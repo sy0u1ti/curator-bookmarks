@@ -31,6 +31,7 @@ export function createDefaultAiNamingSettings() {
     apiKey: '',
     model: AI_NAMING_DEFAULT_MODEL,
     customModels: [],
+    fetchedModels: [],
     apiStyle: 'responses',
     timeoutMs: AI_NAMING_DEFAULT_TIMEOUT_MS,
     batchSize: AI_NAMING_DEFAULT_BATCH_SIZE,
@@ -128,6 +129,8 @@ export const managerState = {
   moveSearchQuery: '',
   moveSelectionSource: 'availability',
   aiModelModalOpen: false,
+  aiModelPickerModalOpen: false,
+  aiModelPickerSearchQuery: '',
   aiRevealApiKey: false
 }
 
@@ -137,6 +140,10 @@ export const aiNamingState = {
   requestOrigins: [],
   settingsDirty: false,
   testingConnection: false,
+  fetchingModels: false,
+  lastFetchModelsAt: 0,
+  lastFetchModelsError: '',
+  lastFetchModelsCount: 0,
   running: false,
   stopRequested: false,
   applying: false,

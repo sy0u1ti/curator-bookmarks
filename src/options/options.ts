@@ -52,7 +52,8 @@ import {
   AI_NAMING_DEFAULT_BATCH_SIZE,
   AI_NAMING_MAX_BATCH_SIZE,
   AI_NAMING_MAX_TEXT_LENGTH,
-  AI_NAMING_MANAGE_MODELS_VALUE,
+  AI_NAMING_MODELS_ENDPOINT_SUFFIX,
+  AI_NAMING_FETCHED_MODELS_LIMIT,
   AI_NAMING_PRESET_MODELS,
   AI_NAMING_RESPONSE_SCHEMA
 } from './shared-options/constants.js'
@@ -214,6 +215,7 @@ function normalizeAiNamingSettings(rawSettings) {
     apiKey: String(source.apiKey || defaults.apiKey).trim(),
     model: String(source.model || defaults.model).trim() || defaults.model,
     customModels: normalizeAiNamingCustomModels(source.customModels),
+    fetchedModels: normalizeAiNamingFetchedModels(source.fetchedModels),
     apiStyle: apiStyle === 'chat_completions' ? 'chat_completions' : 'responses',
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(5000, Math.min(timeoutMs, 120000)) : defaults.timeoutMs,
     batchSize: Number.isFinite(batchSize)
@@ -228,6 +230,14 @@ function normalizeAiNamingSettings(rawSettings) {
 }
 
 function normalizeAiNamingCustomModels(rawModels) {
+  return normalizeModelIdList(rawModels, 40)
+}
+
+function normalizeAiNamingFetchedModels(rawModels) {
+  return normalizeModelIdList(rawModels, AI_NAMING_FETCHED_MODELS_LIMIT)
+}
+
+function normalizeModelIdList(rawModels, limit = 40) {
   const values = Array.isArray(rawModels)
     ? rawModels
     : typeof rawModels === 'string'
@@ -247,7 +257,7 @@ function normalizeAiNamingCustomModels(rawModels) {
       seen.add(normalized)
       return true
     })
-    .slice(0, 40)
+    .slice(0, Math.max(1, limit))
 }
 
 function serializeAiNamingSettings(settings = aiNamingManagerState.settings) {
@@ -257,6 +267,7 @@ function serializeAiNamingSettings(settings = aiNamingManagerState.settings) {
     apiKey: normalized.apiKey,
     model: normalized.model,
     customModels: normalized.customModels.slice(),
+    fetchedModels: normalized.fetchedModels.slice(),
     apiStyle: normalized.apiStyle,
     timeoutMs: normalized.timeoutMs,
     batchSize: normalized.batchSize,
@@ -326,7 +337,8 @@ function bindEvents() {
   dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
-  dom.aiModelSelect?.addEventListener('change', handleAiModelSelectChange)
+  dom.aiModelPickerTrigger?.addEventListener('click', openAiModelPickerModal)
+  dom.aiFetchModels?.addEventListener('click', handleFetchAiModels)
   dom.aiManageModels?.addEventListener('click', openAiModelModal)
   dom.aiApiStyle?.addEventListener('change', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiTimeoutMs?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
@@ -405,6 +417,18 @@ function bindEvents() {
   dom.closeAiModelModal?.addEventListener('click', closeAiModelModal)
   dom.cancelAiModelModal?.addEventListener('click', closeAiModelModal)
   dom.saveAiModelModal?.addEventListener('click', saveAiModelModalSettings)
+  dom.aiModelPickerSearchInput?.addEventListener('input', (event) => {
+    managerState.aiModelPickerSearchQuery = event.target.value
+    renderAiModelPickerModal()
+  })
+  dom.aiModelPickerResults?.addEventListener('click', handleAiModelPickerResultsClick)
+  dom.closeAiModelPickerModal?.addEventListener('click', closeAiModelPickerModal)
+  dom.cancelAiModelPickerModal?.addEventListener('click', closeAiModelPickerModal)
+  dom.aiModelPickerFetchButton?.addEventListener('click', handleFetchAiModels)
+  dom.aiModelPickerManageButton?.addEventListener('click', () => {
+    closeAiModelPickerModal()
+    openAiModelModal()
+  })
   document.addEventListener('keydown', handleKeydown)
   dom.deleteModalBackdrop?.addEventListener('click', (event) => {
     if (event.target === dom.deleteModalBackdrop) {
@@ -426,6 +450,11 @@ function bindEvents() {
       closeAiModelModal()
     }
   })
+  dom.aiModelPickerModalBackdrop?.addEventListener('click', (event) => {
+    if (event.target === dom.aiModelPickerModalBackdrop) {
+      closeAiModelPickerModal()
+    }
+  })
 }
 
 function getCurrentSectionKey() {
@@ -440,6 +469,12 @@ function handleKeydown(event) {
   if (managerState.aiModelModalOpen) {
     event.preventDefault()
     closeAiModelModal()
+    return
+  }
+
+  if (managerState.aiModelPickerModalOpen) {
+    event.preventDefault()
+    closeAiModelPickerModal()
     return
   }
 
@@ -1264,15 +1299,12 @@ function syncAiNamingSettingsDraftFromDom({ markDirty = false } = {}) {
     return aiNamingManagerState.settings
   }
 
-  const selectedModel = dom.aiModelSelect?.value === AI_NAMING_MANAGE_MODELS_VALUE
-    ? aiNamingManagerState.settings.model
-    : dom.aiModelSelect?.value
-
   aiNamingManagerState.settings = normalizeAiNamingSettings({
     baseUrl: dom.aiBaseUrl.value,
     apiKey: dom.aiApiKey.value,
-    model: selectedModel,
+    model: aiNamingManagerState.settings.model,
     customModels: aiNamingManagerState.settings.customModels,
+    fetchedModels: aiNamingManagerState.settings.fetchedModels,
     apiStyle: dom.aiApiStyle.value,
     timeoutMs: dom.aiTimeoutMs.value,
     batchSize: dom.aiBatchSize.value,
@@ -1366,8 +1398,10 @@ function renderAiNamingSection() {
   if (dom.aiRevealApiKey) {
     dom.aiRevealApiKey.checked = managerState.aiRevealApiKey
   }
-  if (dom.aiModelSelect && dom.aiModelSelect !== document.activeElement) {
-    renderAiNamingModelOptions(settings)
+  renderAiModelPickerTrigger(settings)
+  renderAiFetchModelsStatus()
+  if (managerState.aiModelPickerModalOpen) {
+    renderAiModelPickerModal()
   }
   if (dom.aiApiStyle && dom.aiApiStyle !== document.activeElement) {
     dom.aiApiStyle.value = settings.apiStyle
@@ -1410,6 +1444,15 @@ function renderAiNamingSection() {
   dom.aiConfigStatus.textContent = configText
   if (dom.aiManageModels) {
     dom.aiManageModels.disabled = aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
+  }
+  if (dom.aiFetchModels) {
+    dom.aiFetchModels.disabled =
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      aiNamingState.testingConnection ||
+      aiNamingState.fetchingModels ||
+      aiNamingState.requestingPermission
+    dom.aiFetchModels.textContent = aiNamingState.fetchingModels ? '拉取中…' : '获取模型'
   }
   if (dom.aiConnectivityCopy) {
     dom.aiConnectivityCopy.className = `ai-provider-connectivity ${connectivityMeta.tone}`
@@ -1493,24 +1536,10 @@ function renderAiNamingSection() {
   renderAiNamingResults()
 }
 
-function renderAiNamingModelOptions(settings = aiNamingManagerState.settings) {
-  if (!dom.aiModelSelect) {
-    return
-  }
-
-  const options = getAiNamingModelOptions(settings)
-  dom.aiModelSelect.innerHTML = options
-    .map((option) => `<option value="${escapeAttr(option.value)}">${escapeHtml(option.label)}</option>`)
-    .join('')
-  dom.aiModelSelect.value = options.some((option) => option.value === settings.model)
-    ? settings.model
-    : AI_NAMING_DEFAULT_MODEL
-}
-
 function getAiNamingModelOptions(settings = aiNamingManagerState.settings) {
   const options = []
   const seen = new Set()
-  const appendOption = (value, label = value) => {
+  const appendOption = (value) => {
     const normalizedValue = String(value || '').trim()
     if (!normalizedValue) {
       return
@@ -1522,19 +1551,13 @@ function getAiNamingModelOptions(settings = aiNamingManagerState.settings) {
     }
 
     seen.add(dedupeKey)
-    options.push({
-      value: normalizedValue,
-      label: String(label || normalizedValue).trim() || normalizedValue
-    })
+    options.push(normalizedValue)
   }
 
   AI_NAMING_PRESET_MODELS.forEach((model) => appendOption(model))
   settings.customModels.forEach((model) => appendOption(model))
-  appendOption(settings.model, `${settings.model}（当前）`)
-  options.push({
-    value: AI_NAMING_MANAGE_MODELS_VALUE,
-    label: '设置更多模型'
-  })
+  settings.fetchedModels.forEach((model) => appendOption(model))
+  appendOption(settings.model)
 
   return options
 }
@@ -1544,14 +1567,321 @@ function handleAiRevealApiKeyChange(event) {
   renderAiNamingSection()
 }
 
-function handleAiModelSelectChange() {
-  const selectedValue = String(dom.aiModelSelect?.value || '').trim()
-  if (selectedValue === AI_NAMING_MANAGE_MODELS_VALUE) {
-    openAiModelModal()
+function renderAiModelPickerTrigger(settings = aiNamingManagerState.settings) {
+  if (dom.aiModelPickerLabel) {
+    dom.aiModelPickerLabel.textContent = settings.model || AI_NAMING_DEFAULT_MODEL
+  }
+  if (dom.aiModelPickerTrigger) {
+    dom.aiModelPickerTrigger.disabled =
+      aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
+  }
+}
+
+function renderAiFetchModelsStatus() {
+  if (!dom.aiFetchModelsStatus) {
     return
   }
 
+  let tone = 'muted'
+  let copy = '点击「获取模型」可从当前 Base URL + API Key 拉取后端实际支持的模型列表。'
+
+  if (aiNamingState.fetchingModels) {
+    tone = 'muted'
+    copy = '正在从 API 拉取模型列表…'
+  } else if (aiNamingState.lastFetchModelsError) {
+    tone = 'danger'
+    copy = `拉取失败：${aiNamingState.lastFetchModelsError}`
+  } else if (aiNamingState.lastFetchModelsAt) {
+    tone = 'success'
+    const timeLabel = formatDateTime(aiNamingState.lastFetchModelsAt)
+    copy = `已拉取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`
+  }
+
+  dom.aiFetchModelsStatus.className = `ai-provider-connectivity ${tone}`
+  dom.aiFetchModelsStatus.textContent = copy
+}
+
+function openAiModelPickerModal() {
+  if (aiNamingState.running || aiNamingState.applying) {
+    return
+  }
+
+  managerState.aiModelPickerModalOpen = true
+  managerState.aiModelPickerSearchQuery = ''
+  renderAiModelPickerModal()
+
+  window.setTimeout(() => {
+    if (dom.aiModelPickerSearchInput) {
+      dom.aiModelPickerSearchInput.value = ''
+      dom.aiModelPickerSearchInput.focus()
+    }
+  }, 0)
+}
+
+function closeAiModelPickerModal() {
+  managerState.aiModelPickerModalOpen = false
+  managerState.aiModelPickerSearchQuery = ''
+  renderAiModelPickerModal()
+}
+
+function renderAiModelPickerModal() {
+  if (!dom.aiModelPickerModalBackdrop) {
+    return
+  }
+
+  setModalHidden(dom.aiModelPickerModalBackdrop, managerState.aiModelPickerModalOpen)
+
+  if (!managerState.aiModelPickerModalOpen) {
+    return
+  }
+
+  const settings = aiNamingManagerState.settings
+  const allModels = getAiNamingModelOptions(settings)
+  const fetchedCount = settings.fetchedModels.length
+  const lastFetchedAt = aiNamingState.lastFetchModelsAt
+  const lastFetchedLabel = lastFetchedAt ? formatDateTime(lastFetchedAt) : ''
+
+  if (dom.aiModelPickerModalCopy) {
+    let copy = '输入关键字筛选，点击卡片即可选中。可点击「获取模型」从 API 拉取最新列表。'
+    if (aiNamingState.fetchingModels) {
+      copy = '正在从 API 拉取模型列表…'
+    } else if (aiNamingState.lastFetchModelsError) {
+      copy = `上次拉取失败：${aiNamingState.lastFetchModelsError}`
+    } else if (fetchedCount > 0) {
+      copy = lastFetchedLabel
+        ? `已从 API 拉取 ${fetchedCount} 个模型（${lastFetchedLabel}）。支持搜索预设 + 自定义 + 已拉取模型。`
+        : `已从 API 拉取 ${fetchedCount} 个模型。支持搜索预设 + 自定义 + 已拉取模型。`
+    }
+    dom.aiModelPickerModalCopy.textContent = copy
+  }
+
+  if (dom.aiModelPickerSearchInput && dom.aiModelPickerSearchInput !== document.activeElement) {
+    dom.aiModelPickerSearchInput.value = managerState.aiModelPickerSearchQuery
+  }
+
+  if (dom.aiModelPickerFetchButton) {
+    dom.aiModelPickerFetchButton.disabled =
+      aiNamingState.fetchingModels ||
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      aiNamingState.testingConnection ||
+      aiNamingState.requestingPermission
+    dom.aiModelPickerFetchButton.textContent = aiNamingState.fetchingModels ? '拉取中…' : '获取模型'
+  }
+  if (dom.aiModelPickerManageButton) {
+    dom.aiModelPickerManageButton.disabled =
+      aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
+  }
+
+  if (!dom.aiModelPickerResults) {
+    return
+  }
+
+  const normalizedQuery = normalizeText(managerState.aiModelPickerSearchQuery)
+  const filteredModels = normalizedQuery
+    ? allModels.filter((model) => normalizeText(model).includes(normalizedQuery))
+    : allModels
+
+  if (!filteredModels.length) {
+    dom.aiModelPickerResults.innerHTML = normalizedQuery
+      ? '<div class="detect-empty">没有匹配的模型。</div>'
+      : '<div class="detect-empty">尚未加载模型，可点击下方「获取模型」从 API 拉取。</div>'
+    return
+  }
+
+  dom.aiModelPickerResults.innerHTML = filteredModels
+    .map((model) => buildAiModelPickerCard(model, settings))
+    .join('')
+}
+
+function buildAiModelPickerCard(model, settings = aiNamingManagerState.settings) {
+  const isCurrent = String(model) === String(settings.model || '')
+  const isFetched = settings.fetchedModels.some((value) => value === model)
+  const isCustom = settings.customModels.some((value) => value === model)
+  const isPreset = AI_NAMING_PRESET_MODELS.some((value) => value === model)
+  const tags = []
+  if (isCurrent) {
+    tags.push('当前')
+  }
+  if (isPreset) {
+    tags.push('预设')
+  }
+  if (isCustom) {
+    tags.push('自定义')
+  }
+  if (isFetched) {
+    tags.push('已拉取')
+  }
+  const tagsHtml = tags.length
+    ? `<span class="ai-model-card-tags">${tags.map((tag) => `<span class="ai-model-card-tag">${escapeHtml(tag)}</span>`).join('')}</span>`
+    : ''
+
+  return `
+    <button
+      class="scope-folder-card ai-model-card ${isCurrent ? 'current' : ''}"
+      type="button"
+      role="option"
+      aria-selected="${isCurrent ? 'true' : 'false'}"
+      data-ai-model-id="${escapeAttr(model)}"
+      title="${escapeAttr(model)}"
+    >
+      <div class="scope-folder-head">
+        <strong>${escapeHtml(model)}</strong>
+      </div>
+      ${tagsHtml}
+    </button>
+  `
+}
+
+function handleAiModelPickerResultsClick(event) {
+  if (aiNamingState.running || aiNamingState.applying) {
+    return
+  }
+
+  const targetButton = event.target.closest('[data-ai-model-id]')
+  if (!targetButton) {
+    return
+  }
+
+  const modelId = String(targetButton.getAttribute('data-ai-model-id') || '').trim()
+  if (!modelId) {
+    return
+  }
+
+  aiNamingManagerState.settings = normalizeAiNamingSettings({
+    ...aiNamingManagerState.settings,
+    model: modelId
+  })
   syncAiNamingSettingsDraftFromDom({ markDirty: true })
+  closeAiModelPickerModal()
+  renderAiNamingSection()
+}
+
+function getAiModelsEndpoint(settings) {
+  const baseUrl = String(settings.baseUrl || '').replace(/\/+$/, '')
+  const suffix = AI_NAMING_MODELS_ENDPOINT_SUFFIX
+  return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
+}
+
+function extractFetchedModelIds(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return []
+  }
+
+  const candidates = Array.isArray(payload.data)
+    ? payload.data
+    : Array.isArray(payload.models)
+      ? payload.models
+      : Array.isArray(payload)
+        ? payload
+        : []
+
+  return candidates
+    .map((entry) => {
+      if (!entry) {
+        return ''
+      }
+      if (typeof entry === 'string') {
+        return entry
+      }
+      return String(entry.id || entry.name || '').trim()
+    })
+    .filter(Boolean)
+}
+
+async function handleFetchAiModels() {
+  if (aiNamingState.fetchingModels || aiNamingState.running || aiNamingState.applying) {
+    return
+  }
+
+  syncAiNamingSettingsDraftFromDom()
+  const settings = aiNamingManagerState.settings
+  const baseUrl = String(settings.baseUrl || '').trim()
+  const apiKey = String(settings.apiKey || '').trim()
+
+  if (!baseUrl || !apiKey) {
+    aiNamingState.lastFetchModelsError = !baseUrl
+      ? '请先填写 Base URL。'
+      : '请先填写 API Key。'
+    aiNamingState.lastFetchModelsAt = 0
+    aiNamingState.lastFetchModelsCount = 0
+    renderAiFetchModelsStatus()
+    if (managerState.aiModelPickerModalOpen) {
+      renderAiModelPickerModal()
+    }
+    return
+  }
+
+  const permissionGranted = await ensureAiNamingProviderPermission({
+    interactive: true,
+    baseUrl
+  })
+  if (!permissionGranted) {
+    aiNamingState.lastFetchModelsError = '未授权该 Origin，无法访问该 API。'
+    aiNamingState.lastFetchModelsAt = 0
+    aiNamingState.lastFetchModelsCount = 0
+    renderAiFetchModelsStatus()
+    if (managerState.aiModelPickerModalOpen) {
+      renderAiModelPickerModal()
+    }
+    return
+  }
+
+  aiNamingState.fetchingModels = true
+  aiNamingState.lastFetchModelsError = ''
+  renderAiFetchModelsStatus()
+  if (managerState.aiModelPickerModalOpen) {
+    renderAiModelPickerModal()
+  }
+
+  try {
+    const url = getAiModelsEndpoint(settings)
+    const response = await fetchWithRequestTimeout(
+      url,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          Accept: 'application/json'
+        }
+      },
+      settings.timeoutMs
+    )
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      const detail = text ? `：${text.slice(0, 200)}` : ''
+      throw new Error(`HTTP ${response.status}${detail}`)
+    }
+
+    const payload = await response.json().catch(() => null)
+    const ids = extractFetchedModelIds(payload)
+    if (!ids.length) {
+      throw new Error('接口未返回任何模型 ID。')
+    }
+
+    const normalizedIds = normalizeAiNamingFetchedModels(ids)
+    aiNamingManagerState.settings = normalizeAiNamingSettings({
+      ...aiNamingManagerState.settings,
+      fetchedModels: normalizedIds
+    })
+    await saveAiNamingSettings(aiNamingManagerState.settings)
+    aiNamingState.lastFetchModelsAt = Date.now()
+    aiNamingState.lastFetchModelsCount = normalizedIds.length
+    aiNamingState.lastFetchModelsError = ''
+  } catch (error) {
+    aiNamingState.lastFetchModelsError =
+      error instanceof Error ? error.message : '拉取模型列表失败，请稍后重试。'
+    aiNamingState.lastFetchModelsAt = 0
+    aiNamingState.lastFetchModelsCount = 0
+  } finally {
+    aiNamingState.fetchingModels = false
+    renderAiFetchModelsStatus()
+    renderAiNamingSection()
+    if (managerState.aiModelPickerModalOpen) {
+      renderAiModelPickerModal()
+    }
+  }
 }
 
 function openAiModelModal() {
@@ -1559,9 +1889,6 @@ function openAiModelModal() {
     return
   }
 
-  if (dom.aiModelSelect) {
-    dom.aiModelSelect.value = aiNamingManagerState.settings.model
-  }
   managerState.aiModelModalOpen = true
   renderAiModelModal()
 

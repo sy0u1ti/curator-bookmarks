@@ -307,13 +307,21 @@
                   <span>显示密码</span>
                 </label>
 
-                <label class="ai-provider-field" for="ai-model-select">
+                <div class="ai-provider-field" role="group" aria-label="AI 模型">
                   <span>模型</span>
-                  <select id="ai-model-select" class="ai-provider-select"></select>
-                </label>
+                  <div class="ai-model-field-controls">
+                    <button id="ai-model-picker-trigger" class="scope-picker-trigger ai-model-picker-trigger" type="button" aria-haspopup="dialog" aria-label="选择 AI 模型">
+                      <span id="ai-model-picker-label">gpt-5-mini</span>
+                      <span class="scope-picker-caret" aria-hidden="true"></span>
+                    </button>
+                    <button id="ai-fetch-models" class="options-button secondary small" type="button">获取模型</button>
+                  </div>
+                </div>
+
+                <p id="ai-fetch-models-status" class="ai-provider-connectivity muted">点击「获取模型」可从当前 Base URL + API Key 拉取后端实际支持的模型列表。</p>
 
                 <p class="ai-provider-hint">
-                  可从预设列表选择模型；若目标服务使用自定义模型 ID，可在
+                  支持搜索预设、自定义和已拉取的模型；若目标服务使用自定义模型 ID，可在
                   <button id="ai-manage-models" class="ai-inline-action" type="button">设置更多模型</button>
                   里追加。
                 </p>
@@ -754,6 +762,29 @@
         <div class="options-modal-actions ai-model-modal-actions">
           <button id="cancel-ai-model-modal" class="options-button secondary" type="button">取消</button>
           <button id="save-ai-model-modal" class="options-button" type="button">保存</button>
+        </div>
+      </section>
+    </div>
+
+    <div id="ai-model-picker-modal-backdrop" class="options-modal-backdrop hidden" aria-hidden="true">
+      <section class="options-modal options-modal-wide" role="dialog" aria-modal="true" aria-labelledby="ai-model-picker-modal-title">
+        <button id="close-ai-model-picker-modal" class="options-modal-close" type="button" aria-label="关闭 AI 模型弹窗">×</button>
+        <p class="options-section-label">AI Models</p>
+        <h2 id="ai-model-picker-modal-title">选择 AI 模型</h2>
+        <p id="ai-model-picker-modal-copy" class="options-modal-copy">输入关键字筛选，点击卡片即可选中。可点击「获取模型」从 API 拉取最新列表。</p>
+        <label class="options-search">
+          <span class="options-search-label">搜索模型</span>
+          <input id="ai-model-picker-search-input" class="options-search-input" type="search" placeholder="搜索模型 ID">
+        </label>
+        <div id="ai-model-picker-results" class="detect-results modal-results" role="listbox">
+          <div class="detect-empty">尚未获取模型列表，可点击下方「获取模型」从 API 拉取。</div>
+        </div>
+        <div class="options-modal-actions ai-model-picker-actions">
+          <div class="ai-model-picker-footer-start">
+            <button id="ai-model-picker-fetch" class="options-button secondary" type="button">获取模型</button>
+            <button id="ai-model-picker-manage" class="options-button secondary" type="button">设置更多模型</button>
+          </div>
+          <button id="cancel-ai-model-picker-modal" class="options-button secondary" type="button">关闭</button>
         </div>
       </section>
     </div>

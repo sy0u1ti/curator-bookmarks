@@ -1652,4 +1652,86 @@ a {
   .ai-model-modal-actions {
     flex-direction: column-reverse;
   }
+
+  .ai-model-picker-actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+  }
+
+  .ai-model-picker-footer-start {
+    flex-direction: column;
+    gap: 10px;
+  }
+}
+
+.ai-model-field-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.ai-model-picker-trigger {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.ai-model-picker-actions {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ai-model-picker-footer-start {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.ai-model-card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.ai-model-card .scope-folder-head {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.ai-model-card .scope-folder-head strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.ai-model-card-tags {
+  display: inline-flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-model-card-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--surface-3);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-soft);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.ai-model-card.current .ai-model-card-tag {
+  border-color: rgba(245, 245, 247, 0.3);
+  color: var(--text);
 }
