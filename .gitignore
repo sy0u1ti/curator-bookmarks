@@ -7,3 +7,4 @@ release/
 .env
 .env.local
 .codex
+docs/FEATURE_IMPLEMENTATION.md
