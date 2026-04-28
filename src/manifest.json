@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Curator",
   "description": "在本地查询、浏览、移动和删除 Chrome 书签。",
-  "version": "1.3.1",
+  "version": "1.4.1",
   "icons": {
     "16": "src/assets/icon16.png",
     "32": "src/assets/icon32.png",
@@ -13,6 +13,7 @@
     "activeTab",
     "alarms",
     "bookmarks",
+    "favicon",
     "notifications",
     "storage",
     "webNavigation",
@@ -38,5 +39,8 @@
     },
     "default_title": "Curator",
     "default_popup": "src/popup/popup.html"
+  },
+  "chrome_url_overrides": {
+    "newtab": "src/newtab/newtab.html"
   }
 }

@@ -7,6 +7,12 @@ export const STORAGE_KEYS = {
   bookmarkAddHistory: 'curatorBookmarkAddHistory',
   autoAnalyzeQueue: 'curatorBookmarkAutoAnalyzeQueue',
   pendingAutoAnalyzeNotice: 'curatorBookmarkPendingAutoAnalyzeNotice',
+  newTabCustomIcons: 'curatorBookmarkNewTabCustomIcons',
+  newTabBackgroundSettings: 'curatorBookmarkNewTabBackgroundSettings',
+  newTabSearchSettings: 'curatorBookmarkNewTabSearchSettings',
+  newTabIconSettings: 'curatorBookmarkNewTabIconSettings',
+  newTabTimeSettings: 'curatorBookmarkNewTabTimeSettings',
+  newTabGeneralSettings: 'curatorBookmarkNewTabGeneralSettings',
   redirectCache: 'curatorBookmarkRedirectCache',
   recycleBin: 'curatorBookmarkRecycleBin',
   aiProviderSettings: 'curatorBookmarkAiNamingSettings'

@@ -14,10 +14,16 @@ export function getBookmarkTree(): Promise<chrome.bookmarks.BookmarkTreeNode[]> 
 
 export function moveBookmark(
   bookmarkId: string,
-  parentId: string
+  parentId: string,
+  index?: number
 ): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
-    chrome.bookmarks.move(bookmarkId, { parentId }, (node) => {
+    const destination: chrome.bookmarks.BookmarkDestinationArg = { parentId }
+    if (Number.isFinite(index)) {
+      destination.index = index
+    }
+
+    chrome.bookmarks.move(bookmarkId, destination, (node) => {
       const error = chrome.runtime.lastError
       if (error) {
         reject(new Error(error.message))

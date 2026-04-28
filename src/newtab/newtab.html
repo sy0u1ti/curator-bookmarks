@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curator 新标签页</title>
+    <link rel="stylesheet" href="./newtab.css">
+  </head>
+  <body>
+    <div id="newtab-background-mask" class="newtab-background-mask" aria-hidden="true"></div>
+
+    <div class="settings-trigger-zone">
+      <button
+        id="newtab-settings-trigger"
+        class="settings-trigger"
+        type="button"
+        aria-label="打开设置"
+        aria-controls="newtab-settings-drawer"
+        aria-expanded="false"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"></path>
+          <path d="M19.4 13.4c.1-.5.1-.9.1-1.4s0-.9-.1-1.4l2-1.5-1.9-3.2-2.4 1a8.5 8.5 0 0 0-2.4-1.4L14.4 3h-4.8l-.4 2.5c-.9.3-1.7.8-2.4 1.4l-2.3-1-1.9 3.2 2 1.5c-.1.5-.1.9-.1 1.4s0 .9.1 1.4l-2 1.5 1.9 3.2 2.3-1c.7.6 1.5 1.1 2.4 1.4l.4 2.5h4.8l.4-2.5c.9-.3 1.7-.8 2.4-1.4l2.4 1 1.9-3.2-2.1-1.5Z"></path>
+        </svg>
+      </button>
+    </div>
+
+    <div id="newtab-settings-backdrop" class="settings-backdrop" data-close-settings></div>
+    <aside
+      id="newtab-settings-drawer"
+      class="settings-drawer"
+      aria-label="新标签页设置"
+      aria-hidden="true"
+    >
+      <button id="newtab-settings-close" class="settings-close" type="button" aria-label="关闭设置">
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="m6.5 6.5 11 11M17.5 6.5l-11 11"></path>
+        </svg>
+      </button>
+
+      <div class="settings-drawer-scroll">
+        <section class="settings-section" aria-labelledby="settings-general-title">
+          <h2 id="settings-general-title">通用</h2>
+          <div class="settings-card">
+            <label class="setting-row">
+              <span>隐藏设置图标 <span class="setting-help">?</span></span>
+              <input id="general-hide-settings-trigger" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-background-title">
+          <h2 id="settings-background-title">背景</h2>
+          <div class="settings-card">
+            <div class="setting-row">
+              <span>背景类型</span>
+              <select id="background-type" class="setting-select setting-native-select">
+                <option value="image">图片</option>
+                <option value="video">视频</option>
+                <option value="urls">URLs</option>
+                <option value="color" selected>纯色</option>
+              </select>
+            </div>
+            <label id="background-color-row" class="setting-row">
+              <span>背景颜色</span>
+              <span id="background-color-control" class="setting-color">
+                <span id="background-color-value">#000000</span>
+                <input
+                  id="background-color"
+                  class="setting-color-input"
+                  type="color"
+                  value="#000000"
+                  aria-label="背景颜色"
+                >
+              </span>
+            </label>
+            <div id="background-image-row" class="setting-row" hidden>
+              <span>背景图片</span>
+              <button id="background-image-picker" class="setting-file-button" type="button">选择图片</button>
+              <input id="background-image-file" class="setting-file-input" type="file" accept="image/*">
+            </div>
+            <div id="background-video-row" class="setting-row" hidden>
+              <span>背景视频</span>
+              <button id="background-video-picker" class="setting-file-button" type="button">选择视频</button>
+              <input id="background-video-file" class="setting-file-input" type="file" accept="video/*">
+            </div>
+            <div id="background-url-row" class="setting-row" hidden>
+              <span>图片链接</span>
+              <span class="setting-floating-field">
+                <input
+                  id="background-url"
+                  class="setting-url-input"
+                  type="url"
+                  placeholder="图片链接"
+                  spellcheck="false"
+                >
+              </span>
+            </div>
+            <div id="background-url-cache-row" class="setting-row" hidden>
+              <span>图片缓存</span>
+              <span class="setting-cache-control">
+                <button id="background-url-cache-button" class="setting-file-button" type="button">授权并缓存</button>
+                <span id="background-url-cache-status" class="setting-cache-status"></span>
+              </span>
+            </div>
+            <label class="setting-row">
+              <span>背景蒙版</span>
+              <input id="background-mask-enabled" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <div id="background-mask-style-row" class="setting-row" hidden>
+              <span>模糊样式</span>
+              <select id="background-mask-style" class="setting-select setting-native-select">
+                <option value="dark">暗色增强</option>
+                <option value="frosted">磨砂柔化</option>
+                <option value="light">亮色柔化</option>
+              </select>
+            </div>
+            <label id="background-mask-blur-row" class="setting-row slider-row" hidden>
+              <span>模糊程度</span>
+              <input id="background-mask-blur" class="setting-range" type="range" min="0" max="32" value="12">
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-icon-title">
+          <h2 id="settings-icon-title">图标</h2>
+          <div class="settings-card">
+            <label class="setting-row slider-row">
+              <span>页面宽度</span>
+              <input id="icon-page-width" class="setting-range" type="range" min="16" max="100" value="64">
+            </label>
+            <label class="setting-row slider-row">
+              <span>横向间距</span>
+              <input id="icon-column-gap" class="setting-range" type="range" min="0" max="100" value="18">
+            </label>
+            <label class="setting-row slider-row">
+              <span>竖向间距</span>
+              <input id="icon-row-gap" class="setting-range" type="range" min="0" max="100" value="18">
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-time-title">
+          <h2 id="settings-time-title">时间和日期</h2>
+          <div class="settings-card">
+            <label class="setting-row">
+              <span>启用</span>
+              <input id="time-enabled" class="setting-switch-input" type="checkbox" checked>
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <label class="setting-row">
+              <span>显示秒</span>
+              <input id="time-show-seconds" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <label class="setting-row">
+              <span>12 小时制</span>
+              <input id="time-hour12" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <div class="setting-row">
+              <span>日期格式</span>
+              <select id="time-date-format" class="setting-select setting-native-select">
+                <option value="weekday-day-month">星期 日期 月份</option>
+                <option value="weekday-month-day">星期, 月份 日期</option>
+                <option value="month-day-weekday">月份 日期 星期</option>
+              </select>
+            </div>
+            <label class="setting-row slider-row">
+              <span>时钟大小</span>
+              <input id="time-clock-size" class="setting-range" type="range" min="70" max="130" value="100">
+            </label>
+            <div class="setting-row">
+              <span>时区</span>
+              <select id="time-time-zone" class="setting-select setting-native-select">
+                <option value="auto">自动设置</option>
+                <option value="Asia/Shanghai">北京</option>
+                <option value="Asia/Tokyo">东京</option>
+                <option value="Asia/Singapore">新加坡</option>
+                <option value="Europe/London">伦敦</option>
+                <option value="Europe/Paris">巴黎</option>
+                <option value="America/New_York">纽约</option>
+                <option value="America/Los_Angeles">洛杉矶</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <span>显示</span>
+              <select id="time-display-mode" class="setting-select setting-native-select">
+                <option value="time-date">时钟和日期</option>
+                <option value="time">仅时钟</option>
+                <option value="date">仅日期</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="settings-search-title">
+          <h2 id="settings-search-title">搜索栏</h2>
+          <div class="settings-card">
+            <label class="setting-row">
+              <span>启用</span>
+              <input id="search-enabled" class="setting-switch-input" type="checkbox" checked>
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <label class="setting-row">
+              <span>在新标签页打开链接</span>
+              <input id="search-open-new-tab" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <div class="setting-row">
+              <span>搜索引擎 <span class="setting-help">?</span></span>
+              <select id="search-engine" class="setting-select setting-native-select">
+                <option value="default">默认</option>
+                <option value="google">Google</option>
+                <option value="bing">Bing</option>
+                <option value="baidu">百度</option>
+                <option value="duckduckgo">DuckDuckGo</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <span>占位符文本</span>
+              <span class="setting-floating-field">
+                <input id="search-placeholder" class="setting-text-input" type="text" placeholder="占位符文本" maxlength="40">
+              </span>
+            </div>
+            <label class="setting-row slider-row">
+              <span>宽度</span>
+              <input id="search-width" class="setting-range" type="range" min="16" max="72" value="44">
+            </label>
+            <label class="setting-row slider-row">
+              <span>背景</span>
+              <input id="search-background" class="setting-range" type="range" min="36" max="76" value="58">
+            </label>
+          </div>
+        </section>
+
+      </div>
+    </aside>
+
+    <div id="newtab-root" class="newtab-shell" aria-live="polite"></div>
+    <script type="module" src="./newtab.ts"></script>
+  </body>
+</html>
