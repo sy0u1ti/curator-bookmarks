@@ -3568,26 +3568,20 @@ function buildAiNamingRequestBody(preparedItems, settings) {
   const userPrompt = buildAiNamingUserPrompt(preparedItems)
 
   if (settings.apiStyle === 'chat_completions') {
+    const schemaHint = '\n\n请严格按以下 JSON 格式返回结果，不要添加任何额外文本或 markdown 标记：\n' + JSON.stringify(AI_NAMING_RESPONSE_SCHEMA, null, 2)
     return {
       model: settings.model,
       messages: [
         {
           role: 'system',
-          content: systemPrompt
+          content: systemPrompt + schemaHint
         },
         {
           role: 'user',
           content: userPrompt
         }
       ],
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'bookmark_naming_batch',
-          strict: true,
-          schema: AI_NAMING_RESPONSE_SCHEMA
-        }
-      }
+      response_format: { type: 'json_object' }
     }
   }
 
@@ -3814,7 +3808,7 @@ function extractChatCompletionsJsonText(payload) {
 
   const content = message?.content
   if (typeof content === 'string' && content.trim()) {
-    return content
+    return stripMarkdownCodeFences(content)
   }
 
   if (Array.isArray(content)) {
@@ -3825,11 +3819,15 @@ function extractChatCompletionsJsonText(payload) {
 
     const textNode = content.find((item) => typeof item?.text === 'string' && item.text.trim())
     if (textNode?.text) {
-      return textNode.text
+      return stripMarkdownCodeFences(textNode.text)
     }
   }
 
   throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
+}
+
+function stripMarkdownCodeFences(text) {
+  return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
 }
 
 function extractAiErrorMessage(payload, statusCode) {
