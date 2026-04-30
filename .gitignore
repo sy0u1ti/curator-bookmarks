@@ -13,6 +13,7 @@ release/
 .agents/
 .claude/
 CLAUDE.md
+AGENT_OVERNIGHT_REPORT.md
 
 # Local design drafts
 DESIGN.md

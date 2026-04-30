@@ -315,9 +315,24 @@ body.background-mask-enabled .newtab-background-mask {
   color: var(--text);
 }
 
+.newtab-search-submit:disabled {
+  cursor: default;
+  opacity: 0.46;
+}
+
+.newtab-search-submit:disabled:hover,
+.newtab-search-submit:disabled:focus-visible {
+  background: transparent;
+  color: rgba(245, 245, 247, 0.72);
+}
+
 .newtab-search-clear:active,
 .newtab-search-submit:active {
   transform: scale(0.94);
+}
+
+.newtab-search-submit:disabled:active {
+  transform: none;
 }
 
 .newtab-search-separator {
@@ -347,6 +362,13 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-state.folder-missing {
   width: auto;
+}
+
+.newtab-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
 }
 
 .newtab-state h1 {

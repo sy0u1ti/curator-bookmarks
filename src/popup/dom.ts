@@ -4,6 +4,7 @@ type PopupDomElement =
   HTMLElement & {
     disabled: boolean
     value: string
+    placeholder: string
     focus: () => void
     select: () => void
   }
@@ -20,6 +21,7 @@ export function cacheDom(): void {
   dom.heroSubtitle = byId('hero-subtitle')
   dom.openSettings = byId('open-settings')
   dom.searchInput = byId('search-input')
+  dom.naturalSearchToggle = byId('natural-search-toggle')
   dom.clearSearch = byId('clear-search')
   dom.viewCaption = byId('view-caption')
   dom.folderFilterTrigger = byId('folder-filter-trigger')

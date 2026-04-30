@@ -1,4 +1,5 @@
 import type { FolderRecord } from '../shared/types.js'
+import type { NaturalSearchPlan } from './natural-search.js'
 import type { PopupSearchBookmark, PopupSearchResult } from './search.js'
 
 export interface PopupSmartRecommendation {
@@ -51,6 +52,12 @@ export interface PopupState {
   searchRunId: number
   searchPending: boolean
   searchCache: Map<string, PopupSearchResult[]>
+  naturalSearchEnabled: boolean
+  naturalSearchPending: boolean
+  naturalSearchError: string
+  naturalSearchPlan: NaturalSearchPlan | null
+  naturalSearchPlanCache: Map<string, NaturalSearchPlan>
+  searchHighlightQuery: string
   filteredBookmarksCacheKey: string
   filteredBookmarksCache: PopupSearchBookmark[]
   contentRenderHtml: string
@@ -109,6 +116,12 @@ export const state: PopupState = {
   searchRunId: 0,
   searchPending: false,
   searchCache: new Map(),
+  naturalSearchEnabled: false,
+  naturalSearchPending: false,
+  naturalSearchError: '',
+  naturalSearchPlan: null,
+  naturalSearchPlanCache: new Map(),
+  searchHighlightQuery: '',
   filteredBookmarksCacheKey: '',
   filteredBookmarksCache: [],
   contentRenderHtml: '',

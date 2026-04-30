@@ -38,6 +38,9 @@ const FAVICON_SIZE = 64
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
+const SETTINGS_SAVE_DEBOUNCE_MS = 260
+const EAGER_FAVICON_LIMIT = 40
+const HIGH_PRIORITY_FAVICON_LIMIT = 12
 const BACKGROUND_MEDIA_DB_NAME = 'curatorNewTabBackgroundMedia'
 const BACKGROUND_MEDIA_STORE = 'media'
 const BACKGROUND_URL_CACHE_KEY = 'urlImage'
@@ -181,6 +184,11 @@ let bookmarkDragGhostFrame = 0
 let folderDragGhost: HTMLElement | null = null
 let folderDragGhostFrame = 0
 let resizeLayoutFrame = 0
+let deferredRenderFrame = 0
+let deferredRenderClockUpdate = false
+let searchSettingsSaveTimer = 0
+let iconSettingsSaveTimer = 0
+let timeSettingsSaveTimer = 0
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
@@ -200,14 +208,7 @@ function bindEvents(): void {
   settingsTrigger?.addEventListener('click', openSettingsDrawer)
   settingsClose?.addEventListener('click', closeSettingsDrawer)
   settingsBackdrop?.addEventListener('click', closeSettingsDrawer)
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      closeSettingsDrawer()
-      closeBookmarkMenu()
-      closeAddBookmarkMenu()
-      cancelFolderDrag()
-    }
-  })
+  document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', (event) => {
     const target = event.target
     if (!(target instanceof Element) || (!state.activeMenuBookmarkId && !state.addMenuOpen)) {
@@ -340,6 +341,69 @@ function updateSettingRangeVisual(input: HTMLInputElement): void {
     ? ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100
     : 0
   input.style.setProperty('--range-progress', `${progress}%`)
+}
+
+function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    closeSettingsDrawer()
+    closeBookmarkMenu()
+    closeAddBookmarkMenu()
+    cancelFolderDrag()
+    return
+  }
+
+  if (!shouldFocusSearchFromKeydown(event)) {
+    return
+  }
+
+  const input = document.querySelector<HTMLInputElement>('.newtab-search-input')
+  if (!input) {
+    return
+  }
+
+  event.preventDefault()
+  input.focus()
+
+  if (event.key === '/') {
+    input.select()
+    return
+  }
+
+  if (event.key.length === 1) {
+    input.value = event.key
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  }
+}
+
+function shouldFocusSearchFromKeydown(event: KeyboardEvent): boolean {
+  if (
+    event.defaultPrevented ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.altKey ||
+    !state.searchSettings.enabled ||
+    state.draggingBookmarkId ||
+    state.draggingFolderId ||
+    state.activeMenuBookmarkId ||
+    state.addMenuOpen ||
+    document.body.classList.contains('settings-open')
+  ) {
+    return false
+  }
+
+  const activeElement = document.activeElement
+  if (
+    activeElement instanceof HTMLInputElement ||
+    activeElement instanceof HTMLTextAreaElement ||
+    activeElement instanceof HTMLSelectElement ||
+    activeElement instanceof HTMLButtonElement ||
+    activeElement instanceof HTMLAnchorElement ||
+    activeElement?.getAttribute('contenteditable') === 'true'
+  ) {
+    return false
+  }
+
+  return event.key === '/' || (event.key.length === 1 && Boolean(event.key.trim()))
 }
 
 function bindTimeSettingsEvents(): void {
@@ -586,10 +650,9 @@ function handleIconTitleLinesClick(event: Event): void {
 
 function handleSearchSettingsChange(): void {
   state.searchSettings = readSearchSettingsFromControls()
-  void saveSearchSettings()
-  render()
+  scheduleSearchSettingsSave()
+  scheduleRender({ updateClock: true })
   syncSearchSettingsControls()
-  updateClockText()
 }
 
 function handleBackgroundSettingsChange(): void {
@@ -703,10 +766,9 @@ async function handleBackgroundUrlCacheClick(): Promise<void> {
 
 function handleTimeSettingsChange(): void {
   state.timeSettings = readTimeSettingsFromControls()
-  void saveTimeSettings()
-  render()
+  scheduleTimeSettingsSave()
+  scheduleRender({ updateClock: true })
   syncTimeSettingsControls()
-  updateClockText()
 }
 
 function openSettingsDrawer(): void {
@@ -1799,6 +1861,23 @@ function render(): void {
   root.appendChild(createNewTabPage(createBookmarkSections(state.folderSections)))
 }
 
+function scheduleRender({ updateClock = false } = {}): void {
+  deferredRenderClockUpdate = deferredRenderClockUpdate || updateClock
+  if (deferredRenderFrame) {
+    return
+  }
+
+  deferredRenderFrame = window.requestAnimationFrame(() => {
+    deferredRenderFrame = 0
+    const shouldUpdateClock = deferredRenderClockUpdate
+    deferredRenderClockUpdate = false
+    render()
+    if (shouldUpdateClock) {
+      updateClockText()
+    }
+  })
+}
+
 function createNewTabPage(content: HTMLElement): HTMLElement {
   const page = document.createElement('main')
   page.className = 'newtab-page'
@@ -1865,6 +1944,7 @@ function createSearchWidget(): HTMLElement | null {
   submitButton.className = 'newtab-search-submit'
   submitButton.type = 'submit'
   submitButton.setAttribute('aria-label', '搜索')
+  submitButton.disabled = true
 
   const icon = document.createElement('span')
   icon.className = 'newtab-search-icon'
@@ -1872,14 +1952,25 @@ function createSearchWidget(): HTMLElement | null {
   submitButton.appendChild(icon)
 
   input.addEventListener('input', () => {
-    const hasValue = Boolean(input.value)
-    clearButton.classList.toggle('hidden', !hasValue)
-    separator.classList.toggle('hidden', !hasValue)
+    syncSearchInputActions(input, clearButton, separator, submitButton)
+  })
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return
+    }
+
+    event.preventDefault()
+    if (input.value) {
+      input.value = ''
+      syncSearchInputActions(input, clearButton, separator, submitButton)
+      return
+    }
+
+    input.blur()
   })
   clearButton.addEventListener('click', () => {
     input.value = ''
-    clearButton.classList.add('hidden')
-    separator.classList.add('hidden')
+    syncSearchInputActions(input, clearButton, separator, submitButton)
     input.focus()
   })
   form.addEventListener('submit', (event) => {
@@ -1888,8 +1979,22 @@ function createSearchWidget(): HTMLElement | null {
   })
 
   form.append(input, clearButton, separator, submitButton)
+  syncSearchInputActions(input, clearButton, separator, submitButton)
   slot.appendChild(form)
   return slot
+}
+
+function syncSearchInputActions(
+  input: HTMLInputElement,
+  clearButton: HTMLButtonElement,
+  separator: HTMLElement,
+  submitButton: HTMLButtonElement
+): void {
+  const hasValue = Boolean(input.value.trim())
+  clearButton.classList.toggle('hidden', !input.value)
+  separator.classList.toggle('hidden', !input.value)
+  submitButton.disabled = !hasValue
+  submitButton.setAttribute('aria-disabled', String(!hasValue))
 }
 
 function createClockWidget(): HTMLElement | null {
@@ -1927,6 +2032,15 @@ function createMissingFolderView(): HTMLElement {
   const view = document.createElement('section')
   view.className = 'newtab-state folder-missing'
 
+  const title = document.createElement('h1')
+  title.textContent = '还没有可展示的书签来源'
+
+  const copy = document.createElement('p')
+  copy.textContent = '可以创建一个专用于新标签页的书签文件夹，或在设置中选择已有文件夹。'
+
+  const actions = document.createElement('div')
+  actions.className = 'newtab-state-actions'
+
   const button = document.createElement('button')
   button.className = 'newtab-button'
   button.type = 'button'
@@ -1934,7 +2048,14 @@ function createMissingFolderView(): HTMLElement {
   button.disabled = state.creatingFolder
   button.textContent = state.creatingFolder ? '正在创建' : '新增书签来源文件夹'
 
-  view.appendChild(button)
+  const settingsButton = document.createElement('button')
+  settingsButton.className = 'newtab-button secondary'
+  settingsButton.type = 'button'
+  settingsButton.textContent = '打开设置'
+  settingsButton.addEventListener('click', openSettingsDrawer)
+
+  actions.append(button, settingsButton)
+  view.append(title, copy, actions)
   return view
 }
 
@@ -1980,6 +2101,7 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
 
   const groupList = document.createElement('div')
   groupList.className = 'bookmark-folder-sections'
+  let renderedBookmarkIndex = 0
 
   for (const section of sections) {
     const sectionNode = document.createElement('section')
@@ -2016,7 +2138,8 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
       list.setAttribute('aria-label', `${section.title || '文件夹'}书签`)
 
       for (const bookmark of section.bookmarks) {
-        list.appendChild(createBookmarkTile(bookmark, section.id))
+        list.appendChild(createBookmarkTile(bookmark, section.id, renderedBookmarkIndex))
+        renderedBookmarkIndex += 1
       }
 
       sectionNode.appendChild(list)
@@ -2059,7 +2182,8 @@ function getResponsiveIconColumns(settings: IconSettings): number {
 
 function createBookmarkTile(
   bookmark: chrome.bookmarks.BookmarkTreeNode,
-  folderId: string
+  folderId: string,
+  renderIndex = 0
 ): HTMLAnchorElement {
   const url = String(bookmark.url || '')
   const title = String(bookmark.title || '').trim() || url
@@ -2087,8 +2211,12 @@ function createBookmarkTile(
   icon.src = customIcon || getFaviconUrl(url, String(bookmark.id))
   icon.alt = ''
   icon.draggable = false
-  icon.loading = 'eager'
+  icon.loading = renderIndex < EAGER_FAVICON_LIMIT ? 'eager' : 'lazy'
   icon.decoding = 'async'
+  icon.setAttribute(
+    'fetchpriority',
+    renderIndex < HIGH_PRIORITY_FAVICON_LIMIT ? 'high' : 'low'
+  )
   icon.addEventListener('error', () => {
     iconShell.classList.add('favicon-missing')
   })
@@ -3317,6 +3445,14 @@ async function saveSearchSettings(): Promise<void> {
   })
 }
 
+function scheduleSearchSettingsSave(): void {
+  window.clearTimeout(searchSettingsSaveTimer)
+  searchSettingsSaveTimer = window.setTimeout(() => {
+    searchSettingsSaveTimer = 0
+    void saveSearchSettings()
+  }, SETTINGS_SAVE_DEBOUNCE_MS)
+}
+
 function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_SETTINGS {
   if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
     return { ...DEFAULT_GENERAL_SETTINGS }
@@ -3691,13 +3827,20 @@ async function saveIconSettings(): Promise<void> {
   })
 }
 
+function scheduleIconSettingsSave(): void {
+  window.clearTimeout(iconSettingsSaveTimer)
+  iconSettingsSaveTimer = window.setTimeout(() => {
+    iconSettingsSaveTimer = 0
+    void saveIconSettings()
+  }, SETTINGS_SAVE_DEBOUNCE_MS)
+}
+
 function commitIconSettings(nextSettings: IconSettings): void {
   state.iconSettings = withDetectedIconPreset(nextSettings)
-  void saveIconSettings()
-  render()
+  scheduleIconSettingsSave()
+  scheduleRender({ updateClock: true })
   syncIconSettingsControls()
   updateAllSettingRangeVisuals()
-  updateClockText()
 }
 
 function withDetectedIconPreset(settings: IconSettings): IconSettings {
@@ -4044,6 +4187,14 @@ async function saveTimeSettings(): Promise<void> {
   await setLocalStorage({
     [STORAGE_KEYS.newTabTimeSettings]: state.timeSettings
   })
+}
+
+function scheduleTimeSettingsSave(): void {
+  window.clearTimeout(timeSettingsSaveTimer)
+  timeSettingsSaveTimer = window.setTimeout(() => {
+    timeSettingsSaveTimer = 0
+    void saveTimeSettings()
+  }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
 function updateClockText(): void {

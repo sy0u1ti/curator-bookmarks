@@ -60,12 +60,23 @@ import {
   indexBookmarkForSearch,
   normalizeQuery,
   searchBookmarks,
-  searchBookmarksCooperatively
+  searchBookmarksCooperatively,
+  type PopupSearchResult
 } from './search.js'
+import {
+  buildLocalNaturalSearchPlan,
+  filterBookmarksByNaturalDateRange,
+  getNaturalSearchStatusLabel,
+  mergeNaturalSearchResultSets,
+  normalizeNaturalSearchAiPlan,
+  type NaturalSearchPlan,
+  type NaturalSearchResultSet
+} from './natural-search.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 
 const SEARCH_DEBOUNCE_MS = 140
+const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const SEARCH_CACHE_LIMIT = 40
 const SMART_RECOMMENDATION_LIMIT = 3
 const SMART_LOADING_STEP_COUNT = 3
@@ -120,6 +131,40 @@ const SMART_CLASSIFY_SCHEMA = {
   }
 }
 
+const NATURAL_SEARCH_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['queries', 'keywords', 'excluded_terms', 'date_range', 'explanation'],
+  properties: {
+    queries: {
+      type: 'array',
+      maxItems: 5,
+      items: { type: 'string', maxLength: 80 }
+    },
+    keywords: {
+      type: 'array',
+      maxItems: 12,
+      items: { type: 'string', maxLength: 40 }
+    },
+    excluded_terms: {
+      type: 'array',
+      maxItems: 8,
+      items: { type: 'string', maxLength: 40 }
+    },
+    date_range: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['from', 'to', 'label'],
+      properties: {
+        from: { type: 'string', maxLength: 10 },
+        to: { type: 'string', maxLength: 10 },
+        label: { type: 'string', maxLength: 40 }
+      }
+    },
+    explanation: { type: 'string', maxLength: 120 }
+  }
+} as const
+
 document.addEventListener('DOMContentLoaded', () => {
   cacheDom()
   bindEvents()
@@ -139,6 +184,10 @@ function bindEvents() {
   dom.smartClassifier.addEventListener('input', handleSmartClassifierInput)
   dom.searchInput.addEventListener('input', () => {
     setSearchQuery(dom.searchInput.value)
+  })
+
+  dom.naturalSearchToggle.addEventListener('click', () => {
+    void toggleNaturalLanguageSearch()
   })
 
   dom.clearSearch.addEventListener('click', () => {
@@ -327,11 +376,16 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
       state.searchResults = []
       state.activeResultIndex = 0
       state.searchPending = false
+      state.naturalSearchPending = false
+      state.naturalSearchError = ''
+      state.naturalSearchPlan = null
+      state.searchHighlightQuery = ''
       dom.searchInput.value = ''
     }
   } catch (error) {
     state.searchRunId += 1
     state.searchPending = false
+    state.naturalSearchPending = false
     state.loadError = error instanceof Error ? error.message : '书签加载失败，请稍后重试。'
     state.searchResults = []
   } finally {
@@ -393,13 +447,60 @@ function setSearchQuery(value, { immediate = false } = {}) {
     return
   }
 
+  const debounceMs = state.naturalSearchEnabled ? NATURAL_SEARCH_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS
   state.searchTimer = window.setTimeout(() => {
     state.debouncedQuery = value.trim()
     runSearch()
     render()
-  }, SEARCH_DEBOUNCE_MS)
+  }, debounceMs)
 
   render()
+}
+
+async function toggleNaturalLanguageSearch() {
+  const enabled = !state.naturalSearchEnabled
+  state.naturalSearchEnabled = enabled
+  state.naturalSearchPending = false
+  state.naturalSearchError = ''
+  state.naturalSearchPlan = null
+  state.searchHighlightQuery = ''
+  state.searchRunId += 1
+  render()
+
+  if (enabled) {
+    await prepareNaturalLanguageSearchAi()
+  } else {
+    showToast({ type: 'success', message: '已切回关键词搜索。' })
+  }
+
+  if (state.naturalSearchEnabled !== enabled) {
+    return
+  }
+
+  setSearchQuery(state.searchQuery, { immediate: true })
+  dom.searchInput.focus()
+}
+
+async function prepareNaturalLanguageSearchAi() {
+  try {
+    const settings = await loadAiProviderSettings()
+    validateSmartAiSettings(settings)
+    await ensureSmartClassifyPermissions(settings, { interactive: true })
+    showToast({ type: 'success', message: '自然语言搜索已开启，可使用 AI 理解查询。' })
+  } catch (error) {
+    state.naturalSearchError = 'AI 未就绪，当前使用本地自然语言解析。'
+    const detail = isSmartPermissionRequiredError(error)
+      ? '未完成 AI 渠道授权。'
+      : error instanceof Error
+        ? error.message
+        : ''
+    showToast({
+      type: 'error',
+      message: detail
+        ? `自然语言搜索已开启，本地解析生效：${detail}`
+        : '自然语言搜索已开启，本地解析生效。'
+    })
+  }
 }
 
 function runSearch() {
@@ -407,13 +508,25 @@ function runSearch() {
   const normalizedQuery = normalizeQuery(query)
   const runId = state.searchRunId + 1
   state.searchRunId = runId
+  state.searchHighlightQuery = normalizedQuery
+  state.naturalSearchError = ''
 
   if (!normalizedQuery) {
     state.searchResults = []
     state.activeResultIndex = 0
     state.searchPending = false
+    state.naturalSearchPending = false
+    state.naturalSearchPlan = null
     return
   }
+
+  if (state.naturalSearchEnabled) {
+    runNaturalSearch(query, normalizedQuery, runId)
+    return
+  }
+
+  state.naturalSearchPending = false
+  state.naturalSearchPlan = null
 
   try {
     const cacheKey = getSearchCacheKey(normalizedQuery)
@@ -481,6 +594,120 @@ function runSearch() {
   }
 }
 
+async function runNaturalSearch(query, normalizedQuery, runId) {
+  const cacheKey = getSearchCacheKey(`natural:${getNaturalSearchDateBucket()}:${normalizedQuery}`)
+  const planCacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
+  const cachedResults = state.searchCache.get(cacheKey)
+
+  if (cachedResults) {
+    const cachedPlan = state.naturalSearchPlanCache.get(planCacheKey) || buildLocalNaturalSearchPlan(query)
+    state.naturalSearchPlan = cachedPlan
+    state.searchHighlightQuery = cachedPlan.highlightQuery || normalizedQuery
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
+    state.activeResultIndex = Math.min(
+      state.activeResultIndex,
+      Math.max(state.searchResults.length - 1, 0)
+    )
+    return
+  }
+
+  state.searchPending = true
+  state.naturalSearchPending = true
+  state.searchResults = []
+  state.activeResultIndex = 0
+
+  try {
+    const plan = await resolveNaturalSearchPlan(query, normalizedQuery)
+    if (state.searchRunId !== runId) {
+      return
+    }
+
+    state.naturalSearchPlan = plan
+    state.searchHighlightQuery = plan.highlightQuery || normalizedQuery
+
+    const bookmarks = filterBookmarksByNaturalDateRange(getFilteredBookmarks(), plan)
+    const resultSets: NaturalSearchResultSet[] = []
+    for (const naturalQuery of plan.queries) {
+      if (state.searchRunId !== runId) {
+        return
+      }
+
+      const results = await searchNaturalQuery(naturalQuery, bookmarks, runId)
+      resultSets.push({ query: naturalQuery, results })
+    }
+
+    if (state.searchRunId !== runId) {
+      return
+    }
+
+    const results = mergeNaturalSearchResultSets(plan, resultSets)
+    cacheSearchResults(cacheKey, results)
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
+    state.activeResultIndex = Math.min(
+      state.activeResultIndex,
+      Math.max(state.searchResults.length - 1, 0)
+    )
+    render()
+  } catch (error) {
+    if (state.searchRunId !== runId || (error instanceof Error && error.message === 'search-cancelled')) {
+      return
+    }
+
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.searchResults = []
+    state.loadError = error instanceof Error ? error.message : '自然语言搜索失败，请重试。'
+    render()
+  }
+}
+
+async function resolveNaturalSearchPlan(query, normalizedQuery): Promise<NaturalSearchPlan> {
+  const cacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
+  const cachedPlan = state.naturalSearchPlanCache.get(cacheKey)
+  if (cachedPlan) {
+    return cachedPlan
+  }
+
+  const localPlan = buildLocalNaturalSearchPlan(query)
+  let plan = localPlan
+
+  try {
+    plan = await requestNaturalSearchAiPlan(query, localPlan)
+    state.naturalSearchError = ''
+  } catch (error) {
+    state.naturalSearchError = normalizeNaturalSearchError(error)
+  }
+
+  state.naturalSearchPlanCache.set(cacheKey, plan)
+  if (state.naturalSearchPlanCache.size > SEARCH_CACHE_LIMIT) {
+    const oldestKey = state.naturalSearchPlanCache.keys().next().value
+    if (oldestKey) {
+      state.naturalSearchPlanCache.delete(oldestKey)
+    }
+  }
+
+  return plan
+}
+
+async function searchNaturalQuery(query, bookmarks, runId): Promise<PopupSearchResult[]> {
+  if (!query || !bookmarks.length) {
+    return []
+  }
+
+  if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
+    return searchBookmarks(query, bookmarks)
+  }
+
+  return searchBookmarksCooperatively(query, bookmarks, {
+    isActive: () => state.searchRunId === runId,
+    yieldWork
+  })
+}
+
 function render() {
   renderBanner()
   renderToolbar()
@@ -503,10 +730,34 @@ function renderBanner() {
   dom.errorBanner.textContent = state.loadError
   dom.errorBanner.classList.toggle('hidden', !state.loadError)
   dom.clearSearch.classList.toggle('hidden', !state.searchQuery)
+  dom.searchInput.placeholder = state.naturalSearchEnabled
+    ? '自然语言搜索书签'
+    : '搜索书签或网址'
+  dom.naturalSearchToggle.classList.toggle('active', state.naturalSearchEnabled)
+  dom.naturalSearchToggle.classList.toggle('pending', state.naturalSearchPending)
+  dom.naturalSearchToggle.setAttribute('aria-pressed', String(state.naturalSearchEnabled))
+  dom.naturalSearchToggle.setAttribute(
+    'aria-label',
+    state.naturalSearchEnabled ? '关闭自然语言搜索' : '开启自然语言搜索'
+  )
+  dom.naturalSearchToggle.title = state.naturalSearchEnabled
+    ? '关闭自然语言搜索'
+    : '开启自然语言搜索'
 }
 
 function renderToolbar() {
   if (state.debouncedQuery) {
+    if (state.naturalSearchEnabled) {
+      const statusLabel = state.naturalSearchPending
+        ? '自然语言解析中…'
+        : getNaturalSearchStatusLabel(state.naturalSearchPlan)
+      const errorHint = state.naturalSearchError ? ' · 本地回退' : ''
+      dom.viewCaption.textContent = state.searchPending
+        ? statusLabel
+        : `${statusLabel}${errorHint} · ${state.searchResults.length} 条`
+      return
+    }
+
     dom.viewCaption.textContent = state.searchPending
       ? '搜索中…'
       : `搜索结果 · ${state.searchResults.length} 条`
@@ -835,9 +1086,15 @@ function renderMainContent() {
   dom.emptyState.classList.toggle('hidden', !(showEmptySearch || showEmptyTree))
 
   if (showEmptySearch) {
-    dom.emptyState.textContent = state.selectedFolderFilterId
-      ? '当前文件夹筛选下未找到相关书签'
-      : '未找到相关书签'
+    if (state.naturalSearchEnabled) {
+      dom.emptyState.textContent = state.selectedFolderFilterId
+        ? '当前文件夹筛选下未找到符合自然语言条件的书签'
+        : '未找到符合自然语言条件的书签'
+    } else {
+      dom.emptyState.textContent = state.selectedFolderFilterId
+        ? '当前文件夹筛选下未找到相关书签'
+        : '未找到相关书签'
+    }
   } else if (showEmptyTree) {
     dom.emptyState.textContent = state.selectedFolderFilterId
       ? '当前筛选文件夹下暂无可展示内容'
@@ -850,7 +1107,9 @@ function renderMainContent() {
   }
 
   if (showSearchLoading) {
-    dom.loadingState.innerHTML = renderPopupLoadingStack('正在搜索书签…')
+    dom.loadingState.innerHTML = renderPopupLoadingStack(
+      state.naturalSearchEnabled ? '正在理解搜索意图…' : '正在搜索书签…'
+    )
     return
   }
 
@@ -979,8 +1238,8 @@ function renderSearchResults() {
           <button class="result-main" type="button" data-open-bookmark="${escapeAttr(bookmark.id)}">
             <span class="bookmark-kind" aria-hidden="true"></span>
             <span class="result-copy">
-              <span class="result-title">${highlightText(bookmark.title, state.debouncedQuery)}</span>
-              <span class="result-url" title="${escapeAttr(bookmark.url)}">${highlightText(bookmark.displayUrl, state.debouncedQuery)}</span>
+              <span class="result-title">${highlightText(bookmark.title, state.searchHighlightQuery || state.debouncedQuery)}</span>
+              <span class="result-url" title="${escapeAttr(bookmark.url)}">${highlightText(bookmark.displayUrl, state.searchHighlightQuery || state.debouncedQuery)}</span>
               <span class="result-path-shell">
                 <span
                   class="result-path"
@@ -2195,6 +2454,136 @@ async function ensureSmartClassifyPermissions(settings, { interactive = false } 
   return true
 }
 
+async function requestNaturalSearchAiPlan(query, localPlan: NaturalSearchPlan): Promise<NaturalSearchPlan> {
+  const settings = await loadAiProviderSettings()
+  validateSmartAiSettings(settings)
+  await ensureSmartClassifyPermissions(settings, { interactive: false })
+
+  const endpoint = getAiEndpoint(settings)
+  const requestBody = buildNaturalSearchRequestBody({ settings, query, localPlan })
+  const response = await fetchWithSmartTimeout(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${settings.apiKey}`
+    },
+    body: JSON.stringify(requestBody)
+  }, settings.timeoutMs)
+  const payload = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    throw new Error(extractAiErrorMessage(payload, response.status))
+  }
+
+  const rawJsonText = settings.apiStyle === 'responses'
+    ? extractResponsesJsonText(payload)
+    : extractChatCompletionsJsonText(payload)
+
+  try {
+    return normalizeNaturalSearchAiPlan(JSON.parse(rawJsonText), localPlan)
+  } catch {
+    throw new Error('AI 返回了无法解析的自然语言搜索结果。')
+  }
+}
+
+function buildNaturalSearchRequestBody({ settings, query, localPlan }) {
+  const today = formatLocalDate(Date.now())
+  const examplePlan = buildLocalNaturalSearchPlan('帮我找上周收藏的那个 React 表格教程')
+  const systemPrompt = [
+    '你是浏览器书签搜索查询理解器。',
+    '你的任务是把用户自然语言改写为本地书签搜索关键词，不要回答用户问题。',
+    '输出要适合在标题、URL、文件夹路径、AI 标签、主题、别名和摘要中做文本匹配。',
+    '保留产品名、框架名、库名、站点名和专有名词；去掉“帮我找、那个、收藏的、书签”等意图词。',
+    '为中文和英文同义表达补充少量高价值关键词，例如“表格教程”可包含 table、grid、tutorial、guide。',
+    '如果用户明确排除某类内容，把排除词放入 excluded_terms。',
+    'date_range 只有在用户明确提到时间时填写；from 和 to 使用 YYYY-MM-DD，to 是不包含的结束日期；没有时间条件时三个字段都返回空字符串。',
+    '不要编造用户没有表达的具体网站、作者或标题。'
+  ].join('\n')
+  const userPrompt = JSON.stringify({
+    today,
+    raw_query: query,
+    local_interpretation: {
+      queries: localPlan.queries,
+      date_range: localPlan.dateRange
+        ? {
+            from: formatLocalDate(localPlan.dateRange.from),
+            to: formatLocalDate(localPlan.dateRange.to),
+            label: localPlan.dateRange.label
+          }
+        : { from: '', to: '', label: '' }
+    },
+    examples: [
+      {
+        input: '帮我找上周收藏的那个 React 表格教程',
+        output: {
+          queries: ['react 表格 教程 table grid tutorial guide', 'react table tutorial'],
+          keywords: ['react', '表格', '教程', 'table', 'grid', 'tutorial'],
+          excluded_terms: [],
+          date_range: examplePlan.dateRange
+            ? {
+                from: formatLocalDate(examplePlan.dateRange.from),
+                to: formatLocalDate(examplePlan.dateRange.to),
+                label: examplePlan.dateRange.label
+              }
+            : { from: '', to: '', label: '' },
+          explanation: '按上周收藏和 React 表格教程关键词匹配'
+        }
+      }
+    ]
+  }, null, 2)
+
+  if (settings.apiStyle === 'chat_completions') {
+    const schemaHint = '\n\n请严格按以下 JSON 格式返回结果，不要添加任何额外文本或 markdown 标记：\n' + JSON.stringify(NATURAL_SEARCH_SCHEMA, null, 2)
+    return {
+      model: settings.model,
+      messages: [
+        { role: 'system', content: systemPrompt + schemaHint },
+        { role: 'user', content: userPrompt }
+      ],
+      response_format: { type: 'json_object' }
+    }
+  }
+
+  return {
+    model: settings.model,
+    input: [
+      {
+        role: 'system',
+        content: [{ type: 'input_text', text: systemPrompt }]
+      },
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: userPrompt }]
+      }
+    ],
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'popup_natural_language_search',
+        strict: true,
+        schema: NATURAL_SEARCH_SCHEMA
+      }
+    }
+  }
+}
+
+function normalizeNaturalSearchError(error) {
+  if (isSmartPermissionRequiredError(error)) {
+    return 'AI 渠道未授权，已使用本地自然语言解析。'
+  }
+
+  const message = error instanceof Error ? error.message : ''
+  if (!message) {
+    return 'AI 解析不可用，已使用本地自然语言解析。'
+  }
+
+  if (message.includes('请先到通用设置')) {
+    return '未配置 AI 渠道，已使用本地自然语言解析。'
+  }
+
+  return `AI 解析不可用，已使用本地解析：${cleanSmartText(message, 72)}`
+}
+
 async function buildCurrentPageContext(currentUrl, settings) {
   const timeoutMs = settings.timeoutMs
   let context = null
@@ -2809,6 +3198,14 @@ function getSearchCacheKey(normalizedQuery) {
   return `${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
 }
 
+function getNaturalSearchDateBucket() {
+  return formatLocalDate(Date.now())
+}
+
+function getNaturalSearchPlanCacheKey(normalizedQuery) {
+  return `${getNaturalSearchDateBucket()}\u0000${normalizedQuery}`
+}
+
 function cacheSearchResults(cacheKey, results) {
   state.searchCache.set(cacheKey, results)
   if (state.searchCache.size <= SEARCH_CACHE_LIMIT) {
@@ -2823,6 +3220,7 @@ function cacheSearchResults(cacheKey, results) {
 
 function clearSearchCaches() {
   state.searchCache.clear()
+  state.naturalSearchPlanCache.clear()
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
 }
@@ -2831,6 +3229,18 @@ function yieldWork() {
   return new Promise((resolve) => {
     window.requestAnimationFrame(resolve)
   })
+}
+
+function formatLocalDate(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function isSmartClassifiableUrl(url) {
