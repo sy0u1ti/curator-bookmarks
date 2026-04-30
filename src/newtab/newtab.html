@@ -75,16 +75,18 @@
                 <span class="folder-candidates-chevron" aria-hidden="true"></span>
               </button>
               <div id="folder-candidates-panel" class="folder-candidates-panel" hidden>
-                <label class="setting-floating-field folder-search-field">
-                  <input
-                    id="folder-candidate-search"
-                    class="setting-text-input"
-                    type="search"
-                    placeholder="搜索文件夹"
-                    spellcheck="false"
-                  >
-                </label>
-                <div id="folder-candidate-list" class="folder-candidate-list" role="listbox"></div>
+                <div class="reveal-panel-body">
+                  <label class="setting-floating-field folder-search-field">
+                    <input
+                      id="folder-candidate-search"
+                      class="setting-text-input"
+                      type="search"
+                      placeholder="搜索文件夹"
+                      spellcheck="false"
+                    >
+                  </label>
+                  <div id="folder-candidate-list" class="folder-candidate-list" role="listbox"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -166,8 +168,39 @@
 
         <section class="settings-section" aria-labelledby="settings-icon-title">
           <h2 id="settings-icon-title">图标</h2>
-          <div class="settings-card">
+          <div class="settings-card icon-settings-card">
+            <div class="icon-live-preview-panel">
+              <div class="icon-live-preview-header">
+                <span>实时预览</span>
+                <span id="icon-live-preview-summary" class="icon-live-preview-summary"></span>
+              </div>
+              <div id="icon-live-preview" class="icon-live-preview" aria-label="图标布局预览"></div>
+            </div>
             <div id="icon-preset-row" class="icon-preset-row"></div>
+            <div class="setting-row icon-control-row">
+              <span>布局方式</span>
+              <div id="icon-layout-control" class="setting-segmented" role="group" aria-label="布局方式">
+                <button class="setting-segmented-button" type="button" data-icon-layout-mode="auto">自动适配</button>
+                <button class="setting-segmented-button" type="button" data-icon-layout-mode="fixed">固定列数</button>
+              </div>
+            </div>
+            <label class="setting-row">
+              <span>垂直居中</span>
+              <input id="icon-vertical-center" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <label class="setting-row">
+              <span>显示标题</span>
+              <input id="icon-show-titles" class="setting-switch-input" type="checkbox" checked>
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <div id="icon-title-lines-row" class="setting-row icon-control-row">
+              <span>标题行数</span>
+              <div id="icon-title-lines-control" class="setting-segmented" role="group" aria-label="标题行数">
+                <button class="setting-segmented-button" type="button" data-icon-title-lines="1">1 行</button>
+                <button class="setting-segmented-button" type="button" data-icon-title-lines="2">2 行</button>
+              </div>
+            </div>
             <button
               id="icon-advanced-toggle"
               class="icon-advanced-toggle"
@@ -179,18 +212,32 @@
               <span class="icon-advanced-chevron" aria-hidden="true"></span>
             </button>
             <div id="icon-advanced-panel" class="icon-advanced-panel" hidden>
-              <label class="setting-row slider-row">
-                <span>页面宽度</span>
-                <input id="icon-page-width" class="setting-range" type="range" min="16" max="100" value="64">
-              </label>
-              <label class="setting-row slider-row">
-                <span>横向间距</span>
-                <input id="icon-column-gap" class="setting-range" type="range" min="0" max="100" value="18">
-              </label>
-              <label class="setting-row slider-row">
-                <span>竖向间距</span>
-                <input id="icon-row-gap" class="setting-range" type="range" min="0" max="100" value="18">
-              </label>
+              <div class="reveal-panel-body">
+                <label class="setting-row slider-row">
+                  <span>页面宽度 <output id="icon-page-width-value" class="setting-value">64%</output></span>
+                  <input id="icon-page-width" class="setting-range" type="range" min="16" max="100" value="64">
+                </label>
+                <label class="setting-row slider-row">
+                  <span>图标大小 <output id="icon-shell-size-value" class="setting-value">44px</output></span>
+                  <input id="icon-shell-size" class="setting-range" type="range" min="28" max="72" value="44">
+                </label>
+                <label class="setting-row slider-row">
+                  <span>横向间距 <output id="icon-column-gap-value" class="setting-value">32px</output></span>
+                  <input id="icon-column-gap" class="setting-range" type="range" min="0" max="100" value="18">
+                </label>
+                <label class="setting-row slider-row">
+                  <span>行距 <output id="icon-row-gap-value" class="setting-value">20px</output></span>
+                  <input id="icon-row-gap" class="setting-range" type="range" min="0" max="100" value="18">
+                </label>
+                <label class="setting-row slider-row">
+                  <span>文件夹间距 <output id="icon-folder-gap-value" class="setting-value">22px</output></span>
+                  <input id="icon-folder-gap" class="setting-range" type="range" min="0" max="120" value="22">
+                </label>
+                <label id="icon-columns-row" class="setting-row slider-row">
+                  <span>固定列数 <output id="icon-columns-value" class="setting-value">6</output></span>
+                  <input id="icon-columns" class="setting-range" type="range" min="3" max="12" value="6">
+                </label>
+              </div>
             </div>
           </div>
         </section>
@@ -281,6 +328,14 @@
             <label class="setting-row slider-row">
               <span>宽度</span>
               <input id="search-width" class="setting-range" type="range" min="16" max="72" value="44">
+            </label>
+            <label class="setting-row slider-row">
+              <span>高度</span>
+              <input id="search-height" class="setting-range" type="range" min="28" max="56" value="34">
+            </label>
+            <label class="setting-row slider-row">
+              <span>上下位置</span>
+              <input id="search-offset-y" class="setting-range" type="range" min="-32" max="72" value="0">
             </label>
             <label class="setting-row slider-row">
               <span>背景</span>

@@ -17,13 +17,27 @@ import {
 import { appendRecycleEntry } from '../shared/recycle-bin.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import type { FolderRecord } from '../shared/types.js'
+import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
+import {
+  DEFAULT_ICON_SETTINGS,
+  ICON_LAYOUT_PRESETS,
+  ICON_PRESET_META,
+  type IconLayoutPresetKey,
+  type IconSettings,
+  detectPresetFromValues,
+  getFixedIconGridWidthPx,
+  getFolderGapPx,
+  getIconGapPx,
+  getIconPageWidthPx,
+  getIconRowGapPx,
+  normalizeIconSettings
+} from './icon-settings.js'
 
 const DEFAULT_NEW_TAB_FOLDER_TITLE = '标签页'
 const FAVICON_SIZE = 64
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
-const ICON_PAGE_WIDTH_REFERENCE_PX = 1920
 const BACKGROUND_MEDIA_DB_NAME = 'curatorNewTabBackgroundMedia'
 const BACKGROUND_MEDIA_STORE = 'media'
 const BACKGROUND_URL_CACHE_KEY = 'urlImage'
@@ -47,49 +61,11 @@ const DEFAULT_SEARCH_SETTINGS = {
   engine: 'default',
   placeholder: '',
   width: 44,
+  height: 34,
+  offsetY: 0,
   background: 58
 }
 const SUPPORTED_SEARCH_ENGINES = new Set(['default', 'google', 'bing', 'baidu', 'duckduckgo'])
-const ICON_LAYOUT_PRESETS = {
-  compact: {
-    tileWidth: 72,
-    iconShellSize: 36,
-    pageWidth: 56,
-    columnGap: 6,
-    rowGap: 6
-  },
-  comfortable: {
-    tileWidth: 82,
-    iconShellSize: 44,
-    pageWidth: 64,
-    columnGap: 18,
-    rowGap: 18
-  },
-  spacious: {
-    tileWidth: 96,
-    iconShellSize: 52,
-    pageWidth: 76,
-    columnGap: 30,
-    rowGap: 30
-  }
-} as const
-
-type IconLayoutPresetKey = keyof typeof ICON_LAYOUT_PRESETS
-
-const ICON_PRESET_META: Record<IconLayoutPresetKey, { name: string; desc: string; cols: number; rows: number }> = {
-  compact: { name: '紧凑', desc: '更多图标', cols: 5, rows: 3 },
-  comfortable: { name: '舒适', desc: '均衡布局', cols: 4, rows: 3 },
-  spacious: { name: '宽松', desc: '大图标', cols: 3, rows: 2 }
-}
-
-const DEFAULT_ICON_SETTINGS = {
-  pageWidth: 64,
-  columnGap: 18,
-  rowGap: 18,
-  tileWidth: 82,
-  iconShellSize: 44,
-  preset: 'comfortable' as string
-}
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false
 }
@@ -204,6 +180,7 @@ let bookmarkDragGhost: HTMLElement | null = null
 let bookmarkDragGhostFrame = 0
 let folderDragGhost: HTMLElement | null = null
 let folderDragGhostFrame = 0
+let resizeLayoutFrame = 0
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
@@ -253,6 +230,13 @@ function bindEvents(): void {
     closeAddBookmarkMenu()
     cancelBookmarkDrag()
     cancelFolderDrag()
+    if (!resizeLayoutFrame) {
+      resizeLayoutFrame = window.requestAnimationFrame(() => {
+        resizeLayoutFrame = 0
+        render()
+        updateClockText()
+      })
+    }
   })
 
   root?.addEventListener('click', (event) => {
@@ -306,7 +290,7 @@ function bindEvents(): void {
     const bookmarkTarget = target.closest('[data-bookmark-id]')
     if (bookmarkTarget instanceof HTMLElement) {
       event.preventDefault()
-      closeAddBookmarkMenu()
+      closeAddBookmarkMenu({ animate: false })
       openBookmarkMenu(
         String(bookmarkTarget.dataset.bookmarkId || ''),
         event.clientX,
@@ -317,12 +301,12 @@ function bindEvents(): void {
 
     if (target.closest('.newtab-search')) {
       return
-    }
+  }
 
-    event.preventDefault()
-    closeBookmarkMenu()
-    openAddBookmarkMenu(event.clientX, event.clientY)
-  })
+  event.preventDefault()
+  closeBookmarkMenu({ animate: false })
+  openAddBookmarkMenu(event.clientX, event.clientY)
+})
 
   chrome.bookmarks?.onCreated?.addListener(handleBookmarksChanged)
   chrome.bookmarks?.onRemoved?.addListener(handleBookmarksChanged)
@@ -404,13 +388,22 @@ function bindSearchSettingsEvents(): void {
   document.getElementById('search-engine')?.addEventListener('change', handleSearchSettingsChange)
   document.getElementById('search-placeholder')?.addEventListener('input', handleSearchSettingsChange)
   document.getElementById('search-width')?.addEventListener('input', handleSearchSettingsChange)
+  document.getElementById('search-height')?.addEventListener('input', handleSearchSettingsChange)
+  document.getElementById('search-offset-y')?.addEventListener('input', handleSearchSettingsChange)
   document.getElementById('search-background')?.addEventListener('input', handleSearchSettingsChange)
 }
 
 function bindIconSettingsEvents(): void {
   document.getElementById('icon-page-width')?.addEventListener('input', handleIconSettingsChange)
+  document.getElementById('icon-shell-size')?.addEventListener('input', handleIconSettingsChange)
   document.getElementById('icon-column-gap')?.addEventListener('input', handleIconSettingsChange)
   document.getElementById('icon-row-gap')?.addEventListener('input', handleIconSettingsChange)
+  document.getElementById('icon-folder-gap')?.addEventListener('input', handleIconSettingsChange)
+  document.getElementById('icon-columns')?.addEventListener('input', handleIconSettingsChange)
+  document.getElementById('icon-vertical-center')?.addEventListener('change', handleIconSettingsChange)
+  document.getElementById('icon-show-titles')?.addEventListener('change', handleIconSettingsChange)
+  document.getElementById('icon-layout-control')?.addEventListener('click', handleIconLayoutModeClick)
+  document.getElementById('icon-title-lines-control')?.addEventListener('click', handleIconTitleLinesClick)
   document.getElementById('icon-advanced-toggle')?.addEventListener('click', toggleIconAdvanced)
   document.getElementById('icon-preset-row')?.addEventListener('click', handlePresetCardClick)
 }
@@ -555,14 +548,40 @@ async function updateSelectedFolders(
 }
 
 function handleIconSettingsChange(): void {
-  state.iconSettings = readIconSettingsFromControls()
-  if (state.iconSettings.preset !== 'custom') {
-    state.iconSettings = { ...state.iconSettings, preset: 'custom' }
+  commitIconSettings(readIconSettingsFromControls())
+}
+
+function handleIconLayoutModeClick(event: Event): void {
+  const target = event.target
+  const button = target instanceof Element
+    ? target.closest<HTMLElement>('[data-icon-layout-mode]')
+    : null
+  const layoutMode = button?.dataset.iconLayoutMode
+  if (layoutMode !== 'auto' && layoutMode !== 'fixed') {
+    return
   }
-  void saveIconSettings()
-  render()
-  syncIconSettingsControls()
-  updateClockText()
+
+  commitIconSettings(normalizeIconSettings({
+    ...state.iconSettings,
+    layoutMode,
+    preset: ''
+  }))
+}
+
+function handleIconTitleLinesClick(event: Event): void {
+  const target = event.target
+  const button = target instanceof Element
+    ? target.closest<HTMLElement>('[data-icon-title-lines]')
+    : null
+  if (!button || button.getAttribute('aria-disabled') === 'true') {
+    return
+  }
+
+  commitIconSettings(normalizeIconSettings({
+    ...state.iconSettings,
+    titleLines: Number(button.dataset.iconTitleLines),
+    preset: ''
+  }))
 }
 
 function handleSearchSettingsChange(): void {
@@ -691,6 +710,12 @@ function handleTimeSettingsChange(): void {
 }
 
 function openSettingsDrawer(): void {
+  if (settingsDrawer) {
+    cancelExitMotion(settingsDrawer)
+  }
+  if (settingsBackdrop) {
+    cancelExitMotion(settingsBackdrop)
+  }
   syncGeneralSettingsControls()
   syncFolderSettingsControls()
   syncBackgroundSettingsControls()
@@ -708,9 +733,15 @@ function openSettingsDrawer(): void {
 function closeSettingsDrawer(): void {
   settingsDrawer?.classList.remove('open')
   settingsBackdrop?.classList.remove('open')
+  settingsDrawer?.classList.add('is-closing')
+  settingsBackdrop?.classList.add('is-closing')
   settingsDrawer?.setAttribute('aria-hidden', 'true')
   settingsTrigger?.setAttribute('aria-expanded', 'false')
   document.body.classList.remove('settings-open')
+  window.setTimeout(() => {
+    settingsDrawer?.classList.remove('is-closing')
+    settingsBackdrop?.classList.remove('is-closing')
+  }, 260)
 }
 
 function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number): void {
@@ -743,20 +774,36 @@ function openAddBookmarkMenu(clientX: number, clientY: number): void {
   renderAddBookmarkMenu()
 }
 
-function closeBookmarkMenu(): void {
+function closeBookmarkMenu({ animate = true } = {}): void {
   state.activeMenuBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
   state.pendingCustomIconDataUrl = ''
-  document.querySelector('.bookmark-edit-menu')?.remove()
+  const menu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
+  if (menu) {
+    if (animate) {
+      void closeWithExitMotion(menu, 'is-closing', () => menu.remove(), 180)
+    } else {
+      cancelExitMotion(menu)
+      menu.remove()
+    }
+  }
 }
 
-function closeAddBookmarkMenu(): void {
+function closeAddBookmarkMenu({ animate = true } = {}): void {
   state.addMenuOpen = false
   state.addMenuExpanded = false
   state.addMenuBusy = false
   state.addMenuError = ''
-  document.querySelector('.bookmark-add-menu')?.remove()
+  const menu = document.querySelector<HTMLElement>('.bookmark-add-menu')
+  if (menu) {
+    if (animate) {
+      void closeWithExitMotion(menu, 'is-closing', () => menu.remove(), 180)
+    } else {
+      cancelExitMotion(menu)
+      menu.remove()
+    }
+  }
 }
 
 function handleBookmarkPointerDown(event: PointerEvent): void {
@@ -1783,11 +1830,14 @@ function createSearchWidget(): HTMLElement | null {
 
   const slot = document.createElement('section')
   slot.className = 'newtab-search-slot'
+  slot.style.setProperty('--search-height', `${settings.height}px`)
+  slot.style.setProperty('--search-offset-y', `${settings.offsetY}px`)
   slot.setAttribute('aria-label', '搜索')
 
   const form = document.createElement('form')
   form.className = 'newtab-search'
   form.style.setProperty('--search-width', `${settings.width}vw`)
+  form.style.setProperty('--search-height', `${settings.height}px`)
   form.style.setProperty('--search-bg-alpha', String(settings.background / 100))
   form.setAttribute('role', 'search')
   form.setAttribute('aria-label', '搜索')
@@ -1911,11 +1961,22 @@ function createStateView(message: string, actionLabel = '', action?: () => void)
 function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   const view = document.createElement('section')
   view.className = 'newtab-content'
+  const gridSettings = {
+    ...state.iconSettings,
+    columns: getResponsiveIconColumns(state.iconSettings)
+  }
   view.style.setProperty('--icon-page-width', `${getIconPageWidthPx(state.iconSettings.pageWidth)}px`)
   view.style.setProperty('--icon-column-gap', `${getIconGapPx(state.iconSettings.columnGap)}px`)
-  view.style.setProperty('--icon-row-gap', `${getIconGapPx(state.iconSettings.rowGap)}px`)
+  view.style.setProperty('--icon-row-gap', `${getIconRowGapPx(state.iconSettings.rowGap)}px`)
+  view.style.setProperty('--icon-folder-gap', `${getFolderGapPx(state.iconSettings.folderGap)}px`)
   view.style.setProperty('--icon-tile-width', `${state.iconSettings.tileWidth}px`)
   view.style.setProperty('--icon-shell-size', `${state.iconSettings.iconShellSize}px`)
+  view.style.setProperty('--icon-fixed-grid-width', `${getFixedIconGridWidthPx(gridSettings)}px`)
+  view.style.setProperty('--icon-columns', String(gridSettings.columns))
+  view.style.setProperty('--icon-title-lines', String(state.iconSettings.titleLines))
+  view.dataset.iconLayoutMode = state.iconSettings.layoutMode
+  view.dataset.iconShowTitles = String(state.iconSettings.showTitles)
+  view.dataset.iconVerticalCenter = String(state.iconSettings.verticalCenter)
 
   const groupList = document.createElement('div')
   groupList.className = 'bookmark-folder-sections'
@@ -1971,6 +2032,29 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
 
   view.appendChild(groupList)
   return view
+}
+
+function getResponsiveIconColumns(settings: IconSettings): number {
+  if (settings.layoutMode !== 'fixed') {
+    return settings.columns
+  }
+
+  const viewportWidth = Math.max(
+    320,
+    document.documentElement.clientWidth || window.innerWidth || 1280
+  )
+  const horizontalShellPadding = Math.max(48, Math.min(viewportWidth * 0.1, 144))
+  const availablePageWidth = Math.max(
+    settings.tileWidth,
+    Math.min(getIconPageWidthPx(settings.pageWidth), 1280, viewportWidth - horizontalShellPadding)
+  )
+  const gap = getIconGapPx(settings.columnGap)
+  const maxColumns = Math.max(
+    1,
+    Math.floor((availablePageWidth + gap) / (settings.tileWidth + gap))
+  )
+
+  return Math.max(1, Math.min(settings.columns, maxColumns))
 }
 
 function createBookmarkTile(
@@ -2132,7 +2216,11 @@ function getActiveMenuBookmark(): chrome.bookmarks.BookmarkTreeNode | null {
 }
 
 function renderBookmarkMenu({ focusFirst = true } = {}): void {
-  document.querySelector('.bookmark-edit-menu')?.remove()
+  const existingMenu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
+  if (existingMenu) {
+    cancelExitMotion(existingMenu)
+    existingMenu.remove()
+  }
 
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
@@ -2204,7 +2292,11 @@ function renderBookmarkMenu({ focusFirst = true } = {}): void {
 }
 
 function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
-  document.querySelector('.bookmark-add-menu')?.remove()
+  const existingMenu = document.querySelector<HTMLElement>('.bookmark-add-menu')
+  if (existingMenu) {
+    cancelExitMotion(existingMenu)
+    existingMenu.remove()
+  }
 
   if (!state.addMenuOpen) {
     return
@@ -3147,6 +3239,8 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
       : DEFAULT_SEARCH_SETTINGS.engine,
     placeholder,
     width: clampNumber(settings.width, 16, 72, DEFAULT_SEARCH_SETTINGS.width),
+    height: clampNumber(settings.height, 28, 56, DEFAULT_SEARCH_SETTINGS.height),
+    offsetY: clampNumber(settings.offsetY, -32, 72, DEFAULT_SEARCH_SETTINGS.offsetY),
     background: clampNumber(settings.background, 36, 76, DEFAULT_SEARCH_SETTINGS.background)
   }
 }
@@ -3157,6 +3251,8 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
   const engineInput = document.getElementById('search-engine')
   const placeholderInput = document.getElementById('search-placeholder')
   const widthInput = document.getElementById('search-width')
+  const heightInput = document.getElementById('search-height')
+  const offsetYInput = document.getElementById('search-offset-y')
   const backgroundInput = document.getElementById('search-background')
 
   return normalizeSearchSettings({
@@ -3165,6 +3261,8 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
     engine: engineInput instanceof HTMLSelectElement ? engineInput.value : state.searchSettings.engine,
     placeholder: placeholderInput instanceof HTMLInputElement ? placeholderInput.value : state.searchSettings.placeholder,
     width: widthInput instanceof HTMLInputElement ? Number(widthInput.value) : state.searchSettings.width,
+    height: heightInput instanceof HTMLInputElement ? Number(heightInput.value) : state.searchSettings.height,
+    offsetY: offsetYInput instanceof HTMLInputElement ? Number(offsetYInput.value) : state.searchSettings.offsetY,
     background: backgroundInput instanceof HTMLInputElement ? Number(backgroundInput.value) : state.searchSettings.background
   })
 }
@@ -3176,6 +3274,8 @@ function syncSearchSettingsControls(): void {
   const engineInput = document.getElementById('search-engine')
   const placeholderInput = document.getElementById('search-placeholder')
   const widthInput = document.getElementById('search-width')
+  const heightInput = document.getElementById('search-height')
+  const offsetYInput = document.getElementById('search-offset-y')
   const backgroundInput = document.getElementById('search-background')
 
   if (enabledInput instanceof HTMLInputElement) {
@@ -3196,6 +3296,14 @@ function syncSearchSettingsControls(): void {
   if (widthInput instanceof HTMLInputElement) {
     widthInput.value = String(settings.width)
     widthInput.disabled = !settings.enabled
+  }
+  if (heightInput instanceof HTMLInputElement) {
+    heightInput.value = String(settings.height)
+    heightInput.disabled = !settings.enabled
+  }
+  if (offsetYInput instanceof HTMLInputElement) {
+    offsetYInput.value = String(settings.offsetY)
+    offsetYInput.disabled = !settings.enabled
   }
   if (backgroundInput instanceof HTMLInputElement) {
     backgroundInput.value = String(settings.background)
@@ -3340,7 +3448,7 @@ function syncFolderSettingsControls(): void {
   }
 
   if (panel instanceof HTMLElement) {
-    panel.hidden = !state.folderCandidatesExpanded
+    setRevealPanelExpanded(panel, state.folderCandidatesExpanded)
   }
 
   if (searchInput instanceof HTMLInputElement && searchInput.value !== state.folderCandidateQuery) {
@@ -3478,69 +3586,68 @@ function applyFolderSettings(): void {
   )
 }
 
-const PRESET_KEYS = new Set(['compact', 'comfortable', 'spacious', 'custom'])
-
-function normalizeIconSettings(rawSettings: unknown): typeof DEFAULT_ICON_SETTINGS {
-  if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
-    return { ...DEFAULT_ICON_SETTINGS }
-  }
-
-  const settings = rawSettings as Record<string, unknown>
-  const legacySpacing = settings.spacing
-
-  const pageWidth = clampNumber(settings.pageWidth, 16, 100, DEFAULT_ICON_SETTINGS.pageWidth)
-  const columnGap = clampNumber(
-    settings.columnGap ?? legacySpacing,
-    0,
-    100,
-    DEFAULT_ICON_SETTINGS.columnGap
-  )
-  const rowGap = clampNumber(
-    settings.rowGap ?? legacySpacing,
-    0,
-    100,
-    DEFAULT_ICON_SETTINGS.rowGap
-  )
-  const tileWidth = clampNumber(settings.tileWidth, 60, 120, DEFAULT_ICON_SETTINGS.tileWidth)
-  const iconShellSize = clampNumber(settings.iconShellSize, 28, 64, DEFAULT_ICON_SETTINGS.iconShellSize)
-
-  let preset = typeof settings.preset === 'string' ? settings.preset : ''
-  if (!PRESET_KEYS.has(preset)) {
-    preset = detectPresetFromValues({ pageWidth, columnGap, rowGap, tileWidth, iconShellSize })
-  }
-
-  return { pageWidth, columnGap, rowGap, tileWidth, iconShellSize, preset }
-}
-
-function readIconSettingsFromControls(): typeof DEFAULT_ICON_SETTINGS {
+function readIconSettingsFromControls(): IconSettings {
   const pageWidthInput = document.getElementById('icon-page-width')
+  const iconShellSizeInput = document.getElementById('icon-shell-size')
   const columnGapInput = document.getElementById('icon-column-gap')
   const rowGapInput = document.getElementById('icon-row-gap')
+  const folderGapInput = document.getElementById('icon-folder-gap')
+  const columnsInput = document.getElementById('icon-columns')
+  const verticalCenterInput = document.getElementById('icon-vertical-center')
+  const showTitlesInput = document.getElementById('icon-show-titles')
 
-  return normalizeIconSettings({
+  const settings = normalizeIconSettings({
     pageWidth: pageWidthInput instanceof HTMLInputElement
       ? Number(pageWidthInput.value)
       : state.iconSettings.pageWidth,
+    tileWidth: state.iconSettings.tileWidth,
+    iconShellSize: iconShellSizeInput instanceof HTMLInputElement
+      ? Number(iconShellSizeInput.value)
+      : state.iconSettings.iconShellSize,
     columnGap: columnGapInput instanceof HTMLInputElement
       ? Number(columnGapInput.value)
       : state.iconSettings.columnGap,
     rowGap: rowGapInput instanceof HTMLInputElement
       ? Number(rowGapInput.value)
       : state.iconSettings.rowGap,
-    tileWidth: state.iconSettings.tileWidth,
-    iconShellSize: state.iconSettings.iconShellSize,
-    preset: state.iconSettings.preset
+    folderGap: folderGapInput instanceof HTMLInputElement
+      ? Number(folderGapInput.value)
+      : state.iconSettings.folderGap,
+    layoutMode: state.iconSettings.layoutMode,
+    columns: columnsInput instanceof HTMLInputElement
+      ? Number(columnsInput.value)
+      : state.iconSettings.columns,
+    verticalCenter: verticalCenterInput instanceof HTMLInputElement
+      ? verticalCenterInput.checked
+      : state.iconSettings.verticalCenter,
+    showTitles: showTitlesInput instanceof HTMLInputElement
+      ? showTitlesInput.checked
+      : state.iconSettings.showTitles,
+    titleLines: state.iconSettings.titleLines,
+    preset: ''
   })
+
+  return withDetectedIconPreset(settings)
 }
 
 function syncIconSettingsControls(): void {
   const settings = state.iconSettings
   const pageWidthInput = document.getElementById('icon-page-width')
+  const iconShellSizeInput = document.getElementById('icon-shell-size')
   const columnGapInput = document.getElementById('icon-column-gap')
   const rowGapInput = document.getElementById('icon-row-gap')
+  const folderGapInput = document.getElementById('icon-folder-gap')
+  const columnsInput = document.getElementById('icon-columns')
+  const verticalCenterInput = document.getElementById('icon-vertical-center')
+  const showTitlesInput = document.getElementById('icon-show-titles')
+  const titleLinesRow = document.getElementById('icon-title-lines-row')
+  const columnsRow = document.getElementById('icon-columns-row')
 
   if (pageWidthInput instanceof HTMLInputElement) {
     pageWidthInput.value = String(settings.pageWidth)
+  }
+  if (iconShellSizeInput instanceof HTMLInputElement) {
+    iconShellSizeInput.value = String(settings.iconShellSize)
   }
   if (columnGapInput instanceof HTMLInputElement) {
     columnGapInput.value = String(settings.columnGap)
@@ -3548,8 +3655,34 @@ function syncIconSettingsControls(): void {
   if (rowGapInput instanceof HTMLInputElement) {
     rowGapInput.value = String(settings.rowGap)
   }
+  if (folderGapInput instanceof HTMLInputElement) {
+    folderGapInput.value = String(settings.folderGap)
+  }
+  if (columnsInput instanceof HTMLInputElement) {
+    columnsInput.value = String(settings.columns)
+    columnsInput.disabled = settings.layoutMode !== 'fixed'
+  }
+  if (verticalCenterInput instanceof HTMLInputElement) {
+    verticalCenterInput.checked = settings.verticalCenter
+  }
+  if (showTitlesInput instanceof HTMLInputElement) {
+    showTitlesInput.checked = settings.showTitles
+  }
 
+  setTextContent('icon-page-width-value', `${settings.pageWidth}%`)
+  setTextContent('icon-shell-size-value', `${settings.iconShellSize}px`)
+  setTextContent('icon-column-gap-value', `${getIconGapPx(settings.columnGap)}px`)
+  setTextContent('icon-row-gap-value', `${getIconRowGapPx(settings.rowGap)}px`)
+  setTextContent('icon-folder-gap-value', `${getFolderGapPx(settings.folderGap)}px`)
+  setTextContent('icon-columns-value', String(settings.columns))
+
+  syncIconSegmentButtons('[data-icon-layout-mode]', settings.layoutMode)
+  syncIconSegmentButtons('[data-icon-title-lines]', String(settings.titleLines), !settings.showTitles)
+  titleLinesRow?.classList.toggle('setting-row-disabled', !settings.showTitles)
+  columnsRow?.classList.toggle('setting-row-disabled', settings.layoutMode !== 'fixed')
   syncPresetCardSelection()
+  syncIconAdvancedPanel()
+  renderIconPreview()
 }
 
 async function saveIconSettings(): Promise<void> {
@@ -3558,39 +3691,30 @@ async function saveIconSettings(): Promise<void> {
   })
 }
 
-function getIconPageWidthPx(pageWidth: number): number {
-  return Math.round((clampNumber(pageWidth, 16, 100, DEFAULT_ICON_SETTINGS.pageWidth) / 100) * ICON_PAGE_WIDTH_REFERENCE_PX)
+function commitIconSettings(nextSettings: IconSettings): void {
+  state.iconSettings = withDetectedIconPreset(nextSettings)
+  void saveIconSettings()
+  render()
+  syncIconSettingsControls()
+  updateAllSettingRangeVisuals()
+  updateClockText()
 }
 
-function getIconGapPx(spacing: number): number {
-  return clampNumber(14 + spacing, 14, 114, 32)
-}
-
-function detectPresetFromValues(settings: Omit<typeof DEFAULT_ICON_SETTINGS, 'preset'>): string {
-  for (const [key, preset] of Object.entries(ICON_LAYOUT_PRESETS)) {
-    if (
-      settings.pageWidth === preset.pageWidth &&
-      settings.columnGap === preset.columnGap &&
-      settings.rowGap === preset.rowGap &&
-      settings.tileWidth === preset.tileWidth &&
-      settings.iconShellSize === preset.iconShellSize
-    ) {
-      return key
-    }
+function withDetectedIconPreset(settings: IconSettings): IconSettings {
+  const { preset: _preset, ...presetValues } = settings
+  return {
+    ...settings,
+    preset: detectPresetFromValues(presetValues)
   }
-  return 'custom'
 }
 
 function applyIconPreset(presetKey: IconLayoutPresetKey): void {
   const preset = ICON_LAYOUT_PRESETS[presetKey]
-  state.iconSettings = {
-    pageWidth: preset.pageWidth,
-    columnGap: preset.columnGap,
-    rowGap: preset.rowGap,
-    tileWidth: preset.tileWidth,
-    iconShellSize: preset.iconShellSize,
+  state.iconSettings = normalizeIconSettings({
+    ...preset,
+    verticalCenter: state.iconSettings.verticalCenter,
     preset: presetKey
-  }
+  })
   void saveIconSettings()
   render()
   syncIconSettingsControls()
@@ -3606,7 +3730,19 @@ function toggleIconAdvanced(): void {
   const expanded = toggle.getAttribute('aria-expanded') === 'true'
   toggle.setAttribute('aria-expanded', String(!expanded))
   toggle.classList.toggle('expanded', !expanded)
-  panel.hidden = expanded
+  setRevealPanelExpanded(panel, !expanded)
+}
+
+function setRevealPanelExpanded(panel: HTMLElement, expanded: boolean): void {
+  panel.hidden = false
+  panel.classList.toggle('is-expanded', expanded)
+  panel.classList.toggle('is-collapsed', !expanded)
+  panel.setAttribute('aria-hidden', String(!expanded))
+  if (expanded) {
+    panel.removeAttribute('inert')
+  } else {
+    panel.setAttribute('inert', '')
+  }
 }
 
 function handlePresetCardClick(event: Event): void {
@@ -3628,7 +3764,88 @@ function syncPresetCardSelection(): void {
 }
 
 function syncIconAdvancedPanel(): void {
-  // sliders are always enabled; dragging auto-switches to custom preset
+  const columnsInput = document.getElementById('icon-columns')
+  if (columnsInput instanceof HTMLInputElement) {
+    columnsInput.title = state.iconSettings.layoutMode === 'fixed'
+      ? ''
+      : '固定列数模式下生效'
+  }
+}
+
+function setTextContent(elementId: string, text: string): void {
+  const element = document.getElementById(elementId)
+  if (element) {
+    element.textContent = text
+  }
+}
+
+function syncIconSegmentButtons(selector: string, selectedValue: string, disabled = false): void {
+  for (const button of document.querySelectorAll<HTMLButtonElement>(selector)) {
+    const value = button.dataset.iconLayoutMode || button.dataset.iconTitleLines || ''
+    const selected = value === selectedValue
+    button.classList.toggle('selected', selected)
+    button.setAttribute('aria-pressed', String(selected))
+    button.disabled = disabled
+    button.setAttribute('aria-disabled', String(disabled))
+  }
+}
+
+function renderIconPreview(): void {
+  const preview = document.getElementById('icon-live-preview')
+  if (!preview) {
+    return
+  }
+
+  const settings = state.iconSettings
+  const previewColumnGap = Math.max(4, Math.round(getIconGapPx(settings.columnGap) * 0.2))
+  const previewRowGap = Math.max(2, Math.round(getIconRowGapPx(settings.rowGap) * 0.2))
+  const previewTileWidth = Math.max(42, Math.round(settings.tileWidth * 0.58))
+  const previewShellSize = Math.max(22, Math.round(settings.iconShellSize * 0.58))
+  const previewColumns = settings.layoutMode === 'fixed'
+    ? Math.max(3, Math.min(8, settings.columns))
+    : Math.max(3, Math.min(6, Math.round(settings.pageWidth / 14)))
+  const sampleCount = Math.max(6, Math.min(8, previewColumns * 2))
+  const summary = [
+    settings.layoutMode === 'fixed' ? `${settings.columns} 列固定` : '自动适配',
+    `${settings.iconShellSize}px 图标`,
+    settings.showTitles ? `${settings.titleLines} 行标题` : '隐藏标题'
+  ].join(' · ')
+
+  preview.dataset.iconLayoutMode = settings.layoutMode
+  preview.dataset.iconShowTitles = String(settings.showTitles)
+  preview.style.setProperty('--preview-page-width', `${settings.pageWidth}%`)
+  preview.style.setProperty('--preview-column-gap', `${previewColumnGap}px`)
+  preview.style.setProperty('--preview-row-gap', `${previewRowGap}px`)
+  preview.style.setProperty('--preview-tile-width', `${previewTileWidth}px`)
+  preview.style.setProperty('--preview-shell-size', `${previewShellSize}px`)
+  preview.style.setProperty('--preview-title-lines', String(settings.titleLines))
+  setTextContent('icon-live-preview-summary', summary)
+
+  const grid = document.createElement('div')
+  grid.className = 'icon-live-preview-grid'
+  grid.style.gridTemplateColumns = `repeat(${previewColumns}, minmax(0, var(--preview-tile-width)))`
+
+  const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
+  for (let index = 0; index < sampleCount; index++) {
+    const tile = document.createElement('span')
+    tile.className = 'icon-live-preview-tile'
+
+    const shell = document.createElement('span')
+    shell.className = 'icon-live-preview-shell'
+    const mark = document.createElement('span')
+    mark.className = 'icon-live-preview-mark'
+    mark.textContent = names[index].slice(0, 1)
+    shell.appendChild(mark)
+
+    const title = document.createElement('span')
+    title.className = 'icon-live-preview-title'
+    title.textContent = names[index]
+
+    tile.append(shell, title)
+    grid.appendChild(tile)
+  }
+
+  preview.replaceChildren(grid)
 }
 
 function renderIconPresetCards(): void {
@@ -3663,7 +3880,11 @@ function renderIconPresetCards(): void {
     desc.className = 'icon-preset-desc'
     desc.textContent = meta.desc
 
-    card.append(preview, name, desc)
+    const detail = document.createElement('span')
+    detail.className = 'icon-preset-detail'
+    detail.textContent = meta.detail
+
+    card.append(preview, name, desc, detail)
     row.appendChild(card)
   }
 }

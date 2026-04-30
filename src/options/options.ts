@@ -1,10 +1,10 @@
-// @ts-nocheck
 import {
   BOOKMARKS_BAR_ID,
   ROOT_ID,
   STORAGE_KEYS,
   RECYCLE_BIN_LIMIT
 } from '../shared/constants.js'
+import type { NavigationAttempt } from '../shared/types.js'
 import {
   getLocalStorage,
   removeLocalStorage,
@@ -30,6 +30,12 @@ import {
 } from '../shared/text.js'
 import { cancelNavigationCheck, requestNavigationCheck } from '../shared/messages.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
+import {
+  extractAiErrorMessage,
+  extractChatCompletionsJsonText,
+  extractResponsesJsonText,
+  getAiEndpoint
+} from '../shared/ai-response.js'
 import {
   normalizeAiNamingSettings,
   normalizeAiNamingCustomModels,
@@ -160,8 +166,8 @@ import {
 } from './sections/bookmark-add-history.js'
 
 let availabilityRenderFrame = 0
-let availabilityPauseResolvers = []
-let confirmModalResolve = null
+let availabilityPauseResolvers: Array<() => void> = []
+let confirmModalResolve: ((confirmed: boolean) => void) | null = null
 let activeManagedModalKey = ''
 let modalReturnFocusElement = null
 
@@ -268,7 +274,7 @@ function syncPageSection() {
   const key = SECTION_META[rawKey] ? rawKey : 'general'
   const section = SECTION_META[key]
   const links = document.querySelectorAll('[data-section-link]')
-  const panels = document.querySelectorAll('[data-section-panel]')
+  const panels = document.querySelectorAll<HTMLElement>('[data-section-panel]')
   const availabilitySectionKeys = new Set(['availability', 'history', 'redirects', 'ignore'])
 
   if (rawKey !== key) {
@@ -321,7 +327,9 @@ function bindEvents() {
   dom.availabilityScopeTrigger?.addEventListener('click', () => openScopeModal('availability'))
   dom.historyScopeTrigger?.addEventListener('click', () => openScopeModal('history'))
   dom.aiScopeTrigger?.addEventListener('click', () => openScopeModal('ai'))
-  dom.aiSaveSettings?.addEventListener('click', saveAiNamingSettingsFromDom)
+  dom.aiSaveSettings?.addEventListener('click', () => {
+    void saveAiNamingSettingsFromDom()
+  })
   dom.aiTestConnection?.addEventListener('click', handleAiConnectivityTest)
   dom.aiAction?.addEventListener('click', handleAiNamingAction)
   dom.aiPauseAction?.addEventListener('click', toggleAiNamingPause)
@@ -412,14 +420,14 @@ function bindEvents() {
   dom.confirmDeleteModal?.addEventListener('click', confirmDeleteFailedBookmarks)
   dom.cancelConfirmModal?.addEventListener('click', () => resolveConfirmModal(false))
   dom.confirmModalConfirm?.addEventListener('click', () => resolveConfirmModal(true))
-  dom.moveSearchInput?.addEventListener('input', (event) => {
-    managerState.moveSearchQuery = event.target.value
+  dom.moveSearchInput?.addEventListener('input', () => {
+    managerState.moveSearchQuery = dom.moveSearchInput.value
     renderMoveModal()
   })
   dom.moveFolderResults?.addEventListener('click', handleMoveFolderResultsClick)
   dom.cancelMoveModal?.addEventListener('click', closeMoveModal)
-  dom.scopeSearchInput?.addEventListener('input', (event) => {
-    managerState.scopeSearchQuery = event.target.value
+  dom.scopeSearchInput?.addEventListener('input', () => {
+    managerState.scopeSearchQuery = dom.scopeSearchInput.value
     renderScopeModal()
   })
   dom.scopeFolderResults?.addEventListener('click', handleScopeFolderResultsClick)
@@ -427,8 +435,8 @@ function bindEvents() {
   dom.closeAiModelModal?.addEventListener('click', closeAiModelModal)
   dom.cancelAiModelModal?.addEventListener('click', closeAiModelModal)
   dom.saveAiModelModal?.addEventListener('click', saveAiModelModalSettings)
-  dom.aiModelPickerSearchInput?.addEventListener('input', (event) => {
-    managerState.aiModelPickerSearchQuery = event.target.value
+  dom.aiModelPickerSearchInput?.addEventListener('input', () => {
+    managerState.aiModelPickerSearchQuery = dom.aiModelPickerSearchInput.value
     renderAiModelPickerModal()
   })
   dom.aiModelPickerResults?.addEventListener('click', handleAiModelPickerResultsClick)
@@ -527,7 +535,7 @@ function setManagedModalHidden(key, backdrop, open, preferredFocus = null) {
   }
 
   const wasOpen = backdrop.dataset.modalOpen === 'true'
-  setModalHidden(backdrop, open)
+  const visibilityUpdate = setModalHidden(backdrop, open)
   backdrop.dataset.modalOpen = open ? 'true' : 'false'
 
   if (open && !wasOpen) {
@@ -536,7 +544,9 @@ function setManagedModalHidden(key, backdrop, open, preferredFocus = null) {
     if (activeElement instanceof HTMLElement && !backdrop.contains(activeElement)) {
       modalReturnFocusElement = activeElement
     }
-    window.setTimeout(() => focusModal(backdrop, preferredFocus), 0)
+    void Promise.resolve(visibilityUpdate).then(() => {
+      window.setTimeout(() => focusModal(backdrop, preferredFocus), 0)
+    })
     return
   }
 
@@ -544,7 +554,7 @@ function setManagedModalHidden(key, backdrop, open, preferredFocus = null) {
     activeManagedModalKey = ''
     const returnFocusElement = modalReturnFocusElement
     modalReturnFocusElement = null
-    window.setTimeout(() => {
+    void Promise.resolve(visibilityUpdate).then(() => {
       if (
         activeManagedModalKey ||
         !(returnFocusElement instanceof HTMLElement) ||
@@ -554,7 +564,7 @@ function setManagedModalHidden(key, backdrop, open, preferredFocus = null) {
         return
       }
       returnFocusElement.focus()
-    }, 0)
+    })
   }
 }
 
@@ -1125,7 +1135,7 @@ async function inspectBookmarkAvailability(bookmark, { probeEnabled }) {
     return null
   }
 
-  const attempts = []
+  const attempts: NavigationAttempt[] = []
 
   const firstNavigation = await runNavigationAttempt(bookmark.url, NAVIGATION_TIMEOUT_MS)
   if (availabilityState.stopRequested) {
@@ -1171,7 +1181,7 @@ async function inspectBookmarkAvailability(bookmark, { probeEnabled }) {
 async function waitForAvailabilityRun() {
   while (availabilityState.paused && !availabilityState.stopRequested) {
     await new Promise((resolve) => {
-      availabilityPauseResolvers.push(resolve)
+      availabilityPauseResolvers.push(() => resolve(undefined))
     })
   }
 
@@ -1191,7 +1201,7 @@ function isBookmarkRemovedDuringRun(bookmarkId) {
   return availabilityState.deletedBookmarkIds.has(String(bookmarkId || '').trim())
 }
 
-async function runNavigationAttempt(url, timeoutMs) {
+async function runNavigationAttempt(url, timeoutMs): Promise<NavigationAttempt> {
   const checkId = createNavigationCheckId()
   availabilityState.activeNavigationCheckIds?.add(checkId)
 
@@ -1207,7 +1217,7 @@ async function runNavigationAttempt(url, timeoutMs) {
     }
   } catch (error) {
     return {
-      status: 'failed',
+      status: 'failed' as const,
       finalUrl: url,
       detail: error instanceof Error ? error.message : '后台导航失败。',
       errorCode: 'runtime-message-failed'
@@ -1571,6 +1581,10 @@ function renderLoadingLabel(
     variant = 'bar',
     wrapperClass = 'status-loading-label',
     loaderClass = 'status-dot-loader'
+  }: {
+    variant?: string
+    wrapperClass?: string
+    loaderClass?: string
   } = {}
 ) {
   const loaderVariant = variant === 'spiral' ? 'spiral' : 'bar'
@@ -1582,7 +1596,21 @@ function renderLoadingLabel(
   `
 }
 
-function setLoadingLabel(element, label, { busy = false, variant = 'bar', wrapperClass, loaderClass } = {}) {
+function setLoadingLabel(
+  element,
+  label,
+  {
+    busy = false,
+    variant = 'bar',
+    wrapperClass,
+    loaderClass
+  }: {
+    busy?: boolean
+    variant?: string
+    wrapperClass?: string
+    loaderClass?: string
+  } = {}
+) {
   if (!element) {
     return
   }
@@ -3303,7 +3331,7 @@ function buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem = nu
     currentTitle: bookmark.title,
     suggestedTitle: status === 'suggested' ? normalizedTitle : bookmark.title,
     status,
-    confidence: status === 'failed' ? 'low' : modelItem.confidence,
+    confidence: modelItem.confidence,
     confidenceScore: normalizeAiConfidenceScore(modelItem.confidenceScore ?? modelItem.confidence),
     summary: normalizeAiResultText(modelItem.summary, 420),
     contentType: normalizeAiResultText(modelItem.contentType || preparedItem?.pageContext?.content_type, 80),
@@ -3485,7 +3513,7 @@ async function fetchRemoteBookmarkContentForAi(url, timeoutMs, fallbackContext) 
 }
 
 async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.settings) {
-  const endpoint = getAiNamingEndpoint(settings)
+  const endpoint = getAiEndpoint(settings)
   const response = await fetchWithRequestTimeout(endpoint, {
     method: 'POST',
     cache: 'no-store',
@@ -3535,7 +3563,7 @@ function normalizeAiNamingConnectivityError(error, timeoutMs = aiNamingManagerSt
 
 async function requestAiNamingBatch(preparedItems) {
   const settings = aiNamingManagerState.settings
-  const endpoint = getAiNamingEndpoint(settings)
+  const endpoint = getAiEndpoint(settings)
   const requestBody = buildAiNamingRequestBody(preparedItems, settings)
   const response = await fetchWithRequestTimeout(endpoint, {
     method: 'POST',
@@ -3779,71 +3807,6 @@ function buildAiNamingFailedResult(bookmark, error) {
   }
 }
 
-function extractResponsesJsonText(payload) {
-  const contentItems = Array.isArray(payload?.output)
-    ? payload.output.flatMap((entry) => Array.isArray(entry?.content) ? entry.content : [])
-    : []
-  const refusalNode = contentItems.find((item) => typeof item?.refusal === 'string' && item.refusal.trim())
-  if (refusalNode?.refusal) {
-    throw new Error(buildAiStructuredOutputRefusalError(refusalNode.refusal))
-  }
-
-  if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-    return payload.output_text
-  }
-
-  const textNode = contentItems.find((item) => typeof item?.text === 'string' && item.text.trim())
-  if (textNode?.text) {
-    return textNode.text
-  }
-
-  throw new Error('Responses API 返回中未找到可解析的 JSON 文本。')
-}
-
-function extractChatCompletionsJsonText(payload) {
-  const message = payload?.choices?.[0]?.message
-  if (typeof message?.refusal === 'string' && message.refusal.trim()) {
-    throw new Error(buildAiStructuredOutputRefusalError(message.refusal))
-  }
-
-  const content = message?.content
-  if (typeof content === 'string' && content.trim()) {
-    return stripMarkdownCodeFences(content)
-  }
-
-  if (Array.isArray(content)) {
-    const refusalNode = content.find((item) => typeof item?.refusal === 'string' && item.refusal.trim())
-    if (refusalNode?.refusal) {
-      throw new Error(buildAiStructuredOutputRefusalError(refusalNode.refusal))
-    }
-
-    const textNode = content.find((item) => typeof item?.text === 'string' && item.text.trim())
-    if (textNode?.text) {
-      return stripMarkdownCodeFences(textNode.text)
-    }
-  }
-
-  throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
-}
-
-function stripMarkdownCodeFences(text) {
-  return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
-}
-
-function extractAiErrorMessage(payload, statusCode) {
-  const message = payload?.error?.message || payload?.message || ''
-  return message
-    ? `AI 请求失败（${statusCode}）：${message}`
-    : `AI 请求失败（${statusCode}）。`
-}
-
-function buildAiStructuredOutputRefusalError(refusal) {
-  const normalizedRefusal = String(refusal || '').replace(/\s+/g, ' ').trim()
-  return normalizedRefusal
-    ? `模型拒绝生成结构化结果：${truncateText(normalizedRefusal, 120)}`
-    : '模型拒绝生成结构化结果。'
-}
-
 function normalizeAiConfidence(confidence) {
   if (typeof confidence === 'number') {
     if (confidence >= 0.78) {
@@ -3929,12 +3892,6 @@ function cleanAiSuggestedTitle(title) {
       .trim(),
     AI_NAMING_MAX_TEXT_LENGTH
   )
-}
-
-function getAiNamingEndpoint(settings) {
-  const baseUrl = String(settings.baseUrl || '').replace(/\/+$/, '')
-  const suffix = settings.apiStyle === 'chat_completions' ? 'chat/completions' : 'responses'
-  return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
 }
 
 function renderAvailabilitySelectionGroup() {
@@ -4990,7 +4947,14 @@ function requestConfirmation({
   cancelLabel = '取消',
   tone = 'danger',
   label = ''
-} = {}) {
+}: {
+  title?: string
+  copy?: string
+  confirmLabel?: string
+  cancelLabel?: string
+  tone?: string
+  label?: string
+} = {}): Promise<boolean> {
   if (!dom.confirmModalBackdrop) {
     return Promise.resolve(false)
   }
@@ -5008,7 +4972,7 @@ function requestConfirmation({
   managerState.confirmModalConfirmLabel = confirmLabel
   managerState.confirmModalCancelLabel = cancelLabel
 
-  return new Promise((resolve) => {
+  return new Promise<boolean>((resolve) => {
     confirmModalResolve = resolve
     renderConfirmModal()
   })

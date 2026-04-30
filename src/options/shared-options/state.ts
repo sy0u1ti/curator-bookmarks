@@ -87,6 +87,8 @@ export const availabilityState = {
   folderMap: new Map(),
   runQueue: [],
   deletedBookmarkIds: new Set(),
+  abortController: null as AbortController | null,
+  activeNavigationCheckIds: new Set<string>(),
   requestOrigins: [],
   totalBookmarks: 0,
   eligibleBookmarks: 0,

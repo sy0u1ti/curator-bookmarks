@@ -1,4 +1,3 @@
-// @ts-nocheck
 import {
   BOOKMARKS_BAR_ID,
   ROOT_ID,
@@ -15,8 +14,7 @@ import {
   displayUrl,
   extractDomain,
   normalizeText,
-  normalizeUrl,
-  stripCommonUrlPrefix
+  normalizeUrl
 } from '../shared/text.js'
 import {
   createBookmark,
@@ -33,6 +31,13 @@ import {
 import { getLocalStorage, removeLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
+import {
+  extractAiErrorMessage,
+  extractChatCompletionsJsonText,
+  extractResponsesJsonText,
+  getAiEndpoint
+} from '../shared/ai-response.js'
+import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
 import { normalizeAiNamingSettings } from '../options/sections/ai-settings.js'
 import {
   buildFallbackPageContentFromUrl,
@@ -47,13 +52,20 @@ import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
   AI_NAMING_JINA_READER_ORIGIN
 } from '../options/shared-options/constants.js'
+import {
+  MAX_POPUP_SEARCH_RESULTS,
+  POPUP_SEARCH_ASYNC_THRESHOLD,
+  getQueryTerms,
+  indexBookmarkForSearch,
+  normalizeQuery,
+  searchBookmarks,
+  searchBookmarksCooperatively
+} from './search.js'
+import { dom, cacheDom } from './dom.js'
+import { state } from './state.js'
 
 const SEARCH_DEBOUNCE_MS = 140
-const MAX_RESULTS = 20
 const SEARCH_CACHE_LIMIT = 40
-const SEARCH_PREFILTER_THRESHOLD = 1200
-const SEARCH_ASYNC_THRESHOLD = 1200
-const SEARCH_CHUNK_SIZE = 260
 const SMART_RECOMMENDATION_LIMIT = 3
 const SMART_LOADING_STEP_COUNT = 3
 
@@ -90,59 +102,6 @@ const SMART_CLASSIFY_SCHEMA = {
   }
 }
 
-const state = {
-  isLoading: true,
-  loadError: '',
-  rawTreeRoot: null,
-  bookmarksBarNode: null,
-  allBookmarks: [],
-  allFolders: [],
-  bookmarkMap: new Map(),
-  folderMap: new Map(),
-  expandedFolders: new Set(),
-  moveExpandedFolders: new Set(),
-  searchQuery: '',
-  debouncedQuery: '',
-  selectedFolderFilterId: null,
-  isFilterPickerOpen: false,
-  filterSearchQuery: '',
-  searchResults: [],
-  activeResultIndex: 0,
-  searchTimer: null,
-  searchRunId: 0,
-  searchPending: false,
-  searchCache: new Map(),
-  filteredBookmarksCacheKey: '',
-  filteredBookmarksCache: [],
-  contentRenderHtml: '',
-  activeMenuBookmarkId: null,
-  moveTargetBookmarkId: null,
-  moveSearchQuery: '',
-  editTargetBookmarkId: null,
-  confirmDeleteBookmarkId: null,
-  currentTab: null,
-  currentPageBookmarkId: null,
-  smartStatus: 'idle',
-  smartError: '',
-  smartStep: 0,
-  smartProgressPercent: 0,
-  smartSuggestedTitle: '',
-  smartSummary: '',
-  smartRecommendations: [],
-  smartSelectedRecommendationId: '',
-  smartFolderPickerOpen: false,
-  smartFolderSearchQuery: '',
-  smartSaving: false,
-  smartSaved: false,
-  smartRunId: 0,
-  smartPermissionRequest: null,
-  lastDeletedBookmark: null,
-  toasts: [],
-  toastTimers: new Map()
-}
-
-const dom = {}
-
 document.addEventListener('DOMContentLoaded', () => {
   cacheDom()
   bindEvents()
@@ -155,61 +114,13 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 })
 
-function cacheDom() {
-  dom.heroSubtitle = document.getElementById('hero-subtitle')
-  dom.openSettings = document.getElementById('open-settings')
-  dom.searchInput = document.getElementById('search-input')
-  dom.clearSearch = document.getElementById('clear-search')
-  dom.viewCaption = document.getElementById('view-caption')
-  dom.folderFilterTrigger = document.getElementById('folder-filter-trigger')
-  dom.clearFolderFilter = document.getElementById('clear-folder-filter')
-  dom.errorBanner = document.getElementById('error-banner')
-  dom.smartClassifier = document.getElementById('smart-classifier')
-  dom.smartFooter = document.getElementById('smart-footer')
-  dom.smartTotal = document.getElementById('smart-total')
-  dom.smartFooterSettings = document.getElementById('smart-footer-settings')
-  dom.loadingState = document.getElementById('loading-state')
-  dom.emptyState = document.getElementById('empty-state')
-  dom.content = document.getElementById('content')
-  dom.modalBackdrop = document.getElementById('modal-backdrop')
-  dom.filterModal = document.getElementById('filter-modal')
-  dom.filterSearchInput = document.getElementById('filter-search-input')
-  dom.filterFolderList = document.getElementById('filter-folder-list')
-  dom.closeFilterModal = document.getElementById('close-filter-modal')
-  dom.moveModal = document.getElementById('move-modal')
-  dom.moveBookmarkTitle = document.getElementById('move-bookmark-title')
-  dom.moveBookmarkPath = document.getElementById('move-bookmark-path')
-  dom.moveSearchInput = document.getElementById('move-search-input')
-  dom.moveFolderList = document.getElementById('move-folder-list')
-  dom.closeMoveModal = document.getElementById('close-move-modal')
-  dom.smartFolderModal = document.getElementById('smart-folder-modal')
-  dom.smartFolderPageTitle = document.getElementById('smart-folder-page-title')
-  dom.smartFolderPageUrl = document.getElementById('smart-folder-page-url')
-  dom.smartFolderSearchInput = document.getElementById('smart-folder-search-input')
-  dom.smartFolderList = document.getElementById('smart-folder-list')
-  dom.closeSmartFolderModal = document.getElementById('close-smart-folder-modal')
-  dom.editModal = document.getElementById('edit-modal')
-  dom.editBookmarkPath = document.getElementById('edit-bookmark-path')
-  dom.editTitleInput = document.getElementById('edit-title-input')
-  dom.editUrlInput = document.getElementById('edit-url-input')
-  dom.closeEditModal = document.getElementById('close-edit-modal')
-  dom.cancelEdit = document.getElementById('cancel-edit')
-  dom.saveEdit = document.getElementById('save-edit')
-  dom.deleteModal = document.getElementById('delete-modal')
-  dom.deleteBookmarkTitle = document.getElementById('delete-bookmark-title')
-  dom.deleteBookmarkPath = document.getElementById('delete-bookmark-path')
-  dom.cancelDelete = document.getElementById('cancel-delete')
-  dom.confirmDelete = document.getElementById('confirm-delete')
-  dom.toastRoot = document.getElementById('toast-root')
-}
-
 function bindEvents() {
   dom.openSettings.addEventListener('click', openSettingsPage)
   dom.smartFooterSettings.addEventListener('click', openSettingsPage)
   dom.smartClassifier.addEventListener('click', handleSmartClassifierClick)
   dom.smartClassifier.addEventListener('input', handleSmartClassifierInput)
-  dom.searchInput.addEventListener('input', (event) => {
-    setSearchQuery(event.target.value)
+  dom.searchInput.addEventListener('input', () => {
+    setSearchQuery(dom.searchInput.value)
   })
 
   dom.clearSearch.addEventListener('click', () => {
@@ -222,20 +133,20 @@ function bindEvents() {
   dom.content.addEventListener('click', handleContentClick)
   dom.content.addEventListener('pointerover', handleContentPointerOver)
   dom.filterFolderList.addEventListener('click', handleFilterListClick)
-  dom.filterSearchInput.addEventListener('input', (event) => {
-    state.filterSearchQuery = event.target.value
+  dom.filterSearchInput.addEventListener('input', () => {
+    state.filterSearchQuery = dom.filterSearchInput.value
     renderFilterModal()
   })
   dom.closeFilterModal.addEventListener('click', closeDialogs)
   dom.moveFolderList.addEventListener('click', handleMoveListClick)
-  dom.moveSearchInput.addEventListener('input', (event) => {
-    state.moveSearchQuery = event.target.value
+  dom.moveSearchInput.addEventListener('input', () => {
+    state.moveSearchQuery = dom.moveSearchInput.value
     renderMoveModal()
   })
   dom.closeMoveModal.addEventListener('click', closeDialogs)
   dom.smartFolderList.addEventListener('click', handleSmartFolderListClick)
-  dom.smartFolderSearchInput.addEventListener('input', (event) => {
-    state.smartFolderSearchQuery = event.target.value
+  dom.smartFolderSearchInput.addEventListener('input', () => {
+    state.smartFolderSearchQuery = dom.smartFolderSearchInput.value
     renderSmartFolderModal()
   })
   dom.closeSmartFolderModal.addEventListener('click', closeDialogs)
@@ -295,8 +206,9 @@ async function showPendingAutoAnalyzeNotice() {
       return
     }
 
-    const folderPath = cleanSmartText(notice.folderPath || '', 48)
-    const bookmarkTitle = cleanSmartText(notice.bookmarkTitle || '新增书签', 52)
+    const noticePayload = notice as Record<string, unknown>
+    const folderPath = cleanSmartText(noticePayload.folderPath || '', 48)
+    const bookmarkTitle = cleanSmartText(noticePayload.bookmarkTitle || '新增书签', 52)
     if (!folderPath) {
       await clearPendingAutoAnalyzeNotice()
       return
@@ -318,8 +230,8 @@ async function clearPendingAutoAnalyzeNotice() {
   await clearActionBadge()
 }
 
-function clearActionBadge() {
-  return new Promise((resolve) => {
+function clearActionBadge(): Promise<void> {
+  return new Promise<void>((resolve) => {
     if (!chrome.action?.setBadgeText) {
       resolve()
       return
@@ -346,7 +258,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
 
     const extracted = extractBookmarkData(rootNode)
     const indexedBookmarks = extracted.bookmarks.map(indexBookmarkForSearch)
-    state.allBookmarks = extracted.bookmarks
     state.allBookmarks = indexedBookmarks
     state.allFolders = extracted.folders
     state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
@@ -429,7 +340,7 @@ async function hydrateCurrentTabState() {
   }
 }
 
-function getActiveTab() {
+function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   return new Promise((resolve, reject) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const error = chrome.runtime.lastError
@@ -489,7 +400,7 @@ function runSearch() {
 
     if (cachedResults) {
       state.searchPending = false
-      state.searchResults = cachedResults.slice(0, MAX_RESULTS)
+      state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
       state.activeResultIndex = Math.min(
         state.activeResultIndex,
         Math.max(state.searchResults.length - 1, 0)
@@ -497,11 +408,11 @@ function runSearch() {
       return
     }
 
-    if (bookmarks.length < SEARCH_ASYNC_THRESHOLD) {
+    if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
       const results = searchBookmarks(normalizedQuery, bookmarks)
       cacheSearchResults(cacheKey, results)
       state.searchPending = false
-      state.searchResults = results.slice(0, MAX_RESULTS)
+      state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
       state.activeResultIndex = Math.min(
         state.activeResultIndex,
         Math.max(state.searchResults.length - 1, 0)
@@ -513,7 +424,10 @@ function runSearch() {
     state.searchResults = []
     state.activeResultIndex = 0
 
-    searchBookmarksCooperatively(normalizedQuery, bookmarks, runId)
+    searchBookmarksCooperatively(normalizedQuery, bookmarks, {
+      isActive: () => state.searchRunId === runId,
+      yieldWork
+    })
       .then((results) => {
         if (state.searchRunId !== runId) {
           return
@@ -521,7 +435,7 @@ function runSearch() {
 
         cacheSearchResults(cacheKey, results)
         state.searchPending = false
-        state.searchResults = results.slice(0, MAX_RESULTS)
+        state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
         state.activeResultIndex = Math.min(
           state.activeResultIndex,
           Math.max(state.searchResults.length - 1, 0)
@@ -774,7 +688,7 @@ function renderSmartLoadingCard(currentProgress = state.smartProgressPercent) {
 }
 
 function animateSmartProgress() {
-  const progressBar = dom.smartClassifier.querySelector('.smart-progress-bar')
+  const progressBar = dom.smartClassifier.querySelector<HTMLElement>('.smart-progress-bar')
   if (!progressBar) {
     return
   }
@@ -1074,8 +988,28 @@ function renderActionMenu(bookmarkId) {
   `
 }
 
+function setPopupSurfaceOpen(element, open) {
+  if (!element) {
+    return
+  }
+
+  if (open) {
+    cancelExitMotion(element)
+    element.classList.remove('hidden', 'is-closing')
+    return
+  }
+
+  if (element.classList.contains('hidden') || element.classList.contains('is-closing')) {
+    return
+  }
+
+  void closeWithExitMotion(element, 'is-closing', () => {
+    element.classList.add('hidden')
+  }, 220)
+}
+
 function renderFilterModal() {
-  dom.filterModal.classList.toggle('hidden', !state.isFilterPickerOpen)
+  setPopupSurfaceOpen(dom.filterModal, state.isFilterPickerOpen)
 
   if (!state.isFilterPickerOpen) {
     syncBackdropVisibility()
@@ -1093,7 +1027,7 @@ function renderMoveModal() {
     : null
   const isOpen = Boolean(bookmark)
 
-  dom.moveModal.classList.toggle('hidden', !isOpen)
+  setPopupSurfaceOpen(dom.moveModal, isOpen)
 
   if (!isOpen) {
     syncBackdropVisibility()
@@ -1108,7 +1042,7 @@ function renderMoveModal() {
 }
 
 function renderSmartFolderModal() {
-  dom.smartFolderModal.classList.toggle('hidden', !state.smartFolderPickerOpen)
+  setPopupSurfaceOpen(dom.smartFolderModal, state.smartFolderPickerOpen)
 
   if (!state.smartFolderPickerOpen) {
     syncBackdropVisibility()
@@ -1128,7 +1062,7 @@ function renderEditModal() {
     : null
   const isOpen = Boolean(bookmark)
 
-  dom.editModal.classList.toggle('hidden', !isOpen)
+  setPopupSurfaceOpen(dom.editModal, isOpen)
 
   if (!isOpen) {
     syncBackdropVisibility()
@@ -1147,7 +1081,7 @@ function renderDeleteModal() {
     : null
   const isOpen = Boolean(bookmark)
 
-  dom.deleteModal.classList.toggle('hidden', !isOpen)
+  setPopupSurfaceOpen(dom.deleteModal, isOpen)
 
   if (!isOpen) {
     syncBackdropVisibility()
@@ -1167,8 +1101,8 @@ function syncBackdropVisibility() {
       state.editTargetBookmarkId ||
       state.confirmDeleteBookmarkId
   )
-  dom.modalBackdrop.classList.toggle('hidden', !hasOpenModal)
   dom.modalBackdrop.setAttribute('aria-hidden', String(!hasOpenModal))
+  setPopupSurfaceOpen(dom.modalBackdrop, hasOpenModal)
 }
 
 function renderFilterFolderList() {
@@ -1430,8 +1364,11 @@ function handleContentClick(event) {
   const menuToggle = event.target.closest('[data-open-menu]')
   if (menuToggle) {
     const bookmarkId = menuToggle.getAttribute('data-open-menu')
-    state.activeMenuBookmarkId =
-      state.activeMenuBookmarkId === bookmarkId ? null : bookmarkId
+    if (state.activeMenuBookmarkId === bookmarkId) {
+      closeActionMenu()
+      return
+    }
+    state.activeMenuBookmarkId = bookmarkId
     renderMainContent()
     return
   }
@@ -1522,14 +1459,30 @@ function handleSmartFolderListClick(event) {
   }
 }
 
+function closeActionMenu() {
+  const menu = document.querySelector('.action-menu')
+  const hadMenu = Boolean(state.activeMenuBookmarkId)
+  state.activeMenuBookmarkId = null
+
+  if (menu instanceof HTMLElement && !menu.classList.contains('is-closing')) {
+    void closeWithExitMotion(menu, 'is-closing', () => {
+      renderMainContent()
+    }, 180)
+    return
+  }
+
+  if (hadMenu) {
+    renderMainContent()
+  }
+}
+
 function handleDocumentPointerDown(event) {
   if (!state.activeMenuBookmarkId) {
     return
   }
 
   if (!event.target.closest('.menu-anchor')) {
-    state.activeMenuBookmarkId = null
-    renderMainContent()
+    closeActionMenu()
   }
 }
 
@@ -1581,8 +1534,7 @@ function handleEscapeAction() {
   }
 
   if (state.activeMenuBookmarkId) {
-    state.activeMenuBookmarkId = null
-    renderMainContent()
+    closeActionMenu()
     return true
   }
 
@@ -2613,16 +2565,18 @@ async function hasOptionalOriginPermission(origin) {
   }
 }
 
-function createSmartPermissionRequiredError(origins, message = '需要授权 AI 渠道后才能智能分类。') {
-  const error = new Error(message)
+function createSmartPermissionRequiredError(origins: unknown[], message = '需要授权 AI 渠道后才能智能分类。') {
+  const error = new Error(message) as Error & {
+    smartPermissionRequest?: { origins: string[] }
+  }
   error.smartPermissionRequest = {
-    origins: [...new Set(origins)].filter(Boolean)
+    origins: [...new Set(origins.map((origin) => String(origin || '')).filter(Boolean))]
   }
   return error
 }
 
 function isSmartPermissionRequiredError(error) {
-  return Boolean(error?.smartPermissionRequest?.origins)
+  return Boolean((error as { smartPermissionRequest?: { origins?: string[] } })?.smartPermissionRequest?.origins)
 }
 
 function formatPermissionOrigin(origin) {
@@ -2643,12 +2597,6 @@ function fetchWithSmartTimeout(url, options = {}, timeoutMs = AI_NAMING_DEFAULT_
   })
 }
 
-function getAiEndpoint(settings) {
-  const baseUrl = String(settings.baseUrl || '').replace(/\/+$/, '')
-  const suffix = settings.apiStyle === 'chat_completions' ? 'chat/completions' : 'responses'
-  return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
-}
-
 function getOriginPermissionPattern(url) {
   try {
     const parsedUrl = new URL(String(url || '').trim())
@@ -2661,75 +2609,12 @@ function getOriginPermissionPattern(url) {
   }
 }
 
-function extractResponsesJsonText(payload) {
-  const contentItems = Array.isArray(payload?.output)
-    ? payload.output.flatMap((entry) => Array.isArray(entry?.content) ? entry.content : [])
-    : []
-  const refusalNode = contentItems.find((item) => typeof item?.refusal === 'string' && item.refusal.trim())
-  if (refusalNode?.refusal) {
-    throw new Error(buildAiRefusalError(refusalNode.refusal))
-  }
-
-  if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-    return payload.output_text
-  }
-
-  const textNode = contentItems.find((item) => typeof item?.text === 'string' && item.text.trim())
-  if (textNode?.text) {
-    return textNode.text
-  }
-
-  throw new Error('Responses API 返回中未找到可解析的 JSON 文本。')
-}
-
-function extractChatCompletionsJsonText(payload) {
-  const message = payload?.choices?.[0]?.message
-  if (typeof message?.refusal === 'string' && message.refusal.trim()) {
-    throw new Error(buildAiRefusalError(message.refusal))
-  }
-
-  if (typeof message?.content === 'string' && message.content.trim()) {
-    return stripMarkdownCodeFences(message.content)
-  }
-
-  if (Array.isArray(message?.content)) {
-    const refusalNode = message.content.find((item) => typeof item?.refusal === 'string' && item.refusal.trim())
-    if (refusalNode?.refusal) {
-      throw new Error(buildAiRefusalError(refusalNode.refusal))
-    }
-    const textNode = message.content.find((item) => typeof item?.text === 'string' && item.text.trim())
-    if (textNode?.text) {
-      return stripMarkdownCodeFences(textNode.text)
-    }
-  }
-
-  throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
-}
-
-function stripMarkdownCodeFences(text) {
-  return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
-}
-
-function extractAiErrorMessage(payload, statusCode) {
-  const message = payload?.error?.message || payload?.message || ''
-  return message
-    ? `AI 请求失败（${statusCode}）：${message}`
-    : `AI 请求失败（${statusCode}）。`
-}
-
-function buildAiRefusalError(refusal) {
-  const normalizedRefusal = cleanSmartText(refusal, 120)
-  return normalizedRefusal
-    ? `模型拒绝生成结构化结果：${normalizedRefusal}`
-    : '模型拒绝生成结构化结果。'
-}
-
 function updateActiveResultVisibility() {
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
   }
 
-  const activeResult = dom.content.querySelector(
+  const activeResult = dom.content.querySelector<HTMLElement>(
     `[data-result-index="${state.activeResultIndex}"]`
   )
   if (!activeResult) {
@@ -2792,275 +2677,6 @@ function updateActiveSearchResult(previousIndex, nextIndex) {
   nextCard?.classList.add('active')
 }
 
-function searchBookmarks(query, bookmarks) {
-  const normalizedQuery = normalizeQuery(query)
-  const queryTerms = getQueryTerms(normalizedQuery)
-  const candidates = getSearchCandidates(bookmarks, normalizedQuery, queryTerms)
-  const results = []
-
-  for (const bookmark of candidates) {
-    const score = scoreBookmark(bookmark, normalizedQuery, queryTerms)
-    if (score > 0) {
-      appendTopSearchResult(results, { ...bookmark, score })
-    }
-  }
-
-  return results
-}
-
-async function searchBookmarksCooperatively(query, bookmarks, runId) {
-  const normalizedQuery = normalizeQuery(query)
-  const queryTerms = getQueryTerms(normalizedQuery)
-  const candidates = await getSearchCandidatesCooperatively(
-    bookmarks,
-    normalizedQuery,
-    queryTerms,
-    runId
-  )
-  const results = []
-
-  for (let index = 0; index < candidates.length; index += SEARCH_CHUNK_SIZE) {
-    assertSearchRunActive(runId)
-    const chunk = candidates.slice(index, index + SEARCH_CHUNK_SIZE)
-
-    for (const bookmark of chunk) {
-      const score = scoreBookmark(bookmark, normalizedQuery, queryTerms)
-      if (score > 0) {
-        appendTopSearchResult(results, { ...bookmark, score })
-      }
-    }
-
-    if (index + SEARCH_CHUNK_SIZE < candidates.length) {
-      await yieldSearchWork()
-    }
-  }
-
-  return results
-}
-
-async function getSearchCandidatesCooperatively(bookmarks, normalizedQuery, queryTerms, runId) {
-  if (bookmarks.length < SEARCH_PREFILTER_THRESHOLD) {
-    return bookmarks
-  }
-
-  const requiredTerms = queryTerms.length ? queryTerms : [normalizedQuery]
-  const directMatches = []
-
-  for (let index = 0; index < bookmarks.length; index += SEARCH_CHUNK_SIZE) {
-    assertSearchRunActive(runId)
-    for (const bookmark of bookmarks.slice(index, index + SEARCH_CHUNK_SIZE)) {
-      const searchText = bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
-      if (requiredTerms.every((term) => searchText.includes(term))) {
-        directMatches.push(bookmark)
-      }
-    }
-
-    if (index + SEARCH_CHUNK_SIZE < bookmarks.length) {
-      await yieldSearchWork()
-    }
-  }
-
-  if (directMatches.length) {
-    return directMatches
-  }
-
-  const prefix = normalizedQuery.slice(0, Math.min(normalizedQuery.length, 3))
-  if (!prefix) {
-    return bookmarks
-  }
-
-  const prefixMatches = []
-  for (let index = 0; index < bookmarks.length; index += SEARCH_CHUNK_SIZE) {
-    assertSearchRunActive(runId)
-    for (const bookmark of bookmarks.slice(index, index + SEARCH_CHUNK_SIZE)) {
-      const searchText = bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
-      if (searchText.includes(prefix)) {
-        prefixMatches.push(bookmark)
-      }
-    }
-
-    if (index + SEARCH_CHUNK_SIZE < bookmarks.length) {
-      await yieldSearchWork()
-    }
-  }
-
-  return prefixMatches.length ? prefixMatches : bookmarks
-}
-
-function appendTopSearchResult(results, result) {
-  results.push(result)
-  results.sort(compareSearchResults)
-  if (results.length > MAX_RESULTS) {
-    results.length = MAX_RESULTS
-  }
-}
-
-function compareSearchResults(left, right) {
-  if (right.score !== left.score) {
-    return right.score - left.score
-  }
-
-  if (left.title.length !== right.title.length) {
-    return left.title.length - right.title.length
-  }
-
-  return left.path.localeCompare(right.path, 'zh-Hans-CN')
-}
-
-function assertSearchRunActive(runId) {
-  if (state.searchRunId !== runId) {
-    throw new Error('search-cancelled')
-  }
-}
-
-function yieldSearchWork() {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(resolve)
-  })
-}
-
-function getSearchCandidates(bookmarks, normalizedQuery, queryTerms) {
-  if (bookmarks.length < SEARCH_PREFILTER_THRESHOLD) {
-    return bookmarks
-  }
-
-  const requiredTerms = queryTerms.length ? queryTerms : [normalizedQuery]
-  const directMatches = bookmarks.filter((bookmark) => {
-    const searchText = bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
-    return requiredTerms.every((term) => searchText.includes(term))
-  })
-
-  if (directMatches.length) {
-    return directMatches
-  }
-
-  const prefix = normalizedQuery.slice(0, Math.min(normalizedQuery.length, 3))
-  if (!prefix) {
-    return bookmarks
-  }
-
-  const prefixMatches = bookmarks.filter((bookmark) => {
-    const searchText = bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
-    return searchText.includes(prefix)
-  })
-
-  return prefixMatches.length ? prefixMatches : bookmarks
-}
-
-function scoreBookmark(bookmark, normalizedQuery, queryTerms) {
-  const title = bookmark.normalizedTitle
-  const url = bookmark.normalizedUrl
-  let score = 0
-  let matched = false
-
-  if (!normalizedQuery) {
-    return 0
-  }
-
-  if (title === normalizedQuery) {
-    score += 620
-    matched = true
-  }
-
-  if (title.startsWith(normalizedQuery)) {
-    score += 420
-    matched = true
-  }
-
-  const titleIndex = title.indexOf(normalizedQuery)
-  if (titleIndex !== -1) {
-    score += 300 - Math.min(titleIndex, 120)
-    matched = true
-  }
-
-  if (url.startsWith(normalizedQuery)) {
-    score += 250
-    matched = true
-  }
-
-  const urlIndex = url.indexOf(normalizedQuery)
-  if (urlIndex !== -1) {
-    score += 190 - Math.min(urlIndex, 100)
-    matched = true
-  }
-
-  let allTermsPresent = queryTerms.length > 0
-
-  for (const term of queryTerms) {
-    let termMatched = false
-    const termTitleIndex = title.indexOf(term)
-    const termUrlIndex = url.indexOf(term)
-
-    if (termTitleIndex !== -1) {
-      score += 72 - Math.min(termTitleIndex, 40)
-      termMatched = true
-      matched = true
-    }
-
-    if (termUrlIndex !== -1) {
-      score += 45 - Math.min(termUrlIndex, 40)
-      termMatched = true
-      matched = true
-    }
-
-    if (!termMatched) {
-      allTermsPresent = false
-    }
-  }
-
-  if (allTermsPresent && queryTerms.length > 1) {
-    score += 120
-  }
-
-  const titleFuzzy = subsequenceScore(title, normalizedQuery)
-  const urlFuzzy = subsequenceScore(url, normalizedQuery)
-  const fuzzyScore = Math.max(titleFuzzy * 2, urlFuzzy)
-
-  if (fuzzyScore > 0) {
-    score += fuzzyScore
-    matched = true
-  }
-
-  if (title.includes(normalizedQuery) && url.includes(normalizedQuery)) {
-    score += 38
-  }
-
-  score -= Math.floor(bookmark.title.length / 28)
-
-  return matched ? Math.max(score, 0) : 0
-}
-
-function subsequenceScore(text, query) {
-  if (!text || !query || query.length < 2) {
-    return 0
-  }
-
-  let textIndex = 0
-  let queryIndex = 0
-  let streak = 0
-  let bestStreak = 0
-  let gapPenalty = 0
-
-  while (textIndex < text.length && queryIndex < query.length) {
-    if (text[textIndex] === query[queryIndex]) {
-      queryIndex += 1
-      streak += 1
-      bestStreak = Math.max(bestStreak, streak)
-    } else if (queryIndex > 0) {
-      streak = 0
-      gapPenalty += 1
-    }
-
-    textIndex += 1
-  }
-
-  if (queryIndex !== query.length) {
-    return 0
-  }
-
-  return 40 + query.length * 10 + bestStreak * 10 - gapPenalty
-}
-
 function getCurrentTreeRoot() {
   if (state.selectedFolderFilterId) {
     return findNodeById(state.rawTreeRoot, state.selectedFolderFilterId) || state.bookmarksBarNode
@@ -3086,23 +2702,6 @@ function getFilteredBookmarks() {
   return bookmarks
 }
 
-function indexBookmarkForSearch(bookmark) {
-  const normalizedPath = normalizeText(bookmark.path || '')
-  const normalizedDomain = normalizeText(bookmark.domain || '')
-  return {
-    ...bookmark,
-    normalizedPath,
-    searchText: [
-      bookmark.normalizedTitle,
-      bookmark.normalizedUrl,
-      normalizedPath,
-      normalizedDomain
-    ]
-      .filter(Boolean)
-      .join(' ')
-  }
-}
-
 function getSearchCacheKey(normalizedQuery) {
   return `${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
 }
@@ -3123,6 +2722,12 @@ function clearSearchCaches() {
   state.searchCache.clear()
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
+}
+
+function yieldWork() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(resolve)
+  })
 }
 
 function isSmartClassifiableUrl(url) {
@@ -3245,14 +2850,6 @@ function describeFolder(folder) {
   return parts.join(' · ') || '空文件夹'
 }
 
-function getQueryTerms(query) {
-  return [...new Set(query.split(/\s+/).filter(Boolean))]
-}
-
-function normalizeQuery(value) {
-  return normalizeText(stripCommonUrlPrefix(value))
-}
-
 function highlightText(text, query) {
   const safeText = String(text || '')
   const terms = getQueryTerms(normalizeQuery(query))
@@ -3350,6 +2947,14 @@ function dismissToast(toastId) {
     state.toastTimers.delete(toastId)
   }
 
+  const toastElement = dom.toastRoot.querySelector(`[data-toast-id="${CSS.escape(String(toastId))}"]`)
   state.toasts = state.toasts.filter((toast) => toast.id !== toastId)
+  if (toastElement instanceof HTMLElement && !toastElement.classList.contains('is-closing')) {
+    void closeWithExitMotion(toastElement, 'is-closing', () => {
+      toastElement.remove()
+    }, 220)
+    return
+  }
+
   renderToasts()
 }

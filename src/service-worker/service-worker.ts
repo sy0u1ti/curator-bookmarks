@@ -10,6 +10,12 @@ import { extractBookmarkData } from '../shared/bookmark-tree.js'
 import { BOOKMARK_ADD_HISTORY_LIMIT, STORAGE_KEYS } from '../shared/constants.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { extractDomain } from '../shared/text.js'
+import {
+  extractAiErrorMessage,
+  extractChatCompletionsJsonText,
+  extractResponsesJsonText,
+  getAiEndpoint
+} from '../shared/ai-response.js'
 import { normalizeAiNamingSettings, type AiNamingSettings } from '../options/sections/ai-settings.js'
 import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
@@ -1326,75 +1332,6 @@ function fetchWithAutoTimeout(
   }).finally(() => {
     clearTimeout(timeoutId)
   })
-}
-
-function getAiEndpoint(settings: AiNamingSettings): string {
-  const baseUrl = String(settings.baseUrl || '').replace(/\/+$/, '')
-  const suffix = settings.apiStyle === 'chat_completions' ? 'chat/completions' : 'responses'
-  return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
-}
-
-function extractResponsesJsonText(payload: any): string {
-  const contentItems = Array.isArray(payload?.output)
-    ? payload.output.flatMap((entry: any) => Array.isArray(entry?.content) ? entry.content : [])
-    : []
-  const refusalNode = contentItems.find((item: any) => typeof item?.refusal === 'string' && item.refusal.trim())
-  if (refusalNode?.refusal) {
-    throw new Error(buildAiRefusalError(refusalNode.refusal))
-  }
-
-  if (typeof payload?.output_text === 'string' && payload.output_text.trim()) {
-    return payload.output_text
-  }
-
-  const textNode = contentItems.find((item: any) => typeof item?.text === 'string' && item.text.trim())
-  if (textNode?.text) {
-    return textNode.text
-  }
-
-  throw new Error('Responses API 返回中未找到可解析的 JSON 文本。')
-}
-
-function extractChatCompletionsJsonText(payload: any): string {
-  const message = payload?.choices?.[0]?.message
-  if (typeof message?.refusal === 'string' && message.refusal.trim()) {
-    throw new Error(buildAiRefusalError(message.refusal))
-  }
-
-  if (typeof message?.content === 'string' && message.content.trim()) {
-    return stripMarkdownCodeFences(message.content)
-  }
-
-  if (Array.isArray(message?.content)) {
-    const refusalNode = message.content.find((item: any) => typeof item?.refusal === 'string' && item.refusal.trim())
-    if (refusalNode?.refusal) {
-      throw new Error(buildAiRefusalError(refusalNode.refusal))
-    }
-    const textNode = message.content.find((item: any) => typeof item?.text === 'string' && item.text.trim())
-    if (textNode?.text) {
-      return stripMarkdownCodeFences(textNode.text)
-    }
-  }
-
-  throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
-}
-
-function stripMarkdownCodeFences(text: string): string {
-  return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
-}
-
-function extractAiErrorMessage(payload: any, statusCode: number): string {
-  const message = payload?.error?.message || payload?.message || ''
-  return message
-    ? `AI 请求失败（${statusCode}）：${message}`
-    : `AI 请求失败（${statusCode}）。`
-}
-
-function buildAiRefusalError(refusal: string): string {
-  const normalizedRefusal = cleanText(refusal).slice(0, 120)
-  return normalizedRefusal
-    ? `模型拒绝生成结构化结果：${normalizedRefusal}`
-    : '模型拒绝生成结构化结果。'
 }
 
 function normalizeAutoConfidence(value: unknown): number {

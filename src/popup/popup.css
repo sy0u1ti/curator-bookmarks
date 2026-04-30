@@ -33,6 +33,12 @@
   --indent-step: 16px;
   --ease-standard: 220ms cubic-bezier(0.22, 0.72, 0.18, 1);
   --ease-snappy: 170ms cubic-bezier(0.24, 0.9, 0.24, 1);
+  --motion-fast: 150ms;
+  --motion-standard: 220ms;
+  --motion-surface: 260ms;
+  --motion-ease-out: cubic-bezier(0.22, 0.72, 0.18, 1);
+  --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --motion-spring: cubic-bezier(0.2, 0.88, 0.22, 1);
 }
 
 * {
@@ -1610,7 +1616,13 @@ body.smart-active .smart-classifier {
   background: #1c1c1e;
   box-shadow: none;
   backdrop-filter: none;
-  animation: surface-enter 180ms cubic-bezier(0.22, 0.88, 0.28, 1);
+  transform-origin: top right;
+  animation: surface-enter var(--motion-fast) var(--motion-spring) both;
+}
+
+.action-menu.is-closing {
+  pointer-events: none;
+  animation: surface-exit var(--motion-fast) var(--motion-ease-in) both;
 }
 
 .action-menu button {
@@ -1712,6 +1724,12 @@ mark {
   padding: 14px;
   background: rgba(0, 0, 0, 0.74);
   backdrop-filter: blur(18px);
+  animation: backdrop-enter var(--motion-standard) var(--motion-ease-out) both;
+}
+
+.modal-backdrop.is-closing {
+  pointer-events: none;
+  animation: backdrop-exit var(--motion-standard) var(--motion-ease-in) both;
 }
 
 .modal-card {
@@ -1730,7 +1748,13 @@ mark {
   box-shadow: none;
   backdrop-filter: none;
   overflow: hidden;
-  animation: surface-enter 220ms cubic-bezier(0.2, 0.88, 0.22, 1);
+  animation: modal-enter var(--motion-standard) var(--motion-spring) both;
+}
+
+.modal-card.is-closing,
+.modal-backdrop.is-closing .modal-card:not(.hidden) {
+  pointer-events: none;
+  animation: modal-exit var(--motion-fast) var(--motion-ease-in) both;
 }
 
 .modal-card.small {
@@ -1978,7 +2002,12 @@ mark {
   box-shadow: none;
   backdrop-filter: none;
   pointer-events: auto;
-  animation: surface-enter 220ms cubic-bezier(0.2, 0.88, 0.22, 1);
+  animation: toast-enter var(--motion-standard) var(--motion-spring) both;
+}
+
+.toast.is-closing {
+  pointer-events: none;
+  animation: toast-exit var(--motion-fast) var(--motion-ease-in) both;
 }
 
 .toast.success {
@@ -2680,6 +2709,86 @@ body::after {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes surface-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes backdrop-exit {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modal-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
   }
 }
 
