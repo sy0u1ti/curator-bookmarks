@@ -1,7 +1,7 @@
 import { pinyin } from 'pinyin-pro'
 import type { BookmarkRecord } from '../shared/types.js'
 import { normalizeText, stripCommonUrlPrefix } from '../shared/text.js'
-import type { BookmarkTagRecord } from '../shared/bookmark-tags.js'
+import { getEffectiveBookmarkTags, type BookmarkTagRecord } from '../shared/bookmark-tags.js'
 
 export const MAX_POPUP_SEARCH_RESULTS = 20
 export const POPUP_SEARCH_ASYNC_THRESHOLD = 1200
@@ -36,13 +36,13 @@ export function indexBookmarkForSearch(bookmark: BookmarkRecord, tagRecord: Book
   const tagSummary = normalizeText(tagRecord?.summary || '')
   const tagContentType = normalizeText(tagRecord?.contentType || '')
   const tagTopics = normalizeSearchList(tagRecord?.topics)
-  const tagTags = normalizeSearchList(tagRecord?.tags)
+  const tagTags = normalizeSearchList(getEffectiveBookmarkTags(tagRecord))
   const tagAliases = normalizeSearchList(tagRecord?.aliases)
   const pinyinTokens = buildPinyinSearchTokens([
     bookmark.title,
     bookmark.path,
     ...(tagRecord?.topics || []),
-    ...(tagRecord?.tags || []),
+    ...getEffectiveBookmarkTags(tagRecord),
     ...(tagRecord?.aliases || [])
   ])
 

@@ -37,7 +37,7 @@ const GENERIC_TAG_VALUES = new Set([
   '其他'
 ])
 
-export type BookmarkTagSource = 'ai_naming' | 'auto_analyze' | 'popup_smart' | 'imported'
+export type BookmarkTagSource = 'ai_naming' | 'auto_analyze' | 'popup_smart' | 'imported' | 'manual'
 
 export interface BookmarkTagExtraction {
   status: string
@@ -57,6 +57,8 @@ export interface BookmarkTagRecord {
   contentType: string
   topics: string[]
   tags: string[]
+  manualTags?: string[]
+  manualUpdatedAt?: number
   aliases: string[]
   confidence: number
   source: BookmarkTagSource
@@ -163,8 +165,10 @@ export function normalizeBookmarkTagRecord(
   const duplicateKey = cleanText(source.duplicateKey) || buildBookmarkTagDuplicateKey(normalizedUrl || url)
   const generatedAt = normalizeTimestamp(source.generatedAt ?? fallback.generatedAt) || Date.now()
   const updatedAt = normalizeTimestamp(source.updatedAt ?? fallback.updatedAt) || generatedAt
+  const hasManualTags = hasOwn(source, 'manualTags') || fallback.manualTags !== undefined
+  const manualUpdatedAt = normalizeTimestamp(source.manualUpdatedAt ?? fallback.manualUpdatedAt) || updatedAt
 
-  return {
+  const record: BookmarkTagRecord = {
     schemaVersion: BOOKMARK_TAG_SCHEMA_VERSION,
     bookmarkId,
     url,
@@ -184,6 +188,16 @@ export function normalizeBookmarkTagRecord(
     generatedAt,
     updatedAt
   }
+
+  if (hasManualTags) {
+    const manualTags = normalizeBookmarkTags(source.manualTags ?? fallback.manualTags)
+    if (manualTags.length) {
+      record.manualTags = manualTags
+      record.manualUpdatedAt = manualUpdatedAt
+    }
+  }
+
+  return record
 }
 
 export function buildBookmarkTagRecord({
@@ -230,9 +244,23 @@ export function hasUsefulBookmarkTagData(record: BookmarkTagRecord | null): reco
       record.contentType ||
       record.topics.length ||
       record.tags.length ||
+      Boolean(record.manualTags?.length) ||
       record.aliases.length
     )
   )
+}
+
+export function getEffectiveBookmarkTags(record: BookmarkTagRecord | null | undefined): string[] {
+  if (!record) {
+    return []
+  }
+
+  const manualTags = normalizeBookmarkTags(record.manualTags)
+  if (manualTags.length) {
+    return manualTags
+  }
+
+  return normalizeBookmarkTags(record.tags)
 }
 
 export function normalizeBookmarkTagUrl(value: unknown): string {
@@ -389,15 +417,22 @@ export async function upsertBookmarkTagRecord(record: BookmarkTagRecord): Promis
   }
 
   const current = await loadBookmarkTagIndex()
+  const existingRecord = current.records[normalizedRecord.bookmarkId]
+  const now = Date.now()
+  const nextRecord: BookmarkTagRecord = {
+    ...normalizedRecord,
+    updatedAt: now
+  }
+  if (existingRecord?.manualTags?.length && normalizedRecord.manualTags === undefined) {
+    nextRecord.manualTags = existingRecord.manualTags
+    nextRecord.manualUpdatedAt = existingRecord.manualUpdatedAt
+  }
   const nextIndex: BookmarkTagIndex = {
     version: BOOKMARK_TAG_INDEX_VERSION,
-    updatedAt: Date.now(),
+    updatedAt: now,
     records: {
       ...current.records,
-      [normalizedRecord.bookmarkId]: {
-        ...normalizedRecord,
-        updatedAt: Date.now()
-      }
+      [normalizedRecord.bookmarkId]: nextRecord
     }
   }
 
@@ -410,8 +445,135 @@ export async function upsertBookmarkTagFromAnalysis(input: BookmarkTagBuildInput
     return null
   }
 
-  await upsertBookmarkTagRecord(record)
-  return record
+  const index = await upsertBookmarkTagRecord(record)
+  return index.records[record.bookmarkId] || null
+}
+
+export async function saveManualBookmarkTags(
+  bookmark: Partial<BookmarkRecord> & { id?: unknown; title?: unknown; url?: unknown; path?: unknown },
+  rawTags: unknown,
+  now = Date.now()
+): Promise<BookmarkTagIndex> {
+  const bookmarkId = cleanText(bookmark.id)
+  const url = cleanText(bookmark.url)
+  if (!bookmarkId || !url) {
+    throw new Error('无法保存标签：书签信息不完整。')
+  }
+
+  const current = await loadBookmarkTagIndex()
+  const existingRecord = current.records[bookmarkId]
+  const manualTags = normalizeBookmarkTags(rawTags)
+  if (!manualTags.length) {
+    return clearManualBookmarkTags(bookmarkId)
+  }
+  const baseRecord = existingRecord || normalizeBookmarkTagRecord({
+    schemaVersion: BOOKMARK_TAG_SCHEMA_VERSION,
+    bookmarkId,
+    url,
+    normalizedUrl: normalizeBookmarkTagUrl(url),
+    duplicateKey: buildBookmarkTagDuplicateKey(url),
+    title: bookmark.title,
+    path: bookmark.path,
+    summary: '',
+    contentType: '',
+    topics: [],
+    tags: [],
+    aliases: [],
+    confidence: 0,
+    source: 'manual',
+    model: '',
+    extraction: { status: '', source: '', warnings: [] },
+    generatedAt: now,
+    updatedAt: now
+  })
+  if (!baseRecord) {
+    throw new Error('无法保存标签：标签记录无效。')
+  }
+
+  const normalizedRecord = normalizeBookmarkTagRecord({
+    ...baseRecord,
+    bookmarkId,
+    url,
+    normalizedUrl: normalizeBookmarkTagUrl(url),
+    duplicateKey: buildBookmarkTagDuplicateKey(url),
+    title: cleanText(bookmark.title) || baseRecord?.title,
+    path: cleanText(bookmark.path) || baseRecord?.path,
+    source: existingRecord?.source || 'manual',
+    manualTags,
+    manualUpdatedAt: now,
+    updatedAt: now
+  })
+
+  if (!normalizedRecord) {
+    throw new Error('无法保存标签：标签记录无效。')
+  }
+
+  return saveBookmarkTagIndex({
+    version: BOOKMARK_TAG_INDEX_VERSION,
+    updatedAt: now,
+    records: {
+      ...current.records,
+      [bookmarkId]: normalizedRecord
+    }
+  })
+}
+
+export async function clearManualBookmarkTags(bookmarkId: unknown): Promise<BookmarkTagIndex> {
+  const id = cleanText(bookmarkId)
+  const current = await loadBookmarkTagIndex()
+  const existingRecord = id ? current.records[id] : null
+  if (!id || !existingRecord || existingRecord.manualTags === undefined) {
+    return current
+  }
+
+  const {
+    manualTags: _manualTags,
+    manualUpdatedAt: _manualUpdatedAt,
+    ...recordWithoutManualTags
+  } = existingRecord
+  const nextRecord = normalizeBookmarkTagRecord({
+    ...recordWithoutManualTags,
+    updatedAt: Date.now()
+  })
+  const nextRecords = { ...current.records }
+  if (hasUsefulBookmarkTagData(nextRecord)) {
+    nextRecords[id] = nextRecord
+  } else {
+    delete nextRecords[id]
+  }
+
+  return saveBookmarkTagIndex({
+    version: BOOKMARK_TAG_INDEX_VERSION,
+    updatedAt: Date.now(),
+    records: nextRecords
+  })
+}
+
+export async function clearAiBookmarkTags(bookmarkId: unknown): Promise<BookmarkTagIndex> {
+  const id = cleanText(bookmarkId)
+  const current = await loadBookmarkTagIndex()
+  const existingRecord = id ? current.records[id] : null
+  if (!id || !existingRecord) {
+    return current
+  }
+
+  const nextRecord = normalizeBookmarkTagRecord({
+    ...existingRecord,
+    tags: [],
+    updatedAt: Date.now()
+  })
+  const nextRecords = { ...current.records }
+  if (hasUsefulBookmarkTagData(nextRecord)) {
+    nextRecords[id] = nextRecord
+  } else {
+    delete nextRecords[id]
+  }
+
+  return saveBookmarkTagIndex({
+    version: BOOKMARK_TAG_INDEX_VERSION,
+    updatedAt: Date.now(),
+    records: nextRecords
+  })
 }
 
 export async function removeBookmarkTagRecord(bookmarkId: unknown): Promise<BookmarkTagIndex> {
@@ -571,11 +733,16 @@ function normalizeBookmarkTagSource(value: unknown): BookmarkTagSource {
     source === 'ai_naming' ||
     source === 'auto_analyze' ||
     source === 'popup_smart' ||
-    source === 'imported'
+    source === 'imported' ||
+    source === 'manual'
   ) {
     return source
   }
   return 'imported'
+}
+
+function hasOwn(source: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(source, key)
 }
 
 function normalizeBookmarkTagExtraction(value: unknown): BookmarkTagExtraction {

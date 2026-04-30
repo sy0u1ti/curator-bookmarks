@@ -3,6 +3,10 @@ export const SECTION_META = {
     label: 'General',
     title: '通用设置'
   },
+  dashboard: {
+    label: 'Dashboard',
+    title: '书签仪表盘'
+  },
   availability: {
     label: 'Availability',
     title: '书签可用性检测'

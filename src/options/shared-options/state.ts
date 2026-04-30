@@ -63,6 +63,9 @@ export function normalizeHistoryRunScope(scope = null) {
   }
 }
 
+export type DashboardViewMode = 'cards'
+export type DashboardSortKey = 'date-desc' | 'date-asc' | 'title-asc' | 'domain-asc'
+
 export const availabilityState = {
   catalogLoading: true,
   permissionPending: true,
@@ -143,6 +146,24 @@ export const managerState = {
   confirmModalConfirmLabel: '确认',
   confirmModalCancelLabel: '取消',
   aiRevealApiKey: false
+}
+
+export const dashboardState = {
+  viewMode: 'cards' as DashboardViewMode,
+  query: '',
+  folderId: '',
+  domain: '',
+  month: '',
+  sortKey: 'date-desc' as DashboardSortKey,
+  selectedIds: new Set<string>(),
+  expandedTagIds: new Set<string>(),
+  tagEditorBookmarkId: '',
+  tagEditorDraft: '',
+  tagEditorStatus: '',
+  tagEditorSaving: false,
+  tagEditorBusyAction: '',
+  copyFeedbackId: '',
+  statusMessage: ''
 }
 
 export const aiNamingState = {

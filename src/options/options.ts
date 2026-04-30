@@ -133,6 +133,7 @@ import {
   clearRecycleSelection,
   selectAllRecycleEntries,
   restoreSelectedRecycleEntries,
+  clearSelectedRecycleEntries,
   clearRecycleBin,
   deleteBookmarksToRecycle
 } from './sections/recycle.js'
@@ -175,6 +176,25 @@ import {
   renderBookmarkAddHistory,
   clearBookmarkAddHistory
 } from './sections/bookmark-add-history.js'
+import {
+  cancelDashboardDrag,
+  closeDashboardTagEditor,
+  closeDashboardTagPopover,
+  getSelectedDashboardBookmarks,
+  handleDashboardClick,
+  handleDashboardDocumentClick,
+  handleDashboardDocumentFocusIn,
+  handleDashboardInput,
+  handleDashboardPointerCancel,
+  handleDashboardPointerDown,
+  handleDashboardPointerMove,
+  handleDashboardPointerUp,
+  handleDashboardTagPointerOut,
+  handleDashboardTagPointerOver,
+  moveSelectedDashboardBookmarks,
+  removeDashboardSelectionIds,
+  renderDashboardSection
+} from './sections/dashboard.js'
 
 let availabilityRenderFrame = 0
 let availabilityPauseResolvers: Array<() => void> = []
@@ -223,6 +243,16 @@ const historyCallbacks = {
   renderAvailabilitySection,
   getCurrentAvailabilityScopeMeta,
   confirm: requestConfirmation
+}
+
+const dashboardCallbacks = {
+  renderAvailabilitySection,
+  hydrateAvailabilityCatalog,
+  regenerateAiTags: regenerateDashboardAiTagsForBookmark,
+  openMoveModal,
+  closeMoveModal,
+  confirm: requestConfirmation,
+  recycleCallbacks
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -294,6 +324,8 @@ function syncPageSection() {
     window.history.replaceState(null, '', `#${key}`)
   }
 
+  document.body.classList.toggle('dashboard-fullscreen-active', key === 'dashboard')
+
   links.forEach((link) => {
     const linkKey = link.getAttribute('data-section-link')
     const isExactActive = linkKey === key
@@ -338,6 +370,21 @@ function bindEvents() {
 
 
   dom.availabilityScopeTrigger?.addEventListener('click', () => openScopeModal('availability'))
+  dom.dashboardPanel?.addEventListener('click', (event) => {
+    void handleDashboardClick(event, dashboardCallbacks)
+  })
+  dom.dashboardPanel?.addEventListener('input', handleDashboardInput)
+  dom.dashboardPanel?.addEventListener('change', handleDashboardInput)
+  dom.dashboardPanel?.addEventListener('pointerdown', handleDashboardPointerDown)
+  dom.dashboardPanel?.addEventListener('pointerover', handleDashboardTagPointerOver)
+  dom.dashboardPanel?.addEventListener('pointerout', handleDashboardTagPointerOut)
+  document.addEventListener('pointermove', handleDashboardPointerMove)
+  document.addEventListener('pointerup', (event) => {
+    void handleDashboardPointerUp(event, dashboardCallbacks)
+  })
+  document.addEventListener('pointercancel', handleDashboardPointerCancel)
+  document.addEventListener('click', handleDashboardDocumentClick)
+  document.addEventListener('focusin', handleDashboardDocumentFocusIn)
   dom.historyScopeTrigger?.addEventListener('click', () => openScopeModal('history'))
   dom.aiScopeTrigger?.addEventListener('click', () => openScopeModal('ai'))
   dom.aiSaveSettings?.addEventListener('click', () => {
@@ -431,6 +478,7 @@ function bindEvents() {
   dom.recycleResults?.addEventListener('click', (event) => handleRecycleResultsClick(event, recycleCallbacks))
   dom.recycleClearSelection?.addEventListener('click', () => clearRecycleSelection(recycleCallbacks))
   dom.recycleRestoreSelection?.addEventListener('click', () => restoreSelectedRecycleEntries(recycleCallbacks))
+  dom.recycleClearSelected?.addEventListener('click', () => clearSelectedRecycleEntries(recycleCallbacks))
   dom.recycleSelectAll?.addEventListener('click', () => selectAllRecycleEntries(recycleCallbacks))
   dom.recycleClearAll?.addEventListener('click', () => clearRecycleBin(recycleCallbacks))
   dom.deleteFailedBookmarks?.addEventListener('click', openDeleteModal)
@@ -511,6 +559,21 @@ function handleKeydown(event) {
     return
   }
 
+  if (cancelDashboardDrag()) {
+    event.preventDefault()
+    return
+  }
+
+  if (closeDashboardTagEditor()) {
+    event.preventDefault()
+    return
+  }
+
+  if (closeDashboardTagPopover()) {
+    event.preventDefault()
+    return
+  }
+
   if (managerState.confirmModalOpen) {
     event.preventDefault()
     resolveConfirmModal(false)
@@ -544,6 +607,12 @@ function handleKeydown(event) {
   if (availabilityState.deleteModalOpen) {
     event.preventDefault()
     closeDeleteModal()
+    return
+  }
+
+  if (getCurrentSectionKey() === 'dashboard') {
+    event.preventDefault()
+    window.location.hash = '#general'
   }
 }
 
@@ -1317,8 +1386,19 @@ async function fetchWithTimeout(url, method) {
   }
 }
 
-async function fetchWithRequestTimeout(url, options = {}, timeoutMs = AI_NAMING_DEFAULT_TIMEOUT_MS) {
+async function fetchWithRequestTimeout(url, options: RequestInit = {}, timeoutMs = AI_NAMING_DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController()
+  const externalSignal = options.signal
+  const abortCurrentFetch = () => {
+    controller.abort()
+  }
+
+  if (externalSignal?.aborted) {
+    controller.abort()
+  } else {
+    externalSignal?.addEventListener('abort', abortCurrentFetch, { once: true })
+  }
+
   const timeoutId = window.setTimeout(() => {
     controller.abort()
   }, Math.max(1000, Number(timeoutMs) || AI_NAMING_DEFAULT_TIMEOUT_MS))
@@ -1330,7 +1410,18 @@ async function fetchWithRequestTimeout(url, options = {}, timeoutMs = AI_NAMING_
     })
   } finally {
     clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', abortCurrentFetch)
   }
+}
+
+function throwIfAborted(signal?: AbortSignal | null) {
+  if (signal?.aborted) {
+    throw new DOMException('操作已取消。', 'AbortError')
+  }
+}
+
+function isAbortError(error) {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function applyAvailabilityResult(result) {
@@ -1516,6 +1607,11 @@ function renderActiveOptionsSection() {
     renderAvailabilitySelectionGroup()
     renderReviewResults()
     renderFailedResults()
+    return
+  }
+
+  if (activeSection === 'dashboard') {
+    renderDashboardSection()
     return
   }
 
@@ -2819,12 +2915,35 @@ function buildAiNamingResultCard(result) {
     result.contentType || topics.length
       ? `类型：${result.contentType || '未分类'}${topics.length ? ` · 主题：${topics.join(' / ')}` : ''}`
       : '',
-    result.suggestedFolder ? `推荐文件夹：${result.suggestedFolder}` : '',
     tags.length ? `标签：${tags.join(' / ')}` : '',
     aliases.length ? `别名：${aliases.join(' / ')}` : '',
     result.extractionStatus ? `内容来源：${getAiExtractionLabel(result.extractionStatus, result.extractionSource)}` : '',
     result.reason || result.detail || ''
   ].filter(Boolean)
+  const moveButtonMarkup = canMoveToSuggestedFolder
+    ? `
+        <button
+          class="detect-result-action ai-move-recommended-action double-confirm-action ${pendingMove ? 'confirm' : ''}"
+          type="button"
+          data-ai-move-recommended="${escapeAttr(result.id)}"
+          title="${escapeAttr(pendingMove ? `再次点击，移动到 ${result.suggestedFolder}` : `移动到 ${result.suggestedFolder}`)}"
+          ${interactionLocked ? 'disabled' : ''}
+        >
+          ${pendingMove ? '<span class="double-confirm-icon" aria-hidden="true">✓✓</span> 确认移动' : '移动至推荐文件夹'}
+        </button>
+      `
+    : ''
+  const suggestedFolderMarkup = result.suggestedFolder
+    ? `
+        <div class="ai-result-folder-suggestion">
+          <div class="ai-result-folder-copy">
+            <span>推荐文件夹</span>
+            <strong>${escapeHtml(result.suggestedFolder)}</strong>
+          </div>
+          ${moveButtonMarkup}
+        </div>
+      `
+    : ''
   const tagPreviewMarkup = tags.length
     ? `
         <div class="ai-result-tag-shell ${tagsExpanded ? 'expanded' : ''}" data-ai-tag-shell="${escapeAttr(result.id)}">
@@ -2850,20 +2969,6 @@ function buildAiNamingResultCard(result) {
         </details>
       `
     : ''
-  const moveButtonMarkup = canMoveToSuggestedFolder
-    ? `
-        <button
-          class="detect-result-action ai-move-recommended-action double-confirm-action ${pendingMove ? 'confirm' : ''}"
-          type="button"
-          data-ai-move-recommended="${escapeAttr(result.id)}"
-          title="${escapeAttr(pendingMove ? `再次点击，移动到 ${result.suggestedFolder}` : `移动到 ${result.suggestedFolder}`)}"
-          ${interactionLocked ? 'disabled' : ''}
-        >
-          ${pendingMove ? '<span class="double-confirm-icon" aria-hidden="true">✓✓</span> 确认移动' : '移动至推荐文件夹'}
-        </button>
-      `
-    : ''
-
   return `
     <article class="detect-result-card ${isSelected ? 'selected' : ''}">
       <div class="detect-result-head">
@@ -2883,7 +2988,6 @@ function buildAiNamingResultCard(result) {
         </div>
         <div class="detect-result-actions">
           <a class="detect-result-open" href="${escapeAttr(result.url)}" target="_blank" rel="noreferrer noopener">打开页面</a>
-          ${moveButtonMarkup}
           ${selectable ? `<button class="detect-result-action" type="button" data-ai-apply="${escapeAttr(result.id)}" ${interactionLocked ? 'disabled' : ''}>应用建议</button>` : ''}
         </div>
       </div>
@@ -2894,6 +2998,7 @@ function buildAiNamingResultCard(result) {
           <span>${escapeHtml(displayUrl(result.url))}</span>
           <span>${escapeHtml(result.path || '未归档路径')}</span>
         </div>
+        ${suggestedFolderMarkup}
         ${tagPreviewMarkup}
         ${detailMarkup}
       </div>
@@ -3417,8 +3522,12 @@ async function hasJinaReaderPermission() {
 }
 
 function getAiNamingPermissionOrigins() {
+  return getAiNamingPermissionOriginsForBookmarks(aiNamingState.bookmarks)
+}
+
+function getAiNamingPermissionOriginsForBookmarks(bookmarks = []) {
   const origins = new Set(
-    aiNamingState.bookmarks
+    bookmarks
       .flatMap((bookmark) => {
         const origin = getOriginPermissionPattern(bookmark.url)
         return origin ? [origin] : []
@@ -3432,6 +3541,40 @@ function getAiNamingPermissionOrigins() {
     origins.add(AI_NAMING_JINA_READER_ORIGIN)
   }
   return [...origins]
+}
+
+async function ensureAiNamingPermissionsForBookmarks(bookmarks = [], { interactive = true } = {}) {
+  const origins = getAiNamingPermissionOriginsForBookmarks(bookmarks)
+  if (!origins.length) {
+    aiNamingState.permissionGranted = false
+    return false
+  }
+
+  try {
+    if (await containsPermissions({ origins })) {
+      aiNamingState.permissionGranted = true
+      return true
+    }
+  } catch (error) {
+    aiNamingState.permissionGranted = false
+  }
+
+  if (!interactive) {
+    return false
+  }
+
+  aiNamingState.requestingPermission = true
+  renderAvailabilitySection()
+  try {
+    aiNamingState.permissionGranted = await requestPermissions({ origins })
+    return aiNamingState.permissionGranted
+  } catch (error) {
+    aiNamingState.permissionGranted = false
+    return false
+  } finally {
+    aiNamingState.requestingPermission = false
+    renderAvailabilitySection()
+  }
 }
 
 function getAiNamingProviderPermissionOrigin(baseUrl = aiNamingManagerState.settings.baseUrl) {
@@ -3835,7 +3978,7 @@ async function runAiNamingSuggestions() {
 
       try {
         const aiResponseItems = await requestAiNamingBatch(preparedItems)
-        const failedPreparedItems = mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings)
+        const failedPreparedItems = await mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings)
         retryCandidates.push(...failedPreparedItems.map((preparedItem) => {
           return {
             bookmark: preparedItem.bookmark,
@@ -3982,7 +4125,7 @@ async function retryAiNamingBookmarks(retryCandidates, settings = aiNamingManage
 
     try {
       const { modelItem, preparedItem } = await generateAiNamingResultForBookmark(candidate.bookmark, settings)
-      commitAiNamingResult(candidate.bookmark, modelItem, settings, preparedItem)
+      await commitAiNamingResult(candidate.bookmark, modelItem, settings, preparedItem)
     } catch (retryError) {
       upsertAiNamingResult(
         buildAiNamingRetriedFailureResult(candidate.bookmark, candidate.initialError, retryError)
@@ -3997,9 +4140,14 @@ async function retryAiNamingBookmarks(retryCandidates, settings = aiNamingManage
   scheduleAvailabilityRender()
 }
 
-async function generateAiNamingResultForBookmark(bookmark, settings = aiNamingManagerState.settings) {
-  const preparedItem = await buildAiNamingPreparedItem(bookmark, settings.timeoutMs)
-  const aiResponseItems = await requestAiNamingBatch([preparedItem])
+async function generateAiNamingResultForBookmark(
+  bookmark,
+  settings = aiNamingManagerState.settings,
+  options: { signal?: AbortSignal | null } = {}
+) {
+  const preparedItem = await buildAiNamingPreparedItem(bookmark, settings.timeoutMs, options)
+  throwIfAborted(options.signal)
+  const aiResponseItems = await requestAiNamingBatch([preparedItem], options)
   const modelItem = aiResponseItems.find((item) => String(item.bookmarkId) === String(bookmark.id))
   if (!modelItem) {
     throw new Error('AI 返回中缺少该书签的命名结果。')
@@ -4008,10 +4156,42 @@ async function generateAiNamingResultForBookmark(bookmark, settings = aiNamingMa
   return { modelItem, preparedItem }
 }
 
-function commitAiNamingResult(bookmark, modelItem, settings = aiNamingManagerState.settings, preparedItem = null) {
+async function regenerateDashboardAiTagsForBookmark(bookmark, signal = null) {
+  if (aiNamingState.running || aiNamingState.applying) {
+    throw new Error('AI 标签与命名正在运行，请等待当前任务结束后再重新生成。')
+  }
+
+  if (!isCheckableUrl(bookmark?.url)) {
+    throw new Error('该书签不是可分析的 http/https 链接。')
+  }
+
+  const settings = normalizeAiNamingSettings(aiNamingManagerState.settings)
+  validateAiNamingSettings(settings)
+  aiNamingManagerState.settings = settings
+
+  throwIfAborted(signal)
+  const permissionGranted = await ensureAiNamingPermissionsForBookmarks([bookmark], { interactive: true })
+  if (!permissionGranted) {
+    throw new Error('未授予网页抓取或 AI 服务访问权限，无法重新生成标签。')
+  }
+
+  throwIfAborted(signal)
+  const { modelItem, preparedItem } = await generateAiNamingResultForBookmark(bookmark, settings, { signal })
+  throwIfAborted(signal)
+  const nextResult = buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem)
+  const record = await persistAiNamingTagRecord(bookmark, nextResult, settings, preparedItem, {
+    rethrow: true
+  })
+
+  if (!record) {
+    throw new Error('AI 未生成可保存的标签数据。')
+  }
+}
+
+async function commitAiNamingResult(bookmark, modelItem, settings = aiNamingManagerState.settings, preparedItem = null) {
   const nextResult = buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem)
   upsertAiNamingResult(nextResult)
-  persistAiNamingTagRecord(bookmark, nextResult, settings, preparedItem)
+  await persistAiNamingTagRecord(bookmark, nextResult, settings, preparedItem)
 
   if (
     nextResult.status === 'suggested' &&
@@ -4062,35 +4242,42 @@ function buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem = nu
   }
 }
 
-function persistAiNamingTagRecord(bookmark, result, settings = aiNamingManagerState.settings, preparedItem = null) {
-  upsertBookmarkTagFromAnalysis({
-    bookmark: {
-      id: bookmark.id,
-      title: result.suggestedTitle || bookmark.title,
-      url: bookmark.url,
-      path: bookmark.path
-    },
-    analysis: {
-      summary: result.summary,
-      contentType: result.contentType,
-      topics: result.topics,
-      tags: result.tags,
-      aliases: result.aliases,
-      confidence: result.confidenceScore,
+async function persistAiNamingTagRecord(
+  bookmark,
+  result,
+  settings = aiNamingManagerState.settings,
+  preparedItem = null,
+  options: { rethrow?: boolean } = {}
+) {
+  try {
+    const record = await upsertBookmarkTagFromAnalysis({
+      bookmark: {
+        id: bookmark.id,
+        title: result.suggestedTitle || bookmark.title,
+        url: bookmark.url,
+        path: bookmark.path
+      },
+      analysis: {
+        summary: result.summary,
+        contentType: result.contentType,
+        topics: result.topics,
+        tags: result.tags,
+        aliases: result.aliases,
+        confidence: result.confidenceScore,
+        extraction: {
+          status: result.extractionStatus,
+          source: result.extractionSource,
+          warnings: result.extractionWarnings
+        }
+      },
+      source: 'ai_naming',
+      model: settings.model,
       extraction: {
-        status: result.extractionStatus,
-        source: result.extractionSource,
-        warnings: result.extractionWarnings
+        status: String(preparedItem?.pageContext?.extraction?.status || result.extractionStatus || ''),
+        source: String(preparedItem?.pageContext?.extraction?.source || result.extractionSource || ''),
+        warnings: Array.isArray(result.extractionWarnings) ? result.extractionWarnings : []
       }
-    },
-    source: 'ai_naming',
-    model: settings.model,
-    extraction: {
-      status: String(preparedItem?.pageContext?.extraction?.status || result.extractionStatus || ''),
-      source: String(preparedItem?.pageContext?.extraction?.source || result.extractionSource || ''),
-      warnings: Array.isArray(result.extractionWarnings) ? result.extractionWarnings : []
-    }
-  }).then((record) => {
+    })
     if (record) {
       aiNamingState.tagIndex = normalizeBookmarkTagIndex({
         ...aiNamingState.tagIndex,
@@ -4102,10 +4289,15 @@ function persistAiNamingTagRecord(bookmark, result, settings = aiNamingManagerSt
       })
       renderBookmarkTagDataCard()
     }
-  }).catch((error) => {
+    return record
+  } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据写入失败。'
     renderAiNamingSection()
-  })
+    if (options.rethrow) {
+      throw error
+    }
+    return null
+  }
 }
 
 function buildAiNamingRetriedFailureResult(bookmark, initialError, retryError) {
@@ -4153,8 +4345,8 @@ function buildAiFolderCandidates(bookmark) {
   return candidates.slice(0, 80)
 }
 
-async function buildAiNamingPreparedItem(bookmark, timeoutMs) {
-  const metadata = await getAiMetadataForBookmark(bookmark, timeoutMs)
+async function buildAiNamingPreparedItem(bookmark, timeoutMs, options: { signal?: AbortSignal | null } = {}) {
+  const metadata = await getAiMetadataForBookmark(bookmark, timeoutMs, options)
   const pageContext = buildPageContextForAi(metadata)
   return {
     bookmark,
@@ -4172,11 +4364,14 @@ async function buildAiNamingPreparedItem(bookmark, timeoutMs) {
   }
 }
 
-async function getAiMetadataForBookmark(bookmark, timeoutMs) {
+async function getAiMetadataForBookmark(bookmark, timeoutMs, options: { signal?: AbortSignal | null } = {}) {
   let metadata
   try {
-    metadata = await fetchBookmarkMetadataForAi(bookmark.url, timeoutMs, bookmark)
+    metadata = await fetchBookmarkMetadataForAi(bookmark.url, timeoutMs, bookmark, options)
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
     metadata = buildFallbackPageContentFromUrl(bookmark.url, {
       currentTitle: bookmark.title,
       error
@@ -4186,7 +4381,12 @@ async function getAiMetadataForBookmark(bookmark, timeoutMs) {
   return normalizePageContentContext(metadata)
 }
 
-async function fetchBookmarkMetadataForAi(url, timeoutMs, bookmark = null) {
+async function fetchBookmarkMetadataForAi(
+  url,
+  timeoutMs,
+  bookmark = null,
+  options: { signal?: AbortSignal | null } = {}
+) {
   let context = null
 
   try {
@@ -4195,8 +4395,10 @@ async function fetchBookmarkMetadataForAi(url, timeoutMs, bookmark = null) {
       cache: 'no-store',
       credentials: 'omit',
       redirect: 'follow',
-      referrerPolicy: 'no-referrer'
+      referrerPolicy: 'no-referrer',
+      signal: options.signal
     }, timeoutMs)
+    throwIfAborted(options.signal)
     const finalUrl = String(response.url || url || '')
     const contentType = String(response.headers.get('content-type') || '').toLowerCase()
 
@@ -4214,6 +4416,9 @@ async function fetchBookmarkMetadataForAi(url, timeoutMs, bookmark = null) {
       })
     }
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
     context = buildFallbackPageContentFromUrl(url, {
       currentTitle: bookmark?.title,
       error
@@ -4222,9 +4427,13 @@ async function fetchBookmarkMetadataForAi(url, timeoutMs, bookmark = null) {
 
   if (aiNamingManagerState.settings.allowRemoteParsing) {
     try {
-      const remoteContext = await fetchRemoteBookmarkContentForAi(context.finalUrl || url, timeoutMs, context)
+      throwIfAborted(options.signal)
+      const remoteContext = await fetchRemoteBookmarkContentForAi(context.finalUrl || url, timeoutMs, context, options)
       return combinePageContentContexts(context, remoteContext)
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
       return normalizePageContentContext({
         ...context,
         warnings: [
@@ -4238,7 +4447,12 @@ async function fetchBookmarkMetadataForAi(url, timeoutMs, bookmark = null) {
   return context
 }
 
-async function fetchRemoteBookmarkContentForAi(url, timeoutMs, fallbackContext) {
+async function fetchRemoteBookmarkContentForAi(
+  url,
+  timeoutMs,
+  fallbackContext,
+  options: { signal?: AbortSignal | null } = {}
+) {
   const readerUrl = buildJinaReaderUrl(url)
   if (!readerUrl) {
     throw new Error('远程解析 URL 无效。')
@@ -4252,7 +4466,8 @@ async function fetchRemoteBookmarkContentForAi(url, timeoutMs, fallbackContext) 
     referrerPolicy: 'no-referrer',
     headers: {
       Accept: 'text/plain, text/markdown;q=0.9, */*;q=0.1'
-    }
+    },
+    signal: options.signal
   }, timeoutMs)
 
   if (!response.ok) {
@@ -4315,19 +4530,22 @@ function normalizeAiNamingConnectivityError(error, timeoutMs = aiNamingManagerSt
   return error instanceof Error ? error.message : '连通性测试失败，请稍后重试。'
 }
 
-async function requestAiNamingBatch(preparedItems) {
+async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSignal | null } = {}) {
   const settings = aiNamingManagerState.settings
   const endpoint = getAiEndpoint(settings)
   const requestBody = buildAiNamingRequestBody(preparedItems, settings)
+  throwIfAborted(options.signal)
   const response = await fetchWithRequestTimeout(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${settings.apiKey}`
     },
-    body: JSON.stringify(requestBody)
+    body: JSON.stringify(requestBody),
+    signal: options.signal
   }, settings.timeoutMs)
 
+  throwIfAborted(options.signal)
   const payload = await response.json().catch(() => null)
   if (!response.ok) {
     throw new Error(extractAiErrorMessage(payload, response.status))
@@ -4474,7 +4692,7 @@ function normalizeAiNamingResponseItems(payload, preparedItems) {
     .filter(Boolean)
 }
 
-function mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings = aiNamingManagerState.settings) {
+async function mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings = aiNamingManagerState.settings) {
   const responseMap = new Map(aiResponseItems.map((item) => [String(item.bookmarkId), item]))
   const failedPreparedItems = []
 
@@ -4486,7 +4704,7 @@ function mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings = ai
       continue
     }
 
-    commitAiNamingResult(bookmark, modelItem, settings, preparedItem)
+    await commitAiNamingResult(bookmark, modelItem, settings, preparedItem)
   }
 
   sortAiNamingResults()
@@ -4886,7 +5104,9 @@ function renderMoveModal() {
     return
   }
 
-  const selectedResults = getSelectedAvailabilityResults()
+  const selectedResults = managerState.moveSelectionSource === 'dashboard'
+    ? getSelectedDashboardBookmarks()
+    : getSelectedAvailabilityResults()
   const normalizedQuery = normalizeText(managerState.moveSearchQuery)
   const folders = availabilityState.allFolders
     .filter((folder) => String(folder.id) !== ROOT_ID)
@@ -5457,6 +5677,9 @@ function openMoveModal(source) {
   if (source === 'availability' && !getSelectedAvailabilityResults().length) {
     return
   }
+  if (source === 'dashboard' && !getSelectedDashboardBookmarks().length) {
+    return
+  }
 
   managerState.moveSelectionSource = source
   managerState.moveSearchQuery = ''
@@ -5515,6 +5738,11 @@ async function handleMoveFolderResultsClick(event) {
 
   const folderId = String(targetButton.getAttribute('data-move-target-folder') || '').trim()
   if (!folderId) {
+    return
+  }
+
+  if (managerState.moveSelectionSource === 'dashboard') {
+    await moveSelectedDashboardBookmarks(folderId, dashboardCallbacks)
     return
   }
 
@@ -5648,6 +5876,7 @@ function removeDeletedResultsFromState(bookmarkIds) {
     managerState.selectedAvailabilityIds.delete(bookmarkId)
     managerState.selectedDuplicateIds.delete(bookmarkId)
   })
+  removeDashboardSelectionIds([...removedIdSet])
 
   availabilityState.reviewResults = availabilityState.reviewResults.filter((result) => {
     return !removedIdSet.has(String(result.id))

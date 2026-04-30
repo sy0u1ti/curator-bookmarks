@@ -31,6 +31,10 @@
             <a class="options-nav-link" href="#duplicates" data-section-link="duplicates">重复书签</a>
             <a class="options-nav-link" href="#recycle" data-section-link="recycle">回收站</a>
           </nav>
+          <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
+            <span>视觉化管理</span>
+            <strong>书签仪表盘</strong>
+          </a>
         </aside>
 
         <main class="options-main">
@@ -245,6 +249,111 @@
                     <button id="ai-test-connection" class="options-button" type="button">测试连接</button>
                     <button id="ai-save-settings" class="options-button hidden" type="button">保存设置</button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="dashboard"
+            class="options-panel dashboard-panel"
+            data-section-panel="dashboard"
+            aria-labelledby="dashboard-title"
+            hidden
+          >
+            <p class="options-section-label">Dashboard</p>
+            <div class="dashboard-title-row">
+              <div>
+                <p class="dashboard-kicker">Visual Bookmark Management</p>
+                <h1 id="dashboard-title">全部书签 <span id="dashboard-total">(0)</span></h1>
+              </div>
+              <div class="dashboard-title-actions">
+                <span id="dashboard-status" class="ai-provider-save-state muted"></span>
+                <button class="options-button secondary small" type="button" data-dashboard-action="exit-dashboard">退出</button>
+              </div>
+            </div>
+
+            <div class="options-group dashboard-toolbar">
+              <label class="options-search dashboard-search">
+                <span class="options-search-label">搜索书签</span>
+                <input id="dashboard-query" class="options-search-input" type="search" spellcheck="false" placeholder="标题、域名、路径、标签、摘要">
+              </label>
+              <div class="dashboard-toolbar-actions">
+                <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible">选择当前可见</button>
+                <span id="dashboard-result-count" class="option-value">0 条书签</span>
+              </div>
+            </div>
+
+            <div id="dashboard-selection-group" class="options-group detect-selection-group hidden">
+              <div class="detect-results-header">
+                <div>
+                  <strong id="dashboard-selection-count">0 条已选择</strong>
+                  <p class="detect-results-subtitle">所选书签可批量移动到目标文件夹，或删除并移入回收站。</p>
+                </div>
+                <div class="detect-results-actions">
+                  <button id="dashboard-clear-selection" class="options-button secondary small" type="button" data-dashboard-action="clear-selection">清空选择</button>
+                  <button id="dashboard-move-selection" class="options-button secondary small" type="button" data-dashboard-action="move-selected">批量移动</button>
+                  <button id="dashboard-delete-selection" class="options-button danger small" type="button" data-dashboard-action="delete-selected">批量删除</button>
+                </div>
+              </div>
+            </div>
+
+            <section class="options-group dashboard-results-group" aria-labelledby="dashboard-cards-title">
+              <div class="dashboard-results-head">
+                <strong id="dashboard-cards-title">全部书签</strong>
+                <p class="detect-results-subtitle">拖动卡片空白区域可拖入目标文件夹；按钮、链接和复选框不会触发拖拽。</p>
+              </div>
+              <div id="dashboard-results" class="dashboard-card-grid">
+                <div class="detect-empty">正在读取书签目录。</div>
+              </div>
+            </section>
+
+            <div id="dashboard-drag-overlay" class="dashboard-drag-overlay hidden" aria-hidden="true">
+              <div
+                id="dashboard-delete-drop-target"
+                class="dashboard-delete-drop-target"
+                data-dashboard-delete-drop
+                role="presentation"
+              >
+                <span class="dashboard-delete-drop-icon" aria-hidden="true"></span>
+                <span class="dashboard-delete-drop-copy">
+                  <strong>删除书签</strong>
+                  <small>拖到这里松开，确认后移入回收站</small>
+                </span>
+              </div>
+              <div class="dashboard-drop-panel" role="presentation">
+                <div class="dashboard-drop-head">
+                  <div>
+                    <strong>拖入文件夹移动书签</strong>
+                    <p id="dashboard-drag-hint">选择目标文件夹后松开即可移动。</p>
+                  </div>
+                  <span class="option-value">Esc 取消</span>
+                </div>
+                <div id="dashboard-folder-drop-grid" class="dashboard-folder-drop-grid"></div>
+              </div>
+              <div id="dashboard-drag-preview" class="dashboard-drag-preview" aria-hidden="true"></div>
+            </div>
+
+            <div id="dashboard-tag-editor" class="dashboard-tag-editor hidden" role="dialog" aria-modal="false" aria-labelledby="dashboard-tag-editor-title" data-dashboard-no-drag>
+              <div class="dashboard-tag-editor-panel">
+                <div class="dashboard-tag-editor-head">
+                  <div>
+                    <p class="dashboard-kicker">Tags</p>
+                    <strong id="dashboard-tag-editor-title">修改标签</strong>
+                    <span id="dashboard-tag-editor-meta"></span>
+                  </div>
+                </div>
+                <label class="dashboard-tag-editor-field">
+                  <span>标签</span>
+                  <textarea id="dashboard-tag-editor-input" rows="5" placeholder="用逗号、顿号或换行分隔标签"></textarea>
+                </label>
+                <p class="dashboard-tag-editor-help">每行一个标签，也可以用逗号、顿号分隔；保存后会自动去重。</p>
+                <p id="dashboard-tag-editor-status" class="detect-results-subtitle"></p>
+                <div class="dashboard-tag-editor-actions">
+                  <button id="dashboard-tag-editor-clear-ai" class="options-button secondary small" type="button" data-dashboard-action="clear-ai-tags">清除 AI 标签</button>
+                  <button id="dashboard-tag-editor-regenerate-ai" class="options-button secondary small" type="button" data-dashboard-action="regenerate-ai-tags">重新生成 AI 标签</button>
+                  <button class="options-button secondary small" type="button" data-dashboard-action="close-tag-editor">取消</button>
+                  <button id="dashboard-tag-editor-save" class="options-button small" type="button" data-dashboard-action="save-tags">保存标签</button>
                 </div>
               </div>
             </div>
@@ -837,11 +946,12 @@
               <div class="detect-results-header">
                 <div>
                   <strong id="recycle-selection-count">0 条已选择</strong>
-                  <p class="detect-results-subtitle">可批量恢复选中的回收站书签。</p>
+                  <p class="detect-results-subtitle">可批量恢复选中的回收站书签，也可只清除回收站记录。</p>
                 </div>
                 <div class="detect-results-actions">
                   <button id="recycle-clear-selection" class="options-button secondary small" type="button">清空选择</button>
                   <button id="recycle-restore-selection" class="options-button small" type="button">批量恢复</button>
+                  <button id="recycle-clear-selected" class="options-button danger small" type="button">清除所选</button>
                 </div>
               </div>
             </div>

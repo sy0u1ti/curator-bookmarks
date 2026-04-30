@@ -74,6 +74,7 @@ export function renderRecycleSection(callbacks) {
   dom.recycleSelectionGroup.classList.toggle('hidden', managerState.selectedRecycleIds.size === 0)
   dom.recycleSelectionCount.textContent = `${managerState.selectedRecycleIds.size} 条已选择`
   dom.recycleRestoreSelection.disabled = availabilityState.deleting || managerState.selectedRecycleIds.size === 0
+  dom.recycleClearSelected.disabled = availabilityState.deleting || managerState.selectedRecycleIds.size === 0
   dom.recycleSelectAll.disabled = managerState.recycleBin.length === 0
   dom.recycleClearAll.disabled = managerState.recycleBin.length === 0 || availabilityState.deleting
 
@@ -115,6 +116,14 @@ function buildRecycleEntryCard(entry) {
           >
             恢复书签
           </button>
+          <button
+            class="detect-result-action danger"
+            type="button"
+            data-recycle-clear="${escapeAttr(entry.recycleId)}"
+            ${availabilityState.deleting ? 'disabled' : ''}
+          >
+            清除
+          </button>
         </div>
       </div>
       <div class="detect-result-copy">
@@ -140,6 +149,15 @@ export function handleRecycleResultsClick(event, callbacks) {
     return
   }
 
+  const clearButton = event.target.closest('[data-recycle-clear]')
+  if (clearButton && !availabilityState.deleting) {
+    clearRecycleEntriesByIds(
+      [String(clearButton.getAttribute('data-recycle-clear') || '').trim()],
+      callbacks
+    )
+    return
+  }
+
   const restoreButton = event.target.closest('[data-recycle-restore]')
   if (!restoreButton || availabilityState.deleting) {
     return
@@ -153,6 +171,44 @@ export function handleRecycleResultsClick(event, callbacks) {
 
 export function clearRecycleSelection(callbacks) {
   managerState.selectedRecycleIds.clear()
+  callbacks.renderAvailabilitySection()
+}
+
+async function clearRecycleEntriesByIds(recycleIds, callbacks) {
+  const targetSet = new Set(recycleIds.map((id) => String(id)).filter(Boolean))
+  const targetEntries = managerState.recycleBin.filter((entry) => {
+    return targetSet.has(String(entry.recycleId))
+  })
+
+  if (!targetEntries.length || availabilityState.deleting) {
+    return
+  }
+
+  const confirmed = callbacks.confirm
+    ? await callbacks.confirm({
+        title: targetEntries.length === 1
+          ? '清除这条回收站记录？'
+          : `清除 ${targetEntries.length} 条回收站记录？`,
+        copy: '这只会从扩展回收站中移除记录，之后无法再从扩展内恢复；不会再次修改 Chrome 书签。',
+        confirmLabel: '清除记录',
+        label: 'Delete',
+        tone: 'danger'
+      })
+    : true
+  if (!confirmed) {
+    return
+  }
+
+  managerState.recycleBin = managerState.recycleBin.filter((entry) => {
+    return !targetSet.has(String(entry.recycleId))
+  })
+  for (const recycleId of targetSet) {
+    managerState.selectedRecycleIds.delete(recycleId)
+  }
+  await saveRecycleBin()
+  availabilityState.lastError = targetEntries.length === 1
+    ? '已清除 1 条回收站记录。'
+    : `已清除 ${targetEntries.length} 条回收站记录。`
   callbacks.renderAvailabilitySection()
 }
 
@@ -170,6 +226,14 @@ export async function restoreSelectedRecycleEntries(callbacks) {
 
   await restoreRecycleEntriesByIds([...managerState.selectedRecycleIds], callbacks)
   clearRecycleSelection(callbacks)
+}
+
+export async function clearSelectedRecycleEntries(callbacks) {
+  if (!managerState.selectedRecycleIds.size || availabilityState.deleting) {
+    return
+  }
+
+  await clearRecycleEntriesByIds([...managerState.selectedRecycleIds], callbacks)
 }
 
 async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
