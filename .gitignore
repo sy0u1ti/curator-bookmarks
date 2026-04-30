@@ -20,3 +20,7 @@ DESIGN.json
 PRODUCT.md
 
 docs/FEATURE_IMPLEMENTATION.md
+
+# Local tests
+/tests/
+/tsconfig.test.json
