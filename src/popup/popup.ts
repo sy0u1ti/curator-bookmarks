@@ -28,7 +28,7 @@ import {
   appendRecycleEntry,
   removeRecycleEntry
 } from '../shared/recycle-bin.js'
-import { getLocalStorage, removeLocalStorage } from '../shared/storage.js'
+import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
@@ -80,6 +80,9 @@ const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const SEARCH_CACHE_LIMIT = 40
 const SMART_RECOMMENDATION_LIMIT = 3
 const SMART_LOADING_STEP_COUNT = 3
+const DEFAULT_POPUP_PREFERENCES = {
+  naturalSearchEnabled: false
+}
 
 const SMART_CLASSIFY_SCHEMA = {
   type: 'object',
@@ -167,13 +170,15 @@ const NATURAL_SEARCH_SCHEMA = {
 
 document.addEventListener('DOMContentLoaded', () => {
   cacheDom()
-  bindEvents()
-  render()
-  void showPendingAutoAnalyzeNotice()
-  refreshData({ initial: true, preserveSearch: false }).finally(() => {
-    if (!document.body.classList.contains('smart-active')) {
-      dom.searchInput.focus()
-    }
+  void hydratePopupPreferences().finally(() => {
+    bindEvents()
+    render()
+    void showPendingAutoAnalyzeNotice()
+    refreshData({ initial: true, preserveSearch: false }).finally(() => {
+      if (!document.body.classList.contains('smart-active')) {
+        dom.searchInput.focus()
+      }
+    })
   })
 })
 
@@ -234,6 +239,34 @@ function bindEvents() {
 
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleDocumentKeydown)
+}
+
+async function hydratePopupPreferences() {
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])
+    const preferences = normalizePopupPreferences(stored[STORAGE_KEYS.popupPreferences])
+    state.naturalSearchEnabled = preferences.naturalSearchEnabled
+  } catch {
+    state.naturalSearchEnabled = DEFAULT_POPUP_PREFERENCES.naturalSearchEnabled
+  }
+}
+
+function normalizePopupPreferences(value) {
+  if (!value || typeof value !== 'object') {
+    return { ...DEFAULT_POPUP_PREFERENCES }
+  }
+
+  return {
+    naturalSearchEnabled: value.naturalSearchEnabled === true
+  }
+}
+
+async function savePopupPreferences() {
+  await setLocalStorage({
+    [STORAGE_KEYS.popupPreferences]: {
+      naturalSearchEnabled: state.naturalSearchEnabled
+    }
+  })
 }
 
 async function openSettingsPage() {
@@ -466,6 +499,9 @@ async function toggleNaturalLanguageSearch() {
   state.searchHighlightQuery = ''
   state.searchRunId += 1
   render()
+  void savePopupPreferences().catch(() => {
+    showToast({ type: 'error', message: '搜索模式偏好保存失败，当前会话仍已切换。' })
+  })
 
   if (enabled) {
     await prepareNaturalLanguageSearchAi()
@@ -723,6 +759,9 @@ function render() {
 }
 
 function renderBanner() {
+  const naturalSearchFallback = isNaturalSearchLocalFallback()
+  const naturalSearchPending = state.naturalSearchPending
+
   dom.heroSubtitle.textContent = state.loadError
     ? '读取失败时不会上传数据，请检查扩展权限后重试'
     : '本地读取，不上传任何书签内容'
@@ -734,15 +773,69 @@ function renderBanner() {
     ? '自然语言搜索书签'
     : '搜索书签或网址'
   dom.naturalSearchToggle.classList.toggle('active', state.naturalSearchEnabled)
-  dom.naturalSearchToggle.classList.toggle('pending', state.naturalSearchPending)
+  dom.naturalSearchToggle.classList.toggle('pending', naturalSearchPending)
+  dom.naturalSearchToggle.classList.toggle('fallback', naturalSearchFallback)
+  dom.naturalSearchToggle.textContent = getNaturalSearchToggleText(naturalSearchFallback, naturalSearchPending)
   dom.naturalSearchToggle.setAttribute('aria-pressed', String(state.naturalSearchEnabled))
   dom.naturalSearchToggle.setAttribute(
     'aria-label',
-    state.naturalSearchEnabled ? '关闭自然语言搜索' : '开启自然语言搜索'
+    getNaturalSearchToggleAriaLabel(naturalSearchFallback, naturalSearchPending)
   )
-  dom.naturalSearchToggle.title = state.naturalSearchEnabled
-    ? '关闭自然语言搜索'
-    : '开启自然语言搜索'
+  dom.naturalSearchToggle.title = getNaturalSearchToggleTitle(naturalSearchFallback, naturalSearchPending)
+}
+
+function isNaturalSearchLocalFallback() {
+  return Boolean(
+    state.naturalSearchEnabled &&
+    (
+      state.naturalSearchError ||
+      (state.debouncedQuery && state.naturalSearchPlan?.source === 'local')
+    )
+  )
+}
+
+function getNaturalSearchToggleText(isFallback: boolean, isPending: boolean) {
+  if (!state.naturalSearchEnabled) {
+    return 'AI'
+  }
+
+  if (isPending) {
+    return '...'
+  }
+
+  return isFallback ? '本地' : 'AI'
+}
+
+function getNaturalSearchToggleAriaLabel(isFallback: boolean, isPending: boolean) {
+  if (!state.naturalSearchEnabled) {
+    return '开启自然语言搜索'
+  }
+
+  if (isPending) {
+    return '自然语言搜索正在解析，点击可关闭'
+  }
+
+  if (isFallback) {
+    return '关闭自然语言搜索，当前使用本地解析'
+  }
+
+  return '关闭自然语言搜索，当前可使用 AI 解析'
+}
+
+function getNaturalSearchToggleTitle(isFallback: boolean, isPending: boolean) {
+  if (!state.naturalSearchEnabled) {
+    return '开启自然语言搜索'
+  }
+
+  if (isPending) {
+    return '正在理解搜索意图，点击可关闭'
+  }
+
+  if (isFallback) {
+    return state.naturalSearchError || '当前使用本地自然语言解析，点击关闭'
+  }
+
+  return '自然语言搜索已开启，点击关闭'
 }
 
 function renderToolbar() {
@@ -1267,10 +1360,12 @@ function renderActionMenu(bookmarkId) {
   }
 
   return `
-    <div class="action-menu" role="menu">
-      <button type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}">编辑</button>
-      <button type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}">移动至</button>
-      <button class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}">删除</button>
+    <div class="action-menu" role="menu" aria-label="书签操作">
+      <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}">编辑</button>
+      <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}">复制链接</button>
+      <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}">当前页打开</button>
+      <button role="menuitem" type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}">移动至</button>
+      <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}">删除</button>
     </div>
   `
 }
@@ -1657,6 +1752,9 @@ function handleContentClick(event) {
     }
     state.activeMenuBookmarkId = bookmarkId
     renderMainContent()
+    window.requestAnimationFrame(() => {
+      focusActionMenuItem(0)
+    })
     return
   }
 
@@ -1672,6 +1770,16 @@ function handleContentClick(event) {
 
     if (action === 'move') {
       openMoveDialog(bookmarkId)
+      return
+    }
+
+    if (action === 'copy-url') {
+      void copyBookmarkUrl(bookmarkId)
+      return
+    }
+
+    if (action === 'open-current-tab') {
+      void openBookmarkInCurrentTab(bookmarkId)
       return
     }
 
@@ -1789,6 +1897,10 @@ function handleDocumentKeydown(event) {
     return
   }
 
+  if (handleActionMenuKeydown(event)) {
+    return
+  }
+
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
   }
@@ -1836,6 +1948,58 @@ function handleEscapeAction() {
   }
 
   return false
+}
+
+function handleActionMenuKeydown(event) {
+  if (!state.activeMenuBookmarkId) {
+    return false
+  }
+
+  const items = getActionMenuItems()
+  if (!items.length) {
+    return false
+  }
+
+  const currentIndex = items.findIndex((item) => item === document.activeElement)
+  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
+    event.preventDefault()
+    focusActionMenuItem(currentIndex + 1)
+    return true
+  }
+
+  if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+    event.preventDefault()
+    focusActionMenuItem(currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
+    return true
+  }
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    focusActionMenuItem(0)
+    return true
+  }
+
+  if (event.key === 'End') {
+    event.preventDefault()
+    focusActionMenuItem(items.length - 1)
+    return true
+  }
+
+  return false
+}
+
+function focusActionMenuItem(index) {
+  const items = getActionMenuItems()
+  if (!items.length) {
+    return
+  }
+
+  const nextIndex = ((index % items.length) + items.length) % items.length
+  items[nextIndex].focus()
+}
+
+function getActionMenuItems() {
+  return [...document.querySelectorAll<HTMLButtonElement>('.action-menu [data-menu-action]')]
 }
 
 function handleEditInputKeydown(event) {
@@ -2415,6 +2579,99 @@ async function openBookmark(bookmarkId) {
       type: 'error',
       message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
     })
+  }
+}
+
+async function openBookmarkInCurrentTab(bookmarkId) {
+  const bookmark = state.bookmarkMap.get(bookmarkId)
+  if (!bookmark?.url) {
+    return
+  }
+
+  try {
+    await updateCurrentTabUrl(bookmark.url)
+    window.close()
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
+    })
+  }
+}
+
+function updateCurrentTabUrl(url) {
+  return new Promise((resolve, reject) => {
+    const tabId = Number(state.currentTab?.id)
+    const updateProperties = { url }
+    const callback = (tab) => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+
+      resolve(tab)
+    }
+
+    if (Number.isFinite(tabId)) {
+      chrome.tabs.update(tabId, updateProperties, callback)
+      return
+    }
+
+    chrome.tabs.update(updateProperties, callback)
+  })
+}
+
+async function copyBookmarkUrl(bookmarkId) {
+  const bookmark = state.bookmarkMap.get(bookmarkId)
+  if (!bookmark?.url) {
+    showToast({
+      type: 'error',
+      message: '复制失败：书签链接不存在。'
+    })
+    return
+  }
+
+  try {
+    await writeClipboardText(bookmark.url)
+    closeActionMenu()
+    showToast({
+      type: 'success',
+      message: '链接已复制'
+    })
+  } catch (error) {
+    closeActionMenu()
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
+    })
+  }
+}
+
+function writeClipboardText(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text)
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = String(text || '')
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('浏览器拒绝写入剪贴板。')
+    }
+    return Promise.resolve()
+  } catch (error) {
+    return Promise.reject(error)
+  } finally {
+    textarea.remove()
   }
 }
 

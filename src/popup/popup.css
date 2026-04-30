@@ -506,6 +506,12 @@ button:focus-visible {
   color: #d6f6dc;
 }
 
+.natural-search-toggle.fallback {
+  border-color: rgba(244, 210, 140, 0.45);
+  background: #2a2418;
+  color: #f4e7b0;
+}
+
 .natural-search-toggle.pending {
   color: #f4e7b0;
 }
@@ -2319,6 +2325,12 @@ body::after {
   border-color: rgba(201, 242, 210, 0.4);
   background: #1d2b22;
   color: #d6f6dc;
+}
+
+.natural-search-toggle.fallback {
+  border-color: rgba(244, 210, 140, 0.42);
+  background: #292315;
+  color: #f4e7b0;
 }
 
 .toolbar {

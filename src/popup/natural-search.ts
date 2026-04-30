@@ -100,18 +100,28 @@ const DATE_PHRASES = [
   /this\s+week/gi,
   /last\s+month/gi,
   /this\s+month/gi,
+  /last\s+year/gi,
+  /this\s+year/gi,
   /yesterday/gi,
   /today/gi,
   /(?:最近|近|过去)\s*\d+\s*天/g,
-  /上周|上一周|本周|这周|今天|昨天|前天|上个月|本月|这个月|最近一周|近一周|最近七天|近七天|过去七天|最近一个月|近一个月|过去一个月|最近|近期/g,
+  /(?:最近|近|过去)\s*\d+\s*(?:周|星期|礼拜|个月|月)/g,
+  /\d{4}[-/.]\d{1,2}(?:[-/.]\d{1,2})?/g,
+  /\d{4}\s*年\s*\d{1,2}\s*月(?:\s*\d{1,2}\s*(?:日|号)?)?/g,
+  /上周|上一周|本周|这周|今天|昨天|前天|上个月|本月|这个月|去年|今年|前年|最近一周|近一周|最近七天|近七天|过去七天|最近一个月|近一个月|过去一个月|最近半年|近半年|过去半年|最近|近期/g,
 ]
+
+const CHINESE_EXCLUSION_PATTERN = /(?:不要|不看|排除|过滤掉|过滤|不是|别给我|剔除|去掉)\s*([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
+const ENGLISH_EXCLUSION_PATTERN = /\b(?:without|exclude|excluding|not|no)\s+([a-z0-9][a-z0-9+.#/_-]*)/gi
+const DASH_EXCLUSION_PATTERN = /(^|\s)-([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
 
 export function buildLocalNaturalSearchPlan(query: string, now = Date.now()): NaturalSearchPlan {
   const rawQuery = String(query || '').trim()
+  const exclusion = extractNaturalSearchExclusions(rawQuery)
   const dateRange = parseNaturalDateRange(rawQuery, now)
-  const cleanedQuery = cleanNaturalSearchQuery(rawQuery)
+  const cleanedQuery = cleanNaturalSearchQuery(exclusion.query)
   const normalizedCleanedQuery = normalizeQuery(cleanedQuery)
-  const synonymTerms = collectSynonymTerms(rawQuery)
+  const synonymTerms = collectSynonymTerms(exclusion.query)
   const baseTerms = getQueryTerms(normalizedCleanedQuery)
   const expandedTerms = uniqueNormalizedTerms([...baseTerms, ...synonymTerms])
   const expandedQuery = expandedTerms.join(' ')
@@ -120,13 +130,17 @@ export function buildLocalNaturalSearchPlan(query: string, now = Date.now()): Na
     normalizedCleanedQuery,
     ...synonymTerms
   ])
+  const excludedTerms = uniqueNormalizedTerms([
+    ...exclusion.terms,
+    ...collectSynonymTerms(exclusion.terms.join(' '))
+  ])
 
   return {
     rawQuery,
     queries: queries.length ? queries : uniqueQueries([normalizeQuery(rawQuery)]),
     highlightQuery: uniqueNormalizedTerms([...baseTerms, ...synonymTerms]).join(' ') || normalizeQuery(rawQuery),
     dateRange,
-    excludedTerms: [],
+    excludedTerms,
     explanation: buildLocalExplanation(dateRange),
     source: 'local'
   }
@@ -231,6 +245,10 @@ export function getNaturalSearchStatusLabel(plan: NaturalSearchPlan | null): str
 function parseNaturalDateRange(query: string, now: number): NaturalSearchDateRange | null {
   const text = String(query || '').toLowerCase()
   const current = new Date(now)
+  const explicitDateRange = parseExplicitDateRange(text)
+  if (explicitDateRange) {
+    return explicitDateRange
+  }
 
   if (/上周|上一周|last\s+week/i.test(text)) {
     const thisWeekStart = startOfWeek(current).getTime()
@@ -269,10 +287,42 @@ function parseNaturalDateRange(query: string, now: number): NaturalSearchDateRan
     return rangeFromDates(thisMonthStart, nextMonthStart, '本月收藏')
   }
 
+  if (/去年|last\s+year/i.test(text)) {
+    const year = current.getFullYear() - 1
+    return rangeFromDates(new Date(year, 0, 1).getTime(), new Date(year + 1, 0, 1).getTime(), '去年收藏')
+  }
+
+  if (/前年/i.test(text)) {
+    const year = current.getFullYear() - 2
+    return rangeFromDates(new Date(year, 0, 1).getTime(), new Date(year + 1, 0, 1).getTime(), '前年收藏')
+  }
+
+  if (/今年|this\s+year/i.test(text)) {
+    const year = current.getFullYear()
+    return rangeFromDates(new Date(year, 0, 1).getTime(), new Date(year + 1, 0, 1).getTime(), '今年收藏')
+  }
+
   const recentDaysMatch = text.match(/(?:最近|近|过去)\s*(\d+)\s*天/)
   if (recentDaysMatch) {
     const days = Math.max(1, Math.min(Number(recentDaysMatch[1]) || 1, 365))
     return rangeFromDates(startOfDay(current).getTime() - (days - 1) * DAY_MS, startOfDay(current).getTime() + DAY_MS, `最近 ${days} 天`)
+  }
+
+  const recentWeeksMatch = text.match(/(?:最近|近|过去)\s*(\d+)\s*(?:周|星期|礼拜)/)
+  if (recentWeeksMatch) {
+    const weeks = Math.max(1, Math.min(Number(recentWeeksMatch[1]) || 1, 52))
+    return rangeFromDates(
+      startOfDay(current).getTime() - (weeks * 7 - 1) * DAY_MS,
+      startOfDay(current).getTime() + DAY_MS,
+      `最近 ${weeks} 周`
+    )
+  }
+
+  const recentMonthsMatch = text.match(/(?:最近|近|过去)\s*(\d+)\s*(?:个月|月)/)
+  if (recentMonthsMatch) {
+    const months = Math.max(1, Math.min(Number(recentMonthsMatch[1]) || 1, 24))
+    const fromDate = subtractCalendarMonthsClamped(current, months)
+    return rangeFromDates(fromDate.getTime(), startOfDay(current).getTime() + DAY_MS, `最近 ${months} 个月`)
   }
 
   if (/最近一周|近一周|最近七天|近七天|过去七天/i.test(text)) {
@@ -281,6 +331,11 @@ function parseNaturalDateRange(query: string, now: number): NaturalSearchDateRan
 
   if (/最近一个月|近一个月|过去一个月/i.test(text)) {
     return rangeFromDates(startOfDay(current).getTime() - 29 * DAY_MS, startOfDay(current).getTime() + DAY_MS, '最近 30 天')
+  }
+
+  if (/最近半年|近半年|过去半年/i.test(text)) {
+    const fromDate = subtractCalendarMonthsClamped(current, 6)
+    return rangeFromDates(fromDate.getTime(), startOfDay(current).getTime() + DAY_MS, '最近 6 个月')
   }
 
   if (/最近|近期/i.test(text)) {
@@ -312,6 +367,35 @@ function cleanNaturalSearchQuery(query: string): string {
   return terms.join(' ')
 }
 
+function parseExplicitDateRange(text: string): NaturalSearchDateRange | null {
+  const dayMatch = text.match(/(\d{4})(?:[-/.]|年\s*)(\d{1,2})(?:[-/.]|月\s*)(\d{1,2})(?:日|号)?/)
+  if (dayMatch) {
+    const year = Number(dayMatch[1])
+    const month = Number(dayMatch[2])
+    const day = Number(dayMatch[3])
+    const date = createValidLocalDate(year, month, day)
+    if (date) {
+      return rangeFromDates(date.getTime(), date.getTime() + DAY_MS, `${formatDateRangePart(year, month, day)} 收藏`)
+    }
+  }
+
+  const monthMatch = text.match(/(\d{4})(?:[-/.]|年\s*)(\d{1,2})(?:月)?/)
+  if (monthMatch) {
+    const year = Number(monthMatch[1])
+    const month = Number(monthMatch[2])
+    const date = createValidLocalDate(year, month, 1)
+    if (date) {
+      return rangeFromDates(
+        date.getTime(),
+        new Date(year, month, 1).getTime(),
+        `${formatDateRangePart(year, month)} 收藏`
+      )
+    }
+  }
+
+  return null
+}
+
 function collectSynonymTerms(query: string): string[] {
   const terms: string[] = []
   for (const group of SYNONYM_GROUPS) {
@@ -321,6 +405,31 @@ function collectSynonymTerms(query: string): string[] {
   }
 
   return uniqueNormalizedTerms(terms)
+}
+
+function extractNaturalSearchExclusions(query: string): { query: string; terms: string[] } {
+  const terms: string[] = []
+  let cleanedQuery = String(query || '')
+
+  cleanedQuery = cleanedQuery.replace(CHINESE_EXCLUSION_PATTERN, (_match, value) => {
+    terms.push(String(value || ''))
+    return ' '
+  })
+
+  cleanedQuery = cleanedQuery.replace(ENGLISH_EXCLUSION_PATTERN, (_match, value) => {
+    terms.push(String(value || ''))
+    return ' '
+  })
+
+  cleanedQuery = cleanedQuery.replace(DASH_EXCLUSION_PATTERN, (_match, prefix, value) => {
+    terms.push(String(value || ''))
+    return prefix || ' '
+  })
+
+  return {
+    query: cleanedQuery,
+    terms: uniqueNormalizedTerms(terms)
+  }
 }
 
 function normalizeAiDateRange(rawDateRange: unknown, now: number): NaturalSearchDateRange | null {
@@ -468,6 +577,52 @@ function startOfWeek(date: Date): Date {
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1)
+}
+
+function subtractCalendarMonthsClamped(date: Date, months: number): Date {
+  const monthOffset = Math.max(0, Math.round(months) || 0)
+  const targetFirst = new Date(date.getFullYear(), date.getMonth() - monthOffset, 1)
+  const targetYear = targetFirst.getFullYear()
+  const targetMonth = targetFirst.getMonth()
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate()
+  const output = new Date(
+    targetYear,
+    targetMonth,
+    Math.min(date.getDate(), lastDayOfTargetMonth)
+  )
+  output.setHours(0, 0, 0, 0)
+  return output
+}
+
+function createValidLocalDate(year: number, month: number, day: number): Date | null {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    return null
+  }
+
+  if (year < 1970 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null
+  }
+
+  const date = new Date(year, month - 1, day)
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null
+  }
+
+  date.setHours(0, 0, 0, 0)
+  return date
+}
+
+function formatDateRangePart(year: number, month: number, day?: number): string {
+  const normalizedMonth = String(month).padStart(2, '0')
+  if (day) {
+    return `${year}-${normalizedMonth}-${String(day).padStart(2, '0')}`
+  }
+
+  return `${year}-${normalizedMonth}`
 }
 
 function cleanNaturalText(value: unknown, limit = 180): string {

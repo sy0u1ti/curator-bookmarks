@@ -1,11 +1,27 @@
 {
   "name": "curator-bookmarks",
   "private": true,
-  "version": "1.4.8",
+  "version": "1.4.9",
   "description": "Curator — Chrome 本地书签管理扩展",
+  "license": "MIT",
+  "keywords": [
+    "chrome-extension",
+    "bookmarks",
+    "manifest-v3",
+    "typescript"
+  ],
+  "homepage": "https://github.com/sy0u1ti/curator-bookmarks#readme",
+  "bugs": {
+    "url": "https://github.com/sy0u1ti/curator-bookmarks/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sy0u1ti/curator-bookmarks.git"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "lint": "npm run typecheck",
     "build": "vite build",
     "check:version": "node scripts/check-version.mjs",
     "validate": "npm run typecheck && npm test && npm run check:version && npm run build",

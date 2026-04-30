@@ -111,6 +111,8 @@ interface NewTabFolderSection {
   bookmarks: chrome.bookmarks.BookmarkTreeNode[]
 }
 
+type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy'
+
 const state = {
   loading: true,
   creatingFolder: false,
@@ -126,6 +128,7 @@ const state = {
   editUrl: '',
   menuBusy: false,
   menuError: '',
+  menuStatus: '',
   editIconMode: 'website',
   pendingCustomIconDataUrl: '',
   addMenuOpen: false,
@@ -821,6 +824,7 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
   state.pendingCustomIconDataUrl = ''
   state.menuBusy = false
   state.menuError = ''
+  state.menuStatus = ''
   renderBookmarkMenu()
 }
 
@@ -840,6 +844,7 @@ function closeBookmarkMenu({ animate = true } = {}): void {
   state.activeMenuBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
+  state.menuStatus = ''
   state.pendingCustomIconDataUrl = ''
   const menu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
   if (menu) {
@@ -1606,6 +1611,7 @@ async function saveBookmarkMenuChanges(): Promise<void> {
     const url = normalizeBookmarkInputUrl(state.editUrl)
     state.menuBusy = true
     state.menuError = ''
+    state.menuStatus = ''
     renderBookmarkMenu()
 
     await updateBookmark(bookmark.id, { title, url })
@@ -1614,8 +1620,55 @@ async function saveBookmarkMenuChanges(): Promise<void> {
     await refreshNewTab()
   } catch (error) {
     state.menuBusy = false
+    state.menuStatus = ''
     state.menuError = error instanceof Error ? error.message : '保存失败，请稍后重试。'
     renderBookmarkMenu()
+  }
+}
+
+async function copyActiveMenuBookmarkUrl(): Promise<void> {
+  const bookmark = getActiveMenuBookmark()
+  if (!bookmark?.url) {
+    closeBookmarkMenu()
+    return
+  }
+
+  try {
+    await writeClipboardText(bookmark.url)
+    state.menuError = ''
+    state.menuStatus = '链接已复制'
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'copy-url' })
+  } catch (error) {
+    state.menuStatus = ''
+    state.menuError = error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'copy-url' })
+  }
+}
+
+function writeClipboardText(text: string): Promise<void> {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text)
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('浏览器拒绝写入剪贴板。')
+    }
+    return Promise.resolve()
+  } catch (error) {
+    return Promise.reject(error)
+  } finally {
+    textarea.remove()
   }
 }
 
@@ -1629,6 +1682,7 @@ async function deleteActiveMenuBookmark(): Promise<void> {
   try {
     state.menuBusy = true
     state.menuError = ''
+    state.menuStatus = ''
     renderBookmarkMenu()
 
     await removeBookmark(bookmark.id)
@@ -1653,6 +1707,7 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     await refreshNewTab()
   } catch (error) {
     state.menuBusy = false
+    state.menuStatus = ''
     state.menuError = error instanceof Error ? error.message : '删除失败，请稍后重试。'
     renderBookmarkMenu()
   }
@@ -1668,7 +1723,7 @@ function refreshActiveMenuIcon(): void {
   state.faviconRefreshTokens.set(bookmark.id, Date.now())
   render()
   updateClockText()
-  renderBookmarkMenu()
+  renderBookmarkMenu({ focusFirst: false, focusAction: 'refresh-icon' })
 }
 
 function expandAddBookmarkMenu(): void {
@@ -2343,7 +2398,7 @@ function getActiveMenuBookmark(): chrome.bookmarks.BookmarkTreeNode | null {
   return state.activeMenuBookmarkId ? getBookmarkById(state.activeMenuBookmarkId) : null
 }
 
-function renderBookmarkMenu({ focusFirst = true } = {}): void {
+function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void {
   const existingMenu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
   if (existingMenu) {
     cancelExitMotion(existingMenu)
@@ -2394,10 +2449,14 @@ function renderBookmarkMenu({ focusFirst = true } = {}): void {
 
   const actionList = document.createElement('div')
   actionList.className = 'bookmark-menu-actions'
+  actionList.setAttribute('role', 'menu')
+  actionList.setAttribute('aria-label', '书签操作')
+  actionList.addEventListener('keydown', handleMenuActionsKeydown)
   actionList.append(
-    createMenuAction('删除链接', 'trash', deleteActiveMenuBookmark),
-    createMenuAction('Refresh icon', 'refresh', refreshActiveMenuIcon),
-    createMenuAction('保存更改', 'save', saveBookmarkMenuChanges)
+    createMenuAction('复制链接', 'copy', copyActiveMenuBookmarkUrl, { actionId: 'copy-url' }),
+    createMenuAction('删除链接', 'trash', deleteActiveMenuBookmark, { actionId: 'delete-bookmark' }),
+    createMenuAction('刷新图标', 'refresh', refreshActiveMenuIcon, { actionId: 'refresh-icon' }),
+    createMenuAction('保存更改', 'save', saveBookmarkMenuChanges, { actionId: 'save-bookmark' })
   )
 
   menu.append(titleField, urlField, iconRow, separator, actionList)
@@ -2409,8 +2468,23 @@ function renderBookmarkMenu({ focusFirst = true } = {}): void {
     menu.appendChild(error)
   }
 
+  if (state.menuStatus) {
+    const status = document.createElement('p')
+    status.className = 'bookmark-menu-status'
+    status.textContent = state.menuStatus
+    menu.appendChild(status)
+  }
+
   document.body.appendChild(menu)
   positionBookmarkMenu(menu)
+
+  const focusedAction = focusAction
+    ? menu.querySelector<HTMLButtonElement>(`[data-menu-action="${focusAction}"]`)
+    : null
+  if (focusedAction && !focusedAction.disabled) {
+    focusedAction.focus()
+    return
+  }
 
   const firstInput = menu.querySelector('input')
   if (focusFirst && firstInput instanceof HTMLInputElement) {
@@ -2461,6 +2535,9 @@ function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
     separator.className = 'bookmark-menu-separator'
     const actionList = document.createElement('div')
     actionList.className = 'bookmark-menu-actions'
+    actionList.setAttribute('role', 'menu')
+    actionList.setAttribute('aria-label', '添加书签操作')
+    actionList.addEventListener('keydown', handleMenuActionsKeydown)
     actionList.append(createMenuAction('添加书签', 'plus', saveAddedBookmark, {
       disabled: state.addMenuBusy
     }))
@@ -2495,12 +2572,14 @@ async function handleIconModeChange(nextMode: string): Promise<void> {
     state.editIconMode = 'website'
     state.pendingCustomIconDataUrl = ''
     state.menuError = ''
+    state.menuStatus = ''
     renderBookmarkMenu({ focusFirst: false })
     return
   }
 
   state.menuBusy = true
   state.menuError = ''
+  state.menuStatus = ''
   renderBookmarkMenu({ focusFirst: false })
 
   try {
@@ -2517,6 +2596,7 @@ async function handleIconModeChange(nextMode: string): Promise<void> {
     renderBookmarkMenu({ focusFirst: false })
   } catch (error) {
     state.menuBusy = false
+    state.menuStatus = ''
     state.menuError =
       error instanceof Error ? error.message : '自定义图片读取失败，请重试。'
     state.editIconMode = state.customIcons[bookmark.id] ? 'custom' : 'website'
@@ -2566,14 +2646,19 @@ function createMenuTextField(
 
 function createMenuAction(
   label: string,
-  icon: 'trash' | 'refresh' | 'save' | 'plus',
+  icon: MenuActionIcon,
   action: () => void | Promise<void>,
-  { disabled = state.menuBusy } = {}
+  { disabled = state.menuBusy, actionId = '' }: { disabled?: boolean; actionId?: string } = {}
 ): HTMLButtonElement {
   const button = document.createElement('button')
   button.className = 'bookmark-menu-action'
   button.type = 'button'
   button.disabled = disabled
+  button.setAttribute('role', 'menuitem')
+  button.setAttribute('aria-label', label)
+  if (actionId) {
+    button.dataset.menuAction = actionId
+  }
   button.append(createMenuActionIcon(icon), document.createTextNode(label))
   button.addEventListener('click', () => {
     void action()
@@ -2581,12 +2666,54 @@ function createMenuAction(
   return button
 }
 
-function createMenuActionIcon(icon: 'trash' | 'refresh' | 'save' | 'plus'): SVGSVGElement {
+function handleMenuActionsKeydown(event: KeyboardEvent): void {
+  if (
+    event.key !== 'ArrowUp' &&
+    event.key !== 'ArrowDown' &&
+    event.key !== 'ArrowLeft' &&
+    event.key !== 'ArrowRight' &&
+    event.key !== 'Home' &&
+    event.key !== 'End'
+  ) {
+    return
+  }
+
+  const actionList = event.currentTarget
+  if (!(actionList instanceof HTMLElement)) {
+    return
+  }
+
+  const actions = Array.from(
+    actionList.querySelectorAll<HTMLButtonElement>('.bookmark-menu-action:not(:disabled)')
+  )
+  if (!actions.length) {
+    return
+  }
+
+  const currentIndex = actions.findIndex((action) => action === document.activeElement)
+  const fallbackIndex = currentIndex >= 0 ? currentIndex : 0
+  let nextIndex = fallbackIndex
+
+  if (event.key === 'Home') {
+    nextIndex = 0
+  } else if (event.key === 'End') {
+    nextIndex = actions.length - 1
+  } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
+    nextIndex = (fallbackIndex - 1 + actions.length) % actions.length
+  } else {
+    nextIndex = (fallbackIndex + 1) % actions.length
+  }
+
+  event.preventDefault()
+  actions[nextIndex]?.focus()
+}
+
+function createMenuActionIcon(icon: MenuActionIcon): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('viewBox', '0 0 24 24')
   svg.setAttribute('aria-hidden', 'true')
 
-  const paths: Record<'trash' | 'refresh' | 'save' | 'plus', string[]> = {
+  const paths: Record<MenuActionIcon, string[]> = {
     trash: [
       'M4 7h16',
       'M10 11v6',
@@ -2608,6 +2735,10 @@ function createMenuActionIcon(icon: 'trash' | 'refresh' | 'save' | 'plus'): SVGS
     plus: [
       'M12 5v14',
       'M5 12h14'
+    ],
+    copy: [
+      'M8 8h11v11H8z',
+      'M5 16H4V5h11v1'
     ]
   }
 

@@ -2185,6 +2185,13 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   line-height: 1.45;
 }
 
+.bookmark-menu-status {
+  margin: 8px 2px 0;
+  color: #c9f2d2;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 @keyframes newtab-menu-enter {
   from {
     opacity: 0;
