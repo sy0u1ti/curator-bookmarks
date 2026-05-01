@@ -73,6 +73,10 @@ export function createNewTabPage({ modules }: NewTabPageOptions): HTMLElement {
 
   page.classList.toggle('has-search', modules.some((module) => module.id === 'search'))
   page.classList.toggle('has-clock', modules.some((module) => module.id === 'clock'))
+  const bookmarkModule = modules.find((module) => module.id === 'bookmarks')
+  if (bookmarkModule) {
+    page.dataset.iconVerticalCenter = bookmarkModule.element.dataset.iconVerticalCenter || 'false'
+  }
   page.append(utilityStack, primarySlot)
   return page
 }

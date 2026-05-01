@@ -169,6 +169,11 @@ body.background-mask-enabled .newtab-background-mask {
   align-self: center;
 }
 
+.newtab-page[data-icon-vertical-center="true"] > .newtab-primary-slot {
+  align-items: center;
+  align-items: safe center;
+}
+
 .newtab-page.has-search .newtab-utility-stack {
   --newtab-utility-gap: 12px;
 }
@@ -628,11 +633,6 @@ body.background-mask-enabled .newtab-background-mask {
   width: min(var(--icon-page-width), 100%);
   align-content: start;
   justify-items: stretch;
-}
-
-.newtab-content[data-icon-vertical-center="true"] {
-  align-content: center;
-  align-content: safe center;
 }
 
 .bookmark-folder-sections {
