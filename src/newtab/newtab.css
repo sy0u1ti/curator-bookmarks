@@ -145,16 +145,37 @@ body.background-mask-enabled .newtab-background-mask {
   height: 100%;
   max-width: 1280px;
   align-items: center;
-  gap: 14px;
 }
 
-.newtab-page > .newtab-content {
+.newtab-utility-stack {
+  --newtab-utility-gap: 14px;
+  display: grid;
+  width: min(100%, 1229px);
+  justify-items: center;
+  gap: var(--newtab-utility-gap);
+}
+
+.newtab-primary-slot {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  flex-grow: 1;
+  align-items: start;
+  justify-items: center;
+}
+
+.newtab-page > .newtab-primary-slot {
   flex-grow: 1;
   align-self: center;
 }
 
-.newtab-page.has-search {
-  gap: 12px;
+.newtab-page[data-icon-vertical-center="true"] > .newtab-primary-slot {
+  align-items: center;
+  align-items: safe center;
+}
+
+.newtab-page.has-search .newtab-utility-stack {
+  --newtab-utility-gap: 12px;
 }
 
 .newtab-clock,
@@ -235,8 +256,7 @@ body.background-mask-enabled .newtab-background-mask {
   width: min(540px, 100%);
   height: var(--search-height);
   justify-self: center;
-  transform: translateY(var(--search-offset-y));
-  will-change: transform;
+  margin-top: max(var(--search-offset-y), calc(-1 * var(--newtab-utility-gap)));
 }
 
 .newtab-search {
@@ -506,6 +526,12 @@ body.background-mask-enabled .newtab-background-mask {
   margin-top: 10px;
 }
 
+.newtab-page[data-content-state="empty"] .newtab-primary-slot {
+  align-items: center;
+  align-items: safe center;
+  padding-bottom: clamp(28px, 9vh, 96px);
+}
+
 .newtab-state {
   display: grid;
   width: min(520px, 100%);
@@ -515,7 +541,8 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .newtab-state.folder-missing {
-  width: auto;
+  width: min(560px, 100%);
+  padding: 22px 0;
 }
 
 .newtab-state-actions {
@@ -606,11 +633,6 @@ body.background-mask-enabled .newtab-background-mask {
   width: min(var(--icon-page-width), 100%);
   align-content: start;
   justify-items: stretch;
-}
-
-.newtab-content[data-icon-vertical-center="true"] {
-  align-content: center;
-  align-content: safe center;
 }
 
 .bookmark-folder-sections {
@@ -2512,11 +2534,11 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   }
 
   .newtab-page {
-    gap: 12px;
+    gap: 0;
   }
 
-  .newtab-page.has-search {
-    gap: 10px;
+  .newtab-page.has-search .newtab-utility-stack {
+    --newtab-utility-gap: 10px;
   }
 
   .newtab-quick-group {

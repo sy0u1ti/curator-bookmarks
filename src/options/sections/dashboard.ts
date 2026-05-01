@@ -24,7 +24,7 @@ import {
 } from '../../shared/search-query.js'
 import type { ContentSnapshotIndex } from '../../shared/content-snapshots.js'
 import { buildContentSnapshotSearchMap } from '../../shared/content-snapshots.js'
-import { aiNamingState, availabilityState, contentSnapshotState, dashboardState } from '../shared-options/state.js'
+import { aiNamingState, availabilityState, contentSnapshotState, dashboardState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { escapeAttr, escapeHtml } from '../shared-options/html.js'
 import { compareByPathTitle, formatDateTime } from '../shared-options/utils.js'
@@ -532,9 +532,6 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     } else if (action === 'move-one') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       moveSingleDashboardItem(bookmarkId, callbacks)
-    } else if (action === 'delete-one') {
-      const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
-      await deleteSingleDashboardItem(bookmarkId, callbacks)
     } else if (action === 'exit-dashboard') {
       window.location.hash = '#general'
     } else if (action === 'toggle-search-help') {
@@ -1090,31 +1087,16 @@ function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbac
     return
   }
 
-  dashboardState.selectedIds.clear()
-  dashboardState.selectedIds.add(String(bookmarkId))
-  renderDashboardSection()
-  callbacks.openMoveModal('dashboard')
+  managerState.moveDashboardBookmarkId = String(bookmarkId)
+  callbacks.openMoveModal('dashboard-single')
 }
 
-async function deleteSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbacks): Promise<void> {
-  const bookmark = availabilityState.bookmarkMap.get(String(bookmarkId))
-  if (!bookmark?.url || availabilityState.deleting) {
-    return
+export function getSingleDashboardMoveBookmark(): BookmarkRecord | null {
+  const bookmarkId = String(managerState.moveDashboardBookmarkId || '').trim()
+  if (!bookmarkId) {
+    return null
   }
-
-  const confirmed = await callbacks.confirm({
-    title: '删除这个书签？',
-    copy: `“${bookmark.title || '未命名书签'}” 会从 Chrome 书签中移除并进入回收站，可在回收站恢复。`,
-    confirmLabel: '删除并移入回收站',
-    label: '移入回收站',
-    tone: 'danger'
-  })
-  if (!confirmed) {
-    return
-  }
-
-  dashboardState.selectedIds.delete(String(bookmarkId))
-  await deleteBookmarksToRecycle([bookmarkId], '书签仪表盘单项删除', callbacks.recycleCallbacks)
+  return availabilityState.bookmarkMap.get(bookmarkId) || null
 }
 
 export async function moveSelectedDashboardBookmarks(
@@ -1174,6 +1156,60 @@ export async function moveSelectedDashboardBookmarks(
     }
 
     callbacks.renderAvailabilitySection()
+  }
+}
+
+export async function moveSingleDashboardBookmark(
+  folderId: string,
+  callbacks: DashboardCallbacks
+): Promise<void> {
+  const bookmarkId = String(managerState.moveDashboardBookmarkId || '').trim()
+  const bookmark = bookmarkId ? availabilityState.bookmarkMap.get(bookmarkId) : null
+  const targetFolder = availabilityState.folderMap.get(String(folderId))
+  if (!bookmark?.url || !targetFolder) {
+    callbacks.closeMoveModal()
+    setDashboardStatus('移动失败：目标书签或文件夹不存在。')
+    return
+  }
+
+  availabilityState.deleting = true
+  availabilityState.lastError = ''
+  callbacks.renderAvailabilitySection()
+
+  let moved = false
+  let moveError: unknown = null
+
+  try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-move',
+      source: 'options',
+      reason: '书签仪表盘单项移动',
+      targetBookmarkIds: [bookmarkId],
+      targetFolderIds: [folderId],
+      estimatedChangeCount: 1
+    })
+
+    if (String(bookmark.parentId || '') !== folderId) {
+      await moveBookmark(bookmarkId, folderId)
+      moved = true
+    }
+  } catch (error) {
+    moveError = error
+  } finally {
+    availabilityState.deleting = false
+    callbacks.closeMoveModal()
+
+    if (moved) {
+      await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+    }
+
+    if (moveError) {
+      setDashboardStatus(moveError instanceof Error ? `移动失败：${moveError.message}` : '移动失败，请稍后重试。')
+    } else if (moved) {
+      setDashboardStatus(`已移动到 ${targetFolder.path || targetFolder.title}。`)
+    } else {
+      setDashboardStatus('书签已在该文件夹。')
+    }
   }
 }
 
@@ -1798,14 +1834,6 @@ function buildDashboardCard(item: DashboardItem): string {
             data-dashboard-no-drag
             ${availabilityState.deleting ? 'disabled' : ''}
           >移动</button>
-          <button
-            class="detect-result-action danger"
-            type="button"
-            data-dashboard-action="delete-one"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >删除</button>
         </div>
         <label class="dashboard-card-check" data-dashboard-no-drag>
           <input
