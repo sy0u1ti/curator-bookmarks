@@ -39,6 +39,10 @@ export const SECTION_META = {
     label: 'Duplicates',
     title: '重复书签'
   },
+  'folder-cleanup': {
+    label: 'Folder Cleanup',
+    title: '文件夹清理'
+  },
   ignore: {
     label: 'Ignore Rules',
     title: '忽略规则 / 白名单'

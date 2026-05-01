@@ -33,6 +33,7 @@
             <nav class="options-nav" aria-labelledby="options-bookmark-nav-label">
               <a class="options-nav-link" href="#availability" data-section-link="availability">书签可用性检测</a>
               <a class="options-nav-link" href="#duplicates" data-section-link="duplicates">重复书签检测</a>
+              <a class="options-nav-link" href="#folder-cleanup" data-section-link="folder-cleanup">文件夹清理</a>
               <a class="options-nav-link" href="#recycle" data-section-link="recycle">回收站</a>
               <a class="options-nav-link" href="#history" data-section-link="history">检测历史</a>
               <a class="options-nav-link" href="#redirects" data-section-link="redirects">重定向更新</a>
@@ -1000,6 +1001,66 @@
               </div>
               <div id="duplicate-groups" class="detect-results">
                 <div class="detect-empty">正在分析重复书签。</div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="folder-cleanup"
+            class="options-panel"
+            data-section-panel="folder-cleanup"
+            aria-labelledby="folder-cleanup-title"
+            hidden
+          >
+            <p class="options-section-label">Folder Cleanup</p>
+            <h1 id="folder-cleanup-title">文件夹清理</h1>
+
+            <div class="options-group">
+              <div class="option-row">
+                <div class="option-copy">
+                  <strong>建议和预览优先</strong>
+                  <p>先扫描空文件夹、深层低价值文件夹、单一路径、同名文件夹和超大文件夹；删除、合并和移动都会在确认后执行，并先调用自动备份 hook。</p>
+                </div>
+                <div class="detect-results-actions">
+                  <span id="folder-cleanup-status" class="options-chip muted">未扫描</span>
+                  <button id="folder-cleanup-analyze" class="options-button small" type="button">重新扫描</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="detect-summary-grid compact-grid">
+              <article class="summary-card compact metric-card metric-total">
+                <span class="summary-label">建议总数</span>
+                <strong id="folder-cleanup-summary-total">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-danger">
+                <span class="summary-label">空文件夹</span>
+                <strong id="folder-cleanup-summary-empty">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-warning">
+                <span class="summary-label">深层低价值</span>
+                <strong id="folder-cleanup-summary-deep">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-info">
+                <span class="summary-label">同名合并</span>
+                <strong id="folder-cleanup-summary-same-name">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-muted">
+                <span class="summary-label">超大拆分</span>
+                <strong id="folder-cleanup-summary-large">0</strong>
+              </article>
+            </div>
+
+            <div class="options-group detect-results-group">
+              <div class="detect-results-header">
+                <div>
+                  <strong>清理建议</strong>
+                  <p id="folder-cleanup-results-subtitle" class="detect-results-subtitle">所有建议默认只预览，不会自动修改书签。</p>
+                </div>
+                <span id="folder-cleanup-count" class="option-value">0 条建议</span>
+              </div>
+              <div id="folder-cleanup-results" class="detect-results">
+                <div class="detect-empty">点击重新扫描后，这里会展示可预览的文件夹清理建议。</div>
               </div>
             </div>
           </section>
