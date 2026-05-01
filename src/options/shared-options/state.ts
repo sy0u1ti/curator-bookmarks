@@ -147,6 +147,7 @@ export const managerState = {
   moveModalOpen: false,
   moveSearchQuery: '',
   moveSelectionSource: 'availability',
+  moveDashboardBookmarkId: '',
   aiModelModalOpen: false,
   aiModelPickerModalOpen: false,
   aiModelPickerSearchQuery: '',

@@ -24,7 +24,7 @@ import {
 } from '../../shared/search-query.js'
 import type { ContentSnapshotIndex } from '../../shared/content-snapshots.js'
 import { buildContentSnapshotSearchMap } from '../../shared/content-snapshots.js'
-import { aiNamingState, availabilityState, contentSnapshotState, dashboardState } from '../shared-options/state.js'
+import { aiNamingState, availabilityState, contentSnapshotState, dashboardState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { escapeAttr, escapeHtml } from '../shared-options/html.js'
 import { compareByPathTitle, formatDateTime } from '../shared-options/utils.js'
@@ -1087,10 +1087,16 @@ function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbac
     return
   }
 
-  dashboardState.selectedIds.clear()
-  dashboardState.selectedIds.add(String(bookmarkId))
-  renderDashboardSection()
-  callbacks.openMoveModal('dashboard')
+  managerState.moveDashboardBookmarkId = String(bookmarkId)
+  callbacks.openMoveModal('dashboard-single')
+}
+
+export function getSingleDashboardMoveBookmark(): BookmarkRecord | null {
+  const bookmarkId = String(managerState.moveDashboardBookmarkId || '').trim()
+  if (!bookmarkId) {
+    return null
+  }
+  return availabilityState.bookmarkMap.get(bookmarkId) || null
 }
 
 export async function moveSelectedDashboardBookmarks(
@@ -1150,6 +1156,60 @@ export async function moveSelectedDashboardBookmarks(
     }
 
     callbacks.renderAvailabilitySection()
+  }
+}
+
+export async function moveSingleDashboardBookmark(
+  folderId: string,
+  callbacks: DashboardCallbacks
+): Promise<void> {
+  const bookmarkId = String(managerState.moveDashboardBookmarkId || '').trim()
+  const bookmark = bookmarkId ? availabilityState.bookmarkMap.get(bookmarkId) : null
+  const targetFolder = availabilityState.folderMap.get(String(folderId))
+  if (!bookmark?.url || !targetFolder) {
+    callbacks.closeMoveModal()
+    setDashboardStatus('移动失败：目标书签或文件夹不存在。')
+    return
+  }
+
+  availabilityState.deleting = true
+  availabilityState.lastError = ''
+  callbacks.renderAvailabilitySection()
+
+  let moved = false
+  let moveError: unknown = null
+
+  try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-move',
+      source: 'options',
+      reason: '书签仪表盘单项移动',
+      targetBookmarkIds: [bookmarkId],
+      targetFolderIds: [folderId],
+      estimatedChangeCount: 1
+    })
+
+    if (String(bookmark.parentId || '') !== folderId) {
+      await moveBookmark(bookmarkId, folderId)
+      moved = true
+    }
+  } catch (error) {
+    moveError = error
+  } finally {
+    availabilityState.deleting = false
+    callbacks.closeMoveModal()
+
+    if (moved) {
+      await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+    }
+
+    if (moveError) {
+      setDashboardStatus(moveError instanceof Error ? `移动失败：${moveError.message}` : '移动失败，请稍后重试。')
+    } else if (moved) {
+      setDashboardStatus(`已移动到 ${targetFolder.path || targetFolder.title}。`)
+    } else {
+      setDashboardStatus('书签已在该文件夹。')
+    }
   }
 }
 

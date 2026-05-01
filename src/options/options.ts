@@ -229,6 +229,8 @@ import {
   handleDashboardTagPointerOut,
   handleDashboardTagPointerOver,
   hydrateDashboardSavedSearches,
+  getSingleDashboardMoveBookmark,
+  moveSingleDashboardBookmark,
   moveSelectedDashboardBookmarks,
   removeDashboardSelectionIds,
   renderDashboardSection
@@ -6094,7 +6096,9 @@ function renderMoveModal() {
 
   const selectedResults = managerState.moveSelectionSource === 'dashboard'
     ? getSelectedDashboardBookmarks()
-    : getSelectedAvailabilityResults()
+    : managerState.moveSelectionSource === 'dashboard-single'
+      ? [getSingleDashboardMoveBookmark()].filter(Boolean)
+      : getSelectedAvailabilityResults()
   const normalizedQuery = normalizeText(managerState.moveSearchQuery)
   const folders = availabilityState.allFolders
     .filter((folder) => String(folder.id) !== ROOT_ID)
@@ -6107,9 +6111,11 @@ function renderMoveModal() {
     })
     .sort((left, right) => compareByPathTitle(left, right))
 
-  dom.moveModalCopy.textContent = selectedResults.length
-    ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
-    : '请选择一个目标文件夹，所选书签会被一起移动到该位置。'
+  dom.moveModalCopy.textContent = managerState.moveSelectionSource === 'dashboard-single'
+    ? '请选择一个目标文件夹，这条书签会被移动到该位置。'
+    : selectedResults.length
+      ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
+      : '请选择一个目标文件夹，所选书签会被一起移动到该位置。'
   dom.moveSearchInput.value = managerState.moveSearchQuery
 
   if (!folders.length) {
@@ -6674,6 +6680,9 @@ function openMoveModal(source) {
   if (source === 'dashboard' && !getSelectedDashboardBookmarks().length) {
     return
   }
+  if (source === 'dashboard-single' && !getSingleDashboardMoveBookmark()) {
+    return
+  }
 
   managerState.moveSelectionSource = source
   managerState.moveSearchQuery = ''
@@ -6711,6 +6720,7 @@ function closeMoveModal() {
 
   managerState.moveModalOpen = false
   managerState.moveSearchQuery = ''
+  managerState.moveDashboardBookmarkId = ''
   renderMoveModal()
 }
 
@@ -6737,6 +6747,10 @@ async function handleMoveFolderResultsClick(event) {
 
   if (managerState.moveSelectionSource === 'dashboard') {
     await moveSelectedDashboardBookmarks(folderId, dashboardCallbacks)
+    return
+  }
+  if (managerState.moveSelectionSource === 'dashboard-single') {
+    await moveSingleDashboardBookmark(folderId, dashboardCallbacks)
     return
   }
 
