@@ -32,6 +32,13 @@ import {
   getIconRowGapPx,
   normalizeIconSettings
 } from './icon-settings.js'
+import {
+  createMissingFolderView,
+  createNewTabPage,
+  createStateView,
+  resolveNewTabContentState,
+  type NewTabPageModule
+} from './content-state.js'
 
 const DEFAULT_NEW_TAB_FOLDER_TITLE = '标签页'
 const FAVICON_SIZE = 64
@@ -274,7 +281,9 @@ function bindEvents(): void {
   bindIconSettingsEvents()
   bindTimeSettingsEvents()
   bindSettingsRangeVisuals()
-  settingsTrigger?.addEventListener('click', openSettingsDrawer)
+  settingsTrigger?.addEventListener('click', () => {
+    openSettingsDrawer()
+  })
   settingsClose?.addEventListener('click', closeSettingsDrawer)
   settingsBackdrop?.addEventListener('click', closeSettingsDrawer)
   document.addEventListener('keydown', handleDocumentKeydown)
@@ -322,11 +331,6 @@ function bindEvents(): void {
       event.preventDefault()
       event.stopPropagation()
       return
-    }
-
-    if (target.closest('[data-create-folder]')) {
-      event.preventDefault()
-      void createNewTabFolder()
     }
   })
   root?.addEventListener('pointerdown', handleFolderPointerDown)
@@ -876,7 +880,8 @@ function handleTimeSettingsChange(): void {
   scheduleClockTick()
 }
 
-function openSettingsDrawer(): void {
+function openSettingsDrawer(options?: { focusFirstControl?: boolean }): void {
+  const focusFirstControl = options?.focusFirstControl !== false
   settingsDrawerReturnFocusElement = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : null
@@ -898,8 +903,26 @@ function openSettingsDrawer(): void {
   settingsDrawer?.setAttribute('aria-hidden', 'false')
   settingsTrigger?.setAttribute('aria-expanded', 'true')
   document.body.classList.add('settings-open')
+  if (focusFirstControl) {
+    window.requestAnimationFrame(() => {
+      focusFirstSettingsDrawerControl()
+    })
+  }
+}
+
+function openFolderSourceSettings(): void {
+  state.folderCandidatesExpanded = true
+  state.folderCandidateQuery = ''
+  openSettingsDrawer({ focusFirstControl: false })
+  syncFolderSettingsControls()
   window.requestAnimationFrame(() => {
-    focusFirstSettingsDrawerControl()
+    const section = document.getElementById('settings-folder-title')?.closest('.settings-section')
+    const searchInput = document.getElementById('folder-candidate-search')
+
+    section?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    if (searchInput instanceof HTMLInputElement) {
+      searchInput.focus()
+    }
   })
 }
 
@@ -2140,25 +2163,38 @@ function render(): void {
   }
 
   root.replaceChildren()
+  const contentState = resolveNewTabContentState({
+    loading: state.loading,
+    error: state.error,
+    selectedFolderCount: state.folderSettings.selectedFolderIds.length,
+    visibleFolderCount: state.folderSections.length
+  })
 
-  if (state.loading) {
+  if (contentState.type === 'loading') {
     root.appendChild(createStateView('正在加载'))
     return
   }
 
-  if (state.error) {
-    root.appendChild(createStateView(state.error, '重新加载', () => {
+  if (contentState.type === 'error') {
+    root.appendChild(createStateView(contentState.message, '重新加载', () => {
       void refreshNewTab()
     }))
     return
   }
 
-  if (!state.folderSections.length) {
-    root.appendChild(createNewTabPage(createMissingFolderView()))
+  if (contentState.type === 'missing-folder') {
+    root.appendChild(createNewTabLayout(createMissingFolderView({
+      creatingFolder: state.creatingFolder,
+      reason: contentState.reason,
+      onCreateFolder: () => {
+        void createNewTabFolder()
+      },
+      onOpenFolderSettings: openFolderSourceSettings
+    })))
     return
   }
 
-  root.appendChild(createNewTabPage(createBookmarkSections(state.folderSections)))
+  root.appendChild(createNewTabLayout(createBookmarkSections(state.folderSections)))
 }
 
 function scheduleRender({ updateClock = false } = {}): void {
@@ -2178,27 +2214,42 @@ function scheduleRender({ updateClock = false } = {}): void {
   })
 }
 
-function createNewTabPage(content: HTMLElement): HTMLElement {
-  const page = document.createElement('main')
-  page.className = 'newtab-page'
+function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
+  const modules: NewTabPageModule[] = []
 
   const clock = createClockWidget()
   if (clock) {
-    page.appendChild(clock)
+    modules.push({
+      id: 'clock',
+      element: clock,
+      placement: 'utility'
+    })
   } else {
     const spacer = document.createElement('div')
     spacer.className = 'newtab-clock-spacer'
-    page.appendChild(spacer)
+    modules.push({
+      id: 'clock-spacer',
+      element: spacer,
+      placement: 'utility'
+    })
   }
 
   const search = createSearchWidget()
   if (search) {
-    page.classList.add('has-search')
-    page.appendChild(search)
+    modules.push({
+      id: 'search',
+      element: search,
+      placement: 'utility'
+    })
   }
 
-  page.appendChild(content)
-  return page
+  modules.push({
+    id: primaryContent.classList.contains('newtab-content') ? 'bookmarks' : 'state',
+    element: primaryContent,
+    placement: 'primary'
+  })
+
+  return createNewTabPage({ modules })
 }
 
 function createSearchWidget(): HTMLElement | null {
@@ -2642,57 +2693,6 @@ function createClockWidget(): HTMLElement | null {
   clock.appendChild(zone)
 
   return clock
-}
-
-function createMissingFolderView(): HTMLElement {
-  const view = document.createElement('section')
-  view.className = 'newtab-state folder-missing'
-
-  const title = document.createElement('h1')
-  title.textContent = '请选择新标签页的书签来源'
-
-  const copy = document.createElement('p')
-  copy.textContent = '打开设置里的“书签来源”，选择要显示的文件夹；也可以先创建一个专用于新标签页的文件夹。'
-
-  const actions = document.createElement('div')
-  actions.className = 'newtab-state-actions'
-
-  const button = document.createElement('button')
-  button.className = 'newtab-button'
-  button.type = 'button'
-  button.dataset.createFolder = 'true'
-  button.disabled = state.creatingFolder
-  button.textContent = state.creatingFolder ? '正在创建' : '新增书签来源文件夹'
-
-  const settingsButton = document.createElement('button')
-  settingsButton.className = 'newtab-button secondary'
-  settingsButton.type = 'button'
-  settingsButton.textContent = '打开设置'
-  settingsButton.addEventListener('click', openSettingsDrawer)
-
-  actions.append(button, settingsButton)
-  view.append(title, copy, actions)
-  return view
-}
-
-function createStateView(message: string, actionLabel = '', action?: () => void): HTMLElement {
-  const view = document.createElement('section')
-  view.className = 'newtab-state'
-
-  const copy = document.createElement('p')
-  copy.textContent = message
-  view.appendChild(copy)
-
-  if (actionLabel && action) {
-    const button = document.createElement('button')
-    button.className = 'newtab-button secondary'
-    button.type = 'button'
-    button.textContent = actionLabel
-    button.addEventListener('click', action)
-    view.appendChild(button)
-  }
-
-  return view
 }
 
 function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {

@@ -2805,6 +2805,7 @@ function renderAiNamingSection() {
   }
   if (dom.aiConnectivityCopy) {
     dom.aiConnectivityCopy.className = `ai-provider-connectivity ${connectivityMeta.tone}`
+    dom.aiConnectivityCopy.classList.toggle('hidden', !connectivityMeta.visible)
     setLoadingLabel(dom.aiConnectivityCopy, connectivityMeta.copy, {
       busy: aiNamingState.testingConnection,
       wrapperClass: 'status-loading-label',
@@ -3257,8 +3258,8 @@ function renderAiFetchModelsStatus() {
     return
   }
 
-  let tone = 'muted'
-  let copy = '填写 API Key 后，可从当前接口获取模型列表。'
+  let tone = ''
+  let copy = ''
 
   if (aiNamingState.fetchingModels) {
     tone = 'muted'
@@ -3272,7 +3273,8 @@ function renderAiFetchModelsStatus() {
     copy = `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`
   }
 
-  dom.aiFetchModelsStatus.className = `ai-provider-connectivity ${tone}`
+  dom.aiFetchModelsStatus.className = `ai-provider-connectivity ${tone || 'muted'}`
+  dom.aiFetchModelsStatus.classList.toggle('hidden', !copy)
   setLoadingLabel(dom.aiFetchModelsStatus, copy, {
     busy: aiNamingState.fetchingModels,
     wrapperClass: 'status-loading-label',
@@ -4825,6 +4827,7 @@ function getAiNamingProgressCopy() {
 function getAiNamingConnectivityMeta() {
   if (aiNamingState.testingConnection) {
     return {
+      visible: true,
       tone: 'warning',
       copy: '正在测试当前模型，请稍候。'
     }
@@ -4832,6 +4835,7 @@ function getAiNamingConnectivityMeta() {
 
   if (aiNamingState.lastConnectivityTestStatus === 'success') {
     return {
+      visible: true,
       tone: 'success',
       copy: `${aiNamingState.lastConnectivityTestMessage || '连接成功，当前模型可用。'}${aiNamingState.settingsDirty ? ' 当前改动尚未保存。' : ''}`
     }
@@ -4839,14 +4843,16 @@ function getAiNamingConnectivityMeta() {
 
   if (aiNamingState.lastConnectivityTestStatus === 'error') {
     return {
+      visible: true,
       tone: 'danger',
       copy: aiNamingState.lastConnectivityTestMessage || '连通性测试失败。'
     }
   }
 
   return {
+    visible: false,
     tone: 'muted',
-    copy: '测试连接后，会显示当前模型是否可用。'
+    copy: ''
   }
 }
 
