@@ -28,3 +28,12 @@ test('popup auto analyze status renders at the bottom of the main layout', () =>
   assert.ok(statusIndex > contentIndex)
   assert.ok(footerIndex > statusIndex)
 })
+
+test('auto analyze completion does not create popup toast notices', () => {
+  const popupSource = readProjectFile('src/popup/popup.ts')
+  const serviceWorkerSource = readProjectFile('src/service-worker/service-worker.ts')
+
+  assert.match(popupSource, /async function hydrateAutoAnalyzeStatus/)
+  assert.doesNotMatch(popupSource, /showPendingAutoAnalyzeNotice|pendingNoticeChange|已添加到 \$\{folderPath\}/)
+  assert.doesNotMatch(serviceWorkerSource, /persistPendingAutoAnalyzeNotice/)
+})

@@ -187,7 +187,7 @@ document.addEventListener('DOMContentLoaded', () => {
   void hydratePopupPreferences().finally(() => {
     bindEvents()
     render()
-    void showPendingAutoAnalyzeNotice()
+    void hydrateAutoAnalyzeStatus()
     refreshData({ initial: true, preserveSearch: false }).finally(() => {
       void consumePopupCommandIntent().then((handled) => {
         if (!handled && !document.body.classList.contains('smart-active')) {
@@ -323,12 +323,9 @@ async function openBookmarkHistoryPage() {
   }
 }
 
-async function showPendingAutoAnalyzeNotice() {
+async function hydrateAutoAnalyzeStatus() {
   try {
-    const stored = await getLocalStorage([
-      STORAGE_KEYS.autoAnalyzeStatus,
-      STORAGE_KEYS.pendingAutoAnalyzeNotice
-    ])
+    const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
     const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
     state.autoAnalyzeStatus = currentStatus
     renderAutoAnalyzeStatus()
@@ -336,39 +333,9 @@ async function showPendingAutoAnalyzeNotice() {
       await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
     }
     await acknowledgeAutoAnalyzeBadge(currentStatus)
-
-    const notice = stored[STORAGE_KEYS.pendingAutoAnalyzeNotice]
-    if (!notice || typeof notice !== 'object') {
-      return
-    }
-
-    const noticePayload = notice as Record<string, unknown>
-    const noticeCreatedAt = Number(noticePayload.createdAt) || 0
-    if (noticeCreatedAt && noticeCreatedAt + AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS <= Date.now()) {
-      await clearPendingAutoAnalyzeNotice()
-      return
-    }
-
-    const folderPath = cleanSmartText(noticePayload.folderPath || '', 48)
-    const bookmarkTitle = cleanSmartText(noticePayload.bookmarkTitle || '新增书签', 52)
-    if (!folderPath) {
-      await clearPendingAutoAnalyzeNotice()
-      return
-    }
-
-    showToast({
-      type: 'success',
-      message: `已添加到 ${folderPath}：${bookmarkTitle}`,
-      action: 'open-bookmark-history',
-      actionLabel: '查看'
-    })
-    await clearPendingAutoAnalyzeNotice()
+    await removeLocalStorage(STORAGE_KEYS.pendingAutoAnalyzeNotice)
   } catch (error) {
   }
-}
-
-async function clearPendingAutoAnalyzeNotice() {
-  await removeLocalStorage(STORAGE_KEYS.pendingAutoAnalyzeNotice)
 }
 
 async function dismissAutoAnalyzeStatus() {
@@ -438,11 +405,6 @@ function handleAutoAnalyzeStorageChanged(
         void clearActionBadge()
       })
     }
-  }
-
-  const pendingNoticeChange = changes[STORAGE_KEYS.pendingAutoAnalyzeNotice]
-  if (pendingNoticeChange?.newValue) {
-    void showPendingAutoAnalyzeNotice()
   }
 
   const popupIntentChange = changes[STORAGE_KEYS.popupCommandIntent]

@@ -1076,14 +1076,6 @@ async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise
     console.warn('[Curator] 添加书签历史写入失败', error)
   })
 
-  await persistPendingAutoAnalyzeNotice({
-    bookmarkTitle: finalBookmarkTitle,
-    folderPath: recommendation.path || recommendation.title,
-    confidence: recommendation.confidence
-  }).catch((error) => {
-    console.warn('[Curator] 自动分析待提示写入失败', error)
-  })
-
   await persistAutoAnalyzeStatus({
     status: 'completed',
     bookmarkId,
@@ -1997,25 +1989,6 @@ function appendBookmarkAddHistory(entry: BookmarkAddHistoryEntry): Promise<void>
 
   bookmarkAddHistoryWriteQueue = task.catch(() => {})
   return task
-}
-
-async function persistPendingAutoAnalyzeNotice({
-  bookmarkTitle,
-  folderPath,
-  confidence
-}: {
-  bookmarkTitle: string
-  folderPath: string
-  confidence: number
-}): Promise<void> {
-  await setLocalStorage({
-    [STORAGE_KEYS.pendingAutoAnalyzeNotice]: {
-      createdAt: Date.now(),
-      bookmarkTitle: cleanText(bookmarkTitle),
-      folderPath: cleanText(folderPath),
-      confidence: normalizeAutoConfidence(confidence)
-    }
-  })
 }
 
 async function persistAutoAnalyzeStatus(
