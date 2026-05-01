@@ -14,7 +14,7 @@ import {
   findBookmarksBar,
   findNodeById
 } from '../shared/bookmark-tree.js'
-import { appendRecycleEntry } from '../shared/recycle-bin.js'
+import { appendRecycleEntry, removeRecycleEntry } from '../shared/recycle-bin.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import type { FolderRecord } from '../shared/types.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
@@ -39,8 +39,16 @@ import {
   resolveNewTabContentState,
   type NewTabPageModule
 } from './content-state.js'
+import {
+  DEFAULT_FOLDER_SETTINGS,
+  DEFAULT_NEW_TAB_FOLDER_TITLE,
+  type NewTabFolderSettings,
+  findNewTabFolder,
+  normalizeFolderIds,
+  normalizeFolderSettings,
+  normalizeFolderSettingsWithDefault
+} from './folder-settings.js'
 
-const DEFAULT_NEW_TAB_FOLDER_TITLE = '标签页'
 const FAVICON_SIZE = 64
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -77,17 +85,12 @@ const DEFAULT_SEARCH_SETTINGS = {
 }
 const SUPPORTED_SEARCH_ENGINES = new Set(['default', 'google', 'bing', 'baidu', 'duckduckgo'])
 const SEARCH_SUGGESTION_LIMIT = 6
-const NEW_TAB_ACTIVITY_STORAGE_KEY = 'curatorBookmarkNewTabActivity'
 const QUICK_ACCESS_ITEM_LIMIT = 8
 const ACTIVITY_RECORD_LIMIT = 160
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false,
   showFrequentBookmarks: true,
   showRecentBookmarks: true
-}
-const DEFAULT_FOLDER_SETTINGS = {
-  selectedFolderIds: [] as string[],
-  hideFolderNames: false
 }
 const DEFAULT_TIME_SETTINGS = {
   enabled: true,
@@ -132,8 +135,6 @@ const FOCUSABLE_SELECTOR = [
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])'
 ].join(',')
-
-type NewTabFolderSettings = typeof DEFAULT_FOLDER_SETTINGS
 
 interface NewTabFolderSection {
   id: string
@@ -1934,22 +1935,36 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     state.menuStatus = `正在删除 1 个书签：「${getBookmarkDisplayTitle(bookmark)}」...`
     renderBookmarkMenu({ focusFirst: false, focusAction: 'delete-bookmark' })
 
-    await removeBookmark(bookmark.id)
-    await appendRecycleEntry({
-      recycleId: `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
-      bookmarkId: String(bookmark.id),
-      title: bookmark.title || '未命名书签',
-      url: bookmark.url,
-      parentId: String(bookmark.parentId || ''),
-      index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
-      path: getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE,
-      source: '新标签页删除',
-      deletedAt: Date.now()
-    })
+    const recycleId = `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    let recycleEntryAppended = false
+    try {
+      await appendRecycleEntry({
+        recycleId,
+        bookmarkId: String(bookmark.id),
+        title: bookmark.title || '未命名书签',
+        url: bookmark.url,
+        parentId: String(bookmark.parentId || ''),
+        index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
+        path: getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE,
+        source: '新标签页删除',
+        deletedAt: Date.now()
+      })
+      recycleEntryAppended = true
+      await removeBookmark(bookmark.id)
+    } catch (error) {
+      if (recycleEntryAppended) {
+        await removeRecycleEntry(recycleId).catch((cleanupError) => {
+          console.warn('新标签页回收站删除回滚失败。', cleanupError)
+        })
+      }
+      throw error
+    }
     if (state.customIcons[bookmark.id]) {
       const nextIcons = { ...state.customIcons }
       delete nextIcons[bookmark.id]
-      await saveCustomIcons(nextIcons)
+      await saveCustomIcons(nextIcons).catch((error) => {
+        console.warn('新标签页自定义图标清理失败。', error)
+      })
     }
     await removeBookmarkFromActivity(bookmark.id).catch((error) => {
       console.warn('新标签页打开记录清理失败。', error)
@@ -2037,7 +2052,7 @@ async function refreshNewTab(): Promise<void> {
         STORAGE_KEYS.newTabGeneralSettings,
         STORAGE_KEYS.newTabFolderSettings,
         STORAGE_KEYS.newTabTimeSettings,
-        NEW_TAB_ACTIVITY_STORAGE_KEY
+        STORAGE_KEYS.newTabActivity
       ])
     ])
     const rootNode = tree[0] || null
@@ -2053,7 +2068,7 @@ async function refreshNewTab(): Promise<void> {
     state.folderNode = folderSections[0]?.node || null
     state.bookmarks = getAllSectionBookmarks()
     state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
-    state.activity = normalizeNewTabActivity(stored[NEW_TAB_ACTIVITY_STORAGE_KEY], state.bookmarks)
+    state.activity = normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.bookmarks)
     state.backgroundSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
@@ -3093,53 +3108,6 @@ function bindBookmarkNavigation(
   })
 }
 
-function findNewTabFolder(
-  rootNode: chrome.bookmarks.BookmarkTreeNode | null
-): chrome.bookmarks.BookmarkTreeNode | null {
-  const candidates: Array<{
-    node: chrome.bookmarks.BookmarkTreeNode
-    depth: number
-    underBookmarksBar: boolean
-    directBookmarksBarChild: boolean
-  }> = []
-
-  function walk(
-    node: chrome.bookmarks.BookmarkTreeNode,
-    ancestors: chrome.bookmarks.BookmarkTreeNode[] = []
-  ): void {
-    if (!node.url && node.title === DEFAULT_NEW_TAB_FOLDER_TITLE) {
-      candidates.push({
-        node,
-        depth: ancestors.length,
-        underBookmarksBar: ancestors.some((ancestor) => ancestor.id === BOOKMARKS_BAR_ID),
-        directBookmarksBarChild: node.parentId === BOOKMARKS_BAR_ID
-      })
-    }
-
-    for (const child of node.children || []) {
-      if (!child.url) {
-        walk(child, [...ancestors, node])
-      }
-    }
-  }
-
-  if (rootNode) {
-    walk(rootNode)
-  }
-
-  candidates.sort((left, right) => {
-    if (left.directBookmarksBarChild !== right.directBookmarksBarChild) {
-      return left.directBookmarksBarChild ? -1 : 1
-    }
-    if (left.underBookmarksBar !== right.underBookmarksBar) {
-      return left.underBookmarksBar ? -1 : 1
-    }
-    return left.depth - right.depth
-  })
-
-  return candidates[0]?.node || null
-}
-
 function buildNewTabFolderSections(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null,
   settings: NewTabFolderSettings
@@ -3244,7 +3212,7 @@ async function removeBookmarkFromActivity(bookmarkId: string): Promise<void> {
 
 async function saveNewTabActivity(): Promise<void> {
   await setLocalStorage({
-    [NEW_TAB_ACTIVITY_STORAGE_KEY]: normalizeNewTabActivity(state.activity, state.bookmarks)
+    [STORAGE_KEYS.newTabActivity]: normalizeNewTabActivity(state.activity, state.bookmarks)
   })
 }
 
@@ -4636,53 +4604,6 @@ function applyGeneralSettings(): void {
     'settings-trigger-auto-hide',
     state.generalSettings.hideSettingsTrigger
   )
-}
-
-function normalizeFolderSettings(rawSettings: unknown): NewTabFolderSettings {
-  if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
-    return { ...DEFAULT_FOLDER_SETTINGS }
-  }
-
-  const settings = rawSettings as Record<string, unknown>
-  return {
-    selectedFolderIds: normalizeFolderIds(settings.selectedFolderIds),
-    hideFolderNames: settings.hideFolderNames === true
-  }
-}
-
-function normalizeFolderSettingsWithDefault(
-  rawSettings: unknown,
-  rootNode: chrome.bookmarks.BookmarkTreeNode | null
-): NewTabFolderSettings {
-  const settings = normalizeFolderSettings(rawSettings)
-  if (settings.selectedFolderIds.length) {
-    return settings
-  }
-
-  const defaultFolder = findNewTabFolder(rootNode)
-  if (!defaultFolder?.id) {
-    return settings
-  }
-
-  return {
-    ...settings,
-    selectedFolderIds: [String(defaultFolder.id)]
-  }
-}
-
-function normalizeFolderIds(value: unknown): string[] {
-  const source = Array.isArray(value) ? value : []
-  const seen = new Set<string>()
-  const ids: string[] = []
-  for (const item of source) {
-    const id = String(item || '').trim()
-    if (!id || seen.has(id)) {
-      continue
-    }
-    seen.add(id)
-    ids.push(id)
-  }
-  return ids.slice(0, 24)
 }
 
 function readFolderSettingsFromControls(): NewTabFolderSettings {

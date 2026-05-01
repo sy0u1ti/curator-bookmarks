@@ -22,7 +22,6 @@ const AUTO_BACKUP_DB_NAME = 'curatorBookmarkHeavyUserData'
 const AUTO_BACKUP_DB_VERSION = 2
 const AUTO_BACKUP_STORE = 'autoBackups'
 const CONTENT_FULL_TEXT_STORE = 'contentFullText'
-const NEW_TAB_ACTIVITY_STORAGE_KEY = 'curatorBookmarkNewTabActivity'
 
 export type DangerousOperationKind =
   | 'batch-delete'
@@ -172,7 +171,7 @@ export async function createCuratorBackupFile(
         timeSettings: stored[STORAGE_KEYS.newTabTimeSettings] ?? null,
         generalSettings: stored[STORAGE_KEYS.newTabGeneralSettings] ?? null,
         folderSettings: stored[STORAGE_KEYS.newTabFolderSettings] ?? null,
-        activity: stored[NEW_TAB_ACTIVITY_STORAGE_KEY] ?? null
+        activity: stored[STORAGE_KEYS.newTabActivity] ?? null
       },
       popupPreferences: stored[STORAGE_KEYS.popupPreferences] ?? null,
       aiProviderSettings: redactAiProviderSettings(stored[STORAGE_KEYS.aiProviderSettings])
@@ -420,7 +419,7 @@ async function getBackupStorageSnapshot(): Promise<Record<string, unknown>> {
     STORAGE_KEYS.newTabTimeSettings,
     STORAGE_KEYS.newTabGeneralSettings,
     STORAGE_KEYS.newTabFolderSettings,
-    NEW_TAB_ACTIVITY_STORAGE_KEY,
+    STORAGE_KEYS.newTabActivity,
     STORAGE_KEYS.popupPreferences,
     STORAGE_KEYS.aiProviderSettings
   ])
@@ -461,7 +460,7 @@ function buildNewTabStoragePayload(newTab: Record<string, unknown>): Record<stri
     ['timeSettings', STORAGE_KEYS.newTabTimeSettings],
     ['generalSettings', STORAGE_KEYS.newTabGeneralSettings],
     ['folderSettings', STORAGE_KEYS.newTabFolderSettings],
-    ['activity', NEW_TAB_ACTIVITY_STORAGE_KEY]
+    ['activity', STORAGE_KEYS.newTabActivity]
   ]
   const payload: Record<string, unknown> = {}
   for (const [field, storageKey] of mapping) {
