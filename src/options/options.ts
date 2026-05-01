@@ -213,11 +213,6 @@ import {
   clearBookmarkAddHistory
 } from './sections/bookmark-add-history.js'
 import {
-  handleBatchTagsClick,
-  handleBatchTagsInput,
-  renderBatchTagsSection
-} from './sections/batch-tags.js'
-import {
   cancelDashboardDrag,
   closeDashboardTagEditor,
   closeDashboardTagPopover,
@@ -333,11 +328,6 @@ const dashboardCallbacks = {
 const folderCleanupCallbacks = {
   renderAvailabilitySection,
   hydrateAvailabilityCatalog,
-  confirm: requestConfirmation
-}
-
-const batchTagsCallbacks = {
-  renderAvailabilitySection,
   confirm: requestConfirmation
 }
 
@@ -554,15 +544,6 @@ function bindEvents() {
   dom.aiTagImport?.addEventListener('click', () => dom.aiTagImportInput?.click())
   dom.aiTagImportInput?.addEventListener('change', handleBookmarkTagImport)
   dom.aiTagClear?.addEventListener('click', handleBookmarkTagClear)
-  dom.batchTagsQuery?.addEventListener('input', handleBatchTagsInput)
-  dom.batchTagsFilter?.addEventListener('change', handleBatchTagsInput)
-  dom.batchTagsOperation?.addEventListener('change', handleBatchTagsInput)
-  dom.batchTagsPreview?.addEventListener('click', (event) => handleBatchTagsClick(event, batchTagsCallbacks))
-  dom.batchTagsStats?.addEventListener('click', (event) => handleBatchTagsClick(event, batchTagsCallbacks))
-  dom.batchTagsSelectVisible?.addEventListener('click', (event) => handleBatchTagsClick(event, batchTagsCallbacks))
-  dom.batchTagsSelectUntagged?.addEventListener('click', (event) => handleBatchTagsClick(event, batchTagsCallbacks))
-  dom.batchTagsClearSelection?.addEventListener('click', (event) => handleBatchTagsClick(event, batchTagsCallbacks))
-  dom.batchTagsApply?.addEventListener('click', (event) => handleBatchTagsClick(event, batchTagsCallbacks))
   dom.backupExport?.addEventListener('click', handleFullBackupExport)
   dom.backupImport?.addEventListener('click', () => dom.backupImportInput?.click())
   dom.backupImportInput?.addEventListener('change', handleFullBackupImport)
@@ -2010,11 +1991,6 @@ function renderActiveOptionsSection() {
 
   if (activeSection === 'ai') {
     renderAiNamingSection()
-    return
-  }
-
-  if (activeSection === 'batch-tags') {
-    renderBatchTagsSection()
     return
   }
 

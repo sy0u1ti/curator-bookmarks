@@ -46,7 +46,6 @@
             <nav class="options-nav" aria-labelledby="options-ai-nav-label">
               <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
               <a class="options-nav-link" href="#ai" data-section-link="ai">标签与命名建议</a>
-              <a class="options-nav-link" href="#batch-tags" data-section-link="batch-tags">批量标签</a>
             </nav>
           </div>
           <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
@@ -902,96 +901,6 @@
               </div>
               <div id="ai-results" class="detect-results">
                 <div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示标签与命名建议。</div>
-              </div>
-            </div>
-          </section>
-
-          <section
-            id="batch-tags"
-            class="options-panel"
-            data-section-panel="batch-tags"
-            aria-labelledby="batch-tags-title"
-            hidden
-          >
-            <p class="options-section-label">Batch Tags</p>
-            <h1 id="batch-tags-title">批量标签</h1>
-
-            <div class="options-group ai-tag-data-card">
-              <div class="detect-results-header ai-tag-data-head">
-                <div>
-                  <strong>标签统计</strong>
-                  <p class="detect-results-subtitle">手动标签优先展示；AI 标签会保留，但不会覆盖手动标签。</p>
-                </div>
-                <span id="batch-tags-status" class="option-value"></span>
-              </div>
-              <div class="detect-summary-grid">
-                <article class="summary-card metric-card metric-total">
-                  <span class="summary-label">全部书签</span>
-                  <strong id="batch-tags-total">0</strong>
-                </article>
-                <article class="summary-card metric-card metric-success">
-                  <span class="summary-label">手动标签</span>
-                  <strong id="batch-tags-manual">0</strong>
-                </article>
-                <article class="summary-card metric-card metric-info">
-                  <span class="summary-label">仅 AI 标签</span>
-                  <strong id="batch-tags-ai-only">0</strong>
-                </article>
-                <article class="summary-card metric-card metric-warning">
-                  <span class="summary-label">未打标签</span>
-                  <strong id="batch-tags-untagged">0</strong>
-                </article>
-              </div>
-              <div id="batch-tags-stats" class="batch-tags-stats">
-                <div class="detect-empty">暂无标签统计。</div>
-              </div>
-            </div>
-
-            <div class="options-group ai-tag-data-card">
-              <div class="detect-results-header ai-tag-data-row">
-                <div>
-                  <strong>筛选书签</strong>
-                  <p class="detect-results-subtitle">可按标题、网址、路径或当前展示标签筛选；“未打标签”会筛出没有手动标签也没有 AI 标签的书签。</p>
-                </div>
-                <span id="batch-tags-selection-count" class="option-value">0 条已选择</span>
-              </div>
-              <div class="detect-results-header ai-results-filter-row">
-                <div class="detect-results-actions wrap-start">
-                  <input id="batch-tags-query" class="options-search-input compact" type="search" spellcheck="false" placeholder="筛选标题、网址、路径或标签">
-                  <select id="batch-tags-filter" class="ai-provider-select" aria-label="按标签来源筛选">
-                    <option value="all">全部书签</option>
-                    <option value="manual">已有手动标签</option>
-                    <option value="ai-only">仅 AI 标签</option>
-                    <option value="untagged">未打标签</option>
-                  </select>
-                  <button id="batch-tags-select-visible" class="options-button secondary small" type="button" data-batch-tag-action="select-visible">选择当前结果</button>
-                  <button id="batch-tags-select-untagged" class="options-button secondary small" type="button" data-batch-tag-action="select-untagged">选择未打标签</button>
-                  <button id="batch-tags-clear-selection" class="options-button secondary small" type="button" data-batch-tag-action="clear-selection">清空选择</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="options-group ai-tag-data-card">
-              <div class="detect-results-header ai-tag-data-row">
-                <div>
-                  <strong>批量修改</strong>
-                  <p class="detect-results-subtitle">所有批量修改都会先弹出确认，并在写入前自动创建备份。</p>
-                </div>
-                <div class="detect-results-actions wrap-start">
-                  <select id="batch-tags-operation" class="ai-provider-select" aria-label="选择批量标签操作">
-                    <option value="add">添加手动标签</option>
-                    <option value="remove">移除手动标签</option>
-                    <option value="rename">重命名标签</option>
-                    <option value="merge">合并标签</option>
-                  </select>
-                  <input id="batch-tags-input" class="options-search-input compact" type="text" spellcheck="false" placeholder="标签，多个用逗号分隔">
-                  <input id="batch-tags-from" class="options-search-input compact hidden" type="text" spellcheck="false" placeholder="原标签">
-                  <input id="batch-tags-to" class="options-search-input compact hidden" type="text" spellcheck="false" placeholder="目标标签">
-                  <button id="batch-tags-apply" class="options-button small" type="button" data-batch-tag-action="apply">预览并应用</button>
-                </div>
-              </div>
-              <div id="batch-tags-preview" class="detect-results">
-                <div class="detect-empty">选择书签并填写标签后，可执行批量修改。</div>
               </div>
             </div>
           </section>

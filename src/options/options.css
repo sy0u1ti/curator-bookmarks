@@ -1022,52 +1022,6 @@ a {
   align-items: center;
 }
 
-.batch-tags-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.batch-tags-stat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 6px 10px;
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  background: var(--surface-muted);
-  color: var(--text-primary);
-  font-size: 12px;
-}
-
-.batch-tags-stat-chip strong {
-  font-size: 13px;
-}
-
-.batch-tags-stat-chip span {
-  color: var(--text-muted);
-}
-
-.batch-tags-bookmark-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
-}
-
-.batch-tags-bookmark-row + .batch-tags-bookmark-row {
-  border-top: 1px solid var(--border-subtle);
-}
-
-.batch-tags-bookmark-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
 .detect-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

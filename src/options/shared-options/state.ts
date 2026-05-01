@@ -263,12 +263,3 @@ export const backupRestoreState = {
   restoring: false,
   status: ''
 }
-
-export const batchTagsState = {
-  query: '',
-  filter: 'all',
-  operation: 'add',
-  selectedIds: new Set<string>(),
-  applying: false,
-  status: ''
-}

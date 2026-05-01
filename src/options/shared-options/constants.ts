@@ -23,10 +23,6 @@ export const SECTION_META = {
     label: 'Tag & Naming Suggestions',
     title: '标签与命名建议'
   },
-  'batch-tags': {
-    label: 'Batch Tags',
-    title: '批量标签'
-  },
   backup: {
     label: 'Data & Backup',
     title: '数据与备份'
