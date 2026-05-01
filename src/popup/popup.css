@@ -254,7 +254,7 @@ button:focus-visible {
 
 .hero {
   position: relative;
-  z-index: 1;
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -734,9 +734,11 @@ button:focus-visible {
 
 .search-help-panel {
   position: absolute;
-  top: 44px;
-  right: 0;
-  width: min(320px, 100%);
+  top: calc(100% + 8px);
+  left: 0;
+  right: auto;
+  z-index: 20;
+  width: min(320px, calc(100vw - 28px));
   padding: 12px;
   border: 1px solid #3a3a3c;
   border-radius: 10px;

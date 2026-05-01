@@ -20,6 +20,16 @@
         >
           ?
         </button>
+        <div id="search-help-panel" class="search-help-panel hidden" role="dialog" aria-label="搜索语法帮助">
+          <strong>高级搜索语法</strong>
+          <ul>
+            <li><code>site:github.com</code> 限定站点或域名。</li>
+            <li><code>folder:前端</code> 限定文件夹路径。</li>
+            <li><code>type:文档</code> 限定 AI 识别的内容类型。</li>
+            <li><code>最近一个月</code>、<code>本周</code>、<code>今天</code> 限定添加时间。</li>
+            <li><code>-youtube</code> 排除包含该词的结果。</li>
+          </ul>
+        </div>
         <div class="hero-brand">
           <div class="hero-mark" aria-hidden="true">
             <img class="hero-logo" src="../assets/icon4096.jpg" alt="">
@@ -87,17 +97,6 @@
             清空
           </button>
         </label>
-
-        <div id="search-help-panel" class="search-help-panel hidden" role="dialog" aria-label="搜索语法帮助">
-          <strong>高级搜索语法</strong>
-          <ul>
-            <li><code>site:github.com</code> 限定站点或域名。</li>
-            <li><code>folder:前端</code> 限定文件夹路径。</li>
-            <li><code>type:文档</code> 限定 AI 识别的内容类型。</li>
-            <li><code>最近一个月</code>、<code>本周</code>、<code>今天</code> 限定添加时间。</li>
-            <li><code>-youtube</code> 排除包含该词的结果。</li>
-          </ul>
-        </div>
 
         <div id="search-chips" class="search-chips hidden" aria-label="当前搜索条件"></div>
 
