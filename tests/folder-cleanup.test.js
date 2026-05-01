@@ -66,3 +66,26 @@ test('detects same-name folders and large folder split groups', () => {
   assert.equal(large?.operation, 'split')
   assert.ok((large?.splitGroups || []).length >= 2)
 })
+
+test('excludes chrome default roots and plugin inbox from cleanup suggestions', () => {
+  const bookmarksBarBookmarks = Array.from({ length: 45 }, (_, index) => (
+    bookmark(`bar-${index}`, `书签栏页面 ${index}`, `https://bar-${index}.example.com`)
+  ))
+  const tree = folder('0', '', [
+    folder('1', '书签栏', [
+      ...bookmarksBarBookmarks,
+      folder('90', 'Inbox / 待整理', [
+        folder('91', '临时空文件夹')
+      ]),
+      folder('92', '普通空文件夹')
+    ]),
+    folder('2', '其他书签')
+  ])
+
+  const suggestions = analyzeFolderCleanup(tree)
+
+  assert.equal(suggestions.some((item) => item.primaryFolderId === '1'), false)
+  assert.equal(suggestions.some((item) => item.primaryFolderId === '2'), false)
+  assert.equal(suggestions.some((item) => item.folderIds.includes('90') || item.folderIds.includes('91')), false)
+  assert.ok(suggestions.some((item) => item.kind === 'empty-folder' && item.primaryFolderId === '92'))
+})

@@ -56,6 +56,7 @@ export interface FolderCleanupSuggestion {
 
 export interface FolderCleanupAnalysisOptions {
   tagIndex?: BookmarkTagIndex | null
+  reservedFolderTitles?: string[]
   deepFolderMinDepth?: number
   singlePathMinLength?: number
   singlePathMaxBookmarks?: number
@@ -76,6 +77,7 @@ interface FolderNodeModel {
 }
 
 const SYSTEM_FOLDER_IDS = new Set([ROOT_ID])
+const DEFAULT_RESERVED_FOLDER_TITLES = ['Inbox / 待整理']
 
 export function analyzeFolderCleanup(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null | undefined,
@@ -91,7 +93,7 @@ export function analyzeFolderCleanup(
     path: '',
     depth: 0,
     parentId: ''
-  }, folderMap, folderModels)
+  }, folderMap, folderModels, options)
 
   const suggestions: FolderCleanupSuggestion[] = []
   suggestions.push(...buildEmptyFolderSuggestions(folderModels))
@@ -116,13 +118,18 @@ function collectFolders(
   node: chrome.bookmarks.BookmarkTreeNode,
   context: { path: string; depth: number; parentId: string },
   folderMap: Map<string, FolderNodeModel>,
-  folderModels: FolderNodeModel[]
+  folderModels: FolderNodeModel[],
+  options: FolderCleanupAnalysisOptions
 ): FolderNodeModel | null {
   if (node.url) {
     return null
   }
 
   const title = String(node.title || '').trim() || '未命名文件夹'
+  if (isReservedFolderTitle(title, options)) {
+    return null
+  }
+
   const isRoot = String(node.id) === ROOT_ID
   const path = isRoot ? '' : context.path ? `${context.path} / ${title}` : title
   const depth = isRoot ? 0 : context.depth + 1
@@ -151,7 +158,7 @@ function collectFolders(
       path,
       depth,
       parentId: model.id
-    }, folderMap, folderModels)
+    }, folderMap, folderModels, options)
     if (!childModel) {
       continue
     }
@@ -445,7 +452,16 @@ function compareSuggestions(left: FolderCleanupSuggestion, right: FolderCleanupS
 }
 
 function isSystemFolder(folder: FolderNodeModel): boolean {
-  return SYSTEM_FOLDER_IDS.has(folder.id) || folder.depth <= 0
+  return SYSTEM_FOLDER_IDS.has(folder.id) || folder.depth <= 1
+}
+
+function isReservedFolderTitle(title: string, options: FolderCleanupAnalysisOptions): boolean {
+  const reservedTitles = [
+    ...DEFAULT_RESERVED_FOLDER_TITLES,
+    ...(Array.isArray(options.reservedFolderTitles) ? options.reservedFolderTitles : [])
+  ]
+  const normalizedTitle = normalizeFolderTitle(title)
+  return reservedTitles.some((reservedTitle) => normalizeFolderTitle(reservedTitle) === normalizedTitle)
 }
 
 function normalizeFolderTitle(title: string): string {

@@ -8,7 +8,7 @@ import {
   type FolderCleanupOperationKind,
   type FolderCleanupSuggestion
 } from '../../shared/folder-cleanup.js'
-import { availabilityState, aiNamingState, folderCleanupState } from '../shared-options/state.js'
+import { availabilityState, aiNamingState, folderCleanupState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { escapeHtml, escapeAttr } from '../shared-options/html.js'
 import { formatDateTime, isInteractionLocked } from '../shared-options/utils.js'
@@ -62,7 +62,8 @@ export async function analyzeFolderCleanupSuggestions(callbacks: FolderCleanupCa
 
   try {
     folderCleanupState.suggestions = analyzeFolderCleanup(folderCleanupState.rootNode, {
-      tagIndex: aiNamingState.tagIndex as BookmarkTagIndex
+      tagIndex: aiNamingState.tagIndex as BookmarkTagIndex,
+      reservedFolderTitles: getReservedFolderCleanupTitles()
     })
     folderCleanupState.lastAnalyzedAt = Date.now()
     folderCleanupState.statusMessage = folderCleanupState.suggestions.length
@@ -195,7 +196,8 @@ async function executeFolderCleanupSuggestion(
     await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
     if (folderCleanupState.rootNode) {
       folderCleanupState.suggestions = analyzeFolderCleanup(folderCleanupState.rootNode, {
-        tagIndex: aiNamingState.tagIndex as BookmarkTagIndex
+        tagIndex: aiNamingState.tagIndex as BookmarkTagIndex,
+        reservedFolderTitles: getReservedFolderCleanupTitles()
       })
       folderCleanupState.lastAnalyzedAt = Date.now()
       await persistFolderCleanupState()
@@ -340,6 +342,11 @@ function getStatusText(visibleSuggestionCount: number): string {
     return visibleSuggestionCount ? '有建议' : '已扫描'
   }
   return visibleSuggestionCount ? '有建议' : '未扫描'
+}
+
+function getReservedFolderCleanupTitles(): string[] {
+  const inboxTitle = String(managerState.inboxSettings?.folderTitle || '').trim()
+  return inboxTitle ? [inboxTitle] : []
 }
 
 function getOperationCopy(suggestion: FolderCleanupSuggestion): string {
