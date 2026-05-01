@@ -62,7 +62,7 @@ const DEFAULT_SEARCH_SETTINGS = {
   enabled: true,
   openInNewTab: false,
   engine: 'default',
-  placeholder: '',
+  placeholder: '搜索网页或书签',
   width: 44,
   height: 34,
   offsetY: 0,
@@ -117,6 +117,14 @@ const SUPPORTED_DATE_FORMATS = new Set([
   'weekday-month-day',
   'month-day-weekday'
 ])
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])'
+].join(',')
 
 type NewTabFolderSettings = typeof DEFAULT_FOLDER_SETTINGS
 
@@ -193,6 +201,8 @@ const state = {
   customIcons: {} as Record<string, string>,
   backgroundUrlCacheBusy: false,
   backgroundUrlCacheStatus: '',
+  backgroundStatus: '',
+  backgroundStatusTone: 'info' as 'info' | 'success' | 'warning' | 'error',
   draggingBookmarkId: '',
   dragPointerId: 0,
   dragLongPressTimer: 0,
@@ -243,6 +253,7 @@ let folderDragGhost: HTMLElement | null = null
 let folderDragGhostFrame = 0
 let resizeLayoutFrame = 0
 let deferredRenderFrame = 0
+let settingsDrawerReturnFocusElement: HTMLElement | null = null
 let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let iconSettingsSaveTimer = 0
@@ -402,8 +413,15 @@ function updateSettingRangeVisual(input: HTMLInputElement): void {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Tab' && trapSettingsDrawerFocus(event)) {
+    return
+  }
+
   if (event.key === 'Escape') {
-    closeSettingsDrawer()
+    if (isSettingsDrawerOpen()) {
+      event.preventDefault()
+      closeSettingsDrawer()
+    }
     closeBookmarkMenu()
     closeAddBookmarkMenu()
     cancelFolderDrag()
@@ -758,11 +776,20 @@ async function handleBackgroundFileChange(
 
   const expectedPrefix = mediaType === 'image' ? 'image/' : 'video/'
   if (!file.type.startsWith(expectedPrefix)) {
+    setBackgroundStatus(
+      mediaType === 'image'
+        ? '文件类型不匹配：请选择图片文件（JPG、PNG、WebP 或 GIF）。'
+        : '文件类型不匹配：请选择视频文件（MP4、WebM 或 MOV）。',
+      'warning'
+    )
+    syncBackgroundSettingsControls()
     return
   }
 
   try {
     const previousSettings = state.backgroundSettings
+    setBackgroundStatus('正在保存背景文件...', 'info')
+    syncBackgroundSettingsControls()
     await saveBackgroundMedia(mediaType, file)
     state.backgroundSettings = normalizeBackgroundSettings({
       ...state.backgroundSettings,
@@ -776,8 +803,14 @@ async function handleBackgroundFileChange(
     }
     syncBackgroundSettingsControls()
     await applyBackgroundSettings()
+    setBackgroundStatus(
+      mediaType === 'image' ? '背景图片已保存。' : '背景视频已保存。',
+      'success'
+    )
+    syncBackgroundSettingsControls()
   } catch (error) {
-    console.error(error)
+    setBackgroundStatus(getBackgroundMediaSaveErrorMessage(error), 'error')
+    syncBackgroundSettingsControls()
   }
 }
 
@@ -788,16 +821,20 @@ async function handleBackgroundUrlCacheClick(): Promise<void> {
 
   const imageUrl = normalizeBackgroundImageUrl(state.backgroundSettings.url)
   if (state.backgroundSettings.type !== 'urls' || !imageUrl) {
+    setBackgroundStatus('请输入有效的 http 或 https 图片链接后再缓存。', 'warning')
+    syncBackgroundSettingsControls()
     return
   }
 
   state.backgroundUrlCacheBusy = true
   state.backgroundUrlCacheStatus = '请求授权...'
+  setBackgroundStatus('正在请求图片域名授权...', 'info')
   syncBackgroundSettingsControls()
   try {
     const granted = await requestOriginPermission(imageUrl)
     if (!granted) {
       state.backgroundUrlCacheStatus = '未授权'
+      setBackgroundStatus('未获得图片域名授权：请允许访问当前图片来源后重试。', 'warning')
       return
     }
     if (!isCurrentBackgroundUrl(imageUrl)) {
@@ -821,9 +858,10 @@ async function handleBackgroundUrlCacheClick(): Promise<void> {
     setBackgroundImageFromBlob(blob)
     lastAppliedBackgroundMediaSignature = getBackgroundMediaSignature(state.backgroundSettings)
     state.backgroundUrlCacheStatus = `已缓存 ${formatBytes(blob.size)}`
-  } catch {
+    setBackgroundStatus('远程图片已缓存到本地。', 'success')
+  } catch (error) {
     state.backgroundUrlCacheStatus = '缓存失败'
-    // 缓存失败时保持当前 URL 背景显示，不向扩展错误页写入噪音。
+    setBackgroundStatus(getBackgroundUrlCacheErrorMessage(error), 'error')
   } finally {
     state.backgroundUrlCacheBusy = false
     syncBackgroundSettingsControls()
@@ -839,6 +877,9 @@ function handleTimeSettingsChange(): void {
 }
 
 function openSettingsDrawer(): void {
+  settingsDrawerReturnFocusElement = document.activeElement instanceof HTMLElement
+    ? document.activeElement
+    : null
   if (settingsDrawer) {
     cancelExitMotion(settingsDrawer)
   }
@@ -857,9 +898,16 @@ function openSettingsDrawer(): void {
   settingsDrawer?.setAttribute('aria-hidden', 'false')
   settingsTrigger?.setAttribute('aria-expanded', 'true')
   document.body.classList.add('settings-open')
+  window.requestAnimationFrame(() => {
+    focusFirstSettingsDrawerControl()
+  })
 }
 
 function closeSettingsDrawer(): void {
+  if (!isSettingsDrawerOpen()) {
+    return
+  }
+
   settingsDrawer?.classList.remove('open')
   settingsBackdrop?.classList.remove('open')
   settingsDrawer?.classList.add('is-closing')
@@ -871,6 +919,71 @@ function closeSettingsDrawer(): void {
     settingsDrawer?.classList.remove('is-closing')
     settingsBackdrop?.classList.remove('is-closing')
   }, 260)
+  restoreSettingsDrawerFocus()
+}
+
+function isSettingsDrawerOpen(): boolean {
+  return document.body.classList.contains('settings-open')
+}
+
+function focusFirstSettingsDrawerControl(): void {
+  if (!settingsDrawer || !isSettingsDrawerOpen()) {
+    return
+  }
+
+  const [firstElement] = getFocusableElements(settingsDrawer)
+  ;(firstElement || settingsDrawer).focus()
+}
+
+function restoreSettingsDrawerFocus(): void {
+  const returnElement = settingsDrawerReturnFocusElement
+  settingsDrawerReturnFocusElement = null
+
+  if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
+    returnElement.focus()
+    return
+  }
+
+  settingsTrigger?.focus()
+}
+
+function trapSettingsDrawerFocus(event: KeyboardEvent): boolean {
+  if (!settingsDrawer || !isSettingsDrawerOpen()) {
+    return false
+  }
+
+  const focusableElements = getFocusableElements(settingsDrawer)
+  const firstElement = focusableElements[0] || settingsDrawer
+  const lastElement = focusableElements[focusableElements.length - 1] || settingsDrawer
+  const activeElement = document.activeElement
+
+  if (!settingsDrawer.contains(activeElement)) {
+    event.preventDefault()
+    ;(event.shiftKey ? lastElement : firstElement).focus()
+    return true
+  }
+
+  if (event.shiftKey && activeElement === firstElement) {
+    event.preventDefault()
+    lastElement.focus()
+    return true
+  }
+
+  if (!event.shiftKey && activeElement === lastElement) {
+    event.preventDefault()
+    firstElement.focus()
+    return true
+  }
+
+  return false
+}
+
+function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return [...container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter((element) => {
+    return !element.hasAttribute('disabled') &&
+      !element.getAttribute('aria-hidden') &&
+      element.offsetParent !== null
+  })
 }
 
 function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number): void {
@@ -2099,7 +2212,7 @@ function createSearchWidget(): HTMLElement | null {
   slot.style.setProperty('--search-width', `${settings.width}vw`)
   slot.style.setProperty('--search-height', `${settings.height}px`)
   slot.style.setProperty('--search-offset-y', `${settings.offsetY}px`)
-  slot.setAttribute('aria-label', '搜索')
+  slot.setAttribute('aria-label', '搜索网页或书签')
 
   const form = document.createElement('form')
   form.className = 'newtab-search'
@@ -2107,16 +2220,17 @@ function createSearchWidget(): HTMLElement | null {
   form.style.setProperty('--search-height', `${settings.height}px`)
   form.style.setProperty('--search-bg-alpha', String(settings.background / 100))
   form.setAttribute('role', 'search')
-  form.setAttribute('aria-label', '搜索')
+  form.setAttribute('aria-label', '搜索网页或书签')
 
   const input = document.createElement('input')
+  const searchPlaceholder = getSearchPlaceholder(settings)
   input.className = 'newtab-search-input'
   input.type = 'search'
   input.autocomplete = 'off'
   input.enterKeyHint = 'search'
-  input.placeholder = settings.placeholder
+  input.placeholder = searchPlaceholder
   input.spellcheck = false
-  input.setAttribute('aria-label', settings.placeholder || '搜索')
+  input.setAttribute('aria-label', '输入关键词搜索书签，或按 Enter 搜索网页')
   input.setAttribute('aria-autocomplete', 'list')
   input.setAttribute('aria-controls', 'newtab-search-suggestions')
   input.setAttribute('aria-expanded', 'false')
@@ -2153,11 +2267,15 @@ function createSearchWidget(): HTMLElement | null {
   suggestions.setAttribute('role', 'listbox')
   suggestions.setAttribute('aria-label', '匹配的书签')
 
+  const suggestionsHeading = document.createElement('div')
+  suggestionsHeading.className = 'newtab-search-section-label'
+  suggestionsHeading.textContent = '书签匹配'
+
   const searchHint = document.createElement('div')
   searchHint.className = 'newtab-search-hint'
   searchHint.setAttribute('aria-live', 'polite')
   searchHint.textContent = ''
-  suggestionsPanel.append(suggestions, searchHint)
+  suggestionsPanel.append(suggestionsHeading, suggestions, searchHint)
 
   let searchSuggestions: SearchBookmarkSuggestion[] = []
   let activeSuggestionIndex = -1
@@ -2186,8 +2304,10 @@ function createSearchWidget(): HTMLElement | null {
         return
       }
 
-      searchHint.textContent = `Enter 搜索网页：${query}`
+      searchHint.textContent = `没有匹配的书签。按 Enter 使用网页搜索：${query}`
       suggestionsPanel.classList.remove('hidden')
+      suggestionsHeading.hidden = true
+      input.setAttribute('aria-expanded', 'true')
       return
     }
 
@@ -2209,6 +2329,7 @@ function createSearchWidget(): HTMLElement | null {
       )
     ))
     suggestionsPanel.classList.remove('hidden')
+    suggestionsHeading.hidden = false
     input.setAttribute('aria-expanded', 'true')
     searchHint.textContent = getSearchEnterHint(searchSuggestions[activeSuggestionIndex])
 
@@ -2528,10 +2649,10 @@ function createMissingFolderView(): HTMLElement {
   view.className = 'newtab-state folder-missing'
 
   const title = document.createElement('h1')
-  title.textContent = '还没有可展示的书签来源'
+  title.textContent = '请选择新标签页的书签来源'
 
   const copy = document.createElement('p')
-  copy.textContent = '可以创建一个专用于新标签页的书签文件夹，或在设置中选择已有文件夹。'
+  copy.textContent = '打开设置里的“书签来源”，选择要显示的文件夹；也可以先创建一个专用于新标签页的文件夹。'
 
   const actions = document.createElement('div')
   actions.className = 'newtab-state-actions'
@@ -3722,6 +3843,7 @@ function syncBackgroundSettingsControls(): void {
   const urlCacheRow = document.getElementById('background-url-cache-row')
   const urlCacheButton = document.getElementById('background-url-cache-button')
   const urlCacheStatus = document.getElementById('background-url-cache-status')
+  const backgroundStatus = document.getElementById('background-status')
   const colorControl = document.getElementById('background-color-control')
   const colorValue = document.getElementById('background-color-value')
   const imageButton = document.getElementById('background-image-picker')
@@ -3764,6 +3886,11 @@ function syncBackgroundSettingsControls(): void {
   }
   if (urlCacheStatus instanceof HTMLElement) {
     urlCacheStatus.textContent = settings.type === 'urls' ? state.backgroundUrlCacheStatus : ''
+  }
+  if (backgroundStatus instanceof HTMLElement) {
+    backgroundStatus.textContent = state.backgroundStatus
+    backgroundStatus.hidden = !state.backgroundStatus
+    backgroundStatus.dataset.tone = state.backgroundStatusTone
   }
   if (colorControl instanceof HTMLElement) {
     colorControl.style.backgroundColor = settings.color
@@ -3832,6 +3959,36 @@ function getBackgroundMediaSignature(settings: typeof DEFAULT_BACKGROUND_SETTING
     settings.videoName,
     normalizeBackgroundImageUrl(settings.url)
   ].join('|')
+}
+
+function setBackgroundStatus(
+  message: string,
+  tone: 'info' | 'success' | 'warning' | 'error' = 'info'
+): void {
+  state.backgroundStatus = message
+  state.backgroundStatusTone = tone
+}
+
+function getBackgroundMediaSaveErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  if (/quota|storage|空间|容量/i.test(message)) {
+    return '保存失败：浏览器本地存储空间可能不足，请换用更小文件或清理空间后重试。'
+  }
+  return '保存失败：请确认文件可读取，或换用更小的图片/视频后重试。'
+}
+
+function getBackgroundUrlCacheErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  if (/不是图片|content/i.test(message)) {
+    return '远程缓存失败：链接返回的不是图片，请换用直连图片地址。'
+  }
+  if (/请求失败|status|404|403|401|500/i.test(message)) {
+    return '远程缓存失败：图片请求失败，请检查链接是否可访问或重新授权后重试。'
+  }
+  if (/quota|storage|空间|容量/i.test(message)) {
+    return '远程缓存失败：本地存储空间可能不足，请清理空间后重试。'
+  }
+  return '远程缓存失败：仍会使用原图片链接，请检查网络、图片地址或授权后重试。'
 }
 
 function hasAppliedBackgroundMedia(settings: typeof DEFAULT_BACKGROUND_SETTINGS): boolean {
@@ -4322,7 +4479,7 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
   }
 
   const settings = rawSettings as Record<string, unknown>
-  const placeholder = String(settings.placeholder || '').trim()
+  const placeholder = String(settings.placeholder || '').trim() || DEFAULT_SEARCH_SETTINGS.placeholder
   return {
     enabled: settings.enabled !== false,
     openInNewTab: settings.openInNewTab === true,
@@ -4335,6 +4492,10 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
     offsetY: clampNumber(settings.offsetY, -32, 72, DEFAULT_SEARCH_SETTINGS.offsetY),
     background: clampNumber(settings.background, 36, 76, DEFAULT_SEARCH_SETTINGS.background)
   }
+}
+
+function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string {
+  return String(settings.placeholder || '').trim() || DEFAULT_SEARCH_SETTINGS.placeholder
 }
 
 function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {

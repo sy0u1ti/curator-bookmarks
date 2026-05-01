@@ -419,6 +419,14 @@ body.background-mask-enabled .newtab-background-mask {
   gap: 3px;
 }
 
+.newtab-search-section-label {
+  padding: 2px 8px 1px;
+  color: rgba(245, 245, 247, 0.5);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
 .newtab-search-suggestion {
   display: grid;
   width: 100%;
@@ -1628,6 +1636,26 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.setting-status {
+  margin-top: -2px;
+  padding: 2px 4px 0;
+  color: rgba(245, 245, 247, 0.58);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.setting-status[data-tone="success"] {
+  color: rgba(132, 218, 137, 0.86);
+}
+
+.setting-status[data-tone="warning"] {
+  color: rgba(255, 210, 128, 0.9);
+}
+
+.setting-status[data-tone="error"] {
+  color: rgba(255, 183, 176, 0.92);
 }
 
 .setting-floating-field {

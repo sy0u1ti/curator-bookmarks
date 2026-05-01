@@ -4736,7 +4736,16 @@ body.dashboard-fullscreen-active {
 }
 
 @media (max-width: 920px) {
+  .options-layout {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(100%, 760px);
+  }
+
   .options-sidebar {
+    position: static;
+    width: 100%;
+    max-width: none;
+    align-self: stretch;
     padding: 0;
     border-right: 0;
   }
@@ -4747,8 +4756,17 @@ body.dashboard-fullscreen-active {
   }
 
   .options-nav-link {
+    width: 100%;
+    transform: none;
     border: 1px solid rgba(255, 255, 255, 0.08);
     background: #101011;
+  }
+
+  .options-nav-link:hover,
+  .options-nav-link:focus-visible,
+  .options-nav-link:active,
+  .options-nav-link.active {
+    transform: none;
   }
 
   .ai-provider-flow {

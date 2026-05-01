@@ -29,8 +29,11 @@
     <aside
       id="newtab-settings-drawer"
       class="settings-drawer"
+      role="dialog"
+      aria-modal="true"
       aria-label="新标签页设置"
       aria-hidden="true"
+      tabindex="-1"
     >
       <button id="newtab-settings-close" class="settings-close" type="button" aria-label="关闭设置">
         <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -156,6 +159,7 @@
                 <span id="background-url-cache-status" class="setting-cache-status"></span>
               </span>
             </div>
+            <div id="background-status" class="setting-status" role="status" aria-live="polite" hidden></div>
             <label class="setting-row">
               <span>背景蒙版</span>
               <input id="background-mask-enabled" class="setting-switch-input" type="checkbox">

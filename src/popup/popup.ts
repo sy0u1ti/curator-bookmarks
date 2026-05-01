@@ -97,6 +97,15 @@ const SMART_LOADING_STEP_COUNT = 3
 const DEFAULT_POPUP_PREFERENCES = {
   naturalSearchEnabled: false
 }
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])'
+].join(',')
+let popupDialogReturnFocusElement: HTMLElement | null = null
 
 const SMART_CLASSIFY_SCHEMA = {
   type: 'object',
@@ -1693,6 +1702,9 @@ function renderFolderNode(node, depth) {
 }
 
 function renderBookmarkRow(bookmark, depth) {
+  const isMenuOpen = state.activeMenuBookmarkId === bookmark.id
+  const menuId = getActionMenuId(bookmark.id)
+
   return `
     <div class="tree-row bookmark-row" style="--depth:${depth}">
       <button class="bookmark-card" type="button" data-open-bookmark="${escapeAttr(bookmark.id)}">
@@ -1703,7 +1715,7 @@ function renderBookmarkRow(bookmark, depth) {
         </span>
       </button>
       <div class="menu-anchor">
-        <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="打开操作菜单"></button>
+        <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="打开操作菜单" aria-haspopup="menu" aria-expanded="${String(isMenuOpen)}" aria-controls="${escapeAttr(menuId)}"></button>
         ${renderActionMenu(bookmark.id)}
       </div>
     </div>
@@ -1714,6 +1726,8 @@ function renderSearchResults() {
   return state.searchResults
     .map((bookmark, index) => {
       const isActive = index === state.activeResultIndex
+      const isMenuOpen = state.activeMenuBookmarkId === bookmark.id
+      const menuId = getActionMenuId(bookmark.id)
       const matchReason = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
         ? bookmark.matchReasons.join(' · ')
         : ''
@@ -1737,7 +1751,7 @@ function renderSearchResults() {
             </span>
           </button>
           <div class="menu-anchor">
-            <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="打开操作菜单"></button>
+            <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="打开操作菜单" aria-haspopup="menu" aria-expanded="${String(isMenuOpen)}" aria-controls="${escapeAttr(menuId)}"></button>
             ${renderActionMenu(bookmark.id)}
           </div>
         </article>
@@ -1757,9 +1771,10 @@ function renderActionMenu(bookmarkId) {
   const moveBusy = isPopupActionPending('move', bookmarkId)
   const editBusy = isPopupActionPending('edit', bookmarkId)
   const deleteBusy = isPopupActionPending('delete', bookmarkId)
+  const menuId = getActionMenuId(bookmarkId)
 
   return `
-    <div class="action-menu" role="menu" aria-label="书签操作">
+    <div id="${escapeAttr(menuId)}" class="action-menu" role="menu" aria-label="书签操作">
       <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || editBusy ? 'disabled' : ''}>编辑</button>
       <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}" ${copyBusy ? 'disabled' : ''}>复制链接</button>
       <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || openBusy ? 'disabled' : ''}>当前页打开</button>
@@ -1767,6 +1782,10 @@ function renderActionMenu(bookmarkId) {
       <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || deleteBusy ? 'disabled' : ''}>删除</button>
     </div>
   `
+}
+
+function getActionMenuId(bookmarkId) {
+  return `popup-action-menu-${String(bookmarkId || '').replace(/[^a-zA-Z0-9_-]/g, '-')}`
 }
 
 function setPopupSurfaceOpen(element, open) {
@@ -2394,6 +2413,10 @@ function handleDocumentKeydown(event) {
     return
   }
 
+  if (event.key === 'Tab' && handleModalFocusTrap(event)) {
+    return
+  }
+
   if (event.key === 'Escape') {
     if (handleEscapeAction()) {
       event.preventDefault()
@@ -2545,6 +2568,62 @@ function getActionMenuItems() {
   return [...document.querySelectorAll<HTMLButtonElement>('.action-menu [data-menu-action]')]
 }
 
+function handleModalFocusTrap(event) {
+  const modal = getOpenModalElement()
+  if (!modal) {
+    return false
+  }
+
+  const focusableElements = getFocusableElements(modal)
+  const firstElement = focusableElements[0] || modal
+  const lastElement = focusableElements[focusableElements.length - 1] || modal
+  const activeElement = document.activeElement
+
+  if (!modal.contains(activeElement)) {
+    event.preventDefault()
+    ;(event.shiftKey ? lastElement : firstElement).focus()
+    return true
+  }
+
+  if (event.shiftKey && activeElement === firstElement) {
+    event.preventDefault()
+    lastElement.focus()
+    return true
+  }
+
+  if (!event.shiftKey && activeElement === lastElement) {
+    event.preventDefault()
+    firstElement.focus()
+    return true
+  }
+
+  return false
+}
+
+function getOpenModalElement() {
+  const modal = [
+    dom.filterModal,
+    dom.moveModal,
+    dom.smartFolderModal,
+    dom.editModal,
+    dom.deleteModal
+  ].find((element) => element instanceof HTMLElement && !element.classList.contains('hidden'))
+
+  return modal instanceof HTMLElement ? modal : null
+}
+
+function getFocusableElements(container) {
+  return [...container.querySelectorAll(FOCUSABLE_SELECTOR)].filter((element) => {
+    if (!(element instanceof HTMLElement)) {
+      return false
+    }
+
+    return !element.hasAttribute('disabled') &&
+      !element.getAttribute('aria-hidden') &&
+      element.offsetParent !== null
+  })
+}
+
 function handleEditInputKeydown(event) {
   if (event.key === 'Enter') {
     event.preventDefault()
@@ -2622,6 +2701,7 @@ function openFilterDialog() {
     return
   }
 
+  rememberDialogReturnFocus()
   state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
@@ -2643,6 +2723,7 @@ function openMoveDialog(bookmarkId) {
     return
   }
 
+  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
   state.confirmDeleteBookmarkId = null
@@ -2669,6 +2750,7 @@ function openEditDialog(bookmarkId) {
     return
   }
 
+  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
@@ -2691,6 +2773,7 @@ function openDeleteDialog(bookmarkId) {
     return
   }
 
+  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
@@ -2726,7 +2809,7 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   if (document.body.classList.contains('smart-active')) {
     return
   }
-  dom.searchInput.focus()
+  restoreDialogReturnFocus()
 }
 
 function applyFolderFilter(folderId) {
@@ -2776,6 +2859,7 @@ function openSmartFolderDialog() {
     return
   }
 
+  rememberDialogReturnFocus()
   state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
@@ -2787,6 +2871,35 @@ function openSmartFolderDialog() {
   window.requestAnimationFrame(() => {
     dom.smartFolderSearchInput.focus()
   })
+}
+
+function rememberDialogReturnFocus(preferredElement = null) {
+  const activeElement = document.activeElement
+  popupDialogReturnFocusElement = preferredElement instanceof HTMLElement
+    ? preferredElement
+    : activeElement instanceof HTMLElement
+      ? activeElement
+      : null
+}
+
+function restoreDialogReturnFocus() {
+  const returnElement = popupDialogReturnFocusElement
+  popupDialogReturnFocusElement = null
+
+  if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
+    returnElement.focus()
+    return
+  }
+
+  dom.searchInput.focus()
+}
+
+function getMenuToggleForBookmark(bookmarkId) {
+  if (!bookmarkId) {
+    return null
+  }
+
+  return document.querySelector<HTMLElement>(`[data-open-menu="${CSS.escape(String(bookmarkId))}"]`)
 }
 
 function resetSmartClassification() {
@@ -3001,11 +3114,11 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
       }
     })
 
-    state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
-    finishSmartSaveWithoutRefresh({
-      message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
-      closeModal
-    })
+	    state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
+	    await finishSmartSave({
+	      message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
+	      closeModal
+	    })
     savedWithoutRefresh = true
   } catch (error) {
     state.smartSaving = false
@@ -3028,7 +3141,7 @@ function renderSmartSaveSurfaces() {
   renderSmartFolderModal()
 }
 
-function finishSmartSaveWithoutRefresh({ message, closeModal = true }) {
+async function finishSmartSave({ message, closeModal = true }) {
   state.smartRunId += 1
   state.smartSaving = false
   state.smartSaved = true
@@ -3057,7 +3170,9 @@ function finishSmartSaveWithoutRefresh({ message, closeModal = true }) {
 
   renderSmartSaveSurfaces()
   showToast({ type: 'success', message })
-  showViewNotice('已保存，已返回书签列表')
+  showViewNotice('已保存，正在刷新书签列表')
+  await refreshData({ preserveSearch: true })
+  showViewNotice('已保存，书签列表已更新')
   window.requestAnimationFrame(() => {
     if (!hasOpenModal()) {
       dom.searchInput.focus()
@@ -3255,7 +3370,11 @@ async function undoDelete() {
   state.lastDeletedBookmark = null
 
   try {
-    await createBookmark(payload)
+    const parentId = await getRestorableParentId(payload.parentId)
+    await createBookmark({
+      ...payload,
+      parentId
+    })
     if (payload.recycleId) {
       await removeRecycleEntry(payload.recycleId)
     }
@@ -3273,6 +3392,22 @@ async function undoDelete() {
     })
   } finally {
     setPopupActionPending('undo-delete', actionTargetId, false)
+  }
+}
+
+async function getRestorableParentId(parentId) {
+  const requestedParentId = String(parentId || '').trim()
+  if (!requestedParentId) {
+    return BOOKMARKS_BAR_ID
+  }
+
+  try {
+    const tree = await getBookmarkTree()
+    const rootNode = Array.isArray(tree) ? tree[0] : tree
+    const target = findNodeById(rootNode, requestedParentId)
+    return target && !target.url ? requestedParentId : BOOKMARKS_BAR_ID
+  } catch {
+    return BOOKMARKS_BAR_ID
   }
 }
 
