@@ -574,7 +574,7 @@ function bindEvents() {
     void saveContentSnapshotSettingsFromDom()
   })
   dom.contentSnapshotFullText?.addEventListener('change', () => {
-    void saveContentSnapshotSettingsFromDom()
+    void saveContentSnapshotSettingsFromDom({ syncFullTextSearch: true })
   })
   dom.contentSnapshotSearchFullText?.addEventListener('change', () => {
     void saveContentSnapshotSettingsFromDom()
@@ -2050,13 +2050,21 @@ function syncAiNamingSettingsDraftFromDom({ markDirty = false } = {}) {
   return aiNamingManagerState.settings
 }
 
-async function saveContentSnapshotSettingsFromDom() {
+async function saveContentSnapshotSettingsFromDom({
+  syncFullTextSearch = false
+}: {
+  syncFullTextSearch?: boolean
+} = {}) {
+  const previousSettings = contentSnapshotState.settings
+  const saveFullText = readCheckboxSetting(dom.contentSnapshotFullText, previousSettings.saveFullText)
   const nextSettings = normalizeContentSnapshotSettings({
-    ...contentSnapshotState.settings,
-    enabled: Boolean(dom.contentSnapshotEnabled?.checked),
-    saveFullText: Boolean(dom.contentSnapshotFullText?.checked),
-    fullTextSearchEnabled: Boolean(dom.contentSnapshotSearchFullText?.checked),
-    localOnlyNoAiUpload: Boolean(dom.contentSnapshotLocalOnly?.checked)
+    ...previousSettings,
+    enabled: readCheckboxSetting(dom.contentSnapshotEnabled, previousSettings.enabled),
+    saveFullText,
+    fullTextSearchEnabled: dom.contentSnapshotSearchFullText
+      ? readCheckboxSetting(dom.contentSnapshotSearchFullText, previousSettings.fullTextSearchEnabled)
+      : syncFullTextSearch ? saveFullText : previousSettings.fullTextSearchEnabled,
+    localOnlyNoAiUpload: readCheckboxSetting(dom.contentSnapshotLocalOnly, previousSettings.localOnlyNoAiUpload)
   })
 
   try {
@@ -2065,19 +2073,25 @@ async function saveContentSnapshotSettingsFromDom() {
       includeFullText: contentSnapshotState.settings.fullTextSearchEnabled,
       maxRecords: 1000
     }).catch(() => new Map<string, string>())
-    contentSnapshotState.statusMessage = '网页快照设置已保存。'
+    contentSnapshotState.statusMessage = '网页内容索引设置已保存。'
   } catch (error) {
     contentSnapshotState.statusMessage =
-      error instanceof Error ? `网页快照设置保存失败：${error.message}` : '网页快照设置保存失败。'
+      error instanceof Error ? `网页内容索引设置保存失败：${error.message}` : '网页内容索引设置保存失败。'
   } finally {
     renderAiNamingSection()
     renderDashboardSection()
   }
 }
 
+function readCheckboxSetting(element: typeof dom.contentSnapshotEnabled | undefined, fallback: boolean): boolean {
+  return element ? Boolean(element.checked) : fallback
+}
+
 function renderContentSnapshotSettings() {
   const settings = contentSnapshotState.settings
-  const snapshotCount = Object.keys(contentSnapshotState.index.records || {}).length
+  const snapshotRecords = Object.values(contentSnapshotState.index.records || {})
+  const snapshotCount = snapshotRecords.length
+  const fullTextCount = snapshotRecords.filter((record) => record.hasFullText).length
   if (dom.contentSnapshotEnabled) {
     dom.contentSnapshotEnabled.checked = Boolean(settings.enabled)
   }
@@ -2086,7 +2100,7 @@ function renderContentSnapshotSettings() {
     dom.contentSnapshotFullText.disabled = !settings.enabled
   }
   if (dom.contentSnapshotSearchFullText) {
-    dom.contentSnapshotSearchFullText.checked = Boolean(settings.fullTextSearchEnabled)
+    dom.contentSnapshotSearchFullText.checked = Boolean(settings.saveFullText)
     dom.contentSnapshotSearchFullText.disabled = !settings.enabled || !settings.saveFullText
   }
   if (dom.contentSnapshotLocalOnly) {
@@ -2094,12 +2108,19 @@ function renderContentSnapshotSettings() {
     dom.contentSnapshotLocalOnly.disabled = !settings.enabled
   }
   if (dom.contentSnapshotStatus) {
-    const fullTextCopy = settings.saveFullText
-      ? '已开启全文保存；超过 20KB 的单条全文写入 IndexedDB。'
-      : '全文未保存，仅使用摘要、标题和链接信息。'
+    const modeCopy = settings.enabled
+      ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
+      : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
     dom.contentSnapshotStatus.textContent = contentSnapshotState.statusMessage ||
-      `已保存 ${snapshotCount} 条网页快照。${fullTextCopy}`
+      modeCopy
   }
+}
+
+function buildContentSnapshotStatusCopy(saveFullText: boolean, snapshotCount: number, fullTextCount: number): string {
+  if (saveFullText) {
+    return `已保存 ${snapshotCount} 条网页内容索引，其中 ${fullTextCount} 条包含正文；当前用于摘要和正文搜索。`
+  }
+  return `已保存 ${snapshotCount} 条网页内容索引；当前只保存摘要、标题和链接，不保存正文。`
 }
 
 function resetAiNamingConnectivityState() {

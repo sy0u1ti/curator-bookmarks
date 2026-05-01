@@ -327,15 +327,15 @@
             <div class="options-group ai-naming-settings-card">
               <div class="ai-feature-settings-head">
                 <div>
-                  <strong>网页快照与全文索引</strong>
-                  <p id="content-snapshot-status" class="ai-settings-subtitle">默认保存摘要、标题、规范链接、最终链接和内容类型；全文需要手动开启。</p>
+                  <strong>网页内容索引</strong>
+                  <p id="content-snapshot-status" class="ai-settings-subtitle">用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
                 </div>
-                <span class="options-chip muted">本地存储</span>
+                <span class="options-chip muted">本地内容记忆</span>
               </div>
               <label class="ai-feature-switch-row" for="content-snapshot-enabled">
                 <span class="ai-feature-switch-copy">
-                  <strong>保存网页快照</strong>
-                  <span class="ai-feature-secondary">新增网页书签后在本地保存轻量索引，供搜索使用。</span>
+                  <strong>保存网页内容索引</strong>
+                  <span class="ai-feature-secondary">新增网页书签后保存标题、摘要和链接信息，让本地搜索/AI 分类更容易找到它。</span>
                 </span>
                 <span class="ai-switch">
                   <input id="content-snapshot-enabled" type="checkbox">
@@ -344,34 +344,22 @@
               </label>
               <label class="ai-feature-switch-row" for="content-snapshot-full-text">
                 <span class="ai-feature-switch-copy">
-                  <strong>保存全文纯文本</strong>
-                  <span class="ai-feature-secondary">超过 20KB 的单条全文会写入 IndexedDB，不写入 chrome.storage.local。</span>
+                  <strong>增强：记住正文，搜索更准</strong>
+                  <span class="ai-feature-secondary">适合长文档和教程。开启后会保存可提取的正文，并把正文纳入本地搜索。</span>
                 </span>
                 <span class="ai-switch">
                   <input id="content-snapshot-full-text" type="checkbox">
                   <span class="ai-switch-track" aria-hidden="true"></span>
                 </span>
               </label>
-              <label class="ai-feature-switch-row" for="content-snapshot-search-full-text">
-                <span class="ai-feature-switch-copy">
-                  <strong>搜索全文索引</strong>
-                  <span class="ai-feature-secondary">搜索默认纳入摘要和标题；开启后再纳入已保存全文。</span>
-                </span>
-                <span class="ai-switch">
-                  <input id="content-snapshot-search-full-text" type="checkbox">
-                  <span class="ai-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="ai-feature-switch-row" for="content-snapshot-local-only">
-                <span class="ai-feature-switch-copy">
-                  <strong>仅本地保存，不上传 AI</strong>
-                  <span class="ai-feature-secondary">新增书签只保存快照，不把正文发送给 AI 生成标签。</span>
-                </span>
-                <span class="ai-switch">
-                  <input id="content-snapshot-local-only" type="checkbox">
-                  <span class="ai-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
+              <details class="ai-advanced-details content-snapshot-advanced">
+                <summary class="ai-advanced-summary">高级说明</summary>
+                <div class="ai-advanced-body">
+                  <p class="ai-advanced-note">
+                    默认只保存摘要、标题和链接信息。开启增强后，正文只保存在本机，较长正文会放到浏览器的大数据存储区以减少普通设置占用。
+                  </p>
+                </div>
+              </details>
             </div>
           </section>
 
