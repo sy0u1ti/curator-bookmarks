@@ -26,6 +26,7 @@
             <p id="options-settings-nav-label" class="options-sidebar-label">设置分类</p>
             <nav class="options-nav" aria-labelledby="options-settings-nav-label">
               <a class="options-nav-link" href="#general" data-section-link="general">通用设置</a>
+              <a class="options-nav-link" href="#backup" data-section-link="backup">数据与备份</a>
             </nav>
           </div>
           <div class="options-nav-group">
@@ -45,9 +46,7 @@
             <nav class="options-nav" aria-labelledby="options-ai-nav-label">
               <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
               <a class="options-nav-link" href="#ai" data-section-link="ai">标签与命名建议</a>
-              <a class="options-nav-link" href="#ai-tag-data" data-section-link="ai-tag-data">标签数据</a>
               <a class="options-nav-link" href="#batch-tags" data-section-link="batch-tags">批量标签</a>
-              <a class="options-nav-link" href="#backup" data-section-link="backup">备份与恢复</a>
             </nav>
           </div>
           <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
@@ -823,16 +822,6 @@
               <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成标签和命名建议。</p>
             </div>
 
-            <div class="options-group ai-tag-data-card ai-tag-data-entry-card">
-              <div class="detect-results-header">
-                <div>
-                  <strong>标签数据</strong>
-                  <p class="detect-results-subtitle">管理已保存的标签数据，包含 AI 生成内容和手动维护标签。</p>
-                </div>
-                <a class="options-button secondary small" href="#ai-tag-data" data-section-link="ai-tag-data">打开标签数据</a>
-              </div>
-            </div>
-
             <div class="detect-summary-grid">
               <article class="summary-card metric-card metric-total">
                 <span class="summary-label">可处理</span>
@@ -913,39 +902,6 @@
               </div>
               <div id="ai-results" class="detect-results">
                 <div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示标签与命名建议。</div>
-              </div>
-            </div>
-          </section>
-
-          <section
-            id="ai-tag-data"
-            class="options-panel"
-            data-section-panel="ai-tag-data"
-            aria-labelledby="ai-tag-data-title"
-            hidden
-          >
-            <p class="options-section-label">AI Tag Data</p>
-            <h1 id="ai-tag-data-title">标签数据</h1>
-
-            <div class="options-group ai-tag-data-card">
-              <div class="detect-results-header ai-tag-data-head">
-                <div>
-                  <strong>已保存标签数据</strong>
-                  <p class="detect-results-subtitle">这里保存 AI 生成的摘要、主题和别名，以及 AI 生成或手动维护的标签。可导出备份后再导入恢复，不包含 API Key 或 AI 设置。</p>
-                </div>
-                <span id="ai-tag-data-count" class="option-value">0 条记录</span>
-              </div>
-              <div class="detect-results-header ai-tag-data-row">
-                <div>
-                  <p id="ai-tag-data-updated" class="detect-results-subtitle">尚未保存标签数据。</p>
-                  <p id="ai-tag-data-status" class="detect-status-copy"></p>
-                </div>
-                <div class="detect-results-actions">
-                  <button id="ai-tag-export" class="options-button secondary small" type="button">导出</button>
-                  <button id="ai-tag-import" class="options-button secondary small" type="button">导入</button>
-                  <button id="ai-tag-clear" class="options-button danger small" type="button">清空</button>
-                </div>
-                <input id="ai-tag-import-input" class="hidden" type="file" accept="application/json,.json">
               </div>
             </div>
           </section>
@@ -1047,8 +1003,30 @@
             aria-labelledby="backup-title"
             hidden
           >
-            <p class="options-section-label">Backup & Restore</p>
-            <h1 id="backup-title">备份与恢复</h1>
+            <p class="options-section-label">Data & Backup</p>
+            <h1 id="backup-title">数据与备份</h1>
+
+            <div class="options-group ai-tag-data-card">
+              <div class="detect-results-header ai-tag-data-head">
+                <div>
+                  <strong>标签数据</strong>
+                  <p class="detect-results-subtitle">这里保存 AI 生成的摘要、主题和别名，以及 AI 生成或手动维护的标签。可单独导出/导入，也会包含在完整备份中。</p>
+                </div>
+                <span id="ai-tag-data-count" class="option-value">0 条记录</span>
+              </div>
+              <div class="detect-results-header ai-tag-data-row">
+                <div>
+                  <p id="ai-tag-data-updated" class="detect-results-subtitle">尚未保存标签数据。</p>
+                  <p id="ai-tag-data-status" class="detect-status-copy"></p>
+                </div>
+                <div class="detect-results-actions">
+                  <button id="ai-tag-export" class="options-button secondary small" type="button">导出标签数据</button>
+                  <button id="ai-tag-import" class="options-button secondary small" type="button">导入标签数据</button>
+                  <button id="ai-tag-clear" class="options-button danger small" type="button">清空标签数据</button>
+                </div>
+                <input id="ai-tag-import-input" class="hidden" type="file" accept="application/json,.json">
+              </div>
+            </div>
 
             <div class="options-group ai-tag-data-card">
               <div class="detect-results-header ai-tag-data-head">

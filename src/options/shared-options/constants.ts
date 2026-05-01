@@ -23,17 +23,13 @@ export const SECTION_META = {
     label: 'Tag & Naming Suggestions',
     title: '标签与命名建议'
   },
-  'ai-tag-data': {
-    label: 'AI Tag Data',
-    title: '标签数据'
-  },
   'batch-tags': {
     label: 'Batch Tags',
     title: '批量标签'
   },
   backup: {
-    label: 'Backup & Restore',
-    title: '备份与恢复'
+    label: 'Data & Backup',
+    title: '数据与备份'
   },
   redirects: {
     label: 'Redirects',

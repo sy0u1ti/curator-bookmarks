@@ -348,8 +348,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     window.history.scrollRestoration = 'manual'
   }
 
-  if (!SECTION_META[getCurrentSectionKey()]) {
-    window.history.replaceState(null, '', '#general')
+  const initialSectionKey = normalizeSectionKey(getCurrentSectionKey())
+  if (initialSectionKey !== getCurrentSectionKey()) {
+    window.history.replaceState(null, '', `#${initialSectionKey}`)
   }
 
   syncPageSection()
@@ -427,7 +428,7 @@ async function saveAiNamingSettings(settings = aiNamingManagerState.settings) {
 
 function syncPageSection() {
   const rawKey = getCurrentSectionKey()
-  const key = SECTION_META[rawKey] ? rawKey : 'general'
+  const key = normalizeSectionKey(rawKey)
   const section = SECTION_META[key]
   const links = document.querySelectorAll('[data-section-link]')
   const panels = document.querySelectorAll<HTMLElement>('[data-section-panel]')
@@ -467,7 +468,7 @@ function handleSectionNavigationClick(event) {
 
   const link = event.target.closest('a[data-section-link]') as HTMLAnchorElement | null
   const key = link?.getAttribute('data-section-link') || ''
-  if (!link || !SECTION_META[key]) {
+  if (!link || !SECTION_META[normalizeSectionKey(key)]) {
     return
   }
 
@@ -738,6 +739,14 @@ function bindEvents() {
 
 function getCurrentSectionKey() {
   return window.location.hash.replace(/^#/, '') || 'general'
+}
+
+function normalizeSectionKey(key: string): keyof typeof SECTION_META {
+  if (key === 'ai-tag-data') {
+    return 'backup'
+  }
+
+  return key in SECTION_META ? (key as keyof typeof SECTION_META) : 'general'
 }
 
 function handleKeydown(event) {
@@ -1903,7 +1912,7 @@ function renderAvailabilitySection() {
 }
 
 function renderActiveOptionsSection() {
-  const activeSection = SECTION_META[getCurrentSectionKey()] ? getCurrentSectionKey() : 'general'
+  const activeSection = normalizeSectionKey(getCurrentSectionKey())
 
   if (activeSection === 'availability') {
     renderAvailabilitySelectionGroup()
@@ -1938,17 +1947,13 @@ function renderActiveOptionsSection() {
     return
   }
 
-  if (activeSection === 'ai-tag-data') {
-    renderBookmarkTagDataCard()
-    return
-  }
-
   if (activeSection === 'batch-tags') {
     renderBatchTagsSection()
     return
   }
 
   if (activeSection === 'backup') {
+    renderBookmarkTagDataCard()
     renderBackupRestoreSection()
     return
   }
@@ -2937,10 +2942,10 @@ async function handleBookmarkTagExport() {
       payload
     )
     aiNamingState.tagDataStatus = `已导出 ${payload.records.length} 条标签记录。`
-    renderAiNamingSection()
+    renderActiveOptionsSection()
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据导出失败。'
-    renderAiNamingSection()
+    renderActiveOptionsSection()
   }
 }
 
@@ -2967,7 +2972,7 @@ async function handleBookmarkTagImport(event) {
     if (input) {
       input.value = ''
     }
-    renderAiNamingSection()
+    renderActiveOptionsSection()
   }
 }
 
@@ -2989,10 +2994,10 @@ async function handleBookmarkTagClear() {
     await clearBookmarkTagIndex()
     aiNamingState.tagIndex = normalizeBookmarkTagIndex(null)
     aiNamingState.tagDataStatus = '已清空标签数据。'
-    renderAiNamingSection()
+    renderActiveOptionsSection()
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据清空失败。'
-    renderAiNamingSection()
+    renderActiveOptionsSection()
   }
 }
 
