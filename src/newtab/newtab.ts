@@ -36,6 +36,7 @@ import {
   createMissingFolderView,
   createNewTabPage,
   createStateView,
+  getVerticalCenterCollisionOffset,
   resolveNewTabContentState,
   type NewTabPageModule
 } from './content-state.js'
@@ -259,6 +260,7 @@ let bookmarkDragGhostFrame = 0
 let folderDragGhost: HTMLElement | null = null
 let folderDragGhostFrame = 0
 let resizeLayoutFrame = 0
+let verticalCenterCollisionFrame = 0
 let deferredRenderFrame = 0
 let settingsDrawerReturnFocusElement: HTMLElement | null = null
 let deferredRenderClockUpdate = false
@@ -2162,6 +2164,7 @@ function render(): void {
     return
   }
 
+  cancelScheduledVerticalCenterCollisionUpdate()
   root.replaceChildren()
   const contentState = resolveNewTabContentState({
     loading: state.loading,
@@ -2195,6 +2198,7 @@ function render(): void {
   }
 
   root.appendChild(createNewTabLayout(createBookmarkSections(state.folderSections)))
+  scheduleVerticalCenterCollisionUpdate()
 }
 
 function scheduleRender({ updateClock = false } = {}): void {
@@ -2212,6 +2216,48 @@ function scheduleRender({ updateClock = false } = {}): void {
       updateClockText()
     }
   })
+}
+
+function cancelScheduledVerticalCenterCollisionUpdate(): void {
+  if (!verticalCenterCollisionFrame) {
+    return
+  }
+
+  window.cancelAnimationFrame(verticalCenterCollisionFrame)
+  verticalCenterCollisionFrame = 0
+}
+
+function scheduleVerticalCenterCollisionUpdate(): void {
+  cancelScheduledVerticalCenterCollisionUpdate()
+  verticalCenterCollisionFrame = window.requestAnimationFrame(() => {
+    verticalCenterCollisionFrame = 0
+    updateVerticalCenterCollisionOffset()
+  })
+}
+
+function updateVerticalCenterCollisionOffset(): void {
+  const page = root?.querySelector<HTMLElement>('.newtab-page[data-icon-vertical-center="true"]')
+  if (!page) {
+    return
+  }
+
+  const utilityStack = page.querySelector<HTMLElement>(':scope > .newtab-utility-stack')
+  const primaryContent = page.querySelector<HTMLElement>(':scope > .newtab-primary-slot > .newtab-content')
+  if (!utilityStack || !primaryContent) {
+    page.style.removeProperty('--primary-collision-offset-y')
+    return
+  }
+
+  page.style.setProperty('--primary-collision-offset-y', '0px')
+  const utilityRect = utilityStack.getBoundingClientRect()
+  const contentRect = primaryContent.getBoundingClientRect()
+  const offset = getVerticalCenterCollisionOffset({
+    utilityBottom: utilityRect.bottom,
+    contentTop: contentRect.top
+  })
+  if (offset > 0) {
+    page.style.setProperty('--primary-collision-offset-y', `${offset}px`)
+  }
 }
 
 function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
