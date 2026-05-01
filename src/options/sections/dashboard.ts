@@ -1348,6 +1348,11 @@ function buildDashboardCard(item: DashboardItem): string {
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
   const copyLabel = dashboardState.copyFeedbackId === String(item.id) ? '已复制' : '复制'
   const faviconUrl = getDashboardFaviconUrl(item.url)
+  const tagStatusTitle = item.hasManualTags
+    ? '已有手动标签'
+    : item.aiTags.length
+      ? '已有 AI 标签'
+      : '未生成 AI 标签'
   const tagMarkup = tags.length
     ? tags.map((tag) => `<span class="dashboard-mini-chip">${escapeHtml(tag)}</span>`).join('')
     : ''
@@ -1403,7 +1408,7 @@ function buildDashboardCard(item: DashboardItem): string {
         <div class="dashboard-card-side">
           <span
             class="dashboard-status-dot ${item.tags.length ? 'has-tags' : ''}"
-            title="${escapeAttr(item.tags.length ? '已有 AI 标签' : '未生成 AI 标签')}"
+            title="${escapeAttr(tagStatusTitle)}"
           ></span>
         </div>
       </div>

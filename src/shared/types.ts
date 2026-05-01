@@ -64,8 +64,10 @@ export interface NavigationNetworkEvidence {
   method?: string
   requestedUrl: string
   finalUrl?: string
+  statusUrl?: string
   statusCode?: number
   statusLine?: string
+  finalResponseObserved?: boolean
   errorCode?: string
   fromCache?: boolean
   redirects: NavigationNetworkRedirect[]

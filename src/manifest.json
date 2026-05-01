@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Curator",
   "description": "在本地查询、浏览、移动和删除 Chrome 书签。",
-  "version": "1.4.9",
+  "version": "1.4.10",
   "icons": {
     "16": "src/assets/icon16.png",
     "32": "src/assets/icon32.png",
@@ -39,6 +39,31 @@
     },
     "default_title": "Curator",
     "default_popup": "src/popup/popup.html"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      }
+    },
+    "curator-open-search": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "打开 Curator 并聚焦搜索"
+    },
+    "curator-open-smart-classifier": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "打开 Curator 并立即智能分类"
+    },
+    "curator-toggle-auto-analyze": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "切换 Curator 自动分析"
+    }
   },
   "chrome_url_overrides": {
     "newtab": "src/newtab/newtab.html"

@@ -141,6 +141,7 @@ import {
   buildDuplicateGroups,
   renderDuplicateSection,
   handleDuplicateGroupsClick,
+  handleDuplicateToolbarClick,
   clearDuplicateSelection,
   deleteSelectedDuplicates
 } from './sections/duplicates.js'
@@ -172,6 +173,12 @@ import {
   upsertAvailabilityHistoryEntry
 } from './sections/history.js'
 import {
+  buildPendingAvailabilitySnapshot,
+  normalizePendingAvailabilitySnapshot,
+  reconcilePendingAvailabilitySnapshot,
+  savePendingAvailabilitySnapshot
+} from './sections/pending-availability.js'
+import {
   hydrateBookmarkAddHistory,
   renderBookmarkAddHistory,
   clearBookmarkAddHistory
@@ -197,6 +204,7 @@ import {
 } from './sections/dashboard.js'
 
 let availabilityRenderFrame = 0
+let availabilitySummaryCopyStatusTimer = 0
 let availabilityPauseResolvers: Array<() => void> = []
 let confirmModalResolve: ((confirmed: boolean) => void) | null = null
 let activeManagedModalKey = ''
@@ -215,6 +223,32 @@ const LEGACY_AI_NAMING_CACHE_STORAGE_KEYS = [
   'curatorBookmarkAiMetadataCache',
   'curatorBookmarkAiResultCache'
 ]
+
+const SHORTCUTS_SETTINGS_URL = 'chrome://extensions/shortcuts'
+const SHORTCUT_COMMAND_ORDER = [
+  '_execute_action',
+  'curator-open-search',
+  'curator-open-smart-classifier',
+  'curator-toggle-auto-analyze'
+]
+const SHORTCUT_COMMAND_LABELS: Record<string, { title: string; detail: string }> = {
+  _execute_action: {
+    title: '打开 Popup',
+    detail: '打开 Curator 弹窗。'
+  },
+  'curator-open-search': {
+    title: '打开并聚焦搜索',
+    detail: '打开弹窗后直接聚焦搜索框。'
+  },
+  'curator-open-smart-classifier': {
+    title: '直接智能分类当前页',
+    detail: '打开弹窗后立即分析当前页面并给出保存建议。'
+  },
+  'curator-toggle-auto-analyze': {
+    title: '切换自动分析',
+    detail: '通过快捷键开启或关闭新增书签自动分析。'
+  }
+}
 
 const recycleCallbacks = {
   renderAvailabilitySection,
@@ -259,12 +293,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   cacheDom()
   bindEvents()
 
+  if ('scrollRestoration' in window.history) {
+    window.history.scrollRestoration = 'manual'
+  }
+
   if (!SECTION_META[getCurrentSectionKey()]) {
     window.history.replaceState(null, '', '#general')
   }
 
   syncPageSection()
-  window.addEventListener('hashchange', syncPageSection)
+  resetOptionsScrollPosition()
+  window.addEventListener('hashchange', () => {
+    syncPageSection()
+    resetOptionsScrollPosition()
+  })
+  window.addEventListener('popstate', () => {
+    syncPageSection()
+    resetOptionsScrollPosition()
+  })
+  void hydrateShortcutCommands()
 
   await hydratePersistentState()
   await hydrateAvailabilityCatalog()
@@ -283,6 +330,7 @@ async function hydratePersistentState() {
       STORAGE_KEYS.detectionHistory,
       STORAGE_KEYS.bookmarkAddHistory,
       STORAGE_KEYS.redirectCache,
+      STORAGE_KEYS.pendingAvailabilityResults,
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
       STORAGE_KEYS.bookmarkTagIndex
@@ -292,6 +340,7 @@ async function hydratePersistentState() {
     hydrateDetectionHistory(stored[STORAGE_KEYS.detectionHistory], historyCallbacks)
     hydrateBookmarkAddHistory(stored[STORAGE_KEYS.bookmarkAddHistory])
     managerState.redirectCache = normalizeRedirectCache(stored[STORAGE_KEYS.redirectCache])
+    managerState.pendingAvailabilitySnapshot = normalizePendingAvailabilitySnapshot(stored[STORAGE_KEYS.pendingAvailabilityResults])
     managerState.recycleBin = normalizeRecycleBin(stored[STORAGE_KEYS.recycleBin])
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
     aiNamingState.tagIndex = normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
@@ -318,7 +367,6 @@ function syncPageSection() {
   const section = SECTION_META[key]
   const links = document.querySelectorAll('[data-section-link]')
   const panels = document.querySelectorAll<HTMLElement>('[data-section-panel]')
-  const availabilitySectionKeys = new Set(['availability', 'history', 'redirects', 'ignore'])
 
   if (rawKey !== key) {
     window.history.replaceState(null, '', `#${key}`)
@@ -328,14 +376,9 @@ function syncPageSection() {
 
   links.forEach((link) => {
     const linkKey = link.getAttribute('data-section-link')
-    const isExactActive = linkKey === key
-    const isAvailabilityRootActive =
-      link.classList.contains('options-nav-link') &&
-      linkKey === 'availability' &&
-      availabilitySectionKeys.has(key)
-    const isActive = isExactActive || isAvailabilityRootActive
+    const isActive = linkKey === key
     link.classList.toggle('active', isActive)
-    if (isExactActive) {
+    if (isActive) {
       link.setAttribute('aria-current', 'page')
     } else {
       link.removeAttribute('aria-current')
@@ -346,16 +389,51 @@ function syncPageSection() {
     panel.hidden = panel.getAttribute('data-section-panel') !== key
   })
 
-  document.getElementById('availability-related-nav')?.classList.toggle(
-    'hidden',
-    !availabilitySectionKeys.has(key)
-  )
-
   document.title = `${section.title} · Curator Bookmark`
 
   if (dom.availabilityAction) {
     renderAvailabilitySection()
   }
+}
+
+function handleSectionNavigationClick(event) {
+  if (!(event.target instanceof Element)) {
+    return
+  }
+
+  const link = event.target.closest('a[data-section-link]') as HTMLAnchorElement | null
+  const key = link?.getAttribute('data-section-link') || ''
+  if (!link || !SECTION_META[key]) {
+    return
+  }
+
+  const targetUrl = new URL(link.href, window.location.href)
+  if (targetUrl.origin !== window.location.origin || targetUrl.pathname !== window.location.pathname) {
+    return
+  }
+
+  event.preventDefault()
+  const nextHash = `#${key}`
+  if (window.location.hash !== nextHash) {
+    window.history.pushState(null, '', nextHash)
+  }
+  syncPageSection()
+  resetOptionsScrollPosition()
+}
+
+function resetOptionsScrollPosition() {
+  const reset = () => {
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }
+
+  reset()
+  window.requestAnimationFrame(() => {
+    reset()
+    window.requestAnimationFrame(reset)
+  })
+  window.setTimeout(reset, 0)
 }
 
 
@@ -369,6 +447,7 @@ function bindEvents() {
   }
 
 
+  document.addEventListener('click', handleSectionNavigationClick)
   dom.availabilityScopeTrigger?.addEventListener('click', () => openScopeModal('availability'))
   dom.dashboardPanel?.addEventListener('click', (event) => {
     void handleDashboardClick(event, dashboardCallbacks)
@@ -415,6 +494,13 @@ function bindEvents() {
   dom.aiModelPickerTrigger?.addEventListener('click', openAiModelPickerModal)
   dom.aiFetchModels?.addEventListener('click', handleFetchAiModels)
   dom.aiManageModels?.addEventListener('click', openAiModelModal)
+  dom.openShortcutsSettings?.addEventListener('click', openShortcutsSettingsPage)
+  dom.copyShortcutsUrl?.addEventListener('click', () => {
+    void copyShortcutsUrl()
+  })
+  dom.refreshShortcuts?.addEventListener('click', () => {
+    void hydrateShortcutCommands()
+  })
   dom.aiApiStyle?.addEventListener('change', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiTimeoutMs?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiBatchSize?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
@@ -422,6 +508,7 @@ function bindEvents() {
   dom.aiAllowRemoteParser?.addEventListener('change', handleAiRemoteParserChange)
   dom.aiAutoAnalyzeBookmarks?.addEventListener('change', handleAutoAnalyzeBookmarksChange)
   dom.aiSystemPrompt?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
+  dom.availabilityCopySummary?.addEventListener('click', handleAvailabilityCopySummary)
   dom.availabilityAction?.addEventListener('click', handleAvailabilityAction)
   dom.availabilityPauseAction?.addEventListener('click', toggleAvailabilityPause)
   dom.availabilityStopAction?.addEventListener('click', requestAvailabilityStop)
@@ -467,6 +554,7 @@ function bindEvents() {
   dom.redirectSelectAll?.addEventListener('click', () => selectAllRedirects(redirectsCallbacks))
   dom.redirectDeleteAll?.addEventListener('click', () => deleteAllRedirects(redirectsCallbacks))
   dom.duplicateGroups?.addEventListener('click', (event) => handleDuplicateGroupsClick(event, duplicatesCallbacks))
+  dom.duplicateStrategyControls?.addEventListener('click', (event) => handleDuplicateToolbarClick(event, duplicatesCallbacks))
   dom.duplicateClearSelection?.addEventListener('click', () => clearDuplicateSelection(duplicatesCallbacks))
   dom.duplicateDeleteSelection?.addEventListener('click', () => deleteSelectedDuplicates(duplicatesCallbacks))
   dom.ignoreBookmarkRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
@@ -860,6 +948,7 @@ function applyAvailabilityScope({ preserveResults = false } = {}) {
     clearRedirectSelection(redirectsCallbacks)
     clearDuplicateSelection(duplicatesCallbacks)
     clearRecycleSelection(recycleCallbacks)
+    restorePendingAvailabilitySnapshotForScope()
   }
 
   if (!eligibleBookmarks.length) {
@@ -1046,6 +1135,103 @@ function resetCurrentAvailabilityRunState() {
   availabilityState.retestSelectionProbeEnabled = false
 }
 
+function restorePendingAvailabilitySnapshotForScope() {
+  if (
+    availabilityState.running ||
+    availabilityState.retestingSelection ||
+    availabilityState.deleting ||
+    availabilityState.lastCompletedAt
+  ) {
+    return false
+  }
+
+  const snapshot = managerState.pendingAvailabilitySnapshot
+  const restored = reconcilePendingAvailabilitySnapshot(
+    snapshot,
+    availabilityState.bookmarkMap,
+    getCurrentAvailabilityScopeMeta()
+  )
+
+  if (!restored) {
+    return false
+  }
+
+  availabilityState.reviewResults = restored.reviewResults
+  availabilityState.failedResults = restored.failedResults
+  availabilityState.redirectResults = restored.redirectResults
+  managerState.currentHistoryEntries = restored.currentHistoryEntries
+  managerState.suppressedResults = []
+
+  availabilityState.reviewCount = restored.reviewResults.length
+  availabilityState.failedCount = restored.failedResults.length
+  availabilityState.redirectedCount = restored.redirectResults.length
+  availabilityState.ignoredCount = Math.max(0, Number(snapshot?.summary?.ignoredCount) || 0)
+  availabilityState.availableCount = Math.max(0, Number(snapshot?.summary?.availableCount) || 0)
+  availabilityState.checkedBookmarks = Math.max(
+    restored.matchedCount,
+    Number(snapshot?.summary?.checkedBookmarks) || restored.matchedCount
+  )
+  availabilityState.currentRunProbeEnabled = Boolean(snapshot?.probeEnabled)
+  availabilityState.lastCompletedAt = Number(snapshot?.completedAt || snapshot?.savedAt) || 0
+  availabilityState.lastRunOutcome = String(snapshot?.runOutcome || 'completed')
+
+  sortResultsByPath(availabilityState.reviewResults)
+  sortResultsByPath(availabilityState.failedResults)
+  sortResultsByPath(availabilityState.redirectResults)
+  syncSelectionSet(
+    managerState.selectedAvailabilityIds,
+    new Set(
+      [...availabilityState.reviewResults, ...availabilityState.failedResults].map((result) => String(result.id))
+    )
+  )
+
+  if (restored.droppedCount) {
+    availabilityState.lastError = `已恢复上次待处理结果；${restored.droppedCount} 条结果因书签已变更而跳过。`
+  }
+
+  return true
+}
+
+async function persistPendingAvailabilitySnapshot({
+  savedAt = Date.now()
+}: {
+  savedAt?: number
+} = {}) {
+  const snapshot = buildPendingAvailabilitySnapshot({
+    reviewResults: availabilityState.reviewResults,
+    failedResults: availabilityState.failedResults,
+    redirectResults: availabilityState.redirectResults,
+    scope: getCurrentAvailabilityScopeMeta(),
+    savedAt,
+    completedAt: availabilityState.lastCompletedAt || savedAt,
+    runOutcome: availabilityState.lastRunOutcome || (availabilityState.lastCompletedAt ? 'completed' : ''),
+    probeEnabled: availabilityState.currentRunProbeEnabled || availabilityState.retestSelectionProbeEnabled,
+    summary: {
+      checkedBookmarks: availabilityState.checkedBookmarks,
+      availableCount: availabilityState.availableCount,
+      redirectedCount: availabilityState.redirectedCount,
+      reviewCount: availabilityState.reviewCount,
+      failedCount: availabilityState.failedCount,
+      ignoredCount: availabilityState.ignoredCount
+    }
+  })
+
+  managerState.pendingAvailabilitySnapshot = snapshot
+  await savePendingAvailabilitySnapshot(snapshot)
+}
+
+function persistPendingAvailabilitySnapshotSoon() {
+  void persistPendingAvailabilitySnapshot().catch(() => {})
+}
+
+function hasPendingAvailabilityResults() {
+  return Boolean(
+    availabilityState.reviewResults.length ||
+    availabilityState.failedResults.length ||
+    availabilityState.redirectResults.length
+  )
+}
+
 async function ensureProbePermissionForRun({ interactive = true } = {}) {
   if (!availabilityState.requestOrigins.length) {
     availabilityState.probePermissionGranted = false
@@ -1214,6 +1400,13 @@ async function runAvailabilityDetection({ probeEnabled }) {
         savedAt: availabilityState.lastCompletedAt || Date.now(),
         scope: redirectCacheScope
       })
+    } catch {}
+    try {
+      if (availabilityState.lastCompletedAt || hasPendingAvailabilityResults()) {
+        await persistPendingAvailabilitySnapshot({
+          savedAt: availabilityState.lastCompletedAt || Date.now()
+        })
+      }
     } catch {}
     renderAvailabilitySection()
   }
@@ -1488,6 +1681,7 @@ function renderAvailabilitySection() {
   synchronizeRedirectResults()
   renderAvailabilityScopeControls()
   const scopeMeta = getCurrentAvailabilityScopeMeta()
+  renderAvailabilitySummaryCopyControl()
 
   dom.availabilityPermissionBadge.className = `options-chip ${getModeBadgeTone()}`
   dom.availabilityPermissionBadge.textContent = getModeBadgeText()
@@ -1627,11 +1821,17 @@ function renderActiveOptionsSection() {
 
   if (activeSection === 'general') {
     renderAiNamingSection()
+    renderShortcutSettingsSection()
     return
   }
 
   if (activeSection === 'ai') {
     renderAiNamingSection()
+    return
+  }
+
+  if (activeSection === 'ai-tag-data') {
+    renderBookmarkTagDataCard()
     return
   }
 
@@ -1741,6 +1941,308 @@ function setLoadingLabel(
   }
 
   element.textContent = label
+}
+
+function renderAvailabilitySummaryCopyControl() {
+  if (dom.availabilityCopySummary) {
+    dom.availabilityCopySummary.disabled = availabilityState.catalogLoading || availabilityState.storageLoading
+    dom.availabilityCopySummary.textContent =
+      availabilityState.lastCompletedAt || availabilityState.running || availabilityState.retestingSelection
+        ? '复制摘要'
+        : '复制概览'
+  }
+
+  if (dom.availabilitySummaryCopyStatus) {
+    const tone = String(availabilityState.summaryCopyStatusTone || 'muted')
+    dom.availabilitySummaryCopyStatus.className = `options-inline-status ${tone}`
+    dom.availabilitySummaryCopyStatus.textContent = availabilityState.summaryCopyStatus || ''
+  }
+}
+
+async function handleAvailabilityCopySummary() {
+  if (availabilityState.catalogLoading || availabilityState.storageLoading) {
+    return
+  }
+
+  try {
+    await copyTextToClipboard(buildAvailabilitySummaryText())
+    setAvailabilitySummaryCopyStatus('已复制', 'success')
+  } catch {
+    setAvailabilitySummaryCopyStatus('复制失败', 'warning')
+  }
+}
+
+function buildAvailabilitySummaryText() {
+  const scopeMeta = getCurrentAvailabilityScopeMeta()
+  const progressTotal = availabilityState.retestingSelection
+    ? availabilityState.retestSelectionTotal
+    : availabilityState.eligibleBookmarks
+  const progressCompleted = availabilityState.retestingSelection
+    ? availabilityState.retestSelectionCompleted
+    : availabilityState.checkedBookmarks
+  const lines = [
+    'Curator Bookmark 可用性检测摘要',
+    `范围：${scopeMeta.label}`,
+    `状态：${getAvailabilitySummaryRunStatus()}`,
+    `全部书签：${availabilityState.totalBookmarks}`,
+    `可检测：http/https ${availabilityState.eligibleBookmarks}`,
+    `进度：${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`,
+    `可访问：${availabilityState.availableCount}`,
+    `重定向：${availabilityState.redirectedCount}`,
+    `低置信异常：${availabilityState.reviewCount}`,
+    `高置信异常：${availabilityState.failedCount}`,
+    `已忽略：${availabilityState.ignoredCount}`,
+    `跳过：${availabilityState.skippedCount}`
+  ]
+
+  if (availabilityState.lastError) {
+    lines.push(`提示：${availabilityState.lastError}`)
+  }
+
+  return lines.join('\n')
+}
+
+function getAvailabilitySummaryRunStatus() {
+  if (availabilityState.catalogLoading) {
+    return '正在读取书签'
+  }
+
+  if (availabilityState.storageLoading) {
+    return '正在读取本地状态'
+  }
+
+  if (availabilityState.retestingSelection) {
+    return '正在重新测试所选书签'
+  }
+
+  if (availabilityState.running) {
+    if (availabilityState.stopRequested) {
+      return '正在停止检测'
+    }
+
+    return availabilityState.paused ? '检测已暂停' : '检测中'
+  }
+
+  if (availabilityState.lastCompletedAt) {
+    const timeLabel = formatDateTime(availabilityState.lastCompletedAt)
+    return availabilityState.lastRunOutcome === 'stopped'
+      ? `已停止于 ${timeLabel}`
+      : `已完成于 ${timeLabel}`
+  }
+
+  return '尚未执行检测'
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  textarea.style.top = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('copy command failed')
+    }
+  } finally {
+    textarea.remove()
+  }
+}
+
+async function hydrateShortcutCommands() {
+  managerState.shortcutStatus = 'loading'
+  managerState.shortcutStatusTone = 'muted'
+  renderShortcutSettingsSection()
+
+  try {
+    managerState.shortcutCommands = await getAllExtensionCommands()
+    managerState.shortcutStatus = 'ready'
+    managerState.shortcutStatusTone = 'success'
+  } catch (error) {
+    managerState.shortcutCommands = []
+    managerState.shortcutStatus = error instanceof Error ? error.message : '快捷键读取失败'
+    managerState.shortcutStatusTone = 'warning'
+  } finally {
+    renderShortcutSettingsSection()
+  }
+}
+
+function getAllExtensionCommands(): Promise<chrome.commands.Command[]> {
+  return new Promise((resolve, reject) => {
+    if (!chrome.commands?.getAll) {
+      reject(new Error('快捷键未配置，可在 Chrome 扩展快捷键页设置。'))
+      return
+    }
+
+    chrome.commands.getAll((commands) => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+
+      resolve(commands || [])
+    })
+  })
+}
+
+function renderShortcutSettingsSection() {
+  if (!dom.shortcutList) {
+    return
+  }
+
+  const commands = getOrderedShortcutCommands()
+  if (dom.shortcutStatus) {
+    const statusTone = String(managerState.shortcutStatusTone || 'muted')
+    dom.shortcutStatus.className = `options-chip ${statusTone}`
+    dom.shortcutStatus.textContent = getShortcutStatusLabel()
+  }
+  if (dom.shortcutStatusDetail) {
+    const statusTone = String(managerState.shortcutStatusTone || 'muted')
+    const statusDetail = getShortcutStatusDetail()
+    dom.shortcutStatusDetail.className = `shortcut-status-detail ${statusTone}`
+    dom.shortcutStatusDetail.textContent = statusDetail
+    dom.shortcutStatusDetail.classList.toggle('hidden', !statusDetail)
+  }
+
+  if (!commands.length && managerState.shortcutStatus !== 'loading') {
+    dom.shortcutList.innerHTML = '<div class="detect-empty">暂未读取到扩展快捷键命令。</div>'
+  } else if (managerState.shortcutStatus === 'loading') {
+    dom.shortcutList.innerHTML = '<div class="detect-empty">正在读取当前快捷键绑定…</div>'
+  } else {
+    dom.shortcutList.innerHTML = commands.map(renderShortcutCommandRow).join('')
+  }
+
+  if (dom.refreshShortcuts) {
+    dom.refreshShortcuts.disabled = managerState.shortcutStatus === 'loading'
+  }
+}
+
+function getOrderedShortcutCommands() {
+  const commandMap = new Map(
+    (managerState.shortcutCommands || []).map((command) => [String(command.name || ''), command])
+  )
+
+  return SHORTCUT_COMMAND_ORDER.map((name) => {
+    const fallback = SHORTCUT_COMMAND_LABELS[name]
+    const command = commandMap.get(name)
+    return {
+      name,
+      description: command?.description || fallback?.detail || '',
+      shortcut: command?.shortcut || '',
+      title: fallback?.title || command?.description || name,
+      detail: fallback?.detail || command?.description || name
+    }
+  })
+}
+
+function renderShortcutCommandRow(command) {
+  const shortcut = String(command.shortcut || '').trim()
+  const shortcutLabel = shortcut || '未配置'
+  return `
+    <div class="shortcut-row">
+      <div class="shortcut-copy">
+        <strong>${escapeHtml(command.title)}</strong>
+        <span>${escapeHtml(command.detail)}</span>
+      </div>
+      <span class="shortcut-key ${shortcut ? '' : 'unassigned'}">${escapeHtml(shortcutLabel)}</span>
+    </div>
+  `
+}
+
+function getShortcutStatusLabel() {
+  if (managerState.shortcutStatus === 'loading') {
+    return '读取中'
+  }
+
+  if (managerState.shortcutStatus === 'ready') {
+    const hasAssignedShortcut = (managerState.shortcutCommands || []).some((command) => {
+      return Boolean(String(command.shortcut || '').trim())
+    })
+    if (!hasAssignedShortcut) {
+      return '未配置'
+    }
+    return '已同步'
+  }
+
+  if (managerState.shortcutStatusTone === 'success') {
+    return '已完成'
+  }
+
+  if (managerState.shortcutStatusTone === 'warning' || managerState.shortcutStatusTone === 'danger') {
+    return '未配置'
+  }
+
+  return '需刷新'
+}
+
+function getShortcutStatusDetail() {
+  const status = String(managerState.shortcutStatus || '').trim()
+  if (!status || status === 'loading') {
+    return ''
+  }
+
+  if (status === 'ready') {
+    const hasAssignedShortcut = (managerState.shortcutCommands || []).some((command) => {
+      return Boolean(String(command.shortcut || '').trim())
+    })
+    return hasAssignedShortcut ? '' : '快捷键未配置，可在 Chrome 扩展快捷键页设置。'
+  }
+
+  return status
+}
+
+async function openShortcutsSettingsPage() {
+  try {
+    await chrome.tabs.create({ url: SHORTCUTS_SETTINGS_URL })
+    setShortcutStatus('已打开快捷键设置页。', 'success')
+  } catch {
+    await copyShortcutsUrl()
+  }
+}
+
+async function copyShortcutsUrl() {
+  try {
+    await copyTextToClipboard(SHORTCUTS_SETTINGS_URL)
+    setShortcutStatus('已复制快捷键设置地址。', 'success')
+  } catch {
+    setShortcutStatus(`请在地址栏打开 ${SHORTCUTS_SETTINGS_URL}`, 'warning')
+  }
+}
+
+function setShortcutStatus(message, tone = 'success') {
+  managerState.shortcutStatus = message
+  managerState.shortcutStatusTone = tone
+  renderShortcutSettingsSection()
+}
+
+function setAvailabilitySummaryCopyStatus(message, tone = 'success') {
+  availabilityState.summaryCopyStatus = message
+  availabilityState.summaryCopyStatusTone = tone
+  renderAvailabilitySection()
+
+  if (availabilitySummaryCopyStatusTimer) {
+    window.clearTimeout(availabilitySummaryCopyStatusTimer)
+  }
+
+  if (!message) {
+    return
+  }
+
+  availabilitySummaryCopyStatusTimer = window.setTimeout(() => {
+    availabilityState.summaryCopyStatus = ''
+    availabilityState.summaryCopyStatusTone = 'muted'
+    availabilitySummaryCopyStatusTimer = 0
+    renderAvailabilitySection()
+  }, 1800)
 }
 
 function isAvailabilityPrimaryActionBusy() {
@@ -2168,7 +2670,7 @@ function renderBookmarkTagDataCard() {
   dom.aiTagDataCount.textContent = `${records.length} 条记录`
   dom.aiTagDataUpdated.textContent = latestUpdatedAt
     ? `最近更新于 ${formatDateTime(latestUpdatedAt)}。`
-    : '尚未生成标签数据。'
+    : '尚未保存标签数据。'
   if (dom.aiTagDataStatus) {
     dom.aiTagDataStatus.textContent = aiNamingState.tagDataStatus || ''
   }
@@ -2237,7 +2739,7 @@ async function handleBookmarkTagImport(event) {
 async function handleBookmarkTagClear() {
   const confirmed = await requestConfirmation({
     title: '清空标签数据？',
-    copy: '只会清空本地 AI 标签库，不会删除 Chrome 书签、AI 渠道设置或 API Key。建议先导出备份。',
+    copy: '只会清空本地标签数据，包括 AI 生成内容和手动维护标签；不会删除 Chrome 书签、AI 渠道设置或 API Key。建议先导出备份。',
     confirmLabel: '清空标签数据',
     cancelLabel: '取消',
     tone: 'danger',
@@ -3595,6 +4097,17 @@ async function applySelectedAiNamingResults() {
     return
   }
 
+  const confirmed = await requestConfirmation({
+    title: `应用 ${selectedResults.length} 条 AI 命名建议？`,
+    copy: `会重命名这些书签：${formatAiNamingRenameImpactList(selectedResults)}。只改书签标题，不移动文件夹。`,
+    confirmLabel: `应用 ${selectedResults.length} 条命名`,
+    label: 'Rename',
+    tone: 'warning'
+  })
+  if (!confirmed) {
+    return
+  }
+
   aiNamingState.pendingMoveSelection = false
   aiNamingState.pendingMoveResultIds.clear()
   await applyAiNamingResultsByIds(selectedResults.map((result) => result.id))
@@ -3616,6 +4129,19 @@ async function handleMoveSelectedAiNamingResults() {
   if (!aiNamingState.pendingMoveSelection) {
     aiNamingState.pendingMoveSelection = true
     aiNamingState.pendingMoveResultIds.clear()
+    renderAvailabilitySection()
+    return
+  }
+
+  const confirmed = await requestConfirmation({
+    title: `移动 ${selectedMovableResults.length} 条书签到推荐文件夹？`,
+    copy: `会移动这些书签：${formatAiNamingMoveImpactList(selectedMovableResults)}。书签标题不变，必要时会创建推荐文件夹路径。`,
+    confirmLabel: `移动 ${selectedMovableResults.length} 条书签`,
+    label: 'Move',
+    tone: 'warning'
+  })
+  if (!confirmed) {
+    aiNamingState.pendingMoveSelection = false
     renderAvailabilitySection()
     return
   }
@@ -3682,6 +4208,27 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
 
     renderAvailabilitySection()
   }
+}
+
+function formatAiNamingRenameImpactList(results) {
+  return formatAiNamingImpactList(results, (result) => {
+    const currentTitle = result.currentTitle || result.url || result.id
+    const suggestedTitle = result.suggestedTitle || currentTitle
+    return `${currentTitle} -> ${suggestedTitle}`
+  })
+}
+
+function formatAiNamingMoveImpactList(results) {
+  return formatAiNamingImpactList(results, (result) => {
+    const title = result.currentTitle || result.suggestedTitle || result.url || result.id
+    return `${title} -> ${result.suggestedFolder}`
+  })
+}
+
+function formatAiNamingImpactList(results, formatter) {
+  const names = results.slice(0, 3).map(formatter)
+  const remaining = Math.max(0, results.length - names.length)
+  return remaining ? `${names.join('；')} 等 ${results.length} 条` : names.join('；')
 }
 
 async function applyAiNamingResultsByIds(bookmarkIds) {
@@ -5243,6 +5790,7 @@ function promoteReviewResultToFailed(bookmarkId) {
   syncHistoryEntryStatus(bookmarkId, 'failed')
   sortResultsByPath(availabilityState.reviewResults)
   sortResultsByPath(availabilityState.failedResults)
+  persistPendingAvailabilitySnapshotSoon()
   renderAvailabilitySection()
 }
 
@@ -5284,6 +5832,7 @@ function demoteFailedResultToReview(bookmarkId) {
   syncHistoryEntryStatus(bookmarkId, 'review')
   sortResultsByPath(availabilityState.reviewResults)
   sortResultsByPath(availabilityState.failedResults)
+  persistPendingAvailabilitySnapshotSoon()
   renderAvailabilitySection()
 }
 
@@ -5466,6 +6015,9 @@ async function retestSelectedAvailabilityResults() {
         scope: getCurrentAvailabilityScopeMeta()
       })
     } catch {}
+    try {
+      await persistPendingAvailabilitySnapshot()
+    } catch {}
 
     availabilityState.lastError = `已重新测试 ${processedCount} 条已选书签。`
   } catch (error) {
@@ -5635,6 +6187,7 @@ async function ignoreSelectedAvailabilityResults(kind) {
 
   await saveIgnoreRules()
   repartitionAvailabilityResultsByIgnoreRules()
+  persistPendingAvailabilitySnapshotSoon()
   clearAvailabilitySelection()
   availabilityState.lastError = `已新增 ${addedCount} 条忽略规则。`
   renderAvailabilitySection()
@@ -5804,6 +6357,7 @@ async function moveSelectedAvailabilityToFolder(folderId) {
 
     if (movedIds.length) {
       await hydrateAvailabilityCatalog({ preserveResults: true })
+      persistPendingAvailabilitySnapshotSoon()
     }
 
     clearAvailabilitySelection()
@@ -5896,6 +6450,7 @@ function removeDeletedResultsFromState(bookmarkIds) {
   availabilityState.failedCount = availabilityState.failedResults.length
   availabilityState.redirectedCount = availabilityState.redirectResults.length
   availabilityState.ignoredCount = managerState.suppressedResults.length
+  persistPendingAvailabilitySnapshotSoon()
 }
 
 function getBookmarkRecord(bookmarkId) {

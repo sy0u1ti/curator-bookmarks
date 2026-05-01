@@ -336,7 +336,29 @@ export async function updateSelectedRedirects(callbacks) {
     return
   }
 
-  await updateRedirectEntries([...managerState.selectedRedirectIds], callbacks)
+  const selectedIds = [...managerState.selectedRedirectIds]
+  const redirectSection = getRedirectSectionState(callbacks)
+  const targetResults = redirectSection.results.filter((result) => {
+    return selectedIds.includes(String(result.id))
+  })
+  if (!targetResults.length) {
+    return
+  }
+
+  const confirmed = callbacks.confirm
+    ? await callbacks.confirm({
+        title: `更新 ${targetResults.length} 条重定向书签 URL？`,
+        copy: `会把这些书签的原地址替换为最终地址：${formatRedirectImpactList(targetResults)}。书签标题和所在文件夹不变。`,
+        confirmLabel: `更新 ${targetResults.length} 条 URL`,
+        label: 'Update',
+        tone: 'warning'
+      })
+    : true
+  if (!confirmed) {
+    return
+  }
+
+  await updateRedirectEntries(selectedIds, callbacks)
   clearRedirectSelection(callbacks)
 }
 
@@ -436,4 +458,12 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+function formatRedirectImpactList(results) {
+  const names = results.slice(0, 3).map((result) => {
+    return result.title || displayUrl(result.url) || result.id
+  })
+  const remaining = Math.max(0, results.length - names.length)
+  return remaining ? `${names.join('、')} 等 ${results.length} 条` : names.join('、')
 }

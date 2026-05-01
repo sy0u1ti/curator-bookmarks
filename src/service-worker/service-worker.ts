@@ -7,8 +7,15 @@ import type {
 } from '../shared/messages.js'
 import type { BookmarkRecord, FolderRecord, NavigationNetworkEvidence } from '../shared/types.js'
 import { extractBookmarkData } from '../shared/bookmark-tree.js'
-import { BOOKMARK_ADD_HISTORY_LIMIT, STORAGE_KEYS } from '../shared/constants.js'
-import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
+import {
+  AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS,
+  AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS,
+  BOOKMARK_ADD_HISTORY_LIMIT,
+  COMMAND_FEEDBACK_BADGE_TTL_MS,
+  POPUP_COMMAND_INTENT_TTL_MS,
+  STORAGE_KEYS
+} from '../shared/constants.js'
+import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { extractDomain } from '../shared/text.js'
 import {
   normalizeBookmarkTagConfidence,
@@ -22,7 +29,11 @@ import {
   extractResponsesJsonText,
   getAiEndpoint
 } from '../shared/ai-response.js'
-import { normalizeAiNamingSettings, type AiNamingSettings } from '../options/sections/ai-settings.js'
+import {
+  normalizeAiNamingSettings,
+  serializeAiNamingSettings,
+  type AiNamingSettings
+} from '../options/sections/ai-settings.js'
 import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
   AI_NAMING_JINA_READER_ORIGIN
@@ -113,6 +124,39 @@ interface AutoAnalyzeQueueEntry {
   lastError: string
 }
 
+type AutoAnalyzeStatusKind = 'queued' | 'processing' | 'completed' | 'failed'
+
+interface AutoAnalyzeStatusSnapshot {
+  version: 1
+  status: AutoAnalyzeStatusKind
+  bookmarkId: string
+  title: string
+  url: string
+  folderPath: string
+  confidence: number
+  error: string
+  detail: string
+  attempts: number
+  maxAttempts: number
+  badgeVisible: boolean
+  createdAt: number
+  updatedAt: number
+  expiresAt: number
+}
+
+type PopupCommandIntentAction = 'search' | 'smart-classifier' | 'feedback'
+type PopupCommandIntentTone = 'success' | 'warning' | 'danger' | 'info'
+
+interface PopupCommandIntent {
+  version: 1
+  action: PopupCommandIntentAction
+  sourceCommand: string
+  message: string
+  tone: PopupCommandIntentTone
+  createdAt: number
+  expiresAt: number
+}
+
 const pendingChecks = new Map<number, PendingCheckState>()
 const pendingCheckIds = new Map<string, number>()
 const autoClassifyInFlight = new Set<string>()
@@ -126,10 +170,15 @@ const AUTO_CLASSIFY_SUPPRESS_MS = 10000
 const AUTO_CLASSIFY_DELAY_MS = 900
 const AUTO_CLASSIFY_FOLDER_LIMIT = 260
 const AUTO_ANALYZE_QUEUE_ALARM = 'curator-auto-analyze-queue'
+const AUTO_ANALYZE_STATUS_CLEAR_ALARM = 'curator-auto-analyze-status-clear'
+const COMMAND_FEEDBACK_BADGE_CLEAR_ALARM = 'curator-command-feedback-badge-clear'
 const AUTO_ANALYZE_QUEUE_LIMIT = 50
 const AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS = 3
 const AUTO_ANALYZE_QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const AUTO_ANALYZE_QUEUE_RETRY_MS = 45000
+const COMMAND_OPEN_SEARCH = 'curator-open-search'
+const COMMAND_OPEN_SMART_CLASSIFIER = 'curator-open-smart-classifier'
+const COMMAND_TOGGLE_AUTO_ANALYZE = 'curator-toggle-auto-analyze'
 
 const AUTO_CLASSIFY_SCHEMA = {
   type: 'object',
@@ -187,9 +236,32 @@ type RuntimeMessage = BookmarkSaveMessage | NavigationCheckMessage | NavigationC
 chrome.alarms?.onAlarm.addListener((alarm) => {
   if (alarm.name === AUTO_ANALYZE_QUEUE_ALARM) {
     scheduleAutoAnalyzeQueueProcessing(0)
+    return
+  }
+
+  if (alarm.name === AUTO_ANALYZE_STATUS_CLEAR_ALARM) {
+    clearExpiredAutoAnalyzeStatus().catch((error) => {
+      console.warn('[Curator] 自动分析状态清理失败', error)
+    })
+    return
+  }
+
+  if (alarm.name === COMMAND_FEEDBACK_BADGE_CLEAR_ALARM) {
+    restoreAutoAnalyzeStatusBadge().catch((error) => {
+      console.warn('[Curator] 快捷键反馈徽标恢复失败', error)
+    })
   }
 })
 
+chrome.commands?.onCommand.addListener((command) => {
+  handleCommand(command).catch((error) => {
+    console.warn('[Curator] 快捷键命令处理失败', command, error)
+  })
+})
+
+restoreAutoAnalyzeStatusBadge().catch((error) => {
+  console.warn('[Curator] 自动分析状态徽标恢复失败', error)
+})
 scheduleAutoAnalyzeQueueProcessing(0)
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
@@ -235,6 +307,171 @@ chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResp
 
   return true
 })
+
+async function handleCommand(command: string): Promise<void> {
+  if (command === COMMAND_OPEN_SEARCH) {
+    await persistPopupCommandIntent({
+      action: 'search',
+      sourceCommand: command,
+      message: '已聚焦搜索框。',
+      tone: 'info'
+    })
+    await tryOpenActionPopup()
+    return
+  }
+
+  if (command === COMMAND_OPEN_SMART_CLASSIFIER) {
+    await persistPopupCommandIntent({
+      action: 'smart-classifier',
+      sourceCommand: command,
+      message: '正在智能分类当前页面。',
+      tone: 'info'
+    })
+    await tryOpenActionPopup()
+    return
+  }
+
+  if (command === COMMAND_TOGGLE_AUTO_ANALYZE) {
+    await toggleAutoAnalyzeFromCommand(command)
+  }
+}
+
+async function persistPopupCommandIntent(
+  payload: Pick<PopupCommandIntent, 'action' | 'sourceCommand' | 'message' | 'tone'>
+): Promise<void> {
+  const now = Date.now()
+  const intent: PopupCommandIntent = {
+    version: 1,
+    action: payload.action,
+    sourceCommand: payload.sourceCommand,
+    message: truncateText(payload.message, 120),
+    tone: payload.tone,
+    createdAt: now,
+    expiresAt: now + POPUP_COMMAND_INTENT_TTL_MS
+  }
+
+  await setLocalStorage({
+    [STORAGE_KEYS.popupCommandIntent]: intent
+  })
+}
+
+async function tryOpenActionPopup(): Promise<boolean> {
+  const actionApi = chrome.action as typeof chrome.action & {
+    openPopup?: () => Promise<void> | void
+  }
+  if (!actionApi?.openPopup) {
+    return false
+  }
+
+  try {
+    await actionApi.openPopup()
+    return true
+  } catch (error) {
+    console.info('[Curator] 当前 Chrome 环境未能直接打开 popup，已保留快捷键意图。', error)
+    return false
+  }
+}
+
+async function toggleAutoAnalyzeFromCommand(sourceCommand: string): Promise<void> {
+  const settings = await loadAutoAnalyzeSettings()
+
+  if (settings.autoAnalyzeBookmarks) {
+    await saveAutoAnalyzeSettings({
+      ...settings,
+      autoAnalyzeBookmarks: false
+    })
+    await persistPopupCommandIntent({
+      action: 'feedback',
+      sourceCommand,
+      message: '自动分析已关闭。',
+      tone: 'success'
+    })
+    await showTransientCommandBadge('OFF', '#5f3432')
+    return
+  }
+
+  const readiness = await getAutoAnalyzeCommandReadiness(settings)
+  if (!readiness.ok) {
+    await persistPopupCommandIntent({
+      action: 'feedback',
+      sourceCommand,
+      message: readiness.message,
+      tone: 'warning'
+    })
+    await showTransientCommandBadge('!', '#5f3432')
+    return
+  }
+
+  await saveAutoAnalyzeSettings({
+    ...settings,
+    autoAnalyzeBookmarks: true
+  })
+  await persistPopupCommandIntent({
+    action: 'feedback',
+    sourceCommand,
+    message: '自动分析已开启。',
+    tone: 'success'
+  })
+  await showTransientCommandBadge('ON', '#365f45')
+}
+
+async function getAutoAnalyzeCommandReadiness(
+  settings: AiNamingSettings
+): Promise<{ ok: true; message: string } | { ok: false; message: string }> {
+  if (!hasUsableAiSettings(settings)) {
+    return {
+      ok: false,
+      message: '自动分析未开启：请先在通用设置中配置并保存 AI 渠道。'
+    }
+  }
+
+  const providerOrigin = getOriginPermissionPattern(settings.baseUrl)
+  if (!providerOrigin) {
+    return {
+      ok: false,
+      message: '自动分析未开启：AI Base URL 无效，请在通用设置中检查。'
+    }
+  }
+
+  if (!(await containsHostPermission(providerOrigin))) {
+    return {
+      ok: false,
+      message: '自动分析未开启：请先在设置页测试连接或保存 AI 渠道，以授予服务地址访问权限。'
+    }
+  }
+
+  return {
+    ok: true,
+    message: '自动分析可以开启。'
+  }
+}
+
+async function saveAutoAnalyzeSettings(settings: AiNamingSettings): Promise<void> {
+  const normalized = normalizeAiNamingSettings(settings)
+  await setLocalStorage({
+    [STORAGE_KEYS.aiProviderSettings]: serializeAiNamingSettings(normalized)
+  })
+}
+
+async function showTransientCommandBadge(text: string, color: string): Promise<void> {
+  if (!chrome.action?.setBadgeText) {
+    return
+  }
+
+  await setActionBadgeText(text)
+  await setActionBadgeBackgroundColor(color)
+  scheduleCommandFeedbackBadgeClear()
+}
+
+function scheduleCommandFeedbackBadgeClear(): void {
+  if (!chrome.alarms?.create) {
+    return
+  }
+
+  chrome.alarms.create(COMMAND_FEEDBACK_BADGE_CLEAR_ALARM, {
+    delayInMinutes: Math.max(0.1, COMMAND_FEEDBACK_BADGE_TTL_MS / 60000)
+  })
+}
 
 chrome.bookmarks.onCreated.addListener((bookmarkId, node) => {
   if (!node.url || !/^https?:\/\//i.test(node.url)) {
@@ -327,10 +564,25 @@ async function handleBookmarkCreatedForAutoAnalysis(
     return
   }
 
+  const settings = await loadAutoAnalyzeSettings()
+  if (!settings.autoAnalyzeBookmarks || !hasUsableAiSettings(settings)) {
+    return
+  }
+
   await enqueueAutoAnalyzeBookmark({
     bookmarkId,
     url: initialUrl,
     title: String(node.title || '').trim()
+  })
+  await persistAutoAnalyzeStatus({
+    status: 'queued',
+    bookmarkId,
+    url: initialUrl,
+    title: String(node.title || '').trim() || '新增书签',
+    createdAt: Date.now(),
+    detail: '已加入自动分析，正在整理标签和命名。'
+  }).catch((error) => {
+    console.warn('[Curator] 自动分析排队状态写入失败', error)
   })
   scheduleAutoAnalyzeQueueProcessing(AUTO_CLASSIFY_DELAY_MS)
   scheduleAutoAnalyzeQueueAlarm(AUTO_CLASSIFY_DELAY_MS)
@@ -360,7 +612,17 @@ async function processAutoAnalyzeQueue(): Promise<void> {
       autoClassifyInFlight.add(entry.bookmarkId)
 
       try {
-        await runAutoAnalysisForBookmark(entry.bookmarkId)
+        await persistAutoAnalyzeStatus({
+          status: 'processing',
+          bookmarkId: entry.bookmarkId,
+          url: entry.url,
+          title: entry.title || '新增书签',
+          createdAt: entry.createdAt,
+          detail: '正在读取网页内容，整理标签和命名。'
+        }).catch((error) => {
+          console.warn('[Curator] 自动分析处理中状态写入失败', error)
+        })
+        await runAutoAnalysisForBookmark(entry)
         await removeAutoAnalyzeQueueEntry(entry.bookmarkId)
       } catch (error) {
         const message = getErrorMessage(error)
@@ -370,6 +632,21 @@ async function processAutoAnalyzeQueue(): Promise<void> {
           error: message
         })
         await markAutoAnalyzeQueueEntryFailed(entry.bookmarkId, message)
+        await persistAutoAnalyzeStatus({
+          status: 'failed',
+          bookmarkId: entry.bookmarkId,
+          url: entry.url,
+          title: entry.title || '新增书签',
+          error: message,
+          attempts: Number(entry.attempts || 0) + 1,
+          maxAttempts: AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS,
+          createdAt: entry.createdAt,
+          detail: Number(entry.attempts || 0) + 1 < AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS
+            ? '自动分析失败，已安排稍后重试。'
+            : '自动分析失败，请检查 AI 设置或稍后再试。'
+        }).catch((statusError) => {
+          console.warn('[Curator] 自动分析失败状态写入失败', statusError)
+        })
       } finally {
         autoClassifyInFlight.delete(entry.bookmarkId)
       }
@@ -379,9 +656,11 @@ async function processAutoAnalyzeQueue(): Promise<void> {
   }
 }
 
-async function runAutoAnalysisForBookmark(bookmarkId: string): Promise<void> {
+async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise<void> {
+  const bookmarkId = entry.bookmarkId
   const settings = await loadAutoAnalyzeSettings()
   if (!settings.autoAnalyzeBookmarks || !hasUsableAiSettings(settings)) {
+    await clearAutoAnalyzeStatusForBookmark(bookmarkId)
     return
   }
 
@@ -392,6 +671,15 @@ async function runAutoAnalysisForBookmark(bookmarkId: string): Promise<void> {
 
   const bookmark = await getBookmarkById(bookmarkId)
   if (!bookmark?.url || !/^https?:\/\//i.test(bookmark.url)) {
+    await persistAutoAnalyzeStatus({
+      status: 'failed',
+      bookmarkId,
+      url: entry.url,
+      title: entry.title || '新增书签',
+      error: '书签已不存在或不是可分析的网页链接。',
+      createdAt: entry.createdAt,
+      detail: '自动分析失败，可重试；若持续失败，请检查 AI 设置。'
+    })
     return
   }
 
@@ -408,6 +696,16 @@ async function runAutoAnalysisForBookmark(bookmarkId: string): Promise<void> {
   })
   const recommendation = chooseAutoFolderRecommendation(aiResult, extracted.folders, bookmarkRecord)
   if (!recommendation) {
+    await persistAutoAnalyzeStatus({
+      status: 'completed',
+      bookmarkId,
+      url: bookmark.url,
+      title: bookmarkRecord.title || entry.title || '新增书签',
+      folderPath: bookmarkRecord.path || extracted.folderMap.get(String(bookmark.parentId || ''))?.path || '',
+      confidence: aiResult.confidence,
+      createdAt: entry.createdAt,
+      detail: '自动分析结果已保存，未找到更合适的目标文件夹。'
+    })
     return
   }
 
@@ -420,6 +718,14 @@ async function runAutoAnalysisForBookmark(bookmarkId: string): Promise<void> {
 
   const latestBookmark = await getBookmarkById(bookmarkId)
   if (!latestBookmark?.url || normalizeAutoUrl(latestBookmark.url) !== normalizeAutoUrl(bookmark.url)) {
+    await persistAutoAnalyzeStatus({
+      status: 'completed',
+      bookmarkId,
+      url: bookmark.url,
+      title: bookmarkRecord.title || entry.title || '新增书签',
+      createdAt: entry.createdAt,
+      detail: '自动分析结果已保存，书签内容已被更新。'
+    })
     return
   }
 
@@ -491,12 +797,19 @@ async function runAutoAnalysisForBookmark(bookmarkId: string): Promise<void> {
     console.warn('[Curator] 自动分析待提示写入失败', error)
   })
 
-  await notifyAutoAnalysisSuccess({
-    bookmarkTitle: finalBookmarkTitle,
+  await persistAutoAnalyzeStatus({
+    status: 'completed',
+    bookmarkId,
+    url: bookmark.url,
+    title: finalBookmarkTitle,
     folderPath: recommendation.path || recommendation.title,
-    confidence: recommendation.confidence
+    confidence: recommendation.confidence,
+    createdAt: entry.createdAt,
+    detail: moved
+      ? '自动分析结果已保存，书签已移动到推荐文件夹。'
+      : '自动分析结果已保存，书签已保留在合适位置。'
   }).catch((error) => {
-    console.warn('[Curator] 自动分析通知发送失败', error)
+    console.warn('[Curator] 自动分析状态写入失败', error)
   })
 }
 
@@ -1285,73 +1598,206 @@ async function persistPendingAutoAnalyzeNotice({
       confidence: normalizeAutoConfidence(confidence)
     }
   })
-
-  if (chrome.action?.setBadgeText) {
-    await setActionBadgeText('AI')
-    await setActionBadgeBackgroundColor('#365f45')
-  }
 }
 
-async function notifyAutoAnalysisSuccess({
-  bookmarkTitle,
-  folderPath,
-  confidence
-}: {
-  bookmarkTitle: string
-  folderPath: string
-  confidence: number
-}): Promise<void> {
-  const permissionLevel = await getNotificationPermissionLevel()
-  if (permissionLevel !== 'granted') {
-    throw new Error(`Chrome 通知权限不可用：${permissionLevel}`)
+async function persistAutoAnalyzeStatus(
+  payload: Partial<AutoAnalyzeStatusSnapshot> & {
+    status: AutoAnalyzeStatusKind
+    bookmarkId: string
+    url?: string
+    title?: string
   }
-
-  await createNotification({
-    type: 'basic',
-    iconUrl: chrome.runtime.getURL('src/assets/icon128.png'),
-    title: `已添加到 ${truncateText(folderPath, 48)}`,
-    message: truncateText(bookmarkTitle, 72),
-    contextMessage: `AI 自动分析 · ${Math.round(Math.max(0, Math.min(confidence, 1)) * 100)}%`,
-    priority: 2,
-    requireInteraction: true,
-    silent: false
+): Promise<void> {
+  const now = Date.now()
+  const status = normalizeAutoAnalyzeStatus({
+    version: 1,
+    status: payload.status,
+    bookmarkId: payload.bookmarkId,
+    title: payload.title || '新增书签',
+    url: payload.url || '',
+    folderPath: payload.folderPath || '',
+    confidence: payload.confidence,
+    error: payload.error || '',
+    detail: payload.detail || '',
+    attempts: payload.attempts,
+    maxAttempts: payload.maxAttempts,
+    badgeVisible: payload.badgeVisible !== false,
+    createdAt: payload.createdAt || now,
+    updatedAt: now,
+    expiresAt: now + getAutoAnalyzeStatusTtl(payload.status)
   })
+
+  if (!status) {
+    return
+  }
+
+  await setLocalStorage({
+    [STORAGE_KEYS.autoAnalyzeStatus]: status
+  })
+  await applyAutoAnalyzeStatusBadge(status).catch((error) => {
+    console.warn('[Curator] 自动分析徽标更新失败', error)
+  })
+  scheduleAutoAnalyzeStatusClear(status.expiresAt)
 }
 
-function createNotification(options: chrome.notifications.NotificationOptions<true>): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (!chrome.notifications?.create) {
-      reject(new Error('当前环境不可用 Chrome notifications API。'))
-      return
-    }
+async function clearAutoAnalyzeStatusForBookmark(bookmarkId: string): Promise<void> {
+  const currentStatus = await loadAutoAnalyzeStatus()
+  if (!currentStatus || currentStatus.bookmarkId !== bookmarkId) {
+    return
+  }
 
-    chrome.notifications.create(`auto-classify-${Date.now()}-${Math.random().toString(16).slice(2)}`, options, () => {
-      const error = chrome.runtime.lastError
-      if (error) {
-        reject(new Error(error.message))
-        return
-      }
+  await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
+  await clearActionBadge().catch(() => {})
+  clearAutoAnalyzeStatusAlarm()
+}
 
-      resolve()
+async function loadAutoAnalyzeStatus(): Promise<AutoAnalyzeStatusSnapshot | null> {
+  const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+  return normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+}
+
+function normalizeAutoAnalyzeStatus(rawStatus: unknown): AutoAnalyzeStatusSnapshot | null {
+  if (!rawStatus || typeof rawStatus !== 'object') {
+    return null
+  }
+
+  const source = rawStatus as Record<string, unknown>
+  const status = String(source.status || '').trim() as AutoAnalyzeStatusKind
+  if (!['queued', 'processing', 'completed', 'failed'].includes(status)) {
+    return null
+  }
+
+  const bookmarkId = String(source.bookmarkId || '').trim()
+  if (!bookmarkId) {
+    return null
+  }
+
+  const now = Date.now()
+  const updatedAt = Number(source.updatedAt) || now
+  const createdAt = Number(source.createdAt) || updatedAt
+  return {
+    version: 1,
+    status,
+    bookmarkId,
+    title: truncateText(source.title || '新增书签', 80) || '新增书签',
+    url: String(source.url || '').trim(),
+    folderPath: truncateText(source.folderPath || '', 120),
+    confidence: normalizeAutoConfidence(source.confidence),
+    error: truncateText(source.error || '', 160),
+    detail: truncateText(source.detail || '', 160),
+    attempts: Math.max(0, Math.round(Number(source.attempts) || 0)),
+    maxAttempts: Math.max(0, Math.round(Number(source.maxAttempts) || 0)),
+    badgeVisible: source.badgeVisible !== false,
+    createdAt,
+    updatedAt,
+    expiresAt: Number(source.expiresAt) || updatedAt + getAutoAnalyzeStatusTtl(status)
+  }
+}
+
+function getAutoAnalyzeStatusTtl(status: AutoAnalyzeStatusKind): number {
+  return status === 'queued' || status === 'processing'
+    ? AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS
+    : AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS
+}
+
+async function restoreAutoAnalyzeStatusBadge(): Promise<void> {
+  const status = await loadAutoAnalyzeStatus()
+  if (!status) {
+    await clearActionBadge().catch(() => {})
+    clearAutoAnalyzeStatusAlarm()
+    return
+  }
+
+  if (status.expiresAt <= Date.now()) {
+    await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice])
+    await clearActionBadge().catch(() => {})
+    clearAutoAnalyzeStatusAlarm()
+    return
+  }
+
+  if (status.badgeVisible) {
+    await applyAutoAnalyzeStatusBadge(status).catch((error) => {
+      console.warn('[Curator] 自动分析徽标恢复失败', error)
     })
+  } else {
+    await clearActionBadge().catch(() => {})
+  }
+  scheduleAutoAnalyzeStatusClear(status.expiresAt)
+}
+
+async function clearExpiredAutoAnalyzeStatus(): Promise<void> {
+  const status = await loadAutoAnalyzeStatus()
+  if (!status || status.expiresAt <= Date.now()) {
+    await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice])
+    await clearActionBadge().catch(() => {})
+    clearAutoAnalyzeStatusAlarm()
+    return
+  }
+
+  if (status.badgeVisible) {
+    await applyAutoAnalyzeStatusBadge(status).catch(() => {})
+  } else {
+    await clearActionBadge().catch(() => {})
+  }
+  scheduleAutoAnalyzeStatusClear(status.expiresAt)
+}
+
+async function applyAutoAnalyzeStatusBadge(status: AutoAnalyzeStatusSnapshot): Promise<void> {
+  if (!status.badgeVisible || !chrome.action?.setBadgeText) {
+    await clearActionBadge()
+    return
+  }
+
+  const badge = getAutoAnalyzeStatusBadge(status.status)
+  await setActionBadgeText(badge.text)
+  await setActionBadgeBackgroundColor(badge.color)
+}
+
+function getAutoAnalyzeStatusBadge(status: AutoAnalyzeStatusKind): { text: string; color: string } {
+  if (status === 'completed') {
+    return { text: 'OK', color: '#365f45' }
+  }
+
+  if (status === 'failed') {
+    return { text: '!', color: '#5f3432' }
+  }
+
+  if (status === 'processing') {
+    return { text: 'AI', color: '#2f5f80' }
+  }
+
+  return { text: 'AI', color: '#6b5b2f' }
+}
+
+function scheduleAutoAnalyzeStatusClear(expiresAt: number): void {
+  if (!chrome.alarms?.create) {
+    return
+  }
+
+  chrome.alarms.create(AUTO_ANALYZE_STATUS_CLEAR_ALARM, {
+    delayInMinutes: Math.max(0.1, (expiresAt - Date.now()) / 60000)
   })
 }
 
-function getNotificationPermissionLevel(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    if (!chrome.notifications?.getPermissionLevel) {
-      reject(new Error('当前环境不可用 Chrome notifications API。'))
+function clearAutoAnalyzeStatusAlarm(): void {
+  if (!chrome.alarms?.clear) {
+    return
+  }
+
+  chrome.alarms.clear(AUTO_ANALYZE_STATUS_CLEAR_ALARM, () => {
+    void chrome.runtime.lastError
+  })
+}
+
+function clearActionBadge(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!chrome.action?.setBadgeText) {
+      resolve()
       return
     }
 
-    chrome.notifications.getPermissionLevel((level) => {
-      const error = chrome.runtime.lastError
-      if (error) {
-        reject(new Error(error.message))
-        return
-      }
-
-      resolve(String(level || 'denied'))
+    chrome.action.setBadgeText({ text: '' }, () => {
+      resolve()
     })
   })
 }
@@ -1880,8 +2326,10 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
         ...(Number.isFinite(elapsedMs) ? { elapsedMs } : {})
       })
       evidence.statusCode = Number(details.statusCode) || evidence.statusCode
+      evidence.statusUrl = details.url || evidence.statusUrl
       evidence.statusLine = details.statusLine || evidence.statusLine
       evidence.finalUrl = details.redirectUrl || evidence.finalUrl
+      evidence.finalResponseObserved = false
       evidence.fromCache = Boolean(details.fromCache)
     },
     headersReceived(details) {
@@ -1890,9 +2338,14 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       }
 
       const evidence = getOrCreateNetworkEvidence(state, details)
-      evidence.statusCode = Number(details.statusCode) || evidence.statusCode
+      const statusCode = Number(details.statusCode) || 0
+      evidence.statusCode = statusCode || evidence.statusCode
+      evidence.statusUrl = details.url || evidence.statusUrl
       evidence.statusLine = details.statusLine || evidence.statusLine
       evidence.finalUrl = details.url || evidence.finalUrl
+      if (statusCode && !isRedirectStatusCode(statusCode)) {
+        evidence.finalResponseObserved = true
+      }
       if (!Number.isFinite(evidence.timing.responseStartMs)) {
         evidence.timing.responseStartMs = details.timeStamp
       }
@@ -1905,7 +2358,9 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
 
       const evidence = getOrCreateNetworkEvidence(state, details)
       evidence.statusCode = Number(details.statusCode) || evidence.statusCode
+      evidence.statusUrl = details.url || evidence.statusUrl
       evidence.finalUrl = details.url || evidence.finalUrl
+      evidence.finalResponseObserved = true
       evidence.fromCache = Boolean(details.fromCache)
       evidence.timing.completedMs = details.timeStamp
       evidence.timing.totalMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.completedMs)
@@ -1917,6 +2372,7 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
 
       const evidence = getOrCreateNetworkEvidence(state, details)
       evidence.errorCode = details.error || evidence.errorCode
+      evidence.statusUrl = details.url || evidence.statusUrl
       evidence.finalUrl = details.url || evidence.finalUrl
       evidence.timing.failedMs = details.timeStamp
       evidence.timing.totalMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.failedMs)
@@ -2065,11 +2521,43 @@ function attachNetworkEvidence(
   }
 
   evidence.finalUrl = evidence.finalUrl || result.finalUrl || state.lastUrl || state.requestedUrl
+  const normalizedResult = normalizeNavigationResultWithNetworkEvidence(result, evidence)
   return {
-    ...result,
-    finalUrl: result.finalUrl || evidence.finalUrl || state.lastUrl || state.requestedUrl,
+    ...normalizedResult,
+    finalUrl: normalizedResult.finalUrl || evidence.finalUrl || state.lastUrl || state.requestedUrl,
     networkEvidence: evidence
   }
+}
+
+function normalizeNavigationResultWithNetworkEvidence(
+  result: NavigationCheckResult,
+  evidence: NavigationNetworkEvidence
+): NavigationCheckResult {
+  const statusCode = Number(evidence.statusCode) || 0
+
+  if (statusCode >= 400) {
+    return {
+      ...result,
+      status: 'failed',
+      detail: `后台标签页主请求返回 HTTP ${statusCode}，未按可访问处理。`,
+      errorCode: `http-${statusCode}`
+    }
+  }
+
+  if (isRedirectStatusCode(statusCode) && evidence.finalResponseObserved === false) {
+    return {
+      ...result,
+      status: 'failed',
+      detail: `后台标签页只观察到 HTTP ${statusCode} 跳转，未确认最终页面响应。`,
+      errorCode: `redirect-unverified-${statusCode}`
+    }
+  }
+
+  return result
+}
+
+function isRedirectStatusCode(statusCode: number): boolean {
+  return statusCode >= 300 && statusCode < 400
 }
 
 function cloneNetworkEvidence(

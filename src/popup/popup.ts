@@ -1,5 +1,8 @@
 import {
+  AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS,
+  AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS,
   BOOKMARKS_BAR_ID,
+  POPUP_COMMAND_INTENT_TTL_MS,
   ROOT_ID,
   RECYCLE_BIN_LIMIT,
   STORAGE_KEYS,
@@ -77,6 +80,8 @@ import { state } from './state.js'
 
 const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
+const VIEW_NOTICE_MS = 1800
+const MAX_VISIBLE_TOASTS = 2
 const SEARCH_CACHE_LIMIT = 40
 const SMART_RECOMMENDATION_LIMIT = 3
 const SMART_LOADING_STEP_COUNT = 3
@@ -175,9 +180,11 @@ document.addEventListener('DOMContentLoaded', () => {
     render()
     void showPendingAutoAnalyzeNotice()
     refreshData({ initial: true, preserveSearch: false }).finally(() => {
-      if (!document.body.classList.contains('smart-active')) {
-        dom.searchInput.focus()
-      }
+      void consumePopupCommandIntent().then((handled) => {
+        if (!handled && !document.body.classList.contains('smart-active')) {
+          dom.searchInput.focus()
+        }
+      })
     })
   })
 })
@@ -197,6 +204,7 @@ function bindEvents() {
 
   dom.clearSearch.addEventListener('click', () => {
     setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
     dom.searchInput.focus()
   })
   dom.folderFilterTrigger.addEventListener('click', openFilterDialog)
@@ -225,6 +233,8 @@ function bindEvents() {
   dom.closeEditModal.addEventListener('click', closeDialogs)
   dom.cancelEdit.addEventListener('click', closeDialogs)
   dom.saveEdit.addEventListener('click', saveEditedBookmark)
+  dom.editTitleInput.addEventListener('input', handleEditDraftInput)
+  dom.editUrlInput.addEventListener('input', handleEditDraftInput)
   dom.editTitleInput.addEventListener('keydown', handleEditInputKeydown)
   dom.editUrlInput.addEventListener('keydown', handleEditInputKeydown)
   dom.cancelDelete.addEventListener('click', closeDialogs)
@@ -235,7 +245,9 @@ function bindEvents() {
     }
   })
 
+  dom.autoAnalyzeStatus.addEventListener('click', handleAutoAnalyzeStatusClick)
   dom.toastRoot.addEventListener('click', handleToastClick)
+  chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
 
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleDocumentKeydown)
@@ -299,14 +311,30 @@ async function openBookmarkHistoryPage() {
 
 async function showPendingAutoAnalyzeNotice() {
   try {
-    const stored = await getLocalStorage([STORAGE_KEYS.pendingAutoAnalyzeNotice])
+    const stored = await getLocalStorage([
+      STORAGE_KEYS.autoAnalyzeStatus,
+      STORAGE_KEYS.pendingAutoAnalyzeNotice
+    ])
+    const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+    state.autoAnalyzeStatus = currentStatus
+    renderAutoAnalyzeStatus()
+    if (stored[STORAGE_KEYS.autoAnalyzeStatus] && !currentStatus) {
+      await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
+    }
+    await acknowledgeAutoAnalyzeBadge(currentStatus)
+
     const notice = stored[STORAGE_KEYS.pendingAutoAnalyzeNotice]
     if (!notice || typeof notice !== 'object') {
-      await clearActionBadge()
       return
     }
 
     const noticePayload = notice as Record<string, unknown>
+    const noticeCreatedAt = Number(noticePayload.createdAt) || 0
+    if (noticeCreatedAt && noticeCreatedAt + AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS <= Date.now()) {
+      await clearPendingAutoAnalyzeNotice()
+      return
+    }
+
     const folderPath = cleanSmartText(noticePayload.folderPath || '', 48)
     const bookmarkTitle = cleanSmartText(noticePayload.bookmarkTitle || '新增书签', 52)
     if (!folderPath) {
@@ -327,7 +355,39 @@ async function showPendingAutoAnalyzeNotice() {
 
 async function clearPendingAutoAnalyzeNotice() {
   await removeLocalStorage(STORAGE_KEYS.pendingAutoAnalyzeNotice)
+}
+
+async function dismissAutoAnalyzeStatus() {
+  state.autoAnalyzeStatus = null
+  renderAutoAnalyzeStatus()
+  await removeLocalStorage([
+    STORAGE_KEYS.autoAnalyzeStatus,
+    STORAGE_KEYS.pendingAutoAnalyzeNotice
+  ])
   await clearActionBadge()
+}
+
+async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
+  await clearActionBadge()
+  if (!status) {
+    return
+  }
+
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+    const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+    if (!currentStatus || currentStatus.bookmarkId !== status.bookmarkId) {
+      return
+    }
+
+    await setLocalStorage({
+      [STORAGE_KEYS.autoAnalyzeStatus]: {
+        ...currentStatus,
+        badgeVisible: false
+      }
+    })
+  } catch {
+  }
 }
 
 function clearActionBadge(): Promise<void> {
@@ -341,6 +401,281 @@ function clearActionBadge(): Promise<void> {
       resolve()
     })
   })
+}
+
+function handleAutoAnalyzeStorageChanged(
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: string
+) {
+  if (areaName !== 'local') {
+    return
+  }
+
+  const statusChange = changes[STORAGE_KEYS.autoAnalyzeStatus]
+  if (statusChange) {
+    const nextStatus = normalizeAutoAnalyzeStatus(statusChange.newValue)
+    state.autoAnalyzeStatus = nextStatus
+    renderAutoAnalyzeStatus()
+    if (nextStatus?.badgeVisible) {
+      void acknowledgeAutoAnalyzeBadge(nextStatus)
+    }
+    if (statusChange.newValue && !nextStatus) {
+      void removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus).finally(() => {
+        void clearActionBadge()
+      })
+    }
+  }
+
+  const pendingNoticeChange = changes[STORAGE_KEYS.pendingAutoAnalyzeNotice]
+  if (pendingNoticeChange?.newValue) {
+    void showPendingAutoAnalyzeNotice()
+  }
+
+  const popupIntentChange = changes[STORAGE_KEYS.popupCommandIntent]
+  if (popupIntentChange?.newValue) {
+    void consumePopupCommandIntent(popupIntentChange.newValue)
+  }
+}
+
+function handleAutoAnalyzeStatusClick(event) {
+  const actionButton = event.target.closest('[data-auto-analyze-action]')
+  if (!actionButton) {
+    return
+  }
+
+  const action = actionButton.getAttribute('data-auto-analyze-action')
+  if (action === 'dismiss') {
+    void dismissAutoAnalyzeStatus()
+    return
+  }
+
+  if (action === 'history') {
+    void openBookmarkHistoryPage()
+  }
+}
+
+function renderAutoAnalyzeStatus() {
+  const status = state.autoAnalyzeStatus
+  if (!status) {
+    dom.autoAnalyzeStatus.innerHTML = ''
+    dom.autoAnalyzeStatus.className = 'auto-analyze-status hidden'
+    return
+  }
+
+  const view = getAutoAnalyzeStatusView(status)
+  const actions = status.status === 'completed'
+    ? `
+        <button class="auto-analyze-action" type="button" data-auto-analyze-action="history">查看</button>
+        <button class="auto-analyze-action ghost" type="button" data-auto-analyze-action="dismiss" aria-label="关闭自动分析状态">关闭</button>
+      `
+    : `<button class="auto-analyze-action ghost" type="button" data-auto-analyze-action="dismiss" aria-label="关闭自动分析状态">关闭</button>`
+
+  dom.autoAnalyzeStatus.className = `auto-analyze-status ${escapeAttr(status.status)}`
+  dom.autoAnalyzeStatus.innerHTML = `
+    <div class="auto-analyze-indicator" aria-hidden="true"></div>
+    <div class="auto-analyze-copy" role="status">
+      <p class="auto-analyze-title">${escapeHtml(view.title)}</p>
+      <p class="auto-analyze-detail">${escapeHtml(view.detail)}</p>
+    </div>
+    <div class="auto-analyze-actions">${actions}</div>
+  `
+}
+
+function getAutoAnalyzeStatusView(status) {
+  const title = cleanSmartText(status.title || '新增书签', 44) || '新增书签'
+  const folderPath = cleanSmartText(status.folderPath || '', 48)
+  const error = cleanSmartText(status.error || '', 80)
+  const detail = cleanSmartText(status.detail || '', 80)
+
+  if (status.status === 'queued') {
+    return {
+      title: '已加入自动分析',
+      detail: detail || `正在整理标签和命名：${title}`
+    }
+  }
+
+  if (status.status === 'processing') {
+    return {
+      title: '自动分析进行中',
+      detail: detail || `正在整理标签和命名：${title}`
+    }
+  }
+
+  if (status.status === 'failed') {
+    const retryHint = status.maxAttempts && status.attempts < status.maxAttempts
+      ? `，稍后重试 ${status.attempts}/${status.maxAttempts}`
+      : ''
+    const failureMessage = detail || error || '可重试；若持续失败，请检查 AI 设置'
+    return {
+      title: '自动分析失败',
+      detail: `${failureMessage}${retryHint}`.includes('AI 设置')
+        ? `${failureMessage}${retryHint}`
+        : `${failureMessage}${retryHint}；可重试或检查 AI 设置`
+    }
+  }
+
+  return {
+    title: '自动分析结果已保存',
+    detail: detail || (folderPath ? `结果已保存到 ${folderPath}：${title}` : `结果已保存：${title}`)
+  }
+}
+
+function normalizeAutoAnalyzeStatus(rawStatus) {
+  if (!rawStatus || typeof rawStatus !== 'object') {
+    return null
+  }
+
+  const status = String(rawStatus.status || '').trim()
+  if (!['queued', 'processing', 'completed', 'failed'].includes(status)) {
+    return null
+  }
+
+  const bookmarkId = String(rawStatus.bookmarkId || '').trim()
+  if (!bookmarkId) {
+    return null
+  }
+
+  const updatedAt = Number(rawStatus.updatedAt) || Date.now()
+  const createdAt = Number(rawStatus.createdAt) || updatedAt
+  const expiresAt = Number(rawStatus.expiresAt) || updatedAt + getAutoAnalyzeStatusTtl(status)
+  if (expiresAt <= Date.now()) {
+    return null
+  }
+
+  return {
+    status,
+    bookmarkId,
+    title: cleanSmartText(rawStatus.title || '新增书签', 80) || '新增书签',
+    url: String(rawStatus.url || '').trim(),
+    folderPath: cleanSmartText(rawStatus.folderPath || '', 120),
+    confidence: normalizeSmartConfidence(rawStatus.confidence),
+    error: cleanSmartText(rawStatus.error || '', 160),
+    detail: cleanSmartText(rawStatus.detail || '', 160),
+    attempts: Math.max(0, Math.round(Number(rawStatus.attempts) || 0)),
+    maxAttempts: Math.max(0, Math.round(Number(rawStatus.maxAttempts) || 0)),
+    badgeVisible: rawStatus.badgeVisible !== false,
+    createdAt,
+    updatedAt,
+    expiresAt
+  }
+}
+
+function getAutoAnalyzeStatusTtl(status) {
+  return status === 'queued' || status === 'processing'
+    ? AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS
+    : AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS
+}
+
+async function consumePopupCommandIntent(rawIntent = undefined): Promise<boolean> {
+  let intentSource = rawIntent
+
+  if (typeof rawIntent === 'undefined') {
+    const stored = await getLocalStorage([STORAGE_KEYS.popupCommandIntent])
+    intentSource = stored[STORAGE_KEYS.popupCommandIntent]
+  }
+
+  const intent = normalizePopupCommandIntent(intentSource)
+  if (!intent) {
+    if (intentSource) {
+      await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
+    }
+    return false
+  }
+
+  await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
+
+  if (intent.action === 'feedback') {
+    showCommandFeedbackIntent(intent)
+    return false
+  }
+
+  if (intent.action === 'smart-classifier') {
+    await runSmartClassifierFromCommand(intent)
+    return true
+  }
+
+  focusSearchFromCommand(intent)
+  return true
+}
+
+function normalizePopupCommandIntent(rawIntent) {
+  if (!rawIntent || typeof rawIntent !== 'object') {
+    return null
+  }
+
+  const action = String(rawIntent.action || '').trim()
+  if (!['search', 'smart-classifier', 'feedback'].includes(action)) {
+    return null
+  }
+
+  const tone = String(rawIntent.tone || '').trim()
+  const createdAt = Number(rawIntent.createdAt) || Date.now()
+  const expiresAt = Number(rawIntent.expiresAt) || createdAt + POPUP_COMMAND_INTENT_TTL_MS
+  if (expiresAt <= Date.now()) {
+    return null
+  }
+
+  return {
+    action,
+    sourceCommand: String(rawIntent.sourceCommand || '').trim(),
+    message: cleanSmartText(rawIntent.message || '', 120),
+    tone: ['success', 'warning', 'danger', 'info'].includes(tone) ? tone : 'info',
+    createdAt,
+    expiresAt
+  }
+}
+
+function showCommandFeedbackIntent(intent) {
+  const message = intent.message || '快捷键操作已完成。'
+  showViewNotice(message)
+  showToast({
+    type: intent.tone === 'success' ? 'success' : 'error',
+    message
+  })
+}
+
+function focusSearchFromCommand(intent) {
+  if (hasOpenModal()) {
+    closeDialogs()
+  }
+
+  if (['loading', 'results', 'error', 'permission'].includes(state.smartStatus)) {
+    resetSmartClassification()
+  }
+
+  state.activeMenuBookmarkId = null
+  render()
+
+  window.requestAnimationFrame(() => {
+    dom.searchInput.focus()
+    dom.searchInput.select()
+    showViewNotice(intent.message || (state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入'))
+  })
+}
+
+async function runSmartClassifierFromCommand(intent) {
+  if (hasOpenModal()) {
+    closeDialogs()
+  }
+
+  const currentUrl = String(state.currentTab?.url || '').trim()
+  if (!isSmartClassifiableUrl(currentUrl)) {
+    showToast({
+      type: 'error',
+      message: '当前页面无法进行智能分类。'
+    })
+    dom.searchInput.focus()
+    return
+  }
+
+  state.activeMenuBookmarkId = null
+  if (state.smartStatus === 'unavailable') {
+    state.smartStatus = 'idle'
+  }
+  render()
+  showViewNotice(intent.message || '正在智能分类当前页面。')
+
+  await classifyCurrentPage()
 }
 
 async function refreshData({ initial = false, preserveSearch = true } = {}) {
@@ -466,6 +801,7 @@ function getActiveTab(): Promise<chrome.tabs.Tab | null> {
 function setSearchQuery(value, { immediate = false } = {}) {
   state.searchQuery = value
   state.activeMenuBookmarkId = null
+  clearViewNotice()
 
   if (dom.searchInput.value !== value) {
     dom.searchInput.value = value
@@ -746,6 +1082,7 @@ async function searchNaturalQuery(query, bookmarks, runId): Promise<PopupSearchR
 
 function render() {
   renderBanner()
+  renderAutoAnalyzeStatus()
   renderToolbar()
   renderFilterBar()
   renderSmartClassifier()
@@ -769,9 +1106,11 @@ function renderBanner() {
   dom.errorBanner.textContent = state.loadError
   dom.errorBanner.classList.toggle('hidden', !state.loadError)
   dom.clearSearch.classList.toggle('hidden', !state.searchQuery)
-  dom.searchInput.placeholder = state.naturalSearchEnabled
-    ? '自然语言搜索书签'
-    : '搜索书签或网址'
+  const searchModeView = getSearchModeView(naturalSearchFallback, naturalSearchPending)
+  dom.searchModeChip.textContent = searchModeView.chip
+  dom.searchModeChip.className = `search-mode-chip ${searchModeView.className}`.trim()
+  dom.searchInput.placeholder = searchModeView.placeholder
+  dom.searchInput.setAttribute('aria-label', searchModeView.ariaLabel)
   dom.naturalSearchToggle.classList.toggle('active', state.naturalSearchEnabled)
   dom.naturalSearchToggle.classList.toggle('pending', naturalSearchPending)
   dom.naturalSearchToggle.classList.toggle('fallback', naturalSearchFallback)
@@ -782,6 +1121,42 @@ function renderBanner() {
     getNaturalSearchToggleAriaLabel(naturalSearchFallback, naturalSearchPending)
   )
   dom.naturalSearchToggle.title = getNaturalSearchToggleTitle(naturalSearchFallback, naturalSearchPending)
+}
+
+function getSearchModeView(isFallback: boolean, isPending: boolean) {
+  if (!state.naturalSearchEnabled) {
+    return {
+      chip: '本地',
+      className: '',
+      placeholder: '本地搜索标题、网址或标签',
+      ariaLabel: '本地搜索书签标题、网址或标签'
+    }
+  }
+
+  if (isPending) {
+    return {
+      chip: '理解中',
+      className: 'ai',
+      placeholder: 'AI 正在改写查询',
+      ariaLabel: '自然语言搜索正在使用 AI 改写查询'
+    }
+  }
+
+  if (isFallback) {
+    return {
+      chip: '本地NL',
+      className: 'local-natural',
+      placeholder: '本地自然语言筛选书签',
+      ariaLabel: '本地自然语言筛选书签'
+    }
+  }
+
+  return {
+    chip: 'AI改写',
+    className: 'ai',
+    placeholder: '用自然语言描述要找的书签',
+    ariaLabel: '使用 AI 改写的自然语言搜索'
+  }
 }
 
 function isNaturalSearchLocalFallback() {
@@ -839,26 +1214,105 @@ function getNaturalSearchToggleTitle(isFallback: boolean, isPending: boolean) {
 }
 
 function renderToolbar() {
+  if (state.viewNoticeMessage && !state.isLoading && !state.searchPending && !state.naturalSearchPending) {
+    dom.viewCaption.textContent = state.viewNoticeMessage
+    return
+  }
+
   if (state.debouncedQuery) {
     if (state.naturalSearchEnabled) {
-      const statusLabel = state.naturalSearchPending
-        ? '自然语言解析中…'
-        : getNaturalSearchStatusLabel(state.naturalSearchPlan)
-      const errorHint = state.naturalSearchError ? ' · 本地回退' : ''
       dom.viewCaption.textContent = state.searchPending
-        ? statusLabel
-        : `${statusLabel}${errorHint} · ${state.searchResults.length} 条`
+        ? getNaturalSearchPendingCaption()
+        : `${getNaturalSearchResultCaption()} · ${state.searchResults.length} 条`
       return
     }
 
     dom.viewCaption.textContent = state.searchPending
-      ? '搜索中…'
-      : `搜索结果 · ${state.searchResults.length} 条`
+      ? '本地搜索中…'
+      : `本地匹配 · ${state.searchResults.length} 条`
     return
   }
 
   const currentRoot = getCurrentTreeRoot()
   dom.viewCaption.textContent = currentRoot?.title || '书签栏'
+}
+
+function getNaturalSearchPendingCaption() {
+  return state.naturalSearchError ? 'AI 不可用，本地解析中…' : 'AI 正在改写查询…'
+}
+
+function getNaturalSearchResultCaption() {
+  const plan = state.naturalSearchPlan
+  const modeLabel = plan?.source === 'ai' && !state.naturalSearchError
+    ? 'AI 改写后匹配'
+    : '本地自然语言筛选'
+  const statusLabel = getNaturalSearchStatusLabel(plan)
+  const detail = statusLabel.replace(/^(AI 解析|本地解析)( · )?/, '').trim()
+  return detail ? `${modeLabel} · ${detail}` : modeLabel
+}
+
+function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
+  const normalizedMessage = cleanViewNotice(message)
+  if (!normalizedMessage) {
+    return
+  }
+
+  clearViewNotice()
+  state.viewNoticeMessage = normalizedMessage
+  renderToolbar()
+
+  state.viewNoticeTimer = window.setTimeout(() => {
+    if (state.viewNoticeMessage === normalizedMessage) {
+      state.viewNoticeMessage = ''
+      renderToolbar()
+    }
+    state.viewNoticeTimer = null
+  }, durationMs)
+}
+
+function clearViewNotice() {
+  if (state.viewNoticeTimer) {
+    window.clearTimeout(state.viewNoticeTimer)
+    state.viewNoticeTimer = null
+  }
+  state.viewNoticeMessage = ''
+}
+
+function cleanViewNotice(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (text.length <= 72) {
+    return text
+  }
+  return `${text.slice(0, 71).trim()}…`
+}
+
+function getPopupActionKey(action, targetId = '') {
+  return `${String(action || 'action')}:${String(targetId || 'global')}`
+}
+
+function isPopupActionPending(action, targetId = '') {
+  return state.pendingActionIds.has(getPopupActionKey(action, targetId))
+}
+
+function setPopupActionPending(action, targetId, pending) {
+  const key = getPopupActionKey(action, targetId)
+  if (pending) {
+    state.pendingActionIds.add(key)
+  } else {
+    state.pendingActionIds.delete(key)
+  }
+}
+
+function hasBlockingPopupActionPending() {
+  return [...state.pendingActionIds].some((key) => {
+    return (
+      key.startsWith('move:') ||
+      key.startsWith('edit:') ||
+      key.startsWith('delete:') ||
+      key.startsWith('undo-delete:') ||
+      key.startsWith('save-current-page:')
+    )
+  })
 }
 
 function renderFilterBar() {
@@ -1359,13 +1813,20 @@ function renderActionMenu(bookmarkId) {
     return ''
   }
 
+  const menuBusy = hasBlockingPopupActionPending()
+  const copyBusy = isPopupActionPending('copy-url', bookmarkId)
+  const openBusy = isPopupActionPending('open-current-tab', bookmarkId)
+  const moveBusy = isPopupActionPending('move', bookmarkId)
+  const editBusy = isPopupActionPending('edit', bookmarkId)
+  const deleteBusy = isPopupActionPending('delete', bookmarkId)
+
   return `
     <div class="action-menu" role="menu" aria-label="书签操作">
-      <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}">编辑</button>
-      <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}">复制链接</button>
-      <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}">当前页打开</button>
-      <button role="menuitem" type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}">移动至</button>
-      <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}">删除</button>
+      <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || editBusy ? 'disabled' : ''}>编辑</button>
+      <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}" ${copyBusy ? 'disabled' : ''}>复制链接</button>
+      <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || openBusy ? 'disabled' : ''}>当前页打开</button>
+      <button role="menuitem" type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || moveBusy ? 'disabled' : ''}>移动至</button>
+      <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || deleteBusy ? 'disabled' : ''}>删除</button>
     </div>
   `
 }
@@ -1451,9 +1912,18 @@ function renderEditModal() {
     return
   }
 
+  if (state.editDraftBookmarkId !== bookmark.id) {
+    resetEditDraft(bookmark)
+  }
+
   dom.editBookmarkPath.textContent = bookmark.path || '未归档路径'
-  dom.editTitleInput.value = bookmark.title
-  dom.editUrlInput.value = bookmark.url
+  if (dom.editTitleInput.value !== state.editDraftTitle) {
+    dom.editTitleInput.value = state.editDraftTitle
+  }
+  if (dom.editUrlInput.value !== state.editDraftUrl) {
+    dom.editUrlInput.value = state.editDraftUrl
+  }
+  renderEditDraftControls()
   syncBackdropVisibility()
 }
 
@@ -1472,7 +1942,103 @@ function renderDeleteModal() {
 
   dom.deleteBookmarkTitle.textContent = bookmark.title
   dom.deleteBookmarkPath.textContent = bookmark.path || '未归档路径'
+  dom.cancelDelete.disabled = isPopupActionPending('delete', bookmark.id)
+  dom.confirmDelete.disabled = isPopupActionPending('delete', bookmark.id)
+  dom.confirmDelete.textContent = isPopupActionPending('delete', bookmark.id) ? '删除中…' : '删除'
   syncBackdropVisibility()
+}
+
+function resetEditDraft(bookmark) {
+  clearEditDiscardGuard()
+  state.editDraftBookmarkId = String(bookmark?.id || '')
+  state.editDraftTitle = String(bookmark?.title || '')
+  state.editDraftUrl = String(bookmark?.url || '')
+  state.editDraftDirty = false
+  state.editSaving = false
+}
+
+function clearEditDraft() {
+  clearEditDiscardGuard()
+  state.editDraftBookmarkId = ''
+  state.editDraftTitle = ''
+  state.editDraftUrl = ''
+  state.editDraftDirty = false
+  state.editSaving = false
+}
+
+function handleEditDraftInput() {
+  if (!state.editTargetBookmarkId || state.editSaving) {
+    return
+  }
+
+  state.editDraftBookmarkId = String(state.editTargetBookmarkId)
+  state.editDraftTitle = dom.editTitleInput.value
+  state.editDraftUrl = dom.editUrlInput.value
+  state.editDraftDirty = isCurrentEditDraftDirty()
+  clearEditDiscardGuard()
+  renderEditDraftControls()
+}
+
+function clearEditDiscardGuard() {
+  if (state.editDiscardTimer) {
+    window.clearTimeout(state.editDiscardTimer)
+    state.editDiscardTimer = null
+  }
+  state.editDiscardArmed = false
+}
+
+function shouldBlockDirtyEditClose() {
+  if (!state.editTargetBookmarkId || !state.editDraftDirty) {
+    return false
+  }
+
+  if (state.editDiscardArmed) {
+    clearEditDiscardGuard()
+    return false
+  }
+
+  state.editDiscardArmed = true
+  showToast({
+    type: 'info',
+    message: '编辑尚未保存，再次取消将放弃修改。'
+  })
+  state.editDiscardTimer = window.setTimeout(() => {
+    state.editDiscardArmed = false
+    state.editDiscardTimer = null
+  }, 1800)
+  return true
+}
+
+function isCurrentEditDraftDirty() {
+  const bookmark = state.editTargetBookmarkId
+    ? state.bookmarkMap.get(state.editTargetBookmarkId)
+    : null
+
+  if (!bookmark) {
+    return false
+  }
+
+  return (
+    String(state.editDraftTitle || '') !== String(bookmark.title || '') ||
+    String(state.editDraftUrl || '') !== String(bookmark.url || '')
+  )
+}
+
+function renderEditDraftControls() {
+  if (!dom.saveEdit) {
+    return
+  }
+
+  const bookmarkId = state.editTargetBookmarkId || state.editDraftBookmarkId
+  const saving = state.editSaving || isPopupActionPending('edit', bookmarkId || '')
+  const dirty = Boolean(state.editDraftDirty)
+
+  dom.saveEdit.disabled = saving || !dirty
+  dom.saveEdit.textContent = saving ? '保存中…' : dirty ? '保存' : '未修改'
+  dom.cancelEdit.disabled = saving
+  dom.closeEditModal.disabled = saving
+  dom.editTitleInput.disabled = saving
+  dom.editUrlInput.disabled = saving
 }
 
 function syncBackdropVisibility() {
@@ -1578,6 +2144,7 @@ function renderSmartFolderNode(node, depth, query) {
   }
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
+  const saving = state.smartSaving || isPopupActionPending('save-current-page', node.id)
 
   return `
     <div class="picker-row" style="--depth:${depth}">
@@ -1592,6 +2159,7 @@ function renderSmartFolderNode(node, depth, query) {
         class="picker-folder-card"
         type="button"
         data-smart-select-folder="${escapeAttr(node.id)}"
+        ${saving ? 'disabled' : ''}
       >
         <span class="folder-kind" aria-hidden="true"></span>
         <span class="picker-folder-main">
@@ -1631,6 +2199,7 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
   const isCurrentFolder = bookmark.parentId === node.id
+  const moving = isPopupActionPending('move', bookmark.id)
 
   return `
     <div class="picker-row ${isCurrentFolder ? 'current' : ''}" style="--depth:${depth}">
@@ -1645,6 +2214,7 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
         class="picker-folder-card"
         type="button"
         data-select-folder="${escapeAttr(node.id)}"
+        ${moving ? 'disabled' : ''}
       >
         <span class="folder-kind" aria-hidden="true"></span>
         <span class="picker-folder-main">
@@ -1793,7 +2363,7 @@ function handleContentClick(event) {
   const bookmarkButton = event.target.closest('[data-open-bookmark]')
   if (bookmarkButton) {
     const bookmarkId = bookmarkButton.getAttribute('data-open-bookmark')
-    openBookmark(bookmarkId)
+    void openBookmark(bookmarkId)
   }
 }
 
@@ -1832,7 +2402,7 @@ function handleMoveListClick(event) {
   const folderButton = event.target.closest('[data-select-folder]')
   if (folderButton) {
     const folderId = folderButton.getAttribute('data-select-folder')
-    moveBookmarkToFolder(folderId)
+    void moveBookmarkToFolder(folderId)
   }
 }
 
@@ -1850,7 +2420,7 @@ function handleSmartFolderListClick(event) {
   const folderButton = event.target.closest('[data-smart-select-folder]')
   if (folderButton) {
     const folderId = folderButton.getAttribute('data-smart-select-folder')
-    saveCurrentPageToFolder(folderId)
+    void saveCurrentPageToFolder(folderId)
   }
 }
 
@@ -1894,6 +2464,10 @@ function handleDocumentKeydown(event) {
   }
 
   if (hasOpenModal()) {
+    return
+  }
+
+  if (handleSearchFocusShortcut(event)) {
     return
   }
 
@@ -1944,10 +2518,41 @@ function handleEscapeAction() {
 
   if (state.searchQuery) {
     setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
     return true
   }
 
   return false
+}
+
+function handleSearchFocusShortcut(event) {
+  const key = String(event.key || '')
+  const isCommandSearch = (event.ctrlKey || event.metaKey) && key.toLowerCase() === 'k'
+  const isSlashSearch = key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey
+
+  if ((!isCommandSearch && !isSlashSearch) || isEditableTarget(event.target)) {
+    return false
+  }
+
+  if (document.body.classList.contains('smart-active')) {
+    return false
+  }
+
+  event.preventDefault()
+  state.activeMenuBookmarkId = null
+  renderMainContent()
+  dom.searchInput.focus()
+  dom.searchInput.select()
+  showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
+  return true
+}
+
+function isEditableTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
 }
 
 function handleActionMenuKeydown(event) {
@@ -2005,7 +2610,7 @@ function getActionMenuItems() {
 function handleEditInputKeydown(event) {
   if (event.key === 'Enter') {
     event.preventDefault()
-    saveEditedBookmark()
+    void saveEditedBookmark()
   }
 }
 
@@ -2041,13 +2646,20 @@ function toggleFolder(folderId) {
     return
   }
 
-  if (state.expandedFolders.has(folderId)) {
+  const wasExpanded = state.expandedFolders.has(folderId)
+  if (wasExpanded) {
     state.expandedFolders.delete(folderId)
   } else {
     state.expandedFolders.add(folderId)
   }
 
   renderMainContent()
+  showViewNotice(`${wasExpanded ? '已折叠' : '已展开'}：${getFolderNoticeLabel(folderId)}`)
+}
+
+function getFolderNoticeLabel(folderId) {
+  const folder = state.folderMap.get(folderId)
+  return folder?.path || folder?.title || '文件夹'
 }
 
 function toggleMoveFolder(folderId) {
@@ -2065,6 +2677,13 @@ function toggleMoveFolder(folderId) {
 }
 
 function openFilterDialog() {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+
   state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
@@ -2079,6 +2698,13 @@ function openFilterDialog() {
 }
 
 function openMoveDialog(bookmarkId) {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
   state.confirmDeleteBookmarkId = null
@@ -2093,11 +2719,24 @@ function openMoveDialog(bookmarkId) {
 }
 
 function openEditDialog(bookmarkId) {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+
+  const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
+  if (!bookmark) {
+    return
+  }
+
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = bookmarkId
+  resetEditDraft(bookmark)
   render()
 
   window.requestAnimationFrame(() => {
@@ -2107,6 +2746,13 @@ function openEditDialog(bookmarkId) {
 }
 
 function openDeleteDialog(bookmarkId) {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
@@ -2119,7 +2765,16 @@ function openDeleteDialog(bookmarkId) {
   })
 }
 
-function closeDialogs() {
+function closeDialogs(options: { force?: boolean } | Event = {}) {
+  const force = (options as { force?: boolean })?.force === true
+  if (!force && (state.editSaving || hasBlockingPopupActionPending())) {
+    return
+  }
+
+  if (!force && shouldBlockDirtyEditClose()) {
+    return
+  }
+
   state.isFilterPickerOpen = false
   state.filterSearchQuery = ''
   state.moveTargetBookmarkId = null
@@ -2128,6 +2783,7 @@ function closeDialogs() {
   state.smartFolderSearchQuery = ''
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
+  clearEditDraft()
   render()
   if (document.body.classList.contains('smart-active')) {
     return
@@ -2136,12 +2792,14 @@ function closeDialogs() {
 }
 
 function applyFolderFilter(folderId) {
+  const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
   state.isFilterPickerOpen = false
   state.filterSearchQuery = ''
   state.activeMenuBookmarkId = null
   runSearch()
   render()
+  showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
   dom.searchInput.focus()
 }
 
@@ -2154,6 +2812,13 @@ function clearFolderFilter() {
 }
 
 function openSmartFolderDialog() {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+
   if (!isSmartClassifiableUrl(state.currentTab?.url)) {
     showToast({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
     return
@@ -2321,20 +2986,7 @@ async function saveSmartRecommendation() {
     return
   }
 
-  state.smartSaving = true
-  state.smartSaved = false
-  renderSmartClassifier()
-
-  try {
-    await saveCurrentPageToSmartRecommendation(recommendation)
-  } catch (error) {
-    state.smartSaving = false
-    renderSmartClassifier()
-    showToast({
-      type: 'error',
-      message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
-    })
-  }
+  await saveCurrentPageToSmartRecommendation(recommendation)
 }
 
 async function saveCurrentPageToSmartRecommendation(recommendation) {
@@ -2353,7 +3005,18 @@ async function saveCurrentPageToFolder(folderId, { closeModal = true } = {}) {
 }
 
 async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {}, { closeModal = true } = {}) {
+  const actionTargetId = parentId || folderPath || 'current-page'
+  if (state.smartSaving || isPopupActionPending('save-current-page', actionTargetId)) {
+    return
+  }
+
+  let savedWithoutRefresh = false
   try {
+    setPopupActionPending('save-current-page', actionTargetId, true)
+    state.smartSaving = true
+    state.smartSaved = false
+    renderSmartSaveSurfaces()
+
     const currentUrl = String(state.currentTab?.url || '').trim()
     if (!isSmartClassifiableUrl(currentUrl)) {
       throw new Error('当前页面不是可保存的普通网页。')
@@ -2386,15 +3049,12 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
       }
     })
 
-    state.smartSaving = false
-    state.smartSaved = true
-    state.smartStatus = 'results'
     state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
-    if (closeModal) {
-      closeDialogs()
-    }
-    showToast({ type: 'success', message: '已保存到推荐文件夹' })
-    renderSmartClassifier()
+    finishSmartSaveWithoutRefresh({
+      message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
+      closeModal
+    })
+    savedWithoutRefresh = true
   } catch (error) {
     state.smartSaving = false
     state.smartSaved = false
@@ -2402,8 +3062,66 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
       type: 'error',
       message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
     })
-    render()
+  } finally {
+    setPopupActionPending('save-current-page', actionTargetId, false)
+    state.smartSaving = false
+    if (!savedWithoutRefresh) {
+      renderSmartSaveSurfaces()
+    }
   }
+}
+
+function renderSmartSaveSurfaces() {
+  renderSmartClassifier()
+  renderSmartFolderModal()
+}
+
+function finishSmartSaveWithoutRefresh({ message, closeModal = true }) {
+  state.smartRunId += 1
+  state.smartSaving = false
+  state.smartSaved = true
+  state.smartStatus = 'idle'
+  state.smartError = ''
+  state.smartStep = 0
+  state.smartProgressPercent = 0
+  state.smartSuggestedTitle = ''
+  state.smartSummary = ''
+  state.smartContentType = ''
+  state.smartTopics = []
+  state.smartTags = []
+  state.smartAliases = []
+  state.smartConfidence = 0
+  state.smartModel = ''
+  state.smartExtraction = { status: '', source: '', warnings: [] }
+  state.smartRecommendations = []
+  state.smartSelectedRecommendationId = ''
+  state.smartPermissionRequest = null
+  state.activeMenuBookmarkId = null
+
+  if (closeModal || state.smartFolderPickerOpen) {
+    state.smartFolderPickerOpen = false
+    state.smartFolderSearchQuery = ''
+  }
+
+  renderSmartSaveSurfaces()
+  showToast({ type: 'success', message })
+  showViewNotice('已保存，已返回书签列表')
+  window.requestAnimationFrame(() => {
+    if (!hasOpenModal()) {
+      dom.searchInput.focus()
+    }
+  })
+}
+
+function getSmartSaveSuccessMessage(savedBookmark, { parentId = '', folderPath = '' } = {}) {
+  const folderLabel = cleanSmartText(
+    folderPath ||
+      state.folderMap.get(savedBookmark?.parentId || parentId)?.path ||
+      state.folderMap.get(parentId)?.path ||
+      '',
+    48
+  )
+  return folderLabel ? `已保存到 ${folderLabel}` : '保存成功'
 }
 
 async function moveBookmarkToFolder(folderId) {
@@ -2411,7 +3129,7 @@ async function moveBookmarkToFolder(folderId) {
     ? state.bookmarkMap.get(state.moveTargetBookmarkId)
     : null
 
-  if (!bookmark || !folderId) {
+  if (!bookmark || !folderId || isPopupActionPending('move', bookmark?.id || '')) {
     return
   }
 
@@ -2420,22 +3138,30 @@ async function moveBookmarkToFolder(folderId) {
       type: 'success',
       message: '书签已在当前文件夹中'
     })
+    showViewNotice('书签已在当前文件夹中')
     return
   }
 
+  const movedTitle = bookmark.title
+  setPopupActionPending('move', bookmark.id, true)
+  renderMoveModal()
   try {
     await moveBookmark(bookmark.id, folderId)
     showToast({
       type: 'success',
       message: '移动成功'
     })
-    closeDialogs()
+    closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
+    showViewNotice(`已移动：${movedTitle}`)
   } catch (error) {
     showToast({
       type: 'error',
       message: error instanceof Error ? `移动失败：${error.message}` : '移动失败，请稍后重试。'
     })
+  } finally {
+    setPopupActionPending('move', bookmark.id, false)
+    renderMoveModal()
   }
 }
 
@@ -2444,12 +3170,18 @@ async function saveEditedBookmark() {
     ? state.bookmarkMap.get(state.editTargetBookmarkId)
     : null
 
-  if (!bookmark) {
+  if (!bookmark || state.editSaving || isPopupActionPending('edit', bookmark?.id || '')) {
     return
   }
 
-  const nextTitle = dom.editTitleInput.value.trim() || '未命名书签'
-  const nextUrl = dom.editUrlInput.value.trim()
+  const nextTitle = String(state.editDraftTitle || dom.editTitleInput.value).trim() || '未命名书签'
+  const nextUrl = String(state.editDraftUrl || dom.editUrlInput.value).trim()
+
+  state.editDraftDirty = isCurrentEditDraftDirty()
+  if (!state.editDraftDirty) {
+    renderEditDraftControls()
+    return
+  }
 
   if (!nextUrl) {
     showToast({
@@ -2471,6 +3203,10 @@ async function saveEditedBookmark() {
     return
   }
 
+  state.editSaving = true
+  setPopupActionPending('edit', bookmark.id, true)
+  renderEditDraftControls()
+
   try {
     await updateBookmark(bookmark.id, {
       title: nextTitle,
@@ -2480,13 +3216,20 @@ async function saveEditedBookmark() {
       type: 'success',
       message: '保存成功'
     })
-    closeDialogs()
+    state.editSaving = false
+    setPopupActionPending('edit', bookmark.id, false)
+    closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
+    showViewNotice(`已更新：${nextTitle}`)
   } catch (error) {
     showToast({
       type: 'error',
       message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
     })
+  } finally {
+    state.editSaving = false
+    setPopupActionPending('edit', bookmark.id, false)
+    renderEditDraftControls()
   }
 }
 
@@ -2495,9 +3238,12 @@ async function confirmDeleteBookmark() {
     ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
     : null
 
-  if (!bookmark) {
+  if (!bookmark || isPopupActionPending('delete', bookmark?.id || '')) {
     return
   }
+
+  setPopupActionPending('delete', bookmark.id, true)
+  renderDeleteModal()
 
   try {
     state.lastDeletedBookmark = {
@@ -2528,13 +3274,17 @@ async function confirmDeleteBookmark() {
       actionLabel: '撤销'
     })
 
-    closeDialogs()
+    closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
+    showViewNotice(`已删除：${bookmark.title}`)
   } catch (error) {
     showToast({
       type: 'error',
       message: error instanceof Error ? `删除失败：${error.message}` : '删除失败，请稍后重试。'
     })
+  } finally {
+    setPopupActionPending('delete', bookmark.id, false)
+    renderDeleteModal()
   }
 }
 
@@ -2544,6 +3294,12 @@ async function undoDelete() {
   }
 
   const payload = state.lastDeletedBookmark
+  const actionTargetId = payload.recycleId || payload.url || payload.title
+  if (isPopupActionPending('undo-delete', actionTargetId)) {
+    return
+  }
+
+  setPopupActionPending('undo-delete', actionTargetId, true)
   state.lastDeletedBookmark = null
 
   try {
@@ -2556,18 +3312,22 @@ async function undoDelete() {
       message: '已撤销删除'
     })
     await refreshData({ preserveSearch: true })
+    showViewNotice(`已恢复：${payload.title}`)
   } catch (error) {
+    state.lastDeletedBookmark = payload
     showToast({
       type: 'error',
       message: error instanceof Error ? `撤销失败：${error.message}` : '撤销失败，请稍后重试。'
     })
+  } finally {
+    setPopupActionPending('undo-delete', actionTargetId, false)
   }
 }
 
 async function openBookmark(bookmarkId) {
   const bookmark = state.bookmarkMap.get(bookmarkId)
 
-  if (!bookmark?.url) {
+  if (!bookmark?.url || hasBlockingPopupActionPending()) {
     return
   }
 
@@ -2584,10 +3344,11 @@ async function openBookmark(bookmarkId) {
 
 async function openBookmarkInCurrentTab(bookmarkId) {
   const bookmark = state.bookmarkMap.get(bookmarkId)
-  if (!bookmark?.url) {
+  if (!bookmark?.url || hasBlockingPopupActionPending() || isPopupActionPending('open-current-tab', bookmarkId)) {
     return
   }
 
+  setPopupActionPending('open-current-tab', bookmarkId, true)
   try {
     await updateCurrentTabUrl(bookmark.url)
     window.close()
@@ -2596,6 +3357,8 @@ async function openBookmarkInCurrentTab(bookmarkId) {
       type: 'error',
       message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
     })
+  } finally {
+    setPopupActionPending('open-current-tab', bookmarkId, false)
   }
 }
 
@@ -2624,6 +3387,10 @@ function updateCurrentTabUrl(url) {
 
 async function copyBookmarkUrl(bookmarkId) {
   const bookmark = state.bookmarkMap.get(bookmarkId)
+  if (isPopupActionPending('copy-url', bookmarkId)) {
+    return
+  }
+
   if (!bookmark?.url) {
     showToast({
       type: 'error',
@@ -2632,6 +3399,7 @@ async function copyBookmarkUrl(bookmarkId) {
     return
   }
 
+  setPopupActionPending('copy-url', bookmarkId, true)
   try {
     await writeClipboardText(bookmark.url)
     closeActionMenu()
@@ -2639,12 +3407,15 @@ async function copyBookmarkUrl(bookmarkId) {
       type: 'success',
       message: '链接已复制'
     })
+    showViewNotice(`已复制链接：${bookmark.title}`)
   } catch (error) {
     closeActionMenu()
     showToast({
       type: 'error',
       message: error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
     })
+  } finally {
+    setPopupActionPending('copy-url', bookmarkId, false)
   }
 }
 
@@ -3696,8 +4467,22 @@ function showToast({ type = 'success', message, action = '', actionLabel = '' })
     actionLabel
   }
 
-  state.toasts = [...state.toasts, toast]
+  const nextToasts = [...state.toasts, toast]
+  const overflowCount = Math.max(0, nextToasts.length - MAX_VISIBLE_TOASTS)
+  if (overflowCount) {
+    const removedToastIds = getOverflowToastIds(nextToasts, overflowCount)
+    removedToastIds.forEach(clearToastTimer)
+    state.toasts = nextToasts.filter((nextToast) => {
+      return !removedToastIds.has(String(nextToast.id || ''))
+    })
+  } else {
+    state.toasts = nextToasts
+  }
   renderToasts()
+
+  if (!state.toasts.some((visibleToast) => visibleToast.id === id)) {
+    return
+  }
 
   const timeoutId = window.setTimeout(() => {
     dismissToast(id)
@@ -3706,16 +4491,38 @@ function showToast({ type = 'success', message, action = '', actionLabel = '' })
   state.toastTimers.set(id, timeoutId)
 }
 
+function getOverflowToastIds(toasts, overflowCount) {
+  const removedToastIds = new Set()
+  for (const toast of toasts) {
+    if (removedToastIds.size >= overflowCount) {
+      break
+    }
+    if (toast.action) {
+      continue
+    }
+    removedToastIds.add(String(toast.id || ''))
+  }
+
+  for (const toast of toasts) {
+    if (removedToastIds.size >= overflowCount) {
+      break
+    }
+    const toastId = String(toast.id || '')
+    if (removedToastIds.has(toastId)) {
+      continue
+    }
+    removedToastIds.add(toastId)
+  }
+
+  return removedToastIds
+}
+
 function dismissToast(toastId) {
   if (!toastId) {
     return
   }
 
-  const timeoutId = state.toastTimers.get(toastId)
-  if (timeoutId) {
-    clearTimeout(timeoutId)
-    state.toastTimers.delete(toastId)
-  }
+  clearToastTimer(toastId)
 
   const toastElement = dom.toastRoot.querySelector(`[data-toast-id="${CSS.escape(String(toastId))}"]`)
   state.toasts = state.toasts.filter((toast) => toast.id !== toastId)
@@ -3727,4 +4534,12 @@ function dismissToast(toastId) {
   }
 
   renderToasts()
+}
+
+function clearToastTimer(toastId) {
+  const timeoutId = state.toastTimers.get(String(toastId))
+  if (timeoutId) {
+    clearTimeout(timeoutId)
+    state.toastTimers.delete(String(toastId))
+  }
 }

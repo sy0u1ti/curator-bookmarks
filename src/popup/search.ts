@@ -7,6 +7,7 @@ export const MAX_POPUP_SEARCH_RESULTS = 20
 export const POPUP_SEARCH_ASYNC_THRESHOLD = 1200
 const SEARCH_PREFILTER_THRESHOLD = 1200
 const SEARCH_CHUNK_SIZE = 260
+const RECENT_SORT_TERMS = new Set(['recent', 'new', 'newest', 'latest', '最近', '新近', '最近优先'])
 
 export interface PopupSearchBookmark extends BookmarkRecord {
   normalizedPath: string
@@ -28,6 +29,17 @@ export interface PopupSearchResult extends PopupSearchBookmark {
 export interface CooperativeSearchOptions {
   isActive: () => boolean
   yieldWork?: () => Promise<unknown>
+}
+
+interface ParsedPopupSearchQuery {
+  rawQuery: string
+  normalizedQuery: string
+  queryTerms: string[]
+  siteFilters: string[]
+  folderFilters: string[]
+  typeFilters: string[]
+  recencyHint: boolean
+  hasStructuredFilters: boolean
 }
 
 export function indexBookmarkForSearch(bookmark: BookmarkRecord, tagRecord: BookmarkTagRecord | null = null): PopupSearchBookmark {
@@ -78,13 +90,12 @@ export function searchBookmarks(
   query: string,
   bookmarks: PopupSearchBookmark[]
 ): PopupSearchResult[] {
-  const normalizedQuery = normalizeQuery(query)
-  const queryTerms = getQueryTerms(normalizedQuery)
-  const candidates = getSearchCandidates(bookmarks, normalizedQuery, queryTerms)
+  const parsedQuery = parsePopupSearchQuery(query)
+  const candidates = getSearchCandidates(bookmarks, parsedQuery)
   const results: PopupSearchResult[] = []
 
   for (const bookmark of candidates) {
-    const match = scoreBookmarkWithReasons(bookmark, normalizedQuery, queryTerms)
+    const match = scoreBookmarkWithReasons(bookmark, parsedQuery)
     if (match.score > 0) {
       appendTopSearchResult(results, {
         ...bookmark,
@@ -102,12 +113,10 @@ export async function searchBookmarksCooperatively(
   bookmarks: PopupSearchBookmark[],
   options: CooperativeSearchOptions
 ): Promise<PopupSearchResult[]> {
-  const normalizedQuery = normalizeQuery(query)
-  const queryTerms = getQueryTerms(normalizedQuery)
+  const parsedQuery = parsePopupSearchQuery(query)
   const candidates = await getSearchCandidatesCooperatively(
     bookmarks,
-    normalizedQuery,
-    queryTerms,
+    parsedQuery,
     options
   )
   const results: PopupSearchResult[] = []
@@ -117,7 +126,7 @@ export async function searchBookmarksCooperatively(
     const chunk = candidates.slice(index, index + SEARCH_CHUNK_SIZE)
 
     for (const bookmark of chunk) {
-      const match = scoreBookmarkWithReasons(bookmark, normalizedQuery, queryTerms)
+      const match = scoreBookmarkWithReasons(bookmark, parsedQuery)
       if (match.score > 0) {
         appendTopSearchResult(results, {
           ...bookmark,
@@ -143,19 +152,111 @@ export function normalizeQuery(value: unknown): string {
   return normalizeText(stripCommonUrlPrefix(value))
 }
 
+function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
+  const rawQuery = normalizeQuery(query)
+  const terms = getQueryTerms(rawQuery)
+  const textTerms: string[] = []
+  const siteFilters: string[] = []
+  const folderFilters: string[] = []
+  const typeFilters: string[] = []
+  let recencyHint = false
+
+  for (const term of terms) {
+    const operator = parseSearchOperatorTerm(term)
+    if (operator) {
+      if (operator.kind === 'site') {
+        siteFilters.push(operator.value)
+      } else if (operator.kind === 'folder') {
+        folderFilters.push(operator.value)
+      } else {
+        typeFilters.push(operator.value)
+      }
+      continue
+    }
+
+    if (isRecencyHintTerm(term)) {
+      recencyHint = true
+      continue
+    }
+
+    textTerms.push(term)
+  }
+
+  const normalizedQuery = textTerms.join(' ')
+  return {
+    rawQuery,
+    normalizedQuery,
+    queryTerms: getQueryTerms(normalizedQuery),
+    siteFilters: uniqueFilterTerms(siteFilters),
+    folderFilters: uniqueFilterTerms(folderFilters),
+    typeFilters: uniqueFilterTerms(typeFilters),
+    recencyHint,
+    hasStructuredFilters: Boolean(siteFilters.length || folderFilters.length || typeFilters.length)
+  }
+}
+
+function parseSearchOperatorTerm(term: string): { kind: 'site' | 'folder' | 'type'; value: string } | null {
+  const match = String(term || '').match(/^([^:：]+)[:：](.+)$/)
+  if (!match) {
+    return null
+  }
+
+  const key = normalizeText(match[1])
+  const value = normalizeFilterValue(match[2])
+  if (!value) {
+    return null
+  }
+
+  if (key === 'site' || key === 'domain' || key === 'url' || key === '站点' || key === '域名') {
+    return { kind: 'site', value }
+  }
+  if (key === 'folder' || key === 'path' || key === '文件夹' || key === '目录' || key === '路径') {
+    return { kind: 'folder', value }
+  }
+  if (key === 'type' || key === 'kind' || key === '类型' || key === '类别') {
+    return { kind: 'type', value }
+  }
+
+  return null
+}
+
+function normalizeFilterValue(value: unknown): string {
+  return normalizeText(stripCommonUrlPrefix(value))
+    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
+    .trim()
+}
+
+function uniqueFilterTerms(values: string[]): string[] {
+  return [...new Set(values.map((value) => normalizeFilterValue(value)).filter(Boolean))]
+}
+
+function isRecencyHintTerm(term: string): boolean {
+  const normalized = normalizeText(term).replace(/^sort[:：]/, '')
+  return RECENT_SORT_TERMS.has(normalized)
+}
+
 export function scoreBookmark(
   bookmark: PopupSearchBookmark,
   normalizedQuery: string,
   queryTerms: string[]
 ): number {
-  return scoreBookmarkWithReasons(bookmark, normalizedQuery, queryTerms).score
+  return scoreBookmarkWithReasons(bookmark, {
+    rawQuery: normalizedQuery,
+    normalizedQuery,
+    queryTerms,
+    siteFilters: [],
+    folderFilters: [],
+    typeFilters: [],
+    recencyHint: false,
+    hasStructuredFilters: false
+  }).score
 }
 
 function scoreBookmarkWithReasons(
   bookmark: PopupSearchBookmark,
-  normalizedQuery: string,
-  queryTerms: string[]
+  parsedQuery: ParsedPopupSearchQuery
 ): { score: number; reasons: string[] } {
+  const { normalizedQuery, queryTerms } = parsedQuery
   const title = bookmark.normalizedTitle
   const url = bookmark.normalizedUrl
   const domain = normalizeText(bookmark.domain || '')
@@ -163,46 +264,59 @@ function scoreBookmarkWithReasons(
   let matched = false
   const reasons: string[] = []
 
-  if (!normalizedQuery) {
+  if (!matchesStructuredFilters(bookmark, parsedQuery, reasons)) {
     return { score: 0, reasons: [] }
   }
 
-  if (title === normalizedQuery) {
+  if (!normalizedQuery && !parsedQuery.hasStructuredFilters && !parsedQuery.recencyHint) {
+    return { score: 0, reasons: [] }
+  }
+
+  if (parsedQuery.hasStructuredFilters) {
+    score += 90
+    matched = true
+  }
+
+  if (normalizedQuery && title === normalizedQuery) {
     score += 620
     matched = true
     addReason(reasons, `命中：标题 ${bookmark.title}`)
   }
 
-  if (title.startsWith(normalizedQuery)) {
+  if (normalizedQuery && title.startsWith(normalizedQuery)) {
     score += 420
     matched = true
     addReason(reasons, `命中：标题前缀 ${normalizedQuery}`)
   }
 
-  const titleIndex = title.indexOf(normalizedQuery)
+  const titleIndex = normalizedQuery ? title.indexOf(normalizedQuery) : -1
   if (titleIndex !== -1) {
     score += 300 - Math.min(titleIndex, 120)
     matched = true
     addReason(reasons, `命中：标题 ${normalizedQuery}`)
   }
 
-  if (url.startsWith(normalizedQuery) || domain.startsWith(normalizedQuery)) {
+  if (normalizedQuery && (url.startsWith(normalizedQuery) || domain.startsWith(normalizedQuery))) {
     score += 250
     matched = true
     addReason(reasons, `命中：网址 ${normalizedQuery}`)
   }
 
-  const urlIndex = Math.max(url.indexOf(normalizedQuery), domain.indexOf(normalizedQuery))
+  const urlIndex = normalizedQuery
+    ? Math.max(url.indexOf(normalizedQuery), domain.indexOf(normalizedQuery))
+    : -1
   if (urlIndex !== -1) {
     score += 190 - Math.min(urlIndex, 100)
     matched = true
     addReason(reasons, `命中：网址 ${normalizedQuery}`)
   }
 
-  const semanticMatch = scoreSemanticFields(bookmark, normalizedQuery, queryTerms, reasons)
-  if (semanticMatch.score > 0) {
-    score += semanticMatch.score
-    matched = true
+  if (normalizedQuery || queryTerms.length) {
+    const semanticMatch = scoreSemanticFields(bookmark, normalizedQuery, queryTerms, reasons)
+    if (semanticMatch.score > 0) {
+      score += semanticMatch.score
+      matched = true
+    }
   }
 
   let allTermsPresent = queryTerms.length > 0
@@ -240,6 +354,13 @@ function scoreBookmarkWithReasons(
 
   if (allTermsPresent && queryTerms.length > 1) {
     score += 120
+    insertReason(reasons, buildQueryCoverageReason(queryTerms), 1)
+  }
+
+  const approximateMatch = scoreLatinApproximateTerms(bookmark, queryTerms, reasons)
+  if (approximateMatch.score > 0) {
+    score += approximateMatch.score
+    matched = true
   }
 
   const titleFuzzy = subsequenceScore(title, normalizedQuery)
@@ -252,8 +373,17 @@ function scoreBookmarkWithReasons(
     addReason(reasons, `命中：模糊匹配 ${normalizedQuery}`)
   }
 
-  if (title.includes(normalizedQuery) && url.includes(normalizedQuery)) {
+  if (normalizedQuery && title.includes(normalizedQuery) && url.includes(normalizedQuery)) {
     score += 38
+  }
+
+  if (parsedQuery.recencyHint) {
+    const recencyBoost = getBookmarkRecencyBoost(bookmark)
+    if (recencyBoost > 0) {
+      score += recencyBoost
+      matched = true
+      insertReason(reasons, '排序：最近添加优先', 0)
+    }
   }
 
   score -= Math.floor(bookmark.title.length / 28)
@@ -379,6 +509,46 @@ function scoreTextField(
   return Math.round(weight * (matchedTerms.length / queryTerms.length))
 }
 
+function matchesStructuredFilters(
+  bookmark: PopupSearchBookmark,
+  parsedQuery: ParsedPopupSearchQuery,
+  reasons: string[]
+): boolean {
+  if (parsedQuery.siteFilters.length) {
+    const domain = normalizeText(bookmark.domain || '')
+    const url = bookmark.normalizedUrl || ''
+    const matchedSite = parsedQuery.siteFilters.find((filter) =>
+      domain.includes(filter) || url.includes(filter)
+    )
+    if (!matchedSite) {
+      return false
+    }
+    addReason(reasons, `筛选：站点 ${matchedSite}`)
+  }
+
+  if (parsedQuery.folderFilters.length) {
+    const matchedFolder = parsedQuery.folderFilters.find((filter) =>
+      bookmark.normalizedPath.includes(filter)
+    )
+    if (!matchedFolder) {
+      return false
+    }
+    addReason(reasons, `筛选：文件夹 ${matchedFolder}`)
+  }
+
+  if (parsedQuery.typeFilters.length) {
+    const matchedType = parsedQuery.typeFilters.find((filter) =>
+      bookmark.tagContentType.includes(filter)
+    )
+    if (!matchedType) {
+      return false
+    }
+    addReason(reasons, `筛选：类型 ${matchedType}`)
+  }
+
+  return true
+}
+
 function termMatchedSemanticField(bookmark: PopupSearchBookmark, term: string): boolean {
   return [
     bookmark.normalizedPath,
@@ -390,6 +560,145 @@ function termMatchedSemanticField(bookmark: PopupSearchBookmark, term: string): 
     ...bookmark.tagPinyinFull,
     ...bookmark.tagPinyinInitials
   ].some((value) => value.includes(term))
+}
+
+function scoreLatinApproximateTerms(
+  bookmark: PopupSearchBookmark,
+  queryTerms: string[],
+  reasons: string[]
+): { score: number } {
+  const latinTerms = queryTerms.filter(isApproximateLatinTerm)
+  if (!latinTerms.length) {
+    return { score: 0 }
+  }
+
+  const tokens = collectApproximateSearchTokens(bookmark)
+  if (!tokens.length) {
+    return { score: 0 }
+  }
+
+  let score = 0
+  for (const term of latinTerms) {
+    if (tokens.some((token) => token.includes(term))) {
+      continue
+    }
+
+    const match = findClosestLatinToken(term, tokens)
+    if (!match) {
+      continue
+    }
+
+    score += Math.max(24, 58 - match.distance * 12)
+    addReason(reasons, `命中：近似 ${match.token} / ${term}`)
+  }
+
+  return { score }
+}
+
+function isApproximateLatinTerm(term: string): boolean {
+  return /^[a-z0-9][a-z0-9+.#-]{3,}$/i.test(term)
+}
+
+function collectApproximateSearchTokens(bookmark: PopupSearchBookmark): string[] {
+  const values = [
+    bookmark.normalizedTitle,
+    bookmark.normalizedUrl,
+    normalizeText(bookmark.domain || ''),
+    bookmark.normalizedPath,
+    bookmark.tagSummary,
+    bookmark.tagContentType,
+    ...bookmark.tagTopics,
+    ...bookmark.tagTags,
+    ...bookmark.tagAliases
+  ]
+  const tokens = new Set<string>()
+
+  for (const value of values) {
+    const matches = String(value || '').match(/[a-z0-9][a-z0-9+.#-]{2,}/gi) || []
+    for (const match of matches) {
+      const token = normalizeText(match)
+      if (token.length >= 3 && token.length <= 48) {
+        tokens.add(token)
+      }
+    }
+  }
+
+  return [...tokens]
+}
+
+function findClosestLatinToken(
+  term: string,
+  tokens: string[]
+): { token: string; distance: number } | null {
+  let bestMatch: { token: string; distance: number } | null = null
+  const maxDistance = getApproximateDistanceLimit(term)
+
+  for (const token of tokens) {
+    if (
+      Math.abs(token.length - term.length) > maxDistance ||
+      token[0] !== term[0]
+    ) {
+      continue
+    }
+
+    const distance = damerauLevenshteinDistance(term, token, maxDistance)
+    if (distance > maxDistance) {
+      continue
+    }
+
+    if (!bestMatch || distance < bestMatch.distance || token.length < bestMatch.token.length) {
+      bestMatch = { token, distance }
+    }
+  }
+
+  return bestMatch
+}
+
+function getApproximateDistanceLimit(term: string): number {
+  if (term.length >= 8) {
+    return 2
+  }
+  return term.length >= 5 ? 2 : 1
+}
+
+function damerauLevenshteinDistance(left: string, right: string, limit: number): number {
+  const previousPreviousRow = new Array(right.length + 1).fill(0)
+  let previousRow = Array.from({ length: right.length + 1 }, (_value, index) => index)
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const currentRow = [leftIndex]
+    let rowBest = currentRow[0]
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
+      let distance = Math.min(
+        previousRow[rightIndex] + 1,
+        currentRow[rightIndex - 1] + 1,
+        previousRow[rightIndex - 1] + substitutionCost
+      )
+
+      if (
+        leftIndex > 1 &&
+        rightIndex > 1 &&
+        left[leftIndex - 1] === right[rightIndex - 2] &&
+        left[leftIndex - 2] === right[rightIndex - 1]
+      ) {
+        distance = Math.min(distance, previousPreviousRow[rightIndex - 2] + 1)
+      }
+
+      currentRow[rightIndex] = distance
+      rowBest = Math.min(rowBest, distance)
+    }
+
+    if (rowBest > limit) {
+      return limit + 1
+    }
+
+    previousPreviousRow.splice(0, previousPreviousRow.length, ...previousRow)
+    previousRow = currentRow
+  }
+
+  return previousRow[right.length] ?? limit + 1
 }
 
 function shouldUseSummaryForQuery(normalizedQuery: string): boolean {
@@ -442,32 +751,85 @@ function buildPinyinToken(text: string, options: Record<string, unknown>): strin
 }
 
 function addReason(reasons: string[], reason: string): void {
-  const text = String(reason || '').replace(/\s+/g, ' ').trim()
+  const text = normalizeReasonText(reason)
   if (text && !reasons.includes(text)) {
     reasons.push(text)
   }
 }
 
+function insertReason(reasons: string[], reason: string, index: number): void {
+  const text = normalizeReasonText(reason)
+  if (!text || reasons.includes(text)) {
+    return
+  }
+
+  reasons.splice(Math.max(0, Math.min(index, reasons.length)), 0, text)
+}
+
+function normalizeReasonText(reason: string): string {
+  const text = String(reason || '').replace(/\s+/g, ' ').trim()
+  return text
+}
+
+function buildQueryCoverageReason(queryTerms: string[]): string {
+  const termSummary = formatReasonTerms(queryTerms)
+  return termSummary ? `匹配：包含全部关键词 ${termSummary}` : ''
+}
+
+function formatReasonTerms(terms: string[]): string {
+  const uniqueTerms = [...new Set(terms.map((term) => normalizeText(term)).filter(Boolean))]
+  const visibleTerms = uniqueTerms.slice(0, 4)
+  if (!visibleTerms.length) {
+    return ''
+  }
+
+  const suffix = uniqueTerms.length > visibleTerms.length ? ` 等 ${uniqueTerms.length} 个` : ''
+  return `${visibleTerms.join(' / ')}${suffix}`
+}
+
+function getBookmarkRecencyBoost(bookmark: PopupSearchBookmark): number {
+  const dateAdded = Number(bookmark.dateAdded)
+  if (!Number.isFinite(dateAdded) || dateAdded <= 0) {
+    return 0
+  }
+
+  const ageDays = Math.max(0, (Date.now() - dateAdded) / (24 * 60 * 60 * 1000))
+  if (ageDays <= 7) {
+    return 120
+  }
+  if (ageDays <= 30) {
+    return 90
+  }
+  if (ageDays <= 90) {
+    return 58
+  }
+  if (ageDays <= 180) {
+    return 30
+  }
+  return 8
+}
+
 function getSearchCandidates(
   bookmarks: PopupSearchBookmark[],
-  normalizedQuery: string,
-  queryTerms: string[]
+  parsedQuery: ParsedPopupSearchQuery
 ): PopupSearchBookmark[] {
   if (bookmarks.length < SEARCH_PREFILTER_THRESHOLD) {
     return bookmarks
   }
 
-  const requiredTerms = queryTerms.length ? queryTerms : [normalizedQuery]
+  const requiredTerms = parsedQuery.queryTerms.length
+    ? parsedQuery.queryTerms
+    : [parsedQuery.normalizedQuery]
   const directMatches = bookmarks.filter((bookmark) => {
     const searchText = bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
-    return requiredTerms.every((term) => searchText.includes(term))
+    return requiredTerms.every((term) => !term || searchText.includes(term))
   })
 
   if (directMatches.length) {
     return directMatches
   }
 
-  const prefix = normalizedQuery.slice(0, Math.min(normalizedQuery.length, 3))
+  const prefix = parsedQuery.normalizedQuery.slice(0, Math.min(parsedQuery.normalizedQuery.length, 3))
   if (!prefix) {
     return bookmarks
   }
@@ -482,22 +844,23 @@ function getSearchCandidates(
 
 async function getSearchCandidatesCooperatively(
   bookmarks: PopupSearchBookmark[],
-  normalizedQuery: string,
-  queryTerms: string[],
+  parsedQuery: ParsedPopupSearchQuery,
   options: CooperativeSearchOptions
 ): Promise<PopupSearchBookmark[]> {
   if (bookmarks.length < SEARCH_PREFILTER_THRESHOLD) {
     return bookmarks
   }
 
-  const requiredTerms = queryTerms.length ? queryTerms : [normalizedQuery]
+  const requiredTerms = parsedQuery.queryTerms.length
+    ? parsedQuery.queryTerms
+    : [parsedQuery.normalizedQuery]
   const directMatches: PopupSearchBookmark[] = []
 
   for (let index = 0; index < bookmarks.length; index += SEARCH_CHUNK_SIZE) {
     assertSearchActive(options)
     for (const bookmark of bookmarks.slice(index, index + SEARCH_CHUNK_SIZE)) {
       const searchText = bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
-      if (requiredTerms.every((term) => searchText.includes(term))) {
+      if (requiredTerms.every((term) => !term || searchText.includes(term))) {
         directMatches.push(bookmark)
       }
     }
@@ -511,7 +874,7 @@ async function getSearchCandidatesCooperatively(
     return directMatches
   }
 
-  const prefix = normalizedQuery.slice(0, Math.min(normalizedQuery.length, 3))
+  const prefix = parsedQuery.normalizedQuery.slice(0, Math.min(parsedQuery.normalizedQuery.length, 3))
   if (!prefix) {
     return bookmarks
   }
@@ -545,6 +908,11 @@ function appendTopSearchResult(results: PopupSearchResult[], result: PopupSearch
 function compareSearchResults(left: PopupSearchResult, right: PopupSearchResult): number {
   if (right.score !== left.score) {
     return right.score - left.score
+  }
+
+  const dateDelta = Number(right.dateAdded || 0) - Number(left.dateAdded || 0)
+  if (dateDelta !== 0) {
+    return dateDelta
   }
 
   if (left.title.length !== right.title.length) {

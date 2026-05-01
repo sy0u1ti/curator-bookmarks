@@ -9,7 +9,7 @@
   <body>
     <div class="options-shell">
       <header class="options-header">
-        <a class="options-brand" href="#general" aria-label="跳转到通用设置">
+        <a class="options-brand" href="#general" data-section-link="general" aria-label="跳转到通用设置">
           <span class="options-brand-mark" aria-hidden="true">
             <img src="../assets/icon4096.jpg" alt="">
           </span>
@@ -21,16 +21,32 @@
       </header>
 
       <div class="options-layout">
-        <aside class="options-sidebar" aria-label="设置分类">
-          <p class="options-sidebar-label">设置分类</p>
-          <nav class="options-nav">
-            <a class="options-nav-link" href="#general" data-section-link="general">通用设置</a>
-            <a class="options-nav-link" href="#availability" data-section-link="availability">可用性检测</a>
-            <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">添加历史</a>
-            <a class="options-nav-link" href="#ai" data-section-link="ai">AI 标签与命名</a>
-            <a class="options-nav-link" href="#duplicates" data-section-link="duplicates">重复书签</a>
-            <a class="options-nav-link" href="#recycle" data-section-link="recycle">回收站</a>
-          </nav>
+        <aside class="options-sidebar" aria-label="设置导航">
+          <div class="options-nav-group">
+            <p id="options-settings-nav-label" class="options-sidebar-label">设置分类</p>
+            <nav class="options-nav" aria-labelledby="options-settings-nav-label">
+              <a class="options-nav-link" href="#general" data-section-link="general">通用设置</a>
+            </nav>
+          </div>
+          <div class="options-nav-group">
+            <p id="options-bookmark-nav-label" class="options-sidebar-label">书签管理</p>
+            <nav class="options-nav" aria-labelledby="options-bookmark-nav-label">
+              <a class="options-nav-link" href="#availability" data-section-link="availability">书签可用性检测</a>
+              <a class="options-nav-link" href="#duplicates" data-section-link="duplicates">重复书签检测</a>
+              <a class="options-nav-link" href="#recycle" data-section-link="recycle">回收站</a>
+              <a class="options-nav-link" href="#history" data-section-link="history">检测历史</a>
+              <a class="options-nav-link" href="#redirects" data-section-link="redirects">重定向更新</a>
+              <a class="options-nav-link" href="#ignore" data-section-link="ignore">忽略规则</a>
+            </nav>
+          </div>
+          <div class="options-nav-group">
+            <p id="options-ai-nav-label" class="options-sidebar-label">AI功能</p>
+            <nav class="options-nav" aria-labelledby="options-ai-nav-label">
+              <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
+              <a class="options-nav-link" href="#ai" data-section-link="ai">标签与命名建议</a>
+              <a class="options-nav-link" href="#ai-tag-data" data-section-link="ai-tag-data">标签数据</a>
+            </nav>
+          </div>
           <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
             <span>视觉化管理</span>
             <strong>书签仪表盘</strong>
@@ -38,13 +54,6 @@
         </aside>
 
         <main class="options-main">
-          <nav id="availability-related-nav" class="availability-related-nav hidden" aria-label="可用性检测相关页面">
-            <a href="#availability" data-section-link="availability">书签可用性检测</a>
-            <a href="#history" data-section-link="history">检测历史</a>
-            <a href="#redirects" data-section-link="redirects">重定向更新</a>
-            <a href="#ignore" data-section-link="ignore">忽略规则</a>
-          </nav>
-
           <section
             id="general"
             class="options-panel"
@@ -69,8 +78,8 @@
                         <span
                           class="ai-help-tooltip"
                           tabindex="0"
-                          aria-label="添加网页书签后，自动分析内容并归类到合适文件夹。完成后会通过 Chrome 通知和弹窗提示结果。"
-                          data-tooltip="添加网页书签后，自动分析内容并归类到合适文件夹。完成后会通过 Chrome 通知和弹窗提示结果。"
+                          aria-label="添加网页书签后，自动分析内容并归类到合适文件夹。状态会在 popup 和扩展图标上轻量提示。"
+                          data-tooltip="添加网页书签后，自动分析内容并归类到合适文件夹。状态会在 popup 和扩展图标上轻量提示。"
                         >?</span>
                       </strong>
                       <span id="ai-auto-analyze-status" class="options-chip muted ai-inline-status">未开启</span>
@@ -102,6 +111,26 @@
                     <span class="ai-switch-track" aria-hidden="true"></span>
                   </label>
                 </div>
+              </div>
+            </div>
+
+            <div class="options-group ai-provider-card">
+              <div class="ai-provider-head">
+                <div class="ai-provider-copy">
+                  <h2 class="ai-settings-subtitle">快捷键</h2>
+                  <p class="ai-provider-notice">为打开搜索、智能分类和切换自动分析设置快捷键。</p>
+                  <p class="ai-provider-subtitle">Chrome 只允许在扩展快捷键页修改绑定。</p>
+                </div>
+                <span id="shortcut-status" class="options-chip muted">读取中</span>
+              </div>
+              <p id="shortcut-status-detail" class="shortcut-status-detail hidden"></p>
+              <div id="shortcut-list" class="shortcut-list">
+                <div class="detect-empty">正在读取当前快捷键绑定…</div>
+              </div>
+              <div class="shortcut-actions">
+                <button id="open-shortcuts-settings" class="options-button small" type="button">打开快捷键设置</button>
+                <button id="copy-shortcuts-url" class="options-button secondary small" type="button">复制设置地址</button>
+                <button id="refresh-shortcuts" class="options-button secondary small" type="button">刷新状态</button>
               </div>
             </div>
 
@@ -240,6 +269,20 @@
                       <button id="ai-manage-models" class="ai-inline-action" type="button">设置更多模型</button>
                       里追加。
                     </p>
+                    <label class="ai-provider-check" for="ai-auto-select-high">
+                      <input id="ai-auto-select-high" type="checkbox">
+                      <span>自动选中高置信建议</span>
+                    </label>
+                    <label class="ai-settings-field" for="ai-system-prompt">
+                      <span>系统提示词</span>
+                      <textarea
+                        id="ai-system-prompt"
+                        class="ai-settings-textarea"
+                        rows="5"
+                        spellcheck="false"
+                        placeholder="留空使用默认提示词"
+                      ></textarea>
+                    </label>
                   </div>
                 </details>
 
@@ -391,6 +434,10 @@
               </div>
 
               <div class="detect-toolbar-actions">
+                <span id="availability-summary-copy-status" class="options-inline-status"></span>
+                <button id="availability-copy-summary" class="options-button secondary small" type="button">
+                  复制概览
+                </button>
                 <button id="availability-action" class="options-button" type="button">
                   开始检测全部书签
                 </button>
@@ -415,35 +462,35 @@
             </div>
 
             <div class="detect-summary-grid">
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-total">
                 <span id="availability-total-label" class="summary-label">全部书签</span>
                 <strong id="availability-total">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-info">
                 <span class="summary-label">可检测</span>
                 <strong id="availability-eligible">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-success">
                 <span class="summary-label">可访问</span>
                 <strong id="availability-available">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-warning">
                 <span class="summary-label">重定向</span>
                 <strong id="availability-redirected">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-warning">
                 <span class="summary-label">低置信异常</span>
                 <strong id="availability-review">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-danger">
                 <span class="summary-label">高置信异常</span>
                 <strong id="availability-failed">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-muted">
                 <span class="summary-label">已忽略</span>
                 <strong id="availability-ignored">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-muted">
                 <span class="summary-label">跳过</span>
                 <strong id="availability-skipped">0</strong>
               </article>
@@ -585,8 +632,8 @@
             aria-labelledby="bookmark-history-title"
             hidden
           >
-            <p class="options-section-label">Bookmark History</p>
-            <h1 id="bookmark-history-title">添加书签历史</h1>
+            <p class="options-section-label">Auto Analysis Add History</p>
+            <h1 id="bookmark-history-title">自动分析添加历史</h1>
 
             <div class="options-group detect-history-group">
               <div class="detect-results-header">
@@ -596,7 +643,7 @@
                 </div>
                 <div class="detect-results-actions">
                   <span id="bookmark-add-history-timestamp" class="option-value">尚无历史</span>
-                  <button id="bookmark-add-history-clear" class="options-button secondary small" type="button">清空添加历史</button>
+                  <button id="bookmark-add-history-clear" class="options-button secondary small" type="button">清空自动分析添加历史</button>
                 </div>
               </div>
               <div class="detect-history-grid bookmark-add-history-grid">
@@ -630,8 +677,8 @@
             aria-labelledby="ai-title"
             hidden
           >
-            <p class="options-section-label">AI Tags & Naming</p>
-            <h1 id="ai-title">AI 标签与命名</h1>
+            <p class="options-section-label">Tag & Naming Suggestions</p>
+            <h1 id="ai-title">标签与命名建议</h1>
 
             <div class="options-group">
               <div class="option-row">
@@ -673,58 +720,46 @@
               <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成标签和命名建议。</p>
             </div>
 
-            <div class="options-group ai-tag-data-card">
-              <div class="detect-results-header ai-tag-data-head">
+            <div class="options-group ai-tag-data-card ai-tag-data-entry-card">
+              <div class="detect-results-header">
                 <div>
                   <strong>标签数据</strong>
-                  <p class="detect-results-subtitle">保存 AI 生成的摘要、标签、主题和别名，可导出备份后再导入恢复，本区域不会导出 API Key 或 AI 设置。</p>
+                  <p class="detect-results-subtitle">管理已保存的标签数据，包含 AI 生成内容和手动维护标签。</p>
                 </div>
-                <span id="ai-tag-data-count" class="option-value">0 条记录</span>
-              </div>
-              <div class="detect-results-header ai-tag-data-row">
-                <div>
-                  <p id="ai-tag-data-updated" class="detect-results-subtitle">尚未生成标签数据。</p>
-                  <p id="ai-tag-data-status" class="detect-status-copy"></p>
-                </div>
-                <div class="detect-results-actions">
-                  <button id="ai-tag-export" class="options-button secondary small" type="button">导出</button>
-                  <button id="ai-tag-import" class="options-button secondary small" type="button">导入</button>
-                  <button id="ai-tag-clear" class="options-button danger small" type="button">清空</button>
-                </div>
-                <input id="ai-tag-import-input" class="hidden" type="file" accept="application/json,.json">
+                <a class="options-button secondary small" href="#ai-tag-data" data-section-link="ai-tag-data">打开标签数据</a>
               </div>
             </div>
 
             <div class="detect-summary-grid">
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-total">
                 <span class="summary-label">可处理</span>
                 <strong id="ai-eligible">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-success">
                 <span class="summary-label">已建议</span>
                 <strong id="ai-suggested">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-warning">
                 <span class="summary-label">待确认</span>
                 <strong id="ai-manual-review">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-muted">
                 <span class="summary-label">无需改名</span>
                 <strong id="ai-unchanged">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-success">
                 <span class="summary-label">高置信</span>
                 <strong id="ai-high-confidence">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-info">
                 <span class="summary-label">中置信</span>
                 <strong id="ai-medium-confidence">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-warning">
                 <span class="summary-label">低置信</span>
                 <strong id="ai-low-confidence">0</strong>
               </article>
-              <article class="summary-card">
+              <article class="summary-card metric-card metric-danger">
                 <span class="summary-label">失败</span>
                 <strong id="ai-failed">0</strong>
               </article>
@@ -775,6 +810,39 @@
               </div>
               <div id="ai-results" class="detect-results">
                 <div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示标签与命名建议。</div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="ai-tag-data"
+            class="options-panel"
+            data-section-panel="ai-tag-data"
+            aria-labelledby="ai-tag-data-title"
+            hidden
+          >
+            <p class="options-section-label">AI Tag Data</p>
+            <h1 id="ai-tag-data-title">标签数据</h1>
+
+            <div class="options-group ai-tag-data-card">
+              <div class="detect-results-header ai-tag-data-head">
+                <div>
+                  <strong>已保存标签数据</strong>
+                  <p class="detect-results-subtitle">这里保存 AI 生成的摘要、主题和别名，以及 AI 生成或手动维护的标签。可导出备份后再导入恢复，不包含 API Key 或 AI 设置。</p>
+                </div>
+                <span id="ai-tag-data-count" class="option-value">0 条记录</span>
+              </div>
+              <div class="detect-results-header ai-tag-data-row">
+                <div>
+                  <p id="ai-tag-data-updated" class="detect-results-subtitle">尚未保存标签数据。</p>
+                  <p id="ai-tag-data-status" class="detect-status-copy"></p>
+                </div>
+                <div class="detect-results-actions">
+                  <button id="ai-tag-export" class="options-button secondary small" type="button">导出</button>
+                  <button id="ai-tag-import" class="options-button secondary small" type="button">导入</button>
+                  <button id="ai-tag-clear" class="options-button danger small" type="button">清空</button>
+                </div>
+                <input id="ai-tag-import-input" class="hidden" type="file" accept="application/json,.json">
               </div>
             </div>
           </section>
@@ -835,13 +903,41 @@
               <div class="detect-results-header">
                 <div>
                   <strong id="duplicate-selection-count">0 条已选择</strong>
-                  <p class="detect-results-subtitle">你可以对这些重复项执行批量合并删除。</p>
+                  <p id="duplicate-selection-impact" class="detect-results-subtitle">将删除 0 条，保留 0 条。</p>
+                  <p id="duplicate-selection-warning" class="duplicate-selection-warning hidden"></p>
                 </div>
                 <div class="detect-results-actions">
                   <button id="duplicate-clear-selection" class="options-button secondary small" type="button">清空选择</button>
-                  <button id="duplicate-delete-selection" class="options-button danger small" type="button">批量合并删除</button>
+                  <button id="duplicate-delete-selection" class="options-button danger small" type="button">移入回收站</button>
                 </div>
               </div>
+            </div>
+
+            <div class="detect-summary-grid compact-grid duplicate-summary-grid">
+              <article class="summary-card compact metric-card metric-total">
+                <span class="summary-label">重复分组</span>
+                <strong id="duplicate-summary-groups">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-info">
+                <span class="summary-label">建议清理</span>
+                <strong id="duplicate-summary-candidates">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-warning">
+                <span class="summary-label">跨文件夹</span>
+                <strong id="duplicate-summary-cross-folder">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-warning">
+                <span class="summary-label">标题差异</span>
+                <strong id="duplicate-summary-title-variants">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-danger">
+                <span class="summary-label">高风险</span>
+                <strong id="duplicate-summary-high-risk">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-success">
+                <span class="summary-label">已选择</span>
+                <strong id="duplicate-summary-selected">0</strong>
+              </article>
             </div>
 
             <div class="options-group detect-results-group">
@@ -851,6 +947,12 @@
                   <p id="duplicate-results-subtitle" class="detect-results-subtitle">同一归一化地址下出现多个书签时，会归到同一组。</p>
                 </div>
                 <span id="duplicate-group-count" class="option-value">0 组重复</span>
+              </div>
+              <div class="duplicate-toolbar">
+                <div id="duplicate-strategy-controls" class="duplicate-strategy-controls duplicate-primary-action-row" aria-label="重复书签选择策略">
+                  <button class="options-button small duplicate-primary-action" type="button" data-duplicate-strategy="recommended">按推荐选择当前结果</button>
+                  <span id="duplicate-strategy-status" class="duplicate-strategy-status"></span>
+                </div>
               </div>
               <div id="duplicate-groups" class="detect-results">
                 <div class="detect-empty">正在分析重复书签。</div>

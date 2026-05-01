@@ -30,6 +30,23 @@ export interface PopupToast {
   [key: string]: unknown
 }
 
+export interface PopupAutoAnalyzeStatus {
+  status: string
+  bookmarkId: string
+  title: string
+  url: string
+  folderPath: string
+  confidence: number
+  error: string
+  detail: string
+  attempts: number
+  maxAttempts: number
+  badgeVisible: boolean
+  createdAt: number
+  updatedAt: number
+  expiresAt: number
+}
+
 export interface PopupState {
   isLoading: boolean
   loadError: string
@@ -44,6 +61,8 @@ export interface PopupState {
   searchQuery: string
   debouncedQuery: string
   selectedFolderFilterId: string | null
+  viewNoticeMessage: string
+  viewNoticeTimer: number | null
   isFilterPickerOpen: boolean
   filterSearchQuery: string
   searchResults: PopupSearchResult[]
@@ -65,7 +84,15 @@ export interface PopupState {
   moveTargetBookmarkId: string | null
   moveSearchQuery: string
   editTargetBookmarkId: string | null
+  editDraftBookmarkId: string
+  editDraftTitle: string
+  editDraftUrl: string
+  editDraftDirty: boolean
+  editDiscardArmed: boolean
+  editDiscardTimer: number | null
+  editSaving: boolean
   confirmDeleteBookmarkId: string | null
+  pendingActionIds: Set<string>
   currentTab: chrome.tabs.Tab | null
   currentPageBookmarkId: string | null
   smartStatus: string
@@ -89,6 +116,7 @@ export interface PopupState {
   smartSaved: boolean
   smartRunId: number
   smartPermissionRequest: { origins?: string[] } | null
+  autoAnalyzeStatus: PopupAutoAnalyzeStatus | null
   lastDeletedBookmark: PopupDeletedBookmark | null
   toasts: PopupToast[]
   toastTimers: Map<string, number>
@@ -108,6 +136,8 @@ export const state: PopupState = {
   searchQuery: '',
   debouncedQuery: '',
   selectedFolderFilterId: null,
+  viewNoticeMessage: '',
+  viewNoticeTimer: null,
   isFilterPickerOpen: false,
   filterSearchQuery: '',
   searchResults: [],
@@ -129,7 +159,15 @@ export const state: PopupState = {
   moveTargetBookmarkId: null,
   moveSearchQuery: '',
   editTargetBookmarkId: null,
+  editDraftBookmarkId: '',
+  editDraftTitle: '',
+  editDraftUrl: '',
+  editDraftDirty: false,
+  editDiscardArmed: false,
+  editDiscardTimer: null,
+  editSaving: false,
   confirmDeleteBookmarkId: null,
+  pendingActionIds: new Set(),
   currentTab: null,
   currentPageBookmarkId: null,
   smartStatus: 'idle',
@@ -153,6 +191,7 @@ export const state: PopupState = {
   smartSaved: false,
   smartRunId: 0,
   smartPermissionRequest: null,
+  autoAnalyzeStatus: null,
   lastDeletedBookmark: null,
   toasts: [],
   toastTimers: new Map()

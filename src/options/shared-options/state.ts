@@ -107,7 +107,9 @@ export const availabilityState = {
   redirectResults: [],
   lastCompletedAt: 0,
   lastRunOutcome: '',
-  lastError: ''
+  lastError: '',
+  summaryCopyStatus: '',
+  summaryCopyStatusTone: 'muted'
 }
 
 export const managerState = {
@@ -115,6 +117,7 @@ export const managerState = {
   historyRuns: [],
   bookmarkAddHistory: [],
   redirectCache: createEmptyRedirectCache(),
+  pendingAvailabilitySnapshot: null,
   previousHistoryMap: new Map(),
   historyLastRunAt: 0,
   historyRecoveredResults: [],
@@ -123,6 +126,7 @@ export const managerState = {
   suppressedResults: [],
   currentHistoryEntries: [],
   duplicateGroups: [],
+  duplicateStrategyStatus: '',
   recycleBin: [],
   selectedAvailabilityIds: new Set(),
   selectedRedirectIds: new Set(),
@@ -145,7 +149,10 @@ export const managerState = {
   confirmModalCopy: '请确认是否继续。',
   confirmModalConfirmLabel: '确认',
   confirmModalCancelLabel: '取消',
-  aiRevealApiKey: false
+  aiRevealApiKey: false,
+  shortcutCommands: [] as chrome.commands.Command[],
+  shortcutStatus: 'loading',
+  shortcutStatusTone: 'muted'
 }
 
 export const dashboardState = {

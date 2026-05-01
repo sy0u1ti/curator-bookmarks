@@ -114,34 +114,36 @@ const DATE_PHRASES = [
 const CHINESE_EXCLUSION_PATTERN = /(?:不要|不看|排除|过滤掉|过滤|不是|别给我|剔除|去掉)\s*([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
 const ENGLISH_EXCLUSION_PATTERN = /\b(?:without|exclude|excluding|not|no)\s+([a-z0-9][a-z0-9+.#/_-]*)/gi
 const DASH_EXCLUSION_PATTERN = /(^|\s)-([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
+const STRUCTURED_SEARCH_OPERATOR_PATTERN = /(^|\s)((?:site|domain|url|folder|path|type|kind|站点|域名|文件夹|目录|路径|类型|类别)[:：][^\s，。！？；、,!?;()[\]{}"'“”‘’]+)/gi
 
 export function buildLocalNaturalSearchPlan(query: string, now = Date.now()): NaturalSearchPlan {
   const rawQuery = String(query || '').trim()
   const exclusion = extractNaturalSearchExclusions(rawQuery)
+  const structuredOperators = extractStructuredSearchOperators(exclusion.query)
   const dateRange = parseNaturalDateRange(rawQuery, now)
-  const cleanedQuery = cleanNaturalSearchQuery(exclusion.query)
+  const cleanedQuery = cleanNaturalSearchQuery(structuredOperators.query)
   const normalizedCleanedQuery = normalizeQuery(cleanedQuery)
   const synonymTerms = collectSynonymTerms(exclusion.query)
   const baseTerms = getQueryTerms(normalizedCleanedQuery)
-  const expandedTerms = uniqueNormalizedTerms([...baseTerms, ...synonymTerms])
+  const expandedTerms = uniqueNormalizedTerms([...structuredOperators.terms, ...baseTerms, ...synonymTerms])
   const expandedQuery = expandedTerms.join(' ')
+  const excludedTerms = uniqueNormalizedTerms([
+    ...exclusion.terms,
+    ...collectSynonymTerms(exclusion.terms.join(' '))
+  ])
   const queries = uniqueQueries([
     expandedQuery,
     normalizedCleanedQuery,
     ...synonymTerms
   ])
-  const excludedTerms = uniqueNormalizedTerms([
-    ...exclusion.terms,
-    ...collectSynonymTerms(exclusion.terms.join(' '))
-  ])
 
   return {
     rawQuery,
     queries: queries.length ? queries : uniqueQueries([normalizeQuery(rawQuery)]),
-    highlightQuery: uniqueNormalizedTerms([...baseTerms, ...synonymTerms]).join(' ') || normalizeQuery(rawQuery),
+    highlightQuery: uniqueNormalizedTerms([...structuredOperators.terms, ...baseTerms, ...synonymTerms]).join(' ') || normalizeQuery(rawQuery),
     dateRange,
     excludedTerms,
-    explanation: buildLocalExplanation(dateRange),
+    explanation: buildLocalExplanation({ dateRange, baseTerms, synonymTerms, excludedTerms }),
     source: 'local'
   }
 }
@@ -161,9 +163,10 @@ export function normalizeNaturalSearchAiPlan(
     rawKeywords.map((value) => String(value || '')).join(' '),
     ...fallbackPlan.queries
   ])
-  const excludedTerms = uniqueNormalizedTerms(
-    Array.isArray(source.excluded_terms) ? source.excluded_terms.map((value) => String(value || '')) : []
-  )
+  const excludedTerms = uniqueNormalizedTerms([
+    ...fallbackPlan.excludedTerms,
+    ...(Array.isArray(source.excluded_terms) ? source.excluded_terms.map((value) => String(value || '')) : [])
+  ])
   const aiDateRange = normalizeAiDateRange(source.date_range, now)
   const dateRange = fallbackPlan.dateRange || aiDateRange
   const explanation = cleanNaturalText(source.explanation, 120) || fallbackPlan.explanation || 'AI 已改写查询'
@@ -212,7 +215,7 @@ export function mergeNaturalSearchResultSets(
 
       const existing = merged.get(result.id)
       const nextScore = result.score + queryBoost + (plan.dateRange ? 22 : 0)
-      const nextReasons = buildNaturalMatchReasons(plan, result.matchReasons)
+      const nextReasons = buildNaturalMatchReasons(plan, result.matchReasons, resultSet.query)
       if (!existing || nextScore > existing.score) {
         merged.set(result.id, {
           ...result,
@@ -238,6 +241,14 @@ export function getNaturalSearchStatusLabel(plan: NaturalSearchPlan | null): str
   const parts = [plan.source === 'ai' ? 'AI 解析' : '本地解析']
   if (plan.dateRange?.label) {
     parts.push(plan.dateRange.label)
+  }
+  const keywordSummary = getNaturalKeywordSummary(plan)
+  if (keywordSummary) {
+    parts.push(`关键词 ${keywordSummary}`)
+  }
+  const exclusionSummary = formatNaturalTerms(plan.excludedTerms, 2)
+  if (exclusionSummary) {
+    parts.push(`排除 ${exclusionSummary}`)
   }
   return parts.join(' · ')
 }
@@ -407,6 +418,19 @@ function collectSynonymTerms(query: string): string[] {
   return uniqueNormalizedTerms(terms)
 }
 
+function extractStructuredSearchOperators(query: string): { query: string; terms: string[] } {
+  const terms: string[] = []
+  const cleanedQuery = String(query || '').replace(STRUCTURED_SEARCH_OPERATOR_PATTERN, (_match, prefix, operatorTerm) => {
+    terms.push(String(operatorTerm || ''))
+    return prefix || ' '
+  })
+
+  return {
+    query: cleanedQuery,
+    terms: uniqueNormalizedTerms(terms)
+  }
+}
+
 function extractNaturalSearchExclusions(query: string): { query: string; terms: string[] } {
   const terms: string[] = []
   let cleanedQuery = String(query || '')
@@ -515,13 +539,21 @@ function matchesExcludedTerms(bookmark: PopupSearchBookmark, excludedTerms: stri
   return excludedTerms.some((term) => searchText.includes(term))
 }
 
-function buildNaturalMatchReasons(plan: NaturalSearchPlan, reasons: string[]): string[] {
+function buildNaturalMatchReasons(
+  plan: NaturalSearchPlan,
+  reasons: string[],
+  matchedQuery: string
+): string[] {
+  const querySummary = formatNaturalTerms(getQueryTerms(matchedQuery), 4)
   const naturalReasons = [
-    plan.dateRange?.label ? `自然语言：${plan.dateRange.label}` : '',
-    plan.explanation ? `自然语言：${plan.explanation}` : ''
+    querySummary ? `关键词：${querySummary}` : '',
+    plan.dateRange?.label ? `时间：${plan.dateRange.label}` : ''
   ].filter(Boolean)
 
-  return mergeReasons(naturalReasons, reasons).slice(0, 3)
+  return mergeReasons(
+    mergeReasons(naturalReasons, reasons),
+    plan.explanation ? [`解析：${plan.explanation}`] : []
+  ).slice(0, 3)
 }
 
 function mergeReasons(left: string[], right: string[]): string[] {
@@ -548,10 +580,49 @@ function compareNaturalSearchResults(left: PopupSearchResult, right: PopupSearch
   return left.path.localeCompare(right.path, 'zh-Hans-CN')
 }
 
-function buildLocalExplanation(dateRange: NaturalSearchDateRange | null): string {
-  return dateRange?.label
-    ? `已按${dateRange.label}和关键词匹配`
-    : '已提取关键词并扩展同义词'
+function buildLocalExplanation({
+  dateRange,
+  baseTerms,
+  synonymTerms,
+  excludedTerms
+}: {
+  dateRange: NaturalSearchDateRange | null
+  baseTerms: string[]
+  synonymTerms: string[]
+  excludedTerms: string[]
+}): string {
+  const baseSummary = formatNaturalTerms(baseTerms, 4)
+  const synonymSummary = formatNaturalTerms(synonymTerms, 4)
+  const exclusionSummary = formatNaturalTerms(excludedTerms, 3)
+  const parts = [
+    baseSummary ? `关键词 ${baseSummary}` : '',
+    synonymSummary ? `扩展 ${synonymSummary}` : '',
+    dateRange?.label ? `时间 ${dateRange.label}` : '',
+    exclusionSummary ? `排除 ${exclusionSummary}` : ''
+  ].filter(Boolean)
+
+  return parts.length ? parts.join(' · ') : '已提取关键词并扩展同义词'
+}
+
+function getNaturalKeywordSummary(plan: NaturalSearchPlan): string {
+  const terms = uniqueNormalizedTerms(getQueryTerms(plan.highlightQuery))
+    .filter((term) => !plan.excludedTerms.includes(term))
+  return formatNaturalTerms(terms, 3)
+}
+
+function formatNaturalTerms(terms: string[], limit: number): string {
+  const uniqueTerms = uniqueNormalizedTerms(terms)
+  const visibleTerms = uniqueTerms
+    .slice(0, Math.max(1, limit))
+    .map((term) => cleanNaturalText(term, 20))
+    .filter(Boolean)
+
+  if (!visibleTerms.length) {
+    return ''
+  }
+
+  const suffix = uniqueTerms.length > visibleTerms.length ? ` 等 ${uniqueTerms.length} 个` : ''
+  return `${visibleTerms.join(' / ')}${suffix}`
 }
 
 function rangeFromDates(from: number, to: number, label: string): NaturalSearchDateRange {

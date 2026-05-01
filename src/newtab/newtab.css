@@ -166,36 +166,69 @@ body.background-mask-enabled .newtab-background-mask {
   --clock-scale: 1;
   display: inline-flex;
   width: min(100%, 1229px);
-  min-height: 30px;
-  align-items: baseline;
+  min-height: 32px;
+  align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   color: var(--text);
   text-align: left;
-  transform: scale(var(--clock-scale));
-  transform-origin: left center;
   user-select: none;
+}
+
+.newtab-clock-time-group {
+  display: inline-flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
 }
 
 .newtab-clock-time {
   font-variant-numeric: tabular-nums;
   color: rgba(245, 245, 247, 0.92);
-  font-size: 21px;
-  font-weight: 680;
+  font-size: calc(22px * var(--clock-scale));
+  font-weight: 720;
   letter-spacing: 0;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.newtab-clock[data-clock-show-seconds="false"] .newtab-clock-time {
+  min-width: 5ch;
+}
+
+.newtab-clock[data-clock-show-seconds="true"] .newtab-clock-time {
+  min-width: 8ch;
+}
+
+.newtab-clock-period,
+.newtab-clock-zone {
+  color: rgba(245, 245, 247, 0.4);
+  font-size: calc(10px * var(--clock-scale));
+  font-weight: 720;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .newtab-clock-date {
-  color: rgba(245, 245, 247, 0.46);
-  font-size: 12px;
-  font-weight: 620;
+  color: rgba(245, 245, 247, 0.54);
+  font-size: calc(12px * var(--clock-scale));
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
+  white-space: nowrap;
+}
+
+.newtab-clock[data-clock-display-mode="date"] .newtab-clock-date {
+  color: rgba(245, 245, 247, 0.82);
+  font-size: calc(16px * var(--clock-scale));
+  font-weight: 700;
 }
 
 .newtab-search-slot {
   --search-height: 34px;
+  --search-width: 44vw;
   --search-offset-y: 0px;
   position: relative;
   z-index: 2;
@@ -221,7 +254,11 @@ body.background-mask-enabled .newtab-background-mask {
   border: 1px solid rgba(245, 245, 247, 0.13);
   border-radius: 8px;
   background: rgba(8, 8, 9, calc(var(--search-bg-alpha) + 0.24));
-  box-shadow: none;
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
   transition:
     border-color var(--ease-standard),
     background var(--ease-standard),
@@ -231,7 +268,10 @@ body.background-mask-enabled .newtab-background-mask {
 .newtab-search:focus-within {
   border-color: rgba(245, 245, 247, 0.28);
   background: rgba(14, 14, 15, calc(var(--search-bg-alpha) + 0.24));
-  box-shadow: 0 0 0 2px rgba(245, 245, 247, 0.08);
+  box-shadow:
+    0 16px 42px rgba(0, 0, 0, 0.22),
+    0 0 0 2px rgba(245, 245, 247, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 .newtab-search-icon {
@@ -345,6 +385,112 @@ body.background-mask-enabled .newtab-background-mask {
 .newtab-search-clear.hidden,
 .newtab-search-separator.hidden {
   display: none;
+}
+
+.newtab-search-suggestions-panel {
+  position: absolute;
+  top: calc(var(--search-height) + 8px);
+  left: 50%;
+  display: grid;
+  width: min(max(220px, var(--search-width)), 540px, 100%);
+  max-height: min(312px, calc(100vh - 180px));
+  gap: 3px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(245, 245, 247, 0.14);
+  border-radius: 10px;
+  background: rgba(10, 10, 11, 0.92);
+  box-shadow:
+    0 18px 44px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
+  scrollbar-width: thin;
+  transform: translateX(-50%);
+}
+
+.newtab-search-suggestions-panel.hidden {
+  display: none;
+}
+
+.newtab-search-suggestions {
+  display: grid;
+  gap: 3px;
+}
+
+.newtab-search-suggestion {
+  display: grid;
+  width: 100%;
+  min-height: 44px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(245, 245, 247, 0.86);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease-out),
+    color var(--motion-fast) var(--motion-ease-out);
+}
+
+.newtab-search-suggestion:hover,
+.newtab-search-suggestion:focus-visible,
+.newtab-search-suggestion.active {
+  background: rgba(245, 245, 247, 0.085);
+  color: var(--text);
+  outline: none;
+}
+
+.newtab-search-suggestion-mark {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.07);
+  color: rgba(245, 245, 247, 0.82);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.newtab-search-suggestion-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.newtab-search-suggestion-copy strong,
+.newtab-search-suggestion-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-search-suggestion-copy strong {
+  color: currentColor;
+  font-size: 12px;
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.newtab-search-suggestion-copy span {
+  color: rgba(245, 245, 247, 0.44);
+  font-size: 10px;
+  font-weight: 560;
+  line-height: 1.2;
+}
+
+.newtab-search-hint {
+  padding: 3px 8px 0;
+  color: rgba(245, 245, 247, 0.42);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .newtab-page.has-search .newtab-content,
@@ -464,6 +610,109 @@ body.background-mask-enabled .newtab-background-mask {
   width: 100%;
   align-content: start;
   gap: var(--icon-folder-gap);
+}
+
+.newtab-quick-access {
+  display: grid;
+  width: 100%;
+  gap: 9px;
+  margin-bottom: 16px;
+}
+
+.newtab-quick-group {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.newtab-quick-heading {
+  min-height: 26px;
+  padding-top: 7px;
+  color: rgba(245, 245, 247, 0.48);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.newtab-quick-list {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 6px;
+}
+
+.newtab-quick-link {
+  display: grid;
+  min-width: 0;
+  min-height: 34px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 4px 8px 4px 5px;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 7px;
+  background: rgba(245, 245, 247, 0.035);
+  color: rgba(245, 245, 247, 0.84);
+  text-decoration: none;
+  transition:
+    border-color var(--ease-standard),
+    background-color var(--ease-standard),
+    color var(--ease-standard);
+}
+
+.newtab-quick-link:hover,
+.newtab-quick-link:focus-visible {
+  border-color: rgba(245, 245, 247, 0.22);
+  background: rgba(245, 245, 247, 0.075);
+  color: var(--text);
+  outline: none;
+}
+
+.newtab-quick-link:focus-visible {
+  box-shadow: 0 0 0 2px rgba(245, 245, 247, 0.12);
+}
+
+.newtab-quick-mark {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(245, 245, 247, 0.08);
+  color: rgba(245, 245, 247, 0.72);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.newtab-quick-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.newtab-quick-copy strong,
+.newtab-quick-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-quick-copy strong {
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.15;
+}
+
+.newtab-quick-copy span {
+  color: rgba(245, 245, 247, 0.42);
+  font-size: 10px;
+  font-weight: 560;
+  line-height: 1.15;
 }
 
 .bookmark-folder-section {
@@ -2162,6 +2411,15 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   background: rgba(245, 245, 247, 0.08);
 }
 
+.bookmark-menu-action.danger {
+  color: #ffcbc5;
+}
+
+.bookmark-menu-action.danger:hover,
+.bookmark-menu-action.danger:focus-visible {
+  background: rgba(255, 183, 176, 0.11);
+}
+
 .bookmark-menu-action:focus-visible {
   outline: 2px solid rgba(245, 245, 247, 0.28);
   outline-offset: 1px;
@@ -2190,6 +2448,10 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   color: #c9f2d2;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.bookmark-menu-status.is-warning {
+  color: #ffd8d3;
 }
 
 @keyframes newtab-menu-enter {
@@ -2229,9 +2491,27 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
     gap: 10px;
   }
 
+  .newtab-quick-group {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .newtab-quick-heading {
+    min-height: 16px;
+    padding-top: 0;
+  }
+
+  .newtab-quick-list {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  }
+
   .newtab-clock,
   .newtab-clock-spacer {
     min-height: 0;
+  }
+
+  .newtab-clock {
+    gap: 4px 8px;
   }
 
   .newtab-search-input {
@@ -2239,11 +2519,20 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   }
 
   .newtab-clock-time {
-    font-size: 19px;
+    font-size: calc(20px * var(--clock-scale));
   }
 
   .newtab-clock-date {
-    font-size: 11px;
+    font-size: calc(11px * var(--clock-scale));
+  }
+
+  .newtab-clock[data-clock-display-mode="date"] .newtab-clock-date {
+    font-size: calc(14px * var(--clock-scale));
+  }
+
+  .newtab-clock-period,
+  .newtab-clock-zone {
+    font-size: calc(9px * var(--clock-scale));
   }
 
   .bookmark-grid {

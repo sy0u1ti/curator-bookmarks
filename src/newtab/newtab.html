@@ -47,6 +47,16 @@
               <input id="general-hide-settings-trigger" class="setting-switch-input" type="checkbox">
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
+            <label class="setting-row">
+              <span>显示常用</span>
+              <input id="general-show-frequent" class="setting-switch-input" type="checkbox" checked>
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <label class="setting-row">
+              <span>显示最近</span>
+              <input id="general-show-recent" class="setting-switch-input" type="checkbox" checked>
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
           </div>
         </section>
 
@@ -263,13 +273,14 @@
             <div class="setting-row">
               <span>日期格式</span>
               <select id="time-date-format" class="setting-select setting-native-select">
-                <option value="weekday-day-month">星期 日期 月份</option>
-                <option value="weekday-month-day">星期, 月份 日期</option>
-                <option value="month-day-weekday">月份 日期 星期</option>
+                <option value="year-month-day-weekday">2026.05.01 周五</option>
+                <option value="month-day-weekday">05.01 周五</option>
+                <option value="weekday-month-day">周五 05/01</option>
+                <option value="weekday-day-month">周五 01/05</option>
               </select>
             </div>
             <label class="setting-row slider-row">
-              <span>时钟大小</span>
+              <span>时钟大小 <output id="time-clock-size-value" class="setting-value">100%</output></span>
               <input id="time-clock-size" class="setting-range" type="range" min="70" max="130" value="100">
             </label>
             <div class="setting-row">

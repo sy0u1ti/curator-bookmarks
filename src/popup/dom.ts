@@ -20,7 +20,9 @@ function byId(id: string): PopupDomElement {
 export function cacheDom(): void {
   dom.heroSubtitle = byId('hero-subtitle')
   dom.openSettings = byId('open-settings')
+  dom.autoAnalyzeStatus = byId('auto-analyze-status')
   dom.searchInput = byId('search-input')
+  dom.searchModeChip = byId('search-mode-chip')
   dom.naturalSearchToggle = byId('natural-search-toggle')
   dom.clearSearch = byId('clear-search')
   dom.viewCaption = byId('view-caption')

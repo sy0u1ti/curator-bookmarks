@@ -234,7 +234,12 @@ export function shouldAcceptNavigationSuccess(result: NavigationAttempt | null |
     return false
   }
 
-  const statusCode = Number(result.networkEvidence?.statusCode) || 0
+  const evidence = result.networkEvidence
+  const statusCode = Number(evidence?.statusCode) || 0
+  if (evidence && isUnverifiedRedirectEvidence(evidence)) {
+    return false
+  }
+
   return !statusCode || statusCode < 400
 }
 
@@ -359,6 +364,15 @@ export function classifyNavigationNetworkEvidence(
   const failedBeforeCompletion = Boolean(
     evidence.errorCode && !Number.isFinite(evidence.timing?.completedMs)
   )
+  if (isUnverifiedRedirectEvidence(evidence)) {
+    return {
+      kind: 'unknown',
+      method,
+      label: '最终响应未确认',
+      detail: formatNavigationNetworkEvidence(evidence) || '主请求发生跳转，但未确认最终页面响应。'
+    }
+  }
+
   if (failedBeforeCompletion) {
     return {
       kind: 'network',
@@ -391,6 +405,11 @@ export function classifyNavigationNetworkEvidence(
   }
 
   return null
+}
+
+function isUnverifiedRedirectEvidence(evidence: NavigationNetworkEvidence): boolean {
+  const statusCode = Number(evidence.statusCode) || 0
+  return statusCode >= 300 && statusCode < 400 && evidence.finalResponseObserved === false
 }
 
 export function classifyNavigationNetworkEvidenceFromAttempts(
@@ -473,6 +492,10 @@ export function formatNavigationNetworkEvidence(
 
   if (evidence.redirects?.length) {
     fragments.push(`重定向 ${evidence.redirects.length} 次`)
+  }
+
+  if (isUnverifiedRedirectEvidence(evidence)) {
+    fragments.push('未确认最终页面响应')
   }
 
   const responseLatencyMs = evidence.timing?.responseLatencyMs

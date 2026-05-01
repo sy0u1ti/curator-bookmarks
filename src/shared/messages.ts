@@ -1,7 +1,5 @@
-import type { NavigationNetworkEvidence } from './types.js'
+import type { NavigationNetworkEvidence, NavigationStatus } from './types.js'
 import type { BookmarkTagAnalysisInput } from './bookmark-tags.js'
-
-type NavigationStatus = 'available' | 'failed'
 
 export interface NavigationCheckMessage {
   type: 'availability:navigate'

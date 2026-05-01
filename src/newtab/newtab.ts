@@ -69,8 +69,14 @@ const DEFAULT_SEARCH_SETTINGS = {
   background: 58
 }
 const SUPPORTED_SEARCH_ENGINES = new Set(['default', 'google', 'bing', 'baidu', 'duckduckgo'])
+const SEARCH_SUGGESTION_LIMIT = 6
+const NEW_TAB_ACTIVITY_STORAGE_KEY = 'curatorBookmarkNewTabActivity'
+const QUICK_ACCESS_ITEM_LIMIT = 8
+const ACTIVITY_RECORD_LIMIT = 160
 const DEFAULT_GENERAL_SETTINGS = {
-  hideSettingsTrigger: false
+  hideSettingsTrigger: false,
+  showFrequentBookmarks: true,
+  showRecentBookmarks: true
 }
 const DEFAULT_FOLDER_SETTINGS = {
   selectedFolderIds: [] as string[],
@@ -81,9 +87,19 @@ const DEFAULT_TIME_SETTINGS = {
   showSeconds: false,
   hour12: false,
   clockSize: 100,
-  dateFormat: 'month-day-weekday',
+  dateFormat: 'year-month-day-weekday',
   timeZone: 'auto',
   displayMode: 'time-date'
+}
+const TIME_ZONE_LABELS: Record<string, string> = {
+  auto: '本地',
+  'Asia/Shanghai': '北京',
+  'Asia/Tokyo': '东京',
+  'Asia/Singapore': '新加坡',
+  'Europe/London': '伦敦',
+  'Europe/Paris': '巴黎',
+  'America/New_York': '纽约',
+  'America/Los_Angeles': '洛杉矶'
 }
 const SUPPORTED_TIME_ZONES = new Set([
   'auto',
@@ -96,6 +112,7 @@ const SUPPORTED_TIME_ZONES = new Set([
   'America/Los_Angeles'
 ])
 const SUPPORTED_DATE_FORMATS = new Set([
+  'year-month-day-weekday',
   'weekday-day-month',
   'weekday-month-day',
   'month-day-weekday'
@@ -111,7 +128,40 @@ interface NewTabFolderSection {
   bookmarks: chrome.bookmarks.BookmarkTreeNode[]
 }
 
-type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy'
+interface SearchBookmarkSuggestion {
+  id: string
+  title: string
+  url: string
+  folderTitle: string
+  folderPath: string
+  score: number
+  order: number
+}
+
+interface NewTabActivityRecord {
+  bookmarkId: string
+  title: string
+  url: string
+  openCount: number
+  firstOpenedAt: number
+  lastOpenedAt: number
+}
+
+interface NewTabActivityState {
+  pinnedIds: string[]
+  records: Record<string, NewTabActivityRecord>
+}
+
+interface QuickAccessItem {
+  id: string
+  title: string
+  url: string
+  detail: string
+  badge: string
+  bookmark: chrome.bookmarks.BookmarkTreeNode
+}
+
+type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
 
 const state = {
   loading: true,
@@ -131,6 +181,7 @@ const state = {
   menuStatus: '',
   editIconMode: 'website',
   pendingCustomIconDataUrl: '',
+  pendingDeleteBookmarkId: '',
   addMenuOpen: false,
   addMenuExpanded: false,
   addMenuX: 0,
@@ -167,6 +218,10 @@ const state = {
   iconSettings: { ...DEFAULT_ICON_SETTINGS },
   generalSettings: { ...DEFAULT_GENERAL_SETTINGS },
   folderSettings: { ...DEFAULT_FOLDER_SETTINGS } as NewTabFolderSettings,
+  activity: {
+    pinnedIds: [],
+    records: {}
+  } as NewTabActivityState,
   folderCandidatesExpanded: false,
   folderCandidateQuery: '',
   timeSettings: { ...DEFAULT_TIME_SETTINGS },
@@ -317,8 +372,8 @@ function bindEvents(): void {
   chrome.bookmarks?.onChanged?.addListener(handleBookmarksChanged)
   chrome.bookmarks?.onMoved?.addListener(handleBookmarksChanged)
 
-  window.clearInterval(clockTimer)
-  clockTimer = window.setInterval(updateClockText, 1000)
+  window.clearTimeout(clockTimer)
+  scheduleClockTick()
 }
 
 function bindSettingsRangeVisuals(): void {
@@ -479,6 +534,12 @@ function bindGeneralSettingsEvents(): void {
   document
     .getElementById('general-hide-settings-trigger')
     ?.addEventListener('change', handleGeneralSettingsChange)
+  document
+    .getElementById('general-show-frequent')
+    ?.addEventListener('change', handleGeneralSettingsChange)
+  document
+    .getElementById('general-show-recent')
+    ?.addEventListener('change', handleGeneralSettingsChange)
 }
 
 function bindFolderSettingsEvents(): void {
@@ -504,6 +565,8 @@ function handleGeneralSettingsChange(): void {
   void saveGeneralSettings()
   syncGeneralSettingsControls()
   applyGeneralSettings()
+  render()
+  updateClockText()
 }
 
 function handleFolderSettingsChange(): void {
@@ -772,6 +835,7 @@ function handleTimeSettingsChange(): void {
   scheduleTimeSettingsSave()
   scheduleRender({ updateClock: true })
   syncTimeSettingsControls()
+  scheduleClockTick()
 }
 
 function openSettingsDrawer(): void {
@@ -822,6 +886,7 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
   state.editUrl = String(bookmark.url || '').trim()
   state.editIconMode = state.customIcons[bookmarkId] ? 'custom' : 'website'
   state.pendingCustomIconDataUrl = ''
+  state.pendingDeleteBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
   state.menuStatus = ''
@@ -846,6 +911,7 @@ function closeBookmarkMenu({ animate = true } = {}): void {
   state.menuError = ''
   state.menuStatus = ''
   state.pendingCustomIconDataUrl = ''
+  state.pendingDeleteBookmarkId = ''
   const menu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
   if (menu) {
     if (animate) {
@@ -1599,6 +1665,42 @@ function handleBookmarksChanged(): void {
   void refreshNewTab()
 }
 
+function isActiveMenuBookmarkPinned(): boolean {
+  const bookmark = getActiveMenuBookmark()
+  return Boolean(bookmark && state.activity.pinnedIds.includes(String(bookmark.id)))
+}
+
+async function toggleActiveMenuBookmarkPin(): Promise<void> {
+  const bookmark = getActiveMenuBookmark()
+  if (!bookmark?.url) {
+    closeBookmarkMenu()
+    return
+  }
+
+  const bookmarkId = String(bookmark.id)
+  const pinned = state.activity.pinnedIds.includes(bookmarkId)
+  state.activity = {
+    ...state.activity,
+    pinnedIds: pinned
+      ? state.activity.pinnedIds.filter((id) => id !== bookmarkId)
+      : [bookmarkId, ...state.activity.pinnedIds.filter((id) => id !== bookmarkId)]
+  }
+
+  try {
+    state.pendingDeleteBookmarkId = ''
+    await saveNewTabActivity()
+    state.menuError = ''
+    state.menuStatus = pinned ? '已取消固定' : '已固定到常用'
+    render()
+    updateClockText()
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
+  } catch (error) {
+    state.menuStatus = ''
+    state.menuError = error instanceof Error ? error.message : '固定状态保存失败，请稍后重试。'
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
+  }
+}
+
 async function saveBookmarkMenuChanges(): Promise<void> {
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
@@ -1609,6 +1711,7 @@ async function saveBookmarkMenuChanges(): Promise<void> {
   try {
     const title = state.editTitle.trim() || state.editUrl.trim()
     const url = normalizeBookmarkInputUrl(state.editUrl)
+    state.pendingDeleteBookmarkId = ''
     state.menuBusy = true
     state.menuError = ''
     state.menuStatus = ''
@@ -1634,6 +1737,7 @@ async function copyActiveMenuBookmarkUrl(): Promise<void> {
   }
 
   try {
+    state.pendingDeleteBookmarkId = ''
     await writeClipboardText(bookmark.url)
     state.menuError = ''
     state.menuStatus = '链接已复制'
@@ -1679,11 +1783,20 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     return
   }
 
+  const bookmarkId = String(bookmark.id || '')
+  if (state.pendingDeleteBookmarkId !== bookmarkId) {
+    state.pendingDeleteBookmarkId = bookmarkId
+    state.menuError = ''
+    state.menuStatus = getDeleteBookmarkConfirmationText(bookmark)
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'delete-bookmark' })
+    return
+  }
+
   try {
     state.menuBusy = true
     state.menuError = ''
-    state.menuStatus = ''
-    renderBookmarkMenu()
+    state.menuStatus = `正在删除 1 个书签：「${getBookmarkDisplayTitle(bookmark)}」...`
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'delete-bookmark' })
 
     await removeBookmark(bookmark.id)
     await appendRecycleEntry({
@@ -1702,15 +1815,30 @@ async function deleteActiveMenuBookmark(): Promise<void> {
       delete nextIcons[bookmark.id]
       await saveCustomIcons(nextIcons)
     }
+    await removeBookmarkFromActivity(bookmark.id).catch((error) => {
+      console.warn('新标签页打开记录清理失败。', error)
+    })
 
+    state.pendingDeleteBookmarkId = ''
     closeBookmarkMenu()
     await refreshNewTab()
   } catch (error) {
+    state.pendingDeleteBookmarkId = ''
     state.menuBusy = false
     state.menuStatus = ''
     state.menuError = error instanceof Error ? error.message : '删除失败，请稍后重试。'
     renderBookmarkMenu()
   }
+}
+
+function getDeleteBookmarkConfirmationText(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
+  const title = getBookmarkDisplayTitle(bookmark)
+  const folderPath = getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE
+  return `再点一次“确认删除 1 个”会从 Chrome 书签中删除「${title}」，位置：${folderPath}。删除记录会进入回收站，可从回收站恢复。`
+}
+
+function getBookmarkDisplayTitle(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
+  return String(bookmark.title || '').trim() || String(bookmark.url || '').trim() || '未命名书签'
 }
 
 function refreshActiveMenuIcon(): void {
@@ -1720,6 +1848,7 @@ function refreshActiveMenuIcon(): void {
     return
   }
 
+  state.pendingDeleteBookmarkId = ''
   state.faviconRefreshTokens.set(bookmark.id, Date.now())
   render()
   updateClockText()
@@ -1771,7 +1900,8 @@ async function refreshNewTab(): Promise<void> {
         STORAGE_KEYS.newTabIconSettings,
         STORAGE_KEYS.newTabGeneralSettings,
         STORAGE_KEYS.newTabFolderSettings,
-        STORAGE_KEYS.newTabTimeSettings
+        STORAGE_KEYS.newTabTimeSettings,
+        NEW_TAB_ACTIVITY_STORAGE_KEY
       ])
     ])
     const rootNode = tree[0] || null
@@ -1787,6 +1917,7 @@ async function refreshNewTab(): Promise<void> {
     state.folderNode = folderSections[0]?.node || null
     state.bookmarks = getAllSectionBookmarks()
     state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
+    state.activity = normalizeNewTabActivity(stored[NEW_TAB_ACTIVITY_STORAGE_KEY], state.bookmarks)
     state.backgroundSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
@@ -1808,6 +1939,7 @@ async function refreshNewTab(): Promise<void> {
     syncTimeSettingsControls()
     updateAllSettingRangeVisuals()
     updateClockText()
+    scheduleClockTick()
   }
 }
 
@@ -1964,6 +2096,7 @@ function createSearchWidget(): HTMLElement | null {
 
   const slot = document.createElement('section')
   slot.className = 'newtab-search-slot'
+  slot.style.setProperty('--search-width', `${settings.width}vw`)
   slot.style.setProperty('--search-height', `${settings.height}px`)
   slot.style.setProperty('--search-offset-y', `${settings.offsetY}px`)
   slot.setAttribute('aria-label', '搜索')
@@ -1984,6 +2117,9 @@ function createSearchWidget(): HTMLElement | null {
   input.placeholder = settings.placeholder
   input.spellcheck = false
   input.setAttribute('aria-label', settings.placeholder || '搜索')
+  input.setAttribute('aria-autocomplete', 'list')
+  input.setAttribute('aria-controls', 'newtab-search-suggestions')
+  input.setAttribute('aria-expanded', 'false')
 
   const clearButton = document.createElement('button')
   clearButton.className = 'newtab-search-clear hidden'
@@ -1998,7 +2134,8 @@ function createSearchWidget(): HTMLElement | null {
   const submitButton = document.createElement('button')
   submitButton.className = 'newtab-search-submit'
   submitButton.type = 'submit'
-  submitButton.setAttribute('aria-label', '搜索')
+  submitButton.setAttribute('aria-label', '搜索网页')
+  submitButton.title = '搜索网页'
   submitButton.disabled = true
 
   const icon = document.createElement('span')
@@ -2006,15 +2143,132 @@ function createSearchWidget(): HTMLElement | null {
   icon.setAttribute('aria-hidden', 'true')
   submitButton.appendChild(icon)
 
+  const suggestionsPanel = document.createElement('div')
+  suggestionsPanel.id = 'newtab-search-suggestions-panel'
+  suggestionsPanel.className = 'newtab-search-suggestions-panel hidden'
+
+  const suggestions = document.createElement('div')
+  suggestions.id = 'newtab-search-suggestions'
+  suggestions.className = 'newtab-search-suggestions'
+  suggestions.setAttribute('role', 'listbox')
+  suggestions.setAttribute('aria-label', '匹配的书签')
+
+  const searchHint = document.createElement('div')
+  searchHint.className = 'newtab-search-hint'
+  searchHint.setAttribute('aria-live', 'polite')
+  searchHint.textContent = ''
+  suggestionsPanel.append(suggestions, searchHint)
+
+  let searchSuggestions: SearchBookmarkSuggestion[] = []
+  let activeSuggestionIndex = -1
+
+  const hideSuggestions = () => {
+    searchSuggestions = []
+    activeSuggestionIndex = -1
+    suggestions.replaceChildren()
+    searchHint.textContent = ''
+    suggestionsPanel.classList.add('hidden')
+    input.setAttribute('aria-expanded', 'false')
+    input.removeAttribute('aria-activedescendant')
+  }
+
+  const renderSuggestions = ({ preserveActive = false } = {}) => {
+    const query = input.value.trim()
+    const previousActiveIndex = activeSuggestionIndex
+    searchSuggestions = getSearchBookmarkSuggestions(input.value)
+    if (!searchSuggestions.length) {
+      activeSuggestionIndex = -1
+      suggestions.replaceChildren()
+      input.removeAttribute('aria-activedescendant')
+      input.setAttribute('aria-expanded', 'false')
+      if (!query) {
+        hideSuggestions()
+        return
+      }
+
+      searchHint.textContent = `Enter 搜索网页：${query}`
+      suggestionsPanel.classList.remove('hidden')
+      return
+    }
+
+    activeSuggestionIndex = preserveActive
+      ? Math.max(0, Math.min(previousActiveIndex, searchSuggestions.length - 1))
+      : 0
+
+    suggestions.replaceChildren(...searchSuggestions.map((suggestion, index) =>
+      createSearchSuggestionButton(
+        suggestion,
+        index,
+        index === activeSuggestionIndex,
+        (selectedSuggestion) => {
+          input.value = selectedSuggestion.title
+          syncSearchInputActions(input, clearButton, separator, submitButton)
+          hideSuggestions()
+          openBookmarkSuggestion(selectedSuggestion)
+        }
+      )
+    ))
+    suggestionsPanel.classList.remove('hidden')
+    input.setAttribute('aria-expanded', 'true')
+    searchHint.textContent = getSearchEnterHint(searchSuggestions[activeSuggestionIndex])
+
+    if (activeSuggestionIndex >= 0) {
+      input.setAttribute('aria-activedescendant', getSearchSuggestionElementId(activeSuggestionIndex))
+    } else {
+      input.removeAttribute('aria-activedescendant')
+    }
+  }
+
+  const moveActiveSuggestion = (direction: 1 | -1) => {
+    if (!searchSuggestions.length) {
+      renderSuggestions({ preserveActive: true })
+    }
+    if (!searchSuggestions.length) {
+      return
+    }
+
+    activeSuggestionIndex = activeSuggestionIndex < 0
+      ? (direction > 0 ? 0 : searchSuggestions.length - 1)
+      : (activeSuggestionIndex + direction + searchSuggestions.length) % searchSuggestions.length
+    renderSuggestions({ preserveActive: true })
+  }
+
   input.addEventListener('input', () => {
     syncSearchInputActions(input, clearButton, separator, submitButton)
+    renderSuggestions()
+  })
+  input.addEventListener('focus', () => {
+    renderSuggestions()
   })
   input.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveActiveSuggestion(event.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+
+    if (event.key === 'Enter' && activeSuggestionIndex >= 0) {
+      const suggestion = searchSuggestions[activeSuggestionIndex]
+      if (suggestion) {
+        event.preventDefault()
+        input.value = suggestion.title
+        syncSearchInputActions(input, clearButton, separator, submitButton)
+        hideSuggestions()
+        openBookmarkSuggestion(suggestion)
+      }
+      return
+    }
+
     if (event.key !== 'Escape') {
       return
     }
 
     event.preventDefault()
+    if (searchSuggestions.length) {
+      hideSuggestions()
+      return
+    }
+
     if (input.value) {
       input.value = ''
       syncSearchInputActions(input, clearButton, separator, submitButton)
@@ -2026,16 +2280,25 @@ function createSearchWidget(): HTMLElement | null {
   clearButton.addEventListener('click', () => {
     input.value = ''
     syncSearchInputActions(input, clearButton, separator, submitButton)
+    hideSuggestions()
     input.focus()
   })
   form.addEventListener('submit', (event) => {
     event.preventDefault()
+    hideSuggestions()
     submitSearch(input.value)
+  })
+  slot.addEventListener('focusout', () => {
+    window.setTimeout(() => {
+      if (!slot.contains(document.activeElement)) {
+        hideSuggestions()
+      }
+    }, 0)
   })
 
   form.append(input, clearButton, separator, submitButton)
   syncSearchInputActions(input, clearButton, separator, submitButton)
-  slot.appendChild(form)
+  slot.append(form, suggestionsPanel)
   return slot
 }
 
@@ -2052,6 +2315,159 @@ function syncSearchInputActions(
   submitButton.setAttribute('aria-disabled', String(!hasValue))
 }
 
+function getSearchBookmarkSuggestions(query: string): SearchBookmarkSuggestion[] {
+  const normalizedQuery = normalizeBookmarkSuggestionText(query)
+  if (!normalizedQuery) {
+    return []
+  }
+
+  const suggestions: SearchBookmarkSuggestion[] = []
+  let order = 0
+  for (const section of state.folderSections) {
+    for (const bookmark of section.bookmarks) {
+      const url = String(bookmark.url || '').trim()
+      if (!url) {
+        continue
+      }
+
+      const title = String(bookmark.title || '').trim() || url
+      const score = getSearchSuggestionScore(
+        normalizedQuery,
+        normalizeBookmarkSuggestionText(title),
+        normalizeBookmarkSuggestionText(url),
+        normalizeBookmarkSuggestionText(section.title)
+      )
+      if (score < 0) {
+        order += 1
+        continue
+      }
+
+      suggestions.push({
+        id: String(bookmark.id),
+        title,
+        url,
+        folderTitle: section.title || '未命名文件夹',
+        folderPath: section.path || section.title || '',
+        score,
+        order
+      })
+      order += 1
+    }
+  }
+
+  return suggestions
+    .sort((left, right) => left.score - right.score || left.order - right.order)
+    .slice(0, SEARCH_SUGGESTION_LIMIT)
+}
+
+function getSearchEnterHint(suggestion: SearchBookmarkSuggestion | undefined): string {
+  if (!suggestion) {
+    return 'Enter 搜索网页'
+  }
+
+  return `Enter 打开「${suggestion.title}」；搜索图标搜索网页`
+}
+
+function getSearchSuggestionScore(
+  query: string,
+  title: string,
+  url: string,
+  folderTitle: string
+): number {
+  if (title === query) {
+    return 0
+  }
+  if (title.startsWith(query)) {
+    return 1
+  }
+  if (title.includes(query)) {
+    return 2
+  }
+  if (url.includes(query)) {
+    return 3
+  }
+  if (folderTitle.includes(query)) {
+    return 4
+  }
+  return -1
+}
+
+function normalizeBookmarkSuggestionText(value: string): string {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function createSearchSuggestionButton(
+  suggestion: SearchBookmarkSuggestion,
+  index: number,
+  active: boolean,
+  onSelect: (suggestion: SearchBookmarkSuggestion) => void
+): HTMLButtonElement {
+  const button = document.createElement('button')
+  button.id = getSearchSuggestionElementId(index)
+  button.className = `newtab-search-suggestion${active ? ' active' : ''}`
+  button.type = 'button'
+  button.setAttribute('role', 'option')
+  button.setAttribute('aria-selected', String(active))
+  button.setAttribute('aria-label', `打开书签：${suggestion.title}`)
+  button.addEventListener('pointerdown', (event) => {
+    event.preventDefault()
+  })
+  button.addEventListener('click', () => {
+    onSelect(suggestion)
+  })
+
+  const mark = document.createElement('span')
+  mark.className = 'newtab-search-suggestion-mark'
+  mark.setAttribute('aria-hidden', 'true')
+  mark.textContent = getFallbackLabel(suggestion.title)
+
+  const copy = document.createElement('span')
+  copy.className = 'newtab-search-suggestion-copy'
+
+  const title = document.createElement('strong')
+  title.textContent = suggestion.title
+
+  const meta = document.createElement('span')
+  const source = suggestion.folderPath || suggestion.folderTitle
+  meta.textContent = source
+    ? `${source} · ${formatSearchSuggestionUrl(suggestion.url)}`
+    : formatSearchSuggestionUrl(suggestion.url)
+
+  copy.append(title, meta)
+  button.append(mark, copy)
+  return button
+}
+
+function getSearchSuggestionElementId(index: number): string {
+  return `newtab-search-suggestion-${index}`
+}
+
+function formatSearchSuggestionUrl(url: string): string {
+  try {
+    const parsedUrl = new URL(url)
+    const pathname = parsedUrl.pathname === '/' ? '' : parsedUrl.pathname
+    return `${parsedUrl.hostname}${pathname}`
+  } catch {
+    return url.replace(/^https?:\/\//i, '')
+  }
+}
+
+function openBookmarkSuggestion(suggestion: SearchBookmarkSuggestion): void {
+  const bookmark = getBookmarkById(suggestion.id)
+  if (!bookmark) {
+    openSearchTarget(suggestion.url)
+    return
+  }
+
+  void recordBookmarkOpen(bookmark).finally(() => {
+    openSearchTarget(suggestion.url)
+  })
+}
+
 function createClockWidget(): HTMLElement | null {
   const settings = state.timeSettings
   if (!settings.enabled || settings.displayMode === 'none') {
@@ -2061,24 +2477,48 @@ function createClockWidget(): HTMLElement | null {
   const clock = document.createElement('section')
   clock.className = 'newtab-clock'
   clock.style.setProperty('--clock-scale', String(settings.clockSize / 100))
-  clock.setAttribute('aria-label', '时间和日期')
   const now = new Date()
+  clock.dataset.clockDisplayMode = settings.displayMode
+  clock.dataset.clockShowSeconds = String(settings.showSeconds && settings.displayMode !== 'date')
+  clock.dataset.clockHour12 = String(settings.hour12 && settings.displayMode !== 'date')
+  clock.setAttribute('aria-label', getClockAriaLabel(now))
 
   if (settings.displayMode !== 'date') {
-    const time = document.createElement('div')
+    const timeGroup = document.createElement('span')
+    timeGroup.className = 'newtab-clock-time-group'
+
+    const time = document.createElement('time')
     time.className = 'newtab-clock-time'
     time.dataset.clockTime = 'true'
+    time.dateTime = formatClockTimeDateTime(now)
     time.textContent = formatClockTime(now)
-    clock.appendChild(time)
+    timeGroup.appendChild(time)
+
+    if (settings.hour12) {
+      const period = document.createElement('span')
+      period.className = 'newtab-clock-period'
+      period.dataset.clockPeriod = 'true'
+      period.textContent = formatClockPeriod(now)
+      timeGroup.appendChild(period)
+    }
+
+    clock.appendChild(timeGroup)
   }
 
   if (settings.displayMode !== 'time') {
-    const date = document.createElement('div')
+    const date = document.createElement('time')
     date.className = 'newtab-clock-date'
     date.dataset.clockDate = 'true'
+    date.dateTime = formatClockDateTime(now)
     date.textContent = formatClockDate(now)
     clock.appendChild(date)
   }
+
+  const zone = document.createElement('span')
+  zone.className = 'newtab-clock-zone'
+  zone.dataset.clockZone = 'true'
+  zone.textContent = getClockZoneLabel()
+  clock.appendChild(zone)
 
   return clock
 }
@@ -2154,6 +2594,11 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   view.dataset.iconShowTitles = String(state.iconSettings.showTitles)
   view.dataset.iconVerticalCenter = String(state.iconSettings.verticalCenter)
 
+  const quickAccess = createQuickAccessPanel()
+  if (quickAccess) {
+    view.appendChild(quickAccess)
+  }
+
   const groupList = document.createElement('div')
   groupList.className = 'bookmark-folder-sections'
   let renderedBookmarkIndex = 0
@@ -2212,6 +2657,212 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   return view
 }
 
+function createQuickAccessPanel(): HTMLElement | null {
+  const showFrequent = state.generalSettings.showFrequentBookmarks
+  const showRecent = state.generalSettings.showRecentBookmarks
+  if (!showFrequent && !showRecent) {
+    return null
+  }
+
+  const frequentItems = showFrequent ? getFrequentQuickAccessItems() : []
+  const recentItems = showRecent
+    ? getRecentQuickAccessItems(new Set(frequentItems.map((item) => item.id)))
+    : []
+
+  if (!frequentItems.length && !recentItems.length) {
+    return null
+  }
+
+  const panel = document.createElement('section')
+  panel.className = 'newtab-quick-access'
+  panel.setAttribute('aria-label', '常用和最近书签')
+
+  if (frequentItems.length) {
+    panel.appendChild(createQuickAccessGroup('常用', frequentItems))
+  }
+  if (recentItems.length) {
+    panel.appendChild(createQuickAccessGroup('最近', recentItems))
+  }
+
+  return panel
+}
+
+function createQuickAccessGroup(label: string, items: QuickAccessItem[]): HTMLElement {
+  const group = document.createElement('section')
+  group.className = 'newtab-quick-group'
+  group.setAttribute('aria-label', `${label}书签`)
+
+  const header = document.createElement('div')
+  header.className = 'newtab-quick-heading'
+  header.textContent = label
+
+  const list = document.createElement('div')
+  list.className = 'newtab-quick-list'
+
+  for (const item of items) {
+    list.appendChild(createQuickAccessLink(item))
+  }
+
+  group.append(header, list)
+  return group
+}
+
+function createQuickAccessLink(item: QuickAccessItem): HTMLAnchorElement {
+  const link = document.createElement('a')
+  link.className = 'newtab-quick-link'
+  link.href = item.url
+  link.title = `${item.title} · ${item.detail}`
+  link.draggable = false
+  link.dataset.bookmarkId = item.id
+  bindBookmarkNavigation(link, item.bookmark)
+
+  const mark = document.createElement('span')
+  mark.className = 'newtab-quick-mark'
+  mark.textContent = item.badge
+  mark.setAttribute('aria-hidden', 'true')
+
+  const copy = document.createElement('span')
+  copy.className = 'newtab-quick-copy'
+
+  const title = document.createElement('strong')
+  title.textContent = item.title
+
+  const detail = document.createElement('span')
+  detail.textContent = item.detail
+
+  copy.append(title, detail)
+  link.append(mark, copy)
+  return link
+}
+
+function getFrequentQuickAccessItems(): QuickAccessItem[] {
+  const bookmarkMap = getBookmarkNodeMap()
+  const items: QuickAccessItem[] = []
+  const usedIds = new Set<string>()
+
+  for (const bookmarkId of state.activity.pinnedIds) {
+    const bookmark = bookmarkMap.get(bookmarkId)
+    if (!bookmark?.url || usedIds.has(bookmarkId)) {
+      continue
+    }
+
+    items.push(createQuickAccessItem(bookmark, '已固定', '固'))
+    usedIds.add(bookmarkId)
+    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
+      return items
+    }
+  }
+
+  const frequentRecords = Object.values(state.activity.records)
+    .filter((record) => record.openCount > 0 && !usedIds.has(record.bookmarkId))
+    .sort((left, right) =>
+      right.openCount - left.openCount ||
+      right.lastOpenedAt - left.lastOpenedAt ||
+      left.title.localeCompare(right.title, 'zh-Hans-CN')
+    )
+
+  for (const record of frequentRecords) {
+    const bookmark = bookmarkMap.get(record.bookmarkId)
+    if (!bookmark?.url) {
+      continue
+    }
+
+    items.push(createQuickAccessItem(bookmark, `打开 ${record.openCount} 次`, '常'))
+    usedIds.add(record.bookmarkId)
+    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
+      break
+    }
+  }
+
+  return items
+}
+
+function getRecentQuickAccessItems(excludedIds: Set<string>): QuickAccessItem[] {
+  const bookmarkMap = getBookmarkNodeMap()
+  const items: QuickAccessItem[] = []
+  const usedIds = new Set(excludedIds)
+
+  const recentlyOpened = Object.values(state.activity.records)
+    .filter((record) => record.lastOpenedAt > 0 && !usedIds.has(record.bookmarkId))
+    .sort((left, right) => right.lastOpenedAt - left.lastOpenedAt)
+
+  for (const record of recentlyOpened) {
+    const bookmark = bookmarkMap.get(record.bookmarkId)
+    if (!bookmark?.url) {
+      continue
+    }
+
+    items.push(createQuickAccessItem(bookmark, formatRelativeActivityTime(record.lastOpenedAt, '打开'), '开'))
+    usedIds.add(record.bookmarkId)
+    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
+      return items
+    }
+  }
+
+  const recentlyAdded = state.bookmarks
+    .filter((bookmark) => Number.isFinite(Number(bookmark.dateAdded)) && !usedIds.has(String(bookmark.id)))
+    .sort((left, right) => Number(right.dateAdded || 0) - Number(left.dateAdded || 0))
+
+  for (const bookmark of recentlyAdded) {
+    if (!bookmark.url) {
+      continue
+    }
+
+    items.push(createQuickAccessItem(bookmark, formatRelativeActivityTime(Number(bookmark.dateAdded), '添加'), '新'))
+    usedIds.add(String(bookmark.id))
+    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
+      break
+    }
+  }
+
+  return items
+}
+
+function createQuickAccessItem(
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  detail: string,
+  badge: string
+): QuickAccessItem {
+  const url = String(bookmark.url || '').trim()
+  const title = String(bookmark.title || '').trim() || url
+  return {
+    id: String(bookmark.id),
+    title,
+    url,
+    detail,
+    badge,
+    bookmark
+  }
+}
+
+function getBookmarkNodeMap(): Map<string, chrome.bookmarks.BookmarkTreeNode> {
+  return new Map(state.bookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+}
+
+function formatRelativeActivityTime(timestamp: number, label: string): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return `${label}时间未知`
+  }
+
+  const diffMs = Date.now() - timestamp
+  const minuteMs = 60 * 1000
+  const hourMs = 60 * minuteMs
+  const dayMs = 24 * hourMs
+
+  if (diffMs < hourMs) {
+    return `${label}于刚刚`
+  }
+  if (diffMs < dayMs) {
+    return `${label}于 ${Math.max(1, Math.floor(diffMs / hourMs))} 小时前`
+  }
+  if (diffMs < 30 * dayMs) {
+    return `${label}于 ${Math.max(1, Math.floor(diffMs / dayMs))} 天前`
+  }
+
+  const date = new Date(timestamp)
+  return `${label}于 ${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
+
 function getResponsiveIconColumns(settings: IconSettings): number {
   if (settings.layoutMode !== 'fixed') {
     return settings.columns
@@ -2249,6 +2900,7 @@ function createBookmarkTile(
   item.draggable = false
   item.dataset.bookmarkId = String(bookmark.id)
   item.dataset.folderId = folderId
+  bindBookmarkNavigation(item, bookmark)
   if (String(bookmark.id) === state.draggingBookmarkId && state.dragOriginalOrderIds.length) {
     item.classList.add('dragging')
   }
@@ -2287,6 +2939,37 @@ function createBookmarkTile(
   iconShell.append(icon, fallback)
   item.append(iconShell, label)
   return item
+}
+
+function bindBookmarkNavigation(
+  link: HTMLAnchorElement,
+  bookmark: chrome.bookmarks.BookmarkTreeNode
+): void {
+  const url = String(bookmark.url || '').trim()
+  if (!url) {
+    return
+  }
+
+  link.addEventListener('click', (event) => {
+    if (
+      state.dragSuppressClick ||
+      state.folderDragSuppressClick ||
+      state.draggingBookmarkId ||
+      state.draggingFolderId
+    ) {
+      return
+    }
+
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+      void recordBookmarkOpen(bookmark)
+      return
+    }
+
+    event.preventDefault()
+    void recordBookmarkOpen(bookmark).finally(() => {
+      window.location.assign(url)
+    })
+  })
 }
 
 function findNewTabFolder(
@@ -2394,6 +3077,126 @@ function getBookmarkFolderPath(bookmark: chrome.bookmarks.BookmarkTreeNode): str
   return state.folderSections.find((section) => section.id === parentId)?.path || ''
 }
 
+async function recordBookmarkOpen(bookmark: chrome.bookmarks.BookmarkTreeNode): Promise<void> {
+  const bookmarkId = String(bookmark.id || '').trim()
+  const url = String(bookmark.url || '').trim()
+  if (!bookmarkId || !url) {
+    return
+  }
+
+  const now = Date.now()
+  const previousRecord = state.activity.records[bookmarkId]
+  state.activity = normalizeNewTabActivity({
+    ...state.activity,
+    records: {
+      ...state.activity.records,
+      [bookmarkId]: {
+        bookmarkId,
+        title: String(bookmark.title || '').trim() || url,
+        url,
+        openCount: Math.min((previousRecord?.openCount || 0) + 1, 9999),
+        firstOpenedAt: previousRecord?.firstOpenedAt || now,
+        lastOpenedAt: now
+      }
+    }
+  }, state.bookmarks)
+
+  await saveNewTabActivity().catch((error) => {
+    console.warn('新标签页打开记录保存失败。', error)
+  })
+}
+
+async function removeBookmarkFromActivity(bookmarkId: string): Promise<void> {
+  const normalizedId = String(bookmarkId || '').trim()
+  if (!normalizedId) {
+    return
+  }
+
+  const records = { ...state.activity.records }
+  delete records[normalizedId]
+  state.activity = {
+    pinnedIds: state.activity.pinnedIds.filter((id) => id !== normalizedId),
+    records
+  }
+  await saveNewTabActivity()
+}
+
+async function saveNewTabActivity(): Promise<void> {
+  await setLocalStorage({
+    [NEW_TAB_ACTIVITY_STORAGE_KEY]: normalizeNewTabActivity(state.activity, state.bookmarks)
+  })
+}
+
+function normalizeNewTabActivity(
+  rawActivity: unknown,
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[]
+): NewTabActivityState {
+  const validIds = new Set(bookmarks.map((bookmark) => String(bookmark.id)))
+  const source = rawActivity && typeof rawActivity === 'object' && !Array.isArray(rawActivity)
+    ? rawActivity as Record<string, unknown>
+    : {}
+  const pinnedIds = Array.isArray(source.pinnedIds)
+    ? uniqueActivityIds(source.pinnedIds, validIds).slice(0, QUICK_ACCESS_ITEM_LIMIT)
+    : []
+  const rawRecords = source.records && typeof source.records === 'object' && !Array.isArray(source.records)
+    ? source.records as Record<string, unknown>
+    : {}
+  const records: Record<string, NewTabActivityRecord> = {}
+
+  const normalizedRecords = Object.entries(rawRecords)
+    .map(([bookmarkId, value]) => normalizeActivityRecord(bookmarkId, value, validIds))
+    .filter((record): record is NewTabActivityRecord => Boolean(record))
+    .sort((left, right) => right.lastOpenedAt - left.lastOpenedAt)
+    .slice(0, ACTIVITY_RECORD_LIMIT)
+
+  for (const record of normalizedRecords) {
+    records[record.bookmarkId] = record
+  }
+
+  return { pinnedIds, records }
+}
+
+function uniqueActivityIds(values: unknown[], validIds: Set<string>): string[] {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  for (const value of values) {
+    const id = String(value || '').trim()
+    if (!id || seen.has(id) || !validIds.has(id)) {
+      continue
+    }
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
+function normalizeActivityRecord(
+  bookmarkId: string,
+  value: unknown,
+  validIds: Set<string>
+): NewTabActivityRecord | null {
+  const id = String(bookmarkId || '').trim()
+  if (!id || !validIds.has(id) || !value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const source = value as Record<string, unknown>
+  const openCount = Math.max(0, Math.min(Math.floor(Number(source.openCount) || 0), 9999))
+  const lastOpenedAt = Number(source.lastOpenedAt) || 0
+  if (openCount <= 0 || lastOpenedAt <= 0) {
+    return null
+  }
+
+  return {
+    bookmarkId: id,
+    title: String(source.title || '').trim().slice(0, 160),
+    url: String(source.url || '').trim().slice(0, 2048),
+    openCount,
+    firstOpenedAt: Number(source.firstOpenedAt) || lastOpenedAt,
+    lastOpenedAt
+  }
+}
+
 function getActiveMenuBookmark(): chrome.bookmarks.BookmarkTreeNode | null {
   return state.activeMenuBookmarkId ? getBookmarkById(state.activeMenuBookmarkId) : null
 }
@@ -2453,8 +3256,19 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
   actionList.setAttribute('aria-label', '书签操作')
   actionList.addEventListener('keydown', handleMenuActionsKeydown)
   actionList.append(
+    createMenuAction(
+      isActiveMenuBookmarkPinned() ? '取消固定' : '固定到常用',
+      'pin',
+      toggleActiveMenuBookmarkPin,
+      { actionId: 'toggle-pin' }
+    ),
     createMenuAction('复制链接', 'copy', copyActiveMenuBookmarkUrl, { actionId: 'copy-url' }),
-    createMenuAction('删除链接', 'trash', deleteActiveMenuBookmark, { actionId: 'delete-bookmark' }),
+    createMenuAction(
+      state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
+      'trash',
+      deleteActiveMenuBookmark,
+      { actionId: 'delete-bookmark', variant: 'danger' }
+    ),
     createMenuAction('刷新图标', 'refresh', refreshActiveMenuIcon, { actionId: 'refresh-icon' }),
     createMenuAction('保存更改', 'save', saveBookmarkMenuChanges, { actionId: 'save-bookmark' })
   )
@@ -2471,6 +3285,9 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
   if (state.menuStatus) {
     const status = document.createElement('p')
     status.className = 'bookmark-menu-status'
+    if (state.pendingDeleteBookmarkId === String(bookmark.id)) {
+      status.classList.add('is-warning')
+    }
     status.textContent = state.menuStatus
     menu.appendChild(status)
   }
@@ -2571,6 +3388,7 @@ async function handleIconModeChange(nextMode: string): Promise<void> {
   if (nextMode === 'website') {
     state.editIconMode = 'website'
     state.pendingCustomIconDataUrl = ''
+    state.pendingDeleteBookmarkId = ''
     state.menuError = ''
     state.menuStatus = ''
     renderBookmarkMenu({ focusFirst: false })
@@ -2578,6 +3396,7 @@ async function handleIconModeChange(nextMode: string): Promise<void> {
   }
 
   state.menuBusy = true
+  state.pendingDeleteBookmarkId = ''
   state.menuError = ''
   state.menuStatus = ''
   renderBookmarkMenu({ focusFirst: false })
@@ -2631,6 +3450,7 @@ function createMenuTextField(
   input.disabled = disabled
   input.spellcheck = false
   input.addEventListener('input', () => {
+    state.pendingDeleteBookmarkId = ''
     onInput(input.value)
   })
   input.addEventListener('keydown', (event) => {
@@ -2648,10 +3468,18 @@ function createMenuAction(
   label: string,
   icon: MenuActionIcon,
   action: () => void | Promise<void>,
-  { disabled = state.menuBusy, actionId = '' }: { disabled?: boolean; actionId?: string } = {}
+  {
+    disabled = state.menuBusy,
+    actionId = '',
+    variant = ''
+  }: {
+    disabled?: boolean
+    actionId?: string
+    variant?: 'danger' | ''
+  } = {}
 ): HTMLButtonElement {
   const button = document.createElement('button')
-  button.className = 'bookmark-menu-action'
+  button.className = `bookmark-menu-action${variant ? ` ${variant}` : ''}`
   button.type = 'button'
   button.disabled = disabled
   button.setAttribute('role', 'menuitem')
@@ -2739,6 +3567,11 @@ function createMenuActionIcon(icon: MenuActionIcon): SVGSVGElement {
     copy: [
       'M8 8h11v11H8z',
       'M5 16H4V5h11v1'
+    ],
+    pin: [
+      'M7 4h10',
+      'M9 4l1 7-3 3v2h10v-2l-3-3 1-7',
+      'M12 16v5'
     ]
   }
 
@@ -3591,25 +4424,43 @@ function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_
 
   const settings = rawSettings as Record<string, unknown>
   return {
-    hideSettingsTrigger: settings.hideSettingsTrigger === true
+    hideSettingsTrigger: settings.hideSettingsTrigger === true,
+    showFrequentBookmarks: settings.showFrequentBookmarks !== false,
+    showRecentBookmarks: settings.showRecentBookmarks !== false
   }
 }
 
 function readGeneralSettingsFromControls(): typeof DEFAULT_GENERAL_SETTINGS {
   const hideInput = document.getElementById('general-hide-settings-trigger')
+  const showFrequentInput = document.getElementById('general-show-frequent')
+  const showRecentInput = document.getElementById('general-show-recent')
 
   return normalizeGeneralSettings({
     hideSettingsTrigger: hideInput instanceof HTMLInputElement
       ? hideInput.checked
-      : state.generalSettings.hideSettingsTrigger
+      : state.generalSettings.hideSettingsTrigger,
+    showFrequentBookmarks: showFrequentInput instanceof HTMLInputElement
+      ? showFrequentInput.checked
+      : state.generalSettings.showFrequentBookmarks,
+    showRecentBookmarks: showRecentInput instanceof HTMLInputElement
+      ? showRecentInput.checked
+      : state.generalSettings.showRecentBookmarks
   })
 }
 
 function syncGeneralSettingsControls(): void {
   const hideInput = document.getElementById('general-hide-settings-trigger')
+  const showFrequentInput = document.getElementById('general-show-frequent')
+  const showRecentInput = document.getElementById('general-show-recent')
 
   if (hideInput instanceof HTMLInputElement) {
     hideInput.checked = state.generalSettings.hideSettingsTrigger
+  }
+  if (showFrequentInput instanceof HTMLInputElement) {
+    showFrequentInput.checked = state.generalSettings.showFrequentBookmarks
+  }
+  if (showRecentInput instanceof HTMLInputElement) {
+    showRecentInput.checked = state.generalSettings.showRecentBookmarks
   }
 }
 
@@ -3757,7 +4608,11 @@ function createSelectedFolderControls(): HTMLElement[] {
     remove.className = 'folder-source-remove'
     remove.type = 'button'
     remove.dataset.folderRemoveId = folderId
-    remove.setAttribute('aria-label', `移除 ${folder?.title || '文件夹'}`)
+    const folderTitle = folder?.title || '文件夹'
+    const affectedCount = folder?.bookmarkCount || 0
+    const removeLabel = `从新标签页移除「${folderTitle}」，将隐藏 ${affectedCount} 个书签，不会删除书签`
+    remove.setAttribute('aria-label', removeLabel)
+    remove.title = removeLabel
     remove.textContent = '×'
 
     row.append(copy, remove)
@@ -4312,6 +5167,8 @@ function syncTimeSettingsControls(): void {
     displayInput.value = settings.displayMode
     displayInput.disabled = !settings.enabled
   }
+
+  setTextContent('time-clock-size-value', `${settings.clockSize}%`)
 }
 
 async function saveTimeSettings(): Promise<void> {
@@ -4328,19 +5185,56 @@ function scheduleTimeSettingsSave(): void {
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
+function scheduleClockTick(): void {
+  window.clearTimeout(clockTimer)
+  if (!state.timeSettings.enabled || state.timeSettings.displayMode === 'none') {
+    clockTimer = 0
+    return
+  }
+
+  clockTimer = window.setTimeout(() => {
+    clockTimer = 0
+    updateClockText()
+    scheduleClockTick()
+  }, getClockUpdateDelay(new Date()))
+}
+
+function getClockUpdateDelay(date: Date): number {
+  const milliseconds = date.getMilliseconds()
+  if (state.timeSettings.showSeconds && state.timeSettings.displayMode !== 'date') {
+    return Math.max(250, 1000 - milliseconds + 25)
+  }
+
+  return Math.max(1000, (60 - date.getSeconds()) * 1000 - milliseconds + 25)
+}
+
 function updateClockText(): void {
+  const clockNode = document.querySelector('.newtab-clock')
   const timeNode = document.querySelector('[data-clock-time]')
   const dateNode = document.querySelector('[data-clock-date]')
-  if (!timeNode && !dateNode) {
+  const periodNode = document.querySelector('[data-clock-period]')
+  const zoneNode = document.querySelector('[data-clock-zone]')
+  if (!timeNode && !dateNode && !periodNode && !zoneNode) {
     return
   }
 
   const now = new Date()
-  if (timeNode) {
-    timeNode.textContent = formatClockTime(now)
+  if (clockNode instanceof HTMLElement) {
+    clockNode.setAttribute('aria-label', getClockAriaLabel(now))
   }
-  if (dateNode) {
+  if (timeNode instanceof HTMLTimeElement) {
+    timeNode.textContent = formatClockTime(now)
+    timeNode.dateTime = formatClockTimeDateTime(now)
+  }
+  if (periodNode) {
+    periodNode.textContent = formatClockPeriod(now)
+  }
+  if (dateNode instanceof HTMLTimeElement) {
     dateNode.textContent = formatClockDate(now)
+    dateNode.dateTime = formatClockDateTime(now)
+  }
+  if (zoneNode) {
+    zoneNode.textContent = getClockZoneLabel()
   }
 }
 
@@ -4362,14 +5256,39 @@ function formatClockTime(date: Date): string {
   return timeParts.join(':')
 }
 
+function formatClockPeriod(date: Date): string {
+  return getClockParts(date).hours < 12 ? 'AM' : 'PM'
+}
+
+function formatClockTimeDateTime(date: Date): string {
+  const parts = getClockParts(date)
+  return [
+    String(parts.hours).padStart(2, '0'),
+    String(parts.minutes).padStart(2, '0'),
+    String(parts.seconds).padStart(2, '0')
+  ].join(':')
+}
+
+function formatClockDateTime(date: Date): string {
+  const parts = getClockParts(date)
+  return [
+    String(parts.year).padStart(4, '0'),
+    String(parts.month).padStart(2, '0'),
+    String(parts.day).padStart(2, '0')
+  ].join('-')
+}
+
 function formatClockDate(date: Date): string {
   const settings = state.timeSettings
   const parts = getClockParts(date)
+  const yearText = String(parts.year).padStart(4, '0')
   const monthText = String(parts.month).padStart(2, '0')
   const dayText = String(parts.day).padStart(2, '0')
   const weekdayText = parts.weekday.replace(/^星期/, '周')
 
   switch (settings.dateFormat) {
+    case 'year-month-day-weekday':
+      return `${yearText}.${monthText}.${dayText} ${weekdayText}`
     case 'weekday-day-month':
       return `${weekdayText} ${dayText}/${monthText}`
     case 'weekday-month-day':
@@ -4378,6 +5297,25 @@ function formatClockDate(date: Date): string {
     default:
       return `${monthText}.${dayText} ${weekdayText}`
   }
+}
+
+function getClockAriaLabel(date: Date): string {
+  const settings = state.timeSettings
+  const parts: string[] = []
+  if (settings.displayMode !== 'date') {
+    parts.push(settings.hour12
+      ? `${formatClockTime(date)} ${formatClockPeriod(date)}`
+      : formatClockTime(date))
+  }
+  if (settings.displayMode !== 'time') {
+    parts.push(formatClockDate(date))
+  }
+  parts.push(getClockZoneLabel())
+  return parts.join('，')
+}
+
+function getClockZoneLabel(): string {
+  return TIME_ZONE_LABELS[state.timeSettings.timeZone] || state.timeSettings.timeZone
 }
 
 function getClockParts(date: Date): {

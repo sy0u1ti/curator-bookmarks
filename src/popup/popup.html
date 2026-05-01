@@ -33,10 +33,12 @@
         </button>
       </header>
 
+      <section id="auto-analyze-status" class="auto-analyze-status hidden" aria-live="polite" aria-atomic="true"></section>
+
       <section id="smart-classifier" class="smart-classifier hidden" aria-live="polite"></section>
 
-      <section class="filter-row">
-        <button id="folder-filter-trigger" class="filter-trigger" type="button">
+      <section class="filter-row" aria-label="筛选范围">
+        <button id="folder-filter-trigger" class="filter-trigger" type="button" aria-label="选择文件夹筛选范围">
           全部文件夹
         </button>
         <button id="clear-folder-filter" class="filter-clear hidden" type="button">
@@ -46,6 +48,7 @@
 
       <label class="search-shell" for="search-input">
         <span class="search-icon" aria-hidden="true"></span>
+        <span id="search-mode-chip" class="search-mode-chip" aria-hidden="true">本地</span>
         <input
           id="search-input"
           class="search-input"
@@ -53,6 +56,7 @@
           spellcheck="false"
           autocomplete="off"
           autofocus
+          aria-label="搜索书签标题或网址"
           placeholder="搜索书签或网址"
         >
         <button
@@ -70,7 +74,7 @@
         </button>
       </label>
 
-      <section class="toolbar">
+      <section class="toolbar" aria-label="当前视图状态">
         <p class="view-caption" id="view-caption">书签栏</p>
         <p class="key-hint">↑ ↓ 切换 · Enter 打开 · Esc 返回</p>
       </section>
