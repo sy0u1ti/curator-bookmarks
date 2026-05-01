@@ -524,7 +524,7 @@ export async function clearDetectionHistoryLogs(callbacks) {
         title: `清空 ${managerState.historyRuns.length} 次检测历史日志？`,
         copy: '检测历史、趋势对比和连续异常计数会被清除。当前检测结果不会被删除。',
         confirmLabel: '清空历史日志',
-        label: 'Confirm',
+        label: '清空历史',
         tone: 'warning'
       })
     : true

@@ -540,7 +540,7 @@ export async function deleteSelectedDuplicates(callbacks) {
         title: `移入回收站 ${targetIds.length} 条重复书签？`,
         copy: `这些重复项会从 Chrome 书签中移除并进入扩展回收站；本次会保留 ${selectionStats.keepCount} 条。`,
         confirmLabel: '移入回收站',
-        label: 'Delete',
+        label: '移入回收站',
         tone: 'danger'
       })
     : true

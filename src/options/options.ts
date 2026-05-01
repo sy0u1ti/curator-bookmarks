@@ -6642,7 +6642,7 @@ async function deleteSelectedAvailabilityResults() {
     title: `删除 ${selectedResults.length} 条异常书签？`,
     copy: '这些书签会从 Chrome 书签中移除并进入回收站。你仍可在回收站里恢复它们，当前选择会被清空。',
     confirmLabel: '删除并移入回收站',
-    label: 'Delete',
+    label: '移入回收站',
     tone: 'danger'
   })
   if (!confirmed) {
@@ -6953,7 +6953,7 @@ function requestConfirmation({
 
   managerState.confirmModalOpen = true
   managerState.confirmModalTone = tone === 'warning' ? 'warning' : 'danger'
-  managerState.confirmModalLabel = label || (managerState.confirmModalTone === 'warning' ? 'Confirm' : 'Delete')
+  managerState.confirmModalLabel = label || (managerState.confirmModalTone === 'warning' ? '确认' : '删除')
   managerState.confirmModalTitle = title
   managerState.confirmModalCopy = copy
   managerState.confirmModalConfirmLabel = confirmLabel

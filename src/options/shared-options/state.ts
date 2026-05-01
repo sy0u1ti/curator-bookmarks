@@ -152,7 +152,7 @@ export const managerState = {
   aiModelPickerSearchQuery: '',
   confirmModalOpen: false,
   confirmModalTone: 'danger',
-  confirmModalLabel: 'Confirm',
+  confirmModalLabel: '确认',
   confirmModalTitle: '确认操作？',
   confirmModalCopy: '请确认是否继续。',
   confirmModalConfirmLabel: '确认',

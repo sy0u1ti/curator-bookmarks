@@ -255,7 +255,7 @@ export async function clearIgnoreRules(kind, callbacks) {
         title: `清空 ${meta.count} 条${meta.label}忽略规则？`,
         copy: '清空后，对应异常会重新出现在后续检测结果中。已保存的书签不会被删除。',
         confirmLabel: '清空规则',
-        label: 'Confirm',
+        label: '清空规则',
         tone: 'warning'
       })
     : true

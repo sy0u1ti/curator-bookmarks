@@ -44,6 +44,7 @@
           <div class="options-nav-group">
             <p id="options-ai-nav-label" class="options-sidebar-label">AI功能</p>
             <nav class="options-nav" aria-labelledby="options-ai-nav-label">
+              <a class="options-nav-link" href="#general" data-section-link="general">AI 渠道/API Key</a>
               <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
               <a class="options-nav-link" href="#ai" data-section-link="ai">标签与命名建议</a>
             </nav>
@@ -804,6 +805,7 @@
               </div>
 
               <div class="detect-toolbar-actions">
+                <a class="options-button secondary small" href="#general" data-section-link="general">配置 API Key</a>
                 <button id="ai-action" class="options-button" type="button">开始分析并生成建议</button>
                 <button id="ai-pause-action" class="options-button secondary small hidden" type="button" disabled>暂停生成</button>
                 <button id="ai-stop-action" class="options-button secondary small hidden" type="button" disabled>停止本次生成</button>
@@ -1264,7 +1266,7 @@
 
     <div id="delete-modal-backdrop" class="options-modal-backdrop hidden" aria-hidden="true">
       <section class="options-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title" aria-describedby="delete-modal-copy">
-        <p class="options-section-label danger">Delete</p>
+        <p class="options-section-label danger">删除</p>
         <h2 id="delete-modal-title">批量删除高置信异常书签？</h2>
         <p id="delete-modal-copy" class="options-modal-copy">这些书签会从 Chrome 书签中移除，并直接从当前高置信异常列表里消失；低置信异常结果会保留。</p>
         <div class="options-modal-actions">
@@ -1276,7 +1278,7 @@
 
     <div id="confirm-modal-backdrop" class="options-modal-backdrop hidden" aria-hidden="true">
       <section class="options-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-copy">
-        <p id="confirm-modal-label" class="options-section-label danger">Confirm</p>
+        <p id="confirm-modal-label" class="options-section-label danger">确认</p>
         <h2 id="confirm-modal-title">确认操作？</h2>
         <p id="confirm-modal-copy" class="options-modal-copy">请确认是否继续。</p>
         <div class="options-modal-actions">

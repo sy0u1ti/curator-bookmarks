@@ -192,7 +192,7 @@ async function clearRecycleEntriesByIds(recycleIds, callbacks) {
           : `清除 ${targetEntries.length} 条回收站记录？`,
         copy: '这只会从扩展回收站中移除记录，之后无法再从扩展内恢复；不会再次修改 Chrome 书签。',
         confirmLabel: '清除记录',
-        label: 'Delete',
+        label: '清除回收站记录',
         tone: 'danger'
       })
     : true
@@ -304,7 +304,7 @@ export async function clearRecycleBin(callbacks) {
         title: `清空 ${managerState.recycleBin.length} 条回收站记录？`,
         copy: '这些回收站记录会被永久移除，之后无法再从扩展内恢复。',
         confirmLabel: '清空回收站',
-        label: 'Delete',
+        label: '清空回收站',
         tone: 'danger'
       })
     : true
@@ -372,7 +372,7 @@ export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: s
           ? `删除过程中断，已删除 ${removedIds.length} 条：${removalError.message}`
           : `删除过程中断，已删除 ${removedIds.length} 条。`
     } else if (removedIds.length) {
-      availabilityState.lastError = `已删除 ${removedIds.length} 条书签，并移入回收站。`
+      availabilityState.lastError = `已删除 ${removedIds.length} 条书签，并移入回收站。可在左侧“回收站”查看并恢复。`
     }
 
     callbacks.renderAvailabilitySection()

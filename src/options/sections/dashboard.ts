@@ -108,6 +108,32 @@ interface DashboardVirtualState {
   observedElement: HTMLElement | null
 }
 
+interface DashboardModelCacheKey {
+  bookmarks: BookmarkRecord[]
+  folders: FolderRecord[]
+  tagIndex: BookmarkTagIndex | null
+  tagRecords: BookmarkTagIndex['records'] | null
+  tagUpdatedAt: number
+  contentSnapshotIndex: ContentSnapshotIndex | null
+  contentSnapshotRecords: ContentSnapshotIndex['records'] | null
+  contentSnapshotUpdatedAt: number
+  contentSnapshotSearchMap: Map<string, string> | null
+  contentSnapshotSearchMapSize: number
+  includeFullText: boolean
+}
+
+interface DashboardRenderCache {
+  modelKey: DashboardModelCacheKey | null
+  model: DashboardModel | null
+  visibleModel: DashboardModel | null
+  visibleQuery: string
+  visibleFolderId: string
+  visibleDomain: string
+  visibleMonth: string
+  visibleSortKey: DashboardSortKey
+  visibleItems: DashboardItem[] | null
+}
+
 interface DashboardCallbacks {
   renderAvailabilitySection: () => void
   hydrateAvailabilityCatalog: (options?: { preserveResults?: boolean }) => Promise<void>
@@ -134,6 +160,17 @@ const DASHBOARD_VIRTUAL_THRESHOLD = 120
 let dashboardStatusTimer = 0
 let dashboardTagRegenerateController: AbortController | null = null
 let closingDashboardTagEditor = false
+const dashboardRenderCache: DashboardRenderCache = {
+  modelKey: null,
+  model: null,
+  visibleModel: null,
+  visibleQuery: '',
+  visibleFolderId: '',
+  visibleDomain: '',
+  visibleMonth: '',
+  visibleSortKey: 'date-desc',
+  visibleItems: null
+}
 
 const virtualState: DashboardVirtualState = {
   items: [],
@@ -492,6 +529,12 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
       callbacks.openMoveModal('dashboard')
     } else if (action === 'delete-selected') {
       await deleteSelectedDashboardItems(callbacks)
+    } else if (action === 'move-one') {
+      const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
+      moveSingleDashboardItem(bookmarkId, callbacks)
+    } else if (action === 'delete-one') {
+      const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
+      await deleteSingleDashboardItem(bookmarkId, callbacks)
     } else if (action === 'exit-dashboard') {
       window.location.hash = '#general'
     } else if (action === 'toggle-search-help') {
@@ -996,7 +1039,7 @@ export async function deleteSelectedDashboardItems(callbacks: DashboardCallbacks
     title: `删除 ${selectedBookmarks.length} 条书签？`,
     copy: '这些书签会从 Chrome 书签中移除并进入回收站。你仍可在回收站里恢复它们。',
     confirmLabel: '删除并移入回收站',
-    label: 'Delete',
+    label: '移入回收站',
     tone: 'danger'
   })
   if (!confirmed) {
@@ -1024,7 +1067,7 @@ async function deleteDashboardBookmarkFromDrop(
     title: '删除这个书签？',
     copy: `“${bookmark.title || '未命名书签'}” 会从 Chrome 书签中移除并进入回收站，可在回收站恢复。`,
     confirmLabel: '删除并移入回收站',
-    label: 'Delete',
+    label: '移入回收站',
     tone: 'danger'
   })
   if (!confirmed) {
@@ -1039,6 +1082,39 @@ async function deleteDashboardBookmarkFromDrop(
       ? (availabilityState.lastError || '删除失败，请稍后重试。')
       : '已删除书签，并移入回收站。'
   )
+}
+
+function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbacks): void {
+  const bookmark = availabilityState.bookmarkMap.get(String(bookmarkId))
+  if (!bookmark?.url || availabilityState.deleting) {
+    return
+  }
+
+  dashboardState.selectedIds.clear()
+  dashboardState.selectedIds.add(String(bookmarkId))
+  renderDashboardSection()
+  callbacks.openMoveModal('dashboard')
+}
+
+async function deleteSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbacks): Promise<void> {
+  const bookmark = availabilityState.bookmarkMap.get(String(bookmarkId))
+  if (!bookmark?.url || availabilityState.deleting) {
+    return
+  }
+
+  const confirmed = await callbacks.confirm({
+    title: '删除这个书签？',
+    copy: `“${bookmark.title || '未命名书签'}” 会从 Chrome 书签中移除并进入回收站，可在回收站恢复。`,
+    confirmLabel: '删除并移入回收站',
+    label: '移入回收站',
+    tone: 'danger'
+  })
+  if (!confirmed) {
+    return
+  }
+
+  dashboardState.selectedIds.delete(String(bookmarkId))
+  await deleteBookmarksToRecycle([bookmarkId], '书签仪表盘单项删除', callbacks.recycleCallbacks)
 }
 
 export async function moveSelectedDashboardBookmarks(
@@ -1101,8 +1177,8 @@ export async function moveSelectedDashboardBookmarks(
   }
 }
 
-function getDashboardRenderData() {
-  const model = buildDashboardModel({
+export function getDashboardRenderData() {
+  const model = getCachedDashboardModel({
     bookmarks: availabilityState.allBookmarks,
     folders: availabilityState.allFolders,
     tagIndex: (aiNamingState.tagIndex as BookmarkTagIndex) || null,
@@ -1110,17 +1186,123 @@ function getDashboardRenderData() {
     contentSnapshotSearchMap: contentSnapshotState.searchTextMap,
     includeFullText: contentSnapshotState.settings.fullTextSearchEnabled
   })
-  const visibleItems = sortDashboardItems(
-    filterDashboardItems(model.items, {
-      query: dashboardState.query
-    }),
-    dashboardState.sortKey
-  )
+  const visibleItems = getCachedDashboardVisibleItems(model, {
+    query: dashboardState.query,
+    folderId: dashboardState.folderId,
+    domain: dashboardState.domain,
+    month: dashboardState.month,
+    sortKey: dashboardState.sortKey
+  })
 
   return {
     model,
     visibleItems
   }
+}
+
+function getCachedDashboardModel({
+  bookmarks,
+  folders,
+  tagIndex,
+  contentSnapshotIndex,
+  contentSnapshotSearchMap,
+  includeFullText
+}: {
+  bookmarks: BookmarkRecord[]
+  folders: FolderRecord[]
+  tagIndex: BookmarkTagIndex | null
+  contentSnapshotIndex: ContentSnapshotIndex | null
+  contentSnapshotSearchMap: Map<string, string> | null
+  includeFullText: boolean
+}): DashboardModel {
+  const key: DashboardModelCacheKey = {
+    bookmarks,
+    folders,
+    tagIndex,
+    tagRecords: tagIndex?.records || null,
+    tagUpdatedAt: Number(tagIndex?.updatedAt) || 0,
+    contentSnapshotIndex,
+    contentSnapshotRecords: contentSnapshotIndex?.records || null,
+    contentSnapshotUpdatedAt: Number(contentSnapshotIndex?.updatedAt) || 0,
+    contentSnapshotSearchMap,
+    contentSnapshotSearchMapSize: contentSnapshotSearchMap?.size || 0,
+    includeFullText
+  }
+
+  if (dashboardRenderCache.model && dashboardRenderCache.modelKey && isDashboardModelCacheKeyEqual(dashboardRenderCache.modelKey, key)) {
+    return dashboardRenderCache.model
+  }
+
+  const model = buildDashboardModel({
+    bookmarks,
+    folders,
+    tagIndex,
+    contentSnapshotIndex,
+    contentSnapshotSearchMap,
+    includeFullText
+  })
+  dashboardRenderCache.modelKey = key
+  dashboardRenderCache.model = model
+  dashboardRenderCache.visibleItems = null
+  dashboardRenderCache.visibleModel = null
+  return model
+}
+
+function isDashboardModelCacheKeyEqual(left: DashboardModelCacheKey, right: DashboardModelCacheKey): boolean {
+  return (
+    left.bookmarks === right.bookmarks &&
+    left.folders === right.folders &&
+    left.tagIndex === right.tagIndex &&
+    left.tagRecords === right.tagRecords &&
+    left.tagUpdatedAt === right.tagUpdatedAt &&
+    left.contentSnapshotIndex === right.contentSnapshotIndex &&
+    left.contentSnapshotRecords === right.contentSnapshotRecords &&
+    left.contentSnapshotUpdatedAt === right.contentSnapshotUpdatedAt &&
+    left.contentSnapshotSearchMap === right.contentSnapshotSearchMap &&
+    left.contentSnapshotSearchMapSize === right.contentSnapshotSearchMapSize &&
+    left.includeFullText === right.includeFullText
+  )
+}
+
+function getCachedDashboardVisibleItems(
+  model: DashboardModel,
+  filters: DashboardFilters = {}
+): DashboardItem[] {
+  const query = String(filters.query || '')
+  const folderId = String(filters.folderId || '')
+  const domain = String(filters.domain || '')
+  const month = String(filters.month || '')
+  const sortKey = filters.sortKey || 'date-desc'
+
+  if (
+    dashboardRenderCache.visibleItems &&
+    dashboardRenderCache.visibleModel === model &&
+    dashboardRenderCache.visibleQuery === query &&
+    dashboardRenderCache.visibleFolderId === folderId &&
+    dashboardRenderCache.visibleDomain === domain &&
+    dashboardRenderCache.visibleMonth === month &&
+    dashboardRenderCache.visibleSortKey === sortKey
+  ) {
+    return dashboardRenderCache.visibleItems
+  }
+
+  const visibleItems = sortDashboardItems(
+    filterDashboardItems(model.items, {
+      query,
+      folderId,
+      domain,
+      month
+    }),
+    sortKey
+  )
+  dashboardRenderCache.visibleModel = model
+  dashboardRenderCache.visibleQuery = query
+  dashboardRenderCache.visibleFolderId = folderId
+  dashboardRenderCache.visibleDomain = domain
+  dashboardRenderCache.visibleMonth = month
+  dashboardRenderCache.visibleSortKey = sortKey
+  dashboardRenderCache.visibleItems = visibleItems
+  return visibleItems
 }
 
 function getDashboardTagRecord(bookmarkId: string): BookmarkTagRecord | null {
@@ -1545,12 +1727,15 @@ function buildDashboardCard(item: DashboardItem): string {
           type="button"
           data-dashboard-toggle-tags="${escapeAttr(item.id)}"
           data-dashboard-no-drag
+          aria-expanded="${expanded ? 'true' : 'false'}"
+          aria-controls="dashboard-tag-popover-${escapeAttr(item.id)}"
+          aria-label="查看 ${escapeAttr(String(hiddenTagCount))} 个隐藏标签"
         >+${escapeHtml(String(hiddenTagCount))}</button>
       `
     : ''
   const tagPopoverMarkup = expanded && item.tags.length
     ? `
-        <div class="dashboard-tag-popover" data-dashboard-no-drag>
+        <div id="dashboard-tag-popover-${escapeAttr(item.id)}" class="dashboard-tag-popover" data-dashboard-no-drag role="region" aria-label="全部标签">
           <strong>全部标签</strong>
           <div class="dashboard-tag-popover-list">
             ${item.tags.map((tag) => `<span class="dashboard-mini-chip">${escapeHtml(tag)}</span>`).join('')}
@@ -1605,6 +1790,22 @@ function buildDashboardCard(item: DashboardItem): string {
             data-dashboard-bookmark-id="${escapeAttr(item.id)}"
             data-dashboard-no-drag
           >修改标签</button>
+          <button
+            class="detect-result-action"
+            type="button"
+            data-dashboard-action="move-one"
+            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
+            data-dashboard-no-drag
+            ${availabilityState.deleting ? 'disabled' : ''}
+          >移动</button>
+          <button
+            class="detect-result-action danger"
+            type="button"
+            data-dashboard-action="delete-one"
+            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
+            data-dashboard-no-drag
+            ${availabilityState.deleting ? 'disabled' : ''}
+          >删除</button>
         </div>
         <label class="dashboard-card-check" data-dashboard-no-drag>
           <input

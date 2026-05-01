@@ -351,7 +351,7 @@ export async function updateSelectedRedirects(callbacks) {
         title: `更新 ${targetResults.length} 条重定向书签 URL？`,
         copy: `会把这些书签的原地址替换为最终地址：${formatRedirectImpactList(targetResults)}。书签标题和所在文件夹不变。`,
         confirmLabel: `更新 ${targetResults.length} 条 URL`,
-        label: 'Update',
+        label: '更新 URL',
         tone: 'warning'
       })
     : true
@@ -374,7 +374,7 @@ export async function deleteSelectedRedirects(callbacks) {
         title: `删除 ${targetIds.length} 条重定向书签？`,
         copy: '这些书签会从 Chrome 书签中移除并进入回收站。重定向缓存中的对应结果也会被清理。',
         confirmLabel: '删除并移入回收站',
-        label: 'Delete',
+        label: '移入回收站',
         tone: 'danger'
       })
     : true
@@ -398,7 +398,7 @@ export async function deleteAllRedirects(callbacks) {
         title: `删除本区全部 ${targetIds.length} 条重定向书签？`,
         copy: '这些书签会从 Chrome 书签中移除并进入回收站。此操作只影响当前重定向更新区。',
         confirmLabel: '删除本区并移入回收站',
-        label: 'Delete',
+        label: '移入回收站',
         tone: 'danger'
       })
     : true
