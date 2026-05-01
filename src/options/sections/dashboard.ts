@@ -532,9 +532,6 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     } else if (action === 'move-one') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       moveSingleDashboardItem(bookmarkId, callbacks)
-    } else if (action === 'delete-one') {
-      const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
-      await deleteSingleDashboardItem(bookmarkId, callbacks)
     } else if (action === 'exit-dashboard') {
       window.location.hash = '#general'
     } else if (action === 'toggle-search-help') {
@@ -1094,27 +1091,6 @@ function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbac
   dashboardState.selectedIds.add(String(bookmarkId))
   renderDashboardSection()
   callbacks.openMoveModal('dashboard')
-}
-
-async function deleteSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbacks): Promise<void> {
-  const bookmark = availabilityState.bookmarkMap.get(String(bookmarkId))
-  if (!bookmark?.url || availabilityState.deleting) {
-    return
-  }
-
-  const confirmed = await callbacks.confirm({
-    title: '删除这个书签？',
-    copy: `“${bookmark.title || '未命名书签'}” 会从 Chrome 书签中移除并进入回收站，可在回收站恢复。`,
-    confirmLabel: '删除并移入回收站',
-    label: '移入回收站',
-    tone: 'danger'
-  })
-  if (!confirmed) {
-    return
-  }
-
-  dashboardState.selectedIds.delete(String(bookmarkId))
-  await deleteBookmarksToRecycle([bookmarkId], '书签仪表盘单项删除', callbacks.recycleCallbacks)
 }
 
 export async function moveSelectedDashboardBookmarks(
@@ -1798,14 +1774,6 @@ function buildDashboardCard(item: DashboardItem): string {
             data-dashboard-no-drag
             ${availabilityState.deleting ? 'disabled' : ''}
           >移动</button>
-          <button
-            class="detect-result-action danger"
-            type="button"
-            data-dashboard-action="delete-one"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >删除</button>
         </div>
         <label class="dashboard-card-check" data-dashboard-no-drag>
           <input
