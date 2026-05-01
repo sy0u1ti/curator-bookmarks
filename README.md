@@ -1,44 +1,23 @@
 <p align="center">
-
-  <img src="src/assets/icon128.png" alt="Curator Bookmark" width="96" height="96">
-
+  <img src="src/assets/icon128.png" alt="Curator Bookmark" width="96" height="96">
 </p>
-
-  
 
 <h1 align="center">Curator Bookmark</h1>
 
-  
-
 <p align="center">
-
-  本地优先的 Chrome 书签管理扩展，用于搜索、整理、备份、清理和重新组织浏览器书签。
-
+  本地优先的 Chrome 书签管理扩展，用于搜索、整理、备份、清理和重新组织浏览器书签。
 </p>
 
-  
-
 <p align="center">
-
-  <img src="https://img.shields.io/badge/Chrome%20Manifest-V3-blue?logo=googlechrome" alt="Manifest V3">
-
-  <img src="https://img.shields.io/badge/TypeScript-ES2022-3178c6?logo=typescript" alt="TypeScript">
-
-  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
-
-  <img src="https://img.shields.io/github/v/release/sy0u1ti/curator-bookmarks" alt="GitHub Release">
-
+  <img src="https://img.shields.io/badge/Chrome%20Manifest-V3-blue?logo=googlechrome" alt="Manifest V3">
+  <img src="https://img.shields.io/badge/TypeScript-ES2022-3178c6?logo=typescript" alt="TypeScript">
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
+  <img src="https://img.shields.io/github/v/release/sy0u1ti/curator-bookmarks" alt="GitHub Release">
 </p>
-
-  
 
 ---
 
-  
-
 ## 功能概览
-
-  
 
 ### Popup 书签管理
 
@@ -47,7 +26,7 @@
 - 支持当前网页快速收藏和智能分类。
 
 <p align="center">
-  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.9kgsh3xs35.png" alt="popup">
+  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.9kgsh3xs35.png" alt="popup">
 </p>
 
 
@@ -73,8 +52,8 @@
 - 支持编辑手动标签、清除 AI 标签和单条重新生成 AI 标签。
 
 <p align="center">
-  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.2h8x1hwct6.webp" alt="仪表盘">
-  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.7pwi0e0vk.webp" alt="仪表盘2">
+  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.2h8x1hwct6.webp" alt="仪表盘">
+  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.7pwi0e0vk.webp" alt="仪表盘2">
 </p>
   
 ### 书签管理
