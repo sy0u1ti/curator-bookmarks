@@ -73,6 +73,7 @@ import {
   parseSearchQuery,
   saveSearch
 } from '../shared/search-query.js'
+import { DEFAULT_INBOX_FOLDER_TITLE } from '../shared/inbox.js'
 import {
   buildLocalNaturalSearchPlan,
   filterBookmarksByNaturalDateRange,
@@ -229,6 +230,7 @@ function bindEvents() {
   })
   dom.folderFilterTrigger.addEventListener('click', openFilterDialog)
   dom.clearFolderFilter.addEventListener('click', clearFolderFilter)
+  dom.openInboxFilter.addEventListener('click', applyInboxFolderFilter)
 
   dom.content.addEventListener('click', handleContentClick)
   dom.content.addEventListener('pointerover', handleContentPointerOver)
@@ -2926,6 +2928,20 @@ function clearFolderFilter() {
   }
 
   applyFolderFilter(null)
+}
+
+function applyInboxFolderFilter() {
+  const inboxFolder = [...state.folderMap.values()].find((folder) => {
+    return normalizeText(folder.title || '') === normalizeText(DEFAULT_INBOX_FOLDER_TITLE) ||
+      normalizeText(folder.path || '').endsWith(normalizeText(DEFAULT_INBOX_FOLDER_TITLE))
+  })
+
+  if (!inboxFolder) {
+    showToast({ type: 'info', message: 'Inbox / 待整理 尚未创建，使用快捷键收藏后会自动生成。' })
+    return
+  }
+
+  applyFolderFilter(inboxFolder.id)
 }
 
 function openSmartFolderDialog() {

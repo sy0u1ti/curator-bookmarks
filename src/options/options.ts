@@ -40,6 +40,10 @@ import {
   type BookmarkTagIndex
 } from '../shared/bookmark-tags.js'
 import {
+  normalizeInboxSettings,
+  saveInboxSettings
+} from '../shared/inbox.js'
+import {
   buildBackupRestorePreview,
   createAutoBackupBeforeDangerousOperation,
   createCuratorBackupFile,
@@ -246,6 +250,7 @@ const LEGACY_AI_NAMING_CACHE_STORAGE_KEYS = [
 const SHORTCUTS_SETTINGS_URL = 'chrome://extensions/shortcuts'
 const SHORTCUT_COMMAND_ORDER = [
   '_execute_action',
+  'curator-capture-inbox',
   'curator-open-search',
   'curator-open-smart-classifier',
   'curator-toggle-auto-analyze'
@@ -254,6 +259,10 @@ const SHORTCUT_COMMAND_LABELS: Record<string, { title: string; detail: string }>
   _execute_action: {
     title: '打开 Popup',
     detail: '打开 Curator 弹窗。'
+  },
+  'curator-capture-inbox': {
+    title: '直接收藏到 Inbox',
+    detail: '保存当前网页到 Inbox / 待整理，并在后台分析归类。'
   },
   'curator-open-search': {
     title: '打开并聚焦搜索',
@@ -360,7 +369,8 @@ async function hydratePersistentState() {
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
       STORAGE_KEYS.bookmarkTagIndex,
-      STORAGE_KEYS.folderCleanupState
+      STORAGE_KEYS.folderCleanupState,
+      STORAGE_KEYS.inboxSettings
     ])
 
     managerState.ignoreRules = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
@@ -372,6 +382,7 @@ async function hydratePersistentState() {
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
     aiNamingState.tagIndex = normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
     hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
+    managerState.inboxSettings = normalizeInboxSettings(stored[STORAGE_KEYS.inboxSettings])
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
   } catch (error) {
     availabilityState.lastError =
@@ -541,6 +552,12 @@ function bindEvents() {
   dom.aiAutoSelectHigh?.addEventListener('change', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiAllowRemoteParser?.addEventListener('change', handleAiRemoteParserChange)
   dom.aiAutoAnalyzeBookmarks?.addEventListener('change', handleAutoAnalyzeBookmarksChange)
+  dom.inboxAutoMoveToRecommendedFolder?.addEventListener('change', () => {
+    void handleInboxWorkflowSettingChange('autoMoveToRecommendedFolder')
+  })
+  dom.inboxTagOnlyNoAutoMove?.addEventListener('change', () => {
+    void handleInboxWorkflowSettingChange('tagOnlyNoAutoMove')
+  })
   dom.aiSystemPrompt?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.availabilityCopySummary?.addEventListener('click', handleAvailabilityCopySummary)
   dom.availabilityAction?.addEventListener('click', handleAvailabilityAction)
@@ -2377,6 +2394,38 @@ async function handleAutoAnalyzeBookmarksChange() {
   }
 }
 
+async function handleInboxWorkflowSettingChange(
+  source: 'autoMoveToRecommendedFolder' | 'tagOnlyNoAutoMove'
+) {
+  if (!dom.inboxAutoMoveToRecommendedFolder || !dom.inboxTagOnlyNoAutoMove) {
+    return
+  }
+
+  const previousSettings = normalizeInboxSettings(managerState.inboxSettings)
+  const tagOnlyNoAutoMove = Boolean(dom.inboxTagOnlyNoAutoMove.checked)
+  const autoMoveToRecommendedFolder = source === 'tagOnlyNoAutoMove' && tagOnlyNoAutoMove
+    ? false
+    : Boolean(dom.inboxAutoMoveToRecommendedFolder.checked)
+
+  try {
+    managerState.inboxSettingsStatus = '正在保存 Inbox 设置…'
+    renderAiNamingSection()
+    managerState.inboxSettings = await saveInboxSettings({
+      ...previousSettings,
+      autoMoveToRecommendedFolder,
+      tagOnlyNoAutoMove
+    })
+    managerState.inboxSettingsStatus = 'Inbox 设置已保存。'
+  } catch (error) {
+    managerState.inboxSettings = previousSettings
+    managerState.inboxSettingsStatus = error instanceof Error
+      ? error.message
+      : 'Inbox 设置保存失败，请稍后重试。'
+  } finally {
+    renderAiNamingSection()
+  }
+}
+
 async function handleAiRemoteParserChange() {
   if (!dom.aiAllowRemoteParser) {
     return
@@ -2530,6 +2579,39 @@ function renderAiNamingSection() {
     const autoAnalyzeEnabled = Boolean(settings.autoAnalyzeBookmarks)
     dom.aiAutoAnalyzeStatus.className = `options-chip ai-inline-status ${autoAnalyzeEnabled ? 'success' : 'muted'}`
     dom.aiAutoAnalyzeStatus.textContent = autoAnalyzeEnabled ? '自动分析开启' : '未开启'
+  }
+  const inboxSettings = normalizeInboxSettings(managerState.inboxSettings)
+  if (dom.inboxAutoMoveToRecommendedFolder) {
+    dom.inboxAutoMoveToRecommendedFolder.checked = Boolean(inboxSettings.autoMoveToRecommendedFolder)
+    dom.inboxAutoMoveToRecommendedFolder.disabled =
+      Boolean(inboxSettings.tagOnlyNoAutoMove) ||
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      aiNamingState.requestingPermission
+  }
+  if (dom.inboxTagOnlyNoAutoMove) {
+    dom.inboxTagOnlyNoAutoMove.checked = Boolean(inboxSettings.tagOnlyNoAutoMove)
+    dom.inboxTagOnlyNoAutoMove.disabled =
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      aiNamingState.requestingPermission
+  }
+  if (dom.inboxWorkflowStatus) {
+    const statusText = managerState.inboxSettingsStatus ||
+      (inboxSettings.tagOnlyNoAutoMove
+        ? '只生成标签'
+        : inboxSettings.autoMoveToRecommendedFolder
+          ? '自动移动开启'
+          : '保留在 Inbox')
+    const statusTone = managerState.inboxSettingsStatus
+      ? managerState.inboxSettingsStatus.includes('失败') || managerState.inboxSettingsStatus.includes('Error')
+        ? 'warning'
+        : 'success'
+      : inboxSettings.autoMoveToRecommendedFolder && !inboxSettings.tagOnlyNoAutoMove
+        ? 'success'
+        : 'muted'
+    dom.inboxWorkflowStatus.className = `options-chip ai-inline-status ${statusTone}`
+    dom.inboxWorkflowStatus.textContent = statusText
   }
   if (dom.aiSystemPrompt && dom.aiSystemPrompt !== document.activeElement) {
     dom.aiSystemPrompt.value = settings.systemPrompt

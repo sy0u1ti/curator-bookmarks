@@ -46,6 +46,12 @@
         "default": "Alt+Shift+C"
       }
     },
+    "curator-capture-inbox": {
+      "suggested_key": {
+        "default": "Alt+Shift+I"
+      },
+      "description": "直接收藏当前网页到 Inbox / 待整理"
+    },
     "curator-open-search": {
       "suggested_key": {
         "default": "Alt+Shift+S"

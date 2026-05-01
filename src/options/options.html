@@ -113,6 +113,47 @@
                     <span class="ai-switch-track" aria-hidden="true"></span>
                   </label>
                 </div>
+
+                <div class="ai-feature-switch-row">
+                  <div class="ai-feature-switch-copy">
+                    <div class="ai-feature-title-row">
+                      <strong>
+                        自动移动到推荐文件夹
+                        <span
+                          class="ai-help-tooltip"
+                          tabindex="0"
+                          aria-label="快捷键收藏会先进入 Inbox / 待整理；AI 置信度足够时自动移动到推荐文件夹。"
+                          data-tooltip="快捷键收藏会先进入 Inbox / 待整理；AI 置信度足够时自动移动到推荐文件夹。"
+                        >?</span>
+                      </strong>
+                      <span id="inbox-workflow-status" class="options-chip muted ai-inline-status">Inbox 开启</span>
+                    </div>
+                  </div>
+                  <label class="ai-switch" for="inbox-auto-move-to-recommended-folder">
+                    <input id="inbox-auto-move-to-recommended-folder" type="checkbox" aria-label="自动移动到推荐文件夹">
+                    <span class="ai-switch-track" aria-hidden="true"></span>
+                  </label>
+                </div>
+
+                <div class="ai-feature-switch-row">
+                  <div class="ai-feature-switch-copy">
+                    <div class="ai-feature-title-row">
+                      <strong>
+                        只打标签，不自动移动
+                        <span
+                          class="ai-help-tooltip"
+                          tabindex="0"
+                          aria-label="开启后，快捷键收藏仍保存到 Inbox / 待整理，只生成标签和摘要，不移动文件夹。"
+                          data-tooltip="开启后，快捷键收藏仍保存到 Inbox / 待整理，只生成标签和摘要，不移动文件夹。"
+                        >?</span>
+                      </strong>
+                    </div>
+                  </div>
+                  <label class="ai-switch" for="inbox-tag-only-no-auto-move">
+                    <input id="inbox-tag-only-no-auto-move" type="checkbox" aria-label="只打标签，不自动移动">
+                    <span class="ai-switch-track" aria-hidden="true"></span>
+                  </label>
+                </div>
               </div>
             </div>
 

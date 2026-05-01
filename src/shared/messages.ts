@@ -23,6 +23,10 @@ export interface BookmarkSaveMessage {
   analysis?: BookmarkTagAnalysisInput
 }
 
+export interface InboxUndoLastMoveMessage {
+  type: 'inbox:undo-last-move'
+}
+
 export interface NavigationCheckResult {
   status: NavigationStatus
   finalUrl: string
@@ -37,6 +41,12 @@ export interface BookmarkSaveResult {
   title: string
   url: string
   created: boolean
+}
+
+export interface InboxUndoLastMoveResult {
+  bookmarkId: string
+  parentId: string
+  title: string
 }
 
 interface RuntimeMessageResponse<TResult = unknown> {
@@ -62,6 +72,11 @@ export function cancelNavigationCheck(checkId: string): Promise<void> {
 export function requestBookmarkSave(payload: Omit<BookmarkSaveMessage, 'type'>): Promise<BookmarkSaveResult> {
   const message: BookmarkSaveMessage = { type: 'bookmark:save', ...payload }
   return sendRuntimeMessage<BookmarkSaveResult>(message)
+}
+
+export function requestInboxUndoLastMove(): Promise<InboxUndoLastMoveResult> {
+  const message: InboxUndoLastMoveMessage = { type: 'inbox:undo-last-move' }
+  return sendRuntimeMessage<InboxUndoLastMoveResult>(message)
 }
 
 function sendRuntimeMessage<TResult>(message: unknown): Promise<TResult> {

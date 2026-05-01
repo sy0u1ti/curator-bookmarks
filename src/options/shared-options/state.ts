@@ -5,6 +5,7 @@ import {
   AI_NAMING_DEFAULT_BATCH_SIZE
 } from './constants.js'
 import type { SavedSearch, SavedSearchIndex } from '../../shared/search-query.js'
+import { getDefaultInboxSettings } from '../../shared/inbox.js'
 
 export function createEmptyIgnoreRules() {
   return {
@@ -153,7 +154,9 @@ export const managerState = {
   aiRevealApiKey: false,
   shortcutCommands: [] as chrome.commands.Command[],
   shortcutStatus: 'loading',
-  shortcutStatusTone: 'muted'
+  shortcutStatusTone: 'muted',
+  inboxSettings: getDefaultInboxSettings(),
+  inboxSettingsStatus: ''
 }
 
 export const dashboardState = {
