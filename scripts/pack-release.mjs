@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { deflateRawSync } from 'node:zlib'
 
 const packageJson = JSON.parse(await fs.readFile('package.json', 'utf8'))
 const version = packageJson.version
@@ -48,6 +49,9 @@ async function collectFiles(rootDir) {
         .relative(rootDir, absolutePath)
         .split(path.sep)
         .join('/')
+      if (relativePath.endsWith('.map')) {
+        continue
+      }
       files.push({
         path: relativePath,
         data: await fs.readFile(absolutePath),
@@ -68,6 +72,7 @@ function buildZip(entries) {
   for (const entry of entries) {
     const name = Buffer.from(entry.path, 'utf8')
     const data = entry.data
+    const compressedData = deflateRawSync(data, { level: 9 })
     const crc = crc32(data)
     const { time, date } = toDosDateTime(entry.mtime)
     const localHeader = Buffer.alloc(30)
@@ -75,27 +80,27 @@ function buildZip(entries) {
     localHeader.writeUInt32LE(0x04034b50, 0)
     localHeader.writeUInt16LE(20, 4)
     localHeader.writeUInt16LE(0x0800, 6)
-    localHeader.writeUInt16LE(0, 8)
+    localHeader.writeUInt16LE(8, 8)
     localHeader.writeUInt16LE(time, 10)
     localHeader.writeUInt16LE(date, 12)
     localHeader.writeUInt32LE(crc, 14)
-    localHeader.writeUInt32LE(data.length, 18)
+    localHeader.writeUInt32LE(compressedData.length, 18)
     localHeader.writeUInt32LE(data.length, 22)
     localHeader.writeUInt16LE(name.length, 26)
     localHeader.writeUInt16LE(0, 28)
 
-    localParts.push(localHeader, name, data)
+    localParts.push(localHeader, name, compressedData)
 
     const centralHeader = Buffer.alloc(46)
     centralHeader.writeUInt32LE(0x02014b50, 0)
     centralHeader.writeUInt16LE(20, 4)
     centralHeader.writeUInt16LE(20, 6)
     centralHeader.writeUInt16LE(0x0800, 8)
-    centralHeader.writeUInt16LE(0, 10)
+    centralHeader.writeUInt16LE(8, 10)
     centralHeader.writeUInt16LE(time, 12)
     centralHeader.writeUInt16LE(date, 14)
     centralHeader.writeUInt32LE(crc, 16)
-    centralHeader.writeUInt32LE(data.length, 20)
+    centralHeader.writeUInt32LE(compressedData.length, 20)
     centralHeader.writeUInt32LE(data.length, 24)
     centralHeader.writeUInt16LE(name.length, 28)
     centralHeader.writeUInt16LE(0, 30)
@@ -106,7 +111,7 @@ function buildZip(entries) {
     centralHeader.writeUInt32LE(offset, 42)
 
     centralParts.push(centralHeader, name)
-    offset += localHeader.length + name.length + data.length
+    offset += localHeader.length + name.length + compressedData.length
   }
 
   const centralDirectory = Buffer.concat(centralParts)
