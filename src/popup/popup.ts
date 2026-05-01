@@ -53,6 +53,11 @@ import {
   normalizePageContentContext
 } from '../options/sections/content-extraction.js'
 import {
+  buildContentSnapshotSearchMapWithFullText,
+  loadContentSnapshotIndex,
+  loadContentSnapshotSettings
+} from '../shared/content-snapshots.js'
+import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
   AI_NAMING_JINA_READER_ORIGIN
 } from '../options/shared-options/constants.js'
@@ -725,9 +730,27 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
 
     const extracted = extractBookmarkData(rootNode)
     const tagIndex = await loadBookmarkTagIndex().catch(() => null)
+    const snapshotSettings = await loadContentSnapshotSettings().catch(() => null)
+    const snapshotIndex = await loadContentSnapshotIndex().catch(() => null)
+    const snapshotSearchMap = snapshotIndex
+      ? await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
+          includeFullText: Boolean(snapshotSettings?.fullTextSearchEnabled),
+          maxRecords: 600
+        }).catch(() => new Map<string, string>())
+      : new Map<string, string>()
     const tagRecords = tagIndex?.records || {}
     const indexedBookmarks = extracted.bookmarks.map((bookmark) => {
-      return indexBookmarkForSearch(bookmark, tagRecords[bookmark.id] || null)
+      const indexed = indexBookmarkForSearch(
+        bookmark,
+        tagRecords[bookmark.id] || null,
+        snapshotIndex?.records?.[bookmark.id] || null,
+        { includeFullText: Boolean(snapshotSettings?.fullTextSearchEnabled) }
+      )
+      const snapshotSearchText = snapshotSearchMap.get(bookmark.id)
+      if (snapshotSearchText) {
+        indexed.searchText = `${indexed.searchText} ${snapshotSearchText}`.trim()
+      }
+      return indexed
     })
     state.allBookmarks = indexedBookmarks
     state.allFolders = extracted.folders

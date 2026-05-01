@@ -19,8 +19,9 @@ const BACKUP_SCHEMA_VERSION = 1
 const BACKUP_APP = 'curator-bookmarks'
 const BACKUP_KIND = 'full-backup'
 const AUTO_BACKUP_DB_NAME = 'curatorBookmarkHeavyUserData'
-const AUTO_BACKUP_DB_VERSION = 1
+const AUTO_BACKUP_DB_VERSION = 2
 const AUTO_BACKUP_STORE = 'autoBackups'
+const CONTENT_FULL_TEXT_STORE = 'contentFullText'
 const NEW_TAB_ACTIVITY_STORAGE_KEY = 'curatorBookmarkNewTabActivity'
 
 export type DangerousOperationKind =
@@ -625,6 +626,9 @@ function openAutoBackupDb(): Promise<IDBDatabase> {
       const db = request.result
       if (!db.objectStoreNames.contains(AUTO_BACKUP_STORE)) {
         db.createObjectStore(AUTO_BACKUP_STORE, { keyPath: 'backupId' })
+      }
+      if (!db.objectStoreNames.contains(CONTENT_FULL_TEXT_STORE)) {
+        db.createObjectStore(CONTENT_FULL_TEXT_STORE, { keyPath: 'snapshotId' })
       }
     })
     request.addEventListener('success', () => resolve(request.result))

@@ -22,7 +22,9 @@ import {
   parseSearchQuery,
   saveSearch
 } from '../../shared/search-query.js'
-import { aiNamingState, availabilityState, dashboardState } from '../shared-options/state.js'
+import type { ContentSnapshotIndex } from '../../shared/content-snapshots.js'
+import { buildContentSnapshotSearchMap } from '../../shared/content-snapshots.js'
+import { aiNamingState, availabilityState, contentSnapshotState, dashboardState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { escapeAttr, escapeHtml } from '../shared-options/html.js'
 import { compareByPathTitle, formatDateTime } from '../shared-options/utils.js'
@@ -154,14 +156,23 @@ const dragState: DashboardDragState = {
 export function buildDashboardModel({
   bookmarks = [],
   folders = [],
-  tagIndex = null
+  tagIndex = null,
+  contentSnapshotIndex = null,
+  contentSnapshotSearchMap = null,
+  includeFullText = false
 }: {
   bookmarks?: BookmarkRecord[]
   folders?: FolderRecord[]
   tagIndex?: BookmarkTagIndex | null
+  contentSnapshotIndex?: ContentSnapshotIndex | null
+  contentSnapshotSearchMap?: Map<string, string> | null
+  includeFullText?: boolean
 } = {}): DashboardModel {
   const folderMap = new Map(folders.map((folder) => [String(folder.id), folder]))
   const tagRecords = tagIndex?.records || {}
+  const snapshotSearchMap = contentSnapshotIndex
+    ? buildContentSnapshotSearchMap(contentSnapshotIndex, { includeFullText })
+    : new Map<string, string>()
   const items = bookmarks.map((bookmark) => {
     const tagRecord = tagRecords[String(bookmark.id)] || null
     const folder = folderMap.get(String(bookmark.parentId || '')) || null
@@ -173,6 +184,10 @@ export function buildDashboardModel({
     const topics = normalizeDashboardTextList(tagRecord?.topics)
     const aliases = normalizeDashboardTextList(tagRecord?.aliases)
     const summary = String(tagRecord?.summary || '').replace(/\s+/g, ' ').trim()
+    const snapshotSearchText =
+      contentSnapshotSearchMap?.get(String(bookmark.id)) ||
+      snapshotSearchMap.get(String(bookmark.id)) ||
+      ''
     const tagSummary = tags.slice(0, 4).join(' / ')
     const domain = String(bookmark.domain || extractDomain(bookmark.url) || '').trim()
     const searchText = normalizeText([
@@ -186,7 +201,8 @@ export function buildDashboardModel({
       summary,
       ...tags,
       ...topics,
-      ...aliases
+      ...aliases,
+      snapshotSearchText
     ].join(' '))
 
     return {
@@ -1089,7 +1105,10 @@ function getDashboardRenderData() {
   const model = buildDashboardModel({
     bookmarks: availabilityState.allBookmarks,
     folders: availabilityState.allFolders,
-    tagIndex: (aiNamingState.tagIndex as BookmarkTagIndex) || null
+    tagIndex: (aiNamingState.tagIndex as BookmarkTagIndex) || null,
+    contentSnapshotIndex: contentSnapshotState.index,
+    contentSnapshotSearchMap: contentSnapshotState.searchTextMap,
+    includeFullText: contentSnapshotState.settings.fullTextSearchEnabled
   })
   const visibleItems = sortDashboardItems(
     filterDashboardItems(model.items, {
@@ -1722,7 +1741,10 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
   const model = existingModel || buildDashboardModel({
     bookmarks: availabilityState.allBookmarks,
     folders: availabilityState.allFolders,
-    tagIndex: (aiNamingState.tagIndex as BookmarkTagIndex) || null
+    tagIndex: (aiNamingState.tagIndex as BookmarkTagIndex) || null,
+    contentSnapshotIndex: contentSnapshotState.index,
+    contentSnapshotSearchMap: contentSnapshotState.searchTextMap,
+    includeFullText: contentSnapshotState.settings.fullTextSearchEnabled
   })
   const bookmark = availabilityState.bookmarkMap.get(String(dragState.bookmarkId))
   const faviconUrl = getDashboardFaviconUrl(bookmark?.url || '')

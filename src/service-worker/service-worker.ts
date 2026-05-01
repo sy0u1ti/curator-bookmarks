@@ -61,6 +61,10 @@ import {
   normalizePageContentContext,
   type PageContentContext
 } from '../options/sections/content-extraction.js'
+import {
+  loadContentSnapshotSettings,
+  saveContentSnapshotFromContext
+} from '../shared/content-snapshots.js'
 
 interface PendingCheckState {
   tabId: number
@@ -729,7 +733,10 @@ async function handleBookmarkCreatedForAutoAnalysis(
   }
 
   const settings = await loadAutoAnalyzeSettings()
-  if (!settings.autoAnalyzeBookmarks || !hasUsableAiSettings(settings)) {
+  const snapshotSettings = await loadContentSnapshotSettings().catch(() => null)
+  const shouldAutoAnalyze = settings.autoAnalyzeBookmarks && hasUsableAiSettings(settings)
+  const shouldSnapshot = Boolean(snapshotSettings?.enabled && snapshotSettings.autoCaptureOnBookmarkCreate)
+  if (!shouldAutoAnalyze && !shouldSnapshot) {
     return
   }
 
@@ -744,7 +751,9 @@ async function handleBookmarkCreatedForAutoAnalysis(
     url: initialUrl,
     title: String(node.title || '').trim() || '新增书签',
     createdAt: Date.now(),
-    detail: '已加入自动分析，正在整理标签和命名。'
+    detail: shouldAutoAnalyze
+      ? '已加入自动分析，正在整理标签和命名。'
+      : '已加入网页快照队列，仅在本地保存索引。'
   }).catch((error) => {
     console.warn('[Curator] 自动分析排队状态写入失败', error)
   })
@@ -830,14 +839,22 @@ async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise
   const bookmarkId = entry.bookmarkId
   const inboxItem = await findInboxItemByBookmarkId(bookmarkId)
   const settings = await loadAutoAnalyzeSettings()
-  if ((!settings.autoAnalyzeBookmarks && !inboxItem) || !hasUsableAiSettings(settings)) {
+  const snapshotSettings = await loadContentSnapshotSettings().catch(() => null)
+  const shouldSnapshot = Boolean(snapshotSettings?.enabled && snapshotSettings.autoCaptureOnBookmarkCreate)
+  const shouldUploadToAi = (settings.autoAnalyzeBookmarks || Boolean(inboxItem)) &&
+    hasUsableAiSettings(settings) &&
+    !snapshotSettings?.localOnlyNoAiUpload
+
+  if (!shouldSnapshot && !shouldUploadToAi) {
     await clearAutoAnalyzeStatusForBookmark(bookmarkId)
     return
   }
 
-  const providerOrigin = getOriginPermissionPattern(settings.baseUrl)
-  if (!providerOrigin || !(await containsHostPermission(providerOrigin))) {
-    throw new Error('缺少 AI 服务地址访问权限，请在设置页重新测试连接或保存自动分析设置。')
+  if (shouldUploadToAi) {
+    const providerOrigin = getOriginPermissionPattern(settings.baseUrl)
+    if (!providerOrigin || !(await containsHostPermission(providerOrigin))) {
+      throw new Error('缺少 AI 服务地址访问权限，请在设置页重新测试连接或保存自动分析设置。')
+    }
   }
 
   const bookmark = await getBookmarkById(bookmarkId)
@@ -858,7 +875,35 @@ async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise
   const rootNode = Array.isArray(tree) ? tree[0] : tree
   const extracted = extractBookmarkData(rootNode)
   const bookmarkRecord = extracted.bookmarkMap.get(bookmarkId) || buildAutoBookmarkRecord(bookmark)
-  const pageContext = await buildAutoPageContext(bookmarkRecord, settings)
+  const pageContext = await buildAutoPageContext(bookmarkRecord, {
+    ...settings,
+    allowRemoteParsing: shouldUploadToAi && settings.allowRemoteParsing
+  })
+  if (shouldSnapshot && snapshotSettings) {
+    await saveContentSnapshotFromContext({
+      bookmark: bookmarkRecord,
+      context: pageContext,
+      settings: snapshotSettings
+    }).catch((error) => {
+      console.warn('[Curator] 网页快照保存失败', error)
+    })
+  }
+
+  if (!shouldUploadToAi) {
+    await persistAutoAnalyzeStatus({
+      status: 'completed',
+      bookmarkId,
+      url: bookmark.url,
+      title: bookmarkRecord.title || entry.title || '新增书签',
+      folderPath: bookmarkRecord.path || extracted.folderMap.get(String(bookmark.parentId || ''))?.path || '',
+      createdAt: entry.createdAt,
+      detail: snapshotSettings?.localOnlyNoAiUpload
+        ? '网页快照已仅保存到本地，未上传给 AI。'
+        : '网页快照已保存到本地。'
+    })
+    return
+  }
+
   const aiResult = await requestAutoClassification({
     settings,
     pageContext,

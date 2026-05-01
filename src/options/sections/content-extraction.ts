@@ -181,9 +181,12 @@ export function buildFallbackPageContentFromUrl(
     const segments = pathname.split('/').filter(Boolean)
     if (segments.length >= 2) {
       title = `${segments[0]} / ${segments[1]}`
-      description = segments.length > 2
-        ? `GitHub ${segments.slice(2).join(' / ')}`
-        : 'GitHub repository'
+      const githubPath = segments.slice(2).join(' / ')
+      description = segments.some((segment) => /^readme(\.md)?$/i.test(segment))
+        ? 'GitHub README 页面，当前使用页面元信息或 URL 生成轻量快照。'
+        : githubPath
+          ? `GitHub 页面：${githubPath}`
+          : 'GitHub 仓库页面，当前使用页面元信息或 URL 生成轻量快照。'
     }
     source = 'github'
   } else if (hostname === 'www.npmjs.com' || hostname === 'npmjs.com') {
@@ -193,11 +196,11 @@ export function buildFallbackPageContentFromUrl(
     source = 'npm'
   } else if (hostname === 'youtu.be' || hostname.endsWith('youtube.com')) {
     title = title || 'YouTube 视频'
-    description = 'YouTube video or channel page'
+    description = 'YouTube 视频或频道页面，当前保存标题、描述元信息与轻量 fallback。'
     source = 'youtube'
   } else if (isDocumentationHost(hostname)) {
     title = readableFilename || title || hostname
-    description = 'Documentation page inferred from URL path'
+    description = '文档页，当前基于页面元信息或 URL 路径生成轻量快照。'
     source = 'docs'
   }
 

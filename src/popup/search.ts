@@ -8,6 +8,8 @@ import {
   parseSearchQuery,
   type ParsedSearchQuery
 } from '../shared/search-query.js'
+import type { ContentSnapshotRecord } from '../shared/content-snapshots.js'
+import { buildContentSnapshotSearchText } from '../shared/content-snapshots.js'
 
 export const MAX_POPUP_SEARCH_RESULTS = 20
 export const POPUP_SEARCH_ASYNC_THRESHOLD = 1200
@@ -44,7 +46,12 @@ interface ParsedPopupSearchQuery extends ParsedSearchQuery {
   hasStructuredFilters: boolean
 }
 
-export function indexBookmarkForSearch(bookmark: BookmarkRecord, tagRecord: BookmarkTagRecord | null = null): PopupSearchBookmark {
+export function indexBookmarkForSearch(
+  bookmark: BookmarkRecord,
+  tagRecord: BookmarkTagRecord | null = null,
+  snapshotRecord: ContentSnapshotRecord | null = null,
+  options: { includeFullText?: boolean } = {}
+): PopupSearchBookmark {
   const normalizedPath = normalizeText(bookmark.path || '')
   const normalizedDomain = normalizeText(bookmark.domain || '')
   const tagSummary = normalizeText(tagRecord?.summary || '')
@@ -52,6 +59,7 @@ export function indexBookmarkForSearch(bookmark: BookmarkRecord, tagRecord: Book
   const tagTopics = normalizeSearchList(tagRecord?.topics)
   const tagTags = normalizeSearchList(getEffectiveBookmarkTags(tagRecord))
   const tagAliases = normalizeSearchList(tagRecord?.aliases)
+  const snapshotSearchText = buildContentSnapshotSearchText(snapshotRecord, options)
   const pinyinTokens = buildPinyinSearchTokens([
     bookmark.title,
     bookmark.path,
@@ -81,7 +89,8 @@ export function indexBookmarkForSearch(bookmark: BookmarkRecord, tagRecord: Book
       ...tagAliases,
       ...pinyinTokens.full,
       ...pinyinTokens.initials,
-      tagSummary
+      tagSummary,
+      snapshotSearchText
     ]
       .filter(Boolean)
       .join(' ')
