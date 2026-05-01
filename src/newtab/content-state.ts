@@ -28,6 +28,27 @@ export interface MissingFolderViewOptions {
   onOpenFolderSettings: () => void
 }
 
+export interface VerticalCenterCollisionOffsetInput {
+  utilityBottom: number
+  contentTop: number
+  minimumGap?: number
+}
+
+const DEFAULT_VERTICAL_CENTER_COLLISION_GAP = 12
+
+export function getVerticalCenterCollisionOffset({
+  utilityBottom,
+  contentTop,
+  minimumGap = DEFAULT_VERTICAL_CENTER_COLLISION_GAP
+}: VerticalCenterCollisionOffsetInput): number {
+  const requiredTop = utilityBottom + Math.max(0, minimumGap)
+  const offset = Math.ceil(requiredTop - contentTop)
+  if (!Number.isFinite(offset)) {
+    return 0
+  }
+  return Math.max(0, offset)
+}
+
 export function resolveNewTabContentState(
   input: ResolveNewTabContentStateInput
 ): NewTabContentState {

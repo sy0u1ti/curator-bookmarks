@@ -139,8 +139,10 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .newtab-page {
+  --primary-collision-offset-y: 0px;
   display: flex;
   flex-direction: column;
+  position: relative;
   width: 100%;
   height: 100%;
   max-width: 1280px;
@@ -170,8 +172,16 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .newtab-page[data-icon-vertical-center="true"] > .newtab-primary-slot {
+  position: absolute;
+  inset: 0;
   align-items: center;
   align-items: safe center;
+  pointer-events: none;
+  transform: translateY(var(--primary-collision-offset-y));
+}
+
+.newtab-page[data-icon-vertical-center="true"] > .newtab-primary-slot > * {
+  pointer-events: auto;
 }
 
 .newtab-page.has-search .newtab-utility-stack {
