@@ -94,6 +94,7 @@ import {
 import {
   availabilityState,
   managerState,
+  folderCleanupState,
   aiNamingState,
   aiNamingManagerState,
   createEmptyIgnoreRules,
@@ -145,6 +146,13 @@ import {
   clearDuplicateSelection,
   deleteSelectedDuplicates
 } from './sections/duplicates.js'
+import {
+  hydrateFolderCleanupState,
+  analyzeFolderCleanupSuggestions,
+  renderFolderCleanupSection,
+  handleFolderCleanupClick,
+  handleFolderCleanupPreviewClick
+} from './sections/folder-cleanup.js'
 import {
   normalizeRedirectCache,
   saveRedirectCache,
@@ -289,6 +297,12 @@ const dashboardCallbacks = {
   recycleCallbacks
 }
 
+const folderCleanupCallbacks = {
+  renderAvailabilitySection,
+  hydrateAvailabilityCatalog,
+  confirm: requestConfirmation
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   cacheDom()
   bindEvents()
@@ -333,7 +347,8 @@ async function hydratePersistentState() {
       STORAGE_KEYS.pendingAvailabilityResults,
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
-      STORAGE_KEYS.bookmarkTagIndex
+      STORAGE_KEYS.bookmarkTagIndex,
+      STORAGE_KEYS.folderCleanupState
     ])
 
     managerState.ignoreRules = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
@@ -344,6 +359,7 @@ async function hydratePersistentState() {
     managerState.recycleBin = normalizeRecycleBin(stored[STORAGE_KEYS.recycleBin])
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
     aiNamingState.tagIndex = normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
+    hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
   } catch (error) {
     availabilityState.lastError =
@@ -557,6 +573,13 @@ function bindEvents() {
   dom.duplicateStrategyControls?.addEventListener('click', (event) => handleDuplicateToolbarClick(event, duplicatesCallbacks))
   dom.duplicateClearSelection?.addEventListener('click', () => clearDuplicateSelection(duplicatesCallbacks))
   dom.duplicateDeleteSelection?.addEventListener('click', () => deleteSelectedDuplicates(duplicatesCallbacks))
+  dom.folderCleanupAnalyze?.addEventListener('click', () => {
+    void analyzeFolderCleanupSuggestions(folderCleanupCallbacks)
+  })
+  dom.folderCleanupResults?.addEventListener('click', (event) => {
+    handleFolderCleanupPreviewClick(event, folderCleanupCallbacks)
+    void handleFolderCleanupClick(event, folderCleanupCallbacks)
+  })
   dom.ignoreBookmarkRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
   dom.ignoreDomainRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
   dom.ignoreFolderRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
@@ -875,6 +898,7 @@ async function hydrateAvailabilityCatalog({ preserveResults = false } = {}) {
     const extracted = extractBookmarkData(rootNode)
     const bookmarks = extracted.bookmarks
 
+    folderCleanupState.rootNode = rootNode
     availabilityState.allBookmarks = bookmarks
     availabilityState.allFolders = extracted.folders
     availabilityState.bookmarkMap = extracted.bookmarkMap
@@ -894,11 +918,16 @@ async function hydrateAvailabilityCatalog({ preserveResults = false } = {}) {
     availabilityState.skippedCount = 0
     resetDetectionResults()
     managerState.duplicateGroups = []
+    folderCleanupState.rootNode = null
+    folderCleanupState.suggestions = []
     syncAiNamingCatalog({ preserveResults: false })
     availabilityState.lastError =
       error instanceof Error ? error.message : '书签列表读取失败，请刷新页面后重试。'
   } finally {
     availabilityState.catalogLoading = false
+    if (folderCleanupState.rootNode) {
+      await analyzeFolderCleanupSuggestions(folderCleanupCallbacks)
+    }
     renderAvailabilitySection()
   }
 }
@@ -1842,6 +1871,11 @@ function renderActiveOptionsSection() {
 
   if (activeSection === 'duplicates') {
     renderDuplicateSection()
+    return
+  }
+
+  if (activeSection === 'folder-cleanup') {
+    renderFolderCleanupSection(folderCleanupCallbacks)
     return
   }
 

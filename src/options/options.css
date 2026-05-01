@@ -2163,6 +2163,40 @@ body.dashboard-fullscreen-active {
   color: var(--text-dim);
 }
 
+.folder-cleanup-split-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.folder-cleanup-preview {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.folder-cleanup-preview-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.folder-cleanup-preview-row strong {
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
 .detect-empty {
   padding: 18px 16px;
   color: var(--text-soft);

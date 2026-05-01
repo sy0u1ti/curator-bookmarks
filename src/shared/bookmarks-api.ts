@@ -66,6 +66,20 @@ export function removeBookmark(bookmarkId: string): Promise<void> {
   })
 }
 
+export function removeBookmarkTree(bookmarkId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    chrome.bookmarks.removeTree(bookmarkId, () => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+
+      resolve()
+    })
+  })
+}
+
 interface CreateBookmarkPayload extends chrome.bookmarks.BookmarkCreateArg {
   recycleId?: string
 }

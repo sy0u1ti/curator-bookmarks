@@ -173,6 +173,17 @@ export const dashboardState = {
   statusMessage: ''
 }
 
+export const folderCleanupState = {
+  rootNode: null as chrome.bookmarks.BookmarkTreeNode | null,
+  suggestions: [] as any[],
+  selectedSuggestionId: '',
+  statusMessage: '',
+  lastAnalyzedAt: 0,
+  running: false,
+  executing: false,
+  executedSuggestionIds: new Set<string>()
+}
+
 export const aiNamingState = {
   scopeFolderId: '',
   bookmarks: [],
