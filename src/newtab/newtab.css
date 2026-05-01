@@ -145,15 +145,30 @@ body.background-mask-enabled .newtab-background-mask {
   height: 100%;
   max-width: 1280px;
   align-items: center;
+}
+
+.newtab-utility-stack {
+  display: grid;
+  width: min(100%, 1229px);
+  justify-items: center;
   gap: 14px;
 }
 
-.newtab-page > .newtab-content {
+.newtab-primary-slot {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  flex-grow: 1;
+  align-items: start;
+  justify-items: center;
+}
+
+.newtab-page > .newtab-primary-slot {
   flex-grow: 1;
   align-self: center;
 }
 
-.newtab-page.has-search {
+.newtab-page.has-search .newtab-utility-stack {
   gap: 12px;
 }
 
@@ -506,6 +521,12 @@ body.background-mask-enabled .newtab-background-mask {
   margin-top: 10px;
 }
 
+.newtab-page[data-content-state="empty"] .newtab-primary-slot {
+  align-items: center;
+  align-items: safe center;
+  padding-bottom: clamp(28px, 9vh, 96px);
+}
+
 .newtab-state {
   display: grid;
   width: min(520px, 100%);
@@ -515,7 +536,8 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .newtab-state.folder-missing {
-  width: auto;
+  width: min(560px, 100%);
+  padding: 22px 0;
 }
 
 .newtab-state-actions {
@@ -2512,10 +2534,10 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   }
 
   .newtab-page {
-    gap: 12px;
+    gap: 0;
   }
 
-  .newtab-page.has-search {
+  .newtab-page.has-search .newtab-utility-stack {
     gap: 10px;
   }
 
