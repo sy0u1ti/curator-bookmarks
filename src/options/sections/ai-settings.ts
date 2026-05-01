@@ -29,8 +29,10 @@ interface AiNamingSettingsSource {
   apiStyle?: unknown
   timeoutMs?: unknown
   batchSize?: unknown
+  autoSelectHighConfidence?: unknown
   allowRemoteParsing?: unknown
   autoAnalyzeBookmarks?: unknown
+  systemPrompt?: unknown
 }
 
 export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSettings {
@@ -55,7 +57,10 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
     batchSize: Number.isFinite(batchSize)
       ? Math.max(1, Math.min(Math.round(batchSize), AI_NAMING_MAX_BATCH_SIZE))
       : defaults.batchSize,
-    autoSelectHighConfidence: defaults.autoSelectHighConfidence,
+    autoSelectHighConfidence:
+      typeof source.autoSelectHighConfidence === 'boolean'
+        ? source.autoSelectHighConfidence
+        : defaults.autoSelectHighConfidence,
     allowRemoteParsing:
       typeof source.allowRemoteParsing === 'boolean'
         ? source.allowRemoteParsing
@@ -64,7 +69,7 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
       typeof source.autoAnalyzeBookmarks === 'boolean'
         ? source.autoAnalyzeBookmarks
         : defaults.autoAnalyzeBookmarks,
-    systemPrompt: defaults.systemPrompt
+    systemPrompt: String(source.systemPrompt || defaults.systemPrompt).trim()
   }
 }
 
