@@ -224,3 +224,11 @@ export const aiNamingState = {
 export const aiNamingManagerState = {
   settings: createDefaultAiNamingSettings()
 }
+
+export const backupRestoreState = {
+  fileName: '',
+  backup: null,
+  preview: null,
+  restoring: false,
+  status: ''
+}

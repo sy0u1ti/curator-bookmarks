@@ -10,6 +10,7 @@ import {
 } from '../../shared/bookmark-tags.js'
 import { displayUrl, extractDomain, normalizeText } from '../../shared/text.js'
 import { moveBookmark } from '../../shared/bookmarks-api.js'
+import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { ROOT_ID } from '../../shared/constants.js'
 import { renderDotMatrixLoader } from '../../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../../shared/motion.js'
@@ -981,6 +982,15 @@ export async function moveSelectedDashboardBookmarks(
   let moveError: unknown = null
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-move',
+      source: 'options',
+      reason: `书签仪表盘批量移动 ${selectedBookmarks.length} 条`,
+      targetBookmarkIds: selectedBookmarks.map((bookmark) => String(bookmark.id)),
+      targetFolderIds: [folderId],
+      estimatedChangeCount: selectedBookmarks.length
+    })
+
     for (const bookmark of selectedBookmarks) {
       if (String(bookmark.parentId || '') === folderId) {
         continue
@@ -1471,6 +1481,14 @@ async function moveDashboardBookmarkToFolder(
   }
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-move',
+      source: 'options',
+      reason: '书签仪表盘拖拽移动',
+      targetBookmarkIds: [bookmarkId],
+      targetFolderIds: [folderId],
+      estimatedChangeCount: 1
+    })
     await moveBookmark(bookmarkId, folderId)
     dashboardState.selectedIds.delete(bookmarkId)
     await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })

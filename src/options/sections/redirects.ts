@@ -1,6 +1,7 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
 import { updateBookmark } from '../../shared/bookmarks-api.js'
+import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { displayUrl } from '../../shared/text.js'
 import {
   availabilityState,
@@ -427,6 +428,14 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
   let updateError = null
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'redirect-url-update',
+      source: 'options',
+      reason: `批量更新 ${targetResults.length} 条重定向 URL`,
+      targetBookmarkIds: targetResults.map((result) => String(result.id)),
+      estimatedChangeCount: targetResults.length
+    })
+
     for (const result of targetResults) {
       const finalUrl = String(result.finalUrl || '').trim()
       if (!finalUrl || !isRedirectedNavigation(result.url, finalUrl)) {

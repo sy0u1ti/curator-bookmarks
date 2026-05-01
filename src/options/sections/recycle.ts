@@ -5,6 +5,7 @@ import {
 } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
 import { createBookmark, removeBookmark } from '../../shared/bookmarks-api.js'
+import { createAutoBackupBeforeDangerousOperation, type DangerousOperationKind } from '../../shared/backup.js'
 import { displayUrl } from '../../shared/text.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
@@ -333,6 +334,14 @@ export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: s
   let removalError = null
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: inferDeleteBackupKind(source),
+      source: 'options',
+      reason: source || '删除书签前自动备份',
+      targetBookmarkIds: uniqueIds,
+      estimatedChangeCount: uniqueIds.length
+    })
+
     for (const bookmarkId of uniqueIds) {
       const bookmark = callbacks.getBookmarkRecord(bookmarkId)
       if (!bookmark?.url) {
@@ -368,4 +377,14 @@ export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: s
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+function inferDeleteBackupKind(source: string): DangerousOperationKind {
+  if (/重复/.test(source)) {
+    return 'duplicate-cleanup'
+  }
+  if (/异常|坏链|高置信/.test(source)) {
+    return 'availability-cleanup'
+  }
+  return 'batch-delete'
 }

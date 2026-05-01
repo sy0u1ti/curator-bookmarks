@@ -39,6 +39,15 @@ import {
   upsertBookmarkTagFromAnalysis,
   type BookmarkTagIndex
 } from '../shared/bookmark-tags.js'
+import {
+  buildBackupRestorePreview,
+  createAutoBackupBeforeDangerousOperation,
+  createCuratorBackupFile,
+  getBackupFileName,
+  parseCuratorBackupFile,
+  restoreCuratorBackup,
+  type BackupRestoreMode
+} from '../shared/backup.js'
 import { cancelNavigationCheck, requestNavigationCheck } from '../shared/messages.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
 import {
@@ -96,6 +105,7 @@ import {
   managerState,
   aiNamingState,
   aiNamingManagerState,
+  backupRestoreState,
   createEmptyIgnoreRules,
   createEmptyRedirectCache
 } from './shared-options/state.js'
@@ -488,6 +498,12 @@ function bindEvents() {
   dom.aiTagImport?.addEventListener('click', () => dom.aiTagImportInput?.click())
   dom.aiTagImportInput?.addEventListener('change', handleBookmarkTagImport)
   dom.aiTagClear?.addEventListener('click', handleBookmarkTagClear)
+  dom.backupExport?.addEventListener('click', handleFullBackupExport)
+  dom.backupImport?.addEventListener('click', () => dom.backupImportInput?.click())
+  dom.backupImportInput?.addEventListener('change', handleFullBackupImport)
+  dom.backupRestoreTags?.addEventListener('click', () => handleFullBackupRestore('tagsOnly'))
+  dom.backupRestoreNewTab?.addEventListener('click', () => handleFullBackupRestore('newTabOnly'))
+  dom.backupRestoreSafeFull?.addEventListener('click', () => handleFullBackupRestore('safeFull'))
   dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
@@ -1835,6 +1851,11 @@ function renderActiveOptionsSection() {
     return
   }
 
+  if (activeSection === 'backup') {
+    renderBackupRestoreSection()
+    return
+  }
+
   if (activeSection === 'redirects') {
     renderRedirectSection(redirectsCallbacks)
     return
@@ -2758,6 +2779,147 @@ async function handleBookmarkTagClear() {
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据清空失败。'
     renderAiNamingSection()
+  }
+}
+
+function renderBackupRestoreSection() {
+  if (!dom.backupPreview) {
+    return
+  }
+
+  const hasBackup = Boolean(backupRestoreState.backup && backupRestoreState.preview)
+  const busy = Boolean(backupRestoreState.restoring)
+  if (dom.backupStatus) {
+    dom.backupStatus.textContent = backupRestoreState.status || ''
+  }
+  if (dom.backupExport) {
+    dom.backupExport.disabled = busy
+  }
+  if (dom.backupImport) {
+    dom.backupImport.disabled = busy
+  }
+  if (dom.backupRestoreTags) {
+    dom.backupRestoreTags.disabled = !hasBackup || busy
+  }
+  if (dom.backupRestoreNewTab) {
+    dom.backupRestoreNewTab.disabled = !hasBackup || busy
+  }
+  if (dom.backupRestoreSafeFull) {
+    dom.backupRestoreSafeFull.disabled = !hasBackup || busy
+  }
+
+  if (!backupRestoreState.preview) {
+    dom.backupPreview.innerHTML = '<div class="detect-empty">请选择备份文件进行预览。</div>'
+    return
+  }
+
+  const preview = backupRestoreState.preview
+  const warnings = preview.warnings.length
+    ? `<ul class="detect-result-evidence">${preview.warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join('')}</ul>`
+    : '<p class="detect-result-detail">未发现阻塞恢复的问题。</p>'
+  dom.backupPreview.innerHTML = `
+    <article class="detect-result-card">
+      <div class="detect-result-copy">
+        <strong>${escapeHtml(preview.fileName || '已导入备份文件')}</strong>
+        <div class="detect-result-detail">导出时间：${escapeHtml(preview.exportedAt || '未知')} · 扩展版本：${escapeHtml(preview.extensionVersion || '未知')}</div>
+        <div class="detect-result-detail">书签 URL：${preview.counts.bookmarkUrls}，当前缺失：${preview.counts.missingBookmarkUrls}；标签记录：${preview.counts.tagRecords}，可匹配：${preview.counts.tagMatched}，无法匹配：${preview.counts.tagUnmatched}</div>
+        <div class="detect-result-detail">回收站：${preview.counts.recycleEntries}；忽略规则：${preview.counts.ignoreRules}；重定向历史：${preview.counts.redirectEntries}；新标签页配置：${preview.counts.newTabSections}</div>
+        ${warnings}
+      </div>
+    </article>
+  `
+}
+
+async function handleFullBackupExport() {
+  backupRestoreState.status = '正在生成完整备份...'
+  renderBackupRestoreSection()
+
+  try {
+    const now = Date.now()
+    const payload = await createCuratorBackupFile('manual', now)
+    downloadJsonFile(getBackupFileName(now), payload)
+    backupRestoreState.status = '完整备份已导出，文件不包含 API Key。'
+  } catch (error) {
+    backupRestoreState.status = error instanceof Error ? error.message : '完整备份导出失败。'
+  } finally {
+    renderBackupRestoreSection()
+  }
+}
+
+async function handleFullBackupImport(event) {
+  const input = event?.target
+  const file = input?.files?.[0]
+  if (!file) {
+    return
+  }
+
+  backupRestoreState.status = '正在读取备份文件...'
+  backupRestoreState.backup = null
+  backupRestoreState.preview = null
+  renderBackupRestoreSection()
+
+  try {
+    const rawText = await readTextFile(file)
+    const backup = parseCuratorBackupFile(JSON.parse(rawText))
+    const preview = await buildBackupRestorePreview(backup, file.name)
+    backupRestoreState.fileName = file.name
+    backupRestoreState.backup = backup
+    backupRestoreState.preview = preview
+    backupRestoreState.status = '已生成恢复预览，请选择恢复范围。'
+  } catch (error) {
+    backupRestoreState.status = error instanceof Error ? error.message : '备份文件导入失败。'
+  } finally {
+    if (input) {
+      input.value = ''
+    }
+    renderBackupRestoreSection()
+  }
+}
+
+async function handleFullBackupRestore(mode: BackupRestoreMode) {
+  if (!backupRestoreState.backup || backupRestoreState.restoring) {
+    return
+  }
+
+  const modeLabel = mode === 'tagsOnly'
+    ? '只恢复标签数据'
+    : mode === 'newTabOnly'
+      ? '只恢复新标签页配置'
+      : '恢复全部可安全恢复的数据'
+  const confirmed = await requestConfirmation({
+    title: `${modeLabel}？`,
+    copy: mode === 'safeFull'
+      ? '恢复前会自动创建本地备份；缺失书签只会复制到新的恢复文件夹，不会替换整个 Chrome 书签树，也不会恢复 API Key。'
+      : '恢复会写入对应的本地扩展数据，不会恢复 API Key。',
+    confirmLabel: modeLabel,
+    cancelLabel: '取消',
+    tone: mode === 'safeFull' ? 'warning' : 'danger',
+    label: 'Restore'
+  })
+  if (!confirmed) {
+    return
+  }
+
+  backupRestoreState.restoring = true
+  backupRestoreState.status = '正在恢复...'
+  renderBackupRestoreSection()
+
+  try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'restore',
+      source: 'options',
+      reason: `恢复备份：${modeLabel}`
+    })
+    const result = await restoreCuratorBackup(backupRestoreState.backup, mode)
+    await hydrateAvailabilityCatalog({ preserveResults: true })
+    aiNamingState.tagIndex = await loadBookmarkTagIndex()
+    backupRestoreState.status =
+      `恢复完成：标签 ${result.restored.tags} 条，新标签页配置 ${result.restored.newTabSections} 项，本地数据 ${result.restored.storageSections} 项，复制缺失书签 ${result.restored.copiedBookmarks} 条；无法匹配标签 ${result.unmatchedTags} 条。`
+  } catch (error) {
+    backupRestoreState.status = error instanceof Error ? error.message : '备份恢复失败。'
+  } finally {
+    backupRestoreState.restoring = false
+    renderBackupRestoreSection()
   }
 }
 
@@ -4171,6 +4333,14 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
   const folderCache = new Map()
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-move',
+      source: 'options',
+      reason: `AI 推荐文件夹批量移动 ${targetResults.length} 条`,
+      targetBookmarkIds: targetResults.map((result) => String(result.id)),
+      estimatedChangeCount: targetResults.length
+    })
+
     for (const result of targetResults) {
       try {
         const targetFolderId = await ensureAiSuggestedFolderPath(result.suggestedFolder, folderCache)
@@ -4249,6 +4419,14 @@ async function applyAiNamingResultsByIds(bookmarkIds) {
   let applyError = null
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-tag-update',
+      source: 'options',
+      reason: `AI 命名建议批量应用 ${targetResults.length} 条`,
+      targetBookmarkIds: targetResults.map((result) => String(result.id)),
+      estimatedChangeCount: targetResults.length
+    })
+
     for (const result of targetResults) {
       await updateBookmark(result.id, {
         title: result.suggestedTitle
@@ -6345,6 +6523,15 @@ async function moveSelectedAvailabilityToFolder(folderId) {
   let moveError = null
 
   try {
+    await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-move',
+      source: 'options',
+      reason: `可用性结果批量移动 ${selectedResults.length} 条`,
+      targetBookmarkIds: selectedResults.map((result) => String(result.id)),
+      targetFolderIds: [folderId],
+      estimatedChangeCount: selectedResults.length
+    })
+
     for (const result of selectedResults) {
       await moveBookmark(result.id, folderId)
       movedIds.push(result.id)

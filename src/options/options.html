@@ -45,6 +45,7 @@
               <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
               <a class="options-nav-link" href="#ai" data-section-link="ai">标签与命名建议</a>
               <a class="options-nav-link" href="#ai-tag-data" data-section-link="ai-tag-data">标签数据</a>
+              <a class="options-nav-link" href="#backup" data-section-link="backup">备份与恢复</a>
             </nav>
           </div>
           <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
@@ -843,6 +844,49 @@
                   <button id="ai-tag-clear" class="options-button danger small" type="button">清空</button>
                 </div>
                 <input id="ai-tag-import-input" class="hidden" type="file" accept="application/json,.json">
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="backup"
+            class="options-panel"
+            data-section-panel="backup"
+            aria-labelledby="backup-title"
+            hidden
+          >
+            <p class="options-section-label">Backup & Restore</p>
+            <h1 id="backup-title">备份与恢复</h1>
+
+            <div class="options-group ai-tag-data-card">
+              <div class="detect-results-header ai-tag-data-head">
+                <div>
+                  <strong>完整备份</strong>
+                  <p class="detect-results-subtitle">导出 Chrome 书签树、标签数据、回收站、忽略规则、重定向历史、新标签页配置和 AI 设置；不会导出 API Key。</p>
+                </div>
+                <div class="detect-results-actions">
+                  <button id="backup-export" class="options-button small" type="button">导出完整备份</button>
+                  <button id="backup-import" class="options-button secondary small" type="button">导入并预览</button>
+                </div>
+                <input id="backup-import-input" class="hidden" type="file" accept="application/json,.json">
+              </div>
+              <p id="backup-status" class="detect-status-copy"></p>
+            </div>
+
+            <div class="options-group ai-tag-data-card">
+              <div class="detect-results-header ai-tag-data-row">
+                <div>
+                  <strong>恢复预览</strong>
+                  <p class="detect-results-subtitle">导入文件后先查看差异，再选择恢复范围；不会直接替换整个 Chrome 书签树。</p>
+                </div>
+                <div class="detect-results-actions">
+                  <button id="backup-restore-tags" class="options-button secondary small" type="button" disabled>只恢复标签数据</button>
+                  <button id="backup-restore-newtab" class="options-button secondary small" type="button" disabled>只恢复新标签页配置</button>
+                  <button id="backup-restore-safe-full" class="options-button small" type="button" disabled>恢复全部可安全恢复的数据</button>
+                </div>
+              </div>
+              <div id="backup-preview" class="detect-results">
+                <div class="detect-empty">请选择备份文件进行预览。</div>
               </div>
             </div>
           </section>

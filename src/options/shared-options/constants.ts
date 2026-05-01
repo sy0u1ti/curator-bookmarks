@@ -27,6 +27,10 @@ export const SECTION_META = {
     label: 'AI Tag Data',
     title: '标签数据'
   },
+  backup: {
+    label: 'Backup & Restore',
+    title: '备份与恢复'
+  },
   redirects: {
     label: 'Redirects',
     title: '重定向更新'
