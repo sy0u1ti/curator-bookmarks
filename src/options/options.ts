@@ -258,17 +258,12 @@ const LEGACY_AI_NAMING_CACHE_STORAGE_KEYS = [
 const SHORTCUTS_SETTINGS_URL = 'chrome://extensions/shortcuts'
 const NEW_TAB_SHORTCUT_FOLDER_TITLE = '标签页'
 const SHORTCUT_COMMAND_ORDER = [
-  '_execute_action',
   'curator-capture-inbox',
   'curator-open-search',
   'curator-open-smart-classifier',
   'curator-toggle-auto-analyze'
 ]
 const SHORTCUT_COMMAND_LABELS: Record<string, { title: string; detail: string }> = {
-  _execute_action: {
-    title: '打开 Popup',
-    detail: '打开 Curator 弹窗。'
-  },
   'curator-capture-inbox': {
     title: '直接收藏到 Inbox',
     detail: '保存当前网页到 Inbox / 待整理，并在后台分析归类。'

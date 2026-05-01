@@ -41,11 +41,6 @@
     "default_popup": "src/popup/popup.html"
   },
   "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Alt+Shift+C"
-      }
-    },
     "curator-capture-inbox": {
       "suggested_key": {
         "default": "Alt+Shift+I"
