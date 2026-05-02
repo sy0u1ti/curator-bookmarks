@@ -454,13 +454,13 @@
                   </div>
                   <span class="option-value">Esc 取消</span>
                 </div>
-                <div id="dashboard-folder-drop-grid" class="dashboard-folder-drop-grid"></div>
+                <div id="dashboard-folder-drop-grid" class="dashboard-folder-drop-grid" role="listbox" aria-label="拖放目标文件夹"></div>
               </div>
               <div id="dashboard-drag-preview" class="dashboard-drag-preview" aria-hidden="true"></div>
             </div>
 
             <div id="dashboard-tag-editor" class="dashboard-tag-editor hidden" role="dialog" aria-modal="false" aria-labelledby="dashboard-tag-editor-title" data-dashboard-no-drag>
-              <div class="dashboard-tag-editor-panel">
+              <div class="dashboard-tag-editor-panel" tabindex="-1">
                 <div class="dashboard-tag-editor-head">
                   <div>
                     <p class="dashboard-kicker">Tags</p>
@@ -543,6 +543,24 @@
               <p id="availability-status-copy" class="detect-status-copy">仅检测 `http/https` 书签，其它协议会自动跳过。</p>
             </div>
 
+            <div class="options-guidance-list" aria-label="坏链检测结果处理顺序">
+              <div class="options-guidance-item">
+                <span class="options-chip danger">高置信</span>
+                <strong>先重测，再移动或删除</strong>
+                <p>多层证据都指向失效时才进入高置信；批量删除前建议先抽样打开确认。</p>
+              </div>
+              <div class="options-guidance-item">
+                <span class="options-chip warning">低置信</span>
+                <strong>优先人工确认</strong>
+                <p>登录限制、地区限制、反爬或临时失败会留在低置信；确认后可移入高置信或加入忽略规则。</p>
+              </div>
+              <div class="options-guidance-item">
+                <span class="options-chip success">重定向</span>
+                <strong>确认当前地址后更新</strong>
+                <p>更新前会重新读取书签，只有当前 URL 仍等于检测时原地址才会替换为最终 URL。</p>
+              </div>
+            </div>
+
             <div class="detect-summary-grid">
               <article class="summary-card metric-card metric-total">
                 <span id="availability-total-label" class="summary-label">全部书签</span>
@@ -612,6 +630,7 @@
               <div id="availability-review-results" class="detect-results">
                 <div class="detect-empty">开始检测后，这里会展示低置信异常书签。</div>
               </div>
+              <div id="availability-review-pagination" class="results-pagination hidden" aria-label="低置信异常分页"></div>
             </div>
 
             <div class="options-group detect-results-group">
@@ -631,6 +650,7 @@
               <div id="availability-results" class="detect-results">
                 <div class="detect-empty">开始检测后，这里会展示高置信失效的书签。</div>
               </div>
+              <div id="availability-failed-pagination" class="results-pagination hidden" aria-label="高置信异常分页"></div>
             </div>
           </section>
 
@@ -884,6 +904,7 @@
               <div id="ai-results" class="detect-results">
                 <div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。</div>
               </div>
+              <div id="ai-results-pagination" class="results-pagination hidden" aria-label="AI 标签与命名结果分页"></div>
             </div>
           </section>
 
@@ -991,6 +1012,7 @@
               <div id="redirect-results" class="detect-results">
                 <div class="detect-empty">完成一次检测后，这里会展示可一键更新的重定向书签。</div>
               </div>
+              <div id="redirect-pagination" class="results-pagination hidden" aria-label="重定向结果分页"></div>
             </div>
           </section>
 
@@ -1295,7 +1317,7 @@
           <span class="options-search-label">搜索文件夹</span>
           <input id="scope-search-input" class="options-search-input" type="search" placeholder="搜索文件夹名称或路径">
         </label>
-        <div id="scope-folder-results" class="detect-results modal-results" role="listbox">
+        <div id="scope-folder-results" class="detect-results modal-results" role="listbox" aria-label="筛选文件夹">
           <div class="detect-empty">正在加载文件夹列表。</div>
         </div>
         <div class="options-modal-actions">

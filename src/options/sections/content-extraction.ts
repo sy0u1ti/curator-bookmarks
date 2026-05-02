@@ -161,10 +161,30 @@ export function extractPageContentFromHtml(html: string, options: ExtractHtmlOpt
 }
 
 export function sanitizeHtmlForInertParsing(html: unknown): string {
-  return String(html || '')
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-    .replace(/<script\b[^>]*\/?>/gi, '')
-    .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi, '')
+  let sanitized = String(html || '')
+  if (!sanitized) {
+    return ''
+  }
+
+  sanitized = stripHtmlElementWithContent(sanitized, 'script')
+  sanitized = stripHtmlElementWithContent(sanitized, 'style')
+  sanitized = stripHtmlElementWithContent(sanitized, 'noscript')
+  sanitized = stripHtmlElementWithContent(sanitized, 'iframe')
+  sanitized = stripHtmlElementWithContent(sanitized, 'object')
+  sanitized = stripHtmlElementWithContent(sanitized, 'embed')
+  sanitized = stripHtmlElementWithContent(sanitized, 'svg')
+  sanitized = stripHtmlElementWithContent(sanitized, 'canvas')
+  sanitized = stripHtmlElementWithContent(sanitized, 'picture')
+  sanitized = stripHtmlElementWithContent(sanitized, 'audio')
+  sanitized = stripHtmlElementWithContent(sanitized, 'video')
+
+  return sanitized
+    .replace(/<script\b[^>]*(?:\/?>)?/gi, '')
+    .replace(/<link\b(?![^>]*\brel\s*=\s*(?:"[^"]*\bcanonical\b[^"]*"|'[^']*\bcanonical\b[^']*'|[^\s>]*\bcanonical\b[^\s>]*))[^>]*>/gi, '')
+    .replace(/<meta\b(?=[^>]*\bhttp-equiv\s*=\s*(?:"(?:refresh|content-security-policy)"|'(?:refresh|content-security-policy)'|(?:refresh|content-security-policy)\b))[^>]*>/gi, '')
+    .replace(/<base\b[^>]*>/gi, '')
+    .replace(/<(?:img|source|track)\b[^>]*>/gi, '')
+    .replace(/\s(?:src|srcset|poster|data|background)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '')
     .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '')
     .replace(/\s+on[a-z]+\s*=\s*[^\s"'=<>`]+/gi, '')
@@ -588,6 +608,10 @@ export function detectContentType(
 
 function queryMeta(documentNode: Document, selector: string): string {
   return truncateCleanText(documentNode.querySelector(selector)?.getAttribute('content') || '', 420)
+}
+
+function stripHtmlElementWithContent(html: string, tagName: string): string {
+  return html.replace(new RegExp(`<${tagName}\\b[^>]*>[\\s\\S]*?<\\/${tagName}\\s*>`, 'gi'), '')
 }
 
 function collectHeadings(documentNode: Document): string[] {

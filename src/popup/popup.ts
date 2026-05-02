@@ -24,16 +24,16 @@ import {
   createTab,
   getBookmarkTree,
   moveBookmark,
-  removeBookmark,
   updateBookmark
 } from '../shared/bookmarks-api.js'
 import {
-  appendRecycleEntry,
+  deleteBookmarkToRecycle,
   removeRecycleEntry
 } from '../shared/recycle-bin.js'
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
+import type { BookmarkTagIndex } from '../shared/bookmark-tags.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
 import {
   extractAiErrorMessage,
@@ -57,11 +57,6 @@ import {
   normalizePageContentContext
 } from '../options/sections/content-extraction.js'
 import {
-  buildContentSnapshotSearchMapWithFullText,
-  loadContentSnapshotIndex,
-  loadContentSnapshotSettings
-} from '../shared/content-snapshots.js'
-import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
   AI_NAMING_JINA_READER_ORIGIN
 } from '../options/shared-options/constants.js'
@@ -69,7 +64,6 @@ import {
   MAX_POPUP_SEARCH_RESULTS,
   POPUP_SEARCH_ASYNC_THRESHOLD,
   getQueryTerms,
-  indexBookmarkForSearch,
   normalizeQuery,
   searchBookmarks,
   searchBookmarksCooperatively,
@@ -88,6 +82,12 @@ import {
   type NaturalSearchPlan,
   type NaturalSearchResultSet
 } from './natural-search.js'
+import {
+  buildLightPopupSearchIndex,
+  enrichPopupSearchIndexWithSnapshotFullText,
+  loadPopupSearchIndexSnapshotState,
+  shouldWarmPopupSnapshotFullText
+} from './search-index.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 
@@ -96,6 +96,7 @@ const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
 const SEARCH_CACHE_LIMIT = 40
+const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
 const SMART_RECOMMENDATION_LIMIT = 3
 const SMART_LOADING_STEP_COUNT = 3
 const DEFAULT_POPUP_PREFERENCES = {
@@ -677,33 +678,22 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     state.bookmarksBarNode = findBookmarksBar(rootNode)
 
     const extracted = extractBookmarkData(rootNode)
-    const tagIndex = await loadBookmarkTagIndex().catch(() => null)
-    const snapshotSettings = await loadContentSnapshotSettings().catch(() => null)
-    const snapshotIndex = await loadContentSnapshotIndex().catch(() => null)
-    const snapshotSearchMap = snapshotIndex
-      ? await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
-          includeFullText: Boolean(snapshotSettings?.fullTextSearchEnabled),
-          maxRecords: 600
-        }).catch(() => new Map<string, string>())
-      : new Map<string, string>()
-    const tagRecords = tagIndex?.records || {}
-    const indexedBookmarks = extracted.bookmarks.map((bookmark) => {
-      const indexed = indexBookmarkForSearch(
-        bookmark,
-        tagRecords[bookmark.id] || null,
-        snapshotIndex?.records?.[bookmark.id] || null,
-        { includeFullText: Boolean(snapshotSettings?.fullTextSearchEnabled) }
-      )
-      const snapshotSearchText = snapshotSearchMap.get(bookmark.id)
-      if (snapshotSearchText) {
-        indexed.searchText = `${indexed.searchText} ${snapshotSearchText}`.trim()
-      }
-      return indexed
+    const [tagIndex, snapshotState] = await Promise.all([
+      loadBookmarkTagIndex().catch(() => null),
+      loadPopupSearchIndexSnapshotState()
+    ])
+    const indexedBookmarks = buildLightPopupSearchIndex({
+      bookmarks: extracted.bookmarks,
+      tagIndex,
+      snapshotIndex: snapshotState.index
     })
     state.allBookmarks = indexedBookmarks
     state.allFolders = extracted.folders
     state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
     state.folderMap = extracted.folderMap
+    state.searchSnapshotState = snapshotState
+    state.searchSnapshotFullTextReady = false
+    state.searchSnapshotFullTextPending = false
     clearSearchCaches()
     await hydrateCurrentTabState()
 
@@ -753,6 +743,8 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
       state.searchHighlightQuery = ''
       dom.searchInput.value = ''
     }
+
+    schedulePopupSnapshotFullTextWarmup(extracted.bookmarks, tagIndex)
   } catch (error) {
     state.searchRunId += 1
     state.searchPending = false
@@ -785,6 +777,54 @@ async function hydrateCurrentTabState() {
   if (!['loading', 'results', 'permission', 'saving'].includes(state.smartStatus)) {
     state.smartStatus = 'idle'
   }
+}
+
+function schedulePopupSnapshotFullTextWarmup(bookmarks, tagIndex: BookmarkTagIndex | null) {
+  const snapshotState = state.searchSnapshotState
+  const warmupRunId = state.searchSnapshotFullTextRunId + 1
+  state.searchSnapshotFullTextRunId = warmupRunId
+
+  if (!shouldWarmPopupSnapshotFullText(snapshotState)) {
+    state.searchSnapshotFullTextPending = false
+    state.searchSnapshotFullTextReady = false
+    return
+  }
+
+  state.searchSnapshotFullTextPending = true
+  window.setTimeout(() => {
+    window.requestAnimationFrame(() => {
+      void warmPopupSnapshotFullTextIndex(bookmarks, tagIndex, snapshotState, warmupRunId)
+    })
+  }, SEARCH_SNAPSHOT_WARM_DELAY_MS)
+}
+
+async function warmPopupSnapshotFullTextIndex(bookmarks, tagIndex, snapshotState, warmupRunId) {
+  if (state.searchSnapshotFullTextRunId !== warmupRunId || !snapshotState?.index) {
+    return
+  }
+
+  const indexedBookmarks = await enrichPopupSearchIndexWithSnapshotFullText({
+    bookmarks,
+    tagIndex,
+    snapshotIndex: snapshotState.index,
+    includeFullText: true
+  })
+
+  if (state.searchSnapshotFullTextRunId !== warmupRunId) {
+    return
+  }
+
+  state.allBookmarks = indexedBookmarks
+  state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
+  state.searchSnapshotFullTextReady = true
+  state.searchSnapshotFullTextPending = false
+  clearSearchCaches()
+
+  if (state.debouncedQuery) {
+    runSearch()
+  }
+
+  render()
 }
 
 function getActiveTab(): Promise<chrome.tabs.Tab | null> {
@@ -1138,31 +1178,51 @@ function isNaturalSearchLocalFallback() {
 }
 
 function getNaturalSearchToggleText() {
-  return 'AI'
+  if (!state.naturalSearchEnabled) {
+    return '语义'
+  }
+
+  if (state.naturalSearchPending) {
+    return state.naturalSearchError ? '本地' : '理解中'
+  }
+
+  if (state.naturalSearchPlan?.source === 'ai' && !state.naturalSearchError) {
+    return 'AI 语义'
+  }
+
+  return '本地语义'
 }
 
 function getNaturalSearchToggleAriaLabel(isPending: boolean) {
   if (!state.naturalSearchEnabled) {
-    return '开启自然语言搜索'
+    return '开启语义和自然语言搜索，本地解析，可在 AI 可用时改写查询'
   }
 
   if (isPending) {
-    return '自然语言搜索正在解析，点击可关闭'
+    return state.naturalSearchError
+      ? '本地自然语言搜索正在解析，点击可关闭'
+      : '自然语言搜索正在解析，点击可关闭'
   }
 
-  return '关闭自然语言搜索'
+  return '关闭语义和自然语言搜索，回到关键词搜索'
 }
 
 function getNaturalSearchToggleTitle(isPending: boolean) {
   if (!state.naturalSearchEnabled) {
-    return '开启自然语言搜索'
+    return '开启自然语言搜索：优先本地解析，AI 可用时改写查询'
   }
 
   if (isPending) {
-    return '正在理解搜索意图，点击可关闭'
+    return state.naturalSearchError
+      ? 'AI 不可用，正在使用本地解析；点击关闭'
+      : '正在理解搜索意图，点击关闭'
   }
 
-  return '关闭自然语言搜索'
+  if (state.naturalSearchPlan?.source === 'ai' && !state.naturalSearchError) {
+    return 'AI 已改写查询；点击关闭自然语言搜索'
+  }
+
+  return '本地自然语言解析中；点击关闭'
 }
 
 function renderToolbar() {
@@ -1190,7 +1250,7 @@ function renderToolbar() {
 }
 
 function getNaturalSearchPendingCaption() {
-  return state.naturalSearchError ? 'AI 不可用，本地解析中…' : 'AI 正在改写查询…'
+  return state.naturalSearchError ? 'AI 不可用，本地解析中…' : '自然语言搜索解析中…'
 }
 
 function getNaturalSearchResultCaption() {
@@ -1584,15 +1644,7 @@ function renderMainContent() {
   dom.emptyState.classList.toggle('hidden', !(showEmptySearch || showEmptyTree))
 
   if (showEmptySearch) {
-    if (state.naturalSearchEnabled) {
-      dom.emptyState.textContent = state.selectedFolderFilterId
-        ? '当前文件夹筛选下未找到符合自然语言条件的书签'
-        : '未找到符合自然语言条件的书签'
-    } else {
-      dom.emptyState.textContent = state.selectedFolderFilterId
-        ? '当前文件夹筛选下未找到相关书签'
-        : '未找到相关书签'
-    }
+    dom.emptyState.innerHTML = renderEmptySearchState()
   } else if (showEmptyTree) {
     dom.emptyState.textContent = state.selectedFolderFilterId
       ? '当前筛选文件夹下暂无可展示内容'
@@ -1615,6 +1667,37 @@ function renderMainContent() {
     preserveScroll: !hasQuery
   })
   updateActiveResultVisibility()
+}
+
+function renderEmptySearchState() {
+  const naturalSearchActive = state.naturalSearchEnabled
+  const hasFolderFilter = Boolean(state.selectedFolderFilterId)
+  const title = naturalSearchActive
+    ? (hasFolderFilter ? '当前文件夹未匹配自然语言条件' : '未找到符合自然语言条件的书签')
+    : (hasFolderFilter ? '当前文件夹未找到相关书签' : '未找到相关书签')
+  const hint = naturalSearchActive
+    ? '可以清除筛选、查看全部，或关闭自然语言搜索改用关键词语法。'
+    : '可以清除筛选、查看全部，或试试 site:、folder:、type: 等高级语法。'
+  const actions = [
+    '<button class="empty-action primary" type="button" data-empty-action="clear-query">清空搜索</button>',
+    hasFolderFilter
+      ? '<button class="empty-action" type="button" data-empty-action="clear-filter">清除筛选</button>'
+      : '',
+    '<button class="empty-action" type="button" data-empty-action="show-all">查看全部</button>',
+    naturalSearchActive
+      ? '<button class="empty-action" type="button" data-empty-action="toggle-natural">关闭自然语言</button>'
+      : '<button class="empty-action" type="button" data-empty-action="toggle-natural">自然语言搜索</button>'
+  ].filter(Boolean).join('')
+
+  return `
+    <div class="empty-search-state">
+      <p class="empty-title">${escapeHtml(title)}</p>
+      <p class="empty-hint">${escapeHtml(hint)}</p>
+      <div class="empty-actions">
+        ${actions}
+      </div>
+    </div>
+  `
 }
 
 function replaceContentHtml(nextHtml, { preserveScroll = false } = {}) {
@@ -2032,6 +2115,8 @@ function renderFilterFolderList() {
         <button
           class="filter-option ${isSelected ? 'selected' : ''}"
           type="button"
+          role="option"
+          aria-selected="${isSelected ? 'true' : 'false'}"
           data-select-filter-folder="${escapeAttr(folder.id)}"
           title="${escapeAttr(folder.path)}"
         >
@@ -2114,11 +2199,17 @@ function renderSmartFolderNode(node, depth, query) {
         type="button"
         ${childFolders.length ? '' : 'data-disabled="true"'}
         data-toggle-smart-folder="${escapeAttr(node.id)}"
+        role="treeitem"
+        aria-level="${depth + 1}"
+        aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
         aria-label="${isExpanded ? '折叠文件夹' : '展开文件夹'}"
       ></button>
       <button
         class="picker-folder-card"
         type="button"
+        role="treeitem"
+        aria-level="${depth + 1}"
+        aria-selected="false"
         data-smart-select-folder="${escapeAttr(node.id)}"
         ${saving ? 'disabled' : ''}
       >
@@ -2169,11 +2260,17 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
         type="button"
         ${childFolders.length ? '' : 'data-disabled="true"'}
         data-toggle-move-folder="${escapeAttr(node.id)}"
+        role="treeitem"
+        aria-level="${depth + 1}"
+        aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
         aria-label="${isExpanded ? '折叠文件夹' : '展开文件夹'}"
       ></button>
       <button
         class="picker-folder-card"
         type="button"
+        role="treeitem"
+        aria-level="${depth + 1}"
+        aria-selected="${isCurrentFolder ? 'true' : 'false'}"
         data-select-folder="${escapeAttr(node.id)}"
         ${moving ? 'disabled' : ''}
       >
@@ -2325,6 +2422,39 @@ function handleContentClick(event) {
   if (bookmarkButton) {
     const bookmarkId = bookmarkButton.getAttribute('data-open-bookmark')
     void openBookmark(bookmarkId)
+    return
+  }
+
+  const emptyAction = event.target.closest('[data-empty-action]')
+  if (emptyAction) {
+    handleEmptySearchAction(emptyAction.getAttribute('data-empty-action'))
+  }
+}
+
+function handleEmptySearchAction(action) {
+  if (action === 'clear-query') {
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
+    dom.searchInput.focus()
+    return
+  }
+
+  if (action === 'clear-filter') {
+    clearFolderFilter()
+    return
+  }
+
+  if (action === 'show-all') {
+    state.selectedFolderFilterId = null
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已显示全部书签')
+    dom.searchInput.focus()
+    return
+  }
+
+  if (action === 'toggle-natural') {
+    void toggleNaturalLanguageSearch()
+    return
   }
 }
 
@@ -3325,8 +3455,7 @@ async function confirmDeleteBookmark() {
       recycleId: `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
     }
 
-    await removeBookmark(bookmark.id)
-    await appendRecycleEntry({
+    await deleteBookmarkToRecycle(bookmark.id, {
       recycleId: state.lastDeletedBookmark.recycleId,
       bookmarkId: String(bookmark.id),
       title: bookmark.title,

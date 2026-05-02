@@ -4,9 +4,11 @@ import assert from 'node:assert/strict'
 import {
   buildContentSnapshotRecord,
   buildContentSnapshotSearchText,
-  normalizeContentSnapshotSettings
+  normalizeContentSnapshotSettings,
+  saveContentSnapshotFromContext,
+  setContentFullTextOperationsForTest
 } from '../src/shared/content-snapshots.js'
-import { CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT } from '../src/shared/constants.js'
+import { CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT, STORAGE_KEYS } from '../src/shared/constants.js'
 
 const bookmark = {
   id: '42',
@@ -90,4 +92,56 @@ test('content snapshot moves full text over 20KB to IndexedDB record', () => {
   assert.equal(record.fullText, undefined)
   assert.equal(record.fullTextRef, record.snapshotId)
   assert.equal(fullTextRecord?.text.length, CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT + 1)
+})
+
+test('content snapshot cleans up IndexedDB full text when local index write fails', async () => {
+  const deletedSnapshotIds: string[] = []
+  const restoreFullTextOperations = setContentFullTextOperationsForTest({
+    put: async () => {},
+    delete: async (snapshotId: string) => {
+      deletedSnapshotIds.push(snapshotId)
+    }
+  })
+  ;(globalThis as any).chrome = {
+    storage: {
+      local: {
+        get(_keys: string[], callback: (items: Record<string, unknown>) => void) {
+          setTimeout(() => callback({}), 0)
+        },
+        set(_payload: Record<string, unknown>, callback: () => void) {
+          setTimeout(() => {
+            lastError = { message: 'quota exceeded' }
+            callback()
+            lastError = undefined
+          }, 0)
+        }
+      }
+    },
+    runtime: {
+      get lastError() {
+        return lastError
+      }
+    }
+  }
+  let lastError: { message: string } | undefined
+
+  try {
+    await assert.rejects(
+      saveContentSnapshotFromContext({
+        bookmark,
+        context: {
+          mainText: 'a'.repeat(CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT + 1),
+          contentType: 'article'
+        },
+        settings: normalizeContentSnapshotSettings({ saveFullText: true }),
+        now: 123
+      }),
+      /quota exceeded/
+    )
+
+    assert.deepEqual(deletedSnapshotIds, ['snapshot-42-123'])
+  } finally {
+    restoreFullTextOperations()
+    delete (globalThis as any).chrome
+  }
 })

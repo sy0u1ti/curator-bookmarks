@@ -65,6 +65,7 @@ import {
   loadContentSnapshotSettings,
   saveContentSnapshotFromContext
 } from '../shared/content-snapshots.js'
+import { shouldReuseBookmarkForSave } from './save-guards.js'
 
 interface PendingCheckState {
   tabId: number
@@ -140,6 +141,11 @@ interface AutoAnalyzeQueueEntry {
   attempts: number
   nextRunAt: number
   lastError: string
+}
+
+interface AutoAnalyzeTreeContext {
+  rootNode: chrome.bookmarks.BookmarkTreeNode | null
+  extracted: ReturnType<typeof extractBookmarkData>
 }
 
 type AutoAnalyzeStatusKind = 'queued' | 'processing' | 'completed' | 'failed'
@@ -795,7 +801,7 @@ async function processAutoAnalyzeQueue(): Promise<void> {
         }).catch((error) => {
           console.warn('[Curator] 自动分析处理中状态写入失败', error)
         })
-        await runAutoAnalysisForBookmark(entry)
+        await runAutoAnalysisForBookmark(entry, await getAutoAnalyzeTreeContext())
         await removeAutoAnalyzeQueueEntry(entry.bookmarkId)
       } catch (error) {
         const message = getErrorMessage(error)
@@ -835,7 +841,34 @@ async function processAutoAnalyzeQueue(): Promise<void> {
   }
 }
 
-async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise<void> {
+let autoAnalyzeTreeContext: AutoAnalyzeTreeContext | null = null
+
+async function getAutoAnalyzeTreeContext(): Promise<AutoAnalyzeTreeContext> {
+  if (autoAnalyzeTreeContext) {
+    return autoAnalyzeTreeContext
+  }
+
+  autoAnalyzeTreeContext = await buildAutoAnalyzeTreeContext()
+  return autoAnalyzeTreeContext
+}
+
+async function buildAutoAnalyzeTreeContext(): Promise<AutoAnalyzeTreeContext> {
+  const tree = await getBookmarkTree()
+  const rootNode = Array.isArray(tree) ? tree[0] || null : tree
+  return {
+    rootNode,
+    extracted: extractBookmarkData(rootNode)
+  }
+}
+
+function invalidateAutoAnalyzeTreeContext(): void {
+  autoAnalyzeTreeContext = null
+}
+
+async function runAutoAnalysisForBookmark(
+  entry: AutoAnalyzeQueueEntry,
+  treeContext: AutoAnalyzeTreeContext
+): Promise<void> {
   const bookmarkId = entry.bookmarkId
   const inboxItem = await findInboxItemByBookmarkId(bookmarkId)
   const settings = await loadAutoAnalyzeSettings()
@@ -871,9 +904,7 @@ async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise
     return
   }
 
-  const tree = await getBookmarkTree()
-  const rootNode = Array.isArray(tree) ? tree[0] : tree
-  const extracted = extractBookmarkData(rootNode)
+  const extracted = treeContext.extracted
   const bookmarkRecord = extracted.bookmarkMap.get(bookmarkId) || buildAutoBookmarkRecord(bookmark)
   const pageContext = await buildAutoPageContext(bookmarkRecord, {
     ...settings,
@@ -987,6 +1018,7 @@ async function runAutoAnalysisForBookmark(entry: AutoAnalyzeQueueEntry): Promise
   let currentBookmark = latestBookmark
   if (moved) {
     currentBookmark = await moveBookmarkNode(bookmarkId, folderId)
+    invalidateAutoAnalyzeTreeContext()
   }
 
   const suggestedTitle = cleanAutoTitle(aiResult.title, currentBookmark.title || bookmarkRecord.title)
@@ -2371,10 +2403,11 @@ async function saveBookmarkFromMessage(message: BookmarkSaveMessage): Promise<Bo
   const bookmarkId = String(message.bookmarkId || '').trim()
   if (bookmarkId) {
     const existingBookmark = await getBookmarkById(bookmarkId)
-    if (existingBookmark?.url) {
+    if (existingBookmark?.url && shouldReuseBookmarkForSave(existingBookmark.url, url)) {
       let node = existingBookmark
       if (existingBookmark.parentId !== parentId) {
         node = await moveBookmarkNode(bookmarkId, parentId)
+        invalidateAutoAnalyzeTreeContext()
       }
       if (title && title !== node.title) {
         node = await updateBookmarkNode(bookmarkId, { title })

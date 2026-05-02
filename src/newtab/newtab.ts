@@ -6,14 +6,13 @@ import {
   createBookmark,
   getBookmarkTree,
   moveBookmark,
-  removeBookmark,
   updateBookmark
 } from '../shared/bookmarks-api.js'
 import {
   extractBookmarkData,
   findBookmarksBar
 } from '../shared/bookmark-tree.js'
-import { appendRecycleEntry, removeRecycleEntry } from '../shared/recycle-bin.js'
+import { deleteBookmarkToRecycle, removeRecycleEntry } from '../shared/recycle-bin.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import type { ExtractedBookmarkData, FolderRecord } from '../shared/types.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
@@ -58,6 +57,13 @@ import {
   normalizeFolderSettings,
   normalizeFolderSettingsWithDefault
 } from './folder-settings.js'
+import {
+  BACKGROUND_URL_FETCH_TIMEOUT_MS,
+  BACKGROUND_URL_MAX_BYTES,
+  buildMinimalBookmarkMoveOperations,
+  validateBackgroundBlobSize,
+  validateBackgroundContentLength
+} from './interactions.js'
 
 const FAVICON_SIZE = 64
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
@@ -179,6 +185,14 @@ interface QuickAccessItem {
 }
 
 type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
+type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+interface LastDeletedBookmarkState {
+  bookmark: chrome.bookmarks.BookmarkTreeNode
+  recycleId: string
+  deletedAt: number
+  customIcon?: string
+}
 
 const state = {
   loading: true,
@@ -205,6 +219,9 @@ const state = {
   editIconMode: 'website',
   pendingCustomIconDataUrl: '',
   pendingDeleteBookmarkId: '',
+  lastDeletedBookmark: null as LastDeletedBookmarkState | null,
+  deleteToastStatus: '',
+  deleteToastBusy: false,
   addMenuOpen: false,
   addMenuExpanded: false,
   addFolderId: '',
@@ -251,6 +268,8 @@ const state = {
   folderCandidatesExpanded: false,
   folderCandidateQuery: '',
   timeSettings: { ...DEFAULT_TIME_SETTINGS },
+  settingsSaveState: 'idle' as SettingsSaveState,
+  settingsSaveMessage: '',
   faviconRefreshTokens: new Map<string, number>()
 }
 
@@ -275,6 +294,7 @@ let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let iconSettingsSaveTimer = 0
 let timeSettingsSaveTimer = 0
+let settingsSaveStatusTimer = 0
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
@@ -306,6 +326,7 @@ function bindEvents(): void {
     if (
       target.closest('.bookmark-edit-menu') ||
       target.closest('.bookmark-add-menu') ||
+      target.closest('.newtab-delete-toast') ||
       target.closest('[data-bookmark-id]')
     ) {
       return
@@ -348,6 +369,25 @@ function bindEvents(): void {
     ) {
       event.preventDefault()
       event.stopPropagation()
+      return
+    }
+  })
+
+  document.body.addEventListener('click', (event) => {
+    const target = event.target
+    if (!(target instanceof Element)) {
+      return
+    }
+
+    if (target.closest('[data-undo-delete]')) {
+      event.preventDefault()
+      void undoLastDeletedBookmark()
+      return
+    }
+
+    if (target.closest('[data-open-recycle]')) {
+      event.preventDefault()
+      openRecycleBin()
       return
     }
   })
@@ -602,7 +642,9 @@ function bindFolderSettingsEvents(): void {
 
 function handleGeneralSettingsChange(): void {
   state.generalSettings = readGeneralSettingsFromControls()
-  void saveGeneralSettings()
+  void saveGeneralSettings().catch((error) => {
+    console.warn('新标签页通用设置保存失败。', error)
+  })
   syncGeneralSettingsControls()
   applyGeneralSettings()
   render()
@@ -611,7 +653,9 @@ function handleGeneralSettingsChange(): void {
 
 function handleFolderSettingsChange(): void {
   state.folderSettings = readFolderSettingsFromControls()
-  void saveFolderSettings()
+  void saveFolderSettings().catch((error) => {
+    console.warn('新标签页文件夹设置保存失败。', error)
+  })
   syncFolderSettingsControls()
   applyFolderSettings()
   render()
@@ -768,7 +812,9 @@ function handleBackgroundSettingsChange(): void {
     state.backgroundUrlCacheStatus = ''
   }
   state.backgroundSettings = nextSettings
-  void saveBackgroundSettings()
+  void saveBackgroundSettings().catch((error) => {
+    console.warn('新标签页背景设置保存失败。', error)
+  })
   syncBackgroundSettingsControls()
   void applyBackgroundSettingsAfterCacheUpdate(shouldClearUrlCache)
 }
@@ -914,6 +960,7 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean }): void {
   syncSearchSettingsControls()
   syncIconSettingsControls()
   syncTimeSettingsControls()
+  syncSettingsSaveStatus()
   updateAllSettingRangeVisuals()
   settingsDrawer?.classList.add('open')
   settingsBackdrop?.classList.add('open')
@@ -1221,7 +1268,7 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
     return
   }
 
-  await persistBookmarkOrder(folderId, finalOrderIds)
+  await persistBookmarkOrder(folderId, originalOrderIds, finalOrderIds)
 }
 
 function cancelBookmarkDrag({ keepSuppressClick = false } = {}): void {
@@ -1477,15 +1524,28 @@ function moveDraggedBookmarkInState(insertIndex: number): boolean {
   return true
 }
 
-async function persistBookmarkOrder(folderId: string, bookmarkIds: string[]): Promise<void> {
+async function persistBookmarkOrder(
+  folderId: string,
+  originalBookmarkIds: string[],
+  finalBookmarkIds: string[]
+): Promise<void> {
   if (!folderId) {
+    return
+  }
+
+  const operations = buildMinimalBookmarkMoveOperations(
+    originalBookmarkIds,
+    finalBookmarkIds,
+    folderId
+  )
+  if (!operations.length) {
     return
   }
 
   state.reorderingBookmarks = true
   try {
-    for (let index = 0; index < bookmarkIds.length; index += 1) {
-      await moveBookmark(bookmarkIds[index], String(folderId), index)
+    for (const operation of operations) {
+      await moveBookmark(operation.id, operation.parentId, operation.index)
     }
     await refreshNewTab()
   } catch (error) {
@@ -1969,30 +2029,19 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     renderBookmarkMenu({ focusFirst: false, focusAction: 'delete-bookmark' })
 
     const recycleId = `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
-    let recycleEntryAppended = false
-    try {
-      await appendRecycleEntry({
-        recycleId,
-        bookmarkId: String(bookmark.id),
-        title: bookmark.title || '未命名书签',
-        url: bookmark.url,
-        parentId: String(bookmark.parentId || ''),
-        index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
-        path: getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE,
-        source: '新标签页删除',
-        deletedAt: Date.now()
-      })
-      recycleEntryAppended = true
-      await removeBookmark(bookmark.id)
-    } catch (error) {
-      if (recycleEntryAppended) {
-        await removeRecycleEntry(recycleId).catch((cleanupError) => {
-          console.warn('新标签页回收站删除回滚失败。', cleanupError)
-        })
-      }
-      throw error
-    }
-    if (state.customIcons[bookmark.id]) {
+    await deleteBookmarkToRecycle(bookmark.id, {
+      recycleId,
+      bookmarkId: String(bookmark.id),
+      title: bookmark.title || '未命名书签',
+      url: bookmark.url,
+      parentId: String(bookmark.parentId || ''),
+      index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
+      path: getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE,
+      source: '新标签页删除',
+      deletedAt: Date.now()
+    })
+    const deletedCustomIcon = state.customIcons[bookmark.id]
+    if (deletedCustomIcon) {
       const nextIcons = { ...state.customIcons }
       delete nextIcons[bookmark.id]
       await saveCustomIcons(nextIcons).catch((error) => {
@@ -2004,6 +2053,13 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     })
 
     state.pendingDeleteBookmarkId = ''
+    state.lastDeletedBookmark = {
+      bookmark,
+      recycleId,
+      deletedAt: Date.now(),
+      customIcon: deletedCustomIcon
+    }
+    state.deleteToastStatus = ''
     closeBookmarkMenu()
     await refreshNewTab()
   } catch (error) {
@@ -2019,6 +2075,56 @@ function getDeleteBookmarkConfirmationText(bookmark: chrome.bookmarks.BookmarkTr
   const title = getBookmarkDisplayTitle(bookmark)
   const folderPath = getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE
   return `再点一次“确认删除 1 个”会从 Chrome 书签中删除「${title}」，位置：${folderPath}。删除记录会进入回收站，可从回收站恢复。`
+}
+
+async function undoLastDeletedBookmark(): Promise<void> {
+  const deleted = state.lastDeletedBookmark
+  if (!deleted || state.deleteToastBusy) {
+    return
+  }
+
+  state.deleteToastBusy = true
+  state.deleteToastStatus = '正在恢复...'
+  renderDeleteToast()
+
+  try {
+    const bookmark = deleted.bookmark
+    const createdBookmark = await createBookmark({
+      parentId: String(bookmark.parentId || BOOKMARKS_BAR_ID),
+      index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : undefined,
+      title: bookmark.title || '未命名书签',
+      url: bookmark.url
+    })
+    await removeRecycleEntry(deleted.recycleId).catch((error) => {
+      console.warn('新标签页撤销删除时清理回收站记录失败。', error)
+    })
+    if (deleted.customIcon) {
+      await saveCustomIcons({
+        ...state.customIcons,
+        [String(createdBookmark.id)]: deleted.customIcon
+      }).catch((error) => {
+        console.warn('新标签页撤销删除时恢复自定义图标失败。', error)
+      })
+    }
+
+    state.lastDeletedBookmark = null
+    state.deleteToastBusy = false
+    state.deleteToastStatus = ''
+    await refreshNewTab()
+    renderDeleteToast()
+  } catch (error) {
+    state.deleteToastBusy = false
+    state.deleteToastStatus = error instanceof Error ? error.message : '恢复失败，请打开回收站处理。'
+    renderDeleteToast()
+  }
+}
+
+function openRecycleBin(): void {
+  const url = chrome.runtime.getURL('src/options/options.html#recycle')
+  void chrome.tabs?.create?.({ url })
+  state.lastDeletedBookmark = null
+  state.deleteToastStatus = ''
+  renderDeleteToast()
 }
 
 function getBookmarkDisplayTitle(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
@@ -2115,6 +2221,7 @@ async function refreshNewTab(): Promise<void> {
   } finally {
     state.loading = false
     render()
+    renderDeleteToast()
     syncBackgroundSettingsControls()
     void applyBackgroundSettings()
     syncSearchSettingsControls()
@@ -2246,6 +2353,48 @@ function render(): void {
 
   root.appendChild(createNewTabLayout(createBookmarkSections(state.folderSections)))
   scheduleVerticalCenterCollisionUpdate()
+}
+
+function renderDeleteToast(): void {
+  document.querySelector<HTMLElement>('.newtab-delete-toast')?.remove()
+  const deleted = state.lastDeletedBookmark
+  if (!deleted) {
+    return
+  }
+
+  const toast = document.createElement('section')
+  toast.className = 'newtab-delete-toast'
+  toast.setAttribute('role', 'status')
+  toast.setAttribute('aria-live', 'polite')
+
+  const copy = document.createElement('div')
+  copy.className = 'newtab-delete-toast-copy'
+
+  const title = document.createElement('strong')
+  title.textContent = '已删除书签'
+
+  const detail = document.createElement('span')
+  detail.textContent = state.deleteToastStatus || getBookmarkDisplayTitle(deleted.bookmark)
+
+  copy.append(title, detail)
+
+  const actions = document.createElement('div')
+  actions.className = 'newtab-delete-toast-actions'
+
+  const undo = document.createElement('button')
+  undo.type = 'button'
+  undo.dataset.undoDelete = 'true'
+  undo.disabled = state.deleteToastBusy
+  undo.textContent = state.deleteToastBusy ? '恢复中' : '撤销'
+
+  const recycle = document.createElement('button')
+  recycle.type = 'button'
+  recycle.dataset.openRecycle = 'true'
+  recycle.textContent = '回收站'
+
+  actions.append(undo, recycle)
+  toast.append(copy, actions)
+  document.body.appendChild(toast)
 }
 
 function scheduleRender({ updateClock = false } = {}): void {
@@ -3992,7 +4141,7 @@ function syncBackgroundSettingsControls(): void {
 }
 
 async function saveBackgroundSettings(): Promise<void> {
-  await setLocalStorage({
+  await saveSettingsWithFeedback({
     [STORAGE_KEYS.newTabBackgroundSettings]: state.backgroundSettings
   })
 }
@@ -4041,6 +4190,12 @@ function getBackgroundUrlCacheErrorMessage(error: unknown): string {
   }
   if (/请求失败|status|404|403|401|500/i.test(message)) {
     return '远程缓存失败：图片请求失败，请检查链接是否可访问或重新授权后重试。'
+  }
+  if (/太大|上限|size|large/i.test(message)) {
+    return message || '远程缓存失败：图片文件超过本地缓存上限，请换用更小的图片。'
+  }
+  if (/超时|timeout|abort/i.test(message)) {
+    return '远程缓存失败：图片下载超时，请检查网络或换用更稳定的直连图片。'
   }
   if (/quota|storage|空间|容量/i.test(message)) {
     return '远程缓存失败：本地存储空间可能不足，请清理空间后重试。'
@@ -4452,20 +4607,53 @@ async function clearBackgroundUrlCache(): Promise<void> {
 }
 
 async function fetchBackgroundUrlImage(imageUrl: string): Promise<Blob> {
-  const response = await fetch(imageUrl, {
-    cache: 'force-cache'
-  })
-  if (!response.ok) {
-    throw new Error(`图片请求失败：${response.status}`)
-  }
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => {
+    controller.abort()
+  }, BACKGROUND_URL_FETCH_TIMEOUT_MS)
 
-  const blob = await response.blob()
-  const contentType = response.headers.get('content-type') || blob.type
-  if (!blob.size || !contentType.toLowerCase().startsWith('image/')) {
-    throw new Error('链接返回的内容不是图片。')
-  }
+  try {
+    const response = await fetch(imageUrl, {
+      cache: 'force-cache',
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      throw new Error(`图片请求失败：${response.status}`)
+    }
 
-  return await createOptimizedBackgroundImageBlob(blob)
+    const declaredSize = validateBackgroundContentLength(
+      response.headers.get('content-length'),
+      BACKGROUND_URL_MAX_BYTES
+    )
+    if (!declaredSize.allowed) {
+      throw new Error(declaredSize.message)
+    }
+
+    const blob = await response.blob()
+    const contentType = response.headers.get('content-type') || blob.type
+    if (!blob.size || !contentType.toLowerCase().startsWith('image/')) {
+      throw new Error('链接返回的内容不是图片。')
+    }
+
+    const finalSize = validateBackgroundBlobSize(blob.size, BACKGROUND_URL_MAX_BYTES)
+    if (!finalSize.allowed) {
+      throw new Error(finalSize.message)
+    }
+
+    const optimizedBlob = await createOptimizedBackgroundImageBlob(blob)
+    const optimizedSize = validateBackgroundBlobSize(optimizedBlob.size, BACKGROUND_URL_MAX_BYTES)
+    if (!optimizedSize.allowed) {
+      throw new Error(optimizedSize.message)
+    }
+    return optimizedBlob
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('远程图片下载超时。')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
 }
 
 async function createOptimizedBackgroundImageBlob(blob: Blob): Promise<Blob> {
@@ -4643,7 +4831,7 @@ function syncSearchSettingsControls(): void {
 }
 
 async function saveSearchSettings(): Promise<void> {
-  await setLocalStorage({
+  await saveSettingsWithFeedback({
     [STORAGE_KEYS.newTabSearchSettings]: state.searchSettings
   })
 }
@@ -4652,7 +4840,9 @@ function scheduleSearchSettingsSave(): void {
   window.clearTimeout(searchSettingsSaveTimer)
   searchSettingsSaveTimer = window.setTimeout(() => {
     searchSettingsSaveTimer = 0
-    void saveSearchSettings()
+    void saveSearchSettings().catch((error) => {
+      console.warn('新标签页搜索设置保存失败。', error)
+    })
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
@@ -4707,7 +4897,7 @@ function syncGeneralSettingsControls(): void {
 }
 
 async function saveGeneralSettings(): Promise<void> {
-  await setLocalStorage({
+  await saveSettingsWithFeedback({
     [STORAGE_KEYS.newTabGeneralSettings]: state.generalSettings
   })
 }
@@ -4887,7 +5077,7 @@ function normalizeSettingSearchText(value: string): string {
 }
 
 async function saveFolderSettings(): Promise<void> {
-  await setLocalStorage({
+  await saveSettingsWithFeedback({
     [STORAGE_KEYS.newTabFolderSettings]: state.folderSettings
   })
 }
@@ -4999,7 +5189,7 @@ function syncIconSettingsControls(): void {
 }
 
 async function saveIconSettings(): Promise<void> {
-  await setLocalStorage({
+  await saveSettingsWithFeedback({
     [STORAGE_KEYS.newTabIconSettings]: state.iconSettings
   })
 }
@@ -5008,7 +5198,9 @@ function scheduleIconSettingsSave(): void {
   window.clearTimeout(iconSettingsSaveTimer)
   iconSettingsSaveTimer = window.setTimeout(() => {
     iconSettingsSaveTimer = 0
-    void saveIconSettings()
+    void saveIconSettings().catch((error) => {
+      console.warn('新标签页图标设置保存失败。', error)
+    })
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
@@ -5035,7 +5227,9 @@ function applyIconPreset(presetKey: IconLayoutPresetKey): void {
     verticalCenter: state.iconSettings.verticalCenter,
     preset: presetKey
   })
-  void saveIconSettings()
+  void saveIconSettings().catch((error) => {
+    console.warn('新标签页图标预设保存失败。', error)
+  })
   render()
   syncIconSettingsControls()
   updateAllSettingRangeVisuals()
@@ -5099,6 +5293,43 @@ function setTextContent(elementId: string, text: string): void {
   if (element) {
     element.textContent = text
   }
+}
+
+async function saveSettingsWithFeedback(values: Record<string, unknown>): Promise<void> {
+  setSettingsSaveStatus('saving', '保存中...')
+  try {
+    await setLocalStorage(values)
+    setSettingsSaveStatus('saved', '已保存')
+  } catch (error) {
+    setSettingsSaveStatus('error', '保存失败')
+    throw error
+  }
+}
+
+function setSettingsSaveStatus(nextState: SettingsSaveState, message: string): void {
+  window.clearTimeout(settingsSaveStatusTimer)
+  state.settingsSaveState = nextState
+  state.settingsSaveMessage = message
+  syncSettingsSaveStatus()
+
+  if (nextState === 'saved') {
+    settingsSaveStatusTimer = window.setTimeout(() => {
+      state.settingsSaveState = 'idle'
+      state.settingsSaveMessage = ''
+      syncSettingsSaveStatus()
+    }, 1800)
+  }
+}
+
+function syncSettingsSaveStatus(): void {
+  const status = document.getElementById('settings-save-status')
+  if (!(status instanceof HTMLElement)) {
+    return
+  }
+
+  status.dataset.state = state.settingsSaveState
+  status.hidden = state.settingsSaveState === 'idle'
+  status.textContent = state.settingsSaveMessage
 }
 
 function syncIconSegmentButtons(selector: string, selectedValue: string, disabled = false): void {
@@ -5385,7 +5616,7 @@ function syncTimeSettingsControls(): void {
 }
 
 async function saveTimeSettings(): Promise<void> {
-  await setLocalStorage({
+  await saveSettingsWithFeedback({
     [STORAGE_KEYS.newTabTimeSettings]: state.timeSettings
   })
 }
@@ -5394,7 +5625,9 @@ function scheduleTimeSettingsSave(): void {
   window.clearTimeout(timeSettingsSaveTimer)
   timeSettingsSaveTimer = window.setTimeout(() => {
     timeSettingsSaveTimer = 0
-    void saveTimeSettings()
+    void saveTimeSettings().catch((error) => {
+      console.warn('新标签页时间设置保存失败。', error)
+    })
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 

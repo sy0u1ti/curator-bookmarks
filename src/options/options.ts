@@ -154,7 +154,6 @@ import {
 } from './sections/ignore.js'
 import {
   normalizeRecycleBin,
-  saveRecycleBin,
   renderRecycleSection,
   handleRecycleResultsClick,
   clearRecycleSelection,
@@ -227,6 +226,7 @@ import {
   handleDashboardDocumentClick,
   handleDashboardDocumentFocusIn,
   handleDashboardInput,
+  handleDashboardKeydown,
   handleDashboardPointerCancel,
   handleDashboardPointerDown,
   handleDashboardPointerMove,
@@ -263,6 +263,7 @@ const LEGACY_AI_NAMING_CACHE_STORAGE_KEYS = [
 
 const SHORTCUTS_SETTINGS_URL = 'chrome://extensions/shortcuts'
 const NEW_TAB_SHORTCUT_FOLDER_TITLE = '标签页'
+const RESULTS_PAGE_SIZE = 25
 const SHORTCUT_COMMAND_ORDER = [
   'curator-capture-inbox',
   'curator-open-search',
@@ -451,6 +452,10 @@ function syncPageSection() {
   if (dom.availabilityAction) {
     renderAvailabilitySection()
   }
+
+  if (key === 'general') {
+    renderAiNamingSection()
+  }
 }
 
 function handleSectionNavigationClick(event) {
@@ -511,6 +516,7 @@ function bindEvents() {
   })
   dom.dashboardPanel?.addEventListener('input', handleDashboardInput)
   dom.dashboardPanel?.addEventListener('change', handleDashboardInput)
+  dom.dashboardPanel?.addEventListener('keydown', handleDashboardKeydown)
   dom.dashboardPanel?.addEventListener('pointerdown', handleDashboardPointerDown)
   dom.dashboardPanel?.addEventListener('pointerover', handleDashboardTagPointerOver)
   dom.dashboardPanel?.addEventListener('pointerout', handleDashboardTagPointerOut)
@@ -537,6 +543,9 @@ function bindEvents() {
   dom.aiMoveSelectionToSuggested?.addEventListener('click', handleMoveSelectedAiNamingResults)
   dom.aiResults?.addEventListener('click', handleAiResultsClick)
   dom.aiResults?.addEventListener('change', handleAiResultsChange)
+  dom.aiResultsPagination?.addEventListener('click', (event) => {
+    handleResultsPaginationClick(event, 'ai-results')
+  })
   dom.aiFilterStatus?.addEventListener('change', handleAiResultsFilterChange)
   dom.aiFilterConfidence?.addEventListener('change', handleAiResultsFilterChange)
   dom.aiFilterQuery?.addEventListener('input', handleAiResultsFilterChange)
@@ -593,6 +602,12 @@ function bindEvents() {
   dom.availabilityStopAction?.addEventListener('click', requestAvailabilityStop)
   dom.availabilityReviewResults?.addEventListener('click', handleReviewResultAction)
   dom.availabilityResults?.addEventListener('click', handleFailedResultAction)
+  dom.availabilityReviewPagination?.addEventListener('click', (event) => {
+    handleResultsPaginationClick(event, 'availability-review')
+  })
+  dom.availabilityFailedPagination?.addEventListener('click', (event) => {
+    handleResultsPaginationClick(event, 'availability-failed')
+  })
   dom.availabilityClearHistory?.addEventListener('click', () => clearDetectionHistoryLogs(historyCallbacks))
   dom.availabilityToggleHistoryLogs?.addEventListener('click', () => toggleHistoryLogsCollapsed(historyCallbacks))
   dom.bookmarkAddHistoryClear?.addEventListener('click', () => clearBookmarkAddHistory({
@@ -627,6 +642,9 @@ function bindEvents() {
     selectAvailabilityResultsByStatus('failed')
   })
   dom.redirectResults?.addEventListener('click', (event) => handleRedirectResultsClick(event, redirectsCallbacks))
+  dom.redirectPagination?.addEventListener('click', (event) => {
+    handleResultsPaginationClick(event, 'redirects')
+  })
   dom.redirectClearSelection?.addEventListener('click', () => clearRedirectSelection(redirectsCallbacks))
   dom.redirectBatchUpdate?.addEventListener('click', () => updateSelectedRedirects(redirectsCallbacks))
   dom.redirectDeleteSelection?.addEventListener('click', () => deleteSelectedRedirects(redirectsCallbacks))
@@ -906,6 +924,79 @@ function trapModalFocus(event) {
   }
 
   return false
+}
+
+function getPaginationStateKey(kind) {
+  if (kind === 'availability-review') {
+    return { state: availabilityState, key: 'reviewResultsPage' }
+  }
+  if (kind === 'availability-failed') {
+    return { state: availabilityState, key: 'failedResultsPage' }
+  }
+  if (kind === 'ai-results') {
+    return { state: aiNamingState, key: 'resultsPage' }
+  }
+  return { state: managerState, key: 'redirectResultsPage' }
+}
+
+function getClampedResultsPage(kind, totalCount, pageSize = RESULTS_PAGE_SIZE) {
+  const { state, key } = getPaginationStateKey(kind)
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / pageSize))
+  const currentPage = Math.min(Math.max(1, Number(state[key]) || 1), totalPages)
+  state[key] = currentPage
+  return currentPage
+}
+
+function getPaginatedResults(kind, results, pageSize = RESULTS_PAGE_SIZE) {
+  const page = getClampedResultsPage(kind, results.length, pageSize)
+  const start = (page - 1) * pageSize
+  return results.slice(start, start + pageSize)
+}
+
+function renderResultsPagination(container, kind, totalCount, label, pageSize = RESULTS_PAGE_SIZE) {
+  if (!container) {
+    return
+  }
+
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / pageSize))
+  const page = getClampedResultsPage(kind, totalCount, pageSize)
+  const start = totalCount ? (page - 1) * pageSize + 1 : 0
+  const end = Math.min(totalCount, page * pageSize)
+  container.classList.toggle('hidden', totalPages <= 1)
+
+  if (totalPages <= 1) {
+    container.innerHTML = ''
+    return
+  }
+
+  container.innerHTML = `
+    <span class="results-pagination-label">${escapeHtml(label)} ${escapeHtml(String(start))}-${escapeHtml(String(end))} / ${escapeHtml(String(totalCount))}</span>
+    <button class="options-button secondary small" type="button" data-results-page="${escapeAttr(kind)}" data-page-direction="prev" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+    <span class="option-value">${escapeHtml(String(page))} / ${escapeHtml(String(totalPages))}</span>
+    <button class="options-button secondary small" type="button" data-results-page="${escapeAttr(kind)}" data-page-direction="next" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+  `
+}
+
+function resetResultsPage(kind) {
+  const { state, key } = getPaginationStateKey(kind)
+  state[key] = 1
+}
+
+function handleResultsPaginationClick(event, expectedKind) {
+  const button = event.target.closest('[data-results-page]')
+  if (!button || button.hasAttribute('disabled')) {
+    return
+  }
+
+  const kind = String(button.getAttribute('data-results-page') || '')
+  if (kind !== expectedKind) {
+    return
+  }
+
+  const direction = String(button.getAttribute('data-page-direction') || '')
+  const { state, key } = getPaginationStateKey(kind)
+  state[key] = Math.max(1, (Number(state[key]) || 1) + (direction === 'next' ? 1 : -1))
+  renderAvailabilitySection()
 }
 
 function handleReviewResultAction(event) {
@@ -1193,6 +1284,7 @@ function resetAiNamingRunState() {
   aiNamingState.lowConfidenceCount = 0
   aiNamingState.failedCount = 0
   aiNamingState.results = []
+  aiNamingState.resultsPage = 1
   aiNamingState.selectedResultIds = new Set()
   aiNamingState.pendingMoveResultIds = new Set()
   aiNamingState.pendingMoveSelection = false
@@ -1294,6 +1386,9 @@ async function hydrateAiNamingPermissionState() {
 
 function resetCurrentAvailabilityRunState() {
   resetDetectionResults()
+  resetResultsPage('availability-review')
+  resetResultsPage('availability-failed')
+  resetResultsPage('redirects')
   availabilityState.lastCompletedAt = 0
   availabilityState.lastRunOutcome = ''
   availabilityState.currentRunProbeEnabled = false
@@ -3711,6 +3806,7 @@ function handleAiResultsFilterChange() {
   aiNamingState.filterStatus = String(dom.aiFilterStatus?.value || 'all')
   aiNamingState.filterConfidence = String(dom.aiFilterConfidence?.value || 'all')
   aiNamingState.filterQuery = String(dom.aiFilterQuery?.value || '').trim()
+  resetResultsPage('ai-results')
   renderAvailabilitySection()
 }
 
@@ -3718,6 +3814,7 @@ function clearAiResultsFilters() {
   aiNamingState.filterStatus = 'all'
   aiNamingState.filterConfidence = 'all'
   aiNamingState.filterQuery = ''
+  resetResultsPage('ai-results')
   renderAvailabilitySection()
 }
 
@@ -3742,6 +3839,7 @@ function renderAiNamingResults() {
 
   if (aiNamingState.running && !aiNamingState.results.length) {
     dom.aiResults.innerHTML = '<div class="detect-empty">正在读取网页内容、生成标签并生成命名建议，请稍候。</div>'
+    renderResultsPagination(dom.aiResultsPagination, 'ai-results', 0, 'AI 结果')
     return
   }
 
@@ -3751,17 +3849,21 @@ function renderAiNamingResults() {
       : aiNamingState.lastCompletedAt
         ? '<div class="detect-empty">最近一次生成已完成，当前没有待处理的书签智能分析结果。</div>'
         : '<div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。</div>'
+    renderResultsPagination(dom.aiResultsPagination, 'ai-results', 0, 'AI 结果')
     return
   }
 
   if (!visibleResults.length) {
     dom.aiResults.innerHTML = '<div class="detect-empty">当前筛选条件下没有匹配的书签智能分析结果。</div>'
+    renderResultsPagination(dom.aiResultsPagination, 'ai-results', 0, 'AI 结果')
     return
   }
 
-  dom.aiResults.innerHTML = visibleResults
+  const pageResults = getPaginatedResults('ai-results', visibleResults)
+  dom.aiResults.innerHTML = pageResults
     .map((result) => buildAiNamingResultCard(result))
     .join('')
+  renderResultsPagination(dom.aiResultsPagination, 'ai-results', visibleResults.length, 'AI 结果')
   syncAiResultTagOverflow()
 }
 
@@ -6118,6 +6220,8 @@ function renderScopeModal() {
     <button
       class="scope-folder-card ${allSelected ? 'current' : ''}"
       type="button"
+      role="option"
+      aria-selected="${allSelected ? 'true' : 'false'}"
       data-scope-folder-id=""
     >
       <div class="scope-folder-head">
@@ -6129,7 +6233,7 @@ function renderScopeModal() {
   `
 
   if (!folders.length) {
-    dom.scopeFolderResults.innerHTML = `${allOption}<div class="detect-empty">没有匹配的文件夹。</div>`
+    dom.scopeFolderResults.innerHTML = `${allOption}<div class="detect-empty" role="presentation">没有匹配的文件夹。</div>`
     return
   }
 
@@ -6149,6 +6253,8 @@ function buildScopeFolderCard(folder) {
     <button
       class="scope-folder-card ${isCurrent ? 'current' : ''}"
       type="button"
+      role="option"
+      aria-selected="${isCurrent ? 'true' : 'false'}"
       data-scope-folder-id="${escapeAttr(folder.id)}"
       title="${escapeAttr(folder.path || folder.title || '未命名文件夹')}"
     >
@@ -6168,22 +6274,32 @@ function renderReviewResults() {
 
   if (availabilityState.running && !availabilityState.reviewResults.length) {
     dom.availabilityReviewResults.innerHTML = '<div class="detect-empty">正在多层检测，暂时还没有低置信异常书签。</div>'
+    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, '低置信异常')
     return
   }
 
   if (!availabilityState.lastCompletedAt && !availabilityState.running) {
     dom.availabilityReviewResults.innerHTML = '<div class="detect-empty">开始检测后，这里会展示证据不足以直接判定为高置信异常的书签。</div>'
+    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, '低置信异常')
     return
   }
 
   if (!availabilityState.reviewResults.length) {
     dom.availabilityReviewResults.innerHTML = '<div class="detect-empty">最近一次检测没有低置信异常书签。</div>'
+    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, '低置信异常')
     return
   }
 
-  dom.availabilityReviewResults.innerHTML = availabilityState.reviewResults
+  const pageResults = getPaginatedResults('availability-review', availabilityState.reviewResults)
+  dom.availabilityReviewResults.innerHTML = pageResults
     .map((result) => buildAvailabilityResultCard(result, 'warning'))
     .join('')
+  renderResultsPagination(
+    dom.availabilityReviewPagination,
+    'availability-review',
+    availabilityState.reviewResults.length,
+    '低置信异常'
+  )
 }
 
 function renderFailedResults() {
@@ -6193,27 +6309,38 @@ function renderFailedResults() {
 
   if (availabilityState.running && !availabilityState.failedResults.length) {
     dom.availabilityResults.innerHTML = '<div class="detect-empty">正在多层检测，暂时还没有发现高置信异常书签。</div>'
+    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, '高置信异常')
     return
   }
 
   if (availabilityState.lastError && !availabilityState.lastCompletedAt && !availabilityState.failedResults.length) {
     dom.availabilityResults.innerHTML = `<div class="detect-empty">${escapeHtml(availabilityState.lastError)}</div>`
+    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, '高置信异常')
     return
   }
 
   if (!availabilityState.lastCompletedAt && !availabilityState.running) {
     dom.availabilityResults.innerHTML = '<div class="detect-empty">开始检测后，这里会展示多层验证后仍可判定为高置信异常的书签。</div>'
+    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, '高置信异常')
     return
   }
 
   if (!availabilityState.failedResults.length) {
     dom.availabilityResults.innerHTML = '<div class="detect-empty">最近一次检测未发现高置信异常书签。</div>'
+    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, '高置信异常')
     return
   }
 
-  dom.availabilityResults.innerHTML = availabilityState.failedResults
+  const pageResults = getPaginatedResults('availability-failed', availabilityState.failedResults)
+  dom.availabilityResults.innerHTML = pageResults
     .map((result) => buildAvailabilityResultCard(result, 'danger'))
     .join('')
+  renderResultsPagination(
+    dom.availabilityFailedPagination,
+    'availability-failed',
+    availabilityState.failedResults.length,
+    '高置信异常'
+  )
 }
 
 function renderMoveModal() {
@@ -6331,6 +6458,7 @@ function buildAvailabilityResultCard(result, tone) {
         >
           ${escapeHtml(displayUrl(result.url))}
         </a>
+        <p class="detect-result-detail">${escapeHtml(getAvailabilityResultRecommendation(result))}</p>
         <p class="detect-result-detail">${escapeHtml(result.detail)}</p>
         <p class="detect-result-path" title="${escapeAttr(result.path || '未归档路径')}">${escapeHtml(result.path || '未归档路径')}</p>
       </div>
@@ -6499,6 +6627,12 @@ function selectAvailabilityResultsByStatus(status) {
     : availabilityState.reviewResults
   )
     .map((result) => String(result.id))
+
+  if (status === 'failed') {
+    resetResultsPage('availability-failed')
+  } else {
+    resetResultsPage('availability-review')
+  }
 
   managerState.selectedAvailabilityIds = new Set([
     ...managerState.selectedAvailabilityIds,
@@ -7319,6 +7453,22 @@ function getModeCopyText() {
   return '当前默认会先做后台导航检测。点击开始检测时会尝试申请第二层网络探测权限；如果未授权，系统仍会继续做后台导航检测。'
 }
 
+function getAvailabilityResultRecommendation(result): string {
+  const status = String(result?.status || '')
+  const badgeText = String(result?.badgeText || '')
+  const finalUrl = String(result?.finalUrl || '')
+
+  if (status === 'redirected' || (finalUrl && isRedirectedNavigation(result?.url || '', finalUrl))) {
+    return '建议：先打开最终链接确认目标页面正确；更新前系统会重新读取书签并确认当前 URL 仍等于检测时原地址。'
+  }
+
+  if (status === 'failed' || badgeText.includes('高置信')) {
+    return '建议：先重测或抽样打开确认；确认失效后可移动归档或批量删除到回收站。'
+  }
+
+  return '建议：先人工打开确认；若是登录、地区限制、反爬或临时失败，可保留在低置信或加入忽略规则。'
+}
+
 function getAvailabilityActionText() {
   const scopeMeta = getCurrentAvailabilityScopeMeta()
   const scopeActionLabel = scopeMeta.type === 'all' ? '全部书签' : '当前范围'
@@ -7420,7 +7570,10 @@ function resetDetectionResults() {
   availabilityState.ignoredCount = 0
   availabilityState.reviewResults = []
   availabilityState.failedResults = []
+  availabilityState.reviewResultsPage = 1
+  availabilityState.failedResultsPage = 1
   availabilityState.redirectResults = []
+  managerState.redirectResultsPage = 1
   managerState.suppressedResults = []
   managerState.currentHistoryEntries = []
 }

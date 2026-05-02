@@ -1,5 +1,6 @@
 import type { FolderRecord } from '../shared/types.js'
 import type { NaturalSearchPlan } from './natural-search.js'
+import type { PopupSearchIndexSnapshotState } from './search-index.js'
 import type { PopupSearchBookmark, PopupSearchResult } from './search.js'
 
 export interface PopupSmartRecommendation {
@@ -71,6 +72,10 @@ export interface PopupState {
   searchRunId: number
   searchPending: boolean
   searchCache: Map<string, PopupSearchResult[]>
+  searchSnapshotState: PopupSearchIndexSnapshotState | null
+  searchSnapshotFullTextReady: boolean
+  searchSnapshotFullTextPending: boolean
+  searchSnapshotFullTextRunId: number
   naturalSearchEnabled: boolean
   naturalSearchPending: boolean
   naturalSearchError: string
@@ -146,6 +151,10 @@ export const state: PopupState = {
   searchRunId: 0,
   searchPending: false,
   searchCache: new Map(),
+  searchSnapshotState: null,
+  searchSnapshotFullTextReady: false,
+  searchSnapshotFullTextPending: false,
+  searchSnapshotFullTextRunId: 0,
   naturalSearchEnabled: false,
   naturalSearchPending: false,
   naturalSearchError: '',

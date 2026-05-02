@@ -37,6 +37,8 @@ const GENERIC_TAG_VALUES = new Set([
   '其他'
 ])
 
+let bookmarkTagIndexWriteQueue: Promise<unknown> = Promise.resolve()
+
 export type BookmarkTagSource = 'ai_naming' | 'auto_analyze' | 'popup_smart' | 'imported' | 'manual'
 
 export interface BookmarkTagExtraction {
@@ -416,27 +418,44 @@ export async function upsertBookmarkTagRecord(record: BookmarkTagRecord): Promis
     return loadBookmarkTagIndex()
   }
 
-  const current = await loadBookmarkTagIndex()
-  const existingRecord = current.records[normalizedRecord.bookmarkId]
-  const now = Date.now()
-  const nextRecord: BookmarkTagRecord = {
-    ...normalizedRecord,
-    updatedAt: now
-  }
-  if (existingRecord?.manualTags?.length && normalizedRecord.manualTags === undefined) {
-    nextRecord.manualTags = existingRecord.manualTags
-    nextRecord.manualUpdatedAt = existingRecord.manualUpdatedAt
-  }
-  const nextIndex: BookmarkTagIndex = {
-    version: BOOKMARK_TAG_INDEX_VERSION,
-    updatedAt: now,
-    records: {
-      ...current.records,
-      [normalizedRecord.bookmarkId]: nextRecord
+  return updateBookmarkTagIndex((current) => {
+    const existingRecord = current.records[normalizedRecord.bookmarkId]
+    const now = Date.now()
+    const nextRecord: BookmarkTagRecord = {
+      ...normalizedRecord,
+      updatedAt: now
     }
-  }
+    if (existingRecord?.manualTags?.length && normalizedRecord.manualTags === undefined) {
+      nextRecord.manualTags = existingRecord.manualTags
+      nextRecord.manualUpdatedAt = existingRecord.manualUpdatedAt
+    }
 
-  return saveBookmarkTagIndex(nextIndex)
+    return {
+      version: BOOKMARK_TAG_INDEX_VERSION,
+      updatedAt: now,
+      records: {
+        ...current.records,
+        [normalizedRecord.bookmarkId]: nextRecord
+      }
+    }
+  })
+}
+
+function updateBookmarkTagIndex(
+  updater: (index: BookmarkTagIndex) => BookmarkTagIndex
+): Promise<BookmarkTagIndex> {
+  const task = bookmarkTagIndexWriteQueue.then(async () => {
+    const current = await loadBookmarkTagIndex()
+    const nextIndex = normalizeBookmarkTagIndex(updater(current))
+    assertBookmarkTagIndexWithinQuota(nextIndex)
+    await setLocalStorage({
+      [STORAGE_KEYS.bookmarkTagIndex]: nextIndex
+    })
+    return nextIndex
+  })
+
+  bookmarkTagIndexWriteQueue = task.catch(() => {})
+  return task
 }
 
 export async function upsertBookmarkTagFromAnalysis(input: BookmarkTagBuildInput): Promise<BookmarkTagRecord | null> {

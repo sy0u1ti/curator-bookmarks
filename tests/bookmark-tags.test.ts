@@ -15,8 +15,10 @@ import {
   normalizeBookmarkTagConfidence,
   normalizeBookmarkTagIndex,
   normalizeBookmarkTagUrl,
-  normalizeBookmarkTags
+  normalizeBookmarkTags,
+  upsertBookmarkTagRecord
 } from '../src/shared/bookmark-tags.js'
+import { STORAGE_KEYS } from '../src/shared/constants.js'
 import type { BookmarkRecord } from '../src/shared/types.js'
 
 function bookmark(overrides: Partial<BookmarkRecord>): BookmarkRecord {
@@ -257,3 +259,54 @@ test('rejects oversized tag index writes', () => {
   }
   assert.ok(/标签库数据过大/.test(errorMessage))
 })
+
+test('serializes bookmark tag upserts without dropping concurrent records', async () => {
+  const store: Record<string, unknown> = {}
+
+  ;(globalThis as any).chrome = createStorageMock(store)
+
+  const firstRecord = buildBookmarkTagRecord({
+    bookmark: bookmark({ id: 'b1', title: 'First', url: 'https://example.com/first' }),
+    analysis: { summary: 'first summary', tags: ['first'] },
+    source: 'ai_naming',
+    now: 1000
+  })
+  const secondRecord = buildBookmarkTagRecord({
+    bookmark: bookmark({ id: 'b2', title: 'Second', url: 'https://example.com/second' }),
+    analysis: { summary: 'second summary', tags: ['second'] },
+    source: 'popup_smart',
+    now: 1000
+  })
+
+  await Promise.all([
+    upsertBookmarkTagRecord(firstRecord),
+    upsertBookmarkTagRecord(secondRecord)
+  ])
+
+  const index = normalizeBookmarkTagIndex(store[STORAGE_KEYS.bookmarkTagIndex])
+  assert.equal(index.records.b1.summary, 'first summary')
+  assert.equal(index.records.b2.summary, 'second summary')
+})
+
+function createStorageMock(store: Record<string, unknown>) {
+  return {
+    storage: {
+      local: {
+        get(keys: string[], callback: (items: Record<string, unknown>) => void) {
+          const snapshot: Record<string, unknown> = {}
+          for (const key of keys) {
+            snapshot[key] = store[key]
+          }
+          setTimeout(() => callback(snapshot), 0)
+        },
+        set(payload: Record<string, unknown>, callback: () => void) {
+          setTimeout(() => {
+            Object.assign(store, payload)
+            callback()
+          }, 0)
+        }
+      }
+    },
+    runtime: {}
+  }
+}

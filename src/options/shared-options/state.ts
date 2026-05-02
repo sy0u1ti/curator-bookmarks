@@ -111,6 +111,8 @@ export const availabilityState = {
   skippedCount: 0,
   reviewResults: [],
   failedResults: [],
+  reviewResultsPage: 1,
+  failedResultsPage: 1,
   redirectResults: [],
   lastCompletedAt: 0,
   lastRunOutcome: '',
@@ -137,6 +139,7 @@ export const managerState = {
   recycleBin: [],
   selectedAvailabilityIds: new Set(),
   selectedRedirectIds: new Set(),
+  redirectResultsPage: 1,
   selectedDuplicateIds: new Set(),
   selectedRecycleIds: new Set(),
   historyLogsCollapsed: false,
@@ -180,6 +183,7 @@ export const dashboardState = {
   tagEditorStatus: '',
   tagEditorSaving: false,
   tagEditorBusyAction: '',
+  tagEditorReturnFocusId: '',
   copyFeedbackId: '',
   statusMessage: ''
 }
@@ -214,6 +218,7 @@ export const aiNamingState = {
   filterStatus: 'all',
   filterConfidence: 'all',
   filterQuery: '',
+  resultsPage: 1,
   expandedTagResultIds: new Set(),
   pendingMoveResultIds: new Set(),
   pendingMoveSelection: false,

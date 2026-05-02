@@ -1,6 +1,7 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
-import { updateBookmark } from '../../shared/bookmarks-api.js'
+import { getBookmarkTree, updateBookmark } from '../../shared/bookmarks-api.js'
+import { extractBookmarkData } from '../../shared/bookmark-tree.js'
 import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { displayUrl } from '../../shared/text.js'
 import {
@@ -18,6 +19,8 @@ import {
 } from '../shared-options/utils.js'
 import { isRedirectedNavigation } from './classifier.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
+
+const REDIRECT_RESULTS_PAGE_SIZE = 25
 
 export function normalizeRedirectCache(rawCache) {
   if (!rawCache || typeof rawCache !== 'object') {
@@ -237,12 +240,15 @@ export function renderRedirectSection(callbacks) {
       : redirectSection.useCachedResults && redirectSection.savedAt
         ? '<div class="detect-empty">当前没有可直接更新的重定向缓存结果。完成新的检测后，这里会重新生成待更新列表。</div>'
         : '<div class="detect-empty">完成一次检测后，这里会展示可一键更新的重定向书签。</div>'
+    renderRedirectPagination(0)
     return
   }
 
-  dom.redirectResults.innerHTML = redirectResults
+  const pageResults = getRedirectPageResults(redirectResults)
+  dom.redirectResults.innerHTML = pageResults
     .map((result) => buildRedirectResultCard(result))
     .join('')
+  renderRedirectPagination(redirectResults.length)
 }
 
 function buildRedirectResultCard(result) {
@@ -287,6 +293,9 @@ function buildRedirectResultCard(result) {
         <div class="detect-result-detail">
           最终地址：<span class="detect-inline-url">${escapeHtml(displayUrl(result.finalUrl || result.url))}</span>
         </div>
+        <div class="detect-result-detail">
+          建议：先打开最终链接确认；更新前会重新读取书签，只有当前 URL 仍等于检测时原地址才会写入。
+        </div>
         <p class="detect-result-path" title="${escapeAttr(result.path || '未归档路径')}">${escapeHtml(result.path || '未归档路径')}</p>
       </div>
     </article>
@@ -326,6 +335,7 @@ export function clearRedirectSelection(callbacks) {
 
 export function selectAllRedirects(callbacks) {
   const { results } = getRedirectSectionState(callbacks)
+  managerState.redirectResultsPage = 1
   managerState.selectedRedirectIds = new Set(
     results.map((result) => String(result.id))
   )
@@ -425,6 +435,7 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
   callbacks.renderAvailabilitySection()
 
   const updatedIds = []
+  const skippedEntries = []
   let updateError = null
 
   try {
@@ -436,9 +447,32 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
       estimatedChangeCount: targetResults.length
     })
 
+    const latestBookmarkMap = await getLatestBookmarkMap()
+
     for (const result of targetResults) {
       const finalUrl = String(result.finalUrl || '').trim()
       if (!finalUrl || !isRedirectedNavigation(result.url, finalUrl)) {
+        skippedEntries.push({
+          id: result.id,
+          reason: '最终 URL 已不再构成有效重定向。'
+        })
+        continue
+      }
+
+      const latestBookmark = latestBookmarkMap.get(String(result.id))
+      if (!latestBookmark?.url) {
+        skippedEntries.push({
+          id: result.id,
+          reason: '书签已不存在。'
+        })
+        continue
+      }
+
+      if (String(latestBookmark.url) !== String(result.url || '')) {
+        skippedEntries.push({
+          id: result.id,
+          reason: `当前 URL 已变更为 ${displayUrl(latestBookmark.url)}。`
+        })
         continue
       }
 
@@ -462,11 +496,60 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
           ? `批量更新重定向过程中断，已更新 ${updatedIds.length} 条：${updateError.message}`
           : `批量更新重定向过程中断，已更新 ${updatedIds.length} 条。`
     } else if (updatedIds.length) {
-      availabilityState.lastError = `已将 ${updatedIds.length} 条重定向书签更新为最终 URL。`
+      const skippedCopy = skippedEntries.length
+        ? ` ${skippedEntries.length} 条因当前 URL 与检测时原 URL 不一致或书签已不存在而跳过。`
+        : ''
+      availabilityState.lastError = `已将 ${updatedIds.length} 条重定向书签更新为最终 URL。${skippedCopy}`.trim()
+    } else if (skippedEntries.length) {
+      availabilityState.lastError = `${skippedEntries.length} 条重定向结果已跳过：${skippedEntries[0].reason}`
     }
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+async function getLatestBookmarkMap() {
+  const tree = await getBookmarkTree()
+  const rootNode = Array.isArray(tree) ? tree[0] : tree
+  const bookmarks = extractBookmarkData(rootNode).bookmarks
+  return new Map(bookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+}
+
+function getRedirectPageResults(results) {
+  const page = getRedirectPage(results.length)
+  const start = (page - 1) * REDIRECT_RESULTS_PAGE_SIZE
+  return results.slice(start, start + REDIRECT_RESULTS_PAGE_SIZE)
+}
+
+function getRedirectPage(totalCount) {
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / REDIRECT_RESULTS_PAGE_SIZE))
+  const page = Math.min(Math.max(1, Number(managerState.redirectResultsPage) || 1), totalPages)
+  managerState.redirectResultsPage = page
+  return page
+}
+
+function renderRedirectPagination(totalCount) {
+  if (!dom.redirectPagination) {
+    return
+  }
+
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / REDIRECT_RESULTS_PAGE_SIZE))
+  const page = getRedirectPage(totalCount)
+  dom.redirectPagination.classList.toggle('hidden', totalPages <= 1)
+
+  if (totalPages <= 1) {
+    dom.redirectPagination.innerHTML = ''
+    return
+  }
+
+  const start = (page - 1) * REDIRECT_RESULTS_PAGE_SIZE + 1
+  const end = Math.min(totalCount, page * REDIRECT_RESULTS_PAGE_SIZE)
+  dom.redirectPagination.innerHTML = `
+    <span class="results-pagination-label">重定向结果 ${escapeHtml(String(start))}-${escapeHtml(String(end))} / ${escapeHtml(String(totalCount))}</span>
+    <button class="options-button secondary small" type="button" data-results-page="redirects" data-page-direction="prev" ${page <= 1 ? 'disabled' : ''}>上一页</button>
+    <span class="option-value">${escapeHtml(String(page))} / ${escapeHtml(String(totalPages))}</span>
+    <button class="options-button secondary small" type="button" data-results-page="redirects" data-page-direction="next" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
+  `
 }
 
 function formatRedirectImpactList(results) {

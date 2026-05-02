@@ -120,6 +120,46 @@ test('normalizes remote markdown content into AI page context', () => {
   assert.ok(/bookmark organization/.test(String(aiContext.main_text_excerpt)))
 })
 
+test('sanitizes remote HTML before inert parsing to avoid extension CSP loads', () => {
+  const html = [
+    '<!doctype html>',
+    '<html lang="zh-CN">',
+    '<head>',
+    '<title>Remote Article</title>',
+    '<meta name="description" content="Remote page description">',
+    '<link rel="canonical" href="https://ttacademy.com/articles/demo">',
+    '<link rel="modulepreload" href="https://ttacademy.com/_app/immutable/chunks/DJpsk58E.js">',
+    '<link rel="preconnect" href="https://analytics.example">',
+    '<script type="module" src="https://ttacademy.com/_app/immutable/chunks/DJpsk58E.js"></script>',
+    '<script>window.__tracking = true</script>',
+    '<meta http-equiv="refresh" content="0; url=https://example.com">',
+    '</head>',
+    '<body>',
+    '<main>',
+    '<h1>Remote Article</h1>',
+    '<img src="https://ttacademy.com/cover.png" srcset="https://ttacademy.com/cover@2x.png 2x">',
+    '<p>This article explains how browser extension page extraction should ignore executable resources before parsing remote HTML.</p>',
+    '<p>It keeps textual metadata and readable content for AI naming while avoiding blocked remote script and preload requests.</p>',
+    '</main>',
+    '<iframe src="https://ttacademy.com/embed"></iframe>',
+    '</body>',
+    '</html>'
+  ].join('')
+
+  const sanitized = sanitizeHtmlForInertParsing(html)
+
+  assert.match(sanitized, /<title>Remote Article<\/title>/)
+  assert.match(sanitized, /<meta name="description" content="Remote page description">/)
+  assert.match(sanitized, /rel="canonical"/)
+  assert.doesNotMatch(sanitized, /<script\b/i)
+  assert.doesNotMatch(sanitized, /modulepreload/i)
+  assert.doesNotMatch(sanitized, /preconnect/i)
+  assert.doesNotMatch(sanitized, /http-equiv="refresh"/i)
+  assert.doesNotMatch(sanitized, /<iframe\b/i)
+  assert.doesNotMatch(sanitized, /\ssrc(?:set)?=/i)
+  assert.match(sanitized, /browser extension page extraction/)
+})
+
 test('combines local and Jina Reader contexts for AI analysis', () => {
   const localText = Array(8)
     .fill('Local extraction keeps browser-visible metadata, headings, navigation clues and page-specific link context.')

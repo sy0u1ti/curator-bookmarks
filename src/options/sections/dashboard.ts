@@ -480,6 +480,49 @@ export function handleDashboardInput(event: Event): void {
   scheduleDashboardSectionRender()
 }
 
+export function handleDashboardKeydown(event: KeyboardEvent): void {
+  const target = event.target as HTMLElement | null
+  if (!target) {
+    return
+  }
+
+  if (dashboardState.tagEditorBookmarkId && isDashboardTagEditorEvent(event)) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      closeDashboardTagEditor()
+      return
+    }
+
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      void saveDashboardTagEditor()
+    }
+    return
+  }
+
+  const tagToggle = target.closest<HTMLElement>('[data-dashboard-toggle-tags]')
+  if (!tagToggle || (event.key !== 'Enter' && event.key !== ' ')) {
+    return
+  }
+
+  event.preventDefault()
+  event.stopPropagation()
+  const bookmarkId = String(tagToggle.getAttribute('data-dashboard-toggle-tags') || '').trim()
+  if (!bookmarkId) {
+    return
+  }
+
+  if (dashboardState.expandedTagIds.has(bookmarkId)) {
+    dashboardState.expandedTagIds.delete(bookmarkId)
+  } else {
+    dashboardState.expandedTagIds.clear()
+    dashboardState.expandedTagIds.add(bookmarkId)
+  }
+  renderDashboardSection()
+}
+
 export async function handleDashboardClick(event: Event, callbacks: DashboardCallbacks): Promise<void> {
   const target = event.target as HTMLElement | null
   if (!target) {
@@ -648,7 +691,8 @@ export function closeDashboardTagPopover(): boolean {
 }
 
 export function closeDashboardTagEditor(): boolean {
-  if (!dashboardState.tagEditorBookmarkId) {
+  const closingBookmarkId = String(dashboardState.tagEditorBookmarkId || '')
+  if (!closingBookmarkId) {
     return false
   }
   if (dashboardState.tagEditorBusyAction === 'regenerate-ai' && dashboardState.tagEditorSaving) {
@@ -666,6 +710,7 @@ export function closeDashboardTagEditor(): boolean {
   if (!editor || editor.classList.contains('hidden')) {
     clearDashboardTagEditorState()
     renderDashboardSection()
+    restoreDashboardTagEditorFocus(closingBookmarkId)
     return true
   }
 
@@ -674,10 +719,12 @@ export function closeDashboardTagEditor(): boolean {
     clearDashboardTagEditorState()
     closingDashboardTagEditor = false
     renderDashboardSection()
+    restoreDashboardTagEditorFocus(closingBookmarkId)
   }, 220).catch(() => {
     clearDashboardTagEditorState()
     closingDashboardTagEditor = false
     renderDashboardSection()
+    restoreDashboardTagEditorFocus(closingBookmarkId)
   })
   return true
 }
@@ -688,7 +735,23 @@ function clearDashboardTagEditorState(): void {
   dashboardState.tagEditorStatus = ''
   dashboardState.tagEditorSaving = false
   dashboardState.tagEditorBusyAction = ''
+  dashboardState.tagEditorReturnFocusId = ''
   dashboardTagRegenerateController = null
+}
+
+function restoreDashboardTagEditorFocus(bookmarkId: string): void {
+  const returnFocusId = String(dashboardState.tagEditorReturnFocusId || bookmarkId || '').trim()
+  if (!returnFocusId) {
+    return
+  }
+
+  window.setTimeout(() => {
+    const card = findDashboardCardElement(returnFocusId)
+    const editButton = card?.querySelector<HTMLElement>('[data-dashboard-action="edit-tags"]')
+    if (editButton && document.contains(editButton) && !editButton.hasAttribute('disabled')) {
+      editButton.focus()
+    }
+  }, 0)
 }
 
 function openDashboardTagEditor(bookmarkId: string): void {
@@ -700,6 +763,7 @@ function openDashboardTagEditor(bookmarkId: string): void {
 
   dashboardState.expandedTagIds.clear()
   dashboardState.tagEditorBookmarkId = String(item.id)
+  dashboardState.tagEditorReturnFocusId = String(item.id)
   dashboardState.tagEditorDraft = item.tags.join('\n')
   dashboardState.tagEditorStatus = item.hasManualTags
     ? '当前显示的是手动标签，AI 标签仍可单独重新生成或清除。'
@@ -1661,7 +1725,7 @@ function buildDashboardCard(item: DashboardItem): string {
     : ''
   const tagPopoverMarkup = expanded && item.tags.length
     ? `
-        <div id="dashboard-tag-popover-${escapeAttr(item.id)}" class="dashboard-tag-popover" data-dashboard-no-drag role="region" aria-label="全部标签">
+        <div id="dashboard-tag-popover-${escapeAttr(item.id)}" class="dashboard-tag-popover" data-dashboard-no-drag role="dialog" aria-modal="false" aria-label="全部标签">
           <strong>全部标签</strong>
           <div class="dashboard-tag-popover-list">
             ${item.tags.map((tag) => `<span class="dashboard-mini-chip">${escapeHtml(tag)}</span>`).join('')}
@@ -1905,6 +1969,8 @@ function buildDashboardFolderDropCard(folder: DashboardFolderTarget): string {
     <button
       class="dashboard-folder-drop-card ${active ? 'active' : ''}"
       type="button"
+      role="option"
+      aria-selected="${active ? 'true' : 'false'}"
       data-dashboard-drop-folder="${escapeAttr(folder.id)}"
       title="${escapeAttr(folder.path)}"
     >
