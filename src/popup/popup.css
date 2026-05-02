@@ -618,7 +618,8 @@ button:focus-visible {
 
 .natural-search-toggle {
   flex: none;
-  min-width: 30px;
+  min-width: 42px;
+  max-width: 78px;
   min-height: 26px;
   display: inline-flex;
   align-items: center;
@@ -630,7 +631,9 @@ button:focus-visible {
   color: var(--text-dim);
   font-size: 11px;
   font-weight: 750;
-  line-height: 1;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   transition:
     background var(--ease-standard),
@@ -1525,6 +1528,76 @@ body.smart-active .smart-classifier {
 .state-panel.compact {
   height: auto;
   padding: 12px 6px 6px;
+}
+
+.empty-search-state {
+  display: grid;
+  justify-items: center;
+  gap: 9px;
+  max-width: 320px;
+}
+
+.empty-title,
+.empty-hint {
+  margin: 0;
+}
+
+.empty-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.empty-hint {
+  color: var(--text-soft);
+}
+
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.empty-action {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 245, 247, 0.28);
+  border-radius: 7px;
+  background: #171719;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 700;
+  transition:
+    background var(--ease-standard),
+    border-color var(--ease-standard),
+    color var(--ease-standard),
+    transform var(--ease-snappy);
+}
+
+.empty-action.primary {
+  border-color: rgba(245, 245, 247, 0.86);
+  background: #f5f5f7;
+  color: #111113;
+}
+
+.empty-action:hover,
+.empty-action:focus-visible {
+  border-color: rgba(245, 245, 247, 0.54);
+  background: #26262a;
+  color: var(--text);
+}
+
+.empty-action.primary:hover,
+.empty-action.primary:focus-visible {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: #111113;
+}
+
+.empty-action:active {
+  transform: scale(0.98);
 }
 
 .tree-row,
@@ -2565,12 +2638,15 @@ body::after {
 }
 
 .natural-search-toggle {
-  min-width: 30px;
+  min-width: 42px;
+  max-width: 78px;
   min-height: 26px;
   padding: 0 8px;
   border-color: #2f2f2f;
   background: #1b1b1b;
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .natural-search-toggle.active {
