@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import {
@@ -7,6 +9,10 @@ import {
   resolvePortalPanelLayout,
   getVerticalCenterCollisionOffset
 } from '../src/newtab/content-state.js'
+
+function readProjectFile(path: string): string {
+  return readFileSync(resolve(process.cwd(), path), 'utf8')
+}
 
 test('does not offset vertically centered icons when utility stack has enough clearance', () => {
   assert.equal(getVerticalCenterCollisionOffset({
@@ -140,4 +146,13 @@ test('resolves portal layout from overview and quick access visibility', () => {
     hasOverviewSignal: true,
     hasQuickAccess: false
   }), 'hidden')
+})
+
+test('newtab settings expose one combined quick access switch', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+
+  assert.match(html, /显示常用和最近/)
+  assert.match(html, /id="general-show-quick-access"/)
+  assert.doesNotMatch(html, /id="general-show-frequent"/)
+  assert.doesNotMatch(html, /id="general-show-recent"/)
 })
