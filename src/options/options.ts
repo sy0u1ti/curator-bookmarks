@@ -467,7 +467,7 @@ function handleSectionNavigationClick(event) {
 
   const link = event.target.closest('a[data-section-link]') as HTMLAnchorElement | null
   const key = link?.getAttribute('data-section-link') || ''
-  if (!link || !SECTION_META[normalizeSectionKey(key)]) {
+  if (!link || !(key in SECTION_META)) {
     return
   }
 
@@ -476,8 +476,13 @@ function handleSectionNavigationClick(event) {
     return
   }
 
+  const nextHash = targetUrl.hash || `#${key}`
+  const nextSectionKey = normalizeSectionKey(nextHash.replace(/^#/, '').split(':')[0] || key)
+  if (nextSectionKey !== key) {
+    return
+  }
+
   event.preventDefault()
-  const nextHash = `#${key}`
   if (window.location.hash !== nextHash) {
     window.history.pushState(null, '', nextHash)
   }
