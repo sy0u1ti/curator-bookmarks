@@ -880,6 +880,15 @@ body.background-mask-enabled .newtab-background-mask {
   opacity: 0.54;
 }
 
+.folder-section-header-row {
+  display: inline-flex;
+  max-width: min(560px, 100%);
+  align-items: center;
+  align-self: start;
+  justify-self: start;
+  gap: 4px;
+}
+
 .folder-section-header {
   display: inline-flex;
   max-width: min(520px, 100%);
@@ -903,6 +912,52 @@ body.background-mask-enabled .newtab-background-mask {
     background-color var(--ease-standard),
     color var(--ease-standard),
     transform var(--ease-standard);
+}
+
+.folder-section-add {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(245, 245, 247, 0.56);
+  cursor: pointer;
+  line-height: 0;
+  opacity: 0.72;
+  transition:
+    opacity var(--ease-standard),
+    background-color var(--ease-standard),
+    color var(--ease-standard);
+}
+
+.folder-section-add:hover,
+.folder-section-add:focus-visible {
+  border-color: rgba(245, 245, 247, 0.12);
+  background: rgba(245, 245, 247, 0.075);
+  color: var(--text);
+  opacity: 1;
+}
+
+.folder-section-add:focus-visible {
+  outline: 2px solid rgba(245, 245, 247, 0.26);
+  outline-offset: 3px;
+}
+
+.folder-section-add svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .folder-section-header:hover,
@@ -942,15 +997,14 @@ body.background-mask-enabled .newtab-background-mask {
   line-height: 1;
 }
 
-body.folder-names-hidden .folder-section-header {
+body.folder-names-hidden .folder-section-header-row {
   opacity: 0;
   transform: translate3d(0, -4px, 0);
 }
 
-body.folder-names-hidden .bookmark-folder-section:hover .folder-section-header,
-body.folder-names-hidden .folder-section-header:hover,
-body.folder-names-hidden .folder-section-header:focus-visible,
-body.folder-names-hidden.folder-order-dragging .folder-section-header {
+body.folder-names-hidden .bookmark-folder-section:hover .folder-section-header-row,
+body.folder-names-hidden .folder-section-header-row:focus-within,
+body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }

@@ -198,3 +198,16 @@ test('newtab settings expose one combined quick access switch', () => {
   assert.doesNotMatch(html, /id="general-show-frequent"/)
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
+
+test('newtab folder headers expose scoped quick-add controls', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const css = readProjectFile('src/newtab/newtab.css')
+
+  assert.match(script, /addFolderId: ''/)
+  assert.match(script, /data-add-bookmark-folder-id/)
+  assert.match(script, /function openAddBookmarkMenuForElement/)
+  assert.match(script, /const folderId = state\.addFolderId \|\| await ensureNewTabFolder\(\)/)
+  assert.match(script, /headerRow\.append\(header, createFolderAddButton\(section\)\)/)
+  assert.match(css, /\.folder-section-header-row/)
+  assert.match(css, /\.folder-section-add/)
+})

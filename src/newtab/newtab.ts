@@ -207,6 +207,7 @@ const state = {
   pendingDeleteBookmarkId: '',
   addMenuOpen: false,
   addMenuExpanded: false,
+  addFolderId: '',
   addMenuX: 0,
   addMenuY: 0,
   addTitle: '',
@@ -330,6 +331,14 @@ function bindEvents(): void {
   root?.addEventListener('click', (event) => {
     const target = event.target
     if (!(target instanceof Element)) {
+      return
+    }
+
+    const addButton = target.closest('[data-add-bookmark-folder-id]')
+    if (addButton instanceof HTMLElement) {
+      event.preventDefault()
+      const folderId = String(addButton.dataset.addBookmarkFolderId || '').trim()
+      openAddBookmarkMenuForElement(addButton, folderId)
       return
     }
 
@@ -1038,10 +1047,27 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
 }
 
 function openAddBookmarkMenu(clientX: number, clientY: number): void {
+  closeBookmarkMenu({ animate: false })
   state.addMenuOpen = true
   state.addMenuExpanded = false
+  state.addFolderId = ''
   state.addMenuX = clientX
   state.addMenuY = clientY
+  state.addTitle = ''
+  state.addUrl = ''
+  state.addMenuBusy = false
+  state.addMenuError = ''
+  renderAddBookmarkMenu()
+}
+
+function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): void {
+  const rect = anchor.getBoundingClientRect()
+  closeBookmarkMenu({ animate: false })
+  state.addMenuOpen = true
+  state.addMenuExpanded = true
+  state.addFolderId = folderId
+  state.addMenuX = rect.right
+  state.addMenuY = rect.bottom + 8
   state.addTitle = ''
   state.addUrl = ''
   state.addMenuBusy = false
@@ -1070,6 +1096,7 @@ function closeBookmarkMenu({ animate = true } = {}): void {
 function closeAddBookmarkMenu({ animate = true } = {}): void {
   state.addMenuOpen = false
   state.addMenuExpanded = false
+  state.addFolderId = ''
   state.addMenuBusy = false
   state.addMenuError = ''
   const menu = document.querySelector<HTMLElement>('.bookmark-add-menu')
@@ -2026,7 +2053,7 @@ async function saveAddedBookmark(): Promise<void> {
     state.addMenuError = ''
     renderAddBookmarkMenu({ focusFirst: false })
 
-    const folderId = await ensureNewTabFolder()
+    const folderId = state.addFolderId || await ensureNewTabFolder()
     await createBookmark({
       parentId: folderId,
       title,
@@ -2748,7 +2775,11 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
     count.textContent = String(section.bookmarks.length)
 
     header.append(title, count)
-    sectionNode.appendChild(header)
+
+    const headerRow = document.createElement('div')
+    headerRow.className = 'folder-section-header-row'
+    headerRow.append(header, createFolderAddButton(section))
+    sectionNode.appendChild(headerRow)
 
     if (section.bookmarks.length) {
       const list = document.createElement('nav')
@@ -2773,6 +2804,20 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
 
   view.appendChild(groupList)
   return view
+}
+
+function createFolderAddButton(section: NewTabFolderSection): HTMLButtonElement {
+  const button = document.createElement('button')
+  button.className = 'folder-section-add'
+  button.type = 'button'
+  button.dataset.addBookmarkFolderId = section.id
+  button.title = `添加书签到「${section.title || '未命名文件夹'}」`
+  button.setAttribute('aria-label', button.title)
+  button.append(createMenuActionIcon('plus'))
+  button.addEventListener('pointerdown', (event) => {
+    event.stopPropagation()
+  })
+  return button
 }
 
 function createPortalPanel(): HTMLElement | null {
