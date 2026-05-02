@@ -6,14 +6,13 @@ import {
   createBookmark,
   getBookmarkTree,
   moveBookmark,
-  removeBookmark,
   updateBookmark
 } from '../shared/bookmarks-api.js'
 import {
   extractBookmarkData,
   findBookmarksBar
 } from '../shared/bookmark-tree.js'
-import { appendRecycleEntry, removeRecycleEntry } from '../shared/recycle-bin.js'
+import { deleteBookmarkToRecycle } from '../shared/recycle-bin.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import type { ExtractedBookmarkData, FolderRecord } from '../shared/types.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
@@ -1933,29 +1932,17 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     renderBookmarkMenu({ focusFirst: false, focusAction: 'delete-bookmark' })
 
     const recycleId = `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
-    let recycleEntryAppended = false
-    try {
-      await appendRecycleEntry({
-        recycleId,
-        bookmarkId: String(bookmark.id),
-        title: bookmark.title || '未命名书签',
-        url: bookmark.url,
-        parentId: String(bookmark.parentId || ''),
-        index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
-        path: getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE,
-        source: '新标签页删除',
-        deletedAt: Date.now()
-      })
-      recycleEntryAppended = true
-      await removeBookmark(bookmark.id)
-    } catch (error) {
-      if (recycleEntryAppended) {
-        await removeRecycleEntry(recycleId).catch((cleanupError) => {
-          console.warn('新标签页回收站删除回滚失败。', cleanupError)
-        })
-      }
-      throw error
-    }
+    await deleteBookmarkToRecycle(bookmark.id, {
+      recycleId,
+      bookmarkId: String(bookmark.id),
+      title: bookmark.title || '未命名书签',
+      url: bookmark.url,
+      parentId: String(bookmark.parentId || ''),
+      index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
+      path: getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE,
+      source: '新标签页删除',
+      deletedAt: Date.now()
+    })
     if (state.customIcons[bookmark.id]) {
       const nextIcons = { ...state.customIcons }
       delete nextIcons[bookmark.id]

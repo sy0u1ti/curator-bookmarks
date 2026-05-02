@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { appendRecycleEntry, removeRecycleEntry } from '../src/shared/recycle-bin.js'
+import {
+  appendRecycleEntry,
+  appendRecycleEntries,
+  deleteBookmarkToRecycle,
+  removeRecycleEntry,
+  removeRecycleEntries
+} from '../src/shared/recycle-bin.js'
 import { normalizeRecycleBin } from '../src/options/sections/recycle.js'
 import { STORAGE_KEYS } from '../src/shared/constants.js'
 
@@ -102,3 +108,159 @@ test('serializes recycle bin append and remove operations in one context', async
   )
   assert.ok(writes.length >= 4)
 })
+
+test('merges stale recycle bin saves with current storage entries', async () => {
+  const store: Record<string, unknown> = {
+    [STORAGE_KEYS.recycleBin]: [
+      {
+        recycleId: 'popup-new',
+        deletedAt: 300,
+        title: 'Popup',
+        url: 'https://popup.example.com'
+      }
+    ]
+  }
+
+  ;(globalThis as any).chrome = createChromeMock({ store })
+
+  await appendRecycleEntries([
+    {
+      recycleId: 'options-stale',
+      deletedAt: 200,
+      title: 'Options',
+      url: 'https://options.example.com'
+    }
+  ])
+
+  assert.deepEqual(
+    (store[STORAGE_KEYS.recycleBin] as Array<{ recycleId: string }>).map((entry) => entry.recycleId),
+    ['popup-new', 'options-stale']
+  )
+})
+
+test('removes recycle entries by id without dropping unrelated current entries', async () => {
+  const store: Record<string, unknown> = {
+    [STORAGE_KEYS.recycleBin]: [
+      {
+        recycleId: 'old-options',
+        deletedAt: 100,
+        title: 'Old',
+        url: 'https://old.example.com'
+      },
+      {
+        recycleId: 'popup-new',
+        deletedAt: 300,
+        title: 'Popup',
+        url: 'https://popup.example.com'
+      }
+    ]
+  }
+
+  ;(globalThis as any).chrome = createChromeMock({ store })
+
+  await removeRecycleEntries(['old-options'])
+
+  assert.deepEqual(
+    (store[STORAGE_KEYS.recycleBin] as Array<{ recycleId: string }>).map((entry) => entry.recycleId),
+    ['popup-new']
+  )
+})
+
+test('does not remove Chrome bookmark when recycle append fails', async () => {
+  const store: Record<string, unknown> = {}
+  const removedBookmarkIds: string[] = []
+
+  ;(globalThis as any).chrome = createChromeMock({
+    store,
+    setError: 'storage unavailable',
+    removedBookmarkIds
+  })
+
+  await assert.rejects(
+    deleteBookmarkToRecycle('bookmark-1', {
+      recycleId: 'recycle-1',
+      bookmarkId: 'bookmark-1',
+      deletedAt: 100,
+      title: 'Bookmark',
+      url: 'https://bookmark.example.com'
+    }),
+    /storage unavailable/
+  )
+
+  assert.deepEqual(removedBookmarkIds, [])
+  assert.equal(store[STORAGE_KEYS.recycleBin], undefined)
+})
+
+test('rolls back recycle entry when Chrome bookmark removal fails', async () => {
+  const store: Record<string, unknown> = {}
+  const removedBookmarkIds: string[] = []
+
+  ;(globalThis as any).chrome = createChromeMock({
+    store,
+    removeBookmarkError: 'bookmark locked',
+    removedBookmarkIds
+  })
+
+  await assert.rejects(
+    deleteBookmarkToRecycle('bookmark-1', {
+      recycleId: 'recycle-1',
+      bookmarkId: 'bookmark-1',
+      deletedAt: 100,
+      title: 'Bookmark',
+      url: 'https://bookmark.example.com'
+    }),
+    /bookmark locked/
+  )
+
+  assert.deepEqual(removedBookmarkIds, ['bookmark-1'])
+  assert.deepEqual(store[STORAGE_KEYS.recycleBin], [])
+})
+
+function createChromeMock(options: {
+  store: Record<string, unknown>
+  setError?: string
+  removeBookmarkError?: string
+  removedBookmarkIds?: string[]
+}) {
+  const { store, setError, removeBookmarkError, removedBookmarkIds = [] } = options
+  let lastError: { message: string } | undefined
+
+  return {
+    storage: {
+      local: {
+        get(keys: string[], callback: (items: Record<string, unknown>) => void) {
+          const snapshot: Record<string, unknown> = {}
+          for (const key of keys) {
+            snapshot[key] = store[key]
+          }
+          setTimeout(() => callback(snapshot), 0)
+        },
+        set(payload: Record<string, unknown>, callback: () => void) {
+          setTimeout(() => {
+            if (!setError) {
+              Object.assign(store, payload)
+            }
+            lastError = setError ? { message: setError } : undefined
+            callback()
+            lastError = undefined
+          }, 0)
+        }
+      }
+    },
+    bookmarks: {
+      remove(bookmarkId: string, callback: () => void) {
+        setTimeout(() => {
+          removedBookmarkIds.push(bookmarkId)
+          lastError = removeBookmarkError ? { message: removeBookmarkError } : undefined
+          callback()
+          lastError = undefined
+        }, 0)
+      }
+    },
+    runtime: {
+      get lastError() {
+        return lastError
+      }
+    }
+  }
+}

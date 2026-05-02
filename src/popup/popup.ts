@@ -24,11 +24,10 @@ import {
   createTab,
   getBookmarkTree,
   moveBookmark,
-  removeBookmark,
   updateBookmark
 } from '../shared/bookmarks-api.js'
 import {
-  appendRecycleEntry,
+  deleteBookmarkToRecycle,
   removeRecycleEntry
 } from '../shared/recycle-bin.js'
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
@@ -3321,8 +3320,7 @@ async function confirmDeleteBookmark() {
       recycleId: `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
     }
 
-    await removeBookmark(bookmark.id)
-    await appendRecycleEntry({
+    await deleteBookmarkToRecycle(bookmark.id, {
       recycleId: state.lastDeletedBookmark.recycleId,
       bookmarkId: String(bookmark.id),
       title: bookmark.title,

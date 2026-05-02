@@ -149,7 +149,6 @@ import {
 } from './sections/ignore.js'
 import {
   normalizeRecycleBin,
-  saveRecycleBin,
   renderRecycleSection,
   handleRecycleResultsClick,
   clearRecycleSelection,

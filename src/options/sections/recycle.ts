@@ -1,10 +1,16 @@
 import {
   BOOKMARKS_BAR_ID,
-  STORAGE_KEYS,
   RECYCLE_BIN_LIMIT
 } from '../../shared/constants.js'
-import { setLocalStorage } from '../../shared/storage.js'
-import { createBookmark, removeBookmark } from '../../shared/bookmarks-api.js'
+import { createBookmark } from '../../shared/bookmarks-api.js'
+import {
+  appendRecycleEntries,
+  deleteBookmarkToRecycle,
+  loadRecycleBinEntries,
+  mergeRecycleEntries,
+  removeRecycleEntries,
+  type RecycleEntry
+} from '../../shared/recycle-bin.js'
 import { createAutoBackupBeforeDangerousOperation, type DangerousOperationKind } from '../../shared/backup.js'
 import { displayUrl } from '../../shared/text.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
@@ -36,15 +42,10 @@ export function normalizeRecycleBin(rawEntries) {
 }
 
 export async function saveRecycleBin() {
-  await setLocalStorage({
-    [STORAGE_KEYS.recycleBin]: managerState.recycleBin.slice(0, RECYCLE_BIN_LIMIT)
-  })
-}
-
-function appendRecycleEntries(entries) {
-  managerState.recycleBin = [...entries, ...managerState.recycleBin]
-    .sort((left, right) => right.deletedAt - left.deletedAt)
-    .slice(0, RECYCLE_BIN_LIMIT)
+  const nextEntries = mergeRecycleEntries(managerState.recycleBin as RecycleEntry[])
+  managerState.recycleBin = nextEntries
+  await appendRecycleEntries(nextEntries)
+  await refreshRecycleBinState()
 }
 
 function buildRecycleEntry(bookmark, source) {
@@ -176,7 +177,7 @@ export function clearRecycleSelection(callbacks) {
 }
 
 async function clearRecycleEntriesByIds(recycleIds, callbacks) {
-  const targetSet = new Set(recycleIds.map((id) => String(id)).filter(Boolean))
+  const targetSet = new Set<string>(recycleIds.map((id) => String(id)).filter(Boolean))
   const targetEntries = managerState.recycleBin.filter((entry) => {
     return targetSet.has(String(entry.recycleId))
   })
@@ -206,7 +207,8 @@ async function clearRecycleEntriesByIds(recycleIds, callbacks) {
   for (const recycleId of targetSet) {
     managerState.selectedRecycleIds.delete(recycleId)
   }
-  await saveRecycleBin()
+  await removeRecycleEntries([...targetSet])
+  await refreshRecycleBinState()
   availabilityState.lastError = targetEntries.length === 1
     ? '已清除 1 条回收站记录。'
     : `已清除 ${targetEntries.length} 条回收站记录。`
@@ -274,10 +276,12 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
     availabilityState.deleting = false
 
     if (restoredIds.length) {
+      const restoredSet = new Set(restoredIds)
       managerState.recycleBin = managerState.recycleBin.filter((entry) => {
-        return !new Set(restoredIds).has(String(entry.recycleId))
+        return !restoredSet.has(String(entry.recycleId))
       })
-      await saveRecycleBin()
+      await removeRecycleEntries(restoredIds)
+      await refreshRecycleBinState()
       await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
     }
 
@@ -312,8 +316,10 @@ export async function clearRecycleBin(callbacks) {
     return
   }
 
+  const recycleIds = managerState.recycleBin.map((entry) => String(entry.recycleId))
   managerState.recycleBin = []
-  await saveRecycleBin()
+  await removeRecycleEntries(recycleIds)
+  await refreshRecycleBinState()
   clearRecycleSelection(callbacks)
   availabilityState.lastError = '已清空回收站记录。'
   callbacks.renderAvailabilitySection()
@@ -348,17 +354,21 @@ export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: s
         continue
       }
 
-      await removeBookmark(bookmarkId)
+      const recycleEntry = buildRecycleEntry(bookmark, source)
+      await deleteBookmarkToRecycle(bookmarkId, recycleEntry)
       removedIds.push(bookmarkId)
-      recycleEntries.push(buildRecycleEntry(bookmark, source))
+      recycleEntries.push(recycleEntry)
     }
   } catch (error) {
     removalError = error
   } finally {
     if (removedIds.length) {
-      appendRecycleEntries(recycleEntries)
+      managerState.recycleBin = mergeRecycleEntries(
+        recycleEntries as RecycleEntry[],
+        managerState.recycleBin as RecycleEntry[]
+      )
+      await refreshRecycleBinState()
       callbacks.removeDeletedResultsFromState(removedIds)
-      await saveRecycleBin()
       await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
       await callbacks.saveRedirectCache()
     }
@@ -377,6 +387,11 @@ export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: s
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+export async function refreshRecycleBinState(): Promise<void> {
+  managerState.recycleBin = normalizeRecycleBin(await loadRecycleBinEntries())
+  managerState.recycleBin = managerState.recycleBin.slice(0, RECYCLE_BIN_LIMIT)
 }
 
 function inferDeleteBackupKind(source: string): DangerousOperationKind {
