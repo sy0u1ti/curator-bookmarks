@@ -14,6 +14,14 @@ const bookmark = {
   url: 'https://react.dev/learn'
 }
 
+test('content snapshot settings enable full text capture and search by default', () => {
+  const settings = normalizeContentSnapshotSettings(null)
+
+  assert.equal(settings.enabled, true)
+  assert.equal(settings.saveFullText, true)
+  assert.equal(settings.fullTextSearchEnabled, true)
+})
+
 test('content snapshot keeps summary and headings searchable by default', () => {
   const { record } = buildContentSnapshotRecord({
     bookmark,

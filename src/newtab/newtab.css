@@ -652,24 +652,122 @@ body.background-mask-enabled .newtab-background-mask {
   gap: var(--icon-folder-gap);
 }
 
+.newtab-portal {
+  --portal-card-min-height: 42px;
+  --portal-card-gap: 6px;
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(190px, 0.58fr) minmax(0, 1.42fr);
+  align-items: stretch;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 10px;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 8px;
+  background: rgba(8, 8, 9, 0.3);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+.newtab-portal.overview-only {
+  width: min(356px, 100%);
+  grid-template-columns: 1fr;
+  justify-self: start;
+}
+
+.newtab-portal.quick-only {
+  grid-template-columns: 1fr;
+}
+
+.newtab-portal-overview {
+  display: grid;
+  min-width: 0;
+  align-content: stretch;
+  gap: 10px;
+}
+
+.newtab-portal-heading {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.newtab-portal-heading strong {
+  color: rgba(245, 245, 247, 0.9);
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.15;
+}
+
+.newtab-portal-heading span {
+  overflow: hidden;
+  color: rgba(245, 245, 247, 0.46);
+  font-size: 11px;
+  font-weight: 560;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-portal-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--portal-card-min-height), 1fr);
+  gap: var(--portal-card-gap);
+}
+
+.newtab-portal-stat {
+  display: grid;
+  min-width: 0;
+  min-height: var(--portal-card-min-height);
+  align-content: center;
+  gap: 2px;
+  padding: 7px 8px;
+  border: 1px solid rgba(245, 245, 247, 0.08);
+  border-radius: 7px;
+  background: rgba(245, 245, 247, 0.04);
+}
+
+.newtab-portal-stat strong {
+  overflow: hidden;
+  color: rgba(245, 245, 247, 0.9);
+  font-size: 16px;
+  font-weight: 760;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-portal-stat span {
+  overflow: hidden;
+  color: rgba(245, 245, 247, 0.42);
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .newtab-quick-access {
   display: grid;
   width: 100%;
-  gap: 9px;
-  margin-bottom: 16px;
+  align-content: stretch;
+  gap: var(--portal-card-gap);
 }
 
 .newtab-quick-group {
   display: grid;
   min-width: 0;
-  grid-template-columns: 38px minmax(0, 1fr);
-  align-items: start;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: stretch;
   gap: 8px;
 }
 
 .newtab-quick-heading {
-  min-height: 26px;
-  padding-top: 7px;
+  display: flex;
+  min-height: var(--portal-card-min-height);
+  align-items: center;
   color: rgba(245, 245, 247, 0.48);
   font-size: 11px;
   font-weight: 750;
@@ -682,13 +780,14 @@ body.background-mask-enabled .newtab-background-mask {
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
-  gap: 6px;
+  grid-auto-rows: minmax(var(--portal-card-min-height), 1fr);
+  gap: var(--portal-card-gap);
 }
 
 .newtab-quick-link {
   display: grid;
   min-width: 0;
-  min-height: 34px;
+  min-height: var(--portal-card-min-height);
   grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
@@ -727,6 +826,16 @@ body.background-mask-enabled .newtab-background-mask {
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
+}
+
+.newtab-quick-link[data-quick-reason="pinned"] .newtab-quick-mark {
+  background: rgba(120, 166, 255, 0.16);
+  color: rgba(180, 204, 255, 0.94);
+}
+
+.newtab-quick-link[data-quick-reason="opened"] .newtab-quick-mark {
+  background: rgba(132, 218, 137, 0.14);
+  color: rgba(185, 236, 188, 0.9);
 }
 
 .newtab-quick-copy {
@@ -2635,6 +2744,33 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
 
   .newtab-page.has-search .newtab-utility-stack {
     --newtab-utility-gap: 10px;
+  }
+
+  .newtab-portal {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 9px;
+  }
+
+  .newtab-portal.overview-only {
+    width: 100%;
+  }
+
+  .newtab-portal-overview {
+    gap: 8px;
+  }
+
+  .newtab-portal-stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .newtab-portal-stat {
+    min-height: 38px;
+    padding: 6px;
+  }
+
+  .newtab-portal-stat strong {
+    font-size: 14px;
   }
 
   .newtab-quick-group {

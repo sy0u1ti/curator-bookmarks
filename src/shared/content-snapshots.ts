@@ -71,8 +71,8 @@ export const DEFAULT_CONTENT_SNAPSHOT_SETTINGS: ContentSnapshotSettings = {
   version: 1,
   enabled: true,
   autoCaptureOnBookmarkCreate: true,
-  saveFullText: false,
-  fullTextSearchEnabled: false,
+  saveFullText: true,
+  fullTextSearchEnabled: true,
   localOnlyNoAiUpload: false
 }
 
@@ -82,8 +82,8 @@ export function normalizeContentSnapshotSettings(raw: unknown): ContentSnapshotS
     version: 1,
     enabled: source.enabled !== false,
     autoCaptureOnBookmarkCreate: source.autoCaptureOnBookmarkCreate !== false,
-    saveFullText: source.saveFullText === true,
-    fullTextSearchEnabled: source.fullTextSearchEnabled === true,
+    saveFullText: source.saveFullText !== false,
+    fullTextSearchEnabled: source.fullTextSearchEnabled !== false,
     localOnlyNoAiUpload: source.localOnlyNoAiUpload === true
   }
 }

@@ -92,6 +92,7 @@ export function cacheDom() {
   dom.aiConnectivityCopy = byId('ai-connectivity-copy')
   dom.aiRunBadge = byId('ai-run-badge')
   dom.aiStatusCopy = byId('ai-status-copy')
+  dom.aiConfigLink = byId('ai-config-link')
   dom.aiSaveSettings = byId('ai-save-settings')
   dom.aiTestConnection = byId('ai-test-connection')
   dom.aiAction = byId('ai-action')

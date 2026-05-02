@@ -86,13 +86,18 @@ import {
   buildPageContextForAi,
   buildRemotePageContentFromText,
   combinePageContentContexts,
+  decideDirectPageFetch,
   extractPageContentFromHtml,
+  appendPageContentWarnings,
+  getDirectPageFetchFailureWarning,
+  getDirectPageFetchOriginPattern,
   normalizePageContentContext
 } from './sections/content-extraction.js'
 import {
   buildContentSnapshotSearchMapWithFullText,
   normalizeContentSnapshotIndex,
   normalizeContentSnapshotSettings,
+  saveContentSnapshotFromContext,
   saveContentSnapshotSettings
 } from '../shared/content-snapshots.js'
 import {
@@ -1193,6 +1198,9 @@ function resetAiNamingRunState() {
   aiNamingState.pendingMoveSelection = false
   aiNamingState.lastCompletedAt = 0
   aiNamingState.lastError = ''
+  contentSnapshotState.aiRunSavedCount = 0
+  contentSnapshotState.aiRunFailedCount = 0
+  contentSnapshotState.statusMessage = ''
 }
 
 function syncAiNamingCatalog({ preserveResults = false } = {}) {
@@ -2111,7 +2119,9 @@ function renderContentSnapshotSettings() {
     const modeCopy = settings.enabled
       ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
       : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
+    const aiRunCopy = buildContentSnapshotAiRunStatusCopy()
     dom.contentSnapshotStatus.textContent = contentSnapshotState.statusMessage ||
+      aiRunCopy ||
       modeCopy
   }
 }
@@ -2121,6 +2131,23 @@ function buildContentSnapshotStatusCopy(saveFullText: boolean, snapshotCount: nu
     return `已保存 ${snapshotCount} 条网页内容索引，其中 ${fullTextCount} 条包含正文；当前用于摘要和正文搜索。`
   }
   return `已保存 ${snapshotCount} 条网页内容索引；当前只保存摘要、标题和链接，不保存正文。`
+}
+
+function buildContentSnapshotAiRunStatusCopy(): string {
+  const savedCount = Math.max(0, Number(contentSnapshotState.aiRunSavedCount) || 0)
+  const failedCount = Math.max(0, Number(contentSnapshotState.aiRunFailedCount) || 0)
+  if (!aiNamingState.running && !savedCount && !failedCount) {
+    return ''
+  }
+
+  const totalCount = Object.keys(contentSnapshotState.index.records || {}).length
+  if (failedCount) {
+    return `书签智能分析已同步 ${savedCount} 条网页内容索引，${failedCount} 条保存失败；当前共 ${totalCount} 条索引。`
+  }
+  if (aiNamingState.running) {
+    return `书签智能分析正在同步网页内容索引，本轮已保存 ${savedCount} 条；当前共 ${totalCount} 条索引。`
+  }
+  return `书签智能分析本轮已保存 ${savedCount} 条网页内容索引；当前共 ${totalCount} 条索引。`
 }
 
 function resetAiNamingConnectivityState() {
@@ -2788,6 +2815,7 @@ function renderAiNamingSection() {
     : hasRequiredConfig
       ? '已配置'
       : '待配置'
+  const hasSavedApiKey = Boolean(settings.apiKey)
   const connectivityMeta = getAiNamingConnectivityMeta()
 
   if (dom.aiProviderNoticeText) {
@@ -2832,6 +2860,14 @@ function renderAiNamingSection() {
       wrapperClass: 'status-loading-label',
       loaderClass: 'status-dot-loader'
     })
+  }
+  if (dom.aiConfigLink) {
+    dom.aiConfigLink.textContent = hasSavedApiKey ? '已配置 API KEY' : '配置 API Key'
+    dom.aiConfigLink.classList.toggle('configured', hasSavedApiKey)
+    dom.aiConfigLink.setAttribute(
+      'aria-label',
+      hasSavedApiKey ? '已配置 API KEY，前往通用设置查看或修改' : '配置 API Key'
+    )
   }
 
   dom.aiRunBadge.className = `options-chip ${getAiNamingBadgeTone()}`
@@ -3713,13 +3749,13 @@ function renderAiNamingResults() {
     dom.aiResults.innerHTML = aiNamingState.lastError
       ? `<div class="detect-empty">${escapeHtml(aiNamingState.lastError)}</div>`
       : aiNamingState.lastCompletedAt
-        ? '<div class="detect-empty">最近一次生成已完成，当前没有待处理的 AI 标签与命名结果。</div>'
-        : '<div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示标签与命名建议。</div>'
+        ? '<div class="detect-empty">最近一次生成已完成，当前没有待处理的书签智能分析结果。</div>'
+        : '<div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。</div>'
     return
   }
 
   if (!visibleResults.length) {
-    dom.aiResults.innerHTML = '<div class="detect-empty">当前筛选条件下没有匹配的 AI 标签与命名结果。</div>'
+    dom.aiResults.innerHTML = '<div class="detect-empty">当前筛选条件下没有匹配的书签智能分析结果。</div>'
     return
   }
 
@@ -4312,13 +4348,13 @@ async function handleAiNamingAction() {
 
     const permissionGranted = await ensureAiNamingPermissionsForRun({ interactive: true })
     if (!permissionGranted) {
-      throw new Error('未授予网页抓取或 AI 服务访问权限，无法生成标签与命名建议。')
+      throw new Error('未授予网页抓取或 AI 服务访问权限，无法运行书签智能分析。')
     }
 
     await runAiNamingSuggestions()
   } catch (error) {
     aiNamingState.lastError =
-      error instanceof Error ? error.message : 'AI 标签与命名失败，请稍后重试。'
+      error instanceof Error ? error.message : '书签智能分析失败，请稍后重试。'
     renderAvailabilitySection()
   }
 }
@@ -4824,16 +4860,16 @@ function getAiNamingStatusCopy() {
 
   if (aiNamingState.running) {
     if (aiNamingState.paused) {
-      return 'AI 标签与命名已暂停。继续后会保留当前结果并从下一条书签继续处理。'
+      return '书签智能分析已暂停。继续后会保留当前结果并从下一条书签继续处理。'
     }
 
     return aiNamingManagerState.settings.allowRemoteParsing
-      ? '正在结合本地内容和 Jina Reader 解析结果生成标签与命名建议。你可以随时停止当前批次。'
-      : '正在读取网页内容、生成标签并生成命名建议。你可以随时停止当前批次。'
+      ? '正在结合本地内容和 Jina Reader 解析结果生成智能分析建议，并同步网页内容索引。你可以随时停止当前批次。'
+      : '正在读取网页内容、生成书签智能分析建议，并同步网页内容索引。你可以随时停止当前批次。'
   }
 
   if (aiNamingState.lastCompletedAt) {
-    return `最近一次 AI 标签与命名建议完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。`
+    return `最近一次书签智能分析完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。`
   }
 
   return '配置 AI 渠道后，可批量生成更适合收藏、检索和重命名的书签标签与标题。应用前你可以逐条预览。'
@@ -4844,7 +4880,7 @@ function getAiNamingProgressCopy() {
   const remoteCopy = aiNamingManagerState.settings.allowRemoteParsing
     ? '已开启 Jina Reader 远程解析，本轮会结合本地抽取与远程解析内容。'
     : '仅使用本地网页抓取与内容抽取。'
-  return `当前范围：${scopeMeta.label}。本轮会处理 ${aiNamingState.eligibleBookmarks} 条 http/https 书签，并调用模型 ${aiNamingManagerState.settings.model || '未配置'} 生成标签和命名建议。${remoteCopy}`
+  return `当前范围：${scopeMeta.label}。本轮会处理 ${aiNamingState.eligibleBookmarks} 条 http/https 书签，并调用模型 ${aiNamingManagerState.settings.model || '未配置'} 生成书签智能分析建议。${remoteCopy}`
 }
 
 function getAiNamingConnectivityMeta() {
@@ -5024,7 +5060,7 @@ async function runAiNamingSuggestions() {
       startedAt: runStartedAt,
       completedAt: aiNamingState.lastCompletedAt
     }).catch((error) => {
-      console.warn('[Curator] AI 标签与命名完成通知发送失败', error)
+      console.warn('[Curator] 书签智能分析完成通知发送失败', error)
     })
   } finally {
     aiNamingState.running = false
@@ -5052,7 +5088,7 @@ async function notifyAiNamingRunFinished({
 
   const processed = Math.max(0, Number(aiNamingState.checkedBookmarks) || 0)
   const total = Math.max(processed, Number(aiNamingState.eligibleBookmarks) || 0)
-  const title = stopped ? 'AI 标签与命名已停止' : 'AI 标签与命名已完成'
+  const title = stopped ? '书签智能分析已停止' : '书签智能分析已完成'
   const message = stopped
     ? `已处理 ${processed}/${total} 条，保留 ${aiNamingState.results.length} 条已生成结果。`
     : `已处理 ${processed}/${total} 条，建议改名 ${aiNamingState.suggestedCount} 条，待确认 ${aiNamingState.manualReviewCount} 条，失败 ${aiNamingState.failedCount} 条。`
@@ -5169,7 +5205,7 @@ async function generateAiNamingResultForBookmark(
 
 async function regenerateDashboardAiTagsForBookmark(bookmark, signal = null) {
   if (aiNamingState.running || aiNamingState.applying) {
-    throw new Error('AI 标签与命名正在运行，请等待当前任务结束后再重新生成。')
+    throw new Error('书签智能分析正在运行，请等待当前任务结束后再重新生成。')
   }
 
   if (!isCheckableUrl(bookmark?.url)) {
@@ -5359,8 +5395,9 @@ function buildAiFolderCandidates(bookmark) {
 async function buildAiNamingPreparedItem(bookmark, timeoutMs, options: { signal?: AbortSignal | null } = {}) {
   const metadata = await getAiMetadataForBookmark(bookmark, timeoutMs, options)
   const pageContext = buildPageContextForAi(metadata)
-  return {
+  const preparedItem = {
     bookmark,
+    pageMetadata: metadata,
     pageContext,
     requestItem: {
       bookmark_id: String(bookmark.id),
@@ -5372,6 +5409,48 @@ async function buildAiNamingPreparedItem(bookmark, timeoutMs, options: { signal?
       existing_folders: buildAiFolderCandidates(bookmark),
       page_context: pageContext
     }
+  }
+  await saveContentSnapshotForAiPreparedItem(preparedItem)
+  return preparedItem
+}
+
+async function saveContentSnapshotForAiPreparedItem(preparedItem): Promise<void> {
+  if (!contentSnapshotState.settings.enabled || !preparedItem?.bookmark || !preparedItem?.pageMetadata) {
+    return
+  }
+
+  try {
+    const record = await saveContentSnapshotFromContext({
+      bookmark: preparedItem.bookmark,
+      context: preparedItem.pageMetadata,
+      settings: contentSnapshotState.settings
+    })
+    if (!record) {
+      return
+    }
+
+    contentSnapshotState.index = normalizeContentSnapshotIndex({
+      ...contentSnapshotState.index,
+      updatedAt: Math.max(Number(contentSnapshotState.index.updatedAt) || 0, Number(record.extractedAt) || Date.now()),
+      records: {
+        ...contentSnapshotState.index.records,
+        [record.bookmarkId]: record
+      }
+    })
+    contentSnapshotState.searchTextMap = await buildContentSnapshotSearchMapWithFullText(contentSnapshotState.index, {
+      includeFullText: contentSnapshotState.settings.fullTextSearchEnabled,
+      maxRecords: 1000
+    }).catch(() => contentSnapshotState.searchTextMap)
+    contentSnapshotState.aiRunSavedCount += 1
+    contentSnapshotState.statusMessage = ''
+    renderContentSnapshotSettings()
+  } catch (error) {
+    contentSnapshotState.aiRunFailedCount += 1
+    const title = preparedItem.bookmark?.title || preparedItem.bookmark?.url || preparedItem.bookmark?.id || '未知书签'
+    const message = error instanceof Error ? error.message : '未知错误'
+    contentSnapshotState.statusMessage = `书签智能分析保存网页内容索引失败：${title}：${message}`
+    console.warn('[Curator] 书签智能分析保存网页内容索引失败', error)
+    renderContentSnapshotSettings()
   }
 }
 
@@ -5399,44 +5478,70 @@ async function fetchBookmarkMetadataForAi(
   options: { signal?: AbortSignal | null } = {}
 ) {
   let context = null
+  const originPattern = getDirectPageFetchOriginPattern(url)
+  const canFetchDirectly = originPattern ? await hasOriginPermission(originPattern) : false
+  const directFetchDecision = decideDirectPageFetch(url, canFetchDirectly)
 
-  try {
-    const response = await fetchWithRequestTimeout(url, {
-      method: 'GET',
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'follow',
-      referrerPolicy: 'no-referrer',
-      signal: options.signal
-    }, timeoutMs)
-    throwIfAborted(options.signal)
-    const finalUrl = String(response.url || url || '')
-    const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+  if (!directFetchDecision.allowed) {
+    context = appendPageContentWarnings(
+      buildFallbackPageContentFromUrl(url, {
+        currentTitle: bookmark?.title
+      }),
+      [directFetchDecision.warning]
+    )
+  } else {
+    try {
+      const response = await fetchWithRequestTimeout(url, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer',
+        signal: options.signal
+      }, timeoutMs)
+      throwIfAborted(options.signal)
+      const finalUrl = String(response.url || url || '')
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase()
 
-    if (!contentType.includes('text/html')) {
-      context = buildFallbackPageContentFromUrl(finalUrl, {
-        currentTitle: bookmark?.title,
-        contentType
-      })
-    } else {
-      const html = await response.text()
-      context = extractPageContentFromHtml(html, {
-        url: finalUrl,
-        currentTitle: bookmark?.title,
-        contentType
-      })
+      if (!contentType.includes('text/html')) {
+        context = buildFallbackPageContentFromUrl(finalUrl, {
+          currentTitle: bookmark?.title,
+          contentType
+        })
+      } else {
+        const html = await response.text()
+        context = extractPageContentFromHtml(html, {
+          url: finalUrl,
+          currentTitle: bookmark?.title,
+          contentType
+        })
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
+      context = appendPageContentWarnings(
+        buildFallbackPageContentFromUrl(url, {
+          currentTitle: bookmark?.title,
+          error
+        }),
+        [getDirectPageFetchFailureWarning(error)]
+      )
     }
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error
-    }
-    context = buildFallbackPageContentFromUrl(url, {
-      currentTitle: bookmark?.title,
-      error
-    })
   }
 
   if (aiNamingManagerState.settings.allowRemoteParsing) {
+    const canUseRemoteParser = await hasOriginPermission(AI_NAMING_JINA_READER_ORIGIN)
+    if (!canUseRemoteParser) {
+      return normalizePageContentContext({
+        ...context,
+        warnings: [
+          ...(context.warnings || []),
+          'Jina Reader 未授权，本次已跳过远程解析。'
+        ]
+      })
+    }
+
     try {
       throwIfAborted(options.signal)
       const remoteContext = await fetchRemoteBookmarkContentForAi(context.finalUrl || url, timeoutMs, context, options)
@@ -5456,6 +5561,18 @@ async function fetchBookmarkMetadataForAi(
   }
 
   return context
+}
+
+async function hasOriginPermission(origin) {
+  if (!origin) {
+    return false
+  }
+
+  try {
+    return Boolean(await containsPermissions({ origins: [origin] }))
+  } catch (error) {
+    return false
+  }
 }
 
 async function fetchRemoteBookmarkContentForAi(
@@ -5939,7 +6056,7 @@ function renderAvailabilityScopeControls() {
     {
       disabled: aiNamingState.running || aiNamingState.applying || availabilityState.catalogLoading,
       label: aiScopeMeta.label,
-      copy: `当前范围：${aiScopeMeta.label}。AI 标签与命名只会读取该范围里的 http/https 书签，并基于网页内容生成标签和标题建议。`
+      copy: `当前范围：${aiScopeMeta.label}。书签智能分析只会读取该范围里的 http/https 书签，并基于网页内容生成标签和标题建议。`
     }
   )
 }
@@ -5975,7 +6092,7 @@ function renderScopeModal() {
     managerState.scopeModalSource === 'history'
       ? '历史范围'
       : managerState.scopeModalSource === 'ai'
-        ? 'AI 标签与命名范围'
+        ? '书签智能分析范围'
         : '检测范围'
   const normalizedQuery = normalizeText(managerState.scopeSearchQuery)
   const folders = availabilityState.allFolders
@@ -5989,7 +6106,7 @@ function renderScopeModal() {
     .sort((left, right) => compareByPathTitle(left, right))
 
   dom.scopeModalCopy.textContent = managerState.scopeModalSource === 'ai'
-    ? '请选择一个文件夹作为当前 AI 标签与命名范围，支持搜索文件夹名称或路径；选择后会立即更新可处理书签列表。'
+    ? '请选择一个文件夹作为当前书签智能分析范围，支持搜索文件夹名称或路径；选择后会立即更新可处理书签列表。'
     : `请选择一个文件夹作为当前${sourceLabel}，支持搜索文件夹名称或路径；选择后会立即更新可用性检测与历史记录视图。`
   dom.scopeSearchInput.value = managerState.scopeSearchQuery
 

@@ -188,7 +188,9 @@ export const contentSnapshotState = {
   settings: { ...DEFAULT_CONTENT_SNAPSHOT_SETTINGS } as ContentSnapshotSettings,
   index: { version: 1, updatedAt: 0, records: {} } as ContentSnapshotIndex,
   searchTextMap: new Map<string, string>(),
-  statusMessage: ''
+  statusMessage: '',
+  aiRunSavedCount: 0,
+  aiRunFailedCount: 0
 }
 
 export const folderCleanupState = {

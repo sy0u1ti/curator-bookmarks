@@ -25,6 +25,7 @@ export interface NewTabSearchIndexBookmark {
   id: string
   title?: string
   url?: string
+  dateAdded?: number
 }
 
 export interface NewTabSearchIndexSection {
@@ -53,6 +54,57 @@ export interface SearchBookmarkSuggestion {
   folderPath: string
   score: number
   order: number
+}
+
+export interface PortalBookmarkActivityRecord {
+  bookmarkId: string
+  openCount: number
+  lastOpenedAt: number
+}
+
+export interface PortalBookmarkSourceItem {
+  id: string
+  title?: string
+  url?: string
+  dateAdded?: number
+}
+
+export interface PortalQuickAccessItem {
+  id: string
+  reason: 'pinned' | 'frequent' | 'opened' | 'added'
+  detail: string
+  badge: string
+}
+
+export interface PortalQuickAccessInput {
+  bookmarks: PortalBookmarkSourceItem[]
+  pinnedIds: string[]
+  records: Record<string, PortalBookmarkActivityRecord>
+  now: number
+  itemLimit: number
+  showFrequent: boolean
+  showRecent: boolean
+}
+
+export interface PortalOverviewInput {
+  sections: NewTabSearchIndexSection[]
+  activityRecords: Record<string, PortalBookmarkActivityRecord>
+  now: number
+}
+
+export interface PortalOverview {
+  bookmarkCount: number
+  folderCount: number
+  openedTodayCount: number
+  addedTodayCount: number
+}
+
+export type PortalPanelLayout = 'hidden' | 'full' | 'overview-only' | 'quick-only'
+
+export interface PortalPanelLayoutInput {
+  showOverview: boolean
+  hasOverviewSignal: boolean
+  hasQuickAccess: boolean
 }
 
 export interface MissingFolderViewOptions {
@@ -102,6 +154,23 @@ export function resolveNewTabContentState(
   }
 
   return { type: 'bookmarks' }
+}
+
+export function resolvePortalPanelLayout({
+  showOverview,
+  hasOverviewSignal,
+  hasQuickAccess
+}: PortalPanelLayoutInput): PortalPanelLayout {
+  if (showOverview && hasOverviewSignal && hasQuickAccess) {
+    return 'full'
+  }
+  if (showOverview && hasOverviewSignal) {
+    return 'overview-only'
+  }
+  if (hasQuickAccess) {
+    return 'quick-only'
+  }
+  return 'hidden'
 }
 
 export function buildNewTabSearchIndex(
@@ -178,6 +247,199 @@ export function getSearchBookmarkSuggestionsFromIndex(
     .slice(0, limit)
 }
 
+export function buildNewTabPortalOverview({
+  sections,
+  activityRecords,
+  now
+}: PortalOverviewInput): PortalOverview {
+  const todayStart = getLocalDayStart(now)
+  const bookmarkIds = new Set<string>()
+  let addedTodayCount = 0
+
+  for (const section of sections) {
+    for (const bookmark of section.bookmarks) {
+      const id = String(bookmark.id || '').trim()
+      const url = String(bookmark.url || '').trim()
+      if (!id || !url || bookmarkIds.has(id)) {
+        continue
+      }
+
+      bookmarkIds.add(id)
+      if (isTimestampInLocalDay(Number(bookmark.dateAdded), todayStart, now)) {
+        addedTodayCount += 1
+      }
+    }
+  }
+
+  const openedTodayIds = new Set<string>()
+  for (const record of Object.values(activityRecords)) {
+    const id = String(record.bookmarkId || '').trim()
+    if (
+      id &&
+      bookmarkIds.has(id) &&
+      Number(record.openCount) > 0 &&
+      isTimestampInLocalDay(Number(record.lastOpenedAt), todayStart, now)
+    ) {
+      openedTodayIds.add(id)
+    }
+  }
+
+  return {
+    bookmarkCount: bookmarkIds.size,
+    folderCount: sections.length,
+    openedTodayCount: openedTodayIds.size,
+    addedTodayCount
+  }
+}
+
+export function getPortalQuickAccessItems({
+  bookmarks,
+  pinnedIds,
+  records,
+  now,
+  itemLimit,
+  showFrequent,
+  showRecent
+}: PortalQuickAccessInput): {
+  frequentItems: PortalQuickAccessItem[]
+  recentItems: PortalQuickAccessItem[]
+} {
+  const bookmarkMap = new Map(
+    bookmarks
+      .filter((bookmark) => String(bookmark.id || '').trim() && String(bookmark.url || '').trim())
+      .map((bookmark) => [String(bookmark.id), bookmark])
+  )
+  const limit = Math.max(0, Math.floor(itemLimit))
+  const frequentItems: PortalQuickAccessItem[] = []
+  const recentItems: PortalQuickAccessItem[] = []
+  const usedIds = new Set<string>()
+
+  if (showFrequent && limit > 0) {
+    for (const bookmarkId of pinnedIds) {
+      const id = String(bookmarkId || '').trim()
+      if (!id || usedIds.has(id) || !bookmarkMap.has(id)) {
+        continue
+      }
+
+      frequentItems.push({
+        id,
+        reason: 'pinned',
+        detail: '已固定',
+        badge: '固'
+      })
+      usedIds.add(id)
+      if (frequentItems.length >= limit) {
+        break
+      }
+    }
+
+    if (frequentItems.length < limit) {
+      const frequentRecords = Object.values(records)
+        .filter((record) =>
+          Number(record.openCount) > 0 &&
+          !usedIds.has(String(record.bookmarkId)) &&
+          bookmarkMap.has(String(record.bookmarkId))
+        )
+        .sort((left, right) =>
+          Number(right.openCount) - Number(left.openCount) ||
+          Number(right.lastOpenedAt) - Number(left.lastOpenedAt)
+        )
+
+      for (const record of frequentRecords) {
+        const id = String(record.bookmarkId)
+        frequentItems.push({
+          id,
+          reason: 'frequent',
+          detail: `打开 ${Math.min(Math.floor(Number(record.openCount) || 0), 9999)} 次`,
+          badge: '常'
+        })
+        usedIds.add(id)
+        if (frequentItems.length >= limit) {
+          break
+        }
+      }
+    }
+  }
+
+  if (showRecent && limit > 0) {
+    const recentRecords = Object.values(records)
+      .filter((record) =>
+        Number(record.lastOpenedAt) > 0 &&
+        !usedIds.has(String(record.bookmarkId)) &&
+        bookmarkMap.has(String(record.bookmarkId))
+      )
+      .sort((left, right) => Number(right.lastOpenedAt) - Number(left.lastOpenedAt))
+
+    for (const record of recentRecords) {
+      const id = String(record.bookmarkId)
+      recentItems.push({
+        id,
+        reason: 'opened',
+        detail: formatNewTabRelativeActivityTime(Number(record.lastOpenedAt), '打开', now),
+        badge: '开'
+      })
+      usedIds.add(id)
+      if (recentItems.length >= limit) {
+        break
+      }
+    }
+
+    if (recentItems.length < limit) {
+      const recentlyAdded = [...bookmarkMap.values()]
+        .filter((bookmark) =>
+          !usedIds.has(String(bookmark.id)) &&
+          Number.isFinite(Number(bookmark.dateAdded)) &&
+          Number(bookmark.dateAdded) > 0
+        )
+        .sort((left, right) => Number(right.dateAdded) - Number(left.dateAdded))
+
+      for (const bookmark of recentlyAdded) {
+        const id = String(bookmark.id)
+        recentItems.push({
+          id,
+          reason: 'added',
+          detail: formatNewTabRelativeActivityTime(Number(bookmark.dateAdded), '添加', now),
+          badge: '新'
+        })
+        usedIds.add(id)
+        if (recentItems.length >= limit) {
+          break
+        }
+      }
+    }
+  }
+
+  return { frequentItems, recentItems }
+}
+
+export function formatNewTabRelativeActivityTime(
+  timestamp: number,
+  label: string,
+  now = Date.now()
+): string {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) {
+    return `${label}时间未知`
+  }
+
+  const diffMs = Math.max(0, now - timestamp)
+  const minuteMs = 60 * 1000
+  const hourMs = 60 * minuteMs
+  const dayMs = 24 * hourMs
+
+  if (diffMs < hourMs) {
+    return `${label}于刚刚`
+  }
+  if (diffMs < dayMs) {
+    return `${label}于 ${Math.max(1, Math.floor(diffMs / hourMs))} 小时前`
+  }
+  if (diffMs < 30 * dayMs) {
+    return `${label}于 ${Math.max(1, Math.floor(diffMs / dayMs))} 天前`
+  }
+
+  const date = new Date(timestamp)
+  return `${label}于 ${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
+
 export function normalizeNewTabSearchText(value: string): string {
   return String(value || '')
     .normalize('NFKC')
@@ -208,6 +470,19 @@ function getSearchSuggestionScore(
     return 4
   }
   return -1
+}
+
+function getLocalDayStart(timestamp: number): number {
+  const date = Number.isFinite(timestamp) && timestamp > 0 ? new Date(timestamp) : new Date()
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+function isTimestampInLocalDay(timestamp: number, dayStart: number, now: number): boolean {
+  return Number.isFinite(timestamp) &&
+    timestamp >= dayStart &&
+    timestamp <= now &&
+    timestamp < dayStart + 24 * 60 * 60 * 1000
 }
 
 export function createNewTabPage({ modules }: NewTabPageOptions): HTMLElement {
