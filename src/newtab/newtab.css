@@ -771,6 +771,15 @@ body.background-mask-enabled .newtab-background-mask {
   opacity: 0.54;
 }
 
+.folder-section-header-row {
+  display: inline-flex;
+  max-width: min(560px, 100%);
+  align-items: center;
+  align-self: start;
+  justify-self: start;
+  gap: 4px;
+}
+
 .folder-section-header {
   display: inline-flex;
   max-width: min(520px, 100%);
@@ -794,6 +803,47 @@ body.background-mask-enabled .newtab-background-mask {
     background-color var(--ease-standard),
     color var(--ease-standard),
     transform var(--ease-standard);
+}
+
+.folder-section-add {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(245, 245, 247, 0.56);
+  cursor: pointer;
+  opacity: 0.72;
+  transition:
+    opacity var(--ease-standard),
+    background-color var(--ease-standard),
+    color var(--ease-standard);
+}
+
+.folder-section-add:hover,
+.folder-section-add:focus-visible {
+  border-color: rgba(245, 245, 247, 0.12);
+  background: rgba(245, 245, 247, 0.075);
+  color: var(--text);
+  opacity: 1;
+}
+
+.folder-section-add:focus-visible {
+  outline: 2px solid rgba(245, 245, 247, 0.26);
+  outline-offset: 3px;
+}
+
+.folder-section-add svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
 }
 
 .folder-section-header:hover,
@@ -833,15 +883,14 @@ body.background-mask-enabled .newtab-background-mask {
   line-height: 1;
 }
 
-body.folder-names-hidden .folder-section-header {
+body.folder-names-hidden .folder-section-header-row {
   opacity: 0;
   transform: translate3d(0, -4px, 0);
 }
 
-body.folder-names-hidden .bookmark-folder-section:hover .folder-section-header,
-body.folder-names-hidden .folder-section-header:hover,
-body.folder-names-hidden .folder-section-header:focus-visible,
-body.folder-names-hidden.folder-order-dragging .folder-section-header {
+body.folder-names-hidden .bookmark-folder-section:hover .folder-section-header-row,
+body.folder-names-hidden .folder-section-header-row:focus-within,
+body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
   opacity: 1;
   transform: translate3d(0, 0, 0);
 }
@@ -1235,6 +1284,33 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   color: rgba(245, 245, 247, 0.5);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.settings-save-status {
+  width: max-content;
+  min-height: 20px;
+  margin-top: 3px;
+  padding: 3px 8px;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 999px;
+  background: rgba(245, 245, 247, 0.055);
+  color: rgba(245, 245, 247, 0.62);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.settings-save-status[hidden] {
+  display: none;
+}
+
+.settings-save-status[data-state="saved"] {
+  border-color: rgba(132, 218, 137, 0.2);
+  color: rgba(132, 218, 137, 0.9);
+}
+
+.settings-save-status[data-state="error"] {
+  border-color: rgba(255, 183, 176, 0.24);
+  color: rgba(255, 183, 176, 0.94);
 }
 
 .settings-section {
@@ -2598,6 +2674,78 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
 
 .bookmark-menu-status.is-warning {
   color: #ffd8d3;
+}
+
+.newtab-delete-toast {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  z-index: 90;
+  display: flex;
+  width: min(360px, calc(100vw - 32px));
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 12px 10px 14px;
+  border: 1px solid rgba(245, 245, 247, 0.22);
+  border-radius: 8px;
+  background: rgba(18, 18, 19, 0.94);
+  color: rgba(245, 245, 247, 0.92);
+  box-shadow: 0 18px 54px rgba(0, 0, 0, 0.5);
+}
+
+.newtab-delete-toast-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.newtab-delete-toast-copy strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.newtab-delete-toast-copy span {
+  overflow: hidden;
+  color: rgba(245, 245, 247, 0.58);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-delete-toast-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.newtab-delete-toast-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 245, 247, 0.14);
+  border-radius: 6px;
+  background: rgba(245, 245, 247, 0.08);
+  color: rgba(245, 245, 247, 0.9);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.newtab-delete-toast-actions button:hover,
+.newtab-delete-toast-actions button:focus-visible {
+  background: rgba(245, 245, 247, 0.14);
+}
+
+.newtab-delete-toast-actions button:focus-visible {
+  outline: 2px solid rgba(245, 245, 247, 0.28);
+  outline-offset: 2px;
+}
+
+.newtab-delete-toast-actions button:disabled {
+  cursor: default;
+  opacity: 0.58;
 }
 
 @keyframes newtab-menu-enter {
