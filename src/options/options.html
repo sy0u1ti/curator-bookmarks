@@ -388,20 +388,22 @@
                   <span class="options-search-label">搜索书签</span>
                   <span class="dashboard-query-row">
                     <input id="dashboard-query" class="options-search-input" type="search" spellcheck="false" placeholder="site:github.com react / folder:前端 type:文档 / 最近一个月 AI 教程 -youtube">
-                    <button id="dashboard-search-help-toggle" class="options-button secondary small dashboard-help-button" type="button" aria-expanded="false" aria-controls="dashboard-search-help-panel" aria-label="搜索语法帮助" title="搜索语法帮助">?</button>
+                    <button
+                      id="dashboard-search-help-toggle"
+                      class="dashboard-help-button"
+                      type="button"
+                      aria-label="查看高级搜索语法"
+                      aria-describedby="dashboard-search-help-description"
+                      data-tooltip="高级搜索语法&#10;site:github.com 限定站点或域名。&#10;folder:前端 限定文件夹路径。&#10;type:文档 限定 AI 识别的内容类型。&#10;最近一个月、本周、今天 限定添加时间。&#10;-youtube 排除包含该词的结果。"
+                    >
+                      ?
+                    </button>
                     <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible">选择当前可见</button>
                   </span>
                 </label>
-                <div id="dashboard-search-help-panel" class="dashboard-search-help hidden" role="dialog" aria-label="搜索语法帮助">
-                  <strong>高级搜索语法</strong>
-                  <ul>
-                    <li><code>site:github.com</code> 限定站点或域名。</li>
-                    <li><code>folder:前端</code> 限定文件夹路径。</li>
-                    <li><code>type:文档</code> 限定 AI 识别的内容类型。</li>
-                    <li><code>最近一个月</code>、<code>本周</code>、<code>今天</code> 限定添加时间。</li>
-                    <li><code>-youtube</code> 排除包含该词的结果。</li>
-                  </ul>
-                </div>
+                <p id="dashboard-search-help-description" class="sr-only">
+                  高级搜索语法：site:github.com 限定站点或域名。folder:前端 限定文件夹路径。type:文档 限定 AI 识别的内容类型。最近一个月、本周、今天限定添加时间。-youtube 排除包含该词的结果。
+                </p>
                 <div id="dashboard-search-chips" class="dashboard-search-chips hidden" aria-label="当前搜索条件"></div>
               </div>
               <div class="dashboard-toolbar-actions">

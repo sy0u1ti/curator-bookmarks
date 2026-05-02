@@ -175,7 +175,6 @@ export const dashboardState = {
   domain: '',
   month: '',
   sortKey: 'date-desc' as DashboardSortKey,
-  searchHelpOpen: false,
   selectedIds: new Set<string>(),
   expandedTagIds: new Set<string>(),
   tagEditorBookmarkId: '',

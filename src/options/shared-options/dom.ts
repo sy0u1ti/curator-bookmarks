@@ -23,8 +23,6 @@ export function cacheDom() {
   dom.dashboardStatus = byId('dashboard-status')
   dom.dashboardTotal = byId('dashboard-total')
   dom.dashboardQuery = byId('dashboard-query')
-  dom.dashboardSearchHelpToggle = byId('dashboard-search-help-toggle')
-  dom.dashboardSearchHelpPanel = byId('dashboard-search-help-panel')
   dom.dashboardSearchChips = byId('dashboard-search-chips')
   dom.dashboardSelectionGroup = byId('dashboard-selection-group')
   dom.dashboardSelectionCount = byId('dashboard-selection-count')

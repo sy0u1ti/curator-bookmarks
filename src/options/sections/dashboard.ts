@@ -571,9 +571,6 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
       moveSingleDashboardItem(bookmarkId, callbacks)
     } else if (action === 'exit-dashboard') {
       window.location.hash = '#general'
-    } else if (action === 'toggle-search-help') {
-      dashboardState.searchHelpOpen = !dashboardState.searchHelpOpen
-      renderDashboardSearchTools()
     } else if (action === 'edit-tags') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       openDashboardTagEditor(bookmarkId)
@@ -594,13 +591,6 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
   const copyButton = target.closest<HTMLElement>('[data-dashboard-copy]')
   if (copyButton) {
     await copyDashboardBookmarkUrl(String(copyButton.getAttribute('data-dashboard-copy') || '').trim())
-    return
-  }
-
-  const helpToggle = target.closest<HTMLElement>('#dashboard-search-help-toggle')
-  if (helpToggle) {
-    dashboardState.searchHelpOpen = !dashboardState.searchHelpOpen
-    renderDashboardSearchTools()
     return
   }
 
@@ -1394,8 +1384,6 @@ function renderDashboardSearchTools(): void {
   const parsed = parseSearchQuery(dashboardState.query)
   const chips = parsed.chips
 
-  dom.dashboardSearchHelpPanel?.classList.toggle('hidden', !dashboardState.searchHelpOpen)
-  dom.dashboardSearchHelpToggle?.setAttribute('aria-expanded', String(dashboardState.searchHelpOpen))
   dom.dashboardSearchChips?.classList.toggle('hidden', chips.length === 0)
   if (dom.dashboardSearchChips) {
     dom.dashboardSearchChips.innerHTML = chips
