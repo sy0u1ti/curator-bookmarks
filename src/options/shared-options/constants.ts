@@ -20,8 +20,8 @@ export const SECTION_META = {
     title: '自动分析添加历史'
   },
   ai: {
-    label: 'Tag & Naming Suggestions',
-    title: '标签与命名建议'
+    label: 'Smart Bookmark Analysis',
+    title: '书签智能分析'
   },
   backup: {
     label: 'Data & Backup',

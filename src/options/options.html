@@ -45,7 +45,7 @@
             <p id="options-ai-nav-label" class="options-sidebar-label">AI功能</p>
             <nav class="options-nav" aria-labelledby="options-ai-nav-label">
               <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
-              <a class="options-nav-link" href="#ai" data-section-link="ai">标签与命名建议</a>
+              <a class="options-nav-link" href="#ai" data-section-link="ai">书签智能分析</a>
             </nav>
           </div>
           <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
@@ -100,8 +100,8 @@
                         <span
                           class="ai-help-tooltip"
                           tabindex="0"
-                          aria-label="开启后，弹窗智能分类、AI 标签与命名和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。"
-                          data-tooltip="开启后，弹窗智能分类、AI 标签与命名和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。"
+                          aria-label="开启后，弹窗智能分类、书签智能分析和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。"
+                          data-tooltip="开启后，弹窗智能分类、书签智能分析和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。"
                         >?</span>
                       </strong>
                       <span id="ai-remote-parser-status" class="options-chip muted ai-inline-status">未开启</span>
@@ -759,8 +759,8 @@
             aria-labelledby="ai-title"
             hidden
           >
-            <p class="options-section-label">Tag & Naming Suggestions</p>
-            <h1 id="ai-title">标签与命名建议</h1>
+            <p class="options-section-label">Smart Bookmark Analysis</p>
+            <h1 id="ai-title">书签智能分析</h1>
 
             <div class="options-group">
               <div class="option-row">
@@ -768,7 +768,7 @@
                   <strong>分析范围</strong>
                   <p id="ai-scope-copy">当前范围：全部书签。你可以切换到某个文件夹，只处理该文件夹及其子层级里的 `http/https` 书签。</p>
                 </div>
-                <button id="ai-scope-trigger" class="scope-picker-trigger" type="button" aria-label="选择 AI 标签与命名范围">
+                <button id="ai-scope-trigger" class="scope-picker-trigger" type="button" aria-label="选择书签智能分析范围">
                   <span id="ai-scope-label">全部书签</span>
                   <span class="scope-picker-caret" aria-hidden="true"></span>
                 </button>
@@ -778,7 +778,7 @@
             <div class="detect-toolbar">
               <div class="detect-permission-card">
                 <div class="detect-permission-meta">
-                  <span id="ai-run-badge" class="options-chip muted">AI 标签与命名</span>
+                  <span id="ai-run-badge" class="options-chip muted">书签智能分析</span>
                   <strong>执行方式</strong>
                 </div>
                 <p id="ai-status-copy">保存通用 AI 渠道后，系统会先读取网页内容，再分批调用 AI 生成标签和命名建议。建议生成后，你可以先预览并手动选择要应用的标题。</p>
@@ -857,21 +857,21 @@
             <div class="options-group detect-results-group">
               <div class="detect-results-header">
                 <div>
-                  <strong>标签与命名建议</strong>
+                  <strong>书签智能分析</strong>
                   <p id="ai-results-subtitle" class="detect-results-subtitle">在通用设置中配置 AI 渠道后，开始分析并生成建议，这里会展示当前标题、建议标题、标签、置信度与原因。</p>
                 </div>
                 <span id="ai-result-count" class="option-value">0 条结果</span>
               </div>
               <div class="detect-results-header ai-results-filter-row">
                 <div class="detect-results-actions wrap-start">
-                  <select id="ai-filter-status" class="ai-provider-select" aria-label="按状态筛选 AI 标签与命名结果">
+                  <select id="ai-filter-status" class="ai-provider-select" aria-label="按状态筛选书签智能分析结果">
                     <option value="all">全部状态</option>
                     <option value="suggested">只看建议改名</option>
                     <option value="changed">只看标题变化大</option>
                     <option value="manual_review">只看待人工确认</option>
                     <option value="failed">只看失败</option>
                   </select>
-                  <select id="ai-filter-confidence" class="ai-provider-select" aria-label="按置信度筛选 AI 标签与命名结果">
+                  <select id="ai-filter-confidence" class="ai-provider-select" aria-label="按置信度筛选书签智能分析结果">
                     <option value="all">全部置信度</option>
                     <option value="high">只看高置信</option>
                     <option value="medium">只看中置信</option>
@@ -882,7 +882,7 @@
                 </div>
               </div>
               <div id="ai-results" class="detect-results">
-                <div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示标签与命名建议。</div>
+                <div class="detect-empty">保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。</div>
               </div>
             </div>
           </section>

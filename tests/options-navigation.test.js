@@ -20,3 +20,14 @@ test('recycle bin is the last item in bookmark management navigation', () => {
 
   assert.equal(links.at(-1), 'recycle')
 })
+
+test('smart analysis section uses the renamed Chinese entry copy', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const constants = readProjectFile('src/options/shared-options/constants.ts')
+
+  assert.match(optionsHtml, /data-section-link="ai">书签智能分析</)
+  assert.match(optionsHtml, /<h1 id="ai-title">书签智能分析<\/h1>/)
+  assert.match(constants, /title: '书签智能分析'/)
+  assert.doesNotMatch(optionsHtml, /标签与命名建议/)
+  assert.doesNotMatch(constants, /标签与命名建议/)
+})
