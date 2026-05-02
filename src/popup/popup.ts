@@ -49,7 +49,11 @@ import {
   buildPageContextForAi,
   buildRemotePageContentFromText,
   combinePageContentContexts,
+  decideDirectPageFetch,
   extractPageContentFromHtml,
+  appendPageContentWarnings,
+  getDirectPageFetchFailureWarning,
+  getDirectPageFetchOriginPattern,
   normalizePageContentContext
 } from '../options/sections/content-extraction.js'
 import {
@@ -3702,36 +3706,51 @@ function normalizeNaturalSearchError(error) {
 async function buildCurrentPageContext(currentUrl, settings) {
   const timeoutMs = settings.timeoutMs
   let context = null
+  const originPattern = getDirectPageFetchOriginPattern(currentUrl)
+  const canFetchDirectly = originPattern ? Boolean(await hasOptionalOriginPermission(originPattern)) : false
+  const directFetchDecision = decideDirectPageFetch(currentUrl, canFetchDirectly)
 
-  try {
-    const response = await fetchWithSmartTimeout(currentUrl, {
-      method: 'GET',
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'follow',
-      referrerPolicy: 'no-referrer'
-    }, timeoutMs)
-    const finalUrl = String(response.url || currentUrl || '')
-    const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+  if (!directFetchDecision.allowed) {
+    context = appendPageContentWarnings(
+      buildFallbackPageContentFromUrl(currentUrl, {
+        currentTitle: getCurrentPageTitle()
+      }),
+      [directFetchDecision.warning]
+    )
+  } else {
+    try {
+      const response = await fetchWithSmartTimeout(currentUrl, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer'
+      }, timeoutMs)
+      const finalUrl = String(response.url || currentUrl || '')
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase()
 
-    if (contentType.includes('text/html')) {
-      const html = await response.text()
-      context = extractPageContentFromHtml(html, {
-        url: finalUrl,
-        currentTitle: getCurrentPageTitle(),
-        contentType
-      })
-    } else {
-      context = buildFallbackPageContentFromUrl(finalUrl, {
-        currentTitle: getCurrentPageTitle(),
-        contentType
-      })
+      if (contentType.includes('text/html')) {
+        const html = await response.text()
+        context = extractPageContentFromHtml(html, {
+          url: finalUrl,
+          currentTitle: getCurrentPageTitle(),
+          contentType
+        })
+      } else {
+        context = buildFallbackPageContentFromUrl(finalUrl, {
+          currentTitle: getCurrentPageTitle(),
+          contentType
+        })
+      }
+    } catch (error) {
+      context = appendPageContentWarnings(
+        buildFallbackPageContentFromUrl(currentUrl, {
+          currentTitle: getCurrentPageTitle(),
+          error
+        }),
+        [getDirectPageFetchFailureWarning(error)]
+      )
     }
-  } catch (error) {
-    context = buildFallbackPageContentFromUrl(currentUrl, {
-      currentTitle: getCurrentPageTitle(),
-      error
-    })
   }
 
   if (settings.allowRemoteParsing) {

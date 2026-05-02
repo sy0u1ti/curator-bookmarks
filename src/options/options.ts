@@ -86,7 +86,11 @@ import {
   buildPageContextForAi,
   buildRemotePageContentFromText,
   combinePageContentContexts,
+  decideDirectPageFetch,
   extractPageContentFromHtml,
+  appendPageContentWarnings,
+  getDirectPageFetchFailureWarning,
+  getDirectPageFetchOriginPattern,
   normalizePageContentContext
 } from './sections/content-extraction.js'
 import {
@@ -5399,44 +5403,70 @@ async function fetchBookmarkMetadataForAi(
   options: { signal?: AbortSignal | null } = {}
 ) {
   let context = null
+  const originPattern = getDirectPageFetchOriginPattern(url)
+  const canFetchDirectly = originPattern ? await hasOriginPermission(originPattern) : false
+  const directFetchDecision = decideDirectPageFetch(url, canFetchDirectly)
 
-  try {
-    const response = await fetchWithRequestTimeout(url, {
-      method: 'GET',
-      cache: 'no-store',
-      credentials: 'omit',
-      redirect: 'follow',
-      referrerPolicy: 'no-referrer',
-      signal: options.signal
-    }, timeoutMs)
-    throwIfAborted(options.signal)
-    const finalUrl = String(response.url || url || '')
-    const contentType = String(response.headers.get('content-type') || '').toLowerCase()
+  if (!directFetchDecision.allowed) {
+    context = appendPageContentWarnings(
+      buildFallbackPageContentFromUrl(url, {
+        currentTitle: bookmark?.title
+      }),
+      [directFetchDecision.warning]
+    )
+  } else {
+    try {
+      const response = await fetchWithRequestTimeout(url, {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'omit',
+        redirect: 'follow',
+        referrerPolicy: 'no-referrer',
+        signal: options.signal
+      }, timeoutMs)
+      throwIfAborted(options.signal)
+      const finalUrl = String(response.url || url || '')
+      const contentType = String(response.headers.get('content-type') || '').toLowerCase()
 
-    if (!contentType.includes('text/html')) {
-      context = buildFallbackPageContentFromUrl(finalUrl, {
-        currentTitle: bookmark?.title,
-        contentType
-      })
-    } else {
-      const html = await response.text()
-      context = extractPageContentFromHtml(html, {
-        url: finalUrl,
-        currentTitle: bookmark?.title,
-        contentType
-      })
+      if (!contentType.includes('text/html')) {
+        context = buildFallbackPageContentFromUrl(finalUrl, {
+          currentTitle: bookmark?.title,
+          contentType
+        })
+      } else {
+        const html = await response.text()
+        context = extractPageContentFromHtml(html, {
+          url: finalUrl,
+          currentTitle: bookmark?.title,
+          contentType
+        })
+      }
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error
+      }
+      context = appendPageContentWarnings(
+        buildFallbackPageContentFromUrl(url, {
+          currentTitle: bookmark?.title,
+          error
+        }),
+        [getDirectPageFetchFailureWarning(error)]
+      )
     }
-  } catch (error) {
-    if (isAbortError(error)) {
-      throw error
-    }
-    context = buildFallbackPageContentFromUrl(url, {
-      currentTitle: bookmark?.title,
-      error
-    })
   }
 
   if (aiNamingManagerState.settings.allowRemoteParsing) {
+    const canUseRemoteParser = await hasOriginPermission(AI_NAMING_JINA_READER_ORIGIN)
+    if (!canUseRemoteParser) {
+      return normalizePageContentContext({
+        ...context,
+        warnings: [
+          ...(context.warnings || []),
+          'Jina Reader 未授权，本次已跳过远程解析。'
+        ]
+      })
+    }
+
     try {
       throwIfAborted(options.signal)
       const remoteContext = await fetchRemoteBookmarkContentForAi(context.finalUrl || url, timeoutMs, context, options)
@@ -5456,6 +5486,18 @@ async function fetchBookmarkMetadataForAi(
   }
 
   return context
+}
+
+async function hasOriginPermission(origin) {
+  if (!origin) {
+    return false
+  }
+
+  try {
+    return Boolean(await containsPermissions({ origins: [origin] }))
+  } catch (error) {
+    return false
+  }
 }
 
 async function fetchRemoteBookmarkContentForAi(

@@ -1,5 +1,18 @@
 export type PageExtractionStatus = 'ok' | 'limited' | 'fallback' | 'remote' | 'combined' | 'failed'
 
+export type DirectPageFetchDecisionReason =
+  | 'allowed'
+  | 'invalid-url'
+  | 'unsupported-scheme'
+  | 'missing-origin-permission'
+
+export interface DirectPageFetchDecision {
+  allowed: boolean
+  originPattern: string
+  reason: DirectPageFetchDecisionReason
+  warning: string
+}
+
 export interface PageContentSourceContext {
   label: string
   title: string
@@ -92,7 +105,7 @@ const NOISE_SELECTOR = [
 
 export function extractPageContentFromHtml(html: string, options: ExtractHtmlOptions = {}): PageContentContext {
   const finalUrl = String(options.url || '').trim()
-  const documentNode = new DOMParser().parseFromString(String(html || ''), 'text/html')
+  const documentNode = new DOMParser().parseFromString(sanitizeHtmlForInertParsing(html), 'text/html')
   const title = cleanText(
     documentNode.querySelector('title')?.textContent ||
       queryMeta(documentNode, 'meta[property="og:title"]') ||
@@ -145,6 +158,19 @@ export function extractPageContentFromHtml(html: string, options: ExtractHtmlOpt
     ...context,
     contentType: detectContentType(context, options.contentType)
   }
+}
+
+export function sanitizeHtmlForInertParsing(html: unknown): string {
+  return String(html || '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<script\b[^>]*\/?>/gi, '')
+    .replace(/<meta\b[^>]*http-equiv\s*=\s*["']?content-security-policy["']?[^>]*>/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*"[^"]*"/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*'[^']*'/gi, '')
+    .replace(/\s+on[a-z]+\s*=\s*[^\s"'=<>`]+/gi, '')
+    .replace(/\s+(href|src)\s*=\s*"javascript:[^"]*"/gi, '')
+    .replace(/\s+(href|src)\s*=\s*'javascript:[^']*'/gi, '')
+    .replace(/\s+(href|src)\s*=\s*javascript:[^\s"'=<>`]+/gi, '')
 }
 
 export function buildFallbackPageContentFromUrl(
@@ -397,6 +423,96 @@ export function shouldUseRemoteContent(context: PageContentContext | null | unde
     normalized.extractionStatus === 'failed' ||
     normalized.mainText.length < MIN_USEFUL_MAIN_TEXT_LENGTH
   )
+}
+
+export function getDirectPageFetchOriginPattern(url: unknown): string {
+  const parsedUrl = parseUrlSafely(url)
+  if (!parsedUrl) {
+    return ''
+  }
+  if (!/^https?:$/i.test(parsedUrl.protocol)) {
+    return ''
+  }
+  return `${parsedUrl.origin}/*`
+}
+
+export function decideDirectPageFetch(
+  url: unknown,
+  hasOriginPermission: boolean
+): DirectPageFetchDecision {
+  const normalizedUrl = String(url || '').trim()
+  const parsedUrl = parseUrlSafely(normalizedUrl)
+
+  if (!parsedUrl) {
+    return {
+      allowed: false,
+      originPattern: '',
+      reason: 'invalid-url',
+      warning: '网页地址无效，已跳过直接抓取。'
+    }
+  }
+
+  if (!/^https?:$/i.test(parsedUrl.protocol)) {
+    return {
+      allowed: false,
+      originPattern: '',
+      reason: 'unsupported-scheme',
+      warning: '该链接类型不支持直接抓取，已使用有限上下文。'
+    }
+  }
+
+  const originPattern = `${parsedUrl.origin}/*`
+  if (!hasOriginPermission) {
+    return {
+      allowed: false,
+      originPattern,
+      reason: 'missing-origin-permission',
+      warning: `未授权访问 ${parsedUrl.origin}，已跳过直接抓取并使用后备上下文。`
+    }
+  }
+
+  return {
+    allowed: true,
+    originPattern,
+    reason: 'allowed',
+    warning: ''
+  }
+}
+
+export function appendPageContentWarnings(
+  context: Partial<PageContentContext>,
+  warnings: unknown[]
+): PageContentContext {
+  return normalizePageContentContext({
+    ...context,
+    warnings: [
+      ...(Array.isArray(context.warnings) ? context.warnings : []),
+      ...warnings.map((warning) => String(warning || '')).filter(Boolean)
+    ]
+  })
+}
+
+export function isCorsLikeFetchFailure(error: unknown): boolean {
+  if (error instanceof TypeError) {
+    return true
+  }
+
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    message.includes('failed to fetch') ||
+    message.includes('cors') ||
+    message.includes('access-control-allow-origin') ||
+    message.includes('load failed') ||
+    message.includes('networkerror')
+  )
+}
+
+export function getDirectPageFetchFailureWarning(error: unknown): string {
+  if (isCorsLikeFetchFailure(error)) {
+    return '直接抓取网页被浏览器或站点策略拦截，已使用后备上下文。'
+  }
+
+  return `直接抓取网页失败：${getErrorMessage(error)}`
 }
 
 export function buildJinaReaderUrl(url: unknown): string {
