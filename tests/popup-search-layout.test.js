@@ -37,3 +37,14 @@ test('auto analyze completion does not create popup toast notices', () => {
   assert.doesNotMatch(popupSource, /showPendingAutoAnalyzeNotice|pendingNoticeChange|已添加到 \$\{folderPath\}/)
   assert.doesNotMatch(serviceWorkerSource, /persistPendingAutoAnalyzeNotice/)
 })
+
+test('snapshot-only auto analysis completion stays silent in popup and action badge', () => {
+  const serviceWorkerSource = readProjectFile('src/service-worker/service-worker.ts')
+
+  assert.doesNotMatch(serviceWorkerSource, /网页快照已保存到本地/)
+  assert.doesNotMatch(serviceWorkerSource, /网页快照已仅保存到本地/)
+  assert.match(
+    serviceWorkerSource,
+    /if \(!shouldUploadToAi\) \{[\s\S]*?await clearAutoAnalyzeStatusForBookmark\(bookmarkId\)[\s\S]*?return[\s\S]*?\}/
+  )
+})

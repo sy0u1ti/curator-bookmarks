@@ -921,17 +921,7 @@ async function runAutoAnalysisForBookmark(
   }
 
   if (!shouldUploadToAi) {
-    await persistAutoAnalyzeStatus({
-      status: 'completed',
-      bookmarkId,
-      url: bookmark.url,
-      title: bookmarkRecord.title || entry.title || '新增书签',
-      folderPath: bookmarkRecord.path || extracted.folderMap.get(String(bookmark.parentId || ''))?.path || '',
-      createdAt: entry.createdAt,
-      detail: snapshotSettings?.localOnlyNoAiUpload
-        ? '网页快照已仅保存到本地，未上传给 AI。'
-        : '网页快照已保存到本地。'
-    })
+    await clearAutoAnalyzeStatusForBookmark(bookmarkId)
     return
   }
 
