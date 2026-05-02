@@ -1,12 +1,6 @@
-export function normalizeBookmarkSaveUrl(url: unknown): string {
-  try {
-    const parsedUrl = new URL(String(url || '').trim())
-    parsedUrl.hash = ''
-    return parsedUrl.toString()
-  } catch {
-    return String(url || '').trim()
-  }
-}
+import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
+
+export { normalizeBookmarkSaveUrl }
 
 export function shouldReuseBookmarkForSave(
   existingUrl: unknown,

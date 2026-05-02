@@ -16,9 +16,9 @@ import {
 import {
   displayUrl,
   extractDomain,
-  normalizeText,
-  normalizeUrl
+  normalizeText
 } from '../shared/text.js'
+import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
 import {
   createBookmark,
   createTab,
@@ -762,9 +762,9 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
 async function hydrateCurrentTabState() {
   state.currentTab = await getActiveTab().catch(() => null)
   const currentUrl = String(state.currentTab?.url || '').trim()
-  const normalizedCurrentUrl = normalizeUrl(currentUrl)
+  const normalizedCurrentUrl = normalizeBookmarkSaveUrl(currentUrl)
   const matchedBookmark = normalizedCurrentUrl
-    ? state.allBookmarks.find((bookmark) => bookmark.normalizedUrl === normalizedCurrentUrl)
+    ? state.allBookmarks.find((bookmark) => bookmark.duplicateKey === normalizedCurrentUrl)
     : null
 
   state.currentPageBookmarkId = matchedBookmark?.id || null

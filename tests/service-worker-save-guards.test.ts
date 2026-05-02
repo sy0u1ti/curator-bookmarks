@@ -4,21 +4,61 @@ import { resolve } from 'node:path'
 import test from 'node:test'
 
 import { shouldReuseBookmarkForSave } from '../src/service-worker/save-guards.js'
+import { normalizeBookmarkSaveUrl } from '../src/shared/bookmark-save-url.js'
 
 function readProjectFile(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8')
 }
 
-test('popup smart save only reuses a bookmark id when urls still match', () => {
+test('normalizes bookmark save urls for equivalent current-page variants', () => {
+  assert.equal(
+    normalizeBookmarkSaveUrl('HTTPS://www.Example.com/Docs/#Intro'),
+    'example.com/docs'
+  )
+  assert.equal(
+    normalizeBookmarkSaveUrl('https://example.com/docs///#section'),
+    'example.com/docs'
+  )
+  assert.equal(
+    normalizeBookmarkSaveUrl('https://www.example.com/'),
+    'example.com/'
+  )
+  assert.equal(
+    normalizeBookmarkSaveUrl('www.Example.com/Docs/#Intro'),
+    'example.com/docs'
+  )
+})
+
+test('popup smart save only reuses a bookmark id when save urls still match', () => {
   assert.equal(
     shouldReuseBookmarkForSave('https://example.com/docs#intro', 'https://example.com/docs'),
+    true
+  )
+  assert.equal(
+    shouldReuseBookmarkForSave('https://www.Example.com/Docs/#intro', 'https://example.com/docs'),
+    true
+  )
+  assert.equal(
+    shouldReuseBookmarkForSave('https://example.com/docs/', 'https://www.example.com/docs#top'),
     true
   )
   assert.equal(
     shouldReuseBookmarkForSave('https://example.com/old', 'https://example.com/current'),
     false
   )
+  assert.equal(
+    shouldReuseBookmarkForSave('https://example.com/docs?view=old', 'https://example.com/docs?view=current'),
+    false
+  )
   assert.equal(shouldReuseBookmarkForSave('', 'https://example.com/current'), false)
+})
+
+test('popup current-page matching uses the shared bookmark save url normalizer', () => {
+  const source = readProjectFile('src/popup/popup.ts')
+
+  assert.match(source, /from '\.\.\/shared\/bookmark-save-url\.js'/)
+  assert.match(source, /const normalizedCurrentUrl = normalizeBookmarkSaveUrl\(currentUrl\)/)
+  assert.match(source, /bookmark\.duplicateKey === normalizedCurrentUrl/)
 })
 
 test('auto analyze queue reuses a tree snapshot within one processing pass', () => {
