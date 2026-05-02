@@ -55,3 +55,9 @@ test('serializes normalized AI naming settings without sharing mutable arrays', 
   assert.equal(serialized.allowRemoteParsing, true)
   assert.equal(serialized.autoAnalyzeBookmarks, true)
 })
+
+test('uses gpt-5.5 as the default AI model', () => {
+  const settings = normalizeAiNamingSettings({})
+
+  assert.equal(settings.model, 'gpt-5.5')
+})

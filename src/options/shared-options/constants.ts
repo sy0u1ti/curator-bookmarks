@@ -54,7 +54,7 @@ export const NAVIGATION_TIMEOUT_MS = 30000
 export const NAVIGATION_RETRY_TIMEOUT_MS = 45000
 export const AVAILABILITY_CONCURRENCY = 2
 export const AI_NAMING_DEFAULT_BASE_URL = 'https://api.openai.com/v1'
-export const AI_NAMING_DEFAULT_MODEL = 'gpt-5-mini'
+export const AI_NAMING_DEFAULT_MODEL = 'gpt-5.5'
 export const AI_NAMING_DEFAULT_TIMEOUT_MS = 30000
 export const AI_NAMING_DEFAULT_BATCH_SIZE = 6
 export const AI_NAMING_MAX_BATCH_SIZE = 20
@@ -64,6 +64,7 @@ export const AI_NAMING_MODELS_ENDPOINT_SUFFIX = 'models'
 export const AI_NAMING_FETCHED_MODELS_LIMIT = 200
 export const AI_NAMING_JINA_READER_ORIGIN = 'https://r.jina.ai/*'
 export const AI_NAMING_PRESET_MODELS = [
+  'gpt-5.5',
   'gpt-5.2',
   'gpt-5.2-pro',
   'gpt-5',
