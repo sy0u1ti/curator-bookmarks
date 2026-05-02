@@ -4856,7 +4856,7 @@ function getAiNamingStatusCopy() {
 
     return aiNamingManagerState.settings.allowRemoteParsing
       ? '正在结合本地内容和 Jina Reader 解析结果生成智能分析建议，并同步网页内容索引。你可以随时停止当前批次。'
-      : '正在读取网页内容、生成标签并生成命名建议。你可以随时停止当前批次。'
+      : '正在读取网页内容、生成书签智能分析建议，并同步网页内容索引。你可以随时停止当前批次。'
   }
 
   if (aiNamingState.lastCompletedAt) {
@@ -4871,7 +4871,7 @@ function getAiNamingProgressCopy() {
   const remoteCopy = aiNamingManagerState.settings.allowRemoteParsing
     ? '已开启 Jina Reader 远程解析，本轮会结合本地抽取与远程解析内容。'
     : '仅使用本地网页抓取与内容抽取。'
-  return `当前范围：${scopeMeta.label}。本轮会处理 ${aiNamingState.eligibleBookmarks} 条 http/https 书签，并调用模型 ${aiNamingManagerState.settings.model || '未配置'} 生成标签和命名建议。${remoteCopy}`
+  return `当前范围：${scopeMeta.label}。本轮会处理 ${aiNamingState.eligibleBookmarks} 条 http/https 书签，并调用模型 ${aiNamingManagerState.settings.model || '未配置'} 生成书签智能分析建议。${remoteCopy}`
 }
 
 function getAiNamingConnectivityMeta() {
