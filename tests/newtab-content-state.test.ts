@@ -5,6 +5,7 @@ import { test } from 'node:test'
 
 import {
   buildNewTabPortalOverview,
+  collectPortalBookmarkSourceItems,
   getPortalQuickAccessItems,
   resolvePortalPanelLayout,
   getVerticalCenterCollisionOffset
@@ -122,6 +123,47 @@ test('selects portal quick access items without duplicating frequent and recent 
     [
       { id: '2', reason: 'opened', badge: '开' }
     ]
+  )
+})
+
+test('builds portal quick access from the full bookmark tree, not only visible sections', () => {
+  const now = new Date('2026-05-02T10:30:00+08:00').getTime()
+  const visibleTime = now - 3 * 60 * 60 * 1000
+  const hiddenTime = now - 60 * 60 * 1000
+  const bookmarks = collectPortalBookmarkSourceItems({
+    id: '0',
+    title: '',
+    children: [
+      {
+        id: '10',
+        title: '标签页',
+        children: [
+          { id: '11', title: 'Visible', url: 'https://example.com/visible', dateAdded: visibleTime }
+        ]
+      },
+      {
+        id: '20',
+        title: '其他书签',
+        children: [
+          { id: '21', title: 'Hidden', url: 'https://example.com/hidden', dateAdded: hiddenTime }
+        ]
+      }
+    ]
+  })
+
+  const quickAccess = getPortalQuickAccessItems({
+    now,
+    itemLimit: 2,
+    showFrequent: false,
+    showRecent: true,
+    pinnedIds: [],
+    bookmarks,
+    records: {}
+  })
+
+  assert.deepEqual(
+    quickAccess.recentItems.map((item) => item.id),
+    ['21', '11']
   )
 })
 

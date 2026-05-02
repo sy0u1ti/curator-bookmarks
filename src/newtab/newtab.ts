@@ -37,6 +37,7 @@ import {
   createNewTabPage,
   createStateView,
   buildNewTabPortalOverview,
+  collectPortalBookmarkSourceItems,
   getPortalQuickAccessItems,
   getSearchBookmarkSuggestionsFromIndex,
   getVerticalCenterCollisionOffset,
@@ -190,6 +191,8 @@ const state = {
   folderSections: [] as NewTabFolderSection[],
   bookmarks: [] as chrome.bookmarks.BookmarkTreeNode[],
   bookmarkMap: new Map<string, chrome.bookmarks.BookmarkTreeNode>(),
+  allBookmarks: [] as chrome.bookmarks.BookmarkTreeNode[],
+  allBookmarkMap: new Map<string, chrome.bookmarks.BookmarkTreeNode>(),
   searchIndex: [] as NewTabSearchIndexEntry[],
   activeMenuBookmarkId: '',
   menuX: 0,
@@ -2074,7 +2077,7 @@ async function refreshNewTab(): Promise<void> {
     state.folderSections = folderSections
     refreshDerivedBookmarkState()
     state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
-    state.activity = normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.bookmarks)
+    state.activity = normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.allBookmarks)
     state.backgroundSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
@@ -2883,7 +2886,7 @@ function createPortalStat(label: string, value: number): HTMLElement {
 
 function createQuickAccessPanel(): HTMLElement | null {
   const { frequentItems, recentItems } = getPortalQuickAccessItems({
-    bookmarks: state.bookmarks,
+    bookmarks: state.allBookmarks,
     pinnedIds: state.activity.pinnedIds,
     records: state.activity.records,
     now: Date.now(),
@@ -2918,7 +2921,7 @@ function createQuickAccessPanel(): HTMLElement | null {
 }
 
 function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): QuickAccessItem | null {
-  const bookmark = state.bookmarkMap.get(item.id)
+  const bookmark = state.allBookmarkMap.get(item.id)
   if (!bookmark?.url) {
     return null
   }
@@ -3126,6 +3129,12 @@ function buildFolderNodeMap(
   return map
 }
 
+function buildAllBookmarks(
+  rootNode: chrome.bookmarks.BookmarkTreeNode | null
+): chrome.bookmarks.BookmarkTreeNode[] {
+  return collectPortalBookmarkSourceItems(rootNode) as chrome.bookmarks.BookmarkTreeNode[]
+}
+
 function buildNewTabFolderSections(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null,
   settings: NewTabFolderSettings,
@@ -3182,16 +3191,20 @@ function refreshDerivedBookmarkState(): void {
   state.folderNode = state.folderSections[0]?.node || null
   state.bookmarks = getAllSectionBookmarks()
   state.bookmarkMap = new Map(state.bookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+  state.allBookmarks = buildAllBookmarks(state.rootNode)
+  state.allBookmarkMap = new Map(state.allBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
   state.searchIndex = buildNewTabSearchIndex(state.folderSections)
 }
 
 function getBookmarkById(bookmarkId: string): chrome.bookmarks.BookmarkTreeNode | null {
-  return state.bookmarkMap.get(String(bookmarkId)) || null
+  return state.bookmarkMap.get(String(bookmarkId)) || state.allBookmarkMap.get(String(bookmarkId)) || null
 }
 
 function getBookmarkFolderPath(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
   const parentId = String(bookmark.parentId || '')
-  return state.folderSections.find((section) => section.id === parentId)?.path || ''
+  return state.folderSections.find((section) => section.id === parentId)?.path ||
+    state.folderData?.folderMap.get(parentId)?.path ||
+    ''
 }
 
 async function recordBookmarkOpen(bookmark: chrome.bookmarks.BookmarkTreeNode): Promise<void> {
@@ -3216,7 +3229,7 @@ async function recordBookmarkOpen(bookmark: chrome.bookmarks.BookmarkTreeNode): 
         lastOpenedAt: now
       }
     }
-  }, state.bookmarks)
+  }, state.allBookmarks)
 
   await saveNewTabActivity().catch((error) => {
     console.warn('新标签页打开记录保存失败。', error)
@@ -3240,7 +3253,7 @@ async function removeBookmarkFromActivity(bookmarkId: string): Promise<void> {
 
 async function saveNewTabActivity(): Promise<void> {
   await setLocalStorage({
-    [STORAGE_KEYS.newTabActivity]: normalizeNewTabActivity(state.activity, state.bookmarks)
+    [STORAGE_KEYS.newTabActivity]: normalizeNewTabActivity(state.activity, state.allBookmarks)
   })
 }
 

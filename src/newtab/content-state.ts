@@ -86,6 +86,10 @@ export interface PortalQuickAccessInput {
   showRecent: boolean
 }
 
+export interface BookmarkTreeSourceItem extends PortalBookmarkSourceItem {
+  children?: BookmarkTreeSourceItem[]
+}
+
 export interface PortalOverviewInput {
   sections: NewTabSearchIndexSection[]
   activityRecords: Record<string, PortalBookmarkActivityRecord>
@@ -410,6 +414,29 @@ export function getPortalQuickAccessItems({
   }
 
   return { frequentItems, recentItems }
+}
+
+export function collectPortalBookmarkSourceItems(
+  rootNode: BookmarkTreeSourceItem | null | undefined
+): PortalBookmarkSourceItem[] {
+  const bookmarks: PortalBookmarkSourceItem[] = []
+  if (!rootNode) {
+    return bookmarks
+  }
+
+  const walk = (node: BookmarkTreeSourceItem): void => {
+    if (String(node.url || '').trim()) {
+      bookmarks.push(node)
+      return
+    }
+
+    for (const child of node.children || []) {
+      walk(child)
+    }
+  }
+
+  walk(rootNode)
+  return bookmarks
 }
 
 export function formatNewTabRelativeActivityTime(
