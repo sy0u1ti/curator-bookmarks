@@ -386,6 +386,19 @@ export function updateDashboardDragHover(
   }
 }
 
+export function getDashboardSelectionLabel(
+  item: Pick<DashboardItem, 'title' | 'path' | 'url'>
+): string {
+  const title = String(item.title || '').replace(/\s+/g, ' ').trim() || '未命名书签'
+  const context = String(item.path || displayUrl(item.url) || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return context
+    ? `选择书签：${title}，位置：${context}`
+    : `选择书签：${title}`
+}
+
 export function resetDashboardDragStateSnapshot(): DashboardDragStateSnapshot {
   return createDashboardDragState()
 }
@@ -1697,6 +1710,7 @@ function findDashboardCardElement(bookmarkId: string): HTMLElement | null {
 function buildDashboardCard(item: DashboardItem): string {
   const selected = dashboardState.selectedIds.has(String(item.id))
   const expanded = dashboardState.expandedTagIds.has(String(item.id))
+  const selectionLabel = getDashboardSelectionLabel(item)
   const visibleTagLimit = 1
   const tags = item.tags.slice(0, visibleTagLimit)
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
@@ -1793,10 +1807,11 @@ function buildDashboardCard(item: DashboardItem): string {
           <input
             type="checkbox"
             data-dashboard-select="${escapeAttr(item.id)}"
+            aria-label="${escapeAttr(selectionLabel)}"
             ${selected ? 'checked' : ''}
             ${availabilityState.deleting ? 'disabled' : ''}
           >
-          <span class="sr-only">选择</span>
+          <span class="sr-only">${escapeHtml(selectionLabel)}</span>
         </label>
       </div>
       ${tagPopoverMarkup}
