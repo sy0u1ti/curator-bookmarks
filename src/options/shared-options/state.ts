@@ -4,7 +4,6 @@ import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
   AI_NAMING_DEFAULT_BATCH_SIZE
 } from './constants.js'
-import type { SavedSearch, SavedSearchIndex } from '../../shared/search-query.js'
 import { getDefaultInboxSettings } from '../../shared/inbox.js'
 import {
   DEFAULT_CONTENT_SNAPSHOT_SETTINGS,
@@ -174,9 +173,6 @@ export const dashboardState = {
   month: '',
   sortKey: 'date-desc' as DashboardSortKey,
   searchHelpOpen: false,
-  savedSearchIndex: { version: 1, updatedAt: 0, searches: [] } as SavedSearchIndex,
-  savedSearches: [] as SavedSearch[],
-  selectedSavedSearchId: '',
   selectedIds: new Set<string>(),
   expandedTagIds: new Set<string>(),
   tagEditorBookmarkId: '',

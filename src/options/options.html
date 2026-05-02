@@ -388,7 +388,8 @@
                   <span class="options-search-label">搜索书签</span>
                   <span class="dashboard-query-row">
                     <input id="dashboard-query" class="options-search-input" type="search" spellcheck="false" placeholder="site:github.com react / folder:前端 type:文档 / 最近一个月 AI 教程 -youtube">
-                    <button id="dashboard-search-help-toggle" class="options-button secondary small" type="button" aria-expanded="false" aria-controls="dashboard-search-help-panel">帮助</button>
+                    <button id="dashboard-search-help-toggle" class="options-button secondary small dashboard-help-button" type="button" aria-expanded="false" aria-controls="dashboard-search-help-panel" aria-label="搜索语法帮助" title="搜索语法帮助">?</button>
+                    <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible">选择当前可见</button>
                   </span>
                 </label>
                 <div id="dashboard-search-help-panel" class="dashboard-search-help hidden" role="dialog" aria-label="搜索语法帮助">
@@ -402,16 +403,8 @@
                   </ul>
                 </div>
                 <div id="dashboard-search-chips" class="dashboard-search-chips hidden" aria-label="当前搜索条件"></div>
-                <div class="dashboard-saved-search-row" aria-label="保存的搜索">
-                  <select id="dashboard-saved-search-select" class="options-search-input compact" aria-label="选择保存的搜索">
-                    <option value="">选择保存搜索</option>
-                  </select>
-                  <button id="dashboard-save-search" class="options-button secondary small" type="button">保存搜索</button>
-                  <button id="dashboard-delete-saved-search" class="options-button danger small" type="button">删除</button>
-                </div>
               </div>
               <div class="dashboard-toolbar-actions">
-                <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible">选择当前可见</button>
                 <span id="dashboard-result-count" class="option-value">0 条书签</span>
               </div>
             </div>
@@ -792,7 +785,7 @@
               </div>
 
               <div class="detect-toolbar-actions">
-                <a class="options-button secondary small" href="#general" data-section-link="general">配置 API Key</a>
+                <a class="options-button secondary small ai-config-link" href="#general" data-section-link="general">配置 API Key</a>
                 <button id="ai-action" class="options-button" type="button">开始分析并生成建议</button>
                 <button id="ai-pause-action" class="options-button secondary small hidden" type="button" disabled>暂停生成</button>
                 <button id="ai-stop-action" class="options-button secondary small hidden" type="button" disabled>停止本次生成</button>

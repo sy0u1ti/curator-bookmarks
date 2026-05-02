@@ -1094,9 +1094,19 @@ a {
 
 .dashboard-query-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 8px;
   align-items: center;
+}
+
+.dashboard-help-button {
+  width: 32px;
+  min-width: 32px;
+  padding-inline: 0;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
 }
 
 .dashboard-search-help {
@@ -1150,13 +1160,6 @@ a {
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 650;
-}
-
-.dashboard-saved-search-row {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
-  gap: 8px;
-  align-items: center;
 }
 
 .dashboard-panel,
@@ -2896,6 +2899,16 @@ body.dashboard-fullscreen-active {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.ai-config-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 16px;
+  line-height: 1.2;
+  text-decoration: none;
 }
 
 .ai-provider-save-state {
@@ -4825,6 +4838,18 @@ body.dashboard-fullscreen-active {
 
   .dashboard-toolbar {
     display: flex;
+  }
+
+  .dashboard-query-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dashboard-query-row .options-search-input {
+    grid-column: 1 / -1;
+  }
+
+  .dashboard-query-row [data-dashboard-action="select-visible"] {
+    justify-self: start;
   }
 
   .dashboard-toolbar-actions {

@@ -228,7 +228,6 @@ import {
   handleDashboardPointerUp,
   handleDashboardTagPointerOut,
   handleDashboardTagPointerOver,
-  hydrateDashboardSavedSearches,
   getSingleDashboardMoveBookmark,
   moveSingleDashboardBookmark,
   moveSelectedDashboardBookmarks,
@@ -355,7 +354,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   void hydrateShortcutCommands()
 
   await hydratePersistentState()
-  await hydrateDashboardSavedSearches()
   await hydrateAvailabilityCatalog()
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
