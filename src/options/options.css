@@ -2042,7 +2042,6 @@ a {
   flex-wrap: wrap;
 }
 
-.options-status-summary,
 .options-guidance-list {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2050,7 +2049,6 @@ a {
   margin-top: 18px;
 }
 
-.options-status-summary-item,
 .options-guidance-item {
   min-width: 0;
   padding: 16px;
@@ -2059,7 +2057,6 @@ a {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.options-status-summary-item strong,
 .options-guidance-item strong {
   display: block;
   margin-top: 8px;
@@ -2069,7 +2066,6 @@ a {
   line-height: 1.35;
 }
 
-.options-status-summary-item p,
 .options-guidance-item p {
   margin: 8px 0 0;
   color: var(--text-soft);
@@ -4066,7 +4062,6 @@ body.dashboard-fullscreen-active {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .options-status-summary,
   .options-guidance-list {
     grid-template-columns: minmax(0, 1fr);
   }

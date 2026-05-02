@@ -78,7 +78,6 @@ export function cacheDom() {
   dom.inboxAutoMoveToRecommendedFolder = byId('inbox-auto-move-to-recommended-folder')
   dom.inboxTagOnlyNoAutoMove = byId('inbox-tag-only-no-auto-move')
   dom.inboxWorkflowStatus = byId('inbox-workflow-status')
-  dom.optionsAiInboxSummary = byId('options-ai-inbox-summary')
   dom.contentSnapshotEnabled = byId('content-snapshot-enabled')
   dom.contentSnapshotFullText = byId('content-snapshot-full-text')
   dom.contentSnapshotSearchFullText = byId('content-snapshot-search-full-text')

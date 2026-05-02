@@ -2778,7 +2778,6 @@ function renderAiNamingSection() {
   }
 
   const settings = aiNamingManagerState.settings
-  renderAiInboxStatusSummary()
   if (dom.aiBaseUrl && dom.aiBaseUrl !== document.activeElement) {
     dom.aiBaseUrl.value = settings.baseUrl
   }
@@ -3049,60 +3048,6 @@ function renderAiNamingSection() {
   renderAiResultsFilterControls()
 
   renderAiNamingResults()
-}
-
-function renderAiInboxStatusSummary() {
-  if (!dom.optionsAiInboxSummary) {
-    return
-  }
-
-  const settings = normalizeAiNamingSettings(aiNamingManagerState.settings)
-  const inboxSettings = normalizeInboxSettings(managerState.inboxSettings)
-  const snapshotSettings = contentSnapshotState.settings
-  const hasRequiredConfig = Boolean(settings.baseUrl && settings.apiKey && settings.model)
-  const aiTitle = aiNamingState.settingsDirty
-    ? '有未保存改动'
-    : hasRequiredConfig
-      ? '已配置'
-      : '待配置'
-  const aiCopy = hasRequiredConfig
-    ? `当前模型 ${settings.model}，${settings.allowRemoteParsing ? '已开启 Jina Reader 远程解析' : '仅使用本地抽取'}。`
-    : '填写 API Key、Base URL 并选择模型后，可启用标签、命名与自动分析。'
-  const inboxTitle = inboxSettings.tagOnlyNoAutoMove
-    ? '只生成标签'
-    : inboxSettings.autoMoveToRecommendedFolder
-      ? '自动移动开启'
-      : '保留在 Inbox'
-  const inboxCopy = inboxSettings.tagOnlyNoAutoMove
-    ? '快捷键收藏仍留在 Inbox，只补充标签和摘要。'
-    : inboxSettings.autoMoveToRecommendedFolder
-      ? '高置信推荐会从 Inbox 自动移动到匹配文件夹。'
-      : '快捷键收藏先进入 Inbox / 待整理，由你手动处理。'
-  const snapshotRecords = Object.values(contentSnapshotState.index.records || {})
-  const snapshotTitle = snapshotSettings.enabled
-    ? snapshotSettings.saveFullText
-      ? '保存摘要与正文'
-      : '保存摘要'
-    : '未开启'
-  const snapshotCopy = snapshotSettings.enabled
-    ? `已保存 ${snapshotRecords.length} 条内容索引，${snapshotSettings.localOnlyNoAiUpload ? '默认不上传给 AI' : '可供 AI 与搜索使用'}。`
-    : '关闭时不会为新增网页书签保存摘要或正文索引。'
-
-  dom.optionsAiInboxSummary.innerHTML = [
-    buildStatusSummaryItem('AI 渠道', aiTitle, aiCopy),
-    buildStatusSummaryItem('Inbox 流程', inboxTitle, inboxCopy),
-    buildStatusSummaryItem('网页内容索引', snapshotTitle, snapshotCopy)
-  ].join('')
-}
-
-function buildStatusSummaryItem(label, title, copy) {
-  return `
-    <div class="options-status-summary-item">
-      <span class="summary-label">${escapeHtml(label)}</span>
-      <strong>${escapeHtml(title)}</strong>
-      <p>${escapeHtml(copy)}</p>
-    </div>
-  `
 }
 
 function renderBookmarkTagDataCard() {
