@@ -36,8 +36,12 @@ import {
   createMissingFolderView,
   createNewTabPage,
   createStateView,
+  buildNewTabPortalOverview,
+  getPortalQuickAccessItems,
   getSearchBookmarkSuggestionsFromIndex,
   getVerticalCenterCollisionOffset,
+  type PortalOverview,
+  type PortalQuickAccessItem,
   resolveNewTabContentState,
   type NewTabPageModule,
   type NewTabSearchIndexEntry,
@@ -168,6 +172,7 @@ interface QuickAccessItem {
   url: string
   detail: string
   badge: string
+  reason: PortalQuickAccessItem['reason']
   bookmark: chrome.bookmarks.BookmarkTreeNode
 }
 
@@ -2703,9 +2708,9 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   view.dataset.iconShowTitles = String(state.iconSettings.showTitles)
   view.dataset.iconVerticalCenter = String(state.iconSettings.verticalCenter)
 
-  const quickAccess = createQuickAccessPanel()
-  if (quickAccess) {
-    view.appendChild(quickAccess)
+  const portal = createPortalPanel()
+  if (portal) {
+    view.appendChild(portal)
   }
 
   const groupList = document.createElement('div')
@@ -2766,19 +2771,136 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   return view
 }
 
-function createQuickAccessPanel(): HTMLElement | null {
+function createPortalPanel(): HTMLElement | null {
   const showFrequent = state.generalSettings.showFrequentBookmarks
   const showRecent = state.generalSettings.showRecentBookmarks
-  if (!showFrequent && !showRecent) {
+  const overview = buildNewTabPortalOverview({
+    sections: state.folderSections,
+    activityRecords: state.activity.records,
+    now: Date.now()
+  })
+  const quickAccess = createQuickAccessPanel()
+
+  if (!quickAccess && !hasPortalOverviewSignal(overview)) {
     return null
   }
 
-  const frequentItems = showFrequent ? getFrequentQuickAccessItems() : []
-  const recentItems = showRecent
-    ? getRecentQuickAccessItems(new Set(frequentItems.map((item) => item.id)))
-    : []
+  const panel = document.createElement('section')
+  panel.className = 'newtab-portal'
+  panel.setAttribute('aria-label', '今日门户')
 
-  if (!frequentItems.length && !recentItems.length) {
+  panel.appendChild(createPortalOverview(overview, {
+    showFrequent,
+    showRecent,
+    hasQuickAccess: Boolean(quickAccess)
+  }))
+  if (quickAccess) {
+    panel.appendChild(quickAccess)
+  }
+
+  return panel
+}
+
+function hasPortalOverviewSignal(overview: PortalOverview): boolean {
+  return overview.bookmarkCount > 0 || overview.folderCount > 0 || overview.openedTodayCount > 0
+}
+
+function createPortalOverview(
+  overview: PortalOverview,
+  options: {
+    showFrequent: boolean
+    showRecent: boolean
+    hasQuickAccess: boolean
+  }
+): HTMLElement {
+  const section = document.createElement('section')
+  section.className = 'newtab-portal-overview'
+  section.setAttribute('aria-label', '今日概览')
+
+  const heading = document.createElement('div')
+  heading.className = 'newtab-portal-heading'
+
+  const title = document.createElement('strong')
+  title.textContent = '今日'
+
+  const meta = document.createElement('span')
+  meta.textContent = createPortalSummaryText(overview, options)
+
+  heading.append(title, meta)
+
+  const stats = document.createElement('div')
+  stats.className = 'newtab-portal-stats'
+  stats.append(
+    createPortalStat('书签', overview.bookmarkCount),
+    createPortalStat('来源', overview.folderCount),
+    createPortalStat('今日打开', overview.openedTodayCount),
+    createPortalStat('今日新增', overview.addedTodayCount)
+  )
+
+  section.append(heading, stats)
+  return section
+}
+
+function createPortalSummaryText(
+  overview: PortalOverview,
+  options: {
+    showFrequent: boolean
+    showRecent: boolean
+    hasQuickAccess: boolean
+  }
+): string {
+  if (options.hasQuickAccess) {
+    if (options.showFrequent && options.showRecent) {
+      return '常用与最近入口已整理'
+    }
+    if (options.showFrequent) {
+      return '常用入口已整理'
+    }
+    return '最近入口已整理'
+  }
+
+  if (overview.addedTodayCount > 0) {
+    return `今天新增 ${overview.addedTodayCount} 个书签`
+  }
+  if (overview.bookmarkCount > 0) {
+    return '从这里继续浏览'
+  }
+  return '等待添加书签'
+}
+
+function createPortalStat(label: string, value: number): HTMLElement {
+  const stat = document.createElement('span')
+  stat.className = 'newtab-portal-stat'
+
+  const number = document.createElement('strong')
+  number.textContent = String(Math.max(0, value))
+
+  const copy = document.createElement('span')
+  copy.textContent = label
+
+  stat.append(number, copy)
+  return stat
+}
+
+function createQuickAccessPanel(): HTMLElement | null {
+  const { frequentItems, recentItems } = getPortalQuickAccessItems({
+    bookmarks: state.bookmarks,
+    pinnedIds: state.activity.pinnedIds,
+    records: state.activity.records,
+    now: Date.now(),
+    itemLimit: QUICK_ACCESS_ITEM_LIMIT,
+    showFrequent: state.generalSettings.showFrequentBookmarks,
+    showRecent: state.generalSettings.showRecentBookmarks
+  })
+
+  const frequentQuickAccessItems = frequentItems
+    .map(createQuickAccessItemFromPortalItem)
+    .filter((item): item is QuickAccessItem => Boolean(item))
+  const recentQuickAccessItems = recentItems
+    .map(createQuickAccessItemFromPortalItem)
+    .filter((item): item is QuickAccessItem => Boolean(item))
+
+  if (!frequentQuickAccessItems.length && !recentQuickAccessItems.length) {
     return null
   }
 
@@ -2786,14 +2908,23 @@ function createQuickAccessPanel(): HTMLElement | null {
   panel.className = 'newtab-quick-access'
   panel.setAttribute('aria-label', '常用和最近书签')
 
-  if (frequentItems.length) {
-    panel.appendChild(createQuickAccessGroup('常用', frequentItems))
+  if (frequentQuickAccessItems.length) {
+    panel.appendChild(createQuickAccessGroup('常用', frequentQuickAccessItems))
   }
-  if (recentItems.length) {
-    panel.appendChild(createQuickAccessGroup('最近', recentItems))
+  if (recentQuickAccessItems.length) {
+    panel.appendChild(createQuickAccessGroup('最近', recentQuickAccessItems))
   }
 
   return panel
+}
+
+function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): QuickAccessItem | null {
+  const bookmark = state.bookmarkMap.get(item.id)
+  if (!bookmark?.url) {
+    return null
+  }
+
+  return createQuickAccessItem(bookmark, item.detail, item.badge, item.reason)
 }
 
 function createQuickAccessGroup(label: string, items: QuickAccessItem[]): HTMLElement {
@@ -2823,6 +2954,7 @@ function createQuickAccessLink(item: QuickAccessItem): HTMLAnchorElement {
   link.title = `${item.title} · ${item.detail}`
   link.draggable = false
   link.dataset.bookmarkId = item.id
+  link.dataset.quickReason = item.reason
   bindBookmarkNavigation(link, item.bookmark)
 
   const mark = document.createElement('span')
@@ -2844,128 +2976,11 @@ function createQuickAccessLink(item: QuickAccessItem): HTMLAnchorElement {
   return link
 }
 
-function getFrequentQuickAccessItems(): QuickAccessItem[] {
-  const items: QuickAccessItem[] = []
-  const usedIds = new Set<string>()
-
-  for (const bookmarkId of state.activity.pinnedIds) {
-    const bookmark = state.bookmarkMap.get(bookmarkId)
-    if (!bookmark?.url || usedIds.has(bookmarkId)) {
-      continue
-    }
-
-    items.push(createQuickAccessItem(bookmark, '已固定', '固'))
-    usedIds.add(bookmarkId)
-    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
-      return items
-    }
-  }
-
-  const frequentRecords = Object.values(state.activity.records)
-    .filter((record) => record.openCount > 0 && !usedIds.has(record.bookmarkId))
-    .sort((left, right) =>
-      right.openCount - left.openCount ||
-      right.lastOpenedAt - left.lastOpenedAt ||
-      left.title.localeCompare(right.title, 'zh-Hans-CN')
-    )
-
-  for (const record of frequentRecords) {
-    const bookmark = state.bookmarkMap.get(record.bookmarkId)
-    if (!bookmark?.url) {
-      continue
-    }
-
-    items.push(createQuickAccessItem(bookmark, `打开 ${record.openCount} 次`, '常'))
-    usedIds.add(record.bookmarkId)
-    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
-      break
-    }
-  }
-
-  return items
-}
-
-function getRecentQuickAccessItems(excludedIds: Set<string>): QuickAccessItem[] {
-  const items: QuickAccessItem[] = []
-  const usedIds = new Set(excludedIds)
-
-  const recentlyOpened = Object.values(state.activity.records)
-    .filter((record) => record.lastOpenedAt > 0 && !usedIds.has(record.bookmarkId))
-    .sort((left, right) => right.lastOpenedAt - left.lastOpenedAt)
-
-  for (const record of recentlyOpened) {
-    const bookmark = state.bookmarkMap.get(record.bookmarkId)
-    if (!bookmark?.url) {
-      continue
-    }
-
-    items.push(createQuickAccessItem(bookmark, formatRelativeActivityTime(record.lastOpenedAt, '打开'), '开'))
-    usedIds.add(record.bookmarkId)
-    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
-      return items
-    }
-  }
-
-  for (const bookmark of getRecentAddedBookmarks(usedIds, QUICK_ACCESS_ITEM_LIMIT - items.length)) {
-    items.push(createQuickAccessItem(bookmark, formatRelativeActivityTime(Number(bookmark.dateAdded), '添加'), '新'))
-    usedIds.add(String(bookmark.id))
-    if (items.length >= QUICK_ACCESS_ITEM_LIMIT) {
-      break
-    }
-  }
-
-  return items
-}
-
-function getRecentAddedBookmarks(
-  excludedIds: Set<string>,
-  limit: number
-): chrome.bookmarks.BookmarkTreeNode[] {
-  if (limit <= 0) {
-    return []
-  }
-
-  const recentBookmarks: chrome.bookmarks.BookmarkTreeNode[] = []
-  for (const bookmark of state.bookmarks) {
-    const bookmarkId = String(bookmark.id)
-    if (
-      !bookmark.url ||
-      excludedIds.has(bookmarkId) ||
-      !Number.isFinite(Number(bookmark.dateAdded))
-    ) {
-      continue
-    }
-
-    insertRecentAddedBookmark(recentBookmarks, bookmark, limit)
-  }
-
-  return recentBookmarks
-}
-
-function insertRecentAddedBookmark(
-  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
-  bookmark: chrome.bookmarks.BookmarkTreeNode,
-  limit: number
-): void {
-  const timestamp = Number(bookmark.dateAdded || 0)
-  const insertIndex = bookmarks.findIndex((item) => Number(item.dateAdded || 0) < timestamp)
-  if (insertIndex < 0) {
-    if (bookmarks.length < limit) {
-      bookmarks.push(bookmark)
-    }
-    return
-  }
-
-  bookmarks.splice(insertIndex, 0, bookmark)
-  if (bookmarks.length > limit) {
-    bookmarks.length = limit
-  }
-}
-
 function createQuickAccessItem(
   bookmark: chrome.bookmarks.BookmarkTreeNode,
   detail: string,
-  badge: string
+  badge: string,
+  reason: PortalQuickAccessItem['reason']
 ): QuickAccessItem {
   const url = String(bookmark.url || '').trim()
   const title = String(bookmark.title || '').trim() || url
@@ -2975,32 +2990,9 @@ function createQuickAccessItem(
     url,
     detail,
     badge,
+    reason,
     bookmark
   }
-}
-
-function formatRelativeActivityTime(timestamp: number, label: string): string {
-  if (!Number.isFinite(timestamp) || timestamp <= 0) {
-    return `${label}时间未知`
-  }
-
-  const diffMs = Date.now() - timestamp
-  const minuteMs = 60 * 1000
-  const hourMs = 60 * minuteMs
-  const dayMs = 24 * hourMs
-
-  if (diffMs < hourMs) {
-    return `${label}于刚刚`
-  }
-  if (diffMs < dayMs) {
-    return `${label}于 ${Math.max(1, Math.floor(diffMs / hourMs))} 小时前`
-  }
-  if (diffMs < 30 * dayMs) {
-    return `${label}于 ${Math.max(1, Math.floor(diffMs / dayMs))} 天前`
-  }
-
-  const date = new Date(timestamp)
-  return `${label}于 ${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
 }
 
 function getResponsiveIconColumns(settings: IconSettings): number {
