@@ -52,6 +52,20 @@ test('content snapshot stores short full text in local index', () => {
   assert.equal(fullTextRecord, null)
 })
 
+test('content snapshot settings preserve independent storage fields', () => {
+  const settings = normalizeContentSnapshotSettings({
+    enabled: false,
+    saveFullText: true,
+    fullTextSearchEnabled: true,
+    localOnlyNoAiUpload: true
+  })
+
+  assert.equal(settings.enabled, false)
+  assert.equal(settings.saveFullText, true)
+  assert.equal(settings.fullTextSearchEnabled, true)
+  assert.equal(settings.localOnlyNoAiUpload, true)
+})
+
 test('content snapshot moves full text over 20KB to IndexedDB record', () => {
   const largeText = 'a'.repeat(CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT + 1)
   const { record, fullTextRecord } = buildContentSnapshotRecord({

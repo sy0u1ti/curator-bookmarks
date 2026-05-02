@@ -31,7 +31,8 @@
       class="settings-drawer"
       role="dialog"
       aria-modal="true"
-      aria-label="新标签页设置"
+      aria-labelledby="newtab-settings-title"
+      aria-describedby="newtab-settings-summary"
       aria-hidden="true"
       tabindex="-1"
     >
@@ -42,21 +43,36 @@
       </button>
 
       <div class="settings-drawer-scroll">
+        <header class="settings-drawer-header">
+          <p class="settings-drawer-kicker">New Tab</p>
+          <h1 id="newtab-settings-title">新标签页设置</h1>
+          <p id="newtab-settings-summary" class="settings-drawer-summary">书签来源、背景、图标布局、时间与搜索栏。</p>
+        </header>
+
         <section class="settings-section" aria-labelledby="settings-general-title">
           <h2 id="settings-general-title">通用</h2>
           <div class="settings-card">
             <label class="setting-row">
-              <span>隐藏设置图标 <span class="setting-help">?</span></span>
+              <span class="setting-label-stack">
+                <span>隐藏设置图标</span>
+                <small>桌面端移到右上角时显示，触屏设备始终显示。</small>
+              </span>
               <input id="general-hide-settings-trigger" class="setting-switch-input" type="checkbox">
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
             <label class="setting-row">
-              <span>显示常用</span>
+              <span class="setting-label-stack">
+                <span>显示常用</span>
+                <small>优先展示打开次数较多或已固定的书签。</small>
+              </span>
               <input id="general-show-frequent" class="setting-switch-input" type="checkbox" checked>
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
             <label class="setting-row">
-              <span>显示最近</span>
+              <span class="setting-label-stack">
+                <span>显示最近</span>
+                <small>展示最近打开或最近添加的书签。</small>
+              </span>
               <input id="general-show-recent" class="setting-switch-input" type="checkbox" checked>
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
@@ -67,7 +83,10 @@
           <h2 id="settings-folder-title">书签来源</h2>
           <div class="settings-card">
             <label class="setting-row">
-              <span>隐藏文件夹名</span>
+              <span class="setting-label-stack">
+                <span>隐藏文件夹名</span>
+                <small>只保留图标网格，适合单一来源或极简布局。</small>
+              </span>
               <input id="folder-hide-names" class="setting-switch-input" type="checkbox">
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
@@ -98,7 +117,12 @@
                       spellcheck="false"
                     >
                   </label>
-                  <div id="folder-candidate-list" class="folder-candidate-list" role="listbox"></div>
+                  <div
+                    id="folder-candidate-list"
+                    class="folder-candidate-list"
+                    role="listbox"
+                    aria-multiselectable="true"
+                  ></div>
                 </div>
               </div>
             </div>
@@ -109,11 +133,14 @@
           <h2 id="settings-background-title">背景</h2>
           <div class="settings-card">
             <div class="setting-row">
-              <span>背景类型</span>
+              <span class="setting-label-stack">
+                <span>背景类型</span>
+                <small>可选择纯色、本地图片/视频或远程图片链接。</small>
+              </span>
               <select id="background-type" class="setting-select setting-native-select">
                 <option value="image">图片</option>
                 <option value="video">视频</option>
-                <option value="urls">URLs</option>
+                <option value="urls">图片链接</option>
                 <option value="color" selected>纯色</option>
               </select>
             </div>
@@ -161,7 +188,10 @@
             </div>
             <div id="background-status" class="setting-status" role="status" aria-live="polite" hidden></div>
             <label class="setting-row">
-              <span>背景蒙版</span>
+              <span class="setting-label-stack">
+                <span>背景蒙版</span>
+                <small>提升复杂背景上的图标和文字可读性。</small>
+              </span>
               <input id="background-mask-enabled" class="setting-switch-input" type="checkbox">
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
@@ -174,7 +204,7 @@
               </select>
             </div>
             <label id="background-mask-blur-row" class="setting-row slider-row" hidden>
-              <span>模糊程度</span>
+              <span>模糊程度 <output id="background-mask-blur-value" class="setting-value">12px</output></span>
               <input id="background-mask-blur" class="setting-range" type="range" min="0" max="32" value="12">
             </label>
           </div>
@@ -188,23 +218,32 @@
                 <span>实时预览</span>
                 <span id="icon-live-preview-summary" class="icon-live-preview-summary"></span>
               </div>
-              <div id="icon-live-preview" class="icon-live-preview" aria-label="图标布局预览"></div>
+              <div id="icon-live-preview" class="icon-live-preview" role="img" aria-label="图标布局预览"></div>
             </div>
             <div id="icon-preset-row" class="icon-preset-row"></div>
             <div class="setting-row icon-control-row">
-              <span>布局方式</span>
+              <span class="setting-label-stack">
+                <span>布局方式</span>
+                <small>自动适配屏幕宽度；固定列数会在窄屏收缩。</small>
+              </span>
               <div id="icon-layout-control" class="setting-segmented" role="group" aria-label="布局方式">
                 <button class="setting-segmented-button" type="button" data-icon-layout-mode="auto">自动适配</button>
                 <button class="setting-segmented-button" type="button" data-icon-layout-mode="fixed">固定列数</button>
               </div>
             </div>
             <label class="setting-row">
-              <span>垂直居中</span>
+              <span class="setting-label-stack">
+                <span>垂直居中</span>
+                <small>书签较少时让主内容贴近屏幕中部。</small>
+              </span>
               <input id="icon-vertical-center" class="setting-switch-input" type="checkbox">
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
             <label class="setting-row">
-              <span>显示标题</span>
+              <span class="setting-label-stack">
+                <span>显示标题</span>
+                <small>关闭后只显示网站图标。</small>
+              </span>
               <input id="icon-show-titles" class="setting-switch-input" type="checkbox" checked>
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
@@ -315,17 +354,26 @@
           <h2 id="settings-search-title">搜索栏</h2>
           <div class="settings-card">
             <label class="setting-row">
-              <span>启用</span>
+              <span class="setting-label-stack">
+                <span>启用</span>
+                <small>在新标签页顶部搜索书签，也可直接搜索网页。</small>
+              </span>
               <input id="search-enabled" class="setting-switch-input" type="checkbox" checked>
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
             <label class="setting-row">
-              <span>在新标签页打开链接</span>
+              <span class="setting-label-stack">
+                <span>在新标签页打开链接</span>
+                <small>保留当前 Curator 新标签页。</small>
+              </span>
               <input id="search-open-new-tab" class="setting-switch-input" type="checkbox">
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
             <div class="setting-row">
-              <span>搜索引擎 <span class="setting-help">?</span></span>
+              <span class="setting-label-stack">
+                <span>搜索引擎</span>
+                <small>输入内容不是网址时使用此引擎。</small>
+              </span>
               <select id="search-engine" class="setting-select setting-native-select">
                 <option value="default">默认</option>
                 <option value="google">Google</option>
@@ -341,19 +389,19 @@
               </span>
             </div>
             <label class="setting-row slider-row">
-              <span>宽度</span>
+              <span>宽度 <output id="search-width-value" class="setting-value">44vw</output></span>
               <input id="search-width" class="setting-range" type="range" min="16" max="72" value="44">
             </label>
             <label class="setting-row slider-row">
-              <span>高度</span>
+              <span>高度 <output id="search-height-value" class="setting-value">34px</output></span>
               <input id="search-height" class="setting-range" type="range" min="28" max="56" value="34">
             </label>
             <label class="setting-row slider-row">
-              <span>上下位置</span>
+              <span>上下位置 <output id="search-offset-y-value" class="setting-value">0px</output></span>
               <input id="search-offset-y" class="setting-range" type="range" min="-32" max="72" value="0">
             </label>
             <label class="setting-row slider-row">
-              <span>背景</span>
+              <span>背景 <output id="search-background-value" class="setting-value">58%</output></span>
               <input id="search-background" class="setting-range" type="range" min="36" max="76" value="58">
             </label>
           </div>

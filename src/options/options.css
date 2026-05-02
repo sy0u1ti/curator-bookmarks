@@ -1597,11 +1597,11 @@ a {
 
 .dashboard-drop-panel {
   position: fixed;
-  top: calc(50% + 52px);
+  top: calc(50% + 58px);
   left: 50%;
   z-index: 2;
-  width: min(1280px, calc(100vw - 72px));
-  max-height: min(calc(100vh - 168px), 760px);
+  width: min(1440px, calc(100vw - 56px));
+  max-height: min(calc(100vh - 150px), 820px);
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
@@ -1742,11 +1742,11 @@ a {
 
 .dashboard-folder-drop-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  max-height: calc(min(calc(100vh - 168px), 760px) - 78px);
+  grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
+  gap: 10px;
+  max-height: calc(min(calc(100vh - 150px), 820px) - 72px);
   overflow: auto;
-  padding: 16px;
+  padding: 14px;
 }
 
 .dashboard-folder-drop-grid > .detect-empty {
@@ -1755,12 +1755,12 @@ a {
 
 .dashboard-folder-drop-card {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr);
-  gap: 10px;
-  min-height: 82px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 72px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 11px;
+  padding: 9px 10px;
   background: rgba(245, 245, 247, 0.045);
   color: var(--text-soft);
   font: inherit;
@@ -1784,8 +1784,8 @@ a {
 
 .dashboard-folder-icon {
   position: relative;
-  width: 28px;
-  height: 22px;
+  width: 26px;
+  height: 20px;
   margin-top: 3px;
   border-radius: 5px;
   background: rgba(245, 245, 247, 0.18);
@@ -4779,7 +4779,7 @@ body.dashboard-fullscreen-active {
   }
 
   .dashboard-folder-drop-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   }
 }
 
@@ -4839,12 +4839,27 @@ body.dashboard-fullscreen-active {
 
   .dashboard-folder-drop-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 10px;
+    max-height: calc(100vh - 220px);
   }
 
   .dashboard-drop-panel {
-    top: calc(50% + 48px);
+    top: calc(50% + 52px);
     width: calc(100vw - 28px);
-    max-height: calc(100vh - 136px);
+    max-height: calc(100vh - 148px);
+  }
+
+  .dashboard-folder-drop-card {
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 8px;
+    min-height: 68px;
+    padding: 8px;
+  }
+
+  .dashboard-folder-icon {
+    width: 23px;
+    height: 18px;
   }
 
   .dashboard-delete-drop-target {

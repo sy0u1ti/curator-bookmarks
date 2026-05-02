@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
   newTabTimeSettings: 'curatorBookmarkNewTabTimeSettings',
   newTabGeneralSettings: 'curatorBookmarkNewTabGeneralSettings',
   newTabFolderSettings: 'curatorBookmarkNewTabFolderSettings',
+  newTabActivity: 'curatorBookmarkNewTabActivity',
   popupCommandIntent: 'curatorBookmarkPopupCommandIntent',
   popupPreferences: 'curatorBookmarkPopupPreferences',
   redirectCache: 'curatorBookmarkRedirectCache',

@@ -229,6 +229,8 @@ import {
   handleDashboardTagPointerOut,
   handleDashboardTagPointerOver,
   hydrateDashboardSavedSearches,
+  getSingleDashboardMoveBookmark,
+  moveSingleDashboardBookmark,
   moveSelectedDashboardBookmarks,
   removeDashboardSelectionIds,
   renderDashboardSection
@@ -574,7 +576,7 @@ function bindEvents() {
     void saveContentSnapshotSettingsFromDom()
   })
   dom.contentSnapshotFullText?.addEventListener('change', () => {
-    void saveContentSnapshotSettingsFromDom()
+    void saveContentSnapshotSettingsFromDom({ syncFullTextSearch: true })
   })
   dom.contentSnapshotSearchFullText?.addEventListener('change', () => {
     void saveContentSnapshotSettingsFromDom()
@@ -2050,13 +2052,21 @@ function syncAiNamingSettingsDraftFromDom({ markDirty = false } = {}) {
   return aiNamingManagerState.settings
 }
 
-async function saveContentSnapshotSettingsFromDom() {
+async function saveContentSnapshotSettingsFromDom({
+  syncFullTextSearch = false
+}: {
+  syncFullTextSearch?: boolean
+} = {}) {
+  const previousSettings = contentSnapshotState.settings
+  const saveFullText = readCheckboxSetting(dom.contentSnapshotFullText, previousSettings.saveFullText)
   const nextSettings = normalizeContentSnapshotSettings({
-    ...contentSnapshotState.settings,
-    enabled: Boolean(dom.contentSnapshotEnabled?.checked),
-    saveFullText: Boolean(dom.contentSnapshotFullText?.checked),
-    fullTextSearchEnabled: Boolean(dom.contentSnapshotSearchFullText?.checked),
-    localOnlyNoAiUpload: Boolean(dom.contentSnapshotLocalOnly?.checked)
+    ...previousSettings,
+    enabled: readCheckboxSetting(dom.contentSnapshotEnabled, previousSettings.enabled),
+    saveFullText,
+    fullTextSearchEnabled: dom.contentSnapshotSearchFullText
+      ? readCheckboxSetting(dom.contentSnapshotSearchFullText, previousSettings.fullTextSearchEnabled)
+      : syncFullTextSearch ? saveFullText : previousSettings.fullTextSearchEnabled,
+    localOnlyNoAiUpload: readCheckboxSetting(dom.contentSnapshotLocalOnly, previousSettings.localOnlyNoAiUpload)
   })
 
   try {
@@ -2065,19 +2075,25 @@ async function saveContentSnapshotSettingsFromDom() {
       includeFullText: contentSnapshotState.settings.fullTextSearchEnabled,
       maxRecords: 1000
     }).catch(() => new Map<string, string>())
-    contentSnapshotState.statusMessage = '网页快照设置已保存。'
+    contentSnapshotState.statusMessage = '网页内容索引设置已保存。'
   } catch (error) {
     contentSnapshotState.statusMessage =
-      error instanceof Error ? `网页快照设置保存失败：${error.message}` : '网页快照设置保存失败。'
+      error instanceof Error ? `网页内容索引设置保存失败：${error.message}` : '网页内容索引设置保存失败。'
   } finally {
     renderAiNamingSection()
     renderDashboardSection()
   }
 }
 
+function readCheckboxSetting(element: typeof dom.contentSnapshotEnabled | undefined, fallback: boolean): boolean {
+  return element ? Boolean(element.checked) : fallback
+}
+
 function renderContentSnapshotSettings() {
   const settings = contentSnapshotState.settings
-  const snapshotCount = Object.keys(contentSnapshotState.index.records || {}).length
+  const snapshotRecords = Object.values(contentSnapshotState.index.records || {})
+  const snapshotCount = snapshotRecords.length
+  const fullTextCount = snapshotRecords.filter((record) => record.hasFullText).length
   if (dom.contentSnapshotEnabled) {
     dom.contentSnapshotEnabled.checked = Boolean(settings.enabled)
   }
@@ -2086,7 +2102,7 @@ function renderContentSnapshotSettings() {
     dom.contentSnapshotFullText.disabled = !settings.enabled
   }
   if (dom.contentSnapshotSearchFullText) {
-    dom.contentSnapshotSearchFullText.checked = Boolean(settings.fullTextSearchEnabled)
+    dom.contentSnapshotSearchFullText.checked = Boolean(settings.saveFullText)
     dom.contentSnapshotSearchFullText.disabled = !settings.enabled || !settings.saveFullText
   }
   if (dom.contentSnapshotLocalOnly) {
@@ -2094,12 +2110,19 @@ function renderContentSnapshotSettings() {
     dom.contentSnapshotLocalOnly.disabled = !settings.enabled
   }
   if (dom.contentSnapshotStatus) {
-    const fullTextCopy = settings.saveFullText
-      ? '已开启全文保存；超过 20KB 的单条全文写入 IndexedDB。'
-      : '全文未保存，仅使用摘要、标题和链接信息。'
+    const modeCopy = settings.enabled
+      ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
+      : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
     dom.contentSnapshotStatus.textContent = contentSnapshotState.statusMessage ||
-      `已保存 ${snapshotCount} 条网页快照。${fullTextCopy}`
+      modeCopy
   }
+}
+
+function buildContentSnapshotStatusCopy(saveFullText: boolean, snapshotCount: number, fullTextCount: number): string {
+  if (saveFullText) {
+    return `已保存 ${snapshotCount} 条网页内容索引，其中 ${fullTextCount} 条包含正文；当前用于摘要和正文搜索。`
+  }
+  return `已保存 ${snapshotCount} 条网页内容索引；当前只保存摘要、标题和链接，不保存正文。`
 }
 
 function resetAiNamingConnectivityState() {
@@ -2805,6 +2828,7 @@ function renderAiNamingSection() {
   }
   if (dom.aiConnectivityCopy) {
     dom.aiConnectivityCopy.className = `ai-provider-connectivity ${connectivityMeta.tone}`
+    dom.aiConnectivityCopy.classList.toggle('hidden', !connectivityMeta.visible)
     setLoadingLabel(dom.aiConnectivityCopy, connectivityMeta.copy, {
       busy: aiNamingState.testingConnection,
       wrapperClass: 'status-loading-label',
@@ -3141,13 +3165,15 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
   const modeLabel = mode === 'tagsOnly'
     ? '只恢复标签数据'
     : mode === 'newTabOnly'
-      ? '只恢复新标签页配置'
+      ? '只恢复新标签页设置'
       : '恢复全部可安全恢复的数据'
   const confirmed = await requestConfirmation({
     title: `${modeLabel}？`,
     copy: mode === 'safeFull'
       ? '恢复前会自动创建本地备份；缺失书签只会复制到新的恢复文件夹，不会替换整个 Chrome 书签树，也不会恢复 API Key。'
-      : '恢复会写入对应的本地扩展数据，不会恢复 API Key。',
+      : mode === 'newTabOnly'
+        ? '恢复会写入书签来源、布局、搜索、时间和背景设置；不会恢复背景媒体缓存，也不会恢复 API Key。'
+        : '恢复会写入对应的本地扩展数据，不会恢复 API Key。',
     confirmLabel: modeLabel,
     cancelLabel: '取消',
     tone: mode === 'safeFull' ? 'warning' : 'danger',
@@ -3257,8 +3283,8 @@ function renderAiFetchModelsStatus() {
     return
   }
 
-  let tone = 'muted'
-  let copy = '填写 API Key 后，可从当前接口获取模型列表。'
+  let tone = ''
+  let copy = ''
 
   if (aiNamingState.fetchingModels) {
     tone = 'muted'
@@ -3272,7 +3298,8 @@ function renderAiFetchModelsStatus() {
     copy = `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`
   }
 
-  dom.aiFetchModelsStatus.className = `ai-provider-connectivity ${tone}`
+  dom.aiFetchModelsStatus.className = `ai-provider-connectivity ${tone || 'muted'}`
+  dom.aiFetchModelsStatus.classList.toggle('hidden', !copy)
   setLoadingLabel(dom.aiFetchModelsStatus, copy, {
     busy: aiNamingState.fetchingModels,
     wrapperClass: 'status-loading-label',
@@ -4825,6 +4852,7 @@ function getAiNamingProgressCopy() {
 function getAiNamingConnectivityMeta() {
   if (aiNamingState.testingConnection) {
     return {
+      visible: true,
       tone: 'warning',
       copy: '正在测试当前模型，请稍候。'
     }
@@ -4832,6 +4860,7 @@ function getAiNamingConnectivityMeta() {
 
   if (aiNamingState.lastConnectivityTestStatus === 'success') {
     return {
+      visible: true,
       tone: 'success',
       copy: `${aiNamingState.lastConnectivityTestMessage || '连接成功，当前模型可用。'}${aiNamingState.settingsDirty ? ' 当前改动尚未保存。' : ''}`
     }
@@ -4839,14 +4868,16 @@ function getAiNamingConnectivityMeta() {
 
   if (aiNamingState.lastConnectivityTestStatus === 'error') {
     return {
+      visible: true,
       tone: 'danger',
       copy: aiNamingState.lastConnectivityTestMessage || '连通性测试失败。'
     }
   }
 
   return {
+    visible: false,
     tone: 'muted',
-    copy: '测试连接后，会显示当前模型是否可用。'
+    copy: ''
   }
 }
 
@@ -6088,7 +6119,9 @@ function renderMoveModal() {
 
   const selectedResults = managerState.moveSelectionSource === 'dashboard'
     ? getSelectedDashboardBookmarks()
-    : getSelectedAvailabilityResults()
+    : managerState.moveSelectionSource === 'dashboard-single'
+      ? [getSingleDashboardMoveBookmark()].filter(Boolean)
+      : getSelectedAvailabilityResults()
   const normalizedQuery = normalizeText(managerState.moveSearchQuery)
   const folders = availabilityState.allFolders
     .filter((folder) => String(folder.id) !== ROOT_ID)
@@ -6101,9 +6134,11 @@ function renderMoveModal() {
     })
     .sort((left, right) => compareByPathTitle(left, right))
 
-  dom.moveModalCopy.textContent = selectedResults.length
-    ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
-    : '请选择一个目标文件夹，所选书签会被一起移动到该位置。'
+  dom.moveModalCopy.textContent = managerState.moveSelectionSource === 'dashboard-single'
+    ? '请选择一个目标文件夹，这条书签会被移动到该位置。'
+    : selectedResults.length
+      ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
+      : '请选择一个目标文件夹，所选书签会被一起移动到该位置。'
   dom.moveSearchInput.value = managerState.moveSearchQuery
 
   if (!folders.length) {
@@ -6668,6 +6703,9 @@ function openMoveModal(source) {
   if (source === 'dashboard' && !getSelectedDashboardBookmarks().length) {
     return
   }
+  if (source === 'dashboard-single' && !getSingleDashboardMoveBookmark()) {
+    return
+  }
 
   managerState.moveSelectionSource = source
   managerState.moveSearchQuery = ''
@@ -6705,6 +6743,7 @@ function closeMoveModal() {
 
   managerState.moveModalOpen = false
   managerState.moveSearchQuery = ''
+  managerState.moveDashboardBookmarkId = ''
   renderMoveModal()
 }
 
@@ -6731,6 +6770,10 @@ async function handleMoveFolderResultsClick(event) {
 
   if (managerState.moveSelectionSource === 'dashboard') {
     await moveSelectedDashboardBookmarks(folderId, dashboardCallbacks)
+    return
+  }
+  if (managerState.moveSelectionSource === 'dashboard-single') {
+    await moveSingleDashboardBookmark(folderId, dashboardCallbacks)
     return
   }
 
