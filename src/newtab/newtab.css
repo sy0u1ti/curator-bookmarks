@@ -653,10 +653,12 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .newtab-portal {
+  --portal-card-min-height: 42px;
+  --portal-card-gap: 6px;
   display: grid;
   width: 100%;
   grid-template-columns: minmax(190px, 0.58fr) minmax(0, 1.42fr);
-  align-items: start;
+  align-items: stretch;
   gap: 14px;
   margin-bottom: 18px;
   padding: 10px;
@@ -681,6 +683,7 @@ body.background-mask-enabled .newtab-background-mask {
 .newtab-portal-overview {
   display: grid;
   min-width: 0;
+  align-content: stretch;
   gap: 10px;
 }
 
@@ -710,13 +713,14 @@ body.background-mask-enabled .newtab-background-mask {
 .newtab-portal-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
+  grid-auto-rows: minmax(var(--portal-card-min-height), 1fr);
+  gap: var(--portal-card-gap);
 }
 
 .newtab-portal-stat {
   display: grid;
   min-width: 0;
-  min-height: 42px;
+  min-height: var(--portal-card-min-height);
   align-content: center;
   gap: 2px;
   padding: 7px 8px;
@@ -748,20 +752,22 @@ body.background-mask-enabled .newtab-background-mask {
 .newtab-quick-access {
   display: grid;
   width: 100%;
-  gap: 9px;
+  align-content: stretch;
+  gap: var(--portal-card-gap);
 }
 
 .newtab-quick-group {
   display: grid;
   min-width: 0;
   grid-template-columns: 34px minmax(0, 1fr);
-  align-items: start;
+  align-items: stretch;
   gap: 8px;
 }
 
 .newtab-quick-heading {
-  min-height: 26px;
-  padding-top: 7px;
+  display: flex;
+  min-height: var(--portal-card-min-height);
+  align-items: center;
   color: rgba(245, 245, 247, 0.48);
   font-size: 11px;
   font-weight: 750;
@@ -774,13 +780,14 @@ body.background-mask-enabled .newtab-background-mask {
   display: grid;
   min-width: 0;
   grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
-  gap: 6px;
+  grid-auto-rows: minmax(var(--portal-card-min-height), 1fr);
+  gap: var(--portal-card-gap);
 }
 
 .newtab-quick-link {
   display: grid;
   min-width: 0;
-  min-height: 34px;
+  min-height: var(--portal-card-min-height);
   grid-template-columns: 24px minmax(0, 1fr);
   align-items: center;
   gap: 7px;
