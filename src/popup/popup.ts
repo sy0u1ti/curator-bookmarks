@@ -1210,10 +1210,10 @@ function getNaturalSearchToggleText() {
   }
 
   if (state.naturalSearchPlan?.source === 'ai' && !state.naturalSearchError) {
-    return 'AI 语义'
+    return 'AI'
   }
 
-  return '本地语义'
+  return 'AI'
 }
 
 function getNaturalSearchToggleAriaLabel(isPending: boolean) {

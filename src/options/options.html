@@ -44,8 +44,8 @@
           <div class="options-nav-group">
             <p id="options-ai-nav-label" class="options-sidebar-label">AI功能</p>
             <nav class="options-nav" aria-labelledby="options-ai-nav-label">
-              <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
               <a class="options-nav-link" href="#ai" data-section-link="ai">书签智能分析</a>
+              <a class="options-nav-link" href="#bookmark-history" data-section-link="bookmark-history">自动分析添加历史</a>
             </nav>
           </div>
           <a class="options-dashboard-entry" href="#dashboard" data-section-link="dashboard">
@@ -154,6 +154,44 @@
                   </label>
                 </div>
               </div>
+            </div>
+
+            <div class="options-group ai-naming-settings-card">
+              <div class="ai-feature-settings-head">
+                <div>
+                  <strong>网页内容索引</strong>
+                  <p id="content-snapshot-status" class="ai-settings-subtitle">用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
+                </div>
+                <span class="options-chip muted">本地内容记忆</span>
+              </div>
+              <label class="ai-feature-switch-row" for="content-snapshot-enabled">
+                <span class="ai-feature-switch-copy">
+                  <strong>保存网页内容索引</strong>
+                  <span class="ai-feature-secondary">新增网页书签后保存标题、摘要和链接信息，让本地搜索/AI 分类更容易找到它。</span>
+                </span>
+                <span class="ai-switch">
+                  <input id="content-snapshot-enabled" type="checkbox">
+                  <span class="ai-switch-track" aria-hidden="true"></span>
+                </span>
+              </label>
+              <label class="ai-feature-switch-row" for="content-snapshot-full-text">
+                <span class="ai-feature-switch-copy">
+                  <strong>增强：记住正文，搜索更准</strong>
+                  <span class="ai-feature-secondary">适合长文档和教程。开启后会保存可提取的正文，并把正文纳入本地搜索。</span>
+                </span>
+                <span class="ai-switch">
+                  <input id="content-snapshot-full-text" type="checkbox">
+                  <span class="ai-switch-track" aria-hidden="true"></span>
+                </span>
+              </label>
+              <details class="ai-advanced-details content-snapshot-advanced">
+                <summary class="ai-advanced-summary">高级说明</summary>
+                <div class="ai-advanced-body">
+                  <p class="ai-advanced-note">
+                    默认只保存摘要、标题和链接信息。开启增强后，正文只保存在本机，较长正文会放到浏览器的大数据存储区以减少普通设置占用。
+                  </p>
+                </div>
+              </details>
             </div>
 
             <div class="options-group ai-provider-card">
@@ -324,43 +362,6 @@
               </div>
             </div>
 
-            <div class="options-group ai-naming-settings-card">
-              <div class="ai-feature-settings-head">
-                <div>
-                  <strong>网页内容索引</strong>
-                  <p id="content-snapshot-status" class="ai-settings-subtitle">用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
-                </div>
-                <span class="options-chip muted">本地内容记忆</span>
-              </div>
-              <label class="ai-feature-switch-row" for="content-snapshot-enabled">
-                <span class="ai-feature-switch-copy">
-                  <strong>保存网页内容索引</strong>
-                  <span class="ai-feature-secondary">新增网页书签后保存标题、摘要和链接信息，让本地搜索/AI 分类更容易找到它。</span>
-                </span>
-                <span class="ai-switch">
-                  <input id="content-snapshot-enabled" type="checkbox">
-                  <span class="ai-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
-              <label class="ai-feature-switch-row" for="content-snapshot-full-text">
-                <span class="ai-feature-switch-copy">
-                  <strong>增强：记住正文，搜索更准</strong>
-                  <span class="ai-feature-secondary">适合长文档和教程。开启后会保存可提取的正文，并把正文纳入本地搜索。</span>
-                </span>
-                <span class="ai-switch">
-                  <input id="content-snapshot-full-text" type="checkbox">
-                  <span class="ai-switch-track" aria-hidden="true"></span>
-                </span>
-              </label>
-              <details class="ai-advanced-details content-snapshot-advanced">
-                <summary class="ai-advanced-summary">高级说明</summary>
-                <div class="ai-advanced-body">
-                  <p class="ai-advanced-note">
-                    默认只保存摘要、标题和链接信息。开启增强后，正文只保存在本机，较长正文会放到浏览器的大数据存储区以减少普通设置占用。
-                  </p>
-                </div>
-              </details>
-            </div>
           </section>
 
           <section
@@ -388,20 +389,22 @@
                   <span class="options-search-label">搜索书签</span>
                   <span class="dashboard-query-row">
                     <input id="dashboard-query" class="options-search-input" type="search" spellcheck="false" placeholder="site:github.com react / folder:前端 type:文档 / 最近一个月 AI 教程 -youtube">
-                    <button id="dashboard-search-help-toggle" class="options-button secondary small dashboard-help-button" type="button" aria-expanded="false" aria-controls="dashboard-search-help-panel" aria-label="搜索语法帮助" title="搜索语法帮助">?</button>
+                    <button
+                      id="dashboard-search-help-toggle"
+                      class="dashboard-help-button"
+                      type="button"
+                      aria-label="查看高级搜索语法"
+                      aria-describedby="dashboard-search-help-description"
+                      data-tooltip="高级搜索语法&#10;site:github.com 限定站点或域名。&#10;folder:前端 限定文件夹路径。&#10;type:文档 限定 AI 识别的内容类型。&#10;最近一个月、本周、今天 限定添加时间。&#10;-youtube 排除包含该词的结果。"
+                    >
+                      ?
+                    </button>
                     <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible">选择当前可见</button>
                   </span>
                 </label>
-                <div id="dashboard-search-help-panel" class="dashboard-search-help hidden" role="dialog" aria-label="搜索语法帮助">
-                  <strong>高级搜索语法</strong>
-                  <ul>
-                    <li><code>site:github.com</code> 限定站点或域名。</li>
-                    <li><code>folder:前端</code> 限定文件夹路径。</li>
-                    <li><code>type:文档</code> 限定 AI 识别的内容类型。</li>
-                    <li><code>最近一个月</code>、<code>本周</code>、<code>今天</code> 限定添加时间。</li>
-                    <li><code>-youtube</code> 排除包含该词的结果。</li>
-                  </ul>
-                </div>
+                <p id="dashboard-search-help-description" class="sr-only">
+                  高级搜索语法：site:github.com 限定站点或域名。folder:前端 限定文件夹路径。type:文档 限定 AI 识别的内容类型。最近一个月、本周、今天限定添加时间。-youtube 排除包含该词的结果。
+                </p>
                 <div id="dashboard-search-chips" class="dashboard-search-chips hidden" aria-label="当前搜索条件"></div>
               </div>
               <div class="dashboard-toolbar-actions">
@@ -805,7 +808,7 @@
               </div>
 
               <div class="detect-toolbar-actions">
-                <a id="ai-config-link" class="options-button secondary small ai-config-link" href="#general" data-section-link="general">配置 API Key</a>
+                <a id="ai-config-link" class="options-button secondary small ai-config-link" href="#general:ai-provider" data-section-link="general">配置 API Key</a>
                 <button id="ai-action" class="options-button" type="button">开始分析并生成建议</button>
                 <button id="ai-pause-action" class="options-button secondary small hidden" type="button" disabled>暂停生成</button>
                 <button id="ai-stop-action" class="options-button secondary small hidden" type="button" disabled>停止本次生成</button>

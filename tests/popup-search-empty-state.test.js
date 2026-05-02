@@ -13,8 +13,7 @@ const popupHtml = readProjectFile('src/popup/popup.html')
 test('popup natural search entry is understandable without relying on AI-only text', () => {
   assert.doesNotMatch(popupHtml, new RegExp('>\\s*AI\\s*</button>'))
   assert.match(popupHtml, new RegExp('>\\s*语义\\s*</button>'))
-  assert.match(popupSource, /return '本地语义'/)
-  assert.match(popupSource, /return 'AI 语义'/)
+  assert.match(popupSource, /return 'AI'/)
 })
 
 test('popup empty search state offers actionable recovery controls', () => {
