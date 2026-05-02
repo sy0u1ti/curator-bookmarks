@@ -61,6 +61,7 @@ import {
   BACKGROUND_URL_FETCH_TIMEOUT_MS,
   BACKGROUND_URL_MAX_BYTES,
   buildMinimalBookmarkMoveOperations,
+  resolveRestorableBookmarkParentId,
   validateBackgroundBlobSize,
   validateBackgroundContentLength
 } from './interactions.js'
@@ -2089,8 +2090,9 @@ async function undoLastDeletedBookmark(): Promise<void> {
 
   try {
     const bookmark = deleted.bookmark
+    const parentId = await getRestorableParentId(bookmark.parentId)
     const createdBookmark = await createBookmark({
-      parentId: String(bookmark.parentId || BOOKMARKS_BAR_ID),
+      parentId,
       index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : undefined,
       title: bookmark.title || '未命名书签',
       url: bookmark.url
@@ -2116,6 +2118,16 @@ async function undoLastDeletedBookmark(): Promise<void> {
     state.deleteToastBusy = false
     state.deleteToastStatus = error instanceof Error ? error.message : '恢复失败，请打开回收站处理。'
     renderDeleteToast()
+  }
+}
+
+async function getRestorableParentId(parentId: string | undefined): Promise<string> {
+  try {
+    const rootNode = (await getBookmarkTree())[0] || null
+    const bookmarksBar = findBookmarksBar(rootNode)
+    return resolveRestorableBookmarkParentId(parentId, rootNode, bookmarksBar?.id || BOOKMARKS_BAR_ID)
+  } catch {
+    return BOOKMARKS_BAR_ID
   }
 }
 
