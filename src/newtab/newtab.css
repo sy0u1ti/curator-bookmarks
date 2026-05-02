@@ -807,10 +807,11 @@ body.background-mask-enabled .newtab-background-mask {
 
 .folder-section-add {
   display: inline-grid;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
   place-items: center;
+  box-sizing: border-box;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
@@ -837,13 +838,13 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .folder-section-add svg {
-  width: 15px;
-  height: 15px;
+  width: 12px;
+  height: 12px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.9;
+  stroke-width: 2;
 }
 
 .folder-section-header:hover,
