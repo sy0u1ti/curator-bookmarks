@@ -2,9 +2,12 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import {
+  buildAvailabilityProfileFromUserSettings,
   createAvailabilityRunScheduler,
   formatAvailabilityRunnerStatus,
   getAvailabilityDomainKey,
+  getDefaultAvailabilityRunnerUserSettings,
+  normalizeAvailabilityRunnerUserSettings,
   normalizeAvailabilitySpeedProfile,
   runAvailabilityQueue
 } from '../src/options/sections/availability-runner.js'
@@ -19,6 +22,33 @@ test('normalizes the balanced availability profile from existing constants', () 
   assert.equal(profile.navigationTimeoutMs, 30000)
   assert.equal(profile.retryNavigationTimeoutMs, 45000)
   assert.equal(profile.probeTimeoutMs, 20000)
+})
+
+test('normalizes user-facing availability settings into a scheduler profile', () => {
+  assert.deepEqual(getDefaultAvailabilityRunnerUserSettings(), {
+    concurrency: 2,
+    navigationTimeoutMs: 30000
+  })
+
+  assert.deepEqual(
+    normalizeAvailabilityRunnerUserSettings({
+      concurrency: 99,
+      navigationTimeoutMs: 1000
+    }),
+    {
+      concurrency: 6,
+      navigationTimeoutMs: 5000
+    }
+  )
+
+  const profile = buildAvailabilityProfileFromUserSettings({
+    concurrency: 4,
+    navigationTimeoutMs: 10000
+  })
+  assert.equal(profile.concurrency, 4)
+  assert.equal(profile.navigationTimeoutMs, 10000)
+  assert.equal(profile.retryNavigationTimeoutMs, 15000)
+  assert.equal(profile.probeTimeoutMs, 10000)
 })
 
 test('limits one active task per domain while allowing another domain', () => {

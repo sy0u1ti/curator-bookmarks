@@ -120,8 +120,13 @@ export const availabilityState = {
   lastRunOutcome: '',
   lastError: '',
   runnerStatusCopy: '',
-  summaryCopyStatus: '',
-  summaryCopyStatusTone: 'muted'
+  settingsOpen: false,
+  settingsStatus: '',
+  settingsStatusTone: 'muted',
+  settings: {
+    concurrency: 2,
+    navigationTimeoutMs: 30000
+  }
 }
 
 export const managerState = {

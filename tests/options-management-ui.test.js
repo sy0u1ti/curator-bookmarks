@@ -151,18 +151,34 @@ test('availability duration ticks independently while a run is active', () => {
   assert.match(optionsSource, /clearAvailabilityDurationTimer\(\)/)
 })
 
-test('availability checks use adaptive runner without adding a speed settings panel', () => {
+test('availability toolbar exposes detection settings instead of summary copy', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const domSource = readProjectFile('src/options/shared-options/dom.ts')
+
+  assert.doesNotMatch(optionsHtml, /availability-copy-summary|复制摘要|复制概览/)
+  assert.match(optionsHtml, /id="availability-settings-trigger"[^>]*>[\s\S]*?检测设置/)
+  assert.match(optionsHtml, /id="availability-settings-popover"[^>]+role="dialog"/)
+  assert.match(optionsHtml, /id="availability-concurrency-input"/)
+  assert.match(optionsHtml, /id="availability-timeout-input"/)
+  assert.match(domSource, /availabilitySettingsTrigger/)
+  assert.match(optionsSource, /saveAvailabilitySettingsFromDom/)
+  assert.match(optionsSource, /STORAGE_KEYS\.availabilitySettings/)
+})
+
+test('availability checks use adaptive runner with user settings', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
   const runnerSource = readProjectFile('src/options/sections/availability-runner.ts')
 
   assert.match(optionsSource, /createAvailabilityRunScheduler/)
+  assert.match(optionsSource, /buildAvailabilityProfileFromUserSettings\(availabilityState\.settings\)/)
   assert.match(optionsSource, /runAvailabilityQueue/)
   assert.match(optionsSource, /inspectBookmarkAvailability\(bookmark, \{ probeEnabled, scheduler \}\)/)
   assert.match(optionsSource, /fetchWithTimeout\(url, 'HEAD', timeoutMs\)/)
   assert.match(runnerSource, /domainConcurrency: 1/)
   assert.match(runnerSource, /statusCode === 429/)
-  assert.doesNotMatch(optionsHtml, /availability-speed-profile|速度设置/)
+  assert.doesNotMatch(optionsHtml, /availability-speed-profile|速度档位/)
 })
 
 test('redirect update rereads current bookmarks and skips stale source URLs', () => {

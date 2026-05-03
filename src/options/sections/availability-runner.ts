@@ -6,6 +6,10 @@ import {
 import { FETCH_TIMEOUT_MS } from './classifier.js'
 
 export type AvailabilitySpeedProfileName = 'balanced'
+export type AvailabilityRunnerUserSettings = Partial<Pick<
+  AvailabilitySpeedProfile,
+  'concurrency' | 'navigationTimeoutMs'
+>>
 
 export interface AvailabilitySpeedProfile {
   name: AvailabilitySpeedProfileName
@@ -103,6 +107,52 @@ const BALANCED_PROFILE: AvailabilitySpeedProfile = {
 
 export const AVAILABILITY_SPEED_PROFILES: Record<AvailabilitySpeedProfileName, AvailabilitySpeedProfile> = {
   balanced: BALANCED_PROFILE
+}
+
+export function getDefaultAvailabilityRunnerUserSettings(): Required<AvailabilityRunnerUserSettings> {
+  return {
+    concurrency: BALANCED_PROFILE.concurrency,
+    navigationTimeoutMs: BALANCED_PROFILE.navigationTimeoutMs
+  }
+}
+
+export function normalizeAvailabilityRunnerUserSettings(
+  value: unknown
+): Required<AvailabilityRunnerUserSettings> {
+  const source = value && typeof value === 'object'
+    ? value as AvailabilityRunnerUserSettings
+    : {}
+
+  return {
+    concurrency: clampInteger(source.concurrency, 1, 6, BALANCED_PROFILE.concurrency),
+    navigationTimeoutMs: clampInteger(
+      source.navigationTimeoutMs,
+      5000,
+      120000,
+      BALANCED_PROFILE.navigationTimeoutMs
+    )
+  }
+}
+
+export function buildAvailabilityProfileFromUserSettings(
+  value: unknown
+): AvailabilitySpeedProfile {
+  const settings = normalizeAvailabilityRunnerUserSettings(value)
+  const retryNavigationTimeoutMs = Math.max(
+    settings.navigationTimeoutMs,
+    Math.round(settings.navigationTimeoutMs * 1.5)
+  )
+  const probeTimeoutMs = Math.max(
+    5000,
+    Math.min(FETCH_TIMEOUT_MS, settings.navigationTimeoutMs)
+  )
+
+  return normalizeAvailabilitySpeedProfile({
+    concurrency: settings.concurrency,
+    navigationTimeoutMs: settings.navigationTimeoutMs,
+    retryNavigationTimeoutMs,
+    probeTimeoutMs
+  })
 }
 
 export function normalizeAvailabilitySpeedProfile(

@@ -67,9 +67,11 @@ import {
   serializeAiNamingSettings
 } from './sections/ai-settings.js'
 import {
+  buildAvailabilityProfileFromUserSettings,
   createAvailabilityRunScheduler,
   formatAvailabilityRunnerStatus,
-  getDefaultAvailabilityRunnerStatusCopy,
+  getDefaultAvailabilityRunnerUserSettings,
+  normalizeAvailabilityRunnerUserSettings,
   runAvailabilityQueue,
   type AvailabilityRunOutcome,
   type AvailabilityRunScheduler
@@ -249,7 +251,6 @@ import {
 } from './sections/dashboard.js'
 
 let availabilityRenderFrame = 0
-let availabilitySummaryCopyStatusTimer = 0
 let availabilityDurationTimer = 0
 let availabilityPauseResolvers: Array<() => void> = []
 const AVAILABILITY_FILTERS = new Set([
@@ -396,6 +397,7 @@ async function hydratePersistentState() {
       STORAGE_KEYS.bookmarkAddHistory,
       STORAGE_KEYS.redirectCache,
       STORAGE_KEYS.pendingAvailabilityResults,
+      STORAGE_KEYS.availabilitySettings,
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
       STORAGE_KEYS.bookmarkTagIndex,
@@ -410,6 +412,7 @@ async function hydratePersistentState() {
     hydrateBookmarkAddHistory(stored[STORAGE_KEYS.bookmarkAddHistory])
     managerState.redirectCache = normalizeRedirectCache(stored[STORAGE_KEYS.redirectCache])
     managerState.pendingAvailabilitySnapshot = normalizePendingAvailabilitySnapshot(stored[STORAGE_KEYS.pendingAvailabilityResults])
+    availabilityState.settings = normalizeAvailabilityRunnerUserSettings(stored[STORAGE_KEYS.availabilitySettings])
     managerState.recycleBin = normalizeRecycleBin(stored[STORAGE_KEYS.recycleBin])
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
     aiNamingState.tagIndex = normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
@@ -577,6 +580,7 @@ function bindEvents() {
   })
   document.addEventListener('pointercancel', handleDashboardPointerCancel)
   document.addEventListener('click', handleDashboardDocumentClick)
+  document.addEventListener('click', handleAvailabilitySettingsDocumentClick)
   document.addEventListener('focusin', handleDashboardDocumentFocusIn)
   dom.historyScopeTrigger?.addEventListener('click', () => openScopeModal('history'))
   dom.aiScopeTrigger?.addEventListener('click', () => openScopeModal('ai'))
@@ -647,7 +651,15 @@ function bindEvents() {
   dom.contentSnapshotLocalOnly?.addEventListener('change', () => {
     void saveContentSnapshotSettingsFromDom()
   })
-  dom.availabilityCopySummary?.addEventListener('click', handleAvailabilityCopySummary)
+  dom.availabilitySettingsTrigger?.addEventListener('click', toggleAvailabilitySettingsPopover)
+  dom.availabilitySettingsSave?.addEventListener('click', () => {
+    void saveAvailabilitySettingsFromDom()
+  })
+  dom.availabilitySettingsReset?.addEventListener('click', () => {
+    void resetAvailabilitySettings()
+  })
+  dom.availabilityConcurrencyInput?.addEventListener('input', syncAvailabilitySettingsDraftFromDom)
+  dom.availabilityTimeoutInput?.addEventListener('input', syncAvailabilitySettingsDraftFromDom)
   dom.availabilityAction?.addEventListener('click', handleAvailabilityAction)
   dom.availabilityPauseAction?.addEventListener('click', toggleAvailabilityPause)
   dom.availabilityStopAction?.addEventListener('click', requestAvailabilityStop)
@@ -816,6 +828,12 @@ function handleKeydown(event) {
     return
   }
 
+  if (availabilityState.settingsOpen) {
+    event.preventDefault()
+    closeAvailabilitySettingsPopover()
+    return
+  }
+
   if (cancelDashboardDrag()) {
     event.preventDefault()
     return
@@ -937,10 +955,10 @@ function getOpenModalBackdrop() {
   return [
     dom.confirmModalBackdrop,
     dom.aiModelModalBackdrop,
-    dom.aiModelPickerModalBackdrop,
-    dom.scopeModalBackdrop,
-    dom.moveModalBackdrop,
-    dom.deleteModalBackdrop
+  dom.aiModelPickerModalBackdrop,
+  dom.scopeModalBackdrop,
+  dom.moveModalBackdrop,
+  dom.deleteModalBackdrop
   ].find((backdrop) => {
     return backdrop?.dataset?.modalOpen === 'true' && !backdrop.classList.contains('hidden')
   }) || null
@@ -1710,9 +1728,15 @@ function requestAvailabilityStop() {
   renderAvailabilitySection()
 }
 
+function createAvailabilityScheduler() {
+  return createAvailabilityRunScheduler({
+    profile: buildAvailabilityProfileFromUserSettings(availabilityState.settings)
+  })
+}
+
 async function runAvailabilityDetection({ probeEnabled }) {
   const redirectCacheScope = getCurrentAvailabilityScopeMeta()
-  const scheduler = createAvailabilityRunScheduler()
+  const scheduler = createAvailabilityScheduler()
   availabilityState.running = true
   availabilityState.paused = false
   availabilityState.stopRequested = false
@@ -2054,7 +2078,11 @@ async function waitForAvailabilityQueueDelay(ms: number): Promise<void> {
 function updateAvailabilityRunnerStatus(scheduler: AvailabilityRunScheduler | null = null) {
   availabilityState.runnerStatusCopy = scheduler
     ? formatAvailabilityRunnerStatus(scheduler.getSnapshot())
-    : getDefaultAvailabilityRunnerStatusCopy()
+    : formatAvailabilityRunnerStatus(createAvailabilityScheduler().getSnapshot())
+}
+
+function getAvailabilityRunnerStatusCopy() {
+  return availabilityState.runnerStatusCopy || formatAvailabilityRunnerStatus(createAvailabilityScheduler().getSnapshot())
 }
 
 async function fetchWithRequestTimeout(url, options: RequestInit = {}, timeoutMs = AI_NAMING_DEFAULT_TIMEOUT_MS) {
@@ -2159,7 +2187,7 @@ function renderAvailabilitySection() {
   synchronizeRedirectResults()
   renderAvailabilityScopeControls()
   const scopeMeta = getCurrentAvailabilityScopeMeta()
-  renderAvailabilitySummaryCopyControl()
+  renderAvailabilitySettingsControl()
 
   dom.availabilityPermissionBadge.className = `options-chip ${getModeBadgeTone()}`
   dom.availabilityPermissionBadge.textContent = getModeBadgeText()
@@ -2409,6 +2437,154 @@ function getAvailabilityFilterCounts() {
     recovered: managerState.historyRecoveredResults.length,
     ignored: managerState.suppressedResults.length
   }
+}
+
+function renderAvailabilitySettingsControl() {
+  const settings = normalizeAvailabilityRunnerUserSettings(availabilityState.settings)
+  availabilityState.settings = settings
+
+  if (dom.availabilitySettingsTrigger) {
+    dom.availabilitySettingsTrigger.disabled =
+      availabilityState.running ||
+      availabilityState.retestingSelection ||
+      availabilityState.catalogLoading ||
+      availabilityState.storageLoading
+    dom.availabilitySettingsTrigger.setAttribute('aria-expanded', availabilityState.settingsOpen ? 'true' : 'false')
+  }
+
+  if (dom.availabilitySettingsPopover) {
+    dom.availabilitySettingsPopover.classList.toggle('hidden', !availabilityState.settingsOpen)
+  }
+
+  if (availabilityState.settingsOpen) {
+    if (dom.availabilityConcurrencyInput && dom.availabilityConcurrencyInput !== document.activeElement) {
+      dom.availabilityConcurrencyInput.value = String(settings.concurrency)
+    }
+    if (dom.availabilityTimeoutInput && dom.availabilityTimeoutInput !== document.activeElement) {
+      dom.availabilityTimeoutInput.value = String(Math.round(settings.navigationTimeoutMs / 1000))
+    }
+  }
+
+  if (dom.availabilitySettingsStatus) {
+    const tone = String(availabilityState.settingsStatusTone || 'muted')
+    dom.availabilitySettingsStatus.className = `options-inline-status ${tone}`
+    dom.availabilitySettingsStatus.textContent = availabilityState.settingsStatus || ''
+  }
+}
+
+function openAvailabilitySettingsPopover() {
+  if (
+    availabilityState.running ||
+    availabilityState.retestingSelection ||
+    availabilityState.catalogLoading ||
+    availabilityState.storageLoading
+  ) {
+    return
+  }
+
+  availabilityState.settingsOpen = true
+  availabilityState.settingsStatus = ''
+  renderAvailabilitySection()
+  window.setTimeout(() => {
+    dom.availabilityConcurrencyInput?.focus()
+    dom.availabilityConcurrencyInput?.select?.()
+  }, 0)
+}
+
+function closeAvailabilitySettingsPopover() {
+  if (!availabilityState.settingsOpen) {
+    return
+  }
+
+  availabilityState.settingsOpen = false
+  availabilityState.settingsStatus = ''
+  renderAvailabilitySection()
+}
+
+function toggleAvailabilitySettingsPopover() {
+  if (availabilityState.settingsOpen) {
+    closeAvailabilitySettingsPopover()
+    return
+  }
+
+  openAvailabilitySettingsPopover()
+}
+
+function handleAvailabilitySettingsDocumentClick(event) {
+  if (!availabilityState.settingsOpen) {
+    return
+  }
+
+  const target = event.target
+  if (!(target instanceof Node)) {
+    return
+  }
+
+  if (
+    dom.availabilitySettingsPopover?.contains(target) ||
+    dom.availabilitySettingsTrigger?.contains(target)
+  ) {
+    return
+  }
+
+  closeAvailabilitySettingsPopover()
+}
+
+function readAvailabilitySettingsFromDom() {
+  return normalizeAvailabilityRunnerUserSettings({
+    concurrency: Number(dom.availabilityConcurrencyInput?.value),
+    navigationTimeoutMs: Number(dom.availabilityTimeoutInput?.value) * 1000
+  })
+}
+
+function syncAvailabilitySettingsDraftFromDom() {
+  if (!availabilityState.settingsOpen) {
+    return
+  }
+
+  availabilityState.settings = readAvailabilitySettingsFromDom()
+  availabilityState.settingsStatus = '未保存'
+  availabilityState.settingsStatusTone = 'muted'
+  updateAvailabilityRunnerStatus()
+  renderAvailabilitySettingsControl()
+  dom.availabilityPermissionCopy.textContent = getModeCopyText()
+}
+
+async function saveAvailabilitySettingsFromDom() {
+  const nextSettings = readAvailabilitySettingsFromDom()
+  availabilityState.settings = nextSettings
+  availabilityState.settingsStatus = '已保存'
+  availabilityState.settingsStatusTone = 'success'
+
+  try {
+    await setLocalStorage({
+      [STORAGE_KEYS.availabilitySettings]: nextSettings
+    })
+  } catch {
+    availabilityState.settingsStatus = '保存失败'
+    availabilityState.settingsStatusTone = 'warning'
+  }
+
+  updateAvailabilityRunnerStatus()
+  renderAvailabilitySection()
+}
+
+async function resetAvailabilitySettings() {
+  availabilityState.settings = getDefaultAvailabilityRunnerUserSettings()
+  availabilityState.settingsStatus = '已恢复'
+  availabilityState.settingsStatusTone = 'success'
+
+  try {
+    await setLocalStorage({
+      [STORAGE_KEYS.availabilitySettings]: availabilityState.settings
+    })
+  } catch {
+    availabilityState.settingsStatus = '保存失败'
+    availabilityState.settingsStatusTone = 'warning'
+  }
+
+  updateAvailabilityRunnerStatus()
+  renderAvailabilitySection()
 }
 
 function getAvailabilityDecisionStats() {
@@ -2761,97 +2937,6 @@ function setLoadingLabel(
   element.textContent = label
 }
 
-function renderAvailabilitySummaryCopyControl() {
-  if (dom.availabilityCopySummary) {
-    dom.availabilityCopySummary.disabled = availabilityState.catalogLoading || availabilityState.storageLoading
-    dom.availabilityCopySummary.textContent =
-      availabilityState.lastCompletedAt || availabilityState.running || availabilityState.retestingSelection
-        ? '复制摘要'
-        : '复制概览'
-  }
-
-  if (dom.availabilitySummaryCopyStatus) {
-    const tone = String(availabilityState.summaryCopyStatusTone || 'muted')
-    dom.availabilitySummaryCopyStatus.className = `options-inline-status ${tone}`
-    dom.availabilitySummaryCopyStatus.textContent = availabilityState.summaryCopyStatus || ''
-  }
-}
-
-async function handleAvailabilityCopySummary() {
-  if (availabilityState.catalogLoading || availabilityState.storageLoading) {
-    return
-  }
-
-  try {
-    await copyTextToClipboard(buildAvailabilitySummaryText())
-    setAvailabilitySummaryCopyStatus('已复制', 'success')
-  } catch {
-    setAvailabilitySummaryCopyStatus('复制失败', 'warning')
-  }
-}
-
-function buildAvailabilitySummaryText() {
-  const scopeMeta = getCurrentAvailabilityScopeMeta()
-  const progressTotal = availabilityState.retestingSelection
-    ? availabilityState.retestSelectionTotal
-    : availabilityState.eligibleBookmarks
-  const progressCompleted = availabilityState.retestingSelection
-    ? availabilityState.retestSelectionCompleted
-    : availabilityState.checkedBookmarks
-  const lines = [
-    'Curator Bookmark 可用性检测摘要',
-    `范围：${scopeMeta.label}`,
-    `状态：${getAvailabilitySummaryRunStatus()}`,
-    `速度：${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`,
-    `全部书签：${availabilityState.totalBookmarks}`,
-    `可检测：http/https ${availabilityState.eligibleBookmarks}`,
-    `进度：${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`,
-    `可访问：${availabilityState.availableCount}`,
-    `重定向：${availabilityState.redirectedCount}`,
-    `低置信异常：${availabilityState.reviewCount}`,
-    `高置信异常：${availabilityState.failedCount}`,
-    `已忽略：${availabilityState.ignoredCount}`,
-    `跳过：${availabilityState.skippedCount}`
-  ]
-
-  if (availabilityState.lastError) {
-    lines.push(`提示：${availabilityState.lastError}`)
-  }
-
-  return lines.join('\n')
-}
-
-function getAvailabilitySummaryRunStatus() {
-  if (availabilityState.catalogLoading) {
-    return '正在读取书签'
-  }
-
-  if (availabilityState.storageLoading) {
-    return '正在读取本地状态'
-  }
-
-  if (availabilityState.retestingSelection) {
-    return '正在重新测试所选书签'
-  }
-
-  if (availabilityState.running) {
-    if (availabilityState.stopRequested) {
-      return '正在停止检测'
-    }
-
-    return availabilityState.paused ? '检测已暂停' : '检测中'
-  }
-
-  if (availabilityState.lastCompletedAt) {
-    const timeLabel = formatDateTime(availabilityState.lastCompletedAt)
-    return availabilityState.lastRunOutcome === 'stopped'
-      ? `已停止于 ${timeLabel}`
-      : `已完成于 ${timeLabel}`
-  }
-
-  return '尚未执行检测'
-}
-
 async function copyTextToClipboard(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text)
@@ -3041,27 +3126,6 @@ function setShortcutStatus(message, tone = 'success') {
   managerState.shortcutStatus = message
   managerState.shortcutStatusTone = tone
   renderShortcutSettingsSection()
-}
-
-function setAvailabilitySummaryCopyStatus(message, tone = 'success') {
-  availabilityState.summaryCopyStatus = message
-  availabilityState.summaryCopyStatusTone = tone
-  renderAvailabilitySection()
-
-  if (availabilitySummaryCopyStatusTimer) {
-    window.clearTimeout(availabilitySummaryCopyStatusTimer)
-  }
-
-  if (!message) {
-    return
-  }
-
-  availabilitySummaryCopyStatusTimer = window.setTimeout(() => {
-    availabilityState.summaryCopyStatus = ''
-    availabilityState.summaryCopyStatusTone = 'muted'
-    availabilitySummaryCopyStatusTimer = 0
-    renderAvailabilitySection()
-  }, 1800)
 }
 
 function isAvailabilityPrimaryActionBusy() {
@@ -7465,7 +7529,7 @@ async function retestSelectedAvailabilityResults() {
   availabilityState.retestSelectionTotal = targetBookmarks.length
   availabilityState.retestSelectionCompleted = 0
   availabilityState.retestSelectionProbeEnabled = probeEnabled
-  const scheduler = createAvailabilityRunScheduler()
+  const scheduler = createAvailabilityScheduler()
   updateAvailabilityRunnerStatus(scheduler)
   renderAvailabilitySection()
 
@@ -8305,10 +8369,10 @@ function getModeCopyText() {
   }
 
   if (availabilityState.probePermissionGranted) {
-    return `当前会按“后台导航 -> 失败重试 -> 网络探测”三层方式校验。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
+    return `当前会按“后台导航 -> 失败重试 -> 网络探测”三层方式校验。${getAvailabilityRunnerStatusCopy()}`
   }
 
-  return `当前默认会先做后台导航检测。点击开始检测时会尝试申请第二层网络探测权限；如果未授权，系统仍会继续做后台导航检测。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
+  return `当前默认会先做后台导航检测。点击开始检测时会尝试申请第二层网络探测权限；如果未授权，系统仍会继续做后台导航检测。${getAvailabilityRunnerStatusCopy()}`
 }
 
 function getAvailabilityResultRecommendation(result): string {
@@ -8391,10 +8455,10 @@ function getAvailabilityStatusCopy() {
     }
 
     if (availabilityState.currentRunProbeEnabled) {
-      return `本轮依次执行后台导航、失败重试和网络探测。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
+      return `本轮依次执行后台导航、失败重试和网络探测。${getAvailabilityRunnerStatusCopy()}`
     }
 
-    return `本轮仅执行后台导航和失败重试，因为未启用第二层网络探测。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
+    return `本轮仅执行后台导航和失败重试，因为未启用第二层网络探测。${getAvailabilityRunnerStatusCopy()}`
   }
 
   if (availabilityState.lastCompletedAt) {

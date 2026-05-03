@@ -520,10 +520,30 @@
               </div>
 
               <div class="detect-toolbar-actions">
-                <span id="availability-summary-copy-status" class="options-inline-status"></span>
-                <button id="availability-copy-summary" class="options-button secondary small" type="button">
-                  复制概览
-                </button>
+                <div class="availability-settings-anchor">
+                  <button id="availability-settings-trigger" class="options-button secondary small" type="button" aria-expanded="false" aria-controls="availability-settings-popover">
+                    检测设置
+                  </button>
+                  <section id="availability-settings-popover" class="availability-settings-popover hidden" role="dialog" aria-modal="false" aria-labelledby="availability-settings-title">
+                    <div class="availability-settings-head">
+                      <strong id="availability-settings-title">检测设置</strong>
+                      <span id="availability-settings-status" class="options-inline-status muted"></span>
+                    </div>
+                    <label class="availability-setting-field" for="availability-concurrency-input">
+                      <span>并发数</span>
+                      <input id="availability-concurrency-input" class="availability-setting-input" type="number" inputmode="numeric" min="1" max="6" step="1">
+                    </label>
+                    <label class="availability-setting-field" for="availability-timeout-input">
+                      <span>超时时长（秒）</span>
+                      <input id="availability-timeout-input" class="availability-setting-input" type="number" inputmode="numeric" min="5" max="120" step="5">
+                    </label>
+                    <p class="availability-settings-note">单域名仍会自动限流；遇到超时或 HTTP 429 会降速。</p>
+                    <div class="availability-settings-actions">
+                      <button id="availability-settings-reset" class="options-button secondary small" type="button">恢复默认</button>
+                      <button id="availability-settings-save" class="options-button small" type="button">保存设置</button>
+                    </div>
+                  </section>
+                </div>
                 <button id="availability-action" class="options-button" type="button">
                   开始检测全部书签
                 </button>
