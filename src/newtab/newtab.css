@@ -729,6 +729,151 @@ body.background-mask-enabled .newtab-background-mask {
   background: rgba(245, 245, 247, 0.13);
 }
 
+.newtab-dashboard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  overflow: auto;
+  padding: 32px;
+  background: rgba(8, 9, 12, 0.72);
+}
+
+.newtab-dashboard-shell {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.newtab-dashboard-panel-content,
+.dashboard-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.dashboard-title-row,
+.dashboard-toolbar,
+.dashboard-results-head,
+.dashboard-card-body,
+.dashboard-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dashboard-title-row h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.dashboard-kicker,
+.options-section-label,
+.detect-results-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.dashboard-toolbar,
+.dashboard-results-group,
+.dashboard-bookmark-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(18, 19, 24, 0.78);
+}
+
+.dashboard-toolbar,
+.dashboard-results-group {
+  padding: 16px;
+}
+
+.dashboard-search-box {
+  min-width: 0;
+  flex: 1;
+}
+
+.dashboard-search,
+.dashboard-query-row {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dashboard-bookmark-card {
+  min-width: 0;
+  padding: 14px;
+}
+
+.dashboard-card-copy,
+.dashboard-card-copy strong,
+.dashboard-card-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-favicon-shell {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.1);
+}
+
+.dashboard-favicon-shell img,
+.dashboard-favicon-shell span {
+  grid-area: 1 / 1;
+}
+
+.dashboard-favicon-shell img {
+  width: 22px;
+  height: 22px;
+}
+
+.dashboard-card-copy {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+}
+
+.dashboard-card-meta,
+.dashboard-card-actions,
+.dashboard-title-actions,
+.dashboard-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-path-chip,
+.dashboard-search-chip {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(245, 245, 247, 0.08);
+  color: var(--text-muted);
+}
+
+.dashboard-path-chip {
+  overflow: hidden;
+  padding: 4px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detect-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
 .newtab-content {
   --icon-page-width: 1229px;
   --icon-column-gap: 24px;
@@ -1492,6 +1637,11 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible .bookmark-tit
     border-color var(--ease-standard),
     color var(--ease-standard),
     transform 160ms ease;
+}
+
+.dashboard-trigger {
+  right: 66px;
+  text-decoration: none;
 }
 
 .settings-trigger:hover,
