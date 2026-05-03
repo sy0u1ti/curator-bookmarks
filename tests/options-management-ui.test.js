@@ -58,6 +58,53 @@ test('dashboard renders a clickable folder sidebar filter with bookmark counts',
   assert.doesNotMatch(dashboardSource, /title:\s*'全部书签'/)
 })
 
+test('dashboard virtual grid computes bounded windows for large card lists', async () => {
+  const {
+    computeDashboardVirtualWindow,
+    getDashboardVirtualColumnCount,
+    getDashboardVirtualRenderedCount
+  } = await import('../src/options/sections/dashboard.js')
+
+  assert.equal(getDashboardVirtualColumnCount(1040, 340, 10), 3)
+
+  const firstWindow = computeDashboardVirtualWindow({
+    itemCount: 10000,
+    contentWidth: 1040,
+    containerHeight: 560,
+    scrollTop: 0,
+    cardHeight: 176,
+    gap: 10,
+    minCardWidth: 340,
+    overscanRows: 4
+  })
+
+  assert.equal(firstWindow.columnCount, 3)
+  assert.equal(firstWindow.startIndex, 0)
+  assert.ok(
+    getDashboardVirtualRenderedCount(firstWindow) <= 36,
+    'initial dashboard window should render only visible rows plus overscan'
+  )
+  assert.ok(firstWindow.totalHeight > 600000)
+
+  const scrolledWindow = computeDashboardVirtualWindow({
+    itemCount: 10000,
+    contentWidth: 1040,
+    containerHeight: 560,
+    scrollTop: 3720,
+    cardHeight: 176,
+    gap: 10,
+    minCardWidth: 340,
+    overscanRows: 4
+  })
+
+  assert.ok(scrolledWindow.startIndex > 0)
+  assert.ok(scrolledWindow.offsetY > 0)
+  assert.ok(
+    getDashboardVirtualRenderedCount(scrolledWindow) <= 36,
+    'scrolled dashboard window should keep DOM card count bounded'
+  )
+})
+
 test('dashboard search toolbar omits duplicate result count and placeholder copy', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const domSource = readProjectFile('src/options/shared-options/dom.ts')

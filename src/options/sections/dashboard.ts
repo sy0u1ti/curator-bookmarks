@@ -58,10 +58,19 @@ interface DashboardDragState extends DashboardDragStateSnapshot {
 
 interface DashboardVirtualState {
   items: DashboardItem[]
+  filterKey: string
   scrollTop: number
+  contentWidth: number
   containerHeight: number
   columnCount: number
   rowStride: number
+  renderedStartIndex: number
+  renderedEndIndex: number
+  renderedColumnCount: number
+  renderedTotalHeight: number
+  renderedOffsetY: number
+  renderedStateKey: string
+  renderedItems: DashboardItem[] | null
   frame: number
   sectionFrame: number
   resetScrollOnNextRender: boolean
@@ -136,10 +145,19 @@ const dashboardRenderCache: DashboardRenderCache = {
 
 const virtualState: DashboardVirtualState = {
   items: [],
+  filterKey: '',
   scrollTop: 0,
+  contentWidth: 0,
   containerHeight: 0,
   columnCount: 1,
   rowStride: DASHBOARD_CARD_HEIGHT + DASHBOARD_GRID_GAP,
+  renderedStartIndex: -1,
+  renderedEndIndex: -1,
+  renderedColumnCount: 0,
+  renderedTotalHeight: -1,
+  renderedOffsetY: -1,
+  renderedStateKey: '',
+  renderedItems: null,
   frame: 0,
   sectionFrame: 0,
   resetScrollOnNextRender: false,
@@ -214,6 +232,96 @@ export function syncDashboardSelection(selection: Set<string>, validIds: Set<str
     }
   }
   return selection
+}
+
+export interface DashboardVirtualWindow {
+  columnCount: number
+  totalRows: number
+  rowStride: number
+  totalHeight: number
+  maxScrollTop: number
+  scrollTop: number
+  startRow: number
+  endRow: number
+  startIndex: number
+  endIndex: number
+  offsetY: number
+}
+
+export function getDashboardVirtualColumnCount(
+  contentWidth: number,
+  minCardWidth = DASHBOARD_CARD_MIN_WIDTH,
+  gap = DASHBOARD_GRID_GAP
+): number {
+  const safeWidth = Math.max(1, Math.floor(Number(contentWidth) || 0))
+  const safeGap = Math.max(0, Number(gap) || 0)
+  const safeMinWidth = Math.max(1, Number(minCardWidth) || 1)
+  const effectiveMinWidth = Math.min(safeMinWidth, safeWidth)
+  return Math.max(1, Math.floor((safeWidth + safeGap) / (effectiveMinWidth + safeGap)))
+}
+
+export function computeDashboardVirtualWindow({
+  itemCount,
+  contentWidth,
+  containerHeight,
+  scrollTop,
+  cardHeight = DASHBOARD_CARD_HEIGHT,
+  gap = DASHBOARD_GRID_GAP,
+  minCardWidth = DASHBOARD_CARD_MIN_WIDTH,
+  overscanRows = DASHBOARD_VIRTUAL_OVERSCAN_ROWS
+}: {
+  itemCount: number
+  contentWidth: number
+  containerHeight: number
+  scrollTop: number
+  cardHeight?: number
+  gap?: number
+  minCardWidth?: number
+  overscanRows?: number
+}): DashboardVirtualWindow {
+  const safeItemCount = Math.max(0, Math.floor(Number(itemCount) || 0))
+  const safeHeight = Math.max(1, Math.floor(Number(containerHeight) || 0))
+  const safeScrollTop = Math.max(0, Number(scrollTop) || 0)
+  const safeGap = Math.max(0, Number(gap) || 0)
+  const rowStride = Math.max(1, Math.floor((Number(cardHeight) || DASHBOARD_CARD_HEIGHT) + safeGap))
+  const overscan = Math.max(0, Math.floor(Number(overscanRows) || 0))
+  const columnCount = getDashboardVirtualColumnCount(contentWidth, minCardWidth, safeGap)
+  const totalRows = safeItemCount ? Math.ceil(safeItemCount / columnCount) : 0
+  const totalHeight = totalRows ? Math.max(0, totalRows * rowStride - safeGap) : 0
+  const maxScrollTop = Math.max(0, totalHeight - safeHeight)
+  const clampedScrollTop = Math.min(safeScrollTop, maxScrollTop)
+  const startRow = safeItemCount
+    ? Math.max(0, Math.floor(clampedScrollTop / rowStride) - overscan)
+    : 0
+  const endRow = safeItemCount
+    ? Math.min(
+      totalRows,
+      Math.max(
+        startRow + 1,
+        Math.ceil((clampedScrollTop + safeHeight) / rowStride) + overscan
+      )
+    )
+    : 0
+  const startIndex = Math.min(safeItemCount, startRow * columnCount)
+  const endIndex = Math.min(safeItemCount, Math.max(startIndex, endRow * columnCount))
+
+  return {
+    columnCount,
+    totalRows,
+    rowStride,
+    totalHeight,
+    maxScrollTop,
+    scrollTop: clampedScrollTop,
+    startRow,
+    endRow,
+    startIndex,
+    endIndex,
+    offsetY: startRow * rowStride
+  }
+}
+
+export function getDashboardVirtualRenderedCount(window: DashboardVirtualWindow): number {
+  return Math.max(0, window.endIndex - window.startIndex)
 }
 
 export function getSelectedDashboardBookmarks(): BookmarkRecord[] {
@@ -1395,15 +1503,13 @@ function getDashboardDefaultFolderId(): string {
 
 function renderDashboardCards(items: DashboardItem[]): void {
   if (availabilityState.catalogLoading) {
-    virtualState.items = []
-    dom.dashboardResults.classList.remove('is-virtualized')
+    resetDashboardVirtualRenderCache({ clearItems: true })
     dom.dashboardResults.innerHTML = renderDashboardEmptyLoading('正在读取书签目录。')
     return
   }
 
   if (!items.length) {
-    virtualState.items = []
-    dom.dashboardResults.classList.remove('is-virtualized')
+    resetDashboardVirtualRenderCache({ clearItems: true })
     dom.dashboardResults.innerHTML = dashboardState.query
       ? '<div class="detect-empty">当前搜索没有匹配的书签。</div>'
       : '<div class="detect-empty">没有可展示的书签。</div>'
@@ -1413,47 +1519,140 @@ function renderDashboardCards(items: DashboardItem[]): void {
   ensureDashboardVirtualGrid()
   virtualState.items = items
 
-  if (items.length < DASHBOARD_VIRTUAL_THRESHOLD || !dom.dashboardResults.clientHeight) {
-    dom.dashboardResults.classList.remove('is-virtualized')
+  updateDashboardVirtualMetrics()
+  applyDashboardVirtualFilterReset(items)
+
+  if (items.length < DASHBOARD_VIRTUAL_THRESHOLD) {
+    resetDashboardVirtualRenderCache({ preserveItems: true })
+    virtualState.items = items
     dom.dashboardResults.innerHTML = items.map((item) => buildDashboardCard(item)).join('')
     reconcileDashboardTransientUiWithRenderedItems(new Set(items.map((item) => String(item.id))))
     return
   }
 
   dom.dashboardResults.classList.add('is-virtualized')
-  updateDashboardVirtualMetrics()
+  const virtualWindow = computeDashboardVirtualWindow({
+    itemCount: items.length,
+    contentWidth: virtualState.contentWidth,
+    containerHeight: virtualState.containerHeight,
+    scrollTop: dom.dashboardResults.scrollTop
+  })
 
-  const columnCount = Math.max(1, virtualState.columnCount)
-  const totalRows = Math.ceil(items.length / columnCount)
-  const totalHeight = Math.max(0, totalRows * virtualState.rowStride - DASHBOARD_GRID_GAP)
-  const maxScrollTop = Math.max(0, totalHeight - virtualState.containerHeight)
-  if (dom.dashboardResults.scrollTop > maxScrollTop) {
-    dom.dashboardResults.scrollTop = maxScrollTop
+  if (dom.dashboardResults.scrollTop !== virtualWindow.scrollTop) {
+    dom.dashboardResults.scrollTop = virtualWindow.scrollTop
   }
-  virtualState.scrollTop = dom.dashboardResults.scrollTop
+  virtualState.scrollTop = virtualWindow.scrollTop
+  virtualState.columnCount = virtualWindow.columnCount
+  virtualState.rowStride = virtualWindow.rowStride
 
-  const startRow = Math.max(0, Math.floor(virtualState.scrollTop / virtualState.rowStride) - DASHBOARD_VIRTUAL_OVERSCAN_ROWS)
-  const endRow = Math.min(
-    totalRows,
-    Math.ceil((virtualState.scrollTop + virtualState.containerHeight) / virtualState.rowStride) + DASHBOARD_VIRTUAL_OVERSCAN_ROWS
-  )
-  const startIndex = startRow * columnCount
-  const endIndex = Math.min(items.length, endRow * columnCount)
-  const renderedItems = items.slice(startIndex, endIndex)
+  const renderedItems = items.slice(virtualWindow.startIndex, virtualWindow.endIndex)
   const renderedIds = new Set(renderedItems.map((item) => String(item.id)))
   reconcileDashboardTransientUiWithRenderedItems(renderedIds)
 
-  dom.dashboardResults.innerHTML = `
-    <div class="dashboard-virtual-spacer" style="height: ${Math.ceil(totalHeight)}px;">
-      <div
-        class="dashboard-virtual-window"
-        style="transform: translate3d(0, ${Math.round(startRow * virtualState.rowStride)}px, 0); grid-template-columns: repeat(${columnCount}, minmax(0, 1fr));"
-      >
-        ${renderedItems.map((item) => buildDashboardCard(item)).join('')}
+  const stateKey = getDashboardVirtualRenderStateKey(renderedItems)
+  const canReuseShell =
+    virtualState.renderedItems === items &&
+    virtualState.renderedStartIndex === virtualWindow.startIndex &&
+    virtualState.renderedEndIndex === virtualWindow.endIndex &&
+    virtualState.renderedColumnCount === virtualWindow.columnCount &&
+    virtualState.renderedTotalHeight === virtualWindow.totalHeight &&
+    virtualState.renderedOffsetY === virtualWindow.offsetY &&
+    virtualState.renderedStateKey === stateKey
+
+  if (!canReuseShell) {
+    dom.dashboardResults.innerHTML = `
+      <div class="dashboard-virtual-spacer" style="height: ${Math.ceil(virtualWindow.totalHeight)}px;">
+        <div
+          class="dashboard-virtual-window"
+          style="transform: translate3d(0, ${Math.round(virtualWindow.offsetY)}px, 0); grid-template-columns: repeat(${virtualWindow.columnCount}, minmax(0, 1fr));"
+        >
+          ${renderedItems.map((item) => buildDashboardCard(item)).join('')}
+        </div>
       </div>
-    </div>
-  `
+    `
+  }
+
+  const spacer = dom.dashboardResults.querySelector<HTMLElement>('.dashboard-virtual-spacer')
+  const windowElement = dom.dashboardResults.querySelector<HTMLElement>('.dashboard-virtual-window')
+  if (spacer) {
+    spacer.style.height = `${Math.ceil(virtualWindow.totalHeight)}px`
+  }
+  if (windowElement) {
+    windowElement.style.transform = `translate3d(0, ${Math.round(virtualWindow.offsetY)}px, 0)`
+    windowElement.style.gridTemplateColumns = `repeat(${virtualWindow.columnCount}, minmax(0, 1fr))`
+  }
+
+  virtualState.renderedItems = items
+  virtualState.renderedStartIndex = virtualWindow.startIndex
+  virtualState.renderedEndIndex = virtualWindow.endIndex
+  virtualState.renderedColumnCount = virtualWindow.columnCount
+  virtualState.renderedTotalHeight = virtualWindow.totalHeight
+  virtualState.renderedOffsetY = virtualWindow.offsetY
+  virtualState.renderedStateKey = stateKey
   updateDashboardFloatingEditorPosition(renderedIds)
+}
+
+function resetDashboardVirtualRenderCache({
+  clearItems = false,
+  preserveItems = false
+}: {
+  clearItems?: boolean
+  preserveItems?: boolean
+} = {}): void {
+  if (clearItems) {
+    virtualState.items = []
+    virtualState.filterKey = ''
+  } else if (!preserveItems) {
+    virtualState.items = []
+  }
+  virtualState.renderedItems = null
+  virtualState.renderedStartIndex = -1
+  virtualState.renderedEndIndex = -1
+  virtualState.renderedColumnCount = 0
+  virtualState.renderedTotalHeight = -1
+  virtualState.renderedOffsetY = -1
+  virtualState.renderedStateKey = ''
+  dom.dashboardResults?.classList.remove('is-virtualized')
+}
+
+function applyDashboardVirtualFilterReset(items: DashboardItem[]): void {
+  const filterKey = getDashboardVirtualFilterKey(items)
+  if (virtualState.filterKey === filterKey) {
+    return
+  }
+
+  virtualState.filterKey = filterKey
+  resetDashboardVirtualScroll()
+}
+
+function getDashboardVirtualFilterKey(items: DashboardItem[]): string {
+  return [
+    dashboardState.query,
+    getDashboardEffectiveFolderId(),
+    dashboardState.domain,
+    dashboardState.month,
+    dashboardState.sortKey,
+    items.length,
+    items[0]?.id || '',
+    items[items.length - 1]?.id || ''
+  ].map((value) => String(value || '')).join('\u0001')
+}
+
+function getDashboardVirtualRenderStateKey(renderedItems: DashboardItem[]): string {
+  const itemState = renderedItems.map((item) => {
+    const id = String(item.id)
+    return [
+      id,
+      dashboardState.selectedIds.has(id) ? '1' : '0',
+      dashboardState.expandedTagIds.has(id) ? '1' : '0',
+      dashboardState.copyFeedbackId === id ? '1' : '0'
+    ].join(':')
+  }).join('|')
+
+  return [
+    availabilityState.deleting ? 'deleting' : 'idle',
+    itemState
+  ].join('\u0001')
 }
 
 function ensureDashboardVirtualGrid(): void {
@@ -1464,11 +1663,16 @@ function ensureDashboardVirtualGrid(): void {
 
   virtualState.observedElement?.removeEventListener('scroll', handleDashboardVirtualScroll)
   virtualState.resizeObserver?.disconnect()
+  if (virtualState.frame) {
+    window.cancelAnimationFrame(virtualState.frame)
+    virtualState.frame = 0
+  }
   virtualState.observedElement = container
 
   container.addEventListener('scroll', handleDashboardVirtualScroll, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
     virtualState.resizeObserver = new ResizeObserver(() => {
+      resetDashboardVirtualRenderCache({ preserveItems: true })
       scheduleDashboardVirtualRender()
     })
     virtualState.resizeObserver.observe(container)
@@ -1512,6 +1716,7 @@ function scheduleDashboardSectionRender(): void {
 function resetDashboardVirtualScroll(): void {
   virtualState.scrollTop = 0
   virtualState.resetScrollOnNextRender = true
+  resetDashboardVirtualRenderCache({ preserveItems: true })
   if (dom.dashboardResults) {
     dom.dashboardResults.scrollTop = 0
   }
@@ -1522,6 +1727,7 @@ function updateDashboardVirtualMetrics(): void {
   if (!container) {
     virtualState.containerHeight = 0
     virtualState.columnCount = 1
+    virtualState.contentWidth = 0
     return
   }
 
@@ -1534,13 +1740,10 @@ function updateDashboardVirtualMetrics(): void {
   const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
   const paddingRight = Number.parseFloat(style.paddingRight) || 0
   const contentWidth = Math.max(1, container.clientWidth - paddingLeft - paddingRight)
-  const minCardWidth = Math.min(DASHBOARD_CARD_MIN_WIDTH, contentWidth)
 
   virtualState.containerHeight = Math.max(1, container.clientHeight)
-  virtualState.columnCount = Math.max(
-    1,
-    Math.floor((contentWidth + DASHBOARD_GRID_GAP) / (minCardWidth + DASHBOARD_GRID_GAP))
-  )
+  virtualState.contentWidth = contentWidth
+  virtualState.columnCount = getDashboardVirtualColumnCount(contentWidth)
   virtualState.rowStride = DASHBOARD_CARD_HEIGHT + DASHBOARD_GRID_GAP
 }
 
