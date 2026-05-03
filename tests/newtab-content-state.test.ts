@@ -309,16 +309,30 @@ test('newtab boots with a wallpaper loading guard before app content is shown', 
   assert.match(script, /classList\.remove\('loading-wallpaper', 'newtab-booting'\)/)
 })
 
-test('newtab waits for wallpaper media readiness before revealing the startup view', () => {
+test('newtab waits for local wallpaper media readiness before revealing the startup view', () => {
   const script = readProjectFile('src/newtab/newtab.ts')
 
   assert.match(script, /waitForBackgroundImageReady\(objectUrl, applyToken\)/)
-  assert.match(script, /waitForBackgroundImageReady\(imageUrl, applyToken\)/)
   assert.match(script, /waitForBackgroundVideoReady\(video, applyToken\)/)
   assert.match(script, /loadedmetadata/)
   assert.match(script, /canplay/)
   assert.match(script, /markWallpaperPending\(\)/)
   assert.match(script, /markWallpaperReady\(\)/)
+})
+
+test('newtab url wallpaper loading does not block the main view', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(
+    script,
+    /if \(settings\.type === 'urls'\) \{[\s\S]*?markWallpaperReady\(\)[\s\S]*?void applyUrlBackgroundImage\(imageUrl, applyToken, mediaSignature\)/
+  )
+  assert.doesNotMatch(
+    script,
+    /if \(settings\.type === 'urls'\) \{[\s\S]*?await applyUrlBackgroundImage\(imageUrl, applyToken, mediaSignature\)/
+  )
+  assert.match(script, /preserveCurrentUntilReady: true/)
+  assert.match(script, /waitForBackgroundImageReady\(imageUrl, applyToken\)/)
 })
 
 test('newtab wallpaper startup fallback stays silent in extension errors', () => {

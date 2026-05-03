@@ -4804,25 +4804,27 @@ async function applyBackgroundSettings(): Promise<void> {
     return
   }
 
-  clearVideoBackground()
-  setActiveBackgroundObjectUrl('')
-  document.body.style.backgroundImage = ''
-
   if (settings.type === 'color') {
+    clearVideoBackground()
+    setActiveBackgroundObjectUrl('')
+    document.body.style.backgroundImage = ''
     document.documentElement.style.setProperty('--bg', settings.color)
     lastAppliedBackgroundMediaSignature = mediaSignature
     markWallpaperReady()
     return
   }
 
-  markWallpaperPending()
   document.documentElement.style.setProperty('--bg', settings.color)
 
   if (settings.type === 'urls') {
     const imageUrl = normalizeBackgroundImageUrl(settings.url)
     if (imageUrl) {
-      await applyUrlBackgroundImage(imageUrl, applyToken, mediaSignature)
+      markWallpaperReady()
+      void applyUrlBackgroundImage(imageUrl, applyToken, mediaSignature)
     } else {
+      clearVideoBackground()
+      setActiveBackgroundObjectUrl('')
+      document.body.style.backgroundImage = ''
       lastAppliedBackgroundMediaSignature = mediaSignature
       markWallpaperReady()
     }
@@ -4834,6 +4836,11 @@ async function applyBackgroundSettings(): Promise<void> {
     markWallpaperReady()
     return
   }
+
+  clearVideoBackground()
+  setActiveBackgroundObjectUrl('')
+  document.body.style.backgroundImage = ''
+  markWallpaperPending()
 
   const mediaType = settings.type
   let mediaRecord: Awaited<ReturnType<typeof getBackgroundMedia>>
@@ -4975,11 +4982,14 @@ async function applyUrlBackgroundImage(
     }
 
     if (cachedRecord) {
-      const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken)
+      const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken, {
+        preserveCurrentUntilReady: true
+      })
       if (applyToken !== backgroundApplyToken) {
         return
       }
       if (ready) {
+        clearVideoBackground()
         lastAppliedBackgroundMediaSignature = mediaSignature
       }
       markWallpaperReady()
@@ -4991,6 +5001,8 @@ async function applyUrlBackgroundImage(
       return
     }
     if (ready) {
+      clearVideoBackground()
+      setActiveBackgroundObjectUrl('')
       document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
       lastAppliedBackgroundMediaSignature = mediaSignature
     }
@@ -5003,6 +5015,8 @@ async function applyUrlBackgroundImage(
         return
       }
       if (ready) {
+        clearVideoBackground()
+        setActiveBackgroundObjectUrl('')
         document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
         lastAppliedBackgroundMediaSignature = mediaSignature
       }
@@ -5034,17 +5048,33 @@ function isCurrentBackgroundUrl(imageUrl: string): boolean {
     normalizeBackgroundImageUrl(state.backgroundSettings.url) === imageUrl
 }
 
-async function setBackgroundImageFromBlob(blob: Blob, applyToken = backgroundApplyToken): Promise<boolean> {
+async function setBackgroundImageFromBlob(
+  blob: Blob,
+  applyToken = backgroundApplyToken,
+  { preserveCurrentUntilReady = false }: { preserveCurrentUntilReady?: boolean } = {}
+): Promise<boolean> {
   const objectUrl = URL.createObjectURL(blob)
-  setActiveBackgroundObjectUrl(objectUrl)
+  if (!preserveCurrentUntilReady) {
+    setActiveBackgroundObjectUrl(objectUrl)
+  }
   const ready = await waitForBackgroundImageReady(objectUrl, applyToken)
   if (applyToken !== backgroundApplyToken) {
+    if (preserveCurrentUntilReady) {
+      URL.revokeObjectURL(objectUrl)
+    }
     return false
   }
   if (ready) {
+    if (preserveCurrentUntilReady) {
+      setActiveBackgroundObjectUrl(objectUrl)
+    }
     document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
   } else {
-    setActiveBackgroundObjectUrl('')
+    if (preserveCurrentUntilReady) {
+      URL.revokeObjectURL(objectUrl)
+    } else {
+      setActiveBackgroundObjectUrl('')
+    }
   }
   return ready
 }
