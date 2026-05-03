@@ -50,9 +50,12 @@ test('dashboard renders a clickable folder sidebar filter with bookmark counts',
   assert.ok(renderSidebarReferences.length >= 2, 'dashboard sidebar renderer should be invoked by the section render path')
   assert.match(dashboardSource, /dashboardFolderTree[\s\S]*data-dashboard-folder-filter/)
   assert.match(dashboardSource, /applyDashboardFolderFilter\(/)
+  assert.match(dashboardSource, /getDashboardEffectiveFolderId/)
+  assert.match(dashboardSource, /BOOKMARKS_BAR_ID/)
   assert.match(dashboardSource, /bookmarkCount/)
   assert.match(dashboardSource, /个书签/)
   assert.match(dashboardSource, /(?:active|current)/)
+  assert.doesNotMatch(dashboardSource, /title:\s*'全部书签'/)
 })
 
 test('dashboard folder sidebar layout and active styles are defined', () => {
@@ -62,6 +65,7 @@ test('dashboard folder sidebar layout and active styles are defined', () => {
   assert.match(optionsCss, /\.dashboard-folder-sidebar\s*\{/)
   assert.match(optionsCss, /\.dashboard-folder-tree\s*\{/)
   assert.match(optionsCss, /\.dashboard-folder-tree[^{}]*\.(?:active|current)\s*\{/)
+  assert.match(optionsCss, /\.dashboard-bookmark-card\s*\{[\s\S]*?backdrop-filter:\s*blur/)
   assert.match(
     optionsCss,
     /\.dashboard-fullscreen-active\s+\.dashboard-content-layout\s*\{[\s\S]*?(?:display:\s*(?:grid|flex)|grid-template-columns:)/
@@ -112,6 +116,7 @@ test('dashboard folder filtering exposes clickable breadcrumbs', () => {
   assert.match(dashboardSource, /aria-current="page"/)
   assert.match(dashboardSource, /function applyDashboardFolderFilter/)
   assert.match(dashboardSource, /data-dashboard-folder-filter="\$\{escapeAttr\(item\.parentId \|\| ''\)\}"/)
+  assert.doesNotMatch(dashboardSource, />全部书签<\/button>/)
 })
 
 test('availability, redirect and AI result lists render paginated controls', () => {

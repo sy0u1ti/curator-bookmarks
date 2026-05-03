@@ -224,11 +224,14 @@ test('builds folder targets and exposes top-folder/date helpers', () => {
   const folders = [
     folder({ id: '0', title: 'root', path: 'root' }),
     folder({ id: '20', title: 'Vue', path: '书签栏 / 开发 / Vue', bookmarkCount: 3 }),
-    folder({ id: '10', title: 'React', path: '书签栏 / 开发 / React', folderCount: 2 })
+    folder({ id: '10', title: 'React', path: '书签栏 / 开发 / React', folderCount: 2 }),
+    folder({ id: '2', title: '其他书签', path: '其他书签', folderCount: 1 }),
+    folder({ id: '21', title: '归档', path: '其他书签 / 归档' }),
+    folder({ id: '1', title: '书签栏', path: '书签栏', folderCount: 1 })
   ]
   const folderMap = new Map(folders.map((item) => [item.id, item]))
 
-  assert.deepEqual(getDashboardFolderTargets(folders).map((item) => item.id), ['10', '20'])
+  assert.deepEqual(getDashboardFolderTargets(folders).map((item) => item.id), ['1', '10', '20', '2', '21'])
   assert.equal(getDashboardTopFolder(bookmark({ ancestorIds: ['20'], parentId: '10' }), folderMap)?.id, '20')
   assert.equal(getDashboardTopFolder(bookmark({ ancestorIds: [], parentId: '10' }), folderMap)?.id, '10')
   assert.deepEqual(getDashboardDateMeta(0), { key: 'unknown', label: '未知时间', known: false })

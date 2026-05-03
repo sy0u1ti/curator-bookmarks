@@ -1677,9 +1677,16 @@ a {
   height: 176px;
   overflow: visible;
   padding: 12px;
-  border: 1px solid var(--line-soft);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background: #151517;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+    rgba(245, 245, 247, 0.035);
+  backdrop-filter: blur(18px) saturate(130%);
+  -webkit-backdrop-filter: blur(18px) saturate(130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 16px 42px rgba(0, 0, 0, 0.18);
   transition:
     border-color var(--ease-standard),
     background var(--ease-standard),
@@ -1709,11 +1716,14 @@ a {
 
 .dashboard-bookmark-card:hover,
 .dashboard-bookmark-card:focus-within {
-  border-color: rgba(245, 245, 247, 0.22);
-  background: #1a1a1d;
+  border-color: rgba(245, 245, 247, 0.2);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035)),
+    rgba(245, 245, 247, 0.055);
   box-shadow:
-    inset 0 0 0 1px rgba(245, 245, 247, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    inset 0 0 0 1px rgba(245, 245, 247, 0.055),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 18px 48px rgba(0, 0, 0, 0.22);
 }
 
 .dashboard-bookmark-card:focus-within {
@@ -1722,8 +1732,10 @@ a {
 }
 
 .dashboard-bookmark-card.selected {
-  border-color: rgba(156, 232, 177, 0.34);
-  background: rgba(156, 232, 177, 0.075);
+  border-color: rgba(245, 245, 247, 0.26);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.04)),
+    rgba(245, 245, 247, 0.075);
 }
 
 .is-dashboard-dragging .dashboard-bookmark-card {

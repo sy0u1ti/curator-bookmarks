@@ -1,5 +1,5 @@
 import { getEffectiveBookmarkTags, type BookmarkTagIndex } from './bookmark-tags.js'
-import { ROOT_ID } from './constants.js'
+import { OTHER_BOOKMARKS_ID, ROOT_ID } from './constants.js'
 import {
   buildContentSnapshotSearchMap,
   type ContentSnapshotIndex
@@ -279,10 +279,31 @@ function compareDashboardItemPath(left: DashboardItem, right: DashboardItem): nu
 }
 
 function compareByPathTitle(left: { path?: string; title?: string }, right: { path?: string; title?: string }): number {
+  const rootOrder = getDashboardRootFolderOrder(left) - getDashboardRootFolderOrder(right)
+  if (rootOrder !== 0) {
+    return rootOrder
+  }
+
   return (
     String(left.path || '').localeCompare(String(right.path || ''), 'zh-CN') ||
     String(left.title || '').localeCompare(String(right.title || ''), 'zh-CN')
   )
+}
+
+function getDashboardRootFolderOrder(item: { path?: string; title?: string; id?: string }): number {
+  const id = String(item.id || '').trim()
+  const path = String(item.path || item.title || '').trim()
+  const rootTitle = path.split(/\s*(?:\/|>|›|»|\\)\s*/g).map((segment) => segment.trim()).filter(Boolean)[0] || path
+
+  if (id === OTHER_BOOKMARKS_ID || rootTitle === '其他书签') {
+    return 2
+  }
+
+  if (rootTitle === '书签栏') {
+    return 0
+  }
+
+  return 1
 }
 
 function formatDashboardDateTime(timestamp: number): string {

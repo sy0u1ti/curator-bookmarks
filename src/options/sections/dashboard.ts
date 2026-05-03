@@ -20,6 +20,7 @@ import { renderDotMatrixLoader } from '../../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../../shared/motion.js'
 import { parseSearchQuery } from '../../shared/search-query.js'
 import type { ContentSnapshotIndex } from '../../shared/content-snapshots.js'
+import { BOOKMARKS_BAR_ID } from '../../shared/constants.js'
 import {
   buildDashboardModel,
   filterDashboardItems,
@@ -1071,9 +1072,10 @@ export function getDashboardRenderData() {
     contentSnapshotSearchMap: contentSnapshotState.searchTextMap,
     includeFullText: contentSnapshotState.settings.fullTextSearchEnabled
   })
+  const effectiveFolderId = getDashboardEffectiveFolderId()
   const visibleItems = getCachedDashboardVisibleItems(model, {
     query: dashboardState.query,
-    folderId: dashboardState.folderId,
+    folderId: effectiveFolderId,
     domain: dashboardState.domain,
     month: dashboardState.month,
     sortKey: dashboardState.sortKey
@@ -1213,7 +1215,7 @@ function renderDashboardFolderBreadcrumbs(): void {
     return
   }
 
-  const selectedFolderId = String(dashboardState.folderId || '').trim()
+  const selectedFolderId = getDashboardEffectiveFolderId()
   const selectedFolder = selectedFolderId
     ? availabilityState.folderMap.get(selectedFolderId)
     : null
@@ -1232,14 +1234,7 @@ function buildDashboardFolderBreadcrumbMarkup(folder: FolderRecord): string {
 
   return `
     <ol class="dashboard-folder-breadcrumb-list">
-      <li>
-        <button
-          class="dashboard-folder-breadcrumb-link"
-          type="button"
-          data-dashboard-folder-filter=""
-        >全部书签</button>
-      </li>
-      ${segments.map((segment) => {
+      ${segments.map((segment, index) => {
         const content = segment.current || !segment.id
           ? `
             <span
@@ -1258,7 +1253,7 @@ function buildDashboardFolderBreadcrumbMarkup(folder: FolderRecord): string {
           `
 
         return `
-          <li class="dashboard-folder-breadcrumb-separator" aria-hidden="true">&gt;</li>
+          ${index === 0 ? '' : '<li class="dashboard-folder-breadcrumb-separator" aria-hidden="true">&gt;</li>'}
           <li>${content}</li>
         `
       }).join('')}
@@ -1271,19 +1266,9 @@ function renderDashboardFolderSidebar(model: DashboardModel): void {
     return
   }
 
-  const selectedFolderId = String(dashboardState.folderId || '').trim()
+  const selectedFolderId = getDashboardEffectiveFolderId()
   const folderBookmarkCounts = getDashboardFolderBookmarkCounts(model)
   dom.dashboardFolderSidebarCount.textContent = `${model.totalFolders} 个文件夹`
-
-  const allActive = !selectedFolderId
-  const allBookmarksMarkup = buildDashboardFolderSidebarItem({
-    id: '',
-    title: '全部书签',
-    path: '全部书签',
-    count: model.totalBookmarks,
-    depth: 0,
-    active: allActive
-  })
 
   const folderMarkup = model.folderTargets
     .map((folder) => {
@@ -1300,7 +1285,7 @@ function renderDashboardFolderSidebar(model: DashboardModel): void {
     })
     .join('')
 
-  dom.dashboardFolderTree.innerHTML = allBookmarksMarkup + folderMarkup
+  dom.dashboardFolderTree.innerHTML = folderMarkup
 }
 
 function getDashboardFolderBookmarkCounts(model: DashboardModel): Map<string, number> {
@@ -1389,13 +1374,26 @@ function applyDashboardFolderFilter(folderId: unknown): void {
     ? availabilityState.folderMap.get(normalizedFolderId)
     : null
 
-  dashboardState.folderId = selectedFolder ? normalizedFolderId : ''
+  dashboardState.folderId = selectedFolder ? normalizedFolderId : getDashboardDefaultFolderId()
   dashboardState.selectedIds.clear()
   dashboardState.expandedTagIds.clear()
   resetDashboardVirtualScroll()
   setDashboardStatus(selectedFolder
     ? `已筛选：${formatFolderPath(selectedFolder, availabilityState.folderMap) || selectedFolder.title}`
-    : '已显示全部书签')
+    : '已显示书签栏')
+}
+
+function getDashboardEffectiveFolderId(): string {
+  const selectedFolderId = String(dashboardState.folderId || '').trim()
+  if (selectedFolderId && availabilityState.folderMap.has(selectedFolderId)) {
+    return selectedFolderId
+  }
+
+  return getDashboardDefaultFolderId()
+}
+
+function getDashboardDefaultFolderId(): string {
+  return availabilityState.folderMap.has(BOOKMARKS_BAR_ID) ? BOOKMARKS_BAR_ID : ''
 }
 
 function renderDashboardCards(items: DashboardItem[]): void {

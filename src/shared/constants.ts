@@ -1,4 +1,5 @@
 export const BOOKMARKS_BAR_ID = '1'
+export const OTHER_BOOKMARKS_ID = '2'
 export const ROOT_ID = '0'
 
 export const STORAGE_KEYS = {
