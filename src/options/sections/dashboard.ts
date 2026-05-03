@@ -73,6 +73,7 @@ interface DashboardVirtualState {
   renderedItems: DashboardItem[] | null
   frame: number
   sectionFrame: number
+  scrollIdleTimer: number
   resetScrollOnNextRender: boolean
   resizeObserver: ResizeObserver | null
   observedElement: HTMLElement | null
@@ -125,12 +126,14 @@ export const DASHBOARD_DRAG_MOVE_THRESHOLD = 4
 const DASHBOARD_CARD_HEIGHT = 176
 const DASHBOARD_GRID_GAP = 10
 const DASHBOARD_CARD_MIN_WIDTH = 340
-const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 3
+const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 6
 const DASHBOARD_VIRTUAL_THRESHOLD = 120
 
 let dashboardStatusTimer = 0
 let dashboardTagRegenerateController: AbortController | null = null
 let closingDashboardTagEditor = false
+let dashboardViewReady = true
+let dashboardViewRevealFrame = 0
 const dashboardRenderCache: DashboardRenderCache = {
   modelKey: null,
   model: null,
@@ -160,6 +163,7 @@ const virtualState: DashboardVirtualState = {
   renderedItems: null,
   frame: 0,
   sectionFrame: 0,
+  scrollIdleTimer: 0,
   resetScrollOnNextRender: false,
   resizeObserver: null,
   observedElement: null
@@ -342,6 +346,7 @@ export function renderDashboardSection(): void {
   }
 
   const { model, visibleItems } = getDashboardRenderData()
+  syncDashboardPanelReadyState()
 
   syncDashboardSelection(
     dashboardState.selectedIds,
@@ -1482,10 +1487,14 @@ function applyDashboardFolderFilter(folderId: unknown): void {
   dashboardState.folderId = selectedFolder ? normalizedFolderId : getDashboardDefaultFolderId()
   dashboardState.selectedIds.clear()
   dashboardState.expandedTagIds.clear()
+  dashboardViewReady = false
+  syncDashboardPanelReadyState()
   resetDashboardVirtualScroll()
   setDashboardStatus(selectedFolder
     ? `已筛选：${formatFolderPath(selectedFolder, availabilityState.folderMap) || selectedFolder.title}`
-    : '已显示书签栏')
+    : '已显示书签栏', '', { render: false })
+  scheduleDashboardSectionRender()
+  scheduleDashboardPanelReveal()
 }
 
 function getDashboardEffectiveFolderId(): string {
@@ -1519,8 +1528,8 @@ function renderDashboardCards(items: DashboardItem[]): void {
   ensureDashboardVirtualGrid()
   virtualState.items = items
 
-  updateDashboardVirtualMetrics()
   applyDashboardVirtualFilterReset(items)
+  updateDashboardVirtualMetrics()
 
   if (items.length < DASHBOARD_VIRTUAL_THRESHOLD) {
     resetDashboardVirtualRenderCache({ preserveItems: true })
@@ -1537,6 +1546,13 @@ function renderDashboardCards(items: DashboardItem[]): void {
     containerHeight: virtualState.containerHeight,
     scrollTop: dom.dashboardResults.scrollTop
   })
+  const viewportWindow = computeDashboardVirtualWindow({
+    itemCount: items.length,
+    contentWidth: virtualState.contentWidth,
+    containerHeight: virtualState.containerHeight,
+    scrollTop: dom.dashboardResults.scrollTop,
+    overscanRows: 0
+  })
 
   if (dom.dashboardResults.scrollTop !== virtualWindow.scrollTop) {
     dom.dashboardResults.scrollTop = virtualWindow.scrollTop
@@ -1544,6 +1560,18 @@ function renderDashboardCards(items: DashboardItem[]): void {
   virtualState.scrollTop = virtualWindow.scrollTop
   virtualState.columnCount = virtualWindow.columnCount
   virtualState.rowStride = virtualWindow.rowStride
+
+  if (canReuseDashboardVirtualShell(items, virtualWindow, viewportWindow)) {
+    const stableRenderedItems = items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
+    const stableRenderedIds = new Set(stableRenderedItems.map((item) => String(item.id)))
+    const spacer = dom.dashboardResults.querySelector<HTMLElement>('.dashboard-virtual-spacer')
+    if (spacer) {
+      spacer.style.height = `${Math.ceil(virtualWindow.totalHeight)}px`
+    }
+    reconcileDashboardTransientUiWithRenderedItems(stableRenderedIds)
+    updateDashboardFloatingEditorPosition(stableRenderedIds)
+    return
+  }
 
   const renderedItems = items.slice(virtualWindow.startIndex, virtualWindow.endIndex)
   const renderedIds = new Set(renderedItems.map((item) => String(item.id)))
@@ -1590,6 +1618,34 @@ function renderDashboardCards(items: DashboardItem[]): void {
   virtualState.renderedOffsetY = virtualWindow.offsetY
   virtualState.renderedStateKey = stateKey
   updateDashboardFloatingEditorPosition(renderedIds)
+}
+
+function canReuseDashboardVirtualShell(
+  items: DashboardItem[],
+  virtualWindow: DashboardVirtualWindow,
+  viewportWindow: DashboardVirtualWindow
+): boolean {
+  if (
+    virtualState.renderedItems !== items ||
+    virtualState.renderedStartIndex < 0 ||
+    virtualState.renderedEndIndex <= virtualState.renderedStartIndex ||
+    virtualState.renderedColumnCount !== virtualWindow.columnCount ||
+    virtualState.renderedTotalHeight !== virtualWindow.totalHeight
+  ) {
+    return false
+  }
+
+  const viewportStartIndex = viewportWindow.startIndex
+  const viewportEndIndex = viewportWindow.endIndex
+  if (
+    virtualState.renderedStartIndex > viewportStartIndex ||
+    virtualState.renderedEndIndex < viewportEndIndex
+  ) {
+    return false
+  }
+
+  const renderedItems = items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
+  return virtualState.renderedStateKey === getDashboardVirtualRenderStateKey(renderedItems)
 }
 
 function resetDashboardVirtualRenderCache({
@@ -1685,6 +1741,15 @@ function handleDashboardVirtualScroll(): void {
     return
   }
 
+  container.classList.add('is-scrolling')
+  if (virtualState.scrollIdleTimer) {
+    window.clearTimeout(virtualState.scrollIdleTimer)
+  }
+  virtualState.scrollIdleTimer = window.setTimeout(() => {
+    virtualState.scrollIdleTimer = 0
+    container.classList.remove('is-scrolling')
+  }, 140)
+
   virtualState.scrollTop = container.scrollTop
   scheduleDashboardVirtualRender()
 }
@@ -1713,12 +1778,35 @@ function scheduleDashboardSectionRender(): void {
   })
 }
 
+function syncDashboardPanelReadyState(): void {
+  dom.dashboardPanel?.setAttribute(
+    'data-dashboard-ready',
+    !availabilityState.catalogLoading && dashboardViewReady ? 'true' : 'false'
+  )
+}
+
+function scheduleDashboardPanelReveal(): void {
+  if (dashboardViewRevealFrame) {
+    window.cancelAnimationFrame(dashboardViewRevealFrame)
+  }
+
+  dashboardViewRevealFrame = window.requestAnimationFrame(() => {
+    dashboardViewRevealFrame = window.requestAnimationFrame(() => {
+      dashboardViewRevealFrame = 0
+      dashboardViewReady = true
+      syncDashboardPanelReadyState()
+    })
+  })
+}
+
 function resetDashboardVirtualScroll(): void {
   virtualState.scrollTop = 0
-  virtualState.resetScrollOnNextRender = true
   resetDashboardVirtualRenderCache({ preserveItems: true })
   if (dom.dashboardResults) {
     dom.dashboardResults.scrollTop = 0
+    virtualState.resetScrollOnNextRender = false
+  } else {
+    virtualState.resetScrollOnNextRender = true
   }
 }
 
@@ -2051,10 +2139,16 @@ async function moveDashboardBookmarkToFolder(
   }
 }
 
-function setDashboardStatus(message: string, copiedId = ''): void {
+function setDashboardStatus(
+  message: string,
+  copiedId = '',
+  { render = true }: { render?: boolean } = {}
+): void {
   dashboardState.statusMessage = message
   dashboardState.copyFeedbackId = copiedId
-  renderDashboardSection()
+  if (render) {
+    renderDashboardSection()
+  }
 
   if (dashboardStatusTimer) {
     window.clearTimeout(dashboardStatusTimer)

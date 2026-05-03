@@ -34,8 +34,11 @@ test('options folder listbox options expose role and aria-selected state', () =>
 test('dashboard exposes a persistent folder sidebar with cached DOM refs', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const domSource = readProjectFile('src/options/shared-options/dom.ts')
+  const dashboardPanel = optionsHtml.match(/<section[\s\S]*?id="dashboard"[\s\S]*?>/)?.[0] || ''
   const sidebarElement = optionsHtml.match(/<[^>]+id="dashboard-folder-sidebar"[^>]*>/)?.[0] || ''
 
+  assert.match(dashboardPanel, /data-dashboard-ready="false"/)
+  assert.match(optionsHtml, /class="dashboard-loading-screen"/)
   assert.match(sidebarElement, /aria-label="书签文件夹"/)
   assert.match(optionsHtml, /id="dashboard-folder-tree"/)
   assert.match(domSource, /dashboardFolderSidebar\s*=\s*byId\('dashboard-folder-sidebar'\)/)
@@ -81,7 +84,7 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   assert.equal(firstWindow.columnCount, 3)
   assert.equal(firstWindow.startIndex, 0)
   assert.ok(
-    getDashboardVirtualRenderedCount(firstWindow) <= 36,
+    getDashboardVirtualRenderedCount(firstWindow) <= 54,
     'initial dashboard window should render only visible rows plus overscan'
   )
   assert.ok(firstWindow.totalHeight > 600000)
@@ -100,7 +103,7 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   assert.ok(scrolledWindow.startIndex > 0)
   assert.ok(scrolledWindow.offsetY > 0)
   assert.ok(
-    getDashboardVirtualRenderedCount(scrolledWindow) <= 36,
+    getDashboardVirtualRenderedCount(scrolledWindow) <= 54,
     'scrolled dashboard window should keep DOM card count bounded'
   )
 })
@@ -136,7 +139,12 @@ test('dashboard folder sidebar layout and active styles are defined', () => {
   assert.match(optionsCss, /\.dashboard-folder-sidebar\s*\{/)
   assert.match(optionsCss, /\.dashboard-folder-tree\s*\{/)
   assert.match(optionsCss, /\.dashboard-folder-tree[^{}]*\.(?:active|current)\s*\{/)
-  assert.match(optionsCss, /\.dashboard-bookmark-card\s*\{[\s\S]*?backdrop-filter:\s*blur/)
+  assert.match(optionsCss, /\.dashboard-panel\[data-dashboard-ready="false"\]\s+\.dashboard-loading-screen\s*\{[\s\S]*?opacity:\s*1/)
+  assert.match(optionsCss, /\.dashboard-panel\[data-dashboard-ready="false"\]\s+\.dashboard-results-group\s*\{[\s\S]*?opacity:\s*0/)
+  assert.match(optionsCss, /\.dashboard-bookmark-card::before\s*\{[\s\S]*?backdrop-filter:\s*blur/)
+  assert.match(optionsCss, /\.dashboard-card-grid\.is-scrolling\s+\.dashboard-bookmark-card::before\s*\{[\s\S]*?backdrop-filter:\s*none/)
+  assert.match(optionsCss, /\.dashboard-card-grid\.is-virtualized\s*\{[\s\S]*?overflow-anchor:\s*none/)
+  assert.match(optionsCss, /\.dashboard-card-grid\s*\{[\s\S]*?scrollbar-gutter:\s*stable/)
   assert.match(
     optionsCss,
     /\.dashboard-fullscreen-active\s+\.dashboard-content-layout\s*\{[\s\S]*?(?:display:\s*(?:grid|flex)|grid-template-columns:)/

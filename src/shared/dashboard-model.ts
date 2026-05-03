@@ -74,9 +74,10 @@ export function buildDashboardModel({
 } = {}): DashboardModel {
   const folderMap = new Map(folders.map((folder) => [String(folder.id), folder]))
   const tagRecords = tagIndex?.records || {}
-  const snapshotSearchMap = contentSnapshotIndex
-    ? buildContentSnapshotSearchMap(contentSnapshotIndex, { includeFullText })
-    : new Map<string, string>()
+  const snapshotSearchMap = contentSnapshotSearchMap ||
+    (contentSnapshotIndex
+      ? buildContentSnapshotSearchMap(contentSnapshotIndex, { includeFullText })
+      : new Map<string, string>())
   const items = bookmarks.map((bookmark) => {
     const tagRecord = tagRecords[String(bookmark.id)] || null
     const folder = folderMap.get(String(bookmark.parentId || '')) || null
@@ -88,10 +89,7 @@ export function buildDashboardModel({
     const topics = normalizeDashboardTextList(tagRecord?.topics)
     const aliases = normalizeDashboardTextList(tagRecord?.aliases)
     const summary = String(tagRecord?.summary || '').replace(/\s+/g, ' ').trim()
-    const snapshotSearchText =
-      contentSnapshotSearchMap?.get(String(bookmark.id)) ||
-      snapshotSearchMap.get(String(bookmark.id)) ||
-      ''
+    const snapshotSearchText = snapshotSearchMap.get(String(bookmark.id)) || ''
     const tagSummary = tags.slice(0, 4).join(' / ')
     const domain = String(bookmark.domain || extractDomain(bookmark.url) || '').trim()
     const searchText = normalizeText([

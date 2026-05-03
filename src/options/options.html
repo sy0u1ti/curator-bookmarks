@@ -387,9 +387,16 @@
             id="dashboard"
             class="options-panel dashboard-panel"
             data-section-panel="dashboard"
+            data-dashboard-ready="false"
             aria-labelledby="dashboard-title"
             hidden
           >
+            <div class="dashboard-loading-screen" aria-hidden="true">
+              <div class="dashboard-loading-card">
+                <span class="dashboard-loading-mark"></span>
+                <span>正在读取书签仪表盘</span>
+              </div>
+            </div>
             <p class="options-section-label">Dashboard</p>
             <div class="dashboard-title-row">
               <div>

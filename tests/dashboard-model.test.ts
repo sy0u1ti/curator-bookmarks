@@ -147,6 +147,42 @@ test('builds dashboard items with folder, date, tag, snapshot and summary metada
   assert.equal(model.items[1].monthKey, 'unknown')
 })
 
+test('dashboard model reuses the hydrated snapshot search map when provided', () => {
+  const contentSnapshotIndex: ContentSnapshotIndex = {
+    version: 1,
+    updatedAt: 1,
+    records: {
+      b1: {
+        snapshotId: 's1',
+        bookmarkId: 'b1',
+        url: 'https://docs.example.com/react-table',
+        title: 'Snapshot title',
+        summary: 'slow fallback snapshot term',
+        headings: [],
+        canonicalUrl: '',
+        finalUrl: 'https://docs.example.com/react-table',
+        contentType: 'article',
+        source: 'html',
+        extractionStatus: 'ok',
+        extractedAt: 1,
+        hasFullText: false,
+        fullTextBytes: 0,
+        fullTextStorage: 'none',
+        warnings: []
+      }
+    }
+  }
+  const hydratedSearchMap = new Map([['b1', 'precomputed fast search term']])
+  const model = buildDashboardModel({
+    bookmarks: [bookmark({ id: 'b1', title: 'React Table Guide' })],
+    contentSnapshotIndex,
+    contentSnapshotSearchMap: hydratedSearchMap
+  })
+
+  assert.equal(model.items[0].searchText.includes('precomputed fast search term'), true)
+  assert.equal(model.items[0].searchText.includes('slow fallback snapshot term'), false)
+})
+
 test('filters dashboard items by query, folder ancestor, domain and month', () => {
   const model = buildDashboardModel({
     bookmarks: [
