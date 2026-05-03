@@ -252,6 +252,7 @@ import {
 
 let availabilityRenderFrame = 0
 let availabilityDurationTimer = 0
+let aiNamingDurationTimer = 0
 let availabilityPauseResolvers: Array<() => void> = []
 const AVAILABILITY_FILTERS = new Set([
   'all',
@@ -1486,6 +1487,7 @@ function resetAiNamingRunState() {
   aiNamingState.selectedResultIds = new Set()
   aiNamingState.pendingMoveResultIds = new Set()
   aiNamingState.pendingMoveSelection = false
+  aiNamingState.runStartedAt = 0
   aiNamingState.lastCompletedAt = 0
   aiNamingState.lastError = ''
   contentSnapshotState.aiRunSavedCount = 0
@@ -3617,9 +3619,8 @@ function renderAiNamingSection() {
   dom.aiMediumConfidence.textContent = String(aiNamingState.mediumConfidenceCount)
   dom.aiLowConfidence.textContent = String(aiNamingState.lowConfidenceCount)
   dom.aiFailed.textContent = String(aiNamingState.failedCount)
-  if (dom.aiDecisionStatus) {
-    dom.aiDecisionStatus.textContent = getAiNamingDecisionStatusText()
-  }
+  updateAiNamingDurationDisplay()
+  syncAiNamingDurationTimer()
 
   const selectableResults = getSelectableAiNamingResults()
   const highConfidenceResults = selectableResults.filter((result) => result.confidence === 'high')
@@ -3667,30 +3668,55 @@ function renderAiNamingSection() {
   renderAiNamingResults()
 }
 
-function getAiNamingDecisionStatusText() {
-  const progressLabel = aiNamingState.eligibleBookmarks
-    ? `${aiNamingState.checkedBookmarks} / ${aiNamingState.eligibleBookmarks}`
-    : ''
+function getAiNamingDurationLabel() {
+  const startedAt = Number(aiNamingState.runStartedAt) || 0
 
-  if (aiNamingState.running) {
-    if (aiNamingState.stopRequested) {
-      return progressLabel ? `停止中 ${progressLabel}` : '停止中'
-    }
-    if (aiNamingState.paused) {
-      return progressLabel ? `已暂停 ${progressLabel}` : '已暂停'
-    }
-    return progressLabel ? `生成中 ${progressLabel}` : '生成中'
+  if ((aiNamingState.running || aiNamingState.applying) && startedAt) {
+    return `用时 ${formatDuration(Date.now() - startedAt)}`
   }
 
-  if (aiNamingState.applying) {
-    return '应用中'
+  if (aiNamingState.lastCompletedAt && startedAt && aiNamingState.lastCompletedAt >= startedAt) {
+    return `用时 ${formatDuration(aiNamingState.lastCompletedAt - startedAt)}`
   }
 
   if (aiNamingState.lastCompletedAt) {
-    return progressLabel ? `已完成 ${progressLabel}` : formatDateTime(aiNamingState.lastCompletedAt)
+    return formatDateTime(aiNamingState.lastCompletedAt)
   }
 
   return '未开始'
+}
+
+function updateAiNamingDurationDisplay() {
+  if (dom.aiDecisionStatus) {
+    dom.aiDecisionStatus.textContent = getAiNamingDurationLabel()
+  }
+}
+
+function syncAiNamingDurationTimer() {
+  const shouldTick = Boolean(
+    Number(aiNamingState.runStartedAt) &&
+    (aiNamingState.running || aiNamingState.applying)
+  )
+
+  if (!shouldTick) {
+    clearAiNamingDurationTimer()
+    return
+  }
+
+  if (aiNamingDurationTimer) {
+    return
+  }
+
+  aiNamingDurationTimer = window.setInterval(updateAiNamingDurationDisplay, 1000)
+}
+
+function clearAiNamingDurationTimer() {
+  if (!aiNamingDurationTimer) {
+    return
+  }
+
+  window.clearInterval(aiNamingDurationTimer)
+  aiNamingDurationTimer = 0
 }
 
 function renderBookmarkTagDataCard() {
@@ -5682,6 +5708,7 @@ async function runAiNamingSuggestions() {
   aiNamingState.stopRequested = false
   aiNamingState.paused = false
   resetAiNamingRunState()
+  aiNamingState.runStartedAt = runStartedAt
   aiNamingState.eligibleBookmarks = aiNamingState.bookmarks.length
   renderAvailabilitySection()
 

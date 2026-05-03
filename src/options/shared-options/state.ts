@@ -241,6 +241,7 @@ export const aiNamingState = {
   requestingPermission: false,
   permissionGranted: false,
   remoteParserPermissionGranted: false,
+  runStartedAt: 0,
   checkedBookmarks: 0,
   eligibleBookmarks: 0,
   suggestedCount: 0,
