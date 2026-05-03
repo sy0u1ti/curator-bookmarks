@@ -331,38 +331,34 @@
           <h2 id="settings-time-title">时间和日期</h2>
           <div class="settings-card">
             <label class="setting-row">
-              <span>启用</span>
+              <span class="setting-label-stack">
+                <span>显示时间模块</span>
+                <small>放在搜索栏上方，关闭后保留原布局间距。</small>
+              </span>
               <input id="time-enabled" class="setting-switch-input" type="checkbox" checked>
               <span class="setting-switch" aria-hidden="true"></span>
             </label>
-            <label class="setting-row">
-              <span>显示秒</span>
-              <input id="time-show-seconds" class="setting-switch-input" type="checkbox">
-              <span class="setting-switch" aria-hidden="true"></span>
-            </label>
-            <label class="setting-row">
-              <span>12 小时制</span>
-              <input id="time-hour12" class="setting-switch-input" type="checkbox">
-              <span class="setting-switch" aria-hidden="true"></span>
-            </label>
             <div class="setting-row">
-              <span>日期格式</span>
-              <select id="time-date-format" class="setting-select setting-native-select">
-                <option value="year-month-day-weekday">2026.05.01 周五</option>
-                <option value="month-day-weekday">05.01 周五</option>
-                <option value="weekday-month-day">周五 05/01</option>
-                <option value="weekday-day-month">周五 01/05</option>
+              <span class="setting-label-stack">
+                <span>显示内容</span>
+                <small>保留时间+日期、仅时间、仅日期三种模式。</small>
+              </span>
+              <select id="time-display-mode" class="setting-select setting-native-select">
+                <option value="time-date">时间和日期</option>
+                <option value="time">仅时间</option>
+                <option value="date">仅日期</option>
               </select>
             </div>
-            <label class="setting-row slider-row">
-              <span>时钟大小 <output id="time-clock-size-value" class="setting-value">100%</output></span>
-              <input id="time-clock-size" class="setting-range" type="range" min="70" max="130" value="100">
-            </label>
             <div class="setting-row">
-              <span>时区</span>
+              <span class="setting-label-stack">
+                <span>时区</span>
+                <small>自动跟随系统，也可固定为常用城市。</small>
+              </span>
               <select id="time-time-zone" class="setting-select setting-native-select">
-                <option value="auto">自动设置</option>
+                <option value="auto">自动跟随系统</option>
+                <option value="UTC">UTC</option>
                 <option value="Asia/Shanghai">北京</option>
+                <option value="Asia/Hong_Kong">香港</option>
                 <option value="Asia/Tokyo">东京</option>
                 <option value="Asia/Singapore">新加坡</option>
                 <option value="Europe/London">伦敦</option>
@@ -372,13 +368,53 @@
               </select>
             </div>
             <div class="setting-row">
-              <span>显示</span>
-              <select id="time-display-mode" class="setting-select setting-native-select">
-                <option value="time-date">时钟和日期</option>
-                <option value="time">仅时钟</option>
-                <option value="date">仅日期</option>
+              <span class="setting-label-stack">
+                <span>日期格式</span>
+                <small>仅在显示日期时生效。</small>
+              </span>
+              <select id="time-date-format" class="setting-select setting-native-select">
+                <option value="year-month-day-weekday">2026.05.01 周五</option>
+                <option value="chinese-date-weekday">2026年5月1日 周五</option>
+                <option value="month-day-weekday">05.01 周五</option>
+                <option value="weekday-month-day">周五 05/01</option>
+                <option value="weekday-day-month">周五 01/05</option>
+                <option value="year-month-day">2026.05.01</option>
               </select>
             </div>
+            <label class="setting-row">
+              <span class="setting-label-stack">
+                <span>显示秒数</span>
+                <small>开启后每秒更新；关闭时按分钟更新以减少渲染。</small>
+              </span>
+              <input id="time-show-seconds" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <label class="setting-row">
+              <span class="setting-label-stack">
+                <span>12 小时制</span>
+                <small>显示 AM/PM，24 小时制会隐藏该标记。</small>
+              </span>
+              <input id="time-hour12" class="setting-switch-input" type="checkbox">
+              <span class="setting-switch" aria-hidden="true"></span>
+            </label>
+            <div class="setting-row">
+              <span class="setting-label-stack">
+                <span>显示密度</span>
+                <small>紧凑适合更多书签，清晰会拉开时间与日期。</small>
+              </span>
+              <select id="time-density" class="setting-select setting-native-select">
+                <option value="compact">紧凑</option>
+                <option value="balanced">标准</option>
+                <option value="comfortable">清晰</option>
+              </select>
+            </div>
+            <label class="setting-row slider-row">
+              <span class="setting-label-stack">
+                <span>字号 <output id="time-clock-size-value" class="setting-value">100%</output></span>
+                <small>只影响时间和日期，不改变搜索和书签区域。</small>
+              </span>
+              <input id="time-clock-size" class="setting-range" type="range" min="70" max="140" value="100">
+            </label>
           </div>
         </section>
 

@@ -92,6 +92,19 @@ import {
   planSearchOpenTargets,
   type SearchEngineId
 } from './search-engines.js'
+import {
+  DEFAULT_TIME_SETTINGS,
+  formatClockDate,
+  formatClockDateTime,
+  formatClockPeriod,
+  formatClockTime,
+  formatClockTimeDateTime,
+  getClockAriaLabel,
+  getClockUpdateDelay,
+  getClockZoneLabel,
+  normalizeTimeSettings,
+  type NewTabTimeSettings
+} from './time-settings.js'
 const FAVICON_SIZE = 64
 const FAVICON_COLOR_SAMPLE_SIZE = 32
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
@@ -140,41 +153,6 @@ const DEFAULT_GENERAL_SETTINGS = {
   showQuickAccess: true,
   showSourceNavigation: true
 }
-const DEFAULT_TIME_SETTINGS = {
-  enabled: true,
-  showSeconds: false,
-  hour12: false,
-  clockSize: 100,
-  dateFormat: 'year-month-day-weekday',
-  timeZone: 'auto',
-  displayMode: 'time-date'
-}
-const TIME_ZONE_LABELS: Record<string, string> = {
-  auto: '本地',
-  'Asia/Shanghai': '北京',
-  'Asia/Tokyo': '东京',
-  'Asia/Singapore': '新加坡',
-  'Europe/London': '伦敦',
-  'Europe/Paris': '巴黎',
-  'America/New_York': '纽约',
-  'America/Los_Angeles': '洛杉矶'
-}
-const SUPPORTED_TIME_ZONES = new Set([
-  'auto',
-  'Asia/Shanghai',
-  'Asia/Tokyo',
-  'Asia/Singapore',
-  'Europe/London',
-  'Europe/Paris',
-  'America/New_York',
-  'America/Los_Angeles'
-])
-const SUPPORTED_DATE_FORMATS = new Set([
-  'year-month-day-weekday',
-  'weekday-day-month',
-  'weekday-month-day',
-  'month-day-weekday'
-])
 const FOCUSABLE_SELECTOR = [
   'a[href]',
   'button:not([disabled])',
@@ -301,7 +279,7 @@ const state = {
   } as NewTabActivityState,
   folderCandidatesExpanded: false,
   folderCandidateQuery: '',
-  timeSettings: { ...DEFAULT_TIME_SETTINGS },
+  timeSettings: { ...DEFAULT_TIME_SETTINGS } as NewTabTimeSettings,
   settingsSaveState: 'idle' as SettingsSaveState,
   settingsSaveMessage: '',
   dashboardOpen: false,
@@ -606,6 +584,7 @@ function bindTimeSettingsEvents(): void {
   document.getElementById('time-date-format')?.addEventListener('change', handleTimeSettingsChange)
   document.getElementById('time-time-zone')?.addEventListener('change', handleTimeSettingsChange)
   document.getElementById('time-display-mode')?.addEventListener('change', handleTimeSettingsChange)
+  document.getElementById('time-density')?.addEventListener('change', handleTimeSettingsChange)
   document.getElementById('time-clock-size')?.addEventListener('input', handleTimeSettingsChange)
 }
 
@@ -3203,7 +3182,7 @@ function openBookmarkSuggestion(suggestion: SearchBookmarkSuggestion): void {
 
 function createClockWidget(): HTMLElement | null {
   const settings = state.timeSettings
-  if (!settings.enabled || settings.displayMode === 'none') {
+  if (!settings.enabled) {
     return null
   }
 
@@ -3212,9 +3191,10 @@ function createClockWidget(): HTMLElement | null {
   clock.style.setProperty('--clock-scale', String(settings.clockSize / 100))
   const now = new Date()
   clock.dataset.clockDisplayMode = settings.displayMode
+  clock.dataset.clockDensity = settings.density
   clock.dataset.clockShowSeconds = String(settings.showSeconds && settings.displayMode !== 'date')
   clock.dataset.clockHour12 = String(settings.hour12 && settings.displayMode !== 'date')
-  clock.setAttribute('aria-label', getClockAriaLabel(now))
+  clock.setAttribute('aria-label', getClockAriaLabel(now, settings))
 
   if (settings.displayMode !== 'date') {
     const timeGroup = document.createElement('span')
@@ -3223,15 +3203,15 @@ function createClockWidget(): HTMLElement | null {
     const time = document.createElement('time')
     time.className = 'newtab-clock-time'
     time.dataset.clockTime = 'true'
-    time.dateTime = formatClockTimeDateTime(now)
-    time.textContent = formatClockTime(now)
+    time.dateTime = formatClockTimeDateTime(now, settings)
+    time.textContent = formatClockTime(now, settings)
     timeGroup.appendChild(time)
 
     if (settings.hour12) {
       const period = document.createElement('span')
       period.className = 'newtab-clock-period'
       period.dataset.clockPeriod = 'true'
-      period.textContent = formatClockPeriod(now)
+      period.textContent = formatClockPeriod(now, settings)
       timeGroup.appendChild(period)
     }
 
@@ -3242,15 +3222,15 @@ function createClockWidget(): HTMLElement | null {
     const date = document.createElement('time')
     date.className = 'newtab-clock-date'
     date.dataset.clockDate = 'true'
-    date.dateTime = formatClockDateTime(now)
-    date.textContent = formatClockDate(now)
+    date.dateTime = formatClockDateTime(now, settings)
+    date.textContent = formatClockDate(now, settings)
     clock.appendChild(date)
   }
 
   const zone = document.createElement('span')
   zone.className = 'newtab-clock-zone'
   zone.dataset.clockZone = 'true'
-  zone.textContent = getClockZoneLabel()
+  zone.textContent = getClockZoneLabel(settings)
   clock.appendChild(zone)
 
   return clock
@@ -6284,34 +6264,7 @@ function openSearchTargets(targetUrls: string[]): void {
   window.location.assign(targetUrl)
 }
 
-function normalizeTimeSettings(rawSettings: unknown): typeof DEFAULT_TIME_SETTINGS {
-  if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
-    return { ...DEFAULT_TIME_SETTINGS }
-  }
-
-  const settings = rawSettings as Record<string, unknown>
-  const legacyDateFormat = String(settings.dateFormat)
-  const dateFormat = ['auto', 'zh', 'iso'].includes(legacyDateFormat)
-    ? 'month-day-weekday'
-    : legacyDateFormat
-  return {
-    enabled: settings.enabled !== false,
-    showSeconds: settings.showSeconds === true,
-    hour12: settings.hour12 === true,
-    clockSize: clampNumber(settings.clockSize, 70, 130, DEFAULT_TIME_SETTINGS.clockSize),
-    dateFormat: SUPPORTED_DATE_FORMATS.has(dateFormat)
-      ? dateFormat
-      : DEFAULT_TIME_SETTINGS.dateFormat,
-    timeZone: SUPPORTED_TIME_ZONES.has(String(settings.timeZone))
-      ? String(settings.timeZone)
-      : DEFAULT_TIME_SETTINGS.timeZone,
-    displayMode: ['time-date', 'time', 'date'].includes(String(settings.displayMode))
-      ? String(settings.displayMode)
-      : DEFAULT_TIME_SETTINGS.displayMode
-  }
-}
-
-function readTimeSettingsFromControls(): typeof DEFAULT_TIME_SETTINGS {
+function readTimeSettingsFromControls(): NewTabTimeSettings {
   const enabledInput = document.getElementById('time-enabled')
   const secondsInput = document.getElementById('time-show-seconds')
   const hour12Input = document.getElementById('time-hour12')
@@ -6319,6 +6272,7 @@ function readTimeSettingsFromControls(): typeof DEFAULT_TIME_SETTINGS {
   const dateFormatInput = document.getElementById('time-date-format')
   const timeZoneInput = document.getElementById('time-time-zone')
   const displayInput = document.getElementById('time-display-mode')
+  const densityInput = document.getElementById('time-density')
 
   return normalizeTimeSettings({
     enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : state.timeSettings.enabled,
@@ -6327,7 +6281,8 @@ function readTimeSettingsFromControls(): typeof DEFAULT_TIME_SETTINGS {
     clockSize: sizeInput instanceof HTMLInputElement ? Number(sizeInput.value) : state.timeSettings.clockSize,
     dateFormat: dateFormatInput instanceof HTMLSelectElement ? dateFormatInput.value : state.timeSettings.dateFormat,
     timeZone: timeZoneInput instanceof HTMLSelectElement ? timeZoneInput.value : state.timeSettings.timeZone,
-    displayMode: displayInput instanceof HTMLSelectElement ? displayInput.value : state.timeSettings.displayMode
+    displayMode: displayInput instanceof HTMLSelectElement ? displayInput.value : state.timeSettings.displayMode,
+    density: densityInput instanceof HTMLSelectElement ? densityInput.value : state.timeSettings.density
   })
 }
 
@@ -6340,13 +6295,15 @@ function syncTimeSettingsControls(): void {
   const dateFormatInput = document.getElementById('time-date-format')
   const timeZoneInput = document.getElementById('time-time-zone')
   const displayInput = document.getElementById('time-display-mode')
+  const densityInput = document.getElementById('time-density')
   const dependentControls = [
     secondsInput,
     hour12Input,
     sizeInput,
     dateFormatInput,
     timeZoneInput,
-    displayInput
+    displayInput,
+    densityInput
   ]
 
   if (enabledInput instanceof HTMLInputElement) {
@@ -6375,6 +6332,10 @@ function syncTimeSettingsControls(): void {
   if (displayInput instanceof HTMLSelectElement) {
     displayInput.value = settings.displayMode
     displayInput.disabled = !settings.enabled
+  }
+  if (densityInput instanceof HTMLSelectElement) {
+    densityInput.value = settings.density
+    densityInput.disabled = !settings.enabled
   }
 
   setTextContent('time-clock-size-value', `${settings.clockSize}%`)
@@ -6408,7 +6369,8 @@ function scheduleTimeSettingsSave(): void {
 
 function scheduleClockTick(): void {
   window.clearTimeout(clockTimer)
-  if (!state.timeSettings.enabled || state.timeSettings.displayMode === 'none') {
+  const delay = getClockUpdateDelay(new Date(), state.timeSettings)
+  if (delay <= 0) {
     clockTimer = 0
     return
   }
@@ -6417,16 +6379,7 @@ function scheduleClockTick(): void {
     clockTimer = 0
     updateClockText()
     scheduleClockTick()
-  }, getClockUpdateDelay(new Date()))
-}
-
-function getClockUpdateDelay(date: Date): number {
-  const milliseconds = date.getMilliseconds()
-  if (state.timeSettings.showSeconds && state.timeSettings.displayMode !== 'date') {
-    return Math.max(250, 1000 - milliseconds + 25)
-  }
-
-  return Math.max(1000, (60 - date.getSeconds()) * 1000 - milliseconds + 25)
+  }, delay)
 }
 
 function updateClockText(): void {
@@ -6440,151 +6393,23 @@ function updateClockText(): void {
   }
 
   const now = new Date()
+  const settings = state.timeSettings
   if (clockNode instanceof HTMLElement) {
-    clockNode.setAttribute('aria-label', getClockAriaLabel(now))
+    clockNode.setAttribute('aria-label', getClockAriaLabel(now, settings))
   }
   if (timeNode instanceof HTMLTimeElement) {
-    timeNode.textContent = formatClockTime(now)
-    timeNode.dateTime = formatClockTimeDateTime(now)
+    timeNode.textContent = formatClockTime(now, settings)
+    timeNode.dateTime = formatClockTimeDateTime(now, settings)
   }
   if (periodNode) {
-    periodNode.textContent = formatClockPeriod(now)
+    periodNode.textContent = formatClockPeriod(now, settings)
   }
   if (dateNode instanceof HTMLTimeElement) {
-    dateNode.textContent = formatClockDate(now)
-    dateNode.dateTime = formatClockDateTime(now)
+    dateNode.textContent = formatClockDate(now, settings)
+    dateNode.dateTime = formatClockDateTime(now, settings)
   }
   if (zoneNode) {
-    zoneNode.textContent = getClockZoneLabel()
-  }
-}
-
-function formatClockTime(date: Date): string {
-  const settings = state.timeSettings
-  const parts = getClockParts(date)
-  let hours = parts.hours
-  if (settings.hour12) {
-    hours = hours % 12 || 12
-  }
-
-  const timeParts = [
-    String(hours).padStart(2, '0'),
-    String(parts.minutes).padStart(2, '0')
-  ]
-  if (settings.showSeconds) {
-    timeParts.push(String(parts.seconds).padStart(2, '0'))
-  }
-  return timeParts.join(':')
-}
-
-function formatClockPeriod(date: Date): string {
-  return getClockParts(date).hours < 12 ? 'AM' : 'PM'
-}
-
-function formatClockTimeDateTime(date: Date): string {
-  const parts = getClockParts(date)
-  return [
-    String(parts.hours).padStart(2, '0'),
-    String(parts.minutes).padStart(2, '0'),
-    String(parts.seconds).padStart(2, '0')
-  ].join(':')
-}
-
-function formatClockDateTime(date: Date): string {
-  const parts = getClockParts(date)
-  return [
-    String(parts.year).padStart(4, '0'),
-    String(parts.month).padStart(2, '0'),
-    String(parts.day).padStart(2, '0')
-  ].join('-')
-}
-
-function formatClockDate(date: Date): string {
-  const settings = state.timeSettings
-  const parts = getClockParts(date)
-  const yearText = String(parts.year).padStart(4, '0')
-  const monthText = String(parts.month).padStart(2, '0')
-  const dayText = String(parts.day).padStart(2, '0')
-  const weekdayText = parts.weekday.replace(/^星期/, '周')
-
-  switch (settings.dateFormat) {
-    case 'year-month-day-weekday':
-      return `${yearText}.${monthText}.${dayText} ${weekdayText}`
-    case 'weekday-day-month':
-      return `${weekdayText} ${dayText}/${monthText}`
-    case 'weekday-month-day':
-      return `${weekdayText} ${monthText}/${dayText}`
-    case 'month-day-weekday':
-    default:
-      return `${monthText}.${dayText} ${weekdayText}`
-  }
-}
-
-function getClockAriaLabel(date: Date): string {
-  const settings = state.timeSettings
-  const parts: string[] = []
-  if (settings.displayMode !== 'date') {
-    parts.push(settings.hour12
-      ? `${formatClockTime(date)} ${formatClockPeriod(date)}`
-      : formatClockTime(date))
-  }
-  if (settings.displayMode !== 'time') {
-    parts.push(formatClockDate(date))
-  }
-  parts.push(getClockZoneLabel())
-  return parts.join('，')
-}
-
-function getClockZoneLabel(): string {
-  return TIME_ZONE_LABELS[state.timeSettings.timeZone] || state.timeSettings.timeZone
-}
-
-function getClockParts(date: Date): {
-  year: number
-  month: number
-  day: number
-  weekday: string
-  hours: number
-  minutes: number
-  seconds: number
-} {
-  const { timeZone } = state.timeSettings
-  if (timeZone === 'auto') {
-    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
-    return {
-      year: date.getFullYear(),
-      month: date.getMonth() + 1,
-      day: date.getDate(),
-      weekday: weekdays[date.getDay()],
-      hours: date.getHours(),
-      minutes: date.getMinutes(),
-      seconds: date.getSeconds()
-    }
-  }
-
-  const formatter = new Intl.DateTimeFormat('zh-CN-u-ca-gregory', {
-    timeZone,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    weekday: 'long',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hourCycle: 'h23'
-  })
-  const formattedParts = formatter.formatToParts(date)
-  const getPart = (type: Intl.DateTimeFormatPartTypes): string =>
-    formattedParts.find((part) => part.type === type)?.value || ''
-
-  return {
-    year: Number(getPart('year')) || date.getFullYear(),
-    month: Number(getPart('month')) || date.getMonth() + 1,
-    day: Number(getPart('day')) || date.getDate(),
-    weekday: getPart('weekday') || '',
-    hours: Number(getPart('hour')) || 0,
-    minutes: Number(getPart('minute')) || 0,
-    seconds: Number(getPart('second')) || 0
+    zoneNode.textContent = getClockZoneLabel(settings)
   }
 }
 
