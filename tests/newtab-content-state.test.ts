@@ -369,3 +369,21 @@ test('newtab settings section titles are visually prominent', () => {
   assert.match(sectionTitleRule, /font-weight:\s*760/)
   assert.match(sectionTitleRule, /color:\s*rgba\(245,\s*245,\s*247,\s*0\.78\)/)
 })
+
+test('newtab dashboard glass layer is scoped away from options dashboard styles', () => {
+  const newtabCss = readProjectFile('src/newtab/newtab.css')
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(newtabCss, /\.newtab-dashboard-overlay\s*\{[\s\S]*?width:\s*min\(1180px,\s*100%\)/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface\s*\{[\s\S]*?backdrop-filter:\s*blur\(24px\)\s*saturate\(0\.92\)/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-title-row\s*\{/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-toolbar\s*\{/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-card-grid\s*\{/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-bookmark-card\s*\{/)
+  assert.match(newtabCss, /@media \(max-width: 680px\)[\s\S]*?\.newtab-dashboard-surface \.dashboard-card-grid/)
+  assert.match(newtabCss, /@media \(prefers-reduced-motion: reduce\)/)
+
+  assert.doesNotMatch(newtabCss, /(?:^|\n)\.dashboard-(?:title-row|toolbar|card-grid|bookmark-card)\s*\{/)
+  assert.doesNotMatch(optionsCss, /newtab-dashboard-(?:overlay|surface)/)
+  assert.doesNotMatch(optionsCss, /backdrop-filter:\s*blur\(24px\)\s*saturate\(0\.92\)/)
+})
