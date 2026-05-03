@@ -212,25 +212,51 @@ test('newtab settings expose one combined quick access switch', () => {
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
 
-test('newtab exposes a lazy original dashboard route', () => {
+test('newtab exposes a lazy options dashboard iframe route', () => {
   const html = readProjectFile('src/newtab/newtab.html')
   const script = readProjectFile('src/newtab/newtab.ts')
+  const dashboardTrigger = html.match(/<a[\s\S]*?id="newtab-dashboard-trigger"[\s\S]*?<\/a>/)?.[0] || ''
+  const dashboardOverlay = html.match(/<[a-z]+[\s\S]*?id="newtab-dashboard-overlay"[\s\S]*?>/)?.[0] || ''
+  const dashboardFrame = html.match(/<iframe[\s\S]*?id="newtab-dashboard-frame"[\s\S]*?>/)?.[0] || ''
 
-  assert.match(html, /id="newtab-dashboard-trigger"[\s\S]*href="#dashboard"/)
-  assert.match(html, /id="newtab-dashboard-overlay"/)
-  assert.match(html, /id="newtab-dashboard-overlay"[\s\S]*hidden/)
-  assert.match(html, /data-newtab-dashboard-root/)
+  assert.match(dashboardTrigger, /href="#dashboard"/)
+  assert.match(dashboardTrigger, /aria-controls="newtab-dashboard-overlay"/)
+  assert.match(dashboardOverlay, /\bhidden\b/)
+  assert.match(dashboardOverlay, /aria-hidden="true"/)
+  assert.match(dashboardFrame, /loading="lazy"/)
+  assert.match(dashboardFrame, /title="书签仪表盘"/)
+  assert.doesNotMatch(html, /data-newtab-dashboard-root/)
+
+  assert.ok(
+    /NEWTAB_DASHBOARD_EMBED_PATH/.test(script) ||
+      /options\.html\?embed=newtab-dashboard#dashboard/.test(script),
+    'newtab should point the iframe at the embedded options dashboard route'
+  )
+  assert.match(script, /chrome\.runtime\.getURL\(/)
   assert.match(script, /window\.location\.hash === '#dashboard'/)
-  assert.match(script, /function ensureDashboardLoaded\(\): Promise<void>/)
-  assert.match(script, /dashboardLoadState: 'idle' as NewTabDashboardLoadState/)
-  assert.match(script, /getBookmarkTree\(\)/)
+  assert.match(script, /addEventListener\(['"]message['"][\s\S]*curator:newtab-dashboard-close/)
+
+  for (const pattern of [
+    /buildDashboardPanel/,
+    /createDashboardBookmarkCard/,
+    /renderDashboardCardWindow/,
+    /dashboard-performance/,
+    /createDashboardFaviconWarmupQueue/,
+    /getDashboardVirtualWindow/,
+    /buildDashboardModel/,
+    /filterDashboardItems/,
+    /sortDashboardItems/
+  ]) {
+    assert.doesNotMatch(script, pattern)
+  }
 })
 
-test('newtab dashboard keeps original options dashboard class semantics', () => {
+test('newtab does not duplicate options dashboard markup or card semantics', () => {
   const html = readProjectFile('src/newtab/newtab.html')
   const script = readProjectFile('src/newtab/newtab.ts')
 
-  assert.match(html, /class="options-panel dashboard-panel"/)
+  assert.doesNotMatch(html, /class="options-panel dashboard-panel"/)
+  assert.doesNotMatch(html, /id="newtab-dashboard"[\s\S]*data-newtab-dashboard-root/)
 
   for (const className of [
     'options-section-label',
@@ -245,13 +271,13 @@ test('newtab dashboard keeps original options dashboard class semantics', () => 
     'dashboard-card-grid',
     'dashboard-bookmark-card'
   ]) {
-    assert.match(script, new RegExp(className))
+    assert.doesNotMatch(script, new RegExp(className))
   }
 
-  assert.match(script, /Visual Bookmark Management/)
-  assert.match(script, /全部书签/)
-  assert.match(script, /detect-result-open/)
-  assert.match(script, /detect-result-action/)
+  assert.doesNotMatch(script, /Visual Bookmark Management/)
+  assert.doesNotMatch(script, /全部书签/)
+  assert.doesNotMatch(script, /detect-result-open/)
+  assert.doesNotMatch(script, /detect-result-action/)
 })
 
 test('newtab boots with a wallpaper loading guard before app content is shown', () => {
@@ -412,45 +438,24 @@ test('newtab settings section titles are visually prominent', () => {
   assert.match(sectionTitleRule, /color:\s*rgba\(245,\s*245,\s*247,\s*0\.78\)/)
 })
 
-test('newtab dashboard glass layer is scoped away from options dashboard styles', () => {
+test('newtab dashboard glass layer only styles the iframe shell', () => {
   const newtabCss = readProjectFile('src/newtab/newtab.css')
   const optionsCss = readProjectFile('src/options/options.css')
 
   assert.match(newtabCss, /\.newtab-dashboard-overlay\s*\{[\s\S]*?position:\s*fixed/)
   assert.match(newtabCss, /\.newtab-dashboard-overlay\s*\{[\s\S]*?inset:\s*0/)
   assert.match(newtabCss, /\.newtab-dashboard-overlay\[hidden\]\s*\{[\s\S]*?display:\s*none/)
-  assert.match(newtabCss, /\.newtab-dashboard-surface\s*\{[\s\S]*?width:\s*min\(1180px,\s*100%\)/)
-  assert.match(newtabCss, /\.newtab-dashboard-surface\s*\{[\s\S]*?backdrop-filter:\s*blur\(24px\)\s*saturate\(0\.92\)/)
-  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-title-row\s*\{/)
-  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-toolbar\s*\{/)
-  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-card-grid\s*\{/)
-  assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-bookmark-card\s*\{/)
-  assert.match(newtabCss, /@media \(max-width: 680px\)[\s\S]*?\.newtab-dashboard-surface \.dashboard-card-grid/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface\s*\{[\s\S]*?backdrop-filter:\s*blur\(/)
+  assert.match(newtabCss, /\.newtab-dashboard-frame\s*\{/)
   assert.match(newtabCss, /@media \(prefers-reduced-motion: reduce\)/)
 
-  assert.doesNotMatch(newtabCss, /(?:^|\n)\.dashboard-(?:title-row|toolbar|card-grid|bookmark-card)\s*\{/)
-  assert.doesNotMatch(optionsCss, /newtab-dashboard-(?:overlay|surface)/)
-  assert.doesNotMatch(optionsCss, /backdrop-filter:\s*blur\(24px\)\s*saturate\(0\.92\)/)
-})
-
-test('newtab dashboard bounds large-list rendering with a virtual window', () => {
-  const script = readProjectFile('src/newtab/newtab.ts')
-  const css = readProjectFile('src/newtab/newtab.css')
-  const mobileVirtualGridRule = getCssRuleBody(
-    css,
-    '.newtab-dashboard-surface .dashboard-card-grid,\n  .newtab-dashboard-surface .dashboard-virtual-window'
+  assert.doesNotMatch(
+    newtabCss,
+    /\.newtab-dashboard-surface\s+\.(?:dashboard-|options-|detect-)/
   )
-  const mobileCardRule = getCssRuleBodies(css, '.newtab-dashboard-surface .dashboard-bookmark-card').at(-1) || ''
-
-  assert.match(script, /NEWTAB_DASHBOARD_VIRTUAL_THRESHOLD = 120/)
-  assert.match(script, /function renderDashboardCardWindow\(/)
-  assert.match(script, /visibleItems\.length < NEWTAB_DASHBOARD_VIRTUAL_THRESHOLD/)
-  assert.match(script, /getDashboardVirtualWindow\(/)
-  assert.match(script, /visibleItems\.slice\(startIndex, rowEndIndex\)/)
-  assert.match(script, /dashboardRoot\?\.addEventListener\('scroll', handleDashboardScroll, true\)/)
-  assert.match(script, /function restoreDashboardVirtualScroll\(\): void/)
-  assert.match(css, /\.newtab-dashboard-surface \.dashboard-card-grid\.is-virtualized/)
-  assert.match(css, /\.newtab-dashboard-surface \.dashboard-virtual-window/)
-  assert.match(mobileVirtualGridRule, /grid-auto-rows:\s*176px/)
-  assert.match(mobileCardRule, /height:\s*176px/)
+  assert.doesNotMatch(
+    newtabCss,
+    /@media [^{]+\{[\s\S]*?\.newtab-dashboard-surface\s+\.dashboard-(?:title-row|toolbar|card-grid|bookmark-card)/
+  )
+  assert.doesNotMatch(optionsCss, /newtab-dashboard-(?:overlay|surface|frame)/)
 })
