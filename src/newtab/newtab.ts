@@ -1351,14 +1351,6 @@ function createBookmarkDragGhost(sourceTile = getActiveDragTile()): void {
   }
 
   const rect = sourceTile.getBoundingClientRect()
-  const iconRect = sourceTile.querySelector('.bookmark-icon-shell')?.getBoundingClientRect()
-  state.dragOffsetX = iconRect
-    ? iconRect.left + iconRect.width / 2 - rect.left
-    : rect.width / 2
-  state.dragOffsetY = iconRect
-    ? iconRect.top + iconRect.height / 2 - rect.top
-    : rect.height / 2
-
   const ghost = sourceTile.cloneNode(true) as HTMLElement
   ghost.classList.remove('dragging')
   ghost.classList.add('bookmark-drag-ghost')
@@ -1366,11 +1358,45 @@ function createBookmarkDragGhost(sourceTile = getActiveDragTile()): void {
   ghost.removeAttribute('data-bookmark-id')
   ghost.removeAttribute('data-folder-id')
   ghost.setAttribute('aria-hidden', 'true')
+  copyBookmarkDragGhostVariables(sourceTile, ghost)
   ghost.style.width = `${rect.width}px`
   ghost.style.height = `${rect.height}px`
   bookmarkDragGhost = ghost
   document.body.appendChild(ghost)
+  syncBookmarkDragOffsetToGhostIcon(ghost, rect)
   updateBookmarkDragGhost({ immediate: true })
+}
+
+function copyBookmarkDragGhostVariables(sourceTile: HTMLElement, ghost: HTMLElement): void {
+  const sourceStyles = window.getComputedStyle(sourceTile)
+  const inheritedVariableNames = [
+    '--icon-shell-size',
+    '--icon-title-lines',
+    '--bookmark-card-rgb',
+    '--bookmark-card-bg-alpha',
+    '--bookmark-card-border-alpha',
+    '--bookmark-card-hover-alpha'
+  ]
+
+  for (const variableName of inheritedVariableNames) {
+    const value = sourceStyles.getPropertyValue(variableName).trim()
+    if (value) {
+      ghost.style.setProperty(variableName, value)
+    }
+  }
+}
+
+function syncBookmarkDragOffsetToGhostIcon(ghost: HTMLElement, sourceRect: DOMRect): void {
+  const ghostRect = ghost.getBoundingClientRect()
+  const iconRect = ghost.querySelector('.bookmark-icon-shell')?.getBoundingClientRect()
+  if (iconRect && ghostRect.width && ghostRect.height) {
+    state.dragOffsetX = iconRect.left + iconRect.width / 2 - ghostRect.left
+    state.dragOffsetY = iconRect.top + iconRect.height / 2 - ghostRect.top
+    return
+  }
+
+  state.dragOffsetX = sourceRect.width / 2
+  state.dragOffsetY = sourceRect.height / 2
 }
 
 function getActiveDragTile(): HTMLElement | null {
