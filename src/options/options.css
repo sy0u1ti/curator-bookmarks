@@ -2303,6 +2303,10 @@ a {
   line-height: 1.25;
 }
 
+.ai-decision-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .availability-filter-bar,
 .availability-result-actions {
   display: flex;
@@ -4428,6 +4432,10 @@ body.dashboard-fullscreen-active {
   }
 
   .availability-decision-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ai-decision-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

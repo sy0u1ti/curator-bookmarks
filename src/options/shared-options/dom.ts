@@ -99,6 +99,7 @@ export function cacheDom() {
   dom.aiProgressText = byId('ai-progress-text')
   dom.aiProgressBar = byId('ai-progress-bar')
   dom.aiProgressCopy = byId('ai-progress-copy')
+  dom.aiDecisionStatus = byId('ai-decision-status')
   dom.aiEligible = byId('ai-eligible')
   dom.aiSuggested = byId('ai-suggested')
   dom.aiManualReview = byId('ai-manual-review')

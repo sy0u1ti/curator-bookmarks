@@ -3617,6 +3617,9 @@ function renderAiNamingSection() {
   dom.aiMediumConfidence.textContent = String(aiNamingState.mediumConfidenceCount)
   dom.aiLowConfidence.textContent = String(aiNamingState.lowConfidenceCount)
   dom.aiFailed.textContent = String(aiNamingState.failedCount)
+  if (dom.aiDecisionStatus) {
+    dom.aiDecisionStatus.textContent = getAiNamingDecisionStatusText()
+  }
 
   const selectableResults = getSelectableAiNamingResults()
   const highConfidenceResults = selectableResults.filter((result) => result.confidence === 'high')
@@ -3662,6 +3665,32 @@ function renderAiNamingSection() {
   renderAiResultsFilterControls()
 
   renderAiNamingResults()
+}
+
+function getAiNamingDecisionStatusText() {
+  const progressLabel = aiNamingState.eligibleBookmarks
+    ? `${aiNamingState.checkedBookmarks} / ${aiNamingState.eligibleBookmarks}`
+    : ''
+
+  if (aiNamingState.running) {
+    if (aiNamingState.stopRequested) {
+      return progressLabel ? `停止中 ${progressLabel}` : '停止中'
+    }
+    if (aiNamingState.paused) {
+      return progressLabel ? `已暂停 ${progressLabel}` : '已暂停'
+    }
+    return progressLabel ? `生成中 ${progressLabel}` : '生成中'
+  }
+
+  if (aiNamingState.applying) {
+    return '应用中'
+  }
+
+  if (aiNamingState.lastCompletedAt) {
+    return progressLabel ? `已完成 ${progressLabel}` : formatDateTime(aiNamingState.lastCompletedAt)
+  }
+
+  return '未开始'
 }
 
 function renderBookmarkTagDataCard() {

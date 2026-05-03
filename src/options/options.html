@@ -859,39 +859,48 @@
               <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>
             </div>
 
-            <div class="detect-summary-grid">
-              <article class="summary-card metric-card metric-total">
-                <span class="summary-label">可处理</span>
-                <strong id="ai-eligible">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-success">
-                <span class="summary-label">已建议</span>
-                <strong id="ai-suggested">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-warning">
-                <span class="summary-label">待确认</span>
-                <strong id="ai-manual-review">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-muted">
-                <span class="summary-label">无需改名</span>
-                <strong id="ai-unchanged">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-success">
-                <span class="summary-label">高置信</span>
-                <strong id="ai-high-confidence">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-info">
-                <span class="summary-label">中置信</span>
-                <strong id="ai-medium-confidence">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-warning">
-                <span class="summary-label">低置信</span>
-                <strong id="ai-low-confidence">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-danger">
-                <span class="summary-label">失败</span>
-                <strong id="ai-failed">0</strong>
-              </article>
+            <div class="availability-decision-panel ai-decision-panel" aria-label="书签智能分析决策概览">
+              <div class="availability-decision-header">
+                <div>
+                  <strong>决策面板</strong>
+                  <p class="detect-results-subtitle">先查看可直接应用的建议，再处理待确认、低置信和失败项。</p>
+                </div>
+                <span id="ai-decision-status" class="option-value">未开始</span>
+              </div>
+              <div class="availability-decision-grid ai-decision-grid">
+                <div>
+                  <span class="summary-label">可处理</span>
+                  <strong id="ai-eligible">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">已建议</span>
+                  <strong id="ai-suggested">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">待确认</span>
+                  <strong id="ai-manual-review">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">无需改名</span>
+                  <strong id="ai-unchanged">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">高置信</span>
+                  <strong id="ai-high-confidence">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">中置信</span>
+                  <strong id="ai-medium-confidence">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">低置信</span>
+                  <strong id="ai-low-confidence">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">失败</span>
+                  <strong id="ai-failed">0</strong>
+                </div>
+              </div>
             </div>
 
             <div id="ai-selection-group" class="options-group detect-selection-group hidden">

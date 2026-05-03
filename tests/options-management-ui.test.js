@@ -184,6 +184,22 @@ test('availability management links are grouped under a collapsible sidebar titl
   assert.match(optionsCss, /\.options-nav-group-caret/)
 })
 
+test('smart bookmark analysis uses the decision panel summary layout', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const domSource = readProjectFile('src/options/shared-options/dom.ts')
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[^>]+aria-label="书签智能分析决策概览"/)
+  assert.match(optionsHtml, /id="ai-decision-status"[^>]*>未开始/)
+  assert.match(optionsHtml, /class="availability-decision-grid ai-decision-grid"[\s\S]*?id="ai-eligible"[\s\S]*?id="ai-suggested"[\s\S]*?id="ai-manual-review"[\s\S]*?id="ai-unchanged"[\s\S]*?id="ai-high-confidence"[\s\S]*?id="ai-medium-confidence"[\s\S]*?id="ai-low-confidence"[\s\S]*?id="ai-failed"/)
+  assert.doesNotMatch(optionsHtml, /<article class="summary-card metric-card[\s\S]*?id="ai-eligible"/)
+  assert.match(domSource, /aiDecisionStatus/)
+  assert.match(optionsSource, /function getAiNamingDecisionStatusText/)
+  assert.match(optionsSource, /dom\.aiDecisionStatus\.textContent = getAiNamingDecisionStatusText\(\)/)
+  assert.match(optionsCss, /\.ai-decision-grid/)
+})
+
 test('availability checks use adaptive runner with user settings', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
