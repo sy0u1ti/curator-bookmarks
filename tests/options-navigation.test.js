@@ -32,3 +32,17 @@ test('smart analysis section uses the renamed Chinese entry copy', () => {
   assert.doesNotMatch(optionsHtml, /标签与命名建议/)
   assert.doesNotMatch(constants, /标签与命名建议/)
 })
+
+test('options dashboard entry keeps the settings-page dashboard instead of redirecting to newtab', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  const dashboardEntry = optionsHtml.match(/<a\s+class="options-dashboard-entry"[\s\S]*?<\/a>/)?.[0] || ''
+  assert.match(dashboardEntry, /href="#dashboard"/)
+  assert.match(dashboardEntry, /data-section-link="dashboard"/)
+  assert.doesNotMatch(dashboardEntry, /newtab\.html#dashboard/)
+  assert.doesNotMatch(dashboardEntry, /data-dashboard-entry/)
+
+  assert.match(optionsSource, /document\.body\.classList\.toggle\('dashboard-fullscreen-active', key === 'dashboard'\)/)
+  assert.doesNotMatch(optionsSource, /NEWTAB_DASHBOARD_PATH|openNewTabDashboard|handleDashboardEntryClick/)
+})
