@@ -750,10 +750,10 @@ body.background-mask-enabled .newtab-background-mask {
   inset: 0;
   z-index: 60;
   display: grid;
-  align-items: start;
-  justify-items: center;
-  overflow: auto;
-  padding: clamp(16px, 4vw, 32px);
+  align-items: stretch;
+  justify-items: stretch;
+  overflow: hidden;
+  padding: 0;
   background: rgba(0, 0, 0, 0.18);
 }
 
@@ -764,13 +764,15 @@ body.background-mask-enabled .newtab-background-mask {
 .newtab-dashboard-surface {
   position: relative;
   display: grid;
-  width: min(2200px, 100%);
+  width: 100vw;
+  width: 100dvw;
   min-width: 0;
-  height: min(1040px, calc(100vh - 64px));
-  min-height: min(760px, calc(100vh - 64px));
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
   overflow: hidden;
   border: 1px solid rgba(245, 245, 247, 0.12);
-  border-radius: 8px;
+  border-radius: 0;
   background: rgba(5, 5, 6, 0.68);
   box-shadow:
     0 24px 72px rgba(0, 0, 0, 0.36),
@@ -3348,10 +3350,12 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   }
 
   .newtab-dashboard-surface {
-    width: 100%;
+    width: 100vw;
+    width: 100dvw;
     height: 100vh;
+    height: 100dvh;
     min-height: 0;
-    border-radius: 8px;
+    border-radius: 0;
   }
 
   .newtab-portal {
