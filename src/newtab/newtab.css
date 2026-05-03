@@ -1278,9 +1278,9 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
 
 .bookmark-tile {
   --bookmark-card-rgb: 245 245 247;
-  --bookmark-card-bg-alpha: 0.046;
-  --bookmark-card-border-alpha: 0.12;
-  --bookmark-card-hover-alpha: 0.07;
+  --bookmark-card-bg-alpha: 0.04;
+  --bookmark-card-border-alpha: 0.08;
+  --bookmark-card-hover-alpha: 0.075;
   display: grid;
   width: 100%;
   min-height: calc(var(--icon-shell-size) + 18px);
@@ -1289,15 +1289,9 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
   gap: 10px;
   justify-self: stretch;
   padding: 8px 10px;
-  border: 1px solid rgb(var(--bookmark-card-rgb) / var(--bookmark-card-border-alpha));
-  border-radius: 8px;
-  background:
-    linear-gradient(
-      135deg,
-      rgb(var(--bookmark-card-rgb) / var(--bookmark-card-bg-alpha)),
-      rgba(255, 255, 255, 0.024)
-    ),
-    rgba(8, 8, 9, 0.42);
+  border: 1px solid rgba(245, 245, 247, var(--bookmark-card-border-alpha));
+  border-radius: 7px;
+  background: rgba(245, 245, 247, var(--bookmark-card-bg-alpha));
   color: var(--text);
   text-align: left;
   text-decoration: none;
@@ -1329,21 +1323,15 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
 
 .bookmark-tile:hover,
 .bookmark-tile:focus-visible {
-  border-color: rgb(var(--bookmark-card-rgb) / 0.22);
-  background:
-    linear-gradient(
-      135deg,
-      rgb(var(--bookmark-card-rgb) / var(--bookmark-card-hover-alpha)),
-      rgba(255, 255, 255, 0.034)
-    ),
-    rgba(14, 14, 15, 0.58);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.18);
+  border-color: rgba(245, 245, 247, 0.16);
+  background: rgba(245, 245, 247, var(--bookmark-card-hover-alpha));
+  box-shadow: none;
   transform: translateY(-1px);
 }
 
 .bookmark-tile:active {
-  border-color: rgb(var(--bookmark-card-rgb) / 0.16);
-  background: rgba(8, 8, 9, 0.72);
+  border-color: rgba(245, 245, 247, 0.12);
+  background: rgba(245, 245, 247, 0.055);
   box-shadow: none;
   transform: translateY(1px) scale(0.985);
   transition-duration: 60ms;
@@ -1367,14 +1355,8 @@ body.bookmark-drag-preview-initializing .bookmark-tile {
 body.bookmark-dragging .bookmark-tile:not(.dragging):hover,
 body.bookmark-dragging .bookmark-tile:not(.dragging):active,
 body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible {
-  border-color: rgb(var(--bookmark-card-rgb) / var(--bookmark-card-border-alpha));
-  background:
-    linear-gradient(
-      135deg,
-      rgb(var(--bookmark-card-rgb) / var(--bookmark-card-bg-alpha)),
-      rgba(255, 255, 255, 0.024)
-    ),
-    rgba(8, 8, 9, 0.42);
+  border-color: rgba(245, 245, 247, var(--bookmark-card-border-alpha));
+  background: rgba(245, 245, 247, var(--bookmark-card-bg-alpha));
   box-shadow: none;
   transform: none;
 }

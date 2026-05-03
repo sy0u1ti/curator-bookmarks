@@ -212,6 +212,15 @@ test('newtab settings expose one combined quick access switch', () => {
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
 
+test('newtab search settings use Google as the default engine without duplicate default entry', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+  const source = readProjectFile('src/newtab/newtab.ts')
+
+  assert.doesNotMatch(html, /value="default"/)
+  assert.doesNotMatch(html, /data-search-engine-toggle="default"/)
+  assert.match(source, /engine:\s*'google'\s+as SearchEngineId/)
+})
+
 test('newtab exposes a lazy options dashboard iframe route', () => {
   const html = readProjectFile('src/newtab/newtab.html')
   const script = readProjectFile('src/newtab/newtab.ts')
@@ -476,4 +485,16 @@ test('newtab dashboard glass layer only styles the iframe shell', () => {
     /\.newtab-dashboard-surface\s+\.dashboard-(?:content-layout|folder-sidebar|folder-tree)/
   )
   assert.doesNotMatch(optionsCss, /newtab-dashboard-(?:overlay|surface|frame)/)
+})
+
+test('newtab bookmark tiles match the frosted overview card surface', () => {
+  const newtabCss = readProjectFile('src/newtab/newtab.css')
+  const tileRule = getCssRuleBody(newtabCss, '.bookmark-tile')
+  const hoverRule = getCssRuleBody(newtabCss, '.bookmark-tile:hover,\n.bookmark-tile:focus-visible')
+
+  assert.match(tileRule, /border-radius:\s*7px/)
+  assert.match(tileRule, /background:\s*rgba\(245,\s*245,\s*247,\s*var\(--bookmark-card-bg-alpha\)\)/)
+  assert.doesNotMatch(tileRule, /linear-gradient/)
+  assert.match(hoverRule, /background:\s*rgba\(245,\s*245,\s*247,\s*var\(--bookmark-card-hover-alpha\)\)/)
+  assert.doesNotMatch(hoverRule, /box-shadow:\s*0\s+10px/)
 })

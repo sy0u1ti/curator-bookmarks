@@ -1,5 +1,4 @@
 export type SearchEngineId =
-  | 'default'
   | 'google'
   | 'bing'
   | 'baidu'
@@ -27,13 +26,6 @@ export type SearchOpenTarget = {
 export const SEARCH_MULTI_OPEN_LIMIT = 4
 
 export const SEARCH_ENGINE_CONFIGS: SearchEngineConfig[] = [
-  {
-    id: 'default',
-    name: '默认',
-    shortName: '默认',
-    urlTemplate: 'https://www.google.com/search?q={query}',
-    defaultEnabled: true
-  },
   {
     id: 'google',
     name: 'Google',
@@ -113,13 +105,13 @@ export function isSearchEngineId(value: unknown): value is SearchEngineId {
   return typeof value === 'string' && SEARCH_ENGINE_IDS.has(value as SearchEngineId)
 }
 
-export function normalizeSearchEngineId(value: unknown, fallback: SearchEngineId = 'default'): SearchEngineId {
+export function normalizeSearchEngineId(value: unknown, fallback: SearchEngineId = 'google'): SearchEngineId {
   return isSearchEngineId(value) ? value : fallback
 }
 
 export function normalizeEnabledSearchEngineIds(
   rawIds: unknown,
-  selectedEngine: SearchEngineId = 'default'
+  selectedEngine: SearchEngineId = 'google'
 ): SearchEngineId[] {
   const ids = Array.isArray(rawIds)
     ? rawIds.filter(isSearchEngineId)
@@ -140,7 +132,7 @@ export function normalizeEnabledSearchEngineIds(
 }
 
 export function buildSearchEngineUrl(query: string, engineId: SearchEngineId): string {
-  const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId) || SEARCH_ENGINE_CONFIG_BY_ID.get('default')
+  const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId) || SEARCH_ENGINE_CONFIG_BY_ID.get('google')
   const encodedQuery = encodeURIComponent(String(query || '').trim())
   return String(engine?.urlTemplate || SEARCH_ENGINE_CONFIGS[0].urlTemplate).replace('{query}', encodedQuery)
 }
@@ -162,7 +154,7 @@ export function planSearchOpenTargets(
     : [selectedEngine]
 
   return engineIds.map((engineId) => {
-    const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId) || SEARCH_ENGINE_CONFIG_BY_ID.get('default')!
+    const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId) || SEARCH_ENGINE_CONFIG_BY_ID.get('google')!
     return {
       engineId,
       engineName: engine.name,

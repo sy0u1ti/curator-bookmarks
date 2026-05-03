@@ -58,6 +58,18 @@ test('dashboard renders a clickable folder sidebar filter with bookmark counts',
   assert.doesNotMatch(dashboardSource, /title:\s*'全部书签'/)
 })
 
+test('dashboard search toolbar omits duplicate result count and placeholder copy', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const domSource = readProjectFile('src/options/shared-options/dom.ts')
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
+  const queryInput = optionsHtml.match(/<input[^>]+id="dashboard-query"[^>]*>/)?.[0] || ''
+
+  assert.match(queryInput, /placeholder=""/)
+  assert.doesNotMatch(optionsHtml, /id="dashboard-result-count"/)
+  assert.doesNotMatch(domSource, /dashboardResultCount/)
+  assert.doesNotMatch(dashboardSource, /dashboardResultCount/)
+})
+
 test('dashboard folder sidebar layout and active styles are defined', () => {
   const optionsCss = readProjectFile('src/options/options.css')
 

@@ -10,9 +10,10 @@ import {
 
 test('normalizes search engine selection and enabled order', () => {
   assert.equal(normalizeSearchEngineId('perplexity'), 'perplexity')
-  assert.equal(normalizeSearchEngineId('unknown'), 'default')
+  assert.equal(normalizeSearchEngineId('unknown'), 'google')
+  assert.equal(normalizeSearchEngineId('default'), 'google')
   assert.deepEqual(
-    normalizeEnabledSearchEngineIds(['bing', 'bing', 'chatgpt', 'bad'], 'google'),
+    normalizeEnabledSearchEngineIds(['default', 'bing', 'bing', 'chatgpt', 'bad'], 'google'),
     ['google', 'bing', 'chatgpt']
   )
 })

@@ -123,7 +123,7 @@ const SUPPORTED_BACKGROUND_MASK_STYLES = new Set(['dark', 'frosted', 'light'])
 const DEFAULT_SEARCH_SETTINGS = {
   enabled: true,
   openInNewTab: false,
-  engine: 'default' as SearchEngineId,
+  engine: 'google' as SearchEngineId,
   enabledEngines: DEFAULT_ENABLED_SEARCH_ENGINE_IDS,
   placeholder: '搜索网页或书签',
   width: 44,
@@ -3123,7 +3123,7 @@ function getSearchEnterHint(suggestion: SearchBookmarkSuggestion | undefined): s
 }
 
 function getCurrentSearchEngineName(): string {
-  return SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)?.name || '默认'
+  return SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)?.name || 'Google'
 }
 
 function getEngineSearchHint(query: string): string {

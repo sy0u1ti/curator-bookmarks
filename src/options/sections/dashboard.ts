@@ -245,9 +245,6 @@ export function renderDashboardSection(): void {
   )
 
   dom.dashboardTotal.textContent = `(${model.totalBookmarks})`
-  dom.dashboardResultCount.textContent = visibleItems.length === model.items.length
-    ? `${visibleItems.length} 条书签`
-    : `${visibleItems.length} / ${model.items.length} 条书签`
   dom.dashboardStatus.innerHTML = availabilityState.deleting
     ? renderDashboardLoadingLabel('正在处理所选书签...', {
       loaderClass: 'dashboard-status-dot-loader'

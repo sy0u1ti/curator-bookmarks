@@ -33,7 +33,6 @@ export function cacheDom() {
   dom.dashboardClearSelection = byId('dashboard-clear-selection')
   dom.dashboardMoveSelection = byId('dashboard-move-selection')
   dom.dashboardDeleteSelection = byId('dashboard-delete-selection')
-  dom.dashboardResultCount = byId('dashboard-result-count')
   dom.dashboardResults = byId('dashboard-results')
   dom.dashboardDragOverlay = byId('dashboard-drag-overlay')
   dom.dashboardDeleteDropTarget = byId('dashboard-delete-drop-target')
