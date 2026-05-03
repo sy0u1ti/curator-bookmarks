@@ -6,6 +6,7 @@ import {
   buildBookmarkOrderAfterInsert,
   buildMinimalBookmarkMoveOperations,
   resolveRestorableBookmarkParentId,
+  resolveBookmarkDragInsertIndex,
   shouldInsertAfterBookmarkTile,
   validateBackgroundBlobSize,
   validateBackgroundContentLength
@@ -131,6 +132,50 @@ test('bookmark drag insertion uses vertical order across rows', () => {
   assert.equal(
     shouldInsertAfterBookmarkTile({ x: 120, y: 82 }, targetRect),
     true
+  )
+})
+
+test('bookmark drag slot hit testing keeps the first column reachable across rows', () => {
+  const slots = [
+    { id: 'a', left: 0, top: 0, width: 100, height: 72 },
+    { id: 'b', left: 120, top: 0, width: 100, height: 72 },
+    { id: 'c', left: 240, top: 0, width: 100, height: 72 },
+    { id: 'd', left: 0, top: 92, width: 100, height: 72 },
+    { id: 'e', left: 120, top: 92, width: 100, height: 72 },
+    { id: 'f', left: 240, top: 92, width: 100, height: 72 }
+  ]
+
+  assert.equal(
+    resolveBookmarkDragInsertIndex(slots, 'a', { x: 18, y: 128 }),
+    3
+  )
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(slots.map((slot) => slot.id), 'a', 3),
+    ['b', 'c', 'd', 'a', 'e', 'f']
+  )
+})
+
+test('bookmark drag slot hit testing uses slot boundaries for direct replacement', () => {
+  const slots = [
+    { id: 'a', left: 0, top: 0, width: 100, height: 72 },
+    { id: 'b', left: 120, top: 0, width: 100, height: 72 },
+    { id: 'c', left: 240, top: 0, width: 100, height: 72 },
+    { id: 'd', left: 0, top: 92, width: 100, height: 72 },
+    { id: 'e', left: 120, top: 92, width: 100, height: 72 },
+    { id: 'f', left: 240, top: 92, width: 100, height: 72 }
+  ]
+
+  assert.equal(
+    resolveBookmarkDragInsertIndex(slots, 'a', { x: 96, y: 128 }),
+    3
+  )
+  assert.equal(
+    resolveBookmarkDragInsertIndex(slots, 'a', { x: 116, y: 128 }),
+    4
+  )
+  assert.equal(
+    resolveBookmarkDragInsertIndex(slots, 'f', { x: 20, y: 128 }),
+    3
   )
 })
 

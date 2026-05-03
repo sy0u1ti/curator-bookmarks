@@ -77,6 +77,8 @@ import {
   buildBookmarkOrderAfterInsert,
   buildMinimalBookmarkMoveOperations,
   resolveRestorableBookmarkParentId,
+  resolveBookmarkDragInsertIndex,
+  type BookmarkDragSlotRectLike,
   validateBackgroundBlobSize,
   validateBackgroundContentLength
 } from './interactions.js'
@@ -1493,25 +1495,16 @@ function getBookmarkInsertIndex(clientX: number, clientY: number): number {
     return -1
   }
 
-  const candidates = getBookmarkDragLayoutCandidates()
-  if (!candidates.length) {
+  const slots = getBookmarkDragLayoutSlots()
+  if (!slots.length) {
     return -1
   }
 
-  const row = getBookmarkDragTargetRow(candidates, clientY)
-  if (!row.length) {
-    return -1
-  }
-
-  for (const candidate of row) {
-    const centerX = candidate.rect.left + candidate.rect.width / 2
-    if (clientX < centerX) {
-      return candidates.indexOf(candidate)
-    }
-  }
-
-  const lastCandidate = row[row.length - 1]
-  return candidates.indexOf(lastCandidate) + 1
+  return resolveBookmarkDragInsertIndex(
+    slots,
+    state.draggingBookmarkId,
+    getBookmarkDragTargetPoint(clientX, clientY)
+  )
 }
 
 function hasBookmarkInsertChange(insertIndex: number): boolean {
@@ -1570,15 +1563,20 @@ function getActiveBookmarkGrid(): HTMLElement | null {
   )
 }
 
-function getBookmarkDragLayoutCandidates(): Array<{ id: string; rect: DOMRect }> {
+function getBookmarkDragLayoutSlots(): BookmarkDragSlotRectLike[] {
   if (bookmarkDragSlotOrderIds.length && bookmarkDragSlotRects.size) {
     return bookmarkDragSlotOrderIds
-      .filter((bookmarkId) => bookmarkId !== state.draggingBookmarkId)
       .map((bookmarkId) => {
         const rect = bookmarkDragSlotRects.get(bookmarkId)
-        return rect ? { id: bookmarkId, rect } : null
+        return rect ? {
+          id: bookmarkId,
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height
+        } : null
       })
-      .filter((candidate): candidate is { id: string; rect: DOMRect } => Boolean(candidate))
+      .filter((slot): slot is BookmarkDragSlotRectLike => Boolean(slot))
   }
 
   const grid = getActiveBookmarkGrid()
@@ -1588,56 +1586,25 @@ function getBookmarkDragLayoutCandidates(): Array<{ id: string; rect: DOMRect }>
 
   return Array
     .from(grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]'))
-    .filter((tile) => String(tile.dataset.bookmarkId || '') !== state.draggingBookmarkId)
-    .map((tile) => ({
-      id: String(tile.dataset.bookmarkId || ''),
-      rect: tile.getBoundingClientRect()
-    }))
-    .filter((candidate) => candidate.id)
+    .map((tile) => {
+      const rect = tile.getBoundingClientRect()
+      return {
+        id: String(tile.dataset.bookmarkId || ''),
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height
+      }
+    })
+    .filter((slot) => slot.id)
 }
 
-function getBookmarkDragTargetRow(
-  candidates: Array<{ id: string; rect: DOMRect }>,
+function getBookmarkDragTargetPoint(
+  clientX: number,
   clientY: number
-): Array<{ id: string; rect: DOMRect }> {
-  const rows: Array<Array<{ id: string; rect: DOMRect }>> = []
-  for (const candidate of candidates) {
-    const centerY = candidate.rect.top + candidate.rect.height / 2
-    const row = rows.find((items) => {
-      const first = items[0]
-      const firstCenterY = first.rect.top + first.rect.height / 2
-      return Math.abs(centerY - firstCenterY) <= Math.max(8, Math.min(first.rect.height, candidate.rect.height) * 0.5)
-    })
-    if (row) {
-      row.push(candidate)
-    } else {
-      rows.push([candidate])
-    }
-  }
-
-  for (const row of rows) {
-    row.sort((left, right) => left.rect.left - right.rect.left)
-  }
-  rows.sort((left, right) => left[0].rect.top - right[0].rect.top)
-
-  let closestRow: Array<{ id: string; rect: DOMRect }> | null = null
-  let closestDistance = Number.POSITIVE_INFINITY
-  for (const row of rows) {
-    const top = Math.min(...row.map((candidate) => candidate.rect.top))
-    const bottom = Math.max(...row.map((candidate) => candidate.rect.bottom))
-    const centerY = (top + bottom) / 2
-    const distance = clientY < top
-      ? top - clientY
-      : clientY > bottom
-        ? clientY - bottom
-        : Math.abs(clientY - centerY) * 0.2
-    if (distance < closestDistance) {
-      closestDistance = distance
-      closestRow = row
-    }
-  }
-
-  return closestRow || []
+): { x: number; y: number } {
+  // The pointer is kept at the favicon center, so it matches the point users steer visually.
+  return { x: clientX, y: clientY }
 }
 
 function syncBookmarkDragVisualPreview(): void {

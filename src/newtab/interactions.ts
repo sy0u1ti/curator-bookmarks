@@ -14,6 +14,10 @@ export interface BookmarkTileRectLike {
   height: number
 }
 
+export interface BookmarkDragSlotRectLike extends BookmarkTileRectLike {
+  id: string
+}
+
 export interface BackgroundFetchSizeCheck {
   allowed: boolean
   message?: string
@@ -127,6 +131,116 @@ export function shouldInsertAfterBookmarkTile(
   }
 
   return pointer.x > targetCenterX
+}
+
+export function resolveBookmarkDragInsertIndex(
+  slotRects: BookmarkDragSlotRectLike[],
+  draggedId: string,
+  targetPoint: { x: number; y: number }
+): number {
+  const normalizedDraggedId = String(draggedId || '').trim()
+  if (!normalizedDraggedId || !slotRects.length) {
+    return -1
+  }
+
+  const slotRows = groupBookmarkDragSlotRows(slotRects)
+  const targetRow = findBookmarkDragTargetRow(slotRows, targetPoint.y)
+  if (!targetRow.length) {
+    return -1
+  }
+
+  const targetSlotIndex = resolveBookmarkDragTargetSlotIndex(targetRow, targetPoint.x)
+  const slotIndex = slotRects.findIndex((slot) => slot.id === targetRow[targetSlotIndex].id)
+  if (slotIndex < 0) {
+    return -1
+  }
+
+  return slotIndexToBookmarkInsertIndex(slotRects, normalizedDraggedId, slotIndex)
+}
+
+function groupBookmarkDragSlotRows(
+  slotRects: BookmarkDragSlotRectLike[]
+): BookmarkDragSlotRectLike[][] {
+  const rows: BookmarkDragSlotRectLike[][] = []
+  for (const slot of slotRects) {
+    const centerY = slot.top + slot.height / 2
+    const row = rows.find((items) => {
+      const first = items[0]
+      const firstCenterY = first.top + first.height / 2
+      return Math.abs(centerY - firstCenterY) <= Math.max(8, Math.min(first.height, slot.height) * 0.5)
+    })
+    if (row) {
+      row.push(slot)
+    } else {
+      rows.push([slot])
+    }
+  }
+
+  for (const row of rows) {
+    row.sort((left, right) => left.left - right.left)
+  }
+  rows.sort((left, right) => left[0].top - right[0].top)
+  return rows
+}
+
+function findBookmarkDragTargetRow(
+  rows: BookmarkDragSlotRectLike[][],
+  targetY: number
+): BookmarkDragSlotRectLike[] {
+  let closestRow: BookmarkDragSlotRectLike[] | null = null
+  let closestDistance = Number.POSITIVE_INFINITY
+  for (const row of rows) {
+    const top = Math.min(...row.map((slot) => slot.top))
+    const bottom = Math.max(...row.map((slot) => slot.top + slot.height))
+    const centerY = (top + bottom) / 2
+    const distance = targetY < top
+      ? top - targetY
+      : targetY > bottom
+        ? targetY - bottom
+        : Math.abs(targetY - centerY) * 0.2
+    if (distance < closestDistance) {
+      closestDistance = distance
+      closestRow = row
+    }
+  }
+
+  return closestRow || []
+}
+
+function resolveBookmarkDragTargetSlotIndex(
+  row: BookmarkDragSlotRectLike[],
+  targetX: number
+): number {
+  if (row.length <= 1) {
+    return 0
+  }
+
+  for (let index = 0; index < row.length - 1; index += 1) {
+    const leftSlot = row[index]
+    const rightSlot = row[index + 1]
+    const boundaryX = (
+      leftSlot.left + leftSlot.width / 2 +
+      rightSlot.left + rightSlot.width / 2
+    ) / 2
+    if (targetX < boundaryX) {
+      return index
+    }
+  }
+
+  return row.length - 1
+}
+
+function slotIndexToBookmarkInsertIndex(
+  slotRects: BookmarkDragSlotRectLike[],
+  draggedId: string,
+  slotIndex: number
+): number {
+  const draggedSlotIndex = slotRects.findIndex((slot) => slot.id === draggedId)
+  if (draggedSlotIndex < 0) {
+    return -1
+  }
+
+  return Math.max(0, Math.min(slotIndex, slotRects.length - 1))
 }
 
 function getLongestIncreasingSubsequenceIndexes(values: number[]): number[] {
