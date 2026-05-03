@@ -65,6 +65,11 @@ import {
   validateBackgroundBlobSize,
   validateBackgroundContentLength
 } from './interactions.js'
+import {
+  getBrowserQuickShortcuts,
+  normalizeBrowserQuickShortcutsVisible,
+  type BrowserQuickShortcut
+} from './quick-shortcuts.js'
 
 const FAVICON_SIZE = 64
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
@@ -107,7 +112,8 @@ const ACTIVITY_RECORD_LIMIT = 160
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false,
   showPortalOverview: true,
-  showQuickAccess: true
+  showQuickAccess: true,
+  showBrowserShortcuts: true
 }
 const DEFAULT_TIME_SETTINGS = {
   enabled: true,
@@ -620,6 +626,9 @@ function bindGeneralSettingsEvents(): void {
     ?.addEventListener('change', handleGeneralSettingsChange)
   document
     .getElementById('general-show-quick-access')
+    ?.addEventListener('change', handleGeneralSettingsChange)
+  document
+    .getElementById('general-show-browser-shortcuts')
     ?.addEventListener('change', handleGeneralSettingsChange)
 }
 
@@ -2984,16 +2993,18 @@ function createFolderAddButton(section: NewTabFolderSection): HTMLButtonElement 
 function createPortalPanel(): HTMLElement | null {
   const showOverview = state.generalSettings.showPortalOverview
   const showQuickAccess = state.generalSettings.showQuickAccess
+  const showBrowserShortcuts = state.generalSettings.showBrowserShortcuts
   const overview = buildNewTabPortalOverview({
     sections: state.folderSections,
     activityRecords: state.activity.records,
     now: Date.now()
   })
   const quickAccess = createQuickAccessPanel()
+  const browserShortcuts = createBrowserShortcutPanel()
   const layout = resolvePortalPanelLayout({
     showOverview,
     hasOverviewSignal: hasPortalOverviewSignal(overview),
-    hasQuickAccess: Boolean(quickAccess)
+    hasQuickAccess: Boolean(quickAccess || browserShortcuts)
   })
 
   if (layout === 'hidden') {
@@ -3007,11 +3018,16 @@ function createPortalPanel(): HTMLElement | null {
   if (layout === 'full' || layout === 'overview-only') {
     panel.appendChild(createPortalOverview(overview, {
       showQuickAccess,
-      hasQuickAccess: Boolean(quickAccess)
+      showBrowserShortcuts,
+      hasQuickAccess: Boolean(quickAccess),
+      hasBrowserShortcuts: Boolean(browserShortcuts)
     }))
   }
   if (quickAccess) {
     panel.appendChild(quickAccess)
+  }
+  if (browserShortcuts) {
+    panel.appendChild(browserShortcuts)
   }
 
   return panel
@@ -3025,7 +3041,9 @@ function createPortalOverview(
   overview: PortalOverview,
   options: {
     showQuickAccess: boolean
+    showBrowserShortcuts: boolean
     hasQuickAccess: boolean
+    hasBrowserShortcuts: boolean
   }
 ): HTMLElement {
   const section = document.createElement('section')
@@ -3060,11 +3078,16 @@ function createPortalSummaryText(
   overview: PortalOverview,
   options: {
     showQuickAccess: boolean
+    showBrowserShortcuts: boolean
     hasQuickAccess: boolean
+    hasBrowserShortcuts: boolean
   }
 ): string {
   if (options.hasQuickAccess) {
-    return '常用和最近入口已整理'
+    return options.hasBrowserShortcuts ? '书签和浏览器入口已整理' : '常用和最近入口已整理'
+  }
+  if (options.hasBrowserShortcuts) {
+    return '浏览器快捷入口已整理'
   }
 
   if (overview.addedTodayCount > 0) {
@@ -3124,6 +3147,74 @@ function createQuickAccessPanel(): HTMLElement | null {
   }
 
   return panel
+}
+
+function createBrowserShortcutPanel(): HTMLElement | null {
+  const shortcuts = getBrowserQuickShortcuts(state.generalSettings.showBrowserShortcuts)
+  if (!shortcuts.length) {
+    return null
+  }
+
+  const panel = document.createElement('section')
+  panel.className = 'newtab-browser-shortcuts'
+  panel.setAttribute('aria-label', '浏览器快捷入口')
+  panel.appendChild(createBrowserShortcutGroup('工具', shortcuts))
+  return panel
+}
+
+function createBrowserShortcutGroup(label: string, shortcuts: BrowserQuickShortcut[]): HTMLElement {
+  const group = document.createElement('section')
+  group.className = 'newtab-quick-group newtab-browser-shortcut-group'
+  group.setAttribute('aria-label', `${label}快捷入口`)
+
+  const header = document.createElement('div')
+  header.className = 'newtab-quick-heading'
+  header.textContent = label
+
+  const list = document.createElement('div')
+  list.className = 'newtab-quick-list newtab-browser-shortcut-list'
+
+  for (const shortcut of shortcuts) {
+    list.appendChild(createBrowserShortcutLink(shortcut))
+  }
+
+  group.append(header, list)
+  return group
+}
+
+function createBrowserShortcutLink(shortcut: BrowserQuickShortcut): HTMLAnchorElement {
+  const link = document.createElement('a')
+  link.className = 'newtab-quick-link newtab-browser-shortcut-link'
+  link.href = shortcut.url
+  link.title = `${shortcut.label} · ${shortcut.detail}`
+  link.draggable = false
+  link.dataset.browserShortcutId = shortcut.id
+  link.addEventListener('click', (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    window.location.assign(shortcut.url)
+  })
+
+  const mark = document.createElement('span')
+  mark.className = 'newtab-quick-mark'
+  mark.textContent = shortcut.badge
+  mark.setAttribute('aria-hidden', 'true')
+
+  const copy = document.createElement('span')
+  copy.className = 'newtab-quick-copy'
+
+  const title = document.createElement('strong')
+  title.textContent = shortcut.label
+
+  const detail = document.createElement('span')
+  detail.textContent = shortcut.detail
+
+  copy.append(title, detail)
+  link.append(mark, copy)
+  return link
 }
 
 function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): QuickAccessItem | null {
@@ -4870,7 +4961,8 @@ function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_
     showPortalOverview: settings.showPortalOverview !== false,
     showQuickAccess: typeof settings.showQuickAccess === 'boolean'
       ? settings.showQuickAccess
-      : legacyQuickAccess
+      : legacyQuickAccess,
+    showBrowserShortcuts: normalizeBrowserQuickShortcutsVisible(settings.showBrowserShortcuts)
   }
 }
 
@@ -4878,6 +4970,7 @@ function readGeneralSettingsFromControls(): typeof DEFAULT_GENERAL_SETTINGS {
   const hideInput = document.getElementById('general-hide-settings-trigger')
   const showOverviewInput = document.getElementById('general-show-overview')
   const showQuickAccessInput = document.getElementById('general-show-quick-access')
+  const showBrowserShortcutsInput = document.getElementById('general-show-browser-shortcuts')
 
   return normalizeGeneralSettings({
     hideSettingsTrigger: hideInput instanceof HTMLInputElement
@@ -4888,7 +4981,10 @@ function readGeneralSettingsFromControls(): typeof DEFAULT_GENERAL_SETTINGS {
       : state.generalSettings.showPortalOverview,
     showQuickAccess: showQuickAccessInput instanceof HTMLInputElement
       ? showQuickAccessInput.checked
-      : state.generalSettings.showQuickAccess
+      : state.generalSettings.showQuickAccess,
+    showBrowserShortcuts: showBrowserShortcutsInput instanceof HTMLInputElement
+      ? showBrowserShortcutsInput.checked
+      : state.generalSettings.showBrowserShortcuts
   })
 }
 
@@ -4896,6 +4992,7 @@ function syncGeneralSettingsControls(): void {
   const hideInput = document.getElementById('general-hide-settings-trigger')
   const showOverviewInput = document.getElementById('general-show-overview')
   const showQuickAccessInput = document.getElementById('general-show-quick-access')
+  const showBrowserShortcutsInput = document.getElementById('general-show-browser-shortcuts')
 
   if (hideInput instanceof HTMLInputElement) {
     hideInput.checked = state.generalSettings.hideSettingsTrigger
@@ -4905,6 +5002,9 @@ function syncGeneralSettingsControls(): void {
   }
   if (showQuickAccessInput instanceof HTMLInputElement) {
     showQuickAccessInput.checked = state.generalSettings.showQuickAccess
+  }
+  if (showBrowserShortcutsInput instanceof HTMLInputElement) {
+    showBrowserShortcutsInput.checked = state.generalSettings.showBrowserShortcuts
   }
 }
 

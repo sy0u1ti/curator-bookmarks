@@ -838,6 +838,26 @@ body.background-mask-enabled .newtab-background-mask {
   color: rgba(185, 236, 188, 0.9);
 }
 
+.newtab-browser-shortcuts {
+  display: grid;
+  min-width: 0;
+  align-content: stretch;
+  gap: var(--portal-card-gap);
+}
+
+.newtab-portal:has(.newtab-quick-access) .newtab-browser-shortcuts {
+  grid-column: 1 / -1;
+}
+
+.newtab-browser-shortcut-list {
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+}
+
+.newtab-browser-shortcut-link .newtab-quick-mark {
+  background: rgba(245, 245, 247, 0.075);
+  color: rgba(245, 245, 247, 0.72);
+}
+
 .newtab-quick-copy {
   display: grid;
   min-width: 0;
