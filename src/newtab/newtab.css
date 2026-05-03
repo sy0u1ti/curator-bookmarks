@@ -227,41 +227,63 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-clock {
   --clock-scale: 1;
-  --clock-gap-x: 10px;
-  --clock-gap-y: 4px;
-  display: inline-flex;
-  width: min(100%, 1229px);
-  min-height: calc(30px * var(--clock-scale));
+  --clock-surface-alpha: 0.18;
+  display: grid;
+  width: fit-content;
+  max-width: min(100%, 1229px);
+  min-height: calc(38px * var(--clock-scale));
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
-  gap: var(--clock-gap-y) var(--clock-gap-x);
+  justify-content: center;
+  gap: calc(10px * var(--clock-scale));
+  padding: calc(7px * var(--clock-scale)) calc(11px * var(--clock-scale));
+  border: 1px solid rgba(245, 245, 247, 0.11);
+  border-radius: calc(12px * var(--clock-scale));
+  background: rgba(8, 8, 9, var(--clock-surface-alpha));
   color: var(--text);
-  text-align: left;
+  text-align: center;
   user-select: none;
+  box-shadow:
+    0 14px 32px rgba(0, 0, 0, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  -webkit-backdrop-filter: blur(16px) saturate(128%);
+  backdrop-filter: blur(16px) saturate(128%);
 }
 
 .newtab-clock[data-clock-density="compact"] {
-  --clock-gap-x: 8px;
-  --clock-gap-y: 2px;
-  min-height: calc(26px * var(--clock-scale));
+  --clock-surface-alpha: 0;
+  min-height: calc(24px * var(--clock-scale));
+  grid-auto-flow: column;
+  gap: calc(8px * var(--clock-scale));
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .newtab-clock[data-clock-density="comfortable"] {
-  --clock-gap-x: 12px;
-  --clock-gap-y: 6px;
-  min-height: calc(36px * var(--clock-scale));
+  --clock-surface-alpha: 0.24;
+  min-width: min(100%, 300px);
+  min-height: calc(74px * var(--clock-scale));
+  grid-auto-flow: row;
+  gap: calc(6px * var(--clock-scale));
+  padding: calc(13px * var(--clock-scale)) calc(18px * var(--clock-scale));
+  border-radius: calc(16px * var(--clock-scale));
 }
 
 .newtab-clock[data-clock-display-mode="date"][data-clock-density="comfortable"] {
-  min-height: calc(30px * var(--clock-scale));
+  min-height: calc(54px * var(--clock-scale));
 }
 
 .newtab-clock-time-group {
   display: inline-flex;
   min-width: 0;
   align-items: baseline;
-  gap: 5px;
+  justify-content: center;
+  gap: calc(5px * var(--clock-scale));
 }
 
 .newtab-clock-time {
@@ -292,6 +314,10 @@ body.background-mask-enabled .newtab-background-mask {
   white-space: nowrap;
 }
 
+.newtab-clock-zone {
+  padding-top: calc(1px * var(--clock-scale));
+}
+
 .newtab-clock-date {
   color: rgba(245, 245, 247, 0.54);
   font-size: calc(12px * var(--clock-scale));
@@ -307,28 +333,16 @@ body.background-mask-enabled .newtab-background-mask {
   font-weight: 700;
 }
 
-.newtab-clock[data-clock-density="compact"] .newtab-clock-time {
-  font-size: calc(20px * var(--clock-scale));
-}
-
-.newtab-clock[data-clock-density="compact"] .newtab-clock-date {
-  font-size: calc(11px * var(--clock-scale));
-}
-
-.newtab-clock[data-clock-density="compact"][data-clock-display-mode="date"] .newtab-clock-date {
-  font-size: calc(14px * var(--clock-scale));
-}
-
-.newtab-clock[data-clock-density="comfortable"] .newtab-clock-time {
-  font-size: calc(26px * var(--clock-scale));
-}
-
 .newtab-clock[data-clock-density="comfortable"] .newtab-clock-date {
-  font-size: calc(13px * var(--clock-scale));
+  color: rgba(245, 245, 247, 0.66);
 }
 
-.newtab-clock[data-clock-density="comfortable"][data-clock-display-mode="date"] .newtab-clock-date {
-  font-size: calc(18px * var(--clock-scale));
+.newtab-clock[data-clock-density="comfortable"] .newtab-clock-zone {
+  justify-self: center;
+  padding: calc(2px * var(--clock-scale)) calc(7px * var(--clock-scale));
+  border-radius: 999px;
+  background: rgba(245, 245, 247, 0.08);
+  color: rgba(245, 245, 247, 0.48);
 }
 
 .newtab-search-slot {
@@ -357,7 +371,7 @@ body.background-mask-enabled .newtab-background-mask {
   padding: 0 10px;
   border: 1px solid rgba(245, 245, 247, 0.13);
   border-radius: 8px;
-  background: rgba(8, 8, 9, calc(var(--search-bg-alpha) + 0.24));
+  background: rgba(8, 8, 9, var(--search-bg-alpha));
   box-shadow:
     0 12px 34px rgba(0, 0, 0, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.035);
@@ -371,7 +385,7 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-search:focus-within {
   border-color: rgba(245, 245, 247, 0.28);
-  background: rgba(14, 14, 15, calc(var(--search-bg-alpha) + 0.24));
+  background: rgba(14, 14, 15, calc(var(--search-bg-alpha) + 0.08));
   box-shadow:
     0 16px 42px rgba(0, 0, 0, 0.22),
     0 0 0 2px rgba(245, 245, 247, 0.08),

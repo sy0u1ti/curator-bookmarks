@@ -5449,7 +5449,7 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
     width: clampNumber(settings.width, 16, 72, DEFAULT_SEARCH_SETTINGS.width),
     height: clampNumber(settings.height, 28, 56, DEFAULT_SEARCH_SETTINGS.height),
     offsetY: clampNumber(settings.offsetY, -32, 72, DEFAULT_SEARCH_SETTINGS.offsetY),
-    background: clampNumber(settings.background, 36, 76, DEFAULT_SEARCH_SETTINGS.background)
+    background: clampNumber(settings.background, 0, 92, DEFAULT_SEARCH_SETTINGS.background)
   }
 }
 

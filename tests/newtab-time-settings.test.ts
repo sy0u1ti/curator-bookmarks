@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test } from 'node:test'
 import {
   DEFAULT_TIME_SETTINGS,
@@ -9,6 +11,10 @@ import {
   getClockZoneLabel,
   normalizeTimeSettings
 } from '../src/newtab/time-settings.js'
+
+function readFile(path: string): string {
+  return readFileSync(resolve(process.cwd(), path), 'utf8')
+}
 
 test('normalizes newtab time settings with legacy date formats and new density defaults', () => {
   assert.deepEqual(normalizeTimeSettings(undefined), DEFAULT_TIME_SETTINGS)
@@ -78,4 +84,20 @@ test('supports fixed common time zones without network or external data', () => 
 
   assert.equal(settings.timeZone, 'Asia/Hong_Kong')
   assert.equal(getClockZoneLabel(settings), '香港')
+})
+
+test('time density changes layout structure instead of only changing font size', () => {
+  const html = readFile('src/newtab/newtab.html')
+  const css = readFile('src/newtab/newtab.css')
+
+  assert.match(html, /布局密度/)
+  assert.match(html, /极简单行/)
+  assert.match(html, /平衡胶囊/)
+  assert.match(html, /独立卡片/)
+  assert.match(css, /\.newtab-clock\[data-clock-density="compact"\]\s*\{[\s\S]*?background:\s*transparent/)
+  assert.match(css, /\.newtab-clock\[data-clock-density="comfortable"\]\s*\{[\s\S]*?grid-auto-flow:\s*row/)
+  assert.match(css, /\.newtab-clock\[data-clock-density="comfortable"\]\s*\{[\s\S]*?min-width:\s*min\(100%,\s*300px\)/)
+  assert.match(css, /\.newtab-clock\[data-clock-density="comfortable"\]\s+\.newtab-clock-zone\s*\{[\s\S]*?background:\s*rgba\(245,\s*245,\s*247,\s*0\.08\)/)
+  assert.doesNotMatch(css, /\.newtab-clock\[data-clock-density="compact"\]\s+\.newtab-clock-time\s*\{/)
+  assert.doesNotMatch(css, /\.newtab-clock\[data-clock-density="comfortable"\]\s+\.newtab-clock-time\s*\{/)
 })

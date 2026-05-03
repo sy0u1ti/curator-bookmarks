@@ -117,6 +117,15 @@ test('dashboard search toolbar omits duplicate result count and placeholder copy
   assert.doesNotMatch(dashboardSource, /dashboardResultCount/)
 })
 
+test('dashboard search input reuses the animated bottom focus indicator', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(optionsCss, /\.dashboard-search\s*\{[\s\S]*?--accent-color:\s*#a3e583[\s\S]*?position:\s*relative/)
+  assert.match(optionsCss, /\.dashboard-search::before,\s*\.dashboard-search::after\s*\{[\s\S]*?bottom:\s*-1px/)
+  assert.match(optionsCss, /\.dashboard-search::after\s*\{[\s\S]*?transform:\s*scaleX\(0\)/)
+  assert.match(optionsCss, /\.dashboard-search:focus-within::after\s*\{[\s\S]*?transform:\s*scaleX\(1\)/)
+})
+
 test('dashboard folder sidebar layout and active styles are defined', () => {
   const optionsCss = readProjectFile('src/options/options.css')
 

@@ -221,6 +221,19 @@ test('newtab search settings use Google as the default engine without duplicate 
   assert.match(source, /engine:\s*'google'\s+as SearchEngineId/)
 })
 
+test('newtab search background opacity exposes a wide direct alpha range', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+  const css = readProjectFile('src/newtab/newtab.css')
+  const source = readProjectFile('src/newtab/newtab.ts')
+  const backgroundInput = html.match(/<input[^>]+id="search-background"[^>]*>/)?.[0] || ''
+
+  assert.match(backgroundInput, /min="0"/)
+  assert.match(backgroundInput, /max="92"/)
+  assert.match(source, /background:\s*clampNumber\(settings\.background,\s*0,\s*92,\s*DEFAULT_SEARCH_SETTINGS\.background\)/)
+  assert.match(css, /background:\s*rgba\(8,\s*8,\s*9,\s*var\(--search-bg-alpha\)\)/)
+  assert.doesNotMatch(css, /var\(--search-bg-alpha\)\s*\+\s*0\.24/)
+})
+
 test('newtab exposes a lazy options dashboard iframe route', () => {
   const html = readProjectFile('src/newtab/newtab.html')
   const script = readProjectFile('src/newtab/newtab.ts')
