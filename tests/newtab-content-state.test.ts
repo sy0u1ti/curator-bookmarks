@@ -239,6 +239,8 @@ test('newtab exposes a lazy options dashboard iframe route', () => {
   for (const pattern of [
     /buildDashboardPanel/,
     /createDashboardBookmarkCard/,
+    /renderDashboardFolderSidebar/,
+    /applyDashboardFolderFilter/,
     /renderDashboardCardWindow/,
     /dashboard-performance/,
     /createDashboardFaviconWarmupQueue/,
@@ -267,6 +269,9 @@ test('newtab does not duplicate options dashboard markup or card semantics', () 
     'dashboard-panel',
     'dashboard-title-row',
     'dashboard-toolbar',
+    'dashboard-content-layout',
+    'dashboard-folder-sidebar',
+    'dashboard-folder-tree',
     'dashboard-search',
     'dashboard-card-grid',
     'dashboard-bookmark-card'
@@ -462,6 +467,10 @@ test('newtab dashboard glass layer only styles the iframe shell', () => {
   assert.doesNotMatch(
     newtabCss,
     /@media [^{]+\{[\s\S]*?\.newtab-dashboard-surface\s+\.dashboard-(?:title-row|toolbar|card-grid|bookmark-card)/
+  )
+  assert.doesNotMatch(
+    newtabCss,
+    /\.newtab-dashboard-surface\s+\.dashboard-(?:content-layout|folder-sidebar|folder-tree)/
   )
   assert.doesNotMatch(optionsCss, /newtab-dashboard-(?:overlay|surface|frame)/)
 })

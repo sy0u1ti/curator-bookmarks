@@ -7,6 +7,21 @@ function readProjectFile(path) {
   return readFileSync(resolve(process.cwd(), path), 'utf8')
 }
 
+function getCssRuleBody(css, selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))
+  return match?.[1] || ''
+}
+
+function getVerticalPadding(rule) {
+  const match = rule.match(/padding:\s*([0-9.]+)px\s+(?:clamp\([^)]*\)|[^\s;]+)(?:\s+([0-9.]+)px)?\s*;/)
+  assert.ok(match, 'rule should define vertical padding in px')
+  return {
+    top: Number(match[1]),
+    bottom: Number(match[2] || match[1])
+  }
+}
+
 test('options folder listbox options expose role and aria-selected state', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
@@ -14,6 +29,63 @@ test('options folder listbox options expose role and aria-selected state', () =>
   assert.match(optionsHtml, /id="scope-folder-results"[^>]+role="listbox"[^>]+aria-label="筛选文件夹"/)
   assert.match(optionsSource, /class="scope-folder-card \$\{allSelected \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{allSelected \? 'true' : 'false'\}"/)
   assert.match(optionsSource, /class="scope-folder-card \$\{isCurrent \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{isCurrent \? 'true' : 'false'\}"/)
+})
+
+test('dashboard exposes a persistent folder sidebar with cached DOM refs', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const domSource = readProjectFile('src/options/shared-options/dom.ts')
+  const sidebarElement = optionsHtml.match(/<[^>]+id="dashboard-folder-sidebar"[^>]*>/)?.[0] || ''
+
+  assert.match(sidebarElement, /aria-label="书签文件夹"/)
+  assert.match(optionsHtml, /id="dashboard-folder-tree"/)
+  assert.match(domSource, /dashboardFolderSidebar\s*=\s*byId\('dashboard-folder-sidebar'\)/)
+  assert.match(domSource, /dashboardFolderTree\s*=\s*byId\('dashboard-folder-tree'\)/)
+})
+
+test('dashboard renders a clickable folder sidebar filter with bookmark counts', () => {
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
+  const renderSidebarReferences = dashboardSource.match(/renderDashboardFolderSidebar\(/g) || []
+
+  assert.match(dashboardSource, /function renderDashboardFolderSidebar/)
+  assert.ok(renderSidebarReferences.length >= 2, 'dashboard sidebar renderer should be invoked by the section render path')
+  assert.match(dashboardSource, /dashboardFolderTree[\s\S]*data-dashboard-folder-filter/)
+  assert.match(dashboardSource, /applyDashboardFolderFilter\(/)
+  assert.match(dashboardSource, /bookmarkCount/)
+  assert.match(dashboardSource, /个书签/)
+  assert.match(dashboardSource, /(?:active|current)/)
+})
+
+test('dashboard folder sidebar layout and active styles are defined', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(optionsCss, /\.dashboard-content-layout\s*\{/)
+  assert.match(optionsCss, /\.dashboard-folder-sidebar\s*\{/)
+  assert.match(optionsCss, /\.dashboard-folder-tree\s*\{/)
+  assert.match(optionsCss, /\.dashboard-folder-tree[^{}]*\.(?:active|current)\s*\{/)
+  assert.match(
+    optionsCss,
+    /\.dashboard-fullscreen-active\s+\.dashboard-content-layout\s*\{[\s\S]*?(?:display:\s*(?:grid|flex)|grid-template-columns:)/
+  )
+  assert.match(
+    optionsCss,
+    /\.dashboard-fullscreen-active\s+\.dashboard-content-layout\s*\{[\s\S]*?(?:align-items:\s*stretch|min-height:\s*0|height:\s*100%)/
+  )
+})
+
+test('dashboard fullscreen uses the compact top spacing for panel and toolbar', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+  const fullscreenPanelRule = getCssRuleBody(optionsCss, '.dashboard-fullscreen-active .dashboard-panel')
+  const fullscreenToolbarRule = getCssRuleBody(optionsCss, '.dashboard-fullscreen-active .dashboard-toolbar')
+  const panelPadding = getVerticalPadding(fullscreenPanelRule)
+  const toolbarPadding = getVerticalPadding(fullscreenToolbarRule)
+
+  assert.ok(fullscreenPanelRule, 'fullscreen dashboard panel rule should exist')
+  assert.ok(fullscreenToolbarRule, 'fullscreen dashboard toolbar rule should exist')
+  assert.doesNotMatch(fullscreenPanelRule, /padding:\s*26px\s+clamp\(24px,\s*3\.4vw,\s*54px\)\s+30px/)
+  assert.doesNotMatch(fullscreenToolbarRule, /padding:\s*12px\s+0\s+10px/)
+  assert.ok(panelPadding.top < 26, 'fullscreen dashboard panel top padding should be tighter than the old value')
+  assert.ok(toolbarPadding.top < 12, 'fullscreen dashboard toolbar top padding should be tighter than the old value')
+  assert.ok(toolbarPadding.bottom < 10, 'fullscreen dashboard toolbar bottom padding should be tighter than the old value')
 })
 
 test('dashboard tag editor and tag popover have dialog semantics and keyboard path', () => {
