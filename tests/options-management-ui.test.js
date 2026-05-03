@@ -45,8 +45,8 @@ test('availability, redirect and AI result lists render paginated controls', () 
   }
 
   assert.match(optionsSource, /const RESULTS_PAGE_SIZE = 25/)
-  assert.match(optionsSource, /getPaginatedResults\('availability-review', availabilityState\.reviewResults\)/)
-  assert.match(optionsSource, /getPaginatedResults\('availability-failed', availabilityState\.failedResults\)/)
+  assert.match(optionsSource, /getPaginatedResults\('availability-review', panelResults\)/)
+  assert.match(optionsSource, /getPaginatedResults\('availability-failed', panelResults\)/)
   assert.match(optionsSource, /getPaginatedResults\('ai-results', visibleResults\)/)
   assert.match(redirectsSource, /const REDIRECT_RESULTS_PAGE_SIZE = 25/)
   assert.match(redirectsSource, /getRedirectPageResults\(redirectResults\)/)
@@ -57,12 +57,45 @@ test('broken-link guidance explains confidence levels and redirect handling', ()
   const optionsSource = readProjectFile('src/options/options.ts')
   const redirectsSource = readProjectFile('src/options/sections/redirects.ts')
 
-  assert.match(optionsHtml, /坏链检测结果处理顺序/)
-  assert.match(optionsHtml, /高置信[\s\S]*?先重测，再移动或删除/)
-  assert.match(optionsHtml, /低置信[\s\S]*?优先人工确认/)
-  assert.match(optionsHtml, /重定向[\s\S]*?确认当前地址后更新/)
+  assert.match(optionsHtml, /决策面板/)
+  assert.match(optionsHtml, /高置信/)
+  assert.match(optionsHtml, /低置信 \/ 待确认/)
+  assert.match(optionsHtml, /重定向/)
   assert.match(optionsSource, /getAvailabilityResultRecommendation/)
   assert.match(redirectsSource, /更新前会重新读取书签/)
+})
+
+test('availability results expose decision filters and single-item ignore actions', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  for (const filter of [
+    'all',
+    'failed',
+    'review',
+    'redirected',
+    'new',
+    'persistent',
+    'recovered',
+    'ignored'
+  ]) {
+    assert.match(optionsHtml, new RegExp(`data-availability-filter="${filter}"`))
+  }
+
+  assert.match(optionsHtml, /availability-decision-new/)
+  assert.match(optionsHtml, /availability-decision-persistent/)
+  assert.match(optionsHtml, /availability-decision-recovered/)
+  assert.match(optionsHtml, /availability-decision-ignored/)
+  assert.match(optionsSource, /data-availability-result-action="\$\{escapeAttr\(action\)\}"/)
+  assert.match(optionsSource, /ignoreSingleAvailabilityResult/)
+  assert.match(optionsSource, /addAvailabilityIgnoreRule/)
+  assert.match(optionsSource, /本次隐藏/)
+  assert.match(optionsSource, /忽略此书签/)
+  assert.match(optionsSource, /忽略此域名/)
+  assert.match(optionsSource, /忽略此文件夹/)
+  assert.match(optionsSource, /以后不再检测/)
+  assert.match(optionsSource, /getAvailabilityEvidenceSummary/)
+  assert.match(optionsSource, /连续异常/)
 })
 
 test('redirect update rereads current bookmarks and skips stale source URLs', () => {
