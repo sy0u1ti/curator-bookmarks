@@ -226,9 +226,17 @@ test('newtab exposes a lazy original dashboard route', () => {
 })
 
 test('newtab dashboard keeps original options dashboard class semantics', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
   const script = readProjectFile('src/newtab/newtab.ts')
 
+  assert.match(html, /class="options-panel dashboard-panel"/)
+
   for (const className of [
+    'options-section-label',
+    'options-group dashboard-toolbar',
+    'options-search dashboard-search',
+    'options-search-input',
+    'options-button secondary small',
     'dashboard-panel',
     'dashboard-title-row',
     'dashboard-toolbar',
@@ -407,7 +415,9 @@ test('newtab dashboard glass layer is scoped away from options dashboard styles'
   const newtabCss = readProjectFile('src/newtab/newtab.css')
   const optionsCss = readProjectFile('src/options/options.css')
 
-  assert.match(newtabCss, /\.newtab-dashboard-overlay\s*\{[\s\S]*?width:\s*min\(1180px,\s*100%\)/)
+  assert.match(newtabCss, /\.newtab-dashboard-overlay\s*\{[\s\S]*?position:\s*fixed/)
+  assert.match(newtabCss, /\.newtab-dashboard-overlay\s*\{[\s\S]*?inset:\s*0/)
+  assert.match(newtabCss, /\.newtab-dashboard-surface\s*\{[\s\S]*?width:\s*min\(1180px,\s*100%\)/)
   assert.match(newtabCss, /\.newtab-dashboard-surface\s*\{[\s\S]*?backdrop-filter:\s*blur\(24px\)\s*saturate\(0\.92\)/)
   assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-title-row\s*\{/)
   assert.match(newtabCss, /\.newtab-dashboard-surface \.dashboard-toolbar\s*\{/)
@@ -419,4 +429,26 @@ test('newtab dashboard glass layer is scoped away from options dashboard styles'
   assert.doesNotMatch(newtabCss, /(?:^|\n)\.dashboard-(?:title-row|toolbar|card-grid|bookmark-card)\s*\{/)
   assert.doesNotMatch(optionsCss, /newtab-dashboard-(?:overlay|surface)/)
   assert.doesNotMatch(optionsCss, /backdrop-filter:\s*blur\(24px\)\s*saturate\(0\.92\)/)
+})
+
+test('newtab dashboard bounds large-list rendering with a virtual window', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const css = readProjectFile('src/newtab/newtab.css')
+  const mobileVirtualGridRule = getCssRuleBody(
+    css,
+    '.newtab-dashboard-surface .dashboard-card-grid,\n  .newtab-dashboard-surface .dashboard-virtual-window'
+  )
+  const mobileCardRule = getCssRuleBodies(css, '.newtab-dashboard-surface .dashboard-bookmark-card').at(-1) || ''
+
+  assert.match(script, /NEWTAB_DASHBOARD_VIRTUAL_THRESHOLD = 120/)
+  assert.match(script, /function renderDashboardCardWindow\(/)
+  assert.match(script, /visibleItems\.length < NEWTAB_DASHBOARD_VIRTUAL_THRESHOLD/)
+  assert.match(script, /getDashboardVirtualWindow\(/)
+  assert.match(script, /visibleItems\.slice\(startIndex, rowEndIndex\)/)
+  assert.match(script, /dashboardRoot\?\.addEventListener\('scroll', handleDashboardScroll, true\)/)
+  assert.match(script, /function restoreDashboardVirtualScroll\(\): void/)
+  assert.match(css, /\.newtab-dashboard-surface \.dashboard-card-grid\.is-virtualized/)
+  assert.match(css, /\.newtab-dashboard-surface \.dashboard-virtual-window/)
+  assert.match(mobileVirtualGridRule, /grid-auto-rows:\s*176px/)
+  assert.match(mobileCardRule, /height:\s*176px/)
 })
