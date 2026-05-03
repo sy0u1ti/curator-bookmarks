@@ -1400,6 +1400,8 @@ a {
 
 .dashboard-panel,
 .dashboard-results-group,
+.dashboard-folder-sidebar,
+.dashboard-folder-sidebar-item,
 .dashboard-card-grid,
 .dashboard-bookmark-card,
 .dashboard-drag-overlay,
@@ -1478,6 +1480,148 @@ a {
 .dashboard-results-head p {
   margin: 0;
   text-align: left;
+}
+
+.dashboard-content-layout {
+  display: grid;
+  grid-template-columns: minmax(190px, 236px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+  min-height: 0;
+}
+
+.dashboard-folder-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.035);
+  overflow: hidden;
+}
+
+.dashboard-folder-sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 10px 10px 9px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.dashboard-folder-sidebar-head strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-folder-sidebar-head .option-value {
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+
+.dashboard-folder-sidebar-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.dashboard-folder-sidebar-item {
+  --folder-depth-offset: 0px;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 6px 8px 6px calc(8px + var(--folder-depth-offset));
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color var(--ease-standard),
+    background var(--ease-standard),
+    color var(--ease-standard);
+}
+
+.dashboard-folder-sidebar-item:hover,
+.dashboard-folder-sidebar-item:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.055);
+  color: var(--text);
+}
+
+.dashboard-folder-sidebar-item:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.34);
+  outline-offset: 2px;
+}
+
+.dashboard-folder-sidebar-item.active {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--text);
+}
+
+.dashboard-folder-sidebar-branch {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.22);
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0 0 0 4px;
+}
+
+.dashboard-folder-sidebar-item:first-child .dashboard-folder-sidebar-branch {
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 50%;
+}
+
+.dashboard-folder-sidebar-label {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-folder-sidebar-count {
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.dashboard-folder-sidebar-item.active .dashboard-folder-sidebar-count {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text);
+}
+
+.dashboard-card-region {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 
 .dashboard-card-grid {
@@ -2555,6 +2699,19 @@ body.dashboard-fullscreen-active {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.dashboard-fullscreen-active .dashboard-content-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dashboard-fullscreen-active .dashboard-folder-sidebar {
+  min-height: 0;
+}
+
+.dashboard-fullscreen-active .dashboard-card-region {
+  min-height: 0;
 }
 
 .dashboard-fullscreen-active .dashboard-card-grid {
@@ -5457,6 +5614,11 @@ body.dashboard-fullscreen-active {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dashboard-content-layout {
+    grid-template-columns: minmax(168px, 210px) minmax(0, 1fr);
+    gap: 10px;
+  }
+
   .dashboard-folder-drop-grid {
     grid-template-columns: repeat(auto-fit, minmax(156px, 1fr));
   }
@@ -5500,6 +5662,14 @@ body.dashboard-fullscreen-active {
 
   .dashboard-card-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-content-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dashboard-folder-sidebar {
+    max-height: 220px;
   }
 
   .dashboard-toolbar {

@@ -24,6 +24,8 @@ export function cacheDom() {
   dom.dashboardQuery = byId('dashboard-query')
   dom.dashboardSearchChips = byId('dashboard-search-chips')
   dom.dashboardFolderBreadcrumbs = byId('dashboard-folder-breadcrumbs')
+  dom.dashboardFolderSidebarCount = byId('dashboard-folder-sidebar-count')
+  dom.dashboardFolderSidebarList = byId('dashboard-folder-sidebar-list')
   dom.dashboardSelectionGroup = byId('dashboard-selection-group')
   dom.dashboardSelectionCount = byId('dashboard-selection-count')
   dom.dashboardSelectVisible = byId('dashboard-select-visible-top')

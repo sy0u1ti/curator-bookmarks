@@ -255,6 +255,7 @@ export function renderDashboardSection(): void {
   dom.dashboardQuery.value = dashboardState.query
   renderDashboardSearchTools()
   renderDashboardFolderBreadcrumbs()
+  renderDashboardFolderSidebar(model)
 
   renderDashboardSelectionBar(visibleItems)
   renderDashboardCards(visibleItems)
@@ -1263,6 +1264,105 @@ function buildDashboardFolderBreadcrumbMarkup(folder: FolderRecord): string {
       }).join('')}
     </ol>
   `
+}
+
+function renderDashboardFolderSidebar(model: DashboardModel): void {
+  if (!dom.dashboardFolderSidebarList || !dom.dashboardFolderSidebarCount) {
+    return
+  }
+
+  const selectedFolderId = String(dashboardState.folderId || '').trim()
+  const folderBookmarkCounts = getDashboardFolderBookmarkCounts(model)
+  dom.dashboardFolderSidebarCount.textContent = `${model.totalFolders} 个文件夹`
+
+  const allActive = !selectedFolderId
+  const allBookmarksMarkup = buildDashboardFolderSidebarItem({
+    id: '',
+    title: '全部书签',
+    path: '全部书签',
+    count: model.totalBookmarks,
+    depth: 0,
+    active: allActive
+  })
+
+  const folderMarkup = model.folderTargets
+    .map((folder) => {
+      const folderRecord = availabilityState.folderMap.get(String(folder.id))
+      const depth = Number(folderRecord?.depth) || getDashboardFolderPathDepth(folder.path)
+      return buildDashboardFolderSidebarItem({
+        id: folder.id,
+        title: folder.title,
+        path: formatFolderPath(folderRecord || folder, availabilityState.folderMap) || folder.path || folder.title,
+        count: folderBookmarkCounts.get(String(folder.id)) || 0,
+        depth: Math.max(0, depth - 1),
+        active: selectedFolderId === String(folder.id)
+      })
+    })
+    .join('')
+
+  dom.dashboardFolderSidebarList.innerHTML = allBookmarksMarkup + folderMarkup
+}
+
+function getDashboardFolderBookmarkCounts(model: DashboardModel): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const item of model.items) {
+    const folderIds = new Set<string>([
+      ...(Array.isArray(item.ancestorIds) ? item.ancestorIds.map(String) : []),
+      String(item.parentId || '')
+    ].filter(Boolean))
+    for (const folderId of folderIds) {
+      counts.set(folderId, (counts.get(folderId) || 0) + 1)
+    }
+  }
+  return counts
+}
+
+function buildDashboardFolderSidebarItem({
+  id,
+  title,
+  path,
+  count,
+  depth,
+  active
+}: {
+  id: string
+  title: string
+  path: string
+  count: number
+  depth: number
+  active: boolean
+}): string {
+  const clampedDepth = Math.min(Math.max(Number(depth) || 0, 0), 8)
+  const countLabel = `${Number(count) || 0}`
+  const titleText = String(title || '未命名文件夹').trim() || '未命名文件夹'
+  const pathText = String(path || titleText).trim() || titleText
+  const currentAttribute = active ? ' aria-current="page"' : ''
+
+  return `
+    <button
+      class="dashboard-folder-sidebar-item ${active ? 'active' : ''}"
+      type="button"
+      data-dashboard-folder-filter="${escapeAttr(id)}"
+      data-dashboard-no-drag
+      aria-pressed="${active ? 'true' : 'false'}"
+     ${currentAttribute}
+      aria-label="${escapeAttr(`${pathText}，${countLabel} 条书签`)}"
+      title="${escapeAttr(pathText)}"
+      style="--folder-depth-offset: ${clampedDepth * 13}px;"
+    >
+      <span class="dashboard-folder-sidebar-branch" aria-hidden="true"></span>
+      <span class="dashboard-folder-sidebar-label">${escapeHtml(titleText)}</span>
+      <span class="dashboard-folder-sidebar-count">${escapeHtml(countLabel)}</span>
+    </button>
+  `
+}
+
+function getDashboardFolderPathDepth(path: string): number {
+  return String(path || '')
+    .split(/\s*(?:\/|>|›|»|\\)\s*/g)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .length
 }
 
 function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
