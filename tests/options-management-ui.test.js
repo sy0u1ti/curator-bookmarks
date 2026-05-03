@@ -52,6 +52,24 @@ test('availability, redirect and AI result lists render paginated controls', () 
   assert.match(redirectsSource, /getRedirectPageResults\(redirectResults\)/)
 })
 
+test('duplicate decisions expose explicit keep strategies and recycle wording', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const duplicateSource = readProjectFile('src/options/sections/duplicates.ts')
+
+  assert.match(optionsHtml, /data-duplicate-strategy="recommended"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="newest"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="oldest"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="shorter-path"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="tagged"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="newtab-source"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="recent"/)
+  assert.match(duplicateSource, /duplicate-recommendation-signals/)
+  assert.match(duplicateSource, /有手动标签/)
+  assert.match(duplicateSource, /新标签页来源/)
+  assert.match(duplicateSource, /最近访问/)
+  assert.doesNotMatch(duplicateSource, />\\s*删除所选\\s*</)
+})
+
 test('broken-link guidance explains confidence levels and redirect handling', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')

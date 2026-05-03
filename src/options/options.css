@@ -2812,6 +2812,14 @@ body.dashboard-fullscreen-active {
   line-height: 1.6;
 }
 
+.duplicate-recommendation-signals {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 9px;
+}
+
 .duplicate-item-list {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
 import { displayUrl } from '../../shared/text.js'
-import { availabilityState, managerState } from '../shared-options/state.js'
+import { getEffectiveBookmarkTags } from '../../shared/bookmark-tags.js'
+import { availabilityState, aiNamingState, contentSnapshotState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { escapeHtml, escapeAttr } from '../shared-options/html.js'
 import {
@@ -13,6 +14,10 @@ const DUPLICATE_STRATEGY_LABELS = {
   recommended: '按推荐选择',
   newest: '保留最新',
   oldest: '保留最早',
+  'shorter-path': '保留路径最短',
+  tagged: '保留有标签',
+  'newtab-source': '保留新标签页来源',
+  recent: '保留最近访问',
   'scope-or-shorter': '保留当前范围',
   folder: '保留指定文件夹'
 }
@@ -86,10 +91,17 @@ function buildDuplicateGroupModel(key, items) {
   const oldestItem = sortedItems.slice().sort(compareDuplicateItemsByOldest)[0]
   const shorterPathItem = sortedItems.slice().sort(compareDuplicateItemsByShorterPath)[0]
   const fullerTitleItem = sortedItems.slice().sort(compareDuplicateItemsByFullerTitle)[0]
+  const taggedItem = sortedItems.slice().sort(compareDuplicateItemsByTagSignal)[0]
+  const newTabSourceItem = sortedItems.slice().sort(compareDuplicateItemsByNewTabSource)[0]
+  const recentItem = sortedItems.slice().sort(compareDuplicateItemsByRecentActivity)[0]
   const recommendation = buildDuplicateRecommendation({
     latestItem,
+    oldestItem,
     shorterPathItem,
     fullerTitleItem,
+    taggedItem,
+    newTabSourceItem,
+    recentItem,
     isCrossFolder,
     hasTitleVariants
   })
@@ -108,6 +120,9 @@ function buildDuplicateGroupModel(key, items) {
     oldestItemId: String(oldestItem?.id || ''),
     shorterPathItemId: String(shorterPathItem?.id || ''),
     fullerTitleItemId: String(fullerTitleItem?.id || ''),
+    taggedItemId: hasDuplicateTagSignal(taggedItem) ? String(taggedItem?.id || '') : '',
+    newTabSourceItemId: hasNewTabSourceSignal(newTabSourceItem) ? String(newTabSourceItem?.id || '') : '',
+    recentItemId: hasRecentActivitySignal(recentItem) ? String(recentItem?.id || '') : '',
     recommendedKeepId: String(recommendation.item?.id || ''),
     recommendation
   }
@@ -138,11 +153,43 @@ function collectDuplicateFolders(items) {
 
 function buildDuplicateRecommendation({
   latestItem,
+  oldestItem,
   shorterPathItem,
   fullerTitleItem,
+  taggedItem,
+  newTabSourceItem,
+  recentItem,
   isCrossFolder,
   hasTitleVariants
 }) {
+  if (hasDuplicateTagSignal(taggedItem)) {
+    const tagReason = getDuplicateTagRecommendationReason(taggedItem)
+    return {
+      kind: tagReason.kind,
+      label: tagReason.label,
+      item: taggedItem,
+      reason: tagReason.reason
+    }
+  }
+
+  if (hasNewTabSourceSignal(newTabSourceItem)) {
+    return {
+      kind: 'newtab-source',
+      label: '新标签页来源',
+      item: newTabSourceItem,
+      reason: '该副本位于新标签页展示来源中，优先保留可避免破坏新标签页入口。'
+    }
+  }
+
+  if (hasRecentActivitySignal(recentItem)) {
+    return {
+      kind: 'recent',
+      label: '最近访问',
+      item: recentItem,
+      reason: '该副本最近在新标签页打开过，优先保留仍在使用的副本。'
+    }
+  }
+
   if (hasTitleVariants && fullerTitleItem) {
     return {
       kind: 'fuller-title',
@@ -164,8 +211,8 @@ function buildDuplicateRecommendation({
   return {
     kind: 'latest',
     label: '最新',
-    item: latestItem,
-    reason: '同文件夹重复，默认保留最近添加的副本。'
+    item: latestItem || oldestItem,
+    reason: '没有更强的使用信号时，默认保留最近添加的副本。'
   }
 }
 
@@ -284,7 +331,7 @@ function renderDuplicateStrategyControls(visibleGroups) {
     const disabled = isInteractionLocked() || visibleGroups.length === 0
     for (const button of dom.duplicateStrategyControls.querySelectorAll<HTMLButtonElement>('[data-duplicate-strategy]')) {
       const strategy = normalizeDuplicateStrategy(button.getAttribute('data-duplicate-strategy'))
-      const visible = strategy === 'recommended'
+      const visible = strategy !== 'folder' && strategy !== 'scope-or-shorter'
       button.classList.toggle('hidden', !visible)
       button.setAttribute('aria-hidden', visible ? 'false' : 'true')
       button.textContent = strategy === 'recommended' ? '按推荐选择当前结果' : DUPLICATE_STRATEGY_LABELS[strategy]
@@ -328,6 +375,9 @@ function buildDuplicateGroupCard(group) {
           <span class="options-chip success">推荐保留</span>
           <strong>${escapeHtml(recommendedItem?.title || '未命名书签')}</strong>
           <p>${escapeHtml(group.recommendation.reason)} 按推荐会选择 ${recommendedDeleteCount} 条移入回收站；也可逐条勾选。</p>
+          <div class="duplicate-recommendation-signals" aria-label="推荐依据">
+            ${buildDuplicateRecommendationSignals(group)}
+          </div>
         </div>
         <div class="duplicate-group-actions">
           <button
@@ -339,6 +389,24 @@ function buildDuplicateGroupCard(group) {
           >
             按推荐选择
           </button>
+          <button
+            class="options-button secondary small"
+            type="button"
+            data-duplicate-keep-strategy="newest"
+            data-duplicate-group-id="${escapeAttr(group.id)}"
+            ${locked ? 'disabled' : ''}
+          >
+            保留最新
+          </button>
+          <button
+            class="options-button secondary small"
+            type="button"
+            data-duplicate-keep-strategy="shorter-path"
+            data-duplicate-group-id="${escapeAttr(group.id)}"
+            ${locked ? 'disabled' : ''}
+          >
+            保留路径最短
+          </button>
         </div>
       </div>
       <div class="duplicate-item-list">
@@ -346,6 +414,25 @@ function buildDuplicateGroupCard(group) {
       </div>
     </article>
   `
+}
+
+function buildDuplicateRecommendationSignals(group) {
+  const signals = [
+    ['最新', group.latestItemId],
+    ['最早', group.oldestItemId],
+    ['路径最短', group.shorterPathItemId],
+    ['有标签/摘要', group.taggedItemId],
+    ['新标签页来源', group.newTabSourceItemId],
+    ['最近访问', group.recentItemId]
+  ]
+
+  return signals
+    .filter(([, bookmarkId]) => Boolean(bookmarkId))
+    .map(([label, bookmarkId]) => {
+      const active = String(bookmarkId) === String(group.recommendedKeepId)
+      return `<span class="options-chip ${active ? 'success' : 'muted'}">${escapeHtml(label)}</span>`
+    })
+    .join('')
 }
 
 function buildDuplicateGroupChips(group) {
@@ -424,6 +511,15 @@ function buildDuplicateItemBadges(item, group) {
   }
   if (itemId === String(group.fullerTitleItemId) && group.hasTitleVariants) {
     badges.push(['muted', '标题更完整'])
+  }
+  if (itemId === String(group.taggedItemId)) {
+    badges.push(['muted', getDuplicateTagBadgeLabel(item)])
+  }
+  if (itemId === String(group.newTabSourceItemId)) {
+    badges.push(['muted', '新标签页来源'])
+  }
+  if (itemId === String(group.recentItemId)) {
+    badges.push(['muted', '最近访问'])
   }
   if (isBookmarkInCurrentDuplicateScope(item)) {
     badges.push(['muted', '当前范围'])
@@ -696,6 +792,28 @@ function getDuplicateKeepItem(group, strategy) {
     return getDuplicateGroupItem(group, group.oldestItemId) || group.items[group.items.length - 1]
   }
 
+  if (normalizedStrategy === 'shorter-path') {
+    return getDuplicateGroupItem(group, group.shorterPathItemId) || group.items[0]
+  }
+
+  if (normalizedStrategy === 'tagged') {
+    return getDuplicateGroupItem(group, group.taggedItemId) ||
+      getDuplicateGroupItem(group, group.recommendedKeepId) ||
+      group.items[0]
+  }
+
+  if (normalizedStrategy === 'newtab-source') {
+    return getDuplicateGroupItem(group, group.newTabSourceItemId) ||
+      getDuplicateGroupItem(group, group.recommendedKeepId) ||
+      group.items[0]
+  }
+
+  if (normalizedStrategy === 'recent') {
+    return getDuplicateGroupItem(group, group.recentItemId) ||
+      getDuplicateGroupItem(group, group.recommendedKeepId) ||
+      group.items[0]
+  }
+
   if (normalizedStrategy === 'scope-or-shorter') {
     const scopeItem = getCurrentScopeDuplicateItem(group)
     if (scopeItem) {
@@ -786,6 +904,27 @@ function compareDuplicateItemsByFullerTitle(left, right) {
   )
 }
 
+function compareDuplicateItemsByTagSignal(left, right) {
+  return (
+    getDuplicateTagSignalScore(right) - getDuplicateTagSignalScore(left) ||
+    compareDuplicateItemsByNewest(left, right)
+  )
+}
+
+function compareDuplicateItemsByNewTabSource(left, right) {
+  return (
+    Number(hasNewTabSourceSignal(right)) - Number(hasNewTabSourceSignal(left)) ||
+    compareDuplicateItemsByNewest(left, right)
+  )
+}
+
+function compareDuplicateItemsByRecentActivity(left, right) {
+  return (
+    getDuplicateLastOpenedAt(right) - getDuplicateLastOpenedAt(left) ||
+    compareDuplicateItemsByNewest(left, right)
+  )
+}
+
 function getDuplicatePathDepth(item) {
   return String(item.path || '')
     .split('/')
@@ -819,6 +958,111 @@ function isBookmarkInCurrentDuplicateScope(item) {
 
   const ancestorIds = Array.isArray(item.ancestorIds) ? item.ancestorIds.map((id) => String(id)) : []
   return String(item.parentId || '') === scopeFolderId || ancestorIds.includes(scopeFolderId)
+}
+
+function hasDuplicateTagSignal(item) {
+  return getDuplicateTagSignalScore(item) > 0
+}
+
+function getDuplicateTagSignalScore(item) {
+  const bookmarkId = String(item?.id || '')
+  if (!bookmarkId) {
+    return 0
+  }
+
+  const tagRecord = aiNamingState.tagIndex?.records?.[bookmarkId] || null
+  const snapshotRecord = contentSnapshotState.index?.records?.[bookmarkId] || null
+  let score = 0
+  if (tagRecord?.manualTags?.length) {
+    score += 60
+  }
+  if (getEffectiveBookmarkTags(tagRecord).length) {
+    score += 32
+  }
+  if (String(tagRecord?.summary || '').trim()) {
+    score += 18
+  }
+  if (snapshotRecord?.summary || snapshotRecord?.hasFullText) {
+    score += 12
+  }
+  return score
+}
+
+function getDuplicateTagRecommendationReason(item) {
+  const bookmarkId = String(item?.id || '')
+  const tagRecord = aiNamingState.tagIndex?.records?.[bookmarkId] || null
+  const snapshotRecord = contentSnapshotState.index?.records?.[bookmarkId] || null
+  if (tagRecord?.manualTags?.length) {
+    return {
+      kind: 'manual-tags',
+      label: '有手动标签',
+      reason: '该副本带有手动标签，包含人工整理信息，优先保留。'
+    }
+  }
+  if (getEffectiveBookmarkTags(tagRecord).length) {
+    return {
+      kind: 'ai-tags',
+      label: '有标签',
+      reason: '该副本已有标签数据，保留后可继续用于 Dashboard 检索和筛选。'
+    }
+  }
+  if (String(tagRecord?.summary || '').trim() || snapshotRecord?.summary || snapshotRecord?.hasFullText) {
+    return {
+      kind: 'summary',
+      label: '有摘要',
+      reason: '该副本已有 AI 摘要或网页内容快照，保留后不会丢失分析上下文。'
+    }
+  }
+
+  return {
+    kind: 'tagged',
+    label: '有整理信息',
+    reason: '该副本已有整理数据，优先保留。'
+  }
+}
+
+function getDuplicateTagBadgeLabel(item) {
+  return getDuplicateTagRecommendationReason(item).label
+}
+
+function hasNewTabSourceSignal(item) {
+  return isBookmarkInNewTabSource(item)
+}
+
+function isBookmarkInNewTabSource(item) {
+  const path = String(item?.path || '')
+  const folder = availabilityState.folderMap.get(String(item?.parentId || ''))
+  return isNewTabSourcePath(path) || isNewTabSourcePath(folder?.path || folder?.title || '')
+}
+
+function isNewTabSourcePath(path) {
+  return String(path || '')
+    .split('/')
+    .map((part) => part.trim())
+    .some((part) => part === '标签页')
+}
+
+function hasRecentActivitySignal(item) {
+  return getDuplicateLastOpenedAt(item) > 0
+}
+
+function getDuplicateLastOpenedAt(item) {
+  const activity = item && typeof item === 'object'
+    ? (item.activity || item.newTabActivity || item.activityRecord)
+    : null
+  if (activity && typeof activity === 'object') {
+    return Number(activity.lastOpenedAt) || 0
+  }
+
+  const bookmarkId = String(item?.id || '')
+  const activityRecords = (availabilityState as any).newTabActivity?.records ||
+    (managerState as any).newTabActivity?.records ||
+    null
+  if (activityRecords && typeof activityRecords === 'object') {
+    return Number(activityRecords[bookmarkId]?.lastOpenedAt) || 0
+  }
+
+  return 0
 }
 
 function formatDuplicateDate(timestamp) {
