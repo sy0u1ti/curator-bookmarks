@@ -1276,7 +1276,10 @@ function handleBookmarkPointerMove(event: PointerEvent): void {
   }
 
   if (moveDraggedBookmarkInState(insertIndex)) {
-    renderWithBookmarkFlip()
+    if (!syncActiveBookmarkGridOrder()) {
+      render()
+      updateClockText()
+    }
     updateBookmarkDragGhost({ immediate: true })
   }
 }
@@ -1465,55 +1468,50 @@ function setActiveBookmarkFolderBookmarks(bookmarks: chrome.bookmarks.BookmarkTr
   refreshDerivedBookmarkState()
 }
 
-function getBookmarkTileRects(): Map<string, DOMRect> {
-  const rects = new Map<string, DOMRect>()
-  for (const tile of document.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]')) {
+function syncActiveBookmarkGridOrder(): boolean {
+  const section = getActiveBookmarkFolderSection()
+  if (!section) {
+    return false
+  }
+
+  const grid = document.querySelector<HTMLElement>(
+    `.bookmark-grid[data-bookmark-grid-folder-id="${CSS.escape(section.id)}"]`
+  )
+  if (!grid) {
+    return false
+  }
+
+  const tileByBookmarkId = new Map<string, HTMLElement>()
+  for (const tile of grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]')) {
     const bookmarkId = String(tile.dataset.bookmarkId || '')
     if (bookmarkId) {
-      rects.set(bookmarkId, tile.getBoundingClientRect())
+      tileByBookmarkId.set(bookmarkId, tile)
     }
   }
-  return rects
-}
-
-function renderWithBookmarkFlip(): void {
-  const previousRects = getBookmarkTileRects()
-  render()
-  updateClockText()
-
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    return
+  if (tileByBookmarkId.size !== section.bookmarks.length) {
+    return false
   }
 
-  for (const tile of document.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]')) {
-    const bookmarkId = String(tile.dataset.bookmarkId || '')
-    if (!bookmarkId || bookmarkId === state.draggingBookmarkId) {
-      continue
+  const orderedTiles: HTMLElement[] = []
+  for (const bookmark of section.bookmarks) {
+    const tile = tileByBookmarkId.get(String(bookmark.id))
+    if (!tile) {
+      return false
     }
-
-    const previousRect = previousRects.get(bookmarkId)
-    if (!previousRect) {
-      continue
-    }
-
-    const currentRect = tile.getBoundingClientRect()
-    const deltaX = previousRect.left - currentRect.left
-    const deltaY = previousRect.top - currentRect.top
-    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
-      continue
-    }
-
-    tile.animate(
-      [
-        { transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` },
-        { transform: 'translate3d(0, 0, 0)' }
-      ],
-      {
-        duration: 180,
-        easing: 'cubic-bezier(0.22, 0.72, 0.18, 1)'
-      }
-    )
+    orderedTiles.push(tile)
   }
+
+  const currentTiles = Array.from(grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]'))
+  const currentOrderIds = currentTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
+  const nextOrderIds = orderedTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
+  if (areStringArraysEqual(currentOrderIds, nextOrderIds)) {
+    return true
+  }
+
+  for (const tile of orderedTiles) {
+    grid.appendChild(tile)
+  }
+  return true
 }
 
 function getBookmarkInsertIndex(clientX: number, clientY: number): number {
@@ -1558,11 +1556,9 @@ function getBookmarkInsertIndex(clientX: number, clientY: number): number {
   }
 
   const rect = closestTile.getBoundingClientRect()
-  const draggedRect = getActiveDragTile()?.getBoundingClientRect() || null
   const insertAfter = shouldInsertAfterBookmarkTile(
     { x: clientX, y: clientY },
-    rect,
-    draggedRect
+    rect
   )
   return targetIndex + (insertAfter ? 1 : 0)
 }
@@ -3125,6 +3121,7 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
     if (section.bookmarks.length) {
       const list = document.createElement('nav')
       list.className = 'bookmark-grid'
+      list.dataset.bookmarkGridFolderId = section.id
       list.setAttribute('aria-label', `${section.title || '文件夹'}书签`)
 
       for (const bookmark of section.bookmarks) {

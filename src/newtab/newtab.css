@@ -1278,6 +1278,24 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
   cursor: default;
 }
 
+body.bookmark-dragging .bookmark-tile:not(.dragging) {
+  transition: none;
+}
+
+body.bookmark-dragging .bookmark-tile:not(.dragging):hover,
+body.bookmark-dragging .bookmark-tile:not(.dragging):active {
+  border-color: rgb(var(--bookmark-card-rgb) / var(--bookmark-card-border-alpha));
+  background:
+    linear-gradient(
+      135deg,
+      rgb(var(--bookmark-card-rgb) / var(--bookmark-card-bg-alpha)),
+      rgba(255, 255, 255, 0.024)
+    ),
+    rgba(8, 8, 9, 0.42);
+  box-shadow: none;
+  transform: none;
+}
+
 .bookmark-drag-ghost {
   position: fixed;
   top: 0;
@@ -1326,6 +1344,13 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
   border-color: rgb(var(--bookmark-card-rgb) / 0.16);
   background: rgba(0, 0, 0, 0.48);
   transition-duration: 60ms;
+}
+
+body.bookmark-dragging .bookmark-tile:not(.dragging):hover .bookmark-icon-shell,
+body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-icon-shell {
+  border-color: rgb(var(--bookmark-card-rgb) / 0.12);
+  background: rgba(0, 0, 0, 0.34);
+  transition: none;
 }
 
 .bookmark-favicon {
@@ -1388,6 +1413,11 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
 .bookmark-tile:hover .bookmark-title,
 .bookmark-tile:focus-visible .bookmark-title {
   color: var(--text);
+}
+
+body.bookmark-dragging .bookmark-tile:not(.dragging):hover .bookmark-title,
+body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-title {
+  color: rgba(245, 245, 247, 0.78);
 }
 
 .settings-trigger-zone {

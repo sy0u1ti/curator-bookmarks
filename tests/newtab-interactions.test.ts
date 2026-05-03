@@ -54,29 +54,26 @@ test('does not emit bookmark moves for unchanged or invalid reorder snapshots', 
 
 test('bookmark drag insertion uses horizontal halves within the same row', () => {
   const targetRect = { left: 100, top: 40, width: 180, height: 48 }
-  const draggedRect = { left: 300, top: 42, width: 180, height: 48 }
 
   assert.equal(
-    shouldInsertAfterBookmarkTile({ x: 180, y: 120 }, targetRect, draggedRect),
+    shouldInsertAfterBookmarkTile({ x: 180, y: 64 }, targetRect),
     false
   )
   assert.equal(
-    shouldInsertAfterBookmarkTile({ x: 220, y: 8 }, targetRect, draggedRect),
+    shouldInsertAfterBookmarkTile({ x: 220, y: 64 }, targetRect),
     true
   )
 })
 
 test('bookmark drag insertion uses vertical order across rows', () => {
   const targetRect = { left: 100, top: 40, width: 180, height: 48 }
-  const draggedBelow = { left: 100, top: 130, width: 180, height: 48 }
-  const draggedAbove = { left: 100, top: -50, width: 180, height: 48 }
 
   assert.equal(
-    shouldInsertAfterBookmarkTile({ x: 260, y: 56 }, targetRect, draggedBelow),
+    shouldInsertAfterBookmarkTile({ x: 260, y: 48 }, targetRect),
     false
   )
   assert.equal(
-    shouldInsertAfterBookmarkTile({ x: 120, y: 96 }, targetRect, draggedAbove),
+    shouldInsertAfterBookmarkTile({ x: 120, y: 82 }, targetRect),
     true
   )
 })

@@ -90,24 +90,23 @@ export function buildMinimalBookmarkMoveOperations(
 
 export function shouldInsertAfterBookmarkTile(
   pointer: { x: number; y: number },
-  targetRect: BookmarkTileRectLike,
-  draggedRect?: BookmarkTileRectLike | null
+  targetRect: BookmarkTileRectLike
 ): boolean {
   const targetCenterX = targetRect.left + targetRect.width / 2
   const targetCenterY = targetRect.top + targetRect.height / 2
-  if (!draggedRect) {
-    return pointer.x > targetCenterX
+  const verticalThreshold = Math.max(
+    6,
+    targetRect.height * 0.24
+  )
+
+  if (pointer.y < targetCenterY - verticalThreshold) {
+    return false
+  }
+  if (pointer.y > targetCenterY + verticalThreshold) {
+    return true
   }
 
-  const draggedCenterY = draggedRect.top + draggedRect.height / 2
-  const sameRowThreshold = Math.max(
-    6,
-    Math.min(targetRect.height, draggedRect.height) * 0.5
-  )
-  const sameRow = Math.abs(draggedCenterY - targetCenterY) <= sameRowThreshold
-  return sameRow
-    ? pointer.x > targetCenterX
-    : pointer.y > targetCenterY
+  return pointer.x > targetCenterX
 }
 
 function getLongestIncreasingSubsequenceIndexes(values: number[]): number[] {
