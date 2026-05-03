@@ -227,16 +227,34 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-clock {
   --clock-scale: 1;
+  --clock-gap-x: 10px;
+  --clock-gap-y: 4px;
   display: inline-flex;
   width: min(100%, 1229px);
-  min-height: 32px;
+  min-height: calc(30px * var(--clock-scale));
   align-items: center;
   justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: var(--clock-gap-y) var(--clock-gap-x);
   color: var(--text);
   text-align: left;
   user-select: none;
+}
+
+.newtab-clock[data-clock-density="compact"] {
+  --clock-gap-x: 8px;
+  --clock-gap-y: 2px;
+  min-height: calc(26px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-density="comfortable"] {
+  --clock-gap-x: 12px;
+  --clock-gap-y: 6px;
+  min-height: calc(36px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-display-mode="date"][data-clock-density="comfortable"] {
+  min-height: calc(30px * var(--clock-scale));
 }
 
 .newtab-clock-time-group {
@@ -279,7 +297,7 @@ body.background-mask-enabled .newtab-background-mask {
   font-size: calc(12px * var(--clock-scale));
   font-weight: 650;
   letter-spacing: 0;
-  line-height: 1;
+  line-height: 1.05;
   white-space: nowrap;
 }
 
@@ -287,6 +305,30 @@ body.background-mask-enabled .newtab-background-mask {
   color: rgba(245, 245, 247, 0.82);
   font-size: calc(16px * var(--clock-scale));
   font-weight: 700;
+}
+
+.newtab-clock[data-clock-density="compact"] .newtab-clock-time {
+  font-size: calc(20px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-density="compact"] .newtab-clock-date {
+  font-size: calc(11px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-density="compact"][data-clock-display-mode="date"] .newtab-clock-date {
+  font-size: calc(14px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-density="comfortable"] .newtab-clock-time {
+  font-size: calc(26px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-density="comfortable"] .newtab-clock-date {
+  font-size: calc(13px * var(--clock-scale));
+}
+
+.newtab-clock[data-clock-density="comfortable"][data-clock-display-mode="date"] .newtab-clock-date {
+  font-size: calc(18px * var(--clock-scale));
 }
 
 .newtab-search-slot {
@@ -3402,10 +3444,6 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   .newtab-clock,
   .newtab-clock-spacer {
     min-height: 0;
-  }
-
-  .newtab-clock {
-    gap: 4px 8px;
   }
 
   .newtab-search-input {
