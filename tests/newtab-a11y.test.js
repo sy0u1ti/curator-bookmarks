@@ -23,3 +23,12 @@ test('newtab keeps local polite status regions for short feedback', () => {
   assert.match(newtabSource, /toast\.setAttribute\('role', 'status'\)/)
   assert.match(newtabSource, /toast\.setAttribute\('aria-live', 'polite'\)/)
 })
+
+test('newtab wallpaper startup motion respects reduced-motion preference', () => {
+  const newtabCss = readProjectFile('src/newtab/newtab.css')
+
+  assert.match(newtabCss, /@media \(prefers-reduced-motion: reduce\)/)
+  assert.match(newtabCss, /transition: none !important/)
+  assert.match(newtabCss, /html:not\(\.loading-wallpaper\) \.newtab-shell/)
+  assert.match(newtabCss, /\.newtab-background-video/)
+})

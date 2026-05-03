@@ -107,6 +107,8 @@ const BACKGROUND_MEDIA_STORE = 'media'
 const BACKGROUND_URL_CACHE_KEY = 'urlImage'
 const BACKGROUND_URL_CACHE_MAX_DIMENSION = 2560
 const BACKGROUND_URL_CACHE_QUALITY = 0.86
+const BACKGROUND_IMAGE_READY_TIMEOUT_MS = 2200
+const BACKGROUND_VIDEO_READY_TIMEOUT_MS = 2800
 const DEFAULT_BACKGROUND_SETTINGS = {
   type: 'color',
   color: '#000000',
@@ -331,11 +333,12 @@ let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
 let bookmarkDragSlotRects = new Map<string, DOMRect>()
 let bookmarkDragSlotOrderIds: string[] = []
+const backgroundPreloadPromise = preloadBackgroundSettings()
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
   renderIconPresetCards()
-  void preloadBackgroundSettings()
+  void backgroundPreloadPromise
   void refreshNewTab()
 })
 
@@ -855,6 +858,7 @@ function handleBackgroundSettingsChange(): void {
     state.backgroundUrlCacheStatus = ''
   }
   state.backgroundSettings = nextSettings
+  setWallpaperPlaceholderColor(nextSettings.color)
   void saveBackgroundSettings().catch((error) => {
     console.warn('新标签页背景设置保存失败。', error)
   })
@@ -965,8 +969,11 @@ async function handleBackgroundUrlCacheClick(): Promise<void> {
       return
     }
 
-    setBackgroundImageFromBlob(blob)
-    lastAppliedBackgroundMediaSignature = getBackgroundMediaSignature(state.backgroundSettings)
+    const ready = await setBackgroundImageFromBlob(blob)
+    if (ready) {
+      lastAppliedBackgroundMediaSignature = getBackgroundMediaSignature(state.backgroundSettings)
+    }
+    markWallpaperReady()
     state.backgroundUrlCacheStatus = `已缓存 ${formatBytes(blob.size)}`
     setBackgroundStatus('远程图片已缓存到本地。', 'success')
   } catch (error) {
@@ -2439,10 +2446,12 @@ async function preloadBackgroundSettings(): Promise<void> {
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.newTabBackgroundSettings])
     state.backgroundSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
+    setWallpaperPlaceholderColor(state.backgroundSettings.color)
     syncBackgroundSettingsControls()
     await applyBackgroundSettings()
   } catch (error) {
     console.warn('新标签页背景预加载失败。', error)
+    markWallpaperReady()
   }
 }
 
@@ -4674,16 +4683,33 @@ function hasAppliedBackgroundMedia(settings: typeof DEFAULT_BACKGROUND_SETTINGS)
   return true
 }
 
+function setWallpaperPlaceholderColor(color = state.backgroundSettings.color): void {
+  document.documentElement.style.setProperty(
+    '--wallpaper-placeholder-bg',
+    normalizeHexColor(color, DEFAULT_BACKGROUND_SETTINGS.color)
+  )
+}
+
+function markWallpaperReady(): void {
+  document.documentElement.classList.remove('loading-wallpaper', 'newtab-booting')
+}
+
+function markWallpaperPending(): void {
+  document.documentElement.classList.add('loading-wallpaper')
+}
+
 async function applyBackgroundSettings(): Promise<void> {
   const applyToken = ++backgroundApplyToken
   const settings = state.backgroundSettings
   const mediaSignature = getBackgroundMediaSignature(settings)
   applyBackgroundMaskSettings(settings)
+  setWallpaperPlaceholderColor(settings.color)
 
   if (
     mediaSignature === lastAppliedBackgroundMediaSignature &&
     hasAppliedBackgroundMedia(settings)
   ) {
+    markWallpaperReady()
     return
   }
 
@@ -4694,10 +4720,12 @@ async function applyBackgroundSettings(): Promise<void> {
   if (settings.type === 'color') {
     document.documentElement.style.setProperty('--bg', settings.color)
     lastAppliedBackgroundMediaSignature = mediaSignature
+    markWallpaperReady()
     return
   }
 
-  document.documentElement.style.setProperty('--bg', DEFAULT_BACKGROUND_SETTINGS.color)
+  markWallpaperPending()
+  document.documentElement.style.setProperty('--bg', settings.color)
 
   if (settings.type === 'urls') {
     const imageUrl = normalizeBackgroundImageUrl(settings.url)
@@ -4705,12 +4733,14 @@ async function applyBackgroundSettings(): Promise<void> {
       await applyUrlBackgroundImage(imageUrl, applyToken, mediaSignature)
     } else {
       lastAppliedBackgroundMediaSignature = mediaSignature
+      markWallpaperReady()
     }
     return
   }
 
   if (settings.type !== 'image' && settings.type !== 'video') {
     lastAppliedBackgroundMediaSignature = mediaSignature
+    markWallpaperReady()
     return
   }
 
@@ -4720,17 +4750,33 @@ async function applyBackgroundSettings(): Promise<void> {
     mediaRecord = await getBackgroundMedia(mediaType)
   } catch (error) {
     console.error(error)
+    if (applyToken === backgroundApplyToken) {
+      markWallpaperReady()
+    }
     return
   }
   if (applyToken !== backgroundApplyToken || !mediaRecord) {
+    if (applyToken === backgroundApplyToken) {
+      markWallpaperReady()
+    }
     return
   }
 
   const objectUrl = URL.createObjectURL(mediaRecord.blob)
   setActiveBackgroundObjectUrl(objectUrl)
   if (mediaType === 'image') {
-    document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
-    lastAppliedBackgroundMediaSignature = mediaSignature
+    const ready = await waitForBackgroundImageReady(objectUrl, applyToken)
+    if (applyToken !== backgroundApplyToken) {
+      return
+    }
+    if (ready) {
+      document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
+      lastAppliedBackgroundMediaSignature = mediaSignature
+    } else {
+      setActiveBackgroundObjectUrl('')
+      console.warn('新标签页背景图片未在启动等待窗口内完成加载，已使用本地占位降级显示。')
+    }
+    markWallpaperReady()
     return
   }
 
@@ -4742,8 +4788,91 @@ async function applyBackgroundSettings(): Promise<void> {
   video.playsInline = true
   video.src = objectUrl
   document.body.prepend(video)
-  void video.play()
-  lastAppliedBackgroundMediaSignature = mediaSignature
+  const ready = await waitForBackgroundVideoReady(video, applyToken)
+  if (applyToken !== backgroundApplyToken) {
+    return
+  }
+  if (ready) {
+    void video.play()
+    lastAppliedBackgroundMediaSignature = mediaSignature
+  } else {
+    video.remove()
+    setActiveBackgroundObjectUrl('')
+    console.warn('新标签页背景视频未在启动等待窗口内完成加载，已使用本地占位降级显示。')
+  }
+  markWallpaperReady()
+}
+
+function waitForBackgroundImageReady(imageUrl: string, applyToken: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const image = new Image()
+    let settled = false
+    let timeout = 0
+
+    const settle = (ready: boolean) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      window.clearTimeout(timeout)
+      image.onload = null
+      image.onerror = null
+      resolve(ready && applyToken === backgroundApplyToken)
+    }
+
+    timeout = window.setTimeout(() => {
+      settle(false)
+    }, BACKGROUND_IMAGE_READY_TIMEOUT_MS)
+    image.onload = () => {
+      settle(true)
+    }
+    image.onerror = () => {
+      settle(false)
+    }
+    image.src = imageUrl
+  })
+}
+
+function waitForBackgroundVideoReady(video: HTMLVideoElement, applyToken: number): Promise<boolean> {
+  if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+    return Promise.resolve(applyToken === backgroundApplyToken)
+  }
+
+  return new Promise((resolve) => {
+    let settled = false
+    let timeout = 0
+
+    const cleanup = () => {
+      window.clearTimeout(timeout)
+      video.removeEventListener('loadedmetadata', handleReady)
+      video.removeEventListener('canplay', handleReady)
+      video.removeEventListener('error', handleError)
+    }
+
+    const settle = (ready: boolean) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      resolve(ready && applyToken === backgroundApplyToken)
+    }
+
+    function handleReady(): void {
+      settle(true)
+    }
+
+    function handleError(): void {
+      settle(false)
+    }
+
+    timeout = window.setTimeout(() => {
+      settle(false)
+    }, BACKGROUND_VIDEO_READY_TIMEOUT_MS)
+    video.addEventListener('loadedmetadata', handleReady, { once: true })
+    video.addEventListener('canplay', handleReady, { once: true })
+    video.addEventListener('error', handleError, { once: true })
+  })
 }
 
 async function applyUrlBackgroundImage(
@@ -4758,18 +4887,42 @@ async function applyUrlBackgroundImage(
     }
 
     if (cachedRecord) {
-      setBackgroundImageFromBlob(cachedRecord.blob)
-      lastAppliedBackgroundMediaSignature = mediaSignature
+      const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken)
+      if (applyToken !== backgroundApplyToken) {
+        return
+      }
+      if (ready) {
+        lastAppliedBackgroundMediaSignature = mediaSignature
+      }
+      markWallpaperReady()
       return
     }
 
-    document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
-    lastAppliedBackgroundMediaSignature = mediaSignature
+    const ready = await waitForBackgroundImageReady(imageUrl, applyToken)
+    if (applyToken !== backgroundApplyToken) {
+      return
+    }
+    if (ready) {
+      document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
+      lastAppliedBackgroundMediaSignature = mediaSignature
+    } else {
+      console.warn('新标签页远程背景图片未在启动等待窗口内完成加载，已使用同色占位降级显示。')
+    }
+    markWallpaperReady()
     void cacheBackgroundUrlImage(imageUrl)
   } catch {
     if (applyToken === backgroundApplyToken) {
-      document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
-      lastAppliedBackgroundMediaSignature = mediaSignature
+      const ready = await waitForBackgroundImageReady(imageUrl, applyToken)
+      if (applyToken !== backgroundApplyToken) {
+        return
+      }
+      if (ready) {
+        document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
+        lastAppliedBackgroundMediaSignature = mediaSignature
+      } else {
+        console.warn('新标签页远程背景图片缓存读取失败，已使用直连图片并解除启动占位。')
+      }
+      markWallpaperReady()
     }
   }
 }
@@ -4797,10 +4950,20 @@ function isCurrentBackgroundUrl(imageUrl: string): boolean {
     normalizeBackgroundImageUrl(state.backgroundSettings.url) === imageUrl
 }
 
-function setBackgroundImageFromBlob(blob: Blob): void {
+async function setBackgroundImageFromBlob(blob: Blob, applyToken = backgroundApplyToken): Promise<boolean> {
   const objectUrl = URL.createObjectURL(blob)
   setActiveBackgroundObjectUrl(objectUrl)
-  document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
+  const ready = await waitForBackgroundImageReady(objectUrl, applyToken)
+  if (applyToken !== backgroundApplyToken) {
+    return false
+  }
+  if (ready) {
+    document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
+  } else {
+    setActiveBackgroundObjectUrl('')
+    console.warn('新标签页背景缓存图片未在启动等待窗口内完成加载，已使用本地占位降级显示。')
+  }
+  return ready
 }
 
 function applyBackgroundMaskSettings(settings = state.backgroundSettings): void {

@@ -212,6 +212,32 @@ test('newtab settings expose one combined quick access switch', () => {
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
 
+test('newtab boots with a wallpaper loading guard before app content is shown', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+  const css = readProjectFile('src/newtab/newtab.css')
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(html, /<html lang="zh-CN" class="loading-wallpaper newtab-booting">/)
+  assert.match(css, /--wallpaper-placeholder-bg: #000000/)
+  assert.match(css, /html\.loading-wallpaper \.newtab-shell/)
+  assert.match(css, /visibility: hidden/)
+  assert.match(script, /const backgroundPreloadPromise = preloadBackgroundSettings\(\)/)
+  assert.match(script, /function markWallpaperReady\(\): void/)
+  assert.match(script, /classList\.remove\('loading-wallpaper', 'newtab-booting'\)/)
+})
+
+test('newtab waits for wallpaper media readiness before revealing the startup view', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(script, /waitForBackgroundImageReady\(objectUrl, applyToken\)/)
+  assert.match(script, /waitForBackgroundImageReady\(imageUrl, applyToken\)/)
+  assert.match(script, /waitForBackgroundVideoReady\(video, applyToken\)/)
+  assert.match(script, /loadedmetadata/)
+  assert.match(script, /canplay/)
+  assert.match(script, /markWallpaperPending\(\)/)
+  assert.match(script, /markWallpaperReady\(\)/)
+})
+
 test('newtab folder headers expose scoped quick-add controls', () => {
   const script = readProjectFile('src/newtab/newtab.ts')
   const css = readProjectFile('src/newtab/newtab.css')
