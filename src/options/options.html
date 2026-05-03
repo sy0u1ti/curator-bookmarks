@@ -32,10 +32,29 @@
           <div class="options-nav-group">
             <p id="options-bookmark-nav-label" class="options-sidebar-label">书签管理</p>
             <nav class="options-nav" aria-labelledby="options-bookmark-nav-label">
-              <a class="options-nav-link" href="#availability" data-section-link="availability">书签可用性检测</a>
-              <a class="options-nav-link" href="#history" data-section-link="history">检测历史</a>
-              <a class="options-nav-link" href="#redirects" data-section-link="redirects">重定向更新</a>
-              <a class="options-nav-link" href="#ignore" data-section-link="ignore">忽略规则</a>
+              <div class="options-nav-collapsible" data-nav-group="availability-tools">
+                <button
+                  class="options-nav-group-trigger"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="availability-tools-nav"
+                  data-nav-group-trigger="availability-tools"
+                >
+                  <span>可用性管理</span>
+                  <span class="options-nav-group-caret" aria-hidden="true"></span>
+                </button>
+                <div
+                  id="availability-tools-nav"
+                  class="options-nav-sublist"
+                  data-nav-group-panel="availability-tools"
+                  hidden
+                >
+                  <a class="options-nav-link options-nav-subitem" href="#availability" data-section-link="availability">书签可用性检测</a>
+                  <a class="options-nav-link options-nav-subitem" href="#history" data-section-link="history">检测历史</a>
+                  <a class="options-nav-link options-nav-subitem" href="#redirects" data-section-link="redirects">重定向更新</a>
+                  <a class="options-nav-link options-nav-subitem" href="#ignore" data-section-link="ignore">忽略规则</a>
+                </div>
+              </div>
               <a class="options-nav-link" href="#duplicates" data-section-link="duplicates">重复书签检测</a>
               <a class="options-nav-link" href="#folder-cleanup" data-section-link="folder-cleanup">文件夹清理</a>
               <a class="options-nav-link" href="#recycle" data-section-link="recycle">回收站</a>
@@ -406,6 +425,7 @@
                   高级搜索语法：site:github.com 限定站点或域名。folder:前端 限定文件夹路径。type:文档 限定 AI 识别的内容类型。最近一个月、本周、今天限定添加时间。-youtube 排除包含该词的结果。
                 </p>
                 <div id="dashboard-search-chips" class="dashboard-search-chips hidden" aria-label="当前搜索条件"></div>
+                <nav id="dashboard-folder-breadcrumbs" class="dashboard-folder-breadcrumbs hidden" aria-label="当前 Dashboard 文件夹路径"></nav>
               </div>
               <div class="dashboard-toolbar-actions">
                 <span id="dashboard-result-count" class="option-value">0 条书签</span>
@@ -519,10 +539,30 @@
               </div>
 
               <div class="detect-toolbar-actions">
-                <span id="availability-summary-copy-status" class="options-inline-status"></span>
-                <button id="availability-copy-summary" class="options-button secondary small" type="button">
-                  复制概览
-                </button>
+                <div class="availability-settings-anchor">
+                  <button id="availability-settings-trigger" class="options-button secondary small" type="button" aria-expanded="false" aria-controls="availability-settings-popover">
+                    检测设置
+                  </button>
+                  <section id="availability-settings-popover" class="availability-settings-popover hidden" role="dialog" aria-modal="false" aria-labelledby="availability-settings-title">
+                    <div class="availability-settings-head">
+                      <strong id="availability-settings-title">检测设置</strong>
+                      <span id="availability-settings-status" class="options-inline-status muted"></span>
+                    </div>
+                    <label class="availability-setting-field" for="availability-concurrency-input">
+                      <span>并发数</span>
+                      <input id="availability-concurrency-input" class="availability-setting-input" type="number" inputmode="numeric" min="1" max="6" step="1">
+                    </label>
+                    <label class="availability-setting-field" for="availability-timeout-input">
+                      <span>超时时长（秒）</span>
+                      <input id="availability-timeout-input" class="availability-setting-input" type="number" inputmode="numeric" min="5" max="120" step="5">
+                    </label>
+                    <p class="availability-settings-note">单域名仍会自动限流；遇到超时或 HTTP 429 会降速。</p>
+                    <div class="availability-settings-actions">
+                      <button id="availability-settings-reset" class="options-button secondary small" type="button">恢复默认</button>
+                      <button id="availability-settings-save" class="options-button small" type="button">保存设置</button>
+                    </div>
+                  </section>
+                </div>
                 <button id="availability-action" class="options-button" type="button">
                   开始检测全部书签
                 </button>
@@ -535,68 +575,62 @@
               </div>
             </div>
 
-            <div class="detect-progress-card">
-              <div class="detect-progress-meta">
-                <strong>检测进度</strong>
-                <span id="availability-progress-text">未开始</span>
+            <div class="availability-decision-panel" aria-label="可用性检测决策概览">
+              <div class="availability-decision-header">
+                <div>
+                  <strong>决策面板</strong>
+                  <p class="detect-results-subtitle">异常项可直接忽略书签、域名或文件夹；确认失效后再移动或删除。</p>
+                </div>
+                <span id="availability-decision-duration" class="option-value">未开始</span>
               </div>
-              <div class="detect-progress-track" aria-hidden="true">
-                <span id="availability-progress-bar" class="detect-progress-bar"></span>
+              <div class="decision-progress-row">
+                <div class="decision-progress-meta">
+                  <span class="summary-label">检测进度</span>
+                  <strong id="availability-progress-text">未开始</strong>
+                </div>
+                <div class="decision-progress-body">
+                  <div class="detect-progress-track" aria-hidden="true">
+                    <span id="availability-progress-bar" class="detect-progress-bar"></span>
+                  </div>
+                  <p id="availability-status-copy" class="detect-status-copy">仅检测 `http/https` 书签，其它协议会自动跳过。</p>
+                </div>
               </div>
-              <p id="availability-status-copy" class="detect-status-copy">仅检测 `http/https` 书签，其它协议会自动跳过。</p>
-            </div>
-
-            <div class="options-guidance-list" aria-label="坏链检测结果处理顺序">
-              <div class="options-guidance-item">
-                <span class="options-chip danger">高置信</span>
-                <strong>先重测，再移动或删除</strong>
-                <p>多层证据都指向失效时才进入高置信；批量删除前建议先抽样打开确认。</p>
+              <div class="availability-decision-grid">
+                <div>
+                  <span class="summary-label">本次范围</span>
+                  <strong id="availability-decision-scope">全部书签</strong>
+                </div>
+                <div>
+                  <span class="summary-label">扫描进度</span>
+                  <strong id="availability-decision-progress">0 / 0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">新增异常</span>
+                  <strong id="availability-decision-new">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">持续异常</span>
+                  <strong id="availability-decision-persistent">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">已恢复</span>
+                  <strong id="availability-decision-recovered">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">忽略过滤</span>
+                  <strong id="availability-decision-ignored">0</strong>
+                </div>
               </div>
-              <div class="options-guidance-item">
-                <span class="options-chip warning">低置信</span>
-                <strong>优先人工确认</strong>
-                <p>登录限制、地区限制、反爬或临时失败会留在低置信；确认后可移入高置信或加入忽略规则。</p>
+              <div id="availability-filter-bar" class="availability-filter-bar" role="toolbar" aria-label="筛选可用性检测结果">
+                <button class="options-button secondary small" type="button" data-availability-filter="all" aria-pressed="true">全部</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="failed" aria-pressed="false">高置信</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="review" aria-pressed="false">低置信 / 待确认</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="redirected" aria-pressed="false">重定向</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="new" aria-pressed="false">新增</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="persistent" aria-pressed="false">持续</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="recovered" aria-pressed="false">已恢复</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="ignored" aria-pressed="false">已忽略过滤</button>
               </div>
-              <div class="options-guidance-item">
-                <span class="options-chip success">重定向</span>
-                <strong>确认当前地址后更新</strong>
-                <p>更新前会重新读取书签，只有当前 URL 仍等于检测时原地址才会替换为最终 URL。</p>
-              </div>
-            </div>
-
-            <div class="detect-summary-grid">
-              <article class="summary-card metric-card metric-total">
-                <span id="availability-total-label" class="summary-label">全部书签</span>
-                <strong id="availability-total">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-info">
-                <span class="summary-label">可检测</span>
-                <strong id="availability-eligible">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-success">
-                <span class="summary-label">可访问</span>
-                <strong id="availability-available">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-warning">
-                <span class="summary-label">重定向</span>
-                <strong id="availability-redirected">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-warning">
-                <span class="summary-label">低置信异常</span>
-                <strong id="availability-review">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-danger">
-                <span class="summary-label">高置信异常</span>
-                <strong id="availability-failed">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-muted">
-                <span class="summary-label">已忽略</span>
-                <strong id="availability-ignored">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-muted">
-                <span class="summary-label">跳过</span>
-                <strong id="availability-skipped">0</strong>
-              </article>
             </div>
 
             <div id="availability-selection-group" class="options-group detect-selection-group hidden">
@@ -622,7 +656,7 @@
             <div class="options-group detect-results-group">
               <div class="detect-results-header">
                 <div>
-                  <strong>低置信异常</strong>
+                  <strong id="availability-review-title">低置信异常</strong>
                   <p id="availability-review-subtitle" class="detect-results-subtitle">导航失败但证据不足以直接判定为高置信异常，建议人工确认</p>
                 </div>
                 <div class="detect-results-actions">
@@ -639,7 +673,7 @@
             <div class="options-group detect-results-group">
               <div class="detect-results-header">
                 <div>
-                  <strong>高置信异常</strong>
+                  <strong id="availability-failed-title">高置信异常</strong>
                   <p id="availability-last-run" class="detect-results-subtitle">尚未执行检测</p>
                 </div>
                 <div class="detect-results-actions">
@@ -815,50 +849,60 @@
               </div>
             </div>
 
-            <div class="detect-progress-card">
-              <div class="detect-progress-meta">
-                <strong>执行进度</strong>
-                <span id="ai-progress-text">未开始</span>
+            <div class="availability-decision-panel ai-decision-panel" aria-label="书签智能分析决策概览">
+              <div class="availability-decision-header">
+                <div>
+                  <strong>决策面板</strong>
+                  <p class="detect-results-subtitle">先查看可直接应用的建议，再处理待确认、低置信和失败项。</p>
+                </div>
+                <span id="ai-decision-status" class="option-value">未开始</span>
               </div>
-              <div class="detect-progress-track" aria-hidden="true">
-                <span id="ai-progress-bar" class="detect-progress-bar"></span>
+              <div class="decision-progress-row">
+                <div class="decision-progress-meta">
+                  <span class="summary-label">执行进度</span>
+                  <strong id="ai-progress-text">未开始</strong>
+                </div>
+                <div class="decision-progress-body">
+                  <div class="detect-progress-track" aria-hidden="true">
+                    <span id="ai-progress-bar" class="detect-progress-bar"></span>
+                  </div>
+                  <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>
+                </div>
               </div>
-              <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>
-            </div>
-
-            <div class="detect-summary-grid">
-              <article class="summary-card metric-card metric-total">
-                <span class="summary-label">可处理</span>
-                <strong id="ai-eligible">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-success">
-                <span class="summary-label">已建议</span>
-                <strong id="ai-suggested">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-warning">
-                <span class="summary-label">待确认</span>
-                <strong id="ai-manual-review">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-muted">
-                <span class="summary-label">无需改名</span>
-                <strong id="ai-unchanged">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-success">
-                <span class="summary-label">高置信</span>
-                <strong id="ai-high-confidence">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-info">
-                <span class="summary-label">中置信</span>
-                <strong id="ai-medium-confidence">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-warning">
-                <span class="summary-label">低置信</span>
-                <strong id="ai-low-confidence">0</strong>
-              </article>
-              <article class="summary-card metric-card metric-danger">
-                <span class="summary-label">失败</span>
-                <strong id="ai-failed">0</strong>
-              </article>
+              <div class="availability-decision-grid ai-decision-grid">
+                <div>
+                  <span class="summary-label">可处理</span>
+                  <strong id="ai-eligible">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">已建议</span>
+                  <strong id="ai-suggested">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">待确认</span>
+                  <strong id="ai-manual-review">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">无需改名</span>
+                  <strong id="ai-unchanged">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">高置信</span>
+                  <strong id="ai-high-confidence">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">中置信</span>
+                  <strong id="ai-medium-confidence">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">低置信</span>
+                  <strong id="ai-low-confidence">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">失败</span>
+                  <strong id="ai-failed">0</strong>
+                </div>
+              </div>
             </div>
 
             <div id="ai-selection-group" class="options-group detect-selection-group hidden">
@@ -1081,6 +1125,12 @@
               <div class="duplicate-toolbar">
                 <div id="duplicate-strategy-controls" class="duplicate-strategy-controls duplicate-primary-action-row" aria-label="重复书签选择策略">
                   <button class="options-button small duplicate-primary-action" type="button" data-duplicate-strategy="recommended">按推荐选择当前结果</button>
+                  <button class="options-button secondary small" type="button" data-duplicate-strategy="newest">保留最新</button>
+                  <button class="options-button secondary small" type="button" data-duplicate-strategy="oldest">保留最早</button>
+                  <button class="options-button secondary small" type="button" data-duplicate-strategy="shorter-path">保留路径最短</button>
+                  <button class="options-button secondary small" type="button" data-duplicate-strategy="tagged">保留有标签</button>
+                  <button class="options-button secondary small" type="button" data-duplicate-strategy="newtab-source">保留新标签页来源</button>
+                  <button class="options-button secondary small" type="button" data-duplicate-strategy="recent">保留最近访问</button>
                   <span id="duplicate-strategy-status" class="duplicate-strategy-status"></span>
                 </div>
               </div>

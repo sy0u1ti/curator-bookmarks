@@ -1,6 +1,7 @@
 :root {
   color-scheme: dark;
   --bg: #050506;
+  --wallpaper-placeholder-bg: #000000;
   --background-mask-blur: 12px;
   --text: #f5f5f7;
   --text-muted: rgba(245, 245, 247, 0.58);
@@ -31,6 +32,7 @@ body {
   min-width: 320px;
   margin: 0;
   overflow: hidden;
+  background: var(--wallpaper-placeholder-bg, var(--bg));
 }
 
 body {
@@ -43,6 +45,34 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+}
+
+html.loading-wallpaper,
+html.loading-wallpaper body {
+  background-color: var(--wallpaper-placeholder-bg, #000000);
+}
+
+html.loading-wallpaper body {
+  background-image: none;
+}
+
+html.loading-wallpaper .newtab-shell,
+html.loading-wallpaper .settings-trigger-zone {
+  opacity: 0;
+  visibility: hidden;
+}
+
+html:not(.loading-wallpaper) .newtab-shell,
+html:not(.loading-wallpaper) .settings-trigger-zone {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity var(--motion-standard) var(--motion-ease-out),
+    visibility 0s linear 0s;
+}
+
+html.loading-wallpaper .newtab-background-video {
+  opacity: 0;
 }
 
 body.bookmark-dragging,
@@ -106,6 +136,8 @@ button {
   height: 100%;
   object-fit: cover;
   pointer-events: none;
+  opacity: 1;
+  transition: opacity var(--motion-standard) var(--motion-ease-out);
 }
 
 .newtab-background-mask {

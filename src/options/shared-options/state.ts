@@ -109,16 +109,24 @@ export const availabilityState = {
   failedCount: 0,
   ignoredCount: 0,
   skippedCount: 0,
+  runStartedAt: 0,
   reviewResults: [],
   failedResults: [],
   reviewResultsPage: 1,
   failedResultsPage: 1,
   redirectResults: [],
+  availabilityFilter: 'all',
   lastCompletedAt: 0,
   lastRunOutcome: '',
   lastError: '',
-  summaryCopyStatus: '',
-  summaryCopyStatusTone: 'muted'
+  runnerStatusCopy: '',
+  settingsOpen: false,
+  settingsStatus: '',
+  settingsStatusTone: 'muted',
+  settings: {
+    concurrency: 2,
+    navigationTimeoutMs: 30000
+  }
 }
 
 export const managerState = {
@@ -233,6 +241,7 @@ export const aiNamingState = {
   requestingPermission: false,
   permissionGranted: false,
   remoteParserPermissionGranted: false,
+  runStartedAt: 0,
   checkedBookmarks: 0,
   eligibleBookmarks: 0,
   suggestedCount: 0,

@@ -1,5 +1,10 @@
 import type { BookmarkRecord, FolderRecord } from '../../shared/types.js'
 import {
+  buildBookmarkPathSegments,
+  formatBookmarkPath,
+  formatFolderPath
+} from '../../shared/bookmark-path.js'
+import {
   clearAiBookmarkTags,
   getEffectiveBookmarkTags,
   normalizeBookmarkTagIndex,
@@ -451,6 +456,7 @@ export function renderDashboardSection(): void {
     : escapeHtml(dashboardState.statusMessage || '')
   dom.dashboardQuery.value = dashboardState.query
   renderDashboardSearchTools()
+  renderDashboardFolderBreadcrumbs()
 
   renderDashboardSelectionBar(visibleItems)
   renderDashboardCards(visibleItems)
@@ -539,6 +545,12 @@ export function handleDashboardKeydown(event: KeyboardEvent): void {
 export async function handleDashboardClick(event: Event, callbacks: DashboardCallbacks): Promise<void> {
   const target = event.target as HTMLElement | null
   if (!target) {
+    return
+  }
+
+  const folderFilterButton = target.closest<HTMLElement>('[data-dashboard-folder-filter]')
+  if (folderFilterButton) {
+    applyDashboardFolderFilter(folderFilterButton.getAttribute('data-dashboard-folder-filter'))
     return
   }
 
@@ -1393,6 +1405,64 @@ function renderDashboardSearchTools(): void {
 
 }
 
+function renderDashboardFolderBreadcrumbs(): void {
+  if (!dom.dashboardFolderBreadcrumbs) {
+    return
+  }
+
+  const selectedFolderId = String(dashboardState.folderId || '').trim()
+  const selectedFolder = selectedFolderId
+    ? availabilityState.folderMap.get(selectedFolderId)
+    : null
+
+  dom.dashboardFolderBreadcrumbs.classList.toggle('hidden', !selectedFolder)
+  dom.dashboardFolderBreadcrumbs.innerHTML = selectedFolder
+    ? buildDashboardFolderBreadcrumbMarkup(selectedFolder)
+    : ''
+}
+
+function buildDashboardFolderBreadcrumbMarkup(folder: FolderRecord): string {
+  const segments = buildBookmarkPathSegments(folder, availabilityState.folderMap)
+  if (!segments.length) {
+    return ''
+  }
+
+  return `
+    <ol class="dashboard-folder-breadcrumb-list">
+      <li>
+        <button
+          class="dashboard-folder-breadcrumb-link"
+          type="button"
+          data-dashboard-folder-filter=""
+        >全部书签</button>
+      </li>
+      ${segments.map((segment) => {
+        const content = segment.current || !segment.id
+          ? `
+            <span
+              class="dashboard-folder-breadcrumb-current"
+              aria-current="page"
+              title="${escapeAttr(segment.path)}"
+            >${escapeHtml(segment.label)}</span>
+          `
+          : `
+            <button
+              class="dashboard-folder-breadcrumb-link"
+              type="button"
+              data-dashboard-folder-filter="${escapeAttr(segment.id)}"
+              title="${escapeAttr(segment.path)}"
+            >${escapeHtml(segment.label)}</button>
+          `
+
+        return `
+          <li class="dashboard-folder-breadcrumb-separator" aria-hidden="true">&gt;</li>
+          <li>${content}</li>
+        `
+      }).join('')}
+    </ol>
+  `
+}
+
 function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
   const selectedCount = getSelectedDashboardBookmarks().length
   dom.dashboardSelectionGroup.classList.toggle('hidden', selectedCount === 0)
@@ -1407,6 +1477,21 @@ function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
     .forEach((button) => {
       button.disabled = availabilityState.deleting || visibleItems.length === 0
     })
+}
+
+function applyDashboardFolderFilter(folderId: unknown): void {
+  const normalizedFolderId = String(folderId || '').trim()
+  const selectedFolder = normalizedFolderId
+    ? availabilityState.folderMap.get(normalizedFolderId)
+    : null
+
+  dashboardState.folderId = selectedFolder ? normalizedFolderId : ''
+  dashboardState.selectedIds.clear()
+  dashboardState.expandedTagIds.clear()
+  resetDashboardVirtualScroll()
+  setDashboardStatus(selectedFolder
+    ? `已筛选：${formatFolderPath(selectedFolder, availabilityState.folderMap) || selectedFolder.title}`
+    : '已显示全部书签')
 }
 
 function renderDashboardCards(items: DashboardItem[]): void {
@@ -1709,6 +1794,7 @@ function buildDashboardCard(item: DashboardItem): string {
     : item.aiTags.length
       ? '已有 AI 标签'
       : '未生成 AI 标签'
+  const itemPath = formatBookmarkPath(item.path) || '未归档路径'
   const tagMarkup = tags.length
     ? tags.map((tag) => `<span class="dashboard-mini-chip">${escapeHtml(tag)}</span>`).join('')
     : ''
@@ -1759,7 +1845,14 @@ function buildDashboardCard(item: DashboardItem): string {
             data-dashboard-no-drag
           >${escapeHtml(displayUrl(item.url))}</a>
           <div class="dashboard-card-meta">
-            <span class="dashboard-path-chip" title="${escapeAttr(item.path || '未归档路径')}">${escapeHtml(item.path || '未归档路径')}</span>
+            <button
+              class="dashboard-path-chip"
+              type="button"
+              data-dashboard-folder-filter="${escapeAttr(item.parentId || '')}"
+              data-dashboard-no-drag
+              title="${escapeAttr(itemPath)}"
+              aria-label="按文件夹筛选：${escapeAttr(itemPath)}"
+            >${escapeHtml(itemPath)}</button>
             ${tagMarkup}
             ${toggleMarkup}
           </div>

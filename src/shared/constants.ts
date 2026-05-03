@@ -21,6 +21,7 @@ export const STORAGE_KEYS = {
   popupCommandIntent: 'curatorBookmarkPopupCommandIntent',
   popupPreferences: 'curatorBookmarkPopupPreferences',
   redirectCache: 'curatorBookmarkRedirectCache',
+  availabilitySettings: 'curatorBookmarkAvailabilitySettings',
   recycleBin: 'curatorBookmarkRecycleBin',
   aiProviderSettings: 'curatorBookmarkAiNamingSettings',
   bookmarkTagIndex: 'curatorBookmarkTagIndex',

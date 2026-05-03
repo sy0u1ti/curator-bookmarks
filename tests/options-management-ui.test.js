@@ -30,6 +30,18 @@ test('dashboard tag editor and tag popover have dialog semantics and keyboard pa
   assert.match(optionsSource, /addEventListener\('keydown', handleDashboardKeydown\)/)
 })
 
+test('dashboard folder filtering exposes clickable breadcrumbs', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
+
+  assert.match(optionsHtml, /id="dashboard-folder-breadcrumbs"[^>]+aria-label="当前 Dashboard 文件夹路径"/)
+  assert.match(dashboardSource, /function renderDashboardFolderBreadcrumbs/)
+  assert.match(dashboardSource, /data-dashboard-folder-filter="\$\{escapeAttr\(segment\.id\)\}"/)
+  assert.match(dashboardSource, /aria-current="page"/)
+  assert.match(dashboardSource, /function applyDashboardFolderFilter/)
+  assert.match(dashboardSource, /data-dashboard-folder-filter="\$\{escapeAttr\(item\.parentId \|\| ''\)\}"/)
+})
+
 test('availability, redirect and AI result lists render paginated controls', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
@@ -45,11 +57,29 @@ test('availability, redirect and AI result lists render paginated controls', () 
   }
 
   assert.match(optionsSource, /const RESULTS_PAGE_SIZE = 25/)
-  assert.match(optionsSource, /getPaginatedResults\('availability-review', availabilityState\.reviewResults\)/)
-  assert.match(optionsSource, /getPaginatedResults\('availability-failed', availabilityState\.failedResults\)/)
+  assert.match(optionsSource, /getPaginatedResults\('availability-review', panelResults\)/)
+  assert.match(optionsSource, /getPaginatedResults\('availability-failed', panelResults\)/)
   assert.match(optionsSource, /getPaginatedResults\('ai-results', visibleResults\)/)
   assert.match(redirectsSource, /const REDIRECT_RESULTS_PAGE_SIZE = 25/)
   assert.match(redirectsSource, /getRedirectPageResults\(redirectResults\)/)
+})
+
+test('duplicate decisions expose explicit keep strategies and recycle wording', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const duplicateSource = readProjectFile('src/options/sections/duplicates.ts')
+
+  assert.match(optionsHtml, /data-duplicate-strategy="recommended"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="newest"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="oldest"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="shorter-path"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="tagged"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="newtab-source"/)
+  assert.match(optionsHtml, /data-duplicate-strategy="recent"/)
+  assert.match(duplicateSource, /duplicate-recommendation-signals/)
+  assert.match(duplicateSource, /有手动标签/)
+  assert.match(duplicateSource, /新标签页来源/)
+  assert.match(duplicateSource, /最近访问/)
+  assert.doesNotMatch(duplicateSource, />\\s*删除所选\\s*</)
 })
 
 test('broken-link guidance explains confidence levels and redirect handling', () => {
@@ -57,12 +87,140 @@ test('broken-link guidance explains confidence levels and redirect handling', ()
   const optionsSource = readProjectFile('src/options/options.ts')
   const redirectsSource = readProjectFile('src/options/sections/redirects.ts')
 
-  assert.match(optionsHtml, /坏链检测结果处理顺序/)
-  assert.match(optionsHtml, /高置信[\s\S]*?先重测，再移动或删除/)
-  assert.match(optionsHtml, /低置信[\s\S]*?优先人工确认/)
-  assert.match(optionsHtml, /重定向[\s\S]*?确认当前地址后更新/)
+  assert.match(optionsHtml, /决策面板/)
+  assert.match(optionsHtml, /高置信/)
+  assert.match(optionsHtml, /低置信 \/ 待确认/)
+  assert.match(optionsHtml, /重定向/)
   assert.match(optionsSource, /getAvailabilityResultRecommendation/)
   assert.match(redirectsSource, /更新前会重新读取书签/)
+})
+
+test('availability results expose decision filters and single-item ignore actions', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  for (const filter of [
+    'all',
+    'failed',
+    'review',
+    'redirected',
+    'new',
+    'persistent',
+    'recovered',
+    'ignored'
+  ]) {
+    assert.match(optionsHtml, new RegExp(`data-availability-filter="${filter}"`))
+  }
+
+  assert.match(optionsHtml, /availability-decision-new/)
+  assert.match(optionsHtml, /availability-decision-persistent/)
+  assert.match(optionsHtml, /availability-decision-recovered/)
+  assert.match(optionsHtml, /availability-decision-ignored/)
+  assert.match(optionsSource, /data-availability-result-action="\$\{escapeAttr\(action\)\}"/)
+  assert.match(optionsSource, /ignoreSingleAvailabilityResult/)
+  assert.match(optionsSource, /addAvailabilityIgnoreRule/)
+  assert.match(optionsSource, /本次隐藏/)
+  assert.match(optionsSource, /忽略此书签/)
+  assert.match(optionsSource, /忽略此域名/)
+  assert.match(optionsSource, /忽略此文件夹/)
+  assert.match(optionsSource, /以后不再检测/)
+  assert.match(optionsSource, /getAvailabilityEvidenceSummary/)
+  assert.match(optionsSource, /连续异常/)
+})
+
+test('availability decision panel replaces duplicate summary metric cards', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsHtml, /class="availability-decision-panel"/)
+  assert.match(optionsHtml, /class="availability-decision-panel"[\s\S]*?class="decision-progress-row"[\s\S]*?id="availability-progress-text"[\s\S]*?id="availability-progress-bar"[\s\S]*?id="availability-status-copy"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-total"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-eligible"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-available"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-skipped"/)
+  assert.doesNotMatch(optionsHtml, /class="detect-progress-card"[\s\S]*?id="availability-progress-text"/)
+  assert.doesNotMatch(optionsSource, /dom\.availabilityTotal/)
+  assert.doesNotMatch(optionsSource, /dom\.availabilityEligible/)
+  assert.doesNotMatch(optionsSource, /dom\.availabilitySkipped/)
+})
+
+test('availability duration ticks independently while a run is active', () => {
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsSource, /let availabilityDurationTimer = 0/)
+  assert.match(optionsSource, /window\.setInterval\(updateAvailabilityDurationDisplay, 1000\)/)
+  assert.match(optionsSource, /syncAvailabilityDurationTimer\(\)/)
+  assert.match(optionsSource, /clearAvailabilityDurationTimer\(\)/)
+})
+
+test('availability toolbar exposes detection settings instead of summary copy', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const domSource = readProjectFile('src/options/shared-options/dom.ts')
+
+  assert.doesNotMatch(optionsHtml, /availability-copy-summary|复制摘要|复制概览/)
+  assert.match(optionsHtml, /id="availability-settings-trigger"[^>]*>[\s\S]*?检测设置/)
+  assert.match(optionsHtml, /id="availability-settings-popover"[^>]+role="dialog"/)
+  assert.match(optionsHtml, /id="availability-concurrency-input"/)
+  assert.match(optionsHtml, /id="availability-timeout-input"/)
+  assert.match(domSource, /availabilitySettingsTrigger/)
+  assert.match(optionsSource, /saveAvailabilitySettingsFromDom/)
+  assert.match(optionsSource, /STORAGE_KEYS\.availabilitySettings/)
+})
+
+test('availability management links are grouped under a collapsible sidebar title', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(optionsHtml, /data-nav-group="availability-tools"/)
+  assert.match(optionsHtml, /data-nav-group-trigger="availability-tools"[\s\S]*?可用性管理/)
+  assert.match(optionsHtml, /aria-expanded="false"/)
+  assert.match(optionsHtml, /id="availability-tools-nav"[\s\S]*?hidden/)
+  assert.match(optionsHtml, /data-nav-group-panel="availability-tools"[\s\S]*?data-section-link="availability"[\s\S]*?data-section-link="history"[\s\S]*?data-section-link="redirects"[\s\S]*?data-section-link="ignore"/)
+  assert.match(optionsSource, /COLLAPSIBLE_NAV_GROUP_SECTIONS/)
+  assert.match(optionsSource, /new Set\(\['availability', 'history', 'redirects', 'ignore'\]\)/)
+  assert.match(optionsSource, /function syncCollapsibleNavGroups/)
+  assert.match(optionsSource, /function handleCollapsibleNavGroupClick/)
+  assert.match(optionsCss, /\.options-nav-sublist/)
+  assert.match(optionsCss, /\.options-nav-group-caret/)
+})
+
+test('smart bookmark analysis uses the decision panel summary layout', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const domSource = readProjectFile('src/options/shared-options/dom.ts')
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[^>]+aria-label="书签智能分析决策概览"/)
+  assert.match(optionsHtml, /id="ai-decision-status"[^>]*>未开始/)
+  assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[\s\S]*?class="decision-progress-row"[\s\S]*?id="ai-progress-text"[\s\S]*?id="ai-progress-bar"[\s\S]*?id="ai-progress-copy"/)
+  assert.match(optionsHtml, /class="availability-decision-grid ai-decision-grid"[\s\S]*?id="ai-eligible"[\s\S]*?id="ai-suggested"[\s\S]*?id="ai-manual-review"[\s\S]*?id="ai-unchanged"[\s\S]*?id="ai-high-confidence"[\s\S]*?id="ai-medium-confidence"[\s\S]*?id="ai-low-confidence"[\s\S]*?id="ai-failed"/)
+  assert.doesNotMatch(optionsHtml, /<article class="summary-card metric-card[\s\S]*?id="ai-eligible"/)
+  assert.doesNotMatch(optionsHtml, /class="detect-progress-card"[\s\S]*?id="ai-progress-text"/)
+  assert.match(domSource, /aiDecisionStatus/)
+  assert.match(optionsSource, /let aiNamingDurationTimer = 0/)
+  assert.match(optionsSource, /function getAiNamingDurationLabel/)
+  assert.match(optionsSource, /dom\.aiDecisionStatus\.textContent = getAiNamingDurationLabel\(\)/)
+  assert.match(optionsSource, /window\.setInterval\(updateAiNamingDurationDisplay, 1000\)/)
+  assert.match(optionsSource, /syncAiNamingDurationTimer\(\)/)
+  assert.match(optionsSource, /clearAiNamingDurationTimer\(\)/)
+  assert.match(optionsCss, /\.ai-decision-grid/)
+})
+
+test('availability checks use adaptive runner with user settings', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const runnerSource = readProjectFile('src/options/sections/availability-runner.ts')
+
+  assert.match(optionsSource, /createAvailabilityRunScheduler/)
+  assert.match(optionsSource, /buildAvailabilityProfileFromUserSettings\(availabilityState\.settings\)/)
+  assert.match(optionsSource, /runAvailabilityQueue/)
+  assert.match(optionsSource, /inspectBookmarkAvailability\(bookmark, \{ probeEnabled, scheduler \}\)/)
+  assert.match(optionsSource, /fetchWithTimeout\(url, 'HEAD', timeoutMs\)/)
+  assert.match(runnerSource, /domainConcurrency: 1/)
+  assert.match(runnerSource, /statusCode === 429/)
+  assert.doesNotMatch(optionsHtml, /availability-speed-profile|速度档位/)
 })
 
 test('redirect update rereads current bookmarks and skips stale source URLs', () => {
