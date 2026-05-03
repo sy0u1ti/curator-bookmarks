@@ -195,6 +195,8 @@ test('newtab settings expose one combined quick access switch', () => {
 
   assert.match(html, /显示常用和最近/)
   assert.match(html, /id="general-show-quick-access"/)
+  assert.match(html, /显示浏览器快捷入口/)
+  assert.match(html, /id="general-show-browser-shortcuts"/)
   assert.doesNotMatch(html, /id="general-show-frequent"/)
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
