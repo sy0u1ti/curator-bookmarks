@@ -1,7 +1,10 @@
 import type { FolderRecord } from '../shared/types.js'
+import { createMemoryCache, type MemoryCache } from '../shared/cache.js'
 import type { NaturalSearchPlan } from './natural-search.js'
 import type { PopupSearchIndexSnapshotState } from './search-index.js'
 import type { PopupSearchBookmark, PopupSearchResult } from './search.js'
+
+const SEARCH_CACHE_LIMIT = 40
 
 export interface PopupSmartRecommendation {
   id: string
@@ -71,7 +74,7 @@ export interface PopupState {
   searchTimer: number | null
   searchRunId: number
   searchPending: boolean
-  searchCache: Map<string, PopupSearchResult[]>
+  searchCache: MemoryCache<string, PopupSearchResult[]>
   searchSnapshotState: PopupSearchIndexSnapshotState | null
   searchSnapshotFullTextReady: boolean
   searchSnapshotFullTextPending: boolean
@@ -81,7 +84,7 @@ export interface PopupState {
   naturalSearchPending: boolean
   naturalSearchError: string
   naturalSearchPlan: NaturalSearchPlan | null
-  naturalSearchPlanCache: Map<string, NaturalSearchPlan>
+  naturalSearchPlanCache: MemoryCache<string, NaturalSearchPlan>
   searchHighlightQuery: string
   filteredBookmarksCacheKey: string
   filteredBookmarksCache: PopupSearchBookmark[]
@@ -151,7 +154,10 @@ export const state: PopupState = {
   searchTimer: null,
   searchRunId: 0,
   searchPending: false,
-  searchCache: new Map(),
+  searchCache: createMemoryCache<string, PopupSearchResult[]>({
+    maxEntries: SEARCH_CACHE_LIMIT,
+    version: 'popup-search-v1'
+  }),
   searchSnapshotState: null,
   searchSnapshotFullTextReady: false,
   searchSnapshotFullTextPending: false,
@@ -161,7 +167,10 @@ export const state: PopupState = {
   naturalSearchPending: false,
   naturalSearchError: '',
   naturalSearchPlan: null,
-  naturalSearchPlanCache: new Map(),
+  naturalSearchPlanCache: createMemoryCache<string, NaturalSearchPlan>({
+    maxEntries: SEARCH_CACHE_LIMIT,
+    version: 'popup-natural-search-plan-v1'
+  }),
   searchHighlightQuery: '',
   filteredBookmarksCacheKey: '',
   filteredBookmarksCache: [],

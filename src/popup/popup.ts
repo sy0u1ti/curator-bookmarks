@@ -100,7 +100,6 @@ const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
-const SEARCH_CACHE_LIMIT = 40
 const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
 const SMART_RECOMMENDATION_LIMIT = 3
 const SMART_LOADING_STEP_COUNT = 3
@@ -1111,12 +1110,6 @@ async function resolveNaturalSearchPlan(query, normalizedQuery): Promise<Natural
   }
 
   state.naturalSearchPlanCache.set(cacheKey, plan)
-  if (state.naturalSearchPlanCache.size > SEARCH_CACHE_LIMIT) {
-    const oldestKey = state.naturalSearchPlanCache.keys().next().value
-    if (oldestKey) {
-      state.naturalSearchPlanCache.delete(oldestKey)
-    }
-  }
 
   return plan
 }
@@ -4589,14 +4582,6 @@ function getNaturalSearchPlanCacheKey(normalizedQuery) {
 
 function cacheSearchResults(cacheKey, results) {
   state.searchCache.set(cacheKey, results)
-  if (state.searchCache.size <= SEARCH_CACHE_LIMIT) {
-    return
-  }
-
-  const oldestKey = state.searchCache.keys().next().value
-  if (oldestKey) {
-    state.searchCache.delete(oldestKey)
-  }
 }
 
 function clearSearchCaches() {
