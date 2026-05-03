@@ -238,6 +238,13 @@ test('newtab waits for wallpaper media readiness before revealing the startup vi
   assert.match(script, /markWallpaperReady\(\)/)
 })
 
+test('newtab wallpaper startup fallback stays silent in extension errors', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.doesNotMatch(script, /console\.(?:warn|error)\([^)]*启动等待窗口/)
+  assert.doesNotMatch(script, /console\.error\(error\)/)
+})
+
 test('newtab folder headers expose scoped quick-add controls', () => {
   const script = readProjectFile('src/newtab/newtab.ts')
   const css = readProjectFile('src/newtab/newtab.css')

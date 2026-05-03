@@ -4748,8 +4748,7 @@ async function applyBackgroundSettings(): Promise<void> {
   let mediaRecord: Awaited<ReturnType<typeof getBackgroundMedia>>
   try {
     mediaRecord = await getBackgroundMedia(mediaType)
-  } catch (error) {
-    console.error(error)
+  } catch {
     if (applyToken === backgroundApplyToken) {
       markWallpaperReady()
     }
@@ -4774,7 +4773,6 @@ async function applyBackgroundSettings(): Promise<void> {
       lastAppliedBackgroundMediaSignature = mediaSignature
     } else {
       setActiveBackgroundObjectUrl('')
-      console.warn('新标签页背景图片未在启动等待窗口内完成加载，已使用本地占位降级显示。')
     }
     markWallpaperReady()
     return
@@ -4798,7 +4796,6 @@ async function applyBackgroundSettings(): Promise<void> {
   } else {
     video.remove()
     setActiveBackgroundObjectUrl('')
-    console.warn('新标签页背景视频未在启动等待窗口内完成加载，已使用本地占位降级显示。')
   }
   markWallpaperReady()
 }
@@ -4905,8 +4902,6 @@ async function applyUrlBackgroundImage(
     if (ready) {
       document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
       lastAppliedBackgroundMediaSignature = mediaSignature
-    } else {
-      console.warn('新标签页远程背景图片未在启动等待窗口内完成加载，已使用同色占位降级显示。')
     }
     markWallpaperReady()
     void cacheBackgroundUrlImage(imageUrl)
@@ -4919,8 +4914,6 @@ async function applyUrlBackgroundImage(
       if (ready) {
         document.body.style.backgroundImage = `url("${escapeCssUrl(imageUrl)}")`
         lastAppliedBackgroundMediaSignature = mediaSignature
-      } else {
-        console.warn('新标签页远程背景图片缓存读取失败，已使用直连图片并解除启动占位。')
       }
       markWallpaperReady()
     }
@@ -4961,7 +4954,6 @@ async function setBackgroundImageFromBlob(blob: Blob, applyToken = backgroundApp
     document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
   } else {
     setActiveBackgroundObjectUrl('')
-    console.warn('新标签页背景缓存图片未在启动等待窗口内完成加载，已使用本地占位降级显示。')
   }
   return ready
 }
