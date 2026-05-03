@@ -5863,6 +5863,7 @@ function renderIconPreview(): void {
   const previewColumns = settings.layoutMode === 'fixed'
     ? Math.max(2, Math.min(6, settings.columns))
     : Math.max(2, Math.min(4, Math.round(settings.pageWidth / 24)))
+  const previewGridMaxWidth = previewColumns * previewTileWidth + (previewColumns - 1) * previewColumnGap
   const sampleCount = Math.max(4, Math.min(8, previewColumns * 2))
   const summary = [
     settings.layoutMode === 'fixed' ? `${settings.columns} 列固定` : '自动适配',
@@ -5879,11 +5880,12 @@ function renderIconPreview(): void {
   preview.style.setProperty('--preview-tile-width', `${previewTileWidth}px`)
   preview.style.setProperty('--preview-shell-size', `${previewShellSize}px`)
   preview.style.setProperty('--preview-title-lines', String(settings.titleLines))
+  preview.style.setProperty('--preview-grid-max-width', `${previewGridMaxWidth}px`)
   setTextContent('icon-live-preview-summary', summary)
 
   const grid = document.createElement('div')
   grid.className = 'icon-live-preview-grid'
-  grid.style.gridTemplateColumns = `repeat(${previewColumns}, minmax(0, var(--preview-tile-width)))`
+  grid.style.gridTemplateColumns = `repeat(${previewColumns}, minmax(0, 1fr))`
 
   const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
   for (let index = 0; index < sampleCount; index++) {

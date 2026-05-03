@@ -272,3 +272,18 @@ test('newtab exposes source navigation anchors and a folder source setting switc
   assert.match(script, /dataset\.sourceNavigationTarget/)
   assert.match(css, /\.source-navigation/)
 })
+
+test('newtab settings drawer layout responds to drawer width', () => {
+  const css = readProjectFile('src/newtab/newtab.css')
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(css, /container:\s*settings-drawer\s*\/\s*inline-size/)
+  assert.match(css, /@container settings-drawer \(max-width: 380px\)/)
+  assert.match(css, /\.search-engine-setting-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)/)
+  assert.match(css, /\.search-engine-toggle-grid\s*\{[\s\S]*width:\s*100%/)
+  assert.doesNotMatch(css, /width:\s*min\(360px,\s*42vw\)/)
+  assert.match(css, /--preview-grid-max-width/)
+  assert.match(script, /--preview-grid-max-width/)
+  assert.match(script, /grid\.style\.gridTemplateColumns = `repeat\(\$\{previewColumns\}, minmax\(0, 1fr\)\)`/)
+  assert.doesNotMatch(script, /grid\.style\.gridTemplateColumns = `repeat\(\$\{previewColumns\}, minmax\(0, var\(--preview-tile-width\)\)\)`/)
+})
