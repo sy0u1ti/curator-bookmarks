@@ -133,10 +133,12 @@ test('availability decision panel replaces duplicate summary metric cards', () =
   const optionsSource = readProjectFile('src/options/options.ts')
 
   assert.match(optionsHtml, /class="availability-decision-panel"/)
+  assert.match(optionsHtml, /class="availability-decision-panel"[\s\S]*?class="decision-progress-row"[\s\S]*?id="availability-progress-text"[\s\S]*?id="availability-progress-bar"[\s\S]*?id="availability-status-copy"/)
   assert.doesNotMatch(optionsHtml, /id="availability-total"/)
   assert.doesNotMatch(optionsHtml, /id="availability-eligible"/)
   assert.doesNotMatch(optionsHtml, /id="availability-available"/)
   assert.doesNotMatch(optionsHtml, /id="availability-skipped"/)
+  assert.doesNotMatch(optionsHtml, /class="detect-progress-card"[\s\S]*?id="availability-progress-text"/)
   assert.doesNotMatch(optionsSource, /dom\.availabilityTotal/)
   assert.doesNotMatch(optionsSource, /dom\.availabilityEligible/)
   assert.doesNotMatch(optionsSource, /dom\.availabilitySkipped/)
@@ -192,8 +194,10 @@ test('smart bookmark analysis uses the decision panel summary layout', () => {
 
   assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[^>]+aria-label="书签智能分析决策概览"/)
   assert.match(optionsHtml, /id="ai-decision-status"[^>]*>未开始/)
+  assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[\s\S]*?class="decision-progress-row"[\s\S]*?id="ai-progress-text"[\s\S]*?id="ai-progress-bar"[\s\S]*?id="ai-progress-copy"/)
   assert.match(optionsHtml, /class="availability-decision-grid ai-decision-grid"[\s\S]*?id="ai-eligible"[\s\S]*?id="ai-suggested"[\s\S]*?id="ai-manual-review"[\s\S]*?id="ai-unchanged"[\s\S]*?id="ai-high-confidence"[\s\S]*?id="ai-medium-confidence"[\s\S]*?id="ai-low-confidence"[\s\S]*?id="ai-failed"/)
   assert.doesNotMatch(optionsHtml, /<article class="summary-card metric-card[\s\S]*?id="ai-eligible"/)
+  assert.doesNotMatch(optionsHtml, /class="detect-progress-card"[\s\S]*?id="ai-progress-text"/)
   assert.match(domSource, /aiDecisionStatus/)
   assert.match(optionsSource, /let aiNamingDurationTimer = 0/)
   assert.match(optionsSource, /function getAiNamingDurationLabel/)

@@ -575,17 +575,6 @@
               </div>
             </div>
 
-            <div class="detect-progress-card">
-              <div class="detect-progress-meta">
-                <strong>检测进度</strong>
-                <span id="availability-progress-text">未开始</span>
-              </div>
-              <div class="detect-progress-track" aria-hidden="true">
-                <span id="availability-progress-bar" class="detect-progress-bar"></span>
-              </div>
-              <p id="availability-status-copy" class="detect-status-copy">仅检测 `http/https` 书签，其它协议会自动跳过。</p>
-            </div>
-
             <div class="availability-decision-panel" aria-label="可用性检测决策概览">
               <div class="availability-decision-header">
                 <div>
@@ -593,6 +582,18 @@
                   <p class="detect-results-subtitle">异常项可直接忽略书签、域名或文件夹；确认失效后再移动或删除。</p>
                 </div>
                 <span id="availability-decision-duration" class="option-value">未开始</span>
+              </div>
+              <div class="decision-progress-row">
+                <div class="decision-progress-meta">
+                  <span class="summary-label">检测进度</span>
+                  <strong id="availability-progress-text">未开始</strong>
+                </div>
+                <div class="decision-progress-body">
+                  <div class="detect-progress-track" aria-hidden="true">
+                    <span id="availability-progress-bar" class="detect-progress-bar"></span>
+                  </div>
+                  <p id="availability-status-copy" class="detect-status-copy">仅检测 `http/https` 书签，其它协议会自动跳过。</p>
+                </div>
               </div>
               <div class="availability-decision-grid">
                 <div>
@@ -848,17 +849,6 @@
               </div>
             </div>
 
-            <div class="detect-progress-card">
-              <div class="detect-progress-meta">
-                <strong>执行进度</strong>
-                <span id="ai-progress-text">未开始</span>
-              </div>
-              <div class="detect-progress-track" aria-hidden="true">
-                <span id="ai-progress-bar" class="detect-progress-bar"></span>
-              </div>
-              <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>
-            </div>
-
             <div class="availability-decision-panel ai-decision-panel" aria-label="书签智能分析决策概览">
               <div class="availability-decision-header">
                 <div>
@@ -866,6 +856,18 @@
                   <p class="detect-results-subtitle">先查看可直接应用的建议，再处理待确认、低置信和失败项。</p>
                 </div>
                 <span id="ai-decision-status" class="option-value">未开始</span>
+              </div>
+              <div class="decision-progress-row">
+                <div class="decision-progress-meta">
+                  <span class="summary-label">执行进度</span>
+                  <strong id="ai-progress-text">未开始</strong>
+                </div>
+                <div class="decision-progress-body">
+                  <div class="detect-progress-track" aria-hidden="true">
+                    <span id="ai-progress-bar" class="detect-progress-bar"></span>
+                  </div>
+                  <p id="ai-progress-copy" class="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>
+                </div>
               </div>
               <div class="availability-decision-grid ai-decision-grid">
                 <div>
