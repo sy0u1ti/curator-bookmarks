@@ -14,6 +14,11 @@ import {
   findNodeById
 } from '../shared/bookmark-tree.js'
 import {
+  buildBookmarkPathSegments,
+  formatBookmarkPath,
+  formatFolderPath
+} from '../shared/bookmark-path.js'
+import {
   displayUrl,
   extractDomain,
   normalizeText
@@ -237,6 +242,7 @@ function bindEvents() {
   dom.content.addEventListener('click', handleContentClick)
   dom.emptyState.addEventListener('click', handleContentClick)
   dom.content.addEventListener('pointerover', handleContentPointerOver)
+  dom.folderBreadcrumbs.addEventListener('click', handlePopupBreadcrumbClick)
   dom.filterFolderList.addEventListener('click', handleFilterListClick)
   dom.filterSearchInput.addEventListener('input', () => {
     state.filterSearchQuery = dom.filterSearchInput.value
@@ -1354,12 +1360,50 @@ function renderFilterBar() {
   const selectedFolder = state.selectedFolderFilterId
     ? state.folderMap.get(state.selectedFolderFilterId)
     : null
+  const selectedPath = selectedFolder ? formatFolderPath(selectedFolder, state.folderMap) : ''
 
   dom.folderFilterTrigger.textContent = selectedFolder
-    ? `文件夹：${selectedFolder.path || selectedFolder.title}`
+    ? `文件夹：${selectedPath || selectedFolder.title}`
     : '全部文件夹'
-  dom.folderFilterTrigger.title = selectedFolder?.path || ''
+  dom.folderFilterTrigger.title = selectedPath || ''
   dom.clearFolderFilter.classList.toggle('hidden', !selectedFolder)
+  dom.folderBreadcrumbs.classList.toggle('hidden', !selectedFolder)
+  dom.folderBreadcrumbs.innerHTML = selectedFolder
+    ? renderPopupFolderBreadcrumbs(selectedFolder)
+    : ''
+}
+
+function renderPopupFolderBreadcrumbs(folder) {
+  const segments = buildBookmarkPathSegments(folder, state.folderMap)
+  if (!segments.length) {
+    return ''
+  }
+
+  return `
+    <ol class="folder-breadcrumb-list">
+      ${segments.map((segment, index) => {
+        const separator = index > 0 ? '<li class="folder-breadcrumb-separator" aria-hidden="true">&gt;</li>' : ''
+        const content = segment.current || !segment.id
+          ? `
+            <span
+              class="folder-breadcrumb-current"
+              aria-current="page"
+              title="${escapeAttr(segment.path)}"
+            >${escapeHtml(segment.label)}</span>
+          `
+          : `
+            <button
+              class="folder-breadcrumb-link"
+              type="button"
+              data-folder-breadcrumb-id="${escapeAttr(segment.id)}"
+              title="${escapeAttr(segment.path)}"
+            >${escapeHtml(segment.label)}</button>
+          `
+
+        return `${separator}<li>${content}</li>`
+      }).join('')}
+    </ol>
+  `
 }
 
 function renderSmartClassifier() {
@@ -1621,6 +1665,7 @@ function renderSmartRecommendation(recommendation, selectedId) {
   const isSelected = recommendation.id === selectedId
   const confidence = Math.round(Math.max(0, Math.min(Number(recommendation.confidence) || 0, 1)) * 100)
   const path = recommendation.path || recommendation.title || ''
+  const formattedPath = formatBookmarkPath(path) || path
 
   return `
     <button
@@ -1633,7 +1678,7 @@ function renderSmartRecommendation(recommendation, selectedId) {
           <span class="smart-folder-icon" aria-hidden="true"></span>
           <span class="smart-folder-name">${escapeHtml(recommendation.title || path || '未命名文件夹')}</span>
         </span>
-        <span class="smart-folder-path">${escapeHtml(formatSmartFolderPath(path))}</span>
+        <span class="smart-folder-path" title="${escapeAttr(formattedPath)}">${escapeHtml(formattedPath || '未归档路径')}</span>
       </span>
       <span class="smart-folder-meta">
         ${recommendation.kind === 'new' ? '<span class="smart-new-badge">新建</span>' : ''}
@@ -1968,7 +2013,7 @@ function renderMoveModal() {
   }
 
   dom.moveBookmarkTitle.textContent = bookmark.title
-  dom.moveBookmarkPath.textContent = bookmark.path || '未归档路径'
+  dom.moveBookmarkPath.textContent = formatBookmarkPath(bookmark.path) || '未归档路径'
   dom.moveSearchInput.value = state.moveSearchQuery
   dom.moveFolderList.innerHTML = renderMoveFolderList(bookmark)
   syncBackdropVisibility()
@@ -1983,7 +2028,7 @@ function renderSmartFolderModal() {
   }
 
   dom.smartFolderPageTitle.textContent = state.smartSuggestedTitle || getCurrentPageTitle()
-  dom.smartFolderPageUrl.textContent = displayUrl(state.currentTab?.url || '')
+  dom.smartFolderPageUrl.textContent = getSmartFolderTargetPathLabel()
   dom.smartFolderSearchInput.value = state.smartFolderSearchQuery
   dom.smartFolderList.innerHTML = renderSmartFolderList()
   syncBackdropVisibility()
@@ -2157,6 +2202,7 @@ function renderFilterFolderList() {
   const folderItems = folders
     .map((folder) => {
       const isSelected = state.selectedFolderFilterId === folder.id
+      const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
       return `
         <button
           class="filter-option ${isSelected ? 'selected' : ''}"
@@ -2169,7 +2215,7 @@ function renderFilterFolderList() {
           <span class="folder-kind" aria-hidden="true"></span>
           <span class="filter-option-copy">
             <span class="filter-option-title">${highlightText(folder.title, state.filterSearchQuery)}</span>
-            <span class="filter-option-path">${highlightText(folder.path, state.filterSearchQuery)}</span>
+            <span class="filter-option-path">${highlightText(folderPath, state.filterSearchQuery)}</span>
           </span>
         </button>
       `
@@ -2237,6 +2283,7 @@ function renderSmartFolderNode(node, depth, query) {
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
   const saving = state.smartSaving || isPopupActionPending('save-current-page', node.id)
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
 
   return `
     <div class="picker-row" style="--depth:${depth}">
@@ -2262,7 +2309,7 @@ function renderSmartFolderNode(node, depth, query) {
         <span class="folder-kind" aria-hidden="true"></span>
         <span class="picker-folder-main">
           <span class="row-title">${highlightText(folder.title, state.smartFolderSearchQuery)}</span>
-          <span class="picker-path" title="${escapeAttr(folder.path)}">${highlightText(folder.path, state.smartFolderSearchQuery)}</span>
+          <span class="picker-path" title="${escapeAttr(folderPath)}">${highlightText(folderPath, state.smartFolderSearchQuery)}</span>
         </span>
       </button>
     </div>
@@ -2298,6 +2345,7 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
   const isCurrentFolder = bookmark.parentId === node.id
   const moving = isPopupActionPending('move', bookmark.id)
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
 
   return `
     <div class="picker-row ${isCurrentFolder ? 'current' : ''}" style="--depth:${depth}">
@@ -2323,7 +2371,7 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
         <span class="folder-kind" aria-hidden="true"></span>
         <span class="picker-folder-main">
           <span class="row-title">${highlightText(folder.title, state.moveSearchQuery)}</span>
-          <span class="picker-path" title="${escapeAttr(folder.path)}">${highlightText(folder.path, state.moveSearchQuery)}</span>
+          <span class="picker-path" title="${escapeAttr(folderPath)}">${highlightText(folderPath, state.moveSearchQuery)}</span>
           ${isCurrentFolder ? '<span class="picker-badge">当前位置</span>' : ''}
         </span>
       </button>
@@ -2475,6 +2523,15 @@ function handleContentClick(event) {
   if (emptyAction) {
     handleEmptySearchAction(emptyAction.getAttribute('data-empty-action'))
   }
+}
+
+function handlePopupBreadcrumbClick(event) {
+  const breadcrumbButton = event.target.closest('[data-folder-breadcrumb-id]')
+  if (!breadcrumbButton) {
+    return
+  }
+
+  applyFolderFilter(breadcrumbButton.getAttribute('data-folder-breadcrumb-id'))
 }
 
 function handleEmptySearchAction(action) {
@@ -4643,7 +4700,16 @@ function getLastPathSegment(value) {
 }
 
 function formatSmartFolderPath(path) {
-  return splitSmartFolderPath(path).join(' · ') || '未归档路径'
+  return formatBookmarkPath(path) || splitSmartFolderPath(path).join(' · ') || '未归档路径'
+}
+
+function getSmartFolderTargetPathLabel() {
+  const selectedRecommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
+  if (selectedRecommendation) {
+    return `当前推荐：${formatBookmarkPath(selectedRecommendation.path) || selectedRecommendation.title || '未命名文件夹'}`
+  }
+
+  return `当前页面：${displayUrl(state.currentTab?.url || '')}`
 }
 
 function normalizeSmartError(error) {

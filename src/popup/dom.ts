@@ -30,6 +30,7 @@ export function cacheDom(): void {
   dom.folderFilterTrigger = byId('folder-filter-trigger')
   dom.clearFolderFilter = byId('clear-folder-filter')
   dom.openInboxFilter = byId('open-inbox-filter')
+  dom.folderBreadcrumbs = byId('folder-breadcrumbs')
   dom.errorBanner = byId('error-banner')
   dom.smartClassifier = byId('smart-classifier')
   dom.smartFooter = byId('smart-footer')

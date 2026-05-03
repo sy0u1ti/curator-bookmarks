@@ -121,6 +121,7 @@ import {
   folderCleanupState,
   aiNamingState,
   aiNamingManagerState,
+  dashboardState,
   contentSnapshotState,
   backupRestoreState,
   createEmptyIgnoreRules,
@@ -1165,6 +1166,9 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
     availabilityState.allFolders = extracted.folders
     availabilityState.bookmarkMap = extracted.bookmarkMap
     availabilityState.folderMap = extracted.folderMap
+    if (dashboardState.folderId && !availabilityState.folderMap.has(String(dashboardState.folderId))) {
+      dashboardState.folderId = ''
+    }
     managerState.duplicateGroups = buildDuplicateGroups(bookmarks, {
       excludedFolderIds: excludedDuplicateFolderIds
     })

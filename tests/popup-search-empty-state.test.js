@@ -38,6 +38,10 @@ test('popup natural search asks for AI channel setup before enabling semantic mo
 })
 
 test('popup folder pickers expose option and treeitem semantics', () => {
+  assert.match(popupHtml, /id="folder-breadcrumbs"[^>]+aria-label="当前文件夹路径"/)
+  assert.match(popupSource, /data-folder-breadcrumb-id="\$\{escapeAttr\(segment\.id\)\}"/)
+  assert.match(popupSource, /aria-current="page"/)
+  assert.match(popupSource, /function handlePopupBreadcrumbClick/)
   assert.match(popupSource, /class="filter-option \$\{isSelected \? 'selected' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{isSelected \? 'true' : 'false'\}"/)
   assert.match(popupSource, /data-toggle-move-folder="\$\{escapeAttr\(node\.id\)\}"[\s\S]*?role="treeitem"[\s\S]*?aria-level="\$\{depth \+ 1\}"[\s\S]*?aria-expanded="\$\{childFolders\.length \? String\(isExpanded\) : 'false'\}"/)
   assert.match(popupSource, /role="treeitem"[\s\S]*?aria-level="\$\{depth \+ 1\}"[\s\S]*?aria-selected="\$\{isCurrentFolder \? 'true' : 'false'\}"[\s\S]*?data-select-folder="\$\{escapeAttr\(node\.id\)\}"/)

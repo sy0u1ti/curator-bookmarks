@@ -30,6 +30,18 @@ test('dashboard tag editor and tag popover have dialog semantics and keyboard pa
   assert.match(optionsSource, /addEventListener\('keydown', handleDashboardKeydown\)/)
 })
 
+test('dashboard folder filtering exposes clickable breadcrumbs', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
+
+  assert.match(optionsHtml, /id="dashboard-folder-breadcrumbs"[^>]+aria-label="当前 Dashboard 文件夹路径"/)
+  assert.match(dashboardSource, /function renderDashboardFolderBreadcrumbs/)
+  assert.match(dashboardSource, /data-dashboard-folder-filter="\$\{escapeAttr\(segment\.id\)\}"/)
+  assert.match(dashboardSource, /aria-current="page"/)
+  assert.match(dashboardSource, /function applyDashboardFolderFilter/)
+  assert.match(dashboardSource, /data-dashboard-folder-filter="\$\{escapeAttr\(item\.parentId \|\| ''\)\}"/)
+})
+
 test('availability, redirect and AI result lists render paginated controls', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
