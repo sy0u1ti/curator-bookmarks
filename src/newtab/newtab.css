@@ -1283,7 +1283,8 @@ body.bookmark-dragging .bookmark-tile:not(.dragging) {
 }
 
 body.bookmark-dragging .bookmark-tile:not(.dragging):hover,
-body.bookmark-dragging .bookmark-tile:not(.dragging):active {
+body.bookmark-dragging .bookmark-tile:not(.dragging):active,
+body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible {
   border-color: rgb(var(--bookmark-card-rgb) / var(--bookmark-card-border-alpha));
   background:
     linear-gradient(
@@ -1311,6 +1312,19 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):active {
 
 .bookmark-drag-ghost .bookmark-icon-shell {
   transform: none;
+}
+
+.bookmark-drop-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 118;
+  border-radius: 999px;
+  background: rgba(245, 245, 247, 0.86);
+  box-shadow: 0 0 0 1px rgba(5, 5, 6, 0.58), 0 10px 24px rgba(0, 0, 0, 0.32);
+  pointer-events: none;
+  transition: none;
+  will-change: transform;
 }
 
 .bookmark-tile:focus-visible {
@@ -1347,7 +1361,8 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):active {
 }
 
 body.bookmark-dragging .bookmark-tile:not(.dragging):hover .bookmark-icon-shell,
-body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-icon-shell {
+body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-icon-shell,
+body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible .bookmark-icon-shell {
   border-color: rgb(var(--bookmark-card-rgb) / 0.12);
   background: rgba(0, 0, 0, 0.34);
   transition: none;
@@ -1416,7 +1431,8 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-icon-shell
 }
 
 body.bookmark-dragging .bookmark-tile:not(.dragging):hover .bookmark-title,
-body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-title {
+body.bookmark-dragging .bookmark-tile:not(.dragging):active .bookmark-title,
+body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible .bookmark-title {
   color: rgba(245, 245, 247, 0.78);
 }
 

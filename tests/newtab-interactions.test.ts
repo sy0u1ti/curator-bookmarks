@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import {
   BACKGROUND_URL_MAX_BYTES,
+  buildBookmarkOrderAfterInsert,
   buildMinimalBookmarkMoveOperations,
   resolveRestorableBookmarkParentId,
   shouldInsertAfterBookmarkTile,
@@ -49,6 +50,41 @@ test('does not emit bookmark moves for unchanged or invalid reorder snapshots', 
   assert.deepEqual(
     buildMinimalBookmarkMoveOperations(['a', 'b', 'c'], ['a', 'c', 'b'], ''),
     []
+  )
+})
+
+test('builds bookmark order after a pending drag insert without mutating input', () => {
+  const order = ['a', 'b', 'c', 'd']
+
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(order, 'b', 3),
+    ['a', 'c', 'b', 'd']
+  )
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(order, 'b', 0),
+    ['b', 'a', 'c', 'd']
+  )
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(order, 'b', 4),
+    ['a', 'c', 'd', 'b']
+  )
+  assert.deepEqual(order, ['a', 'b', 'c', 'd'])
+})
+
+test('keeps bookmark order unchanged for invalid or same-slot pending inserts', () => {
+  const order = ['a', 'b', 'c', 'd']
+
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(order, 'missing', 2),
+    order
+  )
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(order, 'b', 1),
+    order
+  )
+  assert.deepEqual(
+    buildBookmarkOrderAfterInsert(order, 'b', 2),
+    order
   )
 })
 

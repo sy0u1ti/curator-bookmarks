@@ -74,6 +74,7 @@ import {
 import {
   BACKGROUND_URL_FETCH_TIMEOUT_MS,
   BACKGROUND_URL_MAX_BYTES,
+  buildBookmarkOrderAfterInsert,
   buildMinimalBookmarkMoveOperations,
   resolveRestorableBookmarkParentId,
   shouldInsertAfterBookmarkTile,
@@ -275,6 +276,7 @@ const state = {
   dragOffsetY: 0,
   draggingBookmarkFolderId: '',
   dragOriginalOrderIds: [] as string[],
+  dragPendingInsertIndex: -1,
   dragSuppressClick: false,
   draggingFolderId: '',
   folderDragPointerId: 0,
@@ -326,6 +328,7 @@ let iconSettingsSaveTimer = 0
 let faviconAccentSaveTimer = 0
 let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
+let bookmarkDropIndicator: HTMLElement | null = null
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
@@ -1271,17 +1274,7 @@ function handleBookmarkPointerMove(event: PointerEvent): void {
   event.preventDefault()
   updateBookmarkDragGhost()
   const insertIndex = getBookmarkInsertIndex(event.clientX, event.clientY)
-  if (insertIndex < 0) {
-    return
-  }
-
-  if (moveDraggedBookmarkInState(insertIndex)) {
-    if (!syncActiveBookmarkGridOrder()) {
-      render()
-      updateClockText()
-    }
-    updateBookmarkDragGhost({ immediate: true })
-  }
+  setBookmarkDragPendingInsertIndex(insertIndex)
 }
 
 async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
@@ -1294,8 +1287,13 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
 
   const wasDragging = Boolean(state.dragOriginalOrderIds.length)
   const folderId = state.draggingBookmarkFolderId
-  const finalOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
   const originalOrderIds = [...state.dragOriginalOrderIds]
+  const pendingInsertIndex = state.dragPendingInsertIndex >= 0
+    ? state.dragPendingInsertIndex
+    : getBookmarkInsertIndex(event.clientX, event.clientY)
+  const finalOrderIds = wasDragging && pendingInsertIndex >= 0
+    ? applyDraggedBookmarkInsertInState(pendingInsertIndex)
+    : getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
   clearBookmarkDragState({ keepSuppressClick: wasDragging })
 
   if (!wasDragging) {
@@ -1334,7 +1332,9 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   state.dragOffsetY = 0
   state.draggingBookmarkFolderId = ''
   state.dragOriginalOrderIds = []
+  state.dragPendingInsertIndex = -1
   removeBookmarkDragGhost()
+  removeBookmarkDropIndicator()
   document.body.classList.remove('bookmark-dragging')
 
   if (keepSuppressClick) {
@@ -1446,6 +1446,11 @@ function removeBookmarkDragGhost(): void {
   bookmarkDragGhost = null
 }
 
+function setBookmarkDragPendingInsertIndex(insertIndex: number): void {
+  state.dragPendingInsertIndex = hasBookmarkInsertChange(insertIndex) ? insertIndex : -1
+  updateBookmarkDropIndicator()
+}
+
 function getActiveBookmarkFolderSection(): NewTabFolderSection | null {
   if (!state.draggingBookmarkFolderId) {
     return null
@@ -1466,52 +1471,6 @@ function setActiveBookmarkFolderBookmarks(bookmarks: chrome.bookmarks.BookmarkTr
 
   section.bookmarks = bookmarks
   refreshDerivedBookmarkState()
-}
-
-function syncActiveBookmarkGridOrder(): boolean {
-  const section = getActiveBookmarkFolderSection()
-  if (!section) {
-    return false
-  }
-
-  const grid = document.querySelector<HTMLElement>(
-    `.bookmark-grid[data-bookmark-grid-folder-id="${CSS.escape(section.id)}"]`
-  )
-  if (!grid) {
-    return false
-  }
-
-  const tileByBookmarkId = new Map<string, HTMLElement>()
-  for (const tile of grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]')) {
-    const bookmarkId = String(tile.dataset.bookmarkId || '')
-    if (bookmarkId) {
-      tileByBookmarkId.set(bookmarkId, tile)
-    }
-  }
-  if (tileByBookmarkId.size !== section.bookmarks.length) {
-    return false
-  }
-
-  const orderedTiles: HTMLElement[] = []
-  for (const bookmark of section.bookmarks) {
-    const tile = tileByBookmarkId.get(String(bookmark.id))
-    if (!tile) {
-      return false
-    }
-    orderedTiles.push(tile)
-  }
-
-  const currentTiles = Array.from(grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]'))
-  const currentOrderIds = currentTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
-  const nextOrderIds = orderedTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
-  if (areStringArraysEqual(currentOrderIds, nextOrderIds)) {
-    return true
-  }
-
-  for (const tile of orderedTiles) {
-    grid.appendChild(tile)
-  }
-  return true
 }
 
 function getBookmarkInsertIndex(clientX: number, clientY: number): number {
@@ -1563,32 +1522,150 @@ function getBookmarkInsertIndex(clientX: number, clientY: number): number {
   return targetIndex + (insertAfter ? 1 : 0)
 }
 
-function moveDraggedBookmarkInState(insertIndex: number): boolean {
+function hasBookmarkInsertChange(insertIndex: number): boolean {
+  if (insertIndex < 0 || !state.draggingBookmarkId) {
+    return false
+  }
+
+  const currentOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
+  const finalOrderIds = buildBookmarkOrderAfterInsert(
+    currentOrderIds,
+    state.draggingBookmarkId,
+    insertIndex
+  )
+  return !areStringArraysEqual(currentOrderIds, finalOrderIds)
+}
+
+function applyDraggedBookmarkInsertInState(insertIndex: number): string[] {
   const currentBookmarks = getActiveBookmarkFolderBookmarks()
-  const currentIndex = currentBookmarks.findIndex(
-    (bookmark) => String(bookmark.id) === state.draggingBookmarkId
+  const currentOrderIds = currentBookmarks.map((bookmark) => String(bookmark.id))
+  const finalOrderIds = buildBookmarkOrderAfterInsert(
+    currentOrderIds,
+    state.draggingBookmarkId,
+    insertIndex
   )
-  if (currentIndex < 0) {
-    return false
+  if (areStringArraysEqual(currentOrderIds, finalOrderIds)) {
+    return currentOrderIds
   }
 
-  const nextBookmarks = [...currentBookmarks]
-  const [draggedBookmark] = nextBookmarks.splice(currentIndex, 1)
-  const normalizedIndex = Math.max(
-    0,
-    Math.min(
-      currentIndex < insertIndex ? insertIndex - 1 : insertIndex,
-      nextBookmarks.length
-    )
-  )
-
-  if (currentIndex === normalizedIndex) {
-    return false
+  const bookmarkById = new Map(currentBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+  const nextBookmarks: chrome.bookmarks.BookmarkTreeNode[] = []
+  for (const bookmarkId of finalOrderIds) {
+    const bookmark = bookmarkById.get(bookmarkId)
+    if (!bookmark) {
+      return currentOrderIds
+    }
+    nextBookmarks.push(bookmark)
   }
 
-  nextBookmarks.splice(normalizedIndex, 0, draggedBookmark)
   setActiveBookmarkFolderBookmarks(nextBookmarks)
-  return true
+  return finalOrderIds
+}
+
+function updateBookmarkDropIndicator(): void {
+  if (!state.draggingBookmarkId || state.dragPendingInsertIndex < 0) {
+    removeBookmarkDropIndicator()
+    return
+  }
+
+  const rect = getBookmarkDropIndicatorRect(state.dragPendingInsertIndex)
+  if (!rect) {
+    removeBookmarkDropIndicator()
+    return
+  }
+
+  const indicator = ensureBookmarkDropIndicator()
+  indicator.style.width = `${rect.width}px`
+  indicator.style.height = `${rect.height}px`
+  indicator.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`
+}
+
+function ensureBookmarkDropIndicator(): HTMLElement {
+  if (bookmarkDropIndicator) {
+    return bookmarkDropIndicator
+  }
+
+  const indicator = document.createElement('div')
+  indicator.className = 'bookmark-drop-indicator'
+  indicator.setAttribute('aria-hidden', 'true')
+  bookmarkDropIndicator = indicator
+  document.body.appendChild(indicator)
+  return indicator
+}
+
+function removeBookmarkDropIndicator(): void {
+  bookmarkDropIndicator?.remove()
+  bookmarkDropIndicator = null
+}
+
+function getBookmarkDropIndicatorRect(insertIndex: number): { left: number; top: number; width: number; height: number } | null {
+  const folderId = state.draggingBookmarkFolderId
+  if (!folderId) {
+    return null
+  }
+
+  const grid = document.querySelector<HTMLElement>(
+    `.bookmark-grid[data-bookmark-grid-folder-id="${CSS.escape(folderId)}"]`
+  )
+  if (!grid) {
+    return null
+  }
+
+  const currentOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
+  const finalOrderIds = buildBookmarkOrderAfterInsert(
+    currentOrderIds,
+    state.draggingBookmarkId,
+    insertIndex
+  )
+  const slotIndex = finalOrderIds.findIndex((bookmarkId) => bookmarkId === state.draggingBookmarkId)
+  if (slotIndex < 0) {
+    return null
+  }
+
+  const nonDraggedTiles = Array
+    .from(grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]'))
+    .filter((tile) => String(tile.dataset.bookmarkId || '') !== state.draggingBookmarkId)
+  if (!nonDraggedTiles.length) {
+    return null
+  }
+
+  const markerWidth = 3
+  const tileBefore = nonDraggedTiles[slotIndex - 1] || null
+  const tileAfter = nonDraggedTiles[slotIndex] || null
+  const anchorTile = tileAfter || tileBefore
+  if (!anchorTile) {
+    return null
+  }
+
+  const anchorRect = anchorTile.getBoundingClientRect()
+  const height = Math.max(24, anchorRect.height - 10)
+  const top = anchorRect.top + (anchorRect.height - height) / 2
+
+  if (tileBefore && tileAfter) {
+    const beforeRect = tileBefore.getBoundingClientRect()
+    const afterRect = tileAfter.getBoundingClientRect()
+    const sameRow = Math.abs(beforeRect.top - afterRect.top) <= Math.min(beforeRect.height, afterRect.height) * 0.5
+    const left = sameRow
+      ? (beforeRect.right + afterRect.left - markerWidth) / 2
+      : afterRect.left - markerWidth - 6
+    return {
+      left,
+      top: sameRow
+        ? Math.min(beforeRect.top, afterRect.top) + (Math.min(beforeRect.height, afterRect.height) - height) / 2
+        : top,
+      width: markerWidth,
+      height
+    }
+  }
+
+  return {
+    left: tileAfter
+      ? anchorRect.left - markerWidth - 6
+      : anchorRect.right + 6,
+    top,
+    width: markerWidth,
+    height
+  }
 }
 
 async function persistBookmarkOrder(

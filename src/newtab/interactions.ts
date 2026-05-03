@@ -88,6 +88,31 @@ export function buildMinimalBookmarkMoveOperations(
   return operations
 }
 
+export function buildBookmarkOrderAfterInsert(
+  currentIds: string[],
+  draggedId: string,
+  insertIndex: number
+): string[] {
+  const normalizedDraggedId = String(draggedId || '').trim()
+  const currentIndex = currentIds.findIndex((id) => id === normalizedDraggedId)
+  if (!normalizedDraggedId || currentIndex < 0) {
+    return [...currentIds]
+  }
+
+  const nextIds = [...currentIds]
+  const [draggedBookmarkId] = nextIds.splice(currentIndex, 1)
+  const normalizedIndex = Math.max(
+    0,
+    Math.min(
+      currentIndex < insertIndex ? insertIndex - 1 : insertIndex,
+      nextIds.length
+    )
+  )
+
+  nextIds.splice(normalizedIndex, 0, draggedBookmarkId)
+  return nextIds
+}
+
 export function shouldInsertAfterBookmarkTile(
   pointer: { x: number; y: number },
   targetRect: BookmarkTileRectLike
