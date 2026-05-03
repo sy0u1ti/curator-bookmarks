@@ -18,7 +18,6 @@ function byId(id: string): OptionsDomElement {
 }
 
 export function cacheDom() {
-  dom.availabilityTotalLabel = byId('availability-total-label')
   dom.dashboardPanel = byId('dashboard')
   dom.dashboardStatus = byId('dashboard-status')
   dom.dashboardTotal = byId('dashboard-total')
@@ -156,14 +155,6 @@ export function cacheDom() {
   dom.availabilityDecisionRecovered = byId('availability-decision-recovered')
   dom.availabilityDecisionIgnored = byId('availability-decision-ignored')
   dom.availabilityFilterBar = byId('availability-filter-bar')
-  dom.availabilityTotal = byId('availability-total')
-  dom.availabilityEligible = byId('availability-eligible')
-  dom.availabilityAvailable = byId('availability-available')
-  dom.availabilityRedirected = byId('availability-redirected')
-  dom.availabilityReview = byId('availability-review')
-  dom.availabilityFailed = byId('availability-failed')
-  dom.availabilityIgnored = byId('availability-ignored')
-  dom.availabilitySkipped = byId('availability-skipped')
   dom.availabilityReviewTitle = byId('availability-review-title')
   dom.availabilityReviewSubtitle = byId('availability-review-subtitle')
   dom.availabilityReviewCount = byId('availability-review-count')

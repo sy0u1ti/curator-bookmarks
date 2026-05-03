@@ -128,6 +128,29 @@ test('availability results expose decision filters and single-item ignore action
   assert.match(optionsSource, /连续异常/)
 })
 
+test('availability decision panel replaces duplicate summary metric cards', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsHtml, /class="availability-decision-panel"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-total"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-eligible"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-available"/)
+  assert.doesNotMatch(optionsHtml, /id="availability-skipped"/)
+  assert.doesNotMatch(optionsSource, /dom\.availabilityTotal/)
+  assert.doesNotMatch(optionsSource, /dom\.availabilityEligible/)
+  assert.doesNotMatch(optionsSource, /dom\.availabilitySkipped/)
+})
+
+test('availability duration ticks independently while a run is active', () => {
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsSource, /let availabilityDurationTimer = 0/)
+  assert.match(optionsSource, /window\.setInterval\(updateAvailabilityDurationDisplay, 1000\)/)
+  assert.match(optionsSource, /syncAvailabilityDurationTimer\(\)/)
+  assert.match(optionsSource, /clearAvailabilityDurationTimer\(\)/)
+})
+
 test('availability checks use adaptive runner without adding a speed settings panel', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')

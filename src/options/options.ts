@@ -250,6 +250,7 @@ import {
 
 let availabilityRenderFrame = 0
 let availabilitySummaryCopyStatusTimer = 0
+let availabilityDurationTimer = 0
 let availabilityPauseResolvers: Array<() => void> = []
 const AVAILABILITY_FILTERS = new Set([
   'all',
@@ -2238,18 +2239,6 @@ function renderAvailabilitySection() {
   renderAvailabilityDecisionSummary(scopeMeta, progressCompleted, progressTotal)
   renderAvailabilityFilterBar()
 
-  if (dom.availabilityTotalLabel) {
-    dom.availabilityTotalLabel.textContent = scopeMeta.type === 'all' ? '全部书签' : '当前范围'
-  }
-  dom.availabilityTotal.textContent = String(availabilityState.totalBookmarks)
-  dom.availabilityEligible.textContent = String(availabilityState.eligibleBookmarks)
-  dom.availabilityAvailable.textContent = String(availabilityState.availableCount)
-  dom.availabilityRedirected.textContent = String(availabilityState.redirectedCount)
-  dom.availabilityReview.textContent = String(availabilityState.reviewCount)
-  dom.availabilityFailed.textContent = String(availabilityState.failedCount)
-  dom.availabilityIgnored.textContent = String(availabilityState.ignoredCount)
-  dom.availabilitySkipped.textContent = String(availabilityState.skippedCount)
-
   if (dom.availabilityReviewTitle) {
     dom.availabilityReviewTitle.textContent = getAvailabilityPanelTitle('review')
   }
@@ -2354,9 +2343,8 @@ function renderAvailabilityDecisionSummary(scopeMeta, progressCompleted, progres
   if (dom.availabilityDecisionProgress) {
     dom.availabilityDecisionProgress.textContent = `${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`
   }
-  if (dom.availabilityDecisionDuration) {
-    dom.availabilityDecisionDuration.textContent = getAvailabilityDurationLabel()
-  }
+  updateAvailabilityDurationDisplay()
+  syncAvailabilityDurationTimer()
   if (dom.availabilityDecisionNew) {
     dom.availabilityDecisionNew.textContent = String(decisionStats.newCount)
   }
@@ -2457,6 +2445,39 @@ function getAvailabilityDurationLabel() {
   }
 
   return '未开始'
+}
+
+function updateAvailabilityDurationDisplay() {
+  if (dom.availabilityDecisionDuration) {
+    dom.availabilityDecisionDuration.textContent = getAvailabilityDurationLabel()
+  }
+}
+
+function syncAvailabilityDurationTimer() {
+  const shouldTick = Boolean(
+    Number(availabilityState.runStartedAt) &&
+    (availabilityState.running || availabilityState.retestingSelection)
+  )
+
+  if (!shouldTick) {
+    clearAvailabilityDurationTimer()
+    return
+  }
+
+  if (availabilityDurationTimer) {
+    return
+  }
+
+  availabilityDurationTimer = window.setInterval(updateAvailabilityDurationDisplay, 1000)
+}
+
+function clearAvailabilityDurationTimer() {
+  if (!availabilityDurationTimer) {
+    return
+  }
+
+  window.clearInterval(availabilityDurationTimer)
+  availabilityDurationTimer = 0
 }
 
 function formatDuration(durationMs) {
@@ -7440,6 +7461,7 @@ async function retestSelectedAvailabilityResults() {
   availabilityState.lastError = ''
   const probeEnabled = await ensureProbePermissionForRun({ interactive: true })
   availabilityState.retestingSelection = true
+  availabilityState.runStartedAt = Date.now()
   availabilityState.retestSelectionTotal = targetBookmarks.length
   availabilityState.retestSelectionCompleted = 0
   availabilityState.retestSelectionProbeEnabled = probeEnabled
