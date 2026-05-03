@@ -10,6 +10,18 @@
     <div id="newtab-background-mask" class="newtab-background-mask" aria-hidden="true"></div>
 
     <div class="settings-trigger-zone">
+      <a
+        id="newtab-dashboard-trigger"
+        class="settings-trigger dashboard-trigger"
+        href="#dashboard"
+        aria-label="打开书签仪表盘"
+        aria-controls="newtab-dashboard-overlay"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M4 5.5h16M4 12h16M4 18.5h16"></path>
+          <path d="M7 4v3M11 10.5v3M15 17v3"></path>
+        </svg>
+      </a>
       <button
         id="newtab-settings-trigger"
         class="settings-trigger"
@@ -481,6 +493,22 @@
 
       </div>
     </aside>
+
+    <section
+      id="newtab-dashboard-overlay"
+      class="newtab-dashboard-overlay"
+      aria-labelledby="newtab-dashboard-title"
+      aria-hidden="true"
+      hidden
+    >
+      <div class="newtab-dashboard-shell">
+        <section
+          id="newtab-dashboard"
+          class="options-panel dashboard-panel"
+          data-newtab-dashboard-root
+        ></section>
+      </div>
+    </section>
 
     <div id="newtab-root" class="newtab-shell"></div>
     <script type="module" src="./newtab.ts"></script>

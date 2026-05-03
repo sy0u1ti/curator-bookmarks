@@ -212,6 +212,39 @@ test('newtab settings expose one combined quick access switch', () => {
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
 
+test('newtab exposes a lazy original dashboard route', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(html, /id="newtab-dashboard-trigger"[\s\S]*href="#dashboard"/)
+  assert.match(html, /id="newtab-dashboard-overlay"/)
+  assert.match(html, /data-newtab-dashboard-root/)
+  assert.match(script, /window\.location\.hash === '#dashboard'/)
+  assert.match(script, /function ensureDashboardLoaded\(\): Promise<void>/)
+  assert.match(script, /dashboardLoadState: 'idle' as NewTabDashboardLoadState/)
+  assert.match(script, /getBookmarkTree\(\)/)
+})
+
+test('newtab dashboard keeps original options dashboard class semantics', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  for (const className of [
+    'dashboard-panel',
+    'dashboard-title-row',
+    'dashboard-toolbar',
+    'dashboard-search',
+    'dashboard-card-grid',
+    'dashboard-bookmark-card'
+  ]) {
+    assert.match(script, new RegExp(className))
+  }
+
+  assert.match(script, /Visual Bookmark Management/)
+  assert.match(script, /全部书签/)
+  assert.match(script, /detect-result-open/)
+  assert.match(script, /detect-result-action/)
+})
+
 test('newtab boots with a wallpaper loading guard before app content is shown', () => {
   const html = readProjectFile('src/newtab/newtab.html')
   const css = readProjectFile('src/newtab/newtab.css')
