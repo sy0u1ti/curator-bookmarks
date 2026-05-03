@@ -12,19 +12,10 @@ import {
   extractBookmarkData,
   findBookmarksBar
 } from '../shared/bookmark-tree.js'
-import { formatBookmarkPath } from '../shared/bookmark-path.js'
 import { deleteBookmarkToRecycle, removeRecycleEntry } from '../shared/recycle-bin.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
-import { displayUrl } from '../shared/text.js'
 import type { ExtractedBookmarkData, FolderRecord } from '../shared/types.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
-import {
-  buildDashboardModel,
-  filterDashboardItems,
-  sortDashboardItems,
-  type DashboardItem,
-  type DashboardModel
-} from '../shared/dashboard-model.js'
 import {
   DEFAULT_ICON_SETTINGS,
   ICON_LAYOUT_PRESETS,
@@ -101,12 +92,6 @@ import {
   planSearchOpenTargets,
   type SearchEngineId
 } from './search-engines.js'
-import {
-  createDashboardFaviconWarmupQueue,
-  getDashboardVirtualWindow,
-  type DashboardFaviconWarmupQueue
-} from './dashboard-performance.js'
-
 const FAVICON_SIZE = 64
 const FAVICON_COLOR_SAMPLE_SIZE = 32
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
@@ -116,11 +101,6 @@ const SETTINGS_SAVE_DEBOUNCE_MS = 260
 const FAVICON_ACCENT_SAVE_DEBOUNCE_MS = 900
 const EAGER_FAVICON_LIMIT = 40
 const HIGH_PRIORITY_FAVICON_LIMIT = 12
-const NEWTAB_DASHBOARD_CARD_HEIGHT = 176
-const NEWTAB_DASHBOARD_GRID_GAP = 10
-const NEWTAB_DASHBOARD_VIRTUAL_THRESHOLD = 120
-const NEWTAB_DASHBOARD_VIRTUAL_OVERSCAN = 24
-const NEWTAB_DASHBOARD_VIRTUAL_FALLBACK_HEIGHT = 640
 const BACKGROUND_MEDIA_DB_NAME = 'curatorNewTabBackgroundMedia'
 const BACKGROUND_MEDIA_STORE = 'media'
 const BACKGROUND_URL_CACHE_KEY = 'urlImage'
@@ -238,7 +218,6 @@ interface QuickAccessItem {
 
 type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
-type NewTabDashboardLoadState = 'idle' | 'loading' | 'ready' | 'error'
 
 interface LastDeletedBookmarkState {
   bookmark: chrome.bookmarks.BookmarkTreeNode
@@ -326,21 +305,14 @@ const state = {
   settingsSaveState: 'idle' as SettingsSaveState,
   settingsSaveMessage: '',
   dashboardOpen: false,
-  dashboardLoadState: 'idle' as NewTabDashboardLoadState,
-  dashboardModel: null as DashboardModel | null,
-  dashboardQuery: '',
-  dashboardError: '',
-  dashboardCopyFeedbackId: '',
-  dashboardFaviconWarmup: null as DashboardFaviconWarmupQueue | null,
-  dashboardScrollTop: 0,
-  dashboardRenderFrame: 0,
+  dashboardFrameLoaded: false,
   faviconRefreshTokens: new Map<string, number>()
 }
 
 const root = document.getElementById('newtab-root')
 const dashboardTrigger = document.getElementById('newtab-dashboard-trigger')
 const dashboardOverlay = document.getElementById('newtab-dashboard-overlay')
-const dashboardRoot = document.getElementById('newtab-dashboard')
+const dashboardFrame = document.getElementById('newtab-dashboard-frame') as HTMLIFrameElement | null
 const settingsTrigger = document.getElementById('newtab-settings-trigger')
 const settingsDrawer = document.getElementById('newtab-settings-drawer')
 const settingsBackdrop = document.getElementById('newtab-settings-backdrop')
@@ -387,6 +359,7 @@ function bindEvents(): void {
     openDashboardRoute()
   })
   window.addEventListener('hashchange', syncDashboardRoute)
+  window.addEventListener('message', handleDashboardMessage)
   syncDashboardRoute()
   settingsTrigger?.addEventListener('click', () => {
     openSettingsDrawer()
@@ -394,12 +367,6 @@ function bindEvents(): void {
   settingsClose?.addEventListener('click', closeSettingsDrawer)
   settingsBackdrop?.addEventListener('click', closeSettingsDrawer)
   document.addEventListener('keydown', handleDocumentKeydown)
-  dashboardRoot?.addEventListener('click', (event) => {
-    void handleDashboardClick(event)
-  })
-  dashboardRoot?.addEventListener('input', (event) => {
-    handleDashboardInput(event)
-  })
   document.addEventListener('pointerdown', (event) => {
     const target = event.target
     if (!(target instanceof Element) || (!state.activeMenuBookmarkId && !state.addMenuOpen)) {
@@ -418,7 +385,6 @@ function bindEvents(): void {
     closeBookmarkMenu()
     closeAddBookmarkMenu()
   })
-  dashboardRoot?.addEventListener('scroll', handleDashboardScroll, true)
   window.addEventListener('resize', () => {
     closeBookmarkMenu()
     closeAddBookmarkMenu()
@@ -2124,11 +2090,6 @@ function handleBookmarksChanged(): void {
   }
 
   void refreshNewTab()
-  if (state.dashboardOpen) {
-    state.dashboardLoadState = 'idle'
-    state.dashboardModel = null
-    void ensureDashboardLoaded()
-  }
 }
 
 function isActiveMenuBookmarkPinned(): boolean {
@@ -2620,6 +2581,9 @@ function render(): void {
 function syncDashboardRoute(): void {
   const shouldOpen = window.location.hash === '#dashboard'
   if (shouldOpen === state.dashboardOpen) {
+    if (shouldOpen) {
+      ensureDashboardFrameLoaded()
+    }
     return
   }
 
@@ -2627,11 +2591,7 @@ function syncDashboardRoute(): void {
   renderDashboard()
   if (shouldOpen) {
     closeSettingsDrawer()
-    void ensureDashboardLoaded()
-    return
   }
-
-  state.dashboardCopyFeedbackId = ''
 }
 
 function openDashboardRoute(): void {
@@ -2647,6 +2607,7 @@ function closeDashboardRoute(): void {
   if (window.location.hash !== '#dashboard') {
     state.dashboardOpen = false
     renderDashboard()
+    dashboardTrigger?.focus()
     return
   }
 
@@ -2655,43 +2616,17 @@ function closeDashboardRoute(): void {
   dashboardTrigger?.focus()
 }
 
-async function ensureDashboardLoaded(): Promise<void> {
-  if (!state.dashboardOpen || state.dashboardLoadState === 'loading' || state.dashboardLoadState === 'ready') {
+function ensureDashboardFrameLoaded(): void {
+  if (state.dashboardFrameLoaded || !dashboardFrame) {
     return
   }
 
-  state.dashboardLoadState = 'loading'
-  state.dashboardError = ''
-  renderDashboard()
-
-  try {
-    if (!state.rootNode) {
-      const tree = await getBookmarkTree()
-      state.rootNode = tree[0] || null
-      state.folderData = extractBookmarkData(state.rootNode)
-      state.folderNodeMap = buildFolderNodeMap(state.rootNode)
-      state.allBookmarks = buildAllBookmarks(state.rootNode)
-      state.allBookmarkMap = new Map(state.allBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
-    } else if (!state.folderData) {
-      state.folderData = extractBookmarkData(state.rootNode)
-    }
-
-    state.dashboardModel = buildDashboardModel({
-      bookmarks: state.folderData?.bookmarks || [],
-      folders: state.folderData?.folders || []
-    })
-    startDashboardFaviconWarmup(state.dashboardModel.items)
-    state.dashboardLoadState = 'ready'
-  } catch (error) {
-    state.dashboardLoadState = 'error'
-    state.dashboardError = error instanceof Error ? error.message : '书签仪表盘加载失败，请稍后重试。'
-  }
-
-  renderDashboard()
+  dashboardFrame.src = chrome.runtime.getURL('src/options/options.html?embed=newtab-dashboard#dashboard')
+  state.dashboardFrameLoaded = true
 }
 
 function renderDashboard(): void {
-  if (!dashboardOverlay || !dashboardRoot) {
+  if (!dashboardOverlay) {
     return
   }
 
@@ -2699,455 +2634,23 @@ function renderDashboard(): void {
   dashboardOverlay.setAttribute('aria-hidden', state.dashboardOpen ? 'false' : 'true')
   dashboardTrigger?.setAttribute('aria-expanded', state.dashboardOpen ? 'true' : 'false')
 
-  if (!state.dashboardOpen) {
-    cancelDashboardFaviconWarmup()
-    cancelScheduledDashboardRender()
-    dashboardRoot.replaceChildren()
+  if (state.dashboardOpen) {
+    ensureDashboardFrameLoaded()
+  }
+}
+
+function handleDashboardMessage(event: MessageEvent): void {
+  if (!dashboardFrame || event.source !== dashboardFrame.contentWindow) {
     return
   }
 
-  const model = state.dashboardModel || buildDashboardModel({
-    bookmarks: state.folderData?.bookmarks || [],
-    folders: state.folderData?.folders || []
-  })
-  state.dashboardModel = model
-  const allItems = model.items
-  const visibleItems = getFilteredDashboardItems(allItems)
-  const statusText = getDashboardStatusText(allItems.length, visibleItems.length)
-  dashboardRoot.replaceChildren(buildDashboardPanel(visibleItems, allItems.length, statusText))
-  restoreDashboardVirtualScroll()
-}
-
-function buildDashboardPanel(
-  visibleItems: DashboardItem[],
-  totalCount: number,
-  statusText: string
-): HTMLElement {
-  const fragment = document.createElement('div')
-  fragment.className = 'newtab-dashboard-panel-content'
-
-  const label = document.createElement('p')
-  label.className = 'options-section-label'
-  label.textContent = 'Dashboard'
-
-  const titleRow = document.createElement('div')
-  titleRow.className = 'dashboard-title-row'
-
-  const titleCopy = document.createElement('div')
-  const kicker = document.createElement('p')
-  kicker.className = 'dashboard-kicker'
-  kicker.textContent = 'Visual Bookmark Management'
-  const title = document.createElement('h1')
-  title.id = 'newtab-dashboard-title'
-  title.append('全部书签 ')
-  const total = document.createElement('span')
-  total.id = 'newtab-dashboard-total'
-  total.textContent = `(${totalCount})`
-  title.append(total)
-  titleCopy.append(kicker, title)
-
-  const titleActions = document.createElement('div')
-  titleActions.className = 'dashboard-title-actions'
-  const status = document.createElement('span')
-  status.id = 'newtab-dashboard-status'
-  status.className = 'ai-provider-save-state muted'
-  status.textContent = statusText
-  const close = document.createElement('button')
-  close.className = 'options-button secondary small'
-  close.type = 'button'
-  close.dataset.dashboardClose = 'true'
-  close.textContent = '退出'
-  titleActions.append(status, close)
-  titleRow.append(titleCopy, titleActions)
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'options-group dashboard-toolbar'
-  const searchBox = document.createElement('div')
-  searchBox.className = 'dashboard-search-box'
-  const labelSearch = document.createElement('label')
-  labelSearch.className = 'options-search dashboard-search'
-  const searchLabel = document.createElement('span')
-  searchLabel.className = 'options-search-label'
-  searchLabel.textContent = '搜索书签'
-  const queryRow = document.createElement('span')
-  queryRow.className = 'dashboard-query-row'
-  const query = document.createElement('input')
-  query.id = 'newtab-dashboard-query'
-  query.className = 'options-search-input'
-  query.type = 'search'
-  query.spellcheck = false
-  query.placeholder = '搜索标题、URL 或文件夹路径'
-  query.value = state.dashboardQuery
-  query.dataset.dashboardSearch = 'true'
-  queryRow.append(query)
-  labelSearch.append(searchLabel, queryRow)
-  const chips = document.createElement('div')
-  chips.id = 'newtab-dashboard-search-chips'
-  chips.className = `dashboard-search-chips${state.dashboardQuery.trim() ? '' : ' hidden'}`
-  chips.setAttribute('aria-label', '当前搜索条件')
-  if (state.dashboardQuery.trim()) {
-    const chip = document.createElement('span')
-    chip.className = 'dashboard-search-chip query'
-    chip.textContent = state.dashboardQuery.trim()
-    chips.append(chip)
-  }
-  searchBox.append(labelSearch, chips)
-  const toolbarActions = document.createElement('div')
-  toolbarActions.className = 'dashboard-toolbar-actions'
-  const count = document.createElement('span')
-  count.id = 'newtab-dashboard-result-count'
-  count.className = 'option-value'
-  count.textContent = `${visibleItems.length} 条书签`
-  toolbarActions.append(count)
-  toolbar.append(searchBox, toolbarActions)
-
-  const results = document.createElement('section')
-  results.className = 'options-group dashboard-results-group'
-  results.setAttribute('aria-labelledby', 'newtab-dashboard-cards-title')
-  const resultsHead = document.createElement('div')
-  resultsHead.className = 'dashboard-results-head'
-  const resultsTitle = document.createElement('strong')
-  resultsTitle.id = 'newtab-dashboard-cards-title'
-  resultsTitle.textContent = '全部书签'
-  const resultsSubtitle = document.createElement('p')
-  resultsSubtitle.className = 'detect-results-subtitle'
-  resultsSubtitle.textContent = '沿用 Options 书签仪表盘的卡片结构，在新标签页中独立查看全部书签。'
-  resultsHead.append(resultsTitle, resultsSubtitle)
-  const grid = document.createElement('div')
-  grid.id = 'newtab-dashboard-results'
-  grid.className = 'dashboard-card-grid'
-
-  if (state.dashboardLoadState === 'loading') {
-    grid.append(createDashboardEmptyState('正在读取书签目录。'))
-  } else if (state.dashboardLoadState === 'error') {
-    grid.append(createDashboardEmptyState(state.dashboardError || '书签仪表盘加载失败。'))
-  } else if (!visibleItems.length) {
-    grid.append(createDashboardEmptyState(state.dashboardQuery.trim() ? '没有匹配的书签。' : '暂无书签。'))
-  } else {
-    renderDashboardCardWindow(grid, visibleItems)
-  }
-
-  results.append(resultsHead, grid)
-  fragment.append(label, titleRow, toolbar, results)
-  return fragment
-}
-
-function renderDashboardCardWindow(
-  grid: HTMLElement,
-  visibleItems: readonly DashboardItem[]
-): void {
-  if (visibleItems.length < NEWTAB_DASHBOARD_VIRTUAL_THRESHOLD) {
-    for (const item of visibleItems) {
-      grid.append(createDashboardBookmarkCard(item))
-    }
+  if (event.origin !== window.location.origin) {
     return
   }
 
-  const viewportHeight = getDashboardViewportHeight()
-  const columns = getDashboardColumnCount()
-  const rowCount = Math.ceil(visibleItems.length / columns)
-  const totalHeight = Math.max(
-    0,
-    rowCount * (NEWTAB_DASHBOARD_CARD_HEIGHT + NEWTAB_DASHBOARD_GRID_GAP) - NEWTAB_DASHBOARD_GRID_GAP
-  )
-  const maxScrollTop = Math.max(0, totalHeight - viewportHeight)
-  const scrollTop = Math.min(state.dashboardScrollTop, maxScrollTop)
-  state.dashboardScrollTop = scrollTop
-  const windowState = getDashboardVirtualWindow({
-    totalCount: visibleItems.length,
-    scrollTop,
-    viewportHeight,
-    itemHeight: NEWTAB_DASHBOARD_CARD_HEIGHT + NEWTAB_DASHBOARD_GRID_GAP,
-    overscan: NEWTAB_DASHBOARD_VIRTUAL_OVERSCAN
-  })
-  const startRow = Math.floor(windowState.startIndex / columns)
-  const startIndex = Math.max(0, startRow * columns)
-  const rowEndIndex = Math.min(
-    visibleItems.length,
-    Math.ceil(windowState.endIndex / columns) * columns
-  )
-  const spacer = document.createElement('div')
-  spacer.className = 'dashboard-virtual-spacer'
-  spacer.style.height = `${Math.ceil(totalHeight)}px`
-  const windowElement = document.createElement('div')
-  windowElement.className = 'dashboard-virtual-window'
-  windowElement.style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`
-  windowElement.style.transform = `translate3d(0, ${Math.round(startRow * (NEWTAB_DASHBOARD_CARD_HEIGHT + NEWTAB_DASHBOARD_GRID_GAP))}px, 0)`
-  for (const item of visibleItems.slice(startIndex, rowEndIndex)) {
-    windowElement.append(createDashboardBookmarkCard(item))
-  }
-
-  grid.classList.add('is-virtualized')
-  spacer.append(windowElement)
-  grid.append(spacer)
-}
-
-function getDashboardViewportHeight(): number {
-  const grid = dashboardRoot?.querySelector<HTMLElement>('#newtab-dashboard-results')
-  const height = grid?.clientHeight || dashboardRoot?.clientHeight || 0
-  return Math.max(1, height || NEWTAB_DASHBOARD_VIRTUAL_FALLBACK_HEIGHT)
-}
-
-function getDashboardColumnCount(): number {
-  const grid = dashboardRoot?.querySelector<HTMLElement>('#newtab-dashboard-results')
-  if (!grid || typeof window === 'undefined') {
-    return 3
-  }
-
-  const style = window.getComputedStyle(grid)
-  const templateColumns = style.gridTemplateColumns
-    .split(' ')
-    .map((value) => value.trim())
-    .filter(Boolean)
-  return Math.max(1, templateColumns.length || 3)
-}
-
-function createDashboardEmptyState(message: string): HTMLElement {
-  const empty = document.createElement('div')
-  empty.className = 'detect-empty'
-  empty.textContent = message
-  return empty
-}
-
-function getFilteredDashboardItems(items: DashboardItem[]): DashboardItem[] {
-  return sortDashboardItems(
-    filterDashboardItems(items, {
-      query: state.dashboardQuery
-    }),
-    'date-desc'
-  )
-}
-
-function getDashboardStatusText(totalCount: number, visibleCount: number): string {
-  if (state.dashboardLoadState === 'loading') {
-    return '读取中'
-  }
-
-  if (state.dashboardLoadState === 'error') {
-    return '加载失败'
-  }
-
-  if (state.dashboardQuery.trim()) {
-    return `${visibleCount} / ${totalCount} 条`
-  }
-
-  return `${totalCount} 条书签`
-}
-
-function createDashboardBookmarkCard(item: DashboardItem): HTMLElement {
-  const card = document.createElement('article')
-  card.className = 'dashboard-bookmark-card'
-  card.dataset.dashboardCard = 'true'
-  card.dataset.dashboardBookmarkId = item.id
-
-  const body = document.createElement('div')
-  body.className = 'dashboard-card-body'
-
-  const faviconShell = document.createElement('span')
-  faviconShell.className = 'dashboard-favicon-shell'
-  faviconShell.setAttribute('aria-hidden', 'true')
-  const favicon = document.createElement('img')
-  favicon.src = getFaviconUrl(item.url, item.id)
-  favicon.alt = ''
-  favicon.loading = 'lazy'
-  favicon.decoding = 'async'
-  favicon.draggable = false
-  favicon.addEventListener('error', () => {
-    faviconShell.classList.add('favicon-missing')
-  })
-  const fallback = document.createElement('span')
-  fallback.textContent = getFallbackLabel(item.title)
-  faviconShell.append(favicon, fallback)
-
-  const copy = document.createElement('div')
-  copy.className = 'dashboard-card-copy'
-  const titleRow = document.createElement('div')
-  titleRow.className = 'dashboard-card-title-row'
-  const title = document.createElement('strong')
-  title.title = item.title || '未命名书签'
-  title.textContent = item.title || '未命名书签'
-  titleRow.append(title)
-  const url = document.createElement('a')
-  url.className = 'dashboard-card-url'
-  url.href = item.url
-  url.target = '_blank'
-  url.rel = 'noreferrer noopener'
-  url.dataset.dashboardOpen = item.id
-  url.textContent = displayUrl(item.url)
-  const meta = document.createElement('div')
-  meta.className = 'dashboard-card-meta'
-  const path = document.createElement('button')
-  path.className = 'dashboard-path-chip'
-  path.type = 'button'
-  path.disabled = true
-  path.title = formatBookmarkPath(item.path) || '未归档路径'
-  path.textContent = formatBookmarkPath(item.path) || '未归档路径'
-  meta.append(path)
-  copy.append(titleRow, url, meta)
-
-  const side = document.createElement('div')
-  side.className = 'dashboard-card-side'
-  const dot = document.createElement('span')
-  dot.className = 'dashboard-status-dot'
-  dot.title = '新标签页仪表盘'
-  side.append(dot)
-  body.append(faviconShell, copy, side)
-
-  const footer = document.createElement('div')
-  footer.className = 'dashboard-card-footer'
-  const actions = document.createElement('div')
-  actions.className = 'dashboard-card-actions'
-  const open = document.createElement('a')
-  open.className = 'detect-result-open'
-  open.href = item.url
-  open.target = '_blank'
-  open.rel = 'noreferrer noopener'
-  open.dataset.dashboardOpen = item.id
-  open.textContent = '打开'
-  const copyButton = document.createElement('button')
-  copyButton.className = 'detect-result-action'
-  copyButton.type = 'button'
-  copyButton.dataset.dashboardCopy = item.id
-  copyButton.textContent = state.dashboardCopyFeedbackId === item.id ? '已复制' : '复制'
-  actions.append(open, copyButton)
-  footer.append(actions)
-
-  card.append(body, footer)
-  return card
-}
-
-async function handleDashboardClick(event: MouseEvent): Promise<void> {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
-
-  if (target.closest('[data-dashboard-close]')) {
-    event.preventDefault()
+  if (event.data?.type === 'curator:newtab-dashboard-close') {
     closeDashboardRoute()
-    return
   }
-
-  const copyButton = target.closest<HTMLElement>('[data-dashboard-copy]')
-  if (copyButton) {
-    event.preventDefault()
-    await copyDashboardBookmarkUrl(String(copyButton.dataset.dashboardCopy || ''))
-    return
-  }
-
-  const openTarget = target.closest<HTMLElement>('[data-dashboard-open]')
-  if (openTarget) {
-    const bookmark = getBookmarkById(String(openTarget.dataset.dashboardOpen || ''))
-    if (bookmark) {
-      void recordBookmarkOpen(bookmark)
-    }
-  }
-}
-
-function handleDashboardInput(event: Event): void {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement) || !target.matches('[data-dashboard-search]')) {
-    return
-  }
-
-  state.dashboardQuery = target.value
-  state.dashboardScrollTop = 0
-  renderDashboard()
-  const input = dashboardRoot?.querySelector<HTMLInputElement>('[data-dashboard-search]')
-  input?.focus()
-  const cursorPosition = target.selectionStart ?? state.dashboardQuery.length
-  input?.setSelectionRange(cursorPosition, cursorPosition)
-}
-
-function handleDashboardScroll(event: Event): void {
-  if (!state.dashboardOpen) {
-    return
-  }
-
-  const target = event.target
-  if (!(target instanceof HTMLElement) || target.id !== 'newtab-dashboard-results') {
-    return
-  }
-
-  if (!target.classList.contains('is-virtualized')) {
-    return
-  }
-
-  state.dashboardScrollTop = target.scrollTop
-  scheduleDashboardRender()
-}
-
-function scheduleDashboardRender(): void {
-  if (state.dashboardRenderFrame) {
-    return
-  }
-
-  state.dashboardRenderFrame = window.requestAnimationFrame(() => {
-    state.dashboardRenderFrame = 0
-    renderDashboard()
-  })
-}
-
-function cancelScheduledDashboardRender(): void {
-  if (!state.dashboardRenderFrame) {
-    return
-  }
-
-  window.cancelAnimationFrame(state.dashboardRenderFrame)
-  state.dashboardRenderFrame = 0
-}
-
-function restoreDashboardVirtualScroll(): void {
-  const grid = dashboardRoot?.querySelector<HTMLElement>('#newtab-dashboard-results.is-virtualized')
-  if (!grid || grid.scrollTop === state.dashboardScrollTop) {
-    return
-  }
-
-  grid.scrollTop = state.dashboardScrollTop
-}
-
-async function copyDashboardBookmarkUrl(bookmarkId: string): Promise<void> {
-  const item = state.dashboardModel?.items.find((entry) => entry.id === bookmarkId) ||
-    state.folderData?.bookmarkMap.get(bookmarkId)
-  if (!item) {
-    return
-  }
-
-  await writeClipboardText(item.url)
-  state.dashboardCopyFeedbackId = bookmarkId
-  renderDashboard()
-  window.setTimeout(() => {
-    if (state.dashboardCopyFeedbackId !== bookmarkId) {
-      return
-    }
-
-    state.dashboardCopyFeedbackId = ''
-    renderDashboard()
-  }, 1400)
-}
-
-function startDashboardFaviconWarmup(items: readonly DashboardItem[]): void {
-  cancelDashboardFaviconWarmup()
-  if (!items.length) {
-    return
-  }
-
-  const queue = createDashboardFaviconWarmupQueue({
-    bookmarks: items,
-    faviconEndpointUrl: chrome.runtime.getURL('/_favicon/'),
-    size: FAVICON_SIZE,
-    cacheToken: (item) => state.faviconRefreshTokens.get(item.id),
-    maxConcurrent: 2,
-    batchSize: 8,
-    batchDelayMs: 32
-  })
-  state.dashboardFaviconWarmup = queue
-  queue.start()
-}
-
-function cancelDashboardFaviconWarmup(): void {
-  state.dashboardFaviconWarmup?.cancel()
-  state.dashboardFaviconWarmup = null
 }
 
 function renderDeleteToast(): void {
