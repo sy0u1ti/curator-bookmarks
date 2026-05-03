@@ -36,13 +36,23 @@ test('smart analysis section uses the renamed Chinese entry copy', () => {
 test('options dashboard entry keeps the settings-page dashboard instead of redirecting to newtab', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
 
   const dashboardEntry = optionsHtml.match(/<a\s+class="options-dashboard-entry"[\s\S]*?<\/a>/)?.[0] || ''
+  const dashboardPanel = optionsHtml.match(/<section[\s\S]*?id="dashboard"[\s\S]*?<\/section>/)?.[0] || ''
   assert.match(dashboardEntry, /href="#dashboard"/)
   assert.match(dashboardEntry, /data-section-link="dashboard"/)
   assert.doesNotMatch(dashboardEntry, /newtab\.html#dashboard/)
   assert.doesNotMatch(dashboardEntry, /data-dashboard-entry/)
 
+  assert.match(dashboardPanel, /class="options-panel dashboard-panel"/)
+  assert.match(dashboardPanel, /data-section-panel="dashboard"/)
+  assert.match(dashboardPanel, /data-dashboard-action="exit-dashboard"/)
   assert.match(optionsSource, /document\.body\.classList\.toggle\('dashboard-fullscreen-active', key === 'dashboard'\)/)
+  assert.match(optionsSource, /options-dashboard-embed/)
+  assert.match(optionsSource, /curator:newtab-dashboard-close/)
+  assert.match(optionsSource, /postMessage/)
+  assert.match(dashboardSource, /action === 'exit-dashboard'[\s\S]*callbacks\./)
+  assert.doesNotMatch(dashboardSource, /action === 'exit-dashboard'[\s\S]*window\.location\.hash = '#general'/)
   assert.doesNotMatch(optionsSource, /NEWTAB_DASHBOARD_PATH|openNewTabDashboard|handleDashboardEntryClick/)
 })
