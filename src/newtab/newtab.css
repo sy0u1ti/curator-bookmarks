@@ -864,6 +864,85 @@ body.background-mask-enabled .newtab-background-mask {
   line-height: 1.15;
 }
 
+.source-navigation {
+  display: inline-grid;
+  max-width: 100%;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-self: start;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.source-navigation-label {
+  color: rgba(245, 245, 247, 0.42);
+  font-size: 11px;
+  font-weight: 720;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.source-navigation-list {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.source-navigation-link {
+  display: inline-flex;
+  max-width: min(180px, 100%);
+  height: 26px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 7px;
+  background: rgba(245, 245, 247, 0.035);
+  color: rgba(245, 245, 247, 0.72);
+  text-decoration: none;
+  transition:
+    border-color var(--ease-standard),
+    background-color var(--ease-standard),
+    color var(--ease-standard);
+}
+
+.source-navigation-link:hover,
+.source-navigation-link:focus-visible {
+  border-color: rgba(245, 245, 247, 0.22);
+  background: rgba(245, 245, 247, 0.08);
+  color: var(--text);
+  outline: none;
+}
+
+.source-navigation-link:focus-visible {
+  box-shadow: 0 0 0 2px rgba(245, 245, 247, 0.12);
+}
+
+.source-navigation-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-navigation-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 16px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(245, 245, 247, 0.075);
+  color: rgba(245, 245, 247, 0.48);
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1;
+}
+
 .bookmark-folder-section {
   display: grid;
   width: 100%;
@@ -874,6 +953,12 @@ body.background-mask-enabled .newtab-background-mask {
   transition:
     opacity var(--ease-standard),
     transform var(--ease-standard);
+  scroll-margin-top: clamp(28px, 5vh, 48px);
+}
+
+.bookmark-folder-section:focus-visible {
+  outline: 2px solid rgba(245, 245, 247, 0.22);
+  outline-offset: 8px;
 }
 
 .bookmark-folder-section.dragging-folder {

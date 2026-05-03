@@ -34,6 +34,21 @@ export interface NewTabSearchIndexSection {
   bookmarks: NewTabSearchIndexBookmark[]
 }
 
+export interface NewTabSourceNavigationSection {
+  id: string
+  title: string
+  path: string
+  bookmarks: NewTabSearchIndexBookmark[]
+}
+
+export interface NewTabSourceNavigationItem {
+  id: string
+  anchorId: string
+  title: string
+  path: string
+  bookmarkCount: number
+}
+
 export interface NewTabSearchIndexEntry {
   id: string
   title: string
@@ -211,6 +226,36 @@ export function buildNewTabSearchIndex(
   }
 
   return entries
+}
+
+export function buildNewTabSourceNavigationItems(
+  sections: NewTabSourceNavigationSection[]
+): NewTabSourceNavigationItem[] {
+  return sections
+    .map((section) => {
+      const id = String(section.id || '').trim()
+      if (!id) {
+        return null
+      }
+
+      const title = String(section.title || '').trim() || '未命名文件夹'
+      return {
+        id,
+        anchorId: getNewTabSourceAnchorId(id),
+        title,
+        path: String(section.path || title).trim() || title,
+        bookmarkCount: section.bookmarks.filter((bookmark) => String(bookmark.url || '').trim()).length
+      }
+    })
+    .filter((item): item is NewTabSourceNavigationItem => Boolean(item))
+}
+
+export function getNewTabSourceAnchorId(sourceId: string): string {
+  const normalizedId = String(sourceId || '').trim()
+  const safeId = normalizedId
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `newtab-source-${safeId || 'folder'}`
 }
 
 export function getSearchBookmarkSuggestionsFromIndex(

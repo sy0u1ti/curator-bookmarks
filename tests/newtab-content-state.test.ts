@@ -5,7 +5,9 @@ import { test } from 'node:test'
 
 import {
   buildNewTabPortalOverview,
+  buildNewTabSourceNavigationItems,
   collectPortalBookmarkSourceItems,
+  getNewTabSourceAnchorId,
   getPortalQuickAccessItems,
   resolvePortalPanelLayout,
   getVerticalCenterCollisionOffset
@@ -210,4 +212,63 @@ test('newtab folder headers expose scoped quick-add controls', () => {
   assert.match(script, /headerRow\.append\(header, createFolderAddButton\(section\)\)/)
   assert.match(css, /\.folder-section-header-row/)
   assert.match(css, /\.folder-section-add/)
+})
+
+test('builds compact source navigation data with stable anchors and bookmark counts', () => {
+  assert.deepEqual(
+    buildNewTabSourceNavigationItems([
+      {
+        id: '10',
+        title: '工作',
+        path: '书签栏 / 工作',
+        bookmarks: [
+          { id: '11', title: 'Docs', url: 'https://example.com/docs' },
+          { id: '12', title: 'Folder' }
+        ]
+      },
+      {
+        id: 'folder:design',
+        title: '',
+        path: '',
+        bookmarks: [
+          { id: '21', title: 'Tokens', url: 'https://example.com/tokens' }
+        ]
+      },
+      {
+        id: ' ',
+        title: '无效',
+        path: '无效',
+        bookmarks: []
+      }
+    ]),
+    [
+      {
+        id: '10',
+        anchorId: 'newtab-source-10',
+        title: '工作',
+        path: '书签栏 / 工作',
+        bookmarkCount: 1
+      },
+      {
+        id: 'folder:design',
+        anchorId: 'newtab-source-folder-design',
+        title: '未命名文件夹',
+        path: '未命名文件夹',
+        bookmarkCount: 1
+      }
+    ]
+  )
+})
+
+test('newtab exposes source navigation anchors and a folder source setting switch', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const css = readProjectFile('src/newtab/newtab.css')
+
+  assert.equal(getNewTabSourceAnchorId('folder:design'), 'newtab-source-folder-design')
+  assert.match(html, /id="folder-show-source-navigation"/)
+  assert.match(script, /buildNewTabSourceNavigationItems/)
+  assert.match(script, /sectionNode\.id = getNewTabSourceAnchorId\(section\.id\)/)
+  assert.match(script, /dataset\.sourceNavigationTarget/)
+  assert.match(css, /\.source-navigation/)
 })
