@@ -547,21 +547,49 @@
               <p id="availability-status-copy" class="detect-status-copy">仅检测 `http/https` 书签，其它协议会自动跳过。</p>
             </div>
 
-            <div class="options-guidance-list" aria-label="坏链检测结果处理顺序">
-              <div class="options-guidance-item">
-                <span class="options-chip danger">高置信</span>
-                <strong>先重测，再移动或删除</strong>
-                <p>多层证据都指向失效时才进入高置信；批量删除前建议先抽样打开确认。</p>
+            <div class="availability-decision-panel" aria-label="可用性检测决策概览">
+              <div class="availability-decision-header">
+                <div>
+                  <strong>决策面板</strong>
+                  <p class="detect-results-subtitle">异常项可直接忽略书签、域名或文件夹；确认失效后再移动或删除。</p>
+                </div>
+                <span id="availability-decision-duration" class="option-value">未开始</span>
               </div>
-              <div class="options-guidance-item">
-                <span class="options-chip warning">低置信</span>
-                <strong>优先人工确认</strong>
-                <p>登录限制、地区限制、反爬或临时失败会留在低置信；确认后可移入高置信或加入忽略规则。</p>
+              <div class="availability-decision-grid">
+                <div>
+                  <span class="summary-label">本次范围</span>
+                  <strong id="availability-decision-scope">全部书签</strong>
+                </div>
+                <div>
+                  <span class="summary-label">扫描进度</span>
+                  <strong id="availability-decision-progress">0 / 0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">新增异常</span>
+                  <strong id="availability-decision-new">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">持续异常</span>
+                  <strong id="availability-decision-persistent">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">已恢复</span>
+                  <strong id="availability-decision-recovered">0</strong>
+                </div>
+                <div>
+                  <span class="summary-label">忽略过滤</span>
+                  <strong id="availability-decision-ignored">0</strong>
+                </div>
               </div>
-              <div class="options-guidance-item">
-                <span class="options-chip success">重定向</span>
-                <strong>确认当前地址后更新</strong>
-                <p>更新前会重新读取书签，只有当前 URL 仍等于检测时原地址才会替换为最终 URL。</p>
+              <div id="availability-filter-bar" class="availability-filter-bar" role="toolbar" aria-label="筛选可用性检测结果">
+                <button class="options-button secondary small" type="button" data-availability-filter="all" aria-pressed="true">全部</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="failed" aria-pressed="false">高置信</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="review" aria-pressed="false">低置信 / 待确认</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="redirected" aria-pressed="false">重定向</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="new" aria-pressed="false">新增</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="persistent" aria-pressed="false">持续</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="recovered" aria-pressed="false">已恢复</button>
+                <button class="options-button secondary small" type="button" data-availability-filter="ignored" aria-pressed="false">已忽略过滤</button>
               </div>
             </div>
 
@@ -591,7 +619,7 @@
                 <strong id="availability-failed">0</strong>
               </article>
               <article class="summary-card metric-card metric-muted">
-                <span class="summary-label">已忽略</span>
+                <span class="summary-label">忽略过滤</span>
                 <strong id="availability-ignored">0</strong>
               </article>
               <article class="summary-card metric-card metric-muted">
@@ -623,7 +651,7 @@
             <div class="options-group detect-results-group">
               <div class="detect-results-header">
                 <div>
-                  <strong>低置信异常</strong>
+                  <strong id="availability-review-title">低置信异常</strong>
                   <p id="availability-review-subtitle" class="detect-results-subtitle">导航失败但证据不足以直接判定为高置信异常，建议人工确认</p>
                 </div>
                 <div class="detect-results-actions">
@@ -640,7 +668,7 @@
             <div class="options-group detect-results-group">
               <div class="detect-results-header">
                 <div>
-                  <strong>高置信异常</strong>
+                  <strong id="availability-failed-title">高置信异常</strong>
                   <p id="availability-last-run" class="detect-results-subtitle">尚未执行检测</p>
                 </div>
                 <div class="detect-results-actions">
