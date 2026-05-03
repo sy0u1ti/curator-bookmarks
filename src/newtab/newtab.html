@@ -46,7 +46,7 @@
         <header class="settings-drawer-header">
           <p class="settings-drawer-kicker">New Tab</p>
           <h1 id="newtab-settings-title">新标签页设置</h1>
-          <p id="newtab-settings-summary" class="settings-drawer-summary">书签来源、背景、图标布局、时间与搜索栏。</p>
+          <p id="newtab-settings-summary" class="settings-drawer-summary">书签来源、背景、卡片布局、时间与搜索栏。</p>
           <div
             id="settings-save-status"
             class="settings-save-status"
@@ -226,14 +226,14 @@
         </section>
 
         <section class="settings-section" aria-labelledby="settings-icon-title">
-          <h2 id="settings-icon-title">图标</h2>
+          <h2 id="settings-icon-title">书签卡片</h2>
           <div class="settings-card icon-settings-card">
             <div class="icon-live-preview-panel">
               <div class="icon-live-preview-header">
                 <span>实时预览</span>
                 <span id="icon-live-preview-summary" class="icon-live-preview-summary"></span>
               </div>
-              <div id="icon-live-preview" class="icon-live-preview" role="img" aria-label="图标布局预览"></div>
+              <div id="icon-live-preview" class="icon-live-preview" role="img" aria-label="书签卡片布局预览"></div>
             </div>
             <div id="icon-preset-row" class="icon-preset-row"></div>
             <div class="setting-row icon-control-row">
@@ -257,7 +257,7 @@
             <label class="setting-row">
               <span class="setting-label-stack">
                 <span>显示标题</span>
-                <small>关闭后只显示网站图标。</small>
+                <small>关闭后卡片收缩为只显示网站图标。</small>
               </span>
               <input id="icon-show-titles" class="setting-switch-input" type="checkbox" checked>
               <span class="setting-switch" aria-hidden="true"></span>
@@ -282,28 +282,32 @@
             <div id="icon-advanced-panel" class="icon-advanced-panel" hidden>
               <div class="reveal-panel-body">
                 <label class="setting-row slider-row">
-                  <span>页面宽度 <output id="icon-page-width-value" class="setting-value">64%</output></span>
-                  <input id="icon-page-width" class="setting-range" type="range" min="16" max="100" value="64">
+                  <span>页面宽度 <output id="icon-page-width-value" class="setting-value">78%</output></span>
+                  <input id="icon-page-width" class="setting-range" type="range" min="16" max="100" value="78">
+                </label>
+                <label id="icon-tile-width-row" class="setting-row slider-row">
+                  <span>卡片宽度 <output id="icon-tile-width-value" class="setting-value">184px</output></span>
+                  <input id="icon-tile-width" class="setting-range" type="range" min="132" max="260" value="184">
                 </label>
                 <label class="setting-row slider-row">
-                  <span>图标大小 <output id="icon-shell-size-value" class="setting-value">44px</output></span>
-                  <input id="icon-shell-size" class="setting-range" type="range" min="28" max="72" value="44">
+                  <span>图标区域 <output id="icon-shell-size-value" class="setting-value">32px</output></span>
+                  <input id="icon-shell-size" class="setting-range" type="range" min="24" max="48" value="32">
                 </label>
                 <label class="setting-row slider-row">
-                  <span>横向间距 <output id="icon-column-gap-value" class="setting-value">32px</output></span>
-                  <input id="icon-column-gap" class="setting-range" type="range" min="0" max="100" value="18">
+                  <span>横向间距 <output id="icon-column-gap-value" class="setting-value">24px</output></span>
+                  <input id="icon-column-gap" class="setting-range" type="range" min="0" max="100" value="10">
                 </label>
                 <label class="setting-row slider-row">
-                  <span>行距 <output id="icon-row-gap-value" class="setting-value">20px</output></span>
-                  <input id="icon-row-gap" class="setting-range" type="range" min="0" max="100" value="18">
+                  <span>行距 <output id="icon-row-gap-value" class="setting-value">12px</output></span>
+                  <input id="icon-row-gap" class="setting-range" type="range" min="0" max="100" value="10">
                 </label>
                 <label class="setting-row slider-row">
-                  <span>文件夹间距 <output id="icon-folder-gap-value" class="setting-value">22px</output></span>
-                  <input id="icon-folder-gap" class="setting-range" type="range" min="0" max="120" value="22">
+                  <span>文件夹间距 <output id="icon-folder-gap-value" class="setting-value">20px</output></span>
+                  <input id="icon-folder-gap" class="setting-range" type="range" min="0" max="120" value="20">
                 </label>
                 <label id="icon-columns-row" class="setting-row slider-row">
-                  <span>固定列数 <output id="icon-columns-value" class="setting-value">6</output></span>
-                  <input id="icon-columns" class="setting-range" type="range" min="3" max="12" value="6">
+                  <span>固定列数 <output id="icon-columns-value" class="setting-value">4</output></span>
+                  <input id="icon-columns" class="setting-range" type="range" min="2" max="8" value="4">
                 </label>
               </div>
             </div>

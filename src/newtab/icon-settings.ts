@@ -2,38 +2,38 @@ const ICON_PAGE_WIDTH_REFERENCE_PX = 1920
 
 export const ICON_LAYOUT_PRESETS = {
   compact: {
-    tileWidth: 72,
-    iconShellSize: 36,
-    pageWidth: 56,
+    tileWidth: 148,
+    iconShellSize: 28,
+    pageWidth: 72,
     columnGap: 6,
-    rowGap: 6,
-    folderGap: 12,
+    rowGap: 8,
+    folderGap: 16,
     layoutMode: 'auto',
-    columns: 8,
+    columns: 5,
     showTitles: true,
     titleLines: 1
   },
   comfortable: {
-    tileWidth: 82,
-    iconShellSize: 44,
-    pageWidth: 64,
-    columnGap: 18,
-    rowGap: 18,
-    folderGap: 22,
+    tileWidth: 184,
+    iconShellSize: 32,
+    pageWidth: 78,
+    columnGap: 10,
+    rowGap: 10,
+    folderGap: 20,
     layoutMode: 'auto',
-    columns: 6,
+    columns: 4,
     showTitles: true,
-    titleLines: 2
+    titleLines: 1
   },
   spacious: {
-    tileWidth: 98,
-    iconShellSize: 54,
-    pageWidth: 76,
-    columnGap: 30,
-    rowGap: 28,
-    folderGap: 34,
+    tileWidth: 224,
+    iconShellSize: 36,
+    pageWidth: 84,
+    columnGap: 14,
+    rowGap: 14,
+    folderGap: 26,
     layoutMode: 'auto',
-    columns: 5,
+    columns: 3,
     showTitles: true,
     titleLines: 2
   }
@@ -66,23 +66,23 @@ export const ICON_PRESET_META: Record<IconLayoutPresetKey, {
   cols: number
   rows: number
 }> = {
-  compact: { name: '紧凑', desc: '8 列 · 36px', detail: '高频访问 · 单行标题', cols: 5, rows: 3 },
-  comfortable: { name: '均衡', desc: '6 列 · 44px', detail: '日常桌面 · 双行标题', cols: 4, rows: 3 },
-  spacious: { name: '展示', desc: '5 列 · 54px', detail: '大屏展示 · 宽松间距', cols: 3, rows: 2 }
+  compact: { name: '紧凑', desc: '148px · 28px', detail: '高频访问 · 单行卡片', cols: 4, rows: 3 },
+  comfortable: { name: '均衡', desc: '184px · 32px', detail: '日常桌面 · 标准卡片', cols: 3, rows: 3 },
+  spacious: { name: '展示', desc: '224px · 36px', detail: '大屏展示 · 双行卡片', cols: 2, rows: 3 }
 }
 
 export const DEFAULT_ICON_SETTINGS: IconSettings = {
-  pageWidth: 64,
-  columnGap: 18,
-  rowGap: 18,
-  folderGap: 22,
-  tileWidth: 82,
-  iconShellSize: 44,
+  pageWidth: 78,
+  columnGap: 10,
+  rowGap: 10,
+  folderGap: 20,
+  tileWidth: 184,
+  iconShellSize: 32,
   preset: 'comfortable',
   layoutMode: 'auto',
-  columns: 6,
+  columns: 4,
   showTitles: true,
-  titleLines: 2,
+  titleLines: 1,
   verticalCenter: false
 }
 
@@ -108,12 +108,12 @@ export function normalizeIconSettings(rawSettings: unknown): IconSettings {
     DEFAULT_ICON_SETTINGS.rowGap
   )
   const folderGap = clampNumber(settings.folderGap, 0, 120, DEFAULT_ICON_SETTINGS.folderGap)
-  const tileWidth = clampNumber(settings.tileWidth, 60, 126, DEFAULT_ICON_SETTINGS.tileWidth)
-  const iconShellSize = clampNumber(settings.iconShellSize, 28, 72, DEFAULT_ICON_SETTINGS.iconShellSize)
+  const tileWidth = clampNumber(settings.tileWidth, 132, 260, DEFAULT_ICON_SETTINGS.tileWidth)
+  const iconShellSize = clampNumber(settings.iconShellSize, 24, 48, DEFAULT_ICON_SETTINGS.iconShellSize)
   const layoutMode = SUPPORTED_LAYOUT_MODES.has(String(settings.layoutMode))
     ? String(settings.layoutMode) as IconLayoutMode
     : DEFAULT_ICON_SETTINGS.layoutMode
-  const columns = clampNumber(settings.columns, 3, 12, DEFAULT_ICON_SETTINGS.columns)
+  const columns = clampNumber(settings.columns, 2, 8, DEFAULT_ICON_SETTINGS.columns)
   const showTitles = typeof settings.showTitles === 'boolean'
     ? settings.showTitles
     : DEFAULT_ICON_SETTINGS.showTitles
@@ -188,9 +188,18 @@ export function getFolderGapPx(folderGap: number): number {
 }
 
 export function getFixedIconGridWidthPx(settings: IconSettings): number {
-  const columns = clampNumber(settings.columns, 3, 12, DEFAULT_ICON_SETTINGS.columns)
+  const columns = clampNumber(settings.columns, 2, 8, DEFAULT_ICON_SETTINGS.columns)
   const gap = getIconGapPx(settings.columnGap)
-  return Math.round(columns * settings.tileWidth + Math.max(columns - 1, 0) * gap)
+  const tileWidth = getEffectiveIconTileWidthPx(settings)
+  return Math.round(columns * tileWidth + Math.max(columns - 1, 0) * gap)
+}
+
+export function getEffectiveIconTileWidthPx(settings: IconSettings): number {
+  if (settings.showTitles) {
+    return settings.tileWidth
+  }
+
+  return Math.max(settings.iconShellSize + 20, Math.round(settings.iconShellSize * 1.72))
 }
 
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {

@@ -23,6 +23,7 @@ import {
   type IconLayoutPresetKey,
   type IconSettings,
   detectPresetFromValues,
+  getEffectiveIconTileWidthPx,
   getFixedIconGridWidthPx,
   getFolderGapPx,
   getIconGapPx,
@@ -60,6 +61,17 @@ import {
   normalizeFolderSettingsWithDefault
 } from './folder-settings.js'
 import {
+  buildChromeFaviconUrl,
+  formatFaviconAccentCssRgb,
+  getFaviconAccentCacheEntry,
+  normalizeFaviconAccentCache,
+  removeFaviconAccentCacheEntry,
+  selectFaviconAccentColor,
+  upsertFaviconAccentCacheEntry,
+  type FaviconAccentCache,
+  type FaviconAccentColor
+} from './favicon-cache.js'
+import {
   BACKGROUND_URL_FETCH_TIMEOUT_MS,
   BACKGROUND_URL_MAX_BYTES,
   buildMinimalBookmarkMoveOperations,
@@ -79,10 +91,12 @@ import {
 } from './search-engines.js'
 
 const FAVICON_SIZE = 64
+const FAVICON_COLOR_SAMPLE_SIZE = 32
 const CUSTOM_ICON_MAX_BYTES = 2 * 1024 * 1024
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
 const SETTINGS_SAVE_DEBOUNCE_MS = 260
+const FAVICON_ACCENT_SAVE_DEBOUNCE_MS = 900
 const EAGER_FAVICON_LIMIT = 40
 const HIGH_PRIORITY_FAVICON_LIMIT = 12
 const BACKGROUND_MEDIA_DB_NAME = 'curatorNewTabBackgroundMedia'
@@ -246,6 +260,7 @@ const state = {
   addMenuBusy: false,
   addMenuError: '',
   customIcons: {} as Record<string, string>,
+  faviconAccentCache: {} as FaviconAccentCache,
   backgroundUrlCacheBusy: false,
   backgroundUrlCacheStatus: '',
   backgroundStatus: '',
@@ -307,6 +322,7 @@ let settingsDrawerReturnFocusElement: HTMLElement | null = null
 let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let iconSettingsSaveTimer = 0
+let faviconAccentSaveTimer = 0
 let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
 
@@ -614,6 +630,7 @@ function bindSearchSettingsEvents(): void {
 
 function bindIconSettingsEvents(): void {
   document.getElementById('icon-page-width')?.addEventListener('input', handleIconSettingsChange)
+  document.getElementById('icon-tile-width')?.addEventListener('input', handleIconSettingsChange)
   document.getElementById('icon-shell-size')?.addEventListener('input', handleIconSettingsChange)
   document.getElementById('icon-column-gap')?.addEventListener('input', handleIconSettingsChange)
   document.getElementById('icon-row-gap')?.addEventListener('input', handleIconSettingsChange)
@@ -1959,6 +1976,7 @@ async function saveBookmarkMenuChanges(): Promise<void> {
   }
 
   try {
+    const previousUrl = String(bookmark.url || '').trim()
     const title = state.editTitle.trim() || state.editUrl.trim()
     const url = normalizeBookmarkInputUrl(state.editUrl)
     state.pendingDeleteBookmarkId = ''
@@ -1969,6 +1987,10 @@ async function saveBookmarkMenuChanges(): Promise<void> {
 
     await updateBookmark(bookmark.id, { title, url })
     await persistCustomIconChoice(bookmark.id)
+    if (previousUrl !== url) {
+      await deleteFaviconAccentCacheEntry(bookmark.id)
+      state.faviconRefreshTokens.set(bookmark.id, Date.now())
+    }
     closeBookmarkMenu()
     await refreshNewTab()
   } catch (error) {
@@ -2068,6 +2090,9 @@ async function deleteActiveMenuBookmark(): Promise<void> {
         console.warn('新标签页自定义图标清理失败。', error)
       })
     }
+    await deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
+      console.warn('新标签页网站图标色彩缓存清理失败。', error)
+    })
     await removeBookmarkFromActivity(bookmark.id).catch((error) => {
       console.warn('新标签页打开记录清理失败。', error)
     })
@@ -2171,6 +2196,9 @@ function refreshActiveMenuIcon(): void {
 
   state.pendingDeleteBookmarkId = ''
   state.faviconRefreshTokens.set(bookmark.id, Date.now())
+  void deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
+    console.warn('新标签页网站图标色彩缓存刷新失败。', error)
+  })
   render()
   updateClockText()
   renderBookmarkMenu({ focusFirst: false, focusAction: 'refresh-icon' })
@@ -2219,6 +2247,7 @@ async function refreshNewTab(): Promise<void> {
         STORAGE_KEYS.newTabBackgroundSettings,
         STORAGE_KEYS.newTabSearchSettings,
         STORAGE_KEYS.newTabIconSettings,
+        STORAGE_KEYS.newTabFaviconAccentCache,
         STORAGE_KEYS.newTabGeneralSettings,
         STORAGE_KEYS.newTabFolderSettings,
         STORAGE_KEYS.newTabTimeSettings,
@@ -2241,6 +2270,7 @@ async function refreshNewTab(): Promise<void> {
     state.folderSections = folderSections
     refreshDerivedBookmarkState()
     state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
+    state.faviconAccentCache = normalizeFaviconAccentCache(stored[STORAGE_KEYS.newTabFaviconAccentCache])
     state.activity = normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.allBookmarks)
     state.backgroundSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
@@ -3000,7 +3030,7 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   view.style.setProperty('--icon-column-gap', `${getIconGapPx(state.iconSettings.columnGap)}px`)
   view.style.setProperty('--icon-row-gap', `${getIconRowGapPx(state.iconSettings.rowGap)}px`)
   view.style.setProperty('--icon-folder-gap', `${getFolderGapPx(state.iconSettings.folderGap)}px`)
-  view.style.setProperty('--icon-tile-width', `${state.iconSettings.tileWidth}px`)
+  view.style.setProperty('--icon-tile-width', `${getEffectiveIconTileWidthPx(state.iconSettings)}px`)
   view.style.setProperty('--icon-shell-size', `${state.iconSettings.iconShellSize}px`)
   view.style.setProperty('--icon-fixed-grid-width', `${getFixedIconGridWidthPx(gridSettings)}px`)
   view.style.setProperty('--icon-columns', String(gridSettings.columns))
@@ -3389,14 +3419,15 @@ function getResponsiveIconColumns(settings: IconSettings): number {
     document.documentElement.clientWidth || window.innerWidth || 1280
   )
   const horizontalShellPadding = Math.max(48, Math.min(viewportWidth * 0.1, 144))
+  const tileWidth = getEffectiveIconTileWidthPx(settings)
   const availablePageWidth = Math.max(
-    settings.tileWidth,
+    tileWidth,
     Math.min(getIconPageWidthPx(settings.pageWidth), 1280, viewportWidth - horizontalShellPadding)
   )
   const gap = getIconGapPx(settings.columnGap)
   const maxColumns = Math.max(
     1,
-    Math.floor((availablePageWidth + gap) / (settings.tileWidth + gap))
+    Math.floor((availablePageWidth + gap) / (tileWidth + gap))
   )
 
   return Math.max(1, Math.min(settings.columns, maxColumns))
@@ -3417,6 +3448,10 @@ function createBookmarkTile(
   item.dataset.bookmarkId = String(bookmark.id)
   item.dataset.folderId = folderId
   bindBookmarkNavigation(item, bookmark)
+  const customIcon = state.customIcons[String(bookmark.id)]
+  if (!customIcon) {
+    applyCachedFaviconAccent(item, String(bookmark.id), url)
+  }
   if (String(bookmark.id) === state.draggingBookmarkId && state.dragOriginalOrderIds.length) {
     item.classList.add('dragging')
   }
@@ -3426,7 +3461,6 @@ function createBookmarkTile(
   iconShell.setAttribute('aria-hidden', 'true')
 
   const icon = document.createElement('img')
-  const customIcon = state.customIcons[String(bookmark.id)]
   icon.className = 'bookmark-favicon'
   if (customIcon) {
     icon.classList.add('custom-icon')
@@ -3443,6 +3477,11 @@ function createBookmarkTile(
   icon.addEventListener('error', () => {
     iconShell.classList.add('favicon-missing')
   })
+  if (!customIcon) {
+    icon.addEventListener('load', () => {
+      handleFaviconLoaded(icon, item, String(bookmark.id), url)
+    }, { once: true })
+  }
 
   const fallback = document.createElement('span')
   fallback.className = 'bookmark-fallback'
@@ -3455,6 +3494,89 @@ function createBookmarkTile(
   iconShell.append(icon, fallback)
   item.append(iconShell, label)
   return item
+}
+
+function applyCachedFaviconAccent(item: HTMLElement, bookmarkId: string, url: string): void {
+  const entry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
+  if (!entry) {
+    return
+  }
+
+  applyFaviconAccentToTile(item, entry.color)
+}
+
+function handleFaviconLoaded(
+  icon: HTMLImageElement,
+  item: HTMLElement,
+  bookmarkId: string,
+  url: string
+): void {
+  const cachedEntry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
+  if (cachedEntry) {
+    applyFaviconAccentToTile(item, cachedEntry.color)
+    return
+  }
+
+  const color = extractFaviconAccentColor(icon)
+  if (!color) {
+    return
+  }
+
+  applyFaviconAccentToTile(item, color)
+  state.faviconAccentCache = upsertFaviconAccentCacheEntry(
+    state.faviconAccentCache,
+    bookmarkId,
+    url,
+    color
+  )
+  scheduleFaviconAccentCacheSave()
+}
+
+function extractFaviconAccentColor(icon: HTMLImageElement): FaviconAccentColor | null {
+  if (!icon.naturalWidth || !icon.naturalHeight) {
+    return null
+  }
+
+  const canvas = document.createElement('canvas')
+  const size = Math.min(
+    FAVICON_COLOR_SAMPLE_SIZE,
+    Math.max(icon.naturalWidth, icon.naturalHeight)
+  )
+  canvas.width = size
+  canvas.height = size
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) {
+    return null
+  }
+
+  try {
+    context.clearRect(0, 0, size, size)
+    context.drawImage(icon, 0, 0, size, size)
+    return selectFaviconAccentColor(context.getImageData(0, 0, size, size).data)
+  } catch {
+    return null
+  }
+}
+
+function applyFaviconAccentToTile(item: HTMLElement, color: FaviconAccentColor): void {
+  item.style.setProperty('--bookmark-card-rgb', formatFaviconAccentCssRgb(color))
+}
+
+async function saveFaviconAccentCache(): Promise<void> {
+  state.faviconAccentCache = normalizeFaviconAccentCache(state.faviconAccentCache)
+  await setLocalStorage({
+    [STORAGE_KEYS.newTabFaviconAccentCache]: state.faviconAccentCache
+  })
+}
+
+function scheduleFaviconAccentCacheSave(): void {
+  window.clearTimeout(faviconAccentSaveTimer)
+  faviconAccentSaveTimer = window.setTimeout(() => {
+    faviconAccentSaveTimer = 0
+    void saveFaviconAccentCache().catch((error) => {
+      console.warn('新标签页网站图标色彩缓存保存失败。', error)
+    })
+  }, FAVICON_ACCENT_SAVE_DEBOUNCE_MS)
 }
 
 function bindBookmarkNavigation(
@@ -4155,6 +4277,16 @@ async function saveCustomIcons(nextIcons: Record<string, string>): Promise<void>
   await setLocalStorage({
     [STORAGE_KEYS.newTabCustomIcons]: nextIcons
   })
+}
+
+async function deleteFaviconAccentCacheEntry(bookmarkId: string): Promise<void> {
+  const nextCache = removeFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId)
+  if (nextCache === state.faviconAccentCache) {
+    return
+  }
+
+  state.faviconAccentCache = nextCache
+  await saveFaviconAccentCache()
 }
 
 function normalizeCustomIcons(rawIcons: unknown): Record<string, string> {
@@ -5308,6 +5440,7 @@ function applyFolderSettings(): void {
 
 function readIconSettingsFromControls(): IconSettings {
   const pageWidthInput = document.getElementById('icon-page-width')
+  const tileWidthInput = document.getElementById('icon-tile-width')
   const iconShellSizeInput = document.getElementById('icon-shell-size')
   const columnGapInput = document.getElementById('icon-column-gap')
   const rowGapInput = document.getElementById('icon-row-gap')
@@ -5320,7 +5453,9 @@ function readIconSettingsFromControls(): IconSettings {
     pageWidth: pageWidthInput instanceof HTMLInputElement
       ? Number(pageWidthInput.value)
       : state.iconSettings.pageWidth,
-    tileWidth: state.iconSettings.tileWidth,
+    tileWidth: tileWidthInput instanceof HTMLInputElement
+      ? Number(tileWidthInput.value)
+      : state.iconSettings.tileWidth,
     iconShellSize: iconShellSizeInput instanceof HTMLInputElement
       ? Number(iconShellSizeInput.value)
       : state.iconSettings.iconShellSize,
@@ -5353,6 +5488,7 @@ function readIconSettingsFromControls(): IconSettings {
 function syncIconSettingsControls(): void {
   const settings = state.iconSettings
   const pageWidthInput = document.getElementById('icon-page-width')
+  const tileWidthInput = document.getElementById('icon-tile-width')
   const iconShellSizeInput = document.getElementById('icon-shell-size')
   const columnGapInput = document.getElementById('icon-column-gap')
   const rowGapInput = document.getElementById('icon-row-gap')
@@ -5360,11 +5496,16 @@ function syncIconSettingsControls(): void {
   const columnsInput = document.getElementById('icon-columns')
   const verticalCenterInput = document.getElementById('icon-vertical-center')
   const showTitlesInput = document.getElementById('icon-show-titles')
+  const tileWidthRow = document.getElementById('icon-tile-width-row')
   const titleLinesRow = document.getElementById('icon-title-lines-row')
   const columnsRow = document.getElementById('icon-columns-row')
 
   if (pageWidthInput instanceof HTMLInputElement) {
     pageWidthInput.value = String(settings.pageWidth)
+  }
+  if (tileWidthInput instanceof HTMLInputElement) {
+    tileWidthInput.value = String(settings.tileWidth)
+    tileWidthInput.disabled = !settings.showTitles
   }
   if (iconShellSizeInput instanceof HTMLInputElement) {
     iconShellSizeInput.value = String(settings.iconShellSize)
@@ -5390,6 +5531,7 @@ function syncIconSettingsControls(): void {
   }
 
   setTextContent('icon-page-width-value', `${settings.pageWidth}%`)
+  setTextContent('icon-tile-width-value', `${settings.tileWidth}px`)
   setTextContent('icon-shell-size-value', `${settings.iconShellSize}px`)
   setTextContent('icon-column-gap-value', `${getIconGapPx(settings.columnGap)}px`)
   setTextContent('icon-row-gap-value', `${getIconRowGapPx(settings.rowGap)}px`)
@@ -5398,6 +5540,7 @@ function syncIconSettingsControls(): void {
 
   syncIconSegmentButtons('[data-icon-layout-mode]', settings.layoutMode)
   syncIconSegmentButtons('[data-icon-title-lines]', String(settings.titleLines), !settings.showTitles)
+  tileWidthRow?.classList.toggle('setting-row-disabled', !settings.showTitles)
   titleLinesRow?.classList.toggle('setting-row-disabled', !settings.showTitles)
   columnsRow?.classList.toggle('setting-row-disabled', settings.layoutMode !== 'fixed')
   syncPresetCardSelection()
@@ -5497,6 +5640,13 @@ function syncPresetCardSelection(): void {
 }
 
 function syncIconAdvancedPanel(): void {
+  const tileWidthInput = document.getElementById('icon-tile-width')
+  if (tileWidthInput instanceof HTMLInputElement) {
+    tileWidthInput.title = state.iconSettings.showTitles
+      ? ''
+      : '显示标题时生效'
+  }
+
   const columnsInput = document.getElementById('icon-columns')
   if (columnsInput instanceof HTMLInputElement) {
     columnsInput.title = state.iconSettings.layoutMode === 'fixed'
@@ -5567,18 +5717,20 @@ function renderIconPreview(): void {
   }
 
   const settings = state.iconSettings
-  const previewColumnGap = Math.max(4, Math.round(getIconGapPx(settings.columnGap) * 0.2))
-  const previewRowGap = Math.max(2, Math.round(getIconRowGapPx(settings.rowGap) * 0.2))
-  const previewTileWidth = Math.max(42, Math.round(settings.tileWidth * 0.58))
-  const previewShellSize = Math.max(22, Math.round(settings.iconShellSize * 0.58))
+  const previewColumnGap = Math.max(4, Math.round(getIconGapPx(settings.columnGap) * 0.34))
+  const previewRowGap = Math.max(4, Math.round(getIconRowGapPx(settings.rowGap) * 0.34))
+  const effectiveTileWidth = getEffectiveIconTileWidthPx(settings)
+  const previewTileWidth = Math.max(48, Math.round(effectiveTileWidth * 0.42))
+  const previewShellSize = Math.max(18, Math.round(settings.iconShellSize * 0.62))
   const previewColumns = settings.layoutMode === 'fixed'
-    ? Math.max(3, Math.min(8, settings.columns))
-    : Math.max(3, Math.min(6, Math.round(settings.pageWidth / 14)))
-  const sampleCount = Math.max(6, Math.min(8, previewColumns * 2))
+    ? Math.max(2, Math.min(6, settings.columns))
+    : Math.max(2, Math.min(4, Math.round(settings.pageWidth / 24)))
+  const sampleCount = Math.max(4, Math.min(8, previewColumns * 2))
   const summary = [
     settings.layoutMode === 'fixed' ? `${settings.columns} 列固定` : '自动适配',
-    `${settings.iconShellSize}px 图标`,
-    settings.showTitles ? `${settings.titleLines} 行标题` : '隐藏标题'
+    `${settings.tileWidth}px 卡片`,
+    `${settings.iconShellSize}px 图标区`,
+    settings.showTitles ? `${settings.titleLines} 行标题` : '图标模式'
   ].join(' · ')
 
   preview.dataset.iconLayoutMode = settings.layoutMode
@@ -5604,7 +5756,7 @@ function renderIconPreview(): void {
     shell.className = 'icon-live-preview-shell'
     const mark = document.createElement('span')
     mark.className = 'icon-live-preview-mark'
-    mark.textContent = names[index].slice(0, 1)
+    mark.textContent = names[index]?.slice(0, 1) || '*'
     shell.appendChild(mark)
 
     const title = document.createElement('span')
@@ -5634,13 +5786,13 @@ function renderIconPresetCards(): void {
     const preview = document.createElement('div')
     preview.className = 'icon-preset-preview'
     preview.style.gridTemplateColumns = `repeat(${meta.cols}, 1fr)`
-    preview.style.gap = key === 'compact' ? '2px' : key === 'spacious' ? '4px' : '3px'
+    preview.style.gap = key === 'compact' ? '3px' : key === 'spacious' ? '5px' : '4px'
     preview.style.padding = '0 4px'
 
     for (let i = 0; i < meta.cols * meta.rows; i++) {
       const cell = document.createElement('span')
       cell.className = 'icon-preset-preview-cell'
-      cell.style.height = key === 'compact' ? '10px' : key === 'spacious' ? '14px' : '11px'
+      cell.style.height = key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px'
       preview.appendChild(cell)
     }
 
@@ -6175,8 +6327,14 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 function getFaviconUrl(url: string, bookmarkId = ''): string {
   const refreshToken = bookmarkId ? state.faviconRefreshTokens.get(bookmarkId) : 0
-  const cacheSuffix = refreshToken ? `&refresh=${refreshToken}` : ''
-  return `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(url)}&size=${FAVICON_SIZE}${cacheSuffix}`
+  return buildChromeFaviconUrl(
+    chrome.runtime.getURL('/_favicon/'),
+    url,
+    {
+      size: FAVICON_SIZE,
+      cacheToken: refreshToken
+    }
+  )
 }
 
 function getFallbackLabel(title: string): string {

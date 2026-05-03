@@ -4,6 +4,7 @@ import {
   DEFAULT_ICON_SETTINGS,
   ICON_LAYOUT_PRESETS,
   detectPresetFromValues,
+  getEffectiveIconTileWidthPx,
   getFixedIconGridWidthPx,
   getFolderGapPx,
   getIconGapPx,
@@ -16,8 +17,8 @@ test('normalizes legacy icon settings and fills new layout defaults', () => {
     normalizeIconSettings({
       pageWidth: 70,
       spacing: 12,
-      tileWidth: 84,
-      iconShellSize: 46,
+      tileWidth: 168,
+      iconShellSize: 34,
       preset: 'custom'
     }),
     {
@@ -26,8 +27,8 @@ test('normalizes legacy icon settings and fills new layout defaults', () => {
       columnGap: 12,
       rowGap: 12,
       folderGap: DEFAULT_ICON_SETTINGS.folderGap,
-      tileWidth: 84,
-      iconShellSize: 46,
+      tileWidth: 168,
+      iconShellSize: 34,
       verticalCenter: false,
       preset: 'custom'
     }
@@ -54,10 +55,10 @@ test('bounds invalid icon setting values', () => {
   assert.equal(settings.columnGap, 0)
   assert.equal(settings.rowGap, 100)
   assert.equal(settings.folderGap, 120)
-  assert.equal(settings.tileWidth, 60)
-  assert.equal(settings.iconShellSize, 72)
+  assert.equal(settings.tileWidth, 132)
+  assert.equal(settings.iconShellSize, 48)
   assert.equal(settings.layoutMode, 'fixed')
-  assert.equal(settings.columns, 12)
+  assert.equal(settings.columns, 8)
   assert.equal(settings.verticalCenter, true)
   assert.equal(settings.showTitles, false)
   assert.equal(settings.titleLines, 2)
@@ -102,11 +103,21 @@ test('computes fixed grid width from columns, tile width and gap', () => {
   const settings = normalizeIconSettings({
     layoutMode: 'fixed',
     columns: 4,
-    tileWidth: 80,
+    tileWidth: 180,
     columnGap: 6
   })
   assert.equal(getIconGapPx(6), 20)
   assert.equal(getIconRowGapPx(0), 2)
   assert.equal(getFolderGapPx(999), 120)
-  assert.equal(getFixedIconGridWidthPx(settings), 380)
+  assert.equal(getFixedIconGridWidthPx(settings), 780)
+})
+
+test('shrinks effective tile width when card titles are hidden', () => {
+  const settings = normalizeIconSettings({
+    tileWidth: 220,
+    iconShellSize: 32,
+    showTitles: false
+  })
+
+  assert.equal(getEffectiveIconTileWidthPx(settings), 55)
 })
