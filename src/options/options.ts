@@ -67,6 +67,14 @@ import {
   serializeAiNamingSettings
 } from './sections/ai-settings.js'
 import {
+  createAvailabilityRunScheduler,
+  formatAvailabilityRunnerStatus,
+  getDefaultAvailabilityRunnerStatusCopy,
+  runAvailabilityQueue,
+  type AvailabilityRunOutcome,
+  type AvailabilityRunScheduler
+} from './sections/availability-runner.js'
+import {
   FETCH_TIMEOUT_MS,
   buildNavigationSuccess,
   buildFailureClassification,
@@ -104,7 +112,6 @@ import {
   SECTION_META,
   NAVIGATION_TIMEOUT_MS,
   NAVIGATION_RETRY_TIMEOUT_MS,
-  AVAILABILITY_CONCURRENCY,
   AI_NAMING_DEFAULT_BASE_URL,
   AI_NAMING_DEFAULT_MODEL,
   AI_NAMING_DEFAULT_TIMEOUT_MS,
@@ -1508,6 +1515,7 @@ function resetCurrentAvailabilityRunState() {
   availabilityState.lastCompletedAt = 0
   availabilityState.lastRunOutcome = ''
   availabilityState.runStartedAt = 0
+  availabilityState.runnerStatusCopy = ''
   availabilityState.currentRunProbeEnabled = false
   availabilityState.retestingSelection = false
   availabilityState.retestSelectionTotal = 0
@@ -1703,6 +1711,7 @@ function requestAvailabilityStop() {
 
 async function runAvailabilityDetection({ probeEnabled }) {
   const redirectCacheScope = getCurrentAvailabilityScopeMeta()
+  const scheduler = createAvailabilityRunScheduler()
   availabilityState.running = true
   availabilityState.paused = false
   availabilityState.stopRequested = false
@@ -1710,6 +1719,7 @@ async function runAvailabilityDetection({ probeEnabled }) {
   availabilityState.lastCompletedAt = 0
   availabilityState.lastRunOutcome = ''
   availabilityState.runStartedAt = Date.now()
+  updateAvailabilityRunnerStatus(scheduler)
   availabilityState.runQueue = availabilityState.bookmarks.slice()
   availabilityState.deletedBookmarkIds = new Set()
   availabilityState.abortController = new AbortController()
@@ -1720,41 +1730,30 @@ async function runAvailabilityDetection({ probeEnabled }) {
   renderAvailabilitySection()
 
   try {
-    let nextIndex = 0
-    const workerCount = Math.min(AVAILABILITY_CONCURRENCY, availabilityState.runQueue.length)
-
-    await Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (nextIndex < availabilityState.runQueue.length) {
-          const canContinue = await waitForAvailabilityRun()
-          if (!canContinue) {
-            return
-          }
-
-          const currentIndex = nextIndex
-          nextIndex += 1
-
-          const bookmark = availabilityState.runQueue[currentIndex]
-          if (!bookmark || isBookmarkRemovedDuringRun(bookmark.id)) {
-            continue
-          }
-
-          const result = await inspectBookmarkAvailability(bookmark, { probeEnabled })
-          if (!result) {
-            if (availabilityState.stopRequested) {
-              return
-            }
-            continue
-          }
-
-          if (isBookmarkRemovedDuringRun(result.id)) {
-            continue
-          }
-
-          applyAvailabilityResult(result)
+    await runAvailabilityQueue({
+      items: availabilityState.runQueue,
+      scheduler,
+      getUrl: (bookmark) => bookmark?.url,
+      shouldContinue: waitForAvailabilityRun,
+      shouldSkip: (bookmark) => !bookmark || isBookmarkRemovedDuringRun(bookmark.id),
+      wait: waitForAvailabilityQueueDelay,
+      onWait: () => {
+        updateAvailabilityRunnerStatus(scheduler)
+      },
+      processItem: async (bookmark) => {
+        const result = await inspectBookmarkAvailability(bookmark, { probeEnabled, scheduler })
+        if (!result) {
+          return
         }
-      })
-    )
+
+        if (isBookmarkRemovedDuringRun(result.id)) {
+          return
+        }
+
+        applyAvailabilityResult(result)
+        updateAvailabilityRunnerStatus(scheduler)
+      }
+    })
 
     sortResultsByPath(availabilityState.reviewResults)
     sortResultsByPath(availabilityState.failedResults)
@@ -1776,6 +1775,7 @@ async function runAvailabilityDetection({ probeEnabled }) {
     availabilityState.deletedBookmarkIds = new Set()
     availabilityState.abortController = null
     availabilityState.activeNavigationCheckIds = new Set()
+    updateAvailabilityRunnerStatus(scheduler)
     releaseAvailabilityPauseResolvers()
     try {
       await persistRedirectCacheSnapshot(redirectsCallbacks, {
@@ -1794,14 +1794,29 @@ async function runAvailabilityDetection({ probeEnabled }) {
   }
 }
 
-async function inspectBookmarkAvailability(bookmark, { probeEnabled }) {
+async function inspectBookmarkAvailability(
+  bookmark,
+  {
+    probeEnabled,
+    scheduler = null
+  }: {
+    probeEnabled: boolean
+    scheduler?: AvailabilityRunScheduler | null
+  }
+) {
   if (!(await waitForAvailabilityRun())) {
     return null
   }
 
   const attempts: NavigationAttempt[] = []
+  const timeoutPolicy = scheduler?.getTimeoutPolicy(bookmark?.url) || {
+    navigationTimeoutMs: NAVIGATION_TIMEOUT_MS,
+    retryNavigationTimeoutMs: NAVIGATION_RETRY_TIMEOUT_MS,
+    probeTimeoutMs: FETCH_TIMEOUT_MS
+  }
 
-  const firstNavigation = await runNavigationAttempt(bookmark.url, NAVIGATION_TIMEOUT_MS)
+  const firstNavigation = await runNavigationAttempt(bookmark.url, timeoutPolicy.navigationTimeoutMs)
+  scheduler?.recordOutcome(bookmark.url, getNavigationAttemptRunOutcome(firstNavigation))
   if (availabilityState.stopRequested) {
     return null
   }
@@ -1816,7 +1831,8 @@ async function inspectBookmarkAvailability(bookmark, { probeEnabled }) {
       return null
     }
 
-    const secondNavigation = await runNavigationAttempt(bookmark.url, NAVIGATION_RETRY_TIMEOUT_MS)
+    const secondNavigation = await runNavigationAttempt(bookmark.url, timeoutPolicy.retryNavigationTimeoutMs)
+    scheduler?.recordOutcome(bookmark.url, getNavigationAttemptRunOutcome(secondNavigation))
     if (availabilityState.stopRequested) {
       return null
     }
@@ -1833,7 +1849,8 @@ async function inspectBookmarkAvailability(bookmark, { probeEnabled }) {
       return null
     }
 
-    probe = await probeBookmarkUrl(bookmark.url)
+    probe = await probeBookmarkUrl(bookmark.url, { timeoutMs: timeoutPolicy.probeTimeoutMs })
+    scheduler?.recordOutcome(bookmark.url, getProbeRunOutcome(probe))
     if (availabilityState.stopRequested) {
       return null
     }
@@ -1904,9 +1921,9 @@ function cancelActiveNavigationChecks() {
   })
 }
 
-async function probeBookmarkUrl(url) {
+async function probeBookmarkUrl(url, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
   try {
-    const headResponse = await fetchWithTimeout(url, 'HEAD')
+    const headResponse = await fetchWithTimeout(url, 'HEAD', timeoutMs)
     if (!shouldFallbackToGet(headResponse.status)) {
       return classifyProbeResponse(headResponse, 'HEAD')
     }
@@ -1916,20 +1933,29 @@ async function probeBookmarkUrl(url) {
         kind: 'unknown',
         method: 'HEAD',
         label: '探测超时',
-        detail: `网络探测超时，超过 ${Math.round(FETCH_TIMEOUT_MS / 1000)} 秒仍未返回。`
+        detail: `网络探测超时，超过 ${Math.round(timeoutMs / 1000)} 秒仍未返回。`
       }
     }
   }
 
   try {
-    const getResponse = await fetchWithTimeout(url, 'GET')
+    const getResponse = await fetchWithTimeout(url, 'GET', timeoutMs)
     return classifyProbeResponse(getResponse, 'GET')
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      return {
+        kind: 'unknown',
+        method: 'GET',
+        label: '探测超时',
+        detail: `网络探测超时，超过 ${Math.round(timeoutMs / 1000)} 秒仍未返回。`
+      }
+    }
+
     return classifyProbeError(error)
   }
 }
 
-async function fetchWithTimeout(url, method) {
+async function fetchWithTimeout(url, method, timeoutMs = FETCH_TIMEOUT_MS) {
   const controller = new AbortController()
   const runSignal = availabilityState.abortController?.signal
   const abortCurrentFetch = () => {
@@ -1944,7 +1970,7 @@ async function fetchWithTimeout(url, method) {
 
   const timeoutId = window.setTimeout(() => {
     controller.abort()
-  }, FETCH_TIMEOUT_MS)
+  }, Math.max(1000, Number(timeoutMs) || FETCH_TIMEOUT_MS))
 
   try {
     return await fetch(url, {
@@ -1959,6 +1985,75 @@ async function fetchWithTimeout(url, method) {
     clearTimeout(timeoutId)
     runSignal?.removeEventListener('abort', abortCurrentFetch)
   }
+}
+
+function getNavigationAttemptRunOutcome(attempt: NavigationAttempt | null | undefined): AvailabilityRunOutcome {
+  const statusCode = Number(attempt?.networkEvidence?.statusCode) || extractStatusCodeFromText(attempt?.errorCode) || extractStatusCodeFromText(attempt?.detail)
+  const errorCode = String(attempt?.networkEvidence?.errorCode || attempt?.errorCode || '').trim()
+  const detail = String(attempt?.detail || '').trim()
+
+  if (statusCode === 429) {
+    return { kind: 'throttle', statusCode, errorCode, detail }
+  }
+
+  if (
+    ['timeout', 'net::ERR_TIMED_OUT', 'net::ERR_CONNECTION_TIMED_OUT'].includes(errorCode) ||
+    /timeout|超时/i.test(detail)
+  ) {
+    return { kind: 'timeout', statusCode, errorCode, detail, timedOut: true }
+  }
+
+  if (attempt?.status === 'available') {
+    return { kind: 'success', statusCode, errorCode, detail }
+  }
+
+  return {
+    kind: statusCode ? 'http' : 'network',
+    statusCode,
+    errorCode,
+    detail
+  }
+}
+
+function getProbeRunOutcome(probe): AvailabilityRunOutcome {
+  const statusCode = extractStatusCodeFromText(probe?.label) || extractStatusCodeFromText(probe?.detail)
+  const detail = String(probe?.detail || '').trim()
+
+  if (statusCode === 429) {
+    return { kind: 'throttle', statusCode, detail }
+  }
+
+  if (/timeout|超时/i.test(detail) || String(probe?.label || '').includes('超时')) {
+    return { kind: 'timeout', statusCode, detail, timedOut: true }
+  }
+
+  if (probe?.kind === 'ok') {
+    return { kind: 'success', statusCode, detail }
+  }
+
+  return {
+    kind: statusCode ? 'http' : 'unknown',
+    statusCode,
+    detail
+  }
+}
+
+function extractStatusCodeFromText(value): number {
+  const match = String(value || '').match(/\b(?:HTTP|http-|status\s*)?([1-5][0-9]{2})\b/)
+  return match ? Number(match[1]) || 0 : 0
+}
+
+async function waitForAvailabilityQueueDelay(ms: number): Promise<void> {
+  const delayMs = Math.max(1, Math.round(Number(ms) || 1))
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, delayMs)
+  })
+}
+
+function updateAvailabilityRunnerStatus(scheduler: AvailabilityRunScheduler | null = null) {
+  availabilityState.runnerStatusCopy = scheduler
+    ? formatAvailabilityRunnerStatus(scheduler.getSnapshot())
+    : getDefaultAvailabilityRunnerStatusCopy()
 }
 
 async function fetchWithRequestTimeout(url, options: RequestInit = {}, timeoutMs = AI_NAMING_DEFAULT_TIMEOUT_MS) {
@@ -2686,6 +2781,7 @@ function buildAvailabilitySummaryText() {
     'Curator Bookmark 可用性检测摘要',
     `范围：${scopeMeta.label}`,
     `状态：${getAvailabilitySummaryRunStatus()}`,
+    `速度：${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`,
     `全部书签：${availabilityState.totalBookmarks}`,
     `可检测：http/https ${availabilityState.eligibleBookmarks}`,
     `进度：${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`,
@@ -7347,36 +7443,39 @@ async function retestSelectedAvailabilityResults() {
   availabilityState.retestSelectionTotal = targetBookmarks.length
   availabilityState.retestSelectionCompleted = 0
   availabilityState.retestSelectionProbeEnabled = probeEnabled
+  const scheduler = createAvailabilityRunScheduler()
+  updateAvailabilityRunnerStatus(scheduler)
   renderAvailabilitySection()
 
   let processedCount = 0
 
   try {
-    let nextIndex = 0
-    const workerCount = Math.min(AVAILABILITY_CONCURRENCY, targetBookmarks.length)
-
-    await Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (nextIndex < targetBookmarks.length) {
-          const currentIndex = nextIndex
-          nextIndex += 1
-
-          const bookmark = targetBookmarks[currentIndex]
-          try {
-            if (bookmark && !isBookmarkRemovedDuringRun(bookmark.id)) {
-              const result = await inspectBookmarkAvailability(bookmark, { probeEnabled })
-              if (result && !isBookmarkRemovedDuringRun(result.id)) {
-                applyRetestedAvailabilityResult(result)
-                processedCount += 1
-              }
-            }
-          } finally {
-            availabilityState.retestSelectionCompleted += 1
-            scheduleAvailabilityRender()
-          }
+    await runAvailabilityQueue({
+      items: targetBookmarks,
+      scheduler,
+      getUrl: (bookmark) => bookmark?.url,
+      shouldSkip: (bookmark) => !bookmark,
+      wait: waitForAvailabilityQueueDelay,
+      onWait: () => {
+        updateAvailabilityRunnerStatus(scheduler)
+      },
+      onItemSettled: () => {
+        availabilityState.retestSelectionCompleted += 1
+        updateAvailabilityRunnerStatus(scheduler)
+        scheduleAvailabilityRender()
+      },
+      processItem: async (bookmark) => {
+        if (isBookmarkRemovedDuringRun(bookmark.id)) {
+          return
         }
-      })
-    )
+
+        const result = await inspectBookmarkAvailability(bookmark, { probeEnabled, scheduler })
+        if (result && !isBookmarkRemovedDuringRun(result.id)) {
+          applyRetestedAvailabilityResult(result)
+          processedCount += 1
+        }
+      }
+    })
 
     sortResultsByPath(availabilityState.reviewResults)
     sortResultsByPath(availabilityState.failedResults)
@@ -7403,6 +7502,7 @@ async function retestSelectedAvailabilityResults() {
     availabilityState.retestSelectionTotal = 0
     availabilityState.retestSelectionCompleted = 0
     availabilityState.retestSelectionProbeEnabled = false
+    updateAvailabilityRunnerStatus(scheduler)
     renderAvailabilitySection()
   }
 }
@@ -8183,10 +8283,10 @@ function getModeCopyText() {
   }
 
   if (availabilityState.probePermissionGranted) {
-    return `当前会按“后台导航 -> 失败重试 -> 网络探测”三层方式校验。后台导航单条超时 ${Math.round(NAVIGATION_TIMEOUT_MS / 1000)} 秒，重试超时 ${Math.round(NAVIGATION_RETRY_TIMEOUT_MS / 1000)} 秒。`
+    return `当前会按“后台导航 -> 失败重试 -> 网络探测”三层方式校验。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
   }
 
-  return '当前默认会先做后台导航检测。点击开始检测时会尝试申请第二层网络探测权限；如果未授权，系统仍会继续做后台导航检测。'
+  return `当前默认会先做后台导航检测。点击开始检测时会尝试申请第二层网络探测权限；如果未授权，系统仍会继续做后台导航检测。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
 }
 
 function getAvailabilityResultRecommendation(result): string {
@@ -8269,10 +8369,10 @@ function getAvailabilityStatusCopy() {
     }
 
     if (availabilityState.currentRunProbeEnabled) {
-      return `本轮依次执行后台导航、失败重试和网络探测。后台导航超时 ${Math.round(NAVIGATION_TIMEOUT_MS / 1000)} 秒，重试超时 ${Math.round(NAVIGATION_RETRY_TIMEOUT_MS / 1000)} 秒。`
+      return `本轮依次执行后台导航、失败重试和网络探测。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
     }
 
-    return `本轮仅执行后台导航和失败重试，因为未启用第二层网络探测。后台导航超时 ${Math.round(NAVIGATION_TIMEOUT_MS / 1000)} 秒，重试超时 ${Math.round(NAVIGATION_RETRY_TIMEOUT_MS / 1000)} 秒。`
+    return `本轮仅执行后台导航和失败重试，因为未启用第二层网络探测。${availabilityState.runnerStatusCopy || getDefaultAvailabilityRunnerStatusCopy()}`
   }
 
   if (availabilityState.lastCompletedAt) {

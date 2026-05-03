@@ -119,6 +119,7 @@ export const availabilityState = {
   lastCompletedAt: 0,
   lastRunOutcome: '',
   lastError: '',
+  runnerStatusCopy: '',
   summaryCopyStatus: '',
   summaryCopyStatusTone: 'muted'
 }
