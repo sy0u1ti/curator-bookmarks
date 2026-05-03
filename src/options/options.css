@@ -1842,14 +1842,10 @@ a {
   inset: 0;
   z-index: 0;
   border-radius: inherit;
-  -webkit-backdrop-filter: blur(16px) saturate(120%);
-  backdrop-filter: blur(16px) saturate(120%);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.036), rgba(255, 255, 255, 0.012)),
+    rgba(18, 18, 20, 0.42);
   pointer-events: none;
-}
-
-.dashboard-card-grid.is-scrolling .dashboard-bookmark-card::before {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
 }
 
 .dashboard-bookmark-card.tags-expanded {

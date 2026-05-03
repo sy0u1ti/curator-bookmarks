@@ -84,7 +84,7 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   assert.equal(firstWindow.columnCount, 3)
   assert.equal(firstWindow.startIndex, 0)
   assert.ok(
-    getDashboardVirtualRenderedCount(firstWindow) <= 54,
+    getDashboardVirtualRenderedCount(firstWindow) <= 90,
     'initial dashboard window should render only visible rows plus overscan'
   )
   assert.ok(firstWindow.totalHeight > 600000)
@@ -103,7 +103,7 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   assert.ok(scrolledWindow.startIndex > 0)
   assert.ok(scrolledWindow.offsetY > 0)
   assert.ok(
-    getDashboardVirtualRenderedCount(scrolledWindow) <= 54,
+    getDashboardVirtualRenderedCount(scrolledWindow) <= 90,
     'scrolled dashboard window should keep DOM card count bounded'
   )
 })
@@ -141,8 +141,8 @@ test('dashboard folder sidebar layout and active styles are defined', () => {
   assert.match(optionsCss, /\.dashboard-folder-tree[^{}]*\.(?:active|current)\s*\{/)
   assert.match(optionsCss, /\.dashboard-panel\[data-dashboard-ready="false"\]\s+\.dashboard-loading-screen\s*\{[\s\S]*?opacity:\s*1/)
   assert.match(optionsCss, /\.dashboard-panel\[data-dashboard-ready="false"\]\s+\.dashboard-results-group\s*\{[\s\S]*?opacity:\s*0/)
-  assert.match(optionsCss, /\.dashboard-bookmark-card::before\s*\{[\s\S]*?backdrop-filter:\s*blur/)
-  assert.match(optionsCss, /\.dashboard-card-grid\.is-scrolling\s+\.dashboard-bookmark-card::before\s*\{[\s\S]*?backdrop-filter:\s*none/)
+  assert.match(optionsCss, /\.dashboard-bookmark-card::before\s*\{[\s\S]*?background:\s*[\s\S]*?rgba\(18,\s*18,\s*20,\s*0\.42\)/)
+  assert.doesNotMatch(optionsCss, /\.dashboard-card-grid\.is-scrolling\s+\.dashboard-bookmark-card::before/)
   assert.match(optionsCss, /\.dashboard-card-grid\.is-virtualized\s*\{[\s\S]*?overflow-anchor:\s*none/)
   assert.match(optionsCss, /\.dashboard-card-grid\s*\{[\s\S]*?scrollbar-gutter:\s*stable/)
   assert.match(

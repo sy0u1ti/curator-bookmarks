@@ -73,7 +73,6 @@ interface DashboardVirtualState {
   renderedItems: DashboardItem[] | null
   frame: number
   sectionFrame: number
-  scrollIdleTimer: number
   resetScrollOnNextRender: boolean
   resizeObserver: ResizeObserver | null
   observedElement: HTMLElement | null
@@ -126,7 +125,7 @@ export const DASHBOARD_DRAG_MOVE_THRESHOLD = 4
 const DASHBOARD_CARD_HEIGHT = 176
 const DASHBOARD_GRID_GAP = 10
 const DASHBOARD_CARD_MIN_WIDTH = 340
-const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 6
+const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 12
 const DASHBOARD_VIRTUAL_THRESHOLD = 120
 
 let dashboardStatusTimer = 0
@@ -163,7 +162,6 @@ const virtualState: DashboardVirtualState = {
   renderedItems: null,
   frame: 0,
   sectionFrame: 0,
-  scrollIdleTimer: 0,
   resetScrollOnNextRender: false,
   resizeObserver: null,
   observedElement: null
@@ -1562,14 +1560,16 @@ function renderDashboardCards(items: DashboardItem[]): void {
   virtualState.rowStride = virtualWindow.rowStride
 
   if (canReuseDashboardVirtualShell(items, virtualWindow, viewportWindow)) {
-    const stableRenderedItems = items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
-    const stableRenderedIds = new Set(stableRenderedItems.map((item) => String(item.id)))
     const spacer = dom.dashboardResults.querySelector<HTMLElement>('.dashboard-virtual-spacer')
     if (spacer) {
       spacer.style.height = `${Math.ceil(virtualWindow.totalHeight)}px`
     }
-    reconcileDashboardTransientUiWithRenderedItems(stableRenderedIds)
-    updateDashboardFloatingEditorPosition(stableRenderedIds)
+    if (dashboardState.expandedTagIds.size || dashboardState.tagEditorBookmarkId) {
+      const stableRenderedItems = items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
+      const stableRenderedIds = new Set(stableRenderedItems.map((item) => String(item.id)))
+      reconcileDashboardTransientUiWithRenderedItems(stableRenderedIds)
+      updateDashboardFloatingEditorPosition(stableRenderedIds)
+    }
     return
   }
 
@@ -1740,15 +1740,6 @@ function handleDashboardVirtualScroll(): void {
   if (!container?.classList.contains('is-virtualized')) {
     return
   }
-
-  container.classList.add('is-scrolling')
-  if (virtualState.scrollIdleTimer) {
-    window.clearTimeout(virtualState.scrollIdleTimer)
-  }
-  virtualState.scrollIdleTimer = window.setTimeout(() => {
-    virtualState.scrollIdleTimer = 0
-    container.classList.remove('is-scrolling')
-  }, 140)
 
   virtualState.scrollTop = container.scrollTop
   scheduleDashboardVirtualRender()
