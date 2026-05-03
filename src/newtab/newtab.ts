@@ -328,7 +328,6 @@ let iconSettingsSaveTimer = 0
 let faviconAccentSaveTimer = 0
 let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
-let bookmarkDropIndicator: HTMLElement | null = null
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents()
@@ -1257,6 +1256,7 @@ function beginBookmarkDrag(): void {
   const sourceTile = getActiveDragTile()
   createBookmarkDragGhost(sourceTile)
   sourceTile?.classList.add('dragging')
+  syncBookmarkDragPreviewOrder()
 }
 
 function handleBookmarkPointerMove(event: PointerEvent): void {
@@ -1334,7 +1334,6 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   state.dragOriginalOrderIds = []
   state.dragPendingInsertIndex = -1
   removeBookmarkDragGhost()
-  removeBookmarkDropIndicator()
   document.body.classList.remove('bookmark-dragging')
 
   if (keepSuppressClick) {
@@ -1447,8 +1446,15 @@ function removeBookmarkDragGhost(): void {
 }
 
 function setBookmarkDragPendingInsertIndex(insertIndex: number): void {
-  state.dragPendingInsertIndex = hasBookmarkInsertChange(insertIndex) ? insertIndex : -1
-  updateBookmarkDropIndicator()
+  const nextInsertIndex = hasBookmarkInsertChange(insertIndex) ? insertIndex : -1
+  if (state.dragPendingInsertIndex === nextInsertIndex) {
+    return
+  }
+
+  const previousRects = getBookmarkDragPreviewRects()
+  state.dragPendingInsertIndex = nextInsertIndex
+  syncBookmarkDragPreviewOrder()
+  animateBookmarkDragPreviewShift(previousRects)
 }
 
 function getActiveBookmarkFolderSection(): NewTabFolderSection | null {
@@ -1532,6 +1538,122 @@ function hasBookmarkInsertChange(insertIndex: number): boolean {
   return !areStringArraysEqual(currentOrderIds, finalOrderIds)
 }
 
+function getPreviewBookmarkOrderIds(): string[] {
+  const currentOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
+  if (state.dragPendingInsertIndex < 0 || !state.draggingBookmarkId) {
+    return currentOrderIds
+  }
+
+  return buildBookmarkOrderAfterInsert(
+    currentOrderIds,
+    state.draggingBookmarkId,
+    state.dragPendingInsertIndex
+  )
+}
+
+function syncBookmarkDragPreviewOrder(): void {
+  const section = getActiveBookmarkFolderSection()
+  if (!section) {
+    return
+  }
+
+  const grid = document.querySelector<HTMLElement>(
+    `.bookmark-grid[data-bookmark-grid-folder-id="${CSS.escape(section.id)}"]`
+  )
+  if (!grid) {
+    return
+  }
+
+  const tileByBookmarkId = new Map<string, HTMLElement>()
+  for (const tile of grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]')) {
+    const bookmarkId = String(tile.dataset.bookmarkId || '')
+    if (bookmarkId) {
+      tileByBookmarkId.set(bookmarkId, tile)
+    }
+  }
+
+  const orderedTiles: HTMLElement[] = []
+  for (const bookmarkId of getPreviewBookmarkOrderIds()) {
+    const tile = tileByBookmarkId.get(bookmarkId)
+    if (!tile) {
+      return
+    }
+    orderedTiles.push(tile)
+  }
+
+  if (orderedTiles.length !== tileByBookmarkId.size) {
+    return
+  }
+
+  const currentOrderIds = Array
+    .from(grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]'))
+    .map((tile) => String(tile.dataset.bookmarkId || ''))
+  const nextOrderIds = orderedTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
+  if (areStringArraysEqual(currentOrderIds, nextOrderIds)) {
+    return
+  }
+
+  for (const tile of orderedTiles) {
+    grid.appendChild(tile)
+  }
+}
+
+function getBookmarkDragPreviewRects(): Map<string, DOMRect> {
+  const rects = new Map<string, DOMRect>()
+  if (!state.draggingBookmarkFolderId) {
+    return rects
+  }
+
+  for (const tile of document.querySelectorAll<HTMLElement>(
+    `.bookmark-tile[data-bookmark-id][data-folder-id="${CSS.escape(state.draggingBookmarkFolderId)}"]`
+  )) {
+    const bookmarkId = String(tile.dataset.bookmarkId || '')
+    if (bookmarkId) {
+      rects.set(bookmarkId, tile.getBoundingClientRect())
+    }
+  }
+
+  return rects
+}
+
+function animateBookmarkDragPreviewShift(previousRects: Map<string, DOMRect>): void {
+  if (!previousRects.size || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    return
+  }
+
+  for (const tile of document.querySelectorAll<HTMLElement>(
+    `.bookmark-tile[data-bookmark-id][data-folder-id="${CSS.escape(state.draggingBookmarkFolderId)}"]`
+  )) {
+    const bookmarkId = String(tile.dataset.bookmarkId || '')
+    if (!bookmarkId || bookmarkId === state.draggingBookmarkId) {
+      continue
+    }
+
+    const previousRect = previousRects.get(bookmarkId)
+    if (!previousRect) {
+      continue
+    }
+
+    const currentRect = tile.getBoundingClientRect()
+    const deltaX = previousRect.left - currentRect.left
+    const deltaY = previousRect.top - currentRect.top
+    if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) {
+      continue
+    }
+
+    tile.animate(
+      [
+        { transform: `translate3d(${deltaX}px, ${deltaY}px, 0)` },
+        { transform: 'translate3d(0, 0, 0)' }
+      ],
+      {
+        duration: 150,
+        easing: 'cubic-bezier(0.22, 0.72, 0.18, 1)'
+      }
+    )
+  }
+}
+
 function applyDraggedBookmarkInsertInState(insertIndex: number): string[] {
   const currentBookmarks = getActiveBookmarkFolderBookmarks()
   const currentOrderIds = currentBookmarks.map((bookmark) => String(bookmark.id))
@@ -1556,112 +1678,6 @@ function applyDraggedBookmarkInsertInState(insertIndex: number): string[] {
 
   setActiveBookmarkFolderBookmarks(nextBookmarks)
   return finalOrderIds
-}
-
-function updateBookmarkDropIndicator(): void {
-  if (!state.draggingBookmarkId || state.dragPendingInsertIndex < 0) {
-    removeBookmarkDropIndicator()
-    return
-  }
-
-  const rect = getBookmarkDropIndicatorRect(state.dragPendingInsertIndex)
-  if (!rect) {
-    removeBookmarkDropIndicator()
-    return
-  }
-
-  const indicator = ensureBookmarkDropIndicator()
-  indicator.style.width = `${rect.width}px`
-  indicator.style.height = `${rect.height}px`
-  indicator.style.transform = `translate3d(${rect.left}px, ${rect.top}px, 0)`
-}
-
-function ensureBookmarkDropIndicator(): HTMLElement {
-  if (bookmarkDropIndicator) {
-    return bookmarkDropIndicator
-  }
-
-  const indicator = document.createElement('div')
-  indicator.className = 'bookmark-drop-indicator'
-  indicator.setAttribute('aria-hidden', 'true')
-  bookmarkDropIndicator = indicator
-  document.body.appendChild(indicator)
-  return indicator
-}
-
-function removeBookmarkDropIndicator(): void {
-  bookmarkDropIndicator?.remove()
-  bookmarkDropIndicator = null
-}
-
-function getBookmarkDropIndicatorRect(insertIndex: number): { left: number; top: number; width: number; height: number } | null {
-  const folderId = state.draggingBookmarkFolderId
-  if (!folderId) {
-    return null
-  }
-
-  const grid = document.querySelector<HTMLElement>(
-    `.bookmark-grid[data-bookmark-grid-folder-id="${CSS.escape(folderId)}"]`
-  )
-  if (!grid) {
-    return null
-  }
-
-  const currentOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
-  const finalOrderIds = buildBookmarkOrderAfterInsert(
-    currentOrderIds,
-    state.draggingBookmarkId,
-    insertIndex
-  )
-  const slotIndex = finalOrderIds.findIndex((bookmarkId) => bookmarkId === state.draggingBookmarkId)
-  if (slotIndex < 0) {
-    return null
-  }
-
-  const nonDraggedTiles = Array
-    .from(grid.querySelectorAll<HTMLElement>(':scope > .bookmark-tile[data-bookmark-id]'))
-    .filter((tile) => String(tile.dataset.bookmarkId || '') !== state.draggingBookmarkId)
-  if (!nonDraggedTiles.length) {
-    return null
-  }
-
-  const markerWidth = 3
-  const tileBefore = nonDraggedTiles[slotIndex - 1] || null
-  const tileAfter = nonDraggedTiles[slotIndex] || null
-  const anchorTile = tileAfter || tileBefore
-  if (!anchorTile) {
-    return null
-  }
-
-  const anchorRect = anchorTile.getBoundingClientRect()
-  const height = Math.max(24, anchorRect.height - 10)
-  const top = anchorRect.top + (anchorRect.height - height) / 2
-
-  if (tileBefore && tileAfter) {
-    const beforeRect = tileBefore.getBoundingClientRect()
-    const afterRect = tileAfter.getBoundingClientRect()
-    const sameRow = Math.abs(beforeRect.top - afterRect.top) <= Math.min(beforeRect.height, afterRect.height) * 0.5
-    const left = sameRow
-      ? (beforeRect.right + afterRect.left - markerWidth) / 2
-      : afterRect.left - markerWidth - 6
-    return {
-      left,
-      top: sameRow
-        ? Math.min(beforeRect.top, afterRect.top) + (Math.min(beforeRect.height, afterRect.height) - height) / 2
-        : top,
-      width: markerWidth,
-      height
-    }
-  }
-
-  return {
-    left: tileAfter
-      ? anchorRect.left - markerWidth - 6
-      : anchorRect.right + 6,
-    top,
-    width: markerWidth,
-    height
-  }
 }
 
 async function persistBookmarkOrder(

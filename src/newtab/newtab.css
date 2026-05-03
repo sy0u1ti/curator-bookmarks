@@ -1314,19 +1314,6 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible {
   transform: none;
 }
 
-.bookmark-drop-indicator {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 118;
-  border-radius: 999px;
-  background: rgba(245, 245, 247, 0.86);
-  box-shadow: 0 0 0 1px rgba(5, 5, 6, 0.58), 0 10px 24px rgba(0, 0, 0, 0.32);
-  pointer-events: none;
-  transition: none;
-  will-change: transform;
-}
-
 .bookmark-tile:focus-visible {
   outline: 2px solid rgba(245, 245, 247, 0.38);
   outline-offset: 3px;
