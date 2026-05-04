@@ -1910,6 +1910,10 @@ function renderFolderNode(node, depth) {
     isPinnedRoot || state.expandedFolders.has(node.id)
   const children = Array.isArray(node.children) ? node.children : []
   const folderInfo = state.folderMap.get(node.id)
+  const toggleLabel = getPopupFolderToggleLabel(
+    isExpanded ? '折叠文件夹' : '展开文件夹',
+    folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderInfo.title : node.title
+  )
   const childMarkup = isExpanded
     ? children
         .map((child) => {
@@ -1930,7 +1934,7 @@ function renderFolderNode(node, depth) {
         class="tree-toggle ${isExpanded ? 'expanded' : ''}"
         type="button"
         data-toggle-folder="${escapeAttr(node.id)}"
-        aria-label="${isExpanded ? '折叠文件夹' : '展开文件夹'}"
+        aria-label="${escapeAttr(toggleLabel)}"
       ></button>
     `
 
@@ -2032,6 +2036,11 @@ function renderSearchResults() {
 function getBookmarkActionMenuLabel(bookmark) {
   const title = cleanSmartText(bookmark?.title || '未命名书签', 48)
   return `打开 ${title} 的操作菜单`
+}
+
+function getPopupFolderToggleLabel(action, folderPath) {
+  const target = cleanSmartText(folderPath || '未命名文件夹', 72)
+  return `${action}：${target || '未命名文件夹'}`
 }
 
 function renderActionMenu(bookmarkId) {
@@ -2399,6 +2408,7 @@ function renderSmartFolderNode(node, depth, query) {
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
   const saving = state.smartSaving || isPopupActionPending('save-current-page', node.id)
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
 
   return `
     <div class="picker-row" style="--depth:${depth}">
@@ -2410,7 +2420,7 @@ function renderSmartFolderNode(node, depth, query) {
         role="treeitem"
         aria-level="${depth + 1}"
         aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
-        aria-label="${isExpanded ? '折叠文件夹' : '展开文件夹'}"
+        aria-label="${escapeAttr(toggleLabel)}"
       ></button>
       <button
         class="picker-folder-card"
@@ -2461,6 +2471,7 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
   const isCurrentFolder = bookmark.parentId === node.id
   const moving = isPopupActionPending('move', bookmark.id)
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
 
   return `
     <div class="picker-row ${isCurrentFolder ? 'current' : ''}" style="--depth:${depth}">
@@ -2472,7 +2483,7 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
         role="treeitem"
         aria-level="${depth + 1}"
         aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
-        aria-label="${isExpanded ? '折叠文件夹' : '展开文件夹'}"
+        aria-label="${escapeAttr(toggleLabel)}"
       ></button>
       <button
         class="picker-folder-card"
