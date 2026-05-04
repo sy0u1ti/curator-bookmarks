@@ -134,6 +134,15 @@ test('popup startup uses light snapshot search metadata instead of full snapshot
 
 test('popup folder pickers expose option and treeitem semantics', () => {
   assert.match(popupHtml, /id="folder-breadcrumbs"[^>]+aria-label="当前文件夹路径"/)
+  const filterSearchInput = popupHtml.match(/<input[\s\S]*?id="filter-search-input"[\s\S]*?>/)?.[0] || ''
+  assert.match(filterSearchInput, /aria-label="搜索筛选文件夹"/)
+  assert.match(filterSearchInput, /aria-controls="filter-folder-list"/)
+  const moveSearchInput = popupHtml.match(/<input[\s\S]*?id="move-search-input"[\s\S]*?>/)?.[0] || ''
+  assert.match(moveSearchInput, /aria-label="搜索移动目标文件夹"/)
+  assert.match(moveSearchInput, /aria-controls="move-folder-list"/)
+  const smartFolderSearchInput = popupHtml.match(/<input[\s\S]*?id="smart-folder-search-input"[\s\S]*?>/)?.[0] || ''
+  assert.match(smartFolderSearchInput, /aria-label="搜索保存目标文件夹"/)
+  assert.match(smartFolderSearchInput, /aria-controls="smart-folder-list"/)
   assert.match(popupHtml, /id="filter-folder-list"[^>]+role="listbox"[^>]+aria-label="筛选文件夹候选列表"/)
   assert.match(popupHtml, /id="move-folder-list"[^>]+role="tree"[^>]+aria-label="移动目标文件夹"/)
   assert.match(popupHtml, /id="smart-folder-list"[^>]+role="tree"[^>]+aria-label="保存目标文件夹"/)
