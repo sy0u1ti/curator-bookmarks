@@ -7,7 +7,7 @@
 - 集成分支：`integration/goal-final-polish-20260504`
 - 集成 worktree：`/mnt/g/coding/worktrees/goal-final-polish-20260504`
 - 基线：`main@11582da` / `v1.4.23`
-- 当前集成代码状态：在 `d4cb535` 基础上继续追加 popup 内容快照存储模块预加载瘦身；报告最新提交以 `git log -1 --oneline` 为准。
+- 当前集成代码状态：在 `e33821c` 基础上继续追加自动分析队列失败唤醒修正；报告最新提交以 `git log -1 --oneline` 为准。
 
 本轮采用多 agent 分支审查与修复流程，覆盖性能、UI、功能、人性化体验、构建安全五个可合并改动方向。主工作区 `/mnt/g/coding/chromebookmark` 保持在 `main@11582da`，未合并到 `main`。
 
@@ -66,6 +66,12 @@
   - 影响：popup 首屏只需要内容快照设置、索引 normalizer 和轻量搜索文本，但静态依赖完整 `content-snapshots` 会把 IndexedDB 全文读取、保存、删除等低频能力带入首屏预加载。
   - 建议：拆出轻量内容快照搜索入口；只有全文 warmup 或保存/删除快照时再加载完整存储模块。
   - 处理：已完成，popup 默认 `modulepreload` 不再包含完整 `content-snapshots-*`，只保留首屏搜索需要的轻量 `content-snapshot-search-*`。
+
+- [低] 性能/功能：自动分析失败后可能安排无意义队列唤醒
+  - 位置：`src/service-worker/service-worker.ts` / `markAutoAnalyzeQueueEntryFailed`
+  - 影响：队列条目达到最大重试次数被移除，或下一条剩余任务有更晚 `nextRunAt` 时，仍固定按 `AUTO_ANALYZE_QUEUE_RETRY_MS` 创建闹钟，造成 service worker 无意义唤醒。
+  - 建议：失败写回后基于更新后的剩余队列重新计算下一次唤醒。
+  - 处理：已完成，`markAutoAnalyzeQueueEntryFailed` 使用 `scheduleNextAutoAnalyzeQueueWake(nextQueue)`。
 
 - [高] 功能：标签索引并发写入可能覆盖字段
   - 位置：`src/shared/bookmark-tags.ts`
@@ -184,6 +190,15 @@
    - 严重程度：低
    - 推荐优化方向：新增轻量 `content-snapshot-search` 模块承载类型、normalizer 和 search text formatter；完整 `content-snapshots` 仅在全文 warmup、options 或 service worker 保存/删除路径使用。
    - 是否需要 benchmark 或 profile 验证：当前通过构建产物、focused tests 和 `npm run validate` 验证；后续可用 Chrome Performance 对 popup 冷启动做实测。
+   - 处理状态：已修复。
+
+10. 自动分析失败后可能安排无意义队列唤醒
+   - 问题位置：`src/service-worker/service-worker.ts` / `markAutoAnalyzeQueueEntryFailed`
+   - 问题描述：失败重试写回队列后，旧实现始终调用 `scheduleAutoAnalyzeQueueAlarm(AUTO_ANALYZE_QUEUE_RETRY_MS)`，没有考虑失败条目可能已达到最大次数被移除，也没有按剩余队列中最早 `nextRunAt` 调度。
+   - 影响范围：自动书签分析失败或临时网络/AI 错误场景。
+   - 严重程度：低
+   - 推荐优化方向：复用 `scheduleNextAutoAnalyzeQueueWake`，用更新后的队列决定是否清除闹钟或安排准确的下一次唤醒。
+   - 是否需要 benchmark 或 profile 验证：无需 benchmark；已用 focused test 和全量验证覆盖。
    - 处理状态：已修复。
 
 ## 四、UI 审查结果
@@ -318,8 +333,8 @@
   - 影响范围：newtab/options/popup UI 与可访问性。
   - 测试方式：`npm test`、`npm run typecheck`
 
-- 集成分支补充优化 / `5a8589c`、`32d636d`、`323898b`、`4699fb9`、`d88164f`、`0e7bd5c`、`b185052`、`87f4f3c`、`d4cb535`、popup 内容快照存储模块预加载瘦身提交
-  - 实现思路：修复 popup 窄视口横向溢出；将 newtab 搜索重 chunk 改为按需加载，并保留轻量同步建议；将 newtab 标签索引读取改为轻量 storage normalizer；内联 newtab loading SVG 和关闭动效 helper；将回收站删除/撤销模块改为按需加载；将启动读书签树改为本页轻量 wrapper，书签移动、编辑、新建、撤销恢复等写操作通过 `bookmarks-api` 动态加载；将 popup 自然语言搜索、智能分类网页内容抽取、AI 设置归一化、AI 响应解析、Inbox 状态模块、回收站事务 helper 和完整内容快照存储模块改为触发对应功能后再加载或通过轻量常量/搜索入口解耦，移除首屏非必要运行时预加载。
+- 集成分支补充优化 / `5a8589c`、`32d636d`、`323898b`、`4699fb9`、`d88164f`、`0e7bd5c`、`b185052`、`87f4f3c`、`d4cb535`、`e33821c`、自动分析队列失败唤醒修正提交
+  - 实现思路：修复 popup 窄视口横向溢出；将 newtab 搜索重 chunk 改为按需加载，并保留轻量同步建议；将 newtab 标签索引读取改为轻量 storage normalizer；内联 newtab loading SVG 和关闭动效 helper；将回收站删除/撤销模块改为按需加载；将启动读书签树改为本页轻量 wrapper，书签移动、编辑、新建、撤销恢复等写操作通过 `bookmarks-api` 动态加载；将 popup 自然语言搜索、智能分类网页内容抽取、AI 设置归一化、AI 响应解析、Inbox 状态模块、回收站事务 helper 和完整内容快照存储模块改为触发对应功能后再加载或通过轻量常量/搜索入口解耦；自动分析失败后按剩余队列重新计算下一次唤醒，移除首屏和后台队列的非必要运行成本。
   - 影响范围：`src/popup/popup.css`、`src/popup/popup.ts`、`src/newtab/content-state.ts`、`src/newtab/newtab.ts`、相关测试。
   - 测试方式：focused tests、`npm test`、`npm run validate`、Playwright 产物/搜索冒烟。
 
@@ -335,7 +350,7 @@
 - `npm audit --json`：0 vulnerabilities。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过；当前脚本等价于 `npm run typecheck`。
-- `npm test`：316/316 通过。
+- `npm test`：317/317 通过。
 - `npm run check:version`：通过，版本 `1.4.23`。
 - `npm run build`：通过。
 - `npm run validate`：通过，覆盖 typecheck、test、check:version、build。
@@ -345,6 +360,9 @@
 - focused newtab 搜索测试：通过。
   - `node --test .tmp-test/tests/newtab-search-index.test.js .tmp-test/tests/newtab-content-state.test.js`：53/53 通过。
   - 覆盖轻量同步建议缓存、自然语言搜索动态 import、pinyin 动态搜索、无匹配网页搜索 fallback。
+- focused service worker 队列测试：通过。
+  - `npm run test:build && node --test .tmp-test/tests/service-worker-save-guards.test.js .tmp-test/tests/ai-settings.test.js`：9/9 通过。
+  - 覆盖自动分析队列复用树快照、失败后按剩余队列状态重新安排唤醒、AI 设置序列化。
 - Playwright 扩展冒烟：通过。
   - 实际加载 `dist` 扩展。
   - newtab：`#newtab-root` 可见，无 pageerror/console error。
@@ -403,6 +421,7 @@
 - popup Inbox 筛选标题改走轻量常量入口，AI 响应 helper 改为请求触发后按需加载，避免默认打开 popup 时预加载 `inbox` 和 `ai-response`。
 - popup 回收站事务 helper 改为删除/撤销删除触发后按需加载，避免默认打开 popup 时预加载 `recycle-bin`。
 - popup 内容快照搜索拆出轻量入口，完整快照存储和 IndexedDB 全文读取模块改为全文 warmup 或保存/删除路径按需加载，避免默认打开 popup 时预加载完整 `content-snapshots`。
+- 自动分析队列失败后按剩余队列重新计算下一次唤醒，避免失败条目已移除时仍固定创建重试闹钟。
 
 ## 十、创新了什么功能
 
