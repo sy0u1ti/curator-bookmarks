@@ -132,6 +132,23 @@ test('popup startup uses light snapshot search metadata instead of full snapshot
   assert.doesNotMatch(builtPopupHtml, /<link[^>]+content-snapshots[^>]+rel="modulepreload"/i)
 })
 
+test('popup full text snapshot warmup is triggered by real searches instead of startup', () => {
+  assert.doesNotMatch(popupSource, /schedulePopupSnapshotFullTextWarmup\(extracted\.bookmarks,\s*tagIndex\)/)
+  assert.match(popupSource, /function maybeWarmPopupSnapshotFullTextForSearch\(\)/)
+  assert.match(
+    popupSource,
+    /if \([\s\S]*?state\.searchSnapshotFullTextReady[\s\S]*?state\.searchSnapshotFullTextPending[\s\S]*?!state\.debouncedQuery\.trim\(\)[\s\S]*?\)/
+  )
+  assert.match(
+    popupSource,
+    /if \(!normalizedQuery\)[\s\S]*?return[\s\S]*?maybeWarmPopupSnapshotFullTextForSearch\(\)[\s\S]*?if \(state\.naturalSearchEnabled\)/
+  )
+  assert.match(popupSource, /state\.searchTagIndex = tagIndex/)
+  assert.match(popupSource, /state\.searchSnapshotFullTextRunId \+= 1/)
+  assert.match(popupSource, /bookmarks: state\.allBookmarks/)
+  assert.match(popupSource, /tagIndex: state\.searchTagIndex/)
+})
+
 test('popup folder pickers expose option and treeitem semantics', () => {
   assert.match(popupHtml, /id="folder-breadcrumbs"[^>]+aria-label="当前文件夹路径"/)
   const filterSearchInput = popupHtml.match(/<input[\s\S]*?id="filter-search-input"[\s\S]*?>/)?.[0] || ''
