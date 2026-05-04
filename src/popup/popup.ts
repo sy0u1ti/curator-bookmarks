@@ -2038,6 +2038,12 @@ function getBookmarkActionMenuLabel(bookmark) {
   return `打开 ${title} 的操作菜单`
 }
 
+function getBookmarkActionLabel(action, bookmarkId) {
+  const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
+  const title = cleanSmartText(bookmark?.title || bookmark?.displayUrl || bookmarkId || '未命名书签', 48)
+  return `${action}：${title || '未命名书签'}`
+}
+
 function getPopupFolderToggleLabel(action, folderPath) {
   const target = cleanSmartText(folderPath || '未命名文件夹', 72)
   return `${action}：${target || '未命名文件夹'}`
@@ -2055,14 +2061,19 @@ function renderActionMenu(bookmarkId) {
   const editBusy = isPopupActionPending('edit', bookmarkId)
   const deleteBusy = isPopupActionPending('delete', bookmarkId)
   const menuId = getActionMenuId(bookmarkId)
+  const editLabel = getBookmarkActionLabel('编辑书签', bookmarkId)
+  const copyLabel = getBookmarkActionLabel('复制书签链接', bookmarkId)
+  const openLabel = getBookmarkActionLabel('当前页打开书签', bookmarkId)
+  const moveLabel = getBookmarkActionLabel('移动书签', bookmarkId)
+  const deleteLabel = getBookmarkActionLabel('删除书签', bookmarkId)
 
   return `
     <div id="${escapeAttr(menuId)}" class="action-menu" role="menu" aria-label="书签操作">
-      <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || editBusy ? 'disabled' : ''}>编辑</button>
-      <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}" ${copyBusy ? 'disabled' : ''}>复制链接</button>
-      <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || openBusy ? 'disabled' : ''}>当前页打开</button>
-      <button role="menuitem" type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || moveBusy ? 'disabled' : ''}>移动至</button>
-      <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}" ${menuBusy || deleteBusy ? 'disabled' : ''}>删除</button>
+      <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(editLabel)}" ${menuBusy || editBusy ? 'disabled' : ''}>编辑</button>
+      <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(copyLabel)}" ${copyBusy ? 'disabled' : ''}>复制链接</button>
+      <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(openLabel)}" ${menuBusy || openBusy ? 'disabled' : ''}>当前页打开</button>
+      <button role="menuitem" type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(moveLabel)}" ${menuBusy || moveBusy ? 'disabled' : ''}>移动至</button>
+      <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(deleteLabel)}" ${menuBusy || deleteBusy ? 'disabled' : ''}>删除</button>
     </div>
   `
 }
