@@ -5965,12 +5965,12 @@ body.dashboard-fullscreen-active {
 }
 
 .dashboard-fullscreen-active .dashboard-panel .dashboard-toolbar {
-  grid-template-columns: minmax(0, 640px) auto;
-  justify-content: start;
+  grid-template-columns: minmax(0, 640px);
+  justify-content: center;
   align-items: center;
-  gap: 12px;
+  gap: 0;
   width: min(100%, 820px);
-  margin: 8px 0 0;
+  margin: 8px auto 0;
   padding: 0;
 }
 

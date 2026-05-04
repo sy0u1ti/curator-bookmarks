@@ -233,7 +233,7 @@ test('dashboard fullscreen uses the compact top spacing for panel and toolbar', 
   )
   assert.match(
     optionsCss,
-    /\.dashboard-fullscreen-active\s+\.dashboard-panel\s+\.dashboard-toolbar\s*\{[\s\S]*?justify-content:\s*start[\s\S]*?width:\s*min\(100%,\s*820px\)[\s\S]*?margin:\s*8px\s+0\s+0/
+    /\.dashboard-fullscreen-active\s+\.dashboard-panel\s+\.dashboard-toolbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*640px\)[\s\S]*?justify-content:\s*center[\s\S]*?width:\s*min\(100%,\s*820px\)[\s\S]*?margin:\s*8px\s+auto\s+0/
   )
   assert.doesNotMatch(optionsCss, /\.dashboard-fullscreen-active\s+\.dashboard-panel\s+\.dashboard-toolbar\s*\{[\s\S]*?margin:\s*-52px/)
   assert.match(
