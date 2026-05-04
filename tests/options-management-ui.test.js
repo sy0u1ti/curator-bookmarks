@@ -712,6 +712,25 @@ test('history and tag cleanup buttons expose specific labels', () => {
   }
 })
 
+test('tag and backup data buttons expose data-scope labels', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const labelledButtons = [
+    ['ai-tag-export', '导出书签标签数据'],
+    ['ai-tag-import', '导入书签标签数据'],
+    ['backup-export', '导出完整书签备份'],
+    ['backup-import', '导入完整备份并预览'],
+    ['backup-restore-tags', '从备份预览只恢复书签标签数据'],
+    ['backup-restore-newtab', '从备份预览只恢复新标签页设置'],
+    ['backup-restore-safe-full', '从备份预览恢复全部可安全恢复的数据']
+  ]
+
+  for (const [id, label] of labelledButtons) {
+    const button = optionsHtml.match(new RegExp(`<button[^>]+id="${id}"[^>]*>`))?.[0] || ''
+    assert.ok(button, `missing button ${id}`)
+    assert.match(button, new RegExp(`aria-label="${label}"`))
+  }
+})
+
 test('smart bookmark analysis bulk selection buttons expose analysis-specific labels', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const labelledButtons = [

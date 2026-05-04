@@ -1033,8 +1033,8 @@
                   <p id="ai-tag-data-status" class="detect-status-copy"></p>
                 </div>
                 <div class="detect-results-actions">
-                  <button id="ai-tag-export" class="options-button secondary small" type="button">导出标签数据</button>
-                  <button id="ai-tag-import" class="options-button secondary small" type="button">导入标签数据</button>
+                  <button id="ai-tag-export" class="options-button secondary small" type="button" aria-label="导出书签标签数据">导出标签数据</button>
+                  <button id="ai-tag-import" class="options-button secondary small" type="button" aria-label="导入书签标签数据">导入标签数据</button>
                   <button id="ai-tag-clear" class="options-button danger small" type="button" aria-label="清空全部书签标签数据">清空标签数据</button>
                 </div>
                 <input id="ai-tag-import-input" class="hidden" type="file" accept="application/json,.json">
@@ -1048,8 +1048,8 @@
                   <p class="detect-results-subtitle">导出 Chrome 书签树、标签数据、回收站、忽略规则、重定向历史、新标签页配置和 AI 设置；不会导出 API Key。</p>
                 </div>
                 <div class="detect-results-actions">
-                  <button id="backup-export" class="options-button small" type="button">导出完整备份</button>
-                  <button id="backup-import" class="options-button secondary small" type="button">导入并预览</button>
+                  <button id="backup-export" class="options-button small" type="button" aria-label="导出完整书签备份">导出完整备份</button>
+                  <button id="backup-import" class="options-button secondary small" type="button" aria-label="导入完整备份并预览">导入并预览</button>
                 </div>
                 <input id="backup-import-input" class="hidden" type="file" accept="application/json,.json">
               </div>
@@ -1063,9 +1063,9 @@
                   <p class="detect-results-subtitle">导入文件后先查看差异，再选择恢复范围；新标签页恢复只写入设置项，不恢复背景媒体缓存，也不会直接替换整个 Chrome 书签树。</p>
                 </div>
                 <div class="detect-results-actions">
-                  <button id="backup-restore-tags" class="options-button secondary small" type="button" disabled>只恢复标签数据</button>
-                  <button id="backup-restore-newtab" class="options-button secondary small" type="button" disabled>只恢复新标签页设置</button>
-                  <button id="backup-restore-safe-full" class="options-button small" type="button" disabled>恢复全部可安全恢复的数据</button>
+                  <button id="backup-restore-tags" class="options-button secondary small" type="button" disabled aria-label="从备份预览只恢复书签标签数据">只恢复标签数据</button>
+                  <button id="backup-restore-newtab" class="options-button secondary small" type="button" disabled aria-label="从备份预览只恢复新标签页设置">只恢复新标签页设置</button>
+                  <button id="backup-restore-safe-full" class="options-button small" type="button" disabled aria-label="从备份预览恢复全部可安全恢复的数据">恢复全部可安全恢复的数据</button>
                 </div>
               </div>
               <div id="backup-preview" class="detect-results">
