@@ -1015,7 +1015,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
   const cachedResults = state.searchCache.get(cacheKey)
 
   if (cachedResults) {
-    const cachedPlan = state.naturalSearchPlanCache.get(planCacheKey) || buildLocalNaturalSearchPlan(query)
+    const cachedPlan = await resolveCachedNaturalSearchPlan(query, planCacheKey)
     state.naturalSearchPlan = cachedPlan
     state.searchHighlightQuery = cachedPlan.highlightQuery || normalizedQuery
     state.searchPending = false
@@ -1078,6 +1078,27 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     state.loadError = error instanceof Error ? error.message : '自然语言搜索失败，请重试。'
     render()
   }
+}
+
+async function resolveCachedNaturalSearchPlan(query, planCacheKey): Promise<NaturalSearchPlan> {
+  const localPlan = buildLocalNaturalSearchPlan(query)
+  const cachedPlan = state.naturalSearchPlanCache.get(planCacheKey)
+  if (!cachedPlan || cachedPlan.source !== 'ai') {
+    return localPlan
+  }
+
+  try {
+    const settings = await loadAiProviderSettings()
+    if (hasConfiguredAiProviderSettings(settings)) {
+      return cachedPlan
+    }
+  } catch {
+    // Fall through to local parsing when provider settings cannot be read.
+  }
+
+  state.naturalSearchPlanCache.delete(planCacheKey)
+  state.naturalSearchError = '未配置 AI 渠道，已使用本地解析。'
+  return localPlan
 }
 
 async function resolveNaturalSearchPlan(query, normalizedQuery): Promise<NaturalSearchPlan> {
