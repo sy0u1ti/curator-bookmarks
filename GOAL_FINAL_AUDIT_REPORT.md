@@ -7,7 +7,7 @@
 - 集成分支：`integration/goal-final-polish-20260504`
 - 集成 worktree：`/mnt/g/coding/worktrees/goal-final-polish-20260504`
 - 基线：`main@11582da` / `v1.4.23`
-- 当前集成代码状态：在 `7ac0f64` 基础上继续追加 popup 文件夹候选容器可访问名称修正；报告最新提交以 `git log -1 --oneline` 为准。
+- 当前集成代码状态：在 `b85e12d` 基础上继续追加 newtab 候选文件夹 listbox 可访问名称修正；报告最新提交以 `git log -1 --oneline` 为准。
 
 本轮采用多 agent 分支审查与修复流程，覆盖性能、UI、功能、人性化体验、构建安全五个可合并改动方向。主工作区 `/mnt/g/coding/chromebookmark` 保持在 `main@11582da`，未合并到 `main`。
 
@@ -186,6 +186,12 @@
   - 影响：搜索框主要依赖 placeholder，辅助技术不一定稳定识别其用途，也没有显式声明控制候选列表。
   - 建议：为搜索框添加稳定 `aria-label`，并通过 `aria-controls` 关联候选文件夹列表。
   - 处理：已完成，候选文件夹搜索框现在暴露 `aria-label="搜索候选文件夹"` 和 `aria-controls="folder-candidate-list"`。
+
+- [低] UI/可访问性：newtab 候选文件夹 listbox 缺少稳定可访问名称
+  - 位置：`src/newtab/newtab.html` / `folder-candidate-list`
+  - 影响：候选文件夹容器已有 listbox 语义，但没有自身名称，辅助技术用户进入列表时只能听到泛化控件类型。
+  - 建议：为候选文件夹 listbox 添加稳定 `aria-label`，并用回归测试约束搜索框与列表的语义关联。
+  - 处理：已完成，候选列表现在暴露 `aria-label="候选文件夹列表"`。
 
 - [低] UI/可访问性：newtab 主搜索输入缺少 combobox 角色
   - 位置：`src/newtab/newtab.ts` / `createSearchWidget`
@@ -471,7 +477,15 @@
    - 推荐改进方案：为输入框添加稳定名称，并用 `aria-controls` 指向 `folder-candidate-list`。
    - 处理状态：已修复。
 
-21. newtab 主搜索输入缺少 combobox 角色
+21. newtab 候选文件夹 listbox 可访问名称不稳定
+   - 页面/组件位置：newtab 设置抽屉 / 文件夹来源候选列表
+   - 现象描述：候选文件夹列表已有 `role="listbox"` 和多选语义，但容器没有稳定可访问名称。
+   - 对用户的影响：辅助技术用户从搜索框进入候选列表后，难以确认当前列表是文件夹来源候选项。
+   - 严重程度：低
+   - 推荐改进方案：为 `folder-candidate-list` 添加稳定 `aria-label`，并用静态测试约束搜索框、列表和多选语义。
+   - 处理状态：已修复。
+
+22. newtab 主搜索输入缺少 combobox 角色
    - 页面/组件位置：newtab 主搜索框
    - 现象描述：搜索输入已有自动补全和候选列表状态，但没有显式 `role="combobox"`。
    - 对用户的影响：辅助技术可能只把它当作普通搜索输入，无法稳定感知候选列表语义。
@@ -479,7 +493,7 @@
    - 推荐改进方案：补充 combobox 角色，并静态约束它继续控制 `newtab-search-suggestions` listbox。
    - 处理状态：已修复。
 
-22. newtab 搜索引擎菜单缺少完整键盘导航
+23. newtab 搜索引擎菜单缺少完整键盘导航
    - 页面/组件位置：newtab 主搜索框 / 搜索引擎切换菜单
    - 现象描述：菜单已有 `role="menu"` 和 `menuitemradio`，但打开后不会把焦点送入菜单项，也没有方向键、Home/End 和 Escape 的菜单行为。
    - 对用户的影响：键盘用户需要额外 Tab 才能进入菜单，切换搜索引擎的路径不符合常见菜单控件预期。
@@ -487,7 +501,7 @@
    - 推荐改进方案：触发按钮支持 ArrowDown/ArrowUp 打开菜单并聚焦首尾项；菜单内支持 ArrowUp/ArrowDown/Home/End 移动焦点，Escape 关闭并回焦按钮。
    - 处理状态：已修复。
 
-23. newtab 候选文件夹 listbox 缺少方向键导航
+24. newtab 候选文件夹 listbox 缺少方向键导航
    - 页面/组件位置：newtab 设置抽屉 / 文件夹来源候选列表
    - 现象描述：候选文件夹列表声明为多选 listbox，但选项缺少 roving focus 和方向键/Home/End/Escape 行为。
    - 对用户的影响：键盘用户筛选和选择来源文件夹时，需要在多个候选项之间连续 Tab，选择后也可能丢失当前候选项上下文。
@@ -602,7 +616,7 @@
 - `npm audit --json`：0 vulnerabilities。
 - `npm run typecheck`：通过。
 - `npm run lint`：通过；当前脚本等价于 `npm run typecheck`。
-- `npm test`：334/334 通过。
+- `npm test`：337/337 通过。
 - `npm run check:version`：通过，版本 `1.4.23`。
 - `npm run build`：通过。
 - `npm run validate`：通过，覆盖 typecheck、test、check:version、build。
@@ -611,7 +625,7 @@
   - 覆盖自然语言搜索动态 import 缓存、禁止 popup 运行时静态导入 `natural-search`/`shared/inbox`/`ai-response`/`recycle-bin`/完整 `content-snapshots`、AI plan 缓存降级、失效 AI plan 对应结果缓存清理、智能分类模块按需加载、删除事务 helper 按需加载、内容快照全文 warmup 按需加载、构建产物不预加载 `natural-search`/`content-extraction`/`ai-settings`/`inbox`/`ai-response`/`recycle-bin`/完整 `content-snapshots`、普通搜索行为。
 - focused newtab 搜索测试：通过。
   - `node --test .tmp-test/tests/newtab-search-index.test.js .tmp-test/tests/newtab-content-state.test.js`：55/55 通过。
-  - 覆盖轻量同步建议缓存、自然语言搜索动态 import、pinyin 动态搜索、无匹配网页搜索 fallback、候选文件夹搜索框稳定可访问名称、候选文件夹 listbox 键盘导航、主搜索 combobox 语义和搜索引擎菜单键盘导航。
+  - 覆盖轻量同步建议缓存、自然语言搜索动态 import、pinyin 动态搜索、无匹配网页搜索 fallback、候选文件夹搜索框和 listbox 稳定可访问名称、候选文件夹 listbox 键盘导航、主搜索 combobox 语义和搜索引擎菜单键盘导航。
 - focused service worker 队列测试：通过。
   - `npm run test:build && node --test .tmp-test/tests/service-worker-save-guards.test.js .tmp-test/tests/ai-settings.test.js`：9/9 通过。
   - 覆盖自动分析队列复用树快照、失败后按剩余队列状态重新安排唤醒、AI 设置序列化。
@@ -704,6 +718,7 @@
 - 文件夹清理建议的预览、执行和拆分撤销按钮加入建议标题与移动数量上下文，降低执行清理或撤销拆分时的误操作风险。
 - 可用性检测异常结果卡的选择、打开链接、移入高置信和移回低置信按钮加入书签标题与路径上下文，降低批量处理坏链时的误操作风险。
 - newtab 候选文件夹搜索框加入稳定可访问名称并关联候选列表，改善文件夹来源设置的辅助技术体验。
+- newtab 候选文件夹 listbox 加入稳定可访问名称，改善辅助技术用户从搜索框进入候选列表后的上下文识别。
 - newtab 主搜索输入补充 combobox 语义，让书签建议 listbox 更容易被辅助技术识别。
 - newtab 搜索引擎菜单支持方向键打开、菜单项焦点循环、Home/End 跳转和 Escape 回焦，改善键盘切换搜索引擎体验。
 - newtab 候选文件夹 listbox 支持方向键进入、循环移动、Home/End 跳转、Escape 回搜索框和选择后回焦，改善键盘选择来源文件夹体验。

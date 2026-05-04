@@ -24,6 +24,18 @@ test('newtab keeps local polite status regions for short feedback', () => {
   assert.match(newtabSource, /toast\.setAttribute\('aria-live', 'polite'\)/)
 })
 
+test('newtab folder candidate picker exposes named listbox semantics', () => {
+  const newtabHtml = readProjectFile('src/newtab/newtab.html')
+  const searchInput = newtabHtml.match(/<input[\s\S]*?id="folder-candidate-search"[\s\S]*?>/)?.[0] || ''
+  const candidateList = newtabHtml.match(/<div[\s\S]*?id="folder-candidate-list"[\s\S]*?>/)?.[0] || ''
+
+  assert.match(searchInput, /aria-label="搜索候选文件夹"/)
+  assert.match(searchInput, /aria-controls="folder-candidate-list"/)
+  assert.match(candidateList, /role="listbox"/)
+  assert.match(candidateList, /aria-label="候选文件夹列表"/)
+  assert.match(candidateList, /aria-multiselectable="true"/)
+})
+
 test('newtab wallpaper startup motion respects reduced-motion preference', () => {
   const newtabCss = readProjectFile('src/newtab/newtab.css')
 
