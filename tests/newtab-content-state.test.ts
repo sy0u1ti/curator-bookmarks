@@ -747,3 +747,31 @@ test('newtab bookmark tiles match the frosted overview card surface', () => {
   assert.match(hoverRule, /background:\s*rgba\(8,\s*8,\s*9,\s*var\(--bookmark-card-hover-alpha\)\)/)
   assert.doesNotMatch(hoverRule, /box-shadow:\s*0\s+10px/)
 })
+
+test('newtab large bookmark lists render tiles incrementally', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(script, /const BOOKMARK_TILE_INITIAL_RENDER_LIMIT = 160/)
+  assert.match(script, /const BOOKMARK_TILE_RENDER_CHUNK_SIZE = 80/)
+  assert.match(script, /let bookmarkTileRenderVersion = 0/)
+  assert.match(script, /function appendBookmarkTilesInChunks/)
+  assert.match(script, /function scheduleBookmarkTileChunkRender/)
+  assert.match(script, /window\.requestAnimationFrame\(\(\) =>/)
+  assert.match(script, /renderVersion !== bookmarkTileRenderVersion \|\| !list\.isConnected/)
+  assert.match(script, /list\.dataset\.incrementalRender = 'true'/)
+  assert.doesNotMatch(script, /for \(const bookmark of section\.bookmarks\) \{[\s\S]*?list\.appendChild\(createBookmarkTile/)
+})
+
+test('newtab bookmark suggestions are debounced and cached', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+
+  assert.match(script, /const SEARCH_SUGGESTION_DEBOUNCE_MS = 80/)
+  assert.match(script, /const SEARCH_SUGGESTION_CACHE_LIMIT = 24/)
+  assert.match(script, /const scheduleSuggestionsRender = \(\{ preserveActive = false, immediate = false \} = \{\}\) =>/)
+  assert.match(script, /window\.setTimeout\(\(\) => \{[\s\S]*?renderSuggestions\(\{ preserveActive, queryOverride: query \}\)/)
+  assert.match(script, /const searchSuggestionCache = new Map<string, SearchBookmarkSuggestion\[\]>\(\)/)
+  assert.match(script, /function getSearchSuggestionCacheKey/)
+  assert.match(script, /normalizeNewTabSearchText\(query\)/)
+  assert.match(script, /searchSuggestionCache\.clear\(\)/)
+  assert.doesNotMatch(script, /input\.addEventListener\('input', \(\) => \{[\s\S]*?renderSuggestions\(\)/)
+})
