@@ -1535,7 +1535,17 @@ function renderSmartClassifier() {
         ${renderSmartExitButton()}
       </div>
       <div class="error-banner">${escapeHtml(state.smartError || '智能分类失败，请稍后重试。')}</div>
-      ${renderSmartManualButton()}
+      <div class="smart-actions smart-actions-three">
+        <button class="smart-cancel-button" type="button" data-smart-action="manual-folder">
+          手动选择
+        </button>
+        <button class="smart-settings-action" type="button" data-smart-action="open-ai-settings">
+          AI 设置
+        </button>
+        <button class="smart-classify-button" type="button" data-smart-action="classify">
+          重试
+        </button>
+      </div>
     `
     return
   }
@@ -1617,6 +1627,9 @@ function renderSmartPermissionCard() {
       <div class="smart-actions">
         <button class="smart-cancel-button" type="button" data-smart-action="manual-folder">
           手动选择
+        </button>
+        <button class="smart-settings-action" type="button" data-smart-action="open-ai-settings">
+          AI 设置
         </button>
         <button class="smart-classify-button" type="button" data-smart-action="grant-permission">
           授权并继续
@@ -2564,6 +2577,11 @@ function handleSmartClassifierClick(event) {
 
   if (action === 'grant-permission') {
     grantSmartPermissionAndClassify()
+    return
+  }
+
+  if (action === 'open-ai-settings') {
+    void openSettingsPage('ai-provider')
     return
   }
 

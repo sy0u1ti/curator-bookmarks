@@ -1457,42 +1457,42 @@ a {
   display: inline-flex;
   align-items: center;
   padding: 0 8px;
-  border: 1px solid var(--surface-3);
+  border: 1px solid rgba(245, 245, 247, 0.16);
   border-radius: 7px;
-  background: var(--surface-1);
-  color: var(--text-soft);
+  background: rgba(245, 245, 247, 0.08);
+  color: rgba(245, 245, 247, 0.88);
   font-size: 12px;
   font-weight: 650;
 }
 
 .dashboard-search-chip.site {
-  border-color: rgba(2, 132, 199, 0.24);
-  background: rgba(2, 132, 199, 0.08);
-  color: #0369a1;
+  border-color: rgba(125, 211, 252, 0.36);
+  background: rgba(14, 116, 144, 0.28);
+  color: #bae6fd;
 }
 
 .dashboard-search-chip.folder {
-  border-color: rgba(124, 58, 237, 0.22);
-  background: rgba(124, 58, 237, 0.08);
-  color: #6d28d9;
+  border-color: rgba(196, 181, 253, 0.36);
+  background: rgba(109, 40, 217, 0.28);
+  color: #ddd6fe;
 }
 
 .dashboard-search-chip.type {
-  border-color: rgba(22, 163, 74, 0.24);
-  background: rgba(22, 163, 74, 0.08);
-  color: #15803d;
+  border-color: rgba(134, 239, 172, 0.34);
+  background: rgba(21, 128, 61, 0.28);
+  color: #bbf7d0;
 }
 
 .dashboard-search-chip.time {
-  border-color: rgba(202, 138, 4, 0.26);
-  background: rgba(202, 138, 4, 0.09);
-  color: #854d0e;
+  border-color: rgba(253, 224, 71, 0.34);
+  background: rgba(161, 98, 7, 0.28);
+  color: #fef08a;
 }
 
 .dashboard-search-chip.exclude {
-  border-color: rgba(220, 38, 38, 0.22);
-  background: rgba(220, 38, 38, 0.08);
-  color: #b91c1c;
+  border-color: rgba(252, 165, 165, 0.34);
+  background: rgba(185, 28, 28, 0.28);
+  color: #fecaca;
 }
 
 .dashboard-folder-breadcrumbs {
