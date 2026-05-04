@@ -532,3 +532,15 @@ test('redirect update rereads current bookmarks and skips stale source URLs', ()
   assert.match(redirectsSource, /String\(latestBookmark\.url\) !== String\(result\.url \|\| ''\)/)
   assert.match(redirectsSource, /await updateBookmark\(result\.id, \{ url: finalUrl \}\)/)
 })
+
+test('redirect result actions expose bookmark-specific labels', () => {
+  const redirectsSource = readProjectFile('src/options/sections/redirects.ts')
+
+  assert.match(redirectsSource, /function getRedirectResultActionLabel\(action, result\)/)
+  assert.match(redirectsSource, /const selectionLabel = getRedirectResultActionLabel\('选择重定向书签', result\)/)
+  assert.match(redirectsSource, /const updateLabel = getRedirectResultActionLabel\('更新为最终 URL', result\)/)
+  assert.match(redirectsSource, /const openFinalLabel = getRedirectResultActionLabel\('打开最终链接', result\)/)
+  assert.match(redirectsSource, /data-bookmark-id="\$\{escapeAttr\(result\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(selectionLabel\)\}"/)
+  assert.match(redirectsSource, /data-redirect-update="\$\{escapeAttr\(result\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(updateLabel\)\}"/)
+  assert.match(redirectsSource, /<a class="detect-result-open"[\s\S]*?aria-label="\$\{escapeAttr\(openFinalLabel\)\}"/)
+})
