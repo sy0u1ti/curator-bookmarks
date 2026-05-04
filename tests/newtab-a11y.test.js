@@ -36,6 +36,26 @@ test('newtab folder candidate picker exposes named listbox semantics', () => {
   assert.match(candidateList, /aria-multiselectable="true"/)
 })
 
+test('newtab settings native controls expose stable accessible names', () => {
+  const newtabHtml = readProjectFile('src/newtab/newtab.html')
+  const labelledControls = [
+    ['background-type', '背景类型'],
+    ['background-url', '背景图片链接'],
+    ['background-mask-style', '背景蒙版样式'],
+    ['time-display-mode', '时间显示内容'],
+    ['time-time-zone', '时区'],
+    ['time-date-format', '日期格式'],
+    ['time-density', '时间布局密度'],
+    ['search-engine', '默认搜索引擎'],
+    ['search-placeholder', '搜索栏占位符文本']
+  ]
+
+  for (const [id, label] of labelledControls) {
+    const control = newtabHtml.match(new RegExp(`<(?:input|select)[\\s\\S]*?id="${id}"[\\s\\S]*?>`))?.[0] || ''
+    assert.match(control, new RegExp(`aria-label="${label}"`))
+  }
+})
+
 test('newtab wallpaper startup motion respects reduced-motion preference', () => {
   const newtabCss = readProjectFile('src/newtab/newtab.css')
 

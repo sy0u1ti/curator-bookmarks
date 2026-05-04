@@ -177,7 +177,7 @@
                 <span>背景类型</span>
                 <small>可选择纯色、本地图片/视频或远程图片链接。</small>
               </span>
-              <select id="background-type" class="setting-select setting-native-select">
+              <select id="background-type" class="setting-select setting-native-select" aria-label="背景类型">
                 <option value="image">图片</option>
                 <option value="video">视频</option>
                 <option value="urls">图片链接</option>
@@ -215,6 +215,7 @@
                   class="setting-url-input"
                   type="url"
                   placeholder="图片链接"
+                  aria-label="背景图片链接"
                   spellcheck="false"
                 >
               </span>
@@ -237,7 +238,7 @@
             </label>
             <div id="background-mask-style-row" class="setting-row" hidden>
               <span>模糊样式</span>
-              <select id="background-mask-style" class="setting-select setting-native-select">
+              <select id="background-mask-style" class="setting-select setting-native-select" aria-label="背景蒙版样式">
                 <option value="dark">暗色增强</option>
                 <option value="frosted">磨砂柔化</option>
                 <option value="light">亮色柔化</option>
@@ -358,7 +359,7 @@
                 <span>显示内容</span>
                 <small>保留时间+日期、仅时间、仅日期三种模式。</small>
               </span>
-              <select id="time-display-mode" class="setting-select setting-native-select">
+              <select id="time-display-mode" class="setting-select setting-native-select" aria-label="时间显示内容">
                 <option value="time-date">时间和日期</option>
                 <option value="time">仅时间</option>
                 <option value="date">仅日期</option>
@@ -369,7 +370,7 @@
                 <span>时区</span>
                 <small>自动跟随系统，也可固定为常用城市。</small>
               </span>
-              <select id="time-time-zone" class="setting-select setting-native-select">
+              <select id="time-time-zone" class="setting-select setting-native-select" aria-label="时区">
                 <option value="auto">自动跟随系统</option>
                 <option value="UTC">UTC</option>
                 <option value="Asia/Shanghai">北京</option>
@@ -387,7 +388,7 @@
                 <span>日期格式</span>
                 <small>仅在显示日期时生效。</small>
               </span>
-              <select id="time-date-format" class="setting-select setting-native-select">
+              <select id="time-date-format" class="setting-select setting-native-select" aria-label="日期格式">
                 <option value="year-month-day-weekday">2026.05.01 周五</option>
                 <option value="chinese-date-weekday">2026年5月1日 周五</option>
                 <option value="month-day-weekday">05.01 周五</option>
@@ -417,7 +418,7 @@
                 <span>布局密度</span>
                 <small>切换时间模块的排版结构，不改变字号。</small>
               </span>
-              <select id="time-density" class="setting-select setting-native-select">
+              <select id="time-density" class="setting-select setting-native-select" aria-label="时间布局密度">
                 <option value="compact">极简单行</option>
                 <option value="balanced">平衡胶囊</option>
                 <option value="comfortable">独立卡片</option>
@@ -457,7 +458,7 @@
                 <span>搜索引擎</span>
                 <small>输入内容不是网址时使用此引擎。</small>
               </span>
-              <select id="search-engine" class="setting-select setting-native-select">
+              <select id="search-engine" class="setting-select setting-native-select" aria-label="默认搜索引擎">
                 <option value="google">Google</option>
                 <option value="bing">Bing</option>
                 <option value="baidu">百度</option>
@@ -516,7 +517,7 @@
             <div class="setting-row">
               <span>占位符文本</span>
               <span class="setting-floating-field">
-                <input id="search-placeholder" class="setting-text-input" type="text" placeholder="占位符文本" maxlength="40">
+                <input id="search-placeholder" class="setting-text-input" type="text" placeholder="占位符文本" maxlength="40" aria-label="搜索栏占位符文本">
               </span>
             </div>
             <label class="setting-row slider-row">
