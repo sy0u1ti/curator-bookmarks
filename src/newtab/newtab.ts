@@ -15,9 +15,11 @@ import {
 import { deleteBookmarkToRecycle, removeRecycleEntry } from '../shared/recycle-bin.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import type { ExtractedBookmarkData, FolderRecord } from '../shared/types.js'
-import {
-  loadBookmarkTagIndex,
-  type BookmarkTagIndex
+import type {
+  BookmarkTagExtraction,
+  BookmarkTagIndex,
+  BookmarkTagRecord,
+  BookmarkTagSource
 } from '../shared/bookmark-tags.js'
 import type { ContentSnapshotIndex } from '../shared/content-snapshots.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
@@ -2654,7 +2656,7 @@ async function refreshNewTab(): Promise<void> {
   render()
 
   try {
-    const [tree, stored, tagIndex] = await Promise.all([
+    const [tree, stored] = await Promise.all([
       getBookmarkTree(),
       getLocalStorage([
         STORAGE_KEYS.newTabCustomIcons,
@@ -2666,9 +2668,9 @@ async function refreshNewTab(): Promise<void> {
         STORAGE_KEYS.newTabFolderSettings,
         STORAGE_KEYS.newTabTimeSettings,
         STORAGE_KEYS.newTabActivity,
+        STORAGE_KEYS.bookmarkTagIndex,
         STORAGE_KEYS.contentSnapshotIndex
-      ]),
-      loadBookmarkTagIndex().catch(() => null)
+      ])
     ])
     const rootNode = tree[0] || null
     const folderData = extractBookmarkData(rootNode)
@@ -2681,7 +2683,7 @@ async function refreshNewTab(): Promise<void> {
 
     state.rootNode = rootNode
     state.folderData = folderData
-    state.bookmarkTagIndex = tagIndex
+    state.bookmarkTagIndex = normalizeNewTabBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
     state.searchSnapshotIndex = normalizeNewTabContentSnapshotIndex(stored[STORAGE_KEYS.contentSnapshotIndex])
     state.folderNodeMap = folderNodeMap
     state.folderSettings = folderSettings
@@ -3679,6 +3681,147 @@ function shouldLoadNaturalSearchSuggestions(
     .test(normalizedQuery) ||
     /\b(?:last|this|recent|recently|saved|bookmark|bookmarks|without|exclude|excluding|not|no|find|show)\b/i
       .test(normalizedQuery)
+}
+
+function normalizeNewTabBookmarkTagIndex(raw: unknown): BookmarkTagIndex {
+  const source = raw && typeof raw === 'object'
+    ? raw as { updatedAt?: unknown; records?: unknown }
+    : {}
+  const rawRecords = source.records && typeof source.records === 'object'
+    ? source.records as Record<string, unknown>
+    : {}
+  const records: BookmarkTagIndex['records'] = {}
+
+  for (const [fallbackBookmarkId, rawRecord] of Object.entries(rawRecords)) {
+    const record = normalizeNewTabBookmarkTagRecord(rawRecord, fallbackBookmarkId)
+    if (record) {
+      records[record.bookmarkId] = record
+    }
+  }
+
+  return {
+    version: 1,
+    updatedAt: normalizeNewTabTimestamp(source.updatedAt) || getLatestNewTabBookmarkTagUpdatedAt(records),
+    records
+  }
+}
+
+function normalizeNewTabBookmarkTagRecord(raw: unknown, fallbackBookmarkId: string): BookmarkTagRecord | null {
+  const source = raw && typeof raw === 'object'
+    ? raw as Record<string, unknown>
+    : {}
+  const bookmarkId = normalizeNewTabTagText(source.bookmarkId || fallbackBookmarkId)
+  const url = normalizeNewTabTagText(source.url)
+  if (!bookmarkId || !url) {
+    return null
+  }
+
+  const generatedAt = normalizeNewTabTimestamp(source.generatedAt) || Date.now()
+  const updatedAt = normalizeNewTabTimestamp(source.updatedAt) || generatedAt
+  const manualTags = normalizeNewTabBookmarkTagList(source.manualTags, 12)
+  const record: BookmarkTagRecord = {
+    schemaVersion: 1,
+    bookmarkId,
+    url,
+    normalizedUrl: normalizeNewTabTagText(source.normalizedUrl || url),
+    duplicateKey: normalizeNewTabTagText(source.duplicateKey || source.normalizedUrl || url),
+    title: normalizeNewTabTagText(source.title, 180),
+    path: normalizeNewTabTagText(source.path, 240),
+    summary: normalizeNewTabTagText(source.summary, 500),
+    contentType: normalizeNewTabTagText(source.contentType || source.content_type, 40),
+    topics: normalizeNewTabTagTextList(source.topics, 8, 40),
+    tags: normalizeNewTabBookmarkTagList(source.tags, 12),
+    aliases: normalizeNewTabTagTextList(source.aliases, 20, 40),
+    confidence: normalizeNewTabTagConfidence(source.confidence),
+    source: normalizeNewTabBookmarkTagSource(source.source),
+    model: normalizeNewTabTagText(source.model, 120),
+    extraction: normalizeNewTabBookmarkTagExtraction(source.extraction),
+    generatedAt,
+    updatedAt
+  }
+
+  if (manualTags.length) {
+    record.manualTags = manualTags
+    record.manualUpdatedAt = normalizeNewTabTimestamp(source.manualUpdatedAt) || updatedAt
+  }
+
+  return record
+}
+
+function normalizeNewTabBookmarkTagExtraction(raw: unknown): BookmarkTagExtraction {
+  const source = raw && typeof raw === 'object'
+    ? raw as { status?: unknown; source?: unknown; warnings?: unknown }
+    : {}
+
+  return {
+    status: normalizeNewTabTagText(source.status, 40),
+    source: normalizeNewTabTagText(source.source, 80),
+    warnings: normalizeNewTabTagTextList(source.warnings, 4, 40)
+  }
+}
+
+function normalizeNewTabBookmarkTagSource(value: unknown): BookmarkTagSource {
+  const source = String(value || '').trim()
+  return source === 'ai_naming' ||
+    source === 'auto_analyze' ||
+    source === 'popup_smart' ||
+    source === 'imported' ||
+    source === 'manual'
+    ? source
+    : 'imported'
+}
+
+function normalizeNewTabBookmarkTagList(value: unknown, limit: number): string[] {
+  return normalizeNewTabTagTextList(value, limit, 24)
+}
+
+function normalizeNewTabTagTextList(value: unknown, limit: number, itemLimit: number): string[] {
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,，、\n]/)
+      : []
+  const seen = new Set<string>()
+  const output: string[] = []
+
+  for (const item of values) {
+    const text = normalizeNewTabTagText(item, itemLimit)
+    const key = text.toLowerCase()
+    if (!text || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    output.push(text)
+    if (output.length >= limit) {
+      break
+    }
+  }
+
+  return output
+}
+
+function normalizeNewTabTagText(value: unknown, limit = 1000): string {
+  return String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, limit)
+}
+
+function normalizeNewTabTagConfidence(value: unknown): number {
+  const rawNumber = typeof value === 'number'
+    ? value
+    : Number(String(value ?? '').replace(/%$/, ''))
+  if (!Number.isFinite(rawNumber)) {
+    return 0
+  }
+  const normalized = rawNumber > 1 && rawNumber <= 100 ? rawNumber / 100 : rawNumber
+  return Math.max(0, Math.min(normalized, 1))
+}
+
+function normalizeNewTabTimestamp(value: unknown): number {
+  const timestamp = Number(value)
+  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : 0
+}
+
+function getLatestNewTabBookmarkTagUpdatedAt(records: BookmarkTagIndex['records']): number {
+  return Object.values(records).reduce((latest, record) => Math.max(latest, Number(record.updatedAt) || 0), 0)
 }
 
 function normalizeNewTabContentSnapshotIndex(raw: unknown): ContentSnapshotIndex {

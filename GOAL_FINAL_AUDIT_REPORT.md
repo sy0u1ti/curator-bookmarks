@@ -7,7 +7,7 @@
 - 集成分支：`integration/goal-final-polish-20260504`
 - 集成 worktree：`/mnt/g/coding/worktrees/goal-final-polish-20260504`
 - 基线：`main@11582da` / `v1.4.23`
-- 当前集成提交：`32d636d`。
+- 当前集成提交：待本次最终提交后更新。
 
 本轮采用多 agent 分支审查与修复流程，覆盖性能、UI、功能、人性化体验、构建安全五个可合并改动方向。主工作区 `/mnt/g/coding/chromebookmark` 保持在 `main@11582da`，未合并到 `main`。
 
@@ -243,8 +243,8 @@
   - 影响范围：newtab/options/popup UI 与可访问性。
   - 测试方式：`npm test`、`npm run typecheck`
 
-- 集成分支补充优化 / `5a8589c`、`32d636d`
-  - 实现思路：修复 popup 窄视口横向溢出；将 newtab 搜索重 chunk 改为按需加载，并保留轻量同步建议。
+- 集成分支补充优化 / `5a8589c`、`32d636d`、待本次最终提交后更新
+  - 实现思路：修复 popup 窄视口横向溢出；将 newtab 搜索重 chunk 改为按需加载，并保留轻量同步建议；将 newtab 标签索引读取改为轻量 storage normalizer，移除首屏 `bookmark-tags` 运行时预加载。
   - 影响范围：`src/popup/popup.css`、`src/newtab/content-state.ts`、`src/newtab/newtab.ts`、相关测试。
   - 测试方式：focused tests、`npm test`、`npm run validate`、Playwright 产物/搜索冒烟。
 
@@ -284,11 +284,11 @@
   - 修复后 popup 在 390px 窄视口下 `scrollWidth === clientWidth`，无横向溢出。
 - Playwright newtab 搜索加载策略检查：通过。
   - fresh profile 打开 newtab 无 pageerror/console error。
-  - 普通关键词命中本地书签时，搜索建议可见，且仅加载 `newtab` 主 chunk、`bookmark-tags`、`dot-matrix-loader` 和 CSS，未加载 `search-*`、`natural-search-*`、`content-snapshots-*`。
+  - 普通关键词命中本地书签时，搜索建议可见，且仅加载 `newtab` 主 chunk、`storage`、`dot-matrix-loader` 和 CSS，未加载 `bookmark-tags-*`、`search-*`、`natural-search-*`、`content-snapshots-*`。
   - 无本地匹配时网页搜索 fallback 可见，无 pageerror/console error。
 - dist modulepreload 检查：通过。
-  - `dist/src/newtab/newtab.html` 只预加载 `bookmark-tags-*` 和 `dot-matrix-loader-*`。
-  - 未发现 newtab 首屏 `modulepreload` 预加载 `search-*`、`natural-search-*` 或 `content-snapshots-*`。
+  - `dist/src/newtab/newtab.html` 只预加载 `storage-*` 和 `dot-matrix-loader-*`。
+  - 未发现 newtab 首屏 `modulepreload` 预加载 `bookmark-tags-*`、`search-*`、`natural-search-*` 或 `content-snapshots-*`。
 - Playwright 可访问名称检查：通过。
   - newtab、options dashboard、popup 中可见交互控件均有可访问名称。
   - 未发现可见的无名 `button`、`a[href]`、`input`、`select`、`textarea` 或 `role="button"` 控件。
@@ -312,6 +312,7 @@
 - popup 模态背景 inert，改善可访问性。
 - popup 根布局支持窄视口收缩，避免独立页面或窄屏容器横向溢出。
 - newtab 搜索保留轻量同步建议，将 pinyin、自然语言、复杂 popup 搜索 chunk 改为按需加载，降低普通打开新标签页和普通关键词搜索的初始资源成本。
+- newtab 标签索引读取改为本页轻量 normalizer，避免仅为读取标签数据而首屏加载完整 `bookmark-tags` 模块。
 
 ## 十、创新了什么功能
 
