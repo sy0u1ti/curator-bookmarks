@@ -201,6 +201,8 @@ export const contentSnapshotState = {
   searchTextMap: new Map<string, string>(),
   searchTextMapIncludesFullText: false,
   searchTextMapLoadingFullText: false,
+  searchTextMapFullTextRetryCount: 0,
+  searchTextMapFullTextRetryTimer: 0,
   statusMessage: '',
   aiRunSavedCount: 0,
   aiRunFailedCount: 0

@@ -1410,6 +1410,7 @@ function ensureDashboardFullTextSearchMapForQuery(): void {
     })
     .catch(() => {
       contentSnapshotState.searchTextMapIncludesFullText = false
+      contentSnapshotState.searchTextMapFullTextRetryCount = 0
     })
     .finally(() => {
       contentSnapshotState.searchTextMapLoadingFullText = false

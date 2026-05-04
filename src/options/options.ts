@@ -322,6 +322,8 @@ const SHORTCUT_COMMAND_LABELS: Record<string, { title: string; detail: string }>
     detail: '通过快捷键开启或关闭新增书签自动分析。'
   }
 }
+const CONTENT_SNAPSHOT_FULL_TEXT_RETRY_LIMIT = 2
+const CONTENT_SNAPSHOT_FULL_TEXT_RETRY_DELAY_MS = 1200
 
 const recycleCallbacks = {
   renderAvailabilitySection,
@@ -440,6 +442,7 @@ async function hydratePersistentState() {
     })
     contentSnapshotState.searchTextMapIncludesFullText = false
     contentSnapshotState.searchTextMapLoadingFullText = false
+    resetContentSnapshotFullTextSearchMapRetry()
     scheduleContentSnapshotFullTextSearchMapHydration()
     hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
     managerState.inboxSettings = normalizeInboxSettings(stored[STORAGE_KEYS.inboxSettings])
@@ -478,6 +481,29 @@ function scheduleContentSnapshotFullTextSearchMapHydration(): void {
   window.setTimeout(hydrate, 0)
 }
 
+function scheduleContentSnapshotFullTextSearchMapRetry(): void {
+  if (
+    contentSnapshotState.searchTextMapFullTextRetryCount >= CONTENT_SNAPSHOT_FULL_TEXT_RETRY_LIMIT ||
+    contentSnapshotState.searchTextMapFullTextRetryTimer
+  ) {
+    return
+  }
+
+  contentSnapshotState.searchTextMapFullTextRetryCount += 1
+  contentSnapshotState.searchTextMapFullTextRetryTimer = window.setTimeout(() => {
+    contentSnapshotState.searchTextMapFullTextRetryTimer = 0
+    void hydrateContentSnapshotFullTextSearchMap()
+  }, CONTENT_SNAPSHOT_FULL_TEXT_RETRY_DELAY_MS)
+}
+
+function resetContentSnapshotFullTextSearchMapRetry(): void {
+  if (contentSnapshotState.searchTextMapFullTextRetryTimer) {
+    window.clearTimeout(contentSnapshotState.searchTextMapFullTextRetryTimer)
+  }
+  contentSnapshotState.searchTextMapFullTextRetryTimer = 0
+  contentSnapshotState.searchTextMapFullTextRetryCount = 0
+}
+
 async function hydrateContentSnapshotFullTextSearchMap(): Promise<void> {
   if (
     !contentSnapshotState.settings.fullTextSearchEnabled ||
@@ -494,9 +520,11 @@ async function hydrateContentSnapshotFullTextSearchMap(): Promise<void> {
       maxRecords: 1000
     })
     contentSnapshotState.searchTextMapIncludesFullText = true
+    resetContentSnapshotFullTextSearchMapRetry()
     renderDashboardSection()
   } catch {
     contentSnapshotState.searchTextMapIncludesFullText = false
+    scheduleContentSnapshotFullTextSearchMapRetry()
   } finally {
     contentSnapshotState.searchTextMapLoadingFullText = false
   }
@@ -2990,6 +3018,7 @@ async function saveContentSnapshotSettingsFromDom({
     }).catch(() => new Map<string, string>())
     contentSnapshotState.searchTextMapIncludesFullText = contentSnapshotState.settings.fullTextSearchEnabled
     contentSnapshotState.searchTextMapLoadingFullText = false
+    resetContentSnapshotFullTextSearchMapRetry()
     contentSnapshotState.statusMessage = '网页内容索引设置已保存。'
   } catch (error) {
     contentSnapshotState.statusMessage =
@@ -6302,6 +6331,7 @@ async function saveContentSnapshotForAiPreparedItem(preparedItem): Promise<void>
     }).catch(() => contentSnapshotState.searchTextMap)
     contentSnapshotState.searchTextMapIncludesFullText = contentSnapshotState.settings.fullTextSearchEnabled
     contentSnapshotState.searchTextMapLoadingFullText = false
+    resetContentSnapshotFullTextSearchMapRetry()
     contentSnapshotState.aiRunSavedCount += 1
     contentSnapshotState.statusMessage = ''
     renderContentSnapshotSettings()

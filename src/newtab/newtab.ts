@@ -536,6 +536,10 @@ function updateSettingRangeVisual(input: HTMLInputElement): void {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Tab' && trapDashboardOverlayFocus(event)) {
+    return
+  }
+
   if (event.key === 'Tab' && trapSettingsDrawerFocus(event)) {
     return
   }
@@ -1171,6 +1175,37 @@ function trapSettingsDrawerFocus(event: KeyboardEvent): boolean {
   const activeElement = document.activeElement
 
   if (!settingsDrawer.contains(activeElement)) {
+    event.preventDefault()
+    ;(event.shiftKey ? lastElement : firstElement).focus()
+    return true
+  }
+
+  if (event.shiftKey && activeElement === firstElement) {
+    event.preventDefault()
+    lastElement.focus()
+    return true
+  }
+
+  if (!event.shiftKey && activeElement === lastElement) {
+    event.preventDefault()
+    firstElement.focus()
+    return true
+  }
+
+  return false
+}
+
+function trapDashboardOverlayFocus(event: KeyboardEvent): boolean {
+  if (!dashboardOverlay || !state.dashboardOpen) {
+    return false
+  }
+
+  const focusableElements = getFocusableElements(dashboardOverlay)
+  const firstElement = focusableElements[0] || dashboardOverlay
+  const lastElement = focusableElements[focusableElements.length - 1] || dashboardOverlay
+  const activeElement = document.activeElement
+
+  if (!dashboardOverlay.contains(activeElement)) {
     event.preventDefault()
     ;(event.shiftKey ? lastElement : firstElement).focus()
     return true
