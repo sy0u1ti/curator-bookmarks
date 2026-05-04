@@ -45,7 +45,10 @@ function getFunctionBody(source, functionName) {
 test('options folder listbox options expose role and aria-selected state', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
+  const scopeSearchInput = optionsHtml.match(/<input[\s\S]*?id="scope-search-input"[\s\S]*?>/)?.[0] || ''
 
+  assert.match(scopeSearchInput, /aria-label="搜索筛选文件夹"/)
+  assert.match(scopeSearchInput, /aria-controls="scope-folder-results"/)
   assert.match(optionsHtml, /id="scope-folder-results"[^>]+role="listbox"[^>]+aria-label="筛选文件夹"/)
   assert.match(optionsSource, /class="scope-folder-card \$\{allSelected \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{allSelected \? 'true' : 'false'\}"/)
   assert.match(optionsSource, /class="scope-folder-card \$\{isCurrent \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{isCurrent \? 'true' : 'false'\}"/)
@@ -62,7 +65,10 @@ test('options folder listbox options expose role and aria-selected state', () =>
 test('AI model picker listbox supports keyboard navigation', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
+  const modelSearchInput = optionsHtml.match(/<input[\s\S]*?id="ai-model-picker-search-input"[\s\S]*?>/)?.[0] || ''
 
+  assert.match(modelSearchInput, /aria-label="搜索 AI 模型"/)
+  assert.match(modelSearchInput, /aria-controls="ai-model-picker-results"/)
   assert.match(optionsHtml, /id="ai-model-picker-results"[^>]+role="listbox"[^>]+aria-label="AI 模型候选列表"/)
   assert.match(optionsSource, /class="scope-folder-card ai-model-card \$\{isCurrent \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{isCurrent \? 'true' : 'false'\}"/)
   assert.match(optionsSource, /aiModelPickerActiveId/)
@@ -78,7 +84,10 @@ test('AI model picker listbox supports keyboard navigation', () => {
 test('move folder picker exposes listbox semantics and keyboard navigation', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
+  const moveSearchInput = optionsHtml.match(/<input[\s\S]*?id="move-search-input"[\s\S]*?>/)?.[0] || ''
 
+  assert.match(moveSearchInput, /aria-label="搜索移动目标文件夹"/)
+  assert.match(moveSearchInput, /aria-controls="move-folder-results"/)
   assert.match(optionsHtml, /id="move-folder-results"[^>]+role="listbox"[^>]+aria-label="移动目标文件夹"/)
   assert.match(optionsSource, /class="move-folder-card"[\s\S]*?role="option"[\s\S]*?aria-selected="false"[\s\S]*?data-move-target-folder="\$\{escapeAttr\(folder\.id\)\}"/)
   assert.match(optionsSource, /moveFolderActiveId/)
