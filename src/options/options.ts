@@ -948,9 +948,13 @@ function bindEvents() {
   dom.cancelMoveModal?.addEventListener('click', closeMoveModal)
   dom.scopeSearchInput?.addEventListener('input', () => {
     managerState.scopeSearchQuery = dom.scopeSearchInput.value
+    managerState.scopeFolderActiveId = null
     renderScopeModal()
   })
+  dom.scopeSearchInput?.addEventListener('keydown', handleScopeSearchKeydown)
   dom.scopeFolderResults?.addEventListener('click', handleScopeFolderResultsClick)
+  dom.scopeFolderResults?.addEventListener('keydown', handleScopeFolderResultsKeydown)
+  dom.scopeFolderResults?.addEventListener('focusin', handleScopeFolderResultsFocus)
   dom.cancelScopeModal?.addEventListener('click', closeScopeModal)
   dom.closeAiModelModal?.addEventListener('click', closeAiModelModal)
   dom.cancelAiModelModal?.addEventListener('click', closeAiModelModal)
@@ -7039,10 +7043,10 @@ function renderScopeModal() {
     : `请选择一个文件夹作为当前${sourceLabel}，支持搜索文件夹名称或路径；选择后会立即更新可用性检测与历史记录视图。`
   dom.scopeSearchInput.value = managerState.scopeSearchQuery
 
-  const activeScopeFolderId = managerState.scopeModalSource === 'ai'
-    ? aiNamingState.scopeFolderId
-    : availabilityState.scopeFolderId
+  const activeScopeFolderId = getCurrentScopeFolderId()
   const allSelected = !activeScopeFolderId
+  const activeId = resolveScopeFolderActiveId(folders, activeScopeFolderId)
+  const allActive = activeId === ''
   const allOption = `
     <button
       class="scope-folder-card ${allSelected ? 'current' : ''}"
@@ -7050,6 +7054,7 @@ function renderScopeModal() {
       role="option"
       aria-selected="${allSelected ? 'true' : 'false'}"
       data-scope-folder-id=""
+      tabindex="${allActive ? '0' : '-1'}"
     >
       <div class="scope-folder-head">
         <span class="scope-folder-icon" aria-hidden="true"></span>
@@ -7071,10 +7076,9 @@ function renderScopeModal() {
 }
 
 function buildScopeFolderCard(folder) {
-  const activeScopeFolderId = managerState.scopeModalSource === 'ai'
-    ? aiNamingState.scopeFolderId
-    : availabilityState.scopeFolderId
+  const activeScopeFolderId = getCurrentScopeFolderId()
   const isCurrent = String(folder.id) === String(activeScopeFolderId || '')
+  const isActive = String(folder.id) === String(managerState.scopeFolderActiveId || '')
 
   return `
     <button
@@ -7083,6 +7087,7 @@ function buildScopeFolderCard(folder) {
       role="option"
       aria-selected="${isCurrent ? 'true' : 'false'}"
       data-scope-folder-id="${escapeAttr(folder.id)}"
+      tabindex="${isActive ? '0' : '-1'}"
       title="${escapeAttr(folder.path || folder.title || '未命名文件夹')}"
     >
       <div class="scope-folder-head">
@@ -7092,6 +7097,32 @@ function buildScopeFolderCard(folder) {
       <span>${escapeHtml(folder.path || folder.title || '未命名文件夹')}</span>
     </button>
   `
+}
+
+function getCurrentScopeFolderId() {
+  return managerState.scopeModalSource === 'ai'
+    ? aiNamingState.scopeFolderId
+    : availabilityState.scopeFolderId
+}
+
+function getScopeFolderOptionButtons() {
+  return [...dom.scopeFolderResults.querySelectorAll<HTMLButtonElement>('[data-scope-folder-id]')]
+}
+
+function resolveScopeFolderActiveId(folders, activeScopeFolderId = getCurrentScopeFolderId()) {
+  const optionIds = new Set(['', ...folders.map((folder) => String(folder.id || ''))])
+  const storedActiveId = managerState.scopeFolderActiveId === null
+    ? null
+    : String(managerState.scopeFolderActiveId || '')
+  const selectedId = String(activeScopeFolderId || '')
+  const activeId = storedActiveId !== null && optionIds.has(storedActiveId)
+    ? storedActiveId
+    : optionIds.has(selectedId)
+      ? selectedId
+      : ''
+
+  managerState.scopeFolderActiveId = activeId
+  return activeId
 }
 
 function renderReviewResults() {
@@ -8227,6 +8258,7 @@ function openScopeModal(source) {
 
   managerState.scopeModalSource = source
   managerState.scopeSearchQuery = ''
+  managerState.scopeFolderActiveId = getCurrentScopeFolderId()
   managerState.scopeModalOpen = true
   renderScopeModal()
 
@@ -8253,6 +8285,7 @@ function closeScopeModal() {
 
   managerState.scopeModalOpen = false
   managerState.scopeSearchQuery = ''
+  managerState.scopeFolderActiveId = null
   renderScopeModal()
 }
 
@@ -8289,6 +8322,7 @@ async function handleScopeFolderResultsClick(event) {
   }
 
   const folderId = String(targetButton.getAttribute('data-scope-folder-id') || '').trim()
+  managerState.scopeFolderActiveId = folderId
   const source = managerState.scopeModalSource
   if (source === 'ai' && (aiNamingState.running || aiNamingState.applying)) {
     return
@@ -8305,6 +8339,111 @@ async function handleScopeFolderResultsClick(event) {
   }
 
   await handleAvailabilityScopeChange(folderId)
+}
+
+function handleScopeSearchKeydown(event) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+    return
+  }
+
+  if (!getScopeFolderOptionButtons().length) {
+    return
+  }
+
+  event.preventDefault()
+  focusScopeFolderOption(event.key === 'ArrowDown' ? 'first' : 'last')
+}
+
+function handleScopeFolderResultsKeydown(event) {
+  if (
+    event.key !== 'ArrowDown' &&
+    event.key !== 'ArrowUp' &&
+    event.key !== 'Home' &&
+    event.key !== 'End' &&
+    event.key !== 'Escape'
+  ) {
+    return
+  }
+
+  event.preventDefault()
+  if (event.key === 'Escape') {
+    dom.scopeSearchInput?.focus()
+    return
+  }
+
+  if (event.key === 'Home') {
+    focusScopeFolderOption('first')
+  } else if (event.key === 'End') {
+    focusScopeFolderOption('last')
+  } else {
+    focusScopeFolderOption(event.key === 'ArrowDown' ? 1 : -1)
+  }
+}
+
+function handleScopeFolderResultsFocus(event) {
+  const target = event.target
+  if (!(target instanceof HTMLElement) || !target.hasAttribute('data-scope-folder-id')) {
+    return
+  }
+
+  managerState.scopeFolderActiveId = String(target.getAttribute('data-scope-folder-id') || '')
+  syncScopeFolderTabStops(managerState.scopeFolderActiveId)
+}
+
+function syncScopeFolderTabStops(activeId) {
+  for (const button of getScopeFolderOptionButtons()) {
+    button.tabIndex = String(button.getAttribute('data-scope-folder-id') || '') === activeId ? 0 : -1
+  }
+}
+
+function focusScopeFolderOptionById(folderId) {
+  const normalizedFolderId = String(folderId || '')
+  let targetButton = null
+  for (const button of getScopeFolderOptionButtons()) {
+    const isTarget = String(button.getAttribute('data-scope-folder-id') || '') === normalizedFolderId
+    button.tabIndex = isTarget ? 0 : -1
+    if (isTarget) {
+      targetButton = button
+    }
+  }
+
+  if (!targetButton) {
+    return false
+  }
+
+  managerState.scopeFolderActiveId = normalizedFolderId
+  targetButton.focus()
+  return true
+}
+
+function focusScopeFolderOption(direction) {
+  const buttons = getScopeFolderOptionButtons()
+  if (!buttons.length) {
+    return
+  }
+
+  const currentIndex = buttons.findIndex((button) => button === document.activeElement)
+  const storedActiveId = managerState.scopeFolderActiveId === null
+    ? null
+    : String(managerState.scopeFolderActiveId || '')
+  let nextIndex = storedActiveId === null
+    ? -1
+    : buttons.findIndex((button) => String(button.getAttribute('data-scope-folder-id') || '') === storedActiveId)
+
+  if (direction === 'first') {
+    nextIndex = 0
+  } else if (direction === 'last') {
+    nextIndex = buttons.length - 1
+  } else if (currentIndex >= 0) {
+    nextIndex = (currentIndex + direction + buttons.length) % buttons.length
+  } else if (nextIndex < 0) {
+    nextIndex = direction > 0 ? 0 : buttons.length - 1
+  }
+
+  const button = buttons[Math.max(0, nextIndex)]
+  if (button) {
+    focusScopeFolderOptionById(String(button.getAttribute('data-scope-folder-id') || ''))
+  }
 }
 
 async function moveSelectedAvailabilityToFolder(folderId) {

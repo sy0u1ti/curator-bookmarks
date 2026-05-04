@@ -49,6 +49,14 @@ test('options folder listbox options expose role and aria-selected state', () =>
   assert.match(optionsHtml, /id="scope-folder-results"[^>]+role="listbox"[^>]+aria-label="筛选文件夹"/)
   assert.match(optionsSource, /class="scope-folder-card \$\{allSelected \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{allSelected \? 'true' : 'false'\}"/)
   assert.match(optionsSource, /class="scope-folder-card \$\{isCurrent \? 'current' : ''\}"[\s\S]*?role="option"[\s\S]*?aria-selected="\$\{isCurrent \? 'true' : 'false'\}"/)
+  assert.match(optionsSource, /dom\.scopeSearchInput\?\.addEventListener\('keydown', handleScopeSearchKeydown\)/)
+  assert.match(optionsSource, /dom\.scopeFolderResults\?\.addEventListener\('keydown', handleScopeFolderResultsKeydown\)/)
+  assert.match(optionsSource, /dom\.scopeFolderResults\?\.addEventListener\('focusin', handleScopeFolderResultsFocus\)/)
+  assert.match(optionsSource, /function handleScopeFolderResultsKeydown\(event\)/)
+  assert.match(optionsSource, /event\.key !== 'Home'[\s\S]*?event\.key !== 'End'[\s\S]*?event\.key !== 'Escape'/)
+  assert.match(optionsSource, /dom\.scopeSearchInput\?\.focus\(\)/)
+  assert.match(optionsSource, /tabindex="\$\{allActive \? '0' : '-1'\}"/)
+  assert.match(optionsSource, /tabindex="\$\{isActive \? '0' : '-1'\}"/)
 })
 
 test('dashboard exposes a persistent folder sidebar with cached DOM refs', () => {

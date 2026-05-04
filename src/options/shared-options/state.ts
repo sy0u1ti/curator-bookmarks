@@ -154,6 +154,7 @@ export const managerState = {
   scopeModalOpen: false,
   scopeModalSource: 'availability',
   scopeSearchQuery: '',
+  scopeFolderActiveId: null as string | null,
   moveModalOpen: false,
   moveSearchQuery: '',
   moveSelectionSource: 'availability',
