@@ -40,6 +40,15 @@ test('popup natural search allows local parsing without AI setup', () => {
   assert.match(popupSource, /openSettingsPage\('ai-provider'\)/)
 })
 
+test('popup natural search does not reuse stale AI plans without provider setup', () => {
+  assert.match(popupSource, /function resolveCachedNaturalSearchPlan\(query, planCacheKey\): Promise<NaturalSearchPlan>/)
+  assert.match(popupSource, /const cachedPlan = await resolveCachedNaturalSearchPlan\(query, planCacheKey\)/)
+  assert.match(popupSource, /if \(!cachedPlan \|\| cachedPlan\.source !== 'ai'\)[\s\S]*?return localPlan/)
+  assert.match(popupSource, /if \(hasConfiguredAiProviderSettings\(settings\)\)[\s\S]*?return cachedPlan/)
+  assert.match(popupSource, /state\.naturalSearchPlanCache\.delete\(planCacheKey\)/)
+  assert.match(popupSource, /未配置 AI 渠道，已使用本地解析。/)
+})
+
 test('popup folder pickers expose option and treeitem semantics', () => {
   assert.match(popupHtml, /id="folder-breadcrumbs"[^>]+aria-label="当前文件夹路径"/)
   assert.match(popupSource, /data-folder-breadcrumb-id="\$\{escapeAttr\(segment\.id\)\}"/)
