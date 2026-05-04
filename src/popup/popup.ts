@@ -35,7 +35,6 @@ import {
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
-import type { BookmarkTagIndex } from '../shared/bookmark-tags.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
 import {
@@ -701,9 +700,11 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     state.allFolders = extracted.folders
     state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
     state.folderMap = extracted.folderMap
+    state.searchTagIndex = tagIndex
     state.searchSnapshotState = snapshotState
     state.searchSnapshotFullTextReady = false
     state.searchSnapshotFullTextPending = false
+    state.searchSnapshotFullTextRunId += 1
     clearSearchCaches()
     await hydrateCurrentTabState()
 
@@ -753,8 +754,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
       state.searchHighlightQuery = ''
       dom.searchInput.value = ''
     }
-
-    schedulePopupSnapshotFullTextWarmup(extracted.bookmarks, tagIndex)
   } catch (error) {
     state.searchRunId += 1
     state.searchPending = false
@@ -789,7 +788,15 @@ async function hydrateCurrentTabState() {
   }
 }
 
-function schedulePopupSnapshotFullTextWarmup(bookmarks, tagIndex: BookmarkTagIndex | null) {
+function maybeWarmPopupSnapshotFullTextForSearch() {
+  if (
+    state.searchSnapshotFullTextReady ||
+    state.searchSnapshotFullTextPending ||
+    !state.debouncedQuery.trim()
+  ) {
+    return
+  }
+
   const snapshotState = state.searchSnapshotState
   const warmupRunId = state.searchSnapshotFullTextRunId + 1
   state.searchSnapshotFullTextRunId = warmupRunId
@@ -803,19 +810,19 @@ function schedulePopupSnapshotFullTextWarmup(bookmarks, tagIndex: BookmarkTagInd
   state.searchSnapshotFullTextPending = true
   window.setTimeout(() => {
     window.requestAnimationFrame(() => {
-      void warmPopupSnapshotFullTextIndex(bookmarks, tagIndex, snapshotState, warmupRunId)
+      void warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId)
     })
   }, SEARCH_SNAPSHOT_WARM_DELAY_MS)
 }
 
-async function warmPopupSnapshotFullTextIndex(bookmarks, tagIndex, snapshotState, warmupRunId) {
+async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   if (state.searchSnapshotFullTextRunId !== warmupRunId || !snapshotState?.index) {
     return
   }
 
   const indexedBookmarks = await enrichPopupSearchIndexWithSnapshotFullText({
-    bookmarks,
-    tagIndex,
+    bookmarks: state.allBookmarks,
+    tagIndex: state.searchTagIndex,
     snapshotIndex: snapshotState.index,
     includeFullText: true
   })
@@ -937,6 +944,8 @@ function runSearch() {
     state.naturalSearchPlan = null
     return
   }
+
+  maybeWarmPopupSnapshotFullTextForSearch()
 
   if (state.naturalSearchEnabled) {
     runNaturalSearch(query, normalizedQuery, runId)
