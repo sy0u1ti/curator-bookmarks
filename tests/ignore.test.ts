@@ -76,3 +76,11 @@ test('ignore rule remove buttons render rule-specific labels', () => {
   assert.match(source, /const deleteLabel = getIgnoreRuleActionLabel\('删除忽略规则', rule, kind\)/)
   assert.match(source, /data-ignore-remove="\$\{escapeAttr\(kind\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(deleteLabel\)\}"/)
 })
+
+test('ignore rule clear category buttons expose category-specific labels', () => {
+  const html = readProjectFile('src/options/options.html')
+
+  assert.match(html, /id="ignore-clear-bookmarks"[^>]+aria-label="清空按书签忽略规则"/)
+  assert.match(html, /id="ignore-clear-domains"[^>]+aria-label="清空按域名忽略规则"/)
+  assert.match(html, /id="ignore-clear-folders"[^>]+aria-label="清空按文件夹忽略规则"/)
+})
