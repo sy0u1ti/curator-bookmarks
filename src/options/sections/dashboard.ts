@@ -148,6 +148,7 @@ let dashboardSelectionMotionFrame = 0
 let dashboardSelectionMotionTimer = 0
 let dashboardSelectionCompositeMotionActive = false
 let dashboardVirtualResizeDeferredForSelection = false
+let dashboardVirtualResizeFrame = 0
 let dashboardTagRegenerateController: AbortController | null = null
 let closingDashboardTagEditor = false
 let dashboardViewReady = false
@@ -2047,21 +2048,49 @@ function ensureDashboardVirtualGrid(): void {
     window.cancelAnimationFrame(virtualState.frame)
     virtualState.frame = 0
   }
+  if (dashboardVirtualResizeFrame) {
+    window.cancelAnimationFrame(dashboardVirtualResizeFrame)
+    dashboardVirtualResizeFrame = 0
+  }
   virtualState.observedElement = container
 
   container.addEventListener('scroll', handleDashboardVirtualScroll, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
-    virtualState.resizeObserver = new ResizeObserver(() => {
-      if (dashboardSelectionCompositeMotionActive) {
-        dashboardVirtualResizeDeferredForSelection = true
-        return
-      }
-      beginStableDashboardResultsUpdate()
-      resetDashboardVirtualRenderCache({ preserveItems: true })
-      scheduleDashboardVirtualRender()
-    })
+    virtualState.resizeObserver = new ResizeObserver(handleDashboardVirtualResize)
     virtualState.resizeObserver.observe(container)
   }
+}
+
+function handleDashboardVirtualResize(): void {
+  if (dashboardSelectionCompositeMotionActive) {
+    dashboardVirtualResizeDeferredForSelection = true
+    return
+  }
+
+  scheduleDashboardVirtualResize()
+}
+
+function scheduleDashboardVirtualResize({
+  showMask = true
+}: {
+  showMask?: boolean
+} = {}): void {
+  if (dashboardVirtualResizeFrame) {
+    return
+  }
+
+  dashboardVirtualResizeFrame = window.requestAnimationFrame(() => {
+    dashboardVirtualResizeFrame = 0
+    if (dashboardSelectionCompositeMotionActive) {
+      dashboardVirtualResizeDeferredForSelection = true
+      return
+    }
+    if (showMask) {
+      beginStableDashboardResultsUpdate()
+    }
+    resetDashboardVirtualRenderCache({ preserveItems: true })
+    scheduleDashboardVirtualRender()
+  })
 }
 
 function beginDashboardSelectionCompositeMotion(): void {
@@ -2126,8 +2155,7 @@ function finishDashboardSelectionCompositeMotion({
   dashboardVirtualResizeDeferredForSelection = false
 
   if (shouldCommitResize) {
-    resetDashboardVirtualRenderCache({ preserveItems: true })
-    scheduleDashboardVirtualRender()
+    scheduleDashboardVirtualResize({ showMask: false })
   }
 }
 

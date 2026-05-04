@@ -187,26 +187,24 @@ test('dashboard resize observer masks stale virtual cards before rerender', () =
   const testDir = dirname(fileURLToPath(import.meta.url))
   const sourcePath = resolve(testDir, '../../src/options/sections/dashboard.ts')
   const source = readFileSync(sourcePath, 'utf8')
-  const observerBody = source.match(
-    /virtualState\.resizeObserver\s*=\s*new ResizeObserver\(\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\)/
+  const resizeHandlerBody = source.match(
+    /function handleDashboardVirtualResize\(\): void\s*\{([\s\S]*?)\n\}\n\nfunction scheduleDashboardVirtualResize/
   )?.[1] || ''
+  const resizeSchedulerBody = source.match(
+    /function scheduleDashboardVirtualResize\([\s\S]*?\n\}\n\nfunction beginDashboardSelectionCompositeMotion/
+  )?.[0] || ''
 
-  assert.match(observerBody, /dashboardSelectionCompositeMotionActive/)
-  assert.match(observerBody, /dashboardVirtualResizeDeferredForSelection\s*=\s*true/)
-  assert.match(observerBody, /return/)
-  assert.match(observerBody, /beginStableDashboardResultsUpdate\(\)/)
-  assert.match(observerBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
-  assert.match(observerBody, /scheduleDashboardVirtualRender\(\)/)
-  assert.ok(
-    observerBody.indexOf('dashboardSelectionCompositeMotionActive') <
-      observerBody.indexOf('beginStableDashboardResultsUpdate()'),
-    'selection-bar composite motion should defer resize rerenders until motion finishes'
-  )
-  assert.ok(
-    observerBody.indexOf('beginStableDashboardResultsUpdate()') <
-      observerBody.indexOf('scheduleDashboardVirtualRender()'),
-    'resize should hide the old virtual window before scheduling the new render'
-  )
+  assert.match(source, /new ResizeObserver\(handleDashboardVirtualResize\)/)
+  assert.match(resizeHandlerBody, /dashboardSelectionCompositeMotionActive/)
+  assert.match(resizeHandlerBody, /dashboardVirtualResizeDeferredForSelection\s*=\s*true/)
+  assert.match(resizeHandlerBody, /scheduleDashboardVirtualResize\(\)/)
+  assert.doesNotMatch(resizeHandlerBody, /beginStableDashboardResultsUpdate\(\)/)
+  assert.doesNotMatch(resizeHandlerBody, /resetDashboardVirtualRenderCache/)
+  assert.doesNotMatch(resizeHandlerBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.match(resizeSchedulerBody, /window\.requestAnimationFrame/)
+  assert.match(resizeSchedulerBody, /beginStableDashboardResultsUpdate\(\)/)
+  assert.match(resizeSchedulerBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
+  assert.match(resizeSchedulerBody, /scheduleDashboardVirtualRender\(\)/)
 })
 
 test('dashboard stable update overlay uses the shared dot matrix loader', () => {
@@ -237,7 +235,8 @@ test('dashboard large selection motion defers virtual resize to one final render
   assert.match(source, /data-dashboard-selection-motion[\s\S]*?useCompositeMotion\s*\?\s*'composite'\s*:\s*'layout'/)
   assert.match(source, /function transitionDashboardSelectionBarVisibility\([\s\S]*?getBoundingClientRect\(\)\.top[\s\S]*?beginDashboardSelectionCompositeMotion\(\)[\s\S]*?classList\.toggle\('hidden',\s*shouldHideSelection\)[\s\S]*?animateDashboardSelectionCardRegionShift/)
   assert.match(finishMotionBody, /dashboardVirtualResizeDeferredForSelection/)
-  assert.match(finishMotionBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
-  assert.match(finishMotionBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.match(finishMotionBody, /scheduleDashboardVirtualResize\(\{\s*showMask:\s*false\s*\}\)/)
+  assert.doesNotMatch(finishMotionBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
+  assert.doesNotMatch(finishMotionBody, /scheduleDashboardVirtualRender\(\)/)
   assert.doesNotMatch(finishMotionBody, /beginStableDashboardResultsUpdate\(\)/)
 })
