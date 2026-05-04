@@ -562,9 +562,11 @@ test('smart bookmark analysis uses the decision panel summary layout', () => {
   const optionsSource = readProjectFile('src/options/options.ts')
   const domSource = readProjectFile('src/options/shared-options/dom.ts')
   const optionsCss = readProjectFile('src/options/options.css')
+  const queryInput = optionsHtml.match(/<input[\s\S]*?id="ai-filter-query"[\s\S]*?>/)?.[0] || ''
 
   assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[^>]+aria-label="书签智能分析决策概览"/)
   assert.match(optionsHtml, /id="ai-decision-status"[^>]*>未开始/)
+  assert.match(queryInput, /aria-label="筛选书签智能分析结果"/)
   assert.match(optionsHtml, /class="availability-decision-panel ai-decision-panel"[\s\S]*?class="decision-progress-row"[\s\S]*?id="ai-progress-text"[\s\S]*?id="ai-progress-bar"[\s\S]*?id="ai-progress-copy"/)
   assert.match(optionsHtml, /class="availability-decision-grid ai-decision-grid"[\s\S]*?id="ai-eligible"[\s\S]*?id="ai-suggested"[\s\S]*?id="ai-manual-review"[\s\S]*?id="ai-unchanged"[\s\S]*?id="ai-high-confidence"[\s\S]*?id="ai-medium-confidence"[\s\S]*?id="ai-low-confidence"[\s\S]*?id="ai-failed"/)
   assert.doesNotMatch(optionsHtml, /<article class="summary-card metric-card[\s\S]*?id="ai-eligible"/)
