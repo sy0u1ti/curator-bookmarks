@@ -191,7 +191,10 @@ test('dashboard resize observer masks stale virtual cards before rerender', () =
     /function handleDashboardVirtualResize\(\): void\s*\{([\s\S]*?)\n\}\n\nfunction scheduleDashboardVirtualResize/
   )?.[1] || ''
   const resizeSchedulerBody = source.match(
-    /function scheduleDashboardVirtualResize\([\s\S]*?\n\}\n\nfunction beginDashboardSelectionCompositeMotion/
+    /function scheduleDashboardVirtualResize\([\s\S]*?\n\}\n\nfunction commitDashboardVirtualResize/
+  )?.[0] || ''
+  const resizeCommitBody = source.match(
+    /function commitDashboardVirtualResize\([\s\S]*?\n\}\n\nfunction beginDashboardSelectionCompositeMotion/
   )?.[0] || ''
 
   assert.match(source, /new ResizeObserver\(handleDashboardVirtualResize\)/)
@@ -202,9 +205,13 @@ test('dashboard resize observer masks stale virtual cards before rerender', () =
   assert.doesNotMatch(resizeHandlerBody, /resetDashboardVirtualRenderCache/)
   assert.doesNotMatch(resizeHandlerBody, /scheduleDashboardVirtualRender\(\)/)
   assert.match(resizeSchedulerBody, /window\.requestAnimationFrame/)
-  assert.match(resizeSchedulerBody, /beginStableDashboardResultsUpdate\(\)/)
-  assert.match(resizeSchedulerBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
-  assert.match(resizeSchedulerBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.match(resizeSchedulerBody, /commitDashboardVirtualResize\(\{\s*showMask\s*\}\)/)
+  assert.doesNotMatch(resizeSchedulerBody, /resetDashboardVirtualRenderCache/)
+  assert.doesNotMatch(resizeSchedulerBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.match(resizeCommitBody, /beginStableDashboardResultsUpdate\(\)/)
+  assert.match(resizeCommitBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
+  assert.match(resizeCommitBody, /renderDashboardCards\(virtualState\.items\)/)
+  assert.doesNotMatch(resizeCommitBody, /scheduleDashboardVirtualRender\(\)/)
 })
 
 test('dashboard stable update overlay uses the shared dot matrix loader', () => {
@@ -235,8 +242,28 @@ test('dashboard large selection motion defers virtual resize to one final render
   assert.match(source, /data-dashboard-selection-motion[\s\S]*?useCompositeMotion\s*\?\s*'composite'\s*:\s*'layout'/)
   assert.match(source, /function transitionDashboardSelectionBarVisibility\([\s\S]*?getBoundingClientRect\(\)\.top[\s\S]*?beginDashboardSelectionCompositeMotion\(\)[\s\S]*?classList\.toggle\('hidden',\s*shouldHideSelection\)[\s\S]*?animateDashboardSelectionCardRegionShift/)
   assert.match(finishMotionBody, /dashboardVirtualResizeDeferredForSelection/)
-  assert.match(finishMotionBody, /scheduleDashboardVirtualResize\(\{\s*showMask:\s*false\s*\}\)/)
+  assert.match(finishMotionBody, /commitDashboardVirtualResize\(\{\s*showMask:\s*false\s*\}\)/)
   assert.doesNotMatch(finishMotionBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
   assert.doesNotMatch(finishMotionBody, /scheduleDashboardVirtualRender\(\)/)
   assert.doesNotMatch(finishMotionBody, /beginStableDashboardResultsUpdate\(\)/)
+})
+
+test('dashboard selection inputs avoid duplicate click and input rerenders', () => {
+  const testDir = dirname(fileURLToPath(import.meta.url))
+  const sourcePath = resolve(testDir, '../../src/options/sections/dashboard.ts')
+  const source = readFileSync(sourcePath, 'utf8')
+  const selectionInputHelperBody = source.match(
+    /function applyDashboardSelectionInputState\([\s\S]*?\n\}\n\nexport function removeDashboardSelectionIds/
+  )?.[0] || ''
+  const inputHandlerBody = source.match(
+    /export function handleDashboardInput\([\s\S]*?\n\}\n\nexport function handleDashboardKeydown/
+  )?.[0] || ''
+  const clickHandlerBody = source.match(
+    /export async function handleDashboardClick\([\s\S]*?\n\}\n\nexport function handleDashboardTagPointerOver/
+  )?.[0] || ''
+
+  assert.match(selectionInputHelperBody, /isChecked\s*===\s*isSelected/)
+  assert.match(selectionInputHelperBody, /return\s+false/)
+  assert.match(inputHandlerBody, /if\s*\(applyDashboardSelectionInputState\(target as HTMLInputElement\)\)\s*\{\s*renderDashboardSection\(\)/)
+  assert.match(clickHandlerBody, /if\s*\(applyDashboardSelectionInputState\(selectionInput\)\)\s*\{\s*renderDashboardSection\(\)/)
 })

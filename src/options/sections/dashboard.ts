@@ -428,6 +428,26 @@ export function getSelectedDashboardBookmarks(): BookmarkRecord[] {
     .filter(Boolean)
 }
 
+function applyDashboardSelectionInputState(input: HTMLInputElement): boolean {
+  const bookmarkId = String(input.getAttribute('data-dashboard-select') || '').trim()
+  if (!bookmarkId) {
+    return false
+  }
+
+  const isChecked = Boolean(input.checked)
+  const isSelected = dashboardState.selectedIds.has(bookmarkId)
+  if (isChecked === isSelected) {
+    return false
+  }
+
+  if (isChecked) {
+    dashboardState.selectedIds.add(bookmarkId)
+  } else {
+    dashboardState.selectedIds.delete(bookmarkId)
+  }
+  return true
+}
+
 export function removeDashboardSelectionIds(bookmarkIds: unknown[]): void {
   for (const bookmarkId of bookmarkIds) {
     dashboardState.selectedIds.delete(String(bookmarkId))
@@ -496,13 +516,9 @@ export function handleDashboardInput(event: Event): void {
   }
 
   if (target.matches('input[data-dashboard-select]')) {
-    const bookmarkId = String(target.getAttribute('data-dashboard-select') || '').trim()
-    if (bookmarkId && 'checked' in target && target.checked) {
-      dashboardState.selectedIds.add(bookmarkId)
-    } else if (bookmarkId) {
-      dashboardState.selectedIds.delete(bookmarkId)
+    if (applyDashboardSelectionInputState(target as HTMLInputElement)) {
+      renderDashboardSection()
     }
-    renderDashboardSection()
     return
   }
 
@@ -579,13 +595,9 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
 
   const selectionInput = target.closest<HTMLInputElement>('input[data-dashboard-select]')
   if (selectionInput) {
-    const bookmarkId = String(selectionInput.getAttribute('data-dashboard-select') || '').trim()
-    if (bookmarkId && selectionInput.checked) {
-      dashboardState.selectedIds.add(bookmarkId)
-    } else if (bookmarkId) {
-      dashboardState.selectedIds.delete(bookmarkId)
+    if (applyDashboardSelectionInputState(selectionInput)) {
+      renderDashboardSection()
     }
-    renderDashboardSection()
     return
   }
 
@@ -595,8 +607,10 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     if (action === 'select-visible') {
       selectVisibleDashboardItems()
     } else if (action === 'clear-selection') {
-      dashboardState.selectedIds.clear()
-      renderDashboardSection()
+      if (dashboardState.selectedIds.size) {
+        dashboardState.selectedIds.clear()
+        renderDashboardSection()
+      }
     } else if (action === 'move-selected') {
       callbacks.openMoveModal('dashboard')
     } else if (action === 'delete-selected') {
@@ -1097,10 +1111,17 @@ export function cancelDashboardDrag({ silent = false }: { silent?: boolean } = {
 
 export function selectVisibleDashboardItems(): void {
   const { visibleItems } = getDashboardRenderData()
+  let changed = false
   for (const item of visibleItems) {
-    dashboardState.selectedIds.add(String(item.id))
+    const bookmarkId = String(item.id)
+    if (!dashboardState.selectedIds.has(bookmarkId)) {
+      dashboardState.selectedIds.add(bookmarkId)
+      changed = true
+    }
   }
-  renderDashboardSection()
+  if (changed) {
+    renderDashboardSection()
+  }
 }
 
 export async function deleteSelectedDashboardItems(callbacks: DashboardCallbacks): Promise<void> {
@@ -2085,12 +2106,26 @@ function scheduleDashboardVirtualResize({
       dashboardVirtualResizeDeferredForSelection = true
       return
     }
-    if (showMask) {
-      beginStableDashboardResultsUpdate()
-    }
-    resetDashboardVirtualRenderCache({ preserveItems: true })
-    scheduleDashboardVirtualRender()
+    commitDashboardVirtualResize({ showMask })
   })
+}
+
+function commitDashboardVirtualResize({
+  showMask = true
+}: {
+  showMask?: boolean
+} = {}): void {
+  if (virtualState.frame) {
+    window.cancelAnimationFrame(virtualState.frame)
+    virtualState.frame = 0
+  }
+  if (showMask) {
+    beginStableDashboardResultsUpdate()
+  }
+  resetDashboardVirtualRenderCache({ preserveItems: true })
+  if (virtualState.items.length) {
+    renderDashboardCards(virtualState.items)
+  }
 }
 
 function beginDashboardSelectionCompositeMotion(): void {
@@ -2155,7 +2190,7 @@ function finishDashboardSelectionCompositeMotion({
   dashboardVirtualResizeDeferredForSelection = false
 
   if (shouldCommitResize) {
-    scheduleDashboardVirtualResize({ showMask: false })
+    commitDashboardVirtualResize({ showMask: false })
   }
 }
 
