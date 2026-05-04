@@ -139,10 +139,15 @@ const DASHBOARD_GRID_GAP = 10
 const DASHBOARD_CARD_MIN_WIDTH = 300
 const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 12
 const DASHBOARD_VIRTUAL_THRESHOLD = 120
+const DASHBOARD_SELECTION_MOTION_MS = 260
 
 let dashboardStatusTimer = 0
 let dashboardResultsStableFrame = 0
 let dashboardResultsUpdateOverlay: HTMLElement | null = null
+let dashboardSelectionMotionFrame = 0
+let dashboardSelectionMotionTimer = 0
+let dashboardSelectionCompositeMotionActive = false
+let dashboardVirtualResizeDeferredForSelection = false
 let dashboardTagRegenerateController: AbortController | null = null
 let closingDashboardTagEditor = false
 let dashboardViewReady = false
@@ -1659,7 +1664,22 @@ function getDashboardFolderPathDepth(path: string): number {
 
 function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
   const selectedCount = getSelectedDashboardBookmarks().length
-  dom.dashboardSelectionGroup.classList.toggle('hidden', selectedCount === 0)
+  const shouldHideSelection = selectedCount === 0
+  const selectionVisibilityChanged = dom.dashboardSelectionGroup.classList.contains('hidden') !== shouldHideSelection
+  const useCompositeMotion = shouldUseDashboardSelectionCompositeMotion(visibleItems)
+
+  dom.dashboardPanel?.setAttribute(
+    'data-dashboard-selection-motion',
+    useCompositeMotion ? 'composite' : 'layout'
+  )
+  if (selectionVisibilityChanged) {
+    transitionDashboardSelectionBarVisibility(shouldHideSelection, useCompositeMotion)
+  } else {
+    if (!useCompositeMotion) {
+      finishDashboardSelectionCompositeMotion({ commitResize: false })
+    }
+    dom.dashboardSelectionGroup.classList.toggle('hidden', shouldHideSelection)
+  }
   dom.dashboardSelectionCount.textContent = `${selectedCount} 条已选择`
   dom.dashboardSelectVisible.disabled = availabilityState.deleting || visibleItems.length === 0
   dom.dashboardClearSelection.disabled = availabilityState.deleting || selectedCount === 0
@@ -1671,6 +1691,34 @@ function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
     .forEach((button) => {
       button.disabled = availabilityState.deleting || visibleItems.length === 0
     })
+}
+
+function shouldUseDashboardSelectionCompositeMotion(visibleItems: DashboardItem[]): boolean {
+  return visibleItems.length >= DASHBOARD_VIRTUAL_THRESHOLD
+}
+
+function transitionDashboardSelectionBarVisibility(
+  shouldHideSelection: boolean,
+  useCompositeMotion: boolean
+): void {
+  if (!useCompositeMotion) {
+    finishDashboardSelectionCompositeMotion({ commitResize: false })
+    dom.dashboardSelectionGroup.classList.toggle('hidden', shouldHideSelection)
+    return
+  }
+
+  const motionTarget = dom.dashboardCardRegion
+  const beforeTop = motionTarget?.getBoundingClientRect().top ?? 0
+  beginDashboardSelectionCompositeMotion()
+  dom.dashboardSelectionGroup.classList.toggle('hidden', shouldHideSelection)
+
+  if (!motionTarget) {
+    finishDashboardSelectionCompositeMotion()
+    return
+  }
+
+  const afterTop = motionTarget.getBoundingClientRect().top
+  animateDashboardSelectionCardRegionShift(motionTarget, beforeTop - afterTop)
 }
 
 function applyDashboardFolderFilter(folderId: unknown): void {
@@ -2004,11 +2052,82 @@ function ensureDashboardVirtualGrid(): void {
   container.addEventListener('scroll', handleDashboardVirtualScroll, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
     virtualState.resizeObserver = new ResizeObserver(() => {
+      if (dashboardSelectionCompositeMotionActive) {
+        dashboardVirtualResizeDeferredForSelection = true
+        return
+      }
       beginStableDashboardResultsUpdate()
       resetDashboardVirtualRenderCache({ preserveItems: true })
       scheduleDashboardVirtualRender()
     })
     virtualState.resizeObserver.observe(container)
+  }
+}
+
+function beginDashboardSelectionCompositeMotion(): void {
+  dashboardSelectionCompositeMotionActive = true
+  dashboardVirtualResizeDeferredForSelection = false
+  dom.dashboardPanel?.classList.add('is-selection-motion-active')
+  if (dashboardSelectionMotionFrame) {
+    window.cancelAnimationFrame(dashboardSelectionMotionFrame)
+    dashboardSelectionMotionFrame = 0
+  }
+  if (dashboardSelectionMotionTimer) {
+    window.clearTimeout(dashboardSelectionMotionTimer)
+    dashboardSelectionMotionTimer = 0
+  }
+}
+
+function animateDashboardSelectionCardRegionShift(target: HTMLElement, deltaY: number): void {
+  const shift = Number.isFinite(deltaY) ? Math.round(deltaY) : 0
+  target.style.removeProperty('--dashboard-selection-motion-shift')
+
+  if (!shift) {
+    dashboardSelectionMotionTimer = window.setTimeout(() => {
+      finishDashboardSelectionCompositeMotion()
+    }, DASHBOARD_SELECTION_MOTION_MS)
+    return
+  }
+
+  target.style.setProperty('--dashboard-selection-motion-shift', `${shift}px`)
+  target.classList.add('is-selection-motion-shifting')
+  dashboardSelectionMotionFrame = window.requestAnimationFrame(() => {
+    dashboardSelectionMotionFrame = 0
+    target.classList.add('is-selection-motion-settling')
+    target.style.setProperty('--dashboard-selection-motion-shift', '0px')
+  })
+  dashboardSelectionMotionTimer = window.setTimeout(() => {
+    target.classList.remove('is-selection-motion-shifting', 'is-selection-motion-settling')
+    target.style.removeProperty('--dashboard-selection-motion-shift')
+    finishDashboardSelectionCompositeMotion()
+  }, DASHBOARD_SELECTION_MOTION_MS + 60)
+}
+
+function finishDashboardSelectionCompositeMotion({
+  commitResize = true
+}: {
+  commitResize?: boolean
+} = {}): void {
+  if (dashboardSelectionMotionFrame) {
+    window.cancelAnimationFrame(dashboardSelectionMotionFrame)
+    dashboardSelectionMotionFrame = 0
+  }
+  if (dashboardSelectionMotionTimer) {
+    window.clearTimeout(dashboardSelectionMotionTimer)
+    dashboardSelectionMotionTimer = 0
+  }
+
+  dom.dashboardCardRegion?.classList.remove('is-selection-motion-shifting', 'is-selection-motion-settling')
+  dom.dashboardCardRegion?.style.removeProperty('--dashboard-selection-motion-shift')
+  dom.dashboardPanel?.classList.remove('is-selection-motion-active')
+
+  const shouldCommitResize = commitResize && dashboardVirtualResizeDeferredForSelection
+  dashboardSelectionCompositeMotionActive = false
+  dashboardVirtualResizeDeferredForSelection = false
+
+  if (shouldCommitResize) {
+    resetDashboardVirtualRenderCache({ preserveItems: true })
+    scheduleDashboardVirtualRender()
   }
 }
 

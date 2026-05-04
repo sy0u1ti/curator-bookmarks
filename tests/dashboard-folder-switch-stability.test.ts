@@ -191,9 +191,17 @@ test('dashboard resize observer masks stale virtual cards before rerender', () =
     /virtualState\.resizeObserver\s*=\s*new ResizeObserver\(\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\)/
   )?.[1] || ''
 
+  assert.match(observerBody, /dashboardSelectionCompositeMotionActive/)
+  assert.match(observerBody, /dashboardVirtualResizeDeferredForSelection\s*=\s*true/)
+  assert.match(observerBody, /return/)
   assert.match(observerBody, /beginStableDashboardResultsUpdate\(\)/)
   assert.match(observerBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
   assert.match(observerBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.ok(
+    observerBody.indexOf('dashboardSelectionCompositeMotionActive') <
+      observerBody.indexOf('beginStableDashboardResultsUpdate()'),
+    'selection-bar composite motion should defer resize rerenders until motion finishes'
+  )
   assert.ok(
     observerBody.indexOf('beginStableDashboardResultsUpdate()') <
       observerBody.indexOf('scheduleDashboardVirtualRender()'),
@@ -214,4 +222,22 @@ test('dashboard stable update overlay uses the shared dot matrix loader', () => 
   assert.match(source, /renderDotMatrixLoader\(\{\s*variant:\s*'spiral',\s*className:\s*'dashboard-update-dot-loader'\s*\}\)/)
   assert.match(source, /overlay\.setAttribute\('aria-hidden',\s*'true'\)/)
   assert.match(source, /function hideDashboardResultsUpdateOverlay\(\)[\s\S]*?dashboardResultsUpdateOverlay\?\.remove\(\)/)
+})
+
+test('dashboard large selection motion defers virtual resize to one final render', () => {
+  const testDir = dirname(fileURLToPath(import.meta.url))
+  const sourcePath = resolve(testDir, '../../src/options/sections/dashboard.ts')
+  const source = readFileSync(sourcePath, 'utf8')
+  const finishMotionBody = source.match(
+    /function finishDashboardSelectionCompositeMotion\([\s\S]*?\n\}\n\nfunction handleDashboardVirtualScroll/
+  )?.[0] || ''
+
+  assert.match(source, /const DASHBOARD_SELECTION_MOTION_MS\s*=\s*260/)
+  assert.match(source, /function shouldUseDashboardSelectionCompositeMotion\(visibleItems: DashboardItem\[\]\): boolean\s*\{[\s\S]*?visibleItems\.length\s*>=\s*DASHBOARD_VIRTUAL_THRESHOLD/)
+  assert.match(source, /data-dashboard-selection-motion[\s\S]*?useCompositeMotion\s*\?\s*'composite'\s*:\s*'layout'/)
+  assert.match(source, /function transitionDashboardSelectionBarVisibility\([\s\S]*?getBoundingClientRect\(\)\.top[\s\S]*?beginDashboardSelectionCompositeMotion\(\)[\s\S]*?classList\.toggle\('hidden',\s*shouldHideSelection\)[\s\S]*?animateDashboardSelectionCardRegionShift/)
+  assert.match(finishMotionBody, /dashboardVirtualResizeDeferredForSelection/)
+  assert.match(finishMotionBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
+  assert.match(finishMotionBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.doesNotMatch(finishMotionBody, /beginStableDashboardResultsUpdate\(\)/)
 })

@@ -1863,6 +1863,18 @@ a {
   position: relative;
 }
 
+.dashboard-card-region.is-selection-motion-shifting {
+  transform: translate3d(0, var(--dashboard-selection-motion-shift, 0), 0);
+  transition: none;
+  will-change: transform;
+}
+
+.dashboard-card-region.is-selection-motion-settling {
+  transform: translate3d(0, var(--dashboard-selection-motion-shift, 0), 0);
+  transition: transform 260ms var(--motion-ease-out);
+  will-change: transform;
+}
+
 .dashboard-card-grid {
   position: relative;
   display: grid;
@@ -2874,6 +2886,13 @@ a {
     opacity 180ms var(--motion-ease-out),
     transform 260ms var(--motion-ease-out);
   will-change: max-height, margin-top, padding, opacity, transform;
+}
+
+.dashboard-panel[data-dashboard-selection-motion="composite"] #dashboard-selection-group {
+  transition:
+    opacity 180ms var(--motion-ease-out),
+    transform 260ms var(--motion-ease-out);
+  will-change: opacity, transform;
 }
 
 .dashboard-panel #dashboard-selection-group.hidden {

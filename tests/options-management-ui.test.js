@@ -268,6 +268,22 @@ test('dashboard selection bar expands without display jump', () => {
   assert.doesNotMatch(expandedRule, /animation:\s*options-reveal-enter/)
 })
 
+test('dashboard large selection motion uses transform instead of layout animation', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+  const shiftingRule = getCssRuleBody(optionsCss, '.dashboard-card-region.is-selection-motion-shifting')
+  const settlingRule = getCssRuleBody(optionsCss, '.dashboard-card-region.is-selection-motion-settling')
+  const compositeRule = getCssRuleBody(optionsCss, '.dashboard-panel[data-dashboard-selection-motion="composite"] #dashboard-selection-group')
+
+  assert.match(shiftingRule, /transform:\s*translate3d\(0,\s*var\(--dashboard-selection-motion-shift,\s*0\),\s*0\)/)
+  assert.match(shiftingRule, /transition:\s*none/)
+  assert.match(shiftingRule, /will-change:\s*transform/)
+  assert.match(settlingRule, /transition:\s*transform\s+260ms/)
+  assert.match(settlingRule, /will-change:\s*transform/)
+  assert.doesNotMatch(compositeRule, /max-height/)
+  assert.doesNotMatch(compositeRule, /margin-top/)
+  assert.match(compositeRule, /transition:[\s\S]*opacity[\s\S]*transform/)
+})
+
 test('dashboard tag editor and tag popover have dialog semantics and keyboard path', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
