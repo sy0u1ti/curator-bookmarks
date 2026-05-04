@@ -438,6 +438,18 @@ test('availability results expose decision filters and single-item ignore action
   assert.match(optionsSource, /连续异常/)
 })
 
+test('availability result controls expose bookmark-specific labels', () => {
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsSource, /function getAvailabilityResultActionLabel\(action, result\)/)
+  assert.match(optionsSource, /const selectionLabel = getAvailabilityResultActionLabel\('选择异常书签', result\)/)
+  assert.match(optionsSource, /const openLabel = getAvailabilityResultActionLabel\('打开异常书签链接', result\)/)
+  assert.match(optionsSource, /data-availability-select="true"[\s\S]*?aria-label="\$\{escapeAttr\(selectionLabel\)\}"/)
+  assert.match(optionsSource, /class="detect-result-open"[\s\S]*?aria-label="\$\{escapeAttr\(openLabel\)\}"/)
+  assert.match(optionsSource, /const actionLabel = getAvailabilityResultActionLabel\('移入高置信异常', result\)[\s\S]*?data-review-action="promote-failed"[\s\S]*?aria-label="\$\{escapeAttr\(actionLabel\)\}"/)
+  assert.match(optionsSource, /const actionLabel = getAvailabilityResultActionLabel\('移回低置信异常', result\)[\s\S]*?data-failed-action="demote-review"[\s\S]*?aria-label="\$\{escapeAttr\(actionLabel\)\}"/)
+})
+
 test('availability decision panel replaces duplicate summary metric cards', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')

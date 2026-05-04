@@ -7339,6 +7339,8 @@ function buildAvailabilityDisplayCard(result, panel) {
   const statusLabel = getAvailabilityResultStatusLabel(result)
   const actionLocked = isAvailabilityResultActionLocked()
   const actionButton = getAvailabilityConfidenceMoveAction(result, actionLocked)
+  const selectionLabel = getAvailabilityResultActionLabel('选择异常书签', result)
+  const openLabel = getAvailabilityResultActionLabel('打开异常书签链接', result)
   const quickActions = buildAvailabilityQuickActions(result, actionLocked)
   const metadataItems = getAvailabilityResultMetadata(result)
   const evidenceCopy = getAvailabilityEvidenceSummary(result)
@@ -7356,6 +7358,7 @@ function buildAvailabilityDisplayCard(result, panel) {
                 type="checkbox"
                 data-availability-select="true"
                 data-bookmark-id="${escapeAttr(result.id)}"
+                aria-label="${escapeAttr(selectionLabel)}"
                 ${selected ? 'checked' : ''}
                 ${interactionLocked ? 'disabled' : ''}
               >
@@ -7373,6 +7376,7 @@ function buildAvailabilityDisplayCard(result, panel) {
               href="${escapeAttr(result.url)}"
               target="_blank"
               rel="noreferrer noopener"
+              aria-label="${escapeAttr(openLabel)}"
             >
               打开链接
             </a>
@@ -7455,14 +7459,30 @@ function getAvailabilityResultFallbackBadge(result) {
   return '忽略规则命中'
 }
 
+function getAvailabilityResultActionLabel(action, result) {
+  const title = String(result?.title || displayUrl(result?.url) || '未命名书签')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const path = String(result?.path || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
+  const safePath = path.length > 48 ? `${path.slice(0, 47).trim()}…` : path
+
+  return `${action}：${safeTitle || '未命名书签'}${safePath ? `，位置：${safePath}` : ''}`
+}
+
 function getAvailabilityConfidenceMoveAction(result, interactionLocked) {
   if (result.status === 'review') {
+    const actionLabel = getAvailabilityResultActionLabel('移入高置信异常', result)
+
     return `
       <button
         class="detect-result-action"
         type="button"
         data-review-action="promote-failed"
         data-bookmark-id="${escapeAttr(result.id)}"
+        aria-label="${escapeAttr(actionLabel)}"
         ${interactionLocked ? 'disabled' : ''}
       >
         移入高置信异常
@@ -7471,12 +7491,15 @@ function getAvailabilityConfidenceMoveAction(result, interactionLocked) {
   }
 
   if (result.status === 'failed') {
+    const actionLabel = getAvailabilityResultActionLabel('移回低置信异常', result)
+
     return `
       <button
         class="detect-result-action"
         type="button"
         data-failed-action="demote-review"
         data-bookmark-id="${escapeAttr(result.id)}"
+        aria-label="${escapeAttr(actionLabel)}"
         ${interactionLocked ? 'disabled' : ''}
       >
         移回低置信异常
