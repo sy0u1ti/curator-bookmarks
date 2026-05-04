@@ -382,6 +382,16 @@ test('duplicate decisions expose explicit keep strategies and recycle wording', 
   assert.doesNotMatch(duplicateSource, />\\s*删除所选\\s*</)
 })
 
+test('duplicate item recycle checkboxes expose bookmark-specific labels', () => {
+  const duplicateSource = readProjectFile('src/options/sections/duplicates.ts')
+
+  assert.match(duplicateSource, /function getDuplicateItemSelectionLabel\(item\)/)
+  assert.match(duplicateSource, /const selectionLabel = getDuplicateItemSelectionLabel\(item\)/)
+  assert.match(duplicateSource, /data-duplicate-select="true"[\s\S]*?data-bookmark-id="\$\{escapeAttr\(item\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(selectionLabel\)\}"/)
+  assert.match(duplicateSource, /移入回收站：\$\{safeTitle \|\| '未命名书签'\}/)
+  assert.match(duplicateSource, /位置：\$\{path\}/)
+})
+
 test('broken-link guidance explains confidence levels and redirect handling', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
