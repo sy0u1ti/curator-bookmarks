@@ -674,6 +674,23 @@ test('redirect update rereads current bookmarks and skips stale source URLs', ()
   assert.match(redirectsSource, /await updateBookmark\(result\.id, \{ url: finalUrl \}\)/)
 })
 
+test('redirect bulk selection buttons expose redirect-specific labels', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const labelledButtons = [
+    ['redirect-clear-selection', '清空重定向更新已选书签'],
+    ['redirect-batch-update', '批量更新重定向已选书签为最终 URL'],
+    ['redirect-delete-selection', '删除重定向更新已选书签'],
+    ['redirect-select-all', '全选待更新重定向书签'],
+    ['redirect-delete-all', '批量删除待更新重定向书签']
+  ]
+
+  for (const [id, label] of labelledButtons) {
+    const button = optionsHtml.match(new RegExp(`<button[^>]+id="${id}"[^>]*>`))?.[0] || ''
+    assert.ok(button, `missing button ${id}`)
+    assert.match(button, new RegExp(`aria-label="${label}"`))
+  }
+})
+
 test('redirect result actions expose bookmark-specific labels', () => {
   const redirectsSource = readProjectFile('src/options/sections/redirects.ts')
 
