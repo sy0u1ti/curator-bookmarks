@@ -255,6 +255,18 @@ export function getDashboardSelectionLabel(
     : `选择书签：${title}`
 }
 
+export function getDashboardCardActionLabel(
+  action: string,
+  item: Pick<DashboardItem, 'title' | 'url'>
+): string {
+  const title = String(item.title || displayUrl(item.url) || '未命名书签')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
+
+  return `${action}：${safeTitle || '未命名书签'}`
+}
+
 export function resetDashboardDragStateSnapshot(): DashboardDragStateSnapshot {
   return createDashboardDragState()
 }
@@ -2697,6 +2709,11 @@ function buildDashboardCard(item: DashboardItem): string {
   const selected = dashboardState.selectedIds.has(String(item.id))
   const expanded = dashboardState.expandedTagIds.has(String(item.id))
   const selectionLabel = getDashboardSelectionLabel(item)
+  const openLabel = getDashboardCardActionLabel('打开书签', item)
+  const copyActionLabel = getDashboardCardActionLabel('复制书签链接', item)
+  const editTagsLabel = getDashboardCardActionLabel('修改书签标签', item)
+  const moveLabel = getDashboardCardActionLabel('移动书签', item)
+  const deleteLabel = getDashboardCardActionLabel('删除书签', item)
   const visibleTagLimit = 1
   const tags = item.tags.slice(0, visibleTagLimit)
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
@@ -2779,14 +2796,15 @@ function buildDashboardCard(item: DashboardItem): string {
       </div>
       <div class="dashboard-card-footer">
         <div class="dashboard-card-actions">
-          <a class="detect-result-open" href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag>打开</a>
-          <button class="detect-result-action" type="button" data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag>${escapeHtml(copyLabel)}</button>
+          <a class="detect-result-open" href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag aria-label="${escapeAttr(openLabel)}">打开</a>
+          <button class="detect-result-action" type="button" data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag aria-label="${escapeAttr(copyActionLabel)}">${escapeHtml(copyLabel)}</button>
           <button
             class="detect-result-action"
             type="button"
             data-dashboard-action="edit-tags"
             data-dashboard-bookmark-id="${escapeAttr(item.id)}"
             data-dashboard-no-drag
+            aria-label="${escapeAttr(editTagsLabel)}"
           >修改标签</button>
           <button
             class="detect-result-action"
@@ -2794,6 +2812,7 @@ function buildDashboardCard(item: DashboardItem): string {
             data-dashboard-action="move-one"
             data-dashboard-bookmark-id="${escapeAttr(item.id)}"
             data-dashboard-no-drag
+            aria-label="${escapeAttr(moveLabel)}"
             ${availabilityState.deleting ? 'disabled' : ''}
           >移动</button>
           <button
@@ -2802,6 +2821,7 @@ function buildDashboardCard(item: DashboardItem): string {
             data-dashboard-action="delete-one"
             data-dashboard-bookmark-id="${escapeAttr(item.id)}"
             data-dashboard-no-drag
+            aria-label="${escapeAttr(deleteLabel)}"
             ${availabilityState.deleting ? 'disabled' : ''}
           >删除</button>
         </div>
