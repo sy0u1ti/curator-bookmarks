@@ -335,6 +335,31 @@ test('dashboard search input reuses the animated bottom focus indicator', () => 
   assert.doesNotMatch(optionsCss, /\.dashboard-search::after\s*\{/)
 })
 
+test('AI provider flow makes Base URL discoverable without implying it is in the first field', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const firstStep = optionsHtml.match(/<li class="ai-flow-step">[\s\S]*?<span class="ai-flow-index">1<\/span>[\s\S]*?<\/li>/)?.[0] || ''
+  const providerAdvanced = optionsHtml.match(/<details id="ai-advanced-settings"[\s\S]*?<\/details>/)?.[0] || ''
+  const advancedSummary = providerAdvanced.match(/<summary class="ai-advanced-summary">[\s\S]*?<\/summary>/)?.[0] || ''
+  const advancedNote = providerAdvanced.match(/<div class="ai-advanced-note">[\s\S]*?<\/div>/)?.[0] || ''
+
+  assert.match(firstStep, /先填 API Key；Base URL 在高级选项/)
+  assert.doesNotMatch(firstStep, /API Key \/ Base URL/)
+  assert.match(advancedSummary, /Base URL/)
+  assert.match(advancedNote, /Base URL 在这里配置/)
+})
+
+test('dashboard search chips use readable dark-surface token colors', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+
+  assert.match(optionsCss, /\.dashboard-search-chip\s*\{[\s\S]*?background:\s*rgba\(245,\s*245,\s*247,\s*0\.08\)[\s\S]*?color:\s*rgba\(245,\s*245,\s*247,\s*0\.88\)/)
+  assert.match(optionsCss, /\.dashboard-search-chip\.site\s*\{[\s\S]*?color:\s*#bae6fd/)
+  assert.match(optionsCss, /\.dashboard-search-chip\.folder\s*\{[\s\S]*?color:\s*#ddd6fe/)
+  assert.match(optionsCss, /\.dashboard-search-chip\.type\s*\{[\s\S]*?color:\s*#bbf7d0/)
+  assert.match(optionsCss, /\.dashboard-search-chip\.time\s*\{[\s\S]*?color:\s*#fef08a/)
+  assert.match(optionsCss, /\.dashboard-search-chip\.exclude\s*\{[\s\S]*?color:\s*#fecaca/)
+  assert.doesNotMatch(optionsCss, /\.dashboard-search-chip\.site\s*\{[\s\S]*?color:\s*#0369a1/)
+})
+
 test('dashboard folder sidebar layout and active styles are defined', () => {
   const optionsCss = readProjectFile('src/options/options.css')
 
