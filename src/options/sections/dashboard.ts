@@ -156,6 +156,7 @@ let dashboardViewRevealFrame = 0
 let dashboardViewRevealRenderVersion = 0
 let dashboardCardsRenderVersion = 0
 let dashboardCardsCommittedRenderVersion = 0
+let pendingDashboardFolderFocusId = ''
 const dashboardRenderCache: DashboardRenderCache = {
   modelKey: null,
   model: null,
@@ -1591,6 +1592,7 @@ function renderDashboardFolderSidebar(model: DashboardModel): void {
   if (dom.dashboardFolderTree.innerHTML !== folderMarkup) {
     dom.dashboardFolderTree.innerHTML = folderMarkup
   }
+  restorePendingDashboardFolderFocus()
 }
 
 function getCachedDashboardFolderSidebarMarkup(
@@ -1713,7 +1715,7 @@ function handleDashboardFolderListboxKeydown(event: KeyboardEvent, target: HTMLE
 
   event.preventDefault()
   event.stopPropagation()
-  focusAndApplyDashboardFolderOption(options[nextIndex])
+  focusAndApplyDashboardFolderOption(options[nextIndex], { restoreAfterRender: true })
   return true
 }
 
@@ -1723,7 +1725,44 @@ function getDashboardFolderFilterOptions(): HTMLElement[] {
   )
 }
 
-function focusAndApplyDashboardFolderOption(option: HTMLElement | undefined): void {
+function focusAndApplyDashboardFolderOption(
+  option: HTMLElement | undefined,
+  { restoreAfterRender = false } = {}
+): void {
+  if (!option) {
+    return
+  }
+
+  const folderId = String(option.getAttribute('data-dashboard-folder-filter') || '').trim()
+  for (const item of getDashboardFolderFilterOptions()) {
+    item.tabIndex = item === option ? 0 : -1
+  }
+
+  option.focus()
+  if (restoreAfterRender) {
+    pendingDashboardFolderFocusId = folderId
+  }
+  applyDashboardFolderFilter(folderId)
+  if (restoreAfterRender) {
+    schedulePendingDashboardFolderFocusRestore()
+  }
+}
+
+function schedulePendingDashboardFolderFocusRestore(): void {
+  window.requestAnimationFrame(() => {
+    restorePendingDashboardFolderFocus()
+  })
+}
+
+function restorePendingDashboardFolderFocus(): void {
+  if (!pendingDashboardFolderFocusId || !dom.dashboardFolderTree) {
+    return
+  }
+
+  const focusId = pendingDashboardFolderFocusId
+  const option = dom.dashboardFolderTree.querySelector<HTMLElement>(
+    `[data-dashboard-folder-filter="${CSS.escape(focusId)}"]`
+  )
   if (!option) {
     return
   }
@@ -1731,9 +1770,8 @@ function focusAndApplyDashboardFolderOption(option: HTMLElement | undefined): vo
   for (const item of getDashboardFolderFilterOptions()) {
     item.tabIndex = item === option ? 0 : -1
   }
-
-  option.focus()
-  applyDashboardFolderFilter(option.getAttribute('data-dashboard-folder-filter'))
+  pendingDashboardFolderFocusId = ''
+  option.focus({ preventScroll: true })
 }
 
 function getDashboardFolderPathDepth(path: string): number {
