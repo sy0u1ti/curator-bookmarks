@@ -176,6 +176,7 @@ const BOOKMARK_TILE_RENDER_CHUNK_SIZE = 80
 const BOOKMARK_CHANGE_REFRESH_DEBOUNCE_MS = 120
 const QUICK_ACCESS_ITEM_LIMIT = 8
 const ACTIVITY_RECORD_LIMIT = 160
+const DASHBOARD_FRAME_READY_TIMEOUT_MS = 12000
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false,
   showPortalOverview: true,
@@ -334,6 +335,7 @@ const state = {
   dashboardOpen: false,
   dashboardFrameLoaded: false,
   dashboardFrameReady: false,
+  dashboardFrameError: '',
   searchOffsetBounds: { ...SEARCH_OFFSET_BOUNDS_FALLBACK } as AdaptiveSearchOffsetBounds,
   searchWidthBounds: { ...SEARCH_WIDTH_BOUNDS_FALLBACK },
   faviconRefreshTokens: new Map<string, number>()
@@ -342,7 +344,10 @@ const state = {
 const root = document.getElementById('newtab-root')
 const dashboardTrigger = document.getElementById('newtab-dashboard-trigger')
 const dashboardOverlay = document.getElementById('newtab-dashboard-overlay')
+const dashboardClose = document.getElementById('newtab-dashboard-close')
 const dashboardFrame = document.getElementById('newtab-dashboard-frame') as HTMLIFrameElement | null
+const dashboardFallback = document.getElementById('newtab-dashboard-fallback')
+const dashboardFallbackCopy = document.getElementById('newtab-dashboard-fallback-copy')
 const settingsTrigger = document.getElementById('newtab-settings-trigger')
 const settingsDrawer = document.getElementById('newtab-settings-drawer')
 const settingsBackdrop = document.getElementById('newtab-settings-backdrop')
@@ -370,6 +375,7 @@ let settingsSaveStatusTimer = 0
 let bookmarkChangeRefreshTimer = 0
 let bookmarkChangeRefreshInFlight = false
 let bookmarkChangeRefreshQueued = false
+let dashboardFrameReadyTimeout = 0
 let bookmarkDragSlotRects = new Map<string, DOMRect>()
 let bookmarkDragSlotOrderIds: string[] = []
 let dashboardReturnFocusTarget: HTMLElement | null = null
@@ -393,6 +399,26 @@ function bindEvents(): void {
   dashboardTrigger?.addEventListener('click', (event) => {
     event.preventDefault()
     openDashboardRoute()
+  })
+  dashboardClose?.addEventListener('click', closeDashboardRoute)
+  dashboardFrame?.addEventListener('error', () => {
+    setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
+  })
+  dashboardFallback?.addEventListener('click', (event) => {
+    const target = event.target
+    if (!(target instanceof Element)) {
+      return
+    }
+
+    const actionButton = target.closest<HTMLElement>('[data-dashboard-fallback-action]')
+    const action = actionButton?.getAttribute('data-dashboard-fallback-action')
+    if (action === 'return') {
+      closeDashboardRoute()
+      return
+    }
+    if (action === 'retry') {
+      retryDashboardFrame()
+    }
   })
   window.addEventListener('hashchange', syncDashboardRoute)
   window.addEventListener('message', handleDashboardMessage)
@@ -2839,6 +2865,9 @@ function openDashboardRoute(): void {
       : null
 
   if (window.location.hash === '#dashboard') {
+    if (state.dashboardFrameError) {
+      retryDashboardFrame()
+    }
     syncDashboardRoute()
     return
   }
@@ -2847,6 +2876,8 @@ function openDashboardRoute(): void {
 }
 
 function closeDashboardRoute(): void {
+  window.clearTimeout(dashboardFrameReadyTimeout)
+  dashboardFrameReadyTimeout = 0
   if (window.location.hash !== '#dashboard') {
     state.dashboardOpen = false
     renderDashboard()
@@ -2860,13 +2891,61 @@ function closeDashboardRoute(): void {
 }
 
 function ensureDashboardFrameLoaded(): void {
-  if (state.dashboardFrameLoaded || !dashboardFrame) {
+  if (!dashboardFrame) {
+    return
+  }
+
+  if (state.dashboardFrameLoaded) {
+    if (
+      state.dashboardOpen &&
+      !state.dashboardFrameReady &&
+      !state.dashboardFrameError &&
+      !dashboardFrameReadyTimeout
+    ) {
+      scheduleDashboardFrameReadyTimeout()
+    }
     return
   }
 
   state.dashboardFrameReady = false
+  state.dashboardFrameError = ''
   dashboardFrame.src = chrome.runtime.getURL('src/options/options.html?embed=newtab-dashboard#dashboard')
   state.dashboardFrameLoaded = true
+  scheduleDashboardFrameReadyTimeout()
+}
+
+function retryDashboardFrame(): void {
+  if (!dashboardFrame) {
+    setDashboardFrameError('书签仪表盘加载失败。请返回新标签页后再试。')
+    return
+  }
+
+  window.clearTimeout(dashboardFrameReadyTimeout)
+  dashboardFrameReadyTimeout = 0
+  state.dashboardFrameLoaded = false
+  state.dashboardFrameReady = false
+  state.dashboardFrameError = ''
+  dashboardFrame.removeAttribute('src')
+  renderDashboard()
+}
+
+function scheduleDashboardFrameReadyTimeout(): void {
+  window.clearTimeout(dashboardFrameReadyTimeout)
+  dashboardFrameReadyTimeout = window.setTimeout(() => {
+    if (!state.dashboardOpen || state.dashboardFrameReady) {
+      return
+    }
+
+    setDashboardFrameError('书签仪表盘加载耗时过长。你可以返回新标签页，或重试打开仪表盘。')
+  }, DASHBOARD_FRAME_READY_TIMEOUT_MS)
+}
+
+function setDashboardFrameError(message: string): void {
+  window.clearTimeout(dashboardFrameReadyTimeout)
+  dashboardFrameReadyTimeout = 0
+  state.dashboardFrameReady = false
+  state.dashboardFrameError = message
+  renderDashboard()
 }
 
 function renderDashboard(): void {
@@ -2874,10 +2953,18 @@ function renderDashboard(): void {
     return
   }
 
+  const hasDashboardError = Boolean(state.dashboardFrameError)
   dashboardOverlay.hidden = !state.dashboardOpen
   dashboardOverlay.setAttribute('aria-hidden', state.dashboardOpen ? 'false' : 'true')
-  dashboardOverlay.dataset.dashboardReady = state.dashboardFrameReady ? 'true' : 'false'
+  dashboardOverlay.dataset.dashboardReady = state.dashboardFrameReady && !hasDashboardError ? 'true' : 'false'
+  dashboardOverlay.dataset.dashboardError = hasDashboardError ? 'true' : 'false'
   dashboardTrigger?.setAttribute('aria-expanded', state.dashboardOpen ? 'true' : 'false')
+  if (dashboardFallback) {
+    dashboardFallback.hidden = !hasDashboardError
+  }
+  if (dashboardFallbackCopy) {
+    dashboardFallbackCopy.textContent = state.dashboardFrameError || ''
+  }
 
   if (state.dashboardOpen) {
     ensureDashboardFrameLoaded()
@@ -2925,6 +3012,9 @@ function handleDashboardMessage(event: MessageEvent): void {
   }
 
   if (event.data?.type === 'curator:newtab-dashboard-ready') {
+    window.clearTimeout(dashboardFrameReadyTimeout)
+    dashboardFrameReadyTimeout = 0
+    state.dashboardFrameError = ''
     state.dashboardFrameReady = true
     renderDashboard()
   }
