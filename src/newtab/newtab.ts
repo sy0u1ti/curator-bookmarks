@@ -2881,6 +2881,11 @@ function getBookmarkDisplayTitle(bookmark: chrome.bookmarks.BookmarkTreeNode): s
   return String(bookmark.title || '').trim() || String(bookmark.url || '').trim() || '未命名书签'
 }
 
+function getBookmarkActionLabelContext(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
+  const title = getBookmarkDisplayTitle(bookmark)
+  return title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
+}
+
 function refreshActiveMenuIcon(): void {
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
@@ -3305,6 +3310,7 @@ function renderDeleteToast(): void {
   if (!deleted) {
     return
   }
+  const bookmarkLabel = getBookmarkActionLabelContext(deleted.bookmark)
 
   const toast = document.createElement('section')
   toast.className = 'newtab-delete-toast'
@@ -3330,11 +3336,13 @@ function renderDeleteToast(): void {
   undo.dataset.undoDelete = 'true'
   undo.disabled = state.deleteToastBusy
   undo.textContent = state.deleteToastBusy ? '恢复中' : '撤销'
+  undo.setAttribute('aria-label', `撤销删除：${bookmarkLabel}`)
 
   const recycle = document.createElement('button')
   recycle.type = 'button'
   recycle.dataset.openRecycle = 'true'
   recycle.textContent = '回收站'
+  recycle.setAttribute('aria-label', `打开回收站查看：${bookmarkLabel}`)
 
   actions.append(undo, recycle)
   toast.append(copy, actions)

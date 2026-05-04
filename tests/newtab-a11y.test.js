@@ -22,6 +22,10 @@ test('newtab keeps local polite status regions for short feedback', () => {
   assert.match(newtabHtml, /id="settings-save-status"[\s\S]*aria-live="polite"/)
   assert.match(newtabSource, /toast\.setAttribute\('role', 'status'\)/)
   assert.match(newtabSource, /toast\.setAttribute\('aria-live', 'polite'\)/)
+  assert.match(newtabSource, /function getBookmarkActionLabelContext\(bookmark/)
+  assert.match(newtabSource, /title\.length > 48 \? `\$\{title\.slice\(0, 47\)\.trim\(\)\}…` : title/)
+  assert.match(newtabSource, /undo\.setAttribute\('aria-label', `撤销删除：\$\{bookmarkLabel\}`\)/)
+  assert.match(newtabSource, /recycle\.setAttribute\('aria-label', `打开回收站查看：\$\{bookmarkLabel\}`\)/)
 })
 
 test('newtab folder candidate picker exposes named listbox semantics', () => {
