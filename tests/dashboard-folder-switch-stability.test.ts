@@ -10,6 +10,26 @@ import {
   shouldResetDashboardVirtualScrollForFilterChange
 } from '../src/options/sections/dashboard.js'
 
+function getFunctionBody(source: string, functionName: string): string {
+  const start = source.indexOf(`function ${functionName}`)
+  assert.ok(start >= 0, `${functionName} should exist`)
+  const bodyStart = source.indexOf('{', start)
+  assert.ok(bodyStart >= 0, `${functionName} should have a body`)
+  let depth = 0
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index]
+    if (char === '{') {
+      depth += 1
+    } else if (char === '}') {
+      depth -= 1
+      if (depth === 0) {
+        return source.slice(bodyStart + 1, index)
+      }
+    }
+  }
+  assert.fail(`${functionName} body should close`)
+}
+
 test('dashboard section entry resets reveal before showing cached cards', () => {
   assert.equal(
     shouldResetDashboardPanelRevealForSectionEntry({
@@ -253,18 +273,26 @@ test('dashboard selection inputs avoid duplicate click and input rerenders', () 
   const testDir = dirname(fileURLToPath(import.meta.url))
   const sourcePath = resolve(testDir, '../../src/options/sections/dashboard.ts')
   const source = readFileSync(sourcePath, 'utf8')
-  const selectionInputHelperBody = source.match(
-    /function applyDashboardSelectionInputState\([\s\S]*?\n\}\n\nexport function removeDashboardSelectionIds/
-  )?.[0] || ''
-  const inputHandlerBody = source.match(
-    /export function handleDashboardInput\([\s\S]*?\n\}\n\nexport function handleDashboardKeydown/
-  )?.[0] || ''
-  const clickHandlerBody = source.match(
-    /export async function handleDashboardClick\([\s\S]*?\n\}\n\nexport function handleDashboardTagPointerOver/
-  )?.[0] || ''
+  const selectionInputHelperBody = getFunctionBody(source, 'applyDashboardSelectionInputState')
+  const selectionSyncBody = getFunctionBody(source, 'syncDashboardSelectionOnly')
+  const inputHandlerBody = getFunctionBody(source, 'handleDashboardInput')
+  const clickHandlerBody = getFunctionBody(source, 'handleDashboardClick')
+  const selectVisibleBody = getFunctionBody(source, 'selectVisibleDashboardItems')
+  const virtualStateKeyBody = getFunctionBody(source, 'getDashboardVirtualRenderStateKey')
 
   assert.match(selectionInputHelperBody, /isChecked\s*===\s*isSelected/)
   assert.match(selectionInputHelperBody, /return\s+false/)
-  assert.match(inputHandlerBody, /if\s*\(applyDashboardSelectionInputState\(target as HTMLInputElement\)\)\s*\{\s*renderDashboardSection\(\)/)
-  assert.match(clickHandlerBody, /if\s*\(applyDashboardSelectionInputState\(selectionInput\)\)\s*\{\s*renderDashboardSection\(\)/)
+  assert.match(inputHandlerBody, /if\s*\(applyDashboardSelectionInputState\(target as HTMLInputElement\)\)\s*\{\s*syncDashboardSelectionOnly\(\)/)
+  assert.match(clickHandlerBody, /if\s*\(applyDashboardSelectionInputState\(selectionInput\)\)\s*\{\s*syncDashboardSelectionOnly\(\)/)
+  assert.match(clickHandlerBody, /dashboardState\.selectedIds\.clear\(\)[\s\S]*?syncDashboardSelectionOnly\(\)/)
+  assert.match(selectVisibleBody, /if\s*\(changed\)\s*\{\s*syncDashboardSelectionOnly\(\)/)
+  assert.match(selectionSyncBody, /renderDashboardSelectionBar\(visibleItems\)/)
+  assert.match(selectionSyncBody, /querySelectorAll<HTMLElement>\('\[data-dashboard-card\]'\)/)
+  assert.match(selectionSyncBody, /card\.classList\.toggle\('selected',\s*selected\)/)
+  assert.match(selectionSyncBody, /querySelector<HTMLInputElement>\('input\[data-dashboard-select\]'\)/)
+  assert.match(selectionSyncBody, /input\.checked\s*=\s*selected/)
+  assert.doesNotMatch(selectionSyncBody, /innerHTML/)
+  assert.doesNotMatch(selectionSyncBody, /renderDashboardCards\(/)
+  assert.doesNotMatch(selectionSyncBody, /renderDashboardSection\(/)
+  assert.doesNotMatch(virtualStateKeyBody, /selectedIds/)
 })

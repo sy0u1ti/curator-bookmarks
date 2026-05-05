@@ -462,6 +462,29 @@ function applyDashboardSelectionInputState(input: HTMLInputElement): boolean {
   return true
 }
 
+export function syncDashboardSelectionOnly(): void {
+  if (!dom.dashboardResults) {
+    return
+  }
+
+  const { model, visibleItems } = getDashboardRenderData()
+  syncDashboardSelection(
+    dashboardState.selectedIds,
+    new Set(model.items.map((item) => String(item.id)))
+  )
+  renderDashboardSelectionBar(visibleItems)
+
+  dom.dashboardResults.querySelectorAll<HTMLElement>('[data-dashboard-card]').forEach((card) => {
+    const bookmarkId = String(card.getAttribute('data-dashboard-bookmark-id') || '').trim()
+    const selected = bookmarkId ? dashboardState.selectedIds.has(bookmarkId) : false
+    card.classList.toggle('selected', selected)
+    const input = card.querySelector<HTMLInputElement>('input[data-dashboard-select]')
+    if (input) {
+      input.checked = selected
+    }
+  })
+}
+
 function getDashboardScopeTitle(folderId: string): string {
   const folder = folderId ? availabilityState.folderMap.get(folderId) : null
   if (!folder) {
@@ -566,7 +589,7 @@ export function handleDashboardInput(event: Event): void {
 
   if (target.matches('input[data-dashboard-select]')) {
     if (applyDashboardSelectionInputState(target as HTMLInputElement)) {
-      renderDashboardSection()
+      syncDashboardSelectionOnly()
     }
     return
   }
@@ -646,7 +669,7 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
   const selectionInput = target.closest<HTMLInputElement>('input[data-dashboard-select]')
   if (selectionInput) {
     if (applyDashboardSelectionInputState(selectionInput)) {
-      renderDashboardSection()
+      syncDashboardSelectionOnly()
     }
     return
   }
@@ -665,7 +688,7 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     } else if (action === 'clear-selection') {
       if (dashboardState.selectedIds.size) {
         dashboardState.selectedIds.clear()
-        renderDashboardSection()
+        syncDashboardSelectionOnly()
       }
     } else if (action === 'move-selected') {
       callbacks.openMoveModal('dashboard')
@@ -1185,7 +1208,7 @@ export function selectVisibleDashboardItems(): void {
     }
   }
   if (changed) {
-    renderDashboardSection()
+    syncDashboardSelectionOnly()
   }
 }
 
@@ -2203,7 +2226,6 @@ function getDashboardVirtualRenderStateKey(renderedItems: DashboardItem[]): stri
     const id = String(item.id)
     return [
       id,
-      dashboardState.selectedIds.has(id) ? '1' : '0',
       dashboardState.expandedTagIds.has(id) ? '1' : '0',
       dashboardState.copyFeedbackId === id ? '1' : '0'
     ].join(':')
