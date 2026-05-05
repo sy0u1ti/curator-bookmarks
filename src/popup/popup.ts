@@ -3714,11 +3714,11 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
       }
     })
 
-	    state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
-	    await finishSmartSave({
-	      message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
-	      closeModal
-	    })
+    state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
+    await finishSmartSave({
+      message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
+      closeModal
+    })
     savedWithoutRefresh = true
   } catch (error) {
     state.smartSaving = false

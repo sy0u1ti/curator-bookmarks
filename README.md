@@ -55,7 +55,7 @@
   <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.2h8x1hwct6.webp" alt="仪表盘">
   <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.7pwi0e0vk.webp" alt="仪表盘2">
 </p>
-  
+
 ### 书签管理
 
 - 死链检测
@@ -72,7 +72,7 @@
 
 - AI生成摘要、主题、标签、别名、标题建议和推荐收藏位置。
 
-  
+
 ### 书签新标签页
 
 - 接管 Chrome 新标签页，展示自选的书签文件夹。
@@ -81,9 +81,9 @@
 
 - 书签加新标签页的全新体验
 
-  
-  
-  
+
+
+
 
 ## 安装
 
@@ -94,11 +94,11 @@
 3. 在 **书签来源** 中选择要展示的文件夹，或点击 **新增书签来源文件夹** 创建专用文件夹。
 4. 回到新标签页后，可继续调整搜索栏、背景、时间日期和图标布局。
 
-  
+
 
 ### 下载发行版
 
-  
+
 
 1. 前往 [Releases](https://github.com/sy0u1ti/curator-bookmarks/releases) 下载最新 `curator-bookmarks-*.zip`
 
@@ -108,15 +108,15 @@
 
 4. 点击 **加载已解压的扩展程序**，选择解压后的 `dist` 文件夹
 
-  
+
 
 ### 从源码构建
 
-  
+
 
 需要 Node.js 18+。
 
-  
+
 
 ```bash
 
@@ -126,16 +126,16 @@ npm run build
 
 ```
 
-  
+
 
 然后按上述步骤 3-4 加载 `dist` 文件夹。
 
-  
-  
+
+
 
 ## 开发
 
-  
+
 
 ```bash
 
@@ -151,12 +151,12 @@ npm run pack:zip     # 构建并打包 release zip
 
 ```
 
-  
-  
-  
+
+
+
 
 ## 许可
 
-  
+
 
 [MIT](LICENSE)
