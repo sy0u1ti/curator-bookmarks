@@ -315,3 +315,11 @@
 - 合并后验证：`git status --short --branch` 确认只新增 `Work documentation.md`
 - 是否需要回到 agent worktree 修复：否
 
+## Agent: agent/extension-modernization-20260506-quality
+
+- 范围：仅补充回归测试和本文档审计记录，未改 popup/newtab/options 主 UI。
+- Popup 性能策略：保持首屏轻索引，`buildLightPopupSearchIndex` 只消费标题、URL、路径、标签、摘要和 headings；新增测试覆盖 `enrichPopupSearchIndexWithSnapshotFullText(... includeFullText: false)` 不把本地或 IDB full text 合入搜索文本，避免首屏被全文数据阻塞。
+- Newtab 性能策略：健康摘要继续基于现有书签、标签、snapshot summary 和 activity 元数据计算；新增测试确认只有 full text 引用但没有 summary 的 snapshot 仍被视为缺少摘要，避免 newtab 首屏为了健康卡读取或分析正文。
+- Saved search 测试策略：补充纯模型测试，覆盖 normalize 后按更新时间排序、上限裁剪、空 query 丢弃、scope 过滤，以及重复保存同一 query/scope 时原地更新，保护 popup/dashboard 复用保存搜索数据时不扩大 storage 体积。
+- Options/tag management 审计：本次未修改标签管理 UI；质量要求是标签统计和批量操作应继续放在对应 section 激活后计算，不放入 options 首屏初始化路径。
+- 验证记录：先安装依赖 `npm ci`；定向验证 `npm run test:build && node --test .tmp-test/tests/popup-search-index.test.js .tmp-test/tests/newtab-bookmark-health.test.js .tmp-test/tests/search-query.test.js` 通过。

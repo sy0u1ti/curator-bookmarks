@@ -215,6 +215,29 @@ test('recent unprocessed excludes pinned, opened, tagged and summarized bookmark
   assert.equal(health.cards.find((card) => card.id === 'recent-unprocessed')?.count, 1)
 })
 
+test('health summary does not treat stored full text as first-paint summary data', () => {
+  const health = buildNewTabBookmarkHealth({
+    now: NOW,
+    bookmarks: [
+      bookmark({ id: 'fulltext-only', dateAdded: NOW - DAY_MS })
+    ],
+    tagIndex: null,
+    snapshotIndex: snapshotIndex({
+      'fulltext-only': snapshotRecord('fulltext-only', {
+        summary: '',
+        hasFullText: true,
+        fullTextBytes: 25000,
+        fullTextStorage: 'idb',
+        fullTextRef: 'snapshot-fulltext-only'
+      })
+    }),
+    activity: null
+  })
+
+  assert.deepEqual(health.details.missingSummaryBookmarkIds, ['fulltext-only'])
+  assert.deepEqual(health.details.recentUnprocessedBookmarkIds, ['fulltext-only'])
+})
+
 test('empty health input returns quiet cards without side effects', () => {
   const health = buildNewTabBookmarkHealth({
     now: NOW,
