@@ -80,6 +80,16 @@ test('allows direct page fetch only for http origins with granted permission', (
   )
 })
 
+test('skips known account pages even when origin permission is granted', () => {
+  const decision = decideDirectPageFetch('https://mail.google.com/mail/u/0/#inbox', true)
+
+  assert.equal(decision.allowed, false)
+  assert.equal(decision.originPattern, 'https://mail.google.com/*')
+  assert.equal(decision.reason, 'account-login-page')
+  assert.match(decision.warning, /登录或账号入口/)
+  assert.equal(decideDirectPageFetch('https://26qexo.vercel.app/login/?next=/', true).allowed, true)
+})
+
 test('normalizes CORS-like fetch failures into graceful fallback warnings', () => {
   const corsError = new TypeError('Failed to fetch')
   const context = appendPageContentWarnings(

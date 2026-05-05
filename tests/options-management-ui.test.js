@@ -869,6 +869,8 @@ test('availability and smart analysis runs notify when finished', () => {
   assert.match(optionsSource, /书签智能分析已停止/)
   assert.match(optionsSource, /createOptionsNotification\(`availability-\$\{completedAt\}-/)
   assert.match(optionsSource, /createOptionsNotification\(`ai-naming-\$\{completedAt\}-/)
+  assert.match(optionsSource, /createOptionsPageNotification\(notificationId, options\)/)
+  assert.match(optionsSource, /chrome\.notifications\.create\(notificationId,[\s\S]*?chrome\.runtime\.getURL\('src\/assets\/icon128\.png'\)/)
   assert.match(messagesSource, /type: 'notification:create'/)
   assert.match(messagesSource, /export function requestRuntimeNotification/)
   assert.doesNotMatch(optionsSource, /getNotificationPermissionLevel/)

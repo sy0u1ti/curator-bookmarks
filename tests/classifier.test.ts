@@ -280,6 +280,40 @@ test('builds failure classifications from navigation and probe evidence', () => 
   assert.equal(
     buildFailureClassification(
       bookmark,
+      [
+        navigationAttempt('net::ERR_CONNECTION_RESET'),
+        navigationAttempt('net::ERR_CONNECTION_RESET')
+      ],
+      {
+        kind: 'network',
+        method: '主请求',
+        label: '主请求失败',
+        detail: '主请求失败：net::ERR_CONNECTION_RESET。'
+      },
+      true
+    ).status,
+    'review'
+  )
+  assert.equal(
+    buildFailureClassification(
+      bookmark,
+      [
+        navigationAttempt('net::ERR_CONNECTION_RESET'),
+        navigationAttempt('net::ERR_CONNECTION_RESET')
+      ],
+      {
+        kind: 'network',
+        method: 'GET',
+        label: '网络探测失败',
+        detail: '网络探测未能建立连接。'
+      },
+      true
+    ).status,
+    'failed'
+  )
+  assert.equal(
+    buildFailureClassification(
+      bookmark,
       [{ ...navigationAttempt('', 'available'), detail: '后台标签页已完成页面导航。' }],
       { kind: 'ok', method: 'GET', label: '探测可达', detail: '网络探测(GET)可达。' },
       true

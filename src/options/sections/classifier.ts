@@ -164,7 +164,10 @@ export function buildFailureClassification(
   }
 
   if (effectiveProbe.kind === 'network') {
-    if (shouldClassifyAsHighConfidence(navigationEvidence, effectiveProbe.kind)) {
+    if (
+      effectiveProbe.method !== '主请求' &&
+      shouldClassifyAsHighConfidence(navigationEvidence, effectiveProbe.kind)
+    ) {
       return {
         ...baseResult,
         status: 'failed',
@@ -188,7 +191,10 @@ export function buildFailureClassification(
   }
 
   if (effectiveProbe.kind === 'unknown') {
-    if (shouldClassifyAsHighConfidence(navigationEvidence, effectiveProbe.kind)) {
+    if (
+      effectiveProbe.method !== '主请求' &&
+      shouldClassifyAsHighConfidence(navigationEvidence, effectiveProbe.kind)
+    ) {
       return {
         ...baseResult,
         status: 'failed',

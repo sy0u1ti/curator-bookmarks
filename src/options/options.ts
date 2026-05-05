@@ -6203,9 +6203,53 @@ function createOptionsNotification(
     silent?: boolean
   }
 ): Promise<void> {
-  return requestRuntimeNotification({
-    notificationId,
-    ...options
+  return createOptionsPageNotification(notificationId, options).catch(async (directError) => {
+    try {
+      await requestRuntimeNotification({
+        notificationId,
+        ...options
+      })
+    } catch {
+      throw directError
+    }
+  })
+}
+
+function createOptionsPageNotification(
+  notificationId: string,
+  options: {
+    title: string
+    message: string
+    contextMessage?: string
+    priority?: number
+    requireInteraction?: boolean
+    silent?: boolean
+  }
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!chrome.notifications?.create) {
+      reject(new Error('Chrome notifications API unavailable.'))
+      return
+    }
+
+    chrome.notifications.create(notificationId, {
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('src/assets/icon128.png'),
+      title: options.title,
+      message: options.message,
+      contextMessage: options.contextMessage || undefined,
+      priority: Number.isFinite(options.priority) ? Number(options.priority) : 1,
+      requireInteraction: Boolean(options.requireInteraction),
+      silent: Boolean(options.silent)
+    }, () => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+
+      resolve()
+    })
   })
 }
 
