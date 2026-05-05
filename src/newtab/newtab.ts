@@ -152,7 +152,7 @@ const DEFAULT_SEARCH_SETTINGS = {
   engine: 'google' as SearchEngineId,
   enabledEngines: DEFAULT_ENABLED_SEARCH_ENGINE_IDS,
   placeholder: '搜索网页或书签',
-  width: 44,
+  width: 34,
   height: 34,
   offsetY: 0,
   background: 58
@@ -472,7 +472,6 @@ const state = {
 const root = document.getElementById('newtab-root')
 const dashboardTrigger = document.getElementById('newtab-dashboard-trigger')
 const dashboardOverlay = document.getElementById('newtab-dashboard-overlay')
-const dashboardClose = document.getElementById('newtab-dashboard-close')
 const dashboardFrame = document.getElementById('newtab-dashboard-frame') as HTMLIFrameElement | null
 const dashboardFallback = document.getElementById('newtab-dashboard-fallback')
 const dashboardFallbackCopy = document.getElementById('newtab-dashboard-fallback-copy')
@@ -529,7 +528,6 @@ function bindEvents(): void {
     event.preventDefault()
     openDashboardRoute()
   })
-  dashboardClose?.addEventListener('click', closeDashboardRoute)
   dashboardFrame?.addEventListener('error', () => {
     setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
   })
@@ -3796,9 +3794,9 @@ function createSearchWidget(): HTMLElement | null {
 
     suggestions.hidden = false
     suggestionsHeading.textContent = '书签匹配'
-    activeSuggestionIndex = preserveActive
-      ? Math.max(0, Math.min(previousActiveIndex, searchSuggestions.length - 1))
-      : 0
+    activeSuggestionIndex = preserveActive && previousActiveIndex >= 0
+      ? Math.min(previousActiveIndex, searchSuggestions.length - 1)
+      : -1
 
     suggestions.replaceChildren(...searchSuggestions.map((suggestion, index) =>
       createSearchSuggestionButton(
@@ -3815,7 +3813,7 @@ function createSearchWidget(): HTMLElement | null {
     ))
     suggestionsPanel.classList.remove('hidden')
     suggestionsHeading.hidden = false
-    suggestionsHint.textContent = `按 Enter 打开选中的书签；Cmd/Ctrl+Enter 用 ${getSearchEngineDisplayName()} 搜索网页`
+    suggestionsHint.textContent = `按 ↓ 选择书签，选中后 Enter 打开；Cmd/Ctrl+Enter 用 ${getSearchEngineDisplayName()} 搜索网页`
     suggestionsHint.hidden = false
     input.setAttribute('aria-expanded', 'true')
 

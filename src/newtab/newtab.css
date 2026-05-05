@@ -469,7 +469,7 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-search-slot {
   --search-height: 34px;
-  --search-width: 44vw;
+  --search-width: 34vw;
   --search-effective-width: min(max(220px, var(--search-width)), 100%);
   --search-offset-y: 0px;
   position: relative;
@@ -482,7 +482,7 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-search {
   --search-bg-alpha: 0.58;
-  --search-width: 44vw;
+  --search-width: 34vw;
   --search-height: 34px;
   z-index: 1;
   display: flex;
@@ -981,44 +981,6 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-dashboard-overlay[hidden] {
   display: none;
-}
-
-.newtab-dashboard-close {
-  position: fixed;
-  top: 14px;
-  right: 14px;
-  z-index: 4;
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border: 1px solid rgba(245, 245, 247, 0.18);
-  border-radius: 6px;
-  background: rgba(12, 12, 13, 0.82);
-  color: rgba(245, 245, 247, 0.82);
-  cursor: pointer;
-  -webkit-backdrop-filter: blur(16px);
-  backdrop-filter: blur(16px);
-}
-
-.newtab-dashboard-close svg {
-  width: 18px;
-  height: 18px;
-  stroke: currentColor;
-  stroke-width: 1.7;
-  stroke-linecap: round;
-}
-
-.newtab-dashboard-close:hover,
-.newtab-dashboard-close:focus-visible {
-  border-color: rgba(245, 245, 247, 0.32);
-  background: rgba(24, 24, 26, 0.92);
-  color: #ffffff;
-}
-
-.newtab-dashboard-close:focus-visible {
-  outline: 2px solid rgba(245, 245, 247, 0.36);
-  outline-offset: 3px;
 }
 
 .newtab-dashboard-surface {
@@ -2318,15 +2280,18 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
 .folder-candidate-card {
   display: grid;
   width: 100%;
+  min-width: 0;
   max-width: 100%;
   min-height: 34px;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: start;
   gap: 8px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.035);
   color: rgba(245, 245, 247, 0.86);
+  white-space: normal;
 }
 
 .folder-source-selected-item {
@@ -2365,23 +2330,31 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
 
 .folder-source-selected-copy strong,
 .folder-candidate-copy strong {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: rgba(245, 245, 247, 0.9);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: anywhere;
+  white-space: normal;
   word-break: break-word;
 }
 
 .folder-source-selected-copy span,
 .folder-candidate-copy span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   color: rgba(245, 245, 247, 0.4);
   font-size: 10px;
   font-weight: 500;
   line-height: 1.2;
   overflow-wrap: anywhere;
+  white-space: normal;
   word-break: break-word;
 }
 

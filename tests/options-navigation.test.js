@@ -122,3 +122,19 @@ test('dashboard fullscreen and embedded mode reset the options shell scroll layo
   assert.match(optionsCss, /\.dashboard-fullscreen-active\s+\.options-main\s*>\s*\.options-panel\s*\{[\s\S]*?width:\s*100%[\s\S]*?max-width:\s*none[\s\S]*?margin-inline:\s*0/)
   assert.match(optionsCss, /\.options-dashboard-embed\.dashboard-fullscreen-active\s+\.options-shell,\s*\.options-dashboard-embed\.dashboard-fullscreen-active\s+\.options-layout,\s*\.options-dashboard-embed\.dashboard-fullscreen-active\s+\.options-main,\s*\.options-dashboard-embed\.dashboard-fullscreen-active\s+\.dashboard-panel\s*\{[\s\S]*?background:\s*transparent/)
 })
+
+test('embedded dashboard exposes one top-right close affordance from the iframe content', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+  const closeRule = getCssRuleBody(
+    optionsCss,
+    '.options-dashboard-embed.dashboard-fullscreen-active .dashboard-title-actions [data-dashboard-action="exit-dashboard"]'
+  )
+
+  assert.match(closeRule, /position:\s*fixed/)
+  assert.match(closeRule, /top:\s*14px/)
+  assert.match(closeRule, /right:\s*14px/)
+  assert.match(closeRule, /width:\s*38px/)
+  assert.match(closeRule, /font-size:\s*0/)
+  assert.match(optionsCss, /\.options-dashboard-embed\.dashboard-fullscreen-active \.dashboard-title-actions \[data-dashboard-action="exit-dashboard"\]::before/)
+  assert.match(optionsCss, /\.options-dashboard-embed\.dashboard-fullscreen-active \.dashboard-title-actions \[data-dashboard-action="exit-dashboard"\]::after/)
+})

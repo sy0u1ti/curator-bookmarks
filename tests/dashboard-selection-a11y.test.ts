@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import {
+  getDashboardFaviconFallbackUrl,
   getDashboardCardActionLabel,
   getDashboardSelectionLabel
 } from '../src/options/sections/dashboard.js'
@@ -77,6 +78,42 @@ test('dashboard cards render bookmark-specific action labels', () => {
   assert.match(dashboardSource, /data-dashboard-action="edit-tags"[\s\S]*?aria-label="\$\{escapeAttr\(editTagsLabel\)\}"/)
   assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?aria-label="\$\{escapeAttr\(moveLabel\)\}"/)
   assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?aria-label="\$\{escapeAttr\(deleteLabel\)\}"/)
+})
+
+test('dashboard cards actively load site favicons before falling back to Chrome cache', () => {
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(dashboardSource, /function getPrimaryDashboardFaviconUrl\(url: string\): string/)
+  assert.match(dashboardSource, /return `\$\{parsedUrl\.origin\}\/favicon\.ico`/)
+  assert.match(dashboardSource, /export function getDashboardFaviconFallbackUrl\(url: string\): string/)
+  assert.match(dashboardSource, /chrome-extension:\/\/\$\{runtimeId\}\/_favicon\/\?pageUrl=\$\{encodeURIComponent\(url\)\}&size=32/)
+  assert.match(dashboardSource, /data-dashboard-favicon-source="primary"/)
+  assert.match(dashboardSource, /data-dashboard-favicon-page-url="\$\{escapeAttr\(item\.url\)\}"/)
+  assert.match(dashboardSource, /function handleDashboardFaviconError\(image: HTMLImageElement, callbacks: DashboardCallbacks\): void/)
+  assert.match(optionsSource, /handleDashboardError\(event, dashboardCallbacks\), true/)
+  assert.match(optionsSource, /getFaviconFallbackUrl: getDashboardFaviconFallbackUrl/)
+
+  const originalChrome = globalThis.chrome
+  globalThis.chrome = {
+    ...originalChrome,
+    runtime: {
+      ...originalChrome?.runtime,
+      id: 'extension-id'
+    }
+  } as typeof chrome
+  try {
+    assert.equal(
+      getDashboardFaviconFallbackUrl('https://example.com/docs'),
+      'chrome-extension://extension-id/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2Fdocs&size=32'
+    )
+  } finally {
+    if (originalChrome === undefined) {
+      delete globalThis.chrome
+    } else {
+      globalThis.chrome = originalChrome
+    }
+  }
 })
 
 test('dashboard cards expose keyboard-triggerable move and delete actions', () => {

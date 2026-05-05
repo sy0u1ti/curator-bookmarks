@@ -238,6 +238,7 @@ import {
   handleDashboardClick,
   handleDashboardDocumentClick,
   handleDashboardDocumentFocusIn,
+  handleDashboardError,
   handleDashboardInput,
   handleDashboardKeydown,
   handleDashboardPointerCancel,
@@ -249,6 +250,7 @@ import {
   isDashboardViewReady,
   prepareDashboardSectionEntry,
   getSingleDashboardMoveBookmark,
+  getDashboardFaviconFallbackUrl,
   moveSingleDashboardBookmark,
   moveSelectedDashboardBookmarks,
   removeDashboardSelectionIds,
@@ -362,6 +364,7 @@ const dashboardCallbacks = {
   regenerateAiTags: regenerateDashboardAiTagsForBookmark,
   openMoveModal,
   closeMoveModal,
+  getFaviconFallbackUrl: getDashboardFaviconFallbackUrl,
   exitDashboard,
   confirm: requestConfirmation,
   recycleCallbacks
@@ -770,6 +773,7 @@ function bindEvents() {
   dom.dashboardPanel?.addEventListener('input', handleDashboardInput)
   dom.dashboardPanel?.addEventListener('change', handleDashboardInput)
   dom.dashboardPanel?.addEventListener('keydown', handleDashboardKeydown)
+  dom.dashboardPanel?.addEventListener('error', (event) => handleDashboardError(event, dashboardCallbacks), true)
   dom.dashboardPanel?.addEventListener('pointerdown', handleDashboardPointerDown)
   dom.dashboardPanel?.addEventListener('pointerover', handleDashboardTagPointerOver)
   dom.dashboardPanel?.addEventListener('pointerout', handleDashboardTagPointerOut)

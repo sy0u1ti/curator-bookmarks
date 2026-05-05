@@ -122,6 +122,7 @@ interface DashboardCallbacks {
   regenerateAiTags: (bookmark: BookmarkRecord, signal?: AbortSignal) => Promise<void>
   openMoveModal: (source: string) => void
   closeMoveModal: () => void
+  getFaviconFallbackUrl?: (url: string) => string
   exitDashboard?: () => void
   confirm: (options: {
     title: string
@@ -705,6 +706,15 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     return
   }
 
+}
+
+export function handleDashboardError(event: Event, callbacks: DashboardCallbacks): void {
+  const target = event.target
+  if (!(target instanceof HTMLImageElement) || !target.matches('[data-dashboard-favicon]')) {
+    return
+  }
+
+  handleDashboardFaviconError(target, callbacks)
 }
 
 export function handleDashboardTagPointerOver(event: PointerEvent): void {
@@ -2718,7 +2728,7 @@ function buildDashboardCard(item: DashboardItem): string {
   const tags = item.tags.slice(0, visibleTagLimit)
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
   const copyLabel = dashboardState.copyFeedbackId === String(item.id) ? '已复制' : '复制'
-  const faviconUrl = getDashboardFaviconUrl(item.url)
+  const faviconUrl = getPrimaryDashboardFaviconUrl(item.url)
   const tagStatusTitle = item.hasManualTags
     ? '已有手动标签'
     : item.aiTags.length
@@ -2760,7 +2770,7 @@ function buildDashboardCard(item: DashboardItem): string {
     >
       <div class="dashboard-card-body">
         <span class="dashboard-favicon-shell" aria-hidden="true">
-          ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" decoding="async" draggable="false">` : ''}
+          ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" decoding="async" draggable="false" data-dashboard-favicon data-dashboard-favicon-source="primary" data-dashboard-favicon-page-url="${escapeAttr(item.url)}">` : ''}
           <span>${escapeHtml(getFallbackLabel(item.title))}</span>
         </span>
         <div class="dashboard-card-copy">
@@ -2853,6 +2863,22 @@ async function copyDashboardBookmarkUrl(bookmarkId: string): Promise<void> {
   } catch {
     setDashboardStatus('复制失败，请手动复制链接。')
   }
+}
+
+function handleDashboardFaviconError(image: HTMLImageElement, callbacks: DashboardCallbacks): void {
+  if (image.dataset.dashboardFaviconSource !== 'primary') {
+    image.remove()
+    return
+  }
+
+  const fallbackUrl = callbacks.getFaviconFallbackUrl?.(image.dataset.dashboardFaviconPageUrl || '') || ''
+  if (!fallbackUrl || fallbackUrl === image.currentSrc || fallbackUrl === image.src) {
+    image.remove()
+    return
+  }
+
+  image.dataset.dashboardFaviconSource = 'fallback'
+  image.src = fallbackUrl
 }
 
 async function moveDashboardBookmarkToFolder(
@@ -2973,7 +2999,7 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
     includeFullText: contentSnapshotState.settings.fullTextSearchEnabled
   })
   const bookmark = availabilityState.bookmarkMap.get(String(dragState.bookmarkId))
-  const faviconUrl = getDashboardFaviconUrl(bookmark?.url || '')
+  const faviconUrl = getPrimaryDashboardFaviconUrl(bookmark?.url || '')
 
   dom.dashboardPanel?.classList.add('is-dashboard-dragging')
   cancelExitMotion(dom.dashboardDragOverlay, 'is-closing')
@@ -2997,7 +3023,7 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
 
   dom.dashboardDragPreview.innerHTML = `
     <span class="dashboard-favicon-shell" aria-hidden="true">
-      ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" decoding="async" draggable="false">` : ''}
+      ${faviconUrl ? `<img src="${escapeAttr(faviconUrl)}" alt="" loading="lazy" decoding="async" draggable="false" data-dashboard-favicon data-dashboard-favicon-source="primary" data-dashboard-favicon-page-url="${escapeAttr(bookmark?.url || '')}">` : ''}
       <span>${escapeHtml(getFallbackLabel(bookmark?.title || ''))}</span>
     </span>
     <span>${escapeHtml(bookmark?.title || '未命名书签')}</span>
@@ -3159,7 +3185,19 @@ function suppressDashboardNativeSelection(event?: Event): void {
   document.getSelection()?.removeAllRanges()
 }
 
-function getDashboardFaviconUrl(url: string): string {
+function getPrimaryDashboardFaviconUrl(url: string): string {
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      return ''
+    }
+    return `${parsedUrl.origin}/favicon.ico`
+  } catch {
+    return ''
+  }
+}
+
+export function getDashboardFaviconFallbackUrl(url: string): string {
   const runtimeId = typeof chrome !== 'undefined' ? chrome.runtime?.id : ''
   if (!runtimeId || !url) {
     return ''
