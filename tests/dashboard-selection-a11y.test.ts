@@ -87,6 +87,7 @@ test('dashboard cards render bookmark-specific action labels', () => {
   assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'tag'[\s\S]*?label: editTagsLabel[\s\S]*?tooltip: '修改标签'/)
   assert.match(dashboardSource, /data-dashboard-action="toggle-speed-dial"[\s\S]*?aria-pressed="\$\{speedDialPinned \? 'true' : 'false'\}"/)
   assert.match(dashboardSource, /className: `detect-result-action dashboard-speed-dial-action \$\{speedDialPinned \? 'active' : ''\}`/)
+  assert.match(dashboardSource, /function getDashboardVirtualRenderStateKey\([\s\S]*?dashboardState\.speedDialPinnedIds\.has\(id\) \? '1' : '0'/)
   assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'move'[\s\S]*?label: moveLabel[\s\S]*?tooltip: '移动书签'/)
   assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'delete'[\s\S]*?label: deleteLabel[\s\S]*?tooltip: '删除书签'/)
   assert.match(dashboardSource, /<span class="sr-only">\$\{safeText\}<\/span>/)

@@ -2338,7 +2338,8 @@ function getDashboardVirtualRenderStateKey(renderedItems: DashboardItem[]): stri
     return [
       id,
       dashboardState.expandedTagIds.has(id) ? '1' : '0',
-      dashboardState.copyFeedbackId === id ? '1' : '0'
+      dashboardState.copyFeedbackId === id ? '1' : '0',
+      dashboardState.speedDialPinnedIds.has(id) ? '1' : '0'
     ].join(':')
   }).join('|')
 

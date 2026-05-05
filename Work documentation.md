@@ -581,6 +581,37 @@
 
 - 否。等待用户手动测试和明确批准。
 
+## Dashboard Speed Dial Micro-fix - 2026-05-05
+
+### 用户测试反馈修复
+
+- 修复书签仪表盘 Speed Dial 状态按钮点击后必须重进仪表盘才刷新的问题；Speed Dial 固定状态现在进入虚拟列表渲染 key，点击后当前可见卡片会立即重建并更新 `aria-pressed`、active 样式和 tooltip。
+- 移除书签卡片在按钮聚焦或按下时的外框高亮；卡片 hover 仍保留，但当鼠标或键盘操作图标按钮时，外框和背景保持静态，只让按钮本身反馈。
+
+### 本轮验证结果
+
+- `node --test .tmp-test/tests/dashboard-selection-a11y.test.js .tmp-test/tests/options-management-ui.test.js .tmp-test/tests/dashboard-folder-switch-stability.test.js` 通过；72 tests，72 pass。
+- `npm run typecheck` 通过。
+- `npm run lint` 通过。
+- `npm test` 通过；410 tests，410 pass，0 fail。
+- `npm run build` 通过；Vite 6.4.2 成功生成 `dist/`。
+- `npm run check:version` 通过；Version check passed: 1.4.25。
+- `git diff --check` 通过。
+
+### 更新后的手动测试重点
+
+- 在 newtab 嵌入的书签仪表盘里点击某张卡片的 Speed Dial 图标，确认按钮立即切换为已固定状态，不需要关闭重开仪表盘。
+- 再次点击同一个 Speed Dial 图标，确认按钮立即切回未固定状态。
+- 点击或键盘聚焦卡片底部任一图标按钮时，确认只有按钮本身有反馈，卡片外框不会额外闪亮。
+
+### 当前集成分支
+
+- `integration/newtab-modernization`
+
+### 是否合并 main
+
+- 否。等待用户手动测试和明确批准。
+
 ## Follow-up UX Fix Summary - 2026-05-05
 
 ### 用户测试反馈修复
