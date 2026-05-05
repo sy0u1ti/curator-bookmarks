@@ -4,13 +4,13 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import {
-  createNewTabAddSpeedDialMessage,
+  createNewTabToggleSpeedDialMessage,
   getDashboardFaviconFallbackUrl,
   getDashboardCardActionLabel,
   getDashboardSelectionLabel,
   isNewTabDashboardEmbed
 } from '../src/options/sections/dashboard.js'
-import { NEWTAB_ADD_SPEED_DIAL_MESSAGE_TYPE } from '../src/shared/constants.js'
+import { NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE } from '../src/shared/constants.js'
 
 function readProjectFile(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8')
@@ -77,29 +77,32 @@ test('dashboard cards render bookmark-specific action labels', () => {
   assert.match(dashboardSource, /const moveLabel = getDashboardCardActionLabel\('移动书签', item\)/)
   assert.match(dashboardSource, /const deleteLabel = getDashboardCardActionLabel\('删除书签', item\)/)
   assert.match(dashboardSource, /const addSpeedDialLabel = getDashboardCardActionLabel\('添加进 Speed Dial', item\)/)
-  assert.match(dashboardSource, /<a class="detect-result-open"[\s\S]*?aria-label="\$\{escapeAttr\(openLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-copy="\$\{escapeAttr\(item\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(copyActionLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-action="edit-tags"[\s\S]*?aria-label="\$\{escapeAttr\(editTagsLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-action="add-speed-dial"[\s\S]*?data-dashboard-no-drag[\s\S]*?aria-label="\$\{escapeAttr\(addSpeedDialLabel\)\}"[\s\S]*?>添加进 Speed Dial<\/button>/)
-  assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?aria-label="\$\{escapeAttr\(moveLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?aria-label="\$\{escapeAttr\(deleteLabel\)\}"/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'open'[\s\S]*?label: openLabel[\s\S]*?tooltip: '打开书签'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'copy'[\s\S]*?label: copyActionLabel[\s\S]*?tooltip: copyLabel === '已复制' \? '已复制' : '复制链接'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'tag'[\s\S]*?label: editTagsLabel[\s\S]*?tooltip: '修改标签'/)
+  assert.match(dashboardSource, /data-dashboard-action="toggle-speed-dial"[\s\S]*?aria-pressed="false"/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'move'[\s\S]*?label: moveLabel[\s\S]*?tooltip: '移动书签'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'delete'[\s\S]*?label: deleteLabel[\s\S]*?tooltip: '删除书签'/)
+  assert.match(dashboardSource, /<span class="sr-only">\$\{safeText\}<\/span>/)
+  assert.match(dashboardSource, /data-dashboard-tooltip="\$\{safeTooltip\}"/)
+  assert.doesNotMatch(dashboardSource, />添加进 Speed Dial<\/button>/)
 })
 
-test('dashboard Speed Dial action uses the shared newtab message contract', () => {
+test('dashboard Speed Dial action uses the shared newtab toggle message contract', () => {
   const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
   const constantsSource = readProjectFile('src/shared/constants.ts')
 
-  assert.equal(NEWTAB_ADD_SPEED_DIAL_MESSAGE_TYPE, 'curator:newtab-add-speed-dial')
-  assert.deepEqual(createNewTabAddSpeedDialMessage('  b1  '), {
-    type: 'curator:newtab-add-speed-dial',
+  assert.equal(NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE, 'curator:newtab-toggle-speed-dial')
+  assert.deepEqual(createNewTabToggleSpeedDialMessage('  b1  '), {
+    type: 'curator:newtab-toggle-speed-dial',
     bookmarkId: 'b1'
   })
   assert.equal(isNewTabDashboardEmbed('?embed=newtab-dashboard'), true)
   assert.equal(isNewTabDashboardEmbed('?embed=options'), false)
-  assert.match(constantsSource, /export interface NewTabAddSpeedDialMessage[\s\S]*?type: typeof NEWTAB_ADD_SPEED_DIAL_MESSAGE_TYPE[\s\S]*?bookmarkId: string/)
-  assert.match(dashboardSource, /action === 'add-speed-dial'[\s\S]*?addDashboardBookmarkToSpeedDial\(bookmarkId\)/)
-  assert.match(dashboardSource, /function addDashboardBookmarkToSpeedDial\(bookmarkId: string\): void/)
-  assert.match(dashboardSource, /window\.parent\.postMessage\(createNewTabAddSpeedDialMessage\(safeBookmarkId\), window\.location\.origin\)/)
+  assert.match(constantsSource, /export interface NewTabToggleSpeedDialMessage[\s\S]*?type: typeof NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE[\s\S]*?bookmarkId: string/)
+  assert.match(dashboardSource, /action === 'toggle-speed-dial'[\s\S]*?toggleDashboardBookmarkSpeedDial\(bookmarkId\)/)
+  assert.match(dashboardSource, /function toggleDashboardBookmarkSpeedDial\(bookmarkId: string\): void/)
+  assert.match(dashboardSource, /window\.parent\.postMessage\(createNewTabToggleSpeedDialMessage\(safeBookmarkId\), window\.location\.origin\)/)
   assert.match(dashboardSource, /setDashboardStatus\('请在新标签页打开仪表盘后添加到 Speed Dial。'\)/)
 })
 
@@ -143,8 +146,8 @@ test('dashboard cards use stable Chrome favicon URLs without swapping visible so
 test('dashboard cards expose keyboard-triggerable move and delete actions', () => {
   const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
 
-  assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?>移动<\/button>/)
-  assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?>删除<\/button>/)
+  assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?text: '移动'/)
+  assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?text: '删除'/)
   assert.match(dashboardSource, /action === 'delete-one'[\s\S]*?deleteDashboardBookmarkFromCard/)
   assert.match(dashboardSource, /async function deleteDashboardBookmarkFromCard/)
 })

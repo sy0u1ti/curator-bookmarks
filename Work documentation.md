@@ -581,6 +581,41 @@
 
 - 否。等待用户手动测试和明确批准。
 
+## Icon Action Follow-up - 2026-05-05
+
+### 用户测试反馈修复
+
+- 将书签仪表盘卡片底部的“打开、复制、修改标签、Speed Dial、移动、删除”文字动作改为固定尺寸图标按钮。
+- 每个图标按钮保留完整 `aria-label`，视觉文本改为 `sr-only`，鼠标悬浮或键盘聚焦时通过 tooltip 显示功能文本。
+- 图标按钮增加 hover、focus、active 反馈；按下时有缩放、颜色和阴影反馈。
+- Speed Dial 按钮从单向添加改为 toggle：在 newtab 嵌入仪表盘里再次点击同一书签会取消当前场景的 Speed Dial 固定。
+- newtab 右上角书签仪表盘入口旁新增“Ctrl/Cmd+K 快捷打开书签仪表盘”提示，并在窄屏下改为入口下方显示。
+
+### 本轮验证结果
+
+- `npm run typecheck` 通过。
+- `npm run lint` 通过。
+- `node --test .tmp-test/tests/dashboard-selection-a11y.test.js .tmp-test/tests/newtab-content-state.test.js .tmp-test/tests/options-management-ui.test.js` 通过；121 tests，121 pass。
+- `npm test` 通过；407 tests，407 pass，0 fail。
+- `npm run build` 通过；Vite 6.4.2 成功生成 `dist/`。
+- `npm run check:version` 通过；Version check passed: 1.4.25。
+
+### 更新后的手动测试重点
+
+- 在书签仪表盘卡片上确认底部操作是图标按钮，不再显示长文字按钮。
+- 悬浮或键盘聚焦每个图标按钮，确认能看到“打开书签、复制链接、修改标签、切换 Speed Dial、移动书签、删除书签”等 tooltip。
+- 点击每个图标按钮，确认有清晰按下反馈；删除按钮应保留危险色。
+- 在 newtab 嵌入仪表盘中点击 Speed Dial 图标，确认第一次加入当前场景 Speed Dial，第二次取消固定。
+- 在 newtab 右上角确认书签仪表盘入口旁显示“Ctrl/Cmd+K 快捷打开书签仪表盘”，窄屏下不遮挡设置按钮。
+
+### 当前集成分支
+
+- `integration/newtab-modernization`
+
+### 是否合并 main
+
+- 否。等待用户手动测试和明确批准。
+
 ## Follow-up Fix Summary - 2026-05-05
 
 ### 用户测试反馈修复

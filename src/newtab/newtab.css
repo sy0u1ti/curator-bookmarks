@@ -2233,7 +2233,7 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible .bookmark-tit
   top: 0;
   right: 0;
   z-index: 30;
-  width: 116px;
+  width: min(360px, calc(100vw - 18px));
   height: 96px;
   pointer-events: none;
 }
@@ -2271,6 +2271,29 @@ body.bookmark-dragging .bookmark-tile:not(.dragging):focus-visible .bookmark-tit
   min-width: 40px;
   padding: 0;
   text-decoration: none;
+}
+
+.dashboard-shortcut-hint {
+  position: absolute;
+  top: 24px;
+  right: 116px;
+  display: inline-flex;
+  max-width: min(220px, calc(100vw - 168px));
+  min-height: 28px;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(245, 245, 247, 0.09);
+  border-radius: 7px;
+  padding: 0 9px;
+  background: rgba(24, 24, 26, 0.52);
+  color: rgba(245, 245, 247, 0.54);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(14px);
 }
 
 .dashboard-trigger span {
@@ -2316,10 +2339,25 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   transform: translate3d(0, 0, 0);
 }
 
+body.settings-trigger-auto-hide .dashboard-shortcut-hint {
+  opacity: 0;
+  transition: opacity var(--ease-standard);
+}
+
+body.settings-trigger-auto-hide .settings-trigger-zone:hover .dashboard-shortcut-hint,
+body.settings-trigger-auto-hide .settings-trigger:focus-visible ~ .dashboard-shortcut-hint,
+body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashboard-shortcut-hint {
+  opacity: 1;
+}
+
 @media (hover: none) {
   body.settings-trigger-auto-hide .settings-trigger {
     opacity: 1;
     transform: none;
+  }
+
+  body.settings-trigger-auto-hide .dashboard-shortcut-hint {
+    opacity: 1;
   }
 }
 
@@ -4314,7 +4352,7 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
   }
 
   .settings-trigger-zone {
-    width: 170px;
+    width: 250px;
   }
 
   .dashboard-trigger {
@@ -4325,6 +4363,14 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] {
 
   .dashboard-trigger span {
     font-size: 11px;
+  }
+
+  .dashboard-shortcut-hint {
+    top: 58px;
+    right: 12px;
+    max-width: min(226px, calc(100vw - 24px));
+    min-height: 26px;
+    font-size: 10px;
   }
 
   .settings-drawer {

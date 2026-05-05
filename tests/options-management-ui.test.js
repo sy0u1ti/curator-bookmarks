@@ -703,7 +703,7 @@ test('availability result controls expose bookmark-specific labels', () => {
   assert.match(optionsSource, /const selectionLabel = getAvailabilityResultActionLabel\('选择异常书签', result\)/)
   assert.match(optionsSource, /const openLabel = getAvailabilityResultActionLabel\('打开异常书签链接', result\)/)
   assert.match(optionsSource, /data-availability-select="true"[\s\S]*?aria-label="\$\{escapeAttr\(selectionLabel\)\}"/)
-  assert.match(optionsSource, /class="detect-result-open"[\s\S]*?aria-label="\$\{escapeAttr\(openLabel\)\}"/)
+  assert.match(optionsSource, /class="[^"]*detect-result-open[^"]*"[\s\S]*?aria-label="\$\{escapeAttr\(openLabel\)\}"/)
   assert.match(optionsSource, /const actionLabel = getAvailabilityResultActionLabel\('移入高置信异常', result\)[\s\S]*?data-review-action="promote-failed"[\s\S]*?aria-label="\$\{escapeAttr\(actionLabel\)\}"/)
   assert.match(optionsSource, /const actionLabel = getAvailabilityResultActionLabel\('移回低置信异常', result\)[\s\S]*?data-failed-action="demote-review"[\s\S]*?aria-label="\$\{escapeAttr\(actionLabel\)\}"/)
 })

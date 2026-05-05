@@ -25,8 +25,8 @@ import {
 } from '../../shared/content-snapshots.js'
 import {
   BOOKMARKS_BAR_ID,
-  NEWTAB_ADD_SPEED_DIAL_MESSAGE_TYPE,
-  type NewTabAddSpeedDialMessage
+  NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
+  type NewTabToggleSpeedDialMessage
 } from '../../shared/constants.js'
 import {
   buildDashboardFolderBookmarkCounts,
@@ -273,9 +273,56 @@ export function getDashboardCardActionLabel(
   return `${action}：${safeTitle || '未命名书签'}`
 }
 
-export function createNewTabAddSpeedDialMessage(bookmarkId: string): NewTabAddSpeedDialMessage {
+export function renderDashboardIcon(icon: 'open' | 'copy' | 'tag' | 'speed-dial' | 'move' | 'delete'): string {
+  const pathByIcon: Record<typeof icon, string> = {
+    open: '<path d="M7 17 17 7"></path><path d="M9 7h8v8"></path>',
+    copy: '<rect x="8" y="8" width="9" height="9" rx="2"></rect><path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path>',
+    tag: '<path d="M20 12 12 20 4 12V4h8l8 8Z"></path><path d="M8 8h.01"></path>',
+    'speed-dial': '<path d="M12 3v5"></path><path d="m16.6 5.4-3.5 3.5"></path><path d="M21 12h-5"></path><path d="M18.4 18.4 14.8 15"></path><path d="M5.6 18.4 9.2 15"></path><path d="M3 12h5"></path><path d="m7.4 5.4 3.5 3.5"></path><circle cx="12" cy="12" r="3"></circle>',
+    move: '<path d="M12 3v18"></path><path d="m8 7 4-4 4 4"></path><path d="m8 17 4 4 4-4"></path><path d="M3 12h18"></path><path d="m7 8-4 4 4 4"></path><path d="m17 8 4 4-4 4"></path>',
+    delete: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path>'
+  }
+
+  return `<svg aria-hidden="true" viewBox="0 0 24 24">${pathByIcon[icon]}</svg>`
+}
+
+function renderDashboardCardAction({
+  as = 'button',
+  icon,
+  label,
+  tooltip,
+  className = '',
+  attrs = '',
+  text,
+  disabled = false
+}: {
+  as?: 'a' | 'button'
+  icon: Parameters<typeof renderDashboardIcon>[0]
+  label: string
+  tooltip: string
+  className?: string
+  attrs?: string
+  text: string
+  disabled?: boolean
+}): string {
+  const safeTooltip = escapeAttr(tooltip)
+  const safeLabel = escapeAttr(label)
+  const safeText = escapeHtml(text)
+  const classes = ['dashboard-icon-action', className].filter(Boolean).join(' ')
+  const disabledAttr = disabled ? ' disabled' : ''
+  const content = `
+    ${renderDashboardIcon(icon)}
+    <span class="sr-only">${safeText}</span>
+  `
+
+  return as === 'a'
+    ? `<a class="${escapeAttr(classes)}" ${attrs} data-dashboard-tooltip="${safeTooltip}" aria-label="${safeLabel}">${content}</a>`
+    : `<button class="${escapeAttr(classes)}" type="button" ${attrs} data-dashboard-tooltip="${safeTooltip}" aria-label="${safeLabel}"${disabledAttr}>${content}</button>`
+}
+
+export function createNewTabToggleSpeedDialMessage(bookmarkId: string): NewTabToggleSpeedDialMessage {
   return {
-    type: NEWTAB_ADD_SPEED_DIAL_MESSAGE_TYPE,
+    type: NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
     bookmarkId: String(bookmarkId || '').trim()
   }
 }
@@ -716,9 +763,9 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     } else if (action === 'delete-one') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       await deleteDashboardBookmarkFromCard(bookmarkId, callbacks)
-    } else if (action === 'add-speed-dial') {
+    } else if (action === 'toggle-speed-dial') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
-      addDashboardBookmarkToSpeedDial(bookmarkId)
+      toggleDashboardBookmarkSpeedDial(bookmarkId)
     } else if (action === 'exit-dashboard') {
       if (callbacks.exitDashboard) {
         callbacks.exitDashboard()
@@ -1323,7 +1370,7 @@ function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbac
   callbacks.openMoveModal('dashboard-single')
 }
 
-function addDashboardBookmarkToSpeedDial(bookmarkId: string): void {
+function toggleDashboardBookmarkSpeedDial(bookmarkId: string): void {
   const safeBookmarkId = String(bookmarkId || '').trim()
   if (!safeBookmarkId || !availabilityState.bookmarkMap.has(safeBookmarkId)) {
     setDashboardStatus('添加失败：书签不存在。')
@@ -1331,8 +1378,8 @@ function addDashboardBookmarkToSpeedDial(bookmarkId: string): void {
   }
 
   if (isNewTabDashboardEmbed()) {
-    window.parent.postMessage(createNewTabAddSpeedDialMessage(safeBookmarkId), window.location.origin)
-    setDashboardStatus('已发送到 Speed Dial。')
+    window.parent.postMessage(createNewTabToggleSpeedDialMessage(safeBookmarkId), window.location.origin)
+    setDashboardStatus('已切换 Speed Dial 固定状态。')
     return
   }
 
@@ -2870,42 +2917,57 @@ function buildDashboardCard(item: DashboardItem): string {
       </div>
       <div class="dashboard-card-footer">
         <div class="dashboard-card-actions">
-          <a class="detect-result-open" href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag aria-label="${escapeAttr(openLabel)}">打开</a>
-          <button class="detect-result-action" type="button" data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag aria-label="${escapeAttr(copyActionLabel)}">${escapeHtml(copyLabel)}</button>
-          <button
-            class="detect-result-action"
-            type="button"
-            data-dashboard-action="edit-tags"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(editTagsLabel)}"
-          >修改标签</button>
-          <button
-            class="detect-result-action"
-            type="button"
-            data-dashboard-action="add-speed-dial"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(addSpeedDialLabel)}"
-          >添加进 Speed Dial</button>
-          <button
-            class="detect-result-action"
-            type="button"
-            data-dashboard-action="move-one"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(moveLabel)}"
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >移动</button>
-          <button
-            class="detect-result-action danger"
-            type="button"
-            data-dashboard-action="delete-one"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(deleteLabel)}"
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >删除</button>
+          ${renderDashboardCardAction({
+            as: 'a',
+            icon: 'open',
+            label: openLabel,
+            tooltip: '打开书签',
+            className: 'detect-result-open',
+            attrs: `href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag`,
+            text: '打开'
+          })}
+          ${renderDashboardCardAction({
+            icon: 'copy',
+            label: copyActionLabel,
+            tooltip: copyLabel === '已复制' ? '已复制' : '复制链接',
+            className: 'detect-result-action',
+            attrs: `data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: copyLabel
+          })}
+          ${renderDashboardCardAction({
+            icon: 'tag',
+            label: editTagsLabel,
+            tooltip: '修改标签',
+            className: 'detect-result-action',
+            attrs: `data-dashboard-action="edit-tags" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: '修改标签'
+          })}
+          ${renderDashboardCardAction({
+            icon: 'speed-dial',
+            label: addSpeedDialLabel,
+            tooltip: '切换 Speed Dial',
+            className: 'detect-result-action dashboard-speed-dial-action',
+            attrs: `data-dashboard-action="toggle-speed-dial" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag aria-pressed="false"`,
+            text: '添加进 Speed Dial'
+          })}
+          ${renderDashboardCardAction({
+            icon: 'move',
+            label: moveLabel,
+            tooltip: '移动书签',
+            className: 'detect-result-action',
+            attrs: `data-dashboard-action="move-one" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: '移动',
+            disabled: availabilityState.deleting
+          })}
+          ${renderDashboardCardAction({
+            icon: 'delete',
+            label: deleteLabel,
+            tooltip: '删除书签',
+            className: 'detect-result-action danger',
+            attrs: `data-dashboard-action="delete-one" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: '删除',
+            disabled: availabilityState.deleting
+          })}
         </div>
         <label class="dashboard-card-check" data-dashboard-no-drag>
           <input
