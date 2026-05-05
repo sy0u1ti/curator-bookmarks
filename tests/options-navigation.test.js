@@ -65,6 +65,7 @@ test('options dashboard entry keeps the settings-page dashboard instead of redir
   assert.match(optionsSource, /notifyNewTabDashboardReady/)
   assert.match(optionsSource, /newTabDashboardReadyPosted/)
   assert.match(optionsSource, /hydrateAvailabilityCatalog\(\{ analyzeFolderCleanup: !IS_OPTIONS_DASHBOARD_EMBED_MODE \}\)/)
+  assert.match(optionsSource, /await hydrateAvailabilityCatalog\(\{ analyzeFolderCleanup: !IS_OPTIONS_DASHBOARD_EMBED_MODE \}\)\s+await hydrateDashboardSpeedDialState\(\)\s+renderDashboardSectionIfVisible\(\)/)
   assert.match(optionsSource, /postMessage/)
   assert.match(dashboardSource, /action === 'exit-dashboard'[\s\S]*callbacks\.exitDashboard\(\)/)
   assert.match(dashboardSource, /callbacks\.exitDashboard[\s\S]*window\.location\.hash = '#general'/)

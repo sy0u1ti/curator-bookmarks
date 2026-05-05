@@ -10,6 +10,9 @@ import {
   toggleNewTabWorkspacePin,
   updateNewTabWorkspace
 } from '../src/newtab/workspace-settings.js'
+import {
+  normalizeNewTabWorkspaceSettings as normalizeSharedNewTabWorkspaceSettings
+} from '../src/shared/newtab-workspace-settings.js'
 
 test('normalizes default workspaces and migrates legacy pins into the default scene', () => {
   const settings = normalizeNewTabWorkspaceSettings(null, {
@@ -26,6 +29,13 @@ test('normalizes default workspaces and migrates legacy pins into the default sc
     ['personal', '个人']
   ])
   assert.deepEqual(settings.workspaces[0].pinnedIds, ['2', '1'])
+})
+
+test('newtab workspace settings are shared by newtab and options surfaces', () => {
+  const newtabSettings = normalizeNewTabWorkspaceSettings(null, { now: 100 })
+  const sharedSettings = normalizeSharedNewTabWorkspaceSettings(null, { now: 100 })
+
+  assert.deepEqual(sharedSettings, newtabSettings)
 })
 
 test('keeps workspace pins isolated when toggling bookmarks', () => {

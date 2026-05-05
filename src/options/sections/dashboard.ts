@@ -27,9 +27,16 @@ import {
   BOOKMARKS_BAR_ID,
   NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
   NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
+  STORAGE_KEYS,
   type NewTabSpeedDialStateMessage,
   type NewTabToggleSpeedDialMessage
 } from '../../shared/constants.js'
+import { getLocalStorage, setLocalStorage } from '../../shared/storage.js'
+import {
+  getActiveNewTabWorkspace,
+  normalizeNewTabWorkspaceSettings,
+  toggleNewTabWorkspacePin
+} from '../../shared/newtab-workspace-settings.js'
 import {
   buildDashboardFolderBookmarkCounts,
   buildDashboardModel,
@@ -863,7 +870,7 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
       await deleteDashboardBookmarkFromCard(bookmarkId, callbacks)
     } else if (action === 'toggle-speed-dial') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
-      toggleDashboardBookmarkSpeedDial(bookmarkId)
+      await toggleDashboardBookmarkSpeedDial(bookmarkId)
     } else if (action === 'exit-dashboard') {
       if (callbacks.exitDashboard) {
         callbacks.exitDashboard()
@@ -1468,7 +1475,27 @@ function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbac
   callbacks.openMoveModal('dashboard-single')
 }
 
-function toggleDashboardBookmarkSpeedDial(bookmarkId: string): void {
+export async function hydrateDashboardSpeedDialState(): Promise<void> {
+  if (isNewTabDashboardEmbed()) {
+    return
+  }
+
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    applyDashboardSpeedDialWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings])
+  } catch {
+    dashboardState.speedDialPinnedIds = new Set()
+  }
+}
+
+function applyDashboardSpeedDialWorkspaceSettings(rawSettings: unknown): void {
+  const settings = normalizeNewTabWorkspaceSettings(rawSettings, {
+    validBookmarkIds: availabilityState.bookmarkMap.keys()
+  })
+  dashboardState.speedDialPinnedIds = new Set(getActiveNewTabWorkspace(settings).pinnedIds)
+}
+
+async function toggleDashboardBookmarkSpeedDial(bookmarkId: string): Promise<void> {
   const safeBookmarkId = String(bookmarkId || '').trim()
   if (!safeBookmarkId || !availabilityState.bookmarkMap.has(safeBookmarkId)) {
     setDashboardStatus('添加失败：书签不存在。')
@@ -1487,7 +1514,28 @@ function toggleDashboardBookmarkSpeedDial(bookmarkId: string): void {
     return
   }
 
-  setDashboardStatus('请在新标签页打开仪表盘后添加到 Speed Dial。')
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    const settings = normalizeNewTabWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings], {
+      validBookmarkIds: availabilityState.bookmarkMap.keys()
+    })
+    const activeWorkspace = getActiveNewTabWorkspace(settings)
+    const nextSettings = toggleNewTabWorkspacePin(settings, activeWorkspace.id, safeBookmarkId, {
+      validBookmarkIds: availabilityState.bookmarkMap.keys()
+    })
+    await setLocalStorage({
+      [STORAGE_KEYS.newTabWorkspaceSettings]: nextSettings
+    })
+    dashboardState.speedDialPinnedIds = new Set(getActiveNewTabWorkspace(nextSettings).pinnedIds)
+    renderDashboardSection()
+    setDashboardStatus(
+      dashboardState.speedDialPinnedIds.has(safeBookmarkId)
+        ? '已添加到 Speed Dial。'
+        : '已从 Speed Dial 移除。'
+    )
+  } catch (error) {
+    setDashboardStatus(error instanceof Error ? error.message : 'Speed Dial 状态更新失败，请稍后重试。')
+  }
 }
 
 export function getSingleDashboardMoveBookmark(): BookmarkRecord | null {

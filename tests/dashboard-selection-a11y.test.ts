@@ -122,11 +122,15 @@ test('dashboard Speed Dial action uses the shared newtab toggle message contract
   assert.match(constantsSource, /export interface NewTabSpeedDialStateMessage[\s\S]*?type: typeof NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE[\s\S]*?pinnedIds: string\[\]/)
   assert.match(constantsSource, /export interface NewTabDashboardOpenMessage[\s\S]*?type: typeof NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE/)
   assert.match(dashboardSource, /function applyNewTabSpeedDialStateMessage\(/)
-  assert.match(dashboardSource, /action === 'toggle-speed-dial'[\s\S]*?toggleDashboardBookmarkSpeedDial\(bookmarkId\)/)
-  assert.match(dashboardSource, /function toggleDashboardBookmarkSpeedDial\(bookmarkId: string\): void/)
+  assert.match(dashboardSource, /export async function hydrateDashboardSpeedDialState\(\): Promise<void>/)
+  assert.match(dashboardSource, /action === 'toggle-speed-dial'[\s\S]*?await toggleDashboardBookmarkSpeedDial\(bookmarkId\)/)
+  assert.match(dashboardSource, /async function toggleDashboardBookmarkSpeedDial\(bookmarkId: string\): Promise<void>/)
   assert.match(dashboardSource, /window\.parent\.postMessage\(createNewTabToggleSpeedDialMessage\(safeBookmarkId\), window\.location\.origin\)/)
   assert.match(dashboardSource, /dashboardState\.speedDialPinnedIds\.has\(safeBookmarkId\)/)
-  assert.match(dashboardSource, /setDashboardStatus\('请在新标签页打开仪表盘后添加到 Speed Dial。'\)/)
+  assert.match(dashboardSource, /getLocalStorage\(\[STORAGE_KEYS\.newTabWorkspaceSettings\]\)/)
+  assert.match(dashboardSource, /toggleNewTabWorkspacePin\([\s\S]*?activeWorkspace\.id[\s\S]*?safeBookmarkId/)
+  assert.match(dashboardSource, /setLocalStorage\(\{[\s\S]*?\[STORAGE_KEYS\.newTabWorkspaceSettings\]: nextSettings/)
+  assert.doesNotMatch(dashboardSource, /请在新标签页打开仪表盘后添加到 Speed Dial/)
 })
 
 test('dashboard cards use stable Chrome favicon URLs without swapping visible sources', () => {

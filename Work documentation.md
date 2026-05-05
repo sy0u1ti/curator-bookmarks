@@ -581,6 +581,41 @@
 
 - 否。等待用户手动测试和明确批准。
 
+## Follow-up Fix Summary - 2026-05-05 - Options Dashboard Speed Dial Parity
+
+### 用户测试反馈修复
+
+- 修复设置页书签仪表盘点击 Speed Dial 图标时提示“请在新标签页打开仪表盘后添加到 Speed Dial”的问题。
+- options 入口现在会直接读写与 newtab 相同的 `curatorBookmarkNewTabWorkspaceSettings`，并按当前场景切换书签的 Speed Dial 固定状态。
+- newtab 嵌入式仪表盘仍保留 `postMessage` 协议，由父级 newtab 执行当前场景切换。
+- 进入设置页后会在书签目录加载完成后水合 Speed Dial 状态；如果当前已经在仪表盘，会立即重绘卡片按钮状态。
+- 将 newtab workspace settings 纯逻辑移动到 `src/shared/newtab-workspace-settings.ts`，`src/newtab/workspace-settings.ts` 保留 re-export，供 newtab 与 options 复用。
+
+### 本轮验证结果
+
+- `npm run test:build && node --test .tmp-test/tests/dashboard-selection-a11y.test.js .tmp-test/tests/options-navigation.test.js .tmp-test/tests/newtab-workspace-settings.test.js .tmp-test/tests/newtab-content-state.test.js` 通过；85 tests，85 pass。
+- `npm run typecheck` 通过。
+- `npm run lint` 通过。
+- `npm test` 通过；412 tests，412 pass，0 fail。
+- `npm run build` 通过；Vite 6.4.2 成功生成 `dist/`。
+- `npm run check:version` 通过；Version check passed: 1.4.25。
+- `git diff --check` 通过。
+
+### 更新后的手动测试重点
+
+- 从设置页进入书签仪表盘，点击任意书签卡片的 Speed Dial 图标，确认不会再出现“请在新标签页打开仪表盘后添加到 Speed Dial”的提示。
+- 在设置页仪表盘中点击 Speed Dial 图标，确认按钮状态立即从“添加”切换为“已在 Speed Dial”，再次点击会移除。
+- 回到 newtab 当前场景，确认刚才在设置页仪表盘固定或取消固定的书签与 Speed Dial 内容一致。
+- 从 newtab 入口打开仪表盘，确认嵌入式仪表盘仍能通过同一个图标按钮切换当前场景 Speed Dial 状态。
+
+### 当前集成分支
+
+- `integration/newtab-modernization`
+
+### 是否合并 main
+
+- 否。等待用户手动测试和明确批准。
+
 ## Dashboard Speed Dial Micro-fix - 2026-05-05
 
 ### 用户测试反馈修复

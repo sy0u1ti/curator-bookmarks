@@ -247,6 +247,7 @@ import {
   handleDashboardTagPointerOut,
   handleDashboardTagPointerOver,
   applyNewTabSpeedDialStateMessage,
+  hydrateDashboardSpeedDialState,
   isDashboardViewReady,
   prepareDashboardSectionEntry,
   getSingleDashboardMoveBookmark,
@@ -406,6 +407,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await hydratePersistentState()
   await hydrateAvailabilityCatalog({ analyzeFolderCleanup: !IS_OPTIONS_DASHBOARD_EMBED_MODE })
+  await hydrateDashboardSpeedDialState()
+  renderDashboardSectionIfVisible()
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
   renderAvailabilitySection()
