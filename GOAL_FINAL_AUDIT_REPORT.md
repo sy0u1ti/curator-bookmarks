@@ -8,7 +8,7 @@
 - 集成 worktree：`/mnt/g/coding/worktrees/goal-r3-audit-remediation-20260505`
 - 集成分支：`integration/goal-r3-audit-remediation-20260505`
 - 基线：`main@1c727d2` / `v1.4.24`
-- 当前集成提交：`e3f88a9 Merge goal r4 search performance`
+- 当前集成提交：以集成 worktree 内 `git log -1 --oneline` 为准。
 - 当前版本文件：`package.json`、`src/manifest.json`、`dist/manifest.json` 均为 `1.4.24`。
 
 本轮在独立集成 worktree 中继续执行多 agent 审查与修复，重点覆盖数据安全、搜索性能、AI 请求取消、Options 初始化负载、New Tab 固定布局、Popup 智能分类恢复路径与回收站恢复安全。所有改动已停留在集成分支，等待你手动测试后再决定是否合并到 `main`。
