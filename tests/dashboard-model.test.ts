@@ -3,6 +3,7 @@ import { test } from 'node:test'
 import {
   buildDashboardFolderBookmarkCounts,
   buildDashboardModel,
+  filterAndSortDashboardItems,
   filterDashboardItems,
   getDashboardDateMeta,
   getDashboardFolderTargets,
@@ -272,6 +273,65 @@ test('sorts dashboard items without mutating the original list', () => {
   assert.deepEqual(sortDashboardItems(model.items, 'title-asc').map((item) => item.id), ['new', 'unknown', 'old'])
   assert.deepEqual(sortDashboardItems(model.items, 'domain-asc').map((item) => item.id), ['new', 'old', 'unknown'])
   assert.deepEqual(model.items.map((item) => item.id), original)
+})
+
+test('filters and sorts dashboard items with a bounded top result set', () => {
+  const bookmarks = Array.from({ length: 30 }, (_, index) => bookmark({
+    id: `old-${index}`,
+    title: `React Archive ${index}`,
+    url: `https://archive.example.com/react-${index}`,
+    path: index % 2 === 0 ? '书签栏 / 开发 / React' : '其他书签 / 开发 / React',
+    ancestorIds: index % 2 === 0 ? ['1', '10'] : ['2', '20'],
+    parentId: index % 2 === 0 ? '10' : '20',
+    domain: 'archive.example.com',
+    dateAdded: Date.UTC(2026, 0, 1) + index
+  })).concat([
+    bookmark({
+      id: 'newest',
+      title: 'React Latest',
+      url: 'https://docs.example.com/latest',
+      path: '书签栏 / 开发 / React',
+      ancestorIds: ['1', '10'],
+      parentId: '10',
+      domain: 'docs.example.com',
+      dateAdded: Date.UTC(2026, 1, 1)
+    }),
+    bookmark({
+      id: 'unknown',
+      title: 'React Unknown',
+      url: 'https://docs.example.com/unknown',
+      path: '书签栏 / 开发 / React',
+      ancestorIds: ['1', '10'],
+      parentId: '10',
+      domain: 'docs.example.com',
+      dateAdded: 0
+    }),
+    bookmark({
+      id: 'vue',
+      title: 'Vue Grid',
+      url: 'https://docs.example.com/vue',
+      path: '书签栏 / 开发 / Vue',
+      ancestorIds: ['1', '20'],
+      parentId: '20',
+      domain: 'docs.example.com',
+      dateAdded: Date.UTC(2026, 2, 1)
+    })
+  ])
+  const model = buildDashboardModel({ bookmarks })
+  const filters = { query: 'react', folderId: '1', sortKey: 'date-desc' as const }
+  const fullOrder = sortDashboardItems(filterDashboardItems(model.items, filters), filters.sortKey)
+    .map((item) => item.id)
+  const bounded = filterAndSortDashboardItems(model.items, filters, { limit: 4 })
+
+  assert.deepEqual(bounded.map((item) => item.id), fullOrder.slice(0, 4))
+  assert.equal(bounded.includes(model.items.find((item) => item.id === 'unknown')!), false)
+  assert.deepEqual(
+    filterAndSortDashboardItems(model.items, { query: 'react', sortKey: 'title-asc' }, { limit: 3 })
+      .map((item) => item.id),
+    sortDashboardItems(filterDashboardItems(model.items, { query: 'react' }), 'title-asc')
+      .slice(0, 3)
+      .map((item) => item.id)
+  )
 })
 
 test('builds folder targets and exposes top-folder/date helpers', () => {
