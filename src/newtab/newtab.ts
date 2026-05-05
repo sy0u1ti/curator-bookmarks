@@ -117,6 +117,37 @@ import {
   normalizeTimeSettings,
   type NewTabTimeSettings
 } from './time-settings.js'
+import {
+  buildNewTabBookmarkHealth,
+  hasActionableBookmarkHealth
+} from './bookmark-health.js'
+import {
+  buildCommandPaletteItems,
+  shouldOpenCommandPaletteFromKeydown,
+  type CommandPaletteItem
+} from './command-palette.js'
+import {
+  buildNewTabModuleSettingRows,
+  buildNewTabPrivacyNotice,
+  DEFAULT_NEW_TAB_MODULE_SETTINGS,
+  normalizeNewTabModuleSettings,
+  type NewTabModuleSettingKey,
+  type NewTabModuleSettings
+} from './module-settings.js'
+import {
+  buildSpeedDialItems,
+  createSpeedDialEmptyState,
+  getSpeedDialPinActionCopy,
+  isSpeedDialBookmarkPinned
+} from './speed-dial.js'
+import {
+  getActiveNewTabWorkspace,
+  normalizeNewTabWorkspaceSettings,
+  setActiveNewTabWorkspace,
+  toggleNewTabWorkspacePin,
+  updateNewTabWorkspace,
+  type NewTabWorkspaceSettings
+} from './workspace-settings.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const FAVICON_COLOR_SAMPLE_SIZE = 32
@@ -365,6 +396,7 @@ interface QuickAccessItem {
 
 type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
+type SettingsDrawerSection = 'folder' | 'workspaces' | 'modules'
 
 interface LastDeletedBookmarkState {
   bookmark: chrome.bookmarks.BookmarkTreeNode
@@ -451,6 +483,11 @@ const state = {
   iconSettings: { ...DEFAULT_ICON_SETTINGS },
   generalSettings: { ...DEFAULT_GENERAL_SETTINGS },
   folderSettings: { ...DEFAULT_FOLDER_SETTINGS } as NewTabFolderSettings,
+  moduleSettings: { ...DEFAULT_NEW_TAB_MODULE_SETTINGS } as NewTabModuleSettings,
+  workspaceSettings: normalizeNewTabWorkspaceSettings(null) as NewTabWorkspaceSettings,
+  commandPaletteOpen: false,
+  commandPaletteQuery: '',
+  commandPaletteActiveIndex: 0,
   activity: {
     pinnedIds: [],
     records: {}
@@ -716,6 +753,11 @@ function updateSettingRangeVisual(input: HTMLInputElement): void {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent): void {
+  if (state.commandPaletteOpen) {
+    handleCommandPaletteKeydown(event)
+    return
+  }
+
   if (event.key === 'Tab' && trapDashboardOverlayFocus(event)) {
     return
   }
@@ -737,6 +779,12 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
     closeBookmarkMenu()
     closeAddBookmarkMenu()
     cancelFolderDrag()
+    return
+  }
+
+  if (state.moduleSettings.commandHints && shouldOpenCommandPaletteFromKeydown(event) && event.key !== '/') {
+    event.preventDefault()
+    openCommandPalette()
     return
   }
 
@@ -913,6 +961,15 @@ function bindFolderSettingsEvents(): void {
   document
     .getElementById('folder-selected-list')
     ?.addEventListener('click', handleSelectedFolderClick)
+  document
+    .getElementById('workspace-settings-list')
+    ?.addEventListener('click', handleWorkspaceSettingsClick)
+  document
+    .getElementById('workspace-settings-list')
+    ?.addEventListener('input', handleWorkspaceSettingsInput)
+  document
+    .getElementById('newtab-module-settings-list')
+    ?.addEventListener('change', handleModuleSettingsChange)
 }
 
 function handleGeneralSettingsChange(): void {
@@ -1423,7 +1480,7 @@ function handleTimeSettingsChange(): void {
   scheduleClockTick()
 }
 
-function openSettingsDrawer(options?: { focusFirstControl?: boolean }): void {
+function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
   const focusFirstControl = options?.focusFirstControl !== false
   settingsDrawerReturnFocusElement = document.activeElement instanceof HTMLElement
     ? document.activeElement
@@ -1440,6 +1497,7 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean }): void {
   syncSearchSettingsControls()
   syncIconSettingsControls()
   syncTimeSettingsControls()
+  syncNewTabModernSettingsControls()
   syncSettingsSaveStatus()
   updateAllSettingRangeVisuals()
   scheduleAdaptiveNewTabLayoutUpdate()
@@ -1455,22 +1513,47 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean }): void {
       focusFirstSettingsDrawerControl()
     })
   }
+  if (options?.section) {
+    window.requestAnimationFrame(() => {
+      focusSettingsSection(options.section)
+    })
+  }
 }
 
 function openFolderSourceSettings(): void {
   state.folderCandidatesExpanded = true
   state.folderCandidateQuery = ''
-  openSettingsDrawer({ focusFirstControl: false })
+  openSettingsDrawer({ focusFirstControl: false, section: 'folder' })
   syncFolderSettingsControls()
-  window.requestAnimationFrame(() => {
-    const section = document.getElementById('settings-folder-title')?.closest('.settings-section')
-    const searchInput = document.getElementById('folder-candidate-search')
+}
 
-    section?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+function openWorkspaceSettings(): void {
+  openSettingsDrawer({ focusFirstControl: false, section: 'workspaces' })
+}
+
+function openModuleSettings(): void {
+  openSettingsDrawer({ focusFirstControl: false, section: 'modules' })
+}
+
+function focusSettingsSection(section: SettingsDrawerSection): void {
+  const titleIdBySection: Record<SettingsDrawerSection, string> = {
+    folder: 'settings-folder-title',
+    workspaces: 'settings-workspaces-title',
+    modules: 'settings-modules-title'
+  }
+  const targetSection = document.getElementById(titleIdBySection[section])?.closest('.settings-section')
+  targetSection?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+
+  if (section === 'folder') {
+    const searchInput = document.getElementById('folder-candidate-search')
     if (searchInput instanceof HTMLInputElement) {
       searchInput.focus()
     }
-  })
+    return
+  }
+
+  const firstControl = targetSection?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+  firstControl?.focus()
 }
 
 function closeSettingsDrawer(): void {
@@ -2714,7 +2797,7 @@ function isSelfBookmarkMoveEvent(bookmarkId: string): boolean {
 
 function isActiveMenuBookmarkPinned(): boolean {
   const bookmark = getActiveMenuBookmark()
-  return Boolean(bookmark && state.activity.pinnedIds.includes(String(bookmark.id)))
+  return Boolean(bookmark && isSpeedDialBookmarkPinned(getActiveWorkspacePinnedIds(), String(bookmark.id)))
 }
 
 async function toggleActiveMenuBookmarkPin(): Promise<void> {
@@ -2725,19 +2808,21 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
   }
 
   const bookmarkId = String(bookmark.id)
-  const pinned = state.activity.pinnedIds.includes(bookmarkId)
-  state.activity = {
-    ...state.activity,
-    pinnedIds: pinned
-      ? state.activity.pinnedIds.filter((id) => id !== bookmarkId)
-      : [bookmarkId, ...state.activity.pinnedIds.filter((id) => id !== bookmarkId)]
-  }
+  const workspace = getActiveNewTabWorkspace(state.workspaceSettings)
+  const pinned = isSpeedDialBookmarkPinned(workspace.pinnedIds, bookmarkId)
+  state.workspaceSettings = toggleNewTabWorkspacePin(
+    state.workspaceSettings,
+    workspace.id,
+    bookmarkId,
+    { validBookmarkIds: state.allBookmarkMap.keys() }
+  )
 
   try {
     state.pendingDeleteBookmarkId = ''
-    await saveNewTabActivity()
+    await saveNewTabWorkspaceSettings()
+    const copy = getSpeedDialPinActionCopy(pinned, workspace.name)
     state.menuError = ''
-    state.menuStatus = pinned ? '已取消固定' : '已固定到 Curator 常用'
+    state.menuStatus = copy.status
     render()
     updateClockText()
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
@@ -2876,6 +2961,9 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     await removeBookmarkFromActivity(bookmark.id).catch((error) => {
       console.warn('新标签页打开记录清理失败。', error)
     })
+    await removeBookmarkFromWorkspacePins(bookmark.id).catch((error) => {
+      console.warn('新标签页 workspace 固定入口清理失败。', error)
+    })
 
     state.pendingDeleteBookmarkId = ''
     state.lastDeletedBookmark = {
@@ -2963,6 +3051,12 @@ function openRecycleBin(): void {
   renderDeleteToast()
 }
 
+function openOptionsHash(hash: string): void {
+  const normalizedHash = String(hash || '').startsWith('#') ? String(hash) : `#${String(hash || '').trim()}`
+  const url = chrome.runtime.getURL(`src/options/options.html${normalizedHash}`)
+  void chrome.tabs?.create?.({ url })
+}
+
 function getBookmarkDisplayTitle(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
   return String(bookmark.title || '').trim() || String(bookmark.url || '').trim() || '未命名书签'
 }
@@ -3037,6 +3131,8 @@ async function refreshNewTab(): Promise<void> {
         STORAGE_KEYS.newTabGeneralSettings,
         STORAGE_KEYS.newTabFolderSettings,
         STORAGE_KEYS.newTabTimeSettings,
+        STORAGE_KEYS.newTabWorkspaceSettings,
+        STORAGE_KEYS.newTabModuleSettings,
         STORAGE_KEYS.newTabActivity,
         STORAGE_KEYS.bookmarkTagIndex,
         STORAGE_KEYS.contentSnapshotIndex
@@ -3063,6 +3159,11 @@ async function refreshNewTab(): Promise<void> {
     state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
     state.faviconAccentCache = normalizeFaviconAccentCache(stored[STORAGE_KEYS.newTabFaviconAccentCache])
     state.activity = normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.allBookmarks)
+    state.workspaceSettings = normalizeNewTabWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings], {
+      validBookmarkIds: state.allBookmarkMap.keys(),
+      legacyPinnedIds: state.activity.pinnedIds
+    })
+    state.moduleSettings = normalizeNewTabModuleSettings(stored[STORAGE_KEYS.newTabModuleSettings])
     state.backgroundSettings = preloadedBackground || state.backgroundSettings
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
@@ -3082,6 +3183,7 @@ async function refreshNewTab(): Promise<void> {
     applyGeneralSettings()
     syncFolderSettingsControls()
     applyFolderSettings()
+    syncNewTabModernSettingsControls()
     syncTimeSettingsControls()
     updateAllSettingRangeVisuals()
     updateClockText()
@@ -4486,6 +4588,31 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   view.dataset.iconVerticalCenter = String(state.iconSettings.verticalCenter)
   view.setAttribute('aria-busy', state.reorderingBookmarks ? 'true' : 'false')
 
+  const commandPalette = createCommandPaletteOverlay()
+  if (commandPalette) {
+    view.appendChild(commandPalette)
+  }
+
+  const workspaceSwitcher = createWorkspaceSwitcher()
+  if (workspaceSwitcher) {
+    view.appendChild(workspaceSwitcher)
+  }
+
+  const speedDial = createSpeedDialPanel()
+  if (speedDial) {
+    view.appendChild(speedDial)
+  }
+
+  const health = createBookmarkHealthPanel()
+  if (health) {
+    view.appendChild(health)
+  }
+
+  const commandHints = createCommandHintBar()
+  if (commandHints) {
+    view.appendChild(commandHints)
+  }
+
   const portal = createPortalPanel()
   if (portal) {
     view.appendChild(portal)
@@ -4568,6 +4695,452 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
 
   view.appendChild(groupList)
   return view
+}
+
+function getActiveWorkspacePinnedIds(): string[] {
+  return getActiveNewTabWorkspace(state.workspaceSettings).pinnedIds
+}
+
+function getActiveWorkspaceName(): string {
+  return getActiveNewTabWorkspace(state.workspaceSettings).name
+}
+
+function createWorkspaceSwitcher(): HTMLElement | null {
+  if (!state.moduleSettings.workspaces) {
+    return null
+  }
+
+  const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
+  const section = document.createElement('section')
+  section.className = 'newtab-workspaces'
+  section.setAttribute('aria-label', '书签场景')
+
+  const label = document.createElement('span')
+  label.className = 'newtab-workspaces-label'
+  label.textContent = '场景'
+
+  const list = document.createElement('div')
+  list.className = 'newtab-workspace-list'
+  list.setAttribute('role', 'listbox')
+  list.setAttribute('aria-label', '切换书签场景')
+
+  for (const workspace of state.workspaceSettings.workspaces) {
+    const button = document.createElement('button')
+    button.className = 'newtab-workspace-pill'
+    button.type = 'button'
+    button.dataset.workspaceId = workspace.id
+    button.setAttribute('role', 'option')
+    button.setAttribute('aria-selected', String(workspace.id === activeWorkspace.id))
+    button.textContent = workspace.name
+    button.addEventListener('click', () => {
+      void switchNewTabWorkspace(workspace.id)
+    })
+    list.appendChild(button)
+  }
+
+  const manageButton = document.createElement('button')
+  manageButton.className = 'newtab-workspace-manage'
+  manageButton.type = 'button'
+  manageButton.textContent = '管理'
+  manageButton.addEventListener('click', openWorkspaceSettings)
+
+  section.append(label, list, manageButton)
+  return section
+}
+
+function createSpeedDialPanel(): HTMLElement | null {
+  if (!state.moduleSettings.speedDial) {
+    return null
+  }
+
+  const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
+  const items = buildSpeedDialItems({
+    pinnedIds: activeWorkspace.pinnedIds,
+    bookmarks: state.allBookmarkMap
+  })
+  const section = document.createElement('section')
+  section.className = 'newtab-speed-dial'
+  section.setAttribute('aria-label', `${activeWorkspace.name} Speed Dial`)
+
+  const header = document.createElement('div')
+  header.className = 'newtab-module-heading'
+  const title = document.createElement('h2')
+  title.textContent = 'Speed Dial'
+  const meta = document.createElement('span')
+  meta.textContent = `${activeWorkspace.name} · ${items.length} 个固定入口`
+  header.append(title, meta)
+  section.appendChild(header)
+
+  if (!items.length) {
+    section.appendChild(createSpeedDialEmptyPanel(activeWorkspace.name))
+    return section
+  }
+
+  const list = document.createElement('div')
+  list.className = 'newtab-speed-dial-grid'
+  for (const item of items) {
+    const bookmark = getBookmarkById(item.id)
+    if (!bookmark?.url) {
+      continue
+    }
+    list.appendChild(createSpeedDialLink(item, bookmark))
+  }
+
+  section.appendChild(list)
+  return section
+}
+
+function createSpeedDialEmptyPanel(workspaceName: string): HTMLElement {
+  const emptyState = createSpeedDialEmptyState(workspaceName)
+  const empty = document.createElement('div')
+  empty.className = 'newtab-speed-dial-empty'
+
+  const copy = document.createElement('div')
+  copy.className = 'newtab-speed-dial-empty-copy'
+  const title = document.createElement('strong')
+  title.textContent = emptyState.title
+  const detail = document.createElement('span')
+  detail.textContent = emptyState.detail
+  copy.append(title, detail)
+
+  const actions = document.createElement('div')
+  actions.className = 'newtab-speed-dial-empty-actions'
+
+  for (const action of emptyState.actions) {
+    const button = document.createElement('button')
+    button.className = 'newtab-button secondary'
+    button.type = 'button'
+    button.textContent = action.label
+    button.addEventListener('click', () => {
+      if (action.id === 'search') {
+        document.querySelector<HTMLInputElement>('.newtab-search-input')?.focus()
+        return
+      }
+      if (action.id === 'settings') {
+        openWorkspaceSettings()
+      }
+    })
+    actions.appendChild(button)
+  }
+
+  empty.append(copy, actions)
+  return empty
+}
+
+function createSpeedDialLink(
+  item: ReturnType<typeof buildSpeedDialItems>[number],
+  bookmark: chrome.bookmarks.BookmarkTreeNode
+): HTMLAnchorElement {
+  const link = document.createElement('a')
+  link.className = 'newtab-speed-dial-card'
+  link.href = item.url
+  link.title = item.title
+  link.draggable = false
+  link.dataset.bookmarkId = item.id
+  bindBookmarkNavigation(link, bookmark)
+  applyCachedFaviconAccent(link, item.id, item.url)
+
+  const mark = document.createElement('span')
+  mark.className = 'newtab-speed-dial-mark'
+  mark.setAttribute('aria-hidden', 'true')
+  mark.textContent = item.fallbackLabel
+
+  const copy = document.createElement('span')
+  copy.className = 'newtab-speed-dial-copy'
+  const title = document.createElement('strong')
+  title.textContent = item.title
+  const detail = document.createElement('span')
+  detail.textContent = item.detail
+  copy.append(title, detail)
+
+  link.append(mark, copy)
+  return link
+}
+
+function createBookmarkHealthPanel(): HTMLElement | null {
+  if (!state.moduleSettings.health) {
+    return null
+  }
+
+  const health = buildNewTabBookmarkHealth({
+    bookmarks: getAllBookmarkRecords(),
+    tagIndex: state.bookmarkTagIndex,
+    snapshotIndex: state.searchSnapshotIndex,
+    activity: state.activity
+  })
+  const visibleCards = health.cards.filter((card) => card.count > 0).slice(0, 4)
+  const cards = visibleCards.length ? visibleCards : health.cards.slice(0, 3)
+
+  if (!hasActionableBookmarkHealth(health.cards) && health.totalBookmarks <= 0) {
+    return null
+  }
+
+  const section = document.createElement('section')
+  section.className = 'newtab-bookmark-health'
+  section.setAttribute('aria-label', '书签健康提醒')
+
+  const header = document.createElement('div')
+  header.className = 'newtab-module-heading'
+  const title = document.createElement('h2')
+  title.textContent = '书签健康'
+  const meta = document.createElement('span')
+  meta.textContent = hasActionableBookmarkHealth(health.cards)
+    ? '轻量整理提醒'
+    : '当前没有明显待处理项'
+  header.append(title, meta)
+
+  const list = document.createElement('div')
+  list.className = 'newtab-health-grid'
+  for (const card of cards) {
+    const button = document.createElement('button')
+    button.className = 'newtab-health-card'
+    button.type = 'button'
+    button.dataset.severity = card.severity
+    button.addEventListener('click', () => {
+      openOptionsHash(card.actionHash)
+    })
+
+    const count = document.createElement('strong')
+    count.textContent = String(card.count)
+    const label = document.createElement('span')
+    label.textContent = card.label
+    const detail = document.createElement('small')
+    detail.textContent = card.detail
+    button.append(count, label, detail)
+    list.appendChild(button)
+  }
+
+  section.append(header, list)
+  return section
+}
+
+function createCommandHintBar(): HTMLElement | null {
+  if (!state.moduleSettings.commandHints) {
+    return null
+  }
+
+  const bar = document.createElement('section')
+  bar.className = 'newtab-command-hints'
+  bar.setAttribute('aria-label', '快捷操作提示')
+
+  const paletteButton = document.createElement('button')
+  paletteButton.type = 'button'
+  paletteButton.textContent = 'Ctrl / Cmd + K'
+  paletteButton.addEventListener('click', openCommandPalette)
+
+  const searchHint = document.createElement('span')
+  searchHint.textContent = '/ 搜索书签'
+
+  const privacyButton = document.createElement('button')
+  privacyButton.type = 'button'
+  privacyButton.textContent = '隐私与模块'
+  privacyButton.addEventListener('click', openModuleSettings)
+
+  bar.append(paletteButton, searchHint, privacyButton)
+  return bar
+}
+
+function createCommandPaletteOverlay(): HTMLElement | null {
+  if (!state.commandPaletteOpen || !state.moduleSettings.commandHints) {
+    return null
+  }
+
+  const items = getCurrentCommandPaletteItems()
+  const overlay = document.createElement('section')
+  overlay.className = 'newtab-command-palette'
+  overlay.setAttribute('role', 'dialog')
+  overlay.setAttribute('aria-modal', 'true')
+  overlay.setAttribute('aria-label', '命令面板')
+
+  const panel = document.createElement('div')
+  panel.className = 'newtab-command-palette-panel'
+
+  const input = document.createElement('input')
+  input.className = 'newtab-command-palette-input'
+  input.type = 'search'
+  input.placeholder = '搜索书签、固定入口、切换场景或打开整理工具'
+  input.value = state.commandPaletteQuery
+  input.setAttribute('aria-label', '搜索命令')
+  input.setAttribute('aria-controls', 'newtab-command-palette-results')
+  input.addEventListener('input', () => {
+    state.commandPaletteQuery = input.value
+    state.commandPaletteActiveIndex = 0
+    scheduleRender()
+  })
+
+  const list = document.createElement('div')
+  list.id = 'newtab-command-palette-results'
+  list.className = 'newtab-command-palette-results'
+  list.setAttribute('role', 'listbox')
+
+  items.forEach((item, index) => {
+    const button = document.createElement('button')
+    button.className = 'newtab-command-palette-item'
+    button.type = 'button'
+    button.dataset.commandId = item.id
+    button.dataset.commandType = item.type
+    button.setAttribute('role', 'option')
+    button.setAttribute('aria-selected', String(index === state.commandPaletteActiveIndex))
+    button.addEventListener('click', () => {
+      void executeCommandPaletteItem(item)
+    })
+
+    const title = document.createElement('strong')
+    title.textContent = item.title
+    const detail = document.createElement('span')
+    detail.textContent = item.detail
+    button.append(title, detail)
+    list.appendChild(button)
+  })
+
+  if (!items.length) {
+    const empty = document.createElement('p')
+    empty.className = 'newtab-command-palette-empty'
+    empty.textContent = '没有匹配命令。试试书签标题、URL、场景名或“重复”“整理”。'
+    list.appendChild(empty)
+  }
+
+  panel.append(input, list)
+  overlay.appendChild(panel)
+  overlay.addEventListener('pointerdown', (event) => {
+    if (event.target === overlay) {
+      closeCommandPalette()
+    }
+  })
+
+  window.requestAnimationFrame(() => {
+    const activeInput = document.querySelector<HTMLInputElement>('.newtab-command-palette-input')
+    activeInput?.focus()
+    activeInput?.setSelectionRange(activeInput.value.length, activeInput.value.length)
+  })
+
+  return overlay
+}
+
+function getCurrentCommandPaletteItems(): CommandPaletteItem[] {
+  return buildCommandPaletteItems({
+    query: state.commandPaletteQuery,
+    searchIndex: state.searchIndex,
+    pinnedIds: getActiveWorkspacePinnedIds(),
+    workspaces: state.workspaceSettings.workspaces,
+    activeWorkspaceId: state.workspaceSettings.activeWorkspaceId,
+    limit: 12
+  })
+}
+
+function openCommandPalette(): void {
+  closeBookmarkMenu()
+  closeAddBookmarkMenu()
+  state.commandPaletteOpen = true
+  state.commandPaletteQuery = ''
+  state.commandPaletteActiveIndex = 0
+  render()
+}
+
+function closeCommandPalette(): void {
+  state.commandPaletteOpen = false
+  state.commandPaletteQuery = ''
+  state.commandPaletteActiveIndex = 0
+  render()
+}
+
+function handleCommandPaletteKeydown(event: KeyboardEvent): void {
+  if (!state.commandPaletteOpen) {
+    return
+  }
+
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeCommandPalette()
+    return
+  }
+
+  const items = getCurrentCommandPaletteItems()
+  if (!items.length) {
+    return
+  }
+
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    const direction = event.key === 'ArrowDown' ? 1 : -1
+    state.commandPaletteActiveIndex =
+      (state.commandPaletteActiveIndex + direction + items.length) % items.length
+    scheduleRender()
+    return
+  }
+
+  if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault()
+    state.commandPaletteActiveIndex = event.key === 'Home' ? 0 : items.length - 1
+    scheduleRender()
+    return
+  }
+
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    void executeCommandPaletteItem(items[state.commandPaletteActiveIndex] || items[0])
+  }
+}
+
+async function executeCommandPaletteItem(item: CommandPaletteItem | undefined): Promise<void> {
+  if (!item) {
+    return
+  }
+
+  if (item.type === 'bookmark' && item.bookmarkId) {
+    const bookmark = getBookmarkById(item.bookmarkId)
+    if (bookmark?.url) {
+      closeCommandPalette()
+      await recordBookmarkOpen(bookmark)
+      window.location.assign(bookmark.url)
+    }
+    return
+  }
+
+  if ((item.type === 'pin' || item.type === 'unpin') && item.bookmarkId) {
+    state.workspaceSettings = toggleNewTabWorkspacePin(
+      state.workspaceSettings,
+      state.workspaceSettings.activeWorkspaceId,
+      item.bookmarkId,
+      { validBookmarkIds: state.allBookmarkMap.keys() }
+    )
+    await saveNewTabWorkspaceSettings()
+    closeCommandPalette()
+    return
+  }
+
+  if (item.type === 'workspace' && item.workspaceId) {
+    await switchNewTabWorkspace(item.workspaceId)
+    closeCommandPalette()
+    return
+  }
+
+  closeCommandPalette()
+  if (item.type === 'settings') {
+    openSettingsDrawer({ focusFirstControl: false, section: 'modules' })
+    return
+  }
+
+  if (item.type === 'dashboard') {
+    openDashboardRoute()
+    return
+  }
+
+  if (item.type === 'options' && item.actionHash) {
+    openOptionsHash(item.actionHash)
+  }
+}
+
+async function switchNewTabWorkspace(workspaceId: string): Promise<void> {
+  const nextSettings = setActiveNewTabWorkspace(state.workspaceSettings, workspaceId)
+  if (nextSettings === state.workspaceSettings) {
+    return
+  }
+
+  state.workspaceSettings = nextSettings
+  await saveNewTabWorkspaceSettings()
+  render()
+  updateClockText()
 }
 
 function appendBookmarkTilesInChunks(
@@ -4851,7 +5424,7 @@ function createPortalStat(label: string, value: number): HTMLElement {
 function createQuickAccessPanel(): HTMLElement | null {
   const { frequentItems, recentItems } = getPortalQuickAccessItems({
     bookmarks: state.bookmarks,
-    pinnedIds: state.activity.pinnedIds,
+    pinnedIds: getActiveWorkspacePinnedIds(),
     records: state.activity.records,
     now: Date.now(),
     itemLimit: QUICK_ACCESS_ITEM_LIMIT,
@@ -5283,6 +5856,11 @@ function getVisibleBookmarkRecords(): BookmarkRecord[] {
   return records
 }
 
+function getAllBookmarkRecords(): BookmarkRecord[] {
+  const folderData = state.folderData || extractBookmarkData(state.rootNode)
+  return folderData.bookmarks
+}
+
 function getBookmarkById(bookmarkId: string): chrome.bookmarks.BookmarkTreeNode | null {
   return state.bookmarkMap.get(String(bookmarkId)) || state.allBookmarkMap.get(String(bookmarkId)) || null
 }
@@ -5338,9 +5916,48 @@ async function removeBookmarkFromActivity(bookmarkId: string): Promise<void> {
   await saveNewTabActivity()
 }
 
+async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void> {
+  const normalizedId = String(bookmarkId || '').trim()
+  if (!normalizedId) {
+    return
+  }
+
+  let nextSettings = state.workspaceSettings
+  for (const workspace of state.workspaceSettings.workspaces) {
+    if (!workspace.pinnedIds.includes(normalizedId)) {
+      continue
+    }
+    nextSettings = updateNewTabWorkspace(
+      nextSettings,
+      workspace.id,
+      { pinnedIds: workspace.pinnedIds.filter((id) => id !== normalizedId) },
+      { validBookmarkIds: state.allBookmarkMap.keys() }
+    )
+  }
+
+  state.workspaceSettings = nextSettings
+  await saveNewTabWorkspaceSettings()
+}
+
 async function saveNewTabActivity(): Promise<void> {
   await setLocalStorage({
     [STORAGE_KEYS.newTabActivity]: normalizeNewTabActivity(state.activity, state.allBookmarks)
+  })
+}
+
+async function saveNewTabWorkspaceSettings(): Promise<void> {
+  state.workspaceSettings = normalizeNewTabWorkspaceSettings(state.workspaceSettings, {
+    validBookmarkIds: state.allBookmarkMap.keys()
+  })
+  await setLocalStorage({
+    [STORAGE_KEYS.newTabWorkspaceSettings]: state.workspaceSettings
+  })
+}
+
+async function saveNewTabModuleSettings(): Promise<void> {
+  state.moduleSettings = normalizeNewTabModuleSettings(state.moduleSettings)
+  await saveSettingsWithFeedback({
+    [STORAGE_KEYS.newTabModuleSettings]: state.moduleSettings
   })
 }
 
@@ -5473,14 +6090,14 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
   actionList.setAttribute('aria-label', '书签操作')
   actionList.addEventListener('keydown', handleMenuActionsKeydown)
   const bookmarkLabel = getBookmarkActionLabelContext(bookmark)
-  const pinLabel = isActiveMenuBookmarkPinned() ? '取消固定书签' : '固定书签到 Curator 常用'
+  const pinCopy = getSpeedDialPinActionCopy(isActiveMenuBookmarkPinned(), getActiveWorkspaceName())
   const deleteLabel = state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除书签' : '删除书签'
   actionList.append(
     createMenuAction(
-      isActiveMenuBookmarkPinned() ? '取消固定' : '固定到 Curator 常用',
+      pinCopy.label,
       'pin',
       toggleActiveMenuBookmarkPin,
-      { actionId: 'toggle-pin', ariaLabel: `${pinLabel}：${bookmarkLabel}` }
+      { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
     ),
     createMenuAction('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
       actionId: 'copy-url',
@@ -7127,6 +7744,174 @@ function syncFolderSettingsControls(): void {
   if (candidateList instanceof HTMLElement) {
     candidateList.replaceChildren(...createFolderCandidateControls())
   }
+}
+
+function syncNewTabModernSettingsControls(): void {
+  syncWorkspaceSettingsControls()
+  syncModuleSettingsControls()
+  syncPrivacyNoticeControls()
+}
+
+function syncWorkspaceSettingsControls(): void {
+  const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
+  setTextContent('workspace-active-name', `${activeWorkspace.name} · ${activeWorkspace.pinnedIds.length} 个固定入口`)
+
+  const list = document.getElementById('workspace-settings-list')
+  if (!(list instanceof HTMLElement)) {
+    return
+  }
+
+  const rows = state.workspaceSettings.workspaces.map((workspace) => {
+    const row = document.createElement('div')
+    row.className = 'workspace-settings-row'
+    row.dataset.workspaceId = workspace.id
+
+    const input = document.createElement('input')
+    input.className = 'setting-text-input workspace-name-input'
+    input.type = 'text'
+    input.value = workspace.name
+    input.maxLength = 24
+    input.dataset.workspaceNameInput = workspace.id
+    input.setAttribute('aria-label', `重命名场景 ${workspace.name}`)
+
+    const meta = document.createElement('span')
+    meta.className = 'workspace-settings-meta'
+    meta.textContent = `${workspace.pinnedIds.length} 个固定入口`
+
+    const button = document.createElement('button')
+    button.className = 'newtab-button secondary workspace-activate-button'
+    button.type = 'button'
+    button.dataset.workspaceActivate = workspace.id
+    button.disabled = workspace.id === state.workspaceSettings.activeWorkspaceId
+    button.textContent = workspace.id === state.workspaceSettings.activeWorkspaceId ? '当前' : '切换'
+
+    row.append(input, meta, button)
+    return row
+  })
+
+  list.replaceChildren(...rows)
+}
+
+function syncModuleSettingsControls(): void {
+  const list = document.getElementById('newtab-module-settings-list')
+  if (!(list instanceof HTMLElement)) {
+    return
+  }
+
+  const rows = buildNewTabModuleSettingRows(state.moduleSettings).map((setting) => {
+    const label = document.createElement('label')
+    label.className = 'setting-row'
+    label.dataset.moduleSettingRow = setting.key
+
+    const copy = document.createElement('span')
+    copy.className = 'setting-label-stack'
+    const title = document.createElement('span')
+    title.textContent = setting.label
+    const detail = document.createElement('small')
+    detail.textContent = setting.description
+    copy.append(title, detail)
+
+    const input = document.createElement('input')
+    input.className = 'setting-switch-input'
+    input.type = 'checkbox'
+    input.checked = setting.enabled
+    input.dataset.moduleSettingToggle = setting.key
+
+    const switchVisual = document.createElement('span')
+    switchVisual.className = 'setting-switch'
+    switchVisual.setAttribute('aria-hidden', 'true')
+
+    label.append(copy, input, switchVisual)
+    return label
+  })
+
+  list.replaceChildren(...rows)
+}
+
+function syncPrivacyNoticeControls(): void {
+  const container = document.getElementById('newtab-privacy-notice')
+  if (!(container instanceof HTMLElement)) {
+    return
+  }
+
+  container.replaceChildren()
+  if (!state.moduleSettings.privacyNotice) {
+    container.hidden = true
+    return
+  }
+  container.hidden = false
+
+  const notice = buildNewTabPrivacyNotice()
+  const title = document.createElement('strong')
+  title.textContent = notice.title
+  const summary = document.createElement('p')
+  summary.textContent = notice.summary
+  const list = document.createElement('ul')
+  for (const bullet of notice.bullets) {
+    const item = document.createElement('li')
+    item.textContent = bullet
+    list.appendChild(item)
+  }
+  container.append(title, summary, list)
+}
+
+function handleWorkspaceSettingsClick(event: Event): void {
+  const target = event.target
+  if (!(target instanceof Element)) {
+    return
+  }
+
+  const button = target.closest<HTMLButtonElement>('[data-workspace-activate]')
+  if (!button) {
+    return
+  }
+
+  void switchNewTabWorkspace(String(button.dataset.workspaceActivate || ''))
+}
+
+function handleWorkspaceSettingsInput(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
+
+  const workspaceId = String(target.dataset.workspaceNameInput || '')
+  if (!workspaceId) {
+    return
+  }
+
+  state.workspaceSettings = updateNewTabWorkspace(
+    state.workspaceSettings,
+    workspaceId,
+    { name: target.value },
+    { validBookmarkIds: state.allBookmarkMap.keys() }
+  )
+  void saveNewTabWorkspaceSettings().catch((error) => {
+    setSettingsSaveStatus('error', error instanceof Error ? error.message : '场景设置保存失败')
+  })
+  render()
+}
+
+function handleModuleSettingsChange(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement)) {
+    return
+  }
+
+  const key = target.dataset.moduleSettingToggle as NewTabModuleSettingKey | undefined
+  if (!key || !(key in state.moduleSettings)) {
+    return
+  }
+
+  state.moduleSettings = normalizeNewTabModuleSettings({
+    ...state.moduleSettings,
+    [key]: target.checked
+  })
+  void saveNewTabModuleSettings().catch((error) => {
+    setSettingsSaveStatus('error', error instanceof Error ? error.message : '模块设置保存失败')
+  })
+  syncNewTabModernSettingsControls()
+  render()
 }
 
 function createSelectedFolderControls(): HTMLElement[] {

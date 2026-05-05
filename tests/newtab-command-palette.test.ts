@@ -69,7 +69,7 @@ test('finds workspace and cleanup commands with Chinese keywords', () => {
 test('command palette shortcut avoids editable targets', () => {
   assert.equal(shouldOpenCommandPaletteFromKeydown({ key: 'k', metaKey: true }), true)
   assert.equal(shouldOpenCommandPaletteFromKeydown({ key: 'k', ctrlKey: true }), true)
-  assert.equal(shouldOpenCommandPaletteFromKeydown({ key: '/' }), true)
+  assert.equal(shouldOpenCommandPaletteFromKeydown({ key: '/' }), false)
   assert.equal(shouldOpenCommandPaletteFromKeydown({ key: '/', target: { tagName: 'INPUT' } }), false)
   assert.equal(shouldOpenCommandPaletteFromKeydown({ key: 'k', metaKey: true, target: { isContentEditable: true } }), false)
   assert.equal(shouldOpenCommandPaletteFromKeydown({ key: '/', altKey: true }), false)

@@ -45,9 +45,9 @@ test('newtab bookmark edit menu actions expose bookmark-specific labels', () => 
   const newtabSource = readProjectFile('src/newtab/newtab.ts')
 
   assert.match(newtabSource, /const bookmarkLabel = getBookmarkActionLabelContext\(bookmark\)/)
-  assert.match(newtabSource, /const pinLabel = isActiveMenuBookmarkPinned\(\) \? '取消固定书签' : '固定书签到 Curator 常用'/)
+  assert.match(newtabSource, /const pinCopy = getSpeedDialPinActionCopy\(isActiveMenuBookmarkPinned\(\), getActiveWorkspaceName\(\)\)/)
   assert.match(newtabSource, /const deleteLabel = state\.pendingDeleteBookmarkId === String\(bookmark\.id\) \? '确认删除书签' : '删除书签'/)
-  assert.match(newtabSource, /actionId: 'toggle-pin', ariaLabel: `\$\{pinLabel\}：\$\{bookmarkLabel\}`/)
+  assert.match(newtabSource, /actionId: 'toggle-pin', ariaLabel: `\$\{pinCopy\.ariaLabel\}：\$\{bookmarkLabel\}`/)
   assert.match(newtabSource, /actionId: 'copy-url',[\s\S]*?ariaLabel: `复制书签链接：\$\{bookmarkLabel\}`/)
   assert.match(newtabSource, /actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `\$\{deleteLabel\}：\$\{bookmarkLabel\}`/)
   assert.match(newtabSource, /actionId: 'refresh-icon',[\s\S]*?ariaLabel: `刷新书签图标：\$\{bookmarkLabel\}`/)

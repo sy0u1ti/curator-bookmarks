@@ -108,7 +108,7 @@ export function shouldOpenCommandPaletteFromKeydown(event: KeyboardEventLike): b
     return true
   }
 
-  return !event.metaKey && !event.ctrlKey && key === '/'
+  return false
 }
 
 function createBookmarkCommand(entry: NewTabSearchIndexEntry): CommandPaletteItem {

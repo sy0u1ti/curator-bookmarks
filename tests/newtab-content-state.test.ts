@@ -351,6 +351,37 @@ test('newtab settings expose one combined local quick access switch', () => {
   assert.doesNotMatch(html, /id="general-show-recent"/)
 })
 
+test('newtab modernized bookmark modules are visible and settings-controlled', () => {
+  const html = readProjectFile('src/newtab/newtab.html')
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const css = readProjectFile('src/newtab/newtab.css')
+
+  assert.match(html, /id="settings-workspaces-title"/)
+  assert.match(html, /id="settings-modules-title"/)
+  assert.match(html, /id="workspace-settings-list"/)
+  assert.match(html, /id="newtab-module-settings-list"/)
+  assert.match(html, /id="newtab-privacy-notice"/)
+  assert.match(script, /STORAGE_KEYS\.newTabWorkspaceSettings/)
+  assert.match(script, /STORAGE_KEYS\.newTabModuleSettings/)
+  assert.match(script, /createWorkspaceSwitcher\(\)/)
+  assert.match(script, /createSpeedDialPanel\(\)/)
+  assert.match(script, /createBookmarkHealthPanel\(\)/)
+  assert.match(script, /createCommandPaletteOverlay\(\)/)
+  assert.match(css, /\.newtab-speed-dial,[\s\S]*?\.newtab-bookmark-health\s*\{/)
+  assert.match(css, /\.newtab-command-palette\s*\{/)
+})
+
+test('newtab pinning uses active workspace instead of legacy activity pins', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const toggleBody = getFunctionBody(script, 'toggleActiveMenuBookmarkPin')
+  const quickAccessBody = getFunctionBody(script, 'createQuickAccessPanel')
+
+  assert.match(toggleBody, /toggleNewTabWorkspacePin\(/)
+  assert.match(toggleBody, /await saveNewTabWorkspaceSettings\(\)/)
+  assert.doesNotMatch(toggleBody, /await saveNewTabActivity\(\)/)
+  assert.match(quickAccessBody, /pinnedIds:\s*getActiveWorkspacePinnedIds\(\)/)
+})
+
 test('newtab general settings expose bookmark new tab opening independently from search', () => {
   const html = readProjectFile('src/newtab/newtab.html')
   const source = readProjectFile('src/newtab/newtab.ts')

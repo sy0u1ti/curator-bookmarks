@@ -440,3 +440,142 @@
 - 冲突解决方式：文档保留已有 agent 小节和 integration log 并追加 health-settings 小节；`constants.ts` 同时保留 `newTabWorkspaceSettings` 与 `newTabModuleSettings`。
 - 合并后验证：暂未运行；等待 UI 集成完成后统一运行。
 - 是否需要回到 agent worktree 修复：否
+
+## Integration Implementation: newtab UI wiring
+
+### 负责范围
+
+- 在 `integration/newtab-modernization` 中把四个 agent 分支的数据模型接入真实 newtab 页面、书签菜单、settings drawer 和键盘交互。
+
+### 修复或优化的原有功能
+
+- 原 `newTabActivity.pinnedIds` 只作为迁移来源，新的固定入口保存到当前 workspace，`Curator 常用` 和书签菜单均按当前场景读取 pinned ids。
+- 右键菜单的固定文案从全局“Curator 常用”改为“固定到/取消固定当前场景”，避免用户误以为所有场景共享同一列表。
+- 命令面板只响应 `Ctrl/Cmd+K`，保留 `/` 聚焦搜索，避免破坏已有全局搜索快捷键。
+
+### 新增功能
+
+- 首屏新增 workspace 场景切换器，支持默认、工作、学习、个人场景快速切换。
+- 首屏新增 Speed Dial 模块，展示当前 workspace 的固定书签，包含空状态和从书签菜单/命令面板固定的路径。
+- 首屏新增书签健康提醒，轻量展示待整理、重复候选、缺标签、缺摘要、新近未处理等入口，并跳转 options 对应整理页。
+- 首屏新增命令提示和命令面板，支持搜索书签、打开书签、pin/unpin、切换 workspace、打开设置、Dashboard 和整理工具。
+- Settings 新增“场景与固定入口”区，可切换和重命名 workspace。
+- Settings 新增“模块与隐私”区，可开关 Speed Dial、Workspace、书签健康、快捷提示、隐私说明，并展示本地优先和权限边界。
+
+### UI / UX 改进
+
+- 新模块使用紧凑玻璃面板、稳定 grid 尺寸和省略策略，避免长标题撑破布局。
+- 移动窄屏下 workspace、Speed Dial、健康卡和命令面板改为单列或自动换行。
+- 健康卡和命令面板均使用按钮/列表语义，保留键盘可达性。
+
+### 性能改进
+
+- 不新增依赖、网络请求、Chrome 权限或 history 权限。
+- Speed Dial、Workspace 和健康提醒均复用 refresh 阶段已经读取的 bookmark tree、tag index、snapshot index、activity。
+- 命令面板按需渲染，并复用已有 `searchIndex`，不在首屏引入额外远程或重型解析。
+
+### 影响范围
+
+- 涉及文件：`src/newtab/newtab.ts`、`src/newtab/newtab.html`、`src/newtab/newtab.css`、`src/newtab/command-palette.ts`、`tests/newtab-a11y.test.js`、`tests/newtab-command-palette.test.ts`、`tests/newtab-content-state.test.ts`。
+- 涉及模块：newtab 首屏、settings drawer、bookmark menu、command palette、workspace storage、module settings storage。
+
+### 实现思路
+
+- 在 `refreshNewTab()` 同步读取 `newTabWorkspaceSettings` 和 `newTabModuleSettings`，用旧 `newTabActivity.pinnedIds` 迁移默认 workspace。
+- 在 `createBookmarkSections()` 顶部依次渲染 command palette、workspace switcher、Speed Dial、health cards 和 command hints，再保留原 portal/source/bookmark grid。
+- 通过 `saveNewTabWorkspaceSettings()` 和 `saveNewTabModuleSettings()` 独立持久化新状态，避免把 workspace pins 继续写回 legacy activity。
+- 将 options 深链统一封装为 `openOptionsHash()`，健康卡和命令面板复用同一路径。
+
+### 测试方式
+
+- 已运行临时依赖软链验证：`npm run typecheck`，通过。
+- 已运行临时依赖软链验证：`npm test -- --test-name-pattern "newtab modernized bookmark modules|newtab bookmark edit menu actions"`，399 项通过，5 项 skip。
+- 手动测试建议：在 newtab 右键固定书签到不同 workspace，刷新后确认各场景 Speed Dial 独立；用 `Ctrl/Cmd+K` 执行打开书签、pin/unpin、切换 workspace、打开整理入口；在 settings 开关模块并确认首屏即时变化。
+
+### 已知风险
+
+- 尚未做真实浏览器截图验收；最终自动验证完成后仍建议用户加载扩展进行人工交互测试。
+- 健康提醒是轻量统计入口，不做实时失效检测，疑似失效仍应走 options 的检测流程。
+
+## Final Summary
+
+### 优化了哪些原有项目
+
+- 将原全局固定书签语义升级为 workspace 级固定入口，旧 `newTabActivity.pinnedIds` 仅作为默认场景迁移来源。
+- 保留 `/` 聚焦搜索的原快捷键体验，新增命令面板只使用 `Ctrl/Cmd+K`，避免键盘行为互相抢占。
+- 原 `Curator 常用` 快捷访问改为读取当前 workspace pinned ids，和首屏 Speed Dial 保持一致。
+- 右键书签菜单的固定/取消固定文案改为当前场景上下文，并继续保留复制、删除、刷新图标、保存等原操作。
+
+### 新增/创新了哪些功能
+
+- Workspace 场景模式：默认、工作、学习、个人场景可在首屏切换，每个场景独立保存 pinned bookmarks。
+- Speed Dial：首屏展示当前场景固定书签，支持空状态引导、右键菜单固定/取消固定、命令面板 pin/unpin。
+- 书签健康提醒：首屏展示待整理、重复候选、缺少标签、缺少摘要、新近未处理等轻量整理入口。
+- Command Palette：`Ctrl/Cmd+K` 打开，可搜索书签、打开书签、pin/unpin、切换 workspace、进入 settings/dashboard/options 整理页。
+- 模块显示控制：settings 可开关 Speed Dial、Workspace、书签健康、快捷提示和隐私说明。
+- 隐私透明说明：settings 明确本地优先、不追踪、不出售数据、不修改默认搜索引擎、不新增 history 权限。
+
+### newtab 页面变化
+
+- 书签网格上方新增 workspace 切换器、Speed Dial、书签健康卡和快捷提示。
+- Command Palette 以 overlay 形式按需渲染，不占用常驻首屏空间。
+- 健康提醒卡片点击后跳转到 options 对应整理入口，如 `#duplicates`、`#folder-cleanup`、`#ai`、`#dashboard`。
+- 移动窄屏下新增模块自动单列或换行，避免按钮和标题挤出容器。
+
+### newtab settings 变化
+
+- 新增“场景与固定入口”设置区，支持查看当前场景、切换场景和重命名场景。
+- 新增“模块与隐私”设置区，支持模块开关和隐私说明展示。
+- settings 保存仍使用本地 `chrome.storage.local`，新增 key 为 `newTabWorkspaceSettings` 和 `newTabModuleSettings`。
+
+### 功能完整度提升
+
+- 至少 4 个用户可感知功能已落地并接入 UI、状态和持久化：Workspace、Speed Dial、书签健康、Command Palette、模块开关、隐私说明。
+- 新功能均围绕更快访问书签、更好搜索书签、更好组织和整理书签、隐私透明控制。
+
+### UI 美观度提升
+
+- 新增模块采用紧凑、克制的玻璃面板和稳定 grid，不引入泛 dashboard 装饰组件。
+- 长标题、URL、健康说明和按钮文案均使用省略或多行截断，降低窄屏错位风险。
+
+### 性能优化
+
+- 不新增远程请求、运行时依赖、Chrome 权限、history 权限或默认搜索引擎修改。
+- Speed Dial、Workspace、健康提醒和命令面板复用已有 bookmark tree、search index、tag index、snapshot index 和 activity。
+- 命令面板按需渲染，关闭时不保留结果列表 DOM。
+
+### UX 体验优化
+
+- 右键菜单、首屏 Speed Dial、快捷访问和命令面板使用同一 active workspace pin 数据。
+- `/` 仍聚焦搜索；`Ctrl/Cmd+K` 专用于命令面板；Escape 可关闭命令面板、settings、dashboard 或菜单。
+- settings 中模块开关即时影响首屏显示，隐私边界直接出现在 newtab settings。
+
+### 测试、Lint、Typecheck、Build 结果
+
+- install：`npm install` 通过；added 76 packages，audited 77 packages，found 0 vulnerabilities。
+- lint：`npm run lint` 通过；当前脚本执行 `npm run typecheck`。
+- typecheck：`npm run typecheck` 通过。
+- test：`npm test` 通过；404 tests，399 pass，5 skipped，0 fail。
+- build：`npm run build` 通过；Vite 6.4.2 成功生成 `dist/`。
+
+### 需要用户手动测试的重点
+
+- 在不同 workspace 中分别固定不同书签，刷新 newtab 后确认 Speed Dial 独立保存。
+- 用右键菜单固定/取消固定书签，确认文案和首屏 Speed Dial 同步。
+- 用 `Ctrl/Cmd+K` 搜索书签、打开书签、pin/unpin、切换 workspace、打开 settings 和整理入口。
+- 在 settings 关闭 Speed Dial、Workspace、书签健康、快捷提示、隐私说明，确认首屏即时变化。
+- 准备重复、待整理、缺标签/摘要书签后确认健康卡计数和 options 深链入口合理。
+- 在窄屏窗口检查 workspace、Speed Dial、健康卡、命令面板和 settings 文案不溢出。
+
+### 已知风险或后续建议
+
+- 本轮已完成自动化验证和构建，但未在真实 Chrome 扩展环境中截图/手测；建议用户加载 integration 分支构建产物进行人工测试。
+- 书签健康模块是轻量本地统计，不替代 options 中的可用性检测或重型整理流程。
+
+### 当前集成分支
+
+- `integration/newtab-modernization`
+
+### 是否合并 main
+
+- 否。等待用户手动测试和明确批准。
