@@ -237,6 +237,7 @@
 ## 八、验证记录
 
 - `git diff --check main..HEAD`：通过。
+- `npm run lint`：通过；当前脚本为 `npm run typecheck`。
 - `npm run validate`：通过。
   - `npm run typecheck`：通过。
   - `npm test`：369/369 通过。
@@ -296,7 +297,7 @@
 - 已在 `G:\coding\worktrees` 对应 WSL 路径 `/mnt/g/coding/worktrees` 下使用独立集成 worktree：满足。
 - 已组织多 agent/多分支审查与修复：满足。
 - 已逐个合并 agent 分支到集成分支：满足。
-- 已运行 typecheck、测试、版本检查、build 与 `git diff --check`：满足。
+- 已运行 lint、typecheck、测试、版本检查、build 与 `git diff --check`：满足。
 - 未合并到 `main`：满足，主工作区仍在 `main...origin/main`。
 - 停止后汇报优化项、创新功能、手动测试重点：满足，本报告第九至十一节覆盖。
 - 关于“500 次以上审查与修复”：本轮没有编造不可验证的 500 次独立循环计数；已按可验证工程结果完成当前发现问题的修复与完整验证。若你仍要求严格计数型 500 次循环，需要单独按计数日志长时间执行。
