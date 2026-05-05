@@ -561,7 +561,7 @@ export function getSearchBookmarkSuggestionsFromIndex(
       continue
     }
 
-    suggestions.push({
+    retainTopSearchBookmarkSuggestion(suggestions, {
       id: entry.id,
       title: entry.title,
       url: entry.url,
@@ -569,12 +569,10 @@ export function getSearchBookmarkSuggestionsFromIndex(
       folderPath: entry.folderPath,
       score,
       order: entry.order
-    })
+    }, limit)
   }
 
-  return suggestions
-    .sort((left, right) => left.score - right.score || left.order - right.order)
-    .slice(0, limit)
+  return suggestions.sort(compareSearchBookmarkSuggestions)
 }
 
 export async function getNaturalSearchBookmarkSuggestionsFromIndex(
@@ -662,6 +660,35 @@ function getSuggestionFromPopupResult(
     score,
     order: entry.order
   }
+}
+
+function retainTopSearchBookmarkSuggestion(
+  suggestions: SearchBookmarkSuggestion[],
+  suggestion: SearchBookmarkSuggestion,
+  limit: number
+): void {
+  if (suggestions.length < limit) {
+    suggestions.push(suggestion)
+    return
+  }
+
+  let worstIndex = 0
+  for (let index = 1; index < suggestions.length; index += 1) {
+    if (compareSearchBookmarkSuggestions(suggestions[index], suggestions[worstIndex]) > 0) {
+      worstIndex = index
+    }
+  }
+
+  if (compareSearchBookmarkSuggestions(suggestion, suggestions[worstIndex]) < 0) {
+    suggestions[worstIndex] = suggestion
+  }
+}
+
+function compareSearchBookmarkSuggestions(
+  left: SearchBookmarkSuggestion,
+  right: SearchBookmarkSuggestion
+): number {
+  return left.score - right.score || left.order - right.order
 }
 
 export function buildNewTabPortalOverview({

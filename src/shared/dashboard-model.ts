@@ -21,6 +21,10 @@ export interface DashboardFilters {
   sortKey?: DashboardSortKey
 }
 
+export interface DashboardFilterSortOptions {
+  limit?: number
+}
+
 export interface DashboardItem extends BookmarkRecord {
   normalizedAncestorIds: string[]
   folderTitle: string
@@ -143,12 +147,42 @@ export function buildDashboardModel({
 }
 
 export function filterDashboardItems(items: DashboardItem[], filters: DashboardFilters = {}): DashboardItem[] {
+  const predicate = createDashboardItemPredicate(filters)
+  return items.filter(predicate)
+}
+
+export function filterAndSortDashboardItems(
+  items: DashboardItem[],
+  filters: DashboardFilters = {},
+  options: DashboardFilterSortOptions = {}
+): DashboardItem[] {
+  const limit = Math.floor(Number(options.limit))
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return sortDashboardItems(filterDashboardItems(items, filters), filters.sortKey)
+  }
+
+  const predicate = createDashboardItemPredicate(filters)
+  const comparator = getDashboardItemComparator(filters.sortKey)
+  const topItems: DashboardItem[] = []
+
+  for (const item of items) {
+    if (!predicate(item)) {
+      continue
+    }
+
+    retainTopDashboardItem(topItems, item, limit, comparator)
+  }
+
+  return topItems.sort(comparator)
+}
+
+function createDashboardItemPredicate(filters: DashboardFilters = {}): (item: DashboardItem) => boolean {
   const parsedQuery = parseSearchQuery(filters.query || '')
   const folderId = String(filters.folderId || '').trim()
   const domain = String(filters.domain || '').trim()
   const month = String(filters.month || '').trim()
 
-  return items.filter((item) => {
+  return (item) => {
     if (!matchesParsedSearchQuery(parsedQuery, {
       searchText: item.searchText,
       domain: item.domain,
@@ -181,14 +215,43 @@ export function filterDashboardItems(items: DashboardItem[], filters: DashboardF
     }
 
     return true
-  })
+  }
 }
 
 export function sortDashboardItems(
   items: DashboardItem[],
   sortKey: DashboardSortKey = 'date-desc'
 ): DashboardItem[] {
-  return items.slice().sort((left, right) => {
+  return items.slice().sort(getDashboardItemComparator(sortKey))
+}
+
+function retainTopDashboardItem(
+  items: DashboardItem[],
+  item: DashboardItem,
+  limit: number,
+  comparator: (left: DashboardItem, right: DashboardItem) => number
+): void {
+  if (items.length < limit) {
+    items.push(item)
+    return
+  }
+
+  let worstIndex = 0
+  for (let index = 1; index < items.length; index += 1) {
+    if (comparator(items[index], items[worstIndex]) > 0) {
+      worstIndex = index
+    }
+  }
+
+  if (comparator(item, items[worstIndex]) < 0) {
+    items[worstIndex] = item
+  }
+}
+
+function getDashboardItemComparator(
+  sortKey: DashboardSortKey = 'date-desc'
+): (left: DashboardItem, right: DashboardItem) => number {
+  return (left, right) => {
     if (sortKey === 'title-asc') {
       return left.title.localeCompare(right.title, 'zh-CN') || compareDashboardItemPath(left, right)
     }
@@ -202,7 +265,7 @@ export function sortDashboardItems(
     }
 
     return compareDashboardDates(left, right, 'desc') || compareDashboardItemPath(left, right)
-  })
+  }
 }
 
 export function getDashboardFolderTargets(folders: FolderRecord[]): DashboardFolderTarget[] {

@@ -100,6 +100,70 @@ test('uses precomputed normalized fields when ranking newtab bookmark suggestion
   )
 })
 
+test('keeps only top ranked newtab suggestions while preserving exact prefix url and folder order', () => {
+  const index = buildNewTabSearchIndex([
+    {
+      title: 'React Folder',
+      path: 'Bookmarks / React Folder',
+      bookmarks: [
+        { id: 'late-exact', title: 'React', url: 'https://z.example.com/react', dateAdded: 1 },
+        { id: 'prefix', title: 'React Table Guide', url: 'https://b.example.com/table', dateAdded: 2 },
+        { id: 'title-contains', title: 'Advanced React Notes', url: 'https://c.example.com/notes', dateAdded: 3 },
+        { id: 'url-match', title: 'Grid Article', url: 'https://react.example.com/grid', dateAdded: 4 },
+        { id: 'folder-match', title: 'Hooks Reference', url: 'https://d.example.com/hooks', dateAdded: 5 }
+      ]
+    },
+    {
+      title: 'Archive',
+      path: 'Bookmarks / Archive',
+      bookmarks: [
+        { id: 'early-exact', title: 'React', url: 'https://a.example.com/react', dateAdded: 7 }
+      ]
+    }
+  ])
+
+  const fullOrder = getSearchBookmarkSuggestionsFromIndex('react', index, 20)
+    .map((suggestion) => suggestion.id)
+
+  assert.deepEqual(fullOrder, [
+    'late-exact',
+    'early-exact',
+    'prefix',
+    'title-contains',
+    'url-match',
+    'folder-match'
+  ])
+  assert.deepEqual(
+    getSearchBookmarkSuggestionsFromIndex('react', index, 3).map((suggestion) => suggestion.id),
+    fullOrder.slice(0, 3)
+  )
+})
+
+test('bounded newtab suggestions keep multi-term matches equal to the full sorted result', () => {
+  const index = buildNewTabSearchIndex([
+    {
+      title: 'Archive',
+      path: 'Bookmarks / Archive',
+      bookmarks: Array.from({ length: 24 }, (_, index) => ({
+        id: `noise-${index}`,
+        title: `React Virtual Grid ${index}`,
+        url: `https://example.com/noise-${index}`
+      })).concat([
+        { id: 'winner', title: 'React Grid', url: 'https://example.com/winner' },
+        { id: 'term-match', title: 'React Virtual Grid', url: 'https://example.com/term' }
+      ])
+    }
+  ])
+
+  const fullOrder = getSearchBookmarkSuggestionsFromIndex('react grid', index, 30)
+    .map((suggestion) => suggestion.id)
+
+  assert.deepEqual(
+    getSearchBookmarkSuggestionsFromIndex('react grid', index, 2).map((suggestion) => suggestion.id),
+    fullOrder.slice(0, 2)
+  )
+})
+
 test('normalizes newtab search text consistently', () => {
   assert.equal(normalizeNewTabSearchText('  Ｒｅａｃｔ   TABLE  '), 'react table')
   assert.deepEqual(getSearchBookmarkSuggestionsFromIndex('', [], 6), [])
