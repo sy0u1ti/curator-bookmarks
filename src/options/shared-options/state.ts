@@ -134,7 +134,6 @@ export const managerState = {
   historyRuns: [],
   bookmarkAddHistory: [],
   redirectCache: createEmptyRedirectCache(),
-  pendingAvailabilitySnapshot: null,
   previousHistoryMap: new Map(),
   historyLastRunAt: 0,
   historyRecoveredResults: [],

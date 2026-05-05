@@ -224,12 +224,6 @@ import {
   upsertAvailabilityHistoryEntry
 } from './sections/history.js'
 import {
-  buildPendingAvailabilitySnapshot,
-  normalizePendingAvailabilitySnapshot,
-  reconcilePendingAvailabilitySnapshot,
-  savePendingAvailabilitySnapshot
-} from './sections/pending-availability.js'
-import {
   hydrateBookmarkAddHistory,
   renderBookmarkAddHistory,
   clearBookmarkAddHistory
@@ -424,7 +418,6 @@ async function hydratePersistentState() {
       STORAGE_KEYS.detectionHistory,
       STORAGE_KEYS.bookmarkAddHistory,
       STORAGE_KEYS.redirectCache,
-      STORAGE_KEYS.pendingAvailabilityResults,
       STORAGE_KEYS.availabilitySettings,
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
@@ -439,7 +432,7 @@ async function hydratePersistentState() {
     hydrateDetectionHistory(stored[STORAGE_KEYS.detectionHistory], historyCallbacks)
     hydrateBookmarkAddHistory(stored[STORAGE_KEYS.bookmarkAddHistory])
     managerState.redirectCache = normalizeRedirectCache(stored[STORAGE_KEYS.redirectCache])
-    managerState.pendingAvailabilitySnapshot = normalizePendingAvailabilitySnapshot(stored[STORAGE_KEYS.pendingAvailabilityResults])
+    await clearPersistedAvailabilitySnapshot()
     availabilityState.settings = normalizeAvailabilityRunnerUserSettings(stored[STORAGE_KEYS.availabilitySettings])
     managerState.recycleBin = normalizeRecycleBin(stored[STORAGE_KEYS.recycleBin])
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
@@ -462,6 +455,12 @@ async function hydratePersistentState() {
     availabilityState.storageLoading = false
     renderAvailabilitySection()
   }
+}
+
+async function clearPersistedAvailabilitySnapshot(): Promise<void> {
+  try {
+    await removeLocalStorage(STORAGE_KEYS.pendingAvailabilityResults)
+  } catch {}
 }
 
 function scheduleContentSnapshotFullTextSearchMapHydration(): void {
@@ -1568,7 +1567,6 @@ function applyAvailabilityScope({ preserveResults = false } = {}) {
     clearRedirectSelection(redirectsCallbacks)
     clearDuplicateSelection(duplicatesCallbacks)
     clearRecycleSelection(recycleCallbacks)
-    restorePendingAvailabilitySnapshotForScope()
   }
 
   if (!eligibleBookmarks.length) {
@@ -1765,104 +1763,6 @@ function resetCurrentAvailabilityRunState() {
   availabilityState.retestSelectionProbeEnabled = false
 }
 
-function restorePendingAvailabilitySnapshotForScope() {
-  if (
-    availabilityState.running ||
-    availabilityState.retestingSelection ||
-    availabilityState.deleting ||
-    availabilityState.lastCompletedAt
-  ) {
-    return false
-  }
-
-  const snapshot = managerState.pendingAvailabilitySnapshot
-  const restored = reconcilePendingAvailabilitySnapshot(
-    snapshot,
-    availabilityState.bookmarkMap,
-    getCurrentAvailabilityScopeMeta()
-  )
-
-  if (!restored) {
-    return false
-  }
-
-  availabilityState.reviewResults = restored.reviewResults
-  availabilityState.failedResults = restored.failedResults
-  availabilityState.redirectResults = restored.redirectResults
-  managerState.currentHistoryEntries = restored.currentHistoryEntries
-  managerState.suppressedResults = []
-
-  availabilityState.reviewCount = restored.reviewResults.length
-  availabilityState.failedCount = restored.failedResults.length
-  availabilityState.redirectedCount = restored.redirectResults.length
-  availabilityState.ignoredCount = Math.max(0, Number(snapshot?.summary?.ignoredCount) || 0)
-  availabilityState.availableCount = Math.max(0, Number(snapshot?.summary?.availableCount) || 0)
-  availabilityState.checkedBookmarks = Math.max(
-    restored.matchedCount,
-    Number(snapshot?.summary?.checkedBookmarks) || restored.matchedCount
-  )
-  availabilityState.currentRunProbeEnabled = Boolean(snapshot?.probeEnabled)
-  availabilityState.lastCompletedAt = Number(snapshot?.completedAt || snapshot?.savedAt) || 0
-  availabilityState.lastRunOutcome = String(snapshot?.runOutcome || 'completed')
-  availabilityState.runStartedAt = 0
-
-  sortResultsByPath(availabilityState.reviewResults)
-  sortResultsByPath(availabilityState.failedResults)
-  sortResultsByPath(availabilityState.redirectResults)
-  syncSelectionSet(
-    managerState.selectedAvailabilityIds,
-    new Set(
-      [...availabilityState.reviewResults, ...availabilityState.failedResults].map((result) => String(result.id))
-    )
-  )
-
-  if (restored.droppedCount) {
-    availabilityState.lastError = `已恢复上次待处理结果；${restored.droppedCount} 条结果因书签已变更而跳过。`
-  }
-
-  return true
-}
-
-async function persistPendingAvailabilitySnapshot({
-  savedAt = Date.now()
-}: {
-  savedAt?: number
-} = {}) {
-  const snapshot = buildPendingAvailabilitySnapshot({
-    reviewResults: availabilityState.reviewResults,
-    failedResults: availabilityState.failedResults,
-    redirectResults: availabilityState.redirectResults,
-    scope: getCurrentAvailabilityScopeMeta(),
-    savedAt,
-    completedAt: availabilityState.lastCompletedAt || savedAt,
-    runOutcome: availabilityState.lastRunOutcome || (availabilityState.lastCompletedAt ? 'completed' : ''),
-    probeEnabled: availabilityState.currentRunProbeEnabled || availabilityState.retestSelectionProbeEnabled,
-    summary: {
-      checkedBookmarks: availabilityState.checkedBookmarks,
-      availableCount: availabilityState.availableCount,
-      redirectedCount: availabilityState.redirectedCount,
-      reviewCount: availabilityState.reviewCount,
-      failedCount: availabilityState.failedCount,
-      ignoredCount: availabilityState.ignoredCount
-    }
-  })
-
-  managerState.pendingAvailabilitySnapshot = snapshot
-  await savePendingAvailabilitySnapshot(snapshot)
-}
-
-function persistPendingAvailabilitySnapshotSoon() {
-  void persistPendingAvailabilitySnapshot().catch(() => {})
-}
-
-function hasPendingAvailabilityResults() {
-  return Boolean(
-    availabilityState.reviewResults.length ||
-    availabilityState.failedResults.length ||
-    availabilityState.redirectResults.length
-  )
-}
-
 async function ensureProbePermissionForRun({ interactive = true } = {}) {
   if (!availabilityState.requestOrigins.length) {
     availabilityState.probePermissionGranted = false
@@ -2037,13 +1937,6 @@ async function runAvailabilityDetection({ probeEnabled }) {
         savedAt: availabilityState.lastCompletedAt || Date.now(),
         scope: redirectCacheScope
       })
-    } catch {}
-    try {
-      if (availabilityState.lastCompletedAt || hasPendingAvailabilityResults()) {
-        await persistPendingAvailabilitySnapshot({
-          savedAt: availabilityState.lastCompletedAt || Date.now()
-        })
-      }
     } catch {}
     renderAvailabilitySection()
   }
@@ -7921,7 +7814,6 @@ function promoteReviewResultToFailed(bookmarkId) {
   syncHistoryEntryStatus(bookmarkId, 'failed')
   sortResultsByPath(availabilityState.reviewResults)
   sortResultsByPath(availabilityState.failedResults)
-  persistPendingAvailabilitySnapshotSoon()
   renderAvailabilitySection()
 }
 
@@ -7963,7 +7855,6 @@ function demoteFailedResultToReview(bookmarkId) {
   syncHistoryEntryStatus(bookmarkId, 'review')
   sortResultsByPath(availabilityState.reviewResults)
   sortResultsByPath(availabilityState.failedResults)
-  persistPendingAvailabilitySnapshotSoon()
   renderAvailabilitySection()
 }
 
@@ -8156,9 +8047,6 @@ async function retestSelectedAvailabilityResults() {
         scope: getCurrentAvailabilityScopeMeta()
       })
     } catch {}
-    try {
-      await persistPendingAvailabilitySnapshot()
-    } catch {}
 
     availabilityState.lastError = `已重新测试 ${processedCount} 条已选书签。`
   } catch (error) {
@@ -8284,7 +8172,6 @@ async function ignoreSelectedAvailabilityResults(kind) {
 
   await saveIgnoreRules()
   repartitionAvailabilityResultsByIgnoreRules()
-  persistPendingAvailabilitySnapshotSoon()
   clearAvailabilitySelection()
   availabilityState.lastError = `已新增 ${addedCount} 条忽略规则。`
   renderAvailabilitySection()
@@ -8311,7 +8198,6 @@ async function ignoreSingleAvailabilityResult(bookmarkId, kind) {
 
   await saveIgnoreRules()
   repartitionAvailabilityResultsByIgnoreRules()
-  persistPendingAvailabilitySnapshotSoon()
   availabilityState.lastError = `已${getIgnoreKindActionLabel(kind)}，后续检测会自动过滤。`
   renderAvailabilitySection()
 }
@@ -8393,7 +8279,6 @@ function hideAvailabilityResultForCurrentRun(bookmarkId) {
 
   removeAvailabilityResultById(bookmarkId)
   managerState.selectedAvailabilityIds.delete(String(bookmarkId))
-  persistPendingAvailabilitySnapshotSoon()
   availabilityState.lastError = `已从本次结果隐藏“${result.title || '未命名书签'}”。不会新增忽略规则，重新检测后可能再次出现。`
   renderAvailabilitySection()
 }
@@ -8828,7 +8713,6 @@ async function moveSelectedAvailabilityToFolder(folderId) {
 
     if (movedIds.length) {
       await hydrateAvailabilityCatalog({ preserveResults: true })
-      persistPendingAvailabilitySnapshotSoon()
     }
 
     clearAvailabilitySelection()
@@ -8921,7 +8805,6 @@ function removeDeletedResultsFromState(bookmarkIds) {
   availabilityState.failedCount = availabilityState.failedResults.length
   availabilityState.redirectedCount = availabilityState.redirectResults.length
   availabilityState.ignoredCount = managerState.suppressedResults.length
-  persistPendingAvailabilitySnapshotSoon()
 }
 
 function getBookmarkRecord(bookmarkId) {

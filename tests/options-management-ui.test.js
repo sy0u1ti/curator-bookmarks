@@ -891,6 +891,18 @@ test('availability checks use adaptive runner with user settings', () => {
   assert.doesNotMatch(optionsHtml, /availability-speed-profile|速度档位/)
 })
 
+test('availability results are not restored into the UI after refresh', () => {
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsSource, /hydrateDetectionHistory/)
+  assert.match(optionsSource, /await clearPersistedAvailabilitySnapshot\(\)/)
+  assert.match(optionsSource, /removeLocalStorage\(STORAGE_KEYS\.pendingAvailabilityResults\)/)
+  assert.doesNotMatch(optionsSource, /restorePendingAvailabilitySnapshotForScope/)
+  assert.doesNotMatch(optionsSource, /reconcilePendingAvailabilitySnapshot/)
+  assert.doesNotMatch(optionsSource, /savePendingAvailabilitySnapshot/)
+  assert.doesNotMatch(optionsSource, /已恢复上次待处理结果/)
+})
+
 test('redirect update rereads current bookmarks and skips stale source URLs', () => {
   const redirectsSource = readProjectFile('src/options/sections/redirects.ts')
 
