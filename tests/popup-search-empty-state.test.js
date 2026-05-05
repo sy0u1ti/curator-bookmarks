@@ -10,6 +10,7 @@ function readProjectFile(path) {
 const popupSource = readProjectFile('src/popup/popup.ts')
 const popupStateSource = readProjectFile('src/popup/state.ts')
 const popupHtml = readProjectFile('src/popup/popup.html')
+const popupCss = readProjectFile('src/popup/popup.css')
 
 test('popup natural search entry is understandable without relying on AI-only text', () => {
   assert.doesNotMatch(popupHtml, new RegExp('>\\s*AI\\s*</button>'))
@@ -25,6 +26,11 @@ test('popup empty search state offers actionable recovery controls', () => {
   assert.match(popupSource, /data-empty-action="toggle-natural"/)
   assert.match(popupSource, /dom\.emptyState\.addEventListener\('click', handleContentClick\)/)
   assert.match(popupSource, /handleEmptySearchAction/)
+})
+
+test('popup empty search state does not render the boxed plus mark', () => {
+  assert.doesNotMatch(popupCss, /\.empty-search-state::before/)
+  assert.doesNotMatch(popupCss, /#empty-state\.state-panel:not\(\.hidden\)::before/)
 })
 
 test('popup natural search allows local parsing without AI setup', () => {

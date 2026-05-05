@@ -3516,18 +3516,6 @@ input:not(.search-input):focus-visible {
   background: rgba(255, 255, 255, 0.035);
 }
 
-.content-shell > #empty-state.state-panel:not(.hidden)::before {
-  content: "";
-  width: 24px;
-  height: 24px;
-  margin-bottom: 8px;
-  border-radius: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background:
-    linear-gradient(90deg, transparent 45%, rgba(255, 255, 255, 0.62) 45% 55%, transparent 55%),
-    linear-gradient(transparent 45%, rgba(255, 255, 255, 0.62) 45% 55%, transparent 55%);
-}
-
 @keyframes natural-search-pulse {
   0%,
   100% {
