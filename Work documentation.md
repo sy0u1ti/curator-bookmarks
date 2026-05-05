@@ -306,6 +306,15 @@
 
 ## Integration Log
 
+## Integration Log: agent/extension-modernization-20260506-quality
+
+- 合并时间：2026-05-06
+- 合并结果：成功，有文档冲突
+- 冲突文件：`Work documentation.md`
+- 冲突解决方式：保留 shared 集成日志与 quality agent 记录，并将 quality 记录整理为标准 agent 小节。
+- 合并后验证：待运行 quality 定向测试
+- 是否需要回到 agent worktree 修复：否
+
 ## Integration Log: agent/extension-modernization-20260506-shared
 
 - 合并时间：2026-05-06
@@ -371,3 +380,52 @@
 - 冲突解决方式：无
 - 合并后验证：`git status --short --branch` 确认只新增 `Work documentation.md`
 - 是否需要回到 agent worktree 修复：否
+
+## Agent: agent/extension-modernization-20260506-quality
+
+### 负责范围
+
+- 补充回归测试和文档审计记录，未改 popup/newtab/options 主 UI。
+
+### 修复或优化的原有功能
+
+- 为 popup 搜索轻索引、newtab 健康摘要和 saved search 纯模型补充回归保护。
+
+### 新增功能 / 核心能力增强
+
+- 无直接用户可见功能；本分支负责保障其他功能不会破坏性能和数据模型。
+
+### UI / UX 改进
+
+- 无 UI 改动。
+
+### 性能改进
+
+- Popup 性能策略：保持首屏轻索引，`buildLightPopupSearchIndex` 只消费标题、URL、路径、标签、摘要和 headings；新增测试覆盖 `enrichPopupSearchIndexWithSnapshotFullText(... includeFullText: false)` 不把本地或 IDB full text 合入搜索文本。
+- Newtab 性能策略：健康摘要继续基于现有书签、标签、snapshot summary 和 activity 元数据计算；新增测试确认只有 full text 引用但没有 summary 的 snapshot 仍被视为缺少摘要。
+- Options/tag management 审计：标签统计和批量操作应继续放在对应 section 激活后计算，不放入 options 首屏初始化路径。
+
+### 隐私 / 权限 / 数据安全影响
+
+- 不新增权限，不联网，不改变存储结构。
+
+### 影响范围
+
+- 涉及文件：`tests/popup-search-index.test.ts`、`tests/newtab-bookmark-health.test.ts`、`tests/search-query.test.ts`、`Work documentation.md`
+- 涉及模块：popup search index、newtab health、saved search model。
+
+### 实现思路
+
+- 使用单元测试锁定轻量路径和 saved search 归一化/裁剪/去重行为。
+
+### 测试方式
+
+- 已运行：`npm ci`
+- 已运行：`npm run test:build && node --test .tmp-test/tests/popup-search-index.test.js .tmp-test/tests/newtab-bookmark-health.test.js .tmp-test/tests/search-query.test.js`
+- 已运行：`npm test`
+- 已运行：`npm run check:version`
+- 已运行：`npm run build`
+
+### 已知风险
+
+- 本分支只增强测试，后续 UI 分支合并后仍需运行完整验证。

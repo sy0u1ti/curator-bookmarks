@@ -8,6 +8,7 @@ import type {
 import type { BookmarkRecord } from '../src/shared/types.js'
 import {
   buildLightPopupSearchIndex,
+  enrichPopupSearchIndexWithSnapshotFullText,
   shouldWarmPopupSnapshotFullText
 } from '../src/popup/search-index.js'
 
@@ -83,6 +84,28 @@ test('popup light search index keeps snapshot metadata but skips IDB full text a
   assert.equal(indexed.length, 1)
   assert.match(indexed[0].searchText, /react reference summary/)
   assert.match(indexed[0].searchText, /quick start/)
+  assert.doesNotMatch(indexed[0].searchText, /hidden full text term/)
+})
+
+test('popup enrichment keeps the light path when full text is explicitly disabled', async () => {
+  const index = snapshotIndex()
+  index.records.docs.fullTextStorage = 'local'
+  index.records.docs.fullText = 'hidden full text term'
+  index.records.docs.fullTextRef = undefined
+
+  const indexed = await enrichPopupSearchIndexWithSnapshotFullText({
+    bookmarks: [bookmark({
+      id: 'docs',
+      title: 'React Docs',
+      normalizedTitle: 'react docs',
+      normalizedUrl: 'example.com/docs'
+    })],
+    tagIndex: null,
+    snapshotIndex: index,
+    includeFullText: false
+  })
+
+  assert.match(indexed[0].searchText, /react reference summary/)
   assert.doesNotMatch(indexed[0].searchText, /hidden full text term/)
 })
 
