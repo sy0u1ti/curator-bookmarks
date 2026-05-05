@@ -306,6 +306,15 @@
 
 ## Integration Log
 
+## Integration Log: agent/extension-modernization-20260506-newtab
+
+- 合并时间：2026-05-06
+- 合并结果：成功，有文档冲突
+- 冲突文件：`Work documentation.md`
+- 冲突解决方式：保留 popup/quality 与 newtab agent 记录，并将 newtab 记录整理为标准 agent 小节。
+- 合并后验证：待运行 newtab 聚焦测试
+- 是否需要回到 agent worktree 修复：否
+
 ## Integration Log: agent/extension-modernization-20260506-popup
 
 - 合并时间：2026-05-06
@@ -488,3 +497,52 @@
 
 - Popup 直接写入 newtab workspace storage；如 shared/newtab workspace schema 后续变化，需要由集成方对齐。
 - 固定按钮当前采用 toggle 行为，文案成功态会区分固定或取消固定。
+
+## Agent: agent/extension-modernization-20260506-newtab
+
+### 负责范围
+
+- Newtab 命令工作台、书签健康摘要和对应测试。
+
+### 修复或优化的原有功能
+
+- `Ctrl/Cmd+K` 打开 command palette，不再直接打开 dashboard；打开时关闭设置抽屉和 dashboard overlay，避免多个 overlay 互相遮挡。
+
+### 新增功能 / 核心能力增强
+
+- 新增右上角可见命令工作台入口。
+- 命令面板可搜索书签、固定/取消固定当前场景 Speed Dial、切换 workspace、打开新标签页设置、书签仪表盘、重复检测、清理中心和回收站。
+
+### UI / UX 改进
+
+- 命令工作台保留 Escape 关闭、上下键/Home/End 导航、Enter 执行。
+- 空结果提示可搜索的关键词方向。
+- 顶部提示改为 “Ctrl/Cmd+K 打开命令工作台”，健康摘要 meta 显示当前书签总量和本地指标来源，命令工作台增加标题和搜索提示。
+
+### 性能改进
+
+- 书签健康摘要继续复用 `buildNewTabBookmarkHealth` 的本地轻量指标。
+- 展示待整理/重复/缺少标签/缺少摘要/新近未处理，并在卡片上给出对应 options hash 或 dashboard 入口；不新增首屏重型同步分析。
+
+### 隐私 / 权限 / 数据安全影响
+
+- 不新增权限，不联网，不读取浏览历史。健康摘要只使用已加载的本地书签/标签/快照/activity 指标。
+
+### 影响范围
+
+- 涉及文件：`src/newtab/newtab.html`、`src/newtab/newtab.ts`、`src/newtab/newtab.css`、`src/newtab/command-palette.ts`、`tests/newtab-command-palette.test.ts`、`Work documentation.md`
+- 涉及模块：newtab command palette、newtab health summary、workspace/speed dial UI。
+
+### 实现思路
+
+- 扩展现有 command palette 模型，不新增远程依赖。
+- 使用当前已加载页面状态生成命令和健康入口。
+
+### 测试方式
+
+- 已运行：`npm ci`
+- 已运行：`npm run test:build && node --test .tmp-test/tests/newtab-command-palette.test.js .tmp-test/tests/newtab-bookmark-health.test.js && npm run typecheck`
+
+### 已知风险
+
+- `Ctrl/Cmd+K` 行为变化需要手动确认用户是否更喜欢先打开命令工作台，而非直接打开 dashboard。
