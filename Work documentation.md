@@ -306,6 +306,15 @@
 
 ## Integration Log
 
+## Integration Log: agent/extension-modernization-20260506-shared
+
+- 合并时间：2026-05-06
+- 合并结果：成功
+- 冲突文件：无
+- 冲突解决方式：无
+- 合并后验证：待运行 shared 聚焦测试
+- 是否需要回到 agent worktree 修复：否
+
 ## Agent: agent/extension-modernization-20260506-shared
 
 ### 负责范围
