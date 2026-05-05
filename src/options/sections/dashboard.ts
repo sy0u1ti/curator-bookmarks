@@ -23,7 +23,20 @@ import {
   buildContentSnapshotSearchMapWithFullText,
   type ContentSnapshotIndex
 } from '../../shared/content-snapshots.js'
-import { BOOKMARKS_BAR_ID } from '../../shared/constants.js'
+import {
+  BOOKMARKS_BAR_ID,
+  NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
+  NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
+  STORAGE_KEYS,
+  type NewTabSpeedDialStateMessage,
+  type NewTabToggleSpeedDialMessage
+} from '../../shared/constants.js'
+import { getLocalStorage, setLocalStorage } from '../../shared/storage.js'
+import {
+  getActiveNewTabWorkspace,
+  normalizeNewTabWorkspaceSettings,
+  toggleNewTabWorkspacePin
+} from '../../shared/newtab-workspace-settings.js'
 import {
   buildDashboardFolderBookmarkCounts,
   buildDashboardModel,
@@ -82,6 +95,11 @@ interface DashboardVirtualState {
   resetScrollOnNextRender: boolean
   resizeObserver: ResizeObserver | null
   observedElement: HTMLElement | null
+  pendingInitialMeasure: boolean
+  measureRetryFrame: number
+  lastResizeWidth: number
+  lastResizeHeight: number
+  lastResizeColumnCount: number
 }
 
 interface DashboardModelCacheKey {
@@ -138,9 +156,12 @@ export const DASHBOARD_DRAG_MOVE_THRESHOLD = 4
 const DASHBOARD_CARD_HEIGHT = 176
 const DASHBOARD_GRID_GAP = 10
 const DASHBOARD_CARD_MIN_WIDTH = 300
+const DASHBOARD_VIRTUAL_MIN_READY_WIDTH = 48
+const DASHBOARD_VIRTUAL_MIN_READY_HEIGHT = 48
 const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 12
 const DASHBOARD_VIRTUAL_THRESHOLD = 120
 const DASHBOARD_SELECTION_MOTION_MS = 260
+const DASHBOARD_NEWTAB_EMBED_PARAM = 'newtab-dashboard'
 
 let dashboardStatusTimer = 0
 let dashboardResultsStableFrame = 0
@@ -197,7 +218,12 @@ const virtualState: DashboardVirtualState = {
   sectionFrame: 0,
   resetScrollOnNextRender: false,
   resizeObserver: null,
-  observedElement: null
+  observedElement: null,
+  pendingInitialMeasure: false,
+  measureRetryFrame: 0,
+  lastResizeWidth: 0,
+  lastResizeHeight: 0,
+  lastResizeColumnCount: 0
 }
 
 const dragState: DashboardDragState = {
@@ -268,6 +294,85 @@ export function getDashboardCardActionLabel(
   return `${action}：${safeTitle || '未命名书签'}`
 }
 
+export function renderDashboardIcon(icon: 'open' | 'copy' | 'tag' | 'speed-dial' | 'move' | 'delete'): string {
+  const pathByIcon: Record<typeof icon, string> = {
+    open: '<path d="M7 17 17 7"></path><path d="M9 7h8v8"></path>',
+    copy: '<rect x="8" y="8" width="9" height="9" rx="2"></rect><path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path>',
+    tag: '<path d="M20 12 12 20 4 12V4h8l8 8Z"></path><path d="M8 8h.01"></path>',
+    'speed-dial': '<path d="M12 3v5"></path><path d="m16.6 5.4-3.5 3.5"></path><path d="M21 12h-5"></path><path d="M18.4 18.4 14.8 15"></path><path d="M5.6 18.4 9.2 15"></path><path d="M3 12h5"></path><path d="m7.4 5.4 3.5 3.5"></path><circle cx="12" cy="12" r="3"></circle>',
+    move: '<path d="M12 3v18"></path><path d="m8 7 4-4 4 4"></path><path d="m8 17 4 4 4-4"></path><path d="M3 12h18"></path><path d="m7 8-4 4 4 4"></path><path d="m17 8 4 4-4 4"></path>',
+    delete: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path>'
+  }
+
+  return `<svg aria-hidden="true" viewBox="0 0 24 24">${pathByIcon[icon]}</svg>`
+}
+
+function renderDashboardCardAction({
+  as = 'button',
+  icon,
+  label,
+  tooltip,
+  className = '',
+  attrs = '',
+  text,
+  disabled = false
+}: {
+  as?: 'a' | 'button'
+  icon: Parameters<typeof renderDashboardIcon>[0]
+  label: string
+  tooltip: string
+  className?: string
+  attrs?: string
+  text: string
+  disabled?: boolean
+}): string {
+  const safeTooltip = escapeAttr(tooltip)
+  const safeLabel = escapeAttr(label)
+  const safeText = escapeHtml(text)
+  const classes = ['dashboard-icon-action', className].filter(Boolean).join(' ')
+  const disabledAttr = disabled ? ' disabled' : ''
+  const content = `
+    ${renderDashboardIcon(icon)}
+    <span class="sr-only">${safeText}</span>
+  `
+
+  return as === 'a'
+    ? `<a class="${escapeAttr(classes)}" ${attrs} data-dashboard-tooltip="${safeTooltip}" aria-label="${safeLabel}">${content}</a>`
+    : `<button class="${escapeAttr(classes)}" type="button" ${attrs} data-dashboard-tooltip="${safeTooltip}" aria-label="${safeLabel}"${disabledAttr}>${content}</button>`
+}
+
+export function createNewTabToggleSpeedDialMessage(bookmarkId: string): NewTabToggleSpeedDialMessage {
+  return {
+    type: NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
+    bookmarkId: String(bookmarkId || '').trim()
+  }
+}
+
+export function applyNewTabSpeedDialStateMessage(
+  message: unknown
+): boolean {
+  if (!message || typeof message !== 'object' || Array.isArray(message)) {
+    return false
+  }
+
+  const payload = message as Partial<NewTabSpeedDialStateMessage>
+  if (payload.type !== NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE || !Array.isArray(payload.pinnedIds)) {
+    return false
+  }
+
+  dashboardState.speedDialPinnedIds = new Set(
+    payload.pinnedIds
+      .map((id) => String(id || '').trim())
+      .filter(Boolean)
+  )
+  renderDashboardSection()
+  return true
+}
+
+export function isNewTabDashboardEmbed(search = window.location.search): boolean {
+  return new URLSearchParams(search).get('embed') === DASHBOARD_NEWTAB_EMBED_PARAM
+}
+
 export function resetDashboardDragStateSnapshot(): DashboardDragStateSnapshot {
   return createDashboardDragState()
 }
@@ -305,6 +410,72 @@ export function getDashboardVirtualColumnCount(
   const safeMinWidth = Math.max(1, Number(minCardWidth) || 1)
   const effectiveMinWidth = Math.min(safeMinWidth, safeWidth)
   return Math.max(1, Math.floor((safeWidth + safeGap) / (effectiveMinWidth + safeGap)))
+}
+
+export interface DashboardVirtualMetricsSnapshot {
+  contentWidth: number
+  containerHeight: number
+  columnCount: number
+}
+
+export function getDashboardVirtualMetricsSnapshot(
+  container: HTMLElement | null,
+  fallbackWidth = 0,
+  fallbackHeight = 0
+): DashboardVirtualMetricsSnapshot {
+  if (!container) {
+    return {
+      contentWidth: 0,
+      containerHeight: 0,
+      columnCount: 1
+    }
+  }
+
+  const style = window.getComputedStyle(container)
+  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
+  const paddingRight = Number.parseFloat(style.paddingRight) || 0
+  const bounds = container.getBoundingClientRect()
+  const parentBounds = container.parentElement?.getBoundingClientRect()
+  const measuredWidth = Math.max(
+    0,
+    Number(container.clientWidth) || 0,
+    Number(bounds.width) || 0,
+    Number(parentBounds?.width) || 0
+  )
+  const rawWidth = measuredWidth >= DASHBOARD_VIRTUAL_MIN_READY_WIDTH
+    ? measuredWidth
+    : Math.max(measuredWidth, Number(fallbackWidth) || 0)
+  const contentWidth = Math.max(0, rawWidth - paddingLeft - paddingRight)
+  const measuredHeight = Math.max(
+    0,
+    Number(container.clientHeight) || 0,
+    Number(bounds.height) || 0,
+    Number(parentBounds?.height) || 0
+  )
+  const containerHeight = measuredHeight >= DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
+    ? measuredHeight
+    : Math.max(measuredHeight, Number(fallbackHeight) || 0)
+
+  return {
+    contentWidth,
+    containerHeight,
+    columnCount: getDashboardVirtualColumnCount(contentWidth)
+  }
+}
+
+export function isDashboardVirtualMetricsReady(metrics: DashboardVirtualMetricsSnapshot): boolean {
+  return (
+    metrics.contentWidth >= DASHBOARD_VIRTUAL_MIN_READY_WIDTH &&
+    metrics.containerHeight >= DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
+  )
+}
+
+function hasDashboardVirtualMetricsChanged(metrics: DashboardVirtualMetricsSnapshot): boolean {
+  return (
+    Math.round(metrics.contentWidth) !== Math.round(virtualState.lastResizeWidth) ||
+    Math.round(metrics.containerHeight) !== Math.round(virtualState.lastResizeHeight) ||
+    metrics.columnCount !== virtualState.lastResizeColumnCount
+  )
 }
 
 export function computeDashboardVirtualWindow({
@@ -564,9 +735,6 @@ export function renderDashboardSection(): void {
   const renderVersion = beginDashboardCardsRender()
   renderDashboardCards(visibleItems, renderVersion)
   renderDashboardTagEditor(model)
-  if (!availabilityState.catalogLoading) {
-    scheduleDashboardPanelReveal(renderVersion)
-  }
 
   if (dragState.active) {
     renderDashboardDragOverlay(model)
@@ -700,6 +868,9 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     } else if (action === 'delete-one') {
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       await deleteDashboardBookmarkFromCard(bookmarkId, callbacks)
+    } else if (action === 'toggle-speed-dial') {
+      const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
+      await toggleDashboardBookmarkSpeedDial(bookmarkId)
     } else if (action === 'exit-dashboard') {
       if (callbacks.exitDashboard) {
         callbacks.exitDashboard()
@@ -1302,6 +1473,69 @@ function moveSingleDashboardItem(bookmarkId: string, callbacks: DashboardCallbac
 
   managerState.moveDashboardBookmarkId = String(bookmarkId)
   callbacks.openMoveModal('dashboard-single')
+}
+
+export async function hydrateDashboardSpeedDialState(): Promise<void> {
+  if (isNewTabDashboardEmbed()) {
+    return
+  }
+
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    applyDashboardSpeedDialWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings])
+  } catch {
+    dashboardState.speedDialPinnedIds = new Set()
+  }
+}
+
+function applyDashboardSpeedDialWorkspaceSettings(rawSettings: unknown): void {
+  const settings = normalizeNewTabWorkspaceSettings(rawSettings, {
+    validBookmarkIds: availabilityState.bookmarkMap.keys()
+  })
+  dashboardState.speedDialPinnedIds = new Set(getActiveNewTabWorkspace(settings).pinnedIds)
+}
+
+async function toggleDashboardBookmarkSpeedDial(bookmarkId: string): Promise<void> {
+  const safeBookmarkId = String(bookmarkId || '').trim()
+  if (!safeBookmarkId || !availabilityState.bookmarkMap.has(safeBookmarkId)) {
+    setDashboardStatus('添加失败：书签不存在。')
+    return
+  }
+
+  if (isNewTabDashboardEmbed()) {
+    window.parent.postMessage(createNewTabToggleSpeedDialMessage(safeBookmarkId), window.location.origin)
+    if (dashboardState.speedDialPinnedIds.has(safeBookmarkId)) {
+      dashboardState.speedDialPinnedIds.delete(safeBookmarkId)
+    } else {
+      dashboardState.speedDialPinnedIds.add(safeBookmarkId)
+    }
+    renderDashboardSection()
+    setDashboardStatus('已切换 Speed Dial 固定状态。')
+    return
+  }
+
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    const settings = normalizeNewTabWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings], {
+      validBookmarkIds: availabilityState.bookmarkMap.keys()
+    })
+    const activeWorkspace = getActiveNewTabWorkspace(settings)
+    const nextSettings = toggleNewTabWorkspacePin(settings, activeWorkspace.id, safeBookmarkId, {
+      validBookmarkIds: availabilityState.bookmarkMap.keys()
+    })
+    await setLocalStorage({
+      [STORAGE_KEYS.newTabWorkspaceSettings]: nextSettings
+    })
+    dashboardState.speedDialPinnedIds = new Set(getActiveNewTabWorkspace(nextSettings).pinnedIds)
+    renderDashboardSection()
+    setDashboardStatus(
+      dashboardState.speedDialPinnedIds.has(safeBookmarkId)
+        ? '已添加到 Speed Dial。'
+        : '已从 Speed Dial 移除。'
+    )
+  } catch (error) {
+    setDashboardStatus(error instanceof Error ? error.message : 'Speed Dial 状态更新失败，请稍后重试。')
+  }
 }
 
 export function getSingleDashboardMoveBookmark(): BookmarkRecord | null {
@@ -1983,7 +2217,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   virtualState.items = items
 
   applyDashboardVirtualFilterReset(items)
-  updateDashboardVirtualMetrics()
+  const metricsReady = updateDashboardVirtualMetrics()
 
   if (items.length < DASHBOARD_VIRTUAL_THRESHOLD) {
     resetDashboardVirtualRenderCache({ preserveItems: true })
@@ -1996,6 +2230,13 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   }
 
   dom.dashboardResults.classList.add('is-virtualized')
+  if (!metricsReady) {
+    virtualState.pendingInitialMeasure = true
+    scheduleDashboardVirtualMeasureRetry(renderVersion)
+    return
+  }
+
+  virtualState.pendingInitialMeasure = false
   const virtualWindow = computeDashboardVirtualWindow({
     itemCount: items.length,
     contentWidth: virtualState.contentWidth,
@@ -2163,6 +2404,11 @@ function resetDashboardVirtualRenderCache({
   virtualState.renderedTotalHeight = -1
   virtualState.renderedOffsetY = -1
   virtualState.renderedStateKey = ''
+  virtualState.pendingInitialMeasure = false
+  if (virtualState.measureRetryFrame) {
+    window.cancelAnimationFrame(virtualState.measureRetryFrame)
+    virtualState.measureRetryFrame = 0
+  }
   dom.dashboardResults?.classList.remove('is-virtualized')
 }
 
@@ -2227,7 +2473,8 @@ function getDashboardVirtualRenderStateKey(renderedItems: DashboardItem[]): stri
     return [
       id,
       dashboardState.expandedTagIds.has(id) ? '1' : '0',
-      dashboardState.copyFeedbackId === id ? '1' : '0'
+      dashboardState.copyFeedbackId === id ? '1' : '0',
+      dashboardState.speedDialPinnedIds.has(id) ? '1' : '0'
     ].join(':')
   }).join('|')
 
@@ -2249,11 +2496,18 @@ function ensureDashboardVirtualGrid(): void {
     window.cancelAnimationFrame(virtualState.frame)
     virtualState.frame = 0
   }
+  if (virtualState.measureRetryFrame) {
+    window.cancelAnimationFrame(virtualState.measureRetryFrame)
+    virtualState.measureRetryFrame = 0
+  }
   if (dashboardVirtualResizeFrame) {
     window.cancelAnimationFrame(dashboardVirtualResizeFrame)
     dashboardVirtualResizeFrame = 0
   }
   virtualState.observedElement = container
+  virtualState.lastResizeWidth = 0
+  virtualState.lastResizeHeight = 0
+  virtualState.lastResizeColumnCount = 0
 
   container.addEventListener('scroll', handleDashboardVirtualScroll, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
@@ -2265,6 +2519,21 @@ function ensureDashboardVirtualGrid(): void {
 function handleDashboardVirtualResize(): void {
   if (dashboardSelectionCompositeMotionActive) {
     dashboardVirtualResizeDeferredForSelection = true
+    return
+  }
+
+  const metrics = getDashboardVirtualMetricsSnapshot(
+    dom.dashboardResults,
+    virtualState.contentWidth,
+    virtualState.containerHeight
+  )
+  if (!isDashboardVirtualMetricsReady(metrics) && virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD) {
+    virtualState.pendingInitialMeasure = true
+    scheduleDashboardVirtualMeasureRetry()
+    return
+  }
+
+  if (!hasDashboardVirtualMetricsChanged(metrics) && !virtualState.pendingInitialMeasure) {
     return
   }
 
@@ -2300,6 +2569,20 @@ function commitDashboardVirtualResize({
   if (virtualState.frame) {
     window.cancelAnimationFrame(virtualState.frame)
     virtualState.frame = 0
+  }
+  const metrics = getDashboardVirtualMetricsSnapshot(
+    dom.dashboardResults,
+    virtualState.contentWidth,
+    virtualState.containerHeight
+  )
+  if (!isDashboardVirtualMetricsReady(metrics) && virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD) {
+    virtualState.pendingInitialMeasure = true
+    scheduleDashboardVirtualMeasureRetry()
+    return
+  }
+  if (!hasDashboardVirtualMetricsChanged(metrics) && !virtualState.pendingInitialMeasure && !preserveRenderedWindow) {
+    clearStableDashboardResultsUpdate()
+    return
   }
   if (showMask) {
     beginStableDashboardResultsUpdate()
@@ -2400,6 +2683,21 @@ function scheduleDashboardVirtualRender(): void {
     if (virtualState.items.length) {
       renderDashboardCards(virtualState.items)
     }
+  })
+}
+
+function scheduleDashboardVirtualMeasureRetry(renderVersion = dashboardCardsRenderVersion): void {
+  if (virtualState.measureRetryFrame) {
+    return
+  }
+
+  virtualState.measureRetryFrame = window.requestAnimationFrame(() => {
+    virtualState.measureRetryFrame = 0
+    if (!virtualState.items.length || renderVersion !== dashboardCardsRenderVersion) {
+      return
+    }
+
+    renderDashboardCards(virtualState.items, renderVersion)
   })
 }
 
@@ -2508,6 +2806,7 @@ function commitDashboardCardsRender(renderVersion: number): void {
   }
 
   dashboardCardsCommittedRenderVersion = safeRenderVersion
+  scheduleDashboardPanelReveal(safeRenderVersion)
 }
 
 function scheduleDashboardPanelReveal(renderVersion: number): void {
@@ -2583,13 +2882,13 @@ function resetDashboardVirtualScroll(): void {
   }
 }
 
-function updateDashboardVirtualMetrics(): void {
+function updateDashboardVirtualMetrics(): boolean {
   const container = dom.dashboardResults
   if (!container) {
     virtualState.containerHeight = 0
     virtualState.columnCount = 1
     virtualState.contentWidth = 0
-    return
+    return false
   }
 
   if (virtualState.resetScrollOnNextRender) {
@@ -2597,15 +2896,20 @@ function updateDashboardVirtualMetrics(): void {
     virtualState.resetScrollOnNextRender = false
   }
 
-  const style = window.getComputedStyle(container)
-  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
-  const paddingRight = Number.parseFloat(style.paddingRight) || 0
-  const contentWidth = Math.max(1, container.clientWidth - paddingLeft - paddingRight)
+  const metrics = getDashboardVirtualMetricsSnapshot(
+    container,
+    virtualState.contentWidth,
+    virtualState.containerHeight
+  )
 
-  virtualState.containerHeight = Math.max(1, container.clientHeight)
-  virtualState.contentWidth = contentWidth
-  virtualState.columnCount = getDashboardVirtualColumnCount(contentWidth)
+  virtualState.containerHeight = Math.max(1, metrics.containerHeight)
+  virtualState.contentWidth = Math.max(1, metrics.contentWidth)
+  virtualState.columnCount = metrics.columnCount
   virtualState.rowStride = DASHBOARD_CARD_HEIGHT + DASHBOARD_GRID_GAP
+  virtualState.lastResizeWidth = virtualState.contentWidth
+  virtualState.lastResizeHeight = virtualState.containerHeight
+  virtualState.lastResizeColumnCount = virtualState.columnCount
+  return isDashboardVirtualMetricsReady(metrics)
 }
 
 function reconcileDashboardTransientUiWithRenderedItems(renderedIds: Set<string>): void {
@@ -2752,6 +3056,10 @@ function buildDashboardCard(item: DashboardItem): string {
   const editTagsLabel = getDashboardCardActionLabel('修改书签标签', item)
   const moveLabel = getDashboardCardActionLabel('移动书签', item)
   const deleteLabel = getDashboardCardActionLabel('删除书签', item)
+  const speedDialPinned = dashboardState.speedDialPinnedIds.has(String(item.id))
+  const speedDialActionText = speedDialPinned ? '已在 Speed Dial' : '添加进 Speed Dial'
+  const speedDialTooltip = speedDialPinned ? '从 Speed Dial 移除' : '添加进 Speed Dial'
+  const speedDialActionLabel = getDashboardCardActionLabel(speedDialTooltip, item)
   const visibleTagLimit = 1
   const tags = item.tags.slice(0, visibleTagLimit)
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
@@ -2834,34 +3142,57 @@ function buildDashboardCard(item: DashboardItem): string {
       </div>
       <div class="dashboard-card-footer">
         <div class="dashboard-card-actions">
-          <a class="detect-result-open" href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag aria-label="${escapeAttr(openLabel)}">打开</a>
-          <button class="detect-result-action" type="button" data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag aria-label="${escapeAttr(copyActionLabel)}">${escapeHtml(copyLabel)}</button>
-          <button
-            class="detect-result-action"
-            type="button"
-            data-dashboard-action="edit-tags"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(editTagsLabel)}"
-          >修改标签</button>
-          <button
-            class="detect-result-action"
-            type="button"
-            data-dashboard-action="move-one"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(moveLabel)}"
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >移动</button>
-          <button
-            class="detect-result-action danger"
-            type="button"
-            data-dashboard-action="delete-one"
-            data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-            data-dashboard-no-drag
-            aria-label="${escapeAttr(deleteLabel)}"
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >删除</button>
+          ${renderDashboardCardAction({
+            as: 'a',
+            icon: 'open',
+            label: openLabel,
+            tooltip: '打开书签',
+            className: 'detect-result-open',
+            attrs: `href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag`,
+            text: '打开'
+          })}
+          ${renderDashboardCardAction({
+            icon: 'copy',
+            label: copyActionLabel,
+            tooltip: copyLabel === '已复制' ? '已复制' : '复制链接',
+            className: 'detect-result-action',
+            attrs: `data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: copyLabel
+          })}
+          ${renderDashboardCardAction({
+            icon: 'tag',
+            label: editTagsLabel,
+            tooltip: '修改标签',
+            className: 'detect-result-action',
+            attrs: `data-dashboard-action="edit-tags" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: '修改标签'
+          })}
+          ${renderDashboardCardAction({
+            icon: 'speed-dial',
+            label: speedDialActionLabel,
+            tooltip: speedDialTooltip,
+            className: `detect-result-action dashboard-speed-dial-action ${speedDialPinned ? 'active' : ''}`,
+            attrs: `data-dashboard-action="toggle-speed-dial" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag aria-pressed="${speedDialPinned ? 'true' : 'false'}"`,
+            text: speedDialActionText
+          })}
+          ${renderDashboardCardAction({
+            icon: 'move',
+            label: moveLabel,
+            tooltip: '移动书签',
+            className: 'detect-result-action',
+            attrs: `data-dashboard-action="move-one" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: '移动',
+            disabled: availabilityState.deleting
+          })}
+          ${renderDashboardCardAction({
+            icon: 'delete',
+            label: deleteLabel,
+            tooltip: '删除书签',
+            className: 'detect-result-action danger',
+            attrs: `data-dashboard-action="delete-one" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag`,
+            text: '删除',
+            disabled: availabilityState.deleting
+          })}
         </div>
         <label class="dashboard-card-check" data-dashboard-no-drag>
           <input

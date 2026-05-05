@@ -1,5 +1,6 @@
 import {
   BOOKMARKS_BAR_ID,
+  NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
   ROOT_ID,
   STORAGE_KEYS,
   RECYCLE_BIN_LIMIT
@@ -245,6 +246,8 @@ import {
   handleDashboardPointerUp,
   handleDashboardTagPointerOut,
   handleDashboardTagPointerOver,
+  applyNewTabSpeedDialStateMessage,
+  hydrateDashboardSpeedDialState,
   isDashboardViewReady,
   prepareDashboardSectionEntry,
   getSingleDashboardMoveBookmark,
@@ -399,10 +402,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     resetOptionsScrollPosition()
   })
   window.addEventListener('curator:dashboard-view-ready', notifyNewTabDashboardReady)
+  window.addEventListener('message', handleNewTabDashboardMessage)
   void hydrateShortcutCommands()
 
   await hydratePersistentState()
   await hydrateAvailabilityCatalog({ analyzeFolderCleanup: !IS_OPTIONS_DASHBOARD_EMBED_MODE })
+  await hydrateDashboardSpeedDialState()
+  renderDashboardSectionIfVisible()
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
   renderAvailabilitySection()
@@ -634,6 +640,21 @@ function notifyNewTabDashboardReady(): void {
       )
     })
   })
+}
+
+function handleNewTabDashboardMessage(event: MessageEvent): void {
+  if (!IS_OPTIONS_DASHBOARD_EMBED_MODE || event.origin !== window.location.origin) {
+    return
+  }
+
+  if (event.data?.type === NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE) {
+    newTabDashboardReadyPosted = false
+    prepareDashboardSectionEntry()
+    renderDashboardSection()
+    return
+  }
+
+  applyNewTabSpeedDialStateMessage(event.data)
 }
 
 function syncCollapsibleNavGroups(activeSectionKey) {

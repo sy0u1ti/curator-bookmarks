@@ -1878,7 +1878,7 @@ a {
 .dashboard-card-grid {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   grid-auto-rows: 176px;
   align-items: stretch;
   gap: 10px;
@@ -1963,9 +1963,11 @@ a {
   right: 0;
   left: 0;
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
   grid-auto-rows: 176px;
   align-items: stretch;
   gap: 10px;
+  min-width: 0;
   will-change: transform;
 }
 
@@ -2004,7 +2006,7 @@ a {
     box-shadow var(--ease-standard),
     outline-color var(--ease-standard),
     opacity var(--ease-standard);
-  contain: layout paint style;
+  contain: layout style;
   contain-intrinsic-size: 176px;
   touch-action: manipulation;
 }
@@ -2043,8 +2045,7 @@ a {
   overflow: hidden;
 }
 
-.dashboard-bookmark-card:hover,
-.dashboard-bookmark-card:focus-within {
+.dashboard-bookmark-card:hover {
   border-color: rgba(245, 245, 247, 0.2);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035)),
@@ -2055,9 +2056,14 @@ a {
     0 10px 28px rgba(0, 0, 0, 0.18);
 }
 
-.dashboard-bookmark-card:focus-within {
-  outline: 1px solid rgba(245, 245, 247, 0.18);
-  outline-offset: 2px;
+.dashboard-bookmark-card:has(.dashboard-icon-action:is(:hover, :focus, :active)) {
+  border-color: rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
+    rgba(245, 245, 247, 0.035);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    0 8px 24px rgba(0, 0, 0, 0.14);
 }
 
 .dashboard-bookmark-card.selected {
@@ -2222,8 +2228,9 @@ a {
 .dashboard-card-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 9px;
+  flex-wrap: nowrap;
+  gap: 7px;
+  min-width: 0;
 }
 
 .dashboard-card-footer {
@@ -2235,7 +2242,7 @@ a {
   min-width: 0;
   margin-top: auto;
   padding-top: 2px;
-  padding-left: 53px;
+  padding-left: 0;
 }
 
 .dashboard-bookmark-card.tags-expanded {
@@ -3269,6 +3276,126 @@ body.dashboard-fullscreen-active {
   font: inherit;
   cursor: pointer;
   transition: color var(--ease-standard);
+}
+
+.dashboard-icon-action {
+  position: relative;
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.045);
+  color: rgba(245, 245, 247, 0.66);
+  text-decoration: none;
+  transform: translateY(0) scale(1);
+  transition:
+    color var(--ease-standard),
+    border-color var(--ease-standard),
+    background-color var(--ease-standard),
+    box-shadow var(--ease-standard),
+    transform 140ms ease;
+}
+
+.dashboard-icon-action svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+}
+
+.dashboard-icon-action::after {
+  content: attr(data-dashboard-tooltip);
+  position: absolute;
+  right: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  max-width: 180px;
+  width: max-content;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  background: rgba(19, 19, 22, 0.96);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+  color: rgba(245, 245, 247, 0.9);
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.2;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(50%, 4px);
+  transition:
+    opacity var(--ease-standard),
+    transform var(--ease-standard);
+  white-space: nowrap;
+}
+
+.dashboard-icon-action:hover,
+.dashboard-icon-action:focus-visible {
+  border-color: rgba(245, 245, 247, 0.22);
+  background: rgba(245, 245, 247, 0.09);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.dashboard-icon-action:hover::after,
+.dashboard-icon-action:focus-visible::after {
+  opacity: 1;
+  transform: translate(50%, 0);
+}
+
+.dashboard-icon-action:active {
+  border-color: rgba(156, 232, 177, 0.34);
+  background: rgba(156, 232, 177, 0.12);
+  box-shadow:
+    inset 0 0 0 1px rgba(156, 232, 177, 0.1),
+    0 4px 12px rgba(0, 0, 0, 0.22);
+  color: #d9ffe2;
+  transform: translateY(0) scale(0.92);
+}
+
+.dashboard-icon-action[aria-pressed="true"],
+.dashboard-icon-action.active {
+  border-color: rgba(156, 232, 177, 0.34);
+  background: rgba(156, 232, 177, 0.14);
+  color: #d9ffe2;
+  box-shadow:
+    inset 0 0 0 1px rgba(156, 232, 177, 0.12),
+    0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.dashboard-icon-action[aria-pressed="true"]:hover,
+.dashboard-icon-action[aria-pressed="true"]:focus-visible,
+.dashboard-icon-action.active:hover,
+.dashboard-icon-action.active:focus-visible {
+  border-color: rgba(156, 232, 177, 0.48);
+  background: rgba(156, 232, 177, 0.2);
+  color: #effff2;
+}
+
+.dashboard-icon-action.danger {
+  color: #ffb7b0;
+}
+
+.dashboard-icon-action.danger:hover,
+.dashboard-icon-action.danger:focus-visible {
+  border-color: rgba(255, 183, 176, 0.32);
+  background: rgba(255, 183, 176, 0.1);
+  color: #ffe7e3;
+}
+
+.dashboard-icon-action:disabled {
+  cursor: default;
+  opacity: 0.42;
+  pointer-events: none;
+  transform: none;
 }
 
 .detect-result-action:hover,

@@ -4,10 +4,18 @@ import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import {
+  applyNewTabSpeedDialStateMessage,
+  createNewTabToggleSpeedDialMessage,
   getDashboardFaviconFallbackUrl,
   getDashboardCardActionLabel,
-  getDashboardSelectionLabel
+  getDashboardSelectionLabel,
+  isNewTabDashboardEmbed
 } from '../src/options/sections/dashboard.js'
+import {
+  NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
+  NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
+  NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE
+} from '../src/shared/constants.js'
 
 function readProjectFile(path: string): string {
   return readFileSync(resolve(process.cwd(), path), 'utf8')
@@ -73,11 +81,56 @@ test('dashboard cards render bookmark-specific action labels', () => {
   assert.match(dashboardSource, /const editTagsLabel = getDashboardCardActionLabel\('修改书签标签', item\)/)
   assert.match(dashboardSource, /const moveLabel = getDashboardCardActionLabel\('移动书签', item\)/)
   assert.match(dashboardSource, /const deleteLabel = getDashboardCardActionLabel\('删除书签', item\)/)
-  assert.match(dashboardSource, /<a class="detect-result-open"[\s\S]*?aria-label="\$\{escapeAttr\(openLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-copy="\$\{escapeAttr\(item\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(copyActionLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-action="edit-tags"[\s\S]*?aria-label="\$\{escapeAttr\(editTagsLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?aria-label="\$\{escapeAttr\(moveLabel\)\}"/)
-  assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?aria-label="\$\{escapeAttr\(deleteLabel\)\}"/)
+  assert.match(dashboardSource, /const speedDialPinned = dashboardState\.speedDialPinnedIds\.has\(String\(item\.id\)\)/)
+  assert.match(dashboardSource, /const speedDialActionLabel = getDashboardCardActionLabel\(speedDialTooltip, item\)/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'open'[\s\S]*?label: openLabel[\s\S]*?tooltip: '打开书签'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'copy'[\s\S]*?label: copyActionLabel[\s\S]*?tooltip: copyLabel === '已复制' \? '已复制' : '复制链接'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'tag'[\s\S]*?label: editTagsLabel[\s\S]*?tooltip: '修改标签'/)
+  assert.match(dashboardSource, /data-dashboard-action="toggle-speed-dial"[\s\S]*?aria-pressed="\$\{speedDialPinned \? 'true' : 'false'\}"/)
+  assert.match(dashboardSource, /className: `detect-result-action dashboard-speed-dial-action \$\{speedDialPinned \? 'active' : ''\}`/)
+  assert.match(dashboardSource, /function getDashboardVirtualRenderStateKey\([\s\S]*?dashboardState\.speedDialPinnedIds\.has\(id\) \? '1' : '0'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'move'[\s\S]*?label: moveLabel[\s\S]*?tooltip: '移动书签'/)
+  assert.match(dashboardSource, /renderDashboardCardAction\(\{[\s\S]*?icon: 'delete'[\s\S]*?label: deleteLabel[\s\S]*?tooltip: '删除书签'/)
+  assert.match(dashboardSource, /<span class="sr-only">\$\{safeText\}<\/span>/)
+  assert.match(dashboardSource, /data-dashboard-tooltip="\$\{safeTooltip\}"/)
+  assert.doesNotMatch(dashboardSource, />添加进 Speed Dial<\/button>/)
+})
+
+test('dashboard Speed Dial action uses the shared newtab toggle message contract', () => {
+  const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
+  const constantsSource = readProjectFile('src/shared/constants.ts')
+
+  assert.equal(NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE, 'curator:newtab-dashboard-open')
+  assert.equal(NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE, 'curator:newtab-toggle-speed-dial')
+  assert.equal(NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE, 'curator:newtab-speed-dial-state')
+  assert.deepEqual(createNewTabToggleSpeedDialMessage('  b1  '), {
+    type: 'curator:newtab-toggle-speed-dial',
+    bookmarkId: 'b1'
+  })
+  assert.equal(applyNewTabSpeedDialStateMessage({
+    type: 'curator:newtab-speed-dial-state',
+    pinnedIds: [' b1 ', '', 'b2']
+  }), true)
+  const invalidSpeedDialStateMessage = {
+    type: 'curator:unknown',
+    pinnedIds: ['b1']
+  }
+  assert.equal(applyNewTabSpeedDialStateMessage(invalidSpeedDialStateMessage), false)
+  assert.equal(isNewTabDashboardEmbed('?embed=newtab-dashboard'), true)
+  assert.equal(isNewTabDashboardEmbed('?embed=options'), false)
+  assert.match(constantsSource, /export interface NewTabToggleSpeedDialMessage[\s\S]*?type: typeof NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE[\s\S]*?bookmarkId: string/)
+  assert.match(constantsSource, /export interface NewTabSpeedDialStateMessage[\s\S]*?type: typeof NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE[\s\S]*?pinnedIds: string\[\]/)
+  assert.match(constantsSource, /export interface NewTabDashboardOpenMessage[\s\S]*?type: typeof NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE/)
+  assert.match(dashboardSource, /function applyNewTabSpeedDialStateMessage\(/)
+  assert.match(dashboardSource, /export async function hydrateDashboardSpeedDialState\(\): Promise<void>/)
+  assert.match(dashboardSource, /action === 'toggle-speed-dial'[\s\S]*?await toggleDashboardBookmarkSpeedDial\(bookmarkId\)/)
+  assert.match(dashboardSource, /async function toggleDashboardBookmarkSpeedDial\(bookmarkId: string\): Promise<void>/)
+  assert.match(dashboardSource, /window\.parent\.postMessage\(createNewTabToggleSpeedDialMessage\(safeBookmarkId\), window\.location\.origin\)/)
+  assert.match(dashboardSource, /dashboardState\.speedDialPinnedIds\.has\(safeBookmarkId\)/)
+  assert.match(dashboardSource, /getLocalStorage\(\[STORAGE_KEYS\.newTabWorkspaceSettings\]\)/)
+  assert.match(dashboardSource, /toggleNewTabWorkspacePin\([\s\S]*?activeWorkspace\.id[\s\S]*?safeBookmarkId/)
+  assert.match(dashboardSource, /setLocalStorage\(\{[\s\S]*?\[STORAGE_KEYS\.newTabWorkspaceSettings\]: nextSettings/)
+  assert.doesNotMatch(dashboardSource, /请在新标签页打开仪表盘后添加到 Speed Dial/)
 })
 
 test('dashboard cards use stable Chrome favicon URLs without swapping visible sources', () => {
@@ -120,8 +173,8 @@ test('dashboard cards use stable Chrome favicon URLs without swapping visible so
 test('dashboard cards expose keyboard-triggerable move and delete actions', () => {
   const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
 
-  assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?>移动<\/button>/)
-  assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?>删除<\/button>/)
+  assert.match(dashboardSource, /data-dashboard-action="move-one"[\s\S]*?text: '移动'/)
+  assert.match(dashboardSource, /data-dashboard-action="delete-one"[\s\S]*?text: '删除'/)
   assert.match(dashboardSource, /action === 'delete-one'[\s\S]*?deleteDashboardBookmarkFromCard/)
   assert.match(dashboardSource, /async function deleteDashboardBookmarkFromCard/)
 })

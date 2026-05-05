@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 import {
+  isDashboardVirtualMetricsReady,
   shouldRevealDashboardPanelAfterRender,
   shouldResetDashboardPanelRevealForSectionEntry,
   shouldResetDashboardPanelRevealForRender,
@@ -219,6 +220,10 @@ test('dashboard resize observer masks stale virtual cards before rerender', () =
 
   assert.match(source, /new ResizeObserver\(handleDashboardVirtualResize\)/)
   assert.match(resizeHandlerBody, /dashboardSelectionCompositeMotionActive/)
+  assert.match(resizeHandlerBody, /getDashboardVirtualMetricsSnapshot/)
+  assert.match(resizeHandlerBody, /isDashboardVirtualMetricsReady\(metrics\)/)
+  assert.match(resizeHandlerBody, /hasDashboardVirtualMetricsChanged\(metrics\)/)
+  assert.match(resizeHandlerBody, /scheduleDashboardVirtualMeasureRetry\(\)/)
   assert.match(resizeHandlerBody, /dashboardVirtualResizeDeferredForSelection\s*=\s*true/)
   assert.match(resizeHandlerBody, /scheduleDashboardVirtualResize\(\)/)
   assert.doesNotMatch(resizeHandlerBody, /beginStableDashboardResultsUpdate\(\)/)
@@ -228,10 +233,51 @@ test('dashboard resize observer masks stale virtual cards before rerender', () =
   assert.match(resizeSchedulerBody, /commitDashboardVirtualResize\(\{\s*showMask\s*\}\)/)
   assert.doesNotMatch(resizeSchedulerBody, /resetDashboardVirtualRenderCache/)
   assert.doesNotMatch(resizeSchedulerBody, /scheduleDashboardVirtualRender\(\)/)
+  assert.match(resizeCommitBody, /hasDashboardVirtualMetricsChanged\(metrics\)/)
+  assert.match(resizeCommitBody, /clearStableDashboardResultsUpdate\(\)/)
   assert.match(resizeCommitBody, /beginStableDashboardResultsUpdate\(\)/)
   assert.match(resizeCommitBody, /resetDashboardVirtualRenderCache\(\{\s*preserveItems:\s*true\s*\}\)/)
   assert.match(resizeCommitBody, /renderDashboardCards\(virtualState\.items\)/)
   assert.doesNotMatch(resizeCommitBody, /scheduleDashboardVirtualRender\(\)/)
+})
+
+test('dashboard initial virtual render waits for usable layout metrics', () => {
+  const testDir = dirname(fileURLToPath(import.meta.url))
+  const sourcePath = resolve(testDir, '../../src/options/sections/dashboard.ts')
+  const source = readFileSync(sourcePath, 'utf8')
+  const renderCardsBody = getFunctionBody(source, 'renderDashboardCards')
+  const retryBody = getFunctionBody(source, 'scheduleDashboardVirtualMeasureRetry')
+  const metricsBody = getFunctionBody(source, 'updateDashboardVirtualMetrics')
+  const metricsSnapshotBody = getFunctionBody(source, 'getDashboardVirtualMetricsSnapshot')
+  const commitBody = getFunctionBody(source, 'commitDashboardCardsRender')
+  const sectionBody = getFunctionBody(source, 'renderDashboardSection')
+
+  assert.equal(isDashboardVirtualMetricsReady({
+    contentWidth: 1,
+    containerHeight: 560,
+    columnCount: 1
+  }), false)
+  assert.equal(isDashboardVirtualMetricsReady({
+    contentWidth: 640,
+    containerHeight: 1,
+    columnCount: 2
+  }), false)
+  assert.equal(isDashboardVirtualMetricsReady({
+    contentWidth: 48,
+    containerHeight: 48,
+    columnCount: 1
+  }), true)
+
+  assert.match(renderCardsBody, /const metricsReady = updateDashboardVirtualMetrics\(\)/)
+  assert.match(renderCardsBody, /if\s*\(!metricsReady\)\s*\{[\s\S]*?virtualState\.pendingInitialMeasure\s*=\s*true[\s\S]*?scheduleDashboardVirtualMeasureRetry\(renderVersion\)[\s\S]*?return/)
+  assert.match(retryBody, /window\.requestAnimationFrame/)
+  assert.match(retryBody, /renderVersion !== dashboardCardsRenderVersion/)
+  assert.match(retryBody, /renderDashboardCards\(virtualState\.items,\s*renderVersion\)/)
+  assert.match(metricsBody, /getDashboardVirtualMetricsSnapshot/)
+  assert.match(metricsSnapshotBody, /container\.getBoundingClientRect\(\)/)
+  assert.match(metricsSnapshotBody, /container\.parentElement\?\.getBoundingClientRect\(\)/)
+  assert.match(commitBody, /scheduleDashboardPanelReveal\(safeRenderVersion\)/)
+  assert.doesNotMatch(sectionBody, /scheduleDashboardPanelReveal\(renderVersion\)/)
 })
 
 test('dashboard stable update overlay uses the shared dot matrix loader', () => {
@@ -304,4 +350,5 @@ test('dashboard selection inputs avoid duplicate click and input rerenders', () 
   assert.doesNotMatch(selectionSyncBody, /renderDashboardCards\(/)
   assert.doesNotMatch(selectionSyncBody, /renderDashboardSection\(/)
   assert.doesNotMatch(virtualStateKeyBody, /selectedIds/)
+  assert.match(virtualStateKeyBody, /speedDialPinnedIds\.has\(id\)/)
 })
