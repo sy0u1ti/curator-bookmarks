@@ -1307,11 +1307,6 @@ body.background-mask-enabled .newtab-background-mask {
   color: rgba(180, 204, 255, 0.94);
 }
 
-.newtab-quick-link[data-quick-reason="opened"] .newtab-quick-mark {
-  background: rgba(132, 218, 137, 0.14);
-  color: rgba(185, 236, 188, 0.9);
-}
-
 .newtab-quick-copy {
   display: grid;
   min-width: 0;

@@ -236,7 +236,43 @@ test('selects portal quick access items without duplicating frequent and recent 
       badge: item.badge
     })),
     [
-      { id: '2', reason: 'opened', badge: '开' }
+      { id: '2', reason: 'added', badge: '新' }
+    ]
+  )
+})
+
+test('newtab recent quick access excludes recently opened bookmarks', () => {
+  const now = new Date('2026-05-02T10:30:00+08:00').getTime()
+  const oneHourAgo = now - 60 * 60 * 1000
+  const twoHoursAgo = now - 2 * 60 * 60 * 1000
+  const yesterday = now - 24 * 60 * 60 * 1000
+
+  const quickAccess = getPortalQuickAccessItems({
+    now,
+    itemLimit: 2,
+    showFrequent: false,
+    showRecent: true,
+    pinnedIds: [],
+    bookmarks: [
+      { id: '1', title: 'Opened Only', url: 'https://example.com/opened', dateAdded: yesterday },
+      { id: '2', title: 'Newer Added', url: 'https://example.com/newer', dateAdded: oneHourAgo },
+      { id: '3', title: 'Older Added', url: 'https://example.com/older', dateAdded: twoHoursAgo }
+    ],
+    records: {
+      1: { bookmarkId: '1', openCount: 12, lastOpenedAt: now },
+      3: { bookmarkId: '3', openCount: 1, lastOpenedAt: oneHourAgo }
+    }
+  })
+
+  assert.deepEqual(
+    quickAccess.recentItems.map((item) => ({
+      id: item.id,
+      reason: item.reason,
+      badge: item.badge
+    })),
+    [
+      { id: '2', reason: 'added', badge: '新' },
+      { id: '3', reason: 'added', badge: '新' }
     ]
   )
 })

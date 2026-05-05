@@ -119,7 +119,7 @@ export interface PortalBookmarkSourceItem {
 
 export interface PortalQuickAccessItem {
   id: string
-  reason: 'pinned' | 'frequent' | 'opened' | 'added'
+  reason: 'pinned' | 'frequent' | 'added'
   detail: string
   badge: string
 }
@@ -806,49 +806,25 @@ export function getPortalQuickAccessItems({
   }
 
   if (showRecent && limit > 0) {
-    const recentRecords = Object.values(records)
-      .filter((record) =>
-        Number(record.lastOpenedAt) > 0 &&
-        !usedIds.has(String(record.bookmarkId)) &&
-        bookmarkMap.has(String(record.bookmarkId))
+    const recentlyAdded = [...bookmarkMap.values()]
+      .filter((bookmark) =>
+        !usedIds.has(String(bookmark.id)) &&
+        Number.isFinite(Number(bookmark.dateAdded)) &&
+        Number(bookmark.dateAdded) > 0
       )
-      .sort((left, right) => Number(right.lastOpenedAt) - Number(left.lastOpenedAt))
+      .sort((left, right) => Number(right.dateAdded) - Number(left.dateAdded))
 
-    for (const record of recentRecords) {
-      const id = String(record.bookmarkId)
+    for (const bookmark of recentlyAdded) {
+      const id = String(bookmark.id)
       recentItems.push({
         id,
-        reason: 'opened',
-        detail: formatNewTabRelativeActivityTime(Number(record.lastOpenedAt), '打开', now),
-        badge: '开'
+        reason: 'added',
+        detail: formatNewTabRelativeActivityTime(Number(bookmark.dateAdded), '添加', now),
+        badge: '新'
       })
       usedIds.add(id)
       if (recentItems.length >= limit) {
         break
-      }
-    }
-
-    if (recentItems.length < limit) {
-      const recentlyAdded = [...bookmarkMap.values()]
-        .filter((bookmark) =>
-          !usedIds.has(String(bookmark.id)) &&
-          Number.isFinite(Number(bookmark.dateAdded)) &&
-          Number(bookmark.dateAdded) > 0
-        )
-        .sort((left, right) => Number(right.dateAdded) - Number(left.dateAdded))
-
-      for (const bookmark of recentlyAdded) {
-        const id = String(bookmark.id)
-        recentItems.push({
-          id,
-          reason: 'added',
-          detail: formatNewTabRelativeActivityTime(Number(bookmark.dateAdded), '添加', now),
-          badge: '新'
-        })
-        usedIds.add(id)
-        if (recentItems.length >= limit) {
-          break
-        }
       }
     }
   }
