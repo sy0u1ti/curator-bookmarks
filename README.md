@@ -19,15 +19,10 @@
   
 
 <p align="center">
-
   <img src="https://img.shields.io/badge/Chrome%20Manifest-V3-blue?logo=googlechrome" alt="Manifest V3">
-
   <img src="https://img.shields.io/badge/TypeScript-ES2022-3178c6?logo=typescript" alt="TypeScript">
-
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License">
-
   <img src="https://img.shields.io/github/v/release/sy0u1ti/curator-bookmarks" alt="GitHub Release">
-
 </p>
 
   
@@ -60,9 +55,7 @@
   
 
 <p align="center">
-
   <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.9kgsh3xs35.png" alt="popup">
-
 </p>
 
   
@@ -95,11 +88,8 @@
   
 
 <p align="center">
-
   <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.8advgtzihj.webp" alt="仪表盘">
-
   <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.9o0ekvb207.webp" alt="仪表盘2">
-
 </p>
 
   
