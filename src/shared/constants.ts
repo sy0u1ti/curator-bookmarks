@@ -1,8 +1,13 @@
 export const BOOKMARKS_BAR_ID = '1'
 export const OTHER_BOOKMARKS_ID = '2'
 export const ROOT_ID = '0'
+export const NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE = 'curator:newtab-dashboard-open'
 export const NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE = 'curator:newtab-toggle-speed-dial'
 export const NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE = 'curator:newtab-speed-dial-state'
+
+export interface NewTabDashboardOpenMessage {
+  type: typeof NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE
+}
 
 export interface NewTabToggleSpeedDialMessage {
   type: typeof NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE

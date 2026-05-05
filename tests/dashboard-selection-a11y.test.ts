@@ -12,6 +12,7 @@ import {
   isNewTabDashboardEmbed
 } from '../src/options/sections/dashboard.js'
 import {
+  NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
   NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
   NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE
 } from '../src/shared/constants.js'
@@ -99,6 +100,7 @@ test('dashboard Speed Dial action uses the shared newtab toggle message contract
   const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
   const constantsSource = readProjectFile('src/shared/constants.ts')
 
+  assert.equal(NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE, 'curator:newtab-dashboard-open')
   assert.equal(NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE, 'curator:newtab-toggle-speed-dial')
   assert.equal(NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE, 'curator:newtab-speed-dial-state')
   assert.deepEqual(createNewTabToggleSpeedDialMessage('  b1  '), {
@@ -118,6 +120,7 @@ test('dashboard Speed Dial action uses the shared newtab toggle message contract
   assert.equal(isNewTabDashboardEmbed('?embed=options'), false)
   assert.match(constantsSource, /export interface NewTabToggleSpeedDialMessage[\s\S]*?type: typeof NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE[\s\S]*?bookmarkId: string/)
   assert.match(constantsSource, /export interface NewTabSpeedDialStateMessage[\s\S]*?type: typeof NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE[\s\S]*?pinnedIds: string\[\]/)
+  assert.match(constantsSource, /export interface NewTabDashboardOpenMessage[\s\S]*?type: typeof NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE/)
   assert.match(dashboardSource, /function applyNewTabSpeedDialStateMessage\(/)
   assert.match(dashboardSource, /action === 'toggle-speed-dial'[\s\S]*?toggleDashboardBookmarkSpeedDial\(bookmarkId\)/)
   assert.match(dashboardSource, /function toggleDashboardBookmarkSpeedDial\(bookmarkId: string\): void/)

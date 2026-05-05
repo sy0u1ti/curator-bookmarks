@@ -88,6 +88,11 @@ interface DashboardVirtualState {
   resetScrollOnNextRender: boolean
   resizeObserver: ResizeObserver | null
   observedElement: HTMLElement | null
+  pendingInitialMeasure: boolean
+  measureRetryFrame: number
+  lastResizeWidth: number
+  lastResizeHeight: number
+  lastResizeColumnCount: number
 }
 
 interface DashboardModelCacheKey {
@@ -144,6 +149,8 @@ export const DASHBOARD_DRAG_MOVE_THRESHOLD = 4
 const DASHBOARD_CARD_HEIGHT = 176
 const DASHBOARD_GRID_GAP = 10
 const DASHBOARD_CARD_MIN_WIDTH = 300
+const DASHBOARD_VIRTUAL_MIN_READY_WIDTH = 48
+const DASHBOARD_VIRTUAL_MIN_READY_HEIGHT = 48
 const DASHBOARD_VIRTUAL_OVERSCAN_ROWS = 12
 const DASHBOARD_VIRTUAL_THRESHOLD = 120
 const DASHBOARD_SELECTION_MOTION_MS = 260
@@ -204,7 +211,12 @@ const virtualState: DashboardVirtualState = {
   sectionFrame: 0,
   resetScrollOnNextRender: false,
   resizeObserver: null,
-  observedElement: null
+  observedElement: null,
+  pendingInitialMeasure: false,
+  measureRetryFrame: 0,
+  lastResizeWidth: 0,
+  lastResizeHeight: 0,
+  lastResizeColumnCount: 0
 }
 
 const dragState: DashboardDragState = {
@@ -391,6 +403,72 @@ export function getDashboardVirtualColumnCount(
   const safeMinWidth = Math.max(1, Number(minCardWidth) || 1)
   const effectiveMinWidth = Math.min(safeMinWidth, safeWidth)
   return Math.max(1, Math.floor((safeWidth + safeGap) / (effectiveMinWidth + safeGap)))
+}
+
+export interface DashboardVirtualMetricsSnapshot {
+  contentWidth: number
+  containerHeight: number
+  columnCount: number
+}
+
+export function getDashboardVirtualMetricsSnapshot(
+  container: HTMLElement | null,
+  fallbackWidth = 0,
+  fallbackHeight = 0
+): DashboardVirtualMetricsSnapshot {
+  if (!container) {
+    return {
+      contentWidth: 0,
+      containerHeight: 0,
+      columnCount: 1
+    }
+  }
+
+  const style = window.getComputedStyle(container)
+  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
+  const paddingRight = Number.parseFloat(style.paddingRight) || 0
+  const bounds = container.getBoundingClientRect()
+  const parentBounds = container.parentElement?.getBoundingClientRect()
+  const measuredWidth = Math.max(
+    0,
+    Number(container.clientWidth) || 0,
+    Number(bounds.width) || 0,
+    Number(parentBounds?.width) || 0
+  )
+  const rawWidth = measuredWidth >= DASHBOARD_VIRTUAL_MIN_READY_WIDTH
+    ? measuredWidth
+    : Math.max(measuredWidth, Number(fallbackWidth) || 0)
+  const contentWidth = Math.max(0, rawWidth - paddingLeft - paddingRight)
+  const measuredHeight = Math.max(
+    0,
+    Number(container.clientHeight) || 0,
+    Number(bounds.height) || 0,
+    Number(parentBounds?.height) || 0
+  )
+  const containerHeight = measuredHeight >= DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
+    ? measuredHeight
+    : Math.max(measuredHeight, Number(fallbackHeight) || 0)
+
+  return {
+    contentWidth,
+    containerHeight,
+    columnCount: getDashboardVirtualColumnCount(contentWidth)
+  }
+}
+
+export function isDashboardVirtualMetricsReady(metrics: DashboardVirtualMetricsSnapshot): boolean {
+  return (
+    metrics.contentWidth >= DASHBOARD_VIRTUAL_MIN_READY_WIDTH &&
+    metrics.containerHeight >= DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
+  )
+}
+
+function hasDashboardVirtualMetricsChanged(metrics: DashboardVirtualMetricsSnapshot): boolean {
+  return (
+    Math.round(metrics.contentWidth) !== Math.round(virtualState.lastResizeWidth) ||
+    Math.round(metrics.containerHeight) !== Math.round(virtualState.lastResizeHeight) ||
+    metrics.columnCount !== virtualState.lastResizeColumnCount
+  )
 }
 
 export function computeDashboardVirtualWindow({
@@ -650,9 +728,6 @@ export function renderDashboardSection(): void {
   const renderVersion = beginDashboardCardsRender()
   renderDashboardCards(visibleItems, renderVersion)
   renderDashboardTagEditor(model)
-  if (!availabilityState.catalogLoading) {
-    scheduleDashboardPanelReveal(renderVersion)
-  }
 
   if (dragState.active) {
     renderDashboardDragOverlay(model)
@@ -2094,7 +2169,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   virtualState.items = items
 
   applyDashboardVirtualFilterReset(items)
-  updateDashboardVirtualMetrics()
+  const metricsReady = updateDashboardVirtualMetrics()
 
   if (items.length < DASHBOARD_VIRTUAL_THRESHOLD) {
     resetDashboardVirtualRenderCache({ preserveItems: true })
@@ -2107,6 +2182,13 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   }
 
   dom.dashboardResults.classList.add('is-virtualized')
+  if (!metricsReady) {
+    virtualState.pendingInitialMeasure = true
+    scheduleDashboardVirtualMeasureRetry(renderVersion)
+    return
+  }
+
+  virtualState.pendingInitialMeasure = false
   const virtualWindow = computeDashboardVirtualWindow({
     itemCount: items.length,
     contentWidth: virtualState.contentWidth,
@@ -2274,6 +2356,11 @@ function resetDashboardVirtualRenderCache({
   virtualState.renderedTotalHeight = -1
   virtualState.renderedOffsetY = -1
   virtualState.renderedStateKey = ''
+  virtualState.pendingInitialMeasure = false
+  if (virtualState.measureRetryFrame) {
+    window.cancelAnimationFrame(virtualState.measureRetryFrame)
+    virtualState.measureRetryFrame = 0
+  }
   dom.dashboardResults?.classList.remove('is-virtualized')
 }
 
@@ -2361,11 +2448,18 @@ function ensureDashboardVirtualGrid(): void {
     window.cancelAnimationFrame(virtualState.frame)
     virtualState.frame = 0
   }
+  if (virtualState.measureRetryFrame) {
+    window.cancelAnimationFrame(virtualState.measureRetryFrame)
+    virtualState.measureRetryFrame = 0
+  }
   if (dashboardVirtualResizeFrame) {
     window.cancelAnimationFrame(dashboardVirtualResizeFrame)
     dashboardVirtualResizeFrame = 0
   }
   virtualState.observedElement = container
+  virtualState.lastResizeWidth = 0
+  virtualState.lastResizeHeight = 0
+  virtualState.lastResizeColumnCount = 0
 
   container.addEventListener('scroll', handleDashboardVirtualScroll, { passive: true })
   if (typeof ResizeObserver !== 'undefined') {
@@ -2377,6 +2471,21 @@ function ensureDashboardVirtualGrid(): void {
 function handleDashboardVirtualResize(): void {
   if (dashboardSelectionCompositeMotionActive) {
     dashboardVirtualResizeDeferredForSelection = true
+    return
+  }
+
+  const metrics = getDashboardVirtualMetricsSnapshot(
+    dom.dashboardResults,
+    virtualState.contentWidth,
+    virtualState.containerHeight
+  )
+  if (!isDashboardVirtualMetricsReady(metrics) && virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD) {
+    virtualState.pendingInitialMeasure = true
+    scheduleDashboardVirtualMeasureRetry()
+    return
+  }
+
+  if (!hasDashboardVirtualMetricsChanged(metrics) && !virtualState.pendingInitialMeasure) {
     return
   }
 
@@ -2412,6 +2521,20 @@ function commitDashboardVirtualResize({
   if (virtualState.frame) {
     window.cancelAnimationFrame(virtualState.frame)
     virtualState.frame = 0
+  }
+  const metrics = getDashboardVirtualMetricsSnapshot(
+    dom.dashboardResults,
+    virtualState.contentWidth,
+    virtualState.containerHeight
+  )
+  if (!isDashboardVirtualMetricsReady(metrics) && virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD) {
+    virtualState.pendingInitialMeasure = true
+    scheduleDashboardVirtualMeasureRetry()
+    return
+  }
+  if (!hasDashboardVirtualMetricsChanged(metrics) && !virtualState.pendingInitialMeasure && !preserveRenderedWindow) {
+    clearStableDashboardResultsUpdate()
+    return
   }
   if (showMask) {
     beginStableDashboardResultsUpdate()
@@ -2512,6 +2635,21 @@ function scheduleDashboardVirtualRender(): void {
     if (virtualState.items.length) {
       renderDashboardCards(virtualState.items)
     }
+  })
+}
+
+function scheduleDashboardVirtualMeasureRetry(renderVersion = dashboardCardsRenderVersion): void {
+  if (virtualState.measureRetryFrame) {
+    return
+  }
+
+  virtualState.measureRetryFrame = window.requestAnimationFrame(() => {
+    virtualState.measureRetryFrame = 0
+    if (!virtualState.items.length || renderVersion !== dashboardCardsRenderVersion) {
+      return
+    }
+
+    renderDashboardCards(virtualState.items, renderVersion)
   })
 }
 
@@ -2620,6 +2758,7 @@ function commitDashboardCardsRender(renderVersion: number): void {
   }
 
   dashboardCardsCommittedRenderVersion = safeRenderVersion
+  scheduleDashboardPanelReveal(safeRenderVersion)
 }
 
 function scheduleDashboardPanelReveal(renderVersion: number): void {
@@ -2695,13 +2834,13 @@ function resetDashboardVirtualScroll(): void {
   }
 }
 
-function updateDashboardVirtualMetrics(): void {
+function updateDashboardVirtualMetrics(): boolean {
   const container = dom.dashboardResults
   if (!container) {
     virtualState.containerHeight = 0
     virtualState.columnCount = 1
     virtualState.contentWidth = 0
-    return
+    return false
   }
 
   if (virtualState.resetScrollOnNextRender) {
@@ -2709,15 +2848,20 @@ function updateDashboardVirtualMetrics(): void {
     virtualState.resetScrollOnNextRender = false
   }
 
-  const style = window.getComputedStyle(container)
-  const paddingLeft = Number.parseFloat(style.paddingLeft) || 0
-  const paddingRight = Number.parseFloat(style.paddingRight) || 0
-  const contentWidth = Math.max(1, container.clientWidth - paddingLeft - paddingRight)
+  const metrics = getDashboardVirtualMetricsSnapshot(
+    container,
+    virtualState.contentWidth,
+    virtualState.containerHeight
+  )
 
-  virtualState.containerHeight = Math.max(1, container.clientHeight)
-  virtualState.contentWidth = contentWidth
-  virtualState.columnCount = getDashboardVirtualColumnCount(contentWidth)
+  virtualState.containerHeight = Math.max(1, metrics.containerHeight)
+  virtualState.contentWidth = Math.max(1, metrics.contentWidth)
+  virtualState.columnCount = metrics.columnCount
   virtualState.rowStride = DASHBOARD_CARD_HEIGHT + DASHBOARD_GRID_GAP
+  virtualState.lastResizeWidth = virtualState.contentWidth
+  virtualState.lastResizeHeight = virtualState.containerHeight
+  virtualState.lastResizeColumnCount = virtualState.columnCount
+  return isDashboardVirtualMetricsReady(metrics)
 }
 
 function reconcileDashboardTransientUiWithRenderedItems(renderedIds: Set<string>): void {

@@ -308,6 +308,21 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   assert.equal(getDashboardVirtualColumnCount(1040), 3)
   assert.equal(getDashboardVirtualColumnCount(1240), 4)
 
+  assert.equal(
+    computeDashboardVirtualWindow({
+      itemCount: 10000,
+      contentWidth: 1,
+      containerHeight: 560,
+      scrollTop: 0,
+      cardHeight: 176,
+      gap: 10,
+      minCardWidth: 300,
+      overscanRows: 4
+    }).columnCount,
+    1,
+    'near-zero metrics still clamp safely until the dashboard defers reveal'
+  )
+
   const firstWindow = computeDashboardVirtualWindow({
     itemCount: 10000,
     contentWidth: 1040,
@@ -421,6 +436,14 @@ test('dashboard folder sidebar layout and active styles are defined', () => {
   assert.match(optionsCss, /\.dashboard-favicon-shell img \+ span\s*\{[\s\S]*?display:\s*none/)
   assert.match(optionsCss, /\.dashboard-card-grid\.is-virtualized\s*\{[\s\S]*?overflow-anchor:\s*none/)
   assert.match(optionsCss, /\.dashboard-card-grid\s*\{[\s\S]*?scrollbar-gutter:\s*stable/)
+  assert.match(
+    optionsCss,
+    /\.dashboard-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(min\(300px,\s*100%\),\s*1fr\)\)/
+  )
+  assert.match(
+    optionsCss,
+    /\.dashboard-virtual-window\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(min\(300px,\s*100%\),\s*1fr\)\)/
+  )
   assert.match(
     optionsCss,
     /\.dashboard-fullscreen-active\s+\.dashboard-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(min\(300px,\s*100%\),\s*1fr\)\)/

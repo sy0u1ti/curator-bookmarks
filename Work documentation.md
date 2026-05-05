@@ -702,15 +702,27 @@
 - `f8ba311 fix(newtab): apply follow-up settings polish`
 - `4232678 feat(dashboard): add speed dial card action`
 - `2e9dba9 fix(newtab): handle dashboard speed dial messages`
+- `4b4f60c fix(newtab): polish dashboard speed dial and search`
+- `92c20a7 fix(dashboard): refresh speed dial action immediately`
+
+### 书签仪表盘首帧闪烁与流畅度修复
+
+- newtab 每次打开嵌入式书签仪表盘时都会重置外层 ready 状态，并向 iframe 发送 `curator:newtab-dashboard-open`，避免复用隐藏期间已经被重排成 1 列的旧 iframe 内容。
+- options 嵌入式 dashboard 收到 open 消息后重置内部 reveal 状态并重新渲染；只有卡片渲染提交后才调度 ready/reveal。
+- 虚拟网格测量改为合并 `clientWidth/clientHeight`、自身 `getBoundingClientRect()` 和父容器尺寸；隐藏或近零尺寸时延后一帧重试，不再用 1px 宽度直接渲染大列表。
+- `.dashboard-card-grid` 和 `.dashboard-virtual-window` 均增加 `auto-fill minmax(min(300px, 100%), 1fr)` 兜底列定义，避免 inline columns 写入前的单列全宽闪烁。
+- ResizeObserver 会跳过尺寸/列数没有变化的回调；无效尺寸只触发测量重试，减少进入和窗口稳定期间的重复重绘。
 
 ### 本轮验证结果
 
 - `npm run typecheck` 通过。
 - `node --test .tmp-test/tests/newtab-module-settings.test.js .tmp-test/tests/newtab-command-palette.test.js .tmp-test/tests/newtab-content-state.test.js .tmp-test/tests/newtab-speed-dial.test.js .tmp-test/tests/dashboard-selection-a11y.test.js` 通过；82 tests，82 pass。
+- `node --test .tmp-test/tests/dashboard-folder-switch-stability.test.js .tmp-test/tests/options-management-ui.test.js .tmp-test/tests/newtab-content-state.test.js .tmp-test/tests/dashboard-selection-a11y.test.js .tmp-test/tests/options-navigation.test.js` 通过；142 tests，142 pass。
 - `npm run lint` 通过。
-- `npm test` 通过；407 tests，407 pass，0 fail。
+- `npm test` 通过；411 tests，411 pass，0 fail。
 - `npm run build` 通过；Vite 6.4.2 成功生成 `dist/`。
 - `npm run check:version` 通过；Version check passed: 1.4.25。
+- `git diff --check` 通过。
 
 ### 更新后的手动测试重点
 
@@ -720,7 +732,9 @@
 - 按 `Ctrl/Cmd+K`，确认直接打开书签仪表盘，而不是命令面板或快捷提示。
 - 按 `/`，确认仍聚焦 newtab 搜索框。
 - 清空某个场景的固定书签，确认 Speed Dial 空状态不再显示“搜索书签”“在书签上右键固定”“管理场景”三个按钮。
-- 在书签仪表盘卡片点击“添加进 Speed Dial”，返回 newtab 后确认该书签加入当前场景的 Speed Dial；最终行为以后续状态化 toggle 记录为准。
+- 在书签仪表盘卡片点击 Speed Dial 图标按钮，确认按钮状态立即变化；再次点击可取消固定，不需要重进仪表盘。
+- 从 newtab 打开书签仪表盘，重点观察进入瞬间第一列卡片是否不再铺满整个屏幕。
+- 在书签数量较多的目录里滚动、切换文件夹和反复打开/关闭仪表盘，确认没有明显卡顿或 loading 卡死。
 
 ### 当前集成分支
 

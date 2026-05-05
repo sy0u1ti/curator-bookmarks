@@ -1,5 +1,6 @@
 import {
   BOOKMARKS_BAR_ID,
+  NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
   NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
   NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
   STORAGE_KEYS
@@ -3259,11 +3260,15 @@ function syncDashboardRoute(): void {
   const shouldOpen = window.location.hash === '#dashboard'
   if (shouldOpen === state.dashboardOpen) {
     if (shouldOpen) {
+      resetDashboardFrameReady()
       ensureDashboardFrameLoaded()
     }
     return
   }
 
+  if (shouldOpen) {
+    resetDashboardFrameReady()
+  }
   state.dashboardOpen = shouldOpen
   renderDashboard()
   if (shouldOpen) {
@@ -3318,6 +3323,9 @@ function ensureDashboardFrameLoaded(): void {
     ) {
       scheduleDashboardFrameReadyTimeout()
     }
+    if (state.dashboardOpen && !state.dashboardFrameReady && !state.dashboardFrameError) {
+      postDashboardOpenMessage()
+    }
     return
   }
 
@@ -3326,6 +3334,13 @@ function ensureDashboardFrameLoaded(): void {
   dashboardFrame.src = chrome.runtime.getURL('src/options/options.html?embed=newtab-dashboard#dashboard')
   state.dashboardFrameLoaded = true
   scheduleDashboardFrameReadyTimeout()
+}
+
+function resetDashboardFrameReady(): void {
+  window.clearTimeout(dashboardFrameReadyTimeout)
+  dashboardFrameReadyTimeout = 0
+  state.dashboardFrameReady = false
+  state.dashboardFrameError = ''
 }
 
 function retryDashboardFrame(): void {
@@ -3384,6 +3399,17 @@ function renderDashboard(): void {
     ensureDashboardFrameLoaded()
     focusDashboardOverlay()
   }
+}
+
+function postDashboardOpenMessage(): void {
+  if (!dashboardFrame || !state.dashboardOpen || !state.dashboardFrameLoaded) {
+    return
+  }
+
+  dashboardFrame.contentWindow?.postMessage(
+    { type: NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE },
+    window.location.origin
+  )
 }
 
 function focusDashboardOverlay(): void {
