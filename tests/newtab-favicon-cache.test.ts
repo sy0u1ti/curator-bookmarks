@@ -2,12 +2,14 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   buildChromeFaviconUrl,
+  type FaviconAccentCache,
   formatFaviconAccentCssRgb,
   getFaviconAccentCacheEntry,
   normalizeFaviconAccentCache,
   removeFaviconAccentCacheEntry,
   selectFaviconAccentColor,
-  upsertFaviconAccentCacheEntry
+  upsertFaviconAccentCacheEntry,
+  upsertFaviconAccentCacheEntryInPlace
 } from '../src/newtab/favicon-cache.js'
 
 test('builds chrome favicon urls with page url, size and refresh token', () => {
@@ -80,6 +82,33 @@ test('returns cached favicon accent only for the same bookmark url', () => {
     { r: 20, g: 120, b: 220 }
   )
   assert.deepEqual(removeFaviconAccentCacheEntry(cache, '42'), {})
+})
+
+test('mutates favicon accent cache in place and prunes stale overflow without cloning', () => {
+  const cache: FaviconAccentCache = {
+    stale: {
+      url: 'https://stale.example/',
+      color: { r: 1, g: 2, b: 3 },
+      updatedAt: 100
+    },
+    keep: {
+      url: 'https://keep.example/',
+      color: { r: 4, g: 5, b: 6 },
+      updatedAt: 900
+    }
+  }
+
+  const changed = upsertFaviconAccentCacheEntryInPlace(
+    cache,
+    'newest',
+    'https://new.example/',
+    { r: 260, g: 12.4, b: -5 },
+    { now: 1000, maxAgeMs: 500, limit: 1 }
+  )
+
+  assert.equal(changed, true)
+  assert.deepEqual(Object.keys(cache), ['newest'])
+  assert.deepEqual(cache.newest.color, { r: 255, g: 12, b: 0 })
 })
 
 test('selects a saturated favicon accent color from image pixels', () => {

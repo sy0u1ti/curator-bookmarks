@@ -1090,6 +1090,19 @@ test('newtab folder candidate cards keep long text inside their frame', () => {
   assert.match(focusRules, /box-shadow:\s*0 0 0 2px rgba\(245,\s*245,\s*247,\s*0\.16\)/)
 })
 
+test('newtab adaptive layout batches rect reads and avoids reset-before-read reflow', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const offsetBoundsBody = script.match(/function updateAdaptiveSearchOffsetBounds\(\): void \{[\s\S]*?\n}\n\nfunction updateVerticalCenterCollisionOffset/)?.[0] || ''
+  const collisionBody = script.match(/function updateVerticalCenterCollisionOffset\(\): void \{[\s\S]*?\n}\n\nfunction createNewTabLayout/)?.[0] || ''
+
+  assert.match(offsetBoundsBody, /const slotRect = slot\.getBoundingClientRect\(\)/)
+  assert.doesNotMatch(offsetBoundsBody, /const searchRect = slot\.getBoundingClientRect\(\)/)
+  assert.match(offsetBoundsBody, /searchTop: slotRect\.top/)
+  assert.match(offsetBoundsBody, /searchBottom: slotRect\.bottom/)
+  assert.doesNotMatch(collisionBody, /setProperty\('--primary-collision-offset-y', '0px'\)[\s\S]*?getBoundingClientRect/)
+  assert.match(collisionBody, /page\.style\.removeProperty\('--primary-collision-offset-y'\)/)
+})
+
 test('newtab search and quick access stay scoped to selected source folders', () => {
   const script = readProjectFile('src/newtab/newtab.ts')
 
@@ -1126,7 +1139,13 @@ test('newtab avoids heavy startup and navigation work on the main path', () => {
   const iconLiveBody = getFunctionBody(script, 'applyIconSettingsLive')
 
   assert.match(script, /const FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET = 48/)
+  assert.match(script, /const FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS = 1500/)
   assert.match(script, /renderIndex < FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET/)
+  assert.match(script, /scheduleFaviconAccentExtraction\([\s\S]*?renderIndex < HIGH_PRIORITY_FAVICON_LIMIT/)
+  assert.match(script, /function scheduleFaviconAccentExtraction/)
+  assert.match(script, /if \(!icon\.isConnected \|\| !item\.isConnected\)/)
+  assert.match(script, /const requestIdle = window\.requestIdleCallback/)
+  assert.match(script, /requestIdle\(run, \{ timeout: FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS \}\)/)
   assert.match(refreshBody, /backgroundPreloadPromise/)
   assert.match(refreshBody, /backgroundMutationVersionAtStart === backgroundSettingsMutationVersion/)
   assert.doesNotMatch(refreshBody, /STORAGE_KEYS\.newTabBackgroundSettings/)

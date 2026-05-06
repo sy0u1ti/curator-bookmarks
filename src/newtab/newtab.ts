@@ -80,7 +80,7 @@ import {
   normalizeFaviconAccentCache,
   removeFaviconAccentCacheEntry,
   selectFaviconAccentColor,
-  upsertFaviconAccentCacheEntry,
+  upsertFaviconAccentCacheEntryInPlace,
   type FaviconAccentCache,
   type FaviconAccentColor
 } from './favicon-cache.js'
@@ -154,6 +154,7 @@ const FAVICON_ACCENT_SAVE_DEBOUNCE_MS = 900
 const EAGER_FAVICON_LIMIT = 40
 const HIGH_PRIORITY_FAVICON_LIMIT = 12
 const FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET = 48
+const FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS = 1500
 const BACKGROUND_MEDIA_DB_NAME = 'curatorNewTabBackgroundMedia'
 const BACKGROUND_MEDIA_STORE = 'media'
 const BACKGROUND_URL_CACHE_KEY = 'urlImage'
@@ -3604,7 +3605,6 @@ function updateAdaptiveSearchOffsetBounds(): void {
   const shellRect = root?.getBoundingClientRect()
   const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 1280
   const slotRect = slot.getBoundingClientRect()
-  const searchRect = slot.getBoundingClientRect()
   const previousModule = slot.previousElementSibling instanceof HTMLElement
     ? slot.previousElementSibling
     : null
@@ -3616,8 +3616,8 @@ function updateAdaptiveSearchOffsetBounds(): void {
     (document.documentElement.clientHeight || window.innerHeight || 0)
   const bounds = getAdaptiveSearchOffsetBounds({
     currentOffsetY: state.searchSettings.offsetY,
-    searchTop: searchRect.top,
-    searchBottom: searchRect.bottom,
+    searchTop: slotRect.top,
+    searchBottom: slotRect.bottom,
     viewportTop,
     viewportBottom,
     previousModuleBottom: previousModule?.getBoundingClientRect().bottom,
@@ -3658,7 +3658,6 @@ function updateVerticalCenterCollisionOffset(): void {
     return
   }
 
-  page.style.setProperty('--primary-collision-offset-y', '0px')
   const utilityRect = utilityStack.getBoundingClientRect()
   const contentRect = primaryContent.getBoundingClientRect()
   const offset = getVerticalCenterCollisionOffset({
@@ -3667,6 +3666,8 @@ function updateVerticalCenterCollisionOffset(): void {
   })
   if (offset > 0) {
     page.style.setProperty('--primary-collision-offset-y', `${offset}px`)
+  } else {
+    page.style.removeProperty('--primary-collision-offset-y')
   }
 }
 
@@ -5291,7 +5292,13 @@ function createBookmarkTile(
   })
   if (!customIcon && renderIndex < FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET) {
     icon.addEventListener('load', () => {
-      handleFaviconLoaded(icon, item, String(bookmark.id), url)
+      scheduleFaviconAccentExtraction(
+        icon,
+        item,
+        String(bookmark.id),
+        url,
+        renderIndex < HIGH_PRIORITY_FAVICON_LIMIT
+      )
     }, { once: true })
   }
 
@@ -5335,13 +5342,43 @@ function handleFaviconLoaded(
   }
 
   applyFaviconAccentToTile(item, color)
-  state.faviconAccentCache = upsertFaviconAccentCacheEntry(
+  const changed = upsertFaviconAccentCacheEntryInPlace(
     state.faviconAccentCache,
     bookmarkId,
     url,
     color
   )
-  scheduleFaviconAccentCacheSave()
+  if (changed) {
+    scheduleFaviconAccentCacheSave()
+  }
+}
+
+function scheduleFaviconAccentExtraction(
+  icon: HTMLImageElement,
+  item: HTMLElement,
+  bookmarkId: string,
+  url: string,
+  highPriority: boolean
+): void {
+  const run = () => {
+    if (!icon.isConnected || !item.isConnected) {
+      return
+    }
+    handleFaviconLoaded(icon, item, bookmarkId, url)
+  }
+
+  if (highPriority) {
+    window.requestAnimationFrame(run)
+    return
+  }
+
+  const requestIdle = window.requestIdleCallback
+  if (typeof requestIdle === 'function') {
+    requestIdle(run, { timeout: FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS })
+    return
+  }
+
+  window.setTimeout(run, 0)
 }
 
 function extractFaviconAccentColor(icon: HTMLImageElement): FaviconAccentColor | null {

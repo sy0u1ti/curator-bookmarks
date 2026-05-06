@@ -80,6 +80,19 @@ test('auto analyze queue failure schedules wake from remaining queue state', () 
   assert.doesNotMatch(failureBody, /scheduleAutoAnalyzeQueueAlarm\(AUTO_ANALYZE_QUEUE_RETRY_MS\)/)
 })
 
+test('auto classify suppression map prunes expired entries without changing active suppressions', () => {
+  const source = readProjectFile('src/service-worker/service-worker.ts')
+  const suppressBody = source.match(/function suppressAutoClassifyUrl[\s\S]*?\n}\n\nfunction isAutoClassifyUrlSuppressed/)?.[0] || ''
+  const readBody = source.match(/function isAutoClassifyUrlSuppressed[\s\S]*?\n}\n\nfunction pruneSuppressedAutoBookmarkUrls/)?.[0] || ''
+  const pruneBody = source.match(/function pruneSuppressedAutoBookmarkUrls[\s\S]*?\n}\n\nfunction normalizeAutoUrl/)?.[0] || ''
+
+  assert.match(suppressBody, /pruneSuppressedAutoBookmarkUrls\(now\)/)
+  assert.match(readBody, /pruneSuppressedAutoBookmarkUrls\(now\)/)
+  assert.match(pruneBody, /expiresAt <= now/)
+  assert.doesNotMatch(source, /SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT/)
+  assert.doesNotMatch(pruneBody, /suppressedAutoBookmarkUrls\.size >/)
+})
+
 test('availability background navigation closes at DOM readiness before page preload warnings', () => {
   const source = readProjectFile('src/service-worker/service-worker.ts')
   const domReadyBody = source.match(

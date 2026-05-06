@@ -194,6 +194,29 @@ test('popup full text snapshot warmup is triggered by real searches instead of s
   assert.match(popupSource, /tagIndex: state\.searchTagIndex/)
 })
 
+test('popup search caches expire and filtered bookmark arrays release when search is cleared', () => {
+  assert.match(popupStateSource, /const SEARCH_CACHE_TTL_MS = 5 \* 60 \* 1000/)
+  assert.match(popupStateSource, /searchCache: createMemoryCache<string, PopupSearchResult\[\]>\(\{[\s\S]*?ttlMs: SEARCH_CACHE_TTL_MS/)
+  assert.match(popupStateSource, /naturalSearchPlanCache: createMemoryCache<string, NaturalSearchPlan>\(\{[\s\S]*?ttlMs: SEARCH_CACHE_TTL_MS/)
+  assert.match(
+    popupSource,
+    /if \(!normalizedQuery\) \{[\s\S]*?state\.filteredBookmarksCacheKey = ''[\s\S]*?state\.filteredBookmarksCache = \[\][\s\S]*?abortNaturalSearchRequest\(\)[\s\S]*?return/
+  )
+})
+
+test('popup smart loading progress uses transform without layout reads', () => {
+  assert.match(popupSource, /style="--smart-progress-scale: \$\{startProgress \/ 100\}"/)
+  assert.match(popupSource, /function renderSmartLoadingState\(\)/)
+  assert.match(popupSource, /const existingCard = dom\.smartClassifier\.querySelector<HTMLElement>\('\.smart-loading-card'\)/)
+  assert.match(popupSource, /progressBar\.dataset\.smartProgressTarget = String\(progress\)/)
+  assert.match(popupSource, /progressBar\.style\.setProperty\('--smart-progress-scale', String\(targetProgress \/ 100\)\)/)
+  assert.doesNotMatch(popupSource, /function readSmartProgressPercent/)
+  assert.doesNotMatch(popupSource, /getBoundingClientRect\(\)\.width \/ trackWidth/)
+  assert.match(popupCss, /transform: scaleX\(var\(--smart-progress-scale, 0\)\)/)
+  assert.match(popupCss, /will-change: transform/)
+  assert.doesNotMatch(popupCss, /transition: width 760ms/)
+})
+
 test('popup folder pickers expose option and treeitem semantics', () => {
   assert.match(popupHtml, /id="folder-breadcrumbs"[^>]+aria-label="当前文件夹路径"/)
   const filterSearchInput = popupHtml.match(/<input[\s\S]*?id="filter-search-input"[\s\S]*?>/)?.[0] || ''

@@ -7,6 +7,7 @@ import type { PopupSearchIndexSnapshotState } from './search-index.js'
 import type { PopupSearchBookmark, PopupSearchResult } from './search.js'
 
 const SEARCH_CACHE_LIMIT = 40
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000
 
 export interface PopupSmartRecommendation {
   id: string
@@ -165,6 +166,7 @@ export const state: PopupState = {
   searchPending: false,
   searchCache: createMemoryCache<string, PopupSearchResult[]>({
     maxEntries: SEARCH_CACHE_LIMIT,
+    ttlMs: SEARCH_CACHE_TTL_MS,
     version: 'popup-search-v1'
   }),
   savedSearches: null,
@@ -183,6 +185,7 @@ export const state: PopupState = {
   naturalSearchAbortController: null,
   naturalSearchPlanCache: createMemoryCache<string, NaturalSearchPlan>({
     maxEntries: SEARCH_CACHE_LIMIT,
+    ttlMs: SEARCH_CACHE_TTL_MS,
     version: 'popup-natural-search-plan-v1'
   }),
   searchHighlightQuery: '',

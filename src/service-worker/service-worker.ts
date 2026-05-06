@@ -2429,7 +2429,10 @@ function suppressAutoClassifyUrl(url: string): void {
   if (!normalizedUrl) {
     return
   }
-  suppressedAutoBookmarkUrls.set(normalizedUrl, Date.now() + AUTO_CLASSIFY_SUPPRESS_MS)
+  const now = Date.now()
+  pruneSuppressedAutoBookmarkUrls(now)
+  suppressedAutoBookmarkUrls.set(normalizedUrl, now + AUTO_CLASSIFY_SUPPRESS_MS)
+  pruneSuppressedAutoBookmarkUrls(now)
 }
 
 function isAutoClassifyUrlSuppressed(url: string): boolean {
@@ -2439,12 +2442,7 @@ function isAutoClassifyUrlSuppressed(url: string): boolean {
   }
 
   const now = Date.now()
-  for (const [key, expiresAt] of suppressedAutoBookmarkUrls.entries()) {
-    if (expiresAt <= now) {
-      suppressedAutoBookmarkUrls.delete(key)
-    }
-  }
-
+  pruneSuppressedAutoBookmarkUrls(now)
   const expiresAt = suppressedAutoBookmarkUrls.get(normalizedUrl)
   if (!expiresAt || expiresAt <= now) {
     suppressedAutoBookmarkUrls.delete(normalizedUrl)
@@ -2453,6 +2451,14 @@ function isAutoClassifyUrlSuppressed(url: string): boolean {
 
   suppressedAutoBookmarkUrls.delete(normalizedUrl)
   return true
+}
+
+function pruneSuppressedAutoBookmarkUrls(now = Date.now()): void {
+  for (const [key, expiresAt] of suppressedAutoBookmarkUrls.entries()) {
+    if (expiresAt <= now) {
+      suppressedAutoBookmarkUrls.delete(key)
+    }
+  }
 }
 
 function normalizeAutoUrl(url: string): string {

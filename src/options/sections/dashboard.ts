@@ -3757,9 +3757,35 @@ function scheduleDashboardFaviconWarmupRender(): void {
 }
 
 function getDashboardFaviconWarmupKey(items: DashboardItem[]): string {
-  return items
-    .map((item) => `${String(item.id)}\u0000${String(item.url || '')}`)
-    .join('\u0001')
+  if (!items.length) {
+    return ''
+  }
+
+  let hash = 2166136261
+  for (const item of items) {
+    hash = updateDashboardFaviconWarmupHash(hash, String(item.id || ''))
+    hash = updateDashboardFaviconWarmupHash(hash, String(item.url || ''))
+  }
+
+  const first = items[0]
+  const last = items[items.length - 1]
+  return [
+    items.length,
+    String(first.id || ''),
+    String(first.url || ''),
+    String(last.id || ''),
+    String(last.url || ''),
+    hash >>> 0
+  ].join('\u0000')
+}
+
+function updateDashboardFaviconWarmupHash(seed: number, value: string): number {
+  let hash = seed >>> 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
 }
 
 function getDashboardFaviconCacheKey(pageUrl: string): string {

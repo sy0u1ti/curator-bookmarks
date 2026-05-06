@@ -324,6 +324,18 @@ test('dashboard favicon warmup preloads full bookmark set with bounded concurren
   })
 })
 
+test('dashboard favicon warmup key avoids joining every item into a large string', () => {
+  const source = readProjectFile('src/options/sections/dashboard.ts')
+  const keyBody = source.match(/function getDashboardFaviconWarmupKey[\s\S]*?\n}\n\nfunction updateDashboardFaviconWarmupHash/)?.[0] || ''
+
+  assert.match(keyBody, /let hash = 2166136261/)
+  assert.match(keyBody, /updateDashboardFaviconWarmupHash\(hash, String\(item\.id \|\| ''\)\)/)
+  assert.match(keyBody, /items\.length/)
+  assert.match(source, /function updateDashboardFaviconWarmupHash/)
+  assert.doesNotMatch(keyBody, /\.map\(\(item\)/)
+  assert.doesNotMatch(keyBody, /\.join\('\\u0001'\)/)
+})
+
 test('dashboard cards expose keyboard-triggerable move and delete actions', () => {
   const dashboardSource = readProjectFile('src/options/sections/dashboard.ts')
 

@@ -1052,6 +1052,8 @@ function runSearch() {
     state.searchPending = false
     state.naturalSearchPending = false
     state.naturalSearchPlan = null
+    state.filteredBookmarksCacheKey = ''
+    state.filteredBookmarksCache = []
     abortNaturalSearchRequest()
     return
   }
@@ -1713,8 +1715,7 @@ function renderSmartClassifier() {
   }
 
   if (state.smartStatus === 'loading') {
-    const currentProgress = readSmartProgressPercent()
-    dom.smartClassifier.innerHTML = renderSmartLoadingCard(currentProgress)
+    renderSmartLoadingState()
     animateSmartProgress()
     return
   }
@@ -1902,13 +1903,37 @@ function renderSmartLoadingCard(currentProgress = state.smartProgressPercent) {
             <span
               class="smart-progress-bar"
               data-smart-progress-target="${escapeAttr(String(progress))}"
-              style="width: ${startProgress}%"
+              style="--smart-progress-scale: ${startProgress / 100}"
             ></span>
           </div>
         </div>
       </div>
     </article>
   `
+}
+
+function renderSmartLoadingState() {
+  const existingCard = dom.smartClassifier.querySelector<HTMLElement>('.smart-loading-card')
+  if (!existingCard) {
+    dom.smartClassifier.innerHTML = renderSmartLoadingCard(state.smartProgressPercent)
+    return
+  }
+
+  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
+  const progress = getSmartProgressTarget()
+  const label = existingCard.querySelector<HTMLElement>('.smart-loading-copy span')
+  const stepLabel = existingCard.querySelector<HTMLElement>('.smart-loading-copy small')
+  const progressBar = existingCard.querySelector<HTMLElement>('.smart-progress-bar')
+
+  if (label) {
+    label.textContent = getSmartLoadingLabel()
+  }
+  if (stepLabel) {
+    stepLabel.textContent = `${step}/${SMART_LOADING_STEP_COUNT}`
+  }
+  if (progressBar) {
+    progressBar.dataset.smartProgressTarget = String(progress)
+  }
 }
 
 function animateSmartProgress() {
@@ -1923,24 +1948,9 @@ function animateSmartProgress() {
   )
 
   window.requestAnimationFrame(() => {
-    progressBar.style.width = `${targetProgress}%`
+    progressBar.style.setProperty('--smart-progress-scale', String(targetProgress / 100))
     state.smartProgressPercent = targetProgress
   })
-}
-
-function readSmartProgressPercent() {
-  const track = dom.smartClassifier.querySelector('.smart-progress-track')
-  const progressBar = dom.smartClassifier.querySelector('.smart-progress-bar')
-  if (!track || !progressBar) {
-    return state.smartProgressPercent
-  }
-
-  const trackWidth = track.getBoundingClientRect().width
-  if (!trackWidth) {
-    return state.smartProgressPercent
-  }
-
-  return Math.max(0, Math.min((progressBar.getBoundingClientRect().width / trackWidth) * 100, 100))
 }
 
 function renderSmartResultCard() {
