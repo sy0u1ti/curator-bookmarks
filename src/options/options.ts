@@ -32,6 +32,7 @@ import {
 import {
   buildBookmarkTagExport,
   clearBookmarkTagIndex,
+  getEffectiveBookmarkTags,
   loadBookmarkTagIndex,
   mergeBookmarkTagImport,
   normalizeBookmarkTags,
@@ -238,6 +239,7 @@ import {
   handleDashboardDocumentClick,
   handleDashboardDocumentFocusIn,
   handleDashboardError,
+  handleDashboardLoad,
   handleDashboardInput,
   handleDashboardKeydown,
   handleDashboardPointerCancel,
@@ -251,12 +253,17 @@ import {
   isDashboardViewReady,
   prepareDashboardSectionEntry,
   getSingleDashboardMoveBookmark,
-  getDashboardFaviconFallbackUrl,
+  hydrateDashboardFaviconCache,
   moveSingleDashboardBookmark,
   moveSelectedDashboardBookmarks,
   removeDashboardSelectionIds,
   renderDashboardSection
 } from './sections/dashboard.js'
+import {
+  deleteTagFromIndex,
+  renderTagManagementSection,
+  renameTagInIndex
+} from './sections/tag-management.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -365,7 +372,6 @@ const dashboardCallbacks = {
   regenerateAiTags: regenerateDashboardAiTagsForBookmark,
   openMoveModal,
   closeMoveModal,
-  getFaviconFallbackUrl: getDashboardFaviconFallbackUrl,
   exitDashboard,
   confirm: requestConfirmation,
   recycleCallbacks
@@ -431,7 +437,8 @@ async function hydratePersistentState() {
       STORAGE_KEYS.folderCleanupState,
       STORAGE_KEYS.inboxSettings,
       STORAGE_KEYS.contentSnapshotSettings,
-      STORAGE_KEYS.contentSnapshotIndex
+      STORAGE_KEYS.contentSnapshotIndex,
+      STORAGE_KEYS.dashboardFaviconCache
     ])
 
     managerState.ignoreRules = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
@@ -448,6 +455,7 @@ async function hydratePersistentState() {
     contentSnapshotState.searchTextMap = buildContentSnapshotSearchMap(contentSnapshotState.index, {
       includeFullText: false
     })
+    hydrateDashboardFaviconCache(stored[STORAGE_KEYS.dashboardFaviconCache])
     contentSnapshotState.searchTextMapIncludesFullText = false
     contentSnapshotState.searchTextMapLoadingFullText = false
     resetContentSnapshotFullTextSearchMapRetry()
@@ -595,6 +603,10 @@ function syncPageSection() {
 
   if (key === 'general') {
     renderAiNamingSection()
+  }
+
+  if (key === 'tags') {
+    renderTagManagementSectionFromState()
   }
 
   scrollToSectionAnchor()
@@ -797,6 +809,7 @@ function bindEvents() {
   dom.dashboardPanel?.addEventListener('input', handleDashboardInput)
   dom.dashboardPanel?.addEventListener('change', handleDashboardInput)
   dom.dashboardPanel?.addEventListener('keydown', handleDashboardKeydown)
+  dom.dashboardPanel?.addEventListener('load', handleDashboardLoad, true)
   dom.dashboardPanel?.addEventListener('error', (event) => handleDashboardError(event, dashboardCallbacks), true)
   dom.dashboardPanel?.addEventListener('pointerdown', handleDashboardPointerDown)
   dom.dashboardPanel?.addEventListener('pointerover', handleDashboardTagPointerOver)
@@ -842,6 +855,16 @@ function bindEvents() {
   dom.backupRestoreTags?.addEventListener('click', () => handleFullBackupRestore('tagsOnly'))
   dom.backupRestoreNewTab?.addEventListener('click', () => handleFullBackupRestore('newTabOnly'))
   dom.backupRestoreSafeFull?.addEventListener('click', () => handleFullBackupRestore('safeFull'))
+  dom.tagManagementRefresh?.addEventListener('click', () => {
+    void refreshTagManagementData()
+  })
+  dom.tagManagementRename?.addEventListener('click', () => {
+    void handleTagManagementRename()
+  })
+  dom.tagManagementDelete?.addEventListener('click', () => {
+    void handleTagManagementDelete()
+  })
+  dom.tagManagementResults?.addEventListener('click', handleTagManagementResultsClick)
   dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
@@ -2506,6 +2529,11 @@ function renderActiveOptionsSection() {
     return
   }
 
+  if (activeSection === 'tags') {
+    renderTagManagementSectionFromState()
+    return
+  }
+
   if (activeSection === 'redirects') {
     renderRedirectSection(redirectsCallbacks)
     return
@@ -3937,6 +3965,118 @@ async function handleBookmarkTagClear() {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据清空失败。'
     renderActiveOptionsSection()
   }
+}
+
+function renderTagManagementSectionFromState(status = aiNamingState.tagDataStatus || '') {
+  renderTagManagementSection({
+    index: normalizeBookmarkTagIndex(aiNamingState.tagIndex),
+    bookmarks: availabilityState.allBookmarks,
+    status,
+    loading: availabilityState.catalogLoading
+  })
+}
+
+async function refreshTagManagementData() {
+  aiNamingState.tagDataStatus = '正在刷新标签统计...'
+  renderTagManagementSectionFromState()
+
+  try {
+    aiNamingState.tagIndex = await loadBookmarkTagIndex()
+    if (!availabilityState.allBookmarks.length) {
+      await hydrateAvailabilityCatalog({ preserveResults: true, analyzeFolderCleanup: false })
+    }
+    aiNamingState.tagDataStatus = '标签统计已刷新。'
+  } catch (error) {
+    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签统计刷新失败。'
+  } finally {
+    renderTagManagementSectionFromState()
+  }
+}
+
+async function handleTagManagementRename() {
+  const sourceTag = String(dom.tagManagementRenameSource?.value || '').trim()
+  const targetTag = String(dom.tagManagementRenameTarget?.value || '').trim()
+
+  try {
+    const currentIndex = normalizeBookmarkTagIndex(aiNamingState.tagIndex)
+    const nextIndex = renameTagInIndex(currentIndex, sourceTag, targetTag)
+    const changedCount = countRecordsWithEffectiveTag(currentIndex, sourceTag)
+    const savedIndex = await saveBookmarkTagIndex(nextIndex)
+    aiNamingState.tagIndex = savedIndex
+    aiNamingState.tagDataStatus = `已将 ${changedCount} 条书签中的「${sourceTag}」重命名为「${targetTag}」。`
+    if (dom.tagManagementRenameSource) {
+      dom.tagManagementRenameSource.value = targetTag
+    }
+    if (dom.tagManagementRenameTarget) {
+      dom.tagManagementRenameTarget.value = ''
+    }
+  } catch (error) {
+    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签重命名失败。'
+  } finally {
+    renderTagManagementSectionFromState()
+  }
+}
+
+async function handleTagManagementDelete() {
+  const sourceTag = String(dom.tagManagementRenameSource?.value || '').trim()
+  const currentIndex = normalizeBookmarkTagIndex(aiNamingState.tagIndex)
+  const affectedCount = countRecordsWithEffectiveTag(currentIndex, sourceTag)
+  if (!affectedCount) {
+    aiNamingState.tagDataStatus = sourceTag ? `没有找到标签「${sourceTag}」。` : '请输入要删除的标签。'
+    renderTagManagementSectionFromState()
+    return
+  }
+
+  const confirmed = await requestConfirmation({
+    title: `删除标签「${sourceTag}」？`,
+    copy: `将从 ${affectedCount} 条书签的本地标签数据中移除此标签，不会删除 Chrome 书签。建议先导出标签数据或完整备份。`,
+    confirmLabel: '删除标签',
+    cancelLabel: '取消',
+    tone: 'danger',
+    label: 'Delete tag'
+  })
+  if (!confirmed) {
+    return
+  }
+
+  try {
+    const nextIndex = deleteTagFromIndex(currentIndex, sourceTag)
+    const savedIndex = await saveBookmarkTagIndex(nextIndex)
+    aiNamingState.tagIndex = savedIndex
+    aiNamingState.tagDataStatus = `已从 ${affectedCount} 条书签中删除标签「${sourceTag}」。`
+    if (dom.tagManagementRenameSource) {
+      dom.tagManagementRenameSource.value = ''
+    }
+  } catch (error) {
+    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签删除失败。'
+  } finally {
+    renderTagManagementSectionFromState()
+  }
+}
+
+function handleTagManagementResultsClick(event) {
+  if (!(event.target instanceof Element)) {
+    return
+  }
+
+  const button = event.target.closest('[data-tag-fill]') as HTMLElement | null
+  if (!button || !dom.tagManagementRenameSource) {
+    return
+  }
+
+  dom.tagManagementRenameSource.value = String(button.getAttribute('data-tag-fill') || '')
+  dom.tagManagementRenameTarget?.select?.()
+}
+
+function countRecordsWithEffectiveTag(index: BookmarkTagIndex, sourceTag: string): number {
+  const source = normalizeBookmarkTags([sourceTag], 1)[0] || ''
+  if (!source) {
+    return 0
+  }
+  const sourceKey = source.toLowerCase()
+  return Object.values(normalizeBookmarkTagIndex(index).records).filter((record) => {
+    return getEffectiveBookmarkTags(record).some((tag) => tag.toLowerCase() === sourceKey)
+  }).length
 }
 
 function renderBackupRestoreSection() {

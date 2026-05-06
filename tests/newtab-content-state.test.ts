@@ -356,8 +356,9 @@ test('newtab modernized bookmark modules are visible and settings-controlled', (
   const script = readProjectFile('src/newtab/newtab.ts')
   const css = readProjectFile('src/newtab/newtab.css')
 
-  assert.match(html, /id="settings-workspaces-title"/)
-  assert.match(html, /id="workspace-settings-list"/)
+  assert.match(html, /id="settings-speed-dial-title"/)
+  assert.doesNotMatch(html, /id="settings-workspaces-title"/)
+  assert.doesNotMatch(html, /id="workspace-settings-list"/)
   assert.match(html, /id="newtab-speed-dial-setting"/)
   assert.match(html, /id="newtab-health-setting"/)
   assert.doesNotMatch(html, /模块与隐私/)
@@ -365,12 +366,12 @@ test('newtab modernized bookmark modules are visible and settings-controlled', (
   assert.doesNotMatch(html, /隐私说明/)
   assert.match(script, /STORAGE_KEYS\.newTabWorkspaceSettings/)
   assert.match(script, /STORAGE_KEYS\.newTabModuleSettings/)
-  assert.match(script, /createWorkspaceSwitcher\(\)/)
+  assert.doesNotMatch(script, /createWorkspaceSwitcher\(\)/)
   assert.match(script, /createSpeedDialPanel\(\)/)
   assert.match(script, /createBookmarkHealthPanel\(\)/)
-  assert.match(script, /createCommandPaletteOverlay\(\)/)
   assert.match(css, /\.newtab-speed-dial,[\s\S]*?\.newtab-bookmark-health\s*\{/)
-  assert.match(css, /\.newtab-command-palette\s*\{/)
+  assert.doesNotMatch(script, /createCommandPaletteOverlay\(\)/)
+  assert.doesNotMatch(css, /\.newtab-command-palette\s*\{/)
   assert.doesNotMatch(script, /createCommandHintBar\(\)/)
 })
 
@@ -965,8 +966,10 @@ test('newtab compact viewport preserves dashboard trigger label while clearing t
   assert.match(compactRule, /\.dashboard-trigger\s*\{[\s\S]*?min-width:\s*112px[\s\S]*?padding:\s*0\s+10px/)
   assert.match(compactRule, /\.dashboard-trigger span\s*\{[\s\S]*?font-size:\s*11px/)
   assert.match(compactRule, /\.dashboard-shortcut-hint\s*\{[\s\S]*?top:\s*58px[\s\S]*?max-width:\s*min\(226px,\s*calc\(100vw - 24px\)\)/)
-  assert.doesNotMatch(compactRule, /\.dashboard-trigger\s*\{[\s\S]*?width:\s*40px/)
-  assert.doesNotMatch(compactRule, /\.dashboard-trigger span\s*\{[\s\S]*?clip-path:\s*inset\(50%\)/)
+  const compactDashboardTriggerRule = compactRule.match(/\.dashboard-trigger\s*\{[\s\S]*?\}/)?.[0] || ''
+  const compactDashboardTriggerSpanRule = compactRule.match(/\.dashboard-trigger span\s*\{[\s\S]*?\}/)?.[0] || ''
+  assert.doesNotMatch(compactDashboardTriggerRule, /width:\s*40px/)
+  assert.doesNotMatch(compactDashboardTriggerSpanRule, /clip-path:\s*inset\(50%\)/)
 })
 
 test('newtab bookmark tiles match the frosted overview card surface', () => {
@@ -1125,8 +1128,10 @@ test('newtab avoids heavy startup and navigation work on the main path', () => {
   assert.match(script, /const FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET = 48/)
   assert.match(script, /renderIndex < FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET/)
   assert.match(refreshBody, /backgroundPreloadPromise/)
+  assert.match(refreshBody, /backgroundMutationVersionAtStart === backgroundSettingsMutationVersion/)
   assert.doesNotMatch(refreshBody, /STORAGE_KEYS\.newTabBackgroundSettings/)
-  assert.match(preloadBody, /return state\.backgroundSettings/)
+  assert.match(preloadBody, /backgroundMutationVersionAtStart === backgroundSettingsMutationVersion/)
+  assert.match(preloadBody, /return nextSettings/)
   assert.doesNotMatch(preloadBody, /await applyBackgroundSettings\(\)/)
   assert.match(snapshotBody, /fullText:\s*undefined/)
   assert.doesNotMatch(snapshotBody, /normalizeNewTabSnapshotText\(source\.fullText\)/)
