@@ -273,6 +273,7 @@ async function closeWithExitMotion(
 const SEARCH_SUGGESTION_LIMIT = 6
 const SEARCH_SUGGESTION_DEBOUNCE_MS = 80
 const SEARCH_SUGGESTION_CACHE_LIMIT = 24
+const SEARCH_SUGGESTION_CACHE_TTL_MS = 2 * 60 * 1000
 
 function getBookmarkTree(): Promise<chrome.bookmarks.BookmarkTreeNode[]> {
   return new Promise((resolve, reject) => {
@@ -548,6 +549,8 @@ document.addEventListener('DOMContentLoaded', () => {
   void backgroundPreloadPromise
   void refreshNewTab()
 })
+
+window.addEventListener('pagehide', cleanupNewTabRuntime)
 
 function bindEvents(): void {
   bindGeneralSettingsEvents()
@@ -4181,16 +4184,19 @@ function syncSearchInputActions(
   submitButton.setAttribute('aria-disabled', String(!hasValue))
 }
 
-const searchSuggestionCache = new Map<string, Promise<SearchBookmarkSuggestion[]>>()
-const naturalSearchSuggestionCache = new Map<string, Promise<SearchBookmarkSuggestion[]>>()
+interface SearchSuggestionCacheEntry {
+  promise: Promise<SearchBookmarkSuggestion[]>
+  updatedAt: number
+}
+
+const searchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
+const naturalSearchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
 
 function getSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSuggestion[]> {
   const cacheKey = getSearchSuggestionCacheKey(query)
-  const cached = searchSuggestionCache.get(cacheKey)
+  const cached = getSearchSuggestionCacheEntry(searchSuggestionCache, cacheKey)
   if (cached) {
-    searchSuggestionCache.delete(cacheKey)
-    searchSuggestionCache.set(cacheKey, cached)
-    return cached
+    return cached.promise
   }
 
   const suggestionsPromise = getPopupSearchBookmarkSuggestionsFromIndex(
@@ -4198,24 +4204,15 @@ function getSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSugg
     state.preparedSearchIndex,
     SEARCH_SUGGESTION_LIMIT
   )
-  searchSuggestionCache.set(cacheKey, suggestionsPromise)
-  while (searchSuggestionCache.size > SEARCH_SUGGESTION_CACHE_LIMIT) {
-    const oldestKey = searchSuggestionCache.keys().next().value
-    if (!oldestKey) {
-      break
-    }
-    searchSuggestionCache.delete(oldestKey)
-  }
+  setSearchSuggestionCacheEntry(searchSuggestionCache, cacheKey, suggestionsPromise)
   return suggestionsPromise
 }
 
 function getNaturalSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSuggestion[]> {
   const cacheKey = getSearchSuggestionCacheKey(query)
-  const cached = naturalSearchSuggestionCache.get(cacheKey)
+  const cached = getSearchSuggestionCacheEntry(naturalSearchSuggestionCache, cacheKey)
   if (cached) {
-    naturalSearchSuggestionCache.delete(cacheKey)
-    naturalSearchSuggestionCache.set(cacheKey, cached)
-    return cached
+    return cached.promise
   }
 
   const suggestionsPromise = getNaturalSearchBookmarkSuggestionsFromIndex(
@@ -4223,15 +4220,64 @@ function getNaturalSearchBookmarkSuggestions(query: string): Promise<SearchBookm
     state.preparedSearchIndex,
     SEARCH_SUGGESTION_LIMIT
   )
-  naturalSearchSuggestionCache.set(cacheKey, suggestionsPromise)
-  while (naturalSearchSuggestionCache.size > SEARCH_SUGGESTION_CACHE_LIMIT) {
-    const oldestKey = naturalSearchSuggestionCache.keys().next().value
+  setSearchSuggestionCacheEntry(naturalSearchSuggestionCache, cacheKey, suggestionsPromise)
+  return suggestionsPromise
+}
+
+function getSearchSuggestionCacheEntry(
+  cache: Map<string, SearchSuggestionCacheEntry>,
+  cacheKey: string,
+  now = Date.now()
+): SearchSuggestionCacheEntry | null {
+  const cached = cache.get(cacheKey)
+  if (!cached) {
+    return null
+  }
+
+  if (now - cached.updatedAt > SEARCH_SUGGESTION_CACHE_TTL_MS) {
+    cache.delete(cacheKey)
+    return null
+  }
+
+  cache.delete(cacheKey)
+  cache.set(cacheKey, cached)
+  return cached
+}
+
+function setSearchSuggestionCacheEntry(
+  cache: Map<string, SearchSuggestionCacheEntry>,
+  cacheKey: string,
+  promise: Promise<SearchBookmarkSuggestion[]>
+): void {
+  cache.set(cacheKey, {
+    promise,
+    updatedAt: Date.now()
+  })
+  promise.catch(() => {
+    if (cache.get(cacheKey)?.promise === promise) {
+      cache.delete(cacheKey)
+    }
+  })
+  pruneSearchSuggestionCache(cache)
+}
+
+function pruneSearchSuggestionCache(
+  cache: Map<string, SearchSuggestionCacheEntry>,
+  now = Date.now()
+): void {
+  for (const [cacheKey, entry] of cache.entries()) {
+    if (now - entry.updatedAt > SEARCH_SUGGESTION_CACHE_TTL_MS) {
+      cache.delete(cacheKey)
+    }
+  }
+
+  while (cache.size > SEARCH_SUGGESTION_CACHE_LIMIT) {
+    const oldestKey = cache.keys().next().value
     if (!oldestKey) {
       break
     }
-    naturalSearchSuggestionCache.delete(oldestKey)
+    cache.delete(oldestKey)
   }
-  return suggestionsPromise
 }
 
 function shouldLoadNaturalSearchSuggestions(
@@ -5426,6 +5472,53 @@ function scheduleFaviconAccentCacheSave(): void {
       console.warn('新标签页网站图标色彩缓存保存失败。', error)
     })
   }, FAVICON_ACCENT_SAVE_DEBOUNCE_MS)
+}
+
+function cleanupNewTabRuntime(): void {
+  window.clearTimeout(clockTimer)
+  clockTimer = 0
+  window.clearTimeout(searchSettingsSaveTimer)
+  searchSettingsSaveTimer = 0
+  window.clearTimeout(searchSettingsSettleTimer)
+  searchSettingsSettleTimer = 0
+  window.clearTimeout(iconSettingsSaveTimer)
+  iconSettingsSaveTimer = 0
+  window.clearTimeout(timeSettingsSaveTimer)
+  timeSettingsSaveTimer = 0
+  window.clearTimeout(settingsSaveStatusTimer)
+  settingsSaveStatusTimer = 0
+  window.clearTimeout(folderReorderStatusTimer)
+  folderReorderStatusTimer = 0
+  window.clearTimeout(bookmarkChangeRefreshTimer)
+  bookmarkChangeRefreshTimer = 0
+  window.clearTimeout(dashboardFrameReadyTimeout)
+  dashboardFrameReadyTimeout = 0
+  window.clearTimeout(state.dragLongPressTimer)
+  state.dragLongPressTimer = 0
+  window.clearTimeout(state.folderDragLongPressTimer)
+  state.folderDragLongPressTimer = 0
+  window.cancelAnimationFrame(resizeLayoutFrame)
+  resizeLayoutFrame = 0
+  window.cancelAnimationFrame(verticalCenterCollisionFrame)
+  verticalCenterCollisionFrame = 0
+  window.cancelAnimationFrame(deferredRenderFrame)
+  deferredRenderFrame = 0
+  removeBookmarkDragGhost()
+  removeFolderDragGhost()
+  setActiveBackgroundObjectUrl('')
+  clearVideoBackground()
+  searchSuggestionCache.clear()
+  naturalSearchSuggestionCache.clear()
+  if (faviconAccentSaveTimer) {
+    window.clearTimeout(faviconAccentSaveTimer)
+    faviconAccentSaveTimer = 0
+    void saveFaviconAccentCache().catch(() => {})
+  }
+  if (dashboardFrame) {
+    dashboardFrame.removeAttribute('src')
+    state.dashboardFrameLoaded = false
+    state.dashboardFrameReady = false
+  }
 }
 
 function bindBookmarkNavigation(

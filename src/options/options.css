@@ -2823,7 +2823,7 @@ a {
   transform: translate3d(-50%, -50%, 0);
   transition: opacity var(--ease-standard);
   animation: dashboard-preview-enter var(--motion-fast) var(--motion-ease-out) both;
-  will-change: left, top;
+  will-change: transform;
 }
 
 .dashboard-drag-overlay.is-closing .dashboard-drag-preview {

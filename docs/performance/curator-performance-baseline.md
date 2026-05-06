@@ -8,7 +8,7 @@ This baseline was captured before applying the performance changes on the requir
 
 - Worktree: `/mnt/g/coding/worktrees/curator-performance-optimization`
 - Branch: `agent/curator-performance-optimization`
-- Base commit: `a4db1f4`
+- Base commit: `76e9ed9`
 - Package manager: `npm` with `package-lock.json`
 - Framework: vanilla TypeScript DOM code
 - Build tool: Vite 6.4.2 with `@crxjs/vite-plugin`
@@ -24,7 +24,7 @@ This baseline was captured before applying the performance changes on the requir
 
 ## Initial Quality Gates
 
-Initial commands run on the fresh worktree:
+Initial commands run on the fresh worktree before the performance changes:
 
 - `npm ci`: passed
 - `npm run typecheck`: passed
@@ -32,6 +32,12 @@ Initial commands run on the fresh worktree:
 - `npm run build`: passed
 
 The initial skipped tests were build-artifact checks that depend on `dist/` being present during the test run.
+
+The first baseline pass was captured while the worktree was based on `a4db1f4`
+(`v1.4.27`). The branch was later rebased onto `76e9ed9`. The source-relevant
+diff between those two commits is limited to `.gitignore` and removal of
+`Work documentation.md`, so the extension source, package metadata and build
+inputs used by this baseline are unchanged.
 
 ## Initial Build Artifact Snapshot
 

@@ -58,15 +58,19 @@ test('popup current-page matching uses the shared bookmark save url normalizer',
 
   assert.match(source, /from '\.\.\/shared\/bookmark-save-url\.js'/)
   assert.match(source, /const normalizedCurrentUrl = normalizeBookmarkSaveUrl\(currentUrl\)/)
-  assert.match(source, /bookmark\.duplicateKey === normalizedCurrentUrl/)
+  assert.match(source, /state\.bookmarkDuplicateKeyMap\.get\(normalizedCurrentUrl\)/)
+  assert.match(source, /function buildPopupBookmarkDuplicateKeyMap/)
+  assert.doesNotMatch(source, /state\.allBookmarks\.find\(\(bookmark\) => bookmark\.duplicateKey === normalizedCurrentUrl\)/)
 })
 
 test('auto analyze queue reuses a tree snapshot within one processing pass', () => {
   const source = readProjectFile('src/service-worker/service-worker.ts')
+  const processBody = source.match(/async function processAutoAnalyzeQueue[\s\S]*?\n}\n\nlet autoAnalyzeTreeContext/)?.[0] || ''
 
   assert.match(source, /interface AutoAnalyzeTreeContext/)
   assert.match(source, /let autoAnalyzeTreeContext: AutoAnalyzeTreeContext \| null = null/)
   assert.match(source, /await runAutoAnalysisForBookmark\(entry, await getAutoAnalyzeTreeContext\(\)\)/)
+  assert.match(processBody, /finally \{[\s\S]*?autoAnalyzeQueueProcessing = false[\s\S]*?autoAnalyzeTreeContext = null/)
   assert.match(source, /function invalidateAutoAnalyzeTreeContext\(\)/)
   assert.match(source, /if \(moved\) \{[\s\S]*?invalidateAutoAnalyzeTreeContext\(\)/)
 })
@@ -78,6 +82,10 @@ test('auto analyze queue failure schedules wake from remaining queue state', () 
   assert.match(failureBody, /const nextQueue = await updateAutoAnalyzeQueue/)
   assert.match(failureBody, /scheduleNextAutoAnalyzeQueueWake\(nextQueue\)/)
   assert.doesNotMatch(failureBody, /scheduleAutoAnalyzeQueueAlarm\(AUTO_ANALYZE_QUEUE_RETRY_MS\)/)
+  assert.match(source, /function getNextRunnableAutoAnalyzeQueueEntry\(/)
+  assert.match(source, /function getNextAutoAnalyzeQueueWakeAt\(/)
+  assert.doesNotMatch(source, /\.filter\(\(item\) => item\.nextRunAt <= now[\s\S]*?\.sort\(/)
+  assert.doesNotMatch(source, /\.map\(\(entry\) => Number\(entry\.nextRunAt\)[\s\S]*?\.sort\(/)
 })
 
 test('auto classify suppression map prunes expired entries without changing active suppressions', () => {
@@ -89,8 +97,9 @@ test('auto classify suppression map prunes expired entries without changing acti
   assert.match(suppressBody, /pruneSuppressedAutoBookmarkUrls\(now\)/)
   assert.match(readBody, /pruneSuppressedAutoBookmarkUrls\(now\)/)
   assert.match(pruneBody, /expiresAt <= now/)
-  assert.doesNotMatch(source, /SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT/)
-  assert.doesNotMatch(pruneBody, /suppressedAutoBookmarkUrls\.size >/)
+  assert.match(source, /const SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT = 80/)
+  assert.match(pruneBody, /suppressedAutoBookmarkUrls\.size > SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT/)
+  assert.match(pruneBody, /oldestExpiresAt/)
 })
 
 test('availability background navigation closes at DOM readiness before page preload warnings', () => {

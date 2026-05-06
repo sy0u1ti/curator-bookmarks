@@ -41,6 +41,10 @@ test('popup exposes saved search controls without eager dashboard work', () => {
 
 test('popup current page card has bookmark-aware quick actions', () => {
   assert.match(popupSource, /state\.currentPageBookmarkId = matchedBookmark\?\.id \|\| null/)
+  assert.match(popupStateSource, /bookmarkDuplicateKeyMap: Map<string, PopupSearchBookmark>/)
+  assert.match(popupSource, /state\.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap\(indexedBookmarks\)/)
+  assert.match(popupSource, /state\.bookmarkDuplicateKeyMap\.get\(normalizedCurrentUrl\)/)
+  assert.doesNotMatch(popupSource, /state\.allBookmarks\.find\(\(bookmark\) => bookmark\.duplicateKey === normalizedCurrentUrl\)/)
   assert.match(popupSource, /已收藏 ·/)
   assert.match(popupSource, /未收藏 · 可快速保存到文件夹/)
   assert.match(popupSource, /data-current-page-action="open-folder"/)
@@ -202,6 +206,12 @@ test('popup search caches expire and filtered bookmark arrays release when searc
     popupSource,
     /if \(!normalizedQuery\) \{[\s\S]*?state\.filteredBookmarksCacheKey = ''[\s\S]*?state\.filteredBookmarksCache = \[\][\s\S]*?abortNaturalSearchRequest\(\)[\s\S]*?return/
   )
+  assert.match(popupSource, /window\.addEventListener\('pagehide', cleanupPopupRuntime\)/)
+  assert.match(popupSource, /function cleanupPopupRuntime\(\)/)
+  assert.match(popupSource, /chrome\.storage\?\.onChanged\?\.removeListener\?\.\(handleAutoAnalyzeStorageChanged\)/)
+  assert.match(popupSource, /state\.contentRenderHtml = ''/)
+  assert.match(popupSource, /state\.toastTimers\.clear\(\)/)
+  assert.match(popupSource, /clearSearchCaches\(\)/)
 })
 
 test('popup smart loading progress uses transform without layout reads', () => {

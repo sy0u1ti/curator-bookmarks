@@ -235,12 +235,13 @@ let dashboardCardsRenderVersion = 0
 let dashboardCardsCommittedRenderVersion = 0
 let pendingDashboardFolderFocusId = ''
 let dashboardFaviconWarmupQueue: DashboardFaviconWarmupQueue | null = null
-let dashboardFaviconWarmupKey = ''
+let dashboardFaviconWarmupItems: DashboardItem[] | null = null
 let dashboardFaviconWarmupRenderTimer = 0
 let dashboardFaviconLoadSyncFrame = 0
 let dashboardFaviconCache: DashboardFaviconCache = {}
 let dashboardFaviconCacheHydrated = false
 let dashboardFaviconCacheSaveTimer = 0
+let dashboardDropHoverCard: HTMLElement | null = null
 const dashboardRenderCache: DashboardRenderCache = {
   modelKey: null,
   model: null,
@@ -810,7 +811,7 @@ export function isDashboardViewReady(): boolean {
 
 export function prepareDashboardSectionEntry(): void {
   resetDashboardPanelReveal()
-  dashboardFaviconWarmupKey = ''
+  dashboardFaviconWarmupItems = null
   scheduleDashboardFaviconLoadSync()
 }
 
@@ -3535,10 +3536,8 @@ function updateDashboardDragPreviewPosition(): void {
     return
   }
 
-  dom.dashboardDragPreview.style.left = `${dragState.currentX}px`
-  dom.dashboardDragPreview.style.top = `${dragState.currentY}px`
   dom.dashboardDragPreview.style.transform =
-    'translate3d(-50%, -50%, 0)'
+    `translate3d(${dragState.currentX}px, ${dragState.currentY}px, 0) translate3d(-50%, -50%, 0)`
 }
 
 function updateDashboardDropHoverFromPoint(x: number, y: number): void {
@@ -3561,15 +3560,23 @@ function setDashboardDeleteDropHover(active: boolean): void {
 }
 
 function setDashboardDropHover(folderId: string): void {
-  dragState.hoverFolderId = String(folderId || '').trim()
-  dom.dashboardFolderDropGrid
-    ?.querySelectorAll<HTMLElement>('[data-dashboard-drop-folder]')
-    .forEach((card) => {
-      card.classList.toggle(
-        'active',
-        card.getAttribute('data-dashboard-drop-folder') === dragState.hoverFolderId
-      )
-    })
+  const nextFolderId = String(folderId || '').trim()
+  if (
+    dragState.hoverFolderId === nextFolderId &&
+    dashboardDropHoverCard?.isConnected &&
+    dashboardDropHoverCard.getAttribute('data-dashboard-drop-folder') === nextFolderId
+  ) {
+    return
+  }
+
+  dashboardDropHoverCard?.classList.remove('active')
+  dragState.hoverFolderId = nextFolderId
+  dashboardDropHoverCard = nextFolderId
+    ? dom.dashboardFolderDropGrid?.querySelector<HTMLElement>(
+      `[data-dashboard-drop-folder="${CSS.escape(nextFolderId)}"]`
+    ) || null
+    : null
+  dashboardDropHoverCard?.classList.add('active')
 }
 
 function hideDashboardDragOverlay(): Promise<void> {
@@ -3591,14 +3598,13 @@ function hideDashboardDragOverlay(): Promise<void> {
 
 function clearDashboardDragOverlayContent(): void {
   setDashboardDeleteDropHover(false)
+  dashboardDropHoverCard = null
   if (dom.dashboardFolderDropGrid) {
     dom.dashboardFolderDropGrid.innerHTML = ''
   }
   if (dom.dashboardDragPreview) {
     dom.dashboardDragPreview.innerHTML = ''
     dom.dashboardDragPreview.style.transform = ''
-    dom.dashboardDragPreview.style.left = ''
-    dom.dashboardDragPreview.style.top = ''
   }
 }
 
@@ -3691,23 +3697,22 @@ function getFallbackLabel(title: string): string {
 
 function syncDashboardFaviconWarmup(items: DashboardItem[]): void {
   if (availabilityState.catalogLoading || dom.dashboardPanel?.hidden) {
+    stopDashboardFaviconWarmup()
     return
   }
 
   const endpointUrl = getDashboardFaviconEndpointUrl()
   if (!endpointUrl || !items.length) {
     stopDashboardFaviconWarmup()
-    dashboardFaviconWarmupKey = ''
     return
   }
 
-  const nextKey = getDashboardFaviconWarmupKey(items)
-  if (nextKey && nextKey === dashboardFaviconWarmupKey && dashboardFaviconWarmupQueue) {
+  if (items === dashboardFaviconWarmupItems && dashboardFaviconWarmupQueue) {
     return
   }
 
   stopDashboardFaviconWarmup()
-  dashboardFaviconWarmupKey = nextKey
+  dashboardFaviconWarmupItems = items
   dashboardFaviconWarmupQueue = createDashboardFaviconWarmupQueue({
     bookmarks: items,
     faviconEndpointUrl: endpointUrl,
@@ -3732,6 +3737,7 @@ function syncDashboardFaviconWarmup(items: DashboardItem[]): void {
 function stopDashboardFaviconWarmup(): void {
   dashboardFaviconWarmupQueue?.cancel()
   dashboardFaviconWarmupQueue = null
+  dashboardFaviconWarmupItems = null
   if (dashboardFaviconWarmupRenderTimer) {
     window.clearTimeout(dashboardFaviconWarmupRenderTimer)
     dashboardFaviconWarmupRenderTimer = 0
@@ -3739,7 +3745,7 @@ function stopDashboardFaviconWarmup(): void {
 }
 
 function resetDashboardFaviconWarmupForCacheChange(): void {
-  dashboardFaviconWarmupKey = ''
+  dashboardFaviconWarmupItems = null
   stopDashboardFaviconWarmup()
 }
 
@@ -3754,38 +3760,6 @@ function scheduleDashboardFaviconWarmupRender(): void {
       renderDashboardSection()
     }
   }, DASHBOARD_FAVICON_RERENDER_DEBOUNCE_MS)
-}
-
-function getDashboardFaviconWarmupKey(items: DashboardItem[]): string {
-  if (!items.length) {
-    return ''
-  }
-
-  let hash = 2166136261
-  for (const item of items) {
-    hash = updateDashboardFaviconWarmupHash(hash, String(item.id || ''))
-    hash = updateDashboardFaviconWarmupHash(hash, String(item.url || ''))
-  }
-
-  const first = items[0]
-  const last = items[items.length - 1]
-  return [
-    items.length,
-    String(first.id || ''),
-    String(first.url || ''),
-    String(last.id || ''),
-    String(last.url || ''),
-    hash >>> 0
-  ].join('\u0000')
-}
-
-function updateDashboardFaviconWarmupHash(seed: number, value: string): number {
-  let hash = seed >>> 0
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
 }
 
 function getDashboardFaviconCacheKey(pageUrl: string): string {

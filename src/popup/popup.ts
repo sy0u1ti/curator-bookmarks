@@ -234,6 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
   })
 })
 
+window.addEventListener('pagehide', cleanupPopupRuntime)
+
 function bindEvents() {
   dom.openSettings.addEventListener('click', openSettingsPage)
   dom.smartFooterSettings.addEventListener('click', openSettingsPage)
@@ -806,6 +808,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     state.allBookmarks = indexedBookmarks
     state.allFolders = extracted.folders
     state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
+    state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
     state.folderMap = extracted.folderMap
     state.searchTagIndex = tagIndex
     state.searchSnapshotState = snapshotState
@@ -880,7 +883,7 @@ async function hydrateCurrentTabState() {
   const currentUrl = String(state.currentTab?.url || '').trim()
   const normalizedCurrentUrl = normalizeBookmarkSaveUrl(currentUrl)
   const matchedBookmark = normalizedCurrentUrl
-    ? state.allBookmarks.find((bookmark) => bookmark.duplicateKey === normalizedCurrentUrl)
+    ? state.bookmarkDuplicateKeyMap.get(normalizedCurrentUrl)
     : null
 
   state.currentPageBookmarkId = matchedBookmark?.id || null
@@ -895,6 +898,35 @@ async function hydrateCurrentTabState() {
   if (!['loading', 'results', 'permission', 'saving'].includes(state.smartStatus)) {
     state.smartStatus = 'idle'
   }
+}
+
+function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
+  const map = new Map()
+  for (const bookmark of bookmarks) {
+    const duplicateKey = String(bookmark.duplicateKey || '').trim()
+    if (duplicateKey && !map.has(duplicateKey)) {
+      map.set(duplicateKey, bookmark)
+    }
+  }
+  return map
+}
+
+function cleanupPopupRuntime() {
+  abortNaturalSearchRequest()
+  chrome.storage?.onChanged?.removeListener?.(handleAutoAnalyzeStorageChanged)
+  clearTimeout(state.searchTimer)
+  state.searchTimer = null
+  clearViewNotice()
+  clearEditDiscardGuard()
+  for (const timeoutId of state.toastTimers.values()) {
+    clearTimeout(timeoutId)
+  }
+  state.toastTimers.clear()
+  state.toasts = []
+  state.contentRenderHtml = ''
+  state.filteredBookmarksCacheKey = ''
+  state.filteredBookmarksCache = []
+  clearSearchCaches()
 }
 
 function maybeWarmPopupSnapshotFullTextForSearch() {
@@ -942,6 +974,7 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
 
   state.allBookmarks = indexedBookmarks
   state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
+  state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
   state.searchSnapshotFullTextReady = true
   state.searchSnapshotFullTextPending = false
   clearSearchCaches()

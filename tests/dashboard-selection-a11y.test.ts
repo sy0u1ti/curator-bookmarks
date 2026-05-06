@@ -324,16 +324,24 @@ test('dashboard favicon warmup preloads full bookmark set with bounded concurren
   })
 })
 
-test('dashboard favicon warmup key avoids joining every item into a large string', () => {
+test('dashboard favicon warmup reuse avoids lossy signatures and repeated item joins', () => {
   const source = readProjectFile('src/options/sections/dashboard.ts')
-  const keyBody = source.match(/function getDashboardFaviconWarmupKey[\s\S]*?\n}\n\nfunction updateDashboardFaviconWarmupHash/)?.[0] || ''
+  const warmupBody = source.match(/function syncDashboardFaviconWarmup[\s\S]*?\n}\n\nfunction stopDashboardFaviconWarmup/)?.[0] || ''
+  const previewBody = source.match(/function updateDashboardDragPreviewPosition[\s\S]*?\n}\n\nfunction updateDashboardDropHoverFromPoint/)?.[0] || ''
 
-  assert.match(keyBody, /let hash = 2166136261/)
-  assert.match(keyBody, /updateDashboardFaviconWarmupHash\(hash, String\(item\.id \|\| ''\)\)/)
-  assert.match(keyBody, /items\.length/)
-  assert.match(source, /function updateDashboardFaviconWarmupHash/)
-  assert.doesNotMatch(keyBody, /\.map\(\(item\)/)
-  assert.doesNotMatch(keyBody, /\.join\('\\u0001'\)/)
+  assert.match(source, /let dashboardFaviconWarmupItems: DashboardItem\[\] \| null = null/)
+  assert.match(warmupBody, /items === dashboardFaviconWarmupItems && dashboardFaviconWarmupQueue/)
+  assert.match(warmupBody, /stopDashboardFaviconWarmup\(\)[\s\S]*?return/)
+  assert.match(warmupBody, /dashboardFaviconWarmupItems = items/)
+  assert.match(source, /dashboardFaviconWarmupItems = null/)
+  assert.doesNotMatch(source, /function getDashboardFaviconWarmupKey/)
+  assert.doesNotMatch(source, /function updateDashboardFaviconWarmupHash/)
+  assert.doesNotMatch(warmupBody, /\.map\(\(item\)/)
+  assert.doesNotMatch(warmupBody, /\.join\(/)
+  assert.match(previewBody, /style\.transform =[\s\S]*translate3d\(\$\{dragState\.currentX\}px, \$\{dragState\.currentY\}px, 0\)/)
+  assert.doesNotMatch(previewBody, /style\.left/)
+  assert.doesNotMatch(previewBody, /style\.top/)
+  assert.match(source, /let dashboardDropHoverCard: HTMLElement \| null = null/)
 })
 
 test('dashboard cards expose keyboard-triggerable move and delete actions', () => {

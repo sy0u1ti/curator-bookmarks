@@ -197,6 +197,7 @@ let autoAnalyzeQueueProcessing = false
 let autoAnalyzeQueueTimer = 0
 const MAX_PENDING_NAVIGATION_CHECKS = 4
 const AUTO_CLASSIFY_SUPPRESS_MS = 10000
+const SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT = 80
 const AUTO_CLASSIFY_DELAY_MS = 900
 const AUTO_CLASSIFY_FOLDER_LIMIT = 260
 const AUTO_ANALYZE_QUEUE_ALARM = 'curator-auto-analyze-queue'
@@ -822,9 +823,7 @@ async function processAutoAnalyzeQueue(): Promise<void> {
       const now = Date.now()
       const queue = await loadAutoAnalyzeQueue()
       const freshQueue = pruneAutoAnalyzeQueue(queue, now)
-      const entry = freshQueue
-        .filter((item) => item.nextRunAt <= now && !autoClassifyInFlight.has(item.bookmarkId))
-        .sort((left, right) => left.nextRunAt - right.nextRunAt || left.createdAt - right.createdAt)[0]
+      const entry = getNextRunnableAutoAnalyzeQueueEntry(freshQueue, now)
 
       if (!entry) {
         scheduleNextAutoAnalyzeQueueWake(freshQueue)
@@ -881,6 +880,7 @@ async function processAutoAnalyzeQueue(): Promise<void> {
     }
   } finally {
     autoAnalyzeQueueProcessing = false
+    autoAnalyzeTreeContext = null
   }
 }
 
@@ -1173,10 +1173,7 @@ function scheduleAutoAnalyzeQueueProcessing(delayMs = 0): void {
 
 function scheduleNextAutoAnalyzeQueueWake(queue: AutoAnalyzeQueueEntry[]): void {
   const now = Date.now()
-  const nextRunAt = queue
-    .map((entry) => Number(entry.nextRunAt) || 0)
-    .filter((value) => value > now)
-    .sort((left, right) => left - right)[0]
+  const nextRunAt = getNextAutoAnalyzeQueueWakeAt(queue, now)
 
   if (!nextRunAt) {
     clearAutoAnalyzeQueueAlarm()
@@ -1184,6 +1181,40 @@ function scheduleNextAutoAnalyzeQueueWake(queue: AutoAnalyzeQueueEntry[]): void 
   }
 
   scheduleAutoAnalyzeQueueAlarm(Math.max(1000, nextRunAt - now))
+}
+
+function getNextRunnableAutoAnalyzeQueueEntry(
+  queue: AutoAnalyzeQueueEntry[],
+  now = Date.now()
+): AutoAnalyzeQueueEntry | null {
+  let nextEntry: AutoAnalyzeQueueEntry | null = null
+  for (const entry of queue) {
+    if (entry.nextRunAt > now || autoClassifyInFlight.has(entry.bookmarkId)) {
+      continue
+    }
+    if (
+      !nextEntry ||
+      entry.nextRunAt < nextEntry.nextRunAt ||
+      (entry.nextRunAt === nextEntry.nextRunAt && entry.createdAt < nextEntry.createdAt)
+    ) {
+      nextEntry = entry
+    }
+  }
+  return nextEntry
+}
+
+function getNextAutoAnalyzeQueueWakeAt(
+  queue: AutoAnalyzeQueueEntry[],
+  now = Date.now()
+): number {
+  let nextRunAt = 0
+  for (const entry of queue) {
+    const runAt = Number(entry.nextRunAt) || 0
+    if (runAt > now && (!nextRunAt || runAt < nextRunAt)) {
+      nextRunAt = runAt
+    }
+  }
+  return nextRunAt
 }
 
 function scheduleAutoAnalyzeQueueAlarm(delayMs: number): void {
@@ -2458,6 +2489,21 @@ function pruneSuppressedAutoBookmarkUrls(now = Date.now()): void {
     if (expiresAt <= now) {
       suppressedAutoBookmarkUrls.delete(key)
     }
+  }
+
+  while (suppressedAutoBookmarkUrls.size > SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT) {
+    let oldestKey = ''
+    let oldestExpiresAt = Number.POSITIVE_INFINITY
+    for (const [key, expiresAt] of suppressedAutoBookmarkUrls.entries()) {
+      if (expiresAt < oldestExpiresAt) {
+        oldestKey = key
+        oldestExpiresAt = expiresAt
+      }
+    }
+    if (!oldestKey) {
+      break
+    }
+    suppressedAutoBookmarkUrls.delete(oldestKey)
   }
 }
 

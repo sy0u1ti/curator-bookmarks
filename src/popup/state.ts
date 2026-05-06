@@ -62,6 +62,7 @@ export interface PopupState {
   allBookmarks: PopupSearchBookmark[]
   allFolders: FolderRecord[]
   bookmarkMap: Map<string, PopupSearchBookmark>
+  bookmarkDuplicateKeyMap: Map<string, PopupSearchBookmark>
   folderMap: Map<string, FolderRecord>
   expandedFolders: Set<string>
   moveExpandedFolders: Set<string>
@@ -148,6 +149,7 @@ export const state: PopupState = {
   allBookmarks: [],
   allFolders: [],
   bookmarkMap: new Map(),
+  bookmarkDuplicateKeyMap: new Map(),
   folderMap: new Map(),
   expandedFolders: new Set(),
   moveExpandedFolders: new Set(),
