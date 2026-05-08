@@ -8,11 +8,14 @@ const BUDGET_RULES = [
   { id: 'popup', match: /^popup\.html-.*\.js$/, maxKb: 105, warnKb: 100, required: true },
   { id: 'newtab', match: /^newtab\.html-.*\.js$/, maxKb: 200, warnKb: 190, required: true },
   { id: 'options', match: /^options\.html-.*\.js$/, maxKb: 385, warnKb: 370, required: true },
-  { id: 'search', match: /^search-(?!query).*\.js$/, maxKb: 30, required: true },
-  { id: 'search-query', match: /^search-query-.*\.js$/, maxKb: 12, required: false },
-  { id: 'vendor-pinyin', match: /^vendor-pinyin-.*\.js$/, maxKb: 320, required: true },
-  { id: 'service-worker', match: /^service-worker\.ts-.*\.js$/, maxKb: 60, required: true }
+  { id: 'search', match: /^search-(?!query).*\.js$/, maxKb: 30, warnPct: 95, required: true },
+  { id: 'search-query', match: /^search-query-.*\.js$/, maxKb: 12, warnPct: 95, required: false },
+  { id: 'vendor-pinyin', match: /^vendor-pinyin-.*\.js$/, maxKb: 320, warnPct: 95, required: true },
+  { id: 'service-worker', match: /^service-worker\.ts-.*\.js$/, maxKb: 60, warnPct: 95, required: true }
 ]
+
+const REPORT_DIR = '.perf-results'
+const REPORT_PATH = `${REPORT_DIR}/bundle-budget-report.json`
 
 function formatKb(bytes) {
   return (bytes / 1024).toFixed(2)
@@ -43,14 +46,14 @@ function evaluateRule(rule, assets) {
       matched: [],
       totalBytes: 0,
       maxBytes: rule.maxKb * 1024,
-      warnBytes: Number(rule.warnKb || 0) * 1024,
+      warnBytes: getWarnBytes(rule),
       ok: !rule.required,
       reason: rule.required ? 'missing' : 'optional-missing'
     }
   }
   const totalBytes = matched.reduce((sum, asset) => sum + asset.size, 0)
   const maxBytes = rule.maxKb * 1024
-  const warnBytes = Number(rule.warnKb || 0) * 1024
+  const warnBytes = getWarnBytes(rule)
   return {
     rule,
     matched,
@@ -60,6 +63,16 @@ function evaluateRule(rule, assets) {
     ok: totalBytes <= maxBytes,
     reason: totalBytes <= maxBytes ? warnBytes && totalBytes > warnBytes ? 'warning' : 'ok' : 'over-budget'
   }
+}
+
+function getWarnBytes(rule) {
+  if (Number(rule.warnKb) > 0) {
+    return Number(rule.warnKb) * 1024
+  }
+  if (Number(rule.warnPct) > 0) {
+    return rule.maxKb * 1024 * (Number(rule.warnPct) / 100)
+  }
+  return 0
 }
 
 function printReport(results) {
@@ -95,6 +108,7 @@ async function main() {
   const assets = await listAssets()
   const results = BUDGET_RULES.map((rule) => evaluateRule(rule, assets))
   printReport(results)
+  await writeReport(results)
 
   const failures = results.filter((result) => !result.ok)
   if (failures.length) {
@@ -113,6 +127,32 @@ async function main() {
   }
 
   console.log('\nbundle budget ok')
+}
+
+async function writeReport(results) {
+  await fs.mkdir(REPORT_DIR, { recursive: true })
+  const report = {
+    generatedAt: new Date().toISOString(),
+    rules: results.map((result) => ({
+      id: result.rule.id,
+      required: Boolean(result.rule.required),
+      files: result.matched.map((asset) => ({
+        path: path.join(ASSETS_DIR, asset.entry),
+        sizeBytes: asset.size,
+        sizeKb: Number(formatKb(asset.size))
+      })),
+      totalBytes: result.totalBytes,
+      sizeKb: Number(formatKb(result.totalBytes)),
+      maxKb: Number(formatKb(result.maxBytes)),
+      warnKb: result.warnBytes ? Number(formatKb(result.warnBytes)) : null,
+      usedPct: result.maxBytes ? Number(((result.totalBytes / result.maxBytes) * 100).toFixed(1)) : null,
+      status: result.reason,
+      gate: result.ok ? 'pass' : 'fail',
+      budgeted: true
+    }))
+  }
+  await fs.writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`)
+  console.log(`bundle budget report written to ${REPORT_PATH}`)
 }
 
 await main()

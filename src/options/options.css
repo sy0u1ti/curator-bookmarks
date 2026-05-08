@@ -4661,6 +4661,51 @@ body.dashboard-fullscreen-active {
   margin-top: 22px;
 }
 
+.ai-request-preview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.ai-request-preview-head,
+.ai-request-preview-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.ai-request-preview-head strong,
+.ai-request-preview-row strong {
+  color: var(--text-strong);
+}
+
+.ai-request-preview-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.ai-request-preview-row {
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ai-request-preview-row span {
+  flex: 0 0 110px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.ai-request-preview-row strong {
+  min-width: 0;
+  text-align: right;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .ai-provider-actions {
   display: flex;
   align-items: center;

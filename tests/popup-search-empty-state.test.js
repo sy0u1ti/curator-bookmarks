@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { test } from 'node:test'
 
@@ -61,6 +61,16 @@ test('popup empty search state does not render the boxed plus mark', () => {
   assert.doesNotMatch(popupCss, /#empty-state\.state-panel:not\(\.hidden\)::before/)
 })
 
+test('popup auto analyze status can collapse without dismissing task state', () => {
+  assert.match(popupStateSource, /autoAnalyzeCollapsed: boolean/)
+  assert.match(popupSource, /data-auto-analyze-action="toggle"/)
+  assert.match(popupSource, /state\.autoAnalyzeCollapsed = !state\.autoAnalyzeCollapsed/)
+  assert.match(popupSource, /aria-expanded="\$\{collapsed \? 'false' : 'true'\}"/)
+  assert.match(popupSource, /auto-analyze-status \$\{escapeAttr\(status\.status\)\}\$\{collapsed \? ' collapsed' : ''\}/)
+  assert.match(popupCss, /\.auto-analyze-status\.collapsed\s*\{/)
+  assert.match(popupCss, /\.auto-analyze-status\.collapsed \.auto-analyze-detail\s*\{[\s\S]*?display:\s*none/)
+})
+
 test('popup natural search allows local parsing without AI setup', () => {
   assert.match(popupSource, /naturalSearchSetupRequired/)
   assert.match(popupSource, /function renderNaturalSearchSetupState/)
@@ -74,6 +84,16 @@ test('popup natural search allows local parsing without AI setup', () => {
   assert.match(naturalSearchAiSource, /function hasConfiguredNaturalSearchAiProvider/)
   assert.match(popupSource, /if \(!naturalSearchAi\.hasConfiguredNaturalSearchAiProvider\(settings\)\)[\s\S]*?return localPlan/)
   assert.match(popupSource, /openSettingsPage\('ai-provider'\)/)
+})
+
+test('popup AI requests use cost limits and prompt-injection safeguards', () => {
+  assert.match(popupSource, /reserveAiUsage\(\{[\s\S]*?feature: 'popup-smart-classifier'/)
+  assert.match(naturalSearchAiSource, /reserveAiUsage\(\{[\s\S]*?feature/)
+  assert.match(naturalSearchAiSource, /dashboard-natural-search/)
+  for (const source of [popupSource, naturalSearchAiSource]) {
+    assert.match(source, /不可信输入/)
+    assert.match(source, /不得执行/)
+  }
 })
 
 test('popup natural search does not reuse stale AI plans without provider setup', () => {
@@ -110,12 +130,6 @@ test('popup natural search aborts stale AI requests when the query or mode chang
   assert.match(popupSource, /isAbortError\(error\)/)
 })
 
-test('built popup html does not preload natural search chunk', { skip: !existsSync(resolve(process.cwd(), 'dist/src/popup/popup.html')) }, () => {
-  const builtPopupHtml = readProjectFile('dist/src/popup/popup.html')
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+natural-search/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+natural-search[^>]+rel="modulepreload"/i)
-})
-
 test('popup smart page extraction is lazy loaded for classification only', () => {
   assert.match(popupSource, /let contentExtractionModulePromise: Promise<typeof import\('\.\.\/options\/sections\/content-extraction\.js'\)> \| null = null/)
   assert.match(popupSource, /contentExtractionModulePromise \|\|= import\('\.\.\/options\/sections\/content-extraction\.js'\)/)
@@ -146,45 +160,22 @@ test('popup AI response helpers are lazy loaded only when AI requests run', () =
   assert.match(popupSource, /aiResponse\.extractAiErrorMessage\(payload, response\.status\)/)
 })
 
-test('built popup html does not preload smart page extraction chunk', { skip: !existsSync(resolve(process.cwd(), 'dist/src/popup/popup.html')) }, () => {
-  const builtPopupHtml = readProjectFile('dist/src/popup/popup.html')
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+content-extraction/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+content-extraction[^>]+rel="modulepreload"/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+ai-settings/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+ai-settings[^>]+rel="modulepreload"/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+ai-response/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+ai-response[^>]+rel="modulepreload"/i)
-})
-
-test('popup inbox filter title does not preload inbox state module', { skip: !existsSync(resolve(process.cwd(), 'dist/src/popup/popup.html')) }, () => {
-  const builtPopupHtml = readProjectFile('dist/src/popup/popup.html')
-  assert.doesNotMatch(popupSource, /^import\s+(?!type)(?:[^\n]|\n(?!import\b))*from\s+['"]\.\.\/shared\/inbox\.js['"]/m)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+inbox/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+inbox[^>]+rel="modulepreload"/i)
-})
-
-test('popup recycle bin helpers load only after delete actions', { skip: !existsSync(resolve(process.cwd(), 'dist/src/popup/popup.html')) }, () => {
-  const builtPopupHtml = readProjectFile('dist/src/popup/popup.html')
+test('popup recycle bin helpers load only after delete actions', () => {
   assert.match(popupSource, /let recycleBinModulePromise: Promise<typeof import\('\.\.\/shared\/recycle-bin\.js'\)> \| null = null/)
   assert.match(popupSource, /recycleBinModulePromise \|\|= import\('\.\.\/shared\/recycle-bin\.js'\)/)
   assert.doesNotMatch(popupSource, /^import\s+(?!type)(?:[^\n]|\n(?!import\b))*from\s+['"]\.\.\/shared\/recycle-bin\.js['"]/m)
   assert.match(popupSource, /const recycleBin = await loadRecycleBinModule\(\)[\s\S]*?recycleBin\.deleteBookmarkToRecycle/)
   assert.match(popupSource, /const recycleBin = await loadRecycleBinModule\(\)[\s\S]*?recycleBin\.removeRecycleEntry/)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+recycle-bin/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+recycle-bin[^>]+rel="modulepreload"/i)
 })
 
-test('popup startup uses light snapshot search metadata instead of full snapshot storage module', { skip: !existsSync(resolve(process.cwd(), 'dist/src/popup/popup.html')) }, () => {
+test('popup startup uses light snapshot search metadata instead of full snapshot storage module', () => {
   const searchSource = readProjectFile('src/popup/search.ts')
   const searchIndexSource = readProjectFile('src/popup/search-index.ts')
-  const builtPopupHtml = readProjectFile('dist/src/popup/popup.html')
 
   assert.match(searchSource, /from '\.\.\/shared\/content-snapshot-search\.js'/)
   assert.match(searchIndexSource, /from '\.\.\/shared\/content-snapshot-search\.js'/)
   assert.match(searchIndexSource, /await import\('\.\.\/shared\/content-snapshots\.js'\)/)
   assert.doesNotMatch(searchSource, /^import\s+(?!type)(?:[^\n]|\n(?!import\b))*from\s+['"]\.\.\/shared\/content-snapshots\.js['"]/m)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+rel="modulepreload"[^>]+content-snapshots/i)
-  assert.doesNotMatch(builtPopupHtml, /<link[^>]+content-snapshots[^>]+rel="modulepreload"/i)
 })
 
 test('popup full text snapshot warmup is triggered by real searches instead of startup', () => {

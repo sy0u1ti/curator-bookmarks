@@ -20,6 +20,7 @@ test('featured newtab gallery ships stable multi-source image records', () => {
   for (const item of FEATURED_BACKGROUND_ITEMS) {
     assert.match(item.id, /^(nasa|rijksmuseum|met|smithsonian)-/)
     assert.match(item.imageUrl, /^https:\/\//)
+    assert.doesNotMatch(new URL(item.imageUrl).pathname, /\.svg$/i)
     assert.match(item.sourceUrl, /^https:\/\//)
     assert.ok(item.title)
     assert.ok(item.credit)

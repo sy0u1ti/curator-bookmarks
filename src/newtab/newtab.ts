@@ -184,7 +184,7 @@ const BACKGROUND_URL_CACHE_QUALITY = 0.86
 const BACKGROUND_IMAGE_READY_TIMEOUT_MS = 2200
 const BACKGROUND_VIDEO_READY_TIMEOUT_MS = 2800
 const DEFAULT_BACKGROUND_SETTINGS = {
-  type: 'featured',
+  type: 'color',
   color: '#000000',
   imageName: '',
   videoName: '',
@@ -198,10 +198,11 @@ const SUPPORTED_BACKGROUND_TYPES = new Set(['featured', 'image', 'video', 'urls'
 const SUPPORTED_BACKGROUND_MASK_STYLES = new Set(['dark', 'frosted', 'light'])
 const DEFAULT_SEARCH_SETTINGS = {
   enabled: true,
+  webSearchEnabled: true,
   openInNewTab: false,
   engine: 'google' as SearchEngineId,
   enabledEngines: DEFAULT_ENABLED_SEARCH_ENGINE_IDS,
-  placeholder: '搜索网页或书签',
+  placeholder: '搜索书签、网页或输入命令',
   naturalSearchEnabled: false,
   autoVerticalCenter: false,
   width: 34,
@@ -1067,6 +1068,7 @@ function bindBackgroundSettingsEvents(): void {
 
 function bindSearchSettingsEvents(): void {
   document.getElementById('search-enabled')?.addEventListener('change', handleSearchSettingsChange)
+  document.getElementById('search-web-enabled')?.addEventListener('change', handleSearchSettingsChange)
   document.getElementById('search-open-new-tab')?.addEventListener('change', handleSearchSettingsChange)
   document.getElementById('search-engine')?.addEventListener('change', handleSearchSettingsChange)
   document.getElementById('search-auto-vertical-center')?.addEventListener('change', handleSearchSettingsChange)
@@ -3679,6 +3681,7 @@ function getContentStateSignature(contentState: NewTabContentState): string {
 function getNewTabShellSignature(): string {
   return [
     state.searchSettings.enabled,
+    state.searchSettings.webSearchEnabled,
     state.searchSettings.openInNewTab,
     state.searchSettings.engine,
     state.searchSettings.enabledEngines.join(','),
@@ -4252,9 +4255,9 @@ function createNewTabOnboardingStrip(): HTMLElement | null {
   const copy = document.createElement('div')
   copy.className = 'newtab-onboarding-copy'
   const title = document.createElement('strong')
-  title.textContent = 'Curator 本地优先保存书签索引'
+  title.textContent = 'Curator 已将新标签页设为书签搜索和快捷入口'
   const detail = document.createElement('span')
-  detail.textContent = '选择来源、查看权限说明，AI 可稍后配置或跳过。'
+  detail.textContent = '核心书签功能默认本地；网页搜索、精选远程背景、AI/Jina 和链接检测可关闭或跳过。'
   copy.append(title, detail)
 
   const actions = document.createElement('div')
@@ -4267,14 +4270,18 @@ function createNewTabOnboardingStrip(): HTMLElement | null {
   privacyButton.type = 'button'
   privacyButton.textContent = '权限说明'
   privacyButton.addEventListener('click', () => openOptionsHash('#privacy'))
+  const restoreButton = document.createElement('button')
+  restoreButton.type = 'button'
+  restoreButton.textContent = '恢复说明'
+  restoreButton.addEventListener('click', () => openOptionsHash('#onboarding'))
   const skipButton = document.createElement('button')
   skipButton.type = 'button'
   skipButton.className = 'secondary'
-  skipButton.textContent = '跳过'
+  skipButton.textContent = '我知道了'
   skipButton.addEventListener('click', () => {
     void completeNewTabOnboarding()
   })
-  actions.append(sourceButton, privacyButton, skipButton)
+  actions.append(sourceButton, privacyButton, restoreButton, skipButton)
   section.append(copy, actions)
   return section
 }
@@ -4298,6 +4305,7 @@ function createSearchWidget(): HTMLElement | null {
   if (!settings.enabled) {
     return null
   }
+  const webSearchEnabled = settings.webSearchEnabled !== false
 
   const slot = document.createElement('section')
   slot.className = 'newtab-search-slot'
@@ -4305,7 +4313,7 @@ function createSearchWidget(): HTMLElement | null {
   slot.style.setProperty('--search-height', `${settings.height}px`)
   slot.style.setProperty('--search-offset-y', `${settings.offsetY}px`)
   slot.dataset.searchAutoVerticalCenter = String(settings.autoVerticalCenter)
-  slot.setAttribute('aria-label', '搜索网页或书签')
+  slot.setAttribute('aria-label', webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令')
 
   const form = document.createElement('form')
   form.className = 'newtab-search'
@@ -4313,7 +4321,7 @@ function createSearchWidget(): HTMLElement | null {
   form.style.setProperty('--search-height', `${settings.height}px`)
   form.style.setProperty('--search-bg-alpha', String(settings.background / 100))
   form.setAttribute('role', 'search')
-  form.setAttribute('aria-label', '搜索网页或书签')
+  form.setAttribute('aria-label', webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令')
 
   const input = document.createElement('input')
   const searchPlaceholder = getSearchPlaceholder(settings)
@@ -4324,7 +4332,12 @@ function createSearchWidget(): HTMLElement | null {
   input.placeholder = searchPlaceholder
   input.spellcheck = false
   input.setAttribute('role', 'combobox')
-  input.setAttribute('aria-label', '输入关键词搜索书签，或按 Enter 搜索网页')
+  input.setAttribute(
+    'aria-label',
+    webSearchEnabled
+      ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
+      : '输入关键词搜索本地书签或命令'
+  )
   input.setAttribute('aria-autocomplete', 'list')
   input.setAttribute('aria-controls', 'newtab-search-suggestions')
   input.setAttribute('aria-expanded', 'false')
@@ -4350,7 +4363,10 @@ function createSearchWidget(): HTMLElement | null {
     const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)
     const label = engine?.shortName || '搜索'
     engineButton.textContent = label
-    engineButton.title = `当前引擎：${engine?.name || label}。Cmd/Ctrl+Enter 搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎。`
+    engineButton.disabled = state.searchSettings.webSearchEnabled === false
+    engineButton.title = state.searchSettings.webSearchEnabled === false
+      ? '网页搜索已关闭。可在新标签页设置中重新启用。'
+      : `当前引擎：${engine?.name || label}。Cmd/Ctrl+Enter 搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎。`
     engineButton.setAttribute('aria-label', `选择搜索引擎，当前为 ${engine?.name || label}`)
   }
 
@@ -4572,6 +4588,16 @@ function createSearchWidget(): HTMLElement | null {
         return
       }
 
+      if (state.searchSettings.webSearchEnabled === false) {
+        suggestionsHeading.textContent = '本地书签'
+        suggestionsHeading.hidden = false
+        suggestionsHint.textContent = '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
+        suggestionsHint.hidden = false
+        suggestionsPanel.classList.remove('hidden')
+        input.setAttribute('aria-expanded', 'true')
+        return
+      }
+
       suggestionsHeading.textContent = '网页搜索'
       suggestionsHeading.hidden = false
       suggestionsHint.replaceChildren(createSearchWebFallbackButton(trimmedQuery))
@@ -4786,6 +4812,9 @@ function createSearchWidget(): HTMLElement | null {
     scheduleSuggestionsRender({ preserveActive: true, immediate: true })
   })
   engineButton.addEventListener('click', () => {
+    if (state.searchSettings.webSearchEnabled === false) {
+      return
+    }
     if (engineButton.getAttribute('aria-expanded') === 'true') {
       closeEngineMenu()
       return
@@ -4804,6 +4833,9 @@ function createSearchWidget(): HTMLElement | null {
     event.preventDefault()
     closeEngineMenu()
     hideSuggestions()
+    if (state.searchSettings.webSearchEnabled === false) {
+      return
+    }
     submitSearch(input.value)
   })
   input.addEventListener('keydown', (event) => {
@@ -4811,6 +4843,9 @@ function createSearchWidget(): HTMLElement | null {
       event.preventDefault()
       closeEngineMenu()
       hideSuggestions()
+      if (state.searchSettings.webSearchEnabled === false) {
+        return
+      }
       submitSearch(input.value, true)
     }
   })
@@ -4843,6 +4878,9 @@ function createSearchWidget(): HTMLElement | null {
     button.addEventListener('click', () => {
       closeEngineMenu()
       hideSuggestions()
+      if (state.searchSettings.webSearchEnabled === false) {
+        return
+      }
       submitSearch(query)
     })
     return button
@@ -8325,7 +8363,7 @@ async function fetchBackgroundUrlImage(imageUrl: string): Promise<Blob> {
 }
 
 async function createOptimizedBackgroundImageBlob(blob: Blob): Promise<Blob> {
-  if (['image/gif', 'image/svg+xml'].includes(blob.type.toLowerCase())) {
+  if (blob.type.toLowerCase() === 'image/gif') {
     return blob
   }
 
@@ -8370,6 +8408,9 @@ async function createOptimizedBackgroundImageBlob(blob: Blob): Promise<Blob> {
 
 function isBackgroundImageResponse(contentType: unknown, imageUrl: string): boolean {
   const normalizedType = String(contentType || '').toLowerCase()
+  if (normalizedType.includes('image/svg+xml') || /\.svg(?:$|[?#])/i.test(imageUrl)) {
+    return false
+  }
   if (normalizedType.startsWith('image/')) {
     return true
   }
@@ -8417,6 +8458,7 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
   const engine = normalizeSearchEngineId(settings.engine, DEFAULT_SEARCH_SETTINGS.engine)
   return {
     enabled: settings.enabled !== false,
+    webSearchEnabled: settings.webSearchEnabled !== false,
     openInNewTab: settings.openInNewTab === true,
     engine,
     enabledEngines: normalizeEnabledSearchEngineIds(settings.enabledEngines, engine),
@@ -8441,6 +8483,7 @@ function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string 
 
 function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
   const enabledInput = document.getElementById('search-enabled')
+  const webEnabledInput = document.getElementById('search-web-enabled')
   const openInput = document.getElementById('search-open-new-tab')
   const engineInput = document.getElementById('search-engine')
   const engineToggleInputs = Array.from(
@@ -8455,6 +8498,9 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
 
   return normalizeSearchSettings({
     enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : state.searchSettings.enabled,
+    webSearchEnabled: webEnabledInput instanceof HTMLInputElement
+      ? webEnabledInput.checked
+      : state.searchSettings.webSearchEnabled,
     openInNewTab: openInput instanceof HTMLInputElement ? openInput.checked : state.searchSettings.openInNewTab,
     engine: engineInput instanceof HTMLSelectElement ? engineInput.value : state.searchSettings.engine,
     enabledEngines: engineToggleInputs.length
@@ -8476,6 +8522,7 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
 function syncSearchSettingsControls(): void {
   const settings = state.searchSettings
   const enabledInput = document.getElementById('search-enabled')
+  const webEnabledInput = document.getElementById('search-web-enabled')
   const openInput = document.getElementById('search-open-new-tab')
   const engineInput = document.getElementById('search-engine')
   const engineToggleInputs = Array.from(
@@ -8488,6 +8535,7 @@ function syncSearchSettingsControls(): void {
   const autoVerticalCenterInput = document.getElementById('search-auto-vertical-center')
   const backgroundInput = document.getElementById('search-background')
   const dependentControls = [
+    webEnabledInput,
     openInput,
     engineInput,
     ...engineToggleInputs,
@@ -8501,19 +8549,23 @@ function syncSearchSettingsControls(): void {
   if (enabledInput instanceof HTMLInputElement) {
     enabledInput.checked = settings.enabled
   }
+  if (webEnabledInput instanceof HTMLInputElement) {
+    webEnabledInput.checked = settings.webSearchEnabled
+    webEnabledInput.disabled = !settings.enabled
+  }
   if (openInput instanceof HTMLInputElement) {
     openInput.checked = settings.openInNewTab
-    openInput.disabled = !settings.enabled
+    openInput.disabled = !settings.enabled || !settings.webSearchEnabled
   }
   if (engineInput instanceof HTMLSelectElement) {
     engineInput.value = settings.engine
-    engineInput.disabled = !settings.enabled
+    engineInput.disabled = !settings.enabled || !settings.webSearchEnabled
   }
   for (const input of engineToggleInputs) {
     const engineId = input.dataset.searchEngineToggle || ''
     const isSelected = settings.engine === engineId
     input.checked = settings.enabledEngines.includes(engineId as SearchEngineId)
-    input.disabled = !settings.enabled || isSelected
+    input.disabled = !settings.enabled || !settings.webSearchEnabled || isSelected
     input.closest<HTMLElement>('.search-engine-toggle')?.classList.toggle('active', input.checked)
     input.closest<HTMLElement>('.search-engine-toggle')?.classList.toggle('locked', isSelected)
   }
@@ -8543,7 +8595,10 @@ function syncSearchSettingsControls(): void {
     const row = control instanceof HTMLElement
       ? control.closest<HTMLElement>('.setting-row')
       : null
-    row?.classList.toggle('setting-row-disabled', !settings.enabled)
+    const disabled = !settings.enabled ||
+      ((control === openInput || control === engineInput || engineToggleInputs.includes(control as HTMLInputElement)) &&
+        !settings.webSearchEnabled)
+    row?.classList.toggle('setting-row-disabled', disabled)
   }
 }
 
@@ -9425,6 +9480,10 @@ function submitSearch(value: string, openAllEnabled = false): void {
   const directUrl = getDirectNavigationUrl(query)
   if (directUrl) {
     openSearchTarget(directUrl)
+    return
+  }
+
+  if (state.searchSettings.webSearchEnabled === false) {
     return
   }
 

@@ -110,7 +110,7 @@ export function buildFailureClassification(
       badgeText: '低置信异常',
       detail: joinEvidenceDetail(
         navigationSummary,
-        '未完成第二层网络探测，暂归为低置信异常，不建议直接删除'
+        '未获得目标网站授权或未取得网络校验证据，暂归为低置信异常，不建议直接删除'
       )
     }
   }

@@ -38,6 +38,10 @@ jobs:
           name: curator-release-check
           path: |
             release/*.zip
+            .perf-results/release-evidence.json
+            .perf-results/bundle-budget-report.json
             .perf-results/*.json
             .e2e-results/*.json
+            .e2e-results/screenshot-manifest-*.json
+            .e2e-results/screenshots/*.png
           if-no-files-found: ignore

@@ -1,0 +1,36 @@
+# High-Risk Operations Safety Matrix
+
+Last reviewed: 2026-05-08
+
+This matrix is the safety ledger for operations that can delete, move, overwrite, clear or remotely process user data. It complements automated tests and the manual release evidence checklist. A Chrome Web Store submission must not treat this file as a substitute for a manual exploratory pass.
+
+## Baseline Rules
+
+- No high-risk operation runs as an unannounced default cleanup.
+- Delete actions should say "move to recycle bin" unless they only clear local recovery records.
+- Bulk operations need a visible scope, confirmation or target-selection step, auto-backup or rollback path where practical, partial-failure handling and a result summary.
+- The auto-backup hook is fail-closed by default: if the backup cannot be written, the high-risk mutation must stop unless the caller explicitly opts into a documented skipped-backup path.
+- AI suggestions can generate recommendations, but applying names, moving bookmarks or saving generated tags remains user-triggered.
+- Sensitive URLs are skipped by default for AI/Jina and ordinary link checks.
+
+## Matrix
+
+| Operation group | Safety model | Automated evidence | Manual evidence still required |
+| --- | --- | --- | --- |
+| Bookmark delete from Popup, Dashboard, duplicates, redirects and availability results | User action plus confirmation; deletion writes recycle entry before Chrome bookmark removal; failed Chrome removal rolls back recycle entry; result summary points to Recycle Bin. | `tests/recycle.test.ts`, `tests/options-management-ui.test.js`, `tests/popup-search-empty-state.test.js`, `tests/duplicates.test.js` | Browser pass for single delete, bulk delete, cancel, storage failure and mixed stale selection. |
+| Folder cleanup delete/merge/move/split | Suggestions render preview first; execution requires confirmation; fail-closed auto-backup hook runs before mutation; split records undo data and can move bookmarks back; errors leave a status message. | `tests/folder-cleanup.test.js`, `src/options/sections/folder-cleanup.ts` | Browser pass for empty-folder delete, same-name merge, split undo and interrupted operation. |
+| Recycle Bin restore and record clearing | Restore recreates bookmarks and only removes recycle records after successful creates; missing original parent falls back to Bookmarks Bar; clearing recycle records requires confirmation and does not touch Chrome bookmarks. | `tests/recycle.test.ts`, `src/options/sections/recycle.ts` | Browser pass for missing parent, duplicate restore, partial restore failure and clear-all cancellation. |
+| Bookmark move and batch move | User opens move target picker, reviews target folder context and confirms the target action; fail-closed auto-backup hook runs before mutation; partial failure reports moved count and first error. | `tests/options-management-ui.test.js`, `src/options/options.ts`, `src/options/sections/dashboard.ts` | Browser pass for Dashboard, availability results and single-card move with stale target folders. |
+| Redirect URL update | Confirmation lists original-to-final URL impact; implementation re-reads latest bookmarks and skips entries whose current URL no longer matches the detected URL; auto-backup hook runs before mutation. | `src/options/sections/redirects.ts`, `tests/options-management-ui.test.js` | Browser pass for changed bookmark URL, missing bookmark, valid redirect and skipped entries. |
+| Tag import, rename, delete and clear | Import computes counts before saving and creates an auto-backup before matched changes; rename/delete/clear require confirmation; operations affect local tag data only and do not delete Chrome bookmarks; status summarizes changed/skipped/unmatched counts. | `tests/tag-management.test.ts`, `tests/options-management-ui.test.js`, `src/options/options.ts` | Browser pass for import overwrite, rename collision, delete cancellation and clear-all cancellation. |
+| Backup restore | Import creates a restore preview first; restore mode requires confirmation; safe full restore creates an auto-backup, preserves local API key, copies missing bookmark instances into a restore folder and reports restored/unmatched counts. | `tests/backup.test.ts`, `tests/options-management-ui.test.js` | Browser pass for invalid JSON, tags-only restore, newtab-only restore, safe full restore and user cancellation. |
+| Audit log and history clearing | Clear actions require confirmation and only remove local diagnostic/history records; ordinary backup excludes audit log and AI usage ledger. | `tests/privacy-audit.test.ts`, `tests/backup.test.ts`, `tests/options-management-ui.test.js` | Browser pass for clearing audit log, availability history, auto-analysis add history and ignore rules. |
+| AI naming/tagging suggestions | AI is optional; request preview shows fields, target service, batch size and daily limit; prompt treats page content as untrusted; apply/move actions require confirmation, auto-backup and result summary; manual tags are preserved as effective tags. | `tests/ai-settings.test.ts`, `tests/options-management-ui.test.js`, `tests/bookmark-tags.test.ts` | Browser pass for provider error, stop current batch, apply selected names, move to suggested folder and rejected suggestion persistence. |
+| AI/Jina, content extraction and sensitive URLs | Base URL must be HTTPS except localhost development; sensitive URL classes are skipped by default; ordinary backup excludes full text/cache and API credentials. | `tests/sensitive-url.test.ts`, `tests/content-extraction.test.ts`, `tests/content-snapshots.test.ts`, `tests/backup.test.ts` | Browser pass for Jina disabled, sensitive URL skip copy and content extraction permission denial. |
+| Link availability detection and cleanup | User starts detection, can pause/cancel, scheduler limits concurrency, sensitive URLs are skipped, low-confidence failures require review, high-confidence cleanup deletes to Recycle Bin rather than permanently deleting. | `tests/availability-runner.test.ts`, `tests/classifier.test.ts`, `tests/options-management-ui.test.js` | Browser pass for timeout, 403/429, login-required, redirect loop, cancellation and partial cleanup. |
+| Scheduled/automatic tasks | Alarms resume user-enabled tasks and status cleanup; automatic analysis does not permanently delete bookmarks; failure leaves items in Inbox or review state and reports status. | `tests/shortcut-commands.test.js`, `src/service-worker/service-worker.ts` | Browser pass for service worker restart, duplicate alarm, disabled AI and network failure. |
+| Remote backgrounds and cached media | Default background is local color; Featured Gallery is opt-in; remote SVG is rejected; media/cache is excluded from ordinary backup. | `tests/newtab-background-gallery.test.ts`, `tests/newtab-content-state.test.ts`, `tests/backup.test.ts` | Browser pass for failed remote image fallback, featured attribution and cache clearing through extension-data reset. |
+
+## Submission Rule
+
+Before Chrome Web Store submission, attach this matrix to the manual evidence packet and mark each manual pass with date, version, tester and fixture data used. If any row lacks either automated evidence or manual pass notes, record the exception and mitigation in `docs/manual-release-evidence.md` before submission.

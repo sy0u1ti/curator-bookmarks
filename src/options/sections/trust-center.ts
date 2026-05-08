@@ -214,13 +214,13 @@ function renderPermissionCards(): void {
     },
     {
       title: 'storage',
-      copy: '保存标签、索引、设置、回收站、审计日志和备份元数据。',
-      items: ['API Key 只保存在本地扩展存储', '不使用远程遥测']
+      copy: '保存标签、索引、设置、回收站、脱敏审计日志和备份元数据。',
+      items: ['API Key 只保存在本地扩展存储', '普通备份排除审计日志和正文缓存', '不使用默认远程行为遥测']
     },
     {
-      title: 'http/https host permissions',
-      copy: '当前 manifest 安装时声明 http://*/* 与 https://*/*，用于用户主动执行的网络检测、内容提取、AI 服务和 Jina Reader 请求。',
-      items: ['AI 关闭时不主动请求 AI 服务', 'Jina Reader 默认关闭', '敏感 URL 默认跳过']
+      title: 'optional http/https host permissions',
+      copy: 'manifest 只把 http://*/* 与 https://*/* 声明为可选主机权限；链接检测、可选内容提取、用户配置 AI 服务和 Jina Reader 会在用户触发时按 origin 请求授权。',
+      items: ['安装时不授予全站点访问', 'AI 关闭时不主动请求 AI 服务', 'Jina Reader 默认关闭', '网页搜索和远程背景不是主机权限理由', '敏感 URL 默认跳过']
     },
     {
       title: 'webNavigation / webRequest',
@@ -260,11 +260,42 @@ function renderRemoteRequestMatrix(): void {
 
   const rows = [
     {
+      title: 'Newtab 网页搜索',
+      enabled: '可关闭',
+      target: '用户选择的 Google、Bing、百度、DuckDuckGo 等搜索引擎',
+      fields: '搜索关键词和浏览器常规网络请求元数据',
+      body: '否',
+      credentials: '浏览器按搜索引擎自身登录状态处理；Curator 不代理',
+      off: '在新标签页设置关闭“启用网页搜索”',
+      audit: '否，Curator 不记录网页搜索 query'
+    },
+    {
+      title: '精选远程背景',
+      enabled: '默认关闭，主动选择后启用',
+      target: 'NASA、The Met、Smithsonian、Rijksmuseum 图片域名或 CDN',
+      fields: '图片请求、IP、User-Agent 等常规网络元数据；不包含书签数据',
+      body: '否',
+      credentials: '不主动附加 API Key 或 Authorization',
+      off: '背景类型切回纯色、本地图片或关闭远程链接',
+      audit: '否'
+    },
+    {
+      title: '用户自定义远程背景',
+      enabled: '默认关闭',
+      target: '用户输入的图片 URL 所在服务',
+      fields: '图片请求和网络元数据，不包含书签数据',
+      body: '否',
+      credentials: 'fetch 缓存请求不携带自定义凭据',
+      off: '删除图片链接或切换为纯色/本地背景',
+      audit: '否'
+    },
+    {
       title: 'AI 命名/分类',
       enabled: '默认关闭',
       target: '用户配置的 OpenAI-compatible 服务',
       fields: '标题、URL、文件夹路径、元信息、可选摘要/正文片段',
       body: '可选',
+      credentials: 'Authorization 只发送给用户配置服务，不写入日志或普通备份',
       off: '关闭 AI 或不配置 API Key',
       audit: '是'
     },
@@ -274,6 +305,7 @@ function renderRemoteRequestMatrix(): void {
       target: '用户配置的 AI 服务',
       fields: '搜索查询、本地解析计划',
       body: '否',
+      credentials: 'Authorization 只发送给用户配置服务，不写入日志或普通备份',
       off: '关闭自然语言搜索或 AI 渠道',
       audit: '是'
     },
@@ -283,6 +315,7 @@ function renderRemoteRequestMatrix(): void {
       target: 'https://r.jina.ai/',
       fields: '目标 URL',
       body: '返回正文由设置决定是否保存/使用',
+      credentials: '不发送 API Key；使用 HTTPS',
       off: '关闭 Jina Reader',
       audit: '是'
     },
@@ -290,8 +323,9 @@ function renderRemoteRequestMatrix(): void {
       title: '死链/重定向检测',
       enabled: '用户主动运行',
       target: '书签目标网站',
-      fields: '请求 URL、HTTP 请求元数据',
+      fields: '被检测 URL 请求、HTTP 状态、重定向证据；日志默认只保留目标域名和状态类别',
       body: '否',
+      credentials: '后台检测不主动附加 API Key；敏感 URL 默认跳过',
       off: '不运行检测或停止任务',
       audit: '是'
     }
@@ -305,6 +339,7 @@ function renderRemoteRequestMatrix(): void {
         <li>发送到：${escapeHtml(row.target)}</li>
         <li>可能发送字段：${escapeHtml(row.fields)}</li>
         <li>是否含正文：${escapeHtml(row.body)}</li>
+        <li>凭据：${escapeHtml(row.credentials)}</li>
         <li>关闭方式：${escapeHtml(row.off)}</li>
         <li>审计日志：${escapeHtml(row.audit)}</li>
       </ul>
@@ -335,7 +370,7 @@ function renderPrivacyAuditEntries(): void {
       </div>
       <div class="privacy-audit-meta">
         <span>${escapeHtml(formatDateTime(entry.createdAt))}</span>
-        <span>${escapeHtml(entry.target)}</span>
+        <span>${escapeHtml(entry.targetDomain || entry.target)}</span>
         <span>${entry.itemCount} 条</span>
         <span>${entry.includesBody ? '可能含正文' : '不含正文'}</span>
         <span>${escapeHtml(entry.status)}</span>

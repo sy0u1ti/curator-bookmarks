@@ -18,6 +18,7 @@ export interface PrivacyAuditLogEntry {
   feature: PrivacyAuditFeature
   label: string
   target: string
+  targetDomain: string
   itemCount: number
   fields: string[]
   includesBody: boolean
@@ -44,6 +45,8 @@ export interface PrivacyAuditInput {
 }
 
 export const PRIVACY_AUDIT_LOG_LIMIT = 80
+export const PRIVACY_AUDIT_LOG_RETENTION_LIMIT = 20
+export const PRIVACY_AUDIT_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 const FEATURE_LABELS: Record<PrivacyAuditFeature, string> = {
   'ai-naming': '书签智能分析',
@@ -56,6 +59,7 @@ const FEATURE_LABELS: Record<PrivacyAuditFeature, string> = {
 }
 
 export function normalizePrivacyAuditLog(rawLog: unknown): PrivacyAuditLog {
+  const now = Date.now()
   const source = rawLog && typeof rawLog === 'object' && !Array.isArray(rawLog)
     ? rawLog as Record<string, unknown>
     : {}
@@ -64,7 +68,8 @@ export function normalizePrivacyAuditLog(rawLog: unknown): PrivacyAuditLog {
       .map(normalizePrivacyAuditEntry)
       .filter((entry): entry is PrivacyAuditLogEntry => Boolean(entry))
       .sort((left, right) => right.createdAt - left.createdAt)
-      .slice(0, PRIVACY_AUDIT_LOG_LIMIT)
+      .filter((entry) => isWithinRetentionWindow(entry.createdAt, now))
+      .slice(0, PRIVACY_AUDIT_LOG_RETENTION_LIMIT)
     : []
 
   return {
@@ -87,7 +92,8 @@ export async function appendPrivacyAuditLogEntry(input: PrivacyAuditInput): Prom
     createdAt: now,
     feature: normalizePrivacyAuditFeature(input.feature),
     label: normalizeText(input.label) || FEATURE_LABELS[normalizePrivacyAuditFeature(input.feature)],
-    target: normalizeText(input.target) || '本地任务',
+    target: sanitizeAuditTarget(input.target),
+    targetDomain: getAuditTargetDomain(input.target),
     itemCount: Math.max(0, Math.floor(Number(input.itemCount) || 0)),
     fields: normalizeFieldList(input.fields),
     includesBody: Boolean(input.includesBody),
@@ -131,12 +137,13 @@ function normalizePrivacyAuditEntry(rawEntry: unknown): PrivacyAuditLogEntry | n
     createdAt,
     feature,
     label: normalizeText(source.label) || FEATURE_LABELS[feature],
-    target: normalizeText(source.target) || '本地任务',
+    target: sanitizeAuditTarget(source.target),
+    targetDomain: getAuditTargetDomain(source.target),
     itemCount: Math.max(0, Math.floor(Number(source.itemCount) || 0)),
     fields: normalizeFieldList(source.fields),
     includesBody: Boolean(source.includesBody),
     status: normalizePrivacyAuditStatus(source.status),
-    reason: normalizeText(source.reason).slice(0, 220)
+    reason: redactSensitiveText(normalizeText(source.reason)).slice(0, 220)
   }
 }
 
@@ -160,7 +167,7 @@ function normalizeFieldList(value: unknown): string[] {
   const seen = new Set<string>()
   const output: string[] = []
   for (const item of rawValues) {
-    const text = normalizeText(item).slice(0, 48)
+    const text = redactSensitiveText(normalizeText(item)).slice(0, 48)
     const key = text.toLowerCase()
     if (!text || seen.has(key)) {
       continue
@@ -181,6 +188,50 @@ function normalizeTimestamp(value: unknown): number {
 
 function normalizeText(value: unknown): string {
   return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function sanitizeAuditTarget(value: unknown): string {
+  const text = normalizeText(value)
+  if (!text) {
+    return '本地任务'
+  }
+
+  try {
+    const parsedUrl = new URL(text)
+    return parsedUrl.origin || parsedUrl.hostname || '外部服务'
+  } catch {
+    return redactSensitiveText(text).slice(0, 120) || '外部服务'
+  }
+}
+
+function getAuditTargetDomain(value: unknown): string {
+  const text = normalizeText(value)
+  if (!text) {
+    return ''
+  }
+
+  try {
+    return new URL(text).hostname.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/authorization\s*[:=]\s*bearer\s+[^\s,;]+/gi, 'Authorization=[redacted]')
+    .replace(/bearer\s+[a-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
+    .replace(/(authorization|api[-_ ]?key|token|secret|password)\s*[:=]\s*[^\s,;]+/gi, '$1=[redacted]')
+    .replace(/[?&][^=\s&]+=[^\s&]+/g, '?[query-redacted]')
+}
+
+function isWithinRetentionWindow(createdAt: number, now = Date.now()): boolean {
+  const timestamp = normalizeTimestamp(createdAt)
+  if (!timestamp) {
+    return false
+  }
+
+  return timestamp >= now - PRIVACY_AUDIT_LOG_RETENTION_MS
 }
 
 function latestEntryTime(entries: PrivacyAuditLogEntry[]): number {

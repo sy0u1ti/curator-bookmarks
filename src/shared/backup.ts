@@ -38,6 +38,7 @@ export type DangerousOperationKind =
   | 'folder-cleanup-move'
   | 'redirect-url-update'
   | 'batch-tag-update'
+  | 'tag-import'
   | 'restore'
 
 export type BackupRestoreMode = 'tagsOnly' | 'newTabOnly' | 'safeFull'
@@ -51,6 +52,7 @@ export interface AutoBackupBeforeDangerousOperationOptions {
   estimatedChangeCount?: number
   retentionLimit?: number
   now?: number
+  allowSkipOnFailure?: boolean
 }
 
 export interface AutoBackupHookResult {
@@ -78,7 +80,7 @@ export interface CuratorBackupFileV1 {
   source: 'manual' | 'auto'
   redaction: {
     aiProviderSettings: 'apiKey-omitted'
-    omittedFields: ['apiKey']
+    omittedFields: Array<'apiKey' | 'authorizationHeaders' | 'privacyAuditLog' | 'aiUsageLedger' | 'contentFullText' | 'contentSnapshotCache' | 'newTabBackgroundMedia' | 'userMediaCache'>
   }
   chromeBookmarks: {
     exportedAt: string
@@ -164,7 +166,16 @@ export async function createCuratorBackupFile(
     source,
     redaction: {
       aiProviderSettings: 'apiKey-omitted',
-      omittedFields: ['apiKey']
+      omittedFields: [
+        'apiKey',
+        'authorizationHeaders',
+        'privacyAuditLog',
+        'aiUsageLedger',
+        'contentFullText',
+        'contentSnapshotCache',
+        'newTabBackgroundMedia',
+        'userMediaCache'
+      ]
     },
     chromeBookmarks: {
       exportedAt,
@@ -192,7 +203,8 @@ export async function createCuratorBackupFile(
     },
     notes: [
       'AI Provider API Key is intentionally omitted.',
-      'New tab background media blobs in IndexedDB are not included.'
+      'Authorization headers, privacy audit logs, AI usage counters, content full text/cache and diagnostic logs are intentionally omitted.',
+      'New tab background media blobs and user media caches in IndexedDB are not included.'
     ]
   }
 }
@@ -225,7 +237,16 @@ export function parseCuratorBackupFile(payload: unknown): CuratorBackupFileV1 {
     source: source.source === 'auto' ? 'auto' : 'manual',
     redaction: {
       aiProviderSettings: 'apiKey-omitted',
-      omittedFields: ['apiKey']
+      omittedFields: [
+        'apiKey',
+        'authorizationHeaders',
+        'privacyAuditLog',
+        'aiUsageLedger',
+        'contentFullText',
+        'contentSnapshotCache',
+        'newTabBackgroundMedia',
+        'userMediaCache'
+      ]
     },
     chromeBookmarks: {
       exportedAt: String(source.chromeBookmarks.exportedAt || source.exportedAt || ''),
@@ -417,12 +438,17 @@ export async function createAutoBackupBeforeDangerousOperation(
       sizeBytes
     }
   } catch (error) {
+    const reason = error instanceof Error ? error.message : '自动备份失败'
+    if (!options.allowSkipOnFailure) {
+      throw new Error(`自动备份失败，已停止执行高风险操作：${reason}`)
+    }
+
     return {
       backupId: `failed-${createdAt}`,
       fileName: '',
       createdAt,
       skipped: true,
-      reason: error instanceof Error ? error.message : '自动备份失败'
+      reason
     }
   }
 }

@@ -38,7 +38,10 @@ test('newtab search settings explain that web search does not hijack browser sea
 
   assert.match(newtabHtml, /class="setting-trust-note"/)
   assert.match(newtabHtml, /不会修改 Chrome 默认搜索引擎或启动页/)
+  assert.match(newtabHtml, /id="search-web-enabled"/)
+  assert.match(newtabHtml, /关键词会发送给所选搜索引擎/)
   assert.match(newtabSource, /未找到书签；按 Enter 仅在本页用 \$\{getSearchEngineDisplayName\(\)\} 搜索网页/)
+  assert.match(newtabSource, /state\.searchSettings\.webSearchEnabled === false/)
 })
 
 test('newtab bookmark edit menu actions expose bookmark-specific labels', () => {

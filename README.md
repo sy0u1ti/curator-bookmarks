@@ -10,7 +10,7 @@
 
 <p align="center">
 
-  本地优先的 Chrome 书签管理扩展，用于搜索、整理、备份、清理和重新组织浏览器书签。
+  本地优先的 Chrome 书签搜索、整理、清理和新标签页扩展；AI 与远程解析为用户主动启用的可选辅助能力。
   当前为 Beta / 本地安装阶段，尚未在 Chrome Web Store 上架；发布前门禁见 `release:check`。
 
 </p>
@@ -76,7 +76,7 @@
 
 - 快捷键直接收藏当前网页到 `Inbox / 待整理`。
 
-- 后台自动分析网页内容、生成标签和摘要，并移动到推荐文件夹。
+- 可选自动分析：启用 AI 服务并授权相关 origin 后，可为新增书签生成标签、摘要和推荐文件夹；也可设置为仅生成信息、不自动移动。
 
 
 
@@ -113,11 +113,11 @@
 
 - 支持当前网页快速收藏和智能分类。
 
-- AI生成摘要、网页内容索引、标签让书签检索更容易、更快速。
+- 启用 AI 后可生成摘要、网页内容索引和标签，让后续检索更容易；未启用 AI 时本地搜索、手动整理和备份仍可使用。
 
 - AI生成书签重命名建议，让书签内容更易识别。
 
-- AI推荐书签文件夹，智能收纳海量书签。
+- AI 可推荐书签文件夹；应用前可预览，手动整理结果默认优先。
 
 - 支持 OpenAI 兼容的 Responses API 和 Chat Completions API。
 
@@ -134,7 +134,9 @@
 
 - 接管 Chrome 新标签页，展示自选的书签文件夹。
 
-- 支持自定义书签图标、拖拽排序、背景图片/视频/颜色、时间日期、搜索栏和图标布局。
+- 支持自定义书签图标、拖拽排序、背景图片/视频/颜色、时间日期、搜索栏和图标布局；默认背景为本地纯色，精选远程图库需主动选择。
+
+- 网页搜索可关闭；提交网页搜索时，查询会发送给所选搜索引擎，Curator 不代理、不记录该 query。
 
 - 利用书签构建快捷入口，不再被多余新标签页捆绑。
 
@@ -154,17 +156,21 @@
 
 1. 安装并加载扩展后，打开新标签页。
 
-2. 如果新标签页提示没有书签来源，点击 **打开设置**。
+2. Curator 会替换 Chrome 新标签页，用于书签搜索和快捷入口。如果需要恢复 Chrome 默认新标签页，可在 Chrome 扩展管理页停用或移除 Curator。
 
-3. 在 **书签来源** 中选择要展示的文件夹，或点击 **新增书签来源文件夹** 创建专用文件夹。
+3. 如果新标签页提示没有书签来源，点击 **打开设置**。
 
-4. 回到新标签页后，可继续调整搜索栏、背景、时间日期和图标布局。
+4. 在 **书签来源** 中选择要展示的文件夹，或点击 **新增书签来源文件夹** 创建专用文件夹。
+
+5. 回到新标签页后，可继续调整搜索栏、网页搜索开关、背景、时间日期和图标布局。
 
 ### 隐私与权限
 
 - 隐私政策见 [PRIVACY.md](./PRIVACY.md)。
 - Chrome Web Store 上架文案和权限说明草案见 [docs/chrome-web-store-listing.md](./docs/chrome-web-store-listing.md)。
-- 当前 manifest 使用安装时 `http://*/*` 与 `https://*/*` host permissions；扩展内的“隐私与权限中心”会解释用途、外部请求边界和本地审计日志。
+- 权限矩阵见 [docs/permissions-matrix.md](./docs/permissions-matrix.md)，CWS 隐私字段映射见 [docs/privacy-practices-mapping.md](./docs/privacy-practices-mapping.md)。
+- 当前 manifest 只把 `http://*/*` 与 `https://*/*` 声明为 optional host permissions；链接检测、可选内容提取、用户配置 AI 服务和 Jina Reader 会在用户触发时按 origin 请求授权。扩展内的“隐私与权限中心”会解释用途、外部请求边界和本地脱敏审计日志。Newtab 网页搜索和远程背景不是主机权限理由。
+- Curator 不使用默认远程行为遥测；但用户提交网页搜索、主动选择精选远程背景、运行链接检测、启用 AI/Jina 或配置远程背景时会产生外部请求。
 
 
 
@@ -259,13 +265,13 @@ npm run validate     # 类型检查 + 测试 + 版本检查 + 构建
 
 npm run pack:zip     # 构建并打包 release zip
 
-npm run release:check # 发布门禁：validate、打包、性能预算、真实扩展 E2E
+npm run release:check # 发布门禁：validate、性能预算、真实扩展 E2E，最后打包 release zip
 
 
 
 ```
 
-`release:check` 会生成本地性能 fixtures，并在无显示的 Linux/CI 环境中自动通过 Xvfb 跑 Chrome 扩展冒烟测试。
+`release:check` 会生成本地性能 fixtures，并在无显示的 Linux/CI 环境中自动通过 Xvfb 跑 Chrome 扩展冒烟测试；全部验证完成后再生成 release zip。完成后会写入 `.perf-results/release-evidence.json`，记录版本、zip sha256、性能/E2E 结果文件、工作区状态和各性能脚本的门禁边界。
 
 
 

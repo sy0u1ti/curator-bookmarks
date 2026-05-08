@@ -1,10 +1,12 @@
+import { assessSensitiveExternalUrl } from '../../shared/sensitive-url.js'
+
 export type PageExtractionStatus = 'ok' | 'limited' | 'fallback' | 'remote' | 'combined' | 'failed'
 
 export type DirectPageFetchDecisionReason =
   | 'allowed'
   | 'invalid-url'
   | 'unsupported-scheme'
-  | 'account-login-page'
+  | 'sensitive-url'
   | 'missing-origin-permission'
 
 export interface DirectPageFetchDecision {
@@ -66,10 +68,6 @@ const MAX_LINK_CONTEXT = 18
 const MAX_LIST_TEXT_LENGTH = 120
 const MIN_USEFUL_MAIN_TEXT_LENGTH = 420
 const JINA_READER_PREFIX = 'https://r.jina.ai/http://'
-const DIRECT_FETCH_ACCOUNT_HOSTS = new Set([
-  'accounts.google.com',
-  'mail.google.com'
-])
 
 const CONTENT_SELECTORS = [
   'article',
@@ -487,12 +485,13 @@ export function decideDirectPageFetch(
   }
 
   const originPattern = `${parsedUrl.origin}/*`
-  if (isAccountLoginUrl(parsedUrl)) {
+  const sensitiveDecision = assessSensitiveExternalUrl(normalizedUrl)
+  if (sensitiveDecision.sensitive) {
     return {
       allowed: false,
       originPattern,
-      reason: 'account-login-page',
-      warning: '该链接属于登录或账号入口，已跳过直接抓取并使用后备上下文。'
+      reason: 'sensitive-url',
+      warning: sensitiveDecision.warning.replace('外部请求', '直接抓取')
     }
   }
 
@@ -511,11 +510,6 @@ export function decideDirectPageFetch(
     reason: 'allowed',
     warning: ''
   }
-}
-
-function isAccountLoginUrl(parsedUrl: URL): boolean {
-  const hostname = parsedUrl.hostname.replace(/^www\./i, '').toLowerCase()
-  return DIRECT_FETCH_ACCOUNT_HOSTS.has(hostname)
 }
 
 export function appendPageContentWarnings(

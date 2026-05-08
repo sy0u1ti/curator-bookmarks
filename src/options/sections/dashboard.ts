@@ -2855,6 +2855,7 @@ async function resolveDashboardNaturalSearch(
       dashboardState.naturalSearchError = '未配置 AI 渠道，已使用本地解析。'
     } else {
       plan = await naturalSearchAi.requestNaturalSearchAiPlan({
+        feature: 'dashboard-natural-search',
         query,
         localPlan: effectiveLocalPlan,
         settings,

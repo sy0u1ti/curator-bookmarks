@@ -25,7 +25,11 @@
     "build": "vite build",
     "check:version": "node scripts/check-version.mjs",
     "validate": "npm run typecheck && npm test && npm run check:version && npm run build",
-    "release:check": "npm run validate && npm run pack:zip:dist && npm run perf:fixtures && npm run perf:bundle && npm run perf:search && npm run perf:dashboard-scroll && npm run perf:dashboard-trace && npm run perf:popup-startup && npm run perf:newtab-startup && npm run e2e",
+    "release:check": "npm run validate && npm run perf:fixtures && npm run perf:bundle && npm run perf:search && npm run perf:dashboard-scroll && npm run perf:dashboard-trace && npm run perf:popup-startup:release && npm run perf:newtab-startup:release && npm run e2e && npm run pack:zip:dist && npm run release:zip-scan && npm run release:evidence",
+    "release:evidence": "node scripts/write-release-evidence.mjs",
+    "release:zip-scan": "node scripts/scan-release-zip.mjs",
+    "release:manual-evidence:init": "node scripts/init-manual-release-evidence.mjs",
+    "release:manual-evidence": "node scripts/check-manual-release-evidence.mjs",
     "review:goal": "node scripts/run-goal-500-review.mjs",
     "pack:zip": "npm run validate && node scripts/pack-release.mjs",
     "pack:zip:dist": "node scripts/pack-release.mjs",
@@ -39,7 +43,9 @@
     "perf:dashboard-scroll": "npm run test:build && node scripts/perf-benchmark-dashboard-scroll.mjs",
     "perf:dashboard-trace": "npm run build && node scripts/perf-benchmark-dashboard-trace.mjs",
     "perf:popup-startup": "npm run build && node scripts/perf-benchmark-popup-startup.mjs",
+    "perf:popup-startup:release": "npm run build && node scripts/perf-benchmark-popup-startup.mjs --profile=release",
     "perf:newtab-startup": "npm run build && node scripts/perf-benchmark-newtab-startup.mjs",
+    "perf:newtab-startup:release": "npm run build && node scripts/perf-benchmark-newtab-startup.mjs --profile=release",
     "perf:bundle": "npm run build && node scripts/check-bundle-budget.mjs"
   },
   "devDependencies": {

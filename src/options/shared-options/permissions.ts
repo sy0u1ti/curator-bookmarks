@@ -1,10 +1,15 @@
+import {
+  assessSensitiveExternalUrl,
+  isExternallyCheckableUrl
+} from '../../shared/sensitive-url.js'
+
 export function collectRequestOrigins(bookmarks: Array<{ url?: string }>): string[] {
   const origins = new Set<string>()
 
   for (const bookmark of bookmarks) {
     try {
       const parsedUrl = new URL(String(bookmark.url || ''))
-      if (/^https?:$/i.test(parsedUrl.protocol)) {
+      if (/^https?:$/i.test(parsedUrl.protocol) && !assessSensitiveExternalUrl(parsedUrl.href).sensitive) {
         origins.add(`${parsedUrl.origin}/*`)
       }
     } catch {
@@ -16,7 +21,7 @@ export function collectRequestOrigins(bookmarks: Array<{ url?: string }>): strin
 }
 
 export function isCheckableUrl(url: unknown): boolean {
-  return /^https?:\/\//i.test(String(url || ''))
+  return isExternallyCheckableUrl(url)
 }
 
 export function getOriginPermissionPattern(url: unknown): string {

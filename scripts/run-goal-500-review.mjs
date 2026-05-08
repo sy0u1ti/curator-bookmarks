@@ -23,9 +23,12 @@ function gitFiles(args) {
 }
 
 const trackedFiles = gitFiles(['ls-files'])
-const sourceFiles = trackedFiles.filter((file) => file.startsWith('src/'))
-const testFiles = trackedFiles.filter((file) => file.startsWith('tests/'))
-const docsFiles = trackedFiles.filter((file) => file.endsWith('.md') || file.startsWith('docs/'))
+const untrackedFiles = gitFiles(['ls-files', '--others', '--exclude-standard'])
+const reviewFiles = [...new Set([...trackedFiles, ...untrackedFiles])]
+  .filter((file) => existsSync(file))
+const sourceFiles = reviewFiles.filter((file) => file.startsWith('src/'))
+const testFiles = reviewFiles.filter((file) => file.startsWith('tests/'))
+const docsFiles = reviewFiles.filter((file) => file.endsWith('.md') || file.startsWith('docs/'))
 const distFiles = existsSync('dist')
   ? execFileSync('find', ['dist', '-type', 'f'], { encoding: 'utf8' })
       .split('\n')
@@ -58,7 +61,7 @@ function lineCount(content) {
   return content.split('\n').length
 }
 
-for (const file of trackedFiles) {
+for (const file of reviewFiles) {
   if (!hasTextExtension(file)) {
     continue
   }
@@ -148,7 +151,7 @@ for (const file of docsFiles.filter(hasTextExtension)) {
   })
 }
 
-for (const file of trackedFiles.filter(isBinaryAsset)) {
+for (const file of reviewFiles.filter(isBinaryAsset)) {
   addCheck('assets', file, 'binary asset exists and is non-empty', () => {
     const size = statSync(file).size
     const ok = size > 0
@@ -171,11 +174,45 @@ addCheck('build', 'package.json', 'package version matches source manifest', () 
   return { ok, evidence: `package=${packageVersion}; manifest=${manifestVersion}` }
 })
 
+addCheck('security', 'src/manifest.json', 'manifest uses optional host permissions instead of install-time all-site access', () => {
+  const manifest = JSON.parse(readText('src/manifest.json'))
+  const optionalHosts = manifest.optional_host_permissions || []
+  const ok = (
+    !Object.hasOwn(manifest, 'host_permissions') &&
+    Array.isArray(optionalHosts) &&
+    optionalHosts.includes('http://*/*') &&
+    optionalHosts.includes('https://*/*')
+  )
+  return {
+    ok,
+    evidence: ok
+      ? 'host_permissions absent; optional http/https hosts declared'
+      : 'manifest host permission stance is not optional-only'
+  }
+})
+
 addCheck('build', 'dist/manifest.json', 'built manifest version matches package version', () => {
   const packageVersion = JSON.parse(readText('package.json')).version
   const manifestVersion = JSON.parse(readText('dist/manifest.json')).version
   const ok = packageVersion === manifestVersion
   return { ok, evidence: `package=${packageVersion}; dist=${manifestVersion}` }
+})
+
+addCheck('security', 'dist/manifest.json', 'built manifest preserves optional-only host permission stance', () => {
+  const manifest = JSON.parse(readText('dist/manifest.json'))
+  const optionalHosts = manifest.optional_host_permissions || []
+  const ok = (
+    !Object.hasOwn(manifest, 'host_permissions') &&
+    Array.isArray(optionalHosts) &&
+    optionalHosts.includes('http://*/*') &&
+    optionalHosts.includes('https://*/*')
+  )
+  return {
+    ok,
+    evidence: ok
+      ? 'dist manifest has optional http/https hosts and no install-time host_permissions'
+      : 'dist manifest host permission stance is not optional-only'
+  }
 })
 
 addCheck('build', 'package.json', 'validate script covers typecheck, test, version check, and build', () => {

@@ -12,13 +12,25 @@ import {
 
 const DIST_DIR = path.resolve('dist')
 const RESULT_DIR = '.perf-results'
-const MEASURED_RUNS = 5
+const PROFILES = {
+  smoke: {
+    runs: 5,
+    gate: 'median',
+    description: '5-run smoke median gate with p95/max observation'
+  },
+  release: {
+    runs: 20,
+    gate: 'p95',
+    description: '20-run release p95 gate with max observation'
+  }
+}
 const BUDGETS = {
   shellReadyMs: 100,
   totalInteractiveMs: 500
 }
 
 async function main() {
+  const profile = getProfile()
   await relaunchWithXvfbIfNeeded(import.meta.url)
   await assertDistReady(DIST_DIR)
   await fs.mkdir(RESULT_DIR, { recursive: true })
@@ -31,15 +43,22 @@ async function main() {
     const serviceWorker = await waitForExtensionServiceWorker(context)
     const extensionId = new URL(serviceWorker.url()).host
     const rows = []
-    for (let run = 0; run < MEASURED_RUNS; run += 1) {
+    for (let run = 0; run < profile.runs; run += 1) {
       rows.push(await measurePopupStartupRun(context, extensionId, run + 1))
     }
     const summary = summarizeRows(rows)
-    const ok = isWithinBudget(summary.shellReadyMedianMs, BUDGETS.shellReadyMs) &&
-      isWithinBudget(summary.totalInteractiveMedianMs, BUDGETS.totalInteractiveMs) &&
-      rows.every((row) => row.complete)
-    await writeResult('popup-startup', { budgets: BUDGETS, runs: MEASURED_RUNS, rows, summary, ok })
-    printRows(rows, summary)
+    const ok = isPopupStartupWithinBudget(summary, rows, profile)
+    await writeResult('popup-startup', {
+      profile: profile.id,
+      gate: profile.gate,
+      gateDescription: profile.description,
+      budgets: BUDGETS,
+      runs: profile.runs,
+      rows,
+      summary,
+      ok
+    })
+    printRows(rows, summary, profile)
     if (!ok) {
       console.error('popup startup budget failed')
       process.exit(1)
@@ -48,6 +67,15 @@ async function main() {
   } finally {
     await context.close()
     await fs.rm(userDataDir, { recursive: true, force: true })
+  }
+}
+
+function getProfile() {
+  const rawProfile = process.argv.find((arg) => arg.startsWith('--profile='))?.split('=')[1] || 'smoke'
+  const profile = PROFILES[rawProfile] || PROFILES.smoke
+  return {
+    id: rawProfile in PROFILES ? rawProfile : 'smoke',
+    ...profile
   }
 }
 
@@ -129,6 +157,18 @@ function isWithinBudget(value, budget) {
   return isFiniteNumber(value) && value <= budget
 }
 
+function isPopupStartupWithinBudget(summary, rows, profile) {
+  const complete = rows.every((row) => row.complete)
+  if (profile.gate === 'p95') {
+    return complete &&
+      isWithinBudget(summary.shellReadyP95Ms, BUDGETS.shellReadyMs) &&
+      isWithinBudget(summary.totalInteractiveP95Ms, BUDGETS.totalInteractiveMs)
+  }
+  return complete &&
+    isWithinBudget(summary.shellReadyMedianMs, BUDGETS.shellReadyMs) &&
+    isWithinBudget(summary.totalInteractiveMedianMs, BUDGETS.totalInteractiveMs)
+}
+
 function isFiniteNumber(value) {
   return typeof value === 'number' && Number.isFinite(value)
 }
@@ -139,12 +179,14 @@ async function writeResult(name, payload) {
   console.log(`results written to ${outPath}`)
 }
 
-function printRows(rows, summary) {
+function printRows(rows, summary, profile) {
   for (const row of rows) {
     console.log(`${row.page}#${row.run}: shell=${row.shellReadyMs ?? 'missing'}ms total=${row.totalInteractiveMs ?? 'missing'}ms`)
   }
+  console.log(`popup profile: ${profile.id} (${profile.description})`)
   console.log(`popup median: shell=${summary.shellReadyMedianMs ?? 'missing'}ms total=${summary.totalInteractiveMedianMs ?? 'missing'}ms`)
   console.log(`popup p95: shell=${summary.shellReadyP95Ms ?? 'missing'}ms total=${summary.totalInteractiveP95Ms ?? 'missing'}ms`)
+  console.log(`popup max: shell=${summary.shellReadyMaxMs ?? 'missing'}ms total=${summary.totalInteractiveMaxMs ?? 'missing'}ms`)
 }
 
 await main()

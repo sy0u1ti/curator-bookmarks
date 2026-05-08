@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { test } from 'node:test'
 
 import {
@@ -12,6 +14,10 @@ import {
   validateBackgroundBlobSize,
   validateBackgroundContentLength
 } from '../src/newtab/interactions.js'
+
+function readProjectFile(path: string): string {
+  return readFileSync(resolve(process.cwd(), path), 'utf8')
+}
 
 test('builds minimal bookmark move operations for a drag reorder', () => {
   assert.deepEqual(
@@ -237,6 +243,16 @@ test('validates remote background declared and final blob size', () => {
 
   assert.deepEqual(validateBackgroundBlobSize(BACKGROUND_URL_MAX_BYTES), { allowed: true })
   assert.equal(validateBackgroundBlobSize(BACKGROUND_URL_MAX_BYTES + 1).allowed, false)
+})
+
+test('remote background image response rejects SVG media', () => {
+  const source = readProjectFile('src/newtab/newtab.ts')
+  const imageResponseBody = source.match(/function isBackgroundImageResponse[\s\S]*?function isKnownImageUrlWithoutContentType/)?.[0] || ''
+  const optimizeBody = source.match(/async function createOptimizedBackgroundImageBlob[\s\S]*?function isBackgroundImageResponse/)?.[0] || ''
+
+  assert.match(imageResponseBody, /image\/svg\+xml/)
+  assert.match(imageResponseBody, /\.svg/)
+  assert.doesNotMatch(optimizeBody, /image\/svg\\\+xml'\]\.includes/)
 })
 
 test('resolves undo delete parent to a live folder or the default location', () => {

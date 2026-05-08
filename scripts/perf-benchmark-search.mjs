@@ -100,6 +100,8 @@ async function benchmarkLabel({ buildLightPopupSearchIndex, searchBookmarks, sea
       lastHits = hits
     }
     samples.sort((a, b) => a - b)
+    const budgetMs = BUDGETS.syncP95MsByFixture[label] || null
+    const p95Ms = Number(quantile(samples, 0.95).toFixed(2))
     rows.push({
       label,
       mode: 'final',
@@ -111,11 +113,13 @@ async function benchmarkLabel({ buildLightPopupSearchIndex, searchBookmarks, sea
       complete: true,
       runs: MEASURED_RUNS,
       p50Ms: Number(quantile(samples, 0.5).toFixed(2)),
-      p95Ms: Number(quantile(samples, 0.95).toFixed(2)),
+      p95Ms,
       maxMs: Number(samples[samples.length - 1].toFixed(2)),
       minMs: Number(samples[0].toFixed(2)),
-      budgetMs: BUDGETS.syncP95MsByFixture[label] || null,
-      ok: isSearchBudgetOk(label, Number(quantile(samples, 0.95).toFixed(2)))
+      budgetMs,
+      budgeted: Boolean(budgetMs),
+      gate: budgetMs ? 'p95' : 'observe',
+      ok: isSearchBudgetOk(label, p95Ms)
     })
 
     if (label === '50k') {
@@ -145,6 +149,8 @@ async function benchmarkLabel({ buildLightPopupSearchIndex, searchBookmarks, sea
         maxMs: Number(firstBatchSamples[firstBatchSamples.length - 1].toFixed(2)),
         minMs: Number(firstBatchSamples[0].toFixed(2)),
         budgetMs: BUDGETS.firstBatchP95MsByFixture[label] || null,
+        budgeted: Boolean(BUDGETS.firstBatchP95MsByFixture[label]),
+        gate: BUDGETS.firstBatchP95MsByFixture[label] ? 'p95-and-min-hits' : 'observe',
         ok: isFirstBatchBudgetOk(label, p95Ms, lastBatch.hits)
       })
     }
@@ -153,7 +159,7 @@ async function benchmarkLabel({ buildLightPopupSearchIndex, searchBookmarks, sea
 }
 
 function printTable(rows) {
-  const header = ['fixture', 'mode', 'kind', 'query', 'hits', 'p50ms', 'p95ms', 'budget', 'status']
+  const header = ['fixture', 'mode', 'kind', 'query', 'hits', 'p50ms', 'p95ms', 'budget', 'gate', 'status']
   const widths = header.map((title) => title.length)
   const data = rows.map((row) => [
     row.label,
@@ -164,6 +170,7 @@ function printTable(rows) {
     String(row.p50Ms),
     String(row.p95Ms),
     row.budgetMs ? String(row.budgetMs) : '-',
+    row.gate,
     row.ok ? 'ok' : 'fail'
   ])
   for (const row of data) {

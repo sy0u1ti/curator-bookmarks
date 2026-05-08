@@ -536,6 +536,17 @@ button:focus-visible {
   box-shadow: 0 0 0 3px rgba(255, 138, 130, 0.12);
 }
 
+.auto-analyze-status.collapsed {
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  min-height: 30px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.auto-analyze-status.collapsed .auto-analyze-detail {
+  display: none;
+}
+
 .search-shell {
   position: relative;
   z-index: 1;

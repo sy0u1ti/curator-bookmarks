@@ -2,7 +2,8 @@ import {
   AI_NAMING_DEFAULT_BASE_URL,
   AI_NAMING_DEFAULT_MODEL,
   AI_NAMING_DEFAULT_TIMEOUT_MS,
-  AI_NAMING_DEFAULT_BATCH_SIZE
+  AI_NAMING_DEFAULT_BATCH_SIZE,
+  AI_NAMING_DEFAULT_DAILY_LIMIT
 } from './constants.js'
 import { getDefaultInboxSettings } from '../../shared/inbox.js'
 import {
@@ -41,6 +42,7 @@ export function createDefaultAiNamingSettings() {
     apiStyle: 'responses',
     timeoutMs: AI_NAMING_DEFAULT_TIMEOUT_MS,
     batchSize: AI_NAMING_DEFAULT_BATCH_SIZE,
+    dailyLimit: AI_NAMING_DEFAULT_DAILY_LIMIT,
     autoSelectHighConfidence: true,
     allowRemoteParsing: false,
     autoAnalyzeBookmarks: false,
@@ -281,6 +283,9 @@ export const aiNamingState = {
   lastConnectivityTestAt: 0,
   lastConnectivityTestStatus: '',
   lastConnectivityTestMessage: '',
+  usageUsedToday: 0,
+  usageDayKey: '',
+  usageUpdatedAt: 0,
   lastCompletedAt: 0,
   lastError: ''
 }

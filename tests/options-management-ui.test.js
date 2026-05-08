@@ -884,6 +884,32 @@ test('smart bookmark analysis uses the decision panel summary layout', () => {
   assert.match(optionsCss, /\.ai-decision-grid/)
 })
 
+test('AI provider settings expose request preview, daily limit and prompt-injection safeguards', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const aiSettingsSource = readProjectFile('src/options/sections/ai-settings.ts')
+  const serviceWorkerSource = readProjectFile('src/service-worker/service-worker.ts')
+  const popupSource = readProjectFile('src/popup/popup.ts')
+  const naturalSearchAiSource = readProjectFile('src/popup/natural-search-ai.ts')
+
+  assert.match(optionsHtml, /id="ai-daily-limit"/)
+  assert.match(optionsHtml, /每日 AI 请求上限/)
+  assert.match(optionsHtml, /id="ai-usage-status"/)
+  assert.match(optionsHtml, /aria-label="AI 请求预览"/)
+  assert.match(optionsHtml, /发送字段类别/)
+  assert.match(optionsHtml, /请求预览位于[\s\S]*?目标 Base URL/)
+  assert.match(optionsSource, /buildAiRequestPreviewHtml/)
+  assert.match(optionsSource, /目标服务/)
+  assert.match(optionsSource, /每批最多/)
+  assert.match(optionsSource, /每日上限/)
+  assert.match(optionsSource, /reserveAiUsage\(\{[\s\S]*?feature: 'ai-naming'/)
+  assert.match(aiSettingsSource, /dailyLimit/)
+  for (const source of [optionsSource, serviceWorkerSource, popupSource, naturalSearchAiSource]) {
+    assert.match(source, /不可信输入/)
+    assert.match(source, /不得执行/)
+  }
+})
+
 test('history and tag cleanup buttons expose specific labels', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const labelledButtons = [
@@ -924,6 +950,7 @@ test('start privacy and health centers expose visible options entries', () => {
   const optionsCss = readProjectFile('src/options/options.css')
   const constants = readProjectFile('src/options/shared-options/constants.ts')
   const privacySectionSource = readProjectFile('src/options/sections/privacy.ts')
+  const trustCenterSource = readProjectFile('src/options/sections/trust-center.ts')
   const healthSectionSource = readProjectFile('src/options/sections/health-center.ts')
 
   assert.match(optionsHtml, /data-section-link="onboarding">开始使用</)
@@ -932,6 +959,8 @@ test('start privacy and health centers expose visible options entries', () => {
   assert.match(optionsHtml, /<h1 id="privacy-title">隐私与权限中心<\/h1>/)
   assert.match(optionsHtml, /id="privacy-permission-list"/)
   assert.match(optionsHtml, /id="privacy-audit-log"/)
+  assert.match(optionsHtml, /网页搜索、精选远程背景、链接检测、AI\/Jina 和自定义远程背景/)
+  assert.match(optionsHtml, /最近 20 条或 7 天内的任务摘要/)
   assert.match(optionsHtml, /id="health-action-list"/)
   assert.match(optionsHtml, /id="health-deadlink-count"/)
   assert.match(constants, /privacy:[\s\S]*title: '隐私与权限中心'/)
@@ -939,6 +968,10 @@ test('start privacy and health centers expose visible options entries', () => {
   assert.match(optionsSource, /function renderPrivacySection/)
   assert.match(optionsSource, /function renderHealthCenterSection/)
   assert.match(optionsSource, /function renderOnboardingSection/)
+  assert.match(trustCenterSource, /title: 'Newtab 网页搜索'/)
+  assert.match(trustCenterSource, /title: '精选远程背景'/)
+  assert.match(trustCenterSource, /title: '用户自定义远程背景'/)
+  assert.match(trustCenterSource, /Curator 不记录网页搜索 query/)
   assert.match(optionsSource, /import\('\.\/sections\/privacy\.js'\)/)
   assert.match(optionsSource, /import\('\.\/sections\/health-center\.js'\)/)
   assert.match(privacySectionSource, /renderPrivacySection/)
@@ -948,6 +981,23 @@ test('start privacy and health centers expose visible options entries', () => {
   assert.match(optionsHtml, /id="dashboard-performance-mode"/)
   assert.match(optionsSource, /handleDashboardPerformanceModeChange/)
   assert.match(optionsCss, /\.dashboard-performance-mode-toggle/)
+})
+
+test('onboarding exposes the required four-step local-first flow', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+
+  assert.match(optionsHtml, /<button id="onboarding-complete"[^>]*>完成引导<\/button>/)
+  assert.match(optionsHtml, /暂不设置，继续本地搜索/)
+  assert.match(optionsHtml, /Curator 的单一用途是 Chrome 书签搜索、整理、清理和新标签页/)
+  assert.match(optionsHtml, /安装后 Curator 会替换 Chrome 新标签页/)
+  assert.match(optionsHtml, /选择书签栏、选择一个常用文件夹，或暂不设置/)
+  assert.match(optionsHtml, /暂不设置不会影响 Popup、仪表盘和本地书签搜索/)
+  assert.match(optionsHtml, /从搜索书签、整理书签、定制新标签页或开启 AI 中选一个入口开始/)
+  assert.match(optionsHtml, /打开 Popup/)
+  assert.match(optionsHtml, /恢复 Chrome 默认新标签页/)
+  assert.match(optionsHtml, /进入 AI 服务设置/)
+  assert.doesNotMatch(optionsHtml, /标记完成/)
+  assert.doesNotMatch(optionsHtml, /AI 渠道设置向导/)
 })
 
 test('tag management center exposes visible options entry', () => {
@@ -970,6 +1020,24 @@ test('tag management center exposes visible options entry', () => {
   assert.match(constants, /tags:[\s\S]*title: '标签管理中心'/)
   assert.match(optionsSource, /handleTagManagementRename/)
   assert.match(optionsSource, /handleTagManagementDelete/)
+  assert.match(optionsSource, /title: `重命名标签/)
+  assert.match(optionsSource, /confirmLabel: '重命名标签'/)
+  assert.match(optionsSource, /title: `导入 \$\{changedCount\} 条标签数据/)
+  assert.match(optionsSource, /kind: 'tag-import'/)
+  assert.match(optionsSource, /执行前会创建本地自动备份/)
+})
+
+test('privacy audit and ignore rule cleanup paths require confirmation', () => {
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.match(optionsSource, /async function handlePrivacyAuditClear/)
+  assert.match(optionsSource, /title: '清空本地审计日志？'/)
+  assert.match(optionsSource, /confirmLabel: '清空审计日志'/)
+  assert.match(optionsSource, /dom\.privacyClearAudit\?\.addEventListener\('click', \(\) => \{[\s\S]*?handlePrivacyAuditClear/)
+  assert.match(optionsSource, /title: `新增 \$\{candidateResults\.length\} 条忽略规则？`/)
+  assert.match(optionsSource, /title: `新增\$\{getIgnoreKindLabel\(kind\)\}忽略规则？`/)
+  assert.match(optionsSource, /confirmLabel: '新增忽略规则'/)
+  assert.match(optionsSource, /不会删除或移动 Chrome 书签/)
 })
 
 test('smart bookmark analysis bulk selection buttons expose analysis-specific labels', () => {
@@ -1043,6 +1111,22 @@ test('availability checks use adaptive runner with user settings', () => {
   assert.match(runnerSource, /domainConcurrency: 1/)
   assert.match(runnerSource, /statusCode === 429/)
   assert.doesNotMatch(optionsHtml, /availability-speed-profile|速度档位/)
+})
+
+test('availability checks require optional host permission before visiting target sites', () => {
+  const manifest = JSON.parse(readProjectFile('src/manifest.json'))
+  const optionsSource = readProjectFile('src/options/options.ts')
+
+  assert.equal(Object.hasOwn(manifest, 'host_permissions'), false)
+  assert.deepEqual(manifest.optional_host_permissions, ['http://*/*', 'https://*/*'])
+  assert.match(optionsSource, /async function ensureProbePermissionForRun\(\{ interactive = true, origins = availabilityState\.requestOrigins \} = \{\}\)/)
+  assert.match(optionsSource, /const requestOrigins = normalizeOriginPermissionList\(origins\)/)
+  assert.match(optionsSource, /await containsPermissions\(\{ origins: requestOrigins \}\)/)
+  assert.match(optionsSource, /await requestPermissions\(\{\s*origins: requestOrigins\s*\}\)/)
+  assert.match(optionsSource, /const probeEnabled = await ensureProbePermissionForRun\(\{ interactive: true \}\)[\s\S]*?if \(!probeEnabled\) \{[\s\S]*?未授予当前检测范围的目标网站访问权限/)
+  assert.match(optionsSource, /const retestOrigins = collectRequestOrigins\(targetBookmarks\)[\s\S]*?ensureProbePermissionForRun\(\{\s*interactive: true,\s*origins: retestOrigins\s*\}\)/)
+  assert.match(optionsSource, /未授予所选书签目标网站访问权限/)
+  assert.match(optionsSource, /未授权则不会访问这些网站/)
 })
 
 test('availability results are not restored into the UI after refresh', () => {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import {
   SEARCH_MULTI_OPEN_LIMIT,
@@ -7,6 +8,16 @@ import {
   normalizeSearchEngineId,
   planSearchOpenTargets
 } from '../src/newtab/search-engines.js'
+
+test('newtab web search is controlled by an explicit user setting', () => {
+  const html = readFileSync('src/newtab/newtab.html', 'utf8')
+  const script = readFileSync('src/newtab/newtab.ts', 'utf8')
+
+  assert.match(html, /id="search-web-enabled"/)
+  assert.match(html, /关闭后仅保留本地书签搜索/)
+  assert.match(script, /webSearchEnabled:\s*true/)
+  assert.match(script, /if \(state\.searchSettings\.webSearchEnabled === false\) \{[\s\S]*?return[\s\S]*?\}/)
+})
 
 test('normalizes search engine selection and enabled order', () => {
   assert.equal(normalizeSearchEngineId('perplexity'), 'perplexity')

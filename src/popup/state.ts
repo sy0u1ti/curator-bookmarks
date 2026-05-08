@@ -139,6 +139,7 @@ export interface PopupState {
   smartRunId: number
   smartPermissionRequest: { origins?: string[] } | null
   autoAnalyzeStatus: PopupAutoAnalyzeStatus | null
+  autoAnalyzeCollapsed: boolean
   lastDeletedBookmark: PopupDeletedBookmark | null
   toasts: PopupToast[]
   toastTimers: Map<string, number>
@@ -237,6 +238,7 @@ export const state: PopupState = {
   smartRunId: 0,
   smartPermissionRequest: null,
   autoAnalyzeStatus: null,
+  autoAnalyzeCollapsed: false,
   lastDeletedBookmark: null,
   toasts: [],
   toastTimers: new Map()

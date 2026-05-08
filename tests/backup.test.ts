@@ -1,8 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   buildBackupRestorePreview,
+  createAutoBackupBeforeDangerousOperation,
   getBackupFileName,
   parseCuratorBackupFile,
   restoreCuratorBackup,
@@ -51,6 +53,105 @@ test('parseCuratorBackupFile removes API key fields from AI settings', () => {
   assert.equal('apiKey' in backup.storage.aiProviderSettings, false)
   assert.equal('api_key' in backup.storage.aiProviderSettings, false)
   assert.equal(backup.storage.aiProviderSettings.model, 'gpt-5-mini')
+})
+
+test('backup redaction declares audit logs, full text and user media are omitted', () => {
+  const backup = parseCuratorBackupFile({
+    app: 'curator-bookmarks',
+    kind: 'full-backup',
+    schemaVersion: 1,
+    exportedAt: '2026-05-01T00:00:00.000Z',
+    extensionVersion: '1.4.10',
+    manifestVersion: 3,
+    source: 'manual',
+    chromeBookmarks: {
+      exportedAt: '2026-05-01T00:00:00.000Z',
+      tree: []
+    },
+    storage: {
+      bookmarkTagIndex: { version: 1, updatedAt: 0, records: {} },
+      recycleBin: [],
+      ignoreRules: { bookmarks: [], domains: [], folders: [] },
+      redirectCache: { savedAt: 0, results: [] },
+      newTab: {},
+      aiProviderSettings: { apiKey: 'fixture-secret' }
+    }
+  })
+
+  assert.deepEqual(backup.redaction.omittedFields, [
+    'apiKey',
+    'authorizationHeaders',
+    'privacyAuditLog',
+    'aiUsageLedger',
+    'contentFullText',
+    'contentSnapshotCache',
+    'newTabBackgroundMedia',
+    'userMediaCache'
+  ])
+  assert.doesNotMatch(JSON.stringify(backup), /fixture-secret|privacyAuditLog":\[|curatorBookmarkAiUsageLedger/)
+})
+
+test('dangerous operation backup kinds include tag import changes', () => {
+  const backupSource = readFileSync('src/shared/backup.ts', 'utf8')
+
+  assert.match(backupSource, /\| 'tag-import'/)
+})
+
+test('dangerous operation auto backup stops when backup storage fails by default', async () => {
+  const store: Record<string, unknown> = {}
+  ;(globalThis as any).chrome = createChromeMock({
+    store,
+    tree: [rootNode([])]
+  })
+  ;(globalThis as any).indexedDB = {
+    open() {
+      throw new Error('IndexedDB unavailable')
+    }
+  }
+
+  try {
+    await assert.rejects(
+      createAutoBackupBeforeDangerousOperation({
+        kind: 'batch-delete',
+        source: 'options',
+        reason: '测试失败中断',
+        now: Date.UTC(2026, 4, 1)
+      }),
+      /自动备份失败，已停止执行高风险操作：IndexedDB unavailable/
+    )
+  } finally {
+    delete (globalThis as any).chrome
+    delete (globalThis as any).indexedDB
+  }
+})
+
+test('dangerous operation auto backup can explicitly allow skipped backup', async () => {
+  const store: Record<string, unknown> = {}
+  ;(globalThis as any).chrome = createChromeMock({
+    store,
+    tree: [rootNode([])]
+  })
+  ;(globalThis as any).indexedDB = {
+    open() {
+      throw new Error('IndexedDB unavailable')
+    }
+  }
+
+  try {
+    const result = await createAutoBackupBeforeDangerousOperation({
+      kind: 'batch-delete',
+      source: 'options',
+      reason: '测试显式跳过',
+      now: Date.UTC(2026, 4, 1),
+      allowSkipOnFailure: true
+    })
+
+    assert.equal(result.skipped, true)
+    assert.match(result.reason || '', /IndexedDB unavailable/)
+  } finally {
+    delete (globalThis as any).chrome
+    delete (globalThis as any).indexedDB
+  }
 })
 
 test('safe full restore keeps local AI api key while restoring safe provider fields', async () => {
