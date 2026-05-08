@@ -247,6 +247,12 @@ test('content snapshot full text search map is not awaited during initial option
   assert.match(optionsSource, /scheduleContentSnapshotFullTextSearchMapHydration/)
   assert.match(initialMapAssignment, /buildContentSnapshotSearchMap\(/)
   assert.doesNotMatch(initialMapAssignment, /await buildContentSnapshotSearchMapWithFullText/)
+  assert.doesNotMatch(hydratePersistentBody, /await loadBookmarkTagIndex\(\)/)
+  assert.doesNotMatch(hydratePersistentBody, /await loadContentSnapshotIndex\(\)/)
+  assert.match(optionsSource, /function scheduleLargeRepositoryHydration\(\)/)
+  assert.match(optionsSource, /function hydrateLargeRepositoryState\(\)/)
+  assert.match(getFunctionBody(optionsSource, 'hydrateLargeRepositoryState'), /loadBookmarkTagIndex\(\)/)
+  assert.match(getFunctionBody(optionsSource, 'hydrateLargeRepositoryState'), /loadContentSnapshotIndex\(\)/)
   assert.doesNotMatch(hydratePersistentBody, /scheduleContentSnapshotFullTextSearchMapHydration\(\)/)
   assert.doesNotMatch(hydratePersistentBody, /requestIdleCallback/)
   assert.match(optionsSource, /CONTENT_SNAPSHOT_FULL_TEXT_RETRY_LIMIT\s*=\s*2/)
@@ -272,7 +278,9 @@ test('dashboard query hydrates full text map on demand and renders after hydrati
   assert.match(ensureBody, /parseSearchQuery\(dashboardState\.query\)\.textTerms\.length/)
   assert.match(ensureBody, /buildContentSnapshotSearchMapWithFullText\(contentSnapshotState\.index,\s*\{[\s\S]*?maxRecords:\s*1000/)
   assert.match(ensureBody, /contentSnapshotState\.searchTextMap = searchMap/)
-  assert.match(ensureBody, /renderDashboardSection\(\)/)
+  assert.match(ensureBody, /markDashboardVirtualFilterChange\('append'\)/)
+  assert.match(ensureBody, /scheduleDashboardListRender\(\)/)
+  assert.doesNotMatch(ensureBody, /renderDashboardSection\(\)/)
 })
 
 test('dashboard search reuses popup search, saved searches and AI natural parsing', () => {
@@ -324,11 +332,15 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   const {
     computeDashboardVirtualWindow,
     getDashboardVirtualColumnCount,
+    getDashboardVirtualOverscanRows,
     getDashboardVirtualRenderedCount
   } = await import('../src/options/sections/dashboard.js')
 
   assert.equal(getDashboardVirtualColumnCount(1040), 3)
   assert.equal(getDashboardVirtualColumnCount(1240), 4)
+  assert.equal(getDashboardVirtualColumnCount(3840), 12)
+  assert.equal(getDashboardVirtualOverscanRows(12, 6), 5)
+  assert.equal(getDashboardVirtualOverscanRows(12, 6, { fastScrolling: true }), 3)
 
   assert.equal(
     computeDashboardVirtualWindow({
@@ -380,6 +392,38 @@ test('dashboard virtual grid computes bounded windows for large card lists', asy
   assert.ok(
     getDashboardVirtualRenderedCount(scrolledWindow) <= 90,
     'scrolled dashboard window should keep DOM card count bounded'
+  )
+
+  const wideWindow = computeDashboardVirtualWindow({
+    itemCount: 20000,
+    contentWidth: 3840,
+    containerHeight: 960,
+    scrollTop: 18600,
+    cardHeight: 176,
+    gap: 10,
+    minCardWidth: 300
+  })
+
+  assert.equal(wideWindow.columnCount, 12)
+  assert.ok(
+    getDashboardVirtualRenderedCount(wideWindow) <= 200,
+    '4K dashboard window should stay below the virtual card budget'
+  )
+
+  const fastWideWindow = computeDashboardVirtualWindow({
+    itemCount: 20000,
+    contentWidth: 3840,
+    containerHeight: 960,
+    scrollTop: 18600,
+    cardHeight: 176,
+    gap: 10,
+    minCardWidth: 300,
+    fastScrolling: true
+  })
+
+  assert.ok(
+    getDashboardVirtualRenderedCount(fastWideWindow) < getDashboardVirtualRenderedCount(wideWindow),
+    'fast scrolling should shrink overscan before idle backfill'
   )
 })
 
@@ -450,9 +494,9 @@ test('dashboard folder sidebar layout and active styles are defined', () => {
   assert.match(optionsCss, /\.dashboard-folder-tree[^{}]*\.(?:active|current)\s*\{/)
   assert.match(optionsCss, /\.dashboard-panel\[data-dashboard-ready="false"\]\s+\.dashboard-loading-screen\s*\{[\s\S]*?opacity:\s*1/)
   assert.match(optionsCss, /\.dashboard-panel\[data-dashboard-ready="false"\]\s+\.dashboard-results-group\s*\{[\s\S]*?opacity:\s*0[\s\S]*?visibility:\s*hidden/)
-  assert.match(optionsCss, /\.dashboard-bookmark-card::before\s*\{[\s\S]*?background:\s*[\s\S]*?rgba\(18,\s*18,\s*20,\s*0\.42\)/)
+  assert.match(optionsCss, /\.dashboard-bookmark-card::before\s*\{[\s\S]*?content:\s*none/)
   assert.doesNotMatch(optionsCss, /\.dashboard-bookmark-card:focus-within/)
-  assert.match(optionsCss, /\.dashboard-bookmark-card:has\(\.dashboard-icon-action:is\(:hover,\s*:focus,\s*:active\)\)\s*\{[\s\S]*?border-color:\s*rgba\(255,\s*255,\s*255,\s*0\.08\)/)
+  assert.doesNotMatch(optionsCss, /\.dashboard-bookmark-card:has\(/)
   assert.doesNotMatch(optionsCss, /\.dashboard-card-grid\.is-scrolling\s+\.dashboard-bookmark-card::before/)
   assert.match(optionsCss, /\.dashboard-favicon-shell img\s*\{[\s\S]*?z-index:\s*1/)
   assert.match(optionsCss, /\.dashboard-favicon-shell img\s*\{[\s\S]*?opacity:\s*0/)
@@ -874,15 +918,44 @@ test('tag and backup data buttons expose data-scope labels', () => {
   }
 })
 
+test('start privacy and health centers expose visible options entries', () => {
+  const optionsHtml = readProjectFile('src/options/options.html')
+  const optionsSource = readProjectFile('src/options/options.ts')
+  const optionsCss = readProjectFile('src/options/options.css')
+  const constants = readProjectFile('src/options/shared-options/constants.ts')
+  const privacySectionSource = readProjectFile('src/options/sections/privacy.ts')
+  const healthSectionSource = readProjectFile('src/options/sections/health-center.ts')
+
+  assert.match(optionsHtml, /data-section-link="onboarding">开始使用</)
+  assert.match(optionsHtml, /data-section-link="privacy">隐私与权限中心</)
+  assert.match(optionsHtml, /data-section-link="health">书签健康中心</)
+  assert.match(optionsHtml, /<h1 id="privacy-title">隐私与权限中心<\/h1>/)
+  assert.match(optionsHtml, /id="privacy-permission-list"/)
+  assert.match(optionsHtml, /id="privacy-audit-log"/)
+  assert.match(optionsHtml, /id="health-action-list"/)
+  assert.match(optionsHtml, /id="health-deadlink-count"/)
+  assert.match(constants, /privacy:[\s\S]*title: '隐私与权限中心'/)
+  assert.match(constants, /health:[\s\S]*title: '书签健康中心'/)
+  assert.match(optionsSource, /function renderPrivacySection/)
+  assert.match(optionsSource, /function renderHealthCenterSection/)
+  assert.match(optionsSource, /function renderOnboardingSection/)
+  assert.match(optionsSource, /import\('\.\/sections\/privacy\.js'\)/)
+  assert.match(optionsSource, /import\('\.\/sections\/health-center\.js'\)/)
+  assert.match(privacySectionSource, /renderPrivacySection/)
+  assert.match(healthSectionSource, /renderHealthCenterSection/)
+  assert.match(optionsCss, /\.privacy-permission-list/)
+  assert.match(optionsCss, /\.health-action-card/)
+  assert.match(optionsHtml, /id="dashboard-performance-mode"/)
+  assert.match(optionsSource, /handleDashboardPerformanceModeChange/)
+  assert.match(optionsCss, /\.dashboard-performance-mode-toggle/)
+})
+
 test('tag management center exposes visible options entry', () => {
   const optionsHtml = readProjectFile('src/options/options.html')
   const optionsSource = readProjectFile('src/options/options.ts')
   const optionsCss = readProjectFile('src/options/options.css')
   const constants = readProjectFile('src/options/shared-options/constants.ts')
 
-  assert.doesNotMatch(optionsHtml, /data-section-link="privacy">隐私与权限中心</)
-  assert.doesNotMatch(optionsHtml, /<h1 id="privacy-title">隐私与权限中心<\/h1>/)
-  assert.doesNotMatch(optionsHtml, /id="privacy-permission-list"/)
   assert.match(optionsHtml, /data-section-link="tags">标签管理中心</)
   assert.match(optionsHtml, /<h1 id="tags-title">标签管理中心<\/h1>/)
   assert.match(optionsHtml, /class="tag-management-layout"/)
@@ -894,9 +967,7 @@ test('tag management center exposes visible options entry', () => {
   assert.match(optionsCss, /\.tag-management-card\s*\{[\s\S]*?padding:\s*20px 22px/)
   assert.match(optionsCss, /\.tag-management-chip\s*\{[\s\S]*?padding:\s*9px 14px/)
   assert.match(optionsCss, /\.tag-management-examples li\s*\{[\s\S]*?overflow-wrap:\s*anywhere/)
-  assert.doesNotMatch(constants, /privacy:[\s\S]*title: '隐私与权限中心'/)
   assert.match(constants, /tags:[\s\S]*title: '标签管理中心'/)
-  assert.doesNotMatch(optionsSource, /renderPrivacySection/)
   assert.match(optionsSource, /handleTagManagementRename/)
   assert.match(optionsSource, /handleTagManagementDelete/)
 })
@@ -926,10 +997,16 @@ test('smart bookmark analysis result actions expose bookmark-specific labels', (
   assert.match(optionsSource, /const openLabel = getAiNamingResultActionLabel\('打开书签页面', result\)/)
   assert.match(optionsSource, /const applyLabel = getAiNamingResultActionLabel\('应用书签智能分析建议', result\)/)
   assert.match(optionsSource, /const moveLabel = getAiNamingResultActionLabel\('移动至推荐文件夹', result\)/)
+  assert.match(optionsSource, /const rejectLabel = getAiNamingResultActionLabel\('拒绝书签智能分析建议', result\)/)
   assert.match(optionsSource, /data-ai-select="\$\{escapeAttr\(result\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(selectionLabel\)\}"/)
   assert.match(optionsSource, /data-ai-move-recommended="\$\{escapeAttr\(result\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(moveLabel\)\}"/)
   assert.match(optionsSource, /<a class="detect-result-open"[\s\S]*?aria-label="\$\{escapeAttr\(openLabel\)\}"/)
   assert.match(optionsSource, /data-ai-apply="\$\{escapeAttr\(result\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(applyLabel\)\}"/)
+  assert.match(optionsSource, /data-ai-reject="\$\{escapeAttr\(result\.id\)\}"[\s\S]*?aria-label="\$\{escapeAttr\(rejectLabel\)\}"/)
+  assert.match(optionsSource, /async function rejectAiNamingResult/)
+  assert.match(optionsSource, /STORAGE_KEYS\.aiRejectedSuggestions/)
+  assert.match(optionsSource, /isAiNamingSuggestionRejected\(result\)/)
+  assert.match(optionsSource, /已拒绝的同一标题建议不会重复展示/)
 })
 
 test('availability and smart analysis runs notify when finished', () => {

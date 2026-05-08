@@ -60,6 +60,7 @@ import {
   requestRuntimeNotification
 } from '../shared/messages.js'
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
+import type { PrivacyAuditInput } from '../shared/privacy-audit.js'
 import {
   extractAiErrorMessage,
   extractChatCompletionsJsonText,
@@ -113,6 +114,7 @@ import {
   buildContentSnapshotSearchMap,
   buildContentSnapshotSearchText,
   buildContentSnapshotSearchMapWithFullText,
+  loadContentSnapshotIndex,
   normalizeContentSnapshotIndex,
   normalizeContentSnapshotSettings,
   saveContentSnapshotFromContext,
@@ -258,7 +260,7 @@ import {
   moveSelectedDashboardBookmarks,
   removeDashboardSelectionIds,
   renderDashboardSection
-} from './sections/dashboard.js'
+} from './sections/dashboard-lazy.js'
 import {
   deleteTagFromIndex,
   renderTagManagementSection,
@@ -276,6 +278,11 @@ let availabilityRenderFrame = 0
 let availabilityDurationTimer = 0
 let aiNamingDurationTimer = 0
 let availabilityPauseResolvers: Array<() => void> = []
+let largeRepositoryHydrationStarted = false
+let onboardingCompleted = false
+let onboardingModulePromise: Promise<typeof import('./sections/trust-center.js')> | null = null
+let privacyModulePromise: Promise<typeof import('./sections/privacy.js')> | null = null
+let healthCenterModulePromise: Promise<typeof import('./sections/health-center.js')> | null = null
 const AVAILABILITY_FILTERS = new Set([
   'all',
   'failed',
@@ -286,6 +293,7 @@ const AVAILABILITY_FILTERS = new Set([
   'recovered',
   'ignored'
 ])
+const AI_REJECTED_SUGGESTIONS_LIMIT = 500
 const COLLAPSIBLE_NAV_GROUP_SECTIONS: Record<string, Set<string>> = {
   'availability-tools': new Set(['availability', 'history', 'redirects', 'ignore'])
 }
@@ -396,7 +404,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (initialSectionKey !== getCurrentSectionKey()) {
     window.history.replaceState(null, '', `#${initialSectionKey}`)
   }
-
   syncPageSection()
   resetOptionsScrollPosition()
   window.addEventListener('hashchange', () => {
@@ -412,9 +419,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   void hydrateShortcutCommands()
 
   await hydratePersistentState()
+  if (!window.location.hash && !onboardingCompleted && !IS_OPTIONS_DASHBOARD_EMBED_MODE) {
+    window.history.replaceState(null, '', '#onboarding')
+    syncPageSection()
+    resetOptionsScrollPosition()
+  }
   await hydrateAvailabilityCatalog({ analyzeFolderCleanup: !IS_OPTIONS_DASHBOARD_EMBED_MODE })
-  await hydrateDashboardSpeedDialState()
-  renderDashboardSectionIfVisible()
+  if (normalizeSectionKey(getCurrentSectionKey()) === 'dashboard') {
+    await hydrateDashboardSpeedDialState()
+    renderDashboardSectionIfVisible()
+  }
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
   renderAvailabilitySection()
@@ -433,14 +447,13 @@ async function hydratePersistentState() {
       STORAGE_KEYS.availabilitySettings,
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
-      STORAGE_KEYS.bookmarkTagIndex,
       STORAGE_KEYS.folderCleanupState,
       STORAGE_KEYS.inboxSettings,
       STORAGE_KEYS.contentSnapshotSettings,
-      STORAGE_KEYS.contentSnapshotIndex,
-      STORAGE_KEYS.dashboardFaviconCache
+      STORAGE_KEYS.onboardingState,
+      STORAGE_KEYS.dashboardFaviconCache,
+      STORAGE_KEYS.aiRejectedSuggestions
     ])
-
     managerState.ignoreRules = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
     hydrateDetectionHistory(stored[STORAGE_KEYS.detectionHistory], historyCallbacks)
     hydrateBookmarkAddHistory(stored[STORAGE_KEYS.bookmarkAddHistory])
@@ -449,19 +462,20 @@ async function hydratePersistentState() {
     availabilityState.settings = normalizeAvailabilityRunnerUserSettings(stored[STORAGE_KEYS.availabilitySettings])
     managerState.recycleBin = normalizeRecycleBin(stored[STORAGE_KEYS.recycleBin])
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
-    aiNamingState.tagIndex = normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
+    hydrateAiRejectedSuggestions(stored[STORAGE_KEYS.aiRejectedSuggestions])
     contentSnapshotState.settings = normalizeContentSnapshotSettings(stored[STORAGE_KEYS.contentSnapshotSettings])
-    contentSnapshotState.index = normalizeContentSnapshotIndex(stored[STORAGE_KEYS.contentSnapshotIndex])
-    contentSnapshotState.searchTextMap = buildContentSnapshotSearchMap(contentSnapshotState.index, {
-      includeFullText: false
-    })
+    contentSnapshotState.index = normalizeContentSnapshotIndex(null)
+    contentSnapshotState.searchTextMap = buildContentSnapshotSearchMap(contentSnapshotState.index, { includeFullText: false })
     hydrateDashboardFaviconCache(stored[STORAGE_KEYS.dashboardFaviconCache])
     contentSnapshotState.searchTextMapIncludesFullText = false
     contentSnapshotState.searchTextMapLoadingFullText = false
     resetContentSnapshotFullTextSearchMapRetry()
     hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
     managerState.inboxSettings = normalizeInboxSettings(stored[STORAGE_KEYS.inboxSettings])
+    const onboarding = await loadOnboardingModule()
+    onboardingCompleted = onboarding.normalizeOnboardingCompleted(stored[STORAGE_KEYS.onboardingState])
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
+    scheduleLargeRepositoryHydration()
   } catch (error) {
     availabilityState.lastError =
       error instanceof Error ? error.message : '本地规则读取失败，请刷新页面后重试。'
@@ -469,6 +483,51 @@ async function hydratePersistentState() {
     availabilityState.storageLoading = false
     renderAvailabilitySection()
   }
+}
+
+function scheduleLargeRepositoryHydration(): void {
+  if (largeRepositoryHydrationStarted) {
+    return
+  }
+
+  largeRepositoryHydrationStarted = true
+  const hydrate = () => {
+    void hydrateLargeRepositoryState()
+  }
+
+  const requestIdleCallback = (window as Window & {
+    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
+  }).requestIdleCallback?.bind(window)
+
+  if (requestIdleCallback) {
+    requestIdleCallback(hydrate, { timeout: 1000 })
+    return
+  }
+
+  window.setTimeout(hydrate, 0)
+}
+
+async function hydrateLargeRepositoryState(): Promise<void> {
+  const [tagIndex, snapshotIndex] = await Promise.all([
+    loadBookmarkTagIndex().catch(() => normalizeBookmarkTagIndex(null)),
+    loadContentSnapshotIndex().catch(() => normalizeContentSnapshotIndex(null))
+  ])
+
+  aiNamingState.tagIndex = tagIndex
+  contentSnapshotState.index = snapshotIndex
+  contentSnapshotState.searchTextMap = buildContentSnapshotSearchMap(contentSnapshotState.index, {
+    includeFullText: false
+  })
+  contentSnapshotState.searchTextMapIncludesFullText = false
+  contentSnapshotState.searchTextMapLoadingFullText = false
+  resetContentSnapshotFullTextSearchMapRetry()
+
+  renderLargeRepositoryDependentSections()
+}
+
+function renderLargeRepositoryDependentSections(): void {
+  renderActiveOptionsSection()
+  renderDashboardSectionIfVisible()
 }
 
 async function clearPersistedAvailabilitySnapshot(): Promise<void> {
@@ -603,6 +662,18 @@ function syncPageSection() {
 
   if (key === 'general') {
     renderAiNamingSection()
+  }
+
+  if (key === 'onboarding') {
+    void renderOnboardingSection()
+  }
+
+  if (key === 'privacy') {
+    void refreshPrivacyAuditLog()
+  }
+
+  if (key === 'health') {
+    void renderHealthCenterSection()
   }
 
   if (key === 'tags') {
@@ -808,6 +879,7 @@ function bindEvents() {
   })
   dom.dashboardPanel?.addEventListener('input', handleDashboardInput)
   dom.dashboardPanel?.addEventListener('change', handleDashboardInput)
+  dom.dashboardPanel?.addEventListener('change', handleDashboardPerformanceModeChange)
   dom.dashboardPanel?.addEventListener('keydown', handleDashboardKeydown)
   dom.dashboardPanel?.addEventListener('load', handleDashboardLoad, true)
   dom.dashboardPanel?.addEventListener('error', (event) => handleDashboardError(event, dashboardCallbacks), true)
@@ -987,6 +1059,22 @@ function bindEvents() {
   dom.recycleClearSelected?.addEventListener('click', () => clearSelectedRecycleEntries(recycleCallbacks))
   dom.recycleSelectAll?.addEventListener('click', () => selectAllRecycleEntries(recycleCallbacks))
   dom.recycleClearAll?.addEventListener('click', () => clearRecycleBin(recycleCallbacks))
+  dom.onboardingComplete?.addEventListener('click', () => {
+    void completeOnboarding()
+  })
+  dom.onboardingSkip?.addEventListener('click', () => {
+    void completeOnboarding()
+  })
+  dom.onboardingOpenPrivacy?.addEventListener('click', () => {
+    window.location.hash = '#privacy'
+  })
+  dom.onboardingOpenNewtabSource?.addEventListener('click', openNewTabWithSettings)
+  dom.onboardingOpenAiSettings?.addEventListener('click', () => {
+    window.location.hash = '#general:ai-provider'
+  })
+  dom.privacyClearAudit?.addEventListener('click', () => {
+    void clearPrivacyAuditLogFromOptions().then(() => renderPrivacySection())
+  })
   dom.deleteFailedBookmarks?.addEventListener('click', openDeleteModal)
   dom.cancelDeleteModal?.addEventListener('click', closeDeleteModal)
   dom.confirmDeleteModal?.addEventListener('click', confirmDeleteFailedBookmarks)
@@ -1062,6 +1150,16 @@ function bindEvents() {
       closeAiModelPickerModal()
     }
   })
+}
+
+function handleDashboardPerformanceModeChange(event: Event): void {
+  const target = event.target
+  if (!(target instanceof HTMLInputElement) || !target.matches('[data-dashboard-performance-mode]')) {
+    return
+  }
+
+  dom.dashboardPanel?.classList.toggle('dashboard-performance-mode', target.checked)
+  document.body.classList.toggle('dashboard-performance-mode-active', target.checked)
 }
 
 function getCurrentSectionKey() {
@@ -1683,6 +1781,7 @@ function resetAiNamingRunState() {
   aiNamingState.paused = false
   aiNamingState.pauseResolvers = []
   aiNamingState.suggestedCount = 0
+  aiNamingState.rejectedCount = 0
   aiNamingState.manualReviewCount = 0
   aiNamingState.unchangedCount = 0
   aiNamingState.highConfidenceCount = 0
@@ -1715,6 +1814,7 @@ function syncAiNamingCatalog({ preserveResults = false } = {}) {
 
   if (preserveResults) {
     aiNamingState.results = syncAiNamingResultMetadata(aiNamingState.results)
+      .filter((result) => !isAiNamingSuggestionRejected(result))
     syncSelectionSet(
       aiNamingState.selectedResultIds,
       new Set(
@@ -1757,8 +1857,134 @@ function syncAiNamingResultMetadata(results) {
     .filter(Boolean)
 }
 
+function hydrateAiRejectedSuggestions(rawSuggestions: unknown): void {
+  const normalized = normalizeAiRejectedSuggestions(rawSuggestions)
+  aiNamingState.rejectedSuggestions = normalized
+  aiNamingState.rejectedSuggestionKeys = new Set(
+    normalized.map((entry) => String(entry.key || '')).filter(Boolean)
+  )
+}
+
+function normalizeAiRejectedSuggestions(rawSuggestions: unknown): Array<{
+  key: string
+  bookmarkId: string
+  url: string
+  currentTitle: string
+  suggestedTitle: string
+  reason: string
+  rejectedAt: number
+}> {
+  const entries = Array.isArray(rawSuggestions) ? rawSuggestions : []
+  const normalized: Array<{
+    key: string
+    bookmarkId: string
+    url: string
+    currentTitle: string
+    suggestedTitle: string
+    reason: string
+    rejectedAt: number
+  }> = []
+  const seen = new Set<string>()
+
+  for (const rawEntry of entries) {
+    const source = rawEntry && typeof rawEntry === 'object'
+      ? rawEntry as Record<string, unknown>
+      : {}
+    const bookmarkId = String(source.bookmarkId || source.id || '').trim()
+    const url = String(source.url || '').trim().slice(0, 2048)
+    const currentTitle = normalizeAiResultText(source.currentTitle, 160)
+    const suggestedTitle = normalizeAiResultText(source.suggestedTitle, AI_NAMING_MAX_TEXT_LENGTH)
+    const key = normalizeAiRejectedSuggestionKey(
+      String(source.key || buildAiRejectedSuggestionKey({ bookmarkId, url, currentTitle, suggestedTitle }))
+    )
+    if (!key || !suggestedTitle || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    normalized.push({
+      key,
+      bookmarkId,
+      url,
+      currentTitle,
+      suggestedTitle,
+      reason: normalizeAiResultText(source.reason, 220),
+      rejectedAt: Number(source.rejectedAt) || 0
+    })
+  }
+
+  normalized.sort((left, right) => (Number(right.rejectedAt) || 0) - (Number(left.rejectedAt) || 0))
+  return normalized.slice(0, AI_REJECTED_SUGGESTIONS_LIMIT)
+}
+
+function buildAiRejectedSuggestionEntry(result, now = Date.now()) {
+  const bookmarkId = String(result?.id || '').trim()
+  const url = String(result?.url || '').trim()
+  const currentTitle = normalizeAiResultText(result?.currentTitle, 160)
+  const suggestedTitle = normalizeAiResultText(result?.suggestedTitle, AI_NAMING_MAX_TEXT_LENGTH)
+  const key = buildAiRejectedSuggestionKey({ bookmarkId, url, currentTitle, suggestedTitle })
+  if (!key || !suggestedTitle) {
+    return null
+  }
+
+  return {
+    key,
+    bookmarkId,
+    url,
+    currentTitle,
+    suggestedTitle,
+    reason: normalizeAiResultText(result?.reason, 220),
+    rejectedAt: now
+  }
+}
+
+function buildAiRejectedSuggestionKey({
+  bookmarkId = '',
+  url = '',
+  currentTitle = '',
+  suggestedTitle = ''
+} = {}): string {
+  const stableTarget = normalizeUrl(url) || `bookmark:${String(bookmarkId || '').trim()}`
+  const current = normalizeText(currentTitle)
+  const suggested = normalizeText(suggestedTitle)
+  if (!stableTarget || !suggested) {
+    return ''
+  }
+  return normalizeAiRejectedSuggestionKey(`${stableTarget}|${current}|${suggested}`)
+}
+
+function normalizeAiRejectedSuggestionKey(key: string): string {
+  return normalizeText(key).slice(0, 1024)
+}
+
+function isAiNamingSuggestionRejected(result): boolean {
+  if (result?.status !== 'suggested') {
+    return false
+  }
+  const entry = buildAiRejectedSuggestionEntry(result, 0)
+  return Boolean(entry && aiNamingState.rejectedSuggestionKeys.has(entry.key))
+}
+
+function countCurrentAiRejectedSuggestions(): number {
+  const currentKeys = new Set(
+    aiNamingState.bookmarks
+      .map((bookmark) => normalizeUrl(bookmark.url) || `bookmark:${String(bookmark.id || '').trim()}`)
+      .filter(Boolean)
+  )
+  return aiNamingState.rejectedSuggestions.filter((entry) => {
+    const targetKey = normalizeUrl(entry.url) || `bookmark:${String(entry.bookmarkId || '').trim()}`
+    return currentKeys.has(targetKey)
+  }).length
+}
+
+async function saveAiRejectedSuggestions(): Promise<void> {
+  await setLocalStorage({
+    [STORAGE_KEYS.aiRejectedSuggestions]: aiNamingState.rejectedSuggestions
+  })
+}
+
 function recalculateAiNamingSummary() {
   aiNamingState.suggestedCount = aiNamingState.results.filter((result) => result.status === 'suggested').length
+  aiNamingState.rejectedCount = countCurrentAiRejectedSuggestions()
   aiNamingState.manualReviewCount = aiNamingState.results.filter((result) => result.status === 'manual_review').length
   aiNamingState.unchangedCount = aiNamingState.results.filter((result) => result.status === 'unchanged').length
   aiNamingState.failedCount = aiNamingState.results.filter((result) => result.status === 'failed').length
@@ -1904,13 +2130,14 @@ function createAvailabilityScheduler() {
 async function runAvailabilityDetection({ probeEnabled }) {
   const redirectCacheScope = getCurrentAvailabilityScopeMeta()
   const scheduler = createAvailabilityScheduler()
+  const runStartedAt = Date.now()
   availabilityState.running = true
   availabilityState.paused = false
   availabilityState.stopRequested = false
   availabilityState.lastError = ''
   availabilityState.lastCompletedAt = 0
   availabilityState.lastRunOutcome = ''
-  availabilityState.runStartedAt = Date.now()
+  availabilityState.runStartedAt = runStartedAt
   updateAvailabilityRunnerStatus(scheduler)
   availabilityState.runQueue = availabilityState.bookmarks.slice()
   availabilityState.deletedBookmarkIds = new Set()
@@ -1962,10 +2189,32 @@ async function runAvailabilityDetection({ probeEnabled }) {
     }).catch((error) => {
       console.warn('[Curator] 书签可用性检测完成通知发送失败', error)
     })
+    recordPrivacyAudit({
+      feature: 'availability-check',
+      label: '死链/重定向检测',
+      target: '书签目标网站',
+      itemCount: availabilityState.checkedBookmarks,
+      fields: ['URL', 'HTTP 状态', '重定向地址', '错误码'],
+      includesBody: false,
+      status: availabilityState.stopRequested ? 'cancelled' : 'success',
+      reason: availabilityState.stopRequested
+        ? `用户停止检测，已处理 ${availabilityState.checkedBookmarks} 条。`
+        : `完成检测：可访问 ${availabilityState.availableCount}，重定向 ${availabilityState.redirectedCount}，异常 ${availabilityState.reviewCount + availabilityState.failedCount}。`
+    })
   } catch (error) {
     availabilityState.lastRunOutcome = ''
     availabilityState.lastError =
       error instanceof Error ? error.message : '书签可用性检测失败，请稍后重试。'
+    recordPrivacyAudit({
+      feature: 'availability-check',
+      label: '死链/重定向检测',
+      target: '书签目标网站',
+      itemCount: availabilityState.checkedBookmarks,
+      fields: ['URL', 'HTTP 状态', '重定向地址', '错误码'],
+      includesBody: false,
+      status: 'error',
+      reason: availabilityState.lastError
+    })
   } finally {
     availabilityState.running = false
     availabilityState.paused = false
@@ -2512,6 +2761,21 @@ function renderActiveOptionsSection() {
     return
   }
 
+  if (activeSection === 'onboarding') {
+    void renderOnboardingSection()
+    return
+  }
+
+  if (activeSection === 'privacy') {
+    void renderPrivacySection()
+    return
+  }
+
+  if (activeSection === 'health') {
+    void renderHealthCenterSection()
+    return
+  }
+
   if (activeSection === 'general') {
     renderAiNamingSection()
     renderShortcutSettingsSection()
@@ -2556,6 +2820,112 @@ function renderActiveOptionsSection() {
 
   if (activeSection === 'recycle') {
     renderRecycleSection(recycleCallbacks)
+  }
+}
+
+async function completeOnboarding(): Promise<void> {
+  onboardingCompleted = true
+  const onboarding = await loadOnboardingModule()
+  await onboarding.completeOnboarding()
+  onboarding.renderOnboardingSection(onboardingCompleted)
+}
+
+function openNewTabWithSettings(): void {
+  const url = chrome.runtime.getURL('src/newtab/newtab.html#settings')
+  void chrome.tabs?.create?.({ url })
+}
+
+async function refreshPrivacyAuditLog(): Promise<void> {
+  const privacy = await loadPrivacyModule()
+  await privacy.refreshPrivacyAuditLog()
+  if (normalizeSectionKey(getCurrentSectionKey()) === 'privacy') {
+    privacy.renderPrivacySection()
+  }
+}
+
+async function clearPrivacyAuditLogFromOptions(): Promise<void> {
+  const privacy = await loadPrivacyModule()
+  await privacy.clearPrivacyAuditLogFromOptions()
+}
+
+async function renderOnboardingSection(): Promise<void> {
+  const onboarding = await loadOnboardingModule()
+  onboarding.renderOnboardingSection(onboardingCompleted)
+}
+
+async function renderPrivacySection(): Promise<void> {
+  const privacy = await loadPrivacyModule()
+  privacy.renderPrivacySection()
+}
+
+async function renderHealthCenterSection(): Promise<void> {
+  const healthCenter = await loadHealthCenterModule()
+  healthCenter.renderHealthCenterSection()
+}
+
+function recordPrivacyAudit(input: PrivacyAuditInput): void {
+  void loadPrivacyModule().then((privacy) => {
+    privacy.recordPrivacyAudit(input, {
+      isPrivacySectionActive: () => normalizeSectionKey(getCurrentSectionKey()) === 'privacy',
+      renderPrivacy: () => privacy.renderPrivacySection()
+    })
+  })
+}
+
+function loadOnboardingModule(): Promise<typeof import('./sections/trust-center.js')> {
+  if (!onboardingModulePromise) {
+    onboardingModulePromise = import('./sections/trust-center.js')
+  }
+  return onboardingModulePromise
+}
+
+function loadPrivacyModule(): Promise<typeof import('./sections/privacy.js')> {
+  if (!privacyModulePromise) {
+    privacyModulePromise = import('./sections/privacy.js')
+  }
+  return privacyModulePromise
+}
+
+function loadHealthCenterModule(): Promise<typeof import('./sections/health-center.js')> {
+  if (!healthCenterModulePromise) {
+    healthCenterModulePromise = import('./sections/health-center.js')
+  }
+  return healthCenterModulePromise
+}
+
+function getAiPreparedItemAuditFields(preparedItems): string[] {
+  const fields = new Set(['标题', 'URL', '文件夹路径', '目标域名', '已有文件夹候选'])
+  for (const item of Array.isArray(preparedItems) ? preparedItems : []) {
+    const pageContext = item?.requestItem?.page_context || item?.pageContext || {}
+    if (pageContext.description) {
+      fields.add('网页描述')
+    }
+    if (Array.isArray(pageContext.headings) && pageContext.headings.length) {
+      fields.add('标题层级')
+    }
+    if (pageContext.main_text_excerpt) {
+      fields.add('正文片段')
+    }
+    if (Array.isArray(pageContext.source_contexts) && pageContext.source_contexts.length) {
+      fields.add('内容来源')
+    }
+  }
+  return [...fields]
+}
+
+function aiPreparedItemsIncludeBody(preparedItems): boolean {
+  return (Array.isArray(preparedItems) ? preparedItems : []).some((item) => {
+    const pageContext = item?.requestItem?.page_context || item?.pageContext || {}
+    return Boolean(pageContext.main_text_excerpt)
+  })
+}
+
+function getSafeAuditTarget(url: unknown): string {
+  try {
+    const parsed = new URL(String(url || '').trim())
+    return parsed.origin
+  } catch {
+    return String(url || '').trim().slice(0, 120) || '外部服务'
   }
 }
 
@@ -3755,7 +4125,9 @@ function renderAiNamingSection() {
 
   dom.aiEligible.textContent = String(aiNamingState.eligibleBookmarks)
   dom.aiSuggested.textContent = String(aiNamingState.suggestedCount)
-  dom.aiManualReview.textContent = String(aiNamingState.manualReviewCount)
+  dom.aiManualReview.textContent = aiNamingState.rejectedCount
+    ? `${aiNamingState.manualReviewCount} / 已拒绝 ${aiNamingState.rejectedCount}`
+    : String(aiNamingState.manualReviewCount)
   dom.aiUnchanged.textContent = String(aiNamingState.unchangedCount)
   dom.aiHighConfidence.textContent = String(aiNamingState.highConfidenceCount)
   dom.aiMediumConfidence.textContent = String(aiNamingState.mediumConfidenceCount)
@@ -3802,7 +4174,7 @@ function renderAiNamingSection() {
     ? `${aiNamingState.results.length} 条结果`
     : `${visibleAiResults.length} / ${aiNamingState.results.length} 条结果`
   dom.aiResultsSubtitle.textContent = aiNamingState.lastCompletedAt
-    ? `最近一次完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。建议改名 ${aiNamingState.suggestedCount} 条，待确认 ${aiNamingState.manualReviewCount} 条，失败 ${aiNamingState.failedCount} 条。网页标签与 AI 建议每次都会重新生成。`
+    ? `最近一次完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。建议改名 ${aiNamingState.suggestedCount} 条，待确认 ${aiNamingState.manualReviewCount} 条，已拒绝 ${aiNamingState.rejectedCount} 条，失败 ${aiNamingState.failedCount} 条。网页标签每次都会重新生成；已拒绝的同一标题建议不会重复展示。`
     : '在通用设置中配置 AI 渠道后，开始分析并生成建议，这里会展示当前标题、建议标题、标签、置信度与原因。'
 
   renderAiResultsFilterControls()
@@ -4732,11 +5104,31 @@ async function handleFetchAiModels() {
     aiNamingState.lastFetchModelsAt = Date.now()
     aiNamingState.lastFetchModelsCount = normalizedIds.length
     aiNamingState.lastFetchModelsError = ''
+    recordPrivacyAudit({
+      feature: 'ai-provider-models',
+      label: 'AI 模型列表',
+      target: getSafeAuditTarget(url),
+      itemCount: normalizedIds.length,
+      fields: ['API Key', '模型列表'],
+      includesBody: false,
+      status: 'success',
+      reason: `已读取 ${normalizedIds.length} 个模型 ID。`
+    })
   } catch (error) {
     aiNamingState.lastFetchModelsError =
       error instanceof Error ? error.message : '拉取模型列表失败，请稍后重试。'
     aiNamingState.lastFetchModelsAt = 0
     aiNamingState.lastFetchModelsCount = 0
+    recordPrivacyAudit({
+      feature: 'ai-provider-models',
+      label: 'AI 模型列表',
+      target: getSafeAuditTarget(settings.baseUrl),
+      itemCount: 0,
+      fields: ['API Key', '模型列表'],
+      includesBody: false,
+      status: 'error',
+      reason: aiNamingState.lastFetchModelsError
+    })
   } finally {
     aiNamingState.fetchingModels = false
     renderAiFetchModelsStatus()
@@ -5013,6 +5405,7 @@ function buildAiNamingResultCard(result) {
   const openLabel = getAiNamingResultActionLabel('打开书签页面', result)
   const applyLabel = getAiNamingResultActionLabel('应用书签智能分析建议', result)
   const moveLabel = getAiNamingResultActionLabel('移动至推荐文件夹', result)
+  const rejectLabel = getAiNamingResultActionLabel('拒绝书签智能分析建议', result)
   const badgeTone = result.status === 'failed'
     ? 'danger'
     : result.confidence === 'high'
@@ -5106,6 +5499,7 @@ function buildAiNamingResultCard(result) {
         <div class="detect-result-actions">
           <a class="detect-result-open" href="${escapeAttr(result.url)}" target="_blank" rel="noreferrer noopener" aria-label="${escapeAttr(openLabel)}">打开页面</a>
           ${selectable ? `<button class="detect-result-action" type="button" data-ai-apply="${escapeAttr(result.id)}" aria-label="${escapeAttr(applyLabel)}" ${interactionLocked ? 'disabled' : ''}>应用建议</button>` : ''}
+          ${selectable ? `<button class="detect-result-action secondary" type="button" data-ai-reject="${escapeAttr(result.id)}" aria-label="${escapeAttr(rejectLabel)}" ${interactionLocked ? 'disabled' : ''}>拒绝建议</button>` : ''}
         </div>
       </div>
       <div class="detect-result-copy ai-result-copy">
@@ -5453,6 +5847,21 @@ function handleAiResultsClick(event) {
     return
   }
 
+  const rejectButton = event.target.closest('[data-ai-reject]')
+  if (rejectButton) {
+    if (aiNamingState.running || aiNamingState.applying) {
+      return
+    }
+
+    const bookmarkId = String(rejectButton.getAttribute('data-ai-reject') || '').trim()
+    if (!bookmarkId) {
+      return
+    }
+
+    void rejectAiNamingResult(bookmarkId)
+    return
+  }
+
   const applyButton = event.target.closest('[data-ai-apply]')
   if (!applyButton || aiNamingState.running || aiNamingState.applying) {
     return
@@ -5464,6 +5873,37 @@ function handleAiResultsClick(event) {
   }
 
   applyAiNamingResultsByIds([bookmarkId])
+}
+
+async function rejectAiNamingResult(bookmarkId: string): Promise<void> {
+  const targetResult = aiNamingState.results.find((result) => String(result.id) === String(bookmarkId))
+  const entry = buildAiRejectedSuggestionEntry(targetResult)
+  if (!targetResult || targetResult.status !== 'suggested' || !entry) {
+    return
+  }
+
+  aiNamingState.rejectedSuggestionKeys.add(entry.key)
+  aiNamingState.rejectedSuggestions = normalizeAiRejectedSuggestions([
+    entry,
+    ...aiNamingState.rejectedSuggestions
+  ])
+  aiNamingState.rejectedSuggestionKeys = new Set(
+    aiNamingState.rejectedSuggestions.map((item) => item.key)
+  )
+  aiNamingState.results = aiNamingState.results.filter((result) => String(result.id) !== String(bookmarkId))
+  aiNamingState.selectedResultIds.delete(String(bookmarkId))
+  aiNamingState.pendingMoveResultIds.delete(String(bookmarkId))
+  aiNamingState.pendingMoveSelection = false
+  aiNamingState.lastError = `已拒绝“${targetResult.suggestedTitle || targetResult.currentTitle || '未命名书签'}”的建议，后续不会重复展示同一建议。`
+  recalculateAiNamingSummary()
+  renderAvailabilitySection()
+
+  try {
+    await saveAiRejectedSuggestions()
+  } catch (error) {
+    aiNamingState.lastError = error instanceof Error ? error.message : '拒绝偏好保存失败。'
+    renderAvailabilitySection()
+  }
 }
 
 async function handleAiNamingAction() {
@@ -6798,49 +7238,97 @@ async function fetchRemoteBookmarkContentForAi(
     throw new Error('远程解析 URL 无效。')
   }
 
-  const response = await fetchWithRequestTimeout(readerUrl, {
-    method: 'GET',
-    cache: 'no-store',
-    credentials: 'omit',
-    redirect: 'follow',
-    referrerPolicy: 'no-referrer',
-    headers: {
-      Accept: 'text/plain, text/markdown;q=0.9, */*;q=0.1'
-    },
-    signal: options.signal
-  }, timeoutMs)
+  try {
+    const response = await fetchWithRequestTimeout(readerUrl, {
+      method: 'GET',
+      cache: 'no-store',
+      credentials: 'omit',
+      redirect: 'follow',
+      referrerPolicy: 'no-referrer',
+      headers: {
+        Accept: 'text/plain, text/markdown;q=0.9, */*;q=0.1'
+      },
+      signal: options.signal
+    }, timeoutMs)
 
-  if (!response.ok) {
-    throw new Error(`Jina Reader 返回 HTTP ${response.status}。`)
+    if (!response.ok) {
+      throw new Error(`Jina Reader 返回 HTTP ${response.status}。`)
+    }
+
+    const text = await response.text()
+    recordPrivacyAudit({
+      feature: 'jina-reader',
+      label: 'Jina Reader 远程解析',
+      target: 'https://r.jina.ai/',
+      itemCount: 1,
+      fields: ['目标 URL'],
+      includesBody: false,
+      status: 'success',
+      reason: `已解析 ${getSafeAuditTarget(url)}。`
+    })
+    return buildRemotePageContentFromText(text, {
+      url: fallbackContext?.finalUrl || url,
+      currentTitle: fallbackContext?.title
+    })
+  } catch (error) {
+    recordPrivacyAudit({
+      feature: 'jina-reader',
+      label: 'Jina Reader 远程解析',
+      target: 'https://r.jina.ai/',
+      itemCount: 1,
+      fields: ['目标 URL'],
+      includesBody: false,
+      status: isAbortError(error) ? 'cancelled' : 'error',
+      reason: error instanceof Error ? error.message : 'Jina Reader 解析失败。'
+    })
+    throw error
   }
-
-  const text = await response.text()
-  return buildRemotePageContentFromText(text, {
-    url: fallbackContext?.finalUrl || url,
-    currentTitle: fallbackContext?.title
-  })
 }
 
 async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.settings) {
   const endpoint = getAiEndpoint(settings)
-  const response = await fetchWithRequestTimeout(endpoint, {
-    method: 'POST',
-    cache: 'no-store',
-    credentials: 'omit',
-    referrerPolicy: 'no-referrer',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify(buildAiNamingConnectivityRequestBody(settings))
-  }, settings.timeoutMs)
+  try {
+    const response = await fetchWithRequestTimeout(endpoint, {
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${settings.apiKey}`
+      },
+      body: JSON.stringify(buildAiNamingConnectivityRequestBody(settings))
+    }, settings.timeoutMs)
 
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new Error(extractAiErrorMessage(payload, response.status))
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(extractAiErrorMessage(payload, response.status))
+    }
+
+    recordPrivacyAudit({
+      feature: 'ai-connectivity-test',
+      label: 'AI 连接测试',
+      target: getSafeAuditTarget(endpoint),
+      itemCount: 1,
+      fields: ['API Key', '模型 ID', '测试文本'],
+      includesBody: false,
+      status: 'success',
+      reason: `模型 ${settings.model} 可用。`
+    })
+    return `连接成功，当前模型 ${settings.model} 可用。`
+  } catch (error) {
+    recordPrivacyAudit({
+      feature: 'ai-connectivity-test',
+      label: 'AI 连接测试',
+      target: getSafeAuditTarget(endpoint),
+      itemCount: 1,
+      fields: ['API Key', '模型 ID', '测试文本'],
+      includesBody: false,
+      status: 'error',
+      reason: normalizeAiNamingConnectivityError(error, settings.timeoutMs)
+    })
+    throw error
   }
-
-  return `连接成功，当前模型 ${settings.model} 可用。`
 }
 
 function buildAiNamingConnectivityRequestBody(settings = aiNamingManagerState.settings) {
@@ -6875,32 +7363,56 @@ async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSign
   const endpoint = getAiEndpoint(settings)
   const requestBody = buildAiNamingRequestBody(preparedItems, settings)
   throwIfAborted(options.signal)
-  const response = await fetchWithRequestTimeout(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify(requestBody),
-    signal: options.signal
-  }, settings.timeoutMs)
-
-  throwIfAborted(options.signal)
-  const payload = await response.json().catch(() => null)
-  if (!response.ok) {
-    throw new Error(extractAiErrorMessage(payload, response.status))
-  }
-
-  const rawJsonText = settings.apiStyle === 'responses'
-    ? extractResponsesJsonText(payload)
-    : extractChatCompletionsJsonText(payload)
-  let parsedPayload = null
   try {
-    parsedPayload = JSON.parse(rawJsonText)
+    const response = await fetchWithRequestTimeout(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${settings.apiKey}`
+      },
+      body: JSON.stringify(requestBody),
+      signal: options.signal
+    }, settings.timeoutMs)
+
+    throwIfAborted(options.signal)
+    const payload = await response.json().catch(() => null)
+    if (!response.ok) {
+      throw new Error(extractAiErrorMessage(payload, response.status))
+    }
+
+    const rawJsonText = settings.apiStyle === 'responses'
+      ? extractResponsesJsonText(payload)
+      : extractChatCompletionsJsonText(payload)
+    let parsedPayload = null
+    try {
+      parsedPayload = JSON.parse(rawJsonText)
+    } catch (error) {
+      throw new Error('AI 返回了无法解析的 JSON 结果。')
+    }
+    recordPrivacyAudit({
+      feature: 'ai-naming',
+      label: '书签智能分析',
+      target: getSafeAuditTarget(endpoint),
+      itemCount: preparedItems.length,
+      fields: getAiPreparedItemAuditFields(preparedItems),
+      includesBody: aiPreparedItemsIncludeBody(preparedItems),
+      status: 'success',
+      reason: `已完成 ${preparedItems.length} 条书签分析请求。`
+    })
+    return normalizeAiNamingResponseItems(parsedPayload, preparedItems)
   } catch (error) {
-    throw new Error('AI 返回了无法解析的 JSON 结果。')
+    recordPrivacyAudit({
+      feature: 'ai-naming',
+      label: '书签智能分析',
+      target: getSafeAuditTarget(endpoint),
+      itemCount: preparedItems.length,
+      fields: getAiPreparedItemAuditFields(preparedItems),
+      includesBody: aiPreparedItemsIncludeBody(preparedItems),
+      status: isAbortError(error) ? 'cancelled' : 'error',
+      reason: error instanceof Error ? error.message : 'AI 分析请求失败。'
+    })
+    throw error
   }
-  return normalizeAiNamingResponseItems(parsedPayload, preparedItems)
 }
 
 function buildAiNamingRequestBody(preparedItems, settings) {
@@ -7054,6 +7566,12 @@ async function mergeAiNamingBatchResults(preparedItems, aiResponseItems, setting
 function upsertAiNamingResult(result) {
   const bookmarkId = String(result?.id || '').trim()
   if (!bookmarkId) {
+    return
+  }
+
+  if (isAiNamingSuggestionRejected(result)) {
+    aiNamingState.results = aiNamingState.results.filter((entry) => String(entry.id) !== bookmarkId)
+    aiNamingState.selectedResultIds.delete(bookmarkId)
     return
   }
 

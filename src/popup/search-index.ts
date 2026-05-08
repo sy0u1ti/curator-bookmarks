@@ -9,6 +9,10 @@ import {
 } from '../shared/content-snapshot-search.js'
 import type { BookmarkRecord } from '../shared/types.js'
 import {
+  enrichPinyinTokensCooperatively,
+  type CooperativeEnrichOptions
+} from '../shared/search/pinyin.js'
+import {
   indexBookmarkForSearch,
   type PopupSearchBookmark
 } from './search.js'
@@ -49,6 +53,13 @@ export async function loadPopupSearchIndexSnapshotState(): Promise<PopupSearchIn
   const settings = await loadContentSnapshotSettings().catch(() => null)
   const index = await loadContentSnapshotIndex().catch(() => null)
   return { settings, index }
+}
+
+export async function enrichLightPopupSearchIndexWithPinyin(
+  indexed: PopupSearchBookmark[],
+  options: CooperativeEnrichOptions = {}
+): Promise<{ processed: number; enriched: number; aborted: boolean }> {
+  return enrichPinyinTokensCooperatively(indexed, options)
 }
 
 export function shouldWarmPopupSnapshotFullText(

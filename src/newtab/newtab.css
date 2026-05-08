@@ -347,6 +347,73 @@ body.background-mask-enabled .newtab-background-mask {
   min-height: 0;
 }
 
+.newtab-onboarding-strip {
+  display: grid;
+  width: min(100%, 980px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 8px;
+  background: rgba(8, 8, 9, 0.32);
+  color: rgba(245, 245, 247, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.newtab-onboarding-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.newtab-onboarding-copy strong {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-onboarding-copy span {
+  overflow: hidden;
+  color: rgba(245, 245, 247, 0.55);
+  font-size: 11px;
+  font-weight: 580;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.newtab-onboarding-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 245, 247, 0.12);
+  border-radius: 7px;
+  background: rgba(245, 245, 247, 0.08);
+  color: rgba(245, 245, 247, 0.9);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 680;
+}
+
+.newtab-onboarding-actions button.secondary {
+  color: rgba(245, 245, 247, 0.62);
+}
+
+.newtab-onboarding-actions button:hover,
+.newtab-onboarding-actions button:focus-visible {
+  border-color: rgba(245, 245, 247, 0.22);
+  background: rgba(245, 245, 247, 0.12);
+}
+
 .newtab-clock {
   --clock-scale: 1;
   --clock-surface-alpha: 0.18;
@@ -887,6 +954,11 @@ body.background-mask-enabled .newtab-background-mask {
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
+}
+
+.newtab-search-suggestion.command .newtab-search-suggestion-mark {
+  background: rgba(189, 243, 202, 0.16);
+  color: rgba(189, 243, 202, 0.94);
 }
 
 .newtab-search-suggestion-copy {
@@ -1963,6 +2035,19 @@ body.folder-names-hidden.folder-order-dragging .folder-section-header-row {
   justify-items: stretch;
   row-gap: var(--icon-row-gap);
   column-gap: var(--icon-column-gap);
+}
+
+.bookmark-grid-placeholder {
+  display: grid;
+  min-height: calc(var(--icon-shell-size) + 18px);
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px dashed rgba(245, 245, 247, 0.14);
+  border-radius: 8px;
+  background: rgba(8, 8, 9, 0.16);
+  color: rgba(245, 245, 247, 0.46);
+  font-size: 11px;
+  font-weight: 620;
 }
 
 .newtab-content[data-icon-layout-mode="fixed"] .bookmark-grid {
@@ -4075,6 +4160,15 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
 
   .newtab-page.has-search .newtab-utility-stack {
     --newtab-utility-gap: 10px;
+  }
+
+  .newtab-onboarding-strip {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .newtab-onboarding-actions {
+    justify-content: flex-start;
   }
 
   .newtab-dashboard-overlay {

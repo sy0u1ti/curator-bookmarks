@@ -89,6 +89,39 @@ test('safe full restore keeps local AI api key while restoring safe provider fie
   }
 })
 
+test('safe full restore preserves rejected AI suggestion preferences', async () => {
+  const store: Record<string, unknown> = {}
+  ;(globalThis as any).chrome = createChromeMock({
+    store,
+    tree: [rootNode([])]
+  })
+
+  try {
+    await restoreCuratorBackup(createBackup({
+      tree: [rootNode([])],
+      aiRejectedSuggestions: [{
+        key: 'example.com/docs|old title|better title',
+        bookmarkId: 'bookmark-1',
+        url: 'https://example.com/docs',
+        currentTitle: 'Old Title',
+        suggestedTitle: 'Better Title',
+        rejectedAt: 1778208000000
+      }]
+    }), 'safeFull')
+
+    assert.deepEqual(store[STORAGE_KEYS.aiRejectedSuggestions], [{
+      key: 'example.com/docs|old title|better title',
+      bookmarkId: 'bookmark-1',
+      url: 'https://example.com/docs',
+      currentTitle: 'Old Title',
+      suggestedTitle: 'Better Title',
+      rejectedAt: 1778208000000
+    }])
+  } finally {
+    delete (globalThis as any).chrome
+  }
+})
+
 test('safe full restore copies same URL when the missing instance is in another folder path', async () => {
   const store: Record<string, unknown> = {}
   const created: chrome.bookmarks.BookmarkCreateArg[] = []
@@ -189,10 +222,12 @@ test('safe full preview declares local collection overwrite semantics', async ()
 
 function createBackup({
   tree,
-  aiProviderSettings = { apiKeyRedacted: true }
+  aiProviderSettings = { apiKeyRedacted: true },
+  aiRejectedSuggestions = []
 }: {
   tree: chrome.bookmarks.BookmarkTreeNode[]
   aiProviderSettings?: Record<string, unknown>
+  aiRejectedSuggestions?: unknown[]
 }): CuratorBackupFileV1 {
   return parseCuratorBackupFile({
     app: 'curator-bookmarks',
@@ -213,6 +248,7 @@ function createBackup({
       redirectCache: { savedAt: 0, results: [] },
       newTab: {},
       popupPreferences: null,
+      aiRejectedSuggestions,
       aiProviderSettings
     }
   })

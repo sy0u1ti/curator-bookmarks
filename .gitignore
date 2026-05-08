@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .tmp-test/
+.perf-fixtures/
+.perf-results/
+.e2e-results/
 release/
 *.log
 .DS_Store
@@ -14,4 +17,4 @@ release/
 .claude/
 CLAUDE.md
 AGENT_OVERNIGHT_REPORT.md
-
+REPOSITORY_REVIEW_SUGGESTIONS.md

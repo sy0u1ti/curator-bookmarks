@@ -336,31 +336,121 @@ test('dashboard favicon warmup reuse avoids lossy signatures and repeated item j
   const previewBody = source.match(/function updateDashboardDragPreviewPosition[\s\S]*?\n}\n\nfunction updateDashboardDropHoverFromPoint/)?.[0] || ''
 
   assert.match(source, /let dashboardFaviconWarmupItems: DashboardItem\[\] \| null = null/)
+  assert.match(source, /let dashboardFaviconWarmupKey = ''/)
   assert.match(source, /let dashboardFaviconWarmupStartIndex = -1/)
   assert.match(source, /let dashboardFaviconWarmupEndIndex = -1/)
+  assert.match(source, /let dashboardFaviconWarmupEndpointUrl = ''/)
   assert.match(source, /const DASHBOARD_FAVICON_WARMUP_CONCURRENCY = 1/)
   assert.match(source, /const DASHBOARD_FAVICON_WARMUP_OVERSCAN_ROWS = 2/)
+  assert.match(warmupBody, /dashboardFaviconWarmupItems === items/)
+  assert.match(warmupBody, /dashboardFaviconWarmupEndpointUrl === endpointUrl/)
+  assert.match(warmupBody, /const warmupKey = getDashboardFaviconWarmupStableKey\(warmupItems\)/)
+  assert.match(warmupBody, /warmupKey === dashboardFaviconWarmupKey/)
   assert.match(warmupBody, /safeStartIndex === dashboardFaviconWarmupStartIndex/)
   assert.match(warmupBody, /safeEndIndex === dashboardFaviconWarmupEndIndex/)
   assert.match(warmupBody, /dashboardFaviconWarmupQueue/)
   assert.match(warmupBody, /stopDashboardFaviconWarmup\(\)[\s\S]*?return/)
   assert.match(warmupBody, /dashboardFaviconWarmupItems = items/)
+  assert.match(warmupBody, /dashboardFaviconWarmupKey = warmupKey/)
+  assert.match(warmupBody, /dashboardFaviconWarmupEndpointUrl = endpointUrl/)
   assert.match(warmupBody, /bookmarks: warmupItems/)
-  assert.match(warmupBody, /syncDashboardFaviconForPageUrl\(item\.pageUrl\)/)
+  assert.match(warmupBody, /scheduleDashboardFaviconForPageUrlSync\(item\.pageUrl\)/)
   assert.match(source, /dashboardFaviconWarmupItems = null/)
-  assert.match(source, /function syncDashboardFaviconForPageUrl\(pageUrl: string\): void/)
+  assert.match(source, /dashboardFaviconWarmupKey = ''/)
+  assert.match(source, /dashboardFaviconWarmupEndpointUrl = ''/)
+  assert.match(source, /function syncDashboardFaviconsForPageUrls\(pageUrls: Iterable<string>\): void/)
   assert.match(source, /querySelectorAll<HTMLImageElement>\('img\[data-dashboard-favicon\]'\)/)
   assert.match(source, /getDashboardFaviconWarmupStartIndex\(viewportWindow\)/)
   assert.match(source, /getDashboardFaviconWarmupEndIndex\(viewportWindow, items\.length\)/)
   assert.doesNotMatch(source, /syncDashboardFaviconWarmup\(model\.items\)/)
-  assert.doesNotMatch(source, /function getDashboardFaviconWarmupKey/)
+  assert.match(source, /function getDashboardFaviconWarmupStableKey\(items: DashboardItem\[\]\): string/)
   assert.doesNotMatch(source, /function updateDashboardFaviconWarmupHash/)
-  assert.doesNotMatch(warmupBody, /\.map\(\(item\)/)
+  assert.doesNotMatch(warmupBody, /items\.map\(\(item\)/)
   assert.doesNotMatch(warmupBody, /\.join\(/)
   assert.match(previewBody, /style\.transform =[\s\S]*translate3d\(\$\{dragState\.currentX\}px, \$\{dragState\.currentY\}px, 0\)/)
   assert.doesNotMatch(previewBody, /style\.left/)
   assert.doesNotMatch(previewBody, /style\.top/)
   assert.match(source, /let dashboardDropHoverCard: HTMLElement \| null = null/)
+})
+
+test('dashboard card renders reuse stable item keys instead of array identity', () => {
+  const source = readProjectFile('src/options/sections/dashboard.ts')
+  const staticListBody = source.match(/if \(items\.length < DASHBOARD_VIRTUAL_THRESHOLD\) \{[\s\S]*?\n  \}\n\n  dom\.dashboardResults\.classList\.add\('is-virtualized'\)/)?.[0] || ''
+  const virtualReuseBody = source.match(/function canReuseDashboardVirtualShell[\s\S]*?\n}\n\nfunction renderDashboardVirtualScrollFrame/)?.[0] || ''
+
+  assert.match(staticListBody, /virtualState\.renderedStaticListKey === staticListKey/)
+  assert.doesNotMatch(staticListBody, /virtualState\.renderedItems === items/)
+  assert.match(virtualReuseBody, /validateRenderKey = true/)
+  assert.match(virtualReuseBody, /if \(!validateRenderKey\) \{[\s\S]*?return true/)
+  assert.match(virtualReuseBody, /virtualState\.renderedStaticListKey === getDashboardStaticListRenderKey\(renderedItems, stateKey\)/)
+  assert.doesNotMatch(virtualReuseBody, /virtualState\.renderedItems !== items/)
+  assert.match(source, /function getDashboardCardRenderKey\(item: DashboardItem\): string/)
+})
+
+test('dashboard virtual scroll frame stays on the light list path', () => {
+  const source = readProjectFile('src/options/sections/dashboard.ts')
+  const virtualSource = readProjectFile('src/options/sections/dashboard-virtual.ts')
+  const scrollFrameBody = source.match(/function renderDashboardVirtualScrollFrame\(\): void \{[\s\S]*?\n}\n\nfunction commitDashboardVirtualWindow/)?.[0] || ''
+  const scheduleBody = source.match(/function scheduleDashboardVirtualRender\(\): void \{[\s\S]*?\n}\n\nfunction scheduleDashboardVirtualMeasureRetry/)?.[0] || ''
+  const prefetchBody = source.match(/function maybePrefetchDashboardSearchResults\(container: HTMLElement\): void \{[\s\S]*?\n}\n\nfunction scheduleDashboardSearchPrefetchLimitIncrease/)?.[0] || ''
+  const virtualWindowBody = source.match(/function renderDashboardVirtualWindow[\s\S]*?\n}\n\nfunction ensureDashboardVirtualWindowElements/)?.[0] || ''
+
+  assert.match(virtualSource, /export const DASHBOARD_VIRTUAL_MAX_RENDERED_CARDS = 200/)
+  assert.match(source, /const DASHBOARD_VIRTUAL_CARD_NODE_POOL_LIMIT = 480/)
+  assert.match(source, /const dashboardVirtualCardNodePool = new Map/)
+  assert.match(source, /getDashboardVirtualOverscanRows,[\s\S]*?from '\.\/dashboard-virtual\.js'/)
+  assert.match(virtualSource, /export function getDashboardVirtualOverscanRows/)
+  assert.match(scrollFrameBody, /computeDashboardVirtualWindow\(\{[\s\S]*?fastScrolling: virtualState\.isFastScrolling/)
+  assert.match(scrollFrameBody, /canReuseDashboardVirtualShell\(items, virtualWindow, viewportWindow, \{ validateRenderKey: false \}\)/)
+  assert.match(scrollFrameBody, /syncDashboardVirtualRenderedShellGeometry\(virtualWindow\)/)
+  assert.doesNotMatch(scrollFrameBody, /if \(canReuseDashboardVirtualShell[\s\S]*?updateDashboardVirtualShellGeometry\(virtualWindow\)/)
+  assert.doesNotMatch(scrollFrameBody, /renderDashboardCards\(/)
+  assert.doesNotMatch(scrollFrameBody, /getDashboardVirtualMetricsSnapshot/)
+  assert.match(scheduleBody, /renderDashboardVirtualScrollFrame\(\)/)
+  assert.doesNotMatch(scheduleBody, /renderDashboardCards\(virtualState\.items\)/)
+  assert.match(prefetchBody, /dashboardSearchPrefetchPendingKey = dashboardActiveSearchKey/)
+  assert.doesNotMatch(prefetchBody, /scheduleDashboardSectionRender\(\)/)
+  assert.match(source, /let dashboardListRenderPendingForScroll = false/)
+  assert.match(source, /if \(virtualState\.scrollIdleTimer\) \{[\s\S]*?dashboardListRenderPendingForScroll = true[\s\S]*?return/)
+  assert.match(source, /if \(dashboardListRenderFrame\) \{[\s\S]*?window\.cancelAnimationFrame\(dashboardListRenderFrame\)[\s\S]*?dashboardListRenderPendingForScroll = true/)
+  assert.match(virtualWindowBody, /document\.createDocumentFragment\(\)/)
+  assert.match(virtualWindowBody, /fragment\.append\(getDashboardVirtualCardNode\(item\)\)/)
+  assert.match(virtualWindowBody, /windowElement\.replaceChildren\(fragment\)/)
+  assert.doesNotMatch(virtualWindowBody, /innerHTML = cardsMarkup/)
+  assert.doesNotMatch(virtualWindowBody, /renderedItems\.map\(\(item\) => buildDashboardCard\(item\)\)\.join/)
+  assert.match(source, /function syncDashboardVirtualRenderedShellGeometry\(virtualWindow: DashboardVirtualWindow\): void \{[\s\S]*?virtualState\.renderedOffsetY >= 0[\s\S]*?updateRenderedOffset: false/)
+  assert.match(source, /function updateDashboardVirtualShellGeometry\([\s\S]*?updateRenderedOffset = true[\s\S]*?if \(updateRenderedOffset\) \{[\s\S]*?virtualState\.renderedOffsetY = virtualWindow\.offsetY/)
+})
+
+test('dashboard favicon sync is batched away from the scroll frame', () => {
+  const source = readProjectFile('src/options/sections/dashboard.ts')
+  const loadSyncBody = source.match(/function syncCompletedDashboardFaviconImages\(\): void \{[\s\S]*?\n}\n\nasync function moveDashboardBookmarkToFolder/)?.[0] || ''
+  const dirtySyncBody = source.match(/function scheduleDashboardFaviconForPageUrlSync\(pageUrl: string\): void \{[\s\S]*?\n}\n\nfunction flushDashboardFaviconDirtySync/)?.[0] || ''
+  const flushBody = source.match(/function flushDashboardFaviconDirtySync\(\): void \{[\s\S]*?\n}\n\nfunction getDashboardFaviconCacheKey/)?.[0] || ''
+
+  assert.match(source, /const DASHBOARD_FAVICON_LOAD_SYNC_BATCH_SIZE = 96/)
+  assert.match(source, /const dashboardFaviconDirtyPageUrls = new Set<string>\(\)/)
+  assert.match(source, /scheduleDashboardFaviconForPageUrlSync\(item\.pageUrl\)/)
+  assert.doesNotMatch(source, /syncDashboardFaviconForPageUrl\(item\.pageUrl\)/)
+  assert.match(loadSyncBody, /\.dashboard-virtual-window/)
+  assert.match(loadSyncBody, /processed >= DASHBOARD_FAVICON_LOAD_SYNC_BATCH_SIZE/)
+  assert.match(dirtySyncBody, /dashboardFaviconDirtyPageUrls\.add\(normalizedPageUrl\)/)
+  assert.match(flushBody, /runIdle\(\(\) => \{[\s\S]*?syncDashboardFaviconsForPageUrls\(dirtyPageUrls\)/)
+  assert.doesNotMatch(flushBody, /for \(const pageUrl of dirtyPageUrls\)/)
+})
+
+test('dashboard performance CSS avoids costly scroll paint features', () => {
+  const optionsCss = readProjectFile('src/options/options.css')
+  const virtualGridRule = optionsCss.match(/\.dashboard-card-grid\.is-virtualized\s*\{[\s\S]*?\}/)?.[0] || ''
+  const updateMaskRule = optionsCss.match(/\.dashboard-card-grid\.is-updating::before\s*\{[\s\S]*?\}/)?.[0] || ''
+  const cardRule = optionsCss.match(/\.dashboard-bookmark-card\s*\{[\s\S]*?\}/)?.[0] || ''
+
+  assert.doesNotMatch(optionsCss, /\.dashboard-bookmark-card:has\(/)
+  assert.doesNotMatch(virtualGridRule, /will-change:\s*scroll-position/)
+  assert.doesNotMatch(updateMaskRule, /backdrop-filter/)
+  assert.match(cardRule, /contain:\s*layout paint style/)
+  assert.match(cardRule, /box-shadow:\s*inset 0 1px 0/)
+  assert.match(optionsCss, /\.dashboard-performance-mode \.dashboard-bookmark-card/)
 })
 
 test('dashboard cards expose keyboard-triggerable move and delete actions', () => {

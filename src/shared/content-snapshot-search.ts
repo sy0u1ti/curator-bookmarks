@@ -1,5 +1,9 @@
 import { STORAGE_KEYS } from './constants.js'
 import { getLocalStorage } from './storage.js'
+import {
+  configureContentSnapshotRepository,
+  loadContentSnapshotIndexFromRepository
+} from './repositories/snapshot-repository.js'
 import { normalizeText } from './text.js'
 
 export interface ContentSnapshotSettings {
@@ -83,9 +87,13 @@ export async function loadContentSnapshotSettings(): Promise<ContentSnapshotSett
   return normalizeContentSnapshotSettings(stored[STORAGE_KEYS.contentSnapshotSettings])
 }
 
+configureContentSnapshotRepository({
+  normalizeIndex: normalizeContentSnapshotIndex,
+  normalizeRecord: normalizeContentSnapshotRecord
+})
+
 export async function loadContentSnapshotIndex(): Promise<ContentSnapshotIndex> {
-  const stored = await getLocalStorage([STORAGE_KEYS.contentSnapshotIndex])
-  return normalizeContentSnapshotIndex(stored[STORAGE_KEYS.contentSnapshotIndex])
+  return loadContentSnapshotIndexFromRepository()
 }
 
 export function buildContentSnapshotSearchText(

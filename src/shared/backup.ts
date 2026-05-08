@@ -7,12 +7,17 @@ import { getBookmarkTree, createBookmark } from './bookmarks-api.js'
 import { extractBookmarkData } from './bookmark-tree.js'
 import {
   buildBookmarkTagDuplicateKey,
+  loadBookmarkTagIndex,
   mergeBookmarkTagImport,
   normalizeBookmarkTagIndex,
   normalizeBookmarkTagUrl,
   saveBookmarkTagIndex,
   type BookmarkTagIndex
 } from './bookmark-tags.js'
+import {
+  loadNewTabActivityFromRepository,
+  type NewTabActivityRepositoryState
+} from './repositories/activity-repository.js'
 import { getLocalStorage, setLocalStorage } from './storage.js'
 
 const BACKUP_SCHEMA_VERSION = 1
@@ -90,6 +95,7 @@ export interface CuratorBackupFileV1 {
     redirectCache: unknown
     newTab: Record<string, unknown>
     popupPreferences?: unknown
+    aiRejectedSuggestions?: unknown[]
     aiProviderSettings: Record<string, unknown> & {
       apiKeyRedacted: true
     }
@@ -141,6 +147,12 @@ export async function createCuratorBackupFile(
   const exportedAt = new Date(now).toISOString()
   const tree = await getBookmarkTree()
   const stored = await getBackupStorageSnapshot()
+  const bookmarkTagIndex = await loadBookmarkTagIndex().catch(() =>
+    normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
+  )
+  const newTabActivity = await loadNewTabActivityFromRepository(normalizeNewTabActivityForBackup).catch(() =>
+    normalizeNewTabActivityForBackup(stored[STORAGE_KEYS.newTabActivity])
+  )
 
   return {
     app: BACKUP_APP,
@@ -159,7 +171,7 @@ export async function createCuratorBackupFile(
       tree
     },
     storage: {
-      bookmarkTagIndex: normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex]),
+      bookmarkTagIndex,
       recycleBin: normalizeUnknownArray(stored[STORAGE_KEYS.recycleBin]),
       ignoreRules: normalizeIgnoreRulesForBackup(stored[STORAGE_KEYS.ignoreRules]),
       redirectCache: stored[STORAGE_KEYS.redirectCache] ?? null,
@@ -172,9 +184,10 @@ export async function createCuratorBackupFile(
         timeSettings: stored[STORAGE_KEYS.newTabTimeSettings] ?? null,
         generalSettings: stored[STORAGE_KEYS.newTabGeneralSettings] ?? null,
         folderSettings: stored[STORAGE_KEYS.newTabFolderSettings] ?? null,
-        activity: stored[STORAGE_KEYS.newTabActivity] ?? null
+        activity: newTabActivity
       },
       popupPreferences: stored[STORAGE_KEYS.popupPreferences] ?? null,
+      aiRejectedSuggestions: normalizeUnknownArray(stored[STORAGE_KEYS.aiRejectedSuggestions]),
       aiProviderSettings: redactAiProviderSettings(stored[STORAGE_KEYS.aiProviderSettings])
     },
     notes: [
@@ -225,6 +238,7 @@ export function parseCuratorBackupFile(payload: unknown): CuratorBackupFileV1 {
       redirectCache: source.storage.redirectCache ?? null,
       newTab: normalizeObject(source.storage.newTab),
       popupPreferences: source.storage.popupPreferences ?? null,
+      aiRejectedSuggestions: normalizeUnknownArray(source.storage.aiRejectedSuggestions),
       aiProviderSettings: redactAiProviderSettings(source.storage.aiProviderSettings)
     },
     notes: Array.isArray(source.notes) ? source.notes.map((note) => String(note)) : []
@@ -319,9 +333,7 @@ export async function restoreCuratorBackup(
   }
 
   if (mode === 'tagsOnly' || mode === 'safeFull') {
-    const currentIndex = normalizeBookmarkTagIndex(
-      (await getLocalStorage([STORAGE_KEYS.bookmarkTagIndex]))[STORAGE_KEYS.bookmarkTagIndex]
-    )
+    const currentIndex = await loadBookmarkTagIndex()
     const tagImport = mergeBookmarkTagImport(currentIndex, {
       records: Object.values(backup.storage.bookmarkTagIndex.records)
     }, currentData.bookmarks)
@@ -344,7 +356,8 @@ export async function restoreCuratorBackup(
       [STORAGE_KEYS.recycleBin]: backup.storage.recycleBin,
       [STORAGE_KEYS.ignoreRules]: backup.storage.ignoreRules,
       [STORAGE_KEYS.redirectCache]: backup.storage.redirectCache,
-      [STORAGE_KEYS.popupPreferences]: backup.storage.popupPreferences
+      [STORAGE_KEYS.popupPreferences]: backup.storage.popupPreferences,
+      [STORAGE_KEYS.aiRejectedSuggestions]: backup.storage.aiRejectedSuggestions
     }
     localPayload[STORAGE_KEYS.aiProviderSettings] = mergeRestoredAiProviderSettings(
       currentAiSettings,
@@ -414,9 +427,40 @@ export async function createAutoBackupBeforeDangerousOperation(
   }
 }
 
+function normalizeNewTabActivityForBackup(rawActivity: unknown): NewTabActivityRepositoryState {
+  const source = normalizeObject(rawActivity)
+  const rawRecords = normalizeObject(source.records)
+  const records: NewTabActivityRepositoryState['records'] = {}
+
+  for (const [bookmarkId, value] of Object.entries(rawRecords)) {
+    const record = normalizeObject(value)
+    const id = String(record.bookmarkId || bookmarkId || '').trim()
+    const url = String(record.url || '').trim()
+    const lastOpenedAt = Number(record.lastOpenedAt) || 0
+    const openCount = Math.max(0, Math.min(Math.floor(Number(record.openCount) || 0), 9999))
+    if (!id || !url || !lastOpenedAt || !openCount) {
+      continue
+    }
+    records[id] = {
+      bookmarkId: id,
+      title: String(record.title || '').trim().slice(0, 160),
+      url: url.slice(0, 2048),
+      openCount,
+      firstOpenedAt: Number(record.firstOpenedAt) || lastOpenedAt,
+      lastOpenedAt
+    }
+  }
+
+  return {
+    pinnedIds: Array.isArray(source.pinnedIds)
+      ? source.pinnedIds.map((id) => String(id || '').trim()).filter(Boolean)
+      : [],
+    records
+  }
+}
+
 async function getBackupStorageSnapshot(): Promise<Record<string, unknown>> {
   return getLocalStorage([
-    STORAGE_KEYS.bookmarkTagIndex,
     STORAGE_KEYS.recycleBin,
     STORAGE_KEYS.ignoreRules,
     STORAGE_KEYS.redirectCache,
@@ -430,6 +474,7 @@ async function getBackupStorageSnapshot(): Promise<Record<string, unknown>> {
     STORAGE_KEYS.newTabFolderSettings,
     STORAGE_KEYS.newTabActivity,
     STORAGE_KEYS.popupPreferences,
+    STORAGE_KEYS.aiRejectedSuggestions,
     STORAGE_KEYS.aiProviderSettings
   ])
 }

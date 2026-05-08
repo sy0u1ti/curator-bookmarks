@@ -65,6 +65,7 @@ import {
   normalizeNewTabSearchText,
   resolvePortalPanelLayout,
   type AdaptiveSearchOffsetBounds,
+  type NewTabContentState,
   type PortalOverview,
   type PortalQuickAccessItem,
   resolveNewTabContentState,
@@ -161,6 +162,8 @@ import {
   updateNewTabWorkspace,
   type NewTabWorkspaceSettings
 } from './workspace-settings.js'
+import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
+import { runIdle, runMicroIdle } from '../shared/idle.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const FAVICON_COLOR_SAMPLE_SIZE = 32
@@ -169,7 +172,7 @@ const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
 const SETTINGS_SAVE_DEBOUNCE_MS = 260
 const FAVICON_ACCENT_SAVE_DEBOUNCE_MS = 900
-const EAGER_FAVICON_LIMIT = 40
+const EAGER_FAVICON_LIMIT = 24
 const HIGH_PRIORITY_FAVICON_LIMIT = 12
 const FAVICON_ACCENT_EXTRACTION_INITIAL_BUDGET = 48
 const FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS = 1500
@@ -211,8 +214,34 @@ const SEARCH_OFFSET_ABSOLUTE_MIN = -240
 const SEARCH_OFFSET_ABSOLUTE_MAX = 240
 const SEARCH_WIDTH_BOUNDS_FALLBACK = { min: 16, max: 72 }
 const NEWTAB_LAYOUT_SAFE_GAP = 12
+const NEWTAB_COMMAND_SCORE = -100000
+const NEWTAB_COMMAND_SUGGESTION_LIMIT = 4
 
 type MotionCleanup = () => void | Promise<void>
+
+interface NewTabCommandSuggestion {
+  id: string
+  title: string
+  subtitle: string
+  keywords: string[]
+  run: () => void
+}
+
+type NewTabCommandSearchSuggestion = {
+  suggestionType: 'command'
+  id: string
+  title: string
+  url: string
+  folderTitle: string
+  folderPath: string
+  score: number
+  order: number
+  command: NewTabCommandSuggestion
+}
+
+type NewTabSearchSuggestion =
+  | (SearchBookmarkSuggestion & { suggestionType?: 'bookmark' })
+  | NewTabCommandSearchSuggestion
 
 function prefersReducedMotion(): boolean {
   return Boolean(
@@ -402,6 +431,8 @@ interface NewTabActivityState {
   records: Record<string, NewTabActivityRecord>
 }
 
+type NewTabActivityRepositoryModule = typeof import('../shared/repositories/activity-repository.js')
+
 interface QuickAccessItem {
   id: string
   title: string
@@ -410,6 +441,13 @@ interface QuickAccessItem {
   badge: string
   reason: PortalQuickAccessItem['reason']
   bookmark: chrome.bookmarks.BookmarkTreeNode
+}
+
+interface BookmarkLazyExpansionTarget {
+  section: NewTabFolderSection
+  nextIndex: number
+  renderedBookmarkIndex: number
+  renderVersion: number
 }
 
 type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
@@ -440,6 +478,8 @@ const state = {
   allBookmarkMap: new Map<string, chrome.bookmarks.BookmarkTreeNode>(),
   searchIndex: [] as NewTabSearchIndexEntry[],
   preparedSearchIndex: prepareNewTabSearchIndex([]) as NewTabPreparedSearchIndex,
+  searchIndexReady: false,
+  searchIndexReadyPromise: Promise.resolve() as Promise<void>,
   savedSearches: null as SavedSearchIndex | null,
   savedSearchesLoaded: false,
   savedSearchesError: '',
@@ -530,6 +570,8 @@ const state = {
   faviconRefreshTokens: new Map<string, number>()
 }
 
+let onboardingCompleted = false
+
 const root = document.getElementById('newtab-root')
 const dashboardTrigger = document.getElementById('newtab-dashboard-trigger')
 const dashboardOverlay = document.getElementById('newtab-dashboard-overlay')
@@ -571,9 +613,25 @@ let backgroundSettingsMutationVersion = 0
 let bookmarkDragSlotRects = new Map<string, DOMRect>()
 let bookmarkDragSlotOrderIds: string[] = []
 let dashboardReturnFocusTarget: HTMLElement | null = null
+let newTabDomContentLoadedRecorded = false
+let newTabSkeletonRenderRecorded = false
+let newTabFirstRenderRecorded = false
+let newTabBackgroundReadyRecorded = false
+let newTabRefreshVersion = 0
+let searchIndexBuildVersion = 0
+let searchIndexRebuildScheduled = false
+let resolveSearchIndexReady: () => void = () => {}
+let searchIndexReadyPromise: Promise<void> = createSearchIndexReadyPromise()
+let lastRenderedContentSignature = ''
+let lastRenderedShellSignature = ''
+let bookmarkLazyExpansionObserver: IntersectionObserver | null = null
+let bookmarkLazyExpansionTargets = new WeakMap<HTMLElement, BookmarkLazyExpansionTarget>()
 const backgroundPreloadPromise = preloadBackgroundSettings()
 
+state.searchIndexReadyPromise = searchIndexReadyPromise
+
 document.addEventListener('DOMContentLoaded', () => {
+  recordNewTabDomContentLoaded()
   bindEvents()
   hydrateFeaturedBackgroundOptions()
   renderIconPresetCards()
@@ -581,6 +639,88 @@ document.addEventListener('DOMContentLoaded', () => {
   void hydrateNewTabSavedSearches()
   void refreshNewTab()
 })
+
+function createSearchIndexReadyPromise(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    resolveSearchIndexReady = resolve
+  })
+}
+
+function resetSearchIndexReadyState(): void {
+  searchIndexBuildVersion += 1
+  searchIndexRebuildScheduled = false
+  resolveSearchIndexReady()
+  state.searchIndexReady = false
+  searchIndexReadyPromise = createSearchIndexReadyPromise()
+  state.searchIndexReadyPromise = searchIndexReadyPromise
+}
+
+function markSearchIndexDirty({ schedule = true } = {}): void {
+  resetSearchIndexReadyState()
+  if (schedule) {
+    scheduleNewTabSearchIndexRebuild()
+  }
+}
+
+function scheduleNewTabSearchIndexRebuild(): void {
+  if (state.searchIndexReady) {
+    return
+  }
+  if (searchIndexRebuildScheduled) {
+    return
+  }
+
+  searchIndexRebuildScheduled = true
+  const version = searchIndexBuildVersion
+  runIdle(() => {
+    searchIndexRebuildScheduled = false
+    if (version !== searchIndexBuildVersion) {
+      return
+    }
+
+    rebuildNewTabSearchIndex()
+  })
+}
+
+function recordNewTabDomContentLoaded(): void {
+  if (newTabDomContentLoadedRecorded) {
+    return
+  }
+
+  newTabDomContentLoadedRecorded = true
+  perfMark('newtab.domContentLoaded')
+}
+
+function recordNewTabSkeletonRendered(): void {
+  if (newTabSkeletonRenderRecorded) {
+    return
+  }
+
+  newTabSkeletonRenderRecorded = true
+  perfMark('newtab.skeletonRendered')
+  perfMeasure('newtab.skeletonMs', 'newtab.domContentLoaded', 'newtab.skeletonRendered')
+}
+
+function recordNewTabFirstBookmarksRendered(): void {
+  if (newTabFirstRenderRecorded) {
+    return
+  }
+
+  newTabFirstRenderRecorded = true
+  perfMark('newtab.firstBookmarksRendered')
+  perfMeasure('newtab.firstBookmarksMs', 'newtab.domContentLoaded', 'newtab.firstBookmarksRendered')
+  perfMeasure('newtab.totalInteractive', 'newtab.domContentLoaded', 'newtab.firstBookmarksRendered')
+}
+
+function recordNewTabBackgroundReady(): void {
+  if (newTabBackgroundReadyRecorded) {
+    return
+  }
+
+  newTabBackgroundReadyRecorded = true
+  perfMark('newtab.backgroundReady')
+  perfMeasure('newtab.backgroundReadyMs', 'newtab.domContentLoaded', 'newtab.backgroundReady')
+}
 
 window.addEventListener('pagehide', cleanupNewTabRuntime)
 
@@ -1013,24 +1153,36 @@ function bindFolderSettingsEvents(): void {
 }
 
 function handleGeneralSettingsChange(): void {
+  const previousSettings = state.generalSettings
   state.generalSettings = readGeneralSettingsFromControls()
   void saveGeneralSettings().catch((error) => {
     console.warn('新标签页通用设置保存失败。', error)
   })
   syncGeneralSettingsControls()
   applyGeneralSettings()
-  render()
-  updateClockText()
+  if (
+    previousSettings.showPortalOverview !== state.generalSettings.showPortalOverview ||
+    previousSettings.showQuickAccess !== state.generalSettings.showQuickAccess ||
+    previousSettings.showSourceNavigation !== state.generalSettings.showSourceNavigation
+  ) {
+    scheduleRender({ updateClock: true })
+  }
 }
 
 function handleFolderSettingsChange(): void {
+  const previousSettings = state.folderSettings
   state.folderSettings = readFolderSettingsFromControls()
   void saveFolderSettings().catch((error) => {
     console.warn('新标签页文件夹设置保存失败。', error)
   })
   syncFolderSettingsControls()
   applyFolderSettings()
-  render()
+  if (previousSettings.hideFolderNames !== state.folderSettings.hideFolderNames) {
+    if (!renderBookmarkSections()) {
+      render()
+    }
+    scheduleAdaptiveNewTabLayoutUpdate()
+  }
   updateClockText()
 }
 
@@ -1260,6 +1412,7 @@ async function updateSelectedFolders(
   })
   state.folderSections = buildNewTabFolderSections(state.rootNode, state.folderSettings)
   refreshDerivedBookmarkState()
+  markSearchIndexDirty()
 
   try {
     await saveFolderSettings()
@@ -1267,6 +1420,7 @@ async function updateSelectedFolders(
     state.folderSettings = previousSettings
     state.folderSections = previousSections
     refreshDerivedBookmarkState()
+    markSearchIndexDirty()
     render()
     syncFolderSettingsControls()
     applyFolderSettings()
@@ -1877,6 +2031,7 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
     return
   }
 
+  markSearchIndexDirty()
   await persistBookmarkOrder(folderId, originalOrderIds, finalOrderIds)
 }
 
@@ -2331,6 +2486,7 @@ function syncPersistedBookmarkOrderInState(
     state.folderNodeMap
   )
   refreshDerivedBookmarkState()
+  markSearchIndexDirty()
   render()
   updateClockText()
   return true
@@ -2456,6 +2612,7 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
     ...state.folderSettings,
     selectedFolderIds: finalOrderIds
   })
+  markSearchIndexDirty()
   try {
     await saveFolderSettings()
     syncFolderSettingsControls()
@@ -2466,6 +2623,7 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
       selectedFolderIds: originalOrderIds
     })
     restoreFolderDragOrder(originalOrderIds, originalSections)
+    markSearchIndexDirty()
     syncFolderSettingsControls()
     const message = error instanceof Error ? error.message : '请稍后重试。'
     setFolderReorderStatus(`文件夹顺序保存失败，已恢复到拖拽前顺序。${message}`, 'error')
@@ -2808,7 +2966,7 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
     const copy = getSpeedDialPinActionCopy(pinned)
     state.menuError = ''
     state.menuStatus = copy.status
-    render()
+    scheduleRender({ updateClock: true })
     updateClockText()
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
   } catch (error) {
@@ -3042,6 +3200,12 @@ function openOptionsHash(hash: string): void {
   void chrome.tabs?.create?.({ url })
 }
 
+function focusNewTabSearchInput(): void {
+  const input = document.querySelector<HTMLInputElement>('.newtab-search-input')
+  input?.focus()
+  input?.select()
+}
+
 function getBookmarkDisplayTitle(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
   return String(bookmark.title || '').trim() || String(bookmark.url || '').trim() || '未命名书签'
 }
@@ -3063,7 +3227,10 @@ function refreshActiveMenuIcon(): void {
   void deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
     console.warn('新标签页网站图标色彩缓存刷新失败。', error)
   })
-  render()
+  if (!renderBookmarkSections()) {
+    render()
+  }
+  scheduleAdaptiveNewTabLayoutUpdate()
   updateClockText()
   renderBookmarkMenu({ focusFirst: false, focusAction: 'refresh-icon' })
 }
@@ -3099,11 +3266,13 @@ async function saveAddedBookmark(): Promise<void> {
 }
 
 async function refreshNewTab(): Promise<void> {
+  const refreshVersion = ++newTabRefreshVersion
   const backgroundMutationVersionAtStart = backgroundSettingsMutationVersion
   state.loading = true
   state.error = ''
   state.bookmarkReorderError = ''
   clearFolderReorderStatus()
+  resetSearchIndexReadyState()
   render()
 
   try {
@@ -3119,12 +3288,11 @@ async function refreshNewTab(): Promise<void> {
         STORAGE_KEYS.newTabTimeSettings,
         STORAGE_KEYS.newTabWorkspaceSettings,
         STORAGE_KEYS.newTabModuleSettings,
-        STORAGE_KEYS.newTabActivity,
-        STORAGE_KEYS.bookmarkTagIndex,
-        STORAGE_KEYS.contentSnapshotIndex
+        STORAGE_KEYS.onboardingState
       ]),
       backgroundPreloadPromise
     ])
+    perfMark('newtab.storageLoaded')
     const rootNode = tree[0] || null
     const folderData = extractBookmarkData(rootNode)
     const folderNodeMap = buildFolderNodeMap(rootNode)
@@ -3133,21 +3301,22 @@ async function refreshNewTab(): Promise<void> {
       rootNode
     )
     const folderSections = buildNewTabFolderSections(rootNode, folderSettings, folderData, folderNodeMap)
+    perfMark('newtab.sectionsBuilt')
+    perfMeasure('newtab.sectionsBuildMs', 'newtab.storageLoaded', 'newtab.sectionsBuilt')
 
     state.rootNode = rootNode
     state.folderData = folderData
-    state.bookmarkTagIndex = normalizeNewTabBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
-    state.searchSnapshotIndex = normalizeNewTabContentSnapshotIndex(stored[STORAGE_KEYS.contentSnapshotIndex])
+    state.bookmarkTagIndex = null
+    state.searchSnapshotIndex = null
     state.folderNodeMap = folderNodeMap
     state.folderSettings = folderSettings
     state.folderSections = folderSections
     refreshDerivedBookmarkState()
     state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
     state.faviconAccentCache = normalizeFaviconAccentCache(stored[STORAGE_KEYS.newTabFaviconAccentCache])
-    state.activity = normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.allBookmarks)
+    state.activity = normalizeNewTabActivity(null, state.allBookmarks)
     state.workspaceSettings = normalizeNewTabWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings], {
-      validBookmarkIds: state.allBookmarkMap.keys(),
-      legacyPinnedIds: state.activity.pinnedIds
+      validBookmarkIds: state.allBookmarkMap.keys()
     })
     state.moduleSettings = normalizeNewTabModuleSettings(stored[STORAGE_KEYS.newTabModuleSettings])
     if (backgroundMutationVersionAtStart === backgroundSettingsMutationVersion) {
@@ -3157,6 +3326,7 @@ async function refreshNewTab(): Promise<void> {
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
     state.generalSettings = normalizeGeneralSettings(stored[STORAGE_KEYS.newTabGeneralSettings])
     state.timeSettings = normalizeTimeSettings(stored[STORAGE_KEYS.newTabTimeSettings])
+    onboardingCompleted = normalizeNewTabOnboardingCompleted(stored[STORAGE_KEYS.onboardingState])
   } catch (error) {
     state.error = error instanceof Error ? error.message : '新标签页加载失败，请刷新后重试。'
   } finally {
@@ -3176,6 +3346,63 @@ async function refreshNewTab(): Promise<void> {
     updateAllSettingRangeVisuals()
     updateClockText()
     scheduleClockTick()
+    runIdle(() => {
+      void hydrateNewTabSearchAndTags(refreshVersion)
+    })
+  }
+}
+
+async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion): Promise<void> {
+  try {
+    const [tagIndex, snapshotIndex, activity] = await Promise.all([
+      loadNewTabBookmarkTagIndexLazy(),
+      loadNewTabContentSnapshotIndexLazy(),
+      loadNewTabActivityLazy()
+    ])
+    if (refreshVersion !== newTabRefreshVersion) {
+      return
+    }
+
+    state.bookmarkTagIndex = normalizeNewTabBookmarkTagIndex(tagIndex)
+    state.searchSnapshotIndex = normalizeNewTabContentSnapshotIndex(snapshotIndex)
+    state.activity = activity
+    state.workspaceSettings = normalizeNewTabWorkspaceSettings(state.workspaceSettings, {
+      validBookmarkIds: state.allBookmarkMap.keys(),
+      legacyPinnedIds: state.activity.pinnedIds
+    })
+    scheduleNewTabSearchIndexRebuild()
+    render()
+  } catch (error) {
+    console.warn('新标签页 idle 数据加载失败。', error)
+    scheduleNewTabSearchIndexRebuild()
+  }
+}
+
+async function loadNewTabBookmarkTagIndexLazy(): Promise<BookmarkTagIndex | null> {
+  try {
+    const { loadBookmarkTagIndex } = await import('../shared/bookmark-tags.js')
+    return await loadBookmarkTagIndex()
+  } catch {
+    return null
+  }
+}
+
+async function loadNewTabContentSnapshotIndexLazy(): Promise<ContentSnapshotIndex | null> {
+  try {
+    const { loadContentSnapshotIndex } = await import('../shared/content-snapshots.js')
+    return await loadContentSnapshotIndex()
+  } catch {
+    return null
+  }
+}
+
+async function loadNewTabActivityLazy(): Promise<NewTabActivityState> {
+  try {
+    const activityRepository = await loadNewTabActivityRepositoryLazy()
+    return activityRepository.loadNewTabActivityFromRepository(normalizeNewTabActivityForCurrentBookmarks)
+  } catch {
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabActivity]).catch(() => ({}))
+    return normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.allBookmarks)
   }
 }
 
@@ -3195,6 +3422,7 @@ async function preloadBackgroundSettings(): Promise<typeof DEFAULT_BACKGROUND_SE
   } catch (error) {
     console.warn('新标签页背景预加载失败。', error)
     markWallpaperReady()
+    recordNewTabBackgroundReady()
     return preloadedBackgroundSettings
   }
 }
@@ -3245,6 +3473,7 @@ async function ensureNewTabFolder(): Promise<string> {
     })
     state.folderSections = buildNewTabFolderSections(rootNode, state.folderSettings)
     refreshDerivedBookmarkState()
+    markSearchIndexDirty()
     await saveFolderSettings()
     return String(existingFolder.id)
   }
@@ -3260,6 +3489,7 @@ async function ensureNewTabFolder(): Promise<string> {
   })
   state.folderSections = buildNewTabFolderSections(rootNode, state.folderSettings)
   refreshDerivedBookmarkState()
+  markSearchIndexDirty()
   await saveFolderSettings()
   return String(createdFolder.id)
 }
@@ -3269,44 +3499,204 @@ function render(): void {
     return
   }
 
-  bookmarkTileRenderVersion += 1
-  cancelScheduledAdaptiveNewTabLayoutUpdate()
-  root.replaceChildren()
   const contentState = resolveNewTabContentState({
     loading: state.loading,
     error: state.error,
     selectedFolderCount: state.folderSettings.selectedFolderIds.length,
     visibleFolderCount: state.folderSections.length
   })
+  const contentSignature = getContentStateSignature(contentState)
+  const shellSignature = getNewTabShellSignature()
 
-  if (contentState.type === 'loading') {
-    root.appendChild(createNewTabLayout(createLoadingStateView()))
+  if (
+    contentState.type === 'bookmarks' &&
+    lastRenderedContentSignature === 'bookmarks' &&
+    lastRenderedShellSignature === shellSignature &&
+    renderBookmarkSections()
+  ) {
     scheduleAdaptiveNewTabLayoutUpdate()
+    recordNewTabFirstBookmarksRendered()
     return
+  }
+
+  bookmarkTileRenderVersion += 1
+  disconnectBookmarkLazyExpansionObserver()
+  cancelScheduledAdaptiveNewTabLayoutUpdate()
+  root.replaceChildren(createContentStateView(contentState))
+  lastRenderedContentSignature = contentSignature
+  lastRenderedShellSignature = shellSignature
+  scheduleAdaptiveNewTabLayoutUpdate()
+  recordContentStateRender(contentState)
+}
+
+function createContentStateView(contentState: NewTabContentState): HTMLElement {
+  if (contentState.type === 'loading') {
+    return createNewTabLayout(createLoadingStateView())
   }
 
   if (contentState.type === 'error') {
-    root.appendChild(createStateView(contentState.message, '重新加载', () => {
+    return createStateView(contentState.message, '重新加载', () => {
       void refreshNewTab()
-    }))
-    return
+    })
   }
 
   if (contentState.type === 'missing-folder') {
-    root.appendChild(createNewTabLayout(createMissingFolderView({
+    return createNewTabLayout(createMissingFolderView({
       creatingFolder: state.creatingFolder,
       reason: contentState.reason,
       onCreateFolder: () => {
         void createNewTabFolder()
       },
       onOpenFolderSettings: openFolderSourceSettings
-    })))
-    scheduleAdaptiveNewTabLayoutUpdate()
+    }))
+  }
+
+  return createNewTabLayout(createBookmarkSections(state.folderSections))
+}
+
+function renderBookmarkSections(): boolean {
+  const content = root?.querySelector<HTMLElement>('.newtab-content')
+  if (!content) {
+    return false
+  }
+
+  bookmarkTileRenderVersion += 1
+  disconnectBookmarkLazyExpansionObserver()
+  const nextContent = createBookmarkSections(state.folderSections)
+  content.replaceChildren(...Array.from(nextContent.childNodes))
+  copyElementPresentationState(nextContent, content)
+  return true
+}
+
+function getBookmarkLazyExpansionObserver(): IntersectionObserver | null {
+  if (typeof IntersectionObserver === 'undefined') {
+    return null
+  }
+
+  if (!bookmarkLazyExpansionObserver) {
+    bookmarkLazyExpansionObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) {
+          continue
+        }
+
+        const placeholder = entry.target
+        if (placeholder instanceof HTMLElement) {
+          expandBookmarkSectionPlaceholder(placeholder)
+        }
+      }
+    }, { rootMargin: '360px 0px' })
+  }
+
+  return bookmarkLazyExpansionObserver
+}
+
+function observeBookmarkSectionPlaceholder(
+  placeholder: HTMLElement,
+  target: BookmarkLazyExpansionTarget
+): void {
+  bookmarkLazyExpansionTargets.set(placeholder, target)
+  const observer = getBookmarkLazyExpansionObserver()
+  if (!observer) {
+    runMicroIdle(() => expandBookmarkSectionPlaceholder(placeholder))
     return
   }
 
-  root.appendChild(createNewTabLayout(createBookmarkSections(state.folderSections)))
-  scheduleAdaptiveNewTabLayoutUpdate()
+  observer.observe(placeholder)
+}
+
+function disconnectBookmarkLazyExpansionObserver(): void {
+  bookmarkLazyExpansionObserver?.disconnect()
+  bookmarkLazyExpansionObserver = null
+  bookmarkLazyExpansionTargets = new WeakMap<HTMLElement, BookmarkLazyExpansionTarget>()
+}
+
+function expandBookmarkSectionPlaceholder(placeholder: HTMLElement): void {
+  const target = bookmarkLazyExpansionTargets.get(placeholder)
+  if (!target) {
+    return
+  }
+
+  bookmarkLazyExpansionTargets.delete(placeholder)
+  bookmarkLazyExpansionObserver?.unobserve(placeholder)
+  if (target.renderVersion !== bookmarkTileRenderVersion || !placeholder.isConnected) {
+    return
+  }
+
+  const list = placeholder.closest<HTMLElement>('.bookmark-grid')
+  if (!list) {
+    placeholder.remove()
+    return
+  }
+
+  scheduleBookmarkTileChunkRender(
+    list,
+    target.section,
+    target.nextIndex,
+    target.renderedBookmarkIndex,
+    target.renderVersion,
+    placeholder
+  )
+}
+
+function copyElementPresentationState(source: HTMLElement, target: HTMLElement): void {
+  target.className = source.className
+  target.removeAttribute('style')
+  const sourceAttributeNames = new Set(source.getAttributeNames())
+  for (const name of target.getAttributeNames()) {
+    if (name !== 'class' && !sourceAttributeNames.has(name)) {
+      target.removeAttribute(name)
+    }
+  }
+
+  for (const name of source.getAttributeNames()) {
+    if (name === 'class') {
+      continue
+    }
+
+    target.setAttribute(name, source.getAttribute(name) || '')
+  }
+}
+
+function recordContentStateRender(contentState: NewTabContentState): void {
+  if (contentState.type === 'loading') {
+    recordNewTabSkeletonRendered()
+  } else if (contentState.type === 'bookmarks' || contentState.type === 'missing-folder') {
+    recordNewTabFirstBookmarksRendered()
+  }
+}
+
+function getContentStateSignature(contentState: NewTabContentState): string {
+  if (contentState.type === 'error') {
+    return `error:${contentState.message}`
+  }
+  if (contentState.type === 'missing-folder') {
+    return `missing-folder:${contentState.reason}:${state.creatingFolder}`
+  }
+  return contentState.type
+}
+
+function getNewTabShellSignature(): string {
+  return [
+    state.searchSettings.enabled,
+    state.searchSettings.openInNewTab,
+    state.searchSettings.engine,
+    state.searchSettings.enabledEngines.join(','),
+    state.searchSettings.placeholder,
+    state.searchSettings.naturalSearchEnabled,
+    state.searchSettings.autoVerticalCenter,
+    state.searchSettings.width,
+    state.searchSettings.height,
+    state.searchSettings.offsetY,
+    state.searchSettings.background,
+    state.timeSettings.enabled,
+    state.timeSettings.displayMode,
+    state.timeSettings.hour12,
+    state.timeSettings.showSeconds,
+    state.timeSettings.dateFormat,
+    state.timeSettings.clockSize,
+    state.timeSettings.density
+  ].join('|')
 }
 
 function syncDashboardRoute(): void {
@@ -3799,6 +4189,15 @@ function updateVerticalCenterCollisionOffset(): void {
 function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
   const modules: NewTabPageModule[] = []
 
+  const onboarding = createNewTabOnboardingStrip()
+  if (onboarding) {
+    modules.push({
+      id: 'onboarding',
+      element: onboarding,
+      placement: 'utility'
+    })
+  }
+
   const clock = createClockWidget()
   if (clock) {
     modules.push({
@@ -3832,6 +4231,66 @@ function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
   })
 
   return createNewTabPage({ modules })
+}
+
+function normalizeNewTabOnboardingCompleted(rawState: unknown): boolean {
+  if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+    return false
+  }
+  return (rawState as { completed?: unknown }).completed === true
+}
+
+function createNewTabOnboardingStrip(): HTMLElement | null {
+  if (onboardingCompleted || state.loading || state.error) {
+    return null
+  }
+
+  const section = document.createElement('section')
+  section.className = 'newtab-onboarding-strip'
+  section.setAttribute('aria-label', 'Curator 首次使用引导')
+
+  const copy = document.createElement('div')
+  copy.className = 'newtab-onboarding-copy'
+  const title = document.createElement('strong')
+  title.textContent = 'Curator 本地优先保存书签索引'
+  const detail = document.createElement('span')
+  detail.textContent = '选择来源、查看权限说明，AI 可稍后配置或跳过。'
+  copy.append(title, detail)
+
+  const actions = document.createElement('div')
+  actions.className = 'newtab-onboarding-actions'
+  const sourceButton = document.createElement('button')
+  sourceButton.type = 'button'
+  sourceButton.textContent = '选择来源'
+  sourceButton.addEventListener('click', openFolderSourceSettings)
+  const privacyButton = document.createElement('button')
+  privacyButton.type = 'button'
+  privacyButton.textContent = '权限说明'
+  privacyButton.addEventListener('click', () => openOptionsHash('#privacy'))
+  const skipButton = document.createElement('button')
+  skipButton.type = 'button'
+  skipButton.className = 'secondary'
+  skipButton.textContent = '跳过'
+  skipButton.addEventListener('click', () => {
+    void completeNewTabOnboarding()
+  })
+  actions.append(sourceButton, privacyButton, skipButton)
+  section.append(copy, actions)
+  return section
+}
+
+async function completeNewTabOnboarding(): Promise<void> {
+  onboardingCompleted = true
+  await setLocalStorage({
+    [STORAGE_KEYS.onboardingState]: {
+      version: 1,
+      completed: true,
+      completedAt: Date.now()
+    }
+  }).catch((error) => {
+    console.warn('新标签页引导状态保存失败。', error)
+  })
+  render()
 }
 
 function createSearchWidget(): HTMLElement | null {
@@ -4063,7 +4522,7 @@ function createSearchWidget(): HTMLElement | null {
 
   suggestionsPanel.append(searchChips, savedSearches, suggestionsHeading, suggestions, suggestionsHint)
 
-  let searchSuggestions: SearchBookmarkSuggestion[] = []
+  let searchSuggestions: NewTabSearchSuggestion[] = []
   let activeSuggestionIndex = -1
   let suggestionDebounceTimer = 0
   let suggestionRequestId = 0
@@ -4088,7 +4547,7 @@ function createSearchWidget(): HTMLElement | null {
     input.removeAttribute('aria-activedescendant')
   }
 
-  const renderSuggestions = (suggestionList: SearchBookmarkSuggestion[], {
+  const renderSuggestions = (suggestionList: NewTabSearchSuggestion[], {
     preserveActive = false,
     query = input.value
   }: {
@@ -4123,7 +4582,9 @@ function createSearchWidget(): HTMLElement | null {
     }
 
     suggestions.hidden = false
-    suggestionsHeading.textContent = '书签匹配'
+    suggestionsHeading.textContent = searchSuggestions.some(isCommandSuggestion)
+      ? '书签与命令'
+      : '书签匹配'
     activeSuggestionIndex = preserveActive && previousActiveIndex >= 0
       ? Math.min(previousActiveIndex, searchSuggestions.length - 1)
       : -1
@@ -4137,7 +4598,7 @@ function createSearchWidget(): HTMLElement | null {
           input.value = selectedSuggestion.title
           syncSearchInputActions(input, clearButton, separator, submitButton)
           hideSuggestions()
-          openBookmarkSuggestion(selectedSuggestion)
+          openSearchSuggestion(selectedSuggestion)
         }
       )
     ))
@@ -4161,12 +4622,24 @@ function createSearchWidget(): HTMLElement | null {
     window.clearTimeout(suggestionDebounceTimer)
 
     const renderCurrentSuggestions = () => {
+      if (!state.searchIndexReady && query.trim()) {
+        renderSearchIndexPreparingState(query)
+        void state.searchIndexReadyPromise.then(() => {
+          if (requestId !== suggestionRequestId || input.value !== query) {
+            return
+          }
+
+          scheduleSuggestionsRender({ preserveActive, immediate: true })
+        })
+        return
+      }
+
       void getSearchBookmarkSuggestions(query).then((directSuggestions) => {
         if (requestId !== suggestionRequestId) {
           return
         }
 
-        renderSuggestions(directSuggestions, { preserveActive, query })
+        renderSuggestions(mergeNewTabCommandSuggestions(query, directSuggestions), { preserveActive, query })
         if (!shouldLoadNaturalSearchSuggestions(query, directSuggestions)) {
           return
         }
@@ -4177,7 +4650,7 @@ function createSearchWidget(): HTMLElement | null {
           }
 
           updateNaturalButton()
-          renderSuggestions(naturalSuggestions, { preserveActive: true, query })
+          renderSuggestions(mergeNewTabCommandSuggestions(query, naturalSuggestions), { preserveActive: true, query })
         }).catch(() => {
           // Keep the popup-aligned suggestions visible if the optional natural-search chunk fails to load.
         }).finally(() => {
@@ -4190,7 +4663,7 @@ function createSearchWidget(): HTMLElement | null {
           return
         }
 
-        renderSuggestions([], { preserveActive, query })
+        renderSuggestions(mergeNewTabCommandSuggestions(query, []), { preserveActive, query })
       })
     }
 
@@ -4207,6 +4680,31 @@ function createSearchWidget(): HTMLElement | null {
       }
       renderCurrentSuggestions()
     }, SEARCH_SUGGESTION_DEBOUNCE_MS)
+  }
+
+  const renderSearchIndexPreparingState = (query: string) => {
+    const trimmedQuery = String(query || '').trim()
+    if (!trimmedQuery) {
+      hideSuggestions()
+      return
+    }
+
+    searchSuggestions = []
+    activeSuggestionIndex = -1
+    renderNewTabSearchChips(searchChips, trimmedQuery)
+    renderNewTabSavedSearches(savedSearches, trimmedQuery, input, () => {
+      syncSearchInputActions(input, clearButton, separator, submitButton)
+      scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+    })
+    suggestions.replaceChildren()
+    suggestions.hidden = true
+    suggestionsHeading.textContent = '书签匹配'
+    suggestionsHeading.hidden = false
+    suggestionsHint.textContent = '正在准备索引…'
+    suggestionsHint.hidden = false
+    suggestionsPanel.classList.remove('hidden')
+    input.setAttribute('aria-expanded', 'true')
+    input.removeAttribute('aria-activedescendant')
   }
 
   const moveActiveSuggestion = (direction: 1 | -1) => {
@@ -4244,7 +4742,7 @@ function createSearchWidget(): HTMLElement | null {
         input.value = suggestion.title
         syncSearchInputActions(input, clearButton, separator, submitButton)
         hideSuggestions()
-        openBookmarkSuggestion(suggestion)
+        openSearchSuggestion(suggestion)
       }
       return
     }
@@ -4553,6 +5051,73 @@ function syncSearchInputActions(
   submitButton.setAttribute('aria-disabled', String(!hasValue))
 }
 
+function mergeNewTabCommandSuggestions(
+  query: string,
+  bookmarkSuggestions: SearchBookmarkSuggestion[]
+): NewTabSearchSuggestion[] {
+  const commandSuggestions = getNewTabCommandSuggestions(query)
+  if (!commandSuggestions.length) {
+    return bookmarkSuggestions
+  }
+
+  return [
+    ...commandSuggestions,
+    ...bookmarkSuggestions
+  ].slice(0, SEARCH_SUGGESTION_LIMIT + NEWTAB_COMMAND_SUGGESTION_LIMIT)
+}
+
+function getNewTabCommandSuggestions(query: string): NewTabSearchSuggestion[] {
+  const normalizedQuery = normalizeNewTabSearchText(query)
+  if (!normalizedQuery) {
+    return []
+  }
+
+  return NEWTAB_COMMAND_SUGGESTIONS
+    .map((command, order) => {
+      const score = getNewTabCommandScore(normalizedQuery, command)
+      if (score < 0) {
+        return null
+      }
+      return {
+        suggestionType: 'command' as const,
+        id: `command:${command.id}`,
+        title: command.title,
+        url: '',
+        folderTitle: '命令',
+        folderPath: command.subtitle,
+        score: NEWTAB_COMMAND_SCORE - score,
+        order,
+        command
+      }
+    })
+    .filter((suggestion): suggestion is NewTabCommandSearchSuggestion => Boolean(suggestion))
+    .sort((left, right) => left.score - right.score || left.order - right.order)
+    .slice(0, NEWTAB_COMMAND_SUGGESTION_LIMIT)
+}
+
+function getNewTabCommandScore(normalizedQuery: string, command: NewTabCommandSuggestion): number {
+  const haystack = normalizeNewTabSearchText([
+    command.title,
+    command.subtitle,
+    ...command.keywords
+  ].join(' '))
+  if (!haystack) {
+    return -1
+  }
+  if (haystack.includes(normalizedQuery)) {
+    return normalizedQuery.length >= 4 ? 100 : 80
+  }
+  const terms = normalizedQuery.split(/\s+/).filter(Boolean)
+  if (terms.length && terms.every((term) => haystack.includes(term))) {
+    return 70
+  }
+  if (/^[:：/>]/.test(normalizedQuery)) {
+    const commandQuery = normalizeNewTabSearchText(normalizedQuery.replace(/^[:：/>]+/, ''))
+    return commandQuery && haystack.includes(commandQuery) ? 90 : -1
+  }
+  return -1
+}
+
 interface SearchSuggestionCacheEntry {
   promise: Promise<SearchBookmarkSuggestion[]>
   updatedAt: number
@@ -4560,6 +5125,36 @@ interface SearchSuggestionCacheEntry {
 
 const searchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
 const naturalSearchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
+const NEWTAB_COMMAND_SUGGESTIONS: NewTabCommandSuggestion[] = [
+  {
+    id: 'open-dashboard',
+    title: '打开书签仪表盘',
+    subtitle: '管理、搜索和批量整理书签库',
+    keywords: ['dashboard', '仪表盘', '管理', '整理', '书签管理', 'dashboard 打开', 'open dashboard'],
+    run: openDashboardRoute
+  },
+  {
+    id: 'open-settings',
+    title: '打开设置',
+    subtitle: '调整来源、布局、背景、搜索栏和 AI 设置',
+    keywords: ['settings', '设置', '选项', 'options', '配置', '打开设置'],
+    run: () => openSettingsDrawer()
+  },
+  {
+    id: 'open-inbox',
+    title: '打开 Inbox',
+    subtitle: '查看待整理收藏和自动分析添加历史',
+    keywords: ['inbox', '收件箱', '待整理', '未分类', '临时收藏', '稍后整理'],
+    run: () => openOptionsHash('#bookmark-history')
+  },
+  {
+    id: 'open-health',
+    title: '打开健康中心',
+    subtitle: '查看重复、死链、文件夹清理和备份入口',
+    keywords: ['health', '健康', '健康中心', '清理', '死链', '重复', '备份', '回收站'],
+    run: () => openOptionsHash('#health')
+  }
+]
 
 function abortNewTabNaturalSearchRequest(): void {
   state.naturalSearchAbortController?.abort()
@@ -4568,6 +5163,10 @@ function abortNewTabNaturalSearchRequest(): void {
 }
 
 function getSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSuggestion[]> {
+  if (!state.searchIndexReady) {
+    return state.searchIndexReadyPromise.then(() => getSearchBookmarkSuggestions(query))
+  }
+
   const cacheKey = getSearchSuggestionCacheKey(query)
   const cached = getSearchSuggestionCacheEntry(searchSuggestionCache, cacheKey)
   if (cached) {
@@ -4584,6 +5183,10 @@ function getSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSugg
 }
 
 function getNaturalSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSuggestion[]> {
+  if (!state.searchIndexReady) {
+    return state.searchIndexReadyPromise.then(() => getNaturalSearchBookmarkSuggestions(query))
+  }
+
   const cacheKey = getSearchSuggestionCacheKey(query)
   const cached = getSearchSuggestionCacheEntry(naturalSearchSuggestionCache, cacheKey)
   if (cached) {
@@ -4962,18 +5565,19 @@ function getNaturalSearchPlanCacheKey(normalizedQuery: string): string {
 }
 
 function createSearchSuggestionButton(
-  suggestion: SearchBookmarkSuggestion,
+  suggestion: NewTabSearchSuggestion,
   index: number,
   active: boolean,
-  onSelect: (suggestion: SearchBookmarkSuggestion) => void
+  onSelect: (suggestion: NewTabSearchSuggestion) => void
 ): HTMLButtonElement {
+  const command = isCommandSuggestion(suggestion)
   const button = document.createElement('button')
   button.id = getSearchSuggestionElementId(index)
-  button.className = `newtab-search-suggestion${active ? ' active' : ''}`
+  button.className = `newtab-search-suggestion${command ? ' command' : ''}${active ? ' active' : ''}`
   button.type = 'button'
   button.setAttribute('role', 'option')
   button.setAttribute('aria-selected', String(active))
-  button.setAttribute('aria-label', `打开书签：${suggestion.title}`)
+  button.setAttribute('aria-label', `${command ? '执行命令' : '打开书签'}：${suggestion.title}`)
   button.addEventListener('pointerdown', (event) => {
     event.preventDefault()
   })
@@ -4984,7 +5588,7 @@ function createSearchSuggestionButton(
   const mark = document.createElement('span')
   mark.className = 'newtab-search-suggestion-mark'
   mark.setAttribute('aria-hidden', 'true')
-  mark.textContent = getFallbackLabel(suggestion.title)
+  mark.textContent = command ? '>' : getFallbackLabel(suggestion.title)
 
   const copy = document.createElement('span')
   copy.className = 'newtab-search-suggestion-copy'
@@ -4993,10 +5597,10 @@ function createSearchSuggestionButton(
   title.textContent = suggestion.title
 
   const meta = document.createElement('span')
-  const source = suggestion.folderPath || suggestion.folderTitle
-  meta.textContent = source
+  const source = command ? suggestion.command.subtitle : suggestion.folderPath || suggestion.folderTitle
+  meta.textContent = source && suggestion.url
     ? `${source} · ${formatSearchSuggestionUrl(suggestion.url)}`
-    : formatSearchSuggestionUrl(suggestion.url)
+    : source || formatSearchSuggestionUrl(suggestion.url)
 
   copy.append(title, meta)
   button.append(mark, copy)
@@ -5015,6 +5619,19 @@ function formatSearchSuggestionUrl(url: string): string {
   } catch {
     return url.replace(/^https?:\/\//i, '')
   }
+}
+
+function isCommandSuggestion(suggestion: NewTabSearchSuggestion): suggestion is NewTabCommandSearchSuggestion {
+  return suggestion.suggestionType === 'command'
+}
+
+function openSearchSuggestion(suggestion: NewTabSearchSuggestion): void {
+  if (isCommandSuggestion(suggestion)) {
+    suggestion.command.run()
+    return
+  }
+
+  openBookmarkSuggestion(suggestion)
 }
 
 function openBookmarkSuggestion(suggestion: SearchBookmarkSuggestion): void {
@@ -5355,12 +5972,34 @@ function appendBookmarkTilesInChunks(
   }
 
   if (initialCount < section.bookmarks.length) {
+    const remainingCount = section.bookmarks.length - initialCount
+    const placeholder = createBookmarkSectionPlaceholder(section, remainingCount)
     list.dataset.incrementalRender = 'true'
     list.setAttribute('aria-busy', 'true')
-    scheduleBookmarkTileChunkRender(list, section, initialCount, renderedBookmarkIndex + initialCount, renderVersion)
+    list.appendChild(placeholder)
+    observeBookmarkSectionPlaceholder(placeholder, {
+      section,
+      nextIndex: initialCount,
+      renderedBookmarkIndex: renderedBookmarkIndex + initialCount,
+      renderVersion
+    })
   }
 
   return renderedBookmarkIndex + section.bookmarks.length
+}
+
+function createBookmarkSectionPlaceholder(
+  section: NewTabFolderSection,
+  remainingCount: number
+): HTMLElement {
+  const placeholder = document.createElement('div')
+  placeholder.className = 'bookmark-grid-placeholder'
+  placeholder.dataset.pendingBookmarks = String(Math.max(0, remainingCount))
+  placeholder.setAttribute('role', 'status')
+  placeholder.setAttribute('aria-live', 'polite')
+  placeholder.textContent = `继续载入 ${remainingCount} 个书签`
+  placeholder.title = `${section.title || '文件夹'}还有 ${remainingCount} 个书签将在滚动到此处时载入`
+  return placeholder
 }
 
 function scheduleBookmarkTileChunkRender(
@@ -5368,7 +6007,8 @@ function scheduleBookmarkTileChunkRender(
   section: NewTabFolderSection,
   nextIndex: number,
   renderedBookmarkIndex: number,
-  renderVersion: number
+  renderVersion: number,
+  placeholder?: HTMLElement
 ): void {
   window.requestAnimationFrame(() => {
     if (renderVersion !== bookmarkTileRenderVersion || !list.isConnected) {
@@ -5380,19 +6020,29 @@ function scheduleBookmarkTileChunkRender(
     for (let index = nextIndex; index < endIndex; index += 1) {
       fragment.appendChild(createBookmarkTile(section.bookmarks[index], section.id, renderedBookmarkIndex + (index - nextIndex)))
     }
-    list.appendChild(fragment)
+    if (placeholder?.isConnected) {
+      placeholder.before(fragment)
+    } else {
+      list.appendChild(fragment)
+    }
 
     if (endIndex < section.bookmarks.length) {
+      if (placeholder?.isConnected) {
+        placeholder.dataset.pendingBookmarks = String(section.bookmarks.length - endIndex)
+        placeholder.textContent = `继续载入 ${section.bookmarks.length - endIndex} 个书签`
+      }
       scheduleBookmarkTileChunkRender(
         list,
         section,
         endIndex,
         renderedBookmarkIndex + (endIndex - nextIndex),
-        renderVersion
+        renderVersion,
+        placeholder
       )
       return
     }
 
+    placeholder?.remove()
     delete list.dataset.incrementalRender
     list.setAttribute('aria-busy', state.reorderingBookmarks ? 'true' : 'false')
   })
@@ -5868,7 +6518,7 @@ function scheduleFaviconAccentExtraction(
   }
 
   const requestIdle = window.requestIdleCallback
-  if (typeof requestIdle === 'function') {
+  if (requestIdle) {
     requestIdle(run, { timeout: FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS })
     return
   }
@@ -5956,6 +6606,7 @@ function cleanupNewTabRuntime(): void {
   deferredRenderFrame = 0
   removeBookmarkDragGhost()
   removeFolderDragGhost()
+  disconnectBookmarkLazyExpansionObserver()
   setActiveBackgroundObjectUrl('')
   clearVideoBackground()
   abortNewTabNaturalSearchRequest()
@@ -6114,6 +6765,9 @@ function refreshDerivedBookmarkState(): void {
   state.bookmarkMap = new Map(state.bookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
   state.allBookmarks = buildAllBookmarks(state.rootNode)
   state.allBookmarkMap = new Map(state.allBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+}
+
+function rebuildNewTabSearchIndex(): void {
   state.searchIndex = buildNewTabSearchIndex({
     bookmarks: getAllBookmarkRecords(),
     tagIndex: state.bookmarkTagIndex,
@@ -6123,6 +6777,11 @@ function refreshDerivedBookmarkState(): void {
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
   state.naturalSearchPlanCache.clear()
+  state.searchIndexReady = true
+  state.searchIndexReadyPromise = searchIndexReadyPromise
+  resolveSearchIndexReady()
+  perfMark('newtab.searchReady')
+  perfMeasure('newtab.searchReadyMs', 'newtab.domContentLoaded', 'newtab.searchReady')
 }
 
 function getAllBookmarkRecords(): BookmarkRecord[] {
@@ -6150,22 +6809,23 @@ async function recordBookmarkOpen(bookmark: chrome.bookmarks.BookmarkTreeNode): 
 
   const now = Date.now()
   const previousRecord = state.activity.records[bookmarkId]
+  const nextRecord: NewTabActivityRecord = {
+    bookmarkId,
+    title: String(bookmark.title || '').trim() || url,
+    url,
+    openCount: Math.min((previousRecord?.openCount || 0) + 1, 9999),
+    firstOpenedAt: previousRecord?.firstOpenedAt || now,
+    lastOpenedAt: now
+  }
   state.activity = normalizeNewTabActivity({
     ...state.activity,
     records: {
       ...state.activity.records,
-      [bookmarkId]: {
-        bookmarkId,
-        title: String(bookmark.title || '').trim() || url,
-        url,
-        openCount: Math.min((previousRecord?.openCount || 0) + 1, 9999),
-        firstOpenedAt: previousRecord?.firstOpenedAt || now,
-        lastOpenedAt: now
-      }
+      [bookmarkId]: nextRecord
     }
   }, state.allBookmarks)
 
-  await saveNewTabActivity().catch((error) => {
+  await saveNewTabActivityRecord(nextRecord).catch((error) => {
     console.warn('新标签页打开记录保存失败。', error)
   })
 }
@@ -6176,13 +6836,7 @@ async function removeBookmarkFromActivity(bookmarkId: string): Promise<void> {
     return
   }
 
-  const records = { ...state.activity.records }
-  delete records[normalizedId]
-  state.activity = {
-    pinnedIds: state.activity.pinnedIds.filter((id) => id !== normalizedId),
-    records
-  }
-  await saveNewTabActivity()
+  state.activity = await saveNewTabActivityRemoval(normalizedId)
 }
 
 async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void> {
@@ -6210,9 +6864,37 @@ async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void
 }
 
 async function saveNewTabActivity(): Promise<void> {
-  await setLocalStorage({
-    [STORAGE_KEYS.newTabActivity]: normalizeNewTabActivity(state.activity, state.allBookmarks)
-  })
+  const activityRepository = await loadNewTabActivityRepositoryLazy()
+  state.activity = await activityRepository.saveNewTabActivityToRepository(
+    state.activity,
+    normalizeNewTabActivityForCurrentBookmarks
+  )
+}
+
+async function saveNewTabActivityRecord(record: NewTabActivityRecord): Promise<void> {
+  const activityRepository = await loadNewTabActivityRepositoryLazy()
+  state.activity = await activityRepository.upsertNewTabActivityRecordInRepository(
+    state.activity,
+    record,
+    normalizeNewTabActivityForCurrentBookmarks
+  )
+}
+
+async function saveNewTabActivityRemoval(bookmarkId: string): Promise<NewTabActivityState> {
+  const activityRepository = await loadNewTabActivityRepositoryLazy()
+  return activityRepository.removeNewTabActivityRecordInRepository(
+    state.activity,
+    bookmarkId,
+    normalizeNewTabActivityForCurrentBookmarks
+  )
+}
+
+async function loadNewTabActivityRepositoryLazy(): Promise<NewTabActivityRepositoryModule> {
+  return import('../shared/repositories/activity-repository.js')
+}
+
+function normalizeNewTabActivityForCurrentBookmarks(rawActivity: unknown): NewTabActivityState {
+  return normalizeNewTabActivity(rawActivity, state.allBookmarks)
 }
 
 async function saveNewTabWorkspaceSettings(): Promise<void> {
@@ -7049,6 +7731,7 @@ function getBackgroundPlaceholderColor(settings: typeof DEFAULT_BACKGROUND_SETTI
 
 function markWallpaperReady(): void {
   document.documentElement.classList.remove('loading-wallpaper', 'newtab-booting')
+  recordNewTabBackgroundReady()
 }
 
 function markWallpaperPending(): void {
@@ -8121,7 +8804,7 @@ function handleModuleSettingsChange(event: Event): void {
     setSettingsSaveStatus('error', error instanceof Error ? error.message : '模块设置保存失败')
   })
   syncNewTabModernSettingsControls()
-  render()
+  scheduleRender({ updateClock: true })
 }
 
 function createSelectedFolderControls(): HTMLElement[] {
@@ -8482,7 +9165,7 @@ function applyIconPreset(presetKey: IconLayoutPresetKey): void {
   void saveIconSettings().catch((error) => {
     console.warn('新标签页图标预设保存失败。', error)
   })
-  render()
+  applyIconSettingsLive()
   syncIconSettingsControls()
   updateAllSettingRangeVisuals()
   updateClockText()
@@ -8493,7 +9176,7 @@ function resetIconSettingsToDefaults(): void {
   void saveIconSettings().catch((error) => {
     console.warn('新标签页图标默认布局保存失败。', error)
   })
-  render()
+  applyIconSettingsLive()
   syncIconSettingsControls()
   updateAllSettingRangeVisuals()
   updateClockText()

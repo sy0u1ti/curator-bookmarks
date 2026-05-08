@@ -421,6 +421,19 @@ test('newtab modernized bookmark modules are visible and settings-controlled', (
   assert.doesNotMatch(script, /createCommandHintBar\(\)/)
 })
 
+test('newtab shows a skippable onboarding strip before completion', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const css = readProjectFile('src/newtab/newtab.css')
+
+  assert.match(script, /STORAGE_KEYS\.onboardingState/)
+  assert.match(script, /function createNewTabOnboardingStrip\(\): HTMLElement \| null/)
+  assert.match(script, /openOptionsHash\('#privacy'\)/)
+  assert.match(script, /completeNewTabOnboarding\(\)/)
+  assert.match(script, /placement: 'utility'/)
+  assert.match(css, /\.newtab-onboarding-strip\s*\{/)
+  assert.match(css, /\.newtab-onboarding-actions button/)
+})
+
 test('newtab time widget does not render timezone text', () => {
   const script = readProjectFile('src/newtab/newtab.ts')
   const css = readProjectFile('src/newtab/newtab.css')
@@ -1350,6 +1363,22 @@ test('newtab search suggestions explain bookmark enter behavior and empty web se
   assert.match(script, /button\.addEventListener\('click', \(\) => \{[\s\S]*?submitSearch\(query\)/)
   assert.match(css, /\.newtab-search-hint\s*\{/)
   assert.match(css, /\.newtab-search-web-hint\s*\{/)
+})
+
+test('newtab search suggestions include command entries for dashboard settings inbox and health', () => {
+  const script = readProjectFile('src/newtab/newtab.ts')
+  const css = readProjectFile('src/newtab/newtab.css')
+
+  assert.match(script, /const NEWTAB_COMMAND_SUGGESTIONS: NewTabCommandSuggestion\[\] = \[/)
+  assert.match(script, /id: 'open-dashboard'[\s\S]*?run: openDashboardRoute/)
+  assert.match(script, /id: 'open-settings'[\s\S]*?run: \(\) => openSettingsDrawer\(\)/)
+  assert.match(script, /id: 'open-inbox'[\s\S]*?openOptionsHash\('#bookmark-history'\)/)
+  assert.match(script, /id: 'open-health'[\s\S]*?openOptionsHash\('#health'\)/)
+  assert.match(script, /mergeNewTabCommandSuggestions\(query, directSuggestions\)/)
+  assert.match(script, /mergeNewTabCommandSuggestions\(query, naturalSuggestions\)/)
+  assert.match(script, /function openSearchSuggestion\(suggestion: NewTabSearchSuggestion\)/)
+  assert.match(script, /suggestion\.command\.run\(\)/)
+  assert.match(css, /\.newtab-search-suggestion\.command \.newtab-search-suggestion-mark\s*\{/)
 })
 
 test('newtab search engine menu supports menu radio keyboard navigation', () => {

@@ -1,6 +1,6 @@
-import { pinyin } from 'pinyin-pro'
 import type { BookmarkRecord } from '../shared/types.js'
 import { normalizeText, stripCommonUrlPrefix } from '../shared/text.js'
+import { createTopKCollector } from '../shared/search/topk.js'
 import { getEffectiveBookmarkTags, type BookmarkTagRecord } from '../shared/bookmark-tags.js'
 import {
   buildSearchTextQuery,
@@ -8,6 +8,7 @@ import {
   parseSearchQuery,
   type ParsedSearchQuery
 } from '../shared/search-query.js'
+import { requiresPinyinTokens } from '../shared/search/pinyin.js'
 import {
   buildContentSnapshotSearchText,
   type ContentSnapshotRecord
@@ -17,6 +18,7 @@ export const MAX_POPUP_SEARCH_RESULTS = 20
 export const POPUP_SEARCH_ASYNC_THRESHOLD = 1200
 const SEARCH_PREFILTER_THRESHOLD = 1200
 const SEARCH_CHUNK_SIZE = 260
+const FIRST_BATCH_MAX_SCAN_WITH_RESULTS = 8000
 const RECENT_SORT_TERMS = new Set(['recent', 'new', 'newest', 'latest', '最近', '新近', '最近优先'])
 
 export interface PopupSearchBookmark extends BookmarkRecord {
@@ -29,6 +31,8 @@ export interface PopupSearchBookmark extends BookmarkRecord {
   tagPinyinFull: string[]
   tagPinyinInitials: string[]
   searchText: string
+  pinyinEnriched?: boolean
+  pinyinBaseSearchText?: string
 }
 
 export interface PopupSearchResult extends PopupSearchBookmark {
@@ -62,13 +66,6 @@ export function indexBookmarkForSearch(
   const tagTags = normalizeSearchList(getEffectiveBookmarkTags(tagRecord))
   const tagAliases = normalizeSearchList(tagRecord?.aliases)
   const snapshotSearchText = buildContentSnapshotSearchText(snapshotRecord, options)
-  const pinyinTokens = buildPinyinSearchTokens([
-    bookmark.title,
-    bookmark.path,
-    ...(tagRecord?.topics || []),
-    ...getEffectiveBookmarkTags(tagRecord),
-    ...(tagRecord?.aliases || [])
-  ])
 
   return {
     ...bookmark,
@@ -78,8 +75,8 @@ export function indexBookmarkForSearch(
     tagTopics,
     tagTags,
     tagAliases,
-    tagPinyinFull: pinyinTokens.full,
-    tagPinyinInitials: pinyinTokens.initials,
+    tagPinyinFull: [],
+    tagPinyinInitials: [],
     searchText: [
       bookmark.normalizedTitle,
       bookmark.normalizedUrl,
@@ -89,8 +86,6 @@ export function indexBookmarkForSearch(
       ...tagTopics,
       ...tagTags,
       ...tagAliases,
-      ...pinyinTokens.full,
-      ...pinyinTokens.initials,
       tagSummary,
       snapshotSearchText
     ]
@@ -113,6 +108,73 @@ export function searchBookmarksUnbounded(
   return searchBookmarksWithLimit(query, bookmarks, 0)
 }
 
+export function searchBookmarksTopK(
+  query: string,
+  bookmarks: PopupSearchBookmark[],
+  limit: number,
+  offset = 0
+): PopupSearchResult[] {
+  const safeLimit = Math.max(0, Math.floor(Number(limit) || 0))
+  const safeOffset = Math.max(0, Math.floor(Number(offset) || 0))
+  if (!safeLimit) {
+    return []
+  }
+
+  return searchBookmarksWithLimit(query, bookmarks, safeLimit + safeOffset)
+    .slice(safeOffset, safeOffset + safeLimit)
+}
+
+export interface PopupSearchFirstBatch {
+  results: PopupSearchResult[]
+  scanned: number
+  complete: boolean
+}
+
+export function searchBookmarksFirstBatch(
+  query: string,
+  bookmarks: PopupSearchBookmark[],
+  limit = MAX_POPUP_SEARCH_RESULTS
+): PopupSearchFirstBatch {
+  const safeLimit = Math.max(0, Math.floor(Number(limit) || 0))
+  const parsedQuery = parsePopupSearchQuery(query)
+  if (!safeLimit || !canUseFastFirstBatch(parsedQuery)) {
+    return { results: [], scanned: 0, complete: false }
+  }
+
+  const topResults = createTopKCollector<PopupSearchResult>(safeLimit, compareSearchResults)
+  const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
+  let scanned = 0
+
+  for (const bookmark of bookmarks) {
+    scanned += 1
+    if (!matchesFastFirstBatchCandidate(bookmark, parsedQuery, terms)) {
+      continue
+    }
+
+    const match = scoreFastFirstBatchBookmark(bookmark, parsedQuery, terms)
+    if (match.score > 0) {
+      topResults.add({
+        ...bookmark,
+        score: match.score,
+        matchReasons: match.reasons
+      })
+    }
+
+    if (
+      topResults.size >= safeLimit &&
+      scanned >= FIRST_BATCH_MAX_SCAN_WITH_RESULTS
+    ) {
+      break
+    }
+  }
+
+  return {
+    results: topResults.sortedValues(),
+    scanned,
+    complete: scanned >= bookmarks.length
+  }
+}
+
 function searchBookmarksWithLimit(
   query: string,
   bookmarks: PopupSearchBookmark[],
@@ -122,6 +184,9 @@ function searchBookmarksWithLimit(
   const candidates = getSearchCandidates(bookmarks, parsedQuery)
   const results: PopupSearchResult[] = []
   const bounded = limit > 0
+  const topResults = bounded
+    ? createTopKCollector<PopupSearchResult>(limit, compareSearchResults)
+    : null
 
   for (const bookmark of candidates) {
     const match = scoreBookmarkWithReasons(bookmark, parsedQuery)
@@ -132,14 +197,14 @@ function searchBookmarksWithLimit(
         matchReasons: match.reasons
       }
       if (bounded) {
-        appendTopSearchResult(results, result, limit)
+        topResults?.add(result)
       } else {
         results.push(result)
       }
     }
   }
 
-  return bounded ? results : results.sort(compareSearchResults)
+  return topResults ? topResults.sortedValues() : results.sort(compareSearchResults)
 }
 
 export async function searchBookmarksCooperatively(
@@ -343,20 +408,24 @@ function scoreBookmarkWithReasons(
     insertReason(reasons, buildQueryCoverageReason(queryTerms), 1)
   }
 
-  const approximateMatch = scoreLatinApproximateTerms(bookmark, queryTerms, reasons)
-  if (approximateMatch.score > 0) {
-    score += approximateMatch.score
-    matched = true
+  if (!allTermsPresent) {
+    const approximateMatch = scoreLatinApproximateTerms(bookmark, queryTerms, reasons)
+    if (approximateMatch.score > 0) {
+      score += approximateMatch.score
+      matched = true
+    }
   }
 
-  const titleFuzzy = subsequenceScore(title, normalizedQuery)
-  const urlFuzzy = subsequenceScore(url, normalizedQuery)
-  const fuzzyScore = Math.max(titleFuzzy * 2, urlFuzzy)
+  if (!matched) {
+    const titleFuzzy = subsequenceScore(title, normalizedQuery)
+    const urlFuzzy = subsequenceScore(url, normalizedQuery)
+    const fuzzyScore = Math.max(titleFuzzy * 2, urlFuzzy)
 
-  if (fuzzyScore > 0) {
-    score += fuzzyScore
-    matched = true
-    addReason(reasons, `命中：模糊匹配 ${normalizedQuery}`)
+    if (fuzzyScore > 0) {
+      score += fuzzyScore
+      matched = true
+      addReason(reasons, `命中：模糊匹配 ${normalizedQuery}`)
+    }
   }
 
   if (normalizedQuery && title.includes(normalizedQuery) && url.includes(normalizedQuery)) {
@@ -376,6 +445,92 @@ function scoreBookmarkWithReasons(
 
   return {
     score: matched ? Math.max(score, 0) : 0,
+    reasons: prioritizeSearchReasons(reasons, 3)
+  }
+}
+
+function canUseFastFirstBatch(parsedQuery: ParsedPopupSearchQuery): boolean {
+  if (
+    !parsedQuery.normalizedQuery ||
+    parsedQuery.hasStructuredFilters ||
+    parsedQuery.recencyHint
+  ) {
+    return false
+  }
+
+  return !parsedQuery.textTerms.some((term) => /\s/.test(term))
+}
+
+function matchesFastFirstBatchCandidate(
+  bookmark: PopupSearchBookmark,
+  parsedQuery: ParsedPopupSearchQuery,
+  terms: string[]
+): boolean {
+  if (!terms.length) {
+    return false
+  }
+
+  const searchText = getBookmarkSearchText(bookmark)
+  return terms.every((term) => searchText.includes(term))
+}
+
+function scoreFastFirstBatchBookmark(
+  bookmark: PopupSearchBookmark,
+  parsedQuery: ParsedPopupSearchQuery,
+  terms: string[]
+): { score: number; reasons: string[] } {
+  const normalizedQuery = parsedQuery.normalizedQuery
+  const title = bookmark.normalizedTitle
+  const url = bookmark.normalizedUrl
+  const domain = normalizeText(bookmark.domain || '')
+  const path = bookmark.normalizedPath
+  const reasons: string[] = []
+  let score = 0
+
+  if (title === normalizedQuery) {
+    score += 620
+    addReason(reasons, `命中：标题 ${bookmark.title}`)
+  } else if (title.startsWith(normalizedQuery)) {
+    score += 420
+    addReason(reasons, `命中：标题前缀 ${normalizedQuery}`)
+  } else {
+    const titleIndex = title.indexOf(normalizedQuery)
+    if (titleIndex !== -1) {
+      score += 300 - Math.min(titleIndex, 120)
+      addReason(reasons, `命中：标题 ${normalizedQuery}`)
+    }
+  }
+
+  if (url.startsWith(normalizedQuery) || domain.startsWith(normalizedQuery)) {
+    score += 250
+    addReason(reasons, `命中：网址 ${normalizedQuery}`)
+  } else {
+    const urlIndex = Math.max(url.indexOf(normalizedQuery), domain.indexOf(normalizedQuery))
+    if (urlIndex !== -1) {
+      score += 190 - Math.min(urlIndex, 100)
+      addReason(reasons, `命中：网址 ${normalizedQuery}`)
+    }
+  }
+
+  if (path.includes(normalizedQuery)) {
+    score += 40
+    addReason(reasons, `命中：文件夹 ${bookmark.path || ''}`.trim())
+  }
+
+  if (score <= 0) {
+    score += Math.max(12, terms.length * 12)
+    addReason(reasons, buildQueryCoverageReason(terms) || `命中：本地索引 ${normalizedQuery}`)
+  }
+
+  if (terms.length > 1 && terms.every((term) => getBookmarkSearchText(bookmark).includes(term))) {
+    score += 80
+    insertReason(reasons, buildQueryCoverageReason(terms), 1)
+  }
+
+  score -= Math.floor(bookmark.title.length / 28)
+
+  return {
+    score: Math.max(score, 0),
     reasons: prioritizeSearchReasons(reasons, 3)
   }
 }
@@ -500,6 +655,10 @@ function matchesStructuredFilters(
   parsedQuery: ParsedPopupSearchQuery,
   reasons: string[]
 ): boolean {
+  if (!parsedQuery.hasStructuredFilters) {
+    return true
+  }
+
   if (!matchesParsedSearchQuery(parsedQuery, {
     searchText: getBookmarkSearchText(bookmark),
     domain: bookmark.domain,
@@ -733,41 +892,6 @@ function normalizeSearchList(values: unknown): string[] {
   return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))]
 }
 
-function buildPinyinSearchTokens(values: unknown[]): { full: string[]; initials: string[] } {
-  const full = new Set<string>()
-  const initials = new Set<string>()
-
-  for (const value of values) {
-    const text = String(value || '')
-    const matches = text.match(/[\u3400-\u9fff]+/gu) || []
-    for (const match of matches) {
-      const fullToken = buildPinyinToken(match, {})
-      const initialsToken = buildPinyinToken(match, { pattern: 'first' })
-      if (fullToken) {
-        full.add(fullToken)
-      }
-      if (initialsToken) {
-        initials.add(initialsToken)
-      }
-    }
-  }
-
-  return {
-    full: [...full],
-    initials: [...initials]
-  }
-}
-
-function buildPinyinToken(text: string, options: Record<string, unknown>): string {
-  return normalizeText(
-    pinyin(text, {
-      toneType: 'none',
-      type: 'array',
-      ...options
-    }).join('')
-  )
-}
-
 function addReason(reasons: string[], reason: string): void {
   const text = normalizeReasonText(reason)
   if (text && !reasons.includes(text)) {
@@ -850,6 +974,10 @@ function getSearchCandidates(
     return bookmarks
   }
 
+  if (requiresPinyinTokens(parsedQuery.normalizedQuery)) {
+    return bookmarks.filter((bookmark) => matchesSearchCandidateFilters(bookmark, parsedQuery))
+  }
+
   const requiredTerms = getCandidateRequiredTerms(parsedQuery)
   const directMatches = bookmarks.filter((bookmark) => {
     if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
@@ -886,6 +1014,10 @@ async function getSearchCandidatesCooperatively(
 ): Promise<PopupSearchBookmark[]> {
   if (bookmarks.length < SEARCH_PREFILTER_THRESHOLD) {
     return bookmarks
+  }
+
+  if (requiresPinyinTokens(parsedQuery.normalizedQuery)) {
+    return bookmarks.filter((bookmark) => matchesSearchCandidateFilters(bookmark, parsedQuery))
   }
 
   const requiredTerms = getCandidateRequiredTerms(parsedQuery)
@@ -952,6 +1084,10 @@ function matchesSearchCandidateFilters(
   bookmark: PopupSearchBookmark,
   parsedQuery: ParsedPopupSearchQuery
 ): boolean {
+  if (!parsedQuery.hasStructuredFilters) {
+    return true
+  }
+
   return matchesParsedSearchQuery(parsedQuery, {
     searchText: getBookmarkSearchText(bookmark),
     domain: bookmark.domain,

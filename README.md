@@ -11,7 +11,7 @@
 <p align="center">
 
   本地优先的 Chrome 书签管理扩展，用于搜索、整理、备份、清理和重新组织浏览器书签。
-  项目暂未完善，成熟之时上架chrome扩展商店
+  当前为 Beta / 本地安装阶段，尚未在 Chrome Web Store 上架；发布前门禁见 `release:check`。
 
 </p>
 
@@ -160,6 +160,12 @@
 
 4. 回到新标签页后，可继续调整搜索栏、背景、时间日期和图标布局。
 
+### 隐私与权限
+
+- 隐私政策见 [PRIVACY.md](./PRIVACY.md)。
+- Chrome Web Store 上架文案和权限说明草案见 [docs/chrome-web-store-listing.md](./docs/chrome-web-store-listing.md)。
+- 当前 manifest 使用安装时 `http://*/*` 与 `https://*/*` host permissions；扩展内的“隐私与权限中心”会解释用途、外部请求边界和本地审计日志。
+
 
 
 
@@ -253,9 +259,13 @@ npm run validate     # 类型检查 + 测试 + 版本检查 + 构建
 
 npm run pack:zip     # 构建并打包 release zip
 
+npm run release:check # 发布门禁：validate、打包、性能预算、真实扩展 E2E
+
 
 
 ```
+
+`release:check` 会生成本地性能 fixtures，并在无显示的 Linux/CI 环境中自动通过 Xvfb 跑 Chrome 扩展冒烟测试。
 
 
 

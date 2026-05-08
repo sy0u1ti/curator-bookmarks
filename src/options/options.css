@@ -742,6 +742,147 @@ a {
   line-height: 1.65;
 }
 
+.trust-card-grid,
+.quick-path-grid,
+.privacy-permission-list,
+.privacy-remote-matrix,
+.health-action-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.trust-card-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.quick-path-grid,
+.privacy-permission-list,
+.privacy-remote-matrix,
+.health-action-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.trust-card,
+.quick-path-card,
+.privacy-permission-card,
+.privacy-matrix-card,
+.health-action-card {
+  min-width: 0;
+  padding: 18px 20px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.045);
+  color: var(--text);
+}
+
+.quick-path-card {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.quick-path-card {
+  font: inherit;
+}
+
+.dashboard-performance-mode-toggle {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 245, 247, 0.12);
+  border-radius: 7px;
+  background: rgba(245, 245, 247, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.dashboard-performance-mode-toggle input {
+  width: 14px;
+  height: 14px;
+  accent-color: #bdf3ca;
+}
+
+.quick-path-card:hover,
+.quick-path-card:focus-visible,
+.health-action-card:hover,
+.health-action-card:focus-visible {
+  border-color: rgba(245, 245, 247, 0.18);
+  background: rgba(245, 245, 247, 0.075);
+}
+
+.trust-card-index {
+  display: inline-grid;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 12px;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(245, 245, 247, 0.12);
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.trust-card strong,
+.quick-path-card strong,
+.privacy-permission-card strong,
+.privacy-matrix-card strong,
+.health-action-card strong {
+  display: block;
+  color: var(--text-strong);
+  font-size: 15px;
+}
+
+.trust-card p,
+.quick-path-card span,
+.privacy-permission-card p,
+.privacy-matrix-card p,
+.health-action-card span {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.privacy-permission-card ul,
+.privacy-matrix-card ul {
+  margin: 12px 0 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.privacy-audit-card {
+  display: grid;
+  gap: 8px;
+}
+
+.privacy-audit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .trust-card-grid,
+  .quick-path-grid,
+  .privacy-permission-list,
+  .privacy-remote-matrix,
+  .health-action-list {
+    grid-template-columns: 1fr;
+  }
+}
+
 .options-group {
   margin-top: 28px;
   padding: 8px 0;
@@ -2264,8 +2405,6 @@ a {
   background:
     linear-gradient(180deg, rgba(18, 18, 20, 0.28), rgba(18, 18, 20, 0.18)),
     rgba(8, 8, 10, 0.22);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
   pointer-events: none;
 }
 
@@ -2305,7 +2444,23 @@ a {
   position: relative;
   overflow-anchor: none;
   scroll-behavior: auto;
-  will-change: scroll-position;
+}
+
+.dashboard-performance-mode .dashboard-bookmark-card,
+.dashboard-performance-mode .dashboard-toolbar,
+.dashboard-performance-mode .dashboard-folder-sidebar,
+.dashboard-performance-mode .dashboard-selection-card,
+.dashboard-performance-mode .detect-selection-group,
+body.dashboard-performance-mode-active .dashboard-update-indicator {
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.dashboard-performance-mode *,
+body.dashboard-performance-mode-active .dashboard-update-indicator {
+  transition-duration: 0ms;
+  animation-duration: 0ms;
 }
 
 .dashboard-virtual-spacer {
@@ -2351,25 +2506,21 @@ a {
   padding: 12px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
-    rgba(245, 245, 247, 0.035);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    0 8px 24px rgba(0, 0, 0, 0.14);
+  background: rgba(245, 245, 247, 0.045);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition:
     border-color var(--ease-standard),
     background var(--ease-standard),
     box-shadow var(--ease-standard),
     outline-color var(--ease-standard),
     opacity var(--ease-standard);
-  contain: layout style;
+  contain: layout paint style;
   contain-intrinsic-size: 176px;
   touch-action: manipulation;
 }
 
 .dashboard-bookmark-card::before {
-  content: "";
+  content: none;
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -2404,30 +2555,16 @@ a {
 
 .dashboard-bookmark-card:hover {
   border-color: rgba(245, 245, 247, 0.2);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.035)),
-    rgba(245, 245, 247, 0.055);
+  background: rgba(245, 245, 247, 0.062);
   box-shadow:
     inset 0 0 0 1px rgba(245, 245, 247, 0.055),
     inset 0 1px 0 rgba(255, 255, 255, 0.07),
     0 10px 28px rgba(0, 0, 0, 0.18);
 }
 
-.dashboard-bookmark-card:has(.dashboard-icon-action:is(:hover, :focus, :active)) {
-  border-color: rgba(255, 255, 255, 0.08);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.025)),
-    rgba(245, 245, 247, 0.035);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    0 8px 24px rgba(0, 0, 0, 0.14);
-}
-
 .dashboard-bookmark-card.selected {
   border-color: rgba(245, 245, 247, 0.26);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.095), rgba(255, 255, 255, 0.04)),
-    rgba(245, 245, 247, 0.075);
+  background: rgba(245, 245, 247, 0.08);
 }
 
 .is-dashboard-dragging .dashboard-bookmark-card {

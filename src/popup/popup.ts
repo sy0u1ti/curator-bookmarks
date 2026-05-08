@@ -44,6 +44,7 @@ import {
   normalizeQuery,
   searchBookmarks,
   searchBookmarksCooperatively,
+  searchBookmarksFirstBatch,
   type PopupSearchResult
 } from './search.js'
 import {
@@ -66,12 +67,15 @@ import type {
 } from './natural-search.js'
 import {
   buildLightPopupSearchIndex,
+  enrichLightPopupSearchIndexWithPinyin,
   enrichPopupSearchIndexWithSnapshotFullText,
   loadPopupSearchIndexSnapshotState,
   shouldWarmPopupSnapshotFullText
 } from './search-index.js'
+import { requiresPinyinTokens } from '../shared/search/pinyin.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
+import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
 
 const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
@@ -191,12 +195,18 @@ const SMART_CLASSIFY_SCHEMA = {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  perfMark('popup.domContentLoaded')
   cacheDom()
+  bindEvents()
+  render()
+  perfMark('popup.firstRender')
+  perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
+
   void hydratePopupPreferences().finally(() => {
-    bindEvents()
     render()
-    void hydrateAutoAnalyzeStatus()
     refreshData({ initial: true, preserveSearch: false }).finally(() => {
+      perfMark('popup.interactive')
+      perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
       void consumePopupCommandIntent().then((handled) => {
         if (!handled && !document.body.classList.contains('smart-active')) {
           dom.searchInput.focus()
@@ -204,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
       })
     })
   })
+  void hydrateAutoAnalyzeStatus()
 })
 
 window.addEventListener('pagehide', cleanupPopupRuntime)
@@ -762,6 +773,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
 
   try {
     const tree = await getBookmarkTree()
+    perfMark('popup.bookmarkTreeLoaded')
     const rootNode = Array.isArray(tree) ? tree[0] : tree
 
     state.rawTreeRoot = rootNode
@@ -777,6 +789,8 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
       tagIndex,
       snapshotIndex: snapshotState.index
     })
+    perfMark('popup.indexBuilt')
+    perfMeasure('popup.indexBuildMs', 'popup.bookmarkTreeLoaded', 'popup.indexBuilt')
     state.allBookmarks = indexedBookmarks
     state.allFolders = extracted.folders
     state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
@@ -787,6 +801,9 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     state.searchSnapshotFullTextReady = false
     state.searchSnapshotFullTextPending = false
     state.searchSnapshotFullTextRunId += 1
+    state.pinyinEnrichmentReady = false
+    state.pinyinEnrichmentPending = false
+    state.pinyinEnrichmentRunId += 1
     clearSearchCaches()
     await hydrateCurrentTabState()
     void hydrateSavedSearches()
@@ -847,7 +864,78 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   } finally {
     state.isLoading = false
     render()
+    schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
   }
+}
+
+function schedulePinyinEnrichment(runId: number): void {
+  if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
+    return
+  }
+  if (runId !== state.pinyinEnrichmentRunId) {
+    return
+  }
+  if (!state.allBookmarks.length) {
+    return
+  }
+
+  state.pinyinEnrichmentPending = true
+  perfMark('popup.pinyinEnrichmentStart')
+
+  const targets = state.allBookmarks
+  const startEnrichment = () => {
+    if (runId !== state.pinyinEnrichmentRunId) {
+      state.pinyinEnrichmentPending = false
+      return
+    }
+
+    enrichLightPopupSearchIndexWithPinyin(targets, {
+      isActive: () => runId === state.pinyinEnrichmentRunId
+    })
+      .then((result) => {
+        if (runId !== state.pinyinEnrichmentRunId) {
+          return
+        }
+        state.pinyinEnrichmentPending = false
+        if (result.aborted) {
+          return
+        }
+        state.pinyinEnrichmentReady = true
+        perfMark('popup.pinyinEnrichmentReady')
+        perfMeasure(
+          'popup.pinyinEnrichmentMs',
+          'popup.pinyinEnrichmentStart',
+          'popup.pinyinEnrichmentReady'
+        )
+        clearSearchCaches()
+        if (state.debouncedQuery || state.searchQuery) {
+          runSearch()
+        }
+        render()
+      })
+      .catch((error) => {
+        if (runId !== state.pinyinEnrichmentRunId) {
+          return
+        }
+        state.pinyinEnrichmentPending = false
+        console.warn('[Curator] 拼音索引补齐失败', error)
+      })
+  }
+
+  setTimeout(startEnrichment, 0)
+}
+
+function ensurePinyinEnrichmentForQuery(query: string): void {
+  if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
+    return
+  }
+  if (!state.allBookmarks.length) {
+    return
+  }
+  if (!requiresPinyinTokens(query)) {
+    return
+  }
+  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
 
 async function hydrateCurrentTabState() {
@@ -949,6 +1037,9 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
   state.searchSnapshotFullTextReady = true
   state.searchSnapshotFullTextPending = false
+  state.pinyinEnrichmentReady = false
+  state.pinyinEnrichmentPending = false
+  state.pinyinEnrichmentRunId += 1
   clearSearchCaches()
 
   if (state.debouncedQuery) {
@@ -956,6 +1047,7 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   }
 
   render()
+  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
 
 function getActiveTab(): Promise<chrome.tabs.Tab | null> {
@@ -983,6 +1075,8 @@ function setSearchQuery(value, { immediate = false } = {}) {
   }
 
   clearTimeout(state.searchTimer)
+
+  ensurePinyinEnrichmentForQuery(value)
 
   if (immediate) {
     state.debouncedQuery = value.trim()
@@ -1105,6 +1199,17 @@ function runSearch() {
     state.searchPending = true
     state.searchResults = []
     state.activeResultIndex = 0
+
+    const firstBatch = searchBookmarksFirstBatch(
+      normalizedQuery,
+      bookmarks,
+      MAX_POPUP_SEARCH_RESULTS
+    )
+    if (firstBatch.results.length) {
+      state.searchResults = firstBatch.results.slice(0, MAX_POPUP_SEARCH_RESULTS)
+      state.activeResultIndex = 0
+      render()
+    }
 
     searchBookmarksCooperatively(normalizedQuery, bookmarks, {
       isActive: () => state.searchRunId === runId,

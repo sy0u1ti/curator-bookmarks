@@ -88,6 +88,9 @@ export interface PopupState {
   searchSnapshotFullTextReady: boolean
   searchSnapshotFullTextPending: boolean
   searchSnapshotFullTextRunId: number
+  pinyinEnrichmentReady: boolean
+  pinyinEnrichmentPending: boolean
+  pinyinEnrichmentRunId: number
   naturalSearchEnabled: boolean
   naturalSearchSetupRequired: boolean
   naturalSearchPending: boolean
@@ -179,6 +182,9 @@ export const state: PopupState = {
   searchSnapshotFullTextReady: false,
   searchSnapshotFullTextPending: false,
   searchSnapshotFullTextRunId: 0,
+  pinyinEnrichmentReady: false,
+  pinyinEnrichmentPending: false,
+  pinyinEnrichmentRunId: 0,
   naturalSearchEnabled: false,
   naturalSearchSetupRequired: false,
   naturalSearchPending: false,

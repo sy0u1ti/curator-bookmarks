@@ -1,5 +1,12 @@
 import { STORAGE_KEYS } from './constants.js'
-import { getLocalStorage, setLocalStorage, removeLocalStorage } from './storage.js'
+import {
+  clearBookmarkTagIndexInRepository,
+  configureBookmarkTagRepository,
+  loadBookmarkTagIndexFromRepository,
+  resetBookmarkTagRepositoryForTest,
+  saveBookmarkTagIndexToRepository,
+  updateBookmarkTagIndexInRepository
+} from './repositories/tag-repository.js'
 import type { BookmarkRecord } from './types.js'
 
 export const BOOKMARK_TAG_SCHEMA_VERSION = 1
@@ -391,9 +398,13 @@ export function assertBookmarkTagIndexWithinQuota(index: BookmarkTagIndex): void
   }
 }
 
+configureBookmarkTagRepository({
+  normalizeIndex: normalizeBookmarkTagIndex,
+  normalizeRecord: normalizeBookmarkTagRecord
+})
+
 export async function loadBookmarkTagIndex(): Promise<BookmarkTagIndex> {
-  const stored = await getLocalStorage([STORAGE_KEYS.bookmarkTagIndex])
-  return normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
+  return loadBookmarkTagIndexFromRepository()
 }
 
 export async function saveBookmarkTagIndex(index: BookmarkTagIndex): Promise<BookmarkTagIndex> {
@@ -402,14 +413,11 @@ export async function saveBookmarkTagIndex(index: BookmarkTagIndex): Promise<Boo
     updatedAt: Date.now()
   })
   assertBookmarkTagIndexWithinQuota(normalized)
-  await setLocalStorage({
-    [STORAGE_KEYS.bookmarkTagIndex]: normalized
-  })
-  return normalized
+  return saveBookmarkTagIndexToRepository(normalized)
 }
 
 export async function clearBookmarkTagIndex(): Promise<void> {
-  await removeLocalStorage(STORAGE_KEYS.bookmarkTagIndex)
+  await clearBookmarkTagIndexInRepository()
 }
 
 export async function upsertBookmarkTagRecord(record: BookmarkTagRecord): Promise<BookmarkTagIndex> {
@@ -445,17 +453,20 @@ function updateBookmarkTagIndex(
   updater: (index: BookmarkTagIndex) => BookmarkTagIndex
 ): Promise<BookmarkTagIndex> {
   const task = bookmarkTagIndexWriteQueue.then(async () => {
-    const current = await loadBookmarkTagIndex()
-    const nextIndex = normalizeBookmarkTagIndex(updater(current))
-    assertBookmarkTagIndexWithinQuota(nextIndex)
-    await setLocalStorage({
-      [STORAGE_KEYS.bookmarkTagIndex]: nextIndex
+    return updateBookmarkTagIndexInRepository((current) => {
+      const nextIndex = normalizeBookmarkTagIndex(updater(current))
+      assertBookmarkTagIndexWithinQuota(nextIndex)
+      return nextIndex
     })
-    return nextIndex
   })
 
   bookmarkTagIndexWriteQueue = task.catch(() => {})
   return task
+}
+
+export function __resetBookmarkTagRepositoryForTest(): void {
+  bookmarkTagIndexWriteQueue = Promise.resolve()
+  resetBookmarkTagRepositoryForTest()
 }
 
 export async function upsertBookmarkTagFromAnalysis(input: BookmarkTagBuildInput): Promise<BookmarkTagRecord | null> {

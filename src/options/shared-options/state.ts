@@ -261,6 +261,7 @@ export const aiNamingState = {
   checkedBookmarks: 0,
   eligibleBookmarks: 0,
   suggestedCount: 0,
+  rejectedCount: 0,
   manualReviewCount: 0,
   unchangedCount: 0,
   highConfidenceCount: 0,
@@ -268,6 +269,8 @@ export const aiNamingState = {
   lowConfidenceCount: 0,
   failedCount: 0,
   results: [],
+  rejectedSuggestions: [],
+  rejectedSuggestionKeys: new Set<string>(),
   selectedResultIds: new Set(),
   tagIndex: {
     version: 1,

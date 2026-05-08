@@ -10,7 +10,17 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
-      sourcemap: debugSourcemap
+      sourcemap: debugSourcemap,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('pinyin-pro')) {
+              return 'vendor-pinyin'
+            }
+            return undefined
+          }
+        }
+      }
     }
   }
 })

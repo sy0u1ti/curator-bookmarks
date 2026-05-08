@@ -23,6 +23,14 @@
       <div class="options-layout">
         <aside class="options-sidebar" aria-label="设置导航">
           <div class="options-nav-group">
+            <p id="options-start-nav-label" class="options-sidebar-label">开始</p>
+            <nav class="options-nav" aria-labelledby="options-start-nav-label">
+              <a class="options-nav-link" href="#onboarding" data-section-link="onboarding">开始使用</a>
+              <a class="options-nav-link" href="#privacy" data-section-link="privacy">隐私与权限中心</a>
+              <a class="options-nav-link" href="#health" data-section-link="health">书签健康中心</a>
+            </nav>
+          </div>
+          <div class="options-nav-group">
             <p id="options-settings-nav-label" class="options-sidebar-label">设置分类</p>
             <nav class="options-nav" aria-labelledby="options-settings-nav-label">
               <a class="options-nav-link" href="#general" data-section-link="general">通用设置</a>
@@ -75,6 +83,175 @@
         </aside>
 
         <main class="options-main">
+          <section
+            id="onboarding"
+            class="options-panel"
+            data-section-panel="onboarding"
+            aria-labelledby="onboarding-title"
+            hidden
+          >
+            <p class="options-section-label">Start</p>
+            <h1 id="onboarding-title">开始使用</h1>
+            <p class="options-description">3 分钟内完成基础配置。AI 是可选能力，不配置也能使用搜索、仪表盘、新标签页、重复检测、回收站和备份。</p>
+
+            <div class="options-group trust-overview">
+              <div class="option-row">
+                <div class="option-copy">
+                  <strong>配置状态</strong>
+                  <p id="onboarding-status">正在读取本地状态。</p>
+                </div>
+                <div class="detect-results-actions">
+                  <button id="onboarding-complete" class="options-button small" type="button">标记完成</button>
+                  <button id="onboarding-skip" class="options-button secondary small" type="button">跳过引导</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="trust-card-grid" aria-label="首次使用步骤">
+              <article class="trust-card">
+                <span class="trust-card-index">1</span>
+                <strong>本地优先</strong>
+                <p>书签、索引、标签、回收站和设置默认保存在当前浏览器扩展存储中。API Key 只保存在本地扩展存储中。</p>
+              </article>
+              <article class="trust-card">
+                <span class="trust-card-index">2</span>
+                <strong>选择新标签页来源</strong>
+                <p>先选择书签栏或常用文件夹作为首页来源，之后可在新标签页设置抽屉中调整。</p>
+              </article>
+              <article class="trust-card">
+                <span class="trust-card-index">3</span>
+                <strong>可选配置 AI</strong>
+                <p>AI 命名、分类、自然语言改写和 Jina Reader 默认可跳过；开启前会说明发送字段和目标服务。</p>
+              </article>
+              <article class="trust-card">
+                <span class="trust-card-index">4</span>
+                <strong>安全整理</strong>
+                <p>批量删除和清理会走预览、回收站或备份恢复路径；永久删除需要额外确认。</p>
+              </article>
+            </div>
+
+            <div class="quick-path-grid" aria-label="快速路径">
+              <a class="quick-path-card" href="#dashboard" data-section-link="dashboard">
+                <strong>我只想搜索书签</strong>
+                <span>打开仪表盘并使用本地搜索。</span>
+              </a>
+              <a class="quick-path-card" href="#health" data-section-link="health">
+                <strong>我想整理书签</strong>
+                <span>进入健康中心和清理任务。</span>
+              </a>
+              <button id="onboarding-open-newtab-source" class="quick-path-card" type="button">
+                <strong>我想定制新标签页</strong>
+                <span>打开新标签页设置来源。</span>
+              </button>
+              <button id="onboarding-open-ai-settings" class="quick-path-card" type="button">
+                <strong>我想开启 AI 自动整理</strong>
+                <span>进入 AI 渠道设置向导。</span>
+              </button>
+              <button id="onboarding-open-privacy" class="quick-path-card" type="button">
+                <strong>我想先看权限说明</strong>
+                <span>查看隐私、权限和审计日志。</span>
+              </button>
+            </div>
+          </section>
+
+          <section
+            id="privacy"
+            class="options-panel"
+            data-section-panel="privacy"
+            aria-labelledby="privacy-title"
+            hidden
+          >
+            <p class="options-section-label">Privacy & Permissions</p>
+            <h1 id="privacy-title">隐私与权限中心</h1>
+            <p class="options-description">这里展示 manifest 权限、外部请求边界和最近本地审计日志。当前版本保留安装时 `http://*/*` / `https://*/*` host permissions，用于用户主动运行的检测、内容提取和可选 AI/Jina 功能。</p>
+
+            <div id="privacy-permission-list" class="privacy-permission-list" aria-label="权限说明"></div>
+
+            <div class="options-group">
+              <div class="detect-results-header">
+                <div>
+                  <strong>远程请求与敏感 URL 矩阵</strong>
+                  <p class="detect-results-subtitle">AI 和 Jina 默认可跳过；敏感协议、登录、支付、邮箱、文档和内网站点默认不发送给 AI/Jina，也不做普通死链检测。</p>
+                </div>
+                <div class="detect-results-actions">
+                  <span id="privacy-ai-status" class="options-chip muted">AI 未配置</span>
+                  <span id="privacy-jina-status" class="options-chip muted">Jina 未开启</span>
+                </div>
+              </div>
+              <div id="privacy-remote-matrix" class="privacy-remote-matrix"></div>
+            </div>
+
+            <div class="options-group">
+              <div class="detect-results-header">
+                <div>
+                  <strong>本地审计日志</strong>
+                  <p class="detect-results-subtitle">只保存最近任务摘要，不保存 API Key、响应正文或完整网页正文。</p>
+                </div>
+                <button id="privacy-clear-audit" class="options-button secondary small" type="button">清空审计日志</button>
+              </div>
+              <div id="privacy-audit-log" class="detect-results compact">
+                <div class="detect-empty">暂无外部请求记录。</div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="health"
+            class="options-panel"
+            data-section-panel="health"
+            aria-labelledby="health-title"
+            hidden
+          >
+            <p class="options-section-label">Health Center</p>
+            <h1 id="health-title">书签健康中心</h1>
+            <p class="options-description">先评估，再建议，最后安全执行。健康中心不会自动删除、移动或修改书签。</p>
+
+            <div class="detect-summary-grid compact-grid health-summary-grid">
+              <article class="summary-card compact metric-card metric-total">
+                <span class="summary-label">书签总数</span>
+                <strong id="health-total-bookmarks">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-info">
+                <span class="summary-label">文件夹</span>
+                <strong id="health-folder-count">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-warning">
+                <span class="summary-label">待整理 Inbox</span>
+                <strong id="health-inbox-count">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-warning">
+                <span class="summary-label">重复候选</span>
+                <strong id="health-duplicate-count">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-danger">
+                <span class="summary-label">疑似失效/复查</span>
+                <strong id="health-deadlink-count">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-muted">
+                <span class="summary-label">缺少标签</span>
+                <strong id="health-missing-tag-count">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-muted">
+                <span class="summary-label">缺少摘要</span>
+                <strong id="health-missing-summary-count">0</strong>
+              </article>
+              <article class="summary-card compact metric-card metric-info">
+                <span class="summary-label">文件夹建议</span>
+                <strong id="health-folder-suggestion-count">0</strong>
+              </article>
+            </div>
+
+            <div class="options-group">
+              <div class="detect-results-header">
+                <div>
+                  <strong>行动建议</strong>
+                  <p class="detect-results-subtitle">批量操作前请先导出备份；删除默认进入回收站或要求额外确认。</p>
+                </div>
+              </div>
+              <div id="health-action-list" class="health-action-list"></div>
+            </div>
+          </section>
+
           <section
             id="general"
             class="options-panel"
@@ -455,6 +632,10 @@
                       ?
                     </button>
                     <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible" aria-label="选择当前可见的 Dashboard 书签">选择当前可见</button>
+                    <label class="dashboard-performance-mode-toggle" for="dashboard-performance-mode">
+                      <input id="dashboard-performance-mode" type="checkbox" data-dashboard-performance-mode>
+                      <span>性能优先</span>
+                    </label>
                   </span>
                 </label>
                 <p id="dashboard-search-help-description" class="sr-only">

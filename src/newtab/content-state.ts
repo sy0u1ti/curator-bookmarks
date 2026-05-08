@@ -92,6 +92,7 @@ export interface NewTabPreparedSearchIndex {
   entriesById: Map<string, NewTabSearchIndexEntry>
   popupSearchEntries: NewTabPopupSearchSourceEntry[]
   popupSearchBookmarks?: PopupSearchBookmark[]
+  popupSearchPinyinReady?: boolean
   supportsPopupSearch: boolean
 }
 
@@ -671,6 +672,7 @@ export async function getPopupSearchBookmarkSuggestionsFromIndex(
     searchBookmarks
   } = await import('../popup/search.js')
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
+  await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
 
   return searchBookmarks(query, popupBookmarks)
     .map((result) => getSuggestionFromPopupResult(preparedIndex, result.id, result.score))
@@ -706,6 +708,13 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
 
   const plan = options.naturalSearchPlan || buildLocalNaturalSearchPlan(query, options.now)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
+  const naturalQueriesNeedingPinyin = [query, ...plan.queries].some((value) => value)
+  if (naturalQueriesNeedingPinyin) {
+    await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
+    for (const naturalQuery of plan.queries) {
+      await ensurePopupBookmarksHavePinyinIfNeeded(naturalQuery, preparedIndex, popupBookmarks)
+    }
+  }
   const bookmarks = filterBookmarksByNaturalDateRange(popupBookmarks, plan)
   const resultSets: NaturalSearchResultSet[] = []
   const seenQueries = new Set<string>()
@@ -756,6 +765,25 @@ function getPreparedPopupSearchBookmarks(
     })
   )
   return index.popupSearchBookmarks
+}
+
+async function ensurePopupBookmarksHavePinyinIfNeeded(
+  query: string,
+  index: NewTabPreparedSearchIndex,
+  popupBookmarks: PopupSearchBookmark[]
+): Promise<void> {
+  if (index.popupSearchPinyinReady) {
+    return
+  }
+  if (!query) {
+    return
+  }
+  const { requiresPinyinTokens, enrichPinyinTokensCooperatively } = await import('../shared/search/pinyin.js')
+  if (!requiresPinyinTokens(query)) {
+    return
+  }
+  await enrichPinyinTokensCooperatively(popupBookmarks)
+  index.popupSearchPinyinReady = true
 }
 
 function getSuggestionFromPopupResult(

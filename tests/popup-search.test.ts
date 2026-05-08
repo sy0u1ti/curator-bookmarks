@@ -6,8 +6,10 @@ import {
   normalizeQuery,
   scoreBookmark,
   searchBookmarks,
+  searchBookmarksTopK,
   searchBookmarksCooperatively
 } from '../src/popup/search.js'
+import { enrichBookmarkPinyinTokens } from '../src/shared/search/pinyin.js'
 
 function bookmark(overrides: Partial<BookmarkRecord>): BookmarkRecord {
   const title = overrides.title || 'Example'
@@ -66,7 +68,7 @@ test('ranks exact and prefix title matches before weaker URL matches', () => {
   assert.ok(scoreBookmark(exact, 'openai', ['openai']) > scoreBookmark(urlOnly, 'openai', ['openai']))
 })
 
-test('searches Chinese bookmarks through local pinyin initials', () => {
+test('searches Chinese bookmarks through local pinyin initials', async () => {
   const indexed = indexBookmarkForSearch(bookmark({
     id: 'baidu',
     title: '百度',
@@ -76,9 +78,35 @@ test('searches Chinese bookmarks through local pinyin initials', () => {
     path: '工具 / 搜索'
   }))
 
+  await enrichBookmarkPinyinTokens(indexed)
+
   const results = searchBookmarks('bd', [indexed])
   assert.equal(results[0]?.id, 'baidu')
   assert.ok(results[0]?.matchReasons.some((reason) => reason.includes('首字母 bd')))
+})
+
+test('keeps pinyin matches in large top-k indexes without direct text prefilter', async () => {
+  const bookmarks = Array.from({ length: 1300 }, (_value, index) =>
+    indexBookmarkForSearch(bookmark({
+      id: `latin-${index}`,
+      title: `Latin Bookmark ${index}`,
+      normalizedTitle: `latin bookmark ${index}`,
+      normalizedUrl: `example.com/${index}`
+    }))
+  )
+  const target = indexBookmarkForSearch(bookmark({
+    id: 'visual-weather',
+    title: '可视化全球天气实况',
+    normalizedTitle: '可视化全球天气实况',
+    normalizedUrl: 'earth.nullschool.net/current/wind',
+    domain: 'earth.nullschool.net',
+    path: '书签栏 / 工具 / 好玩'
+  }))
+
+  await enrichBookmarkPinyinTokens(target)
+  const results = searchBookmarksTopK('keshihua', [...bookmarks, target], 5)
+
+  assert.equal(results[0]?.id, 'visual-weather')
 })
 
 test('searches AI tags and aliases for semantic local matches', () => {

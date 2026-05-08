@@ -1,7 +1,19 @@
 export const SECTION_META = {
+  onboarding: {
+    label: 'Start',
+    title: '开始使用'
+  },
   general: {
     label: 'General',
     title: '通用设置'
+  },
+  privacy: {
+    label: 'Privacy & Permissions',
+    title: '隐私与权限中心'
+  },
+  health: {
+    label: 'Health Center',
+    title: '书签健康中心'
   },
   dashboard: {
     label: 'Dashboard',

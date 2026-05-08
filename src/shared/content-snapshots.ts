@@ -1,6 +1,10 @@
 import { CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT, STORAGE_KEYS } from './constants.js'
 import { setLocalStorage } from './storage.js'
 import {
+  resetContentSnapshotRepositoryForTest,
+  updateContentSnapshotIndexInRepository
+} from './repositories/snapshot-repository.js'
+import {
   buildContentSnapshotSearchMap,
   cleanContentSnapshotText as cleanText,
   loadContentSnapshotIndex,
@@ -175,12 +179,9 @@ function updateContentSnapshotIndex(
   updater: (index: ContentSnapshotIndex) => ContentSnapshotIndex
 ): Promise<ContentSnapshotIndex> {
   const task = contentSnapshotIndexWriteQueue.then(async () => {
-    const current = await loadContentSnapshotIndex()
-    const nextIndex = normalizeContentSnapshotIndex(updater(current))
-    await setLocalStorage({
-      [STORAGE_KEYS.contentSnapshotIndex]: nextIndex
+    return updateContentSnapshotIndexInRepository((current) => {
+      return normalizeContentSnapshotIndex(updater(current))
     })
-    return nextIndex
   })
 
   contentSnapshotIndexWriteQueue = task.catch(() => {})
@@ -354,6 +355,11 @@ export function setContentFullTextOperationsForTest(
   return () => {
     contentFullTextOperations = previous
   }
+}
+
+export function __resetContentSnapshotRepositoryForTest(): void {
+  contentSnapshotIndexWriteQueue = Promise.resolve()
+  resetContentSnapshotRepositoryForTest()
 }
 
 export function estimateTextBytes(value: unknown): number {
