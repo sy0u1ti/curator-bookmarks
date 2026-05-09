@@ -92,7 +92,10 @@ export interface PopupState {
   pinyinEnrichmentPending: boolean
   pinyinEnrichmentRunId: number
   naturalSearchEnabled: boolean
+  naturalSearchAiConfigured: boolean
+  naturalSearchAiConfigChecked: boolean
   naturalSearchSetupRequired: boolean
+  aiProviderPromptOpen: boolean
   naturalSearchPending: boolean
   naturalSearchError: string
   naturalSearchPlan: NaturalSearchPlan | null
@@ -117,6 +120,7 @@ export interface PopupState {
   pendingActionIds: Set<string>
   currentTab: chrome.tabs.Tab | null
   currentPageBookmarkId: string | null
+  newTabPinnedIds: Set<string>
   smartStatus: string
   smartError: string
   smartStep: number
@@ -187,7 +191,10 @@ export const state: PopupState = {
   pinyinEnrichmentPending: false,
   pinyinEnrichmentRunId: 0,
   naturalSearchEnabled: false,
+  naturalSearchAiConfigured: false,
+  naturalSearchAiConfigChecked: false,
   naturalSearchSetupRequired: false,
+  aiProviderPromptOpen: false,
   naturalSearchPending: false,
   naturalSearchError: '',
   naturalSearchPlan: null,
@@ -216,6 +223,7 @@ export const state: PopupState = {
   pendingActionIds: new Set(),
   currentTab: null,
   currentPageBookmarkId: null,
+  newTabPinnedIds: new Set(),
   smartStatus: 'idle',
   smartError: '',
   smartStep: 0,

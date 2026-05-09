@@ -2,8 +2,7 @@ import {
   AI_NAMING_DEFAULT_BASE_URL,
   AI_NAMING_DEFAULT_MODEL,
   AI_NAMING_DEFAULT_TIMEOUT_MS,
-  AI_NAMING_DEFAULT_BATCH_SIZE,
-  AI_NAMING_DEFAULT_DAILY_LIMIT
+  AI_NAMING_DEFAULT_BATCH_SIZE
 } from './constants.js'
 import { getDefaultInboxSettings } from '../../shared/inbox.js'
 import {
@@ -42,7 +41,6 @@ export function createDefaultAiNamingSettings() {
     apiStyle: 'responses',
     timeoutMs: AI_NAMING_DEFAULT_TIMEOUT_MS,
     batchSize: AI_NAMING_DEFAULT_BATCH_SIZE,
-    dailyLimit: AI_NAMING_DEFAULT_DAILY_LIMIT,
     autoSelectHighConfidence: true,
     allowRemoteParsing: false,
     autoAnalyzeBookmarks: false,
@@ -72,7 +70,6 @@ export function normalizeHistoryRunScope(scope = null) {
   }
 }
 
-export type DashboardViewMode = 'cards'
 export type DashboardSortKey = 'date-desc' | 'date-asc' | 'title-asc' | 'domain-asc'
 
 export const availabilityState = {
@@ -181,13 +178,14 @@ export const managerState = {
 }
 
 export const dashboardState = {
-  viewMode: 'cards' as DashboardViewMode,
   query: '',
   folderId: '',
   domain: '',
   month: '',
   sortKey: 'date-desc' as DashboardSortKey,
   naturalSearchEnabled: false,
+  naturalSearchAiConfigured: false,
+  naturalSearchAiConfigChecked: false,
   naturalSearchPending: false,
   naturalSearchError: '',
   naturalSearchPlan: null as import('../../popup/natural-search.js').NaturalSearchPlan | null,
@@ -283,9 +281,6 @@ export const aiNamingState = {
   lastConnectivityTestAt: 0,
   lastConnectivityTestStatus: '',
   lastConnectivityTestMessage: '',
-  usageUsedToday: 0,
-  usageDayKey: '',
-  usageUpdatedAt: 0,
   lastCompletedAt: 0,
   lastError: ''
 }

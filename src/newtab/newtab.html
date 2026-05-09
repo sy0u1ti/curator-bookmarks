@@ -205,11 +205,18 @@
             <div id="background-featured-row" class="setting-row">
               <span class="setting-label-stack">
                 <span>精选图库</span>
-                <small>主动选择后会访问 NASA、Rijksmuseum、The Met 与 Smithsonian 等第三方图片域名并自动缓存。</small>
+                <small>主动选择后会访问 NASA、The Met 与 Wikimedia Commons 等第三方图片域名并自动缓存。</small>
               </span>
-              <select id="background-featured-id" class="setting-select setting-native-select" aria-label="精选图库图片">
-                <option value="">每日精选</option>
-              </select>
+              <button
+                id="background-featured-picker"
+                class="setting-picker-button"
+                type="button"
+                aria-haspopup="dialog"
+                aria-controls="background-featured-modal"
+              >
+                <span id="background-featured-picker-label">每日精选</span>
+              </button>
+              <input id="background-featured-id" type="hidden" value="">
             </div>
             <div id="background-featured-credit-row" class="setting-row background-featured-credit-row">
               <span>图片来源</span>
@@ -554,12 +561,12 @@
               </span>
             </div>
             <label class="setting-row slider-row">
-              <span>宽度 <output id="search-width-value" class="setting-value">34vw</output></span>
-              <input id="search-width" class="setting-range" type="range" min="16" max="72" value="34" aria-label="搜索栏宽度">
+              <span>宽度 <output id="search-width-value" class="setting-value">44vw</output></span>
+              <input id="search-width" class="setting-range" type="range" min="16" max="72" value="44" aria-label="搜索栏宽度">
             </label>
             <label class="setting-row slider-row">
-              <span>高度 <output id="search-height-value" class="setting-value">34px</output></span>
-              <input id="search-height" class="setting-range" type="range" min="28" max="56" value="34" aria-label="搜索栏高度">
+              <span>高度 <output id="search-height-value" class="setting-value">40px</output></span>
+              <input id="search-height" class="setting-range" type="range" min="28" max="56" value="40" aria-label="搜索栏高度">
             </label>
             <label class="setting-row slider-row">
               <span>上下位置 <output id="search-offset-y-value" class="setting-value">0px</output></span>
@@ -582,6 +589,35 @@
 
       </div>
     </aside>
+
+    <div
+      id="background-featured-modal"
+      class="featured-wallpaper-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="background-featured-modal-title"
+      aria-hidden="true"
+      inert
+    >
+      <div class="featured-wallpaper-panel">
+        <header class="featured-wallpaper-head">
+          <div>
+            <p class="featured-wallpaper-kicker">Featured Gallery</p>
+            <h3 id="background-featured-modal-title">选择精选图库壁纸</h3>
+          </div>
+          <button id="background-featured-modal-close" class="featured-wallpaper-close" type="button" aria-label="关闭精选图库">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="m6.5 6.5 11 11M17.5 6.5l-11 11"></path>
+            </svg>
+          </button>
+        </header>
+        <div
+          id="background-featured-modal-grid"
+          class="featured-wallpaper-grid"
+          aria-label="精选图库壁纸列表"
+        ></div>
+      </div>
+    </div>
 
     <section
       id="newtab-dashboard-overlay"

@@ -8,6 +8,7 @@ export interface NewTabModuleSettings {
   version: 1
   speedDial: boolean
   health: boolean
+  order: NewTabModuleSettingKey[]
 }
 
 export interface NewTabModuleSettingRow {
@@ -22,7 +23,8 @@ export const NEW_TAB_MODULE_SETTINGS_STORAGE_KEY = STORAGE_KEYS.newTabModuleSett
 export const DEFAULT_NEW_TAB_MODULE_SETTINGS: NewTabModuleSettings = {
   version: 1,
   speedDial: true,
-  health: true
+  health: true,
+  order: ['speedDial', 'health']
 }
 
 export const NEW_TAB_MODULE_SETTING_META: Record<
@@ -52,7 +54,8 @@ export function normalizeNewTabModuleSettings(rawSettings: unknown): NewTabModul
   return {
     version: 1,
     speedDial: readCombinedSpeedDialSetting(source),
-    health: readBooleanSetting(source.health, DEFAULT_NEW_TAB_MODULE_SETTINGS.health)
+    health: readBooleanSetting(source.health, DEFAULT_NEW_TAB_MODULE_SETTINGS.health),
+    order: normalizeModuleOrder(source.order)
   }
 }
 
@@ -69,16 +72,37 @@ export function isNewTabModuleEnabled(
 
 export function getVisibleNewTabModules(rawSettings: unknown): NewTabModuleSettingKey[] {
   const settings = normalizeNewTabModuleSettings(rawSettings)
-  return MODULE_SETTING_KEYS.filter((key) => settings[key])
+  return settings.order.filter((key) => settings[key])
 }
 
 export function buildNewTabModuleSettingRows(rawSettings: unknown): NewTabModuleSettingRow[] {
   const settings = normalizeNewTabModuleSettings(rawSettings)
-  return MODULE_SETTING_KEYS.map((key) => ({
+  return settings.order.map((key) => ({
     key,
     ...NEW_TAB_MODULE_SETTING_META[key],
     enabled: settings[key]
   }))
+}
+
+export function moveNewTabModuleSetting(
+  rawSettings: unknown,
+  key: NewTabModuleSettingKey,
+  direction: -1 | 1
+): NewTabModuleSettings {
+  const settings = normalizeNewTabModuleSettings(rawSettings)
+  const fromIndex = settings.order.indexOf(key)
+  const toIndex = fromIndex + direction
+  if (fromIndex < 0 || toIndex < 0 || toIndex >= settings.order.length) {
+    return settings
+  }
+
+  const order = settings.order.slice()
+  const [item] = order.splice(fromIndex, 1)
+  order.splice(toIndex, 0, item)
+  return {
+    ...settings,
+    order
+  }
 }
 
 function readBooleanSetting(value: unknown, fallback: boolean): boolean {
@@ -89,4 +113,26 @@ function readCombinedSpeedDialSetting(source: Record<string, unknown>): boolean 
   const speedDial = readBooleanSetting(source.speedDial, DEFAULT_NEW_TAB_MODULE_SETTINGS.speedDial)
   const workspaces = readBooleanSetting(source.workspaces, DEFAULT_NEW_TAB_MODULE_SETTINGS.speedDial)
   return speedDial && workspaces
+}
+
+function normalizeModuleOrder(value: unknown): NewTabModuleSettingKey[] {
+  const order: NewTabModuleSettingKey[] = []
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (isNewTabModuleSettingKey(item) && !order.includes(item)) {
+        order.push(item)
+      }
+    }
+  }
+
+  for (const key of MODULE_SETTING_KEYS) {
+    if (!order.includes(key)) {
+      order.push(key)
+    }
+  }
+  return order
+}
+
+function isNewTabModuleSettingKey(value: unknown): value is NewTabModuleSettingKey {
+  return typeof value === 'string' && (MODULE_SETTING_KEYS as string[]).includes(value)
 }

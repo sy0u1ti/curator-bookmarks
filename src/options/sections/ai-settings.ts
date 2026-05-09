@@ -1,8 +1,6 @@
 import { normalizeText } from '../../shared/text.js'
 import {
-  AI_NAMING_DEFAULT_DAILY_LIMIT,
   AI_NAMING_FETCHED_MODELS_LIMIT,
-  AI_NAMING_MAX_DAILY_LIMIT,
   AI_NAMING_MAX_BATCH_SIZE
 } from '../shared-options/constants.js'
 import { createDefaultAiNamingSettings } from '../shared-options/state.js'
@@ -16,7 +14,6 @@ export interface AiNamingSettings {
   apiStyle: 'responses' | 'chat_completions'
   timeoutMs: number
   batchSize: number
-  dailyLimit: number
   autoSelectHighConfidence: boolean
   allowRemoteParsing: boolean
   autoAnalyzeBookmarks: boolean
@@ -32,7 +29,6 @@ interface AiNamingSettingsSource {
   apiStyle?: unknown
   timeoutMs?: unknown
   batchSize?: unknown
-  dailyLimit?: unknown
   autoSelectHighConfidence?: unknown
   allowRemoteParsing?: unknown
   autoAnalyzeBookmarks?: unknown
@@ -47,7 +43,6 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
   const apiStyle = String(source.apiStyle || defaults.apiStyle).trim()
   const timeoutMs = Number(source.timeoutMs)
   const batchSize = Number(source.batchSize)
-  const dailyLimit = Number(source.dailyLimit)
 
   return {
     baseUrl: String(source.baseUrl || defaults.baseUrl).trim() || defaults.baseUrl,
@@ -62,11 +57,6 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
     batchSize: Number.isFinite(batchSize)
       ? Math.max(1, Math.min(Math.round(batchSize), AI_NAMING_MAX_BATCH_SIZE))
       : defaults.batchSize,
-    dailyLimit: Number.isFinite(dailyLimit)
-      ? Math.max(1, Math.min(Math.round(dailyLimit), AI_NAMING_MAX_DAILY_LIMIT))
-      : Number.isFinite(Number(defaults.dailyLimit))
-        ? Math.max(1, Math.min(Math.round(Number(defaults.dailyLimit)), AI_NAMING_MAX_DAILY_LIMIT))
-        : AI_NAMING_DEFAULT_DAILY_LIMIT,
     autoSelectHighConfidence:
       typeof source.autoSelectHighConfidence === 'boolean'
         ? source.autoSelectHighConfidence
@@ -125,7 +115,6 @@ export function serializeAiNamingSettings(settings: unknown): AiNamingSettings {
     apiStyle: normalized.apiStyle,
     timeoutMs: normalized.timeoutMs,
     batchSize: normalized.batchSize,
-    dailyLimit: normalized.dailyLimit,
     autoSelectHighConfidence: normalized.autoSelectHighConfidence,
     allowRemoteParsing: normalized.allowRemoteParsing,
     autoAnalyzeBookmarks: normalized.autoAnalyzeBookmarks,

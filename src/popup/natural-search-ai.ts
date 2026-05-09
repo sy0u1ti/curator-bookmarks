@@ -1,5 +1,4 @@
 import { STORAGE_KEYS } from '../shared/constants.js'
-import { reserveAiUsage } from '../shared/ai-usage.js'
 import {
   extractAiErrorMessage,
   extractChatCompletionsJsonText,
@@ -57,7 +56,6 @@ interface NaturalSearchAiRequest {
   query: string
   localPlan: NaturalSearchPlan
   settings: AiNamingSettings
-  feature?: 'popup-natural-search' | 'dashboard-natural-search'
   signal?: AbortSignal | null
 }
 
@@ -115,7 +113,6 @@ export async function requestNaturalSearchAiPlan({
   query,
   localPlan,
   settings,
-  feature = 'popup-natural-search',
   signal = null
 }: NaturalSearchAiRequest): Promise<NaturalSearchPlan> {
   throwIfAborted(signal)
@@ -124,11 +121,6 @@ export async function requestNaturalSearchAiPlan({
 
   throwIfAborted(signal)
   const endpoint = getAiEndpoint(settings)
-  await reserveAiUsage({
-    feature,
-    itemCount: 1,
-    dailyLimit: settings.dailyLimit
-  })
   const requestBody = buildNaturalSearchRequestBody({ settings, query, localPlan })
   const response = await fetchWithTimeout(endpoint, {
     method: 'POST',
@@ -159,19 +151,19 @@ export async function requestNaturalSearchAiPlan({
 
 export function normalizeNaturalSearchAiError(error: unknown): string {
   if (isNaturalSearchPermissionRequiredError(error)) {
-    return 'AI 渠道未授权，已使用本地自然语言解析。'
+    return 'AI 渠道未授权，请完成授权后再使用语义搜索。'
   }
 
   const message = error instanceof Error ? error.message : ''
   if (!message) {
-    return 'AI 解析不可用，已使用本地自然语言解析。'
+    return 'AI 解析不可用，请稍后重试或检查 AI 渠道配置。'
   }
 
   if (message.includes('请先到通用设置')) {
-    return '未配置 AI 渠道，已使用本地自然语言解析。'
+    return '请配置 AI 渠道后再使用语义搜索。'
   }
 
-  return `AI 解析不可用，已使用本地解析：${truncateNaturalSearchText(message, 72)}`
+  return `AI 解析不可用：${truncateNaturalSearchText(message, 72)}`
 }
 
 export function isNaturalSearchAbortError(error: unknown): boolean {

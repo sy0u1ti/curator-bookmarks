@@ -254,12 +254,14 @@ export function normalizeQuery(value: unknown): string {
 
 function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
   const parsed = parseSearchQuery(query)
+  const excludedTerms = parsed.excludedTerms
   const recencyHint = parsed.textTerms.some(isRecencyHintTerm)
   const textTerms = parsed.textTerms.filter((term) => !isRecencyHintTerm(term))
-  const normalizedQuery = buildSearchTextQuery({ ...parsed, textTerms })
+  const normalizedQuery = buildSearchTextQuery({ ...parsed, textTerms, excludedTerms })
   return {
     ...parsed,
     textTerms,
+    excludedTerms,
     normalizedQuery,
     queryTerms: getQueryTerms(normalizedQuery),
     recencyHint,
@@ -267,7 +269,7 @@ function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
       parsed.siteFilters.length ||
       parsed.folderFilters.length ||
       parsed.typeFilters.length ||
-      parsed.excludedTerms.length ||
+      excludedTerms.length ||
       parsed.dateRange
     )
   }
@@ -889,6 +891,10 @@ function normalizeSearchList(values: unknown): string[] {
   if (!Array.isArray(values)) {
     return []
   }
+  return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))]
+}
+
+function uniqueSearchTerms(values: string[]): string[] {
   return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))]
 }
 

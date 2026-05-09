@@ -75,9 +75,48 @@ const SEARCH_OPERATOR_KEYS = new Set([
   '类别'
 ])
 
+const SAFE_LOCAL_RULE_FILLER_PATTERNS = [
+  /帮我/g,
+  /帮忙/g,
+  /麻烦/g,
+  /请/g,
+  /找一下/g,
+  /找找/g,
+  /搜索/g,
+  /查找/g,
+  /查一下/g,
+  /看看/g,
+  /收藏的/g,
+  /收藏/g,
+  /书签/g,
+  /链接/g,
+  /网址/g,
+  /页面/g,
+  /那个/g,
+  /这个/g,
+  /一些/g,
+  /一个/g,
+  /之前/g,
+  /以前/g,
+  /我的/g,
+  /我/g,
+  /关于/g,
+  /有关/g,
+  /一下/g,
+  /资料/g
+]
+
+const CHINESE_SEARCH_EXCLUSION_PATTERN = /(?:不要|不看|排除|过滤掉|过滤|不是|别给我|剔除|去掉)\s*([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
+const ENGLISH_SEARCH_EXCLUSION_PATTERN = /\b(?:without|exclude|excluding|not|no)\s+([a-z0-9][a-z0-9+.#/_-]*)/gi
+const DASH_SEARCH_EXCLUSION_PATTERN = /(^|\s)-([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
+const SAFE_LOCAL_STRUCTURED_OPERATOR_PATTERN = /(^|\s)((?:site|domain|url|folder|path|type|kind|站点|域名|文件夹|目录|路径|类型|类别)[:：]\s*(?:"[^"]*"|'[^']*'|“[^”]*”|‘[^’]*’|[^\s，。！？；、,!?;()[\]{}"'“”‘’]+))/gi
+const SAFE_LOCAL_PLACEHOLDER_START = 0xe000
+const SAFE_LOCAL_PLACEHOLDER_PATTERN = /[\ue000-\uf8ff]/g
+
 export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearchQuery {
   const rawQuery = normalizeRawSearchQuery(query)
-  const tokens = tokenizeSearchQuery(rawQuery)
+  const safeRules = applySafeLocalSearchRules(rawQuery)
+  const tokens = tokenizeSearchQuery(safeRules.query)
   const textTerms: string[] = []
   const siteFilters: string[] = []
   const folderFilters: string[] = []
@@ -130,9 +169,27 @@ export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearch
     siteFilters: uniqueTerms(siteFilters),
     folderFilters: uniqueTerms(folderFilters),
     typeFilters: uniqueTerms(typeFilters),
-    excludedTerms: uniqueTerms(excludedTerms),
+    excludedTerms: uniqueTerms([...excludedTerms, ...safeRules.excludedTerms]),
     dateRange,
     chips: dedupeChips(chips)
+  }
+}
+
+export function applySafeLocalSearchRules(query: unknown): { query: string; excludedTerms: string[] } {
+  const rawQuery = normalizeRawSearchQuery(query)
+  const protectedParts: string[] = []
+  const protectedQuery = protectSafeLocalStructuredSearch(rawQuery, protectedParts)
+  const exclusion = extractSafeLocalSearchExclusions(protectedQuery)
+  const cleanedQuery = restoreSafeLocalStructuredSearch(
+    cleanSafeLocalSearchQuery(exclusion.query),
+    protectedParts
+  )
+  const excludedTerms = uniqueTerms(exclusion.terms)
+  const negativeTerms = excludedTerms.map((term) => `-${formatSafeLocalRuleTerm(term)}`).filter(Boolean)
+
+  return {
+    query: [cleanedQuery, ...negativeTerms].filter(Boolean).join(' ') || rawQuery,
+    excludedTerms
   }
 }
 
@@ -518,6 +575,69 @@ function createSavedSearchId(now: number): string {
 
 function normalizeRawSearchQuery(value: unknown): string {
   return normalizeText(stripCommonUrlPrefix(value)).trim()
+}
+
+function cleanSafeLocalSearchQuery(query: string): string {
+  let text = String(query || '')
+    .replace(/[，。！？；、]/g, ' ')
+    .replace(/([a-z0-9])([\u3400-\u9fff])/gi, '$1 $2')
+    .replace(/([\u3400-\u9fff])([a-z0-9])/gi, '$1 $2')
+
+  for (const pattern of SAFE_LOCAL_RULE_FILLER_PATTERNS) {
+    text = text.replace(pattern, ' ')
+  }
+
+  return text
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function protectSafeLocalStructuredSearch(query: string, protectedParts: string[]): string {
+  return String(query || '').replace(SAFE_LOCAL_STRUCTURED_OPERATOR_PATTERN, (_match, prefix, operatorTerm) => {
+    const index = protectedParts.push(String(operatorTerm || '')) - 1
+    return `${prefix || ''}${String.fromCharCode(SAFE_LOCAL_PLACEHOLDER_START + index)}`
+  })
+}
+
+function restoreSafeLocalStructuredSearch(query: string, protectedParts: string[]): string {
+  return String(query || '').replace(SAFE_LOCAL_PLACEHOLDER_PATTERN, (placeholder) => {
+    const index = placeholder.charCodeAt(0) - SAFE_LOCAL_PLACEHOLDER_START
+    return protectedParts[index] || placeholder
+  })
+}
+
+function extractSafeLocalSearchExclusions(query: string): { query: string; terms: string[] } {
+  const terms: string[] = []
+  let cleanedQuery = String(query || '')
+
+  cleanedQuery = cleanedQuery.replace(CHINESE_SEARCH_EXCLUSION_PATTERN, (_match, value) => {
+    terms.push(String(value || ''))
+    return ' '
+  })
+
+  cleanedQuery = cleanedQuery.replace(ENGLISH_SEARCH_EXCLUSION_PATTERN, (_match, value) => {
+    terms.push(String(value || ''))
+    return ' '
+  })
+
+  cleanedQuery = cleanedQuery.replace(DASH_SEARCH_EXCLUSION_PATTERN, (_match, prefix, value) => {
+    terms.push(String(value || ''))
+    return prefix || ' '
+  })
+
+  return {
+    query: cleanedQuery,
+    terms: uniqueTerms(terms)
+  }
+}
+
+function formatSafeLocalRuleTerm(term: string): string {
+  const normalized = normalizeSearchValue(term)
+  if (!normalized) {
+    return ''
+  }
+
+  return /\s/.test(normalized) ? `"${normalized.replace(/"/g, '')}"` : normalized
 }
 
 function normalizeSearchValue(value: unknown): string {

@@ -20,7 +20,6 @@ import {
   STORAGE_KEYS
 } from '../shared/constants.js'
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
-import { reserveAiUsage } from '../shared/ai-usage.js'
 import { extractDomain } from '../shared/text.js'
 import { assessSensitiveExternalUrl } from '../shared/sensitive-url.js'
 import {
@@ -1782,11 +1781,6 @@ async function requestAutoClassification({
   folders: FolderRecord[]
 }): Promise<AutoClassifyResult> {
   const endpoint = getAiEndpoint(settings)
-  await reserveAiUsage({
-    feature: 'service-worker-auto-analyze',
-    itemCount: 1,
-    dailyLimit: settings.dailyLimit
-  })
   const requestBody = buildAutoClassifyRequestBody({ settings, pageContext, bookmark, folders })
   const response = await fetchWithAutoTimeout(endpoint, {
     method: 'POST',

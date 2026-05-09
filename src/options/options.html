@@ -23,14 +23,6 @@
       <div class="options-layout">
         <aside class="options-sidebar" aria-label="设置导航">
           <div class="options-nav-group">
-            <p id="options-start-nav-label" class="options-sidebar-label">开始</p>
-            <nav class="options-nav" aria-labelledby="options-start-nav-label">
-              <a class="options-nav-link" href="#onboarding" data-section-link="onboarding">开始使用</a>
-              <a class="options-nav-link" href="#privacy" data-section-link="privacy">隐私与权限中心</a>
-              <a class="options-nav-link" href="#health" data-section-link="health">书签健康中心</a>
-            </nav>
-          </div>
-          <div class="options-nav-group">
             <p id="options-settings-nav-label" class="options-sidebar-label">设置分类</p>
             <nav class="options-nav" aria-labelledby="options-settings-nav-label">
               <a class="options-nav-link" href="#general" data-section-link="general">通用设置</a>
@@ -83,183 +75,6 @@
         </aside>
 
         <main class="options-main">
-          <section
-            id="onboarding"
-            class="options-panel"
-            data-section-panel="onboarding"
-            aria-labelledby="onboarding-title"
-            hidden
-          >
-            <p class="options-section-label">Start</p>
-            <h1 id="onboarding-title">开始使用</h1>
-            <p class="options-description">3 分钟内完成基础配置。AI 是可选能力，不配置也能使用搜索、仪表盘、新标签页、重复检测、回收站和备份。</p>
-
-            <div class="options-group trust-overview">
-              <div class="option-row">
-                <div class="option-copy">
-                  <strong>配置状态</strong>
-                  <p id="onboarding-status">正在读取本地状态。</p>
-                </div>
-                <div class="detect-results-actions">
-                  <button id="onboarding-complete" class="options-button small" type="button">完成引导</button>
-                  <button id="onboarding-skip" class="options-button secondary small" type="button">暂不设置，继续本地搜索</button>
-                </div>
-              </div>
-            </div>
-
-            <div class="trust-card-grid" aria-label="首次使用步骤">
-              <article class="trust-card">
-                <span class="trust-card-index">1</span>
-                <strong>理解边界</strong>
-                <p>Curator 的单一用途是 Chrome 书签搜索、整理、清理和新标签页。核心书签读取、搜索和整理默认在本机执行；链接检测、网页搜索、远程背景、AI/Jina 是单独披露的外部请求。安装后 Curator 会替换 Chrome 新标签页。</p>
-              </article>
-              <article class="trust-card">
-                <span class="trust-card-index">2</span>
-                <strong>选择新标签页来源</strong>
-                <p>选择书签栏、选择一个常用文件夹，或暂不设置。暂不设置不会影响 Popup、仪表盘和本地书签搜索。</p>
-              </article>
-              <article class="trust-card">
-                <span class="trust-card-index">3</span>
-                <strong>选择第一目标</strong>
-                <p>从搜索书签、整理书签、定制新标签页或开启 AI 中选一个入口开始。AI 服务可跳过，本地功能不需要配置 AI。</p>
-              </article>
-              <article class="trust-card">
-                <span class="trust-card-index">4</span>
-                <strong>完成后继续</strong>
-                <p>完成后可打开 Popup、打开仪表盘、查看隐私中心，或查看恢复 Chrome 默认新标签页说明。批量整理会走预览、回收站或备份恢复路径。</p>
-              </article>
-            </div>
-
-            <div class="quick-path-grid" aria-label="快速路径">
-              <a class="quick-path-card" href="../popup/popup.html">
-                <strong>打开 Popup</strong>
-                <span>使用轻量本地搜索和当前页收藏。</span>
-              </a>
-              <a class="quick-path-card" href="#dashboard" data-section-link="dashboard">
-                <strong>我只想搜索书签</strong>
-                <span>打开仪表盘并使用本地搜索。</span>
-              </a>
-              <a class="quick-path-card" href="#health" data-section-link="health">
-                <strong>我想整理书签</strong>
-                <span>进入健康中心和清理任务。</span>
-              </a>
-              <button id="onboarding-open-newtab-source" class="quick-path-card" type="button">
-                <strong>我想定制新标签页</strong>
-                <span>打开新标签页设置来源。</span>
-              </button>
-              <button id="onboarding-open-ai-settings" class="quick-path-card" type="button">
-                <strong>我想开启 AI 自动整理</strong>
-                <span>进入 AI 服务设置。</span>
-              </button>
-              <button id="onboarding-open-privacy" class="quick-path-card" type="button">
-                <strong>我想先看权限说明</strong>
-                <span>查看隐私、权限和审计日志。</span>
-              </button>
-              <a class="quick-path-card" href="#privacy" data-section-link="privacy">
-                <strong>恢复 Chrome 默认新标签页</strong>
-                <span>在扩展管理页停用或移除 Curator；隐私中心和 listing 也保留说明。</span>
-              </a>
-            </div>
-          </section>
-
-          <section
-            id="privacy"
-            class="options-panel"
-            data-section-panel="privacy"
-            aria-labelledby="privacy-title"
-            hidden
-          >
-            <p class="options-section-label">Privacy & Permissions</p>
-            <h1 id="privacy-title">隐私与权限中心</h1>
-            <p class="options-description">这里展示 manifest 权限、外部请求边界和最近本地审计日志。核心书签读取、搜索和整理默认在本机执行；网页搜索、精选远程背景、链接检测、AI/Jina 和自定义远程背景是单独披露的外部请求类别。</p>
-
-            <div id="privacy-permission-list" class="privacy-permission-list" aria-label="权限说明"></div>
-
-            <div class="options-group">
-              <div class="detect-results-header">
-                <div>
-                  <strong>远程请求与敏感 URL 矩阵</strong>
-                  <p class="detect-results-subtitle">AI 和 Jina 默认可跳过；敏感协议、登录、支付、邮箱、文档和内网站点默认不发送给 AI/Jina，也不做普通死链检测。审计日志只保存脱敏摘要，普通备份不会包含。</p>
-                </div>
-                <div class="detect-results-actions">
-                  <span id="privacy-ai-status" class="options-chip muted">AI 未配置</span>
-                  <span id="privacy-jina-status" class="options-chip muted">Jina 未开启</span>
-                </div>
-              </div>
-              <div id="privacy-remote-matrix" class="privacy-remote-matrix"></div>
-            </div>
-
-            <div class="options-group">
-              <div class="detect-results-header">
-                <div>
-                  <strong>本地审计日志</strong>
-                  <p class="detect-results-subtitle">只保存最近 20 条或 7 天内的任务摘要，不保存 API Key、Authorization、URL query、响应正文或完整网页正文。</p>
-                </div>
-                <button id="privacy-clear-audit" class="options-button secondary small" type="button">清空审计日志</button>
-              </div>
-              <div id="privacy-audit-log" class="detect-results compact">
-                <div class="detect-empty">暂无外部请求记录。</div>
-              </div>
-            </div>
-          </section>
-
-          <section
-            id="health"
-            class="options-panel"
-            data-section-panel="health"
-            aria-labelledby="health-title"
-            hidden
-          >
-            <p class="options-section-label">Health Center</p>
-            <h1 id="health-title">书签健康中心</h1>
-            <p class="options-description">先评估，再建议，最后安全执行。健康中心不会自动删除、移动或修改书签。</p>
-
-            <div class="detect-summary-grid compact-grid health-summary-grid">
-              <article class="summary-card compact metric-card metric-total">
-                <span class="summary-label">书签总数</span>
-                <strong id="health-total-bookmarks">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-info">
-                <span class="summary-label">文件夹</span>
-                <strong id="health-folder-count">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-warning">
-                <span class="summary-label">待整理 Inbox</span>
-                <strong id="health-inbox-count">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-warning">
-                <span class="summary-label">重复候选</span>
-                <strong id="health-duplicate-count">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-danger">
-                <span class="summary-label">疑似失效/复查</span>
-                <strong id="health-deadlink-count">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-muted">
-                <span class="summary-label">缺少标签</span>
-                <strong id="health-missing-tag-count">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-muted">
-                <span class="summary-label">缺少摘要</span>
-                <strong id="health-missing-summary-count">0</strong>
-              </article>
-              <article class="summary-card compact metric-card metric-info">
-                <span class="summary-label">文件夹建议</span>
-                <strong id="health-folder-suggestion-count">0</strong>
-              </article>
-            </div>
-
-            <div class="options-group">
-              <div class="detect-results-header">
-                <div>
-                  <strong>行动建议</strong>
-                  <p class="detect-results-subtitle">批量操作前请先导出备份；删除默认进入回收站或要求额外确认。</p>
-                </div>
-              </div>
-              <div id="health-action-list" class="health-action-list"></div>
-            </div>
-          </section>
-
           <section
             id="general"
             class="options-panel"
@@ -423,8 +238,8 @@
               <div class="ai-provider-head">
                 <div class="ai-provider-copy">
                   <h2 class="ai-settings-subtitle">自定义 AI 渠道</h2>
-                  <p id="ai-provider-notice-text" class="ai-provider-notice">支持 OpenAI 兼容接口，可自定义 Base URL、API Key 和模型。</p>
-                  <p class="ai-provider-subtitle">API Key 只保存在当前扩展的本地存储中。</p>
+                  <p id="ai-provider-notice-text" class="ai-provider-notice">填写 API Key 后，系统将获取可用模型并用于书签智能分析。</p>
+                  <p class="ai-provider-subtitle">API Key 仅保存在本地，不会上传到 Curator Bookmark 服务器。</p>
                 </div>
                 <span id="ai-config-status" class="options-chip muted">待配置</span>
               </div>
@@ -466,7 +281,7 @@
                     type="password"
                     spellcheck="false"
                     autocomplete="off"
-                    placeholder="sk-..."
+                    placeholder="未保存 API Key"
                   >
                 </label>
 
@@ -494,11 +309,8 @@
                 <p id="ai-connectivity-copy" class="ai-provider-connectivity muted hidden"></p>
 
                 <details id="ai-advanced-settings" class="ai-advanced-details">
-                  <summary class="ai-advanced-summary">高级说明、Base URL 与接口选项</summary>
+                  <summary class="ai-advanced-summary">Base URL 与接口选项</summary>
                   <div class="ai-advanced-body">
-                    <div class="ai-advanced-note">
-                      Base URL 在这里配置。当前实现兼容 OpenAI Responses API 和 Chat Completions API，可填写到 `/v1`，也可以直接填写到 `/v1/responses` 或 `/v1/chat/completions`。
-                    </div>
                     <div class="ai-settings-grid ai-settings-grid-advanced">
                       <label class="ai-settings-field" for="ai-base-url">
                         <span>自定义 API 接口地址</span>
@@ -547,20 +359,6 @@
                           placeholder="6"
                         >
                       </label>
-
-                      <label class="ai-settings-field" for="ai-daily-limit">
-                        <span>每日 AI 请求上限</span>
-                        <input
-                          id="ai-daily-limit"
-                          class="ai-provider-input"
-                          type="number"
-                          min="1"
-                          max="1000"
-                          step="1"
-                          inputmode="numeric"
-                          placeholder="120"
-                        >
-                      </label>
                     </div>
 
                     <p class="ai-provider-field-tip">
@@ -568,22 +366,8 @@
                       <button id="ai-manage-models" class="ai-inline-action" type="button" aria-label="打开自定义模型列表设置">设置更多模型</button>
                       里追加。
                     </p>
-                    <p id="ai-usage-status" class="ai-provider-field-tip">今日已用 0/120 次 AI 请求，剩余 120 次；不会自动无限重试。</p>
                   </div>
                 </details>
-
-                <div class="ai-request-preview" aria-label="AI 请求预览">
-                  <div class="ai-request-preview-head">
-                    <strong>AI 请求预览</strong>
-                    <span class="options-chip muted">发送前确认</span>
-                  </div>
-                  <div id="ai-request-preview" class="ai-request-preview-grid">
-                    <div class="ai-request-preview-row">
-                      <span>发送字段类别</span>
-                      <strong>标题、URL、文件夹路径、目标域名、摘要/正文片段（如可用）</strong>
-                    </div>
-                  </div>
-                </div>
 
                 <div class="ai-provider-actions">
                   <span id="ai-save-status" class="ai-provider-save-state muted">待配置</span>
@@ -599,7 +383,7 @@
 
           <section
             id="dashboard"
-            class="options-panel dashboard-panel"
+            class="options-panel dashboard-panel dashboard-performance-mode"
             data-section-panel="dashboard"
             data-dashboard-ready="false"
             aria-labelledby="dashboard-title"
@@ -668,10 +452,6 @@
                       ?
                     </button>
                     <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible" aria-label="选择当前可见的 Dashboard 书签">选择当前可见</button>
-                    <label class="dashboard-performance-mode-toggle" for="dashboard-performance-mode">
-                      <input id="dashboard-performance-mode" type="checkbox" data-dashboard-performance-mode>
-                      <span>性能优先</span>
-                    </label>
                   </span>
                 </label>
                 <p id="dashboard-search-help-description" class="sr-only">
@@ -715,7 +495,7 @@
                     role="listbox"
                   ></nav>
                 </aside>
-                <div id="dashboard-card-region" class="dashboard-card-region">
+              <div id="dashboard-card-region" class="dashboard-card-region">
                   <div id="dashboard-results" class="dashboard-card-grid">
                     <div class="detect-empty">正在读取书签目录。</div>
                   </div>
@@ -1106,7 +886,6 @@
                   <strong>执行方式</strong>
                 </div>
                 <p id="ai-status-copy">保存通用 AI 渠道后，系统会先读取网页内容，再分批生成书签智能分析建议并同步网页内容索引。建议生成后，你可以先预览并手动选择要应用的标题。</p>
-                <p class="detect-results-subtitle">请求预览位于“通用设置 > 自定义 AI 渠道”，会显示目标 Base URL、字段类别、预计条数、每批/每日上限与正文片段策略。</p>
               </div>
 
               <div class="detect-toolbar-actions">

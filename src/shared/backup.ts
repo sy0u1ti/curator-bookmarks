@@ -80,7 +80,7 @@ export interface CuratorBackupFileV1 {
   source: 'manual' | 'auto'
   redaction: {
     aiProviderSettings: 'apiKey-omitted'
-    omittedFields: Array<'apiKey' | 'authorizationHeaders' | 'privacyAuditLog' | 'aiUsageLedger' | 'contentFullText' | 'contentSnapshotCache' | 'newTabBackgroundMedia' | 'userMediaCache'>
+    omittedFields: Array<'apiKey' | 'authorizationHeaders' | 'privacyAuditLog' | 'contentFullText' | 'contentSnapshotCache' | 'newTabBackgroundMedia' | 'userMediaCache'>
   }
   chromeBookmarks: {
     exportedAt: string
@@ -170,7 +170,6 @@ export async function createCuratorBackupFile(
         'apiKey',
         'authorizationHeaders',
         'privacyAuditLog',
-        'aiUsageLedger',
         'contentFullText',
         'contentSnapshotCache',
         'newTabBackgroundMedia',
@@ -241,7 +240,6 @@ export function parseCuratorBackupFile(payload: unknown): CuratorBackupFileV1 {
         'apiKey',
         'authorizationHeaders',
         'privacyAuditLog',
-        'aiUsageLedger',
         'contentFullText',
         'contentSnapshotCache',
         'newTabBackgroundMedia',

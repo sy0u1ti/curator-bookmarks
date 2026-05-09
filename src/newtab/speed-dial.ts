@@ -65,8 +65,8 @@ export function buildSpeedDialItems({
 
 export function createSpeedDialEmptyState(): SpeedDialEmptyState {
   return {
-    title: 'Speed Dial 还没有固定书签',
-    detail: '从书签卡片菜单固定常用链接后，它们会出现在这里。'
+    title: '暂无固定入口',
+    detail: '将常用网站固定到这里，打开新标签页即可一键访问。'
   }
 }
 
