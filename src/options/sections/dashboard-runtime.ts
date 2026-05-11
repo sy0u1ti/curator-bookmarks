@@ -21,13 +21,7 @@ import { renderDotMatrixLoader } from '../../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../../shared/motion.js'
 import {
   buildSearchTextQuery,
-  deleteSavedSearch,
-  getSavedSearchesForScope,
-  loadSavedSearchIndex,
-  parseSearchQuery,
-  saveSearch,
-  type SavedSearch,
-  type SavedSearchIndex
+  parseSearchQuery
 } from '../../shared/search-query.js'
 import {
   buildContentSnapshotSearchMapWithFullText,
@@ -284,6 +278,7 @@ const DASHBOARD_SEARCH_SCROLL_PREFETCH_MIN_INTERVAL_MS = 450
 const DASHBOARD_SEARCH_SCROLL_PREFETCH_IDLE_TIMEOUT_MS = 650
 const DASHBOARD_SCROLL_IDLE_MS = 110
 const DASHBOARD_SCROLL_SETTLE_MS = 160
+const DASHBOARD_VIRTUAL_SCROLL_GUARD_ROWS = 3
 const DASHBOARD_FAVICON_LOAD_SYNC_BATCH_SIZE = 64
 const DASHBOARD_FAVICON_DIRTY_SYNC_DELAY_MS = 160
 const DASHBOARD_FAVICON_DIRTY_SYNC_SCROLL_DELAY_MS = 220
@@ -291,7 +286,6 @@ const DASHBOARD_FAVICON_WARMUP_DEBUG_DELAY_MS = 1400
 
 let dashboardStatusTimer = 0
 let dashboardResultsStableFrame = 0
-let dashboardResultsUpdateOverlay: HTMLElement | null = null
 let dashboardSelectionMotionFrame = 0
 let dashboardSelectionMotionTimer = 0
 let dashboardSelectionCompositeMotionActive = false
@@ -837,6 +831,13 @@ function syncDashboardRenderedSelectionState(): void {
     const bookmarkId = String(card.getAttribute('data-dashboard-bookmark-id') || '').trim()
     syncDashboardSelectionCardElement(card, bookmarkId)
   })
+  syncDashboardVirtualSelectionNodePool()
+}
+
+function syncDashboardVirtualSelectionNodePool(): void {
+  for (const [bookmarkId, pooled] of dashboardVirtualCardNodePool) {
+    syncDashboardSelectionCardElement(pooled.element, bookmarkId)
+  }
 }
 
 function syncDashboardSelectionCardState(bookmarkId: string): void {
@@ -959,11 +960,6 @@ export function prepareDashboardSectionEntry(): void {
   dashboardFaviconWarmupKey = ''
   clearPendingDashboardFaviconWarmup()
   scheduleDashboardFaviconLoadSync()
-  void hydrateDashboardSavedSearches().then(() => {
-    if (!dom.dashboardPanel?.hidden) {
-      renderDashboardSearchTools()
-    }
-  })
   startDashboardNaturalSearch()
 }
 
@@ -1026,6 +1022,38 @@ function closeDashboardCardMenuElement(details: HTMLDetailsElement): void {
   details.querySelector<HTMLElement>('summary')?.setAttribute('aria-expanded', 'false')
 }
 
+function setDashboardSearchHelpOpen(open: boolean): boolean {
+  const trigger = document.getElementById('dashboard-search-help-toggle')
+  const popover = document.getElementById('dashboard-search-help-popover')
+  if (!trigger || !popover) {
+    return false
+  }
+
+  trigger.setAttribute('aria-expanded', open ? 'true' : 'false')
+  popover.classList.toggle('is-open', open)
+  return true
+}
+
+function toggleDashboardSearchHelp(): void {
+  const trigger = document.getElementById('dashboard-search-help-toggle')
+  const isOpen = trigger?.getAttribute('aria-expanded') === 'true'
+  setDashboardSearchHelpOpen(!isOpen)
+}
+
+function closeDashboardSearchHelp(): boolean {
+  const trigger = document.getElementById('dashboard-search-help-toggle')
+  if (trigger?.getAttribute('aria-expanded') !== 'true') {
+    return false
+  }
+
+  return setDashboardSearchHelpOpen(false)
+}
+
+function isDashboardSearchHelpEvent(event: Event): boolean {
+  const target = event.target as HTMLElement | null
+  return Boolean(target?.closest('#dashboard-search-help-toggle, #dashboard-search-help-popover'))
+}
+
 function closeOpenDashboardCardMenu({ restoreFocus = false }: { restoreFocus?: boolean } = {}): boolean {
   const openDetails = dom.dashboardPanel?.querySelector<HTMLDetailsElement>('.dashboard-card-more[open]')
   if (!openDetails) {
@@ -1043,6 +1071,12 @@ function closeOpenDashboardCardMenu({ restoreFocus = false }: { restoreFocus?: b
 export function handleDashboardKeydown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null
   if (!target) {
+    return
+  }
+
+  if (event.key === 'Escape' && closeDashboardSearchHelp()) {
+    event.preventDefault()
+    event.stopPropagation()
     return
   }
 
@@ -1101,12 +1135,6 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     syncDashboardCardMenuOpenState(moreSummary.closest<HTMLDetailsElement>('.dashboard-card-more'))
   }
 
-  const savedSearchButton = target.closest<HTMLElement>('[data-dashboard-saved-search-action]')
-  if (savedSearchButton) {
-    await handleDashboardSavedSearchAction(savedSearchButton)
-    return
-  }
-
   const folderFilterButton = target.closest<HTMLElement>('[data-dashboard-folder-filter]')
   if (folderFilterButton) {
     applyDashboardFolderFilter(folderFilterButton.getAttribute('data-dashboard-folder-filter'))
@@ -1162,6 +1190,13 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
       openDashboardTagEditor(bookmarkId)
     } else if (action === 'toggle-natural-search') {
       void toggleDashboardNaturalSearch()
+    } else if (action === 'clear-search') {
+      applyDashboardSearchQuery('')
+      window.setTimeout(() => dom.dashboardQuery?.focus(), 0)
+    } else if (action === 'toggle-search-help') {
+      event.preventDefault()
+      event.stopPropagation()
+      toggleDashboardSearchHelp()
     } else if (action === 'close-tag-editor') {
       if (!cancelDashboardTagRegeneration()) {
         closeDashboardTagEditor()
@@ -1253,6 +1288,10 @@ export function handleDashboardTagPointerOut(event: PointerEvent): void {
 
 export function handleDashboardDocumentClick(event: MouseEvent): void {
   const target = event.target as HTMLElement | null
+  if (!isDashboardSearchHelpEvent(event)) {
+    closeDashboardSearchHelp()
+  }
+
   if (target?.closest('.dashboard-card-more')) {
     return
   }
@@ -1278,6 +1317,10 @@ export function handleDashboardDocumentClick(event: MouseEvent): void {
 
 export function handleDashboardDocumentFocusIn(event: FocusEvent): void {
   const target = event.target as HTMLElement | null
+  if (!isDashboardSearchHelpEvent(event)) {
+    closeDashboardSearchHelp()
+  }
+
   if (!target?.closest('.dashboard-card-more')) {
     closeOpenDashboardCardMenu()
   }
@@ -2636,6 +2679,7 @@ function getDashboardTagRecord(bookmarkId: string): BookmarkTagRecord | null {
 function renderDashboardSearchTools(): void {
   const parsed = parseSearchQuery(dashboardState.query)
   const chips = parsed.chips
+  dom.dashboardClearSearch?.classList.toggle('hidden', !String(dashboardState.query || '').trim())
   renderDashboardNaturalSearchToggle()
 
   dom.dashboardSearchChips?.classList.toggle('hidden', chips.length === 0)
@@ -2644,8 +2688,6 @@ function renderDashboardSearchTools(): void {
       .map((chip) => `<span class="dashboard-search-chip ${escapeAttr(chip.kind)}">${escapeHtml(chip.label)}</span>`)
       .join('')
   }
-
-  renderDashboardSavedSearches()
 }
 
 function renderDashboardNaturalSearchToggle(): void {
@@ -2657,179 +2699,16 @@ function renderDashboardNaturalSearchToggle(): void {
   const active = dashboardState.naturalSearchEnabled
   const pending = dashboardState.naturalSearchPending
   const fallback = Boolean(active && dashboardState.naturalSearchError)
+  const label = button.querySelector<HTMLElement>('.dashboard-natural-search-label')
   button.classList.toggle('active', active)
   button.classList.toggle('pending', pending)
   button.classList.toggle('fallback', fallback)
-  button.textContent = getDashboardNaturalSearchToggleText()
+  if (label) {
+    label.textContent = getDashboardNaturalSearchToggleText()
+  }
   button.setAttribute('aria-pressed', String(active))
   button.setAttribute('aria-label', active ? '关闭 Dashboard AI 语义搜索' : '开启 Dashboard AI 语义搜索')
   button.title = getDashboardNaturalSearchToggleTitle()
-}
-
-function renderDashboardSavedSearches(): void {
-  const container = dom.dashboardSavedSearches
-  if (!container) {
-    return
-  }
-
-  const savedSearches = dashboardState.savedSearches
-    ? getSavedSearchesForScope(dashboardState.savedSearches, 'dashboard')
-    : []
-  const normalizedQuery = normalizeDashboardSearchText(dashboardState.query)
-  const canSaveCurrent = Boolean(normalizedQuery)
-  const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeDashboardSearchText(item.query) === normalizedQuery)
-  const show = canSaveCurrent || savedSearches.length > 0 || dashboardState.savedSearchesError
-
-  container.classList.toggle('hidden', !show)
-  if (!show) {
-    container.innerHTML = ''
-    return
-  }
-
-  const status = dashboardState.savedSearchesError
-    ? `<span class="dashboard-saved-search-status error">${escapeHtml(dashboardState.savedSearchesError)}</span>`
-    : !savedSearches.length
-      ? '<span class="dashboard-saved-search-status">还没有保存搜索</span>'
-      : ''
-  const saveButton = canSaveCurrent
-    ? `
-      <button class="dashboard-saved-search-save" type="button" data-dashboard-saved-search-action="save-current" ${hasCurrentSaved ? 'disabled' : ''}>
-        ${hasCurrentSaved ? '已保存' : '保存搜索'}
-      </button>
-    `
-    : ''
-  const items = savedSearches.slice(0, 6).map(renderDashboardSavedSearchChip).join('')
-
-  container.innerHTML = `
-    <div class="dashboard-saved-search-head">
-      <span>保存搜索</span>
-      ${saveButton}
-    </div>
-    ${status}
-    ${items ? `<div class="dashboard-saved-search-list">${items}</div>` : ''}
-  `
-}
-
-function renderDashboardSavedSearchChip(search: SavedSearch): string {
-  const isActive = normalizeDashboardSearchText(search.query) === normalizeDashboardSearchText(dashboardState.query)
-  return `
-    <span class="dashboard-saved-search-chip ${isActive ? 'active' : ''}">
-      <button
-        class="dashboard-saved-search-apply"
-        type="button"
-        data-dashboard-saved-search-action="apply"
-        data-dashboard-saved-search-id="${escapeAttr(search.id)}"
-        title="${escapeAttr(search.query)}"
-      >${escapeHtml(search.name || search.query)}</button>
-      <button
-        class="dashboard-saved-search-delete"
-        type="button"
-        data-dashboard-saved-search-action="delete"
-        data-dashboard-saved-search-id="${escapeAttr(search.id)}"
-        aria-label="删除保存搜索：${escapeAttr(search.name || search.query)}"
-      >×</button>
-    </span>
-  `
-}
-
-async function hydrateDashboardSavedSearches(): Promise<void> {
-  if (dashboardState.savedSearchesLoaded) {
-    return
-  }
-
-  try {
-    dashboardState.savedSearches = await loadSavedSearchIndex()
-    dashboardState.savedSearchesLoaded = true
-    dashboardState.savedSearchesError = ''
-  } catch {
-    dashboardState.savedSearchesLoaded = true
-    dashboardState.savedSearchesError = '保存搜索读取失败'
-  }
-}
-
-async function ensureDashboardSavedSearchIndex(): Promise<SavedSearchIndex> {
-  if (dashboardState.savedSearches) {
-    return dashboardState.savedSearches
-  }
-
-  dashboardState.savedSearches = await loadSavedSearchIndex()
-  dashboardState.savedSearchesLoaded = true
-  dashboardState.savedSearchesError = ''
-  return dashboardState.savedSearches
-}
-
-async function handleDashboardSavedSearchAction(button: HTMLElement): Promise<void> {
-  const action = button.getAttribute('data-dashboard-saved-search-action')
-  const searchId = button.getAttribute('data-dashboard-saved-search-id')
-
-  if (action === 'save-current') {
-    await saveDashboardCurrentSearchQuery()
-    return
-  }
-
-  if (action === 'apply') {
-    const savedSearch = dashboardState.savedSearches
-      ? getSavedSearchesForScope(dashboardState.savedSearches, 'dashboard').find((item) => item.id === searchId)
-      : null
-    if (savedSearch) {
-      applyDashboardSearchQuery(savedSearch.query)
-      setDashboardStatus(`已应用保存搜索：${savedSearch.name}`)
-      dom.dashboardQuery?.focus()
-    }
-    return
-  }
-
-  if (action === 'delete') {
-    await deleteDashboardSavedSearch(searchId)
-  }
-}
-
-async function saveDashboardCurrentSearchQuery(): Promise<void> {
-  const query = dashboardState.query.trim()
-  if (!query) {
-    setDashboardStatus('请输入查询后再保存。')
-    dom.dashboardQuery?.focus()
-    return
-  }
-
-  try {
-    const index = await ensureDashboardSavedSearchIndex()
-    dashboardState.savedSearches = await saveSearch(index, {
-      name: createDashboardSavedSearchName(query),
-      query,
-      scope: 'both'
-    })
-    dashboardState.savedSearchesLoaded = true
-    dashboardState.savedSearchesError = ''
-    renderDashboardSearchTools()
-    setDashboardStatus('已保存搜索，可在 popup、newtab 和 Dashboard 复用。')
-  } catch (error) {
-    dashboardState.savedSearchesError = error instanceof Error ? error.message : '保存搜索失败'
-    renderDashboardSearchTools()
-    setDashboardStatus('保存搜索失败，请稍后重试。')
-  }
-}
-
-async function deleteDashboardSavedSearch(searchId: unknown): Promise<void> {
-  try {
-    const index = await ensureDashboardSavedSearchIndex()
-    dashboardState.savedSearches = await deleteSavedSearch(index, String(searchId || ''))
-    dashboardState.savedSearchesLoaded = true
-    dashboardState.savedSearchesError = ''
-    renderDashboardSearchTools()
-    setDashboardStatus('已删除保存搜索。')
-  } catch (error) {
-    dashboardState.savedSearchesError = error instanceof Error ? error.message : '删除保存搜索失败'
-    renderDashboardSearchTools()
-    setDashboardStatus('删除保存搜索失败，请稍后重试。')
-  }
-}
-
-function createDashboardSavedSearchName(query: string): string {
-  const parsed = parseSearchQuery(query)
-  const chipLabels = parsed.chips.map((chip) => chip.label.replace(/^[^：]+：/, '')).filter(Boolean)
-  const terms = parsed.textTerms.join(' ')
-  return truncateDashboardText([...chipLabels, terms].filter(Boolean).join(' · ') || query, 60) || '未命名搜索'
 }
 
 function applyDashboardSearchQuery(query: string): void {
@@ -3572,7 +3451,7 @@ function getDashboardFolderPathDepth(path: string): number {
 function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
   const selectedCount = getSelectedDashboardBookmarks().length
   const shouldHideSelection = selectedCount === 0
-  const selectionVisibilityChanged = dom.dashboardSelectionGroup.classList.contains('hidden') !== shouldHideSelection
+  const selectionVisibilityChanged = dom.dashboardSelectionGroup.classList.contains('is-empty') !== shouldHideSelection
   const useCompositeMotion = shouldUseDashboardSelectionCompositeMotion()
 
   dom.dashboardPanel?.setAttribute(
@@ -3585,7 +3464,8 @@ function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
     if (!useCompositeMotion) {
       finishDashboardSelectionCompositeMotion({ commitResize: false })
     }
-    dom.dashboardSelectionGroup.classList.toggle('hidden', shouldHideSelection)
+    dom.dashboardSelectionGroup.classList.remove('hidden')
+    dom.dashboardSelectionGroup.classList.toggle('is-empty', shouldHideSelection)
   }
   dom.dashboardSelectionCount.textContent = `${selectedCount} 条已选择`
   dom.dashboardSelectVisible.disabled = availabilityState.deleting || visibleItems.length === 0
@@ -3601,7 +3481,7 @@ function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
 }
 
 function shouldUseDashboardSelectionCompositeMotion(): boolean {
-  return true
+  return false
 }
 
 function transitionDashboardSelectionBarVisibility(
@@ -3610,14 +3490,16 @@ function transitionDashboardSelectionBarVisibility(
 ): void {
   if (!useCompositeMotion) {
     finishDashboardSelectionCompositeMotion({ commitResize: false })
-    dom.dashboardSelectionGroup.classList.toggle('hidden', shouldHideSelection)
+    dom.dashboardSelectionGroup.classList.remove('hidden')
+    dom.dashboardSelectionGroup.classList.toggle('is-empty', shouldHideSelection)
     return
   }
 
   const motionTarget = dom.dashboardCardRegion
   const beforeTop = motionTarget?.getBoundingClientRect().top ?? 0
   beginDashboardSelectionCompositeMotion()
-  dom.dashboardSelectionGroup.classList.toggle('hidden', shouldHideSelection)
+  dom.dashboardSelectionGroup.classList.remove('hidden')
+  dom.dashboardSelectionGroup.classList.toggle('is-empty', shouldHideSelection)
 
   if (!motionTarget) {
     finishDashboardSelectionCompositeMotion()
@@ -4249,6 +4131,7 @@ function getDashboardVirtualCardNode(item: DashboardItem): HTMLElement {
   dashboardVirtualCardNodePoolTick += 1
   if (pooled && pooled.renderKey === renderKey) {
     pooled.lastUsed = dashboardVirtualCardNodePoolTick
+    syncDashboardSelectionCardElement(pooled.element, bookmarkId)
     return pooled.element
   }
 
@@ -4724,7 +4607,59 @@ function handleDashboardVirtualScroll(): void {
   virtualState.isFastScrolling = velocity >= DASHBOARD_VIRTUAL_FAST_SCROLL_PX_PER_MS
   scheduleDashboardScrollIdle()
   maybePrefetchDashboardSearchResults(container)
+  if (!canReuseDashboardVirtualWindowAtScrollTop(nextScrollTop)) {
+    renderDashboardVirtualScrollWindow(nextScrollTop, { syncContainerScroll: false })
+    return
+  }
   scheduleDashboardVirtualRender()
+}
+
+function canReuseDashboardVirtualWindowAtScrollTop(scrollTop: number): boolean {
+  const container = dom.dashboardResults
+  const items = virtualState.items
+  if (
+    !container?.classList.contains('is-virtualized') ||
+    !items.length ||
+    virtualState.pendingInitialMeasure ||
+    virtualState.contentWidth < DASHBOARD_VIRTUAL_MIN_READY_WIDTH ||
+    virtualState.containerHeight < DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
+  ) {
+    return true
+  }
+
+  const viewportWindow = computeDashboardVirtualWindow({
+    itemCount: items.length,
+    contentWidth: virtualState.contentWidth,
+    containerHeight: virtualState.containerHeight,
+    scrollTop,
+    cardHeight: virtualState.cardHeight,
+    minCardWidth: virtualState.minCardWidth,
+    overscanRows: 0
+  })
+
+  if (!canReuseDashboardVirtualShell(items, viewportWindow, viewportWindow, {
+    validateRenderKey: false,
+    allowAnchoredGeometry: true
+  })) {
+    return false
+  }
+
+  const columnCount = Math.max(1, virtualState.renderedColumnCount || viewportWindow.columnCount)
+  const renderedStartRow = Math.floor(Math.max(0, virtualState.renderedStartIndex) / columnCount)
+  const renderedEndRow = Math.ceil(Math.max(0, virtualState.renderedEndIndex) / columnCount)
+  const guardRows = Math.min(
+    DASHBOARD_VIRTUAL_SCROLL_GUARD_ROWS,
+    Math.max(0, Math.floor((renderedEndRow - renderedStartRow - (viewportWindow.endRow - viewportWindow.startRow)) / 2))
+  )
+
+  if (guardRows <= 0) {
+    return true
+  }
+
+  return (
+    viewportWindow.startRow - renderedStartRow >= guardRows &&
+    renderedEndRow - viewportWindow.endRow >= guardRows
+  )
 }
 
 function getDashboardNow(): number {
@@ -4950,7 +4885,6 @@ function beginStableDashboardResultsUpdate(): void {
     container.style.setProperty('--dashboard-results-stable-height', `${stableHeight}px`)
   }
   container.classList.add('is-updating')
-  showDashboardResultsUpdateOverlay()
   if (dashboardResultsStableFrame) {
     window.cancelAnimationFrame(dashboardResultsStableFrame)
   }
@@ -4983,35 +4917,6 @@ function clearStableDashboardResultsUpdate(): void {
   }
   dom.dashboardResults?.classList.remove('is-updating')
   dom.dashboardResults?.style.removeProperty('--dashboard-results-stable-height')
-  hideDashboardResultsUpdateOverlay()
-}
-
-function showDashboardResultsUpdateOverlay(): void {
-  const host = dom.dashboardCardRegion
-  if (!host) {
-    return
-  }
-
-  if (dashboardResultsUpdateOverlay?.isConnected) {
-    dashboardResultsUpdateOverlay.classList.remove('hidden')
-    return
-  }
-
-  const overlay = document.createElement('div')
-  overlay.className = 'dashboard-update-overlay'
-  overlay.setAttribute('aria-hidden', 'true')
-  overlay.innerHTML = `
-    <div class="dashboard-update-indicator">
-      ${renderDotMatrixLoader({ variant: 'spiral', className: 'dashboard-update-dot-loader' })}
-    </div>
-  `
-  dashboardResultsUpdateOverlay = overlay
-  host.append(overlay)
-}
-
-function hideDashboardResultsUpdateOverlay(): void {
-  dashboardResultsUpdateOverlay?.remove()
-  dashboardResultsUpdateOverlay = null
 }
 
 function syncDashboardPanelReadyState(): void {

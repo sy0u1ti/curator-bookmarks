@@ -428,7 +428,46 @@ document.addEventListener('DOMContentLoaded', async () => {
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
   renderAvailabilitySection()
+  bindBookmarkChangeListeners()
 })
+
+let bookmarkChangeRefreshHandle = 0
+function scheduleBookmarkChangeRefresh(): void {
+  if (bookmarkChangeRefreshHandle) {
+    window.clearTimeout(bookmarkChangeRefreshHandle)
+  }
+  bookmarkChangeRefreshHandle = window.setTimeout(() => {
+    bookmarkChangeRefreshHandle = 0
+    void hydrateAvailabilityCatalog({ preserveResults: true, analyzeFolderCleanup: false })
+      .then(() => {
+        renderDashboardSectionIfVisible()
+      })
+      .catch((error) => {
+        console.warn('Curator: 书签变更后的 dashboard 重新加载失败。', error)
+      })
+  }, 240)
+}
+
+function bindBookmarkChangeListeners(): void {
+  if (typeof chrome === 'undefined' || !chrome.bookmarks) {
+    return
+  }
+
+  try {
+    chrome.bookmarks.onCreated.addListener(scheduleBookmarkChangeRefresh)
+    chrome.bookmarks.onRemoved.addListener(scheduleBookmarkChangeRefresh)
+    chrome.bookmarks.onChanged.addListener(scheduleBookmarkChangeRefresh)
+    chrome.bookmarks.onMoved.addListener(scheduleBookmarkChangeRefresh)
+    if (chrome.bookmarks.onChildrenReordered) {
+      chrome.bookmarks.onChildrenReordered.addListener(scheduleBookmarkChangeRefresh)
+    }
+    if (chrome.bookmarks.onImportEnded) {
+      chrome.bookmarks.onImportEnded.addListener(scheduleBookmarkChangeRefresh)
+    }
+  } catch (error) {
+    console.warn('Curator: 注册书签事件监听失败。', error)
+  }
+}
 
 async function hydratePersistentState() {
   availabilityState.storageLoading = true
@@ -873,6 +912,40 @@ function resetOptionsScrollPosition() {
   window.setTimeout(reset, 0)
 }
 
+const EMPTY_STATE_CTA_NAVIGATION: Record<string, string> = {
+  'run-availability': '#availability',
+  'open-auto-analyze': '#ai',
+  'configure-ai': '#ai',
+  'open-dashboard': '#dashboard',
+  'redirect-info': '#redirects',
+  'availability-info': '#availability',
+  'recycle-info': '#recycle'
+}
+
+function handleEmptyStateCta(event: Event) {
+  if (!(event.target instanceof Element)) {
+    return
+  }
+
+  const button = event.target.closest('[data-empty-cta]') as HTMLButtonElement | null
+  if (!button) {
+    return
+  }
+
+  const action = button.getAttribute('data-empty-cta') || ''
+  const targetHash = EMPTY_STATE_CTA_NAVIGATION[action]
+  if (!targetHash) {
+    return
+  }
+
+  event.preventDefault()
+  if (window.location.hash !== targetHash) {
+    window.history.pushState(null, '', targetHash)
+  }
+  syncPageSection()
+  resetOptionsScrollPosition()
+}
+
 function scrollToSectionAnchor() {
   if (normalizeSectionKey(getCurrentSectionKey()) !== 'general') {
     return
@@ -907,6 +980,7 @@ function bindEvents() {
 
   document.addEventListener('click', handleSectionNavigationClick)
   document.addEventListener('click', handleCollapsibleNavGroupClick)
+  document.addEventListener('click', handleEmptyStateCta)
   dom.availabilityScopeTrigger?.addEventListener('click', () => openScopeModal('availability'))
   dom.dashboardPanel?.addEventListener('click', (event) => {
     void handleDashboardClick(event, dashboardCallbacks)

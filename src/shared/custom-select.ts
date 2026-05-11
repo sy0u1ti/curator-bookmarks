@@ -151,7 +151,7 @@ function enhanceSelect(select: HTMLSelectElement): void {
   const list = documentRef.createElement('div')
   const listId = `custom-select-list-${++customSelectId}`
   list.id = listId
-  list.className = 'custom-select-list'
+  list.className = getListClassName(select)
   list.setAttribute('role', 'listbox')
   list.hidden = true
   trigger.setAttribute('aria-controls', listId)
@@ -269,6 +269,18 @@ function getWrapperClassName(select: HTMLSelectElement): string {
   return classes.join(' ')
 }
 
+function getListClassName(select: HTMLSelectElement): string {
+  return getWrapperClassName(select)
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((className) => {
+      return className === 'custom-select'
+        ? 'custom-select-list'
+        : `${className}-list`
+    })
+    .join(' ')
+}
+
 function handleTriggerKeydown(event: KeyboardEvent, state: CustomSelectState): void {
   if (state.select.disabled) {
     return
@@ -322,10 +334,12 @@ function openCustomSelect(state: CustomSelectState): void {
   closeCustomSelect()
   activeState = state
   renderCustomSelectList(state)
+  state.list.style.visibility = 'hidden'
+  state.list.hidden = false
   positionCustomSelectList(state)
   state.wrapper.dataset.open = 'true'
   state.trigger.setAttribute('aria-expanded', 'true')
-  state.list.hidden = false
+  state.list.style.visibility = ''
 }
 
 function closeCustomSelect({ focusTrigger = false } = {}): void {
@@ -385,10 +399,11 @@ function positionCustomSelectList(state: CustomSelectState): void {
   const spaceBelow = window.innerHeight - rect.bottom - viewportPadding
   const spaceAbove = rect.top - viewportPadding
   const maxHeight = Math.max(132, Math.min(280, Math.max(spaceBelow, spaceAbove)))
-  const placeAbove = spaceBelow < 180 && spaceAbove > spaceBelow
+  const menuHeight = Math.min(Math.ceil(state.list.scrollHeight) || maxHeight, maxHeight)
+  const placeAbove = spaceBelow < menuHeight + 6 && spaceAbove > spaceBelow
   const top = placeAbove
-    ? Math.max(viewportPadding, rect.top - maxHeight - 6)
-    : Math.min(window.innerHeight - viewportPadding, rect.bottom + 6)
+    ? Math.max(viewportPadding, rect.top - menuHeight - 6)
+    : Math.min(window.innerHeight - viewportPadding - menuHeight, rect.bottom + 6)
   const left = Math.min(
     Math.max(viewportPadding, rect.left),
     Math.max(viewportPadding, window.innerWidth - rect.width - viewportPadding)

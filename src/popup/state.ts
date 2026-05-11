@@ -83,6 +83,7 @@ export interface PopupState {
   savedSearches: SavedSearchIndex | null
   savedSearchesLoaded: boolean
   savedSearchesError: string
+  savedSearchesExpanded: boolean
   searchTagIndex: BookmarkTagIndex | null
   searchSnapshotState: PopupSearchIndexSnapshotState | null
   searchSnapshotFullTextReady: boolean
@@ -182,6 +183,7 @@ export const state: PopupState = {
   savedSearches: null,
   savedSearchesLoaded: false,
   savedSearchesError: '',
+  savedSearchesExpanded: false,
   searchTagIndex: null,
   searchSnapshotState: null,
   searchSnapshotFullTextReady: false,

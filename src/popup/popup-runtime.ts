@@ -1540,11 +1540,13 @@ function renderBanner() {
   dom.naturalSearchToggle.classList.toggle('active', state.naturalSearchEnabled)
   dom.naturalSearchToggle.classList.toggle('pending', naturalSearchPending)
   dom.naturalSearchToggle.classList.toggle('fallback', naturalSearchFallback)
+  dom.naturalSearchToggle.classList.toggle('not-configured', !state.naturalSearchAiConfigured && !state.naturalSearchEnabled)
   dom.naturalSearchToggle.textContent = getNaturalSearchToggleText()
   dom.naturalSearchToggle.setAttribute('aria-pressed', String(state.naturalSearchEnabled))
+  dom.naturalSearchToggle.setAttribute('aria-label', '语义搜索')
   dom.naturalSearchToggle.setAttribute(
-    'aria-label',
-    getNaturalSearchToggleAriaLabel(naturalSearchPending)
+    'aria-disabled',
+    String(!state.naturalSearchEnabled && !state.naturalSearchAiConfigured)
   )
   dom.naturalSearchToggle.title = getNaturalSearchToggleTitle(naturalSearchPending)
   renderSearchTools()
@@ -1575,27 +1577,49 @@ function renderSavedSearches() {
     return
   }
 
-  const status = state.savedSearchesError
+  const hasError = Boolean(state.savedSearchesError)
+  const itemsCount = savedSearches.length
+  const expanded = Boolean(state.savedSearchesExpanded) || hasError
+  dom.savedSearches.classList.toggle('expanded', expanded)
+  dom.savedSearches.classList.toggle('collapsed', !expanded)
+
+  const status = hasError
     ? `<span class="saved-search-status error">${escapeHtml(state.savedSearchesError)}</span>`
-    : !savedSearches.length
-      ? '<span class="saved-search-status">暂无保存项</span>'
-      : ''
+    : ''
+
   const saveButton = canSaveCurrent
     ? `
-      <button class="saved-search-save" type="button" data-saved-search-action="save-current" ${hasCurrentSaved ? 'disabled' : ''}>
-        ${hasCurrentSaved ? '已保存' : '保存'}
+      <button class="saved-search-save" type="button" data-saved-search-action="save-current" ${hasCurrentSaved ? 'disabled' : ''} aria-label="${hasCurrentSaved ? '当前搜索已保存' : '保存当前搜索'}">
+        ${hasCurrentSaved ? '已保存' : '保存当前搜索'}
       </button>
     `
     : ''
+
+  const toggleButton = itemsCount > 0
+    ? `
+      <button
+        class="saved-search-toggle"
+        type="button"
+        data-saved-search-action="toggle"
+        aria-expanded="${String(expanded)}"
+        aria-controls="saved-searches-list"
+      >
+        <span class="saved-search-toggle-label">已保存 ${itemsCount}</span>
+        <span class="saved-search-toggle-icon" aria-hidden="true"></span>
+      </button>
+    `
+    : '<span class="saved-search-status">暂无保存项</span>'
+
   const items = savedSearches.slice(0, 6).map(renderSavedSearchChip).join('')
-  const head = saveButton
-    ? `<div class="saved-search-head">${saveButton}</div>`
+  const head = `<div class="saved-search-head">${toggleButton}${saveButton}</div>`
+  const list = expanded && items
+    ? `<div id="saved-searches-list" class="saved-search-list">${items}</div>`
     : ''
 
   dom.savedSearches.innerHTML = `
     ${head}
     ${status}
-    ${items ? `<div class="saved-search-list">${items}</div>` : ''}
+    ${list}
   `
 }
 
@@ -1656,20 +1680,6 @@ function getNaturalSearchToggleText() {
   }
 
   return 'AI'
-}
-
-function getNaturalSearchToggleAriaLabel(isPending: boolean) {
-  if (!state.naturalSearchEnabled) {
-    return state.naturalSearchAiConfigured
-      ? '开启 AI 语义搜索'
-      : '配置 AI 渠道后开启语义搜索'
-  }
-
-  if (isPending) {
-    return 'AI 语义搜索正在解析，点击可关闭'
-  }
-
-  return '关闭 AI 语义搜索，回到普通搜索'
 }
 
 function getNaturalSearchToggleTitle(isPending: boolean) {
@@ -2442,8 +2452,14 @@ function renderSearchResults() {
       const isMenuOpen = state.activeMenuBookmarkId === bookmark.id
       const menuId = getActionMenuId(bookmark.id)
       const menuLabel = getBookmarkActionMenuLabel(bookmark)
-      const matchReason = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
+      const reasonTokens = summarizeMatchReasonTokens(bookmark.matchReasons)
+      const reasonTitle = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
         ? bookmark.matchReasons.join(' · ')
+        : ''
+      const reasonsMarkup = reasonTokens.length
+        ? `<span class="result-match-reasons" title="${escapeAttr(reasonTitle)}" aria-label="命中原因：${escapeAttr(reasonTokens.join('、'))}">${reasonTokens
+            .map((token) => `<span class="result-match-token">${escapeHtml(token)}</span>`)
+            .join('')}</span>`
         : ''
 
       return `
@@ -2459,19 +2475,56 @@ function renderSearchResults() {
                   title="${escapeAttr(bookmark.path || '未归档路径')}"
                 >${escapeHtml(bookmark.path || '未归档路径')}</span>
               </span>
-              ${matchReason
-                ? `<span class="result-match-reason" title="${escapeAttr(matchReason)}">${escapeHtml(matchReason)}</span>`
-                : ''}
+              ${reasonsMarkup}
             </span>
           </button>
           <div class="menu-anchor">
-            <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="${escapeAttr(menuLabel)}" aria-haspopup="menu" aria-expanded="${String(isMenuOpen)}" aria-controls="${escapeAttr(menuId)}"></button>
+            <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="${escapeAttr(menuLabel)}" aria-haspopup="menu" aria-expanded="${String(isMenuOpen)}" aria-controls="${escapeAttr(menuId)}" title="操作菜单"></button>
             ${renderActionMenu(bookmark.id)}
           </div>
         </article>
       `
     })
     .join('')
+}
+
+const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
+  { test: /^命中：标题/, label: '标题命中' },
+  { test: /^命中：网址/, label: 'URL 命中' },
+  { test: /^命中：文件夹/, label: '路径命中' },
+  { test: /^命中：标签|^标签：/, label: '标签命中' },
+  { test: /^命中：主题|^主题：/, label: '标签命中' },
+  { test: /^命中：别名/, label: '别名命中' },
+  { test: /^命中：摘要/, label: '摘要命中' },
+  { test: /^命中：类型/, label: '类型命中' },
+  { test: /^命中：拼音/, label: '拼音命中' },
+  { test: /^命中：首字母/, label: '首字母命中' },
+  { test: /^命中：模糊匹配|^命中：近似/, label: '模糊命中' },
+  { test: /^筛选：站点/, label: '站点筛选' },
+  { test: /^筛选：文件夹/, label: '文件夹筛选' },
+  { test: /^筛选：类型/, label: '类型筛选' },
+  { test: /^筛选：/, label: '时间筛选' },
+  { test: /^排除：/, label: '已排除' }
+]
+
+function summarizeMatchReasonTokens(reasons: unknown): string[] {
+  if (!Array.isArray(reasons) || reasons.length === 0) {
+    return []
+  }
+
+  const tokens: string[] = []
+  const seen = new Set<string>()
+  for (const value of reasons) {
+    const text = String(value || '').trim()
+    if (!text) continue
+    const matched = MATCH_REASON_TOKEN_PATTERNS.find((entry) => entry.test.test(text))
+    if (!matched) continue
+    if (seen.has(matched.label)) continue
+    seen.add(matched.label)
+    tokens.push(matched.label)
+    if (tokens.length >= 3) break
+  }
+  return tokens
 }
 
 function getBookmarkActionMenuLabel(bookmark) {
@@ -2794,7 +2847,7 @@ function renderFilterFolderList() {
           tabindex="${isActive ? '0' : '-1'}"
           title="${escapeAttr(folder.path)}"
         >
-          <span class="folder-kind" aria-hidden="true"></span>
+          <span class="filter-option-check" aria-hidden="true"></span>
           <span class="filter-option-copy">
             <span class="filter-option-title">${highlightText(folder.title, state.filterSearchQuery)}</span>
             <span class="filter-option-path">${highlightText(folderPath, state.filterSearchQuery)}</span>
@@ -2805,7 +2858,13 @@ function renderFilterFolderList() {
     .join('')
 
   if (!folderItems && query) {
-    return '<div class="state-panel compact">未找到相关文件夹</div>'
+    return `
+      <div class="modal-empty">
+        <p class="modal-empty-title">未找到相关文件夹</p>
+        <p class="modal-empty-detail">没有标题或路径包含「${escapeHtml(state.filterSearchQuery)}」</p>
+        <button class="secondary-button" type="button" data-filter-folder-action="clear-search">清空搜索</button>
+      </div>
+    `
   }
 
   return folderItems
@@ -3055,6 +3114,12 @@ function handleSavedSearchAction(button) {
   const action = button.getAttribute('data-saved-search-action')
   const searchId = button.getAttribute('data-saved-search-id')
 
+  if (action === 'toggle') {
+    state.savedSearchesExpanded = !state.savedSearchesExpanded
+    renderSavedSearches()
+    return
+  }
+
   if (action === 'save-current') {
     void saveCurrentSearchQuery()
     return
@@ -3233,6 +3298,15 @@ function handleContentPointerOver(event) {
 }
 
 function handleFilterListClick(event) {
+  const clearButton = event.target.closest('[data-filter-folder-action="clear-search"]')
+  if (clearButton) {
+    state.filterSearchQuery = ''
+    dom.filterSearchInput.value = ''
+    dom.filterFolderList.innerHTML = renderFilterFolderList()
+    dom.filterSearchInput.focus()
+    return
+  }
+
   const filterButton = event.target.closest('[data-select-filter-folder]')
   if (!filterButton) {
     return

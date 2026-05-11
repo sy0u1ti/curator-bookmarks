@@ -1195,11 +1195,62 @@ function bindFolderSettingsEvents(): void {
 }
 
 function bindSettingsGroupTabs(): void {
-  document.querySelectorAll<HTMLElement>('[data-settings-group-tab]').forEach((button) => {
+  const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
+  tabs[0]?.parentElement?.style.setProperty('--settings-tab-count', String(tabs.length))
+
+  for (const button of tabs) {
     button.addEventListener('click', () => {
       setActiveSettingsGroup(normalizeSettingsDrawerSection(button.dataset.settingsGroupTab))
+      button.focus()
     })
+    button.addEventListener('keydown', (event: KeyboardEvent) => {
+      handleSettingsGroupTabKeydown(event, tabs, button)
+    })
+  }
+
+  enrichSettingsSectionRoles()
+}
+
+function handleSettingsGroupTabKeydown(event: KeyboardEvent, tabs: HTMLElement[], current: HTMLElement): void {
+  const horizontal = event.key === 'ArrowRight' || event.key === 'ArrowLeft'
+  const home = event.key === 'Home'
+  const end = event.key === 'End'
+  if (!horizontal && !home && !end) {
+    return
+  }
+  event.preventDefault()
+
+  const index = tabs.indexOf(current)
+  let nextIndex = index
+  if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length
+  else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length
+  else if (home) nextIndex = 0
+  else if (end) nextIndex = tabs.length - 1
+
+  const target = tabs[nextIndex]
+  if (!target) return
+  setActiveSettingsGroup(normalizeSettingsDrawerSection(target.dataset.settingsGroupTab))
+  target.focus()
+}
+
+function enrichSettingsSectionRoles(): void {
+  const sectionsByGroup = new Map<string, HTMLElement[]>()
+  document.querySelectorAll<HTMLElement>('[data-settings-group]').forEach((panel) => {
+    const group = normalizeSettingsDrawerSection(panel.dataset.settingsGroup)
+    panel.setAttribute('role', 'tabpanel')
+    panel.setAttribute('aria-labelledby', `settings-tab-${group}`)
+    panel.tabIndex = 0
+    if (!sectionsByGroup.has(group)) {
+      sectionsByGroup.set(group, [])
+    }
+    sectionsByGroup.get(group)!.push(panel)
   })
+  for (const [group, panels] of sectionsByGroup) {
+    if (!panels.length) continue
+    if (!panels[0].id) {
+      panels[0].id = `settings-panel-${group}`
+    }
+  }
 }
 
 function handleGeneralSettingsChange(): void {
@@ -1766,10 +1817,17 @@ function setActiveSettingsGroup(
   state.activeSettingsGroup = nextSection
   settingsDrawer?.setAttribute('data-active-settings-group', nextSection)
 
-  document.querySelectorAll<HTMLElement>('[data-settings-group-tab]').forEach((tab) => {
+  const settingsTabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
+  settingsTabs[0]?.parentElement?.style.setProperty('--settings-tab-count', String(settingsTabs.length))
+  settingsTabs.forEach((tab, index) => {
     const active = normalizeSettingsDrawerSection(tab.dataset.settingsGroupTab) === nextSection
     tab.classList.toggle('active', active)
+    tab.setAttribute('aria-selected', String(active))
     tab.setAttribute('aria-pressed', String(active))
+    tab.tabIndex = active ? 0 : -1
+    if (active) {
+      tab.parentElement?.style.setProperty('--settings-tab-index', String(index))
+    }
   })
 
   document.querySelectorAll<HTMLElement>('[data-settings-group]').forEach((panel) => {

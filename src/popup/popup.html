@@ -14,18 +14,22 @@
           class="search-help-toggle"
           type="button"
           aria-label="查看高级搜索语法"
+          title="查看高级搜索语法（site / folder / type / -排除）"
           aria-expanded="false"
           aria-controls="search-help-popover"
         >
           ?
         </button>
         <div id="search-help-popover" class="search-help-popover hidden" role="dialog" aria-label="高级搜索语法" tabindex="-1">
+          <span class="search-help-arrow" aria-hidden="true"></span>
           <strong>高级搜索语法</strong>
-          <span>site:github.com 限定站点</span>
-          <span>folder:"前端资料" 限定文件夹</span>
-          <span>type:文档 限定内容类型</span>
-          <span>最近 2 周、昨天、上个月限定时间</span>
-          <span>-youtube 或 -"短视频" 排除结果</span>
+          <ul class="search-help-list">
+            <li><span class="search-help-tag">站点</span><code>site:github.com</code></li>
+            <li><span class="search-help-tag">文件夹</span><code>folder:"前端资料"</code></li>
+            <li><span class="search-help-tag">类型</span><code>type:文档</code></li>
+            <li><span class="search-help-tag">排除</span><code>-youtube</code> 或 <code>-"短视频"</code></li>
+          </ul>
+          <span class="search-help-hint">Esc 关闭 · 点击外部收起</span>
         </div>
         <div class="hero-brand">
           <div class="hero-mark" aria-hidden="true">
@@ -37,7 +41,7 @@
             <p class="hero-subtitle" id="hero-subtitle">本地读取，不上传任何书签内容</p>
           </div>
         </div>
-        <button id="open-settings" class="hero-settings-button" type="button" aria-label="打开设置页">
+        <button id="open-settings" class="hero-settings-button" type="button" aria-label="打开设置页" title="打开设置页">
           <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <path
               d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.757.426 1.757 2.924 0 3.35a1.724 1.724 0 0 0-1.065 2.573c.94 1.543-.827 3.31-2.37 2.37a1.724 1.724 0 0 0-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.572-1.066c-1.543.94-3.31-.827-2.37-2.37a1.724 1.724 0 0 0-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.572c-.94-1.544.827-3.31 2.37-2.37.996.608 2.296.07 2.572-1.066Z"
@@ -54,12 +58,12 @@
       <section id="smart-classifier" class="smart-classifier hidden" aria-live="polite"></section>
 
       <section class="filter-row" aria-label="筛选范围">
-        <button id="folder-filter-trigger" class="filter-trigger" type="button" aria-label="选择文件夹筛选范围">
+        <button id="folder-filter-trigger" class="filter-trigger" type="button" aria-label="选择文件夹筛选范围" title="选择文件夹筛选范围">
           <span class="filter-trigger-label">筛选</span>
           <span id="folder-filter-trigger-text" class="filter-trigger-text">全部文件夹</span>
           <span class="filter-trigger-icon" aria-hidden="true"></span>
         </button>
-        <button id="clear-folder-filter" class="filter-clear hidden" type="button">
+        <button id="clear-folder-filter" class="filter-clear hidden" type="button" title="清除文件夹筛选">
           清除筛选
         </button>
       </section>
@@ -78,18 +82,18 @@
             autofocus
             aria-label="搜索书签标题、网址或高级语法"
           >
+          <button id="clear-search" class="clear-search hidden" type="button" aria-label="清空搜索">
+            清空
+          </button>
           <button
             id="natural-search-toggle"
             class="natural-search-toggle"
             type="button"
-            aria-label="开启 AI 语义搜索"
+            aria-label="语义搜索"
             aria-pressed="false"
             title="AI 语义搜索：需要先配置 AI 渠道"
           >
             语义
-          </button>
-          <button id="clear-search" class="clear-search hidden" type="button" aria-label="清空搜索">
-            清空
           </button>
         </label>
 

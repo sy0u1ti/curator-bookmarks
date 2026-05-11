@@ -500,20 +500,29 @@
                 <label class="options-search dashboard-search">
 	                  <span class="options-search-label">搜索书签</span>
 	                  <span class="dashboard-query-row">
-	                    <span class="dashboard-search-input-field">
-	                      <span class="dashboard-search-icon" aria-hidden="true"></span>
-	                      <input id="dashboard-query" class="dashboard-search-input" type="search" spellcheck="false" placeholder="">
-	                    </span>
-                    <button id="dashboard-natural-search-toggle" class="dashboard-natural-search-toggle" type="button" data-dashboard-action="toggle-natural-search" aria-pressed="false" aria-label="开启 Dashboard 自然语言搜索">语义</button>
                     <button
 	                      id="dashboard-search-help-toggle"
 	                      class="dashboard-help-button"
 	                      type="button"
+                      data-dashboard-action="toggle-search-help"
 	                      aria-label="查看高级搜索语法"
+                      aria-expanded="false"
+                      aria-controls="dashboard-search-help-popover"
 	                      aria-describedby="dashboard-search-help-popover"
 	                    >
 	                      ?
 	                    </button>
+	                    <span class="dashboard-search-input-field">
+	                      <span class="dashboard-search-icon" aria-hidden="true"></span>
+	                      <input id="dashboard-query" class="dashboard-search-input" type="search" spellcheck="false" placeholder="关键词搜索">
+                      <button id="dashboard-clear-search" class="dashboard-clear-search hidden" type="button" data-dashboard-action="clear-search" aria-label="清空 Dashboard 搜索">
+                        清空
+                      </button>
+                      <button id="dashboard-natural-search-toggle" class="dashboard-natural-search-toggle" type="button" data-dashboard-action="toggle-natural-search" aria-pressed="false" aria-label="开启 Dashboard 自然语言搜索">
+                        <span class="dashboard-natural-search-marker" aria-hidden="true"></span>
+                        <span class="dashboard-natural-search-label">语义</span>
+                      </button>
+	                    </span>
 	                  </span>
 	                </label>
 	                <div id="dashboard-search-help-popover" class="dashboard-help-popover" role="tooltip">
@@ -523,20 +532,20 @@
 	                  <span>type:文档 限定内容类型</span>
 	                  <span>最近 2 周、昨天、上个月限定时间</span>
 	                  <span>-youtube 或 -"短视频" 排除结果</span>
-	                </div>
+                </div>
                 <div id="dashboard-search-chips" class="dashboard-search-chips hidden" aria-label="当前搜索条件"></div>
-                <div id="dashboard-saved-searches" class="dashboard-saved-searches hidden" aria-label="已保存搜索"></div>
                 <nav id="dashboard-folder-breadcrumbs" class="dashboard-folder-breadcrumbs hidden" aria-label="当前 Dashboard 文件夹路径"></nav>
               </div>
             </div>
 
-            <div id="dashboard-selection-group" class="options-group detect-selection-group hidden">
+            <div id="dashboard-selection-group" class="options-group detect-selection-group is-empty">
               <div class="detect-results-header">
                 <div>
                   <strong id="dashboard-selection-count">0 条已选择</strong>
                   <p class="detect-results-subtitle">所选书签可批量移动到目标文件夹，或删除并移入回收站。</p>
                 </div>
                 <div class="detect-results-actions">
+                  <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible" aria-label="选择当前可见的 Dashboard 书签">选择当前可见</button>
                   <button id="dashboard-clear-selection" class="options-button secondary small" type="button" data-dashboard-action="clear-selection" aria-label="清空 Dashboard 已选书签">清空选择</button>
                   <button id="dashboard-move-selection" class="options-button secondary small" type="button" data-dashboard-action="move-selected" aria-label="批量移动 Dashboard 已选书签">批量移动</button>
                   <button id="dashboard-delete-selection" class="options-button danger small" type="button" data-dashboard-action="delete-selected" aria-label="批量删除 Dashboard 已选书签">批量删除</button>
@@ -550,7 +559,6 @@
 	                  <strong id="dashboard-cards-title">书签栏</strong>
 	                  <p class="detect-results-subtitle">拖动卡片空白区域可拖入目标文件夹；按钮、链接和复选框不会触发拖拽。</p>
 	                </div>
-	                <button id="dashboard-select-visible-top" class="options-button secondary small" type="button" data-dashboard-action="select-visible" aria-label="选择当前可见的 Dashboard 书签">选择当前可见</button>
 	              </div>
               <div class="dashboard-content-layout">
                 <aside id="dashboard-folder-sidebar" class="dashboard-folder-sidebar" aria-labelledby="dashboard-folder-sidebar-title" aria-label="书签文件夹">
@@ -683,7 +691,6 @@
                 <button id="availability-action" class="options-button" type="button">
                   开始检测全部书签
                 </button>
-                <span class="risk-action-note">预览结果，不自动修改书签</span>
                 <button id="availability-pause-action" class="options-button secondary small hidden" type="button" disabled>
                   暂停检测
                 </button>
@@ -868,7 +875,14 @@
                 </div>
               </div>
               <div id="availability-history-log-list" class="detect-results compact">
-                <div class="detect-empty">完成检测后，这里会保留最近多次检测日志。</div>
+                <div class="detect-empty with-cta" data-empty-key="availability-history">
+                  <p class="detect-empty-title">还没有检测日志</p>
+                  <p class="detect-empty-detail">完成一次检测后，这里会保留最近多次结果，用于趋势对比和连续异常计数。</p>
+                  <div class="detect-empty-actions">
+                    <button class="options-button primary small" type="button" data-empty-cta="run-availability">开始一次检测</button>
+                    <button class="options-button secondary small" type="button" data-empty-cta="availability-info">查看检测范围</button>
+                  </div>
+                </div>
               </div>
               <div class="detect-results-header history-subheader">
                 <div>
@@ -922,7 +936,14 @@
                 </article>
               </div>
               <div id="bookmark-add-history-results" class="detect-results compact bookmark-add-history-results">
-                <div class="detect-empty">还没有自动分析添加记录。开启“自动分析”后，新增普通网页书签并完成分类时会写入这里。</div>
+                <div class="detect-empty with-cta" data-empty-key="bookmark-add-history">
+                  <p class="detect-empty-title">还没有自动分析添加记录</p>
+                  <p class="detect-empty-detail">开启「自动分析」后，新增普通网页书签并完成分类时会写入这里。</p>
+                  <div class="detect-empty-actions">
+                    <button class="options-button primary small" type="button" data-empty-cta="open-auto-analyze">开启自动分析</button>
+                    <button class="options-button secondary small" type="button" data-empty-cta="configure-ai">配置 AI 渠道</button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -962,7 +983,6 @@
               <div class="detect-toolbar-actions">
                 <a id="ai-config-link" class="options-button secondary small ai-config-link" href="#general:ai-provider" data-section-link="general">配置 API Key</a>
                 <button id="ai-action" class="options-button" type="button">开始分析并生成建议</button>
-                <span class="risk-action-note">先预览建议，应用前确认</span>
                 <button id="ai-pause-action" class="options-button secondary small hidden" type="button" disabled>暂停生成</button>
                 <button id="ai-stop-action" class="options-button secondary small hidden" type="button" disabled>停止本次生成</button>
               </div>
@@ -1248,7 +1268,14 @@
                 </div>
               </div>
               <div id="redirect-results" class="detect-results">
-                <div class="detect-empty">完成一次检测后，这里会展示可一键更新的重定向书签。</div>
+                <div class="detect-empty with-cta" data-empty-key="redirect">
+                  <p class="detect-empty-title">还没有可更新的重定向</p>
+                  <p class="detect-empty-detail">完成一次可用性检测后，这里会展示原地址与落地地址不一致的书签，可一键更新。</p>
+                  <div class="detect-empty-actions">
+                    <button class="options-button primary small" type="button" data-empty-cta="run-availability">运行可用性检测</button>
+                    <button class="options-button secondary small" type="button" data-empty-cta="redirect-info">了解重定向更新</button>
+                  </div>
+                </div>
               </div>
               <div id="redirect-pagination" class="results-pagination hidden" aria-label="重定向结果分页"></div>
             </div>
@@ -1316,7 +1343,6 @@
               <div class="duplicate-toolbar">
                 <div id="duplicate-strategy-controls" class="duplicate-strategy-controls duplicate-primary-action-row" aria-label="重复书签选择策略">
                   <button class="options-button small duplicate-primary-action" type="button" data-duplicate-strategy="recommended" aria-label="按推荐选择重复书签当前结果">按推荐选择当前结果</button>
-                  <span class="risk-action-note">删除前确认，进入回收站</span>
                   <button class="options-button secondary small" type="button" data-duplicate-strategy="newest" aria-label="保留重复书签中的最新项">保留最新</button>
                   <button class="options-button secondary small" type="button" data-duplicate-strategy="oldest" aria-label="保留重复书签中的最早项">保留最早</button>
                   <button class="options-button secondary small" type="button" data-duplicate-strategy="shorter-path" aria-label="保留重复书签中路径最短的项">保留路径最短</button>
@@ -1503,7 +1529,14 @@
                 </div>
               </div>
               <div id="recycle-results" class="detect-results">
-                <div class="detect-empty">回收站当前为空。</div>
+                <div class="detect-empty with-cta" data-empty-key="recycle">
+                  <p class="detect-empty-title">回收站当前为空</p>
+                  <p class="detect-empty-detail">删除的书签会暂存到这里，最多保留 30 天，可以在原位置或备份恢复。</p>
+                  <div class="detect-empty-actions">
+                    <button class="options-button primary small" type="button" data-empty-cta="open-dashboard">查看仪表盘</button>
+                    <button class="options-button secondary small" type="button" data-empty-cta="recycle-info">了解删除保护</button>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

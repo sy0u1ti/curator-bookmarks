@@ -71,12 +71,12 @@
           ></div>
         </header>
 
-        <nav class="settings-group-tabs" aria-label="新标签页设置分组">
-          <button class="settings-group-tab" type="button" data-settings-group-tab="source" aria-pressed="true">来源</button>
-          <button class="settings-group-tab" type="button" data-settings-group-tab="appearance" aria-pressed="false">外观</button>
-          <button class="settings-group-tab" type="button" data-settings-group-tab="search" aria-pressed="false">搜索</button>
-          <button class="settings-group-tab" type="button" data-settings-group-tab="modules" aria-pressed="false">模块</button>
-          <button class="settings-group-tab" type="button" data-settings-group-tab="advanced" aria-pressed="false">高级</button>
+        <nav class="settings-group-tabs" aria-label="新标签页设置分组" role="tablist">
+          <button class="settings-group-tab" type="button" role="tab" id="settings-tab-source" data-settings-group-tab="source" aria-controls="settings-panel-source" aria-selected="true" tabindex="0">来源</button>
+          <button class="settings-group-tab" type="button" role="tab" id="settings-tab-appearance" data-settings-group-tab="appearance" aria-controls="settings-panel-appearance" aria-selected="false" tabindex="-1">外观</button>
+          <button class="settings-group-tab" type="button" role="tab" id="settings-tab-search" data-settings-group-tab="search" aria-controls="settings-panel-search" aria-selected="false" tabindex="-1">搜索</button>
+          <button class="settings-group-tab" type="button" role="tab" id="settings-tab-modules" data-settings-group-tab="modules" aria-controls="settings-panel-modules" aria-selected="false" tabindex="-1">模块</button>
+          <button class="settings-group-tab" type="button" role="tab" id="settings-tab-advanced" data-settings-group-tab="advanced" aria-controls="settings-panel-advanced" aria-selected="false" tabindex="-1">高级</button>
         </nav>
 
         <section class="settings-section" data-settings-group="advanced" aria-labelledby="settings-general-title">
@@ -118,7 +118,6 @@
                 aria-controls="folder-candidates-panel"
               >
                 <span data-folder-toggle-label>展开候选文件夹</span>
-                <span class="folder-candidates-chevron" aria-hidden="true"></span>
               </button>
               <div id="folder-candidates-panel" class="folder-candidates-panel" hidden>
                 <div class="reveal-panel-body">
@@ -341,8 +340,7 @@
               aria-expanded="false"
               aria-controls="icon-advanced-panel"
             >
-              <span>高级调整</span>
-              <span class="icon-advanced-chevron" aria-hidden="true"></span>
+              <span>卡片细节</span>
             </button>
             <div id="icon-advanced-panel" class="icon-advanced-panel" hidden>
               <div class="reveal-panel-body">
