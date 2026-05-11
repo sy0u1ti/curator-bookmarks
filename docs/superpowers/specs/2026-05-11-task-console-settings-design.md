@@ -10,7 +10,7 @@ The redesign should make the settings page feel like a pragmatic maintenance con
 
 - Use the selected `Task Console` visual direction.
 - Preserve the current settings page structure: left grouped navigation, right section panels, existing setting sections, result lists, modals, and workflows.
-- Use square block switches: white rectangular track with a black square indicator. The indicator position communicates off/on.
+- Use square block switches with state-specific contrast: on uses a white track with a black square indicator, while off uses a black track with a white square indicator.
 - Keep the UI black and white, with limited green for active command/success signals.
 - Use terminal-style affordances for task-oriented sections without turning every label into code.
 
@@ -116,13 +116,11 @@ This is visual copy only unless an existing element already provides equivalent 
 
 ### Square Switch
 
-All settings switches should adopt the selected square style:
+All settings switches should adopt the selected square style with stronger state contrast:
 
-- Track: white rectangle.
-- Knob: black square.
-- Off: knob on the left.
-- On: knob on the right.
-- Disabled: lower opacity, same geometry.
+- On: white rectangular track with a black square indicator on the right.
+- Off: black rectangular track with a white square indicator on the left.
+- Disabled: lower opacity, same geometry and state color relationship.
 - Focus-visible: thin green or white outline outside the switch.
 
 The input remains a real checkbox for accessibility. The visual switch is only the styled track.
