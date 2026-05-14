@@ -10616,14 +10616,21 @@ function setTextContent(elementId: string, text: string): void {
 }
 
 async function saveSettingsWithFeedback(values: Record<string, unknown>): Promise<void> {
-  setSettingsSaveStatus('saving', '保存中...')
+  clearSettingsSaveStatus()
   try {
     await setLocalStorage(values)
-    setSettingsSaveStatus('saved', '已保存')
+    clearSettingsSaveStatus()
   } catch (error) {
     setSettingsSaveStatus('error', '保存失败，本次调整仅临时生效；刷新后会恢复到上次已保存状态')
     throw error
   }
+}
+
+function clearSettingsSaveStatus(): void {
+  window.clearTimeout(settingsSaveStatusTimer)
+  state.settingsSaveState = 'idle'
+  state.settingsSaveMessage = ''
+  syncSettingsSaveStatus()
 }
 
 function setSettingsSaveStatus(nextState: SettingsSaveState, message: string): void {
