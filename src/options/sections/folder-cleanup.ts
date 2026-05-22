@@ -174,12 +174,37 @@ export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
     : ''
 
   if (!suggestions.length) {
-    dom.folderCleanupResults.innerHTML = splitUndoNotice ||
-      `<div class="detect-empty">${escapeHtml(folderCleanupState.statusMessage || '当前未发现需要清理的文件夹。')}</div>`
+    if (splitUndoNotice) {
+      dom.folderCleanupResults.replaceChildren(createFolderCleanupFragment([splitUndoNotice]))
+    } else {
+      dom.folderCleanupResults.replaceChildren(
+        createFolderCleanupEmptyState(folderCleanupState.statusMessage || '当前未发现需要清理的文件夹。')
+      )
+    }
     return
   }
 
-  dom.folderCleanupResults.innerHTML = `${splitUndoNotice}${suggestions.map((suggestion) => buildSuggestionCard(suggestion, locked)).join('')}`
+  const rows = suggestions.map((suggestion) => buildSuggestionCard(suggestion, locked))
+  dom.folderCleanupResults.replaceChildren(
+    createFolderCleanupFragment(splitUndoNotice ? [splitUndoNotice, ...rows] : rows)
+  )
+}
+
+function createFolderCleanupFragment(markupItems: string[]): DocumentFragment {
+  const fragment = document.createDocumentFragment()
+  for (const markup of markupItems) {
+    const template = document.createElement('template')
+    template.innerHTML = markup.trim()
+    fragment.append(...Array.from(template.content.childNodes))
+  }
+  return fragment
+}
+
+function createFolderCleanupEmptyState(message: string): HTMLElement {
+  const empty = document.createElement('div')
+  empty.className = 'detect-empty'
+  empty.textContent = message
+  return empty
 }
 
 export async function handleFolderCleanupClick(event: Event, callbacks: FolderCleanupCallbacks) {

@@ -5,8 +5,10 @@ import type {
 } from '../shared/content-snapshots.js'
 import type { BookmarkRecord } from '../shared/types.js'
 import type { NaturalSearchPlan, NaturalSearchResultSet } from '../popup/natural-search.js'
-import { extractDomain } from '../shared/text.js'
-import { searchBookmarksTopK, type PopupSearchBookmark } from '../popup/search.js'
+import { searchBookmarksTopK } from '../popup/search-lookup.js'
+import { extractDomain, normalizeSearchTextCompact } from '../shared/text.js'
+import type { PopupSearchBookmark } from '../popup/search.js'
+import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 
 export type NewTabContentState =
   | { type: 'loading' }
@@ -76,6 +78,7 @@ export interface NewTabSearchIndexEntry {
   normalizedFolderTitle: string
   normalizedSearchText: string
   order: number
+  sourceDateAdded?: number
   sourceBookmark?: BookmarkRecord
   sourceTagRecord?: BookmarkTagRecord | null
   sourceSnapshotRecord?: ContentSnapshotRecord | null
@@ -414,7 +417,8 @@ export function buildNewTabSearchIndex(
           folderTitle,
           folderPath
         }),
-        order
+        order,
+        sourceDateAdded: Number(bookmark.dateAdded) || 0
       })
       order += 1
     }
@@ -489,6 +493,7 @@ function buildNewTabSearchIndexFromBookmarks({
           snapshotRecord
         }),
         order,
+        sourceDateAdded: Number(bookmark.dateAdded) || 0,
         sourceBookmark: bookmark,
         sourceTagRecord: tagRecord,
         sourceSnapshotRecord: snapshotRecord
@@ -613,7 +618,7 @@ export async function getPopupSearchBookmarkSuggestionsFromIndex(
   const {
     indexBookmarkForSearch,
     searchBookmarksTopK
-  } = await import('../popup/search.js')
+  } = await import('../popup/search-lookup.js')
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
   await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
 
@@ -641,7 +646,7 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
   const {
     indexBookmarkForSearch,
     searchBookmarksTopK
-  } = await import('../popup/search.js')
+  } = await import('../popup/search-lookup.js')
   const {
     buildLocalNaturalSearchPlan,
     filterBookmarksByNaturalDateRange,
@@ -695,7 +700,7 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
 
 function getPreparedPopupSearchBookmarks(
   index: NewTabPreparedSearchIndex,
-  indexBookmarkForSearch: typeof import('../popup/search.js').indexBookmarkForSearch
+  indexBookmarkForSearch: typeof import('../popup/search-lookup.js').indexBookmarkForSearch
 ): PopupSearchBookmark[] {
   if (index.popupSearchBookmarks) {
     return index.popupSearchBookmarks
@@ -720,10 +725,10 @@ async function ensurePopupBookmarksHavePinyinIfNeeded(
   if (!query) {
     return
   }
-  const { requiresPinyinTokens, enrichPinyinTokensCooperatively } = await import('../shared/search/pinyin.js')
   if (!requiresPinyinTokens(query)) {
     return
   }
+  const { enrichPinyinTokensCooperatively } = await import('../shared/search/pinyin.js')
   await enrichPinyinTokensCooperatively(popupBookmarks)
   index.popupSearchPinyinReady = true
 }
@@ -793,7 +798,7 @@ function getFallbackPopupSearchBookmarks(entries: NewTabSearchIndexEntry[]): Pop
       ancestorIds: [],
       parentId: '',
       index: entry.order,
-      dateAdded: 0,
+      dateAdded: Number(entry.sourceDateAdded || entry.sourceBookmark?.dateAdded) || 0,
       normalizedPath: normalizedFolderPath,
       tagSummary: '',
       tagContentType: '',
@@ -802,6 +807,16 @@ function getFallbackPopupSearchBookmarks(entries: NewTabSearchIndexEntry[]): Pop
       tagAliases: [],
       tagPinyinFull: [],
       tagPinyinInitials: [],
+      searchTextCompact: normalizeSearchTextCompact([
+        title,
+        url,
+        domain,
+        entry.folderTitle,
+        folderPath
+      ]
+        .map((value) => normalizeNewTabSearchText(String(value || '')))
+        .filter(Boolean)
+        .join(' ')),
       searchText: [
         title,
         url,
@@ -969,38 +984,6 @@ export function normalizeNewTabSearchText(value: string): string {
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()
-}
-
-function getSearchSuggestionScore(
-  query: string,
-  title: string,
-  url: string,
-  folderTitle: string,
-  searchText: string
-): number {
-  if (title === query) {
-    return 0
-  }
-  if (title.startsWith(query)) {
-    return 1
-  }
-  if (title.includes(query)) {
-    return 2
-  }
-  if (url.includes(query)) {
-    return 3
-  }
-  if (folderTitle.includes(query)) {
-    return 4
-  }
-  if (searchText.includes(query)) {
-    return 5
-  }
-  const terms = query.split(/\s+/).filter(Boolean)
-  if (terms.length > 1 && terms.every((term) => searchText.includes(term))) {
-    return 6
-  }
-  return -1
 }
 
 export function createNewTabPage({ modules }: NewTabPageOptions): HTMLElement {

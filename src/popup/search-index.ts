@@ -8,14 +8,22 @@ import {
   loadContentSnapshotSettings
 } from '../shared/content-snapshot-search.js'
 import type { BookmarkRecord } from '../shared/types.js'
-import {
-  enrichPinyinTokensCooperatively,
-  type CooperativeEnrichOptions
-} from '../shared/search/pinyin.js'
+import type {
+  BookmarkCatalogSnapshot,
+  BookmarkCatalogSnapshotState
+} from '../shared/bookmark-catalog.js'
+import type { CooperativeEnrichOptions } from '../shared/search/pinyin.js'
 import {
   indexBookmarkForSearch,
   type PopupSearchBookmark
 } from './search.js'
+
+let pinyinModulePromise: Promise<typeof import('../shared/search/pinyin.js')> | null = null
+
+function loadPinyinModule(): Promise<typeof import('../shared/search/pinyin.js')> {
+  pinyinModulePromise ||= import('../shared/search/pinyin.js')
+  return pinyinModulePromise
+}
 
 export const POPUP_SNAPSHOT_FULL_TEXT_LIMIT = 600
 
@@ -59,6 +67,7 @@ export async function enrichLightPopupSearchIndexWithPinyin(
   indexed: PopupSearchBookmark[],
   options: CooperativeEnrichOptions = {}
 ): Promise<{ processed: number; enriched: number; aborted: boolean }> {
+  const { enrichPinyinTokensCooperatively } = await loadPinyinModule()
   return enrichPinyinTokensCooperatively(indexed, options)
 }
 
@@ -105,4 +114,120 @@ export async function enrichPopupSearchIndexWithSnapshotFullText({
     }
     return indexed
   })
+}
+
+export function buildLightPopupSearchIndexFromCatalog(
+  catalog: BookmarkCatalogSnapshot
+): PopupSearchBookmark[] {
+  return buildLightPopupSearchIndex({
+    bookmarks: catalog.extracted.bookmarks,
+    tagIndex: catalog.tagIndex,
+    snapshotIndex: catalog.snapshotState?.index || null
+  })
+}
+
+export function patchLightPopupSearchIndexFromCatalog(
+  indexed: PopupSearchBookmark[],
+  catalog: BookmarkCatalogSnapshot
+): number {
+  return patchPopupSearchIndexFromCatalog(indexed, catalog, {
+    includeFullText: false
+  })
+}
+
+export async function enrichPopupSearchIndexWithSnapshotFullTextFromCatalog(
+  catalog: BookmarkCatalogSnapshot
+): Promise<PopupSearchBookmark[]> {
+  return enrichPopupSearchIndexWithSnapshotFullText({
+    bookmarks: catalog.extracted.bookmarks,
+    tagIndex: catalog.tagIndex,
+    snapshotIndex: catalog.snapshotState?.index || null,
+    includeFullText: true
+  })
+}
+
+export async function enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog(
+  indexed: PopupSearchBookmark[],
+  catalog: BookmarkCatalogSnapshot,
+  options: {
+    isActive?: () => boolean
+  } = {}
+): Promise<number> {
+  const snapshotIndex = catalog.snapshotState?.index || null
+  if (!snapshotIndex) {
+    if (options.isActive && !options.isActive()) {
+      return 0
+    }
+    return patchLightPopupSearchIndexFromCatalog(indexed, catalog)
+  }
+
+  const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
+  const snapshotSearchMap = await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
+    includeFullText: true,
+    maxRecords: POPUP_SNAPSHOT_FULL_TEXT_LIMIT
+  }).catch(() => new Map<string, string>())
+  if (options.isActive && !options.isActive()) {
+    return 0
+  }
+
+  return patchPopupSearchIndexFromCatalog(indexed, catalog, {
+    includeFullText: true,
+    snapshotSearchMap
+  })
+}
+
+function patchPopupSearchIndexFromCatalog(
+  indexed: PopupSearchBookmark[],
+  catalog: BookmarkCatalogSnapshot,
+  {
+    includeFullText,
+    snapshotSearchMap = null
+  }: {
+    includeFullText: boolean
+    snapshotSearchMap?: Map<string, string> | null
+  }
+): number {
+  const tagRecords = catalog.tagIndex?.records || {}
+  const snapshotIndex = catalog.snapshotState?.index || null
+  const snapshotRecords = snapshotIndex?.records || {}
+  const sourceBookmarks = catalog.extracted.bookmarks
+  let patched = 0
+
+  for (let index = 0; index < indexed.length; index += 1) {
+    const target = indexed[index]
+    if (!target) {
+      continue
+    }
+
+    const sourceBookmark = sourceBookmarks[index]?.id === target.id
+      ? sourceBookmarks[index]
+      : catalog.extracted.bookmarkMap.get(target.id) || target
+
+    const next = indexBookmarkForSearch(
+      sourceBookmark,
+      tagRecords[target.id] || null,
+      snapshotRecords[target.id] || null,
+      { includeFullText }
+    )
+    const snapshotSearchText = snapshotSearchMap?.get(target.id)
+    if (snapshotSearchText) {
+      next.searchText = `${next.searchText} ${snapshotSearchText}`.trim()
+    }
+
+    patchPopupSearchBookmark(target, next)
+    patched += 1
+  }
+
+  return patched
+}
+
+function patchPopupSearchBookmark(
+  target: PopupSearchBookmark,
+  next: PopupSearchBookmark
+): void {
+  Object.assign(target, next)
+  target.tagPinyinFull = []
+  target.tagPinyinInitials = []
+  delete target.pinyinBaseSearchText
+  delete target.pinyinEnriched
 }

@@ -19,7 +19,10 @@ release/
 # Local assistant/tooling artifacts
 .agents/
 .claude/
+AGENTS.md
 CLAUDE.md
 AGENT_OVERNIGHT_REPORT.md
 REPOSITORY_REVIEW_SUGGESTIONS.md
 .superpowers/
+docs/
+test/

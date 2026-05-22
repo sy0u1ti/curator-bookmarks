@@ -107,14 +107,14 @@ export function renderTagManagementSection({
     return
   }
 
-  dom.tagManagementResults.innerHTML = renderTagCloud(summary.stats)
-  const cloud = dom.tagManagementResults.querySelector<HTMLElement>('[data-tag-cloud-root]')
+  const cloud = renderTagCloud(summary.stats)
+  dom.tagManagementResults.replaceChildren(cloud)
   if (cloud) {
     startTagCloudPhysics(cloud)
   }
 }
 
-function renderTagCloud(stats: BookmarkTagUsageStat[]): string {
+function renderTagCloud(stats: BookmarkTagUsageStat[]): HTMLElement {
   const widthPx = Math.max(960, Math.floor(dom.tagManagementResults?.clientWidth || 0))
   const heightPx = Math.min(820, Math.max(520, Math.floor(window.innerHeight * 0.68)))
   const items = buildTagCloudItems(stats, {
@@ -122,11 +122,23 @@ function renderTagCloud(stats: BookmarkTagUsageStat[]): string {
     heightPx
   })
 
-  return `
-    <div class="tag-management-cloud" role="list" aria-label="标签词云，字号越大表示使用越频繁" data-tag-cloud-root>
-      ${items.map((item) => renderTagCloudItem(item)).join('')}
-    </div>
-  `
+  const root = document.createElement('div')
+  root.className = 'tag-management-cloud'
+  root.setAttribute('role', 'list')
+  root.setAttribute('aria-label', '标签词云，字号越大表示使用越频繁')
+  root.dataset.tagCloudRoot = ''
+
+  const fragment = document.createDocumentFragment()
+  for (const item of items) {
+    const template = document.createElement('template')
+    template.innerHTML = renderTagCloudItem(item).trim()
+    const button = template.content.firstElementChild
+    if (button) {
+      fragment.appendChild(button)
+    }
+  }
+  root.appendChild(fragment)
+  return root
 }
 
 function renderTagCloudItem(item: TagCloudItem): string {

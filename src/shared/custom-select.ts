@@ -12,6 +12,7 @@ const enhancedSelects = new WeakMap<HTMLSelectElement, CustomSelectState>()
 const observedDocuments = new WeakSet<Document>()
 let activeState: CustomSelectState | null = null
 let customSelectId = 0
+let activeCustomSelectObserverCount = 0
 
 export function initializeCustomSelects(root: ParentNode = document): void {
   const documentRef = getRootDocument(root)
@@ -26,6 +27,16 @@ export function refreshCustomSelects(root: ParentNode = document): void {
     if (state) {
       syncCustomSelect(state)
     }
+  }
+}
+
+export function destroyCustomSelects(root: ParentNode = document): void {
+  cleanupSelects(root, { force: true })
+}
+
+export function getCustomSelectDebugState(): { activeObservers: number } {
+  return {
+    activeObservers: activeCustomSelectObserverCount
   }
 }
 
@@ -106,9 +117,9 @@ function enhanceSelects(root: ParentNode): void {
   }
 }
 
-function cleanupSelects(root: ParentNode): void {
+function cleanupSelects(root: ParentNode, options: { force?: boolean } = {}): void {
   for (const select of getSelects(root)) {
-    cleanupSelect(select)
+    cleanupSelect(select, options)
   }
 }
 
@@ -175,6 +186,7 @@ function enhanceSelect(select: HTMLSelectElement): void {
     observer: new MutationObserver(() => syncCustomSelect(state))
   }
   enhancedSelects.set(select, state)
+  activeCustomSelectObserverCount += 1
 
   patchSelectValueSetter(select, state)
   select.classList.add('custom-select-native')
@@ -205,9 +217,13 @@ function enhanceSelect(select: HTMLSelectElement): void {
   syncCustomSelect(state)
 }
 
-function cleanupSelect(select: HTMLSelectElement): void {
+function cleanupSelect(select: HTMLSelectElement, { force = false }: { force?: boolean } = {}): void {
   const state = enhancedSelects.get(select)
-  if (!state || state.wrapper.isConnected) {
+  if (!state) {
+    return
+  }
+  const selectDetachedFromWrapper = !state.select.isConnected || !state.wrapper.contains(state.select)
+  if (!force && state.wrapper.isConnected && !selectDetachedFromWrapper) {
     return
   }
 
@@ -215,6 +231,7 @@ function cleanupSelect(select: HTMLSelectElement): void {
     activeState = null
   }
   state.observer.disconnect()
+  activeCustomSelectObserverCount = Math.max(0, activeCustomSelectObserverCount - 1)
   state.list.remove()
   enhancedSelects.delete(select)
 }
@@ -247,6 +264,13 @@ function patchSelectProperty<T extends object>(
       queueMicrotask(() => syncCustomSelect(state))
     }
   })
+}
+
+export function syncCustomSelectForControl(select: HTMLSelectElement): void {
+  const state = enhancedSelects.get(select)
+  if (state) {
+    syncCustomSelect(state)
+  }
 }
 
 function getWrapperClassName(select: HTMLSelectElement): string {

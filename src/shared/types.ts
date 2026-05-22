@@ -25,11 +25,17 @@ export interface FolderRecord {
   bookmarkCount: number
 }
 
+export interface BookmarkCatalogVersionFingerprint {
+  bookmarkHash: string
+  folderHash: string
+}
+
 export interface ExtractedBookmarkData {
   bookmarks: BookmarkRecord[]
   folders: FolderRecord[]
   bookmarkMap: Map<string, BookmarkRecord>
   folderMap: Map<string, FolderRecord>
+  catalogVersionFingerprint: BookmarkCatalogVersionFingerprint
 }
 
 export type NavigationStatus = 'available' | 'failed'

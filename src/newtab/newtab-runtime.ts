@@ -6,11 +6,14 @@ import {
   STORAGE_KEYS
 } from '../shared/constants.js'
 import {
-  extractBookmarkData,
   findBookmarksBar
 } from '../shared/bookmark-tree.js'
+import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
-import { initializeCustomSelects } from '../shared/custom-select.js'
+import {
+  initializeCustomSelects,
+  syncCustomSelectForControl
+} from '../shared/custom-select.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import {
   getSettingsGroupControlSyncActions,
@@ -44,7 +47,6 @@ import type { ContentSnapshotIndex } from '../shared/content-snapshots.js'
 import {
   DEFAULT_ICON_SETTINGS,
   ICON_LAYOUT_PRESETS,
-  ICON_PRESET_META,
   type IconLayoutPresetKey,
   type IconSettings,
   detectPresetFromValues,
@@ -105,13 +107,13 @@ import {
   getFaviconAccentCacheEntry,
   normalizeFaviconAccentCache,
   removeFaviconAccentCacheEntry,
-  upsertFaviconAccentCacheEntryInPlace,
   type FaviconAccentCache,
   type FaviconAccentColor
 } from './favicon-cache.js'
 import {
   BACKGROUND_URL_FETCH_TIMEOUT_MS,
-  BACKGROUND_URL_MAX_BYTES,
+  BACKGROUND_URL_FULL_MAX_BYTES,
+  BACKGROUND_URL_PREVIEW_MAX_BYTES,
   applyBookmarkMoveOperationsToChildren,
   buildBookmarkOrderAfterInsert,
   buildMinimalBookmarkMoveOperations,
@@ -148,13 +150,35 @@ import {
   normalizeFeaturedBackgroundPreferences,
   type FeaturedBackgroundPreferences
 } from './featured-gallery-preferences.js'
-import { buildFeaturedBackgroundPickerItems } from './featured-gallery-list.js'
+import { openFeaturedBackgroundPickerContent } from './featured-gallery-picker.js'
+import {
+  buildFeaturedBackgroundPickerItems,
+  buildFeaturedBackgroundPickerSections,
+  type FeaturedBackgroundPickerSections
+} from './featured-gallery-list.js'
+import { createFeaturedBackgroundCardPreviewRegistry } from './featured-gallery-preview-registry.js'
+import { getSpeedDialFaviconLoadAttributes } from './speed-dial-load-attributes.js'
+import type { SpeedDialEmptyState, SpeedDialItem } from './speed-dial-types.js'
+import {
+  createFolderDragSectionRectSnapshotFromElements,
+  createFolderDragSectionRectSnapshot,
+  getFolderFlipDeltasFromSnapshots,
+  getFolderInsertIndexFromSnapshot,
+  projectFolderDragSectionRectSnapshot,
+  type FolderDragSectionRectSnapshot
+} from './folder-drag-geometry.js'
+import {
+  getBookmarkCreationIncrementalResult,
+  getBookmarkMoveIncrementalResult,
+  getBookmarkRemovalIncrementalResult
+} from './bookmark-change-incremental.js'
 import type { FeaturedBackgroundItem } from './background-gallery.js'
 import {
   clearInstantWallpaper,
   clearInstantWallpaperTarget,
   createInstantWallpaperDataUrl,
   readInstantWallpaper,
+  readInstantWallpaperDataUrl,
   readInstantWallpaperTarget,
   saveInstantWallpaper,
   saveInstantWallpaperTarget,
@@ -162,6 +186,7 @@ import {
   normalizeInstantWallpaperColor,
   type InstantWallpaperTargetRecord
 } from './instant-wallpaper.js'
+import { createBackgroundObjectUrlCache } from './background-media-cache.js'
 import {
   getActiveNewTabWorkspace,
   normalizeNewTabWorkspaceSettings,
@@ -173,14 +198,11 @@ import { mark as perfMark, measure as perfMeasure, measureNow } from '../shared/
 import { runIdle, runMicroIdle } from '../shared/idle.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
-const FAVICON_COLOR_SAMPLE_SIZE = 32
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
 const SETTINGS_SAVE_DEBOUNCE_MS = 260
-const FAVICON_ACCENT_SAVE_DEBOUNCE_MS = 900
 const EAGER_FAVICON_LIMIT = 12
 const HIGH_PRIORITY_FAVICON_LIMIT = 6
-const FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS = 1500
 const BACKGROUND_MEDIA_DB_NAME = 'curatorNewTabBackgroundMedia'
 const BACKGROUND_MEDIA_STORE = 'media'
 const BACKGROUND_URL_CACHE_KEY = 'urlImage'
@@ -188,9 +210,7 @@ const BACKGROUND_URL_CACHE_KEY_PREFIX = `${BACKGROUND_URL_CACHE_KEY}:`
 const FEATURED_BACKGROUND_PREVIEW_CACHE_KEY_PREFIX = 'featuredPreview:'
 const BACKGROUND_URL_CACHE_MAX_DIMENSION = 2560
 const BACKGROUND_URL_CACHE_QUALITY = 0.86
-const FEATURED_BACKGROUND_PREVIEW_CACHE_MAX_DIMENSION = 1120
-const FEATURED_BACKGROUND_PREVIEW_CACHE_QUALITY = 0.74
-const FEATURED_BACKGROUND_PREVIEW_CACHE_CONCURRENCY = 4
+const FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY = 2
 const BACKGROUND_IMAGE_READY_TIMEOUT_MS = 2200
 const REMOTE_BACKGROUND_READY_TIMEOUT_MS = 900
 const BACKGROUND_VIDEO_READY_TIMEOUT_MS = 2800
@@ -275,9 +295,7 @@ type NewTabSearchSuggestion =
 type BackgroundGalleryModule = typeof import('./background-gallery.js')
 type BackgroundGalleryRefreshModule = typeof import('./background-gallery-refresh.js')
 type SpeedDialModule = typeof import('./speed-dial.js')
-type SpeedDialItem = ReturnType<SpeedDialModule['buildSpeedDialItems']>[number]
 type TimeSettingsModule = typeof import('./time-settings.js')
-type FaviconAccentModule = typeof import('./favicon-accent.js')
 type CustomIconPickerModule = typeof import('./custom-icon-picker.js')
 
 let backgroundGalleryModulePromise: Promise<BackgroundGalleryModule> | null = null
@@ -286,7 +304,6 @@ let backgroundGalleryRefreshModulePromise: Promise<BackgroundGalleryRefreshModul
 let speedDialModulePromise: Promise<SpeedDialModule> | null = null
 let timeSettingsModulePromise: Promise<TimeSettingsModule> | null = null
 let timeSettingsModule: TimeSettingsModule | null = null
-let faviconAccentModulePromise: Promise<FaviconAccentModule> | null = null
 let customIconPickerModulePromise: Promise<CustomIconPickerModule> | null = null
 let featuredBackgroundUiVersion = 0
 let featuredBackgroundPickerRenderSignature = ''
@@ -308,7 +325,7 @@ async function closeWithExitMotion(
 }
 
 const SEARCH_SUGGESTION_LIMIT = 6
-const SEARCH_SUGGESTION_DEBOUNCE_MS = 80
+const SEARCH_SUGGESTION_DEBOUNCE_MS = 120
 const SEARCH_SUGGESTION_CACHE_LIMIT = 24
 const SEARCH_SUGGESTION_CACHE_TTL_MS = 2 * 60 * 1000
 
@@ -365,8 +382,6 @@ function loadBackgroundGalleryModule(): Promise<BackgroundGalleryModule> {
   backgroundGalleryModulePromise ||= import('./background-gallery.js').then((mod) => {
     backgroundGalleryModule = mod
     migrateStoredFeaturedBackgroundId(mod)
-    scheduleFeaturedBackgroundGalleryPreviewObjectUrlWarm()
-    void cacheFeaturedBackgroundGalleryPreviewImages()
     return mod
   })
   return backgroundGalleryModulePromise
@@ -390,11 +405,6 @@ function loadTimeSettingsModule(): Promise<TimeSettingsModule> {
   return timeSettingsModulePromise
 }
 
-function loadFaviconAccentModule(): Promise<FaviconAccentModule> {
-  faviconAccentModulePromise ||= import('./favicon-accent.js')
-  return faviconAccentModulePromise
-}
-
 function loadCustomIconPickerModule(): Promise<CustomIconPickerModule> {
   customIconPickerModulePromise ||= import('./custom-icon-picker.js')
   return customIconPickerModulePromise
@@ -403,6 +413,10 @@ function loadCustomIconPickerModule(): Promise<CustomIconPickerModule> {
 const BOOKMARK_TILE_INITIAL_RENDER_LIMIT = 72
 const BOOKMARK_TILE_RENDER_CHUNK_SIZE = 48
 const BOOKMARK_CHANGE_REFRESH_DEBOUNCE_MS = 320
+const FEATURED_GALLERY_HIGH_PRIORITY_PREVIEW_LIMIT = 12
+const FEATURED_GALLERY_INITIAL_PREVIEW_HYDRATION_LIMIT = 16
+const FEATURED_GALLERY_PREVIEW_HYDRATION_CHUNK_SIZE = 6
+const FEATURED_BACKGROUND_HOVER_PREVIEW_DELAY_MS = 220
 const QUICK_ACCESS_ITEM_LIMIT = 6
 const ACTIVITY_RECORD_LIMIT = 160
 const DASHBOARD_FRAME_READY_TIMEOUT_MS = 12000
@@ -481,6 +495,7 @@ const state = {
   error: '',
   rootNode: null as chrome.bookmarks.BookmarkTreeNode | null,
   folderData: null as ExtractedBookmarkData | null,
+  bookmarkCatalog: null as BookmarkCatalogSnapshot | null,
   bookmarkTagIndex: null as BookmarkTagIndex | null,
   searchSnapshotIndex: null as ContentSnapshotIndex | null,
   folderNodeMap: new Map<string, chrome.bookmarks.BookmarkTreeNode>(),
@@ -611,25 +626,35 @@ const state = {
 
 let onboardingCompleted = false
 
-const root = document.getElementById('newtab-root')
-const dashboardTrigger = document.getElementById('newtab-dashboard-trigger')
-const dashboardOverlay = document.getElementById('newtab-dashboard-overlay')
-const dashboardFrame = document.getElementById('newtab-dashboard-frame') as HTMLIFrameElement | null
-const dashboardFallback = document.getElementById('newtab-dashboard-fallback')
-const dashboardFallbackCopy = document.getElementById('newtab-dashboard-fallback-copy')
-const settingsTrigger = document.getElementById('newtab-settings-trigger')
-const settingsDrawer = document.getElementById('newtab-settings-drawer')
-const settingsBackdrop = document.getElementById('newtab-settings-backdrop')
-const settingsClose = document.getElementById('newtab-settings-close')
-const featuredBackgroundModal = document.getElementById('background-featured-modal')
-const featuredBackgroundModalGrid = document.getElementById('background-featured-modal-grid')
-const featuredBackgroundModalClose = document.getElementById('background-featured-modal-close')
-const featuredBackgroundPicker = document.getElementById('background-featured-picker')
-const featuredBackgroundRefreshButton = document.getElementById('background-featured-refresh')
-const featuredBackgroundStatus = document.getElementById('background-featured-status')
-const featuredBackgroundDisplayModeInput = document.getElementById('background-featured-display-mode')
-const featuredBackgroundDisplaySizeInput = document.getElementById('background-featured-display-size')
-const featuredBackgroundPositionYInput = document.getElementById('background-featured-position-y')
+const elementByIdCache = new Map<string, HTMLElement>()
+
+function cachedEl<T extends HTMLElement = HTMLElement>(id: string): T | null {
+  const existing = elementByIdCache.get(id)
+  if (existing) return existing as T
+  const found = document.getElementById(id) as T | null
+  if (found) elementByIdCache.set(id, found)
+  return found
+}
+
+const root = cachedEl('newtab-root')
+const dashboardTrigger = cachedEl('newtab-dashboard-trigger')
+let dashboardOverlay: HTMLElement | null = null
+let dashboardFrame: HTMLIFrameElement | null = null
+let dashboardFallback: HTMLElement | null = null
+let dashboardFallbackCopy: HTMLElement | null = null
+const settingsTrigger = cachedEl('newtab-settings-trigger')
+let settingsDrawer: HTMLElement | null = null
+const settingsBackdrop = cachedEl('newtab-settings-backdrop')
+let settingsClose: HTMLElement | null = null
+let featuredBackgroundModal: HTMLElement | null = null
+let featuredBackgroundModalGrid: HTMLElement | null = null
+let featuredBackgroundModalClose: HTMLElement | null = null
+let featuredBackgroundPicker: HTMLElement | null = null
+let featuredBackgroundRefreshButton: HTMLElement | null = null
+let featuredBackgroundStatus: HTMLElement | null = null
+let featuredBackgroundDisplaySizeInput: HTMLElement | null = null
+let featuredBackgroundPositionXInput: HTMLElement | null = null
+let featuredBackgroundPositionYInput: HTMLElement | null = null
 let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
@@ -643,33 +668,28 @@ let speedDialDragGhost: HTMLElement | null = null
 let speedDialDragGhostFrame = 0
 let folderDragGhost: HTMLElement | null = null
 let folderDragGhostFrame = 0
+let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
 let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
-let searchAutoCenterFrame = 0
 let deferredRenderFrame = 0
 let bookmarkTileRenderVersion = 0
 let settingsDrawerReturnFocusElement: HTMLElement | null = null
 let featuredBackgroundModalReturnFocusElement: HTMLElement | null = null
 let featuredBackgroundPreviewElement: HTMLElement | null = null
 let featuredBackgroundPreviewCard: HTMLElement | null = null
-let featuredBackgroundGalleryObjectUrlByImageUrl = new Map<string, string>()
-let featuredBackgroundGalleryObjectUrlTaskByImageUrl = new Map<string, Promise<string>>()
-let featuredBackgroundGalleryObjectUrlGeneration = 0
-let featuredBackgroundGalleryPreviewObjectUrlByImageUrl = new Map<string, string>()
-let featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl = new Map<string, Promise<string>>()
-let featuredBackgroundGalleryPreviewObjectUrlGeneration = 0
-let featuredBackgroundGalleryCacheTask: Promise<void> | null = null
-let featuredBackgroundGalleryCacheSignature = ''
-let featuredBackgroundGalleryPreviewCacheTask: Promise<void> | null = null
-let featuredBackgroundGalleryPreviewCacheSignature = ''
+let featuredBackgroundCardPreviewObserver: IntersectionObserver | null = null
+let featuredBackgroundCardPreviewObservedRoot: HTMLElement | null = null
+const featuredBackgroundGalleryObjectUrlCache = createBackgroundObjectUrlCache()
+const featuredBackgroundGalleryPreviewObjectUrlCache = createBackgroundObjectUrlCache()
+const featuredBackgroundCardPreviewRegistry = createFeaturedBackgroundCardPreviewRegistry()
 let featuredBackgroundGalleryPreviewObjectUrlWarmTask: Promise<void> | null = null
 let featuredBackgroundGalleryPreviewObjectUrlWarmSignature = ''
+let featuredBackgroundGalleryPreviewWarmTimer = 0
 let instantWallpaperRemoteReadyFallbackTimer = 0
 let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let searchSettingsSettleTimer = 0
 let iconSettingsSaveTimer = 0
-let faviconAccentSaveTimer = 0
 let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
 let folderReorderStatusTimer = 0
@@ -682,6 +702,7 @@ let backgroundStartupCacheRequestId = 0
 let backgroundUrlCacheTaskByUrl = new Map<string, BackgroundUrlCacheTask>()
 let preloadedBackgroundSettings: typeof DEFAULT_BACKGROUND_SETTINGS | null = null
 let backgroundSettingsMutationVersion = 0
+let backgroundUiAppliedFromPreload = false
 let bookmarkDragSlotRects = new Map<string, DOMRect>()
 let bookmarkDragSlotOrderIds: string[] = []
 let speedDialDragSlotRects = new Map<string, DOMRect>()
@@ -694,9 +715,35 @@ let newTabBackgroundReadyRecorded = false
 let newTabRefreshVersion = 0
 let searchIndexBuildVersion = 0
 let searchIndexRebuildScheduled = false
+let lastBuiltSearchIndexCatalogVersion = ''
 let resolveSearchIndexReady: () => void = () => {}
 let searchIndexReadyPromise: Promise<void> = createSearchIndexReadyPromise()
 let lastRenderedContentSignature = ''
+
+function refreshBookmarkCatalog(
+  rootNode: chrome.bookmarks.BookmarkTreeNode | null = state.rootNode
+): BookmarkCatalogSnapshot {
+  const snapshot = buildBookmarkCatalogSnapshot({
+    rootNode,
+    tagIndex: state.bookmarkTagIndex,
+    snapshotState: {
+      settings: null,
+      index: state.searchSnapshotIndex
+    }
+  })
+  state.bookmarkCatalog = snapshot
+  state.folderData = snapshot.extracted
+  return snapshot
+}
+
+function getBookmarkCatalog(
+  rootNode: chrome.bookmarks.BookmarkTreeNode | null = state.rootNode
+): BookmarkCatalogSnapshot {
+  if (state.bookmarkCatalog && state.rootNode === rootNode) {
+    return state.bookmarkCatalog
+  }
+  return refreshBookmarkCatalog(rootNode)
+}
 let lastRenderedShellSignature = ''
 let bookmarkLazyExpansionObserver: IntersectionObserver | null = null
 let bookmarkLazyExpansionTargets = new WeakMap<HTMLElement, BookmarkLazyExpansionTarget>()
@@ -714,7 +761,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeCustomSelects()
   bindEvents()
   hydrateFeaturedBackgroundOptions()
-  renderIconPresetCards()
   void backgroundPreloadPromise
   void hydrateNewTabSavedSearches()
   void refreshNewTab()
@@ -737,6 +783,7 @@ function resetSearchIndexReadyState(): void {
 }
 
 function markSearchIndexDirty({ schedule = true } = {}): void {
+  state.bookmarkCatalog = null
   resetSearchIndexReadyState()
   if (schedule) {
     scheduleNewTabSearchIndexRebuild()
@@ -806,36 +853,9 @@ function recordNewTabBackgroundReady(): void {
 window.addEventListener('pagehide', cleanupNewTabRuntime)
 
 function bindEvents(): void {
-  bindGeneralSettingsEvents()
-  bindFolderSettingsEvents()
-  bindBackgroundSettingsEvents()
-  bindSearchSettingsEvents()
-  bindIconSettingsEvents()
-  bindTimeSettingsEvents()
-  bindSettingsGroupTabs()
-  bindSettingsRangeVisuals()
   dashboardTrigger?.addEventListener('click', (event) => {
     event.preventDefault()
     openDashboardRoute()
-  })
-  dashboardFrame?.addEventListener('error', () => {
-    setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
-  })
-  dashboardFallback?.addEventListener('click', (event) => {
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
-    }
-
-    const actionButton = target.closest<HTMLElement>('[data-dashboard-fallback-action]')
-    const action = actionButton?.getAttribute('data-dashboard-fallback-action')
-    if (action === 'return') {
-      closeDashboardRoute()
-      return
-    }
-    if (action === 'retry') {
-      retryDashboardFrame()
-    }
   })
   window.addEventListener('hashchange', syncDashboardRoute)
   window.addEventListener('message', handleDashboardMessage)
@@ -843,7 +863,6 @@ function bindEvents(): void {
   settingsTrigger?.addEventListener('click', () => {
     openSettingsDrawer()
   })
-  settingsClose?.addEventListener('click', closeSettingsDrawer)
   settingsBackdrop?.addEventListener('click', closeSettingsDrawer)
   document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', (event) => {
@@ -868,7 +887,7 @@ function bindEvents(): void {
     if (!resizeLayoutFrame) {
       resizeLayoutFrame = window.requestAnimationFrame(() => {
         resizeLayoutFrame = 0
-        render()
+        applyIconSettingsLive()
         updateClockText()
       })
     }
@@ -920,9 +939,7 @@ function bindEvents(): void {
   root?.addEventListener('pointerdown', handleSpeedDialPointerDown)
   root?.addEventListener('pointerdown', handleFolderPointerDown)
   root?.addEventListener('pointerdown', handleBookmarkPointerDown)
-  window.addEventListener('pointermove', handleSpeedDialPointerMove)
-  window.addEventListener('pointermove', handleBookmarkPointerMove)
-  window.addEventListener('pointermove', handleFolderPointerMove)
+  window.addEventListener('pointermove', handleNewTabPointerMove)
   window.addEventListener('pointerup', (event) => {
     void finishSpeedDialDrag(event)
     void finishBookmarkDrag(event)
@@ -972,9 +989,9 @@ function bindEvents(): void {
   openAddBookmarkMenu(event.clientX, event.clientY)
 })
 
-  chrome.bookmarks?.onCreated?.addListener(handleBookmarksChanged)
-  chrome.bookmarks?.onRemoved?.addListener(handleBookmarksChanged)
-  chrome.bookmarks?.onChanged?.addListener(handleBookmarksChanged)
+  chrome.bookmarks?.onCreated?.addListener(handleBookmarkCreated)
+  chrome.bookmarks?.onRemoved?.addListener(handleBookmarkRemoved)
+  chrome.bookmarks?.onChanged?.addListener(handleBookmarkChanged)
   chrome.bookmarks?.onMoved?.addListener(handleBookmarkMoved)
 
   window.clearTimeout(clockTimer)
@@ -1130,146 +1147,122 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
 }
 
 function bindTimeSettingsEvents(): void {
-  document.getElementById('time-enabled')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-show-seconds')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-hour12')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-date-format')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-time-zone')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-display-mode')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-density')?.addEventListener('change', handleTimeSettingsChange)
-  document.getElementById('time-clock-size')?.addEventListener('input', handleTimeSettingsChange)
+  cachedEl('time-enabled')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-show-seconds')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-hour12')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-date-format')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-time-zone')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-display-mode')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-density')?.addEventListener('change', handleTimeSettingsChange)
+  cachedEl('time-clock-size')?.addEventListener('input', handleTimeSettingsChange)
 }
 
 function bindBackgroundSettingsEvents(): void {
-  document.getElementById('background-type')?.addEventListener('change', handleBackgroundSettingsChange)
-  document.getElementById('background-featured-id')?.addEventListener('change', handleBackgroundSettingsChange)
-  featuredBackgroundDisplayModeInput?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
-  featuredBackgroundDisplaySizeInput?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
-  featuredBackgroundPositionYInput?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
-  featuredBackgroundDisplaySizeInput?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
-  featuredBackgroundPositionYInput?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
-  featuredBackgroundPicker?.addEventListener('click', () => {
-    void openFeaturedBackgroundPicker()
-  })
-  featuredBackgroundRefreshButton?.addEventListener('click', () => {
-    void refreshFeaturedBackgroundGallery()
-  })
-  featuredBackgroundModalClose?.addEventListener('click', handleFeaturedBackgroundModalCloseRequest)
-  featuredBackgroundModalGrid?.addEventListener('scroll', () => {
-    clearFeaturedBackgroundHoverPreview()
-  })
-  featuredBackgroundModal?.addEventListener('pointerdown', handleFeaturedBackgroundModalPointerDown, true)
-  document.getElementById('background-color')?.addEventListener('input', handleBackgroundSettingsChange)
-  const backgroundUrlInput = document.getElementById('background-url')
+  cachedEl('background-type')?.addEventListener('change', handleBackgroundSettingsChange)
+  cachedEl('background-featured-id')?.addEventListener('change', handleBackgroundSettingsChange)
+  cachedEl('background-featured-display-size')?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
+  cachedEl('background-featured-position-x')?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
+  cachedEl('background-featured-position-y')?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
+  cachedEl('background-featured-display-size')?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
+  cachedEl('background-featured-position-x')?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
+  cachedEl('background-featured-position-y')?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
+  cachedEl('background-color')?.addEventListener('input', handleBackgroundSettingsChange)
+  const backgroundUrlInput = cachedEl('background-url')
   backgroundUrlInput?.addEventListener('input', handleBackgroundSettingsChange)
   backgroundUrlInput?.addEventListener('change', () => {
     void handleBackgroundUrlCommit()
   })
-  document.getElementById('background-mask-enabled')?.addEventListener('change', handleBackgroundSettingsChange)
-  document.getElementById('background-mask-style')?.addEventListener('change', handleBackgroundSettingsChange)
-  document.getElementById('background-mask-blur')?.addEventListener('input', handleBackgroundSettingsChange)
-  document.getElementById('background-image-picker')?.addEventListener('click', () => {
-    const input = document.getElementById('background-image-file')
+  cachedEl('background-mask-enabled')?.addEventListener('change', handleBackgroundSettingsChange)
+  cachedEl('background-mask-style')?.addEventListener('change', handleBackgroundSettingsChange)
+  cachedEl('background-mask-blur')?.addEventListener('input', handleBackgroundSettingsChange)
+  cachedEl('background-image-picker')?.addEventListener('click', () => {
+    const input = cachedEl('background-image-file')
     if (input instanceof HTMLInputElement) {
       input.click()
     }
   })
-  document.getElementById('background-video-picker')?.addEventListener('click', () => {
-    const input = document.getElementById('background-video-file')
+  cachedEl('background-video-picker')?.addEventListener('click', () => {
+    const input = cachedEl('background-video-file')
     if (input instanceof HTMLInputElement) {
       input.click()
     }
   })
-  document.getElementById('background-image-file')?.addEventListener('change', (event) => {
+  cachedEl('background-image-file')?.addEventListener('change', (event) => {
     void handleBackgroundFileChange('image', event)
   })
-  document.getElementById('background-video-file')?.addEventListener('change', (event) => {
+  cachedEl('background-video-file')?.addEventListener('change', (event) => {
     void handleBackgroundFileChange('video', event)
   })
 }
 
 function bindSearchSettingsEvents(): void {
-  document.getElementById('search-enabled')?.addEventListener('change', handleSearchSettingsChange)
-  document.getElementById('search-web-enabled')?.addEventListener('change', handleSearchSettingsChange)
-  document.getElementById('search-open-new-tab')?.addEventListener('change', handleSearchSettingsChange)
-  document.getElementById('search-engine')?.addEventListener('change', handleSearchSettingsChange)
-  document.getElementById('search-auto-vertical-center')?.addEventListener('change', handleSearchSettingsChange)
+  cachedEl('search-enabled')?.addEventListener('change', handleSearchSettingsChange)
+  cachedEl('search-web-enabled')?.addEventListener('change', handleSearchSettingsChange)
+  cachedEl('search-open-new-tab')?.addEventListener('change', handleSearchSettingsChange)
+  cachedEl('search-engine')?.addEventListener('change', handleSearchSettingsChange)
+  cachedEl('search-auto-vertical-center')?.addEventListener('change', handleSearchSettingsChange)
   document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]').forEach((input) => {
     input.addEventListener('change', handleSearchSettingsChange)
   })
-  document.getElementById('search-placeholder')?.addEventListener('input', handleSearchSettingsChange)
-  document.getElementById('search-width')?.addEventListener('input', handleSearchSettingsPreview)
-  document.getElementById('search-height')?.addEventListener('input', handleSearchSettingsPreview)
-  document.getElementById('search-offset-y')?.addEventListener('input', handleSearchSettingsPreview)
-  document.getElementById('search-background')?.addEventListener('input', handleSearchSettingsPreview)
-  document.getElementById('search-width')?.addEventListener('change', handleSearchSettingsCommit)
-  document.getElementById('search-height')?.addEventListener('change', handleSearchSettingsCommit)
-  document.getElementById('search-offset-y')?.addEventListener('change', handleSearchSettingsCommit)
-  document.getElementById('search-background')?.addEventListener('change', handleSearchSettingsCommit)
+  cachedEl('search-placeholder')?.addEventListener('input', handleSearchSettingsChange)
+  cachedEl('search-width')?.addEventListener('input', handleSearchSettingsPreview)
+  cachedEl('search-height')?.addEventListener('input', handleSearchSettingsPreview)
+  cachedEl('search-offset-y')?.addEventListener('input', handleSearchSettingsPreview)
+  cachedEl('search-background')?.addEventListener('input', handleSearchSettingsPreview)
+  cachedEl('search-width')?.addEventListener('change', handleSearchSettingsCommit)
+  cachedEl('search-height')?.addEventListener('change', handleSearchSettingsCommit)
+  cachedEl('search-offset-y')?.addEventListener('change', handleSearchSettingsCommit)
+  cachedEl('search-background')?.addEventListener('change', handleSearchSettingsCommit)
 }
 
 function bindIconSettingsEvents(): void {
-  document.getElementById('icon-page-width')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-tile-width')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-shell-size')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-column-gap')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-row-gap')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-folder-gap')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-columns')?.addEventListener('input', handleIconSettingsChange)
-  document.getElementById('icon-vertical-center')?.addEventListener('change', handleIconSettingsChange)
-  document.getElementById('icon-show-titles')?.addEventListener('change', handleIconSettingsChange)
-  document.getElementById('icon-layout-control')?.addEventListener('click', handleIconLayoutModeClick)
-  document.getElementById('icon-title-lines-control')?.addEventListener('click', handleIconTitleLinesClick)
-  document.getElementById('icon-advanced-toggle')?.addEventListener('click', toggleIconAdvanced)
-  document.getElementById('icon-reset-defaults')?.addEventListener('click', resetIconSettingsToDefaults)
-  document.getElementById('icon-preset-row')?.addEventListener('click', handlePresetCardClick)
+  cachedEl('icon-page-width')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-tile-width')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-shell-size')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-column-gap')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-row-gap')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-folder-gap')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-columns')?.addEventListener('input', handleIconSettingsChange)
+  cachedEl('icon-vertical-center')?.addEventListener('change', handleIconSettingsChange)
+  cachedEl('icon-show-titles')?.addEventListener('change', handleIconSettingsChange)
+  cachedEl('icon-layout-control')?.addEventListener('click', handleIconLayoutModeClick)
+  cachedEl('icon-title-lines-control')?.addEventListener('click', handleIconTitleLinesClick)
+  cachedEl('icon-advanced-toggle')?.addEventListener('click', toggleIconAdvanced)
+  cachedEl('icon-reset-defaults')?.addEventListener('click', resetIconSettingsToDefaults)
+  cachedEl('icon-preset-row')?.addEventListener('click', handlePresetCardClick)
 }
 
 function bindGeneralSettingsEvents(): void {
-  document
-    .getElementById('general-hide-settings-trigger')
+  cachedEl('general-hide-settings-trigger')
     ?.addEventListener('change', handleGeneralSettingsChange)
-  document
-    .getElementById('general-show-quick-access')
+  cachedEl('general-show-quick-access')
     ?.addEventListener('change', handleGeneralSettingsChange)
-  document
-    .getElementById('general-open-bookmarks-new-tab')
+  cachedEl('general-open-bookmarks-new-tab')
     ?.addEventListener('change', handleGeneralSettingsChange)
 }
 
 function bindFolderSettingsEvents(): void {
-  document
-    .getElementById('folder-hide-names')
+  cachedEl('folder-hide-names')
     ?.addEventListener('change', handleFolderSettingsChange)
-  document
-    .getElementById('folder-show-source-navigation')
+  cachedEl('folder-show-source-navigation')
     ?.addEventListener('change', handleGeneralSettingsChange)
-  document
-    .getElementById('folder-candidates-toggle')
+  cachedEl('folder-candidates-toggle')
     ?.addEventListener('click', toggleFolderCandidates)
-  document
-    .getElementById('folder-candidate-search')
+  cachedEl('folder-candidate-search')
     ?.addEventListener('input', handleFolderCandidateSearch)
-  document
-    .getElementById('folder-candidate-search')
+  cachedEl('folder-candidate-search')
     ?.addEventListener('keydown', handleFolderCandidateSearchKeydown)
-  document
-    .getElementById('folder-candidate-list')
+  cachedEl('folder-candidate-list')
     ?.addEventListener('click', handleFolderCandidateClick)
-  document
-    .getElementById('folder-candidate-list')
+  cachedEl('folder-candidate-list')
     ?.addEventListener('keydown', handleFolderCandidateListKeydown)
-  document
-    .getElementById('folder-candidate-list')
+  cachedEl('folder-candidate-list')
     ?.addEventListener('focusin', handleFolderCandidateFocus)
-  document
-    .getElementById('folder-selected-list')
+  cachedEl('folder-selected-list')
     ?.addEventListener('click', handleSelectedFolderClick)
-  document
-    .getElementById('newtab-speed-dial-setting')
+  cachedEl('newtab-speed-dial-setting')
     ?.addEventListener('change', handleModuleSettingsChange)
-  document
-    .getElementById('newtab-speed-dial-setting')
+  cachedEl('newtab-speed-dial-setting')
     ?.addEventListener('click', handleModuleSettingsClick)
 }
 
@@ -1370,7 +1363,7 @@ function toggleFolderCandidates(): void {
   syncFolderSettingsControls()
   if (state.folderCandidatesExpanded) {
     window.requestAnimationFrame(() => {
-      const searchInput = document.getElementById('folder-candidate-search')
+      const searchInput = cachedEl('folder-candidate-search')
       if (searchInput instanceof HTMLInputElement) {
         searchInput.focus({ preventScroll: true })
       }
@@ -1436,7 +1429,7 @@ function handleFolderCandidateListKeydown(event: KeyboardEvent): void {
 
   event.preventDefault()
   if (event.key === 'Escape') {
-    document.getElementById('folder-candidate-search')?.focus()
+    cachedEl('folder-candidate-search')?.focus()
     return
   }
 
@@ -1450,7 +1443,7 @@ function handleFolderCandidateListKeydown(event: KeyboardEvent): void {
 }
 
 function getFolderCandidateOptionButtons(): HTMLButtonElement[] {
-  const candidateList = document.getElementById('folder-candidate-list')
+  const candidateList = cachedEl('folder-candidate-list')
   if (!(candidateList instanceof HTMLElement)) {
     return []
   }
@@ -1586,7 +1579,7 @@ async function updateSelectedFolders(
     focusCandidateId = ''
   } = {}
 ): Promise<void> {
-  const candidateList = document.getElementById('folder-candidate-list')
+  const candidateList = cachedEl('folder-candidate-list')
   const previousScrollTop = preserveCandidateScroll && candidateList instanceof HTMLElement
     ? candidateList.scrollTop
     : 0
@@ -1624,7 +1617,7 @@ async function updateSelectedFolders(
 
   if (preserveCandidateScroll || restoreCandidateFocus) {
     window.requestAnimationFrame(() => {
-      const nextList = document.getElementById('folder-candidate-list')
+      const nextList = cachedEl('folder-candidate-list')
       if (nextList instanceof HTMLElement) {
         nextList.scrollTop = previousScrollTop
       }
@@ -1724,7 +1717,7 @@ function applySearchSettingsLive(): void {
     if (slot) {
       slot.dataset.searchAutoVerticalCenter = 'true'
     }
-    scheduleSearchAutoVerticalCenterUpdate()
+    scheduleAdaptiveNewTabLayoutUpdate()
   } else if (slot) {
     slot.dataset.searchAutoVerticalCenter = 'false'
     slot.style.setProperty('--search-offset-y', `${offsetY}px`)
@@ -1885,8 +1878,86 @@ function syncActiveSettingsGroupControls(group: SettingsDrawerSection = state.ac
   }
 }
 
+let settingsDrawerMounted = false
+let settingsDrawerMountPromise: Promise<void> | null = null
+
+function ensureSettingsDrawerMounted(): Promise<void> {
+  if (settingsDrawerMounted) return Promise.resolve()
+  if (settingsDrawerMountPromise) return settingsDrawerMountPromise
+  settingsDrawerMountPromise = (async () => {
+    const mod = await import('./settings-drawer-mount.js')
+    const result = mod.mountSettingsDrawer({
+      onCloseClick: closeSettingsDrawer,
+      onFeaturedPickerClick: () => {
+        void openFeaturedBackgroundPicker()
+      },
+      bindGeneralSettingsEvents,
+      bindFolderSettingsEvents,
+      bindBackgroundSettingsEvents,
+      bindSearchSettingsEvents,
+      bindIconSettingsEvents,
+      bindTimeSettingsEvents,
+      bindSettingsGroupTabs,
+      bindSettingsRangeVisuals
+    })
+    if (!result) return
+    settingsDrawerMounted = true
+    settingsDrawer = result.drawer
+    settingsClose = result.close
+    featuredBackgroundPicker = result.featuredPicker
+    featuredBackgroundDisplaySizeInput = result.featuredDisplaySize
+    featuredBackgroundPositionXInput = result.featuredPositionX
+    featuredBackgroundPositionYInput = result.featuredPositionY
+    if (settingsDrawer) {
+      initializeCustomSelects(settingsDrawer)
+    }
+    hydrateFeaturedBackgroundOptions()
+    syncBackgroundSettingsControls()
+    syncSearchSettingsControls()
+    syncGeneralSettingsControls()
+    syncFolderSettingsControls()
+    syncIconSettingsControls()
+    syncTimeSettingsControls()
+  })()
+  return settingsDrawerMountPromise
+}
+
 function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
+  void ensureSettingsDrawerMounted().then(() => {
+    const firstOpenAfterMount = !isSettingsDrawerOpen()
+    if (firstOpenAfterMount) {
+      primeSettingsDrawerOpenTransition()
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          runOpenSettingsDrawer(options)
+        })
+      })
+      return
+    }
+    runOpenSettingsDrawer(options)
+  })
+}
+
+function primeSettingsDrawerOpenTransition(): void {
+  if (settingsDrawer) {
+    cancelExitMotion(settingsDrawer)
+    settingsDrawer.classList.remove('open')
+    settingsDrawer.classList.add('is-opening')
+    settingsDrawer.setAttribute('aria-hidden', 'true')
+    settingsDrawer.removeAttribute('inert')
+    settingsDrawer.getBoundingClientRect()
+  }
+  if (settingsBackdrop) {
+    cancelExitMotion(settingsBackdrop)
+    settingsBackdrop.classList.remove('open')
+    settingsBackdrop.classList.add('is-opening')
+    settingsBackdrop.getBoundingClientRect()
+  }
+}
+
+function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
   measureNow('newtab.openSettingsDrawer', () => {
+    renderIconPresetCards()
     const focusFirstControl = options?.focusFirstControl !== false
     setActiveSettingsGroup(options?.section || state.activeSettingsGroup || 'source', { scrollToTop: false })
     settingsDrawerReturnFocusElement = document.activeElement instanceof HTMLElement
@@ -1903,6 +1974,8 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: S
     scheduleAdaptiveNewTabLayoutUpdate()
     settingsDrawer?.classList.add('open')
     settingsBackdrop?.classList.add('open')
+    settingsDrawer?.classList.remove('is-opening')
+    settingsBackdrop?.classList.remove('is-opening')
     settingsDrawer?.setAttribute('aria-hidden', 'false')
     settingsDrawer?.removeAttribute('inert')
     settingsTrigger?.setAttribute('aria-expanded', 'true')
@@ -1935,11 +2008,11 @@ function focusSettingsSection(section: SettingsDrawerSection): void {
     modules: 'settings-speed-dial-title',
     advanced: 'settings-general-title'
   }
-  const targetSection = document.getElementById(titleIdBySection[section])?.closest('.settings-section')
+  const targetSection = cachedEl(titleIdBySection[section])?.closest('.settings-section')
   targetSection?.scrollIntoView({ block: 'start', behavior: 'smooth' })
 
   if (section === 'source') {
-    const searchInput = document.getElementById('folder-candidate-search')
+    const searchInput = cachedEl('folder-candidate-search')
     if (searchInput instanceof HTMLInputElement) {
       searchInput.focus()
     }
@@ -1994,6 +2067,8 @@ function closeSettingsDrawer(): void {
 
   settingsDrawer?.classList.remove('open')
   settingsBackdrop?.classList.remove('open')
+  settingsDrawer?.classList.remove('is-opening')
+  settingsBackdrop?.classList.remove('is-opening')
   settingsDrawer?.classList.add('is-closing')
   settingsBackdrop?.classList.add('is-closing')
   settingsDrawer?.setAttribute('aria-hidden', 'true')
@@ -2311,6 +2386,12 @@ function beginSpeedDialDrag(): void {
   window.requestAnimationFrame(() => {
     document.body.classList.remove('bookmark-drag-preview-initializing')
   })
+}
+
+function handleNewTabPointerMove(event: PointerEvent): void {
+  handleSpeedDialPointerMove(event)
+  handleBookmarkPointerMove(event)
+  handleFolderPointerMove(event)
 }
 
 function handleSpeedDialPointerMove(event: PointerEvent): void {
@@ -3267,7 +3348,8 @@ function syncPersistedBookmarkOrderInState(
   }
 
   folderNode.children = nextChildren
-  state.folderData = extractBookmarkData(state.rootNode)
+  state.bookmarkCatalog = null
+  state.folderData = refreshBookmarkCatalog(state.rootNode).extracted
   state.folderNodeMap = buildFolderNodeMap(state.rootNode)
   state.folderSections = buildNewTabFolderSections(
     state.rootNode,
@@ -3341,6 +3423,17 @@ function beginFolderDrag(): void {
   state.folderDragLongPressTimer = 0
   state.folderDragOriginalOrderIds = state.folderSections.map((section) => section.id)
   state.folderDragOriginalSections = [...state.folderSections]
+  folderDragSectionRectSnapshot = createFolderDragSectionRectSnapshot(
+    Array.from(document.querySelectorAll<HTMLElement>('.bookmark-folder-section[data-folder-section-id]'))
+      .map((section) => {
+        const rect = section.getBoundingClientRect()
+        return {
+          id: String(section.dataset.folderSectionId || ''),
+          top: rect.top,
+          height: rect.height
+        }
+      })
+  )
   state.folderDragSuppressClick = true
   document.body.classList.add('folder-order-dragging')
   const sourceHeader = getActiveFolderDragHeader()
@@ -3445,6 +3538,7 @@ function clearFolderDragState({ keepSuppressClick = false } = {}): void {
   state.folderDragOffsetY = 0
   state.folderDragOriginalOrderIds = []
   state.folderDragOriginalSections = []
+  folderDragSectionRectSnapshot = null
   removeFolderDragGhost()
   document.body.classList.remove('folder-order-dragging')
 
@@ -3524,19 +3618,15 @@ function removeFolderDragGhost(): void {
   folderDragGhost = null
 }
 
-function getFolderSectionRects(): Map<string, DOMRect> {
-  const rects = new Map<string, DOMRect>()
-  for (const section of document.querySelectorAll<HTMLElement>('.bookmark-folder-section[data-folder-section-id]')) {
-    const folderId = String(section.dataset.folderSectionId || '')
-    if (folderId) {
-      rects.set(folderId, section.getBoundingClientRect())
-    }
-  }
-  return rects
+function getFolderSectionRects(): FolderDragSectionRectSnapshot {
+  const sections = Array.from(
+    document.querySelectorAll<HTMLElement>('.bookmark-folder-section[data-folder-section-id]')
+  )
+  return createFolderDragSectionRectSnapshotFromElements(sections)
 }
 
 function renderWithFolderFlip(): void {
-  const previousRects = getFolderSectionRects()
+  const previousRects = folderDragSectionRectSnapshot || getFolderSectionRects()
   render()
   updateClockText()
 
@@ -3544,26 +3634,18 @@ function renderWithFolderFlip(): void {
     return
   }
 
-  for (const section of document.querySelectorAll<HTMLElement>('.bookmark-folder-section[data-folder-section-id]')) {
-    const folderId = String(section.dataset.folderSectionId || '')
-    if (!folderId || folderId === state.draggingFolderId) {
-      continue
-    }
-
-    const previousRect = previousRects.get(folderId)
-    if (!previousRect) {
-      continue
-    }
-
-    const currentRect = section.getBoundingClientRect()
-    const deltaY = previousRect.top - currentRect.top
-    if (Math.abs(deltaY) < 0.5) {
-      continue
-    }
-
-    section.animate(
+  const currentSnapshot = projectFolderDragSectionRectSnapshot(previousRects, state.folderSections.map((section) => section.id))
+  for (const delta of getFolderFlipDeltasFromSnapshots(
+    previousRects,
+    currentSnapshot,
+    state.draggingFolderId
+  )) {
+    const section = document.querySelector<HTMLElement>(
+      `.bookmark-folder-section[data-folder-section-id="${CSS.escape(delta.folderId)}"]`
+    )
+    section?.animate(
       [
-        { transform: `translate3d(0, ${deltaY}px, 0)` },
+        { transform: `translate3d(0, ${delta.deltaY}px, 0)` },
         { transform: 'translate3d(0, 0, 0)' }
       ],
       {
@@ -3572,38 +3654,12 @@ function renderWithFolderFlip(): void {
       }
     )
   }
+  folderDragSectionRectSnapshot = currentSnapshot
 }
 
 function getFolderInsertIndex(clientY: number): number {
-  const sections = Array.from(document.querySelectorAll<HTMLElement>('.bookmark-folder-section[data-folder-section-id]'))
-  if (!sections.length) {
-    return -1
-  }
-
-  let closestSection: HTMLElement | null = null
-  let closestDistance = Number.POSITIVE_INFINITY
-  for (const section of sections) {
-    const rect = section.getBoundingClientRect()
-    const centerY = rect.top + rect.height / 2
-    const distance = Math.abs(clientY - centerY)
-    if (distance < closestDistance) {
-      closestDistance = distance
-      closestSection = section
-    }
-  }
-
-  if (!closestSection) {
-    return -1
-  }
-
-  const folderId = String(closestSection.dataset.folderSectionId || '')
-  const targetIndex = state.folderSections.findIndex((section) => section.id === folderId)
-  if (targetIndex < 0) {
-    return -1
-  }
-
-  const rect = closestSection.getBoundingClientRect()
-  return targetIndex + (clientY > rect.top + rect.height / 2 ? 1 : 0)
+  const snapshot = folderDragSectionRectSnapshot || getFolderSectionRects()
+  return getFolderInsertIndexFromSnapshot(clientY, snapshot)
 }
 
 function moveDraggedFolderInState(insertIndex: number): boolean {
@@ -3665,20 +3721,461 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.every((value, index) => value === right[index])
 }
 
-function handleBookmarksChanged(): void {
+function isFolderRelevantToNewTab(folderId: string | null | undefined): boolean {
+  const id = String(folderId || '').trim()
+  if (!id) {
+    return true
+  }
+  const selectedIds = state.folderSettings?.selectedFolderIds
+  if (!selectedIds || !selectedIds.length) {
+    return true
+  }
+  if (!state.folderNodeMap || state.folderNodeMap.size === 0) {
+    return true
+  }
+  const selectedSet = new Set(selectedIds.map((value) => String(value)))
+  let current = state.folderNodeMap.get(id) || null
+  let guard = 0
+  while (current && guard < 256) {
+    if (selectedSet.has(String(current.id))) {
+      return true
+    }
+    const parentId = current.parentId ? String(current.parentId) : ''
+    if (!parentId) {
+      break
+    }
+    current = state.folderNodeMap.get(parentId) || null
+    guard += 1
+  }
+  return false
+}
+
+function handleBookmarkCreated(
+  _bookmarkId: string,
+  bookmark: chrome.bookmarks.BookmarkTreeNode
+): void {
   if (state.reorderingBookmarks) {
     return
   }
 
-  scheduleBookmarkChangeRefresh()
+  const parentId = bookmark && bookmark.parentId ? String(bookmark.parentId) : ''
+  const createdBookmark = Boolean(bookmark?.url)
+  const parentRelevant = !parentId || isFolderRelevantToNewTab(parentId)
+  if (!parentRelevant) {
+    return
+  }
+
+  const insertedLocally = createdBookmark ? insertBookmarkInPlace(bookmark) : false
+  const result = getBookmarkCreationIncrementalResult({
+    createdBookmark,
+    parentRelevant,
+    insertedLocally
+  })
+  if (result.shouldRefresh) {
+    scheduleBookmarkChangeRefresh()
+  }
 }
 
-function handleBookmarkMoved(bookmarkId: string): void {
+function handleBookmarkChanged(bookmarkId: string, changeInfo: chrome.bookmarks.BookmarkChangeInfo): void {
+  if (state.reorderingBookmarks) {
+    return
+  }
+
+  const id = String(bookmarkId || '').trim()
+  if (!id) {
+    scheduleBookmarkChangeRefresh()
+    return
+  }
+
+  if (!patchBookmarkInPlace(id, changeInfo)) {
+    scheduleBookmarkChangeRefresh()
+  }
+}
+
+function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boolean {
+  const bookmarkId = String(bookmark?.id || '').trim()
+  const parentId = String(bookmark?.parentId || '').trim()
+  if (!bookmarkId || !bookmark?.url || !parentId) {
+    return false
+  }
+
+  const targetSection = state.folderSections.find((section) => section.id === parentId)
+  const parentNode = state.folderNodeMap.get(parentId) || targetSection?.node || null
+  if (!targetSection || !parentNode) {
+    return false
+  }
+
+  const existingChildren = Array.isArray(parentNode.children) ? parentNode.children : []
+  if (!existingChildren.some((child) => String(child.id) === bookmarkId)) {
+    const nextChildren = [...existingChildren]
+    const insertIndex = typeof bookmark.index === 'number'
+      ? Math.max(0, Math.min(bookmark.index, nextChildren.length))
+      : nextChildren.length
+    nextChildren.splice(insertIndex, 0, bookmark)
+    parentNode.children = nextChildren
+  }
+
+  state.folderSections = state.folderSections.map((section) => {
+    if (section.id !== parentId) {
+      return section
+    }
+
+    const nextBookmarks = section.bookmarks.some((item) => String(item.id) === bookmarkId)
+      ? section.bookmarks
+      : insertBookmarkByIndex(section.bookmarks, bookmark)
+    return {
+      ...section,
+      bookmarks: nextBookmarks,
+      directBookmarkCount: nextBookmarks.length,
+      totalBookmarkCount: Math.max(section.totalBookmarkCount + 1, nextBookmarks.length)
+    }
+  })
+  state.bookmarks = getAllSectionBookmarks()
+  state.bookmarkMap = new Map(state.bookmarks.map((item) => [String(item.id), item]))
+  state.allBookmarks = buildAllBookmarks(state.rootNode)
+  state.allBookmarkMap = new Map(state.allBookmarks.map((item) => [String(item.id), item]))
+  invalidateQuickAccessCache()
+  markSearchIndexDirty({ schedule: true })
+  renderBookmarkSections()
+  return true
+}
+
+function insertBookmarkByIndex(
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
+  bookmark: chrome.bookmarks.BookmarkTreeNode
+): chrome.bookmarks.BookmarkTreeNode[] {
+  const nextBookmarks = bookmarks.filter((item) => String(item.id) !== String(bookmark.id))
+  const insertIndex = typeof bookmark.index === 'number'
+    ? Math.max(0, Math.min(bookmark.index, nextBookmarks.length))
+    : nextBookmarks.length
+  nextBookmarks.splice(insertIndex, 0, bookmark)
+  return nextBookmarks
+}
+
+function patchBookmarkInPlace(
+  bookmarkId: string,
+  changeInfo: chrome.bookmarks.BookmarkChangeInfo
+): boolean {
+  const node = state.allBookmarkMap.get(bookmarkId) || state.bookmarkMap.get(bookmarkId)
+  if (!node || !node.url) {
+    return false
+  }
+
+  if (changeInfo.title !== undefined) {
+    node.title = changeInfo.title
+  }
+  if (changeInfo.url !== undefined) {
+    node.url = changeInfo.url
+  }
+
+  const titleForDisplay = String(node.title || '').trim() || String(node.url || '')
+  const tiles = document.querySelectorAll<HTMLAnchorElement>(
+    `.bookmark-tile[data-bookmark-id="${CSS.escape(bookmarkId)}"]`
+  )
+  tiles.forEach((tile) => {
+    if (changeInfo.url !== undefined) {
+      tile.href = changeInfo.url
+    }
+    if (changeInfo.title !== undefined) {
+      const label = tile.querySelector<HTMLElement>('.bookmark-title')
+      if (label) {
+        label.textContent = titleForDisplay
+      }
+      const fallback = tile.querySelector<HTMLElement>('.bookmark-fallback')
+      if (fallback) {
+        fallback.textContent = getFallbackLabel(titleForDisplay)
+      }
+    }
+  })
+
+  const speedDialCards = document.querySelectorAll<HTMLAnchorElement>(
+    `.newtab-speed-dial-card[data-speed-dial-bookmark-id="${CSS.escape(bookmarkId)}"]`
+  )
+  speedDialCards.forEach((card) => {
+    if (changeInfo.url !== undefined) {
+      card.href = changeInfo.url
+    }
+    if (changeInfo.title !== undefined) {
+      const strong = card.querySelector<HTMLElement>('.newtab-speed-dial-copy > strong')
+      if (strong) {
+        strong.textContent = titleForDisplay
+      }
+    }
+  })
+
+  invalidateQuickAccessCache()
+  return tiles.length > 0 || speedDialCards.length > 0
+}
+
+function invalidateQuickAccessCache(): void {
+  quickAccessViewModelCache = null
+}
+
+function handleBookmarkRemoved(bookmarkId: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo): void {
+  if (state.reorderingBookmarks) {
+    return
+  }
+
+  const removedBookmark = Boolean(removeInfo.node?.url)
+  if (!removedBookmark) {
+    scheduleBookmarkChangeRefresh()
+    return
+  }
+
+  const removedLocally = removeBookmarkTilesInPlace(String(bookmarkId || ''))
+  const result = getBookmarkRemovalIncrementalResult({
+    removedBookmark,
+    removedLocally
+  })
+  if (result.shouldRefresh) {
+    scheduleBookmarkChangeRefresh()
+  }
+}
+
+function removeBookmarkTilesInPlace(bookmarkId: string): boolean {
+  if (!bookmarkId) {
+    return false
+  }
+
+  let removedAny = false
+  document.querySelectorAll<HTMLElement>(
+    `.bookmark-tile[data-bookmark-id="${CSS.escape(bookmarkId)}"]`
+  ).forEach((tile) => {
+    tile.remove()
+    removedAny = true
+  })
+  document.querySelectorAll<HTMLElement>(
+    `.newtab-speed-dial-card[data-speed-dial-bookmark-id="${CSS.escape(bookmarkId)}"]`
+  ).forEach((card) => {
+    card.remove()
+    removedAny = true
+  })
+
+  forgetBookmarkFromLocalMaps(bookmarkId)
+
+  if (removedAny) {
+    invalidateQuickAccessCache()
+    markSearchIndexDirty({ schedule: true })
+    renderBookmarkSections()
+    postDashboardSpeedDialState()
+  }
+  return removedAny
+}
+
+function forgetBookmarkFromLocalMaps(bookmarkId: string): void {
+  const removedVisible = state.bookmarkMap.delete(bookmarkId)
+  const removedAny = state.allBookmarkMap.delete(bookmarkId) || removedVisible
+  if (removedAny) {
+    state.bookmarks = state.bookmarks.filter((bookmark) => String(bookmark.id) !== bookmarkId)
+    state.allBookmarks = state.allBookmarks.filter((bookmark) => String(bookmark.id) !== bookmarkId)
+    state.folderSections = state.folderSections.map((section) => {
+      if (!section.bookmarks.some((bookmark) => String(bookmark.id) === bookmarkId)) {
+        return section
+      }
+      const nodeChildren = Array.isArray(section.node.children)
+        ? section.node.children.filter((child) => String(child.id) !== bookmarkId)
+        : section.node.children
+      if (Array.isArray(section.node.children)) {
+        section.node.children = nodeChildren
+      }
+      return {
+        ...section,
+        bookmarks: section.bookmarks.filter((bookmark) => String(bookmark.id) !== bookmarkId),
+        directBookmarkCount: Math.max(0, section.directBookmarkCount - 1),
+        totalBookmarkCount: Math.max(0, section.totalBookmarkCount - 1)
+      }
+    })
+    state.faviconRefreshTokens.delete(bookmarkId)
+  }
+}
+
+function handleBookmarkMoved(
+  bookmarkId: string,
+  moveInfo?: chrome.bookmarks.BookmarkMoveInfo
+): void {
   if (isSelfBookmarkMoveEvent(bookmarkId)) {
     return
   }
 
-  handleBookmarksChanged()
+  const newParentRelevant = moveInfo
+    ? isFolderRelevantToNewTab(moveInfo.parentId)
+    : true
+  const oldParentRelevant = moveInfo
+    ? isFolderRelevantToNewTab(moveInfo.oldParentId)
+    : true
+  if (moveInfo && !newParentRelevant && !oldParentRelevant) {
+    return
+  }
+
+  const movedLocally = moveInfo
+    ? moveBookmarkInPlace(String(bookmarkId || ''), moveInfo, {
+        oldParentRelevant,
+        newParentRelevant
+      })
+    : false
+  const result = getBookmarkMoveIncrementalResult({
+    movedBookmark: Boolean(getBookmarkById(bookmarkId)?.url),
+    oldParentRelevant,
+    newParentRelevant,
+    movedLocally
+  })
+  if (result.shouldRefresh) {
+    scheduleBookmarkChangeRefresh()
+  }
+}
+
+function moveBookmarkInPlace(
+  bookmarkId: string,
+  moveInfo: chrome.bookmarks.BookmarkMoveInfo,
+  relevance: {
+    oldParentRelevant: boolean
+    newParentRelevant: boolean
+  }
+): boolean {
+  const normalizedBookmarkId = String(bookmarkId || '').trim()
+  const oldParentId = String(moveInfo.oldParentId || '').trim()
+  const newParentId = String(moveInfo.parentId || '').trim()
+  if (!normalizedBookmarkId || !oldParentId || !newParentId) {
+    return false
+  }
+
+  const movedNode = state.allBookmarkMap.get(normalizedBookmarkId) || state.bookmarkMap.get(normalizedBookmarkId) || null
+  if (!movedNode?.url) {
+    return false
+  }
+
+  const oldParentNode = state.folderNodeMap.get(oldParentId) || null
+  const newParentNode = state.folderNodeMap.get(newParentId) || null
+  if (!oldParentNode || !newParentNode) {
+    return false
+  }
+
+  const oldSection = state.folderSections.find((section) => section.id === oldParentId) || null
+  const newSection = state.folderSections.find((section) => section.id === newParentId) || null
+  if (
+    (relevance.oldParentRelevant && !oldSection) ||
+    (relevance.newParentRelevant && !newSection)
+  ) {
+    return false
+  }
+  if (
+    oldSection &&
+    !oldSection.bookmarks.some((bookmark) => String(bookmark.id) === normalizedBookmarkId)
+  ) {
+    return false
+  }
+  if (
+    newSection &&
+    newSection !== oldSection &&
+    newSection.bookmarks.some((bookmark) => String(bookmark.id) === normalizedBookmarkId)
+  ) {
+    return false
+  }
+
+  if (!removeBookmarkFromParentNode(oldParentNode, normalizedBookmarkId)) {
+    return false
+  }
+
+  const nextBookmark: chrome.bookmarks.BookmarkTreeNode = {
+    ...movedNode,
+    parentId: newParentId
+  }
+  if (typeof moveInfo.index === 'number') {
+    nextBookmark.index = moveInfo.index
+  }
+
+  insertBookmarkIntoParentNode(newParentNode, nextBookmark, moveInfo.index)
+
+  let sectionChanged = false
+  state.folderSections = state.folderSections.map((section) => {
+    if (section.id !== oldParentId && section.id !== newParentId) {
+      return section
+    }
+
+    let nextBookmarks = section.bookmarks
+    if (section.id === oldParentId) {
+      nextBookmarks = nextBookmarks.filter((bookmark) => String(bookmark.id) !== normalizedBookmarkId)
+    }
+    if (section.id === newParentId) {
+      nextBookmarks = insertBookmarkByIndex(nextBookmarks, nextBookmark)
+    }
+
+    if (nextBookmarks === section.bookmarks) {
+      return section
+    }
+
+    sectionChanged = true
+    const counts = getFolderBookmarkCounts(section.node)
+    return {
+      ...section,
+      bookmarks: nextBookmarks,
+      directBookmarkCount: counts.directBookmarkCount,
+      totalBookmarkCount: counts.totalBookmarkCount
+    }
+  })
+
+  movedNode.parentId = newParentId
+  if (typeof moveInfo.index === 'number') {
+    movedNode.index = moveInfo.index
+  }
+  const nextBookmarks = getAllSectionBookmarks()
+  state.bookmarks = nextBookmarks
+  state.bookmarkMap = new Map(nextBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+  state.folderNode = state.folderSections[0]?.node || null
+  state.bookmarkCatalog = null
+  invalidateQuickAccessCache()
+  markSearchIndexDirty({ schedule: true })
+  renderBookmarkSections()
+  if (isBookmarkPinnedInSpeedDial(getActiveWorkspacePinnedIds(), normalizedBookmarkId)) {
+    postDashboardSpeedDialState()
+  }
+  return sectionChanged
+}
+
+function removeBookmarkFromParentNode(
+  parentNode: chrome.bookmarks.BookmarkTreeNode,
+  bookmarkId: string
+): boolean {
+  if (!Array.isArray(parentNode.children)) {
+    return false
+  }
+
+  const nextChildren = parentNode.children.filter((child) => String(child.id) !== bookmarkId)
+  if (nextChildren.length === parentNode.children.length) {
+    return false
+  }
+
+  parentNode.children = reindexBookmarkChildren(nextChildren)
+  return true
+}
+
+function insertBookmarkIntoParentNode(
+  parentNode: chrome.bookmarks.BookmarkTreeNode,
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  rawIndex: number | undefined
+): void {
+  const nextChildren = Array.isArray(parentNode.children)
+    ? parentNode.children.filter((child) => String(child.id) !== String(bookmark.id))
+    : []
+  const insertIndex = normalizeBookmarkInsertIndex(rawIndex, nextChildren.length)
+  nextChildren.splice(insertIndex, 0, bookmark)
+  parentNode.children = reindexBookmarkChildren(nextChildren)
+}
+
+function reindexBookmarkChildren(
+  children: chrome.bookmarks.BookmarkTreeNode[]
+): chrome.bookmarks.BookmarkTreeNode[] {
+  return children.map((child, index) => {
+    child.index = index
+    return child
+  })
+}
+
+function normalizeBookmarkInsertIndex(rawIndex: number | undefined, length: number): number {
+  if (!Number.isFinite(rawIndex)) {
+    return length
+  }
+  return Math.max(0, Math.min(Math.trunc(Number(rawIndex)), length))
 }
 
 function scheduleBookmarkChangeRefresh(): void {
@@ -4085,7 +4582,11 @@ async function refreshNewTab(): Promise<void> {
     ])
     perfMark('newtab.storageLoaded')
     const rootNode = tree[0] || null
-    const folderData = extractBookmarkData(rootNode)
+    state.rootNode = rootNode
+    state.bookmarkCatalog = null
+    state.bookmarkTagIndex = null
+    state.searchSnapshotIndex = null
+    const folderData = refreshBookmarkCatalog(rootNode).extracted
     const folderNodeMap = buildFolderNodeMap(rootNode)
     const folderSettings = normalizeFolderSettingsWithDefault(
       stored[STORAGE_KEYS.newTabFolderSettings],
@@ -4095,10 +4596,7 @@ async function refreshNewTab(): Promise<void> {
     perfMark('newtab.sectionsBuilt')
     perfMeasure('newtab.sectionsBuildMs', 'newtab.storageLoaded', 'newtab.sectionsBuilt')
 
-    state.rootNode = rootNode
     state.folderData = folderData
-    state.bookmarkTagIndex = null
-    state.searchSnapshotIndex = null
     state.folderNodeMap = folderNodeMap
     state.folderSettings = folderSettings
     state.folderSections = folderSections
@@ -4125,16 +4623,6 @@ async function refreshNewTab(): Promise<void> {
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
     state.generalSettings = normalizeGeneralSettings(stored[STORAGE_KEYS.newTabGeneralSettings])
     state.timeSettings = normalizeTimeSettingsLocal(stored[STORAGE_KEYS.newTabTimeSettings])
-    await refreshNewTabNaturalSearchAiConfiguredState()
-    if (!state.searchSettings.naturalSearchAiConfigured && state.searchSettings.naturalSearchEnabled) {
-      state.searchSettings = normalizeSearchSettings({
-        ...state.searchSettings,
-        naturalSearchEnabled: false
-      })
-      void saveSearchSettings().catch((saveError) => {
-        console.warn('新标签页 AI 语义搜索状态保存失败。', saveError)
-      })
-    }
     onboardingCompleted = normalizeNewTabOnboardingCompleted(stored[STORAGE_KEYS.onboardingState])
   } catch (error) {
     state.error = error instanceof Error ? error.message : '新标签页加载失败，请刷新后重试。'
@@ -4143,13 +4631,20 @@ async function refreshNewTab(): Promise<void> {
     state.loading = false
     render()
     renderDeleteToast()
-    scheduleFeaturedBackgroundDailyRefresh()
-    void cacheFeaturedBackgroundGalleryPreviewImages()
-    void applyBackgroundSettings()
+    const skipBackgroundUiSync = backgroundUiAppliedFromPreload
+    backgroundUiAppliedFromPreload = false
+    if (!skipBackgroundUiSync) {
+      scheduleFeaturedBackgroundDailyRefresh()
+    }
+    if (!skipBackgroundUiSync) {
+      void applyBackgroundSettings()
+    }
     applyGeneralSettings()
     applyFolderSettings()
-    syncBackgroundSettingsControls()
-    syncFeaturedBackgroundDisplayPreferenceControls()
+    if (!skipBackgroundUiSync) {
+      syncBackgroundSettingsControls()
+      syncFeaturedBackgroundDisplayPreferenceControls()
+    }
     syncSearchSettingsControls()
     syncIconSettingsControls()
     syncGeneralSettingsControls()
@@ -4162,6 +4657,20 @@ async function refreshNewTab(): Promise<void> {
     runIdle(() => {
       void hydrateNewTabSearchAndTags(refreshVersion)
     })
+    runIdle(() => {
+      void refreshNewTabNaturalSearchAiConfiguredState().then(() => {
+        if (!state.searchSettings.naturalSearchAiConfigured && state.searchSettings.naturalSearchEnabled) {
+          state.searchSettings = normalizeSearchSettings({
+            ...state.searchSettings,
+            naturalSearchEnabled: false
+          })
+          void saveSearchSettings().catch((saveError) => {
+            console.warn('新标签页 AI 语义搜索状态保存失败。', saveError)
+          })
+          syncSearchSettingsControls()
+        }
+      })
+    }, { timeout: 800 })
   }
 }
 
@@ -4235,6 +4744,7 @@ async function preloadBackgroundSettings(): Promise<typeof DEFAULT_BACKGROUND_SE
       syncFeaturedBackgroundDisplayPreferenceControls()
       scheduleFeaturedBackgroundDailyRefresh()
       void applyBackgroundSettings()
+      backgroundUiAppliedFromPreload = true
     }
     return nextSettings
   } catch (error) {
@@ -4518,8 +5028,40 @@ function getNewTabShellSignature(): string {
   ].join('|')
 }
 
+let dashboardOverlayMounted = false
+let dashboardOverlayMountPromise: Promise<void> | null = null
+
+function ensureDashboardOverlayMounted(): Promise<void> {
+  if (dashboardOverlayMounted) return Promise.resolve()
+  if (dashboardOverlayMountPromise) return dashboardOverlayMountPromise
+  dashboardOverlayMountPromise = (async () => {
+    const mod = await import('./dashboard-overlay-mount.js')
+    const result = mod.mountDashboardOverlay({
+      onFrameError: () => {
+        setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
+      },
+      onFallbackReturn: closeDashboardRoute,
+      onFallbackRetry: retryDashboardFrame
+    })
+    if (!result) return
+    dashboardOverlayMounted = true
+    dashboardOverlay = result.overlay
+    dashboardFrame = result.frame
+    dashboardFallback = result.fallback
+    dashboardFallbackCopy = result.fallbackCopy
+    if (state.dashboardOpen) {
+      renderDashboard()
+      ensureDashboardFrameLoaded()
+    }
+  })()
+  return dashboardOverlayMountPromise
+}
+
 function syncDashboardRoute(): void {
   const shouldOpen = window.location.hash === '#dashboard'
+  if (shouldOpen) {
+    void ensureDashboardOverlayMounted()
+  }
   if (shouldOpen === state.dashboardOpen) {
     if (shouldOpen) {
       resetDashboardFrameReady()
@@ -4539,6 +5081,7 @@ function syncDashboardRoute(): void {
 }
 
 function openDashboardRoute(): void {
+  void ensureDashboardOverlayMounted()
   dashboardReturnFocusTarget = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : dashboardTrigger instanceof HTMLElement
@@ -4836,39 +5379,15 @@ function cancelScheduledAdaptiveNewTabLayoutUpdate(): void {
   verticalCenterCollisionFrame = 0
 }
 
-function cancelScheduledSearchAutoVerticalCenterUpdate(): void {
-  if (!searchAutoCenterFrame) {
-    return
-  }
-
-  window.cancelAnimationFrame(searchAutoCenterFrame)
-  searchAutoCenterFrame = 0
-}
-
 function scheduleAdaptiveNewTabLayoutUpdate(): void {
   cancelScheduledAdaptiveNewTabLayoutUpdate()
   verticalCenterCollisionFrame = window.requestAnimationFrame(() => {
     verticalCenterCollisionFrame = 0
-    updateAdaptiveSearchOffsetBounds()
-    updateVerticalCenterCollisionOffset()
-    scheduleSearchAutoVerticalCenterUpdate()
+    runBatchedAdaptiveLayoutUpdate()
   })
 }
 
-function scheduleSearchAutoVerticalCenterUpdate(): void {
-  if (!state.searchSettings.autoVerticalCenter) {
-    cancelScheduledSearchAutoVerticalCenterUpdate()
-    return
-  }
-
-  cancelScheduledSearchAutoVerticalCenterUpdate()
-  searchAutoCenterFrame = window.requestAnimationFrame(() => {
-    searchAutoCenterFrame = 0
-    updateSearchAutoVerticalCenterOffset()
-  })
-}
-
-function updateAdaptiveSearchOffsetBounds(): void {
+function runBatchedAdaptiveLayoutUpdate(): void {
   const page = root?.querySelector<HTMLElement>('.newtab-page')
   const slot = page?.querySelector<HTMLElement>('.newtab-search-slot')
   if (!page || !slot) {
@@ -4879,26 +5398,39 @@ function updateAdaptiveSearchOffsetBounds(): void {
     return
   }
 
-  const shellRect = root?.getBoundingClientRect()
-  const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 1280
-  const slotRect = slot.getBoundingClientRect()
   const previousModule = slot.previousElementSibling instanceof HTMLElement
     ? slot.previousElementSibling
     : null
-  const primaryContent = page.dataset.iconVerticalCenter === 'true'
+  const iconVerticalCenter = page.dataset.iconVerticalCenter === 'true'
+  const primaryContent = iconVerticalCenter
     ? page.querySelector<HTMLElement>(':scope > .newtab-primary-slot > .newtab-content')
     : null
+  const collisionUtilityStack = iconVerticalCenter
+    ? page.querySelector<HTMLElement>(':scope > .newtab-utility-stack')
+    : null
+
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth || 1280
+  const shellRect = root?.getBoundingClientRect()
+  const slotRect = slot.getBoundingClientRect()
+  const previousModuleRect = previousModule?.getBoundingClientRect()
+  const nextModuleRect = iconVerticalCenter
+    ? getSearchAutoVerticalCenterNextModule(page, slot)?.getBoundingClientRect()
+    : null
+  const primaryContentRect = primaryContent?.getBoundingClientRect()
+  const collisionUtilityRect = collisionUtilityStack?.getBoundingClientRect()
+  const currentOffsetY = getCurrentSearchOffsetY(slot)
+
   const viewportTop = shellRect?.top ?? 0
   const viewportBottom = shellRect?.bottom ??
     (document.documentElement.clientHeight || window.innerHeight || 0)
   const bounds = getAdaptiveSearchOffsetBounds({
-    currentOffsetY: getCurrentSearchOffsetY(slot),
+    currentOffsetY,
     searchTop: slotRect.top,
     searchBottom: slotRect.bottom,
     viewportTop,
     viewportBottom,
-    previousModuleBottom: previousModule?.getBoundingClientRect().bottom,
-    primaryContentTop: primaryContent?.getBoundingClientRect().top,
+    previousModuleBottom: previousModuleRect?.bottom,
+    primaryContentTop: primaryContentRect?.top,
     minimumGap: NEWTAB_LAYOUT_SAFE_GAP,
     absoluteMin: SEARCH_OFFSET_ABSOLUTE_MIN,
     absoluteMax: SEARCH_OFFSET_ABSOLUTE_MAX
@@ -4907,6 +5439,20 @@ function updateAdaptiveSearchOffsetBounds(): void {
     viewportWidth,
     containerWidth: slotRect.width
   })
+
+  let collisionWriteAction: 'apply' | 'remove' | 'noop' = 'noop'
+  let collisionOffset = 0
+  if (iconVerticalCenter) {
+    if (collisionUtilityRect && primaryContentRect) {
+      collisionOffset = getVerticalCenterCollisionOffset({
+        utilityBottom: collisionUtilityRect.bottom,
+        contentTop: primaryContentRect.top
+      })
+      collisionWriteAction = collisionOffset > 0 ? 'apply' : 'remove'
+    } else {
+      collisionWriteAction = 'remove'
+    }
+  }
 
   state.searchOffsetBounds = bounds
   state.searchWidthBounds = widthBounds
@@ -4919,45 +5465,30 @@ function updateAdaptiveSearchOffsetBounds(): void {
       '--search-offset-y',
       `${clampNumber(state.searchSettings.offsetY, bounds.min, bounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)}px`
     )
+  } else {
+    const offsetY = getAutoCenteredSearchOffsetY({
+      currentOffsetY,
+      searchTop: slotRect.top,
+      searchBottom: slotRect.bottom,
+      viewportTop,
+      viewportBottom,
+      previousModuleBottom: previousModuleRect?.bottom,
+      nextModuleTop: nextModuleRect?.top,
+      minimumGap: NEWTAB_LAYOUT_SAFE_GAP,
+      minOffsetY: bounds.min,
+      maxOffsetY: bounds.max,
+      fallbackOffsetY: currentOffsetY
+    })
+    slot.dataset.searchAutoVerticalCenter = 'true'
+    slot.style.setProperty('--search-offset-y', `${offsetY}px`)
+  }
+  if (collisionWriteAction === 'apply') {
+    page.style.setProperty('--primary-collision-offset-y', `${collisionOffset}px`)
+  } else if (collisionWriteAction === 'remove') {
+    page.style.removeProperty('--primary-collision-offset-y')
   }
   syncSearchWidthControl()
   syncSearchOffsetControl()
-}
-
-function updateSearchAutoVerticalCenterOffset(): void {
-  const page = root?.querySelector<HTMLElement>('.newtab-page')
-  const slot = page?.querySelector<HTMLElement>('.newtab-search-slot')
-  if (!page || !slot || !state.searchSettings.enabled || !state.searchSettings.autoVerticalCenter) {
-    return
-  }
-
-  const shellRect = root?.getBoundingClientRect()
-  const slotRect = slot.getBoundingClientRect()
-  const bounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
-  const currentOffsetY = getCurrentSearchOffsetY(slot)
-  const viewportTop = shellRect?.top ?? 0
-  const viewportBottom = shellRect?.bottom ??
-    (document.documentElement.clientHeight || window.innerHeight || 0)
-  const previousModule = slot.previousElementSibling instanceof HTMLElement
-    ? slot.previousElementSibling
-    : null
-  const nextModule = getSearchAutoVerticalCenterNextModule(page, slot)
-  const offsetY = getAutoCenteredSearchOffsetY({
-    currentOffsetY,
-    searchTop: slotRect.top,
-    searchBottom: slotRect.bottom,
-    viewportTop,
-    viewportBottom,
-    previousModuleBottom: previousModule?.getBoundingClientRect().bottom,
-    nextModuleTop: nextModule?.getBoundingClientRect().top,
-    minimumGap: NEWTAB_LAYOUT_SAFE_GAP,
-    minOffsetY: bounds.min,
-    maxOffsetY: bounds.max,
-    fallbackOffsetY: currentOffsetY
-  })
-
-  slot.dataset.searchAutoVerticalCenter = 'true'
-  slot.style.setProperty('--search-offset-y', `${offsetY}px`)
 }
 
 function getCurrentSearchOffsetY(slot: HTMLElement): number {
@@ -4977,32 +5508,6 @@ function getSearchAutoVerticalCenterNextModule(page: HTMLElement, slot: HTMLElem
   }
 
   return page.querySelector<HTMLElement>(':scope > .newtab-primary-slot > :first-child')
-}
-
-function updateVerticalCenterCollisionOffset(): void {
-  const page = root?.querySelector<HTMLElement>('.newtab-page[data-icon-vertical-center="true"]')
-  if (!page) {
-    return
-  }
-
-  const utilityStack = page.querySelector<HTMLElement>(':scope > .newtab-utility-stack')
-  const primaryContent = page.querySelector<HTMLElement>(':scope > .newtab-primary-slot > .newtab-content')
-  if (!utilityStack || !primaryContent) {
-    page.style.removeProperty('--primary-collision-offset-y')
-    return
-  }
-
-  const utilityRect = utilityStack.getBoundingClientRect()
-  const contentRect = primaryContent.getBoundingClientRect()
-  const offset = getVerticalCenterCollisionOffset({
-    utilityBottom: utilityRect.bottom,
-    contentTop: contentRect.top
-  })
-  if (offset > 0) {
-    page.style.setProperty('--primary-collision-offset-y', `${offset}px`)
-  } else {
-    page.style.removeProperty('--primary-collision-offset-y')
-  }
 }
 
 function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
@@ -5350,6 +5855,12 @@ function createSearchWidget(): HTMLElement | null {
   let activeSuggestionIndex = -1
   let suggestionDebounceTimer = 0
   let suggestionRequestId = 0
+  let renderedSuggestionKeys: string[] = []
+
+  const getSuggestionKey = (suggestion: NewTabSearchSuggestion): string => {
+    const type = suggestion.suggestionType === 'command' ? 'cmd' : 'bm'
+    return `${type}:${suggestion.id}`
+  }
 
   const hideSuggestions = () => {
     window.clearTimeout(suggestionDebounceTimer)
@@ -5357,6 +5868,7 @@ function createSearchWidget(): HTMLElement | null {
     searchSuggestions = []
     activeSuggestionIndex = -1
     suggestions.replaceChildren()
+    renderedSuggestionKeys = []
     searchChips.replaceChildren()
     searchChips.classList.add('hidden')
     savedSearches.replaceChildren()
@@ -5390,6 +5902,7 @@ function createSearchWidget(): HTMLElement | null {
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
       suggestions.replaceChildren()
+      renderedSuggestionKeys = []
       suggestions.hidden = true
       input.removeAttribute('aria-activedescendant')
       if (!trimmedQuery) {
@@ -5426,19 +5939,37 @@ function createSearchWidget(): HTMLElement | null {
       ? Math.min(previousActiveIndex, searchSuggestions.length - 1)
       : -1
 
-    suggestions.replaceChildren(...searchSuggestions.map((suggestion, index) =>
-      createSearchSuggestionButton(
-        suggestion,
-        index,
-        index === activeSuggestionIndex,
-        (selectedSuggestion) => {
-          input.value = selectedSuggestion.title
-          syncSearchInputActions(input, clearButton, separator, submitButton)
-          hideSuggestions()
-          openSearchSuggestion(selectedSuggestion)
-        }
-      )
-    ))
+    const onSelectSuggestion = (selectedSuggestion: NewTabSearchSuggestion) => {
+      input.value = selectedSuggestion.title
+      syncSearchInputActions(input, clearButton, separator, submitButton)
+      hideSuggestions()
+      openSearchSuggestion(selectedSuggestion)
+    }
+
+    const nextSuggestionKeys = searchSuggestions.map(getSuggestionKey)
+    const existingButtons = Array.from(suggestions.children) as HTMLButtonElement[]
+    const keysUnchanged = existingButtons.length === nextSuggestionKeys.length &&
+      nextSuggestionKeys.every((key, index) => renderedSuggestionKeys[index] === key)
+
+    if (keysUnchanged) {
+      existingButtons.forEach((button, index) => {
+        const suggestion = searchSuggestions[index]
+        const active = index === activeSuggestionIndex
+        const command = isCommandSuggestion(suggestion)
+        button.className = `newtab-search-suggestion${command ? ' command' : ''}${active ? ' active' : ''}`
+        button.setAttribute('aria-selected', String(active))
+      })
+    } else {
+      suggestions.replaceChildren(...searchSuggestions.map((suggestion, index) =>
+        createSearchSuggestionButton(
+          suggestion,
+          index,
+          index === activeSuggestionIndex,
+          onSelectSuggestion
+        )
+      ))
+      renderedSuggestionKeys = nextSuggestionKeys
+    }
     suggestionsPanel.classList.remove('hidden')
     suggestionsHeading.hidden = false
     suggestionsHint.textContent = getSearchSuggestionHintText()
@@ -5534,6 +6065,7 @@ function createSearchWidget(): HTMLElement | null {
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
     suggestions.replaceChildren()
+    renderedSuggestionKeys = []
     suggestions.hidden = true
     suggestionsHeading.textContent = '书签匹配'
     suggestionsHeading.hidden = false
@@ -6719,7 +7251,8 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
         list,
         section,
         renderedBookmarkIndex,
-        bookmarkTileRenderVersion
+        bookmarkTileRenderVersion,
+        Math.max(0, BOOKMARK_TILE_INITIAL_RENDER_LIMIT - renderedBookmarkIndex)
       )
 
       sectionNode.appendChild(list)
@@ -6859,13 +7392,15 @@ function renderSpeedDialPanel(
   const list = document.createElement('div')
   list.className = 'newtab-speed-dial-grid'
   list.setAttribute('aria-busy', state.reorderingSpeedDial ? 'true' : 'false')
-  for (const item of items) {
+  let renderedIndex = 0
+  items.forEach((item) => {
     const bookmark = getBookmarkById(item.id)
     if (!bookmark?.url) {
-      continue
+      return
     }
-    list.appendChild(createSpeedDialLink(item, bookmark))
-  }
+    list.appendChild(createSpeedDialLink(item, bookmark, renderedIndex))
+    renderedIndex += 1
+  })
 
   content.appendChild(list)
   replaceSpeedDialContent(section, content)
@@ -6902,7 +7437,8 @@ function createSpeedDialEmptyPanel(
 
 function createSpeedDialLink(
   item: SpeedDialItem,
-  bookmark: chrome.bookmarks.BookmarkTreeNode
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  renderIndex = 0
 ): HTMLAnchorElement {
   const customIcon = state.customIcons[String(item.id)]
   const link = document.createElement('a')
@@ -6914,10 +7450,7 @@ function createSpeedDialLink(
   link.dataset.speedDialBookmarkId = item.id
   link.setAttribute('aria-label', `打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`)
   bindBookmarkNavigation(link, bookmark)
-  const cachedAccent = !customIcon
-    ? getFaviconAccentCacheEntry(state.faviconAccentCache, item.id, item.url)
-    : null
-  if (cachedAccent) {
+  if (!customIcon) {
     applyCachedFaviconAccent(link, item.id, item.url)
   }
   if (String(item.id) === state.speedDialDraggingBookmarkId && state.speedDialDragOriginalOrderIds.length) {
@@ -6936,17 +7469,13 @@ function createSpeedDialLink(
   icon.src = customIcon || getFaviconUrl(item.url, item.id)
   icon.alt = ''
   icon.draggable = false
-  icon.loading = 'eager'
+  const faviconLoadAttributes = getSpeedDialFaviconLoadAttributes(renderIndex)
+  icon.loading = faviconLoadAttributes.loading
   icon.decoding = 'async'
-  icon.setAttribute('fetchpriority', 'high')
+  icon.setAttribute('fetchpriority', faviconLoadAttributes.fetchpriority)
   icon.addEventListener('error', () => {
     mark.classList.add('favicon-missing')
   })
-  if (!customIcon && !cachedAccent) {
-    icon.addEventListener('load', () => {
-      scheduleFaviconAccentExtraction(icon, link, item.id, item.url)
-    }, { once: true })
-  }
 
   const fallback = document.createElement('span')
   fallback.className = 'bookmark-fallback'
@@ -6969,9 +7498,11 @@ function appendBookmarkTilesInChunks(
   list: HTMLElement,
   section: NewTabFolderSection,
   renderedBookmarkIndex: number,
-  renderVersion: number
+  renderVersion: number,
+  pageBudget: number = BOOKMARK_TILE_INITIAL_RENDER_LIMIT
 ): number {
-  const initialCount = Math.min(section.bookmarks.length, BOOKMARK_TILE_INITIAL_RENDER_LIMIT)
+  const perSectionLimit = Math.min(section.bookmarks.length, BOOKMARK_TILE_INITIAL_RENDER_LIMIT)
+  const initialCount = Math.min(perSectionLimit, Math.max(0, pageBudget))
   for (let index = 0; index < initialCount; index += 1) {
     list.appendChild(createBookmarkTile(section.bookmarks[index], section.id, renderedBookmarkIndex + index))
   }
@@ -7133,7 +7664,7 @@ function createSourceNavigation(sections: NewTabFolderSection[]): HTMLElement | 
 }
 
 function focusSourceSection(anchorId: string): void {
-  const section = document.getElementById(anchorId)
+  const section = cachedEl(anchorId)
   if (!(section instanceof HTMLElement)) {
     return
   }
@@ -7170,16 +7701,58 @@ function createPortalPanel(): HTMLElement | null {
   return panel
 }
 
-function createQuickAccessPanel(): HTMLElement | null {
-  const { frequentItems, recentItems } = getPortalQuickAccessItems({
+interface QuickAccessViewModel {
+  frequentItems: ReturnType<typeof getPortalQuickAccessItems>['frequentItems']
+  recentItems: ReturnType<typeof getPortalQuickAccessItems>['recentItems']
+}
+
+let quickAccessViewModelCache: {
+  bookmarksRef: typeof state.bookmarks | null
+  recordsRef: typeof state.activity.records | null
+  pinnedSignature: string
+  showQuickAccess: boolean
+  itemLimit: number
+  model: QuickAccessViewModel
+} | null = null
+
+function computeQuickAccessViewModel(): QuickAccessViewModel {
+  const pinnedIds = getActiveWorkspacePinnedIds()
+  const pinnedSignature = pinnedIds.join(',')
+  const show = state.generalSettings.showQuickAccess
+  if (
+    quickAccessViewModelCache &&
+    quickAccessViewModelCache.bookmarksRef === state.bookmarks &&
+    quickAccessViewModelCache.recordsRef === state.activity.records &&
+    quickAccessViewModelCache.pinnedSignature === pinnedSignature &&
+    quickAccessViewModelCache.showQuickAccess === show &&
+    quickAccessViewModelCache.itemLimit === QUICK_ACCESS_ITEM_LIMIT
+  ) {
+    return quickAccessViewModelCache.model
+  }
+
+  const model = getPortalQuickAccessItems({
     bookmarks: state.bookmarks,
-    pinnedIds: getActiveWorkspacePinnedIds(),
+    pinnedIds,
     records: state.activity.records,
     now: Date.now(),
     itemLimit: QUICK_ACCESS_ITEM_LIMIT,
-    showFrequent: state.generalSettings.showQuickAccess,
-    showRecent: state.generalSettings.showQuickAccess
+    showFrequent: show,
+    showRecent: show
   })
+
+  quickAccessViewModelCache = {
+    bookmarksRef: state.bookmarks,
+    recordsRef: state.activity.records,
+    pinnedSignature,
+    showQuickAccess: show,
+    itemLimit: QUICK_ACCESS_ITEM_LIMIT,
+    model
+  }
+  return model
+}
+
+function createQuickAccessPanel(): HTMLElement | null {
+  const { frequentItems, recentItems } = computeQuickAccessViewModel()
 
   const frequentQuickAccessItems = frequentItems
     .map(createQuickAccessItemFromPortalItem)
@@ -7307,10 +7880,7 @@ function createBookmarkTile(
   bindBookmarkNavigation(item, bookmark)
   const bookmarkId = String(bookmark.id)
   const customIcon = state.customIcons[bookmarkId]
-  const cachedAccent = !customIcon
-    ? getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
-    : null
-  if (cachedAccent) {
+  if (!customIcon) {
     applyCachedFaviconAccent(item, bookmarkId, url)
   }
   if (bookmarkId === state.draggingBookmarkId && state.dragOriginalOrderIds.length) {
@@ -7338,16 +7908,6 @@ function createBookmarkTile(
   icon.addEventListener('error', () => {
     iconShell.classList.add('favicon-missing')
   })
-  if (!customIcon && !cachedAccent && renderIndex >= BOOKMARK_TILE_INITIAL_RENDER_LIMIT) {
-    icon.addEventListener('load', () => {
-      scheduleFaviconAccentExtraction(
-        icon,
-        item,
-        bookmarkId,
-        url
-      )
-    }, { once: true })
-  }
 
   const fallback = document.createElement('span')
   fallback.className = 'bookmark-fallback'
@@ -7364,92 +7924,51 @@ function createBookmarkTile(
 
 function applyCachedFaviconAccent(item: HTMLElement, bookmarkId: string, url: string): void {
   const entry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
-  if (!entry) {
+  if (entry) {
+    applyFaviconAccentToTile(item, entry.color)
     return
   }
 
-  applyFaviconAccentToTile(item, entry.color)
+  const fallback = getHostnameAccentColor(url)
+  if (fallback) {
+    applyFaviconAccentToTile(item, fallback)
+  }
 }
 
-function handleFaviconLoaded(
-  icon: HTMLImageElement,
-  item: HTMLElement,
-  bookmarkId: string,
-  url: string
-): void {
-  const cachedEntry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
-  if (cachedEntry) {
-    applyFaviconAccentToTile(item, cachedEntry.color)
-    return
-  }
+const FAVICON_ACCENT_PALETTE: readonly FaviconAccentColor[] = [
+  { r: 234, g: 200, b: 168 },
+  { r: 200, g: 220, b: 255 },
+  { r: 168, g: 220, b: 180 },
+  { r: 255, g: 200, b: 200 },
+  { r: 220, g: 200, b: 240 },
+  { r: 240, g: 220, b: 160 },
+  { r: 200, g: 230, b: 230 },
+  { r: 240, g: 180, b: 200 },
+  { r: 180, g: 200, b: 230 },
+  { r: 230, g: 180, b: 180 },
+  { r: 200, g: 240, b: 200 },
+  { r: 220, g: 200, b: 180 }
+]
 
-  void extractFaviconAccentColor(icon)
-    .then((color) => {
-      if (!color || !item.isConnected) {
-        return
-      }
-
-      applyFaviconAccentToTile(item, color)
-      const changed = upsertFaviconAccentCacheEntryInPlace(
-        state.faviconAccentCache,
-        bookmarkId,
-        url,
-        color
-      )
-      if (changed) {
-        scheduleFaviconAccentCacheSave()
-      }
-    })
-    .catch(() => {})
-}
-
-function scheduleFaviconAccentExtraction(
-  icon: HTMLImageElement,
-  item: HTMLElement,
-  bookmarkId: string,
-  url: string
-): void {
-  const run = () => {
-    if (!icon.isConnected || !item.isConnected) {
-      return
-    }
-    handleFaviconLoaded(icon, item, bookmarkId, url)
-  }
-
-  const requestIdle = window.requestIdleCallback
-  if (requestIdle) {
-    requestIdle(run, { timeout: FAVICON_ACCENT_EXTRACTION_IDLE_TIMEOUT_MS })
-    return
-  }
-
-  window.setTimeout(run, 0)
-}
-
-async function extractFaviconAccentColor(icon: HTMLImageElement): Promise<FaviconAccentColor | null> {
-  if (!icon.naturalWidth || !icon.naturalHeight) {
+function getHostnameAccentColor(url: string): FaviconAccentColor | null {
+  const trimmed = String(url || '').trim()
+  if (!trimmed) {
     return null
   }
-
-  const canvas = document.createElement('canvas')
-  const size = Math.min(
-    FAVICON_COLOR_SAMPLE_SIZE,
-    Math.max(icon.naturalWidth, icon.naturalHeight)
-  )
-  canvas.width = size
-  canvas.height = size
-  const context = canvas.getContext('2d', { willReadFrequently: true })
-  if (!context) {
-    return null
-  }
-
+  let host = ''
   try {
-    context.clearRect(0, 0, size, size)
-    context.drawImage(icon, 0, 0, size, size)
-    const faviconAccent = await loadFaviconAccentModule()
-    return faviconAccent.selectFaviconAccentColor(context.getImageData(0, 0, size, size).data)
+    host = new URL(trimmed).hostname.toLowerCase()
   } catch {
+    host = trimmed.toLowerCase()
+  }
+  if (!host) {
     return null
   }
+  let hash = 5381
+  for (let index = 0; index < host.length; index += 1) {
+    hash = ((hash << 5) + hash + host.charCodeAt(index)) >>> 0
+  }
+  return FAVICON_ACCENT_PALETTE[hash % FAVICON_ACCENT_PALETTE.length]
 }
 
 function applyFaviconAccentToTile(item: HTMLElement, color: FaviconAccentColor): void {
@@ -7463,16 +7982,6 @@ async function saveFaviconAccentCache(): Promise<void> {
   })
 }
 
-function scheduleFaviconAccentCacheSave(): void {
-  window.clearTimeout(faviconAccentSaveTimer)
-  faviconAccentSaveTimer = window.setTimeout(() => {
-    faviconAccentSaveTimer = 0
-    void saveFaviconAccentCache().catch((error) => {
-      console.warn('新标签页网站图标色彩缓存保存失败。', error)
-    })
-  }, FAVICON_ACCENT_SAVE_DEBOUNCE_MS)
-}
-
 function cleanupNewTabRuntime(): void {
   window.clearTimeout(clockTimer)
   clockTimer = 0
@@ -7480,7 +7989,9 @@ function cleanupNewTabRuntime(): void {
   featuredBackgroundRefreshTimer = 0
   window.clearTimeout(featuredBackgroundPreferencesSaveTimer)
   featuredBackgroundPreferencesSaveTimer = 0
+  clearFeaturedBackgroundPreviewWarmTimers()
   clearFeaturedBackgroundHoverPreview()
+  clearFeaturedBackgroundCardPreviewRegistry()
   revokeFeaturedBackgroundGalleryObjectUrls()
   revokeFeaturedBackgroundGalleryPreviewObjectUrls()
   window.clearTimeout(searchSettingsSaveTimer)
@@ -7509,8 +8020,6 @@ function cleanupNewTabRuntime(): void {
   resizeLayoutFrame = 0
   window.cancelAnimationFrame(verticalCenterCollisionFrame)
   verticalCenterCollisionFrame = 0
-  window.cancelAnimationFrame(searchAutoCenterFrame)
-  searchAutoCenterFrame = 0
   window.cancelAnimationFrame(deferredRenderFrame)
   deferredRenderFrame = 0
   removeBookmarkDragGhost()
@@ -7523,11 +8032,6 @@ function cleanupNewTabRuntime(): void {
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
   state.naturalSearchPlanCache.clear()
-  if (faviconAccentSaveTimer) {
-    window.clearTimeout(faviconAccentSaveTimer)
-    faviconAccentSaveTimer = 0
-    void saveFaviconAccentCache().catch(() => {})
-  }
   if (dashboardFrame) {
     dashboardFrame.removeAttribute('src')
     state.dashboardFrameLoaded = false
@@ -7602,32 +8106,6 @@ async function getFeaturedBackgroundPreviewCacheRecord(imageUrl: string): Promis
   }
 }
 
-async function saveFeaturedBackgroundPreviewCache(imageUrl: string, blob: Blob): Promise<void> {
-  const key = getFeaturedBackgroundPreviewCacheKey(imageUrl)
-  const normalizedUrl = normalizeBackgroundImageUrl(imageUrl)
-  if (!key || !normalizedUrl || !blob.size) {
-    return
-  }
-
-  const db = await openBackgroundMediaDb()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      const transaction = db.transaction(BACKGROUND_MEDIA_STORE, 'readwrite')
-      transaction.objectStore(BACKGROUND_MEDIA_STORE).put({
-        blob,
-        url: normalizedUrl,
-        type: blob.type,
-        updatedAt: Date.now()
-      }, key)
-      transaction.oncomplete = () => resolve()
-      transaction.onerror = () => reject(transaction.error || new Error('精选图库预览缓存保存失败。'))
-      transaction.onabort = () => reject(transaction.error || new Error('精选图库预览缓存保存失败。'))
-    })
-  } finally {
-    db.close()
-  }
-}
-
 async function clearFeaturedBackgroundPreviewCache(): Promise<void> {
   const db = await openBackgroundMediaDb()
   try {
@@ -7642,7 +8120,7 @@ async function clearFeaturedBackgroundPreviewCache(): Promise<void> {
           resolve()
           return
         }
-        cursor.delete()
+        store.delete(cursor.key)
         cursor.continue()
       }
       transaction.oncomplete = () => resolve()
@@ -7654,94 +8132,21 @@ async function clearFeaturedBackgroundPreviewCache(): Promise<void> {
   }
 }
 
-async function createFeaturedBackgroundPreviewBlob(blob: Blob): Promise<Blob> {
-  if (!blob.type.toLowerCase().startsWith('image/')) {
-    return blob
-  }
-  if (blob.type.toLowerCase() === 'image/gif') {
-    return blob
-  }
-
-  let bitmap: ImageBitmap
-  try {
-    bitmap = await createImageBitmap(blob)
-  } catch {
-    return blob
-  }
-
-  try {
-    const sourceMaxDimension = Math.max(bitmap.width, bitmap.height)
-    if (!sourceMaxDimension) {
-      return blob
-    }
-
-    const targetMaxDimension = Math.min(FEATURED_BACKGROUND_PREVIEW_CACHE_MAX_DIMENSION, getBackgroundCacheTargetDimension())
-    if (sourceMaxDimension <= targetMaxDimension) {
-      return blob
-    }
-
-    const scale = targetMaxDimension / sourceMaxDimension
-    const targetWidth = Math.max(1, Math.round(bitmap.width * scale))
-    const targetHeight = Math.max(1, Math.round(bitmap.height * scale))
-    const canvas = document.createElement('canvas')
-    canvas.width = targetWidth
-    canvas.height = targetHeight
-    const context = canvas.getContext('2d')
-    if (!context) {
-      return blob
-    }
-
-    context.imageSmoothingEnabled = true
-    context.imageSmoothingQuality = 'high'
-    context.drawImage(bitmap, 0, 0, targetWidth, targetHeight)
-    const optimizedBlob = await canvasToBlob(canvas, 'image/webp', FEATURED_BACKGROUND_PREVIEW_CACHE_QUALITY)
-    return optimizedBlob && optimizedBlob.size < blob.size ? optimizedBlob : blob
-  } finally {
-    bitmap.close()
-  }
-}
-
 async function createFeaturedBackgroundPreviewObjectUrl(imageUrl: string): Promise<string> {
   const normalizedUrl = normalizeBackgroundImageUrl(imageUrl)
   if (!normalizedUrl) {
     return ''
   }
 
-  const cachedObjectUrl = featuredBackgroundGalleryPreviewObjectUrlByImageUrl.get(normalizedUrl)
-  if (cachedObjectUrl) {
-    return cachedObjectUrl
-  }
-
-  const existingTask = featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.get(normalizedUrl)
-  if (existingTask) {
-    return existingTask
-  }
-
-  const generation = featuredBackgroundGalleryPreviewObjectUrlGeneration
-  const task = getFeaturedBackgroundPreviewCacheRecord(normalizedUrl).then((record) => {
-    if (!record?.blob || generation !== featuredBackgroundGalleryPreviewObjectUrlGeneration) {
-      return ''
-    }
-    const objectUrl = URL.createObjectURL(record.blob)
-    featuredBackgroundGalleryPreviewObjectUrlByImageUrl.set(normalizedUrl, objectUrl)
-    return objectUrl
-  }).catch(() => '').finally(() => {
-    if (featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.get(normalizedUrl) === task) {
-      featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.delete(normalizedUrl)
-    }
-  })
-
-  featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.set(normalizedUrl, task)
-  return task
+  return featuredBackgroundGalleryPreviewObjectUrlCache.resolve(
+    normalizedUrl,
+    () => getFeaturedBackgroundPreviewCacheRecord(normalizedUrl).then((record) => record?.blob || null),
+    { fallbackUrl: '' }
+  )
 }
 
 function revokeFeaturedBackgroundGalleryPreviewObjectUrls(): void {
-  featuredBackgroundGalleryPreviewObjectUrlGeneration += 1
-  for (const objectUrl of featuredBackgroundGalleryPreviewObjectUrlByImageUrl.values()) {
-    URL.revokeObjectURL(objectUrl)
-  }
-  featuredBackgroundGalleryPreviewObjectUrlByImageUrl.clear()
-  featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.clear()
+  featuredBackgroundGalleryPreviewObjectUrlCache.clear()
 }
 
 function bindBookmarkNavigation(
@@ -7824,7 +8229,7 @@ function buildNewTabFolderSections(
     return []
   }
 
-  const resolvedFolderData = folderData || extractBookmarkData(rootNode)
+  const resolvedFolderData = folderData || getBookmarkCatalog(rootNode).extracted
   const resolvedFolderNodeMap = folderNodeMap.size ? folderNodeMap : buildFolderNodeMap(rootNode)
   const selectedIds = normalizeFolderIds(settings.selectedFolderIds)
   const sections: NewTabFolderSection[] = []
@@ -7889,11 +8294,23 @@ function refreshDerivedBookmarkState(): void {
 }
 
 function rebuildNewTabSearchIndex(): void {
+  const catalog = getBookmarkCatalog()
+  if (
+    state.searchIndex &&
+    lastBuiltSearchIndexCatalogVersion &&
+    lastBuiltSearchIndexCatalogVersion === catalog.version
+  ) {
+    state.searchIndexReady = true
+    state.searchIndexReadyPromise = searchIndexReadyPromise
+    resolveSearchIndexReady()
+    return
+  }
   state.searchIndex = buildNewTabSearchIndex({
-    bookmarks: getAllBookmarkRecords(),
+    bookmarks: catalog.extracted.bookmarks,
     tagIndex: state.bookmarkTagIndex,
     snapshotIndex: state.searchSnapshotIndex
   })
+  lastBuiltSearchIndexCatalogVersion = catalog.version
   state.preparedSearchIndex = prepareNewTabSearchIndex(state.searchIndex)
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
@@ -7906,7 +8323,7 @@ function rebuildNewTabSearchIndex(): void {
 }
 
 function getAllBookmarkRecords(): BookmarkRecord[] {
-  const folderData = state.folderData || extractBookmarkData(state.rootNode)
+  const folderData = state.folderData || getBookmarkCatalog().extracted
   return folderData.bookmarks
 }
 
@@ -8690,13 +9107,13 @@ function normalizePositiveDimension(value: unknown): number | undefined {
 }
 
 function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTINGS {
-  const typeInput = document.getElementById('background-type')
-  const colorInput = document.getElementById('background-color')
-  const featuredInput = document.getElementById('background-featured-id')
-  const urlInput = document.getElementById('background-url')
-  const maskEnabledInput = document.getElementById('background-mask-enabled')
-  const maskStyleInput = document.getElementById('background-mask-style')
-  const maskBlurInput = document.getElementById('background-mask-blur')
+  const typeInput = cachedEl('background-type')
+  const colorInput = cachedEl('background-color')
+  const featuredInput = cachedEl('background-featured-id')
+  const urlInput = cachedEl('background-url')
+  const maskEnabledInput = cachedEl('background-mask-enabled')
+  const maskStyleInput = cachedEl('background-mask-style')
+  const maskBlurInput = cachedEl('background-mask-blur')
 
   return normalizeBackgroundSettings({
     type: typeInput instanceof HTMLSelectElement ? typeInput.value : state.backgroundSettings.type,
@@ -8722,35 +9139,36 @@ function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTING
 function syncBackgroundSettingsControls(): void {
   const settings = state.backgroundSettings
   updateBackgroundStartupCacheStatus(settings)
-  const typeInput = document.getElementById('background-type')
-  const colorInput = document.getElementById('background-color')
-  const featuredInput = document.getElementById('background-featured-id')
-  const featuredPicker = document.getElementById('background-featured-picker')
-  const featuredPickerLabel = document.getElementById('background-featured-picker-label')
-  const urlInput = document.getElementById('background-url')
-  const colorRow = document.getElementById('background-color-row')
-  const featuredRow = document.getElementById('background-featured-row')
-  const featuredCreditRow = document.getElementById('background-featured-credit-row')
-  const featuredCredit = document.getElementById('background-featured-credit')
-  const featuredDisplayRow = document.getElementById('background-featured-display-row')
-  const featuredDisplaySizeRow = document.getElementById('background-featured-display-size-row')
-  const featuredPositionYRow = document.getElementById('background-featured-position-y-row')
-  const imageRow = document.getElementById('background-image-row')
-  const videoRow = document.getElementById('background-video-row')
-  const urlRow = document.getElementById('background-url-row')
-  const backgroundStatus = document.getElementById('background-status')
-  const colorControl = document.getElementById('background-color-control')
-  const colorValue = document.getElementById('background-color-value')
-  const imageButton = document.getElementById('background-image-picker')
-  const videoButton = document.getElementById('background-video-picker')
-  const maskEnabledInput = document.getElementById('background-mask-enabled')
-  const maskStyleInput = document.getElementById('background-mask-style')
-  const maskBlurInput = document.getElementById('background-mask-blur')
-  const maskStyleRow = document.getElementById('background-mask-style-row')
-  const maskBlurRow = document.getElementById('background-mask-blur-row')
+  const typeInput = cachedEl('background-type')
+  const colorInput = cachedEl('background-color')
+  const featuredInput = cachedEl('background-featured-id')
+  const featuredPicker = cachedEl('background-featured-picker')
+  const featuredPickerLabel = cachedEl('background-featured-picker-label')
+  const urlInput = cachedEl('background-url')
+  const colorRow = cachedEl('background-color-row')
+  const featuredRow = cachedEl('background-featured-row')
+  const featuredCreditRow = cachedEl('background-featured-credit-row')
+  const featuredCredit = cachedEl('background-featured-credit')
+  const featuredDisplaySizeRow = cachedEl('background-featured-display-size-row')
+  const featuredPositionXRow = cachedEl('background-featured-position-x-row')
+  const featuredPositionYRow = cachedEl('background-featured-position-y-row')
+  const imageRow = cachedEl('background-image-row')
+  const videoRow = cachedEl('background-video-row')
+  const urlRow = cachedEl('background-url-row')
+  const backgroundStatus = cachedEl('background-status')
+  const colorControl = cachedEl('background-color-control')
+  const colorValue = cachedEl('background-color-value')
+  const imageButton = cachedEl('background-image-picker')
+  const videoButton = cachedEl('background-video-picker')
+  const maskEnabledInput = cachedEl('background-mask-enabled')
+  const maskStyleInput = cachedEl('background-mask-style')
+  const maskBlurInput = cachedEl('background-mask-blur')
+  const maskStyleRow = cachedEl('background-mask-style-row')
+  const maskBlurRow = cachedEl('background-mask-blur-row')
 
   if (typeInput instanceof HTMLSelectElement) {
     typeInput.value = settings.type
+    syncCustomSelectForControl(typeInput)
   }
   if (colorInput instanceof HTMLInputElement) {
     colorInput.value = settings.color
@@ -8777,11 +9195,11 @@ function syncBackgroundSettingsControls(): void {
   if (featuredCreditRow instanceof HTMLElement) {
     featuredCreditRow.hidden = settings.type !== 'featured'
   }
-  if (featuredDisplayRow instanceof HTMLElement) {
-    featuredDisplayRow.hidden = settings.type !== 'featured'
-  }
   if (featuredDisplaySizeRow instanceof HTMLElement) {
     featuredDisplaySizeRow.hidden = settings.type !== 'featured'
+  }
+  if (featuredPositionXRow instanceof HTMLElement) {
+    featuredPositionXRow.hidden = settings.type !== 'featured'
   }
   if (featuredPositionYRow instanceof HTMLElement) {
     featuredPositionYRow.hidden = settings.type !== 'featured'
@@ -8847,6 +9265,7 @@ function syncBackgroundSettingsControls(): void {
   if (maskStyleInput instanceof HTMLSelectElement) {
     maskStyleInput.value = settings.maskStyle
     maskStyleInput.disabled = !settings.maskEnabled
+    syncCustomSelectForControl(maskStyleInput)
   }
   if (maskBlurInput instanceof HTMLInputElement) {
     maskBlurInput.value = String(settings.maskBlur)
@@ -9077,7 +9496,9 @@ function getBackgroundPlaceholderColor(settings: typeof DEFAULT_BACKGROUND_SETTI
 }
 
 function markWallpaperReady(): void {
-  document.documentElement.classList.remove('loading-wallpaper', 'newtab-booting')
+  const rootElement = document.documentElement
+  rootElement.classList.remove('loading-wallpaper', 'newtab-booting')
+  delete rootElement.dataset.instantWallpaperPending
   recordNewTabBackgroundReady()
 }
 
@@ -9086,11 +9507,12 @@ function markWallpaperPending(): void {
   rootElement.classList.add('loading-wallpaper')
   rootElement.classList.remove('instant-wallpaper-ready')
   rootElement.classList.remove('instant-wallpaper-remote-ready')
+  rootElement.dataset.instantWallpaperPending = 'true'
   delete rootElement.dataset.instantWallpaperRemoteReady
 }
 
 function cleanupInstantWallpaperStartupStyle(): void {
-  document.getElementById('instant-wallpaper-startup-style')?.remove()
+  cachedEl('instant-wallpaper-startup-style')?.remove()
 }
 
 function markRuntimeWallpaperApplied(): void {
@@ -9135,9 +9557,13 @@ function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
   if (!instantWallpaper) {
     return false
   }
+  const dataUrl = readInstantWallpaperDataUrl(instantWallpaper)
+  if (!dataUrl) {
+    return false
+  }
 
-  rootElement.style.setProperty('--instant-wallpaper-image', `url("${escapeCssUrl(instantWallpaper.dataUrl)}")`)
-  rootElement.style.setProperty('--instant-wallpaper-preview-image', `url("${escapeCssUrl(instantWallpaper.dataUrl)}")`)
+  rootElement.style.setProperty('--instant-wallpaper-image', `url("${escapeCssUrl(dataUrl)}")`)
+  rootElement.style.setProperty('--instant-wallpaper-preview-image', `url("${escapeCssUrl(dataUrl)}")`)
   rootElement.style.setProperty('--instant-wallpaper-size', instantWallpaper.backgroundSize || 'cover')
   rootElement.style.setProperty('--instant-wallpaper-position', instantWallpaper.backgroundPosition || 'center')
   rootElement.style.setProperty('--wallpaper-placeholder-bg', instantWallpaper.placeholderColor || getBackgroundPlaceholderColor(state.backgroundSettings))
@@ -9201,14 +9627,21 @@ async function applyBackgroundSettings(): Promise<void> {
   document.documentElement.style.setProperty('--bg', getBackgroundPlaceholderColor(settings))
 
   if (isRemoteBackgroundType(settings.type)) {
-  const imageUrl = getRemoteBackgroundImageUrl(settings)
-  if (imageUrl) {
+    const imageUrl = getRemoteBackgroundImageUrl(settings)
+    if (imageUrl) {
       syncInstantWallpaperTargetForSettings(settings, mediaSignature)
       clearVideoBackground()
       setActiveBackgroundObjectUrl('')
-      ensureInstantWallpaperFallbackStyles(mediaSignature)
-      applyDirectRemoteBackgroundImage(imageUrl, mediaSignature)
-      markWallpaperReady()
+      const hasInstantWallpaperFallback = ensureInstantWallpaperFallbackStyles(mediaSignature)
+      if (!hasInstantWallpaperFallback) {
+        markWallpaperPending()
+      }
+      applyDirectRemoteBackgroundImage(imageUrl, mediaSignature, {
+        revealWhenReady: !hasInstantWallpaperFallback
+      })
+      if (hasInstantWallpaperFallback) {
+        markWallpaperReady()
+      }
       void applyUrlBackgroundImage(imageUrl, applyToken, mediaSignature, settings)
     } else {
       clearVideoBackground()
@@ -9417,7 +9850,13 @@ async function applyUrlBackgroundImage(
 function applyDirectRemoteBackgroundImage(
   imageUrl: string,
   mediaSignature: string,
-  { markApplied = true }: { markApplied?: boolean } = {}
+  {
+    markApplied = true,
+    revealWhenReady = false
+  }: {
+    markApplied?: boolean
+    revealWhenReady?: boolean
+  } = {}
 ): void {
   const applyToken = backgroundApplyToken
   clearVideoBackground()
@@ -9429,10 +9868,15 @@ function applyDirectRemoteBackgroundImage(
   if (markApplied) {
     lastAppliedBackgroundMediaSignature = mediaSignature
     void waitForBackgroundImageReady(imageUrl, applyToken).then((ready) => {
-      if (!ready || mediaSignature !== lastAppliedBackgroundMediaSignature) {
+      if (applyToken !== backgroundApplyToken || mediaSignature !== lastAppliedBackgroundMediaSignature) {
         return
       }
-      markInstantWallpaperRemoteReady(mediaSignature)
+      if (ready) {
+        markInstantWallpaperRemoteReady(mediaSignature)
+      }
+      if (revealWhenReady) {
+        markWallpaperReady()
+      }
     })
   }
 }
@@ -9464,7 +9908,13 @@ async function cacheBackgroundUrlImage(
     return
   }
 
-  await ensureBackgroundImageFetchPermission(normalizedUrl)
+  const permissionGranted = await ensureBackgroundImageFetchPermission(normalizedUrl)
+  if (!permissionGranted) {
+    state.backgroundUrlCacheStatus = '未授权该图片域名，首屏缓存可能无法准备。'
+    updateBackgroundStartupCacheStatus(settings)
+    syncBackgroundSettingsControls()
+    return
+  }
 
   let cacheTask = backgroundUrlCacheTaskByUrl.get(normalizedUrl)
   if (!cacheTask) {
@@ -9488,7 +9938,7 @@ async function cacheBackgroundUrlImage(
     updateBackgroundStartupCacheStatus(settings)
     syncBackgroundSettingsControls()
 
-    const durableBlob = await cacheTask.durableBlob
+    const durableBlob = await cacheTask.durableBlob.catch(() => startupBlob)
     if (mediaSignature) {
       await updateInstantWallpaperFromBlob(durableBlob, mediaSignature, settings)
     }
@@ -9532,6 +9982,7 @@ function createBackgroundUrlCacheTask(
     }
     return durable
   })
+  durableBlob.catch(() => {})
 
   return {
     startupBlob,
@@ -9584,62 +10035,6 @@ async function applyCachedRemoteBackgroundBlobToCurrentPage(
   return true
 }
 
-async function cacheFeaturedBackgroundGalleryImages(): Promise<void> {
-  const urls = getFeaturedBackgroundCacheUrls()
-  const signature = urls.join('|')
-  if (
-    featuredBackgroundGalleryCacheTask &&
-    featuredBackgroundGalleryCacheSignature === signature
-  ) {
-    return featuredBackgroundGalleryCacheTask
-  }
-
-  featuredBackgroundGalleryCacheSignature = signature
-  featuredBackgroundGalleryCacheTask = cacheFeaturedBackgroundGalleryImageUrls(urls).finally(() => {
-    if (featuredBackgroundGalleryCacheSignature === signature) {
-      featuredBackgroundGalleryCacheTask = null
-    }
-  })
-  return featuredBackgroundGalleryCacheTask
-}
-
-async function cacheFeaturedBackgroundGalleryImageUrls(urls: string[]): Promise<void> {
-  for (const imageUrl of urls) {
-    await cacheBackgroundUrlImage(imageUrl)
-  }
-}
-
-async function cacheFeaturedBackgroundGalleryPreviewImages(): Promise<void> {
-  const urls = getFeaturedBackgroundPreviewCacheUrls()
-  const signature = urls.join('|')
-  if (
-    featuredBackgroundGalleryPreviewCacheTask &&
-    featuredBackgroundGalleryPreviewCacheSignature === signature
-  ) {
-    return featuredBackgroundGalleryPreviewCacheTask
-  }
-
-  featuredBackgroundGalleryPreviewCacheSignature = signature
-  featuredBackgroundGalleryPreviewCacheTask = cacheFeaturedBackgroundGalleryPreviewImageUrls(urls).finally(() => {
-    if (featuredBackgroundGalleryPreviewCacheSignature === signature) {
-      featuredBackgroundGalleryPreviewCacheTask = null
-    }
-  })
-  return featuredBackgroundGalleryPreviewCacheTask
-}
-
-async function cacheFeaturedBackgroundGalleryPreviewImageUrls(urls: string[]): Promise<void> {
-  const workers = Array.from(
-    { length: Math.min(FEATURED_BACKGROUND_PREVIEW_CACHE_CONCURRENCY, urls.length) },
-    async (_, workerIndex) => {
-      for (let index = workerIndex; index < urls.length; index += FEATURED_BACKGROUND_PREVIEW_CACHE_CONCURRENCY) {
-        await resolveFeaturedBackgroundGalleryPreviewObjectUrl(urls[index], { fetchOnMiss: true })
-      }
-    }
-  )
-  await Promise.all(workers)
-}
-
 function scheduleFeaturedBackgroundGalleryPreviewObjectUrlWarm(): void {
   runIdle(() => {
     if (!backgroundGalleryModule) {
@@ -9673,9 +10068,9 @@ async function warmFeaturedBackgroundPickerPreviewObjectUrls(gallery: Background
 
 async function warmFeaturedBackgroundPreviewObjectUrls(urls: string[]): Promise<void> {
   const workers = Array.from(
-    { length: Math.min(FEATURED_BACKGROUND_PREVIEW_CACHE_CONCURRENCY, urls.length) },
+    { length: Math.min(FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY, urls.length) },
     async (_, workerIndex) => {
-      for (let index = workerIndex; index < urls.length; index += FEATURED_BACKGROUND_PREVIEW_CACHE_CONCURRENCY) {
+      for (let index = workerIndex; index < urls.length; index += FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY) {
         await createFeaturedBackgroundPreviewObjectUrl(urls[index])
       }
     }
@@ -9713,60 +10108,8 @@ function getBackgroundImageOriginPattern(imageUrl: string): string {
   }
 }
 
-function getFeaturedBackgroundCacheUrls(): string[] {
-  const urls = new Set<string>()
-  const activeUrl = getRemoteBackgroundImageUrl(state.backgroundSettings)
-  if (activeUrl) {
-    urls.add(activeUrl)
-  }
-  for (const item of state.featuredBackgroundGallery) {
-    if (item.imageUrl) {
-      urls.add(item.imageUrl)
-    }
-  }
-  if (backgroundGalleryModule) {
-    for (const item of getFeaturedBackgroundPickerItems(backgroundGalleryModule)) {
-      if (item.imageUrl) {
-        urls.add(item.imageUrl)
-      }
-    }
-  }
-  return [...urls]
-}
-
-function getFeaturedBackgroundPreviewCacheUrls(): string[] {
-  const urls = new Set<string>()
-  const activeFeaturedItem = getActiveFeaturedBackgroundItemSync()
-  const activePreviewUrl = activeFeaturedItem
-    ? getFeaturedBackgroundPreviewSourceUrl(activeFeaturedItem.provider, activeFeaturedItem.imageUrl)
-    : ''
-  if (activePreviewUrl) {
-    urls.add(activePreviewUrl)
-  }
-  for (const item of state.featuredBackgroundGallery) {
-    const previewUrl = getFeaturedBackgroundPreviewSourceUrl(item.provider, item.imageUrl)
-    if (previewUrl) {
-      urls.add(previewUrl)
-    }
-  }
-  if (backgroundGalleryModule) {
-    for (const item of getFeaturedBackgroundPickerItems(backgroundGalleryModule)) {
-      const previewUrl = getFeaturedBackgroundPreviewSourceUrl(item.provider, item.imageUrl)
-      if (previewUrl) {
-        urls.add(previewUrl)
-      }
-    }
-  }
-  return [...urls]
-}
-
 function getFeaturedBackgroundPickerPreviewUrls(gallery: BackgroundGalleryModule): string[] {
   const urls = new Set<string>()
-  const dailyItem = gallery.selectFeaturedBackgroundItem(getFeaturedBackgroundDateSeed())
-  const dailyPreviewUrl = getFeaturedBackgroundPreviewSourceUrl(dailyItem.provider, dailyItem.imageUrl)
-  if (dailyPreviewUrl) {
-    urls.add(dailyPreviewUrl)
-  }
 
   for (const item of getFeaturedBackgroundPickerItems(gallery)) {
     const previewUrl = getFeaturedBackgroundPreviewSourceUrl(item.provider, item.imageUrl)
@@ -9821,13 +10164,12 @@ async function updateInstantWallpaperFromBlob(
     return
   }
 
-  const placeholderColor = await extractBackgroundPlaceholderColor(blob)
   const displayCss = getBackgroundDisplayCssForSettings(settings)
   const recordBase = {
     signature: mediaSignature,
     backgroundSize: displayCss.backgroundSize,
     backgroundPosition: displayCss.backgroundPosition,
-    placeholderColor: placeholderColor || getBackgroundPlaceholderColor(settings),
+    placeholderColor: getBackgroundPlaceholderColor(settings),
     updatedAt: Date.now(),
     ready: true
   }
@@ -9939,6 +10281,13 @@ function getFeaturedBackgroundPreviewImageUrl(
         url.pathname = pathParts.join('/')
         return url.href
       }
+      const commonsIndex = pathParts.findIndex((part) => part === 'commons')
+      if (commonsIndex >= 0 && pathParts[commonsIndex + 1] !== 'thumb' && filename) {
+        pathParts.splice(commonsIndex + 1, 0, 'thumb')
+        pathParts.push(`960px-${filename}`)
+        url.pathname = pathParts.join('/')
+        return url.href
+      }
     }
     if (item.provider === 'artic' && url.hostname === 'www.artic.edu') {
       url.pathname = url.pathname.replace('/full/2560,/', '/full/960,/')
@@ -9990,69 +10339,6 @@ function clearInstantWallpaperFallbackStyles(): void {
   rootElement.style.removeProperty('--instant-wallpaper-position')
 }
 
-async function extractBackgroundPlaceholderColor(blob: Blob): Promise<string> {
-  if (!blob.type.toLowerCase().startsWith('image/')) {
-    return ''
-  }
-
-  let bitmap: ImageBitmap
-  try {
-    bitmap = await createImageBitmap(blob, {
-      resizeWidth: 24,
-      resizeHeight: 24,
-      resizeQuality: 'low'
-    })
-  } catch {
-    return ''
-  }
-
-  try {
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-    const context = canvas.getContext('2d', { willReadFrequently: true })
-    if (!context) {
-      return ''
-    }
-
-    context.drawImage(bitmap, 0, 0)
-    const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
-    let red = 0
-    let green = 0
-    let blue = 0
-    let count = 0
-    for (let index = 0; index < data.length; index += 4) {
-      const alpha = data[index + 3]
-      if (alpha < 16) {
-        continue
-      }
-      red += data[index]
-      green += data[index + 1]
-      blue += data[index + 2]
-      count += 1
-    }
-    if (!count) {
-      return ''
-    }
-    return toReadablePlaceholderColor(
-      Math.round(red / count),
-      Math.round(green / count),
-      Math.round(blue / count)
-    )
-  } catch {
-    return ''
-  } finally {
-    bitmap.close()
-  }
-}
-
-function toReadablePlaceholderColor(red: number, green: number, blue: number): string {
-  const luminance = (0.2126 * red + 0.7152 * green + 0.0722 * blue) / 255
-  const lift = luminance < 0.08 ? 28 : 0
-  const clampChannel = (value: number) => Math.max(12, Math.min(235, value + lift))
-  return rgbToHex(clampChannel(red), clampChannel(green), clampChannel(blue))
-}
-
 function getNonBlackPlaceholderColor(value: unknown): string {
   const color = normalizeInstantWallpaperColor(value)
   const parsed = parseHexColor(color)
@@ -10083,7 +10369,7 @@ function rgbToHex(red: number, green: number, blue: number): string {
 }
 
 function applyBackgroundMaskSettings(settings = state.backgroundSettings): void {
-  const mask = document.getElementById('newtab-background-mask')
+  const mask = cachedEl('newtab-background-mask')
   document.body.classList.toggle('background-mask-enabled', settings.maskEnabled)
   document.body.dataset.backgroundMaskStyle = settings.maskStyle
   document.documentElement.style.setProperty('--background-mask-blur', `${settings.maskBlur}px`)
@@ -10457,7 +10743,10 @@ function getBackgroundUrlCacheKey(imageUrl = normalizeBackgroundImageUrl(state.b
   return `${BACKGROUND_URL_CACHE_KEY_PREFIX}${normalizedUrl}`
 }
 
-async function fetchBackgroundUrlImage(imageUrl: string): Promise<Blob> {
+async function fetchBackgroundUrlImage(
+  imageUrl: string,
+  { maxBytes = BACKGROUND_URL_FULL_MAX_BYTES }: { maxBytes?: number } = {}
+): Promise<Blob> {
   const controller = new AbortController()
   const timeout = window.setTimeout(() => {
     controller.abort()
@@ -10474,7 +10763,7 @@ async function fetchBackgroundUrlImage(imageUrl: string): Promise<Blob> {
 
     const declaredSize = validateBackgroundContentLength(
       response.headers.get('content-length'),
-      BACKGROUND_URL_MAX_BYTES
+      maxBytes
     )
     if (!declaredSize.allowed) {
       throw new Error(declaredSize.message)
@@ -10486,13 +10775,13 @@ async function fetchBackgroundUrlImage(imageUrl: string): Promise<Blob> {
       throw new Error('链接返回的内容不是图片。')
     }
 
-    const finalSize = validateBackgroundBlobSize(blob.size, BACKGROUND_URL_MAX_BYTES)
+    const finalSize = validateBackgroundBlobSize(blob.size, maxBytes)
     if (!finalSize.allowed) {
       throw new Error(finalSize.message)
     }
 
     const optimizedBlob = await createOptimizedBackgroundImageBlob(blob)
-    const optimizedSize = validateBackgroundBlobSize(optimizedBlob.size, BACKGROUND_URL_MAX_BYTES)
+    const optimizedSize = validateBackgroundBlobSize(optimizedBlob.size, BACKGROUND_URL_PREVIEW_MAX_BYTES)
     if (!optimizedSize.allowed) {
       throw new Error(optimizedSize.message)
     }
@@ -10628,19 +10917,19 @@ function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string 
 }
 
 function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
-  const enabledInput = document.getElementById('search-enabled')
-  const webEnabledInput = document.getElementById('search-web-enabled')
-  const openInput = document.getElementById('search-open-new-tab')
-  const engineInput = document.getElementById('search-engine')
+  const enabledInput = cachedEl('search-enabled')
+  const webEnabledInput = cachedEl('search-web-enabled')
+  const openInput = cachedEl('search-open-new-tab')
+  const engineInput = cachedEl('search-engine')
   const engineToggleInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]')
   )
-  const placeholderInput = document.getElementById('search-placeholder')
-  const widthInput = document.getElementById('search-width')
-  const heightInput = document.getElementById('search-height')
-  const offsetYInput = document.getElementById('search-offset-y')
-  const autoVerticalCenterInput = document.getElementById('search-auto-vertical-center')
-  const backgroundInput = document.getElementById('search-background')
+  const placeholderInput = cachedEl('search-placeholder')
+  const widthInput = cachedEl('search-width')
+  const heightInput = cachedEl('search-height')
+  const offsetYInput = cachedEl('search-offset-y')
+  const autoVerticalCenterInput = cachedEl('search-auto-vertical-center')
+  const backgroundInput = cachedEl('search-background')
 
   return normalizeSearchSettings({
     enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : state.searchSettings.enabled,
@@ -10667,18 +10956,18 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
 
 function syncSearchSettingsControls(): void {
   const settings = state.searchSettings
-  const enabledInput = document.getElementById('search-enabled')
-  const webEnabledInput = document.getElementById('search-web-enabled')
-  const openInput = document.getElementById('search-open-new-tab')
-  const engineInput = document.getElementById('search-engine')
+  const enabledInput = cachedEl('search-enabled')
+  const webEnabledInput = cachedEl('search-web-enabled')
+  const openInput = cachedEl('search-open-new-tab')
+  const engineInput = cachedEl('search-engine')
   const engineToggleInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]')
   )
-  const placeholderInput = document.getElementById('search-placeholder')
-  const widthInput = document.getElementById('search-width')
-  const heightInput = document.getElementById('search-height')
-  const autoVerticalCenterInput = document.getElementById('search-auto-vertical-center')
-  const backgroundInput = document.getElementById('search-background')
+  const placeholderInput = cachedEl('search-placeholder')
+  const widthInput = cachedEl('search-width')
+  const heightInput = cachedEl('search-height')
+  const autoVerticalCenterInput = cachedEl('search-auto-vertical-center')
+  const backgroundInput = cachedEl('search-background')
   const dependentControls = [
     webEnabledInput,
     openInput,
@@ -10748,7 +11037,7 @@ function syncSearchSettingsControls(): void {
 }
 
 function syncSearchWidthControl(): void {
-  const widthInput = document.getElementById('search-width')
+  const widthInput = cachedEl('search-width')
   const bounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
   const value = clampNumber(
     state.searchSettings.width,
@@ -10767,7 +11056,7 @@ function syncSearchWidthControl(): void {
 }
 
 function syncSearchOffsetControl(): void {
-  const offsetYInput = document.getElementById('search-offset-y')
+  const offsetYInput = cachedEl('search-offset-y')
   const bounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
   const value = clampNumber(
     state.searchSettings.offsetY,
@@ -10823,10 +11112,10 @@ function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_
 }
 
 function readGeneralSettingsFromControls(): typeof DEFAULT_GENERAL_SETTINGS {
-  const hideInput = document.getElementById('general-hide-settings-trigger')
-  const showQuickAccessInput = document.getElementById('general-show-quick-access')
-  const openBookmarksInput = document.getElementById('general-open-bookmarks-new-tab')
-  const showSourceNavigationInput = document.getElementById('folder-show-source-navigation')
+  const hideInput = cachedEl('general-hide-settings-trigger')
+  const showQuickAccessInput = cachedEl('general-show-quick-access')
+  const openBookmarksInput = cachedEl('general-open-bookmarks-new-tab')
+  const showSourceNavigationInput = cachedEl('folder-show-source-navigation')
 
   return normalizeGeneralSettings({
     hideSettingsTrigger: hideInput instanceof HTMLInputElement
@@ -10845,10 +11134,10 @@ function readGeneralSettingsFromControls(): typeof DEFAULT_GENERAL_SETTINGS {
 }
 
 function syncGeneralSettingsControls(): void {
-  const hideInput = document.getElementById('general-hide-settings-trigger')
-  const showQuickAccessInput = document.getElementById('general-show-quick-access')
-  const openBookmarksInput = document.getElementById('general-open-bookmarks-new-tab')
-  const showSourceNavigationInput = document.getElementById('folder-show-source-navigation')
+  const hideInput = cachedEl('general-hide-settings-trigger')
+  const showQuickAccessInput = cachedEl('general-show-quick-access')
+  const openBookmarksInput = cachedEl('general-open-bookmarks-new-tab')
+  const showSourceNavigationInput = cachedEl('folder-show-source-navigation')
 
   if (hideInput instanceof HTMLInputElement) {
     hideInput.checked = state.generalSettings.hideSettingsTrigger
@@ -10878,7 +11167,7 @@ function applyGeneralSettings(): void {
 }
 
 function readFolderSettingsFromControls(): NewTabFolderSettings {
-  const hideInput = document.getElementById('folder-hide-names')
+  const hideInput = cachedEl('folder-hide-names')
 
   return normalizeFolderSettings({
     selectedFolderIds: state.folderSettings.selectedFolderIds,
@@ -10890,13 +11179,13 @@ function readFolderSettingsFromControls(): NewTabFolderSettings {
 
 function syncFolderSettingsControls(): void {
   measureNow('newtab.syncFolderSettingsControls', () => {
-    const hideInput = document.getElementById('folder-hide-names')
-    const selectedList = document.getElementById('folder-selected-list')
-    const selectedCount = document.getElementById('folder-selected-count')
-    const toggle = document.getElementById('folder-candidates-toggle')
-    const panel = document.getElementById('folder-candidates-panel')
-    const searchInput = document.getElementById('folder-candidate-search')
-    const candidateList = document.getElementById('folder-candidate-list')
+    const hideInput = cachedEl('folder-hide-names')
+    const selectedList = cachedEl('folder-selected-list')
+    const selectedCount = cachedEl('folder-selected-count')
+    const toggle = cachedEl('folder-candidates-toggle')
+    const panel = cachedEl('folder-candidates-panel')
+    const searchInput = cachedEl('folder-candidate-search')
+    const candidateList = cachedEl('folder-candidate-list')
 
     if (hideInput instanceof HTMLInputElement) {
       hideInput.checked = state.folderSettings.hideFolderNames
@@ -10944,7 +11233,7 @@ function syncModuleSettingsControls(): void {
 
   const rows = buildNewTabModuleSettingRows(state.moduleSettings)
   rows.forEach((setting, index) => {
-    const container = document.getElementById(containerIdByKey[setting.key])
+    const container = cachedEl(containerIdByKey[setting.key])
     if (container instanceof HTMLElement) {
       container.replaceChildren(createModuleSettingRow(setting, index, rows.length))
     }
@@ -11180,7 +11469,7 @@ function getFolderCandidates(): NewTabFolderCandidate[] {
     return []
   }
 
-  const folderData = state.folderData || extractBookmarkData(state.rootNode)
+  const folderData = state.folderData || getBookmarkCatalog().extracted
   const folderNodeMap = state.folderNodeMap.size ? state.folderNodeMap : buildFolderNodeMap(state.rootNode)
   return folderData.folders.map((folder) => {
     const counts = getFolderBookmarkCounts(folderNodeMap.get(folder.id) || null)
@@ -11247,15 +11536,15 @@ function applyFolderSettings(): void {
 }
 
 function readIconSettingsFromControls(): IconSettings {
-  const pageWidthInput = document.getElementById('icon-page-width')
-  const tileWidthInput = document.getElementById('icon-tile-width')
-  const iconShellSizeInput = document.getElementById('icon-shell-size')
-  const columnGapInput = document.getElementById('icon-column-gap')
-  const rowGapInput = document.getElementById('icon-row-gap')
-  const folderGapInput = document.getElementById('icon-folder-gap')
-  const columnsInput = document.getElementById('icon-columns')
-  const verticalCenterInput = document.getElementById('icon-vertical-center')
-  const showTitlesInput = document.getElementById('icon-show-titles')
+  const pageWidthInput = cachedEl('icon-page-width')
+  const tileWidthInput = cachedEl('icon-tile-width')
+  const iconShellSizeInput = cachedEl('icon-shell-size')
+  const columnGapInput = cachedEl('icon-column-gap')
+  const rowGapInput = cachedEl('icon-row-gap')
+  const folderGapInput = cachedEl('icon-folder-gap')
+  const columnsInput = cachedEl('icon-columns')
+  const verticalCenterInput = cachedEl('icon-vertical-center')
+  const showTitlesInput = cachedEl('icon-show-titles')
 
   const settings = normalizeIconSettings({
     pageWidth: pageWidthInput instanceof HTMLInputElement
@@ -11296,18 +11585,18 @@ function readIconSettingsFromControls(): IconSettings {
 function syncIconSettingsControls(): void {
   measureNow('newtab.syncIconSettingsControls', () => {
     const settings = state.iconSettings
-    const pageWidthInput = document.getElementById('icon-page-width')
-    const tileWidthInput = document.getElementById('icon-tile-width')
-    const iconShellSizeInput = document.getElementById('icon-shell-size')
-    const columnGapInput = document.getElementById('icon-column-gap')
-    const rowGapInput = document.getElementById('icon-row-gap')
-    const folderGapInput = document.getElementById('icon-folder-gap')
-    const columnsInput = document.getElementById('icon-columns')
-    const verticalCenterInput = document.getElementById('icon-vertical-center')
-    const showTitlesInput = document.getElementById('icon-show-titles')
-    const tileWidthRow = document.getElementById('icon-tile-width-row')
-    const titleLinesRow = document.getElementById('icon-title-lines-row')
-    const columnsRow = document.getElementById('icon-columns-row')
+    const pageWidthInput = cachedEl('icon-page-width')
+    const tileWidthInput = cachedEl('icon-tile-width')
+    const iconShellSizeInput = cachedEl('icon-shell-size')
+    const columnGapInput = cachedEl('icon-column-gap')
+    const rowGapInput = cachedEl('icon-row-gap')
+    const folderGapInput = cachedEl('icon-folder-gap')
+    const columnsInput = cachedEl('icon-columns')
+    const verticalCenterInput = cachedEl('icon-vertical-center')
+    const showTitlesInput = cachedEl('icon-show-titles')
+    const tileWidthRow = cachedEl('icon-tile-width-row')
+    const titleLinesRow = cachedEl('icon-title-lines-row')
+    const columnsRow = cachedEl('icon-columns-row')
 
     if (pageWidthInput instanceof HTMLInputElement) {
       pageWidthInput.value = String(settings.pageWidth)
@@ -11448,8 +11737,8 @@ function resetIconSettingsToDefaults(): void {
 }
 
 function toggleIconAdvanced(): void {
-  const toggle = document.getElementById('icon-advanced-toggle')
-  const panel = document.getElementById('icon-advanced-panel')
+  const toggle = cachedEl('icon-advanced-toggle')
+  const panel = cachedEl('icon-advanced-panel')
   if (!toggle || !panel) return
 
   const expanded = toggle.getAttribute('aria-expanded') === 'true'
@@ -11491,14 +11780,14 @@ function syncPresetCardSelection(): void {
 }
 
 function syncIconAdvancedPanel(): void {
-  const tileWidthInput = document.getElementById('icon-tile-width')
+  const tileWidthInput = cachedEl('icon-tile-width')
   if (tileWidthInput instanceof HTMLInputElement) {
     tileWidthInput.title = state.iconSettings.showTitles
       ? ''
       : '显示标题时生效'
   }
 
-  const columnsInput = document.getElementById('icon-columns')
+  const columnsInput = cachedEl('icon-columns')
   if (columnsInput instanceof HTMLInputElement) {
     columnsInput.title = state.iconSettings.layoutMode === 'fixed'
       ? ''
@@ -11507,7 +11796,7 @@ function syncIconAdvancedPanel(): void {
 }
 
 function setTextContent(elementId: string, text: string): void {
-  const element = document.getElementById(elementId)
+  const element = cachedEl(elementId)
   if (element) {
     element.textContent = text
   }
@@ -11547,7 +11836,7 @@ function setSettingsSaveStatus(nextState: SettingsSaveState, message: string): v
 }
 
 function syncSettingsSaveStatus(): void {
-  const status = document.getElementById('settings-save-status')
+  const status = cachedEl('settings-save-status')
   if (!(status instanceof HTMLElement)) {
     return
   }
@@ -11569,7 +11858,7 @@ function syncIconSegmentButtons(selector: string, selectedValue: string, disable
 }
 
 function renderIconPreviewIfNeeded(): void {
-  const preview = document.getElementById('icon-live-preview')
+  const preview = cachedEl('icon-live-preview')
   if (!preview) {
     return
   }
@@ -11583,63 +11872,26 @@ function renderIconPreviewIfNeeded(): void {
 }
 
 function renderIconPreview(): void {
-  const preview = document.getElementById('icon-live-preview')
+  const preview = cachedEl('icon-live-preview')
   if (!preview) {
     return
   }
 
   renderIconPreviewElement(
     preview,
-    document.getElementById('icon-live-preview-summary'),
+    cachedEl('icon-live-preview-summary'),
     state.iconSettings
   )
 }
 
 function renderIconPresetCards(): void {
-  const row = document.getElementById('icon-preset-row')
-  if (!row) return
-
-  row.replaceChildren()
-  for (const [key, meta] of Object.entries(ICON_PRESET_META)) {
-    const card = document.createElement('button')
-    card.className = 'icon-preset-card'
-    card.type = 'button'
-    card.dataset.preset = key
-    card.setAttribute('aria-pressed', 'false')
-    card.setAttribute('aria-label', `${meta.name}布局，${meta.desc}，${meta.detail}`)
-
-    const preview = document.createElement('div')
-    preview.className = 'icon-preset-preview'
-    preview.style.gridTemplateColumns = `repeat(${meta.cols}, 1fr)`
-    preview.style.gap = key === 'compact' ? '3px' : key === 'spacious' ? '5px' : '4px'
-    preview.style.padding = '0 4px'
-
-    for (let i = 0; i < meta.cols * meta.rows; i++) {
-      const cell = document.createElement('span')
-      cell.className = 'icon-preset-preview-cell'
-      cell.style.height = key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px'
-      preview.appendChild(cell)
-    }
-
-    const name = document.createElement('span')
-    name.className = 'icon-preset-name'
-    name.textContent = meta.name
-
-    const desc = document.createElement('span')
-    desc.className = 'icon-preset-desc'
-    desc.textContent = meta.desc
-
-    const detail = document.createElement('span')
-    detail.className = 'icon-preset-detail'
-    detail.textContent = meta.detail
-
-    card.append(preview, name, desc, detail)
-    row.appendChild(card)
-  }
+  const row = cachedEl('icon-preset-row')
+  if (!row || row.childElementCount > 0) return
+  void import('./settings-drawer-mount.js').then((mod) => mod.renderIconPresetCards())
 }
 
 async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
-  const input = document.getElementById('background-featured-id')
+  const input = cachedEl('background-featured-id')
   const dateSeed = getFeaturedBackgroundDateSeed()
   if (state.backgroundSettings.type !== 'featured' ||
     !(input instanceof HTMLInputElement) ||
@@ -11660,7 +11912,40 @@ async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
   syncFeaturedBackgroundPickerLabel()
 }
 
+let featuredBackgroundModalMounted = false
+let featuredBackgroundModalMountPromise: Promise<void> | null = null
+
+function ensureFeaturedBackgroundModalMounted(): Promise<void> {
+  if (featuredBackgroundModalMounted) return Promise.resolve()
+  if (featuredBackgroundModalMountPromise) return featuredBackgroundModalMountPromise
+  featuredBackgroundModalMountPromise = (async () => {
+    const mod = await import('./featured-modal-mount.js')
+    const result = mod.mountFeaturedBackgroundModal({
+      onRefreshClick: () => {
+        void refreshFeaturedBackgroundGallery()
+      },
+      onCloseRequest: handleFeaturedBackgroundModalCloseRequest,
+      onGridScroll: () => {
+        clearFeaturedBackgroundHoverPreview()
+      },
+      onModalPointerDownCapture: handleFeaturedBackgroundModalPointerDown,
+      bindCardDelegation: (grid) => {
+        bindFeaturedBackgroundCardDelegation(grid)
+      }
+    })
+    if (!result) return
+    featuredBackgroundModalMounted = true
+    featuredBackgroundModal = result.modal
+    featuredBackgroundModalGrid = result.grid
+    featuredBackgroundModalClose = result.close
+    featuredBackgroundRefreshButton = result.refresh
+    featuredBackgroundStatus = result.status
+  })()
+  return featuredBackgroundModalMountPromise
+}
+
 async function openFeaturedBackgroundPicker(): Promise<void> {
+  await ensureFeaturedBackgroundModalMounted()
   if (!(featuredBackgroundModal instanceof HTMLElement) ||
     !(featuredBackgroundModalGrid instanceof HTMLElement)) {
     return
@@ -11674,36 +11959,57 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
   featuredBackgroundModal.removeAttribute('inert')
   featuredBackgroundPicker?.setAttribute('aria-expanded', 'true')
 
-  try {
-    if (backgroundGalleryModule) {
-      await warmFeaturedBackgroundPickerPreviewObjectUrls(backgroundGalleryModule)
-      renderFeaturedBackgroundPicker(backgroundGalleryModule)
-      window.requestAnimationFrame(() => {
-        const activeCard = featuredBackgroundModalGrid.querySelector<HTMLElement>('.featured-wallpaper-card.is-selected')
-        const firstCard = featuredBackgroundModalGrid.querySelector<HTMLElement>('.featured-wallpaper-card')
-        ;(activeCard || firstCard || featuredBackgroundModalClose as HTMLElement | null)?.focus()
-      })
-      return
-    }
+  await openFeaturedBackgroundPickerContent({
+    getLoadedGallery: () => backgroundGalleryModule,
+    loadGallery: loadBackgroundGalleryModule,
+    isOpen: isFeaturedBackgroundPickerOpen,
+    hasRenderedContent: () =>
+      !!featuredBackgroundModalGrid?.querySelector('.featured-wallpaper-card'),
+    showLoading: () => {
+      featuredBackgroundModalGrid.replaceChildren(createFeaturedBackgroundLoadingCard())
+    },
+    showError: () => {
+      featuredBackgroundModalGrid.replaceChildren(createFeaturedBackgroundErrorCard())
+    },
+    render: renderFeaturedBackgroundPicker,
+    focusInitialTarget: focusFeaturedBackgroundPickerInitialTarget,
+    scheduleFrame: (callback) => {
+      window.requestAnimationFrame(callback)
+    },
+    schedulePreviewWarm: (callback) => {
+      scheduleFeaturedBackgroundPreviewWarm(callback)
+    },
+    warmPreviewObjectUrls: warmFeaturedBackgroundPickerPreviewObjectUrls
+  })
+}
 
-    featuredBackgroundModalGrid.replaceChildren(createFeaturedBackgroundLoadingCard())
-    const gallery = await loadBackgroundGalleryModule()
+function scheduleFeaturedBackgroundPreviewWarm(callback: () => void): void {
+  window.clearTimeout(featuredBackgroundGalleryPreviewWarmTimer)
+  featuredBackgroundGalleryPreviewWarmTimer = window.setTimeout(() => {
+    featuredBackgroundGalleryPreviewWarmTimer = 0
     if (!isFeaturedBackgroundPickerOpen()) {
       return
     }
-    await warmFeaturedBackgroundPickerPreviewObjectUrls(gallery)
-    if (!isFeaturedBackgroundPickerOpen()) {
-      return
-    }
-    renderFeaturedBackgroundPicker(gallery)
-    window.requestAnimationFrame(() => {
-      const activeCard = featuredBackgroundModalGrid.querySelector<HTMLElement>('.featured-wallpaper-card.is-selected')
-      const firstCard = featuredBackgroundModalGrid.querySelector<HTMLElement>('.featured-wallpaper-card')
-      ;(activeCard || firstCard || featuredBackgroundModalClose as HTMLElement | null)?.focus()
-    })
-  } catch {
-    featuredBackgroundModalGrid.replaceChildren(createFeaturedBackgroundErrorCard())
+    runIdle(() => {
+      if (isFeaturedBackgroundPickerOpen()) {
+        callback()
+      }
+    }, { timeout: 1600 })
+  }, 1600)
+}
+
+function clearFeaturedBackgroundPreviewWarmTimers(): void {
+  window.clearTimeout(featuredBackgroundGalleryPreviewWarmTimer)
+  featuredBackgroundGalleryPreviewWarmTimer = 0
+}
+
+function focusFeaturedBackgroundPickerInitialTarget(): void {
+  if (!(featuredBackgroundModalGrid instanceof HTMLElement) || !isFeaturedBackgroundPickerOpen()) {
+    return
   }
+  const activeCard = featuredBackgroundModalGrid.querySelector<HTMLElement>('.featured-wallpaper-card.is-selected')
+  const firstCard = featuredBackgroundModalGrid.querySelector<HTMLElement>('.featured-wallpaper-card')
+  ;(activeCard || firstCard || featuredBackgroundModalClose as HTMLElement | null)?.focus()
 }
 
 function closeFeaturedBackgroundPicker(): void {
@@ -11712,6 +12018,9 @@ function closeFeaturedBackgroundPicker(): void {
   }
 
   clearFeaturedBackgroundHoverPreview()
+  clearFeaturedBackgroundPreviewWarmTimers()
+  disconnectFeaturedBackgroundCardPreviewObserver()
+  featuredBackgroundCardPreviewRegistry.resetVisibility()
   featuredBackgroundModal.classList.remove('open')
   featuredBackgroundModal.setAttribute('aria-hidden', 'true')
   featuredBackgroundModal.setAttribute('inert', '')
@@ -11747,159 +12056,330 @@ function isFeaturedBackgroundPickerOpen(): boolean {
   return featuredBackgroundModal instanceof HTMLElement && featuredBackgroundModal.classList.contains('open')
 }
 
+function getFeaturedBackgroundCardPreviewObserver(): IntersectionObserver | null {
+  if (typeof IntersectionObserver === 'undefined') {
+    return null
+  }
+
+  if (!featuredBackgroundCardPreviewObserver) {
+    featuredBackgroundCardPreviewObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting || !(entry.target instanceof HTMLElement)) {
+          continue
+        }
+        hydrateFeaturedBackgroundCardPreview(entry.target)
+      }
+    }, {
+      root: featuredBackgroundModalGrid instanceof HTMLElement ? featuredBackgroundModalGrid : null,
+      rootMargin: '280px 0px'
+    })
+    featuredBackgroundCardPreviewObservedRoot = featuredBackgroundModalGrid instanceof HTMLElement
+      ? featuredBackgroundModalGrid
+      : null
+  } else if (featuredBackgroundCardPreviewObservedRoot !== featuredBackgroundModalGrid) {
+    disconnectFeaturedBackgroundCardPreviewObserver()
+    return getFeaturedBackgroundCardPreviewObserver()
+  }
+
+  return featuredBackgroundCardPreviewObserver
+}
+
+function disconnectFeaturedBackgroundCardPreviewObserver(): void {
+  featuredBackgroundCardPreviewObserver?.disconnect()
+  featuredBackgroundCardPreviewObserver = null
+  featuredBackgroundCardPreviewObservedRoot = null
+}
+
+function observeFeaturedBackgroundCardPreview(card: HTMLElement): void {
+  if (!card.isConnected) {
+    return
+  }
+  const observer = getFeaturedBackgroundCardPreviewObserver()
+  if (!observer) {
+    runMicroIdle(() => {
+      hydrateFeaturedBackgroundCardPreview(card)
+    })
+    return
+  }
+  observer.observe(card)
+}
+
+function hydrateFeaturedBackgroundCardPreview(card: HTMLElement): void {
+  const entry = featuredBackgroundCardPreviewRegistry.markVisible(card)
+  if (!entry) {
+    return
+  }
+  featuredBackgroundCardPreviewObserver?.unobserve(card)
+  const imageUrl = String(card.dataset.featuredBackgroundPreviewUrl || '')
+  const remotePreviewUrl = String(entry.image.dataset.remotePreviewUrl || imageUrl)
+  if (!imageUrl) {
+    return
+  }
+  const image = entry.image as HTMLImageElement
+  const cachedPreviewObjectUrl = featuredBackgroundGalleryPreviewObjectUrlCache.get(remotePreviewUrl)
+  if (cachedPreviewObjectUrl && image.src !== cachedPreviewObjectUrl) {
+    image.src = cachedPreviewObjectUrl
+    card.dataset.featuredBackgroundResolvedPreviewUrl = cachedPreviewObjectUrl
+    card.classList.add('has-preview-image')
+    card.classList.remove('is-loading')
+    return
+  }
+  if (!image.src) {
+    image.src = remotePreviewUrl
+    card.dataset.featuredBackgroundResolvedPreviewUrl = remotePreviewUrl
+  }
+  card.classList.add('has-preview-image')
+  card.classList.remove('is-loading')
+}
+
+function observeFeaturedBackgroundCardPreviews(): void {
+  if (!(featuredBackgroundModalGrid instanceof HTMLElement)) {
+    return
+  }
+  const cards = featuredBackgroundModalGrid.querySelectorAll<HTMLElement>('.featured-wallpaper-card')
+  hydrateFeaturedBackgroundInitialCardPreviews(cards)
+  scheduleFeaturedBackgroundCardPreviewObservation(cards)
+}
+
+function hydrateFeaturedBackgroundInitialCardPreviews(cards: NodeListOf<HTMLElement>): void {
+  let hydrated = 0
+  for (const card of cards) {
+    if (hydrated >= FEATURED_GALLERY_INITIAL_PREVIEW_HYDRATION_LIMIT) {
+      return
+    }
+    hydrateFeaturedBackgroundCardPreview(card)
+    hydrated += 1
+  }
+}
+
+function scheduleFeaturedBackgroundCardPreviewObservation(cards: NodeListOf<HTMLElement>): void {
+  let cursor = FEATURED_GALLERY_INITIAL_PREVIEW_HYDRATION_LIMIT
+  const observeNextChunk = () => {
+    if (!isFeaturedBackgroundPickerOpen()) {
+      return
+    }
+
+    const end = Math.min(cursor + FEATURED_GALLERY_PREVIEW_HYDRATION_CHUNK_SIZE, cards.length)
+    for (; cursor < end; cursor += 1) {
+      observeFeaturedBackgroundCardPreview(cards[cursor])
+    }
+    if (cursor < cards.length) {
+      runMicroIdle(observeNextChunk)
+    }
+  }
+
+  runMicroIdle(observeNextChunk)
+}
+
 function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void {
   if (!(featuredBackgroundModalGrid instanceof HTMLElement)) {
     return
   }
 
   clearFeaturedBackgroundHoverPreview()
-  const currentDateSeed = getFeaturedBackgroundDateSeed()
-  const dailyItem = gallery.selectFeaturedBackgroundItem(currentDateSeed)
+  const staticFeaturedBackgroundIds = new Set(gallery.FEATURED_BACKGROUND_ITEMS.map((item) => item.id))
   const selectedId = state.backgroundSettings.featuredId
-  const pickerItems = getFeaturedBackgroundPickerItems(gallery)
+  const pickerSections = getFeaturedBackgroundPickerSections(gallery)
+  const pickerItems = [...pickerSections.favorites, ...pickerSections.refreshed]
   const renderSignature = [
-    currentDateSeed,
     selectedId,
     state.featuredBackgroundFavoriteIds.join(','),
-    dailyItem.id,
-    dailyItem.imageUrl,
     ...pickerItems.map((item) => `${item.id}:${item.imageUrl}`)
   ].join('|')
   if (featuredBackgroundPickerRenderSignature === renderSignature &&
     featuredBackgroundModalGrid.querySelector('.featured-wallpaper-card')) {
     syncFeaturedBackgroundModalControls()
-    hydrateFeaturedBackgroundPickerCachedImages()
-    scheduleFeaturedBackgroundGalleryImageCache()
-    scheduleFeaturedBackgroundGalleryPreviewCache()
+    observeFeaturedBackgroundCardPreviews()
     return
   }
 
+  clearFeaturedBackgroundCardPreviewRegistry()
   const fragment = document.createDocumentFragment()
   syncFeaturedBackgroundModalControls()
-  fragment.appendChild(createFeaturedBackgroundCard({
-    value: '',
-    title: '每日精选',
-    subtitle: dailyItem.title,
-    imageUrl: dailyItem.imageUrl,
-    source: dailyItem.credit,
-    previewProvider: dailyItem.provider,
-    selected: !selectedId,
-    daily: true,
-    width: dailyItem.width,
-    height: dailyItem.height
-  }))
+  appendFeaturedBackgroundSection(fragment, {
+    title: '收藏壁纸',
+    emptyText: '还没有收藏壁纸',
+    items: pickerSections.favorites,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset: 0
+  })
 
-  for (const item of pickerItems) {
-    fragment.appendChild(createFeaturedBackgroundCard({
-      value: item.id,
-      title: item.title,
-      subtitle: item.credit,
-      imageUrl: item.imageUrl,
-      source: item.license,
-      previewProvider: item.provider,
-      selected: selectedId === item.id,
-      daily: false,
-      favorite: isFeaturedBackgroundFavorite(item.id),
-      width: item.width,
-      height: item.height
-    }))
-  }
+  const refreshedNasaItems = pickerSections.refreshed.filter((item) => item.provider === 'nasa')
+  const refreshedWikimediaItems = pickerSections.refreshed.filter((item) => item.provider === 'wikimedia')
+  appendFeaturedBackgroundRefreshSection(fragment, {
+    staticFeaturedBackgroundIds,
+    selectedId,
+    groups: [
+      {
+        title: 'NASA',
+        emptyText: '刷新图库后会显示 NASA 图片',
+        items: refreshedNasaItems,
+        renderIndexOffset: pickerSections.favorites.length
+      },
+      {
+        title: 'Wikimedia',
+        emptyText: '刷新图库后会显示 Wikimedia 图片',
+        items: refreshedWikimediaItems,
+        renderIndexOffset: pickerSections.favorites.length + refreshedNasaItems.length
+      }
+    ]
+  })
 
   featuredBackgroundModalGrid.replaceChildren(fragment)
   featuredBackgroundPickerRenderSignature = renderSignature
-  hydrateFeaturedBackgroundPickerCachedImages()
-  scheduleFeaturedBackgroundGalleryImageCache()
-  scheduleFeaturedBackgroundGalleryPreviewCache()
+  observeFeaturedBackgroundCardPreviews()
 }
 
-function scheduleFeaturedBackgroundGalleryImageCache(): void {
-  runIdle(() => {
-    if (!isFeaturedBackgroundPickerOpen()) {
-      return
-    }
-    void cacheFeaturedBackgroundGalleryImages()
-  }, { timeout: 4000 })
+function appendFeaturedBackgroundRefreshSection(
+  fragment: DocumentFragment,
+  {
+    groups,
+    staticFeaturedBackgroundIds,
+    selectedId
+  }: {
+    groups: Array<{
+      title: string
+      emptyText: string
+      items: FeaturedBackgroundItem[]
+      renderIndexOffset: number
+    }>
+    staticFeaturedBackgroundIds: Set<string>
+    selectedId: string
+  }
+): void {
+  const section = document.createElement('section')
+  section.className = 'featured-wallpaper-section'
+  section.setAttribute('aria-label', '刷新图库')
+
+  const heading = document.createElement('h4')
+  heading.className = 'featured-wallpaper-section-title'
+  heading.textContent = '刷新图库'
+  section.appendChild(heading)
+
+  const stack = document.createElement('div')
+  stack.className = 'featured-wallpaper-provider-stack'
+  for (const group of groups) {
+    const provider = document.createElement('section')
+    provider.className = 'featured-wallpaper-provider-section'
+    provider.setAttribute('aria-label', group.title)
+
+    const providerHeading = document.createElement('h5')
+    providerHeading.className = 'featured-wallpaper-provider-title'
+    providerHeading.textContent = group.title
+    provider.appendChild(providerHeading)
+
+    const list = document.createElement('div')
+    list.className = 'featured-wallpaper-section-grid'
+    appendFeaturedBackgroundCards(list, {
+      emptyText: group.emptyText,
+      items: group.items,
+      staticFeaturedBackgroundIds,
+      selectedId,
+      renderIndexOffset: group.renderIndexOffset
+    })
+    provider.appendChild(list)
+    stack.appendChild(provider)
+  }
+
+  section.appendChild(stack)
+  fragment.appendChild(section)
 }
 
-function scheduleFeaturedBackgroundGalleryPreviewCache(): void {
-  runIdle(() => {
-    void cacheFeaturedBackgroundGalleryPreviewImages()
-  }, { timeout: 4000 })
+function appendFeaturedBackgroundSection(
+  fragment: DocumentFragment,
+  {
+    title,
+    emptyText,
+    items,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset
+  }: {
+    title: string
+    emptyText: string
+    items: FeaturedBackgroundItem[]
+    staticFeaturedBackgroundIds: Set<string>
+    selectedId: string
+    renderIndexOffset: number
+  }
+): void {
+  const section = document.createElement('section')
+  section.className = 'featured-wallpaper-section'
+  section.setAttribute('aria-label', title)
+
+  const heading = document.createElement('h4')
+  heading.className = 'featured-wallpaper-section-title'
+  heading.textContent = title
+  section.appendChild(heading)
+
+  const list = document.createElement('div')
+  list.className = 'featured-wallpaper-section-grid'
+  appendFeaturedBackgroundCards(list, {
+    emptyText,
+    items,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset
+  })
+
+  section.appendChild(list)
+  fragment.appendChild(section)
 }
 
-function hydrateFeaturedBackgroundPickerCachedImages(): void {
-  if (!(featuredBackgroundModalGrid instanceof HTMLElement)) {
-    return
+function appendFeaturedBackgroundCards(
+  list: HTMLElement,
+  {
+    emptyText,
+    items,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset
+  }: {
+    emptyText: string
+    items: FeaturedBackgroundItem[]
+    staticFeaturedBackgroundIds: Set<string>
+    selectedId: string
+    renderIndexOffset: number
   }
-
-  const cards = featuredBackgroundModalGrid.querySelectorAll<HTMLElement>('.featured-wallpaper-card')
-  for (const card of cards) {
-    const imageUrl = card.dataset.featuredBackgroundPreviewUrl || ''
-    const image = card.querySelector<HTMLImageElement>('.featured-wallpaper-preview-image')
-    if (!imageUrl || !(image instanceof HTMLImageElement)) {
-      continue
-    }
-    const cachedObjectUrl = getCachedFeaturedBackgroundPreviewObjectUrl(image.dataset.remotePreviewUrl || imageUrl)
-    if (cachedObjectUrl) {
-      if (image.src !== cachedObjectUrl) {
-        image.src = cachedObjectUrl
-      }
-      card.dataset.featuredBackgroundResolvedPreviewUrl = cachedObjectUrl
-      card.classList.add('has-preview-image')
-      continue
-    }
-    void applyFeaturedBackgroundCachedPreview(card, image, imageUrl, image.dataset.remotePreviewUrl || imageUrl)
+): void {
+  if (items.length) {
+    items.forEach((item, index) => {
+      list.appendChild(createFeaturedBackgroundCard({
+        value: item.id,
+        title: item.title,
+        imageUrl: item.imageUrl,
+        previewProvider: item.provider,
+        accentColor: item.accentColor,
+        bundledPreviewUrl: staticFeaturedBackgroundIds.has(item.id)
+          ? getFeaturedBackgroundBundledThumbnailUrl(item.id)
+          : '',
+        selected: selectedId === item.id,
+        favorite: isFeaturedBackgroundFavorite(item.id),
+        width: item.width,
+        height: item.height,
+        renderIndex: renderIndexOffset + index
+      }))
+    })
+  } else {
+    const empty = document.createElement('div')
+    empty.className = 'featured-wallpaper-section-empty'
+    empty.textContent = emptyText
+    list.appendChild(empty)
   }
-}
-
-function getCachedFeaturedBackgroundPreviewObjectUrl(imageUrl: string): string {
-  const normalizedUrl = normalizeBackgroundImageUrl(imageUrl)
-  if (!normalizedUrl) {
-    return ''
-  }
-  return featuredBackgroundGalleryPreviewObjectUrlByImageUrl.get(normalizedUrl) || ''
-}
-
-async function applyFeaturedBackgroundCachedPreview(
-  card: HTMLElement,
-  image: HTMLImageElement,
-  imageUrl: string,
-  fallbackUrl: string
-): Promise<void> {
-  const previewUrl = fallbackUrl || imageUrl
-  if (!previewUrl) {
-    return
-  }
-
-  const normalizedUrl = normalizeBackgroundImageUrl(previewUrl)
-  const cachedObjectUrl = normalizedUrl ? featuredBackgroundGalleryPreviewObjectUrlByImageUrl.get(normalizedUrl) || '' : ''
-  if (cachedObjectUrl && image.src !== cachedObjectUrl) {
-    image.src = cachedObjectUrl
-    card.dataset.featuredBackgroundResolvedPreviewUrl = cachedObjectUrl
-    card.classList.add('has-preview-image')
-  }
-
-  const cachedUrl = await resolveFeaturedBackgroundGalleryPreviewObjectUrl(previewUrl, {
-    fallbackUrl: previewUrl,
-    fetchOnMiss: false
-  }).catch(() => '')
-  if (!image.isConnected || !card.isConnected) {
-    return
-  }
-
-  const nextUrl = cachedUrl || previewUrl
-  if (!nextUrl) {
-    return
-  }
-  if (image.src !== nextUrl) {
-    image.src = nextUrl
-  }
-  card.dataset.featuredBackgroundResolvedPreviewUrl = nextUrl
-  card.classList.toggle('has-preview-image', Boolean(nextUrl))
 }
 
 function getFeaturedBackgroundPickerItems(gallery: BackgroundGalleryModule): FeaturedBackgroundItem[] {
   return buildFeaturedBackgroundPickerItems({
+    storedItems: state.featuredBackgroundGallery,
+    staticItems: gallery.FEATURED_BACKGROUND_ITEMS,
+    favoriteIds: state.featuredBackgroundFavoriteIds,
+    selectedId: state.backgroundSettings.featuredId
+  })
+}
+
+function getFeaturedBackgroundPickerSections(gallery: BackgroundGalleryModule): FeaturedBackgroundPickerSections {
+  return buildFeaturedBackgroundPickerSections({
     storedItems: state.featuredBackgroundGallery,
     staticItems: gallery.FEATURED_BACKGROUND_ITEMS,
     favoriteIds: state.featuredBackgroundFavoriteIds,
@@ -11916,16 +12396,6 @@ function getFeaturedBackgroundPreviewSourceUrl(
     : itemOrProvider.provider
   const candidates = getFeaturedBackgroundPreviewCandidates(imageUrl, provider)
   return candidates[0] || ''
-}
-
-async function resolveFeaturedBackgroundGalleryPreviewObjectUrl(
-  imageUrl: string,
-  { fallbackUrl = '', fetchOnMiss = false }: { fallbackUrl?: string; fetchOnMiss?: boolean } = {}
-): Promise<string> {
-  return resolveFeaturedBackgroundGalleryPreviewObjectUrlWithSource(imageUrl, {
-    fallbackUrl,
-    fetchOnMiss
-  })
 }
 
 function getFeaturedBackgroundProviderForUrl(imageUrl: string): FeaturedBackgroundItem['provider'] {
@@ -11952,67 +12422,108 @@ function getFeaturedBackgroundProviderForUrl(imageUrl: string): FeaturedBackgrou
   return 'wikimedia'
 }
 
+function getFeaturedBackgroundPreviewPlaceholderColor({
+  provider,
+  accentColor,
+  imageUrl,
+  title,
+  credit
+}: {
+  provider: FeaturedBackgroundItem['provider']
+  accentColor?: string
+  imageUrl: string
+  title: string
+  credit: string
+}): string {
+  void imageUrl
+  void title
+  void credit
+  if (typeof accentColor === 'string' && accentColor.trim()) {
+    return getNonBlackPlaceholderColor(accentColor)
+  }
+  return getNonBlackPlaceholderColor(
+    provider === 'met'
+      ? '#18200f'
+      : provider === 'nasa'
+        ? '#06080d'
+        : provider === 'artic'
+          ? '#142026'
+          : provider === 'cleveland'
+            ? '#1c1518'
+            : '#14191d'
+  )
+}
+
+const FEATURED_BACKGROUND_BUNDLED_THUMBNAIL_URL_BY_ID: Record<string, string> = {
+  'met-wheat-field-with-cypresses': 'featured-gallery-thumbnails/met-wheat-field-with-cypresses.jpg',
+  'wikimedia-water-lilies-monet': 'featured-gallery-thumbnails/wikimedia-water-lilies-monet.jpg',
+  'nasa-apollo-earthrise': 'featured-gallery-thumbnails/nasa-apollo-earthrise.jpg',
+  'met-venice-from-the-porch': 'featured-gallery-thumbnails/met-venice-from-the-porch.jpg',
+  'wikimedia-among-sierra-nevada': 'featured-gallery-thumbnails/wikimedia-among-sierra-nevada.jpg',
+  'nasa-andromeda-infrared': 'featured-gallery-thumbnails/nasa-andromeda-infrared.jpg',
+  'met-sunflowers': 'featured-gallery-thumbnails/met-sunflowers.jpg',
+  'wikimedia-starry-night': 'featured-gallery-thumbnails/wikimedia-starry-night.jpg',
+  'nasa-eagle-nebula-wise': 'featured-gallery-thumbnails/nasa-eagle-nebula-wise.jpg',
+  'met-cypresses': 'featured-gallery-thumbnails/met-cypresses.jpg',
+  'wikimedia-great-wave': 'featured-gallery-thumbnails/wikimedia-great-wave.jpg',
+  'nasa-earth-limb-aurora': 'featured-gallery-thumbnails/nasa-earth-limb-aurora.jpg',
+  'met-irises': 'featured-gallery-thumbnails/met-irises.jpg',
+  'wikimedia-cotopaxi': 'featured-gallery-thumbnails/wikimedia-cotopaxi.jpg',
+  'nasa-mars-landscape-curiosity': 'featured-gallery-thumbnails/nasa-mars-landscape-curiosity.jpg',
+  'met-monet-family-garden': 'featured-gallery-thumbnails/met-monet-family-garden.jpg',
+  'wikimedia-fighting-temeraire': 'featured-gallery-thumbnails/wikimedia-fighting-temeraire.jpg',
+  'nasa-dust-devil-on-mars': 'featured-gallery-thumbnails/nasa-dust-devil-on-mars.jpg',
+  'met-bouquet-flowers': 'featured-gallery-thumbnails/met-bouquet-flowers.jpg',
+  'wikimedia-impression-sunrise': 'featured-gallery-thumbnails/wikimedia-impression-sunrise.jpg',
+  'nasa-jupiter-southern-hemisphere': 'featured-gallery-thumbnails/nasa-jupiter-southern-hemisphere.jpg',
+  'met-young-woman-water-pitcher': 'featured-gallery-thumbnails/met-young-woman-water-pitcher.jpg',
+  'wikimedia-wanderer-sea-fog': 'featured-gallery-thumbnails/wikimedia-wanderer-sea-fog.jpg',
+  'nasa-aurora-borealis-blankets-earth': 'featured-gallery-thumbnails/nasa-aurora-borealis-blankets-earth.jpg',
+  'met-dance-class': 'featured-gallery-thumbnails/met-dance-class.jpg',
+  'wikimedia-great-day-wrath': 'featured-gallery-thumbnails/wikimedia-great-day-wrath.jpg',
+  'nasa-orion-nebula-infrared': 'featured-gallery-thumbnails/nasa-orion-nebula-infrared.jpg',
+  'met-la-berceuse': 'featured-gallery-thumbnails/met-la-berceuse.jpg',
+  'wikimedia-snow-storm-steamboat': 'featured-gallery-thumbnails/wikimedia-snow-storm-steamboat.jpg',
+  'nasa-mars-cerberus-fossae': 'featured-gallery-thumbnails/nasa-mars-cerberus-fossae.jpg',
+  'met-rembrandt-self-portrait': 'featured-gallery-thumbnails/met-rembrandt-self-portrait.jpg'
+}
+
+function getFeaturedBackgroundBundledThumbnailUrl(featuredId: string): string {
+  const id = String(featuredId || '').trim()
+  if (!id) return ''
+  const path = FEATURED_BACKGROUND_BUNDLED_THUMBNAIL_URL_BY_ID[id]
+  if (!path) return ''
+  if (typeof chrome !== 'undefined' && typeof chrome.runtime?.getURL === 'function') {
+    return chrome.runtime.getURL(path)
+  }
+  return `/${path}`
+}
+
 async function resolveFeaturedBackgroundGalleryPreviewObjectUrlWithSource(
   imageUrl: string,
-  { fallbackUrl = '', fetchOnMiss = false }: { fallbackUrl?: string; fetchOnMiss?: boolean } = {}
+  { fallbackUrl = '' }: { fallbackUrl?: string } = {}
 ): Promise<string> {
   const normalizedUrl = normalizeBackgroundImageUrl(imageUrl)
   if (!normalizedUrl) {
     return ''
   }
 
-  const cachedObjectUrl = featuredBackgroundGalleryPreviewObjectUrlByImageUrl.get(normalizedUrl)
+  const cachedObjectUrl = featuredBackgroundGalleryPreviewObjectUrlCache.get(normalizedUrl)
   if (cachedObjectUrl) {
     return cachedObjectUrl
   }
 
-  const existingTask = featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.get(normalizedUrl)
-  if (existingTask) {
-    return existingTask
-  }
-
-  const generation = featuredBackgroundGalleryPreviewObjectUrlGeneration
-  const task = getFeaturedBackgroundPreviewCacheRecord(normalizedUrl).then(async (record) => {
-    if (record?.blob && generation === featuredBackgroundGalleryPreviewObjectUrlGeneration) {
-      const objectUrl = URL.createObjectURL(record.blob)
-      featuredBackgroundGalleryPreviewObjectUrlByImageUrl.set(normalizedUrl, objectUrl)
-      return objectUrl
-    }
-    if (!fetchOnMiss) {
-      return fallbackUrl || ''
-    }
-
-    const fetched = await fetchFeaturedBackgroundPreviewBlob(normalizedUrl).catch(() => null)
-    if (!fetched || generation !== featuredBackgroundGalleryPreviewObjectUrlGeneration) {
-      return fallbackUrl || ''
-    }
-    const previewBlob = await createFeaturedBackgroundPreviewBlob(fetched)
-    try {
-      await saveFeaturedBackgroundPreviewCache(normalizedUrl, previewBlob)
-    } catch {
-      // Preview cache is best-effort; the visible card can still fall back to the remote preview URL.
-    }
-    const objectUrl = URL.createObjectURL(previewBlob)
-    featuredBackgroundGalleryPreviewObjectUrlByImageUrl.set(normalizedUrl, objectUrl)
-    return objectUrl
-  }).catch(() => fallbackUrl || '').finally(() => {
-    if (featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.get(normalizedUrl) === task) {
-      featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.delete(normalizedUrl)
-    }
-  })
-
-  featuredBackgroundGalleryPreviewObjectUrlTaskByImageUrl.set(normalizedUrl, task)
-  return task
-}
-
-async function fetchFeaturedBackgroundPreviewBlob(imageUrl: string): Promise<Blob> {
-  const normalizedUrl = normalizeBackgroundImageUrl(imageUrl)
-  if (!normalizedUrl) {
-    throw new Error('预览图片地址无效。')
-  }
-
-  await ensureBackgroundImageFetchPermission(normalizedUrl)
-  return fetchBackgroundUrlImage(normalizedUrl)
+  return featuredBackgroundGalleryPreviewObjectUrlCache.resolve(
+    normalizedUrl,
+    async () => {
+      const record = await getFeaturedBackgroundPreviewCacheRecord(normalizedUrl)
+      if (record?.blob) {
+        return record.blob
+      }
+      return null
+    },
+    { fallbackUrl: fallbackUrl || '' }
+  )
 }
 
 async function resolveFeaturedBackgroundGalleryObjectUrl(imageUrl: string): Promise<string> {
@@ -12020,102 +12531,108 @@ async function resolveFeaturedBackgroundGalleryObjectUrl(imageUrl: string): Prom
   if (!normalizedUrl) {
     return ''
   }
-
-  const cachedObjectUrl = featuredBackgroundGalleryObjectUrlByImageUrl.get(normalizedUrl)
-  if (cachedObjectUrl) {
-    return cachedObjectUrl
-  }
-
-  const existingTask = featuredBackgroundGalleryObjectUrlTaskByImageUrl.get(normalizedUrl)
-  if (existingTask) {
-    return existingTask
-  }
-
-  const generation = featuredBackgroundGalleryObjectUrlGeneration
-  const task = getBackgroundUrlCache(normalizedUrl).then((record) => {
-    if (!record?.blob || generation !== featuredBackgroundGalleryObjectUrlGeneration) {
-      return ''
-    }
-
-    const objectUrl = URL.createObjectURL(record.blob)
-    featuredBackgroundGalleryObjectUrlByImageUrl.set(normalizedUrl, objectUrl)
-    return objectUrl
-  }).catch(() => '').finally(() => {
-    if (featuredBackgroundGalleryObjectUrlTaskByImageUrl.get(normalizedUrl) === task) {
-      featuredBackgroundGalleryObjectUrlTaskByImageUrl.delete(normalizedUrl)
-    }
-  })
-
-  featuredBackgroundGalleryObjectUrlTaskByImageUrl.set(normalizedUrl, task)
-  return task
+  return featuredBackgroundGalleryObjectUrlCache.resolve(
+    normalizedUrl,
+    () => getBackgroundUrlCache(normalizedUrl).then((record) => record?.blob || null),
+    { fallbackUrl: '' }
+  )
 }
 
 function revokeFeaturedBackgroundGalleryObjectUrls(): void {
-  featuredBackgroundGalleryObjectUrlGeneration += 1
-  for (const objectUrl of featuredBackgroundGalleryObjectUrlByImageUrl.values()) {
-    URL.revokeObjectURL(objectUrl)
-  }
-  featuredBackgroundGalleryObjectUrlByImageUrl.clear()
-  featuredBackgroundGalleryObjectUrlTaskByImageUrl.clear()
+  featuredBackgroundGalleryObjectUrlCache.clear()
+}
+
+function clearFeaturedBackgroundCardPreviewRegistry(): void {
+  featuredBackgroundCardPreviewObserver?.disconnect()
+  featuredBackgroundCardPreviewRegistry.clear()
+  featuredBackgroundCardPreviewObserver = null
+  featuredBackgroundCardPreviewObservedRoot = null
 }
 
 function createFeaturedBackgroundCard({
   value,
   title,
-  subtitle,
   imageUrl,
-  source,
   previewProvider,
+  accentColor,
+  bundledPreviewUrl = '',
   selected,
-  daily,
   favorite = false,
   width,
-  height
+  height,
+  renderIndex = 0
 }: {
   value: string
   title: string
-  subtitle: string
   imageUrl: string
-  source: string
   previewProvider: FeaturedBackgroundItem['provider']
+  accentColor?: string
+  bundledPreviewUrl?: string
   selected: boolean
-  daily: boolean
   favorite?: boolean
   width?: number
   height?: number
+  renderIndex?: number
 }): HTMLElement {
   const card = document.createElement('div')
   card.className = 'featured-wallpaper-card'
   card.setAttribute('role', 'button')
   card.setAttribute('tabindex', '0')
+  card.setAttribute('aria-label', title)
   card.dataset.featuredBackgroundId = value
   card.dataset.featuredBackgroundPreviewUrl = imageUrl
   card.dataset.featuredBackgroundPreviewTitle = title
   card.setAttribute('aria-pressed', String(selected))
   card.classList.toggle('is-selected', selected)
-  if (daily) {
-    card.classList.add('is-daily')
-  }
+  const previewAccentColor = getFeaturedBackgroundPreviewPlaceholderColor({
+    provider: previewProvider,
+    accentColor,
+    imageUrl,
+    title,
+    credit: title
+  })
 
   const preview = document.createElement('span')
   preview.className = 'featured-wallpaper-preview'
+  preview.style.setProperty('--featured-wallpaper-preview-placeholder', previewAccentColor)
   const previewImage = document.createElement('img')
   previewImage.className = 'featured-wallpaper-preview-image'
   previewImage.alt = ''
   previewImage.decoding = 'async'
   previewImage.loading = 'eager'
-  previewImage.setAttribute('fetchpriority', 'high')
+  previewImage.setAttribute('fetchpriority', renderIndex < FEATURED_GALLERY_HIGH_PRIORITY_PREVIEW_LIMIT ? 'high' : 'auto')
   previewImage.draggable = false
   const remotePreviewUrl = getFeaturedBackgroundPreviewImageUrl({ provider: previewProvider }, imageUrl) || imageUrl
+  const previewFallbackUrls = [
+    remotePreviewUrl,
+    imageUrl
+  ].filter((url, index, urls) => Boolean(url) && url !== bundledPreviewUrl && urls.indexOf(url) === index)
   previewImage.dataset.remotePreviewUrl = remotePreviewUrl
-  const cachedPreviewObjectUrl = featuredBackgroundGalleryPreviewObjectUrlByImageUrl.get(normalizeBackgroundImageUrl(remotePreviewUrl))
-  const initialPreviewUrl = cachedPreviewObjectUrl || remotePreviewUrl
-  if (initialPreviewUrl) {
-    previewImage.src = initialPreviewUrl
-    card.dataset.featuredBackgroundResolvedPreviewUrl = initialPreviewUrl
+  previewImage.dataset.previewFallbackUrls = JSON.stringify(previewFallbackUrls)
+  const initialPreviewUrl = featuredBackgroundGalleryPreviewObjectUrlCache.get(remotePreviewUrl) ||
+    bundledPreviewUrl ||
+    remotePreviewUrl
+  previewImage.addEventListener('error', () => {
+    const fallbackUrls = parseFeaturedBackgroundPreviewFallbackUrls(previewImage.dataset.previewFallbackUrls)
+    const fallbackUrl = fallbackUrls.shift() || ''
+    previewImage.dataset.previewFallbackUrls = JSON.stringify(fallbackUrls)
+    if (!fallbackUrl) {
+      card.classList.remove('has-preview-image')
+      card.classList.add('is-loading')
+      return
+    }
+
+    previewImage.src = fallbackUrl
+    card.dataset.featuredBackgroundResolvedPreviewUrl = fallbackUrl
     card.classList.add('has-preview-image')
-  }
-  void applyFeaturedBackgroundCachedPreview(card, previewImage, imageUrl, remotePreviewUrl)
+    card.classList.remove('is-loading')
+  })
+  previewImage.addEventListener('load', () => {
+    card.dataset.featuredBackgroundResolvedPreviewUrl = previewImage.currentSrc || previewImage.src
+    card.classList.add('has-preview-image')
+    card.classList.remove('is-loading')
+  })
+  previewImage.src = initialPreviewUrl
   preview.appendChild(previewImage)
   const resolution = document.createElement('span')
   resolution.className = 'featured-wallpaper-resolution'
@@ -12124,7 +12641,7 @@ function createFeaturedBackgroundCard({
   resolution.dataset.state = resolutionText ? 'ready' : 'pending'
   preview.appendChild(resolution)
 
-  if (!daily && value) {
+  if (value) {
     const favoriteButton = document.createElement('button')
     favoriteButton.className = 'featured-wallpaper-favorite'
     favoriteButton.type = 'button'
@@ -12132,61 +12649,97 @@ function createFeaturedBackgroundCard({
     favoriteButton.setAttribute('aria-label', favorite ? '取消收藏这张精选图' : '收藏这张精选图')
     favoriteButton.classList.toggle('is-favorite', favorite)
     favoriteButton.appendChild(createFeaturedFavoriteIcon())
-    favoriteButton.addEventListener('click', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      clearFeaturedBackgroundHoverPreview(card)
-      void toggleFeaturedBackgroundFavorite(value)
-    })
     preview.appendChild(favoriteButton)
   }
 
-  const meta = document.createElement('span')
-  meta.className = 'featured-wallpaper-meta'
+  card.append(preview)
+  featuredBackgroundCardPreviewRegistry.register({ card, image: previewImage, accentColor: previewAccentColor })
+  card.dataset.featuredBackgroundResolvedPreviewUrl = initialPreviewUrl
+  card.classList.add('has-preview-image')
+  card.classList.remove('is-loading')
+  return card
+}
 
-  const name = document.createElement('strong')
-  name.textContent = title
+function formatFeaturedBackgroundResolution(item: Pick<FeaturedBackgroundItem, 'width' | 'height'>): string {
+  const width = Number(item.width)
+  const height = Number(item.height)
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return ''
+  }
+  return `${Math.round(width)} x ${Math.round(height)}`
+}
 
-  const detail = document.createElement('span')
-  detail.textContent = subtitle
+function parseFeaturedBackgroundPreviewFallbackUrls(value: unknown): string[] {
+  try {
+    const parsed = JSON.parse(String(value || '[]'))
+    return Array.isArray(parsed)
+      ? parsed.map((url) => String(url || '').trim()).filter(Boolean)
+      : []
+  } catch {
+    return []
+  }
+}
 
-    const sourceLabel = document.createElement('small')
-    sourceLabel.textContent = source
+function bindFeaturedBackgroundCardDelegation(grid: HTMLElement | null): void {
+  if (!grid) return
 
-  meta.append(name, detail, sourceLabel)
-  card.append(preview, meta)
-  card.addEventListener('pointerenter', (event) => {
-    if (event.pointerType !== 'mouse') {
-      return
-    }
+  const findCard = (target: EventTarget | null): HTMLElement | null => {
+    if (!(target instanceof Element)) return null
+    const card = target.closest<HTMLElement>('.featured-wallpaper-card')
+    return card && grid.contains(card) ? card : null
+  }
+
+  const isInsideSameCard = (card: HTMLElement, related: EventTarget | null): boolean => {
+    return related instanceof Node && card.contains(related)
+  }
+
+  grid.addEventListener('pointerover', (event) => {
+    if (event.pointerType !== 'mouse') return
+    const card = findCard(event.target)
+    if (!card) return
+    if (isInsideSameCard(card, event.relatedTarget)) return
     scheduleFeaturedBackgroundHoverPreview(card)
   })
-  card.addEventListener('pointerleave', () => {
+
+  grid.addEventListener('pointerout', (event) => {
+    const card = findCard(event.target)
+    if (!card) return
+    if (isInsideSameCard(card, event.relatedTarget)) return
     clearFeaturedBackgroundHoverPreview(card)
   })
-  card.addEventListener('focusin', () => {
-    scheduleFeaturedBackgroundHoverPreview(card)
+
+  grid.addEventListener('focusout', (event) => {
+    const card = findCard(event.target)
+    if (!card) return
+    if (isInsideSameCard(card, event.relatedTarget)) return
+    clearFeaturedBackgroundHoverPreview(card)
   })
-  card.addEventListener('focusout', (event) => {
-    const nextTarget = event.relatedTarget
-    if (nextTarget instanceof Node && card.contains(nextTarget)) {
+
+  grid.addEventListener('click', (event) => {
+    const card = findCard(event.target)
+    if (!card) return
+    const target = event.target instanceof Element ? event.target : null
+    const favoriteButton = target?.closest<HTMLElement>('.featured-wallpaper-favorite')
+    if (favoriteButton && card.contains(favoriteButton)) {
+      event.preventDefault()
+      event.stopPropagation()
+      clearFeaturedBackgroundHoverPreview(card)
+      void toggleFeaturedBackgroundFavorite(String(card.dataset.featuredBackgroundId || ''))
       return
     }
     clearFeaturedBackgroundHoverPreview(card)
+    selectFeaturedBackgroundFromPicker(String(card.dataset.featuredBackgroundId || ''))
   })
-  card.addEventListener('click', () => {
-    clearFeaturedBackgroundHoverPreview(card)
-    selectFeaturedBackgroundFromPicker(value)
-  })
-  card.addEventListener('keydown', (event) => {
-    if (event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) {
-      return
-    }
+
+  grid.addEventListener('keydown', (event) => {
+    const card = findCard(event.target)
+    if (!card) return
+    if (event.target !== card) return
+    if (event.key !== 'Enter' && event.key !== ' ') return
     event.preventDefault()
     clearFeaturedBackgroundHoverPreview(card)
-    selectFeaturedBackgroundFromPicker(value)
+    selectFeaturedBackgroundFromPicker(String(card.dataset.featuredBackgroundId || ''))
   })
-  return card
 }
 
 function scheduleFeaturedBackgroundHoverPreview(card: HTMLElement): void {
@@ -12207,7 +12760,7 @@ function scheduleFeaturedBackgroundHoverPreview(card: HTMLElement): void {
   featuredBackgroundPreviewTimer = window.setTimeout(() => {
     featuredBackgroundPreviewTimer = 0
     showFeaturedBackgroundHoverPreview(card)
-  }, 3000)
+  }, FEATURED_BACKGROUND_HOVER_PREVIEW_DELAY_MS)
 }
 
 function showFeaturedBackgroundHoverPreview(card: HTMLElement): void {
@@ -12296,15 +12849,6 @@ function clearFeaturedBackgroundHoverPreview(card?: HTMLElement): void {
   }
 }
 
-function formatFeaturedBackgroundResolution(item: Pick<FeaturedBackgroundItem, 'width' | 'height'>): string {
-  const width = Number(item.width)
-  const height = Number(item.height)
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return ''
-  }
-  return `${Math.round(width)} x ${Math.round(height)}`
-}
-
 function createFeaturedFavoriteIcon(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
   svg.setAttribute('viewBox', '0 0 24 24')
@@ -12332,12 +12876,12 @@ function createFeaturedBackgroundErrorCard(): HTMLElement {
 function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPreferences {
   return normalizeFeaturedBackgroundPreferences({
     ...state.featuredBackgroundPreferences,
-    displayMode: featuredBackgroundDisplayModeInput instanceof HTMLSelectElement
-      ? featuredBackgroundDisplayModeInput.value
-      : state.featuredBackgroundPreferences.displayMode,
     displaySize: featuredBackgroundDisplaySizeInput instanceof HTMLInputElement
       ? Number(featuredBackgroundDisplaySizeInput.value)
       : state.featuredBackgroundPreferences.displaySize,
+    positionX: featuredBackgroundPositionXInput instanceof HTMLInputElement
+      ? Number(featuredBackgroundPositionXInput.value)
+      : state.featuredBackgroundPreferences.positionX,
     positionY: featuredBackgroundPositionYInput instanceof HTMLInputElement
       ? Number(featuredBackgroundPositionYInput.value)
       : state.featuredBackgroundPreferences.positionY
@@ -12346,6 +12890,8 @@ function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPref
 
 function applyFeaturedBackgroundDisplayPreferences(): void {
   const displayCss = getFeaturedBackgroundDisplayCss(state.featuredBackgroundPreferences)
+  document.documentElement.style.setProperty('--instant-wallpaper-size', displayCss.backgroundSize)
+  document.documentElement.style.setProperty('--instant-wallpaper-position', displayCss.backgroundPosition)
   document.body.style.backgroundSize = displayCss.backgroundSize
   document.body.style.backgroundPosition = displayCss.backgroundPosition
   updateInstantWallpaperDisplayCss(lastAppliedBackgroundMediaSignature, displayCss)
@@ -12374,14 +12920,17 @@ function updateInstantWallpaperDisplayCss(
 
 function syncFeaturedBackgroundDisplayPreferenceControls(): void {
   const preferences = state.featuredBackgroundPreferences
-  if (featuredBackgroundDisplayModeInput instanceof HTMLSelectElement) {
-    featuredBackgroundDisplayModeInput.value = preferences.displayMode
-  }
   if (featuredBackgroundDisplaySizeInput instanceof HTMLInputElement) {
     featuredBackgroundDisplaySizeInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.min)
     featuredBackgroundDisplaySizeInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.max)
     featuredBackgroundDisplaySizeInput.value = String(preferences.displaySize)
     updateSettingRangeVisual(featuredBackgroundDisplaySizeInput)
+  }
+  if (featuredBackgroundPositionXInput instanceof HTMLInputElement) {
+    featuredBackgroundPositionXInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionX.min)
+    featuredBackgroundPositionXInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionX.max)
+    featuredBackgroundPositionXInput.value = String(preferences.positionX)
+    updateSettingRangeVisual(featuredBackgroundPositionXInput)
   }
   if (featuredBackgroundPositionYInput instanceof HTMLInputElement) {
     featuredBackgroundPositionYInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionY.min)
@@ -12390,6 +12939,7 @@ function syncFeaturedBackgroundDisplayPreferenceControls(): void {
     updateSettingRangeVisual(featuredBackgroundPositionYInput)
   }
   setTextContent('background-featured-display-size-value', `${preferences.displaySize}%`)
+  setTextContent('background-featured-position-x-value', `${preferences.positionX}%`)
   setTextContent('background-featured-position-y-value', `${preferences.positionY}%`)
 }
 
@@ -12468,7 +13018,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
   }
 
   state.featuredBackgroundRefreshing = true
-  setFeaturedBackgroundStatus('正在从 NASA、The Met、Wikimedia 拉取高清图...', 'info')
+  setFeaturedBackgroundStatus('正在从 NASA、Wikimedia 拉取高清图...', 'info')
   syncFeaturedBackgroundModalControls()
   try {
     const permissionGranted = await ensureFeaturedBackgroundPermissions()
@@ -12494,20 +13044,29 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
       fetchedItems
     })
     await saveFeaturedBackgroundGallery()
-    await clearFeaturedBackgroundPreviewCache()
     setFeaturedBackgroundStatus(
       `已拉取 ${fetchedItems.length} 张高分辨率图片，收藏图片已保留。`,
       'success'
     )
-    void cacheFeaturedBackgroundGalleryImages()
-    void cacheFeaturedBackgroundGalleryPreviewImages()
-    const gallery = await loadBackgroundGalleryModule()
-    renderFeaturedBackgroundPicker(gallery)
+    featuredBackgroundPickerRenderSignature = ''
+    await renderFeaturedBackgroundPickerAfterRefresh()
+    void clearFeaturedBackgroundPreviewCache().catch((cacheError) => {
+      console.warn('精选图库预览缓存清除失败。', cacheError)
+    })
   } catch (error) {
     setFeaturedBackgroundStatus(getFeaturedBackgroundRefreshErrorMessage(error), 'error')
   } finally {
     state.featuredBackgroundRefreshing = false
     syncFeaturedBackgroundModalControls()
+  }
+}
+
+async function renderFeaturedBackgroundPickerAfterRefresh(): Promise<void> {
+  try {
+    const gallery = await loadBackgroundGalleryModule()
+    renderFeaturedBackgroundPicker(gallery)
+  } catch (error) {
+    console.warn('精选图库已刷新，但弹窗列表更新失败。', error)
   }
 }
 
@@ -12604,7 +13163,7 @@ function getFeaturedBackgroundRefreshErrorMessage(error: unknown): string {
 }
 
 function selectFeaturedBackgroundFromPicker(featuredId: string): void {
-  const input = document.getElementById('background-featured-id')
+  const input = cachedEl('background-featured-id')
   if (!(input instanceof HTMLInputElement)) {
     return
   }
@@ -12617,14 +13176,14 @@ function selectFeaturedBackgroundFromPicker(featuredId: string): void {
 function getFeaturedBackgroundPickerLabel(settings = state.backgroundSettings): string {
   const activeItem = getActiveFeaturedBackgroundItemSync(settings)
   if (!settings.featuredId) {
-    return activeItem ? `每日精选 · ${activeItem.title}` : '每日精选'
+    return activeItem ? `精选图库 · ${activeItem.title}` : '选择壁纸'
   }
 
   return activeItem?.title || '当前精选图片'
 }
 
 function syncFeaturedBackgroundPickerLabel(): void {
-  const featuredPickerLabel = document.getElementById('background-featured-picker-label')
+  const featuredPickerLabel = cachedEl('background-featured-picker-label')
   if (featuredPickerLabel instanceof HTMLElement) {
     featuredPickerLabel.textContent = getFeaturedBackgroundPickerLabel()
   }
@@ -12637,7 +13196,7 @@ async function hydrateFeaturedBackgroundCredit(settings: typeof DEFAULT_BACKGROU
     if (hydrateVersion !== featuredBackgroundUiVersion) {
       return
     }
-    const featuredCredit = document.getElementById('background-featured-credit')
+    const featuredCredit = cachedEl('background-featured-credit')
     if (!(featuredCredit instanceof HTMLAnchorElement)) {
       return
     }
@@ -12767,14 +13326,14 @@ function normalizeTimeSettingsLocal(rawSettings: unknown): NewTabTimeSettings {
 }
 
 function readTimeSettingsFromControls(): NewTabTimeSettings {
-  const enabledInput = document.getElementById('time-enabled')
-  const secondsInput = document.getElementById('time-show-seconds')
-  const hour12Input = document.getElementById('time-hour12')
-  const sizeInput = document.getElementById('time-clock-size')
-  const dateFormatInput = document.getElementById('time-date-format')
-  const timeZoneInput = document.getElementById('time-time-zone')
-  const displayInput = document.getElementById('time-display-mode')
-  const densityInput = document.getElementById('time-density')
+  const enabledInput = cachedEl('time-enabled')
+  const secondsInput = cachedEl('time-show-seconds')
+  const hour12Input = cachedEl('time-hour12')
+  const sizeInput = cachedEl('time-clock-size')
+  const dateFormatInput = cachedEl('time-date-format')
+  const timeZoneInput = cachedEl('time-time-zone')
+  const displayInput = cachedEl('time-display-mode')
+  const densityInput = cachedEl('time-density')
 
   return normalizeTimeSettingsLocal({
     enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : state.timeSettings.enabled,
@@ -12790,14 +13349,14 @@ function readTimeSettingsFromControls(): NewTabTimeSettings {
 
 function syncTimeSettingsControls(): void {
   const settings = state.timeSettings
-  const enabledInput = document.getElementById('time-enabled')
-  const secondsInput = document.getElementById('time-show-seconds')
-  const hour12Input = document.getElementById('time-hour12')
-  const sizeInput = document.getElementById('time-clock-size')
-  const dateFormatInput = document.getElementById('time-date-format')
-  const timeZoneInput = document.getElementById('time-time-zone')
-  const displayInput = document.getElementById('time-display-mode')
-  const densityInput = document.getElementById('time-density')
+  const enabledInput = cachedEl('time-enabled')
+  const secondsInput = cachedEl('time-show-seconds')
+  const hour12Input = cachedEl('time-hour12')
+  const sizeInput = cachedEl('time-clock-size')
+  const dateFormatInput = cachedEl('time-date-format')
+  const timeZoneInput = cachedEl('time-time-zone')
+  const displayInput = cachedEl('time-display-mode')
+  const densityInput = cachedEl('time-density')
   const dependentControls = [
     secondsInput,
     hour12Input,

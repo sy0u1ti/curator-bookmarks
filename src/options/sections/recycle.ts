@@ -3,7 +3,7 @@ import {
   RECYCLE_BIN_LIMIT
 } from '../../shared/constants.js'
 import { createBookmark, getBookmarkTree } from '../../shared/bookmarks-api.js'
-import { extractBookmarkData } from '../../shared/bookmark-tree.js'
+import { buildBookmarkCatalogSnapshot } from '../../shared/bookmark-catalog.js'
 import {
   appendRecycleEntries,
   deleteBookmarkToRecycle,
@@ -317,7 +317,7 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
 
 async function loadCurrentFolderIds(): Promise<Set<string>> {
   const tree = await getBookmarkTree()
-  const folders = extractBookmarkData(tree[0]).folderMap
+  const folders = buildBookmarkCatalogSnapshot({ rootNode: tree[0] }).extracted.folderMap
   return new Set([...folders.keys(), BOOKMARKS_BAR_ID])
 }
 

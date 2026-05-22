@@ -3,36 +3,32 @@ import {
   isFeaturedBackgroundStyleSuitable,
 } from './featured-background-style.js'
 
-const FEATURED_REFRESH_TARGET_COUNT = 24
-const FEATURED_REFRESH_SOURCE_LIMIT = 36
-const FEATURED_REFRESH_CONCURRENCY = 8
-const NASA_SEARCH_PAGE_SIZE = 18
-const NASA_SEARCH_PAGE_VARIANTS = 4
-const FEATURED_BACKGROUND_HIGH_MIN_LONG_EDGE = 2560
-const FEATURED_BACKGROUND_HIGH_MIN_SHORT_EDGE = 1440
+const FEATURED_REFRESH_PROVIDER_TARGET_COUNT = 12
+const FEATURED_REFRESH_SOURCE_LIMIT = 24
+const FEATURED_REFRESH_CONCURRENCY = 6
+const NASA_SEARCH_PAGE_SIZE = 16
+const NASA_SEARCH_PAGE_VARIANTS = 6
+const FEATURED_BACKGROUND_HIGH_MIN_LONG_EDGE = 1920
+const FEATURED_BACKGROUND_HIGH_MIN_SHORT_EDGE = 1080
+const FEATURED_BACKGROUND_MIN_ASPECT_RATIO = 1.2
 const NASA_SEARCH_QUERIES = [
-  'nasa nebula galaxy Hubble featured image',
-  'aurora earth horizon moon stars photograph',
-  'nasa space telescope galaxy nebula',
-  'mars landscape earth horizon photograph',
-  'saturn jupiter planet space photograph'
-]
-const MET_SEARCH_QUERIES = [
-  'landscape photograph',
-  'aurora photograph',
-  'night sky photograph',
-  'mountain photograph',
-  'ocean photograph',
-  'sunrise photograph'
+  'nasa earth observatory landscape photograph',
+  'iss earth horizon aurora photograph',
+  'nasa ocean clouds earth photograph',
+  'mars landscape panorama photograph',
+  'nasa moon horizon landscape photograph'
 ]
 const COMMONS_SEARCH_QUERIES = [
-  'landscape photograph featured picture public domain',
-  'aurora photograph featured picture public domain',
-  'night sky photograph featured picture public domain',
-  'mountain photograph featured picture public domain',
-  'ocean photograph featured picture public domain'
+  'landscape panorama public domain photograph',
+  'mountain landscape featured picture public domain',
+  'seascape coast public domain photograph',
+  'forest landscape public domain photograph',
+  'waterfall landscape public domain photograph',
+  'city skyline panorama public domain photograph',
+  'aurora landscape public domain photograph',
+  'desert landscape public domain photograph'
 ]
-const COMMONS_SEARCH_LIMIT = 40
+const COMMONS_SEARCH_LIMIT = 24
 
 export interface FeaturedGalleryRefreshState {
   existingItems: FeaturedBackgroundItem[]
@@ -52,8 +48,6 @@ export interface FeaturedGalleryRefreshOptions {
 export const FEATURED_BACKGROUND_REFRESH_ORIGINS = [
   'https://images-api.nasa.gov/*',
   'https://images-assets.nasa.gov/*',
-  'https://collectionapi.metmuseum.org/*',
-  'https://images.metmuseum.org/*',
   'https://commons.wikimedia.org/*',
   'https://upload.wikimedia.org/*'
 ]
@@ -71,22 +65,18 @@ export async function fetchFreshFeaturedBackgroundItems(
   client: FeaturedGalleryFetchClient,
   options: FeaturedGalleryRefreshOptions = {}
 ): Promise<FeaturedBackgroundItem[]> {
-  const [nasaItems, metItems, wikimediaItems] = await Promise.all([
+  const [nasaItems, wikimediaItems] = await Promise.all([
     fetchNasaFeaturedItems(client, options).catch(() => []),
-    fetchMetFeaturedItems(client, options).catch(() => []),
     fetchWikimediaFeaturedItems(client, options).catch(() => [])
   ])
 
   const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
-  const merged = rotateFeaturedCandidates(
-    dedupeFeaturedItems([
-      ...nasaItems,
-      ...metItems,
-      ...wikimediaItems
-    ]),
-    seed
-  )
-  return merged.slice(0, FEATURED_REFRESH_TARGET_COUNT)
+  return [
+    ...rotateFeaturedCandidates(dedupeFeaturedItems(nasaItems), seed)
+      .slice(0, FEATURED_REFRESH_PROVIDER_TARGET_COUNT),
+    ...rotateFeaturedCandidates(dedupeFeaturedItems(wikimediaItems), seed + 1)
+      .slice(0, FEATURED_REFRESH_PROVIDER_TARGET_COUNT)
+  ]
 }
 
 export function mergeFeaturedGalleryRefresh({
@@ -138,7 +128,10 @@ export function isHighResolutionFeaturedBackground(
 
   const longEdge = Math.max(numericWidth, numericHeight)
   const shortEdge = Math.min(numericWidth, numericHeight)
-  return longEdge >= minLongEdge && shortEdge >= minShortEdge
+  const aspectRatio = numericWidth / numericHeight
+  return longEdge >= minLongEdge &&
+    shortEdge >= minShortEdge &&
+    aspectRatio >= FEATURED_BACKGROUND_MIN_ASPECT_RATIO
 }
 
 export function getFeaturedBackgroundResolutionThreshold(
@@ -228,73 +221,6 @@ function selectNasaHighResolutionImageUrl(assetList: unknown): string {
   const preferred = candidates.find((url) => /~orig\./i.test(url)) ||
     candidates.find((url) => /~large\./i.test(url))
   return preferred || ''
-}
-
-async function fetchMetFeaturedItems(
-  client: FeaturedGalleryFetchClient,
-  options: FeaturedGalleryRefreshOptions
-): Promise<FeaturedBackgroundItem[]> {
-  const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
-  const searchResults = await Promise.all(MET_SEARCH_QUERIES.map((query) => {
-    const url = `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&isPublicDomain=true&q=${encodeURIComponent(query)}`
-    return client.fetchJson(url).catch(() => null)
-  }))
-  const objectIds = rotateFeaturedNumbers(
-    uniqueNumbers(
-      searchResults.flatMap((search) => {
-        const rawObjectIds = getObject(search).objectIDs
-        return Array.isArray(rawObjectIds) ? rawObjectIds : []
-      })
-    ),
-    seed
-  ).slice(0, FEATURED_REFRESH_SOURCE_LIMIT)
-  const items = await mapWithConcurrency(objectIds, FEATURED_REFRESH_CONCURRENCY, async (objectId) => {
-    const objectUrl = `https://collectionapi.metmuseum.org/public/collection/v1/objects/${objectId}`
-    const rawObject = await client.fetchJson(objectUrl).catch(() => null)
-    return normalizeMetFeaturedItem(client, rawObject, options)
-  })
-  return items.filter(Boolean) as FeaturedBackgroundItem[]
-}
-
-async function normalizeMetFeaturedItem(
-  client: FeaturedGalleryFetchClient,
-  rawObject: unknown,
-  options: FeaturedGalleryRefreshOptions
-): Promise<FeaturedBackgroundItem | null> {
-  const object = getObject(rawObject)
-  const objectId = Number(object.objectID)
-  const imageUrl = String(object.primaryImage || '').trim()
-  if (!Number.isFinite(objectId) || object.isPublicDomain !== true || !imageUrl) {
-    return null
-  }
-  const title = String(object.title || `The Met ${objectId}`).trim()
-  const artist = String(object.artistDisplayName || '').trim()
-  const credit = artist ? `The Metropolitan Museum of Art / ${artist}` : 'The Metropolitan Museum of Art'
-  if (!isFeaturedBackgroundStyleSuitable({
-    title,
-    credit,
-    provider: 'met',
-    metadata: [String(object.department || ''), String(object.classification || ''), String(object.medium || '')]
-  })) {
-    return null
-  }
-  const imageSize = await getHighResolutionImageSize(client, imageUrl, options)
-  if (!imageSize) {
-    return null
-  }
-  return {
-    id: `met-${objectId}`,
-    title,
-    provider: 'met',
-    imageUrl,
-    sourceUrl: String(object.objectURL || `https://www.metmuseum.org/art/collection/search/${objectId}`).trim(),
-    credit,
-    license: 'Open Access / Public Domain',
-    accentColor: '#171b12',
-    dynamic: true,
-    width: imageSize.width,
-    height: imageSize.height
-  }
 }
 
 async function fetchWikimediaFeaturedItems(
@@ -430,28 +356,6 @@ function rotateFeaturedCandidates<T>(items: T[], seed: number): T[] {
   }
   const start = seed % items.length
   return items.slice(start).concat(items.slice(0, start))
-}
-
-function rotateFeaturedNumbers(items: number[], seed: number): number[] {
-  if (items.length <= 1) {
-    return items
-  }
-  const start = seed % items.length
-  return items.slice(start).concat(items.slice(0, start))
-}
-
-function uniqueNumbers(items: unknown[]): number[] {
-  const seen = new Set<number>()
-  const results: number[] = []
-  for (const item of items) {
-    const value = Number(item)
-    if (!Number.isFinite(value) || value <= 0 || seen.has(value)) {
-      continue
-    }
-    seen.add(value)
-    results.push(value)
-  }
-  return results
 }
 
 async function mapWithConcurrency<T, R>(

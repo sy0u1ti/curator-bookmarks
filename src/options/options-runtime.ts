@@ -17,9 +17,7 @@ import {
   updateBookmark,
   createBookmark
 } from '../shared/bookmarks-api.js'
-import {
-  extractBookmarkData
-} from '../shared/bookmark-tree.js'
+import { buildBookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import {
   normalizeText,
   normalizeUrl,
@@ -246,6 +244,7 @@ import {
   hydrateDashboardSpeedDialState,
   isDashboardViewReady,
   prepareDashboardSectionEntry,
+  teardownDashboardSectionExit,
   getSingleDashboardMoveBookmark,
   hydrateDashboardFaviconCache,
   moveSingleDashboardBookmark,
@@ -497,7 +496,7 @@ async function hydratePersistentState() {
     hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
     managerState.inboxSettings = normalizeInboxSettings(stored[STORAGE_KEYS.inboxSettings])
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
-    scheduleLargeRepositoryHydration()
+    maybeHydrateLargeRepositoryForSection(normalizeSectionKey(getCurrentSectionKey()))
   } catch (error) {
     availabilityState.lastError =
       error instanceof Error ? error.message : '本地规则读取失败，请刷新页面后重试。'
@@ -527,6 +526,14 @@ function scheduleLargeRepositoryHydration(): void {
   }
 
   window.setTimeout(hydrate, 0)
+}
+
+const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['dashboard', 'ai', 'tags'])
+
+function maybeHydrateLargeRepositoryForSection(key: string): void {
+  if (SECTIONS_NEEDING_LARGE_REPOSITORY.has(key)) {
+    scheduleLargeRepositoryHydration()
+  }
 }
 
 async function hydrateLargeRepositoryState(): Promise<void> {
@@ -654,8 +661,14 @@ function syncPageSection() {
   if (previousSectionKey !== 'dashboard' && key === 'dashboard') {
     prepareDashboardSectionEntry()
   }
+  if (previousSectionKey === 'dashboard' && key !== 'dashboard') {
+    teardownDashboardSectionExit()
+  }
   activeSectionKey = key
+  maybeHydrateLargeRepositoryForSection(key)
   maybeHydrateContentSnapshotFullTextSearchMapForVisibleDashboard()
+  syncAvailabilityDurationTimer()
+  syncAiNamingDurationTimer()
 
   document.body.classList.toggle('dashboard-fullscreen-active', key === 'dashboard')
   document.body.classList.toggle('dashboard-performance-mode-active', key === 'dashboard')
@@ -1691,7 +1704,7 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
       getLocalStorage([STORAGE_KEYS.newTabFolderSettings])
     ])
     const rootNode = Array.isArray(tree) ? tree[0] : tree
-    const extracted = extractBookmarkData(rootNode)
+    const extracted = buildBookmarkCatalogSnapshot({ rootNode }).extracted
     const bookmarks = extracted.bookmarks
     const excludedDuplicateFolderIds = collectNewTabShortcutFolderIds(
       rootNode,
@@ -3295,7 +3308,8 @@ function updateAvailabilityDurationDisplay() {
 function syncAvailabilityDurationTimer() {
   const shouldTick = Boolean(
     Number(availabilityState.runStartedAt) &&
-    (availabilityState.running || availabilityState.retestingSelection)
+    (availabilityState.running || availabilityState.retestingSelection) &&
+    activeSectionKey === 'availability'
   )
 
   if (!shouldTick) {
@@ -3688,7 +3702,7 @@ function renderShortcutSettingsSection() {
   } else if (managerState.shortcutStatus === 'loading') {
     dom.shortcutList.innerHTML = '<div class="detect-empty">正在读取当前快捷键绑定…</div>'
   } else {
-    dom.shortcutList.innerHTML = commands.map(renderShortcutCommandRow).join('')
+    renderShortcutCommandRows(dom.shortcutList, commands)
   }
 
   if (dom.refreshShortcuts) {
@@ -3726,6 +3740,19 @@ function renderShortcutCommandRow(command) {
       <span class="shortcut-key ${shortcut ? '' : 'unassigned'}">${escapeHtml(shortcutLabel)}</span>
     </div>
   `
+}
+
+function renderShortcutCommandRows(container, commands) {
+  const fragment = document.createDocumentFragment()
+  for (const command of commands) {
+    const template = document.createElement('template')
+    template.innerHTML = renderShortcutCommandRow(command).trim()
+    const row = template.content.firstElementChild
+    if (row) {
+      fragment.appendChild(row)
+    }
+  }
+  container.replaceChildren(fragment)
 }
 
 function getShortcutStatusLabel() {
@@ -4310,7 +4337,8 @@ function updateAiNamingDurationDisplay() {
 function syncAiNamingDurationTimer() {
   const shouldTick = Boolean(
     Number(aiNamingState.runStartedAt) &&
-    (aiNamingState.running || aiNamingState.applying)
+    (aiNamingState.running || aiNamingState.applying) &&
+    activeSectionKey === 'ai'
   )
 
   if (!shouldTick) {
@@ -4756,7 +4784,7 @@ async function getCurrentBookmarksForTagData() {
 
   const tree = await getBookmarkTree()
   const rootNode = Array.isArray(tree) ? tree[0] : tree
-  return extractBookmarkData(rootNode).bookmarks
+  return buildBookmarkCatalogSnapshot({ rootNode }).extracted.bookmarks
 }
 
 function readTextFile(file: File): Promise<string> {
@@ -8073,14 +8101,15 @@ function renderScopeModal() {
   `
 
   if (!folders.length) {
-    dom.scopeFolderResults.innerHTML = `${allOption}<div class="detect-empty" role="presentation">没有匹配的文件夹。</div>`
+    dom.scopeFolderResults.replaceChildren(
+      createScopeFolderCardFragment([allOption]),
+      createScopeFolderEmptyState('没有匹配的文件夹。')
+    )
     return
   }
 
-  dom.scopeFolderResults.innerHTML = `
-    ${allOption}
-    ${folders.map((folder) => buildScopeFolderCard(folder)).join('')}
-  `
+  const cards = folders.map((folder) => buildScopeFolderCard(folder))
+  dom.scopeFolderResults.replaceChildren(createScopeFolderCardFragment([allOption, ...cards]))
 }
 
 function buildScopeFolderCard(folder) {
@@ -8105,6 +8134,27 @@ function buildScopeFolderCard(folder) {
       <span>${escapeHtml(folder.path || folder.title || '未命名文件夹')}</span>
     </button>
   `
+}
+
+function createScopeFolderCardFragment(cards) {
+  const fragment = document.createDocumentFragment()
+  for (const cardMarkup of cards) {
+    const template = document.createElement('template')
+    template.innerHTML = cardMarkup.trim()
+    const card = template.content.firstElementChild
+    if (card) {
+      fragment.appendChild(card)
+    }
+  }
+  return fragment
+}
+
+function createScopeFolderEmptyState(message) {
+  const empty = document.createElement('div')
+  empty.className = 'detect-empty'
+  empty.setAttribute('role', 'presentation')
+  empty.textContent = message
+  return empty
 }
 
 function getCurrentScopeFolderId() {

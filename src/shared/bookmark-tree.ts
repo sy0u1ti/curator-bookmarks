@@ -8,9 +8,15 @@ import {
 import { BOOKMARKS_BAR_ID, ROOT_ID } from './constants.js'
 import type {
   BookmarkRecord,
+  BookmarkCatalogVersionFingerprint,
   ExtractedBookmarkData,
   FolderRecord
 } from './types.js'
+
+const BOOKMARK_CATALOG_HASH_SEED = 0x811c9dc5
+const BOOKMARK_CATALOG_HASH_ALT_SEED = 0x9e3779b9
+const BOOKMARK_CATALOG_HASH_MULTIPLIER = 0x01000193
+const BOOKMARK_CATALOG_HASH_ALT_MULTIPLIER = 0x85ebca6b
 
 export function extractBookmarkData(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null | undefined
@@ -19,6 +25,8 @@ export function extractBookmarkData(
   const folders: FolderRecord[] = []
   const bookmarkMap = new Map<string, BookmarkRecord>()
   const folderMap = new Map<string, FolderRecord>()
+  let bookmarkHash = BOOKMARK_CATALOG_HASH_SEED >>> 0
+  let folderHash = BOOKMARK_CATALOG_HASH_ALT_SEED >>> 0
 
   function walk(
     node: chrome.bookmarks.BookmarkTreeNode,
@@ -61,6 +69,16 @@ export function extractBookmarkData(
 
       folders.push(folder)
       folderMap.set(folder.id, folder)
+      folderHash = updateCatalogRecordHash(
+        folderHash,
+        BOOKMARK_CATALOG_HASH_ALT_MULTIPLIER,
+        [
+          folder.id,
+          folder.path,
+          String(folder.bookmarkCount || 0),
+          String(folder.folderCount || 0)
+        ]
+      )
     }
 
     for (const child of node.children || []) {
@@ -83,6 +101,16 @@ export function extractBookmarkData(
 
         bookmarks.push(bookmark)
         bookmarkMap.set(bookmark.id, bookmark)
+        bookmarkHash = updateCatalogRecordHash(
+          bookmarkHash,
+          BOOKMARK_CATALOG_HASH_MULTIPLIER,
+          [
+            bookmark.id,
+            bookmark.parentId,
+            bookmark.duplicateKey,
+            String(bookmark.dateAdded || 0)
+          ]
+        )
       } else {
         walk(child, currentAncestorIds, currentPath)
       }
@@ -97,8 +125,37 @@ export function extractBookmarkData(
     bookmarks,
     folders,
     bookmarkMap,
-    folderMap
+    folderMap,
+    catalogVersionFingerprint: createCatalogVersionFingerprint(bookmarkHash, folderHash)
   }
+}
+
+function createCatalogVersionFingerprint(
+  bookmarkHash: number,
+  folderHash: number
+): BookmarkCatalogVersionFingerprint {
+  return {
+    bookmarkHash: (bookmarkHash >>> 0).toString(36),
+    folderHash: (folderHash >>> 0).toString(36)
+  }
+}
+
+function updateCatalogRecordHash(hash: number, multiplier: number, values: unknown[]): number {
+  let next = hash >>> 0
+  for (const value of values) {
+    next = updateCatalogHash(next, value, multiplier)
+  }
+  return updateCatalogHash(next, '\u001f', multiplier)
+}
+
+function updateCatalogHash(hash: number, value: unknown, multiplier: number): number {
+  let next = hash >>> 0
+  const text = String(value ?? '')
+  for (let index = 0; index < text.length; index += 1) {
+    next ^= text.charCodeAt(index)
+    next = Math.imul(next, multiplier) >>> 0
+  }
+  return next >>> 0
 }
 
 export function findBookmarksBar(

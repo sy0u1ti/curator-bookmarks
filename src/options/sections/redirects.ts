@@ -1,7 +1,7 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
 import { getBookmarkTree, updateBookmark } from '../../shared/bookmarks-api.js'
-import { extractBookmarkData } from '../../shared/bookmark-tree.js'
+import { buildBookmarkCatalogSnapshot } from '../../shared/bookmark-catalog.js'
 import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { displayUrl } from '../../shared/text.js'
 import {
@@ -525,7 +525,7 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
 async function getLatestBookmarkMap() {
   const tree = await getBookmarkTree()
   const rootNode = Array.isArray(tree) ? tree[0] : tree
-  const bookmarks = extractBookmarkData(rootNode).bookmarks
+  const bookmarks = buildBookmarkCatalogSnapshot({ rootNode }).extracted.bookmarks
   return new Map(bookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
 }
 

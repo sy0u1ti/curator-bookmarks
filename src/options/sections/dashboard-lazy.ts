@@ -57,6 +57,10 @@ export function prepareDashboardSectionEntry(): void {
   void loadDashboardModule().then((mod) => mod.prepareDashboardSectionEntry())
 }
 
+export function teardownDashboardSectionExit(): void {
+  loadedDashboardModule()?.teardownDashboardSectionExit()
+}
+
 export async function hydrateDashboardSpeedDialState(): Promise<void> {
   const mod = await loadDashboardModule()
   await mod.hydrateDashboardSpeedDialState()

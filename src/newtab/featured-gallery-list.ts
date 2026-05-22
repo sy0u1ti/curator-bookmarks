@@ -8,18 +8,23 @@ export interface FeaturedBackgroundPickerListInput {
   selectedId: string
 }
 
-export function buildFeaturedBackgroundPickerItems({
+export interface FeaturedBackgroundPickerSections {
+  favorites: FeaturedBackgroundItem[]
+  refreshed: FeaturedBackgroundItem[]
+}
+
+export function buildFeaturedBackgroundPickerSections({
   storedItems,
   staticItems,
   favoriteIds,
   selectedId
-}: FeaturedBackgroundPickerListInput): FeaturedBackgroundItem[] {
+}: FeaturedBackgroundPickerListInput): FeaturedBackgroundPickerSections {
   const favorites = new Set(Array.from(favoriteIds, (id) => String(id || '').trim()).filter(Boolean))
   const selected = String(selectedId || '').trim()
-  const hasRefreshCache = storedItems.length > 0
-  const minimumVisibleItems = 12
-  const items: FeaturedBackgroundItem[] = []
-  const seen = new Set<string>()
+  const favoriteItems: FeaturedBackgroundItem[] = []
+  const refreshedItems: FeaturedBackgroundItem[] = []
+  const favoriteSeen = new Set<string>()
+  const refreshedSeen = new Set<string>()
   const filterItem = (item: FeaturedBackgroundItem) => isFeaturedBackgroundStyleSuitable({
     title: item.title,
     credit: item.credit,
@@ -27,25 +32,46 @@ export function buildFeaturedBackgroundPickerItems({
     metadata: [item.sourceUrl]
   })
 
-  const addItems = (sourceItems: FeaturedBackgroundItem[], filter: (item: FeaturedBackgroundItem) => boolean) => {
+  const addFavoriteItems = (sourceItems: FeaturedBackgroundItem[], filter: (item: FeaturedBackgroundItem) => boolean) => {
     for (const item of sourceItems) {
-      const isPinnedByUser = favorites.has(item.id) || item.id === selected
-      if (!item.id || seen.has(item.id) || !filter(item) || (!isPinnedByUser && !filterItem(item))) {
+      if (!item.id || favoriteSeen.has(item.id) || !filter(item)) {
         continue
       }
-      seen.add(item.id)
-      items.push(item)
+      favoriteSeen.add(item.id)
+      favoriteItems.push(item)
     }
   }
 
-  addItems(storedItems, (item) => favorites.has(item.id))
-  addItems(staticItems, (item) => favorites.has(item.id))
-  addItems(staticItems, (item) => Boolean(selected) && item.id === selected)
-  addItems(storedItems, (item) => !favorites.has(item.id))
-
-  if (!hasRefreshCache || items.length < minimumVisibleItems) {
-    addItems(staticItems, (item) => !favorites.has(item.id) && item.id !== selected)
+  const addRefreshedItems = (sourceItems: FeaturedBackgroundItem[], filter: (item: FeaturedBackgroundItem) => boolean) => {
+    for (const item of sourceItems) {
+      const pinnedByUser = favorites.has(item.id) || item.id === selected
+      if (!item.id || refreshedSeen.has(item.id) || !filter(item) || (!pinnedByUser && !filterItem(item))) {
+        continue
+      }
+      refreshedSeen.add(item.id)
+      refreshedItems.push(item)
+    }
   }
 
-  return items
+  addFavoriteItems(storedItems, (item) => favorites.has(item.id))
+  addFavoriteItems(staticItems, (item) => favorites.has(item.id))
+  addFavoriteItems(storedItems, (item) => Boolean(selected) && item.id === selected)
+  addFavoriteItems(staticItems, (item) => Boolean(selected) && item.id === selected)
+
+  const activeFavoriteIds = new Set(favoriteItems.map((item) => item.id))
+  addRefreshedItems(storedItems, (item) => !activeFavoriteIds.has(item.id))
+
+  if (!refreshedItems.length) {
+    addRefreshedItems(staticItems, (item) => !activeFavoriteIds.has(item.id) && item.id !== selected)
+  }
+
+  return {
+    favorites: favoriteItems,
+    refreshed: refreshedItems
+  }
+}
+
+export function buildFeaturedBackgroundPickerItems(input: FeaturedBackgroundPickerListInput): FeaturedBackgroundItem[] {
+  const sections = buildFeaturedBackgroundPickerSections(input)
+  return [...sections.favorites, ...sections.refreshed]
 }

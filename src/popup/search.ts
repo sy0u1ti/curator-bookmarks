@@ -1,5 +1,9 @@
 import type { BookmarkRecord } from '../shared/types.js'
-import { normalizeText, stripCommonUrlPrefix } from '../shared/text.js'
+import {
+  normalizeSearchTextCompact,
+  normalizeText,
+  stripCommonUrlPrefix
+} from '../shared/text.js'
 import { createTopKCollector } from '../shared/search/topk.js'
 import { getEffectiveBookmarkTags, type BookmarkTagRecord } from '../shared/bookmark-tags.js'
 import {
@@ -8,7 +12,7 @@ import {
   parseSearchQuery,
   type ParsedSearchQuery
 } from '../shared/search-query.js'
-import { requiresPinyinTokens } from '../shared/search/pinyin.js'
+import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import {
   buildContentSnapshotSearchText,
   type ContentSnapshotRecord
@@ -19,6 +23,7 @@ export const POPUP_SEARCH_ASYNC_THRESHOLD = 1200
 const SEARCH_PREFILTER_THRESHOLD = 1200
 const SEARCH_CHUNK_SIZE = 260
 const FIRST_BATCH_MAX_SCAN_WITH_RESULTS = 8000
+const LOOSE_SUBSEQUENCE_MIN_COMPACT_LENGTH = 5
 const RECENT_SORT_TERMS = new Set(['recent', 'new', 'newest', 'latest', '最近', '新近', '最近优先'])
 
 export interface PopupSearchBookmark extends BookmarkRecord {
@@ -31,6 +36,7 @@ export interface PopupSearchBookmark extends BookmarkRecord {
   tagPinyinFull: string[]
   tagPinyinInitials: string[]
   searchText: string
+  searchTextCompact?: string
   pinyinEnriched?: boolean
   pinyinBaseSearchText?: string
 }
@@ -67,6 +73,21 @@ export function indexBookmarkForSearch(
   const tagAliases = normalizeSearchList(tagRecord?.aliases)
   const snapshotSearchText = buildContentSnapshotSearchText(snapshotRecord, options)
 
+  const searchText = [
+    bookmark.normalizedTitle,
+    bookmark.normalizedUrl,
+    normalizedPath,
+    normalizedDomain,
+    tagContentType,
+    ...tagTopics,
+    ...tagTags,
+    ...tagAliases,
+    tagSummary,
+    snapshotSearchText
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return {
     ...bookmark,
     normalizedPath,
@@ -77,20 +98,8 @@ export function indexBookmarkForSearch(
     tagAliases,
     tagPinyinFull: [],
     tagPinyinInitials: [],
-    searchText: [
-      bookmark.normalizedTitle,
-      bookmark.normalizedUrl,
-      normalizedPath,
-      normalizedDomain,
-      tagContentType,
-      ...tagTopics,
-      ...tagTags,
-      ...tagAliases,
-      tagSummary,
-      snapshotSearchText
-    ]
-      .filter(Boolean)
-      .join(' ')
+    searchText,
+    searchTextCompact: normalizeSearchTextCompact(searchText)
   }
 }
 
@@ -310,9 +319,12 @@ function scoreBookmarkWithReasons(
   const url = bookmark.normalizedUrl
   const domain = normalizeText(bookmark.domain || '')
   const searchText = getBookmarkSearchText(bookmark)
+  const compactSearchText = getCompactSearchText(bookmark)
+  const compactQuery = normalizeSearchTextCompact(normalizedQuery)
   let score = 0
   let matched = false
   const reasons: string[] = []
+  let strongMatch = false
 
   if (!matchesStructuredFilters(bookmark, parsedQuery, reasons)) {
     return { score: 0, reasons: [] }
@@ -334,12 +346,14 @@ function scoreBookmarkWithReasons(
   if (normalizedQuery && title === normalizedQuery) {
     score += 620
     matched = true
+    strongMatch = true
     addReason(reasons, `命中：标题 ${bookmark.title}`)
   }
 
   if (normalizedQuery && title.startsWith(normalizedQuery)) {
     score += 420
     matched = true
+    strongMatch = true
     addReason(reasons, `命中：标题前缀 ${normalizedQuery}`)
   }
 
@@ -347,7 +361,15 @@ function scoreBookmarkWithReasons(
   if (titleIndex !== -1) {
     score += 300 + getBoundaryMatchBonus(title, titleIndex, normalizedQuery.length, 46) - Math.min(titleIndex, 120)
     matched = true
+    strongMatch = true
     addReason(reasons, `命中：标题 ${normalizedQuery}`)
+  }
+
+  const compactFieldMatch = scoreCompactFieldMatch(bookmark, compactQuery, normalizedQuery, reasons)
+  if (compactFieldMatch.score > 0) {
+    score += compactFieldMatch.score
+    matched = true
+    strongMatch = true
   }
 
   if (normalizedQuery) {
@@ -355,6 +377,7 @@ function scoreBookmarkWithReasons(
     if (domainMatch > 0) {
       score += domainMatch
       matched = true
+      strongMatch = true
       addReason(reasons, `命中：站点 ${domain || normalizedQuery}`)
     }
   }
@@ -362,6 +385,7 @@ function scoreBookmarkWithReasons(
   if (normalizedQuery && url.startsWith(normalizedQuery)) {
     score += 250
     matched = true
+    strongMatch = true
     addReason(reasons, `命中：网址 ${normalizedQuery}`)
   }
 
@@ -369,6 +393,7 @@ function scoreBookmarkWithReasons(
   if (urlIndex !== -1) {
     score += 190 - Math.min(urlIndex, 100)
     matched = true
+    strongMatch = true
     addReason(reasons, `命中：网址 ${normalizedQuery}`)
   }
 
@@ -392,6 +417,7 @@ function scoreBookmarkWithReasons(
       score += 72 + getBoundaryMatchBonus(title, termTitleIndex, term.length, 22) - Math.min(termTitleIndex, 40)
       termMatched = true
       matched = true
+      strongMatch = true
       addReason(reasons, `命中：标题 ${term}`)
     }
 
@@ -400,6 +426,7 @@ function scoreBookmarkWithReasons(
       score += domainTermMatch
       termMatched = true
       matched = true
+      strongMatch = true
       addReason(reasons, `命中：站点 ${domain || term}`)
     }
 
@@ -407,6 +434,7 @@ function scoreBookmarkWithReasons(
       score += (domainTermMatch > 0 ? 22 : 45) - Math.min(termUrlIndex, 40)
       termMatched = true
       matched = true
+      strongMatch = true
       addReason(reasons, `命中：网址 ${term}`)
     }
 
@@ -445,7 +473,7 @@ function scoreBookmarkWithReasons(
   }
 
   if (approximateMatch.score > 0) {
-    score += approximateMatch.score
+    score += strongMatch ? Math.round(approximateMatch.score * 0.7) : approximateMatch.score
     matched = true
   }
 
@@ -454,7 +482,7 @@ function scoreBookmarkWithReasons(
     insertReason(reasons, buildQueryCoverageReason(queryTerms), 1)
   }
 
-  if (!matched) {
+  if (!matched && canUseLooseSubsequenceMatch(parsedQuery)) {
     const titleFuzzy = subsequenceScore(title, normalizedQuery)
     const urlFuzzy = subsequenceScore(url, normalizedQuery)
     const fuzzyScore = Math.max(titleFuzzy * 2, urlFuzzy)
@@ -463,6 +491,18 @@ function scoreBookmarkWithReasons(
       score += fuzzyScore
       matched = true
       addReason(reasons, `命中：模糊匹配 ${normalizedQuery}`)
+    }
+  }
+
+  if (!strongMatch && compactQuery && canUseLooseSubsequenceMatch(parsedQuery)) {
+    const compactFuzzyScore = Math.max(
+      subsequenceScore(compactSearchText, compactQuery) * 2,
+      subsequenceScore(normalizeSearchTextCompact(url), compactQuery)
+    )
+    if (compactFuzzyScore > 0) {
+      score += Math.round(compactFuzzyScore * 0.8)
+      matched = true
+      addReason(reasons, `命中：紧凑模糊 ${normalizedQuery}`)
     }
   }
 
@@ -508,8 +548,7 @@ function matchesFastFirstBatchCandidate(
     return false
   }
 
-  const searchText = getBookmarkSearchText(bookmark)
-  return terms.every((term) => searchText.includes(term))
+  return terms.every((term) => matchesSearchCandidateText(bookmark, term))
 }
 
 function scoreFastFirstBatchBookmark(
@@ -523,6 +562,7 @@ function scoreFastFirstBatchBookmark(
   const domain = normalizeText(bookmark.domain || '')
   const path = bookmark.normalizedPath
   const searchText = getBookmarkSearchText(bookmark)
+  const compactQuery = normalizeSearchTextCompact(normalizedQuery)
   const reasons: string[] = []
   let score = 0
 
@@ -539,6 +579,8 @@ function scoreFastFirstBatchBookmark(
       addReason(reasons, `命中：标题 ${normalizedQuery}`)
     }
   }
+
+  score += scoreCompactFieldMatch(bookmark, compactQuery, normalizedQuery, reasons).score
 
   if (url.startsWith(normalizedQuery) || domain.startsWith(normalizedQuery)) {
     score += 250
@@ -617,6 +659,97 @@ function scoreSemanticFields(
   }
 
   return { score }
+}
+
+function scoreCompactFieldMatch(
+  bookmark: PopupSearchBookmark,
+  compactQuery: string,
+  normalizedQuery: string,
+  reasons: string[]
+): { score: number } {
+  if (!compactQuery) {
+    return { score: 0 }
+  }
+
+  let bestMatch: { score: number; reason: string } | null = null
+  const fields = getCompactSearchFields(bookmark)
+  for (const field of fields) {
+    if (!field.value) {
+      continue
+    }
+
+    const score = getCompactFieldScore(field.value, compactQuery, field.weight)
+    if (score <= 0) {
+      continue
+    }
+
+    const reason = `命中：${field.label} ${normalizedQuery}`
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = { score, reason }
+    }
+  }
+
+  if (!bestMatch) {
+    return { score: 0 }
+  }
+
+  addReason(reasons, bestMatch.reason)
+  return { score: bestMatch.score }
+}
+
+function getCompactSearchFields(bookmark: PopupSearchBookmark): Array<{ value: string; label: string; weight: number }> {
+  return [
+    { value: normalizeSearchTextCompact(bookmark.normalizedTitle), label: '紧凑标题', weight: 240 },
+    { value: normalizeSearchTextCompact(bookmark.normalizedUrl), label: '紧凑网址', weight: 170 },
+    { value: normalizeSearchTextCompact(bookmark.domain || ''), label: '紧凑站点', weight: 210 },
+    { value: normalizeSearchTextCompact(bookmark.normalizedPath), label: '紧凑文件夹', weight: 80 },
+    ...bookmark.tagAliases.map((value) => ({
+      value: normalizeSearchTextCompact(value),
+      label: '紧凑别名',
+      weight: 130
+    })),
+    ...bookmark.tagTags.map((value) => ({
+      value: normalizeSearchTextCompact(value),
+      label: '紧凑标签',
+      weight: 120
+    })),
+    ...bookmark.tagTopics.map((value) => ({
+      value: normalizeSearchTextCompact(value),
+      label: '紧凑主题',
+      weight: 100
+    })),
+    ...bookmark.tagPinyinFull.map((value) => ({
+      value: normalizeSearchTextCompact(value),
+      label: '拼音',
+      weight: 150
+    })),
+    ...bookmark.tagPinyinInitials.map((value) => ({
+      value: normalizeSearchTextCompact(value),
+      label: '首字母',
+      weight: 150
+    }))
+  ]
+}
+
+function getCompactFieldScore(value: string, query: string, weight: number): number {
+  if (!value || !query) {
+    return 0
+  }
+
+  if (value === query) {
+    return weight + 280
+  }
+
+  if (value.startsWith(query)) {
+    return weight + 150
+  }
+
+  const index = value.indexOf(query)
+  if (index !== -1) {
+    return Math.max(weight, weight + 72 - Math.min(index, 72))
+  }
+
+  return 0
 }
 
 function scoreListField(
@@ -1030,8 +1163,7 @@ function getSearchCandidates(
     if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
       return false
     }
-    const searchText = getBookmarkSearchText(bookmark)
-    return requiredTerms.every((term) => !term || searchText.includes(term))
+    return requiredTerms.every((term) => matchesSearchCandidateText(bookmark, term))
   })
 
   if (directMatches.length) {
@@ -1047,8 +1179,7 @@ function getSearchCandidates(
     if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
       return false
     }
-    const searchText = getBookmarkSearchText(bookmark)
-    return searchText.includes(prefix)
+    return matchesSearchCandidateText(bookmark, prefix)
   })
 
   return prefixMatches.length ? prefixMatches : bookmarks
@@ -1078,8 +1209,7 @@ async function getSearchCandidatesCooperatively(
       if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
         continue
       }
-      const searchText = getBookmarkSearchText(bookmark)
-      if (requiredTerms.every((term) => !term || searchText.includes(term))) {
+      if (requiredTerms.every((term) => matchesSearchCandidateText(bookmark, term))) {
         directMatches.push(bookmark)
       }
     }
@@ -1107,8 +1237,7 @@ async function getSearchCandidatesCooperatively(
       if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
         continue
       }
-      const searchText = getBookmarkSearchText(bookmark)
-      if (searchText.includes(prefix)) {
+      if (matchesSearchCandidateText(bookmark, prefix)) {
         prefixMatches.push(bookmark)
       }
     }
@@ -1147,6 +1276,28 @@ function matchesSearchCandidateFilters(
 
 function getBookmarkSearchText(bookmark: PopupSearchBookmark): string {
   return bookmark.searchText || `${bookmark.normalizedTitle} ${bookmark.normalizedUrl}`
+}
+
+function getCompactSearchText(bookmark: PopupSearchBookmark): string {
+  return bookmark.searchTextCompact || normalizeSearchTextCompact(getBookmarkSearchText(bookmark))
+}
+
+function matchesSearchCandidateText(bookmark: PopupSearchBookmark, term: string): boolean {
+  if (!term) {
+    return true
+  }
+
+  const searchText = getBookmarkSearchText(bookmark)
+  if (searchText.includes(term)) {
+    return true
+  }
+
+  const compactTerm = normalizeSearchTextCompact(term)
+  if (!compactTerm) {
+    return false
+  }
+
+  return getCompactSearchFields(bookmark).some((field) => field.value.includes(compactTerm))
 }
 
 function getBestSearchIndex(left: string, right: string, term: string): number {
@@ -1250,6 +1401,23 @@ function scoreOrderedTermProximity(text: string, terms: string[]): number {
 
   const span = Math.max(1, lastEnd - firstIndex)
   return Math.max(0, 48 - Math.min(span, 48))
+}
+
+function canUseLooseSubsequenceMatch(parsedQuery: ParsedPopupSearchQuery): boolean {
+  if (
+    parsedQuery.hasStructuredFilters ||
+    parsedQuery.recencyHint ||
+    parsedQuery.queryTerms.length !== 1
+  ) {
+    return false
+  }
+
+  const compactQuery = normalizeSearchTextCompact(parsedQuery.normalizedQuery)
+  if (compactQuery.length < LOOSE_SUBSEQUENCE_MIN_COMPACT_LENGTH) {
+    return false
+  }
+
+  return !requiresPinyinTokens(parsedQuery.normalizedQuery)
 }
 
 function appendTopSearchResult(results: PopupSearchResult[], result: PopupSearchResult, limit = MAX_POPUP_SEARCH_RESULTS): void {

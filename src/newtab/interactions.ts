@@ -1,5 +1,7 @@
 export const BACKGROUND_URL_FETCH_TIMEOUT_MS = 12000
-export const BACKGROUND_URL_MAX_BYTES = 8 * 1024 * 1024
+export const BACKGROUND_URL_PREVIEW_MAX_BYTES = 8 * 1024 * 1024
+export const BACKGROUND_URL_FULL_MAX_BYTES = 32 * 1024 * 1024
+export const BACKGROUND_URL_MAX_BYTES = BACKGROUND_URL_PREVIEW_MAX_BYTES
 
 export interface BookmarkMoveOperation {
   id: string
@@ -323,7 +325,7 @@ function getLongestIncreasingSubsequenceIndexes(values: number[]): number[] {
 
 export function validateBackgroundContentLength(
   value: string | null,
-  maxBytes = BACKGROUND_URL_MAX_BYTES
+  maxBytes = BACKGROUND_URL_FULL_MAX_BYTES
 ): BackgroundFetchSizeCheck {
   if (!value) {
     return { allowed: true }
@@ -346,7 +348,7 @@ export function validateBackgroundContentLength(
 
 export function validateBackgroundBlobSize(
   size: number,
-  maxBytes = BACKGROUND_URL_MAX_BYTES
+  maxBytes = BACKGROUND_URL_FULL_MAX_BYTES
 ): BackgroundFetchSizeCheck {
   if (!Number.isFinite(size) || size <= maxBytes) {
     return { allowed: true }

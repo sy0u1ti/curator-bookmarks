@@ -4,6 +4,7 @@ declare global {
 }
 
 const PERF_LOG_PREFIX = '[Curator Perf]'
+const perfConsole = console
 
 function readPerfFlag(): boolean {
   try {
@@ -69,7 +70,7 @@ export function measure(name: string, start: string, end?: string): number | und
   }
 
   if (Number.isFinite(duration) && readPerfFlag()) {
-    console.log(`${PERF_LOG_PREFIX} ${name} ${duration!.toFixed(1)}ms`)
+    perfConsole.log(`${PERF_LOG_PREFIX} ${name} ${duration!.toFixed(1)}ms`)
   }
 
   return duration
@@ -84,7 +85,7 @@ export function measureNow<T>(name: string, fn: () => T): T {
     const endedAt = perf?.now?.() ?? Date.now()
     const duration = endedAt - startedAt
     if (Number.isFinite(duration) && readPerfFlag()) {
-      console.log(`${PERF_LOG_PREFIX} ${name} ${duration.toFixed(1)}ms`)
+      perfConsole.log(`${PERF_LOG_PREFIX} ${name} ${duration.toFixed(1)}ms`)
     }
   }
 }
@@ -105,5 +106,5 @@ export function logCount(name: string, count: number): void {
     return
   }
 
-  console.log(`${PERF_LOG_PREFIX} ${name} count=${count}`)
+  perfConsole.log(`${PERF_LOG_PREFIX} ${name} count=${count}`)
 }

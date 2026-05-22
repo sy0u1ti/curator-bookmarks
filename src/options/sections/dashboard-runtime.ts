@@ -53,6 +53,13 @@ import {
   type DashboardModel,
   type DashboardSortKey
 } from '../../shared/dashboard-model.js'
+import {
+  createDashboardSearchKey,
+  getDashboardSearchResultLimit,
+  getDashboardStructuralCandidateItems,
+  mapDashboardSearchIdsToItems,
+  sortDashboardCandidates
+} from '../../shared/dashboard-query.js'
 import { aiNamingState, availabilityState, contentSnapshotState, dashboardState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { escapeAttr, escapeHtml } from '../shared-options/html.js'
@@ -66,7 +73,7 @@ import {
   type PopupSearchResult
 } from '../../popup/search.js'
 import { measureNow as perfMeasureNow, logCount as perfLogCount } from '../../shared/perf.js'
-import { queryLooksLikePinyin } from '../../shared/search/pinyin.js'
+import { queryLooksLikePinyin } from '../../shared/search/pinyin-query.js'
 import type {
   DashboardSearchWorkerRequest,
   DashboardSearchWorkerResponse,
@@ -283,6 +290,7 @@ const DASHBOARD_FAVICON_LOAD_SYNC_BATCH_SIZE = 64
 const DASHBOARD_FAVICON_DIRTY_SYNC_DELAY_MS = 160
 const DASHBOARD_FAVICON_DIRTY_SYNC_SCROLL_DELAY_MS = 220
 const DASHBOARD_FAVICON_WARMUP_DEBUG_DELAY_MS = 1400
+const dashboardDebugConsole = console
 
 let dashboardStatusTimer = 0
 let dashboardResultsStableFrame = 0
@@ -961,6 +969,70 @@ export function prepareDashboardSectionEntry(): void {
   clearPendingDashboardFaviconWarmup()
   scheduleDashboardFaviconLoadSync()
   startDashboardNaturalSearch()
+}
+
+export function teardownDashboardSectionExit(): void {
+  resetDashboardSearchWorker()
+  clearPendingDashboardFaviconWarmup()
+  dashboardFaviconWarmupItems = null
+  dashboardFaviconWarmupKey = ''
+  releaseDashboardCaches()
+}
+
+export function releaseDashboardCaches(): void {
+  clearStableDashboardResultsUpdate()
+  resetDashboardVirtualRenderCache({ clearItems: true })
+  invalidateDashboardPopupSearchCaches()
+  dashboardNaturalSearchCache.clear()
+  dashboardState.naturalSearchAbortController?.abort()
+  dashboardState.naturalSearchAbortController = null
+  dashboardState.naturalSearchPending = false
+  dashboardState.naturalSearchPlan = null
+  dashboardState.naturalSearchError = ''
+  dashboardRenderCache.modelKey = null
+  dashboardRenderCache.model = null
+  dashboardRenderCache.visibleModel = null
+  dashboardRenderCache.visibleNaturalPlan = null
+  dashboardRenderCache.visibleQuery = ''
+  dashboardRenderCache.visibleFolderId = ''
+  dashboardRenderCache.visibleDomain = ''
+  dashboardRenderCache.visibleMonth = ''
+  dashboardRenderCache.visibleSortKey = 'date-desc'
+  dashboardRenderCache.visibleItems = null
+  dashboardRenderCache.folderCountsModel = null
+  dashboardRenderCache.folderBookmarkCounts = null
+  dashboardRenderCache.sidebarModel = null
+  dashboardRenderCache.sidebarSelectedFolderId = ''
+  dashboardRenderCache.sidebarMarkup = ''
+  dashboardRenderCache.sidebarTotalFolders = -1
+  if (dashboardStatusTimer) {
+    window.clearTimeout(dashboardStatusTimer)
+    dashboardStatusTimer = 0
+  }
+  if (dashboardSelectionMotionFrame) {
+    window.cancelAnimationFrame(dashboardSelectionMotionFrame)
+    dashboardSelectionMotionFrame = 0
+  }
+  if (dashboardSelectionMotionTimer) {
+    window.clearTimeout(dashboardSelectionMotionTimer)
+    dashboardSelectionMotionTimer = 0
+  }
+  if (dashboardVirtualResizeFrame) {
+    window.cancelAnimationFrame(dashboardVirtualResizeFrame)
+    dashboardVirtualResizeFrame = 0
+  }
+  if (dashboardViewRevealFrame) {
+    window.cancelAnimationFrame(dashboardViewRevealFrame)
+    dashboardViewRevealFrame = 0
+  }
+  if (dashboardListRenderFrame) {
+    window.cancelAnimationFrame(dashboardListRenderFrame)
+    dashboardListRenderFrame = 0
+  }
+  pendingDashboardFolderFocusId = ''
+  dashboardListRenderPendingForScroll = false
+  dashboardSelectionCompositeMotionActive = false
+  dashboardVirtualResizeDeferredForSelection = false
 }
 
 export function hydrateDashboardFaviconCache(rawCache: unknown, now = Date.now()): void {
@@ -2254,24 +2326,23 @@ function getPopupDashboardVisibleItems(
   const query = String(filters.query || '').trim()
   const normalizedQuery = normalizeDashboardSearchText(query)
   const isPinyinQuery = queryLooksLikePinyin(normalizedQuery)
-  const structurallyFiltered = filterDashboardItems(model.items, {
-    query: query ? '' : query,
-    folderId: filters.folderId,
-    domain: filters.domain,
-    month: filters.month
-  })
+  const structurallyFiltered = getDashboardStructuralCandidateItems(model, filters)
   if (!query) {
     dashboardActiveSearchKey = ''
     dashboardActiveSearchLimit = 0
     dashboardActiveSearchResultCount = 0
   }
   if (!query) {
-    return sortDashboardItems(structurallyFiltered, filters.sortKey)
+    return sortDashboardCandidates(structurallyFiltered, filters)
   }
 
-  const itemById = new Map(structurallyFiltered.map((item) => [String(item.id), item]))
-  const searchKey = getDashboardSearchKey({ model, filters, query, itemCount: structurallyFiltered.length })
-  const limit = getDashboardSearchResultLimit(searchKey)
+  const searchKey = createDashboardSearchKey({ model, filters, query, itemCount: structurallyFiltered.length })
+  const limit = getDashboardSearchResultLimit({
+    requestedLimit: dashboardSearchWorkerState.limitByKey.get(searchKey) || 0,
+    cachedResultCount: dashboardSearchWorkerState.resultCache.get(searchKey)?.length || 0,
+    initialLimit: DASHBOARD_SEARCH_INITIAL_LIMIT,
+    maxLimit: DASHBOARD_SEARCH_MAX_SYNC_LIMIT
+  })
   dashboardActiveSearchKey = searchKey
   dashboardActiveSearchLimit = limit
   dashboardActiveSearchResultCount = structurallyFiltered.length
@@ -2280,9 +2351,7 @@ function getPopupDashboardVisibleItems(
     const popupBookmarks = getDashboardPopupSearchBookmarksFromItems(model, structurallyFiltered)
     const results = searchDashboardPinyinBookmarks(query, searchKey, popupBookmarks, limit)
     dashboardActiveSearchResultCount = results.length < limit ? results.length : structurallyFiltered.length
-    return results
-      .map((result) => itemById.get(String(result.id)))
-      .filter((item): item is DashboardItem => Boolean(item))
+    return mapDashboardSearchIdsToItems(structurallyFiltered, results.map((result) => result.id))
   }
 
   if (shouldUseDashboardSearchWorker(structurallyFiltered.length)) {
@@ -2294,54 +2363,22 @@ function getPopupDashboardVisibleItems(
       limit
     })
     dashboardActiveSearchResultCount = cachedIds.length < limit ? cachedIds.length : structurallyFiltered.length
-    return cachedIds
-      .map((id) => itemById.get(String(id)))
-      .filter((item): item is DashboardItem => Boolean(item))
+    return mapDashboardSearchIdsToItems(structurallyFiltered, cachedIds)
   }
 
   const popupBookmarks = getDashboardPopupSearchBookmarksFromItems(model, structurallyFiltered)
   const results = searchBookmarksTopK(query, popupBookmarks, limit)
   dashboardActiveSearchResultCount = results.length < limit ? results.length : structurallyFiltered.length
-  return results
-    .map((result) => itemById.get(String(result.id)))
-    .filter((item): item is DashboardItem => Boolean(item))
-}
-
-function getDashboardSearchKey({
-  model,
-  filters,
-  query,
-  itemCount
-}: {
-  model: DashboardModel
-  filters: DashboardFilters
-  query: string
-  itemCount: number
-}): string {
-  return [
-    query,
-    String(filters.folderId || ''),
-    String(filters.domain || ''),
-    String(filters.month || ''),
-    String(filters.sortKey || 'date-desc'),
-    String(itemCount),
-    String(model.items.length),
-    String(model.items[0]?.id || ''),
-    String(model.items[model.items.length - 1]?.id || '')
-  ].join('\u0001')
-}
-
-function getDashboardSearchResultLimit(searchKey: string): number {
-  const requestedLimit = dashboardSearchWorkerState.limitByKey.get(searchKey) || 0
-  const currentLimit = dashboardSearchWorkerState.resultCache.get(searchKey)?.length || 0
-  return Math.min(
-    DASHBOARD_SEARCH_MAX_SYNC_LIMIT,
-    Math.max(DASHBOARD_SEARCH_INITIAL_LIMIT, requestedLimit, currentLimit)
-  )
+  return mapDashboardSearchIdsToItems(structurallyFiltered, results.map((result) => result.id))
 }
 
 function getNextDashboardSearchResultLimit(searchKey: string): number {
-  const currentLimit = getDashboardSearchResultLimit(searchKey)
+  const currentLimit = getDashboardSearchResultLimit({
+    requestedLimit: dashboardSearchWorkerState.limitByKey.get(searchKey) || 0,
+    cachedResultCount: dashboardSearchWorkerState.resultCache.get(searchKey)?.length || 0,
+    initialLimit: DASHBOARD_SEARCH_INITIAL_LIMIT,
+    maxLimit: DASHBOARD_SEARCH_MAX_SYNC_LIMIT
+  })
   return Math.min(
     DASHBOARD_SEARCH_MAX_SYNC_LIMIT,
     Math.max(DASHBOARD_SEARCH_INITIAL_LIMIT, currentLimit + DASHBOARD_SEARCH_INCREMENT)
@@ -2385,12 +2422,7 @@ function getDashboardWorkerSearchResultIds({
   if (dashboardSearchWorkerState.error) {
     const popupBookmarks = getDashboardPopupSearchBookmarksFromItems(
       model,
-      filterDashboardItems(model.items, {
-        query: '',
-        folderId: filters.folderId,
-        domain: filters.domain,
-        month: filters.month
-      })
+      getDashboardStructuralCandidateItems(model, filters)
     )
     ensureDashboardPinyinForQuery(query, searchKey, popupBookmarks)
     return searchBookmarksTopK(query, popupBookmarks, limit).map((result) => String(result.id))
@@ -2638,7 +2670,7 @@ function getNaturalDashboardVisibleItems(
     candidatesById.delete(id)
   }
 
-  const fallbackItems = sortDashboardItems([...candidatesById.values()], filters.sortKey)
+  const fallbackItems = sortDashboardCandidates([...candidatesById.values()], filters)
   const rankOffset = rankedItems.length
   const rankMap = new Map(rankedIds.map((id, index) => [id, index]))
   return [...rankedItems, ...fallbackItems].sort((left, right) => {
@@ -3581,7 +3613,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     if (!canReuseStaticList) {
       resetDashboardVirtualRenderCache({ preserveItems: true })
       virtualState.items = items
-      dom.dashboardResults.innerHTML = items.map((item) => buildDashboardCard(item)).join('')
+      dom.dashboardResults.replaceChildren(...items.map((item) => createDashboardCardElement(item)))
       virtualState.renderedStartIndex = 0
       virtualState.renderedEndIndex = items.length
       virtualState.renderedStateKey = stateKey
@@ -6163,7 +6195,7 @@ function flushDashboardFaviconWarmupDebugSummary(): void {
     return
   }
 
-  console.debug?.('[Curator] Dashboard favicon warmup skipped', {
+  dashboardDebugConsole.debug?.('[Curator] Dashboard favicon warmup skipped', {
     count: summary.skipped,
     sampleUrl: summary.firstPageUrl,
     sampleError: summary.firstError
@@ -6181,7 +6213,7 @@ function logDashboardFaviconDebug(message: string, payload: unknown): void {
   if (!isDashboardFaviconDebugEnabled()) {
     return
   }
-  console.debug?.(message, payload)
+  dashboardDebugConsole.debug?.(message, payload)
 }
 
 function isDashboardFaviconDebugEnabled(): boolean {

@@ -38,6 +38,10 @@ import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-
 import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
 import {
+  buildBookmarkCatalogSnapshot,
+  type BookmarkCatalogSnapshot
+} from '../shared/bookmark-catalog.js'
+import {
   MAX_POPUP_SEARCH_RESULTS,
   POPUP_SEARCH_ASYNC_THRESHOLD,
   getQueryTerms,
@@ -67,12 +71,14 @@ import type {
 } from './natural-search.js'
 import {
   buildLightPopupSearchIndex,
+  buildLightPopupSearchIndexFromCatalog,
   enrichLightPopupSearchIndexWithPinyin,
-  enrichPopupSearchIndexWithSnapshotFullText,
+  enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog,
   loadPopupSearchIndexSnapshotState,
+  patchLightPopupSearchIndexFromCatalog,
   shouldWarmPopupSnapshotFullText
 } from './search-index.js'
-import { requiresPinyinTokens } from '../shared/search/pinyin.js'
+import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import { replacePopupSectionHtml } from './render-cache.js'
@@ -116,12 +122,13 @@ let smartClassifierModulePromise: Promise<typeof import('./smart-classifier.js')
 let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> | null = null
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
+let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
 
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
   bookmarksBarNode: chrome.bookmarks.BookmarkTreeNode | null
-  extracted: ReturnType<typeof extractBookmarkData>
+  catalog: BookmarkCatalogSnapshot
   indexedBookmarks: ReturnType<typeof buildLightPopupSearchIndex>
 }
 
@@ -875,12 +882,13 @@ async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefr
   perfMark('popup.bookmarkTreeLoaded')
   const rootNode = Array.isArray(tree) ? tree[0] : tree
   const bookmarksBarNode = findBookmarksBar(rootNode)
-  const extracted = extractBookmarkData(rootNode)
-  const indexedBookmarks = buildLightPopupSearchIndex({
-    bookmarks: extracted.bookmarks,
+  const catalog = buildBookmarkCatalogSnapshot({
+    rootNode,
     tagIndex: null,
-    snapshotIndex: null
+    snapshotState: null,
+    includeFullText: false
   })
+  const indexedBookmarks = buildLightPopupSearchIndexFromCatalog(catalog)
   perfMark('popup.indexBuilt')
   perfMeasure('popup.indexBuildMs', 'popup.bookmarkTreeLoaded', 'popup.indexBuilt')
 
@@ -888,7 +896,7 @@ async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefr
     refreshRunId,
     rootNode,
     bookmarksBarNode,
-    extracted,
+    catalog,
     indexedBookmarks
   }
 }
@@ -900,40 +908,50 @@ function applyPopupBaseRefreshData(
   state.rawTreeRoot = baseData.rootNode
   state.bookmarksBarNode = baseData.bookmarksBarNode
   applyPopupIndexedBookmarkData({
+    catalog: baseData.catalog,
     indexedBookmarks: baseData.indexedBookmarks,
-    extracted: baseData.extracted,
-    tagIndex: null,
-    snapshotState: null
   })
-  syncPopupExpandedFolderState(baseData.extracted, initial)
+  syncPopupExpandedFolderState(baseData.catalog.extracted, initial)
   resetSearchForPopupRefresh(preserveSearch)
 }
 
 function applyPopupIndexedBookmarkData({
+  catalog,
   indexedBookmarks,
-  extracted,
-  tagIndex,
-  snapshotState
 }: {
+  catalog: BookmarkCatalogSnapshot
   indexedBookmarks: ReturnType<typeof buildLightPopupSearchIndex>
-  extracted: ReturnType<typeof extractBookmarkData>
-  tagIndex: Awaited<ReturnType<typeof loadBookmarkTagIndex>> | null
-  snapshotState: Awaited<ReturnType<typeof loadPopupSearchIndexSnapshotState>> | null
 }): void {
   state.allBookmarks = indexedBookmarks
-  state.allFolders = extracted.folders
+  state.allFolders = catalog.extracted.folders
   state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
   state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
-  state.folderMap = extracted.folderMap
-  state.searchTagIndex = tagIndex
-  state.searchSnapshotState = snapshotState
+  state.folderMap = catalog.extracted.folderMap
+  popupBookmarkCatalog = catalog
+  state.searchTagIndex = catalog.tagIndex
+  state.searchSnapshotState = catalog.snapshotState
+  state.searchCache.setVersion(catalog.version)
+  resetPopupSearchEnhancementReadiness()
+  clearSearchCaches()
+}
+
+function applyPopupIndexedBookmarkEnhancements(catalog: BookmarkCatalogSnapshot): void {
+  patchLightPopupSearchIndexFromCatalog(state.allBookmarks, catalog)
+  popupBookmarkCatalog = catalog
+  state.searchTagIndex = catalog.tagIndex
+  state.searchSnapshotState = catalog.snapshotState
+  state.searchCache.setVersion(catalog.version)
+  resetPopupSearchEnhancementReadiness()
+  clearSearchCaches()
+}
+
+function resetPopupSearchEnhancementReadiness(): void {
   state.searchSnapshotFullTextReady = false
   state.searchSnapshotFullTextPending = false
   state.searchSnapshotFullTextRunId += 1
   state.pinyinEnrichmentReady = false
   state.pinyinEnrichmentPending = false
   state.pinyinEnrichmentRunId += 1
-  clearSearchCaches()
 }
 
 function syncPopupExpandedFolderState(
@@ -1041,17 +1059,14 @@ function applyPopupSearchEnhancementData(
     return
   }
 
-  const indexedBookmarks = buildLightPopupSearchIndex({
-    bookmarks: baseData.extracted.bookmarks,
+  const catalog = buildBookmarkCatalogSnapshot({
+    rootNode: baseData.rootNode,
     tagIndex: deferredData.tagIndex,
-    snapshotIndex: deferredData.snapshotState.index
+    snapshotState: deferredData.snapshotState,
+    includeFullText: false,
+    extracted: baseData.catalog.extracted
   })
-  applyPopupIndexedBookmarkData({
-    indexedBookmarks,
-    extracted: baseData.extracted,
-    tagIndex: deferredData.tagIndex,
-    snapshotState: deferredData.snapshotState
-  })
+  applyPopupIndexedBookmarkEnhancements(catalog)
   perfMark('popup.searchIndexReady.end')
   perfMeasure('popup.searchIndexReady', 'popup.bookmarkTreeLoaded', 'popup.searchIndexReady.end')
   if (state.currentTab) {
@@ -1256,20 +1271,23 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
     return
   }
 
-  const indexedBookmarks = await enrichPopupSearchIndexWithSnapshotFullText({
-    bookmarks: state.allBookmarks,
+  const catalog = buildBookmarkCatalogSnapshot({
+    rootNode: state.rawTreeRoot,
     tagIndex: state.searchTagIndex,
-    snapshotIndex: snapshotState.index,
-    includeFullText: true
+    snapshotState,
+    includeFullText: true,
+    extracted: popupBookmarkCatalog?.extracted || null
+  })
+  await enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog(state.allBookmarks, catalog, {
+    isActive: () => state.searchSnapshotFullTextRunId === warmupRunId
   })
 
   if (state.searchSnapshotFullTextRunId !== warmupRunId) {
     return
   }
 
-  state.allBookmarks = indexedBookmarks
-  state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
-  state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
+  popupBookmarkCatalog = catalog
+  state.searchCache.setVersion(catalog.version)
   state.searchSnapshotFullTextReady = true
   state.searchSnapshotFullTextPending = false
   state.pinyinEnrichmentReady = false

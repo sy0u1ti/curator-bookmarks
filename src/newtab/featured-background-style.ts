@@ -7,20 +7,24 @@ export interface FeaturedBackgroundStyleCandidate {
 
 const FEATURED_BACKGROUND_STYLE_POSITIVE_PATTERNS: Array<{ pattern: RegExp; weight: number }> = [
   {
-    pattern: /\b(?:nasa|hubble|webb|jwst|spitzer|chandra|jpl|caltech|nebula|galaxy|milky way|earthrise|aurora|mars|jupiter|saturn|moon|planet|cosmic|space|star(?:s|field)?|night sky)\b/i,
-    weight: 6
+    pattern: /\b(?:nasa|hubble|webb|jwst|spitzer|chandra|jpl|caltech|earthrise|aurora|mars|moon|night sky)\b/i,
+    weight: 4
   },
-  { pattern: /\b(?:landscape|seascape|waterscape|cityscape|panorama|vista|horizon|scenery|photograph|photo)\b/i, weight: 4 },
+  {
+    pattern: /\b(?:nebula|galaxy|milky way|jupiter|saturn|planet|cosmic|space|star(?:s|field)?)\b/i,
+    weight: 2
+  },
+  { pattern: /\b(?:landscape|seascape|waterscape|cityscape|panorama|vista|horizon|scenery|photograph|photo)\b/i, weight: 6 },
   {
     pattern: /\b(?:mountain|river|forest|garden|field|meadow|valley|waterfall|shore|coast|beach|ocean|sea|sky|cloud|storm|wave|waves|harbor|harbour|island|canyon|desert|glacier|volcano)\b/i,
-    weight: 3
+    weight: 4
   },
   { pattern: /\b(?:sunrise|sunset|dawn|dusk|night sky|starry night)\b/i, weight: 3 },
   { pattern: /\b(?:featured picture|quality image|high resolution|high-resolution)\b/i, weight: 2 }
 ]
 
 const FEATURED_BACKGROUND_STYLE_NEGATIVE_PATTERNS: Array<{ pattern: RegExp; weight: number }> = [
-  { pattern: /\b(?:painting|paintings|artwork|work of art|oil on|tempera|canvas|panel|wood|paper|silk|parchment|monotype|print|prints|drawing|drawings|illustration|illustrated|poster)\b/i, weight: 7 },
+  { pattern: /\b(?:painting|paintings|artwork|work of art|oil on|tempera|canvas|panel|wood|paper|silk|parchment|monotype|print|prints|drawing|drawings|illustration|illustrated|poster)\b/i, weight: 3 },
   { pattern: /\bself-portrait\b/i, weight: 6 },
   { pattern: /\bportrait\b/i, weight: 5 },
   { pattern: /\bstill life\b/i, weight: 5 },
@@ -34,11 +38,11 @@ const FEATURED_BACKGROUND_STYLE_NEGATIVE_PATTERNS: Array<{ pattern: RegExp; weig
   }
 ]
 const FEATURED_BACKGROUND_STYLE_PROVIDER_BASELINE: Record<string, number> = {
-  nasa: 3,
+  nasa: 1,
   wikimedia: 0,
-  met: -3,
-  artic: -3,
-  cleveland: -3
+  met: -1,
+  artic: -1,
+  cleveland: -1
 }
 const FEATURED_BACKGROUND_STYLE_REJECT_PATTERNS = [
   /\b(?:scroll|handscroll|hanging scroll|album leaf|calligraphy|woodblock|woodcut|ukiyo-?e|sumi-?e|gongbi)\b/i,

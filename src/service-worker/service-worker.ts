@@ -88,6 +88,18 @@ interface PendingCheckState {
   resolve: (result: NavigationCheckResult) => void
 }
 
+export interface ServiceWorkerDebugSnapshot {
+  pendingNavigationChecks: number
+  pendingNavigationListeners: number
+  pendingNavigationIds: number
+  autoAnalyzeInFlight: number
+  suppressedAutoBookmarkUrls: number
+  autoAnalyzeQueueProcessing: boolean
+  autoAnalyzeQueueTimerActive: boolean
+  lastAppliedBadgeText: string | null
+  lastAppliedBadgeColor: string | null
+}
+
 interface WebRequestListenerSet {
   beforeRequest: (details: chrome.webRequest.WebRequestBodyDetails) => void
   beforeRedirect: (details: chrome.webRequest.WebRedirectionResponseDetails) => void
@@ -565,8 +577,7 @@ async function tryOpenActionPopup(): Promise<boolean> {
   try {
     await actionApi.openPopup()
     return true
-  } catch (error) {
-    console.info('[Curator] 当前 Chrome 环境未能直接打开 popup，已保留快捷键意图。', error)
+  } catch {
     return false
   }
 }
@@ -1460,18 +1471,59 @@ async function removeAutoAnalyzeQueueEntry(bookmarkId: string): Promise<void> {
   })
 }
 
+interface PendingQueueUpdate {
+  updater: (entries: AutoAnalyzeQueueEntry[]) => AutoAnalyzeQueueEntry[]
+  resolve: (value: AutoAnalyzeQueueEntry[]) => void
+  reject: (reason: unknown) => void
+}
+
+let pendingAutoAnalyzeQueueUpdates: PendingQueueUpdate[] = []
+let pendingAutoAnalyzeQueueFlushScheduled = false
+
 function updateAutoAnalyzeQueue(
   updater: (entries: AutoAnalyzeQueueEntry[]) => AutoAnalyzeQueueEntry[]
 ): Promise<AutoAnalyzeQueueEntry[]> {
-  const task = autoAnalyzeQueueWriteQueue.then(async () => {
-    const entries = await loadAutoAnalyzeQueue()
-    const nextEntries = pruneAutoAnalyzeQueue(updater(entries), Date.now())
-    await saveAutoAnalyzeQueue(nextEntries)
-    return nextEntries
-  })
+  return new Promise<AutoAnalyzeQueueEntry[]>((resolve, reject) => {
+    pendingAutoAnalyzeQueueUpdates.push({ updater, resolve, reject })
+    if (pendingAutoAnalyzeQueueFlushScheduled) {
+      return
+    }
+    pendingAutoAnalyzeQueueFlushScheduled = true
+    queueMicrotask(() => {
+      const batch = pendingAutoAnalyzeQueueUpdates
+      pendingAutoAnalyzeQueueUpdates = []
+      pendingAutoAnalyzeQueueFlushScheduled = false
+      if (batch.length === 0) {
+        return
+      }
 
-  autoAnalyzeQueueWriteQueue = task.catch(() => {})
-  return task
+      const task = autoAnalyzeQueueWriteQueue.then(async () => {
+        try {
+          let entries = await loadAutoAnalyzeQueue()
+          const now = Date.now()
+          for (const update of batch) {
+            try {
+              entries = pruneAutoAnalyzeQueue(update.updater(entries), now)
+            } catch (error) {
+              update.reject(error)
+              update.resolve = () => {}
+              update.reject = () => {}
+            }
+          }
+          await saveAutoAnalyzeQueue(entries)
+          for (const update of batch) {
+            update.resolve(entries)
+          }
+        } catch (error) {
+          for (const update of batch) {
+            update.reject(error)
+          }
+        }
+      })
+
+      autoAnalyzeQueueWriteQueue = task.catch(() => {})
+    })
+  })
 }
 
 async function loadAutoAnalyzeQueue(): Promise<AutoAnalyzeQueueEntry[]> {
@@ -2140,6 +2192,24 @@ function appendBookmarkAddHistory(entry: BookmarkAddHistoryEntry): Promise<void>
   return task
 }
 
+let lastPersistedAutoAnalyzeStatusSignature = ''
+
+function getAutoAnalyzeStatusSignature(status: AutoAnalyzeStatusSnapshot): string {
+  return [
+    status.status,
+    status.bookmarkId,
+    status.title,
+    status.url,
+    status.folderPath,
+    String(status.confidence ?? ''),
+    status.error,
+    status.detail,
+    String(status.attempts),
+    String(status.maxAttempts),
+    String(status.badgeVisible)
+  ].join('|')
+}
+
 async function persistAutoAnalyzeStatus(
   payload: Partial<AutoAnalyzeStatusSnapshot> & {
     status: AutoAnalyzeStatusKind
@@ -2171,6 +2241,13 @@ async function persistAutoAnalyzeStatus(
     return
   }
 
+  const signature = getAutoAnalyzeStatusSignature(status)
+  if (signature === lastPersistedAutoAnalyzeStatusSignature) {
+    scheduleAutoAnalyzeStatusClear(status.expiresAt)
+    return
+  }
+  lastPersistedAutoAnalyzeStatusSignature = signature
+
   await setLocalStorage({
     [STORAGE_KEYS.autoAnalyzeStatus]: status
   })
@@ -2186,6 +2263,7 @@ async function clearAutoAnalyzeStatusForBookmark(bookmarkId: string): Promise<vo
     return
   }
 
+  lastPersistedAutoAnalyzeStatusSignature = ''
   await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
   await clearActionBadge().catch(() => {})
   clearAutoAnalyzeStatusAlarm()
@@ -2268,6 +2346,7 @@ async function restoreAutoAnalyzeStatusBadge(): Promise<void> {
 async function clearExpiredAutoAnalyzeStatus(): Promise<void> {
   const status = await loadAutoAnalyzeStatus()
   if (!status || status.expiresAt <= Date.now()) {
+    lastPersistedAutoAnalyzeStatusSignature = ''
     await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice])
     await clearActionBadge().catch(() => {})
     clearAutoAnalyzeStatusAlarm()
@@ -2329,6 +2408,9 @@ function clearAutoAnalyzeStatusAlarm(): void {
   })
 }
 
+let lastAppliedBadgeText: string | null = null
+let lastAppliedBadgeColor: string | null = null
+
 function clearActionBadge(): Promise<void> {
   return new Promise((resolve) => {
     if (!chrome.action?.setBadgeText) {
@@ -2336,7 +2418,13 @@ function clearActionBadge(): Promise<void> {
       return
     }
 
+    if (lastAppliedBadgeText === '') {
+      resolve()
+      return
+    }
+
     chrome.action.setBadgeText({ text: '' }, () => {
+      lastAppliedBadgeText = ''
       resolve()
     })
   })
@@ -2344,6 +2432,10 @@ function clearActionBadge(): Promise<void> {
 
 function setActionBadgeText(text: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (lastAppliedBadgeText === text) {
+      resolve()
+      return
+    }
     chrome.action.setBadgeText({ text }, () => {
       const error = chrome.runtime.lastError
       if (error) {
@@ -2351,6 +2443,7 @@ function setActionBadgeText(text: string): Promise<void> {
         return
       }
 
+      lastAppliedBadgeText = text
       resolve()
     })
   })
@@ -2358,6 +2451,10 @@ function setActionBadgeText(text: string): Promise<void> {
 
 function setActionBadgeBackgroundColor(color: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (lastAppliedBadgeColor === color) {
+      resolve()
+      return
+    }
     chrome.action.setBadgeBackgroundColor({ color }, () => {
       const error = chrome.runtime.lastError
       if (error) {
@@ -2365,6 +2462,7 @@ function setActionBadgeBackgroundColor(color: string): Promise<void> {
         return
       }
 
+      lastAppliedBadgeColor = color
       resolve()
     })
   })
@@ -3230,4 +3328,18 @@ function closeTab(tabId: number): Promise<void> {
       resolve()
     })
   })
+}
+
+export function __getServiceWorkerDebugSnapshot(): ServiceWorkerDebugSnapshot {
+  return {
+    pendingNavigationChecks: pendingChecks.size,
+    pendingNavigationListeners: Array.from(pendingChecks.values()).filter((state) => Boolean(state.webRequestListeners)).length,
+    pendingNavigationIds: pendingCheckIds.size,
+    autoAnalyzeInFlight: autoClassifyInFlight.size,
+    suppressedAutoBookmarkUrls: suppressedAutoBookmarkUrls.size,
+    autoAnalyzeQueueProcessing,
+    autoAnalyzeQueueTimerActive: autoAnalyzeQueueTimer !== 0,
+    lastAppliedBadgeText,
+    lastAppliedBadgeColor
+  }
 }

@@ -1,4 +1,7 @@
-import { normalizeText } from '../text.js'
+import {
+  normalizeSearchTextCompact,
+  normalizeText
+} from '../text.js'
 
 export interface PinyinTokens {
   full: string[]
@@ -9,6 +12,7 @@ export interface PinyinEnrichTarget {
   tagPinyinFull: string[]
   tagPinyinInitials: string[]
   searchText: string
+  searchTextCompact?: string
   title: string
   path?: string
   tagTopics?: string[]
@@ -436,25 +440,6 @@ export function isPinyinModuleLoaded(): boolean {
   return pinyinCharMap !== null
 }
 
-const CHINESE_REGEX = /[㐀-鿿]/u
-const PINYIN_LIKE_REGEX = /^[a-z][a-z0-9]*$/i
-
-export function queryHasChinese(query: string): boolean {
-  return CHINESE_REGEX.test(String(query || ''))
-}
-
-export function queryLooksLikePinyin(query: string): boolean {
-  const trimmed = String(query || '').trim()
-  if (trimmed.length < 3) {
-    return false
-  }
-  return PINYIN_LIKE_REGEX.test(trimmed)
-}
-
-export function requiresPinyinTokens(query: string): boolean {
-  return queryLooksLikePinyin(query)
-}
-
 export function buildPinyinTokensSync(values: unknown[]): PinyinTokens {
   const full = new Set<string>()
   const initials = new Set<string>()
@@ -500,6 +485,7 @@ function applyPinyinTokens(target: PinyinEnrichTarget, tokens: PinyinTokens): bo
     target.tagPinyinFull = []
     target.tagPinyinInitials = []
     target.searchText = baseSearchText
+    target.searchTextCompact = normalizeSearchTextCompact(baseSearchText)
     return false
   }
 
@@ -507,6 +493,7 @@ function applyPinyinTokens(target: PinyinEnrichTarget, tokens: PinyinTokens): bo
   target.tagPinyinInitials = newInitials
   const enrichedSegment = [...newFull, ...newInitials].join(' ')
   target.searchText = enrichedSegment ? `${baseSearchText} ${enrichedSegment}`.trim() : baseSearchText
+  target.searchTextCompact = normalizeSearchTextCompact(target.searchText)
   return true
 }
 
