@@ -202,7 +202,7 @@ export function normalizeInstantWallpaper(rawValue: unknown): InstantWallpaperRe
   const normalizedRecord: InstantWallpaperRecord = {
     signature,
     dataUrlRef,
-    backgroundSize: String(record.backgroundSize || 'cover'),
+    backgroundSize: normalizeInstantWallpaperBackgroundSize(record.backgroundSize),
     backgroundPosition: String(record.backgroundPosition || 'center'),
     placeholderColor: normalizeInstantWallpaperColor(record.placeholderColor),
     updatedAt: Number(record.updatedAt) || 0,
@@ -228,7 +228,7 @@ export function normalizeInstantWallpaperTarget(rawValue: unknown): InstantWallp
     signature,
     imageUrl: String(record.imageUrl || ''),
     previewUrl: String(record.previewUrl || ''),
-    backgroundSize: String(record.backgroundSize || 'cover'),
+    backgroundSize: normalizeInstantWallpaperBackgroundSize(record.backgroundSize),
     backgroundPosition: String(record.backgroundPosition || 'center'),
     placeholderColor: normalizeInstantWallpaperColor(record.placeholderColor),
     cacheRequired: record.cacheRequired === true,
@@ -303,6 +303,13 @@ export function normalizeInstantWallpaperColor(value: unknown): string {
     return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`
   }
   return DEFAULT_INSTANT_WALLPAPER_PLACEHOLDER
+}
+
+function normalizeInstantWallpaperBackgroundSize(value: unknown): string {
+  const backgroundSize = String(value || '').trim()
+  return /^\d+(?:\.\d+)?%\s+auto$/i.test(backgroundSize)
+    ? 'cover'
+    : backgroundSize || 'cover'
 }
 
 export function getInstantWallpaperFallbackColor(): string {

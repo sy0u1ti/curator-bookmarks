@@ -26,7 +26,7 @@
     const startupPreviewUrl = thumbnailDataUrl || targetPreviewUrl || targetImageUrl
 
     const placeholderColor = normalizeColor(targetRecord.placeholderColor)
-    applyStartupBackground(startupImageUrl, startupPreviewUrl, placeholderColor, typeof targetRecord.backgroundSize === 'string' && targetRecord.backgroundSize ? targetRecord.backgroundSize : 'cover', typeof targetRecord.backgroundPosition === 'string' && targetRecord.backgroundPosition ? targetRecord.backgroundPosition : 'center', targetRecord.signature)
+    applyStartupBackground(startupImageUrl, startupPreviewUrl, placeholderColor, normalizeBackgroundSize(targetRecord.backgroundSize), typeof targetRecord.backgroundPosition === 'string' && targetRecord.backgroundPosition ? targetRecord.backgroundPosition : 'center', targetRecord.signature)
     if (!startupImageUrl) {
       revealWallpaper()
       return
@@ -68,7 +68,7 @@
     return {
       signature: targetRecord.signature,
       dataUrlRef: thumbnailDataUrl ? thumbnailDataUrlKey : '',
-      backgroundSize: typeof targetRecord.backgroundSize === 'string' && targetRecord.backgroundSize ? targetRecord.backgroundSize : 'cover',
+      backgroundSize: normalizeBackgroundSize(targetRecord.backgroundSize),
       backgroundPosition: typeof targetRecord.backgroundPosition === 'string' && targetRecord.backgroundPosition ? targetRecord.backgroundPosition : 'center',
       placeholderColor: normalizeColor(targetRecord.placeholderColor),
       updatedAt: Number(targetRecord.updatedAt) || 0,
@@ -203,6 +203,13 @@
 
   function escapeCssUrl(value) {
     return value.replace(/["\\]/g, '\\$&')
+  }
+
+  function normalizeBackgroundSize(value) {
+    const backgroundSize = typeof value === 'string' ? value.trim() : ''
+    return /^\d+(?:\.\d+)?%\s+auto$/i.test(backgroundSize)
+      ? 'cover'
+      : backgroundSize || 'cover'
   }
 
   function normalizeColor(value) {

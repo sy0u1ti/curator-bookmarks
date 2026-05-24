@@ -4,9 +4,19 @@ export interface FeaturedBackgroundPreferences {
   positionY: number
 }
 
+export interface FeaturedBackgroundDisplayCss {
+  backgroundSize: string
+  backgroundPosition: string
+}
+
+export interface FeaturedBackgroundImageSize {
+  width: number
+  height: number
+}
+
 export const FEATURED_BACKGROUND_DISPLAY_LIMITS = {
   displaySize: {
-    min: 50,
+    min: 100,
     max: 180
   },
   positionX: {
@@ -55,11 +65,15 @@ export function normalizeFeaturedBackgroundPreferences(rawPreferences: unknown):
 }
 
 export function getFeaturedBackgroundDisplayCss(
-  preferences: FeaturedBackgroundPreferences
-): { backgroundSize: string; backgroundPosition: string } {
+  preferences: FeaturedBackgroundPreferences,
+  imageSize?: FeaturedBackgroundImageSize | null
+): FeaturedBackgroundDisplayCss {
   const normalized = normalizeFeaturedBackgroundPreferences(preferences)
+  const aspectRatio = getValidImageAspectRatio(imageSize)
   return {
-    backgroundSize: `${normalized.displaySize}% auto`,
+    backgroundSize: aspectRatio
+      ? `max(${normalized.displaySize}vw, ${formatCssNumber(aspectRatio * normalized.displaySize)}vh) auto`
+      : 'cover',
     backgroundPosition: `${normalized.positionX}% ${normalized.positionY}%`
   }
 }
@@ -70,4 +84,20 @@ function clampPreferenceDimension(value: unknown, min: number, max: number, fall
     return fallback
   }
   return Math.max(min, Math.min(max, Math.round(numericValue)))
+}
+
+function getValidImageAspectRatio(imageSize?: FeaturedBackgroundImageSize | null): number {
+  if (!imageSize) {
+    return 0
+  }
+  const width = Number(imageSize.width)
+  const height = Number(imageSize.height)
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return 0
+  }
+  return width / height
+}
+
+function formatCssNumber(value: number): string {
+  return Number(value.toFixed(4)).toString()
 }

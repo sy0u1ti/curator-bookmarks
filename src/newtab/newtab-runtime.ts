@@ -148,6 +148,7 @@ import {
   FEATURED_BACKGROUND_DISPLAY_LIMITS,
   getFeaturedBackgroundDisplayCss,
   normalizeFeaturedBackgroundPreferences,
+  type FeaturedBackgroundDisplayCss,
   type FeaturedBackgroundPreferences
 } from './featured-gallery-preferences.js'
 import { openFeaturedBackgroundPickerContent } from './featured-gallery-picker.js'
@@ -489,6 +490,13 @@ interface LastDeletedBookmarkState {
   customIcon?: string
 }
 
+interface BackgroundImageNaturalSize {
+  width: number
+  height: number
+}
+
+type BackgroundDisplayCss = Pick<FeaturedBackgroundDisplayCss, 'backgroundSize' | 'backgroundPosition'>
+
 const state = {
   loading: true,
   creatingFolder: false,
@@ -700,6 +708,9 @@ let dashboardFrameReadyTimeout = 0
 let backgroundStartupCacheTimer = 0
 let backgroundStartupCacheRequestId = 0
 let backgroundUrlCacheTaskByUrl = new Map<string, BackgroundUrlCacheTask>()
+let activeBackgroundImageNaturalSize: BackgroundImageNaturalSize | null = null
+let activeBackgroundImageNaturalSizeSignature = ''
+const backgroundImageNaturalSizeByUrl = new Map<string, BackgroundImageNaturalSize>()
 let preloadedBackgroundSettings: typeof DEFAULT_BACKGROUND_SETTINGS | null = null
 let backgroundSettingsMutationVersion = 0
 let backgroundUiAppliedFromPreload = false
@@ -9564,7 +9575,7 @@ function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
 
   rootElement.style.setProperty('--instant-wallpaper-image', `url("${escapeCssUrl(dataUrl)}")`)
   rootElement.style.setProperty('--instant-wallpaper-preview-image', `url("${escapeCssUrl(dataUrl)}")`)
-  rootElement.style.setProperty('--instant-wallpaper-size', instantWallpaper.backgroundSize || 'cover')
+  rootElement.style.setProperty('--instant-wallpaper-size', normalizeStoredBackgroundSizeCss(instantWallpaper.backgroundSize))
   rootElement.style.setProperty('--instant-wallpaper-position', instantWallpaper.backgroundPosition || 'center')
   rootElement.style.setProperty('--wallpaper-placeholder-bg', instantWallpaper.placeholderColor || getBackgroundPlaceholderColor(state.backgroundSettings))
   rootElement.dataset.instantWallpaperSignature = mediaSignature
@@ -9614,6 +9625,8 @@ async function applyBackgroundSettings(): Promise<void> {
   if (settings.type === 'color') {
     clearVideoBackground()
     setActiveBackgroundObjectUrl('')
+    activeBackgroundImageNaturalSize = null
+    activeBackgroundImageNaturalSizeSignature = ''
     document.body.style.backgroundImage = ''
     markRuntimeWallpaperApplied()
     clearInstantWallpaperIfSignatureChanged('')
@@ -9632,6 +9645,8 @@ async function applyBackgroundSettings(): Promise<void> {
       syncInstantWallpaperTargetForSettings(settings, mediaSignature)
       clearVideoBackground()
       setActiveBackgroundObjectUrl('')
+      activeBackgroundImageNaturalSize = getStoredBackgroundNaturalSizeForSettings(settings)
+      activeBackgroundImageNaturalSizeSignature = activeBackgroundImageNaturalSize ? mediaSignature : ''
       const hasInstantWallpaperFallback = ensureInstantWallpaperFallbackStyles(mediaSignature)
       if (!hasInstantWallpaperFallback) {
         markWallpaperPending()
@@ -9646,6 +9661,8 @@ async function applyBackgroundSettings(): Promise<void> {
     } else {
       clearVideoBackground()
       setActiveBackgroundObjectUrl('')
+      activeBackgroundImageNaturalSize = null
+      activeBackgroundImageNaturalSizeSignature = ''
       document.body.style.backgroundImage = ''
       markRuntimeWallpaperApplied()
       clearInstantWallpaperIfSignatureChanged('')
@@ -9664,6 +9681,8 @@ async function applyBackgroundSettings(): Promise<void> {
 
   clearVideoBackground()
   setActiveBackgroundObjectUrl('')
+  activeBackgroundImageNaturalSize = null
+  activeBackgroundImageNaturalSizeSignature = ''
   document.body.style.backgroundImage = ''
   clearInstantWallpaperIfSignatureChanged('')
   syncInstantWallpaperTargetForSettings(settings, mediaSignature)
@@ -9693,11 +9712,11 @@ async function applyBackgroundSettings(): Promise<void> {
   const objectUrl = URL.createObjectURL(mediaRecord.blob)
   setActiveBackgroundObjectUrl(objectUrl)
   if (mediaType === 'image') {
-    const ready = await waitForBackgroundImageReady(objectUrl, applyToken)
+    const readyImage = await waitForBackgroundImageReady(objectUrl, applyToken)
     if (applyToken !== backgroundApplyToken) {
       return
     }
-    if (ready) {
+    if (readyImage) {
       document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
       markRuntimeWallpaperApplied()
       lastAppliedBackgroundMediaSignature = mediaSignature
@@ -9736,13 +9755,13 @@ function waitForBackgroundImageReady(
   imageUrl: string,
   applyToken: number,
   timeoutMs = BACKGROUND_IMAGE_READY_TIMEOUT_MS
-): Promise<boolean> {
+): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const image = new Image()
     let settled = false
     let timeout = 0
 
-    const settle = (ready: boolean) => {
+    const settle = (readyImage: HTMLImageElement | null) => {
       if (settled) {
         return
       }
@@ -9750,17 +9769,17 @@ function waitForBackgroundImageReady(
       window.clearTimeout(timeout)
       image.onload = null
       image.onerror = null
-      resolve(ready && applyToken === backgroundApplyToken)
+      resolve(applyToken === backgroundApplyToken ? readyImage : null)
     }
 
     timeout = window.setTimeout(() => {
-      settle(false)
+      settle(null)
     }, timeoutMs)
     image.onload = () => {
-      settle(true)
+      settle(image)
     }
     image.onerror = () => {
-      settle(false)
+      settle(null)
     }
     image.src = imageUrl
   })
@@ -9823,7 +9842,7 @@ async function applyUrlBackgroundImage(
     if (cachedRecord) {
       const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken, {
         preserveCurrentUntilReady: true
-      })
+      }, mediaSignature)
       if (applyToken !== backgroundApplyToken) {
         return
       }
@@ -9867,11 +9886,13 @@ function applyDirectRemoteBackgroundImage(
   markRuntimeWallpaperApplied()
   if (markApplied) {
     lastAppliedBackgroundMediaSignature = mediaSignature
-    void waitForBackgroundImageReady(imageUrl, applyToken).then((ready) => {
+    void waitForBackgroundImageReady(imageUrl, applyToken).then((readyImage) => {
       if (applyToken !== backgroundApplyToken || mediaSignature !== lastAppliedBackgroundMediaSignature) {
         return
       }
-      if (ready) {
+      if (readyImage) {
+        setActiveBackgroundImageNaturalSize(imageUrl, readyImage, mediaSignature)
+        applyFeaturedBackgroundDisplayPreferences()
         markInstantWallpaperRemoteReady(mediaSignature)
       }
       if (revealWhenReady) {
@@ -10130,17 +10151,18 @@ async function setBackgroundImageFromBlob(
   if (!preserveCurrentUntilReady) {
     setActiveBackgroundObjectUrl(objectUrl)
   }
-  const ready = await waitForBackgroundImageReady(objectUrl, applyToken)
+  const readyImage = await waitForBackgroundImageReady(objectUrl, applyToken)
   if (applyToken !== backgroundApplyToken) {
     if (preserveCurrentUntilReady) {
       URL.revokeObjectURL(objectUrl)
     }
     return false
   }
-  if (ready) {
+  if (readyImage) {
     if (preserveCurrentUntilReady) {
       setActiveBackgroundObjectUrl(objectUrl)
     }
+    setActiveBackgroundImageNaturalSize(objectUrl, readyImage, mediaSignature)
     applyFeaturedBackgroundDisplayPreferences()
     document.body.style.backgroundImage = `url("${escapeCssUrl(objectUrl)}")`
     markRuntimeWallpaperApplied()
@@ -10152,7 +10174,7 @@ async function setBackgroundImageFromBlob(
       setActiveBackgroundObjectUrl('')
     }
   }
-  return ready
+  return Boolean(readyImage)
 }
 
 async function updateInstantWallpaperFromBlob(
@@ -10306,14 +10328,24 @@ function getFeaturedBackgroundPreviewImageUrl(
 
 function getBackgroundDisplayCssForSettings(
   settings: typeof DEFAULT_BACKGROUND_SETTINGS
-): { backgroundSize: string; backgroundPosition: string } {
+): BackgroundDisplayCss {
   if (settings.type === 'featured') {
-    return getFeaturedBackgroundDisplayCss(state.featuredBackgroundPreferences)
+    return getFeaturedBackgroundDisplayCss(
+      state.featuredBackgroundPreferences,
+      getFeaturedBackgroundDisplayImageSize(settings, getBackgroundMediaSignature(settings))
+    )
   }
   return {
     backgroundSize: 'cover',
     backgroundPosition: 'center'
   }
+}
+
+function normalizeStoredBackgroundSizeCss(value: unknown): string {
+  const backgroundSize = String(value || '').trim()
+  return /^\d+(?:\.\d+)?%\s+auto$/i.test(backgroundSize)
+    ? 'cover'
+    : backgroundSize || 'cover'
 }
 
 function clearInstantWallpaperIfSignatureChanged(mediaSignature: string): void {
@@ -10388,6 +10420,51 @@ function setActiveBackgroundObjectUrl(nextUrl: string): void {
     URL.revokeObjectURL(activeBackgroundObjectUrl)
   }
   activeBackgroundObjectUrl = nextUrl
+}
+
+function setActiveBackgroundImageNaturalSize(
+  imageUrl: string,
+  image: HTMLImageElement,
+  mediaSignature = lastAppliedBackgroundMediaSignature
+): void {
+  const width = image.naturalWidth || image.width
+  const height = image.naturalHeight || image.height
+  if (!width || !height) {
+    return
+  }
+  const naturalSize = { width, height }
+  activeBackgroundImageNaturalSize = naturalSize
+  activeBackgroundImageNaturalSizeSignature = mediaSignature
+  if (imageUrl) {
+    backgroundImageNaturalSizeByUrl.set(imageUrl, naturalSize)
+  }
+}
+
+function getStoredBackgroundNaturalSizeForSettings(
+  settings: typeof DEFAULT_BACKGROUND_SETTINGS
+): BackgroundImageNaturalSize | null {
+  const imageUrl = isRemoteBackgroundType(settings.type) ? getRemoteBackgroundImageUrl(settings) : ''
+  return imageUrl ? backgroundImageNaturalSizeByUrl.get(imageUrl) || null : null
+}
+
+function getFeaturedBackgroundDisplayImageSize(
+  settings: typeof DEFAULT_BACKGROUND_SETTINGS,
+  mediaSignature = getBackgroundMediaSignature(settings)
+): BackgroundImageNaturalSize | null {
+  const activeItem = getActiveFeaturedBackgroundItemSync(settings)
+  if (activeItem?.width && activeItem.height) {
+    return {
+      width: activeItem.width,
+      height: activeItem.height
+    }
+  }
+  if (
+    activeBackgroundImageNaturalSize &&
+    activeBackgroundImageNaturalSizeSignature === mediaSignature
+  ) {
+    return activeBackgroundImageNaturalSize
+  }
+  return getStoredBackgroundNaturalSizeForSettings(settings)
 }
 
 function normalizeBackgroundImageUrl(value: string): string {
@@ -12889,7 +12966,7 @@ function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPref
 }
 
 function applyFeaturedBackgroundDisplayPreferences(): void {
-  const displayCss = getFeaturedBackgroundDisplayCss(state.featuredBackgroundPreferences)
+  const displayCss = getBackgroundDisplayCssForSettings(state.backgroundSettings)
   document.documentElement.style.setProperty('--instant-wallpaper-size', displayCss.backgroundSize)
   document.documentElement.style.setProperty('--instant-wallpaper-position', displayCss.backgroundPosition)
   document.body.style.backgroundSize = displayCss.backgroundSize
@@ -12900,7 +12977,7 @@ function applyFeaturedBackgroundDisplayPreferences(): void {
 
 function updateInstantWallpaperDisplayCss(
   mediaSignature: string,
-  displayCss = getFeaturedBackgroundDisplayCss(state.featuredBackgroundPreferences)
+  displayCss = getBackgroundDisplayCssForSettings(state.backgroundSettings)
 ): void {
   if (!mediaSignature) {
     return
