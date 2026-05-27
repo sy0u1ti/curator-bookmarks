@@ -913,6 +913,7 @@ function bindEvents(): void {
     const addButton = target.closest('[data-add-bookmark-folder-id]')
     if (addButton instanceof HTMLElement) {
       event.preventDefault()
+      event.stopPropagation()
       const folderId = String(addButton.dataset.addBookmarkFolderId || '').trim()
       openAddBookmarkMenuForElement(addButton, folderId)
       return

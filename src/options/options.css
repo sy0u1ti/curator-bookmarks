@@ -1,3 +1,5 @@
+@import "../shared/ui-refresh.css";
+
 :root {
   color-scheme: dark;
   --options-sidebar-width: 244px;
@@ -1496,7 +1498,7 @@ a {
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background:
-    radial-gradient(circle at 18% 24%, rgba(183, 255, 138, 0.035), transparent 34%),
+    radial-gradient(circle at 18% 24%, rgba(59, 130, 246, 0.035), transparent 34%),
     radial-gradient(circle at 78% 72%, rgba(120, 166, 255, 0.032), transparent 36%),
     rgba(255, 255, 255, 0.018);
   contain: layout paint;
@@ -1563,14 +1565,14 @@ a {
 .tag-management-cloud-word:focus-visible {
   color: var(--text-strong);
   outline: none;
-  text-shadow: 0 0 14px rgba(183, 255, 138, 0.26);
+  text-shadow: 0 0 14px rgba(59, 130, 246, 0.26);
   z-index: 2;
 }
 
 .tag-management-cloud-word.is-dragging {
   color: var(--text-strong);
-  filter: drop-shadow(0 0 12px rgba(183, 255, 138, 0.22));
-  text-shadow: 0 0 18px rgba(183, 255, 138, 0.34);
+  filter: drop-shadow(0 0 12px rgba(59, 130, 246, 0.22));
+  text-shadow: 0 0 18px rgba(59, 130, 246, 0.34);
   z-index: 5;
 }
 
@@ -1796,7 +1798,7 @@ a {
 }
 
 .dashboard-natural-search-toggle.active {
-  border-color: rgba(163, 230, 53, 0.34);
+  border-color: rgba(59, 130, 246, 0.34);
   background: rgba(63, 98, 18, 0.28);
   color: #d9f99d;
 }
@@ -5010,8 +5012,8 @@ body.dashboard-fullscreen-active {
 }
 
 .ai-switch {
-  --secondary-container: #3a4b39;
-  --primary: #84da89;
+  --secondary-container: #1e293b;
+  --primary: #3b82f6;
   font-size: 14px;
   position: relative;
   display: inline-block;
@@ -5062,7 +5064,7 @@ body.dashboard-fullscreen-active {
 
 .ai-switch input:focus-visible + .ai-switch-track {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(132, 218, 137, 0.32);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.32);
 }
 
 .ai-switch input:disabled + .ai-switch-track {
@@ -7681,10 +7683,10 @@ body.dashboard-fullscreen-active {
   --surface-3: #141414;
   --line-soft: rgba(255, 255, 255, 0.14);
   --line-mid: rgba(255, 255, 255, 0.24);
-  --accent-blue: #b7ff8a;
-  --accent-blue-strong: #d4ffc0;
-  --accent-blue-soft: rgba(183, 255, 138, 0.12);
-  --accent-blue-line: rgba(183, 255, 138, 0.38);
+  --accent-blue: #3b82f6;
+  --accent-blue-strong: #93c5fd;
+  --accent-blue-soft: rgba(59, 130, 246, 0.12);
+  --accent-blue-line: rgba(59, 130, 246, 0.38);
   --text: #f8f8f2;
   --text-strong: #ffffff;
   --text-soft: rgba(248, 248, 242, 0.78);
@@ -8115,8 +8117,8 @@ body {
 .options-chip.success,
 .options-chip.ready,
 .availability-status-ok {
-  border-color: rgba(183, 255, 138, 0.42);
-  background: rgba(183, 255, 138, 0.08);
+  border-color: rgba(59, 130, 246, 0.42);
+  background: rgba(59, 130, 246, 0.08);
   color: var(--accent-blue);
 }
 
@@ -8143,7 +8145,7 @@ body {
 
 .summary-card.metric-info::before,
 .summary-card.metric-success::before {
-  background: rgba(183, 255, 138, 0.72);
+  background: rgba(59, 130, 246, 0.72);
 }
 
 .summary-card strong {
@@ -8166,8 +8168,8 @@ body {
 
 .detect-result-card.selected,
 .duplicate-item-row.selected {
-  border-color: rgba(183, 255, 138, 0.38);
-  background: rgba(183, 255, 138, 0.055);
+  border-color: rgba(59, 130, 246, 0.38);
+  background: rgba(59, 130, 246, 0.055);
 }
 
 .detect-result-status,
@@ -8338,7 +8340,7 @@ body {
 .custom-select-option:hover,
 .custom-select-option.is-active,
 .custom-select-option[aria-selected="true"] {
-  background-color: rgba(183, 255, 138, 0.12);
+  background-color: rgba(59, 130, 246, 0.12);
 }
 
 .options-shell input:focus-visible,
@@ -8377,7 +8379,7 @@ body {
 .custom-select-option:hover,
 .custom-select-option.is-active,
 .custom-select-option[aria-selected="true"] {
-  background: rgba(183, 255, 138, 0.12);
+  background: rgba(59, 130, 246, 0.12);
   color: #ffffff;
 }
 
@@ -8893,7 +8895,7 @@ body.dashboard-fullscreen-active::before {
   --dashboard-surface: #0f0f10;
   --dashboard-surface-raised: #111112;
   --dashboard-surface-hover: #171718;
-  --dashboard-surface-active: #132012;
+  --dashboard-surface-active: rgba(47, 124, 246, 0.18);
   --dashboard-control: #050505;
   --dashboard-control-hover: #171718;
   --dashboard-line: rgba(255, 255, 255, 0.14);
@@ -8902,9 +8904,9 @@ body.dashboard-fullscreen-active::before {
   --dashboard-text-soft: rgba(247, 247, 247, 0.76);
   --dashboard-text-muted: rgba(247, 247, 247, 0.56);
   --dashboard-text-dim: rgba(247, 247, 247, 0.38);
-  --dashboard-accent: #b7ff8a;
-  --dashboard-accent-soft: rgba(183, 255, 138, 0.12);
-  --dashboard-accent-line: rgba(183, 255, 138, 0.46);
+  --dashboard-accent: #3b82f6;
+  --dashboard-accent-soft: rgba(59, 130, 246, 0.12);
+  --dashboard-accent-line: rgba(59, 130, 246, 0.46);
   background: #000000;
   color: var(--dashboard-text);
   font-family: var(--font-sans);
@@ -9070,7 +9072,7 @@ body.dashboard-fullscreen-active::before {
 
 .dashboard-panel .dashboard-folder-tree-item.active {
   border-color: var(--dashboard-accent-line);
-  background: #132012;
+  background: rgba(47, 124, 246, 0.18);
   color: var(--dashboard-text);
 }
 
@@ -9100,7 +9102,7 @@ body.dashboard-fullscreen-active::before {
 
 .dashboard-panel .dashboard-bookmark-card.selected {
   border-color: var(--dashboard-accent-line);
-  background: #132012;
+  background: rgba(47, 124, 246, 0.18);
 }
 
 .dashboard-panel .dashboard-favicon-shell,
@@ -9111,9 +9113,9 @@ body.dashboard-fullscreen-active::before {
 }
 
 .dashboard-panel .dashboard-status-dot.has-tags {
-  border-color: rgba(183, 255, 138, 0.72);
+  border-color: rgba(59, 130, 246, 0.72);
   background: var(--dashboard-accent);
-  box-shadow: 0 0 0 3px rgba(183, 255, 138, 0.12);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .dashboard-panel .dashboard-card-title-row strong,
@@ -9150,7 +9152,7 @@ body.dashboard-fullscreen-active::before {
 .dashboard-panel .dashboard-folder-drop-card:focus-visible,
 .dashboard-panel .dashboard-folder-drop-card.is-active {
   border-color: var(--dashboard-accent-line);
-  background: #132012;
+  background: rgba(47, 124, 246, 0.18);
 }
 
 /* Dashboard no large gray blocks pass */
@@ -9380,8 +9382,8 @@ body.dashboard-fullscreen-active::before {
 
 .dashboard-panel .dashboard-natural-search-toggle.active {
   border-color: var(--dashboard-accent-line);
-  background: #132012;
-  color: #d8ffc5;
+  background: rgba(47, 124, 246, 0.18);
+  color: #bfdbfe;
 }
 
 .dashboard-panel .dashboard-natural-search-toggle.active .dashboard-natural-search-marker {
@@ -10145,8 +10147,8 @@ body.dashboard-fullscreen-active::before {
 
 .dashboard-panel .dashboard-bookmark-card.selected .dashboard-favicon-shell img {
   filter:
-    drop-shadow(0 0 1px rgba(183, 255, 138, 0.9))
-    drop-shadow(0 0 7px rgba(183, 255, 138, 0.38));
+    drop-shadow(0 0 1px rgba(59, 130, 246, 0.9))
+    drop-shadow(0 0 7px rgba(59, 130, 246, 0.38));
 }
 
 .dashboard-panel .dashboard-card-title-row strong {
@@ -10473,8 +10475,8 @@ body.dashboard-fullscreen-active::before {
 .dashboard-panel .dashboard-natural-search-toggle.pending {
   border-color: rgba(150, 208, 96, 0.56);
   background: rgba(28, 48, 24, 0.62);
-  color: #d8ffc5;
-  box-shadow: 0 0 0 1px rgba(163, 230, 53, 0.13);
+  color: #bfdbfe;
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.13);
 }
 
 .dashboard-panel .dashboard-natural-search-toggle:hover,
@@ -10492,7 +10494,7 @@ body.dashboard-fullscreen-active::before {
   border-color: rgba(173, 230, 112, 0.7);
   background: rgba(31, 56, 26, 0.72);
   color: #e3ffd5;
-  box-shadow: 0 0 0 1px rgba(163, 230, 53, 0.16);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.16);
 }
 
 .dashboard-panel .dashboard-natural-search-marker {
@@ -10529,9 +10531,9 @@ body.dashboard-fullscreen-active::before {
 
 .dashboard-panel .dashboard-natural-search-toggle.active .dashboard-natural-search-marker,
 .dashboard-panel .dashboard-natural-search-toggle.pending .dashboard-natural-search-marker {
-  border-color: rgba(192, 255, 148, 0.64);
+  border-color: rgba(59, 130, 246, 0.64);
   background: var(--dashboard-accent);
-  box-shadow: 0 0 0 2px rgba(163, 230, 53, 0.18);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
 }
 
 .dashboard-panel .dashboard-clear-search {
@@ -10552,4 +10554,2279 @@ body.dashboard-fullscreen-active::before {
   width: 100%;
   max-width: min(100%, 456px);
   margin-inline: auto;
+}
+
+/* UI refresh final layer: shared soft-dark options and dashboard system. */
+:root {
+  --bg: var(--ui-bg-page);
+  --surface-0: transparent;
+  --surface-1: var(--ui-surface);
+  --surface-2: var(--ui-surface-raised);
+  --surface-3: var(--ui-surface-hover);
+  --line-soft: var(--ui-divider-subtle);
+  --line-mid: var(--ui-divider);
+  --text: var(--ui-text-primary);
+  --text-strong: var(--ui-text-primary);
+  --text-soft: var(--ui-text-secondary);
+  --text-muted: var(--ui-text-tertiary);
+  --text-dim: var(--ui-text-disabled);
+  --radius-xl: var(--ui-radius-panel);
+  --radius-lg: var(--ui-radius-group);
+  --radius-md: var(--ui-radius-control);
+  --ease-standard: var(--ui-motion-standard) var(--ui-ease-standard);
+  --ease-snappy: var(--ui-motion-fast) var(--ui-ease-standard);
+  --motion-fast: var(--ui-motion-fast);
+  --motion-standard: var(--ui-motion-standard);
+  --motion-surface: var(--ui-motion-surface);
+  --motion-ease-out: var(--ui-ease-standard);
+  --motion-spring: var(--ui-ease-spring);
+}
+
+html,
+body {
+  background: var(--ui-bg-page);
+  color: var(--ui-text-primary);
+}
+
+.options-shell {
+  background:
+    radial-gradient(circle at 20% 0%, rgba(91, 114, 97, 0.14), transparent 34%),
+    linear-gradient(180deg, var(--ui-bg-ambient), var(--ui-bg-page));
+  color: var(--ui-text-primary);
+}
+
+.options-header {
+  background: linear-gradient(180deg, rgba(18, 19, 22, 0.92), rgba(18, 19, 22, 0));
+}
+
+.options-brand-mark {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+}
+
+.options-sidebar {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: rgba(28, 30, 35, 0.9);
+  box-shadow: var(--ui-shadow-soft);
+}
+
+.options-nav-link,
+.options-nav-group-trigger,
+.options-dashboard-entry {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-nav-link:hover,
+.options-nav-link:focus-visible,
+.options-nav-group-trigger:hover,
+.options-nav-group-trigger:focus-visible,
+.options-nav-group-trigger.active {
+  background: var(--ui-surface-hover);
+}
+
+.options-nav-link.active {
+  background: var(--ui-surface-selected);
+  color: var(--ui-text-primary);
+}
+
+.options-dashboard-entry {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+}
+
+.options-dashboard-entry:hover,
+.options-dashboard-entry:focus-visible,
+.options-dashboard-entry.active {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.options-panel {
+  padding: 24px 0 48px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.options-panel h1 {
+  max-width: 780px;
+}
+
+.options-description {
+  max-width: 760px;
+  color: var(--ui-text-secondary);
+}
+
+.options-panel:not(.dashboard-panel) > :where(
+  .options-group,
+  .detect-permission-card,
+  .detect-progress-card,
+  .detect-results-group,
+  .detect-selection-group,
+  .detect-history-group,
+  .availability-decision-panel,
+  .ai-provider-card,
+  .ai-feature-settings-card,
+  .ai-naming-settings-card,
+  .ai-tag-data-card,
+  .tag-management-actions,
+  .tag-management-usage
+) {
+  overflow: hidden;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.options-panel:not(.dashboard-panel) > :where(
+  .options-overview-hero,
+  .options-overview-task,
+  .tag-management-overview,
+  .availability-decision-grid
+) {
+  border-radius: var(--ui-radius-group);
+}
+
+.options-panel:not(.dashboard-panel) :where(
+  .option-row,
+  .ai-feature-switch-row,
+  .shortcut-row,
+  .setting-row,
+  .detect-results-header,
+  .ai-provider-head,
+  .ai-feature-settings-head,
+  .tag-management-head,
+  .tag-management-action-head,
+  .tag-management-usage-head,
+  .duplicate-group-header,
+  .availability-decision-header,
+  .detect-progress-head,
+  .ai-tag-data-row
+) {
+  background: transparent;
+}
+
+.options-panel:not(.dashboard-panel) :where(
+  .option-row + .option-row,
+  .ai-feature-switch-row + .ai-feature-switch-row,
+  .shortcut-row + .shortcut-row,
+  .setting-row + .setting-row,
+  .ai-tag-data-row + .ai-tag-data-row
+) {
+  border-top: 1px solid var(--ui-divider-subtle);
+}
+
+.options-panel:not(.dashboard-panel) :where(
+  .summary-card,
+  .detect-empty,
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card,
+  .availability-decision-grid > div,
+  .availability-decision-item,
+  .tag-management-overview article,
+  .tag-management-cloud,
+  .tag-management-detail,
+  .duplicate-group-card,
+  .ai-model-card,
+  .ai-tag-card
+) {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+}
+
+.options-panel:not(.dashboard-panel) :where(
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card
+):hover {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.options-overview-hero,
+.options-overview-task {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface);
+}
+
+.options-chip,
+.option-value,
+.risk-action-note,
+.dashboard-search-chip,
+.dashboard-path-chip,
+.dashboard-mini-chip,
+.dashboard-tag {
+  border-radius: var(--ui-radius-pill);
+}
+
+.options-shell :where(
+  .options-button,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .custom-select-trigger,
+  select,
+  input,
+  textarea
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell :where(
+  .options-button,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .custom-select-trigger
+) {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.options-shell :where(
+  .options-button.secondary,
+  .options-button.danger
+) {
+  background: var(--ui-surface-raised);
+}
+
+.options-shell .options-button.primary,
+.options-shell .options-button:not(.secondary):not(.danger),
+.options-modal .options-button.primary,
+.options-modal .options-button:not(.secondary):not(.danger) {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-accent-strong);
+  color: var(--ui-text-inverse);
+}
+
+.options-shell :where(
+  .options-button,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .custom-select-trigger
+):hover,
+.options-shell :where(
+  .options-button,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .custom-select-trigger
+):focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.options-shell :where(input, textarea, select):focus-visible {
+  border-color: var(--ui-focus-ring);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.options-modal-backdrop {
+  background: rgba(13, 14, 17, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.options-modal {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-panel);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.options-modal-close {
+  border-radius: var(--ui-radius-icon);
+}
+
+.dashboard-panel {
+  --dashboard-card-height: 150px;
+  --dashboard-card-min-width: 260px;
+  --dashboard-line: var(--ui-divider);
+  --dashboard-line-strong: var(--ui-divider-strong);
+  --dashboard-surface-raised: var(--ui-surface);
+  --dashboard-surface-hover: var(--ui-surface-hover);
+  --dashboard-accent: var(--ui-accent);
+  --dashboard-accent-line: var(--ui-accent-line);
+  --dashboard-accent-soft: var(--ui-accent-soft);
+  --dashboard-text: var(--ui-text-primary);
+  --dashboard-text-soft: var(--ui-text-secondary);
+  --dashboard-text-dim: var(--ui-text-tertiary);
+}
+
+.dashboard-panel.options-panel {
+  padding-top: 16px;
+}
+
+.dashboard-panel .dashboard-title-row {
+  border-bottom-color: var(--ui-divider-subtle);
+}
+
+.dashboard-panel .dashboard-toolbar,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-toolbar {
+  width: min(100%, 680px);
+  min-height: var(--ui-toolbar-height);
+  padding: 5px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: rgba(28, 30, 35, 0.92);
+  box-shadow: none;
+}
+
+.dashboard-panel .dashboard-search-box,
+.dashboard-panel .dashboard-search,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-search-box,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-search {
+  max-width: 100%;
+}
+
+.dashboard-panel .dashboard-search-input-field {
+  min-height: 38px;
+  border-color: transparent;
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+}
+
+.dashboard-panel .dashboard-search-input-field:hover,
+.dashboard-panel .dashboard-search-input-field:focus-within {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.dashboard-panel .dashboard-search-input-field:focus-within {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.dashboard-panel .dashboard-natural-search-toggle,
+.dashboard-panel .dashboard-clear-search,
+.dashboard-panel .dashboard-help-button,
+.dashboard-panel .dashboard-icon-action,
+.dashboard-panel .dashboard-tag-toggle,
+.dashboard-panel .dashboard-folder-breadcrumb-link,
+.dashboard-panel .dashboard-folder-breadcrumb-current {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+}
+
+.dashboard-panel .dashboard-natural-search-toggle:hover,
+.dashboard-panel .dashboard-natural-search-toggle:focus-visible,
+.dashboard-panel .dashboard-clear-search:hover,
+.dashboard-panel .dashboard-clear-search:focus-visible,
+.dashboard-panel .dashboard-help-button:hover,
+.dashboard-panel .dashboard-help-button:focus-visible,
+.dashboard-panel .dashboard-icon-action:hover,
+.dashboard-panel .dashboard-icon-action:focus-visible,
+.dashboard-panel .dashboard-tag-toggle:hover,
+.dashboard-panel .dashboard-tag-toggle:focus-visible,
+.dashboard-panel .dashboard-folder-breadcrumb-link:hover,
+.dashboard-panel .dashboard-folder-breadcrumb-link:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.dashboard-panel .dashboard-natural-search-toggle.active,
+.dashboard-panel .dashboard-natural-search-toggle.pending,
+.dashboard-panel .dashboard-natural-search-toggle[aria-pressed="true"],
+.dashboard-panel .dashboard-help-button[aria-expanded="true"] {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  color: #bfdbfe;
+  box-shadow: none;
+}
+
+.dashboard-panel #dashboard-selection-group,
+.dashboard-panel #dashboard-selection-group:not(.hidden),
+.dashboard-fullscreen-active .dashboard-panel #dashboard-selection-group,
+.dashboard-fullscreen-active .dashboard-panel #dashboard-selection-group:not(.hidden) {
+  width: min(100%, 680px);
+  padding: 8px 10px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.dashboard-panel #dashboard-selection-group .detect-results-header {
+  grid-template-columns: minmax(0, auto) max-content;
+  justify-content: space-between;
+}
+
+.dashboard-panel #dashboard-selection-group .options-button,
+.dashboard-panel #dashboard-selection-group .options-button.secondary,
+.dashboard-panel #dashboard-selection-group .options-button.danger,
+.dashboard-panel #dashboard-selection-group .options-button:disabled,
+.dashboard-panel #dashboard-selection-group .options-button.danger:disabled {
+  background: var(--ui-surface-raised);
+}
+
+.dashboard-panel .dashboard-results-group,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-results-group {
+  padding: 12px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-panel);
+  background: rgba(28, 30, 35, 0.76);
+}
+
+.dashboard-panel .dashboard-content-layout {
+  gap: 14px;
+  padding: 0;
+}
+
+.dashboard-panel .dashboard-folder-sidebar {
+  overflow: hidden;
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+}
+
+.dashboard-panel .dashboard-folder-sidebar-head {
+  border-bottom-color: var(--ui-divider-subtle);
+}
+
+.dashboard-panel .dashboard-folder-tree-item {
+  border-radius: var(--ui-radius-control);
+}
+
+.dashboard-panel .dashboard-folder-tree-item:hover,
+.dashboard-panel .dashboard-folder-tree-item:focus-visible {
+  background: var(--ui-surface-hover);
+}
+
+.dashboard-panel .dashboard-folder-tree-item.active {
+  background: var(--ui-surface-selected);
+}
+
+.dashboard-panel .dashboard-card-grid {
+  padding: 0 2px 0 0;
+}
+
+.dashboard-panel .dashboard-bookmark-card {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  box-shadow: none;
+  transition:
+    border-color var(--ui-motion-standard) var(--ui-ease-standard),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    box-shadow var(--ui-motion-standard) var(--ui-ease-standard),
+    transform var(--ui-motion-fast) var(--ui-ease-standard);
+}
+
+.dashboard-panel .dashboard-bookmark-card::before {
+  width: 3px;
+  border-radius: var(--ui-radius-pill) 0 0 var(--ui-radius-pill);
+}
+
+.dashboard-panel .dashboard-bookmark-card:hover {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.dashboard-panel .dashboard-bookmark-card.selected {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.dashboard-panel .dashboard-bookmark-card.dragging,
+.dashboard-panel .dashboard-bookmark-card[aria-grabbed="true"] {
+  border-color: var(--ui-accent-line);
+  box-shadow: var(--ui-shadow-menu);
+  transform: translateY(var(--ui-hover-lift)) scale(1.01);
+}
+
+.options-sidebar :where(.options-nav-link, .options-nav-subitem, .options-nav-group-trigger) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.options-sidebar .options-nav-group-trigger {
+  justify-content: space-between;
+}
+
+.options-sidebar :where(.options-nav-link, .options-nav-subitem) {
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-shell :where(*, *::before, *::after),
+  .options-modal-backdrop,
+  .options-modal,
+  .dashboard-drag-overlay,
+  .dashboard-drop-panel,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-shell :where(*, *::before, *::after),
+  .options-modal-backdrop,
+  .options-modal,
+  .dashboard-drag-overlay,
+  .dashboard-drop-panel,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-shell :where(*, *::before, *::after),
+  .options-modal-backdrop,
+  .options-modal,
+  .dashboard-drag-overlay,
+  .dashboard-drop-panel,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}
+
+.is-dashboard-dragging .dashboard-bookmark-card:not(.dragging) {
+  opacity: 0.72;
+}
+
+.dashboard-panel .dashboard-favicon-shell,
+.dashboard-panel .dashboard-status-dot,
+.dashboard-panel .dashboard-mini-chip,
+.dashboard-panel .dashboard-tag-toggle,
+.dashboard-panel .dashboard-card-actions .dashboard-icon-action {
+  border-radius: var(--ui-radius-small);
+}
+
+.dashboard-panel .dashboard-favicon-shell {
+  background: rgba(243, 245, 247, 0.06);
+}
+
+.dashboard-panel .dashboard-card-menu,
+.dashboard-panel .dashboard-tag-popover,
+.dashboard-panel .dashboard-help-popover,
+.dashboard-panel .dashboard-tag-editor-panel {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface-raised);
+  box-shadow: var(--ui-shadow-menu);
+}
+
+.dashboard-panel .dashboard-card-menu-item {
+  border-radius: var(--ui-radius-control);
+}
+
+.dashboard-panel .dashboard-card-menu-item:hover,
+.dashboard-panel .dashboard-card-menu-item:focus-visible {
+  background: var(--ui-surface-hover);
+}
+
+.dashboard-drag-overlay {
+  background: rgba(13, 14, 17, 0.42);
+  -webkit-backdrop-filter: blur(10px) saturate(1.04);
+  backdrop-filter: blur(10px) saturate(1.04);
+}
+
+.dashboard-drop-panel,
+.dashboard-delete-drop-target,
+.dashboard-folder-drop-card,
+.dashboard-drag-preview {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface-raised);
+  box-shadow: var(--ui-shadow-menu);
+}
+
+.dashboard-folder-drop-card:hover,
+.dashboard-folder-drop-card:focus-visible,
+.dashboard-folder-drop-card.active,
+.dashboard-folder-drop-card.is-active,
+.dashboard-delete-drop-target.active {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.dashboard-delete-drop-target {
+  background: var(--ui-surface-danger);
+}
+
+.dashboard-drag-preview {
+  border-radius: var(--ui-radius-control);
+}
+
+@media (max-width: 760px) {
+  .options-panel {
+    padding-inline: 0;
+  }
+
+  .dashboard-panel .dashboard-toolbar,
+  .dashboard-panel #dashboard-selection-group,
+  .dashboard-panel #dashboard-selection-group:not(.hidden) {
+    width: 100%;
+  }
+
+  .dashboard-panel .dashboard-content-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-shell :where(*, *::before, *::after),
+  .options-modal-backdrop,
+  .options-modal,
+  .dashboard-drag-overlay,
+  .dashboard-drop-panel,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}
+
+.options-shell :where(
+  .summary-card,
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card,
+  .ai-model-card,
+  .ai-tag-card,
+  .options-search,
+  .options-search-input,
+  .options-modal,
+  .custom-select-list,
+  .custom-select-option,
+  .dashboard-folder-sidebar,
+  .dashboard-bookmark-card,
+  .dashboard-card-menu,
+  .dashboard-tag-popover,
+  .dashboard-help-popover,
+  .dashboard-tag-editor-panel,
+  .dashboard-drop-panel,
+  .dashboard-folder-drop-card,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview,
+  .dashboard-search-input-field,
+  .dashboard-natural-search-toggle,
+  .dashboard-clear-search,
+  .dashboard-help-button,
+  .dashboard-icon-action,
+  .dashboard-card-actions .dashboard-icon-action,
+  .dashboard-folder-tree-item,
+  .dashboard-mini-chip,
+  .dashboard-tag-toggle,
+  .dashboard-status-dot,
+  .dashboard-favicon-shell
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell :where(
+  .options-modal,
+  .custom-select-list,
+  .dashboard-folder-sidebar,
+  .dashboard-card-menu,
+  .dashboard-tag-popover,
+  .dashboard-help-popover,
+  .dashboard-tag-editor-panel,
+  .dashboard-drop-panel
+) {
+  border-radius: var(--ui-radius-group);
+}
+
+.options-shell :where(
+  .options-button,
+  .options-search-input,
+  .custom-select-trigger,
+  .dashboard-search-input-field,
+  .dashboard-natural-search-toggle,
+  .dashboard-clear-search,
+  .dashboard-help-button,
+  .dashboard-icon-action,
+  .dashboard-card-actions .dashboard-icon-action,
+  .dashboard-mini-chip,
+  .dashboard-tag-toggle
+) {
+  background: var(--ui-surface-raised);
+}
+
+/* UI refresh final closure: restore black options chrome and round missed controls. */
+html,
+body,
+.options-shell,
+.options-layout,
+.options-main {
+  background: #000000;
+  background-image: none;
+}
+
+.options-shell {
+  grid-template-rows: minmax(0, 1fr);
+  color: var(--ui-text-primary);
+}
+
+.options-shell::before,
+.options-shell::after {
+  display: none;
+}
+
+.options-layout {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  height: 100vh;
+  pointer-events: none;
+}
+
+.options-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  grid-column: 1;
+  grid-row: 1;
+  width: var(--options-sidebar-width);
+  min-height: var(--options-brand-height);
+  height: var(--options-brand-height);
+  padding: 14px 16px 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  pointer-events: auto;
+}
+
+.options-brand {
+  min-height: 58px;
+}
+
+.options-brand-mark {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+}
+
+.options-sidebar {
+  top: 0;
+  z-index: 9;
+  min-height: 100vh;
+  max-height: 100vh;
+  margin-top: 0;
+  padding: calc(var(--options-brand-height) + var(--options-sidebar-gap) + 16px) 16px 18px;
+  border: 0;
+  border-radius: 0;
+  background: #000000;
+  box-shadow: none;
+}
+
+.options-main {
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 100vh;
+  height: 100vh;
+  padding-top: clamp(24px, 3vw, 44px);
+}
+
+.options-dashboard-entry {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.options-dashboard-entry:hover,
+.options-dashboard-entry:focus-visible,
+.options-dashboard-entry.active {
+  border-color: transparent;
+  background: var(--ui-surface-hover);
+}
+
+.options-nav-link,
+.options-nav-group-trigger,
+.options-dashboard-entry {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell :where(
+  .options-button,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .custom-select-option,
+  .options-search,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .ai-model-list-textarea,
+  .tag-management-input,
+  input,
+  textarea,
+  select,
+  .summary-card,
+  .detect-empty,
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card,
+  .availability-decision-item,
+  .tag-management-overview article,
+  .tag-management-cloud,
+  .tag-management-detail,
+  .duplicate-group-card,
+  .ai-model-card,
+  .ai-tag-card,
+  .ai-model-card-tag,
+  .options-chip,
+  .option-value,
+  .risk-action-note,
+  .shortcut-key,
+  .shortcut-status-detail,
+  .availability-status-code,
+  .detect-result-status
+),
+.custom-select-list,
+.custom-select-option {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell :where(
+  .options-overview-hero,
+  .options-overview-task,
+  .options-group,
+  .detect-permission-card,
+  .detect-progress-card,
+  .detect-results-group,
+  .detect-selection-group,
+  .detect-history-group,
+  .availability-decision-panel,
+  .ai-provider-card,
+  .ai-feature-settings-card,
+  .ai-naming-settings-card,
+  .ai-tag-data-card,
+  .tag-management-actions,
+  .tag-management-usage
+) {
+  border-radius: var(--ui-radius-group);
+}
+
+.options-modal :where(
+  .options-search,
+  .options-search-input,
+  .modal-results,
+  .detect-empty,
+  .scope-folder-card,
+  .ai-model-card,
+  .ai-model-card-tag,
+  .options-button,
+  .ai-model-list-textarea,
+  input,
+  textarea
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-modal {
+  border-radius: var(--ui-radius-panel);
+}
+
+.options-modal-close {
+  border-radius: var(--ui-radius-icon);
+}
+
+.options-modal :where(.options-search, .modal-results) {
+  border: 1px solid var(--ui-divider);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.options-modal :where(.options-search) {
+  display: grid;
+  gap: 7px;
+  padding: 10px 12px;
+}
+
+.options-modal :where(.options-search-input, .ai-model-list-textarea) {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.options-modal :where(.options-search-input, .ai-model-list-textarea):focus,
+.options-modal :where(.options-search-input, .ai-model-list-textarea):focus-visible {
+  border-color: var(--ui-focus-ring);
+  background: var(--ui-surface-hover);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.options-modal :where(.modal-results) {
+  overflow: auto;
+  padding: 8px;
+}
+
+.options-modal :where(.ai-model-card, .scope-folder-card) {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+}
+
+.options-modal .scope-folder-card {
+  display: grid;
+  min-height: 56px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-content: stretch;
+  gap: 3px;
+  padding: 9px 12px;
+  line-height: normal;
+  text-align: left;
+  white-space: normal;
+}
+
+.options-modal .scope-folder-head {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.options-modal .scope-folder-head strong,
+.options-modal .scope-folder-card > span:last-child {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.options-modal .scope-folder-card > span:last-child {
+  padding-left: 30px;
+}
+
+.options-modal :where(.ai-model-card:hover, .ai-model-card:focus-visible, .scope-folder-card:hover, .scope-folder-card:focus-visible) {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.options-modal :where(.ai-model-card.current, .ai-model-card[aria-selected="true"]) {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.options-modal :where(.ai-model-card-tag) {
+  border-color: var(--ui-divider-subtle);
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-secondary);
+}
+
+.options-modal .options-button.secondary,
+.options-modal .options-button.danger {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+}
+
+.options-modal .options-button.secondary:hover,
+.options-modal .options-button.secondary:focus-visible,
+.options-modal .options-button.danger:hover,
+.options-modal .options-button.danger:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.dashboard-panel :where(
+  .dashboard-toolbar,
+  .dashboard-results-group,
+  .dashboard-folder-sidebar,
+  .dashboard-bookmark-card,
+  .dashboard-search-input-field,
+  .dashboard-natural-search-toggle,
+  .dashboard-clear-search,
+  .dashboard-help-button,
+  .dashboard-icon-action,
+  .dashboard-card-menu,
+  .dashboard-tag-popover,
+  .dashboard-help-popover,
+  .dashboard-tag-editor-panel,
+  .dashboard-drop-panel,
+  .dashboard-folder-drop-card,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview,
+  .dashboard-folder-tree-item,
+  .dashboard-folder-breadcrumb-link,
+  .dashboard-folder-breadcrumb-current,
+  .dashboard-mini-chip,
+  .dashboard-tag,
+  .dashboard-tag-toggle,
+  .dashboard-status-dot,
+  .dashboard-favicon-shell,
+  .dashboard-folder-tree-count
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.dashboard-panel :where(
+  .dashboard-results-group,
+  .dashboard-folder-sidebar,
+  .dashboard-card-menu,
+  .dashboard-tag-popover,
+  .dashboard-help-popover,
+  .dashboard-tag-editor-panel,
+  .dashboard-drop-panel
+) {
+  border-radius: var(--ui-radius-group);
+}
+
+@media (max-width: 920px) {
+  .options-shell {
+    display: block;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0 24px 36px;
+    overflow-y: auto;
+  }
+
+  .options-header {
+    position: static;
+    width: min(100%, 760px);
+    height: auto;
+    min-height: var(--options-brand-height);
+    margin-inline: auto;
+    padding: 14px 0 0;
+  }
+
+  .options-layout {
+    display: grid;
+    width: min(100%, 760px);
+    height: auto;
+    margin: 0 auto;
+    pointer-events: auto;
+  }
+
+  .options-sidebar {
+    position: static;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    max-height: none;
+    padding: var(--options-sidebar-gap) 0 0;
+    overflow: visible;
+  }
+
+  .options-main {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+    height: auto;
+    overflow: visible;
+    padding: 24px 0 0;
+  }
+
+  .options-nav-link,
+  .options-nav-group-trigger {
+    border: 1px solid var(--ui-divider);
+    background: var(--ui-surface);
+  }
+}
+
+@media (max-width: 760px) {
+  .options-shell {
+    padding-inline: 14px;
+  }
+}
+
+/* UI refresh full-surface closure: beat legacy square-control specificity. */
+.options-shell .options-button,
+.options-shell .options-button.small,
+.options-shell .options-button.primary,
+.options-shell .options-button.secondary,
+.options-shell .options-button.danger,
+.options-shell a.options-button,
+.options-shell button.options-button,
+.options-shell .duplicate-primary-action,
+.options-modal .options-button,
+.options-modal .options-button.small,
+.options-modal .options-button.primary,
+.options-modal .options-button.secondary,
+.options-modal .options-button.danger,
+.dashboard-panel #dashboard-selection-group .options-button,
+.dashboard-panel #dashboard-selection-group .options-button.secondary,
+.dashboard-panel #dashboard-selection-group .options-button.danger,
+.dashboard-panel #dashboard-selection-group .options-button:disabled,
+.dashboard-panel #dashboard-selection-group .options-button.danger:disabled,
+.availability-filter-bar .options-button,
+.availability-filter-bar .options-button.active,
+.shortcut-actions .options-button,
+.ai-provider-action-buttons .options-button,
+.duplicate-docked-selection-actions .options-button {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell .options-button,
+.options-shell .options-button.secondary,
+.options-shell .options-button.danger,
+.options-shell .options-button:disabled,
+.options-shell .options-button.danger:disabled,
+.options-modal .options-button.secondary,
+.options-modal .options-button.danger,
+.options-modal .options-button:disabled,
+.options-modal .options-button.danger:disabled {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.options-shell .options-button.primary,
+.options-shell .options-button:not(.secondary):not(.danger),
+.options-modal .options-button.primary,
+.options-modal .options-button:not(.secondary):not(.danger) {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-accent-strong);
+  color: var(--ui-text-inverse);
+}
+
+.options-shell .options-button:hover,
+.options-shell .options-button:focus-visible,
+.options-modal .options-button:hover,
+.options-modal .options-button:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.options-shell .options-button.primary:hover,
+.options-shell .options-button.primary:focus-visible,
+.options-shell .options-button:not(.secondary):not(.danger):hover,
+.options-shell .options-button:not(.secondary):not(.danger):focus-visible,
+.options-modal .options-button.primary:hover,
+.options-modal .options-button.primary:focus-visible,
+.options-modal .options-button:not(.secondary):not(.danger):hover,
+.options-modal .options-button:not(.secondary):not(.danger):focus-visible {
+  border-color: var(--ui-accent-line);
+  background: color-mix(in srgb, var(--ui-accent-strong) 92%, #ffffff);
+  color: var(--ui-text-inverse);
+}
+
+.options-shell .options-button:disabled,
+.options-shell .options-button.danger:disabled,
+.options-modal .options-button:disabled,
+.options-modal .options-button.danger:disabled {
+  color: var(--ui-text-disabled);
+  opacity: 1;
+}
+
+.options-shell input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.options-shell textarea,
+.options-shell select,
+.options-shell .options-select,
+.options-shell .duplicate-folder-select,
+.options-shell .scope-picker-trigger,
+.options-shell .custom-select-trigger,
+.options-shell .options-search-input,
+.options-shell .options-search-input.compact,
+.options-shell .ai-provider-input,
+.options-shell .ai-provider-select,
+.options-shell .ai-settings-input,
+.options-shell .ai-settings-textarea,
+.options-shell .ai-model-list-textarea,
+.options-shell .tag-management-form input,
+.options-shell .tag-management-input,
+.options-shell .dashboard-search-input-field {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.options-shell textarea,
+.options-shell select,
+.options-shell .options-select,
+.options-shell .duplicate-folder-select,
+.options-shell .scope-picker-trigger,
+.options-shell .custom-select-trigger,
+.options-shell .options-search-input,
+.options-shell .ai-provider-input,
+.options-shell .ai-provider-select,
+.options-shell .ai-settings-input,
+.options-shell .ai-settings-textarea,
+.options-shell .ai-model-list-textarea,
+.options-shell .tag-management-form input,
+.options-shell .tag-management-input {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.options-shell input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.options-shell input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.options-shell textarea:focus,
+.options-shell textarea:focus-visible,
+.options-shell select:focus,
+.options-shell select:focus-visible,
+.options-shell .scope-picker-trigger:focus-visible,
+.options-shell .custom-select-trigger:focus-visible,
+.options-shell .options-search-input:focus,
+.options-shell .options-search-input:focus-visible,
+.options-shell .ai-provider-input:focus,
+.options-shell .ai-provider-input:focus-visible,
+.options-shell .ai-provider-select:focus,
+.options-shell .ai-provider-select:focus-visible,
+.options-shell .ai-settings-input:focus,
+.options-shell .ai-settings-input:focus-visible,
+.options-shell .ai-settings-textarea:focus,
+.options-shell .ai-settings-textarea:focus-visible {
+  border-color: var(--ui-focus-ring);
+  background: var(--ui-surface-hover);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  outline: none;
+}
+
+.options-shell .ai-switch,
+.options-shell .ai-switch-track,
+.options-shell .ai-switch-track::before {
+  border-radius: var(--ui-radius-pill);
+}
+
+.options-shell .ai-switch-track {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+}
+
+.options-shell .ai-switch-track::before {
+  background: var(--ui-text-tertiary);
+}
+
+.options-shell .ai-switch input:checked + .ai-switch-track {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.options-shell .ai-switch input:checked + .ai-switch-track::before {
+  background: var(--ui-accent-strong);
+}
+
+.options-shell .options-chip,
+.options-shell .option-value,
+.options-shell .risk-action-note,
+.options-shell .shortcut-key,
+.options-shell .shortcut-key.unassigned,
+.options-shell .ai-provider-save-state,
+.options-shell .ai-inline-status,
+.options-shell .availability-status-code,
+.options-shell .detect-result-status,
+.options-shell .dashboard-mini-chip,
+.options-shell .dashboard-tag,
+.options-shell .dashboard-tag-toggle,
+.dashboard-panel .option-value,
+.dashboard-panel #dashboard-folder-sidebar-count {
+  border-radius: var(--ui-radius-pill);
+}
+
+.options-shell .shortcut-status-detail,
+.options-shell .ai-inline-action,
+.options-shell .ai-help-tooltip,
+.options-shell summary,
+.options-shell .ai-advanced-summary {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell .ai-inline-action,
+.options-shell .ai-help-tooltip {
+  padding-inline: 6px;
+}
+
+.options-shell summary:hover,
+.options-shell summary:focus-visible,
+.options-shell .ai-advanced-summary:hover,
+.options-shell .ai-advanced-summary:focus-visible {
+  background: var(--ui-surface-hover);
+  outline: none;
+}
+
+/* Cloudflare dark palette closure. */
+html,
+body,
+.options-shell,
+.options-layout,
+.options-main {
+  background: #000000;
+  background-image: none;
+}
+
+.options-header,
+.options-sidebar {
+  background: #000000;
+  background-image: none;
+  box-shadow: none;
+}
+
+.options-brand-mark {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface);
+}
+
+.options-panel:not(.dashboard-panel) > :where(
+  .options-group,
+  .detect-permission-card,
+  .detect-progress-card,
+  .detect-results-group,
+  .detect-selection-group,
+  .detect-history-group,
+  .availability-decision-panel,
+  .ai-provider-card,
+  .ai-feature-settings-card,
+  .ai-naming-settings-card,
+  .ai-tag-data-card,
+  .tag-management-actions,
+  .tag-management-usage,
+  .options-overview-hero,
+  .options-overview-task
+),
+.dashboard-panel .dashboard-results-group,
+.dashboard-panel .dashboard-folder-sidebar,
+.options-modal,
+.custom-select-list {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.options-panel:not(.dashboard-panel) :where(
+  .summary-card,
+  .detect-empty,
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card,
+  .availability-decision-grid > div,
+  .availability-decision-item,
+  .tag-management-overview article,
+  .tag-management-cloud,
+  .tag-management-detail,
+  .duplicate-group-card,
+  .ai-model-card,
+  .ai-tag-card
+),
+.dashboard-panel .dashboard-toolbar,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-toolbar,
+.dashboard-panel .dashboard-bookmark-card,
+.dashboard-panel .dashboard-search-input-field,
+.dashboard-panel .dashboard-card-menu,
+.dashboard-panel .dashboard-tag-popover,
+.dashboard-panel .dashboard-help-popover,
+.dashboard-panel .dashboard-tag-editor-panel,
+.dashboard-drop-panel,
+.dashboard-delete-drop-target,
+.dashboard-folder-drop-card,
+.dashboard-drag-preview {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+}
+
+.options-shell :where(
+  .options-button,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .ai-model-list-textarea,
+  .tag-management-input,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select
+) {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+}
+
+.options-shell .options-button.primary,
+.options-shell .options-button:not(.secondary):not(.danger),
+.options-modal .options-button.primary,
+.options-modal .options-button:not(.secondary):not(.danger) {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-accent-strong);
+  color: var(--ui-text-inverse);
+}
+
+.options-shell .options-button.primary:hover,
+.options-shell .options-button.primary:focus-visible,
+.options-shell .options-button:not(.secondary):not(.danger):hover,
+.options-shell .options-button:not(.secondary):not(.danger):focus-visible,
+.options-modal .options-button.primary:hover,
+.options-modal .options-button.primary:focus-visible,
+.options-modal .options-button:not(.secondary):not(.danger):hover,
+.options-modal .options-button:not(.secondary):not(.danger):focus-visible {
+  border-color: var(--ui-accent-line);
+  background: color-mix(in srgb, var(--ui-accent-strong) 88%, #ffffff);
+  color: var(--ui-text-inverse);
+}
+
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea
+):focus,
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea
+):focus-visible,
+.dashboard-panel .dashboard-search-input-field:focus-within {
+  border-color: var(--ui-focus-ring);
+  background: var(--ui-surface-hover);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft);
+  outline: none;
+}
+
+.options-nav-link.active,
+.options-dashboard-entry:hover,
+.options-dashboard-entry:focus-visible,
+.options-dashboard-entry.active,
+.options-shell .ai-switch input:checked + .ai-switch-track,
+.dashboard-panel .dashboard-natural-search-toggle.active,
+.dashboard-panel .dashboard-natural-search-toggle.pending,
+.dashboard-panel .dashboard-natural-search-toggle[aria-pressed="true"],
+.dashboard-panel .dashboard-help-button[aria-expanded="true"],
+.dashboard-panel .dashboard-folder-tree-item.active,
+.dashboard-panel .dashboard-bookmark-card.selected,
+.dashboard-folder-drop-card:hover,
+.dashboard-folder-drop-card:focus-visible,
+.dashboard-folder-drop-card.active,
+.dashboard-folder-drop-card.is-active {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.dashboard-panel .dashboard-natural-search-toggle.active,
+.dashboard-panel .dashboard-natural-search-toggle.pending,
+.dashboard-panel .dashboard-natural-search-toggle[aria-pressed="true"],
+.dashboard-panel .dashboard-help-button[aria-expanded="true"] {
+  color: #bfdbfe;
+}
+
+.options-shell .ai-switch input:checked + .ai-switch-track::before,
+.dashboard-panel .dashboard-natural-search-toggle.active .dashboard-natural-search-marker,
+.dashboard-panel .dashboard-natural-search-toggle.pending .dashboard-natural-search-marker,
+.dashboard-panel .dashboard-bookmark-card.selected::before {
+  background: var(--ui-accent-strong);
+}
+
+.options-modal-backdrop,
+.dashboard-drag-overlay {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+/* Production polish closure: options and dashboard share one control/surface system. */
+:root {
+  --bg: var(--ui-bg-page);
+  --surface-0: var(--ui-bg-main);
+  --surface-1: var(--ui-surface);
+  --surface-2: var(--ui-surface-raised);
+  --surface-3: var(--ui-surface-hover);
+  --line-soft: var(--ui-divider-subtle);
+  --line-mid: var(--ui-divider);
+  --accent-blue: var(--ui-accent-strong);
+  --accent-blue-strong: var(--ui-accent-strong);
+  --accent-blue-soft: var(--ui-accent-soft);
+  --accent-blue-line: var(--ui-accent-line);
+  --text: var(--ui-text-primary);
+  --text-strong: var(--ui-text-primary);
+  --text-soft: var(--ui-text-secondary);
+  --text-muted: var(--ui-text-tertiary);
+  --text-dim: var(--ui-text-disabled);
+}
+
+html,
+body,
+.options-shell,
+.options-layout {
+  background: var(--ui-bg-page);
+}
+
+.options-main {
+  background: var(--ui-bg-main);
+}
+
+.options-header,
+.options-sidebar {
+  background: #000000;
+}
+
+.options-panel:not(.dashboard-panel) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.options-panel:not(.dashboard-panel) > :where(
+  .options-group,
+  .detect-permission-card,
+  .detect-progress-card,
+  .detect-results-group,
+  .detect-selection-group,
+  .detect-history-group,
+  .availability-decision-panel,
+  .ai-provider-card,
+  .ai-feature-settings-card,
+  .ai-naming-settings-card,
+  .ai-tag-data-card,
+  .tag-management-actions,
+  .tag-management-usage,
+  .options-overview-hero,
+  .options-overview-task
+),
+.dashboard-panel .dashboard-results-group,
+.dashboard-panel .dashboard-folder-sidebar,
+.options-modal,
+.custom-select-list {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.options-panel:not(.dashboard-panel) :where(
+  .summary-card,
+  .detect-empty,
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card,
+  .availability-decision-grid > div,
+  .availability-decision-item,
+  .tag-management-overview article,
+  .tag-management-cloud,
+  .tag-management-detail,
+  .duplicate-group-card,
+  .ai-model-card,
+  .ai-tag-card,
+  .ai-flow-step
+),
+.dashboard-panel .dashboard-toolbar,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-toolbar,
+.dashboard-panel .dashboard-bookmark-card,
+.dashboard-panel .dashboard-search-input-field,
+.dashboard-panel .dashboard-card-menu,
+.dashboard-panel .dashboard-tag-popover,
+.dashboard-panel .dashboard-help-popover,
+.dashboard-panel .dashboard-tag-editor-panel,
+.dashboard-drop-panel,
+.dashboard-delete-drop-target,
+.dashboard-folder-drop-card,
+.dashboard-drag-preview {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+}
+
+.options-shell :where(
+  button,
+  .options-button,
+  .options-button.small,
+  .duplicate-primary-action,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .ai-inline-action,
+  .dashboard-natural-search-toggle,
+  .dashboard-clear-search,
+  .dashboard-help-button,
+  .dashboard-icon-action,
+  .dashboard-tag-toggle,
+  .dashboard-folder-breadcrumb-link,
+  .dashboard-folder-breadcrumb-current
+),
+.options-modal :where(button) {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.options-shell :where(
+  .options-button,
+  .options-button.small,
+  .options-button.secondary,
+  .options-button.danger,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .custom-select-option,
+  .options-search,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .ai-model-list-textarea,
+  .tag-management-input,
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .summary-card,
+  .detect-empty,
+  .detect-result-card,
+  .duplicate-item-row,
+  .folder-cleanup-suggestion-card,
+  .redirect-card,
+  .recycle-card,
+  .scope-folder-card,
+  .availability-decision-item,
+  .tag-management-overview article,
+  .tag-management-cloud,
+  .tag-management-detail,
+  .duplicate-group-card,
+  .ai-model-card,
+  .ai-tag-card,
+  .ai-flow-step,
+  .shortcut-status-detail,
+  .ai-inline-action,
+  .ai-help-tooltip,
+  summary,
+  .ai-advanced-summary,
+  .dashboard-toolbar,
+  .dashboard-bookmark-card,
+  .dashboard-search-input-field,
+  .dashboard-natural-search-toggle,
+  .dashboard-clear-search,
+  .dashboard-help-button,
+  .dashboard-icon-action,
+  .dashboard-card-menu-item,
+  .dashboard-folder-tree-item,
+  .dashboard-folder-breadcrumb-link,
+  .dashboard-folder-breadcrumb-current
+),
+.options-modal :where(
+  .options-search,
+  .options-search-input,
+  .modal-results,
+  .detect-empty,
+  .scope-folder-card,
+  .ai-model-card,
+  .ai-model-card-tag,
+  .options-button,
+  .ai-model-list-textarea,
+  input,
+  textarea
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.options-shell :where(
+  .options-group,
+  .options-overview-hero,
+  .options-overview-task,
+  .detect-permission-card,
+  .detect-progress-card,
+  .detect-results-group,
+  .detect-selection-group,
+  .detect-history-group,
+  .availability-decision-panel,
+  .ai-provider-card,
+  .ai-feature-settings-card,
+  .ai-naming-settings-card,
+  .ai-tag-data-card,
+  .tag-management-actions,
+  .tag-management-usage,
+  .dashboard-results-group,
+  .dashboard-folder-sidebar,
+  .dashboard-card-menu,
+  .dashboard-tag-popover,
+  .dashboard-help-popover,
+  .dashboard-tag-editor-panel,
+  .dashboard-drop-panel
+),
+.options-modal {
+  border-radius: var(--ui-radius-group);
+}
+
+.options-modal {
+  border-radius: var(--ui-radius-panel);
+}
+
+.options-modal .scope-folder-card {
+  display: grid;
+  min-height: 56px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  justify-content: stretch;
+  gap: 3px;
+  padding: 9px 12px;
+  line-height: normal;
+  text-align: left;
+  white-space: normal;
+}
+
+.options-modal .scope-folder-head {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 22px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.options-modal .scope-folder-head strong,
+.options-modal .scope-folder-card > span:last-child {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.options-modal .scope-folder-card > span:last-child {
+  padding-left: 30px;
+}
+
+.options-shell :where(
+  .options-chip,
+  .option-value,
+  .risk-action-note,
+  .shortcut-key,
+  .shortcut-key.unassigned,
+  .ai-provider-save-state,
+  .ai-inline-status,
+  .availability-status-code,
+  .detect-result-status,
+  .dashboard-mini-chip,
+  .dashboard-tag,
+  .dashboard-tag-toggle,
+  .dashboard-status-dot,
+  .dashboard-folder-tree-count
+) {
+  border-radius: var(--ui-radius-pill);
+}
+
+.options-shell :where(
+  .options-button,
+  .options-button.secondary,
+  .options-button.danger,
+  .options-button:disabled,
+  .options-button.danger:disabled,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .dashboard-natural-search-toggle,
+  .dashboard-clear-search,
+  .dashboard-help-button,
+  .dashboard-icon-action,
+  .dashboard-tag-toggle,
+  .dashboard-folder-breadcrumb-link,
+  .dashboard-folder-breadcrumb-current
+),
+.options-modal .options-button.secondary,
+.options-modal .options-button.danger,
+.options-modal .options-button:disabled,
+.options-modal .options-button.danger:disabled {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.options-shell .options-button.primary,
+.options-shell .options-button:not(.secondary):not(.danger),
+.options-modal .options-button.primary,
+.options-modal .options-button:not(.secondary):not(.danger) {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-accent-strong);
+  color: var(--ui-text-inverse);
+}
+
+.options-shell .options-button:hover,
+.options-shell .options-button:focus-visible,
+.options-shell .scope-picker-trigger:hover,
+.options-shell .scope-picker-trigger:focus-visible,
+.options-shell .custom-select-trigger:hover,
+.options-shell .custom-select-trigger:focus-visible,
+.options-shell .dashboard-natural-search-toggle:hover,
+.options-shell .dashboard-natural-search-toggle:focus-visible,
+.options-shell .dashboard-clear-search:hover,
+.options-shell .dashboard-clear-search:focus-visible,
+.options-shell .dashboard-help-button:hover,
+.options-shell .dashboard-help-button:focus-visible,
+.options-shell .dashboard-icon-action:hover,
+.options-shell .dashboard-icon-action:focus-visible,
+.options-shell .dashboard-tag-toggle:hover,
+.options-shell .dashboard-tag-toggle:focus-visible,
+.options-shell .dashboard-folder-breadcrumb-link:hover,
+.options-shell .dashboard-folder-breadcrumb-link:focus-visible,
+.options-modal .options-button:hover,
+.options-modal .options-button:focus-visible,
+.custom-select-option:hover,
+.custom-select-option.is-active,
+.custom-select-option[aria-selected="true"],
+.dashboard-panel .dashboard-card-menu-item:hover,
+.dashboard-panel .dashboard-card-menu-item:focus-visible,
+.dashboard-panel .dashboard-folder-tree-item:hover,
+.dashboard-panel .dashboard-folder-tree-item:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.options-shell .options-button.primary:hover,
+.options-shell .options-button.primary:focus-visible,
+.options-shell .options-button:not(.secondary):not(.danger):hover,
+.options-shell .options-button:not(.secondary):not(.danger):focus-visible,
+.options-modal .options-button.primary:hover,
+.options-modal .options-button.primary:focus-visible,
+.options-modal .options-button:not(.secondary):not(.danger):hover,
+.options-modal .options-button:not(.secondary):not(.danger):focus-visible {
+  border-color: var(--ui-accent-line);
+  background: color-mix(in srgb, var(--ui-accent-strong) 90%, var(--ui-text-primary));
+  color: var(--ui-text-inverse);
+}
+
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .options-select,
+  .duplicate-folder-select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea,
+  .ai-model-list-textarea,
+  .tag-management-input
+) {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+  line-height: 1.35;
+}
+
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea
+):focus,
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea
+):focus-visible,
+.dashboard-panel .dashboard-search-input-field:focus-within {
+  border-color: var(--ui-focus-ring);
+  background: var(--ui-surface-hover);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft);
+  outline: none;
+}
+
+.options-shell .ai-switch,
+.options-shell .ai-switch-track,
+.options-shell .ai-switch-track::before {
+  border-radius: var(--ui-radius-pill);
+}
+
+.options-shell .ai-switch-track {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+}
+
+.options-shell .ai-switch-track::before {
+  background: var(--ui-text-tertiary);
+}
+
+.options-shell .ai-switch input:checked + .ai-switch-track,
+.options-nav-link.active,
+.options-dashboard-entry:hover,
+.options-dashboard-entry:focus-visible,
+.options-dashboard-entry.active,
+.dashboard-panel .dashboard-natural-search-toggle.active,
+.dashboard-panel .dashboard-natural-search-toggle.pending,
+.dashboard-panel .dashboard-natural-search-toggle[aria-pressed="true"],
+.dashboard-panel .dashboard-help-button[aria-expanded="true"],
+.dashboard-panel .dashboard-folder-tree-item.active,
+.dashboard-panel .dashboard-bookmark-card.selected,
+.dashboard-folder-drop-card:hover,
+.dashboard-folder-drop-card:focus-visible,
+.dashboard-folder-drop-card.active,
+.dashboard-folder-drop-card.is-active,
+.dashboard-delete-drop-target.active {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  color: var(--ui-accent-text);
+}
+
+.options-shell .ai-switch input:checked + .ai-switch-track::before,
+.dashboard-panel .dashboard-natural-search-toggle.active .dashboard-natural-search-marker,
+.dashboard-panel .dashboard-natural-search-toggle.pending .dashboard-natural-search-marker,
+.dashboard-panel .dashboard-bookmark-card.selected::before {
+  background: var(--ui-accent-strong);
+}
+
+.dashboard-panel .dashboard-bookmark-card:hover {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  transform: none;
+}
+
+.dashboard-panel .dashboard-folder-tree-count,
+.dashboard-panel .dashboard-folder-tree-item.active .dashboard-folder-tree-count {
+  min-width: 0;
+  border: 0;
+  border-color: transparent;
+  padding: 0;
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dashboard-panel .dashboard-folder-tree-item.active .dashboard-folder-tree-count {
+  color: var(--ui-accent-text);
+}
+
+.dashboard-panel .dashboard-folder-tree-item {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) max-content;
+  align-items: center;
+  justify-content: stretch;
+  gap: 7px;
+  line-height: normal;
+  text-align: left;
+}
+
+.dashboard-panel .dashboard-folder-tree-label {
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-panel .dashboard-folder-tree-count {
+  justify-self: end;
+  line-height: 1.25;
+}
+
+.dashboard-panel .dashboard-bookmark-card::before,
+.dashboard-panel .dashboard-bookmark-card:hover::before,
+.dashboard-panel .dashboard-bookmark-card.selected::before {
+  width: 0;
+  background: transparent;
+}
+
+.dashboard-panel .dashboard-card-actions .dashboard-icon-action {
+  display: inline-grid;
+  place-items: center;
+}
+
+.dashboard-panel .dashboard-card-actions .dashboard-icon-action svg {
+  display: block;
+}
+
+.dashboard-panel .dashboard-card-menu-item {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  justify-items: start;
+  justify-content: stretch;
+  text-align: left;
+}
+
+.dashboard-panel .dashboard-card-menu-item span {
+  min-width: 0;
+  justify-self: start;
+  text-align: left;
+}
+
+.dashboard-panel .dashboard-card-grid:has(.dashboard-bookmark-card.menu-open, .dashboard-bookmark-card.tags-expanded),
+.dashboard-panel .dashboard-virtual-window:has(.dashboard-bookmark-card.menu-open, .dashboard-bookmark-card.tags-expanded) {
+  contain: layout style;
+}
+
+.dashboard-panel .dashboard-bookmark-card.menu-open,
+.dashboard-panel .dashboard-bookmark-card.tags-expanded {
+  z-index: 90;
+  contain: layout style;
+  content-visibility: visible;
+}
+
+.dashboard-panel .dashboard-card-more[open],
+.dashboard-panel .dashboard-card-menu,
+.dashboard-panel .dashboard-tag-popover {
+  pointer-events: auto;
+}
+
+.dashboard-panel .dashboard-bookmark-card.dragging,
+.dashboard-panel .dashboard-bookmark-card[aria-grabbed="true"] {
+  border-color: var(--ui-accent-line);
+  box-shadow: var(--ui-shadow-menu);
+  transform: translateY(var(--ui-hover-lift)) scale(1.01);
+}
+
+.dashboard-panel .dashboard-title-row,
+.dashboard-panel > .options-section-label,
+.dashboard-panel .dashboard-kicker {
+  display: none;
+}
+
+.dashboard-panel.options-panel {
+  padding-top: 0;
+}
+
+.dashboard-panel .dashboard-toolbar,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-toolbar {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(96px, 1fr) minmax(280px, 680px) minmax(96px, 1fr);
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 10px clamp(18px, 2.6vw, 40px) 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.dashboard-panel .dashboard-search-box,
+.dashboard-panel .dashboard-search,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-search-box,
+.dashboard-fullscreen-active .dashboard-panel .dashboard-search {
+  width: 100%;
+  max-width: 680px;
+  margin-inline: 0;
+}
+
+.dashboard-panel .dashboard-search-box {
+  grid-column: 2;
+}
+
+.dashboard-panel .dashboard-title-actions {
+  --dashboard-status-width: minmax(0, 1fr);
+  grid-column: 3;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  justify-content: end;
+  gap: 8px;
+  min-width: 0;
+  padding-top: 0;
+}
+
+.dashboard-panel #dashboard-status {
+  width: auto;
+  max-width: 100%;
+  min-height: 38px;
+  justify-content: flex-end;
+}
+
+.dashboard-panel [data-dashboard-action="exit-dashboard"] {
+  min-height: 38px;
+}
+
+.dashboard-fullscreen-active .dashboard-panel {
+  grid-template-areas:
+    "dashboard-toolbar"
+    "dashboard-selection"
+    "dashboard-results";
+  grid-template-rows: auto auto minmax(0, 1fr);
+  padding-top: 0;
+}
+
+.dashboard-fullscreen-active .dashboard-panel > .options-section-label,
+.dashboard-fullscreen-active .dashboard-panel > .dashboard-title-row {
+  display: none;
+}
+
+@media (max-width: 920px) {
+  .dashboard-panel .dashboard-toolbar,
+  .dashboard-fullscreen-active .dashboard-panel .dashboard-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 16px;
+  }
+
+  .dashboard-panel .dashboard-search-box,
+  .dashboard-panel .dashboard-title-actions {
+    grid-column: 1;
+  }
+
+  .dashboard-panel .dashboard-title-actions {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+.options-shell .ai-advanced-summary,
+.options-shell summary.ai-advanced-summary {
+  min-height: 28px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.options-shell summary:hover,
+.options-shell summary:focus-visible,
+.options-shell .ai-advanced-summary:hover,
+.options-shell .ai-advanced-summary:focus-visible {
+  background: transparent;
+  color: var(--ui-text-primary);
+  box-shadow: none;
+  outline: none;
+}
+
+.options-shell .ai-advanced-summary:hover::after,
+.options-shell .ai-advanced-summary:focus-visible::after {
+  border-color: var(--ui-text-primary);
+}
+
+.ai-provider-field:has(> .ai-provider-input)::before,
+.ai-provider-field:has(> .ai-provider-input)::after,
+.ai-settings-field:has(> .ai-provider-input)::before,
+.ai-settings-field:has(> .ai-provider-input)::after {
+  content: none;
+}
+
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea
+):focus,
+.options-shell :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  textarea,
+  select,
+  .scope-picker-trigger,
+  .custom-select-trigger,
+  .options-search-input,
+  .ai-provider-input,
+  .ai-provider-select,
+  .ai-settings-input,
+  .ai-settings-textarea
+):focus-visible {
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+.options-shell input.ai-provider-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.options-shell input.ai-provider-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.options-shell input.options-search-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.options-shell input.options-search-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible,
+.options-shell input.ai-settings-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus,
+.options-shell input.ai-settings-input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):focus-visible {
+  background: var(--ui-surface-raised);
+  box-shadow: none;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-shell :where(*, *::before, *::after),
+  .options-modal-backdrop,
+  .options-modal,
+  .dashboard-drag-overlay,
+  .dashboard-drop-panel,
+  .dashboard-delete-drop-target,
+  .dashboard-drag-preview {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
 }

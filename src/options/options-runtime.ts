@@ -3885,14 +3885,29 @@ async function handleAutoAnalyzeBookmarksChange() {
     return
   }
 
+  if (aiNamingState.pendingFeatureSwitch) {
+    renderAiNamingSection()
+    return
+  }
+
   const previousSettings = normalizeAiNamingSettings(aiNamingManagerState.settings)
-  const saved = await saveAiNamingSettingsFromDom({
-    validateRequired: Boolean(dom.aiAutoAnalyzeBookmarks.checked)
-  })
-  if (!saved) {
-    aiNamingManagerState.settings = previousSettings
-    dom.aiAutoAnalyzeBookmarks.checked = Boolean(previousSettings.autoAnalyzeBookmarks)
-    renderAvailabilitySection()
+  aiNamingState.pendingFeatureSwitch = 'autoAnalyzeBookmarks'
+  renderAvailabilitySection()
+
+  try {
+    const saved = await saveAiNamingSettingsFromDom({
+      validateRequired: Boolean(dom.aiAutoAnalyzeBookmarks.checked)
+    })
+    if (!saved) {
+      aiNamingManagerState.settings = previousSettings
+      dom.aiAutoAnalyzeBookmarks.checked = Boolean(previousSettings.autoAnalyzeBookmarks)
+      renderAvailabilitySection()
+    }
+  } finally {
+    if (aiNamingState.pendingFeatureSwitch === 'autoAnalyzeBookmarks') {
+      aiNamingState.pendingFeatureSwitch = ''
+      renderAvailabilitySection()
+    }
   }
 }
 
@@ -3903,6 +3918,11 @@ async function handleInboxWorkflowSettingChange(
     return
   }
 
+  if (aiNamingState.pendingFeatureSwitch) {
+    renderAiNamingSection()
+    return
+  }
+
   const previousSettings = normalizeInboxSettings(managerState.inboxSettings)
   const tagOnlyNoAutoMove = Boolean(dom.inboxTagOnlyNoAutoMove.checked)
   const autoMoveToRecommendedFolder = source === 'tagOnlyNoAutoMove' && tagOnlyNoAutoMove
@@ -3910,6 +3930,7 @@ async function handleInboxWorkflowSettingChange(
     : Boolean(dom.inboxAutoMoveToRecommendedFolder.checked)
 
   try {
+    aiNamingState.pendingFeatureSwitch = source
     managerState.inboxSettingsStatus = '正在保存 Inbox 设置…'
     renderAiNamingSection()
     managerState.inboxSettings = await saveInboxSettings({
@@ -3924,6 +3945,9 @@ async function handleInboxWorkflowSettingChange(
       ? error.message
       : 'Inbox 设置保存失败，请稍后重试。'
   } finally {
+    if (aiNamingState.pendingFeatureSwitch === source) {
+      aiNamingState.pendingFeatureSwitch = ''
+    }
     renderAiNamingSection()
   }
 }
@@ -3933,9 +3957,15 @@ async function handleAiRemoteParserChange() {
     return
   }
 
+  if (aiNamingState.pendingFeatureSwitch) {
+    renderAiNamingSection()
+    return
+  }
+
   const nextEnabled = Boolean(dom.aiAllowRemoteParser.checked)
 
   try {
+    aiNamingState.pendingFeatureSwitch = 'allowRemoteParsing'
     aiNamingState.lastError = ''
     const settings = normalizeAiNamingSettings({
       ...syncAiNamingSettingsDraftFromDom(),
@@ -3972,6 +4002,9 @@ async function handleAiRemoteParserChange() {
       error instanceof Error ? error.message : 'Jina Reader 远程解析开启失败，请稍后重试。'
   } finally {
     aiNamingState.requestingPermission = false
+    if (aiNamingState.pendingFeatureSwitch === 'allowRemoteParsing') {
+      aiNamingState.pendingFeatureSwitch = ''
+    }
     renderAvailabilitySection()
   }
 }
@@ -4021,6 +4054,8 @@ function renderAiNamingSection() {
 
   const settings = aiNamingManagerState.settings
   const hasSavedApiKey = Boolean(settings.apiKey)
+  const featureSwitchInFlight = aiNamingState.pendingFeatureSwitch
+  const featureSwitchesLocked = aiNamingState.running || aiNamingState.applying
   if (dom.aiBaseUrl && dom.aiBaseUrl !== document.activeElement) {
     dom.aiBaseUrl.value = settings.baseUrl
   }
@@ -4052,9 +4087,8 @@ function renderAiNamingSection() {
   if (dom.aiAllowRemoteParser) {
     dom.aiAllowRemoteParser.checked = Boolean(settings.allowRemoteParsing)
     dom.aiAllowRemoteParser.disabled =
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.requestingPermission
+      featureSwitchesLocked ||
+      featureSwitchInFlight === 'allowRemoteParsing'
   }
   if (dom.aiRemoteParserStatus) {
     const remoteParserEnabled = Boolean(settings.allowRemoteParsing)
@@ -4074,10 +4108,9 @@ function renderAiNamingSection() {
   if (dom.aiAutoAnalyzeBookmarks) {
     dom.aiAutoAnalyzeBookmarks.checked = Boolean(settings.autoAnalyzeBookmarks)
     dom.aiAutoAnalyzeBookmarks.disabled =
-      aiNamingState.running ||
-      aiNamingState.applying ||
+      featureSwitchesLocked ||
       aiNamingState.testingConnection ||
-      aiNamingState.requestingPermission
+      featureSwitchInFlight === 'autoAnalyzeBookmarks'
   }
   if (dom.aiAutoAnalyzeStatus) {
     const autoAnalyzeEnabled = Boolean(settings.autoAnalyzeBookmarks)
@@ -4089,16 +4122,14 @@ function renderAiNamingSection() {
     dom.inboxAutoMoveToRecommendedFolder.checked = Boolean(inboxSettings.autoMoveToRecommendedFolder)
     dom.inboxAutoMoveToRecommendedFolder.disabled =
       Boolean(inboxSettings.tagOnlyNoAutoMove) ||
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.requestingPermission
+      featureSwitchesLocked ||
+      featureSwitchInFlight === 'autoMoveToRecommendedFolder'
   }
   if (dom.inboxTagOnlyNoAutoMove) {
     dom.inboxTagOnlyNoAutoMove.checked = Boolean(inboxSettings.tagOnlyNoAutoMove)
     dom.inboxTagOnlyNoAutoMove.disabled =
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.requestingPermission
+      featureSwitchesLocked ||
+      featureSwitchInFlight === 'tagOnlyNoAutoMove'
   }
   if (dom.inboxWorkflowStatus) {
     const statusText = managerState.inboxSettingsStatus ||

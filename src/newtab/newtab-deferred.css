@@ -1,3 +1,5 @@
+@import "../shared/ui-refresh.css";
+
 .newtab-dashboard-overlay {
   position: fixed;
   inset: 0;
@@ -255,7 +257,7 @@
 
 .settings-drawer-kicker {
   margin: 0;
-  color: rgba(170, 240, 189, 0.78);
+  color: rgba(59, 130, 246, 0.78);
   font-size: 10px;
   font-weight: 760;
   line-height: 1.2;
@@ -295,8 +297,8 @@
 }
 
 .settings-save-status[data-state="saved"] {
-  border-color: rgba(132, 218, 137, 0.2);
-  color: rgba(132, 218, 137, 0.9);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: rgba(59, 130, 246, 0.9);
 }
 
 .settings-save-status[data-state="error"] {
@@ -344,9 +346,9 @@
 .settings-group-tab.active,
 .settings-group-tab[aria-pressed="true"],
 .settings-group-tab[aria-selected="true"] {
-  border-color: rgba(132, 218, 137, 0.42);
-  background: rgba(132, 218, 137, 0.18);
-  color: #d3f6db;
+  border-color: rgba(59, 130, 246, 0.42);
+  background: rgba(59, 130, 246, 0.18);
+  color: #bfdbfe;
 }
 
 .settings-section {
@@ -629,8 +631,8 @@
 }
 
 .folder-candidate-card.selected {
-  border-color: rgba(132, 218, 137, 0.34);
-  background: rgba(132, 218, 137, 0.08);
+  border-color: rgba(59, 130, 246, 0.34);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .folder-source-selected-copy,
@@ -713,8 +715,8 @@
 }
 
 .folder-candidate-card.selected .folder-candidate-badge {
-  background: rgba(132, 218, 137, 0.16);
-  color: #aaf0bd;
+  background: rgba(59, 130, 246, 0.16);
+  color: #93c5fd;
 }
 
 .folder-source-empty {
@@ -817,8 +819,8 @@
 }
 
 .setting-switch {
-  --secondary-container: #3a4b39;
-  --primary: #84da89;
+  --secondary-container: #1e293b;
+  --primary: #3b82f6;
   position: relative;
   display: inline-block;
   width: 3.7em;
@@ -860,7 +862,7 @@
 
 .setting-switch-input:focus-visible + .setting-switch {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(132, 218, 137, 0.32);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.32);
 }
 
 .setting-select,
@@ -936,10 +938,10 @@
 }
 
 .setting-picker-button:focus-visible {
-  border-color: rgba(132, 218, 137, 0.52);
+  border-color: rgba(59, 130, 246, 0.52);
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(132, 218, 137, 0.16),
+    0 0 0 2px rgba(59, 130, 246, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -1135,7 +1137,7 @@
 }
 
 .featured-wallpaper-status[data-tone="success"] {
-  color: #a7f3b0;
+  color: #93c5fd;
 }
 
 .featured-wallpaper-status[data-tone="warning"] {
@@ -1224,19 +1226,19 @@
 
 .featured-wallpaper-card:hover,
 .featured-wallpaper-card:focus-visible {
-  border-color: rgba(132, 218, 137, 0.45);
+  border-color: rgba(59, 130, 246, 0.45);
   background: #141615;
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(132, 218, 137, 0.12),
+    0 0 0 2px rgba(59, 130, 246, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .featured-wallpaper-card.is-selected {
-  border-color: rgba(132, 218, 137, 0.72);
+  border-color: rgba(59, 130, 246, 0.72);
   background: #142117;
   box-shadow:
-    0 0 0 2px rgba(132, 218, 137, 0.16),
+    0 0 0 2px rgba(59, 130, 246, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -1331,8 +1333,8 @@
 .featured-wallpaper-favorite:hover,
 .featured-wallpaper-favorite:focus-visible,
 .featured-wallpaper-favorite.is-favorite {
-  border-color: rgba(132, 218, 137, 0.56);
-  color: #a7f3b0;
+  border-color: rgba(59, 130, 246, 0.56);
+  color: #93c5fd;
   outline: none;
 }
 
@@ -1531,7 +1533,7 @@
 }
 
 .setting-status[data-tone="success"] {
-  color: rgba(132, 218, 137, 0.86);
+  color: rgba(59, 130, 246, 0.86);
 }
 
 .setting-status[data-tone="warning"] {
@@ -1709,7 +1711,7 @@
   background:
     linear-gradient(
       90deg,
-      #aaf0bd 0 var(--range-progress),
+      #93c5fd 0 var(--range-progress),
       #2a2a2d var(--range-progress) 100%
     );
   box-shadow:
@@ -1728,7 +1730,7 @@
     radial-gradient(circle at 35% 30%, #ffffff, #dddddf 72%);
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.48),
-    0 0 0 4px rgba(170, 240, 189, 0.08);
+    0 0 0 4px rgba(59, 130, 246, 0.08);
 }
 
 .setting-range:focus-visible::-webkit-slider-thumb {
@@ -1746,7 +1748,7 @@
 .setting-range::-moz-range-progress {
   height: 5px;
   border-radius: 999px;
-  background: #aaf0bd;
+  background: #93c5fd;
 }
 
 .setting-range::-moz-range-thumb {
@@ -1758,7 +1760,7 @@
     radial-gradient(circle at 35% 30%, #ffffff, #dddddf 72%);
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.48),
-    0 0 0 4px rgba(170, 240, 189, 0.08);
+    0 0 0 4px rgba(59, 130, 246, 0.08);
 }
 
 /* icon settings */
@@ -2036,8 +2038,8 @@
 }
 
 .icon-preset-card.selected {
-  border-color: rgba(132, 218, 137, 0.34);
-  background: rgba(132, 218, 137, 0.08);
+  border-color: rgba(59, 130, 246, 0.34);
+  background: rgba(59, 130, 246, 0.08);
 }
 
 .icon-preset-preview {
@@ -2338,7 +2340,7 @@
 
 .bookmark-menu-status {
   margin: 8px 2px 0;
-  color: #c9f2d2;
+  color: #bfdbfe;
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2736,10 +2738,10 @@
 .bookmark-menu-select:focus-visible,
 .newtab-shell select:focus-visible,
 .settings-drawer select:focus-visible {
-  border-color: rgba(132, 218, 137, 0.52);
+  border-color: rgba(59, 130, 246, 0.52);
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(132, 218, 137, 0.16),
+    0 0 0 2px rgba(59, 130, 246, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -2763,7 +2765,7 @@
 .bookmark-menu-select option:checked,
 .newtab-shell select option:checked,
 .settings-drawer select option:checked {
-  background: #2f4c34;
+  background: #1d4ed8;
   color: #ffffff;
 }
 
@@ -2868,10 +2870,10 @@
 }
 
 .custom-select-trigger:focus-visible {
-  border-color: rgba(132, 218, 137, 0.52);
+  border-color: rgba(59, 130, 246, 0.52);
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(132, 218, 137, 0.16),
+    0 0 0 2px rgba(59, 130, 246, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -2926,12 +2928,12 @@
 
 .custom-select-option:hover,
 .custom-select-option.is-active {
-  background: rgba(132, 218, 137, 0.13);
+  background: rgba(59, 130, 246, 0.13);
   color: #ffffff;
 }
 
 .custom-select-option[aria-selected="true"] {
-  background: rgba(132, 218, 137, 0.2);
+  background: rgba(59, 130, 246, 0.2);
   color: #ffffff;
 }
 
@@ -2966,7 +2968,7 @@
 }
 
 .newtab-dashboard-fallback-kicker {
-  color: #b7ff8a;
+  color: #3b82f6;
   letter-spacing: 0;
 }
 
@@ -3069,7 +3071,7 @@
 }
 
 .settings-drawer-kicker {
-  color: #b7ff8a;
+  color: #3b82f6;
   letter-spacing: 0;
 }
 
@@ -3089,8 +3091,8 @@
 }
 
 .settings-save-status[data-state="saved"] {
-  border-color: rgba(183, 255, 138, 0.42);
-  color: #b7ff8a;
+  border-color: rgba(59, 130, 246, 0.42);
+  color: #3b82f6;
 }
 
 .settings-save-status[data-state="error"] {
@@ -3134,7 +3136,7 @@
   );
   z-index: 0;
   width: calc((100% - (var(--settings-tab-count) - 1) * var(--settings-tab-gap)) / var(--settings-tab-count));
-  border: 1px solid rgba(183, 255, 138, 0.52);
+  border: 1px solid rgba(59, 130, 246, 0.52);
   background: #111112;
   transform: translate3d(0, 0, 0);
   transition:
@@ -3192,7 +3194,7 @@
 .settings-group-tab.active::before,
 .settings-group-tab[aria-pressed="true"]::before,
 .settings-group-tab[aria-selected="true"]::before {
-  color: #b7ff8a;
+  color: #3b82f6;
 }
 
 .settings-section {
@@ -3277,8 +3279,8 @@
 .folder-candidate-card.selected,
 .search-engine-toggle.active,
 .setting-segmented-button.selected {
-  border-color: rgba(183, 255, 138, 0.46);
-  background: #132012;
+  border-color: rgba(59, 130, 246, 0.46);
+  background: rgba(47, 124, 246, 0.18);
   color: #ffffff;
 }
 
@@ -3302,9 +3304,9 @@
 
 .folder-candidate-card.selected .folder-candidate-badge,
 .setting-status[data-tone="success"] {
-  border-color: rgba(183, 255, 138, 0.46);
-  background: #132012;
-  color: #b7ff8a;
+  border-color: rgba(59, 130, 246, 0.46);
+  background: rgba(47, 124, 246, 0.18);
+  color: #3b82f6;
 }
 
 .setting-switch {
@@ -3347,7 +3349,7 @@
 }
 
 .setting-switch-input:focus-visible + .setting-switch {
-  outline: 2px solid rgba(183, 255, 138, 0.58);
+  outline: 2px solid rgba(59, 130, 246, 0.58);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -3398,7 +3400,7 @@
   width: auto;
   height: auto;
   border: 0;
-  color: #b7ff8a;
+  color: #3b82f6;
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
@@ -3436,7 +3438,7 @@
 .setting-floating-field:focus-within .setting-url-input,
 .setting-floating-field .setting-text-input:focus-visible,
 .setting-floating-field .setting-url-input:focus-visible {
-  border-color: rgba(183, 255, 138, 0.52);
+  border-color: rgba(59, 130, 246, 0.52);
   background: #050505;
   outline: none;
   box-shadow: none;
@@ -3447,7 +3449,7 @@
   background:
     linear-gradient(
       90deg,
-      #b7ff8a 0 var(--range-progress),
+      #3b82f6 0 var(--range-progress),
       #2a2a2a var(--range-progress) 100%
     );
 }
@@ -3515,7 +3517,7 @@
 
 .settings-drawer .custom-select[data-open="true"] .custom-select-trigger-arrow::before,
 .custom-select-setting[data-open="true"] .custom-select-trigger-arrow::before {
-  color: #b7ff8a;
+  color: #3b82f6;
   transform: translate(calc(-50% + 2px), -50%) rotate(45deg);
 }
 
@@ -3523,7 +3525,7 @@
 .settings-drawer .custom-select-trigger:focus-visible,
 .custom-select-setting .custom-select-trigger:hover,
 .custom-select-setting .custom-select-trigger:focus-visible {
-  border-color: rgba(183, 255, 138, 0.52);
+  border-color: rgba(59, 130, 246, 0.52);
   background: #050505;
   box-shadow: none;
 }
@@ -3564,7 +3566,7 @@
 .folder-candidate-card.selected,
 .icon-preset-card.selected,
 .featured-wallpaper-card.is-selected {
-  background: rgba(132, 218, 137, 0.12);
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .custom-select-setting-list {
@@ -3613,7 +3615,7 @@
 }
 
 .custom-select-setting-list .custom-select-option[aria-selected="true"] {
-  background: #132012;
+  background: rgba(47, 124, 246, 0.18);
   color: #ffffff;
 }
 
@@ -3655,12 +3657,12 @@
 }
 
 .folder-candidates-toggle.expanded::before {
-  color: #b7ff8a;
+  color: #3b82f6;
   transform: translate(2px, -50%) rotate(45deg);
 }
 
 .icon-advanced-toggle.expanded::before {
-  color: #b7ff8a;
+  color: #3b82f6;
   transform: translate(2px, -50%);
 }
 
@@ -3674,5 +3676,1426 @@
     opacity: 1;
     clip-path: inset(0);
     transform: translateY(0) scaleY(1);
+  }
+}
+
+/* UI refresh final layer: NewTab settings surfaces only. */
+.newtab-dashboard-overlay,
+.settings-drawer,
+.featured-wallpaper-modal,
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast {
+  --bg: var(--ui-bg-page);
+  --text: var(--ui-text-primary);
+  --text-muted: var(--ui-text-secondary);
+  --text-dim: var(--ui-text-tertiary);
+  --line: var(--ui-divider);
+  --ease-standard: var(--ui-motion-standard) var(--ui-ease-standard);
+  --motion-fast: var(--ui-motion-fast);
+  --motion-standard: var(--ui-motion-standard);
+  --motion-surface: var(--ui-motion-surface);
+  --motion-ease-out: var(--ui-ease-standard);
+  --motion-spring: var(--ui-ease-spring);
+}
+
+.newtab-dashboard-overlay {
+  background: rgba(13, 14, 17, 0.5);
+  -webkit-backdrop-filter: blur(16px) saturate(1.04);
+  backdrop-filter: blur(16px) saturate(1.04);
+}
+
+.newtab-dashboard-surface {
+  border-color: var(--ui-divider);
+  border-radius: 0;
+  background: rgba(18, 19, 22, 0.72);
+  box-shadow: var(--ui-shadow-panel);
+  -webkit-backdrop-filter: blur(24px) saturate(1.04);
+  backdrop-filter: blur(24px) saturate(1.04);
+}
+
+.newtab-dashboard-loading-card,
+.newtab-dashboard-fallback-card {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+  color: var(--ui-text-primary);
+  box-shadow: var(--ui-shadow-soft);
+  -webkit-backdrop-filter: blur(18px) saturate(1.04);
+  backdrop-filter: blur(18px) saturate(1.04);
+}
+
+.newtab-dashboard-frame {
+  background: transparent;
+}
+
+.settings-backdrop {
+  background: rgba(13, 14, 17, 0.62);
+  -webkit-backdrop-filter: blur(10px) saturate(1.04);
+  backdrop-filter: blur(10px) saturate(1.04);
+}
+
+.settings-drawer {
+  width: min(388px, 100vw);
+  border-left: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-panel) 0 0 var(--ui-radius-panel);
+  background: linear-gradient(180deg, var(--ui-bg-ambient), var(--ui-bg-page));
+  color: var(--ui-text-primary);
+  box-shadow: -24px 0 72px rgba(0, 0, 0, 0.44);
+}
+
+.settings-drawer-scroll {
+  padding: 30px 18px 34px;
+  background: transparent;
+  scrollbar-color: rgba(243, 245, 247, 0.26) transparent;
+  mask-image: linear-gradient(180deg, transparent 0, #000 18px, #000 calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18px, #000 calc(100% - 24px), transparent 100%);
+}
+
+.settings-drawer-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-drawer-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--ui-radius-pill);
+  background: rgba(243, 245, 247, 0.28);
+  background-clip: padding-box;
+}
+
+.settings-drawer-header {
+  border-bottom-color: var(--ui-divider-subtle);
+}
+
+.settings-drawer-kicker,
+.featured-wallpaper-kicker,
+.newtab-dashboard-fallback-kicker {
+  color: var(--ui-accent);
+}
+
+.settings-drawer-header h1,
+.featured-wallpaper-head h3,
+.newtab-dashboard-fallback-card h2 {
+  color: var(--ui-text-primary);
+}
+
+.settings-drawer-summary,
+.newtab-dashboard-fallback-card p {
+  color: var(--ui-text-secondary);
+}
+
+.settings-close,
+.featured-wallpaper-close,
+.newtab-delete-toast-actions button {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-icon);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+}
+
+.settings-close:hover,
+.settings-close:focus-visible,
+.featured-wallpaper-close:hover,
+.featured-wallpaper-close:focus-visible,
+.newtab-delete-toast-actions button:hover,
+.newtab-delete-toast-actions button:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.settings-save-status,
+.setting-status,
+.setting-cache-status,
+.featured-wallpaper-status {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+}
+
+.settings-save-status[data-state="saved"],
+.setting-status[data-tone="success"],
+.featured-wallpaper-status[data-tone="success"] {
+  border-color: var(--ui-accent-line);
+  color: var(--ui-success);
+}
+
+.settings-save-status[data-state="error"],
+.setting-status[data-tone="error"],
+.featured-wallpaper-status[data-tone="error"] {
+  border-color: rgba(255, 154, 147, 0.42);
+  color: var(--ui-danger);
+}
+
+.settings-group-tabs {
+  gap: 4px;
+  margin: 0 -2px;
+  padding: 12px 0 10px;
+  border-bottom: 0;
+  background: linear-gradient(180deg, rgba(23, 25, 29, 0.98), rgba(23, 25, 29, 0.88));
+}
+
+.settings-group-tabs::after {
+  content: none;
+}
+
+.settings-group-tab {
+  border: 1px solid var(--ui-divider);
+  border-right-width: 1px;
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-text-tertiary);
+}
+
+.settings-group-tab:hover,
+.settings-group-tab:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.settings-group-tab.active,
+.settings-group-tab[aria-pressed="true"],
+.settings-group-tab[aria-selected="true"] {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  color: #bfdbfe;
+}
+
+.settings-section h2 {
+  color: var(--ui-text-secondary);
+}
+
+.settings-card {
+  overflow: hidden;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.setting-row,
+.newtab-module-setting-row,
+.icon-live-preview-panel,
+.folder-source-panel {
+  border-top: 1px solid var(--ui-divider-subtle);
+}
+
+.setting-row {
+  min-height: var(--ui-row-height);
+  padding: 9px 14px;
+  background: transparent;
+  color: var(--ui-text-primary);
+}
+
+.setting-row:hover {
+  background: rgba(243, 245, 247, 0.035);
+}
+
+.setting-label-stack > span,
+.setting-row > span:first-child:not(.setting-label-stack) {
+  color: var(--ui-text-primary);
+}
+
+.setting-label-stack small,
+.folder-source-summary,
+.folder-source-selected-copy span,
+.folder-candidate-copy span,
+.icon-live-preview-summary {
+  color: var(--ui-text-tertiary);
+}
+
+.setting-trust-note,
+.folder-source-selected-item,
+.folder-candidate-card,
+.folder-candidates-toggle,
+.icon-live-preview,
+.icon-live-preview-tile,
+.search-engine-toggle,
+.setting-segmented,
+.featured-wallpaper-state,
+.featured-wallpaper-section-empty,
+.icon-preset-card,
+.icon-advanced-toggle,
+.reveal-panel-body,
+.setting-cache-control {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  box-shadow: none;
+}
+
+.folder-candidate-card:hover,
+.folder-candidate-card:focus-visible,
+.folder-candidates-toggle:hover,
+.folder-candidates-toggle:focus-visible,
+.search-engine-toggle:hover,
+.search-engine-toggle:focus-visible,
+.setting-segmented-button:hover,
+.setting-segmented-button:focus-visible,
+.icon-preset-card:hover,
+.icon-preset-card:focus-visible,
+.icon-advanced-toggle:hover,
+.icon-advanced-toggle:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.folder-candidate-card.selected,
+.search-engine-toggle.active,
+.setting-segmented-button.selected,
+.icon-preset-card.selected {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  color: #bfdbfe;
+}
+
+.folder-source-summary strong,
+.folder-candidate-badge,
+.setting-value {
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-elevated);
+  color: var(--ui-text-secondary);
+}
+
+.setting-switch {
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-elevated);
+}
+
+.setting-switch::before {
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-text-tertiary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+}
+
+.setting-switch-input:checked + .setting-switch,
+.setting-row:has(.setting-switch-input:checked) .setting-switch {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.setting-switch-input:checked + .setting-switch::before,
+.setting-row:has(.setting-switch-input:checked) .setting-switch::before {
+  background: var(--ui-accent-strong);
+}
+
+.setting-switch-input:focus-visible + .setting-switch {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.setting-select,
+.setting-native-select,
+.setting-color,
+.setting-file-button,
+.setting-picker-button,
+.setting-text-input,
+.setting-url-input,
+.setting-link,
+.setting-floating-field,
+.setting-cache-control,
+.bookmark-menu-select,
+.settings-drawer .custom-select-trigger,
+.custom-select-setting .custom-select-trigger {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.setting-file-button:hover,
+.setting-picker-button:hover,
+.setting-link:hover,
+.setting-native-select:hover,
+.setting-floating-field:focus-within,
+.setting-text-input:focus-visible,
+.setting-url-input:focus-visible,
+.bookmark-menu-select:focus-visible,
+.settings-drawer .custom-select-trigger:hover,
+.settings-drawer .custom-select-trigger:focus-visible,
+.custom-select-setting .custom-select-trigger:hover,
+.custom-select-setting .custom-select-trigger:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.setting-native-select:focus-visible,
+.setting-file-button:focus-visible,
+.setting-picker-button:focus-visible,
+.setting-floating-field:focus-within .setting-text-input,
+.setting-floating-field:focus-within .setting-url-input,
+.setting-floating-field .setting-text-input:focus-visible,
+.setting-floating-field .setting-url-input:focus-visible {
+  border-color: var(--ui-focus-ring);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.custom-select-setting-list {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  box-shadow: var(--ui-shadow-menu);
+}
+
+.custom-select-setting-list .custom-select-option {
+  border-radius: var(--ui-radius-small);
+  background: transparent;
+}
+
+.custom-select-setting-list .custom-select-option:hover,
+.custom-select-setting-list .custom-select-option.is-active {
+  background: var(--ui-surface-hover);
+}
+
+.custom-select-setting-list .custom-select-option[aria-selected="true"] {
+  background: var(--ui-surface-selected);
+}
+
+.setting-range::-webkit-slider-runnable-track {
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-elevated);
+}
+
+.setting-range::-webkit-slider-thumb {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-accent-strong);
+}
+
+.setting-range::-moz-range-track,
+.setting-range::-moz-range-progress,
+.setting-range::-moz-range-thumb {
+  border-radius: var(--ui-radius-pill);
+}
+
+.background-featured-credit {
+  color: var(--ui-text-secondary);
+}
+
+.featured-wallpaper-modal {
+  background: rgba(13, 14, 17, 0.72);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.featured-wallpaper-panel {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-panel);
+  background: linear-gradient(180deg, var(--ui-bg-ambient), var(--ui-bg-page));
+  color: var(--ui-text-primary);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.featured-wallpaper-head {
+  border-bottom-color: var(--ui-divider-subtle);
+}
+
+.featured-wallpaper-action {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+}
+
+.featured-wallpaper-action:hover,
+.featured-wallpaper-action:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.featured-wallpaper-card,
+.featured-wallpaper-preview,
+.featured-wallpaper-hover-preview {
+  border-radius: var(--ui-radius-control);
+}
+
+.featured-wallpaper-card {
+  border-color: var(--ui-divider);
+  background: color-mix(in srgb, var(--featured-wallpaper-preview-placeholder, #202329) 76%, var(--ui-surface));
+  box-shadow: none;
+}
+
+.featured-wallpaper-card:hover,
+.featured-wallpaper-card:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+}
+
+.featured-wallpaper-card.is-selected {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+.featured-wallpaper-favorite,
+.featured-wallpaper-resolution {
+  border-color: rgba(243, 245, 247, 0.22);
+  border-radius: var(--ui-radius-small);
+  background: rgba(18, 19, 22, 0.68);
+}
+
+.bookmark-edit-menu,
+.bookmark-add-menu {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-panel);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-menu);
+}
+
+.bookmark-menu-row,
+.bookmark-menu-input,
+.bookmark-menu-action,
+.bookmark-menu-error,
+.bookmark-menu-status {
+  border-radius: var(--ui-radius-control);
+}
+
+.bookmark-menu-input {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+}
+
+.bookmark-menu-action:hover,
+.bookmark-menu-action:focus-visible {
+  background: var(--ui-surface-hover);
+}
+
+.newtab-delete-toast {
+  border-color: var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-menu);
+}
+
+@media (max-width: 620px) {
+  .settings-drawer {
+    border-radius: var(--ui-radius-group) var(--ui-radius-group) 0 0;
+  }
+
+  .featured-wallpaper-panel {
+    border-radius: var(--ui-radius-group);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer :where(*, *::before, *::after),
+  .settings-backdrop,
+  .featured-wallpaper-modal,
+  .featured-wallpaper-panel,
+  .featured-wallpaper-hover-preview,
+  .newtab-dashboard-overlay,
+  .newtab-dashboard-surface {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}
+
+.settings-drawer :where(
+  .settings-card,
+  .setting-row,
+  .settings-group-tab,
+  .settings-close,
+  .setting-trust-note,
+  .settings-save-status,
+  .setting-select,
+  .setting-native-select,
+  .setting-color,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-text-input,
+  .setting-url-input,
+  .setting-link,
+  .setting-floating-field,
+  .setting-segmented,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-source-selected-item,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .folder-candidate-badge,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .icon-live-preview,
+  .icon-live-preview-tile,
+  .module-setting-order-button,
+  .custom-select-trigger,
+  .custom-select-setting-list,
+  .custom-select-option
+),
+.featured-wallpaper-modal :where(
+  .featured-wallpaper-panel,
+  .featured-wallpaper-card,
+  .featured-wallpaper-close,
+  .featured-wallpaper-action,
+  .featured-wallpaper-state,
+  .featured-wallpaper-section-empty,
+  .featured-wallpaper-favorite,
+  .featured-wallpaper-resolution
+),
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast,
+.newtab-delete-toast-actions button {
+  border-radius: var(--ui-radius-control);
+}
+
+.settings-drawer :where(.settings-card),
+.featured-wallpaper-modal :where(.featured-wallpaper-panel),
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast {
+  border-radius: var(--ui-radius-group);
+}
+
+.settings-drawer :where(
+  .settings-card,
+  .setting-select,
+  .setting-native-select,
+  .setting-color,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-text-input,
+  .setting-url-input,
+  .setting-link,
+  .setting-floating-field,
+  .setting-segmented,
+  .search-engine-toggle,
+  .folder-source-selected-item,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .custom-select-trigger,
+  .custom-select-setting-list
+) {
+  background: var(--ui-surface-raised);
+}
+
+/* UI refresh final closure: catch dynamically rendered NewTab setting controls. */
+.settings-drawer :where(
+  .settings-card,
+  .setting-row:hover,
+  .settings-group-tab,
+  .settings-close,
+  .settings-save-status,
+  .setting-status,
+  .setting-cache-status,
+  .setting-trust-note,
+  .setting-select,
+  .setting-native-select,
+  .setting-color,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-text-input,
+  .setting-url-input,
+  .setting-link,
+  .setting-floating-field,
+  .setting-segmented,
+  .setting-segmented-button,
+  .setting-switch,
+  .setting-switch::before,
+  .setting-value,
+  .setting-cache-control,
+  .search-engine-toggle,
+  .folder-source-panel,
+  .folder-source-selected-item,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .folder-candidate-badge,
+  .icon-live-preview-panel,
+  .icon-live-preview,
+  .icon-live-preview-tile,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .reveal-panel-body,
+  .module-setting-order-button,
+  .custom-select-trigger,
+  .custom-select-setting-list,
+  .custom-select-option,
+  input[type="text"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select
+),
+.featured-wallpaper-modal :where(
+  .featured-wallpaper-panel,
+  .featured-wallpaper-close,
+  .featured-wallpaper-action,
+  .featured-wallpaper-status,
+  .featured-wallpaper-state,
+  .featured-wallpaper-section-empty,
+  .featured-wallpaper-card,
+  .featured-wallpaper-preview,
+  .featured-wallpaper-hover-preview,
+  .featured-wallpaper-favorite,
+  .featured-wallpaper-resolution
+),
+.bookmark-edit-menu :where(
+  .bookmark-menu-row,
+  .bookmark-menu-input,
+  .bookmark-menu-action,
+  .bookmark-menu-error,
+  .bookmark-menu-status
+),
+.bookmark-add-menu :where(
+  .bookmark-menu-row,
+  .bookmark-menu-input,
+  .bookmark-menu-action,
+  .bookmark-menu-error,
+  .bookmark-menu-status
+) {
+  border-radius: var(--ui-radius-control);
+}
+
+.settings-drawer :where(.settings-card),
+.featured-wallpaper-modal :where(.featured-wallpaper-panel),
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast {
+  border-radius: var(--ui-radius-group);
+}
+
+.settings-drawer :where(.setting-switch, .setting-switch::before, .setting-value, .settings-save-status, .setting-status, .setting-cache-status),
+.featured-wallpaper-modal :where(.featured-wallpaper-status, .featured-wallpaper-resolution) {
+  border-radius: var(--ui-radius-pill);
+}
+
+/* Cloudflare dark palette closure for NewTab settings surfaces only. */
+.newtab-dashboard-overlay,
+.settings-backdrop,
+.featured-wallpaper-modal {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.newtab-dashboard-surface,
+.settings-drawer,
+.featured-wallpaper-panel,
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast {
+  border-color: var(--ui-divider);
+  background: var(--ui-bg-page);
+  color: var(--ui-text-primary);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.settings-group-tabs {
+  background: var(--ui-bg-page);
+  background-image: none;
+}
+
+.settings-card,
+.featured-wallpaper-card,
+.featured-wallpaper-state,
+.featured-wallpaper-section-empty,
+.newtab-dashboard-loading-card,
+.newtab-dashboard-fallback-card,
+.bookmark-menu-row {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.settings-drawer :where(
+  .settings-group-tab,
+  .settings-close,
+  .settings-save-status,
+  .setting-status,
+  .setting-cache-status,
+  .setting-trust-note,
+  .setting-select,
+  .setting-native-select,
+  .setting-color,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-text-input,
+  .setting-url-input,
+  .setting-link,
+  .setting-floating-field,
+  .setting-segmented,
+  .setting-segmented-button,
+  .setting-switch,
+  .setting-value,
+  .setting-cache-control,
+  .search-engine-toggle,
+  .folder-source-selected-item,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .folder-candidate-badge,
+  .icon-live-preview,
+  .icon-live-preview-tile,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .reveal-panel-body,
+  .module-setting-order-button,
+  .custom-select-trigger,
+  .custom-select-setting-list,
+  .custom-select-option,
+  input[type="text"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select
+),
+.featured-wallpaper-modal :where(
+  .featured-wallpaper-close,
+  .featured-wallpaper-action,
+  .featured-wallpaper-status,
+  .featured-wallpaper-favorite,
+  .featured-wallpaper-resolution
+),
+.bookmark-edit-menu :where(.bookmark-menu-input, .bookmark-menu-action, .bookmark-menu-error, .bookmark-menu-status),
+.bookmark-add-menu :where(.bookmark-menu-input, .bookmark-menu-action, .bookmark-menu-error, .bookmark-menu-status) {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.settings-drawer :where(
+  .settings-group-tab,
+  .settings-close,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-link,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .custom-select-trigger,
+  .custom-select-option
+):hover,
+.settings-drawer :where(
+  .settings-group-tab,
+  .settings-close,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-link,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .custom-select-trigger,
+  .custom-select-option
+):focus-visible,
+.featured-wallpaper-card:hover,
+.featured-wallpaper-card:focus-visible,
+.featured-wallpaper-action:hover,
+.featured-wallpaper-action:focus-visible,
+.bookmark-menu-action:hover,
+.bookmark-menu-action:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.settings-group-tab.active,
+.settings-group-tab[aria-pressed="true"],
+.settings-group-tab[aria-selected="true"],
+.folder-candidate-card.selected,
+.search-engine-toggle.active,
+.setting-segmented-button.selected,
+.icon-preset-card.selected,
+.featured-wallpaper-card.is-selected,
+.custom-select-setting-list .custom-select-option[aria-selected="true"] {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  color: #bfdbfe;
+}
+
+.setting-switch-input:checked + .setting-switch,
+.setting-row:has(.setting-switch-input:checked) .setting-switch,
+.module-setting-switch-label:has(.setting-switch-input:checked) .setting-switch {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.setting-switch-input:checked + .setting-switch::before,
+.setting-row:has(.setting-switch-input:checked) .setting-switch::before,
+.module-setting-switch-label:has(.setting-switch-input:checked) .setting-switch::before {
+  background: var(--ui-accent-strong);
+}
+
+.setting-native-select:focus-visible,
+.setting-file-button:focus-visible,
+.setting-picker-button:focus-visible,
+.setting-floating-field:focus-within .setting-text-input,
+.setting-floating-field:focus-within .setting-url-input,
+.setting-floating-field .setting-text-input:focus-visible,
+.setting-floating-field .setting-url-input:focus-visible,
+.settings-drawer .custom-select-trigger:focus-visible,
+.custom-select-setting .custom-select-trigger:focus-visible {
+  border-color: var(--ui-focus-ring);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft);
+}
+
+.setting-range::-webkit-slider-runnable-track {
+  background:
+    linear-gradient(
+      90deg,
+      var(--ui-accent-strong) 0 var(--range-progress),
+      var(--ui-surface-elevated) var(--range-progress) 100%
+    );
+}
+
+.setting-range::-moz-range-progress {
+  background: var(--ui-accent-strong);
+}
+
+/* Production polish closure: NewTab settings drawer and popovers override legacy square pass. */
+.newtab-dashboard-overlay,
+.settings-backdrop,
+.featured-wallpaper-modal {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.newtab-dashboard-surface,
+.settings-drawer,
+.featured-wallpaper-panel,
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast {
+  border-color: var(--ui-divider);
+  background: var(--ui-bg-main);
+  color: var(--ui-text-primary);
+  box-shadow: var(--ui-shadow-panel);
+}
+
+.settings-drawer {
+  overflow: hidden;
+  border-radius: var(--ui-radius-panel) 0 0 var(--ui-radius-panel);
+  background: var(--ui-bg-main);
+}
+
+.settings-drawer-scroll {
+  background: transparent;
+  scrollbar-color: rgba(245, 245, 247, 0.28) transparent;
+}
+
+.settings-drawer-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-drawer-scroll::-webkit-scrollbar-thumb {
+  border-color: transparent;
+  border-radius: var(--ui-radius-pill);
+  background: rgba(245, 245, 247, 0.28);
+  background-clip: padding-box;
+}
+
+.settings-drawer :where(button, input, select, textarea),
+.featured-wallpaper-modal :where(button, input, select, textarea),
+.bookmark-edit-menu :where(button, input, select, textarea),
+.bookmark-add-menu :where(button, input, select, textarea),
+.newtab-delete-toast :where(button) {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+}
+
+.settings-drawer :where(
+  button,
+  .settings-close,
+  .settings-group-tab,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-link,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidates-toggle,
+  .module-setting-order-button,
+  .custom-select-trigger
+),
+.featured-wallpaper-modal :where(button, .featured-wallpaper-action, .featured-wallpaper-close),
+.bookmark-edit-menu :where(button, .bookmark-menu-action),
+.bookmark-add-menu :where(button, .bookmark-menu-action),
+.newtab-delete-toast-actions button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  line-height: 1;
+  text-align: center;
+}
+
+.settings-drawer :where(
+  .settings-card,
+  .setting-row:hover,
+  .settings-group-tab,
+  .settings-close,
+  .setting-trust-note,
+  .settings-save-status,
+  .setting-status,
+  .setting-cache-status,
+  .setting-select,
+  .setting-native-select,
+  .setting-color,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-text-input,
+  .setting-url-input,
+  .setting-link,
+  .setting-floating-field,
+  .setting-segmented,
+  .setting-segmented-button,
+  .setting-switch,
+  .setting-switch::before,
+  .setting-value,
+  .setting-cache-control,
+  .search-engine-toggle,
+  .folder-source-panel,
+  .folder-source-selected-item,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .folder-candidate-badge,
+  .icon-live-preview-panel,
+  .icon-live-preview,
+  .icon-live-preview-tile,
+  .icon-live-preview-shell,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .reveal-panel-body,
+  .module-setting-order-button,
+  .custom-select-trigger,
+  .custom-select-trigger-arrow,
+  .custom-select-setting-list,
+  .custom-select-option,
+  input[type="text"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select
+),
+.featured-wallpaper-modal :where(
+  .featured-wallpaper-panel,
+  .featured-wallpaper-close,
+  .featured-wallpaper-action,
+  .featured-wallpaper-status,
+  .featured-wallpaper-state,
+  .featured-wallpaper-section-empty,
+  .featured-wallpaper-card,
+  .featured-wallpaper-preview,
+  .featured-wallpaper-hover-preview,
+  .featured-wallpaper-favorite,
+  .featured-wallpaper-resolution
+),
+.bookmark-edit-menu :where(
+  .bookmark-menu-row,
+  .bookmark-menu-input,
+  .bookmark-menu-action,
+  .bookmark-menu-error,
+  .bookmark-menu-status,
+  .custom-select-trigger,
+  .custom-select-list,
+  .custom-select-option
+),
+.bookmark-add-menu :where(
+  .bookmark-menu-row,
+  .bookmark-menu-input,
+  .bookmark-menu-action,
+  .bookmark-menu-error,
+  .bookmark-menu-status,
+  .custom-select-trigger,
+  .custom-select-list,
+  .custom-select-option
+),
+.newtab-delete-toast,
+.newtab-delete-toast-actions button {
+  border-radius: var(--ui-radius-control);
+}
+
+.settings-drawer :where(.settings-card),
+.featured-wallpaper-modal :where(.featured-wallpaper-panel),
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast {
+  border-radius: var(--ui-radius-group);
+}
+
+.settings-drawer :where(.setting-switch, .setting-switch::before, .setting-value, .settings-save-status, .setting-status, .setting-cache-status),
+.featured-wallpaper-modal :where(.featured-wallpaper-status, .featured-wallpaper-resolution) {
+  border-radius: var(--ui-radius-pill);
+}
+
+.settings-card,
+.featured-wallpaper-card,
+.featured-wallpaper-state,
+.featured-wallpaper-section-empty,
+.newtab-dashboard-loading-card,
+.newtab-dashboard-fallback-card,
+.bookmark-menu-row {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface);
+  box-shadow: none;
+}
+
+.settings-drawer :where(
+  .settings-group-tab,
+  .settings-close,
+  .settings-save-status,
+  .setting-status,
+  .setting-cache-status,
+  .setting-trust-note,
+  .setting-select,
+  .setting-native-select,
+  .setting-color,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-text-input,
+  .setting-url-input,
+  .setting-link,
+  .setting-floating-field,
+  .setting-segmented,
+  .setting-segmented-button,
+  .setting-switch,
+  .setting-value,
+  .setting-cache-control,
+  .search-engine-toggle,
+  .folder-source-selected-item,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .folder-candidate-badge,
+  .icon-live-preview,
+  .icon-live-preview-tile,
+  .icon-live-preview-shell,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .reveal-panel-body,
+  .module-setting-order-button,
+  .custom-select-trigger,
+  .custom-select-setting-list,
+  .custom-select-option,
+  input[type="text"],
+  input[type="url"],
+  input[type="search"],
+  textarea,
+  select
+),
+.featured-wallpaper-modal :where(
+  .featured-wallpaper-close,
+  .featured-wallpaper-action,
+  .featured-wallpaper-status,
+  .featured-wallpaper-favorite,
+  .featured-wallpaper-resolution
+),
+.bookmark-edit-menu :where(.bookmark-menu-input, .bookmark-menu-action, .bookmark-menu-error, .bookmark-menu-status),
+.bookmark-add-menu :where(.bookmark-menu-input, .bookmark-menu-action, .bookmark-menu-error, .bookmark-menu-status),
+.newtab-delete-toast-actions button {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.settings-drawer :where(
+  .settings-group-tab,
+  .settings-close,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-link,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .custom-select-trigger,
+  .custom-select-option
+):hover,
+.settings-drawer :where(
+  .settings-group-tab,
+  .settings-close,
+  .setting-file-button,
+  .setting-picker-button,
+  .setting-link,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidate-card,
+  .folder-candidates-toggle,
+  .icon-preset-card,
+  .icon-advanced-toggle,
+  .custom-select-trigger,
+  .custom-select-option
+):focus-visible,
+.featured-wallpaper-card:hover,
+.featured-wallpaper-card:focus-visible,
+.featured-wallpaper-action:hover,
+.featured-wallpaper-action:focus-visible,
+.bookmark-menu-action:hover,
+.bookmark-menu-action:focus-visible,
+.newtab-delete-toast-actions button:hover,
+.newtab-delete-toast-actions button:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+}
+
+.settings-group-tabs::after {
+  content: none;
+}
+
+.settings-group-tabs {
+  border: 0;
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+}
+
+.settings-group-tab {
+  position: relative;
+  z-index: 0;
+}
+
+.settings-group-tab.active,
+.settings-group-tab[aria-pressed="true"],
+.settings-group-tab[aria-selected="true"] {
+  z-index: 1;
+}
+
+.settings-group-tab.active + .settings-group-tab,
+.settings-group-tab[aria-pressed="true"] + .settings-group-tab,
+.settings-group-tab[aria-selected="true"] + .settings-group-tab {
+  border-left-width: 1px;
+}
+
+.settings-group-tab.active,
+.settings-group-tab[aria-pressed="true"],
+.settings-group-tab[aria-selected="true"],
+.folder-candidate-card.selected,
+.search-engine-toggle.active,
+.setting-segmented-button.selected,
+.icon-preset-card.selected,
+.featured-wallpaper-card.is-selected,
+.custom-select-setting-list .custom-select-option[aria-selected="true"] {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+  color: var(--ui-accent-text);
+}
+
+.settings-card {
+  overflow: visible;
+  border: 0;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.setting-switch {
+  width: 52px;
+  height: 28px;
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  transition:
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    border-color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.setting-switch::before {
+  left: 4px;
+  bottom: 4px;
+  width: 18px;
+  height: 18px;
+  background: var(--ui-text-tertiary);
+  transition:
+    transform var(--ui-motion-standard) var(--ui-ease-spring),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.setting-switch-input:checked + .setting-switch,
+.setting-row:has(.setting-switch-input:checked) .setting-switch,
+.module-setting-switch-label:has(.setting-switch-input:checked) .setting-switch {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.setting-switch-input:checked + .setting-switch::before,
+.setting-row:has(.setting-switch-input:checked) .setting-switch::before,
+.module-setting-switch-label:has(.setting-switch-input:checked) .setting-switch::before {
+  background: var(--ui-accent-strong);
+  transform: translateX(24px);
+}
+
+.setting-native-select:focus-visible,
+.settings-drawer select:focus-visible,
+.setting-file-button:focus-visible,
+.setting-picker-button:focus-visible,
+.setting-floating-field:focus-within .setting-text-input,
+.setting-floating-field:focus-within .setting-url-input,
+.setting-floating-field .setting-text-input:focus-visible,
+.setting-floating-field .setting-url-input:focus-visible,
+.settings-drawer .custom-select-trigger:focus-visible,
+.custom-select-setting .custom-select-trigger:focus-visible {
+  border-color: var(--ui-focus-ring);
+  background: var(--ui-surface-hover);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft);
+  outline: none;
+}
+
+.setting-range::-webkit-slider-runnable-track {
+  border-radius: var(--ui-radius-pill);
+  background:
+    linear-gradient(
+      90deg,
+      var(--ui-accent-strong) 0 var(--range-progress),
+      var(--ui-surface-elevated) var(--range-progress) 100%
+    );
+}
+
+.setting-range::-webkit-slider-thumb {
+  border-color: var(--ui-accent-line);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-accent-strong);
+}
+
+.setting-range::-moz-range-track,
+.setting-range::-moz-range-progress,
+.setting-range::-moz-range-thumb {
+  border-radius: var(--ui-radius-pill);
+}
+
+.setting-range::-moz-range-progress {
+  background: var(--ui-accent-strong);
+}
+
+.settings-drawer .custom-select-trigger,
+.custom-select-setting .custom-select-trigger {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  column-gap: 8px;
+  justify-content: stretch;
+  padding: 0 12px;
+}
+
+.settings-drawer .custom-select-trigger-label,
+.custom-select-setting .custom-select-trigger-label {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.settings-drawer .custom-select-trigger-arrow,
+.custom-select-setting .custom-select-trigger-arrow {
+  position: relative;
+  left: auto;
+  top: auto;
+  bottom: auto;
+  grid-column: 1;
+  grid-row: 1;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--ui-radius-pill);
+  background: transparent;
+}
+
+.settings-drawer .custom-select-trigger-arrow::before,
+.custom-select-setting .custom-select-trigger-arrow::before {
+  border-color: currentColor;
+}
+
+.settings-drawer .folder-candidate-card {
+  display: grid;
+  min-height: 56px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: start;
+  justify-content: normal;
+  gap: 8px;
+  padding: 8px 9px 8px 10px;
+  line-height: normal;
+  text-align: left;
+  white-space: normal;
+}
+
+.settings-drawer .folder-candidate-copy {
+  display: grid;
+  min-width: 0;
+  grid-column: 1;
+  gap: 2px;
+  text-align: left;
+}
+
+.settings-drawer .folder-candidate-copy strong,
+.settings-drawer .folder-candidate-copy span {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-drawer .folder-candidate-badge {
+  grid-column: 2;
+  justify-self: end;
+  align-self: center;
+}
+
+.settings-drawer .folder-candidates-panel,
+.settings-drawer .reveal-panel-body,
+.settings-drawer .folder-candidate-list {
+  border: 0;
+  border-color: transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.settings-drawer .folder-candidates-panel {
+  padding: 0;
+}
+
+.settings-drawer .reveal-panel-body {
+  overflow: visible;
+}
+
+.settings-drawer .icon-reset-defaults {
+  justify-self: center;
+  min-height: 30px;
+  margin: 8px auto 4px;
+  padding: 0 12px;
+}
+
+.folder-candidate-card.selected .folder-candidate-badge {
+  background: var(--ui-accent-soft);
+  color: var(--ui-accent-text);
+}
+
+.folder-candidates-toggle.expanded::before,
+.icon-advanced-toggle.expanded::before,
+.settings-drawer .custom-select[data-open="true"] .custom-select-trigger-arrow::before,
+.custom-select[data-open="true"] .custom-select-trigger-arrow::before {
+  color: var(--ui-accent);
+}
+
+.featured-wallpaper-resolution {
+  padding: 5px 8px;
+  line-height: 1.2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer :where(*, *::before, *::after),
+  .settings-backdrop,
+  .featured-wallpaper-modal,
+  .featured-wallpaper-panel,
+  .featured-wallpaper-hover-preview,
+  .newtab-dashboard-overlay,
+  .newtab-dashboard-surface,
+  .bookmark-edit-menu,
+  .bookmark-add-menu,
+  .newtab-delete-toast {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
   }
 }

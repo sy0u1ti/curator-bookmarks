@@ -1,0 +1,384 @@
+:root {
+  color-scheme: dark;
+  --font-sans: "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+
+  --ui-bg-page: #0b0b0c;
+  --ui-bg-main: #0f0f0f;
+  --ui-bg-ambient: #101112;
+  --ui-surface: #151516;
+  --ui-surface-raised: #1a1b1d;
+  --ui-surface-elevated: #202124;
+  --ui-surface-hover: #242529;
+  --ui-surface-pressed: #2a2c30;
+  --ui-surface-selected: #1b251d;
+  --ui-surface-danger: rgba(255, 123, 114, 0.12);
+
+  --ui-text: #f4f4f5;
+  --ui-text-primary: #f4f4f5;
+  --ui-text-secondary: rgba(244, 244, 245, 0.72);
+  --ui-text-tertiary: rgba(244, 244, 245, 0.52);
+  --ui-text-disabled: rgba(244, 244, 245, 0.34);
+  --ui-text-inverse: #101510;
+
+  --ui-accent: #9fcea1;
+  --ui-accent-strong: #add8ad;
+  --ui-accent-text: #d8f4d9;
+  --ui-accent-soft: rgba(159, 206, 161, 0.16);
+  --ui-accent-line: rgba(159, 206, 161, 0.48);
+  --ui-danger: #ff7b72;
+  --ui-danger-soft: rgba(255, 123, 114, 0.14);
+  --ui-warning: #f8d66d;
+  --ui-success: #3dd68c;
+
+  --ui-divider-subtle: rgba(245, 245, 247, 0.07);
+  --ui-divider: rgba(245, 245, 247, 0.12);
+  --ui-divider-strong: rgba(245, 245, 247, 0.2);
+  --ui-focus-ring: rgba(159, 206, 161, 0.58);
+
+  --ui-radius-page-group: 24px;
+  --ui-radius-panel: 28px;
+  --ui-radius-group: 20px;
+  --ui-radius-control: 14px;
+  --ui-radius-small: 10px;
+  --ui-radius-icon: 11px;
+  --ui-radius-pill: 999px;
+
+  --ui-shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.035);
+  --ui-shadow-panel: 0 26px 70px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --ui-shadow-menu: 0 18px 54px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+
+  --ui-motion-fast: 140ms;
+  --ui-motion-standard: 200ms;
+  --ui-motion-surface: 280ms;
+  --ui-ease-standard: cubic-bezier(0.22, 0.72, 0.18, 1);
+  --ui-ease-spring: cubic-bezier(0.2, 0.88, 0.22, 1);
+  --ui-press-scale: 0.985;
+  --ui-hover-lift: -1px;
+  --ui-sheet-offset: 12px;
+
+  --ui-row-height: 52px;
+  --ui-row-height-compact: 40px;
+  --ui-group-padding: 12px;
+  --ui-toolbar-height: 46px;
+  --ui-icon-size: 32px;
+}
+
+.ui-surface-group,
+.surface-group {
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow-soft);
+}
+
+.ui-list-group,
+.list-group {
+  overflow: hidden;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: var(--ui-surface);
+}
+
+.ui-list-row,
+.list-row {
+  display: grid;
+  min-height: var(--ui-row-height);
+  grid-template-columns: var(--ui-icon-size) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--ui-text-primary);
+  transition:
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-list-row + .ui-list-row,
+.list-row + .list-row {
+  border-top: 1px solid var(--ui-divider-subtle);
+}
+
+.ui-list-row:hover,
+.ui-list-row:focus-visible,
+.list-row:hover,
+.list-row:focus-visible {
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-hover);
+  outline: none;
+}
+
+.ui-icon-button,
+.icon-button-primitive {
+  display: inline-grid;
+  width: var(--ui-icon-size);
+  height: var(--ui-icon-size);
+  place-items: center;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-icon);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  transition:
+    transform var(--ui-motion-fast) var(--ui-ease-standard),
+    border-color var(--ui-motion-standard) var(--ui-ease-standard),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-text-button,
+.ui-primary-button,
+.text-button-primitive,
+.primary-button-primitive {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-weight: 680;
+  transition:
+    transform var(--ui-motion-fast) var(--ui-ease-standard),
+    border-color var(--ui-motion-standard) var(--ui-ease-standard),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-primary-button,
+.primary-button-primitive {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-accent-strong);
+  color: var(--ui-text-inverse);
+}
+
+.ui-icon-button:hover,
+.ui-icon-button:focus-visible,
+.icon-button-primitive:hover,
+.icon-button-primitive:focus-visible,
+.ui-text-button:hover,
+.ui-text-button:focus-visible,
+.ui-primary-button:hover,
+.ui-primary-button:focus-visible,
+.text-button-primitive:hover,
+.text-button-primitive:focus-visible,
+.primary-button-primitive:hover,
+.primary-button-primitive:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+  outline: none;
+}
+
+.ui-primary-button:hover,
+.ui-primary-button:focus-visible,
+.primary-button-primitive:hover,
+.primary-button-primitive:focus-visible {
+  border-color: var(--ui-accent-line);
+  background: color-mix(in srgb, var(--ui-accent-strong) 88%, #ffffff);
+  color: var(--ui-text-inverse);
+}
+
+.ui-icon-button:active,
+.icon-button-primitive:active,
+.ui-text-button:active,
+.ui-primary-button:active,
+.text-button-primitive:active,
+.primary-button-primitive:active {
+  transform: scale(var(--ui-press-scale));
+}
+
+.ui-search-field,
+.search-field-primitive {
+  display: grid;
+  min-height: var(--ui-toolbar-height);
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+}
+
+.ui-input-field,
+.field-primitive,
+.ui-textarea-field,
+.textarea-primitive {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  font: inherit;
+  line-height: 1.45;
+  transition:
+    border-color var(--ui-motion-standard) var(--ui-ease-standard),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    box-shadow var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-input-field:focus,
+.ui-input-field:focus-visible,
+.field-primitive:focus,
+.field-primitive:focus-visible,
+.ui-textarea-field:focus,
+.ui-textarea-field:focus-visible,
+.textarea-primitive:focus,
+.textarea-primitive:focus-visible {
+  border-color: var(--ui-focus-ring);
+  background: var(--ui-surface-hover);
+  box-shadow: 0 0 0 3px var(--ui-accent-soft);
+  outline: none;
+}
+
+.ui-switch,
+.switch-primitive {
+  position: relative;
+  display: inline-flex;
+  width: 52px;
+  height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-raised);
+  transition:
+    border-color var(--ui-motion-standard) var(--ui-ease-standard),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-switch::before,
+.switch-primitive::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-text-tertiary);
+  transition:
+    transform var(--ui-motion-standard) var(--ui-ease-spring),
+    background-color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-switch[aria-checked="true"],
+.switch-primitive[aria-checked="true"] {
+  border-color: var(--ui-accent-line);
+  background: var(--ui-surface-selected);
+}
+
+.ui-switch[aria-checked="true"]::before,
+.switch-primitive[aria-checked="true"]::before {
+  background: var(--ui-accent-strong);
+  transform: translateX(24px);
+}
+
+.ui-segmented-control,
+.segmented-control-primitive {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-bg-ambient);
+}
+
+.ui-popover-menu,
+.popover-menu-primitive,
+.ui-modal-sheet,
+.modal-sheet-primitive {
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-panel);
+  background: var(--ui-surface-raised);
+  box-shadow: var(--ui-shadow-menu);
+}
+
+.ui-menu-item,
+.menu-item-primitive,
+.ui-popover-row,
+.popover-row-primitive {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-secondary);
+  transition:
+    background-color var(--ui-motion-standard) var(--ui-ease-standard),
+    color var(--ui-motion-standard) var(--ui-ease-standard);
+}
+
+.ui-menu-item:hover,
+.ui-menu-item:focus-visible,
+.menu-item-primitive:hover,
+.menu-item-primitive:focus-visible,
+.ui-popover-row:hover,
+.ui-popover-row:focus-visible,
+.popover-row-primitive:hover,
+.popover-row-primitive:focus-visible {
+  background: var(--ui-surface-hover);
+  color: var(--ui-text-primary);
+  outline: none;
+}
+
+.ui-status-pill,
+.status-pill-primitive {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-pill);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 680;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ui-motion-fast: 1ms;
+    --ui-motion-standard: 1ms;
+    --ui-motion-surface: 1ms;
+    --ui-press-scale: 1;
+    --ui-hover-lift: 0px;
+    --ui-sheet-offset: 0px;
+  }
+
+  .ui-surface-group,
+  .surface-group,
+  .ui-list-row,
+  .list-row,
+  .ui-icon-button,
+  .icon-button-primitive,
+  .ui-text-button,
+  .ui-primary-button,
+  .text-button-primitive,
+  .primary-button-primitive,
+  .ui-popover-menu,
+  .popover-menu-primitive,
+  .ui-modal-sheet,
+  .modal-sheet-primitive,
+  .ui-input-field,
+  .field-primitive,
+  .ui-textarea-field,
+  .textarea-primitive,
+  .ui-switch,
+  .switch-primitive,
+  .ui-menu-item,
+  .menu-item-primitive,
+  .ui-popover-row,
+  .popover-row-primitive {
+    animation: none !important;
+    transition-duration: 1ms !important;
+    transform: none !important;
+  }
+}

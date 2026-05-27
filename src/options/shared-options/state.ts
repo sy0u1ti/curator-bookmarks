@@ -252,6 +252,7 @@ export const aiNamingState = {
   abortController: null as AbortController | null,
   applying: false,
   requestingPermission: false,
+  pendingFeatureSwitch: '',
   permissionGranted: false,
   remoteParserPermissionGranted: false,
   runStartedAt: 0,

@@ -513,7 +513,7 @@ export function getDashboardCardActionLabel(
 export function renderDashboardIcon(icon: 'open' | 'copy' | 'tag' | 'speed-dial' | 'move' | 'delete'): string {
   const pathByIcon: Record<typeof icon, string> = {
     open: '<path d="M7 17 17 7"></path><path d="M9 7h8v8"></path>',
-    copy: '<rect x="8" y="8" width="9" height="9" rx="2"></rect><path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path>',
+    copy: '<rect x="9" y="9" width="9" height="9" rx="2"></rect><path d="M6 15H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path>',
     tag: '<path d="M20 12 12 20 4 12V4h8l8 8Z"></path><path d="M8 8h.01"></path>',
     'speed-dial': '<path d="M12 3v5"></path><path d="m16.6 5.4-3.5 3.5"></path><path d="M21 12h-5"></path><path d="M18.4 18.4 14.8 15"></path><path d="M5.6 18.4 9.2 15"></path><path d="M3 12h5"></path><path d="m7.4 5.4 3.5 3.5"></path><circle cx="12" cy="12" r="3"></circle>',
     move: '<path d="M12 3v18"></path><path d="m8 7 4-4 4 4"></path><path d="m8 17 4 4 4-4"></path><path d="M3 12h18"></path><path d="m7 8-4 4 4 4"></path><path d="m17 8 4 4-4 4"></path>',
