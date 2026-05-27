@@ -15,7 +15,7 @@ release/
 .env.local
 .codex
 .vscode/
-
+Agent.md
 # Local assistant/tooling artifacts
 .agents/
 .claude/
