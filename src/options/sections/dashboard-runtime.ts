@@ -17,7 +17,6 @@ import { displayUrl, normalizeText } from '../../shared/text.js'
 import { moveBookmark } from '../../shared/bookmarks-api.js'
 import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { createMemoryCache, type MemoryCache } from '../../shared/cache.js'
-import { renderDotMatrixLoader } from '../../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../../shared/motion.js'
 import {
   buildSearchTextQuery,
@@ -62,7 +61,33 @@ import {
 } from '../../shared/dashboard-query.js'
 import { aiNamingState, availabilityState, contentSnapshotState, dashboardState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeAttr, escapeHtml } from '../shared-options/html.js'
+import {
+  appendDashboardVirtualWindowIslandNodes,
+  createDashboardCardIslandElement,
+  createDashboardTagPopoverIslandElement,
+  createDashboardVirtualWindowIslandElement,
+  mountDashboardDragOverlayIsland,
+  prependDashboardVirtualWindowIslandNodes,
+  removeDashboardVirtualWindowIslandEdgeNodes,
+  renderDashboardCardListIsland,
+  renderDashboardBreadcrumbsIsland,
+  renderDashboardDragPreviewIsland,
+  renderDashboardEmptyStateIsland,
+  renderDashboardFolderDropGridIsland,
+  renderDashboardFolderSidebarIsland,
+  renderDashboardLoadingLabelIsland,
+  renderDashboardSearchChipsIsland,
+  renderDashboardTitleIsland,
+  renderDashboardVirtualWindowShellIsland,
+  replaceDashboardVirtualWindowIslandNodes,
+  type DashboardCardFaviconViewModel,
+  type DashboardCardViewModel,
+  type DashboardBreadcrumbSegmentViewModel,
+  type DashboardFolderDropTargetViewModel,
+  type DashboardFolderSidebarItemViewModel,
+  type DashboardLoadingLabelState,
+  type DashboardSearchChipViewModel
+} from '../components/DashboardRuntimeIslands.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
 import type { NaturalSearchPlan, NaturalSearchResultSet } from '../../popup/natural-search.js'
 import {
@@ -208,7 +233,7 @@ interface DashboardRenderCache {
   folderBookmarkCounts: Map<string, number> | null
   sidebarModel: DashboardModel | null
   sidebarSelectedFolderId: string
-  sidebarMarkup: string
+  sidebarItems: DashboardFolderSidebarItemViewModel[] | null
   sidebarTotalFolders: number
 }
 
@@ -391,7 +416,7 @@ const dashboardRenderCache: DashboardRenderCache = {
   folderBookmarkCounts: null,
   sidebarModel: null,
   sidebarSelectedFolderId: '',
-  sidebarMarkup: '',
+  sidebarItems: null,
   sidebarTotalFolders: -1
 }
 
@@ -508,86 +533,6 @@ export function getDashboardCardActionLabel(
   const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
 
   return `${action}：${safeTitle || '未命名书签'}`
-}
-
-export function renderDashboardIcon(icon: 'open' | 'copy' | 'tag' | 'speed-dial' | 'move' | 'delete'): string {
-  const pathByIcon: Record<typeof icon, string> = {
-    open: '<path d="M7 17 17 7"></path><path d="M9 7h8v8"></path>',
-    copy: '<rect x="9" y="9" width="9" height="9" rx="2"></rect><path d="M6 15H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1"></path>',
-    tag: '<path d="M20 12 12 20 4 12V4h8l8 8Z"></path><path d="M8 8h.01"></path>',
-    'speed-dial': '<path d="M12 3v5"></path><path d="m16.6 5.4-3.5 3.5"></path><path d="M21 12h-5"></path><path d="M18.4 18.4 14.8 15"></path><path d="M5.6 18.4 9.2 15"></path><path d="M3 12h5"></path><path d="m7.4 5.4 3.5 3.5"></path><circle cx="12" cy="12" r="3"></circle>',
-    move: '<path d="M12 3v18"></path><path d="m8 7 4-4 4 4"></path><path d="m8 17 4 4 4-4"></path><path d="M3 12h18"></path><path d="m7 8-4 4 4 4"></path><path d="m17 8 4 4-4 4"></path>',
-    delete: '<path d="M4 7h16"></path><path d="M10 11v6"></path><path d="M14 11v6"></path><path d="M6 7l1 13h10l1-13"></path><path d="M9 7V4h6v3"></path>'
-  }
-
-  return `<svg aria-hidden="true" viewBox="0 0 24 24">${pathByIcon[icon]}</svg>`
-}
-
-function renderDashboardMoreIcon(): string {
-  return '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg>'
-}
-
-function renderDashboardCardAction({
-  as = 'button',
-  icon,
-  label,
-  tooltip,
-  className = '',
-  attrs = '',
-  text,
-  disabled = false
-}: {
-  as?: 'a' | 'button'
-  icon: Parameters<typeof renderDashboardIcon>[0]
-  label: string
-  tooltip: string
-  className?: string
-  attrs?: string
-  text: string
-  disabled?: boolean
-}): string {
-  const safeTooltip = escapeAttr(tooltip)
-  const safeLabel = escapeAttr(label)
-  const safeText = escapeHtml(text)
-  const classes = ['dashboard-icon-action', className].filter(Boolean).join(' ')
-  const disabledAttr = disabled ? ' disabled' : ''
-  const content = `
-    ${renderDashboardIcon(icon)}
-    <span class="sr-only">${safeText}</span>
-  `
-
-  return as === 'a'
-    ? `<a class="${escapeAttr(classes)}" ${attrs} data-dashboard-tooltip="${safeTooltip}" aria-label="${safeLabel}">${content}</a>`
-    : `<button class="${escapeAttr(classes)}" type="button" ${attrs} data-dashboard-tooltip="${safeTooltip}" aria-label="${safeLabel}"${disabledAttr}>${content}</button>`
-}
-
-function renderDashboardCardMenuItem({
-  icon,
-  label,
-  attrs,
-  text,
-  danger = false,
-  disabled = false
-}: {
-  icon: Parameters<typeof renderDashboardIcon>[0]
-  label: string
-  attrs: string
-  text: string
-  danger?: boolean
-  disabled?: boolean
-}): string {
-  return `
-    <button
-      class="dashboard-card-menu-item ${danger ? 'danger' : ''}"
-      type="button"
-      ${attrs}
-      aria-label="${escapeAttr(label)}"
-      ${disabled ? 'disabled' : ''}
-    >
-      ${renderDashboardIcon(icon)}
-      <span>${escapeHtml(text)}</span>
-    </button>
-  `
 }
 
 export function createNewTabToggleSpeedDialMessage(bookmarkId: string): NewTabToggleSpeedDialMessage {
@@ -797,6 +742,7 @@ function applyDashboardSelectionInputState(input: HTMLInputElement): boolean {
   } else {
     dashboardState.selectedIds.delete(bookmarkId)
   }
+  closeOpenDashboardCardMenu()
   return true
 }
 
@@ -832,6 +778,15 @@ export function syncDashboardSelectionOnly(changedIds?: Set<string>): void {
   }
 
   syncDashboardRenderedSelectionState()
+}
+
+function syncDashboardCardMenuOnly(changedIds?: Set<string>): void {
+  const bookmarkIds = changedIds?.size
+    ? changedIds
+    : getDashboardRenderedIds()
+  if (!syncDashboardCardMenuCards(bookmarkIds)) {
+    renderDashboardSection()
+  }
 }
 
 function syncDashboardRenderedSelectionState(): void {
@@ -887,6 +842,7 @@ function toggleDashboardTagPopover(tagToggle: HTMLElement): boolean {
     return false
   }
 
+  closeOpenDashboardCardMenu()
   const previousExpandedIds = new Set(dashboardState.expandedTagIds)
   if (dashboardState.expandedTagIds.has(bookmarkId)) {
     closeDashboardTagPopover()
@@ -929,12 +885,21 @@ export function renderDashboardSection(): void {
     dashboardState.expandedTagIds,
     new Set(model.items.map((item) => String(item.id)))
   )
+  if (
+    dashboardState.activeCardMenuBookmarkId &&
+    !visibleItems.some((item) => String(item.id) === dashboardState.activeCardMenuBookmarkId)
+  ) {
+    dashboardState.activeCardMenuBookmarkId = ''
+  }
 
   const effectiveFolderId = getDashboardEffectiveFolderId()
   const scopeTitle = getDashboardScopeTitle(effectiveFolderId)
   const scopedCountText = `(${visibleItems.length})`
   if (dom.dashboardTitle) {
-    dom.dashboardTitle.innerHTML = `${escapeHtml(scopeTitle)} <span id="dashboard-total">${escapeHtml(scopedCountText)}</span>`
+    renderDashboardTitleIsland(dom.dashboardTitle, {
+      countText: scopedCountText,
+      title: scopeTitle
+    })
     dom.dashboardTotal = dom.dashboardTitle.querySelector('#dashboard-total') as typeof dom.dashboardTotal
   }
   if (dom.dashboardCardsTitle) {
@@ -1003,7 +968,7 @@ export function releaseDashboardCaches(): void {
   dashboardRenderCache.folderBookmarkCounts = null
   dashboardRenderCache.sidebarModel = null
   dashboardRenderCache.sidebarSelectedFolderId = ''
-  dashboardRenderCache.sidebarMarkup = ''
+  dashboardRenderCache.sidebarItems = null
   dashboardRenderCache.sidebarTotalFolders = -1
   if (dashboardStatusTimer) {
     window.clearTimeout(dashboardStatusTimer)
@@ -1072,70 +1037,39 @@ export function handleDashboardInput(event: Event): void {
   scheduleDashboardSectionRender()
 }
 
-function syncDashboardCardMenuOpenState(activeDetails: HTMLDetailsElement | null): void {
-  window.requestAnimationFrame(() => {
-    const detailsList = [
-      ...(dom.dashboardPanel?.querySelectorAll<HTMLDetailsElement>('.dashboard-card-more') || [])
-    ]
-    for (const details of detailsList) {
-      if (activeDetails && details !== activeDetails && details.open) {
-        details.open = false
-      }
-      const open = details.open
-      details.closest<HTMLElement>('[data-dashboard-card]')?.classList.toggle('menu-open', open)
-      details.querySelector<HTMLElement>('summary')?.setAttribute('aria-expanded', open ? 'true' : 'false')
-    }
-  })
-}
-
-function closeDashboardCardMenuElement(details: HTMLDetailsElement): void {
-  details.open = false
-  details.closest<HTMLElement>('[data-dashboard-card]')?.classList.remove('menu-open')
-  details.querySelector<HTMLElement>('summary')?.setAttribute('aria-expanded', 'false')
-}
-
-function setDashboardSearchHelpOpen(open: boolean): boolean {
-  const trigger = document.getElementById('dashboard-search-help-toggle')
-  const popover = document.getElementById('dashboard-search-help-popover')
-  if (!trigger || !popover) {
+function toggleDashboardCardMenu(trigger: HTMLElement): boolean {
+  const bookmarkId = String(trigger.getAttribute('data-dashboard-toggle-menu') || '').trim()
+  if (!bookmarkId) {
     return false
   }
 
-  trigger.setAttribute('aria-expanded', open ? 'true' : 'false')
-  popover.classList.toggle('is-open', open)
+  const previousBookmarkId = String(dashboardState.activeCardMenuBookmarkId || '').trim()
+  const nextBookmarkId = previousBookmarkId === bookmarkId ? '' : bookmarkId
+  dashboardState.activeCardMenuBookmarkId = nextBookmarkId
+  if (!syncDashboardCardMenuCards(new Set([previousBookmarkId, bookmarkId].filter(Boolean)))) {
+    renderDashboardSection()
+  }
   return true
 }
 
 function toggleDashboardSearchHelp(): void {
-  const trigger = document.getElementById('dashboard-search-help-toggle')
-  const isOpen = trigger?.getAttribute('aria-expanded') === 'true'
-  setDashboardSearchHelpOpen(!isOpen)
-}
-
-function closeDashboardSearchHelp(): boolean {
-  const trigger = document.getElementById('dashboard-search-help-toggle')
-  if (trigger?.getAttribute('aria-expanded') !== 'true') {
-    return false
-  }
-
-  return setDashboardSearchHelpOpen(false)
-}
-
-function isDashboardSearchHelpEvent(event: Event): boolean {
-  const target = event.target as HTMLElement | null
-  return Boolean(target?.closest('#dashboard-search-help-toggle, #dashboard-search-help-popover'))
+  window.dispatchEvent(new CustomEvent('dashboard:search-help-toggle'))
 }
 
 function closeOpenDashboardCardMenu({ restoreFocus = false }: { restoreFocus?: boolean } = {}): boolean {
-  const openDetails = dom.dashboardPanel?.querySelector<HTMLDetailsElement>('.dashboard-card-more[open]')
-  if (!openDetails) {
+  const activeBookmarkId = String(dashboardState.activeCardMenuBookmarkId || '').trim()
+  if (!activeBookmarkId) {
     return false
   }
 
-  const summary = openDetails.querySelector<HTMLElement>('summary')
-  closeDashboardCardMenuElement(openDetails)
+  const trigger = findDashboardCardMenuTrigger(activeBookmarkId)
+  dashboardState.activeCardMenuBookmarkId = ''
+  if (!syncDashboardCardMenuCards(new Set([activeBookmarkId]))) {
+    renderDashboardSection()
+  }
   if (restoreFocus) {
-    summary?.focus()
+    const focusTarget = findDashboardCardMenuTrigger(activeBookmarkId) || trigger
+    focusTarget?.focus()
   }
   return true
 }
@@ -1143,12 +1077,6 @@ function closeOpenDashboardCardMenu({ restoreFocus = false }: { restoreFocus?: b
 export function handleDashboardKeydown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null
   if (!target) {
-    return
-  }
-
-  if (event.key === 'Escape' && closeDashboardSearchHelp()) {
-    event.preventDefault()
-    event.stopPropagation()
     return
   }
 
@@ -1202,9 +1130,12 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
     return
   }
 
-  const moreSummary = target.closest<HTMLElement>('.dashboard-card-more > summary')
-  if (moreSummary) {
-    syncDashboardCardMenuOpenState(moreSummary.closest<HTMLDetailsElement>('.dashboard-card-more'))
+  const menuToggle = target.closest<HTMLElement>('[data-dashboard-toggle-menu]')
+  if (menuToggle) {
+    event.preventDefault()
+    event.stopPropagation()
+    toggleDashboardCardMenu(menuToggle)
+    return
   }
 
   const folderFilterButton = target.closest<HTMLElement>('[data-dashboard-folder-filter]')
@@ -1238,17 +1169,21 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
         dashboardState.selectedIds.clear()
         syncDashboardSelectionOnly()
       }
+      closeOpenDashboardCardMenu()
     } else if (action === 'move-selected') {
       callbacks.openMoveModal('dashboard')
     } else if (action === 'delete-selected') {
       await deleteSelectedDashboardItems(callbacks)
     } else if (action === 'move-one') {
+      closeOpenDashboardCardMenu()
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       moveSingleDashboardItem(bookmarkId, callbacks)
     } else if (action === 'delete-one') {
+      closeOpenDashboardCardMenu()
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       await deleteDashboardBookmarkFromCard(bookmarkId, callbacks)
     } else if (action === 'toggle-speed-dial') {
+      closeOpenDashboardCardMenu()
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       await toggleDashboardBookmarkSpeedDial(bookmarkId)
     } else if (action === 'exit-dashboard') {
@@ -1258,6 +1193,7 @@ export async function handleDashboardClick(event: Event, callbacks: DashboardCal
         window.location.hash = '#general'
       }
     } else if (action === 'edit-tags') {
+      closeOpenDashboardCardMenu()
       const bookmarkId = String(actionButton.getAttribute('data-dashboard-bookmark-id') || '').trim()
       openDashboardTagEditor(bookmarkId)
     } else if (action === 'toggle-natural-search') {
@@ -1360,9 +1296,6 @@ export function handleDashboardTagPointerOut(event: PointerEvent): void {
 
 export function handleDashboardDocumentClick(event: MouseEvent): void {
   const target = event.target as HTMLElement | null
-  if (!isDashboardSearchHelpEvent(event)) {
-    closeDashboardSearchHelp()
-  }
 
   if (target?.closest('.dashboard-card-more')) {
     return
@@ -1389,9 +1322,6 @@ export function handleDashboardDocumentClick(event: MouseEvent): void {
 
 export function handleDashboardDocumentFocusIn(event: FocusEvent): void {
   const target = event.target as HTMLElement | null
-  if (!isDashboardSearchHelpEvent(event)) {
-    closeDashboardSearchHelp()
-  }
 
   if (!target?.closest('.dashboard-card-more')) {
     closeOpenDashboardCardMenu()
@@ -1514,6 +1444,7 @@ function openDashboardTagEditor(bookmarkId: string): void {
   }
 
   dashboardState.expandedTagIds.clear()
+  dashboardState.activeCardMenuBookmarkId = ''
   dashboardState.tagEditorBookmarkId = String(item.id)
   dashboardState.tagEditorReturnFocusId = String(item.id)
   dashboardState.tagEditorDraft = item.tags.join('\n')
@@ -2173,7 +2104,7 @@ function getCachedDashboardModel({
   dashboardRenderCache.folderCountsModel = null
   dashboardRenderCache.folderBookmarkCounts = null
   dashboardRenderCache.sidebarModel = null
-  dashboardRenderCache.sidebarMarkup = ''
+  dashboardRenderCache.sidebarItems = null
   dashboardPopupSearchIndexCache.model = null
   dashboardPopupSearchIndexCache.bookmarks = null
   dashboardPopupSearchIndexCache.bookmarkById = null
@@ -2716,9 +2647,13 @@ function renderDashboardSearchTools(): void {
 
   dom.dashboardSearchChips?.classList.toggle('hidden', chips.length === 0)
   if (dom.dashboardSearchChips) {
-    dom.dashboardSearchChips.innerHTML = chips
-      .map((chip) => `<span class="dashboard-search-chip ${escapeAttr(chip.kind)}">${escapeHtml(chip.label)}</span>`)
-      .join('')
+    renderDashboardSearchChipsIsland(
+      dom.dashboardSearchChips,
+      chips.map((chip): DashboardSearchChipViewModel => ({
+        kind: String(chip.kind || ''),
+        label: String(chip.label || '')
+      }))
+    )
   }
 }
 
@@ -2750,6 +2685,7 @@ function applyDashboardSearchQuery(query: string): void {
   }
   dashboardState.selectedIds.clear()
   dashboardState.expandedTagIds.clear()
+  dashboardState.activeCardMenuBookmarkId = ''
   clearIdleDashboardTagEditorForFilterChange()
   ensureDashboardFullTextSearchMapForQuery()
   startDashboardNaturalSearch()
@@ -3226,44 +3162,24 @@ function renderDashboardFolderBreadcrumbs(): void {
     : null
 
   dom.dashboardFolderBreadcrumbs.classList.toggle('hidden', !selectedFolder)
-  dom.dashboardFolderBreadcrumbs.innerHTML = selectedFolder
-    ? buildDashboardFolderBreadcrumbMarkup(selectedFolder)
-    : ''
+  renderDashboardBreadcrumbsIsland(
+    dom.dashboardFolderBreadcrumbs,
+    selectedFolder ? getDashboardFolderBreadcrumbSegments(selectedFolder) : []
+  )
 }
 
-function buildDashboardFolderBreadcrumbMarkup(folder: FolderRecord): string {
+function getDashboardFolderBreadcrumbSegments(folder: FolderRecord): DashboardBreadcrumbSegmentViewModel[] {
   const segments = buildBookmarkPathSegments(folder, availabilityState.folderMap)
   if (!segments.length) {
-    return ''
+    return []
   }
 
-  return `
-    <ol class="dashboard-folder-breadcrumb-list">
-      ${segments.map((segment, index) => {
-        const content = segment.current || !segment.id
-          ? `
-            <span
-              class="dashboard-folder-breadcrumb-current"
-              aria-current="page"
-              title="${escapeAttr(segment.path)}"
-            >${escapeHtml(segment.label)}</span>
-          `
-          : `
-            <button
-              class="dashboard-folder-breadcrumb-link"
-              type="button"
-              data-dashboard-folder-filter="${escapeAttr(segment.id)}"
-              title="${escapeAttr(segment.path)}"
-            >${escapeHtml(segment.label)}</button>
-          `
-
-        return `
-          ${index === 0 ? '' : '<li class="dashboard-folder-breadcrumb-separator" aria-hidden="true">&gt;</li>'}
-          <li>${content}</li>
-        `
-      }).join('')}
-    </ol>
-  `
+  return segments.map((segment) => ({
+    current: Boolean(segment.current || !segment.id),
+    id: String(segment.id || ''),
+    label: String(segment.label || ''),
+    path: String(segment.path || '')
+  }))
 }
 
 function renderDashboardFolderSidebar(model: DashboardModel): void {
@@ -3273,51 +3189,49 @@ function renderDashboardFolderSidebar(model: DashboardModel): void {
 
   const selectedFolderId = getDashboardEffectiveFolderId()
   const folderBookmarkCounts = getCachedDashboardFolderBookmarkCounts(model)
-  const folderMarkup = getCachedDashboardFolderSidebarMarkup(model, selectedFolderId, folderBookmarkCounts)
+  const folderItems = getCachedDashboardFolderSidebarItems(model, selectedFolderId, folderBookmarkCounts)
   const folderCountText = `${model.totalFolders} 个文件夹`
 
   if (dom.dashboardFolderSidebarCount.textContent !== folderCountText) {
     dom.dashboardFolderSidebarCount.textContent = folderCountText
   }
-  if (dom.dashboardFolderTree.innerHTML !== folderMarkup) {
-    dom.dashboardFolderTree.innerHTML = folderMarkup
-  }
+  renderDashboardFolderSidebarIsland(dom.dashboardFolderTree, folderItems)
   restorePendingDashboardFolderFocus()
 }
 
-function getCachedDashboardFolderSidebarMarkup(
+function getCachedDashboardFolderSidebarItems(
   model: DashboardModel,
   selectedFolderId: string,
   folderBookmarkCounts: Map<string, number>
-): string {
+): DashboardFolderSidebarItemViewModel[] {
   if (
     dashboardRenderCache.sidebarModel === model &&
     dashboardRenderCache.sidebarSelectedFolderId === selectedFolderId &&
-    dashboardRenderCache.sidebarTotalFolders === model.totalFolders
+    dashboardRenderCache.sidebarTotalFolders === model.totalFolders &&
+    dashboardRenderCache.sidebarItems
   ) {
-    return dashboardRenderCache.sidebarMarkup
+    return dashboardRenderCache.sidebarItems
   }
 
-  const markup = model.folderTargets
+  const items = model.folderTargets
     .map((folder) => {
       const folderRecord = availabilityState.folderMap.get(String(folder.id))
       const depth = Number(folderRecord?.depth) || getDashboardFolderPathDepth(folder.path)
-      return buildDashboardFolderSidebarItem({
-        id: folder.id,
-        title: folder.title,
-        path: formatFolderPath(folderRecord || folder, availabilityState.folderMap) || folder.path || folder.title,
+      return {
+        active: selectedFolderId === String(folder.id),
         count: folderBookmarkCounts.get(String(folder.id)) || 0,
         depth: Math.max(0, depth - 1),
-        active: selectedFolderId === String(folder.id)
-      })
+        id: folder.id,
+        path: formatFolderPath(folderRecord || folder, availabilityState.folderMap) || folder.path || folder.title,
+        title: folder.title
+      }
     })
-    .join('')
 
   dashboardRenderCache.sidebarModel = model
   dashboardRenderCache.sidebarSelectedFolderId = selectedFolderId
-  dashboardRenderCache.sidebarMarkup = markup
+  dashboardRenderCache.sidebarItems = items
   dashboardRenderCache.sidebarTotalFolders = model.totalFolders
-  return markup
+  return items
 }
 
 function getCachedDashboardFolderBookmarkCounts(model: DashboardModel): Map<string, number> {
@@ -3328,50 +3242,6 @@ function getCachedDashboardFolderBookmarkCounts(model: DashboardModel): Map<stri
   dashboardRenderCache.folderCountsModel = model
   dashboardRenderCache.folderBookmarkCounts = counts
   return counts
-}
-
-function buildDashboardFolderSidebarItem({
-  id,
-  title,
-  path,
-  count,
-  depth,
-  active
-}: {
-  id: string
-  title: string
-  path: string
-  count: number
-  depth: number
-  active: boolean
-}): string {
-  const clampedDepth = Math.min(Math.max(Number(depth) || 0, 0), 8)
-  const countLabel = `${Number(count) || 0} 个书签`
-  const countBadge = `${Number(count) || 0}`
-  const titleText = String(title || '未命名文件夹').trim() || '未命名文件夹'
-  const pathText = String(path || titleText).trim() || titleText
-  const currentAttribute = active ? ' aria-current="page"' : ''
-  const tabIndex = active ? 0 : -1
-
-  return `
-    <button
-      class="dashboard-folder-tree-item ${active ? 'active' : ''}"
-      type="button"
-      role="option"
-      data-dashboard-folder-filter="${escapeAttr(id)}"
-      data-dashboard-no-drag
-      aria-selected="${active ? 'true' : 'false'}"
-      tabindex="${tabIndex}"
-     ${currentAttribute}
-      aria-label="${escapeAttr(`${pathText}，${countLabel}`)}"
-      title="${escapeAttr(pathText)}"
-      style="--folder-depth-offset: ${clampedDepth * 13}px;"
-    >
-      <span class="dashboard-folder-tree-branch" aria-hidden="true"></span>
-      <span class="dashboard-folder-tree-label">${escapeHtml(titleText)}</span>
-      <span class="dashboard-folder-tree-count" title="${escapeAttr(countLabel)}">${escapeHtml(countBadge)}</span>
-    </button>
-  `
 }
 
 function handleDashboardFolderListboxKeydown(event: KeyboardEvent, target: HTMLElement): boolean {
@@ -3548,6 +3418,7 @@ function applyDashboardFolderFilter(folderId: unknown): void {
   dashboardState.folderId = nextFolderId
   dashboardState.selectedIds.clear()
   dashboardState.expandedTagIds.clear()
+  dashboardState.activeCardMenuBookmarkId = ''
   clearIdleDashboardTagEditorForFilterChange()
   beginStableDashboardResultsUpdate()
   markDashboardVirtualFilterChange('folder')
@@ -3576,18 +3447,18 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   if (availabilityState.catalogLoading) {
     resetDashboardVirtualRenderCache({ clearItems: true })
     clearStableDashboardResultsUpdate()
-    dom.dashboardResults.innerHTML = renderDashboardEmptyLoading('正在读取书签目录。')
+    renderDashboardEmptyState('正在读取书签目录。', { loading: true })
     commitDashboardCardsRender(renderVersion)
     return
   }
 
   if (!items.length) {
     resetDashboardVirtualRenderCache({ clearItems: true })
-    dom.dashboardResults.innerHTML = isDashboardWorkerSearchPending()
-      ? renderDashboardEmptyLoading('正在搜索书签。')
-      : dashboardState.query
-        ? '<div class="detect-empty">当前搜索没有匹配的书签。</div>'
-      : '<div class="detect-empty">没有可展示的书签。</div>'
+    if (isDashboardWorkerSearchPending()) {
+      renderDashboardEmptyState('正在搜索书签。', { loading: true })
+    } else {
+      renderDashboardEmptyState(dashboardState.query ? '当前搜索没有匹配的书签。' : '没有可展示的书签。')
+    }
     endStableDashboardResultsUpdate()
     commitDashboardCardsRender(renderVersion)
     return
@@ -3613,7 +3484,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     if (!canReuseStaticList) {
       resetDashboardVirtualRenderCache({ preserveItems: true })
       virtualState.items = items
-      dom.dashboardResults.replaceChildren(...items.map((item) => createDashboardCardElement(item)))
+      renderDashboardCardListIsland(dom.dashboardResults, items.map(buildDashboardCardViewModel))
       virtualState.renderedStartIndex = 0
       virtualState.renderedEndIndex = items.length
       virtualState.renderedStateKey = stateKey
@@ -4019,11 +3890,10 @@ function renderDashboardVirtualWindow({
     return
   }
 
-  const fragment = document.createDocumentFragment()
-  for (const item of renderedItems) {
-    fragment.append(getDashboardVirtualCardNode(item))
-  }
-  windowElement.replaceChildren(fragment)
+  replaceDashboardVirtualWindowIslandNodes(
+    windowElement,
+    renderedItems.map((item) => getDashboardVirtualCardNode(item))
+  )
   pruneDashboardVirtualCardNodePool(renderedIds)
 }
 
@@ -4082,14 +3952,14 @@ function prependDashboardVirtualWindowNodes(
   startIndex: number,
   previousStartIndex: number
 ): void {
-  const fragment = document.createDocumentFragment()
+  const nodes: HTMLElement[] = []
   for (let index = startIndex; index < previousStartIndex; index += 1) {
     const item = renderedItems[index - startIndex]
     if (item) {
-      fragment.append(getDashboardVirtualCardNode(item))
+      nodes.push(getDashboardVirtualCardNode(item))
     }
   }
-  windowElement.prepend(fragment)
+  prependDashboardVirtualWindowIslandNodes(windowElement, nodes)
 }
 
 function appendDashboardVirtualWindowNodes(
@@ -4099,14 +3969,14 @@ function appendDashboardVirtualWindowNodes(
   previousEndIndex: number,
   endIndex: number
 ): void {
-  const fragment = document.createDocumentFragment()
+  const nodes: HTMLElement[] = []
   for (let index = previousEndIndex; index < endIndex; index += 1) {
     const item = renderedItems[index - startIndex]
     if (item) {
-      fragment.append(getDashboardVirtualCardNode(item))
+      nodes.push(getDashboardVirtualCardNode(item))
     }
   }
-  windowElement.append(fragment)
+  appendDashboardVirtualWindowIslandNodes(windowElement, nodes)
 }
 
 function removeDashboardVirtualWindowEdgeNodes(
@@ -4114,15 +3984,7 @@ function removeDashboardVirtualWindowEdgeNodes(
   count: number,
   edge: 'start' | 'end'
 ): void {
-  for (let index = 0; index < count; index += 1) {
-    const child = edge === 'start'
-      ? windowElement.firstElementChild
-      : windowElement.lastElementChild
-    if (!child) {
-      return
-    }
-    child.remove()
-  }
+  removeDashboardVirtualWindowIslandEdgeNodes(windowElement, count, edge)
 }
 
 function ensureDashboardVirtualWindowElements(): {
@@ -4135,12 +3997,10 @@ function ensureDashboardVirtualWindowElements(): {
     return { spacer, windowElement }
   }
 
-  spacer = document.createElement('div')
-  spacer.className = 'dashboard-virtual-spacer'
-  windowElement = document.createElement('div')
-  windowElement.className = 'dashboard-virtual-window'
-  spacer.append(windowElement)
-  dom.dashboardResults.replaceChildren(spacer)
+  const nextElements = createDashboardVirtualWindowIslandElement()
+  spacer = nextElements.spacer
+  windowElement = nextElements.windowElement
+  renderDashboardVirtualWindowShellIsland(dom.dashboardResults, spacer)
   return { spacer, windowElement }
 }
 
@@ -4165,13 +4025,7 @@ function getDashboardVirtualCardNode(item: DashboardItem): HTMLElement {
 }
 
 function createDashboardCardElement(item: DashboardItem): HTMLElement {
-  const template = document.createElement('template')
-  template.innerHTML = buildDashboardCard(item).trim()
-  const element = template.content.firstElementChild
-  if (!(element instanceof HTMLElement)) {
-    throw new Error('Dashboard card markup did not produce an element.')
-  }
-  return element
+  return createDashboardCardIslandElement(buildDashboardCardViewModel(item))
 }
 
 function pruneDashboardVirtualCardNodePool(renderedIds: Set<string>): void {
@@ -4200,6 +4054,9 @@ function patchDashboardCardById(bookmarkId: string): boolean {
     return false
   }
 
+  if (dashboardState.activeCardMenuBookmarkId === safeBookmarkId) {
+    dashboardState.activeCardMenuBookmarkId = ''
+  }
   const nextCard = createDashboardCardElement(item)
 
   card.replaceWith(nextCard)
@@ -4265,12 +4122,7 @@ function syncDashboardTagPopoverCard(bookmarkId: string): boolean {
     return true
   }
 
-  const template = document.createElement('template')
-  template.innerHTML = renderDashboardTagPopoverMarkup(item).trim()
-  const nextPopover = template.content.firstElementChild
-  if (!(nextPopover instanceof HTMLElement)) {
-    return false
-  }
+  const nextPopover = createDashboardTagPopoverIslandElement(buildDashboardCardViewModel(item))
 
   card.append(nextPopover)
   return true
@@ -4280,6 +4132,45 @@ function syncDashboardTagPopoverCards(bookmarkIds: Set<string>): boolean {
   let synced = true
   for (const bookmarkId of bookmarkIds) {
     synced = syncDashboardTagPopoverCard(bookmarkId) && synced
+  }
+  return synced
+}
+
+function findDashboardCardMenuTrigger(bookmarkId: string): HTMLElement | null {
+  const card = findDashboardCardElement(bookmarkId)
+  return card?.querySelector<HTMLElement>('[data-dashboard-toggle-menu]') || null
+}
+
+function syncDashboardCardMenuCard(bookmarkId: string): boolean {
+  const safeBookmarkId = String(bookmarkId || '').trim()
+  const item = getDashboardRenderedItemById(safeBookmarkId)
+  const card = findDashboardCardElement(safeBookmarkId)
+  if (!safeBookmarkId || !item || !card) {
+    return true
+  }
+
+  const open = dashboardState.activeCardMenuBookmarkId === safeBookmarkId
+  card.classList.toggle('menu-open', open)
+  const nextCard = createDashboardCardElement(item)
+  card.replaceWith(nextCard)
+  if (document.activeElement === card || card.contains(document.activeElement)) {
+    findDashboardCardMenuTrigger(safeBookmarkId)?.focus()
+  }
+  if (dom.dashboardResults?.classList.contains('is-virtualized')) {
+    dashboardVirtualCardNodePoolTick += 1
+    dashboardVirtualCardNodePool.set(safeBookmarkId, {
+      element: nextCard,
+      renderKey: getDashboardCardRenderKey(item),
+      lastUsed: dashboardVirtualCardNodePoolTick
+    })
+  }
+  return true
+}
+
+function syncDashboardCardMenuCards(bookmarkIds: Set<string>): boolean {
+  let synced = true
+  for (const bookmarkId of bookmarkIds) {
+    synced = syncDashboardCardMenuCard(bookmarkId) && synced
   }
   return synced
 }
@@ -5128,31 +5019,32 @@ function renderDashboardTagEditor(existingModel?: DashboardModel): void {
   dom.dashboardTagEditorStatus.textContent = statusText
   const hasAiTags = Boolean(record?.tags?.length)
   dom.dashboardTagEditorSave.disabled = dashboardState.tagEditorSaving
-  dom.dashboardTagEditorSave.innerHTML = busyAction === 'save'
-    ? renderDashboardLoadingLabel('保存中...', {
+  setDashboardLoadingLabel(dom.dashboardTagEditorSave, busyAction === 'save' ? '保存中...' : '保存标签', {
+    busy: busyAction === 'save',
       wrapperClass: 'button-loading-label',
       loaderClass: 'dashboard-button-dot-loader'
-    })
-    : '保存标签'
+  })
   dom.dashboardTagEditorClearAi.disabled = dashboardState.tagEditorSaving || !hasAiTags
-  dom.dashboardTagEditorClearAi.innerHTML = busyAction === 'clear-ai'
-    ? renderDashboardLoadingLabel('清除中...', {
+  setDashboardLoadingLabel(dom.dashboardTagEditorClearAi, busyAction === 'clear-ai' ? '清除中...' : '清除 AI 标签', {
+    busy: busyAction === 'clear-ai',
       wrapperClass: 'button-loading-label',
       loaderClass: 'dashboard-button-dot-loader'
-    })
-    : '清除 AI 标签'
+  })
   dom.dashboardTagEditorRegenerateAi.disabled =
     dashboardState.tagEditorSaving ||
     availabilityState.catalogLoading ||
     aiNamingState.running ||
     aiNamingState.applying
-  dom.dashboardTagEditorRegenerateAi.innerHTML = busyAction === 'regenerate-ai'
-    ? renderDashboardLoadingLabel('生成中...', {
+  setDashboardLoadingLabel(
+    dom.dashboardTagEditorRegenerateAi,
+    busyAction === 'regenerate-ai' ? '生成中...' : '重新生成 AI 标签',
+    {
+      busy: busyAction === 'regenerate-ai',
       variant: 'spiral',
       wrapperClass: 'button-loading-label',
       loaderClass: 'dashboard-button-dot-loader'
-    })
-    : '重新生成 AI 标签'
+    }
+  )
   dom.dashboardTagEditor
     ?.querySelectorAll<HTMLButtonElement>('[data-dashboard-action="close-tag-editor"]')
     .forEach((button) => {
@@ -5207,7 +5099,7 @@ function findDashboardCardElement(bookmarkId: string): HTMLElement | null {
   )
 }
 
-function buildDashboardCard(item: DashboardItem): string {
+function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewModel {
   const selected = dashboardState.selectedIds.has(String(item.id))
   const expanded = dashboardState.expandedTagIds.has(String(item.id))
   const selectionLabel = getDashboardSelectionLabel(item)
@@ -5225,165 +5117,43 @@ function buildDashboardCard(item: DashboardItem): string {
   const tags = item.tags.slice(0, visibleTagLimit)
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
   const copyLabel = dashboardState.copyFeedbackId === String(item.id) ? '已复制' : '复制'
-  const faviconMarkup = renderDashboardFaviconImage(item.url)
   const tagStatusTitle = item.hasManualTags
     ? '已有手动标签'
     : item.aiTags.length
       ? '已有 AI 标签'
       : '未生成 AI 标签'
   const itemPath = formatBookmarkPath(item.path) || '未归档路径'
-  const tagMarkup = tags.length
-    ? tags.map((tag) => `<span class="dashboard-mini-chip">${escapeHtml(tag)}</span>`).join('')
-    : ''
-  const toggleMarkup = item.tags.length > visibleTagLimit
-    ? `
-        <button
-          class="dashboard-mini-chip dashboard-tag-toggle"
-          type="button"
-          data-dashboard-toggle-tags="${escapeAttr(item.id)}"
-          data-dashboard-no-drag
-          aria-expanded="${expanded ? 'true' : 'false'}"
-          aria-controls="dashboard-tag-popover-${escapeAttr(item.id)}"
-          aria-label="查看 ${escapeAttr(String(hiddenTagCount))} 个隐藏标签"
-        >+${escapeHtml(String(hiddenTagCount))}</button>
-      `
-    : ''
-  const tagPopoverMarkup = expanded && item.tags.length
-    ? renderDashboardTagPopoverMarkup(item)
-    : ''
-  const tagRowMarkup = tagMarkup || toggleMarkup
-    ? `<div class="dashboard-card-tag-row">${tagMarkup}${toggleMarkup}</div>`
-    : '<div class="dashboard-card-tag-row empty" aria-hidden="true"></div>'
 
-  return `
-    <article
-      class="dashboard-bookmark-card ${selected ? 'selected' : ''} ${expanded ? 'tags-expanded' : ''}"
-      data-dashboard-card
-      data-dashboard-bookmark-id="${escapeAttr(item.id)}"
-    >
-      <label class="dashboard-card-check" data-dashboard-no-drag>
-        <input
-          type="checkbox"
-          data-dashboard-select="${escapeAttr(item.id)}"
-          aria-label="${escapeAttr(selectionLabel)}"
-          ${selected ? 'checked' : ''}
-          ${availabilityState.deleting ? 'disabled' : ''}
-        >
-        <span class="sr-only">${escapeHtml(selectionLabel)}</span>
-      </label>
-      <div class="dashboard-card-body">
-        <span class="dashboard-favicon-shell" aria-hidden="true">
-          ${faviconMarkup}
-          <span>${escapeHtml(getFallbackLabel(item.title))}</span>
-        </span>
-        <div class="dashboard-card-copy">
-          <div class="dashboard-card-title-row">
-            <strong title="${escapeAttr(item.title || '未命名书签')}">${escapeHtml(item.title || '未命名书签')}</strong>
-          </div>
-          <a
-            class="dashboard-card-url"
-            href="${escapeAttr(item.url)}"
-            target="_blank"
-            rel="noreferrer noopener"
-            data-dashboard-no-drag
-          >${escapeHtml(displayUrl(item.url))}</a>
-          <div class="dashboard-card-meta">
-            <div class="dashboard-card-path-row">
-              <button
-                class="dashboard-path-chip"
-                type="button"
-                data-dashboard-folder-filter="${escapeAttr(item.parentId || '')}"
-                data-dashboard-no-drag
-                title="${escapeAttr(itemPath)}"
-                aria-label="按文件夹筛选：${escapeAttr(itemPath)}"
-              >${escapeHtml(itemPath)}</button>
-            </div>
-            ${tagRowMarkup}
-          </div>
-        </div>
-      </div>
-      <div class="dashboard-card-side">
-        <span
-          class="dashboard-status-dot ${item.tags.length ? 'has-tags' : ''}"
-          title="${escapeAttr(tagStatusTitle)}"
-        ></span>
-      </div>
-      <div class="dashboard-card-footer">
-        <div class="dashboard-card-actions">
-          ${renderDashboardCardAction({
-            as: 'a',
-            icon: 'open',
-            label: openLabel,
-            tooltip: '打开书签',
-            className: 'detect-result-open',
-            attrs: `href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer noopener" data-dashboard-no-drag`,
-            text: '打开'
-          })}
-          ${renderDashboardCardAction({
-            icon: 'copy',
-            label: copyActionLabel,
-            tooltip: copyLabel === '已复制' ? '已复制' : '复制链接',
-            className: 'detect-result-action',
-            attrs: `data-dashboard-copy="${escapeAttr(item.id)}" data-dashboard-no-drag`,
-            text: copyLabel
-          })}
-          <details class="dashboard-card-more" data-dashboard-no-drag>
-            <summary
-              class="dashboard-icon-action dashboard-card-more-trigger"
-              data-dashboard-tooltip="更多操作"
-              aria-label="${escapeAttr(moreLabel)}"
-              aria-haspopup="menu"
-              aria-expanded="false"
-            >
-              ${renderDashboardMoreIcon()}
-              <span class="sr-only">更多</span>
-            </summary>
-            <div class="dashboard-card-menu" role="menu" aria-label="${escapeAttr(moreLabel)}">
-              ${renderDashboardCardMenuItem({
-                icon: 'tag',
-                label: editTagsLabel,
-                attrs: `data-dashboard-action="edit-tags" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag role="menuitem"`,
-                text: '修改标签'
-              })}
-              ${renderDashboardCardMenuItem({
-                icon: 'speed-dial',
-                label: speedDialActionLabel,
-                attrs: `data-dashboard-action="toggle-speed-dial" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag role="menuitem" aria-pressed="${speedDialPinned ? 'true' : 'false'}"`,
-                text: speedDialActionText
-              })}
-              ${renderDashboardCardMenuItem({
-                icon: 'move',
-                label: moveLabel,
-                attrs: `data-dashboard-action="move-one" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag role="menuitem"`,
-                text: '移动',
-                disabled: availabilityState.deleting
-              })}
-              ${renderDashboardCardMenuItem({
-                icon: 'delete',
-                label: deleteLabel,
-                attrs: `data-dashboard-action="delete-one" data-dashboard-bookmark-id="${escapeAttr(item.id)}" data-dashboard-no-drag role="menuitem"`,
-                text: '删除',
-                danger: true,
-                disabled: availabilityState.deleting
-              })}
-            </div>
-          </details>
-        </div>
-      </div>
-      ${tagPopoverMarkup}
-    </article>
-  `
-}
-
-function renderDashboardTagPopoverMarkup(item: DashboardItem): string {
-  return `
-    <div id="dashboard-tag-popover-${escapeAttr(item.id)}" class="dashboard-tag-popover" data-dashboard-no-drag role="dialog" aria-modal="false" aria-label="全部标签">
-      <strong>全部标签</strong>
-      <div class="dashboard-tag-popover-list">
-        ${item.tags.map((tag) => `<span class="dashboard-mini-chip">${escapeHtml(tag)}</span>`).join('')}
-      </div>
-    </div>
-  `
+  return {
+    activeMenu: dashboardState.activeCardMenuBookmarkId === String(item.id),
+    bookmarkId: String(item.id),
+    copyActionLabel,
+    copyText: copyLabel,
+    copyTooltip: copyLabel === '已复制' ? '已复制' : '复制链接',
+    deleting: availabilityState.deleting,
+    deleteLabel,
+    displayUrl: displayUrl(item.url),
+    editTagsLabel,
+    expanded,
+    fallbackLabel: getFallbackLabel(item.title),
+    favicon: getDashboardFaviconImageViewModel(item.url),
+    hiddenTagCount,
+    itemPath,
+    moreLabel,
+    moveLabel,
+    openLabel,
+    parentId: String(item.parentId || ''),
+    selected,
+    selectionLabel,
+    speedDialActionLabel,
+    speedDialActionText,
+    speedDialPinned,
+    tagStatusTitle,
+    tags: item.tags,
+    title: item.title || '未命名书签',
+    url: item.url,
+    visibleTags: tags
+  }
 }
 
 async function copyDashboardBookmarkUrl(bookmarkId: string): Promise<void> {
@@ -5551,39 +5321,44 @@ function renderDashboardStatusOnly(): void {
     return
   }
 
-  dom.dashboardStatus.innerHTML = availabilityState.deleting
-    ? renderDashboardLoadingLabel('正在处理所选书签...', {
-      loaderClass: 'dashboard-status-dot-loader'
-    })
-    : escapeHtml(dashboardState.statusMessage || '')
+  setDashboardLoadingLabel(dom.dashboardStatus, availabilityState.deleting
+    ? '正在处理所选书签...'
+    : dashboardState.statusMessage || '', {
+    busy: availabilityState.deleting,
+    loaderClass: 'dashboard-status-dot-loader'
+  })
 }
 
-function renderDashboardLoadingLabel(
+function setDashboardLoadingLabel(
+  element: Element,
   label: string,
   {
+    busy = false,
     variant = 'bar',
     wrapperClass = 'status-loading-label',
     loaderClass = 'dashboard-status-dot-loader'
   }: {
+    busy?: boolean
     variant?: 'bar' | 'spiral'
     wrapperClass?: string
     loaderClass?: string
   } = {}
-): string {
-  return `
-    <span class="${escapeAttr(wrapperClass)}">
-      ${renderDotMatrixLoader({ variant, className: loaderClass })}
-      <span>${escapeHtml(label)}</span>
-    </span>
-  `
+): void {
+  const state: DashboardLoadingLabelState = {
+    busy,
+    label,
+    loaderClass,
+    variant,
+    wrapperClass
+  }
+  renderDashboardLoadingLabelIsland(element, state)
 }
 
-function renderDashboardEmptyLoading(label: string): string {
-  return `
-    <div class="detect-empty dashboard-loading-empty">
-      ${renderDashboardLoadingLabel(label, { variant: 'spiral' })}
-    </div>
-  `
+function renderDashboardEmptyState(label: string, { loading = false }: { loading?: boolean } = {}): void {
+  renderDashboardEmptyStateIsland(dom.dashboardResults, {
+    loading,
+    message: label
+  })
 }
 
 function startDashboardDrag(): void {
@@ -5619,7 +5394,6 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
     includeFullText: contentSnapshotState.settings.fullTextSearchEnabled
   })
   const bookmark = availabilityState.bookmarkMap.get(String(dragState.bookmarkId))
-  const faviconMarkup = renderDashboardFaviconImage(bookmark?.url || '')
 
   dom.dashboardPanel?.classList.add('is-dashboard-dragging')
   cancelExitMotion(dom.dashboardDragOverlay, 'is-closing')
@@ -5628,50 +5402,32 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
   dom.dashboardDragOverlay.setAttribute('aria-hidden', 'false')
   setDashboardDeleteDropHover(dragState.hoverDeleteTarget)
   if (dom.dashboardDragHint) {
-    dom.dashboardDragHint.innerHTML = dragState.moving
-      ? renderDashboardLoadingLabel('正在移动书签...', {
-        wrapperClass: 'status-loading-label',
-        loaderClass: 'dashboard-status-dot-loader'
-      })
-      : '选择目标文件夹后松开即可移动。'
+    setDashboardLoadingLabel(dom.dashboardDragHint, dragState.moving ? '正在移动书签...' : '选择目标文件夹后松开即可移动。', {
+      busy: dragState.moving,
+      wrapperClass: 'status-loading-label',
+      loaderClass: 'dashboard-status-dot-loader'
+    })
   }
 
-  dom.dashboardFolderDropGrid.innerHTML = model.folderTargets.length
-    ? model.folderTargets.map((folder) => buildDashboardFolderDropCard(folder)).join('')
-    : '<div class="detect-empty">没有可用的目标文件夹。</div>'
+  renderDashboardFolderDropGridIsland(
+    dom.dashboardFolderDropGrid,
+    model.folderTargets.map((folder): DashboardFolderDropTargetViewModel => ({
+      active: dragState.hoverFolderId === folder.id,
+      bookmarkCount: folder.bookmarkCount,
+      folderCount: folder.folderCount,
+      id: String(folder.id || ''),
+      path: folder.path || '',
+      title: folder.title || '未命名文件夹'
+    }))
+  )
   setDashboardDropHover(dragState.hoverFolderId)
 
-  dom.dashboardDragPreview.innerHTML = `
-    <span class="dashboard-favicon-shell" aria-hidden="true">
-      ${faviconMarkup}
-      <span>${escapeHtml(getFallbackLabel(bookmark?.title || ''))}</span>
-    </span>
-    <span>${escapeHtml(bookmark?.title || '未命名书签')}</span>
-  `
+  renderDashboardDragPreviewIsland(dom.dashboardDragPreview, {
+    fallbackLabel: getFallbackLabel(bookmark?.title || ''),
+    favicon: getDashboardFaviconImageViewModel(bookmark?.url || ''),
+    title: bookmark?.title || '未命名书签'
+  })
   scheduleDashboardFaviconLoadSync()
-}
-
-function buildDashboardFolderDropCard(folder: DashboardFolderTarget): string {
-  const active = dragState.hoverFolderId === folder.id
-  const bookmarkCopy = `${folder.bookmarkCount} 个书签`
-  const folderCopy = folder.folderCount ? ` · ${folder.folderCount} 个子文件夹` : ''
-  return `
-    <button
-      class="dashboard-folder-drop-card ${active ? 'active' : ''}"
-      type="button"
-      role="option"
-      aria-selected="${active ? 'true' : 'false'}"
-      data-dashboard-drop-folder="${escapeAttr(folder.id)}"
-      title="${escapeAttr(folder.path)}"
-    >
-      <span class="dashboard-folder-icon" aria-hidden="true"></span>
-      <span class="dashboard-folder-copy">
-        <strong>${escapeHtml(folder.title)}</strong>
-        <span>${escapeHtml(folder.path)}</span>
-        <small>${escapeHtml(bookmarkCopy + folderCopy)}</small>
-      </span>
-    </button>
-  `
 }
 
 function updateDashboardDragPreviewPosition(): void {
@@ -5743,22 +5499,20 @@ function clearDashboardDragOverlayContent(): void {
   setDashboardDeleteDropHover(false)
   dashboardDropHoverCard = null
   if (dom.dashboardFolderDropGrid) {
-    dom.dashboardFolderDropGrid.innerHTML = ''
+    renderDashboardFolderDropGridIsland(dom.dashboardFolderDropGrid, [])
   }
   if (dom.dashboardDragPreview) {
-    dom.dashboardDragPreview.innerHTML = ''
+    renderDashboardDragPreviewIsland(dom.dashboardDragPreview, null)
     dom.dashboardDragPreview.style.transform = ''
   }
 }
 
 function ensureDashboardDragOverlayPortal(): void {
-  if (!dom.dashboardDragOverlay || !document.body) {
+  if (!dom.dashboardDragOverlay) {
     return
   }
 
-  if (dom.dashboardDragOverlay.parentElement !== document.body) {
-    document.body.appendChild(dom.dashboardDragOverlay)
-  }
+  mountDashboardDragOverlayIsland(dom.dashboardDragOverlay)
 }
 
 function releaseDashboardPointerCapture(): void {
@@ -5819,43 +5573,31 @@ export function getDashboardFaviconFallbackUrl(url: string): string {
   return buildDashboardFaviconUrl(endpointUrl, url, { size: DASHBOARD_FAVICON_SIZE })
 }
 
-function renderDashboardFaviconImage(pageUrl: string): string {
+function getDashboardFaviconImageViewModel(pageUrl: string): DashboardCardFaviconViewModel | null {
   const normalizedPageUrl = String(pageUrl || '').trim()
   if (!normalizedPageUrl) {
-    return ''
+    return null
   }
 
   const remoteEntry = getDashboardCachedFaviconEntry(normalizedPageUrl)
   if (remoteEntry?.iconUrl) {
-    return renderDashboardFaviconImg({
+    return {
       src: remoteEntry.iconUrl,
       source: 'cache',
       pageUrl: normalizedPageUrl
-    })
+    }
   }
 
   const chromeFaviconUrl = getDashboardFaviconFallbackUrl(normalizedPageUrl)
   if (!chromeFaviconUrl) {
-    return ''
+    return null
   }
 
-  return renderDashboardFaviconImg({
+  return {
     src: chromeFaviconUrl,
     source: 'chrome',
     pageUrl: normalizedPageUrl
-  })
-}
-
-function renderDashboardFaviconImg({
-  src,
-  source,
-  pageUrl
-}: {
-  src: string
-  source: 'cache' | 'chrome'
-  pageUrl: string
-}): string {
-  return `<img src="${escapeAttr(src)}" alt="" loading="lazy" decoding="async" draggable="false" data-dashboard-favicon data-dashboard-favicon-source="${source}" data-dashboard-favicon-page-url="${escapeAttr(pageUrl)}">`
+  }
 }
 
 function getFallbackLabel(title: string): string {

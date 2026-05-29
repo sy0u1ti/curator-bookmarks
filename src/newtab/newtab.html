@@ -45,55 +45,9 @@
       }
     </style>
     <script defer src="/instant-wallpaper-boot.js"></script>
-    <link rel="stylesheet" href="./newtab.css">
   </head>
   <body>
-    <div id="newtab-background-mask" class="newtab-background-mask" aria-hidden="true"></div>
-    <div class="wallpaper-loading-indicator" role="status" aria-live="polite" aria-label="正在加载背景图">
-      <div class="wallpaper-loading-card">
-        <div class="wallpaper-loading-loader" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
-        </div>
-      </div>
-    </div>
-
-    <div class="settings-trigger-zone">
-      <a
-        id="newtab-dashboard-trigger"
-        class="settings-trigger dashboard-trigger"
-        href="#dashboard"
-        aria-label="打开书签仪表盘"
-        aria-controls="newtab-dashboard-overlay"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M6.5 4.5h11a1.5 1.5 0 0 1 1.5 1.5v13l-7-3.8L5 19V6a1.5 1.5 0 0 1 1.5-1.5Z"></path>
-          <path d="M8.5 8.5h7M8.5 11.5h5"></path>
-        </svg>
-        <span>打开书签仪表盘</span>
-      </a>
-      <span class="dashboard-shortcut-hint" aria-hidden="true">Ctrl/Cmd+K 快捷打开书签仪表盘</span>
-      <button
-        id="newtab-settings-trigger"
-        class="settings-trigger"
-        type="button"
-        aria-label="打开设置"
-        aria-controls="newtab-settings-drawer"
-        aria-expanded="false"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z"></path>
-          <path d="M19.4 13.4c.1-.5.1-.9.1-1.4s0-.9-.1-1.4l2-1.5-1.9-3.2-2.4 1a8.5 8.5 0 0 0-2.4-1.4L14.4 3h-4.8l-.4 2.5c-.9.3-1.7.8-2.4 1.4l-2.3-1-1.9 3.2 2 1.5c-.1.5-.1.9-.1 1.4s0 .9.1 1.4l-2 1.5 1.9 3.2 2.3-1c.7.6 1.5 1.1 2.4 1.4l.4 2.5h4.8l.4-2.5c.9-.3 1.7-.8 2.4-1.4l2.4 1 1.9-3.2-2.1-1.5Z"></path>
-        </svg>
-      </button>
-    </div>
-
-    <div id="newtab-settings-backdrop" class="settings-backdrop" data-close-settings></div>
-
-
-
-    <div id="newtab-root" class="newtab-shell"></div>
-    <script type="module" src="./newtab.ts"></script>
+    <div id="newtab-react-root"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

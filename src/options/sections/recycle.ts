@@ -16,8 +16,8 @@ import { createAutoBackupBeforeDangerousOperation, type DangerousOperationKind }
 import { displayUrl } from '../../shared/text.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeHtml, escapeAttr } from '../shared-options/html.js'
-import { syncSelectionSet, formatDateTime } from '../shared-options/utils.js'
+import { syncSelectionSet } from '../shared-options/utils.js'
+import { renderRecycleBinIsland } from '../components/RecycleBinIsland.js'
 
 export function normalizeRecycleBin(rawEntries) {
   if (!Array.isArray(rawEntries)) {
@@ -90,78 +90,30 @@ export function renderRecycleSection(callbacks) {
   dom.recycleSelectAll.disabled = managerState.recycleBin.length === 0
   dom.recycleClearAll.disabled = managerState.recycleBin.length === 0 || availabilityState.deleting
 
-  if (!managerState.recycleBin.length) {
-    dom.recycleResults.innerHTML = '<div class="detect-empty">回收站当前为空。</div>'
-    return
-  }
-
-  dom.recycleResults.innerHTML = managerState.recycleBin
-    .map((entry) => buildRecycleEntryCard(entry))
-    .join('')
-}
-
-function buildRecycleEntryCard(entry) {
-  const selected = managerState.selectedRecycleIds.has(String(entry.recycleId))
-  const selectionLabel = getRecycleEntryActionLabel('选择回收站书签', entry)
-  const restoreLabel = getRecycleEntryActionLabel('恢复书签', entry)
-  const clearLabel = getRecycleEntryActionLabel('清除回收站记录', entry)
-
-  return `
-    <article class="detect-result-card ${selected ? 'selected' : ''}">
-      <div class="detect-result-head">
-        <div class="detect-result-head-left">
-          <label class="detect-result-check">
-            <input
-              type="checkbox"
-              data-recycle-select="true"
-              data-recycle-id="${escapeAttr(entry.recycleId)}"
-              aria-label="${escapeAttr(selectionLabel)}"
-              ${selected ? 'checked' : ''}
-              ${availabilityState.deleting ? 'disabled' : ''}
-            >
-            <span>选择</span>
-          </label>
-          <span class="options-chip muted">回收站</span>
-        </div>
-        <div class="detect-result-actions">
-          <button
-            class="detect-result-action"
-            type="button"
-            data-recycle-restore="${escapeAttr(entry.recycleId)}"
-            aria-label="${escapeAttr(restoreLabel)}"
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >
-            恢复书签
-          </button>
-          <button
-            class="detect-result-action danger"
-            type="button"
-            data-recycle-clear="${escapeAttr(entry.recycleId)}"
-            aria-label="${escapeAttr(clearLabel)}"
-            ${availabilityState.deleting ? 'disabled' : ''}
-          >
-            清除
-          </button>
-        </div>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(entry.title || '未命名书签')}</strong>
-        <div class="detect-result-url">${escapeHtml(displayUrl(entry.url))}</div>
-        <div class="detect-result-detail">来源：${escapeHtml(entry.source || '删除')} · 删除于 ${escapeHtml(formatDateTime(entry.deletedAt))}</div>
-        <div class="detect-result-path" title="${escapeAttr(entry.path || '未归档路径')}">${escapeHtml(entry.path || '未归档路径')}</div>
-      </div>
-    </article>
-  `
+  renderRecycleBinIsland(dom.recycleResults, {
+    entries: managerState.recycleBin,
+    selectedIds: managerState.selectedRecycleIds,
+    disabled: availabilityState.deleting
+  })
 }
 
 export function handleRecycleResultsClick(event, callbacks) {
-  const selectionInput = event.target.closest('input[data-recycle-select]')
-  if (selectionInput) {
-    const recycleId = String(selectionInput.getAttribute('data-recycle-id') || '').trim()
-    if (selectionInput.checked) {
-      managerState.selectedRecycleIds.add(recycleId)
-    } else {
+  const selectionControl = event.target.closest('[data-recycle-select]')
+  if (selectionControl) {
+    const recycleId = String(selectionControl.getAttribute('data-recycle-id') || '').trim()
+    if (
+      availabilityState.deleting ||
+      !recycleId ||
+      selectionControl.hasAttribute('disabled') ||
+      selectionControl.getAttribute('aria-disabled') === 'true'
+    ) {
+      return
+    }
+
+    if (managerState.selectedRecycleIds.has(recycleId)) {
       managerState.selectedRecycleIds.delete(recycleId)
+    } else {
+      managerState.selectedRecycleIds.add(recycleId)
     }
     callbacks.renderAvailabilitySection()
     return

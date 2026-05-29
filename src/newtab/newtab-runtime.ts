@@ -10,10 +10,6 @@ import {
 } from '../shared/bookmark-tree.js'
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
-import {
-  initializeCustomSelects,
-  syncCustomSelectForControl
-} from '../shared/custom-select.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import {
   getSettingsGroupControlSyncActions,
@@ -33,7 +29,6 @@ import {
   loadSavedSearchIndex,
   parseSearchQuery,
   saveSearch,
-  type SavedSearch,
   type SavedSearchIndex
 } from '../shared/search-query.js'
 import type { NaturalSearchPlan } from '../popup/natural-search.js'
@@ -81,6 +76,7 @@ import {
   getAdaptiveSearchWidthBounds,
   getVerticalCenterCollisionOffset,
   normalizeNewTabSearchText,
+  renderContentStateRoot,
   type AdaptiveSearchOffsetBounds,
   type NewTabContentState,
   type PortalQuickAccessItem,
@@ -197,6 +193,66 @@ import {
 } from '../shared/newtab-workspace-settings.js'
 import { mark as perfMark, measure as perfMeasure, measureNow } from '../shared/perf.js'
 import { runIdle, runMicroIdle } from '../shared/idle.js'
+import {
+  appendBookmarkTileIslandElements,
+  createBookmarkAddMenuIslandElement,
+  createBookmarkContentIslandElement,
+  createBookmarkEditMenuIslandElement,
+  createBookmarkGridPlaceholderIslandElement,
+  createBookmarkTileIslandElement,
+  createClockSpacerIslandElement,
+  createClockWidgetIslandElement,
+  createDeleteToastIslandElement,
+  createFeaturedBackgroundHoverPreviewIslandElement,
+  createNewTabOnboardingIslandElement,
+  createPortalPanelIslandElement,
+  createQuickAccessPanelIslandElement,
+  createSearchEngineMenuIslandElement,
+  createSearchWidgetIslandElement,
+  createSpeedDialPanelIslandElement,
+  createSourceNavigationIslandElement,
+  mountBookmarkAddMenuIslandElement,
+  mountBookmarkEditMenuIslandElement,
+  mountBookmarkGridPlaceholderIslandElement,
+  mountDeleteToastIslandElement,
+  mountFeaturedBackgroundHoverPreviewIslandElement,
+  mountNewTabDragGhostBridge,
+  mountSearchEngineMenuIslandElement,
+  renderFeaturedBackgroundPickerIsland,
+  renderFolderCandidateListIsland,
+  renderNewTabSavedSearchesIsland,
+  renderNewTabSearchChipsIsland,
+  renderNewTabSearchHintIsland,
+  renderNewTabSearchSuggestionsIsland,
+  renderModuleSettingRowIsland,
+  renderSelectedFolderSourceListIsland,
+  renderSpeedDialPanelIsland,
+  replaceBookmarkContentIslandChildren,
+  type BookmarkAddMenuViewModel,
+  type BookmarkContentViewModel,
+  type BookmarkEditMenuViewModel,
+  type BookmarkFolderSectionViewModel,
+  type BookmarkMenuActionIcon,
+  type BookmarkMenuActionViewModel,
+  type BookmarkMenuTextFieldViewModel,
+  type BookmarkTileViewModel,
+  type FeaturedBackgroundPickerCardViewModel,
+  type FeaturedBackgroundPickerGridSectionViewModel,
+  type FeaturedBackgroundPickerProviderGroupViewModel,
+  type FeaturedBackgroundPickerState,
+  type FolderCandidateItemViewModel,
+  type FolderCandidateListState,
+  type ModuleSettingRowViewModel,
+  type QuickAccessGroupViewModel,
+  type SavedSearchesState,
+  type SearchChipViewModel,
+  type SearchEngineMenuItemViewModel,
+  type SearchHintState,
+  type SearchSuggestionViewModel,
+  type SelectedFolderSourceItemViewModel,
+  type SelectedFolderSourceListState,
+  type SpeedDialCardViewModel
+} from './components/RuntimeIslands.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -480,7 +536,7 @@ interface BookmarkLazyExpansionTarget {
   renderVersion: number
 }
 
-type MenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
+type MenuActionIcon = BookmarkMenuActionIcon
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 interface LastDeletedBookmarkState {
@@ -644,19 +700,27 @@ function cachedEl<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return found
 }
 
+function isValueControl(element: unknown): element is HTMLInputElement | HTMLSelectElement {
+  return element instanceof HTMLInputElement || element instanceof HTMLSelectElement
+}
+
 const root = cachedEl('newtab-root')
 const dashboardTrigger = cachedEl('newtab-dashboard-trigger')
 let dashboardOverlay: HTMLElement | null = null
 let dashboardFrame: HTMLIFrameElement | null = null
 let dashboardFallback: HTMLElement | null = null
 let dashboardFallbackCopy: HTMLElement | null = null
+let setDashboardOverlayOpen: ((open: boolean) => void) | null = null
 const settingsTrigger = cachedEl('newtab-settings-trigger')
 let settingsDrawer: HTMLElement | null = null
 const settingsBackdrop = cachedEl('newtab-settings-backdrop')
 let settingsClose: HTMLElement | null = null
+let setSettingsDrawerOpen: ((open: boolean) => void) | null = null
 let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
 let featuredBackgroundModalClose: HTMLElement | null = null
+let setFeaturedBackgroundModalOpen: ((open: boolean) => void) | null = null
+let getFeaturedBackgroundModalOpen: (() => boolean) | null = null
 let featuredBackgroundPicker: HTMLElement | null = null
 let featuredBackgroundRefreshButton: HTMLElement | null = null
 let featuredBackgroundStatus: HTMLElement | null = null
@@ -767,16 +831,23 @@ interface BackgroundUrlCacheTask {
   durableBlob: Promise<Blob>
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+let newTabRuntimeStarted = false
+
+export function startNewTabRuntime(): void {
+  if (newTabRuntimeStarted) {
+    return
+  }
+  newTabRuntimeStarted = true
+
   recordNewTabDomContentLoaded()
-  initializeCustomSelects()
   bindEvents()
   hydrateFeaturedBackgroundOptions()
   void backgroundPreloadPromise
   void hydrateNewTabSavedSearches()
   void refreshNewTab()
-})
-document.addEventListener('visibilitychange', handleNewTabVisibilityChange)
+  document.addEventListener('visibilitychange', handleNewTabVisibilityChange)
+  window.addEventListener('pagehide', cleanupNewTabRuntime)
+}
 
 function createSearchIndexReadyPromise(): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -860,8 +931,6 @@ function recordNewTabBackgroundReady(): void {
   perfMark('newtab.backgroundReady')
   perfMeasure('newtab.backgroundReadyMs', 'newtab.domContentLoaded', 'newtab.backgroundReady')
 }
-
-window.addEventListener('pagehide', cleanupNewTabRuntime)
 
 function bindEvents(): void {
   dashboardTrigger?.addEventListener('click', (event) => {
@@ -1128,6 +1197,7 @@ function shouldFocusSearchFromKeydown(event: KeyboardEvent): boolean {
     activeElement instanceof HTMLInputElement ||
     activeElement instanceof HTMLTextAreaElement ||
     activeElement instanceof HTMLSelectElement ||
+    (activeElement instanceof HTMLElement && activeElement.getAttribute('role') === 'combobox') ||
     activeElement instanceof HTMLButtonElement ||
     activeElement instanceof HTMLAnchorElement ||
     activeElement?.getAttribute('contenteditable') === 'true'
@@ -1154,6 +1224,7 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
   return target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     target instanceof HTMLSelectElement ||
+    target.getAttribute('role') === 'combobox' ||
     target.isContentEditable ||
     target.getAttribute('contenteditable') === 'true'
 }
@@ -1899,7 +1970,7 @@ function ensureSettingsDrawerMounted(): Promise<void> {
   settingsDrawerMountPromise = (async () => {
     const mod = await import('./settings-drawer-mount.js')
     const result = mod.mountSettingsDrawer({
-      onCloseClick: closeSettingsDrawer,
+      onCloseRequest: closeSettingsDrawer,
       onFeaturedPickerClick: () => {
         void openFeaturedBackgroundPicker()
       },
@@ -1916,13 +1987,11 @@ function ensureSettingsDrawerMounted(): Promise<void> {
     settingsDrawerMounted = true
     settingsDrawer = result.drawer
     settingsClose = result.close
+    setSettingsDrawerOpen = result.setOpen
     featuredBackgroundPicker = result.featuredPicker
     featuredBackgroundDisplaySizeInput = result.featuredDisplaySize
     featuredBackgroundPositionXInput = result.featuredPositionX
     featuredBackgroundPositionYInput = result.featuredPositionY
-    if (settingsDrawer) {
-      initializeCustomSelects(settingsDrawer)
-    }
     hydrateFeaturedBackgroundOptions()
     syncBackgroundSettingsControls()
     syncSearchSettingsControls()
@@ -1988,6 +2057,7 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     settingsBackdrop?.classList.add('open')
     settingsDrawer?.classList.remove('is-opening')
     settingsBackdrop?.classList.remove('is-opening')
+    setSettingsDrawerOpen?.(true)
     settingsDrawer?.setAttribute('aria-hidden', 'false')
     settingsDrawer?.removeAttribute('inert')
     settingsTrigger?.setAttribute('aria-expanded', 'true')
@@ -2079,6 +2149,7 @@ function closeSettingsDrawer(): void {
 
   settingsDrawer?.classList.remove('open')
   settingsBackdrop?.classList.remove('open')
+  setSettingsDrawerOpen?.(false)
   settingsDrawer?.classList.remove('is-opening')
   settingsBackdrop?.classList.remove('is-opening')
   settingsDrawer?.classList.add('is-closing')
@@ -2512,7 +2583,7 @@ function createSpeedDialDragGhost(sourceCard = getActiveSpeedDialDragCard()): vo
   ghost.style.height = `${rect.height}px`
   ghost.style.visibility = 'hidden'
   speedDialDragGhost = ghost
-  document.body.appendChild(ghost)
+  mountNewTabDragGhostBridge(ghost)
   syncSpeedDialDragOffsetToGhostIcon(ghost, rect)
   updateSpeedDialDragGhost({ immediate: true })
   ghost.style.visibility = ''
@@ -2976,7 +3047,7 @@ function createBookmarkDragGhost(sourceTile = getActiveDragTile()): void {
   ghost.style.height = `${rect.height}px`
   ghost.style.visibility = 'hidden'
   bookmarkDragGhost = ghost
-  document.body.appendChild(ghost)
+  mountNewTabDragGhostBridge(ghost)
   syncBookmarkDragOffsetToGhostIcon(ghost, rect)
   updateBookmarkDragGhost({ immediate: true })
   ghost.style.visibility = ''
@@ -3583,7 +3654,7 @@ function createFolderDragGhost(sourceHeader = getActiveFolderDragHeader()): void
   ghost.style.width = `${rect.width}px`
   ghost.style.height = `${rect.height}px`
   folderDragGhost = ghost
-  document.body.appendChild(ghost)
+  mountNewTabDragGhostBridge(ghost)
   updateFolderDragGhost({ immediate: true })
 }
 
@@ -4862,7 +4933,7 @@ function render(): void {
   bookmarkTileRenderVersion += 1
   disconnectBookmarkLazyExpansionObserver()
   cancelScheduledAdaptiveNewTabLayoutUpdate()
-  root.replaceChildren(createContentStateView(contentState))
+  renderContentStateRoot(root, createContentStateView(contentState))
   lastRenderedContentSignature = contentSignature
   lastRenderedShellSignature = shellSignature
   scheduleAdaptiveNewTabLayoutUpdate()
@@ -4903,8 +4974,7 @@ function renderBookmarkSections(): boolean {
   bookmarkTileRenderVersion += 1
   disconnectBookmarkLazyExpansionObserver()
   const nextContent = createBookmarkSections(state.folderSections)
-  content.replaceChildren(...Array.from(nextContent.childNodes))
-  copyElementPresentationState(nextContent, content)
+  replaceBookmarkContentIslandChildren(content, nextContent)
   return true
 }
 
@@ -4979,25 +5049,6 @@ function expandBookmarkSectionPlaceholder(placeholder: HTMLElement): void {
   )
 }
 
-function copyElementPresentationState(source: HTMLElement, target: HTMLElement): void {
-  target.className = source.className
-  target.removeAttribute('style')
-  const sourceAttributeNames = new Set(source.getAttributeNames())
-  for (const name of target.getAttributeNames()) {
-    if (name !== 'class' && !sourceAttributeNames.has(name)) {
-      target.removeAttribute(name)
-    }
-  }
-
-  for (const name of source.getAttributeNames()) {
-    if (name === 'class') {
-      continue
-    }
-
-    target.setAttribute(name, source.getAttribute(name) || '')
-  }
-}
-
 function recordContentStateRender(contentState: NewTabContentState): void {
   if (contentState.type === 'loading') {
     recordNewTabSkeletonRendered()
@@ -5052,6 +5103,7 @@ function ensureDashboardOverlayMounted(): Promise<void> {
       onFrameError: () => {
         setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
       },
+      onCloseRequest: closeDashboardRoute,
       onFallbackReturn: closeDashboardRoute,
       onFallbackRetry: retryDashboardFrame
     })
@@ -5061,6 +5113,7 @@ function ensureDashboardOverlayMounted(): Promise<void> {
     dashboardFrame = result.frame
     dashboardFallback = result.fallback
     dashboardFallbackCopy = result.fallbackCopy
+    setDashboardOverlayOpen = result.setOpen
     if (state.dashboardOpen) {
       renderDashboard()
       ensureDashboardFrameLoaded()
@@ -5204,6 +5257,7 @@ function renderDashboard(): void {
   dashboardOverlay.setAttribute('aria-hidden', state.dashboardOpen ? 'false' : 'true')
   dashboardOverlay.dataset.dashboardReady = state.dashboardFrameReady && !hasDashboardError ? 'true' : 'false'
   dashboardOverlay.dataset.dashboardError = hasDashboardError ? 'true' : 'false'
+  setDashboardOverlayOpen?.(state.dashboardOpen)
   dashboardTrigger?.setAttribute('aria-expanded', state.dashboardOpen ? 'true' : 'false')
   if (dashboardFallback) {
     dashboardFallback.hidden = !hasDashboardError
@@ -5327,42 +5381,11 @@ function renderDeleteToast(): void {
     return
   }
   const bookmarkLabel = getBookmarkActionLabelContext(deleted.bookmark)
-
-  const toast = document.createElement('section')
-  toast.className = 'newtab-delete-toast'
-  toast.setAttribute('role', 'status')
-  toast.setAttribute('aria-live', 'polite')
-
-  const copy = document.createElement('div')
-  copy.className = 'newtab-delete-toast-copy'
-
-  const title = document.createElement('strong')
-  title.textContent = '已删除书签'
-
-  const detail = document.createElement('span')
-  detail.textContent = state.deleteToastStatus || getBookmarkDisplayTitle(deleted.bookmark)
-
-  copy.append(title, detail)
-
-  const actions = document.createElement('div')
-  actions.className = 'newtab-delete-toast-actions'
-
-  const undo = document.createElement('button')
-  undo.type = 'button'
-  undo.dataset.undoDelete = 'true'
-  undo.disabled = state.deleteToastBusy
-  undo.textContent = state.deleteToastBusy ? '恢复中' : '撤销'
-  undo.setAttribute('aria-label', `撤销删除：${bookmarkLabel}`)
-
-  const recycle = document.createElement('button')
-  recycle.type = 'button'
-  recycle.dataset.openRecycle = 'true'
-  recycle.textContent = '回收站'
-  recycle.setAttribute('aria-label', `打开回收站查看：${bookmarkLabel}`)
-
-  actions.append(undo, recycle)
-  toast.append(copy, actions)
-  document.body.appendChild(toast)
+  mountDeleteToastIslandElement(createDeleteToastIslandElement({
+    bookmarkLabel,
+    busy: state.deleteToastBusy,
+    detail: state.deleteToastStatus || getBookmarkDisplayTitle(deleted.bookmark)
+  }))
 }
 
 function scheduleRender({ updateClock = false } = {}): void {
@@ -5542,11 +5565,9 @@ function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
       placement: 'utility'
     })
   } else {
-    const spacer = document.createElement('div')
-    spacer.className = 'newtab-clock-spacer'
     modules.push({
       id: 'clock-spacer',
-      element: spacer,
+      element: createClockSpacerIslandElement(),
       placement: 'utility'
     })
   }
@@ -5581,34 +5602,12 @@ function createNewTabOnboardingStrip(): HTMLElement | null {
     return null
   }
 
-  const section = document.createElement('section')
-  section.className = 'newtab-onboarding-strip'
-  section.setAttribute('aria-label', 'Curator 首次使用引导')
-
-  const copy = document.createElement('div')
-  copy.className = 'newtab-onboarding-copy'
-  const title = document.createElement('strong')
-  title.textContent = 'Curator 已将新标签页设为书签搜索和快捷入口'
-  const detail = document.createElement('span')
-  detail.textContent = '核心书签功能默认本地；网页搜索、精选远程背景、AI/Jina 和链接检测可关闭或跳过。'
-  copy.append(title, detail)
-
-  const actions = document.createElement('div')
-  actions.className = 'newtab-onboarding-actions'
-  const sourceButton = document.createElement('button')
-  sourceButton.type = 'button'
-  sourceButton.textContent = '选择来源'
-  sourceButton.addEventListener('click', openFolderSourceSettings)
-  const skipButton = document.createElement('button')
-  skipButton.type = 'button'
-  skipButton.className = 'secondary'
-  skipButton.textContent = '我知道了'
-  skipButton.addEventListener('click', () => {
-    void completeNewTabOnboarding()
+  return createNewTabOnboardingIslandElement({
+    onOpenFolderSettings: openFolderSourceSettings,
+    onSkip: () => {
+      void completeNewTabOnboarding()
+    }
   })
-  actions.append(sourceButton, skipButton)
-  section.append(copy, actions)
-  return section
 }
 
 async function completeNewTabOnboarding(): Promise<void> {
@@ -5631,87 +5630,73 @@ function createSearchWidget(): HTMLElement | null {
     return null
   }
   const webSearchEnabled = settings.webSearchEnabled !== false
-
-  const slot = document.createElement('section')
-  slot.className = 'newtab-search-slot'
-  slot.style.setProperty('--search-width', `${settings.width}vw`)
-  slot.style.setProperty('--search-height', `${settings.height}px`)
-  slot.style.setProperty('--search-offset-y', `${settings.offsetY}px`)
-  slot.dataset.searchAutoVerticalCenter = String(settings.autoVerticalCenter)
-  slot.setAttribute('aria-label', webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令')
-
-  const form = document.createElement('form')
-  form.className = 'newtab-search'
-  form.style.setProperty('--search-width', `${settings.width}vw`)
-  form.style.setProperty('--search-height', `${settings.height}px`)
-  form.style.setProperty('--search-bg-alpha', String(settings.background / 100))
-  form.setAttribute('role', 'search')
-  form.setAttribute('aria-label', webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令')
-
-  const input = document.createElement('input')
   const searchPlaceholder = getSearchPlaceholder(settings)
-  input.className = 'newtab-search-input'
-  input.type = 'search'
-  input.autocomplete = 'off'
-  input.enterKeyHint = 'search'
-  input.placeholder = searchPlaceholder
-  input.spellcheck = false
-  input.setAttribute('role', 'combobox')
-  input.setAttribute(
-    'aria-label',
-    webSearchEnabled
+
+  const slot = createSearchWidgetIslandElement({
+    ariaLabel: webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令',
+    autoVerticalCenter: settings.autoVerticalCenter,
+    backgroundAlpha: String(settings.background / 100),
+    engine: getSearchEngineButtonState(),
+    height: settings.height,
+    inputAriaLabel: webSearchEnabled
       ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
-      : '输入关键词搜索本地书签或命令'
-  )
-  input.setAttribute('aria-autocomplete', 'list')
-  input.setAttribute('aria-controls', 'newtab-search-suggestions')
-  input.setAttribute('aria-expanded', 'false')
-
-  const clearButton = document.createElement('button')
-  clearButton.className = 'newtab-search-clear hidden'
-  clearButton.type = 'button'
-  clearButton.setAttribute('aria-label', '清空搜索')
-  clearButton.textContent = '×'
-
-  const naturalButton = document.createElement('button')
-  naturalButton.className = 'newtab-search-natural'
-  naturalButton.type = 'button'
-  naturalButton.setAttribute('aria-pressed', String(state.searchSettings.naturalSearchEnabled))
-
-  const engineButton = document.createElement('button')
-  engineButton.className = 'newtab-search-engine'
-  engineButton.type = 'button'
-  engineButton.setAttribute('aria-haspopup', 'menu')
-  engineButton.setAttribute('aria-expanded', 'false')
+      : '输入关键词搜索本地书签或命令',
+    natural: getNaturalSearchButtonState(),
+    offsetY: settings.offsetY,
+    placeholder: searchPlaceholder,
+    width: settings.width
+  })
+  const form = slot.querySelector<HTMLFormElement>('.newtab-search')
+  const input = slot.querySelector<HTMLInputElement>('.newtab-search-input')
+  const clearButton = slot.querySelector<HTMLButtonElement>('.newtab-search-clear')
+  const naturalButton = slot.querySelector<HTMLButtonElement>('.newtab-search-natural')
+  const engineButton = slot.querySelector<HTMLButtonElement>('.newtab-search-engine')
+  const separator = slot.querySelector<HTMLElement>('.newtab-search-separator')
+  const submitButton = slot.querySelector<HTMLButtonElement>('.newtab-search-submit')
+  const suggestionsPanel = slot.querySelector<HTMLElement>('#newtab-search-suggestions-panel')
+  const suggestions = slot.querySelector<HTMLElement>('#newtab-search-suggestions')
+  const suggestionsHeading = slot.querySelector<HTMLElement>('.newtab-search-section-label')
+  const suggestionsHint = slot.querySelector<HTMLElement>('.newtab-search-hint')
+  const searchChips = slot.querySelector<HTMLElement>('.newtab-search-chips')
+  const savedSearches = slot.querySelector<HTMLElement>('.newtab-saved-searches')
+  if (
+    !form ||
+    !input ||
+    !clearButton ||
+    !naturalButton ||
+    !engineButton ||
+    !separator ||
+    !submitButton ||
+    !suggestionsPanel ||
+    !suggestions ||
+    !suggestionsHeading ||
+    !suggestionsHint ||
+    !searchChips ||
+    !savedSearches
+  ) {
+    return slot
+  }
 
   const updateEngineButton = () => {
-    const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)
-    const label = engine?.shortName || '搜索'
-    engineButton.textContent = label
-    engineButton.disabled = state.searchSettings.webSearchEnabled === false
-    engineButton.title = state.searchSettings.webSearchEnabled === false
-      ? '网页搜索已关闭。可在新标签页设置中重新启用。'
-      : `当前引擎：${engine?.name || label}。Cmd/Ctrl+Enter 搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎。`
-    engineButton.setAttribute('aria-label', `选择搜索引擎，当前为 ${engine?.name || label}`)
+    const buttonState = getSearchEngineButtonState()
+    engineButton.textContent = buttonState.label
+    engineButton.disabled = buttonState.disabled
+    engineButton.title = buttonState.title
+    engineButton.setAttribute('aria-label', buttonState.ariaLabel)
   }
 
   const updateNaturalButton = () => {
-    const active = state.searchSettings.naturalSearchEnabled
-    naturalButton.classList.toggle('active', active)
-    naturalButton.classList.toggle('pending', state.naturalSearchPending)
-    naturalButton.classList.toggle('fallback', Boolean(state.naturalSearchError))
-    naturalButton.textContent = !active
-      ? '语义'
-      : state.naturalSearchPending
-        ? '思考中'
-        : 'AI'
-    naturalButton.title = active
-      ? (state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索')
-      : state.searchSettings.naturalSearchAiConfigured
-        ? '开启 AI 语义搜索'
-        : '需要先配置 AI 渠道'
-    naturalButton.setAttribute('aria-pressed', String(active))
-    naturalButton.setAttribute('aria-label', active ? '关闭 AI 语义搜索' : '开启 AI 语义搜索')
+    const buttonState = getNaturalSearchButtonState()
+    naturalButton.className = [
+      'newtab-search-natural',
+      buttonState.active ? 'active' : '',
+      buttonState.pending ? 'pending' : '',
+      buttonState.fallback ? 'fallback' : ''
+    ].filter(Boolean).join(' ')
+    naturalButton.textContent = buttonState.label
+    naturalButton.title = buttonState.title
+    naturalButton.setAttribute('aria-pressed', String(buttonState.active))
+    naturalButton.setAttribute('aria-label', buttonState.ariaLabel)
   }
 
   const closeEngineMenu = ({ restoreFocus = false } = {}) => {
@@ -5747,37 +5732,34 @@ function createSearchWidget(): HTMLElement | null {
 
   const renderEngineMenu = (initialFocus: 'active' | 'first' | 'last' | 'none' = 'none') => {
     closeEngineMenu()
-    const menu = document.createElement('div')
-    menu.className = 'newtab-search-engine-menu'
-    menu.setAttribute('role', 'menu')
-    menu.setAttribute('aria-label', '搜索引擎')
-
+    const items: SearchEngineMenuItemViewModel[] = []
     for (const engineId of state.searchSettings.enabledEngines) {
       const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId)
       if (!engine) {
         continue
       }
 
-      const item = document.createElement('button')
-      item.className = `newtab-search-engine-item${engineId === state.searchSettings.engine ? ' active' : ''}`
-      item.type = 'button'
-      item.setAttribute('role', 'menuitemradio')
-      item.setAttribute('aria-checked', String(engineId === state.searchSettings.engine))
-      item.tabIndex = -1
-      item.textContent = engine.name
-      item.addEventListener('click', () => {
-        state.searchSettings = normalizeSearchSettings({
-          ...state.searchSettings,
-          engine: engineId
-        })
-        scheduleSearchSettingsSave()
-        updateEngineButton()
-        closeEngineMenu()
-        input.focus()
-        scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+      items.push({
+        active: engineId === state.searchSettings.engine,
+        id: engineId,
+        label: engine.name,
+        onSelect: () => {
+          state.searchSettings = normalizeSearchSettings({
+            ...state.searchSettings,
+            engine: engineId
+          })
+          scheduleSearchSettingsSave()
+          updateEngineButton()
+          closeEngineMenu()
+          input.focus()
+          scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+        }
       })
-      menu.appendChild(item)
     }
+    const menu = createSearchEngineMenuIslandElement({
+      hint: `Cmd/Ctrl+Enter 打开前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎`,
+      items
+    })
 
     menu.addEventListener('keydown', (event) => {
       if (
@@ -5805,63 +5787,13 @@ function createSearchWidget(): HTMLElement | null {
       }
     })
 
-    const hint = document.createElement('div')
-    hint.className = 'newtab-search-engine-menu-hint'
-    hint.textContent = `Cmd/Ctrl+Enter 打开前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎`
-    menu.appendChild(hint)
-    slot.appendChild(menu)
+    mountSearchEngineMenuIslandElement(slot, menu)
     engineButton.setAttribute('aria-expanded', 'true')
 
     if (initialFocus !== 'none') {
       focusEngineMenuItem(menu, initialFocus === 'last' ? 'last' : initialFocus === 'first' ? 'first' : 1)
     }
   }
-
-  const separator = document.createElement('span')
-  separator.className = 'newtab-search-separator hidden'
-  separator.setAttribute('aria-hidden', 'true')
-
-  const submitButton = document.createElement('button')
-  submitButton.className = 'newtab-search-submit'
-  submitButton.type = 'submit'
-  submitButton.setAttribute('aria-label', '搜索网页')
-  submitButton.title = '搜索网页'
-  submitButton.disabled = true
-
-  const icon = document.createElement('span')
-  icon.className = 'newtab-search-icon'
-  icon.setAttribute('aria-hidden', 'true')
-  submitButton.appendChild(icon)
-
-  const suggestionsPanel = document.createElement('div')
-  suggestionsPanel.id = 'newtab-search-suggestions-panel'
-  suggestionsPanel.className = 'newtab-search-suggestions-panel hidden'
-
-  const suggestions = document.createElement('div')
-  suggestions.id = 'newtab-search-suggestions'
-  suggestions.className = 'newtab-search-suggestions'
-  suggestions.setAttribute('role', 'listbox')
-  suggestions.setAttribute('aria-label', '匹配的书签')
-
-  const suggestionsHeading = document.createElement('div')
-  suggestionsHeading.className = 'newtab-search-section-label'
-  suggestionsHeading.textContent = '书签匹配'
-
-  const suggestionsHint = document.createElement('div')
-  suggestionsHint.className = 'newtab-search-hint'
-  suggestionsHint.setAttribute('role', 'status')
-  suggestionsHint.setAttribute('aria-live', 'polite')
-  suggestionsHint.hidden = true
-
-  const searchChips = document.createElement('div')
-  searchChips.className = 'newtab-search-chips hidden'
-  searchChips.setAttribute('aria-label', '当前搜索条件')
-
-  const savedSearches = document.createElement('div')
-  savedSearches.className = 'newtab-saved-searches hidden'
-  savedSearches.setAttribute('aria-label', '已保存搜索')
-
-  suggestionsPanel.append(searchChips, suggestionsHeading, suggestions, suggestionsHint, savedSearches)
 
   let searchSuggestions: NewTabSearchSuggestion[] = []
   let activeSuggestionIndex = -1
@@ -5879,16 +5811,23 @@ function createSearchWidget(): HTMLElement | null {
     suggestionDebounceTimer = 0
     searchSuggestions = []
     activeSuggestionIndex = -1
-    suggestions.replaceChildren()
+    renderNewTabSearchSuggestionsIsland(suggestions, [])
     renderedSuggestionKeys = []
-    searchChips.replaceChildren()
+    renderNewTabSearchChipsIsland(searchChips, [])
     searchChips.classList.add('hidden')
-    savedSearches.replaceChildren()
+    renderNewTabSavedSearchesIsland(savedSearches, {
+      canSaveCurrent: false,
+      error: '',
+      hasCurrentSaved: false,
+      items: [],
+      onSaveCurrent: () => undefined,
+      show: false
+    })
     savedSearches.classList.add('hidden')
     suggestions.hidden = false
     suggestionsHeading.textContent = '书签匹配'
     suggestionsHeading.hidden = false
-    suggestionsHint.replaceChildren()
+    renderNewTabSearchHintIsland(suggestionsHint, { type: 'empty' })
     suggestionsHint.hidden = true
     suggestionsPanel.classList.add('hidden')
     input.setAttribute('aria-expanded', 'false')
@@ -5913,7 +5852,7 @@ function createSearchWidget(): HTMLElement | null {
     searchSuggestions = suggestionList
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
-      suggestions.replaceChildren()
+      renderNewTabSearchSuggestionsIsland(suggestions, [])
       renderedSuggestionKeys = []
       suggestions.hidden = true
       input.removeAttribute('aria-activedescendant')
@@ -5925,7 +5864,10 @@ function createSearchWidget(): HTMLElement | null {
       if (state.searchSettings.webSearchEnabled === false) {
         suggestionsHeading.textContent = advancedSearch ? '语法搜索匹配' : '关键词书签匹配'
         suggestionsHeading.hidden = false
-        suggestionsHint.textContent = '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
+        renderNewTabSearchHintIsland(suggestionsHint, {
+          type: 'text',
+          text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
+        })
         suggestionsHint.hidden = false
         suggestionsPanel.classList.remove('hidden')
         input.setAttribute('aria-expanded', 'true')
@@ -5934,7 +5876,7 @@ function createSearchWidget(): HTMLElement | null {
 
       suggestionsHeading.textContent = '网页搜索'
       suggestionsHeading.hidden = false
-      suggestionsHint.replaceChildren(createSearchWebFallbackButton(trimmedQuery))
+      renderNewTabSearchHintIsland(suggestionsHint, createSearchWebFallbackState(trimmedQuery))
       suggestionsHint.hidden = false
       suggestionsPanel.classList.remove('hidden')
       input.setAttribute('aria-expanded', 'true')
@@ -5972,19 +5914,25 @@ function createSearchWidget(): HTMLElement | null {
         button.setAttribute('aria-selected', String(active))
       })
     } else {
-      suggestions.replaceChildren(...searchSuggestions.map((suggestion, index) =>
-        createSearchSuggestionButton(
-          suggestion,
-          index,
-          index === activeSuggestionIndex,
-          onSelectSuggestion
+      renderNewTabSearchSuggestionsIsland(
+        suggestions,
+        searchSuggestions.map((suggestion, index) =>
+          createSearchSuggestionViewModel(
+            suggestion,
+            index,
+            index === activeSuggestionIndex,
+            onSelectSuggestion
+          )
         )
-      ))
+      )
       renderedSuggestionKeys = nextSuggestionKeys
     }
     suggestionsPanel.classList.remove('hidden')
     suggestionsHeading.hidden = false
-    suggestionsHint.textContent = getSearchSuggestionHintText()
+    renderNewTabSearchHintIsland(suggestionsHint, {
+      type: 'text',
+      text: getSearchSuggestionHintText()
+    })
     suggestionsHint.hidden = false
     input.setAttribute('aria-expanded', 'true')
 
@@ -6076,12 +6024,15 @@ function createSearchWidget(): HTMLElement | null {
       syncSearchInputActions(input, clearButton, separator, submitButton)
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
-    suggestions.replaceChildren()
+    renderNewTabSearchSuggestionsIsland(suggestions, [])
     renderedSuggestionKeys = []
     suggestions.hidden = true
     suggestionsHeading.textContent = '书签匹配'
     suggestionsHeading.hidden = false
-    suggestionsHint.textContent = '正在准备索引…'
+    renderNewTabSearchHintIsland(suggestionsHint, {
+      type: 'text',
+      text: '正在准备索引…'
+    })
     suggestionsHint.hidden = false
     suggestionsPanel.classList.remove('hidden')
     input.setAttribute('aria-expanded', 'true')
@@ -6208,34 +6159,63 @@ function createSearchWidget(): HTMLElement | null {
 
   updateEngineButton()
   updateNaturalButton()
-  form.append(input, clearButton, separator, naturalButton, engineButton, submitButton)
   syncSearchInputActions(input, clearButton, separator, submitButton)
-  slot.append(form, suggestionsPanel)
   return slot
 
-  function createSearchWebFallbackButton(query: string): HTMLButtonElement {
-    const button = document.createElement('button')
-    button.className = 'newtab-search-web-hint'
-    button.type = 'button'
-    button.textContent = `未找到书签；按 Enter 仅在本页用 ${getSearchEngineDisplayName()} 搜索网页`
-    button.title = `用 ${getSearchEngineDisplayName()} 搜索「${query}」`
-    button.setAttribute('aria-label', button.textContent)
-    button.addEventListener('pointerdown', (event) => {
-      event.preventDefault()
-    })
-    button.addEventListener('click', () => {
-      closeEngineMenu()
-      hideSuggestions()
-      if (state.searchSettings.webSearchEnabled === false) {
-        return
+  function createSearchWebFallbackState(query: string): SearchHintState {
+    const label = `未找到书签；按 Enter 仅在本页用 ${getSearchEngineDisplayName()} 搜索网页`
+    return {
+      type: 'webFallback',
+      ariaLabel: label,
+      label,
+      title: `用 ${getSearchEngineDisplayName()} 搜索「${query}」`,
+      onSelect: () => {
+        closeEngineMenu()
+        hideSuggestions()
+        if (state.searchSettings.webSearchEnabled === false) {
+          return
+        }
+        submitSearch(query)
       }
-      submitSearch(query)
-    })
-    return button
+    }
   }
 
   function getSearchEngineDisplayName(): string {
     return SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)?.name || 'Google'
+  }
+
+  function getSearchEngineButtonState() {
+    const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(state.searchSettings.engine)
+    const label = engine?.shortName || '搜索'
+    const disabled = state.searchSettings.webSearchEnabled === false
+    return {
+      ariaLabel: `选择搜索引擎，当前为 ${engine?.name || label}`,
+      disabled,
+      label,
+      title: disabled
+        ? '网页搜索已关闭。可在新标签页设置中重新启用。'
+        : `当前引擎：${engine?.name || label}。Cmd/Ctrl+Enter 搜索前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎。`
+    }
+  }
+
+  function getNaturalSearchButtonState() {
+    const active = state.searchSettings.naturalSearchEnabled
+    return {
+      active,
+      ariaLabel: active ? '关闭 AI 语义搜索' : '开启 AI 语义搜索',
+      fallback: Boolean(state.naturalSearchError),
+      label: !active
+        ? '语义'
+        : state.naturalSearchPending
+          ? '思考中'
+          : 'AI',
+      pending: state.naturalSearchPending,
+      title: active
+        ? (state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索')
+        : state.searchSettings.naturalSearchAiConfigured
+          ? '开启 AI 语义搜索'
+          : '需要先配置 AI 渠道'
+    }
   }
 
   function getSearchSuggestionHintText(): string {
@@ -6248,14 +6228,12 @@ function createSearchWidget(): HTMLElement | null {
 }
 
 function renderNewTabSearchChips(container: HTMLElement, query: string): void {
-  const chips = parseSearchQuery(query).chips
-  container.classList.toggle('hidden', chips.length === 0)
-  container.replaceChildren(...chips.map((chip) => {
-    const item = document.createElement('span')
-    item.className = `newtab-search-chip ${chip.kind}`
-    item.textContent = chip.label
-    return item
+  const chips: SearchChipViewModel[] = parseSearchQuery(query).chips.map((chip) => ({
+    kind: chip.kind,
+    label: chip.label
   }))
+  container.classList.toggle('hidden', chips.length === 0)
+  renderNewTabSearchChipsIsland(container, chips)
 }
 
 function isNewTabAdvancedSearchQuery(query: string): boolean {
@@ -6330,85 +6308,60 @@ function renderNewTabSavedSearches(
   const normalizedQuery = normalizeNewTabSearchText(query)
   const canSaveCurrent = Boolean(normalizedQuery && isNewTabAdvancedSearchQuery(query))
   const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeNewTabSearchText(item.query) === normalizedQuery)
-  const show = canSaveCurrent || savedSearches.length > 0 || state.savedSearchesError
+  const show = Boolean(canSaveCurrent || savedSearches.length > 0 || state.savedSearchesError)
 
   container.classList.toggle('hidden', !show)
-  container.replaceChildren()
-  if (!show) {
-    return
+  const viewModel: SavedSearchesState = {
+    canSaveCurrent,
+    error: state.savedSearchesError,
+    hasCurrentSaved,
+    items: savedSearches.slice(0, 6).map((search) => ({
+      id: search.id,
+      label: search.name || search.query,
+      query: search.query,
+      onApply: () => {
+        input.value = search.query
+        onApply()
+        input.focus()
+      },
+      onDelete: () => deleteNewTabSavedSearch(search.id).then(onApply)
+    })),
+    onSaveCurrent: () => saveNewTabCurrentSearch(query).then(onApply),
+    show
   }
-
-  const head = document.createElement('div')
-  head.className = 'newtab-saved-search-head'
-  const label = document.createElement('span')
-  label.textContent = state.savedSearchesError || '保存搜索'
-  label.className = state.savedSearchesError ? 'error' : ''
-  head.appendChild(label)
-
-  if (canSaveCurrent) {
-    const saveButton = document.createElement('button')
-    saveButton.className = 'newtab-saved-search-save'
-    saveButton.type = 'button'
-    saveButton.disabled = hasCurrentSaved
-    saveButton.textContent = hasCurrentSaved ? '已保存' : '保存'
-    saveButton.addEventListener('pointerdown', (event) => {
-      event.preventDefault()
-    })
-    saveButton.addEventListener('click', () => {
-      void saveNewTabCurrentSearch(query).then(onApply)
-    })
-    head.appendChild(saveButton)
-  }
-  container.appendChild(head)
-
-  if (!savedSearches.length) {
-    return
-  }
-
-  const list = document.createElement('div')
-  list.className = 'newtab-saved-search-list'
-  for (const search of savedSearches.slice(0, 6)) {
-    list.appendChild(createNewTabSavedSearchChip(search, input, onApply))
-  }
-  container.appendChild(list)
+  renderNewTabSavedSearchesIsland(container, viewModel)
 }
 
-function createNewTabSavedSearchChip(
-  search: SavedSearch,
-  input: HTMLInputElement,
-  onApply: () => void
-): HTMLElement {
-  const chip = document.createElement('span')
-  chip.className = 'newtab-saved-search-chip'
+function createSearchSuggestionViewModel(
+  suggestion: NewTabSearchSuggestion,
+  index: number,
+  active: boolean,
+  onSelect: (suggestion: NewTabSearchSuggestion) => void
+): SearchSuggestionViewModel {
+  const command = isCommandSuggestion(suggestion)
+  const source = command ? suggestion.command.subtitle : suggestion.folderPath || suggestion.folderTitle
+  const meta = source && suggestion.url
+    ? `${source} · ${formatSearchSuggestionUrl(suggestion.url)}`
+    : source || formatSearchSuggestionUrl(suggestion.url)
 
-  const apply = document.createElement('button')
-  apply.className = 'newtab-saved-search-apply'
-  apply.type = 'button'
-  apply.textContent = search.name || search.query
-  apply.title = search.query
-  apply.addEventListener('pointerdown', (event) => {
-    event.preventDefault()
-  })
-  apply.addEventListener('click', () => {
-    input.value = search.query
-    onApply()
-    input.focus()
-  })
+  return {
+    active,
+    ariaLabel: `${command ? '执行命令' : '打开书签'}：${suggestion.title}`,
+    command,
+    elementId: getSearchSuggestionElementId(index),
+    id: getSearchSuggestionKey(suggestion, index),
+    mark: command ? '>' : getFallbackLabel(suggestion.title),
+    meta,
+    onSelect: () => {
+      onSelect(suggestion)
+    },
+    title: suggestion.title
+  }
+}
 
-  const remove = document.createElement('button')
-  remove.className = 'newtab-saved-search-delete'
-  remove.type = 'button'
-  remove.textContent = '×'
-  remove.setAttribute('aria-label', `删除保存搜索：${search.name || search.query}`)
-  remove.addEventListener('pointerdown', (event) => {
-    event.preventDefault()
-  })
-  remove.addEventListener('click', () => {
-    void deleteNewTabSavedSearch(search.id).then(onApply)
-  })
-
-  chip.append(apply, remove)
-  return chip
+function getSearchSuggestionKey(suggestion: NewTabSearchSuggestion, index: number): string {
+  const type = isCommandSuggestion(suggestion) ? 'command' : 'bookmark'
+  return `${type}:${suggestion.id}:${index}`
 }
 
 async function hydrateNewTabSavedSearches(): Promise<void> {
@@ -7043,49 +6996,6 @@ function getNaturalSearchPlanCacheKey(normalizedQuery: string): string {
   return `${getNaturalSearchDateBucket()}\u0000${normalizedQuery}`
 }
 
-function createSearchSuggestionButton(
-  suggestion: NewTabSearchSuggestion,
-  index: number,
-  active: boolean,
-  onSelect: (suggestion: NewTabSearchSuggestion) => void
-): HTMLButtonElement {
-  const command = isCommandSuggestion(suggestion)
-  const button = document.createElement('button')
-  button.id = getSearchSuggestionElementId(index)
-  button.className = `newtab-search-suggestion${command ? ' command' : ''}${active ? ' active' : ''}`
-  button.type = 'button'
-  button.setAttribute('role', 'option')
-  button.setAttribute('aria-selected', String(active))
-  button.setAttribute('aria-label', `${command ? '执行命令' : '打开书签'}：${suggestion.title}`)
-  button.addEventListener('pointerdown', (event) => {
-    event.preventDefault()
-  })
-  button.addEventListener('click', () => {
-    onSelect(suggestion)
-  })
-
-  const mark = document.createElement('span')
-  mark.className = 'newtab-search-suggestion-mark'
-  mark.setAttribute('aria-hidden', 'true')
-  mark.textContent = command ? '>' : getFallbackLabel(suggestion.title)
-
-  const copy = document.createElement('span')
-  copy.className = 'newtab-search-suggestion-copy'
-
-  const title = document.createElement('strong')
-  title.textContent = suggestion.title
-
-  const meta = document.createElement('span')
-  const source = command ? suggestion.command.subtitle : suggestion.folderPath || suggestion.folderTitle
-  meta.textContent = source && suggestion.url
-    ? `${source} · ${formatSearchSuggestionUrl(suggestion.url)}`
-    : source || formatSearchSuggestionUrl(suggestion.url)
-
-  copy.append(title, meta)
-  button.append(mark, copy)
-  return button
-}
-
 function getSearchSuggestionElementId(index: number): string {
   return `newtab-search-suggestion-${index}`
 }
@@ -7130,46 +7040,16 @@ function createClockWidget(): HTMLElement | null {
     return null
   }
 
-  const clock = document.createElement('section')
-  clock.className = 'newtab-clock'
-  clock.style.setProperty('--clock-scale', String(settings.clockSize / 100))
   const now = new Date()
-  clock.dataset.clockDisplayMode = settings.displayMode
-  clock.dataset.clockDensity = settings.density
-  clock.dataset.clockShowSeconds = String(settings.showSeconds && settings.displayMode !== 'date')
-  clock.dataset.clockHour12 = String(settings.hour12 && settings.displayMode !== 'date')
-  clock.setAttribute('aria-label', getFallbackClockAriaLabel(now, settings))
-
-  if (settings.displayMode !== 'date') {
-    const timeGroup = document.createElement('span')
-    timeGroup.className = 'newtab-clock-time-group'
-
-    const time = document.createElement('time')
-    time.className = 'newtab-clock-time'
-    time.dataset.clockTime = 'true'
-    time.dateTime = getFallbackClockTimeDateTime(now)
-    time.textContent = formatFallbackClockTime(now, settings)
-    timeGroup.appendChild(time)
-
-    if (settings.hour12) {
-      const period = document.createElement('span')
-      period.className = 'newtab-clock-period'
-      period.dataset.clockPeriod = 'true'
-      period.textContent = formatFallbackClockPeriod(now)
-      timeGroup.appendChild(period)
-    }
-
-    clock.appendChild(timeGroup)
-  }
-
-  if (settings.displayMode !== 'time') {
-    const date = document.createElement('time')
-    date.className = 'newtab-clock-date'
-    date.dataset.clockDate = 'true'
-    date.dateTime = getFallbackClockDateTime(now)
-    date.textContent = formatFallbackClockDate(now)
-    clock.appendChild(date)
-  }
+  const clock = createClockWidgetIslandElement({
+    ariaLabel: getFallbackClockAriaLabel(now, settings),
+    dateDateTime: getFallbackClockDateTime(now),
+    dateText: formatFallbackClockDate(now),
+    periodText: formatFallbackClockPeriod(now),
+    settings,
+    timeDateTime: getFallbackClockTimeDateTime(now),
+    timeText: formatFallbackClockTime(now, settings)
+  })
 
   hydrateClockText(clock)
 
@@ -7177,116 +7057,93 @@ function createClockWidget(): HTMLElement | null {
 }
 
 function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
-  const view = document.createElement('section')
-  view.className = 'newtab-content'
   const gridSettings = {
     ...state.iconSettings,
     columns: getResponsiveIconColumns(state.iconSettings)
   }
-  view.style.setProperty('--icon-page-width', `${getIconPageWidthPx(state.iconSettings.pageWidth)}px`)
-  view.style.setProperty('--icon-column-gap', `${getIconGapPx(state.iconSettings.columnGap)}px`)
-  view.style.setProperty('--icon-row-gap', `${getIconRowGapPx(state.iconSettings.rowGap)}px`)
-  view.style.setProperty('--icon-folder-gap', `${getFolderGapPx(state.iconSettings.folderGap)}px`)
-  view.style.setProperty('--icon-tile-width', `${getEffectiveIconTileWidthPx(state.iconSettings)}px`)
-  view.style.setProperty('--icon-shell-size', `${state.iconSettings.iconShellSize}px`)
-  view.style.setProperty('--icon-fixed-grid-width', `${getFixedIconGridWidthPx(gridSettings)}px`)
-  view.style.setProperty('--icon-columns', String(gridSettings.columns))
-  view.style.setProperty('--icon-title-lines', String(state.iconSettings.titleLines))
-  view.dataset.iconLayoutMode = state.iconSettings.layoutMode
-  view.dataset.iconShowTitles = String(state.iconSettings.showTitles)
-  view.dataset.iconVerticalCenter = String(state.iconSettings.verticalCenter)
-  view.setAttribute('aria-busy', state.reorderingBookmarks ? 'true' : 'false')
 
+  const modules: HTMLElement[] = []
   for (const moduleKey of getVisibleNewTabModules(state.moduleSettings)) {
     const module = createConfigurableNewTabModule(moduleKey)
     if (module) {
-      view.appendChild(module)
+      modules.push(module)
     }
   }
 
   const portal = createPortalPanel()
   if (portal) {
-    view.appendChild(portal)
+    modules.push(portal)
   }
 
   const sourceNavigation = createSourceNavigation(sections)
-  if (sourceNavigation) {
-    view.appendChild(sourceNavigation)
-  }
-
-  const groupList = document.createElement('div')
-  groupList.className = 'bookmark-folder-sections'
   let renderedBookmarkIndex = 0
-
-  for (const section of sections) {
-    const sectionNode = document.createElement('section')
-    sectionNode.className = 'bookmark-folder-section'
-    sectionNode.id = getNewTabSourceAnchorId(section.id)
-    sectionNode.dataset.folderSectionId = section.id
-    sectionNode.tabIndex = -1
-    if (section.id === state.draggingFolderId && state.folderDragOriginalOrderIds.length) {
-      sectionNode.classList.add('dragging-folder')
+  const sectionModels: BookmarkFolderSectionViewModel[] = sections.map((section) => {
+    const dragging = section.id === state.draggingFolderId && Boolean(state.folderDragOriginalOrderIds.length)
+    const sectionModel: BookmarkFolderSectionViewModel = {
+      anchorId: getNewTabSourceAnchorId(section.id),
+      bookmarkCount: section.bookmarks.length,
+      dragging,
+      folderId: section.id,
+      grid: null,
+      onOpenFolderSettings: openFolderSourceSettings,
+      path: section.path,
+      title: section.title
     }
-
-    const header = document.createElement('button')
-    header.className = 'folder-section-header'
-    header.type = 'button'
-    header.dataset.folderDragHandle = section.id
-    header.title = section.path || section.title
-    header.setAttribute('aria-label', `${section.title}，长按拖拽调整文件夹顺序`)
-    if (section.id === state.draggingFolderId && state.folderDragOriginalOrderIds.length) {
-      header.classList.add('dragging')
-    }
-
-    const title = document.createElement('span')
-    title.className = 'folder-section-title'
-    title.textContent = section.title || '未命名文件夹'
-
-    const count = document.createElement('span')
-    count.className = 'folder-section-count'
-    count.textContent = String(section.bookmarks.length)
-
-    header.append(title, count)
-
-    const headerRow = document.createElement('div')
-    headerRow.className = 'folder-section-header-row'
-    headerRow.append(header, createFolderAddButton(section))
-    sectionNode.appendChild(headerRow)
 
     if (section.bookmarks.length) {
-      const list = document.createElement('nav')
-      list.className = 'bookmark-grid'
-      list.dataset.bookmarkGridFolderId = section.id
-      list.setAttribute('aria-label', `${section.title || '文件夹'}书签`)
-      list.setAttribute('aria-busy', state.reorderingBookmarks ? 'true' : 'false')
-      renderedBookmarkIndex = appendBookmarkTilesInChunks(
-        list,
-        section,
-        renderedBookmarkIndex,
-        bookmarkTileRenderVersion,
-        Math.max(0, BOOKMARK_TILE_INITIAL_RENDER_LIMIT - renderedBookmarkIndex)
-      )
-
-      sectionNode.appendChild(list)
-    } else {
-      sectionNode.appendChild(createEmptyFolderState(section))
+      const startIndex = renderedBookmarkIndex
+      sectionModel.grid = {
+        ariaLabel: `${section.title || '文件夹'}书签`,
+        busy: state.reorderingBookmarks,
+        folderId: section.id,
+        onMount: (list) => {
+          if (!list || list.dataset.bookmarkGridHydrated === 'true') {
+            return
+          }
+          list.dataset.bookmarkGridHydrated = 'true'
+          appendBookmarkTilesInChunks(
+            list,
+            section,
+            startIndex,
+            bookmarkTileRenderVersion,
+            Math.max(0, BOOKMARK_TILE_INITIAL_RENDER_LIMIT - startIndex)
+          )
+        }
+      }
+      renderedBookmarkIndex += section.bookmarks.length
     }
 
-    groupList.appendChild(sectionNode)
-  }
+    return sectionModel
+  })
 
   const reorderStatusMessage = state.bookmarkReorderError || state.folderReorderStatus
-  if (reorderStatusMessage) {
-    const status = document.createElement('p')
-    status.className = 'bookmark-reorder-status'
-    status.dataset.tone = state.bookmarkReorderError ? 'error' : state.folderReorderStatusTone
-    status.setAttribute('role', 'status')
-    status.textContent = reorderStatusMessage
-    groupList.appendChild(status)
+  const viewModel: BookmarkContentViewModel = {
+    content: {
+      columnGap: getIconGapPx(state.iconSettings.columnGap),
+      columns: gridSettings.columns,
+      fixedGridWidth: getFixedIconGridWidthPx(gridSettings),
+      folderGap: getFolderGapPx(state.iconSettings.folderGap),
+      iconShellSize: state.iconSettings.iconShellSize,
+      layoutMode: state.iconSettings.layoutMode,
+      pageWidth: getIconPageWidthPx(state.iconSettings.pageWidth),
+      reordering: state.reorderingBookmarks,
+      rowGap: getIconRowGapPx(state.iconSettings.rowGap),
+      showTitles: state.iconSettings.showTitles,
+      tileWidth: getEffectiveIconTileWidthPx(state.iconSettings),
+      titleLines: state.iconSettings.titleLines,
+      verticalCenter: state.iconSettings.verticalCenter
+    },
+    modules,
+    reorderStatus: reorderStatusMessage
+      ? {
+          message: reorderStatusMessage,
+          tone: state.bookmarkReorderError ? 'error' : state.folderReorderStatusTone
+        }
+      : null,
+    sections: sectionModels,
+    sourceNavigation
   }
-
-  view.appendChild(groupList)
-  return view
+  return createBookmarkContentIslandElement(viewModel)
 }
 
 function createConfigurableNewTabModule(key: NewTabModuleSettingKey): HTMLElement | null {
@@ -7328,26 +7185,11 @@ function createSpeedDialPanel(): HTMLElement | null {
     return null
   }
 
-  const section = document.createElement('section')
-  section.className = 'newtab-speed-dial'
-  section.setAttribute('aria-label', 'Speed Dial')
-  section.setAttribute('aria-busy', 'true')
-
-  const header = document.createElement('div')
-  header.className = 'newtab-module-heading'
-  const title = document.createElement('h2')
-  title.textContent = 'Speed Dial'
-  const meta = document.createElement('span')
-  meta.textContent = '正在载入'
-  header.append(title, meta)
-  section.appendChild(header)
-
-  const placeholder = document.createElement('div')
-  placeholder.className = 'newtab-speed-dial-empty'
-  placeholder.setAttribute('role', 'status')
-  placeholder.textContent = '载入固定入口'
-  section.appendChild(placeholder)
-
+  const section = createSpeedDialPanelIslandElement({
+    ariaBusy: true,
+    content: { type: 'loading', label: '载入固定入口' },
+    meta: '正在载入'
+  })
   hydrateSpeedDialPanel(section)
   return section
 }
@@ -7375,11 +7217,12 @@ function hydrateSpeedDialPanel(section: HTMLElement): void {
       if (!section.isConnected) {
         return
       }
-      section.setAttribute('aria-busy', 'false')
-      const meta = section.querySelector<HTMLElement>('.newtab-module-heading span')
-      if (meta) {
-        meta.textContent = '暂时无法载入'
-      }
+      renderSpeedDialPanelIsland(section, {
+        ariaBusy: false,
+        content: { type: 'loading', label: '载入固定入口' },
+        meta: '暂时无法载入',
+        metaTone: 'error'
+      })
     })
 }
 
@@ -7388,122 +7231,80 @@ function renderSpeedDialPanel(
   items: SpeedDialItem[],
   createSpeedDialEmptyState: SpeedDialModule['createSpeedDialEmptyState']
 ): void {
-  const meta = section.querySelector<HTMLElement>('.newtab-module-heading span')
-  if (meta) {
-    meta.textContent = state.speedDialReorderError || `${items.length} 个固定入口`
-    meta.dataset.tone = state.speedDialReorderError ? 'error' : ''
-  }
-
-  const content = document.createDocumentFragment()
   if (!items.length) {
-    content.appendChild(createSpeedDialEmptyPanel(createSpeedDialEmptyState))
-    replaceSpeedDialContent(section, content)
+    renderSpeedDialPanelIsland(section, {
+      ariaBusy: false,
+      content: { type: 'empty', state: createSpeedDialEmptyState() },
+      meta: state.speedDialReorderError || '0 个固定入口',
+      metaTone: state.speedDialReorderError ? 'error' : ''
+    })
     return
   }
 
-  const list = document.createElement('div')
-  list.className = 'newtab-speed-dial-grid'
-  list.setAttribute('aria-busy', state.reorderingSpeedDial ? 'true' : 'false')
-  let renderedIndex = 0
-  items.forEach((item) => {
+  const cardModels: SpeedDialCardViewModel[] = []
+  const cardsById = new Map<string, chrome.bookmarks.BookmarkTreeNode>()
+  for (const item of items) {
     const bookmark = getBookmarkById(item.id)
     if (!bookmark?.url) {
-      return
+      continue
     }
-    list.appendChild(createSpeedDialLink(item, bookmark, renderedIndex))
-    renderedIndex += 1
-  })
-
-  content.appendChild(list)
-  replaceSpeedDialContent(section, content)
-}
-
-function replaceSpeedDialContent(section: HTMLElement, content: DocumentFragment): void {
-  const heading = section.querySelector('.newtab-module-heading')
-  for (const child of Array.from(section.children)) {
-    if (child !== heading) {
-      child.remove()
-    }
+    const renderIndex = cardModels.length
+    cardsById.set(item.id, bookmark)
+    cardModels.push(createSpeedDialCardViewModel(item, renderIndex))
   }
-  section.appendChild(content)
-  section.setAttribute('aria-busy', 'false')
+
+  renderSpeedDialPanelIsland(section, {
+    ariaBusy: false,
+    content: {
+      type: 'items',
+      busy: state.reorderingSpeedDial,
+      items: cardModels
+    },
+    meta: state.speedDialReorderError || `${items.length} 个固定入口`,
+    metaTone: state.speedDialReorderError ? 'error' : ''
+  })
+  bindSpeedDialPanelCards(section, cardsById)
 }
 
-function createSpeedDialEmptyPanel(
-  createSpeedDialEmptyState: SpeedDialModule['createSpeedDialEmptyState']
-): HTMLElement {
-  const emptyState = createSpeedDialEmptyState()
-  const empty = document.createElement('div')
-  empty.className = 'newtab-speed-dial-empty'
-
-  const copy = document.createElement('div')
-  copy.className = 'newtab-speed-dial-empty-copy'
-  const title = document.createElement('strong')
-  title.textContent = emptyState.title
-  const detail = document.createElement('span')
-  detail.textContent = emptyState.detail
-  copy.append(title, detail)
-  empty.appendChild(copy)
-  return empty
-}
-
-function createSpeedDialLink(
-  item: SpeedDialItem,
-  bookmark: chrome.bookmarks.BookmarkTreeNode,
-  renderIndex = 0
-): HTMLAnchorElement {
+function createSpeedDialCardViewModel(item: SpeedDialItem, renderIndex = 0): SpeedDialCardViewModel {
   const customIcon = state.customIcons[String(item.id)]
-  const link = document.createElement('a')
-  link.className = 'newtab-speed-dial-card'
-  link.href = item.url
-  link.title = item.title
-  link.draggable = false
-  link.dataset.bookmarkId = item.id
-  link.dataset.speedDialBookmarkId = item.id
-  link.setAttribute('aria-label', `打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`)
-  bindBookmarkNavigation(link, bookmark)
-  if (!customIcon) {
-    applyCachedFaviconAccent(link, item.id, item.url)
-  }
-  if (String(item.id) === state.speedDialDraggingBookmarkId && state.speedDialDragOriginalOrderIds.length) {
-    link.classList.add('dragging')
-  }
-
-  const mark = document.createElement('span')
-  mark.className = 'newtab-speed-dial-mark bookmark-icon-shell'
-  mark.setAttribute('aria-hidden', 'true')
-
-  const icon = document.createElement('img')
-  icon.className = 'bookmark-favicon'
-  if (customIcon) {
-    icon.classList.add('custom-icon')
-  }
-  icon.src = customIcon || getFaviconUrl(item.url, item.id)
-  icon.alt = ''
-  icon.draggable = false
   const faviconLoadAttributes = getSpeedDialFaviconLoadAttributes(renderIndex)
-  icon.loading = faviconLoadAttributes.loading
-  icon.decoding = 'async'
-  icon.setAttribute('fetchpriority', faviconLoadAttributes.fetchpriority)
-  icon.addEventListener('error', () => {
-    mark.classList.add('favicon-missing')
-  })
+  return {
+    customIcon: Boolean(customIcon),
+    detail: item.detail,
+    dragging: String(item.id) === state.speedDialDraggingBookmarkId && Boolean(state.speedDialDragOriginalOrderIds.length),
+    fallbackLabel: item.fallbackLabel,
+    favicon: {
+      fetchpriority: faviconLoadAttributes.fetchpriority,
+      loading: faviconLoadAttributes.loading,
+      src: customIcon || getFaviconUrl(item.url, item.id)
+    },
+    id: item.id,
+    title: item.title,
+    url: item.url
+  }
+}
 
-  const fallback = document.createElement('span')
-  fallback.className = 'bookmark-fallback'
-  fallback.textContent = item.fallbackLabel
-  mark.append(icon, fallback)
-
-  const copy = document.createElement('span')
-  copy.className = 'newtab-speed-dial-copy'
-  const title = document.createElement('strong')
-  title.textContent = item.title
-  const detail = document.createElement('span')
-  detail.textContent = item.detail
-  copy.append(title, detail)
-
-  link.append(mark, copy)
-  return link
+function bindSpeedDialPanelCards(
+  section: HTMLElement,
+  bookmarksById: Map<string, chrome.bookmarks.BookmarkTreeNode>
+): void {
+  for (const link of section.querySelectorAll<HTMLAnchorElement>('.newtab-speed-dial-card[data-speed-dial-bookmark-id]')) {
+    const bookmarkId = String(link.dataset.speedDialBookmarkId || '')
+    const bookmark = bookmarksById.get(bookmarkId)
+    if (!bookmark) {
+      continue
+    }
+    bindBookmarkNavigation(link, bookmark)
+    if (!state.customIcons[bookmarkId]) {
+      applyCachedFaviconAccent(link, bookmarkId, String(bookmark.url || ''))
+    }
+    const iconShell = link.querySelector<HTMLElement>('.newtab-speed-dial-mark')
+    const icon = link.querySelector<HTMLImageElement>('.bookmark-favicon')
+    icon?.addEventListener('error', () => {
+      iconShell?.classList.add('favicon-missing')
+    })
+  }
 }
 
 function appendBookmarkTilesInChunks(
@@ -7515,16 +7316,19 @@ function appendBookmarkTilesInChunks(
 ): number {
   const perSectionLimit = Math.min(section.bookmarks.length, BOOKMARK_TILE_INITIAL_RENDER_LIMIT)
   const initialCount = Math.min(perSectionLimit, Math.max(0, pageBudget))
-  for (let index = 0; index < initialCount; index += 1) {
-    list.appendChild(createBookmarkTile(section.bookmarks[index], section.id, renderedBookmarkIndex + index))
-  }
+  appendBookmarkTiles(
+    list,
+    section.bookmarks.slice(0, initialCount),
+    section.id,
+    renderedBookmarkIndex
+  )
 
   if (initialCount < section.bookmarks.length) {
     const remainingCount = section.bookmarks.length - initialCount
     const placeholder = createBookmarkSectionPlaceholder(section, remainingCount)
     list.dataset.incrementalRender = 'true'
     list.setAttribute('aria-busy', 'true')
-    list.appendChild(placeholder)
+    mountBookmarkGridPlaceholderIslandElement(list, placeholder)
     observeBookmarkSectionPlaceholder(placeholder, {
       section,
       nextIndex: initialCount,
@@ -7540,14 +7344,10 @@ function createBookmarkSectionPlaceholder(
   section: NewTabFolderSection,
   remainingCount: number
 ): HTMLElement {
-  const placeholder = document.createElement('div')
-  placeholder.className = 'bookmark-grid-placeholder'
-  placeholder.dataset.pendingBookmarks = String(Math.max(0, remainingCount))
-  placeholder.setAttribute('role', 'status')
-  placeholder.setAttribute('aria-live', 'polite')
-  placeholder.textContent = `继续载入 ${remainingCount} 个书签`
-  placeholder.title = `${section.title || '文件夹'}还有 ${remainingCount} 个书签将在滚动到此处时载入`
-  return placeholder
+  return createBookmarkGridPlaceholderIslandElement({
+    folderTitle: section.title || '文件夹',
+    remainingCount
+  })
 }
 
 function scheduleBookmarkTileChunkRender(
@@ -7563,16 +7363,14 @@ function scheduleBookmarkTileChunkRender(
       return
     }
 
-    const fragment = document.createDocumentFragment()
     const endIndex = Math.min(section.bookmarks.length, nextIndex + BOOKMARK_TILE_RENDER_CHUNK_SIZE)
-    for (let index = nextIndex; index < endIndex; index += 1) {
-      fragment.appendChild(createBookmarkTile(section.bookmarks[index], section.id, renderedBookmarkIndex + (index - nextIndex)))
-    }
-    if (placeholder?.isConnected) {
-      placeholder.before(fragment)
-    } else {
-      list.appendChild(fragment)
-    }
+    appendBookmarkTiles(
+      list,
+      section.bookmarks.slice(nextIndex, endIndex),
+      section.id,
+      renderedBookmarkIndex,
+      placeholder?.isConnected ? placeholder : null
+    )
 
     if (endIndex < section.bookmarks.length) {
       if (placeholder?.isConnected) {
@@ -7596,33 +7394,27 @@ function scheduleBookmarkTileChunkRender(
   })
 }
 
-function createEmptyFolderState(section: NewTabFolderSection): HTMLElement {
-  const empty = document.createElement('div')
-  empty.className = 'bookmark-folder-empty-state'
+function appendBookmarkTiles(
+  list: HTMLElement,
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
+  folderId: string,
+  renderedBookmarkIndex: number,
+  before?: ChildNode | null
+): void {
+  const tiles = appendBookmarkTileIslandElements(
+    list,
+    bookmarks.map((bookmark, index) =>
+      createBookmarkTileViewModel(bookmark, folderId, renderedBookmarkIndex + index)
+    ),
+    { before }
+  )
 
-  const copy = document.createElement('p')
-  copy.className = 'bookmark-folder-empty'
-  copy.textContent = '此文件夹还没有书签。你可以先添加一个书签，或改用已有的非空来源；选择来源只改变展示，不会移动或删除书签。'
-
-  const actions = document.createElement('div')
-  actions.className = 'bookmark-folder-empty-actions'
-
-  const addButton = document.createElement('button')
-  addButton.className = 'newtab-button secondary'
-  addButton.type = 'button'
-  addButton.dataset.addBookmarkFolderId = section.id
-  addButton.textContent = '添加书签到这里'
-
-  const sourceButton = document.createElement('button')
-  sourceButton.className = 'newtab-button secondary'
-  sourceButton.type = 'button'
-  sourceButton.textContent = '选择现有来源'
-  sourceButton.title = '打开来源设置并选择已有文件夹'
-  sourceButton.addEventListener('click', openFolderSourceSettings)
-
-  actions.append(addButton, sourceButton)
-  empty.append(copy, actions)
-  return empty
+  tiles.forEach((tile, index) => {
+    const bookmark = bookmarks[index]
+    if (bookmark) {
+      bindBookmarkTileRuntime(tile, bookmark, String(bookmark.id))
+    }
+  })
 }
 
 function createSourceNavigation(sections: NewTabFolderSection[]): HTMLElement | null {
@@ -7635,44 +7427,10 @@ function createSourceNavigation(sections: NewTabFolderSection[]): HTMLElement | 
     return null
   }
 
-  const nav = document.createElement('nav')
-  nav.className = 'source-navigation'
-  nav.setAttribute('aria-label', '书签来源导航')
-
-  const label = document.createElement('span')
-  label.className = 'source-navigation-label'
-  label.textContent = '来源'
-
-  const list = document.createElement('div')
-  list.className = 'source-navigation-list'
-
-  for (const item of items) {
-    const link = document.createElement('a')
-    link.className = 'source-navigation-link'
-    link.href = `#${item.anchorId}`
-    link.dataset.sourceNavigationTarget = item.anchorId
-    link.title = item.path
-    link.draggable = false
-    link.setAttribute('aria-label', `跳转到「${item.title}」，${item.bookmarkCount} 个书签`)
-    link.addEventListener('click', (event) => {
-      event.preventDefault()
-      focusSourceSection(item.anchorId)
-    })
-
-    const title = document.createElement('span')
-    title.className = 'source-navigation-title'
-    title.textContent = item.title
-
-    const count = document.createElement('span')
-    count.className = 'source-navigation-count'
-    count.textContent = String(item.bookmarkCount)
-
-    link.append(title, count)
-    list.appendChild(link)
-  }
-
-  nav.append(label, list)
-  return nav
+  return createSourceNavigationIslandElement({
+    items,
+    onFocusSource: focusSourceSection
+  })
 }
 
 function focusSourceSection(anchorId: string): void {
@@ -7685,32 +7443,13 @@ function focusSourceSection(anchorId: string): void {
   section.focus({ preventScroll: true })
 }
 
-function createFolderAddButton(section: NewTabFolderSection): HTMLButtonElement {
-  const button = document.createElement('button')
-  button.className = 'folder-section-add'
-  button.type = 'button'
-  button.dataset.addBookmarkFolderId = section.id
-  button.title = `添加书签到「${section.title || '未命名文件夹'}」`
-  button.setAttribute('aria-label', button.title)
-  button.append(createMenuActionIcon('plus'))
-  button.addEventListener('pointerdown', (event) => {
-    event.stopPropagation()
-  })
-  return button
-}
-
 function createPortalPanel(): HTMLElement | null {
   const quickAccess = createQuickAccessPanel()
   if (!quickAccess) {
     return null
   }
 
-  const panel = document.createElement('section')
-  panel.className = 'newtab-portal quick-only'
-  panel.setAttribute('aria-label', 'Curator 常用和新近添加书签')
-  panel.appendChild(quickAccess)
-
-  return panel
+  return createPortalPanelIslandElement(quickAccess)
 }
 
 interface QuickAccessViewModel {
@@ -7777,17 +7516,16 @@ function createQuickAccessPanel(): HTMLElement | null {
     return null
   }
 
-  const panel = document.createElement('section')
-  panel.className = 'newtab-quick-access'
-  panel.setAttribute('aria-label', 'Curator 常用和新近添加书签')
-
+  const groups: QuickAccessGroupViewModel[] = []
   if (frequentQuickAccessItems.length) {
-    panel.appendChild(createQuickAccessGroup('Curator 常用', frequentQuickAccessItems))
+    groups.push(createQuickAccessGroup('Curator 常用', frequentQuickAccessItems))
   }
   if (recentQuickAccessItems.length) {
-    panel.appendChild(createQuickAccessGroup('新近添加', recentQuickAccessItems))
+    groups.push(createQuickAccessGroup('新近添加', recentQuickAccessItems))
   }
 
+  const panel = createQuickAccessPanelIslandElement({ groups })
+  bindQuickAccessPanelNavigation(panel, [...frequentQuickAccessItems, ...recentQuickAccessItems])
   return panel
 }
 
@@ -7800,53 +7538,28 @@ function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): Quick
   return createQuickAccessItem(bookmark, item.detail, item.badge, item.reason)
 }
 
-function createQuickAccessGroup(label: string, items: QuickAccessItem[]): HTMLElement {
-  const group = document.createElement('section')
-  group.className = 'newtab-quick-group'
-  group.setAttribute('aria-label', `${label}书签`)
-
-  const header = document.createElement('div')
-  header.className = 'newtab-quick-heading'
-  header.textContent = label
-
-  const list = document.createElement('div')
-  list.className = 'newtab-quick-list'
-
-  for (const item of items) {
-    list.appendChild(createQuickAccessLink(item))
+function createQuickAccessGroup(label: string, items: QuickAccessItem[]): QuickAccessGroupViewModel {
+  return {
+    label,
+    items: items.map((item) => ({
+      badge: item.badge,
+      detail: item.detail,
+      id: item.id,
+      reason: item.reason,
+      title: item.title,
+      url: item.url
+    }))
   }
-
-  group.append(header, list)
-  return group
 }
 
-function createQuickAccessLink(item: QuickAccessItem): HTMLAnchorElement {
-  const link = document.createElement('a')
-  link.className = 'newtab-quick-link'
-  link.href = item.url
-  link.title = `${item.title} · ${item.detail}`
-  link.draggable = false
-  link.dataset.bookmarkId = item.id
-  link.dataset.quickReason = item.reason
-  bindBookmarkNavigation(link, item.bookmark)
-
-  const mark = document.createElement('span')
-  mark.className = 'newtab-quick-mark'
-  mark.textContent = item.badge
-  mark.setAttribute('aria-hidden', 'true')
-
-  const copy = document.createElement('span')
-  copy.className = 'newtab-quick-copy'
-
-  const title = document.createElement('strong')
-  title.textContent = item.title
-
-  const detail = document.createElement('span')
-  detail.textContent = item.detail
-
-  copy.append(title, detail)
-  link.append(mark, copy)
-  return link
+function bindQuickAccessPanelNavigation(panel: HTMLElement, items: QuickAccessItem[]): void {
+  const itemById = new Map(items.map((item) => [item.id, item]))
+  for (const link of panel.querySelectorAll<HTMLAnchorElement>('.newtab-quick-link[data-bookmark-id]')) {
+    const item = itemById.get(String(link.dataset.bookmarkId || ''))
+    if (item) {
+      bindBookmarkNavigation(link, item.bookmark)
+    }
+  }
 }
 
 function createQuickAccessItem(
@@ -7880,58 +7593,53 @@ function createBookmarkTile(
   folderId: string,
   renderIndex = 0
 ): HTMLAnchorElement {
+  const bookmarkId = String(bookmark.id)
+  const tile = createBookmarkTileIslandElement(createBookmarkTileViewModel(bookmark, folderId, renderIndex))
+  bindBookmarkTileRuntime(tile, bookmark, bookmarkId)
+  return tile
+}
+
+function createBookmarkTileViewModel(
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  folderId: string,
+  renderIndex = 0
+): BookmarkTileViewModel {
   const url = String(bookmark.url || '')
   const title = String(bookmark.title || '').trim() || url
-  const item = document.createElement('a')
-  item.className = 'bookmark-tile'
-  item.href = url
-  item.title = title
-  item.draggable = false
-  item.dataset.bookmarkId = String(bookmark.id)
-  item.dataset.folderId = folderId
-  bindBookmarkNavigation(item, bookmark)
   const bookmarkId = String(bookmark.id)
   const customIcon = state.customIcons[bookmarkId]
-  if (!customIcon) {
-    applyCachedFaviconAccent(item, bookmarkId, url)
+  return {
+    customIcon: Boolean(customIcon),
+    dragging: bookmarkId === state.draggingBookmarkId && Boolean(state.dragOriginalOrderIds.length),
+    fallbackLabel: getFallbackLabel(title),
+    favicon: {
+      fetchpriority: renderIndex < HIGH_PRIORITY_FAVICON_LIMIT ? 'high' : 'low',
+      loading: renderIndex < EAGER_FAVICON_LIMIT ? 'eager' : 'lazy',
+      src: customIcon || getFaviconUrl(url, bookmarkId)
+    },
+    folderId,
+    id: bookmarkId,
+    title,
+    url
   }
-  if (bookmarkId === state.draggingBookmarkId && state.dragOriginalOrderIds.length) {
-    item.classList.add('dragging')
+}
+
+function bindBookmarkTileRuntime(
+  tile: HTMLAnchorElement,
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  bookmarkId: string
+): void {
+  bindBookmarkNavigation(tile, bookmark)
+  const url = String(bookmark.url || '')
+  if (!state.customIcons[bookmarkId]) {
+    applyCachedFaviconAccent(tile, bookmarkId, url)
   }
 
-  const iconShell = document.createElement('span')
-  iconShell.className = 'bookmark-icon-shell'
-  iconShell.setAttribute('aria-hidden', 'true')
-
-  const icon = document.createElement('img')
-  icon.className = 'bookmark-favicon'
-  if (customIcon) {
-    icon.classList.add('custom-icon')
-  }
-  icon.src = customIcon || getFaviconUrl(url, bookmarkId)
-  icon.alt = ''
-  icon.draggable = false
-  icon.loading = renderIndex < EAGER_FAVICON_LIMIT ? 'eager' : 'lazy'
-  icon.decoding = 'async'
-  icon.setAttribute(
-    'fetchpriority',
-    renderIndex < HIGH_PRIORITY_FAVICON_LIMIT ? 'high' : 'low'
-  )
-  icon.addEventListener('error', () => {
-    iconShell.classList.add('favicon-missing')
+  const iconShell = tile.querySelector<HTMLElement>('.bookmark-icon-shell')
+  const icon = tile.querySelector<HTMLImageElement>('.bookmark-favicon')
+  icon?.addEventListener('error', () => {
+    iconShell?.classList.add('favicon-missing')
   })
-
-  const fallback = document.createElement('span')
-  fallback.className = 'bookmark-fallback'
-  fallback.textContent = getFallbackLabel(title)
-
-  const label = document.createElement('span')
-  label.className = 'bookmark-title'
-  label.textContent = title
-
-  iconShell.append(icon, fallback)
-  item.append(iconShell, label)
-  return item
 }
 
 function applyCachedFaviconAccent(item: HTMLElement, bookmarkId: string, url: string): void {
@@ -8541,98 +8249,55 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
     return
   }
 
-  const menu = document.createElement('section')
-  menu.className = 'bookmark-edit-menu'
-  menu.setAttribute('role', 'dialog')
-  menu.setAttribute('aria-label', '书签设置')
-  menu.style.left = `${state.menuX}px`
-  menu.style.top = `${state.menuY}px`
-
-  const titleField = createMenuTextField('标题', 'Example', state.editTitle, (value) => {
-    state.editTitle = value
-  })
-  const urlField = createMenuTextField('链接', 'https://example.com/', state.editUrl, (value) => {
-    state.editUrl = value
-  })
-
-  const iconRow = document.createElement('label')
-  iconRow.className = 'bookmark-menu-row'
-  const iconLabel = document.createElement('span')
-  iconLabel.textContent = '图标'
-  const iconSelect = document.createElement('select')
-  iconSelect.className = 'bookmark-menu-select'
-  iconSelect.disabled = state.menuBusy
-  const websiteOption = document.createElement('option')
-  websiteOption.value = 'website'
-  websiteOption.textContent = '网站图标'
-  const customOption = document.createElement('option')
-  customOption.value = 'custom'
-  customOption.textContent = '自定义图片'
-  iconSelect.append(websiteOption, customOption)
-  iconSelect.value = state.editIconMode === 'custom' ? 'custom' : 'website'
-  iconSelect.addEventListener('change', () => {
-    void handleIconModeChange(iconSelect.value)
-  })
-  iconRow.append(iconLabel, iconSelect)
-
-  const separator = document.createElement('div')
-  separator.className = 'bookmark-menu-separator'
-
-  const actionList = document.createElement('div')
-  actionList.className = 'bookmark-menu-actions'
-  actionList.setAttribute('role', 'menu')
-  actionList.setAttribute('aria-label', '书签操作')
-  actionList.addEventListener('keydown', handleMenuActionsKeydown)
   const bookmarkLabel = getBookmarkActionLabelContext(bookmark)
   const pinCopy = getSpeedDialPinActionCopyLocal(isActiveMenuBookmarkPinned())
   const deleteLabel = state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除书签' : '删除书签'
-  actionList.append(
-    createMenuAction(
-      pinCopy.label,
-      'pin',
-      toggleActiveMenuBookmarkPin,
-      { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
-    ),
-    createMenuAction('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
-      actionId: 'copy-url',
-      ariaLabel: `复制书签链接：${bookmarkLabel}`
-    }),
-    createMenuAction(
-      state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
-      'trash',
-      deleteActiveMenuBookmark,
-      { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `${deleteLabel}：${bookmarkLabel}` }
-    ),
-    createMenuAction('刷新图标', 'refresh', refreshActiveMenuIcon, {
-      actionId: 'refresh-icon',
-      ariaLabel: `刷新书签图标：${bookmarkLabel}`
-    }),
-    createMenuAction('保存更改', 'save', saveBookmarkMenuChanges, {
-      actionId: 'save-bookmark',
-      ariaLabel: `保存书签更改：${bookmarkLabel}`
-    })
-  )
+  const menu = createBookmarkEditMenuIslandElement({
+    actions: [
+      createMenuActionViewModel(
+        pinCopy.label,
+        'pin',
+        toggleActiveMenuBookmarkPin,
+        { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
+      ),
+      createMenuActionViewModel('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
+        actionId: 'copy-url',
+        ariaLabel: `复制书签链接：${bookmarkLabel}`
+      }),
+      createMenuActionViewModel(
+        state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
+        'trash',
+        deleteActiveMenuBookmark,
+        { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `${deleteLabel}：${bookmarkLabel}` }
+      ),
+      createMenuActionViewModel('刷新图标', 'refresh', refreshActiveMenuIcon, {
+        actionId: 'refresh-icon',
+        ariaLabel: `刷新书签图标：${bookmarkLabel}`
+      }),
+      createMenuActionViewModel('保存更改', 'save', saveBookmarkMenuChanges, {
+        actionId: 'save-bookmark',
+        ariaLabel: `保存书签更改：${bookmarkLabel}`
+      })
+    ],
+    error: state.menuError,
+    fields: [
+      createMenuTextFieldViewModel('标题', 'Example', state.editTitle, (value) => {
+        state.editTitle = value
+      }),
+      createMenuTextFieldViewModel('链接', 'https://example.com/', state.editUrl, (value) => {
+        state.editUrl = value
+      })
+    ],
+    iconMode: state.editIconMode === 'custom' ? 'custom' : 'website',
+    iconModeDisabled: state.menuBusy,
+    onIconModeChange: handleIconModeChange,
+    status: state.menuStatus,
+    statusTone: state.pendingDeleteBookmarkId === String(bookmark.id) ? 'warning' : '',
+    x: state.menuX,
+    y: state.menuY
+  })
 
-  menu.append(titleField, urlField, iconRow, separator, actionList)
-
-  if (state.menuError) {
-    const error = document.createElement('p')
-    error.className = 'bookmark-menu-error'
-    error.textContent = state.menuError
-    menu.appendChild(error)
-  }
-
-  if (state.menuStatus) {
-    const status = document.createElement('p')
-    status.className = 'bookmark-menu-status'
-    if (state.pendingDeleteBookmarkId === String(bookmark.id)) {
-      status.classList.add('is-warning')
-    }
-    status.textContent = state.menuStatus
-    menu.appendChild(status)
-  }
-
-  document.body.appendChild(menu)
+  mountBookmarkEditMenuIslandElement(menu)
   positionBookmarkMenu(menu)
 
   const focusedAction = focusAction
@@ -8661,54 +8326,34 @@ function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
     return
   }
 
-  const menu = document.createElement('section')
-  menu.className = `bookmark-add-menu ${state.addMenuExpanded ? 'expanded' : ''}`
-  menu.setAttribute('role', 'dialog')
-  menu.setAttribute('aria-label', '添加新标签页书签')
-  menu.style.left = `${state.addMenuX}px`
-  menu.style.top = `${state.addMenuY}px`
+  const menu = createBookmarkAddMenuIslandElement({
+    actions: [
+      createMenuActionViewModel('添加书签', 'plus', saveAddedBookmark, {
+        disabled: state.addMenuBusy
+      })
+    ],
+    error: state.addMenuError,
+    expanded: state.addMenuExpanded,
+    fields: [
+      createMenuTextFieldViewModel('标题', 'Example', state.addTitle, (value) => {
+        state.addTitle = value
+      }, {
+        disabled: state.addMenuBusy,
+        onEnter: saveAddedBookmark
+      }),
+      createMenuTextFieldViewModel('链接', 'https://example.com', state.addUrl, (value) => {
+        state.addUrl = value
+      }, {
+        disabled: state.addMenuBusy,
+        onEnter: saveAddedBookmark
+      })
+    ],
+    onExpand: expandAddBookmarkMenu,
+    x: state.addMenuX,
+    y: state.addMenuY
+  })
 
-  if (!state.addMenuExpanded) {
-    const addButton = document.createElement('button')
-    addButton.className = 'bookmark-add-trigger'
-    addButton.type = 'button'
-    addButton.append(createMenuActionIcon('plus'), document.createTextNode('添加书签'))
-    addButton.addEventListener('click', expandAddBookmarkMenu)
-    menu.appendChild(addButton)
-  } else {
-    const titleField = createMenuTextField('标题', 'Example', state.addTitle, (value) => {
-      state.addTitle = value
-    }, {
-      disabled: state.addMenuBusy,
-      onEnter: saveAddedBookmark
-    })
-    const urlField = createMenuTextField('链接', 'https://example.com', state.addUrl, (value) => {
-      state.addUrl = value
-    }, {
-      disabled: state.addMenuBusy,
-      onEnter: saveAddedBookmark
-    })
-    const separator = document.createElement('div')
-    separator.className = 'bookmark-menu-separator'
-    const actionList = document.createElement('div')
-    actionList.className = 'bookmark-menu-actions'
-    actionList.setAttribute('role', 'menu')
-    actionList.setAttribute('aria-label', '添加书签操作')
-    actionList.addEventListener('keydown', handleMenuActionsKeydown)
-    actionList.append(createMenuAction('添加书签', 'plus', saveAddedBookmark, {
-      disabled: state.addMenuBusy
-    }))
-    menu.append(titleField, urlField, separator, actionList)
-  }
-
-  if (state.addMenuError) {
-    const error = document.createElement('p')
-    error.className = 'bookmark-menu-error'
-    error.textContent = state.addMenuError
-    menu.appendChild(error)
-  }
-
-  document.body.appendChild(menu)
+  mountBookmarkAddMenuIslandElement(menu)
   positionMenu(menu, state.addMenuX, state.addMenuY)
 
   const firstInput = menu.querySelector('input')
@@ -8764,7 +8409,7 @@ async function handleIconModeChange(nextMode: string): Promise<void> {
   }
 }
 
-function createMenuTextField(
+function createMenuTextFieldViewModel(
   label: string,
   placeholder: string,
   value: string,
@@ -8776,36 +8421,23 @@ function createMenuTextField(
     disabled?: boolean
     onEnter?: () => void | Promise<void>
   } = {}
-): HTMLLabelElement {
-  const field = document.createElement('label')
-  field.className = 'bookmark-menu-row'
-
-  const labelNode = document.createElement('span')
-  labelNode.textContent = label
-
-  const input = document.createElement('input')
-  input.className = 'bookmark-menu-input'
-  input.type = label === '链接' ? 'url' : 'text'
-  input.placeholder = placeholder
-  input.value = value
-  input.disabled = disabled
-  input.spellcheck = false
-  input.addEventListener('input', () => {
-    state.pendingDeleteBookmarkId = ''
-    onInput(input.value)
-  })
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      void onEnter()
-    }
-  })
-
-  field.append(labelNode, input)
-  return field
+): BookmarkMenuTextFieldViewModel {
+  return {
+    disabled,
+    id: label === '链接' ? 'url' : 'title',
+    label,
+    onChange(value: string) {
+      state.pendingDeleteBookmarkId = ''
+      onInput(value)
+    },
+    onEnter,
+    placeholder,
+    type: label === '链接' ? 'url' : 'text',
+    value
+  }
 }
 
-function createMenuAction(
+function createMenuActionViewModel(
   label: string,
   icon: MenuActionIcon,
   action: () => void | Promise<void>,
@@ -8820,111 +8452,17 @@ function createMenuAction(
     variant?: 'danger' | ''
     ariaLabel?: string
   } = {}
-): HTMLButtonElement {
-  const button = document.createElement('button')
-  button.className = `bookmark-menu-action${variant ? ` ${variant}` : ''}`
-  button.type = 'button'
-  button.disabled = disabled
-  button.setAttribute('role', 'menuitem')
-  button.setAttribute('aria-label', ariaLabel)
-  if (actionId) {
-    button.dataset.menuAction = actionId
+): BookmarkMenuActionViewModel {
+  return {
+    actionId,
+    ariaLabel,
+    disabled,
+    icon,
+    id: actionId || `${icon}:${label}`,
+    label,
+    onSelect: action,
+    variant
   }
-  button.append(createMenuActionIcon(icon), document.createTextNode(label))
-  button.addEventListener('click', () => {
-    void action()
-  })
-  return button
-}
-
-function handleMenuActionsKeydown(event: KeyboardEvent): void {
-  if (
-    event.key !== 'ArrowUp' &&
-    event.key !== 'ArrowDown' &&
-    event.key !== 'ArrowLeft' &&
-    event.key !== 'ArrowRight' &&
-    event.key !== 'Home' &&
-    event.key !== 'End'
-  ) {
-    return
-  }
-
-  const actionList = event.currentTarget
-  if (!(actionList instanceof HTMLElement)) {
-    return
-  }
-
-  const actions = Array.from(
-    actionList.querySelectorAll<HTMLButtonElement>('.bookmark-menu-action:not(:disabled)')
-  )
-  if (!actions.length) {
-    return
-  }
-
-  const currentIndex = actions.findIndex((action) => action === document.activeElement)
-  const fallbackIndex = currentIndex >= 0 ? currentIndex : 0
-  let nextIndex = fallbackIndex
-
-  if (event.key === 'Home') {
-    nextIndex = 0
-  } else if (event.key === 'End') {
-    nextIndex = actions.length - 1
-  } else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
-    nextIndex = (fallbackIndex - 1 + actions.length) % actions.length
-  } else {
-    nextIndex = (fallbackIndex + 1) % actions.length
-  }
-
-  event.preventDefault()
-  actions[nextIndex]?.focus()
-}
-
-function createMenuActionIcon(icon: MenuActionIcon): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.setAttribute('viewBox', '0 0 24 24')
-  svg.setAttribute('aria-hidden', 'true')
-
-  const paths: Record<MenuActionIcon, string[]> = {
-    trash: [
-      'M4 7h16',
-      'M10 11v6',
-      'M14 11v6',
-      'M6 7l1 14h10l1-14',
-      'M9 7V4h6v3'
-    ],
-    refresh: [
-      'M20 12a8 8 0 0 1-13.7 5.7',
-      'M4 12A8 8 0 0 1 17.7 6.3',
-      'M17.7 2.8v3.5h-3.5',
-      'M6.3 21.2v-3.5h3.5'
-    ],
-    save: [
-      'M5 3h12l2 2v16H5z',
-      'M8 3v6h8V3',
-      'M8 21v-7h8v7'
-    ],
-    plus: [
-      'M12 5v14',
-      'M5 12h14'
-    ],
-    copy: [
-      'M8 8h11v11H8z',
-      'M5 16H4V5h11v1'
-    ],
-    pin: [
-      'M7 4h10',
-      'M9 4l1 7-3 3v2h10v-2l-3-3 1-7',
-      'M12 16v5'
-    ]
-  }
-
-  for (const value of paths[icon]) {
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-    path.setAttribute('d', value)
-    svg.appendChild(path)
-  }
-
-  return svg
 }
 
 function positionBookmarkMenu(menu: HTMLElement): void {
@@ -9128,7 +8666,7 @@ function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTING
   const maskBlurInput = cachedEl('background-mask-blur')
 
   return normalizeBackgroundSettings({
-    type: typeInput instanceof HTMLSelectElement ? typeInput.value : state.backgroundSettings.type,
+    type: isValueControl(typeInput) ? typeInput.value : state.backgroundSettings.type,
     color: colorInput instanceof HTMLInputElement ? colorInput.value : state.backgroundSettings.color,
     imageName: state.backgroundSettings.imageName,
     videoName: state.backgroundSettings.videoName,
@@ -9139,7 +8677,7 @@ function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTING
     maskEnabled: maskEnabledInput instanceof HTMLInputElement
       ? maskEnabledInput.checked
       : state.backgroundSettings.maskEnabled,
-    maskStyle: maskStyleInput instanceof HTMLSelectElement
+    maskStyle: isValueControl(maskStyleInput)
       ? maskStyleInput.value
       : state.backgroundSettings.maskStyle,
     maskBlur: maskBlurInput instanceof HTMLInputElement
@@ -9178,9 +8716,8 @@ function syncBackgroundSettingsControls(): void {
   const maskStyleRow = cachedEl('background-mask-style-row')
   const maskBlurRow = cachedEl('background-mask-blur-row')
 
-  if (typeInput instanceof HTMLSelectElement) {
+  if (isValueControl(typeInput)) {
     typeInput.value = settings.type
-    syncCustomSelectForControl(typeInput)
   }
   if (colorInput instanceof HTMLInputElement) {
     colorInput.value = settings.color
@@ -9274,10 +8811,9 @@ function syncBackgroundSettingsControls(): void {
   if (maskEnabledInput instanceof HTMLInputElement) {
     maskEnabledInput.checked = settings.maskEnabled
   }
-  if (maskStyleInput instanceof HTMLSelectElement) {
+  if (isValueControl(maskStyleInput)) {
     maskStyleInput.value = settings.maskStyle
     maskStyleInput.disabled = !settings.maskEnabled
-    syncCustomSelectForControl(maskStyleInput)
   }
   if (maskBlurInput instanceof HTMLInputElement) {
     maskBlurInput.value = String(settings.maskBlur)
@@ -11015,7 +10551,7 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
       ? webEnabledInput.checked
       : state.searchSettings.webSearchEnabled,
     openInNewTab: openInput instanceof HTMLInputElement ? openInput.checked : state.searchSettings.openInNewTab,
-    engine: engineInput instanceof HTMLSelectElement ? engineInput.value : state.searchSettings.engine,
+    engine: isValueControl(engineInput) ? engineInput.value : state.searchSettings.engine,
     enabledEngines: engineToggleInputs.length
       ? engineToggleInputs
         .filter((input) => input.checked)
@@ -11069,7 +10605,7 @@ function syncSearchSettingsControls(): void {
     openInput.checked = settings.openInNewTab
     openInput.disabled = !settings.enabled || !settings.webSearchEnabled
   }
-  if (engineInput instanceof HTMLSelectElement) {
+  if (isValueControl(engineInput)) {
     engineInput.value = settings.engine
     engineInput.disabled = !settings.enabled || !settings.webSearchEnabled
   }
@@ -11274,7 +10810,7 @@ function syncFolderSettingsControls(): void {
     }
 
     if (selectedList instanceof HTMLElement) {
-      selectedList.replaceChildren(...createSelectedFolderControls())
+      renderSelectedFolderControls(selectedList)
     }
 
     if (toggle instanceof HTMLButtonElement) {
@@ -11295,7 +10831,7 @@ function syncFolderSettingsControls(): void {
     }
 
     if (candidateList instanceof HTMLElement) {
-      candidateList.replaceChildren(...createFolderCandidateControls())
+      renderFolderCandidateControls(candidateList)
     }
   })
 }
@@ -11313,69 +10849,24 @@ function syncModuleSettingsControls(): void {
   rows.forEach((setting, index) => {
     const container = cachedEl(containerIdByKey[setting.key])
     if (container instanceof HTMLElement) {
-      container.replaceChildren(createModuleSettingRow(setting, index, rows.length))
+      renderModuleSettingRowIsland(container, createModuleSettingRowViewModel(setting, index, rows.length))
     }
   })
 }
 
-function createModuleSettingRow(
+function createModuleSettingRowViewModel(
   setting: ReturnType<typeof buildNewTabModuleSettingRows>[number],
   index = 0,
   total = 1
-): HTMLElement {
-  const row = document.createElement('div')
-  row.className = 'setting-row newtab-module-setting-row'
-  row.dataset.moduleSettingRow = setting.key
-
-  const copy = document.createElement('span')
-  copy.className = 'setting-label-stack'
-  const title = document.createElement('span')
-  title.textContent = setting.label
-  const detail = document.createElement('small')
-  detail.textContent = setting.description
-  copy.append(title, detail)
-
-  const controls = document.createElement('span')
-  controls.className = 'module-setting-controls'
-
-  const moveUp = document.createElement('button')
-  moveUp.className = 'module-setting-order-button'
-  moveUp.type = 'button'
-  moveUp.dataset.moduleSettingMove = setting.key
-  moveUp.dataset.moduleSettingDirection = 'up'
-  moveUp.disabled = index <= 0
-  moveUp.setAttribute('aria-label', `上移模块：${setting.label}`)
-  moveUp.title = `上移 ${setting.label}`
-  moveUp.textContent = '↑'
-
-  const moveDown = document.createElement('button')
-  moveDown.className = 'module-setting-order-button'
-  moveDown.type = 'button'
-  moveDown.dataset.moduleSettingMove = setting.key
-  moveDown.dataset.moduleSettingDirection = 'down'
-  moveDown.disabled = index >= total - 1
-  moveDown.setAttribute('aria-label', `下移模块：${setting.label}`)
-  moveDown.title = `下移 ${setting.label}`
-  moveDown.textContent = '↓'
-
-  const switchLabel = document.createElement('label')
-  switchLabel.className = 'module-setting-switch-label'
-  switchLabel.setAttribute('aria-label', `${setting.enabled ? '隐藏' : '显示'}模块：${setting.label}`)
-
-  const input = document.createElement('input')
-  input.className = 'setting-switch-input'
-  input.type = 'checkbox'
-  input.checked = setting.enabled
-  input.dataset.moduleSettingToggle = setting.key
-
-  const switchVisual = document.createElement('span')
-  switchVisual.className = 'setting-switch'
-  switchVisual.setAttribute('aria-hidden', 'true')
-
-  switchLabel.append(input, switchVisual)
-  controls.append(moveUp, moveDown, switchLabel)
-  row.append(copy, controls)
-  return row
+): ModuleSettingRowViewModel {
+  return {
+    description: setting.description,
+    enabled: setting.enabled,
+    index,
+    key: setting.key,
+    label: setting.label,
+    total
+  }
 }
 
 function handleModuleSettingsChange(event: Event): void {
@@ -11425,98 +10916,57 @@ function handleModuleSettingsClick(event: Event): void {
   scheduleRender({ updateClock: true })
 }
 
-function createSelectedFolderControls(): HTMLElement[] {
+function renderSelectedFolderControls(container: HTMLElement): void {
   const selectedIds = state.folderSettings.selectedFolderIds
   if (!selectedIds.length) {
-    const empty = document.createElement('p')
-    empty.className = 'folder-source-empty'
-    empty.textContent = '未选择来源文件夹。选择来源只会决定新标签页显示哪些书签，不会移动、删除或重排原有书签。'
-    return [empty]
+    renderSelectedFolderSourceListIsland(container, {
+      type: 'empty',
+      message: '未选择来源文件夹。选择来源只会决定新标签页显示哪些书签，不会移动、删除或重排原有书签。'
+    })
+    return
   }
 
   const folders = getFolderCandidateMap()
-  return selectedIds.map((folderId) => {
+  const items: SelectedFolderSourceItemViewModel[] = selectedIds.map((folderId) => {
     const folder = folders.get(folderId)
-    const row = document.createElement('div')
-    row.className = 'folder-source-selected-item'
-
-    const copy = document.createElement('span')
-    copy.className = 'folder-source-selected-copy'
-
-    const title = document.createElement('strong')
-    title.textContent = folder?.title || '已删除的文件夹'
-
-    const path = document.createElement('span')
-    path.textContent = folder?.path || folderId
-
-    const stats = document.createElement('span')
-    stats.textContent = folder
-      ? formatFolderCandidateCountSummary(folder)
-      : '来源不可用'
-
-    copy.append(title, path, stats)
-
-    const remove = document.createElement('button')
-    remove.className = 'folder-source-remove'
-    remove.type = 'button'
-    remove.dataset.folderRemoveId = folderId
-    const folderTitle = folder?.title || '文件夹'
-    const affectedCount = folder?.totalBookmarkCount || 0
-    const removeLabel = `从新标签页移除「${folderTitle}」，将隐藏 ${affectedCount} 个书签，不会删除书签`
-    remove.setAttribute('aria-label', removeLabel)
-    remove.title = removeLabel
-    remove.textContent = '×'
-
-    row.append(copy, remove)
-    return row
+    return {
+      affectedCount: folder?.totalBookmarkCount || 0,
+      folderId,
+      path: folder?.path || folderId,
+      stats: folder ? formatFolderCandidateCountSummary(folder) : '来源不可用',
+      title: folder?.title || '已删除的文件夹'
+    }
   })
+  const stateModel: SelectedFolderSourceListState = { type: 'items', items }
+  renderSelectedFolderSourceListIsland(container, stateModel)
 }
 
-function createFolderCandidateControls(): HTMLElement[] {
+function renderFolderCandidateControls(container: HTMLElement): void {
   const candidates = getFilteredFolderCandidates()
   if (!candidates.length) {
-    const empty = document.createElement('p')
-    empty.className = 'folder-source-empty'
-    empty.setAttribute('role', 'status')
-    empty.setAttribute('aria-live', 'polite')
-    empty.textContent = '没有匹配的文件夹。请清空搜索词，或选择其他来源文件夹。'
-    return [empty]
+    renderFolderCandidateListIsland(container, {
+      type: 'empty',
+      message: '没有匹配的文件夹。请清空搜索词，或选择其他来源文件夹。'
+    })
+    return
   }
 
   const selectedIds = new Set(state.folderSettings.selectedFolderIds)
   const activeId = resolveFolderCandidateActiveId(candidates)
-  return candidates.map((folder) => {
+  const items: FolderCandidateItemViewModel[] = candidates.map((folder) => {
     const selected = selectedIds.has(folder.id)
-    const button = document.createElement('button')
-    button.className = `folder-candidate-card ${selected ? 'selected' : ''}`
-    button.type = 'button'
-    button.dataset.folderCandidateId = folder.id
-    button.tabIndex = folder.id === activeId ? 0 : -1
-    button.title = folder.path || folder.title
-    button.setAttribute('role', 'option')
-    button.setAttribute('aria-selected', String(selected))
-
-    const copy = document.createElement('span')
-    copy.className = 'folder-candidate-copy'
-
-    const title = document.createElement('strong')
-    title.textContent = folder.title || '未命名文件夹'
-
-    const path = document.createElement('span')
-    path.textContent = folder.path || folder.title || '未命名文件夹'
-
-    const stats = document.createElement('span')
-    stats.textContent = formatFolderCandidateCountSummary(folder)
-
-    copy.append(title, path, stats)
-
-    const badge = document.createElement('span')
-    badge.className = 'folder-candidate-badge'
-    badge.textContent = selected ? '已选' : String(folder.totalBookmarkCount)
-
-    button.append(copy, badge)
-    return button
+    return {
+      active: folder.id === activeId,
+      badge: selected ? '已选' : String(folder.totalBookmarkCount),
+      folderId: folder.id,
+      path: folder.path,
+      selected,
+      stats: formatFolderCandidateCountSummary(folder),
+      title: folder.title || '未命名文件夹'
+    }
   })
+  const stateModel: FolderCandidateListState = { type: 'items', items }
+  renderFolderCandidateListIsland(container, stateModel)
 }
 
 function getFilteredFolderCandidates(): NewTabFolderCandidate[] {
@@ -12018,6 +11468,8 @@ function ensureFeaturedBackgroundModalMounted(): Promise<void> {
     featuredBackgroundModalClose = result.close
     featuredBackgroundRefreshButton = result.refresh
     featuredBackgroundStatus = result.status
+    setFeaturedBackgroundModalOpen = result.setOpen
+    getFeaturedBackgroundModalOpen = result.isOpen
   })()
   return featuredBackgroundModalMountPromise
 }
@@ -12035,6 +11487,7 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
   featuredBackgroundModal.classList.add('open')
   featuredBackgroundModal.setAttribute('aria-hidden', 'false')
   featuredBackgroundModal.removeAttribute('inert')
+  setFeaturedBackgroundModalOpen?.(true)
   featuredBackgroundPicker?.setAttribute('aria-expanded', 'true')
 
   await openFeaturedBackgroundPickerContent({
@@ -12044,10 +11497,16 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
     hasRenderedContent: () =>
       !!featuredBackgroundModalGrid?.querySelector('.featured-wallpaper-card'),
     showLoading: () => {
-      featuredBackgroundModalGrid.replaceChildren(createFeaturedBackgroundLoadingCard())
+      renderFeaturedBackgroundPickerIsland(featuredBackgroundModalGrid, {
+        type: 'state',
+        label: '正在载入精选图库'
+      })
     },
     showError: () => {
-      featuredBackgroundModalGrid.replaceChildren(createFeaturedBackgroundErrorCard())
+      renderFeaturedBackgroundPickerIsland(featuredBackgroundModalGrid, {
+        type: 'state',
+        label: '精选图库载入失败'
+      })
     },
     render: renderFeaturedBackgroundPicker,
     focusInitialTarget: focusFeaturedBackgroundPickerInitialTarget,
@@ -12102,6 +11561,7 @@ function closeFeaturedBackgroundPicker(): void {
   featuredBackgroundModal.classList.remove('open')
   featuredBackgroundModal.setAttribute('aria-hidden', 'true')
   featuredBackgroundModal.setAttribute('inert', '')
+  setFeaturedBackgroundModalOpen?.(false)
   featuredBackgroundPicker?.setAttribute('aria-expanded', 'false')
 
   const returnElement = featuredBackgroundModalReturnFocusElement
@@ -12131,7 +11591,8 @@ function handleFeaturedBackgroundModalPointerDown(event: PointerEvent): void {
 }
 
 function isFeaturedBackgroundPickerOpen(): boolean {
-  return featuredBackgroundModal instanceof HTMLElement && featuredBackgroundModal.classList.contains('open')
+  return featuredBackgroundModal instanceof HTMLElement &&
+    (getFeaturedBackgroundModalOpen?.() ?? featuredBackgroundModal.classList.contains('open'))
 }
 
 function getFeaturedBackgroundCardPreviewObserver(): IntersectionObserver | null {
@@ -12272,100 +11733,54 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
   }
 
   clearFeaturedBackgroundCardPreviewRegistry()
-  const fragment = document.createDocumentFragment()
   syncFeaturedBackgroundModalControls()
-  appendFeaturedBackgroundSection(fragment, {
-    title: '收藏壁纸',
-    emptyText: '还没有收藏壁纸',
-    items: pickerSections.favorites,
-    staticFeaturedBackgroundIds,
-    selectedId,
-    renderIndexOffset: 0
-  })
 
   const refreshedNasaItems = pickerSections.refreshed.filter((item) => item.provider === 'nasa')
   const refreshedWikimediaItems = pickerSections.refreshed.filter((item) => item.provider === 'wikimedia')
-  appendFeaturedBackgroundRefreshSection(fragment, {
-    staticFeaturedBackgroundIds,
-    selectedId,
-    groups: [
+  renderFeaturedBackgroundPickerIsland(featuredBackgroundModalGrid, {
+    type: 'sections',
+    sections: [
       {
-        title: 'NASA',
-        emptyText: '刷新图库后会显示 NASA 图片',
-        items: refreshedNasaItems,
-        renderIndexOffset: pickerSections.favorites.length
+        type: 'grid',
+        section: createFeaturedBackgroundPickerGridSectionViewModel({
+          title: '收藏壁纸',
+          emptyText: '还没有收藏壁纸',
+          items: pickerSections.favorites,
+          staticFeaturedBackgroundIds,
+          selectedId,
+          renderIndexOffset: 0
+        })
       },
       {
-        title: 'Wikimedia',
-        emptyText: '刷新图库后会显示 Wikimedia 图片',
-        items: refreshedWikimediaItems,
-        renderIndexOffset: pickerSections.favorites.length + refreshedNasaItems.length
+        type: 'providers',
+        title: '刷新图库',
+        groups: [
+          createFeaturedBackgroundPickerProviderGroupViewModel({
+            title: 'NASA',
+            emptyText: '刷新图库后会显示 NASA 图片',
+            items: refreshedNasaItems,
+            staticFeaturedBackgroundIds,
+            selectedId,
+            renderIndexOffset: pickerSections.favorites.length
+          }),
+          createFeaturedBackgroundPickerProviderGroupViewModel({
+            title: 'Wikimedia',
+            emptyText: '刷新图库后会显示 Wikimedia 图片',
+            items: refreshedWikimediaItems,
+            staticFeaturedBackgroundIds,
+            selectedId,
+            renderIndexOffset: pickerSections.favorites.length + refreshedNasaItems.length
+          })
+        ]
       }
     ]
   })
-
-  featuredBackgroundModalGrid.replaceChildren(fragment)
+  registerFeaturedBackgroundRenderedCards(featuredBackgroundModalGrid)
   featuredBackgroundPickerRenderSignature = renderSignature
   observeFeaturedBackgroundCardPreviews()
 }
 
-function appendFeaturedBackgroundRefreshSection(
-  fragment: DocumentFragment,
-  {
-    groups,
-    staticFeaturedBackgroundIds,
-    selectedId
-  }: {
-    groups: Array<{
-      title: string
-      emptyText: string
-      items: FeaturedBackgroundItem[]
-      renderIndexOffset: number
-    }>
-    staticFeaturedBackgroundIds: Set<string>
-    selectedId: string
-  }
-): void {
-  const section = document.createElement('section')
-  section.className = 'featured-wallpaper-section'
-  section.setAttribute('aria-label', '刷新图库')
-
-  const heading = document.createElement('h4')
-  heading.className = 'featured-wallpaper-section-title'
-  heading.textContent = '刷新图库'
-  section.appendChild(heading)
-
-  const stack = document.createElement('div')
-  stack.className = 'featured-wallpaper-provider-stack'
-  for (const group of groups) {
-    const provider = document.createElement('section')
-    provider.className = 'featured-wallpaper-provider-section'
-    provider.setAttribute('aria-label', group.title)
-
-    const providerHeading = document.createElement('h5')
-    providerHeading.className = 'featured-wallpaper-provider-title'
-    providerHeading.textContent = group.title
-    provider.appendChild(providerHeading)
-
-    const list = document.createElement('div')
-    list.className = 'featured-wallpaper-section-grid'
-    appendFeaturedBackgroundCards(list, {
-      emptyText: group.emptyText,
-      items: group.items,
-      staticFeaturedBackgroundIds,
-      selectedId,
-      renderIndexOffset: group.renderIndexOffset
-    })
-    provider.appendChild(list)
-    stack.appendChild(provider)
-  }
-
-  section.appendChild(stack)
-  fragment.appendChild(section)
-}
-
-function appendFeaturedBackgroundSection(
-  fragment: DocumentFragment,
+function createFeaturedBackgroundPickerProviderGroupViewModel(
   {
     title,
     emptyText,
@@ -12381,70 +11796,70 @@ function appendFeaturedBackgroundSection(
     selectedId: string
     renderIndexOffset: number
   }
-): void {
-  const section = document.createElement('section')
-  section.className = 'featured-wallpaper-section'
-  section.setAttribute('aria-label', title)
-
-  const heading = document.createElement('h4')
-  heading.className = 'featured-wallpaper-section-title'
-  heading.textContent = title
-  section.appendChild(heading)
-
-  const list = document.createElement('div')
-  list.className = 'featured-wallpaper-section-grid'
-  appendFeaturedBackgroundCards(list, {
+): FeaturedBackgroundPickerProviderGroupViewModel {
+  return {
+    title,
     emptyText,
-    items,
-    staticFeaturedBackgroundIds,
-    selectedId,
-    renderIndexOffset
-  })
-
-  section.appendChild(list)
-  fragment.appendChild(section)
+    cards: createFeaturedBackgroundPickerCardViewModels({
+      items,
+      staticFeaturedBackgroundIds,
+      selectedId,
+      renderIndexOffset
+    })
+  }
 }
 
-function appendFeaturedBackgroundCards(
-  list: HTMLElement,
+function createFeaturedBackgroundPickerGridSectionViewModel(
   {
+    title,
     emptyText,
     items,
     staticFeaturedBackgroundIds,
     selectedId,
     renderIndexOffset
   }: {
+    title: string
     emptyText: string
     items: FeaturedBackgroundItem[]
     staticFeaturedBackgroundIds: Set<string>
     selectedId: string
     renderIndexOffset: number
   }
-): void {
-  if (items.length) {
-    items.forEach((item, index) => {
-      list.appendChild(createFeaturedBackgroundCard({
-        value: item.id,
-        title: item.title,
-        imageUrl: item.imageUrl,
-        previewProvider: item.provider,
-        accentColor: item.accentColor,
-        bundledPreviewUrl: staticFeaturedBackgroundIds.has(item.id)
-          ? getFeaturedBackgroundBundledThumbnailUrl(item.id)
-          : '',
-        selected: selectedId === item.id,
-        favorite: isFeaturedBackgroundFavorite(item.id),
-        width: item.width,
-        height: item.height,
-        renderIndex: renderIndexOffset + index
-      }))
+): FeaturedBackgroundPickerGridSectionViewModel {
+  return {
+    title,
+    emptyText,
+    cards: createFeaturedBackgroundPickerCardViewModels({
+      items,
+      staticFeaturedBackgroundIds,
+      selectedId,
+      renderIndexOffset
     })
-  } else {
-    const empty = document.createElement('div')
-    empty.className = 'featured-wallpaper-section-empty'
-    empty.textContent = emptyText
-    list.appendChild(empty)
   }
+}
+
+function createFeaturedBackgroundPickerCardViewModels(
+  {
+    items,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset
+  }: {
+    items: FeaturedBackgroundItem[]
+    staticFeaturedBackgroundIds: Set<string>
+    selectedId: string
+    renderIndexOffset: number
+  }
+): FeaturedBackgroundPickerCardViewModel[] {
+  return items.map((item, index) => createFeaturedBackgroundPickerCardViewModel({
+    item,
+    bundledPreviewUrl: staticFeaturedBackgroundIds.has(item.id)
+      ? getFeaturedBackgroundBundledThumbnailUrl(item.id)
+      : '',
+    selected: selectedId === item.id,
+    favorite: isFeaturedBackgroundFavorite(item.id),
+    renderIndex: renderIndexOffset + index
+  }))
 }
 
 function getFeaturedBackgroundPickerItems(gallery: BackgroundGalleryModule): FeaturedBackgroundItem[] {
@@ -12627,115 +12042,73 @@ function clearFeaturedBackgroundCardPreviewRegistry(): void {
   featuredBackgroundCardPreviewObservedRoot = null
 }
 
-function createFeaturedBackgroundCard({
-  value,
-  title,
-  imageUrl,
-  previewProvider,
-  accentColor,
+function createFeaturedBackgroundPickerCardViewModel({
+  item,
   bundledPreviewUrl = '',
   selected,
   favorite = false,
-  width,
-  height,
   renderIndex = 0
 }: {
-  value: string
-  title: string
-  imageUrl: string
-  previewProvider: FeaturedBackgroundItem['provider']
-  accentColor?: string
+  item: FeaturedBackgroundItem
   bundledPreviewUrl?: string
   selected: boolean
   favorite?: boolean
-  width?: number
-  height?: number
   renderIndex?: number
-}): HTMLElement {
-  const card = document.createElement('div')
-  card.className = 'featured-wallpaper-card'
-  card.setAttribute('role', 'button')
-  card.setAttribute('tabindex', '0')
-  card.setAttribute('aria-label', title)
-  card.dataset.featuredBackgroundId = value
-  card.dataset.featuredBackgroundPreviewUrl = imageUrl
-  card.dataset.featuredBackgroundPreviewTitle = title
-  card.setAttribute('aria-pressed', String(selected))
-  card.classList.toggle('is-selected', selected)
+}): FeaturedBackgroundPickerCardViewModel {
+  const imageUrl = item.imageUrl
+  const title = item.title
   const previewAccentColor = getFeaturedBackgroundPreviewPlaceholderColor({
-    provider: previewProvider,
-    accentColor,
+    provider: item.provider,
+    accentColor: item.accentColor,
     imageUrl,
     title,
     credit: title
   })
-
-  const preview = document.createElement('span')
-  preview.className = 'featured-wallpaper-preview'
-  preview.style.setProperty('--featured-wallpaper-preview-placeholder', previewAccentColor)
-  const previewImage = document.createElement('img')
-  previewImage.className = 'featured-wallpaper-preview-image'
-  previewImage.alt = ''
-  previewImage.decoding = 'async'
-  previewImage.loading = 'eager'
-  previewImage.setAttribute('fetchpriority', renderIndex < FEATURED_GALLERY_HIGH_PRIORITY_PREVIEW_LIMIT ? 'high' : 'auto')
-  previewImage.draggable = false
-  const remotePreviewUrl = getFeaturedBackgroundPreviewImageUrl({ provider: previewProvider }, imageUrl) || imageUrl
+  const remotePreviewUrl = getFeaturedBackgroundPreviewImageUrl({ provider: item.provider }, imageUrl) || imageUrl
   const previewFallbackUrls = [
     remotePreviewUrl,
     imageUrl
   ].filter((url, index, urls) => Boolean(url) && url !== bundledPreviewUrl && urls.indexOf(url) === index)
-  previewImage.dataset.remotePreviewUrl = remotePreviewUrl
-  previewImage.dataset.previewFallbackUrls = JSON.stringify(previewFallbackUrls)
   const initialPreviewUrl = featuredBackgroundGalleryPreviewObjectUrlCache.get(remotePreviewUrl) ||
     bundledPreviewUrl ||
     remotePreviewUrl
-  previewImage.addEventListener('error', () => {
-    const fallbackUrls = parseFeaturedBackgroundPreviewFallbackUrls(previewImage.dataset.previewFallbackUrls)
-    const fallbackUrl = fallbackUrls.shift() || ''
-    previewImage.dataset.previewFallbackUrls = JSON.stringify(fallbackUrls)
-    if (!fallbackUrl) {
-      card.classList.remove('has-preview-image')
-      card.classList.add('is-loading')
-      return
-    }
+  const resolutionText = formatFeaturedBackgroundResolution(item)
 
-    previewImage.src = fallbackUrl
-    card.dataset.featuredBackgroundResolvedPreviewUrl = fallbackUrl
-    card.classList.add('has-preview-image')
-    card.classList.remove('is-loading')
-  })
-  previewImage.addEventListener('load', () => {
-    card.dataset.featuredBackgroundResolvedPreviewUrl = previewImage.currentSrc || previewImage.src
-    card.classList.add('has-preview-image')
-    card.classList.remove('is-loading')
-  })
-  previewImage.src = initialPreviewUrl
-  preview.appendChild(previewImage)
-  const resolution = document.createElement('span')
-  resolution.className = 'featured-wallpaper-resolution'
-  const resolutionText = formatFeaturedBackgroundResolution({ width, height })
-  resolution.textContent = resolutionText || '检测中'
-  resolution.dataset.state = resolutionText ? 'ready' : 'pending'
-  preview.appendChild(resolution)
-
-  if (value) {
-    const favoriteButton = document.createElement('button')
-    favoriteButton.className = 'featured-wallpaper-favorite'
-    favoriteButton.type = 'button'
-    favoriteButton.setAttribute('aria-pressed', String(favorite))
-    favoriteButton.setAttribute('aria-label', favorite ? '取消收藏这张精选图' : '收藏这张精选图')
-    favoriteButton.classList.toggle('is-favorite', favorite)
-    favoriteButton.appendChild(createFeaturedFavoriteIcon())
-    preview.appendChild(favoriteButton)
+  return {
+    favorite,
+    fetchpriority: renderIndex < FEATURED_GALLERY_HIGH_PRIORITY_PREVIEW_LIMIT ? 'high' : 'auto',
+    id: item.id,
+    imageUrl,
+    initialPreviewUrl,
+    previewAccentColor,
+    previewFallbackUrls,
+    remotePreviewUrl,
+    resolutionState: resolutionText ? 'ready' : 'pending',
+    resolutionText: resolutionText || '检测中',
+    selected,
+    title
   }
+}
 
-  card.append(preview)
-  featuredBackgroundCardPreviewRegistry.register({ card, image: previewImage, accentColor: previewAccentColor })
-  card.dataset.featuredBackgroundResolvedPreviewUrl = initialPreviewUrl
-  card.classList.add('has-preview-image')
-  card.classList.remove('is-loading')
-  return card
+function registerFeaturedBackgroundRenderedCards(grid: HTMLElement): void {
+  for (const card of grid.querySelectorAll<HTMLElement>('.featured-wallpaper-card')) {
+    const preview = card.querySelector<HTMLElement>('.featured-wallpaper-preview')
+    const image = card.querySelector<HTMLImageElement>('.featured-wallpaper-preview-image')
+    if (!image) {
+      continue
+    }
+    featuredBackgroundCardPreviewRegistry.register({
+      card,
+      image,
+      accentColor: preview?.style.getPropertyValue('--featured-wallpaper-preview-placeholder') || ''
+    })
+    const initialPreviewUrl = card.dataset.featuredBackgroundResolvedPreviewUrl || image.currentSrc || image.src
+    if (initialPreviewUrl) {
+      card.dataset.featuredBackgroundResolvedPreviewUrl = initialPreviewUrl
+    }
+    card.classList.add('has-preview-image')
+    card.classList.remove('is-loading')
+  }
 }
 
 function formatFeaturedBackgroundResolution(item: Pick<FeaturedBackgroundItem, 'width' | 'height'>): string {
@@ -12745,17 +12118,6 @@ function formatFeaturedBackgroundResolution(item: Pick<FeaturedBackgroundItem, '
     return ''
   }
   return `${Math.round(width)} x ${Math.round(height)}`
-}
-
-function parseFeaturedBackgroundPreviewFallbackUrls(value: unknown): string[] {
-  try {
-    const parsed = JSON.parse(String(value || '[]'))
-    return Array.isArray(parsed)
-      ? parsed.map((url) => String(url || '').trim()).filter(Boolean)
-      : []
-  } catch {
-    return []
-  }
 }
 
 function bindFeaturedBackgroundCardDelegation(grid: HTMLElement | null): void {
@@ -12876,12 +12238,9 @@ function getFeaturedBackgroundHoverPreviewElement(): HTMLElement {
     return featuredBackgroundPreviewElement
   }
 
-  const preview = document.createElement('div')
-  preview.className = 'featured-wallpaper-hover-preview'
-  preview.setAttribute('role', 'img')
-  preview.setAttribute('aria-hidden', 'true')
+  const preview = createFeaturedBackgroundHoverPreviewIslandElement({ hidden: true })
   featuredBackgroundPreviewElement = preview
-  featuredBackgroundModal?.appendChild(preview)
+  mountFeaturedBackgroundHoverPreviewIslandElement(featuredBackgroundModal, preview)
   return preview
 }
 
@@ -12925,30 +12284,6 @@ function clearFeaturedBackgroundHoverPreview(card?: HTMLElement): void {
     featuredBackgroundPreviewElement.setAttribute('aria-hidden', 'true')
     featuredBackgroundPreviewElement.style.backgroundImage = ''
   }
-}
-
-function createFeaturedFavoriteIcon(): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.setAttribute('viewBox', '0 0 24 24')
-  svg.setAttribute('aria-hidden', 'true')
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('d', 'M12 21s-7-4.4-9.2-9A5.4 5.4 0 0 1 12 6a5.4 5.4 0 0 1 9.2 6c-2.2 4.6-9.2 9-9.2 9z')
-  svg.appendChild(path)
-  return svg
-}
-
-function createFeaturedBackgroundLoadingCard(): HTMLElement {
-  const card = document.createElement('div')
-  card.className = 'featured-wallpaper-state'
-  card.textContent = '正在载入精选图库'
-  return card
-}
-
-function createFeaturedBackgroundErrorCard(): HTMLElement {
-  const card = document.createElement('div')
-  card.className = 'featured-wallpaper-state'
-  card.textContent = '精选图库载入失败'
-  return card
 }
 
 function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPreferences {
@@ -13418,10 +12753,10 @@ function readTimeSettingsFromControls(): NewTabTimeSettings {
     showSeconds: secondsInput instanceof HTMLInputElement ? secondsInput.checked : state.timeSettings.showSeconds,
     hour12: hour12Input instanceof HTMLInputElement ? hour12Input.checked : state.timeSettings.hour12,
     clockSize: sizeInput instanceof HTMLInputElement ? Number(sizeInput.value) : state.timeSettings.clockSize,
-    dateFormat: dateFormatInput instanceof HTMLSelectElement ? dateFormatInput.value : state.timeSettings.dateFormat,
-    timeZone: timeZoneInput instanceof HTMLSelectElement ? timeZoneInput.value : state.timeSettings.timeZone,
-    displayMode: displayInput instanceof HTMLSelectElement ? displayInput.value : state.timeSettings.displayMode,
-    density: densityInput instanceof HTMLSelectElement ? densityInput.value : state.timeSettings.density
+    dateFormat: isValueControl(dateFormatInput) ? dateFormatInput.value : state.timeSettings.dateFormat,
+    timeZone: isValueControl(timeZoneInput) ? timeZoneInput.value : state.timeSettings.timeZone,
+    displayMode: isValueControl(displayInput) ? displayInput.value : state.timeSettings.displayMode,
+    density: isValueControl(densityInput) ? densityInput.value : state.timeSettings.density
   })
 }
 
@@ -13460,19 +12795,19 @@ function syncTimeSettingsControls(): void {
     sizeInput.value = String(settings.clockSize)
     sizeInput.disabled = !settings.enabled
   }
-  if (dateFormatInput instanceof HTMLSelectElement) {
+  if (isValueControl(dateFormatInput)) {
     dateFormatInput.value = settings.dateFormat
     dateFormatInput.disabled = !settings.enabled || settings.displayMode === 'time'
   }
-  if (timeZoneInput instanceof HTMLSelectElement) {
+  if (isValueControl(timeZoneInput)) {
     timeZoneInput.value = settings.timeZone
     timeZoneInput.disabled = !settings.enabled
   }
-  if (displayInput instanceof HTMLSelectElement) {
+  if (isValueControl(displayInput)) {
     displayInput.value = settings.displayMode
     displayInput.disabled = !settings.enabled
   }
-  if (densityInput instanceof HTMLSelectElement) {
+  if (isValueControl(densityInput)) {
     densityInput.value = settings.density
     densityInput.disabled = !settings.enabled
   }
@@ -13480,7 +12815,7 @@ function syncTimeSettingsControls(): void {
   setTextContent('time-clock-size-value', `${settings.clockSize}%`)
 
   for (const control of dependentControls) {
-    const disabled = control instanceof HTMLInputElement || control instanceof HTMLSelectElement
+    const disabled = isValueControl(control)
       ? control.disabled
       : !settings.enabled
     const row = control instanceof HTMLElement

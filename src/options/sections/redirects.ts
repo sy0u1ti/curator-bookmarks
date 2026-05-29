@@ -11,7 +11,6 @@ import {
   normalizeHistoryRunScope
 } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeHtml, escapeAttr } from '../shared-options/html.js'
 import {
   isInteractionLocked,
   syncSelectionSet,
@@ -19,6 +18,8 @@ import {
 } from '../shared-options/utils.js'
 import { isRedirectedNavigation } from './classifier.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
+import { renderResultsPaginationIsland } from '../components/ResultsPaginationIsland.js'
+import { renderRedirectResultsIsland } from '../components/RedirectResultsIsland.js'
 
 const REDIRECT_RESULTS_PAGE_SIZE = 25
 
@@ -244,86 +245,48 @@ export function renderRedirectSection(callbacks) {
   }
 
   if (!redirectResults.length) {
-    dom.redirectResults.innerHTML = availabilityState.lastCompletedAt
-      ? '<div class="detect-empty">最近一次检测没有发现需要更新最终 URL 的重定向书签。</div>'
+    const emptyMessage = availabilityState.lastCompletedAt
+      ? '最近一次检测没有发现需要更新最终 URL 的重定向书签。'
       : redirectSection.useCachedResults && redirectSection.savedAt
-        ? '<div class="detect-empty">当前没有可直接更新的重定向缓存结果。完成新的检测后，这里会重新生成待更新列表。</div>'
-        : '<div class="detect-empty">完成一次检测后，这里会展示可一键更新的重定向书签。</div>'
+        ? '当前没有可直接更新的重定向缓存结果。完成新的检测后，这里会重新生成待更新列表。'
+        : '完成一次检测后，这里会展示可一键更新的重定向书签。'
+    renderRedirectResultsIsland(dom.redirectResults, {
+      emptyMessage,
+      locked: isInteractionLocked(),
+      results: [],
+      selectedIds: managerState.selectedRedirectIds
+    })
     renderRedirectPagination(0)
     return
   }
 
   const pageResults = getRedirectPageResults(redirectResults)
-  dom.redirectResults.innerHTML = pageResults
-    .map((result) => buildRedirectResultCard(result))
-    .join('')
+  renderRedirectResultsIsland(dom.redirectResults, {
+    emptyMessage: '',
+    locked: isInteractionLocked(),
+    results: pageResults,
+    selectedIds: managerState.selectedRedirectIds
+  })
   renderRedirectPagination(redirectResults.length)
 }
 
-function buildRedirectResultCard(result) {
-  const selected = managerState.selectedRedirectIds.has(String(result.id))
-  const interactionLocked = isInteractionLocked()
-  const selectionLabel = getRedirectResultActionLabel('选择重定向书签', result)
-  const updateLabel = getRedirectResultActionLabel('更新为最终 URL', result)
-  const openFinalLabel = getRedirectResultActionLabel('打开最终链接', result)
-
-  return `
-    <article class="detect-result-card ${selected ? 'selected' : ''}">
-      <div class="detect-result-head">
-        <div class="detect-result-head-left">
-          <label class="detect-result-check">
-            <input
-              type="checkbox"
-              data-redirect-select="true"
-              data-bookmark-id="${escapeAttr(result.id)}"
-              aria-label="${escapeAttr(selectionLabel)}"
-              ${selected ? 'checked' : ''}
-              ${interactionLocked ? 'disabled' : ''}
-            >
-            <span>选择</span>
-          </label>
-          <span class="options-chip success">已跳转</span>
-        </div>
-        <div class="detect-result-actions">
-          <button
-            class="detect-result-action"
-            type="button"
-            data-redirect-update="${escapeAttr(result.id)}"
-            aria-label="${escapeAttr(updateLabel)}"
-            ${interactionLocked ? 'disabled' : ''}
-          >
-            更新为最终 URL
-          </button>
-          <a class="detect-result-open" href="${escapeAttr(result.finalUrl || result.url)}" target="_blank" rel="noreferrer noopener" aria-label="${escapeAttr(openFinalLabel)}">
-            打开最终链接
-          </a>
-        </div>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(result.title || '未命名书签')}</strong>
-        <div class="detect-result-detail">
-          原地址：<span class="detect-inline-url">${escapeHtml(displayUrl(result.url))}</span>
-        </div>
-        <div class="detect-result-detail">
-          最终地址：<span class="detect-inline-url">${escapeHtml(displayUrl(result.finalUrl || result.url))}</span>
-        </div>
-        <div class="detect-result-detail">
-          建议：先打开最终链接确认；更新前会重新读取书签，只有当前 URL 仍等于检测时原地址才会写入。
-        </div>
-        <p class="detect-result-path" title="${escapeAttr(result.path || '未归档路径')}">${escapeHtml(result.path || '未归档路径')}</p>
-      </div>
-    </article>
-  `
-}
-
 export function handleRedirectResultsClick(event, callbacks) {
-  const selectionInput = event.target.closest('input[data-redirect-select]')
-  if (selectionInput) {
-    const bookmarkId = String(selectionInput.getAttribute('data-bookmark-id') || '').trim()
-    if (selectionInput.checked) {
-      managerState.selectedRedirectIds.add(bookmarkId)
-    } else {
+  const selectionControl = event.target.closest('[data-redirect-select]')
+  if (selectionControl) {
+    const bookmarkId = String(selectionControl.getAttribute('data-bookmark-id') || '').trim()
+    if (
+      isInteractionLocked() ||
+      !bookmarkId ||
+      selectionControl.hasAttribute('disabled') ||
+      selectionControl.getAttribute('aria-disabled') === 'true'
+    ) {
+      return
+    }
+
+    if (managerState.selectedRedirectIds.has(bookmarkId)) {
       managerState.selectedRedirectIds.delete(bookmarkId)
+    } else {
+      managerState.selectedRedirectIds.add(bookmarkId)
     }
     callbacks.renderAvailabilitySection()
     return
@@ -549,21 +512,23 @@ function renderRedirectPagination(totalCount) {
 
   const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / REDIRECT_RESULTS_PAGE_SIZE))
   const page = getRedirectPage(totalCount)
-  dom.redirectPagination.classList.toggle('hidden', totalPages <= 1)
-
-  if (totalPages <= 1) {
-    dom.redirectPagination.innerHTML = ''
-    return
-  }
-
-  const start = (page - 1) * REDIRECT_RESULTS_PAGE_SIZE + 1
+  const start = totalCount ? (page - 1) * REDIRECT_RESULTS_PAGE_SIZE + 1 : 0
   const end = Math.min(totalCount, page * REDIRECT_RESULTS_PAGE_SIZE)
-  dom.redirectPagination.innerHTML = `
-    <span class="results-pagination-label">重定向结果 ${escapeHtml(String(start))}-${escapeHtml(String(end))} / ${escapeHtml(String(totalCount))}</span>
-    <button class="options-button secondary small" type="button" data-results-page="redirects" data-page-direction="prev" ${page <= 1 ? 'disabled' : ''}>上一页</button>
-    <span class="option-value">${escapeHtml(String(page))} / ${escapeHtml(String(totalPages))}</span>
-    <button class="options-button secondary small" type="button" data-results-page="redirects" data-page-direction="next" ${page >= totalPages ? 'disabled' : ''}>下一页</button>
-  `
+
+  renderResultsPaginationIsland(
+    dom.redirectPagination,
+    totalPages > 1
+      ? {
+          kind: 'redirects',
+          label: '重定向结果',
+          page,
+          totalPages,
+          start,
+          end,
+          totalCount
+        }
+      : null
+  )
 }
 
 function formatRedirectImpactList(results) {

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .tmp-test/
+tmp/playwright-extension-smoke*/
 .perf-fixtures/
 .perf-results/
 .e2e-results/

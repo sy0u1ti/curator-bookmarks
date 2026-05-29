@@ -1,1 +1,0 @@
-import './newtab-runtime.js'

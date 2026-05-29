@@ -935,6 +935,11 @@ body.background-mask-enabled .newtab-background-mask {
   backdrop-filter: var(--glass-panel-filter);
 }
 
+.newtab-search-engine-menu-items {
+  display: grid;
+  gap: 3px;
+}
+
 .newtab-search-engine-item {
   display: grid;
   min-height: 30px;

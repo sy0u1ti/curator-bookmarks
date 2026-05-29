@@ -1,0 +1,43 @@
+import type { ReactNode } from 'react'
+import { Badge, Card, Icon, type CardProps } from '../index'
+import { cx } from '../primitives/utils'
+
+export interface AiClassificationResultProps extends Omit<CardProps, 'title'> {
+  actions?: ReactNode
+  bodyClassName?: string
+  title: ReactNode
+  folder?: ReactNode
+  confidence?: ReactNode
+  description?: ReactNode
+  meta?: ReactNode
+}
+
+export function AiClassificationResult({
+  actions,
+  bodyClassName,
+  children,
+  className,
+  title,
+  folder,
+  confidence,
+  description,
+  meta,
+  ...props
+}: AiClassificationResultProps) {
+  return (
+    <Card className={cx('grid gap-2', className)} {...props}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Icon name="Sparkles" size={16} aria-hidden="true" />
+          {typeof title === 'string' ? <strong className="text-sm">{title}</strong> : title}
+        </div>
+        {confidence ? <Badge>{confidence}</Badge> : null}
+      </div>
+      {actions}
+      {meta}
+      {description ? <p className="text-sm text-curator-text-muted">{description}</p> : null}
+      {folder ? <p className="text-sm text-curator-text">{folder}</p> : null}
+      {children ? <div className={bodyClassName}>{children}</div> : null}
+    </Card>
+  )
+}

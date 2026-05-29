@@ -14,8 +14,8 @@ import {
 } from '../../shared/folder-cleanup.js'
 import { availabilityState, aiNamingState, folderCleanupState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeHtml, escapeAttr } from '../shared-options/html.js'
 import { formatDateTime, isInteractionLocked } from '../shared-options/utils.js'
+import { renderFolderCleanupIsland } from '../components/FolderCleanupIsland.js'
 
 interface FolderCleanupCallbacks {
   confirm: (options?: {
@@ -160,51 +160,34 @@ export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
   }
 
   if (availabilityState.catalogLoading) {
-    dom.folderCleanupResults.innerHTML = '<div class="detect-empty">正在读取书签树，请稍候…</div>'
+    renderFolderCleanupIsland(dom.folderCleanupResults, {
+      emptyMessage: '正在读取书签树，请稍候…',
+      locked,
+      selectedSuggestionId: folderCleanupState.selectedSuggestionId,
+      splitUndo: null,
+      suggestions: []
+    })
     return
   }
 
   if (!folderCleanupState.rootNode) {
-    dom.folderCleanupResults.innerHTML = '<div class="detect-empty">暂未读取到书签树，请刷新页面后重试。</div>'
+    renderFolderCleanupIsland(dom.folderCleanupResults, {
+      emptyMessage: '暂未读取到书签树，请刷新页面后重试。',
+      locked,
+      selectedSuggestionId: folderCleanupState.selectedSuggestionId,
+      splitUndo: null,
+      suggestions: []
+    })
     return
   }
 
-  const splitUndoNotice = folderCleanupState.lastSplitUndo
-    ? buildSplitUndoNotice(folderCleanupState.lastSplitUndo, locked)
-    : ''
-
-  if (!suggestions.length) {
-    if (splitUndoNotice) {
-      dom.folderCleanupResults.replaceChildren(createFolderCleanupFragment([splitUndoNotice]))
-    } else {
-      dom.folderCleanupResults.replaceChildren(
-        createFolderCleanupEmptyState(folderCleanupState.statusMessage || '当前未发现需要清理的文件夹。')
-      )
-    }
-    return
-  }
-
-  const rows = suggestions.map((suggestion) => buildSuggestionCard(suggestion, locked))
-  dom.folderCleanupResults.replaceChildren(
-    createFolderCleanupFragment(splitUndoNotice ? [splitUndoNotice, ...rows] : rows)
-  )
-}
-
-function createFolderCleanupFragment(markupItems: string[]): DocumentFragment {
-  const fragment = document.createDocumentFragment()
-  for (const markup of markupItems) {
-    const template = document.createElement('template')
-    template.innerHTML = markup.trim()
-    fragment.append(...Array.from(template.content.childNodes))
-  }
-  return fragment
-}
-
-function createFolderCleanupEmptyState(message: string): HTMLElement {
-  const empty = document.createElement('div')
-  empty.className = 'detect-empty'
-  empty.textContent = message
-  return empty
+  renderFolderCleanupIsland(dom.folderCleanupResults, {
+    emptyMessage: folderCleanupState.statusMessage || '当前未发现需要清理的文件夹。',
+    locked,
+    selectedSuggestionId: folderCleanupState.selectedSuggestionId,
+    splitUndo: folderCleanupState.lastSplitUndo,
+    suggestions
+  })
 }
 
 export async function handleFolderCleanupClick(event: Event, callbacks: FolderCleanupCallbacks) {
@@ -508,31 +491,6 @@ function findBookmarkTreeNode(
   return null
 }
 
-function buildSplitUndoNotice(splitUndo: FolderCleanupSplitUndo, locked: boolean): string {
-  const undoLabel = getFolderCleanupSplitUndoActionLabel('撤销本次拆分', splitUndo)
-
-  return `
-    <article class="detect-result-card folder-cleanup-undo-card">
-      <div class="detect-result-head">
-        <span class="options-chip warning">可撤销拆分</span>
-        <div class="detect-result-actions">
-          <button
-            class="detect-result-action"
-            type="button"
-            data-folder-cleanup-undo-split="${escapeAttr(splitUndo.id)}"
-            aria-label="${escapeAttr(undoLabel)}"
-            ${locked ? 'disabled' : ''}
-          >撤销本次拆分</button>
-        </div>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(splitUndo.title)}</strong>
-        <p class="detect-result-detail">已记录 ${splitUndo.moves.length} 个书签的拆分前位置。撤销会先确认并触发自动备份 hook，然后移回书签并删除本次新建的空拆分文件夹。</p>
-      </div>
-    </article>
-  `
-}
-
 export function getFolderCleanupSuggestionActionLabel(
   action: string,
   suggestion: Pick<FolderCleanupSuggestion, 'title' | 'summary'>
@@ -559,62 +517,6 @@ function getFolderCleanupActionContext(value: unknown, fallback: string): string
     : normalized
 
   return safeValue || fallback
-}
-
-function buildSuggestionCard(suggestion: FolderCleanupSuggestion, locked: boolean): string {
-  const previewOpen = folderCleanupState.selectedSuggestionId === suggestion.id
-  const operationCopy = getOperationCopy(suggestion)
-  const previewLabel = getFolderCleanupSuggestionActionLabel(
-    previewOpen ? '收起文件夹清理预览' : '查看文件夹清理预览',
-    suggestion
-  )
-  const operationLabel = getFolderCleanupSuggestionActionLabel(operationCopy, suggestion)
-  const splitPreview = suggestion.splitGroups?.length
-    ? `<div class="folder-cleanup-split-preview">${suggestion.splitGroups.map((group) => `
-        <span class="options-chip muted">${escapeHtml(group.label)} · ${group.count}</span>
-      `).join('')}</div>`
-    : ''
-  const bookmarkPreview = suggestion.bookmarks.length
-    ? `<p class="detect-result-detail">涉及书签：${escapeHtml(suggestion.bookmarks.slice(0, 4).map((bookmark) => bookmark.title).join('、'))}${suggestion.bookmarks.length > 4 ? '…' : ''}</p>`
-    : ''
-
-  return `
-    <article class="detect-result-card folder-cleanup-card">
-      <div class="detect-result-head">
-        <span class="options-chip ${suggestion.severity === 'danger' ? 'danger' : suggestion.severity === 'warning' ? 'warning' : 'muted'}">${escapeHtml(KIND_LABELS[suggestion.kind])}</span>
-        <div class="detect-result-actions">
-          <button
-            class="detect-result-action"
-            type="button"
-            data-folder-cleanup-preview="${escapeAttr(suggestion.id)}"
-            aria-label="${escapeAttr(previewLabel)}"
-          >${previewOpen ? '收起预览' : '查看预览'}</button>
-          <button
-            class="detect-result-action ${suggestion.severity === 'danger' ? 'danger' : ''}"
-            type="button"
-            data-folder-cleanup-action="${escapeAttr(suggestion.id)}"
-            aria-label="${escapeAttr(operationLabel)}"
-            ${locked || !suggestion.canExecute ? 'disabled' : ''}
-          >${escapeHtml(operationCopy)}</button>
-        </div>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(suggestion.title)}</strong>
-        <p class="detect-result-path">${escapeHtml(suggestion.summary)}</p>
-        <p class="detect-result-detail">${escapeHtml(suggestion.reason)}</p>
-        ${bookmarkPreview}
-        ${splitPreview}
-        <div class="folder-cleanup-preview ${previewOpen ? '' : 'hidden'}">
-          ${suggestion.folders.map((folder) => `
-            <div class="folder-cleanup-preview-row">
-              <strong>${escapeHtml(folder.path || folder.title)}</strong>
-              <span>${folder.descendantBookmarkCount} 个书签 · ${folder.depth} 层</span>
-            </div>
-          `).join('')}
-        </div>
-      </div>
-    </article>
-  `
 }
 
 export function handleFolderCleanupPreviewClick(event: Event, callbacks: FolderCleanupCallbacks) {

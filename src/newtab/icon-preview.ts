@@ -4,6 +4,10 @@ import {
   getIconGapPx,
   getIconRowGapPx
 } from './icon-settings.js'
+import {
+  renderIconPreviewIsland,
+  renderIconPreviewSummaryIsland
+} from './components/IconSettingsIslands.js'
 
 export function getIconPreviewSignature(settings: IconSettings): string {
   return [
@@ -52,37 +56,18 @@ export function renderIconPreviewElement(
   preview.style.setProperty('--preview-title-lines', String(settings.titleLines))
   preview.style.setProperty('--preview-grid-max-width', `${previewGridMaxWidth}px`)
   if (summaryElement) {
-    summaryElement.textContent = summary
+    renderIconPreviewSummaryIsland(summaryElement, summary)
   }
 
   if (preview.dataset.iconPreviewSignature === signature && preview.firstElementChild) {
     return
   }
 
-  const grid = document.createElement('div')
-  grid.className = 'icon-live-preview-grid'
-  grid.style.gridTemplateColumns = `repeat(${previewColumns}, minmax(0, 1fr))`
-
   const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
-  for (let index = 0; index < sampleCount; index++) {
-    const tile = document.createElement('span')
-    tile.className = 'icon-live-preview-tile'
-
-    const shell = document.createElement('span')
-    shell.className = 'icon-live-preview-shell'
-    const mark = document.createElement('span')
-    mark.className = 'icon-live-preview-mark'
-    mark.textContent = names[index]?.slice(0, 1) || '*'
-    shell.appendChild(mark)
-
-    const title = document.createElement('span')
-    title.className = 'icon-live-preview-title'
-    title.textContent = names[index]
-
-    tile.append(shell, title)
-    grid.appendChild(tile)
-  }
-
   preview.dataset.iconPreviewSignature = signature
-  preview.replaceChildren(grid)
+  renderIconPreviewIsland(preview, {
+    columns: previewColumns,
+    names,
+    sampleCount
+  })
 }

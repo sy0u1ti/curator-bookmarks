@@ -9,6 +9,13 @@ import { searchBookmarksTopK } from '../popup/search-lookup.js'
 import { extractDomain, normalizeSearchTextCompact } from '../shared/text.js'
 import type { PopupSearchBookmark } from '../popup/search.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
+import {
+  createLoadingStateIslandElement,
+  createMissingFolderIslandElement,
+  createNewTabPageIslandElement,
+  createStateIslandElement,
+  renderContentStateRootIsland
+} from './components/ContentStateIslands.js'
 
 export type NewTabContentState =
   | { type: 'loading' }
@@ -987,35 +994,7 @@ export function normalizeNewTabSearchText(value: string): string {
 }
 
 export function createNewTabPage({ modules }: NewTabPageOptions): HTMLElement {
-  const page = document.createElement('main')
-  page.className = 'newtab-page'
-  page.dataset.contentState = modules.some((module) => module.id === 'bookmarks')
-    ? 'bookmarks'
-    : 'empty'
-
-  const utilityStack = document.createElement('div')
-  utilityStack.className = 'newtab-utility-stack'
-
-  const primarySlot = document.createElement('div')
-  primarySlot.className = 'newtab-primary-slot'
-
-  for (const module of modules) {
-    module.element.dataset.newtabModule = module.id
-    if (module.placement === 'utility') {
-      utilityStack.appendChild(module.element)
-    } else {
-      primarySlot.appendChild(module.element)
-    }
-  }
-
-  page.classList.toggle('has-search', modules.some((module) => module.id === 'search'))
-  page.classList.toggle('has-clock', modules.some((module) => module.id === 'clock'))
-  const bookmarkModule = modules.find((module) => module.id === 'bookmarks')
-  if (bookmarkModule) {
-    page.dataset.iconVerticalCenter = bookmarkModule.element.dataset.iconVerticalCenter || 'false'
-  }
-  page.append(utilityStack, primarySlot)
-  return page
+  return createNewTabPageIslandElement({ modules })
 }
 
 export function createMissingFolderView({
@@ -1024,105 +1003,22 @@ export function createMissingFolderView({
   onCreateFolder,
   onOpenFolderSettings
 }: MissingFolderViewOptions): HTMLElement {
-  const view = document.createElement('section')
-  view.className = 'newtab-state folder-missing'
-  view.setAttribute('aria-labelledby', 'newtab-missing-folder-title')
-
-  const title = document.createElement('h1')
-  title.id = 'newtab-missing-folder-title'
-  title.textContent = reason === 'selected-unavailable'
-    ? '已选书签来源不可用'
-    : '当前没有显示来源'
-
-  const copy = document.createElement('p')
-  copy.textContent = reason === 'selected-unavailable'
-    ? '之前选择的文件夹可能已被删除或移动。请打开设置里的“书签来源”，重新选择要显示的文件夹。'
-    : '没有找到可直接展示的非空文件夹。你可以选择已有来源，或新建专用文件夹后添加书签。'
-
-  const actions = document.createElement('div')
-  actions.className = 'newtab-state-actions'
-
-  const settingsButton = document.createElement('button')
-  settingsButton.className = 'newtab-button'
-  settingsButton.type = 'button'
-  settingsButton.textContent = '选择现有来源'
-  settingsButton.addEventListener('click', onOpenFolderSettings)
-
-  const createButton = document.createElement('button')
-  createButton.className = 'newtab-button secondary'
-  createButton.type = 'button'
-  createButton.disabled = creatingFolder
-  createButton.textContent = creatingFolder ? '正在创建' : '新建专用文件夹'
-  createButton.addEventListener('click', onCreateFolder)
-
-  actions.append(settingsButton, createButton)
-  view.append(title, copy, actions)
-  return view
+  return createMissingFolderIslandElement({
+    creatingFolder,
+    reason,
+    onCreateFolder,
+    onOpenFolderSettings
+  })
 }
 
 export function createStateView(message: string, actionLabel = '', action?: () => void): HTMLElement {
-  const view = document.createElement('section')
-  view.className = 'newtab-state'
-
-  const copy = document.createElement('p')
-  copy.textContent = message
-  view.appendChild(copy)
-
-  if (actionLabel && action) {
-    const button = document.createElement('button')
-    button.className = 'newtab-button secondary'
-    button.type = 'button'
-    button.textContent = actionLabel
-    button.addEventListener('click', action)
-    view.appendChild(button)
-  }
-
-  return view
+  return createStateIslandElement({ action, actionLabel, message })
 }
 
 export function createLoadingStateView(label = '正在加载书签'): HTMLElement {
-  const view = document.createElement('section')
-  view.className = 'newtab-state newtab-loading-state'
-  view.setAttribute('role', 'status')
-  view.setAttribute('aria-label', label)
-  view.innerHTML = renderNewTabDotMatrixLoader('newtab-state-loader')
-  return view
+  return createLoadingStateIslandElement(label)
 }
 
-function renderNewTabDotMatrixLoader(className = ''): string {
-  const classes = ['dot-matrix-loader', 'dot-matrix-loader--spiral', className]
-    .filter(Boolean)
-    .join(' ')
-  const dots: Array<[string, number, number]> = [
-    ['00', 6, 6],
-    ['01', 17, 6],
-    ['02', 28, 6],
-    ['03', 39, 6],
-    ['04', 50, 6],
-    ['10', 6, 17],
-    ['11', 17, 17],
-    ['12', 28, 17],
-    ['13', 39, 17],
-    ['14', 50, 17],
-    ['20', 6, 28],
-    ['21', 17, 28],
-    ['22', 28, 28],
-    ['23', 39, 28],
-    ['24', 50, 28],
-    ['30', 6, 39],
-    ['31', 17, 39],
-    ['32', 28, 39],
-    ['33', 39, 39],
-    ['34', 50, 39],
-    ['40', 6, 50],
-    ['41', 17, 50],
-    ['42', 28, 50],
-    ['43', 39, 50],
-    ['44', 50, 50]
-  ]
-  const litDots = dots
-    .map(([key, x, y]) => `<circle class="dot-matrix-loader-lit dot-matrix-loader-d${key}" cx="${x}" cy="${y}" r="3.1"></circle>`)
-    .join('')
-
-  return `<svg class="${classes}" viewBox="0 0 56 56" aria-hidden="true" focusable="false">${litDots}</svg>`
+export function renderContentStateRoot(container: HTMLElement, view: HTMLElement): void {
+  renderContentStateRootIsland(container, view)
 }

@@ -1,12 +1,11 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
-import { displayUrl } from '../../shared/text.js'
 import {
   managerState,
   createEmptyIgnoreRules
 } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeHtml, escapeAttr } from '../shared-options/html.js'
+import { renderIgnoreRulesIsland } from '../components/IgnoreRulesIsland.js'
 
 export function normalizeIgnoreRules(rawRules) {
   const normalized = createEmptyIgnoreRules()
@@ -135,76 +134,7 @@ function renderIgnoreRuleList(container, rules, kind) {
     return
   }
 
-  if (!rules.length) {
-    container.innerHTML = '<div class="detect-empty">当前没有这类忽略规则。</div>'
-    return
-  }
-
-  container.innerHTML = rules
-    .slice()
-    .sort((left, right) => (Number(right.createdAt) || 0) - (Number(left.createdAt) || 0))
-    .map((rule) => buildIgnoreRuleCard(rule, kind))
-    .join('')
-}
-
-export function getIgnoreRuleActionLabel(action, rule, kind) {
-  const title = kind === 'bookmark'
-    ? rule?.title || displayUrl(rule?.url)
-    : kind === 'folder'
-      ? rule?.path || rule?.title
-      : rule?.domain
-  const normalizedTitle = String(title || '未命名规则')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const safeTitle = normalizedTitle.length > 48
-    ? `${normalizedTitle.slice(0, 47).trim()}…`
-    : normalizedTitle
-
-  return `${action}：${safeTitle || '未命名规则'}`
-}
-
-function buildIgnoreRuleCard(rule, kind) {
-  const title = kind === 'bookmark'
-    ? rule.title
-    : kind === 'folder'
-      ? rule.title
-      : rule.domain
-  const detail = kind === 'bookmark'
-    ? displayUrl(rule.url)
-    : kind === 'folder'
-      ? rule.path || rule.title
-      : '按域名忽略'
-  const ruleId = kind === 'bookmark'
-    ? rule.bookmarkId
-    : kind === 'folder'
-      ? rule.folderId
-      : rule.domain
-  const deleteLabel = getIgnoreRuleActionLabel('删除忽略规则', rule, kind)
-
-  return `
-    <article class="detect-result-card compact">
-      <div class="detect-result-head">
-        <div class="detect-result-head-left">
-          <span class="options-chip muted">忽略规则</span>
-        </div>
-        <div class="detect-result-actions">
-          <button
-            class="detect-result-action"
-            type="button"
-            data-ignore-remove="${escapeAttr(kind)}"
-            data-ignore-id="${escapeAttr(ruleId)}"
-            aria-label="${escapeAttr(deleteLabel)}"
-          >
-            删除规则
-          </button>
-        </div>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(title || '未命名规则')}</strong>
-        <div class="detect-result-detail">${escapeHtml(detail || '')}</div>
-      </div>
-    </article>
-  `
+  renderIgnoreRulesIsland(container, kind, rules)
 }
 
 export function handleIgnoreRulesClick(event, callbacks) {

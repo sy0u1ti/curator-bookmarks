@@ -193,6 +193,7 @@ export const dashboardState = {
   selectedIds: new Set<string>(),
   speedDialPinnedIds: new Set<string>(),
   expandedTagIds: new Set<string>(),
+  activeCardMenuBookmarkId: '',
   tagEditorBookmarkId: '',
   tagEditorDraft: '',
   tagEditorStatus: '',

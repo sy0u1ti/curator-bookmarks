@@ -1,18 +1,20 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
-import { displayUrl } from '../../shared/text.js'
 import {
   availabilityState,
   managerState,
   normalizeHistoryRunScope
 } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeHtml, escapeAttr } from '../shared-options/html.js'
 import {
   compareByPathTitle,
   formatDateTime
 } from '../shared-options/utils.js'
 import { HISTORY_LOG_LIMIT } from '../shared-options/constants.js'
+import {
+  renderAvailabilityHistoryLogIsland,
+  renderAvailabilityRecoveredHistoryIsland
+} from '../components/AvailabilityHistoryIsland.js'
 
 function normalizeHistoryResultArray(entries) {
   if (!Array.isArray(entries)) {
@@ -346,91 +348,6 @@ export function upsertAvailabilityHistoryEntry(result) {
   managerState.currentHistoryEntries[existingIndex] = nextEntry
 }
 
-function buildRecoveredResultCard(result) {
-  return `
-    <article class="detect-result-card compact">
-      <div class="detect-result-head">
-        <div class="detect-result-head-left">
-          <span class="options-chip success">已恢复</span>
-        </div>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(result.title || '未命名书签')}</strong>
-        <div class="detect-result-url">${escapeHtml(displayUrl(result.url))}</div>
-        ${result.streak ? `<div class="detect-result-detail">恢复前曾连续异常 ${escapeHtml(String(result.streak))} 次</div>` : ''}
-        <p class="detect-result-path" title="${escapeAttr(result.path || '未归档路径')}">${escapeHtml(result.path || '未归档路径')}</p>
-      </div>
-    </article>
-  `
-}
-
-function buildHistoryRunCard(run, index, maxAbnormalCount = 1) {
-  const newResults = Array.isArray(run.newResults) ? run.newResults : []
-  const recoveredResults = Array.isArray(run.recoveredResults) ? run.recoveredResults : []
-  const newResultIds = new Set(newResults.map((result) => String(result?.id || '')))
-  const persistentResults = (Array.isArray(run.results) ? run.results : []).filter((result) => {
-    return !newResultIds.has(String(result?.id || ''))
-  })
-  const topStreak = (run.results || []).length === 0
-    ? 0
-    : Math.max(...run.results.map((result) => Number(result.streak) || 1), 1)
-  const runLabel = index === 0 ? '最近一次' : `第 ${index + 1} 次记录`
-  const abnormalCount = Number(run.summary?.totalAbnormal) || 0
-  const width = abnormalCount <= 0 ? 0 : Math.max(8, Math.round((abnormalCount / maxAbnormalCount) * 100))
-
-  return `
-    <article class="detect-result-card history-run-card">
-      <div class="detect-result-head">
-        <div class="detect-result-head-left">
-          <span class="options-chip muted">${escapeHtml(runLabel)}</span>
-          <span class="options-chip muted">${escapeHtml(run.scope?.label || '全部书签')}</span>
-          <span class="options-chip warning">新增 ${escapeHtml(String(Number(run.summary?.newCount) || 0))}</span>
-          <span class="options-chip muted">持续 ${escapeHtml(String(Number(run.summary?.persistentCount) || 0))}</span>
-          <span class="options-chip success">恢复 ${escapeHtml(String(Number(run.summary?.recoveredCount) || 0))}</span>
-        </div>
-        <span class="option-value">${escapeHtml(formatDateTime(run.completedAt))}</span>
-      </div>
-      <div class="detect-result-copy">
-        <div class="history-run-trend">
-          <div class="history-trend-meta">
-            <strong>异常 ${escapeHtml(String(abnormalCount))} 条</strong>
-            <span>低置信 ${escapeHtml(String(Number(run.summary?.reviewCount) || 0))} · 高置信 ${escapeHtml(String(Number(run.summary?.failedCount) || 0))}</span>
-          </div>
-          <div class="history-trend-bar-track" aria-hidden="true">
-            <span class="history-trend-bar" style="width:${width}%"></span>
-          </div>
-          <div class="history-trend-copy">
-            新增 ${escapeHtml(String(Number(run.summary?.newCount) || 0))} · 持续 ${escapeHtml(String(Number(run.summary?.persistentCount) || 0))} · 恢复 ${escapeHtml(String(Number(run.summary?.recoveredCount) || 0))}
-          </div>
-        </div>
-        <div class="history-run-summary">
-          ${topStreak > 0
-            ? `当前记录中最高连续异常为 ${escapeHtml(String(topStreak))} 次，检测范围为 ${escapeHtml(run.scope?.label || '全部书签')}。`
-            : `本次检测没有发现异常，检测范围为 ${escapeHtml(run.scope?.label || '全部书签')}。`}
-        </div>
-        <div class="history-run-section">
-          <strong>本次新增异常</strong>
-          ${newResults.length
-            ? `<ul class="history-run-list">${newResults.slice(0, 6).map((result) => `<li>${escapeHtml(result.title || '未命名书签')} · ${escapeHtml(displayUrl(result.url))} · 连续异常 ${escapeHtml(String(result.streak || 1))} 次</li>`).join('')}</ul>${newResults.length > 6 ? `<p class="history-run-more">还有 ${escapeHtml(String(newResults.length - 6))} 条新增异常未展开。</p>` : ''}`
-            : '<p class="history-run-empty">本次没有新增异常。</p>'}
-        </div>
-        <div class="history-run-section">
-          <strong>本次持续异常</strong>
-          ${persistentResults.length
-            ? `<ul class="history-run-list">${persistentResults.slice(0, 6).map((result) => `<li>${escapeHtml(result.title || '未命名书签')} · ${escapeHtml(displayUrl(result.url))} · 连续异常 ${escapeHtml(String(result.streak || 1))} 次</li>`).join('')}</ul>${persistentResults.length > 6 ? `<p class="history-run-more">还有 ${escapeHtml(String(persistentResults.length - 6))} 条持续异常未展开。</p>` : ''}`
-            : '<p class="history-run-empty">本次没有持续异常。</p>'}
-        </div>
-        <div class="history-run-section">
-          <strong>本次已恢复</strong>
-          ${recoveredResults.length
-            ? `<ul class="history-run-list">${recoveredResults.slice(0, 4).map((result) => `<li>${escapeHtml(result.title || '未命名书签')} · ${escapeHtml(displayUrl(result.url))}</li>`).join('')}</ul>${recoveredResults.length > 4 ? `<p class="history-run-more">还有 ${escapeHtml(String(recoveredResults.length - 4))} 条已恢复结果未展开。</p>` : ''}`
-            : '<p class="history-run-empty">本次没有已恢复结果。</p>'}
-        </div>
-      </div>
-    </article>
-  `
-}
-
 function renderHistoryLogList(callbacks) {
   if (!dom.availabilityHistoryLogList) {
     return
@@ -447,9 +364,14 @@ function renderHistoryLogList(callbacks) {
   }
 
   if (!scopeRuns.length) {
-    dom.availabilityHistoryLogList.innerHTML = managerState.historyRuns.length
-      ? '<div class="detect-empty">当前范围还没有检测日志，切换范围或完成一次检测后会在这里展示。</div>'
-      : '<div class="detect-empty">完成检测后，这里会保留最近多次检测日志。</div>'
+    renderAvailabilityHistoryLogIsland(
+      dom.availabilityHistoryLogList,
+      [],
+      managerState.historyRuns.length
+        ? '当前范围还没有检测日志，切换范围或完成一次检测后会在这里展示。'
+        : '完成检测后，这里会保留最近多次检测日志。',
+      1
+    )
     return
   }
 
@@ -458,9 +380,12 @@ function renderHistoryLogList(callbacks) {
     1
   )
 
-  dom.availabilityHistoryLogList.innerHTML = scopeRuns
-    .map((run, index) => buildHistoryRunCard(run, index, maxAbnormalCount))
-    .join('')
+  renderAvailabilityHistoryLogIsland(
+    dom.availabilityHistoryLogList,
+    scopeRuns,
+    '',
+    maxAbnormalCount
+  )
 }
 
 export function renderAvailabilityHistory(callbacks) {
@@ -495,18 +420,15 @@ export function renderAvailabilityHistory(callbacks) {
 
   renderHistoryLogList(callbacks)
 
-  if (!managerState.historyRecoveredResults.length) {
-    dom.availabilityHistoryRecoveredList.innerHTML = managerState.historyLastRunAt
-      ? '<div class="detect-empty">最近一次完整检测未发现已恢复书签。</div>'
+  renderAvailabilityRecoveredHistoryIsland(
+    dom.availabilityHistoryRecoveredList,
+    managerState.historyRecoveredResults,
+    managerState.historyLastRunAt
+      ? '最近一次完整检测未发现已恢复书签。'
       : managerState.historyRuns.length
-        ? '<div class="detect-empty">当前范围还没有已恢复记录。</div>'
-        : '<div class="detect-empty">完成检测后，这里会展示相较于上一次已恢复的书签。</div>'
-    return
-  }
-
-  dom.availabilityHistoryRecoveredList.innerHTML = managerState.historyRecoveredResults
-    .map((result) => buildRecoveredResultCard(result))
-    .join('')
+        ? '当前范围还没有已恢复记录。'
+        : '完成检测后，这里会展示相较于上一次已恢复的书签。'
+  )
 }
 
 export async function clearDetectionHistoryLogs(callbacks) {

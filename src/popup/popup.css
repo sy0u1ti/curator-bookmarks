@@ -2054,6 +2054,25 @@ body.smart-active .smart-classifier {
   max-width: 320px;
 }
 
+.empty-search-state .ai-setup-prompt-icon {
+  display: none;
+}
+
+.empty-search-state .ai-setup-prompt-copy {
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .empty-title,
 .empty-hint {
   margin: 0;
@@ -2623,6 +2642,15 @@ mark {
   animation: backdrop-exit var(--motion-standard) var(--motion-ease-in) both;
 }
 
+.popup-modal-stack {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-width: 0;
+  max-height: 100%;
+  outline: none;
+}
+
 #filter-modal.modal-card {
   max-width: 396px;
   width: 92%;
@@ -2712,6 +2740,25 @@ mark {
   color: var(--text-soft);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.modal-ai-setup-prompt {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  align-items: start;
+}
+
+.modal-ai-setup-prompt .ai-setup-prompt-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid rgba(245, 245, 247, 0.12);
+  border-radius: 8px;
+  background: rgba(245, 245, 247, 0.04);
+  color: var(--text-soft);
 }
 
 .modal-card-label,
@@ -4282,164 +4329,6 @@ input:not(.search-input):focus-visible {
   color: #ffffff;
 }
 
-.custom-select {
-  position: relative;
-  display: inline-block;
-  min-width: 0;
-  max-width: 100%;
-  vertical-align: middle;
-}
-
-.custom-select-native {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 0 !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-.custom-select-trigger {
-  display: flex;
-  width: 100%;
-  min-height: 34px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 9px;
-  overflow: hidden;
-  padding: 0 8px 0 12px;
-  border: 1px solid rgba(245, 245, 247, 0.15);
-  border-radius: 7px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015)),
-    #080809;
-  color: rgba(245, 245, 247, 0.9);
-  cursor: pointer;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.38);
-  transition:
-    border-color var(--ease-standard),
-    background-color var(--ease-standard),
-    box-shadow var(--ease-standard),
-    color var(--ease-standard);
-}
-
-.custom-select-trigger-label {
-  min-width: 0;
-  overflow: hidden;
-  font-size: 13px;
-  font-weight: 620;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.custom-select-trigger-arrow {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(245, 245, 247, 0.72);
-}
-
-.custom-select-trigger-arrow::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1.6px solid currentColor;
-  border-bottom: 1.6px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
-  transition: transform var(--ease-standard);
-}
-
-.custom-select[data-open="true"] .custom-select-trigger-arrow::before {
-  transform: rotate(225deg) translateY(-2px);
-}
-
-.custom-select-trigger:hover {
-  border-color: rgba(245, 245, 247, 0.26);
-  background-color: #101013;
-  color: #ffffff;
-}
-
-.custom-select-trigger:focus-visible {
-  border-color: rgba(59, 130, 246, 0.54);
-  outline: none;
-  box-shadow:
-    0 0 0 2px rgba(59, 130, 246, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
-}
-
-.custom-select.is-disabled .custom-select-trigger {
-  cursor: default;
-  opacity: 0.48;
-}
-
-.custom-select-list {
-  position: fixed;
-  top: var(--custom-select-top);
-  left: var(--custom-select-left);
-  z-index: 10000;
-  display: grid;
-  width: var(--custom-select-width);
-  max-height: var(--custom-select-max-height);
-  gap: 3px;
-  overflow-y: auto;
-  padding: 5px;
-  border: 1px solid rgba(245, 245, 247, 0.16);
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), transparent),
-    #080809;
-  color: rgba(245, 245, 247, 0.92);
-  box-shadow:
-    0 16px 34px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
-  scrollbar-width: thin;
-}
-
-.custom-select-list[hidden] {
-  display: none;
-}
-
-.custom-select-option {
-  display: flex;
-  min-height: 28px;
-  align-items: center;
-  overflow: hidden;
-  padding: 0 9px;
-  border-radius: 6px;
-  color: rgba(245, 245, 247, 0.86);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 610;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.custom-select-option:hover,
-.custom-select-option.is-active {
-  background: rgba(59, 130, 246, 0.14);
-  color: #ffffff;
-}
-
-.custom-select-option[aria-selected="true"] {
-  background: rgba(59, 130, 246, 0.2);
-  color: #ffffff;
-}
-
-.custom-select-option[aria-disabled="true"] {
-  cursor: default;
-  opacity: 0.45;
-}
-
 /* Popup geek UI reuse pass */
 :root {
   --bg: #000000;
@@ -4489,7 +4378,7 @@ body::after {
   letter-spacing: 0;
 }
 
-.app-shell :where(.bookmark-card, .modal-card, .search-shell, .hero-mark, .hero-settings-button, .search-help-toggle, .auto-analyze-status, .auto-analyze-action, .filter-trigger, .filter-clear, .clear-search, .natural-search-toggle, .content-shell, .state-panel, .folder-card, .result-card, .result-main, .picker-folder-card, .filter-option, .filter-option-check, .icon-button, .action-menu, .action-menu button, .tree-toggle, .folder-kind, .smart-folder-icon, .smart-page-card, .smart-loading-card, .smart-permission-card, .smart-result-card, .smart-page-icon, .current-page-action, .smart-classify-button, .smart-manual-button, .smart-exit-button, .smart-title-input, .smart-folder-option, .smart-new-badge, .smart-cancel-button, .smart-settings-action, .smart-save-button, .smart-footer, .modal-bookmark-card, .modal-input, .secondary-button, .danger-button, .toast, .toast-action, .toast-dismiss, .custom-select-trigger, .custom-select-trigger-arrow, .custom-select-list, .custom-select-option, select) {
+.app-shell :where(.bookmark-card, .modal-card, .search-shell, .hero-mark, .hero-settings-button, .search-help-toggle, .auto-analyze-status, .auto-analyze-action, .filter-trigger, .filter-clear, .clear-search, .natural-search-toggle, .content-shell, .state-panel, .folder-card, .result-card, .result-main, .picker-folder-card, .filter-option, .filter-option-check, .icon-button, .action-menu, .action-menu button, .tree-toggle, .folder-kind, .smart-folder-icon, .smart-page-card, .smart-loading-card, .smart-permission-card, .smart-result-card, .smart-page-icon, .current-page-action, .smart-classify-button, .smart-manual-button, .smart-exit-button, .smart-title-input, .smart-folder-option, .smart-new-badge, .smart-cancel-button, .smart-settings-action, .smart-save-button, .smart-footer, .modal-bookmark-card, .modal-input, .secondary-button, .danger-button, .toast, .toast-action, .toast-dismiss, select) {
   border-radius: 0;
 }
 
@@ -4931,64 +4820,6 @@ body::after {
   box-shadow: none;
 }
 
-.custom-select-trigger {
-  border-color: rgba(255, 255, 255, 0.16);
-  border-radius: 0;
-  background: #000000;
-  box-shadow: none;
-}
-
-.custom-select-trigger-arrow {
-  width: 18px;
-  height: 18px;
-  border-radius: 0;
-  background: transparent;
-  color: rgba(247, 247, 247, 0.5);
-}
-
-.custom-select-trigger-arrow::before {
-  content: ">";
-  width: auto;
-  height: auto;
-  border: 0;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1;
-  transform: none;
-  transition: color var(--ease-standard), transform var(--ease-standard);
-}
-
-.custom-select[data-open="true"] .custom-select-trigger-arrow::before {
-  color: #3b82f6;
-  transform: rotate(90deg);
-}
-
-.custom-select-trigger:hover,
-.custom-select-trigger:focus-visible {
-  border-color: rgba(59, 130, 246, 0.52);
-  background: #050505;
-  box-shadow: none;
-}
-
-.custom-select-list {
-  border-color: rgba(255, 255, 255, 0.18);
-  border-radius: 0;
-  background: #000000;
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.64);
-}
-
-.custom-select-option {
-  border-radius: 0;
-  color: rgba(247, 247, 247, 0.82);
-}
-
-.custom-select-option:hover,
-.custom-select-option.is-active,
-.custom-select-option[aria-selected="true"] {
-  background: rgba(47, 124, 246, 0.18);
-  color: #ffffff;
-}
-
 /* UI refresh: shared soft-dark primitives over the legacy monochrome pass. */
 :root {
   --bg: var(--ui-bg-page);
@@ -5043,7 +4874,6 @@ body::after {
 .app-shell :where(
   .modal-card,
   .action-menu,
-  .custom-select-list,
   .toast
 ) {
   border-radius: var(--ui-radius-panel);
@@ -5064,7 +4894,6 @@ body::after {
   .modal-bookmark-card,
   .modal-input,
   .smart-title-input,
-  .custom-select-trigger,
   select
 ) {
   border-radius: var(--ui-radius-control);
@@ -5090,8 +4919,7 @@ body::after {
   .search-filter-chip,
   .smart-new-badge,
   .picker-badge,
-  .smart-footer,
-  .custom-select-option
+  .smart-footer
 ) {
   border-radius: var(--ui-radius-pill);
 }
@@ -5226,23 +5054,18 @@ body::after {
   background: rgba(243, 245, 247, 0.72);
 }
 
-.action-menu,
-.custom-select-list {
+.action-menu {
   border-color: var(--ui-divider);
   background: var(--ui-surface-raised);
   box-shadow: var(--ui-shadow-menu);
 }
 
-.action-menu button,
-.custom-select-option {
+.action-menu button {
   border-radius: var(--ui-radius-small);
 }
 
 .action-menu button:hover,
-.action-menu button:focus-visible,
-.custom-select-option:hover,
-.custom-select-option.is-active,
-.custom-select-option[aria-selected="true"] {
+.action-menu button:focus-visible {
   background: var(--ui-surface-hover);
 }
 
@@ -5334,17 +5157,14 @@ body::after {
   color: var(--ui-accent);
 }
 
-.app-shell select,
-.custom-select-trigger {
+.app-shell select {
   border-color: var(--ui-divider);
   border-radius: var(--ui-radius-control);
   background-color: var(--ui-surface-raised);
 }
 
 .app-shell select:hover,
-.app-shell select:focus-visible,
-.custom-select-trigger:hover,
-.custom-select-trigger:focus-visible {
+.app-shell select:focus-visible {
   border-color: var(--ui-focus-ring);
   background-color: var(--ui-surface-hover);
 }
@@ -5447,7 +5267,6 @@ body::after {
 }
 
 .action-menu :where(button),
-.custom-select-list :where(.custom-select-option),
 .search-help-popover,
 .search-help-tag,
 .search-filter-chip,
@@ -5495,9 +5314,7 @@ body::after {
 .filter-clear,
 .clear-search,
 .natural-search-toggle,
-.modal-backdrop :where(.modal-search, .modal-input, input[type="text"], input[type="url"], input[type="search"], textarea),
-.custom-select-trigger,
-.custom-select-list {
+.modal-backdrop :where(.modal-search, .modal-input, input[type="text"], input[type="url"], input[type="search"], textarea) {
   border-color: var(--ui-divider);
   background: var(--ui-surface-raised);
 }
@@ -5505,8 +5322,7 @@ body::after {
 .search-shell:focus-within,
 .modal-search:focus-within,
 .modal-backdrop :where(.modal-input, input[type="text"], input[type="url"], input[type="search"], textarea):focus,
-.modal-backdrop :where(.modal-input, input[type="text"], input[type="url"], input[type="search"], textarea):focus-visible,
-.custom-select-trigger:focus-visible {
+.modal-backdrop :where(.modal-input, input[type="text"], input[type="url"], input[type="search"], textarea):focus-visible {
   border-color: var(--ui-focus-ring);
   box-shadow: 0 0 0 3px var(--ui-accent-soft);
 }
@@ -5618,8 +5434,6 @@ body::after {
 .toast-dismiss,
 .icon-button,
 .action-menu,
-.custom-select-trigger,
-.custom-select-list,
 .modal-backdrop :where(.modal-search, .modal-input, input[type="text"], input[type="url"], input[type="search"], textarea) {
   border-color: var(--ui-divider);
   background: var(--ui-surface-raised);
@@ -5680,9 +5494,6 @@ body::after {
   .smart-title-input,
   .smart-folder-option,
   .modal-input,
-  .custom-select-trigger,
-  .custom-select-list,
-  .custom-select-option,
   select
 ),
 .modal-backdrop :where(
@@ -5706,7 +5517,7 @@ body::after {
   border-radius: var(--ui-radius-control);
 }
 
-.app-shell :where(.modal-card, .action-menu, .custom-select-list, .toast),
+.app-shell :where(.modal-card, .action-menu, .toast),
 .modal-backdrop :where(.modal-card) {
   border-radius: var(--ui-radius-panel);
 }
@@ -5779,10 +5590,7 @@ body::after {
 .icon-button:hover,
 .icon-button:focus-visible,
 .action-menu button:hover,
-.action-menu button:focus-visible,
-.custom-select-option:hover,
-.custom-select-option.is-active,
-.custom-select-option[aria-selected="true"] {
+.action-menu button:focus-visible {
   border-color: var(--ui-divider-strong);
   background: var(--ui-surface-hover);
   color: var(--ui-text-primary);
@@ -5791,8 +5599,7 @@ body::after {
 .search-shell:focus-within,
 .modal-search:focus-within,
 .modal-backdrop :where(.modal-input, input[type="text"], input[type="url"], input[type="search"], textarea):focus,
-.modal-backdrop :where(.modal-input, input[type="text"], input[type="url"], input[type="search"], textarea):focus-visible,
-.custom-select-trigger:focus-visible {
+.modal-backdrop :where(.modal-input, input[type="text"], input[type="url"], input[type="search"], textarea):focus-visible {
   border-color: var(--ui-focus-ring);
   background: var(--ui-surface-hover);
   box-shadow: 0 0 0 3px var(--ui-accent-soft);

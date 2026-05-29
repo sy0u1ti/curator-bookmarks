@@ -3,11 +3,10 @@ import {
   STORAGE_KEYS
 } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
-import { displayUrl } from '../../shared/text.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeAttr, escapeHtml } from '../shared-options/html.js'
 import { formatDateTime } from '../shared-options/utils.js'
+import { renderBookmarkAddHistoryIsland } from '../components/BookmarkAddHistoryIsland.js'
 
 export interface BookmarkAddHistoryEntry {
   id: string
@@ -127,37 +126,6 @@ function getBookmarkAddHistorySummary() {
   }
 }
 
-function buildBookmarkAddHistoryCard(entry: BookmarkAddHistoryEntry): string {
-  const confidencePercent = Math.round(entry.confidence * 100)
-  const folderKindText = entry.recommendationKind === 'new' ? '新建文件夹' : '已有文件夹'
-  const movementText = entry.moved ? '已移动' : '已在目标文件夹'
-  const originalFolder = entry.originalFolderPath || '未归档路径'
-  const targetFolder = entry.targetFolderPath || '未归档路径'
-
-  return `
-    <article class="detect-result-card bookmark-add-history-card">
-      <div class="detect-result-head">
-        <div class="detect-result-head-left">
-          <span class="options-chip ${entry.moved ? 'success' : 'muted'}">${escapeHtml(movementText)}</span>
-          <span class="options-chip muted">${escapeHtml(folderKindText)}</span>
-          <span class="options-chip muted">${escapeHtml(String(confidencePercent))}%</span>
-        </div>
-        <span class="option-value">${escapeHtml(formatDateTime(entry.createdAt))}</span>
-      </div>
-      <div class="detect-result-copy">
-        <strong>${escapeHtml(entry.title || '未命名书签')}</strong>
-        <div class="detect-result-url">${escapeHtml(displayUrl(entry.url))}</div>
-        <p class="detect-result-path" title="${escapeAttr(targetFolder)}">${escapeHtml(targetFolder)}</p>
-        ${entry.moved
-          ? `<div class="detect-result-detail">从 ${escapeHtml(originalFolder)} 移动到 ${escapeHtml(targetFolder)}。</div>`
-          : `<div class="detect-result-detail">书签已位于推荐文件夹：${escapeHtml(targetFolder)}。</div>`}
-        ${entry.reason ? `<div class="detect-result-detail">原因：${escapeHtml(entry.reason)}</div>` : ''}
-        ${entry.summary ? `<div class="history-run-summary">摘要：${escapeHtml(entry.summary)}</div>` : ''}
-      </div>
-    </article>
-  `
-}
-
 export function renderBookmarkAddHistory(): void {
   if (!dom.bookmarkAddHistoryResults) {
     return
@@ -179,9 +147,7 @@ export function renderBookmarkAddHistory(): void {
     ? `已保留最近 ${summary.total} 条自动分析添加记录，最近一次发生于 ${formatDateTime(latestEntry!.createdAt)}。`
     : '开启“自动分析”后，新增普通网页书签完成 AI 分类时会在这里记录保存位置。'
 
-  dom.bookmarkAddHistoryResults.innerHTML = entries.length
-    ? entries.map((entry) => buildBookmarkAddHistoryCard(entry)).join('')
-    : '<div class="detect-empty">还没有自动分析添加记录。开启“自动分析”后，新增普通网页书签并完成分类时会写入这里。</div>'
+  renderBookmarkAddHistoryIsland(dom.bookmarkAddHistoryResults, entries)
 }
 
 export async function clearBookmarkAddHistory(callbacks: {

@@ -32,10 +32,8 @@ import {
   updateBookmark
 } from '../shared/bookmarks-api.js'
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
-import { initializeCustomSelects } from '../shared/custom-select.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
-import { renderDotMatrixLoader } from '../shared/dot-matrix-loader.js'
 import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
 import {
   buildBookmarkCatalogSnapshot,
@@ -81,7 +79,31 @@ import {
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
-import { replacePopupSectionHtml } from './render-cache.js'
+import {
+  renderPopupAutoAnalyzeStatusIsland,
+  renderPopupBreadcrumbsIsland,
+  renderPopupContentIsland,
+  renderPopupEmptyStateIsland,
+  renderPopupFolderPickerIsland,
+  renderPopupLoadingStateIsland,
+  renderPopupSavedSearchesIsland,
+  renderPopupSearchChipsIsland,
+  renderPopupSmartClassifierIsland,
+  renderPopupToastsIsland,
+  type PopupActionMenuViewModel,
+  type PopupAutoAnalyzeStatusState,
+  type PopupBreadcrumbSegmentViewModel,
+  type PopupContentRowViewModel,
+  type PopupContentViewModel,
+  type PopupEmptyStateViewModel,
+  type PopupFilterFolderOptionViewModel,
+  type PopupFolderPickerState,
+  type PopupFolderTreeOptionViewModel,
+  type PopupSavedSearchesViewModel,
+  type PopupSearchChipViewModel,
+  type PopupSmartClassifierViewModel,
+  type PopupToastViewModel
+} from './components/PopupRuntimeIslands.js'
 import {
   hydratePopupBaseData,
   hydratePopupDeferredEnhancements
@@ -91,7 +113,6 @@ import {
   getPopupEditBookmarkSavePlan
 } from './edit-bookmark-draft.js'
 import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
-
 const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
@@ -123,7 +144,6 @@ let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> 
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
-
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -131,68 +151,48 @@ interface PopupRefreshBaseData {
   catalog: BookmarkCatalogSnapshot
   indexedBookmarks: ReturnType<typeof buildLightPopupSearchIndex>
 }
-
 interface PopupRefreshDeferredData {
   tagIndex: Awaited<ReturnType<typeof loadBookmarkTagIndex>> | null
   snapshotState: Awaited<ReturnType<typeof loadPopupSearchIndexSnapshotState>>
 }
-
-const smartClassifierRenderState = {
-  get signature() { return state.smartClassifierRenderSignature },
-  set signature(value) { state.smartClassifierRenderSignature = value }
-}
-const searchChipsRenderState = {
-  get signature() { return state.searchChipsRenderSignature },
-  set signature(value) { state.searchChipsRenderSignature = value }
-}
-const savedSearchesRenderState = {
-  get signature() { return state.savedSearchesRenderSignature },
-  set signature(value) { state.savedSearchesRenderSignature = value }
-}
-const folderBreadcrumbsRenderState = {
-  get signature() { return state.folderBreadcrumbsRenderSignature },
-  set signature(value) { state.folderBreadcrumbsRenderSignature = value }
-}
-
 function abortNaturalSearchRequest() {
   state.naturalSearchAbortController?.abort()
   state.naturalSearchAbortController = null
 }
-
 function loadNaturalSearchModule(): Promise<typeof import('./natural-search.js')> {
   naturalSearchModulePromise ||= import('./natural-search.js')
   return naturalSearchModulePromise
 }
-
 function loadNaturalSearchAiModule(): Promise<typeof import('./natural-search-ai.js')> {
   naturalSearchAiModulePromise ||= import('./natural-search-ai.js')
   return naturalSearchAiModulePromise
 }
-
 function loadAiSettingsModule(): Promise<typeof import('../options/sections/ai-settings.js')> {
   aiSettingsModulePromise ||= import('../options/sections/ai-settings.js')
   return aiSettingsModulePromise
 }
-
 function loadSmartClassifierModule(): Promise<typeof import('./smart-classifier.js')> {
   smartClassifierModulePromise ||= import('./smart-classifier.js')
   return smartClassifierModulePromise
 }
-
 function loadRecycleBinModule(): Promise<typeof import('../shared/recycle-bin.js')> {
   recycleBinModulePromise ||= import('../shared/recycle-bin.js')
   return recycleBinModulePromise
 }
+let popupRuntimeStarted = false
 
-document.addEventListener('DOMContentLoaded', () => {
+export function startPopupRuntime(): void {
+  if (popupRuntimeStarted) {
+    return
+  }
+  popupRuntimeStarted = true
+
   perfMark('popup.domContentLoaded')
   cacheDom()
-  initializeCustomSelects()
   bindEvents()
   render()
   perfMark('popup.firstRender')
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
-
   void hydratePopupPreferences().finally(() => {
     render()
     refreshData({ initial: true, preserveSearch: false }).finally(() => {
@@ -206,10 +206,9 @@ document.addEventListener('DOMContentLoaded', () => {
     })
   })
   void hydrateAutoAnalyzeStatus()
-})
+}
 
 window.addEventListener('pagehide', cleanupPopupRuntime)
-
 function bindEvents() {
   dom.openSettings.addEventListener('click', openSettingsPage)
   dom.smartFooterSettings.addEventListener('click', openSettingsPage)
@@ -220,7 +219,6 @@ function bindEvents() {
     if (!(target instanceof Element)) {
       return
     }
-
     const actionButton = target.closest('[data-saved-search-action]')
     if (actionButton) {
       handleSavedSearchAction(actionButton)
@@ -229,14 +227,10 @@ function bindEvents() {
   dom.searchInput.addEventListener('input', () => {
     setSearchQuery(dom.searchInput.value)
   })
-
   dom.naturalSearchToggle.addEventListener('click', () => {
     void toggleNaturalLanguageSearch()
   })
-  dom.searchHelpToggle.addEventListener('click', toggleSearchHelpPopover)
   dom.searchHelpToggle.addEventListener('keydown', handleSearchHelpKeydown)
-  dom.searchHelpPopover.addEventListener('keydown', handleSearchHelpPopoverKeydown)
-
   dom.clearSearch.addEventListener('click', () => {
     setSearchQuery('', { immediate: true })
     showViewNotice('已清空搜索')
@@ -244,7 +238,6 @@ function bindEvents() {
   })
   dom.folderFilterTrigger.addEventListener('click', openFilterDialog)
   dom.clearFolderFilter.addEventListener('click', clearFolderFilter)
-
   dom.content.addEventListener('click', handleContentClick)
   dom.emptyState.addEventListener('click', handleContentClick)
   dom.content.addEventListener('pointerover', handleContentPointerOver)
@@ -296,15 +289,13 @@ function bindEvents() {
       closeDialogs()
     }
   })
-
+  window.addEventListener('popup:modal-close', closeDialogs)
   dom.autoAnalyzeStatus.addEventListener('click', handleAutoAnalyzeStatusClick)
   dom.toastRoot.addEventListener('click', handleToastClick)
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
-
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('keydown', handleDocumentKeydown)
 }
-
 async function hydratePopupPreferences() {
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])
@@ -319,17 +310,14 @@ async function hydratePopupPreferences() {
     void savePopupPreferences().catch(() => {})
   }
 }
-
 function normalizePopupPreferences(value) {
   if (!value || typeof value !== 'object') {
     return { ...DEFAULT_POPUP_PREFERENCES }
   }
-
   return {
     naturalSearchEnabled: value.naturalSearchEnabled === true
   }
 }
-
 async function savePopupPreferences() {
   await setLocalStorage({
     [STORAGE_KEYS.popupPreferences]: {
@@ -337,7 +325,6 @@ async function savePopupPreferences() {
     }
   })
 }
-
 async function refreshNaturalSearchAiConfiguredState() {
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
@@ -349,12 +336,10 @@ async function refreshNaturalSearchAiConfiguredState() {
     state.naturalSearchAiConfigChecked = true
   }
 }
-
 async function hydrateSavedSearches() {
   if (state.savedSearchesLoaded) {
     return
   }
-
   try {
     state.savedSearches = await loadSavedSearchIndex()
     state.savedSearchesLoaded = true
@@ -366,7 +351,6 @@ async function hydrateSavedSearches() {
     renderSearchTools()
   }
 }
-
 async function saveCurrentSearchQuery() {
   const query = state.searchQuery.trim()
   if (!query) {
@@ -374,7 +358,6 @@ async function saveCurrentSearchQuery() {
     dom.searchInput.focus()
     return
   }
-
   try {
     const index = await ensureSavedSearchIndex()
     state.savedSearches = await saveSearch(index, {
@@ -392,7 +375,6 @@ async function saveCurrentSearchQuery() {
     showToast({ type: 'error', message: '保存搜索失败，请稍后重试。' })
   }
 }
-
 async function deletePopupSavedSearch(searchId) {
   try {
     const index = await ensureSavedSearchIndex()
@@ -407,17 +389,14 @@ async function deletePopupSavedSearch(searchId) {
     showToast({ type: 'error', message: '删除保存搜索失败，请稍后重试。' })
   }
 }
-
 async function ensureSavedSearchIndex(): Promise<SavedSearchIndex> {
   if (state.savedSearches) {
     return state.savedSearches
   }
-
   state.savedSearches = await loadSavedSearchIndex()
   state.savedSearchesLoaded = true
   return state.savedSearches
 }
-
 function createSavedSearchName(query) {
   const parsed = parseSearchQuery(query)
   const chipLabels = parsed.chips.map((chip) => chip.label.replace(/^[^：]+：/, '')).filter(Boolean)
@@ -425,7 +404,6 @@ function createSavedSearchName(query) {
   const label = [...chipLabels, terms].filter(Boolean).join(' · ')
   return cleanSmartText(label || query, 60) || '未命名搜索'
 }
-
 async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'general') {
   const hash = target === 'ai-provider' ? 'general:ai-provider' : 'general'
   try {
@@ -440,7 +418,6 @@ async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'gen
     })
   }
 }
-
 async function openBookmarkHistoryPage() {
   try {
     await chrome.tabs.create({
@@ -454,7 +431,6 @@ async function openBookmarkHistoryPage() {
     })
   }
 }
-
 async function hydrateAutoAnalyzeStatus() {
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
@@ -469,7 +445,6 @@ async function hydrateAutoAnalyzeStatus() {
   } catch (error) {
   }
 }
-
 async function dismissAutoAnalyzeStatus() {
   state.autoAnalyzeStatus = null
   renderAutoAnalyzeStatus()
@@ -479,20 +454,17 @@ async function dismissAutoAnalyzeStatus() {
   ])
   await clearActionBadge()
 }
-
 async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
   await clearActionBadge()
   if (!status) {
     return
   }
-
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
     const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
     if (!currentStatus || currentStatus.bookmarkId !== status.bookmarkId) {
       return
     }
-
     await setLocalStorage({
       [STORAGE_KEYS.autoAnalyzeStatus]: {
         ...currentStatus,
@@ -502,20 +474,17 @@ async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
   } catch {
   }
 }
-
 function clearActionBadge(): Promise<void> {
   return new Promise<void>((resolve) => {
     if (!chrome.action?.setBadgeText) {
       resolve()
       return
     }
-
     chrome.action.setBadgeText({ text: '' }, () => {
       resolve()
     })
   })
 }
-
 function handleAutoAnalyzeStorageChanged(
   changes: Record<string, chrome.storage.StorageChange>,
   areaName: string
@@ -523,7 +492,6 @@ function handleAutoAnalyzeStorageChanged(
   if (areaName !== 'local') {
     return
   }
-
   const statusChange = changes[STORAGE_KEYS.autoAnalyzeStatus]
   if (statusChange) {
     const nextStatus = normalizeAutoAnalyzeStatus(statusChange.newValue)
@@ -538,121 +506,96 @@ function handleAutoAnalyzeStorageChanged(
       })
     }
   }
-
   const popupIntentChange = changes[STORAGE_KEYS.popupCommandIntent]
   if (popupIntentChange?.newValue) {
     void consumePopupCommandIntent(popupIntentChange.newValue)
   }
 }
-
 function handleAutoAnalyzeStatusClick(event) {
   const actionButton = event.target.closest('[data-auto-analyze-action]')
   if (!actionButton) {
     return
   }
-
   const action = actionButton.getAttribute('data-auto-analyze-action')
   if (action === 'toggle') {
     state.autoAnalyzeCollapsed = !state.autoAnalyzeCollapsed
     renderAutoAnalyzeStatus()
     return
   }
-
   if (action === 'dismiss') {
     void dismissAutoAnalyzeStatus()
     return
   }
-
   if (action === 'history') {
     void openBookmarkHistoryPage()
   }
 }
-
-function toggleSearchHelpPopover(): void {
-  const open = dom.searchHelpPopover.classList.contains('hidden')
-  setSearchHelpPopoverOpen(open)
-  if (open) {
-    dom.searchHelpPopover.focus()
-  }
-}
-
 function setSearchHelpPopoverOpen(open: boolean): void {
-  dom.searchHelpPopover.classList.toggle('hidden', !open)
-  dom.searchHelpToggle.setAttribute('aria-expanded', String(open))
+  window.dispatchEvent(new CustomEvent(open ? 'popup:search-help-open' : 'popup:search-help-close'))
 }
-
 function handleSearchHelpKeydown(event: KeyboardEvent): void {
   if (event.key !== 'ArrowDown') {
     return
   }
   event.preventDefault()
   setSearchHelpPopoverOpen(true)
-  dom.searchHelpPopover.focus()
 }
-
-function handleSearchHelpPopoverKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') {
-    return
-  }
-  event.preventDefault()
-  setSearchHelpPopoverOpen(false)
-  dom.searchHelpToggle.focus()
-}
-
 function renderAutoAnalyzeStatus() {
   const status = state.autoAnalyzeStatus
   if (!status) {
-    dom.autoAnalyzeStatus.innerHTML = ''
     dom.autoAnalyzeStatus.className = 'auto-analyze-status hidden'
     dom.autoAnalyzeStatus.removeAttribute('aria-label')
+    renderPopupAutoAnalyzeStatusIsland(dom.autoAnalyzeStatus, getAutoAnalyzeStatusViewModel())
     return
   }
 
-  const view = getAutoAnalyzeStatusView(status)
-  const collapsed = state.autoAnalyzeCollapsed
-  const actions = status.status === 'completed'
-    ? `
-        <button class="auto-analyze-action" type="button" data-auto-analyze-action="history">查看</button>
-        <button class="auto-analyze-action ghost" type="button" data-auto-analyze-action="toggle" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? '展开' : '折叠'}</button>
-        <button class="auto-analyze-action ghost" type="button" data-auto-analyze-action="dismiss" aria-label="关闭自动分析状态">关闭</button>
-      `
-    : `
-        <button class="auto-analyze-action ghost" type="button" data-auto-analyze-action="toggle" aria-expanded="${collapsed ? 'false' : 'true'}">${collapsed ? '展开' : '折叠'}</button>
-        <button class="auto-analyze-action ghost" type="button" data-auto-analyze-action="dismiss" aria-label="关闭自动分析状态">关闭</button>
-      `
-
-  dom.autoAnalyzeStatus.className = `auto-analyze-status ${escapeAttr(status.status)}${collapsed ? ' collapsed' : ''}`
-  dom.autoAnalyzeStatus.setAttribute('aria-label', collapsed ? `${view.title}，已折叠` : `${view.title}，${view.detail}`)
-  dom.autoAnalyzeStatus.innerHTML = `
-    <div class="auto-analyze-indicator" aria-hidden="true"></div>
-    <div class="auto-analyze-copy" role="status">
-      <p class="auto-analyze-title">${escapeHtml(view.title)}</p>
-      <p class="auto-analyze-detail">${escapeHtml(view.detail)}</p>
-    </div>
-    <div class="auto-analyze-actions">${actions}</div>
-  `
+  const viewModel = getAutoAnalyzeStatusViewModel()
+  dom.autoAnalyzeStatus.className = `auto-analyze-status ${status.status}${viewModel.collapsed ? ' collapsed' : ''}`
+  dom.autoAnalyzeStatus.setAttribute(
+    'aria-label',
+    viewModel.collapsed ? `${viewModel.title}，已折叠` : `${viewModel.title}，${viewModel.detail}`
+  )
+  renderPopupAutoAnalyzeStatusIsland(dom.autoAnalyzeStatus, viewModel)
 }
 
+function getAutoAnalyzeStatusViewModel(): PopupAutoAnalyzeStatusState {
+  const status = state.autoAnalyzeStatus
+  if (!status) {
+    return {
+      collapsed: true,
+      detail: '',
+      showHistory: false,
+      status: null,
+      title: ''
+    }
+  }
+
+  const view = getAutoAnalyzeStatusView(status)
+  return {
+    collapsed: state.autoAnalyzeCollapsed,
+    detail: view.detail,
+    showHistory: status.status === 'completed',
+    status: status.status,
+    title: view.title
+  }
+}
 function getAutoAnalyzeStatusView(status) {
   const title = cleanSmartText(status.title || '新增书签', 44) || '新增书签'
   const folderPath = cleanSmartText(status.folderPath || '', 48)
   const error = cleanSmartText(status.error || '', 80)
   const detail = cleanSmartText(status.detail || '', 80)
-
   if (status.status === 'queued') {
     return {
       title: '已加入自动分析',
       detail: detail || `正在整理标签和命名：${title}`
     }
   }
-
   if (status.status === 'processing') {
     return {
       title: '自动分析进行中',
       detail: detail || `正在整理标签和命名：${title}`
     }
   }
-
   if (status.status === 'failed') {
     const retryHint = status.maxAttempts && status.attempts < status.maxAttempts
       ? `，稍后重试 ${status.attempts}/${status.maxAttempts}`
@@ -665,35 +608,29 @@ function getAutoAnalyzeStatusView(status) {
         : `${failureMessage}${retryHint}；可重试或检查 AI 设置`
     }
   }
-
   return {
     title: '自动分析结果已保存',
     detail: detail || (folderPath ? `结果已保存到 ${folderPath}：${title}` : `结果已保存：${title}`)
   }
 }
-
 function normalizeAutoAnalyzeStatus(rawStatus) {
   if (!rawStatus || typeof rawStatus !== 'object') {
     return null
   }
-
   const status = String(rawStatus.status || '').trim()
   if (!['queued', 'processing', 'completed', 'failed'].includes(status)) {
     return null
   }
-
   const bookmarkId = String(rawStatus.bookmarkId || '').trim()
   if (!bookmarkId) {
     return null
   }
-
   const updatedAt = Number(rawStatus.updatedAt) || Date.now()
   const createdAt = Number(rawStatus.createdAt) || updatedAt
   const expiresAt = Number(rawStatus.expiresAt) || updatedAt + getAutoAnalyzeStatusTtl(status)
   if (expiresAt <= Date.now()) {
     return null
   }
-
   return {
     status,
     bookmarkId,
@@ -711,21 +648,17 @@ function normalizeAutoAnalyzeStatus(rawStatus) {
     expiresAt
   }
 }
-
 function getAutoAnalyzeStatusTtl(status) {
   return status === 'queued' || status === 'processing'
     ? AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS
     : AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS
 }
-
 async function consumePopupCommandIntent(rawIntent = undefined): Promise<boolean> {
   let intentSource = rawIntent
-
   if (typeof rawIntent === 'undefined') {
     const stored = await getLocalStorage([STORAGE_KEYS.popupCommandIntent])
     intentSource = stored[STORAGE_KEYS.popupCommandIntent]
   }
-
   const intent = normalizePopupCommandIntent(intentSource)
   if (!intent) {
     if (intentSource) {
@@ -733,40 +666,32 @@ async function consumePopupCommandIntent(rawIntent = undefined): Promise<boolean
     }
     return false
   }
-
   await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
-
   if (intent.action === 'feedback') {
     showCommandFeedbackIntent(intent)
     return false
   }
-
   if (intent.action === 'smart-classifier') {
     await runSmartClassifierFromCommand(intent)
     return true
   }
-
   focusSearchFromCommand(intent)
   return true
 }
-
 function normalizePopupCommandIntent(rawIntent) {
   if (!rawIntent || typeof rawIntent !== 'object') {
     return null
   }
-
   const action = String(rawIntent.action || '').trim()
   if (!['search', 'smart-classifier', 'feedback'].includes(action)) {
     return null
   }
-
   const tone = String(rawIntent.tone || '').trim()
   const createdAt = Number(rawIntent.createdAt) || Date.now()
   const expiresAt = Number(rawIntent.expiresAt) || createdAt + POPUP_COMMAND_INTENT_TTL_MS
   if (expiresAt <= Date.now()) {
     return null
   }
-
   return {
     action,
     sourceCommand: String(rawIntent.sourceCommand || '').trim(),
@@ -776,7 +701,6 @@ function normalizePopupCommandIntent(rawIntent) {
     expiresAt
   }
 }
-
 function showCommandFeedbackIntent(intent) {
   const message = intent.message || '快捷键操作已完成。'
   showViewNotice(message)
@@ -785,33 +709,26 @@ function showCommandFeedbackIntent(intent) {
     message
   })
 }
-
 function focusSearchFromCommand(intent) {
   if (hasOpenModal()) {
     closeDialogs()
   }
-
   if (['loading', 'results', 'error', 'permission'].includes(state.smartStatus)) {
     resetSmartClassification()
   }
-
   state.activeMenuBookmarkId = null
   render()
-
   window.requestAnimationFrame(() => {
     dom.searchInput.focus()
     dom.searchInput.select()
     showViewNotice(intent.message || (state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入'))
   })
 }
-
 async function runSmartClassifierFromCommand(intent) {
   await ensureCurrentTabStateHydrated()
-
   if (hasOpenModal()) {
     closeDialogs()
   }
-
   const currentUrl = String(state.currentTab?.url || '').trim()
   if (!isSmartClassifiableUrl(currentUrl)) {
     showToast({
@@ -821,17 +738,14 @@ async function runSmartClassifierFromCommand(intent) {
     dom.searchInput.focus()
     return
   }
-
   state.activeMenuBookmarkId = null
   if (state.smartStatus === 'unavailable') {
     state.smartStatus = 'idle'
   }
   render()
   showViewNotice(intent.message || '正在智能分类当前页面。')
-
   await classifyCurrentPage()
 }
-
 async function refreshData({ initial = false, preserveSearch = true } = {}) {
   const refreshRunId = popupRefreshRunId + 1
   popupRefreshRunId = refreshRunId
@@ -840,7 +754,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   state.loadError = ''
   state.activeMenuBookmarkId = null
   render()
-
   try {
     const { deferredHydration } = await hydratePopupBaseData({
       loadBaseData: () => loadPopupBaseRefreshData(refreshRunId),
@@ -848,7 +761,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
         if (refreshRunId !== popupRefreshRunId) {
           return
         }
-
         applyPopupBaseRefreshData(baseData, { initial, preserveSearch })
         perfMark('popup.refreshData.baseReady.end')
         perfMeasure('popup.refreshData.baseReady', 'popup.refreshData.start', 'popup.refreshData.baseReady.end')
@@ -876,7 +788,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
   }
 }
-
 async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefreshBaseData> {
   const tree = await getBookmarkTree()
   perfMark('popup.bookmarkTreeLoaded')
@@ -891,7 +802,6 @@ async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefr
   const indexedBookmarks = buildLightPopupSearchIndexFromCatalog(catalog)
   perfMark('popup.indexBuilt')
   perfMeasure('popup.indexBuildMs', 'popup.bookmarkTreeLoaded', 'popup.indexBuilt')
-
   return {
     refreshRunId,
     rootNode,
@@ -900,7 +810,6 @@ async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefr
     indexedBookmarks
   }
 }
-
 function applyPopupBaseRefreshData(
   baseData: PopupRefreshBaseData,
   { initial, preserveSearch }: { initial: boolean; preserveSearch: boolean }
@@ -914,7 +823,6 @@ function applyPopupBaseRefreshData(
   syncPopupExpandedFolderState(baseData.catalog.extracted, initial)
   resetSearchForPopupRefresh(preserveSearch)
 }
-
 function applyPopupIndexedBookmarkData({
   catalog,
   indexedBookmarks,
@@ -953,7 +861,6 @@ function resetPopupSearchEnhancementReadiness(): void {
   state.pinyinEnrichmentPending = false
   state.pinyinEnrichmentRunId += 1
 }
-
 function syncPopupExpandedFolderState(
   extracted: ReturnType<typeof extractBookmarkData>,
   initial: boolean
@@ -961,11 +868,9 @@ function syncPopupExpandedFolderState(
   const folderIds = new Set(extracted.folders.map((folder) => folder.id))
   const defaultExpanded = getDefaultExpandedFolders(state.bookmarksBarNode)
   const allExpanded = new Set(extracted.folders.map((folder) => folder.id))
-
   if (state.selectedFolderFilterId && !folderIds.has(state.selectedFolderFilterId)) {
     state.selectedFolderFilterId = null
   }
-
   if (initial || state.expandedFolders.size === 0) {
     state.expandedFolders = defaultExpanded
   } else {
@@ -976,7 +881,6 @@ function syncPopupExpandedFolderState(
       state.expandedFolders = defaultExpanded
     }
   }
-
   if (initial || state.moveExpandedFolders.size === 0) {
     state.moveExpandedFolders = allExpanded
   } else {
@@ -988,14 +892,12 @@ function syncPopupExpandedFolderState(
     }
   }
 }
-
 function resetSearchForPopupRefresh(preserveSearch: boolean): void {
   if (preserveSearch) {
     state.debouncedQuery = state.searchQuery.trim()
     runSearch()
     return
   }
-
   state.searchRunId += 1
   state.searchQuery = ''
   state.debouncedQuery = ''
@@ -1009,21 +911,18 @@ function resetSearchForPopupRefresh(preserveSearch: boolean): void {
   state.searchHighlightQuery = ''
   dom.searchInput.value = ''
 }
-
 function hydratePopupDeferredRefreshData(baseData: PopupRefreshBaseData): Promise<unknown> {
   const indexHydration = hydratePopupDeferredEnhancements({
     baseData,
     loadDeferredData: loadPopupSearchEnhancementData,
     applyDeferredData: applyPopupSearchEnhancementData
   })
-
   const currentTabHydration = hydrateCurrentTabState(baseData.refreshRunId)
   currentTabHydrationPromise = currentTabHydration
   void currentTabHydration.then(() => {
     if (baseData.refreshRunId !== popupRefreshRunId) {
       return
     }
-
     render()
   }).finally(() => {
     if (currentTabHydrationPromise === currentTabHydration) {
@@ -1034,23 +933,18 @@ function hydratePopupDeferredRefreshData(baseData: PopupRefreshBaseData): Promis
     if (baseData.refreshRunId !== popupRefreshRunId) {
       return
     }
-
     render()
   })
   void hydrateSavedSearches()
-
   return indexHydration
 }
-
 async function loadPopupSearchEnhancementData(): Promise<PopupRefreshDeferredData> {
   const [tagIndex, snapshotState] = await Promise.all([
     loadBookmarkTagIndex().catch(() => null),
     loadPopupSearchIndexSnapshotState()
   ])
-
   return { tagIndex, snapshotState }
 }
-
 function applyPopupSearchEnhancementData(
   baseData: PopupRefreshBaseData,
   deferredData: PopupRefreshDeferredData
@@ -1058,7 +952,6 @@ function applyPopupSearchEnhancementData(
   if (baseData.refreshRunId !== popupRefreshRunId) {
     return
   }
-
   const catalog = buildBookmarkCatalogSnapshot({
     rootNode: baseData.rootNode,
     tagIndex: deferredData.tagIndex,
@@ -1078,7 +971,6 @@ function applyPopupSearchEnhancementData(
   render()
   schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
-
 function schedulePinyinEnrichment(runId: number): void {
   if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
     return
@@ -1089,17 +981,14 @@ function schedulePinyinEnrichment(runId: number): void {
   if (!state.allBookmarks.length) {
     return
   }
-
   state.pinyinEnrichmentPending = true
   perfMark('popup.pinyinEnrichmentStart')
-
   const targets = state.allBookmarks
   const startEnrichment = () => {
     if (runId !== state.pinyinEnrichmentRunId) {
       state.pinyinEnrichmentPending = false
       return
     }
-
     enrichLightPopupSearchIndexWithPinyin(targets, {
       isActive: () => runId === state.pinyinEnrichmentRunId
     })
@@ -1132,10 +1021,8 @@ function schedulePinyinEnrichment(runId: number): void {
         console.warn('[Curator] 拼音索引补齐失败', error)
       })
   }
-
   setTimeout(startEnrichment, 0)
 }
-
 function ensurePinyinEnrichmentForQuery(query: string): void {
   if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
     return
@@ -1148,54 +1035,44 @@ function ensurePinyinEnrichmentForQuery(query: string): void {
   }
   schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
-
 async function hydrateCurrentTabState(refreshRunId = popupRefreshRunId) {
   const currentTab = await getActiveTab().catch(() => null)
   if (refreshRunId !== popupRefreshRunId) {
     return
   }
-
   state.currentTab = currentTab
   applyCurrentTabBookmarkMatch()
 }
-
 async function ensureCurrentTabStateHydrated(): Promise<void> {
   if (currentTabHydrationPromise) {
     await currentTabHydrationPromise
     return
   }
-
   await hydrateCurrentTabState()
 }
-
 function applyCurrentTabBookmarkMatch() {
   const currentUrl = String(state.currentTab?.url || '').trim()
   const normalizedCurrentUrl = normalizeBookmarkSaveUrl(currentUrl)
   const matchedBookmark = normalizedCurrentUrl
     ? state.bookmarkDuplicateKeyMap.get(normalizedCurrentUrl)
     : null
-
   state.currentPageBookmarkId = matchedBookmark?.id || null
-
   if (!isSmartClassifiableUrl(currentUrl)) {
     state.smartStatus = 'unavailable'
     state.smartRecommendations = []
     state.smartSelectedRecommendationId = ''
     return
   }
-
   if (!['loading', 'results', 'permission', 'saving'].includes(state.smartStatus)) {
     state.smartStatus = 'idle'
   }
 }
-
 async function hydrateNewTabPinnedState(refreshRunId = popupRefreshRunId) {
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
     if (refreshRunId !== popupRefreshRunId) {
       return
     }
-
     const settings = normalizeNewTabWorkspaceSettings(
       stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
       { validBookmarkIds: state.bookmarkMap.keys() }
@@ -1205,11 +1082,9 @@ async function hydrateNewTabPinnedState(refreshRunId = popupRefreshRunId) {
     if (refreshRunId !== popupRefreshRunId) {
       return
     }
-
     state.newTabPinnedIds = new Set()
   }
 }
-
 function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
   const map = new Map()
   for (const bookmark of bookmarks) {
@@ -1220,7 +1095,6 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
   }
   return map
 }
-
 function cleanupPopupRuntime() {
   abortNaturalSearchRequest()
   chrome.storage?.onChanged?.removeListener?.(handleAutoAnalyzeStorageChanged)
@@ -1238,7 +1112,6 @@ function cleanupPopupRuntime() {
   state.filteredBookmarksCache = []
   clearSearchCaches()
 }
-
 function maybeWarmPopupSnapshotFullTextForSearch() {
   if (
     state.searchSnapshotFullTextReady ||
@@ -1247,17 +1120,14 @@ function maybeWarmPopupSnapshotFullTextForSearch() {
   ) {
     return
   }
-
   const snapshotState = state.searchSnapshotState
   const warmupRunId = state.searchSnapshotFullTextRunId + 1
   state.searchSnapshotFullTextRunId = warmupRunId
-
   if (!shouldWarmPopupSnapshotFullText(snapshotState)) {
     state.searchSnapshotFullTextPending = false
     state.searchSnapshotFullTextReady = false
     return
   }
-
   state.searchSnapshotFullTextPending = true
   window.setTimeout(() => {
     window.requestAnimationFrame(() => {
@@ -1265,12 +1135,10 @@ function maybeWarmPopupSnapshotFullTextForSearch() {
     })
   }, SEARCH_SNAPSHOT_WARM_DELAY_MS)
 }
-
 async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   if (state.searchSnapshotFullTextRunId !== warmupRunId || !snapshotState?.index) {
     return
   }
-
   const catalog = buildBookmarkCatalogSnapshot({
     rootNode: state.rawTreeRoot,
     tagIndex: state.searchTagIndex,
@@ -1294,15 +1162,12 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   state.pinyinEnrichmentPending = false
   state.pinyinEnrichmentRunId += 1
   clearSearchCaches()
-
   if (state.debouncedQuery) {
     runSearch()
   }
-
   render()
   schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
-
 function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   return new Promise((resolve, reject) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -1311,46 +1176,36 @@ function getActiveTab(): Promise<chrome.tabs.Tab | null> {
         reject(new Error(error.message))
         return
       }
-
       resolve(tabs?.[0] || null)
     })
   })
 }
-
 function setSearchQuery(value, { immediate = false } = {}) {
   state.searchQuery = value
   state.naturalSearchSetupRequired = false
   state.activeMenuBookmarkId = null
   clearViewNotice()
-
   if (dom.searchInput.value !== value) {
     dom.searchInput.value = value
   }
-
   clearTimeout(state.searchTimer)
-
   ensurePinyinEnrichmentForQuery(value)
-
   if (immediate) {
     state.debouncedQuery = value.trim()
     runSearch()
     render()
     return
   }
-
   const debounceMs = state.naturalSearchEnabled ? NATURAL_SEARCH_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS
   state.searchTimer = window.setTimeout(() => {
     state.debouncedQuery = value.trim()
     runSearch()
     render()
   }, debounceMs)
-
   render()
 }
-
 async function toggleNaturalLanguageSearch() {
   const enabled = !state.naturalSearchEnabled
-
   if (enabled) {
     await refreshNaturalSearchAiConfiguredState()
     if (!state.naturalSearchAiConfigured) {
@@ -1366,7 +1221,6 @@ async function toggleNaturalLanguageSearch() {
       return
     }
   }
-
   state.naturalSearchEnabled = enabled
   state.naturalSearchSetupRequired = false
   state.naturalSearchPending = false
@@ -1377,20 +1231,16 @@ async function toggleNaturalLanguageSearch() {
   state.searchRunId += 1
   render()
   void savePopupPreferences().catch(() => {})
-
   if (enabled) {
     await prepareNaturalLanguageSearchAi()
   }
-
   if (state.naturalSearchEnabled !== enabled) {
     void savePopupPreferences().catch(() => {})
     return
   }
-
   setSearchQuery(state.searchQuery, { immediate: true })
   dom.searchInput.focus()
 }
-
 async function prepareNaturalLanguageSearchAi() {
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
@@ -1402,7 +1252,6 @@ async function prepareNaturalLanguageSearchAi() {
       openAiProviderPromptDialog()
       return
     }
-
     state.naturalSearchAiConfigured = true
     state.naturalSearchAiConfigChecked = true
     naturalSearchAi.validateNaturalSearchAiProvider(settings)
@@ -1411,7 +1260,6 @@ async function prepareNaturalLanguageSearchAi() {
     state.naturalSearchError = 'AI 未就绪，请检查 AI 渠道配置或授权。'
   }
 }
-
 function runSearch() {
   const query = state.debouncedQuery
   const normalizedQuery = normalizeQuery(query)
@@ -1420,7 +1268,6 @@ function runSearch() {
   state.searchHighlightQuery = normalizedQuery
   state.naturalSearchSetupRequired = false
   state.naturalSearchError = ''
-
   if (!normalizedQuery) {
     state.searchResults = []
     state.activeResultIndex = 0
@@ -1432,23 +1279,18 @@ function runSearch() {
     abortNaturalSearchRequest()
     return
   }
-
   maybeWarmPopupSnapshotFullTextForSearch()
-
   if (state.naturalSearchEnabled) {
     runNaturalSearch(query, normalizedQuery, runId)
     return
   }
-
   abortNaturalSearchRequest()
   state.naturalSearchPending = false
   state.naturalSearchPlan = null
-
   try {
     const cacheKey = getSearchCacheKey(normalizedQuery)
     const cachedResults = state.searchCache.get(cacheKey)
     const bookmarks = getFilteredBookmarks()
-
     if (cachedResults) {
       state.searchPending = false
       state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
@@ -1458,7 +1300,6 @@ function runSearch() {
       )
       return
     }
-
     if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
       const results = searchBookmarks(normalizedQuery, bookmarks)
       cacheSearchResults(cacheKey, results)
@@ -1470,11 +1311,9 @@ function runSearch() {
       )
       return
     }
-
     state.searchPending = true
     state.searchResults = []
     state.activeResultIndex = 0
-
     const firstBatch = searchBookmarksFirstBatch(
       normalizedQuery,
       bookmarks,
@@ -1485,7 +1324,6 @@ function runSearch() {
       state.activeResultIndex = 0
       render()
     }
-
     searchBookmarksCooperatively(normalizedQuery, bookmarks, {
       isActive: () => state.searchRunId === runId,
       yieldWork
@@ -1494,7 +1332,6 @@ function runSearch() {
         if (state.searchRunId !== runId) {
           return
         }
-
         cacheSearchResults(cacheKey, results)
         state.searchPending = false
         state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
@@ -1508,7 +1345,6 @@ function runSearch() {
         if (state.searchRunId !== runId) {
           return
         }
-
         state.searchPending = false
         state.searchResults = []
         state.loadError = error instanceof Error ? error.message : '查询失败，请重试。'
@@ -1520,7 +1356,6 @@ function runSearch() {
     state.loadError = error instanceof Error ? error.message : '查询失败，请重试。'
   }
 }
-
 async function runNaturalSearch(query, normalizedQuery, runId) {
   abortNaturalSearchRequest()
   const controller = new AbortController()
@@ -1528,26 +1363,22 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
   const cacheKey = getSearchCacheKey(`natural:${getNaturalSearchDateBucket()}:${normalizedQuery}`)
   const planCacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
   const cachedResults = state.searchCache.get(cacheKey)
-
   if (!cachedResults) {
     state.searchPending = true
     state.naturalSearchPending = true
     state.searchResults = []
     state.activeResultIndex = 0
   }
-
   try {
     const naturalSearch = await loadNaturalSearchModule()
     if (state.searchRunId !== runId) {
       return
     }
-
     if (cachedResults) {
       const cachedPlanResult = await resolveCachedNaturalSearchPlan(query, planCacheKey, naturalSearch)
       if (state.searchRunId !== runId) {
         return
       }
-
       if (cachedPlanResult.canReuseResults) {
         state.naturalSearchPlan = cachedPlanResult.plan
         state.searchHighlightQuery = cachedPlanResult.plan.highlightQuery || normalizedQuery
@@ -1561,39 +1392,32 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
         render()
         return
       }
-
       state.searchCache.delete(cacheKey)
       state.searchPending = true
       state.naturalSearchPending = true
       state.searchResults = []
       state.activeResultIndex = 0
     }
-
     const plan = await resolveNaturalSearchPlan(query, normalizedQuery, naturalSearch, {
       signal: controller.signal
     })
     if (state.searchRunId !== runId) {
       return
     }
-
     state.naturalSearchPlan = plan
     state.searchHighlightQuery = plan.highlightQuery || normalizedQuery
-
     const bookmarks = naturalSearch.filterBookmarksByNaturalDateRange(getFilteredBookmarks(), plan)
     const resultSets: NaturalSearchResultSet[] = []
     for (const naturalQuery of plan.queries) {
       if (state.searchRunId !== runId) {
         return
       }
-
       const results = await searchNaturalQuery(naturalQuery, bookmarks, runId)
       resultSets.push({ query: naturalQuery, results })
     }
-
     if (state.searchRunId !== runId) {
       return
     }
-
     const results = naturalSearch.mergeNaturalSearchResultSets(plan, resultSets)
     cacheSearchResults(cacheKey, results)
     state.searchPending = false
@@ -1612,7 +1436,6 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     ) {
       return
     }
-
     state.searchPending = false
     state.naturalSearchPending = false
     state.searchResults = []
@@ -1625,7 +1448,6 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
       render()
       return
     }
-
     state.loadError = error instanceof Error ? error.message : 'AI 搜索失败，请重试。'
     render()
   } finally {
@@ -1634,7 +1456,6 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     }
   }
 }
-
 async function resolveCachedNaturalSearchPlan(
   query,
   planCacheKey,
@@ -1645,7 +1466,6 @@ async function resolveCachedNaturalSearchPlan(
   if (!cachedPlan || cachedPlan.source !== 'ai') {
     return { plan: localPlan, canReuseResults: false }
   }
-
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
@@ -1655,7 +1475,6 @@ async function resolveCachedNaturalSearchPlan(
   } catch {
     // Fall through to local parsing when provider settings cannot be read.
   }
-
   state.naturalSearchPlanCache.delete(planCacheKey)
   state.naturalSearchAiConfigured = false
   state.naturalSearchAiConfigChecked = true
@@ -1665,7 +1484,6 @@ async function resolveCachedNaturalSearchPlan(
   openAiProviderPromptDialog()
   return { plan: localPlan, canReuseResults: false }
 }
-
 async function resolveNaturalSearchPlan(
   query,
   normalizedQuery,
@@ -1675,7 +1493,6 @@ async function resolveNaturalSearchPlan(
   const cacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
   const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
   let settings
-
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
     settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
@@ -1684,7 +1501,6 @@ async function resolveNaturalSearchPlan(
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
     throw error
   }
-
   const naturalSearchAi = await loadNaturalSearchAiModule()
   if (!naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
     state.naturalSearchAiConfigured = false
@@ -1697,12 +1513,10 @@ async function resolveNaturalSearchPlan(
   }
   state.naturalSearchAiConfigured = true
   state.naturalSearchAiConfigChecked = true
-
   const cachedPlan = state.naturalSearchPlanCache.get(cacheKey)
   if (cachedPlan) {
     return cachedPlan
   }
-
   try {
     const plan = await naturalSearchAi.requestNaturalSearchAiPlan({
       query,
@@ -1718,22 +1532,18 @@ async function resolveNaturalSearchPlan(
     throw error
   }
 }
-
 async function searchNaturalQuery(query, bookmarks, runId): Promise<PopupSearchResult[]> {
   if (!query || !bookmarks.length) {
     return []
   }
-
   if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
     return searchBookmarks(query, bookmarks)
   }
-
   return searchBookmarksCooperatively(query, bookmarks, {
     isActive: () => state.searchRunId === runId,
     yieldWork
   })
 }
-
 function render() {
   renderBanner()
   renderAutoAnalyzeStatus()
@@ -1749,15 +1559,12 @@ function render() {
   renderDeleteModal()
   renderToasts()
 }
-
 function renderBanner() {
   const naturalSearchFallback = isNaturalSearchLocalFallback()
   const naturalSearchPending = state.naturalSearchPending
-
   dom.heroSubtitle.textContent = state.loadError
     ? '读取失败时不会上传数据，请检查扩展权限后重试'
     : '本地读取，不上传任何书签内容'
-
   dom.errorBanner.textContent = state.loadError
   dom.errorBanner.classList.toggle('hidden', !state.loadError)
   dom.clearSearch.classList.toggle('hidden', !state.searchQuery)
@@ -1770,26 +1577,20 @@ function renderBanner() {
   dom.naturalSearchToggle.textContent = getNaturalSearchToggleText()
   dom.naturalSearchToggle.setAttribute('aria-pressed', String(state.naturalSearchEnabled))
   dom.naturalSearchToggle.setAttribute('aria-label', '语义搜索')
-  dom.naturalSearchToggle.setAttribute(
-    'aria-disabled',
-    String(!state.naturalSearchEnabled && !state.naturalSearchAiConfigured)
-  )
+  dom.naturalSearchToggle.removeAttribute('aria-disabled')
   dom.naturalSearchToggle.title = getNaturalSearchToggleTitle(naturalSearchPending)
   renderSearchTools()
 }
-
 function renderSearchTools() {
   const parsed = parseSearchQuery(state.searchQuery)
   const chips = parsed.chips
-  const chipsHtml = chips
-    .map((chip) => `<span class="search-filter-chip ${escapeAttr(chip.kind)}">${escapeHtml(chip.label)}</span>`)
-    .join('')
   dom.searchChips.classList.toggle('hidden', chips.length === 0)
-  replacePopupSectionHtml(
+  renderPopupSearchChipsIsland(
     dom.searchChips,
-    searchChipsRenderState,
-    `search-chips:${chipsHtml}`,
-    chipsHtml
+    chips.map((chip): PopupSearchChipViewModel => ({
+      kind: String(chip.kind || ''),
+      label: String(chip.label || '')
+    }))
   )
   renderSavedSearches()
 }
@@ -1801,150 +1602,78 @@ function renderSavedSearches() {
   const normalizedQuery = normalizeQuery(state.searchQuery)
   const canSaveCurrent = Boolean(normalizedQuery && queryHasAdvancedSearchSyntax(state.searchQuery))
   const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeQuery(item.query) === normalizedQuery)
-  const show = savedSearches.length > 0 || state.savedSearchesError || canSaveCurrent
+  const show = savedSearches.length > 0 || Boolean(state.savedSearchesError) || canSaveCurrent
+  const hasError = Boolean(state.savedSearchesError)
+  const expanded = Boolean(state.savedSearchesExpanded) || hasError
+  const viewModel: PopupSavedSearchesViewModel = {
+    canSaveCurrent,
+    error: state.savedSearchesError || '',
+    expanded,
+    hasCurrentSaved,
+    items: savedSearches.map((item) => ({
+      active: normalizeQuery(item.query) === normalizedQuery,
+      id: String(item.id || ''),
+      label: item.name || item.query,
+      query: item.query
+    })),
+    show
+  }
 
   dom.savedSearches.classList.toggle('hidden', !show)
   if (!show) {
-    replacePopupSectionHtml(
-      dom.savedSearches,
-      savedSearchesRenderState,
-      'saved-searches:hidden',
-      ''
-    )
+    renderPopupSavedSearchesIsland(dom.savedSearches, viewModel)
     return
   }
 
-  const hasError = Boolean(state.savedSearchesError)
-  const itemsCount = savedSearches.length
-  const expanded = Boolean(state.savedSearchesExpanded) || hasError
   dom.savedSearches.classList.toggle('expanded', expanded)
   dom.savedSearches.classList.toggle('collapsed', !expanded)
-
-  const status = hasError
-    ? `<span class="saved-search-status error">${escapeHtml(state.savedSearchesError)}</span>`
-    : ''
-
-  const saveButton = canSaveCurrent
-    ? `
-      <button class="saved-search-save" type="button" data-saved-search-action="save-current" ${hasCurrentSaved ? 'disabled' : ''} aria-label="${hasCurrentSaved ? '当前搜索已保存' : '保存当前搜索'}">
-        ${hasCurrentSaved ? '已保存' : '保存当前搜索'}
-      </button>
-    `
-    : ''
-
-  const toggleButton = itemsCount > 0
-    ? `
-      <button
-        class="saved-search-toggle"
-        type="button"
-        data-saved-search-action="toggle"
-        aria-expanded="${String(expanded)}"
-        aria-controls="saved-searches-list"
-      >
-        <span class="saved-search-toggle-label">已保存 ${itemsCount}</span>
-        <span class="saved-search-toggle-icon" aria-hidden="true"></span>
-      </button>
-    `
-    : '<span class="saved-search-status">暂无保存项</span>'
-
-  const items = savedSearches.slice(0, 6).map(renderSavedSearchChip).join('')
-  const head = `<div class="saved-search-head">${toggleButton}${saveButton}</div>`
-  const list = expanded && items
-    ? `<div id="saved-searches-list" class="saved-search-list">${items}</div>`
-    : ''
-
-  const html = `
-    ${head}
-    ${status}
-    ${list}
-  `
-  replacePopupSectionHtml(
-    dom.savedSearches,
-    savedSearchesRenderState,
-    `saved-searches:${html}`,
-    html
-  )
+  renderPopupSavedSearchesIsland(dom.savedSearches, viewModel)
 }
-
 function queryHasAdvancedSearchSyntax(query: string): boolean {
   const value = String(query || '').trim()
   if (!value) {
     return false
   }
-
   return /\b(?:site|folder|type):\s*\S/i.test(value) ||
     /(^|\s)-(?=\S)/.test(value) ||
     /(最近\s*\d+\s*(?:天|周|月|年)|昨天|前天|上个月|本周|本月|今年)/.test(value)
 }
-
-function renderSavedSearchChip(search: SavedSearch) {
-  const isActive = normalizeQuery(search.query) === normalizeQuery(state.searchQuery)
-  return `
-    <span class="saved-search-chip ${isActive ? 'active' : ''}">
-      <button
-        class="saved-search-apply"
-        type="button"
-        data-saved-search-action="apply"
-        data-saved-search-id="${escapeAttr(search.id)}"
-        title="${escapeAttr(search.query)}"
-      >${escapeHtml(search.name || search.query)}</button>
-      <button
-        class="saved-search-delete"
-        type="button"
-        data-saved-search-action="delete"
-        data-saved-search-id="${escapeAttr(search.id)}"
-        aria-label="删除保存搜索：${escapeAttr(search.name || search.query)}"
-      >×</button>
-    </span>
-  `
-}
-
 function getSearchInputPlaceholder() {
   return state.naturalSearchEnabled ? 'AI 语义搜索' : '关键词搜索'
 }
-
 function getSearchInputAriaLabel() {
   return state.naturalSearchEnabled
     ? 'AI 语义搜索书签'
     : '关键词搜索书签标题、网址、标签或高级语法'
 }
-
 function isNaturalSearchLocalFallback() {
   return Boolean(state.naturalSearchEnabled && state.naturalSearchError)
 }
-
 function getNaturalSearchToggleText() {
   if (!state.naturalSearchEnabled) {
     return '语义'
   }
-
   if (state.naturalSearchPending) {
     return '思考中'
   }
-
   return 'AI'
 }
-
 function getNaturalSearchToggleTitle(isPending: boolean) {
   if (!state.naturalSearchEnabled) {
     return state.naturalSearchAiConfigured
       ? '开启 AI 语义搜索'
       : '需要先配置 AI 渠道'
   }
-
   if (isPending) {
     return '正在用 AI 理解搜索意图，点击关闭'
   }
-
   return state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索'
 }
-
 function renderToolbar() {
   if (state.viewNoticeMessage && !state.isLoading && !state.searchPending && !state.naturalSearchPending) {
     dom.viewCaption.textContent = state.viewNoticeMessage
     return
   }
-
   if (state.debouncedQuery) {
     if (state.naturalSearchEnabled) {
       dom.viewCaption.textContent = state.searchPending
@@ -1952,21 +1681,17 @@ function renderToolbar() {
         : `${getNaturalSearchResultCaption()} · ${state.searchResults.length} 条`
       return
     }
-
     dom.viewCaption.textContent = state.searchPending
       ? '本地搜索中…'
       : `本地匹配 · ${state.searchResults.length} 条`
     return
   }
-
   const currentRoot = getCurrentTreeRoot()
   dom.viewCaption.textContent = currentRoot?.title || '书签栏'
 }
-
 function getNaturalSearchPendingCaption() {
   return 'AI 语义搜索解析中…'
 }
-
 function getNaturalSearchResultCaption() {
   const plan = state.naturalSearchPlan
   const modeLabel = 'AI 改写后匹配'
@@ -1974,12 +1699,10 @@ function getNaturalSearchResultCaption() {
   const detail = statusLabel.replace(/^(AI 解析|本地解析)( · )?/, '').trim()
   return detail ? `${modeLabel} · ${detail}` : modeLabel
 }
-
 function getNaturalSearchStatusLabelFallback(plan: NaturalSearchPlan | null): string {
   if (!plan) {
     return '自然语言搜索'
   }
-
   const parts = [plan.source === 'ai' ? 'AI 解析' : '本地解析']
   if (plan.dateRange?.label) {
     parts.push(plan.dateRange.label)
@@ -1994,38 +1717,31 @@ function getNaturalSearchStatusLabelFallback(plan: NaturalSearchPlan | null): st
   }
   return parts.join(' · ')
 }
-
 function getNaturalKeywordSummaryFallback(plan: NaturalSearchPlan): string {
   const terms = getQueryTerms(plan.highlightQuery)
     .filter((term) => !plan.excludedTerms.includes(term))
   return formatNaturalTermsFallback(terms, 3)
 }
-
 function formatNaturalTermsFallback(terms: string[], limit: number): string {
   const uniqueTerms = [...new Set(terms)]
   const visibleTerms = uniqueTerms
     .slice(0, Math.max(1, limit))
     .map((term) => cleanSmartText(term, 20))
     .filter(Boolean)
-
   if (!visibleTerms.length) {
     return ''
   }
-
   const suffix = uniqueTerms.length > visibleTerms.length ? ` 等 ${uniqueTerms.length} 个` : ''
   return `${visibleTerms.join(' / ')}${suffix}`
 }
-
 function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
   const normalizedMessage = cleanViewNotice(message)
   if (!normalizedMessage) {
     return
   }
-
   clearViewNotice()
   state.viewNoticeMessage = normalizedMessage
   renderToolbar()
-
   state.viewNoticeTimer = window.setTimeout(() => {
     if (state.viewNoticeMessage === normalizedMessage) {
       state.viewNoticeMessage = ''
@@ -2034,7 +1750,6 @@ function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
     state.viewNoticeTimer = null
   }, durationMs)
 }
-
 function clearViewNotice() {
   if (state.viewNoticeTimer) {
     window.clearTimeout(state.viewNoticeTimer)
@@ -2042,7 +1757,6 @@ function clearViewNotice() {
   }
   state.viewNoticeMessage = ''
 }
-
 function cleanViewNotice(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim()
   if (text.length <= 72) {
@@ -2050,15 +1764,12 @@ function cleanViewNotice(value) {
   }
   return `${text.slice(0, 71).trim()}…`
 }
-
 function getPopupActionKey(action, targetId = '') {
   return `${String(action || 'action')}:${String(targetId || 'global')}`
 }
-
 function isPopupActionPending(action, targetId = '') {
   return state.pendingActionIds.has(getPopupActionKey(action, targetId))
 }
-
 function setPopupActionPending(action, targetId, pending) {
   const key = getPopupActionKey(action, targetId)
   if (pending) {
@@ -2067,7 +1778,6 @@ function setPopupActionPending(action, targetId, pending) {
     state.pendingActionIds.delete(key)
   }
 }
-
 function hasBlockingPopupActionPending() {
   return [...state.pendingActionIds].some((key) => {
     return (
@@ -2079,15 +1789,11 @@ function hasBlockingPopupActionPending() {
     )
   })
 }
-
 function renderFilterBar() {
   const selectedFolder = state.selectedFolderFilterId
     ? state.folderMap.get(state.selectedFolderFilterId)
     : null
   const selectedPath = selectedFolder ? formatFolderPath(selectedFolder, state.folderMap) : ''
-  const breadcrumbsHtml = selectedFolder
-    ? renderPopupFolderBreadcrumbs(selectedFolder)
-    : ''
 
   dom.folderFilterTriggerText.textContent = selectedFolder
     ? `文件夹：${selectedPath || selectedFolder.title}`
@@ -2095,419 +1801,157 @@ function renderFilterBar() {
   dom.folderFilterTrigger.title = selectedPath || ''
   dom.clearFolderFilter.classList.toggle('hidden', !selectedFolder)
   dom.folderBreadcrumbs.classList.toggle('hidden', !selectedFolder)
-  replacePopupSectionHtml(
+  renderPopupBreadcrumbsIsland(
     dom.folderBreadcrumbs,
-    folderBreadcrumbsRenderState,
-    `folder-breadcrumbs:${breadcrumbsHtml}`,
-    breadcrumbsHtml
+    selectedFolder ? getPopupBreadcrumbSegments(selectedFolder) : []
   )
 }
 
-function renderPopupFolderBreadcrumbs(folder) {
+function getPopupBreadcrumbSegments(folder): PopupBreadcrumbSegmentViewModel[] {
   const segments = buildBookmarkPathSegments(folder, state.folderMap)
   if (!segments.length) {
-    return ''
+    return []
   }
 
-  return `
-    <ol class="folder-breadcrumb-list">
-      ${segments.map((segment, index) => {
-        const separator = index > 0 ? '<li class="folder-breadcrumb-separator" aria-hidden="true">&gt;</li>' : ''
-        const content = segment.current || !segment.id
-          ? `
-            <span
-              class="folder-breadcrumb-current"
-              aria-current="page"
-              title="${escapeAttr(segment.path)}"
-            >${escapeHtml(segment.label)}</span>
-          `
-          : `
-            <button
-              class="folder-breadcrumb-link"
-              type="button"
-              data-folder-breadcrumb-id="${escapeAttr(segment.id)}"
-              title="${escapeAttr(segment.path)}"
-            >${escapeHtml(segment.label)}</button>
-          `
-
-        return `${separator}<li>${content}</li>`
-      }).join('')}
-    </ol>
-  `
+  return segments.map((segment) => ({
+    current: Boolean(segment.current || !segment.id),
+    id: String(segment.id || ''),
+    label: String(segment.label || ''),
+    path: String(segment.path || '')
+  }))
 }
-
 function renderSmartClassifier() {
   const currentUrl = String(state.currentTab?.url || '').trim()
   const smartAvailable = isSmartClassifiableUrl(currentUrl)
   const smartOverlayActive =
     smartAvailable && ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
-
   document.body.classList.toggle('smart-active', smartOverlayActive)
   dom.smartClassifier.classList.toggle('hidden', !smartAvailable)
   dom.smartFooter.classList.toggle('hidden', !smartOverlayActive)
   dom.smartTotal.textContent = `总计 ${state.allBookmarks.length}`
 
   if (!smartAvailable) {
-    state.smartClassifierRenderSignature = ''
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('hidden'))
     return
   }
 
   if (state.isLoading && state.smartStatus !== 'results') {
-    const html = `<div class="state-panel">${renderPopupLoadingStack('正在读取当前网页…')}</div>`
-    replacePopupSectionHtml(
-      dom.smartClassifier,
-      smartClassifierRenderState,
-      `smart:loading-page:${currentUrl}:${state.allBookmarks.length}`,
-      html
-    )
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('page-loading'))
     return
   }
 
   if (state.smartStatus === 'loading') {
-    renderSmartLoadingState()
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('loading'))
     animateSmartProgress()
     return
   }
 
   if (state.smartStatus === 'results') {
-    const html = renderSmartResultCard()
-    replacePopupSectionHtml(
-      dom.smartClassifier,
-      smartClassifierRenderState,
-      `smart:results:${html}`,
-      html
-    )
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('results'))
     return
   }
 
   if (state.smartStatus === 'error') {
-    const html = `
-      ${renderSmartPageCard()}
-      <div class="smart-panel-head smart-panel-head-standalone">
-        <p>智能分类失败</p>
-        ${renderSmartExitButton()}
-      </div>
-      <div class="error-banner">${escapeHtml(state.smartError || '智能分类失败，请稍后重试。')}</div>
-      <div class="smart-actions smart-actions-three">
-        <button class="smart-cancel-button" type="button" data-smart-action="manual-folder">
-          手动选择
-        </button>
-        <button class="smart-settings-action" type="button" data-smart-action="open-ai-settings">
-          AI 设置
-        </button>
-        <button class="smart-classify-button" type="button" data-smart-action="classify">
-          重试
-        </button>
-      </div>
-    `
-    replacePopupSectionHtml(
-      dom.smartClassifier,
-      smartClassifierRenderState,
-      `smart:error:${html}`,
-      html
-    )
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('error'))
     return
   }
 
   if (state.smartStatus === 'permission') {
-    const html = renderSmartPermissionCard()
-    replacePopupSectionHtml(
-      dom.smartClassifier,
-      smartClassifierRenderState,
-      `smart:permission:${html}`,
-      html
-    )
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('permission'))
     return
   }
 
-  const html = renderSmartPageCard()
-  replacePopupSectionHtml(
-    dom.smartClassifier,
-    smartClassifierRenderState,
-    `smart:idle:${html}`,
-    html
-  )
+  renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('idle'))
+}
+function getPopupSmartClassifierViewModel(
+  status: PopupSmartClassifierViewModel['status']
+): PopupSmartClassifierViewModel {
+  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
+  const progress = getSmartProgressTarget()
+  const startProgress = Math.max(0, Math.min(Number(state.smartProgressPercent) || 0, progress))
+
+  return {
+    error: state.smartError || '',
+    loadingLabel: getSmartLoadingLabel(),
+    loadingProgress: progress,
+    loadingStartProgress: startProgress,
+    loadingStep: step,
+    loadingStepCount: SMART_LOADING_STEP_COUNT,
+    page: getPopupSmartPageViewModel(),
+    permissionOrigins: Array.isArray(state.smartPermissionRequest?.origins)
+      ? [...new Set(state.smartPermissionRequest.origins)].filter(Boolean).map(formatPermissionOrigin)
+      : [],
+    recommendations: getPopupSmartRecommendationViewModels(),
+    saved: state.smartSaved,
+    saving: state.smartSaving,
+    status,
+    suggestedTitle: state.smartSuggestedTitle || getCurrentPageTitle()
+  }
 }
 
-function renderSmartPageCard() {
+function getPopupSmartPageViewModel() {
   const title = getCurrentPageTitle()
   const favicon = String(state.currentTab?.favIconUrl || '')
   const bookmark = state.currentPageBookmarkId
     ? state.bookmarkMap.get(state.currentPageBookmarkId)
     : null
 
-  return `
-    <article class="smart-page-card ${bookmark ? 'bookmarked' : 'unbookmarked'}">
-      <div class="smart-page-main">
-        <span class="smart-page-icon" aria-hidden="true">
-          ${favicon ? `<img src="${escapeAttr(favicon)}" alt="">` : escapeHtml(getSmartFallbackIconLabel(title))}
-        </span>
-        <div class="smart-page-copy">
-          <p class="smart-page-title" title="${escapeAttr(title)}">${escapeHtml(title)}</p>
-          <p class="smart-page-status" title="${escapeAttr(bookmark?.path || '')}">
-            ${bookmark ? `已收藏 · ${escapeHtml(formatBookmarkPath(bookmark.path) || '未归档路径')}` : '未收藏 · 可快速保存到文件夹'}
-          </p>
-        </div>
-      </div>
-      ${bookmark ? renderBookmarkedCurrentPageActions(bookmark) : renderUnbookmarkedCurrentPageActions()}
-    </article>
-  `
-}
+  if (!bookmark) {
+    return {
+      bookmarked: false,
+      fallbackIcon: getSmartFallbackIconLabel(title),
+      favicon,
+      pinLabel: '',
+      pinPending: false,
+      pinned: false,
+      status: '未收藏 · 可快速保存到文件夹',
+      statusTitle: '',
+      title
+    }
+  }
 
-function renderBookmarkedCurrentPageActions(bookmark) {
-  const pinPending = isPopupActionPending('pin-newtab', bookmark.id)
   const pinned = state.newTabPinnedIds.has(String(bookmark.id))
-  const pinLabel = pinned ? '已固定到newtabs' : '固定到newtabs'
-  return `
-    <div class="current-page-actions" aria-label="当前页快捷操作">
-      <button
-        class="current-page-action primary ${pinned ? 'pressed' : ''}"
-        type="button"
-        data-current-page-action="pin-newtab"
-        aria-pressed="${pinned ? 'true' : 'false'}"
-        ${pinPending ? 'disabled' : ''}
-      >
-        ${pinPending ? renderButtonLoadingLabel(pinned ? '取消中' : '固定中') : pinLabel}
-      </button>
-      <button class="current-page-action" type="button" data-current-page-action="edit">编辑</button>
-    </div>
-  `
-}
-
-function renderUnbookmarkedCurrentPageActions() {
-  return `
-    <div class="current-page-actions" aria-label="当前页快捷操作">
-      <button class="current-page-action primary" type="button" data-current-page-action="save">快速保存</button>
-      <button class="current-page-action" type="button" data-smart-action="classify">智能分类</button>
-    </div>
-  `
-}
-
-function renderSmartExitButton() {
-  return `
-    <button class="smart-exit-button" type="button" data-smart-action="exit" aria-label="退出智能分类">
-      退出
-    </button>
-  `
-}
-
-function renderSmartManualButton() {
-  return `
-    <button class="smart-manual-button" type="button" data-smart-action="manual-folder">
-      <span class="smart-folder-icon" aria-hidden="true"></span>
-      <span>手动选择文件夹</span>
-    </button>
-  `
-}
-
-function renderSmartPermissionCard() {
-  const origins = Array.isArray(state.smartPermissionRequest?.origins)
-    ? state.smartPermissionRequest.origins
-    : []
-
-  return `
-    <article class="smart-permission-card">
-      <div class="smart-panel-head">
-        <p>需要授权 AI 渠道</p>
-        ${renderSmartExitButton()}
-      </div>
-      <div class="smart-permission-body">
-        <p class="smart-permission-copy">
-          智能分类需要访问你配置的 AI 服务地址。当前网页不会申请额外权限，正文读取失败时会用标题和 URL 继续推荐。
-        </p>
-        ${
-          origins.length
-            ? `<div class="smart-permission-origins">${origins
-                .map((origin) => `<span>${escapeHtml(formatPermissionOrigin(origin))}</span>`)
-                .join('')}</div>`
-            : ''
-        }
-        ${
-          state.smartError
-            ? `<p class="smart-permission-error">${escapeHtml(state.smartError)}</p>`
-            : ''
-        }
-      </div>
-      <div class="smart-actions">
-        <button class="smart-cancel-button" type="button" data-smart-action="manual-folder">
-          手动选择
-        </button>
-        <button class="smart-settings-action" type="button" data-smart-action="open-ai-settings">
-          AI 设置
-        </button>
-        <button class="smart-classify-button" type="button" data-smart-action="grant-permission">
-          授权并继续
-        </button>
-      </div>
-    </article>
-  `
-}
-
-function renderPopupLoadingStack(label) {
-  return `
-    <span class="popup-loading-stack">
-      ${renderDotMatrixLoader({ variant: 'spiral', className: 'popup-loading-loader' })}
-      <span>${escapeHtml(label)}</span>
-    </span>
-  `
-}
-
-function renderButtonLoadingLabel(label) {
-  return `
-    <span class="button-loading-label">
-      ${renderDotMatrixLoader({ variant: 'bar', className: 'button-dot-loader' })}
-      <span>${escapeHtml(label)}</span>
-    </span>
-  `
-}
-
-function renderSmartLoadingCard(currentProgress = state.smartProgressPercent) {
-  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
-  const progress = getSmartProgressTarget()
-  const startProgress = Math.max(0, Math.min(Number(currentProgress) || 0, progress))
-
-  return `
-    <article class="smart-loading-card">
-      <div class="smart-panel-head">
-        <p>智能分类</p>
-        ${renderSmartExitButton()}
-      </div>
-      <div class="smart-loading-body">
-        ${renderDotMatrixLoader({ variant: 'spiral', className: 'smart-loading-loader' })}
-        <div class="smart-loading-content">
-          <p class="smart-loading-copy">
-            <span>${escapeHtml(getSmartLoadingLabel())}</span>
-            <small>${step}/${SMART_LOADING_STEP_COUNT}</small>
-          </p>
-          <div class="smart-progress-track" aria-hidden="true">
-            <span
-              class="smart-progress-bar"
-              data-smart-progress-target="${escapeAttr(String(progress))}"
-              style="--smart-progress-scale: ${startProgress / 100}"
-            ></span>
-          </div>
-        </div>
-      </div>
-    </article>
-  `
-}
-
-function renderSmartLoadingState() {
-  const existingCard = dom.smartClassifier.querySelector<HTMLElement>('.smart-loading-card')
-  if (!existingCard) {
-    replacePopupSectionHtml(
-      dom.smartClassifier,
-      smartClassifierRenderState,
-      'smart:loading',
-      renderSmartLoadingCard(state.smartProgressPercent)
-    )
-    return
-  }
-
-  smartClassifierRenderState.signature = 'smart:loading'
-  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
-  const progress = getSmartProgressTarget()
-  const label = existingCard.querySelector<HTMLElement>('.smart-loading-copy span')
-  const stepLabel = existingCard.querySelector<HTMLElement>('.smart-loading-copy small')
-  const progressBar = existingCard.querySelector<HTMLElement>('.smart-progress-bar')
-
-  if (label) {
-    label.textContent = getSmartLoadingLabel()
-  }
-  if (stepLabel) {
-    stepLabel.textContent = `${step}/${SMART_LOADING_STEP_COUNT}`
-  }
-  if (progressBar) {
-    progressBar.dataset.smartProgressTarget = String(progress)
+  return {
+    bookmarked: true,
+    fallbackIcon: getSmartFallbackIconLabel(title),
+    favicon,
+    pinLabel: pinned ? '已固定到newtabs' : '固定到newtabs',
+    pinPending: isPopupActionPending('pin-newtab', bookmark.id),
+    pinned,
+    status: `已收藏 · ${formatBookmarkPath(bookmark.path) || '未归档路径'}`,
+    statusTitle: bookmark.path || '',
+    title
   }
 }
 
+function getPopupSmartRecommendationViewModels() {
+  const selectedId = state.smartSelectedRecommendationId
+  return (state.smartRecommendations || []).map((recommendation) => {
+    const path = recommendation.path || recommendation.title || ''
+    const formattedPath = formatBookmarkPath(path) || path
+    return {
+      confidence: Math.round(Math.max(0, Math.min(Number(recommendation.confidence) || 0, 1)) * 100),
+      id: String(recommendation.id || ''),
+      isNew: recommendation.kind === 'new',
+      path: formattedPath || '未归档路径',
+      selected: recommendation.id === selectedId,
+      title: recommendation.title || path || '未命名文件夹'
+    }
+  })
+}
 function animateSmartProgress() {
   const progressBar = dom.smartClassifier.querySelector<HTMLElement>('.smart-progress-bar')
   if (!progressBar) {
     return
   }
-
   const targetProgress = Math.max(
     0,
     Math.min(Number(progressBar.getAttribute('data-smart-progress-target')) || 0, 100)
   )
-
   window.requestAnimationFrame(() => {
     progressBar.style.setProperty('--smart-progress-scale', String(targetProgress / 100))
     state.smartProgressPercent = targetProgress
   })
-}
-
-function renderSmartResultCard() {
-  const selectedId = state.smartSelectedRecommendationId
-  const recommendations = state.smartRecommendations || []
-  const canSave = Boolean(recommendations.length && !state.smartSaving && !state.smartSaved)
-
-  return `
-    <article class="smart-result-card">
-      <div class="smart-panel-head">
-        <p>推荐文件夹</p>
-        ${renderSmartExitButton()}
-      </div>
-      <div class="smart-title-row">
-        <input
-          id="smart-title-input"
-          class="smart-title-input"
-          type="text"
-          spellcheck="false"
-          maxlength="180"
-          value="${escapeAttr(state.smartSuggestedTitle || getCurrentPageTitle())}"
-          aria-label="推荐书签标题"
-        >
-      </div>
-
-      <p class="smart-section-label">推荐文件夹</p>
-      <div class="smart-recommendations">
-        ${
-          recommendations.length
-            ? recommendations.map((recommendation) => renderSmartRecommendation(recommendation, selectedId)).join('')
-            : '<div class="state-panel compact">未生成可用推荐，请手动选择文件夹。</div>'
-        }
-      </div>
-
-      <div class="smart-actions">
-        <button class="smart-cancel-button" type="button" data-smart-action="reset">取消</button>
-        <button class="smart-save-button ${state.smartSaved ? 'saved' : ''}" type="button" data-smart-action="save" ${canSave ? '' : 'disabled'}>
-          ${state.smartSaved ? '已保存' : state.smartSaving ? renderButtonLoadingLabel('保存中') : '确认保存'}
-        </button>
-      </div>
-    </article>
-    ${renderSmartManualButton()}
-  `
-}
-
-function renderSmartRecommendation(recommendation, selectedId) {
-  const isSelected = recommendation.id === selectedId
-  const confidence = Math.round(Math.max(0, Math.min(Number(recommendation.confidence) || 0, 1)) * 100)
-  const path = recommendation.path || recommendation.title || ''
-  const formattedPath = formatBookmarkPath(path) || path
-
-  return `
-    <button
-      class="smart-folder-option ${isSelected ? 'selected' : ''}"
-      type="button"
-      data-smart-recommendation="${escapeAttr(recommendation.id)}"
-    >
-      <span class="smart-folder-main">
-        <span class="smart-folder-head">
-          <span class="smart-folder-icon" aria-hidden="true"></span>
-          <span class="smart-folder-name">${escapeHtml(recommendation.title || path || '未命名文件夹')}</span>
-        </span>
-        <span class="smart-folder-path" title="${escapeAttr(formattedPath)}">${escapeHtml(formattedPath || '未归档路径')}</span>
-      </span>
-      <span class="smart-folder-meta">
-        ${recommendation.kind === 'new' ? '<span class="smart-new-badge">新建</span>' : ''}
-        ${isSelected ? '<span class="smart-checkmark">✓</span>' : ''}
-        <span>${escapeHtml(String(confidence))}%</span>
-      </span>
-    </button>
-  `
 }
 
 function renderMainContent() {
@@ -2532,7 +1976,6 @@ function renderMainContent() {
     !hasQuery &&
     !state.isLoading &&
     (!currentRoot || !(currentRoot.children || []).length)
-
   dom.loadingState.classList.toggle('hidden', !(state.isLoading || showSearchLoading))
   dom.content.classList.toggle(
     'hidden',
@@ -2540,53 +1983,59 @@ function renderMainContent() {
   )
   dom.emptyState.classList.toggle('hidden', !(showNaturalSearchSetup || showEmptySearch || showEmptyTree))
 
-  if (showNaturalSearchSetup) {
-    dom.emptyState.innerHTML = renderNaturalSearchSetupState()
-  } else if (showEmptySearch) {
-    dom.emptyState.innerHTML = renderEmptySearchState()
-  } else if (showEmptyTree) {
-    dom.emptyState.textContent = state.selectedFolderFilterId
-      ? '当前筛选文件夹下暂无可展示内容'
-      : '未找到可展示的书签栏内容'
-  }
+  renderPopupEmptyStateIsland(dom.emptyState, getPopupEmptyStateViewModel({
+    showEmptySearch,
+    showEmptyTree,
+    showNaturalSearchSetup
+  }))
 
   if (state.isLoading) {
-    dom.loadingState.innerHTML = renderPopupLoadingStack('正在加载书签…')
+    renderPopupLoadingStateIsland(dom.loadingState, { label: '正在加载书签…' })
     return
   }
 
   if (showSearchLoading) {
-    dom.loadingState.innerHTML = renderPopupLoadingStack(
-      state.naturalSearchEnabled ? '正在用 AI 理解搜索意图…' : '正在搜索书签…'
-    )
+    renderPopupLoadingStateIsland(dom.loadingState, {
+      label: state.naturalSearchEnabled ? '正在用 AI 理解搜索意图…' : '正在搜索书签…'
+    })
     return
   }
-
   if (showNaturalSearchSetup || showEmptySearch || showEmptyTree) {
-    replaceContentHtml('', { preserveScroll: false })
+    replaceContentViewModel({ rows: [] }, { preserveScroll: false })
     return
   }
-
-  replaceContentHtml(hasQuery ? renderSearchResults() : renderTreeView(), {
+  replaceContentViewModel(getPopupContentViewModel({ searchMode: hasQuery }), {
     preserveScroll: !hasQuery
   })
   updateActiveResultVisibility()
 }
 
-function renderNaturalSearchSetupState() {
-  return `
-    <div class="empty-search-state natural-search-setup-state">
-      <p class="empty-title">请配置 AI 渠道</p>
-      <p class="empty-hint">普通搜索已包含本地规则。语义搜索需要配置 AI 渠道后使用。</p>
-      <div class="empty-actions">
-        <button class="empty-action primary" type="button" data-empty-action="open-ai-settings">配置 AI 渠道</button>
-        <button class="empty-action" type="button" data-empty-action="dismiss-natural-setup">继续普通搜索</button>
-      </div>
-    </div>
-  `
-}
+function getPopupEmptyStateViewModel({
+  showEmptySearch,
+  showEmptyTree,
+  showNaturalSearchSetup
+}: {
+  showEmptySearch: boolean
+  showEmptyTree: boolean
+  showNaturalSearchSetup: boolean
+}): PopupEmptyStateViewModel {
+  if (showNaturalSearchSetup) {
+    return { kind: 'natural-setup' }
+  }
 
-function renderEmptySearchState() {
+  if (showEmptyTree) {
+    return {
+      kind: 'message',
+      message: state.selectedFolderFilterId
+        ? '当前筛选文件夹下暂无可展示内容'
+        : '未找到可展示的书签栏内容'
+    }
+  }
+
+  if (!showEmptySearch) {
+    return { kind: 'none' }
+  }
+
   const naturalSearchActive = state.naturalSearchEnabled
   const hasFolderFilter = Boolean(state.selectedFolderFilterId)
   const title = naturalSearchActive
@@ -2596,51 +2045,65 @@ function renderEmptySearchState() {
     ? '可以清除筛选、查看全部，或关闭 AI 语义搜索改用普通搜索。'
     : '可以清除筛选、查看全部，或试试 site:github.com、folder:"前端 资料"、最近 2 周、-视频 等高级语法。'
   const actions = [
-    '<button class="empty-action primary" type="button" data-empty-action="clear-query">清空搜索</button>',
+    {
+      action: 'clear-query',
+      label: '清空搜索',
+      primary: true
+    },
     hasFolderFilter
-      ? '<button class="empty-action" type="button" data-empty-action="clear-filter">清除筛选</button>'
-      : '',
-    '<button class="empty-action" type="button" data-empty-action="show-all">查看全部</button>',
-    naturalSearchActive
-      ? '<button class="empty-action" type="button" data-empty-action="toggle-natural">关闭 AI 语义</button>'
-      : '<button class="empty-action" type="button" data-empty-action="toggle-natural">AI 语义搜索</button>'
-  ].filter(Boolean).join('')
+      ? {
+          action: 'clear-filter',
+          label: '清除筛选'
+        }
+      : null,
+    {
+      action: 'show-all',
+      label: '查看全部'
+    },
+    {
+      action: 'toggle-natural',
+      label: naturalSearchActive ? '关闭 AI 语义' : 'AI 语义搜索'
+    }
+  ].filter(Boolean)
 
-  return `
-    <div class="empty-search-state">
-      <p class="empty-title">${escapeHtml(title)}</p>
-      <p class="empty-hint">${escapeHtml(hint)}</p>
-      <div class="empty-actions">
-        ${actions}
-      </div>
-    </div>
-  `
+  return {
+    actions,
+    hint,
+    kind: 'search',
+    title
+  }
 }
-
-function replaceContentHtml(nextHtml, { preserveScroll = false } = {}) {
-  if (state.contentRenderHtml === nextHtml) {
+function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserveScroll = false } = {}) {
+  const nextSignature = JSON.stringify(nextViewModel)
+  if (state.contentRenderHtml === nextSignature) {
     return
   }
 
   const previousScrollTop = dom.content.scrollTop
-  state.contentRenderHtml = nextHtml
-  dom.content.innerHTML = nextHtml
+  state.contentRenderHtml = nextSignature
+  renderPopupContentIsland(dom.content, nextViewModel)
 
   if (preserveScroll) {
     dom.content.scrollTop = previousScrollTop
   }
 }
 
-function renderTreeView() {
-  const currentRoot = getCurrentTreeRoot()
-  if (!currentRoot) {
-    return ''
+function getPopupContentViewModel({ searchMode }: { searchMode: boolean }): PopupContentViewModel {
+  return {
+    rows: searchMode ? getSearchResultRows() : getTreeRows()
   }
-
-  return renderFolderNode(currentRoot, 0)
 }
 
-function renderFolderNode(node, depth) {
+function getTreeRows(): PopupContentRowViewModel[] {
+  const currentRoot = getCurrentTreeRoot()
+  if (!currentRoot) {
+    return []
+  }
+
+  return buildFolderNodeRows(currentRoot, 0)
+}
+
+function buildFolderNodeRows(node, depth): PopupContentRowViewModel[] {
   const currentRoot = getCurrentTreeRoot()
   const isPinnedRoot = depth === 0 && currentRoot?.id === node.id
   const isExpanded =
@@ -2651,129 +2114,73 @@ function renderFolderNode(node, depth) {
     isExpanded ? '折叠文件夹' : '展开文件夹',
     folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderInfo.title : node.title
   )
-  const childMarkup = isExpanded
-    ? children
-        .map((child) => {
-          if (child.url) {
-            const bookmark = state.bookmarkMap.get(child.id)
-            return bookmark ? renderBookmarkRow(bookmark, depth + 1) : ''
-          }
 
-          return renderFolderNode(child, depth + 1)
-        })
-        .join('')
-    : ''
+  const currentRow: PopupContentRowViewModel = {
+    depth,
+    expanded: isExpanded,
+    folderId: String(node.id || ''),
+    kind: 'folder',
+    root: isPinnedRoot,
+    subtitle: describeFolder(folderInfo),
+    title: node.title || '未命名文件夹',
+    toggleLabel
+  }
 
-  const toggleMarkup = isPinnedRoot
-    ? '<span class="tree-toggle-spacer" aria-hidden="true"></span>'
-    : `
-      <button
-        class="tree-toggle ${isExpanded ? 'expanded' : ''}"
-        type="button"
-        data-toggle-folder="${escapeAttr(node.id)}"
-        aria-label="${escapeAttr(toggleLabel)}"
-      ></button>
-    `
+  const childRows = isExpanded
+    ? children.flatMap((child) => {
+        if (child.url) {
+          const bookmark = state.bookmarkMap.get(child.id)
+          return bookmark ? [buildBookmarkRowViewModel(bookmark, depth + 1)] : []
+        }
 
-  const cardMarkup = isPinnedRoot
-    ? `
-      <div class="folder-card root-folder-card">
-        <span class="folder-kind" aria-hidden="true"></span>
-        <span class="row-main">
-          <span class="row-title">${escapeHtml(node.title || '未命名文件夹')}</span>
-          <span class="row-subtitle">${escapeHtml(describeFolder(folderInfo))}</span>
-        </span>
-      </div>
-    `
-    : `
-      <button
-        class="folder-card"
-        type="button"
-        data-toggle-folder="${escapeAttr(node.id)}"
-        aria-expanded="${isExpanded}"
-      >
-        <span class="folder-kind" aria-hidden="true"></span>
-        <span class="row-main">
-          <span class="row-title">${escapeHtml(node.title || '未命名文件夹')}</span>
-          <span class="row-subtitle">${escapeHtml(describeFolder(folderInfo))}</span>
-        </span>
-      </button>
-    `
+        return buildFolderNodeRows(child, depth + 1)
+      })
+    : []
 
-  return `
-    <div class="tree-row folder-row ${isPinnedRoot ? 'root-folder-row' : ''}" style="--depth:${depth}">
-      ${toggleMarkup}
-      ${cardMarkup}
-    </div>
-    ${childMarkup}
-  `
+  return [currentRow, ...childRows]
 }
 
-function renderBookmarkRow(bookmark, depth) {
-  const isMenuOpen = state.activeMenuBookmarkId === bookmark.id
-  const menuId = getActionMenuId(bookmark.id)
-  const menuLabel = getBookmarkActionMenuLabel(bookmark)
-
-  return `
-    <div class="tree-row bookmark-row" style="--depth:${depth}">
-      <button class="bookmark-card" type="button" data-open-bookmark="${escapeAttr(bookmark.id)}">
-        <span class="bookmark-kind" aria-hidden="true"></span>
-        <span class="row-main">
-          <span class="row-title">${escapeHtml(bookmark.title)}</span>
-          <span class="row-subtitle" title="${escapeAttr(bookmark.url)}">${escapeHtml(bookmark.displayUrl)}</span>
-        </span>
-      </button>
-      <div class="menu-anchor">
-        <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="${escapeAttr(menuLabel)}" aria-haspopup="menu" aria-expanded="${String(isMenuOpen)}" aria-controls="${escapeAttr(menuId)}"></button>
-        ${renderActionMenu(bookmark.id)}
-      </div>
-    </div>
-  `
+function buildBookmarkRowViewModel(bookmark, depth) {
+  return {
+    bookmarkId: String(bookmark.id || ''),
+    depth,
+    displayUrl: bookmark.displayUrl || '',
+    kind: 'bookmark',
+    menu: buildActionMenuViewModel(bookmark.id),
+    menuLabel: getBookmarkActionMenuLabel(bookmark),
+    title: bookmark.title || '未命名书签',
+    url: bookmark.url || ''
+  }
 }
 
-function renderSearchResults() {
+function getSearchResultRows(): PopupContentRowViewModel[] {
   return state.searchResults
     .map((bookmark, index) => {
       const isActive = index === state.activeResultIndex
-      const isMenuOpen = state.activeMenuBookmarkId === bookmark.id
-      const menuId = getActionMenuId(bookmark.id)
-      const menuLabel = getBookmarkActionMenuLabel(bookmark)
       const reasonTokens = summarizeMatchReasonTokens(bookmark.matchReasons)
       const reasonTitle = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
         ? bookmark.matchReasons.join(' · ')
         : ''
-      const reasonsMarkup = reasonTokens.length
-        ? `<span class="result-match-reasons" title="${escapeAttr(reasonTitle)}" aria-label="命中原因：${escapeAttr(reasonTokens.join('、'))}">${reasonTokens
-            .map((token) => `<span class="result-match-token">${escapeHtml(token)}</span>`)
-            .join('')}</span>`
-        : ''
 
-      return `
-        <article class="result-card ${isActive ? 'active' : ''}" data-result-index="${index}">
-          <button class="result-main" type="button" data-open-bookmark="${escapeAttr(bookmark.id)}">
-            <span class="bookmark-kind" aria-hidden="true"></span>
-            <span class="result-copy">
-              <span class="result-title">${highlightText(bookmark.title, state.searchHighlightQuery || state.debouncedQuery)}</span>
-              <span class="result-url" title="${escapeAttr(bookmark.url)}">${highlightText(bookmark.displayUrl, state.searchHighlightQuery || state.debouncedQuery)}</span>
-              <span class="result-path-shell">
-                <span
-                  class="result-path"
-                  title="${escapeAttr(bookmark.path || '未归档路径')}"
-                >${escapeHtml(bookmark.path || '未归档路径')}</span>
-              </span>
-              ${reasonsMarkup}
-            </span>
-          </button>
-          <div class="menu-anchor">
-            <button class="icon-button" type="button" data-open-menu="${escapeAttr(bookmark.id)}" aria-label="${escapeAttr(menuLabel)}" aria-haspopup="menu" aria-expanded="${String(isMenuOpen)}" aria-controls="${escapeAttr(menuId)}" title="操作菜单"></button>
-            ${renderActionMenu(bookmark.id)}
-          </div>
-        </article>
-      `
+      return {
+        active: isActive,
+        bookmarkId: String(bookmark.id || ''),
+        depth: 0,
+        displayUrl: bookmark.displayUrl || '',
+        highlightQuery: state.searchHighlightQuery || state.debouncedQuery,
+        index,
+        kind: 'result',
+        menu: buildActionMenuViewModel(bookmark.id),
+        menuLabel: getBookmarkActionMenuLabel(bookmark),
+        path: bookmark.path || '未归档路径',
+        reasonLabel: reasonTokens.length ? `命中原因：${reasonTokens.join('、')}` : '',
+        reasonTitle,
+        reasonTokens,
+        title: bookmark.title || '未命名书签',
+        url: bookmark.url || ''
+      }
     })
-    .join('')
 }
-
 const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
   { test: /^命中：标题/, label: '标题命中' },
   { test: /^命中：网址/, label: 'URL 命中' },
@@ -2792,12 +2199,10 @@ const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
   { test: /^筛选：/, label: '时间筛选' },
   { test: /^排除：/, label: '已排除' }
 ]
-
 function summarizeMatchReasonTokens(reasons: unknown): string[] {
   if (!Array.isArray(reasons) || reasons.length === 0) {
     return []
   }
-
   const tokens: string[] = []
   const seen = new Set<string>()
   for (const value of reasons) {
@@ -2812,28 +2217,20 @@ function summarizeMatchReasonTokens(reasons: unknown): string[] {
   }
   return tokens
 }
-
 function getBookmarkActionMenuLabel(bookmark) {
   const title = cleanSmartText(bookmark?.title || '未命名书签', 48)
   return `打开 ${title} 的操作菜单`
 }
-
 function getBookmarkActionLabel(action, bookmarkId) {
   const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
   const title = cleanSmartText(bookmark?.title || bookmark?.displayUrl || bookmarkId || '未命名书签', 48)
   return `${action}：${title || '未命名书签'}`
 }
-
 function getPopupFolderToggleLabel(action, folderPath) {
   const target = cleanSmartText(folderPath || '未命名文件夹', 72)
   return `${action}：${target || '未命名文件夹'}`
 }
-
-function renderActionMenu(bookmarkId) {
-  if (state.activeMenuBookmarkId !== bookmarkId) {
-    return ''
-  }
-
+function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
   const menuBusy = hasBlockingPopupActionPending()
   const copyBusy = isPopupActionPending('copy-url', bookmarkId)
   const openBusy = isPopupActionPending('open-current-tab', bookmarkId)
@@ -2847,111 +2244,128 @@ function renderActionMenu(bookmarkId) {
   const moveLabel = getBookmarkActionLabel('移动书签', bookmarkId)
   const deleteLabel = getBookmarkActionLabel('删除书签', bookmarkId)
 
-  return `
-    <div id="${escapeAttr(menuId)}" class="action-menu" role="menu" aria-label="书签操作">
-      <button role="menuitem" type="button" data-menu-action="edit" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(editLabel)}" ${menuBusy || editBusy ? 'disabled' : ''}>编辑</button>
-      <button role="menuitem" type="button" data-menu-action="copy-url" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(copyLabel)}" ${copyBusy ? 'disabled' : ''}>复制链接</button>
-      <button role="menuitem" type="button" data-menu-action="open-current-tab" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(openLabel)}" ${menuBusy || openBusy ? 'disabled' : ''}>当前页打开</button>
-      <button role="menuitem" type="button" data-menu-action="move" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(moveLabel)}" ${menuBusy || moveBusy ? 'disabled' : ''}>移动至</button>
-      <button role="menuitem" class="danger" type="button" data-menu-action="delete" data-bookmark-id="${escapeAttr(bookmarkId)}" aria-label="${escapeAttr(deleteLabel)}" ${menuBusy || deleteBusy ? 'disabled' : ''}>删除</button>
-    </div>
-  `
+  return {
+    id: menuId,
+    items: [
+      {
+        action: 'edit',
+        ariaLabel: editLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: menuBusy || editBusy,
+        label: '编辑'
+      },
+      {
+        action: 'copy-url',
+        ariaLabel: copyLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: copyBusy,
+        label: '复制链接'
+      },
+      {
+        action: 'open-current-tab',
+        ariaLabel: openLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: menuBusy || openBusy,
+        label: '当前页打开'
+      },
+      {
+        action: 'move',
+        ariaLabel: moveLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: menuBusy || moveBusy,
+        label: '移动至'
+      },
+      {
+        action: 'delete',
+        ariaLabel: deleteLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: true,
+        disabled: menuBusy || deleteBusy,
+        label: '删除'
+      }
+    ],
+    open: state.activeMenuBookmarkId === bookmarkId
+  }
 }
-
 function getActionMenuId(bookmarkId) {
   return `popup-action-menu-${String(bookmarkId || '').replace(/[^a-zA-Z0-9_-]/g, '-')}`
 }
-
 function setPopupSurfaceOpen(element, open) {
   if (!element) {
     return
   }
-
   if (open) {
     cancelExitMotion(element)
     element.classList.remove('hidden', 'is-closing')
     return
   }
-
   if (element.classList.contains('hidden') || element.classList.contains('is-closing')) {
     return
   }
-
   void closeWithExitMotion(element, 'is-closing', () => {
     element.classList.add('hidden')
   }, 220)
 }
-
 function renderFilterModal() {
   setPopupSurfaceOpen(dom.filterModal, state.isFilterPickerOpen)
-
   if (!state.isFilterPickerOpen) {
     syncBackdropVisibility()
     return
   }
 
   dom.filterSearchInput.value = state.filterSearchQuery
-  dom.filterFolderList.innerHTML = renderFilterFolderList()
+  renderPopupFolderPickerIsland(dom.filterFolderList, getFilterFolderPickerState())
   syncBackdropVisibility()
 }
-
 function renderMoveModal() {
   const bookmark = state.moveTargetBookmarkId
     ? state.bookmarkMap.get(state.moveTargetBookmarkId)
     : null
   const isOpen = Boolean(bookmark)
-
   setPopupSurfaceOpen(dom.moveModal, isOpen)
-
   if (!isOpen) {
     syncBackdropVisibility()
     return
   }
-
   dom.moveBookmarkTitle.textContent = bookmark.title
   dom.moveBookmarkPath.textContent = formatBookmarkPath(bookmark.path) || '未归档路径'
   dom.moveSearchInput.value = state.moveSearchQuery
-  dom.moveFolderList.innerHTML = renderMoveFolderList(bookmark)
+  renderPopupFolderPickerIsland(dom.moveFolderList, getMoveFolderPickerState(bookmark))
   syncBackdropVisibility()
 }
-
 function renderSmartFolderModal() {
   setPopupSurfaceOpen(dom.smartFolderModal, state.smartFolderPickerOpen)
-
   if (!state.smartFolderPickerOpen) {
     syncBackdropVisibility()
     return
   }
-
   dom.smartFolderPageTitle.textContent = state.smartSuggestedTitle || getCurrentPageTitle()
   dom.smartFolderPageUrl.textContent = getSmartFolderTargetPathLabel()
   dom.smartFolderSearchInput.value = state.smartFolderSearchQuery
-  dom.smartFolderList.innerHTML = renderSmartFolderList()
+  renderPopupFolderPickerIsland(dom.smartFolderList, getSmartFolderPickerState())
   syncBackdropVisibility()
 }
-
 function renderAiProviderPromptModal() {
   setPopupSurfaceOpen(dom.aiProviderPromptModal, state.aiProviderPromptOpen)
   syncBackdropVisibility()
 }
-
 function renderEditModal() {
   const bookmark = state.editTargetBookmarkId
     ? state.bookmarkMap.get(state.editTargetBookmarkId)
     : null
   const isOpen = Boolean(bookmark)
-
   setPopupSurfaceOpen(dom.editModal, isOpen)
-
   if (!isOpen) {
     syncBackdropVisibility()
     return
   }
-
   if (state.editDraftBookmarkId !== bookmark.id) {
     resetEditDraft(bookmark)
   }
-
   const draftFolder = state.editDraftParentId ? state.folderMap.get(state.editDraftParentId) : null
   const draftPath = draftFolder
     ? formatFolderPath(draftFolder, state.folderMap) || draftFolder.title
@@ -2963,7 +2377,17 @@ function renderEditModal() {
   dom.editFolderPickerButton.setAttribute('aria-expanded', String(state.editFolderPickerOpen))
   setPopupSurfaceOpen(dom.editFolderPicker, state.editFolderPickerOpen)
   dom.editFolderSearchInput.value = state.editFolderSearchQuery
-  dom.editFolderList.innerHTML = state.editFolderPickerOpen ? renderEditFolderList(bookmark) : ''
+  renderPopupFolderPickerIsland(
+    dom.editFolderList,
+    state.editFolderPickerOpen
+      ? getEditFolderPickerState(bookmark)
+      : {
+          empty: null,
+          mode: 'edit',
+          query: '',
+          treeOptions: []
+        }
+  )
   if (dom.editTitleInput.value !== state.editDraftTitle) {
     dom.editTitleInput.value = state.editDraftTitle
   }
@@ -2973,20 +2397,16 @@ function renderEditModal() {
   renderEditDraftControls()
   syncBackdropVisibility()
 }
-
 function renderDeleteModal() {
   const bookmark = state.confirmDeleteBookmarkId
     ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
     : null
   const isOpen = Boolean(bookmark)
-
   setPopupSurfaceOpen(dom.deleteModal, isOpen)
-
   if (!isOpen) {
     syncBackdropVisibility()
     return
   }
-
   dom.deleteBookmarkTitle.textContent = bookmark.title
   dom.deleteBookmarkPath.textContent = bookmark.path || '未归档路径'
   dom.cancelDelete.disabled = isPopupActionPending('delete', bookmark.id)
@@ -2994,7 +2414,6 @@ function renderDeleteModal() {
   dom.confirmDelete.textContent = isPopupActionPending('delete', bookmark.id) ? '删除中…' : '删除'
   syncBackdropVisibility()
 }
-
 function resetEditDraft(bookmark) {
   clearEditDiscardGuard()
   state.editDraftBookmarkId = String(bookmark?.id || '')
@@ -3006,7 +2425,6 @@ function resetEditDraft(bookmark) {
   state.editDraftDirty = false
   state.editSaving = false
 }
-
 function clearEditDraft() {
   clearEditDiscardGuard()
   state.editDraftBookmarkId = ''
@@ -3018,12 +2436,10 @@ function clearEditDraft() {
   state.editDraftDirty = false
   state.editSaving = false
 }
-
 function handleEditDraftInput() {
   if (!state.editTargetBookmarkId || state.editSaving) {
     return
   }
-
   state.editDraftBookmarkId = String(state.editTargetBookmarkId)
   state.editDraftTitle = dom.editTitleInput.value
   state.editDraftUrl = dom.editUrlInput.value
@@ -3031,7 +2447,6 @@ function handleEditDraftInput() {
   clearEditDiscardGuard()
   renderEditDraftControls()
 }
-
 function clearEditDiscardGuard() {
   if (state.editDiscardTimer) {
     window.clearTimeout(state.editDiscardTimer)
@@ -3039,17 +2454,14 @@ function clearEditDiscardGuard() {
   }
   state.editDiscardArmed = false
 }
-
 function shouldBlockDirtyEditClose() {
   if (!state.editTargetBookmarkId || !state.editDraftDirty) {
     return false
   }
-
   if (state.editDiscardArmed) {
     clearEditDiscardGuard()
     return false
   }
-
   state.editDiscardArmed = true
   showToast({
     type: 'info',
@@ -3061,16 +2473,13 @@ function shouldBlockDirtyEditClose() {
   }, 1800)
   return true
 }
-
 function isCurrentEditDraftDirty() {
   const bookmark = state.editTargetBookmarkId
     ? state.bookmarkMap.get(state.editTargetBookmarkId)
     : null
-
   if (!bookmark) {
     return false
   }
-
   return (
     getPopupEditBookmarkDraftState({
       bookmark,
@@ -3080,16 +2489,13 @@ function isCurrentEditDraftDirty() {
     }).dirty
   )
 }
-
 function renderEditDraftControls() {
   if (!dom.saveEdit) {
     return
   }
-
   const bookmarkId = state.editTargetBookmarkId || state.editDraftBookmarkId
   const saving = state.editSaving || isPopupActionPending('edit', bookmarkId || '')
   const dirty = Boolean(state.editDraftDirty)
-
   dom.saveEdit.disabled = saving || !dirty
   dom.saveEdit.textContent = saving ? '保存中…' : dirty ? '保存' : '未修改'
   dom.cancelEdit.disabled = saving
@@ -3098,7 +2504,6 @@ function renderEditDraftControls() {
   dom.editUrlInput.disabled = saving
   dom.editFolderSearchInput.disabled = saving
 }
-
 function syncBackdropVisibility() {
   const hasOpenModal = Boolean(
     state.isFilterPickerOpen ||
@@ -3111,24 +2516,23 @@ function syncBackdropVisibility() {
   syncPopupAppShellModalState(hasOpenModal)
   dom.modalBackdrop.setAttribute('aria-hidden', String(!hasOpenModal))
   setPopupSurfaceOpen(dom.modalBackdrop, hasOpenModal)
+  window.dispatchEvent(new CustomEvent('popup:modal-state', {
+    detail: { open: hasOpenModal }
+  }))
 }
-
 function syncPopupAppShellModalState(hasOpenModal) {
   if (!dom.appShell) {
     return
   }
-
   if (hasOpenModal) {
     dom.appShell.setAttribute('aria-hidden', 'true')
     dom.appShell.setAttribute('inert', '')
     return
   }
-
   dom.appShell.setAttribute('aria-hidden', 'false')
   dom.appShell.removeAttribute('inert')
 }
-
-function renderFilterFolderList() {
+function getFilterFolderPickerState(): PopupFolderPickerState {
   const query = normalizeText(state.filterSearchQuery)
   const folders = query
     ? state.allFolders.filter((folder) => {
@@ -3140,108 +2544,95 @@ function renderFilterFolderList() {
     : state.allFolders
 
   const activeId = resolveFilterFolderActiveId(folders)
-  const folderItems = folders
+  const filterOptions: PopupFilterFolderOptionViewModel[] = folders
     .map((folder) => {
       const isSelected = state.selectedFolderFilterId === folder.id
       const isActive = folder.id === activeId
       const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
-      return `
-        <button
-          class="filter-option ${isSelected ? 'selected' : ''}"
-          type="button"
-          role="option"
-          aria-selected="${isSelected ? 'true' : 'false'}"
-          data-select-filter-folder="${escapeAttr(folder.id)}"
-          tabindex="${isActive ? '0' : '-1'}"
-          title="${escapeAttr(folder.path)}"
-        >
-          <span class="filter-option-check" aria-hidden="true"></span>
-          <span class="filter-option-copy">
-            <span class="filter-option-title">${highlightText(folder.title, state.filterSearchQuery)}</span>
-            <span class="filter-option-path">${highlightText(folderPath, state.filterSearchQuery)}</span>
-          </span>
-        </button>
-      `
+      return {
+        active: isActive,
+        id: String(folder.id || ''),
+        path: folderPath,
+        selected: isSelected,
+        title: folder.title || '未命名文件夹',
+        tooltip: folder.path || ''
+      }
     })
-    .join('')
 
-  if (!folderItems && query) {
-    return `
-      <div class="modal-empty">
-        <p class="modal-empty-title">未找到相关文件夹</p>
-        <p class="modal-empty-detail">没有标题或路径包含「${escapeHtml(state.filterSearchQuery)}」</p>
-        <button class="secondary-button" type="button" data-filter-folder-action="clear-search">清空搜索</button>
-      </div>
-    `
+  return {
+    empty: !filterOptions.length && query
+      ? {
+          action: 'clear-search',
+          actionLabel: '清空搜索',
+          detail: `没有标题或路径包含「${state.filterSearchQuery}」`,
+          title: '未找到相关文件夹'
+        }
+      : null,
+    filterOptions,
+    mode: 'filter',
+    query: state.filterSearchQuery
   }
-
-  return folderItems
 }
 
-function renderMoveFolderList(bookmark) {
+function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
   const query = normalizeText(state.moveSearchQuery)
-  const markup = roots
-    .map((node) => renderMoveFolderNode(node, 0, query, bookmark))
-    .join('')
+  const treeOptions = roots.flatMap((node) => buildMoveFolderNodeViewModels(node, 0, query, bookmark))
 
-  if (!markup.trim()) {
-    return '<div class="state-panel">未找到相关文件夹</div>'
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'move',
+    query: state.moveSearchQuery,
+    treeOptions
   }
-
-  return markup
 }
 
-function renderEditFolderList(bookmark) {
+function getEditFolderPickerState(bookmark): PopupFolderPickerState {
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
   const query = normalizeText(state.editFolderSearchQuery)
-  const markup = roots
-    .map((node) => renderEditFolderNode(node, 0, query, bookmark))
-    .join('')
+  const treeOptions = roots.flatMap((node) => buildEditFolderNodeViewModels(node, 0, query, bookmark))
 
-  if (!markup.trim()) {
-    return '<div class="state-panel">未找到相关文件夹</div>'
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'edit',
+    query: state.editFolderSearchQuery,
+    treeOptions
   }
-
-  return markup
 }
 
-function renderSmartFolderList() {
+function getSmartFolderPickerState(): PopupFolderPickerState {
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
   const query = normalizeText(state.smartFolderSearchQuery)
-  const markup = roots
-    .map((node) => renderSmartFolderNode(node, 0, query))
-    .join('')
+  const treeOptions = roots.flatMap((node) => buildSmartFolderNodeViewModels(node, 0, query))
 
-  if (!markup.trim()) {
-    return '<div class="state-panel">未找到相关文件夹</div>'
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'smart',
+    query: state.smartFolderSearchQuery,
+    treeOptions
   }
-
-  return markup
 }
 
-function renderSmartFolderNode(node, depth, query) {
+function buildSmartFolderNodeViewModels(node, depth, query): PopupFolderTreeOptionViewModel[] {
   if (node.id === ROOT_ID) {
-    return ''
+    return []
   }
 
   const folder = state.folderMap.get(node.id)
   if (!folder) {
-    return ''
+    return []
   }
 
   const childFolders = (node.children || []).filter((child) => !child.url)
   const isFilterMode = Boolean(query)
-  const childMarkup = childFolders
-    .map((child) => renderSmartFolderNode(child, depth + 1, query))
-    .join('')
+  const childOptions = childFolders.flatMap((child) => buildSmartFolderNodeViewModels(child, depth + 1, query))
   const matchesCurrent =
     !query ||
     folder.normalizedTitle.includes(query) ||
     folder.normalizedPath.includes(query)
 
-  if (isFilterMode && !matchesCurrent && !childMarkup) {
-    return ''
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
   }
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
@@ -3249,61 +2640,46 @@ function renderSmartFolderNode(node, depth, query) {
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
   const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
 
-  return `
-    <div class="picker-row" style="--depth:${depth}">
-      <button
-        class="tree-toggle ${isExpanded ? 'expanded' : ''}"
-        type="button"
-        ${childFolders.length ? '' : 'data-disabled="true"'}
-        data-toggle-smart-folder="${escapeAttr(node.id)}"
-        role="treeitem"
-        aria-level="${depth + 1}"
-        aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
-        aria-label="${escapeAttr(toggleLabel)}"
-      ></button>
-      <button
-        class="picker-folder-card"
-        type="button"
-        role="treeitem"
-        aria-level="${depth + 1}"
-        aria-selected="false"
-        data-smart-select-folder="${escapeAttr(node.id)}"
-        ${saving ? 'disabled' : ''}
-      >
-        <span class="folder-kind" aria-hidden="true"></span>
-        <span class="picker-folder-main">
-          <span class="row-title">${highlightText(folder.title, state.smartFolderSearchQuery)}</span>
-          <span class="picker-path" title="${escapeAttr(folderPath)}">${highlightText(folderPath, state.smartFolderSearchQuery)}</span>
-        </span>
-      </button>
-    </div>
-    ${isExpanded ? childMarkup : ''}
-  `
+  return [
+    {
+      badges: [],
+      depth,
+      disabled: saving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: String(node.id || ''),
+      mode: 'smart',
+      path: folderPath,
+      rowCurrent: false,
+      selected: false,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
 }
 
-function renderMoveFolderNode(node, depth, query, bookmark) {
+function buildMoveFolderNodeViewModels(node, depth, query, bookmark): PopupFolderTreeOptionViewModel[] {
   if (node.id === ROOT_ID) {
-    return ''
+    return []
   }
 
   const folder = state.folderMap.get(node.id)
   if (!folder) {
-    return ''
+    return []
   }
 
   const childFolders = (node.children || []).filter((child) => !child.url)
   const isFilterMode = Boolean(query)
-  const childMarkup = childFolders
-    .map((child) => renderMoveFolderNode(child, depth + 1, query, bookmark))
-    .join('')
+  const childOptions = childFolders.flatMap((child) => buildMoveFolderNodeViewModels(child, depth + 1, query, bookmark))
 
   const matchesCurrent =
     !query ||
     folder.normalizedTitle.includes(query) ||
     folder.normalizedPath.includes(query)
 
-  if (isFilterMode && !matchesCurrent && !childMarkup) {
-    return ''
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
   }
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
@@ -3312,62 +2688,46 @@ function renderMoveFolderNode(node, depth, query, bookmark) {
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
   const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
 
-  return `
-    <div class="picker-row ${isCurrentFolder ? 'current' : ''}" style="--depth:${depth}">
-      <button
-        class="tree-toggle ${isExpanded ? 'expanded' : ''}"
-        type="button"
-        ${childFolders.length ? '' : 'data-disabled="true"'}
-        data-toggle-move-folder="${escapeAttr(node.id)}"
-        role="treeitem"
-        aria-level="${depth + 1}"
-        aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
-        aria-label="${escapeAttr(toggleLabel)}"
-      ></button>
-      <button
-        class="picker-folder-card"
-        type="button"
-        role="treeitem"
-        aria-level="${depth + 1}"
-        aria-selected="${isCurrentFolder ? 'true' : 'false'}"
-        data-select-folder="${escapeAttr(node.id)}"
-        ${moving ? 'disabled' : ''}
-      >
-        <span class="folder-kind" aria-hidden="true"></span>
-        <span class="picker-folder-main">
-          <span class="row-title">${highlightText(folder.title, state.moveSearchQuery)}</span>
-          <span class="picker-path" title="${escapeAttr(folderPath)}">${highlightText(folderPath, state.moveSearchQuery)}</span>
-          ${isCurrentFolder ? '<span class="picker-badge">当前位置</span>' : ''}
-        </span>
-      </button>
-    </div>
-    ${isExpanded ? childMarkup : ''}
-  `
+  return [
+    {
+      badges: isCurrentFolder ? [{ label: '当前位置' }] : [],
+      depth,
+      disabled: moving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: String(node.id || ''),
+      mode: 'move',
+      path: folderPath,
+      rowCurrent: isCurrentFolder,
+      selected: isCurrentFolder,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
 }
 
-function renderEditFolderNode(node, depth, query, bookmark) {
+function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolderTreeOptionViewModel[] {
   if (node.id === ROOT_ID) {
-    return ''
+    return []
   }
 
   const folder = state.folderMap.get(node.id)
   if (!folder) {
-    return ''
+    return []
   }
 
   const childFolders = (node.children || []).filter((child) => !child.url)
   const isFilterMode = Boolean(query)
-  const childMarkup = childFolders
-    .map((child) => renderEditFolderNode(child, depth + 1, query, bookmark))
-    .join('')
+  const childOptions = childFolders.flatMap((child) => buildEditFolderNodeViewModels(child, depth + 1, query, bookmark))
 
   const matchesCurrent =
     !query ||
     folder.normalizedTitle.includes(query) ||
     folder.normalizedPath.includes(query)
 
-  if (isFilterMode && !matchesCurrent && !childMarkup) {
-    return ''
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
   }
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
@@ -3377,75 +2737,49 @@ function renderEditFolderNode(node, depth, query, bookmark) {
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
   const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
 
-  return `
-    <div class="picker-row ${isSelectedFolder ? 'current' : ''}" style="--depth:${depth}">
-      <button
-        class="tree-toggle ${isExpanded ? 'expanded' : ''}"
-        type="button"
-        ${childFolders.length ? '' : 'data-disabled="true"'}
-        data-toggle-edit-folder="${escapeAttr(node.id)}"
-        role="treeitem"
-        aria-level="${depth + 1}"
-        aria-expanded="${childFolders.length ? String(isExpanded) : 'false'}"
-        aria-label="${escapeAttr(toggleLabel)}"
-      ></button>
-      <button
-        class="picker-folder-card"
-        type="button"
-        role="treeitem"
-        aria-level="${depth + 1}"
-        aria-selected="${isSelectedFolder ? 'true' : 'false'}"
-        data-select-edit-folder="${escapeAttr(node.id)}"
-        ${saving ? 'disabled' : ''}
-      >
-        <span class="folder-kind" aria-hidden="true"></span>
-        <span class="picker-folder-main">
-          <span class="row-title">${highlightText(folder.title, state.editFolderSearchQuery)}</span>
-          <span class="picker-path" title="${escapeAttr(folderPath)}">${highlightText(folderPath, state.editFolderSearchQuery)}</span>
-          ${isSelectedFolder ? '<span class="picker-badge">已选择</span>' : ''}
-          ${!isSelectedFolder && isOriginalFolder ? '<span class="picker-badge muted">原位置</span>' : ''}
-        </span>
-      </button>
-    </div>
-    ${isExpanded ? childMarkup : ''}
-  `
+  return [
+    {
+      badges: [
+        isSelectedFolder ? { label: '已选择' } : null,
+        !isSelectedFolder && isOriginalFolder ? { label: '原位置', muted: true } : null
+      ].filter(Boolean),
+      depth,
+      disabled: saving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: String(node.id || ''),
+      mode: 'edit',
+      path: folderPath,
+      rowCurrent: isSelectedFolder,
+      selected: isSelectedFolder,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
 }
-
 function renderToasts() {
-  dom.toastRoot.innerHTML = state.toasts
-    .map((toast) => {
-      return `
-        <div class="toast ${escapeAttr(toast.type)}" data-toast-id="${escapeAttr(toast.id)}">
-          <div class="toast-copy">
-            <p class="toast-message">${escapeHtml(toast.message)}</p>
-          </div>
-          ${
-            toast.action
-              ? `<button class="toast-action" type="button" data-toast-action="${escapeAttr(
-                  toast.action
-                )}" data-toast-id="${escapeAttr(toast.id)}">${escapeHtml(toast.actionLabel || '操作')}</button>`
-              : ''
-          }
-          <button class="toast-dismiss" type="button" data-dismiss-toast="${escapeAttr(toast.id)}">关闭</button>
-        </div>
-      `
-    })
-    .join('')
-}
+  const toasts: PopupToastViewModel[] = state.toasts.map((toast) => ({
+    action: String(toast.action || ''),
+    actionLabel: String(toast.actionLabel || ''),
+    id: String(toast.id || ''),
+    message: String(toast.message || ''),
+    type: String(toast.type || 'success')
+  }))
 
+  renderPopupToastsIsland(dom.toastRoot, toasts)
+}
 function handleSmartClassifierClick(event) {
   const savedSearchButton = event.target.closest('[data-saved-search-action]')
   if (savedSearchButton) {
     handleSavedSearchAction(savedSearchButton)
     return
   }
-
   const quickActionButton = event.target.closest('[data-current-page-action]')
   if (quickActionButton) {
     handleCurrentPageQuickAction(quickActionButton.getAttribute('data-current-page-action'))
     return
   }
-
   const recommendationButton = event.target.closest('[data-smart-recommendation]')
   if (recommendationButton) {
     const nextRecommendationId = recommendationButton.getAttribute('data-smart-recommendation')
@@ -3456,63 +2790,51 @@ function handleSmartClassifierClick(event) {
     renderSmartClassifier()
     return
   }
-
   const actionButton = event.target.closest('[data-smart-action]')
   if (!actionButton) {
     return
   }
-
   const action = actionButton.getAttribute('data-smart-action')
   if (action === 'classify') {
     classifyCurrentPage()
     return
   }
-
   if (action === 'grant-permission') {
     grantSmartPermissionAndClassify()
     return
   }
-
   if (action === 'open-ai-settings') {
     void openSettingsPage('ai-provider')
     return
   }
-
   if (action === 'manual-folder') {
     openSmartFolderDialog()
     return
   }
-
   if (action === 'reset') {
     resetSmartClassification()
     return
   }
-
   if (action === 'exit') {
     resetSmartClassification()
     return
   }
-
   if (action === 'save') {
     saveSmartRecommendation()
   }
 }
-
 function handleSavedSearchAction(button) {
   const action = button.getAttribute('data-saved-search-action')
   const searchId = button.getAttribute('data-saved-search-id')
-
   if (action === 'toggle') {
     state.savedSearchesExpanded = !state.savedSearchesExpanded
     renderSavedSearches()
     return
   }
-
   if (action === 'save-current') {
     void saveCurrentSearchQuery()
     return
   }
-
   if (action === 'apply') {
     const savedSearch = state.savedSearches
       ? getSavedSearchesForScope(state.savedSearches, 'popup').find((item) => item.id === searchId)
@@ -3524,42 +2846,34 @@ function handleSavedSearchAction(button) {
     }
     return
   }
-
   if (action === 'delete') {
     void deletePopupSavedSearch(searchId)
   }
 }
-
 function handleCurrentPageQuickAction(action) {
   const bookmarkId = state.currentPageBookmarkId
-
   if (action === 'save') {
     openSmartFolderDialog()
     return
   }
-
   if (!bookmarkId) {
     showToast({ type: 'error', message: '当前页面尚未收藏。' })
     return
   }
-
   if (action === 'edit') {
     openEditDialog(bookmarkId)
     return
   }
-
   if (action === 'pin-newtab') {
     void pinCurrentPageToNewTab(bookmarkId)
   }
 }
-
 function handleSmartClassifierInput(event) {
   if (event.target?.id === 'smart-title-input') {
     state.smartSuggestedTitle = event.target.value
     state.smartSaved = false
   }
 }
-
 function handleContentClick(event) {
   const folderToggle = event.target.closest('[data-toggle-folder]')
   if (folderToggle) {
@@ -3567,7 +2881,6 @@ function handleContentClick(event) {
     toggleFolder(folderId)
     return
   }
-
   const menuToggle = event.target.closest('[data-open-menu]')
   if (menuToggle) {
     const bookmarkId = menuToggle.getAttribute('data-open-menu')
@@ -3578,61 +2891,49 @@ function handleContentClick(event) {
     openActionMenuFromToggle(bookmarkId)
     return
   }
-
   const actionButton = event.target.closest('[data-menu-action]')
   if (actionButton) {
     const bookmarkId = actionButton.getAttribute('data-bookmark-id')
     const action = actionButton.getAttribute('data-menu-action')
-
     if (action === 'edit') {
       openEditDialog(bookmarkId)
       return
     }
-
     if (action === 'move') {
       openMoveDialog(bookmarkId)
       return
     }
-
     if (action === 'copy-url') {
       void copyBookmarkUrl(bookmarkId)
       return
     }
-
     if (action === 'open-current-tab') {
       void openBookmarkInCurrentTab(bookmarkId)
       return
     }
-
     if (action === 'delete') {
       openDeleteDialog(bookmarkId)
     }
-
     return
   }
-
   const bookmarkButton = event.target.closest('[data-open-bookmark]')
   if (bookmarkButton) {
     const bookmarkId = bookmarkButton.getAttribute('data-open-bookmark')
     void openBookmark(bookmarkId)
     return
   }
-
   const emptyAction = event.target.closest('[data-empty-action]')
   if (emptyAction) {
     handleEmptySearchAction(emptyAction.getAttribute('data-empty-action'))
   }
 }
-
 function handlePopupBreadcrumbClick(event) {
   const breadcrumbButton = event.target.closest('[data-folder-breadcrumb-id]')
   if (!breadcrumbButton) {
     return
   }
-
   applyFolderFilter(breadcrumbButton.getAttribute('data-folder-breadcrumb-id'))
 }
-
 function handleEmptySearchAction(action) {
   if (action === 'clear-query') {
     setSearchQuery('', { immediate: true })
@@ -3640,12 +2941,10 @@ function handleEmptySearchAction(action) {
     dom.searchInput.focus()
     return
   }
-
   if (action === 'clear-filter') {
     clearFolderFilter()
     return
   }
-
   if (action === 'show-all') {
     state.selectedFolderFilterId = null
     setSearchQuery('', { immediate: true })
@@ -3653,18 +2952,15 @@ function handleEmptySearchAction(action) {
     dom.searchInput.focus()
     return
   }
-
   if (action === 'toggle-natural') {
     void toggleNaturalLanguageSearch()
     return
   }
-
   if (action === 'open-ai-settings') {
     closeDialogs({ force: true })
     void openSettingsPage('ai-provider')
     return
   }
-
   if (action === 'dismiss-natural-setup') {
     state.naturalSearchSetupRequired = false
     state.naturalSearchEnabled = false
@@ -3672,52 +2968,43 @@ function handleEmptySearchAction(action) {
     dom.searchInput.focus()
   }
 }
-
 function handleContentPointerOver(event) {
   const resultCard = event.target.closest('[data-result-index]')
   if (!resultCard || !state.debouncedQuery) {
     return
   }
-
   const nextIndex = Number(resultCard.getAttribute('data-result-index'))
   if (!Number.isNaN(nextIndex)) {
     setActiveResultIndex(nextIndex)
   }
 }
-
 function handleFilterListClick(event) {
   const clearButton = event.target.closest('[data-filter-folder-action="clear-search"]')
   if (clearButton) {
     state.filterSearchQuery = ''
     dom.filterSearchInput.value = ''
-    dom.filterFolderList.innerHTML = renderFilterFolderList()
+    renderPopupFolderPickerIsland(dom.filterFolderList, getFilterFolderPickerState())
     dom.filterSearchInput.focus()
     return
   }
-
   const filterButton = event.target.closest('[data-select-filter-folder]')
   if (!filterButton) {
     return
   }
-
   const folderId = filterButton.getAttribute('data-select-filter-folder')
   state.filterFolderActiveId = String(folderId || '')
   applyFolderFilter(folderId === 'all' ? null : folderId)
 }
-
 function handleFilterSearchKeydown(event) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
     return
   }
-
   if (!getFilterFolderOptionButtons().length) {
     return
   }
-
   event.preventDefault()
   focusFilterFolderOption(event.key === 'ArrowDown' ? 'first' : 'last')
 }
-
 function handleFilterListKeydown(event) {
   if (
     event.key !== 'ArrowDown' &&
@@ -3728,13 +3015,11 @@ function handleFilterListKeydown(event) {
   ) {
     return
   }
-
   event.preventDefault()
   if (event.key === 'Escape') {
     dom.filterSearchInput.focus()
     return
   }
-
   if (event.key === 'Home') {
     focusFilterFolderOption('first')
   } else if (event.key === 'End') {
@@ -3743,27 +3028,22 @@ function handleFilterListKeydown(event) {
     focusFilterFolderOption(event.key === 'ArrowDown' ? 1 : -1)
   }
 }
-
 function handleFilterListFocus(event) {
   const target = event.target
   if (!(target instanceof HTMLElement) || !target.dataset.selectFilterFolder) {
     return
   }
-
   state.filterFolderActiveId = target.dataset.selectFilterFolder
   syncFilterFolderTabStops(state.filterFolderActiveId)
 }
-
 function getFilterFolderOptionButtons() {
   return [...dom.filterFolderList.querySelectorAll<HTMLButtonElement>('[data-select-filter-folder]')]
 }
-
 function resolveFilterFolderActiveId(folders) {
   if (!folders.length) {
     state.filterFolderActiveId = ''
     return ''
   }
-
   const selectedId = state.selectedFolderFilterId || ''
   const activeId = folders.some((folder) => folder.id === state.filterFolderActiveId)
     ? state.filterFolderActiveId
@@ -3773,13 +3053,11 @@ function resolveFilterFolderActiveId(folders) {
   state.filterFolderActiveId = activeId
   return activeId
 }
-
 function syncFilterFolderTabStops(activeId) {
   for (const button of getFilterFolderOptionButtons()) {
     button.tabIndex = button.dataset.selectFilterFolder === activeId ? 0 : -1
   }
 }
-
 function focusFilterFolderOptionById(folderId) {
   let targetButton = null
   for (const button of getFilterFolderOptionButtons()) {
@@ -3789,27 +3067,22 @@ function focusFilterFolderOptionById(folderId) {
       targetButton = button
     }
   }
-
   if (!targetButton) {
     return false
   }
-
   state.filterFolderActiveId = folderId
   targetButton.focus()
   return true
 }
-
 function focusFilterFolderOption(direction) {
   const buttons = getFilterFolderOptionButtons()
   if (!buttons.length) {
     return
   }
-
   const currentIndex = buttons.findIndex((button) => button === document.activeElement)
   let nextIndex = state.filterFolderActiveId
     ? buttons.findIndex((button) => button.dataset.selectFilterFolder === state.filterFolderActiveId)
     : -1
-
   if (direction === 'first') {
     nextIndex = 0
   } else if (direction === 'last') {
@@ -3819,14 +3092,12 @@ function focusFilterFolderOption(direction) {
   } else if (nextIndex < 0) {
     nextIndex = direction > 0 ? 0 : buttons.length - 1
   }
-
   const button = buttons[Math.max(0, nextIndex)]
   const folderId = String(button?.dataset.selectFilterFolder || '')
   if (folderId) {
     focusFilterFolderOptionById(folderId)
   }
 }
-
 function handleMoveListClick(event) {
   const toggle = event.target.closest('[data-toggle-move-folder]')
   if (toggle && !state.moveSearchQuery.trim()) {
@@ -3836,20 +3107,17 @@ function handleMoveListClick(event) {
     }
     return
   }
-
   const folderButton = event.target.closest('[data-select-folder]')
   if (folderButton) {
     const folderId = folderButton.getAttribute('data-select-folder')
     void moveBookmarkToFolder(folderId)
   }
 }
-
 function handleEditFolderListClick(event) {
   const target = event.target
   if (!(target instanceof Element)) {
     return
   }
-
   const toggle = target.closest('[data-toggle-edit-folder]')
   if (toggle && !state.editFolderSearchQuery.trim()) {
     const folderId = toggle.getAttribute('data-toggle-edit-folder')
@@ -3859,14 +3127,12 @@ function handleEditFolderListClick(event) {
     }
     return
   }
-
   const folderButton = target.closest('[data-select-edit-folder]')
   if (folderButton) {
     const folderId = String(folderButton.getAttribute('data-select-edit-folder') || '').trim()
     selectEditDraftFolder(folderId)
   }
 }
-
 function handleSmartFolderListClick(event) {
   const toggle = event.target.closest('[data-toggle-smart-folder]')
   if (toggle && !state.smartFolderSearchQuery.trim()) {
@@ -3877,32 +3143,27 @@ function handleSmartFolderListClick(event) {
     }
     return
   }
-
   const folderButton = event.target.closest('[data-smart-select-folder]')
   if (folderButton) {
     const folderId = folderButton.getAttribute('data-smart-select-folder')
     void saveCurrentPageToFolder(folderId)
   }
 }
-
 function toggleEditFolderPicker() {
   if (!state.editTargetBookmarkId || state.editSaving || hasBlockingPopupActionPending()) {
     return
   }
-
   state.editFolderPickerOpen = !state.editFolderPickerOpen
   if (!state.editFolderPickerOpen) {
     state.editFolderSearchQuery = ''
   }
   renderEditModal()
-
   if (state.editFolderPickerOpen) {
     window.requestAnimationFrame(() => {
       dom.editFolderSearchInput.focus()
     })
   }
 }
-
 function selectEditDraftFolder(folderId) {
   const bookmark = state.editTargetBookmarkId
     ? state.bookmarkMap.get(state.editTargetBookmarkId)
@@ -3910,7 +3171,6 @@ function selectEditDraftFolder(folderId) {
   if (!bookmark || state.editSaving || !folderId || !state.folderMap.has(folderId)) {
     return
   }
-
   state.editDraftBookmarkId = String(bookmark.id)
   state.editDraftParentId = folderId
   state.editFolderPickerOpen = false
@@ -3919,19 +3179,16 @@ function selectEditDraftFolder(folderId) {
   clearEditDiscardGuard()
   renderEditModal()
 }
-
 function openActionMenuFromToggle(bookmarkId, { focusLast = false } = {}) {
   if (!bookmarkId) {
     return
   }
-
   state.activeMenuBookmarkId = bookmarkId
   renderMainContent()
   window.requestAnimationFrame(() => {
     focusActionMenuItem(focusLast ? getActionMenuItems().length - 1 : 0)
   })
 }
-
 function closeActionMenu({ restoreFocus = false, focusBookmarkId = state.activeMenuBookmarkId } = {}) {
   const menu = document.querySelector('.action-menu')
   const hadMenu = Boolean(state.activeMenuBookmarkId)
@@ -3942,7 +3199,6 @@ function closeActionMenu({ restoreFocus = false, focusBookmarkId = state.activeM
       getMenuToggleForBookmark(returnBookmarkId)?.focus()
     }
   }
-
   if (menu instanceof HTMLElement && !menu.classList.contains('is-closing')) {
     void closeWithExitMotion(menu, 'is-closing', () => {
       renderMainContent()
@@ -3950,72 +3206,56 @@ function closeActionMenu({ restoreFocus = false, focusBookmarkId = state.activeM
     }, 180)
     return
   }
-
   if (hadMenu) {
     renderMainContent()
     focusMenuToggle()
   }
 }
-
 function handleDocumentPointerDown(event) {
   const target = event.target
-  if (target instanceof Element && !target.closest('#search-help-toggle, #search-help-popover')) {
-    setSearchHelpPopoverOpen(false)
-  }
 
   if (state.activeMenuBookmarkId && !target.closest('.menu-anchor')) {
     closeActionMenu()
   }
 }
-
 function handleDocumentKeydown(event) {
   if (event.isComposing) {
     return
   }
-
   if (event.key === 'Tab' && handleModalFocusTrap(event)) {
     return
   }
-
   if (event.key === 'Escape') {
     if (handleEscapeAction()) {
       event.preventDefault()
     }
     return
   }
-
   if (hasOpenModal()) {
     return
   }
-
   if (handleSearchFocusShortcut(event)) {
     return
   }
-
   if (handleActionMenuToggleKeydown(event)) {
     return
   }
-
   if (handleActionMenuKeydown(event)) {
     return
   }
-
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
   }
-
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     setActiveResultIndex(state.activeResultIndex + 1)
     return
   }
-
   if (event.key === 'ArrowUp') {
     event.preventDefault()
     setActiveResultIndex(state.activeResultIndex - 1)
     return
   }
-
   if (event.key === 'Enter') {
     const activeResult = state.searchResults[state.activeResultIndex]
     if (activeResult) {
@@ -4024,51 +3264,36 @@ function handleDocumentKeydown(event) {
     }
   }
 }
-
 function handleEscapeAction() {
-  if (!dom.searchHelpPopover.classList.contains('hidden')) {
-    setSearchHelpPopoverOpen(false)
-    dom.searchHelpToggle.focus()
-    return true
-  }
-
   if (hasOpenModal()) {
     closeDialogs()
     return true
   }
-
   if (state.activeMenuBookmarkId) {
     closeActionMenu({ restoreFocus: true })
     return true
   }
-
   if (['loading', 'results', 'error'].includes(state.smartStatus)) {
     resetSmartClassification()
     return true
   }
-
   if (state.searchQuery) {
     setSearchQuery('', { immediate: true })
     showViewNotice('已清空搜索')
     return true
   }
-
   return false
 }
-
 function handleSearchFocusShortcut(event) {
   const key = String(event.key || '')
   const isCommandSearch = (event.ctrlKey || event.metaKey) && key.toLowerCase() === 'k'
   const isSlashSearch = key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey
-
   if ((!isCommandSearch && !isSlashSearch) || isEditableTarget(event.target)) {
     return false
   }
-
   if (document.body.classList.contains('smart-active')) {
     return false
   }
-
   event.preventDefault()
   state.activeMenuBookmarkId = null
   renderMainContent()
@@ -4077,121 +3302,98 @@ function handleSearchFocusShortcut(event) {
   showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
   return true
 }
-
 function isEditableTarget(target) {
   if (!(target instanceof HTMLElement)) {
     return false
   }
-
   return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
 }
-
 function handleActionMenuKeydown(event) {
   if (!state.activeMenuBookmarkId) {
     return false
   }
-
   const items = getActionMenuItems()
   if (!items.length) {
     return false
   }
-
   const currentIndex = items.findIndex((item) => item === document.activeElement)
   if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
     event.preventDefault()
     focusActionMenuItem(currentIndex + 1)
     return true
   }
-
   if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
     event.preventDefault()
     focusActionMenuItem(currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
     return true
   }
-
   if (event.key === 'Home') {
     event.preventDefault()
     focusActionMenuItem(0)
     return true
   }
-
   if (event.key === 'End') {
     event.preventDefault()
     focusActionMenuItem(items.length - 1)
     return true
   }
-
   return false
 }
-
 function handleActionMenuToggleKeydown(event) {
   if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
     return false
   }
-
   const toggle = event.target instanceof Element
     ? event.target.closest('[data-open-menu]')
     : null
   if (!toggle) {
     return false
   }
-
   const bookmarkId = toggle.getAttribute('data-open-menu')
   if (!bookmarkId) {
     return false
   }
-
   event.preventDefault()
   openActionMenuFromToggle(bookmarkId, { focusLast: event.key === 'ArrowUp' })
   return true
 }
-
 function focusActionMenuItem(index) {
   const items = getActionMenuItems()
   if (!items.length) {
     return
   }
-
   const nextIndex = ((index % items.length) + items.length) % items.length
   items[nextIndex].focus()
 }
-
 function getActionMenuItems() {
   return [...document.querySelectorAll<HTMLButtonElement>('.action-menu [data-menu-action]')]
 }
-
 function handleModalFocusTrap(event) {
   const modal = getOpenModalElement()
   if (!modal) {
     return false
   }
-
   const focusableElements = getFocusableElements(modal)
   const firstElement = focusableElements[0] || modal
   const lastElement = focusableElements[focusableElements.length - 1] || modal
   const activeElement = document.activeElement
-
   if (!modal.contains(activeElement)) {
     event.preventDefault()
     ;(event.shiftKey ? lastElement : firstElement).focus()
     return true
   }
-
   if (event.shiftKey && activeElement === firstElement) {
     event.preventDefault()
     lastElement.focus()
     return true
   }
-
   if (!event.shiftKey && activeElement === lastElement) {
     event.preventDefault()
     firstElement.focus()
     return true
   }
-
   return false
 }
-
 function getOpenModalElement() {
   const modal = [
     dom.filterModal,
@@ -4201,91 +3403,73 @@ function getOpenModalElement() {
     dom.editModal,
     dom.deleteModal
   ].find((element) => element instanceof HTMLElement && !element.classList.contains('hidden'))
-
   return modal instanceof HTMLElement ? modal : null
 }
-
 function getFocusableElements(container) {
   return [...container.querySelectorAll(FOCUSABLE_SELECTOR)].filter((element) => {
     if (!(element instanceof HTMLElement)) {
       return false
     }
-
     return !element.hasAttribute('disabled') &&
       !element.getAttribute('aria-hidden') &&
       element.getClientRects().length > 0
   })
 }
-
 function handleEditInputKeydown(event) {
   if (event.key === 'Enter') {
     event.preventDefault()
     void saveEditedBookmark()
   }
 }
-
 function handleToastClick(event) {
   const dismissButton = event.target.closest('[data-dismiss-toast]')
   if (dismissButton) {
     dismissToast(dismissButton.getAttribute('data-dismiss-toast'))
     return
   }
-
   const actionButton = event.target.closest('[data-toast-action]')
   if (!actionButton) {
     return
   }
-
   const toastId = actionButton.getAttribute('data-toast-id')
   const action = actionButton.getAttribute('data-toast-action')
-
   dismissToast(toastId)
-
   if (action === 'undo-delete') {
     undoDelete()
     return
   }
-
   if (action === 'open-bookmark-history') {
     void openBookmarkHistoryPage()
   }
 }
-
 function toggleFolder(folderId) {
   if (!folderId) {
     return
   }
-
   const wasExpanded = state.expandedFolders.has(folderId)
   if (wasExpanded) {
     state.expandedFolders.delete(folderId)
   } else {
     state.expandedFolders.add(folderId)
   }
-
   renderMainContent()
   showViewNotice(`${wasExpanded ? '已折叠' : '已展开'}：${getFolderNoticeLabel(folderId)}`)
 }
-
 function getFolderNoticeLabel(folderId) {
   const folder = state.folderMap.get(folderId)
   return folder?.path || folder?.title || '文件夹'
 }
-
 function toggleMoveFolder(folderId) {
   if (!folderId) {
     return
   }
-
   if (state.moveExpandedFolders.has(folderId)) {
     state.moveExpandedFolders.delete(folderId)
   } else {
     state.moveExpandedFolders.add(folderId)
   }
-
   renderMoveModal()
 }
-
 function openFilterDialog() {
   if (hasBlockingPopupActionPending()) {
     return
@@ -4293,7 +3477,6 @@ function openFilterDialog() {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-
   rememberDialogReturnFocus()
   state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
@@ -4302,12 +3485,10 @@ function openFilterDialog() {
   state.isFilterPickerOpen = true
   state.filterSearchQuery = ''
   render()
-
   window.requestAnimationFrame(() => {
     dom.filterSearchInput.focus()
   })
 }
-
 function openMoveDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
     return
@@ -4315,7 +3496,6 @@ function openMoveDialog(bookmarkId) {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
@@ -4324,12 +3504,10 @@ function openMoveDialog(bookmarkId) {
   state.moveTargetBookmarkId = bookmarkId
   state.moveSearchQuery = ''
   render()
-
   window.requestAnimationFrame(() => {
     dom.moveSearchInput.focus()
   })
 }
-
 function openEditDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
     return
@@ -4337,12 +3515,10 @@ function openEditDialog(bookmarkId) {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-
   const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
   if (!bookmark) {
     return
   }
-
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
@@ -4351,13 +3527,11 @@ function openEditDialog(bookmarkId) {
   state.editTargetBookmarkId = bookmarkId
   resetEditDraft(bookmark)
   render()
-
   window.requestAnimationFrame(() => {
     dom.editTitleInput.focus()
     dom.editTitleInput.select()
   })
 }
-
 function openDeleteDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
     return
@@ -4365,7 +3539,6 @@ function openDeleteDialog(bookmarkId) {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
@@ -4373,22 +3546,18 @@ function openDeleteDialog(bookmarkId) {
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = bookmarkId
   render()
-
   window.requestAnimationFrame(() => {
     dom.cancelDelete.focus()
   })
 }
-
 function closeDialogs(options: { force?: boolean } | Event = {}) {
   const force = (options as { force?: boolean })?.force === true
   if (!force && (state.editSaving || hasBlockingPopupActionPending())) {
     return
   }
-
   if (!force && shouldBlockDirtyEditClose()) {
     return
   }
-
   state.isFilterPickerOpen = false
   state.filterSearchQuery = ''
   state.moveTargetBookmarkId = null
@@ -4405,7 +3574,6 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   }
   restoreDialogReturnFocus()
 }
-
 function applyFolderFilter(folderId) {
   const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
@@ -4417,15 +3585,12 @@ function applyFolderFilter(folderId) {
   showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
   dom.searchInput.focus()
 }
-
 function clearFolderFilter() {
   if (!state.selectedFolderFilterId) {
     return
   }
-
   applyFolderFilter(null)
 }
-
 function openSmartFolderDialog() {
   if (hasBlockingPopupActionPending()) {
     return
@@ -4433,12 +3598,10 @@ function openSmartFolderDialog() {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-
   if (!isSmartClassifiableUrl(state.currentTab?.url)) {
     showToast({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
     return
   }
-
   rememberDialogReturnFocus()
   state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
@@ -4447,12 +3610,10 @@ function openSmartFolderDialog() {
   state.smartFolderPickerOpen = true
   state.smartFolderSearchQuery = ''
   render()
-
   window.requestAnimationFrame(() => {
     dom.smartFolderSearchInput.focus()
   })
 }
-
 function openAiProviderPromptDialog() {
   if (hasBlockingPopupActionPending()) {
     return
@@ -4460,7 +3621,6 @@ function openAiProviderPromptDialog() {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-
   rememberDialogReturnFocus(dom.naturalSearchToggle)
   state.activeMenuBookmarkId = null
   state.isFilterPickerOpen = false
@@ -4470,12 +3630,10 @@ function openAiProviderPromptDialog() {
   state.confirmDeleteBookmarkId = null
   state.aiProviderPromptOpen = true
   render()
-
   window.requestAnimationFrame(() => {
     dom.openAiProviderSettings.focus()
   })
 }
-
 function rememberDialogReturnFocus(preferredElement = null) {
   const activeElement = document.activeElement
   popupDialogReturnFocusElement = preferredElement instanceof HTMLElement
@@ -4484,27 +3642,21 @@ function rememberDialogReturnFocus(preferredElement = null) {
       ? activeElement
       : null
 }
-
 function restoreDialogReturnFocus() {
   const returnElement = popupDialogReturnFocusElement
   popupDialogReturnFocusElement = null
-
   if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
     returnElement.focus()
     return
   }
-
   dom.searchInput.focus()
 }
-
 function getMenuToggleForBookmark(bookmarkId) {
   if (!bookmarkId) {
     return null
   }
-
   return document.querySelector<HTMLElement>(`[data-open-menu="${CSS.escape(String(bookmarkId))}"]`)
 }
-
 function resetSmartClassification() {
   state.smartRunId += 1
   state.smartStatus = 'idle'
@@ -4527,18 +3679,15 @@ function resetSmartClassification() {
   state.smartPermissionRequest = null
   renderSmartClassifier()
 }
-
 async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
   if (state.smartStatus === 'loading' || state.smartSaving) {
     return
   }
-
   const currentUrl = String(state.currentTab?.url || '').trim()
   if (!isSmartClassifiableUrl(currentUrl)) {
     showToast({ type: 'error', message: '当前页面无法进行智能分类。' })
     return
   }
-
   const runId = state.smartRunId + 1
   state.smartRunId = runId
   state.smartStatus = 'loading'
@@ -4558,7 +3707,6 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
   state.smartExtraction = { status: '', source: '', warnings: [] }
   state.smartPermissionRequest = null
   renderSmartClassifier()
-
   try {
     const smartClassifier = await loadSmartClassifierModule()
     const settings = await loadAiProviderSettings()
@@ -4568,14 +3716,12 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
       interactive: requestMissingPermissions
     })
     if (state.smartRunId !== runId) return
-
     const pageContext = await smartClassifier.buildCurrentPageContext({
       currentUrl,
       currentTitle: getCurrentPageTitle(),
       settings
     })
     if (state.smartRunId !== runId) return
-
     state.smartStep = 2
     renderSmartClassifier()
     const aiResult = await smartClassifier.requestSmartClassification({
@@ -4586,12 +3732,10 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
       allFolders: state.allFolders
     })
     if (state.smartRunId !== runId) return
-
     state.smartStep = 3
     renderSmartClassifier()
     await waitForSmartLoadingPaint()
     if (state.smartRunId !== runId) return
-
     const recommendations = buildSmartRecommendations(aiResult)
     state.smartSuggestedTitle = cleanSmartTitle(aiResult.title || getCurrentPageTitle())
     state.smartSummary = cleanSmartText(aiResult.summary, 360)
@@ -4620,21 +3764,17 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     renderSmartClassifier()
   }
 }
-
 async function grantSmartPermissionAndClassify() {
   if (state.smartStatus === 'loading' || state.smartSaving) {
     return
   }
-
   const origins = Array.isArray(state.smartPermissionRequest?.origins)
     ? [...new Set(state.smartPermissionRequest.origins)].filter(Boolean)
     : []
-
   if (!origins.length) {
     await classifyCurrentPage({ requestMissingPermissions: true })
     return
   }
-
   try {
     const smartClassifier = await loadSmartClassifierModule()
     const granted = await smartClassifier.requestPermissions({ origins })
@@ -4655,16 +3795,13 @@ async function grantSmartPermissionAndClassify() {
     renderSmartClassifier()
   }
 }
-
 async function saveSmartRecommendation() {
   const recommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
   if (!recommendation || state.smartSaving || state.smartSaved) {
     return
   }
-
   await saveCurrentPageToSmartRecommendation(recommendation)
 }
-
 async function saveCurrentPageToSmartRecommendation(recommendation) {
   if (recommendation.kind === 'new') {
     await saveCurrentPageViaWorker({
@@ -4672,41 +3809,33 @@ async function saveCurrentPageToSmartRecommendation(recommendation) {
     }, { closeModal: false })
     return
   }
-
   await saveCurrentPageToFolder(recommendation.folderId, { closeModal: false })
 }
-
 async function saveCurrentPageToFolder(folderId, { closeModal = true } = {}) {
   await saveCurrentPageViaWorker({ parentId: folderId }, { closeModal })
 }
-
 async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {}, { closeModal = true } = {}) {
   const actionTargetId = parentId || folderPath || 'current-page'
   if (state.smartSaving || isPopupActionPending('save-current-page', actionTargetId)) {
     return
   }
-
   let savedWithoutRefresh = false
   try {
     setPopupActionPending('save-current-page', actionTargetId, true)
     state.smartSaving = true
     state.smartSaved = false
     renderSmartSaveSurfaces()
-
     const currentUrl = String(state.currentTab?.url || '').trim()
     if (!isSmartClassifiableUrl(currentUrl)) {
       throw new Error('当前页面不是可保存的普通网页。')
     }
-
     if (!parentId && !folderPath) {
       throw new Error('未找到可保存的目标文件夹。')
     }
-
     const nextTitle = cleanSmartTitle(state.smartSuggestedTitle || getCurrentPageTitle())
     const existingBookmark = state.currentPageBookmarkId
       ? state.bookmarkMap.get(state.currentPageBookmarkId)
       : null
-
     const savedBookmark = await requestBookmarkSave({
       parentId,
       folderPath,
@@ -4724,7 +3853,6 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
         extraction: state.smartExtraction
       }
     })
-
     state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
     await finishSmartSave({
       message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
@@ -4746,22 +3874,18 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
     }
   }
 }
-
 function renderSmartSaveSurfaces() {
   renderSmartClassifier()
   renderSmartFolderModal()
 }
-
 async function pinCurrentPageToNewTab(bookmarkId) {
   const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
   if (!bookmark?.url || isPopupActionPending('pin-newtab', bookmark.id)) {
     return
   }
-
   try {
     setPopupActionPending('pin-newtab', bookmark.id, true)
     renderSmartClassifier()
-
     const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
     const currentSettings = normalizeNewTabWorkspaceSettings(
       stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
@@ -4774,7 +3898,6 @@ async function pinCurrentPageToNewTab(bookmarkId) {
       bookmark.id,
       { validBookmarkIds: state.bookmarkMap.keys() }
     )
-
     await setLocalStorage({ [STORAGE_KEYS.newTabWorkspaceSettings]: nextSettings })
     const pinned = nextSettings.workspaces
       .find((item) => item.id === workspace.id)
@@ -4795,7 +3918,6 @@ async function pinCurrentPageToNewTab(bookmarkId) {
     renderSmartClassifier()
   }
 }
-
 async function finishSmartSave({ message, closeModal = true }) {
   state.smartRunId += 1
   state.smartSaving = false
@@ -4817,12 +3939,10 @@ async function finishSmartSave({ message, closeModal = true }) {
   state.smartSelectedRecommendationId = ''
   state.smartPermissionRequest = null
   state.activeMenuBookmarkId = null
-
   if (closeModal || state.smartFolderPickerOpen) {
     state.smartFolderPickerOpen = false
     state.smartFolderSearchQuery = ''
   }
-
   renderSmartSaveSurfaces()
   showToast({ type: 'success', message })
   showViewNotice('已保存，正在刷新书签列表')
@@ -4834,7 +3954,6 @@ async function finishSmartSave({ message, closeModal = true }) {
     }
   })
 }
-
 function getSmartSaveSuccessMessage(savedBookmark, { parentId = '', folderPath = '' } = {}) {
   const folderLabel = cleanSmartText(
     folderPath ||
@@ -4845,16 +3964,13 @@ function getSmartSaveSuccessMessage(savedBookmark, { parentId = '', folderPath =
   )
   return folderLabel ? `已保存到 ${folderLabel}` : '保存成功'
 }
-
 async function moveBookmarkToFolder(folderId) {
   const bookmark = state.moveTargetBookmarkId
     ? state.bookmarkMap.get(state.moveTargetBookmarkId)
     : null
-
   if (!bookmark || !folderId || isPopupActionPending('move', bookmark?.id || '')) {
     return
   }
-
   if (bookmark.parentId === folderId) {
     showToast({
       type: 'success',
@@ -4863,7 +3979,6 @@ async function moveBookmarkToFolder(folderId) {
     showViewNotice('书签已在当前文件夹中')
     return
   }
-
   const movedTitle = bookmark.title
   setPopupActionPending('move', bookmark.id, true)
   renderMoveModal()
@@ -4886,16 +4001,13 @@ async function moveBookmarkToFolder(folderId) {
     renderMoveModal()
   }
 }
-
 async function saveEditedBookmark() {
   const bookmark = state.editTargetBookmarkId
     ? state.bookmarkMap.get(state.editTargetBookmarkId)
     : null
-
   if (!bookmark || state.editSaving || isPopupActionPending('edit', bookmark?.id || '')) {
     return
   }
-
   const nextTitle = String(state.editDraftTitle || dom.editTitleInput.value).trim() || '未命名书签'
   const nextUrl = String(state.editDraftUrl || dom.editUrlInput.value).trim()
   const savePlan = getPopupEditBookmarkSavePlan({
@@ -4904,13 +4016,11 @@ async function saveEditedBookmark() {
     draftUrl: nextUrl,
     draftParentId: state.editDraftParentId
   })
-
   state.editDraftDirty = savePlan.dirty
   if (!state.editDraftDirty) {
     renderEditDraftControls()
     return
   }
-
   if (!nextUrl) {
     showToast({
       type: 'error',
@@ -4919,7 +4029,6 @@ async function saveEditedBookmark() {
     dom.editUrlInput.focus()
     return
   }
-
   try {
     new URL(nextUrl)
   } catch (error) {
@@ -4930,11 +4039,9 @@ async function saveEditedBookmark() {
     dom.editUrlInput.focus()
     return
   }
-
   state.editSaving = true
   setPopupActionPending('edit', bookmark.id, true)
   renderEditDraftControls()
-
   try {
     if (savePlan.updateChanges) {
       await updateBookmark(bookmark.id, savePlan.updateChanges)
@@ -4962,19 +4069,15 @@ async function saveEditedBookmark() {
     renderEditDraftControls()
   }
 }
-
 async function confirmDeleteBookmark() {
   const bookmark = state.confirmDeleteBookmarkId
     ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
     : null
-
   if (!bookmark || isPopupActionPending('delete', bookmark?.id || '')) {
     return
   }
-
   setPopupActionPending('delete', bookmark.id, true)
   renderDeleteModal()
-
   try {
     const recycleBin = await loadRecycleBinModule()
     state.lastDeletedBookmark = {
@@ -4984,7 +4087,6 @@ async function confirmDeleteBookmark() {
       index: bookmark.index,
       recycleId: `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
     }
-
     await recycleBin.deleteBookmarkToRecycle(bookmark.id, {
       recycleId: state.lastDeletedBookmark.recycleId,
       bookmarkId: String(bookmark.id),
@@ -4996,14 +4098,12 @@ async function confirmDeleteBookmark() {
       source: '弹窗删除',
       deletedAt: Date.now()
     })
-
     showToast({
       type: 'success',
       message: '删除成功',
       action: 'undo-delete',
       actionLabel: '撤销'
     })
-
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
     showViewNotice(`已删除：${bookmark.title}`)
@@ -5017,21 +4117,17 @@ async function confirmDeleteBookmark() {
     renderDeleteModal()
   }
 }
-
 async function undoDelete() {
   if (!state.lastDeletedBookmark) {
     return
   }
-
   const payload = state.lastDeletedBookmark
   const actionTargetId = payload.recycleId || payload.url || payload.title
   if (isPopupActionPending('undo-delete', actionTargetId)) {
     return
   }
-
   setPopupActionPending('undo-delete', actionTargetId, true)
   state.lastDeletedBookmark = null
-
   try {
     const parentId = await getRestorableParentId(payload.parentId)
     await createBookmark({
@@ -5058,13 +4154,11 @@ async function undoDelete() {
     setPopupActionPending('undo-delete', actionTargetId, false)
   }
 }
-
 async function getRestorableParentId(parentId) {
   const requestedParentId = String(parentId || '').trim()
   if (!requestedParentId) {
     return BOOKMARKS_BAR_ID
   }
-
   try {
     const tree = await getBookmarkTree()
     const rootNode = Array.isArray(tree) ? tree[0] : tree
@@ -5074,14 +4168,11 @@ async function getRestorableParentId(parentId) {
     return BOOKMARKS_BAR_ID
   }
 }
-
 async function openBookmark(bookmarkId) {
   const bookmark = state.bookmarkMap.get(bookmarkId)
-
   if (!bookmark?.url || hasBlockingPopupActionPending()) {
     return
   }
-
   try {
     await createTab({ url: bookmark.url })
     window.close()
@@ -5092,13 +4183,11 @@ async function openBookmark(bookmarkId) {
     })
   }
 }
-
 async function openBookmarkInCurrentTab(bookmarkId) {
   const bookmark = state.bookmarkMap.get(bookmarkId)
   if (!bookmark?.url || hasBlockingPopupActionPending() || isPopupActionPending('open-current-tab', bookmarkId)) {
     return
   }
-
   setPopupActionPending('open-current-tab', bookmarkId, true)
   try {
     await updateCurrentTabUrl(bookmark.url)
@@ -5112,7 +4201,6 @@ async function openBookmarkInCurrentTab(bookmarkId) {
     setPopupActionPending('open-current-tab', bookmarkId, false)
   }
 }
-
 function updateCurrentTabUrl(url) {
   return new Promise((resolve, reject) => {
     const tabId = Number(state.currentTab?.id)
@@ -5123,25 +4211,20 @@ function updateCurrentTabUrl(url) {
         reject(new Error(error.message))
         return
       }
-
       resolve(tab)
     }
-
     if (Number.isFinite(tabId)) {
       chrome.tabs.update(tabId, updateProperties, callback)
       return
     }
-
     chrome.tabs.update(updateProperties, callback)
   })
 }
-
 async function copyBookmarkUrl(bookmarkId) {
   const bookmark = state.bookmarkMap.get(bookmarkId)
   if (isPopupActionPending('copy-url', bookmarkId)) {
     return
   }
-
   if (!bookmark?.url) {
     showToast({
       type: 'error',
@@ -5149,7 +4232,6 @@ async function copyBookmarkUrl(bookmarkId) {
     })
     return
   }
-
   setPopupActionPending('copy-url', bookmarkId, true)
   try {
     await writeClipboardText(bookmark.url)
@@ -5169,12 +4251,10 @@ async function copyBookmarkUrl(bookmarkId) {
     setPopupActionPending('copy-url', bookmarkId, false)
   }
 }
-
 function writeClipboardText(text) {
   if (navigator.clipboard?.writeText) {
     return navigator.clipboard.writeText(text)
   }
-
   const textarea = document.createElement('textarea')
   textarea.value = String(text || '')
   textarea.setAttribute('readonly', '')
@@ -5184,7 +4264,6 @@ function writeClipboardText(text) {
   document.body.appendChild(textarea)
   textarea.focus()
   textarea.select()
-
   try {
     if (!document.execCommand('copy')) {
       throw new Error('浏览器拒绝写入剪贴板。')
@@ -5196,22 +4275,18 @@ function writeClipboardText(text) {
     textarea.remove()
   }
 }
-
 async function loadAiProviderSettings() {
   const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
   const { normalizeAiNamingSettings } = await loadAiSettingsModule()
   return normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
 }
-
 function buildSmartRecommendations(aiResult) {
   const byFolderId = new Map()
-
   for (const suggestion of aiResult.existingFolders) {
     const folder = findBestExistingFolder(suggestion.folderPath)
     if (!folder) {
       continue
     }
-
     const previous = byFolderId.get(folder.id)
     const confidence = normalizeSmartConfidence(suggestion.confidence)
     if (!previous || confidence > previous.confidence) {
@@ -5226,7 +4301,6 @@ function buildSmartRecommendations(aiResult) {
       })
     }
   }
-
   const existingRecommendations = [...byFolderId.values()]
     .sort((left, right) => {
       const leftFolder = state.folderMap.get(left.folderId)
@@ -5238,7 +4312,6 @@ function buildSmartRecommendations(aiResult) {
       )
     })
     .slice(0, SMART_RECOMMENDATION_LIMIT)
-
   if (existingRecommendations.length < SMART_RECOMMENDATION_LIMIT) {
     for (const fallback of buildLocalSmartFolderMatches()) {
       if (existingRecommendations.some((item) => item.folderId === fallback.folderId)) {
@@ -5250,7 +4323,6 @@ function buildSmartRecommendations(aiResult) {
       }
     }
   }
-
   const newFolderPath = normalizeSmartFolderPath(aiResult.newFolder?.folderPath)
   const newRecommendation = newFolderPath
     ? [{
@@ -5263,16 +4335,13 @@ function buildSmartRecommendations(aiResult) {
         reason: aiResult.newFolder?.reason || ''
       }]
     : []
-
   return [...existingRecommendations, ...newRecommendation]
 }
-
 function buildLocalSmartFolderMatches() {
   const titleText = normalizeText(getCurrentPageTitle())
   const urlText = normalizeText(state.currentTab?.url || '')
   const domainText = normalizeText(extractDomain(state.currentTab?.url || ''))
   const haystack = [titleText, urlText, domainText].filter(Boolean).join(' ')
-
   return state.allFolders
     .map((folder) => {
       const title = normalizeText(folder.title)
@@ -5288,7 +4357,6 @@ function buildLocalSmartFolderMatches() {
         score += 0.22
       }
       score += Math.min(Number(folder.depth || 0), 6) * 0.025
-
       return {
         id: `folder:${folder.id}`,
         kind: 'existing',
@@ -5310,7 +4378,6 @@ function buildLocalSmartFolderMatches() {
       )
     })
 }
-
 function normalizeSmartTextList(value, limit, itemLimit) {
   const values = Array.isArray(value)
     ? value
@@ -5319,7 +4386,6 @@ function normalizeSmartTextList(value, limit, itemLimit) {
       : []
   const seen = new Set()
   const output = []
-
   for (const item of values) {
     const text = cleanSmartText(item, itemLimit)
     const key = normalizeText(text)
@@ -5332,40 +4398,33 @@ function normalizeSmartTextList(value, limit, itemLimit) {
       break
     }
   }
-
   return output
 }
-
 function findBestExistingFolder(rawPath) {
   const normalizedPath = normalizeText(rawPath)
   if (!normalizedPath) {
     return null
   }
-
   const folders = state.allFolders.slice()
   const exactPathMatches = folders.filter((folder) => normalizeText(folder.path || folder.title) === normalizedPath)
   if (exactPathMatches.length) {
     return pickDeepestFolder(exactPathMatches)
   }
-
   const exactTitleMatches = folders.filter((folder) => normalizeText(folder.title) === normalizedPath)
   if (exactTitleMatches.length) {
     return pickDeepestFolder(exactTitleMatches)
   }
-
   const segment = normalizeText(getLastPathSegment(rawPath))
   const segmentMatches = folders.filter((folder) => normalizeText(folder.title) === segment)
   if (segmentMatches.length) {
     return pickDeepestFolder(segmentMatches)
   }
-
   const containsMatches = folders.filter((folder) => {
     const folderPath = normalizeText(folder.path || folder.title)
     return folderPath.includes(normalizedPath) || normalizedPath.includes(folderPath)
   })
   return containsMatches.length ? pickDeepestFolder(containsMatches) : null
 }
-
 function pickDeepestFolder(folders) {
   return folders
     .slice()
@@ -5373,166 +4432,132 @@ function pickDeepestFolder(folders) {
       return Number(right.depth || 0) - Number(left.depth || 0) || String(left.path).localeCompare(String(right.path), 'zh-Hans-CN')
     })[0] || null
 }
-
 function isSmartPermissionRequiredError(error) {
   return Boolean((error as { smartPermissionRequest?: { origins?: string[] } })?.smartPermissionRequest?.origins)
 }
-
 function formatPermissionOrigin(origin) {
   return String(origin || '').replace(/\/\*$/, '')
 }
-
 function isAbortError(error) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
-
 function updateActiveResultVisibility() {
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
   }
-
   const activeResult = dom.content.querySelector<HTMLElement>(
     `[data-result-index="${state.activeResultIndex}"]`
   )
   if (!activeResult) {
     return
   }
-
   const maxScrollTop = Math.max(0, dom.content.scrollHeight - dom.content.clientHeight)
-
   if (state.activeResultIndex === 0) {
     dom.content.scrollTop = 0
     return
   }
-
   if (state.activeResultIndex === state.searchResults.length - 1) {
     dom.content.scrollTop = maxScrollTop
     return
   }
-
   const resultTop = activeResult.offsetTop
   const resultBottom = resultTop + activeResult.offsetHeight
   const viewportTop = dom.content.scrollTop
   const viewportBottom = viewportTop + dom.content.clientHeight
-
   if (resultTop < viewportTop) {
     dom.content.scrollTop = Math.max(0, resultTop)
     return
   }
-
   if (resultBottom > viewportBottom) {
     dom.content.scrollTop = Math.min(maxScrollTop, resultBottom - dom.content.clientHeight)
   }
 }
-
 function setActiveResultIndex(nextIndex) {
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
   }
-
   const clampedIndex = Math.max(0, Math.min(nextIndex, state.searchResults.length - 1))
   if (clampedIndex === state.activeResultIndex) {
     return
   }
-
   const previousIndex = state.activeResultIndex
   state.activeResultIndex = clampedIndex
   updateActiveSearchResult(previousIndex, clampedIndex)
   updateActiveResultVisibility()
 }
-
 function updateActiveSearchResult(previousIndex, nextIndex) {
   const previousCard = dom.content.querySelector(`[data-result-index="${previousIndex}"]`)
   const nextCard = dom.content.querySelector(`[data-result-index="${nextIndex}"]`)
-
   if (!previousCard && !nextCard) {
     renderMainContent()
     return
   }
-
   previousCard?.classList.remove('active')
   nextCard?.classList.add('active')
 }
-
 function getCurrentTreeRoot() {
   if (state.selectedFolderFilterId) {
     return findNodeById(state.rawTreeRoot, state.selectedFolderFilterId) || state.bookmarksBarNode
   }
-
   return state.bookmarksBarNode
 }
-
 function getFilteredBookmarks() {
   const cacheKey = state.selectedFolderFilterId || 'all'
   if (state.filteredBookmarksCacheKey === cacheKey) {
     return state.filteredBookmarksCache
   }
-
   const bookmarks = state.selectedFolderFilterId
     ? state.allBookmarks.filter((bookmark) => {
         return bookmark.ancestorIds.includes(state.selectedFolderFilterId)
       })
     : state.allBookmarks
-
   state.filteredBookmarksCacheKey = cacheKey
   state.filteredBookmarksCache = bookmarks
   return bookmarks
 }
-
 function getSearchCacheKey(normalizedQuery) {
   return `${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
 }
-
 function getNaturalSearchDateBucket() {
   return formatLocalDate(Date.now())
 }
-
 function getNaturalSearchPlanCacheKey(normalizedQuery) {
   return `${getNaturalSearchDateBucket()}\u0000${normalizedQuery}`
 }
-
 function cacheSearchResults(cacheKey, results) {
   state.searchCache.set(cacheKey, results)
 }
-
 function clearSearchCaches() {
   state.searchCache.clear()
   state.naturalSearchPlanCache.clear()
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
 }
-
 function yieldWork() {
   return new Promise((resolve) => {
     window.requestAnimationFrame(resolve)
   })
 }
-
 function formatLocalDate(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) {
     return ''
   }
-
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
-
 function isSmartClassifiableUrl(url) {
   return isExternallyCheckableUrl(url)
 }
-
 function getCurrentPageTitle() {
   return String(state.currentTab?.title || '').trim() || '未命名网页'
 }
-
 function getSmartFallbackIconLabel(title) {
   const normalized = String(title || '').trim()
   return normalized ? normalized.slice(0, 1).toUpperCase() : 'C'
 }
-
 function getSmartLoadingLabel() {
   if (state.smartStep <= 1) {
     return '读取网页内容…'
@@ -5542,23 +4567,19 @@ function getSmartLoadingLabel() {
   }
   return '匹配已有文件夹…'
 }
-
 function getSmartProgressTarget() {
   const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
   return Math.max(10, Math.min((step / SMART_LOADING_STEP_COUNT) * 100, 100))
 }
-
 function waitForSmartLoadingPaint() {
   return new Promise((resolve) => {
     window.requestAnimationFrame(resolve)
   })
 }
-
 function cleanSmartTitle(value) {
   const title = cleanSmartText(value, 90)
   return title || getCurrentPageTitle()
 }
-
 function cleanSmartText(value, limit = 180) {
   const text = String(value || '')
     .replace(/\s+/g, ' ')
@@ -5568,7 +4589,6 @@ function cleanSmartText(value, limit = 180) {
   }
   return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
 }
-
 function normalizeSmartConfidence(value) {
   const numeric = Number(value)
   if (Number.isFinite(numeric)) {
@@ -5576,12 +4596,10 @@ function normalizeSmartConfidence(value) {
   }
   return 0
 }
-
 function normalizeSmartFolderPath(value) {
   const segments = splitSmartFolderPath(value)
   return segments.join(' / ')
 }
-
 function splitSmartFolderPath(value) {
   return String(value || '')
     .split(/\s*(?:\/|>|›|»|\\)\s*/g)
@@ -5589,28 +4607,23 @@ function splitSmartFolderPath(value) {
     .filter(Boolean)
     .slice(0, 5)
 }
-
 function getLastPathSegment(value) {
   const segments = splitSmartFolderPath(value)
   return segments.at(-1) || cleanSmartText(value, 60) || '推荐文件夹'
 }
-
 function getSmartFolderTargetPathLabel() {
   const selectedRecommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
   if (selectedRecommendation) {
     return `当前推荐：${formatBookmarkPath(selectedRecommendation.path) || selectedRecommendation.title || '未命名文件夹'}`
   }
-
   return `当前页面：${displayUrl(state.currentTab?.url || '')}`
 }
-
 function normalizeSmartError(error) {
   if (error?.name === 'AbortError') {
     return '请求超时，请稍后重试或调大通用设置中的请求超时。'
   }
   return error instanceof Error ? error.message : '智能分类失败，请稍后重试。'
 }
-
 function hasOpenModal() {
   return Boolean(
     state.isFilterPickerOpen ||
@@ -5620,20 +4633,16 @@ function hasOpenModal() {
       state.confirmDeleteBookmarkId
   )
 }
-
 function getDefaultExpandedFolders(node) {
   if (!node || node.url) {
     return new Set()
   }
-
   return new Set([node.id])
 }
-
 function describeFolder(folder) {
   if (!folder) {
     return '文件夹'
   }
-
   const parts = []
   if (folder.folderCount) {
     parts.push(`${folder.folderCount} 个文件夹`)
@@ -5641,76 +4650,8 @@ function describeFolder(folder) {
   if (folder.bookmarkCount) {
     parts.push(`${folder.bookmarkCount} 个书签`)
   }
-
   return parts.join(' · ') || '空文件夹'
 }
-
-function highlightText(text, query) {
-  const safeText = String(text || '')
-  const terms = getQueryTerms(normalizeQuery(query))
-
-  if (!terms.length || !safeText) {
-    return escapeHtml(safeText)
-  }
-
-  const lowerText = safeText.toLowerCase()
-  const ranges = []
-
-  for (const term of terms.sort((left, right) => right.length - left.length)) {
-    let fromIndex = 0
-    while (fromIndex < lowerText.length) {
-      const matchIndex = lowerText.indexOf(term, fromIndex)
-      if (matchIndex === -1) {
-        break
-      }
-      ranges.push([matchIndex, matchIndex + term.length])
-      fromIndex = matchIndex + term.length
-    }
-  }
-
-  if (!ranges.length) {
-    return escapeHtml(safeText)
-  }
-
-  ranges.sort((left, right) => left[0] - right[0])
-  const mergedRanges = []
-
-  for (const currentRange of ranges) {
-    const previousRange = mergedRanges.at(-1)
-    if (!previousRange || currentRange[0] > previousRange[1]) {
-      mergedRanges.push([...currentRange])
-      continue
-    }
-
-    previousRange[1] = Math.max(previousRange[1], currentRange[1])
-  }
-
-  let cursor = 0
-  let output = ''
-
-  for (const [start, end] of mergedRanges) {
-    output += escapeHtml(safeText.slice(cursor, start))
-    output += `<mark>${escapeHtml(safeText.slice(start, end))}</mark>`
-    cursor = end
-  }
-
-  output += escapeHtml(safeText.slice(cursor))
-  return output
-}
-
-function escapeHtml(value) {
-  return String(value || '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-function escapeAttr(value) {
-  return escapeHtml(value)
-}
-
 function showToast({ type = 'success', message, action = '', actionLabel = '' }) {
   const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`
   const toast = {
@@ -5720,7 +4661,6 @@ function showToast({ type = 'success', message, action = '', actionLabel = '' })
     action,
     actionLabel
   }
-
   const nextToasts = [...state.toasts, toast]
   const overflowCount = Math.max(0, nextToasts.length - MAX_VISIBLE_TOASTS)
   if (overflowCount) {
@@ -5733,18 +4673,14 @@ function showToast({ type = 'success', message, action = '', actionLabel = '' })
     state.toasts = nextToasts
   }
   renderToasts()
-
   if (!state.toasts.some((visibleToast) => visibleToast.id === id)) {
     return
   }
-
   const timeoutId = window.setTimeout(() => {
     dismissToast(id)
   }, action === 'undo-delete' ? UNDO_WINDOW_MS : 3200)
-
   state.toastTimers.set(id, timeoutId)
 }
-
 function getOverflowToastIds(toasts, overflowCount) {
   const removedToastIds = new Set()
   for (const toast of toasts) {
@@ -5756,7 +4692,6 @@ function getOverflowToastIds(toasts, overflowCount) {
     }
     removedToastIds.add(String(toast.id || ''))
   }
-
   for (const toast of toasts) {
     if (removedToastIds.size >= overflowCount) {
       break
@@ -5767,10 +4702,8 @@ function getOverflowToastIds(toasts, overflowCount) {
     }
     removedToastIds.add(toastId)
   }
-
   return removedToastIds
 }
-
 function dismissToast(toastId) {
   if (!toastId) {
     return
@@ -5778,18 +4711,9 @@ function dismissToast(toastId) {
 
   clearToastTimer(toastId)
 
-  const toastElement = dom.toastRoot.querySelector(`[data-toast-id="${CSS.escape(String(toastId))}"]`)
   state.toasts = state.toasts.filter((toast) => toast.id !== toastId)
-  if (toastElement instanceof HTMLElement && !toastElement.classList.contains('is-closing')) {
-    void closeWithExitMotion(toastElement, 'is-closing', () => {
-      toastElement.remove()
-    }, 220)
-    return
-  }
-
   renderToasts()
 }
-
 function clearToastTimer(toastId) {
   const timeoutId = state.toastTimers.get(String(toastId))
   if (timeoutId) {

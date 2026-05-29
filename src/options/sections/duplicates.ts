@@ -2,13 +2,13 @@ import { displayUrl } from '../../shared/text.js'
 import { getEffectiveBookmarkTags } from '../../shared/bookmark-tags.js'
 import { availabilityState, aiNamingState, contentSnapshotState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { escapeHtml, escapeAttr } from '../shared-options/html.js'
 import {
   isInteractionLocked,
   compareByPathTitle,
   syncSelectionSet
 } from '../shared-options/utils.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
+import { renderDuplicateGroupsIsland } from '../components/DuplicateGroupsIsland.js'
 
 const DUPLICATE_STRATEGY_LABELS = {
   recommended: '按推荐选择',
@@ -273,16 +273,15 @@ export function renderDuplicateSection() {
       : `${visibleGroups.length} 组重复。可按推荐选择，或逐条勾选要移入回收站的副本；建议最多处理 ${candidateCount} 条。`
   }
 
-  const inlineActionBar = buildDuplicateInlineActionBar(selectionStats)
-
-  if (!availabilityState.catalogLoading && !managerState.duplicateGroups.length) {
-    dom.duplicateGroups.innerHTML = '<div class="detect-empty">当前未发现重复书签。</div>'
-    return
-  }
-
-  dom.duplicateGroups.innerHTML = managerState.duplicateGroups.length
-    ? `${inlineActionBar}${visibleGroups.map((group) => buildDuplicateGroupCard(group)).join('')}`
-    : '<div class="detect-empty">正在分析重复书签。</div>'
+  renderDuplicateGroupsIsland(dom.duplicateGroups, {
+    catalogLoading: availabilityState.catalogLoading,
+    currentScopeFolderId: String(availabilityState.scopeFolderId || ''),
+    groups: visibleGroups,
+    locked: isInteractionLocked(),
+    selectedIds: managerState.selectedDuplicateIds,
+    selectionStats,
+    tagBadgeLabels: buildDuplicateTagBadgeLabels(visibleGroups)
+  })
 }
 
 function renderDuplicateSummary(summary) {
@@ -315,47 +314,6 @@ function renderDuplicateSelectionState(selectionStats) {
     isInteractionLocked() || selectionStats.deleteCount === 0 || selectionStats.unsafeGroupCount > 0
 }
 
-function buildDuplicateInlineActionBar(selectionStats) {
-  if (!selectionStats.deleteCount) {
-    return ''
-  }
-
-  const locked = isInteractionLocked()
-  const unsafe = selectionStats.unsafeGroupCount > 0
-  const deleteDisabled = locked || unsafe
-  const warning = unsafe
-    ? `<p class="duplicate-docked-selection-warning">${selectionStats.unsafeGroupCount} 组已全选；每组至少保留 1 条后才能移入回收站。</p>`
-    : ''
-
-  return `
-    <div class="duplicate-docked-selection" role="region" aria-label="已选重复书签操作">
-      <div class="duplicate-docked-selection-copy">
-        <strong>已选 ${selectionStats.deleteCount} 条待移入回收站</strong>
-        <p>将保留 ${selectionStats.keepCount} 条，涉及 ${selectionStats.groupCount} 组；确认前不会处理。</p>
-        ${warning}
-      </div>
-      <div class="duplicate-docked-selection-actions">
-        <button
-          class="options-button secondary small"
-          type="button"
-          data-duplicate-clear-selection="true"
-          ${locked ? 'disabled' : ''}
-        >
-          清空选择
-        </button>
-        <button
-          class="options-button danger small"
-          type="button"
-          data-duplicate-delete-selection="true"
-          ${deleteDisabled ? 'disabled' : ''}
-        >
-          移入回收站
-        </button>
-      </div>
-    </div>
-  `
-}
-
 function renderDuplicateStrategyControls(visibleGroups) {
   if (dom.duplicateStrategyControls) {
     const disabled = isInteractionLocked() || visibleGroups.length === 0
@@ -375,213 +333,6 @@ function renderDuplicateStrategyControls(visibleGroups) {
   }
 }
 
-function buildDuplicateGroupCard(group) {
-  const locked = isInteractionLocked()
-  const selectedCount = getDuplicateGroupSelectedCount(group)
-  const keepCount = Math.max(0, group.items.length - selectedCount)
-  const recommendedItem = getDuplicateGroupItem(group, group.recommendedKeepId) || group.items[0]
-  const recommendedDeleteCount = Math.max(0, group.items.length - 1)
-  const currentSelectionCopy = selectedCount > 0
-    ? `已选 ${selectedCount} 条待移入回收站，保留 ${keepCount} 条。`
-    : `按推荐可选择 ${recommendedDeleteCount} 条移入回收站，保留 1 条。`
-
-  return `
-    <article class="detect-result-card duplicate-group-card ${group.risk === 'high' ? 'high-risk' : 'low-risk'}">
-      <div class="duplicate-group-header">
-        <div class="duplicate-group-copy">
-          <div class="duplicate-group-title-row">
-            <strong title="${escapeAttr(group.displayUrl)}">${escapeHtml(group.displayUrl)}</strong>
-            <div class="duplicate-group-tags">
-              ${buildDuplicateGroupChips(group)}
-            </div>
-          </div>
-          <p class="detect-results-subtitle">
-            ${group.items.length} 条重复 · ${group.folders.length} 个文件夹 · ${currentSelectionCopy}
-          </p>
-        </div>
-      </div>
-      <div class="duplicate-recommendation">
-        <div class="duplicate-recommendation-copy">
-          <span class="options-chip success">推荐保留</span>
-          <strong>${escapeHtml(recommendedItem?.title || '未命名书签')}</strong>
-          <p>${escapeHtml(group.recommendation.reason)} 按推荐会选择 ${recommendedDeleteCount} 条移入回收站；也可逐条勾选。</p>
-          <div class="duplicate-recommendation-signals" aria-label="推荐依据">
-            ${buildDuplicateRecommendationSignals(group)}
-          </div>
-        </div>
-        <div class="duplicate-group-actions">
-          <button
-            class="options-button secondary small duplicate-accept-suggestion"
-            type="button"
-            data-duplicate-keep-strategy="recommended"
-            data-duplicate-group-id="${escapeAttr(group.id)}"
-            ${locked ? 'disabled' : ''}
-          >
-            按推荐选择
-          </button>
-          <button
-            class="options-button secondary small"
-            type="button"
-            data-duplicate-keep-strategy="newest"
-            data-duplicate-group-id="${escapeAttr(group.id)}"
-            ${locked ? 'disabled' : ''}
-          >
-            保留最新
-          </button>
-          <button
-            class="options-button secondary small"
-            type="button"
-            data-duplicate-keep-strategy="shorter-path"
-            data-duplicate-group-id="${escapeAttr(group.id)}"
-            ${locked ? 'disabled' : ''}
-          >
-            保留路径最短
-          </button>
-        </div>
-      </div>
-      <div class="duplicate-item-list">
-        ${group.items.map((item) => buildDuplicateItemCard(item, group)).join('')}
-      </div>
-    </article>
-  `
-}
-
-function buildDuplicateRecommendationSignals(group) {
-  const signals = [
-    ['最新', group.latestItemId],
-    ['最早', group.oldestItemId],
-    ['路径最短', group.shorterPathItemId],
-    ['有标签/摘要', group.taggedItemId],
-    ['新标签页来源', group.newTabSourceItemId],
-    ['最近访问', group.recentItemId]
-  ]
-
-  return signals
-    .filter(([, bookmarkId]) => Boolean(bookmarkId))
-    .map(([label, bookmarkId]) => {
-      const active = String(bookmarkId) === String(group.recommendedKeepId)
-      return `<span class="options-chip ${active ? 'success' : 'muted'}">${escapeHtml(label)}</span>`
-    })
-    .join('')
-}
-
-function buildDuplicateGroupChips(group) {
-  const chips = [
-    group.isCrossFolder
-      ? ['warning', '跨文件夹']
-      : ['muted', '同文件夹'],
-    group.hasTitleVariants
-      ? ['warning', '标题不同']
-      : ['muted', '标题一致'],
-    group.risk === 'high'
-      ? ['danger', '高风险']
-      : ['success', '低风险']
-  ]
-
-  return chips
-    .map(([tone, label]) => `<span class="options-chip ${tone}">${escapeHtml(label)}</span>`)
-    .join('')
-}
-
-function buildDuplicateItemCard(item, group) {
-  const itemId = String(item.id)
-  const selected = managerState.selectedDuplicateIds.has(itemId)
-  const recommended = itemId === String(group.recommendedKeepId)
-  const selectionLabel = getDuplicateItemSelectionLabel(item)
-  const classes = [
-    'duplicate-item-row',
-    selected ? 'selected pending-delete' : '',
-    recommended ? 'recommended-keep' : ''
-  ].filter(Boolean).join(' ')
-
-  return `
-    <div class="${classes}">
-      <label class="detect-result-check">
-        <input
-          type="checkbox"
-          data-duplicate-select="true"
-          data-bookmark-id="${escapeAttr(item.id)}"
-          aria-label="${escapeAttr(selectionLabel)}"
-          ${selected ? 'checked' : ''}
-          ${isInteractionLocked() ? 'disabled' : ''}
-        >
-        <span>移入回收站</span>
-      </label>
-      <div class="duplicate-item-copy">
-        <div class="duplicate-item-meta">
-          <strong title="${escapeAttr(item.title || '未命名书签')}">${escapeHtml(item.title || '未命名书签')}</strong>
-          <div class="duplicate-item-badges">
-            ${buildDuplicateItemBadges(item, group)}
-          </div>
-        </div>
-        <div class="detect-result-url">${escapeHtml(displayUrl(item.url))}</div>
-        <div class="detect-result-detail">添加于 ${escapeHtml(formatDuplicateDate(item.dateAdded))}</div>
-        <div class="detect-result-path" title="${escapeAttr(item.path || '未归档路径')}">${escapeHtml(item.path || '未归档路径')}</div>
-      </div>
-    </div>
-  `
-}
-
-function getDuplicateItemSelectionLabel(item) {
-  const title = String(item?.title || displayUrl(item?.url) || '未命名书签')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
-  const path = String(item?.path || '').replace(/\s+/g, ' ').trim()
-
-  return path
-    ? `移入回收站：${safeTitle || '未命名书签'}，位置：${path}`
-    : `移入回收站：${safeTitle || '未命名书签'}`
-}
-
-function buildDuplicateItemBadges(item, group) {
-  const itemId = String(item.id)
-  const badges = []
-
-  if (managerState.selectedDuplicateIds.has(itemId)) {
-    badges.push(['danger', '待移入回收站'])
-  } else if (itemId === String(group.recommendedKeepId)) {
-    badges.push(['success', '推荐保留'])
-  }
-
-  if (itemId === String(group.latestItemId)) {
-    badges.push(['muted', '最新'])
-  }
-  if (itemId === String(group.oldestItemId)) {
-    badges.push(['muted', '最早'])
-  }
-  if (itemId === String(group.shorterPathItemId)) {
-    badges.push(['muted', '路径更短'])
-  }
-  if (itemId === String(group.fullerTitleItemId) && group.hasTitleVariants) {
-    badges.push(['muted', '标题更完整'])
-  }
-  if (itemId === String(group.taggedItemId)) {
-    badges.push(['muted', getDuplicateTagBadgeLabel(item)])
-  }
-  if (itemId === String(group.newTabSourceItemId)) {
-    badges.push(['muted', '新标签页来源'])
-  }
-  if (itemId === String(group.recentItemId)) {
-    badges.push(['muted', '最近访问'])
-  }
-  if (isBookmarkInCurrentDuplicateScope(item)) {
-    badges.push(['muted', '当前范围'])
-  }
-
-  const seen = new Set()
-  return badges
-    .filter(([, label]) => {
-      if (seen.has(label)) {
-        return false
-      }
-      seen.add(label)
-      return true
-    })
-    .map(([tone, label]) => `<span class="options-chip ${tone}">${escapeHtml(label)}</span>`)
-    .join('')
-}
-
 export function handleDuplicateGroupsClick(event, callbacks) {
   if (!(event.target instanceof Element)) {
     return
@@ -599,13 +350,22 @@ export function handleDuplicateGroupsClick(event, callbacks) {
     return
   }
 
-  const selectionInput = event.target.closest('input[data-duplicate-select]')
-  if (selectionInput) {
-    const bookmarkId = String(selectionInput.getAttribute('data-bookmark-id') || '').trim()
-    if (selectionInput.checked) {
-      managerState.selectedDuplicateIds.add(bookmarkId)
-    } else {
+  const selectionControl = event.target.closest('[data-duplicate-select]')
+  if (selectionControl) {
+    const bookmarkId = String(selectionControl.getAttribute('data-bookmark-id') || '').trim()
+    if (
+      isInteractionLocked() ||
+      !bookmarkId ||
+      selectionControl.hasAttribute('disabled') ||
+      selectionControl.getAttribute('aria-disabled') === 'true'
+    ) {
+      return
+    }
+
+    if (managerState.selectedDuplicateIds.has(bookmarkId)) {
       managerState.selectedDuplicateIds.delete(bookmarkId)
+    } else {
+      managerState.selectedDuplicateIds.add(bookmarkId)
     }
     managerState.duplicateStrategyStatus = '已手动调整选择。'
     callbacks.renderAvailabilitySection()
@@ -747,6 +507,18 @@ function getDuplicateSelectionStats(groups = managerState.duplicateGroups) {
 
 function getDuplicateGroupSelectedCount(group) {
   return group.items.filter((item) => managerState.selectedDuplicateIds.has(String(item.id))).length
+}
+
+function buildDuplicateTagBadgeLabels(groups) {
+  const labels = {}
+  for (const group of groups) {
+    for (const item of group.items || []) {
+      if (String(item.id) === String(group.taggedItemId)) {
+        labels[String(item.id)] = getDuplicateTagBadgeLabel(item)
+      }
+    }
+  }
+  return labels
 }
 
 function selectDuplicateGroupsByStrategy(strategy, groups) {

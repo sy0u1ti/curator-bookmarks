@@ -1,0 +1,10 @@
+@import "./tokens.css";
+@import "./tailwind.css";
+
+.curator-react-root {
+  isolation: isolate;
+}
+
+body {
+  position: relative;
+}

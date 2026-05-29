@@ -1,0 +1,18 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-curator-bg: var(--color-bg);
+  --color-curator-elevated: var(--color-bg-elevated);
+  --color-curator-panel: var(--color-bg-panel);
+  --color-curator-muted: var(--color-bg-muted);
+  --color-curator-border: var(--color-border);
+  --color-curator-border-strong: var(--color-border-strong);
+  --color-curator-text: var(--color-text);
+  --color-curator-text-muted: var(--color-text-muted);
+  --color-curator-text-subtle: var(--color-text-subtle);
+  --color-curator-danger: var(--color-danger);
+  --color-curator-warning: var(--color-warning);
+  --color-curator-success: var(--color-success);
+}

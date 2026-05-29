@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -17,6 +17,31 @@ const failures = [];
 
 function read(relativePath) {
   return readFileSync(join(repoRoot, relativePath), 'utf8');
+}
+
+function listFiles(relativeDir, predicate = () => true) {
+  const root = join(repoRoot, relativeDir);
+  const results = [];
+
+  function walk(currentDir) {
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      const absolutePath = join(currentDir, entry.name);
+      const relativePath = absolutePath.slice(repoRoot.length + 1).replaceAll('\\', '/');
+      if (entry.isDirectory()) {
+        if (entry.name !== 'node_modules' && entry.name !== 'dist' && !entry.name.startsWith('.')) {
+          walk(absolutePath);
+        }
+        continue;
+      }
+
+      if (entry.isFile() && predicate(relativePath)) {
+        results.push(relativePath);
+      }
+    }
+  }
+
+  walk(root);
+  return results.sort();
 }
 
 function fail(message) {
@@ -141,23 +166,253 @@ function checkProtectedEntryPoints() {
   const popup = read('src/popup/popup.html');
   const options = read('src/options/options.html');
   const newtab = read('src/newtab/newtab.html');
+  const popupMain = read('src/popup/main.tsx');
+  const optionsMain = read('src/options/main.tsx');
+  const newtabMain = read('src/newtab/main.tsx');
+  const popupApp = read('src/popup/PopupApp.tsx');
+  const optionsApp = read('src/options/OptionsApp.tsx');
+  const optionsCorePanels = read('src/options/components/CorePanels.tsx');
+  const optionsModals = read('src/options/components/OptionsModals.tsx');
+  const newtabApp = read('src/newtab/NewtabApp.tsx');
   const required = [
-    [popup, 'id="search-input"', 'popup search input'],
-    [popup, 'id="folder-filter-trigger"', 'popup folder filter trigger'],
-    [popup, 'id="smart-classifier"', 'popup smart classifier entry'],
-    [popup, 'id="edit-modal"', 'popup edit modal'],
-    [popup, 'id="move-modal"', 'popup move modal'],
-    [popup, 'id="delete-modal"', 'popup delete modal'],
-    [options, 'data-section-link="dashboard"', 'options dashboard entry'],
-    [options, 'id="ai-model-picker-trigger"', 'options AI model picker'],
-    [options, 'id="delete-modal-backdrop"', 'options destructive confirmation modal'],
-    [newtab, 'id="newtab-settings-trigger"', 'NewTab settings trigger'],
-    [newtab, 'id="newtab-dashboard-trigger"', 'NewTab dashboard trigger'],
-    [newtab, 'id="newtab-root"', 'NewTab runtime root'],
+    [popup, 'id="popup-root"', 'popup React root'],
+    [popup, 'src="./main.tsx"', 'popup React entry script'],
+    [popupMain, "document.getElementById('popup-root')", 'popup main mounts the React root'],
+    [popupMain, 'createRoot(root).render(<PopupApp />)', 'popup main renders PopupApp'],
+    [popupApp, 'id="search-input"', 'popup search input'],
+    [popupApp, 'id="folder-filter-trigger"', 'popup folder filter trigger'],
+    [popupApp, 'id="smart-classifier"', 'popup smart classifier entry'],
+    [popupApp, 'id="edit-modal"', 'popup edit modal'],
+    [popupApp, 'id="move-modal"', 'popup move modal'],
+    [popupApp, 'id="delete-modal"', 'popup delete modal'],
+    [options, 'id="options-root"', 'options React root'],
+    [options, 'src="./main.tsx"', 'options React entry script'],
+    [optionsMain, "document.getElementById('options-root')", 'options main mounts the React root'],
+    [optionsMain, 'createRoot(root).render(<OptionsApp />)', 'options main renders OptionsApp'],
+    [optionsApp, 'data-section-link="dashboard"', 'options dashboard entry'],
+    [optionsCorePanels, 'id="ai-model-picker-trigger"', 'options AI model picker'],
+    [optionsModals, 'id="delete-modal-backdrop"', 'options destructive confirmation modal'],
+    [newtab, 'id="newtab-react-root"', 'NewTab React root'],
+    [newtab, 'src="./main.tsx"', 'NewTab React entry script'],
+    [newtab, 'id="instant-wallpaper-startup-style"', 'NewTab instant wallpaper startup style'],
+    [newtab, 'src="/instant-wallpaper-boot.js"', 'NewTab instant wallpaper boot script'],
+    [newtabMain, "document.getElementById('newtab-react-root')", 'NewTab main mounts the React root'],
+    [newtabMain, 'createRoot(root).render(<NewtabApp />)', 'NewTab main renders NewtabApp'],
+    [newtabApp, 'id="newtab-settings-trigger"', 'NewTab settings trigger'],
+    [newtabApp, 'id="newtab-dashboard-trigger"', 'NewTab dashboard trigger'],
+    [newtabApp, 'id="newtab-root"', 'NewTab runtime root'],
   ];
 
   for (const [source, needle, label] of required) {
     assert(source.includes(needle), `protected entry point missing: ${label}`);
+  }
+}
+
+function checkDocumentationEvidence() {
+  const docs = read('docs/ui-refactor-library-selection.md');
+  const packageJson = JSON.parse(read('package.json'));
+  const requiredPackages = [
+    'react',
+    'react-dom',
+    '@vitejs/plugin-react',
+    'tailwindcss',
+    '@tailwindcss/vite',
+    '@base-ui/react',
+    'motion',
+    'lucide-react',
+    'ai-elements',
+  ];
+  const requiredDocSnippets = [
+    '## Documentation Gate',
+    '## Installed Packages',
+    '## Base UI',
+    '## motion',
+    '## lucide-react',
+    '## Tailwind',
+    '## AI Elements',
+    '## Verification Gates',
+    'Base UI quick start',
+    'Motion React docs',
+    'Lucide React docs',
+    'Tailwind Vite docs',
+    'AI Elements setup docs',
+    'Fallback wrappers',
+    'dialog, drawer, menu, popover, and list variants',
+    'npm run smoke:extension',
+  ];
+
+  for (const packageName of requiredPackages) {
+    const installedVersion =
+      packageJson.dependencies?.[packageName] ?? packageJson.devDependencies?.[packageName];
+    assert(Boolean(installedVersion), `required migration package is not installed: ${packageName}`);
+    assert(docs.includes(`- \`${packageName}\``), `library-selection doc is missing package entry: ${packageName}`);
+  }
+
+  for (const snippet of requiredDocSnippets) {
+    assert(docs.includes(snippet), `library-selection doc is missing required evidence: ${snippet}`);
+  }
+}
+
+function checkMotionWrapperCoverage() {
+  const transitions = read('src/ui/motion/transitions.ts');
+  const motionPanel = read('src/ui/motion/MotionPanel.tsx');
+  const dialog = read('src/ui/primitives/Dialog.tsx');
+  const drawer = read('src/ui/primitives/Drawer.tsx');
+  const menu = read('src/ui/primitives/Menu.tsx');
+  const popover = read('src/ui/primitives/Popover.tsx');
+  const requiredVariants = ['dialog', 'drawer', 'menu', 'popover', 'list'];
+
+  for (const variant of requiredVariants) {
+    assert(
+      new RegExp(`${variant}:\\s*\\{`).test(transitions),
+      `motion transition variant is missing: ${variant}`,
+    );
+  }
+
+  assert(
+    /useReducedMotion\(\)/.test(motionPanel) && /duration:\s*0\.01/.test(motionPanel),
+    'MotionPanel must preserve a reduced-motion fallback',
+  );
+
+  for (const [file, contents, variant] of [
+    ['src/ui/primitives/Dialog.tsx', dialog, 'dialog'],
+    ['src/ui/primitives/Drawer.tsx', drawer, 'drawer'],
+    ['src/ui/primitives/Menu.tsx', menu, 'menu'],
+    ['src/ui/primitives/Popover.tsx', popover, 'popover'],
+  ]) {
+    assert(
+      contents.includes(`MotionPanel`) && contents.includes(`variant="${variant}"`),
+      `${file} must compose Base UI with the shared MotionPanel ${variant} variant`,
+    );
+  }
+}
+
+function checkReactMigrationArchitecture() {
+  const removedLegacyFiles = [
+    'src/popup/popup.ts',
+    'src/options/options.ts',
+    'src/newtab/newtab.ts',
+    'src/options/shared-options/html.ts',
+    'src/popup/render-cache.ts',
+    'src/shared/custom-select.ts',
+    'src/shared/dot-matrix-loader.ts',
+    'src/newtab/dashboard-overlay-template.ts',
+    'src/newtab/featured-modal-template.ts',
+    'src/newtab/settings-drawer-template.ts',
+  ];
+
+  for (const file of removedLegacyFiles) {
+    assert(!existsSync(join(repoRoot, file)), `legacy UI file must stay removed: ${file}`);
+  }
+
+  const sourceFiles = listFiles('src', (file) => /\.(?:ts|tsx|html)$/.test(file));
+  const uiBoundaryImportPattern =
+    /(?:from\s+['"](?:@base-ui\/react|@base-ui\/react\/[^'"]+|motion|motion\/react|lucide-react|ai-elements)['"]|import\(\s*['"](?:@base-ui\/react|@base-ui\/react\/[^'"]+|motion|motion\/react|lucide-react|ai-elements)['"]\s*\))/;
+
+  for (const file of sourceFiles) {
+    if (file.startsWith('src/ui/')) {
+      continue;
+    }
+    assert(
+      !uiBoundaryImportPattern.test(read(file)),
+      `feature/domain file imports UI library directly instead of src/ui wrapper: ${file}`,
+    );
+  }
+
+  const serviceWorkerAndSharedFiles = sourceFiles.filter(
+    (file) => file.startsWith('src/service-worker/') || file.startsWith('src/shared/'),
+  );
+  const pureModuleUiImportPattern =
+    /(?:from\s+['"](?:react|react-dom|react-dom\/client|@base-ui\/react|@base-ui\/react\/[^'"]+|motion|motion\/react|lucide-react|ai-elements)['"]|import\(\s*['"](?:react|react-dom|react-dom\/client|@base-ui\/react|@base-ui\/react\/[^'"]+|motion|motion\/react|lucide-react|ai-elements)['"]\s*\))/;
+  for (const file of serviceWorkerAndSharedFiles) {
+    assert(
+      !pureModuleUiImportPattern.test(read(file)),
+      `pure extension/domain module must not import React or UI libraries: ${file}`,
+    );
+  }
+
+  const featureTsxFiles = sourceFiles.filter(
+    (file) =>
+      file.endsWith('.tsx') &&
+      !file.startsWith('src/ui/') &&
+      (file.startsWith('src/popup/') || file.startsWith('src/options/') || file.startsWith('src/newtab/')),
+  );
+  const forbiddenFeatureJsxPattern =
+    /<\s*(?:svg|path|select|option|dialog)\b|<\s*input\b[^>]*\btype=["'](?:checkbox|radio)["']|dangerouslySetInnerHTML/;
+  for (const file of featureTsxFiles) {
+    assert(
+      !forbiddenFeatureJsxPattern.test(read(file)),
+      `feature TSX must use src/ui wrappers instead of raw primitive markup: ${file}`,
+    );
+  }
+
+  const runtimeTsFiles = sourceFiles.filter(
+    (file) =>
+      file.endsWith('.ts') &&
+      (file.startsWith('src/popup/') || file.startsWith('src/options/') || file.startsWith('src/newtab/')),
+  );
+  const staticUiMarkupPattern =
+    /(?:['"`]\s*<|<\\\/?)(?:button|input|select|option|textarea|section|article|details|summary|label|ul|li|dialog)\b/;
+  for (const file of runtimeTsFiles) {
+    assert(
+      !staticUiMarkupPattern.test(read(file)),
+      `runtime TypeScript must not reintroduce static UI HTML templates: ${file}`,
+    );
+  }
+
+  const popupHtml = read('src/popup/popup.html');
+  const optionsHtml = read('src/options/options.html');
+  const newtabHtml = read('src/newtab/newtab.html');
+  assert(/<div id="popup-root"><\/div>/.test(popupHtml), 'popup.html must expose only the popup React root');
+  assert(/<div id="options-root"><\/div>/.test(optionsHtml), 'options.html must expose only the options React root');
+  assert(/<div id="newtab-react-root"><\/div>/.test(newtabHtml), 'newtab.html must expose the NewTab React root');
+  assert(
+    !popupHtml.includes('id="search-input"') &&
+      !optionsHtml.includes('data-section-link=') &&
+      !newtabHtml.includes('id="newtab-root"'),
+    'page HTML must not reintroduce static extension UI controls outside React roots',
+  );
+}
+
+function checkFinalCleanupEvidence() {
+  const sourceFiles = listFiles('src', (file) => /\.(?:ts|tsx|html)$/.test(file));
+  const obsoleteNamePattern = /(?:^|\/)(?:.*legacy.*|.*template.*|.*bridge.*|custom-select|dot-matrix-loader)\.(?:ts|tsx|html)$/i;
+  const obsoleteUiMarkupPattern =
+    /(?:innerHTML\s*=|insertAdjacentHTML\s*\(|templateHTML|renderHTML|renderHtml|createElement\(\s*['"](?:button|select|option|dialog)['"]\s*\))/;
+  const legacyCustomSelectRuntimePattern =
+    /(?:data-custom-select|custom-select-native|initCustomSelect|CustomSelect|enhanceCustomSelect)/;
+
+  for (const file of sourceFiles) {
+    assert(!obsoleteNamePattern.test(file), `obsolete legacy UI implementation file remains: ${file}`);
+    if (file.startsWith('src/ui/')) {
+      continue;
+    }
+    const contents = read(file);
+    assert(
+      !obsoleteUiMarkupPattern.test(contents),
+      `legacy static UI rendering pattern remains outside src/ui wrappers: ${file}`,
+    );
+    assert(
+      !legacyCustomSelectRuntimePattern.test(contents),
+      `legacy custom select runtime pattern remains outside src/ui wrappers: ${file}`,
+    );
+  }
+
+  const featureTsxFiles = sourceFiles.filter(
+    (file) =>
+      file.endsWith('.tsx') &&
+      !file.startsWith('src/ui/') &&
+      (file.startsWith('src/popup/') || file.startsWith('src/options/') || file.startsWith('src/newtab/')),
+  );
+  const allowedNativeInputPattern = /<\s*input\b[^>]*\btype=["'](?:hidden|color|file)["']/g;
+  const rawNativeControlPattern = /<\s*(?:button|select|option|textarea|dialog|details|summary)\b|<\s*input\b/;
+
+  for (const file of featureTsxFiles) {
+    const stripped = read(file).replace(allowedNativeInputPattern, '');
+    assert(
+      !rawNativeControlPattern.test(stripped),
+      `feature TSX must use src/ui wrappers for native interactive primitives: ${file}`,
+    );
   }
 }
 
@@ -288,6 +543,10 @@ function runStaticAudits() {
   checkSharedTokensAndPrimitives();
   checkFinalLayers();
   checkProtectedEntryPoints();
+  checkDocumentationEvidence();
+  checkMotionWrapperCoverage();
+  checkReactMigrationArchitecture();
+  checkFinalCleanupEvidence();
   checkNewTabFolderAddButtonRegression();
   checkNewTabBookmarkTileRegression();
   checkNewTabSearchButtonRegression();
@@ -1669,6 +1928,7 @@ try {
     console.warn('node_modules is missing; skipping Playwright UI smoke audits.');
   } else {
     runPlaywrightAudits();
+    runCommand('npm', ['run', 'smoke:extension'], 'unpacked extension smoke');
   }
 } catch (error) {
   if (error && typeof error === 'object' && 'status' in error) {

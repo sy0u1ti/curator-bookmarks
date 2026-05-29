@@ -7,10 +7,10 @@ import {
   type BookmarkTagUsageStat
 } from '../../shared/tag-management.js'
 import type { BookmarkRecord } from '../../shared/types.js'
-import { buildTagCloudItems, type TagCloudItem } from '../../shared/tag-cloud.js'
-import { escapeAttr, escapeHtml } from '../shared-options/html.js'
+import { buildTagCloudItems } from '../../shared/tag-cloud.js'
 import { dom } from '../shared-options/dom.js'
 import { startTagCloudPhysics, stopTagCloudPhysics } from './tag-cloud-runtime.js'
+import { renderTagManagementCloudIsland } from '../components/TagManagementCloudIsland.js'
 
 export interface TagManagementSummary {
   totalTags: number
@@ -98,23 +98,13 @@ export function renderTagManagementSection({
     dom.tagManagementDelete.disabled = loading || summary.totalTags === 0
   }
 
-  if (!summary.totalTags) {
-    dom.tagManagementResults.innerHTML = `
-      <div class="detect-empty">
-        还没有可管理的标签。先在 popup、书签仪表盘或智能分析里添加标签，之后这里会显示使用频率和整理操作。
-      </div>
-    `
-    return
-  }
-
   const cloud = renderTagCloud(summary.stats)
-  dom.tagManagementResults.replaceChildren(cloud)
   if (cloud) {
     startTagCloudPhysics(cloud)
   }
 }
 
-function renderTagCloud(stats: BookmarkTagUsageStat[]): HTMLElement {
+function renderTagCloud(stats: BookmarkTagUsageStat[]): HTMLElement | null {
   const widthPx = Math.max(960, Math.floor(dom.tagManagementResults?.clientWidth || 0))
   const heightPx = Math.min(820, Math.max(520, Math.floor(window.innerHeight * 0.68)))
   const items = buildTagCloudItems(stats, {
@@ -122,61 +112,7 @@ function renderTagCloud(stats: BookmarkTagUsageStat[]): HTMLElement {
     heightPx
   })
 
-  const root = document.createElement('div')
-  root.className = 'tag-management-cloud'
-  root.setAttribute('role', 'list')
-  root.setAttribute('aria-label', '标签词云，字号越大表示使用越频繁')
-  root.dataset.tagCloudRoot = ''
-
-  const fragment = document.createDocumentFragment()
-  for (const item of items) {
-    const template = document.createElement('template')
-    template.innerHTML = renderTagCloudItem(item).trim()
-    const button = template.content.firstElementChild
-    if (button) {
-      fragment.appendChild(button)
-    }
-  }
-  root.appendChild(fragment)
-  return root
-}
-
-function renderTagCloudItem(item: TagCloudItem): string {
-  const style = [
-    `--tag-x: ${item.leftPercent}%`,
-    `--tag-y: ${item.topPercent}%`,
-    `--tag-size: ${item.fontSizePx}px`,
-    `--tag-alpha: ${item.opacity}`
-  ].join('; ')
-  const className = [
-    'tag-management-cloud-word',
-    `is-${item.tier}`,
-    item.accent ? 'is-prominent' : '',
-    item.tail ? 'is-tail' : ''
-  ].filter(Boolean).join(' ')
-
-  return `
-    <button
-      class="${className}"
-      type="button"
-      role="listitem"
-      data-tag-cloud-word
-      data-tag-fill="${escapeAttr(item.tag)}"
-      data-tag-x="${item.leftPercent}"
-      data-tag-y="${item.topPercent}"
-      data-tag-tier="${escapeAttr(item.tier)}"
-      data-tag-radius="${item.radiusPx}"
-      data-tag-collision-width="${item.collisionWidthPx}"
-      data-tag-collision-height="${item.collisionHeightPx}"
-      data-tag-collision-strength="${item.collisionStrength}"
-      data-tag-mass="${item.mass}"
-      data-tag-phase="${item.phase}"
-      data-tag-flow="${item.flowStrength}"
-      style="${escapeAttr(style)}"
-      title="${escapeAttr(item.tag)}"
-      aria-label="选择标签 ${escapeAttr(item.tag)}"
-    >${escapeHtml(item.tag)}</button>
-  `
+  return renderTagManagementCloudIsland(dom.tagManagementResults, items)
 }
 
 export function stopActiveTagCloud(): void {
