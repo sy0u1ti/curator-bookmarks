@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { runCodexGates } from './codex-gates.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const tmpDir = join(repoRoot, 'tmp', 'ui-audit');
@@ -552,6 +553,11 @@ function runStaticAudits() {
   checkNewTabSearchButtonRegression();
   checkThemeAccentRegression();
   checkNewTabSettingsChromeRegression();
+
+  console.log('\n> Codex 2A objective gates (contrast / inventory / bundle)');
+  for (const failure of runCodexGates(repoRoot)) {
+    fail(failure);
+  }
 
   if (failures.length > 0) {
     console.error('\nStatic UI audit failures:');
