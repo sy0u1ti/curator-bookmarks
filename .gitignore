@@ -27,3 +27,5 @@ REPOSITORY_REVIEW_SUGGESTIONS.md
 .superpowers/
 docs/
 test/
+scripts/
+playwright-visual.config.mjs

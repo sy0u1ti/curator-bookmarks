@@ -17,7 +17,19 @@ const htmlFiles = ['src/popup/popup.html', 'src/options/options.html', 'src/newt
 const failures = [];
 
 function read(relativePath) {
-  return readFileSync(join(repoRoot, relativePath), 'utf8');
+  try {
+    return readFileSync(join(repoRoot, relativePath), 'utf8');
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      // A missing file is a CLEAN audit failure — record it and return '' so the rest
+      // of the audits (and, when they pass, the Playwright/smoke gates) still run and
+      // report a complete list, instead of aborting the whole run with a raw ENOENT
+      // stack trace on the first absent file (e.g. a not-yet-created evidence doc).
+      fail(`required file is missing: ${relativePath}`);
+      return '';
+    }
+    throw error;
+  }
 }
 
 function listFiles(relativeDir, predicate = () => true) {

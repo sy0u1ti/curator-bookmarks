@@ -3,6 +3,7 @@ import { existsSync, rmSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
+import { auditLayout, auditResponsive } from './layout-invariants.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const scriptPath = fileURLToPath(import.meta.url);
@@ -17,12 +18,36 @@ function commandExists(command) {
   return result.status === 0;
 }
 
+// Whether a REAL, responsive X server is reachable. A DISPLAY that is merely *set*
+// (e.g. WSLg exports DISPLAY=:0 with no working server) is NOT enough — headed Chrome
+// then dies with "Missing X server or $DISPLAY". `xset q` is the cheap probe; if it is
+// absent or errors (or hangs against a dead display, hence the timeout), we cannot
+// confirm a usable display, so we treat it as unusable and prefer xvfb (which works
+// whether or not a real display exists).
+function displayWorks() {
+  if (!process.env.DISPLAY) return false;
+  const probe = spawnSync('xset', ['q'], { stdio: 'ignore', timeout: 4000 });
+  return probe.status === 0;
+}
+
+// The smoke must launch Chrome with the unpacked extension, which needs a display. On
+// Linux it re-execs itself under `xvfb-run` (a virtual display) unless a real display
+// is actually usable. Set CURATOR_SMOKE_HEADED=1 to force the real display (e.g. to
+// watch the run); CURATOR_SMOKE_XVFB=1 is set on the re-exec to avoid infinite recursion.
 function relaunchWithXvfbIfNeeded() {
-  if (process.platform !== 'linux' || process.env.DISPLAY || process.env.CURATOR_SMOKE_XVFB === '1') {
+  if (process.platform !== 'linux' || process.env.CURATOR_SMOKE_XVFB === '1') {
+    return;
+  }
+  if (process.env.CURATOR_SMOKE_HEADED === '1' || displayWorks()) {
     return;
   }
 
   if (!commandExists('xvfb-run')) {
+    console.warn(
+      `smoke: no usable X server (DISPLAY="${process.env.DISPLAY ?? ''}") and xvfb-run is not installed; ` +
+        'headed Chrome will fail to launch. Install xvfb (e.g. `sudo apt-get install xvfb`), ' +
+        'or run on a machine with a working display, or set CURATOR_SMOKE_HEADED=1 to try anyway.',
+    );
     return;
   }
 
@@ -419,7 +444,36 @@ async function run() {
       }),
     };
 
-    const errors = Object.values(results).flatMap((result) => result.errors);
+    // Structural + responsive layout invariants on a clean render of each surface
+    // (spec Sections 2A.11 / 2A.12). Catches "renders without errors but the page
+    // STRUCTURE broke, components overlap/overflow, or it isn't responsive".
+    const layoutFailures = [];
+    // popup is a fixed-size surface (Chrome sizes the popup), so a single shot.
+    {
+      const page = await context.newPage();
+      try {
+        await page.setViewportSize({ width: 400, height: 600 });
+        await page.goto(urls.popup, { waitUntil: 'domcontentloaded', timeout: 15000 });
+        await page.addStyleTag({ content: '*,*::before,*::after{transition:none!important;animation:none!important}' });
+        await page.waitForSelector('#search-input', { timeout: 10000 });
+        await page.waitForTimeout(300);
+        layoutFailures.push(...(await auditLayout(page, 'popup')));
+      } finally {
+        await page.close();
+      }
+    }
+    // options + newtab are full-page, window-resizable surfaces: sweep the responsive
+    // breakpoint matrix (structure where it applies; no overlap/overflow/off-screen).
+    for (const name of ['options', 'newtab']) {
+      const page = await context.newPage();
+      try {
+        layoutFailures.push(...(await auditResponsive(page, name, urls[name])));
+      } finally {
+        await page.close();
+      }
+    }
+
+    const errors = Object.values(results).flatMap((result) => result.errors).concat(layoutFailures);
     const summary = {
       extensionId,
       smokeBookmarkId: smokeData.bookmarks.search.id,
