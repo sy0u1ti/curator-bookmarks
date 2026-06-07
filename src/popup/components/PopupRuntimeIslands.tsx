@@ -1,6 +1,4 @@
-import { flushSync } from 'react-dom'
-import { createRoot, type Root } from 'react-dom/client'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import { getQueryTerms, normalizeQuery } from '../search.js'
 import { AiSetupPrompt, Button, DotMatrixLoader, Icon, Input, Progress, Toolbar, type IconName } from '../../ui'
 
@@ -165,20 +163,6 @@ export interface PopupSmartClassifierViewModel {
   saving: boolean
   status: 'hidden' | 'idle' | 'page-loading' | 'loading' | 'results' | 'error' | 'permission'
   suggestedTitle: string
-}
-
-const roots = new WeakMap<Element, Root>()
-
-function renderIsland(container: Element, node: ReactNode): void {
-  let root = roots.get(container)
-  if (!root) {
-    root = createRoot(container)
-    roots.set(container, root)
-  }
-
-  flushSync(() => {
-    root.render(node)
-  })
 }
 
 function PopupEmptyState({ state }: { state: PopupEmptyStateViewModel }) {
