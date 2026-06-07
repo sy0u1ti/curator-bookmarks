@@ -1,4 +1,5 @@
 import type { PopupToast } from './state'
+import type { PopupContentViewModel } from './components/PopupRuntimeIslands'
 
 export interface PopupAutoAnalyzeStatusView {
   collapsed: boolean
@@ -50,6 +51,23 @@ export interface PopupSavedSearchActionDetail {
   searchId: string
 }
 
+export interface PopupContentChangeDetail {
+  preserveScroll: boolean
+  state: PopupContentViewModel
+}
+
+export interface PopupContentActionDetail {
+  action: string
+  bookmarkId?: string
+  emptyAction?: string
+  folderId?: string
+  menuAction?: string
+}
+
+export interface PopupContentResultHoverDetail {
+  index: number
+}
+
 export interface PopupToastChangeDetail {
   toasts: PopupToast[]
 }
@@ -66,6 +84,9 @@ export const POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT = 'popup:auto-analyze-status
 export const POPUP_SEARCH_CHIPS_CHANGE_EVENT = 'popup:search-chips-change'
 export const POPUP_SAVED_SEARCHES_CHANGE_EVENT = 'popup:saved-searches-change'
 export const POPUP_SAVED_SEARCH_ACTION_EVENT = 'popup:saved-search-action'
+export const POPUP_CONTENT_CHANGE_EVENT = 'popup:content-change'
+export const POPUP_CONTENT_ACTION_EVENT = 'popup:content-action'
+export const POPUP_CONTENT_RESULT_HOVER_EVENT = 'popup:content-result-hover'
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
   window.dispatchEvent(
@@ -110,6 +131,36 @@ export function dispatchPopupSavedSearchAction(action: string, searchId = ''): v
   window.dispatchEvent(
     new CustomEvent<PopupSavedSearchActionDetail>(POPUP_SAVED_SEARCH_ACTION_EVENT, {
       detail: { action, searchId }
+    })
+  )
+}
+
+export function dispatchPopupContentChange(
+  state: PopupContentViewModel,
+  options: { preserveScroll?: boolean } = {}
+): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupContentChangeDetail>(POPUP_CONTENT_CHANGE_EVENT, {
+      detail: {
+        preserveScroll: Boolean(options.preserveScroll),
+        state: { ...state }
+      }
+    })
+  )
+}
+
+export function dispatchPopupContentAction(detail: PopupContentActionDetail): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupContentActionDetail>(POPUP_CONTENT_ACTION_EVENT, {
+      detail: { ...detail }
+    })
+  )
+}
+
+export function dispatchPopupContentResultHover(index: number): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupContentResultHoverDetail>(POPUP_CONTENT_RESULT_HOVER_EVENT, {
+      detail: { index }
     })
   )
 }

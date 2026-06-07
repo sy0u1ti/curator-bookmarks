@@ -79,7 +79,6 @@ import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import {
-  renderPopupContentIsland,
   renderPopupFolderPickerIsland,
   renderPopupSmartClassifierIsland,
   type PopupActionMenuViewModel,
@@ -95,14 +94,19 @@ import {
 } from './components/PopupRuntimeIslands.js'
 import {
   dispatchPopupAutoAnalyzeStatusChange,
+  dispatchPopupContentChange,
   dispatchPopupSavedSearchesChange,
   dispatchPopupSearchChipsChange,
   dispatchPopupToastsChange,
   POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
+  POPUP_CONTENT_ACTION_EVENT,
+  POPUP_CONTENT_RESULT_HOVER_EVENT,
   POPUP_SAVED_SEARCH_ACTION_EVENT,
   POPUP_TOAST_ACTION_EVENT,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
+  type PopupContentActionDetail,
+  type PopupContentResultHoverDetail,
   type PopupSavedSearchActionDetail,
   type PopupSavedSearchesView,
   type PopupSearchChipView,
@@ -233,9 +237,6 @@ function bindEvents(signal: AbortSignal) {
     showViewNotice('已清空搜索')
     dom.searchInput.focus()
   }, { signal })
-  dom.content.addEventListener('click', handleContentClick, { signal })
-  dom.emptyState.addEventListener('click', handleContentClick, { signal })
-  dom.content.addEventListener('pointerover', handleContentPointerOver, { signal })
   dom.moveFolderList.addEventListener('click', handleMoveListClick, { signal })
   dom.moveSearchInput.addEventListener('input', () => {
     state.moveSearchQuery = dom.moveSearchInput.value
@@ -275,6 +276,8 @@ function bindEvents(signal: AbortSignal) {
   }, { signal })
   window.addEventListener('popup:modal-close', closeDialogs, { signal })
   window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
+  window.addEventListener(POPUP_CONTENT_ACTION_EVENT, handleContentActionEvent, { signal })
+  window.addEventListener(POPUP_CONTENT_RESULT_HOVER_EVENT, handleContentResultHoverEvent, { signal })
   window.addEventListener(POPUP_SAVED_SEARCH_ACTION_EVENT, handleSavedSearchActionEvent, { signal })
   window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
@@ -1913,10 +1916,6 @@ function renderMainContent() {
   })
   let mainState: PopupContentViewModel['mainState'] | undefined
 
-  dom.loadingState.classList.add('hidden')
-  dom.emptyState.classList.add('hidden')
-  dom.content.classList.remove('hidden')
-
   if (!state.isLoading && showSearchLoading) {
     mainState = {
       kind: 'loading',
@@ -1944,9 +1943,6 @@ function renderMainContent() {
   replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
     preserveScroll: !hasQuery || Boolean(state.isLoading)
   })
-  if (!mainState) {
-    updateActiveResultVisibility()
-  }
 }
 
 function getPopupEmptyStateViewModel({
@@ -2018,19 +2014,8 @@ function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserv
     return
   }
 
-  const previousMainList = dom.content.querySelector<HTMLElement>('[data-popup-main-list]')
-  const previousScrollTop = previousMainList?.scrollTop ?? dom.content.scrollTop
   state.contentRenderHtml = nextSignature
-  renderPopupContentIsland(dom.content, nextViewModel)
-
-  if (preserveScroll) {
-    const nextMainList = dom.content.querySelector<HTMLElement>('[data-popup-main-list]')
-    if (nextMainList) {
-      nextMainList.scrollTop = previousScrollTop
-    } else {
-      dom.content.scrollTop = previousScrollTop
-    }
-  }
+  dispatchPopupContentChange(nextViewModel, { preserveScroll })
 }
 
 function getPopupContentViewModel({
@@ -2836,22 +2821,23 @@ function handleSmartClassifierInput(event) {
     state.smartSaved = false
   }
 }
-function handleContentClick(event) {
-  const sidebarFolderButton = event.target.closest('[data-sidebar-folder-filter]')
-  if (sidebarFolderButton) {
-    const folderId = sidebarFolderButton.getAttribute('data-sidebar-folder-filter')
+function handleContentActionEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupContentActionDetail>).detail
+  handleContentAction(detail || { action: '' })
+}
+
+function handleContentAction(detail: PopupContentActionDetail) {
+  if (detail.action === 'filter-folder') {
+    const folderId = detail.folderId || ''
     applyFolderFilter(folderId === 'all' ? null : folderId, { focusSearch: false })
     return
   }
-  const folderToggle = event.target.closest('[data-toggle-folder]')
-  if (folderToggle) {
-    const folderId = folderToggle.getAttribute('data-toggle-folder')
-    toggleFolder(folderId)
+  if (detail.action === 'toggle-folder') {
+    toggleFolder(detail.folderId)
     return
   }
-  const menuToggle = event.target.closest('[data-open-menu]')
-  if (menuToggle) {
-    const bookmarkId = menuToggle.getAttribute('data-open-menu')
+  if (detail.action === 'toggle-menu') {
+    const bookmarkId = detail.bookmarkId || ''
     if (state.activeMenuBookmarkId === bookmarkId) {
       closeActionMenu({ restoreFocus: true, focusBookmarkId: bookmarkId })
       return
@@ -2859,10 +2845,9 @@ function handleContentClick(event) {
     openActionMenuFromToggle(bookmarkId)
     return
   }
-  const actionButton = event.target.closest('[data-menu-action]')
-  if (actionButton) {
-    const bookmarkId = actionButton.getAttribute('data-bookmark-id')
-    const action = actionButton.getAttribute('data-menu-action')
+  if (detail.action === 'menu-action') {
+    const bookmarkId = detail.bookmarkId || ''
+    const action = detail.menuAction || ''
     if (action === 'edit') {
       openEditDialog(bookmarkId)
       return
@@ -2884,15 +2869,12 @@ function handleContentClick(event) {
     }
     return
   }
-  const bookmarkButton = event.target.closest('[data-open-bookmark]')
-  if (bookmarkButton) {
-    const bookmarkId = bookmarkButton.getAttribute('data-open-bookmark')
-    void openBookmark(bookmarkId)
+  if (detail.action === 'open-bookmark') {
+    void openBookmark(detail.bookmarkId || '')
     return
   }
-  const emptyAction = event.target.closest('[data-empty-action]')
-  if (emptyAction) {
-    handleEmptySearchAction(emptyAction.getAttribute('data-empty-action'))
+  if (detail.action === 'empty-action') {
+    handleEmptySearchAction(detail.emptyAction || '')
   }
 }
 function handleEmptySearchAction(action) {
@@ -2929,12 +2911,12 @@ function handleEmptySearchAction(action) {
     dom.searchInput.focus()
   }
 }
-function handleContentPointerOver(event) {
-  const resultCard = event.target.closest('[data-result-index]')
-  if (!resultCard || !state.debouncedQuery) {
+function handleContentResultHoverEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupContentResultHoverDetail>).detail
+  if (!state.debouncedQuery) {
     return
   }
-  const nextIndex = Number(resultCard.getAttribute('data-result-index'))
+  const nextIndex = Number(detail?.index)
   if (!Number.isNaN(nextIndex)) {
     setActiveResultIndex(nextIndex)
   }
@@ -4249,38 +4231,6 @@ function formatPermissionOrigin(origin) {
 function isAbortError(error) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
-function updateActiveResultVisibility() {
-  if (!state.debouncedQuery || !state.searchResults.length) {
-    return
-  }
-  const scrollContainer = dom.content.querySelector<HTMLElement>('[data-popup-main-list]') || dom.content
-  const activeResult = dom.content.querySelector<HTMLElement>(
-    `[data-result-index="${state.activeResultIndex}"]`
-  )
-  if (!activeResult) {
-    return
-  }
-  const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight)
-  if (state.activeResultIndex === 0) {
-    scrollContainer.scrollTop = 0
-    return
-  }
-  if (state.activeResultIndex === state.searchResults.length - 1) {
-    scrollContainer.scrollTop = maxScrollTop
-    return
-  }
-  const resultTop = activeResult.offsetTop - scrollContainer.offsetTop
-  const resultBottom = resultTop + activeResult.offsetHeight
-  const viewportTop = scrollContainer.scrollTop
-  const viewportBottom = viewportTop + scrollContainer.clientHeight
-  if (resultTop < viewportTop) {
-    scrollContainer.scrollTop = Math.max(0, resultTop)
-    return
-  }
-  if (resultBottom > viewportBottom) {
-    scrollContainer.scrollTop = Math.min(maxScrollTop, resultBottom - scrollContainer.clientHeight)
-  }
-}
 function setActiveResultIndex(nextIndex) {
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
@@ -4292,17 +4242,11 @@ function setActiveResultIndex(nextIndex) {
   const previousIndex = state.activeResultIndex
   state.activeResultIndex = clampedIndex
   updateActiveSearchResult(previousIndex, clampedIndex)
-  updateActiveResultVisibility()
+  renderMainContent()
 }
 function updateActiveSearchResult(previousIndex, nextIndex) {
-  const previousCard = dom.content.querySelector(`[data-result-index="${previousIndex}"]`)
-  const nextCard = dom.content.querySelector(`[data-result-index="${nextIndex}"]`)
-  if (!previousCard && !nextCard) {
-    renderMainContent()
-    return
-  }
-  previousCard?.classList.remove('active')
-  nextCard?.classList.add('active')
+  void previousIndex
+  void nextIndex
 }
 function getCurrentTreeRoot() {
   if (state.selectedFolderFilterId) {

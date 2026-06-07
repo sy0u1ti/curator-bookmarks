@@ -21,10 +21,6 @@ export type PopupEmptyStateViewModel =
       title: string
     }
 
-export interface PopupLoadingStateViewModel {
-  label: string
-}
-
 export interface PopupFolderTreeOptionViewModel {
   badges: Array<{ label: string; muted?: boolean }>
   disabled: boolean
@@ -187,29 +183,11 @@ function renderIsland(container: Element, node: ReactNode): void {
   })
 }
 
-export function renderPopupEmptyStateIsland(
-  container: Element,
-  state: PopupEmptyStateViewModel
-): void {
-  renderIsland(container, <PopupEmptyState state={state} />)
-}
-
-export function renderPopupLoadingStateIsland(
-  container: Element,
-  state: PopupLoadingStateViewModel
-): void {
-  renderIsland(container, <PopupLoadingState state={state} />)
-}
-
 export function renderPopupFolderPickerIsland(
   container: Element,
   state: PopupFolderPickerState
 ): void {
   renderIsland(container, <PopupFolderPicker state={state} />)
-}
-
-export function renderPopupContentIsland(container: Element, state: PopupContentViewModel): void {
-  renderIsland(container, <PopupContent state={state} />)
 }
 
 export function renderPopupSmartClassifierIsland(
@@ -276,15 +254,6 @@ function PopupEmptyState({ state }: { state: PopupEmptyStateViewModel }) {
         ))}
       </div>
     </div>
-  )
-}
-
-function PopupLoadingState({ state }: { state: PopupLoadingStateViewModel }) {
-  return (
-    <span className="popup-loading-stack">
-      <DotMatrixLoader variant="spiral" className="popup-loading-loader" />
-      <span>{state.label}</span>
-    </span>
   )
 }
 
@@ -453,7 +422,7 @@ function splitHighlightText(text: string, query: string): Array<{ highlight: boo
   return parts.length ? parts : [{ highlight: false, text: safeText }]
 }
 
-function PopupContent({ state }: { state: PopupContentViewModel }) {
+export function PopupContent({ state }: { state: PopupContentViewModel }) {
   const sidebarRows = state.sidebarRows || state.rows.filter((row): row is PopupContentFolderRowViewModel => row.kind === 'folder')
   const mainRows = state.mainRows || state.rows.filter((row): row is PopupContentMainRowViewModel => row.kind !== 'folder')
   const mode = state.mode || (mainRows.some((row) => row.kind === 'result') ? 'search' : 'tree')

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
 import { getModalCloseDurationMs } from '../shared/motion'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
+import { PopupContentHost } from './components/PopupContentHost'
 import { PopupSavedSearches } from './components/PopupSavedSearches'
 import { PopupSearchChips } from './components/PopupSearchChips'
 import { PopupToasts } from './components/PopupToasts'
@@ -209,9 +210,7 @@ function PopupShell() {
         <section id="error-banner" className="error-banner hidden" role="alert"></section>
 
         <section className="content-shell">
-          <div id="loading-state" className="state-panel">正在加载书签…</div>
-          <div id="empty-state" className="state-panel hidden"></div>
-          <div id="content" className="content" role="list"></div>
+          <PopupContentHost />
         </section>
 
         <PopupAutoAnalyzeStatus />
