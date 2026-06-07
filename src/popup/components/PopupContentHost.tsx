@@ -3,7 +3,7 @@ import {
   dispatchPopupContentAction,
   dispatchPopupContentResultHover,
   subscribePopupContentChange
-} from '../popup-events'
+} from '../popup-controller-store'
 import { PopupContent } from './PopupContent'
 import type { PopupContentViewModel } from './PopupViewModels'
 

@@ -3,7 +3,7 @@ import { ToastList } from '../../ui/primitives/Toast'
 import {
   dispatchPopupToastAction,
   usePopupToasts
-} from '../popup-events'
+} from '../popup-controller-store'
 
 export function PopupToasts() {
   const toasts = usePopupToasts()

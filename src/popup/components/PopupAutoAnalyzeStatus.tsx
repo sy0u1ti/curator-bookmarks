@@ -2,7 +2,7 @@ import { Button } from '../../ui/primitives/Button'
 import {
   dispatchPopupAutoAnalyzeStatusAction,
   usePopupAutoAnalyzeStatusView
-} from '../popup-events'
+} from '../popup-controller-store'
 
 export function PopupAutoAnalyzeStatus() {
   const state = usePopupAutoAnalyzeStatusView()

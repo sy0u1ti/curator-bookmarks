@@ -2,7 +2,7 @@ import { Button } from '../../ui/primitives/Button'
 import {
   dispatchPopupSavedSearchAction,
   usePopupSavedSearchesView
-} from '../popup-events'
+} from '../popup-controller-store'
 
 export function PopupSavedSearches() {
   const state = usePopupSavedSearchesView()

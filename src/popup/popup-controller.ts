@@ -1,0 +1,4215 @@
+import { useEffect } from 'react'
+import {
+  AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS,
+  AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS,
+  BOOKMARKS_BAR_ID,
+  POPUP_COMMAND_INTENT_TTL_MS,
+  ROOT_ID,
+  STORAGE_KEYS,
+  UNDO_WINDOW_MS
+} from '../shared/constants.js'
+import {
+  extractBookmarkData,
+  findBookmarksBar,
+  findNodeById
+} from '../shared/bookmark-tree.js'
+import {
+  formatBookmarkPath,
+  formatFolderPath
+} from '../shared/bookmark-path.js'
+import {
+  displayUrl,
+  extractDomain,
+  normalizeText
+} from '../shared/text.js'
+import { isExternallyCheckableUrl } from '../shared/sensitive-url.js'
+import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
+import {
+  createBookmark,
+  createTab,
+  getBookmarkTree,
+  moveBookmark,
+  updateBookmark
+} from '../shared/bookmarks-api.js'
+import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { requestBookmarkSave } from '../shared/messages.js'
+import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
+import {
+  buildBookmarkCatalogSnapshot,
+  type BookmarkCatalogSnapshot
+} from '../shared/bookmark-catalog.js'
+import {
+  MAX_POPUP_SEARCH_RESULTS,
+  POPUP_SEARCH_ASYNC_THRESHOLD,
+  getQueryTerms,
+  normalizeQuery,
+  searchBookmarks,
+  searchBookmarksCooperatively,
+  searchBookmarksFirstBatch,
+  type PopupSearchResult
+} from './search.js'
+import {
+  deleteSavedSearch,
+  getSavedSearchesForScope,
+  loadSavedSearchIndex,
+  parseSearchQuery,
+  saveSearch
+} from '../shared/search-query.js'
+import type { SavedSearch, SavedSearchIndex } from '../shared/search-query.js'
+import {
+  DEFAULT_NEW_TAB_WORKSPACE_ID,
+  getActiveNewTabWorkspace,
+  normalizeNewTabWorkspaceSettings,
+  toggleNewTabWorkspacePin
+} from '../shared/newtab-workspace-settings.js'
+import type {
+  NaturalSearchPlan,
+  NaturalSearchResultSet
+} from './natural-search.js'
+import {
+  buildLightPopupSearchIndex,
+  buildLightPopupSearchIndexFromCatalog,
+  enrichLightPopupSearchIndexWithPinyin,
+  enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog,
+  loadPopupSearchIndexSnapshotState,
+  patchLightPopupSearchIndexFromCatalog,
+  shouldWarmPopupSnapshotFullText
+} from './search-index.js'
+import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
+import { state } from './state.js'
+import {
+  type PopupActionMenuViewModel,
+  type PopupContentBookmarkRowViewModel,
+  type PopupContentFolderRowViewModel,
+  type PopupContentRowViewModel,
+  type PopupContentSearchResultViewModel,
+  type PopupContentViewModel,
+  type PopupEmptyStateViewModel,
+  type PopupFolderPickerState,
+  type PopupFolderTreeOptionViewModel,
+  type PopupSmartClassifierViewModel
+} from './components/PopupViewModels.js'
+import {
+  dispatchPopupAutoAnalyzeStatusChange,
+  dispatchPopupChromeChange,
+  dispatchPopupSearchFocusRequest,
+  dispatchPopupContentChange,
+  dispatchPopupFolderPickerChange,
+  dispatchPopupModalsChange,
+  dispatchPopupSavedSearchesChange,
+  dispatchPopupSearchChipsChange,
+  dispatchPopupSmartClassifierChange,
+  dispatchPopupToastsChange,
+  registerPopupActionHandlers,
+  type PopupAutoAnalyzeStatusActionDetail,
+  type PopupAutoAnalyzeStatusView,
+  type PopupChromeActionDetail,
+  type PopupChromeView,
+  type PopupContentActionDetail,
+  type PopupContentResultHoverDetail,
+  type PopupFolderPickerActionDetail,
+  type PopupModalActionDetail,
+  type PopupModalsView,
+  type PopupSavedSearchActionDetail,
+  type PopupSavedSearchesView,
+  type PopupSearchChipView,
+  type PopupSmartClassifierActionDetail,
+  type PopupSmartClassifierTitleChangeDetail,
+  type PopupToastActionDetail
+} from './popup-controller-store.js'
+import {
+  hydratePopupBaseData,
+  hydratePopupDeferredEnhancements
+} from './popup-hydration.js'
+import {
+  getPopupEditBookmarkDraftState,
+  getPopupEditBookmarkSavePlan
+} from './edit-bookmark-draft.js'
+import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
+const SEARCH_DEBOUNCE_MS = 140
+const NATURAL_SEARCH_DEBOUNCE_MS = 520
+const VIEW_NOTICE_MS = 1800
+const MAX_VISIBLE_TOASTS = 2
+const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
+const SMART_RECOMMENDATION_LIMIT = 3
+const SMART_LOADING_STEP_COUNT = 3
+const POPUP_DEFAULT_WORKSPACE_STORAGE = {
+  activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID,
+  workspaces: []
+}
+const DEFAULT_POPUP_PREFERENCES = {
+  naturalSearchEnabled: false
+}
+let popupDialogReturnFocusElement: HTMLElement | null = null
+let naturalSearchModulePromise: Promise<typeof import('./natural-search.js')> | null = null
+let naturalSearchAiModulePromise: Promise<typeof import('./natural-search-ai.js')> | null = null
+let aiSettingsModulePromise: Promise<typeof import('../options/sections/ai-settings.js')> | null = null
+let smartClassifierModulePromise: Promise<typeof import('./smart-classifier.js')> | null = null
+let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> | null = null
+let popupRefreshRunId = 0
+let currentTabHydrationPromise: Promise<void> | null = null
+let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
+let popupControllerEventController: AbortController | null = null
+let unregisterPopupActionHandlers: (() => void) | null = null
+interface PopupRefreshBaseData {
+  refreshRunId: number
+  rootNode: chrome.bookmarks.BookmarkTreeNode | null
+  bookmarksBarNode: chrome.bookmarks.BookmarkTreeNode | null
+  catalog: BookmarkCatalogSnapshot
+  indexedBookmarks: ReturnType<typeof buildLightPopupSearchIndex>
+}
+interface PopupRefreshDeferredData {
+  tagIndex: Awaited<ReturnType<typeof loadBookmarkTagIndex>> | null
+  snapshotState: Awaited<ReturnType<typeof loadPopupSearchIndexSnapshotState>>
+}
+function abortNaturalSearchRequest() {
+  state.naturalSearchAbortController?.abort()
+  state.naturalSearchAbortController = null
+}
+function loadNaturalSearchModule(): Promise<typeof import('./natural-search.js')> {
+  naturalSearchModulePromise ||= import('./natural-search.js')
+  return naturalSearchModulePromise
+}
+function loadNaturalSearchAiModule(): Promise<typeof import('./natural-search-ai.js')> {
+  naturalSearchAiModulePromise ||= import('./natural-search-ai.js')
+  return naturalSearchAiModulePromise
+}
+function loadAiSettingsModule(): Promise<typeof import('../options/sections/ai-settings.js')> {
+  aiSettingsModulePromise ||= import('../options/sections/ai-settings.js')
+  return aiSettingsModulePromise
+}
+function loadSmartClassifierModule(): Promise<typeof import('./smart-classifier.js')> {
+  smartClassifierModulePromise ||= import('./smart-classifier.js')
+  return smartClassifierModulePromise
+}
+function loadRecycleBinModule(): Promise<typeof import('../shared/recycle-bin.js')> {
+  recycleBinModulePromise ||= import('../shared/recycle-bin.js')
+  return recycleBinModulePromise
+}
+let popupControllerStarted = false
+
+export function usePopupController(): void {
+  useEffect(() => startPopupController(), [])
+}
+
+function startPopupController(): () => void {
+  if (popupControllerStarted) {
+    return cleanupPopupController
+  }
+  popupControllerStarted = true
+  popupControllerEventController = new AbortController()
+  const { signal } = popupControllerEventController
+
+  perfMark('popup.domContentLoaded')
+  bindEvents(signal)
+  render()
+  perfMark('popup.firstRender')
+  perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
+  void hydratePopupPreferences().finally(() => {
+    render()
+    refreshData({ initial: true, preserveSearch: false }).finally(() => {
+      perfMark('popup.interactive')
+      perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
+      void consumePopupCommandIntent().then((handled) => {
+        if (!handled && !document.body.classList.contains('smart-active')) {
+          focusSearchInput()
+        }
+      })
+    })
+  })
+  void hydrateAutoAnalyzeStatus()
+
+  window.addEventListener('pagehide', cleanupPopupController, { signal })
+  return cleanupPopupController
+}
+
+function bindEvents(signal: AbortSignal) {
+  unregisterPopupActionHandlers = registerPopupActionHandlers({
+    autoAnalyzeStatus: handleAutoAnalyzeStatusAction,
+    chrome: handleChromeAction,
+    content: handleContentAction,
+    contentResultHover: handleContentResultHover,
+    folderPicker: handleFolderPickerAction,
+    modal: handleModalAction,
+    savedSearch: ({ action, searchId }) => handleSavedSearchAction(action, searchId),
+    smartClassifier: handleSmartClassifierAction,
+    smartClassifierTitleChange: handleSmartClassifierTitleChange,
+    toast: handleToastAction
+  })
+  chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
+  document.addEventListener('keydown', handleDocumentKeydown, { signal })
+}
+async function hydratePopupPreferences() {
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])
+    const preferences = normalizePopupPreferences(stored[STORAGE_KEYS.popupPreferences])
+    state.naturalSearchEnabled = preferences.naturalSearchEnabled
+  } catch {
+    state.naturalSearchEnabled = DEFAULT_POPUP_PREFERENCES.naturalSearchEnabled
+  }
+  await refreshNaturalSearchAiConfiguredState()
+  if (!state.naturalSearchAiConfigured && state.naturalSearchEnabled) {
+    state.naturalSearchEnabled = false
+    void savePopupPreferences().catch(() => {})
+  }
+}
+function normalizePopupPreferences(value) {
+  if (!value || typeof value !== 'object') {
+    return { ...DEFAULT_POPUP_PREFERENCES }
+  }
+  return {
+    naturalSearchEnabled: value.naturalSearchEnabled === true
+  }
+}
+async function savePopupPreferences() {
+  await setLocalStorage({
+    [STORAGE_KEYS.popupPreferences]: {
+      naturalSearchEnabled: state.naturalSearchEnabled
+    }
+  })
+}
+async function refreshNaturalSearchAiConfiguredState() {
+  try {
+    const naturalSearchAi = await loadNaturalSearchAiModule()
+    const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    state.naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
+  } catch {
+    state.naturalSearchAiConfigured = false
+  } finally {
+    state.naturalSearchAiConfigChecked = true
+  }
+}
+async function hydrateSavedSearches() {
+  if (state.savedSearchesLoaded) {
+    return
+  }
+  try {
+    state.savedSearches = await loadSavedSearchIndex()
+    state.savedSearchesLoaded = true
+    state.savedSearchesError = ''
+  } catch {
+    state.savedSearchesLoaded = true
+    state.savedSearchesError = '保存搜索读取失败'
+  } finally {
+    renderSearchTools()
+  }
+}
+async function saveCurrentSearchQuery() {
+  const query = state.searchQuery.trim()
+  if (!query) {
+    showViewNotice('请输入查询后再保存')
+    focusSearchInput()
+    return
+  }
+  try {
+    const index = await ensureSavedSearchIndex()
+    state.savedSearches = await saveSearch(index, {
+      name: createSavedSearchName(query),
+      query,
+      scope: 'both'
+    })
+    state.savedSearchesLoaded = true
+    state.savedSearchesError = ''
+    renderSearchTools()
+    showViewNotice('已保存搜索，可在 popup 复用')
+  } catch (error) {
+    state.savedSearchesError = error instanceof Error ? error.message : '保存搜索失败'
+    renderSearchTools()
+    showToast({ type: 'error', message: '保存搜索失败，请稍后重试。' })
+  }
+}
+async function deletePopupSavedSearch(searchId) {
+  try {
+    const index = await ensureSavedSearchIndex()
+    state.savedSearches = await deleteSavedSearch(index, String(searchId || ''))
+    state.savedSearchesLoaded = true
+    state.savedSearchesError = ''
+    renderSearchTools()
+    showViewNotice('已删除保存搜索')
+  } catch (error) {
+    state.savedSearchesError = error instanceof Error ? error.message : '删除保存搜索失败'
+    renderSearchTools()
+    showToast({ type: 'error', message: '删除保存搜索失败，请稍后重试。' })
+  }
+}
+async function ensureSavedSearchIndex(): Promise<SavedSearchIndex> {
+  if (state.savedSearches) {
+    return state.savedSearches
+  }
+  state.savedSearches = await loadSavedSearchIndex()
+  state.savedSearchesLoaded = true
+  return state.savedSearches
+}
+function createSavedSearchName(query) {
+  const parsed = parseSearchQuery(query)
+  const chipLabels = parsed.chips.map((chip) => chip.label.replace(/^[^：]+：/, '')).filter(Boolean)
+  const terms = parsed.textTerms.join(' ')
+  const label = [...chipLabels, terms].filter(Boolean).join(' · ')
+  return cleanSmartText(label || query, 60) || '未命名搜索'
+}
+async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'general') {
+  const hash = target === 'ai-provider' ? 'general:ai-provider' : 'general'
+  try {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL(`src/options/options.html#${hash}`)
+    })
+    window.close()
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? error.message : '设置页打开失败，请稍后重试。'
+    })
+  }
+}
+async function openBookmarkHistoryPage() {
+  try {
+    await chrome.tabs.create({
+      url: chrome.runtime.getURL('src/options/options.html#bookmark-history')
+    })
+    window.close()
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? error.message : '添加历史打开失败，请稍后重试。'
+    })
+  }
+}
+async function hydrateAutoAnalyzeStatus() {
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+    const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+    state.autoAnalyzeStatus = currentStatus
+    renderAutoAnalyzeStatus()
+    if (stored[STORAGE_KEYS.autoAnalyzeStatus] && !currentStatus) {
+      await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
+    }
+    await acknowledgeAutoAnalyzeBadge(currentStatus)
+    await removeLocalStorage(STORAGE_KEYS.pendingAutoAnalyzeNotice)
+  } catch (error) {
+  }
+}
+async function dismissAutoAnalyzeStatus() {
+  state.autoAnalyzeStatus = null
+  renderAutoAnalyzeStatus()
+  await removeLocalStorage([
+    STORAGE_KEYS.autoAnalyzeStatus,
+    STORAGE_KEYS.pendingAutoAnalyzeNotice
+  ])
+  await clearActionBadge()
+}
+async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
+  await clearActionBadge()
+  if (!status) {
+    return
+  }
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+    const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+    if (!currentStatus || currentStatus.bookmarkId !== status.bookmarkId) {
+      return
+    }
+    await setLocalStorage({
+      [STORAGE_KEYS.autoAnalyzeStatus]: {
+        ...currentStatus,
+        badgeVisible: false
+      }
+    })
+  } catch {
+  }
+}
+function clearActionBadge(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    if (!chrome.action?.setBadgeText) {
+      resolve()
+      return
+    }
+    chrome.action.setBadgeText({ text: '' }, () => {
+      resolve()
+    })
+  })
+}
+function handleAutoAnalyzeStorageChanged(
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: string
+) {
+  if (areaName !== 'local') {
+    return
+  }
+  const statusChange = changes[STORAGE_KEYS.autoAnalyzeStatus]
+  if (statusChange) {
+    const nextStatus = normalizeAutoAnalyzeStatus(statusChange.newValue)
+    state.autoAnalyzeStatus = nextStatus
+    renderAutoAnalyzeStatus()
+    if (nextStatus?.badgeVisible) {
+      void acknowledgeAutoAnalyzeBadge(nextStatus)
+    }
+    if (statusChange.newValue && !nextStatus) {
+      void removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus).finally(() => {
+        void clearActionBadge()
+      })
+    }
+  }
+  const popupIntentChange = changes[STORAGE_KEYS.popupCommandIntent]
+  if (popupIntentChange?.newValue) {
+    void consumePopupCommandIntent(popupIntentChange.newValue)
+  }
+}
+function handleAutoAnalyzeStatusAction(detail: PopupAutoAnalyzeStatusActionDetail) {
+  const action = detail.action
+  if (action === 'toggle') {
+    state.autoAnalyzeCollapsed = !state.autoAnalyzeCollapsed
+    renderAutoAnalyzeStatus()
+    return
+  }
+  if (action === 'dismiss') {
+    void dismissAutoAnalyzeStatus()
+    return
+  }
+  if (action === 'history') {
+    void openBookmarkHistoryPage()
+  }
+}
+
+function handleChromeAction(detail: PopupChromeActionDetail) {
+  const action = String(detail.action || '')
+  if (action === 'open-settings') {
+    void openSettingsPage()
+    return
+  }
+  if (action === 'search-change') {
+    setSearchQuery(String(detail?.value || ''))
+    return
+  }
+  if (action === 'clear-search') {
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
+    focusSearchInput()
+    return
+  }
+  if (action === 'toggle-natural-search') {
+    void toggleNaturalLanguageSearch()
+  }
+}
+
+function focusSearchInput({ select = false } = {}): void {
+  dispatchPopupSearchFocusRequest(select)
+}
+
+function renderAutoAnalyzeStatus() {
+  dispatchPopupAutoAnalyzeStatusChange(getAutoAnalyzeStatusViewModel())
+}
+
+function getAutoAnalyzeStatusViewModel(): PopupAutoAnalyzeStatusView {
+  const status = state.autoAnalyzeStatus
+  if (!status) {
+    return {
+      collapsed: true,
+      detail: '',
+      showHistory: false,
+      status: null,
+      title: ''
+    }
+  }
+
+  const view = getAutoAnalyzeStatusView(status)
+  return {
+    collapsed: state.autoAnalyzeCollapsed,
+    detail: view.detail,
+    showHistory: status.status === 'completed',
+    status: status.status,
+    title: view.title
+  }
+}
+function getAutoAnalyzeStatusView(status) {
+  const title = cleanSmartText(status.title || '新增书签', 44) || '新增书签'
+  const folderPath = cleanSmartText(status.folderPath || '', 48)
+  const error = cleanSmartText(status.error || '', 80)
+  const detail = cleanSmartText(status.detail || '', 80)
+  if (status.status === 'queued') {
+    return {
+      title: '已加入自动分析',
+      detail: detail || `正在整理标签和命名：${title}`
+    }
+  }
+  if (status.status === 'processing') {
+    return {
+      title: '自动分析进行中',
+      detail: detail || `正在整理标签和命名：${title}`
+    }
+  }
+  if (status.status === 'failed') {
+    const retryHint = status.maxAttempts && status.attempts < status.maxAttempts
+      ? `，稍后重试 ${status.attempts}/${status.maxAttempts}`
+      : ''
+    const failureMessage = detail || error || '可重试；若持续失败，请检查 AI 设置'
+    return {
+      title: '自动分析失败',
+      detail: `${failureMessage}${retryHint}`.includes('AI 设置')
+        ? `${failureMessage}${retryHint}`
+        : `${failureMessage}${retryHint}；可重试或检查 AI 设置`
+    }
+  }
+  return {
+    title: '自动分析结果已保存',
+    detail: detail || (folderPath ? `结果已保存到 ${folderPath}：${title}` : `结果已保存：${title}`)
+  }
+}
+function normalizeAutoAnalyzeStatus(rawStatus) {
+  if (!rawStatus || typeof rawStatus !== 'object') {
+    return null
+  }
+  const status = String(rawStatus.status || '').trim()
+  if (!['queued', 'processing', 'completed', 'failed'].includes(status)) {
+    return null
+  }
+  const bookmarkId = String(rawStatus.bookmarkId || '').trim()
+  if (!bookmarkId) {
+    return null
+  }
+  const updatedAt = Number(rawStatus.updatedAt) || Date.now()
+  const createdAt = Number(rawStatus.createdAt) || updatedAt
+  const expiresAt = Number(rawStatus.expiresAt) || updatedAt + getAutoAnalyzeStatusTtl(status)
+  if (expiresAt <= Date.now()) {
+    return null
+  }
+  return {
+    status,
+    bookmarkId,
+    title: cleanSmartText(rawStatus.title || '新增书签', 80) || '新增书签',
+    url: String(rawStatus.url || '').trim(),
+    folderPath: cleanSmartText(rawStatus.folderPath || '', 120),
+    confidence: normalizeSmartConfidence(rawStatus.confidence),
+    error: cleanSmartText(rawStatus.error || '', 160),
+    detail: cleanSmartText(rawStatus.detail || '', 160),
+    attempts: Math.max(0, Math.round(Number(rawStatus.attempts) || 0)),
+    maxAttempts: Math.max(0, Math.round(Number(rawStatus.maxAttempts) || 0)),
+    badgeVisible: rawStatus.badgeVisible !== false,
+    createdAt,
+    updatedAt,
+    expiresAt
+  }
+}
+function getAutoAnalyzeStatusTtl(status) {
+  return status === 'queued' || status === 'processing'
+    ? AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS
+    : AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS
+}
+async function consumePopupCommandIntent(rawIntent = undefined): Promise<boolean> {
+  let intentSource = rawIntent
+  if (typeof rawIntent === 'undefined') {
+    const stored = await getLocalStorage([STORAGE_KEYS.popupCommandIntent])
+    intentSource = stored[STORAGE_KEYS.popupCommandIntent]
+  }
+  const intent = normalizePopupCommandIntent(intentSource)
+  if (!intent) {
+    if (intentSource) {
+      await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
+    }
+    return false
+  }
+  await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
+  if (intent.action === 'feedback') {
+    showCommandFeedbackIntent(intent)
+    return false
+  }
+  if (intent.action === 'smart-classifier') {
+    await runSmartClassifierFromCommand(intent)
+    return true
+  }
+  focusSearchFromCommand(intent)
+  return true
+}
+function normalizePopupCommandIntent(rawIntent) {
+  if (!rawIntent || typeof rawIntent !== 'object') {
+    return null
+  }
+  const action = String(rawIntent.action || '').trim()
+  if (!['search', 'smart-classifier', 'feedback'].includes(action)) {
+    return null
+  }
+  const tone = String(rawIntent.tone || '').trim()
+  const createdAt = Number(rawIntent.createdAt) || Date.now()
+  const expiresAt = Number(rawIntent.expiresAt) || createdAt + POPUP_COMMAND_INTENT_TTL_MS
+  if (expiresAt <= Date.now()) {
+    return null
+  }
+  return {
+    action,
+    sourceCommand: String(rawIntent.sourceCommand || '').trim(),
+    message: cleanSmartText(rawIntent.message || '', 120),
+    tone: ['success', 'warning', 'danger', 'info'].includes(tone) ? tone : 'info',
+    createdAt,
+    expiresAt
+  }
+}
+function showCommandFeedbackIntent(intent) {
+  const message = intent.message || '快捷键操作已完成。'
+  showViewNotice(message)
+  showToast({
+    type: intent.tone === 'success' ? 'success' : 'error',
+    message
+  })
+}
+function focusSearchFromCommand(intent) {
+  if (hasOpenModal()) {
+    closeDialogs()
+  }
+  if (['loading', 'results', 'error', 'permission'].includes(state.smartStatus)) {
+    resetSmartClassification()
+  }
+  render()
+  window.requestAnimationFrame(() => {
+    focusSearchInput({ select: true })
+    showViewNotice(intent.message || (state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入'))
+  })
+}
+async function runSmartClassifierFromCommand(intent) {
+  await ensureCurrentTabStateHydrated()
+  if (hasOpenModal()) {
+    closeDialogs()
+  }
+  const currentUrl = String(state.currentTab?.url || '').trim()
+  if (!isSmartClassifiableUrl(currentUrl)) {
+    showToast({
+      type: 'error',
+      message: '当前页面无法进行智能分类。'
+    })
+    focusSearchInput()
+    return
+  }
+  if (state.smartStatus === 'unavailable') {
+    state.smartStatus = 'idle'
+  }
+  render()
+  showViewNotice(intent.message || '正在智能分类当前页面。')
+  await classifyCurrentPage()
+}
+async function refreshData({ initial = false, preserveSearch = true } = {}) {
+  const refreshRunId = popupRefreshRunId + 1
+  popupRefreshRunId = refreshRunId
+  perfMark('popup.refreshData.start')
+  state.isLoading = true
+  state.loadError = ''
+  render()
+  try {
+    const { deferredHydration } = await hydratePopupBaseData({
+      loadBaseData: () => loadPopupBaseRefreshData(refreshRunId),
+      applyBaseData: (baseData) => {
+        if (refreshRunId !== popupRefreshRunId) {
+          return
+        }
+        applyPopupBaseRefreshData(baseData, { initial, preserveSearch })
+        perfMark('popup.refreshData.baseReady.end')
+        perfMeasure('popup.refreshData.baseReady', 'popup.refreshData.start', 'popup.refreshData.baseReady.end')
+      },
+      startDeferredHydration: (baseData) => hydratePopupDeferredRefreshData(baseData)
+    })
+    void deferredHydration.catch((error) => {
+      console.warn('[Curator] popup 延后数据补齐失败', error)
+    })
+  } catch (error) {
+    if (refreshRunId !== popupRefreshRunId) {
+      return
+    }
+    state.searchRunId += 1
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.loadError = error instanceof Error ? error.message : '书签加载失败，请稍后重试。'
+    state.searchResults = []
+  } finally {
+    if (refreshRunId !== popupRefreshRunId) {
+      return
+    }
+    state.isLoading = false
+    render()
+    schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
+  }
+}
+async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefreshBaseData> {
+  const tree = await getBookmarkTree()
+  perfMark('popup.bookmarkTreeLoaded')
+  const rootNode = Array.isArray(tree) ? tree[0] : tree
+  const bookmarksBarNode = findBookmarksBar(rootNode)
+  const catalog = buildBookmarkCatalogSnapshot({
+    rootNode,
+    tagIndex: null,
+    snapshotState: null,
+    includeFullText: false
+  })
+  const indexedBookmarks = buildLightPopupSearchIndexFromCatalog(catalog)
+  perfMark('popup.indexBuilt')
+  perfMeasure('popup.indexBuildMs', 'popup.bookmarkTreeLoaded', 'popup.indexBuilt')
+  return {
+    refreshRunId,
+    rootNode,
+    bookmarksBarNode,
+    catalog,
+    indexedBookmarks
+  }
+}
+function applyPopupBaseRefreshData(
+  baseData: PopupRefreshBaseData,
+  { initial, preserveSearch }: { initial: boolean; preserveSearch: boolean }
+): void {
+  state.rawTreeRoot = baseData.rootNode
+  state.bookmarksBarNode = baseData.bookmarksBarNode
+  applyPopupIndexedBookmarkData({
+    catalog: baseData.catalog,
+    indexedBookmarks: baseData.indexedBookmarks,
+  })
+  syncPopupExpandedFolderState(baseData.catalog.extracted, initial)
+  resetSearchForPopupRefresh(preserveSearch)
+}
+function applyPopupIndexedBookmarkData({
+  catalog,
+  indexedBookmarks,
+}: {
+  catalog: BookmarkCatalogSnapshot
+  indexedBookmarks: ReturnType<typeof buildLightPopupSearchIndex>
+}): void {
+  state.allBookmarks = indexedBookmarks
+  state.allFolders = catalog.extracted.folders
+  state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
+  state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
+  state.folderMap = catalog.extracted.folderMap
+  popupBookmarkCatalog = catalog
+  state.searchTagIndex = catalog.tagIndex
+  state.searchSnapshotState = catalog.snapshotState
+  state.searchCache.setVersion(catalog.version)
+  resetPopupSearchEnhancementReadiness()
+  clearSearchCaches()
+}
+
+function applyPopupIndexedBookmarkEnhancements(catalog: BookmarkCatalogSnapshot): void {
+  patchLightPopupSearchIndexFromCatalog(state.allBookmarks, catalog)
+  popupBookmarkCatalog = catalog
+  state.searchTagIndex = catalog.tagIndex
+  state.searchSnapshotState = catalog.snapshotState
+  state.searchCache.setVersion(catalog.version)
+  resetPopupSearchEnhancementReadiness()
+  clearSearchCaches()
+}
+
+function resetPopupSearchEnhancementReadiness(): void {
+  state.searchSnapshotFullTextReady = false
+  state.searchSnapshotFullTextPending = false
+  state.searchSnapshotFullTextRunId += 1
+  state.pinyinEnrichmentReady = false
+  state.pinyinEnrichmentPending = false
+  state.pinyinEnrichmentRunId += 1
+}
+function syncPopupExpandedFolderState(
+  extracted: ReturnType<typeof extractBookmarkData>,
+  initial: boolean
+): void {
+  const folderIds = new Set(extracted.folders.map((folder) => folder.id))
+  const defaultExpanded = getDefaultExpandedFolders(state.bookmarksBarNode)
+  const allExpanded = new Set(extracted.folders.map((folder) => folder.id))
+  if (state.selectedFolderFilterId && !folderIds.has(state.selectedFolderFilterId)) {
+    state.selectedFolderFilterId = null
+  }
+  if (initial || state.expandedFolders.size === 0) {
+    state.expandedFolders = defaultExpanded
+  } else {
+    state.expandedFolders = new Set(
+      [...state.expandedFolders].filter((folderId) => folderIds.has(folderId))
+    )
+    if (!state.expandedFolders.size) {
+      state.expandedFolders = defaultExpanded
+    }
+  }
+  if (initial || state.moveExpandedFolders.size === 0) {
+    state.moveExpandedFolders = allExpanded
+  } else {
+    state.moveExpandedFolders = new Set(
+      [...state.moveExpandedFolders].filter((folderId) => folderIds.has(folderId))
+    )
+    if (!state.moveExpandedFolders.size) {
+      state.moveExpandedFolders = allExpanded
+    }
+  }
+}
+function resetSearchForPopupRefresh(preserveSearch: boolean): void {
+  if (preserveSearch) {
+    state.debouncedQuery = state.searchQuery.trim()
+    runSearch()
+    return
+  }
+  state.searchRunId += 1
+  state.searchQuery = ''
+  state.debouncedQuery = ''
+  state.searchResults = []
+  state.activeResultIndex = 0
+  state.searchPending = false
+  state.naturalSearchPending = false
+  state.naturalSearchError = ''
+  state.naturalSearchPlan = null
+  abortNaturalSearchRequest()
+  state.searchHighlightQuery = ''
+}
+function hydratePopupDeferredRefreshData(baseData: PopupRefreshBaseData): Promise<unknown> {
+  const indexHydration = hydratePopupDeferredEnhancements({
+    baseData,
+    loadDeferredData: loadPopupSearchEnhancementData,
+    applyDeferredData: applyPopupSearchEnhancementData
+  })
+  const currentTabHydration = hydrateCurrentTabState(baseData.refreshRunId)
+  currentTabHydrationPromise = currentTabHydration
+  void currentTabHydration.then(() => {
+    if (baseData.refreshRunId !== popupRefreshRunId) {
+      return
+    }
+    render()
+  }).finally(() => {
+    if (currentTabHydrationPromise === currentTabHydration) {
+      currentTabHydrationPromise = null
+    }
+  })
+  void hydrateNewTabPinnedState(baseData.refreshRunId).then(() => {
+    if (baseData.refreshRunId !== popupRefreshRunId) {
+      return
+    }
+    render()
+  })
+  void hydrateSavedSearches()
+  return indexHydration
+}
+async function loadPopupSearchEnhancementData(): Promise<PopupRefreshDeferredData> {
+  const [tagIndex, snapshotState] = await Promise.all([
+    loadBookmarkTagIndex().catch(() => null),
+    loadPopupSearchIndexSnapshotState()
+  ])
+  return { tagIndex, snapshotState }
+}
+function applyPopupSearchEnhancementData(
+  baseData: PopupRefreshBaseData,
+  deferredData: PopupRefreshDeferredData
+): void {
+  if (baseData.refreshRunId !== popupRefreshRunId) {
+    return
+  }
+  const catalog = buildBookmarkCatalogSnapshot({
+    rootNode: baseData.rootNode,
+    tagIndex: deferredData.tagIndex,
+    snapshotState: deferredData.snapshotState,
+    includeFullText: false,
+    extracted: baseData.catalog.extracted
+  })
+  applyPopupIndexedBookmarkEnhancements(catalog)
+  perfMark('popup.searchIndexReady.end')
+  perfMeasure('popup.searchIndexReady', 'popup.bookmarkTreeLoaded', 'popup.searchIndexReady.end')
+  if (state.currentTab) {
+    applyCurrentTabBookmarkMatch()
+  }
+  if (state.debouncedQuery) {
+    runSearch()
+  }
+  render()
+  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
+}
+function schedulePinyinEnrichment(runId: number): void {
+  if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
+    return
+  }
+  if (runId !== state.pinyinEnrichmentRunId) {
+    return
+  }
+  if (!state.allBookmarks.length) {
+    return
+  }
+  state.pinyinEnrichmentPending = true
+  perfMark('popup.pinyinEnrichmentStart')
+  const targets = state.allBookmarks
+  const startEnrichment = () => {
+    if (runId !== state.pinyinEnrichmentRunId) {
+      state.pinyinEnrichmentPending = false
+      return
+    }
+    enrichLightPopupSearchIndexWithPinyin(targets, {
+      isActive: () => runId === state.pinyinEnrichmentRunId
+    })
+      .then((result) => {
+        if (runId !== state.pinyinEnrichmentRunId) {
+          return
+        }
+        state.pinyinEnrichmentPending = false
+        if (result.aborted) {
+          return
+        }
+        state.pinyinEnrichmentReady = true
+        perfMark('popup.pinyinEnrichmentReady')
+        perfMeasure(
+          'popup.pinyinEnrichmentMs',
+          'popup.pinyinEnrichmentStart',
+          'popup.pinyinEnrichmentReady'
+        )
+        clearSearchCaches()
+        if (state.debouncedQuery || state.searchQuery) {
+          runSearch()
+        }
+        render()
+      })
+      .catch((error) => {
+        if (runId !== state.pinyinEnrichmentRunId) {
+          return
+        }
+        state.pinyinEnrichmentPending = false
+        console.warn('[Curator] 拼音索引补齐失败', error)
+      })
+  }
+  setTimeout(startEnrichment, 0)
+}
+function ensurePinyinEnrichmentForQuery(query: string): void {
+  if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
+    return
+  }
+  if (!state.allBookmarks.length) {
+    return
+  }
+  if (!requiresPinyinTokens(query)) {
+    return
+  }
+  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
+}
+async function hydrateCurrentTabState(refreshRunId = popupRefreshRunId) {
+  const currentTab = await getActiveTab().catch(() => null)
+  if (refreshRunId !== popupRefreshRunId) {
+    return
+  }
+  state.currentTab = currentTab
+  applyCurrentTabBookmarkMatch()
+}
+async function ensureCurrentTabStateHydrated(): Promise<void> {
+  if (currentTabHydrationPromise) {
+    await currentTabHydrationPromise
+    return
+  }
+  await hydrateCurrentTabState()
+}
+function applyCurrentTabBookmarkMatch() {
+  const currentUrl = String(state.currentTab?.url || '').trim()
+  const normalizedCurrentUrl = normalizeBookmarkSaveUrl(currentUrl)
+  const matchedBookmark = normalizedCurrentUrl
+    ? state.bookmarkDuplicateKeyMap.get(normalizedCurrentUrl)
+    : null
+  state.currentPageBookmarkId = matchedBookmark?.id || null
+  if (!isSmartClassifiableUrl(currentUrl)) {
+    state.smartStatus = 'unavailable'
+    state.smartRecommendations = []
+    state.smartSelectedRecommendationId = ''
+    return
+  }
+  if (!['loading', 'results', 'permission', 'saving'].includes(state.smartStatus)) {
+    state.smartStatus = 'idle'
+  }
+}
+async function hydrateNewTabPinnedState(refreshRunId = popupRefreshRunId) {
+  try {
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    if (refreshRunId !== popupRefreshRunId) {
+      return
+    }
+    const settings = normalizeNewTabWorkspaceSettings(
+      stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
+      { validBookmarkIds: state.bookmarkMap.keys() }
+    )
+    state.newTabPinnedIds = new Set(getActiveNewTabWorkspace(settings).pinnedIds)
+  } catch {
+    if (refreshRunId !== popupRefreshRunId) {
+      return
+    }
+    state.newTabPinnedIds = new Set()
+  }
+}
+function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
+  const map = new Map()
+  for (const bookmark of bookmarks) {
+    const duplicateKey = String(bookmark.duplicateKey || '').trim()
+    if (duplicateKey && !map.has(duplicateKey)) {
+      map.set(duplicateKey, bookmark)
+    }
+  }
+  return map
+}
+function cleanupPopupController() {
+  popupControllerEventController?.abort()
+  popupControllerEventController = null
+  unregisterPopupActionHandlers?.()
+  unregisterPopupActionHandlers = null
+  popupControllerStarted = false
+  abortNaturalSearchRequest()
+  chrome.storage?.onChanged?.removeListener?.(handleAutoAnalyzeStorageChanged)
+  clearTimeout(state.searchTimer)
+  state.searchTimer = null
+  clearViewNotice()
+  clearEditDiscardGuard()
+  for (const timeoutId of state.toastTimers.values()) {
+    clearTimeout(timeoutId)
+  }
+  state.toastTimers.clear()
+  state.toasts = []
+  state.contentRenderHtml = ''
+  state.filteredBookmarksCacheKey = ''
+  state.filteredBookmarksCache = []
+  clearSearchCaches()
+}
+function maybeWarmPopupSnapshotFullTextForSearch() {
+  if (
+    state.searchSnapshotFullTextReady ||
+    state.searchSnapshotFullTextPending ||
+    !state.debouncedQuery.trim()
+  ) {
+    return
+  }
+  const snapshotState = state.searchSnapshotState
+  const warmupRunId = state.searchSnapshotFullTextRunId + 1
+  state.searchSnapshotFullTextRunId = warmupRunId
+  if (!shouldWarmPopupSnapshotFullText(snapshotState)) {
+    state.searchSnapshotFullTextPending = false
+    state.searchSnapshotFullTextReady = false
+    return
+  }
+  state.searchSnapshotFullTextPending = true
+  window.setTimeout(() => {
+    window.requestAnimationFrame(() => {
+      void warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId)
+    })
+  }, SEARCH_SNAPSHOT_WARM_DELAY_MS)
+}
+async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
+  if (state.searchSnapshotFullTextRunId !== warmupRunId || !snapshotState?.index) {
+    return
+  }
+  const catalog = buildBookmarkCatalogSnapshot({
+    rootNode: state.rawTreeRoot,
+    tagIndex: state.searchTagIndex,
+    snapshotState,
+    includeFullText: true,
+    extracted: popupBookmarkCatalog?.extracted || null
+  })
+  await enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog(state.allBookmarks, catalog, {
+    isActive: () => state.searchSnapshotFullTextRunId === warmupRunId
+  })
+
+  if (state.searchSnapshotFullTextRunId !== warmupRunId) {
+    return
+  }
+
+  popupBookmarkCatalog = catalog
+  state.searchCache.setVersion(catalog.version)
+  state.searchSnapshotFullTextReady = true
+  state.searchSnapshotFullTextPending = false
+  state.pinyinEnrichmentReady = false
+  state.pinyinEnrichmentPending = false
+  state.pinyinEnrichmentRunId += 1
+  clearSearchCaches()
+  if (state.debouncedQuery) {
+    runSearch()
+  }
+  render()
+  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
+}
+function getActiveTab(): Promise<chrome.tabs.Tab | null> {
+  return new Promise((resolve, reject) => {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+      resolve(tabs?.[0] || null)
+    })
+  })
+}
+function setSearchQuery(value, { immediate = false } = {}) {
+  state.searchQuery = value
+  state.naturalSearchSetupRequired = false
+  clearViewNotice()
+  clearTimeout(state.searchTimer)
+  ensurePinyinEnrichmentForQuery(value)
+  if (immediate) {
+    state.debouncedQuery = value.trim()
+    runSearch()
+    render()
+    return
+  }
+  const debounceMs = state.naturalSearchEnabled ? NATURAL_SEARCH_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS
+  state.searchTimer = window.setTimeout(() => {
+    state.debouncedQuery = value.trim()
+    runSearch()
+    render()
+  }, debounceMs)
+  render()
+}
+async function toggleNaturalLanguageSearch() {
+  const enabled = !state.naturalSearchEnabled
+  if (enabled) {
+    await refreshNaturalSearchAiConfiguredState()
+    if (!state.naturalSearchAiConfigured) {
+      state.naturalSearchEnabled = false
+      state.naturalSearchSetupRequired = false
+      state.naturalSearchPending = false
+      state.naturalSearchError = ''
+      state.naturalSearchPlan = null
+      state.searchHighlightQuery = ''
+      abortNaturalSearchRequest()
+      openAiProviderPromptDialog()
+      void savePopupPreferences().catch(() => {})
+      return
+    }
+  }
+  state.naturalSearchEnabled = enabled
+  state.naturalSearchSetupRequired = false
+  state.naturalSearchPending = false
+  state.naturalSearchError = ''
+  state.naturalSearchPlan = null
+  abortNaturalSearchRequest()
+  state.searchHighlightQuery = ''
+  state.searchRunId += 1
+  render()
+  void savePopupPreferences().catch(() => {})
+  if (enabled) {
+    await prepareNaturalLanguageSearchAi()
+  }
+  if (state.naturalSearchEnabled !== enabled) {
+    void savePopupPreferences().catch(() => {})
+    return
+  }
+  setSearchQuery(state.searchQuery, { immediate: true })
+  focusSearchInput()
+}
+async function prepareNaturalLanguageSearchAi() {
+  try {
+    const naturalSearchAi = await loadNaturalSearchAiModule()
+    const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (!naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
+      state.naturalSearchAiConfigured = false
+      state.naturalSearchEnabled = false
+      state.naturalSearchError = ''
+      openAiProviderPromptDialog()
+      return
+    }
+    state.naturalSearchAiConfigured = true
+    state.naturalSearchAiConfigChecked = true
+    naturalSearchAi.validateNaturalSearchAiProvider(settings)
+    await naturalSearchAi.ensureNaturalSearchAiPermissions(settings, { interactive: true })
+  } catch {
+    state.naturalSearchError = 'AI 未就绪，请检查 AI 渠道配置或授权。'
+  }
+}
+function runSearch() {
+  const query = state.debouncedQuery
+  const normalizedQuery = normalizeQuery(query)
+  const runId = state.searchRunId + 1
+  state.searchRunId = runId
+  state.searchHighlightQuery = normalizedQuery
+  state.naturalSearchSetupRequired = false
+  state.naturalSearchError = ''
+  if (!normalizedQuery) {
+    state.searchResults = []
+    state.activeResultIndex = 0
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.naturalSearchPlan = null
+    state.filteredBookmarksCacheKey = ''
+    state.filteredBookmarksCache = []
+    abortNaturalSearchRequest()
+    return
+  }
+  maybeWarmPopupSnapshotFullTextForSearch()
+  if (state.naturalSearchEnabled) {
+    runNaturalSearch(query, normalizedQuery, runId)
+    return
+  }
+  abortNaturalSearchRequest()
+  state.naturalSearchPending = false
+  state.naturalSearchPlan = null
+  try {
+    const cacheKey = getSearchCacheKey(normalizedQuery)
+    const cachedResults = state.searchCache.get(cacheKey)
+    const bookmarks = getFilteredBookmarks()
+    if (cachedResults) {
+      state.searchPending = false
+      state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
+      state.activeResultIndex = Math.min(
+        state.activeResultIndex,
+        Math.max(state.searchResults.length - 1, 0)
+      )
+      return
+    }
+    if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
+      const results = searchBookmarks(normalizedQuery, bookmarks)
+      cacheSearchResults(cacheKey, results)
+      state.searchPending = false
+      state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
+      state.activeResultIndex = Math.min(
+        state.activeResultIndex,
+        Math.max(state.searchResults.length - 1, 0)
+      )
+      return
+    }
+    state.searchPending = true
+    state.searchResults = []
+    state.activeResultIndex = 0
+    const firstBatch = searchBookmarksFirstBatch(
+      normalizedQuery,
+      bookmarks,
+      MAX_POPUP_SEARCH_RESULTS
+    )
+    if (firstBatch.results.length) {
+      state.searchResults = firstBatch.results.slice(0, MAX_POPUP_SEARCH_RESULTS)
+      state.activeResultIndex = 0
+      render()
+    }
+    searchBookmarksCooperatively(normalizedQuery, bookmarks, {
+      isActive: () => state.searchRunId === runId,
+      yieldWork
+    })
+      .then((results) => {
+        if (state.searchRunId !== runId) {
+          return
+        }
+        cacheSearchResults(cacheKey, results)
+        state.searchPending = false
+        state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
+        state.activeResultIndex = Math.min(
+          state.activeResultIndex,
+          Math.max(state.searchResults.length - 1, 0)
+        )
+        render()
+      })
+      .catch((error) => {
+        if (state.searchRunId !== runId) {
+          return
+        }
+        state.searchPending = false
+        state.searchResults = []
+        state.loadError = error instanceof Error ? error.message : '查询失败，请重试。'
+        render()
+      })
+  } catch (error) {
+    state.searchPending = false
+    state.searchResults = []
+    state.loadError = error instanceof Error ? error.message : '查询失败，请重试。'
+  }
+}
+async function runNaturalSearch(query, normalizedQuery, runId) {
+  abortNaturalSearchRequest()
+  const controller = new AbortController()
+  state.naturalSearchAbortController = controller
+  const cacheKey = getSearchCacheKey(`natural:${getNaturalSearchDateBucket()}:${normalizedQuery}`)
+  const planCacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
+  const cachedResults = state.searchCache.get(cacheKey)
+  if (!cachedResults) {
+    state.searchPending = true
+    state.naturalSearchPending = true
+    state.searchResults = []
+    state.activeResultIndex = 0
+  }
+  try {
+    const naturalSearch = await loadNaturalSearchModule()
+    if (state.searchRunId !== runId) {
+      return
+    }
+    if (cachedResults) {
+      const cachedPlanResult = await resolveCachedNaturalSearchPlan(query, planCacheKey, naturalSearch)
+      if (state.searchRunId !== runId) {
+        return
+      }
+      if (cachedPlanResult.canReuseResults) {
+        state.naturalSearchPlan = cachedPlanResult.plan
+        state.searchHighlightQuery = cachedPlanResult.plan.highlightQuery || normalizedQuery
+        state.searchPending = false
+        state.naturalSearchPending = false
+        state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
+        state.activeResultIndex = Math.min(
+          state.activeResultIndex,
+          Math.max(state.searchResults.length - 1, 0)
+        )
+        render()
+        return
+      }
+      state.searchCache.delete(cacheKey)
+      state.searchPending = true
+      state.naturalSearchPending = true
+      state.searchResults = []
+      state.activeResultIndex = 0
+    }
+    const plan = await resolveNaturalSearchPlan(query, normalizedQuery, naturalSearch, {
+      signal: controller.signal
+    })
+    if (state.searchRunId !== runId) {
+      return
+    }
+    state.naturalSearchPlan = plan
+    state.searchHighlightQuery = plan.highlightQuery || normalizedQuery
+    const bookmarks = naturalSearch.filterBookmarksByNaturalDateRange(getFilteredBookmarks(), plan)
+    const resultSets: NaturalSearchResultSet[] = []
+    for (const naturalQuery of plan.queries) {
+      if (state.searchRunId !== runId) {
+        return
+      }
+      const results = await searchNaturalQuery(naturalQuery, bookmarks, runId)
+      resultSets.push({ query: naturalQuery, results })
+    }
+    if (state.searchRunId !== runId) {
+      return
+    }
+    const results = naturalSearch.mergeNaturalSearchResultSets(plan, resultSets)
+    cacheSearchResults(cacheKey, results)
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
+    state.activeResultIndex = Math.min(
+      state.activeResultIndex,
+      Math.max(state.searchResults.length - 1, 0)
+    )
+    render()
+  } catch (error) {
+    if (
+      state.searchRunId !== runId ||
+      isAbortError(error) ||
+      (error instanceof Error && error.message === 'search-cancelled')
+    ) {
+      return
+    }
+    state.searchPending = false
+    state.naturalSearchPending = false
+    state.searchResults = []
+    if (error instanceof Error && error.message === 'ai-provider-not-configured') {
+      state.naturalSearchEnabled = false
+      state.naturalSearchPlan = null
+      state.naturalSearchError = ''
+      state.searchHighlightQuery = normalizedQuery
+      runSearch()
+      render()
+      return
+    }
+    state.loadError = error instanceof Error ? error.message : 'AI 搜索失败，请重试。'
+    render()
+  } finally {
+    if (state.naturalSearchAbortController === controller) {
+      state.naturalSearchAbortController = null
+    }
+  }
+}
+async function resolveCachedNaturalSearchPlan(
+  query,
+  planCacheKey,
+  naturalSearch: typeof import('./natural-search.js')
+): Promise<{ plan: NaturalSearchPlan; canReuseResults: boolean }> {
+  const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
+  const cachedPlan = state.naturalSearchPlanCache.get(planCacheKey)
+  if (!cachedPlan || cachedPlan.source !== 'ai') {
+    return { plan: localPlan, canReuseResults: false }
+  }
+  try {
+    const naturalSearchAi = await loadNaturalSearchAiModule()
+    const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
+      return { plan: cachedPlan, canReuseResults: true }
+    }
+  } catch {
+    // Fall through to local parsing when provider settings cannot be read.
+  }
+  state.naturalSearchPlanCache.delete(planCacheKey)
+  state.naturalSearchAiConfigured = false
+  state.naturalSearchAiConfigChecked = true
+  state.naturalSearchEnabled = false
+  state.naturalSearchError = ''
+  void savePopupPreferences().catch(() => {})
+  openAiProviderPromptDialog()
+  return { plan: localPlan, canReuseResults: false }
+}
+async function resolveNaturalSearchPlan(
+  query,
+  normalizedQuery,
+  naturalSearch: typeof import('./natural-search.js'),
+  options: { signal?: AbortSignal | null } = {}
+): Promise<NaturalSearchPlan> {
+  const cacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
+  const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
+  let settings
+  try {
+    const naturalSearchAi = await loadNaturalSearchAiModule()
+    settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+  } catch (error) {
+    const naturalSearchAi = await loadNaturalSearchAiModule()
+    state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
+    throw error
+  }
+  const naturalSearchAi = await loadNaturalSearchAiModule()
+  if (!naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
+    state.naturalSearchAiConfigured = false
+    state.naturalSearchAiConfigChecked = true
+    state.naturalSearchEnabled = false
+    state.naturalSearchError = ''
+    void savePopupPreferences().catch(() => {})
+    openAiProviderPromptDialog()
+    throw new Error('ai-provider-not-configured')
+  }
+  state.naturalSearchAiConfigured = true
+  state.naturalSearchAiConfigChecked = true
+  const cachedPlan = state.naturalSearchPlanCache.get(cacheKey)
+  if (cachedPlan) {
+    return cachedPlan
+  }
+  try {
+    const plan = await naturalSearchAi.requestNaturalSearchAiPlan({
+      query,
+      localPlan,
+      settings,
+      signal: options.signal
+    })
+    state.naturalSearchError = ''
+    state.naturalSearchPlanCache.set(cacheKey, plan)
+    return plan
+  } catch (error) {
+    state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
+    throw error
+  }
+}
+async function searchNaturalQuery(query, bookmarks, runId): Promise<PopupSearchResult[]> {
+  if (!query || !bookmarks.length) {
+    return []
+  }
+  if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
+    return searchBookmarks(query, bookmarks)
+  }
+  return searchBookmarksCooperatively(query, bookmarks, {
+    isActive: () => state.searchRunId === runId,
+    yieldWork
+  })
+}
+function render() {
+  renderChrome()
+  renderAutoAnalyzeStatus()
+  renderSmartClassifier()
+  renderMainContent()
+  renderModals()
+  renderToasts()
+}
+function renderChrome() {
+  dispatchPopupChromeChange(getPopupChromeViewModel())
+  renderSearchTools()
+}
+
+function getPopupChromeViewModel(): PopupChromeView {
+  const naturalSearchPending = state.naturalSearchPending
+  return {
+    loadError: state.loadError,
+    search: {
+      ariaLabel: getSearchInputAriaLabel(),
+      clearVisible: Boolean(state.searchQuery),
+      fallback: isNaturalSearchLocalFallback(),
+      label: getNaturalSearchToggleText(),
+      notConfigured: !state.naturalSearchAiConfigured && !state.naturalSearchEnabled,
+      pending: naturalSearchPending,
+      placeholder: getSearchInputPlaceholder(),
+      pressed: state.naturalSearchEnabled,
+      query: state.searchQuery,
+      title: getNaturalSearchToggleTitle(naturalSearchPending)
+    },
+    viewCaption: getViewCaptionText()
+  }
+}
+function renderSearchTools() {
+  const parsed = parseSearchQuery(state.searchQuery)
+  const chips = parsed.chips
+  dispatchPopupSearchChipsChange(
+    chips.map((chip): PopupSearchChipView => ({
+      kind: String(chip.kind || ''),
+      label: String(chip.label || '')
+    }))
+  )
+  renderSavedSearches()
+}
+
+function renderSavedSearches() {
+  const savedSearches = state.savedSearches
+    ? getSavedSearchesForScope(state.savedSearches, 'popup')
+    : []
+  const normalizedQuery = normalizeQuery(state.searchQuery)
+  const canSaveCurrent = Boolean(normalizedQuery && queryHasAdvancedSearchSyntax(state.searchQuery))
+  const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeQuery(item.query) === normalizedQuery)
+  const show = savedSearches.length > 0 || Boolean(state.savedSearchesError) || canSaveCurrent
+  const hasError = Boolean(state.savedSearchesError)
+  const expanded = Boolean(state.savedSearchesExpanded) || hasError
+  const viewModel: PopupSavedSearchesView = {
+    canSaveCurrent,
+    error: state.savedSearchesError || '',
+    expanded,
+    hasCurrentSaved,
+    items: savedSearches.map((item) => ({
+      active: normalizeQuery(item.query) === normalizedQuery,
+      id: String(item.id || ''),
+      label: item.name || item.query,
+      query: item.query
+    })),
+    show
+  }
+
+  dispatchPopupSavedSearchesChange(viewModel)
+}
+function queryHasAdvancedSearchSyntax(query: string): boolean {
+  const value = String(query || '').trim()
+  if (!value) {
+    return false
+  }
+  return /\b(?:site|folder|type):\s*\S/i.test(value) ||
+    /(^|\s)-(?=\S)/.test(value) ||
+    /(最近\s*\d+\s*(?:天|周|月|年)|昨天|前天|上个月|本周|本月|今年)/.test(value)
+}
+function getSearchInputPlaceholder() {
+  return state.naturalSearchEnabled ? 'AI 语义搜索' : '关键词搜索'
+}
+function getSearchInputAriaLabel() {
+  return state.naturalSearchEnabled
+    ? 'AI 语义搜索书签'
+    : '关键词搜索书签标题、网址、标签或高级语法'
+}
+function isNaturalSearchLocalFallback() {
+  return Boolean(state.naturalSearchEnabled && state.naturalSearchError)
+}
+function getNaturalSearchToggleText() {
+  if (!state.naturalSearchEnabled) {
+    return '语义'
+  }
+  if (state.naturalSearchPending) {
+    return '思考中'
+  }
+  return 'AI'
+}
+function getNaturalSearchToggleTitle(isPending: boolean) {
+  if (!state.naturalSearchEnabled) {
+    return state.naturalSearchAiConfigured
+      ? '开启 AI 语义搜索'
+      : '需要先配置 AI 渠道'
+  }
+  if (isPending) {
+    return '正在用 AI 理解搜索意图，点击关闭'
+  }
+  return state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索'
+}
+function getViewCaptionText(): string {
+  if (state.viewNoticeMessage && !state.isLoading && !state.searchPending && !state.naturalSearchPending) {
+    return state.viewNoticeMessage
+  }
+  if (state.debouncedQuery) {
+    if (state.naturalSearchEnabled) {
+      return state.searchPending
+        ? getNaturalSearchPendingCaption()
+        : `${getNaturalSearchResultCaption()} · ${state.searchResults.length} 条`
+    }
+    return state.searchPending
+      ? '本地搜索中…'
+      : `本地匹配 · ${state.searchResults.length} 条`
+  }
+  const currentRoot = getCurrentTreeRoot()
+  return currentRoot?.title || '书签栏'
+}
+function getNaturalSearchPendingCaption() {
+  return 'AI 语义搜索解析中…'
+}
+function getNaturalSearchResultCaption() {
+  const plan = state.naturalSearchPlan
+  const modeLabel = 'AI 改写后匹配'
+  const statusLabel = getNaturalSearchStatusLabelFallback(plan)
+  const detail = statusLabel.replace(/^(AI 解析|本地解析)( · )?/, '').trim()
+  return detail ? `${modeLabel} · ${detail}` : modeLabel
+}
+function getNaturalSearchStatusLabelFallback(plan: NaturalSearchPlan | null): string {
+  if (!plan) {
+    return '自然语言搜索'
+  }
+  const parts = [plan.source === 'ai' ? 'AI 解析' : '本地解析']
+  if (plan.dateRange?.label) {
+    parts.push(plan.dateRange.label)
+  }
+  const keywordSummary = getNaturalKeywordSummaryFallback(plan)
+  if (keywordSummary) {
+    parts.push(`关键词 ${keywordSummary}`)
+  }
+  const exclusionSummary = formatNaturalTermsFallback(plan.excludedTerms, 2)
+  if (exclusionSummary) {
+    parts.push(`排除 ${exclusionSummary}`)
+  }
+  return parts.join(' · ')
+}
+function getNaturalKeywordSummaryFallback(plan: NaturalSearchPlan): string {
+  const terms = getQueryTerms(plan.highlightQuery)
+    .filter((term) => !plan.excludedTerms.includes(term))
+  return formatNaturalTermsFallback(terms, 3)
+}
+function formatNaturalTermsFallback(terms: string[], limit: number): string {
+  const uniqueTerms = [...new Set(terms)]
+  const visibleTerms = uniqueTerms
+    .slice(0, Math.max(1, limit))
+    .map((term) => cleanSmartText(term, 20))
+    .filter(Boolean)
+  if (!visibleTerms.length) {
+    return ''
+  }
+  const suffix = uniqueTerms.length > visibleTerms.length ? ` 等 ${uniqueTerms.length} 个` : ''
+  return `${visibleTerms.join(' / ')}${suffix}`
+}
+function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
+  const normalizedMessage = cleanViewNotice(message)
+  if (!normalizedMessage) {
+    return
+  }
+  clearViewNotice()
+  state.viewNoticeMessage = normalizedMessage
+  renderChrome()
+  state.viewNoticeTimer = window.setTimeout(() => {
+    if (state.viewNoticeMessage === normalizedMessage) {
+      state.viewNoticeMessage = ''
+      renderChrome()
+    }
+    state.viewNoticeTimer = null
+  }, durationMs)
+}
+function clearViewNotice() {
+  if (state.viewNoticeTimer) {
+    window.clearTimeout(state.viewNoticeTimer)
+    state.viewNoticeTimer = null
+  }
+  state.viewNoticeMessage = ''
+}
+function cleanViewNotice(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (text.length <= 72) {
+    return text
+  }
+  return `${text.slice(0, 71).trim()}…`
+}
+function getPopupActionKey(action, targetId = '') {
+  return `${String(action || 'action')}:${String(targetId || 'global')}`
+}
+function isPopupActionPending(action, targetId = '') {
+  return state.pendingActionIds.has(getPopupActionKey(action, targetId))
+}
+function setPopupActionPending(action, targetId, pending) {
+  const key = getPopupActionKey(action, targetId)
+  if (pending) {
+    state.pendingActionIds.add(key)
+  } else {
+    state.pendingActionIds.delete(key)
+  }
+}
+function hasBlockingPopupActionPending() {
+  return [...state.pendingActionIds].some((key) => {
+    return (
+      key.startsWith('move:') ||
+      key.startsWith('edit:') ||
+      key.startsWith('delete:') ||
+      key.startsWith('undo-delete:') ||
+      key.startsWith('save-current-page:')
+    )
+  })
+}
+function renderSmartClassifier() {
+  const currentUrl = String(state.currentTab?.url || '').trim()
+  const smartAvailable = isSmartClassifiableUrl(currentUrl)
+  const smartOverlayActive =
+    smartAvailable && ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
+  document.body.classList.toggle('smart-active', smartOverlayActive)
+
+  if (state.isLoading && state.smartStatus !== 'results') {
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('page-loading'))
+    return
+  }
+
+  if (!smartAvailable) {
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('idle'))
+    return
+  }
+
+  if (state.smartStatus === 'loading') {
+    const viewModel = getPopupSmartClassifierViewModel('loading')
+    dispatchPopupSmartClassifierChange(viewModel)
+    state.smartProgressPercent = viewModel.loadingProgress
+    return
+  }
+
+  if (state.smartStatus === 'results') {
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('results'))
+    return
+  }
+
+  if (state.smartStatus === 'error') {
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('error'))
+    return
+  }
+
+  if (state.smartStatus === 'permission') {
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('permission'))
+    return
+  }
+
+  dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('idle'))
+}
+function getPopupSmartClassifierViewModel(
+  status: PopupSmartClassifierViewModel['status']
+): PopupSmartClassifierViewModel {
+  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
+  const progress = getSmartProgressTarget()
+  const startProgress = Math.max(0, Math.min(Number(state.smartProgressPercent) || 0, progress))
+
+  return {
+    error: state.smartError || '',
+    loadingLabel: getSmartLoadingLabel(),
+    loadingProgress: progress,
+    loadingStartProgress: startProgress,
+    loadingStep: step,
+    loadingStepCount: SMART_LOADING_STEP_COUNT,
+    page: getPopupSmartPageViewModel(),
+    permissionOrigins: Array.isArray(state.smartPermissionRequest?.origins)
+      ? [...new Set(state.smartPermissionRequest.origins)].filter(Boolean).map(formatPermissionOrigin)
+      : [],
+    recommendations: getPopupSmartRecommendationViewModels(),
+    saved: state.smartSaved,
+    saving: state.smartSaving,
+    status,
+    suggestedTitle: state.smartSuggestedTitle || getCurrentPageTitle()
+  }
+}
+
+function getPopupSmartPageViewModel() {
+  const title = getCurrentPageTitle()
+  const url = String(state.currentTab?.url || '').trim()
+  const favicon = String(state.currentTab?.favIconUrl || '')
+  const bookmark = state.currentPageBookmarkId
+    ? state.bookmarkMap.get(state.currentPageBookmarkId)
+    : null
+
+  if (!isSmartClassifiableUrl(url)) {
+    return null
+  }
+
+  if (!bookmark) {
+    return {
+      bookmarked: false,
+      fallbackIcon: getSmartFallbackIconLabel(title),
+      favicon,
+      pinLabel: '',
+      pinPending: false,
+      pinned: false,
+      status: '未收藏 · 可快速保存到文件夹',
+      statusTitle: '',
+      title
+    }
+  }
+
+  const pinned = state.newTabPinnedIds.has(String(bookmark.id))
+  return {
+    bookmarked: true,
+    fallbackIcon: getSmartFallbackIconLabel(title),
+    favicon,
+    pinLabel: pinned ? '已固定到newtabs' : '固定到newtabs',
+    pinPending: isPopupActionPending('pin-newtab', bookmark.id),
+    pinned,
+    status: `已收藏 · ${formatBookmarkPath(bookmark.path) || '未归档路径'}`,
+    statusTitle: bookmark.path || '',
+    title
+  }
+}
+
+function getPopupSmartRecommendationViewModels() {
+  const selectedId = state.smartSelectedRecommendationId
+  return (state.smartRecommendations || []).map((recommendation) => {
+    const path = recommendation.path || recommendation.title || ''
+    const formattedPath = formatBookmarkPath(path) || path
+    return {
+      confidence: Math.round(Math.max(0, Math.min(Number(recommendation.confidence) || 0, 1)) * 100),
+      id: String(recommendation.id || ''),
+      isNew: recommendation.kind === 'new',
+      path: formattedPath || '未归档路径',
+      selected: recommendation.id === selectedId,
+      title: recommendation.title || path || '未命名文件夹'
+    }
+  })
+}
+function renderMainContent() {
+  const hasQuery = Boolean(state.debouncedQuery)
+  const showNaturalSearchSetup =
+    state.naturalSearchSetupRequired &&
+    !state.isLoading &&
+    !state.searchPending &&
+    !state.naturalSearchPending
+  const showSearchLoading =
+    hasQuery &&
+    state.searchPending &&
+    !state.searchResults.length &&
+    !state.isLoading
+  const showEmptySearch =
+    hasQuery &&
+    !state.searchPending &&
+    !state.searchResults.length &&
+    !state.isLoading
+  const currentRoot = getCurrentTreeRoot()
+  const showEmptyTree =
+    !hasQuery &&
+    !state.isLoading &&
+    (!currentRoot || !(currentRoot.children || []).length)
+  const emptyState = getPopupEmptyStateViewModel({
+    showEmptySearch,
+    showEmptyTree,
+    showNaturalSearchSetup
+  })
+  let mainState: PopupContentViewModel['mainState'] | undefined
+
+  if (!state.isLoading && showSearchLoading) {
+    mainState = {
+      kind: 'loading',
+      label: state.naturalSearchEnabled ? '正在用 AI 理解搜索意图…' : '正在搜索书签…'
+    }
+  } else if (showNaturalSearchSetup) {
+    mainState = {
+      kind: 'natural-setup',
+      state: emptyState
+    }
+  } else if (showEmptySearch) {
+    mainState = {
+      kind: 'search-empty',
+      state: emptyState
+    }
+  } else if (showEmptyTree) {
+    mainState = {
+      kind: 'empty',
+      label: state.selectedFolderFilterId
+        ? '当前文件夹下暂无书签'
+        : '未找到可展示的书签栏内容'
+    }
+  }
+
+  replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
+    preserveScroll: !hasQuery || Boolean(state.isLoading)
+  })
+}
+
+function getPopupEmptyStateViewModel({
+  showEmptySearch,
+  showEmptyTree,
+  showNaturalSearchSetup
+}: {
+  showEmptySearch: boolean
+  showEmptyTree: boolean
+  showNaturalSearchSetup: boolean
+}): PopupEmptyStateViewModel {
+  if (showNaturalSearchSetup) {
+    return { kind: 'natural-setup' }
+  }
+
+  if (showEmptyTree) {
+    return {
+      kind: 'message',
+      message: state.selectedFolderFilterId
+        ? '当前筛选文件夹下暂无可展示内容'
+        : '未找到可展示的书签栏内容'
+    }
+  }
+
+  if (!showEmptySearch) {
+    return { kind: 'none' }
+  }
+
+  const naturalSearchActive = state.naturalSearchEnabled
+  const hasFolderFilter = Boolean(state.selectedFolderFilterId)
+  const title = naturalSearchActive
+    ? (hasFolderFilter ? '当前文件夹未匹配 AI 语义条件' : '未找到符合 AI 语义条件的书签')
+    : (hasFolderFilter ? '当前文件夹未找到相关书签' : '未找到相关书签')
+  const hint = naturalSearchActive
+    ? '可以清除筛选、查看全部，或关闭 AI 语义搜索改用普通搜索。'
+    : '可以清除筛选、查看全部，或试试 site:github.com、folder:"前端 资料"、最近 2 周、-视频 等高级语法。'
+  const actions = [
+    {
+      action: 'clear-query',
+      label: '清空搜索',
+      primary: true
+    },
+    hasFolderFilter
+      ? {
+          action: 'clear-filter',
+          label: '清除筛选'
+        }
+      : null,
+    {
+      action: 'show-all',
+      label: '查看全部'
+    },
+    {
+      action: 'toggle-natural',
+      label: naturalSearchActive ? '关闭 AI 语义' : 'AI 语义搜索'
+    }
+  ].filter(Boolean)
+
+  return {
+    actions,
+    hint,
+    kind: 'search',
+    title
+  }
+}
+function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserveScroll = false } = {}) {
+  const nextSignature = JSON.stringify(nextViewModel)
+  if (state.contentRenderHtml === nextSignature) {
+    return
+  }
+
+  state.contentRenderHtml = nextSignature
+  dispatchPopupContentChange(nextViewModel, { preserveScroll })
+}
+
+function getPopupContentViewModel({
+  loading = false,
+  mainState,
+  searchMode
+}: {
+  loading?: boolean
+  mainState?: PopupContentViewModel['mainState']
+  searchMode: boolean
+}): PopupContentViewModel {
+  const currentRoot = getCurrentTreeRoot()
+  const sidebarRoot = state.bookmarksBarNode || currentRoot
+  const sidebarRows = sidebarRoot ? getSidebarFolderRows(sidebarRoot) : []
+  const currentRootTitle = currentRoot?.title || '书签栏'
+
+  if (searchMode) {
+    const mainRows = getSearchResultRows()
+    return {
+      emptyLabel: '未找到相关书签',
+      loading,
+      mainState,
+      mainRows,
+      meta: `${mainRows.length} 条`,
+      mode: 'search',
+      rows: mainRows,
+      sidebarRows,
+      title: state.naturalSearchEnabled ? 'AI 匹配结果' : '搜索结果'
+    }
+  }
+
+  const mainRows = getTreeBookmarkRows()
+  return {
+    emptyLabel: '当前文件夹下暂无书签',
+    loading,
+    mainState,
+    mainRows,
+    meta: `${mainRows.length} 个书签`,
+    mode: 'tree',
+    rows: [...sidebarRows, ...mainRows],
+    sidebarRows,
+    title: currentRootTitle
+  }
+}
+
+function getSidebarFolderRows(currentRoot = getCurrentTreeRoot()): PopupContentFolderRowViewModel[] {
+  if (!currentRoot) {
+    return []
+  }
+
+  return buildSidebarFolderRows(currentRoot, 0)
+}
+
+function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
+  const isPinnedRoot = depth === 0
+  const isExpanded = true
+  const children = Array.isArray(node.children) ? node.children : []
+  const folderInfo = state.folderMap.get(node.id)
+  const toggleLabel = getPopupFolderToggleLabel(
+    isExpanded ? '折叠文件夹' : '展开文件夹',
+    folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderInfo.title : node.title
+  )
+
+  const currentRow: PopupContentRowViewModel = {
+    active: (!state.selectedFolderFilterId && isPinnedRoot) || state.selectedFolderFilterId === String(node.id || ''),
+    countLabel: getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot),
+    depth,
+    expanded: isExpanded,
+    folderId: String(node.id || ''),
+    kind: 'folder',
+    root: isPinnedRoot,
+    subtitle: describeFolder(folderInfo),
+    title: node.title || '未命名文件夹',
+    toggleLabel
+  }
+
+  const childRows = isExpanded
+    ? children.flatMap((child) => {
+        if (child.url) {
+          return []
+        }
+
+        return buildSidebarFolderRows(child, depth + 1)
+      })
+    : []
+
+  return [currentRow, ...childRows]
+}
+
+function getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot): string {
+  const folderId = String(node?.id || '')
+  const count = isPinnedRoot
+    ? getFilteredBookmarksForFolder(null).length
+    : getFilteredBookmarksForFolder(folderId).length
+  return String(count)
+}
+
+function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
+  const rootId = String(getCurrentTreeRoot()?.id || '')
+  const bookmarks = getFilteredBookmarks()
+  if (!rootId || !bookmarks.length) {
+    return []
+  }
+  const baseDepth = state.folderMap.get(rootId)?.depth || 1
+  return bookmarks.map((bookmark) => {
+    const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
+    return buildBookmarkRowViewModel(bookmark, depth)
+  })
+}
+
+function buildBookmarkRowViewModel(bookmark, depth): PopupContentBookmarkRowViewModel {
+  return {
+    bookmarkId: String(bookmark.id || ''),
+    depth,
+    displayUrl: bookmark.displayUrl || '',
+    kind: 'bookmark',
+    menu: buildActionMenuViewModel(bookmark.id),
+    menuLabel: getBookmarkActionMenuLabel(bookmark),
+    path: formatBookmarkPath(bookmark.path) || bookmark.path || '',
+    title: bookmark.title || '未命名书签',
+    url: bookmark.url || ''
+  }
+}
+
+function getSearchResultRows(): PopupContentSearchResultViewModel[] {
+  return state.searchResults
+    .map((bookmark, index) => {
+      const isActive = index === state.activeResultIndex
+      const reasonTokens = summarizeMatchReasonTokens(bookmark.matchReasons)
+      const reasonTitle = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
+        ? bookmark.matchReasons.join(' · ')
+        : ''
+
+      return {
+        active: isActive,
+        bookmarkId: String(bookmark.id || ''),
+        depth: 0,
+        displayUrl: bookmark.displayUrl || '',
+        highlightQuery: state.searchHighlightQuery || state.debouncedQuery,
+        index,
+        kind: 'result',
+        menu: buildActionMenuViewModel(bookmark.id),
+        menuLabel: getBookmarkActionMenuLabel(bookmark),
+        path: bookmark.path || '未归档路径',
+        reasonLabel: reasonTokens.length ? `命中原因：${reasonTokens.join('、')}` : '',
+        reasonTitle,
+        reasonTokens,
+        title: bookmark.title || '未命名书签',
+        url: bookmark.url || ''
+      }
+    })
+}
+const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
+  { test: /^命中：标题/, label: '标题命中' },
+  { test: /^命中：网址/, label: 'URL 命中' },
+  { test: /^命中：文件夹/, label: '路径命中' },
+  { test: /^命中：标签|^标签：/, label: '标签命中' },
+  { test: /^命中：主题|^主题：/, label: '标签命中' },
+  { test: /^命中：别名/, label: '别名命中' },
+  { test: /^命中：摘要/, label: '摘要命中' },
+  { test: /^命中：类型/, label: '类型命中' },
+  { test: /^命中：拼音/, label: '拼音命中' },
+  { test: /^命中：首字母/, label: '首字母命中' },
+  { test: /^命中：模糊匹配|^命中：近似/, label: '模糊命中' },
+  { test: /^筛选：站点/, label: '站点筛选' },
+  { test: /^筛选：文件夹/, label: '文件夹筛选' },
+  { test: /^筛选：类型/, label: '类型筛选' },
+  { test: /^筛选：/, label: '时间筛选' },
+  { test: /^排除：/, label: '已排除' }
+]
+function summarizeMatchReasonTokens(reasons: unknown): string[] {
+  if (!Array.isArray(reasons) || reasons.length === 0) {
+    return []
+  }
+  const tokens: string[] = []
+  const seen = new Set<string>()
+  for (const value of reasons) {
+    const text = String(value || '').trim()
+    if (!text) continue
+    const matched = MATCH_REASON_TOKEN_PATTERNS.find((entry) => entry.test.test(text))
+    if (!matched) continue
+    if (seen.has(matched.label)) continue
+    seen.add(matched.label)
+    tokens.push(matched.label)
+    if (tokens.length >= 3) break
+  }
+  return tokens
+}
+function getBookmarkActionMenuLabel(bookmark) {
+  const title = cleanSmartText(bookmark?.title || '未命名书签', 48)
+  return `打开 ${title} 的操作菜单`
+}
+function getBookmarkActionLabel(action, bookmarkId) {
+  const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
+  const title = cleanSmartText(bookmark?.title || bookmark?.displayUrl || bookmarkId || '未命名书签', 48)
+  return `${action}：${title || '未命名书签'}`
+}
+function getPopupFolderToggleLabel(action, folderPath) {
+  const target = cleanSmartText(folderPath || '未命名文件夹', 72)
+  return `${action}：${target || '未命名文件夹'}`
+}
+function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
+  const menuBusy = hasBlockingPopupActionPending()
+  const copyBusy = isPopupActionPending('copy-url', bookmarkId)
+  const openBusy = isPopupActionPending('open-current-tab', bookmarkId)
+  const moveBusy = isPopupActionPending('move', bookmarkId)
+  const editBusy = isPopupActionPending('edit', bookmarkId)
+  const deleteBusy = isPopupActionPending('delete', bookmarkId)
+  const editLabel = getBookmarkActionLabel('编辑书签', bookmarkId)
+  const copyLabel = getBookmarkActionLabel('复制书签链接', bookmarkId)
+  const openLabel = getBookmarkActionLabel('当前页打开书签', bookmarkId)
+  const moveLabel = getBookmarkActionLabel('移动书签', bookmarkId)
+  const deleteLabel = getBookmarkActionLabel('删除书签', bookmarkId)
+
+  return {
+    items: [
+      {
+        action: 'edit',
+        ariaLabel: editLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: menuBusy || editBusy,
+        label: '编辑'
+      },
+      {
+        action: 'copy-url',
+        ariaLabel: copyLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: copyBusy,
+        label: '复制链接'
+      },
+      {
+        action: 'open-current-tab',
+        ariaLabel: openLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: menuBusy || openBusy,
+        label: '当前页打开'
+      },
+      {
+        action: 'move',
+        ariaLabel: moveLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: false,
+        disabled: menuBusy || moveBusy,
+        label: '移动至'
+      },
+      {
+        action: 'delete',
+        ariaLabel: deleteLabel,
+        bookmarkId: String(bookmarkId || ''),
+        danger: true,
+        disabled: menuBusy || deleteBusy,
+        label: '删除'
+      }
+    ]
+  }
+}
+function renderModals() {
+  const viewModel = getPopupModalsViewModel()
+  dispatchPopupModalsChange(viewModel)
+}
+
+function getPopupModalsViewModel(): PopupModalsView {
+  return {
+    active: getActivePopupModal(),
+    aiProvider: getAiProviderPromptModalView(),
+    delete: getDeleteModalView(),
+    edit: getEditModalView(),
+    move: getMoveModalView(),
+    open: hasOpenModal(),
+    smartFolder: getSmartFolderModalView()
+  }
+}
+
+function getActivePopupModal(): PopupModalsView['active'] {
+  if (state.moveTargetBookmarkId) {
+    return 'move'
+  }
+  if (state.smartFolderPickerOpen) {
+    return 'smart-folder'
+  }
+  if (state.aiProviderPromptOpen) {
+    return 'ai-provider'
+  }
+  if (state.editTargetBookmarkId) {
+    return 'edit'
+  }
+  if (state.confirmDeleteBookmarkId) {
+    return 'delete'
+  }
+  return null
+}
+
+function getMoveModalView(): PopupModalsView['move'] {
+  const bookmark = state.moveTargetBookmarkId
+    ? state.bookmarkMap.get(state.moveTargetBookmarkId)
+    : null
+  if (bookmark) {
+    dispatchPopupFolderPickerChange('move', getMoveFolderPickerState(bookmark))
+  }
+  return {
+    open: Boolean(bookmark),
+    path: bookmark ? formatBookmarkPath(bookmark.path) || '未归档路径' : '',
+    query: state.moveSearchQuery,
+    title: bookmark?.title || ''
+  }
+}
+
+function getSmartFolderModalView(): PopupModalsView['smartFolder'] {
+  if (state.smartFolderPickerOpen) {
+    dispatchPopupFolderPickerChange('smart', getSmartFolderPickerState())
+  }
+  return {
+    open: state.smartFolderPickerOpen,
+    query: state.smartFolderSearchQuery,
+    title: state.smartSuggestedTitle || getCurrentPageTitle(),
+    urlLabel: getSmartFolderTargetPathLabel()
+  }
+}
+
+function getAiProviderPromptModalView(): PopupModalsView['aiProvider'] {
+  return {
+    open: state.aiProviderPromptOpen
+  }
+}
+
+function getEditModalView(): PopupModalsView['edit'] {
+  const bookmark = state.editTargetBookmarkId
+    ? state.bookmarkMap.get(state.editTargetBookmarkId)
+    : null
+  const open = Boolean(bookmark)
+  if (!bookmark) {
+    return {
+      cancelDisabled: false,
+      closeDisabled: false,
+      dirty: false,
+      folderPickerOpen: false,
+      folderQuery: '',
+      folderSearchDisabled: false,
+      open,
+      path: '',
+      pathChanged: false,
+      saveDisabled: true,
+      saveLabel: '未修改',
+      title: '',
+      titleDisabled: false,
+      url: '',
+      urlDisabled: false
+    }
+  }
+  if (state.editDraftBookmarkId !== bookmark.id) {
+    resetEditDraft(bookmark)
+  }
+  const draftFolder = state.editDraftParentId ? state.folderMap.get(state.editDraftParentId) : null
+  const draftPath = draftFolder
+    ? formatFolderPath(draftFolder, state.folderMap) || draftFolder.title
+    : bookmark.path || '未归档路径'
+  if (open) {
+    dispatchPopupFolderPickerChange(
+      'edit',
+      state.editFolderPickerOpen
+        ? getEditFolderPickerState(bookmark)
+        : {
+            empty: null,
+            mode: 'edit',
+            query: '',
+            treeOptions: []
+          }
+    )
+  }
+  const bookmarkId = state.editTargetBookmarkId || state.editDraftBookmarkId
+  const saving = state.editSaving || isPopupActionPending('edit', bookmarkId || '')
+  const dirty = Boolean(state.editDraftDirty)
+  return {
+    cancelDisabled: saving,
+    closeDisabled: saving,
+    dirty,
+    folderPickerOpen: state.editFolderPickerOpen,
+    folderQuery: state.editFolderSearchQuery,
+    folderSearchDisabled: saving,
+    open,
+    path: draftPath || '未归档路径',
+    pathChanged: state.editDraftParentId !== String(bookmark.parentId || ''),
+    saveDisabled: saving || !dirty,
+    saveLabel: saving ? '保存中…' : dirty ? '保存' : '未修改',
+    title: state.editDraftTitle,
+    titleDisabled: saving,
+    url: state.editDraftUrl,
+    urlDisabled: saving
+  }
+}
+
+function getDeleteModalView(): PopupModalsView['delete'] {
+  const bookmark = state.confirmDeleteBookmarkId
+    ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
+    : null
+  const deleting = bookmark ? isPopupActionPending('delete', bookmark.id) : false
+  return {
+    cancelDisabled: deleting,
+    confirmDisabled: deleting,
+    confirmLabel: deleting ? '删除中…' : '删除',
+    open: Boolean(bookmark),
+    path: bookmark?.path || '未归档路径',
+    title: bookmark?.title || ''
+  }
+}
+function resetEditDraft(bookmark) {
+  clearEditDiscardGuard()
+  state.editDraftBookmarkId = String(bookmark?.id || '')
+  state.editDraftTitle = String(bookmark?.title || '')
+  state.editDraftUrl = String(bookmark?.url || '')
+  state.editDraftParentId = String(bookmark?.parentId || '')
+  state.editFolderPickerOpen = false
+  state.editFolderSearchQuery = ''
+  state.editDraftDirty = false
+  state.editSaving = false
+}
+function clearEditDraft() {
+  clearEditDiscardGuard()
+  state.editDraftBookmarkId = ''
+  state.editDraftTitle = ''
+  state.editDraftUrl = ''
+  state.editDraftParentId = ''
+  state.editFolderPickerOpen = false
+  state.editFolderSearchQuery = ''
+  state.editDraftDirty = false
+  state.editSaving = false
+}
+function updateEditDraftField(field: 'title' | 'url', value: string) {
+  if (!state.editTargetBookmarkId || state.editSaving) {
+    return
+  }
+  state.editDraftBookmarkId = String(state.editTargetBookmarkId)
+  if (field === 'title') {
+    state.editDraftTitle = value
+  } else {
+    state.editDraftUrl = value
+  }
+  state.editDraftDirty = isCurrentEditDraftDirty()
+  clearEditDiscardGuard()
+  renderModals()
+}
+function clearEditDiscardGuard() {
+  if (state.editDiscardTimer) {
+    window.clearTimeout(state.editDiscardTimer)
+    state.editDiscardTimer = null
+  }
+  state.editDiscardArmed = false
+}
+function shouldBlockDirtyEditClose() {
+  if (!state.editTargetBookmarkId || !state.editDraftDirty) {
+    return false
+  }
+  if (state.editDiscardArmed) {
+    clearEditDiscardGuard()
+    return false
+  }
+  state.editDiscardArmed = true
+  showToast({
+    type: 'info',
+    message: '编辑尚未保存，再次取消将放弃修改。'
+  })
+  state.editDiscardTimer = window.setTimeout(() => {
+    state.editDiscardArmed = false
+    state.editDiscardTimer = null
+  }, 1800)
+  return true
+}
+function isCurrentEditDraftDirty() {
+  const bookmark = state.editTargetBookmarkId
+    ? state.bookmarkMap.get(state.editTargetBookmarkId)
+    : null
+  if (!bookmark) {
+    return false
+  }
+  return (
+    getPopupEditBookmarkDraftState({
+      bookmark,
+      draftTitle: state.editDraftTitle,
+      draftUrl: state.editDraftUrl,
+      draftParentId: state.editDraftParentId
+    }).dirty
+  )
+}
+function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  const query = normalizeText(state.moveSearchQuery)
+  const treeOptions = roots.flatMap((node) => buildMoveFolderNodeViewModels(node, 0, query, bookmark))
+
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'move',
+    query: state.moveSearchQuery,
+    treeOptions
+  }
+}
+
+function getEditFolderPickerState(bookmark): PopupFolderPickerState {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  const query = normalizeText(state.editFolderSearchQuery)
+  const treeOptions = roots.flatMap((node) => buildEditFolderNodeViewModels(node, 0, query, bookmark))
+
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'edit',
+    query: state.editFolderSearchQuery,
+    treeOptions
+  }
+}
+
+function getSmartFolderPickerState(): PopupFolderPickerState {
+  const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
+  const query = normalizeText(state.smartFolderSearchQuery)
+  const treeOptions = roots.flatMap((node) => buildSmartFolderNodeViewModels(node, 0, query))
+
+  return {
+    empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
+    mode: 'smart',
+    query: state.smartFolderSearchQuery,
+    treeOptions
+  }
+}
+
+function buildSmartFolderNodeViewModels(node, depth, query): PopupFolderTreeOptionViewModel[] {
+  if (node.id === ROOT_ID) {
+    return []
+  }
+
+  const folder = state.folderMap.get(node.id)
+  if (!folder) {
+    return []
+  }
+
+  const childFolders = (node.children || []).filter((child) => !child.url)
+  const isFilterMode = Boolean(query)
+  const childOptions = childFolders.flatMap((child) => buildSmartFolderNodeViewModels(child, depth + 1, query))
+  const matchesCurrent =
+    !query ||
+    folder.normalizedTitle.includes(query) ||
+    folder.normalizedPath.includes(query)
+
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
+  }
+
+  const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
+  const saving = state.smartSaving || isPopupActionPending('save-current-page', node.id)
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+
+  return [
+    {
+      badges: [],
+      depth,
+      disabled: saving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: String(node.id || ''),
+      mode: 'smart',
+      path: folderPath,
+      rowCurrent: false,
+      selected: false,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
+}
+
+function buildMoveFolderNodeViewModels(node, depth, query, bookmark): PopupFolderTreeOptionViewModel[] {
+  if (node.id === ROOT_ID) {
+    return []
+  }
+
+  const folder = state.folderMap.get(node.id)
+  if (!folder) {
+    return []
+  }
+
+  const childFolders = (node.children || []).filter((child) => !child.url)
+  const isFilterMode = Boolean(query)
+  const childOptions = childFolders.flatMap((child) => buildMoveFolderNodeViewModels(child, depth + 1, query, bookmark))
+
+  const matchesCurrent =
+    !query ||
+    folder.normalizedTitle.includes(query) ||
+    folder.normalizedPath.includes(query)
+
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
+  }
+
+  const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
+  const isCurrentFolder = bookmark.parentId === node.id
+  const moving = isPopupActionPending('move', bookmark.id)
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+
+  return [
+    {
+      badges: isCurrentFolder ? [{ label: '当前位置' }] : [],
+      depth,
+      disabled: moving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: String(node.id || ''),
+      mode: 'move',
+      path: folderPath,
+      rowCurrent: isCurrentFolder,
+      selected: isCurrentFolder,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
+}
+
+function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolderTreeOptionViewModel[] {
+  if (node.id === ROOT_ID) {
+    return []
+  }
+
+  const folder = state.folderMap.get(node.id)
+  if (!folder) {
+    return []
+  }
+
+  const childFolders = (node.children || []).filter((child) => !child.url)
+  const isFilterMode = Boolean(query)
+  const childOptions = childFolders.flatMap((child) => buildEditFolderNodeViewModels(child, depth + 1, query, bookmark))
+
+  const matchesCurrent =
+    !query ||
+    folder.normalizedTitle.includes(query) ||
+    folder.normalizedPath.includes(query)
+
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
+  }
+
+  const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
+  const isSelectedFolder = state.editDraftParentId === node.id
+  const isOriginalFolder = bookmark.parentId === node.id
+  const saving = state.editSaving || isPopupActionPending('edit', bookmark.id)
+  const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
+  const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+
+  return [
+    {
+      badges: [
+        isSelectedFolder ? { label: '已选择' } : null,
+        !isSelectedFolder && isOriginalFolder ? { label: '原位置', muted: true } : null
+      ].filter(Boolean),
+      depth,
+      disabled: saving,
+      expanded: isExpanded,
+      hasChildren: Boolean(childFolders.length),
+      id: String(node.id || ''),
+      mode: 'edit',
+      path: folderPath,
+      rowCurrent: isSelectedFolder,
+      selected: isSelectedFolder,
+      title: folder.title || '未命名文件夹',
+      toggleLabel
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
+}
+function renderToasts() {
+  dispatchPopupToastsChange(state.toasts)
+}
+function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
+  if (detail.action === 'saved-search') {
+    handleSavedSearchAction(
+      detail.currentPageAction || '',
+      detail.recommendationId || ''
+    )
+    return
+  }
+  if (detail.action === 'current-page') {
+    handleCurrentPageQuickAction(detail.currentPageAction || '')
+    return
+  }
+  if (detail.action === 'recommendation') {
+    const nextRecommendationId = detail.recommendationId || ''
+    if (nextRecommendationId !== state.smartSelectedRecommendationId) {
+      state.smartSaved = false
+    }
+    state.smartSelectedRecommendationId = nextRecommendationId
+    renderSmartClassifier()
+    return
+  }
+  const action = detail.action || ''
+  if (action === 'classify') {
+    classifyCurrentPage()
+    return
+  }
+  if (action === 'grant-permission') {
+    grantSmartPermissionAndClassify()
+    return
+  }
+  if (action === 'open-ai-settings') {
+    void openSettingsPage('ai-provider')
+    return
+  }
+  if (action === 'manual-folder') {
+    openSmartFolderDialog()
+    return
+  }
+  if (action === 'reset') {
+    resetSmartClassification()
+    return
+  }
+  if (action === 'exit') {
+    resetSmartClassification()
+    return
+  }
+  if (action === 'save') {
+    saveSmartRecommendation()
+  }
+}
+function handleSavedSearchAction(action: string, searchId: string) {
+  if (action === 'toggle') {
+    state.savedSearchesExpanded = !state.savedSearchesExpanded
+    renderSavedSearches()
+    return
+  }
+  if (action === 'save-current') {
+    void saveCurrentSearchQuery()
+    return
+  }
+  if (action === 'apply') {
+    const savedSearch = state.savedSearches
+      ? getSavedSearchesForScope(state.savedSearches, 'popup').find((item) => item.id === searchId)
+      : null
+    if (savedSearch) {
+      setSearchQuery(savedSearch.query, { immediate: true })
+      showViewNotice(`已应用保存搜索：${savedSearch.name}`)
+      focusSearchInput()
+    }
+    return
+  }
+  if (action === 'delete') {
+    void deletePopupSavedSearch(searchId)
+  }
+}
+function handleCurrentPageQuickAction(action) {
+  const bookmarkId = state.currentPageBookmarkId
+  if (action === 'save') {
+    openSmartFolderDialog()
+    return
+  }
+  if (!bookmarkId) {
+    showToast({ type: 'error', message: '当前页面尚未收藏。' })
+    return
+  }
+  if (action === 'edit') {
+    openEditDialog(bookmarkId)
+    return
+  }
+  if (action === 'pin-newtab') {
+    void pinCurrentPageToNewTab(bookmarkId)
+  }
+}
+function handleSmartClassifierTitleChange(detail: PopupSmartClassifierTitleChangeDetail) {
+  state.smartSuggestedTitle = String(detail.title || '')
+  state.smartSaved = false
+}
+function handleContentAction(detail: PopupContentActionDetail) {
+  if (detail.action === 'filter-folder') {
+    const folderId = detail.folderId || ''
+    applyFolderFilter(folderId === 'all' ? null : folderId, { focusSearch: false })
+    return
+  }
+  if (detail.action === 'toggle-folder') {
+    toggleFolder(detail.folderId)
+    return
+  }
+  if (detail.action === 'menu-action') {
+    const bookmarkId = detail.bookmarkId || ''
+    const action = detail.menuAction || ''
+    if (action === 'edit') {
+      openEditDialog(bookmarkId)
+      return
+    }
+    if (action === 'move') {
+      openMoveDialog(bookmarkId)
+      return
+    }
+    if (action === 'copy-url') {
+      void copyBookmarkUrl(bookmarkId)
+      return
+    }
+    if (action === 'open-current-tab') {
+      void openBookmarkInCurrentTab(bookmarkId)
+      return
+    }
+    if (action === 'delete') {
+      openDeleteDialog(bookmarkId)
+    }
+    return
+  }
+  if (detail.action === 'open-bookmark') {
+    void openBookmark(detail.bookmarkId || '')
+    return
+  }
+  if (detail.action === 'empty-action') {
+    handleEmptySearchAction(detail.emptyAction || '')
+  }
+}
+function handleEmptySearchAction(action) {
+  if (action === 'clear-query') {
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
+    focusSearchInput()
+    return
+  }
+  if (action === 'clear-filter') {
+    clearFolderFilter()
+    return
+  }
+  if (action === 'show-all') {
+    state.selectedFolderFilterId = null
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已显示全部书签')
+    focusSearchInput()
+    return
+  }
+  if (action === 'toggle-natural') {
+    void toggleNaturalLanguageSearch()
+    return
+  }
+  if (action === 'open-ai-settings') {
+    closeDialogs({ force: true })
+    void openSettingsPage('ai-provider')
+    return
+  }
+  if (action === 'dismiss-natural-setup') {
+    state.naturalSearchSetupRequired = false
+    state.naturalSearchEnabled = false
+    render()
+    focusSearchInput()
+  }
+}
+function handleContentResultHover(detail: PopupContentResultHoverDetail) {
+  if (!state.debouncedQuery) {
+    return
+  }
+  const nextIndex = Number(detail.index)
+  if (!Number.isNaN(nextIndex)) {
+    setActiveResultIndex(nextIndex)
+  }
+}
+function handleFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (!detail.mode || !detail.folderId) {
+    return
+  }
+
+  if (detail.mode === 'move') {
+    handleMoveFolderPickerAction(detail)
+    return
+  }
+  if (detail.mode === 'smart') {
+    handleSmartFolderPickerAction(detail)
+    return
+  }
+  handleEditFolderPickerAction(detail)
+}
+
+function handleModalAction(detail: PopupModalActionDetail) {
+  const action = String(detail.action || '')
+  const value = String(detail.value || '')
+
+  if (action === 'close') {
+    closeDialogs()
+    return
+  }
+  if (action === 'open-ai-settings') {
+    closeDialogs({ force: true })
+    void openSettingsPage('ai-provider')
+    return
+  }
+  if (action === 'move-query-change') {
+    state.moveSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'smart-folder-query-change') {
+    state.smartFolderSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'edit-folder-query-change') {
+    state.editFolderSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'edit-title-change') {
+    updateEditDraftField('title', value)
+    return
+  }
+  if (action === 'edit-url-change') {
+    updateEditDraftField('url', value)
+    return
+  }
+  if (action === 'edit-toggle-folder-picker') {
+    toggleEditFolderPicker()
+    return
+  }
+  if (action === 'save-edit') {
+    void saveEditedBookmark()
+    return
+  }
+  if (action === 'confirm-delete') {
+    void confirmDeleteBookmark()
+  }
+}
+
+function handleMoveFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (detail.action === 'toggle' && !state.moveSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    return
+  }
+  if (detail.action === 'select') {
+    void moveBookmarkToFolder(detail.folderId)
+  }
+}
+
+function handleSmartFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (detail.action === 'toggle' && !state.smartFolderSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    return
+  }
+  if (detail.action === 'select') {
+    void saveCurrentPageToFolder(detail.folderId)
+  }
+}
+
+function handleEditFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (detail.action === 'toggle' && !state.editFolderSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    return
+  }
+  if (detail.action === 'select') {
+    selectEditDraftFolder(detail.folderId)
+  }
+}
+function toggleEditFolderPicker() {
+  if (!state.editTargetBookmarkId || state.editSaving || hasBlockingPopupActionPending()) {
+    return
+  }
+  state.editFolderPickerOpen = !state.editFolderPickerOpen
+  if (!state.editFolderPickerOpen) {
+    state.editFolderSearchQuery = ''
+  }
+  renderModals()
+}
+function selectEditDraftFolder(folderId) {
+  const bookmark = state.editTargetBookmarkId
+    ? state.bookmarkMap.get(state.editTargetBookmarkId)
+    : null
+  if (!bookmark || state.editSaving || !folderId || !state.folderMap.has(folderId)) {
+    return
+  }
+  state.editDraftBookmarkId = String(bookmark.id)
+  state.editDraftParentId = folderId
+  state.editFolderPickerOpen = false
+  state.editFolderSearchQuery = ''
+  state.editDraftDirty = isCurrentEditDraftDirty()
+  clearEditDiscardGuard()
+  renderModals()
+}
+function handleDocumentKeydown(event) {
+  if (event.isComposing) {
+    return
+  }
+  if (event.key === 'Escape') {
+    if (handleEscapeAction()) {
+      event.preventDefault()
+    }
+    return
+  }
+  if (hasOpenModal()) {
+    return
+  }
+  if (handleSearchFocusShortcut(event)) {
+    return
+  }
+  if (!state.debouncedQuery || !state.searchResults.length) {
+    return
+  }
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    setActiveResultIndex(state.activeResultIndex + 1)
+    return
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    setActiveResultIndex(state.activeResultIndex - 1)
+    return
+  }
+  if (event.key === 'Enter') {
+    const activeResult = state.searchResults[state.activeResultIndex]
+    if (activeResult) {
+      event.preventDefault()
+      openBookmark(activeResult.id)
+    }
+  }
+}
+function handleEscapeAction() {
+  if (hasOpenModal()) {
+    closeDialogs()
+    return true
+  }
+  if (['loading', 'results', 'error'].includes(state.smartStatus)) {
+    resetSmartClassification()
+    return true
+  }
+  if (state.searchQuery) {
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
+    return true
+  }
+  return false
+}
+function handleSearchFocusShortcut(event) {
+  const key = String(event.key || '')
+  const isCommandSearch = (event.ctrlKey || event.metaKey) && key.toLowerCase() === 'k'
+  const isSlashSearch = key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey
+  if ((!isCommandSearch && !isSlashSearch) || isEditableTarget(event.target)) {
+    return false
+  }
+  if (document.body.classList.contains('smart-active')) {
+    return false
+  }
+  event.preventDefault()
+  renderMainContent()
+  focusSearchInput({ select: true })
+  showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
+  return true
+}
+function isEditableTarget(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  return Boolean(target.closest('input, textarea, [contenteditable="true"]'))
+}
+function handleToastAction(detail: PopupToastActionDetail) {
+  const toastId = String(detail?.toastId || '')
+  const action = String(detail?.action || '')
+  dismissToast(toastId)
+  if (action === 'undo-delete') {
+    undoDelete()
+    return
+  }
+  if (action === 'open-bookmark-history') {
+    void openBookmarkHistoryPage()
+  }
+}
+function toggleFolder(folderId) {
+  if (!folderId) {
+    return
+  }
+  const wasExpanded = state.expandedFolders.has(folderId)
+  if (wasExpanded) {
+    state.expandedFolders.delete(folderId)
+  } else {
+    state.expandedFolders.add(folderId)
+  }
+  renderMainContent()
+  showViewNotice(`${wasExpanded ? '已折叠' : '已展开'}：${getFolderNoticeLabel(folderId)}`)
+}
+function getFolderNoticeLabel(folderId) {
+  const folder = state.folderMap.get(folderId)
+  return folder?.path || folder?.title || '文件夹'
+}
+function toggleMoveFolder(folderId) {
+  if (!folderId) {
+    return
+  }
+  if (state.moveExpandedFolders.has(folderId)) {
+    state.moveExpandedFolders.delete(folderId)
+  } else {
+    state.moveExpandedFolders.add(folderId)
+  }
+  renderModals()
+}
+function openMoveDialog(bookmarkId) {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
+  state.confirmDeleteBookmarkId = null
+  state.editTargetBookmarkId = null
+  state.moveTargetBookmarkId = bookmarkId
+  state.moveSearchQuery = ''
+  render()
+}
+function openEditDialog(bookmarkId) {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+  const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
+  if (!bookmark) {
+    return
+  }
+  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
+  state.moveTargetBookmarkId = null
+  state.confirmDeleteBookmarkId = null
+  state.editTargetBookmarkId = bookmarkId
+  resetEditDraft(bookmark)
+  render()
+}
+function openDeleteDialog(bookmarkId) {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
+  state.moveTargetBookmarkId = null
+  state.editTargetBookmarkId = null
+  state.confirmDeleteBookmarkId = bookmarkId
+  render()
+}
+function closeDialogs(options: { force?: boolean } | Event = {}) {
+  const force = (options as { force?: boolean })?.force === true
+  if (!force && (state.editSaving || hasBlockingPopupActionPending())) {
+    return
+  }
+  if (!force && shouldBlockDirtyEditClose()) {
+    return
+  }
+  state.moveTargetBookmarkId = null
+  state.moveSearchQuery = ''
+  state.smartFolderPickerOpen = false
+  state.smartFolderSearchQuery = ''
+  state.aiProviderPromptOpen = false
+  state.editTargetBookmarkId = null
+  state.confirmDeleteBookmarkId = null
+  clearEditDraft()
+  render()
+  if (document.body.classList.contains('smart-active')) {
+    return
+  }
+  restoreDialogReturnFocus()
+}
+function applyFolderFilter(folderId, { focusSearch = true } = {}) {
+  const selectedFolder = folderId ? state.folderMap.get(folderId) : null
+  state.selectedFolderFilterId = folderId
+  runSearch()
+  render()
+  showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
+  if (focusSearch) {
+    focusSearchInput()
+  }
+}
+function clearFolderFilter() {
+  if (!state.selectedFolderFilterId) {
+    return
+  }
+  applyFolderFilter(null)
+}
+function openSmartFolderDialog() {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+  if (!isSmartClassifiableUrl(state.currentTab?.url)) {
+    showToast({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
+    return
+  }
+  rememberDialogReturnFocus()
+  state.moveTargetBookmarkId = null
+  state.editTargetBookmarkId = null
+  state.confirmDeleteBookmarkId = null
+  state.smartFolderPickerOpen = true
+  state.smartFolderSearchQuery = ''
+  render()
+}
+function openAiProviderPromptDialog() {
+  if (hasBlockingPopupActionPending()) {
+    return
+  }
+  if (shouldBlockDirtyEditClose()) {
+    return
+  }
+  rememberDialogReturnFocus()
+  state.moveTargetBookmarkId = null
+  state.smartFolderPickerOpen = false
+  state.editTargetBookmarkId = null
+  state.confirmDeleteBookmarkId = null
+  state.aiProviderPromptOpen = true
+  render()
+}
+function rememberDialogReturnFocus(preferredElement = null) {
+  const activeElement = document.activeElement
+  popupDialogReturnFocusElement = preferredElement instanceof HTMLElement
+    ? preferredElement
+    : activeElement instanceof HTMLElement
+      ? activeElement
+      : null
+}
+function restoreDialogReturnFocus() {
+  const returnElement = popupDialogReturnFocusElement
+  popupDialogReturnFocusElement = null
+  if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
+    returnElement.focus()
+    return
+  }
+  focusSearchInput()
+}
+function getMenuToggleForBookmark(bookmarkId) {
+  if (!bookmarkId) {
+    return null
+  }
+  return document.querySelector<HTMLElement>(
+    `[data-bookmark-id="${CSS.escape(String(bookmarkId))}"]`
+  )
+}
+function resetSmartClassification() {
+  state.smartRunId += 1
+  state.smartStatus = 'idle'
+  state.smartError = ''
+  state.smartStep = 0
+  state.smartProgressPercent = 0
+  state.smartSuggestedTitle = ''
+  state.smartSummary = ''
+  state.smartContentType = ''
+  state.smartTopics = []
+  state.smartTags = []
+  state.smartAliases = []
+  state.smartConfidence = 0
+  state.smartModel = ''
+  state.smartExtraction = { status: '', source: '', warnings: [] }
+  state.smartRecommendations = []
+  state.smartSelectedRecommendationId = ''
+  state.smartSaving = false
+  state.smartSaved = false
+  state.smartPermissionRequest = null
+  renderSmartClassifier()
+}
+async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
+  if (state.smartStatus === 'loading' || state.smartSaving) {
+    return
+  }
+  const currentUrl = String(state.currentTab?.url || '').trim()
+  if (!isSmartClassifiableUrl(currentUrl)) {
+    showToast({ type: 'error', message: '当前页面无法进行智能分类。' })
+    return
+  }
+  const runId = state.smartRunId + 1
+  state.smartRunId = runId
+  state.smartStatus = 'loading'
+  state.smartError = ''
+  state.smartStep = 1
+  state.smartProgressPercent = 0
+  state.smartRecommendations = []
+  state.smartSelectedRecommendationId = ''
+  state.smartSaved = false
+  state.smartSuggestedTitle = getCurrentPageTitle()
+  state.smartContentType = ''
+  state.smartTopics = []
+  state.smartTags = []
+  state.smartAliases = []
+  state.smartConfidence = 0
+  state.smartModel = ''
+  state.smartExtraction = { status: '', source: '', warnings: [] }
+  state.smartPermissionRequest = null
+  renderSmartClassifier()
+  try {
+    const smartClassifier = await loadSmartClassifierModule()
+    const settings = await loadAiProviderSettings()
+    if (state.smartRunId !== runId) return
+    smartClassifier.validateSmartAiSettings(settings)
+    await smartClassifier.ensureSmartClassifyPermissions(settings, {
+      interactive: requestMissingPermissions
+    })
+    if (state.smartRunId !== runId) return
+    const pageContext = await smartClassifier.buildCurrentPageContext({
+      currentUrl,
+      currentTitle: getCurrentPageTitle(),
+      settings
+    })
+    if (state.smartRunId !== runId) return
+    state.smartStep = 2
+    renderSmartClassifier()
+    const aiResult = await smartClassifier.requestSmartClassification({
+      settings,
+      pageContext,
+      currentUrl,
+      currentTitle: getCurrentPageTitle(),
+      allFolders: state.allFolders
+    })
+    if (state.smartRunId !== runId) return
+    state.smartStep = 3
+    renderSmartClassifier()
+    await waitForSmartLoadingPaint()
+    if (state.smartRunId !== runId) return
+    const recommendations = buildSmartRecommendations(aiResult)
+    state.smartSuggestedTitle = cleanSmartTitle(aiResult.title || getCurrentPageTitle())
+    state.smartSummary = cleanSmartText(aiResult.summary, 360)
+    state.smartContentType = cleanSmartText(aiResult.contentType, 80)
+    state.smartTopics = normalizeSmartTextList(aiResult.topics, 8, 40)
+    state.smartTags = normalizeBookmarkTags(aiResult.tags)
+    state.smartAliases = normalizeSmartTextList(aiResult.aliases, 20, 40)
+    state.smartConfidence = normalizeSmartConfidence(aiResult.confidence)
+    state.smartModel = settings.model
+    state.smartExtraction = smartClassifier.buildSmartExtractionSnapshot(pageContext)
+    state.smartRecommendations = recommendations
+    state.smartSelectedRecommendationId = recommendations[0]?.id || ''
+    state.smartStatus = 'results'
+    renderSmartClassifier()
+  } catch (error) {
+    if (state.smartRunId !== runId) return
+    if (isSmartPermissionRequiredError(error)) {
+      state.smartStatus = 'permission'
+      state.smartPermissionRequest = error.smartPermissionRequest
+      state.smartError = error.message
+      renderSmartClassifier()
+      return
+    }
+    state.smartStatus = 'error'
+    state.smartError = normalizeSmartError(error)
+    renderSmartClassifier()
+  }
+}
+async function grantSmartPermissionAndClassify() {
+  if (state.smartStatus === 'loading' || state.smartSaving) {
+    return
+  }
+  const origins = Array.isArray(state.smartPermissionRequest?.origins)
+    ? [...new Set(state.smartPermissionRequest.origins)].filter(Boolean)
+    : []
+  if (!origins.length) {
+    await classifyCurrentPage({ requestMissingPermissions: true })
+    return
+  }
+  try {
+    const smartClassifier = await loadSmartClassifierModule()
+    const granted = await smartClassifier.requestPermissions({ origins })
+    if (!granted) {
+      throw smartClassifier.createSmartPermissionRequiredError(origins, '未完成 AI 渠道授权，暂时无法智能分类。')
+    }
+    await classifyCurrentPage()
+  } catch (error) {
+    if (isSmartPermissionRequiredError(error)) {
+      state.smartStatus = 'permission'
+      state.smartPermissionRequest = error.smartPermissionRequest
+      state.smartError = error.message
+    } else {
+      state.smartStatus = 'permission'
+      state.smartPermissionRequest = { origins }
+      state.smartError = normalizeSmartError(error)
+    }
+    renderSmartClassifier()
+  }
+}
+async function saveSmartRecommendation() {
+  const recommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
+  if (!recommendation || state.smartSaving || state.smartSaved) {
+    return
+  }
+  await saveCurrentPageToSmartRecommendation(recommendation)
+}
+async function saveCurrentPageToSmartRecommendation(recommendation) {
+  if (recommendation.kind === 'new') {
+    await saveCurrentPageViaWorker({
+      folderPath: recommendation.path
+    }, { closeModal: false })
+    return
+  }
+  await saveCurrentPageToFolder(recommendation.folderId, { closeModal: false })
+}
+async function saveCurrentPageToFolder(folderId, { closeModal = true } = {}) {
+  await saveCurrentPageViaWorker({ parentId: folderId }, { closeModal })
+}
+async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {}, { closeModal = true } = {}) {
+  const actionTargetId = parentId || folderPath || 'current-page'
+  if (state.smartSaving || isPopupActionPending('save-current-page', actionTargetId)) {
+    return
+  }
+  let savedWithoutRefresh = false
+  try {
+    setPopupActionPending('save-current-page', actionTargetId, true)
+    state.smartSaving = true
+    state.smartSaved = false
+    renderSmartSaveSurfaces()
+    const currentUrl = String(state.currentTab?.url || '').trim()
+    if (!isSmartClassifiableUrl(currentUrl)) {
+      throw new Error('当前页面不是可保存的普通网页。')
+    }
+    if (!parentId && !folderPath) {
+      throw new Error('未找到可保存的目标文件夹。')
+    }
+    const nextTitle = cleanSmartTitle(state.smartSuggestedTitle || getCurrentPageTitle())
+    const existingBookmark = state.currentPageBookmarkId
+      ? state.bookmarkMap.get(state.currentPageBookmarkId)
+      : null
+    const savedBookmark = await requestBookmarkSave({
+      parentId,
+      folderPath,
+      bookmarkId: existingBookmark?.id || state.currentPageBookmarkId || '',
+      title: nextTitle,
+      url: currentUrl,
+      analysis: {
+        summary: state.smartSummary,
+        contentType: state.smartContentType,
+        topics: state.smartTopics,
+        tags: state.smartTags,
+        aliases: state.smartAliases,
+        confidence: state.smartConfidence,
+        model: state.smartModel,
+        extraction: state.smartExtraction
+      }
+    })
+    state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
+    await finishSmartSave({
+      message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
+      closeModal
+    })
+    savedWithoutRefresh = true
+  } catch (error) {
+    state.smartSaving = false
+    state.smartSaved = false
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
+    })
+  } finally {
+    setPopupActionPending('save-current-page', actionTargetId, false)
+    state.smartSaving = false
+    if (!savedWithoutRefresh) {
+      renderSmartSaveSurfaces()
+    }
+  }
+}
+function renderSmartSaveSurfaces() {
+  renderSmartClassifier()
+  renderModals()
+}
+async function pinCurrentPageToNewTab(bookmarkId) {
+  const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
+  if (!bookmark?.url || isPopupActionPending('pin-newtab', bookmark.id)) {
+    return
+  }
+  try {
+    setPopupActionPending('pin-newtab', bookmark.id, true)
+    renderSmartClassifier()
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    const currentSettings = normalizeNewTabWorkspaceSettings(
+      stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
+      { validBookmarkIds: state.bookmarkMap.keys() }
+    )
+    const workspace = getActiveNewTabWorkspace(currentSettings)
+    const nextSettings = toggleNewTabWorkspacePin(
+      currentSettings,
+      workspace.id,
+      bookmark.id,
+      { validBookmarkIds: state.bookmarkMap.keys() }
+    )
+    await setLocalStorage({ [STORAGE_KEYS.newTabWorkspaceSettings]: nextSettings })
+    const pinned = nextSettings.workspaces
+      .find((item) => item.id === workspace.id)
+      ?.pinnedIds.includes(bookmark.id)
+    state.newTabPinnedIds = new Set(getActiveNewTabWorkspace(nextSettings).pinnedIds)
+    void chrome.runtime?.sendMessage?.({
+      type: 'curator:newtab-speed-dial-state',
+      bookmarkId: bookmark.id,
+      pinned: Boolean(pinned)
+    }).catch(() => {})
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `固定失败：${error.message}` : '固定到 newtab 失败，请稍后重试。'
+    })
+  } finally {
+    setPopupActionPending('pin-newtab', bookmark.id, false)
+    renderSmartClassifier()
+  }
+}
+async function finishSmartSave({ message, closeModal = true }) {
+  state.smartRunId += 1
+  state.smartSaving = false
+  state.smartSaved = true
+  state.smartStatus = 'idle'
+  state.smartError = ''
+  state.smartStep = 0
+  state.smartProgressPercent = 0
+  state.smartSuggestedTitle = ''
+  state.smartSummary = ''
+  state.smartContentType = ''
+  state.smartTopics = []
+  state.smartTags = []
+  state.smartAliases = []
+  state.smartConfidence = 0
+  state.smartModel = ''
+  state.smartExtraction = { status: '', source: '', warnings: [] }
+  state.smartRecommendations = []
+  state.smartSelectedRecommendationId = ''
+  state.smartPermissionRequest = null
+  if (closeModal || state.smartFolderPickerOpen) {
+    state.smartFolderPickerOpen = false
+    state.smartFolderSearchQuery = ''
+  }
+  renderSmartSaveSurfaces()
+  showToast({ type: 'success', message })
+  showViewNotice('已保存，正在刷新书签列表')
+  await refreshData({ preserveSearch: true })
+  showViewNotice('已保存，书签列表已更新')
+  window.requestAnimationFrame(() => {
+    if (!hasOpenModal()) {
+      focusSearchInput()
+    }
+  })
+}
+function getSmartSaveSuccessMessage(savedBookmark, { parentId = '', folderPath = '' } = {}) {
+  const folderLabel = cleanSmartText(
+    folderPath ||
+      state.folderMap.get(savedBookmark?.parentId || parentId)?.path ||
+      state.folderMap.get(parentId)?.path ||
+      '',
+    48
+  )
+  return folderLabel ? `已保存到 ${folderLabel}` : '保存成功'
+}
+async function moveBookmarkToFolder(folderId) {
+  const bookmark = state.moveTargetBookmarkId
+    ? state.bookmarkMap.get(state.moveTargetBookmarkId)
+    : null
+  if (!bookmark || !folderId || isPopupActionPending('move', bookmark?.id || '')) {
+    return
+  }
+  if (bookmark.parentId === folderId) {
+    showToast({
+      type: 'success',
+      message: '书签已在当前文件夹中'
+    })
+    showViewNotice('书签已在当前文件夹中')
+    return
+  }
+  const movedTitle = bookmark.title
+  setPopupActionPending('move', bookmark.id, true)
+  renderModals()
+  try {
+    await moveBookmark(bookmark.id, folderId)
+    showToast({
+      type: 'success',
+      message: '移动成功'
+    })
+    closeDialogs({ force: true })
+    await refreshData({ preserveSearch: true })
+    showViewNotice(`已移动：${movedTitle}`)
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `移动失败：${error.message}` : '移动失败，请稍后重试。'
+    })
+  } finally {
+    setPopupActionPending('move', bookmark.id, false)
+    renderModals()
+  }
+}
+async function saveEditedBookmark() {
+  const bookmark = state.editTargetBookmarkId
+    ? state.bookmarkMap.get(state.editTargetBookmarkId)
+    : null
+  if (!bookmark || state.editSaving || isPopupActionPending('edit', bookmark?.id || '')) {
+    return
+  }
+  const nextTitle = String(state.editDraftTitle).trim() || '未命名书签'
+  const nextUrl = String(state.editDraftUrl).trim()
+  const savePlan = getPopupEditBookmarkSavePlan({
+    bookmark,
+    draftTitle: nextTitle,
+    draftUrl: nextUrl,
+    draftParentId: state.editDraftParentId
+  })
+  state.editDraftDirty = savePlan.dirty
+  if (!state.editDraftDirty) {
+    renderModals()
+    return
+  }
+  if (!nextUrl) {
+    showToast({
+      type: 'error',
+      message: '网址不能为空'
+    })
+    return
+  }
+  try {
+    new URL(nextUrl)
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: '请输入有效的网址'
+    })
+    return
+  }
+  state.editSaving = true
+  setPopupActionPending('edit', bookmark.id, true)
+  renderModals()
+  try {
+    if (savePlan.updateChanges) {
+      await updateBookmark(bookmark.id, savePlan.updateChanges)
+    }
+    if (savePlan.parentChanged && savePlan.parentId) {
+      await moveBookmark(bookmark.id, savePlan.parentId)
+    }
+    showToast({
+      type: 'success',
+      message: '保存成功'
+    })
+    state.editSaving = false
+    setPopupActionPending('edit', bookmark.id, false)
+    closeDialogs({ force: true })
+    await refreshData({ preserveSearch: true })
+    showViewNotice(`已更新：${nextTitle}`)
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
+    })
+  } finally {
+    state.editSaving = false
+    setPopupActionPending('edit', bookmark.id, false)
+    renderModals()
+  }
+}
+async function confirmDeleteBookmark() {
+  const bookmark = state.confirmDeleteBookmarkId
+    ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
+    : null
+  if (!bookmark || isPopupActionPending('delete', bookmark?.id || '')) {
+    return
+  }
+  setPopupActionPending('delete', bookmark.id, true)
+  renderModals()
+  try {
+    const recycleBin = await loadRecycleBinModule()
+    state.lastDeletedBookmark = {
+      title: bookmark.title,
+      url: bookmark.url,
+      parentId: bookmark.parentId,
+      index: bookmark.index,
+      recycleId: `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
+    }
+    await recycleBin.deleteBookmarkToRecycle(bookmark.id, {
+      recycleId: state.lastDeletedBookmark.recycleId,
+      bookmarkId: String(bookmark.id),
+      title: bookmark.title,
+      url: bookmark.url,
+      parentId: String(bookmark.parentId || ''),
+      index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : 0,
+      path: bookmark.path || '',
+      source: '弹窗删除',
+      deletedAt: Date.now()
+    })
+    showToast({
+      type: 'success',
+      message: '删除成功',
+      action: 'undo-delete',
+      actionLabel: '撤销'
+    })
+    closeDialogs({ force: true })
+    await refreshData({ preserveSearch: true })
+    showViewNotice(`已删除：${bookmark.title}`)
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `删除失败：${error.message}` : '删除失败，请稍后重试。'
+    })
+  } finally {
+    setPopupActionPending('delete', bookmark.id, false)
+    renderModals()
+  }
+}
+async function undoDelete() {
+  if (!state.lastDeletedBookmark) {
+    return
+  }
+  const payload = state.lastDeletedBookmark
+  const actionTargetId = payload.recycleId || payload.url || payload.title
+  if (isPopupActionPending('undo-delete', actionTargetId)) {
+    return
+  }
+  setPopupActionPending('undo-delete', actionTargetId, true)
+  state.lastDeletedBookmark = null
+  try {
+    const parentId = await getRestorableParentId(payload.parentId)
+    await createBookmark({
+      ...payload,
+      parentId
+    })
+    if (payload.recycleId) {
+      const recycleBin = await loadRecycleBinModule()
+      await recycleBin.removeRecycleEntry(payload.recycleId)
+    }
+    showToast({
+      type: 'success',
+      message: '已撤销删除'
+    })
+    await refreshData({ preserveSearch: true })
+    showViewNotice(`已恢复：${payload.title}`)
+  } catch (error) {
+    state.lastDeletedBookmark = payload
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `撤销失败：${error.message}` : '撤销失败，请稍后重试。'
+    })
+  } finally {
+    setPopupActionPending('undo-delete', actionTargetId, false)
+  }
+}
+async function getRestorableParentId(parentId) {
+  const requestedParentId = String(parentId || '').trim()
+  if (!requestedParentId) {
+    return BOOKMARKS_BAR_ID
+  }
+  try {
+    const tree = await getBookmarkTree()
+    const rootNode = Array.isArray(tree) ? tree[0] : tree
+    const target = findNodeById(rootNode, requestedParentId)
+    return target && !target.url ? requestedParentId : BOOKMARKS_BAR_ID
+  } catch {
+    return BOOKMARKS_BAR_ID
+  }
+}
+async function openBookmark(bookmarkId) {
+  const bookmark = state.bookmarkMap.get(bookmarkId)
+  if (!bookmark?.url || hasBlockingPopupActionPending()) {
+    return
+  }
+  try {
+    await createTab({ url: bookmark.url })
+    window.close()
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
+    })
+  }
+}
+async function openBookmarkInCurrentTab(bookmarkId) {
+  const bookmark = state.bookmarkMap.get(bookmarkId)
+  if (!bookmark?.url || hasBlockingPopupActionPending() || isPopupActionPending('open-current-tab', bookmarkId)) {
+    return
+  }
+  setPopupActionPending('open-current-tab', bookmarkId, true)
+  try {
+    await updateCurrentTabUrl(bookmark.url)
+    window.close()
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `打开失败：${error.message}` : '打开失败，请稍后重试。'
+    })
+  } finally {
+    setPopupActionPending('open-current-tab', bookmarkId, false)
+  }
+}
+function updateCurrentTabUrl(url) {
+  return new Promise((resolve, reject) => {
+    const tabId = Number(state.currentTab?.id)
+    const updateProperties = { url }
+    const callback = (tab) => {
+      const error = chrome.runtime.lastError
+      if (error) {
+        reject(new Error(error.message))
+        return
+      }
+      resolve(tab)
+    }
+    if (Number.isFinite(tabId)) {
+      chrome.tabs.update(tabId, updateProperties, callback)
+      return
+    }
+    chrome.tabs.update(updateProperties, callback)
+  })
+}
+async function copyBookmarkUrl(bookmarkId) {
+  const bookmark = state.bookmarkMap.get(bookmarkId)
+  if (isPopupActionPending('copy-url', bookmarkId)) {
+    return
+  }
+  if (!bookmark?.url) {
+    showToast({
+      type: 'error',
+      message: '复制失败：书签链接不存在。'
+    })
+    return
+  }
+  setPopupActionPending('copy-url', bookmarkId, true)
+  try {
+    await writeClipboardText(bookmark.url)
+    showToast({
+      type: 'success',
+      message: '链接已复制'
+    })
+    showViewNotice(`已复制链接：${bookmark.title}`)
+  } catch (error) {
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
+    })
+  } finally {
+    setPopupActionPending('copy-url', bookmarkId, false)
+  }
+}
+function writeClipboardText(text) {
+  if (navigator.clipboard?.writeText) {
+    return navigator.clipboard.writeText(text)
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = String(text || '')
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '-9999px'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.focus()
+  textarea.select()
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('浏览器拒绝写入剪贴板。')
+    }
+    return Promise.resolve()
+  } catch (error) {
+    return Promise.reject(error)
+  } finally {
+    textarea.remove()
+  }
+}
+async function loadAiProviderSettings() {
+  const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
+  const { normalizeAiNamingSettings } = await loadAiSettingsModule()
+  return normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
+}
+function buildSmartRecommendations(aiResult) {
+  const byFolderId = new Map()
+  for (const suggestion of aiResult.existingFolders) {
+    const folder = findBestExistingFolder(suggestion.folderPath)
+    if (!folder) {
+      continue
+    }
+    const previous = byFolderId.get(folder.id)
+    const confidence = normalizeSmartConfidence(suggestion.confidence)
+    if (!previous || confidence > previous.confidence) {
+      byFolderId.set(folder.id, {
+        id: `folder:${folder.id}`,
+        kind: 'existing',
+        folderId: folder.id,
+        title: folder.title,
+        path: folder.path || folder.title,
+        confidence,
+        reason: suggestion.reason || ''
+      })
+    }
+  }
+  const existingRecommendations = [...byFolderId.values()]
+    .sort((left, right) => {
+      const leftFolder = state.folderMap.get(left.folderId)
+      const rightFolder = state.folderMap.get(right.folderId)
+      return (
+        Number(right.confidence) - Number(left.confidence) ||
+        Number(rightFolder?.depth || 0) - Number(leftFolder?.depth || 0) ||
+        String(left.path).localeCompare(String(right.path), 'zh-Hans-CN')
+      )
+    })
+    .slice(0, SMART_RECOMMENDATION_LIMIT)
+  if (existingRecommendations.length < SMART_RECOMMENDATION_LIMIT) {
+    for (const fallback of buildLocalSmartFolderMatches()) {
+      if (existingRecommendations.some((item) => item.folderId === fallback.folderId)) {
+        continue
+      }
+      existingRecommendations.push(fallback)
+      if (existingRecommendations.length >= SMART_RECOMMENDATION_LIMIT) {
+        break
+      }
+    }
+  }
+  const newFolderPath = normalizeSmartFolderPath(aiResult.newFolder?.folderPath)
+  const newRecommendation = newFolderPath
+    ? [{
+        id: 'new-folder',
+        kind: 'new',
+        folderId: '',
+        title: getLastPathSegment(newFolderPath),
+        path: newFolderPath,
+        confidence: normalizeSmartConfidence(aiResult.newFolder?.confidence),
+        reason: aiResult.newFolder?.reason || ''
+      }]
+    : []
+  return [...existingRecommendations, ...newRecommendation]
+}
+function buildLocalSmartFolderMatches() {
+  const titleText = normalizeText(getCurrentPageTitle())
+  const urlText = normalizeText(state.currentTab?.url || '')
+  const domainText = normalizeText(extractDomain(state.currentTab?.url || ''))
+  const haystack = [titleText, urlText, domainText].filter(Boolean).join(' ')
+  return state.allFolders
+    .map((folder) => {
+      const title = normalizeText(folder.title)
+      const path = normalizeText(folder.path)
+      let score = 0
+      if (title && haystack.includes(title)) {
+        score += 0.38
+      }
+      if (path && haystack.includes(path)) {
+        score += 0.28
+      }
+      if (domainText && (title.includes(domainText) || path.includes(domainText))) {
+        score += 0.22
+      }
+      score += Math.min(Number(folder.depth || 0), 6) * 0.025
+      return {
+        id: `folder:${folder.id}`,
+        kind: 'existing',
+        folderId: folder.id,
+        title: folder.title,
+        path: folder.path || folder.title,
+        confidence: Math.max(0.52, Math.min(score, 0.82)),
+        reason: '基于当前网页标题、域名和文件夹路径的本地补充匹配。'
+      }
+    })
+    .filter((item) => item.confidence > 0.54)
+    .sort((left, right) => {
+      const leftFolder = state.folderMap.get(left.folderId)
+      const rightFolder = state.folderMap.get(right.folderId)
+      return (
+        Number(right.confidence) - Number(left.confidence) ||
+        Number(rightFolder?.depth || 0) - Number(leftFolder?.depth || 0) ||
+        String(left.path).localeCompare(String(right.path), 'zh-Hans-CN')
+      )
+    })
+}
+function normalizeSmartTextList(value, limit, itemLimit) {
+  const values = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,，、\n]/)
+      : []
+  const seen = new Set()
+  const output = []
+  for (const item of values) {
+    const text = cleanSmartText(item, itemLimit)
+    const key = normalizeText(text)
+    if (!text || seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    output.push(text)
+    if (output.length >= limit) {
+      break
+    }
+  }
+  return output
+}
+function findBestExistingFolder(rawPath) {
+  const normalizedPath = normalizeText(rawPath)
+  if (!normalizedPath) {
+    return null
+  }
+  const folders = state.allFolders.slice()
+  const exactPathMatches = folders.filter((folder) => normalizeText(folder.path || folder.title) === normalizedPath)
+  if (exactPathMatches.length) {
+    return pickDeepestFolder(exactPathMatches)
+  }
+  const exactTitleMatches = folders.filter((folder) => normalizeText(folder.title) === normalizedPath)
+  if (exactTitleMatches.length) {
+    return pickDeepestFolder(exactTitleMatches)
+  }
+  const segment = normalizeText(getLastPathSegment(rawPath))
+  const segmentMatches = folders.filter((folder) => normalizeText(folder.title) === segment)
+  if (segmentMatches.length) {
+    return pickDeepestFolder(segmentMatches)
+  }
+  const containsMatches = folders.filter((folder) => {
+    const folderPath = normalizeText(folder.path || folder.title)
+    return folderPath.includes(normalizedPath) || normalizedPath.includes(folderPath)
+  })
+  return containsMatches.length ? pickDeepestFolder(containsMatches) : null
+}
+function pickDeepestFolder(folders) {
+  return folders
+    .slice()
+    .sort((left, right) => {
+      return Number(right.depth || 0) - Number(left.depth || 0) || String(left.path).localeCompare(String(right.path), 'zh-Hans-CN')
+    })[0] || null
+}
+function isSmartPermissionRequiredError(error) {
+  return Boolean((error as { smartPermissionRequest?: { origins?: string[] } })?.smartPermissionRequest?.origins)
+}
+function formatPermissionOrigin(origin) {
+  return String(origin || '').replace(/\/\*$/, '')
+}
+function isAbortError(error) {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+function setActiveResultIndex(nextIndex) {
+  if (!state.debouncedQuery || !state.searchResults.length) {
+    return
+  }
+  const clampedIndex = Math.max(0, Math.min(nextIndex, state.searchResults.length - 1))
+  if (clampedIndex === state.activeResultIndex) {
+    return
+  }
+  const previousIndex = state.activeResultIndex
+  state.activeResultIndex = clampedIndex
+  updateActiveSearchResult(previousIndex, clampedIndex)
+  renderMainContent()
+}
+function updateActiveSearchResult(previousIndex, nextIndex) {
+  void previousIndex
+  void nextIndex
+}
+function getCurrentTreeRoot() {
+  if (state.selectedFolderFilterId) {
+    return findNodeById(state.rawTreeRoot, state.selectedFolderFilterId) || state.bookmarksBarNode
+  }
+  return state.bookmarksBarNode
+}
+function getFilteredBookmarks() {
+  const cacheKey = state.selectedFolderFilterId || 'all'
+  if (state.filteredBookmarksCacheKey === cacheKey) {
+    return state.filteredBookmarksCache
+  }
+  const bookmarks = getFilteredBookmarksForFolder(state.selectedFolderFilterId)
+  state.filteredBookmarksCacheKey = cacheKey
+  state.filteredBookmarksCache = bookmarks
+  return bookmarks
+}
+function getFilteredBookmarksForFolder(folderId) {
+  return folderId
+    ? state.allBookmarks.filter((bookmark) => bookmark.ancestorIds.includes(folderId))
+    : state.allBookmarks
+}
+function getSearchCacheKey(normalizedQuery) {
+  return `${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
+}
+function getNaturalSearchDateBucket() {
+  return formatLocalDate(Date.now())
+}
+function getNaturalSearchPlanCacheKey(normalizedQuery) {
+  return `${getNaturalSearchDateBucket()}\u0000${normalizedQuery}`
+}
+function cacheSearchResults(cacheKey, results) {
+  state.searchCache.set(cacheKey, results)
+}
+function clearSearchCaches() {
+  state.searchCache.clear()
+  state.naturalSearchPlanCache.clear()
+  state.filteredBookmarksCacheKey = ''
+  state.filteredBookmarksCache = []
+}
+function yieldWork() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(resolve)
+  })
+}
+function formatLocalDate(value) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+function isSmartClassifiableUrl(url) {
+  return isExternallyCheckableUrl(url)
+}
+function getCurrentPageTitle() {
+  return String(state.currentTab?.title || '').trim() || '未命名网页'
+}
+function getSmartFallbackIconLabel(title) {
+  const normalized = String(title || '').trim()
+  return normalized ? normalized.slice(0, 1).toUpperCase() : 'C'
+}
+function getSmartLoadingLabel() {
+  if (state.smartStep <= 1) {
+    return '读取网页内容…'
+  }
+  if (state.smartStep === 2) {
+    return 'AI 分析内容…'
+  }
+  return '匹配已有文件夹…'
+}
+function getSmartProgressTarget() {
+  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
+  return Math.max(10, Math.min((step / SMART_LOADING_STEP_COUNT) * 100, 100))
+}
+function waitForSmartLoadingPaint() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(resolve)
+  })
+}
+function cleanSmartTitle(value) {
+  const title = cleanSmartText(value, 90)
+  return title || getCurrentPageTitle()
+}
+function cleanSmartText(value, limit = 180) {
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (text.length <= limit) {
+    return text
+  }
+  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
+}
+function normalizeSmartConfidence(value) {
+  const numeric = Number(value)
+  if (Number.isFinite(numeric)) {
+    return Math.max(0, Math.min(numeric, 1))
+  }
+  return 0
+}
+function normalizeSmartFolderPath(value) {
+  const segments = splitSmartFolderPath(value)
+  return segments.join(' / ')
+}
+function splitSmartFolderPath(value) {
+  return String(value || '')
+    .split(/\s*(?:\/|>|›|»|\\)\s*/g)
+    .map((segment) => segment.trim())
+    .filter(Boolean)
+    .slice(0, 5)
+}
+function getLastPathSegment(value) {
+  const segments = splitSmartFolderPath(value)
+  return segments.at(-1) || cleanSmartText(value, 60) || '推荐文件夹'
+}
+function getSmartFolderTargetPathLabel() {
+  const selectedRecommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
+  if (selectedRecommendation) {
+    return `当前推荐：${formatBookmarkPath(selectedRecommendation.path) || selectedRecommendation.title || '未命名文件夹'}`
+  }
+  return `当前页面：${displayUrl(state.currentTab?.url || '')}`
+}
+function normalizeSmartError(error) {
+  if (error?.name === 'AbortError') {
+    return '请求超时，请稍后重试或调大通用设置中的请求超时。'
+  }
+  return error instanceof Error ? error.message : '智能分类失败，请稍后重试。'
+}
+function hasOpenModal() {
+  return Boolean(
+    state.moveTargetBookmarkId ||
+      state.smartFolderPickerOpen ||
+      state.aiProviderPromptOpen ||
+      state.editTargetBookmarkId ||
+      state.confirmDeleteBookmarkId
+  )
+}
+function getDefaultExpandedFolders(node) {
+  if (!node || node.url) {
+    return new Set()
+  }
+  return new Set([node.id])
+}
+function describeFolder(folder) {
+  if (!folder) {
+    return '文件夹'
+  }
+  const parts = []
+  if (folder.folderCount) {
+    parts.push(`${folder.folderCount} 个文件夹`)
+  }
+  if (folder.bookmarkCount) {
+    parts.push(`${folder.bookmarkCount} 个书签`)
+  }
+  return parts.join(' · ') || '空文件夹'
+}
+function showToast({ type = 'success', message, action = '', actionLabel = '' }) {
+  const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`
+  const toast = {
+    id,
+    type,
+    message,
+    action,
+    actionLabel
+  }
+  const nextToasts = [...state.toasts, toast]
+  const overflowCount = Math.max(0, nextToasts.length - MAX_VISIBLE_TOASTS)
+  if (overflowCount) {
+    const removedToastIds = getOverflowToastIds(nextToasts, overflowCount)
+    removedToastIds.forEach(clearToastTimer)
+    state.toasts = nextToasts.filter((nextToast) => {
+      return !removedToastIds.has(String(nextToast.id || ''))
+    })
+  } else {
+    state.toasts = nextToasts
+  }
+  renderToasts()
+  if (!state.toasts.some((visibleToast) => visibleToast.id === id)) {
+    return
+  }
+  const timeoutId = window.setTimeout(() => {
+    dismissToast(id)
+  }, action === 'undo-delete' ? UNDO_WINDOW_MS : 3200)
+  state.toastTimers.set(id, timeoutId)
+}
+function getOverflowToastIds(toasts, overflowCount) {
+  const removedToastIds = new Set()
+  for (const toast of toasts) {
+    if (removedToastIds.size >= overflowCount) {
+      break
+    }
+    if (toast.action) {
+      continue
+    }
+    removedToastIds.add(String(toast.id || ''))
+  }
+  for (const toast of toasts) {
+    if (removedToastIds.size >= overflowCount) {
+      break
+    }
+    const toastId = String(toast.id || '')
+    if (removedToastIds.has(toastId)) {
+      continue
+    }
+    removedToastIds.add(toastId)
+  }
+  return removedToastIds
+}
+function dismissToast(toastId) {
+  if (!toastId) {
+    return
+  }
+
+  clearToastTimer(toastId)
+
+  state.toasts = state.toasts.filter((toast) => toast.id !== toastId)
+  renderToasts()
+}
+function clearToastTimer(toastId) {
+  const timeoutId = state.toastTimers.get(String(toastId))
+  if (timeoutId) {
+    clearTimeout(timeoutId)
+    state.toastTimers.delete(String(toastId))
+  }
+}

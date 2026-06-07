@@ -7,7 +7,7 @@ import {
   dispatchPopupChromeAction,
   usePopupChromeView,
   usePopupSearchFocusRequest
-} from '../popup-events'
+} from '../popup-controller-store'
 import { PopupSavedSearches } from './PopupSavedSearches'
 import { PopupSearchChips } from './PopupSearchChips'
 

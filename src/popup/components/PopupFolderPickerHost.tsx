@@ -1,7 +1,7 @@
 import {
   dispatchPopupFolderPickerAction,
   usePopupFolderPickerState
-} from '../popup-events'
+} from '../popup-controller-store'
 import { PopupFolderPicker } from './PopupFolderPicker'
 import type { PopupFolderPickerState } from './PopupViewModels'
 

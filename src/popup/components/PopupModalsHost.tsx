@@ -7,7 +7,7 @@ import {
   dispatchPopupModalAction,
   usePopupModalsView,
   type PopupModalsView
-} from '../popup-events'
+} from '../popup-controller-store'
 import { PopupFolderPickerHost } from './PopupFolderPickerHost'
 
 export function PopupModalsHost() {

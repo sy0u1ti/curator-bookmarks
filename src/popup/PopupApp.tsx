@@ -2,7 +2,8 @@ import { useEffect, useMemo, useReducer } from 'react'
 import { DialogOverlay } from '../ui/primitives/Dialog'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getModalCloseDurationMs } from '../shared/motion'
-import { dispatchPopupModalAction, usePopupModalsView } from './popup-events'
+import { dispatchPopupModalAction, usePopupModalsView } from './popup-controller-store'
+import { usePopupController } from './popup-controller'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
@@ -11,22 +12,7 @@ import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { PopupToasts } from './components/PopupToasts'
 
 export function PopupApp() {
-  useEffect(() => {
-    let disposed = false
-    let cleanupRuntime: (() => void) | null = null
-
-    void import('./popup-runtime.js').then(({ startPopupRuntime }) => {
-      if (!disposed) {
-        cleanupRuntime = startPopupRuntime()
-      }
-    })
-
-    return () => {
-      disposed = true
-      cleanupRuntime?.()
-      cleanupRuntime = null
-    }
-  }, [])
+  usePopupController()
 
   return (
     <ThemeProvider>

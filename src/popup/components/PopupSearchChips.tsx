@@ -1,4 +1,4 @@
-import { usePopupSearchChips } from '../popup-events'
+import { usePopupSearchChips } from '../popup-controller-store'
 
 export function PopupSearchChips() {
   const chips = usePopupSearchChips()

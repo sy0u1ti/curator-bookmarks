@@ -2,7 +2,7 @@ import {
   dispatchPopupSmartClassifierAction,
   dispatchPopupSmartClassifierTitleChange,
   usePopupSmartClassifierView
-} from '../popup-events'
+} from '../popup-controller-store'
 import { PopupSmartClassifier } from './PopupSmartClassifier'
 
 export function PopupSmartClassifierHost() {
