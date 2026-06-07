@@ -136,27 +136,6 @@ export interface PopupContentViewModel {
   title?: string
 }
 
-export interface PopupSearchChipViewModel {
-  kind: string
-  label: string
-}
-
-export interface PopupSavedSearchItemViewModel {
-  active: boolean
-  id: string
-  label: string
-  query: string
-}
-
-export interface PopupSavedSearchesViewModel {
-  canSaveCurrent: boolean
-  error: string
-  expanded: boolean
-  hasCurrentSaved: boolean
-  items: PopupSavedSearchItemViewModel[]
-  show: boolean
-}
-
 export interface PopupSmartPageViewModel {
   bookmarked: boolean
   favicon: string
@@ -231,17 +210,6 @@ export function renderPopupFolderPickerIsland(
 
 export function renderPopupContentIsland(container: Element, state: PopupContentViewModel): void {
   renderIsland(container, <PopupContent state={state} />)
-}
-
-export function renderPopupSearchChipsIsland(container: Element, chips: PopupSearchChipViewModel[]): void {
-  renderIsland(container, <PopupSearchChips chips={chips} />)
-}
-
-export function renderPopupSavedSearchesIsland(
-  container: Element,
-  state: PopupSavedSearchesViewModel
-): void {
-  renderIsland(container, <PopupSavedSearches state={state} />)
 }
 
 export function renderPopupSmartClassifierIsland(
@@ -779,89 +747,6 @@ function getPopupActionIconName(action: string): IconName {
     return 'Trash2'
   }
   return 'ExternalLink'
-}
-
-function PopupSearchChips({ chips }: { chips: PopupSearchChipViewModel[] }) {
-  return (
-    <>
-      {chips.map((chip) => (
-        <span className={['search-filter-chip', chip.kind].filter(Boolean).join(' ')} key={`${chip.kind}:${chip.label}`}>
-          {chip.label}
-        </span>
-      ))}
-    </>
-  )
-}
-
-function PopupSavedSearches({ state }: { state: PopupSavedSearchesViewModel }) {
-  if (!state.show) {
-    return null
-  }
-
-  const visibleItems = state.items.slice(0, 6)
-
-  return (
-    <>
-      <div className="saved-search-head">
-        {state.items.length ? (
-          <Button
-            className="saved-search-toggle"
-            type="button"
-            data-saved-search-action="toggle"
-            aria-expanded={state.expanded}
-            aria-controls="saved-searches-list"
-            unstyled
-          >
-            <span className="saved-search-toggle-icon" aria-hidden="true"></span>
-            <span className="saved-search-toggle-label">已保存 {state.items.length}</span>
-          </Button>
-        ) : (
-          <span className="saved-search-status">暂无保存项</span>
-        )}
-        {state.canSaveCurrent ? (
-          <Button
-            className="saved-search-save"
-            type="button"
-            data-saved-search-action="save-current"
-            disabled={state.hasCurrentSaved}
-            aria-label={state.hasCurrentSaved ? '当前搜索已保存' : '保存当前搜索'}
-            unstyled
-          >
-            {state.hasCurrentSaved ? '已保存' : '保存当前搜索'}
-          </Button>
-        ) : null}
-      </div>
-      {state.error ? <span className="saved-search-status error">{state.error}</span> : null}
-      {state.expanded && visibleItems.length ? (
-        <div id="saved-searches-list" className="saved-search-list">
-          {visibleItems.map((item) => (
-            <span className={['saved-search-chip', item.active ? 'active' : ''].filter(Boolean).join(' ')} key={item.id}>
-              <Button
-                className="saved-search-apply"
-                type="button"
-                data-saved-search-action="apply"
-                data-saved-search-id={item.id}
-                title={item.query}
-                unstyled
-              >
-                {item.label}
-              </Button>
-              <Button
-                className="saved-search-delete"
-                type="button"
-                data-saved-search-action="delete"
-                data-saved-search-id={item.id}
-                aria-label={`删除保存搜索：${item.label}`}
-                unstyled
-              >
-                {'\u00d7'}
-              </Button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </>
-  )
 }
 
 function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel }) {

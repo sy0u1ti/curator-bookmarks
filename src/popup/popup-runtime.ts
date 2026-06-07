@@ -81,8 +81,6 @@ import { state } from './state.js'
 import {
   renderPopupContentIsland,
   renderPopupFolderPickerIsland,
-  renderPopupSavedSearchesIsland,
-  renderPopupSearchChipsIsland,
   renderPopupSmartClassifierIsland,
   type PopupActionMenuViewModel,
   type PopupContentBookmarkRowViewModel,
@@ -93,17 +91,21 @@ import {
   type PopupEmptyStateViewModel,
   type PopupFolderPickerState,
   type PopupFolderTreeOptionViewModel,
-  type PopupSavedSearchesViewModel,
-  type PopupSearchChipViewModel,
   type PopupSmartClassifierViewModel
 } from './components/PopupRuntimeIslands.js'
 import {
   dispatchPopupAutoAnalyzeStatusChange,
+  dispatchPopupSavedSearchesChange,
+  dispatchPopupSearchChipsChange,
   dispatchPopupToastsChange,
   POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
+  POPUP_SAVED_SEARCH_ACTION_EVENT,
   POPUP_TOAST_ACTION_EVENT,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
+  type PopupSavedSearchActionDetail,
+  type PopupSavedSearchesView,
+  type PopupSearchChipView,
   type PopupToastActionDetail
 } from './popup-events.js'
 import {
@@ -219,16 +221,6 @@ function bindEvents(signal: AbortSignal) {
   dom.openSettings.addEventListener('click', openSettingsPage, { signal })
   dom.smartClassifier.addEventListener('click', handleSmartClassifierClick, { signal })
   dom.smartClassifier.addEventListener('input', handleSmartClassifierInput, { signal })
-  dom.savedSearches.addEventListener('click', (event) => {
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
-    }
-    const actionButton = target.closest('[data-saved-search-action]')
-    if (actionButton) {
-      handleSavedSearchAction(actionButton)
-    }
-  }, { signal })
   dom.searchInput.addEventListener('input', () => {
     setSearchQuery(dom.searchInput.value)
   }, { signal })
@@ -283,6 +275,7 @@ function bindEvents(signal: AbortSignal) {
   }, { signal })
   window.addEventListener('popup:modal-close', closeDialogs, { signal })
   window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
+  window.addEventListener(POPUP_SAVED_SEARCH_ACTION_EVENT, handleSavedSearchActionEvent, { signal })
   window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
   document.addEventListener('pointerdown', handleDocumentPointerDown, { signal })
@@ -1557,10 +1550,8 @@ function renderBanner() {
 function renderSearchTools() {
   const parsed = parseSearchQuery(state.searchQuery)
   const chips = parsed.chips
-  dom.searchChips.classList.toggle('hidden', chips.length === 0)
-  renderPopupSearchChipsIsland(
-    dom.searchChips,
-    chips.map((chip): PopupSearchChipViewModel => ({
+  dispatchPopupSearchChipsChange(
+    chips.map((chip): PopupSearchChipView => ({
       kind: String(chip.kind || ''),
       label: String(chip.label || '')
     }))
@@ -1578,7 +1569,7 @@ function renderSavedSearches() {
   const show = savedSearches.length > 0 || Boolean(state.savedSearchesError) || canSaveCurrent
   const hasError = Boolean(state.savedSearchesError)
   const expanded = Boolean(state.savedSearchesExpanded) || hasError
-  const viewModel: PopupSavedSearchesViewModel = {
+  const viewModel: PopupSavedSearchesView = {
     canSaveCurrent,
     error: state.savedSearchesError || '',
     expanded,
@@ -1592,15 +1583,7 @@ function renderSavedSearches() {
     show
   }
 
-  dom.savedSearches.classList.toggle('hidden', !show)
-  if (!show) {
-    renderPopupSavedSearchesIsland(dom.savedSearches, viewModel)
-    return
-  }
-
-  dom.savedSearches.classList.toggle('expanded', expanded)
-  dom.savedSearches.classList.toggle('collapsed', !expanded)
-  renderPopupSavedSearchesIsland(dom.savedSearches, viewModel)
+  dispatchPopupSavedSearchesChange(viewModel)
 }
 function queryHasAdvancedSearchSyntax(query: string): boolean {
   const value = String(query || '').trim()
@@ -2738,17 +2721,25 @@ function renderToasts() {
   dispatchPopupToastsChange(state.toasts)
 }
 function handleSmartClassifierClick(event) {
-  const savedSearchButton = event.target.closest('[data-saved-search-action]')
-  if (savedSearchButton) {
-    handleSavedSearchAction(savedSearchButton)
+  const target = event.target
+  if (!(target instanceof Element)) {
     return
   }
-  const quickActionButton = event.target.closest('[data-current-page-action]')
+
+  const savedSearchButton = target.closest('[data-saved-search-action]')
+  if (savedSearchButton) {
+    handleSavedSearchAction(
+      savedSearchButton.getAttribute('data-saved-search-action') || '',
+      savedSearchButton.getAttribute('data-saved-search-id') || ''
+    )
+    return
+  }
+  const quickActionButton = target.closest('[data-current-page-action]')
   if (quickActionButton) {
     handleCurrentPageQuickAction(quickActionButton.getAttribute('data-current-page-action'))
     return
   }
-  const recommendationButton = event.target.closest('[data-smart-recommendation]')
+  const recommendationButton = target.closest('[data-smart-recommendation]')
   if (recommendationButton) {
     const nextRecommendationId = recommendationButton.getAttribute('data-smart-recommendation')
     if (nextRecommendationId !== state.smartSelectedRecommendationId) {
@@ -2758,7 +2749,7 @@ function handleSmartClassifierClick(event) {
     renderSmartClassifier()
     return
   }
-  const actionButton = event.target.closest('[data-smart-action]')
+  const actionButton = target.closest('[data-smart-action]')
   if (!actionButton) {
     return
   }
@@ -2791,9 +2782,12 @@ function handleSmartClassifierClick(event) {
     saveSmartRecommendation()
   }
 }
-function handleSavedSearchAction(button) {
-  const action = button.getAttribute('data-saved-search-action')
-  const searchId = button.getAttribute('data-saved-search-id')
+function handleSavedSearchActionEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupSavedSearchActionDetail>).detail
+  handleSavedSearchAction(detail?.action || '', detail?.searchId || '')
+}
+
+function handleSavedSearchAction(action: string, searchId: string) {
   if (action === 'toggle') {
     state.savedSearchesExpanded = !state.savedSearchesExpanded
     renderSavedSearches()

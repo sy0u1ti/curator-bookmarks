@@ -16,6 +16,40 @@ export interface PopupAutoAnalyzeStatusActionDetail {
   action: string
 }
 
+export interface PopupSearchChipView {
+  kind: string
+  label: string
+}
+
+export interface PopupSearchChipsChangeDetail {
+  chips: PopupSearchChipView[]
+}
+
+export interface PopupSavedSearchItemView {
+  active: boolean
+  id: string
+  label: string
+  query: string
+}
+
+export interface PopupSavedSearchesView {
+  canSaveCurrent: boolean
+  error: string
+  expanded: boolean
+  hasCurrentSaved: boolean
+  items: PopupSavedSearchItemView[]
+  show: boolean
+}
+
+export interface PopupSavedSearchesChangeDetail {
+  state: PopupSavedSearchesView
+}
+
+export interface PopupSavedSearchActionDetail {
+  action: string
+  searchId: string
+}
+
 export interface PopupToastChangeDetail {
   toasts: PopupToast[]
 }
@@ -29,6 +63,9 @@ export const POPUP_TOASTS_CHANGE_EVENT = 'popup:toasts-change'
 export const POPUP_TOAST_ACTION_EVENT = 'popup:toast-action'
 export const POPUP_AUTO_ANALYZE_STATUS_CHANGE_EVENT = 'popup:auto-analyze-status-change'
 export const POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT = 'popup:auto-analyze-status-action'
+export const POPUP_SEARCH_CHIPS_CHANGE_EVENT = 'popup:search-chips-change'
+export const POPUP_SAVED_SEARCHES_CHANGE_EVENT = 'popup:saved-searches-change'
+export const POPUP_SAVED_SEARCH_ACTION_EVENT = 'popup:saved-search-action'
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
   window.dispatchEvent(
@@ -42,6 +79,37 @@ export function dispatchPopupAutoAnalyzeStatusAction(action: string): void {
   window.dispatchEvent(
     new CustomEvent<PopupAutoAnalyzeStatusActionDetail>(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, {
       detail: { action }
+    })
+  )
+}
+
+export function dispatchPopupSearchChipsChange(chips: PopupSearchChipView[]): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSearchChipsChangeDetail>(POPUP_SEARCH_CHIPS_CHANGE_EVENT, {
+      detail: {
+        chips: chips.map((chip) => ({ ...chip }))
+      }
+    })
+  )
+}
+
+export function dispatchPopupSavedSearchesChange(state: PopupSavedSearchesView): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSavedSearchesChangeDetail>(POPUP_SAVED_SEARCHES_CHANGE_EVENT, {
+      detail: {
+        state: {
+          ...state,
+          items: state.items.map((item) => ({ ...item }))
+        }
+      }
+    })
+  )
+}
+
+export function dispatchPopupSavedSearchAction(action: string, searchId = ''): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSavedSearchActionDetail>(POPUP_SAVED_SEARCH_ACTION_EVENT, {
+      detail: { action, searchId }
     })
   )
 }

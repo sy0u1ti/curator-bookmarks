@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
 import { getModalCloseDurationMs } from '../shared/motion'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
+import { PopupSavedSearches } from './components/PopupSavedSearches'
+import { PopupSearchChips } from './components/PopupSearchChips'
 import { PopupToasts } from './components/PopupToasts'
 
 export function PopupApp() {
@@ -192,8 +194,8 @@ function PopupShell() {
               </Button>
             </label>
 
-            <div id="search-chips" className="search-chips hidden" aria-label="当前搜索条件"></div>
-            <div id="saved-searches" className="saved-searches hidden" aria-label="已保存搜索"></div>
+            <PopupSearchChips />
+            <PopupSavedSearches />
           </section>
 
           <section id="smart-classifier" className="smart-classifier hidden" aria-live="polite"></section>
