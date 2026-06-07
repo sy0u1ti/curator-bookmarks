@@ -9,6 +9,11 @@ import { Select } from '../../ui/primitives/Select'
 import { SliderControl } from '../../ui/primitives/Slider'
 import { SwitchControl } from '../../ui/primitives/Switch'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
+import {
+  ICON_PRESET_META,
+  type IconLayoutPresetKey
+} from '../icon-settings'
+import { useNewtabIconPreviewView } from '../newtab-icon-preview-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
@@ -376,6 +381,17 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
 }
 
 function IconSettingsSection() {
+  const iconPreview = useNewtabIconPreviewView()
+  const previewStyle = {
+    '--preview-page-width': `${iconPreview.pageWidth}%`,
+    '--preview-column-gap': `${iconPreview.previewColumnGap}px`,
+    '--preview-grid-max-width': `${iconPreview.previewGridMaxWidth}px`,
+    '--preview-row-gap': `${iconPreview.previewRowGap}px`,
+    '--preview-shell-size': `${iconPreview.previewShellSize}px`,
+    '--preview-tile-width': `${iconPreview.previewTileWidth}px`,
+    '--preview-title-lines': String(iconPreview.titleLines)
+  } as React.CSSProperties
+
   return (
     <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-icon-title">
       <h2 id="settings-icon-title">书签卡片</h2>
@@ -383,11 +399,66 @@ function IconSettingsSection() {
         <div className="icon-live-preview-panel">
           <div className="icon-live-preview-header">
             <span>实时预览</span>
-            <span id="icon-live-preview-summary" className="icon-live-preview-summary" />
+            <span id="icon-live-preview-summary" className="icon-live-preview-summary">
+              {iconPreview.summary}
+            </span>
           </div>
-          <figure id="icon-live-preview" className="icon-live-preview" aria-label="书签卡片布局预览" />
+          <figure
+            id="icon-live-preview"
+            className="icon-live-preview"
+            aria-label="书签卡片布局预览"
+            data-icon-layout-mode={iconPreview.layoutMode}
+            data-icon-show-titles={String(iconPreview.showTitles)}
+            style={previewStyle}
+          >
+            <div
+              className="icon-live-preview-grid"
+              style={{ gridTemplateColumns: `repeat(${iconPreview.columns}, minmax(0, 1fr))` }}
+            >
+              {iconPreview.tiles.map((item) => (
+                <span className="icon-live-preview-tile" key={item.id}>
+                  <span className="icon-live-preview-shell">
+                    <span className="icon-live-preview-mark">{item.mark}</span>
+                  </span>
+                  <span className="icon-live-preview-title">{item.title}</span>
+                </span>
+              ))}
+            </div>
+          </figure>
         </div>
-        <div id="icon-preset-row" className="icon-preset-row" />
+        <div id="icon-preset-row" className="icon-preset-row">
+          {iconPresetCards.map((card) => (
+            <Button
+              className="icon-preset-card"
+              type="button"
+              data-preset={card.key}
+              aria-pressed="false"
+              aria-label={`${card.name}布局，${card.desc}，${card.detail}`}
+              key={card.key}
+              unstyled
+            >
+              <span
+                className="icon-preset-preview"
+                style={{
+                  gap: card.previewGap,
+                  gridTemplateColumns: `repeat(${card.previewColumnCount}, 1fr)`,
+                  padding: card.previewPadding
+                }}
+              >
+                {Array.from({ length: card.previewColumnCount * card.previewRowCount }, (_, index) => (
+                  <span
+                    className="icon-preset-preview-cell"
+                    style={{ height: card.previewCellHeight }}
+                    key={`${card.key}:${index}`}
+                  />
+                ))}
+              </span>
+              <span className="icon-preset-name">{card.name}</span>
+              <span className="icon-preset-desc">{card.desc}</span>
+              <span className="icon-preset-detail">{card.detail}</span>
+            </Button>
+          ))}
+        </div>
         <div className="setting-row icon-control-row">
           <span className="setting-label-stack">
             <span>布局方式</span>
@@ -440,6 +511,21 @@ function IconSettingsSection() {
     </section>
   )
 }
+
+const iconPresetCards = (Object.entries(ICON_PRESET_META) as Array<[
+  IconLayoutPresetKey,
+  typeof ICON_PRESET_META[IconLayoutPresetKey]
+]>).map(([key, meta]) => ({
+  desc: meta.desc,
+  detail: meta.detail,
+  key,
+  name: meta.name,
+  previewCellHeight: key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px',
+  previewColumnCount: meta.cols,
+  previewGap: key === 'compact' ? '3px' : key === 'spacious' ? '5px' : '4px',
+  previewPadding: '0 4px',
+  previewRowCount: meta.rows
+}))
 
 function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
   return (

@@ -43,7 +43,6 @@ import type { ContentSnapshotIndex } from '../shared/content-snapshots.js'
 import {
   DEFAULT_ICON_SETTINGS,
   ICON_LAYOUT_PRESETS,
-  ICON_PRESET_META,
   type IconLayoutPresetKey,
   type IconSettings,
   detectPresetFromValues,
@@ -256,10 +255,6 @@ import {
   type SelectedFolderSourceListState,
   type SpeedDialCardViewModel
 } from './components/RuntimeIslands.js'
-import {
-  renderIconPresetCardsIsland,
-  type IconPresetCardState
-} from './components/IconSettingsIslands.js'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
   dispatchNewtabSettingsDrawerOpen,
@@ -2044,7 +2039,6 @@ function initializeSettingsDrawer(): void {
   bindIconSettingsEvents()
   bindTimeSettingsEvents()
   bindSettingsGroupTabs()
-  renderIconPresetCards()
   settingsDrawerReady = true
   resolveSettingsDrawerReady?.()
   hydrateFeaturedBackgroundOptions()
@@ -2091,7 +2085,6 @@ function primeSettingsDrawerOpenTransition(): void {
 
 function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
   measureNow('newtab.openSettingsDrawer', () => {
-    renderIconPresetCards()
     const focusFirstControl = options?.focusFirstControl !== false
     setActiveSettingsGroup(options?.section || state.activeSettingsGroup || 'source', { scrollToTop: false })
     settingsDrawerReturnFocusElement = document.activeElement instanceof HTMLElement
@@ -11463,29 +11456,7 @@ function renderIconPreview(): void {
 
   renderIconPreviewElement(
     preview,
-    cachedEl('icon-live-preview-summary'),
     state.iconSettings
-  )
-}
-
-function renderIconPresetCards(): void {
-  const row = cachedEl('icon-preset-row')
-  if (!row || row.childElementCount > 0) return
-
-  renderIconPresetCardsIsland(
-    row,
-    (Object.entries(ICON_PRESET_META) as Array<[IconLayoutPresetKey, typeof ICON_PRESET_META[IconLayoutPresetKey]]>)
-      .map(([key, meta]): IconPresetCardState => ({
-        desc: meta.desc,
-        detail: meta.detail,
-        key,
-        name: meta.name,
-        previewCellHeight: key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px',
-        previewColumnCount: meta.cols,
-        previewGap: key === 'compact' ? '3px' : key === 'spacious' ? '5px' : '4px',
-        previewPadding: '0 4px',
-        previewRowCount: meta.rows
-      }))
   )
 }
 

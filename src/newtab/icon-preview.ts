@@ -4,10 +4,7 @@ import {
   getIconGapPx,
   getIconRowGapPx
 } from './icon-settings.js'
-import {
-  renderIconPreviewIsland,
-  renderIconPreviewSummaryIsland
-} from './components/IconSettingsIslands.js'
+import { dispatchNewtabIconPreviewView } from './newtab-icon-preview-store.js'
 
 export function getIconPreviewSignature(settings: IconSettings): string {
   return [
@@ -25,7 +22,6 @@ export function getIconPreviewSignature(settings: IconSettings): string {
 
 export function renderIconPreviewElement(
   preview: HTMLElement,
-  summaryElement: HTMLElement | null,
   settings: IconSettings
 ): void {
   const previewColumnGap = Math.max(4, Math.round(getIconGapPx(settings.columnGap) * 0.34))
@@ -46,28 +42,28 @@ export function renderIconPreviewElement(
   ].join(' · ')
   const signature = getIconPreviewSignature(settings)
 
-  preview.dataset.iconLayoutMode = settings.layoutMode
-  preview.dataset.iconShowTitles = String(settings.showTitles)
-  preview.style.setProperty('--preview-page-width', `${settings.pageWidth}%`)
-  preview.style.setProperty('--preview-column-gap', `${previewColumnGap}px`)
-  preview.style.setProperty('--preview-row-gap', `${previewRowGap}px`)
-  preview.style.setProperty('--preview-tile-width', `${previewTileWidth}px`)
-  preview.style.setProperty('--preview-shell-size', `${previewShellSize}px`)
-  preview.style.setProperty('--preview-title-lines', String(settings.titleLines))
-  preview.style.setProperty('--preview-grid-max-width', `${previewGridMaxWidth}px`)
-  if (summaryElement) {
-    renderIconPreviewSummaryIsland(summaryElement, summary)
-  }
-
   if (preview.dataset.iconPreviewSignature === signature && preview.firstElementChild) {
     return
   }
 
   const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
   preview.dataset.iconPreviewSignature = signature
-  renderIconPreviewIsland(preview, {
+  dispatchNewtabIconPreviewView({
     columns: previewColumns,
-    names,
-    sampleCount
+    layoutMode: settings.layoutMode,
+    pageWidth: settings.pageWidth,
+    previewColumnGap,
+    previewGridMaxWidth,
+    previewRowGap,
+    previewShellSize,
+    previewTileWidth,
+    showTitles: settings.showTitles,
+    summary,
+    titleLines: settings.titleLines,
+    tiles: Array.from({ length: sampleCount }, (_, index) => ({
+      id: `${index}:${names[index] || ''}`,
+      mark: names[index]?.slice(0, 1) || '*',
+      title: names[index] || ''
+    }))
   })
 }
