@@ -10,6 +10,7 @@ import {
   dispatchNewtabFeaturedBackgroundModalRefreshClick,
   useNewtabFeaturedBackgroundModalView
 } from '../newtab-featured-background-modal-store'
+import { FeaturedBackgroundHoverPreviewHost } from './FeaturedBackgroundHoverPreview'
 
 export interface FeaturedBackgroundModalProps {
   open: boolean
@@ -106,6 +107,7 @@ export function FeaturedBackgroundModal({
           aria-label="精选图库壁纸列表"
           onScroll={onGridScroll}
         />
+        <FeaturedBackgroundHoverPreviewHost />
       </DialogPanel>
     </DialogOverlay>
   )

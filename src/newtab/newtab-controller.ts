@@ -204,7 +204,6 @@ import {
   createBookmarkTileIslandElement,
   createClockSpacerIslandElement,
   createClockWidgetIslandElement,
-  createFeaturedBackgroundHoverPreviewIslandElement,
   createNewTabOnboardingIslandElement,
   createPortalPanelIslandElement,
   createQuickAccessPanelIslandElement,
@@ -215,7 +214,6 @@ import {
   mountBookmarkAddMenuIslandElement,
   mountBookmarkEditMenuIslandElement,
   mountBookmarkGridPlaceholderIslandElement,
-  mountFeaturedBackgroundHoverPreviewIslandElement,
   mountNewTabDragGhostBridge,
   mountSearchEngineMenuIslandElement,
   renderFeaturedBackgroundPickerIsland,
@@ -264,6 +262,11 @@ import {
   getNewtabFeaturedBackgroundModalOpen,
   registerNewtabFeaturedBackgroundModalActions
 } from './newtab-featured-background-modal-store.js'
+import {
+  dispatchNewtabFeaturedBackgroundHoverPreviewBackgroundImage,
+  dispatchNewtabFeaturedBackgroundHoverPreviewHidden,
+  dispatchNewtabFeaturedBackgroundHoverPreviewView
+} from './newtab-featured-background-hover-preview-store.js'
 import {
   dispatchNewtabDashboardOverlayControls,
   registerNewtabDashboardOverlayActions
@@ -755,7 +758,6 @@ let deferredRenderFrame = 0
 let bookmarkTileRenderVersion = 0
 let settingsDrawerReturnFocusElement: HTMLElement | null = null
 let featuredBackgroundModalReturnFocusElement: HTMLElement | null = null
-let featuredBackgroundPreviewElement: HTMLElement | null = null
 let featuredBackgroundPreviewCard: HTMLElement | null = null
 let featuredBackgroundCardPreviewObserver: IntersectionObserver | null = null
 let featuredBackgroundCardPreviewObservedRoot: HTMLElement | null = null
@@ -12219,7 +12221,7 @@ function scheduleFeaturedBackgroundHoverPreview(card: HTMLElement): void {
     return
   }
 
-  if (featuredBackgroundPreviewCard === card && featuredBackgroundPreviewElement?.isConnected) {
+  if (featuredBackgroundPreviewCard === card) {
     return
   }
 
@@ -12241,37 +12243,32 @@ function showFeaturedBackgroundHoverPreview(card: HTMLElement): void {
     return
   }
 
-  const preview = getFeaturedBackgroundHoverPreviewElement()
   const fallbackUrl = card.dataset.featuredBackgroundResolvedPreviewUrl || imageUrl
-  preview.style.backgroundImage = `url("${escapeCssUrl(fallbackUrl)}")`
-  preview.setAttribute(
-    'aria-label',
-    `${card.dataset.featuredBackgroundPreviewTitle || '精选图库壁纸'} 大图预览`
-  )
-  preview.setAttribute('aria-hidden', 'false')
-  positionFeaturedBackgroundHoverPreview(card, preview)
+  const position = getFeaturedBackgroundHoverPreviewPosition(card)
   featuredBackgroundPreviewCard = card
-  preview.classList.add('is-visible')
+  dispatchNewtabFeaturedBackgroundHoverPreviewView({
+    ariaLabel: `${card.dataset.featuredBackgroundPreviewTitle || '精选图库壁纸'} 大图预览`,
+    backgroundImage: `url("${escapeCssUrl(fallbackUrl)}")`,
+    height: position.height,
+    left: position.left,
+    top: position.top,
+    visible: true,
+    width: position.width
+  })
   void resolveFeaturedBackgroundGalleryObjectUrl(imageUrl).then((cachedUrl) => {
-    if (!cachedUrl || featuredBackgroundPreviewCard !== card || !preview.isConnected) {
+    if (!cachedUrl || featuredBackgroundPreviewCard !== card) {
       return
     }
-    preview.style.backgroundImage = `url("${escapeCssUrl(cachedUrl)}")`
+    dispatchNewtabFeaturedBackgroundHoverPreviewBackgroundImage(`url("${escapeCssUrl(cachedUrl)}")`)
   })
 }
 
-function getFeaturedBackgroundHoverPreviewElement(): HTMLElement {
-  if (featuredBackgroundPreviewElement?.isConnected) {
-    return featuredBackgroundPreviewElement
-  }
-
-  const preview = createFeaturedBackgroundHoverPreviewIslandElement({ hidden: true })
-  featuredBackgroundPreviewElement = preview
-  mountFeaturedBackgroundHoverPreviewIslandElement(featuredBackgroundModal, preview)
-  return preview
-}
-
-function positionFeaturedBackgroundHoverPreview(card: HTMLElement, preview: HTMLElement): void {
+function getFeaturedBackgroundHoverPreviewPosition(card: HTMLElement): {
+  height: number
+  left: number
+  top: number
+  width: number
+} {
   const cardRect = card.getBoundingClientRect()
   const modalRect = featuredBackgroundModal instanceof HTMLElement
     ? featuredBackgroundModal.getBoundingClientRect()
@@ -12292,10 +12289,12 @@ function positionFeaturedBackgroundHoverPreview(card: HTMLElement, preview: HTML
     ? belowTop
     : Math.max(modalRect.top + 16, aboveTop)
 
-  preview.style.width = `${previewWidth}px`
-  preview.style.height = `${previewHeight}px`
-  preview.style.left = `${left}px`
-  preview.style.top = `${top}px`
+  return {
+    height: previewHeight,
+    left,
+    top,
+    width: previewWidth
+  }
 }
 
 function clearFeaturedBackgroundHoverPreview(card?: HTMLElement): void {
@@ -12306,11 +12305,7 @@ function clearFeaturedBackgroundHoverPreview(card?: HTMLElement): void {
   window.clearTimeout(featuredBackgroundPreviewTimer)
   featuredBackgroundPreviewTimer = 0
   featuredBackgroundPreviewCard = null
-  if (featuredBackgroundPreviewElement) {
-    featuredBackgroundPreviewElement.classList.remove('is-visible')
-    featuredBackgroundPreviewElement.setAttribute('aria-hidden', 'true')
-    featuredBackgroundPreviewElement.style.backgroundImage = ''
-  }
+  dispatchNewtabFeaturedBackgroundHoverPreviewHidden()
 }
 
 function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPreferences {
