@@ -59,9 +59,7 @@ export interface PopupActionMenuItemViewModel {
 }
 
 export interface PopupActionMenuViewModel {
-  id: string
   items: PopupActionMenuItemViewModel[]
-  open: boolean
 }
 
 export interface PopupContentBookmarkRowViewModel {

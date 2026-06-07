@@ -120,15 +120,6 @@ function handleContentClick(event: React.MouseEvent<HTMLElement>) {
     return
   }
 
-  const menuToggle = target.closest('[data-open-menu]')
-  if (menuToggle) {
-    dispatchPopupContentAction({
-      action: 'toggle-menu',
-      bookmarkId: menuToggle.getAttribute('data-open-menu') || ''
-    })
-    return
-  }
-
   const actionButton = target.closest('[data-menu-action]')
   if (actionButton) {
     dispatchPopupContentAction({

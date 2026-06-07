@@ -105,7 +105,6 @@ export interface PopupState {
   contentRenderHtml: string
   searchChipsRenderSignature: string
   savedSearchesRenderSignature: string
-  activeMenuBookmarkId: string | null
   moveTargetBookmarkId: string | null
   moveSearchQuery: string
   editTargetBookmarkId: string | null
@@ -211,7 +210,6 @@ export const state: PopupState = {
   contentRenderHtml: '',
   searchChipsRenderSignature: '',
   savedSearchesRenderSignature: '',
-  activeMenuBookmarkId: null,
   moveTargetBookmarkId: null,
   moveSearchQuery: '',
   editTargetBookmarkId: null,

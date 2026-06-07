@@ -33,7 +33,6 @@ import {
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
-import { closeWithExitMotion } from '../shared/motion.js'
 import {
   buildBookmarkCatalogSnapshot,
   type BookmarkCatalogSnapshot
@@ -240,7 +239,6 @@ function bindEvents(signal: AbortSignal) {
   window.addEventListener(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, handleSmartClassifierTitleChangeEvent, { signal })
   window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
-  document.addEventListener('pointerdown', handleDocumentPointerDown, { signal })
   document.addEventListener('keydown', handleDocumentKeydown, { signal })
 }
 async function hydratePopupPreferences() {
@@ -663,7 +661,6 @@ function focusSearchFromCommand(intent) {
   if (['loading', 'results', 'error', 'permission'].includes(state.smartStatus)) {
     resetSmartClassification()
   }
-  state.activeMenuBookmarkId = null
   render()
   window.requestAnimationFrame(() => {
     focusSearchInput({ select: true })
@@ -684,7 +681,6 @@ async function runSmartClassifierFromCommand(intent) {
     focusSearchInput()
     return
   }
-  state.activeMenuBookmarkId = null
   if (state.smartStatus === 'unavailable') {
     state.smartStatus = 'idle'
   }
@@ -698,7 +694,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   perfMark('popup.refreshData.start')
   state.isLoading = true
   state.loadError = ''
-  state.activeMenuBookmarkId = null
   render()
   try {
     const { deferredHydration } = await hydratePopupBaseData({
@@ -1131,7 +1126,6 @@ function getActiveTab(): Promise<chrome.tabs.Tab | null> {
 function setSearchQuery(value, { immediate = false } = {}) {
   state.searchQuery = value
   state.naturalSearchSetupRequired = false
-  state.activeMenuBookmarkId = null
   clearViewNotice()
   clearTimeout(state.searchTimer)
   ensurePinyinEnrichmentForQuery(value)
@@ -2175,7 +2169,6 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
   const moveBusy = isPopupActionPending('move', bookmarkId)
   const editBusy = isPopupActionPending('edit', bookmarkId)
   const deleteBusy = isPopupActionPending('delete', bookmarkId)
-  const menuId = getActionMenuId(bookmarkId)
   const editLabel = getBookmarkActionLabel('编辑书签', bookmarkId)
   const copyLabel = getBookmarkActionLabel('复制书签链接', bookmarkId)
   const openLabel = getBookmarkActionLabel('当前页打开书签', bookmarkId)
@@ -2183,7 +2176,6 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
   const deleteLabel = getBookmarkActionLabel('删除书签', bookmarkId)
 
   return {
-    id: menuId,
     items: [
       {
         action: 'edit',
@@ -2225,12 +2217,8 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
         disabled: menuBusy || deleteBusy,
         label: '删除'
       }
-    ],
-    open: state.activeMenuBookmarkId === bookmarkId
+    ]
   }
-}
-function getActionMenuId(bookmarkId) {
-  return `popup-action-menu-${String(bookmarkId || '').replace(/[^a-zA-Z0-9_-]/g, '-')}`
 }
 function renderModals() {
   const viewModel = getPopupModalsViewModel()
@@ -2772,15 +2760,6 @@ function handleContentAction(detail: PopupContentActionDetail) {
     toggleFolder(detail.folderId)
     return
   }
-  if (detail.action === 'toggle-menu') {
-    const bookmarkId = detail.bookmarkId || ''
-    if (state.activeMenuBookmarkId === bookmarkId) {
-      closeActionMenu({ restoreFocus: true, focusBookmarkId: bookmarkId })
-      return
-    }
-    openActionMenuFromToggle(bookmarkId)
-    return
-  }
   if (detail.action === 'menu-action') {
     const bookmarkId = detail.bookmarkId || ''
     const action = detail.menuAction || ''
@@ -2978,45 +2957,6 @@ function selectEditDraftFolder(folderId) {
   clearEditDiscardGuard()
   renderModals()
 }
-function openActionMenuFromToggle(bookmarkId, { focusLast = false } = {}) {
-  if (!bookmarkId) {
-    return
-  }
-  state.activeMenuBookmarkId = bookmarkId
-  renderMainContent()
-  window.requestAnimationFrame(() => {
-    focusActionMenuItem(focusLast ? getActionMenuItems().length - 1 : 0)
-  })
-}
-function closeActionMenu({ restoreFocus = false, focusBookmarkId = state.activeMenuBookmarkId } = {}) {
-  const menu = document.querySelector('.action-menu')
-  const hadMenu = Boolean(state.activeMenuBookmarkId)
-  const returnBookmarkId = focusBookmarkId
-  state.activeMenuBookmarkId = null
-  const focusMenuToggle = () => {
-    if (restoreFocus) {
-      getMenuToggleForBookmark(returnBookmarkId)?.focus()
-    }
-  }
-  if (menu instanceof HTMLElement && !menu.classList.contains('is-closing')) {
-    void closeWithExitMotion(menu, 'is-closing', () => {
-      renderMainContent()
-      focusMenuToggle()
-    }, 180)
-    return
-  }
-  if (hadMenu) {
-    renderMainContent()
-    focusMenuToggle()
-  }
-}
-function handleDocumentPointerDown(event) {
-  const target = event.target
-
-  if (state.activeMenuBookmarkId && !target.closest('.menu-anchor')) {
-    closeActionMenu()
-  }
-}
 function handleDocumentKeydown(event) {
   if (event.isComposing) {
     return
@@ -3031,12 +2971,6 @@ function handleDocumentKeydown(event) {
     return
   }
   if (handleSearchFocusShortcut(event)) {
-    return
-  }
-  if (handleActionMenuToggleKeydown(event)) {
-    return
-  }
-  if (handleActionMenuKeydown(event)) {
     return
   }
   if (!state.debouncedQuery || !state.searchResults.length) {
@@ -3065,10 +2999,6 @@ function handleEscapeAction() {
     closeDialogs()
     return true
   }
-  if (state.activeMenuBookmarkId) {
-    closeActionMenu({ restoreFocus: true })
-    return true
-  }
   if (['loading', 'results', 'error'].includes(state.smartStatus)) {
     resetSmartClassification()
     return true
@@ -3091,7 +3021,6 @@ function handleSearchFocusShortcut(event) {
     return false
   }
   event.preventDefault()
-  state.activeMenuBookmarkId = null
   renderMainContent()
   focusSearchInput({ select: true })
   showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
@@ -3102,66 +3031,6 @@ function isEditableTarget(target) {
     return false
   }
   return Boolean(target.closest('input, textarea, [contenteditable="true"]'))
-}
-function handleActionMenuKeydown(event) {
-  if (!state.activeMenuBookmarkId) {
-    return false
-  }
-  const items = getActionMenuItems()
-  if (!items.length) {
-    return false
-  }
-  const currentIndex = items.findIndex((item) => item === document.activeElement)
-  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') {
-    event.preventDefault()
-    focusActionMenuItem(currentIndex + 1)
-    return true
-  }
-  if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') {
-    event.preventDefault()
-    focusActionMenuItem(currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
-    return true
-  }
-  if (event.key === 'Home') {
-    event.preventDefault()
-    focusActionMenuItem(0)
-    return true
-  }
-  if (event.key === 'End') {
-    event.preventDefault()
-    focusActionMenuItem(items.length - 1)
-    return true
-  }
-  return false
-}
-function handleActionMenuToggleKeydown(event) {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-    return false
-  }
-  const toggle = event.target instanceof Element
-    ? event.target.closest('[data-open-menu]')
-    : null
-  if (!toggle) {
-    return false
-  }
-  const bookmarkId = toggle.getAttribute('data-open-menu')
-  if (!bookmarkId) {
-    return false
-  }
-  event.preventDefault()
-  openActionMenuFromToggle(bookmarkId, { focusLast: event.key === 'ArrowUp' })
-  return true
-}
-function focusActionMenuItem(index) {
-  const items = getActionMenuItems()
-  if (!items.length) {
-    return
-  }
-  const nextIndex = ((index % items.length) + items.length) % items.length
-  items[nextIndex].focus()
-}
-function getActionMenuItems() {
-  return [...document.querySelectorAll<HTMLButtonElement>('.action-menu [data-menu-action]')]
 }
 function handleToastAction(event: Event) {
   const detail = (event as CustomEvent<PopupToastActionDetail>).detail
@@ -3212,7 +3081,6 @@ function openMoveDialog(bookmarkId) {
     return
   }
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
-  state.activeMenuBookmarkId = null
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = null
   state.moveTargetBookmarkId = bookmarkId
@@ -3231,7 +3099,6 @@ function openEditDialog(bookmarkId) {
     return
   }
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
-  state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = bookmarkId
@@ -3246,7 +3113,6 @@ function openDeleteDialog(bookmarkId) {
     return
   }
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
-  state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = bookmarkId
@@ -3277,7 +3143,6 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
 function applyFolderFilter(folderId, { focusSearch = true } = {}) {
   const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
-  state.activeMenuBookmarkId = null
   runSearch()
   render()
   showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
@@ -3318,7 +3183,6 @@ function openAiProviderPromptDialog() {
     return
   }
   rememberDialogReturnFocus()
-  state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
   state.smartFolderPickerOpen = false
   state.editTargetBookmarkId = null
@@ -3348,7 +3212,7 @@ function getMenuToggleForBookmark(bookmarkId) {
     return null
   }
   return document.querySelector<HTMLElement>(
-    `[data-open-menu="${CSS.escape(String(bookmarkId))}"], [data-bookmark-id="${CSS.escape(String(bookmarkId))}"]`
+    `[data-bookmark-id="${CSS.escape(String(bookmarkId))}"]`
   )
 }
 function resetSmartClassification() {
@@ -3632,7 +3496,6 @@ async function finishSmartSave({ message, closeModal = true }) {
   state.smartRecommendations = []
   state.smartSelectedRecommendationId = ''
   state.smartPermissionRequest = null
-  state.activeMenuBookmarkId = null
   if (closeModal || state.smartFolderPickerOpen) {
     state.smartFolderPickerOpen = false
     state.smartFolderSearchQuery = ''
@@ -3927,14 +3790,12 @@ async function copyBookmarkUrl(bookmarkId) {
   setPopupActionPending('copy-url', bookmarkId, true)
   try {
     await writeClipboardText(bookmark.url)
-    closeActionMenu()
     showToast({
       type: 'success',
       message: '链接已复制'
     })
     showViewNotice(`已复制链接：${bookmark.title}`)
   } catch (error) {
-    closeActionMenu()
     showToast({
       type: 'error',
       message: error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
