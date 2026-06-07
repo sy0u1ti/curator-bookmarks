@@ -217,7 +217,6 @@ import {
   renderNewTabSearchChipsIsland,
   renderNewTabSearchHintIsland,
   renderNewTabSearchSuggestionsIsland,
-  renderModuleSettingRowIsland,
   renderSelectedFolderSourceListIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
@@ -230,7 +229,6 @@ import {
   type FeaturedBackgroundPickerState,
   type FolderCandidateItemViewModel,
   type FolderCandidateListState,
-  type ModuleSettingRowViewModel,
   type QuickAccessGroupViewModel,
   type SavedSearchesState,
   type SearchChipViewModel,
@@ -241,6 +239,11 @@ import {
   type SelectedFolderSourceListState,
   type SpeedDialCardViewModel
 } from './components/RuntimeIslands.js'
+import {
+  dispatchNewtabModuleSettingsView,
+  registerNewtabModuleSettingsActions,
+  type NewtabModuleSettingRowView
+} from './newtab-module-settings-store.js'
 import type {
   BookmarkAddMenuViewModel,
   BookmarkEditMenuViewModel,
@@ -984,6 +987,10 @@ function bindEvents(): void {
       void undoLastDeletedBookmark()
     }
   })
+  registerNewtabModuleSettingsActions({
+    onMove: handleModuleSettingMove,
+    onToggle: handleModuleSettingToggle
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1346,10 +1353,6 @@ function bindFolderSettingsEvents(): void {
     ?.addEventListener('focusin', handleFolderCandidateFocus)
   cachedEl('folder-selected-list')
     ?.addEventListener('click', handleSelectedFolderClick)
-  cachedEl('newtab-speed-dial-setting')
-    ?.addEventListener('change', handleModuleSettingsChange)
-  cachedEl('newtab-speed-dial-setting')
-    ?.addEventListener('click', handleModuleSettingsClick)
 }
 
 function bindSettingsGroupTabs(): void {
@@ -10842,16 +10845,9 @@ function syncNewTabModernSettingsControls(): void {
 }
 
 function syncModuleSettingsControls(): void {
-  const containerIdByKey: Record<NewTabModuleSettingKey, string> = {
-    speedDial: 'newtab-speed-dial-setting'
-  }
-
   const rows = buildNewTabModuleSettingRows(state.moduleSettings)
-  rows.forEach((setting, index) => {
-    const container = cachedEl(containerIdByKey[setting.key])
-    if (container instanceof HTMLElement) {
-      renderModuleSettingRowIsland(container, createModuleSettingRowViewModel(setting, index, rows.length))
-    }
+  dispatchNewtabModuleSettingsView({
+    rows: rows.map((setting, index) => createModuleSettingRowViewModel(setting, index, rows.length))
   })
 }
 
@@ -10859,7 +10855,7 @@ function createModuleSettingRowViewModel(
   setting: ReturnType<typeof buildNewTabModuleSettingRows>[number],
   index = 0,
   total = 1
-): ModuleSettingRowViewModel {
+): NewtabModuleSettingRowView {
   return {
     description: setting.description,
     enabled: setting.enabled,
@@ -10870,20 +10866,14 @@ function createModuleSettingRowViewModel(
   }
 }
 
-function handleModuleSettingsChange(event: Event): void {
-  const target = event.target
-  if (!(target instanceof HTMLInputElement)) {
-    return
-  }
-
-  const key = target.dataset.moduleSettingToggle as NewTabModuleSettingKey | undefined
+function handleModuleSettingToggle(key: NewTabModuleSettingKey, enabled: boolean): void {
   if (!key || !(key in state.moduleSettings)) {
     return
   }
 
   state.moduleSettings = normalizeNewTabModuleSettings({
     ...state.moduleSettings,
-    [key]: target.checked
+    [key]: enabled
   })
   void saveNewTabModuleSettings().catch((error) => {
     setSettingsSaveStatus('error', error instanceof Error ? error.message : '模块设置保存失败')
@@ -10892,19 +10882,7 @@ function handleModuleSettingsChange(event: Event): void {
   scheduleRender({ updateClock: true })
 }
 
-function handleModuleSettingsClick(event: Event): void {
-  const target = event.target
-  if (!(target instanceof HTMLElement)) {
-    return
-  }
-
-  const button = target.closest<HTMLElement>('[data-module-setting-move]')
-  if (!button) {
-    return
-  }
-
-  const key = button.dataset.moduleSettingMove as NewTabModuleSettingKey | undefined
-  const direction = button.dataset.moduleSettingDirection === 'up' ? -1 : 1
+function handleModuleSettingMove(key: NewTabModuleSettingKey, direction: -1 | 1): void {
   if (!key || !(key in state.moduleSettings)) {
     return
   }

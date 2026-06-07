@@ -22,6 +22,12 @@ import {
   dispatchNewtabSettingsDrawerReady,
   useNewtabSettingsDrawerView
 } from '../newtab-settings-drawer-store'
+import {
+  dispatchNewtabModuleSettingMove,
+  dispatchNewtabModuleSettingToggle,
+  useNewtabModuleSettingsView,
+  type NewtabModuleSettingRowView
+} from '../newtab-module-settings-store'
 
 const settingsTabs = [
   ['source', '来源', true],
@@ -268,14 +274,78 @@ function SourceSettingsSection() {
 }
 
 function ModuleSettingsSection() {
+  const moduleSettings = useNewtabModuleSettingsView()
+
   return (
     <section className="settings-section" data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
       <h2 id="settings-speed-dial-title">模块</h2>
       <Surface className="settings-list" variant="plain">
         <SwitchRow id="general-show-quick-access" title="显示 Curator 常用和新近添加" description="仅基于当前来源内的固定、本页打开记录和添加时间，不读取浏览历史。" defaultChecked />
-        <div id="newtab-speed-dial-setting" className="newtab-module-settings-list" aria-label="Speed Dial 模块" />
+        <div id="newtab-speed-dial-setting" className="newtab-module-settings-list" aria-label="Speed Dial 模块">
+          {moduleSettings.rows.map((row) => (
+            <ModuleSettingRow row={row} key={row.key} />
+          ))}
+        </div>
       </Surface>
     </section>
+  )
+}
+
+function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
+  return (
+    <div className="setting-row newtab-module-setting-row" data-module-setting-row={row.key}>
+      <span className="setting-label-stack">
+        <span>{row.label}</span>
+        <small>{row.description}</small>
+      </span>
+      <span className="module-setting-controls">
+        <Button
+          className="module-setting-order-button"
+          type="button"
+          data-module-setting-move={row.key}
+          data-module-setting-direction="up"
+          disabled={row.index <= 0}
+          aria-label={`上移模块：${row.label}`}
+          title={`上移 ${row.label}`}
+          onClick={() => {
+            dispatchNewtabModuleSettingMove(row.key, -1)
+          }}
+          unstyled
+        >
+          {'\u2191'}
+        </Button>
+        <Button
+          className="module-setting-order-button"
+          type="button"
+          data-module-setting-move={row.key}
+          data-module-setting-direction="down"
+          disabled={row.index >= row.total - 1}
+          aria-label={`下移模块：${row.label}`}
+          title={`下移 ${row.label}`}
+          onClick={() => {
+            dispatchNewtabModuleSettingMove(row.key, 1)
+          }}
+          unstyled
+        >
+          {'\u2193'}
+        </Button>
+        <span className="module-setting-switch-label">
+          <SwitchControl
+            aria-label={`${row.enabled ? '隐藏' : '显示'}模块：${row.label}`}
+            checked={row.enabled}
+            className="setting-switch"
+            inputAttributes={{ 'data-module-setting-toggle': row.key }}
+            inputClassName="setting-switch-input"
+            onCheckedChange={(checked) => {
+              dispatchNewtabModuleSettingToggle(row.key, checked)
+            }}
+            syncInputState
+            thumbClassName="setting-switch-thumb"
+            unstyled
+          />
+        </span>
+      </span>
+    </div>
   )
 }
 
