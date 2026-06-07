@@ -1,18 +1,18 @@
 import { useEffect, useState } from 'react'
+import { Icon } from '../ui/icons/Icon'
+import { Badge } from '../ui/primitives/Badge'
+import { Card } from '../ui/primitives/Card'
 import {
-  Badge,
-  Button,
-  Card,
   CollapsiblePanel,
   CollapsibleRoot,
-  CollapsibleTrigger,
-  Icon,
-  ThemeProvider
-} from '../ui'
+  CollapsibleTrigger
+} from '../ui/primitives/Collapsible'
+import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
 import { AiAnalysisPanel, AvailabilityPanel, GeneralPanel } from './components/CorePanels'
 import { DashboardPanel } from './components/DashboardPanel'
 import { OptionsModals } from './components/OptionsModals'
+import { useOptionsController } from './options-controller'
 import {
   BackupPanel,
   DuplicatesPanel,
@@ -312,13 +312,13 @@ function OptionsOverviewPanel() {
           <strong id="overview-next-step-title">正在读取书签目录</strong>
           <p id="overview-next-step-copy">读取完成后这里会显示建议下一步和当前影响范围。</p>
         </div>
-        <Button
+        <a
           className="options-button small"
-          size="sm"
-          render={<a href="#availability" data-section-link="availability" />}
+          href="#availability"
+          data-section-link="availability"
         >
           开始可用性检测
-        </Button>
+        </a>
       </div>
 
       <div className="detect-summary-grid compact-grid options-overview-metrics">
@@ -352,19 +352,7 @@ function OptionsOverviewPanel() {
 }
 
 export function OptionsApp() {
-  useEffect(() => {
-    let disposed = false
-
-    void import('./options-runtime.js').then(({ startOptionsRuntime }) => {
-      if (!disposed) {
-        void startOptionsRuntime()
-      }
-    })
-
-    return () => {
-      disposed = true
-    }
-  }, [])
+  useOptionsController()
 
   return (
     <ThemeProvider>

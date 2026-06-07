@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   BOOKMARKS_BAR_ID,
   NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
@@ -402,13 +403,19 @@ const folderCleanupCallbacks = {
   confirm: requestConfirmation
 }
 
-let optionsRuntimeStarted = false
+let optionsControllerStarted = false
 
-export async function startOptionsRuntime(): Promise<void> {
-  if (optionsRuntimeStarted) {
+export function useOptionsController(): void {
+  useEffect(() => {
+    void startOptionsController()
+  }, [])
+}
+
+async function startOptionsController(): Promise<void> {
+  if (optionsControllerStarted) {
     return
   }
-  optionsRuntimeStarted = true
+  optionsControllerStarted = true
 
   applyOptionsDashboardEmbedClasses()
   cacheDom()
