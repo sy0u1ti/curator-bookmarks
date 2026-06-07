@@ -1,4 +1,5 @@
-import { CloseButton, DrawerClose } from '../../ui'
+import { CloseButton } from '../../ui/primitives/CloseButton'
+import { DrawerClose } from '../../ui/primitives/Drawer'
 
 export function SettingsDrawerClose() {
   return (

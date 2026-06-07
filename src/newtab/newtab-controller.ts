@@ -43,6 +43,7 @@ import type { ContentSnapshotIndex } from '../shared/content-snapshots.js'
 import {
   DEFAULT_ICON_SETTINGS,
   ICON_LAYOUT_PRESETS,
+  ICON_PRESET_META,
   type IconLayoutPresetKey,
   type IconSettings,
   detectPresetFromValues,
@@ -254,6 +255,15 @@ import {
   type SelectedFolderSourceListState,
   type SpeedDialCardViewModel
 } from './components/RuntimeIslands.js'
+import {
+  renderIconPresetCardsIsland,
+  type IconPresetCardState
+} from './components/IconSettingsIslands.js'
+import {
+  dispatchNewtabSettingsDrawerActiveGroup,
+  dispatchNewtabSettingsDrawerOpen,
+  registerNewtabSettingsDrawerActions
+} from './newtab-settings-drawer-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -719,9 +729,6 @@ let setDashboardOverlayOpen: ((open: boolean) => void) | null = null
 const settingsTrigger = cachedEl('newtab-settings-trigger')
 let settingsDrawer: HTMLElement | null = null
 const settingsBackdrop = cachedEl('newtab-settings-backdrop')
-let settingsClose: HTMLElement | null = null
-let setSettingsDrawerOpen: ((open: boolean) => void) | null = null
-let setSettingsDrawerActiveGroup: ((group: SettingsDrawerSection) => void) | null = null
 let settingsTabsResizeBound = false
 let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
@@ -731,9 +738,6 @@ let getFeaturedBackgroundModalOpen: (() => boolean) | null = null
 let featuredBackgroundPicker: HTMLElement | null = null
 let featuredBackgroundRefreshButton: HTMLElement | null = null
 let featuredBackgroundStatus: HTMLElement | null = null
-let featuredBackgroundDisplaySizeInput: HTMLElement | null = null
-let featuredBackgroundPositionXInput: HTMLElement | null = null
-let featuredBackgroundPositionYInput: HTMLElement | null = null
 let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
@@ -946,6 +950,19 @@ function recordNewTabBackgroundReady(): void {
 }
 
 function bindEvents(): void {
+  registerNewtabSettingsDrawerActions({
+    onFeaturedPickerClick: () => {
+      void openFeaturedBackgroundPicker()
+    },
+    onOpenChange: (open) => {
+      if (!open && isSettingsDrawerOpen()) {
+        closeSettingsDrawer()
+      }
+    },
+    onReady: initializeSettingsDrawer
+  })
+  initializeSettingsDrawer()
+
   dashboardTrigger?.addEventListener('click', (event) => {
     event.preventDefault()
     openDashboardRoute()
@@ -1976,50 +1993,49 @@ function syncActiveSettingsGroupControls(group: SettingsDrawerSection = state.ac
   }
 }
 
-let settingsDrawerMounted = false
-let settingsDrawerMountPromise: Promise<void> | null = null
+let settingsDrawerReady = false
+let settingsDrawerReadyPromise: Promise<void> | null = null
+let resolveSettingsDrawerReady: (() => void) | null = null
 
-function ensureSettingsDrawerMounted(): Promise<void> {
-  if (settingsDrawerMounted) return Promise.resolve()
-  if (settingsDrawerMountPromise) return settingsDrawerMountPromise
-  settingsDrawerMountPromise = (async () => {
-    const mod = await import('./settings-drawer-mount.js')
-    const result = mod.mountSettingsDrawer({
-      onCloseRequest: closeSettingsDrawer,
-      onFeaturedPickerClick: () => {
-        void openFeaturedBackgroundPicker()
-      },
-      bindGeneralSettingsEvents,
-      bindFolderSettingsEvents,
-      bindBackgroundSettingsEvents,
-      bindSearchSettingsEvents,
-      bindIconSettingsEvents,
-      bindTimeSettingsEvents,
-      bindSettingsGroupTabs
+function ensureSettingsDrawerReady(): Promise<void> {
+  if (settingsDrawerReady) return Promise.resolve()
+  if (!settingsDrawerReadyPromise) {
+    settingsDrawerReadyPromise = new Promise<void>((resolve) => {
+      resolveSettingsDrawerReady = resolve
     })
-    if (!result) return
-    settingsDrawerMounted = true
-    settingsDrawer = result.drawer
-    settingsClose = result.close
-    setSettingsDrawerOpen = result.setOpen
-    setSettingsDrawerActiveGroup = result.setActiveGroup
-    featuredBackgroundPicker = result.featuredPicker
-    featuredBackgroundDisplaySizeInput = result.featuredDisplaySize
-    featuredBackgroundPositionXInput = result.featuredPositionX
-    featuredBackgroundPositionYInput = result.featuredPositionY
-    hydrateFeaturedBackgroundOptions()
-    syncBackgroundSettingsControls()
-    syncSearchSettingsControls()
-    syncGeneralSettingsControls()
-    syncFolderSettingsControls()
-    syncIconSettingsControls()
-    syncTimeSettingsControls()
-  })()
-  return settingsDrawerMountPromise
+  }
+  return settingsDrawerReadyPromise
+}
+
+function initializeSettingsDrawer(): void {
+  if (settingsDrawerReady) return
+  settingsDrawer = cachedEl('newtab-settings-drawer')
+  if (!settingsDrawer) {
+    window.requestAnimationFrame(initializeSettingsDrawer)
+    return
+  }
+
+  bindGeneralSettingsEvents()
+  bindFolderSettingsEvents()
+  bindBackgroundSettingsEvents()
+  bindSearchSettingsEvents()
+  bindIconSettingsEvents()
+  bindTimeSettingsEvents()
+  bindSettingsGroupTabs()
+  renderIconPresetCards()
+  settingsDrawerReady = true
+  resolveSettingsDrawerReady?.()
+  hydrateFeaturedBackgroundOptions()
+  syncBackgroundSettingsControls()
+  syncSearchSettingsControls()
+  syncGeneralSettingsControls()
+  syncFolderSettingsControls()
+  syncIconSettingsControls()
+  syncTimeSettingsControls()
 }
 
 function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
-  void ensureSettingsDrawerMounted().then(() => {
+  void ensureSettingsDrawerReady().then(() => {
     const firstOpenAfterMount = !isSettingsDrawerOpen()
     if (firstOpenAfterMount) {
       primeSettingsDrawerOpenTransition()
@@ -2071,7 +2087,7 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     settingsBackdrop?.classList.add('open')
     settingsDrawer?.classList.remove('is-opening')
     settingsBackdrop?.classList.remove('is-opening')
-    setSettingsDrawerOpen?.(true)
+    dispatchNewtabSettingsDrawerOpen(true)
     settingsDrawer?.setAttribute('aria-hidden', 'false')
     settingsDrawer?.removeAttribute('inert')
     settingsTrigger?.setAttribute('aria-expanded', 'true')
@@ -2126,7 +2142,7 @@ function setActiveSettingsGroup(
   measureNow('newtab.setActiveSettingsGroup', () => {
     const nextSection = normalizeSettingsDrawerSection(section)
     state.activeSettingsGroup = nextSection
-    setSettingsDrawerActiveGroup?.(nextSection)
+    dispatchNewtabSettingsDrawerActiveGroup(nextSection)
     settingsDrawer?.setAttribute('data-active-settings-group', nextSection)
 
     const settingsTabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
@@ -2160,7 +2176,7 @@ function closeSettingsDrawer(): void {
 
   settingsDrawer?.classList.remove('open')
   settingsBackdrop?.classList.remove('open')
-  setSettingsDrawerOpen?.(false)
+  dispatchNewtabSettingsDrawerOpen(false)
   settingsDrawer?.classList.remove('is-opening')
   settingsBackdrop?.classList.remove('is-opening')
   settingsDrawer?.classList.add('is-closing')
@@ -11421,7 +11437,22 @@ function renderIconPreview(): void {
 function renderIconPresetCards(): void {
   const row = cachedEl('icon-preset-row')
   if (!row || row.childElementCount > 0) return
-  void import('./settings-drawer-mount.js').then((mod) => mod.renderIconPresetCards())
+
+  renderIconPresetCardsIsland(
+    row,
+    (Object.entries(ICON_PRESET_META) as Array<[IconLayoutPresetKey, typeof ICON_PRESET_META[IconLayoutPresetKey]]>)
+      .map(([key, meta]): IconPresetCardState => ({
+        desc: meta.desc,
+        detail: meta.detail,
+        key,
+        name: meta.name,
+        previewCellHeight: key === 'compact' ? '8px' : key === 'spacious' ? '12px' : '10px',
+        previewColumnCount: meta.cols,
+        previewGap: key === 'compact' ? '3px' : key === 'spacious' ? '5px' : '4px',
+        previewPadding: '0 4px',
+        previewRowCount: meta.rows
+      }))
+  )
 }
 
 async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
@@ -12297,6 +12328,10 @@ function clearFeaturedBackgroundHoverPreview(card?: HTMLElement): void {
 }
 
 function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPreferences {
+  const featuredBackgroundDisplaySizeInput = cachedEl('background-featured-display-size')
+  const featuredBackgroundPositionXInput = cachedEl('background-featured-position-x')
+  const featuredBackgroundPositionYInput = cachedEl('background-featured-position-y')
+
   return normalizeFeaturedBackgroundPreferences({
     ...state.featuredBackgroundPreferences,
     displaySize: featuredBackgroundDisplaySizeInput instanceof HTMLInputElement
@@ -12343,6 +12378,10 @@ function updateInstantWallpaperDisplayCss(
 
 function syncFeaturedBackgroundDisplayPreferenceControls(): void {
   const preferences = state.featuredBackgroundPreferences
+  const featuredBackgroundDisplaySizeInput = cachedEl('background-featured-display-size')
+  const featuredBackgroundPositionXInput = cachedEl('background-featured-position-x')
+  const featuredBackgroundPositionYInput = cachedEl('background-featured-position-y')
+
   if (featuredBackgroundDisplaySizeInput instanceof HTMLInputElement) {
     featuredBackgroundDisplaySizeInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.min)
     featuredBackgroundDisplaySizeInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.max)
