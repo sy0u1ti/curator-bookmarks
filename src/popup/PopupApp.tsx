@@ -5,15 +5,18 @@ import { getModalCloseDurationMs } from '../shared/motion'
 export function PopupApp() {
   useEffect(() => {
     let disposed = false
+    let cleanupRuntime: (() => void) | null = null
 
     void import('./popup-runtime.js').then(({ startPopupRuntime }) => {
       if (!disposed) {
-        startPopupRuntime()
+        cleanupRuntime = startPopupRuntime()
       }
     })
 
     return () => {
       disposed = true
+      cleanupRuntime?.()
+      cleanupRuntime = null
     }
   }, [])
 

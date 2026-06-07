@@ -140,6 +140,7 @@ let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> 
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
+let popupRuntimeEventController: AbortController | null = null
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -177,15 +178,17 @@ function loadRecycleBinModule(): Promise<typeof import('../shared/recycle-bin.js
 }
 let popupRuntimeStarted = false
 
-export function startPopupRuntime(): void {
+export function startPopupRuntime(): () => void {
   if (popupRuntimeStarted) {
-    return
+    return cleanupPopupRuntime
   }
   popupRuntimeStarted = true
+  popupRuntimeEventController = new AbortController()
+  const { signal } = popupRuntimeEventController
 
   perfMark('popup.domContentLoaded')
   cacheDom()
-  bindEvents()
+  bindEvents(signal)
   render()
   perfMark('popup.firstRender')
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
@@ -202,13 +205,15 @@ export function startPopupRuntime(): void {
     })
   })
   void hydrateAutoAnalyzeStatus()
+
+  window.addEventListener('pagehide', cleanupPopupRuntime, { signal })
+  return cleanupPopupRuntime
 }
 
-window.addEventListener('pagehide', cleanupPopupRuntime)
-function bindEvents() {
-  dom.openSettings.addEventListener('click', openSettingsPage)
-  dom.smartClassifier.addEventListener('click', handleSmartClassifierClick)
-  dom.smartClassifier.addEventListener('input', handleSmartClassifierInput)
+function bindEvents(signal: AbortSignal) {
+  dom.openSettings.addEventListener('click', openSettingsPage, { signal })
+  dom.smartClassifier.addEventListener('click', handleSmartClassifierClick, { signal })
+  dom.smartClassifier.addEventListener('input', handleSmartClassifierInput, { signal })
   dom.savedSearches.addEventListener('click', (event) => {
     const target = event.target
     if (!(target instanceof Element)) {
@@ -218,65 +223,65 @@ function bindEvents() {
     if (actionButton) {
       handleSavedSearchAction(actionButton)
     }
-  })
+  }, { signal })
   dom.searchInput.addEventListener('input', () => {
     setSearchQuery(dom.searchInput.value)
-  })
+  }, { signal })
   dom.naturalSearchToggle.addEventListener('click', () => {
     void toggleNaturalLanguageSearch()
-  })
-  dom.searchHelpToggle.addEventListener('keydown', handleSearchHelpKeydown)
+  }, { signal })
+  dom.searchHelpToggle.addEventListener('keydown', handleSearchHelpKeydown, { signal })
   dom.clearSearch.addEventListener('click', () => {
     setSearchQuery('', { immediate: true })
     showViewNotice('已清空搜索')
     dom.searchInput.focus()
-  })
-  dom.content.addEventListener('click', handleContentClick)
-  dom.emptyState.addEventListener('click', handleContentClick)
-  dom.content.addEventListener('pointerover', handleContentPointerOver)
-  dom.moveFolderList.addEventListener('click', handleMoveListClick)
+  }, { signal })
+  dom.content.addEventListener('click', handleContentClick, { signal })
+  dom.emptyState.addEventListener('click', handleContentClick, { signal })
+  dom.content.addEventListener('pointerover', handleContentPointerOver, { signal })
+  dom.moveFolderList.addEventListener('click', handleMoveListClick, { signal })
   dom.moveSearchInput.addEventListener('input', () => {
     state.moveSearchQuery = dom.moveSearchInput.value
     renderMoveModal()
-  })
-  dom.closeMoveModal.addEventListener('click', closeDialogs)
-  dom.smartFolderList.addEventListener('click', handleSmartFolderListClick)
+  }, { signal })
+  dom.closeMoveModal.addEventListener('click', closeDialogs, { signal })
+  dom.smartFolderList.addEventListener('click', handleSmartFolderListClick, { signal })
   dom.smartFolderSearchInput.addEventListener('input', () => {
     state.smartFolderSearchQuery = dom.smartFolderSearchInput.value
     renderSmartFolderModal()
-  })
-  dom.closeSmartFolderModal.addEventListener('click', closeDialogs)
-  dom.closeAiProviderPrompt.addEventListener('click', closeDialogs)
-  dom.cancelAiProviderPrompt.addEventListener('click', closeDialogs)
+  }, { signal })
+  dom.closeSmartFolderModal.addEventListener('click', closeDialogs, { signal })
+  dom.closeAiProviderPrompt.addEventListener('click', closeDialogs, { signal })
+  dom.cancelAiProviderPrompt.addEventListener('click', closeDialogs, { signal })
   dom.openAiProviderSettings.addEventListener('click', () => {
     void openSettingsPage('ai-provider')
-  })
-  dom.closeEditModal.addEventListener('click', closeDialogs)
-  dom.cancelEdit.addEventListener('click', closeDialogs)
-  dom.saveEdit.addEventListener('click', saveEditedBookmark)
-  dom.editFolderPickerButton.addEventListener('click', toggleEditFolderPicker)
-  dom.editFolderList.addEventListener('click', handleEditFolderListClick)
+  }, { signal })
+  dom.closeEditModal.addEventListener('click', closeDialogs, { signal })
+  dom.cancelEdit.addEventListener('click', closeDialogs, { signal })
+  dom.saveEdit.addEventListener('click', saveEditedBookmark, { signal })
+  dom.editFolderPickerButton.addEventListener('click', toggleEditFolderPicker, { signal })
+  dom.editFolderList.addEventListener('click', handleEditFolderListClick, { signal })
   dom.editFolderSearchInput.addEventListener('input', () => {
     state.editFolderSearchQuery = dom.editFolderSearchInput.value
     renderEditModal()
-  })
-  dom.editTitleInput.addEventListener('input', handleEditDraftInput)
-  dom.editUrlInput.addEventListener('input', handleEditDraftInput)
-  dom.editTitleInput.addEventListener('keydown', handleEditInputKeydown)
-  dom.editUrlInput.addEventListener('keydown', handleEditInputKeydown)
-  dom.cancelDelete.addEventListener('click', closeDialogs)
-  dom.confirmDelete.addEventListener('click', confirmDeleteBookmark)
+  }, { signal })
+  dom.editTitleInput.addEventListener('input', handleEditDraftInput, { signal })
+  dom.editUrlInput.addEventListener('input', handleEditDraftInput, { signal })
+  dom.editTitleInput.addEventListener('keydown', handleEditInputKeydown, { signal })
+  dom.editUrlInput.addEventListener('keydown', handleEditInputKeydown, { signal })
+  dom.cancelDelete.addEventListener('click', closeDialogs, { signal })
+  dom.confirmDelete.addEventListener('click', confirmDeleteBookmark, { signal })
   dom.modalBackdrop.addEventListener('click', (event) => {
     if (event.target === dom.modalBackdrop) {
       closeDialogs()
     }
-  })
-  window.addEventListener('popup:modal-close', closeDialogs)
-  dom.autoAnalyzeStatus.addEventListener('click', handleAutoAnalyzeStatusClick)
-  dom.toastRoot.addEventListener('click', handleToastClick)
+  }, { signal })
+  window.addEventListener('popup:modal-close', closeDialogs, { signal })
+  dom.autoAnalyzeStatus.addEventListener('click', handleAutoAnalyzeStatusClick, { signal })
+  dom.toastRoot.addEventListener('click', handleToastClick, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
-  document.addEventListener('pointerdown', handleDocumentPointerDown)
-  document.addEventListener('keydown', handleDocumentKeydown)
+  document.addEventListener('pointerdown', handleDocumentPointerDown, { signal })
+  document.addEventListener('keydown', handleDocumentKeydown, { signal })
 }
 async function hydratePopupPreferences() {
   try {
@@ -1078,6 +1083,9 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
   return map
 }
 function cleanupPopupRuntime() {
+  popupRuntimeEventController?.abort()
+  popupRuntimeEventController = null
+  popupRuntimeStarted = false
   abortNaturalSearchRequest()
   chrome.storage?.onChanged?.removeListener?.(handleAutoAnalyzeStorageChanged)
   clearTimeout(state.searchTimer)
