@@ -9,13 +9,6 @@ import { searchBookmarksTopK } from '../popup/search-lookup.js'
 import { extractDomain, normalizeSearchTextCompact } from '../shared/text.js'
 import type { PopupSearchBookmark } from '../popup/search.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
-import {
-  createLoadingStateIslandElement,
-  createMissingFolderIslandElement,
-  createNewTabPageIslandElement,
-  createStateIslandElement,
-  renderContentStateRootIsland
-} from './components/ContentStateIslands.js'
 
 export type NewTabContentState =
   | { type: 'loading' }
@@ -30,15 +23,49 @@ export interface ResolveNewTabContentStateInput {
   visibleFolderCount: number
 }
 
-export interface NewTabPageModule {
+export interface NewTabElementModule {
+  kind: 'element'
   id: string
   element: HTMLElement
   placement: 'utility' | 'primary'
 }
 
+export interface NewTabLoadingModule {
+  kind: 'loading'
+  id: 'state'
+  label: string
+  placement: 'primary'
+}
+
+export interface NewTabMissingFolderModule extends MissingFolderViewOptions {
+  kind: 'missing-folder'
+  id: 'state'
+  placement: 'primary'
+}
+
+export type NewTabPageModule = NewTabElementModule | NewTabLoadingModule | NewTabMissingFolderModule
+
 export interface NewTabPageOptions {
   modules: NewTabPageModule[]
 }
+
+export interface NewTabPageView {
+  contentState: 'bookmarks' | 'empty'
+  hasClock: boolean
+  hasSearch: boolean
+  iconVerticalCenter: string
+  modules: NewTabPageModule[]
+  type: 'page'
+}
+
+export interface NewTabStateView {
+  action?: () => void
+  actionLabel?: string
+  message: string
+  type: 'state'
+}
+
+export type NewTabContentView = NewTabPageView | NewTabStateView
 
 export interface NewTabSearchIndexBookmark {
   id: string
@@ -993,8 +1020,19 @@ export function normalizeNewTabSearchText(value: string): string {
     .trim()
 }
 
-export function createNewTabPage({ modules }: NewTabPageOptions): HTMLElement {
-  return createNewTabPageIslandElement({ modules })
+export function createNewTabPage({ modules }: NewTabPageOptions): NewTabPageView {
+  const bookmarkModule = modules.find(
+    (module): module is NewTabElementModule => module.kind === 'element' && module.id === 'bookmarks'
+  )
+
+  return {
+    contentState: bookmarkModule ? 'bookmarks' : 'empty',
+    hasClock: modules.some((module) => module.id === 'clock'),
+    hasSearch: modules.some((module) => module.id === 'search'),
+    iconVerticalCenter: bookmarkModule?.element.dataset.iconVerticalCenter || 'false',
+    modules,
+    type: 'page'
+  }
 }
 
 export function createMissingFolderView({
@@ -1002,23 +1040,27 @@ export function createMissingFolderView({
   reason,
   onCreateFolder,
   onOpenFolderSettings
-}: MissingFolderViewOptions): HTMLElement {
-  return createMissingFolderIslandElement({
+}: MissingFolderViewOptions): NewTabMissingFolderModule {
+  return {
     creatingFolder,
+    id: 'state',
+    kind: 'missing-folder',
+    placement: 'primary',
     reason,
     onCreateFolder,
     onOpenFolderSettings
-  })
+  }
 }
 
-export function createStateView(message: string, actionLabel = '', action?: () => void): HTMLElement {
-  return createStateIslandElement({ action, actionLabel, message })
+export function createStateView(message: string, actionLabel = '', action?: () => void): NewTabStateView {
+  return { action, actionLabel, message, type: 'state' }
 }
 
-export function createLoadingStateView(label = '正在加载书签'): HTMLElement {
-  return createLoadingStateIslandElement(label)
-}
-
-export function renderContentStateRoot(container: HTMLElement, view: HTMLElement): void {
-  renderContentStateRootIsland(container, view)
+export function createLoadingStateView(label = '正在加载书签'): NewTabLoadingModule {
+  return {
+    id: 'state',
+    kind: 'loading',
+    label,
+    placement: 'primary'
+  }
 }

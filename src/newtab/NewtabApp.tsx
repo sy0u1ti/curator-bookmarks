@@ -4,6 +4,7 @@ import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { useNewtabController } from './newtab-controller'
 import { DashboardOverlayHost } from './components/DashboardOverlay'
 import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModal'
+import { NewtabContentHost } from './components/NewtabContentHost'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
 
 export function NewtabApp() {
@@ -56,7 +57,9 @@ function NewtabShell() {
       </div>
 
       <div id="newtab-settings-backdrop" className="settings-backdrop" data-close-settings></div>
-      <div id="newtab-root" className="newtab-shell"></div>
+      <div id="newtab-root" className="newtab-shell">
+        <NewtabContentHost />
+      </div>
       <DashboardOverlayHost />
       <SettingsDrawerHost />
       <FeaturedBackgroundModalHost />

@@ -78,9 +78,10 @@ import {
   getAdaptiveSearchWidthBounds,
   getVerticalCenterCollisionOffset,
   normalizeNewTabSearchText,
-  renderContentStateRoot,
   type AdaptiveSearchOffsetBounds,
   type NewTabContentState,
+  type NewTabContentView,
+  type NewTabElementModule,
   type PortalQuickAccessItem,
   resolveNewTabContentState,
   type NewTabPageModule,
@@ -274,6 +275,7 @@ import {
   dispatchNewtabDashboardOverlayControls,
   registerNewtabDashboardOverlayActions
 } from './newtab-dashboard-overlay-store.js'
+import { dispatchNewtabContentView } from './newtab-content-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -4979,14 +4981,14 @@ function render(): void {
   bookmarkTileRenderVersion += 1
   disconnectBookmarkLazyExpansionObserver()
   cancelScheduledAdaptiveNewTabLayoutUpdate()
-  renderContentStateRoot(root, createContentStateView(contentState))
+  dispatchNewtabContentView(createContentStateView(contentState))
   lastRenderedContentSignature = contentSignature
   lastRenderedShellSignature = shellSignature
   scheduleAdaptiveNewTabLayoutUpdate()
   recordContentStateRender(contentState)
 }
 
-function createContentStateView(contentState: NewTabContentState): HTMLElement {
+function createContentStateView(contentState: NewTabContentState): NewTabContentView {
   if (contentState.type === 'loading') {
     return createNewTabLayout(createLoadingStateView())
   }
@@ -5590,12 +5592,13 @@ function getSearchAutoVerticalCenterNextModule(page: HTMLElement, slot: HTMLElem
   return page.querySelector<HTMLElement>(':scope > .newtab-primary-slot > :first-child')
 }
 
-function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
+function createNewTabLayout(primaryContent: HTMLElement | NewTabPageModule): NewTabContentView {
   const modules: NewTabPageModule[] = []
 
   const onboarding = createNewTabOnboardingStrip()
   if (onboarding) {
     modules.push({
+      kind: 'element',
       id: 'onboarding',
       element: onboarding,
       placement: 'utility'
@@ -5605,12 +5608,14 @@ function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
   const clock = createClockWidget()
   if (clock) {
     modules.push({
+      kind: 'element',
       id: 'clock',
       element: clock,
       placement: 'utility'
     })
   } else {
     modules.push({
+      kind: 'element',
       id: 'clock-spacer',
       element: createClockSpacerIslandElement(),
       placement: 'utility'
@@ -5620,19 +5625,29 @@ function createNewTabLayout(primaryContent: HTMLElement): HTMLElement {
   const search = createSearchWidget()
   if (search) {
     modules.push({
+      kind: 'element',
       id: 'search',
       element: search,
       placement: 'utility'
     })
   }
 
-  modules.push({
+  modules.push(toPrimaryNewTabModule(primaryContent))
+
+  return createNewTabPage({ modules })
+}
+
+function toPrimaryNewTabModule(primaryContent: HTMLElement | NewTabPageModule): NewTabPageModule {
+  if (!(primaryContent instanceof HTMLElement)) {
+    return primaryContent
+  }
+
+  return {
+    kind: 'element',
     id: primaryContent.classList.contains('newtab-content') ? 'bookmarks' : 'state',
     element: primaryContent,
     placement: 'primary'
-  })
-
-  return createNewTabPage({ modules })
+  } satisfies NewTabElementModule
 }
 
 function normalizeNewTabOnboardingCompleted(rawState: unknown): boolean {
