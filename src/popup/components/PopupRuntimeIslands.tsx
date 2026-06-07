@@ -4,14 +4,6 @@ import type { CSSProperties, ReactNode } from 'react'
 import { getQueryTerms, normalizeQuery } from '../search.js'
 import { AiSetupPrompt, Button, DotMatrixLoader, Icon, Input, Progress, Toolbar, type IconName } from '../../ui'
 
-export interface PopupAutoAnalyzeStatusState {
-  collapsed: boolean
-  detail: string
-  showHistory: boolean
-  status: string | null
-  title: string
-}
-
 export interface PopupEmptyActionViewModel {
   action: string
   label: string
@@ -216,13 +208,6 @@ function renderIsland(container: Element, node: ReactNode): void {
   })
 }
 
-export function renderPopupAutoAnalyzeStatusIsland(
-  container: Element,
-  state: PopupAutoAnalyzeStatusState
-): void {
-  renderIsland(container, <PopupAutoAnalyzeStatus state={state} />)
-}
-
 export function renderPopupEmptyStateIsland(
   container: Element,
   state: PopupEmptyStateViewModel
@@ -264,47 +249,6 @@ export function renderPopupSmartClassifierIsland(
   state: PopupSmartClassifierViewModel
 ): void {
   renderIsland(container, <PopupSmartClassifier state={state} />)
-}
-
-function PopupAutoAnalyzeStatus({ state }: { state: PopupAutoAnalyzeStatusState }) {
-  if (!state.status) {
-    return null
-  }
-
-  return (
-    <>
-      <div className="auto-analyze-indicator" aria-hidden="true"></div>
-      <div className="auto-analyze-copy" role="status">
-        <p className="auto-analyze-title">{state.title}</p>
-        <p className="auto-analyze-detail">{state.detail}</p>
-      </div>
-      <div className="auto-analyze-actions">
-        {state.showHistory ? (
-          <Button className="auto-analyze-action" type="button" data-auto-analyze-action="history" unstyled>
-            查看
-          </Button>
-        ) : null}
-        <Button
-          className="auto-analyze-action ghost"
-          type="button"
-          data-auto-analyze-action="toggle"
-          aria-expanded={state.collapsed ? 'false' : 'true'}
-          unstyled
-        >
-          {state.collapsed ? '展开' : '折叠'}
-        </Button>
-        <Button
-          className="auto-analyze-action ghost"
-          type="button"
-          data-auto-analyze-action="dismiss"
-          aria-label="关闭自动分析状态"
-          unstyled
-        >
-          关闭
-        </Button>
-      </div>
-    </>
-  )
 }
 
 function PopupEmptyState({ state }: { state: PopupEmptyStateViewModel }) {

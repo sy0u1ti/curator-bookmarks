@@ -79,14 +79,12 @@ import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import {
-  renderPopupAutoAnalyzeStatusIsland,
   renderPopupContentIsland,
   renderPopupFolderPickerIsland,
   renderPopupSavedSearchesIsland,
   renderPopupSearchChipsIsland,
   renderPopupSmartClassifierIsland,
   type PopupActionMenuViewModel,
-  type PopupAutoAnalyzeStatusState,
   type PopupContentBookmarkRowViewModel,
   type PopupContentFolderRowViewModel,
   type PopupContentRowViewModel,
@@ -100,8 +98,12 @@ import {
   type PopupSmartClassifierViewModel
 } from './components/PopupRuntimeIslands.js'
 import {
+  dispatchPopupAutoAnalyzeStatusChange,
   dispatchPopupToastsChange,
+  POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
   POPUP_TOAST_ACTION_EVENT,
+  type PopupAutoAnalyzeStatusActionDetail,
+  type PopupAutoAnalyzeStatusView,
   type PopupToastActionDetail
 } from './popup-events.js'
 import {
@@ -280,7 +282,7 @@ function bindEvents(signal: AbortSignal) {
     }
   }, { signal })
   window.addEventListener('popup:modal-close', closeDialogs, { signal })
-  dom.autoAnalyzeStatus.addEventListener('click', handleAutoAnalyzeStatusClick, { signal })
+  window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
   window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
   document.addEventListener('pointerdown', handleDocumentPointerDown, { signal })
@@ -501,12 +503,9 @@ function handleAutoAnalyzeStorageChanged(
     void consumePopupCommandIntent(popupIntentChange.newValue)
   }
 }
-function handleAutoAnalyzeStatusClick(event) {
-  const actionButton = event.target.closest('[data-auto-analyze-action]')
-  if (!actionButton) {
-    return
-  }
-  const action = actionButton.getAttribute('data-auto-analyze-action')
+function handleAutoAnalyzeStatusAction(event: Event) {
+  const detail = (event as CustomEvent<PopupAutoAnalyzeStatusActionDetail>).detail
+  const action = detail?.action
   if (action === 'toggle') {
     state.autoAnalyzeCollapsed = !state.autoAnalyzeCollapsed
     renderAutoAnalyzeStatus()
@@ -531,24 +530,10 @@ function handleSearchHelpKeydown(event: KeyboardEvent): void {
   setSearchHelpPopoverOpen(true)
 }
 function renderAutoAnalyzeStatus() {
-  const status = state.autoAnalyzeStatus
-  if (!status) {
-    dom.autoAnalyzeStatus.className = 'auto-analyze-status hidden'
-    dom.autoAnalyzeStatus.removeAttribute('aria-label')
-    renderPopupAutoAnalyzeStatusIsland(dom.autoAnalyzeStatus, getAutoAnalyzeStatusViewModel())
-    return
-  }
-
-  const viewModel = getAutoAnalyzeStatusViewModel()
-  dom.autoAnalyzeStatus.className = `auto-analyze-status ${status.status}${viewModel.collapsed ? ' collapsed' : ''}`
-  dom.autoAnalyzeStatus.setAttribute(
-    'aria-label',
-    viewModel.collapsed ? `${viewModel.title}，已折叠` : `${viewModel.title}，${viewModel.detail}`
-  )
-  renderPopupAutoAnalyzeStatusIsland(dom.autoAnalyzeStatus, viewModel)
+  dispatchPopupAutoAnalyzeStatusChange(getAutoAnalyzeStatusViewModel())
 }
 
-function getAutoAnalyzeStatusViewModel(): PopupAutoAnalyzeStatusState {
+function getAutoAnalyzeStatusViewModel(): PopupAutoAnalyzeStatusView {
   const status = state.autoAnalyzeStatus
   if (!status) {
     return {

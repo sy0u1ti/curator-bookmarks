@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
 import { getModalCloseDurationMs } from '../shared/motion'
+import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupToasts } from './components/PopupToasts'
 
 export function PopupApp() {
@@ -211,7 +212,7 @@ function PopupShell() {
           <div id="content" className="content" role="list"></div>
         </section>
 
-        <section id="auto-analyze-status" className="auto-analyze-status hidden" aria-live="polite" aria-atomic="true"></section>
+        <PopupAutoAnalyzeStatus />
 
         <footer id="smart-footer" className="smart-footer hidden" aria-hidden="true">
           <span id="smart-total" className="smart-total">总计 0</span>
