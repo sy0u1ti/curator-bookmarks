@@ -5,6 +5,7 @@ import {
   type NewTabContentView,
   type NewTabElementModule,
   type NewTabMissingFolderModule,
+  type NewTabOnboardingModule,
   type NewTabPageModule
 } from '../content-state'
 import { useNewtabContentView } from '../newtab-content-store'
@@ -38,15 +39,26 @@ function NewTabPage({ view }: { view: Extract<NewTabContentView, { type: 'page' 
       data-content-state={view.contentState}
       data-icon-vertical-center={view.iconVerticalCenter}
     >
-      <div
-        className="newtab-utility-stack"
-        ref={(node) => {
-          mountElementModules(node, utilityModules)
-        }}
-      />
+      <div className="newtab-utility-stack">
+        {utilityModules.map((module) => (
+          <UtilityModule module={module} key={module.id} />
+        ))}
+      </div>
       <PrimarySlot module={primaryModule} />
     </main>
   )
+}
+
+function UtilityModule({ module }: { module: NewTabPageModule }) {
+  if (module.kind === 'onboarding') {
+    return <OnboardingStrip module={module} />
+  }
+
+  if (module.kind === 'element') {
+    return <MountedElementModule module={module} />
+  }
+
+  return null
 }
 
 function PrimarySlot({ module }: { module: NewTabPageModule | undefined }) {
@@ -54,7 +66,11 @@ function PrimarySlot({ module }: { module: NewTabPageModule | undefined }) {
     if (!node || !module || module.kind !== 'element') {
       return
     }
-    mountElementModules(node, [module])
+    module.element.dataset.newtabModule = module.id
+    if (module.element.parentElement === node) {
+      return
+    }
+    node.replaceChildren(module.element)
   }, [module])
 
   if (!module) {
@@ -80,19 +96,38 @@ function PrimarySlot({ module }: { module: NewTabPageModule | undefined }) {
   return <div className="newtab-primary-slot" ref={mountPrimaryElement} />
 }
 
-function mountElementModules(node: HTMLElement | null, modules: NewTabPageModule[]): void {
-  if (!node) {
-    return
-  }
+function MountedElementModule({ module }: { module: NewTabElementModule }) {
+  const mountElement = useCallback((node: HTMLDivElement | null) => {
+    if (!node) {
+      return
+    }
+    module.element.dataset.newtabModule = module.id
+    if (module.element.parentElement === node.parentElement) {
+      return
+    }
+    node.replaceWith(module.element)
+  }, [module])
 
-  const elements = modules
-    .filter((module): module is NewTabElementModule => module.kind === 'element')
-    .map((module) => {
-      module.element.dataset.newtabModule = module.id
-      return module.element
-    })
+  return <div hidden ref={mountElement} />
+}
 
-  node.replaceChildren(...elements)
+function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {
+  return (
+    <section className="newtab-onboarding-strip" aria-label="Curator 首次使用引导">
+      <div className="newtab-onboarding-copy">
+        <strong>Curator 已将新标签页设为书签搜索和快捷入口</strong>
+        <span>核心书签功能默认本地；网页搜索、精选远程背景、AI/Jina 和链接检测可关闭或跳过。</span>
+      </div>
+      <div className="newtab-onboarding-actions">
+        <Button type="button" onClick={module.onOpenFolderSettings} unstyled>
+          选择来源
+        </Button>
+        <Button className="secondary" type="button" onClick={module.onSkip} unstyled>
+          我知道了
+        </Button>
+      </div>
+    </section>
+  )
 }
 
 function LoadingState({ label }: { label: string }) {

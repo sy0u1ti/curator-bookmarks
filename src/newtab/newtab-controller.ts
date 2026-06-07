@@ -202,7 +202,6 @@ import {
   createBookmarkTileIslandElement,
   createClockSpacerIslandElement,
   createClockWidgetIslandElement,
-  createNewTabOnboardingIslandElement,
   createPortalPanelIslandElement,
   createQuickAccessPanelIslandElement,
   createSearchEngineMenuIslandElement,
@@ -5586,12 +5585,7 @@ function createNewTabLayout(primaryContent: HTMLElement | NewTabPageModule): New
 
   const onboarding = createNewTabOnboardingStrip()
   if (onboarding) {
-    modules.push({
-      kind: 'element',
-      id: 'onboarding',
-      element: onboarding,
-      placement: 'utility'
-    })
+    modules.push(onboarding)
   }
 
   const clock = createClockWidget()
@@ -5646,17 +5640,20 @@ function normalizeNewTabOnboardingCompleted(rawState: unknown): boolean {
   return (rawState as { completed?: unknown }).completed === true
 }
 
-function createNewTabOnboardingStrip(): HTMLElement | null {
+function createNewTabOnboardingStrip(): NewTabPageModule | null {
   if (onboardingCompleted || state.loading || state.error) {
     return null
   }
 
-  return createNewTabOnboardingIslandElement({
+  return {
+    id: 'onboarding',
+    kind: 'onboarding',
     onOpenFolderSettings: openFolderSourceSettings,
     onSkip: () => {
       void completeNewTabOnboarding()
-    }
-  })
+    },
+    placement: 'utility'
+  }
 }
 
 async function completeNewTabOnboarding(): Promise<void> {

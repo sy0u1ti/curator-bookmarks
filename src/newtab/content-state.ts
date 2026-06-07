@@ -30,6 +30,14 @@ export interface NewTabElementModule {
   placement: 'utility' | 'primary'
 }
 
+export interface NewTabOnboardingModule {
+  id: 'onboarding'
+  kind: 'onboarding'
+  onOpenFolderSettings: () => void
+  onSkip: () => void
+  placement: 'utility'
+}
+
 export interface NewTabLoadingModule {
   kind: 'loading'
   id: 'state'
@@ -43,7 +51,11 @@ export interface NewTabMissingFolderModule extends MissingFolderViewOptions {
   placement: 'primary'
 }
 
-export type NewTabPageModule = NewTabElementModule | NewTabLoadingModule | NewTabMissingFolderModule
+export type NewTabPageModule =
+  | NewTabElementModule
+  | NewTabLoadingModule
+  | NewTabMissingFolderModule
+  | NewTabOnboardingModule
 
 export interface NewTabPageOptions {
   modules: NewTabPageModule[]
