@@ -190,13 +190,6 @@ export function renderPopupFolderPickerIsland(
   renderIsland(container, <PopupFolderPicker state={state} />)
 }
 
-export function renderPopupSmartClassifierIsland(
-  container: Element,
-  state: PopupSmartClassifierViewModel
-): void {
-  renderIsland(container, <PopupSmartClassifier state={state} />)
-}
-
 function PopupEmptyState({ state }: { state: PopupEmptyStateViewModel }) {
   if (state.kind === 'none') {
     return null
@@ -718,7 +711,7 @@ function getPopupActionIconName(action: string): IconName {
   return 'ExternalLink'
 }
 
-function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel }) {
+export function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel }) {
   if (state.status === 'hidden') {
     return null
   }

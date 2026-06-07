@@ -5,6 +5,7 @@ import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupContentHost } from './components/PopupContentHost'
 import { PopupSavedSearches } from './components/PopupSavedSearches'
 import { PopupSearchChips } from './components/PopupSearchChips'
+import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { PopupToasts } from './components/PopupToasts'
 
 export function PopupApp() {
@@ -199,7 +200,7 @@ function PopupShell() {
             <PopupSavedSearches />
           </section>
 
-          <section id="smart-classifier" className="smart-classifier hidden" aria-live="polite"></section>
+          <PopupSmartClassifierHost />
         </section>
 
         <section className="toolbar" aria-label="当前视图状态">

@@ -26,7 +26,6 @@ export function cacheDom(): void {
   dom.searchHelpToggle = byId('search-help-toggle')
   dom.viewCaption = byId('view-caption')
   dom.errorBanner = byId('error-banner')
-  dom.smartClassifier = byId('smart-classifier')
   dom.smartFooter = byId('smart-footer')
   dom.smartTotal = byId('smart-total')
   dom.smartFooterSettings = byId('smart-footer-settings')

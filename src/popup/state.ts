@@ -103,7 +103,6 @@ export interface PopupState {
   filteredBookmarksCacheKey: string
   filteredBookmarksCache: PopupSearchBookmark[]
   contentRenderHtml: string
-  smartClassifierRenderSignature: string
   searchChipsRenderSignature: string
   savedSearchesRenderSignature: string
   activeMenuBookmarkId: string | null
@@ -210,7 +209,6 @@ export const state: PopupState = {
   filteredBookmarksCacheKey: '',
   filteredBookmarksCache: [],
   contentRenderHtml: '',
-  smartClassifierRenderSignature: '',
   searchChipsRenderSignature: '',
   savedSearchesRenderSignature: '',
   activeMenuBookmarkId: null,

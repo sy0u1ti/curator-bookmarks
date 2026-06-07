@@ -80,7 +80,6 @@ import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import {
   renderPopupFolderPickerIsland,
-  renderPopupSmartClassifierIsland,
   type PopupActionMenuViewModel,
   type PopupContentBookmarkRowViewModel,
   type PopupContentFolderRowViewModel,
@@ -97,11 +96,14 @@ import {
   dispatchPopupContentChange,
   dispatchPopupSavedSearchesChange,
   dispatchPopupSearchChipsChange,
+  dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
   POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
   POPUP_CONTENT_ACTION_EVENT,
   POPUP_CONTENT_RESULT_HOVER_EVENT,
   POPUP_SAVED_SEARCH_ACTION_EVENT,
+  POPUP_SMART_CLASSIFIER_ACTION_EVENT,
+  POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT,
   POPUP_TOAST_ACTION_EVENT,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
@@ -110,6 +112,8 @@ import {
   type PopupSavedSearchActionDetail,
   type PopupSavedSearchesView,
   type PopupSearchChipView,
+  type PopupSmartClassifierActionDetail,
+  type PopupSmartClassifierTitleChangeDetail,
   type PopupToastActionDetail
 } from './popup-events.js'
 import {
@@ -223,8 +227,6 @@ export function startPopupRuntime(): () => void {
 
 function bindEvents(signal: AbortSignal) {
   dom.openSettings.addEventListener('click', openSettingsPage, { signal })
-  dom.smartClassifier.addEventListener('click', handleSmartClassifierClick, { signal })
-  dom.smartClassifier.addEventListener('input', handleSmartClassifierInput, { signal })
   dom.searchInput.addEventListener('input', () => {
     setSearchQuery(dom.searchInput.value)
   }, { signal })
@@ -279,6 +281,8 @@ function bindEvents(signal: AbortSignal) {
   window.addEventListener(POPUP_CONTENT_ACTION_EVENT, handleContentActionEvent, { signal })
   window.addEventListener(POPUP_CONTENT_RESULT_HOVER_EVENT, handleContentResultHoverEvent, { signal })
   window.addEventListener(POPUP_SAVED_SEARCH_ACTION_EVENT, handleSavedSearchActionEvent, { signal })
+  window.addEventListener(POPUP_SMART_CLASSIFIER_ACTION_EVENT, handleSmartClassifierActionEvent, { signal })
+  window.addEventListener(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, handleSmartClassifierTitleChangeEvent, { signal })
   window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
   document.addEventListener('pointerdown', handleDocumentPointerDown, { signal })
@@ -1754,42 +1758,42 @@ function renderSmartClassifier() {
   const smartOverlayActive =
     smartAvailable && ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
   document.body.classList.toggle('smart-active', smartOverlayActive)
-  dom.smartClassifier.classList.remove('hidden')
   dom.smartFooter.classList.add('hidden')
   dom.smartTotal.textContent = `总计 ${state.allBookmarks.length}`
 
   if (state.isLoading && state.smartStatus !== 'results') {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('page-loading'))
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('page-loading'))
     return
   }
 
   if (!smartAvailable) {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('idle'))
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('idle'))
     return
   }
 
   if (state.smartStatus === 'loading') {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('loading'))
-    animateSmartProgress()
+    const viewModel = getPopupSmartClassifierViewModel('loading')
+    dispatchPopupSmartClassifierChange(viewModel)
+    state.smartProgressPercent = viewModel.loadingProgress
     return
   }
 
   if (state.smartStatus === 'results') {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('results'))
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('results'))
     return
   }
 
   if (state.smartStatus === 'error') {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('error'))
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('error'))
     return
   }
 
   if (state.smartStatus === 'permission') {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('permission'))
+    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('permission'))
     return
   }
 
-  renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('idle'))
+  dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('idle'))
 }
 function getPopupSmartClassifierViewModel(
   status: PopupSmartClassifierViewModel['status']
@@ -1872,21 +1876,6 @@ function getPopupSmartRecommendationViewModels() {
     }
   })
 }
-function animateSmartProgress() {
-  const progressBar = dom.smartClassifier.querySelector<HTMLElement>('.smart-progress-bar')
-  if (!progressBar) {
-    return
-  }
-  const targetProgress = Math.max(
-    0,
-    Math.min(Number(progressBar.getAttribute('data-smart-progress-target')) || 0, 100)
-  )
-  window.requestAnimationFrame(() => {
-    progressBar.style.setProperty('--smart-progress-scale', String(targetProgress / 100))
-    state.smartProgressPercent = targetProgress
-  })
-}
-
 function renderMainContent() {
   const hasQuery = Boolean(state.debouncedQuery)
   const showNaturalSearchSetup =
@@ -2705,28 +2694,25 @@ function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
 function renderToasts() {
   dispatchPopupToastsChange(state.toasts)
 }
-function handleSmartClassifierClick(event) {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
+function handleSmartClassifierActionEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupSmartClassifierActionDetail>).detail
+  handleSmartClassifierAction(detail || { action: '' })
+}
 
-  const savedSearchButton = target.closest('[data-saved-search-action]')
-  if (savedSearchButton) {
+function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
+  if (detail.action === 'saved-search') {
     handleSavedSearchAction(
-      savedSearchButton.getAttribute('data-saved-search-action') || '',
-      savedSearchButton.getAttribute('data-saved-search-id') || ''
+      detail.currentPageAction || '',
+      detail.recommendationId || ''
     )
     return
   }
-  const quickActionButton = target.closest('[data-current-page-action]')
-  if (quickActionButton) {
-    handleCurrentPageQuickAction(quickActionButton.getAttribute('data-current-page-action'))
+  if (detail.action === 'current-page') {
+    handleCurrentPageQuickAction(detail.currentPageAction || '')
     return
   }
-  const recommendationButton = target.closest('[data-smart-recommendation]')
-  if (recommendationButton) {
-    const nextRecommendationId = recommendationButton.getAttribute('data-smart-recommendation')
+  if (detail.action === 'recommendation') {
+    const nextRecommendationId = detail.recommendationId || ''
     if (nextRecommendationId !== state.smartSelectedRecommendationId) {
       state.smartSaved = false
     }
@@ -2734,11 +2720,7 @@ function handleSmartClassifierClick(event) {
     renderSmartClassifier()
     return
   }
-  const actionButton = target.closest('[data-smart-action]')
-  if (!actionButton) {
-    return
-  }
-  const action = actionButton.getAttribute('data-smart-action')
+  const action = detail.action || ''
   if (action === 'classify') {
     classifyCurrentPage()
     return
@@ -2815,11 +2797,10 @@ function handleCurrentPageQuickAction(action) {
     void pinCurrentPageToNewTab(bookmarkId)
   }
 }
-function handleSmartClassifierInput(event) {
-  if (event.target?.id === 'smart-title-input') {
-    state.smartSuggestedTitle = event.target.value
-    state.smartSaved = false
-  }
+function handleSmartClassifierTitleChangeEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupSmartClassifierTitleChangeDetail>).detail
+  state.smartSuggestedTitle = String(detail?.title || '')
+  state.smartSaved = false
 }
 function handleContentActionEvent(event: Event) {
   const detail = (event as CustomEvent<PopupContentActionDetail>).detail

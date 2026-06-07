@@ -1,5 +1,5 @@
 import type { PopupToast } from './state'
-import type { PopupContentViewModel } from './components/PopupRuntimeIslands'
+import type { PopupContentViewModel, PopupSmartClassifierViewModel } from './components/PopupRuntimeIslands'
 
 export interface PopupAutoAnalyzeStatusView {
   collapsed: boolean
@@ -68,6 +68,20 @@ export interface PopupContentResultHoverDetail {
   index: number
 }
 
+export interface PopupSmartClassifierChangeDetail {
+  state: PopupSmartClassifierViewModel
+}
+
+export interface PopupSmartClassifierActionDetail {
+  action: string
+  currentPageAction?: string
+  recommendationId?: string
+}
+
+export interface PopupSmartClassifierTitleChangeDetail {
+  title: string
+}
+
 export interface PopupToastChangeDetail {
   toasts: PopupToast[]
 }
@@ -87,6 +101,9 @@ export const POPUP_SAVED_SEARCH_ACTION_EVENT = 'popup:saved-search-action'
 export const POPUP_CONTENT_CHANGE_EVENT = 'popup:content-change'
 export const POPUP_CONTENT_ACTION_EVENT = 'popup:content-action'
 export const POPUP_CONTENT_RESULT_HOVER_EVENT = 'popup:content-result-hover'
+export const POPUP_SMART_CLASSIFIER_CHANGE_EVENT = 'popup:smart-classifier-change'
+export const POPUP_SMART_CLASSIFIER_ACTION_EVENT = 'popup:smart-classifier-action'
+export const POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT = 'popup:smart-classifier-title-change'
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
   window.dispatchEvent(
@@ -161,6 +178,30 @@ export function dispatchPopupContentResultHover(index: number): void {
   window.dispatchEvent(
     new CustomEvent<PopupContentResultHoverDetail>(POPUP_CONTENT_RESULT_HOVER_EVENT, {
       detail: { index }
+    })
+  )
+}
+
+export function dispatchPopupSmartClassifierChange(state: PopupSmartClassifierViewModel): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSmartClassifierChangeDetail>(POPUP_SMART_CLASSIFIER_CHANGE_EVENT, {
+      detail: { state: { ...state } }
+    })
+  )
+}
+
+export function dispatchPopupSmartClassifierAction(detail: PopupSmartClassifierActionDetail): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSmartClassifierActionDetail>(POPUP_SMART_CLASSIFIER_ACTION_EVENT, {
+      detail: { ...detail }
+    })
+  )
+}
+
+export function dispatchPopupSmartClassifierTitleChange(title: string): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSmartClassifierTitleChangeDetail>(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, {
+      detail: { title }
     })
   )
 }
