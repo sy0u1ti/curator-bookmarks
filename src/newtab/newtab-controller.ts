@@ -270,6 +270,10 @@ import {
   getNewtabFeaturedBackgroundModalOpen,
   registerNewtabFeaturedBackgroundModalActions
 } from './newtab-featured-background-modal-store.js'
+import {
+  dispatchNewtabDashboardOverlayControls,
+  registerNewtabDashboardOverlayActions
+} from './newtab-dashboard-overlay-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -724,9 +728,6 @@ const root = cachedEl('newtab-root')
 const dashboardTrigger = cachedEl('newtab-dashboard-trigger')
 let dashboardOverlay: HTMLElement | null = null
 let dashboardFrame: HTMLIFrameElement | null = null
-let dashboardFallback: HTMLElement | null = null
-let dashboardFallbackCopy: HTMLElement | null = null
-let setDashboardOverlayOpen: ((open: boolean) => void) | null = null
 const settingsTrigger = cachedEl('newtab-settings-trigger')
 let settingsDrawer: HTMLElement | null = null
 const settingsBackdrop = cachedEl('newtab-settings-backdrop')
@@ -969,8 +970,18 @@ function bindEvents(): void {
       void refreshFeaturedBackgroundGallery()
     }
   })
+  registerNewtabDashboardOverlayActions({
+    onCloseRequest: closeDashboardRoute,
+    onFallbackRetry: retryDashboardFrame,
+    onFallbackReturn: closeDashboardRoute,
+    onFrameError: () => {
+      setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
+    },
+    onReady: initializeDashboardOverlay
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
+  initializeDashboardOverlay()
 
   dashboardTrigger?.addEventListener('click', (event) => {
     event.preventDefault()
@@ -5126,41 +5137,41 @@ function getNewTabShellSignature(): string {
   ].join('|')
 }
 
-let dashboardOverlayMounted = false
-let dashboardOverlayMountPromise: Promise<void> | null = null
+let dashboardOverlayReady = false
+let dashboardOverlayReadyPromise: Promise<void> | null = null
+let resolveDashboardOverlayReady: (() => void) | null = null
 
-function ensureDashboardOverlayMounted(): Promise<void> {
-  if (dashboardOverlayMounted) return Promise.resolve()
-  if (dashboardOverlayMountPromise) return dashboardOverlayMountPromise
-  dashboardOverlayMountPromise = (async () => {
-    const mod = await import('./dashboard-overlay-mount.js')
-    const result = mod.mountDashboardOverlay({
-      onFrameError: () => {
-        setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
-      },
-      onCloseRequest: closeDashboardRoute,
-      onFallbackReturn: closeDashboardRoute,
-      onFallbackRetry: retryDashboardFrame
+function ensureDashboardOverlayReady(): Promise<void> {
+  if (dashboardOverlayReady) return Promise.resolve()
+  if (!dashboardOverlayReadyPromise) {
+    dashboardOverlayReadyPromise = new Promise<void>((resolve) => {
+      resolveDashboardOverlayReady = resolve
     })
-    if (!result) return
-    dashboardOverlayMounted = true
-    dashboardOverlay = result.overlay
-    dashboardFrame = result.frame
-    dashboardFallback = result.fallback
-    dashboardFallbackCopy = result.fallbackCopy
-    setDashboardOverlayOpen = result.setOpen
-    if (state.dashboardOpen) {
-      renderDashboard()
-      ensureDashboardFrameLoaded()
-    }
-  })()
-  return dashboardOverlayMountPromise
+  }
+  return dashboardOverlayReadyPromise
+}
+
+function initializeDashboardOverlay(): void {
+  if (dashboardOverlayReady) return
+  dashboardOverlay = cachedEl('newtab-dashboard-overlay')
+  dashboardFrame = cachedEl('newtab-dashboard-frame') as HTMLIFrameElement | null
+  if (!dashboardOverlay || !dashboardFrame) {
+    window.requestAnimationFrame(initializeDashboardOverlay)
+    return
+  }
+
+  dashboardOverlayReady = true
+  resolveDashboardOverlayReady?.()
+  renderDashboard()
+  if (state.dashboardOpen) {
+    ensureDashboardFrameLoaded()
+  }
 }
 
 function syncDashboardRoute(): void {
   const shouldOpen = window.location.hash === '#dashboard'
   if (shouldOpen) {
-    void ensureDashboardOverlayMounted()
+    void ensureDashboardOverlayReady()
   }
   if (shouldOpen === state.dashboardOpen) {
     if (shouldOpen) {
@@ -5181,7 +5192,7 @@ function syncDashboardRoute(): void {
 }
 
 function openDashboardRoute(): void {
-  void ensureDashboardOverlayMounted()
+  void ensureDashboardOverlayReady()
   dashboardReturnFocusTarget = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : dashboardTrigger instanceof HTMLElement
@@ -5284,22 +5295,21 @@ function setDashboardFrameError(message: string): void {
 
 function renderDashboard(): void {
   if (!dashboardOverlay) {
+    dispatchNewtabDashboardOverlayControls({
+      errorMessage: state.dashboardFrameError,
+      open: state.dashboardOpen,
+      ready: state.dashboardFrameReady && !state.dashboardFrameError
+    })
     return
   }
 
   const hasDashboardError = Boolean(state.dashboardFrameError)
-  dashboardOverlay.hidden = !state.dashboardOpen
-  dashboardOverlay.setAttribute('aria-hidden', state.dashboardOpen ? 'false' : 'true')
-  dashboardOverlay.dataset.dashboardReady = state.dashboardFrameReady && !hasDashboardError ? 'true' : 'false'
-  dashboardOverlay.dataset.dashboardError = hasDashboardError ? 'true' : 'false'
-  setDashboardOverlayOpen?.(state.dashboardOpen)
+  dispatchNewtabDashboardOverlayControls({
+    errorMessage: state.dashboardFrameError,
+    open: state.dashboardOpen,
+    ready: state.dashboardFrameReady && !hasDashboardError
+  })
   dashboardTrigger?.setAttribute('aria-expanded', state.dashboardOpen ? 'true' : 'false')
-  if (dashboardFallback) {
-    dashboardFallback.hidden = !hasDashboardError
-  }
-  if (dashboardFallbackCopy) {
-    dashboardFallbackCopy.textContent = state.dashboardFrameError || ''
-  }
 
   if (state.dashboardOpen) {
     ensureDashboardFrameLoaded()
