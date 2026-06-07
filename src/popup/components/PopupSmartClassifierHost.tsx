@@ -5,7 +5,8 @@ import {
   POPUP_SMART_CLASSIFIER_CHANGE_EVENT,
   type PopupSmartClassifierChangeDetail
 } from '../popup-events'
-import { PopupSmartClassifier, type PopupSmartClassifierViewModel } from './PopupRuntimeIslands'
+import { PopupSmartClassifier } from './PopupSmartClassifier'
+import type { PopupSmartClassifierViewModel } from './PopupViewModels'
 
 const EMPTY_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
   error: '',
@@ -43,59 +44,24 @@ export function PopupSmartClassifierHost() {
       id="smart-classifier"
       className={['smart-classifier', hidden ? 'hidden' : ''].filter(Boolean).join(' ')}
       aria-live="polite"
-      onClick={handleSmartClassifierClick}
-      onInput={handleSmartClassifierInput}
     >
-      <PopupSmartClassifier state={state} />
+      <PopupSmartClassifier
+        handlers={{
+          onAction: (action) => {
+            dispatchPopupSmartClassifierAction({ action })
+          },
+          onCurrentPageAction: (currentPageAction) => {
+            dispatchPopupSmartClassifierAction({ action: 'current-page', currentPageAction })
+          },
+          onRecommendationSelect: (recommendationId) => {
+            dispatchPopupSmartClassifierAction({ action: 'recommendation', recommendationId })
+          },
+          onTitleChange: (title) => {
+            dispatchPopupSmartClassifierTitleChange(title)
+          }
+        }}
+        state={state}
+      />
     </section>
   )
-}
-
-function handleSmartClassifierClick(event: React.MouseEvent<HTMLElement>) {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
-
-  const savedSearchButton = target.closest('[data-saved-search-action]')
-  if (savedSearchButton) {
-    dispatchPopupSmartClassifierAction({
-      action: 'saved-search',
-      currentPageAction: savedSearchButton.getAttribute('data-saved-search-action') || '',
-      recommendationId: savedSearchButton.getAttribute('data-saved-search-id') || ''
-    })
-    return
-  }
-
-  const quickActionButton = target.closest('[data-current-page-action]')
-  if (quickActionButton) {
-    dispatchPopupSmartClassifierAction({
-      action: 'current-page',
-      currentPageAction: quickActionButton.getAttribute('data-current-page-action') || ''
-    })
-    return
-  }
-
-  const recommendationButton = target.closest('[data-smart-recommendation]')
-  if (recommendationButton) {
-    dispatchPopupSmartClassifierAction({
-      action: 'recommendation',
-      recommendationId: recommendationButton.getAttribute('data-smart-recommendation') || ''
-    })
-    return
-  }
-
-  const actionButton = target.closest('[data-smart-action]')
-  if (actionButton) {
-    dispatchPopupSmartClassifierAction({
-      action: actionButton.getAttribute('data-smart-action') || ''
-    })
-  }
-}
-
-function handleSmartClassifierInput(event: React.FormEvent<HTMLElement>) {
-  const target = event.target
-  if (target instanceof HTMLInputElement && target.id === 'smart-title-input') {
-    dispatchPopupSmartClassifierTitleChange(target.value)
-  }
 }

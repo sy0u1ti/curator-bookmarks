@@ -5,7 +5,8 @@ import {
   POPUP_CONTENT_CHANGE_EVENT,
   type PopupContentChangeDetail
 } from '../popup-events'
-import { PopupContent, type PopupContentViewModel } from './PopupRuntimeIslands'
+import { PopupContent } from './PopupContent'
+import type { PopupContentViewModel } from './PopupViewModels'
 
 const INITIAL_CONTENT_STATE: PopupContentViewModel = {
   loading: true,
@@ -86,81 +87,28 @@ export function PopupContentHost() {
     <div
       id="content"
       className="content"
-      role="list"
       ref={contentRef}
-      onClick={handleContentClick}
-      onPointerOver={handleContentPointerOver}
     >
-      <PopupContent state={state} />
+      <PopupContent
+        handlers={{
+          onBookmarkOpen: (bookmarkId) => {
+            dispatchPopupContentAction({ action: 'open-bookmark', bookmarkId })
+          },
+          onEmptyAction: (emptyAction) => {
+            dispatchPopupContentAction({ action: 'empty-action', emptyAction })
+          },
+          onFolderFilter: (folderId) => {
+            dispatchPopupContentAction({ action: 'filter-folder', folderId })
+          },
+          onMenuAction: (bookmarkId, menuAction) => {
+            dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction })
+          },
+          onResultHover: (index) => {
+            dispatchPopupContentResultHover(index)
+          }
+        }}
+        state={state}
+      />
     </div>
   )
-}
-
-function handleContentClick(event: React.MouseEvent<HTMLElement>) {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
-
-  const sidebarFolderButton = target.closest('[data-sidebar-folder-filter]')
-  if (sidebarFolderButton) {
-    dispatchPopupContentAction({
-      action: 'filter-folder',
-      folderId: sidebarFolderButton.getAttribute('data-sidebar-folder-filter') || ''
-    })
-    return
-  }
-
-  const folderToggle = target.closest('[data-toggle-folder]')
-  if (folderToggle) {
-    dispatchPopupContentAction({
-      action: 'toggle-folder',
-      folderId: folderToggle.getAttribute('data-toggle-folder') || ''
-    })
-    return
-  }
-
-  const actionButton = target.closest('[data-menu-action]')
-  if (actionButton) {
-    dispatchPopupContentAction({
-      action: 'menu-action',
-      bookmarkId: actionButton.getAttribute('data-bookmark-id') || '',
-      menuAction: actionButton.getAttribute('data-menu-action') || ''
-    })
-    return
-  }
-
-  const bookmarkButton = target.closest('[data-open-bookmark]')
-  if (bookmarkButton) {
-    dispatchPopupContentAction({
-      action: 'open-bookmark',
-      bookmarkId: bookmarkButton.getAttribute('data-open-bookmark') || ''
-    })
-    return
-  }
-
-  const emptyAction = target.closest('[data-empty-action]')
-  if (emptyAction) {
-    dispatchPopupContentAction({
-      action: 'empty-action',
-      emptyAction: emptyAction.getAttribute('data-empty-action') || ''
-    })
-  }
-}
-
-function handleContentPointerOver(event: React.PointerEvent<HTMLElement>) {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
-
-  const resultCard = target.closest('[data-result-index]')
-  if (!resultCard) {
-    return
-  }
-
-  const nextIndex = Number(resultCard.getAttribute('data-result-index'))
-  if (!Number.isNaN(nextIndex)) {
-    dispatchPopupContentResultHover(nextIndex)
-  }
 }

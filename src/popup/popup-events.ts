@@ -3,7 +3,7 @@ import type {
   PopupContentViewModel,
   PopupFolderPickerState,
   PopupSmartClassifierViewModel
-} from './components/PopupRuntimeIslands'
+} from './components/PopupViewModels'
 
 export interface PopupAutoAnalyzeStatusView {
   collapsed: boolean

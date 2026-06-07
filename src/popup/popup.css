@@ -6313,7 +6313,9 @@ body.smart-active .smart-permission-card {
 }
 
 .bookmark-main-list {
+  margin: 0;
   padding: 8px 9px;
+  list-style: none;
 }
 
 .bookmark-folder-tree::-webkit-scrollbar,

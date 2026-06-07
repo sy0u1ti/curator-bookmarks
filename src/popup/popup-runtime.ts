@@ -87,7 +87,7 @@ import {
   type PopupFolderPickerState,
   type PopupFolderTreeOptionViewModel,
   type PopupSmartClassifierViewModel
-} from './components/PopupRuntimeIslands.js'
+} from './components/PopupViewModels.js'
 import {
   dispatchPopupAutoAnalyzeStatusChange,
   dispatchPopupChromeChange,
