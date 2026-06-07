@@ -1,20 +1,10 @@
-import { useEffect } from 'react'
-import { Button, Icon, ThemeProvider } from '../ui'
+import { Icon } from '../ui/icons/Icon'
+import { Button } from '../ui/primitives/Button'
+import { ThemeProvider } from '../ui/theme/ThemeProvider'
+import { useNewtabController } from './newtab-controller'
 
 export function NewtabApp() {
-  useEffect(() => {
-    let disposed = false
-
-    void import('./newtab-runtime.js').then(({ startNewTabRuntime }) => {
-      if (!disposed) {
-        startNewTabRuntime()
-      }
-    })
-
-    return () => {
-      disposed = true
-    }
-  }, [])
+  useNewtabController()
 
   return (
     <ThemeProvider>
@@ -27,7 +17,7 @@ function NewtabShell() {
   return (
     <>
       <div id="newtab-background-mask" className="newtab-background-mask" aria-hidden="true"></div>
-      <div className="wallpaper-loading-indicator" role="status" aria-live="polite" aria-label="正在加载背景图">
+      <output className="wallpaper-loading-indicator" aria-live="polite" aria-label="正在加载背景图">
         <div className="wallpaper-loading-card">
           <div className="wallpaper-loading-loader" aria-hidden="true">
             <span></span>
@@ -35,7 +25,7 @@ function NewtabShell() {
             <span></span>
           </div>
         </div>
-      </div>
+      </output>
 
       <div className="settings-trigger-zone">
         <a

@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import {
   BOOKMARKS_BAR_ID,
   NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
@@ -837,13 +838,19 @@ interface BackgroundUrlCacheTask {
   durableBlob: Promise<Blob>
 }
 
-let newTabRuntimeStarted = false
+let newTabControllerStarted = false
 
-export function startNewTabRuntime(): void {
-  if (newTabRuntimeStarted) {
+export function useNewtabController(): void {
+  useEffect(() => {
+    startNewTabController()
+  }, [])
+}
+
+function startNewTabController(): void {
+  if (newTabControllerStarted) {
     return
   }
-  newTabRuntimeStarted = true
+  newTabControllerStarted = true
 
   recordNewTabDomContentLoaded()
   bindEvents()
@@ -852,7 +859,7 @@ export function startNewTabRuntime(): void {
   void hydrateNewTabSavedSearches()
   void refreshNewTab()
   document.addEventListener('visibilitychange', handleNewTabVisibilityChange)
-  window.addEventListener('pagehide', cleanupNewTabRuntime)
+  window.addEventListener('pagehide', cleanupNewTabController)
 }
 
 function createSearchIndexReadyPromise(): Promise<void> {
@@ -7705,7 +7712,8 @@ async function saveFaviconAccentCache(): Promise<void> {
   })
 }
 
-function cleanupNewTabRuntime(): void {
+function cleanupNewTabController(): void {
+  newTabControllerStarted = false
   window.clearTimeout(clockTimer)
   clockTimer = 0
   window.clearTimeout(featuredBackgroundRefreshTimer)
