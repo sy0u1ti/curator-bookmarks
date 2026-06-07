@@ -1,70 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
-import { AiSetupPrompt, Button, Icon, Input } from '../../ui'
+import { useEffect, useRef } from 'react'
+import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
+import { Icon } from '../../ui/icons/Icon'
+import { Button } from '../../ui/primitives/Button'
+import { Input } from '../../ui/primitives/Input'
 import {
   dispatchPopupModalAction,
-  POPUP_MODALS_CHANGE_EVENT,
-  type PopupModalsChangeDetail,
+  usePopupModalsView,
   type PopupModalsView
 } from '../popup-events'
 import { PopupFolderPickerHost } from './PopupFolderPickerHost'
 
-const EMPTY_MODALS: PopupModalsView = {
-  active: null,
-  aiProvider: { open: false },
-  delete: {
-    cancelDisabled: false,
-    confirmDisabled: false,
-    confirmLabel: '删除',
-    open: false,
-    path: '',
-    title: ''
-  },
-  edit: {
-    cancelDisabled: false,
-    closeDisabled: false,
-    dirty: false,
-    folderPickerOpen: false,
-    folderQuery: '',
-    folderSearchDisabled: false,
-    open: false,
-    path: '',
-    pathChanged: false,
-    saveDisabled: true,
-    saveLabel: '未修改',
-    title: '',
-    titleDisabled: false,
-    url: '',
-    urlDisabled: false
-  },
-  move: {
-    open: false,
-    path: '',
-    query: '',
-    title: ''
-  },
-  open: false,
-  smartFolder: {
-    open: false,
-    query: '',
-    title: '',
-    urlLabel: ''
-  }
-}
-
 export function PopupModalsHost() {
-  const [state, setState] = useState<PopupModalsView>(EMPTY_MODALS)
+  const state = usePopupModalsView()
   const previousActiveRef = useRef<PopupModalsView['active']>(null)
   const previousEditPickerOpenRef = useRef(false)
-
-  useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupModalsChangeDetail>).detail
-      setState(detail?.state ?? EMPTY_MODALS)
-    }
-
-    window.addEventListener(POPUP_MODALS_CHANGE_EVENT, handleChange)
-    return () => window.removeEventListener(POPUP_MODALS_CHANGE_EVENT, handleChange)
-  }, [])
 
   useEffect(() => {
     if (state.active !== previousActiveRef.current) {
@@ -81,12 +30,14 @@ export function PopupModalsHost() {
   return (
     <div
       className="popup-modal-stack"
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          dispatchPopupModalAction('close')
-        }
-      }}
     >
+      <Button
+        className="popup-modal-dismiss-layer"
+        type="button"
+        aria-label="关闭弹窗"
+        onClick={() => dispatchPopupModalAction('close')}
+        unstyled
+      />
       {state.move.open ? <MoveBookmarkModal view={state.move} /> : null}
       {state.smartFolder.open ? <SmartFolderModal view={state.smartFolder} /> : null}
       {state.aiProvider.open ? <AiProviderPromptModal /> : null}

@@ -1,22 +1,11 @@
-import { useEffect, useState } from 'react'
 import {
   dispatchPopupFolderPickerAction,
-  POPUP_FOLDER_PICKER_CHANGE_EVENT,
-  type PopupFolderPickerChangeDetail
+  usePopupFolderPickerState
 } from '../popup-events'
 import { PopupFolderPicker } from './PopupFolderPicker'
 import type { PopupFolderPickerState } from './PopupViewModels'
 
 type PopupFolderPickerMode = PopupFolderPickerState['mode']
-
-function getEmptyState(mode: PopupFolderPickerMode): PopupFolderPickerState {
-  return {
-    empty: null,
-    mode,
-    query: '',
-    treeOptions: []
-  }
-}
 
 export function PopupFolderPickerHost({
   className,
@@ -27,19 +16,7 @@ export function PopupFolderPickerHost({
   id: string
   mode: PopupFolderPickerMode
 }) {
-  const [state, setState] = useState<PopupFolderPickerState>(() => getEmptyState(mode))
-
-  useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupFolderPickerChangeDetail>).detail
-      if (detail?.mode === mode) {
-        setState(detail.state)
-      }
-    }
-
-    window.addEventListener(POPUP_FOLDER_PICKER_CHANGE_EVENT, handleChange)
-    return () => window.removeEventListener(POPUP_FOLDER_PICKER_CHANGE_EVENT, handleChange)
-  }, [mode])
+  const state = usePopupFolderPickerState(mode)
 
   return (
     <div id={id} className={className} role="tree" aria-label={getAriaLabel(mode)}>

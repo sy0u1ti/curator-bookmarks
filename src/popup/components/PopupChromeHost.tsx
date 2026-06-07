@@ -1,60 +1,34 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Button, Icon, Input, Popover } from '../../ui'
+import { Icon } from '../../ui/icons/Icon'
+import { Button } from '../../ui/primitives/Button'
+import { Input } from '../../ui/primitives/Input'
+import { Popover } from '../../ui/primitives/Popover'
 import {
   dispatchPopupChromeAction,
-  POPUP_CHROME_CHANGE_EVENT,
-  POPUP_SEARCH_FOCUS_REQUEST_EVENT,
-  type PopupChromeChangeDetail,
-  type PopupChromeView,
-  type PopupSearchFocusRequestDetail
+  usePopupChromeView,
+  usePopupSearchFocusRequest
 } from '../popup-events'
 import { PopupSavedSearches } from './PopupSavedSearches'
 import { PopupSearchChips } from './PopupSearchChips'
 
-const EMPTY_CHROME: PopupChromeView = {
-  loadError: '',
-  search: {
-    ariaLabel: '关键词搜索书签标题、网址、标签或高级语法',
-    clearVisible: false,
-    fallback: false,
-    label: '语义',
-    notConfigured: true,
-    pending: false,
-    placeholder: '关键词搜索',
-    pressed: false,
-    query: '',
-    title: 'AI 语义搜索：需要先配置 AI 渠道'
-  },
-  viewCaption: '书签栏'
-}
-
 export function PopupChromeHost({ children }: { children?: ReactNode }) {
-  const [state, setState] = useState<PopupChromeView>(EMPTY_CHROME)
+  const state = usePopupChromeView()
+  const searchFocusRequest = usePopupSearchFocusRequest()
   const [searchHelpOpen, setSearchHelpOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupChromeChangeDetail>).detail
-      setState(detail?.state ?? EMPTY_CHROME)
-    }
-    const handleFocusRequest = (event: Event) => {
-      const detail = (event as CustomEvent<PopupSearchFocusRequestDetail>).detail
-      window.requestAnimationFrame(() => {
-        searchInputRef.current?.focus()
-        if (detail?.select) {
-          searchInputRef.current?.select()
-        }
-      })
+    if (!searchFocusRequest.id) {
+      return
     }
 
-    window.addEventListener(POPUP_CHROME_CHANGE_EVENT, handleChange)
-    window.addEventListener(POPUP_SEARCH_FOCUS_REQUEST_EVENT, handleFocusRequest)
-    return () => {
-      window.removeEventListener(POPUP_CHROME_CHANGE_EVENT, handleChange)
-      window.removeEventListener(POPUP_SEARCH_FOCUS_REQUEST_EVENT, handleFocusRequest)
-    }
-  }, [])
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus()
+      if (searchFocusRequest.select) {
+        searchInputRef.current?.select()
+      }
+    })
+  }, [searchFocusRequest])
 
   const naturalSearchClassName = [
     'cb-search__mode',

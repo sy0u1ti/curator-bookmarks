@@ -1,32 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Button } from '../../ui'
+import { Button } from '../../ui/primitives/Button'
 import {
   dispatchPopupAutoAnalyzeStatusAction,
-  POPUP_AUTO_ANALYZE_STATUS_CHANGE_EVENT,
-  type PopupAutoAnalyzeStatusChangeDetail,
-  type PopupAutoAnalyzeStatusView
+  usePopupAutoAnalyzeStatusView
 } from '../popup-events'
 
-const EMPTY_AUTO_ANALYZE_STATUS: PopupAutoAnalyzeStatusView = {
-  collapsed: true,
-  detail: '',
-  showHistory: false,
-  status: null,
-  title: ''
-}
-
 export function PopupAutoAnalyzeStatus() {
-  const [state, setState] = useState<PopupAutoAnalyzeStatusView>(EMPTY_AUTO_ANALYZE_STATUS)
-
-  useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupAutoAnalyzeStatusChangeDetail>).detail
-      setState(detail?.state ?? EMPTY_AUTO_ANALYZE_STATUS)
-    }
-
-    window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_CHANGE_EVENT, handleChange)
-    return () => window.removeEventListener(POPUP_AUTO_ANALYZE_STATUS_CHANGE_EVENT, handleChange)
-  }, [])
+  const state = usePopupAutoAnalyzeStatusView()
 
   const hidden = !state.status
   const className = [
@@ -51,10 +30,10 @@ export function PopupAutoAnalyzeStatus() {
       {hidden ? null : (
         <>
           <div className="auto-analyze-indicator" aria-hidden="true"></div>
-          <div className="auto-analyze-copy" role="status">
+          <output className="auto-analyze-copy">
             <p className="auto-analyze-title">{state.title}</p>
             <p className="auto-analyze-detail">{state.detail}</p>
-          </div>
+          </output>
           <div className="auto-analyze-actions">
             {state.showHistory ? (
               <Button

@@ -2477,6 +2477,7 @@ mark {
 }
 
 .popup-modal-stack {
+  position: relative;
   display: grid;
   place-items: center;
   width: 100%;
@@ -2486,6 +2487,16 @@ mark {
   max-height: 100%;
   overflow: hidden;
   outline: none;
+}
+
+.popup-modal-dismiss-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  border: 0;
+  background: transparent;
+  cursor: default;
 }
 
 #filter-modal.modal-card {
@@ -2501,6 +2512,7 @@ mark {
 
 .modal-card {
   position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 398px;
   max-height: calc(100% - 28px);

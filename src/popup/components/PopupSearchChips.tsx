@@ -1,22 +1,7 @@
-import { useEffect, useState } from 'react'
-import {
-  POPUP_SEARCH_CHIPS_CHANGE_EVENT,
-  type PopupSearchChipView,
-  type PopupSearchChipsChangeDetail
-} from '../popup-events'
+import { usePopupSearchChips } from '../popup-events'
 
 export function PopupSearchChips() {
-  const [chips, setChips] = useState<PopupSearchChipView[]>([])
-
-  useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupSearchChipsChangeDetail>).detail
-      setChips(detail?.chips ?? [])
-    }
-
-    window.addEventListener(POPUP_SEARCH_CHIPS_CHANGE_EVENT, handleChange)
-    return () => window.removeEventListener(POPUP_SEARCH_CHIPS_CHANGE_EVENT, handleChange)
-  }, [])
+  const chips = usePopupSearchChips()
 
   return (
     <div

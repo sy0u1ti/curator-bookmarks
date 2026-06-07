@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { DialogOverlay, ThemeProvider } from '../ui'
+import { useEffect, useMemo, useReducer } from 'react'
+import { DialogOverlay } from '../ui/primitives/Dialog'
+import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getModalCloseDurationMs } from '../shared/motion'
+import { dispatchPopupModalAction, usePopupModalsView } from './popup-events'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
@@ -34,41 +36,42 @@ export function PopupApp() {
 }
 
 function PopupShell() {
-  const [modalOpen, setModalOpen] = useState(false)
-  const [modalClosing, setModalClosing] = useState(false)
-  const [modalPortalContainer, setModalPortalContainer] = useState<HTMLElement | null>(null)
+  const modalsView = usePopupModalsView()
+  const modalOpen = modalsView.open
+  const [modalPresence, dispatchModalPresence] = useReducer(reduceModalPresence, {
+    closing: false,
+    visible: modalOpen
+  })
+  const modalPortalContainer = useMemo(() => {
+    return typeof document === 'undefined' ? null : document.getElementById('popup-root')
+  }, [])
 
   useEffect(() => {
     let modalCloseTimer = 0
-    const handleModalState = (event: Event) => {
-      const detail = (event as CustomEvent<{ open?: boolean }>).detail
-      const nextOpen = Boolean(detail?.open)
-      window.clearTimeout(modalCloseTimer)
-      if (nextOpen) {
-        setModalClosing(false)
-        setModalOpen(true)
-        return
-      }
-      setModalClosing(true)
-      modalCloseTimer = window.setTimeout(() => {
-        setModalClosing(false)
-        setModalOpen(false)
-      }, getModalCloseDurationMs())
+    if (modalOpen) {
+      dispatchModalPresence({ type: 'open' })
+      return () => window.clearTimeout(modalCloseTimer)
     }
 
-    setModalPortalContainer(document.getElementById('popup-root'))
-    window.addEventListener('popup:modal-state', handleModalState)
+    if (!modalPresence.visible) {
+      dispatchModalPresence({ type: 'hidden' })
+      return () => window.clearTimeout(modalCloseTimer)
+    }
+
+    dispatchModalPresence({ type: 'closing' })
+    modalCloseTimer = window.setTimeout(() => {
+      dispatchModalPresence({ type: 'hidden' })
+    }, getModalCloseDurationMs())
 
     return () => {
-      window.removeEventListener('popup:modal-state', handleModalState)
       window.clearTimeout(modalCloseTimer)
     }
-  }, [])
+  }, [modalOpen, modalPresence.visible])
 
   const modalBackdropClassName = [
     'modal-backdrop',
-    modalOpen ? '' : 'hidden',
-    modalClosing ? 'is-closing' : ''
+    modalPresence.visible ? '' : 'hidden',
+    modalPresence.closing ? 'is-closing' : ''
   ].filter(Boolean).join(' ')
 
   return (
@@ -76,8 +79,8 @@ function PopupShell() {
       <main
         id="popup-app-shell"
         className="app-shell"
-        aria-hidden={modalOpen && !modalClosing ? 'true' : 'false'}
-        inert={modalOpen && !modalClosing}
+        aria-hidden={modalOpen && !modalPresence.closing ? 'true' : 'false'}
+        inert={modalOpen && !modalPresence.closing}
       >
         <PopupChromeHost>
           <PopupSmartClassifierHost />
@@ -93,15 +96,14 @@ function PopupShell() {
       <DialogOverlay
         id="modal-backdrop"
         className={modalBackdropClassName}
-        open={modalOpen}
+        open={modalPresence.visible}
         onOpenChange={(open) => {
           if (!open && modalOpen) {
-            window.dispatchEvent(new CustomEvent('popup:modal-close'))
+            dispatchPopupModalAction('close')
             return
           }
-          setModalOpen(open)
         }}
-        aria-hidden={modalOpen && !modalClosing ? 'false' : 'true'}
+        aria-hidden={modalPresence.visible && !modalPresence.closing ? 'false' : 'true'}
         disablePointerDismissal
         portalContainer={modalPortalContainer ?? undefined}
       >
@@ -111,4 +113,24 @@ function PopupShell() {
       <PopupToasts />
     </>
   )
+}
+
+interface ModalPresenceState {
+  closing: boolean
+  visible: boolean
+}
+
+type ModalPresenceAction =
+  | { type: 'closing' }
+  | { type: 'hidden' }
+  | { type: 'open' }
+
+function reduceModalPresence(state: ModalPresenceState, action: ModalPresenceAction): ModalPresenceState {
+  if (action.type === 'open') {
+    return { closing: false, visible: true }
+  }
+  if (action.type === 'closing') {
+    return state.visible ? { closing: true, visible: true } : { closing: false, visible: false }
+  }
+  return { closing: false, visible: false }
 }

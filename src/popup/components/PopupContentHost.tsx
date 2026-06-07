@@ -2,8 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   dispatchPopupContentAction,
   dispatchPopupContentResultHover,
-  POPUP_CONTENT_CHANGE_EVENT,
-  type PopupContentChangeDetail
+  subscribePopupContentChange
 } from '../popup-events'
 import { PopupContent } from './PopupContent'
 import type { PopupContentViewModel } from './PopupViewModels'
@@ -21,20 +20,16 @@ export function PopupContentHost() {
   const [state, setState] = useState<PopupContentViewModel>(INITIAL_CONTENT_STATE)
 
   useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupContentChangeDetail>).detail
+    return subscribePopupContentChange((detail) => {
       const root = contentRef.current
       const scrollContainer = root?.querySelector<HTMLElement>('[data-popup-main-list]') || root
 
-      pendingScrollTopRef.current = detail?.preserveScroll && scrollContainer
+      pendingScrollTopRef.current = detail.preserveScroll && scrollContainer
         ? scrollContainer.scrollTop
         : null
-      shouldRevealActiveResultRef.current = !detail?.preserveScroll
-      setState(detail?.state ?? INITIAL_CONTENT_STATE)
-    }
-
-    window.addEventListener(POPUP_CONTENT_CHANGE_EVENT, handleChange)
-    return () => window.removeEventListener(POPUP_CONTENT_CHANGE_EVENT, handleChange)
+      shouldRevealActiveResultRef.current = !detail.preserveScroll
+      setState(detail.state ?? INITIAL_CONTENT_STATE)
+    })
   }, [])
 
   useLayoutEffect(() => {

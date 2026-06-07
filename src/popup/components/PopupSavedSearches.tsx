@@ -1,33 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Button } from '../../ui'
+import { Button } from '../../ui/primitives/Button'
 import {
   dispatchPopupSavedSearchAction,
-  POPUP_SAVED_SEARCHES_CHANGE_EVENT,
-  type PopupSavedSearchesChangeDetail,
-  type PopupSavedSearchesView
+  usePopupSavedSearchesView
 } from '../popup-events'
 
-const EMPTY_SAVED_SEARCHES: PopupSavedSearchesView = {
-  canSaveCurrent: false,
-  error: '',
-  expanded: false,
-  hasCurrentSaved: false,
-  items: [],
-  show: false
-}
-
 export function PopupSavedSearches() {
-  const [state, setState] = useState<PopupSavedSearchesView>(EMPTY_SAVED_SEARCHES)
-
-  useEffect(() => {
-    const handleChange = (event: Event) => {
-      const detail = (event as CustomEvent<PopupSavedSearchesChangeDetail>).detail
-      setState(detail?.state ?? EMPTY_SAVED_SEARCHES)
-    }
-
-    window.addEventListener(POPUP_SAVED_SEARCHES_CHANGE_EVENT, handleChange)
-    return () => window.removeEventListener(POPUP_SAVED_SEARCHES_CHANGE_EVENT, handleChange)
-  }, [])
+  const state = usePopupSavedSearchesView()
 
   const className = [
     'saved-searches',

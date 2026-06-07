@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import type { PopupToast } from './state'
 import type {
   PopupContentViewModel,
@@ -13,10 +14,6 @@ export interface PopupAutoAnalyzeStatusView {
   title: string
 }
 
-export interface PopupAutoAnalyzeStatusChangeDetail {
-  state: PopupAutoAnalyzeStatusView
-}
-
 export interface PopupAutoAnalyzeStatusActionDetail {
   action: string
 }
@@ -24,10 +21,6 @@ export interface PopupAutoAnalyzeStatusActionDetail {
 export interface PopupSearchChipView {
   kind: string
   label: string
-}
-
-export interface PopupSearchChipsChangeDetail {
-  chips: PopupSearchChipView[]
 }
 
 export interface PopupSavedSearchItemView {
@@ -44,10 +37,6 @@ export interface PopupSavedSearchesView {
   hasCurrentSaved: boolean
   items: PopupSavedSearchItemView[]
   show: boolean
-}
-
-export interface PopupSavedSearchesChangeDetail {
-  state: PopupSavedSearchesView
 }
 
 export interface PopupSavedSearchActionDetail {
@@ -72,10 +61,6 @@ export interface PopupContentResultHoverDetail {
   index: number
 }
 
-export interface PopupSmartClassifierChangeDetail {
-  state: PopupSmartClassifierViewModel
-}
-
 export interface PopupSmartClassifierActionDetail {
   action: string
   currentPageAction?: string
@@ -84,11 +69,6 @@ export interface PopupSmartClassifierActionDetail {
 
 export interface PopupSmartClassifierTitleChangeDetail {
   title: string
-}
-
-export interface PopupFolderPickerChangeDetail {
-  mode: PopupFolderPickerState['mode']
-  state: PopupFolderPickerState
 }
 
 export interface PopupFolderPickerActionDetail {
@@ -112,10 +92,6 @@ export interface PopupChromeView {
     title: string
   }
   viewCaption: string
-}
-
-export interface PopupChromeChangeDetail {
-  state: PopupChromeView
 }
 
 export interface PopupChromeActionDetail {
@@ -172,17 +148,9 @@ export interface PopupModalsView {
   }
 }
 
-export interface PopupModalsChangeDetail {
-  state: PopupModalsView
-}
-
 export interface PopupModalActionDetail {
   action: string
   value?: string
-}
-
-export interface PopupToastChangeDetail {
-  toasts: PopupToast[]
 }
 
 export interface PopupToastActionDetail {
@@ -190,200 +158,382 @@ export interface PopupToastActionDetail {
   toastId: string
 }
 
-export const POPUP_TOASTS_CHANGE_EVENT = 'popup:toasts-change'
-export const POPUP_TOAST_ACTION_EVENT = 'popup:toast-action'
-export const POPUP_AUTO_ANALYZE_STATUS_CHANGE_EVENT = 'popup:auto-analyze-status-change'
-export const POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT = 'popup:auto-analyze-status-action'
-export const POPUP_SEARCH_CHIPS_CHANGE_EVENT = 'popup:search-chips-change'
-export const POPUP_SAVED_SEARCHES_CHANGE_EVENT = 'popup:saved-searches-change'
-export const POPUP_SAVED_SEARCH_ACTION_EVENT = 'popup:saved-search-action'
-export const POPUP_CONTENT_CHANGE_EVENT = 'popup:content-change'
-export const POPUP_CONTENT_ACTION_EVENT = 'popup:content-action'
-export const POPUP_CONTENT_RESULT_HOVER_EVENT = 'popup:content-result-hover'
-export const POPUP_SMART_CLASSIFIER_CHANGE_EVENT = 'popup:smart-classifier-change'
-export const POPUP_SMART_CLASSIFIER_ACTION_EVENT = 'popup:smart-classifier-action'
-export const POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT = 'popup:smart-classifier-title-change'
-export const POPUP_FOLDER_PICKER_CHANGE_EVENT = 'popup:folder-picker-change'
-export const POPUP_FOLDER_PICKER_ACTION_EVENT = 'popup:folder-picker-action'
-export const POPUP_CHROME_CHANGE_EVENT = 'popup:chrome-change'
-export const POPUP_CHROME_ACTION_EVENT = 'popup:chrome-action'
-export const POPUP_SEARCH_FOCUS_REQUEST_EVENT = 'popup:search-focus-request'
-export const POPUP_MODALS_CHANGE_EVENT = 'popup:modals-change'
-export const POPUP_MODAL_ACTION_EVENT = 'popup:modal-action'
+export const EMPTY_POPUP_AUTO_ANALYZE_STATUS: PopupAutoAnalyzeStatusView = {
+  collapsed: true,
+  detail: '',
+  showHistory: false,
+  status: null,
+  title: ''
+}
+
+export const EMPTY_POPUP_CHROME_VIEW: PopupChromeView = {
+  loadError: '',
+  search: {
+    ariaLabel: '关键词搜索书签标题、网址、标签或高级语法',
+    clearVisible: false,
+    fallback: false,
+    label: '语义',
+    notConfigured: true,
+    pending: false,
+    placeholder: '关键词搜索',
+    pressed: false,
+    query: '',
+    title: 'AI 语义搜索：需要先配置 AI 渠道'
+  },
+  viewCaption: '书签栏'
+}
+
+export const EMPTY_POPUP_CONTENT_CHANGE_DETAIL: PopupContentChangeDetail = {
+  preserveScroll: false,
+  state: {
+    loading: true,
+    rows: [],
+    title: '书签栏'
+  }
+}
+
+export const EMPTY_POPUP_MODALS_VIEW: PopupModalsView = {
+  active: null,
+  aiProvider: { open: false },
+  delete: {
+    cancelDisabled: false,
+    confirmDisabled: false,
+    confirmLabel: '删除',
+    open: false,
+    path: '',
+    title: ''
+  },
+  edit: {
+    cancelDisabled: false,
+    closeDisabled: false,
+    dirty: false,
+    folderPickerOpen: false,
+    folderQuery: '',
+    folderSearchDisabled: false,
+    open: false,
+    path: '',
+    pathChanged: false,
+    saveDisabled: true,
+    saveLabel: '未修改',
+    title: '',
+    titleDisabled: false,
+    url: '',
+    urlDisabled: false
+  },
+  move: {
+    open: false,
+    path: '',
+    query: '',
+    title: ''
+  },
+  open: false,
+  smartFolder: {
+    open: false,
+    query: '',
+    title: '',
+    urlLabel: ''
+  }
+}
+
+export const EMPTY_POPUP_SAVED_SEARCHES_VIEW: PopupSavedSearchesView = {
+  canSaveCurrent: false,
+  error: '',
+  expanded: false,
+  hasCurrentSaved: false,
+  items: [],
+  show: false
+}
+
+export const EMPTY_POPUP_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
+  error: '',
+  loadingLabel: '',
+  loadingProgress: 0,
+  loadingStartProgress: 0,
+  loadingStep: 1,
+  loadingStepCount: 3,
+  page: null,
+  permissionOrigins: [],
+  recommendations: [],
+  saved: false,
+  saving: false,
+  status: 'hidden',
+  suggestedTitle: ''
+}
+
+export const EMPTY_POPUP_TOASTS: PopupToast[] = []
+
+export function getEmptyPopupFolderPickerState(mode: PopupFolderPickerState['mode']): PopupFolderPickerState {
+  return {
+    empty: null,
+    mode,
+    query: '',
+    treeOptions: []
+  }
+}
+
+interface PopupSearchFocusRequestState extends PopupSearchFocusRequestDetail {
+  id: number
+}
+
+interface PopupViewStoreSnapshot {
+  autoAnalyzeStatus: PopupAutoAnalyzeStatusView
+  chrome: PopupChromeView
+  content: PopupContentChangeDetail
+  folderPickers: Record<PopupFolderPickerState['mode'], PopupFolderPickerState>
+  modals: PopupModalsView
+  savedSearches: PopupSavedSearchesView
+  searchChips: PopupSearchChipView[]
+  searchFocusRequest: PopupSearchFocusRequestState
+  smartClassifier: PopupSmartClassifierViewModel
+  toasts: PopupToast[]
+}
+
+interface PopupActionHandlers {
+  autoAnalyzeStatus?: (detail: PopupAutoAnalyzeStatusActionDetail) => void
+  chrome?: (detail: PopupChromeActionDetail) => void
+  content?: (detail: PopupContentActionDetail) => void
+  contentResultHover?: (detail: PopupContentResultHoverDetail) => void
+  folderPicker?: (detail: PopupFolderPickerActionDetail) => void
+  modal?: (detail: PopupModalActionDetail) => void
+  savedSearch?: (detail: PopupSavedSearchActionDetail) => void
+  smartClassifier?: (detail: PopupSmartClassifierActionDetail) => void
+  smartClassifierTitleChange?: (detail: PopupSmartClassifierTitleChangeDetail) => void
+  toast?: (detail: PopupToastActionDetail) => void
+}
+
+const popupViewStoreListeners = new Set<() => void>()
+const popupContentChangeListeners = new Set<(detail: PopupContentChangeDetail) => void>()
+let popupActionHandlers: PopupActionHandlers = {}
+
+let popupViewStoreSnapshot: PopupViewStoreSnapshot = {
+  autoAnalyzeStatus: EMPTY_POPUP_AUTO_ANALYZE_STATUS,
+  chrome: EMPTY_POPUP_CHROME_VIEW,
+  content: EMPTY_POPUP_CONTENT_CHANGE_DETAIL,
+  folderPickers: {
+    edit: getEmptyPopupFolderPickerState('edit'),
+    move: getEmptyPopupFolderPickerState('move'),
+    smart: getEmptyPopupFolderPickerState('smart')
+  },
+  modals: EMPTY_POPUP_MODALS_VIEW,
+  savedSearches: EMPTY_POPUP_SAVED_SEARCHES_VIEW,
+  searchChips: [],
+  searchFocusRequest: { id: 0, select: false },
+  smartClassifier: EMPTY_POPUP_SMART_CLASSIFIER,
+  toasts: EMPTY_POPUP_TOASTS
+}
+
+function subscribePopupViewStore(listener: () => void): () => void {
+  popupViewStoreListeners.add(listener)
+  return () => popupViewStoreListeners.delete(listener)
+}
+
+function emitPopupViewStoreChange(): void {
+  popupViewStoreListeners.forEach((listener) => listener())
+}
+
+function updatePopupViewStore(nextSnapshot: Partial<PopupViewStoreSnapshot>): void {
+  popupViewStoreSnapshot = {
+    ...popupViewStoreSnapshot,
+    ...nextSnapshot
+  }
+  emitPopupViewStoreChange()
+}
+
+export function subscribePopupContentChange(listener: (detail: PopupContentChangeDetail) => void): () => void {
+  popupContentChangeListeners.add(listener)
+  listener(popupViewStoreSnapshot.content)
+  return () => popupContentChangeListeners.delete(listener)
+}
+
+export function registerPopupActionHandlers(handlers: PopupActionHandlers): () => void {
+  popupActionHandlers = { ...popupActionHandlers, ...handlers }
+  return () => {
+    for (const key of Object.keys(handlers) as Array<keyof PopupActionHandlers>) {
+      if (popupActionHandlers[key] === handlers[key]) {
+        delete popupActionHandlers[key]
+      }
+    }
+  }
+}
+
+export function usePopupAutoAnalyzeStatusView(): PopupAutoAnalyzeStatusView {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.autoAnalyzeStatus,
+    () => EMPTY_POPUP_AUTO_ANALYZE_STATUS
+  )
+}
+
+export function usePopupChromeView(): PopupChromeView {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.chrome,
+    () => EMPTY_POPUP_CHROME_VIEW
+  )
+}
+
+export function usePopupFolderPickerState(mode: PopupFolderPickerState['mode']): PopupFolderPickerState {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.folderPickers[mode],
+    () => getEmptyPopupFolderPickerState(mode)
+  )
+}
+
+export function usePopupModalsView(): PopupModalsView {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.modals,
+    () => EMPTY_POPUP_MODALS_VIEW
+  )
+}
+
+export function usePopupSavedSearchesView(): PopupSavedSearchesView {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.savedSearches,
+    () => EMPTY_POPUP_SAVED_SEARCHES_VIEW
+  )
+}
+
+export function usePopupSearchChips(): PopupSearchChipView[] {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.searchChips,
+    () => []
+  )
+}
+
+export function usePopupSearchFocusRequest(): PopupSearchFocusRequestState {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.searchFocusRequest,
+    () => ({ id: 0, select: false })
+  )
+}
+
+export function usePopupSmartClassifierView(): PopupSmartClassifierViewModel {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.smartClassifier,
+    () => EMPTY_POPUP_SMART_CLASSIFIER
+  )
+}
+
+export function usePopupToasts(): PopupToast[] {
+  return useSyncExternalStore(
+    subscribePopupViewStore,
+    () => popupViewStoreSnapshot.toasts,
+    () => EMPTY_POPUP_TOASTS
+  )
+}
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupAutoAnalyzeStatusChangeDetail>(POPUP_AUTO_ANALYZE_STATUS_CHANGE_EVENT, {
-      detail: { state: { ...state } }
-    })
-  )
+  updatePopupViewStore({ autoAnalyzeStatus: { ...state } })
 }
 
 export function dispatchPopupAutoAnalyzeStatusAction(action: string): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupAutoAnalyzeStatusActionDetail>(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, {
-      detail: { action }
-    })
-  )
+  popupActionHandlers.autoAnalyzeStatus?.({ action })
 }
 
 export function dispatchPopupSearchChipsChange(chips: PopupSearchChipView[]): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSearchChipsChangeDetail>(POPUP_SEARCH_CHIPS_CHANGE_EVENT, {
-      detail: {
-        chips: chips.map((chip) => ({ ...chip }))
-      }
-    })
-  )
+  updatePopupViewStore({ searchChips: chips.map((chip) => ({ ...chip })) })
 }
 
 export function dispatchPopupSavedSearchesChange(state: PopupSavedSearchesView): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSavedSearchesChangeDetail>(POPUP_SAVED_SEARCHES_CHANGE_EVENT, {
-      detail: {
-        state: {
-          ...state,
-          items: state.items.map((item) => ({ ...item }))
-        }
-      }
-    })
-  )
+  updatePopupViewStore({
+    savedSearches: {
+      ...state,
+      items: state.items.map((item) => ({ ...item }))
+    }
+  })
 }
 
 export function dispatchPopupSavedSearchAction(action: string, searchId = ''): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSavedSearchActionDetail>(POPUP_SAVED_SEARCH_ACTION_EVENT, {
-      detail: { action, searchId }
-    })
-  )
+  popupActionHandlers.savedSearch?.({ action, searchId })
 }
 
 export function dispatchPopupContentChange(
   state: PopupContentViewModel,
   options: { preserveScroll?: boolean } = {}
 ): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupContentChangeDetail>(POPUP_CONTENT_CHANGE_EVENT, {
-      detail: {
-        preserveScroll: Boolean(options.preserveScroll),
-        state: { ...state }
-      }
-    })
-  )
+  const detail: PopupContentChangeDetail = {
+    preserveScroll: Boolean(options.preserveScroll),
+    state: { ...state }
+  }
+  popupViewStoreSnapshot = {
+    ...popupViewStoreSnapshot,
+    content: detail
+  }
+  emitPopupViewStoreChange()
+  popupContentChangeListeners.forEach((listener) => listener(detail))
 }
 
 export function dispatchPopupContentAction(detail: PopupContentActionDetail): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupContentActionDetail>(POPUP_CONTENT_ACTION_EVENT, {
-      detail: { ...detail }
-    })
-  )
+  popupActionHandlers.content?.({ ...detail })
 }
 
 export function dispatchPopupContentResultHover(index: number): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupContentResultHoverDetail>(POPUP_CONTENT_RESULT_HOVER_EVENT, {
-      detail: { index }
-    })
-  )
+  popupActionHandlers.contentResultHover?.({ index })
 }
 
 export function dispatchPopupSmartClassifierChange(state: PopupSmartClassifierViewModel): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSmartClassifierChangeDetail>(POPUP_SMART_CLASSIFIER_CHANGE_EVENT, {
-      detail: { state: { ...state } }
-    })
-  )
+  updatePopupViewStore({ smartClassifier: { ...state } })
 }
 
 export function dispatchPopupSmartClassifierAction(detail: PopupSmartClassifierActionDetail): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSmartClassifierActionDetail>(POPUP_SMART_CLASSIFIER_ACTION_EVENT, {
-      detail: { ...detail }
-    })
-  )
+  popupActionHandlers.smartClassifier?.({ ...detail })
 }
 
 export function dispatchPopupSmartClassifierTitleChange(title: string): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSmartClassifierTitleChangeDetail>(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, {
-      detail: { title }
-    })
-  )
+  popupActionHandlers.smartClassifierTitleChange?.({ title })
 }
 
 export function dispatchPopupFolderPickerChange(
   mode: PopupFolderPickerState['mode'],
   state: PopupFolderPickerState
 ): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupFolderPickerChangeDetail>(POPUP_FOLDER_PICKER_CHANGE_EVENT, {
-      detail: {
-        mode,
-        state: { ...state }
-      }
-    })
-  )
+  updatePopupViewStore({
+    folderPickers: {
+      ...popupViewStoreSnapshot.folderPickers,
+      [mode]: { ...state }
+    }
+  })
 }
 
 export function dispatchPopupFolderPickerAction(detail: PopupFolderPickerActionDetail): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupFolderPickerActionDetail>(POPUP_FOLDER_PICKER_ACTION_EVENT, {
-      detail: { ...detail }
-    })
-  )
+  popupActionHandlers.folderPicker?.({ ...detail })
 }
 
 export function dispatchPopupChromeChange(state: PopupChromeView): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupChromeChangeDetail>(POPUP_CHROME_CHANGE_EVENT, {
-      detail: { state: { ...state, search: { ...state.search } } }
-    })
-  )
+  updatePopupViewStore({ chrome: { ...state, search: { ...state.search } } })
 }
 
 export function dispatchPopupChromeAction(action: string, value?: string): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupChromeActionDetail>(POPUP_CHROME_ACTION_EVENT, {
-      detail: { action, value }
-    })
-  )
+  popupActionHandlers.chrome?.({ action, value })
 }
 
 export function dispatchPopupSearchFocusRequest(select = false): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupSearchFocusRequestDetail>(POPUP_SEARCH_FOCUS_REQUEST_EVENT, {
-      detail: { select }
-    })
-  )
+  updatePopupViewStore({
+    searchFocusRequest: {
+      id: popupViewStoreSnapshot.searchFocusRequest.id + 1,
+      select
+    }
+  })
 }
 
 export function dispatchPopupModalsChange(state: PopupModalsView): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupModalsChangeDetail>(POPUP_MODALS_CHANGE_EVENT, {
-      detail: { state: { ...state } }
-    })
-  )
+  updatePopupViewStore({ modals: { ...state } })
 }
 
 export function dispatchPopupModalAction(action: string, value?: string): void {
-  window.dispatchEvent(
-    new CustomEvent<PopupModalActionDetail>(POPUP_MODAL_ACTION_EVENT, {
-      detail: { action, value }
-    })
-  )
+  popupActionHandlers.modal?.({ action, value })
 }
 
 export function dispatchPopupToastsChange(toasts: PopupToast[]): void {
-  window.dispatchEvent(new CustomEvent<PopupToastChangeDetail>(POPUP_TOASTS_CHANGE_EVENT, {
-    detail: {
-      toasts: toasts.map((toast) => ({ ...toast }))
-    }
-  }))
+  updatePopupViewStore({ toasts: toasts.map((toast) => ({ ...toast })) })
 }
 
 export function dispatchPopupToastAction(toastId: string, action: string): void {
-  window.dispatchEvent(new CustomEvent<PopupToastActionDetail>(POPUP_TOAST_ACTION_EVENT, {
-    detail: { action, toastId }
-  }))
+  popupActionHandlers.toast?.({ action, toastId })
 }

@@ -99,16 +99,7 @@ import {
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
-  POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
-  POPUP_CHROME_ACTION_EVENT,
-  POPUP_CONTENT_ACTION_EVENT,
-  POPUP_CONTENT_RESULT_HOVER_EVENT,
-  POPUP_FOLDER_PICKER_ACTION_EVENT,
-  POPUP_MODAL_ACTION_EVENT,
-  POPUP_SAVED_SEARCH_ACTION_EVENT,
-  POPUP_SMART_CLASSIFIER_ACTION_EVENT,
-  POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT,
-  POPUP_TOAST_ACTION_EVENT,
+  registerPopupActionHandlers,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
   type PopupChromeActionDetail,
@@ -158,6 +149,7 @@ let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
 let popupRuntimeEventController: AbortController | null = null
+let unregisterPopupActionHandlers: (() => void) | null = null
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -227,17 +219,18 @@ export function startPopupRuntime(): () => void {
 }
 
 function bindEvents(signal: AbortSignal) {
-  window.addEventListener('popup:modal-close', closeDialogs, { signal })
-  window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
-  window.addEventListener(POPUP_CHROME_ACTION_EVENT, handleChromeActionEvent, { signal })
-  window.addEventListener(POPUP_CONTENT_ACTION_EVENT, handleContentActionEvent, { signal })
-  window.addEventListener(POPUP_CONTENT_RESULT_HOVER_EVENT, handleContentResultHoverEvent, { signal })
-  window.addEventListener(POPUP_FOLDER_PICKER_ACTION_EVENT, handleFolderPickerActionEvent, { signal })
-  window.addEventListener(POPUP_MODAL_ACTION_EVENT, handleModalActionEvent, { signal })
-  window.addEventListener(POPUP_SAVED_SEARCH_ACTION_EVENT, handleSavedSearchActionEvent, { signal })
-  window.addEventListener(POPUP_SMART_CLASSIFIER_ACTION_EVENT, handleSmartClassifierActionEvent, { signal })
-  window.addEventListener(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, handleSmartClassifierTitleChangeEvent, { signal })
-  window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
+  unregisterPopupActionHandlers = registerPopupActionHandlers({
+    autoAnalyzeStatus: handleAutoAnalyzeStatusAction,
+    chrome: handleChromeAction,
+    content: handleContentAction,
+    contentResultHover: handleContentResultHover,
+    folderPicker: handleFolderPickerAction,
+    modal: handleModalAction,
+    savedSearch: ({ action, searchId }) => handleSavedSearchAction(action, searchId),
+    smartClassifier: handleSmartClassifierAction,
+    smartClassifierTitleChange: handleSmartClassifierTitleChange,
+    toast: handleToastAction
+  })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
   document.addEventListener('keydown', handleDocumentKeydown, { signal })
 }
@@ -456,9 +449,8 @@ function handleAutoAnalyzeStorageChanged(
     void consumePopupCommandIntent(popupIntentChange.newValue)
   }
 }
-function handleAutoAnalyzeStatusAction(event: Event) {
-  const detail = (event as CustomEvent<PopupAutoAnalyzeStatusActionDetail>).detail
-  const action = detail?.action
+function handleAutoAnalyzeStatusAction(detail: PopupAutoAnalyzeStatusActionDetail) {
+  const action = detail.action
   if (action === 'toggle') {
     state.autoAnalyzeCollapsed = !state.autoAnalyzeCollapsed
     renderAutoAnalyzeStatus()
@@ -473,9 +465,8 @@ function handleAutoAnalyzeStatusAction(event: Event) {
   }
 }
 
-function handleChromeActionEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupChromeActionDetail>).detail
-  const action = String(detail?.action || '')
+function handleChromeAction(detail: PopupChromeActionDetail) {
+  const action = String(detail.action || '')
   if (action === 'open-settings') {
     void openSettingsPage()
     return
@@ -1038,6 +1029,8 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
 function cleanupPopupRuntime() {
   popupRuntimeEventController?.abort()
   popupRuntimeEventController = null
+  unregisterPopupActionHandlers?.()
+  unregisterPopupActionHandlers = null
   popupRuntimeStarted = false
   abortNaturalSearchRequest()
   chrome.storage?.onChanged?.removeListener?.(handleAutoAnalyzeStorageChanged)
@@ -2222,9 +2215,6 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
 }
 function renderModals() {
   const viewModel = getPopupModalsViewModel()
-  window.dispatchEvent(new CustomEvent('popup:modal-state', {
-    detail: { open: viewModel.open }
-  }))
   dispatchPopupModalsChange(viewModel)
 }
 
@@ -2637,11 +2627,6 @@ function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
 function renderToasts() {
   dispatchPopupToastsChange(state.toasts)
 }
-function handleSmartClassifierActionEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupSmartClassifierActionDetail>).detail
-  handleSmartClassifierAction(detail || { action: '' })
-}
-
 function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
   if (detail.action === 'saved-search') {
     handleSavedSearchAction(
@@ -2692,11 +2677,6 @@ function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
     saveSmartRecommendation()
   }
 }
-function handleSavedSearchActionEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupSavedSearchActionDetail>).detail
-  handleSavedSearchAction(detail?.action || '', detail?.searchId || '')
-}
-
 function handleSavedSearchAction(action: string, searchId: string) {
   if (action === 'toggle') {
     state.savedSearchesExpanded = !state.savedSearchesExpanded
@@ -2740,16 +2720,10 @@ function handleCurrentPageQuickAction(action) {
     void pinCurrentPageToNewTab(bookmarkId)
   }
 }
-function handleSmartClassifierTitleChangeEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupSmartClassifierTitleChangeDetail>).detail
-  state.smartSuggestedTitle = String(detail?.title || '')
+function handleSmartClassifierTitleChange(detail: PopupSmartClassifierTitleChangeDetail) {
+  state.smartSuggestedTitle = String(detail.title || '')
   state.smartSaved = false
 }
-function handleContentActionEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupContentActionDetail>).detail
-  handleContentAction(detail || { action: '' })
-}
-
 function handleContentAction(detail: PopupContentActionDetail) {
   if (detail.action === 'filter-folder') {
     const folderId = detail.folderId || ''
@@ -2826,19 +2800,17 @@ function handleEmptySearchAction(action) {
     focusSearchInput()
   }
 }
-function handleContentResultHoverEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupContentResultHoverDetail>).detail
+function handleContentResultHover(detail: PopupContentResultHoverDetail) {
   if (!state.debouncedQuery) {
     return
   }
-  const nextIndex = Number(detail?.index)
+  const nextIndex = Number(detail.index)
   if (!Number.isNaN(nextIndex)) {
     setActiveResultIndex(nextIndex)
   }
 }
-function handleFolderPickerActionEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupFolderPickerActionDetail>).detail
-  if (!detail?.mode || !detail.folderId) {
+function handleFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (!detail.mode || !detail.folderId) {
     return
   }
 
@@ -2853,10 +2825,9 @@ function handleFolderPickerActionEvent(event: Event) {
   handleEditFolderPickerAction(detail)
 }
 
-function handleModalActionEvent(event: Event) {
-  const detail = (event as CustomEvent<PopupModalActionDetail>).detail
-  const action = String(detail?.action || '')
-  const value = String(detail?.value || '')
+function handleModalAction(detail: PopupModalActionDetail) {
+  const action = String(detail.action || '')
+  const value = String(detail.value || '')
 
   if (action === 'close') {
     closeDialogs()
@@ -3032,8 +3003,7 @@ function isEditableTarget(target) {
   }
   return Boolean(target.closest('input, textarea, [contenteditable="true"]'))
 }
-function handleToastAction(event: Event) {
-  const detail = (event as CustomEvent<PopupToastActionDetail>).detail
+function handleToastAction(detail: PopupToastActionDetail) {
   const toastId = String(detail?.toastId || '')
   const action = String(detail?.action || '')
   dismissToast(toastId)
