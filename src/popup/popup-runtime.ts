@@ -76,7 +76,6 @@ import {
   shouldWarmPopupSnapshotFullText
 } from './search-index.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
-import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import {
   type PopupActionMenuViewModel,
@@ -206,7 +205,6 @@ export function startPopupRuntime(): () => void {
   const { signal } = popupRuntimeEventController
 
   perfMark('popup.domContentLoaded')
-  cacheDom()
   bindEvents(signal)
   render()
   perfMark('popup.firstRender')
@@ -2236,7 +2234,6 @@ function getActionMenuId(bookmarkId) {
 }
 function renderModals() {
   const viewModel = getPopupModalsViewModel()
-  syncPopupAppShellModalState(viewModel.open)
   window.dispatchEvent(new CustomEvent('popup:modal-state', {
     detail: { open: viewModel.open }
   }))
@@ -2464,18 +2461,6 @@ function isCurrentEditDraftDirty() {
       draftParentId: state.editDraftParentId
     }).dirty
   )
-}
-function syncPopupAppShellModalState(hasOpenModal) {
-  if (!dom.appShell) {
-    return
-  }
-  if (hasOpenModal) {
-    dom.appShell.setAttribute('aria-hidden', 'true')
-    dom.appShell.setAttribute('inert', '')
-    return
-  }
-  dom.appShell.setAttribute('aria-hidden', 'false')
-  dom.appShell.removeAttribute('inert')
 }
 function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)

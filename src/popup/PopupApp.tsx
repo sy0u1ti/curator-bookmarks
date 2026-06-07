@@ -73,7 +73,12 @@ function PopupShell() {
 
   return (
     <>
-      <main id="popup-app-shell" className="app-shell">
+      <main
+        id="popup-app-shell"
+        className="app-shell"
+        aria-hidden={modalOpen && !modalClosing ? 'true' : 'false'}
+        inert={modalOpen && !modalClosing}
+      >
         <PopupChromeHost>
           <PopupSmartClassifierHost />
         </PopupChromeHost>
