@@ -33,7 +33,7 @@ import {
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
-import { cancelExitMotion, closeWithExitMotion, getModalCloseDurationMs } from '../shared/motion.js'
+import { closeWithExitMotion } from '../shared/motion.js'
 import {
   buildBookmarkCatalogSnapshot,
   type BookmarkCatalogSnapshot
@@ -94,6 +94,7 @@ import {
   dispatchPopupAutoAnalyzeStatusChange,
   dispatchPopupContentChange,
   dispatchPopupFolderPickerChange,
+  dispatchPopupModalsChange,
   dispatchPopupSavedSearchesChange,
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
@@ -102,6 +103,7 @@ import {
   POPUP_CONTENT_ACTION_EVENT,
   POPUP_CONTENT_RESULT_HOVER_EVENT,
   POPUP_FOLDER_PICKER_ACTION_EVENT,
+  POPUP_MODAL_ACTION_EVENT,
   POPUP_SAVED_SEARCH_ACTION_EVENT,
   POPUP_SMART_CLASSIFIER_ACTION_EVENT,
   POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT,
@@ -111,6 +113,8 @@ import {
   type PopupContentActionDetail,
   type PopupContentResultHoverDetail,
   type PopupFolderPickerActionDetail,
+  type PopupModalActionDetail,
+  type PopupModalsView,
   type PopupSavedSearchActionDetail,
   type PopupSavedSearchesView,
   type PopupSearchChipView,
@@ -141,13 +145,6 @@ const POPUP_DEFAULT_WORKSPACE_STORAGE = {
 const DEFAULT_POPUP_PREFERENCES = {
   naturalSearchEnabled: false
 }
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])'
-].join(',')
 let popupDialogReturnFocusElement: HTMLElement | null = null
 let naturalSearchModulePromise: Promise<typeof import('./natural-search.js')> | null = null
 let naturalSearchAiModulePromise: Promise<typeof import('./natural-search-ai.js')> | null = null
@@ -241,45 +238,12 @@ function bindEvents(signal: AbortSignal) {
     showViewNotice('已清空搜索')
     dom.searchInput.focus()
   }, { signal })
-  dom.moveSearchInput.addEventListener('input', () => {
-    state.moveSearchQuery = dom.moveSearchInput.value
-    renderMoveModal()
-  }, { signal })
-  dom.closeMoveModal.addEventListener('click', closeDialogs, { signal })
-  dom.smartFolderSearchInput.addEventListener('input', () => {
-    state.smartFolderSearchQuery = dom.smartFolderSearchInput.value
-    renderSmartFolderModal()
-  }, { signal })
-  dom.closeSmartFolderModal.addEventListener('click', closeDialogs, { signal })
-  dom.closeAiProviderPrompt.addEventListener('click', closeDialogs, { signal })
-  dom.cancelAiProviderPrompt.addEventListener('click', closeDialogs, { signal })
-  dom.openAiProviderSettings.addEventListener('click', () => {
-    void openSettingsPage('ai-provider')
-  }, { signal })
-  dom.closeEditModal.addEventListener('click', closeDialogs, { signal })
-  dom.cancelEdit.addEventListener('click', closeDialogs, { signal })
-  dom.saveEdit.addEventListener('click', saveEditedBookmark, { signal })
-  dom.editFolderPickerButton.addEventListener('click', toggleEditFolderPicker, { signal })
-  dom.editFolderSearchInput.addEventListener('input', () => {
-    state.editFolderSearchQuery = dom.editFolderSearchInput.value
-    renderEditModal()
-  }, { signal })
-  dom.editTitleInput.addEventListener('input', handleEditDraftInput, { signal })
-  dom.editUrlInput.addEventListener('input', handleEditDraftInput, { signal })
-  dom.editTitleInput.addEventListener('keydown', handleEditInputKeydown, { signal })
-  dom.editUrlInput.addEventListener('keydown', handleEditInputKeydown, { signal })
-  dom.cancelDelete.addEventListener('click', closeDialogs, { signal })
-  dom.confirmDelete.addEventListener('click', confirmDeleteBookmark, { signal })
-  dom.modalBackdrop.addEventListener('click', (event) => {
-    if (event.target === dom.modalBackdrop) {
-      closeDialogs()
-    }
-  }, { signal })
   window.addEventListener('popup:modal-close', closeDialogs, { signal })
   window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
   window.addEventListener(POPUP_CONTENT_ACTION_EVENT, handleContentActionEvent, { signal })
   window.addEventListener(POPUP_CONTENT_RESULT_HOVER_EVENT, handleContentResultHoverEvent, { signal })
   window.addEventListener(POPUP_FOLDER_PICKER_ACTION_EVENT, handleFolderPickerActionEvent, { signal })
+  window.addEventListener(POPUP_MODAL_ACTION_EVENT, handleModalActionEvent, { signal })
   window.addEventListener(POPUP_SAVED_SEARCH_ACTION_EVENT, handleSavedSearchActionEvent, { signal })
   window.addEventListener(POPUP_SMART_CLASSIFIER_ACTION_EVENT, handleSmartClassifierActionEvent, { signal })
   window.addEventListener(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, handleSmartClassifierTitleChangeEvent, { signal })
@@ -1528,11 +1492,7 @@ function render() {
   renderToolbar()
   renderSmartClassifier()
   renderMainContent()
-  renderMoveModal()
-  renderSmartFolderModal()
-  renderAiProviderPromptModal()
-  renderEditModal()
-  renderDeleteModal()
+  renderModals()
   renderToasts()
 }
 function renderBanner() {
@@ -2270,74 +2230,102 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
 function getActionMenuId(bookmarkId) {
   return `popup-action-menu-${String(bookmarkId || '').replace(/[^a-zA-Z0-9_-]/g, '-')}`
 }
-function setPopupSurfaceOpen(element, open) {
-  if (!element) {
-    return
-  }
-  if (open) {
-    cancelExitMotion(element)
-    element.classList.remove('hidden', 'is-closing')
-    if (element.classList.contains('t-modal')) {
-      element.classList.remove('is-open')
-      window.requestAnimationFrame(() => {
-        if (!element.classList.contains('hidden') && !element.classList.contains('is-closing')) {
-          element.classList.add('is-open')
-        }
-      })
-    }
-    return
-  }
-  if (element.classList.contains('hidden') || element.classList.contains('is-closing')) {
-    return
-  }
-  element.classList.remove('is-open')
-  void closeWithExitMotion(element, 'is-closing', () => {
-    element.classList.add('hidden')
-  }, element.classList.contains('t-modal') || element.classList.contains('modal-backdrop')
-    ? getModalCloseDurationMs()
-    : 220)
+function renderModals() {
+  const viewModel = getPopupModalsViewModel()
+  syncPopupAppShellModalState(viewModel.open)
+  window.dispatchEvent(new CustomEvent('popup:modal-state', {
+    detail: { open: viewModel.open }
+  }))
+  dispatchPopupModalsChange(viewModel)
 }
-function renderMoveModal() {
+
+function getPopupModalsViewModel(): PopupModalsView {
+  return {
+    active: getActivePopupModal(),
+    aiProvider: getAiProviderPromptModalView(),
+    delete: getDeleteModalView(),
+    edit: getEditModalView(),
+    move: getMoveModalView(),
+    open: hasOpenModal(),
+    smartFolder: getSmartFolderModalView()
+  }
+}
+
+function getActivePopupModal(): PopupModalsView['active'] {
+  if (state.moveTargetBookmarkId) {
+    return 'move'
+  }
+  if (state.smartFolderPickerOpen) {
+    return 'smart-folder'
+  }
+  if (state.aiProviderPromptOpen) {
+    return 'ai-provider'
+  }
+  if (state.editTargetBookmarkId) {
+    return 'edit'
+  }
+  if (state.confirmDeleteBookmarkId) {
+    return 'delete'
+  }
+  return null
+}
+
+function getMoveModalView(): PopupModalsView['move'] {
   const bookmark = state.moveTargetBookmarkId
     ? state.bookmarkMap.get(state.moveTargetBookmarkId)
     : null
-  const isOpen = Boolean(bookmark)
-  setPopupSurfaceOpen(dom.moveModal, isOpen)
-  if (!isOpen) {
-    syncBackdropVisibility()
-    return
+  if (bookmark) {
+    dispatchPopupFolderPickerChange('move', getMoveFolderPickerState(bookmark))
   }
-  dom.moveBookmarkTitle.textContent = bookmark.title
-  dom.moveBookmarkPath.textContent = formatBookmarkPath(bookmark.path) || '未归档路径'
-  dom.moveSearchInput.value = state.moveSearchQuery
-  dispatchPopupFolderPickerChange('move', getMoveFolderPickerState(bookmark))
-  syncBackdropVisibility()
-}
-function renderSmartFolderModal() {
-  setPopupSurfaceOpen(dom.smartFolderModal, state.smartFolderPickerOpen)
-  if (!state.smartFolderPickerOpen) {
-    syncBackdropVisibility()
-    return
+  return {
+    open: Boolean(bookmark),
+    path: bookmark ? formatBookmarkPath(bookmark.path) || '未归档路径' : '',
+    query: state.moveSearchQuery,
+    title: bookmark?.title || ''
   }
-  dom.smartFolderPageTitle.textContent = state.smartSuggestedTitle || getCurrentPageTitle()
-  dom.smartFolderPageUrl.textContent = getSmartFolderTargetPathLabel()
-  dom.smartFolderSearchInput.value = state.smartFolderSearchQuery
-  dispatchPopupFolderPickerChange('smart', getSmartFolderPickerState())
-  syncBackdropVisibility()
 }
-function renderAiProviderPromptModal() {
-  setPopupSurfaceOpen(dom.aiProviderPromptModal, state.aiProviderPromptOpen)
-  syncBackdropVisibility()
+
+function getSmartFolderModalView(): PopupModalsView['smartFolder'] {
+  if (state.smartFolderPickerOpen) {
+    dispatchPopupFolderPickerChange('smart', getSmartFolderPickerState())
+  }
+  return {
+    open: state.smartFolderPickerOpen,
+    query: state.smartFolderSearchQuery,
+    title: state.smartSuggestedTitle || getCurrentPageTitle(),
+    urlLabel: getSmartFolderTargetPathLabel()
+  }
 }
-function renderEditModal() {
+
+function getAiProviderPromptModalView(): PopupModalsView['aiProvider'] {
+  return {
+    open: state.aiProviderPromptOpen
+  }
+}
+
+function getEditModalView(): PopupModalsView['edit'] {
   const bookmark = state.editTargetBookmarkId
     ? state.bookmarkMap.get(state.editTargetBookmarkId)
     : null
-  const isOpen = Boolean(bookmark)
-  setPopupSurfaceOpen(dom.editModal, isOpen)
-  if (!isOpen) {
-    syncBackdropVisibility()
-    return
+  const open = Boolean(bookmark)
+  if (!bookmark) {
+    return {
+      cancelDisabled: false,
+      closeDisabled: false,
+      dirty: false,
+      folderPickerOpen: false,
+      folderQuery: '',
+      folderSearchDisabled: false,
+      open,
+      path: '',
+      pathChanged: false,
+      saveDisabled: true,
+      saveLabel: '未修改',
+      title: '',
+      titleDisabled: false,
+      url: '',
+      urlDisabled: false
+    }
   }
   if (state.editDraftBookmarkId !== bookmark.id) {
     resetEditDraft(bookmark)
@@ -2346,49 +2334,54 @@ function renderEditModal() {
   const draftPath = draftFolder
     ? formatFolderPath(draftFolder, state.folderMap) || draftFolder.title
     : bookmark.path || '未归档路径'
-  dom.editBookmarkPath.textContent = draftPath || '未归档路径'
-  dom.editBookmarkPath.classList.toggle('changed', state.editDraftParentId !== String(bookmark.parentId || ''))
-  dom.editFolderPickerButton.disabled = state.editSaving
-  dom.editFolderPickerButton.textContent = state.editFolderPickerOpen ? '收起' : '更改'
-  dom.editFolderPickerButton.setAttribute('aria-expanded', String(state.editFolderPickerOpen))
-  setPopupSurfaceOpen(dom.editFolderPicker, state.editFolderPickerOpen)
-  dom.editFolderSearchInput.value = state.editFolderSearchQuery
-  dispatchPopupFolderPickerChange(
-    'edit',
-    state.editFolderPickerOpen
-      ? getEditFolderPickerState(bookmark)
-      : {
-          empty: null,
-          mode: 'edit',
-          query: '',
-          treeOptions: []
-        }
-  )
-  if (dom.editTitleInput.value !== state.editDraftTitle) {
-    dom.editTitleInput.value = state.editDraftTitle
+  if (open) {
+    dispatchPopupFolderPickerChange(
+      'edit',
+      state.editFolderPickerOpen
+        ? getEditFolderPickerState(bookmark)
+        : {
+            empty: null,
+            mode: 'edit',
+            query: '',
+            treeOptions: []
+          }
+    )
   }
-  if (dom.editUrlInput.value !== state.editDraftUrl) {
-    dom.editUrlInput.value = state.editDraftUrl
+  const bookmarkId = state.editTargetBookmarkId || state.editDraftBookmarkId
+  const saving = state.editSaving || isPopupActionPending('edit', bookmarkId || '')
+  const dirty = Boolean(state.editDraftDirty)
+  return {
+    cancelDisabled: saving,
+    closeDisabled: saving,
+    dirty,
+    folderPickerOpen: state.editFolderPickerOpen,
+    folderQuery: state.editFolderSearchQuery,
+    folderSearchDisabled: saving,
+    open,
+    path: draftPath || '未归档路径',
+    pathChanged: state.editDraftParentId !== String(bookmark.parentId || ''),
+    saveDisabled: saving || !dirty,
+    saveLabel: saving ? '保存中…' : dirty ? '保存' : '未修改',
+    title: state.editDraftTitle,
+    titleDisabled: saving,
+    url: state.editDraftUrl,
+    urlDisabled: saving
   }
-  renderEditDraftControls()
-  syncBackdropVisibility()
 }
-function renderDeleteModal() {
+
+function getDeleteModalView(): PopupModalsView['delete'] {
   const bookmark = state.confirmDeleteBookmarkId
     ? state.bookmarkMap.get(state.confirmDeleteBookmarkId)
     : null
-  const isOpen = Boolean(bookmark)
-  setPopupSurfaceOpen(dom.deleteModal, isOpen)
-  if (!isOpen) {
-    syncBackdropVisibility()
-    return
+  const deleting = bookmark ? isPopupActionPending('delete', bookmark.id) : false
+  return {
+    cancelDisabled: deleting,
+    confirmDisabled: deleting,
+    confirmLabel: deleting ? '删除中…' : '删除',
+    open: Boolean(bookmark),
+    path: bookmark?.path || '未归档路径',
+    title: bookmark?.title || ''
   }
-  dom.deleteBookmarkTitle.textContent = bookmark.title
-  dom.deleteBookmarkPath.textContent = bookmark.path || '未归档路径'
-  dom.cancelDelete.disabled = isPopupActionPending('delete', bookmark.id)
-  dom.confirmDelete.disabled = isPopupActionPending('delete', bookmark.id)
-  dom.confirmDelete.textContent = isPopupActionPending('delete', bookmark.id) ? '删除中…' : '删除'
-  syncBackdropVisibility()
 }
 function resetEditDraft(bookmark) {
   clearEditDiscardGuard()
@@ -2412,16 +2405,19 @@ function clearEditDraft() {
   state.editDraftDirty = false
   state.editSaving = false
 }
-function handleEditDraftInput() {
+function updateEditDraftField(field: 'title' | 'url', value: string) {
   if (!state.editTargetBookmarkId || state.editSaving) {
     return
   }
   state.editDraftBookmarkId = String(state.editTargetBookmarkId)
-  state.editDraftTitle = dom.editTitleInput.value
-  state.editDraftUrl = dom.editUrlInput.value
+  if (field === 'title') {
+    state.editDraftTitle = value
+  } else {
+    state.editDraftUrl = value
+  }
   state.editDraftDirty = isCurrentEditDraftDirty()
   clearEditDiscardGuard()
-  renderEditDraftControls()
+  renderModals()
 }
 function clearEditDiscardGuard() {
   if (state.editDiscardTimer) {
@@ -2464,36 +2460,6 @@ function isCurrentEditDraftDirty() {
       draftParentId: state.editDraftParentId
     }).dirty
   )
-}
-function renderEditDraftControls() {
-  if (!dom.saveEdit) {
-    return
-  }
-  const bookmarkId = state.editTargetBookmarkId || state.editDraftBookmarkId
-  const saving = state.editSaving || isPopupActionPending('edit', bookmarkId || '')
-  const dirty = Boolean(state.editDraftDirty)
-  dom.saveEdit.disabled = saving || !dirty
-  dom.saveEdit.textContent = saving ? '保存中…' : dirty ? '保存' : '未修改'
-  dom.cancelEdit.disabled = saving
-  dom.closeEditModal.disabled = saving
-  dom.editTitleInput.disabled = saving
-  dom.editUrlInput.disabled = saving
-  dom.editFolderSearchInput.disabled = saving
-}
-function syncBackdropVisibility() {
-  const hasOpenModal = Boolean(
-    state.moveTargetBookmarkId ||
-      state.smartFolderPickerOpen ||
-      state.aiProviderPromptOpen ||
-      state.editTargetBookmarkId ||
-      state.confirmDeleteBookmarkId
-  )
-  syncPopupAppShellModalState(hasOpenModal)
-  dom.modalBackdrop.setAttribute('aria-hidden', String(!hasOpenModal))
-  setPopupSurfaceOpen(dom.modalBackdrop, hasOpenModal)
-  window.dispatchEvent(new CustomEvent('popup:modal-state', {
-    detail: { open: hasOpenModal }
-  }))
 }
 function syncPopupAppShellModalState(hasOpenModal) {
   if (!dom.appShell) {
@@ -2919,6 +2885,56 @@ function handleFolderPickerActionEvent(event: Event) {
   handleEditFolderPickerAction(detail)
 }
 
+function handleModalActionEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupModalActionDetail>).detail
+  const action = String(detail?.action || '')
+  const value = String(detail?.value || '')
+
+  if (action === 'close') {
+    closeDialogs()
+    return
+  }
+  if (action === 'open-ai-settings') {
+    closeDialogs({ force: true })
+    void openSettingsPage('ai-provider')
+    return
+  }
+  if (action === 'move-query-change') {
+    state.moveSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'smart-folder-query-change') {
+    state.smartFolderSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'edit-folder-query-change') {
+    state.editFolderSearchQuery = value
+    renderModals()
+    return
+  }
+  if (action === 'edit-title-change') {
+    updateEditDraftField('title', value)
+    return
+  }
+  if (action === 'edit-url-change') {
+    updateEditDraftField('url', value)
+    return
+  }
+  if (action === 'edit-toggle-folder-picker') {
+    toggleEditFolderPicker()
+    return
+  }
+  if (action === 'save-edit') {
+    void saveEditedBookmark()
+    return
+  }
+  if (action === 'confirm-delete') {
+    void confirmDeleteBookmark()
+  }
+}
+
 function handleMoveFolderPickerAction(detail: PopupFolderPickerActionDetail) {
   if (detail.action === 'toggle' && !state.moveSearchQuery.trim()) {
     toggleMoveFolder(detail.folderId)
@@ -2932,7 +2948,6 @@ function handleMoveFolderPickerAction(detail: PopupFolderPickerActionDetail) {
 function handleSmartFolderPickerAction(detail: PopupFolderPickerActionDetail) {
   if (detail.action === 'toggle' && !state.smartFolderSearchQuery.trim()) {
     toggleMoveFolder(detail.folderId)
-    renderSmartFolderModal()
     return
   }
   if (detail.action === 'select') {
@@ -2943,7 +2958,6 @@ function handleSmartFolderPickerAction(detail: PopupFolderPickerActionDetail) {
 function handleEditFolderPickerAction(detail: PopupFolderPickerActionDetail) {
   if (detail.action === 'toggle' && !state.editFolderSearchQuery.trim()) {
     toggleMoveFolder(detail.folderId)
-    renderEditModal()
     return
   }
   if (detail.action === 'select') {
@@ -2958,12 +2972,7 @@ function toggleEditFolderPicker() {
   if (!state.editFolderPickerOpen) {
     state.editFolderSearchQuery = ''
   }
-  renderEditModal()
-  if (state.editFolderPickerOpen) {
-    window.requestAnimationFrame(() => {
-      dom.editFolderSearchInput.focus()
-    })
-  }
+  renderModals()
 }
 function selectEditDraftFolder(folderId) {
   const bookmark = state.editTargetBookmarkId
@@ -2978,7 +2987,7 @@ function selectEditDraftFolder(folderId) {
   state.editFolderSearchQuery = ''
   state.editDraftDirty = isCurrentEditDraftDirty()
   clearEditDiscardGuard()
-  renderEditModal()
+  renderModals()
 }
 function openActionMenuFromToggle(bookmarkId, { focusLast = false } = {}) {
   if (!bookmarkId) {
@@ -3021,9 +3030,6 @@ function handleDocumentPointerDown(event) {
 }
 function handleDocumentKeydown(event) {
   if (event.isComposing) {
-    return
-  }
-  if (event.key === 'Tab' && handleModalFocusTrap(event)) {
     return
   }
   if (event.key === 'Escape') {
@@ -3169,58 +3175,6 @@ function focusActionMenuItem(index) {
 function getActionMenuItems() {
   return [...document.querySelectorAll<HTMLButtonElement>('.action-menu [data-menu-action]')]
 }
-function handleModalFocusTrap(event) {
-  const modal = getOpenModalElement()
-  if (!modal) {
-    return false
-  }
-  const focusableElements = getFocusableElements(modal)
-  const firstElement = focusableElements[0] || modal
-  const lastElement = focusableElements[focusableElements.length - 1] || modal
-  const activeElement = document.activeElement
-  if (!modal.contains(activeElement)) {
-    event.preventDefault()
-    ;(event.shiftKey ? lastElement : firstElement).focus()
-    return true
-  }
-  if (event.shiftKey && activeElement === firstElement) {
-    event.preventDefault()
-    lastElement.focus()
-    return true
-  }
-  if (!event.shiftKey && activeElement === lastElement) {
-    event.preventDefault()
-    firstElement.focus()
-    return true
-  }
-  return false
-}
-function getOpenModalElement() {
-  const modal = [
-    dom.moveModal,
-    dom.smartFolderModal,
-    dom.aiProviderPromptModal,
-    dom.editModal,
-    dom.deleteModal
-  ].find((element) => element instanceof HTMLElement && !element.classList.contains('hidden'))
-  return modal instanceof HTMLElement ? modal : null
-}
-function getFocusableElements(container) {
-  return [...container.querySelectorAll(FOCUSABLE_SELECTOR)].filter((element) => {
-    if (!(element instanceof HTMLElement)) {
-      return false
-    }
-    return !element.hasAttribute('disabled') &&
-      !element.getAttribute('aria-hidden') &&
-      element.getClientRects().length > 0
-  })
-}
-function handleEditInputKeydown(event) {
-  if (event.key === 'Enter') {
-    event.preventDefault()
-    void saveEditedBookmark()
-  }
-}
 function handleToastAction(event: Event) {
   const detail = (event as CustomEvent<PopupToastActionDetail>).detail
   const toastId = String(detail?.toastId || '')
@@ -3260,7 +3214,7 @@ function toggleMoveFolder(folderId) {
   } else {
     state.moveExpandedFolders.add(folderId)
   }
-  renderMoveModal()
+  renderModals()
 }
 function openMoveDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
@@ -3276,9 +3230,6 @@ function openMoveDialog(bookmarkId) {
   state.moveTargetBookmarkId = bookmarkId
   state.moveSearchQuery = ''
   render()
-  window.requestAnimationFrame(() => {
-    dom.moveSearchInput.focus()
-  })
 }
 function openEditDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
@@ -3298,10 +3249,6 @@ function openEditDialog(bookmarkId) {
   state.editTargetBookmarkId = bookmarkId
   resetEditDraft(bookmark)
   render()
-  window.requestAnimationFrame(() => {
-    dom.editTitleInput.focus()
-    dom.editTitleInput.select()
-  })
 }
 function openDeleteDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
@@ -3316,9 +3263,6 @@ function openDeleteDialog(bookmarkId) {
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = bookmarkId
   render()
-  window.requestAnimationFrame(() => {
-    dom.cancelDelete.focus()
-  })
 }
 function closeDialogs(options: { force?: boolean } | Event = {}) {
   const force = (options as { force?: boolean })?.force === true
@@ -3377,9 +3321,6 @@ function openSmartFolderDialog() {
   state.smartFolderPickerOpen = true
   state.smartFolderSearchQuery = ''
   render()
-  window.requestAnimationFrame(() => {
-    dom.smartFolderSearchInput.focus()
-  })
 }
 function openAiProviderPromptDialog() {
   if (hasBlockingPopupActionPending()) {
@@ -3396,9 +3337,6 @@ function openAiProviderPromptDialog() {
   state.confirmDeleteBookmarkId = null
   state.aiProviderPromptOpen = true
   render()
-  window.requestAnimationFrame(() => {
-    dom.openAiProviderSettings.focus()
-  })
 }
 function rememberDialogReturnFocus(preferredElement = null) {
   const activeElement = document.activeElement
@@ -3644,7 +3582,7 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
 }
 function renderSmartSaveSurfaces() {
   renderSmartClassifier()
-  renderSmartFolderModal()
+  renderModals()
 }
 async function pinCurrentPageToNewTab(bookmarkId) {
   const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
@@ -3749,7 +3687,7 @@ async function moveBookmarkToFolder(folderId) {
   }
   const movedTitle = bookmark.title
   setPopupActionPending('move', bookmark.id, true)
-  renderMoveModal()
+  renderModals()
   try {
     await moveBookmark(bookmark.id, folderId)
     showToast({
@@ -3766,7 +3704,7 @@ async function moveBookmarkToFolder(folderId) {
     })
   } finally {
     setPopupActionPending('move', bookmark.id, false)
-    renderMoveModal()
+    renderModals()
   }
 }
 async function saveEditedBookmark() {
@@ -3776,8 +3714,8 @@ async function saveEditedBookmark() {
   if (!bookmark || state.editSaving || isPopupActionPending('edit', bookmark?.id || '')) {
     return
   }
-  const nextTitle = String(state.editDraftTitle || dom.editTitleInput.value).trim() || '未命名书签'
-  const nextUrl = String(state.editDraftUrl || dom.editUrlInput.value).trim()
+  const nextTitle = String(state.editDraftTitle).trim() || '未命名书签'
+  const nextUrl = String(state.editDraftUrl).trim()
   const savePlan = getPopupEditBookmarkSavePlan({
     bookmark,
     draftTitle: nextTitle,
@@ -3786,7 +3724,7 @@ async function saveEditedBookmark() {
   })
   state.editDraftDirty = savePlan.dirty
   if (!state.editDraftDirty) {
-    renderEditDraftControls()
+    renderModals()
     return
   }
   if (!nextUrl) {
@@ -3794,7 +3732,6 @@ async function saveEditedBookmark() {
       type: 'error',
       message: '网址不能为空'
     })
-    dom.editUrlInput.focus()
     return
   }
   try {
@@ -3804,12 +3741,11 @@ async function saveEditedBookmark() {
       type: 'error',
       message: '请输入有效的网址'
     })
-    dom.editUrlInput.focus()
     return
   }
   state.editSaving = true
   setPopupActionPending('edit', bookmark.id, true)
-  renderEditDraftControls()
+  renderModals()
   try {
     if (savePlan.updateChanges) {
       await updateBookmark(bookmark.id, savePlan.updateChanges)
@@ -3834,7 +3770,7 @@ async function saveEditedBookmark() {
   } finally {
     state.editSaving = false
     setPopupActionPending('edit', bookmark.id, false)
-    renderEditDraftControls()
+    renderModals()
   }
 }
 async function confirmDeleteBookmark() {
@@ -3845,7 +3781,7 @@ async function confirmDeleteBookmark() {
     return
   }
   setPopupActionPending('delete', bookmark.id, true)
-  renderDeleteModal()
+  renderModals()
   try {
     const recycleBin = await loadRecycleBinModule()
     state.lastDeletedBookmark = {
@@ -3882,7 +3818,7 @@ async function confirmDeleteBookmark() {
     })
   } finally {
     setPopupActionPending('delete', bookmark.id, false)
-    renderDeleteModal()
+    renderModals()
   }
 }
 async function undoDelete() {
@@ -4360,6 +4296,7 @@ function hasOpenModal() {
   return Boolean(
     state.moveTargetBookmarkId ||
       state.smartFolderPickerOpen ||
+      state.aiProviderPromptOpen ||
       state.editTargetBookmarkId ||
       state.confirmDeleteBookmarkId
   )

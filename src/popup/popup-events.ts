@@ -97,6 +97,60 @@ export interface PopupFolderPickerActionDetail {
   mode: PopupFolderPickerState['mode']
 }
 
+export interface PopupModalsView {
+  active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | 'delete' | null
+  aiProvider: {
+    open: boolean
+  }
+  delete: {
+    cancelDisabled: boolean
+    confirmDisabled: boolean
+    confirmLabel: string
+    open: boolean
+    path: string
+    title: string
+  }
+  edit: {
+    cancelDisabled: boolean
+    closeDisabled: boolean
+    dirty: boolean
+    folderPickerOpen: boolean
+    folderQuery: string
+    folderSearchDisabled: boolean
+    open: boolean
+    path: string
+    pathChanged: boolean
+    saveDisabled: boolean
+    saveLabel: string
+    title: string
+    titleDisabled: boolean
+    url: string
+    urlDisabled: boolean
+  }
+  move: {
+    open: boolean
+    path: string
+    query: string
+    title: string
+  }
+  open: boolean
+  smartFolder: {
+    open: boolean
+    query: string
+    title: string
+    urlLabel: string
+  }
+}
+
+export interface PopupModalsChangeDetail {
+  state: PopupModalsView
+}
+
+export interface PopupModalActionDetail {
+  action: string
+  value?: string
+}
+
 export interface PopupToastChangeDetail {
   toasts: PopupToast[]
 }
@@ -121,6 +175,8 @@ export const POPUP_SMART_CLASSIFIER_ACTION_EVENT = 'popup:smart-classifier-actio
 export const POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT = 'popup:smart-classifier-title-change'
 export const POPUP_FOLDER_PICKER_CHANGE_EVENT = 'popup:folder-picker-change'
 export const POPUP_FOLDER_PICKER_ACTION_EVENT = 'popup:folder-picker-action'
+export const POPUP_MODALS_CHANGE_EVENT = 'popup:modals-change'
+export const POPUP_MODAL_ACTION_EVENT = 'popup:modal-action'
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
   window.dispatchEvent(
@@ -241,6 +297,22 @@ export function dispatchPopupFolderPickerAction(detail: PopupFolderPickerActionD
   window.dispatchEvent(
     new CustomEvent<PopupFolderPickerActionDetail>(POPUP_FOLDER_PICKER_ACTION_EVENT, {
       detail: { ...detail }
+    })
+  )
+}
+
+export function dispatchPopupModalsChange(state: PopupModalsView): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupModalsChangeDetail>(POPUP_MODALS_CHANGE_EVENT, {
+      detail: { state: { ...state } }
+    })
+  )
+}
+
+export function dispatchPopupModalAction(action: string, value?: string): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupModalActionDetail>(POPUP_MODAL_ACTION_EVENT, {
+      detail: { action, value }
     })
   )
 }

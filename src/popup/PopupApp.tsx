@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
+import { Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
 import { getModalCloseDurationMs } from '../shared/motion'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupContentHost } from './components/PopupContentHost'
-import { PopupFolderPickerHost } from './components/PopupFolderPickerHost'
+import { PopupModalsHost } from './components/PopupModalsHost'
 import { PopupSavedSearches } from './components/PopupSavedSearches'
 import { PopupSearchChips } from './components/PopupSearchChips'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
@@ -31,38 +31,6 @@ export function PopupApp() {
     <ThemeProvider>
       <PopupShell />
     </ThemeProvider>
-  )
-}
-
-function FolderSearch({
-  htmlFor,
-  inputId,
-  placeholder,
-  label,
-  controls
-}: {
-  htmlFor: string
-  inputId: string
-  placeholder: string
-  label: string
-  controls: string
-}) {
-  return (
-    <label className="cb-search modal-search" htmlFor={htmlFor}>
-      <Icon name="Search" className="cb-search__icon" size={16} aria-hidden="true" />
-      <Input
-        id={inputId}
-        className="cb-search__input"
-        type="text"
-        role="searchbox"
-        spellCheck={false}
-        autoComplete="off"
-        placeholder={placeholder}
-        aria-label={label}
-        aria-controls={controls}
-        unstyled
-      />
-    </label>
   )
 }
 
@@ -238,132 +206,7 @@ function PopupShell() {
         disablePointerDismissal
         portalContainer={modalPortalContainer ?? undefined}
       >
-        <div
-          className="popup-modal-stack"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              window.dispatchEvent(new CustomEvent('popup:modal-close'))
-            }
-          }}
-        >
-        <section id="move-modal" className="modal-card t-modal hidden" aria-labelledby="move-modal-title" tabIndex={-1}>
-          <header className="modal-header">
-            <div>
-              <p className="modal-eyebrow">移动书签</p>
-              <h2 id="move-modal-title">选择目标文件夹</h2>
-            </div>
-            <Button id="close-move-modal" className="icon-button ghost" type="button" aria-label="关闭移动面板" unstyled>
-              关闭
-            </Button>
-          </header>
-          <div className="modal-bookmark-card">
-            <p className="modal-card-label">当前书签</p>
-            <p id="move-bookmark-title" className="modal-card-title"></p>
-            <p id="move-bookmark-path" className="modal-card-path"></p>
-          </div>
-          <FolderSearch htmlFor="move-search-input" inputId="move-search-input" placeholder="搜索目标文件夹" label="搜索移动目标文件夹" controls="move-folder-list" />
-          <PopupFolderPickerHost id="move-folder-list" className="modal-list" mode="move" />
-        </section>
-
-        <section id="smart-folder-modal" className="modal-card t-modal hidden" aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
-          <header className="modal-header">
-            <div>
-              <p className="modal-eyebrow">当前网页</p>
-              <h2 id="smart-folder-modal-title">选择保存文件夹</h2>
-            </div>
-            <Button id="close-smart-folder-modal" className="icon-button ghost" type="button" aria-label="关闭文件夹选择" unstyled>
-              关闭
-            </Button>
-          </header>
-          <div className="modal-bookmark-card">
-            <p className="modal-card-label">即将保存</p>
-            <p id="smart-folder-page-title" className="modal-card-title"></p>
-            <p id="smart-folder-page-url" className="modal-card-path"></p>
-          </div>
-          <FolderSearch htmlFor="smart-folder-search-input" inputId="smart-folder-search-input" placeholder="搜索目标文件夹" label="搜索保存目标文件夹" controls="smart-folder-list" />
-          <PopupFolderPickerHost id="smart-folder-list" className="modal-list" mode="smart" />
-        </section>
-
-        <section id="ai-provider-prompt-modal" className="modal-card t-modal small hidden" aria-labelledby="ai-provider-prompt-title" tabIndex={-1}>
-          <header className="modal-header compact">
-            <div>
-              <p className="modal-eyebrow">AI 搜索</p>
-              <h2 id="ai-provider-prompt-title">请配置 AI 渠道</h2>
-            </div>
-            <Button id="close-ai-provider-prompt" className="icon-button ghost" type="button" aria-label="关闭 AI 渠道配置提示" unstyled>
-              关闭
-            </Button>
-          </header>
-          <AiSetupPrompt
-            className="modal-ai-setup-prompt"
-            description="普通搜索已包含本地规则。语义搜索需要先配置 AI 渠道。"
-            descriptionClassName="modal-note"
-            titleClassName="sr-only"
-            title="AI 渠道配置提示"
-          />
-          <footer className="modal-actions">
-            <Button id="cancel-ai-provider-prompt" className="secondary-button" type="button" unstyled>暂不配置</Button>
-            <Button id="open-ai-provider-settings" className="secondary-button primary-button" type="button" unstyled>配置 AI 渠道</Button>
-          </footer>
-        </section>
-
-        <section id="edit-modal" className="modal-card t-modal hidden" aria-labelledby="edit-modal-title" tabIndex={-1}>
-          <header className="modal-header">
-            <div>
-              <p className="modal-eyebrow">编辑书签</p>
-              <h2 id="edit-modal-title">修改标题与网址</h2>
-            </div>
-            <Button id="close-edit-modal" className="icon-button ghost" type="button" aria-label="关闭编辑面板" unstyled>
-              关闭
-            </Button>
-          </header>
-          <div className="modal-bookmark-card">
-            <p className="modal-card-label">来源路径</p>
-            <div className="modal-path-row">
-              <p id="edit-bookmark-path" className="modal-card-path"></p>
-              <Button id="edit-folder-picker-button" className="secondary-button compact" type="button" aria-expanded="false" aria-controls="edit-folder-picker" unstyled>
-                更改
-              </Button>
-            </div>
-          </div>
-          <section id="edit-folder-picker" className="edit-folder-picker hidden" aria-label="选择新的来源路径">
-            <FolderSearch htmlFor="edit-folder-search-input" inputId="edit-folder-search-input" placeholder="搜索目标文件夹" label="搜索编辑目标文件夹" controls="edit-folder-list" />
-            <PopupFolderPickerHost id="edit-folder-list" className="modal-list compact" mode="edit" />
-          </section>
-          <div className="modal-form">
-            <label className="modal-field" htmlFor="edit-title-input">
-              <span className="modal-label">标题</span>
-              <Input id="edit-title-input" className="modal-input" type="text" spellCheck={false} maxLength={512} unstyled />
-            </label>
-            <label className="modal-field" htmlFor="edit-url-input">
-              <span className="modal-label">网址</span>
-              <Input id="edit-url-input" className="modal-input" type="url" spellCheck={false} inputMode="url" unstyled />
-            </label>
-          </div>
-          <footer className="modal-actions">
-            <Button id="cancel-edit" className="secondary-button" type="button" unstyled>取消</Button>
-            <Button id="save-edit" className="secondary-button primary-button" type="button" unstyled>保存</Button>
-          </footer>
-        </section>
-
-        <section id="delete-modal" className="modal-card t-modal small hidden" aria-labelledby="delete-modal-title" tabIndex={-1}>
-          <header className="modal-header compact">
-            <div>
-              <p className="modal-eyebrow danger">删除确认</p>
-              <h2 id="delete-modal-title">确认删除该书签？</h2>
-            </div>
-          </header>
-          <div className="modal-bookmark-card">
-            <p className="modal-card-label">即将删除</p>
-            <p id="delete-bookmark-title" className="modal-card-title"></p>
-            <p id="delete-bookmark-path" className="modal-card-path"></p>
-          </div>
-          <footer className="modal-actions">
-            <Button id="cancel-delete" className="secondary-button" type="button" unstyled>取消</Button>
-            <Button id="confirm-delete" className="danger-button" type="button" unstyled>删除</Button>
-          </footer>
-        </section>
-        </div>
+        <PopupModalsHost />
       </DialogOverlay>
 
       <PopupToasts />
