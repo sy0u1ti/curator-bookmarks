@@ -13,7 +13,6 @@ import {
   findNodeById
 } from '../shared/bookmark-tree.js'
 import {
-  buildBookmarkPathSegments,
   formatBookmarkPath,
   formatFolderPath
 } from '../shared/bookmark-path.js'
@@ -34,7 +33,7 @@ import {
 import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
-import { cancelExitMotion, closeWithExitMotion } from '../shared/motion.js'
+import { cancelExitMotion, closeWithExitMotion, getModalCloseDurationMs } from '../shared/motion.js'
 import {
   buildBookmarkCatalogSnapshot,
   type BookmarkCatalogSnapshot
@@ -81,22 +80,20 @@ import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import {
   renderPopupAutoAnalyzeStatusIsland,
-  renderPopupBreadcrumbsIsland,
   renderPopupContentIsland,
-  renderPopupEmptyStateIsland,
   renderPopupFolderPickerIsland,
-  renderPopupLoadingStateIsland,
   renderPopupSavedSearchesIsland,
   renderPopupSearchChipsIsland,
   renderPopupSmartClassifierIsland,
   renderPopupToastsIsland,
   type PopupActionMenuViewModel,
   type PopupAutoAnalyzeStatusState,
-  type PopupBreadcrumbSegmentViewModel,
+  type PopupContentBookmarkRowViewModel,
+  type PopupContentFolderRowViewModel,
   type PopupContentRowViewModel,
+  type PopupContentSearchResultViewModel,
   type PopupContentViewModel,
   type PopupEmptyStateViewModel,
-  type PopupFilterFolderOptionViewModel,
   type PopupFolderPickerState,
   type PopupFolderTreeOptionViewModel,
   type PopupSavedSearchesViewModel,
@@ -131,7 +128,6 @@ const FOCUSABLE_SELECTOR = [
   'a[href]',
   'button:not([disabled])',
   'input:not([disabled])',
-  'select:not([disabled])',
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])'
 ].join(',')
@@ -211,7 +207,6 @@ export function startPopupRuntime(): void {
 window.addEventListener('pagehide', cleanupPopupRuntime)
 function bindEvents() {
   dom.openSettings.addEventListener('click', openSettingsPage)
-  dom.smartFooterSettings.addEventListener('click', openSettingsPage)
   dom.smartClassifier.addEventListener('click', handleSmartClassifierClick)
   dom.smartClassifier.addEventListener('input', handleSmartClassifierInput)
   dom.savedSearches.addEventListener('click', (event) => {
@@ -236,22 +231,9 @@ function bindEvents() {
     showViewNotice('已清空搜索')
     dom.searchInput.focus()
   })
-  dom.folderFilterTrigger.addEventListener('click', openFilterDialog)
-  dom.clearFolderFilter.addEventListener('click', clearFolderFilter)
   dom.content.addEventListener('click', handleContentClick)
   dom.emptyState.addEventListener('click', handleContentClick)
   dom.content.addEventListener('pointerover', handleContentPointerOver)
-  dom.folderBreadcrumbs.addEventListener('click', handlePopupBreadcrumbClick)
-  dom.filterFolderList.addEventListener('click', handleFilterListClick)
-  dom.filterFolderList.addEventListener('keydown', handleFilterListKeydown)
-  dom.filterFolderList.addEventListener('focusin', handleFilterListFocus)
-  dom.filterSearchInput.addEventListener('input', () => {
-    state.filterSearchQuery = dom.filterSearchInput.value
-    state.filterFolderActiveId = ''
-    renderFilterModal()
-  })
-  dom.filterSearchInput.addEventListener('keydown', handleFilterSearchKeydown)
-  dom.closeFilterModal.addEventListener('click', closeDialogs)
   dom.moveFolderList.addEventListener('click', handleMoveListClick)
   dom.moveSearchInput.addEventListener('input', () => {
     state.moveSearchQuery = dom.moveSearchInput.value
@@ -1548,10 +1530,8 @@ function render() {
   renderBanner()
   renderAutoAnalyzeStatus()
   renderToolbar()
-  renderFilterBar()
   renderSmartClassifier()
   renderMainContent()
-  renderFilterModal()
   renderMoveModal()
   renderSmartFolderModal()
   renderAiProviderPromptModal()
@@ -1562,13 +1542,10 @@ function render() {
 function renderBanner() {
   const naturalSearchFallback = isNaturalSearchLocalFallback()
   const naturalSearchPending = state.naturalSearchPending
-  dom.heroSubtitle.textContent = state.loadError
-    ? '读取失败时不会上传数据，请检查扩展权限后重试'
-    : '本地读取，不上传任何书签内容'
   dom.errorBanner.textContent = state.loadError
   dom.errorBanner.classList.toggle('hidden', !state.loadError)
   dom.clearSearch.classList.toggle('hidden', !state.searchQuery)
-  dom.searchInput.placeholder = getSearchInputPlaceholder()
+  dom.searchInput.placeholder = 'Search'
   dom.searchInput.setAttribute('aria-label', getSearchInputAriaLabel())
   dom.naturalSearchToggle.classList.toggle('active', state.naturalSearchEnabled)
   dom.naturalSearchToggle.classList.toggle('pending', naturalSearchPending)
@@ -1789,54 +1766,23 @@ function hasBlockingPopupActionPending() {
     )
   })
 }
-function renderFilterBar() {
-  const selectedFolder = state.selectedFolderFilterId
-    ? state.folderMap.get(state.selectedFolderFilterId)
-    : null
-  const selectedPath = selectedFolder ? formatFolderPath(selectedFolder, state.folderMap) : ''
-
-  dom.folderFilterTriggerText.textContent = selectedFolder
-    ? `文件夹：${selectedPath || selectedFolder.title}`
-    : '全部文件夹'
-  dom.folderFilterTrigger.title = selectedPath || ''
-  dom.clearFolderFilter.classList.toggle('hidden', !selectedFolder)
-  dom.folderBreadcrumbs.classList.toggle('hidden', !selectedFolder)
-  renderPopupBreadcrumbsIsland(
-    dom.folderBreadcrumbs,
-    selectedFolder ? getPopupBreadcrumbSegments(selectedFolder) : []
-  )
-}
-
-function getPopupBreadcrumbSegments(folder): PopupBreadcrumbSegmentViewModel[] {
-  const segments = buildBookmarkPathSegments(folder, state.folderMap)
-  if (!segments.length) {
-    return []
-  }
-
-  return segments.map((segment) => ({
-    current: Boolean(segment.current || !segment.id),
-    id: String(segment.id || ''),
-    label: String(segment.label || ''),
-    path: String(segment.path || '')
-  }))
-}
 function renderSmartClassifier() {
   const currentUrl = String(state.currentTab?.url || '').trim()
   const smartAvailable = isSmartClassifiableUrl(currentUrl)
   const smartOverlayActive =
     smartAvailable && ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
   document.body.classList.toggle('smart-active', smartOverlayActive)
-  dom.smartClassifier.classList.toggle('hidden', !smartAvailable)
-  dom.smartFooter.classList.toggle('hidden', !smartOverlayActive)
+  dom.smartClassifier.classList.remove('hidden')
+  dom.smartFooter.classList.add('hidden')
   dom.smartTotal.textContent = `总计 ${state.allBookmarks.length}`
-
-  if (!smartAvailable) {
-    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('hidden'))
-    return
-  }
 
   if (state.isLoading && state.smartStatus !== 'results') {
     renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('page-loading'))
+    return
+  }
+
+  if (!smartAvailable) {
+    renderPopupSmartClassifierIsland(dom.smartClassifier, getPopupSmartClassifierViewModel('idle'))
     return
   }
 
@@ -1891,10 +1837,15 @@ function getPopupSmartClassifierViewModel(
 
 function getPopupSmartPageViewModel() {
   const title = getCurrentPageTitle()
+  const url = String(state.currentTab?.url || '').trim()
   const favicon = String(state.currentTab?.favIconUrl || '')
   const bookmark = state.currentPageBookmarkId
     ? state.bookmarkMap.get(state.currentPageBookmarkId)
     : null
+
+  if (!isSmartClassifiableUrl(url)) {
+    return null
+  }
 
   if (!bookmark) {
     return {
@@ -1976,38 +1927,47 @@ function renderMainContent() {
     !hasQuery &&
     !state.isLoading &&
     (!currentRoot || !(currentRoot.children || []).length)
-  dom.loadingState.classList.toggle('hidden', !(state.isLoading || showSearchLoading))
-  dom.content.classList.toggle(
-    'hidden',
-    state.isLoading || showSearchLoading || showNaturalSearchSetup || showEmptySearch || showEmptyTree
-  )
-  dom.emptyState.classList.toggle('hidden', !(showNaturalSearchSetup || showEmptySearch || showEmptyTree))
-
-  renderPopupEmptyStateIsland(dom.emptyState, getPopupEmptyStateViewModel({
+  const emptyState = getPopupEmptyStateViewModel({
     showEmptySearch,
     showEmptyTree,
     showNaturalSearchSetup
-  }))
-
-  if (state.isLoading) {
-    renderPopupLoadingStateIsland(dom.loadingState, { label: '正在加载书签…' })
-    return
-  }
-
-  if (showSearchLoading) {
-    renderPopupLoadingStateIsland(dom.loadingState, {
-      label: state.naturalSearchEnabled ? '正在用 AI 理解搜索意图…' : '正在搜索书签…'
-    })
-    return
-  }
-  if (showNaturalSearchSetup || showEmptySearch || showEmptyTree) {
-    replaceContentViewModel({ rows: [] }, { preserveScroll: false })
-    return
-  }
-  replaceContentViewModel(getPopupContentViewModel({ searchMode: hasQuery }), {
-    preserveScroll: !hasQuery
   })
-  updateActiveResultVisibility()
+  let mainState: PopupContentViewModel['mainState'] | undefined
+
+  dom.loadingState.classList.add('hidden')
+  dom.emptyState.classList.add('hidden')
+  dom.content.classList.remove('hidden')
+
+  if (!state.isLoading && showSearchLoading) {
+    mainState = {
+      kind: 'loading',
+      label: state.naturalSearchEnabled ? '正在用 AI 理解搜索意图…' : '正在搜索书签…'
+    }
+  } else if (showNaturalSearchSetup) {
+    mainState = {
+      kind: 'natural-setup',
+      state: emptyState
+    }
+  } else if (showEmptySearch) {
+    mainState = {
+      kind: 'search-empty',
+      state: emptyState
+    }
+  } else if (showEmptyTree) {
+    mainState = {
+      kind: 'empty',
+      label: state.selectedFolderFilterId
+        ? '当前文件夹下暂无书签'
+        : '未找到可展示的书签栏内容'
+    }
+  }
+
+  replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
+    preserveScroll: !hasQuery || Boolean(state.isLoading)
+  })
+  if (!mainState) {
+    updateActiveResultVisibility()
+  }
 }
 
 function getPopupEmptyStateViewModel({
@@ -2079,35 +2039,75 @@ function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserv
     return
   }
 
-  const previousScrollTop = dom.content.scrollTop
+  const previousMainList = dom.content.querySelector<HTMLElement>('[data-popup-main-list]')
+  const previousScrollTop = previousMainList?.scrollTop ?? dom.content.scrollTop
   state.contentRenderHtml = nextSignature
   renderPopupContentIsland(dom.content, nextViewModel)
 
   if (preserveScroll) {
-    dom.content.scrollTop = previousScrollTop
+    const nextMainList = dom.content.querySelector<HTMLElement>('[data-popup-main-list]')
+    if (nextMainList) {
+      nextMainList.scrollTop = previousScrollTop
+    } else {
+      dom.content.scrollTop = previousScrollTop
+    }
   }
 }
 
-function getPopupContentViewModel({ searchMode }: { searchMode: boolean }): PopupContentViewModel {
-  return {
-    rows: searchMode ? getSearchResultRows() : getTreeRows()
-  }
-}
-
-function getTreeRows(): PopupContentRowViewModel[] {
+function getPopupContentViewModel({
+  loading = false,
+  mainState,
+  searchMode
+}: {
+  loading?: boolean
+  mainState?: PopupContentViewModel['mainState']
+  searchMode: boolean
+}): PopupContentViewModel {
   const currentRoot = getCurrentTreeRoot()
+  const sidebarRoot = state.bookmarksBarNode || currentRoot
+  const sidebarRows = sidebarRoot ? getSidebarFolderRows(sidebarRoot) : []
+  const currentRootTitle = currentRoot?.title || '书签栏'
+
+  if (searchMode) {
+    const mainRows = getSearchResultRows()
+    return {
+      emptyLabel: '未找到相关书签',
+      loading,
+      mainState,
+      mainRows,
+      meta: `${mainRows.length} 条`,
+      mode: 'search',
+      rows: mainRows,
+      sidebarRows,
+      title: state.naturalSearchEnabled ? 'AI 匹配结果' : '搜索结果'
+    }
+  }
+
+  const mainRows = getTreeBookmarkRows()
+  return {
+    emptyLabel: '当前文件夹下暂无书签',
+    loading,
+    mainState,
+    mainRows,
+    meta: `${mainRows.length} 个书签`,
+    mode: 'tree',
+    rows: [...sidebarRows, ...mainRows],
+    sidebarRows,
+    title: currentRootTitle
+  }
+}
+
+function getSidebarFolderRows(currentRoot = getCurrentTreeRoot()): PopupContentFolderRowViewModel[] {
   if (!currentRoot) {
     return []
   }
 
-  return buildFolderNodeRows(currentRoot, 0)
+  return buildSidebarFolderRows(currentRoot, 0)
 }
 
-function buildFolderNodeRows(node, depth): PopupContentRowViewModel[] {
-  const currentRoot = getCurrentTreeRoot()
-  const isPinnedRoot = depth === 0 && currentRoot?.id === node.id
-  const isExpanded =
-    isPinnedRoot || state.expandedFolders.has(node.id)
+function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
+  const isPinnedRoot = depth === 0
+  const isExpanded = true
   const children = Array.isArray(node.children) ? node.children : []
   const folderInfo = state.folderMap.get(node.id)
   const toggleLabel = getPopupFolderToggleLabel(
@@ -2116,6 +2116,8 @@ function buildFolderNodeRows(node, depth): PopupContentRowViewModel[] {
   )
 
   const currentRow: PopupContentRowViewModel = {
+    active: (!state.selectedFolderFilterId && isPinnedRoot) || state.selectedFolderFilterId === String(node.id || ''),
+    countLabel: getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot),
     depth,
     expanded: isExpanded,
     folderId: String(node.id || ''),
@@ -2129,18 +2131,38 @@ function buildFolderNodeRows(node, depth): PopupContentRowViewModel[] {
   const childRows = isExpanded
     ? children.flatMap((child) => {
         if (child.url) {
-          const bookmark = state.bookmarkMap.get(child.id)
-          return bookmark ? [buildBookmarkRowViewModel(bookmark, depth + 1)] : []
+          return []
         }
 
-        return buildFolderNodeRows(child, depth + 1)
+        return buildSidebarFolderRows(child, depth + 1)
       })
     : []
 
   return [currentRow, ...childRows]
 }
 
-function buildBookmarkRowViewModel(bookmark, depth) {
+function getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot): string {
+  const folderId = String(node?.id || '')
+  const count = isPinnedRoot
+    ? getFilteredBookmarksForFolder(null).length
+    : getFilteredBookmarksForFolder(folderId).length
+  return String(count)
+}
+
+function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
+  const rootId = String(getCurrentTreeRoot()?.id || '')
+  const bookmarks = getFilteredBookmarks()
+  if (!rootId || !bookmarks.length) {
+    return []
+  }
+  const baseDepth = state.folderMap.get(rootId)?.depth || 1
+  return bookmarks.map((bookmark) => {
+    const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
+    return buildBookmarkRowViewModel(bookmark, depth)
+  })
+}
+
+function buildBookmarkRowViewModel(bookmark, depth): PopupContentBookmarkRowViewModel {
   return {
     bookmarkId: String(bookmark.id || ''),
     depth,
@@ -2148,12 +2170,13 @@ function buildBookmarkRowViewModel(bookmark, depth) {
     kind: 'bookmark',
     menu: buildActionMenuViewModel(bookmark.id),
     menuLabel: getBookmarkActionMenuLabel(bookmark),
+    path: formatBookmarkPath(bookmark.path) || bookmark.path || '',
     title: bookmark.title || '未命名书签',
     url: bookmark.url || ''
   }
 }
 
-function getSearchResultRows(): PopupContentRowViewModel[] {
+function getSearchResultRows(): PopupContentSearchResultViewModel[] {
   return state.searchResults
     .map((bookmark, index) => {
       const isActive = index === state.activeResultIndex
@@ -2301,25 +2324,25 @@ function setPopupSurfaceOpen(element, open) {
   if (open) {
     cancelExitMotion(element)
     element.classList.remove('hidden', 'is-closing')
+    if (element.classList.contains('t-modal')) {
+      element.classList.remove('is-open')
+      window.requestAnimationFrame(() => {
+        if (!element.classList.contains('hidden') && !element.classList.contains('is-closing')) {
+          element.classList.add('is-open')
+        }
+      })
+    }
     return
   }
   if (element.classList.contains('hidden') || element.classList.contains('is-closing')) {
     return
   }
+  element.classList.remove('is-open')
   void closeWithExitMotion(element, 'is-closing', () => {
     element.classList.add('hidden')
-  }, 220)
-}
-function renderFilterModal() {
-  setPopupSurfaceOpen(dom.filterModal, state.isFilterPickerOpen)
-  if (!state.isFilterPickerOpen) {
-    syncBackdropVisibility()
-    return
-  }
-
-  dom.filterSearchInput.value = state.filterSearchQuery
-  renderPopupFolderPickerIsland(dom.filterFolderList, getFilterFolderPickerState())
-  syncBackdropVisibility()
+  }, element.classList.contains('t-modal') || element.classList.contains('modal-backdrop')
+    ? getModalCloseDurationMs()
+    : 220)
 }
 function renderMoveModal() {
   const bookmark = state.moveTargetBookmarkId
@@ -2506,8 +2529,7 @@ function renderEditDraftControls() {
 }
 function syncBackdropVisibility() {
   const hasOpenModal = Boolean(
-    state.isFilterPickerOpen ||
-      state.moveTargetBookmarkId ||
+    state.moveTargetBookmarkId ||
       state.smartFolderPickerOpen ||
       state.aiProviderPromptOpen ||
       state.editTargetBookmarkId ||
@@ -2532,48 +2554,6 @@ function syncPopupAppShellModalState(hasOpenModal) {
   dom.appShell.setAttribute('aria-hidden', 'false')
   dom.appShell.removeAttribute('inert')
 }
-function getFilterFolderPickerState(): PopupFolderPickerState {
-  const query = normalizeText(state.filterSearchQuery)
-  const folders = query
-    ? state.allFolders.filter((folder) => {
-        return (
-          folder.normalizedTitle.includes(query) ||
-          folder.normalizedPath.includes(query)
-        )
-      })
-    : state.allFolders
-
-  const activeId = resolveFilterFolderActiveId(folders)
-  const filterOptions: PopupFilterFolderOptionViewModel[] = folders
-    .map((folder) => {
-      const isSelected = state.selectedFolderFilterId === folder.id
-      const isActive = folder.id === activeId
-      const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
-      return {
-        active: isActive,
-        id: String(folder.id || ''),
-        path: folderPath,
-        selected: isSelected,
-        title: folder.title || '未命名文件夹',
-        tooltip: folder.path || ''
-      }
-    })
-
-  return {
-    empty: !filterOptions.length && query
-      ? {
-          action: 'clear-search',
-          actionLabel: '清空搜索',
-          detail: `没有标题或路径包含「${state.filterSearchQuery}」`,
-          title: '未找到相关文件夹'
-        }
-      : null,
-    filterOptions,
-    mode: 'filter',
-    query: state.filterSearchQuery
-  }
-}
-
 function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
   const query = normalizeText(state.moveSearchQuery)
@@ -2875,6 +2855,12 @@ function handleSmartClassifierInput(event) {
   }
 }
 function handleContentClick(event) {
+  const sidebarFolderButton = event.target.closest('[data-sidebar-folder-filter]')
+  if (sidebarFolderButton) {
+    const folderId = sidebarFolderButton.getAttribute('data-sidebar-folder-filter')
+    applyFolderFilter(folderId === 'all' ? null : folderId, { focusSearch: false })
+    return
+  }
   const folderToggle = event.target.closest('[data-toggle-folder]')
   if (folderToggle) {
     const folderId = folderToggle.getAttribute('data-toggle-folder')
@@ -2927,13 +2913,6 @@ function handleContentClick(event) {
     handleEmptySearchAction(emptyAction.getAttribute('data-empty-action'))
   }
 }
-function handlePopupBreadcrumbClick(event) {
-  const breadcrumbButton = event.target.closest('[data-folder-breadcrumb-id]')
-  if (!breadcrumbButton) {
-    return
-  }
-  applyFolderFilter(breadcrumbButton.getAttribute('data-folder-breadcrumb-id'))
-}
 function handleEmptySearchAction(action) {
   if (action === 'clear-query') {
     setSearchQuery('', { immediate: true })
@@ -2976,126 +2955,6 @@ function handleContentPointerOver(event) {
   const nextIndex = Number(resultCard.getAttribute('data-result-index'))
   if (!Number.isNaN(nextIndex)) {
     setActiveResultIndex(nextIndex)
-  }
-}
-function handleFilterListClick(event) {
-  const clearButton = event.target.closest('[data-filter-folder-action="clear-search"]')
-  if (clearButton) {
-    state.filterSearchQuery = ''
-    dom.filterSearchInput.value = ''
-    renderPopupFolderPickerIsland(dom.filterFolderList, getFilterFolderPickerState())
-    dom.filterSearchInput.focus()
-    return
-  }
-  const filterButton = event.target.closest('[data-select-filter-folder]')
-  if (!filterButton) {
-    return
-  }
-  const folderId = filterButton.getAttribute('data-select-filter-folder')
-  state.filterFolderActiveId = String(folderId || '')
-  applyFolderFilter(folderId === 'all' ? null : folderId)
-}
-function handleFilterSearchKeydown(event) {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-    return
-  }
-  if (!getFilterFolderOptionButtons().length) {
-    return
-  }
-  event.preventDefault()
-  focusFilterFolderOption(event.key === 'ArrowDown' ? 'first' : 'last')
-}
-function handleFilterListKeydown(event) {
-  if (
-    event.key !== 'ArrowDown' &&
-    event.key !== 'ArrowUp' &&
-    event.key !== 'Home' &&
-    event.key !== 'End' &&
-    event.key !== 'Escape'
-  ) {
-    return
-  }
-  event.preventDefault()
-  if (event.key === 'Escape') {
-    dom.filterSearchInput.focus()
-    return
-  }
-  if (event.key === 'Home') {
-    focusFilterFolderOption('first')
-  } else if (event.key === 'End') {
-    focusFilterFolderOption('last')
-  } else {
-    focusFilterFolderOption(event.key === 'ArrowDown' ? 1 : -1)
-  }
-}
-function handleFilterListFocus(event) {
-  const target = event.target
-  if (!(target instanceof HTMLElement) || !target.dataset.selectFilterFolder) {
-    return
-  }
-  state.filterFolderActiveId = target.dataset.selectFilterFolder
-  syncFilterFolderTabStops(state.filterFolderActiveId)
-}
-function getFilterFolderOptionButtons() {
-  return [...dom.filterFolderList.querySelectorAll<HTMLButtonElement>('[data-select-filter-folder]')]
-}
-function resolveFilterFolderActiveId(folders) {
-  if (!folders.length) {
-    state.filterFolderActiveId = ''
-    return ''
-  }
-  const selectedId = state.selectedFolderFilterId || ''
-  const activeId = folders.some((folder) => folder.id === state.filterFolderActiveId)
-    ? state.filterFolderActiveId
-    : folders.some((folder) => folder.id === selectedId)
-      ? selectedId
-      : folders[0]?.id || ''
-  state.filterFolderActiveId = activeId
-  return activeId
-}
-function syncFilterFolderTabStops(activeId) {
-  for (const button of getFilterFolderOptionButtons()) {
-    button.tabIndex = button.dataset.selectFilterFolder === activeId ? 0 : -1
-  }
-}
-function focusFilterFolderOptionById(folderId) {
-  let targetButton = null
-  for (const button of getFilterFolderOptionButtons()) {
-    const isTarget = button.dataset.selectFilterFolder === folderId
-    button.tabIndex = isTarget ? 0 : -1
-    if (isTarget) {
-      targetButton = button
-    }
-  }
-  if (!targetButton) {
-    return false
-  }
-  state.filterFolderActiveId = folderId
-  targetButton.focus()
-  return true
-}
-function focusFilterFolderOption(direction) {
-  const buttons = getFilterFolderOptionButtons()
-  if (!buttons.length) {
-    return
-  }
-  const currentIndex = buttons.findIndex((button) => button === document.activeElement)
-  let nextIndex = state.filterFolderActiveId
-    ? buttons.findIndex((button) => button.dataset.selectFilterFolder === state.filterFolderActiveId)
-    : -1
-  if (direction === 'first') {
-    nextIndex = 0
-  } else if (direction === 'last') {
-    nextIndex = buttons.length - 1
-  } else if (currentIndex >= 0) {
-    nextIndex = (currentIndex + direction + buttons.length) % buttons.length
-  } else if (nextIndex < 0) {
-    nextIndex = direction > 0 ? 0 : buttons.length - 1
-  }
-  const button = buttons[Math.max(0, nextIndex)]
-  const folderId = String(button?.dataset.selectFilterFolder || '')
-  if (folderId) {
-    focusFilterFolderOptionById(folderId)
   }
 }
 function handleMoveListClick(event) {
@@ -3306,7 +3165,7 @@ function isEditableTarget(target) {
   if (!(target instanceof HTMLElement)) {
     return false
   }
-  return Boolean(target.closest('input, textarea, select, [contenteditable="true"]'))
+  return Boolean(target.closest('input, textarea, [contenteditable="true"]'))
 }
 function handleActionMenuKeydown(event) {
   if (!state.activeMenuBookmarkId) {
@@ -3396,7 +3255,6 @@ function handleModalFocusTrap(event) {
 }
 function getOpenModalElement() {
   const modal = [
-    dom.filterModal,
     dom.moveModal,
     dom.smartFolderModal,
     dom.aiProviderPromptModal,
@@ -3470,25 +3328,6 @@ function toggleMoveFolder(folderId) {
   }
   renderMoveModal()
 }
-function openFilterDialog() {
-  if (hasBlockingPopupActionPending()) {
-    return
-  }
-  if (shouldBlockDirtyEditClose()) {
-    return
-  }
-  rememberDialogReturnFocus()
-  state.activeMenuBookmarkId = null
-  state.moveTargetBookmarkId = null
-  state.editTargetBookmarkId = null
-  state.confirmDeleteBookmarkId = null
-  state.isFilterPickerOpen = true
-  state.filterSearchQuery = ''
-  render()
-  window.requestAnimationFrame(() => {
-    dom.filterSearchInput.focus()
-  })
-}
 function openMoveDialog(bookmarkId) {
   if (hasBlockingPopupActionPending()) {
     return
@@ -3498,7 +3337,6 @@ function openMoveDialog(bookmarkId) {
   }
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
-  state.isFilterPickerOpen = false
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = null
   state.moveTargetBookmarkId = bookmarkId
@@ -3521,7 +3359,6 @@ function openEditDialog(bookmarkId) {
   }
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
-  state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = bookmarkId
@@ -3541,7 +3378,6 @@ function openDeleteDialog(bookmarkId) {
   }
   rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
   state.activeMenuBookmarkId = null
-  state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = bookmarkId
@@ -3558,8 +3394,6 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   if (!force && shouldBlockDirtyEditClose()) {
     return
   }
-  state.isFilterPickerOpen = false
-  state.filterSearchQuery = ''
   state.moveTargetBookmarkId = null
   state.moveSearchQuery = ''
   state.smartFolderPickerOpen = false
@@ -3574,16 +3408,16 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   }
   restoreDialogReturnFocus()
 }
-function applyFolderFilter(folderId) {
+function applyFolderFilter(folderId, { focusSearch = true } = {}) {
   const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
-  state.isFilterPickerOpen = false
-  state.filterSearchQuery = ''
   state.activeMenuBookmarkId = null
   runSearch()
   render()
   showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
-  dom.searchInput.focus()
+  if (focusSearch) {
+    dom.searchInput.focus()
+  }
 }
 function clearFolderFilter() {
   if (!state.selectedFolderFilterId) {
@@ -3603,7 +3437,6 @@ function openSmartFolderDialog() {
     return
   }
   rememberDialogReturnFocus()
-  state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
@@ -3623,7 +3456,6 @@ function openAiProviderPromptDialog() {
   }
   rememberDialogReturnFocus(dom.naturalSearchToggle)
   state.activeMenuBookmarkId = null
-  state.isFilterPickerOpen = false
   state.moveTargetBookmarkId = null
   state.smartFolderPickerOpen = false
   state.editTargetBookmarkId = null
@@ -3655,7 +3487,9 @@ function getMenuToggleForBookmark(bookmarkId) {
   if (!bookmarkId) {
     return null
   }
-  return document.querySelector<HTMLElement>(`[data-open-menu="${CSS.escape(String(bookmarkId))}"]`)
+  return document.querySelector<HTMLElement>(
+    `[data-open-menu="${CSS.escape(String(bookmarkId))}"], [data-bookmark-id="${CSS.escape(String(bookmarkId))}"]`
+  )
 }
 function resetSmartClassification() {
   state.smartRunId += 1
@@ -4445,31 +4279,32 @@ function updateActiveResultVisibility() {
   if (!state.debouncedQuery || !state.searchResults.length) {
     return
   }
+  const scrollContainer = dom.content.querySelector<HTMLElement>('[data-popup-main-list]') || dom.content
   const activeResult = dom.content.querySelector<HTMLElement>(
     `[data-result-index="${state.activeResultIndex}"]`
   )
   if (!activeResult) {
     return
   }
-  const maxScrollTop = Math.max(0, dom.content.scrollHeight - dom.content.clientHeight)
+  const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight)
   if (state.activeResultIndex === 0) {
-    dom.content.scrollTop = 0
+    scrollContainer.scrollTop = 0
     return
   }
   if (state.activeResultIndex === state.searchResults.length - 1) {
-    dom.content.scrollTop = maxScrollTop
+    scrollContainer.scrollTop = maxScrollTop
     return
   }
-  const resultTop = activeResult.offsetTop
+  const resultTop = activeResult.offsetTop - scrollContainer.offsetTop
   const resultBottom = resultTop + activeResult.offsetHeight
-  const viewportTop = dom.content.scrollTop
-  const viewportBottom = viewportTop + dom.content.clientHeight
+  const viewportTop = scrollContainer.scrollTop
+  const viewportBottom = viewportTop + scrollContainer.clientHeight
   if (resultTop < viewportTop) {
-    dom.content.scrollTop = Math.max(0, resultTop)
+    scrollContainer.scrollTop = Math.max(0, resultTop)
     return
   }
   if (resultBottom > viewportBottom) {
-    dom.content.scrollTop = Math.min(maxScrollTop, resultBottom - dom.content.clientHeight)
+    scrollContainer.scrollTop = Math.min(maxScrollTop, resultBottom - scrollContainer.clientHeight)
   }
 }
 function setActiveResultIndex(nextIndex) {
@@ -4506,14 +4341,15 @@ function getFilteredBookmarks() {
   if (state.filteredBookmarksCacheKey === cacheKey) {
     return state.filteredBookmarksCache
   }
-  const bookmarks = state.selectedFolderFilterId
-    ? state.allBookmarks.filter((bookmark) => {
-        return bookmark.ancestorIds.includes(state.selectedFolderFilterId)
-      })
-    : state.allBookmarks
+  const bookmarks = getFilteredBookmarksForFolder(state.selectedFolderFilterId)
   state.filteredBookmarksCacheKey = cacheKey
   state.filteredBookmarksCache = bookmarks
   return bookmarks
+}
+function getFilteredBookmarksForFolder(folderId) {
+  return folderId
+    ? state.allBookmarks.filter((bookmark) => bookmark.ancestorIds.includes(folderId))
+    : state.allBookmarks
 }
 function getSearchCacheKey(normalizedQuery) {
   return `${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
@@ -4626,8 +4462,7 @@ function normalizeSmartError(error) {
 }
 function hasOpenModal() {
   return Boolean(
-    state.isFilterPickerOpen ||
-      state.moveTargetBookmarkId ||
+    state.moveTargetBookmarkId ||
       state.smartFolderPickerOpen ||
       state.editTargetBookmarkId ||
       state.confirmDeleteBookmarkId

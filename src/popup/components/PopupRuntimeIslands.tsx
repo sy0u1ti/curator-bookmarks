@@ -2,7 +2,7 @@ import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import type { CSSProperties, ReactNode } from 'react'
 import { getQueryTerms, normalizeQuery } from '../search.js'
-import { AiSetupPrompt, Button, DotMatrixLoader, InlineMenu, Input, ToastList } from '../../ui'
+import { AiSetupPrompt, Button, DotMatrixLoader, Icon, Input, Progress, ToastList, Toolbar, type IconName } from '../../ui'
 
 export interface PopupAutoAnalyzeStatusState {
   collapsed: boolean
@@ -33,15 +33,6 @@ export interface PopupLoadingStateViewModel {
   label: string
 }
 
-export interface PopupFilterFolderOptionViewModel {
-  active: boolean
-  id: string
-  path: string
-  selected: boolean
-  title: string
-  tooltip: string
-}
-
 export interface PopupFolderTreeOptionViewModel {
   badges: Array<{ label: string; muted?: boolean }>
   disabled: boolean
@@ -65,8 +56,7 @@ export interface PopupFolderPickerState {
     message?: string
     title?: string
   } | null
-  filterOptions?: PopupFilterFolderOptionViewModel[]
-  mode: 'filter' | 'move' | 'smart' | 'edit'
+  mode: 'move' | 'smart' | 'edit'
   query: string
   treeOptions?: PopupFolderTreeOptionViewModel[]
 }
@@ -101,11 +91,14 @@ export interface PopupContentBookmarkRowViewModel {
   kind: 'bookmark'
   menu: PopupActionMenuViewModel
   menuLabel: string
+  path?: string
   title: string
   url: string
 }
 
 export interface PopupContentFolderRowViewModel {
+  active?: boolean
+  countLabel: string
   depth: number
   expanded: boolean
   folderId: string
@@ -139,8 +132,24 @@ export type PopupContentRowViewModel =
   | PopupContentFolderRowViewModel
   | PopupContentSearchResultViewModel
 
+export type PopupContentMainRowViewModel =
+  | PopupContentBookmarkRowViewModel
+  | PopupContentSearchResultViewModel
+
 export interface PopupContentViewModel {
+  emptyLabel?: string
+  loading?: boolean
+  mainState?: {
+    kind: 'empty' | 'loading' | 'natural-setup' | 'search-empty'
+    label?: string
+    state?: PopupEmptyStateViewModel
+  }
+  mainRows?: PopupContentMainRowViewModel[]
+  meta?: string
+  mode?: 'search' | 'tree'
   rows: PopupContentRowViewModel[]
+  sidebarRows?: PopupContentFolderRowViewModel[]
+  title?: string
 }
 
 export interface PopupSearchChipViewModel {
@@ -162,13 +171,6 @@ export interface PopupSavedSearchesViewModel {
   hasCurrentSaved: boolean
   items: PopupSavedSearchItemViewModel[]
   show: boolean
-}
-
-export interface PopupBreadcrumbSegmentViewModel {
-  current: boolean
-  id: string
-  label: string
-  path: string
 }
 
 export interface PopupSmartPageViewModel {
@@ -267,13 +269,6 @@ export function renderPopupSavedSearchesIsland(
   state: PopupSavedSearchesViewModel
 ): void {
   renderIsland(container, <PopupSavedSearches state={state} />)
-}
-
-export function renderPopupBreadcrumbsIsland(
-  container: Element,
-  segments: PopupBreadcrumbSegmentViewModel[]
-): void {
-  renderIsland(container, <PopupBreadcrumbs segments={segments} />)
 }
 
 export function renderPopupSmartClassifierIsland(
@@ -394,62 +389,7 @@ function PopupLoadingState({ state }: { state: PopupLoadingStateViewModel }) {
 }
 
 function PopupFolderPicker({ state }: { state: PopupFolderPickerState }) {
-  if (state.mode === 'filter') {
-    return <PopupFilterFolderPicker state={state} />
-  }
-
   return <PopupTreeFolderPicker state={state} />
-}
-
-function PopupFilterFolderPicker({ state }: { state: PopupFolderPickerState }) {
-  const options = state.filterOptions || []
-
-  if (!options.length && state.empty) {
-    return (
-      <div className="modal-empty">
-        <p className="modal-empty-title">{state.empty.title || '未找到相关文件夹'}</p>
-        {state.empty.detail ? <p className="modal-empty-detail">{state.empty.detail}</p> : null}
-        {state.empty.action ? (
-          <Button
-            className="secondary-button"
-            type="button"
-            data-filter-folder-action={state.empty.action}
-            unstyled
-          >
-            {state.empty.actionLabel || '清空搜索'}
-          </Button>
-        ) : null}
-      </div>
-    )
-  }
-
-  return (
-    <>
-      {options.map((option) => (
-        <Button
-          className={['filter-option', option.selected ? 'selected' : ''].filter(Boolean).join(' ')}
-          type="button"
-          role="option"
-          aria-selected={option.selected ? 'true' : 'false'}
-          data-select-filter-folder={option.id}
-          tabIndex={option.active ? 0 : -1}
-          title={option.tooltip}
-          key={option.id}
-          unstyled
-        >
-          <span className="filter-option-check" aria-hidden="true"></span>
-          <span className="filter-option-copy">
-            <span className="filter-option-title">
-              <HighlightedText text={option.title} query={state.query} />
-            </span>
-            <span className="filter-option-path">
-              <HighlightedText text={option.path} query={state.query} />
-            </span>
-          </span>
-        </Button>
-      ))}
-    </>
-  )
 }
 
 function PopupTreeFolderPicker({ state }: { state: PopupFolderPickerState }) {
@@ -502,7 +442,7 @@ function PopupTreeFolderOption({
         unstyled
         {...selectAttrs}
       >
-        <span className="folder-kind" aria-hidden="true"></span>
+        <span className="folder-tree-branch" aria-hidden="true"></span>
         <span className="picker-folder-main">
           <span className="row-title">
             <HighlightedText text={option.title} query={query} />
@@ -637,18 +577,178 @@ function PopupToasts({ toasts }: { toasts: PopupToastViewModel[] }) {
 }
 
 function PopupContent({ state }: { state: PopupContentViewModel }) {
+  const sidebarRows = state.sidebarRows || state.rows.filter((row): row is PopupContentFolderRowViewModel => row.kind === 'folder')
+  const mainRows = state.mainRows || state.rows.filter((row): row is PopupContentMainRowViewModel => row.kind !== 'folder')
+  const mode = state.mode || (mainRows.some((row) => row.kind === 'result') ? 'search' : 'tree')
+  const title = state.title || (mode === 'search' ? '搜索结果' : '全部书签')
+  const meta = state.meta || `${mainRows.length} 条`
+  const isLoading = Boolean(state.loading)
+
   return (
-    <>
-      {state.rows.map((row) => {
-        if (row.kind === 'folder') {
-          return <PopupFolderRow row={row} key={`folder:${row.folderId}`} />
-        }
-        if (row.kind === 'bookmark') {
-          return <PopupBookmarkRow row={row} key={`bookmark:${row.bookmarkId}`} />
-        }
-        return <PopupSearchResultRow row={row} key={`result:${row.bookmarkId}:${row.index}`} />
-      })}
-    </>
+    <div
+      className={[
+        'bookmark-workspace-shell',
+        't-skel',
+        isLoading ? 'is-loading' : 'is-revealed'
+      ].join(' ')}
+      data-state={isLoading ? 'loading' : 'ready'}
+      aria-busy={isLoading ? 'true' : 'false'}
+    >
+      <div className="bookmark-workspace-skeleton t-skel-skeleton is-pulsing" aria-hidden="true">
+        <PopupContentSkeleton mode={mode} title={title} />
+      </div>
+      <div className="bookmark-workspace-content t-skel-content">
+        <div className={['bookmark-workspace', `bookmark-workspace-${mode}`].join(' ')}>
+          <aside className="bookmark-sidebar" aria-label="文件夹树">
+            <header className="bookmark-pane-head">
+              <span>全部文件夹</span>
+            </header>
+            <div className="bookmark-folder-tree" role="tree">
+              {sidebarRows.map((row) => <PopupFolderRow row={row} key={`folder:${row.folderId}`} />)}
+            </div>
+          </aside>
+          <section className="bookmark-main-pane" aria-label={title}>
+            <header className="bookmark-pane-head bookmark-main-head">
+              <span>{title}</span>
+              <span className="bookmark-pane-meta">{meta}</span>
+            </header>
+            <div className="bookmark-main-list" data-popup-main-list role="list">
+              {state.mainState ? (
+                <PopupMainStatePanel state={state.mainState} />
+              ) : mainRows.length ? (
+                mainRows.map((row) => {
+                  if (row.kind === 'bookmark') {
+                    return <PopupBookmarkRow row={row} key={`bookmark:${row.bookmarkId}`} />
+                  }
+                  return <PopupSearchResultRow row={row} key={`result:${row.bookmarkId}:${row.index}`} />
+                })
+              ) : (
+                <div className="state-panel compact">{state.emptyLabel || '暂无可展示书签'}</div>
+              )}
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PopupContentSkeleton({
+  mode,
+  title
+}: {
+  mode: 'search' | 'tree'
+  title: string
+}) {
+  const folderRows = [
+    { depth: 0, width: 0.72, count: 0.34 },
+    { depth: 1, width: 0.64, count: 0.26 },
+    { depth: 1, width: 0.76, count: 0.22 },
+    { depth: 2, width: 0.52, count: 0.3 },
+    { depth: 1, width: 0.58, count: 0.24 },
+    { depth: 2, width: 0.68, count: 0.2 },
+    { depth: 2, width: 0.46, count: 0.28 },
+    { depth: 1, width: 0.7, count: 0.18 }
+  ]
+  const bookmarkRows = [
+    { width: 0.78, url: 0.58, path: 0.36 },
+    { width: 0.62, url: 0.74, path: 0.48 },
+    { width: 0.86, url: 0.52, path: 0.42 },
+    { width: 0.58, url: 0.68, path: 0.34 },
+    { width: 0.74, url: 0.56, path: 0.5 }
+  ]
+
+  return (
+    <div className={['bookmark-workspace', `bookmark-workspace-${mode}`, 'bookmark-workspace-placeholder'].join(' ')}>
+      <aside className="bookmark-sidebar" aria-label="文件夹树加载占位">
+        <header className="bookmark-pane-head">
+          <span>全部文件夹</span>
+        </header>
+        <div className="bookmark-folder-tree" role="presentation">
+          {folderRows.map((row, index) => (
+            <div
+              className="tree-row folder-row skeleton-folder-row"
+              style={{ '--depth': row.depth } as CSSProperties}
+              key={`folder-skeleton:${index}`}
+            >
+              <div className="folder-card popup-list-row sidebar-folder-card">
+                <span className="folder-tree-branch" aria-hidden="true"></span>
+                <span className="row-main folder-row-main">
+                  <span className="popup-skeleton-bar skeleton-folder-title" style={{ '--skeleton-width': row.width } as CSSProperties}></span>
+                  <span className="popup-skeleton-bar skeleton-folder-count" style={{ '--skeleton-width': row.count } as CSSProperties}></span>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </aside>
+      <section className="bookmark-main-pane" aria-label={`${title}加载占位`}>
+        <header className="bookmark-pane-head bookmark-main-head">
+          <span>{title}</span>
+          <span className="bookmark-pane-meta">
+            <span className="popup-skeleton-bar skeleton-meta"></span>
+          </span>
+        </header>
+        <div className="bookmark-main-list" role="presentation">
+          {bookmarkRows.map((row, index) => (
+            <div className="tree-row bookmark-row skeleton-bookmark-row" key={`bookmark-skeleton:${index}`}>
+              <div className="bookmark-card popup-list-row">
+                <span className="row-main">
+                  <span className="popup-skeleton-bar skeleton-bookmark-title" style={{ '--skeleton-width': row.width } as CSSProperties}></span>
+                  <span className="popup-skeleton-bar skeleton-bookmark-url" style={{ '--skeleton-width': row.url } as CSSProperties}></span>
+                  <span className="popup-skeleton-bar skeleton-bookmark-path" style={{ '--skeleton-width': row.path } as CSSProperties}></span>
+                </span>
+              </div>
+              <div className="popup-row-actions skeleton-row-actions">
+                <span className="popup-skeleton-dot"></span>
+                <span className="popup-skeleton-dot"></span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function PopupMainStatePanel({
+  state
+}: {
+  state: NonNullable<PopupContentViewModel['mainState']>
+}) {
+  if (state.kind === 'loading') {
+    return (
+      <div className="state-panel compact bookmark-main-state" role="status" aria-live="polite">
+        <PopupMainLoadingSkeleton label={state.label || '正在搜索书签…'} />
+      </div>
+    )
+  }
+
+  if (state.kind === 'natural-setup' || state.kind === 'search-empty') {
+    return (
+      <div className="state-panel compact bookmark-main-state">
+        <PopupEmptyState state={state.state || { kind: 'none' }} />
+      </div>
+    )
+  }
+
+  return (
+    <div className="state-panel compact bookmark-main-state">
+      {state.label || '暂无可展示书签'}
+    </div>
+  )
+}
+
+function PopupMainLoadingSkeleton({ label }: { label: string }) {
+  return (
+    <div className="popup-search-skeleton" aria-label={label}>
+      {[0.82, 0.66, 0.74].map((width, index) => (
+        <div className="popup-search-skeleton-row" key={`search-skeleton:${index}`}>
+          <span className="popup-skeleton-bar skeleton-bookmark-title" style={{ '--skeleton-width': width } as CSSProperties}></span>
+          <span className="popup-skeleton-bar skeleton-bookmark-url" style={{ '--skeleton-width': 0.46 + index * 0.08 } as CSSProperties}></span>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -656,41 +756,21 @@ function PopupFolderRow({ row }: { row: PopupContentFolderRowViewModel }) {
   const style = { '--depth': row.depth } as CSSProperties
 
   return (
-    <div className={['tree-row', 'folder-row', row.root ? 'root-folder-row' : ''].filter(Boolean).join(' ')} style={style}>
-      {row.root ? (
-        <span className="tree-toggle-spacer" aria-hidden="true"></span>
-      ) : (
-        <Button
-          className={['tree-toggle', row.expanded ? 'expanded' : ''].filter(Boolean).join(' ')}
-          type="button"
-          data-toggle-folder={row.folderId}
-          aria-label={row.toggleLabel}
-          unstyled
-        ></Button>
-      )}
-      {row.root ? (
-        <div className="folder-card root-folder-card">
-          <span className="folder-kind" aria-hidden="true"></span>
-          <span className="row-main">
-            <span className="row-title">{row.title}</span>
-            <span className="row-subtitle">{row.subtitle}</span>
-          </span>
-        </div>
-      ) : (
-        <Button
-          className="folder-card"
-          type="button"
-          data-toggle-folder={row.folderId}
-          aria-expanded={row.expanded}
-          unstyled
-        >
-          <span className="folder-kind" aria-hidden="true"></span>
-          <span className="row-main">
-            <span className="row-title">{row.title}</span>
-            <span className="row-subtitle">{row.subtitle}</span>
-          </span>
-        </Button>
-      )}
+    <div className={['tree-row', 'folder-row', row.root ? 'root-folder-row' : '', row.active ? 'active' : ''].filter(Boolean).join(' ')} style={style}>
+      <Button
+        className={['folder-card', 'popup-list-row', 'sidebar-folder-card', row.root ? 'root-folder-card' : '', row.active ? 'active' : ''].filter(Boolean).join(' ')}
+        type="button"
+        data-sidebar-folder-filter={row.root ? 'all' : row.folderId}
+        aria-current={row.active ? 'page' : undefined}
+        title={row.subtitle}
+        unstyled
+      >
+        <span className="folder-tree-branch" aria-hidden="true"></span>
+        <span className="row-main folder-row-main">
+          <span className="row-title">{row.title}</span>
+          <span className="folder-tree-count" title={`${row.countLabel} 个书签`}>{row.countLabel}</span>
+        </span>
+      </Button>
     </div>
   )
 }
@@ -700,14 +780,14 @@ function PopupBookmarkRow({ row }: { row: PopupContentBookmarkRowViewModel }) {
 
   return (
     <div className="tree-row bookmark-row" style={style}>
-      <Button className="bookmark-card" type="button" data-open-bookmark={row.bookmarkId} unstyled>
-        <span className="bookmark-kind" aria-hidden="true"></span>
+      <Button className="bookmark-card popup-list-row" type="button" data-open-bookmark={row.bookmarkId} unstyled>
         <span className="row-main">
           <span className="row-title">{row.title}</span>
           <span className="row-subtitle" title={row.url}>{row.displayUrl}</span>
+          {row.path ? <span className="row-path" title={row.path}>{row.path}</span> : null}
         </span>
       </Button>
-      <PopupActionMenuAnchor bookmarkId={row.bookmarkId} label={row.menuLabel} menu={row.menu} />
+      <PopupRowActions bookmarkId={row.bookmarkId} label={row.menuLabel} menu={row.menu} />
     </div>
   )
 }
@@ -715,8 +795,7 @@ function PopupBookmarkRow({ row }: { row: PopupContentBookmarkRowViewModel }) {
 function PopupSearchResultRow({ row }: { row: PopupContentSearchResultViewModel }) {
   return (
     <article className={['result-card', row.active ? 'active' : ''].filter(Boolean).join(' ')} data-result-index={row.index}>
-      <Button className="result-main" type="button" data-open-bookmark={row.bookmarkId} unstyled>
-        <span className="bookmark-kind" aria-hidden="true"></span>
+      <Button className="result-main popup-list-row" type="button" data-open-bookmark={row.bookmarkId} unstyled>
         <span className="result-copy">
           <span className="result-title">
             <HighlightedText text={row.title} query={row.highlightQuery} />
@@ -736,12 +815,12 @@ function PopupSearchResultRow({ row }: { row: PopupContentSearchResultViewModel 
           ) : null}
         </span>
       </Button>
-      <PopupActionMenuAnchor bookmarkId={row.bookmarkId} label={row.menuLabel} menu={row.menu} title="操作菜单" />
+      <PopupRowActions bookmarkId={row.bookmarkId} label={row.menuLabel} menu={row.menu} title="操作菜单" />
     </article>
   )
 }
 
-function PopupActionMenuAnchor({
+function PopupRowActions({
   bookmarkId,
   label,
   menu,
@@ -752,42 +831,45 @@ function PopupActionMenuAnchor({
   menu: PopupActionMenuViewModel
   title?: string
 }) {
-  const trigger = (
-    <Button
-      className="icon-button"
-      type="button"
-      data-open-menu={bookmarkId}
-      aria-label={label}
-      aria-haspopup="menu"
-      aria-expanded={menu.open}
-      aria-controls={menu.id}
-      title={title}
-      unstyled
-    ></Button>
-  )
+  const quickActions = menu.items.filter((item) => {
+    return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)
+  })
 
   return (
-    <div className="menu-anchor">
-      <InlineMenu
-        id={menu.id}
-        className="action-menu"
-        label="书签操作"
-        open={menu.open}
-        trigger={trigger}
-        actions={menu.items.map((item) => ({
-          id: item.action,
-          label: item.label,
-          disabled: item.disabled,
-          destructive: item.danger,
-          attributes: {
-            'data-menu-action': item.action,
-            'data-bookmark-id': item.bookmarkId,
-            'aria-label': item.ariaLabel
-          }
-        }))}
-      />
+    <div className="popup-row-actions" aria-label="书签快捷操作">
+      {quickActions.map((item) => (
+        <Button
+          className={['row-action-button', item.danger ? 'danger' : ''].filter(Boolean).join(' ')}
+          type="button"
+          data-menu-action={item.action}
+          data-bookmark-id={item.bookmarkId}
+          aria-label={item.ariaLabel}
+          title={item.label}
+          disabled={item.disabled}
+          key={`${item.bookmarkId}:${item.action}`}
+          unstyled
+        >
+          <Icon name={getPopupActionIconName(item.action)} size={14} aria-hidden="true" />
+        </Button>
+      ))}
     </div>
   )
+}
+
+function getPopupActionIconName(action: string): IconName {
+  if (action === 'edit') {
+    return 'Pencil'
+  }
+  if (action === 'copy-url') {
+    return 'Copy'
+  }
+  if (action === 'move') {
+    return 'Move'
+  }
+  if (action === 'delete') {
+    return 'Trash2'
+  }
+  return 'ExternalLink'
 }
 
 function PopupSearchChips({ chips }: { chips: PopupSearchChipViewModel[] }) {
@@ -821,8 +903,8 @@ function PopupSavedSearches({ state }: { state: PopupSavedSearchesViewModel }) {
             aria-controls="saved-searches-list"
             unstyled
           >
-            <span className="saved-search-toggle-label">已保存 {state.items.length}</span>
             <span className="saved-search-toggle-icon" aria-hidden="true"></span>
+            <span className="saved-search-toggle-label">已保存 {state.items.length}</span>
           </Button>
         ) : (
           <span className="saved-search-status">暂无保存项</span>
@@ -873,62 +955,13 @@ function PopupSavedSearches({ state }: { state: PopupSavedSearchesViewModel }) {
   )
 }
 
-function PopupBreadcrumbs({ segments }: { segments: PopupBreadcrumbSegmentViewModel[] }) {
-  if (!segments.length) {
-    return null
-  }
-
-  return (
-    <ol className="folder-breadcrumb-list">
-      {segments.map((segment, index) => (
-        <FragmentWithSeparator index={index} key={`${segment.id || 'current'}:${index}`}>
-          {segment.current || !segment.id ? (
-            <span className="folder-breadcrumb-current" aria-current="page" title={segment.path}>
-              {segment.label}
-            </span>
-          ) : (
-            <Button
-              className="folder-breadcrumb-link"
-              type="button"
-              data-folder-breadcrumb-id={segment.id}
-              title={segment.path}
-              unstyled
-            >
-              {segment.label}
-            </Button>
-          )}
-        </FragmentWithSeparator>
-      ))}
-    </ol>
-  )
-}
-
-function FragmentWithSeparator({
-  children,
-  index
-}: {
-  children: ReactNode
-  index: number
-}) {
-  return (
-    <>
-      {index > 0 ? <li className="folder-breadcrumb-separator" aria-hidden="true">&gt;</li> : null}
-      <li>{children}</li>
-    </>
-  )
-}
-
 function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel }) {
   if (state.status === 'hidden') {
     return null
   }
 
   if (state.status === 'page-loading') {
-    return (
-      <div className="state-panel">
-        <PopupLoadingState state={{ label: '正在读取当前网页…' }} />
-      </div>
-    )
+    return <PopupSmartPageRevealCard page={state.page} loading />
   }
 
   if (state.status === 'loading') {
@@ -953,7 +986,7 @@ function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel 
           <PopupSmartExitButton />
         </div>
         <div className="error-banner">{state.error || '智能分类失败，请稍后重试。'}</div>
-        <div className="smart-actions smart-actions-three">
+        <Toolbar className="smart-actions smart-actions-three" unstyled>
           <Button className="smart-cancel-button" type="button" data-smart-action="manual-folder" unstyled>
             手动选择
           </Button>
@@ -963,7 +996,7 @@ function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel 
           <Button className="smart-classify-button" type="button" data-smart-action="classify" unstyled>
             重试
           </Button>
-        </div>
+        </Toolbar>
       </>
     )
   }
@@ -972,16 +1005,56 @@ function PopupSmartClassifier({ state }: { state: PopupSmartClassifierViewModel 
     return <PopupSmartPermission state={state} />
   }
 
-  return <PopupSmartPageCard page={state.page} />
+  return <PopupSmartPageRevealCard page={state.page} loading={false} />
 }
 
 function PopupSmartPageCard({ page }: { page: PopupSmartPageViewModel | null }) {
+  return (
+    <article className={getPopupSmartPageCardClassName(page)}>
+      <PopupSmartPageCardContent page={page} />
+    </article>
+  )
+}
+
+function PopupSmartPageRevealCard({
+  loading,
+  page
+}: {
+  loading: boolean
+  page: PopupSmartPageViewModel | null
+}) {
+  return (
+    <div
+      className={['current-page-reveal-shell', 't-skel', loading ? 'is-loading' : 'is-revealed'].join(' ')}
+      data-state={loading ? 'loading' : 'ready'}
+      aria-busy={loading ? 'true' : 'false'}
+      role={loading ? 'status' : undefined}
+      aria-live="polite"
+    >
+      <div className="smart-page-card current-page-skeleton-card t-skel-skeleton is-pulsing" aria-hidden="true">
+        <PopupSmartPageSkeletonContent />
+      </div>
+      <article className={[getPopupSmartPageCardClassName(page), 'current-page-card-content', 't-skel-content'].join(' ')}>
+        <PopupSmartPageCardContent page={page} />
+      </article>
+    </div>
+  )
+}
+
+function getPopupSmartPageCardClassName(page: PopupSmartPageViewModel | null) {
+  return [
+    'smart-page-card',
+    page ? (page.bookmarked ? 'bookmarked' : 'unbookmarked') : 'current-page-placeholder'
+  ].join(' ')
+}
+
+function PopupSmartPageCardContent({ page }: { page: PopupSmartPageViewModel | null }) {
   if (!page) {
-    return null
+    return <PopupSmartPagePlaceholderContent />
   }
 
   return (
-    <article className={['smart-page-card', page.bookmarked ? 'bookmarked' : 'unbookmarked'].join(' ')}>
+    <>
       <div className="smart-page-main">
         <span className="smart-page-icon" aria-hidden="true">
           {page.favicon ? <img src={page.favicon} alt="" /> : page.fallbackIcon}
@@ -992,7 +1065,7 @@ function PopupSmartPageCard({ page }: { page: PopupSmartPageViewModel | null }) 
         </div>
       </div>
       {page.bookmarked ? (
-        <div className="current-page-actions" aria-label="当前页快捷操作">
+        <Toolbar className="current-page-actions" aria-label="当前页快捷操作" unstyled>
           <Button
             className={['current-page-action', 'primary', page.pinned ? 'pressed' : ''].filter(Boolean).join(' ')}
             type="button"
@@ -1006,18 +1079,68 @@ function PopupSmartPageCard({ page }: { page: PopupSmartPageViewModel | null }) 
           <Button className="current-page-action" type="button" data-current-page-action="edit" unstyled>
             编辑
           </Button>
-        </div>
+        </Toolbar>
       ) : (
-        <div className="current-page-actions" aria-label="当前页快捷操作">
+        <Toolbar className="current-page-actions" aria-label="当前页快捷操作" unstyled>
           <Button className="current-page-action primary" type="button" data-current-page-action="save" unstyled>
             快速保存
           </Button>
           <Button className="current-page-action" type="button" data-smart-action="classify" unstyled>
             智能分类
           </Button>
-        </div>
+        </Toolbar>
       )}
-    </article>
+    </>
+  )
+}
+
+function PopupSmartPageSkeletonContent() {
+  return (
+    <>
+      <div className="smart-page-main current-page-skeleton-main">
+        <span className="popup-skeleton-dot current-page-skeleton-icon" aria-hidden="true"></span>
+        <span className="current-page-skeleton-copy" aria-hidden="true">
+          <span
+            className="popup-skeleton-bar current-page-skeleton-title"
+            style={{ '--skeleton-width': 0.64 } as CSSProperties}
+          ></span>
+          <span
+            className="popup-skeleton-bar current-page-skeleton-status"
+            style={{ '--skeleton-width': 0.86 } as CSSProperties}
+          ></span>
+        </span>
+      </div>
+      <span className="current-page-actions current-page-skeleton-actions" aria-hidden="true">
+        <span className="popup-skeleton-bar current-page-skeleton-action"></span>
+        <span className="popup-skeleton-bar current-page-skeleton-action secondary"></span>
+      </span>
+    </>
+  )
+}
+
+function PopupSmartPagePlaceholderContent() {
+  return (
+    <>
+      <div className="smart-page-main">
+        <span className="smart-page-icon current-page-placeholder-icon" aria-hidden="true">
+          <Icon name="PanelRight" size={15} />
+        </span>
+        <div className="smart-page-copy">
+          <p className="smart-page-title">当前标签页</p>
+          <p className="smart-page-status" title="打开网页后可快速保存或智能分类">
+            打开网页后可快速保存或智能分类
+          </p>
+        </div>
+      </div>
+      <Toolbar className="current-page-actions is-placeholder" aria-label="当前页快捷操作" unstyled>
+        <Button className="current-page-action primary" type="button" disabled unstyled>
+          快速保存
+        </Button>
+        <Button className="current-page-action" type="button" disabled unstyled>
+          智能分类
+        </Button>
+      </Toolbar>
+    </>
   )
 }
 
@@ -1056,7 +1179,7 @@ function PopupSmartPermission({ state }: { state: PopupSmartClassifierViewModel 
         ) : null}
         {state.error ? <p className="smart-permission-error">{state.error}</p> : null}
       </div>
-      <div className="smart-actions">
+      <Toolbar className="smart-actions" unstyled>
         <Button className="smart-cancel-button" type="button" data-smart-action="manual-folder" unstyled>
           手动选择
         </Button>
@@ -1066,7 +1189,7 @@ function PopupSmartPermission({ state }: { state: PopupSmartClassifierViewModel 
         <Button className="smart-classify-button" type="button" data-smart-action="grant-permission" unstyled>
           授权并继续
         </Button>
-      </div>
+      </Toolbar>
     </article>
   )
 }
@@ -1094,13 +1217,15 @@ function PopupSmartLoading({ state }: { state: PopupSmartClassifierViewModel }) 
             <span>{state.loadingLabel}</span>
             <small>{state.loadingStep}/{state.loadingStepCount}</small>
           </p>
-          <div className="smart-progress-track" aria-hidden="true">
-            <span
-              className="smart-progress-bar"
-              data-smart-progress-target={state.loadingProgress}
-              style={{ '--smart-progress-scale': state.loadingStartProgress / 100 } as CSSProperties}
-            ></span>
-          </div>
+          <Progress
+            className="smart-progress-track"
+            indicatorClassName="smart-progress-bar"
+            indicatorProps={{ 'data-smart-progress-target': state.loadingProgress } as Record<string, string | number>}
+            indicatorStyle={{ '--smart-progress-scale': state.loadingStartProgress / 100 } as CSSProperties}
+            label="智能分类进度"
+            value={state.loadingProgress}
+            unstyled
+          />
         </div>
       </div>
     </article>
@@ -1156,7 +1281,7 @@ function PopupSmartResult({ state }: { state: PopupSmartClassifierViewModel }) {
           <div className="state-panel compact">未生成可用推荐，请手动选择文件夹。</div>
         )}
       </div>
-      <div className="smart-actions">
+      <Toolbar className="smart-actions" unstyled>
         <Button className="smart-cancel-button" type="button" data-smart-action="reset" unstyled>
           取消
         </Button>
@@ -1169,7 +1294,7 @@ function PopupSmartResult({ state }: { state: PopupSmartClassifierViewModel }) {
         >
           {state.saved ? '已保存' : state.saving ? <PopupButtonLoadingLabel label="保存中" /> : '确认保存'}
         </Button>
-      </div>
+      </Toolbar>
     </article>
   )
 }

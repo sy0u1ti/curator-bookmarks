@@ -1,5 +1,14 @@
 @import "../shared/ui-refresh.css";
 
+:root {
+  --tabs-dur: 200ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-text-muted: var(--ui-text-secondary);
+  --tabs-text-active: var(--ui-text-primary);
+  --tabs-bar-bg: var(--ui-surface);
+  --tabs-pill-bg: var(--ui-surface-elevated);
+}
+
 .newtab-dashboard-overlay {
   position: fixed;
   inset: 0;
@@ -159,7 +168,7 @@
   background: rgba(0, 0, 0, 0.62);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--motion-surface) var(--motion-ease-out);
+  transition: opacity var(--modal-open-dur) var(--modal-ease);
 }
 
 .settings-backdrop.open {
@@ -257,7 +266,7 @@
 
 .settings-drawer-kicker {
   margin: 0;
-  color: rgba(59, 130, 246, 0.78);
+  color: rgba(245, 245, 247, 0.78);
   font-size: 10px;
   font-weight: 760;
   line-height: 1.2;
@@ -297,58 +306,13 @@
 }
 
 .settings-save-status[data-state="saved"] {
-  border-color: rgba(59, 130, 246, 0.2);
-  color: rgba(59, 130, 246, 0.9);
+  border-color: rgba(245, 245, 247, 0.2);
+  color: rgba(245, 245, 247, 0.9);
 }
 
 .settings-save-status[data-state="error"] {
   border-color: rgba(255, 183, 176, 0.24);
   color: rgba(255, 183, 176, 0.94);
-}
-
-.settings-group-tabs {
-  position: sticky;
-  top: 0;
-  z-index: 3;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 4px;
-  margin: 0 -2px;
-  padding: 12px 0 10px;
-  background: #050506;
-}
-
-.settings-group-tab {
-  display: inline-grid;
-  min-width: 0;
-  min-height: 32px;
-  place-items: center;
-  padding: 0 7px;
-  border: 1px solid rgba(245, 245, 247, 0.11);
-  border-radius: 7px;
-  background: rgba(245, 245, 247, 0.035);
-  color: rgba(245, 245, 247, 0.58);
-  cursor: pointer;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 720;
-  line-height: 1;
-}
-
-.settings-group-tab:hover,
-.settings-group-tab:focus-visible {
-  border-color: rgba(245, 245, 247, 0.2);
-  background: rgba(245, 245, 247, 0.06);
-  color: rgba(245, 245, 247, 0.88);
-  outline: none;
-}
-
-.settings-group-tab.active,
-.settings-group-tab[aria-pressed="true"],
-.settings-group-tab[aria-selected="true"] {
-  border-color: rgba(59, 130, 246, 0.42);
-  background: rgba(59, 130, 246, 0.18);
-  color: #bfdbfe;
 }
 
 .settings-section {
@@ -383,7 +347,7 @@
   -webkit-line-clamp: 2;
 }
 
-.settings-card {
+.settings-list {
   overflow: visible;
   border: 0;
   border-radius: 0;
@@ -504,7 +468,7 @@
 
 .setting-row-disabled .setting-select,
 .setting-row-disabled .setting-floating-field,
-.setting-row-disabled .setting-range,
+.setting-row-disabled .setting-slider,
 .setting-row-disabled .setting-segmented,
 .setting-row-disabled .search-engine-toggle-grid {
   opacity: 0.52;
@@ -631,8 +595,8 @@
 }
 
 .folder-candidate-card.selected {
-  border-color: rgba(59, 130, 246, 0.34);
-  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(245, 245, 247, 0.34);
+  background: rgba(245, 245, 247, 0.08);
 }
 
 .folder-source-selected-copy,
@@ -715,8 +679,8 @@
 }
 
 .folder-candidate-card.selected .folder-candidate-badge {
-  background: rgba(59, 130, 246, 0.16);
-  color: #93c5fd;
+  background: rgba(245, 245, 247, 0.16);
+  color: #f4f4f5;
 }
 
 .folder-source-empty {
@@ -789,6 +753,49 @@
   margin: 0;
 }
 
+.folder-search-input {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid rgba(245, 245, 247, 0.13);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 34px;
+  caret-color: var(--ui-text-primary);
+  box-shadow: none;
+  outline: none;
+  appearance: none;
+  transition:
+    border-color var(--ease-standard),
+    background-color var(--ease-standard),
+    color var(--ease-standard);
+}
+
+.folder-search-input:focus,
+.folder-search-input:focus-visible {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-hover);
+  box-shadow: none;
+  outline: none;
+}
+
+.folder-search-input::-webkit-search-decoration,
+.folder-search-input::-webkit-search-cancel-button,
+.folder-search-input::-webkit-search-results-button,
+.folder-search-input::-webkit-search-results-decoration {
+  display: none;
+  appearance: none;
+}
+
+.folder-search-input::placeholder {
+  color: var(--ui-text-disabled);
+}
+
 .folder-candidate-list {
   max-height: min(48vh, 360px);
   overflow-y: auto;
@@ -820,7 +827,7 @@
 
 .setting-switch {
   --secondary-container: #1e293b;
-  --primary: #3b82f6;
+  --primary: #f4f4f5;
   position: relative;
   display: inline-block;
   width: 3.7em;
@@ -866,7 +873,7 @@
 .setting-switch:focus-visible,
 .setting-switch-input:focus-visible + .setting-switch {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.32);
+  box-shadow: 0 0 0 2px rgba(245, 245, 247, 0.32);
 }
 
 .setting-select,
@@ -877,8 +884,8 @@
 .setting-url-input,
 .setting-link {
   display: inline-flex;
-  min-width: 118px;
-  max-width: 156px;
+  min-width: min(100%, var(--ui-select-control-width-compact));
+  max-width: min(100%, var(--ui-select-control-width));
   min-height: 30px;
   align-items: center;
   justify-content: flex-start;
@@ -901,6 +908,11 @@
     background-color var(--ease-standard),
     box-shadow var(--ease-standard),
     color var(--ease-standard);
+}
+
+.setting-select {
+  --base-select-control-width: var(--ui-select-control-width-compact);
+  width: min(100%, var(--base-select-control-width));
 }
 
 .setting-select.muted {
@@ -942,37 +954,15 @@
 }
 
 .setting-picker-button:focus-visible {
-  border-color: rgba(59, 130, 246, 0.52);
+  border-color: rgba(245, 245, 247, 0.52);
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(59, 130, 246, 0.16),
+    0 0 0 2px rgba(245, 245, 247, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .setting-picker-button.is-custom-selected {
   color: rgba(245, 245, 247, 0.94);
-}
-
-.setting-native-select {
-  display: block;
-  height: 30px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  outline: none;
-  appearance: none;
-  padding-right: 28px;
-  color-scheme: dark;
-  cursor: pointer;
-}
-
-.setting-native-select:focus-visible {
-  border-color: rgba(245, 245, 247, 0.34);
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(245, 245, 247, 0.1);
-}
-
-.setting-native-select:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 .background-featured-credit-row {
@@ -1011,6 +1001,12 @@
 .featured-wallpaper-modal.open {
   opacity: 1;
   pointer-events: auto;
+}
+
+.featured-wallpaper-modal.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--modal-close-dur) var(--modal-ease);
 }
 
 .featured-wallpaper-modal:not(.open) {
@@ -1141,7 +1137,7 @@
 }
 
 .featured-wallpaper-status[data-tone="success"] {
-  color: #93c5fd;
+  color: #f4f4f5;
 }
 
 .featured-wallpaper-status[data-tone="warning"] {
@@ -1230,19 +1226,19 @@
 
 .featured-wallpaper-card:hover,
 .featured-wallpaper-card:focus-visible {
-  border-color: rgba(59, 130, 246, 0.45);
+  border-color: rgba(245, 245, 247, 0.45);
   background: #141615;
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(59, 130, 246, 0.12),
+    0 0 0 2px rgba(245, 245, 247, 0.12),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .featured-wallpaper-card.is-selected {
-  border-color: rgba(59, 130, 246, 0.72);
+  border-color: rgba(245, 245, 247, 0.72);
   background: #142117;
   box-shadow:
-    0 0 0 2px rgba(59, 130, 246, 0.16),
+    0 0 0 2px rgba(245, 245, 247, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -1337,8 +1333,8 @@
 .featured-wallpaper-favorite:hover,
 .featured-wallpaper-favorite:focus-visible,
 .featured-wallpaper-favorite.is-favorite {
-  border-color: rgba(59, 130, 246, 0.56);
-  color: #93c5fd;
+  border-color: rgba(245, 245, 247, 0.56);
+  color: #f4f4f5;
   outline: none;
 }
 
@@ -1538,7 +1534,7 @@
 }
 
 .setting-status[data-tone="success"] {
-  color: rgba(59, 130, 246, 0.86);
+  color: rgba(245, 245, 247, 0.86);
 }
 
 .setting-status[data-tone="warning"] {
@@ -1554,11 +1550,6 @@
   display: block;
   width: 180px;
   margin: 0;
-}
-
-.setting-native-select option {
-  background: #0d0d0e;
-  color: rgba(245, 245, 247, 0.92);
 }
 
 .setting-color {
@@ -1723,7 +1714,7 @@
 .setting-slider-indicator {
   height: inherit;
   border-radius: inherit;
-  background: #93c5fd;
+  background: #f4f4f5;
 }
 
 .setting-slider-thumb {
@@ -1735,7 +1726,7 @@
     radial-gradient(circle at 35% 30%, #ffffff, #dddddf 72%);
   box-shadow:
     0 2px 8px rgba(0, 0, 0, 0.48),
-    0 0 0 4px rgba(59, 130, 246, 0.08);
+    0 0 0 4px rgba(245, 245, 247, 0.08);
 }
 
 .setting-slider-thumb:focus-within {
@@ -1751,86 +1742,20 @@
 }
 
 .setting-range {
-  --range-progress: 50%;
-  appearance: none;
-  width: 100%;
-  height: 22px;
-  margin: 0;
-  background: transparent;
-  accent-color: #f5f5f7;
-  cursor: pointer;
-}
-
-.setting-range:disabled {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.setting-range:focus-visible {
-  outline: none;
-}
-
-.setting-range::-webkit-slider-runnable-track {
-  height: 5px;
-  border-radius: 999px;
-  background:
-    linear-gradient(
-      90deg,
-      #93c5fd 0 var(--range-progress),
-      #2a2a2d var(--range-progress) 100%
-    );
-  box-shadow:
-    inset 0 1px 2px rgba(0, 0, 0, 0.52),
-    0 1px 0 rgba(255, 255, 255, 0.035);
-}
-
-.setting-range::-webkit-slider-thumb {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  margin-top: -6px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 35% 30%, #ffffff, #dddddf 72%);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.48),
-    0 0 0 4px rgba(59, 130, 246, 0.08);
-}
-
-.setting-range:focus-visible::-webkit-slider-thumb {
-  box-shadow:
-    0 2px 7px rgba(0, 0, 0, 0.36),
-    0 0 0 4px rgba(245, 245, 247, 0.12);
-}
-
-.setting-range::-moz-range-track {
-  height: 4px;
-  border-radius: 999px;
-  background: #2a2a2d;
-}
-
-.setting-range::-moz-range-progress {
-  height: 5px;
-  border-radius: 999px;
-  background: #93c5fd;
-}
-
-.setting-range::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 35% 30%, #ffffff, #dddddf 72%);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.48),
-    0 0 0 4px rgba(59, 130, 246, 0.08);
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* icon settings */
 
-.icon-settings-card {
+.icon-settings-list {
   display: grid;
   gap: 0;
 }
@@ -1980,8 +1905,7 @@
   .setting-row .setting-cache-control,
   .setting-row .setting-segmented,
   .setting-row .search-engine-toggle-grid,
-  .setting-row .setting-slider,
-  .setting-row .setting-range {
+  .setting-row .setting-slider {
     justify-self: stretch;
   }
 
@@ -2104,8 +2028,8 @@
 }
 
 .icon-preset-card.selected {
-  border-color: rgba(59, 130, 246, 0.34);
-  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(245, 245, 247, 0.34);
+  background: rgba(245, 245, 247, 0.08);
 }
 
 .icon-preset-preview {
@@ -2293,7 +2217,7 @@
 }
 
 .bookmark-menu-input,
-.bookmark-menu-select {
+.bookmark-menu-control {
   width: 100%;
   min-width: 0;
   min-height: 28px;
@@ -2314,29 +2238,14 @@
 }
 
 .bookmark-menu-input:focus {
-  border-color: #1f78d8;
-  box-shadow: 0 0 0 1px #1f78d8;
-}
-
-.bookmark-menu-select {
-  padding: 0 6px;
-  appearance: auto;
-  background: #121213;
-  color-scheme: dark;
-}
-
-.bookmark-menu-select option {
-  background: #121213;
-  color: rgba(245, 245, 247, 0.92);
-}
-
-.bookmark-menu-select option:checked {
-  background: #1f78d8;
-  color: #ffffff;
+  border-color: var(--ui-focus-ring);
+  box-shadow: none;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
 }
 
 .bookmark-menu-input:disabled,
-.bookmark-menu-select:disabled,
+.bookmark-menu-control:disabled,
 .bookmark-menu-action:disabled {
   cursor: default;
   opacity: 0.62;
@@ -2406,7 +2315,7 @@
 
 .bookmark-menu-status {
   margin: 8px 2px 0;
-  color: #bfdbfe;
+  color: var(--ui-accent-text);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -2595,10 +2504,7 @@
     min-height: 0;
   }
 
-  .newtab-search-input {
-    font-size: 13px;
-  }
-
+  
   .newtab-clock-time {
     font-size: calc(20px * var(--clock-scale));
   }
@@ -2693,8 +2599,7 @@
   .setting-row .setting-cache-control,
   .setting-row .setting-segmented,
   .setting-row .search-engine-toggle-grid,
-  .setting-row .setting-slider,
-  .setting-row .setting-range {
+  .setting-row .setting-slider {
     justify-self: stretch;
   }
 
@@ -2753,100 +2658,12 @@
   }
 }
 
-/* Unified native select styling */
-.setting-native-select,
-.bookmark-menu-select,
-.newtab-shell select,
-.settings-drawer select {
-  min-width: 0;
-  border-color: rgba(245, 245, 247, 0.15);
-  border-radius: 7px;
-  appearance: none;
-  -webkit-appearance: none;
-  background-color: #080809;
-  background-image:
-    url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.25 6.25 8 10l3.75-3.75' fill='none' stroke='rgba(245,245,247,0.78)' stroke-width='1.7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.015)),
-    linear-gradient(90deg, transparent calc(100% - 31px), rgba(255, 255, 255, 0.055) calc(100% - 31px));
-  background-position:
-    right 9px center,
-    0 0,
-    0 0;
-  background-size:
-    14px 14px,
-    100% 100%,
-    100% 100%;
-  background-repeat: no-repeat;
-  color: rgba(245, 245, 247, 0.9);
-  color-scheme: dark;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.38);
-  transition:
-    border-color var(--ease-standard),
-    background-color var(--ease-standard),
-    box-shadow var(--ease-standard),
-    color var(--ease-standard);
-}
-
-.setting-native-select {
-  padding-right: 35px;
-  text-overflow: ellipsis;
-}
-
-.bookmark-menu-select {
-  padding: 0 34px 0 10px;
-}
-
-.setting-native-select:hover,
-.bookmark-menu-select:hover,
-.newtab-shell select:hover,
-.settings-drawer select:hover {
-  border-color: rgba(245, 245, 247, 0.26);
-  background-color: #101013;
-  color: #ffffff;
-}
-
-.setting-native-select:focus-visible,
-.bookmark-menu-select:focus-visible,
-.newtab-shell select:focus-visible,
-.settings-drawer select:focus-visible {
-  border-color: rgba(59, 130, 246, 0.52);
-  outline: none;
-  box-shadow:
-    0 0 0 2px rgba(59, 130, 246, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
-}
-
-.setting-native-select:disabled,
-.bookmark-menu-select:disabled,
-.newtab-shell select:disabled,
-.settings-drawer select:disabled {
-  cursor: default;
-  opacity: 0.48;
-}
-
-.setting-native-select option,
-.bookmark-menu-select option,
-.newtab-shell select option,
-.settings-drawer select option {
-  background: #101013;
-  color: rgba(245, 245, 247, 0.92);
-}
-
-.setting-native-select option:checked,
-.bookmark-menu-select option:checked,
-.newtab-shell select option:checked,
-.settings-drawer select option:checked {
-  background: #1d4ed8;
-  color: #ffffff;
-}
-
 .custom-select {
   position: relative;
   display: inline-block;
-  min-width: 118px;
-  max-width: 156px;
+  --base-select-control-width: var(--ui-select-control-width-compact);
+  min-width: min(100%, var(--base-select-control-width));
+  max-width: min(100%, var(--ui-select-control-width));
   vertical-align: middle;
 }
 
@@ -2856,25 +2673,16 @@
   max-width: none;
 }
 
-.custom-select-native {
-  position: absolute !important;
-  inset: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 0 !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
 .custom-select-trigger {
   display: flex;
-  width: 100%;
+  width: min(100%, var(--base-select-control-width));
+  min-width: min(100%, var(--base-select-control-width));
   min-height: 30px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 9px;
   overflow: hidden;
-  padding: 0 7px 0 11px;
+  padding: 0 11px;
   border: 1px solid rgba(245, 245, 247, 0.15);
   border-radius: 7px;
   background:
@@ -2893,6 +2701,8 @@
 }
 
 .bookmark-menu-row .custom-select-trigger {
+  width: 100%;
+  min-width: 0;
   min-height: 28px;
 }
 
@@ -2928,12 +2738,13 @@
   height: 7px;
   border-right: 1.6px solid currentColor;
   border-bottom: 1.6px solid currentColor;
-  transform: rotate(45deg) translateY(-2px);
+  transform: rotate(-45deg);
   transition: transform var(--ease-standard);
 }
 
-.custom-select[data-open="true"] .custom-select-trigger-arrow::before {
-  transform: rotate(225deg) translateY(-2px);
+.custom-select-trigger-arrow[data-popup-open]::before,
+.custom-select-trigger[data-popup-open] .custom-select-trigger-arrow::before {
+  transform: rotate(45deg);
 }
 
 .custom-select-trigger:hover {
@@ -2943,10 +2754,10 @@
 }
 
 .custom-select-trigger:focus-visible {
-  border-color: rgba(59, 130, 246, 0.52);
+  border-color: rgba(245, 245, 247, 0.52);
   outline: none;
   box-shadow:
-    0 0 0 2px rgba(59, 130, 246, 0.16),
+    0 0 0 2px rgba(245, 245, 247, 0.16),
     inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
@@ -2959,7 +2770,9 @@
   position: relative;
   z-index: 10000;
   display: grid;
-  width: var(--anchor-width);
+  width: max-content;
+  min-width: var(--anchor-width);
+  max-width: min(var(--available-width, calc(100vw - 24px)), var(--ui-select-menu-max-width));
   max-height: min(280px, var(--available-height));
   gap: 3px;
   overflow-y: auto;
@@ -2983,9 +2796,11 @@
 
 .custom-select-option {
   display: flex;
+  min-width: var(--anchor-width);
+  max-width: min(var(--available-width, calc(100vw - 24px)), var(--ui-select-menu-max-width));
   min-height: 28px;
   align-items: center;
-  overflow: hidden;
+  overflow: visible;
   padding: 0 9px;
   border-radius: 6px;
   color: rgba(245, 245, 247, 0.86);
@@ -2993,18 +2808,17 @@
   font-size: 12px;
   font-weight: 620;
   line-height: 1.2;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .custom-select-option:hover,
 .custom-select-option.is-active {
-  background: rgba(59, 130, 246, 0.13);
+  background: rgba(245, 245, 247, 0.13);
   color: #ffffff;
 }
 
 .custom-select-option[aria-selected="true"] {
-  background: rgba(59, 130, 246, 0.2);
+  background: rgba(245, 245, 247, 0.2);
   color: #ffffff;
 }
 
@@ -3039,7 +2853,7 @@
 }
 
 .newtab-dashboard-fallback-kicker {
-  color: #3b82f6;
+  color: #f4f4f5;
   letter-spacing: 0;
 }
 
@@ -3068,21 +2882,19 @@
 }
 
 .settings-drawer,
-.settings-drawer :where(button, input, select, textarea) {
+.settings-drawer :where(button, .base-input, .base-textarea) {
   font-family: var(--font-sans);
   letter-spacing: 0;
 }
 
 .settings-drawer :where(
-  .settings-card,
+  .settings-list,
   .setting-row,
   .setting-switch,
-  .settings-group-tab,
   .settings-close,
   .setting-trust-note,
   .settings-save-status,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -3142,7 +2954,7 @@
 }
 
 .settings-drawer-kicker {
-  color: #3b82f6;
+  color: #f4f4f5;
   letter-spacing: 0;
 }
 
@@ -3162,8 +2974,8 @@
 }
 
 .settings-save-status[data-state="saved"] {
-  border-color: rgba(59, 130, 246, 0.42);
-  color: #3b82f6;
+  border-color: rgba(245, 245, 247, 0.42);
+  color: #f4f4f5;
 }
 
 .settings-save-status[data-state="error"] {
@@ -3185,89 +2997,6 @@
   color: #ffffff;
 }
 
-.settings-group-tabs {
-  --settings-tab-index: 0;
-  --settings-tab-count: 5;
-  --settings-tab-gap: 0px;
-  gap: 0;
-  margin: 0;
-  padding: 14px 0 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  background: #000000;
-}
-
-.settings-group-tabs::after {
-  content: "";
-  position: absolute;
-  top: 14px;
-  bottom: 12px;
-  left: calc(
-    var(--settings-tab-index) *
-    ((100% - (var(--settings-tab-count) - 1) * var(--settings-tab-gap)) / var(--settings-tab-count) + var(--settings-tab-gap))
-  );
-  z-index: 0;
-  width: calc((100% - (var(--settings-tab-count) - 1) * var(--settings-tab-gap)) / var(--settings-tab-count));
-  border: 1px solid rgba(59, 130, 246, 0.52);
-  background: #111112;
-  transform: translate3d(0, 0, 0);
-  transition:
-    left 220ms cubic-bezier(0.2, 0.88, 0.22, 1),
-    border-color 160ms ease,
-    background-color 160ms ease;
-  pointer-events: none;
-}
-
-.settings-group-tab {
-  position: relative;
-  z-index: 1;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-right-width: 0;
-  background: transparent;
-  color: rgba(247, 247, 247, 0.58);
-  box-shadow: none;
-  transition:
-    color 160ms ease,
-    border-color 160ms ease,
-    background-color 160ms ease;
-}
-
-.settings-group-tab:last-child {
-  border-right-width: 1px;
-}
-
-.settings-group-tab::before {
-  content: none;
-  display: none;
-}
-
-.settings-group-tab:hover,
-.settings-group-tab:focus-visible {
-  border-color: rgba(255, 255, 255, 0.28);
-  background: rgba(255, 255, 255, 0.045);
-  color: #ffffff;
-}
-
-.settings-group-tab.active,
-.settings-group-tab[aria-pressed="true"],
-.settings-group-tab[aria-selected="true"] {
-  border-color: transparent;
-  border-right-width: 1px;
-  background: transparent;
-  color: #ffffff;
-}
-
-.settings-group-tab.active + .settings-group-tab,
-.settings-group-tab[aria-pressed="true"] + .settings-group-tab,
-.settings-group-tab[aria-selected="true"] + .settings-group-tab {
-  border-left-width: 0;
-}
-
-.settings-group-tab.active::before,
-.settings-group-tab[aria-pressed="true"]::before,
-.settings-group-tab[aria-selected="true"]::before {
-  color: #3b82f6;
-}
-
 .settings-section {
   margin-top: 18px;
 }
@@ -3280,7 +3009,7 @@
   letter-spacing: 0;
 }
 
-.settings-card {
+.settings-list {
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -3293,10 +3022,10 @@
   border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.settings-card > .setting-row:first-child,
-.settings-card > .newtab-module-settings-list:first-child .newtab-module-setting-row:first-child,
-.settings-card > .icon-live-preview-panel:first-child,
-.settings-card > .folder-source-panel:first-child {
+.settings-list > .setting-row:first-child,
+.settings-list > .newtab-module-settings-list:first-child .newtab-module-setting-row:first-child,
+.settings-list > .icon-live-preview-panel:first-child,
+.settings-list > .folder-source-panel:first-child {
   border-top: 0;
 }
 
@@ -3350,7 +3079,7 @@
 .folder-candidate-card.selected,
 .search-engine-toggle.active,
 .setting-segmented-button.selected {
-  border-color: rgba(59, 130, 246, 0.46);
+  border-color: rgba(245, 245, 247, 0.46);
   background: rgba(47, 124, 246, 0.18);
   color: #ffffff;
 }
@@ -3375,9 +3104,9 @@
 
 .folder-candidate-card.selected .folder-candidate-badge,
 .setting-status[data-tone="success"] {
-  border-color: rgba(59, 130, 246, 0.46);
+  border-color: rgba(245, 245, 247, 0.46);
   background: rgba(47, 124, 246, 0.18);
-  color: #3b82f6;
+  color: #f4f4f5;
 }
 
 .setting-switch {
@@ -3424,7 +3153,7 @@
 
 .setting-switch:focus-visible,
 .setting-switch-input:focus-visible + .setting-switch {
-  outline: 2px solid rgba(59, 130, 246, 0.58);
+  outline: 2px solid rgba(245, 245, 247, 0.58);
   outline-offset: 2px;
   box-shadow: none;
 }
@@ -3435,7 +3164,6 @@
 }
 
 .setting-select,
-.setting-native-select,
 .setting-color,
 .setting-file-button,
 .setting-picker-button,
@@ -3451,16 +3179,10 @@
   box-shadow: none;
 }
 
-.setting-native-select,
-.settings-drawer select {
+.setting-select.custom-select-trigger {
   background-color: #000000;
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Ctext x='5' y='13' fill='%23b7ff8a' font-family='Consolas, monospace' font-size='13' font-weight='800'%3E%26gt;%3C/text%3E%3C/svg%3E");
-  background-position: 10px 50%;
-  background-size: 18px 18px;
-  background-repeat: no-repeat;
-  padding-left: 34px;
-  padding-right: 12px;
+  background-image: none;
+  padding: 0 12px;
 }
 
 .setting-picker-button::after {
@@ -3476,7 +3198,7 @@
   width: auto;
   height: auto;
   border: 0;
-  color: #3b82f6;
+  color: #f4f4f5;
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
@@ -3496,8 +3218,7 @@
   transform: translate(2px, -50%);
 }
 
-.setting-native-select:hover,
-.settings-drawer select:hover,
+.setting-select.custom-select-trigger:hover,
 .setting-file-button:hover,
 .setting-picker-button:hover,
 .setting-link:hover {
@@ -3506,40 +3227,17 @@
   color: #ffffff;
 }
 
-.setting-native-select:focus-visible,
-.settings-drawer select:focus-visible,
+.setting-select.custom-select-trigger:focus-visible,
 .setting-file-button:focus-visible,
 .setting-picker-button:focus-visible,
 .setting-floating-field:focus-within .setting-text-input,
 .setting-floating-field:focus-within .setting-url-input,
 .setting-floating-field .setting-text-input:focus-visible,
 .setting-floating-field .setting-url-input:focus-visible {
-  border-color: rgba(59, 130, 246, 0.52);
+  border-color: rgba(245, 245, 247, 0.52);
   background: #050505;
   outline: none;
   box-shadow: none;
-}
-
-.setting-range::-webkit-slider-runnable-track {
-  border-radius: 0;
-  background:
-    linear-gradient(
-      90deg,
-      #3b82f6 0 var(--range-progress),
-      #2a2a2a var(--range-progress) 100%
-    );
-}
-
-.setting-range::-webkit-slider-thumb {
-  border-radius: 0;
-  background: #ffffff;
-  box-shadow: none;
-}
-
-.setting-range::-moz-range-track,
-.setting-range::-moz-range-progress,
-.setting-range::-moz-range-thumb {
-  border-radius: 0;
 }
 
 .newtab-delete-toast-panel {
@@ -3555,7 +3253,7 @@
   justify-content: flex-start;
   gap: 8px;
   min-height: 32px;
-  padding: 0 12px 0 34px;
+  padding: 0 12px;
   border-color: rgba(255, 255, 255, 0.16);
   border-radius: 0;
   background: #000000;
@@ -3564,13 +3262,13 @@
 
 .settings-drawer .custom-select-trigger-arrow,
 .custom-select-setting .custom-select-trigger-arrow {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 12px;
+  position: relative;
+  top: auto;
+  bottom: auto;
+  left: auto;
   display: grid;
   width: 14px;
-  height: auto;
+  height: 14px;
   place-items: center;
   border-radius: 0;
   background: transparent;
@@ -3580,28 +3278,30 @@
 .settings-drawer .custom-select-trigger-arrow::before,
 .custom-select-setting .custom-select-trigger-arrow::before {
   content: "";
-  position: absolute;
-  top: 50%;
-  left: 50%;
+  position: relative;
+  top: auto;
+  left: auto;
   width: 6px;
   height: 6px;
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
-  transform: translate(-50%, -50%) rotate(-45deg);
+  transform: rotate(-45deg);
   transition: color var(--ease-standard), transform var(--ease-standard);
 }
 
-.settings-drawer .custom-select[data-open="true"] .custom-select-trigger-arrow::before,
-.custom-select-setting[data-open="true"] .custom-select-trigger-arrow::before {
-  color: #3b82f6;
-  transform: translate(calc(-50% + 2px), -50%) rotate(45deg);
+.settings-drawer .custom-select-trigger-arrow[data-popup-open]::before,
+.settings-drawer .custom-select-trigger[data-popup-open] .custom-select-trigger-arrow::before,
+.custom-select-setting .custom-select-trigger-arrow[data-popup-open]::before,
+.custom-select-setting .custom-select-trigger[data-popup-open] .custom-select-trigger-arrow::before {
+  color: #f4f4f5;
+  transform: rotate(45deg);
 }
 
 .settings-drawer .custom-select-trigger:hover,
 .settings-drawer .custom-select-trigger:focus-visible,
 .custom-select-setting .custom-select-trigger:hover,
 .custom-select-setting .custom-select-trigger:focus-visible {
-  border-color: rgba(59, 130, 246, 0.52);
+  border-color: rgba(245, 245, 247, 0.52);
   background: #050505;
   box-shadow: none;
 }
@@ -3642,7 +3342,7 @@
 .folder-candidate-card.selected,
 .icon-preset-card.selected,
 .featured-wallpaper-card.is-selected {
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(245, 245, 247, 0.12);
 }
 
 .custom-select-setting-list {
@@ -3733,12 +3433,12 @@
 }
 
 .folder-candidates-toggle.expanded::before {
-  color: #3b82f6;
+  color: #f4f4f5;
   transform: translate(2px, -50%) rotate(45deg);
 }
 
 .icon-advanced-toggle.expanded::before {
-  color: #3b82f6;
+  color: #f4f4f5;
   transform: translate(2px, -50%);
 }
 
@@ -3904,46 +3604,11 @@
   color: var(--ui-danger);
 }
 
-.settings-group-tabs {
-  gap: 4px;
-  margin: 0 -2px;
-  padding: 12px 0 10px;
-  border-bottom: 0;
-  background: linear-gradient(180deg, rgba(23, 25, 29, 0.98), rgba(23, 25, 29, 0.88));
-}
-
-.settings-group-tabs::after {
-  content: none;
-}
-
-.settings-group-tab {
-  border: 1px solid var(--ui-divider);
-  border-right-width: 1px;
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-surface);
-  color: var(--ui-text-tertiary);
-}
-
-.settings-group-tab:hover,
-.settings-group-tab:focus-visible {
-  border-color: var(--ui-divider-strong);
-  background: var(--ui-surface-hover);
-  color: var(--ui-text-primary);
-}
-
-.settings-group-tab.active,
-.settings-group-tab[aria-pressed="true"],
-.settings-group-tab[aria-selected="true"] {
-  border-color: var(--ui-accent-line);
-  background: var(--ui-surface-selected);
-  color: #bfdbfe;
-}
-
 .settings-section h2 {
   color: var(--ui-text-secondary);
 }
 
-.settings-card {
+.settings-list {
   overflow: hidden;
   border: 1px solid var(--ui-divider);
   border-radius: var(--ui-radius-group);
@@ -4026,7 +3691,7 @@
 .icon-preset-card.selected {
   border-color: var(--ui-accent-line);
   background: var(--ui-surface-selected);
-  color: #bfdbfe;
+  color: var(--ui-accent-text);
 }
 
 .folder-source-summary strong,
@@ -4065,7 +3730,7 @@
 
 .setting-switch:focus-visible,
 .setting-switch-input:focus-visible + .setting-switch {
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.14);
 }
 
 .setting-slider-track {
@@ -4083,7 +3748,6 @@
 }
 
 .setting-select,
-.setting-native-select,
 .setting-color,
 .setting-file-button,
 .setting-picker-button,
@@ -4092,7 +3756,7 @@
 .setting-link,
 .setting-floating-field,
 .setting-cache-control,
-.bookmark-menu-select,
+.bookmark-menu-control,
 .settings-drawer .custom-select-trigger,
 .custom-select-setting .custom-select-trigger {
   border-color: var(--ui-divider);
@@ -4105,11 +3769,10 @@
 .setting-file-button:hover,
 .setting-picker-button:hover,
 .setting-link:hover,
-.setting-native-select:hover,
 .setting-floating-field:focus-within,
 .setting-text-input:focus-visible,
 .setting-url-input:focus-visible,
-.bookmark-menu-select:focus-visible,
+.bookmark-menu-control:focus-visible,
 .settings-drawer .custom-select-trigger:hover,
 .settings-drawer .custom-select-trigger:focus-visible,
 .custom-select-setting .custom-select-trigger:hover,
@@ -4118,7 +3781,7 @@
   background: var(--ui-surface-hover);
 }
 
-.setting-native-select:focus-visible,
+.setting-select.custom-select-trigger:focus-visible,
 .setting-file-button:focus-visible,
 .setting-picker-button:focus-visible,
 .setting-floating-field:focus-within .setting-text-input,
@@ -4126,7 +3789,7 @@
 .setting-floating-field .setting-text-input:focus-visible,
 .setting-floating-field .setting-url-input:focus-visible {
   border-color: var(--ui-focus-ring);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.12);
 }
 
 .custom-select-setting-list {
@@ -4148,22 +3811,6 @@
 
 .custom-select-setting-list .custom-select-option[aria-selected="true"] {
   background: var(--ui-surface-selected);
-}
-
-.setting-range::-webkit-slider-runnable-track {
-  border-radius: var(--ui-radius-pill);
-  background: var(--ui-surface-elevated);
-}
-
-.setting-range::-webkit-slider-thumb {
-  border-color: var(--ui-accent-line);
-  background: var(--ui-accent-strong);
-}
-
-.setting-range::-moz-range-track,
-.setting-range::-moz-range-progress,
-.setting-range::-moz-range-thumb {
-  border-radius: var(--ui-radius-pill);
 }
 
 .background-featured-credit {
@@ -4223,7 +3870,7 @@
 .featured-wallpaper-card.is-selected {
   border-color: var(--ui-accent-line);
   background: var(--ui-surface-selected);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.12);
 }
 
 .featured-wallpaper-favorite,
@@ -4291,14 +3938,12 @@
 }
 
 .settings-drawer :where(
-  .settings-card,
+  .settings-list,
   .setting-row,
-  .settings-group-tab,
   .settings-close,
   .setting-trust-note,
   .settings-save-status,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -4339,7 +3984,7 @@
   border-radius: var(--ui-radius-control);
 }
 
-.settings-drawer :where(.settings-card),
+.settings-drawer :where(.settings-list),
 .featured-wallpaper-modal :where(.featured-wallpaper-panel),
 .bookmark-edit-menu,
 .bookmark-add-menu,
@@ -4348,9 +3993,7 @@
 }
 
 .settings-drawer :where(
-  .settings-card,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -4373,16 +4016,13 @@
 
 /* UI refresh final closure: catch dynamically rendered NewTab setting controls. */
 .settings-drawer :where(
-  .settings-card,
   .setting-row:hover,
-  .settings-group-tab,
   .settings-close,
   .settings-save-status,
   .setting-status,
   .setting-cache-status,
   .setting-trust-note,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -4397,26 +4037,20 @@
   .setting-value,
   .setting-cache-control,
   .search-engine-toggle,
-  .folder-source-panel,
   .folder-source-selected-item,
   .folder-candidate-card,
   .folder-candidates-toggle,
   .folder-candidate-badge,
-  .icon-live-preview-panel,
   .icon-live-preview,
   .icon-live-preview-tile,
   .icon-preset-card,
   .icon-advanced-toggle,
-  .reveal-panel-body,
   .module-setting-order-button,
   .custom-select-trigger,
   .custom-select-setting-list,
   .custom-select-option,
-  input[type="text"],
-  input[type="url"],
-  input[type="search"],
-  textarea,
-  select
+  .base-input,
+  .base-textarea
 ),
 .featured-wallpaper-modal :where(
   .featured-wallpaper-panel,
@@ -4448,7 +4082,7 @@
   border-radius: var(--ui-radius-control);
 }
 
-.settings-drawer :where(.settings-card),
+.settings-drawer :where(.settings-list),
 .featured-wallpaper-modal :where(.featured-wallpaper-panel),
 .bookmark-edit-menu,
 .bookmark-add-menu,
@@ -4480,12 +4114,7 @@
   box-shadow: var(--ui-shadow-panel);
 }
 
-.settings-group-tabs {
-  background: var(--ui-bg-page);
-  background-image: none;
-}
-
-.settings-card,
+.settings-list,
 .featured-wallpaper-card,
 .featured-wallpaper-state,
 .featured-wallpaper-section-empty,
@@ -4498,14 +4127,12 @@
 }
 
 .settings-drawer :where(
-  .settings-group-tab,
   .settings-close,
   .settings-save-status,
   .setting-status,
   .setting-cache-status,
   .setting-trust-note,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -4532,11 +4159,8 @@
   .custom-select-trigger,
   .custom-select-setting-list,
   .custom-select-option,
-  input[type="text"],
-  input[type="url"],
-  input[type="search"],
-  textarea,
-  select
+  .base-input,
+  .base-textarea
 ),
 .featured-wallpaper-modal :where(
   .featured-wallpaper-close,
@@ -4554,7 +4178,6 @@
 }
 
 .settings-drawer :where(
-  .settings-group-tab,
   .settings-close,
   .setting-file-button,
   .setting-picker-button,
@@ -4569,7 +4192,6 @@
   .custom-select-option
 ):hover,
 .settings-drawer :where(
-  .settings-group-tab,
   .settings-close,
   .setting-file-button,
   .setting-picker-button,
@@ -4594,9 +4216,6 @@
   color: var(--ui-text-primary);
 }
 
-.settings-group-tab.active,
-.settings-group-tab[aria-pressed="true"],
-.settings-group-tab[aria-selected="true"],
 .folder-candidate-card.selected,
 .search-engine-toggle.active,
 .setting-segmented-button.selected,
@@ -4605,7 +4224,7 @@
 .custom-select-setting-list .custom-select-option[aria-selected="true"] {
   border-color: var(--ui-accent-line);
   background: var(--ui-surface-selected);
-  color: #bfdbfe;
+  color: var(--ui-accent-text);
 }
 
 .setting-switch[data-checked],
@@ -4636,7 +4255,6 @@
   background: var(--ui-accent-strong);
 }
 
-.setting-native-select:focus-visible,
 .setting-file-button:focus-visible,
 .setting-picker-button:focus-visible,
 .setting-floating-field:focus-within .setting-text-input,
@@ -4649,20 +4267,7 @@
   box-shadow: 0 0 0 3px var(--ui-accent-soft);
 }
 
-.setting-range::-webkit-slider-runnable-track {
-  background:
-    linear-gradient(
-      90deg,
-      var(--ui-accent-strong) 0 var(--range-progress),
-      var(--ui-surface-elevated) var(--range-progress) 100%
-    );
-}
-
-.setting-range::-moz-range-progress {
-  background: var(--ui-accent-strong);
-}
-
-/* Production polish closure: NewTab settings drawer and popovers override legacy square pass. */
+/* Production polish closure: NewTab settings drawer and popovers use the final compact theme. */
 .newtab-dashboard-overlay,
 .settings-backdrop,
 .featured-wallpaper-modal {
@@ -4703,10 +4308,10 @@
   background-clip: padding-box;
 }
 
-.settings-drawer :where(button, input, select, textarea),
-.featured-wallpaper-modal :where(button, input, select, textarea),
-.bookmark-edit-menu :where(button, input, select, textarea),
-.bookmark-add-menu :where(button, input, select, textarea),
+.settings-drawer :where(button, .base-input, .base-textarea),
+.featured-wallpaper-modal :where(button, .base-input, .base-textarea),
+.bookmark-edit-menu :where(button, .base-input, .base-textarea),
+.bookmark-add-menu :where(button, .base-input, .base-textarea),
 .newtab-delete-toast :where(button) {
   font-family: var(--font-sans);
   letter-spacing: 0;
@@ -4715,7 +4320,6 @@
 .settings-drawer :where(
   button,
   .settings-close,
-  .settings-group-tab,
   .setting-file-button,
   .setting-picker-button,
   .setting-link,
@@ -4739,16 +4343,13 @@
 }
 
 .settings-drawer :where(
-  .settings-card,
   .setting-row:hover,
-  .settings-group-tab,
   .settings-close,
   .setting-trust-note,
   .settings-save-status,
   .setting-status,
   .setting-cache-status,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -4763,28 +4364,22 @@
   .setting-value,
   .setting-cache-control,
   .search-engine-toggle,
-  .folder-source-panel,
   .folder-source-selected-item,
   .folder-candidate-card,
   .folder-candidates-toggle,
   .folder-candidate-badge,
-  .icon-live-preview-panel,
   .icon-live-preview,
   .icon-live-preview-tile,
   .icon-live-preview-shell,
   .icon-preset-card,
   .icon-advanced-toggle,
-  .reveal-panel-body,
   .module-setting-order-button,
   .custom-select-trigger,
   .custom-select-trigger-arrow,
   .custom-select-setting-list,
   .custom-select-option,
-  input[type="text"],
-  input[type="url"],
-  input[type="search"],
-  textarea,
-  select
+  .base-input,
+  .base-textarea
 ),
 .featured-wallpaper-modal :where(
   .featured-wallpaper-panel,
@@ -4824,7 +4419,7 @@
   border-radius: var(--ui-radius-control);
 }
 
-.settings-drawer :where(.settings-card),
+.settings-drawer :where(.settings-list),
 .featured-wallpaper-modal :where(.featured-wallpaper-panel),
 .bookmark-edit-menu,
 .bookmark-add-menu,
@@ -4837,7 +4432,7 @@
   border-radius: var(--ui-radius-pill);
 }
 
-.settings-card,
+.settings-list,
 .featured-wallpaper-card,
 .featured-wallpaper-state,
 .featured-wallpaper-section-empty,
@@ -4850,14 +4445,12 @@
 }
 
 .settings-drawer :where(
-  .settings-group-tab,
   .settings-close,
   .settings-save-status,
   .setting-status,
   .setting-cache-status,
   .setting-trust-note,
   .setting-select,
-  .setting-native-select,
   .setting-color,
   .setting-file-button,
   .setting-picker-button,
@@ -4885,11 +4478,8 @@
   .custom-select-trigger,
   .custom-select-setting-list,
   .custom-select-option,
-  input[type="text"],
-  input[type="url"],
-  input[type="search"],
-  textarea,
-  select
+  .base-input,
+  .base-textarea
 ),
 .featured-wallpaper-modal :where(
   .featured-wallpaper-close,
@@ -4908,7 +4498,6 @@
 }
 
 .settings-drawer :where(
-  .settings-group-tab,
   .settings-close,
   .setting-file-button,
   .setting-picker-button,
@@ -4923,7 +4512,6 @@
   .custom-select-option
 ):hover,
 .settings-drawer :where(
-  .settings-group-tab,
   .settings-close,
   .setting-file-button,
   .setting-picker-button,
@@ -4950,37 +4538,6 @@
   color: var(--ui-text-primary);
 }
 
-.settings-group-tabs::after {
-  content: none;
-}
-
-.settings-group-tabs {
-  border: 0;
-  background: transparent;
-  background-image: none;
-  box-shadow: none;
-}
-
-.settings-group-tab {
-  position: relative;
-  z-index: 0;
-}
-
-.settings-group-tab.active,
-.settings-group-tab[aria-pressed="true"],
-.settings-group-tab[aria-selected="true"] {
-  z-index: 1;
-}
-
-.settings-group-tab.active + .settings-group-tab,
-.settings-group-tab[aria-pressed="true"] + .settings-group-tab,
-.settings-group-tab[aria-selected="true"] + .settings-group-tab {
-  border-left-width: 1px;
-}
-
-.settings-group-tab.active,
-.settings-group-tab[aria-pressed="true"],
-.settings-group-tab[aria-selected="true"],
 .folder-candidate-card.selected,
 .search-engine-toggle.active,
 .setting-segmented-button.selected,
@@ -4992,7 +4549,7 @@
   color: var(--ui-accent-text);
 }
 
-.settings-card {
+.settings-list {
   overflow: visible;
   border: 0;
   border-color: transparent;
@@ -5054,8 +4611,6 @@
   background: var(--ui-accent-strong);
 }
 
-.setting-native-select:focus-visible,
-.settings-drawer select:focus-visible,
 .setting-file-button:focus-visible,
 .setting-picker-button:focus-visible,
 .setting-floating-field:focus-within .setting-text-input,
@@ -5068,32 +4623,6 @@
   background: var(--ui-surface-hover);
   box-shadow: 0 0 0 3px var(--ui-accent-soft);
   outline: none;
-}
-
-.setting-range::-webkit-slider-runnable-track {
-  border-radius: var(--ui-radius-pill);
-  background:
-    linear-gradient(
-      90deg,
-      var(--ui-accent-strong) 0 var(--range-progress),
-      var(--ui-surface-elevated) var(--range-progress) 100%
-    );
-}
-
-.setting-range::-webkit-slider-thumb {
-  border-color: var(--ui-accent-line);
-  border-radius: var(--ui-radius-pill);
-  background: var(--ui-accent-strong);
-}
-
-.setting-range::-moz-range-track,
-.setting-range::-moz-range-progress,
-.setting-range::-moz-range-thumb {
-  border-radius: var(--ui-radius-pill);
-}
-
-.setting-range::-moz-range-progress {
-  background: var(--ui-accent-strong);
 }
 
 .settings-drawer .custom-select-trigger,
@@ -5200,8 +4729,10 @@
 
 .folder-candidates-toggle.expanded::before,
 .icon-advanced-toggle.expanded::before,
-.settings-drawer .custom-select[data-open="true"] .custom-select-trigger-arrow::before,
-.custom-select[data-open="true"] .custom-select-trigger-arrow::before {
+.settings-drawer .custom-select-trigger-arrow[data-popup-open]::before,
+.settings-drawer .custom-select-trigger[data-popup-open] .custom-select-trigger-arrow::before,
+.custom-select-trigger-arrow[data-popup-open]::before,
+.custom-select-trigger[data-popup-open] .custom-select-trigger-arrow::before {
   color: var(--ui-accent);
 }
 
@@ -5241,4 +4772,306 @@
   position: absolute;
   inset: 0;
   opacity: 0;
+}
+
+/* Codex-style Base UI rebuild layer: NewTab auxiliary surfaces. */
+.settings-drawer {
+  width: min(404px, 100vw);
+  border-left: 1px solid var(--ui-divider);
+  border-radius: 0;
+  background: var(--ui-bg-main);
+  box-shadow: none;
+}
+
+.settings-drawer-panel {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.settings-drawer-scroll {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 26px 18px 32px;
+  overflow-x: auto;
+  overflow-y: auto;
+  mask-image: none;
+  -webkit-mask-image: none;
+  overscroll-behavior: contain;
+}
+
+.settings-drawer-scroll > * {
+  min-width: 320px;
+}
+
+.settings-drawer-header {
+  gap: 4px;
+  padding: 0 42px 16px 0;
+  border-bottom: 1px solid var(--ui-divider-subtle);
+}
+
+.settings-drawer-kicker,
+.featured-wallpaper-kicker,
+.newtab-dashboard-fallback-kicker {
+  color: var(--ui-text-tertiary);
+}
+
+.folder-candidate-card.selected,
+.search-engine-toggle.active,
+.setting-segmented-button.selected,
+.icon-preset-card.selected,
+.featured-wallpaper-card.is-selected,
+.custom-select-setting-list .custom-select-option[aria-selected="true"] {
+  background: var(--ui-surface-selected);
+  color: var(--ui-text-primary);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.26),
+    inset 0 0 0 1px rgba(245, 245, 247, 0.08);
+}
+
+.settings-drawer .custom-select-setting-positioner {
+  z-index: 70;
+}
+
+.settings-sliding-tabs-root {
+  display: flex;
+  justify-content: center;
+}
+
+.settings-sliding-tabs {
+  width: max-content;
+  max-width: 100%;
+  margin: 12px auto 14px;
+  overflow-x: auto;
+  scroll-padding-inline: 18px;
+  scrollbar-width: none;
+}
+
+.settings-sliding-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-drawer .settings-sliding-tabs.t-tabs {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-pill);
+  background: var(--tabs-bar-bg);
+  box-shadow: inset 0 1px 0 rgba(245, 245, 247, 0.04);
+}
+
+.settings-drawer .settings-sliding-tab.t-tab {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  appearance: none;
+  background: transparent;
+  color: var(--tabs-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 680;
+  transition: color var(--tabs-dur) var(--tabs-ease);
+}
+
+.settings-drawer .settings-sliding-tab.t-tab:not([aria-selected="true"]):hover,
+.settings-drawer .settings-sliding-tab.t-tab[aria-selected="true"] {
+  color: var(--tabs-text-active);
+}
+
+.settings-drawer .settings-sliding-tab.t-tab:focus-visible {
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: -2px;
+}
+
+.settings-drawer .settings-sliding-tabs .t-tabs-pill {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 0;
+  z-index: 0;
+  width: 0;
+  border-radius: var(--ui-radius-pill);
+  background: var(--tabs-pill-bg);
+  transform: translateX(0);
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-drawer .settings-sliding-tabs .t-tabs-pill,
+  .settings-drawer .settings-sliding-tab.t-tab {
+    transition: none !important;
+  }
+}
+
+.settings-section {
+  margin-top: 18px;
+}
+
+.settings-section h2 {
+  min-height: auto;
+  margin: 0 0 7px;
+  color: var(--ui-text-tertiary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.settings-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-group);
+  background: transparent;
+  box-shadow: none;
+}
+
+.setting-row,
+.newtab-module-setting-row,
+.icon-live-preview-panel,
+.folder-source-panel {
+  min-height: 46px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ui-divider-subtle);
+  background: transparent;
+}
+
+.settings-list > :first-child,
+.settings-list > .newtab-module-settings-list:first-child .newtab-module-setting-row:first-child {
+  border-top: 0;
+}
+
+.setting-row:hover,
+.newtab-module-setting-row:hover {
+  background: var(--ui-surface-hover);
+}
+
+.setting-trust-note,
+.folder-source-selected-item,
+.folder-candidate-card,
+.folder-candidates-toggle,
+.icon-live-preview,
+.icon-live-preview-tile,
+.search-engine-toggle,
+.setting-segmented,
+.featured-wallpaper-state,
+.featured-wallpaper-section-empty,
+.icon-preset-card,
+.icon-advanced-toggle,
+.reveal-panel-body,
+.setting-cache-control,
+.settings-drawer :where(.base-input, .base-textarea),
+.settings-drawer :where(.setting-select, .setting-color, .setting-file-button, .setting-picker-button, .setting-text-input, .setting-url-input, .setting-link, .setting-floating-field, .custom-select-trigger),
+.featured-wallpaper-modal :where(.featured-wallpaper-panel, .featured-wallpaper-card, .featured-wallpaper-action, .featured-wallpaper-close),
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast-panel {
+  border-color: var(--ui-divider);
+  background: var(--ui-surface-raised);
+  color: var(--ui-text-primary);
+  box-shadow: none;
+}
+
+.folder-source-panel,
+.icon-live-preview-panel,
+.reveal-panel-body {
+  background: transparent;
+}
+
+.settings-drawer :where(button, .base-input:not(.folder-search-input), .base-textarea):focus-visible,
+.featured-wallpaper-modal :where(button, .base-input, .base-textarea):focus-visible,
+.bookmark-edit-menu :where(button, .base-input, .base-textarea):focus-visible,
+.bookmark-add-menu :where(button, .base-input, .base-textarea):focus-visible {
+  border-color: var(--ui-focus-ring);
+  box-shadow: none;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+.setting-switch:focus-visible,
+.setting-switch-input:focus-visible + .setting-switch {
+  box-shadow: none;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+.setting-switch[data-checked],
+.setting-switch-input:checked + .setting-switch,
+.setting-row:has(.setting-switch-input:checked) .setting-switch,
+.module-setting-switch-label:has(.setting-switch-input:checked) .setting-switch {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-selected);
+}
+
+.setting-slider-indicator {
+  background: var(--ui-surface-elevated);
+}
+
+.setting-slider-thumb {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-text-primary);
+}
+
+.featured-wallpaper-panel {
+  border-radius: var(--ui-radius-panel);
+  background: var(--ui-bg-main);
+}
+
+.featured-wallpaper-card.is-selected {
+  border-color: var(--ui-divider-strong);
+  background: var(--ui-surface-selected);
+  box-shadow: none;
+}
+
+.newtab-dashboard-overlay,
+.settings-backdrop,
+.featured-wallpaper-modal {
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.newtab-dashboard-surface {
+  border: 1px solid var(--ui-divider);
+  background: var(--ui-bg-main);
+  box-shadow: none;
+}
+
+.settings-drawer :where(
+  .settings-list,
+  .setting-row,
+  .folder-source-panel,
+  .folder-candidate-card,
+  .icon-live-preview-panel,
+  .icon-preset-card,
+  .reveal-panel-body,
+  .search-engine-toggle,
+  .setting-segmented,
+  .setting-switch,
+  .setting-slider-thumb,
+  .custom-select-trigger
+),
+.featured-wallpaper-modal :where(
+  .featured-wallpaper-panel,
+  .featured-wallpaper-card,
+  .featured-wallpaper-action,
+  .featured-wallpaper-state
+),
+.bookmark-edit-menu,
+.bookmark-add-menu,
+.newtab-delete-toast-panel {
+  box-shadow: none !important;
+  filter: none !important;
+  text-shadow: none !important;
 }

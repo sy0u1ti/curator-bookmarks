@@ -700,6 +700,7 @@ function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
         role="search"
         aria-label={state.ariaLabel}
       >
+        <Icon name="Search" className="newtab-search-icon" size={16} aria-hidden="true" />
         <Input
           className="newtab-search-input"
           type="search"
@@ -1362,7 +1363,7 @@ function BookmarkEditMenu({ state }: { state: BookmarkEditMenuViewModel }) {
           }}
           popupClassName="custom-select-list"
           positionerClassName="custom-select-positioner"
-          triggerClassName="bookmark-menu-select custom-select-trigger"
+          triggerClassName="bookmark-menu-control custom-select-trigger"
           unstyled
           valueClassName="custom-select-trigger-label"
         />

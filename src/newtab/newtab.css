@@ -11,8 +11,8 @@
   --text-dim: rgba(245, 245, 247, 0.36);
   --accent: #f5f5f7;
   --accent-strong: rgba(245, 245, 247, 0.78);
-  --blue: #78a6ff;
-  --green: #84da89;
+  --blue: #f4f4f5;
+  --green: #d7d7db;
   --line: rgba(245, 245, 247, 0.14);
   --glass-panel-bg: rgba(8, 8, 10, 0.32);
   --glass-panel-bg-hover: rgba(18, 18, 21, 0.42);
@@ -336,7 +336,6 @@ button {
 .newtab-shell :where(
   input,
   textarea,
-  select,
   button,
   code,
   kbd,
@@ -348,7 +347,6 @@ button {
 .settings-drawer :where(
   input,
   textarea,
-  select,
   button,
   code,
   kbd,
@@ -675,218 +673,6 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-clock[data-clock-density="comfortable"] .newtab-clock-date {
   color: rgba(245, 245, 247, 0.66);
-}
-
-.newtab-search-slot {
-  --search-height: 40px;
-  --search-width: 44vw;
-  --search-effective-width: min(max(560px, var(--search-width)), 640px, 100%);
-  --search-offset-y: 0px;
-  position: relative;
-  z-index: 2;
-  width: 100%;
-  height: var(--search-height);
-  justify-self: center;
-  margin-top: var(--search-offset-y);
-}
-
-.newtab-search {
-  --search-bg-alpha: 0.58;
-  --search-width: 44vw;
-  --search-height: 40px;
-  z-index: 1;
-  display: flex;
-  width: var(--search-effective-width);
-  height: var(--search-height);
-  align-items: center;
-  gap: 9px;
-  margin: 0 auto;
-  padding: 0 10px;
-  border: 1px solid rgba(245, 245, 247, 0.13);
-  border-radius: 8px;
-  background: rgba(8, 8, 9, var(--search-bg-alpha));
-  box-shadow:
-    0 12px 34px rgba(0, 0, 0, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  -webkit-backdrop-filter: var(--glass-panel-filter);
-  backdrop-filter: var(--glass-panel-filter);
-  transition:
-    border-color var(--ease-standard),
-    background var(--ease-standard),
-    box-shadow var(--ease-standard);
-}
-
-.newtab-search:focus-within {
-  border-color: rgba(245, 245, 247, 0.28);
-  background: rgba(14, 14, 15, calc(var(--search-bg-alpha) + 0.08));
-  box-shadow:
-    0 16px 42px rgba(0, 0, 0, 0.22),
-    0 0 0 2px rgba(245, 245, 247, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
-}
-
-.newtab-search-icon {
-  position: relative;
-  width: 13px;
-  height: 13px;
-  flex: none;
-  border: 1.4px solid rgba(245, 245, 247, 0.62);
-  border-radius: 50%;
-  opacity: 0.9;
-}
-
-.newtab-search-icon::after {
-  content: "";
-  position: absolute;
-  right: -4px;
-  bottom: -3px;
-  width: 6px;
-  height: 1.4px;
-  border-radius: 999px;
-  background: rgba(245, 245, 247, 0.62);
-  transform: rotate(45deg);
-  transform-origin: right center;
-}
-
-.newtab-search-input {
-  width: 100%;
-  min-width: 0;
-  height: 100%;
-  border: 0;
-  border-radius: var(--ui-radius-control, 14px);
-  outline: 0;
-  appearance: none;
-  padding: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-.newtab-search-input::-webkit-search-cancel-button {
-  display: none;
-  appearance: none;
-}
-
-.newtab-search-input::placeholder {
-  color: var(--text-dim);
-}
-
-.newtab-search-clear,
-.newtab-search-natural,
-.newtab-search-engine,
-.newtab-search-submit {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 7px;
-  background: transparent;
-  color: rgba(245, 245, 247, 0.72);
-  cursor: pointer;
-  transition:
-    background var(--motion-fast) var(--motion-ease-out),
-    color var(--motion-fast) var(--motion-ease-out),
-    transform var(--motion-fast) var(--motion-spring);
-}
-
-.newtab-search-clear {
-  padding-bottom: 1px;
-  font-size: 18px;
-  font-weight: 300;
-  line-height: 1;
-}
-
-.newtab-search-engine {
-  width: auto;
-  min-width: 42px;
-  max-width: 58px;
-  padding: 0 7px;
-  overflow: hidden;
-  border: 1px solid rgba(245, 245, 247, 0.11);
-  color: rgba(245, 245, 247, 0.68);
-  font-size: 10px;
-  font-weight: 720;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.newtab-search-natural {
-  width: auto;
-  min-width: 42px;
-  max-width: 58px;
-  padding: 0 7px;
-  overflow: hidden;
-  border: 1px solid rgba(245, 245, 247, 0.11);
-  color: rgba(245, 245, 247, 0.68);
-  font-size: 10px;
-  font-weight: 720;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.newtab-search-natural.active {
-  border-color: rgba(163, 230, 53, 0.34);
-  background: rgba(163, 230, 53, 0.12);
-  color: #d9f99d;
-}
-
-.newtab-search-natural.fallback {
-  border-color: rgba(253, 224, 71, 0.34);
-  background: rgba(253, 224, 71, 0.12);
-  color: #fef08a;
-}
-
-.newtab-search-clear:hover,
-.newtab-search-clear:focus-visible,
-.newtab-search-natural:hover,
-.newtab-search-natural:focus-visible,
-.newtab-search-engine:hover,
-.newtab-search-engine:focus-visible,
-.newtab-search-submit:hover,
-.newtab-search-submit:focus-visible {
-  background: rgba(245, 245, 247, 0.08);
-  color: var(--text);
-}
-
-.newtab-search-submit:disabled {
-  cursor: default;
-  opacity: 0.46;
-}
-
-.newtab-search-submit:disabled:hover,
-.newtab-search-submit:disabled:focus-visible {
-  background: transparent;
-  color: rgba(245, 245, 247, 0.72);
-}
-
-.newtab-search-clear:active,
-.newtab-search-natural:active,
-.newtab-search-engine:active,
-.newtab-search-submit:active {
-  transform: scale(0.94);
-}
-
-.newtab-search-submit:disabled:active {
-  transform: none;
-}
-
-.newtab-search-separator {
-  width: 1px;
-  height: min(24px, calc(var(--search-height) - 10px));
-  flex: 0 0 auto;
-  background: rgba(245, 245, 247, 0.22);
-}
-
-.newtab-search-clear.hidden,
-.newtab-search-separator.hidden {
-  display: none;
 }
 
 .newtab-search-suggestions-panel {
@@ -1665,7 +1451,7 @@ body.speed-dial-dragging .newtab-speed-dial-card:not(.dragging):focus-visible {
 }
 
 .newtab-quick-link[data-quick-reason="pinned"] .newtab-quick-mark {
-  background: rgba(120, 166, 255, 0.16);
+  background: rgba(245, 245, 247, 0.16);
   color: rgba(180, 204, 255, 0.94);
 }
 
@@ -2527,20 +2313,6 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
   color: var(--ui-text-primary);
 }
 
-.newtab-search-submit {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  color: rgba(245, 245, 247, 0.64);
-}
-
-.newtab-search-natural,
-.newtab-search-engine {
-  border-color: rgba(245, 245, 247, 0.09);
-  background: rgba(245, 245, 247, 0.04);
-  color: rgba(245, 245, 247, 0.66);
-}
-
 .bookmark-edit-menu,
 .bookmark-add-menu {
   position: fixed;
@@ -2633,7 +2405,7 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
 }
 
 .bookmark-menu-input,
-.bookmark-menu-select {
+.bookmark-menu-control {
   width: 100%;
   min-width: 0;
   min-height: 30px;
@@ -2655,14 +2427,15 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
 }
 
 .bookmark-menu-input:focus,
-.bookmark-menu-select:focus-visible {
+.bookmark-menu-control:focus-visible {
   border-color: var(--ui-focus-ring);
-  box-shadow: 0 0 0 3px var(--ui-accent-soft);
+  box-shadow: none;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
 }
 
-.bookmark-menu-select {
+.bookmark-menu-control {
   padding: 0 8px;
-  color-scheme: dark;
 }
 
 .bookmark-menu-separator {
@@ -2734,13 +2507,6 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
   }
 }
 
-.newtab-search-natural.active,
-.newtab-search-natural[aria-pressed="true"] {
-  border-color: rgba(163, 230, 53, 0.22);
-  background: rgba(163, 230, 53, 0.1);
-  color: rgba(217, 249, 157, 0.92);
-}
-
 .newtab-button.secondary:hover,
 .newtab-button.secondary:focus-visible,
 .newtab-search-clear:hover,
@@ -2770,41 +2536,6 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
   color: var(--ui-text-primary);
 }
 
-.newtab-search-submit:hover,
-.newtab-search-submit:focus-visible {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  color: var(--ui-text-primary);
-}
-
-.newtab-search-natural:hover,
-.newtab-search-natural:focus-visible,
-.newtab-search-engine:hover,
-.newtab-search-engine:focus-visible {
-  border-color: rgba(245, 245, 247, 0.16);
-  background: rgba(245, 245, 247, 0.07);
-  color: var(--ui-text-primary);
-}
-
-.newtab-search-natural.active:hover,
-.newtab-search-natural.active:focus-visible,
-.newtab-search-natural[aria-pressed="true"]:hover,
-.newtab-search-natural[aria-pressed="true"]:focus-visible {
-  border-color: rgba(163, 230, 53, 0.3);
-  background: rgba(163, 230, 53, 0.14);
-  color: rgba(236, 252, 203, 0.96);
-}
-
-.newtab-search:focus-within {
-  border-color: var(--ui-focus-ring);
-  background: rgba(26, 27, 29, 0.78);
-  box-shadow:
-    0 16px 42px rgba(0, 0, 0, 0.22),
-    0 0 0 3px var(--ui-accent-soft),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
-}
-
 .newtab-search-natural.active,
 .newtab-search-natural[aria-pressed="true"],
 .newtab-search-chip,
@@ -2814,27 +2545,6 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
   border-radius: var(--ui-radius-pill);
   background: var(--ui-surface-selected);
   color: var(--ui-accent-text);
-}
-
-.newtab-search-submit {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  color: rgba(245, 245, 247, 0.64);
-}
-
-.newtab-search-natural,
-.newtab-search-engine {
-  border-color: rgba(245, 245, 247, 0.09);
-  background: rgba(245, 245, 247, 0.04);
-  color: rgba(245, 245, 247, 0.66);
-}
-
-.newtab-search-natural.active,
-.newtab-search-natural[aria-pressed="true"] {
-  border-color: rgba(163, 230, 53, 0.22);
-  background: rgba(163, 230, 53, 0.1);
-  color: rgba(217, 249, 157, 0.92);
 }
 
 .newtab-speed-dial-card,
@@ -2995,3 +2705,429 @@ body.bookmark-dragging .bookmark-tile.dragging:focus-visible {
   }
 }
 
+/* Base UI Codex-style theme for non-homepage newtab UI.
+   The homepage background and frosted-glass bookmark surface are intentionally preserved. */
+.settings-drawer,
+.featured-wallpaper-panel,
+.newtab-dashboard-overlay,
+.newtab-dashboard-frame,
+.newtab-dashboard-loading,
+.newtab-dashboard-fallback,
+.bookmark-edit-menu,
+.bookmark-add-menu {
+  border-color: var(--ui-divider) !important;
+  border-radius: var(--ui-radius-panel) !important;
+  background: var(--ui-bg-main) !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: var(--ui-shadow-panel) !important;
+}
+
+.settings-drawer :where(
+  .settings-panel,
+  .setting-card,
+  .setting-group,
+  .folder-candidates-panel,
+  .icon-preset-card,
+  .setting-segmented-control
+),
+.featured-wallpaper-panel :where(
+  .featured-wallpaper-card,
+  .featured-wallpaper-toolbar
+),
+.newtab-dashboard-overlay :where(
+  .newtab-dashboard-loading-card,
+  .newtab-dashboard-fallback-card
+),
+.bookmark-edit-menu :where(.bookmark-menu-row),
+.bookmark-add-menu :where(.bookmark-menu-row) {
+  border-color: var(--ui-divider) !important;
+  border-radius: var(--ui-radius-control) !important;
+  background: var(--ui-surface) !important;
+  box-shadow: none !important;
+}
+
+.settings-drawer :where(
+  .settings-section,
+  .setting-row
+) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.settings-drawer :where(
+  .base-input,
+  .base-textarea,
+  .settings-close,
+  .custom-select-trigger,
+  .setting-picker-button,
+  .setting-file-button,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidates-toggle,
+  .icon-advanced-toggle,
+  .module-setting-order-button
+),
+.featured-wallpaper-panel :where(button, .base-input, .base-textarea),
+.bookmark-edit-menu :where(button, .base-input, .base-textarea),
+.bookmark-add-menu :where(button, .base-input, .base-textarea),
+.newtab-dashboard-overlay :where(button) {
+  border-color: var(--ui-divider) !important;
+  border-radius: var(--ui-radius-control) !important;
+  background: var(--ui-surface-raised) !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: none !important;
+}
+
+.settings-drawer :where(
+  .base-input,
+  .base-textarea,
+  .settings-close,
+  .custom-select-trigger,
+  .setting-picker-button,
+  .setting-file-button,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidates-toggle,
+  .icon-advanced-toggle,
+  .module-setting-order-button
+):hover,
+.settings-drawer :where(
+  .base-input,
+  .base-textarea,
+  .settings-close,
+  .custom-select-trigger,
+  .setting-picker-button,
+  .setting-file-button,
+  .setting-segmented-button,
+  .search-engine-toggle,
+  .folder-candidates-toggle,
+  .icon-advanced-toggle,
+  .module-setting-order-button
+):focus-visible,
+.featured-wallpaper-panel :where(button, .base-input, .base-textarea):hover,
+.featured-wallpaper-panel :where(button, .base-input, .base-textarea):focus-visible,
+.bookmark-edit-menu :where(button, .base-input, .base-textarea):hover,
+.bookmark-edit-menu :where(button, .base-input, .base-textarea):focus-visible,
+.bookmark-add-menu :where(button, .base-input, .base-textarea):hover,
+.bookmark-add-menu :where(button, .base-input, .base-textarea):focus-visible,
+.newtab-dashboard-overlay :where(button):hover,
+.newtab-dashboard-overlay :where(button):focus-visible {
+  border-color: var(--ui-divider-strong) !important;
+  background: var(--ui-surface-hover) !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: none !important;
+  outline: none;
+}
+
+.settings-drawer :where(
+  .base-input,
+  .base-textarea
+):focus,
+.settings-drawer :where(
+  .base-input,
+  .base-textarea
+):focus-visible,
+.featured-wallpaper-panel :where(.base-input, .base-textarea):focus,
+.featured-wallpaper-panel :where(.base-input, .base-textarea):focus-visible,
+.bookmark-edit-menu :where(.base-input, .base-textarea):focus,
+.bookmark-edit-menu :where(.base-input, .base-textarea):focus-visible,
+.bookmark-add-menu :where(.base-input, .base-textarea):focus,
+.bookmark-add-menu :where(.base-input, .base-textarea):focus-visible {
+  border-color: var(--ui-focus-ring) !important;
+  background: var(--ui-surface-hover) !important;
+  box-shadow: none !important;
+  outline: 1px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+.settings-drawer :where(
+  .setting-segmented-button.active,
+  .setting-segmented-button[aria-pressed="true"],
+  .icon-preset-card.is-selected,
+  .folder-candidate-card.is-selected
+),
+.featured-wallpaper-card.is-selected {
+  border-color: var(--ui-divider-strong) !important;
+  background: var(--ui-surface-selected) !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: none !important;
+}
+
+.settings-drawer :where(
+  .settings-section::before,
+  .settings-section::after,
+  .setting-row::before,
+  .setting-row::after,
+  .icon-preset-card::before,
+  .icon-preset-card::after
+),
+.featured-wallpaper-panel :where(.featured-wallpaper-card::before, .featured-wallpaper-card::after),
+.bookmark-edit-menu :where(*::before, *::after),
+.bookmark-add-menu :where(*::before, *::after) {
+  box-shadow: none !important;
+}
+
+.settings-drawer :where(
+  .setting-status-pill,
+  .setting-chip,
+  .source-navigation-count,
+  .folder-section-count,
+  .newtab-search-chip
+),
+.featured-wallpaper-panel :where(.featured-wallpaper-chip, .featured-wallpaper-status),
+.bookmark-edit-menu :where(.bookmark-menu-status, .bookmark-menu-error),
+.bookmark-add-menu :where(.bookmark-menu-status, .bookmark-menu-error) {
+  border-color: var(--ui-divider) !important;
+  background: var(--ui-surface-raised) !important;
+  color: var(--ui-text-secondary) !important;
+  box-shadow: none !important;
+}
+
+.settings-drawer :where(
+  .setting-status-pill.active,
+  .setting-chip.active,
+  .newtab-search-natural.active,
+  .newtab-search-natural[aria-pressed="true"]
+),
+.featured-wallpaper-panel :where(.featured-wallpaper-chip.active) {
+  border-color: var(--ui-divider-strong) !important;
+  background: var(--ui-surface-selected) !important;
+  color: var(--ui-text-primary) !important;
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   Search bar — redesigned hero pill (new tab)
+   Single, self-contained source of truth. Hooks kept (JS queries by class):
+   .newtab-search(form) .newtab-search-input/-clear/-separator/-natural/-engine/-submit,
+   state classes .active/.pending/.fallback on .newtab-search-natural set by runtime.
+   User-tunable inline vars preserved: --search-width / --search-height / --search-bg-alpha.
+   ============================================================ */
+.newtab-search-slot {
+  --search-height: 40px;
+  --search-width: 44vw;
+  --search-effective-width: min(max(560px, var(--search-width)), 640px, 100%);
+  --search-offset-y: 0px;
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: var(--search-height);
+  justify-self: center;
+  margin-top: var(--search-offset-y);
+}
+
+.newtab-search {
+  --search-bg-alpha: 0.58;
+  --search-width: 44vw;
+  --search-height: 40px;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: var(--search-effective-width);
+  height: var(--search-height);
+  margin: 0 auto;
+  padding: 0 8px 0 16px;
+  border: 1px solid rgba(245, 245, 247, 0.13);
+  border-radius: var(--ui-radius-pill);
+  background: rgba(8, 8, 9, var(--search-bg-alpha));
+  box-shadow:
+    0 12px 34px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: var(--glass-panel-filter);
+  backdrop-filter: var(--glass-panel-filter);
+  transition:
+    border-color var(--ui-motion-fast) var(--ui-ease-standard),
+    background var(--ui-motion-fast) var(--ui-ease-standard),
+    box-shadow var(--ui-motion-fast) var(--ui-ease-standard);
+}
+.newtab-search:hover {
+  border-color: rgba(245, 245, 247, 0.2);
+}
+.newtab-search:focus-within {
+  border-color: rgba(245, 245, 247, 0.3);
+  background: rgba(14, 14, 15, calc(var(--search-bg-alpha) + 0.1));
+  box-shadow:
+    0 14px 38px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 3px var(--ui-focus-ring-soft);
+}
+
+.newtab-search-icon {
+  flex: 0 0 auto;
+  color: var(--ui-text-tertiary);
+  pointer-events: none;
+  transition: color var(--ui-motion-fast) var(--ui-ease-standard);
+}
+.newtab-search:focus-within .newtab-search-icon { color: var(--ui-text-secondary); }
+
+.newtab-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  appearance: none;
+  padding: 0 2px;
+  background: transparent;
+  color: var(--ui-text-primary);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: normal;
+  caret-color: var(--ui-text-primary);
+}
+.newtab-search-input::placeholder { color: var(--ui-text-tertiary); }
+.newtab-search-input::-webkit-search-cancel-button,
+.newtab-search-input::-webkit-search-decoration { -webkit-appearance: none; display: none; }
+
+/* Clear + submit: ghost round icon buttons */
+.newtab-search-clear,
+.newtab-search-submit {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ui-radius-pill);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ui-motion-fast) var(--ui-ease-standard),
+    color var(--ui-motion-fast) var(--ui-ease-standard),
+    transform var(--ui-motion-fast) var(--ui-ease-spring);
+}
+.newtab-search-clear:hover,
+.newtab-search-clear:focus-visible,
+.newtab-search-submit:not(:disabled):hover,
+.newtab-search-submit:not(:disabled):focus-visible {
+  background: rgba(245, 245, 247, 0.1);
+  color: var(--ui-text-primary);
+  outline: none;
+}
+.newtab-search-clear:active,
+.newtab-search-submit:not(:disabled):active { transform: scale(0.92); }
+.newtab-search-submit:disabled { opacity: 0.4; cursor: default; }
+.newtab-search-clear.hidden,
+.newtab-search-separator.hidden { display: none; }
+
+/* Separator: thin hairline between input and controls */
+.newtab-search-separator {
+  flex: 0 0 auto;
+  width: 1px;
+  height: min(22px, calc(var(--search-height) - 12px));
+  margin: 0 1px;
+  background: rgba(245, 245, 247, 0.18);
+}
+
+/* Mode toggle (语义 ↔ AI) + engine chip: shared ghost-pill base */
+.newtab-search-natural,
+.newtab-search-engine {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  min-width: 3.25rem;
+  max-width: none;
+  height: 30px;
+  min-height: 0;
+  padding: 0 12px;
+  border: 1px solid var(--ui-divider);
+  border-radius: var(--ui-radius-pill);
+  background: transparent;
+  color: var(--ui-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--ui-motion-fast) var(--ui-ease-standard),
+    border-color var(--ui-motion-fast) var(--ui-ease-standard),
+    color var(--ui-motion-fast) var(--ui-ease-standard),
+    box-shadow var(--ui-motion-fast) var(--ui-ease-standard);
+}
+.newtab-search-natural:hover,
+.newtab-search-natural:focus-visible,
+.newtab-search-engine:not(:disabled):hover,
+.newtab-search-engine:not(:disabled):focus-visible {
+  border-color: var(--ui-divider-strong);
+  color: var(--ui-text-primary);
+  background: rgba(245, 245, 247, 0.08);
+  outline: none;
+}
+.newtab-search-natural:focus-visible,
+.newtab-search-engine:focus-visible { box-shadow: 0 0 0 3px var(--ui-focus-ring-soft); }
+
+/* engine dropdown caret (pseudo — survives runtime textContent updates) */
+.newtab-search-engine::after {
+  content: "";
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  margin-left: 1px;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.6;
+}
+.newtab-search-engine:disabled { opacity: 0.4; cursor: default; }
+
+/* mode active (AI on): crisp filled */
+.newtab-search-natural.active {
+  background: var(--ui-accent);
+  border-color: var(--ui-accent);
+  color: var(--ui-text-inverse);
+}
+.newtab-search-natural.active:hover,
+.newtab-search-natural.active:focus-visible {
+  background: var(--ui-accent-strong);
+  border-color: var(--ui-accent-strong);
+  color: var(--ui-text-inverse);
+}
+/* mode pending (思考中): leading pulsing dot */
+.newtab-search-natural.pending::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: cb-search-pulse 1s var(--ui-ease-standard) infinite;
+}
+/* mode fallback (AI degraded): warning tint — overrides active fill */
+.newtab-search-natural.fallback,
+.newtab-search-natural.fallback.active,
+.newtab-search-natural.fallback:hover,
+.newtab-search-natural.fallback.active:hover {
+  background: rgba(248, 214, 109, 0.14);
+  border-color: var(--ui-warning);
+  color: var(--ui-warning);
+}
+
+@keyframes cb-search-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.65); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .newtab-search,
+  .newtab-search-icon,
+  .newtab-search-clear,
+  .newtab-search-submit,
+  .newtab-search-natural,
+  .newtab-search-engine { transition: none; }
+  .newtab-search-clear:active,
+  .newtab-search-submit:active { transform: none; }
+  .newtab-search-natural.pending::before { animation: none; }
+}

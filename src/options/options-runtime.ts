@@ -257,7 +257,7 @@ import {
 } from './sections/tag-management.js'
 import { renderShortcutListIsland } from './components/ShortcutListIsland.js'
 import { renderResultsPaginationIsland } from './components/ResultsPaginationIsland.js'
-import { renderAiModelPickerResultsIsland } from './components/AiModelPickerResultsIsland.js'
+import { renderAiModelSelectorIsland, type AiModelSelectorChangeDetail } from './components/AiModelSelectorIsland.js'
 import { renderBackupPreviewIsland } from './components/BackupPreviewIsland.js'
 import { renderFolderPickerResultsIsland } from './components/FolderPickerResultsIsland.js'
 import { renderAiNamingResultsIsland } from './components/AiNamingResultsIsland.js'
@@ -1074,6 +1074,7 @@ function bindEvents() {
   dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
+  window.addEventListener('options:ai-model-selector-change', handleAiModelSelectorChange)
   dom.aiModelPickerTrigger?.addEventListener('click', openAiModelPickerModal)
   dom.aiFetchModels?.addEventListener('click', handleFetchAiModels)
   dom.aiManageModels?.addEventListener('click', openAiModelModal)
@@ -4094,6 +4095,7 @@ function renderAiNamingSection() {
     dom.aiRevealApiKey.checked = managerState.aiRevealApiKey
   }
   renderAiModelPickerTrigger(settings)
+  renderAiModelSelector(settings)
   renderAiFetchModelsStatus()
   if (managerState.aiModelPickerModalOpen) {
     renderAiModelPickerModal()
@@ -4891,6 +4893,35 @@ function renderAiModelPickerTrigger(settings = aiNamingManagerState.settings) {
     dom.aiModelPickerTrigger.disabled =
       aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
   }
+}
+
+function renderAiModelSelector(settings = aiNamingManagerState.settings) {
+  if (!dom.aiModelSelectorHost) {
+    return
+  }
+
+  renderAiModelSelectorIsland(dom.aiModelSelectorHost, {
+    currentModel: settings.model || AI_NAMING_DEFAULT_MODEL,
+    customModels: settings.customModels,
+    disabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    fetchedModels: settings.fetchedModels,
+    models: getAiNamingModelOptions(settings),
+    presetModels: AI_NAMING_PRESET_MODELS
+  })
+}
+
+function handleAiModelSelectorChange(event: Event) {
+  const model = String((event as CustomEvent<AiModelSelectorChangeDetail>).detail?.model || '').trim()
+  if (!model || aiNamingState.running || aiNamingState.applying) {
+    return
+  }
+
+  aiNamingManagerState.settings = normalizeAiNamingSettings({
+    ...aiNamingManagerState.settings,
+    model
+  })
+  syncAiNamingSettingsDraftFromDom({ markDirty: true })
+  renderAiNamingSection()
 }
 
 function renderAiFetchModelsStatus() {

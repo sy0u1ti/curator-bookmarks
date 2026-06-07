@@ -2,6 +2,7 @@ import './newtab-deferred.css'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import { ThemeProvider } from '../ui'
+import { getModalCloseDurationMs } from '../shared/motion'
 import { FeaturedBackgroundModal } from './components/FeaturedBackgroundModal'
 
 export interface FeaturedBackgroundModalMountResult {
@@ -24,6 +25,8 @@ export interface FeaturedBackgroundModalMountCallbacks {
 
 let featuredBackgroundModalRoot: Root | null = null
 let featuredBackgroundModalOpen = false
+let featuredBackgroundModalClosing = false
+let featuredBackgroundModalCloseTimer = 0
 let featuredBackgroundModalCallbacks: FeaturedBackgroundModalMountCallbacks | null = null
 
 function renderFeaturedBackgroundModal(): void {
@@ -31,13 +34,13 @@ function renderFeaturedBackgroundModal(): void {
     <ThemeProvider>
       <FeaturedBackgroundModal
         open={featuredBackgroundModalOpen}
+        closing={featuredBackgroundModalClosing}
         onOpenChange={(open, event) => {
           if (!open && featuredBackgroundModalOpen) {
             featuredBackgroundModalCallbacks?.onCloseRequest(event ?? new Event('dialog-close'))
             return
           }
-          featuredBackgroundModalOpen = open
-          renderFeaturedBackgroundModal()
+          setFeaturedBackgroundModalOpen(open)
         }}
         onModalPointerDownCapture={(event) => {
           featuredBackgroundModalCallbacks?.onModalPointerDownCapture(event)
@@ -48,9 +51,23 @@ function renderFeaturedBackgroundModal(): void {
 }
 
 function setFeaturedBackgroundModalOpen(open: boolean): void {
-  if (featuredBackgroundModalOpen === open) return
-  featuredBackgroundModalOpen = open
+  window.clearTimeout(featuredBackgroundModalCloseTimer)
+  if (open) {
+    if (featuredBackgroundModalOpen && !featuredBackgroundModalClosing) return
+    featuredBackgroundModalClosing = false
+    featuredBackgroundModalOpen = true
+    flushSync(renderFeaturedBackgroundModal)
+    return
+  }
+
+  if (!featuredBackgroundModalOpen || featuredBackgroundModalClosing) return
+  featuredBackgroundModalClosing = true
   flushSync(renderFeaturedBackgroundModal)
+  featuredBackgroundModalCloseTimer = window.setTimeout(() => {
+    featuredBackgroundModalClosing = false
+    featuredBackgroundModalOpen = false
+    flushSync(renderFeaturedBackgroundModal)
+  }, getModalCloseDurationMs())
 }
 
 export function mountFeaturedBackgroundModal(
@@ -86,6 +103,6 @@ export function mountFeaturedBackgroundModal(
     refresh,
     status,
     setOpen: setFeaturedBackgroundModalOpen,
-    isOpen: () => featuredBackgroundModalOpen
+    isOpen: () => featuredBackgroundModalOpen && !featuredBackgroundModalClosing
   }
 }

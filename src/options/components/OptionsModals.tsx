@@ -1,13 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, CloseButton, DialogOverlay, DialogPanel, Input, Textarea } from '../../ui'
+import { Button, DialogOverlay, DialogPanel, Input } from '../../ui'
 
 const modalKeyByBackdropId: Record<string, string> = {
   'delete-modal-backdrop': 'delete',
   'confirm-modal-backdrop': 'confirm',
   'move-modal-backdrop': 'move',
-  'scope-modal-backdrop': 'scope',
-  'ai-model-modal-backdrop': 'ai-model',
-  'ai-model-picker-modal-backdrop': 'ai-model-picker'
+  'scope-modal-backdrop': 'scope'
 }
 
 function ModalBackdrop({
@@ -201,108 +199,6 @@ export function OptionsModals() {
         </>
       </ModalBackdrop>
 
-      <ModalBackdrop id="ai-model-modal-backdrop" labelledBy="ai-model-modal-title" describedBy="ai-model-modal-copy" className="options-modal ai-model-modal">
-        <>
-          <CloseButton
-            id="close-ai-model-modal"
-            className="options-modal-close"
-            type="button"
-            label="关闭自定义模型弹窗"
-            variant="ghost"
-          />
-          <p className="options-section-label">Custom Models</p>
-          <h2 id="ai-model-modal-title">自定义模型列表</h2>
-          <p id="ai-model-modal-copy" className="options-modal-copy">
-            输入自定义模型名称，多个模型可用换行、英文逗号或分号分隔。保存后会出现在模型下拉列表里。
-          </p>
-          <label className="ai-settings-field" htmlFor="ai-custom-models-input">
-            <span>模型列表</span>
-            <Textarea
-              id="ai-custom-models-input"
-              className="ai-model-list-textarea"
-              spellCheck={false}
-              placeholder={'gpt-5.5\nmy-provider/model-alpha'}
-            />
-          </label>
-          <p className="ai-model-modal-hint">这里只保存模型 ID，不解析别名、加减号或批量隐藏语法。</p>
-          <div className="options-modal-actions ai-model-modal-actions">
-            <Button
-              id="cancel-ai-model-modal"
-              className="options-button secondary"
-              type="button"
-              variant="secondary"
-              aria-label="取消编辑自定义模型列表"
-            >
-              取消
-            </Button>
-            <Button id="save-ai-model-modal" className="options-button" type="button" aria-label="保存自定义模型列表">
-              保存
-            </Button>
-          </div>
-        </>
-      </ModalBackdrop>
-
-      <ModalBackdrop id="ai-model-picker-modal-backdrop" labelledBy="ai-model-picker-modal-title" describedBy="ai-model-picker-modal-copy" className="options-modal options-modal-wide">
-        <>
-          <CloseButton
-            id="close-ai-model-picker-modal"
-            className="options-modal-close"
-            type="button"
-            label="关闭 AI 模型弹窗"
-            variant="ghost"
-          />
-          <p className="options-section-label">AI Models</p>
-          <h2 id="ai-model-picker-modal-title">选择 AI 模型</h2>
-          <p id="ai-model-picker-modal-copy" className="options-modal-copy">
-            输入关键字筛选，点击卡片即可选中。可点击「获取模型」从 API 拉取最新列表。
-          </p>
-          <label className="options-search">
-            <span className="options-search-label">搜索模型</span>
-            <Input
-              id="ai-model-picker-search-input"
-              className="options-search-input"
-              type="search"
-              placeholder="搜索模型 ID"
-              aria-label="搜索 AI 模型"
-              aria-controls="ai-model-picker-results"
-            />
-          </label>
-          <div id="ai-model-picker-results" className="detect-results modal-results" role="listbox" aria-label="AI 模型候选列表">
-            <div className="detect-empty">尚未获取模型列表，可点击下方「获取模型」从 API 拉取。</div>
-          </div>
-          <div className="options-modal-actions ai-model-picker-actions">
-            <div className="ai-model-picker-footer-start">
-              <Button
-                id="ai-model-picker-fetch"
-                className="options-button secondary"
-                type="button"
-                variant="secondary"
-                aria-label="从 API 获取 AI 模型列表"
-              >
-                获取模型
-              </Button>
-              <Button
-                id="ai-model-picker-manage"
-                className="options-button secondary"
-                type="button"
-                variant="secondary"
-                aria-label="打开自定义模型列表设置"
-              >
-                设置更多模型
-              </Button>
-            </div>
-            <Button
-              id="cancel-ai-model-picker-modal"
-              className="options-button secondary"
-              type="button"
-              variant="secondary"
-              aria-label="关闭 AI 模型选择弹窗"
-            >
-              关闭
-            </Button>
-          </div>
-        </>
-      </ModalBackdrop>
     </>
   )
 }

@@ -268,10 +268,7 @@ export function GeneralPanel() {
           <div className="ai-provider-field" role="group" aria-label="AI 模型">
             <span>模型</span>
             <div className="ai-model-field-controls">
-              <Button id="ai-model-picker-trigger" className="scope-picker-trigger ai-model-picker-trigger" type="button" aria-haspopup="dialog" aria-label="选择 AI 模型">
-                <span id="ai-model-picker-label">gpt-5.5</span>
-                <span className="scope-picker-caret" aria-hidden="true" />
-              </Button>
+              <div id="ai-model-selector-host" className="ai-model-selector-host" />
               <Button id="ai-fetch-models" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="从自定义 AI 渠道获取模型列表">获取模型</Button>
             </div>
           </div>

@@ -67,6 +67,7 @@ export function cacheDom() {
   dom.aiBaseUrl = byId('ai-base-url')
   dom.aiApiKey = byId('ai-api-key')
   dom.aiRevealApiKey = byId('ai-reveal-api-key')
+  dom.aiModelSelectorHost = byId('ai-model-selector-host')
   dom.aiModelPickerTrigger = byId('ai-model-picker-trigger')
   dom.aiModelPickerLabel = byId('ai-model-picker-label')
   dom.aiFetchModels = byId('ai-fetch-models')

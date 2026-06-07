@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Icon } from '../icons/Icon'
-import { cx } from '../primitives/utils'
+import { cx } from '../base/utils'
 
 export interface AiSetupPromptProps {
   actions?: ReactNode

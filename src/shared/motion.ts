@@ -1,4 +1,5 @@
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
+const DEFAULT_MODAL_CLOSE_MS = 150
 
 type MotionCleanup = () => void | Promise<void>
 
@@ -40,6 +41,44 @@ export function waitForMotionEnd(element: Element, timeoutMs = 260): Promise<voi
     element.addEventListener('transitionend', finishFromEvent)
     timeoutId = window.setTimeout(finish, timeoutMs)
   })
+}
+
+export function parseCssTimeToMs(value: string, fallbackMs: number): number {
+  const trimmedValue = value.trim()
+  if (!trimmedValue) {
+    return fallbackMs
+  }
+
+  const firstValue = trimmedValue.split(',')[0]?.trim() ?? ''
+  if (firstValue.endsWith('ms')) {
+    return parseFloat(firstValue) || fallbackMs
+  }
+
+  if (firstValue.endsWith('s')) {
+    return (parseFloat(firstValue) || fallbackMs / 1000) * 1000
+  }
+
+  return parseFloat(firstValue) || fallbackMs
+}
+
+export function getRootMotionDurationMs(customProperty: string, fallbackMs: number): number {
+  if (
+    prefersReducedMotion() ||
+    typeof document === 'undefined' ||
+    typeof window === 'undefined' ||
+    !document.documentElement
+  ) {
+    return prefersReducedMotion() ? 1 : fallbackMs
+  }
+
+  return parseCssTimeToMs(
+    getComputedStyle(document.documentElement).getPropertyValue(customProperty),
+    fallbackMs
+  )
+}
+
+export function getModalCloseDurationMs(fallbackMs = DEFAULT_MODAL_CLOSE_MS): number {
+  return getRootMotionDurationMs('--modal-close-dur', fallbackMs)
 }
 
 export function cancelExitMotion(element: Element, closingClass = 'is-closing'): void {

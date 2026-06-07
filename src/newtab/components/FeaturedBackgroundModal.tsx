@@ -2,30 +2,44 @@ import { Button, CloseButton, DialogClose, DialogOverlay, DialogPanel, DialogTit
 
 export interface FeaturedBackgroundModalProps {
   open: boolean
+  closing?: boolean
   onOpenChange: (open: boolean, event?: Event) => void
   onModalPointerDownCapture: (event: PointerEvent) => void
 }
 
 export function FeaturedBackgroundModal({
   open,
+  closing = false,
   onOpenChange,
   onModalPointerDownCapture
 }: FeaturedBackgroundModalProps) {
+  const modalClassName = [
+    'featured-wallpaper-modal',
+    open ? 'open' : '',
+    closing ? 'is-closing' : ''
+  ].filter(Boolean).join(' ')
+  const panelClassName = [
+    'featured-wallpaper-panel',
+    't-modal',
+    open && !closing ? 'is-open' : '',
+    closing ? 'is-closing' : ''
+  ].filter(Boolean).join(' ')
+
   return (
     <DialogOverlay
       id="background-featured-modal"
-      className={open ? 'featured-wallpaper-modal open' : 'featured-wallpaper-modal'}
+      className={modalClassName}
       open={open}
       onOpenChange={onOpenChange}
       triggerId="background-featured-picker"
-      aria-hidden={open ? 'false' : 'true'}
-      inert={!open}
+      aria-hidden={open && !closing ? 'false' : 'true'}
+      inert={!open || closing}
       onPointerDownCapture={(event) => {
         onModalPointerDownCapture(event.nativeEvent)
       }}
       disablePointerDismissal
     >
-      <DialogPanel className="featured-wallpaper-panel" initialFocus={false} finalFocus={false} unanimated>
+      <DialogPanel className={panelClassName} initialFocus={false} finalFocus={false} unanimated>
         <header className="featured-wallpaper-head">
           <div>
             <p className="featured-wallpaper-kicker">Featured Gallery</p>

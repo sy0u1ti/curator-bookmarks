@@ -71,9 +71,6 @@ export interface PopupState {
   selectedFolderFilterId: string | null
   viewNoticeMessage: string
   viewNoticeTimer: number | null
-  isFilterPickerOpen: boolean
-  filterSearchQuery: string
-  filterFolderActiveId: string
   searchResults: PopupSearchResult[]
   activeResultIndex: number
   searchTimer: number | null
@@ -109,7 +106,6 @@ export interface PopupState {
   smartClassifierRenderSignature: string
   searchChipsRenderSignature: string
   savedSearchesRenderSignature: string
-  folderBreadcrumbsRenderSignature: string
   activeMenuBookmarkId: string | null
   moveTargetBookmarkId: string | null
   moveSearchQuery: string
@@ -174,9 +170,6 @@ export const state: PopupState = {
   selectedFolderFilterId: null,
   viewNoticeMessage: '',
   viewNoticeTimer: null,
-  isFilterPickerOpen: false,
-  filterSearchQuery: '',
-  filterFolderActiveId: '',
   searchResults: [],
   activeResultIndex: 0,
   searchTimer: null,
@@ -220,7 +213,6 @@ export const state: PopupState = {
   smartClassifierRenderSignature: '',
   searchChipsRenderSignature: '',
   savedSearchesRenderSignature: '',
-  folderBreadcrumbsRenderSignature: '',
   activeMenuBookmarkId: null,
   moveTargetBookmarkId: null,
   moveSearchQuery: '',

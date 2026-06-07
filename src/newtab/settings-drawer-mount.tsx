@@ -5,6 +5,7 @@ import { ThemeProvider } from '../ui'
 import { ICON_PRESET_META, type IconLayoutPresetKey } from './icon-settings.js'
 import { SettingsDrawer } from './components/SettingsDrawer'
 import { renderIconPresetCardsIsland, type IconPresetCardState } from './components/IconSettingsIslands'
+import type { SettingsDrawerSection } from './settings-group-sync.js'
 
 export interface SettingsDrawerMountResult {
   drawer: HTMLElement | null
@@ -14,6 +15,7 @@ export interface SettingsDrawerMountResult {
   featuredPositionX: HTMLElement | null
   featuredPositionY: HTMLElement | null
   setOpen: (open: boolean) => void
+  setActiveGroup: (group: SettingsDrawerSection) => void
   isOpen: () => boolean
 }
 
@@ -27,11 +29,11 @@ export interface SettingsDrawerMountCallbacks {
   bindIconSettingsEvents: () => void
   bindTimeSettingsEvents: () => void
   bindSettingsGroupTabs: () => void
-  bindSettingsRangeVisuals: () => void
 }
 
 let settingsDrawerRoot: Root | null = null
 let settingsDrawerOpen = false
+let settingsDrawerActiveGroup: SettingsDrawerSection = 'source'
 let settingsDrawerCallbacks: SettingsDrawerMountCallbacks | null = null
 
 function renderSettingsDrawer(): void {
@@ -39,6 +41,11 @@ function renderSettingsDrawer(): void {
     <ThemeProvider>
       <SettingsDrawer
         open={settingsDrawerOpen}
+        activeGroup={settingsDrawerActiveGroup}
+        onActiveGroupChange={(group) => {
+          settingsDrawerActiveGroup = group
+          renderSettingsDrawer()
+        }}
         onOpenChange={(open, event) => {
           if (!open && settingsDrawerOpen) {
             settingsDrawerCallbacks?.onCloseRequest(event ?? new Event('drawer-close'))
@@ -55,6 +62,12 @@ function renderSettingsDrawer(): void {
 function setSettingsDrawerOpen(open: boolean): void {
   if (settingsDrawerOpen === open) return
   settingsDrawerOpen = open
+  flushSync(renderSettingsDrawer)
+}
+
+function setSettingsDrawerActiveGroup(group: SettingsDrawerSection): void {
+  if (settingsDrawerActiveGroup === group) return
+  settingsDrawerActiveGroup = group
   flushSync(renderSettingsDrawer)
 }
 
@@ -90,7 +103,6 @@ export function mountSettingsDrawer(
   callbacks.bindIconSettingsEvents()
   callbacks.bindTimeSettingsEvents()
   callbacks.bindSettingsGroupTabs()
-  callbacks.bindSettingsRangeVisuals()
   renderIconPresetCards()
 
   return {
@@ -101,6 +113,7 @@ export function mountSettingsDrawer(
     featuredPositionX,
     featuredPositionY,
     setOpen: setSettingsDrawerOpen,
+    setActiveGroup: setSettingsDrawerActiveGroup,
     isOpen: () => settingsDrawerOpen
   }
 }

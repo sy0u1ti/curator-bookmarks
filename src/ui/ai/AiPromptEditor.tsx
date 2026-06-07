@@ -1,5 +1,5 @@
 import { Textarea } from '../index'
-import type { TextareaProps } from '../primitives/Textarea'
+import type { TextareaProps } from '../base/Textarea'
 
 export function AiPromptEditor(props: TextareaProps) {
   return <Textarea spellCheck={false} {...props} />

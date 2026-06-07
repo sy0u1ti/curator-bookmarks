@@ -1,5 +1,18 @@
-import { Button, DrawerOverlay, DrawerPanel, Input, Select, SliderControl, SwitchControl } from '../../ui'
+import { useState } from 'react'
+import { Tabs as BaseTabs } from '@base-ui/react/tabs'
+import {
+  Button,
+  DrawerOverlay,
+  DrawerPanel,
+  Input,
+  Select,
+  SliderControl,
+  Surface,
+  SwitchControl,
+  ToggleGroup
+} from '../../ui'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
+import type { SettingsDrawerSection } from '../settings-group-sync'
 
 const settingsTabs = [
   ['source', '来源', true],
@@ -109,7 +122,8 @@ function SettingsSelect({
   description,
   ariaLabel,
   defaultValue,
-  options
+  options,
+  portalContainer
 }: {
   id: string
   label: string
@@ -117,6 +131,7 @@ function SettingsSelect({
   ariaLabel: string
   defaultValue?: string
   options: Array<readonly [string, string]>
+  portalContainer?: HTMLElement | null
 }) {
   return (
     <div className="setting-row">
@@ -128,13 +143,15 @@ function SettingsSelect({
         id={id}
         defaultValue={defaultValue}
         inputAttributes={{ 'aria-label': ariaLabel, id }}
-        inputClassName="setting-select setting-native-select"
+        inputClassName="setting-select-input"
         itemClassName="custom-select-option"
         options={options.map(([value, label]) => ({ value, label }))}
+        modal={false}
         popupClassName="custom-select-setting-list"
+        portalContainer={portalContainer}
         positionerClassName="custom-select-setting-positioner"
         syncInputState
-        triggerClassName="setting-select setting-native-select custom-select-trigger"
+        triggerClassName="setting-select custom-select-trigger"
         unstyled
         valueClassName="custom-select-trigger-label"
       />
@@ -144,10 +161,14 @@ function SettingsSelect({
 
 export interface SettingsDrawerProps {
   open: boolean
+  activeGroup: SettingsDrawerSection
+  onActiveGroupChange: (group: SettingsDrawerSection) => void
   onOpenChange: (open: boolean, event?: Event) => void
 }
 
-export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
+export function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
+  const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
+
   return (
     <DrawerOverlay
       id="newtab-settings-drawer"
@@ -162,6 +183,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
     >
       <DrawerPanel
         className="settings-drawer-panel"
+        ref={setPanelElement}
         aria-labelledby="newtab-settings-title"
         aria-describedby="newtab-settings-summary"
         initialFocus={false}
@@ -178,13 +200,21 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
           <div id="settings-save-status" className="settings-save-status" role="status" aria-live="polite" data-state="idle" />
         </header>
 
-        <nav className="settings-group-tabs" aria-label="新标签页设置分组" role="tablist">
-          {settingsTabs.map(([group, label, selected]) => (
-            <Button
-              unstyled
-              className="settings-group-tab"
-              type="button"
-              role="tab"
+        <BaseTabs.Root
+          className="settings-sliding-tabs-root"
+          value={activeGroup}
+          onValueChange={(value) => {
+            onActiveGroupChange(value as SettingsDrawerSection)
+          }}
+        >
+        <BaseTabs.List className="settings-sliding-tabs t-tabs" data-settings-tabs aria-label="新标签页设置分组">
+          <span className="settings-sliding-tabs-pill t-tabs-pill" aria-hidden="true"></span>
+          {settingsTabs.map(([group, label]) => {
+            const selected = activeGroup === group
+            return (
+            <BaseTabs.Tab
+              className="settings-sliding-tab t-tab"
+              value={group}
               id={`settings-tab-${group}`}
               data-settings-group-tab={group}
               aria-controls={`settings-panel-${group}`}
@@ -193,21 +223,23 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
               key={group}
             >
               {label}
-            </Button>
-          ))}
-        </nav>
+            </BaseTabs.Tab>
+            )
+          })}
+        </BaseTabs.List>
+        </BaseTabs.Root>
 
         <section className="settings-section" data-settings-group="advanced" aria-labelledby="settings-general-title">
           <h2 id="settings-general-title">高级</h2>
-          <div className="settings-card">
+          <Surface className="settings-list" variant="plain">
             <SwitchRow id="general-hide-settings-trigger" title="隐藏设置图标" description="桌面端移到右上角时显示，触屏设备始终显示。" />
             <SwitchRow id="general-open-bookmarks-new-tab" title="新标签页打开" description="点击书签图标时在新标签页打开，当前新标签页保持不变。" />
-          </div>
+          </Surface>
         </section>
 
         <section className="settings-section" data-settings-group="source" aria-labelledby="settings-folder-title">
           <h2 id="settings-folder-title">书签来源</h2>
-          <div className="settings-card">
+          <Surface className="settings-list" variant="plain">
             <div className="folder-source-panel">
               <div className="folder-source-summary">
                 <span>已选文件夹</span>
@@ -219,8 +251,8 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
               </Button>
               <div id="folder-candidates-panel" className="folder-candidates-panel" hidden>
                 <div className="reveal-panel-body">
-                  <label className="setting-floating-field folder-search-field">
-                    <Input id="folder-candidate-search" className="setting-text-input" type="search" placeholder="搜索文件夹" aria-label="搜索候选文件夹" aria-controls="folder-candidate-list" spellCheck={false} unstyled />
+                  <label className="folder-search-field">
+                    <Input id="folder-candidate-search" className="folder-search-input" type="text" role="searchbox" placeholder="搜索文件夹" aria-label="搜索候选文件夹" aria-controls="folder-candidate-list" spellCheck={false} unstyled />
                   </label>
                   <div id="folder-candidate-list" className="folder-candidate-list" role="listbox" aria-label="候选文件夹列表" aria-multiselectable="true" />
                 </div>
@@ -228,26 +260,27 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             </div>
             <SwitchRow id="folder-hide-names" title="隐藏文件夹名" description="只保留图标网格，适合单一来源或极简布局。" />
             <SwitchRow id="folder-show-source-navigation" title="显示来源导航" description="在多个来源之间快速跳转，不影响文件夹和书签拖拽排序。" defaultChecked />
-          </div>
+          </Surface>
         </section>
 
         <section className="settings-section" data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
           <h2 id="settings-speed-dial-title">模块</h2>
-          <div className="settings-card">
+          <Surface className="settings-list" variant="plain">
             <SwitchRow id="general-show-quick-access" title="显示 Curator 常用和新近添加" description="仅基于当前来源内的固定、本页打开记录和添加时间，不读取浏览历史。" defaultChecked />
             <div id="newtab-speed-dial-setting" className="newtab-module-settings-list" aria-label="Speed Dial 模块" />
-          </div>
+          </Surface>
         </section>
 
         <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-background-title">
           <h2 id="settings-background-title">背景</h2>
-          <div className="settings-card">
+          <Surface className="settings-list" variant="plain">
             <SettingsSelect
               id="background-type"
               label="背景类型"
               description="可选择精选图库、纯色、本地图片/视频或远程图片链接。"
               ariaLabel="背景类型"
               defaultValue="color"
+              portalContainer={panelElement}
               options={[
                 ['featured', '精选图库'],
                 ['image', '图片'],
@@ -264,7 +297,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
               <Button unstyled id="background-featured-picker" className="setting-picker-button" type="button" aria-haspopup="dialog" aria-controls="background-featured-modal">
                 <span id="background-featured-picker-label">选择壁纸</span>
               </Button>
-              <input id="background-featured-id" type="hidden" defaultValue="" />
+              <Input id="background-featured-id" type="hidden" defaultValue="" unstyled />
             </div>
             <div id="background-featured-credit-row" className="setting-row background-featured-credit-row">
               <span>图片来源</span>
@@ -277,18 +310,18 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
               <span>背景颜色</span>
               <span id="background-color-control" className="setting-color">
                 <span id="background-color-value">#000000</span>
-                <input id="background-color" className="setting-color-input" type="color" defaultValue="#000000" aria-label="背景颜色" />
+                <Input id="background-color" className="setting-color-input" type="color" defaultValue="#000000" aria-label="背景颜色" unstyled />
               </span>
             </label>
             <div id="background-image-row" className="setting-row" hidden>
               <span>背景图片</span>
               <Button unstyled id="background-image-picker" className="setting-file-button" type="button">选择图片</Button>
-              <input id="background-image-file" className="setting-file-input" type="file" accept="image/*" />
+              <Input id="background-image-file" className="setting-file-input" type="file" accept="image/*" unstyled />
             </div>
             <div id="background-video-row" className="setting-row" hidden>
               <span>背景视频</span>
               <Button unstyled id="background-video-picker" className="setting-file-button" type="button">选择视频</Button>
-              <input id="background-video-file" className="setting-file-input" type="file" accept="video/*" />
+              <Input id="background-video-file" className="setting-file-input" type="file" accept="video/*" unstyled />
             </div>
             <div id="background-url-row" className="setting-row" hidden>
               <span>图片链接</span>
@@ -303,7 +336,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
               <Select
                 id="background-mask-style"
                 inputAttributes={{ 'aria-label': '背景蒙版样式', id: 'background-mask-style' }}
-                inputClassName="setting-select setting-native-select"
+                inputClassName="setting-select-input"
                 itemClassName="custom-select-option"
                 options={[
                   { value: 'dark', label: '暗色增强' },
@@ -312,20 +345,22 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                   { value: 'light', label: '亮色柔化' }
                 ]}
                 popupClassName="custom-select-setting-list"
+                modal={false}
+                portalContainer={panelElement}
                 positionerClassName="custom-select-setting-positioner"
                 syncInputState
-                triggerClassName="setting-select setting-native-select custom-select-trigger"
+                triggerClassName="setting-select custom-select-trigger"
                 unstyled
                 valueClassName="custom-select-trigger-label"
               />
             </div>
             <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value="12px" min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden />
-          </div>
+          </Surface>
         </section>
 
         <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-icon-title">
           <h2 id="settings-icon-title">书签卡片</h2>
-          <div className="settings-card icon-settings-card">
+          <Surface className="settings-list icon-settings-list" variant="plain">
             <div className="icon-live-preview-panel">
               <div className="icon-live-preview-header">
                 <span>实时预览</span>
@@ -339,19 +374,33 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                 <span>布局方式</span>
                 <small>自动适配屏幕宽度；固定列数会在窄屏收缩。</small>
               </span>
-              <div id="icon-layout-control" className="setting-segmented" role="group" aria-label="布局方式">
-                <Button unstyled className="setting-segmented-button" type="button" data-icon-layout-mode="auto">自动适配</Button>
-                <Button unstyled className="setting-segmented-button" type="button" data-icon-layout-mode="fixed">固定列数</Button>
-              </div>
+              <ToggleGroup
+                id="icon-layout-control"
+                aria-label="布局方式"
+                className="setting-segmented"
+                itemClassName="setting-segmented-button"
+                items={[
+                  { value: 'auto', label: '自动适配', attributes: { 'data-icon-layout-mode': 'auto' } },
+                  { value: 'fixed', label: '固定列数', attributes: { 'data-icon-layout-mode': 'fixed' } }
+                ]}
+                unstyled
+              />
             </div>
             <SwitchRow id="icon-vertical-center" title="垂直居中" description="书签较少时让主内容贴近屏幕中部。" />
             <SwitchRow id="icon-show-titles" title="显示标题" description="关闭后卡片收缩为只显示网站图标。" defaultChecked />
             <div id="icon-title-lines-row" className="setting-row icon-control-row">
               <span>标题行数</span>
-              <div id="icon-title-lines-control" className="setting-segmented" role="group" aria-label="标题行数">
-                <Button unstyled className="setting-segmented-button" type="button" data-icon-title-lines="1">1 行</Button>
-                <Button unstyled className="setting-segmented-button" type="button" data-icon-title-lines="2">2 行</Button>
-              </div>
+              <ToggleGroup
+                id="icon-title-lines-control"
+                aria-label="标题行数"
+                className="setting-segmented"
+                itemClassName="setting-segmented-button"
+                items={[
+                  { value: '1', label: '1 行', attributes: { 'data-icon-title-lines': '1' } },
+                  { value: '2', label: '2 行', attributes: { 'data-icon-title-lines': '2' } }
+                ]}
+                unstyled
+              />
             </div>
             <Button unstyled id="icon-advanced-toggle" className="icon-advanced-toggle" type="button" aria-expanded="false" aria-controls="icon-advanced-panel">
               <span>卡片细节</span>
@@ -368,31 +417,31 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
                 <SliderRow rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value="4" min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" />
               </div>
             </div>
-          </div>
+          </Surface>
         </section>
 
         <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-time-title">
           <h2 id="settings-time-title">时间和日期</h2>
-          <div className="settings-card">
+          <Surface className="settings-list" variant="plain">
             <SwitchRow id="time-enabled" title="显示时间模块" description="放在搜索栏上方，关闭后保留原布局间距。" defaultChecked />
-            <SettingsSelect id="time-display-mode" label="显示内容" description="保留时间+日期、仅时间、仅日期三种模式。" ariaLabel="时间显示内容" options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]} />
-            <SettingsSelect id="time-time-zone" label="时区" description="自动跟随系统，也可固定为常用城市。" ariaLabel="时区" options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]} />
-            <SettingsSelect id="time-date-format" label="日期格式" description="仅在显示日期时生效。" ariaLabel="日期格式" options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]} />
+            <SettingsSelect id="time-display-mode" label="显示内容" description="保留时间+日期、仅时间、仅日期三种模式。" ariaLabel="时间显示内容" portalContainer={panelElement} options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]} />
+            <SettingsSelect id="time-time-zone" label="时区" description="自动跟随系统，也可固定为常用城市。" ariaLabel="时区" portalContainer={panelElement} options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]} />
+            <SettingsSelect id="time-date-format" label="日期格式" description="仅在显示日期时生效。" ariaLabel="日期格式" portalContainer={panelElement} options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]} />
             <SwitchRow id="time-show-seconds" title="显示秒数" description="开启后每秒更新；关闭时按分钟更新以减少渲染。" />
             <SwitchRow id="time-hour12" title="12 小时制" description="显示 AM/PM，24 小时制会隐藏该标记。" />
-            <SettingsSelect id="time-density" label="布局密度" description="切换时间模块的排版结构，不改变字号。" ariaLabel="时间布局密度" options={[['compact', '极简单行'], ['balanced', '平衡胶囊'], ['comfortable', '独立卡片']]} />
+            <SettingsSelect id="time-density" label="布局密度" description="切换时间模块的排版结构，不改变字号。" ariaLabel="时间布局密度" portalContainer={panelElement} options={[['compact', '极简单行'], ['balanced', '平衡胶囊'], ['comfortable', '独立卡片']]} />
             <SliderRow id="time-clock-size" label="字号" valueId="time-clock-size-value" value="100%" min="70" max="140" defaultValue="100" ariaLabel="时间字号" description="只影响时间和日期，不改变搜索和书签区域。" />
-          </div>
+          </Surface>
         </section>
 
         <section className="settings-section" data-settings-group="search" aria-labelledby="settings-search-title">
           <h2 id="settings-search-title">搜索栏</h2>
-          <div className="settings-card">
+          <Surface className="settings-list" variant="plain">
             <p className="setting-trust-note">仅影响 Curator 新标签页内搜索，不会修改 Chrome 默认搜索引擎或启动页；搜索栏可随时关闭。</p>
             <SwitchRow id="search-enabled" title="启用" description="在新标签页顶部搜索本地书签、命令和可选网页搜索。" defaultChecked />
             <SwitchRow id="search-web-enabled" title="启用网页搜索" description="提交网页搜索时，关键词会发送给所选搜索引擎；关闭后仅保留本地书签搜索。" defaultChecked />
             <SwitchRow id="search-open-new-tab" title="在新标签页打开链接" description="保留当前 Curator 新标签页。" />
-            <SettingsSelect id="search-engine" label="搜索引擎" description="输入内容不是网址时使用此引擎。" ariaLabel="默认搜索引擎" options={searchEngines.map(([value, label]) => [value, label])} />
+            <SettingsSelect id="search-engine" label="搜索引擎" description="输入内容不是网址时使用此引擎。" ariaLabel="默认搜索引擎" portalContainer={panelElement} options={searchEngines.map(([value, label]) => [value, label])} />
             <div className="setting-row search-engine-setting-row">
               <span className="setting-label-stack">
                 <span>启用引擎</span>
@@ -424,7 +473,7 @@ export function SettingsDrawer({ open, onOpenChange }: SettingsDrawerProps) {
             <SliderRow id="search-offset-y" label="上下位置" valueId="search-offset-y-value" value="0px" min="-240" max="240" defaultValue="0" ariaLabel="搜索栏上下位置" />
             <SwitchRow id="search-auto-vertical-center" title="自动垂直居中" description="根据上方和下方模块之间的可用空间自动居中搜索栏。" />
             <SliderRow id="search-background" label="背景" valueId="search-background-value" value="30%" min="0" max="92" defaultValue="30" ariaLabel="搜索栏背景透明度" />
-          </div>
+          </Surface>
         </section>
         </div>
       </DrawerPanel>

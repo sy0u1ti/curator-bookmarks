@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Badge, Progress, Spinner } from '../index'
-import { cx } from '../primitives/utils'
+import { cx } from '../base/utils'
 
 export interface AiTaskStatusProps {
   children?: ReactNode

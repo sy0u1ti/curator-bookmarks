@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
-import { Badge, Card, Icon, type CardProps } from '../index'
-import { cx } from '../primitives/utils'
+import { Badge, Icon, Surface, type SurfaceProps } from '../index'
+import { cx } from '../base/utils'
 
-export interface AiClassificationResultProps extends Omit<CardProps, 'title'> {
+export interface AiClassificationResultProps extends Omit<SurfaceProps, 'title'> {
   actions?: ReactNode
   bodyClassName?: string
   title: ReactNode
@@ -25,7 +25,7 @@ export function AiClassificationResult({
   ...props
 }: AiClassificationResultProps) {
   return (
-    <Card className={cx('grid gap-2', className)} {...props}>
+    <Surface className={cx('grid gap-2 p-3', className)} variant="group" {...props}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           <Icon name="Sparkles" size={16} aria-hidden="true" />
@@ -38,6 +38,6 @@ export function AiClassificationResult({
       {description ? <p className="text-sm text-curator-text-muted">{description}</p> : null}
       {folder ? <p className="text-sm text-curator-text">{folder}</p> : null}
       {children ? <div className={bodyClassName}>{children}</div> : null}
-    </Card>
+    </Surface>
   )
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AiSetupPrompt, Button, DialogOverlay, DialogPanel, Icon, Input, Popover, ThemeProvider } from '../ui'
+import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
+import { getModalCloseDurationMs } from '../shared/motion'
 
 export function PopupApp() {
   useEffect(() => {
@@ -23,14 +24,6 @@ export function PopupApp() {
   )
 }
 
-function SearchIconSpan() {
-  return (
-    <span className="search-icon" aria-hidden="true">
-      <Icon name="Search" size={15} />
-    </span>
-  )
-}
-
 function FolderSearch({
   htmlFor,
   inputId,
@@ -45,12 +38,13 @@ function FolderSearch({
   controls: string
 }) {
   return (
-    <label className="search-shell modal-search" htmlFor={htmlFor}>
-      <SearchIconSpan />
+    <label className="cb-search modal-search" htmlFor={htmlFor}>
+      <Icon name="Search" className="cb-search__icon" size={16} aria-hidden="true" />
       <Input
         id={inputId}
-        className="search-input"
-        type="search"
+        className="cb-search__input"
+        type="text"
+        role="searchbox"
         spellCheck={false}
         autoComplete="off"
         placeholder={placeholder}
@@ -65,15 +59,30 @@ function FolderSearch({
 function PopupShell() {
   const [searchHelpOpen, setSearchHelpOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
+  const [modalClosing, setModalClosing] = useState(false)
+  const [modalPortalContainer, setModalPortalContainer] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
+    let modalCloseTimer = 0
     const handleOpen = () => setSearchHelpOpen(true)
     const handleClose = () => setSearchHelpOpen(false)
     const handleModalState = (event: Event) => {
       const detail = (event as CustomEvent<{ open?: boolean }>).detail
-      setModalOpen(Boolean(detail?.open))
+      const nextOpen = Boolean(detail?.open)
+      window.clearTimeout(modalCloseTimer)
+      if (nextOpen) {
+        setModalClosing(false)
+        setModalOpen(true)
+        return
+      }
+      setModalClosing(true)
+      modalCloseTimer = window.setTimeout(() => {
+        setModalClosing(false)
+        setModalOpen(false)
+      }, getModalCloseDurationMs())
     }
 
+    setModalPortalContainer(document.getElementById('popup-root'))
     window.addEventListener('popup:search-help-open', handleOpen)
     window.addEventListener('popup:search-help-close', handleClose)
     window.addEventListener('popup:modal-state', handleModalState)
@@ -82,108 +91,107 @@ function PopupShell() {
       window.removeEventListener('popup:search-help-open', handleOpen)
       window.removeEventListener('popup:search-help-close', handleClose)
       window.removeEventListener('popup:modal-state', handleModalState)
+      window.clearTimeout(modalCloseTimer)
     }
   }, [])
+
+  const modalBackdropClassName = [
+    'modal-backdrop',
+    modalOpen ? '' : 'hidden',
+    modalClosing ? 'is-closing' : ''
+  ].filter(Boolean).join(' ')
 
   return (
     <>
       <main id="popup-app-shell" className="app-shell">
         <header className="hero">
-          <Popover
-            id="search-help-popover"
-            className="search-help-popover"
-            open={searchHelpOpen}
-            onOpenChange={setSearchHelpOpen}
-            portal={false}
-            triggerId="search-help-toggle"
-            align="start"
-            sideOffset={7}
-            trigger={
-              <Button
-                id="search-help-toggle"
-                className="search-help-toggle"
-                type="button"
-                aria-label="查看高级搜索语法"
-                title="查看高级搜索语法（site / folder / type / -排除）"
-                aria-controls="search-help-popover"
-                unstyled
-              >
-                <Icon name="CircleHelp" size={15} aria-hidden="true" />
-              </Button>
-            }
-          >
-            <strong>高级搜索语法</strong>
-            <ul className="search-help-list">
-              <li><span className="search-help-tag">站点</span><span className="search-help-example"><code>site:github.com</code></span></li>
-              <li><span className="search-help-tag">文件夹</span><span className="search-help-example"><code>folder:"前端资料"</code></span></li>
-              <li><span className="search-help-tag">类型</span><span className="search-help-example"><code>type:文档</code></span></li>
-              <li><span className="search-help-tag">排除</span><span className="search-help-example"><code>-youtube</code><span>或</span><code>-"短视频"</code></span></li>
-            </ul>
-            <span className="search-help-hint">Esc 关闭 · 点击外部收起</span>
-          </Popover>
           <div className="hero-brand">
             <div className="hero-mark" aria-hidden="true">
               <img className="hero-logo" src="../assets/icon128.png" alt="" />
             </div>
             <div className="hero-copy">
               <p className="hero-eyebrow">Chrome Bookmark Manager</p>
-              <h1>Curator Bookmark</h1>
-              <p className="hero-subtitle" id="hero-subtitle">本地读取，不上传任何书签内容</p>
+              <div className="hero-title-row">
+                <Popover
+                  id="search-help-popover"
+                  className="search-help-popover"
+                  open={searchHelpOpen}
+                  onOpenChange={setSearchHelpOpen}
+                  portal={false}
+                  triggerId="search-help-toggle"
+                  align="start"
+                  sideOffset={6}
+                  trigger={
+                    <Button
+                      id="search-help-toggle"
+                      className="search-help-toggle"
+                      type="button"
+                      aria-label="查看高级搜索语法"
+                      title="查看高级搜索语法（site / folder / type / -排除）"
+                      aria-controls="search-help-popover"
+                      unstyled
+                    >
+                      <Icon name="CircleHelp" size={13} aria-hidden="true" />
+                    </Button>
+                  }
+                >
+                  <strong>高级搜索语法</strong>
+                  <ul className="search-help-list">
+                    <li><span className="search-help-tag">站点</span><span className="search-help-example"><code>site:github.com</code></span></li>
+                    <li><span className="search-help-tag">文件夹</span><span className="search-help-example"><code>folder:"前端资料"</code></span></li>
+                    <li><span className="search-help-tag">类型</span><span className="search-help-example"><code>type:文档</code></span></li>
+                    <li><span className="search-help-tag">排除</span><span className="search-help-example"><code>-youtube</code><span>或</span><code>-"短视频"</code></span></li>
+                  </ul>
+                  <span className="search-help-hint">Esc 关闭 · 点击外部收起</span>
+                </Popover>
+              </div>
             </div>
           </div>
-          <Button id="open-settings" className="hero-settings-button" type="button" aria-label="打开设置页" title="打开设置页" unstyled>
-            <Icon name="Settings" size={18} aria-hidden="true" />
-          </Button>
+          <div className="hero-actions">
+            <Button id="open-settings" className="hero-settings-button" type="button" aria-label="打开设置页" title="打开设置页" unstyled>
+              <Icon name="Settings" size={15} aria-hidden="true" />
+              <span>设置</span>
+            </Button>
+          </div>
         </header>
 
-        <section id="smart-classifier" className="smart-classifier hidden" aria-live="polite"></section>
+        <section className="command-panel" aria-label="书签搜索与操作">
+          <section className="search-block" aria-label="搜索书签">
+            <label className="cb-search" htmlFor="search-input">
+              <Icon name="Search" className="cb-search__icon" size={16} aria-hidden="true" />
+              <Input
+                id="search-input"
+                className="cb-search__input search-input"
+                type="text"
+                role="searchbox"
+                spellCheck={false}
+                autoComplete="off"
+                placeholder="关键词搜索"
+                autoFocus
+                aria-label="搜索书签标题、网址或高级语法"
+                unstyled
+              />
+              <Button id="clear-search" className="cb-search__clear hidden" type="button" aria-label="清空搜索" unstyled>
+                <Icon name="X" size={14} aria-hidden="true" />
+              </Button>
+              <Button
+                id="natural-search-toggle"
+                className="cb-search__mode"
+                type="button"
+                aria-label="语义搜索"
+                aria-pressed="false"
+                title="AI 语义搜索：需要先配置 AI 渠道"
+                unstyled
+              >
+                语义
+              </Button>
+            </label>
 
-        <section className="filter-row" aria-label="筛选范围">
-          <Button id="folder-filter-trigger" className="filter-trigger" type="button" aria-label="选择文件夹筛选范围" title="选择文件夹筛选范围" unstyled>
-            <span className="filter-trigger-label">筛选</span>
-            <span id="folder-filter-trigger-text" className="filter-trigger-text">全部文件夹</span>
-            <span className="filter-trigger-icon" aria-hidden="true">
-              <Icon name="ChevronDown" size={14} />
-            </span>
-          </Button>
-          <Button id="clear-folder-filter" className="filter-clear hidden" type="button" title="清除文件夹筛选" unstyled>
-            清除筛选
-          </Button>
-        </section>
-        <nav id="folder-breadcrumbs" className="folder-breadcrumbs hidden" aria-label="当前文件夹路径"></nav>
+            <div id="search-chips" className="search-chips hidden" aria-label="当前搜索条件"></div>
+            <div id="saved-searches" className="saved-searches hidden" aria-label="已保存搜索"></div>
+          </section>
 
-        <section className="search-block" aria-label="搜索书签">
-          <label className="search-shell" htmlFor="search-input">
-            <SearchIconSpan />
-            <Input
-              id="search-input"
-              className="search-input"
-              type="search"
-              spellCheck={false}
-              autoComplete="off"
-              placeholder="关键词搜索"
-              autoFocus
-              aria-label="搜索书签标题、网址或高级语法"
-              unstyled
-            />
-            <Button id="clear-search" className="clear-search hidden" type="button" aria-label="清空搜索" unstyled>
-              清空
-            </Button>
-            <Button
-              id="natural-search-toggle"
-              className="natural-search-toggle"
-              type="button"
-              aria-label="语义搜索"
-              aria-pressed="false"
-              title="AI 语义搜索：需要先配置 AI 渠道"
-              unstyled
-            >
-              语义
-            </Button>
-          </label>
-
-          <div id="search-chips" className="search-chips hidden" aria-label="当前搜索条件"></div>
-          <div id="saved-searches" className="saved-searches hidden" aria-label="已保存搜索"></div>
+          <section id="smart-classifier" className="smart-classifier hidden" aria-live="polite"></section>
         </section>
 
         <section className="toolbar" aria-label="当前视图状态">
@@ -201,15 +209,15 @@ function PopupShell() {
 
         <section id="auto-analyze-status" className="auto-analyze-status hidden" aria-live="polite" aria-atomic="true"></section>
 
-        <footer id="smart-footer" className="smart-footer hidden">
+        <footer id="smart-footer" className="smart-footer hidden" aria-hidden="true">
           <span id="smart-total" className="smart-total">总计 0</span>
-          <Button id="smart-footer-settings" className="smart-settings-link" type="button" unstyled>设置</Button>
+          <Button id="smart-footer-settings" className="smart-settings-link" type="button" tabIndex={-1} unstyled>设置</Button>
         </footer>
       </main>
 
       <DialogOverlay
         id="modal-backdrop"
-        className={modalOpen ? 'modal-backdrop' : 'modal-backdrop hidden'}
+        className={modalBackdropClassName}
         open={modalOpen}
         onOpenChange={(open) => {
           if (!open && modalOpen) {
@@ -218,35 +226,19 @@ function PopupShell() {
           }
           setModalOpen(open)
         }}
-        aria-hidden={modalOpen ? 'false' : 'true'}
+        aria-hidden={modalOpen && !modalClosing ? 'false' : 'true'}
         disablePointerDismissal
+        portalContainer={modalPortalContainer ?? undefined}
       >
-        <DialogPanel
+        <div
           className="popup-modal-stack"
-          initialFocus={false}
-          finalFocus={false}
           onClick={(event) => {
             if (event.target === event.currentTarget) {
               window.dispatchEvent(new CustomEvent('popup:modal-close'))
             }
           }}
-          unanimated
         >
-        <section id="filter-modal" className="modal-card hidden" aria-labelledby="filter-modal-title" tabIndex={-1}>
-          <header className="modal-header">
-            <div>
-              <p className="modal-eyebrow">文件夹筛选</p>
-              <h2 id="filter-modal-title">选择筛选文件夹</h2>
-            </div>
-            <Button id="close-filter-modal" className="icon-button ghost" type="button" aria-label="关闭筛选面板" unstyled>
-              关闭
-            </Button>
-          </header>
-          <FolderSearch htmlFor="filter-search-input" inputId="filter-search-input" placeholder="搜索文件夹名称或路径" label="搜索筛选文件夹" controls="filter-folder-list" />
-          <div id="filter-folder-list" className="modal-list" role="listbox" aria-label="筛选文件夹候选列表"></div>
-        </section>
-
-        <section id="move-modal" className="modal-card hidden" aria-labelledby="move-modal-title" tabIndex={-1}>
+        <section id="move-modal" className="modal-card t-modal hidden" aria-labelledby="move-modal-title" tabIndex={-1}>
           <header className="modal-header">
             <div>
               <p className="modal-eyebrow">移动书签</p>
@@ -265,7 +257,7 @@ function PopupShell() {
           <div id="move-folder-list" className="modal-list" role="tree" aria-label="移动目标文件夹"></div>
         </section>
 
-        <section id="smart-folder-modal" className="modal-card hidden" aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
+        <section id="smart-folder-modal" className="modal-card t-modal hidden" aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
           <header className="modal-header">
             <div>
               <p className="modal-eyebrow">当前网页</p>
@@ -284,7 +276,7 @@ function PopupShell() {
           <div id="smart-folder-list" className="modal-list" role="tree" aria-label="保存目标文件夹"></div>
         </section>
 
-        <section id="ai-provider-prompt-modal" className="modal-card small hidden" aria-labelledby="ai-provider-prompt-title" tabIndex={-1}>
+        <section id="ai-provider-prompt-modal" className="modal-card t-modal small hidden" aria-labelledby="ai-provider-prompt-title" tabIndex={-1}>
           <header className="modal-header compact">
             <div>
               <p className="modal-eyebrow">AI 搜索</p>
@@ -307,7 +299,7 @@ function PopupShell() {
           </footer>
         </section>
 
-        <section id="edit-modal" className="modal-card hidden" aria-labelledby="edit-modal-title" tabIndex={-1}>
+        <section id="edit-modal" className="modal-card t-modal hidden" aria-labelledby="edit-modal-title" tabIndex={-1}>
           <header className="modal-header">
             <div>
               <p className="modal-eyebrow">编辑书签</p>
@@ -346,7 +338,7 @@ function PopupShell() {
           </footer>
         </section>
 
-        <section id="delete-modal" className="modal-card small hidden" aria-labelledby="delete-modal-title" tabIndex={-1}>
+        <section id="delete-modal" className="modal-card t-modal small hidden" aria-labelledby="delete-modal-title" tabIndex={-1}>
           <header className="modal-header compact">
             <div>
               <p className="modal-eyebrow danger">删除确认</p>
@@ -363,7 +355,7 @@ function PopupShell() {
             <Button id="confirm-delete" className="danger-button" type="button" unstyled>删除</Button>
           </footer>
         </section>
-        </DialogPanel>
+        </div>
       </DialogOverlay>
 
       <section id="toast-root" className="toast-root" aria-live="polite" aria-atomic="true"></section>

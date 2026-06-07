@@ -381,6 +381,11 @@ async function closeWithExitMotion(
   return closeWithSharedExitMotion(...args)
 }
 
+async function getModalCloseDurationMs(): Promise<number> {
+  const { getModalCloseDurationMs: getSharedModalCloseDurationMs } = await import('../shared/motion.js')
+  return getSharedModalCloseDurationMs()
+}
+
 const SEARCH_SUGGESTION_LIMIT = 6
 const SEARCH_SUGGESTION_DEBOUNCE_MS = 120
 const SEARCH_SUGGESTION_CACHE_LIMIT = 24
@@ -487,7 +492,6 @@ const FOCUSABLE_SELECTOR = [
   'a[href]',
   'button:not([disabled])',
   'input:not([disabled])',
-  'select:not([disabled])',
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])'
 ].join(',')
@@ -716,6 +720,8 @@ let settingsDrawer: HTMLElement | null = null
 const settingsBackdrop = cachedEl('newtab-settings-backdrop')
 let settingsClose: HTMLElement | null = null
 let setSettingsDrawerOpen: ((open: boolean) => void) | null = null
+let setSettingsDrawerActiveGroup: ((group: SettingsDrawerSection) => void) | null = null
+let settingsTabsResizeBound = false
 let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
 let featuredBackgroundModalClose: HTMLElement | null = null
@@ -1079,40 +1085,6 @@ function bindEvents(): void {
   scheduleClockTick()
 }
 
-function bindSettingsRangeVisuals(): void {
-  for (const input of document.querySelectorAll<HTMLInputElement>('.setting-range')) {
-    input.addEventListener('input', () => {
-      updateSettingRangeVisual(input)
-    })
-    updateSettingRangeVisual(input)
-  }
-}
-
-function updateAllSettingRangeVisuals(): void {
-  for (const input of document.querySelectorAll<HTMLInputElement>('.setting-range')) {
-    updateSettingRangeVisual(input)
-  }
-}
-
-function updateActiveSettingsGroupRangeVisuals(group: SettingsDrawerSection = state.activeSettingsGroup): void {
-  const activeGroup = normalizeSettingsDrawerSection(group)
-  for (const input of document.querySelectorAll<HTMLInputElement>(
-    `[data-settings-group="${activeGroup}"] .setting-range`
-  )) {
-    updateSettingRangeVisual(input)
-  }
-}
-
-function updateSettingRangeVisual(input: HTMLInputElement): void {
-  const min = Number(input.min || 0)
-  const max = Number(input.max || 100)
-  const value = Number(input.value || min)
-  const progress = max > min
-    ? ((Math.min(max, Math.max(min, value)) - min) / (max - min)) * 100
-    : 0
-  input.style.setProperty('--range-progress', `${progress}%`)
-}
-
 function handleDocumentKeydown(event: KeyboardEvent): void {
   if (event.key === 'Tab' && trapFeaturedBackgroundModalFocus(event)) {
     return
@@ -1351,7 +1323,7 @@ function bindFolderSettingsEvents(): void {
 
 function bindSettingsGroupTabs(): void {
   const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
-  tabs[0]?.parentElement?.style.setProperty('--settings-tab-count', String(tabs.length))
+  syncSettingsTabsSlidingPill(false)
 
   for (const button of tabs) {
     button.addEventListener('click', () => {
@@ -1363,7 +1335,43 @@ function bindSettingsGroupTabs(): void {
     })
   }
 
+  if (!settingsTabsResizeBound) {
+    settingsTabsResizeBound = true
+    window.addEventListener('resize', () => syncSettingsTabsSlidingPill(false))
+  }
+
+  window.requestAnimationFrame(() => syncSettingsTabsSlidingPill(false))
   enrichSettingsSectionRoles()
+}
+
+function syncSettingsTabsSlidingPill(animate = true): void {
+  const bar = document.querySelector<HTMLElement>('[data-settings-tabs].t-tabs')
+  const pill = bar?.querySelector<HTMLElement>('.t-tabs-pill')
+  if (!bar || !pill) {
+    return
+  }
+
+  const tabs = Array.from(bar.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
+  const activeTab = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || tabs[0]
+  if (!activeTab) {
+    return
+  }
+
+  const move = () => {
+    pill.style.transform = `translateX(${activeTab.offsetLeft}px)`
+    pill.style.width = `${activeTab.offsetWidth}px`
+  }
+
+  if (!animate) {
+    const previousTransition = pill.style.transition
+    pill.style.transition = 'none'
+    move()
+    void pill.offsetWidth
+    pill.style.transition = previousTransition
+    return
+  }
+
+  move()
 }
 
 function handleSettingsGroupTabKeydown(event: KeyboardEvent, tabs: HTMLElement[], current: HTMLElement): void {
@@ -1980,14 +1988,14 @@ function ensureSettingsDrawerMounted(): Promise<void> {
       bindSearchSettingsEvents,
       bindIconSettingsEvents,
       bindTimeSettingsEvents,
-      bindSettingsGroupTabs,
-      bindSettingsRangeVisuals
+      bindSettingsGroupTabs
     })
     if (!result) return
     settingsDrawerMounted = true
     settingsDrawer = result.drawer
     settingsClose = result.close
     setSettingsDrawerOpen = result.setOpen
+    setSettingsDrawerActiveGroup = result.setActiveGroup
     featuredBackgroundPicker = result.featuredPicker
     featuredBackgroundDisplaySizeInput = result.featuredDisplaySize
     featuredBackgroundPositionXInput = result.featuredPositionX
@@ -2051,7 +2059,6 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
       cancelExitMotion(settingsBackdrop)
     }
     syncSettingsSaveStatus()
-    updateActiveSettingsGroupRangeVisuals()
     scheduleAdaptiveNewTabLayoutUpdate()
     settingsDrawer?.classList.add('open')
     settingsBackdrop?.classList.add('open')
@@ -2112,20 +2119,18 @@ function setActiveSettingsGroup(
   measureNow('newtab.setActiveSettingsGroup', () => {
     const nextSection = normalizeSettingsDrawerSection(section)
     state.activeSettingsGroup = nextSection
+    setSettingsDrawerActiveGroup?.(nextSection)
     settingsDrawer?.setAttribute('data-active-settings-group', nextSection)
 
     const settingsTabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
-    settingsTabs[0]?.parentElement?.style.setProperty('--settings-tab-count', String(settingsTabs.length))
-    settingsTabs.forEach((tab, index) => {
+    settingsTabs.forEach((tab) => {
       const active = normalizeSettingsDrawerSection(tab.dataset.settingsGroupTab) === nextSection
       tab.classList.toggle('active', active)
       tab.setAttribute('aria-selected', String(active))
       tab.setAttribute('aria-pressed', String(active))
       tab.tabIndex = active ? 0 : -1
-      if (active) {
-        tab.parentElement?.style.setProperty('--settings-tab-index', String(index))
-      }
     })
+    syncSettingsTabsSlidingPill(true)
 
     document.querySelectorAll<HTMLElement>('[data-settings-group]').forEach((panel) => {
       const active = normalizeSettingsDrawerSection(panel.dataset.settingsGroup) === nextSection
@@ -2138,7 +2143,6 @@ function setActiveSettingsGroup(
       scrollHost?.scrollTo({ top: 0, behavior: 'smooth' })
     }
     syncActiveSettingsGroupControls(nextSection)
-    updateActiveSettingsGroupRangeVisuals(nextSection)
   })
 }
 
@@ -4734,7 +4738,6 @@ async function refreshNewTab(): Promise<void> {
     syncFolderSettingsControls()
     syncNewTabModernSettingsControls()
     syncTimeSettingsControls()
-    updateAllSettingRangeVisuals()
     updateClockText()
     scheduleClockTick()
     runIdle(() => {
@@ -10664,7 +10667,6 @@ function syncSearchWidthControl(): void {
     widthInput.max = String(bounds.max)
     widthInput.value = String(value)
     widthInput.disabled = !state.searchSettings.enabled
-    updateSettingRangeVisual(widthInput)
   }
   setTextContent('search-width-value', `${value}vw`)
 }
@@ -10684,7 +10686,6 @@ function syncSearchOffsetControl(): void {
     offsetYInput.max = String(bounds.max)
     offsetYInput.value = String(value)
     offsetYInput.disabled = disabled
-    updateSettingRangeVisual(offsetYInput)
     offsetYInput
       .closest<HTMLElement>('.setting-row')
       ?.classList.toggle('setting-row-disabled', disabled)
@@ -11196,7 +11197,6 @@ function commitIconSettings(nextSettings: IconSettings): void {
   scheduleIconSettingsSave()
   applyIconSettingsLive()
   syncIconSettingsControls()
-  updateAllSettingRangeVisuals()
 }
 
 function applyIconSettingsLive(): void {
@@ -11249,7 +11249,6 @@ function applyIconPreset(presetKey: IconLayoutPresetKey): void {
   })
   applyIconSettingsLive()
   syncIconSettingsControls()
-  updateAllSettingRangeVisuals()
   updateClockText()
 }
 
@@ -11260,7 +11259,6 @@ function resetIconSettingsToDefaults(): void {
   })
   applyIconSettingsLive()
   syncIconSettingsControls()
-  updateAllSettingRangeVisuals()
   updateClockText()
 }
 
@@ -11484,6 +11482,7 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
   featuredBackgroundModalReturnFocusElement = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : null
+  featuredBackgroundModal.classList.remove('is-closing')
   featuredBackgroundModal.classList.add('open')
   featuredBackgroundModal.setAttribute('aria-hidden', 'false')
   featuredBackgroundModal.removeAttribute('inert')
@@ -11558,10 +11557,13 @@ function closeFeaturedBackgroundPicker(): void {
   clearFeaturedBackgroundPreviewWarmTimers()
   disconnectFeaturedBackgroundCardPreviewObserver()
   featuredBackgroundCardPreviewRegistry.resetVisibility()
-  featuredBackgroundModal.classList.remove('open')
+  featuredBackgroundModal.classList.add('is-closing')
   featuredBackgroundModal.setAttribute('aria-hidden', 'true')
   featuredBackgroundModal.setAttribute('inert', '')
   setFeaturedBackgroundModalOpen?.(false)
+  void getModalCloseDurationMs().then((closeMs) => window.setTimeout(() => {
+    featuredBackgroundModal?.classList.remove('open', 'is-closing')
+  }, closeMs))
   featuredBackgroundPicker?.setAttribute('aria-expanded', 'false')
 
   const returnElement = featuredBackgroundModalReturnFocusElement
@@ -12337,19 +12339,16 @@ function syncFeaturedBackgroundDisplayPreferenceControls(): void {
     featuredBackgroundDisplaySizeInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.min)
     featuredBackgroundDisplaySizeInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.max)
     featuredBackgroundDisplaySizeInput.value = String(preferences.displaySize)
-    updateSettingRangeVisual(featuredBackgroundDisplaySizeInput)
   }
   if (featuredBackgroundPositionXInput instanceof HTMLInputElement) {
     featuredBackgroundPositionXInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionX.min)
     featuredBackgroundPositionXInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionX.max)
     featuredBackgroundPositionXInput.value = String(preferences.positionX)
-    updateSettingRangeVisual(featuredBackgroundPositionXInput)
   }
   if (featuredBackgroundPositionYInput instanceof HTMLInputElement) {
     featuredBackgroundPositionYInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionY.min)
     featuredBackgroundPositionYInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionY.max)
     featuredBackgroundPositionYInput.value = String(preferences.positionY)
-    updateSettingRangeVisual(featuredBackgroundPositionYInput)
   }
   setTextContent('background-featured-display-size-value', `${preferences.displaySize}%`)
   setTextContent('background-featured-position-x-value', `${preferences.positionX}%`)

@@ -54,8 +54,7 @@ export default defineConfig(({ mode }) => {
               id.includes('/src/options/sections/folder-cleanup.ts') ||
               id.includes('/src/options/sections/redirects.ts') ||
               id.includes('/src/options/sections/history.ts') ||
-              id.includes('/src/options/sections/bookmark-add-history.ts') ||
-              id.includes('/src/options/sections/tag-management.ts')
+              id.includes('/src/options/sections/bookmark-add-history.ts')
             ) {
               return 'options-task-sections'
             }
