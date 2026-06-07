@@ -69,5 +69,4 @@ export function cacheDom(): void {
   dom.deleteBookmarkPath = byId('delete-bookmark-path')
   dom.cancelDelete = byId('cancel-delete')
   dom.confirmDelete = byId('confirm-delete')
-  dom.toastRoot = byId('toast-root')
 }

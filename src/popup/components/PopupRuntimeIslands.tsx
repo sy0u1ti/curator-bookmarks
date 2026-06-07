@@ -2,7 +2,7 @@ import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import type { CSSProperties, ReactNode } from 'react'
 import { getQueryTerms, normalizeQuery } from '../search.js'
-import { AiSetupPrompt, Button, DotMatrixLoader, Icon, Input, Progress, ToastList, Toolbar, type IconName } from '../../ui'
+import { AiSetupPrompt, Button, DotMatrixLoader, Icon, Input, Progress, Toolbar, type IconName } from '../../ui'
 
 export interface PopupAutoAnalyzeStatusState {
   collapsed: boolean
@@ -59,14 +59,6 @@ export interface PopupFolderPickerState {
   mode: 'move' | 'smart' | 'edit'
   query: string
   treeOptions?: PopupFolderTreeOptionViewModel[]
-}
-
-export interface PopupToastViewModel {
-  action: string
-  actionLabel: string
-  id: string
-  message: string
-  type: string
 }
 
 export interface PopupActionMenuItemViewModel {
@@ -250,10 +242,6 @@ export function renderPopupFolderPickerIsland(
   state: PopupFolderPickerState
 ): void {
   renderIsland(container, <PopupFolderPicker state={state} />)
-}
-
-export function renderPopupToastsIsland(container: Element, toasts: PopupToastViewModel[]): void {
-  renderIsland(container, <PopupToasts toasts={toasts} />)
 }
 
 export function renderPopupContentIsland(container: Element, state: PopupContentViewModel): void {
@@ -551,29 +539,6 @@ function splitHighlightText(text: string, query: string): Array<{ highlight: boo
   }
 
   return parts.length ? parts : [{ highlight: false, text: safeText }]
-}
-
-function PopupToasts({ toasts }: { toasts: PopupToastViewModel[] }) {
-  return (
-    <ToastList
-      actionClassName="toast-action"
-      closeClassName="toast-dismiss"
-      closeLabel="关闭"
-      contentClassName="toast-copy"
-      descriptionClassName="toast-message"
-      items={toasts.map((toast) => ({
-        action: toast.action,
-        actionLabel: toast.actionLabel || '操作',
-        description: toast.message,
-        id: toast.id,
-        priority: toast.type === 'error' ? 'high' : 'low',
-        type: toast.type
-      }))}
-      rootClassName="toast"
-      timeout={0}
-      unstyled
-    />
-  )
 }
 
 function PopupContent({ state }: { state: PopupContentViewModel }) {

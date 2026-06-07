@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvider } from '../ui'
 import { getModalCloseDurationMs } from '../shared/motion'
+import { PopupToasts } from './components/PopupToasts'
 
 export function PopupApp() {
   useEffect(() => {
@@ -361,7 +362,7 @@ function PopupShell() {
         </div>
       </DialogOverlay>
 
-      <section id="toast-root" className="toast-root" aria-live="polite" aria-atomic="true"></section>
+      <PopupToasts />
     </>
   )
 }

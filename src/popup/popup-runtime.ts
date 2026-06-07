@@ -85,7 +85,6 @@ import {
   renderPopupSavedSearchesIsland,
   renderPopupSearchChipsIsland,
   renderPopupSmartClassifierIsland,
-  renderPopupToastsIsland,
   type PopupActionMenuViewModel,
   type PopupAutoAnalyzeStatusState,
   type PopupContentBookmarkRowViewModel,
@@ -98,9 +97,13 @@ import {
   type PopupFolderTreeOptionViewModel,
   type PopupSavedSearchesViewModel,
   type PopupSearchChipViewModel,
-  type PopupSmartClassifierViewModel,
-  type PopupToastViewModel
+  type PopupSmartClassifierViewModel
 } from './components/PopupRuntimeIslands.js'
+import {
+  dispatchPopupToastsChange,
+  POPUP_TOAST_ACTION_EVENT,
+  type PopupToastActionDetail
+} from './popup-events.js'
 import {
   hydratePopupBaseData,
   hydratePopupDeferredEnhancements
@@ -278,7 +281,7 @@ function bindEvents(signal: AbortSignal) {
   }, { signal })
   window.addEventListener('popup:modal-close', closeDialogs, { signal })
   dom.autoAnalyzeStatus.addEventListener('click', handleAutoAnalyzeStatusClick, { signal })
-  dom.toastRoot.addEventListener('click', handleToastClick, { signal })
+  window.addEventListener(POPUP_TOAST_ACTION_EVENT, handleToastAction, { signal })
   chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
   document.addEventListener('pointerdown', handleDocumentPointerDown, { signal })
   document.addEventListener('keydown', handleDocumentKeydown, { signal })
@@ -2747,15 +2750,7 @@ function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
   ]
 }
 function renderToasts() {
-  const toasts: PopupToastViewModel[] = state.toasts.map((toast) => ({
-    action: String(toast.action || ''),
-    actionLabel: String(toast.actionLabel || ''),
-    id: String(toast.id || ''),
-    message: String(toast.message || ''),
-    type: String(toast.type || 'success')
-  }))
-
-  renderPopupToastsIsland(dom.toastRoot, toasts)
+  dispatchPopupToastsChange(state.toasts)
 }
 function handleSmartClassifierClick(event) {
   const savedSearchButton = event.target.closest('[data-saved-search-action]')
@@ -3287,18 +3282,10 @@ function handleEditInputKeydown(event) {
     void saveEditedBookmark()
   }
 }
-function handleToastClick(event) {
-  const dismissButton = event.target.closest('[data-dismiss-toast]')
-  if (dismissButton) {
-    dismissToast(dismissButton.getAttribute('data-dismiss-toast'))
-    return
-  }
-  const actionButton = event.target.closest('[data-toast-action]')
-  if (!actionButton) {
-    return
-  }
-  const toastId = actionButton.getAttribute('data-toast-id')
-  const action = actionButton.getAttribute('data-toast-action')
+function handleToastAction(event: Event) {
+  const detail = (event as CustomEvent<PopupToastActionDetail>).detail
+  const toastId = String(detail?.toastId || '')
+  const action = String(detail?.action || '')
   dismissToast(toastId)
   if (action === 'undo-delete') {
     undoDelete()
