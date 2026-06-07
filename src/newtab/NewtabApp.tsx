@@ -2,6 +2,7 @@ import { Icon } from '../ui/icons/Icon'
 import { Button } from '../ui/primitives/Button'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { useNewtabController } from './newtab-controller'
+import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModal'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
 
 export function NewtabApp() {
@@ -56,6 +57,7 @@ function NewtabShell() {
       <div id="newtab-settings-backdrop" className="settings-backdrop" data-close-settings></div>
       <div id="newtab-root" className="newtab-shell"></div>
       <SettingsDrawerHost />
+      <FeaturedBackgroundModalHost />
     </>
   )
 }

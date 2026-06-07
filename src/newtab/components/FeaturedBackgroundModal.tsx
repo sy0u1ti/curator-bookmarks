@@ -1,17 +1,38 @@
-import { Button, CloseButton, DialogClose, DialogOverlay, DialogPanel, DialogTitle } from '../../ui'
+import { useEffect } from 'react'
+import { Button } from '../../ui/primitives/Button'
+import { CloseButton } from '../../ui/primitives/CloseButton'
+import { DialogClose, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/primitives/Dialog'
+import {
+  dispatchNewtabFeaturedBackgroundModalGridScroll,
+  dispatchNewtabFeaturedBackgroundModalOpenChange,
+  dispatchNewtabFeaturedBackgroundModalPointerDownCapture,
+  dispatchNewtabFeaturedBackgroundModalReady,
+  dispatchNewtabFeaturedBackgroundModalRefreshClick,
+  useNewtabFeaturedBackgroundModalView
+} from '../newtab-featured-background-modal-store'
 
 export interface FeaturedBackgroundModalProps {
   open: boolean
   closing?: boolean
+  refreshing?: boolean
+  status?: string
+  statusTone?: string
   onOpenChange: (open: boolean, event?: Event) => void
+  onGridScroll: () => void
   onModalPointerDownCapture: (event: PointerEvent) => void
+  onRefreshClick: () => void
 }
 
 export function FeaturedBackgroundModal({
   open,
   closing = false,
+  refreshing = false,
+  status = '',
+  statusTone = 'info',
+  onGridScroll,
   onOpenChange,
-  onModalPointerDownCapture
+  onModalPointerDownCapture,
+  onRefreshClick
 }: FeaturedBackgroundModalProps) {
   const modalClassName = [
     'featured-wallpaper-modal',
@@ -46,15 +67,25 @@ export function FeaturedBackgroundModal({
             <DialogTitle as="h3" id="background-featured-modal-title">选择精选图库壁纸</DialogTitle>
           </div>
           <div className="featured-wallpaper-actions">
-            <span
+            <output
               id="background-featured-status"
               className="featured-wallpaper-status"
-              role="status"
               aria-live="polite"
-              hidden
-            />
-            <Button id="background-featured-refresh" className="featured-wallpaper-action" type="button" unstyled>
-              刷新图库
+              data-tone={statusTone}
+              hidden={!status}
+            >
+              {status}
+            </output>
+            <Button
+              id="background-featured-refresh"
+              className="featured-wallpaper-action"
+              type="button"
+              disabled={refreshing}
+              focusableWhenDisabled
+              onClick={onRefreshClick}
+              unstyled
+            >
+              {refreshing ? '刷新中...' : '刷新图库'}
             </Button>
             <DialogClose
               render={
@@ -73,8 +104,31 @@ export function FeaturedBackgroundModal({
           id="background-featured-modal-grid"
           className="featured-wallpaper-grid"
           aria-label="精选图库壁纸列表"
+          onScroll={onGridScroll}
         />
       </DialogPanel>
     </DialogOverlay>
+  )
+}
+
+export function FeaturedBackgroundModalHost() {
+  const view = useNewtabFeaturedBackgroundModalView()
+
+  useEffect(() => {
+    dispatchNewtabFeaturedBackgroundModalReady()
+  }, [])
+
+  return (
+    <FeaturedBackgroundModal
+      open={view.open}
+      closing={view.closing}
+      refreshing={view.refreshing}
+      status={view.status}
+      statusTone={view.statusTone}
+      onGridScroll={dispatchNewtabFeaturedBackgroundModalGridScroll}
+      onOpenChange={dispatchNewtabFeaturedBackgroundModalOpenChange}
+      onModalPointerDownCapture={dispatchNewtabFeaturedBackgroundModalPointerDownCapture}
+      onRefreshClick={dispatchNewtabFeaturedBackgroundModalRefreshClick}
+    />
   )
 }

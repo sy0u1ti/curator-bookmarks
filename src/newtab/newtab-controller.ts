@@ -264,6 +264,12 @@ import {
   dispatchNewtabSettingsDrawerOpen,
   registerNewtabSettingsDrawerActions
 } from './newtab-settings-drawer-store.js'
+import {
+  dispatchNewtabFeaturedBackgroundModalControls,
+  dispatchNewtabFeaturedBackgroundModalOpen,
+  getNewtabFeaturedBackgroundModalOpen,
+  registerNewtabFeaturedBackgroundModalActions
+} from './newtab-featured-background-modal-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -390,11 +396,6 @@ async function closeWithExitMotion(
 ): ReturnType<typeof import('../shared/motion.js').closeWithExitMotion> {
   const { closeWithExitMotion: closeWithSharedExitMotion } = await import('../shared/motion.js')
   return closeWithSharedExitMotion(...args)
-}
-
-async function getModalCloseDurationMs(): Promise<number> {
-  const { getModalCloseDurationMs: getSharedModalCloseDurationMs } = await import('../shared/motion.js')
-  return getSharedModalCloseDurationMs()
 }
 
 const SEARCH_SUGGESTION_LIMIT = 6
@@ -733,11 +734,7 @@ let settingsTabsResizeBound = false
 let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
 let featuredBackgroundModalClose: HTMLElement | null = null
-let setFeaturedBackgroundModalOpen: ((open: boolean) => void) | null = null
-let getFeaturedBackgroundModalOpen: (() => boolean) | null = null
 let featuredBackgroundPicker: HTMLElement | null = null
-let featuredBackgroundRefreshButton: HTMLElement | null = null
-let featuredBackgroundStatus: HTMLElement | null = null
 let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
@@ -961,7 +958,19 @@ function bindEvents(): void {
     },
     onReady: initializeSettingsDrawer
   })
+  registerNewtabFeaturedBackgroundModalActions({
+    onCloseRequest: handleFeaturedBackgroundModalCloseRequest,
+    onGridScroll: () => {
+      clearFeaturedBackgroundHoverPreview()
+    },
+    onModalPointerDownCapture: handleFeaturedBackgroundModalPointerDown,
+    onReady: initializeFeaturedBackgroundModal,
+    onRefreshClick: () => {
+      void refreshFeaturedBackgroundGallery()
+    }
+  })
   initializeSettingsDrawer()
+  initializeFeaturedBackgroundModal()
 
   dashboardTrigger?.addEventListener('click', (event) => {
     event.preventDefault()
@@ -11477,42 +11486,44 @@ async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
   syncFeaturedBackgroundPickerLabel()
 }
 
-let featuredBackgroundModalMounted = false
-let featuredBackgroundModalMountPromise: Promise<void> | null = null
+let featuredBackgroundModalReady = false
+let featuredBackgroundModalReadyPromise: Promise<void> | null = null
+let resolveFeaturedBackgroundModalReady: (() => void) | null = null
+let featuredBackgroundCardDelegationGrid: HTMLElement | null = null
 
-function ensureFeaturedBackgroundModalMounted(): Promise<void> {
-  if (featuredBackgroundModalMounted) return Promise.resolve()
-  if (featuredBackgroundModalMountPromise) return featuredBackgroundModalMountPromise
-  featuredBackgroundModalMountPromise = (async () => {
-    const mod = await import('./featured-modal-mount.js')
-    const result = mod.mountFeaturedBackgroundModal({
-      onRefreshClick: () => {
-        void refreshFeaturedBackgroundGallery()
-      },
-      onCloseRequest: handleFeaturedBackgroundModalCloseRequest,
-      onGridScroll: () => {
-        clearFeaturedBackgroundHoverPreview()
-      },
-      onModalPointerDownCapture: handleFeaturedBackgroundModalPointerDown,
-      bindCardDelegation: (grid) => {
-        bindFeaturedBackgroundCardDelegation(grid)
-      }
+function ensureFeaturedBackgroundModalReady(): Promise<void> {
+  if (featuredBackgroundModalReady) return Promise.resolve()
+  if (!featuredBackgroundModalReadyPromise) {
+    featuredBackgroundModalReadyPromise = new Promise<void>((resolve) => {
+      resolveFeaturedBackgroundModalReady = resolve
     })
-    if (!result) return
-    featuredBackgroundModalMounted = true
-    featuredBackgroundModal = result.modal
-    featuredBackgroundModalGrid = result.grid
-    featuredBackgroundModalClose = result.close
-    featuredBackgroundRefreshButton = result.refresh
-    featuredBackgroundStatus = result.status
-    setFeaturedBackgroundModalOpen = result.setOpen
-    getFeaturedBackgroundModalOpen = result.isOpen
-  })()
-  return featuredBackgroundModalMountPromise
+  }
+  return featuredBackgroundModalReadyPromise
+}
+
+function initializeFeaturedBackgroundModal(): void {
+  if (featuredBackgroundModalReady) return
+  featuredBackgroundModal = cachedEl('background-featured-modal')
+  featuredBackgroundModalGrid = cachedEl('background-featured-modal-grid')
+  featuredBackgroundModalClose = cachedEl('background-featured-modal-close')
+  featuredBackgroundPicker = cachedEl('background-featured-picker')
+  if (!featuredBackgroundModal || !featuredBackgroundModalGrid) {
+    window.requestAnimationFrame(initializeFeaturedBackgroundModal)
+    return
+  }
+
+  if (featuredBackgroundCardDelegationGrid !== featuredBackgroundModalGrid) {
+    bindFeaturedBackgroundCardDelegation(featuredBackgroundModalGrid)
+    featuredBackgroundCardDelegationGrid = featuredBackgroundModalGrid
+  }
+
+  featuredBackgroundModalReady = true
+  resolveFeaturedBackgroundModalReady?.()
+  syncFeaturedBackgroundModalControls()
 }
 
 async function openFeaturedBackgroundPicker(): Promise<void> {
-  await ensureFeaturedBackgroundModalMounted()
+  await ensureFeaturedBackgroundModalReady()
   if (!(featuredBackgroundModal instanceof HTMLElement) ||
     !(featuredBackgroundModalGrid instanceof HTMLElement)) {
     return
@@ -11521,11 +11532,7 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
   featuredBackgroundModalReturnFocusElement = document.activeElement instanceof HTMLElement
     ? document.activeElement
     : null
-  featuredBackgroundModal.classList.remove('is-closing')
-  featuredBackgroundModal.classList.add('open')
-  featuredBackgroundModal.setAttribute('aria-hidden', 'false')
-  featuredBackgroundModal.removeAttribute('inert')
-  setFeaturedBackgroundModalOpen?.(true)
+  dispatchNewtabFeaturedBackgroundModalOpen(true)
   featuredBackgroundPicker?.setAttribute('aria-expanded', 'true')
 
   await openFeaturedBackgroundPickerContent({
@@ -11596,13 +11603,7 @@ function closeFeaturedBackgroundPicker(): void {
   clearFeaturedBackgroundPreviewWarmTimers()
   disconnectFeaturedBackgroundCardPreviewObserver()
   featuredBackgroundCardPreviewRegistry.resetVisibility()
-  featuredBackgroundModal.classList.add('is-closing')
-  featuredBackgroundModal.setAttribute('aria-hidden', 'true')
-  featuredBackgroundModal.setAttribute('inert', '')
-  setFeaturedBackgroundModalOpen?.(false)
-  void getModalCloseDurationMs().then((closeMs) => window.setTimeout(() => {
-    featuredBackgroundModal?.classList.remove('open', 'is-closing')
-  }, closeMs))
+  dispatchNewtabFeaturedBackgroundModalOpen(false)
   featuredBackgroundPicker?.setAttribute('aria-expanded', 'false')
 
   const returnElement = featuredBackgroundModalReturnFocusElement
@@ -11632,8 +11633,7 @@ function handleFeaturedBackgroundModalPointerDown(event: PointerEvent): void {
 }
 
 function isFeaturedBackgroundPickerOpen(): boolean {
-  return featuredBackgroundModal instanceof HTMLElement &&
-    (getFeaturedBackgroundModalOpen?.() ?? featuredBackgroundModal.classList.contains('open'))
+  return featuredBackgroundModal instanceof HTMLElement && getNewtabFeaturedBackgroundModalOpen()
 }
 
 function getFeaturedBackgroundCardPreviewObserver(): IntersectionObserver | null {
@@ -12405,15 +12405,11 @@ function syncFeaturedBackgroundDisplayPreferenceControls(): void {
 function syncFeaturedBackgroundModalControls(): void {
   state.featuredBackgroundPreferences = normalizeFeaturedBackgroundPreferences(state.featuredBackgroundPreferences)
   syncFeaturedBackgroundDisplayPreferenceControls()
-  if (featuredBackgroundRefreshButton instanceof HTMLButtonElement) {
-    featuredBackgroundRefreshButton.disabled = state.featuredBackgroundRefreshing
-    featuredBackgroundRefreshButton.textContent = state.featuredBackgroundRefreshing ? '刷新中...' : '刷新图库'
-  }
-  if (featuredBackgroundStatus instanceof HTMLElement) {
-    featuredBackgroundStatus.textContent = state.featuredBackgroundStatus
-    featuredBackgroundStatus.hidden = !state.featuredBackgroundStatus
-    featuredBackgroundStatus.dataset.tone = state.featuredBackgroundStatusTone
-  }
+  dispatchNewtabFeaturedBackgroundModalControls({
+    refreshing: state.featuredBackgroundRefreshing,
+    status: state.featuredBackgroundStatus,
+    statusTone: state.featuredBackgroundStatusTone
+  })
 }
 
 function isFeaturedBackgroundFavorite(featuredId: string): boolean {
