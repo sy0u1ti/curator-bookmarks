@@ -32,6 +32,11 @@ export interface AiModelSelectorChangeDetail {
   model: string
 }
 
+export interface AiModelPickerResultsState extends Omit<AiModelSelectorState, 'disabled'> {
+  activeId: string
+  emptyMessage: string
+}
+
 const roots = new WeakMap<Element, Root>()
 
 export function renderAiModelSelectorIsland(container: Element, state: AiModelSelectorState): void {
@@ -46,6 +51,23 @@ export function renderAiModelSelectorIsland(container: Element, state: AiModelSe
     root.render(
       <ThemeProvider>
         <AiModelSelector state={state} />
+      </ThemeProvider>
+    )
+  })
+}
+
+export function renderAiModelPickerResultsIsland(container: Element, state: AiModelPickerResultsState): void {
+  let root = roots.get(container)
+  if (!root) {
+    container.replaceChildren()
+    root = createRoot(container)
+    roots.set(container, root)
+  }
+
+  flushSync(() => {
+    root.render(
+      <ThemeProvider>
+        <AiModelPickerResults state={state} />
       </ThemeProvider>
     )
   })
@@ -144,6 +166,49 @@ function AiModelSelector({ state }: { state: AiModelSelectorState }) {
         </ModelSelectorList>
       </ModelSelectorContent>
     </ModelSelector>
+  )
+}
+
+function AiModelPickerResults({ state }: { state: AiModelPickerResultsState }) {
+  const groupedModels = useMemo(() => groupModels(state.models, { ...state, disabled: false }), [state])
+
+  if (!state.models.length) {
+    return <ModelSelectorEmpty>{state.emptyMessage}</ModelSelectorEmpty>
+  }
+
+  return (
+    <ModelSelectorList aria-label="AI 模型候选列表">
+      {groupedModels.map((group) => (
+        <ModelSelectorGroup heading={group.heading} key={group.heading}>
+          {group.models.map((model) => {
+            const meta = getModelMeta(model, { ...state, disabled: false })
+            const current = model === state.currentModel
+            const active = model === state.activeId
+            return (
+              <ModelSelectorItem
+                aria-selected={current ? 'true' : 'false'}
+                current={current}
+                data-active={active ? 'true' : undefined}
+                key={model}
+                tabIndex={active ? 0 : -1}
+                value={model}
+              >
+                <ModelSelectorLogo provider={meta.provider} />
+                <ModelSelectorName>{model}</ModelSelectorName>
+                <ModelSelectorLogoGroup>
+                  {meta.tags.map((tag) => (
+                    <span className="model-selector-tag" key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </ModelSelectorLogoGroup>
+                {current ? <CheckIcon className="model-selector-check" /> : null}
+              </ModelSelectorItem>
+            )
+          })}
+        </ModelSelectorGroup>
+      ))}
+    </ModelSelectorList>
   )
 }
 

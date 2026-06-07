@@ -257,7 +257,11 @@ import {
 } from './sections/tag-management.js'
 import { renderShortcutListIsland } from './components/ShortcutListIsland.js'
 import { renderResultsPaginationIsland } from './components/ResultsPaginationIsland.js'
-import { renderAiModelSelectorIsland, type AiModelSelectorChangeDetail } from './components/AiModelSelectorIsland.js'
+import {
+  renderAiModelPickerResultsIsland,
+  renderAiModelSelectorIsland,
+  type AiModelSelectorChangeDetail
+} from './components/AiModelSelectorIsland.js'
 import { renderBackupPreviewIsland } from './components/BackupPreviewIsland.js'
 import { renderFolderPickerResultsIsland } from './components/FolderPickerResultsIsland.js'
 import { renderAiNamingResultsIsland } from './components/AiNamingResultsIsland.js'

@@ -1,5 +1,6 @@
 import { Select as BaseSelect } from '@base-ui/react/select'
 import {
+  type ComponentPropsWithoutRef,
   useCallback,
   useId,
   useLayoutEffect,
@@ -33,7 +34,9 @@ export interface SelectProps {
   inputRef?: Ref<HTMLInputElement>
   itemClassName?: string
   listClassName?: string
+  modal?: boolean
   popupClassName?: string
+  portalContainer?: ComponentPropsWithoutRef<typeof BaseSelect.Portal>['container']
   positionerClassName?: string
   syncInputState?: boolean
   valueClassName?: string
@@ -56,7 +59,9 @@ export function Select({
   inputRef,
   itemClassName,
   listClassName,
+  modal,
   popupClassName,
+  portalContainer,
   positionerClassName,
   syncInputState = false,
   valueClassName,
@@ -212,6 +217,7 @@ export function Select({
       value={currentValue}
       inputRef={handleInputRef}
       disabled={disabled}
+      modal={modal}
       onValueChange={(nextValue) => handleValueChange(nextValue)}
     >
       <div className={cx('grid gap-1.5', className)}>
@@ -237,7 +243,7 @@ export function Select({
           )}
         </BaseSelect.Trigger>
       </div>
-      <BaseSelect.Portal>
+      <BaseSelect.Portal container={portalContainer}>
         <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
           <BaseSelect.Popup className={unstyled ? popupClassName : cx(
             'z-50 max-h-64 min-w-[var(--anchor-width)] overflow-hidden rounded-md border border-curator-border bg-curator-bg-elevated p-1 text-curator-text shadow-[var(--shadow-popover)] outline-none',

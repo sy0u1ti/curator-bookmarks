@@ -1,5 +1,5 @@
 import { Drawer as BaseDrawer } from '@base-ui/react/drawer'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from 'react'
 import { Presence } from '../motion/Presence'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx } from './utils'
@@ -108,6 +108,7 @@ export interface DrawerPanelProps extends Omit<BaseDrawerPopupProps, 'className'
   className?: string
   motionClassName?: string
   motionVariant?: ComponentPropsWithoutRef<typeof MotionPanel>['variant']
+  ref?: Ref<HTMLDivElement>
   unanimated?: boolean
 }
 
@@ -115,15 +116,17 @@ export function DrawerPanel({
   className,
   motionClassName,
   motionVariant = 'drawer',
+  ref,
   unanimated = false,
   ...props
 }: DrawerPanelProps) {
   if (unanimated) {
-    return <BaseDrawer.Popup className={className} {...props} />
+    return <BaseDrawer.Popup ref={ref} className={className} {...props} />
   }
 
   return (
     <BaseDrawer.Popup
+      ref={ref}
       render={<MotionPanel variant={motionVariant} className={cx(className, motionClassName)} />}
       {...props}
     />
