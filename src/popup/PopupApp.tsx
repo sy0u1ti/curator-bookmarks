@@ -3,6 +3,7 @@ import { AiSetupPrompt, Button, DialogOverlay, Icon, Input, Popover, ThemeProvid
 import { getModalCloseDurationMs } from '../shared/motion'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupContentHost } from './components/PopupContentHost'
+import { PopupFolderPickerHost } from './components/PopupFolderPickerHost'
 import { PopupSavedSearches } from './components/PopupSavedSearches'
 import { PopupSearchChips } from './components/PopupSearchChips'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
@@ -261,7 +262,7 @@ function PopupShell() {
             <p id="move-bookmark-path" className="modal-card-path"></p>
           </div>
           <FolderSearch htmlFor="move-search-input" inputId="move-search-input" placeholder="搜索目标文件夹" label="搜索移动目标文件夹" controls="move-folder-list" />
-          <div id="move-folder-list" className="modal-list" role="tree" aria-label="移动目标文件夹"></div>
+          <PopupFolderPickerHost id="move-folder-list" className="modal-list" mode="move" />
         </section>
 
         <section id="smart-folder-modal" className="modal-card t-modal hidden" aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
@@ -280,7 +281,7 @@ function PopupShell() {
             <p id="smart-folder-page-url" className="modal-card-path"></p>
           </div>
           <FolderSearch htmlFor="smart-folder-search-input" inputId="smart-folder-search-input" placeholder="搜索目标文件夹" label="搜索保存目标文件夹" controls="smart-folder-list" />
-          <div id="smart-folder-list" className="modal-list" role="tree" aria-label="保存目标文件夹"></div>
+          <PopupFolderPickerHost id="smart-folder-list" className="modal-list" mode="smart" />
         </section>
 
         <section id="ai-provider-prompt-modal" className="modal-card t-modal small hidden" aria-labelledby="ai-provider-prompt-title" tabIndex={-1}>
@@ -327,7 +328,7 @@ function PopupShell() {
           </div>
           <section id="edit-folder-picker" className="edit-folder-picker hidden" aria-label="选择新的来源路径">
             <FolderSearch htmlFor="edit-folder-search-input" inputId="edit-folder-search-input" placeholder="搜索目标文件夹" label="搜索编辑目标文件夹" controls="edit-folder-list" />
-            <div id="edit-folder-list" className="modal-list compact" role="tree" aria-label="编辑目标文件夹"></div>
+            <PopupFolderPickerHost id="edit-folder-list" className="modal-list compact" mode="edit" />
           </section>
           <div className="modal-form">
             <label className="modal-field" htmlFor="edit-title-input">

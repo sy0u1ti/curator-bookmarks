@@ -1,5 +1,9 @@
 import type { PopupToast } from './state'
-import type { PopupContentViewModel, PopupSmartClassifierViewModel } from './components/PopupRuntimeIslands'
+import type {
+  PopupContentViewModel,
+  PopupFolderPickerState,
+  PopupSmartClassifierViewModel
+} from './components/PopupRuntimeIslands'
 
 export interface PopupAutoAnalyzeStatusView {
   collapsed: boolean
@@ -82,6 +86,17 @@ export interface PopupSmartClassifierTitleChangeDetail {
   title: string
 }
 
+export interface PopupFolderPickerChangeDetail {
+  mode: PopupFolderPickerState['mode']
+  state: PopupFolderPickerState
+}
+
+export interface PopupFolderPickerActionDetail {
+  action: 'select' | 'toggle'
+  folderId: string
+  mode: PopupFolderPickerState['mode']
+}
+
 export interface PopupToastChangeDetail {
   toasts: PopupToast[]
 }
@@ -104,6 +119,8 @@ export const POPUP_CONTENT_RESULT_HOVER_EVENT = 'popup:content-result-hover'
 export const POPUP_SMART_CLASSIFIER_CHANGE_EVENT = 'popup:smart-classifier-change'
 export const POPUP_SMART_CLASSIFIER_ACTION_EVENT = 'popup:smart-classifier-action'
 export const POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT = 'popup:smart-classifier-title-change'
+export const POPUP_FOLDER_PICKER_CHANGE_EVENT = 'popup:folder-picker-change'
+export const POPUP_FOLDER_PICKER_ACTION_EVENT = 'popup:folder-picker-action'
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
   window.dispatchEvent(
@@ -202,6 +219,28 @@ export function dispatchPopupSmartClassifierTitleChange(title: string): void {
   window.dispatchEvent(
     new CustomEvent<PopupSmartClassifierTitleChangeDetail>(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, {
       detail: { title }
+    })
+  )
+}
+
+export function dispatchPopupFolderPickerChange(
+  mode: PopupFolderPickerState['mode'],
+  state: PopupFolderPickerState
+): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupFolderPickerChangeDetail>(POPUP_FOLDER_PICKER_CHANGE_EVENT, {
+      detail: {
+        mode,
+        state: { ...state }
+      }
+    })
+  )
+}
+
+export function dispatchPopupFolderPickerAction(detail: PopupFolderPickerActionDetail): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupFolderPickerActionDetail>(POPUP_FOLDER_PICKER_ACTION_EVENT, {
+      detail: { ...detail }
     })
   )
 }

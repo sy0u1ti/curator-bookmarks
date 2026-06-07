@@ -79,7 +79,6 @@ import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import { dom, cacheDom } from './dom.js'
 import { state } from './state.js'
 import {
-  renderPopupFolderPickerIsland,
   type PopupActionMenuViewModel,
   type PopupContentBookmarkRowViewModel,
   type PopupContentFolderRowViewModel,
@@ -94,6 +93,7 @@ import {
 import {
   dispatchPopupAutoAnalyzeStatusChange,
   dispatchPopupContentChange,
+  dispatchPopupFolderPickerChange,
   dispatchPopupSavedSearchesChange,
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
@@ -101,6 +101,7 @@ import {
   POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
   POPUP_CONTENT_ACTION_EVENT,
   POPUP_CONTENT_RESULT_HOVER_EVENT,
+  POPUP_FOLDER_PICKER_ACTION_EVENT,
   POPUP_SAVED_SEARCH_ACTION_EVENT,
   POPUP_SMART_CLASSIFIER_ACTION_EVENT,
   POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT,
@@ -109,6 +110,7 @@ import {
   type PopupAutoAnalyzeStatusView,
   type PopupContentActionDetail,
   type PopupContentResultHoverDetail,
+  type PopupFolderPickerActionDetail,
   type PopupSavedSearchActionDetail,
   type PopupSavedSearchesView,
   type PopupSearchChipView,
@@ -239,13 +241,11 @@ function bindEvents(signal: AbortSignal) {
     showViewNotice('已清空搜索')
     dom.searchInput.focus()
   }, { signal })
-  dom.moveFolderList.addEventListener('click', handleMoveListClick, { signal })
   dom.moveSearchInput.addEventListener('input', () => {
     state.moveSearchQuery = dom.moveSearchInput.value
     renderMoveModal()
   }, { signal })
   dom.closeMoveModal.addEventListener('click', closeDialogs, { signal })
-  dom.smartFolderList.addEventListener('click', handleSmartFolderListClick, { signal })
   dom.smartFolderSearchInput.addEventListener('input', () => {
     state.smartFolderSearchQuery = dom.smartFolderSearchInput.value
     renderSmartFolderModal()
@@ -260,7 +260,6 @@ function bindEvents(signal: AbortSignal) {
   dom.cancelEdit.addEventListener('click', closeDialogs, { signal })
   dom.saveEdit.addEventListener('click', saveEditedBookmark, { signal })
   dom.editFolderPickerButton.addEventListener('click', toggleEditFolderPicker, { signal })
-  dom.editFolderList.addEventListener('click', handleEditFolderListClick, { signal })
   dom.editFolderSearchInput.addEventListener('input', () => {
     state.editFolderSearchQuery = dom.editFolderSearchInput.value
     renderEditModal()
@@ -280,6 +279,7 @@ function bindEvents(signal: AbortSignal) {
   window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
   window.addEventListener(POPUP_CONTENT_ACTION_EVENT, handleContentActionEvent, { signal })
   window.addEventListener(POPUP_CONTENT_RESULT_HOVER_EVENT, handleContentResultHoverEvent, { signal })
+  window.addEventListener(POPUP_FOLDER_PICKER_ACTION_EVENT, handleFolderPickerActionEvent, { signal })
   window.addEventListener(POPUP_SAVED_SEARCH_ACTION_EVENT, handleSavedSearchActionEvent, { signal })
   window.addEventListener(POPUP_SMART_CLASSIFIER_ACTION_EVENT, handleSmartClassifierActionEvent, { signal })
   window.addEventListener(POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT, handleSmartClassifierTitleChangeEvent, { signal })
@@ -2310,7 +2310,7 @@ function renderMoveModal() {
   dom.moveBookmarkTitle.textContent = bookmark.title
   dom.moveBookmarkPath.textContent = formatBookmarkPath(bookmark.path) || '未归档路径'
   dom.moveSearchInput.value = state.moveSearchQuery
-  renderPopupFolderPickerIsland(dom.moveFolderList, getMoveFolderPickerState(bookmark))
+  dispatchPopupFolderPickerChange('move', getMoveFolderPickerState(bookmark))
   syncBackdropVisibility()
 }
 function renderSmartFolderModal() {
@@ -2322,7 +2322,7 @@ function renderSmartFolderModal() {
   dom.smartFolderPageTitle.textContent = state.smartSuggestedTitle || getCurrentPageTitle()
   dom.smartFolderPageUrl.textContent = getSmartFolderTargetPathLabel()
   dom.smartFolderSearchInput.value = state.smartFolderSearchQuery
-  renderPopupFolderPickerIsland(dom.smartFolderList, getSmartFolderPickerState())
+  dispatchPopupFolderPickerChange('smart', getSmartFolderPickerState())
   syncBackdropVisibility()
 }
 function renderAiProviderPromptModal() {
@@ -2353,8 +2353,8 @@ function renderEditModal() {
   dom.editFolderPickerButton.setAttribute('aria-expanded', String(state.editFolderPickerOpen))
   setPopupSurfaceOpen(dom.editFolderPicker, state.editFolderPickerOpen)
   dom.editFolderSearchInput.value = state.editFolderSearchQuery
-  renderPopupFolderPickerIsland(
-    dom.editFolderList,
+  dispatchPopupFolderPickerChange(
+    'edit',
     state.editFolderPickerOpen
       ? getEditFolderPickerState(bookmark)
       : {
@@ -2902,55 +2902,52 @@ function handleContentResultHoverEvent(event: Event) {
     setActiveResultIndex(nextIndex)
   }
 }
-function handleMoveListClick(event) {
-  const toggle = event.target.closest('[data-toggle-move-folder]')
-  if (toggle && !state.moveSearchQuery.trim()) {
-    const folderId = toggle.getAttribute('data-toggle-move-folder')
-    if (!toggle.hasAttribute('data-disabled')) {
-      toggleMoveFolder(folderId)
-    }
+function handleFolderPickerActionEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupFolderPickerActionDetail>).detail
+  if (!detail?.mode || !detail.folderId) {
     return
   }
-  const folderButton = event.target.closest('[data-select-folder]')
-  if (folderButton) {
-    const folderId = folderButton.getAttribute('data-select-folder')
-    void moveBookmarkToFolder(folderId)
+
+  if (detail.mode === 'move') {
+    handleMoveFolderPickerAction(detail)
+    return
+  }
+  if (detail.mode === 'smart') {
+    handleSmartFolderPickerAction(detail)
+    return
+  }
+  handleEditFolderPickerAction(detail)
+}
+
+function handleMoveFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (detail.action === 'toggle' && !state.moveSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    return
+  }
+  if (detail.action === 'select') {
+    void moveBookmarkToFolder(detail.folderId)
   }
 }
-function handleEditFolderListClick(event) {
-  const target = event.target
-  if (!(target instanceof Element)) {
+
+function handleSmartFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (detail.action === 'toggle' && !state.smartFolderSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    renderSmartFolderModal()
     return
   }
-  const toggle = target.closest('[data-toggle-edit-folder]')
-  if (toggle && !state.editFolderSearchQuery.trim()) {
-    const folderId = toggle.getAttribute('data-toggle-edit-folder')
-    if (!toggle.hasAttribute('data-disabled')) {
-      toggleMoveFolder(folderId)
-      renderEditModal()
-    }
-    return
-  }
-  const folderButton = target.closest('[data-select-edit-folder]')
-  if (folderButton) {
-    const folderId = String(folderButton.getAttribute('data-select-edit-folder') || '').trim()
-    selectEditDraftFolder(folderId)
+  if (detail.action === 'select') {
+    void saveCurrentPageToFolder(detail.folderId)
   }
 }
-function handleSmartFolderListClick(event) {
-  const toggle = event.target.closest('[data-toggle-smart-folder]')
-  if (toggle && !state.smartFolderSearchQuery.trim()) {
-    const folderId = toggle.getAttribute('data-toggle-smart-folder')
-    if (!toggle.hasAttribute('data-disabled')) {
-      toggleMoveFolder(folderId)
-      renderSmartFolderModal()
-    }
+
+function handleEditFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (detail.action === 'toggle' && !state.editFolderSearchQuery.trim()) {
+    toggleMoveFolder(detail.folderId)
+    renderEditModal()
     return
   }
-  const folderButton = event.target.closest('[data-smart-select-folder]')
-  if (folderButton) {
-    const folderId = folderButton.getAttribute('data-smart-select-folder')
-    void saveCurrentPageToFolder(folderId)
+  if (detail.action === 'select') {
+    selectEditDraftFolder(detail.folderId)
   }
 }
 function toggleEditFolderPicker() {

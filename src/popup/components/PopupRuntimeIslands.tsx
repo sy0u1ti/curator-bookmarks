@@ -183,13 +183,6 @@ function renderIsland(container: Element, node: ReactNode): void {
   })
 }
 
-export function renderPopupFolderPickerIsland(
-  container: Element,
-  state: PopupFolderPickerState
-): void {
-  renderIsland(container, <PopupFolderPicker state={state} />)
-}
-
 function PopupEmptyState({ state }: { state: PopupEmptyStateViewModel }) {
   if (state.kind === 'none') {
     return null
@@ -250,7 +243,7 @@ function PopupEmptyState({ state }: { state: PopupEmptyStateViewModel }) {
   )
 }
 
-function PopupFolderPicker({ state }: { state: PopupFolderPickerState }) {
+export function PopupFolderPicker({ state }: { state: PopupFolderPickerState }) {
   return <PopupTreeFolderPicker state={state} />
 }
 
