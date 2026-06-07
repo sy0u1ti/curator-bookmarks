@@ -92,6 +92,8 @@ import {
 } from './components/PopupRuntimeIslands.js'
 import {
   dispatchPopupAutoAnalyzeStatusChange,
+  dispatchPopupChromeChange,
+  dispatchPopupSearchFocusRequest,
   dispatchPopupContentChange,
   dispatchPopupFolderPickerChange,
   dispatchPopupModalsChange,
@@ -100,6 +102,7 @@ import {
   dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
   POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT,
+  POPUP_CHROME_ACTION_EVENT,
   POPUP_CONTENT_ACTION_EVENT,
   POPUP_CONTENT_RESULT_HOVER_EVENT,
   POPUP_FOLDER_PICKER_ACTION_EVENT,
@@ -110,6 +113,8 @@ import {
   POPUP_TOAST_ACTION_EVENT,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
+  type PopupChromeActionDetail,
+  type PopupChromeView,
   type PopupContentActionDetail,
   type PopupContentResultHoverDetail,
   type PopupFolderPickerActionDetail,
@@ -213,7 +218,7 @@ export function startPopupRuntime(): () => void {
       perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
       void consumePopupCommandIntent().then((handled) => {
         if (!handled && !document.body.classList.contains('smart-active')) {
-          dom.searchInput.focus()
+          focusSearchInput()
         }
       })
     })
@@ -225,21 +230,9 @@ export function startPopupRuntime(): () => void {
 }
 
 function bindEvents(signal: AbortSignal) {
-  dom.openSettings.addEventListener('click', openSettingsPage, { signal })
-  dom.searchInput.addEventListener('input', () => {
-    setSearchQuery(dom.searchInput.value)
-  }, { signal })
-  dom.naturalSearchToggle.addEventListener('click', () => {
-    void toggleNaturalLanguageSearch()
-  }, { signal })
-  dom.searchHelpToggle.addEventListener('keydown', handleSearchHelpKeydown, { signal })
-  dom.clearSearch.addEventListener('click', () => {
-    setSearchQuery('', { immediate: true })
-    showViewNotice('已清空搜索')
-    dom.searchInput.focus()
-  }, { signal })
   window.addEventListener('popup:modal-close', closeDialogs, { signal })
   window.addEventListener(POPUP_AUTO_ANALYZE_STATUS_ACTION_EVENT, handleAutoAnalyzeStatusAction, { signal })
+  window.addEventListener(POPUP_CHROME_ACTION_EVENT, handleChromeActionEvent, { signal })
   window.addEventListener(POPUP_CONTENT_ACTION_EVENT, handleContentActionEvent, { signal })
   window.addEventListener(POPUP_CONTENT_RESULT_HOVER_EVENT, handleContentResultHoverEvent, { signal })
   window.addEventListener(POPUP_FOLDER_PICKER_ACTION_EVENT, handleFolderPickerActionEvent, { signal })
@@ -311,7 +304,7 @@ async function saveCurrentSearchQuery() {
   const query = state.searchQuery.trim()
   if (!query) {
     showViewNotice('请输入查询后再保存')
-    dom.searchInput.focus()
+    focusSearchInput()
     return
   }
   try {
@@ -483,16 +476,33 @@ function handleAutoAnalyzeStatusAction(event: Event) {
     void openBookmarkHistoryPage()
   }
 }
-function setSearchHelpPopoverOpen(open: boolean): void {
-  window.dispatchEvent(new CustomEvent(open ? 'popup:search-help-open' : 'popup:search-help-close'))
-}
-function handleSearchHelpKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'ArrowDown') {
+
+function handleChromeActionEvent(event: Event) {
+  const detail = (event as CustomEvent<PopupChromeActionDetail>).detail
+  const action = String(detail?.action || '')
+  if (action === 'open-settings') {
+    void openSettingsPage()
     return
   }
-  event.preventDefault()
-  setSearchHelpPopoverOpen(true)
+  if (action === 'search-change') {
+    setSearchQuery(String(detail?.value || ''))
+    return
+  }
+  if (action === 'clear-search') {
+    setSearchQuery('', { immediate: true })
+    showViewNotice('已清空搜索')
+    focusSearchInput()
+    return
+  }
+  if (action === 'toggle-natural-search') {
+    void toggleNaturalLanguageSearch()
+  }
 }
+
+function focusSearchInput({ select = false } = {}): void {
+  dispatchPopupSearchFocusRequest(select)
+}
+
 function renderAutoAnalyzeStatus() {
   dispatchPopupAutoAnalyzeStatusChange(getAutoAnalyzeStatusViewModel())
 }
@@ -658,8 +668,7 @@ function focusSearchFromCommand(intent) {
   state.activeMenuBookmarkId = null
   render()
   window.requestAnimationFrame(() => {
-    dom.searchInput.focus()
-    dom.searchInput.select()
+    focusSearchInput({ select: true })
     showViewNotice(intent.message || (state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入'))
   })
 }
@@ -674,7 +683,7 @@ async function runSmartClassifierFromCommand(intent) {
       type: 'error',
       message: '当前页面无法进行智能分类。'
     })
-    dom.searchInput.focus()
+    focusSearchInput()
     return
   }
   state.activeMenuBookmarkId = null
@@ -848,7 +857,6 @@ function resetSearchForPopupRefresh(preserveSearch: boolean): void {
   state.naturalSearchPlan = null
   abortNaturalSearchRequest()
   state.searchHighlightQuery = ''
-  dom.searchInput.value = ''
 }
 function hydratePopupDeferredRefreshData(baseData: PopupRefreshBaseData): Promise<unknown> {
   const indexHydration = hydratePopupDeferredEnhancements({
@@ -1127,9 +1135,6 @@ function setSearchQuery(value, { immediate = false } = {}) {
   state.naturalSearchSetupRequired = false
   state.activeMenuBookmarkId = null
   clearViewNotice()
-  if (dom.searchInput.value !== value) {
-    dom.searchInput.value = value
-  }
   clearTimeout(state.searchTimer)
   ensurePinyinEnrichmentForQuery(value)
   if (immediate) {
@@ -1181,7 +1186,7 @@ async function toggleNaturalLanguageSearch() {
     return
   }
   setSearchQuery(state.searchQuery, { immediate: true })
-  dom.searchInput.focus()
+  focusSearchInput()
 }
 async function prepareNaturalLanguageSearchAi() {
   try {
@@ -1487,32 +1492,36 @@ async function searchNaturalQuery(query, bookmarks, runId): Promise<PopupSearchR
   })
 }
 function render() {
-  renderBanner()
+  renderChrome()
   renderAutoAnalyzeStatus()
-  renderToolbar()
   renderSmartClassifier()
   renderMainContent()
   renderModals()
   renderToasts()
 }
-function renderBanner() {
-  const naturalSearchFallback = isNaturalSearchLocalFallback()
-  const naturalSearchPending = state.naturalSearchPending
-  dom.errorBanner.textContent = state.loadError
-  dom.errorBanner.classList.toggle('hidden', !state.loadError)
-  dom.clearSearch.classList.toggle('hidden', !state.searchQuery)
-  dom.searchInput.placeholder = 'Search'
-  dom.searchInput.setAttribute('aria-label', getSearchInputAriaLabel())
-  dom.naturalSearchToggle.classList.toggle('active', state.naturalSearchEnabled)
-  dom.naturalSearchToggle.classList.toggle('pending', naturalSearchPending)
-  dom.naturalSearchToggle.classList.toggle('fallback', naturalSearchFallback)
-  dom.naturalSearchToggle.classList.toggle('not-configured', !state.naturalSearchAiConfigured && !state.naturalSearchEnabled)
-  dom.naturalSearchToggle.textContent = getNaturalSearchToggleText()
-  dom.naturalSearchToggle.setAttribute('aria-pressed', String(state.naturalSearchEnabled))
-  dom.naturalSearchToggle.setAttribute('aria-label', '语义搜索')
-  dom.naturalSearchToggle.removeAttribute('aria-disabled')
-  dom.naturalSearchToggle.title = getNaturalSearchToggleTitle(naturalSearchPending)
+function renderChrome() {
+  dispatchPopupChromeChange(getPopupChromeViewModel())
   renderSearchTools()
+}
+
+function getPopupChromeViewModel(): PopupChromeView {
+  const naturalSearchPending = state.naturalSearchPending
+  return {
+    loadError: state.loadError,
+    search: {
+      ariaLabel: getSearchInputAriaLabel(),
+      clearVisible: Boolean(state.searchQuery),
+      fallback: isNaturalSearchLocalFallback(),
+      label: getNaturalSearchToggleText(),
+      notConfigured: !state.naturalSearchAiConfigured && !state.naturalSearchEnabled,
+      pending: naturalSearchPending,
+      placeholder: getSearchInputPlaceholder(),
+      pressed: state.naturalSearchEnabled,
+      query: state.searchQuery,
+      title: getNaturalSearchToggleTitle(naturalSearchPending)
+    },
+    viewCaption: getViewCaptionText()
+  }
 }
 function renderSearchTools() {
   const parsed = parseSearchQuery(state.searchQuery)
@@ -1592,25 +1601,22 @@ function getNaturalSearchToggleTitle(isPending: boolean) {
   }
   return state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索'
 }
-function renderToolbar() {
+function getViewCaptionText(): string {
   if (state.viewNoticeMessage && !state.isLoading && !state.searchPending && !state.naturalSearchPending) {
-    dom.viewCaption.textContent = state.viewNoticeMessage
-    return
+    return state.viewNoticeMessage
   }
   if (state.debouncedQuery) {
     if (state.naturalSearchEnabled) {
-      dom.viewCaption.textContent = state.searchPending
+      return state.searchPending
         ? getNaturalSearchPendingCaption()
         : `${getNaturalSearchResultCaption()} · ${state.searchResults.length} 条`
-      return
     }
-    dom.viewCaption.textContent = state.searchPending
+    return state.searchPending
       ? '本地搜索中…'
       : `本地匹配 · ${state.searchResults.length} 条`
-    return
   }
   const currentRoot = getCurrentTreeRoot()
-  dom.viewCaption.textContent = currentRoot?.title || '书签栏'
+  return currentRoot?.title || '书签栏'
 }
 function getNaturalSearchPendingCaption() {
   return 'AI 语义搜索解析中…'
@@ -1664,11 +1670,11 @@ function showViewNotice(message, { durationMs = VIEW_NOTICE_MS } = {}) {
   }
   clearViewNotice()
   state.viewNoticeMessage = normalizedMessage
-  renderToolbar()
+  renderChrome()
   state.viewNoticeTimer = window.setTimeout(() => {
     if (state.viewNoticeMessage === normalizedMessage) {
       state.viewNoticeMessage = ''
-      renderToolbar()
+      renderChrome()
     }
     state.viewNoticeTimer = null
   }, durationMs)
@@ -1718,8 +1724,6 @@ function renderSmartClassifier() {
   const smartOverlayActive =
     smartAvailable && ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
   document.body.classList.toggle('smart-active', smartOverlayActive)
-  dom.smartFooter.classList.add('hidden')
-  dom.smartTotal.textContent = `总计 ${state.allBookmarks.length}`
 
   if (state.isLoading && state.smartStatus !== 'results') {
     dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('page-loading'))
@@ -2737,7 +2741,7 @@ function handleSavedSearchAction(action: string, searchId: string) {
     if (savedSearch) {
       setSearchQuery(savedSearch.query, { immediate: true })
       showViewNotice(`已应用保存搜索：${savedSearch.name}`)
-      dom.searchInput.focus()
+      focusSearchInput()
     }
     return
   }
@@ -2828,7 +2832,7 @@ function handleEmptySearchAction(action) {
   if (action === 'clear-query') {
     setSearchQuery('', { immediate: true })
     showViewNotice('已清空搜索')
-    dom.searchInput.focus()
+    focusSearchInput()
     return
   }
   if (action === 'clear-filter') {
@@ -2839,7 +2843,7 @@ function handleEmptySearchAction(action) {
     state.selectedFolderFilterId = null
     setSearchQuery('', { immediate: true })
     showViewNotice('已显示全部书签')
-    dom.searchInput.focus()
+    focusSearchInput()
     return
   }
   if (action === 'toggle-natural') {
@@ -2855,7 +2859,7 @@ function handleEmptySearchAction(action) {
     state.naturalSearchSetupRequired = false
     state.naturalSearchEnabled = false
     render()
-    dom.searchInput.focus()
+    focusSearchInput()
   }
 }
 function handleContentResultHoverEvent(event: Event) {
@@ -3104,8 +3108,7 @@ function handleSearchFocusShortcut(event) {
   event.preventDefault()
   state.activeMenuBookmarkId = null
   renderMainContent()
-  dom.searchInput.focus()
-  dom.searchInput.select()
+  focusSearchInput({ select: true })
   showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
   return true
 }
@@ -3294,7 +3297,7 @@ function applyFolderFilter(folderId, { focusSearch = true } = {}) {
   render()
   showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
   if (focusSearch) {
-    dom.searchInput.focus()
+    focusSearchInput()
   }
 }
 function clearFolderFilter() {
@@ -3329,7 +3332,7 @@ function openAiProviderPromptDialog() {
   if (shouldBlockDirtyEditClose()) {
     return
   }
-  rememberDialogReturnFocus(dom.naturalSearchToggle)
+  rememberDialogReturnFocus()
   state.activeMenuBookmarkId = null
   state.moveTargetBookmarkId = null
   state.smartFolderPickerOpen = false
@@ -3353,7 +3356,7 @@ function restoreDialogReturnFocus() {
     returnElement.focus()
     return
   }
-  dom.searchInput.focus()
+  focusSearchInput()
 }
 function getMenuToggleForBookmark(bookmarkId) {
   if (!bookmarkId) {
@@ -3656,7 +3659,7 @@ async function finishSmartSave({ message, closeModal = true }) {
   showViewNotice('已保存，书签列表已更新')
   window.requestAnimationFrame(() => {
     if (!hasOpenModal()) {
-      dom.searchInput.focus()
+      focusSearchInput()
     }
   })
 }

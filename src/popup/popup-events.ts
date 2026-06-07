@@ -97,6 +97,36 @@ export interface PopupFolderPickerActionDetail {
   mode: PopupFolderPickerState['mode']
 }
 
+export interface PopupChromeView {
+  loadError: string
+  search: {
+    ariaLabel: string
+    clearVisible: boolean
+    fallback: boolean
+    label: string
+    notConfigured: boolean
+    pending: boolean
+    placeholder: string
+    pressed: boolean
+    query: string
+    title: string
+  }
+  viewCaption: string
+}
+
+export interface PopupChromeChangeDetail {
+  state: PopupChromeView
+}
+
+export interface PopupChromeActionDetail {
+  action: string
+  value?: string
+}
+
+export interface PopupSearchFocusRequestDetail {
+  select: boolean
+}
+
 export interface PopupModalsView {
   active: 'move' | 'smart-folder' | 'ai-provider' | 'edit' | 'delete' | null
   aiProvider: {
@@ -175,6 +205,9 @@ export const POPUP_SMART_CLASSIFIER_ACTION_EVENT = 'popup:smart-classifier-actio
 export const POPUP_SMART_CLASSIFIER_TITLE_CHANGE_EVENT = 'popup:smart-classifier-title-change'
 export const POPUP_FOLDER_PICKER_CHANGE_EVENT = 'popup:folder-picker-change'
 export const POPUP_FOLDER_PICKER_ACTION_EVENT = 'popup:folder-picker-action'
+export const POPUP_CHROME_CHANGE_EVENT = 'popup:chrome-change'
+export const POPUP_CHROME_ACTION_EVENT = 'popup:chrome-action'
+export const POPUP_SEARCH_FOCUS_REQUEST_EVENT = 'popup:search-focus-request'
 export const POPUP_MODALS_CHANGE_EVENT = 'popup:modals-change'
 export const POPUP_MODAL_ACTION_EVENT = 'popup:modal-action'
 
@@ -297,6 +330,30 @@ export function dispatchPopupFolderPickerAction(detail: PopupFolderPickerActionD
   window.dispatchEvent(
     new CustomEvent<PopupFolderPickerActionDetail>(POPUP_FOLDER_PICKER_ACTION_EVENT, {
       detail: { ...detail }
+    })
+  )
+}
+
+export function dispatchPopupChromeChange(state: PopupChromeView): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupChromeChangeDetail>(POPUP_CHROME_CHANGE_EVENT, {
+      detail: { state: { ...state, search: { ...state.search } } }
+    })
+  )
+}
+
+export function dispatchPopupChromeAction(action: string, value?: string): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupChromeActionDetail>(POPUP_CHROME_ACTION_EVENT, {
+      detail: { action, value }
+    })
+  )
+}
+
+export function dispatchPopupSearchFocusRequest(select = false): void {
+  window.dispatchEvent(
+    new CustomEvent<PopupSearchFocusRequestDetail>(POPUP_SEARCH_FOCUS_REQUEST_EVENT, {
+      detail: { select }
     })
   )
 }
