@@ -197,9 +197,7 @@ import { mark as perfMark, measure as perfMeasure, measureNow } from '../shared/
 import { runIdle, runMicroIdle } from '../shared/idle.js'
 import {
   appendBookmarkTileIslandElements,
-  createBookmarkAddMenuIslandElement,
   createBookmarkContentIslandElement,
-  createBookmarkEditMenuIslandElement,
   createBookmarkGridPlaceholderIslandElement,
   createBookmarkTileIslandElement,
   createClockSpacerIslandElement,
@@ -211,8 +209,6 @@ import {
   createSearchWidgetIslandElement,
   createSpeedDialPanelIslandElement,
   createSourceNavigationIslandElement,
-  mountBookmarkAddMenuIslandElement,
-  mountBookmarkEditMenuIslandElement,
   mountBookmarkGridPlaceholderIslandElement,
   mountNewTabDragGhostBridge,
   mountSearchEngineMenuIslandElement,
@@ -226,13 +222,8 @@ import {
   renderSelectedFolderSourceListIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
-  type BookmarkAddMenuViewModel,
   type BookmarkContentViewModel,
-  type BookmarkEditMenuViewModel,
   type BookmarkFolderSectionViewModel,
-  type BookmarkMenuActionIcon,
-  type BookmarkMenuActionViewModel,
-  type BookmarkMenuTextFieldViewModel,
   type BookmarkTileViewModel,
   type FeaturedBackgroundPickerCardViewModel,
   type FeaturedBackgroundPickerGridSectionViewModel,
@@ -251,6 +242,13 @@ import {
   type SelectedFolderSourceListState,
   type SpeedDialCardViewModel
 } from './components/RuntimeIslands.js'
+import type {
+  BookmarkAddMenuViewModel,
+  BookmarkEditMenuViewModel,
+  BookmarkMenuActionIcon,
+  BookmarkMenuActionViewModel,
+  BookmarkMenuTextFieldViewModel
+} from './bookmark-menu-view-models.js'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
   dispatchNewtabSettingsDrawerOpen,
@@ -276,6 +274,12 @@ import {
   dispatchNewtabDeleteToastView,
   registerNewtabDeleteToastActions
 } from './newtab-delete-toast-store.js'
+import {
+  dispatchNewtabBookmarkAddMenuClosing,
+  dispatchNewtabBookmarkAddMenuView,
+  dispatchNewtabBookmarkEditMenuClosing,
+  dispatchNewtabBookmarkEditMenuView
+} from './newtab-bookmark-menu-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -395,13 +399,6 @@ function cancelExitMotion(element: Element, closingClass = 'is-closing'): void {
     delete element.dataset[MOTION_CLOSE_TOKEN]
   }
   element.classList.remove(closingClass)
-}
-
-async function closeWithExitMotion(
-  ...args: Parameters<typeof import('../shared/motion.js').closeWithExitMotion>
-): ReturnType<typeof import('../shared/motion.js').closeWithExitMotion> {
-  const { closeWithExitMotion: closeWithSharedExitMotion } = await import('../shared/motion.js')
-  return closeWithSharedExitMotion(...args)
 }
 
 const SEARCH_SUGGESTION_LIMIT = 6
@@ -774,6 +771,8 @@ let searchSettingsSettleTimer = 0
 let iconSettingsSaveTimer = 0
 let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
+let bookmarkMenuCloseTimer = 0
+let addBookmarkMenuCloseTimer = 0
 let folderReorderStatusTimer = 0
 let bookmarkChangeRefreshTimer = 0
 let bookmarkChangeRefreshInFlight = false
@@ -2353,6 +2352,7 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
     return
   }
 
+  window.clearTimeout(bookmarkMenuCloseTimer)
   state.activeMenuBookmarkId = bookmarkId
   state.menuX = clientX
   state.menuY = clientY
@@ -2369,6 +2369,7 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
 
 function openAddBookmarkMenu(clientX: number, clientY: number): void {
   closeBookmarkMenu({ animate: false })
+  window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = true
   state.addMenuExpanded = false
   state.addFolderId = ''
@@ -2384,6 +2385,7 @@ function openAddBookmarkMenu(clientX: number, clientY: number): void {
 function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): void {
   const rect = anchor.getBoundingClientRect()
   closeBookmarkMenu({ animate: false })
+  window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = true
   state.addMenuExpanded = true
   state.addFolderId = folderId
@@ -2397,37 +2399,39 @@ function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): v
 }
 
 function closeBookmarkMenu({ animate = true } = {}): void {
+  window.clearTimeout(bookmarkMenuCloseTimer)
   state.activeMenuBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
   state.menuStatus = ''
   state.pendingCustomIconDataUrl = ''
   state.pendingDeleteBookmarkId = ''
-  const menu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
-  if (menu) {
-    if (animate) {
-      void closeWithExitMotion(menu, 'is-closing', () => menu.remove(), 180)
-    } else {
-      cancelExitMotion(menu)
-      menu.remove()
-    }
+  if (animate) {
+    dispatchNewtabBookmarkEditMenuClosing()
+    bookmarkMenuCloseTimer = window.setTimeout(() => {
+      dispatchNewtabBookmarkEditMenuView(null)
+      bookmarkMenuCloseTimer = 0
+    }, 180)
+  } else {
+    dispatchNewtabBookmarkEditMenuView(null)
   }
 }
 
 function closeAddBookmarkMenu({ animate = true } = {}): void {
+  window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = false
   state.addMenuExpanded = false
   state.addFolderId = ''
   state.addMenuBusy = false
   state.addMenuError = ''
-  const menu = document.querySelector<HTMLElement>('.bookmark-add-menu')
-  if (menu) {
-    if (animate) {
-      void closeWithExitMotion(menu, 'is-closing', () => menu.remove(), 180)
-    } else {
-      cancelExitMotion(menu)
-      menu.remove()
-    }
+  if (animate) {
+    dispatchNewtabBookmarkAddMenuClosing()
+    addBookmarkMenuCloseTimer = window.setTimeout(() => {
+      dispatchNewtabBookmarkAddMenuView(null)
+      addBookmarkMenuCloseTimer = 0
+    }, 180)
+  } else {
+    dispatchNewtabBookmarkAddMenuView(null)
   }
 }
 
@@ -8284,129 +8288,104 @@ function getActiveMenuBookmark(): chrome.bookmarks.BookmarkTreeNode | null {
 }
 
 function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void {
-  const existingMenu = document.querySelector<HTMLElement>('.bookmark-edit-menu')
-  if (existingMenu) {
-    cancelExitMotion(existingMenu)
-    existingMenu.remove()
-  }
-
+  window.clearTimeout(bookmarkMenuCloseTimer)
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
+    dispatchNewtabBookmarkEditMenuView(null)
     return
   }
 
   const bookmarkLabel = getBookmarkActionLabelContext(bookmark)
   const pinCopy = getSpeedDialPinActionCopyLocal(isActiveMenuBookmarkPinned())
   const deleteLabel = state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除书签' : '删除书签'
-  const menu = createBookmarkEditMenuIslandElement({
-    actions: [
-      createMenuActionViewModel(
-        pinCopy.label,
-        'pin',
-        toggleActiveMenuBookmarkPin,
-        { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
-      ),
-      createMenuActionViewModel('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
-        actionId: 'copy-url',
-        ariaLabel: `复制书签链接：${bookmarkLabel}`
-      }),
-      createMenuActionViewModel(
-        state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
-        'trash',
-        deleteActiveMenuBookmark,
-        { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `${deleteLabel}：${bookmarkLabel}` }
-      ),
-      createMenuActionViewModel('刷新图标', 'refresh', refreshActiveMenuIcon, {
-        actionId: 'refresh-icon',
-        ariaLabel: `刷新书签图标：${bookmarkLabel}`
-      }),
-      createMenuActionViewModel('保存更改', 'save', saveBookmarkMenuChanges, {
-        actionId: 'save-bookmark',
-        ariaLabel: `保存书签更改：${bookmarkLabel}`
-      })
-    ],
-    error: state.menuError,
-    fields: [
-      createMenuTextFieldViewModel('标题', 'Example', state.editTitle, (value) => {
-        state.editTitle = value
-      }),
-      createMenuTextFieldViewModel('链接', 'https://example.com/', state.editUrl, (value) => {
-        state.editUrl = value
-      })
-    ],
-    iconMode: state.editIconMode === 'custom' ? 'custom' : 'website',
-    iconModeDisabled: state.menuBusy,
-    onIconModeChange: handleIconModeChange,
-    status: state.menuStatus,
-    statusTone: state.pendingDeleteBookmarkId === String(bookmark.id) ? 'warning' : '',
-    x: state.menuX,
-    y: state.menuY
+  dispatchNewtabBookmarkEditMenuView({
+    closing: false,
+    focusAction,
+    focusFirst,
+    menu: {
+      actions: [
+        createMenuActionViewModel(
+          pinCopy.label,
+          'pin',
+          toggleActiveMenuBookmarkPin,
+          { actionId: 'toggle-pin', ariaLabel: `${pinCopy.ariaLabel}：${bookmarkLabel}` }
+        ),
+        createMenuActionViewModel('复制链接', 'copy', copyActiveMenuBookmarkUrl, {
+          actionId: 'copy-url',
+          ariaLabel: `复制书签链接：${bookmarkLabel}`
+        }),
+        createMenuActionViewModel(
+          state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除 1 个' : '删除链接',
+          'trash',
+          deleteActiveMenuBookmark,
+          { actionId: 'delete-bookmark', variant: 'danger', ariaLabel: `${deleteLabel}：${bookmarkLabel}` }
+        ),
+        createMenuActionViewModel('刷新图标', 'refresh', refreshActiveMenuIcon, {
+          actionId: 'refresh-icon',
+          ariaLabel: `刷新书签图标：${bookmarkLabel}`
+        }),
+        createMenuActionViewModel('保存更改', 'save', saveBookmarkMenuChanges, {
+          actionId: 'save-bookmark',
+          ariaLabel: `保存书签更改：${bookmarkLabel}`
+        })
+      ],
+      error: state.menuError,
+      fields: [
+        createMenuTextFieldViewModel('标题', 'Example', state.editTitle, (value) => {
+          state.editTitle = value
+        }),
+        createMenuTextFieldViewModel('链接', 'https://example.com/', state.editUrl, (value) => {
+          state.editUrl = value
+        })
+      ],
+      iconMode: state.editIconMode === 'custom' ? 'custom' : 'website',
+      iconModeDisabled: state.menuBusy,
+      onIconModeChange: handleIconModeChange,
+      status: state.menuStatus,
+      statusTone: state.pendingDeleteBookmarkId === String(bookmark.id) ? 'warning' : '',
+      x: state.menuX,
+      y: state.menuY
+    }
   })
-
-  mountBookmarkEditMenuIslandElement(menu)
-  positionBookmarkMenu(menu)
-
-  const focusedAction = focusAction
-    ? menu.querySelector<HTMLButtonElement>(`[data-menu-action="${focusAction}"]`)
-    : null
-  if (focusedAction && !focusedAction.disabled) {
-    focusedAction.focus()
-    return
-  }
-
-  const firstInput = menu.querySelector('input')
-  if (focusFirst && firstInput instanceof HTMLInputElement) {
-    firstInput.focus()
-    firstInput.select()
-  }
 }
 
 function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
-  const existingMenu = document.querySelector<HTMLElement>('.bookmark-add-menu')
-  if (existingMenu) {
-    cancelExitMotion(existingMenu)
-    existingMenu.remove()
-  }
-
+  window.clearTimeout(addBookmarkMenuCloseTimer)
   if (!state.addMenuOpen) {
+    dispatchNewtabBookmarkAddMenuView(null)
     return
   }
 
-  const menu = createBookmarkAddMenuIslandElement({
-    actions: [
-      createMenuActionViewModel('添加书签', 'plus', saveAddedBookmark, {
-        disabled: state.addMenuBusy
-      })
-    ],
-    error: state.addMenuError,
-    expanded: state.addMenuExpanded,
-    fields: [
-      createMenuTextFieldViewModel('标题', 'Example', state.addTitle, (value) => {
-        state.addTitle = value
-      }, {
-        disabled: state.addMenuBusy,
-        onEnter: saveAddedBookmark
-      }),
-      createMenuTextFieldViewModel('链接', 'https://example.com', state.addUrl, (value) => {
-        state.addUrl = value
-      }, {
-        disabled: state.addMenuBusy,
-        onEnter: saveAddedBookmark
-      })
-    ],
-    onExpand: expandAddBookmarkMenu,
-    x: state.addMenuX,
-    y: state.addMenuY
+  dispatchNewtabBookmarkAddMenuView({
+    closing: false,
+    focusFirst,
+    menu: {
+      actions: [
+        createMenuActionViewModel('添加书签', 'plus', saveAddedBookmark, {
+          disabled: state.addMenuBusy
+        })
+      ],
+      error: state.addMenuError,
+      expanded: state.addMenuExpanded,
+      fields: [
+        createMenuTextFieldViewModel('标题', 'Example', state.addTitle, (value) => {
+          state.addTitle = value
+        }, {
+          disabled: state.addMenuBusy,
+          onEnter: saveAddedBookmark
+        }),
+        createMenuTextFieldViewModel('链接', 'https://example.com', state.addUrl, (value) => {
+          state.addUrl = value
+        }, {
+          disabled: state.addMenuBusy,
+          onEnter: saveAddedBookmark
+        })
+      ],
+      onExpand: expandAddBookmarkMenu,
+      x: state.addMenuX,
+      y: state.addMenuY
+    }
   })
-
-  mountBookmarkAddMenuIslandElement(menu)
-  positionMenu(menu, state.addMenuX, state.addMenuY)
-
-  const firstInput = menu.querySelector('input')
-  if (focusFirst && firstInput instanceof HTMLInputElement) {
-    firstInput.focus()
-    firstInput.select()
-  }
 }
 
 async function handleIconModeChange(nextMode: string): Promise<void> {
@@ -8509,25 +8488,6 @@ function createMenuActionViewModel(
     onSelect: action,
     variant
   }
-}
-
-function positionBookmarkMenu(menu: HTMLElement): void {
-  positionMenu(menu, state.menuX, state.menuY)
-}
-
-function positionMenu(menu: HTMLElement, menuX: number, menuY: number): void {
-  const margin = 8
-  const rect = menu.getBoundingClientRect()
-  const left = Math.max(
-    margin,
-    Math.min(menuX, window.innerWidth - rect.width - margin)
-  )
-  const top = Math.max(
-    margin,
-    Math.min(menuY, window.innerHeight - rect.height - margin)
-  )
-  menu.style.left = `${left}px`
-  menu.style.top = `${top}px`
 }
 
 function normalizeBookmarkInputUrl(value: string): string {

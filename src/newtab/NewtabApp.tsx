@@ -3,6 +3,7 @@ import { Button } from '../ui/primitives/Button'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { useNewtabController } from './newtab-controller'
 import { DashboardOverlayHost } from './components/DashboardOverlay'
+import { BookmarkMenusHost } from './components/BookmarkMenusHost'
 import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModal'
 import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
@@ -65,6 +66,7 @@ function NewtabShell() {
       <SettingsDrawerHost />
       <FeaturedBackgroundModalHost />
       <NewtabDeleteToastHost />
+      <BookmarkMenusHost />
     </>
   )
 }
