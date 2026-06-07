@@ -204,7 +204,6 @@ import {
   createBookmarkTileIslandElement,
   createClockSpacerIslandElement,
   createClockWidgetIslandElement,
-  createDeleteToastIslandElement,
   createFeaturedBackgroundHoverPreviewIslandElement,
   createNewTabOnboardingIslandElement,
   createPortalPanelIslandElement,
@@ -216,7 +215,6 @@ import {
   mountBookmarkAddMenuIslandElement,
   mountBookmarkEditMenuIslandElement,
   mountBookmarkGridPlaceholderIslandElement,
-  mountDeleteToastIslandElement,
   mountFeaturedBackgroundHoverPreviewIslandElement,
   mountNewTabDragGhostBridge,
   mountSearchEngineMenuIslandElement,
@@ -271,6 +269,10 @@ import {
   registerNewtabDashboardOverlayActions
 } from './newtab-dashboard-overlay-store.js'
 import { dispatchNewtabContentView } from './newtab-content-store.js'
+import {
+  dispatchNewtabDeleteToastView,
+  registerNewtabDeleteToastActions
+} from './newtab-delete-toast-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -976,6 +978,12 @@ function bindEvents(): void {
     },
     onReady: initializeDashboardOverlay
   })
+  registerNewtabDeleteToastActions({
+    onOpenRecycle: openRecycleBin,
+    onUndo: () => {
+      void undoLastDeletedBookmark()
+    }
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1046,24 +1054,6 @@ function bindEvents(): void {
     }
   })
 
-  document.body.addEventListener('click', (event) => {
-    const target = event.target
-    if (!(target instanceof Element)) {
-      return
-    }
-
-    if (target.closest('[data-undo-delete]')) {
-      event.preventDefault()
-      void undoLastDeletedBookmark()
-      return
-    }
-
-    if (target.closest('[data-open-recycle]')) {
-      event.preventDefault()
-      openRecycleBin()
-      return
-    }
-  })
   root?.addEventListener('pointerdown', handleSpeedDialPointerDown)
   root?.addEventListener('pointerdown', handleFolderPointerDown)
   root?.addEventListener('pointerdown', handleBookmarkPointerDown)
@@ -5415,17 +5405,17 @@ async function toggleDashboardBookmarkSpeedDial(bookmarkId: string): Promise<voi
 }
 
 function renderDeleteToast(): void {
-  document.querySelector<HTMLElement>('.newtab-delete-toast')?.remove()
   const deleted = state.lastDeletedBookmark
   if (!deleted) {
+    dispatchNewtabDeleteToastView(null)
     return
   }
   const bookmarkLabel = getBookmarkActionLabelContext(deleted.bookmark)
-  mountDeleteToastIslandElement(createDeleteToastIslandElement({
+  dispatchNewtabDeleteToastView({
     bookmarkLabel,
     busy: state.deleteToastBusy,
     detail: state.deleteToastStatus || getBookmarkDisplayTitle(deleted.bookmark)
-  }))
+  })
 }
 
 function scheduleRender({ updateClock = false } = {}): void {
