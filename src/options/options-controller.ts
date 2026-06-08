@@ -263,7 +263,7 @@ import {
   renderAiModelSelectorIsland,
   type AiModelSelectorChangeDetail
 } from './components/AiModelSelectorIsland.js'
-import { renderBackupPreviewIsland } from './components/BackupPreviewIsland.js'
+import { renderBackupControlsIsland } from './components/BackupPreviewIsland.js'
 import { renderFolderPickerResultsIsland } from './components/FolderPickerResultsIsland.js'
 import { renderAiNamingResultsIsland } from './components/AiNamingResultsIsland.js'
 import {
@@ -306,6 +306,10 @@ import {
   IGNORE_RULE_ACTION_EVENT,
   type IgnoreRuleActionDetail
 } from './components/ignore-events.js'
+import {
+  BACKUP_ACTION_EVENT,
+  type BackupActionDetail
+} from './components/backup-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1090,16 +1094,7 @@ function bindEvents() {
   window.addEventListener('options:ai-results-filter-change', handleAiResultsFilterControlChange)
   dom.aiFilterQuery?.addEventListener('input', handleAiResultsFilterChange)
   dom.aiClearFilters?.addEventListener('click', clearAiResultsFilters)
-  dom.aiTagExport?.addEventListener('click', handleBookmarkTagExport)
-  dom.aiTagImport?.addEventListener('click', () => dom.aiTagImportInput?.click())
-  dom.aiTagImportInput?.addEventListener('change', handleBookmarkTagImport)
-  dom.aiTagClear?.addEventListener('click', handleBookmarkTagClear)
-  dom.backupExport?.addEventListener('click', handleFullBackupExport)
-  dom.backupImport?.addEventListener('click', () => dom.backupImportInput?.click())
-  dom.backupImportInput?.addEventListener('change', handleFullBackupImport)
-  dom.backupRestoreTags?.addEventListener('click', () => handleFullBackupRestore('tagsOnly'))
-  dom.backupRestoreNewTab?.addEventListener('click', () => handleFullBackupRestore('newTabOnly'))
-  dom.backupRestoreSafeFull?.addEventListener('click', () => handleFullBackupRestore('safeFull'))
+  window.addEventListener(BACKUP_ACTION_EVENT, handleBackupAction)
   window.addEventListener(TAG_MANAGEMENT_ACTION_EVENT, handleTagManagementAction)
   dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
@@ -4444,7 +4439,11 @@ function clearAiNamingDurationTimer() {
 }
 
 function renderBookmarkTagDataCard() {
-  if (!dom.aiTagDataCount) {
+  renderBackupControls()
+}
+
+function renderBackupControls() {
+  if (!dom.backupControls) {
     return
   }
 
@@ -4455,22 +4454,27 @@ function renderBookmarkTagDataCard() {
         return Math.max(latest, Number(record.updatedAt) || 0)
       }, 0)
     : 0
-  dom.aiTagDataCount.textContent = `${records.length} 条记录`
-  dom.aiTagDataUpdated.textContent = latestUpdatedAt
-    ? `最近更新于 ${formatDateTime(latestUpdatedAt)}。`
-    : '尚未保存标签数据。'
-  if (dom.aiTagDataStatus) {
-    dom.aiTagDataStatus.textContent = aiNamingState.tagDataStatus || ''
-  }
-  if (dom.aiTagExport) {
-    dom.aiTagExport.disabled = records.length === 0 || aiNamingState.running || aiNamingState.applying
-  }
-  if (dom.aiTagImport) {
-    dom.aiTagImport.disabled = aiNamingState.running || aiNamingState.applying
-  }
-  if (dom.aiTagClear) {
-    dom.aiTagClear.disabled = records.length === 0 || aiNamingState.running || aiNamingState.applying
-  }
+  const tagBusy = aiNamingState.running || aiNamingState.applying
+  const hasBackup = Boolean(backupRestoreState.backup && backupRestoreState.preview)
+  const backupBusy = Boolean(backupRestoreState.restoring)
+
+  renderBackupControlsIsland(dom.backupControls, {
+    backup: {
+      busy: backupBusy,
+      hasBackup,
+      preview: backupRestoreState.preview,
+      status: backupRestoreState.status || ''
+    },
+    tagData: {
+      busy: tagBusy,
+      countLabel: `${records.length} 条记录`,
+      hasRecords: records.length > 0,
+      status: aiNamingState.tagDataStatus || '',
+      updatedLabel: latestUpdatedAt
+        ? `最近更新于 ${formatDateTime(latestUpdatedAt)}。`
+        : '尚未保存标签数据。'
+    }
+  })
 }
 
 async function handleBookmarkTagExport() {
@@ -4497,9 +4501,7 @@ async function handleBookmarkTagExport() {
   }
 }
 
-async function handleBookmarkTagImport(event) {
-  const input = event?.target
-  const file = input?.files?.[0]
+async function handleBookmarkTagImport(file?: File) {
   if (!file) {
     return
   }
@@ -4541,9 +4543,6 @@ async function handleBookmarkTagImport(event) {
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据导入失败。'
   } finally {
-    if (input) {
-      input.value = ''
-    }
     renderActiveOptionsSection()
   }
 }
@@ -4611,6 +4610,33 @@ function handleTagManagementAction(event: Event): void {
   }
   if (detail?.action === 'delete') {
     void handleTagManagementDelete(detail.sourceTag)
+  }
+}
+
+function handleBackupAction(event: Event): void {
+  const detail = (event as CustomEvent<BackupActionDetail>).detail
+  if (detail?.action === 'export-tags') {
+    void handleBookmarkTagExport()
+    return
+  }
+  if (detail?.action === 'import-tags') {
+    void handleBookmarkTagImport(detail.file)
+    return
+  }
+  if (detail?.action === 'clear-tags') {
+    void handleBookmarkTagClear()
+    return
+  }
+  if (detail?.action === 'export-backup') {
+    void handleFullBackupExport()
+    return
+  }
+  if (detail?.action === 'import-backup') {
+    void handleFullBackupImport(detail.file)
+    return
+  }
+  if (detail?.action === 'restore' && detail.mode) {
+    void handleFullBackupRestore(detail.mode)
   }
 }
 
@@ -4800,34 +4826,7 @@ function countRecordsWithEffectiveTag(index: BookmarkTagIndex, sourceTag: string
 }
 
 function renderBackupRestoreSection() {
-  if (!dom.backupPreview) {
-    return
-  }
-
-  const hasBackup = Boolean(backupRestoreState.backup && backupRestoreState.preview)
-  const busy = Boolean(backupRestoreState.restoring)
-  if (dom.backupStatus) {
-    dom.backupStatus.textContent = backupRestoreState.status || ''
-  }
-  if (dom.backupExport) {
-    dom.backupExport.disabled = busy
-  }
-  if (dom.backupImport) {
-    dom.backupImport.disabled = busy
-  }
-  if (dom.backupRestoreTags) {
-    dom.backupRestoreTags.disabled = !hasBackup || busy
-  }
-  if (dom.backupRestoreNewTab) {
-    dom.backupRestoreNewTab.disabled = !hasBackup || busy
-  }
-  if (dom.backupRestoreSafeFull) {
-    dom.backupRestoreSafeFull.disabled = !hasBackup || busy
-  }
-
-  renderBackupPreviewIsland(dom.backupPreview, {
-    preview: backupRestoreState.preview
-  })
+  renderBackupControls()
 }
 
 async function handleFullBackupExport() {
@@ -4846,9 +4845,7 @@ async function handleFullBackupExport() {
   }
 }
 
-async function handleFullBackupImport(event) {
-  const input = event?.target
-  const file = input?.files?.[0]
+async function handleFullBackupImport(file?: File) {
   if (!file) {
     return
   }
@@ -4869,9 +4866,6 @@ async function handleFullBackupImport(event) {
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '备份文件导入失败。'
   } finally {
-    if (input) {
-      input.value = ''
-    }
     renderBackupRestoreSection()
   }
 }

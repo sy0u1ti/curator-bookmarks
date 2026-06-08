@@ -1,5 +1,4 @@
 import { Button } from '../../ui/primitives/Button.js'
-import { Input } from '../../ui/primitives/Input.js'
 
 function EmptyCta({
   title,
@@ -92,65 +91,7 @@ export function BackupPanel() {
       <p className="options-section-label">Data & Backup</p>
       <h1 id="backup-title">数据与备份</h1>
 
-      <div className="options-group ai-tag-data-card">
-        <div className="detect-results-header ai-tag-data-head">
-          <div>
-            <strong>标签数据</strong>
-            <p className="detect-results-subtitle">
-              这里保存 AI 生成的摘要、主题和别名，以及 AI 生成或手动维护的标签。可单独导出/导入，也会包含在完整备份中；清空只删除本地标签索引，不删除 Chrome 书签。
-            </p>
-          </div>
-          <span id="ai-tag-data-count" className="option-value">0 条记录</span>
-        </div>
-        <div className="detect-results-header ai-tag-data-row">
-          <div>
-            <p id="ai-tag-data-updated" className="detect-results-subtitle">尚未保存标签数据。</p>
-            <p id="ai-tag-data-status" className="detect-status-copy" />
-          </div>
-          <div className="detect-results-actions">
-            <Button id="ai-tag-export" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="导出书签标签数据">导出标签数据</Button>
-            <Button id="ai-tag-import" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="导入书签标签数据">导入标签数据</Button>
-            <Button id="ai-tag-clear" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="清空全部书签标签数据">清空标签数据</Button>
-          </div>
-          <Input id="ai-tag-import-input" className="hidden" type="file" accept="application/json,.json" />
-        </div>
-      </div>
-
-      <div className="options-group ai-tag-data-card">
-        <div className="detect-results-header ai-tag-data-head">
-          <div>
-            <strong>完整备份</strong>
-            <p className="detect-results-subtitle">
-              导出 Chrome 书签树、标签数据、回收站、忽略规则、重定向历史、新标签页配置和 AI 设置；不会导出 API Key、浏览器密码、Cookie 或网页正文缓存。
-            </p>
-          </div>
-          <div className="detect-results-actions">
-            <Button id="backup-export" className="options-button small" size="sm" type="button" aria-label="导出完整书签备份">导出完整备份</Button>
-            <Button id="backup-import" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="导入完整备份并预览">导入并预览</Button>
-          </div>
-          <Input id="backup-import-input" className="hidden" type="file" accept="application/json,.json" />
-        </div>
-        <p id="backup-status" className="detect-status-copy" />
-      </div>
-
-      <div className="options-group ai-tag-data-card">
-        <div className="detect-results-header ai-tag-data-row">
-          <div>
-            <strong>恢复预览</strong>
-            <p className="detect-results-subtitle">
-              导入文件后先查看差异，再选择恢复范围；标签恢复按当前书签 URL 匹配，新标签页恢复只写入设置项，安全完整恢复会复制缺失书签到恢复文件夹，不会直接替换整个 Chrome 书签树。
-            </p>
-          </div>
-          <div className="detect-results-actions">
-            <Button id="backup-restore-tags" className="options-button secondary small" size="sm" type="button" variant="secondary" disabled aria-label="从备份预览只恢复书签标签数据">只恢复标签数据</Button>
-            <Button id="backup-restore-newtab" className="options-button secondary small" size="sm" type="button" variant="secondary" disabled aria-label="从备份预览只恢复新标签页设置">只恢复新标签页设置</Button>
-            <Button id="backup-restore-safe-full" className="options-button small" size="sm" type="button" disabled aria-label="从备份预览恢复全部可安全恢复的数据">恢复全部可安全恢复的数据</Button>
-          </div>
-        </div>
-        <div id="backup-preview" className="detect-results">
-          <div className="detect-empty">请选择备份文件进行预览。</div>
-        </div>
-      </div>
+      <div id="backup-controls" />
     </section>
   )
 }
