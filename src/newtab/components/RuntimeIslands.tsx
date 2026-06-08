@@ -372,11 +372,6 @@ export interface BookmarkReorderStatusViewModel {
   tone: string
 }
 
-export interface BookmarkGridPlaceholderViewModel {
-  folderTitle: string
-  remainingCount: number
-}
-
 export function createSearchWidgetIslandElement(state: SearchWidgetShellState): HTMLElement {
   const slot = document.createElement('section')
   slot.className = 'newtab-search-slot'
@@ -587,31 +582,6 @@ export function replaceBookmarkContentIslandChildren(
 ): void {
   target.replaceChildren(...Array.from(source.childNodes))
   copyElementPresentationState(source, target)
-}
-
-export function createBookmarkGridPlaceholderIslandElement(state: BookmarkGridPlaceholderViewModel): HTMLElement {
-  const placeholder = document.createElement('div')
-  placeholder.className = 'bookmark-grid-placeholder'
-  renderBookmarkGridPlaceholderIslandElement(placeholder, state)
-  return placeholder
-}
-
-export function renderBookmarkGridPlaceholderIslandElement(
-  placeholder: HTMLElement,
-  state: BookmarkGridPlaceholderViewModel
-): void {
-  placeholder.dataset.pendingBookmarks = String(Math.max(0, state.remainingCount))
-  placeholder.setAttribute('role', 'status')
-  placeholder.setAttribute('aria-live', 'polite')
-  placeholder.title = `${state.folderTitle || '文件夹'}还有 ${state.remainingCount} 个书签将在滚动到此处时载入`
-  renderIsland(placeholder, <BookmarkGridPlaceholder state={state} />)
-}
-
-export function mountBookmarkGridPlaceholderIslandElement(
-  container: HTMLElement,
-  placeholder: HTMLElement
-): void {
-  container.append(placeholder)
 }
 
 export function mountNewTabDragGhostBridge(ghost: HTMLElement): void {
@@ -1137,10 +1107,6 @@ function SpeedDialPanelHost() {
       <SpeedDialPanel state={state} />
     </section>
   )
-}
-
-function BookmarkGridPlaceholder({ state }: { state: BookmarkGridPlaceholderViewModel }) {
-  return <>继续载入 {state.remainingCount} 个书签</>
 }
 
 function PortalPanel({ state }: { state: PortalPanelState }) {

@@ -198,10 +198,8 @@ import { runIdle, runMicroIdle } from '../shared/idle.js'
 import {
   appendBookmarkTileIslandElements,
   createBookmarkContentIslandElement,
-  createBookmarkGridPlaceholderIslandElement,
   createBookmarkTileIslandElement,
   createSearchWidgetIslandElement,
-  mountBookmarkGridPlaceholderIslandElement,
   mountNewTabDragGhostBridge,
   renderFeaturedBackgroundPickerIsland,
   renderNewTabSavedSearchesIsland,
@@ -209,7 +207,6 @@ import {
   renderNewTabSearchHintIsland,
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
-  renderBookmarkGridPlaceholderIslandElement,
   renderBookmarkTileIslandElement,
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
@@ -7164,7 +7161,7 @@ function appendBookmarkTilesInChunks(
     const placeholder = createBookmarkSectionPlaceholder(section, remainingCount)
     list.dataset.incrementalRender = 'true'
     list.setAttribute('aria-busy', 'true')
-    mountBookmarkGridPlaceholderIslandElement(list, placeholder)
+    list.append(placeholder)
     observeBookmarkSectionPlaceholder(placeholder, {
       section,
       nextIndex: initialCount,
@@ -7180,10 +7177,24 @@ function createBookmarkSectionPlaceholder(
   section: NewTabFolderSection,
   remainingCount: number
 ): HTMLElement {
-  return createBookmarkGridPlaceholderIslandElement({
-    folderTitle: section.title || '文件夹',
-    remainingCount
-  })
+  const placeholder = document.createElement('div')
+  placeholder.className = 'bookmark-grid-placeholder'
+  syncBookmarkSectionPlaceholder(placeholder, section, remainingCount)
+  return placeholder
+}
+
+function syncBookmarkSectionPlaceholder(
+  placeholder: HTMLElement,
+  section: NewTabFolderSection,
+  remainingCount: number
+): void {
+  const count = Math.max(0, remainingCount)
+  const folderTitle = section.title || '文件夹'
+  placeholder.dataset.pendingBookmarks = String(count)
+  placeholder.setAttribute('role', 'status')
+  placeholder.setAttribute('aria-live', 'polite')
+  placeholder.title = `${folderTitle}还有 ${count} 个书签将在滚动到此处时载入`
+  placeholder.textContent = `继续载入 ${count} 个书签`
 }
 
 function scheduleBookmarkTileChunkRender(
@@ -7210,10 +7221,7 @@ function scheduleBookmarkTileChunkRender(
 
     if (endIndex < section.bookmarks.length) {
       if (placeholder?.isConnected) {
-        renderBookmarkGridPlaceholderIslandElement(placeholder, {
-          folderTitle: section.title || '文件夹',
-          remainingCount: section.bookmarks.length - endIndex
-        })
+        syncBookmarkSectionPlaceholder(placeholder, section, section.bookmarks.length - endIndex)
       }
       scheduleBookmarkTileChunkRender(
         list,
