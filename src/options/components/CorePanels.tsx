@@ -157,13 +157,9 @@ export function GeneralPanel() {
           </label>
 
           <Fieldset className="ai-provider-field" legend="模型" unstyled>
-            <div className="ai-model-field-controls">
-              <div id="ai-model-selector-host" className="ai-model-selector-host" />
-              <Button id="ai-fetch-models" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="从自定义 AI 渠道获取模型列表">获取模型</Button>
-            </div>
+            <div id="ai-model-tools" />
           </Fieldset>
 
-          <p id="ai-fetch-models-status" className="ai-provider-connectivity muted hidden" />
           <p id="ai-connectivity-copy" className="ai-provider-connectivity muted hidden" />
 
           <CollapsibleRoot id="ai-advanced-settings" className="ai-advanced-details">
@@ -191,11 +187,6 @@ export function GeneralPanel() {
                 </label>
               </div>
 
-              <p className="ai-provider-field-tip">
-                支持搜索预设、自定义和已拉取的模型；若目标服务使用自定义模型 ID，可在{' '}
-                <Button id="ai-manage-models" className="ai-inline-action" type="button" aria-label="打开自定义模型列表设置" unstyled>设置更多模型</Button>
-                {' '}里追加。
-              </p>
             </CollapsiblePanel>
           </CollapsibleRoot>
 

@@ -265,6 +265,7 @@ import {
   renderAiModelSelectorIsland,
   type AiModelSelectorChangeDetail
 } from './components/AiModelSelectorIsland.js'
+import { renderAiModelToolsIsland } from './components/AiModelToolsIsland.js'
 import { renderBackupControlsIsland } from './components/BackupPreviewIsland.js'
 import { renderFolderPickerResultsIsland } from './components/FolderPickerResultsIsland.js'
 import { renderAiNamingResultsIsland } from './components/AiNamingResultsIsland.js'
@@ -324,6 +325,10 @@ import {
   FEATURE_SETTINGS_EVENT,
   type FeatureSettingsChangeDetail
 } from './components/feature-settings-events.js'
+import {
+  AI_MODEL_TOOLS_EVENT,
+  type AiModelToolsActionDetail
+} from './components/ai-model-tools-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1115,8 +1120,7 @@ function bindEvents() {
   dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
   window.addEventListener('options:ai-model-selector-change', handleAiModelSelectorChange)
   dom.aiModelPickerTrigger?.addEventListener('click', openAiModelPickerModal)
-  dom.aiFetchModels?.addEventListener('click', handleFetchAiModels)
-  dom.aiManageModels?.addEventListener('click', openAiModelModal)
+  window.addEventListener(AI_MODEL_TOOLS_EVENT, handleAiModelToolsAction)
   window.addEventListener(SHORTCUT_ACTION_EVENT, handleShortcutAction)
   window.addEventListener('options:ai-provider-select-change', handleAiProviderSelectChange)
   dom.aiTimeoutMs?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
@@ -3564,6 +3568,17 @@ function handleFeatureSettingsChange(event: Event): void {
   }
 }
 
+function handleAiModelToolsAction(event: Event): void {
+  const detail = (event as CustomEvent<AiModelToolsActionDetail>).detail
+  if (detail?.action === 'fetch-models') {
+    void handleFetchAiModels()
+    return
+  }
+  if (detail?.action === 'manage-models') {
+    openAiModelModal()
+  }
+}
+
 async function saveContentSnapshotSettingsFromChange(
   detail: ContentSnapshotSettingsChangeDetail = {}
 ): Promise<void> {
@@ -4190,7 +4205,7 @@ function renderAiNamingSection() {
   }
   renderAiModelPickerTrigger(settings)
   renderAiModelSelector(settings)
-  renderAiFetchModelsStatus()
+  renderAiModelTools(settings)
   if (managerState.aiModelPickerModalOpen) {
     renderAiModelPickerModal()
   }
@@ -4244,23 +4259,6 @@ function renderAiNamingSection() {
       : hasRequiredConfig
         ? '已保存'
         : '待配置'
-  }
-  if (dom.aiManageModels) {
-    dom.aiManageModels.disabled = aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
-  }
-  if (dom.aiFetchModels) {
-    dom.aiFetchModels.disabled =
-      !String(settings.apiKey || '').trim() ||
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.testingConnection ||
-      aiNamingState.fetchingModels ||
-      aiNamingState.requestingPermission
-    setLoadingLabel(dom.aiFetchModels, aiNamingState.fetchingModels ? '获取中' : '获取模型', {
-      busy: aiNamingState.fetchingModels,
-      wrapperClass: 'button-loading-label',
-      loaderClass: 'button-dot-loader'
-    })
   }
   if (dom.aiConnectivityCopy) {
     dom.aiConnectivityCopy.className = `ai-provider-connectivity ${connectivityMeta.tone}`
@@ -5042,6 +5040,29 @@ function renderAiModelSelector(settings = aiNamingManagerState.settings) {
   })
 }
 
+function renderAiModelTools(settings = aiNamingManagerState.settings) {
+  if (!dom.aiModelTools) {
+    return
+  }
+
+  const status = getAiFetchModelsStatus()
+  renderAiModelToolsIsland(dom.aiModelTools, {
+    fetchDisabled:
+      !String(settings.apiKey || '').trim() ||
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      aiNamingState.testingConnection ||
+      aiNamingState.fetchingModels ||
+      aiNamingState.requestingPermission,
+    fetchLabel: aiNamingState.fetchingModels ? '获取中' : '获取模型',
+    fetchModelsStatus: status.copy,
+    fetchModelsStatusBusy: aiNamingState.fetchingModels,
+    fetchModelsStatusTone: status.tone,
+    fetchingModels: aiNamingState.fetchingModels,
+    manageDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
+  })
+}
+
 function handleAiModelSelectorChange(event: Event) {
   const model = String((event as CustomEvent<AiModelSelectorChangeDetail>).detail?.model || '').trim()
   if (!model || aiNamingState.running || aiNamingState.applying) {
@@ -5057,32 +5078,21 @@ function handleAiModelSelectorChange(event: Event) {
 }
 
 function renderAiFetchModelsStatus() {
-  if (!dom.aiFetchModelsStatus) {
-    return
-  }
+  renderAiModelTools()
+}
 
-  let tone = ''
-  let copy = ''
-
+function getAiFetchModelsStatus(): { copy: string; tone: string } {
   if (aiNamingState.fetchingModels) {
-    tone = 'muted'
-    copy = '正在获取模型列表…'
-  } else if (aiNamingState.lastFetchModelsError) {
-    tone = 'danger'
-    copy = `获取失败：${aiNamingState.lastFetchModelsError}`
-  } else if (aiNamingState.lastFetchModelsAt) {
-    tone = 'success'
-    const timeLabel = formatDateTime(aiNamingState.lastFetchModelsAt)
-    copy = `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`
+    return { copy: '正在获取模型列表…', tone: 'muted' }
   }
-
-  dom.aiFetchModelsStatus.className = `ai-provider-connectivity ${tone || 'muted'}`
-  dom.aiFetchModelsStatus.classList.toggle('hidden', !copy)
-  setLoadingLabel(dom.aiFetchModelsStatus, copy, {
-    busy: aiNamingState.fetchingModels,
-    wrapperClass: 'status-loading-label',
-    loaderClass: 'status-dot-loader'
-  })
+  if (aiNamingState.lastFetchModelsError) {
+    return { copy: `获取失败：${aiNamingState.lastFetchModelsError}`, tone: 'danger' }
+  }
+  if (aiNamingState.lastFetchModelsAt) {
+    const timeLabel = formatDateTime(aiNamingState.lastFetchModelsAt)
+    return { copy: `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`, tone: 'success' }
+  }
+  return { copy: '', tone: 'muted' }
 }
 
 function openAiModelPickerModal() {
