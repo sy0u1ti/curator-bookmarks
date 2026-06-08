@@ -218,6 +218,7 @@ import {
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
   renderSearchWidgetButtonStatesIsland,
+  renderSearchWidgetPanelStateIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
   type BookmarkContentViewModel,
@@ -5554,7 +5555,6 @@ function createSearchWidget(): HTMLElement | null {
   const engineButton = slot.querySelector<HTMLButtonElement>('.newtab-search-engine')
   const separator = slot.querySelector<HTMLElement>('.newtab-search-separator')
   const submitButton = slot.querySelector<HTMLButtonElement>('.newtab-search-submit')
-  const suggestionsPanel = slot.querySelector<HTMLElement>('#newtab-search-suggestions-panel')
   const suggestions = slot.querySelector<HTMLElement>('#newtab-search-suggestions')
   const suggestionsHeading = slot.querySelector<HTMLElement>('.newtab-search-section-label')
   const suggestionsHint = slot.querySelector<HTMLElement>('.newtab-search-hint')
@@ -5568,7 +5568,6 @@ function createSearchWidget(): HTMLElement | null {
     !engineButton ||
     !separator ||
     !submitButton ||
-    !suggestionsPanel ||
     !suggestions ||
     !suggestionsHeading ||
     !suggestionsHint ||
@@ -5586,6 +5585,26 @@ function createSearchWidget(): HTMLElement | null {
   }
   const updateEngineButton = renderSearchWidgetButtons
   const updateNaturalButton = renderSearchWidgetButtons
+  let searchPanelVisible = false
+  let searchSuggestionListVisible = true
+  const renderSearchWidgetPanelState = () => {
+    renderSearchWidgetPanelStateIsland(slot, {
+      panelVisible: searchPanelVisible,
+      suggestionsVisible: searchSuggestionListVisible
+    })
+  }
+  const hideSearchPanel = () => {
+    searchPanelVisible = false
+    renderSearchWidgetPanelState()
+  }
+  const showSearchPanel = () => {
+    searchPanelVisible = true
+    renderSearchWidgetPanelState()
+  }
+  const setSearchSuggestionsListVisible = (visible: boolean) => {
+    searchSuggestionListVisible = visible
+    renderSearchWidgetPanelState()
+  }
 
   const closeEngineMenu = ({ restoreFocus = false } = {}) => {
     const existingMenu = slot.querySelector<HTMLElement>('.newtab-search-engine-menu')
@@ -5705,10 +5724,10 @@ function createSearchWidget(): HTMLElement | null {
       onSaveCurrent: () => undefined,
       show: false
     })
-    suggestions.hidden = false
+    setSearchSuggestionsListVisible(true)
     renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
     renderNewTabSearchHintIsland(suggestionsHint, { type: 'empty' })
-    suggestionsPanel.classList.add('hidden')
+    hideSearchPanel()
     input.setAttribute('aria-expanded', 'false')
     input.removeAttribute('aria-activedescendant')
   }
@@ -5732,7 +5751,7 @@ function createSearchWidget(): HTMLElement | null {
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
       renderNewTabSearchSuggestionsIsland(suggestions, [])
-      suggestions.hidden = true
+      setSearchSuggestionsListVisible(false)
       input.removeAttribute('aria-activedescendant')
       if (!trimmedQuery) {
         hideSuggestions()
@@ -5748,19 +5767,19 @@ function createSearchWidget(): HTMLElement | null {
           type: 'text',
           text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
         })
-        suggestionsPanel.classList.remove('hidden')
+        showSearchPanel()
         input.setAttribute('aria-expanded', 'true')
         return
       }
 
       renderNewTabSearchSectionLabelIsland(suggestionsHeading, '网页搜索')
       renderNewTabSearchHintIsland(suggestionsHint, createSearchWebFallbackState(trimmedQuery))
-      suggestionsPanel.classList.remove('hidden')
+      showSearchPanel()
       input.setAttribute('aria-expanded', 'true')
       return
     }
 
-    suggestions.hidden = false
+    setSearchSuggestionsListVisible(true)
     renderNewTabSearchSectionLabelIsland(
       suggestionsHeading,
       searchSuggestions.some(isCommandSuggestion)
@@ -5791,7 +5810,7 @@ function createSearchWidget(): HTMLElement | null {
         )
       )
     )
-    suggestionsPanel.classList.remove('hidden')
+    showSearchPanel()
     renderNewTabSearchHintIsland(suggestionsHint, {
       type: 'text',
       text: getSearchSuggestionHintText()
@@ -5887,13 +5906,13 @@ function createSearchWidget(): HTMLElement | null {
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
     renderNewTabSearchSuggestionsIsland(suggestions, [])
-    suggestions.hidden = true
+    setSearchSuggestionsListVisible(false)
     renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
     renderNewTabSearchHintIsland(suggestionsHint, {
       type: 'text',
       text: '正在准备索引…'
     })
-    suggestionsPanel.classList.remove('hidden')
+    showSearchPanel()
     input.setAttribute('aria-expanded', 'true')
     input.removeAttribute('aria-activedescendant')
   }
@@ -5943,7 +5962,7 @@ function createSearchWidget(): HTMLElement | null {
     }
 
     event.preventDefault()
-    if (searchSuggestions.length || !suggestionsPanel.classList.contains('hidden')) {
+    if (searchSuggestions.length || searchPanelVisible) {
       hideSuggestions()
       return
     }
@@ -6018,6 +6037,7 @@ function createSearchWidget(): HTMLElement | null {
 
   updateEngineButton()
   updateNaturalButton()
+  renderSearchWidgetPanelState()
   syncSearchInputActions(input, clearButton, separator, submitButton)
   return slot
 

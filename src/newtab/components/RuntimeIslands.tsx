@@ -19,6 +19,7 @@ import type { NewTabTimeSettings } from '../time-settings'
 
 const roots = new WeakMap<Element, Root>()
 const searchWidgetButtonStores = new WeakMap<Element, SearchWidgetButtonStore>()
+const searchWidgetPanelStores = new WeakMap<Element, SearchWidgetPanelStore>()
 
 function renderIsland(container: Element, node: React.ReactNode): void {
   let root = roots.get(container)
@@ -245,9 +246,20 @@ export interface SearchWidgetShellState {
 
 export type SearchWidgetButtonStates = Pick<SearchWidgetShellState, 'engine' | 'natural'>
 
+export interface SearchWidgetPanelState {
+  panelVisible: boolean
+  suggestionsVisible: boolean
+}
+
 interface SearchWidgetButtonStore {
   getSnapshot: () => SearchWidgetButtonStates
   setState: (state: SearchWidgetButtonStates) => void
+  subscribe: (listener: () => void) => () => void
+}
+
+interface SearchWidgetPanelStore {
+  getSnapshot: () => SearchWidgetPanelState
+  setState: (state: SearchWidgetPanelState) => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -405,11 +417,19 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     engine: state.engine,
     natural: state.natural
   })
+  const panelStore = getSearchWidgetPanelStore(slot, {
+    panelVisible: false,
+    suggestionsVisible: true
+  })
   buttonStore.setState({
     engine: state.engine,
     natural: state.natural
   })
-  renderIsland(slot, <SearchWidgetShell buttonStore={buttonStore} state={state} />)
+  panelStore.setState({
+    panelVisible: false,
+    suggestionsVisible: true
+  })
+  renderIsland(slot, <SearchWidgetShell buttonStore={buttonStore} panelStore={panelStore} state={state} />)
   return slot
 }
 
@@ -420,6 +440,16 @@ export function renderSearchWidgetButtonStatesIsland(
   const buttonStore = getSearchWidgetButtonStore(container, state)
   flushSync(() => {
     buttonStore.setState(state)
+  })
+}
+
+export function renderSearchWidgetPanelStateIsland(
+  container: HTMLElement,
+  state: SearchWidgetPanelState
+): void {
+  const panelStore = getSearchWidgetPanelStore(container, state)
+  flushSync(() => {
+    panelStore.setState(state)
   })
 }
 
@@ -746,15 +776,49 @@ function getSearchWidgetButtonStore(
   return store
 }
 
+function getSearchWidgetPanelStore(
+  host: Element,
+  initialState: SearchWidgetPanelState
+): SearchWidgetPanelStore {
+  let store = searchWidgetPanelStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  searchWidgetPanelStores.set(host, store)
+  return store
+}
+
 function useSearchWidgetButtonStates(store: SearchWidgetButtonStore): SearchWidgetButtonStates {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
+function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetPanelState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
 
 function SearchWidgetShell({
   buttonStore,
+  panelStore,
   state
 }: {
   buttonStore: SearchWidgetButtonStore
+  panelStore: SearchWidgetPanelStore
   state: SearchWidgetShellState
 }) {
   const formStyle = {
@@ -804,18 +868,7 @@ function SearchWidgetShell({
           <Icon name="Search" className="newtab-search-submit-icon" size={14} aria-hidden="true" />
         </Button>
       </form>
-      <div id="newtab-search-suggestions-panel" className="newtab-search-suggestions-panel hidden">
-        <div className="newtab-search-chips" aria-label="当前搜索条件" />
-        <div className="newtab-search-section-label" />
-        <div
-          id="newtab-search-suggestions"
-          className="newtab-search-suggestions"
-          role="listbox"
-          aria-label="匹配的书签"
-        />
-        <div className="newtab-search-hint" role="status" aria-live="polite" />
-        <div className="newtab-saved-searches" aria-label="已保存搜索" />
-      </div>
+      <SearchWidgetSuggestionsPanel panelStore={panelStore} />
     </>
   )
 }
@@ -853,6 +906,31 @@ function SearchWidgetEngineButton({ buttonStore }: { buttonStore: SearchWidgetBu
     >
       {engine.label}
     </Button>
+  )
+}
+
+function SearchWidgetSuggestionsPanel({ panelStore }: { panelStore: SearchWidgetPanelStore }) {
+  const panelState = useSearchWidgetPanelState(panelStore)
+
+  return (
+    <div
+      id="newtab-search-suggestions-panel"
+      className={panelState.panelVisible
+        ? 'newtab-search-suggestions-panel'
+        : 'newtab-search-suggestions-panel hidden'}
+    >
+      <div className="newtab-search-chips" aria-label="当前搜索条件" />
+      <div className="newtab-search-section-label" />
+      <div
+        id="newtab-search-suggestions"
+        className="newtab-search-suggestions"
+        role="listbox"
+        aria-label="匹配的书签"
+        hidden={!panelState.suggestionsVisible}
+      />
+      <div className="newtab-search-hint" role="status" aria-live="polite" />
+      <div className="newtab-saved-searches" aria-label="已保存搜索" />
+    </div>
   )
 }
 
