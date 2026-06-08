@@ -1,7 +1,8 @@
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
+import type { ReactNode } from 'react'
 import { displayUrl } from '../../shared/text.js'
-import { Button, ThemeProvider } from '../../ui'
+import { Button, Card, ThemeProvider } from '../../ui'
 import { formatDateTime } from '../shared-options/utils.js'
 import type { BookmarkAddHistoryEntry } from '../sections/bookmark-add-history.js'
 
@@ -24,6 +25,114 @@ export function renderBookmarkAddHistoryIsland(
       </ThemeProvider>
     )
   })
+}
+
+export interface BookmarkAddHistorySummaryState {
+  existing: number
+  moved: number
+  newFolder: number
+  total: number
+}
+
+export interface BookmarkAddHistoryHeaderState {
+  clearDisabled: boolean
+  subtitle: string
+  timestamp: string
+}
+
+export function renderBookmarkAddHistoryHeaderIsland(
+  container: Element,
+  state: BookmarkAddHistoryHeaderState
+): void {
+  renderBookmarkAddHistoryNode(container, <BookmarkAddHistoryHeader state={state} />)
+}
+
+export function renderBookmarkAddHistorySummaryIsland(
+  container: Element,
+  state: BookmarkAddHistorySummaryState
+): void {
+  renderBookmarkAddHistoryNode(container, <BookmarkAddHistorySummary state={state} />)
+}
+
+function renderBookmarkAddHistoryNode(container: Element, node: ReactNode): void {
+  let root = roots.get(container)
+  if (!root) {
+    root = createRoot(container)
+    roots.set(container, root)
+  }
+
+  flushSync(() => {
+    root.render(<ThemeProvider>{node}</ThemeProvider>)
+  })
+}
+
+function BookmarkAddHistoryHeader({ state }: { state: BookmarkAddHistoryHeaderState }) {
+  return (
+    <div className="detect-results-header">
+      <div>
+        <strong>自动分析添加记录</strong>
+        <p id="bookmark-add-history-subtitle" className="detect-results-subtitle">
+          {state.subtitle}
+        </p>
+      </div>
+      <div className="detect-results-actions">
+        <span id="bookmark-add-history-timestamp" className="option-value">
+          {state.timestamp}
+        </span>
+        <Button
+          id="bookmark-add-history-clear"
+          className="options-button secondary small"
+          size="sm"
+          type="button"
+          variant="secondary"
+          aria-label="清空自动分析添加历史记录"
+          disabled={state.clearDisabled}
+        >
+          清空自动分析添加历史
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+const historyMetrics = [
+  {
+    label: '总记录',
+    key: 'total',
+    valueId: 'bookmark-add-history-total'
+  },
+  {
+    label: '已移动',
+    key: 'moved',
+    valueId: 'bookmark-add-history-moved'
+  },
+  {
+    label: '匹配已有文件夹',
+    key: 'existing',
+    valueId: 'bookmark-add-history-existing'
+  },
+  {
+    label: '新建文件夹',
+    key: 'newFolder',
+    valueId: 'bookmark-add-history-new'
+  }
+] satisfies Array<{
+  key: keyof BookmarkAddHistorySummaryState
+  label: string
+  valueId: string
+}>
+
+function BookmarkAddHistorySummary({ state }: { state: BookmarkAddHistorySummaryState }) {
+  return (
+    <div className="detect-history-grid bookmark-add-history-grid">
+      {historyMetrics.map((metric) => (
+        <Card className="summary-card compact" key={metric.valueId}>
+          <span className="summary-label">{metric.label}</span>
+          <strong id={metric.valueId}>{state[metric.key]}</strong>
+        </Card>
+      ))}
+    </div>
+  )
 }
 
 function BookmarkAddHistoryList({ entries }: { entries: BookmarkAddHistoryEntry[] }) {

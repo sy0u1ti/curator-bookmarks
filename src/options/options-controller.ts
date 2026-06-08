@@ -1142,10 +1142,16 @@ function bindEvents() {
   })
   dom.availabilityClearHistory?.addEventListener('click', () => clearDetectionHistoryLogs(historyCallbacks))
   dom.availabilityToggleHistoryLogs?.addEventListener('click', () => toggleHistoryLogsCollapsed(historyCallbacks))
-  dom.bookmarkAddHistoryClear?.addEventListener('click', () => clearBookmarkAddHistory({
-    renderAvailabilitySection,
-    confirm: requestConfirmation
-  }))
+  dom.bookmarkAddHistoryHeader?.addEventListener('click', (event) => {
+    const target = event.target as HTMLElement | null
+    if (!target?.closest('#bookmark-add-history-clear')) {
+      return
+    }
+    void clearBookmarkAddHistory({
+      renderAvailabilitySection,
+      confirm: requestConfirmation
+    })
+  })
   dom.availabilityClearSelection?.addEventListener('click', clearAvailabilitySelection)
   dom.availabilitySelectionRetest?.addEventListener('click', retestSelectedAvailabilityResults)
   dom.availabilitySelectionPromote?.addEventListener('click', () => {

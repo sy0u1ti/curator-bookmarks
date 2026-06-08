@@ -6,7 +6,13 @@ import { setLocalStorage } from '../../shared/storage.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { formatDateTime } from '../shared-options/utils.js'
-import { renderBookmarkAddHistoryIsland } from '../components/BookmarkAddHistoryIsland.js'
+import {
+  renderBookmarkAddHistoryHeaderIsland,
+  renderBookmarkAddHistoryIsland,
+  renderBookmarkAddHistorySummaryIsland,
+  type BookmarkAddHistoryHeaderState,
+  type BookmarkAddHistorySummaryState
+} from '../components/BookmarkAddHistoryIsland.js'
 
 export interface BookmarkAddHistoryEntry {
   id: string
@@ -127,26 +133,32 @@ function getBookmarkAddHistorySummary() {
 }
 
 export function renderBookmarkAddHistory(): void {
-  if (!dom.bookmarkAddHistoryResults) {
+  if (!dom.bookmarkAddHistoryHeader || !dom.bookmarkAddHistorySummary || !dom.bookmarkAddHistoryResults) {
     return
   }
 
   const entries = managerState.bookmarkAddHistory
   const summary = getBookmarkAddHistorySummary()
   const latestEntry = entries[0] || null
-
-  dom.bookmarkAddHistoryTotal.textContent = String(summary.total)
-  dom.bookmarkAddHistoryMoved.textContent = String(summary.moved)
-  dom.bookmarkAddHistoryExisting.textContent = String(summary.existing)
-  dom.bookmarkAddHistoryNew.textContent = String(summary.newFolder)
-  dom.bookmarkAddHistoryTimestamp.textContent = latestEntry
+  const timestamp = latestEntry
     ? formatDateTime(latestEntry.createdAt)
     : '尚无历史'
-  dom.bookmarkAddHistoryClear.disabled = summary.total === 0
-  dom.bookmarkAddHistorySubtitle.textContent = summary.total
-    ? `已保留最近 ${summary.total} 条自动分析添加记录，最近一次发生于 ${formatDateTime(latestEntry!.createdAt)}。`
-    : '开启“自动分析”后，新增普通网页书签完成 AI 分类时会在这里记录保存位置。'
+  const headerState: BookmarkAddHistoryHeaderState = {
+    clearDisabled: summary.total === 0,
+    subtitle: summary.total
+      ? `已保留最近 ${summary.total} 条自动分析添加记录，最近一次发生于 ${formatDateTime(latestEntry!.createdAt)}。`
+      : '开启“自动分析”后，新增普通网页书签完成 AI 分类时会在这里记录保存位置。',
+    timestamp
+  }
+  const summaryState: BookmarkAddHistorySummaryState = {
+    existing: summary.existing,
+    moved: summary.moved,
+    newFolder: summary.newFolder,
+    total: summary.total
+  }
 
+  renderBookmarkAddHistoryHeaderIsland(dom.bookmarkAddHistoryHeader, headerState)
+  renderBookmarkAddHistorySummaryIsland(dom.bookmarkAddHistorySummary, summaryState)
   renderBookmarkAddHistoryIsland(dom.bookmarkAddHistoryResults, entries)
 }
 

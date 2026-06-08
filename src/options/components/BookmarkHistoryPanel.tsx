@@ -1,23 +1,4 @@
-import { Button, Card } from '../../ui'
-
-const historyMetrics = [
-  {
-    label: '总记录',
-    valueId: 'bookmark-add-history-total'
-  },
-  {
-    label: '已移动',
-    valueId: 'bookmark-add-history-moved'
-  },
-  {
-    label: '匹配已有文件夹',
-    valueId: 'bookmark-add-history-existing'
-  },
-  {
-    label: '新建文件夹',
-    valueId: 'bookmark-add-history-new'
-  }
-]
+import { Button } from '../../ui'
 
 export function BookmarkHistoryPanel() {
   return (
@@ -32,38 +13,9 @@ export function BookmarkHistoryPanel() {
       <h1 id="bookmark-history-title">自动分析添加历史</h1>
 
       <div className="options-group detect-history-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>自动分析添加记录</strong>
-            <p id="bookmark-add-history-subtitle" className="detect-results-subtitle">
-              开启“自动分析”后，新增普通网页书签完成 AI 分类时会在这里记录保存位置。
-            </p>
-          </div>
-          <div className="detect-results-actions">
-            <span id="bookmark-add-history-timestamp" className="option-value">
-              尚无历史
-            </span>
-            <Button
-              id="bookmark-add-history-clear"
-              className="options-button secondary small"
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="清空自动分析添加历史记录"
-            >
-              清空自动分析添加历史
-            </Button>
-          </div>
-        </div>
+        <div id="bookmark-add-history-header" />
 
-        <div className="detect-history-grid bookmark-add-history-grid">
-          {historyMetrics.map((metric) => (
-            <Card className="summary-card compact" key={metric.valueId}>
-              <span className="summary-label">{metric.label}</span>
-              <strong id={metric.valueId}>0</strong>
-            </Card>
-          ))}
-        </div>
+        <div id="bookmark-add-history-summary" />
 
         <div id="bookmark-add-history-results" className="detect-results compact bookmark-add-history-results">
           <div className="detect-empty with-cta" data-empty-key="bookmark-add-history">
