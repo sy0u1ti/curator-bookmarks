@@ -75,6 +75,7 @@ export interface QuickAccessLinkViewModel {
   badge: string
   detail: string
   id: string
+  onNavigate: (event: React.MouseEvent<HTMLAnchorElement>) => void
   reason: 'pinned' | 'frequent' | 'added'
   title: string
   url: string
@@ -100,6 +101,8 @@ export interface SpeedDialCardViewModel {
     src: string
   }
   id: string
+  onNavigate: (event: React.MouseEvent<HTMLAnchorElement>) => void
+  style?: React.CSSProperties
   title: string
   url: string
 }
@@ -2236,6 +2239,8 @@ function SpeedDialContent({ state }: { state: SpeedDialContentState }) {
           data-bookmark-id={item.id}
           data-speed-dial-bookmark-id={item.id}
           aria-label={`打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`}
+          onClick={item.onNavigate}
+          style={item.style}
           key={item.id}
         >
           <BookmarkIconShell
@@ -2339,6 +2344,7 @@ function QuickAccessPanel({ state }: { state: QuickAccessPanelState }) {
                 draggable={false}
                 data-bookmark-id={item.id}
                 data-quick-reason={item.reason}
+                onClick={item.onNavigate}
                 key={item.id}
               >
                 <span className="newtab-quick-mark" aria-hidden="true">{item.badge}</span>

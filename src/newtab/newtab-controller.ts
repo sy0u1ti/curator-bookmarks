@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react'
 import {
   BOOKMARKS_BAR_ID,
   NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
@@ -7081,15 +7081,13 @@ function renderSpeedDialPanel(
   }
 
   const cardModels: SpeedDialCardViewModel[] = []
-  const cardsById = new Map<string, chrome.bookmarks.BookmarkTreeNode>()
   for (const item of items) {
     const bookmark = getBookmarkById(item.id)
     if (!bookmark?.url) {
       continue
     }
     const renderIndex = cardModels.length
-    cardsById.set(item.id, bookmark)
-    cardModels.push(createSpeedDialCardViewModel(item, renderIndex))
+    cardModels.push(createSpeedDialCardViewModel(item, bookmark, renderIndex))
   }
 
   renderSpeedDialPanelIsland(section, {
@@ -7102,12 +7100,18 @@ function renderSpeedDialPanel(
     meta: state.speedDialReorderError || `${items.length} 个固定入口`,
     metaTone: state.speedDialReorderError ? 'error' : ''
   })
-  bindSpeedDialPanelCards(section, cardsById)
 }
 
-function createSpeedDialCardViewModel(item: SpeedDialItem, renderIndex = 0): SpeedDialCardViewModel {
+function createSpeedDialCardViewModel(
+  item: SpeedDialItem,
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  renderIndex = 0
+): SpeedDialCardViewModel {
   const customIcon = state.customIcons[String(item.id)]
   const faviconLoadAttributes = getSpeedDialFaviconLoadAttributes(renderIndex)
+  const accentColor = !customIcon
+    ? getCachedFaviconAccentCssRgb(String(item.id), String(bookmark.url || item.url || ''))
+    : ''
   return {
     customIcon: Boolean(customIcon),
     detail: item.detail,
@@ -7119,25 +7123,14 @@ function createSpeedDialCardViewModel(item: SpeedDialItem, renderIndex = 0): Spe
       src: customIcon || getFaviconUrl(item.url, item.id)
     },
     id: item.id,
+    onNavigate: (event) => {
+      handleBookmarkNavigation(event, bookmark, item.url)
+    },
+    style: accentColor
+      ? { '--bookmark-card-rgb': accentColor } as CSSProperties
+      : undefined,
     title: item.title,
     url: item.url
-  }
-}
-
-function bindSpeedDialPanelCards(
-  section: HTMLElement,
-  bookmarksById: Map<string, chrome.bookmarks.BookmarkTreeNode>
-): void {
-  for (const link of section.querySelectorAll<HTMLAnchorElement>('.newtab-speed-dial-card[data-speed-dial-bookmark-id]')) {
-    const bookmarkId = String(link.dataset.speedDialBookmarkId || '')
-    const bookmark = bookmarksById.get(bookmarkId)
-    if (!bookmark) {
-      continue
-    }
-    bindBookmarkNavigation(link, bookmark)
-    if (!state.customIcons[bookmarkId]) {
-      applyCachedFaviconAccent(link, bookmarkId, String(bookmark.url || ''))
-    }
   }
 }
 
@@ -7360,9 +7353,7 @@ function createQuickAccessPanel(): HTMLElement | null {
     groups.push(createQuickAccessGroup('新近添加', recentQuickAccessItems))
   }
 
-  const panel = createQuickAccessPanelIslandElement({ groups })
-  bindQuickAccessPanelNavigation(panel, [...frequentQuickAccessItems, ...recentQuickAccessItems])
-  return panel
+  return createQuickAccessPanelIslandElement({ groups })
 }
 
 function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): QuickAccessItem | null {
@@ -7381,20 +7372,13 @@ function createQuickAccessGroup(label: string, items: QuickAccessItem[]): QuickA
       badge: item.badge,
       detail: item.detail,
       id: item.id,
+      onNavigate: (event) => {
+        handleBookmarkNavigation(event, item.bookmark, item.url)
+      },
       reason: item.reason,
       title: item.title,
       url: item.url
     }))
-  }
-}
-
-function bindQuickAccessPanelNavigation(panel: HTMLElement, items: QuickAccessItem[]): void {
-  const itemById = new Map(items.map((item) => [item.id, item]))
-  for (const link of panel.querySelectorAll<HTMLAnchorElement>('.newtab-quick-link[data-bookmark-id]')) {
-    const item = itemById.get(String(link.dataset.bookmarkId || ''))
-    if (item) {
-      bindBookmarkNavigation(link, item.bookmark)
-    }
   }
 }
 
@@ -7483,6 +7467,16 @@ function applyCachedFaviconAccent(item: HTMLElement, bookmarkId: string, url: st
   if (fallback) {
     applyFaviconAccentToTile(item, fallback)
   }
+}
+
+function getCachedFaviconAccentCssRgb(bookmarkId: string, url: string): string {
+  const entry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
+  if (entry) {
+    return formatFaviconAccentCssRgb(entry.color)
+  }
+
+  const fallback = getHostnameAccentColor(url)
+  return fallback ? formatFaviconAccentCssRgb(fallback) : ''
 }
 
 const FAVICON_ACCENT_PALETTE: readonly FaviconAccentColor[] = [
@@ -7710,41 +7704,50 @@ function bindBookmarkNavigation(
   }
 
   link.addEventListener('click', (event) => {
-    const currentBookmark = state.allBookmarkMap.get(bookmarkId) || getBookmarkById(bookmarkId) || bookmark
-    const url = String(currentBookmark.url || link.getAttribute('href') || link.href || '').trim()
-    if (!url) {
-      return
-    }
-
-    if (
-      state.dragSuppressClick ||
-      state.speedDialDragSuppressClick ||
-      state.folderDragSuppressClick ||
-      state.draggingBookmarkId ||
-      state.speedDialDraggingBookmarkId ||
-      state.draggingFolderId
-    ) {
-      return
-    }
-
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-      void recordBookmarkOpen(currentBookmark)
-      return
-    }
-
-    event.preventDefault()
-    if (state.generalSettings.openBookmarksInNewTab) {
-      const opened = window.open(url, '_blank', 'noopener')
-      if (opened) {
-        opened.opener = null
-      }
-      void recordBookmarkOpen(currentBookmark)
-      return
-    }
-
-    void recordBookmarkOpen(currentBookmark)
-    window.location.assign(url)
+    handleBookmarkNavigation(event, bookmark, link.getAttribute('href') || link.href)
   })
+}
+
+function handleBookmarkNavigation(
+  event: MouseEvent | ReactMouseEvent<HTMLAnchorElement>,
+  bookmark: chrome.bookmarks.BookmarkTreeNode,
+  fallbackUrl = ''
+): void {
+  const bookmarkId = String(bookmark.id || '').trim()
+  const currentBookmark = state.allBookmarkMap.get(bookmarkId) || getBookmarkById(bookmarkId) || bookmark
+  const url = String(currentBookmark.url || fallbackUrl || '').trim()
+  if (!url) {
+    return
+  }
+
+  if (
+    state.dragSuppressClick ||
+    state.speedDialDragSuppressClick ||
+    state.folderDragSuppressClick ||
+    state.draggingBookmarkId ||
+    state.speedDialDraggingBookmarkId ||
+    state.draggingFolderId
+  ) {
+    return
+  }
+
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
+    void recordBookmarkOpen(currentBookmark)
+    return
+  }
+
+  event.preventDefault()
+  if (state.generalSettings.openBookmarksInNewTab) {
+    const opened = window.open(url, '_blank', 'noopener')
+    if (opened) {
+      opened.opener = null
+    }
+    void recordBookmarkOpen(currentBookmark)
+    return
+  }
+
+  void recordBookmarkOpen(currentBookmark)
+  window.location.assign(url)
 }
 
 function buildFolderNodeMap(
