@@ -15,6 +15,7 @@ export function getIconPreviewSignature(settings: IconSettings): string {
     settings.iconShellSize,
     settings.layoutMode,
     settings.columns,
+    settings.verticalCenter ? 1 : 0,
     settings.showTitles ? 1 : 0,
     settings.titleLines
   ].join('|')
@@ -60,6 +61,7 @@ export function renderIconPreviewElement(
     showTitles: settings.showTitles,
     summary,
     titleLines: settings.titleLines,
+    verticalCenter: settings.verticalCenter,
     tiles: Array.from({ length: sampleCount }, (_, index) => ({
       id: `${index}:${names[index] || ''}`,
       mark: names[index]?.slice(0, 1) || '*',

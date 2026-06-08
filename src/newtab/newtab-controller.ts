@@ -285,6 +285,7 @@ import {
   dispatchNewtabBookmarkEditMenuClosing,
   dispatchNewtabBookmarkEditMenuView
 } from './newtab-bookmark-menu-store.js'
+import { registerNewtabIconSettingsActions } from './newtab-icon-preview-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -1005,6 +1006,10 @@ function bindEvents(): void {
     onRemoveSelected: handleSelectedFolderRemove,
     onToggleCandidates: toggleFolderCandidates
   })
+  registerNewtabIconSettingsActions({
+    onShowTitlesToggle: handleIconShowTitlesToggle,
+    onVerticalCenterToggle: handleIconVerticalCenterToggle
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1330,8 +1335,6 @@ function bindIconSettingsEvents(): void {
   cachedEl('icon-row-gap')?.addEventListener('input', handleIconSettingsChange)
   cachedEl('icon-folder-gap')?.addEventListener('input', handleIconSettingsChange)
   cachedEl('icon-columns')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-vertical-center')?.addEventListener('change', handleIconSettingsChange)
-  cachedEl('icon-show-titles')?.addEventListener('change', handleIconSettingsChange)
   cachedEl('icon-layout-control')?.addEventListener('click', handleIconLayoutModeClick)
   cachedEl('icon-title-lines-control')?.addEventListener('click', handleIconTitleLinesClick)
   cachedEl('icon-advanced-toggle')?.addEventListener('click', toggleIconAdvanced)
@@ -1727,6 +1730,22 @@ async function updateSelectedFolders(
 
 function handleIconSettingsChange(): void {
   commitIconSettings(readIconSettingsFromControls())
+}
+
+function handleIconVerticalCenterToggle(enabled: boolean): void {
+  commitIconSettings(normalizeIconSettings({
+    ...state.iconSettings,
+    verticalCenter: enabled,
+    preset: ''
+  }))
+}
+
+function handleIconShowTitlesToggle(enabled: boolean): void {
+  commitIconSettings(normalizeIconSettings({
+    ...state.iconSettings,
+    showTitles: enabled,
+    preset: ''
+  }))
 }
 
 function handleIconLayoutModeClick(event: Event): void {
@@ -10947,8 +10966,6 @@ function readIconSettingsFromControls(): IconSettings {
   const rowGapInput = cachedEl('icon-row-gap')
   const folderGapInput = cachedEl('icon-folder-gap')
   const columnsInput = cachedEl('icon-columns')
-  const verticalCenterInput = cachedEl('icon-vertical-center')
-  const showTitlesInput = cachedEl('icon-show-titles')
 
   const settings = normalizeIconSettings({
     pageWidth: pageWidthInput instanceof HTMLInputElement
@@ -10973,12 +10990,8 @@ function readIconSettingsFromControls(): IconSettings {
     columns: columnsInput instanceof HTMLInputElement
       ? Number(columnsInput.value)
       : state.iconSettings.columns,
-    verticalCenter: verticalCenterInput instanceof HTMLInputElement
-      ? verticalCenterInput.checked
-      : state.iconSettings.verticalCenter,
-    showTitles: showTitlesInput instanceof HTMLInputElement
-      ? showTitlesInput.checked
-      : state.iconSettings.showTitles,
+    verticalCenter: state.iconSettings.verticalCenter,
+    showTitles: state.iconSettings.showTitles,
     titleLines: state.iconSettings.titleLines,
     preset: ''
   })
@@ -10996,8 +11009,6 @@ function syncIconSettingsControls(): void {
     const rowGapInput = cachedEl('icon-row-gap')
     const folderGapInput = cachedEl('icon-folder-gap')
     const columnsInput = cachedEl('icon-columns')
-    const verticalCenterInput = cachedEl('icon-vertical-center')
-    const showTitlesInput = cachedEl('icon-show-titles')
     const tileWidthRow = cachedEl('icon-tile-width-row')
     const titleLinesRow = cachedEl('icon-title-lines-row')
     const columnsRow = cachedEl('icon-columns-row')
@@ -11024,12 +11035,6 @@ function syncIconSettingsControls(): void {
     if (columnsInput instanceof HTMLInputElement) {
       columnsInput.value = String(settings.columns)
       columnsInput.disabled = settings.layoutMode !== 'fixed'
-    }
-    if (verticalCenterInput instanceof HTMLInputElement) {
-      verticalCenterInput.checked = settings.verticalCenter
-    }
-    if (showTitlesInput instanceof HTMLInputElement) {
-      showTitlesInput.checked = settings.showTitles
     }
 
     setTextContent('icon-page-width-value', `${settings.pageWidth}%`)

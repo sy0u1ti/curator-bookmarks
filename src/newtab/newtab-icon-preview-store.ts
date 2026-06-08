@@ -19,6 +19,7 @@ export interface NewtabIconPreviewView {
   titleLines: number
   pageWidth: number
   tiles: NewtabIconPreviewTile[]
+  verticalCenter: boolean
 }
 
 const DEFAULT_VIEW: NewtabIconPreviewView = {
@@ -33,10 +34,22 @@ const DEFAULT_VIEW: NewtabIconPreviewView = {
   showTitles: true,
   summary: '',
   titleLines: 1,
-  tiles: []
+  tiles: [],
+  verticalCenter: false
+}
+
+export interface NewtabIconSettingsActions {
+  onShowTitlesToggle: (enabled: boolean) => void
+  onVerticalCenterToggle: (enabled: boolean) => void
+}
+
+const EMPTY_ACTIONS: NewtabIconSettingsActions = {
+  onShowTitlesToggle: () => {},
+  onVerticalCenterToggle: () => {}
 }
 
 let iconPreviewView: NewtabIconPreviewView = DEFAULT_VIEW
+let iconSettingsActions: NewtabIconSettingsActions = EMPTY_ACTIONS
 
 const listeners = new Set<() => void>()
 
@@ -54,6 +67,25 @@ function emitIconPreviewChange(): void {
 export function dispatchNewtabIconPreviewView(view: NewtabIconPreviewView): void {
   iconPreviewView = view
   emitIconPreviewChange()
+}
+
+export function registerNewtabIconSettingsActions(
+  actions: NewtabIconSettingsActions
+): () => void {
+  iconSettingsActions = actions
+  return () => {
+    if (iconSettingsActions === actions) {
+      iconSettingsActions = EMPTY_ACTIONS
+    }
+  }
+}
+
+export function dispatchNewtabIconVerticalCenterToggle(enabled: boolean): void {
+  iconSettingsActions.onVerticalCenterToggle(enabled)
+}
+
+export function dispatchNewtabIconShowTitlesToggle(enabled: boolean): void {
+  iconSettingsActions.onShowTitlesToggle(enabled)
 }
 
 export function useNewtabIconPreviewView(): NewtabIconPreviewView {

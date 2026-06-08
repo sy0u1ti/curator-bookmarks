@@ -14,7 +14,11 @@ import {
   ICON_PRESET_META,
   type IconLayoutPresetKey
 } from '../icon-settings'
-import { useNewtabIconPreviewView } from '../newtab-icon-preview-store'
+import {
+  dispatchNewtabIconShowTitlesToggle,
+  dispatchNewtabIconVerticalCenterToggle,
+  useNewtabIconPreviewView
+} from '../newtab-icon-preview-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
@@ -741,8 +745,20 @@ function IconSettingsSection() {
             unstyled
           />
         </div>
-        <SwitchRow id="icon-vertical-center" title="垂直居中" description="书签较少时让主内容贴近屏幕中部。" />
-        <SwitchRow id="icon-show-titles" title="显示标题" description="关闭后卡片收缩为只显示网站图标。" defaultChecked />
+        <SwitchRow
+          id="icon-vertical-center"
+          title="垂直居中"
+          description="书签较少时让主内容贴近屏幕中部。"
+          checked={iconPreview.verticalCenter}
+          onCheckedChange={dispatchNewtabIconVerticalCenterToggle}
+        />
+        <SwitchRow
+          id="icon-show-titles"
+          title="显示标题"
+          description="关闭后卡片收缩为只显示网站图标。"
+          checked={iconPreview.showTitles}
+          onCheckedChange={dispatchNewtabIconShowTitlesToggle}
+        />
         <div id="icon-title-lines-row" className="setting-row icon-control-row">
           <span>标题行数</span>
           <ToggleGroup
