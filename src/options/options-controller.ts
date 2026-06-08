@@ -286,6 +286,10 @@ import {
   RECYCLE_ACTION_EVENT,
   type RecycleActionDetail
 } from './components/recycle-events.js'
+import {
+  REDIRECT_ACTION_EVENT,
+  type RedirectActionDetail
+} from './components/redirect-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1183,11 +1187,7 @@ function bindEvents() {
   dom.redirectPagination?.addEventListener('click', (event) => {
     handleResultsPaginationClick(event, 'redirects')
   })
-  dom.redirectClearSelection?.addEventListener('click', () => clearRedirectSelection(redirectsCallbacks))
-  dom.redirectBatchUpdate?.addEventListener('click', () => updateSelectedRedirects(redirectsCallbacks))
-  dom.redirectDeleteSelection?.addEventListener('click', () => deleteSelectedRedirects(redirectsCallbacks))
-  dom.redirectSelectAll?.addEventListener('click', () => selectAllRedirects(redirectsCallbacks))
-  dom.redirectDeleteAll?.addEventListener('click', () => deleteAllRedirects(redirectsCallbacks))
+  window.addEventListener(REDIRECT_ACTION_EVENT, handleRedirectAction)
   dom.duplicateGroups?.addEventListener('click', (event) => handleDuplicateGroupsClick(event, duplicatesCallbacks))
   dom.duplicateStrategyControls?.addEventListener('click', (event) => handleDuplicateToolbarClick(event, duplicatesCallbacks))
   dom.duplicateClearSelection?.addEventListener('click', () => clearDuplicateSelection(duplicatesCallbacks))
@@ -4629,6 +4629,29 @@ function handleRecycleAction(event: Event): void {
   }
   if (detail?.action === 'clear-all') {
     void clearRecycleBin(recycleCallbacks)
+  }
+}
+
+function handleRedirectAction(event: Event): void {
+  const detail = (event as CustomEvent<RedirectActionDetail>).detail
+  if (detail?.action === 'clear-selection') {
+    clearRedirectSelection(redirectsCallbacks)
+    return
+  }
+  if (detail?.action === 'update-selected') {
+    void updateSelectedRedirects(redirectsCallbacks)
+    return
+  }
+  if (detail?.action === 'delete-selected') {
+    void deleteSelectedRedirects(redirectsCallbacks)
+    return
+  }
+  if (detail?.action === 'select-all') {
+    selectAllRedirects(redirectsCallbacks)
+    return
+  }
+  if (detail?.action === 'delete-all') {
+    void deleteAllRedirects(redirectsCallbacks)
   }
 }
 

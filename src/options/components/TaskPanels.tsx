@@ -243,32 +243,8 @@ export function RedirectsPanel() {
       <p className="options-section-label">Redirects</p>
       <h1 id="redirects-title">重定向更新</h1>
 
-      <div id="redirect-selection-group" className="options-group detect-selection-group hidden">
-        <div className="detect-results-header">
-          <div>
-            <strong id="redirect-selection-count">0 条已选择</strong>
-            <p className="detect-results-subtitle">可批量更新这些重定向书签为最终地址，或直接批量删除并移入回收站。</p>
-          </div>
-          <div className="detect-results-actions">
-            <Button id="redirect-clear-selection" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空重定向更新已选书签">清空选择</Button>
-            <Button id="redirect-batch-update" className="options-button small" size="sm" type="button" aria-label="批量更新重定向已选书签为最终 URL">批量更新最终 URL</Button>
-            <Button id="redirect-delete-selection" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="删除重定向更新已选书签">删除所选</Button>
-          </div>
-        </div>
-      </div>
-
       <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>待更新重定向</strong>
-            <p id="redirect-results-subtitle" className="detect-results-subtitle">完成检测后，这里会展示原书签地址与最终落地地址不一致的结果。结果会本地缓存，刷新页面后仍可直接更新。</p>
-          </div>
-          <div className="detect-results-actions">
-            <Button id="redirect-select-all" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="全选待更新重定向书签">全选本区</Button>
-            <Button id="redirect-delete-all" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="批量删除待更新重定向书签">批量删除本区</Button>
-            <span id="redirect-count" className="option-value">0 条待更新</span>
-          </div>
-        </div>
+        <div id="redirect-controls" />
         <div id="redirect-results" className="detect-results">
           <EmptyCta
             emptyKey="redirect"

@@ -20,6 +20,7 @@ import { isRedirectedNavigation } from './classifier.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
 import { renderResultsPaginationIsland } from '../components/ResultsPaginationIsland.js'
 import { renderRedirectResultsIsland } from '../components/RedirectResultsIsland.js'
+import { renderRedirectControlsIsland } from '../components/RedirectControlsIsland.js'
 
 const REDIRECT_RESULTS_PAGE_SIZE = 25
 
@@ -229,19 +230,13 @@ export function renderRedirectSection(callbacks) {
     new Set(redirectResults.map((result) => String(result.id)))
   )
 
-  dom.redirectCount.textContent = `${redirectResults.length} 条待更新`
-  dom.redirectSelectionGroup.classList.toggle('hidden', managerState.selectedRedirectIds.size === 0)
-  dom.redirectSelectionCount.textContent = `${managerState.selectedRedirectIds.size} 条已选择`
-  dom.redirectBatchUpdate.disabled = isInteractionLocked() || managerState.selectedRedirectIds.size === 0
-  dom.redirectDeleteSelection.disabled = isInteractionLocked() || managerState.selectedRedirectIds.size === 0
-  dom.redirectSelectAll.disabled = redirectResults.length === 0
-  dom.redirectDeleteAll.disabled = isInteractionLocked() || redirectResults.length === 0
-  if (dom.redirectResultsSubtitle) {
-    dom.redirectResultsSubtitle.textContent = redirectSection.useCachedResults && redirectSection.savedAt && redirectResults.length
-      ? `当前展示的是 ${formatDateTime(redirectSection.savedAt)} 的本地缓存结果，来源范围：${redirectSection.scope.label}。刷新页面后仍可直接更新，不需要重新检测。`
-      : redirectSection.useCachedResults
-        ? '完成检测后，这里会展示原书签地址与最终落地地址不一致的结果。结果会本地缓存，刷新页面后仍可直接更新。'
-        : '当前展示的是本次设置页会话中的重定向检测结果；刷新页面后，这里的待更新列表会回退到本地缓存结果。'
+  if (dom.redirectControls) {
+    renderRedirectControlsIsland(dom.redirectControls, {
+      count: redirectResults.length,
+      locked: isInteractionLocked(),
+      selectedCount: managerState.selectedRedirectIds.size,
+      subtitle: getRedirectResultsSubtitle(redirectSection, redirectResults.length)
+    })
   }
 
   if (!redirectResults.length) {
@@ -268,6 +263,16 @@ export function renderRedirectSection(callbacks) {
     selectedIds: managerState.selectedRedirectIds
   })
   renderRedirectPagination(redirectResults.length)
+}
+
+function getRedirectResultsSubtitle(redirectSection, resultCount): string {
+  if (redirectSection.useCachedResults && redirectSection.savedAt && resultCount) {
+    return `当前展示的是 ${formatDateTime(redirectSection.savedAt)} 的本地缓存结果，来源范围：${redirectSection.scope.label}。刷新页面后仍可直接更新，不需要重新检测。`
+  }
+  if (redirectSection.useCachedResults) {
+    return '完成检测后，这里会展示原书签地址与最终落地地址不一致的结果。结果会本地缓存，刷新页面后仍可直接更新。'
+  }
+  return '当前展示的是本次设置页会话中的重定向检测结果；刷新页面后，这里的待更新列表会回退到本地缓存结果。'
 }
 
 export function handleRedirectResultsClick(event, callbacks) {
