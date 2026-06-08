@@ -200,8 +200,6 @@ import {
   createBookmarkContentIslandElement,
   createBookmarkGridPlaceholderIslandElement,
   createBookmarkTileIslandElement,
-  createClockSpacerIslandElement,
-  createClockWidgetIslandElement,
   createPortalPanelIslandElement,
   createQuickAccessPanelIslandElement,
   createSearchWidgetIslandElement,
@@ -217,7 +215,6 @@ import {
   renderNewTabSearchSuggestionsIsland,
   renderBookmarkGridPlaceholderIslandElement,
   renderBookmarkTileIslandElement,
-  renderClockWidgetStateIsland,
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
   renderSearchWidgetComboboxStateIsland,
@@ -286,6 +283,7 @@ import {
   registerNewtabDashboardOverlayActions
 } from './newtab-dashboard-overlay-store.js'
 import { dispatchNewtabContentView } from './newtab-content-store.js'
+import { dispatchNewtabClockView, type NewtabClockView } from './newtab-clock-store.js'
 import {
   dispatchNewtabDeleteToastView,
   registerNewtabDeleteToastActions
@@ -767,7 +765,6 @@ let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
 let featuredBackgroundModalClose: HTMLElement | null = null
 let featuredBackgroundPicker: HTMLElement | null = null
-let activeClockWidget: HTMLElement | null = null
 let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
@@ -5372,19 +5369,13 @@ function createNewTabLayout(primaryContent: HTMLElement | NewTabPageModule): New
     modules.push(onboarding)
   }
 
-  const clock = createClockWidget()
+  const clock = createClockModule()
   if (clock) {
-    modules.push({
-      kind: 'element',
-      id: 'clock',
-      element: clock,
-      placement: 'utility'
-    })
+    modules.push(clock)
   } else {
     modules.push({
-      kind: 'element',
       id: 'clock-spacer',
-      element: createClockSpacerIslandElement(),
+      kind: 'clock-spacer',
       placement: 'utility'
     })
   }
@@ -6874,18 +6865,21 @@ function openBookmarkSuggestion(suggestion: SearchBookmarkSuggestion): void {
   openSearchTarget(suggestion.url)
 }
 
-function createClockWidget(): HTMLElement | null {
+function createClockModule(): NewTabPageModule | null {
   const settings = state.timeSettings
   if (!settings.enabled) {
+    dispatchNewtabClockView(null)
     return null
   }
 
-  const clock = createClockWidgetIslandElement(createFallbackClockWidgetState(new Date(), settings))
-  activeClockWidget = clock
+  dispatchNewtabClockView(createFallbackClockWidgetState(new Date(), settings))
+  hydrateClockText()
 
-  hydrateClockText(clock)
-
-  return clock
+  return {
+    id: 'clock',
+    kind: 'clock',
+    placement: 'utility'
+  }
 }
 
 function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
@@ -11845,15 +11839,10 @@ function updateClockText(): void {
     return
   }
 
-  const clockNode = getActiveClockWidget()
-  if (!clockNode) {
-    return
-  }
-
   const now = new Date()
   const settings = timeSettingsModule.normalizeTimeSettings(state.timeSettings)
   state.timeSettings = settings
-  renderClockWidgetStateIsland(clockNode, {
+  dispatchNewtabClockView({
     ariaLabel: timeSettingsModule.getClockAriaLabel(now, settings),
     dateDateTime: timeSettingsModule.formatClockDateTime(now, settings),
     dateText: timeSettingsModule.formatClockDate(now, settings),
@@ -11865,19 +11854,14 @@ function updateClockText(): void {
 }
 
 function updateClockTextFallback(): void {
-  const clockNode = getActiveClockWidget()
-  if (!clockNode) {
-    return
-  }
-
   const now = new Date()
-  renderClockWidgetStateIsland(clockNode, createFallbackClockWidgetState(now, state.timeSettings))
+  dispatchNewtabClockView(createFallbackClockWidgetState(now, state.timeSettings))
 }
 
 function createFallbackClockWidgetState(
   date: Date,
   settings: NewTabTimeSettings
-) {
+): NewtabClockView {
   return {
     ariaLabel: getFallbackClockAriaLabel(date, settings),
     dateDateTime: getFallbackClockDateTime(date),
@@ -11889,22 +11873,11 @@ function createFallbackClockWidgetState(
   }
 }
 
-function getActiveClockWidget(): HTMLElement | null {
-  if (activeClockWidget?.isConnected) {
-    return activeClockWidget
-  }
-  activeClockWidget = null
-  return null
-}
-
-function hydrateClockText(clockNode?: HTMLElement): void {
+function hydrateClockText(): void {
   const hydrateVersion = ++clockHydrationVersion
   void loadTimeSettingsModule()
     .then((timeSettings) => {
       if (hydrateVersion !== clockHydrationVersion) {
-        return
-      }
-      if (clockNode && !clockNode.isConnected) {
         return
       }
       updateClockText()

@@ -38,6 +38,18 @@ export interface NewTabOnboardingModule {
   placement: 'utility'
 }
 
+export interface NewTabClockModule {
+  id: 'clock'
+  kind: 'clock'
+  placement: 'utility'
+}
+
+export interface NewTabClockSpacerModule {
+  id: 'clock-spacer'
+  kind: 'clock-spacer'
+  placement: 'utility'
+}
+
 export interface NewTabLoadingModule {
   kind: 'loading'
   id: 'state'
@@ -52,6 +64,8 @@ export interface NewTabMissingFolderModule extends MissingFolderViewOptions {
 }
 
 export type NewTabPageModule =
+  | NewTabClockModule
+  | NewTabClockSpacerModule
   | NewTabElementModule
   | NewTabLoadingModule
   | NewTabMissingFolderModule

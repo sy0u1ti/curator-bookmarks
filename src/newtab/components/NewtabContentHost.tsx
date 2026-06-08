@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { type CSSProperties, useCallback } from 'react'
 import { Button } from '../../ui/primitives/Button'
 import { DotMatrixLoader } from '../../ui/primitives/DotMatrixLoader'
 import {
@@ -9,6 +9,8 @@ import {
   type NewTabPageModule
 } from '../content-state'
 import { useNewtabContentView } from '../newtab-content-store'
+import { useNewtabClockView } from '../newtab-clock-store'
+import { ClockWidgetContent } from './RuntimeIslands'
 
 export function NewtabContentHost() {
   const view = useNewtabContentView()
@@ -52,6 +54,14 @@ function NewTabPage({ view }: { view: Extract<NewTabContentView, { type: 'page' 
 function UtilityModule({ module }: { module: NewTabPageModule }) {
   if (module.kind === 'onboarding') {
     return <OnboardingStrip module={module} />
+  }
+
+  if (module.kind === 'clock') {
+    return <ClockModule />
+  }
+
+  if (module.kind === 'clock-spacer') {
+    return <div className="newtab-clock-spacer" aria-hidden="true" />
   }
 
   if (module.kind === 'element') {
@@ -109,6 +119,28 @@ function MountedElementModule({ module }: { module: NewTabElementModule }) {
   }, [module])
 
   return <div hidden ref={mountElement} />
+}
+
+function ClockModule() {
+  const state = useNewtabClockView()
+  if (!state) {
+    return null
+  }
+
+  const settings = state.settings
+  return (
+    <section
+      className="newtab-clock"
+      style={{ '--clock-scale': String(settings.clockSize / 100) } as CSSProperties}
+      data-clock-display-mode={settings.displayMode}
+      data-clock-density={settings.density}
+      data-clock-show-seconds={String(settings.showSeconds && settings.displayMode !== 'date')}
+      data-clock-hour12={String(settings.hour12 && settings.displayMode !== 'date')}
+      aria-label={state.ariaLabel}
+    >
+      <ClockWidgetContent state={state} />
+    </section>
+  )
 }
 
 function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {
