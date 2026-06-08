@@ -81,6 +81,7 @@ import {
   type NewTabContentState,
   type NewTabContentView,
   type NewTabElementModule,
+  type NewTabBookmarksModule,
   type PortalQuickAccessItem,
   resolveNewTabContentState,
   type NewTabPageModule,
@@ -196,25 +197,25 @@ import {
 import { mark as perfMark, measure as perfMeasure, measureNow } from '../shared/perf.js'
 import { runIdle, runMicroIdle } from '../shared/idle.js'
 import {
-  appendBookmarkTileIslandElements,
-  createBookmarkContentIslandElement,
-  createBookmarkTileIslandElement,
   mountNewTabDragGhostBridge,
-  renderBookmarkTileIslandElement,
-  replaceBookmarkContentIslandChildren,
-  type BookmarkContentViewModel,
-  type BookmarkFolderSectionViewModel,
-  type BookmarkTileViewModel,
   type FeaturedBackgroundPickerCardViewModel,
   type FeaturedBackgroundPickerGridSectionViewModel,
   type FeaturedBackgroundPickerProviderGroupViewModel,
-  type FeaturedBackgroundPickerState,
+  type FeaturedBackgroundPickerState
+} from './components/RuntimeIslands.js'
+import type { SpeedDialCardViewModel } from './components/NewtabSpeedDialPanel.js'
+import {
+  dispatchNewtabBookmarkContentView,
+  getNewtabBookmarkContentView,
+  patchNewtabBookmarkContentView,
+  type BookmarkContentViewModel,
+  type BookmarkFolderSectionViewModel,
+  type BookmarkTileViewModel,
   type PortalPanelState,
   type QuickAccessGroupViewModel,
   type QuickAccessPanelState,
-  type SourceNavigationState,
-  type SpeedDialCardViewModel
-} from './components/RuntimeIslands.js'
+  type SourceNavigationState
+} from './newtab-bookmark-content-store.js'
 import {
   createDefaultSearchWidgetInteractionState,
   createEmptySavedSearchesState,
@@ -576,13 +577,6 @@ interface QuickAccessItem {
   bookmark: chrome.bookmarks.BookmarkTreeNode
 }
 
-interface BookmarkLazyExpansionTarget {
-  section: NewTabFolderSection
-  nextIndex: number
-  renderedBookmarkIndex: number
-  renderVersion: number
-}
-
 type MenuActionIcon = BookmarkMenuActionIcon
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -779,7 +773,6 @@ let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
 let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
 let deferredRenderFrame = 0
-let bookmarkTileRenderVersion = 0
 let settingsDrawerReturnFocusElement: HTMLElement | null = null
 let featuredBackgroundModalReturnFocusElement: HTMLElement | null = null
 let featuredBackgroundPreviewCard: HTMLElement | null = null
@@ -857,8 +850,6 @@ function getBookmarkCatalog(
   return refreshBookmarkCatalog(rootNode)
 }
 let lastRenderedShellSignature = ''
-let bookmarkLazyExpansionObserver: IntersectionObserver | null = null
-let bookmarkLazyExpansionTargets = new WeakMap<HTMLElement, BookmarkLazyExpansionTarget>()
 const backgroundPreloadPromise = preloadBackgroundSettings()
 
 state.searchIndexReadyPromise = searchIndexReadyPromise
@@ -3299,10 +3290,22 @@ function syncPersistedBookmarkOrderInState(
 }
 
 function syncBookmarkReorderBusyState(): void {
-  const busy = state.reorderingBookmarks ? 'true' : 'false'
-  document.querySelector<HTMLElement>('.newtab-content')?.setAttribute('aria-busy', busy)
-  document.querySelectorAll<HTMLElement>('.bookmark-grid').forEach((grid) => {
-    grid.setAttribute('aria-busy', busy)
+  patchNewtabBookmarkContentView((view) => {
+    const sections = view.sections.map((section) => ({
+      ...section,
+      grid: section.grid ? {
+        ...section.grid,
+        busy: state.reorderingBookmarks
+      } : null
+    }))
+    return {
+      ...view,
+      content: {
+        ...view.content,
+        reordering: state.reorderingBookmarks
+      },
+      sections
+    }
   })
 }
 
@@ -3802,18 +3805,10 @@ function patchBookmarkInPlace(
     node.url = changeInfo.url
   }
 
-  let updatedTiles = 0
-  const tiles = document.querySelectorAll<HTMLAnchorElement>(
-    `.bookmark-tile[data-bookmark-id="${CSS.escape(bookmarkId)}"]`
-  )
-  tiles.forEach((tile) => {
-    const folderId = String(tile.dataset.folderId || node.parentId || '').trim()
-    renderBookmarkTileIslandElement(tile, createBookmarkTileViewModel(node, folderId))
-    if (!state.customIcons[bookmarkId]) {
-      applyCachedFaviconAccent(tile, bookmarkId, String(node.url || ''))
-    }
-    updatedTiles += 1
-  })
+  const updatedBookmarkContent = state.bookmarkMap.has(bookmarkId)
+  if (updatedBookmarkContent) {
+    renderBookmarkSections()
+  }
 
   const speedDialCards = document.querySelectorAll<HTMLAnchorElement>(
     `.newtab-speed-dial-card[data-speed-dial-bookmark-id="${CSS.escape(bookmarkId)}"]`
@@ -3824,7 +3819,7 @@ function patchBookmarkInPlace(
   }
 
   invalidateQuickAccessCache()
-  return updatedTiles > 0 || updatedSpeedDial
+  return updatedBookmarkContent || updatedSpeedDial
 }
 
 function invalidateQuickAccessCache(): void {
@@ -3842,7 +3837,7 @@ function handleBookmarkRemoved(bookmarkId: string, removeInfo: chrome.bookmarks.
     return
   }
 
-  const removedLocally = removeBookmarkTilesInPlace(String(bookmarkId || ''))
+  const removedLocally = removeBookmarkFromLocalState(String(bookmarkId || ''))
   const result = getBookmarkRemovalIncrementalResult({
     removedBookmark,
     removedLocally
@@ -3852,37 +3847,23 @@ function handleBookmarkRemoved(bookmarkId: string, removeInfo: chrome.bookmarks.
   }
 }
 
-function removeBookmarkTilesInPlace(bookmarkId: string): boolean {
+function removeBookmarkFromLocalState(bookmarkId: string): boolean {
   if (!bookmarkId) {
     return false
   }
 
-  let removedAny = false
-  document.querySelectorAll<HTMLElement>(
-    `.bookmark-tile[data-bookmark-id="${CSS.escape(bookmarkId)}"]`
-  ).forEach((tile) => {
-    tile.remove()
-    removedAny = true
-  })
-  document.querySelectorAll<HTMLElement>(
-    `.newtab-speed-dial-card[data-speed-dial-bookmark-id="${CSS.escape(bookmarkId)}"]`
-  ).forEach((card) => {
-    card.remove()
-    removedAny = true
-  })
-
-  forgetBookmarkFromLocalMaps(bookmarkId)
-
+  const removedAny = forgetBookmarkFromLocalMaps(bookmarkId)
   if (removedAny) {
     invalidateQuickAccessCache()
     markSearchIndexDirty({ schedule: true })
     renderBookmarkSections()
+    refreshSpeedDialPanel()
     postDashboardSpeedDialState()
   }
   return removedAny
 }
 
-function forgetBookmarkFromLocalMaps(bookmarkId: string): void {
+function forgetBookmarkFromLocalMaps(bookmarkId: string): boolean {
   const removedVisible = state.bookmarkMap.delete(bookmarkId)
   const removedAny = state.allBookmarkMap.delete(bookmarkId) || removedVisible
   if (removedAny) {
@@ -3907,6 +3888,7 @@ function forgetBookmarkFromLocalMaps(bookmarkId: string): void {
     })
     state.faviconRefreshTokens.delete(bookmarkId)
   }
+  return removedAny
 }
 
 function handleBookmarkMoved(
@@ -4766,9 +4748,10 @@ function render(): void {
     return
   }
 
-  bookmarkTileRenderVersion += 1
-  disconnectBookmarkLazyExpansionObserver()
   cancelScheduledAdaptiveNewTabLayoutUpdate()
+  if (contentState.type !== 'bookmarks') {
+    dispatchNewtabBookmarkContentView(null)
+  }
   dispatchNewtabContentView(createContentStateView(contentState))
   lastRenderedContentSignature = contentSignature
   lastRenderedShellSignature = shellSignature
@@ -4802,87 +4785,12 @@ function createContentStateView(contentState: NewTabContentState): NewTabContent
 }
 
 function renderBookmarkSections(): boolean {
-  const content = root?.querySelector<HTMLElement>('.newtab-content')
-  if (!content) {
+  if (!getNewtabBookmarkContentView()) {
     return false
   }
 
-  bookmarkTileRenderVersion += 1
-  disconnectBookmarkLazyExpansionObserver()
-  const nextContent = createBookmarkSections(state.folderSections)
-  replaceBookmarkContentIslandChildren(content, nextContent)
+  createBookmarkSections(state.folderSections)
   return true
-}
-
-function getBookmarkLazyExpansionObserver(): IntersectionObserver | null {
-  if (typeof IntersectionObserver === 'undefined') {
-    return null
-  }
-
-  if (!bookmarkLazyExpansionObserver) {
-    bookmarkLazyExpansionObserver = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) {
-          continue
-        }
-
-        const placeholder = entry.target
-        if (placeholder instanceof HTMLElement) {
-          expandBookmarkSectionPlaceholder(placeholder)
-        }
-      }
-    }, { rootMargin: '360px 0px' })
-  }
-
-  return bookmarkLazyExpansionObserver
-}
-
-function observeBookmarkSectionPlaceholder(
-  placeholder: HTMLElement,
-  target: BookmarkLazyExpansionTarget
-): void {
-  bookmarkLazyExpansionTargets.set(placeholder, target)
-  const observer = getBookmarkLazyExpansionObserver()
-  if (!observer) {
-    runMicroIdle(() => expandBookmarkSectionPlaceholder(placeholder))
-    return
-  }
-
-  observer.observe(placeholder)
-}
-
-function disconnectBookmarkLazyExpansionObserver(): void {
-  bookmarkLazyExpansionObserver?.disconnect()
-  bookmarkLazyExpansionObserver = null
-  bookmarkLazyExpansionTargets = new WeakMap<HTMLElement, BookmarkLazyExpansionTarget>()
-}
-
-function expandBookmarkSectionPlaceholder(placeholder: HTMLElement): void {
-  const target = bookmarkLazyExpansionTargets.get(placeholder)
-  if (!target) {
-    return
-  }
-
-  bookmarkLazyExpansionTargets.delete(placeholder)
-  bookmarkLazyExpansionObserver?.unobserve(placeholder)
-  if (target.renderVersion !== bookmarkTileRenderVersion || !placeholder.isConnected) {
-    return
-  }
-
-  const list = placeholder.closest<HTMLElement>('.bookmark-grid')
-  if (!list) {
-    placeholder.remove()
-    return
-  }
-
-  scheduleBookmarkTileChunkRender(
-    list,
-    target.section,
-    target.nextIndex,
-    target.renderedBookmarkIndex,
-    target.renderVersion,
-    placeholder
-  )
 }
 
 function recordContentStateRender(contentState: NewTabContentState): void {
@@ -6989,20 +6897,17 @@ function createClockModule(): NewTabPageModule | null {
   }
 }
 
-function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
+function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmarksModule {
   const gridSettings = {
     ...state.iconSettings,
     columns: getResponsiveIconColumns(state.iconSettings)
   }
 
-  const modules: HTMLElement[] = []
   let speedDial = false
   for (const moduleKey of getVisibleNewTabModules(state.moduleSettings)) {
     const module = createConfigurableNewTabModule(moduleKey)
     if (module === 'speedDial') {
       speedDial = true
-    } else if (module) {
-      modules.push(module)
     }
   }
 
@@ -7025,23 +6930,19 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
 
     if (section.bookmarks.length) {
       const startIndex = renderedBookmarkIndex
+      const initialVisibleCount = Math.min(
+        section.bookmarks.length,
+        Math.max(0, BOOKMARK_TILE_INITIAL_RENDER_LIMIT - startIndex)
+      )
       sectionModel.grid = {
         ariaLabel: `${section.title || '文件夹'}书签`,
         busy: state.reorderingBookmarks,
+        chunkSize: BOOKMARK_TILE_RENDER_CHUNK_SIZE,
         folderId: section.id,
-        onMount: (list) => {
-          if (!list || list.dataset.bookmarkGridHydrated === 'true') {
-            return
-          }
-          list.dataset.bookmarkGridHydrated = 'true'
-          appendBookmarkTilesInChunks(
-            list,
-            section,
-            startIndex,
-            bookmarkTileRenderVersion,
-            Math.max(0, BOOKMARK_TILE_INITIAL_RENDER_LIMIT - startIndex)
-          )
-        }
+        initialVisibleCount,
+        items: section.bookmarks.map((bookmark, index) =>
+          createBookmarkTileViewModel(bookmark, section.id, startIndex + index)
+        )
       }
       renderedBookmarkIndex += section.bookmarks.length
     }
@@ -7066,7 +6967,6 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
       titleLines: state.iconSettings.titleLines,
       verticalCenter: state.iconSettings.verticalCenter
     },
-    modules,
     portal,
     reorderStatus: reorderStatusMessage
       ? {
@@ -7078,10 +6978,17 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
     sourceNavigation,
     speedDial
   }
-  return createBookmarkContentIslandElement(viewModel)
+
+  dispatchNewtabBookmarkContentView(viewModel)
+  return {
+    id: 'bookmarks',
+    iconVerticalCenter: state.iconSettings.verticalCenter,
+    kind: 'bookmarks',
+    placement: 'primary'
+  }
 }
 
-function createConfigurableNewTabModule(key: NewTabModuleSettingKey): HTMLElement | 'speedDial' | null {
+function createConfigurableNewTabModule(key: NewTabModuleSettingKey): 'speedDial' | null {
   if (key === 'speedDial') {
     return createSpeedDialPanel()
   }
@@ -7232,129 +7139,6 @@ function createSpeedDialCardViewModel(
     title: item.title,
     url: item.url
   }
-}
-
-function appendBookmarkTilesInChunks(
-  list: HTMLElement,
-  section: NewTabFolderSection,
-  renderedBookmarkIndex: number,
-  renderVersion: number,
-  pageBudget: number = BOOKMARK_TILE_INITIAL_RENDER_LIMIT
-): number {
-  const perSectionLimit = Math.min(section.bookmarks.length, BOOKMARK_TILE_INITIAL_RENDER_LIMIT)
-  const initialCount = Math.min(perSectionLimit, Math.max(0, pageBudget))
-  appendBookmarkTiles(
-    list,
-    section.bookmarks.slice(0, initialCount),
-    section.id,
-    renderedBookmarkIndex
-  )
-
-  if (initialCount < section.bookmarks.length) {
-    const remainingCount = section.bookmarks.length - initialCount
-    const placeholder = createBookmarkSectionPlaceholder(section, remainingCount)
-    list.dataset.incrementalRender = 'true'
-    list.setAttribute('aria-busy', 'true')
-    list.append(placeholder)
-    observeBookmarkSectionPlaceholder(placeholder, {
-      section,
-      nextIndex: initialCount,
-      renderedBookmarkIndex: renderedBookmarkIndex + initialCount,
-      renderVersion
-    })
-  }
-
-  return renderedBookmarkIndex + section.bookmarks.length
-}
-
-function createBookmarkSectionPlaceholder(
-  section: NewTabFolderSection,
-  remainingCount: number
-): HTMLElement {
-  const placeholder = document.createElement('div')
-  placeholder.className = 'bookmark-grid-placeholder'
-  syncBookmarkSectionPlaceholder(placeholder, section, remainingCount)
-  return placeholder
-}
-
-function syncBookmarkSectionPlaceholder(
-  placeholder: HTMLElement,
-  section: NewTabFolderSection,
-  remainingCount: number
-): void {
-  const count = Math.max(0, remainingCount)
-  const folderTitle = section.title || '文件夹'
-  placeholder.dataset.pendingBookmarks = String(count)
-  placeholder.setAttribute('role', 'status')
-  placeholder.setAttribute('aria-live', 'polite')
-  placeholder.title = `${folderTitle}还有 ${count} 个书签将在滚动到此处时载入`
-  placeholder.textContent = `继续载入 ${count} 个书签`
-}
-
-function scheduleBookmarkTileChunkRender(
-  list: HTMLElement,
-  section: NewTabFolderSection,
-  nextIndex: number,
-  renderedBookmarkIndex: number,
-  renderVersion: number,
-  placeholder?: HTMLElement
-): void {
-  window.requestAnimationFrame(() => {
-    if (renderVersion !== bookmarkTileRenderVersion || !list.isConnected) {
-      return
-    }
-
-    const endIndex = Math.min(section.bookmarks.length, nextIndex + BOOKMARK_TILE_RENDER_CHUNK_SIZE)
-    appendBookmarkTiles(
-      list,
-      section.bookmarks.slice(nextIndex, endIndex),
-      section.id,
-      renderedBookmarkIndex,
-      placeholder?.isConnected ? placeholder : null
-    )
-
-    if (endIndex < section.bookmarks.length) {
-      if (placeholder?.isConnected) {
-        syncBookmarkSectionPlaceholder(placeholder, section, section.bookmarks.length - endIndex)
-      }
-      scheduleBookmarkTileChunkRender(
-        list,
-        section,
-        endIndex,
-        renderedBookmarkIndex + (endIndex - nextIndex),
-        renderVersion,
-        placeholder
-      )
-      return
-    }
-
-    placeholder?.remove()
-    delete list.dataset.incrementalRender
-    list.setAttribute('aria-busy', state.reorderingBookmarks ? 'true' : 'false')
-  })
-}
-
-function appendBookmarkTiles(
-  list: HTMLElement,
-  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
-  folderId: string,
-  renderedBookmarkIndex: number,
-  before?: ChildNode | null
-): void {
-  const tiles = appendBookmarkTileIslandElements(
-    list,
-    bookmarks.map((bookmark, index) =>
-      createBookmarkTileViewModel(bookmark, folderId, renderedBookmarkIndex + index)
-    ),
-    { before }
-  )
-
-  tiles.forEach((tile, index) => {
-    const bookmark = bookmarks[index]
-    if (bookmark) {
-      bindBookmarkTileRuntime(tile, bookmark, String(bookmark.id))
-    }
-  })
 }
 
 function createSourceNavigation(sections: NewTabFolderSection[]): SourceNavigationState | null {
@@ -7519,17 +7303,6 @@ function getResponsiveIconColumns(settings: IconSettings): number {
   )
 }
 
-function createBookmarkTile(
-  bookmark: chrome.bookmarks.BookmarkTreeNode,
-  folderId: string,
-  renderIndex = 0
-): HTMLAnchorElement {
-  const bookmarkId = String(bookmark.id)
-  const tile = createBookmarkTileIslandElement(createBookmarkTileViewModel(bookmark, folderId, renderIndex))
-  bindBookmarkTileRuntime(tile, bookmark, bookmarkId)
-  return tile
-}
-
 function createBookmarkTileViewModel(
   bookmark: chrome.bookmarks.BookmarkTreeNode,
   folderId: string,
@@ -7539,6 +7312,7 @@ function createBookmarkTileViewModel(
   const title = String(bookmark.title || '').trim() || url
   const bookmarkId = String(bookmark.id)
   const customIcon = state.customIcons[bookmarkId]
+  const accentColor = !customIcon ? getCachedFaviconAccentCssRgb(bookmarkId, url) : ''
   return {
     customIcon: Boolean(customIcon),
     dragging: bookmarkId === state.draggingBookmarkId && Boolean(state.dragOriginalOrderIds.length),
@@ -7550,33 +7324,14 @@ function createBookmarkTileViewModel(
     },
     folderId,
     id: bookmarkId,
+    onNavigate: (event) => {
+      handleBookmarkNavigation(event, bookmark, url)
+    },
+    style: accentColor
+      ? { '--bookmark-card-rgb': accentColor } as CSSProperties
+      : undefined,
     title,
     url
-  }
-}
-
-function bindBookmarkTileRuntime(
-  tile: HTMLAnchorElement,
-  bookmark: chrome.bookmarks.BookmarkTreeNode,
-  bookmarkId: string
-): void {
-  syncBookmarkNavigation(tile, bookmark)
-  const url = String(bookmark.url || '')
-  if (!state.customIcons[bookmarkId]) {
-    applyCachedFaviconAccent(tile, bookmarkId, url)
-  }
-}
-
-function applyCachedFaviconAccent(item: HTMLElement, bookmarkId: string, url: string): void {
-  const entry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
-  if (entry) {
-    applyFaviconAccentToTile(item, entry.color)
-    return
-  }
-
-  const fallback = getHostnameAccentColor(url)
-  if (fallback) {
-    applyFaviconAccentToTile(item, fallback)
   }
 }
 
@@ -7624,10 +7379,6 @@ function getHostnameAccentColor(url: string): FaviconAccentColor | null {
     hash = ((hash << 5) + hash + host.charCodeAt(index)) >>> 0
   }
   return FAVICON_ACCENT_PALETTE[hash % FAVICON_ACCENT_PALETTE.length]
-}
-
-function applyFaviconAccentToTile(item: HTMLElement, color: FaviconAccentColor): void {
-  item.style.setProperty('--bookmark-card-rgb', formatFaviconAccentCssRgb(color))
 }
 
 async function saveFaviconAccentCache(): Promise<void> {
@@ -7681,7 +7432,6 @@ function cleanupNewTabController(): void {
   removeBookmarkDragGhost()
   removeSpeedDialDragGhost()
   removeFolderDragGhost()
-  disconnectBookmarkLazyExpansionObserver()
   setActiveBackgroundObjectUrl('')
   clearVideoBackground()
   abortNewTabNaturalSearchRequest()
@@ -7803,21 +7553,6 @@ async function createFeaturedBackgroundPreviewObjectUrl(imageUrl: string): Promi
 
 function revokeFeaturedBackgroundGalleryPreviewObjectUrls(): void {
   featuredBackgroundGalleryPreviewObjectUrlCache.clear()
-}
-
-function syncBookmarkNavigation(
-  link: HTMLAnchorElement,
-  bookmark: chrome.bookmarks.BookmarkTreeNode
-): void {
-  const bookmarkId = String(bookmark.id || link.dataset.bookmarkId || '').trim()
-  if (!bookmarkId || !String(bookmark.url || '').trim()) {
-    link.onclick = null
-    return
-  }
-
-  link.onclick = (event) => {
-    handleBookmarkNavigation(event, bookmark, link.getAttribute('href') || link.href)
-  }
 }
 
 function handleBookmarkNavigation(

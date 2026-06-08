@@ -12,6 +12,7 @@ import { useNewtabContentView } from '../newtab-content-store'
 import { useNewtabClockView } from '../newtab-clock-store'
 import { useNewtabSearchWidgetView } from '../newtab-search-widget-store'
 import { ClockWidgetContent } from './RuntimeIslands'
+import { NewtabBookmarkContent } from './NewtabBookmarkContent'
 import { NewtabSearchWidget } from './NewtabSearchWidget'
 
 export function NewtabContentHost() {
@@ -105,6 +106,14 @@ function PrimarySlot({ module }: { module: NewTabPageModule | undefined }) {
     return (
       <div className="newtab-primary-slot">
         <MissingFolderState module={module} />
+      </div>
+    )
+  }
+
+  if (module.kind === 'bookmarks') {
+    return (
+      <div className="newtab-primary-slot">
+        <NewtabBookmarkContent />
       </div>
     )
   }

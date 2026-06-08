@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { SpeedDialPanelState } from './components/RuntimeIslands'
+import type { SpeedDialPanelState } from './components/NewtabSpeedDialPanel'
 
 let speedDialView: SpeedDialPanelState | null = null
 const listeners = new Set<() => void>()

@@ -56,6 +56,13 @@ export interface NewTabSearchModule {
   placement: 'utility'
 }
 
+export interface NewTabBookmarksModule {
+  id: 'bookmarks'
+  iconVerticalCenter: boolean
+  kind: 'bookmarks'
+  placement: 'primary'
+}
+
 export interface NewTabLoadingModule {
   kind: 'loading'
   id: 'state'
@@ -70,6 +77,7 @@ export interface NewTabMissingFolderModule extends MissingFolderViewOptions {
 }
 
 export type NewTabPageModule =
+  | NewTabBookmarksModule
   | NewTabClockModule
   | NewTabClockSpacerModule
   | NewTabElementModule
@@ -1055,14 +1063,14 @@ export function normalizeNewTabSearchText(value: string): string {
 
 export function createNewTabPage({ modules }: NewTabPageOptions): NewTabPageView {
   const bookmarkModule = modules.find(
-    (module): module is NewTabElementModule => module.kind === 'element' && module.id === 'bookmarks'
+    (module): module is NewTabBookmarksModule => module.kind === 'bookmarks'
   )
 
   return {
     contentState: bookmarkModule ? 'bookmarks' : 'empty',
     hasClock: modules.some((module) => module.id === 'clock'),
     hasSearch: modules.some((module) => module.id === 'search'),
-    iconVerticalCenter: bookmarkModule?.element.dataset.iconVerticalCenter || 'false',
+    iconVerticalCenter: bookmarkModule ? String(bookmarkModule.iconVerticalCenter) : 'false',
     modules,
     type: 'page'
   }
