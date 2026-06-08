@@ -11122,15 +11122,13 @@ function createFeaturedBackgroundPickerCardViewModel({
 
 function registerFeaturedBackgroundRenderedCards(grid: HTMLElement): void {
   for (const card of grid.querySelectorAll<HTMLElement>('.featured-wallpaper-card')) {
-    const preview = card.querySelector<HTMLElement>('.featured-wallpaper-preview')
     const image = card.querySelector<HTMLImageElement>('.featured-wallpaper-preview-image')
     if (!image) {
       continue
     }
     featuredBackgroundCardPreviewRegistry.register({
       card,
-      image,
-      accentColor: preview?.style.getPropertyValue('--featured-wallpaper-preview-placeholder') || ''
+      image
     })
     const initialPreviewUrl = card.dataset.featuredBackgroundResolvedPreviewUrl || image.currentSrc || image.src
     if (initialPreviewUrl) {

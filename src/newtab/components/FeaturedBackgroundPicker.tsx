@@ -121,7 +121,7 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
     previewState === 'ready' ? 'has-preview-image' : '',
     previewState === 'loading' ? 'is-loading' : ''
   ].filter(Boolean).join(' ')
-  const previewStyle = {
+  const cardStyle = {
     '--featured-wallpaper-preview-placeholder': card.previewAccentColor
   } as CSSProperties
 
@@ -136,6 +136,7 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
       data-featured-background-preview-url={card.imageUrl}
       data-featured-background-preview-title={card.title}
       data-featured-background-resolved-preview-url={card.initialPreviewUrl}
+      style={cardStyle}
       ref={cardRef}
       onBlur={(event) => {
         const nextTarget = event.relatedTarget
@@ -166,7 +167,7 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
         card.onClearHoverPreview(event.currentTarget)
       }}
     >
-      <span className="featured-wallpaper-preview" style={previewStyle}>
+      <span className="featured-wallpaper-preview">
         <img
           className="featured-wallpaper-preview-image"
           src={card.initialPreviewUrl}
