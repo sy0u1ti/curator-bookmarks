@@ -1928,7 +1928,6 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: S
 
 function primeSettingsDrawerOpenTransition(): void {
   if (settingsDrawer) {
-    settingsDrawer.removeAttribute('inert')
     settingsDrawer.getBoundingClientRect()
   }
   if (settingsBackdrop) {
@@ -1947,7 +1946,6 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     syncSettingsSaveStatus()
     scheduleAdaptiveNewTabLayoutUpdate()
     dispatchNewtabSettingsDrawerOpen(true, 'open')
-    settingsDrawer?.removeAttribute('inert')
     if (focusFirstControl) {
       window.requestAnimationFrame(() => {
         focusFirstSettingsDrawerControl()
@@ -2013,7 +2011,6 @@ function closeSettingsDrawer(): void {
   }
 
   dispatchNewtabSettingsDrawerOpen(false, 'closing')
-  settingsDrawer?.setAttribute('inert', '')
   window.setTimeout(() => {
     if (getNewtabSettingsDrawerView().phase === 'closing') {
       dispatchNewtabSettingsDrawerOpen(false, 'closed')
