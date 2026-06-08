@@ -2,7 +2,9 @@ import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import type { CSSProperties } from 'react'
 import type { TagCloudItem } from '../../shared/tag-cloud.js'
-import { Button, ThemeProvider } from '../../ui'
+import { Button } from '../../ui/primitives/Button.js'
+import { ThemeProvider } from '../../ui/theme/ThemeProvider.js'
+import { dispatchTagManagementFill } from './tag-management-events.js'
 
 const roots = new WeakMap<Element, Root>()
 
@@ -37,16 +39,15 @@ function TagManagementCloud({ items }: { items: TagCloudItem[] }) {
   }
 
   return (
-    <div
+    <ul
       className="tag-management-cloud"
-      role="list"
       aria-label="标签词云，字号越大表示使用越频繁"
       data-tag-cloud-root=""
     >
       {items.map((item) => (
         <TagManagementCloudWord item={item} key={`${item.tag}:${item.rank}`} />
       ))}
-    </div>
+    </ul>
   )
 }
 
@@ -59,33 +60,35 @@ function TagManagementCloudWord({ item }: { item: TagCloudItem }) {
   ].filter(Boolean).join(' ')
 
   return (
-    <Button
-      className={className}
-      type="button"
-      role="listitem"
-      data-tag-cloud-word=""
-      data-tag-fill={item.tag}
-      data-tag-x={item.leftPercent}
-      data-tag-y={item.topPercent}
-      data-tag-tier={item.tier}
-      data-tag-radius={item.radiusPx}
-      data-tag-collision-width={item.collisionWidthPx}
-      data-tag-collision-height={item.collisionHeightPx}
-      data-tag-collision-strength={item.collisionStrength}
-      data-tag-mass={item.mass}
-      data-tag-phase={item.phase}
-      data-tag-flow={item.flowStrength}
-      style={{
-        '--tag-x': `${item.leftPercent}%`,
-        '--tag-y': `${item.topPercent}%`,
-        '--tag-size': `${item.fontSizePx}px`,
-        '--tag-alpha': item.opacity
-      } as CSSProperties}
-      title={item.tag}
-      aria-label={`选择标签 ${item.tag}`}
-      unstyled
-    >
-      {item.tag}
-    </Button>
+    <li>
+      <Button
+        className={className}
+        type="button"
+        data-tag-cloud-word=""
+        data-tag-fill={item.tag}
+        data-tag-x={item.leftPercent}
+        data-tag-y={item.topPercent}
+        data-tag-tier={item.tier}
+        data-tag-radius={item.radiusPx}
+        data-tag-collision-width={item.collisionWidthPx}
+        data-tag-collision-height={item.collisionHeightPx}
+        data-tag-collision-strength={item.collisionStrength}
+        data-tag-mass={item.mass}
+        data-tag-phase={item.phase}
+        data-tag-flow={item.flowStrength}
+        onClick={() => dispatchTagManagementFill(item.tag)}
+        style={{
+          '--tag-x': `${item.leftPercent}%`,
+          '--tag-y': `${item.topPercent}%`,
+          '--tag-size': `${item.fontSizePx}px`,
+          '--tag-alpha': item.opacity
+        } as CSSProperties}
+        title={item.tag}
+        aria-label={`选择标签 ${item.tag}`}
+        unstyled
+      >
+        {item.tag}
+      </Button>
+    </li>
   )
 }

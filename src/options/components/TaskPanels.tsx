@@ -228,36 +228,7 @@ export function TagManagementPanel() {
       <h1 id="tags-title">标签管理中心</h1>
 
       <div className="options-group tag-management-usage">
-        <div className="tag-management-head">
-          <div className="tag-management-title">
-            <strong>标签词云</strong>
-            <p className="detect-results-subtitle">字号和明暗代表使用频率，点击标签可填入整理表单。</p>
-          </div>
-          <div className="tag-management-metrics" aria-label="标签统计概览">
-            <span id="tag-management-total">0 个标签</span>
-            <span id="tag-management-tagged-bookmarks">0 条书签</span>
-            <span id="tag-management-manual">0 个手动标签</span>
-          </div>
-        </div>
-
-        <div className="tag-management-toolbar">
-          <div className="tag-management-form">
-            <label htmlFor="tag-management-rename-source">
-              <span>原标签</span>
-              <Input id="tag-management-rename-source" type="text" autoComplete="off" placeholder="选择或输入标签" />
-            </label>
-            <label htmlFor="tag-management-rename-target">
-              <span>新标签</span>
-              <Input id="tag-management-rename-target" type="text" autoComplete="off" placeholder="用于重命名" />
-            </label>
-            <div className="tag-management-form-actions">
-              <Button id="tag-management-rename" className="options-button small" size="sm" type="button" aria-label="重命名书签标签">重命名</Button>
-              <Button id="tag-management-delete" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="删除书签标签">删除标签</Button>
-            </div>
-          </div>
-          <Button id="tag-management-refresh" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="刷新标签统计">刷新统计</Button>
-          <p id="tag-management-status" className="detect-status-copy" />
-        </div>
+        <div id="tag-management-controls" />
         <div id="tag-management-results" className="tag-management-results">
           <div className="detect-empty">正在读取标签统计...</div>
         </div>

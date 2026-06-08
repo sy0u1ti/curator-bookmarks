@@ -1498,7 +1498,9 @@ a {
   position: relative;
   height: clamp(500px, calc(100vh - 232px), 980px);
   min-height: 0;
+  margin: 0;
   overflow: hidden;
+  padding: 0;
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   background:
@@ -1508,6 +1510,10 @@ a {
   contain: layout paint;
   touch-action: none;
   user-select: none;
+}
+
+.tag-management-cloud li {
+  list-style: none;
 }
 
 .tag-management-cloud-word {

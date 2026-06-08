@@ -11,6 +11,7 @@ import { buildTagCloudItems } from '../../shared/tag-cloud.js'
 import { dom } from '../shared-options/dom.js'
 import { startTagCloudPhysics, stopTagCloudPhysics } from './tag-cloud-runtime.js'
 import { renderTagManagementCloudIsland } from '../components/TagManagementCloudIsland.js'
+import { renderTagManagementControlsIsland } from '../components/TagManagementControlsIsland.js'
 
 export interface TagManagementSummary {
   totalTags: number
@@ -83,19 +84,14 @@ export function renderTagManagementSection({
   stopActiveTagCloud()
 
   const summary = buildTagUsageSummary(index, bookmarks)
-  dom.tagManagementTotal.textContent = `${summary.totalTags} 个标签`
-  dom.tagManagementTaggedBookmarks.textContent = `${summary.taggedBookmarks} 条书签`
-  dom.tagManagementManual.textContent = `${summary.manualTags} 个手动标签`
-  dom.tagManagementStatus.textContent = status || (loading ? '正在读取标签统计...' : '')
-
-  if (dom.tagManagementRefresh) {
-    dom.tagManagementRefresh.disabled = loading
-  }
-  if (dom.tagManagementRename) {
-    dom.tagManagementRename.disabled = loading || summary.totalTags === 0
-  }
-  if (dom.tagManagementDelete) {
-    dom.tagManagementDelete.disabled = loading || summary.totalTags === 0
+  if (dom.tagManagementControls) {
+    renderTagManagementControlsIsland(dom.tagManagementControls, {
+      loading,
+      manualTags: summary.manualTags,
+      status: status || (loading ? '正在读取标签统计...' : ''),
+      taggedBookmarks: summary.taggedBookmarks,
+      totalTags: summary.totalTags
+    })
   }
 
   const cloud = renderTagCloud(summary.stats)

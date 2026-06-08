@@ -277,6 +277,11 @@ import {
 import { renderAvailabilityResultsIsland } from './components/AvailabilityResultsIsland.js'
 import { renderLoadingLabelIsland } from './components/LoadingLabelIsland.js'
 import { renderDoubleConfirmLabelIsland } from './components/DoubleConfirmLabelIsland.js'
+import {
+  dispatchTagManagementForm,
+  TAG_MANAGEMENT_ACTION_EVENT,
+  type TagManagementActionDetail
+} from './components/tag-management-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1072,16 +1077,7 @@ function bindEvents() {
   dom.backupRestoreTags?.addEventListener('click', () => handleFullBackupRestore('tagsOnly'))
   dom.backupRestoreNewTab?.addEventListener('click', () => handleFullBackupRestore('newTabOnly'))
   dom.backupRestoreSafeFull?.addEventListener('click', () => handleFullBackupRestore('safeFull'))
-  dom.tagManagementRefresh?.addEventListener('click', () => {
-    void refreshTagManagementData()
-  })
-  dom.tagManagementRename?.addEventListener('click', () => {
-    void handleTagManagementRename()
-  })
-  dom.tagManagementDelete?.addEventListener('click', () => {
-    void handleTagManagementDelete()
-  })
-  dom.tagManagementResults?.addEventListener('click', handleTagManagementResultsClick)
+  window.addEventListener(TAG_MANAGEMENT_ACTION_EVENT, handleTagManagementAction)
   dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
@@ -4598,9 +4594,24 @@ async function refreshTagManagementData() {
   }
 }
 
-async function handleTagManagementRename() {
-  const sourceTag = String(dom.tagManagementRenameSource?.value || '').trim()
-  const targetTag = String(dom.tagManagementRenameTarget?.value || '').trim()
+function handleTagManagementAction(event: Event): void {
+  const detail = (event as CustomEvent<TagManagementActionDetail>).detail
+  if (detail?.action === 'refresh') {
+    void refreshTagManagementData()
+    return
+  }
+  if (detail?.action === 'rename') {
+    void handleTagManagementRename(detail.sourceTag, detail.targetTag)
+    return
+  }
+  if (detail?.action === 'delete') {
+    void handleTagManagementDelete(detail.sourceTag)
+  }
+}
+
+async function handleTagManagementRename(sourceTagInput = '', targetTagInput = '') {
+  const sourceTag = String(sourceTagInput || '').trim()
+  const targetTag = String(targetTagInput || '').trim()
   if (!sourceTag || !targetTag) {
     aiNamingState.tagDataStatus = '请输入要重命名的标签和新标签名。'
     renderTagManagementSectionFromState()
@@ -4639,12 +4650,7 @@ async function handleTagManagementRename() {
     const savedIndex = await saveBookmarkTagIndex(nextIndex)
     aiNamingState.tagIndex = savedIndex
     aiNamingState.tagDataStatus = `已将 ${affectedCount} 条书签中的「${sourceTag}」重命名为「${targetTag}」。`
-    if (dom.tagManagementRenameSource) {
-      dom.tagManagementRenameSource.value = targetTag
-    }
-    if (dom.tagManagementRenameTarget) {
-      dom.tagManagementRenameTarget.value = ''
-    }
+    dispatchTagManagementForm({ sourceTag: targetTag, targetTag: '' })
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签重命名失败。'
   } finally {
@@ -4652,8 +4658,8 @@ async function handleTagManagementRename() {
   }
 }
 
-async function handleTagManagementDelete() {
-  const sourceTag = String(dom.tagManagementRenameSource?.value || '').trim()
+async function handleTagManagementDelete(sourceTagInput = '') {
+  const sourceTag = String(sourceTagInput || '').trim()
   const currentIndex = normalizeBookmarkTagIndex(aiNamingState.tagIndex)
   const affectedCount = countRecordsWithEffectiveTag(currentIndex, sourceTag)
   if (!affectedCount) {
@@ -4679,28 +4685,12 @@ async function handleTagManagementDelete() {
     const savedIndex = await saveBookmarkTagIndex(nextIndex)
     aiNamingState.tagIndex = savedIndex
     aiNamingState.tagDataStatus = `已从 ${affectedCount} 条书签中删除标签「${sourceTag}」。`
-    if (dom.tagManagementRenameSource) {
-      dom.tagManagementRenameSource.value = ''
-    }
+    dispatchTagManagementForm({ sourceTag: '' })
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签删除失败。'
   } finally {
     renderTagManagementSectionFromState()
   }
-}
-
-function handleTagManagementResultsClick(event) {
-  if (!(event.target instanceof Element)) {
-    return
-  }
-
-  const button = event.target.closest('[data-tag-fill]') as HTMLElement | null
-  if (!button || !dom.tagManagementRenameSource) {
-    return
-  }
-
-  dom.tagManagementRenameSource.value = String(button.getAttribute('data-tag-fill') || '')
-  dom.tagManagementRenameTarget?.select?.()
 }
 
 function countRecordsWithEffectiveTag(index: BookmarkTagIndex, sourceTag: string): number {
