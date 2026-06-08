@@ -1893,6 +1893,10 @@ a {
   gap: 6px;
 }
 
+.dashboard-search-chips:empty {
+  display: none;
+}
+
 .dashboard-search-chip {
   min-height: 22px;
   display: inline-flex;

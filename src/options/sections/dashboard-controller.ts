@@ -2647,7 +2647,6 @@ function renderDashboardSearchTools(): void {
   const chips = parsed.chips
   renderDashboardNaturalSearchToggle()
 
-  dom.dashboardSearchChips?.classList.toggle('hidden', chips.length === 0)
   if (dom.dashboardSearchChips) {
     renderDashboardSearchChipsIsland(
       dom.dashboardSearchChips,

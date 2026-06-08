@@ -123,7 +123,7 @@ export function DashboardPanel() {
               </span>
             </span>
           </label>
-          <div id="dashboard-search-chips" className="dashboard-search-chips hidden" aria-label="当前搜索条件" />
+          <div id="dashboard-search-chips" className="dashboard-search-chips" aria-label="当前搜索条件" />
           <nav id="dashboard-folder-breadcrumbs" className="dashboard-folder-breadcrumbs" aria-label="当前 Dashboard 文件夹路径" />
         </div>
         <div className="dashboard-title-actions">
