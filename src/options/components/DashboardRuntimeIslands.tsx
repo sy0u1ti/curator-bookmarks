@@ -105,6 +105,18 @@ export interface DashboardSelectionBarState {
   selectionActionsDisabled: boolean
 }
 
+export interface DashboardTagEditorActionsState {
+  cancelDanger: boolean
+  cancelDisabled: boolean
+  cancelLabel: string
+  clearAiBusy: boolean
+  clearAiDisabled: boolean
+  regenerateAiBusy: boolean
+  regenerateAiDisabled: boolean
+  saveBusy: boolean
+  saveDisabled: boolean
+}
+
 export interface DashboardCardFaviconViewModel {
   pageUrl: string
   source: 'cache' | 'chrome'
@@ -220,6 +232,25 @@ export function renderDashboardSelectionBarIsland(
   state: DashboardSelectionBarState
 ): void {
   renderIsland(container, <DashboardSelectionBar state={state} />)
+}
+
+export function renderDashboardTagEditorTitleIsland(container: Element, title: string): void {
+  renderIsland(container, <>{title}</>)
+}
+
+export function renderDashboardTagEditorMetaIsland(container: Element, meta: string): void {
+  renderIsland(container, <>{meta}</>)
+}
+
+export function renderDashboardTagEditorStatusIsland(container: Element, status: string): void {
+  renderIsland(container, <>{status}</>)
+}
+
+export function renderDashboardTagEditorActionsIsland(
+  container: Element,
+  state: DashboardTagEditorActionsState
+): void {
+  renderIsland(container, <DashboardTagEditorActions state={state} />)
 }
 
 export function createDashboardCardIslandElement(state: DashboardCardViewModel): HTMLElement {
@@ -624,6 +655,87 @@ function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState })
         </Button>
       </div>
     </div>
+  )
+}
+
+function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActionsState }) {
+  return (
+    <>
+      <Button
+        id="dashboard-tag-editor-clear-ai"
+        className="options-button secondary small"
+        size="sm"
+        type="button"
+        data-dashboard-action="clear-ai-tags"
+        variant="secondary"
+        aria-label="清除当前 Dashboard 书签的 AI 标签"
+        disabled={state.clearAiDisabled}
+        focusableWhenDisabled={state.clearAiBusy}
+      >
+        <DashboardLoadingLabel
+          state={{
+            busy: state.clearAiBusy,
+            label: state.clearAiBusy ? '清除中...' : '清除 AI 标签',
+            loaderClass: 'dashboard-button-dot-loader',
+            variant: 'bar',
+            wrapperClass: 'button-loading-label'
+          }}
+        />
+      </Button>
+      <Button
+        id="dashboard-tag-editor-regenerate-ai"
+        className="options-button secondary small"
+        size="sm"
+        type="button"
+        data-dashboard-action="regenerate-ai-tags"
+        variant="secondary"
+        aria-label="重新生成当前 Dashboard 书签的 AI 标签"
+        disabled={state.regenerateAiDisabled}
+        focusableWhenDisabled={state.regenerateAiBusy}
+      >
+        <DashboardLoadingLabel
+          state={{
+            busy: state.regenerateAiBusy,
+            label: state.regenerateAiBusy ? '生成中...' : '重新生成 AI 标签',
+            loaderClass: 'dashboard-button-dot-loader',
+            variant: 'spiral',
+            wrapperClass: 'button-loading-label'
+          }}
+        />
+      </Button>
+      <Button
+        className={`options-button ${state.cancelDanger ? 'danger' : 'secondary'} small`}
+        size="sm"
+        type="button"
+        data-dashboard-action="close-tag-editor"
+        variant={state.cancelDanger ? 'danger' : 'secondary'}
+        aria-label="取消编辑当前 Dashboard 书签标签"
+        disabled={state.cancelDisabled}
+        focusableWhenDisabled={state.cancelDanger}
+      >
+        {state.cancelLabel}
+      </Button>
+      <Button
+        id="dashboard-tag-editor-save"
+        className="options-button small"
+        size="sm"
+        type="button"
+        data-dashboard-action="save-tags"
+        aria-label="保存当前 Dashboard 书签标签"
+        disabled={state.saveDisabled}
+        focusableWhenDisabled={state.saveBusy}
+      >
+        <DashboardLoadingLabel
+          state={{
+            busy: state.saveBusy,
+            label: state.saveBusy ? '保存中...' : '保存标签',
+            loaderClass: 'dashboard-button-dot-loader',
+            variant: 'bar',
+            wrapperClass: 'button-loading-label'
+          }}
+        />
+      </Button>
+    </>
   )
 }
 

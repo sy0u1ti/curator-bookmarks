@@ -81,6 +81,10 @@ import {
   renderDashboardSearchChipsIsland,
   renderDashboardSearchControlsIsland,
   renderDashboardSelectionBarIsland,
+  renderDashboardTagEditorActionsIsland,
+  renderDashboardTagEditorMetaIsland,
+  renderDashboardTagEditorStatusIsland,
+  renderDashboardTagEditorTitleIsland,
   renderDashboardTitleIsland,
   renderDashboardVirtualWindowShellIsland,
   replaceDashboardVirtualWindowIslandNodes,
@@ -90,7 +94,8 @@ import {
   type DashboardFolderDropTargetViewModel,
   type DashboardFolderSidebarItemViewModel,
   type DashboardLoadingLabelState,
-  type DashboardSearchChipViewModel
+  type DashboardSearchChipViewModel,
+  type DashboardTagEditorActionsState
 } from '../components/DashboardRuntimeIslands.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
 import type { NaturalSearchPlan, NaturalSearchResultSet } from '../../popup/natural-search.js'
@@ -4991,7 +4996,6 @@ function renderDashboardTagEditor(existingModel?: DashboardModel): void {
 
   const model = existingModel || getDashboardRenderData().model
   const item = model.items.find((entry) => String(entry.id) === bookmarkId)
-  const record = getDashboardTagRecord(bookmarkId)
   if (!item) {
     closeDashboardTagEditor()
     return
@@ -4999,51 +5003,43 @@ function renderDashboardTagEditor(existingModel?: DashboardModel): void {
 
   dom.dashboardTagEditor.classList.remove('hidden')
   dom.dashboardTagEditor.setAttribute('aria-hidden', 'false')
-  dom.dashboardTagEditorTitle.textContent = item.title || '未命名书签'
-  dom.dashboardTagEditorMeta.textContent = `${displayUrl(item.url)} · ${item.path || '未归档路径'}`
   dom.dashboardTagEditorInput.value = dashboardState.tagEditorDraft
   dom.dashboardTagEditorInput.disabled = dashboardState.tagEditorSaving
-  const busyAction = String(dashboardState.tagEditorBusyAction || '')
   const statusText = dashboardState.tagEditorStatus || '用逗号、顿号或换行分隔标签。'
-  dom.dashboardTagEditorStatus.textContent = statusText
-  const hasAiTags = Boolean(record?.tags?.length)
-  dom.dashboardTagEditorSave.disabled = dashboardState.tagEditorSaving
-  setDashboardLoadingLabel(dom.dashboardTagEditorSave, busyAction === 'save' ? '保存中...' : '保存标签', {
-    busy: busyAction === 'save',
-      wrapperClass: 'button-loading-label',
-      loaderClass: 'dashboard-button-dot-loader'
-  })
-  dom.dashboardTagEditorClearAi.disabled = dashboardState.tagEditorSaving || !hasAiTags
-  setDashboardLoadingLabel(dom.dashboardTagEditorClearAi, busyAction === 'clear-ai' ? '清除中...' : '清除 AI 标签', {
-    busy: busyAction === 'clear-ai',
-      wrapperClass: 'button-loading-label',
-      loaderClass: 'dashboard-button-dot-loader'
-  })
-  dom.dashboardTagEditorRegenerateAi.disabled =
-    dashboardState.tagEditorSaving ||
-    availabilityState.catalogLoading ||
-    aiNamingState.running ||
-    aiNamingState.applying
-  setDashboardLoadingLabel(
-    dom.dashboardTagEditorRegenerateAi,
-    busyAction === 'regenerate-ai' ? '生成中...' : '重新生成 AI 标签',
-    {
-      busy: busyAction === 'regenerate-ai',
-      variant: 'spiral',
-      wrapperClass: 'button-loading-label',
-      loaderClass: 'dashboard-button-dot-loader'
-    }
-  )
-  dom.dashboardTagEditor
-    ?.querySelectorAll<HTMLButtonElement>('[data-dashboard-action="close-tag-editor"]')
-    .forEach((button) => {
-      const canCancelGeneration = busyAction === 'regenerate-ai' && dashboardState.tagEditorSaving
-      button.disabled = dashboardState.tagEditorSaving && !canCancelGeneration
-      button.textContent = canCancelGeneration ? '取消生成' : '取消'
-      button.classList.toggle('danger', canCancelGeneration)
-      button.classList.toggle('secondary', !canCancelGeneration)
-    })
+
+  renderDashboardTagEditorTitleIsland(dom.dashboardTagEditorTitle, item.title || '未命名书签')
+  renderDashboardTagEditorMetaIsland(dom.dashboardTagEditorMeta, `${displayUrl(item.url)} · ${item.path || '未归档路径'}`)
+  renderDashboardTagEditorStatusIsland(dom.dashboardTagEditorStatus, statusText)
+  renderDashboardTagEditorActions()
   positionDashboardTagEditor(bookmarkId)
+}
+
+function renderDashboardTagEditorActions(): void {
+  if (!dom.dashboardTagEditorActions) {
+    return
+  }
+
+  const busyAction = String(dashboardState.tagEditorBusyAction || '')
+  const record = getDashboardTagRecord(String(dashboardState.tagEditorBookmarkId || ''))
+  const hasAiTags = Boolean(record?.tags?.length)
+  const canCancelGeneration = busyAction === 'regenerate-ai' && dashboardState.tagEditorSaving
+  const state: DashboardTagEditorActionsState = {
+    cancelDanger: canCancelGeneration,
+    cancelDisabled: dashboardState.tagEditorSaving && !canCancelGeneration,
+    cancelLabel: canCancelGeneration ? '取消生成' : '取消',
+    clearAiBusy: busyAction === 'clear-ai',
+    clearAiDisabled: dashboardState.tagEditorSaving || !hasAiTags,
+    regenerateAiBusy: busyAction === 'regenerate-ai',
+    regenerateAiDisabled: (
+      dashboardState.tagEditorSaving ||
+      availabilityState.catalogLoading ||
+      aiNamingState.running ||
+      aiNamingState.applying
+    ),
+    saveBusy: busyAction === 'save',
+    saveDisabled: dashboardState.tagEditorSaving
+  }
+  renderDashboardTagEditorActionsIsland(dom.dashboardTagEditorActions, state)
 }
 
 function positionDashboardTagEditor(bookmarkId: string): void {

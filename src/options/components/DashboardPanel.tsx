@@ -241,20 +241,7 @@ export function DashboardPanel() {
                 </label>
                 <p id="dashboard-tag-editor-help" className="dashboard-tag-editor-help">每行一个标签，也可以用逗号、顿号分隔；保存后会自动去重。</p>
                 <p id="dashboard-tag-editor-status" className="detect-results-subtitle dashboard-tag-editor-status" role="status" aria-live="polite" aria-atomic="true" />
-                <div className="dashboard-tag-editor-actions">
-                  <Button id="dashboard-tag-editor-clear-ai" className="options-button secondary small" size="sm" type="button" data-dashboard-action="clear-ai-tags" variant="secondary" aria-label="清除当前 Dashboard 书签的 AI 标签">
-                    清除 AI 标签
-                  </Button>
-                  <Button id="dashboard-tag-editor-regenerate-ai" className="options-button secondary small" size="sm" type="button" data-dashboard-action="regenerate-ai-tags" variant="secondary" aria-label="重新生成当前 Dashboard 书签的 AI 标签">
-                    重新生成 AI 标签
-                  </Button>
-                  <Button className="options-button secondary small" size="sm" type="button" data-dashboard-action="close-tag-editor" variant="secondary" aria-label="取消编辑当前 Dashboard 书签标签">
-                    取消
-                  </Button>
-                  <Button id="dashboard-tag-editor-save" className="options-button small" size="sm" type="button" data-dashboard-action="save-tags" aria-label="保存当前 Dashboard 书签标签">
-                    保存标签
-                  </Button>
-                </div>
+                <div id="dashboard-tag-editor-actions" className="dashboard-tag-editor-actions" />
               </PopoverPopup>
             </PopoverPositioner>
           </PopoverPortal>
