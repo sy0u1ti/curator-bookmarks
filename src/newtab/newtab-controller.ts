@@ -204,13 +204,11 @@ import {
   createClockWidgetIslandElement,
   createPortalPanelIslandElement,
   createQuickAccessPanelIslandElement,
-  createSearchEngineMenuIslandElement,
   createSearchWidgetIslandElement,
   createSpeedDialPanelIslandElement,
   createSourceNavigationIslandElement,
   mountBookmarkGridPlaceholderIslandElement,
   mountNewTabDragGhostBridge,
-  mountSearchEngineMenuIslandElement,
   renderFeaturedBackgroundPickerIsland,
   renderNewTabSavedSearchesIsland,
   renderNewTabSearchChipsIsland,
@@ -220,6 +218,7 @@ import {
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
   renderSearchWidgetComboboxStateIsland,
+  renderSearchWidgetEngineMenuStateIsland,
   renderSearchWidgetPanelStateIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
@@ -234,6 +233,7 @@ import {
   type SavedSearchesState,
   type SearchChipViewModel,
   type SearchEngineMenuItemViewModel,
+  type SearchWidgetEngineMenuState,
   type SearchHintState,
   type SearchSuggestionViewModel,
   type SpeedDialCardViewModel
@@ -5583,6 +5583,14 @@ function createSearchWidget(): HTMLElement | null {
   }
   const updateEngineButton = renderSearchWidgetButtons
   const updateNaturalButton = renderSearchWidgetButtons
+  let searchEngineMenuState: SearchWidgetEngineMenuState = {
+    hint: '',
+    items: [],
+    open: false
+  }
+  const renderSearchEngineMenuState = () => {
+    renderSearchWidgetEngineMenuStateIsland(slot, searchEngineMenuState)
+  }
   let searchComboboxExpanded = false
   let activeSearchDescendantId = ''
   const renderSearchComboboxState = () => {
@@ -5626,14 +5634,19 @@ function createSearchWidget(): HTMLElement | null {
   }
 
   const closeEngineMenu = ({ restoreFocus = false } = {}) => {
-    const existingMenu = slot.querySelector<HTMLElement>('.newtab-search-engine-menu')
-    existingMenu?.remove()
+    searchEngineMenuState = {
+      ...searchEngineMenuState,
+      open: false
+    }
+    renderSearchEngineMenuState()
     engineMenuExpanded = false
     updateEngineButton()
     if (restoreFocus) {
       engineButton.focus()
     }
   }
+
+  const getCurrentEngineMenu = () => slot.querySelector<HTMLElement>('.newtab-search-engine-menu')
 
   const focusEngineMenuItem = (menu: HTMLElement, direction: 1 | -1 | 'first' | 'last') => {
     const items = [...menu.querySelectorAll<HTMLButtonElement>('.newtab-search-engine-item')]
@@ -5683,12 +5696,12 @@ function createSearchWidget(): HTMLElement | null {
         }
       })
     }
-    const menu = createSearchEngineMenuIslandElement({
-      hint: `Cmd/Ctrl+Enter 打开前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎`,
-      items
-    })
 
-    menu.addEventListener('keydown', (event) => {
+    const handleEngineMenuKeydown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+      const menu = getCurrentEngineMenu()
+      if (!menu) {
+        return
+      }
       if (
         event.key !== 'ArrowDown' &&
         event.key !== 'ArrowUp' &&
@@ -5712,13 +5725,23 @@ function createSearchWidget(): HTMLElement | null {
       } else {
         focusEngineMenuItem(menu, event.key === 'ArrowDown' ? 1 : -1)
       }
-    })
+    }
 
-    mountSearchEngineMenuIslandElement(slot, menu)
+    searchEngineMenuState = {
+      hint: `Cmd/Ctrl+Enter 打开前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎`,
+      items,
+      onKeyDown: handleEngineMenuKeydown,
+      open: true
+    }
+    renderSearchEngineMenuState()
     engineMenuExpanded = true
     updateEngineButton()
 
     if (initialFocus !== 'none') {
+      const menu = getCurrentEngineMenu()
+      if (!menu) {
+        return
+      }
       focusEngineMenuItem(menu, initialFocus === 'last' ? 'last' : initialFocus === 'first' ? 'first' : 1)
     }
   }
@@ -6055,6 +6078,7 @@ function createSearchWidget(): HTMLElement | null {
 
   updateEngineButton()
   updateNaturalButton()
+  renderSearchEngineMenuState()
   renderSearchComboboxState()
   renderSearchWidgetPanelState()
   syncSearchInputActions(slot, input)

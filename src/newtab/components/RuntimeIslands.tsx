@@ -21,6 +21,7 @@ const roots = new WeakMap<Element, Root>()
 const searchWidgetActionStores = new WeakMap<Element, SearchWidgetActionStore>()
 const searchWidgetButtonStores = new WeakMap<Element, SearchWidgetButtonStore>()
 const searchWidgetComboboxStores = new WeakMap<Element, SearchWidgetComboboxStore>()
+const searchWidgetEngineMenuStores = new WeakMap<Element, SearchWidgetEngineMenuStore>()
 const searchWidgetPanelStores = new WeakMap<Element, SearchWidgetPanelStore>()
 
 function renderIsland(container: Element, node: React.ReactNode): void {
@@ -263,6 +264,11 @@ export interface SearchWidgetComboboxState {
   expanded: boolean
 }
 
+export interface SearchWidgetEngineMenuState extends SearchEngineMenuState {
+  onKeyDown?: (event: React.KeyboardEvent<HTMLDivElement>) => void
+  open: boolean
+}
+
 interface SearchWidgetActionStore {
   getSnapshot: () => SearchWidgetActionState
   setState: (state: SearchWidgetActionState) => void
@@ -278,6 +284,12 @@ interface SearchWidgetButtonStore {
 interface SearchWidgetComboboxStore {
   getSnapshot: () => SearchWidgetComboboxState
   setState: (state: SearchWidgetComboboxState) => void
+  subscribe: (listener: () => void) => () => void
+}
+
+interface SearchWidgetEngineMenuStore {
+  getSnapshot: () => SearchWidgetEngineMenuState
+  setState: (state: SearchWidgetEngineMenuState) => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -449,6 +461,11 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     activeDescendantId: '',
     expanded: false
   })
+  const engineMenuStore = getSearchWidgetEngineMenuStore(slot, {
+    hint: '',
+    items: [],
+    open: false
+  })
   const panelStore = getSearchWidgetPanelStore(slot, {
     panelVisible: false,
     suggestionsVisible: true
@@ -460,6 +477,11 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
   comboboxStore.setState({
     activeDescendantId: '',
     expanded: false
+  })
+  engineMenuStore.setState({
+    hint: '',
+    items: [],
+    open: false
   })
   buttonStore.setState({
     engine: state.engine,
@@ -474,6 +496,7 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
       actionStore={actionStore}
       buttonStore={buttonStore}
       comboboxStore={comboboxStore}
+      engineMenuStore={engineMenuStore}
       panelStore={panelStore}
       state={state}
     />
@@ -508,6 +531,16 @@ export function renderSearchWidgetComboboxStateIsland(
   const comboboxStore = getSearchWidgetComboboxStore(container, state)
   flushSync(() => {
     comboboxStore.setState(state)
+  })
+}
+
+export function renderSearchWidgetEngineMenuStateIsland(
+  container: HTMLElement,
+  state: SearchWidgetEngineMenuState
+): void {
+  const engineMenuStore = getSearchWidgetEngineMenuStore(container, state)
+  flushSync(() => {
+    engineMenuStore.setState(state)
   })
 }
 
@@ -661,19 +694,6 @@ export function renderFeaturedBackgroundPickerIsland(
   state: FeaturedBackgroundPickerState
 ): void {
   renderIsland(container, <FeaturedBackgroundPicker state={state} />)
-}
-
-export function createSearchEngineMenuIslandElement(state: SearchEngineMenuState): HTMLElement {
-  const menu = document.createElement('div')
-  menu.className = 'newtab-search-engine-menu'
-  menu.setAttribute('role', 'menu')
-  menu.setAttribute('aria-label', '搜索引擎')
-  renderIsland(menu, <SearchEngineMenu state={state} />)
-  return menu
-}
-
-export function mountSearchEngineMenuIslandElement(container: HTMLElement, menu: HTMLElement): void {
-  container.append(menu)
 }
 
 export function renderNewTabSearchChipsIsland(container: HTMLElement, chips: SearchChipViewModel[]): void {
@@ -900,6 +920,34 @@ function getSearchWidgetComboboxStore(
   return store
 }
 
+function getSearchWidgetEngineMenuStore(
+  host: Element,
+  initialState: SearchWidgetEngineMenuState
+): SearchWidgetEngineMenuStore {
+  let store = searchWidgetEngineMenuStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  searchWidgetEngineMenuStores.set(host, store)
+  return store
+}
+
 function getSearchWidgetPanelStore(
   host: Element,
   initialState: SearchWidgetPanelState
@@ -940,6 +988,10 @@ function useSearchWidgetComboboxState(store: SearchWidgetComboboxStore): SearchW
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
 
+function useSearchWidgetEngineMenuState(store: SearchWidgetEngineMenuStore): SearchWidgetEngineMenuState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
 function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetPanelState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
@@ -948,12 +1000,14 @@ function SearchWidgetShell({
   actionStore,
   buttonStore,
   comboboxStore,
+  engineMenuStore,
   panelStore,
   state
 }: {
   actionStore: SearchWidgetActionStore
   buttonStore: SearchWidgetButtonStore
   comboboxStore: SearchWidgetComboboxStore
+  engineMenuStore: SearchWidgetEngineMenuStore
   panelStore: SearchWidgetPanelStore
   state: SearchWidgetShellState
 }) {
@@ -979,6 +1033,7 @@ function SearchWidgetShell({
         <SearchWidgetEngineButton buttonStore={buttonStore} />
         <SearchWidgetSubmitButton actionStore={actionStore} />
       </form>
+      <SearchWidgetEngineMenu engineMenuStore={engineMenuStore} />
       <SearchWidgetSuggestionsPanel panelStore={panelStore} />
     </>
   )
@@ -1089,6 +1144,24 @@ function SearchWidgetEngineButton({ buttonStore }: { buttonStore: SearchWidgetBu
     >
       {engine.label}
     </Button>
+  )
+}
+
+function SearchWidgetEngineMenu({ engineMenuStore }: { engineMenuStore: SearchWidgetEngineMenuStore }) {
+  const engineMenu = useSearchWidgetEngineMenuState(engineMenuStore)
+  if (!engineMenu.open) {
+    return null
+  }
+
+  return (
+    <div
+      className="newtab-search-engine-menu"
+      role="menu"
+      aria-label="搜索引擎"
+      onKeyDown={engineMenu.onKeyDown}
+    >
+      <SearchEngineMenu state={engineMenu} />
+    </div>
   )
 }
 
