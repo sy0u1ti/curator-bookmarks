@@ -16,6 +16,7 @@ import { availabilityState, aiNamingState, folderCleanupState, managerState } fr
 import { dom } from '../shared-options/dom.js'
 import { formatDateTime, isInteractionLocked } from '../shared-options/utils.js'
 import { renderFolderCleanupIsland } from '../components/FolderCleanupIsland.js'
+import { renderFolderCleanupControlsIsland } from '../components/FolderCleanupControlsIsland.js'
 
 interface FolderCleanupCallbacks {
   confirm: (options?: {
@@ -136,27 +137,24 @@ export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
   const summary = summarizeSuggestions(suggestions)
   const locked = isInteractionLocked() || folderCleanupState.running || folderCleanupState.executing
 
-  setText(dom.folderCleanupSummaryTotal, String(suggestions.length))
-  setText(dom.folderCleanupSummaryEmpty, String(summary.empty))
-  setText(dom.folderCleanupSummaryDeep, String(summary.deep))
-  setText(dom.folderCleanupSummarySameName, String(summary.sameName))
-  setText(dom.folderCleanupSummaryLarge, String(summary.large))
-  setText(dom.folderCleanupCount, `${suggestions.length} 条建议`)
-
-  if (dom.folderCleanupStatus) {
-    dom.folderCleanupStatus.className = `options-chip ${folderCleanupState.running ? 'warning' : suggestions.length ? 'success' : 'muted'}`
-    dom.folderCleanupStatus.textContent = getStatusText(suggestions.length)
-  }
-
-  if (dom.folderCleanupAnalyze) {
-    dom.folderCleanupAnalyze.disabled = locked || availabilityState.catalogLoading
-    dom.folderCleanupAnalyze.textContent = folderCleanupState.running ? '扫描中…' : '重新扫描'
-  }
-
-  if (dom.folderCleanupResultsSubtitle) {
-    dom.folderCleanupResultsSubtitle.textContent = folderCleanupState.lastAnalyzedAt
-      ? `上次扫描：${formatDateTime(folderCleanupState.lastAnalyzedAt)}。删除、合并、移动和拆分都会先确认并触发自动备份 hook；拆分会记录本次撤销信息。`
-      : '所有建议默认只预览，不会自动修改书签。'
+  if (dom.folderCleanupControls) {
+    renderFolderCleanupControlsIsland(dom.folderCleanupControls, {
+      analyzeDisabled: locked || availabilityState.catalogLoading,
+      analyzeLabel: folderCleanupState.running ? '扫描中...' : '重新扫描',
+      countLabel: `${suggestions.length} 条建议`,
+      resultsSubtitle: getResultsSubtitle(),
+      status: {
+        label: getStatusText(suggestions.length),
+        tone: folderCleanupState.running ? 'warning' : suggestions.length ? 'success' : 'muted'
+      },
+      summary: {
+        deep: summary.deep,
+        empty: summary.empty,
+        large: summary.large,
+        sameName: summary.sameName,
+        total: suggestions.length
+      }
+    })
   }
 
   if (availabilityState.catalogLoading) {
@@ -558,6 +556,12 @@ function getStatusText(visibleSuggestionCount: number): string {
   return visibleSuggestionCount ? '有建议' : '未扫描'
 }
 
+function getResultsSubtitle(): string {
+  return folderCleanupState.lastAnalyzedAt
+    ? `上次扫描：${formatDateTime(folderCleanupState.lastAnalyzedAt)}。删除、合并、移动和拆分都会先确认并触发自动备份 hook；拆分会记录本次撤销信息。`
+    : '所有建议默认只预览，不会自动修改书签。'
+}
+
 function getReservedFolderCleanupTitles(): string[] {
   const inboxTitle = String(managerState.inboxSettings?.folderTitle || '').trim()
   return inboxTitle ? [inboxTitle] : []
@@ -634,10 +638,4 @@ async function persistFolderCleanupState() {
 
 function sanitizeFolderTitle(title: string): string {
   return String(title || '').replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || '拆分分组'
-}
-
-function setText(element, value: string) {
-  if (element) {
-    element.textContent = value
-  }
 }

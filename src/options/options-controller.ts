@@ -294,6 +294,10 @@ import {
   HISTORY_ACTION_EVENT,
   type HistoryActionDetail
 } from './components/history-events.js'
+import {
+  FOLDER_CLEANUP_ACTION_EVENT,
+  type FolderCleanupActionDetail
+} from './components/folder-cleanup-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1195,9 +1199,7 @@ function bindEvents() {
   dom.duplicateStrategyControls?.addEventListener('click', (event) => handleDuplicateToolbarClick(event, duplicatesCallbacks))
   dom.duplicateClearSelection?.addEventListener('click', () => clearDuplicateSelection(duplicatesCallbacks))
   dom.duplicateDeleteSelection?.addEventListener('click', () => deleteSelectedDuplicates(duplicatesCallbacks))
-  dom.folderCleanupAnalyze?.addEventListener('click', () => {
-    void rescanFolderCleanupSuggestions(folderCleanupCallbacks)
-  })
+  window.addEventListener(FOLDER_CLEANUP_ACTION_EVENT, handleFolderCleanupAction)
   dom.folderCleanupResults?.addEventListener('click', (event) => {
     handleFolderCleanupPreviewClick(event, folderCleanupCallbacks)
     void handleFolderCleanupClick(event, folderCleanupCallbacks)
@@ -4666,6 +4668,13 @@ function handleHistoryAction(event: Event): void {
   }
   if (detail?.action === 'toggle-logs') {
     toggleHistoryLogsCollapsed(historyCallbacks)
+  }
+}
+
+function handleFolderCleanupAction(event: Event): void {
+  const detail = (event as CustomEvent<FolderCleanupActionDetail>).detail
+  if (detail?.action === 'rescan') {
+    void rescanFolderCleanupSuggestions(folderCleanupCallbacks)
   }
 }
 

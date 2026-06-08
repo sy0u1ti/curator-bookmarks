@@ -11,14 +11,6 @@ const duplicateMetrics = [
   { label: '已选择', valueId: 'duplicate-summary-selected', className: 'metric-success' }
 ]
 
-const folderCleanupMetrics = [
-  { label: '建议总数', valueId: 'folder-cleanup-summary-total', className: 'metric-total' },
-  { label: '空文件夹', valueId: 'folder-cleanup-summary-empty', className: 'metric-danger' },
-  { label: '深层低价值', valueId: 'folder-cleanup-summary-deep', className: 'metric-warning' },
-  { label: '同名合并', valueId: 'folder-cleanup-summary-same-name', className: 'metric-info' },
-  { label: '超大拆分', valueId: 'folder-cleanup-summary-large', className: 'metric-muted' }
-]
-
 const duplicateStrategies = [
   { label: '保留最新', value: 'newest' },
   { label: '保留最早', value: 'oldest' },
@@ -293,36 +285,8 @@ export function FolderCleanupPanel() {
       <p className="options-section-label">文件夹清理</p>
       <h1 id="folder-cleanup-title">文件夹清理</h1>
 
-      <div className="options-group">
-        <div className="option-row">
-          <div className="option-copy">
-            <strong>建议和预览优先</strong>
-            <p>先重新读取当前 Chrome 书签树，再扫描空文件夹、深层低价值文件夹、单一路径、同名文件夹和超大文件夹；删除、合并、移动和拆分都会在确认后执行，并先调用自动备份 hook。拆分会记录本次移动，可在建议区撤销本次拆分。</p>
-          </div>
-          <div className="detect-results-actions">
-            <span id="folder-cleanup-status" className="options-chip muted">未扫描</span>
-            <Button id="folder-cleanup-analyze" className="options-button small" size="sm" type="button">重新扫描</Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="detect-summary-grid compact-grid">
-        {folderCleanupMetrics.map((metric) => (
-          <Card className={`summary-card compact metric-card ${metric.className}`} key={metric.valueId}>
-            <span className="summary-label">{metric.label}</span>
-            <strong id={metric.valueId}>0</strong>
-          </Card>
-        ))}
-      </div>
-
       <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>清理建议</strong>
-            <p id="folder-cleanup-results-subtitle" className="detect-results-subtitle">所有建议默认只预览，不会自动修改书签。</p>
-          </div>
-          <span id="folder-cleanup-count" className="option-value">0 条建议</span>
-        </div>
+        <div id="folder-cleanup-controls" />
         <div id="folder-cleanup-results" className="detect-results">
           <div className="detect-empty">点击重新扫描后，这里会展示可预览的文件夹清理建议。</div>
         </div>
