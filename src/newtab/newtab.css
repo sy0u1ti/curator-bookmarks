@@ -790,7 +790,8 @@ body.background-mask-enabled .newtab-background-mask {
   display: none;
 }
 
-.newtab-search-chips:empty {
+.newtab-search-chips:empty,
+.newtab-saved-searches:empty {
   display: none;
 }
 

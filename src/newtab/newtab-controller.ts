@@ -5720,7 +5720,6 @@ function createSearchWidget(): HTMLElement | null {
       onSaveCurrent: () => undefined,
       show: false
     })
-    savedSearches.classList.add('hidden')
     suggestions.hidden = false
     suggestionsHeading.textContent = '书签匹配'
     suggestionsHeading.hidden = false
@@ -6206,7 +6205,6 @@ function renderNewTabSavedSearches(
   const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeNewTabSearchText(item.query) === normalizedQuery)
   const show = Boolean(canSaveCurrent || savedSearches.length > 0 || state.savedSearchesError)
 
-  container.classList.toggle('hidden', !show)
   const viewModel: SavedSearchesState = {
     canSaveCurrent,
     error: state.savedSearchesError,
