@@ -71,6 +71,7 @@ import {
   removeDashboardVirtualWindowIslandEdgeNodes,
   renderDashboardCardListIsland,
   renderDashboardBreadcrumbsIsland,
+  renderDashboardCardsTitleIsland,
   renderDashboardDragPreviewIsland,
   renderDashboardEmptyStateIsland,
   renderDashboardFolderDropGridIsland,
@@ -900,12 +901,10 @@ export function renderDashboardSection(): void {
       countText: scopedCountText,
       title: scopeTitle
     })
-    dom.dashboardTotal = dom.dashboardTitle.querySelector('#dashboard-total') as typeof dom.dashboardTotal
   }
   if (dom.dashboardCardsTitle) {
-    dom.dashboardCardsTitle.textContent = scopeTitle
+    renderDashboardCardsTitleIsland(dom.dashboardCardsTitle, scopeTitle)
   }
-  dom.dashboardTotal.textContent = scopedCountText
   renderDashboardStatusOnly()
   dom.dashboardQuery.value = dashboardState.query
   syncDashboardGridSurface()

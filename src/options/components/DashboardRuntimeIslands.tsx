@@ -139,6 +139,10 @@ export function renderDashboardTitleIsland(container: Element, state: DashboardT
   renderIsland(container, <DashboardTitle state={state} />)
 }
 
+export function renderDashboardCardsTitleIsland(container: Element, title: string): void {
+  renderIsland(container, <>{title}</>)
+}
+
 export function renderDashboardSearchChipsIsland(container: Element, chips: DashboardSearchChipViewModel[]): void {
   renderIsland(container, <DashboardSearchChips chips={chips} />)
 }
