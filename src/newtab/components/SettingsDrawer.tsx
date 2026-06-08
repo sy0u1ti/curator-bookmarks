@@ -15,6 +15,9 @@ import {
   type IconLayoutPresetKey
 } from '../icon-settings'
 import {
+  dispatchNewtabIconPresetApply,
+  dispatchNewtabIconResetDefaults,
+  dispatchNewtabIconSettingFieldChange,
   dispatchNewtabIconShowTitlesToggle,
   dispatchNewtabIconVerticalCenterToggle,
   useNewtabIconPreviewView
@@ -744,11 +747,12 @@ function IconSettingsSection() {
         <div id="icon-preset-row" className="icon-preset-row">
           {iconPresetCards.map((card) => (
             <Button
-              className="icon-preset-card"
+              className={`icon-preset-card${iconPreview.preset === card.key ? ' selected' : ''}`}
               type="button"
               data-preset={card.key}
-              aria-pressed="false"
+              aria-pressed={iconPreview.preset === card.key}
               aria-label={`${card.name}布局，${card.desc}，${card.detail}`}
+              onClick={() => dispatchNewtabIconPresetApply(card.key)}
               key={card.key}
               unstyled
             >
@@ -784,11 +788,16 @@ function IconSettingsSection() {
             aria-label="布局方式"
             className="setting-segmented"
             itemClassName="setting-segmented-button"
+            onValueChange={(value) => {
+              const nextValue = value[0]
+              if (nextValue) dispatchNewtabIconSettingFieldChange('layoutMode', nextValue)
+            }}
             items={[
               { value: 'auto', label: '自动适配', attributes: { 'data-icon-layout-mode': 'auto' } },
               { value: 'fixed', label: '固定列数', attributes: { 'data-icon-layout-mode': 'fixed' } }
             ]}
             unstyled
+            value={iconPreview.layoutMode}
           />
         </div>
         <SwitchRow
@@ -805,18 +814,23 @@ function IconSettingsSection() {
           checked={iconPreview.showTitles}
           onCheckedChange={dispatchNewtabIconShowTitlesToggle}
         />
-        <div id="icon-title-lines-row" className="setting-row icon-control-row">
+        <div id="icon-title-lines-row" className={`setting-row icon-control-row${iconPreview.titleLinesDisabled ? ' setting-row-disabled' : ''}`}>
           <span>标题行数</span>
           <ToggleGroup
             id="icon-title-lines-control"
             aria-label="标题行数"
             className="setting-segmented"
             itemClassName="setting-segmented-button"
+            onValueChange={(value) => {
+              const nextValue = value[0]
+              if (nextValue) dispatchNewtabIconSettingFieldChange('titleLines', Number(nextValue))
+            }}
             items={[
-              { value: '1', label: '1 行', attributes: { 'data-icon-title-lines': '1' } },
-              { value: '2', label: '2 行', attributes: { 'data-icon-title-lines': '2' } }
+              { value: '1', label: '1 行', disabled: iconPreview.titleLinesDisabled, attributes: { 'data-icon-title-lines': '1' } },
+              { value: '2', label: '2 行', disabled: iconPreview.titleLinesDisabled, attributes: { 'data-icon-title-lines': '2' } }
             ]}
             unstyled
+            value={String(iconPreview.titleLines)}
           />
         </div>
         <Button unstyled id="icon-advanced-toggle" className="icon-advanced-toggle" type="button" aria-expanded="false" aria-controls="icon-advanced-panel">
@@ -824,14 +838,14 @@ function IconSettingsSection() {
         </Button>
         <div id="icon-advanced-panel" className="icon-advanced-panel" hidden>
           <div className="reveal-panel-body">
-            <Button unstyled id="icon-reset-defaults" className="icon-reset-defaults" type="button">恢复默认布局</Button>
-            <SliderRow id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value="78%" min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" />
-            <SliderRow rowId="icon-tile-width-row" id="icon-tile-width" label="卡片宽度" valueId="icon-tile-width-value" value="184px" min="132" max="260" defaultValue="184" ariaLabel="书签卡片宽度" />
-            <SliderRow id="icon-shell-size" label="图标区域" valueId="icon-shell-size-value" value="32px" min="24" max="48" defaultValue="32" ariaLabel="书签图标区域尺寸" />
-            <SliderRow id="icon-column-gap" label="横向间距" valueId="icon-column-gap-value" value="24px" min="0" max="100" defaultValue="10" ariaLabel="书签卡片横向间距" />
-            <SliderRow id="icon-row-gap" label="行距" valueId="icon-row-gap-value" value="12px" min="0" max="100" defaultValue="10" ariaLabel="书签卡片行距" />
-            <SliderRow id="icon-folder-gap" label="文件夹间距" valueId="icon-folder-gap-value" value="20px" min="0" max="120" defaultValue="20" ariaLabel="书签文件夹间距" />
-            <SliderRow rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value="4" min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" />
+            <Button unstyled id="icon-reset-defaults" className="icon-reset-defaults" type="button" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
+            <SliderRow id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value={`${iconPreview.pageWidth}%`} min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('pageWidth', value)} sliderValue={iconPreview.pageWidth} />
+            <SliderRow rowId="icon-tile-width-row" id="icon-tile-width" label="卡片宽度" valueId="icon-tile-width-value" value={`${iconPreview.tileWidth}px`} min="132" max="260" defaultValue="184" ariaLabel="书签卡片宽度" disabled={iconPreview.tileWidthDisabled} onValueChange={(value) => dispatchNewtabIconSettingFieldChange('tileWidth', value)} sliderValue={iconPreview.tileWidth} />
+            <SliderRow id="icon-shell-size" label="图标区域" valueId="icon-shell-size-value" value={`${iconPreview.iconShellSize}px`} min="24" max="48" defaultValue="32" ariaLabel="书签图标区域尺寸" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('iconShellSize', value)} sliderValue={iconPreview.iconShellSize} />
+            <SliderRow id="icon-column-gap" label="横向间距" valueId="icon-column-gap-value" value={`${iconPreview.effectiveColumnGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片横向间距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('columnGap', value)} sliderValue={iconPreview.columnGap} />
+            <SliderRow id="icon-row-gap" label="行距" valueId="icon-row-gap-value" value={`${iconPreview.effectiveRowGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片行距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('rowGap', value)} sliderValue={iconPreview.rowGap} />
+            <SliderRow id="icon-folder-gap" label="文件夹间距" valueId="icon-folder-gap-value" value={`${iconPreview.effectiveFolderGap}px`} min="0" max="120" defaultValue="20" ariaLabel="书签文件夹间距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('folderGap', value)} sliderValue={iconPreview.folderGap} />
+            <SliderRow rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value={String(iconPreview.fixedColumns)} min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" disabled={iconPreview.fixedColumnsDisabled} onValueChange={(value) => dispatchNewtabIconSettingFieldChange('columns', value)} sliderValue={iconPreview.fixedColumns} />
           </div>
         </div>
       </Surface>

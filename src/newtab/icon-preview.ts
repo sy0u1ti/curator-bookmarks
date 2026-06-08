@@ -2,9 +2,13 @@ import {
   type IconSettings,
   getEffectiveIconTileWidthPx,
   getIconGapPx,
+  getFolderGapPx,
   getIconRowGapPx
 } from './icon-settings.js'
-import { dispatchNewtabIconPreviewView } from './newtab-icon-preview-store.js'
+import {
+  createNewtabIconPreviewView,
+  dispatchNewtabIconPreviewView
+} from './newtab-icon-preview-store.js'
 
 export function getIconPreviewSignature(settings: IconSettings): string {
   return [
@@ -49,23 +53,26 @@ export function renderIconPreviewElement(
 
   const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
   preview.dataset.iconPreviewSignature = signature
-  dispatchNewtabIconPreviewView({
-    columns: previewColumns,
-    layoutMode: settings.layoutMode,
-    pageWidth: settings.pageWidth,
-    previewColumnGap,
-    previewGridMaxWidth,
-    previewRowGap,
-    previewShellSize,
-    previewTileWidth,
-    showTitles: settings.showTitles,
-    summary,
-    titleLines: settings.titleLines,
-    verticalCenter: settings.verticalCenter,
-    tiles: Array.from({ length: sampleCount }, (_, index) => ({
-      id: `${index}:${names[index] || ''}`,
-      mark: names[index]?.slice(0, 1) || '*',
-      title: names[index] || ''
-    }))
-  })
+  dispatchNewtabIconPreviewView(createNewtabIconPreviewView(
+    settings,
+    {
+      columns: previewColumns,
+      previewColumnGap,
+      previewGridMaxWidth,
+      previewRowGap,
+      previewShellSize,
+      previewTileWidth,
+      summary,
+      tiles: Array.from({ length: sampleCount }, (_, index) => ({
+        id: `${index}:${names[index] || ''}`,
+        mark: names[index]?.slice(0, 1) || '*',
+        title: names[index] || ''
+      }))
+    },
+    {
+      effectiveColumnGap: getIconGapPx(settings.columnGap),
+      effectiveFolderGap: getFolderGapPx(settings.folderGap),
+      effectiveRowGap: getIconRowGapPx(settings.rowGap)
+    }
+  ))
 }

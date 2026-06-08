@@ -285,7 +285,10 @@ import {
   dispatchNewtabBookmarkEditMenuClosing,
   dispatchNewtabBookmarkEditMenuView
 } from './newtab-bookmark-menu-store.js'
-import { registerNewtabIconSettingsActions } from './newtab-icon-preview-store.js'
+import {
+  registerNewtabIconSettingsActions,
+  type NewtabIconSettingsFieldKey
+} from './newtab-icon-preview-store.js'
 import {
   createNewtabTimeSettingsView,
   dispatchNewtabTimeSettingsView,
@@ -1026,6 +1029,9 @@ function bindEvents(): void {
     onToggleCandidates: toggleFolderCandidates
   })
   registerNewtabIconSettingsActions({
+    onFieldChange: handleIconSettingFieldChange,
+    onPresetApply: applyIconPreset,
+    onResetDefaults: resetIconSettingsToDefaults,
     onShowTitlesToggle: handleIconShowTitlesToggle,
     onVerticalCenterToggle: handleIconVerticalCenterToggle
   })
@@ -1326,18 +1332,7 @@ function bindBackgroundSettingsEvents(): void {
 }
 
 function bindIconSettingsEvents(): void {
-  cachedEl('icon-page-width')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-tile-width')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-shell-size')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-column-gap')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-row-gap')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-folder-gap')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-columns')?.addEventListener('input', handleIconSettingsChange)
-  cachedEl('icon-layout-control')?.addEventListener('click', handleIconLayoutModeClick)
-  cachedEl('icon-title-lines-control')?.addEventListener('click', handleIconTitleLinesClick)
   cachedEl('icon-advanced-toggle')?.addEventListener('click', toggleIconAdvanced)
-  cachedEl('icon-reset-defaults')?.addEventListener('click', resetIconSettingsToDefaults)
-  cachedEl('icon-preset-row')?.addEventListener('click', handlePresetCardClick)
 }
 
 function bindGeneralSettingsEvents(): void {
@@ -1726,10 +1721,6 @@ async function updateSelectedFolders(
   }
 }
 
-function handleIconSettingsChange(): void {
-  commitIconSettings(readIconSettingsFromControls())
-}
-
 function handleIconVerticalCenterToggle(enabled: boolean): void {
   commitIconSettings(normalizeIconSettings({
     ...state.iconSettings,
@@ -1746,35 +1737,10 @@ function handleIconShowTitlesToggle(enabled: boolean): void {
   }))
 }
 
-function handleIconLayoutModeClick(event: Event): void {
-  const target = event.target
-  const button = target instanceof Element
-    ? target.closest<HTMLElement>('[data-icon-layout-mode]')
-    : null
-  const layoutMode = button?.dataset.iconLayoutMode
-  if (layoutMode !== 'auto' && layoutMode !== 'fixed') {
-    return
-  }
-
+function handleIconSettingFieldChange(key: NewtabIconSettingsFieldKey, value: number | string): void {
   commitIconSettings(normalizeIconSettings({
     ...state.iconSettings,
-    layoutMode,
-    preset: ''
-  }))
-}
-
-function handleIconTitleLinesClick(event: Event): void {
-  const target = event.target
-  const button = target instanceof Element
-    ? target.closest<HTMLElement>('[data-icon-title-lines]')
-    : null
-  if (!button || button.getAttribute('aria-disabled') === 'true') {
-    return
-  }
-
-  commitIconSettings(normalizeIconSettings({
-    ...state.iconSettings,
-    titleLines: Number(button.dataset.iconTitleLines),
+    [key]: value,
     preset: ''
   }))
 }
@@ -10885,84 +10851,9 @@ function applyFolderSettings(): void {
   )
 }
 
-function readIconSettingsFromControls(): IconSettings {
-  const pageWidthInput = cachedEl('icon-page-width')
-  const tileWidthInput = cachedEl('icon-tile-width')
-  const iconShellSizeInput = cachedEl('icon-shell-size')
-  const columnGapInput = cachedEl('icon-column-gap')
-  const rowGapInput = cachedEl('icon-row-gap')
-  const folderGapInput = cachedEl('icon-folder-gap')
-  const columnsInput = cachedEl('icon-columns')
-
-  const settings = normalizeIconSettings({
-    pageWidth: pageWidthInput instanceof HTMLInputElement
-      ? Number(pageWidthInput.value)
-      : state.iconSettings.pageWidth,
-    tileWidth: tileWidthInput instanceof HTMLInputElement
-      ? Number(tileWidthInput.value)
-      : state.iconSettings.tileWidth,
-    iconShellSize: iconShellSizeInput instanceof HTMLInputElement
-      ? Number(iconShellSizeInput.value)
-      : state.iconSettings.iconShellSize,
-    columnGap: columnGapInput instanceof HTMLInputElement
-      ? Number(columnGapInput.value)
-      : state.iconSettings.columnGap,
-    rowGap: rowGapInput instanceof HTMLInputElement
-      ? Number(rowGapInput.value)
-      : state.iconSettings.rowGap,
-    folderGap: folderGapInput instanceof HTMLInputElement
-      ? Number(folderGapInput.value)
-      : state.iconSettings.folderGap,
-    layoutMode: state.iconSettings.layoutMode,
-    columns: columnsInput instanceof HTMLInputElement
-      ? Number(columnsInput.value)
-      : state.iconSettings.columns,
-    verticalCenter: state.iconSettings.verticalCenter,
-    showTitles: state.iconSettings.showTitles,
-    titleLines: state.iconSettings.titleLines,
-    preset: ''
-  })
-
-  return withDetectedIconPreset(settings)
-}
-
 function syncIconSettingsControls(): void {
   measureNow('newtab.syncIconSettingsControls', () => {
     const settings = state.iconSettings
-    const pageWidthInput = cachedEl('icon-page-width')
-    const tileWidthInput = cachedEl('icon-tile-width')
-    const iconShellSizeInput = cachedEl('icon-shell-size')
-    const columnGapInput = cachedEl('icon-column-gap')
-    const rowGapInput = cachedEl('icon-row-gap')
-    const folderGapInput = cachedEl('icon-folder-gap')
-    const columnsInput = cachedEl('icon-columns')
-    const tileWidthRow = cachedEl('icon-tile-width-row')
-    const titleLinesRow = cachedEl('icon-title-lines-row')
-    const columnsRow = cachedEl('icon-columns-row')
-
-    if (pageWidthInput instanceof HTMLInputElement) {
-      pageWidthInput.value = String(settings.pageWidth)
-    }
-    if (tileWidthInput instanceof HTMLInputElement) {
-      tileWidthInput.value = String(settings.tileWidth)
-      tileWidthInput.disabled = !settings.showTitles
-    }
-    if (iconShellSizeInput instanceof HTMLInputElement) {
-      iconShellSizeInput.value = String(settings.iconShellSize)
-    }
-    if (columnGapInput instanceof HTMLInputElement) {
-      columnGapInput.value = String(settings.columnGap)
-    }
-    if (rowGapInput instanceof HTMLInputElement) {
-      rowGapInput.value = String(settings.rowGap)
-    }
-    if (folderGapInput instanceof HTMLInputElement) {
-      folderGapInput.value = String(settings.folderGap)
-    }
-    if (columnsInput instanceof HTMLInputElement) {
-      columnsInput.value = String(settings.columns)
-      columnsInput.disabled = settings.layoutMode !== 'fixed'
-    }
 
     setTextContent('icon-page-width-value', `${settings.pageWidth}%`)
     setTextContent('icon-tile-width-value', `${settings.tileWidth}px`)
@@ -10972,13 +10863,6 @@ function syncIconSettingsControls(): void {
     setTextContent('icon-folder-gap-value', `${getFolderGapPx(settings.folderGap)}px`)
     setTextContent('icon-columns-value', String(settings.columns))
 
-    syncIconSegmentButtons('[data-icon-layout-mode]', settings.layoutMode)
-    syncIconSegmentButtons('[data-icon-title-lines]', String(settings.titleLines), !settings.showTitles)
-    tileWidthRow?.classList.toggle('setting-row-disabled', !settings.showTitles)
-    titleLinesRow?.classList.toggle('setting-row-disabled', !settings.showTitles)
-    columnsRow?.classList.toggle('setting-row-disabled', settings.layoutMode !== 'fixed')
-    syncPresetCardSelection()
-    syncIconAdvancedPanel()
     renderIconPreviewIfNeeded()
   })
 }
@@ -11092,42 +10976,6 @@ function setRevealPanelExpanded(panel: HTMLElement, expanded: boolean): void {
   }
 }
 
-function handlePresetCardClick(event: Event): void {
-  const target = event.target
-  const card = target instanceof HTMLElement ? target.closest<HTMLElement>('.icon-preset-card') : null
-  if (!card) return
-
-  const presetKey = card.dataset.preset as IconLayoutPresetKey | undefined
-  if (presetKey && presetKey in ICON_LAYOUT_PRESETS) {
-    applyIconPreset(presetKey)
-  }
-}
-
-function syncPresetCardSelection(): void {
-  const cards = document.querySelectorAll<HTMLElement>('.icon-preset-card')
-  for (const card of cards) {
-    const selected = card.dataset.preset === state.iconSettings.preset
-    card.classList.toggle('selected', selected)
-    card.setAttribute('aria-pressed', String(selected))
-  }
-}
-
-function syncIconAdvancedPanel(): void {
-  const tileWidthInput = cachedEl('icon-tile-width')
-  if (tileWidthInput instanceof HTMLInputElement) {
-    tileWidthInput.title = state.iconSettings.showTitles
-      ? ''
-      : '显示标题时生效'
-  }
-
-  const columnsInput = cachedEl('icon-columns')
-  if (columnsInput instanceof HTMLInputElement) {
-    columnsInput.title = state.iconSettings.layoutMode === 'fixed'
-      ? ''
-      : '固定列数模式下生效'
-  }
-}
-
 function setTextContent(elementId: string, text: string): void {
   const element = cachedEl(elementId)
   if (element) {
@@ -11177,17 +11025,6 @@ function syncSettingsSaveStatus(): void {
   status.dataset.state = state.settingsSaveState
   status.hidden = state.settingsSaveState === 'idle'
   status.textContent = state.settingsSaveMessage
-}
-
-function syncIconSegmentButtons(selector: string, selectedValue: string, disabled = false): void {
-  for (const button of document.querySelectorAll<HTMLButtonElement>(selector)) {
-    const value = button.dataset.iconLayoutMode || button.dataset.iconTitleLines || ''
-    const selected = value === selectedValue
-    button.classList.toggle('selected', selected)
-    button.setAttribute('aria-pressed', String(selected))
-    button.disabled = disabled
-    button.setAttribute('aria-disabled', String(disabled))
-  }
 }
 
 function renderIconPreviewIfNeeded(): void {
