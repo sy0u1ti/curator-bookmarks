@@ -200,11 +200,8 @@ import {
   createBookmarkContentIslandElement,
   createBookmarkGridPlaceholderIslandElement,
   createBookmarkTileIslandElement,
-  createPortalPanelIslandElement,
-  createQuickAccessPanelIslandElement,
   createSearchWidgetIslandElement,
   createSpeedDialPanelIslandElement,
-  createSourceNavigationIslandElement,
   mountBookmarkGridPlaceholderIslandElement,
   mountNewTabDragGhostBridge,
   renderFeaturedBackgroundPickerIsland,
@@ -230,10 +227,13 @@ import {
   type FeaturedBackgroundPickerGridSectionViewModel,
   type FeaturedBackgroundPickerProviderGroupViewModel,
   type FeaturedBackgroundPickerState,
+  type PortalPanelState,
   type QuickAccessGroupViewModel,
+  type QuickAccessPanelState,
   type SavedSearchesState,
   type SearchChipViewModel,
   type SearchEngineMenuItemViewModel,
+  type SourceNavigationState,
   type SearchWidgetEngineMenuState,
   type SearchHintState,
   type SearchSuggestionViewModel,
@@ -6897,10 +6897,6 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   }
 
   const portal = createPortalPanel()
-  if (portal) {
-    modules.push(portal)
-  }
-
   const sourceNavigation = createSourceNavigation(sections)
   let renderedBookmarkIndex = 0
   const sectionModels: BookmarkFolderSectionViewModel[] = sections.map((section) => {
@@ -6961,6 +6957,7 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
       verticalCenter: state.iconSettings.verticalCenter
     },
     modules,
+    portal,
     reorderStatus: reorderStatusMessage
       ? {
           message: reorderStatusMessage,
@@ -7234,7 +7231,7 @@ function appendBookmarkTiles(
   })
 }
 
-function createSourceNavigation(sections: NewTabFolderSection[]): HTMLElement | null {
+function createSourceNavigation(sections: NewTabFolderSection[]): SourceNavigationState | null {
   if (!state.generalSettings.showSourceNavigation || sections.length < 2) {
     return null
   }
@@ -7244,10 +7241,10 @@ function createSourceNavigation(sections: NewTabFolderSection[]): HTMLElement | 
     return null
   }
 
-  return createSourceNavigationIslandElement({
+  return {
     items,
     onFocusSource: focusSourceSection
-  })
+  }
 }
 
 function focusSourceSection(anchorId: string): void {
@@ -7260,13 +7257,13 @@ function focusSourceSection(anchorId: string): void {
   section.focus({ preventScroll: true })
 }
 
-function createPortalPanel(): HTMLElement | null {
+function createPortalPanel(): PortalPanelState | null {
   const quickAccess = createQuickAccessPanel()
   if (!quickAccess) {
     return null
   }
 
-  return createPortalPanelIslandElement(quickAccess)
+  return { quickAccess }
 }
 
 interface QuickAccessViewModel {
@@ -7319,7 +7316,7 @@ function computeQuickAccessViewModel(): QuickAccessViewModel {
   return model
 }
 
-function createQuickAccessPanel(): HTMLElement | null {
+function createQuickAccessPanel(): QuickAccessPanelState | null {
   const { frequentItems, recentItems } = computeQuickAccessViewModel()
 
   const frequentQuickAccessItems = frequentItems
@@ -7341,7 +7338,7 @@ function createQuickAccessPanel(): HTMLElement | null {
     groups.push(createQuickAccessGroup('新近添加', recentQuickAccessItems))
   }
 
-  return createQuickAccessPanelIslandElement({ groups })
+  return { groups }
 }
 
 function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): QuickAccessItem | null {

@@ -74,6 +74,10 @@ export interface QuickAccessPanelState {
   groups: QuickAccessGroupViewModel[]
 }
 
+export interface PortalPanelState {
+  quickAccess: QuickAccessPanelState
+}
+
 export interface SpeedDialCardViewModel {
   customIcon: boolean
   detail: string
@@ -336,9 +340,10 @@ export interface BookmarkContentStyleState {
 export interface BookmarkContentViewModel {
   content: BookmarkContentStyleState
   modules: HTMLElement[]
+  portal: PortalPanelState | null
   reorderStatus: BookmarkReorderStatusViewModel | null
   sections: BookmarkFolderSectionViewModel[]
-  sourceNavigation: HTMLElement | null
+  sourceNavigation: SourceNavigationState | null
 }
 
 export interface BookmarkFolderSectionViewModel {
@@ -494,30 +499,6 @@ export function renderSearchWidgetPanelStateIsland(
   flushSync(() => {
     panelStore.setState(state)
   })
-}
-
-export function createSourceNavigationIslandElement(state: SourceNavigationState): HTMLElement {
-  const nav = document.createElement('nav')
-  nav.className = 'source-navigation'
-  nav.setAttribute('aria-label', '书签来源导航')
-  renderIsland(nav, <SourceNavigation state={state} />)
-  return nav
-}
-
-export function createQuickAccessPanelIslandElement(state: QuickAccessPanelState): HTMLElement {
-  const panel = document.createElement('section')
-  panel.className = 'newtab-quick-access'
-  panel.setAttribute('aria-label', 'Curator 常用和新近添加书签')
-  renderIsland(panel, <QuickAccessPanel state={state} />)
-  return panel
-}
-
-export function createPortalPanelIslandElement(content: HTMLElement): HTMLElement {
-  const panel = document.createElement('section')
-  panel.className = 'newtab-portal quick-only'
-  panel.setAttribute('aria-label', 'Curator 常用和新近添加书签')
-  renderIsland(panel, <PortalPanel content={content} />)
-  return panel
 }
 
 export function createSpeedDialPanelIslandElement(state: SpeedDialPanelState): HTMLElement {
@@ -1135,7 +1116,12 @@ function BookmarkContent({ state }: { state: BookmarkContentViewModel }) {
   return (
     <>
       <MountedElements elements={state.modules} />
-      <MountedElement element={state.sourceNavigation} />
+      {state.portal ? <PortalPanel state={state.portal} /> : null}
+      {state.sourceNavigation ? (
+        <nav className="source-navigation" aria-label="书签来源导航">
+          <SourceNavigation state={state.sourceNavigation} />
+        </nav>
+      ) : null}
       <div className="bookmark-folder-sections">
         {state.sections.map((section) => (
           <BookmarkFolderSection section={section} key={section.folderId} />
@@ -1154,8 +1140,14 @@ function BookmarkGridPlaceholder({ state }: { state: BookmarkGridPlaceholderView
   return <>继续载入 {state.remainingCount} 个书签</>
 }
 
-function PortalPanel({ content }: { content: HTMLElement }) {
-  return <MountedElement element={content} />
+function PortalPanel({ state }: { state: PortalPanelState }) {
+  return (
+    <section className="newtab-portal quick-only" aria-label="Curator 常用和新近添加书签">
+      <section className="newtab-quick-access" aria-label="Curator 常用和新近添加书签">
+        <QuickAccessPanel state={state.quickAccess} />
+      </section>
+    </section>
+  )
 }
 
 function MountedElements({ elements }: { elements: HTMLElement[] }) {
