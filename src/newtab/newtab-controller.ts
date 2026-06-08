@@ -1320,10 +1320,6 @@ function bindBackgroundSettingsEvents(): void {
   })
 }
 
-function bindIconSettingsEvents(): void {
-  cachedEl('icon-advanced-toggle')?.addEventListener('click', toggleIconAdvanced)
-}
-
 function bindGeneralSettingsEvents(): void {
 }
 
@@ -2025,7 +2021,6 @@ function initializeSettingsDrawer(): void {
   bindGeneralSettingsEvents()
   bindFolderSettingsEvents()
   bindBackgroundSettingsEvents()
-  bindIconSettingsEvents()
   bindSettingsGroupTabs()
   settingsDrawerReady = true
   resolveSettingsDrawerReady?.()
@@ -10835,29 +10830,6 @@ function resetIconSettingsToDefaults(): void {
   applyIconSettingsLive()
   syncIconSettingsControls()
   updateClockText()
-}
-
-function toggleIconAdvanced(): void {
-  const toggle = cachedEl('icon-advanced-toggle')
-  const panel = cachedEl('icon-advanced-panel')
-  if (!toggle || !panel) return
-
-  const expanded = toggle.getAttribute('aria-expanded') === 'true'
-  toggle.setAttribute('aria-expanded', String(!expanded))
-  toggle.classList.toggle('expanded', !expanded)
-  setRevealPanelExpanded(panel, !expanded)
-}
-
-function setRevealPanelExpanded(panel: HTMLElement, expanded: boolean): void {
-  panel.hidden = false
-  panel.classList.toggle('is-expanded', expanded)
-  panel.classList.toggle('is-collapsed', !expanded)
-  panel.setAttribute('aria-hidden', String(!expanded))
-  if (expanded) {
-    panel.removeAttribute('inert')
-  } else {
-    panel.setAttribute('inert', '')
-  }
 }
 
 function setTextContent(elementId: string, text: string): void {
