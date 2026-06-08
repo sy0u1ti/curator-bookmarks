@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef, type RefObject } from 'react'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { Button } from '../../ui/primitives/Button'
 import { InlineDialogPanel } from '../../ui/primitives/Dialog'
@@ -40,9 +40,13 @@ export function BookmarkMenusHost() {
 
 function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
   const ref = useRef<HTMLElement | null>(null)
+  const firstInputRef = useRef<HTMLInputElement | null>(null)
+  const actionRefs = useBookmarkActionRefs(view.menu.actions)
 
   useBookmarkMenuLayout(ref, {
+    actionRefs,
     closing: view.closing,
+    firstInputRef,
     focusAction: view.focusAction,
     focusFirst: view.focusFirst,
     x: view.menu.x,
@@ -55,13 +59,15 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
       style={{ left: `${view.menu.x}px`, top: `${view.menu.y}px` }}
       ref={ref}
     >
-      <BookmarkEditMenu menu={view.menu} />
+      <BookmarkEditMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
     </section>
   )
 }
 
 function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
   const ref = useRef<HTMLElement | null>(null)
+  const firstInputRef = useRef<HTMLInputElement | null>(null)
+  const actionRefs = useBookmarkActionRefs(view.menu.actions)
   const className = [
     'bookmark-add-menu',
     view.menu.expanded ? 'expanded' : '',
@@ -69,7 +75,9 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
   ].filter(Boolean).join(' ')
 
   useBookmarkMenuLayout(ref, {
+    actionRefs,
     closing: view.closing,
+    firstInputRef,
     focusFirst: view.focusFirst,
     x: view.menu.x,
     y: view.menu.y
@@ -81,21 +89,43 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
       style={{ left: `${view.menu.x}px`, top: `${view.menu.y}px` }}
       ref={ref}
     >
-      <BookmarkAddMenu menu={view.menu} />
+      <BookmarkAddMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
     </section>
   )
+}
+
+type BookmarkActionRefMap = Map<string, RefObject<HTMLElement | null>>
+
+function useBookmarkActionRefs(actions: BookmarkMenuActionViewModel[]): BookmarkActionRefMap {
+  const refMapRef = useRef<BookmarkActionRefMap>(new Map())
+
+  return useMemo(() => {
+    const next = new Map<string, RefObject<HTMLElement | null>>()
+    for (const action of actions) {
+      if (!action.actionId) {
+        continue
+      }
+      next.set(action.actionId, refMapRef.current.get(action.actionId) ?? { current: null })
+    }
+    refMapRef.current = next
+    return next
+  }, [actions])
 }
 
 function useBookmarkMenuLayout(
   ref: React.RefObject<HTMLElement | null>,
   {
+    actionRefs,
     closing,
+    firstInputRef,
     focusAction = '',
     focusFirst,
     x,
     y
   }: {
+    actionRefs: BookmarkActionRefMap
     closing: boolean
+    firstInputRef: RefObject<HTMLInputElement | null>
     focusAction?: string
     focusFirst: boolean
     x: number
@@ -114,20 +144,23 @@ function useBookmarkMenuLayout(
       return
     }
 
-    const focusedAction = focusAction
-      ? menu.querySelector<HTMLButtonElement>(`[data-menu-action="${focusAction}"]`)
-      : null
-    if (focusedAction && !focusedAction.disabled) {
+    const focusedAction = focusAction ? actionRefs.get(focusAction)?.current : null
+    if (focusedAction && !isDisabledFocusTarget(focusedAction)) {
       focusedAction.focus()
       return
     }
 
-    const firstInput = menu.querySelector('input')
-    if (focusFirst && firstInput instanceof HTMLInputElement) {
+    const firstInput = firstInputRef.current
+    if (focusFirst && firstInput) {
       firstInput.focus()
       firstInput.select()
     }
-  }, [closing, focusAction, focusFirst, ref, x, y])
+  }, [actionRefs, closing, firstInputRef, focusAction, focusFirst, ref, x, y])
+}
+
+function isDisabledFocusTarget(element: HTMLElement): boolean {
+  return (element instanceof HTMLButtonElement && element.disabled) ||
+    element.getAttribute('aria-disabled') === 'true'
 }
 
 function positionMenu(menu: HTMLElement, menuX: number, menuY: number): void {
@@ -145,7 +178,15 @@ function positionMenu(menu: HTMLElement, menuX: number, menuY: number): void {
   menu.style.top = `${top}px`
 }
 
-function BookmarkEditMenu({ menu }: { menu: BookmarkEditMenuViewModel }) {
+function BookmarkEditMenu({
+  actionRefs,
+  firstInputRef,
+  menu
+}: {
+  actionRefs: BookmarkActionRefMap
+  firstInputRef: RefObject<HTMLInputElement | null>
+  menu: BookmarkEditMenuViewModel
+}) {
   return (
     <InlineDialogPanel
       className="bookmark-menu-popover-shell"
@@ -153,7 +194,7 @@ function BookmarkEditMenu({ menu }: { menu: BookmarkEditMenuViewModel }) {
       initialFocus={false}
       finalFocus={false}
     >
-      <BookmarkMenuTextField field={menu.fields[0]} />
+      <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
       <BookmarkMenuTextField field={menu.fields[1]} />
       <div className="bookmark-menu-row">
         <span>图标</span>
@@ -177,13 +218,21 @@ function BookmarkEditMenu({ menu }: { menu: BookmarkEditMenuViewModel }) {
         />
       </div>
       <BookmarkMenuSeparator />
-      <BookmarkMenuActions actions={menu.actions} label="书签操作" />
+      <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="书签操作" />
       <BookmarkMenuFeedback error={menu.error} status={menu.status} statusTone={menu.statusTone} />
     </InlineDialogPanel>
   )
 }
 
-function BookmarkAddMenu({ menu }: { menu: BookmarkAddMenuViewModel }) {
+function BookmarkAddMenu({
+  actionRefs,
+  firstInputRef,
+  menu
+}: {
+  actionRefs: BookmarkActionRefMap
+  firstInputRef: RefObject<HTMLInputElement | null>
+  menu: BookmarkAddMenuViewModel
+}) {
   return (
     <InlineDialogPanel
       className="bookmark-menu-popover-shell"
@@ -193,10 +242,10 @@ function BookmarkAddMenu({ menu }: { menu: BookmarkAddMenuViewModel }) {
     >
       {menu.expanded ? (
         <>
-          <BookmarkMenuTextField field={menu.fields[0]} />
+          <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
           <BookmarkMenuTextField field={menu.fields[1]} />
           <BookmarkMenuSeparator />
-          <BookmarkMenuActions actions={menu.actions} label="添加书签操作" />
+          <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
         </>
       ) : (
         <Button
@@ -216,7 +265,13 @@ function BookmarkAddMenu({ menu }: { menu: BookmarkAddMenuViewModel }) {
   )
 }
 
-function BookmarkMenuTextField({ field }: { field: BookmarkMenuTextFieldViewModel }) {
+function BookmarkMenuTextField({
+  field,
+  inputRef
+}: {
+  field: BookmarkMenuTextFieldViewModel
+  inputRef?: RefObject<HTMLInputElement | null>
+}) {
   return (
     <label className="bookmark-menu-row">
       <span>{field.label}</span>
@@ -227,6 +282,7 @@ function BookmarkMenuTextField({ field }: { field: BookmarkMenuTextFieldViewMode
         defaultValue={field.value}
         disabled={field.disabled}
         spellCheck={false}
+        ref={inputRef}
         onChange={(event) => {
           field.onChange(event.currentTarget.value)
         }}
@@ -246,17 +302,28 @@ function BookmarkMenuSeparator() {
   return <div className="bookmark-menu-separator" />
 }
 
-function BookmarkMenuActions({ actions, label }: { actions: BookmarkMenuActionViewModel[]; label: string }) {
+function BookmarkMenuActions({
+  actionRefs,
+  actions,
+  label
+}: {
+  actionRefs: BookmarkActionRefMap
+  actions: BookmarkMenuActionViewModel[]
+  label: string
+}) {
   return (
     <InlineMenuList
-      actions={actions.map(toInlineMenuAction)}
+      actions={actions.map((action) => toInlineMenuAction(action, actionRefs))}
       className="bookmark-menu-actions"
       label={label}
     />
   )
 }
 
-function toInlineMenuAction(action: BookmarkMenuActionViewModel): InlineMenuAction {
+function toInlineMenuAction(
+  action: BookmarkMenuActionViewModel,
+  actionRefs: BookmarkActionRefMap
+): InlineMenuAction {
   return {
     id: action.id,
     label: <BookmarkMenuActionContent icon={action.icon} label={action.label} />,
@@ -265,6 +332,7 @@ function toInlineMenuAction(action: BookmarkMenuActionViewModel): InlineMenuActi
     className: action.variant ? `bookmark-menu-action ${action.variant}` : 'bookmark-menu-action',
     onSelect: action.onSelect,
     closeOnSelect: false,
+    itemRef: action.actionId ? actionRefs.get(action.actionId) : undefined,
     attributes: {
       ...(action.actionId ? { 'data-menu-action': action.actionId } : {}),
       'aria-label': action.ariaLabel

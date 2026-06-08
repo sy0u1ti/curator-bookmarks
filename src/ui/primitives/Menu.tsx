@@ -1,5 +1,5 @@
 import { Menu as BaseMenu } from '@base-ui/react/menu'
-import { useRef, type ReactNode } from 'react'
+import { useRef, type Ref, type ReactNode } from 'react'
 import { Icon } from '../icons/Icon'
 import { MotionPanel } from '../motion/MotionPanel'
 
@@ -56,6 +56,7 @@ export interface InlineMenuAction {
   closeOnSelect?: boolean
   disabled?: boolean
   destructive?: boolean
+  itemRef?: Ref<HTMLElement>
   onSelect?: () => void | Promise<void>
 }
 
@@ -97,6 +98,7 @@ export function InlineMenu({
                   closeOnClick={action.closeOnSelect ?? true}
                   render={<button type="button" />}
                   className={action.className || (action.destructive ? 'danger' : '')}
+                  ref={action.itemRef}
                   onClick={() => {
                     void action.onSelect?.()
                   }}
@@ -148,6 +150,7 @@ export function InlineMenuList({ actions, className, label }: InlineMenuListProp
                 closeOnClick={action.closeOnSelect ?? false}
                 render={<button type="button" />}
                 className={action.className || (action.destructive ? 'danger' : '')}
+                ref={action.itemRef}
                 onClick={() => {
                   void action.onSelect?.()
                 }}
