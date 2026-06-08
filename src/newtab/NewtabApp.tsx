@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { Icon } from '../ui/icons/Icon'
 import { Button } from '../ui/primitives/Button'
 import { cx } from '../ui/primitives/utils'
@@ -40,13 +39,6 @@ function NewtabShell() {
         inert: true
       }
     : {}
-
-  useEffect(() => {
-    document.body.classList.toggle('settings-open', settingsDrawer.open)
-    return () => {
-      document.body.classList.remove('settings-open')
-    }
-  }, [settingsDrawer.open])
 
   return (
     <>

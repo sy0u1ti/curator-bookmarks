@@ -2,11 +2,20 @@ import { useEffect } from 'react'
 import { useNewtabBackgroundSettingsView } from '../newtab-background-settings-store'
 import { useNewtabDragUiView } from '../newtab-drag-ui-store'
 import { useNewtabFolderSourceView } from '../newtab-folder-source-store'
+import { useNewtabSettingsDrawerView } from '../newtab-settings-drawer-store'
 
 export function NewtabBodyClassesHost() {
   const background = useNewtabBackgroundSettingsView()
   const dragUi = useNewtabDragUiView()
   const folderSource = useNewtabFolderSourceView()
+  const settingsDrawer = useNewtabSettingsDrawerView()
+
+  useEffect(() => {
+    document.body.classList.toggle('settings-open', settingsDrawer.open)
+    return () => {
+      document.body.classList.remove('settings-open')
+    }
+  }, [settingsDrawer.open])
 
   useEffect(() => {
     document.body.classList.toggle('background-mask-enabled', background.maskEnabled)
