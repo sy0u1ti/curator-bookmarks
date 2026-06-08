@@ -15,7 +15,7 @@ import {
   type FeaturedBackgroundPickerView
 } from '../newtab-featured-background-picker-store'
 import { FeaturedBackgroundHoverPreviewHost } from './FeaturedBackgroundHoverPreview'
-import { FeaturedBackgroundPicker } from './RuntimeIslands'
+import { FeaturedBackgroundPicker } from './FeaturedBackgroundPicker'
 
 export interface FeaturedBackgroundModalProps {
   open: boolean

@@ -11,7 +11,7 @@ import {
 import { useNewtabContentView } from '../newtab-content-store'
 import { useNewtabClockView } from '../newtab-clock-store'
 import { useNewtabSearchWidgetView } from '../newtab-search-widget-store'
-import { ClockWidgetContent } from './RuntimeIslands'
+import { ClockWidgetContent } from './ClockWidgetContent'
 import { NewtabBookmarkContent } from './NewtabBookmarkContent'
 import { NewtabSearchWidget } from './NewtabSearchWidget'
 

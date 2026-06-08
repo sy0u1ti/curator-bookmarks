@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { FeaturedBackgroundPickerState } from './components/RuntimeIslands'
+import type { FeaturedBackgroundPickerState } from './components/FeaturedBackgroundPicker'
 
 export type FeaturedBackgroundPickerView = FeaturedBackgroundPickerState
 

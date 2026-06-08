@@ -196,13 +196,12 @@ import {
 } from '../shared/newtab-workspace-settings.js'
 import { mark as perfMark, measure as perfMeasure, measureNow } from '../shared/perf.js'
 import { runIdle, runMicroIdle } from '../shared/idle.js'
-import {
-  mountNewTabDragGhostBridge,
-  type FeaturedBackgroundPickerCardViewModel,
-  type FeaturedBackgroundPickerGridSectionViewModel,
-  type FeaturedBackgroundPickerProviderGroupViewModel,
-  type FeaturedBackgroundPickerState
-} from './components/RuntimeIslands.js'
+import type {
+  FeaturedBackgroundPickerCardViewModel,
+  FeaturedBackgroundPickerGridSectionViewModel,
+  FeaturedBackgroundPickerProviderGroupViewModel,
+  FeaturedBackgroundPickerState
+} from './components/FeaturedBackgroundPicker.js'
 import type { SpeedDialCardViewModel } from './components/NewtabSpeedDialPanel.js'
 import {
   dispatchNewtabBookmarkContentView,
@@ -2867,6 +2866,10 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   } else {
     state.dragSuppressClick = false
   }
+}
+
+function mountNewTabDragGhostBridge(ghost: HTMLElement): void {
+  document.body.append(ghost)
 }
 
 function createBookmarkDragGhost(sourceTile = getActiveDragTile()): void {
