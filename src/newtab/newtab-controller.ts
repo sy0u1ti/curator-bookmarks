@@ -767,6 +767,7 @@ let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
 let featuredBackgroundModalClose: HTMLElement | null = null
 let featuredBackgroundPicker: HTMLElement | null = null
+let activeClockWidget: HTMLElement | null = null
 let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
@@ -6880,6 +6881,7 @@ function createClockWidget(): HTMLElement | null {
   }
 
   const clock = createClockWidgetIslandElement(createFallbackClockWidgetState(new Date(), settings))
+  activeClockWidget = clock
 
   hydrateClockText(clock)
 
@@ -11843,7 +11845,7 @@ function updateClockText(): void {
     return
   }
 
-  const clockNode = document.querySelector<HTMLElement>('.newtab-clock')
+  const clockNode = getActiveClockWidget()
   if (!clockNode) {
     return
   }
@@ -11863,7 +11865,7 @@ function updateClockText(): void {
 }
 
 function updateClockTextFallback(): void {
-  const clockNode = document.querySelector<HTMLElement>('.newtab-clock')
+  const clockNode = getActiveClockWidget()
   if (!clockNode) {
     return
   }
@@ -11885,6 +11887,14 @@ function createFallbackClockWidgetState(
     timeDateTime: getFallbackClockTimeDateTime(date),
     timeText: formatFallbackClockTime(date, settings)
   }
+}
+
+function getActiveClockWidget(): HTMLElement | null {
+  if (activeClockWidget?.isConnected) {
+    return activeClockWidget
+  }
+  activeClockWidget = null
+  return null
 }
 
 function hydrateClockText(clockNode?: HTMLElement): void {
