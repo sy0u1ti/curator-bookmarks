@@ -5655,6 +5655,14 @@ function createSearchWidget(): HTMLElement | null {
 
         input.blur()
       },
+      onRootBlur: () => {
+        window.setTimeout(() => {
+          if (!slot.contains(document.activeElement)) {
+            closeEngineMenu()
+            hideSuggestions()
+          }
+        }, 0)
+      },
       onSubmit: (event) => {
         event.preventDefault()
         closeEngineMenu()
@@ -6061,15 +6069,6 @@ function createSearchWidget(): HTMLElement | null {
       : (activeSuggestionIndex + direction + searchSuggestions.length) % searchSuggestions.length
     renderSuggestions(searchSuggestions, { preserveActive: true, query: input.value })
   }
-
-  slot.addEventListener('focusout', () => {
-    window.setTimeout(() => {
-      if (!slot.contains(document.activeElement)) {
-        closeEngineMenu()
-        hideSuggestions()
-      }
-    }, 0)
-  })
 
   updateEngineButton()
   updateNaturalButton()

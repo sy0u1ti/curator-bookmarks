@@ -280,6 +280,7 @@ export interface SearchWidgetInteractionState {
   onInputFocus: () => void
   onInputInput: () => void
   onInputKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
+  onRootBlur: (event: React.FocusEvent<HTMLDivElement>) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onToggleNatural: () => void
 }
@@ -1124,6 +1125,7 @@ function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionSta
     onInputFocus: noop,
     onInputInput: noop,
     onInputKeyDown: noop,
+    onRootBlur: noop,
     onSubmit: (event) => {
       event.preventDefault()
     },
@@ -1156,7 +1158,7 @@ function SearchWidgetShell({
   } as React.CSSProperties
 
   return (
-    <>
+    <div className="newtab-search-shell" onBlur={interactions.onRootBlur}>
       <form
         className="newtab-search"
         style={formStyle}
@@ -1178,7 +1180,7 @@ function SearchWidgetShell({
       </form>
       <SearchWidgetEngineMenu engineMenuStore={engineMenuStore} />
       <SearchWidgetSuggestionsPanel panelStore={panelStore} />
-    </>
+    </div>
   )
 }
 
