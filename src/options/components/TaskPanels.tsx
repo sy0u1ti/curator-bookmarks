@@ -313,7 +313,7 @@ export function RedirectsPanel() {
             secondaryAction="redirect-info"
           />
         </div>
-        <div id="redirect-pagination" className="results-pagination hidden" aria-label="重定向结果分页" />
+        <div id="redirect-pagination" aria-label="重定向结果分页" />
       </div>
     </section>
   )

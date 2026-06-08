@@ -24,8 +24,6 @@ export function renderResultsPaginationIsland(
     roots.set(container, root)
   }
 
-  container.classList.toggle('hidden', !state || state.totalPages <= 1)
-
   flushSync(() => {
     root.render(
       <ThemeProvider>
@@ -37,7 +35,7 @@ export function renderResultsPaginationIsland(
 
 function ResultsPagination({ state }: { state: ResultsPaginationState }) {
   return (
-    <>
+    <div className="results-pagination">
       <span className="results-pagination-label">
         {state.label} {state.start}-{state.end} / {state.totalCount}
       </span>
@@ -64,6 +62,6 @@ function ResultsPagination({ state }: { state: ResultsPaginationState }) {
       >
         下一页
       </Button>
-    </>
+    </div>
   )
 }

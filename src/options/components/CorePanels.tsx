@@ -476,7 +476,7 @@ export function AvailabilityPanel() {
         <div id="availability-review-results" className="detect-results">
           <div className="detect-empty">开始检测后，这里会展示低置信异常书签。</div>
         </div>
-        <div id="availability-review-pagination" className="results-pagination hidden" aria-label="低置信异常分页" />
+        <div id="availability-review-pagination" aria-label="低置信异常分页" />
       </div>
 
       <div className="options-group detect-results-group">
@@ -494,7 +494,7 @@ export function AvailabilityPanel() {
         <div id="availability-results" className="detect-results">
           <div className="detect-empty">开始检测后，这里会展示高置信失效的书签。</div>
         </div>
-        <div id="availability-failed-pagination" className="results-pagination hidden" aria-label="高置信异常分页" />
+        <div id="availability-failed-pagination" aria-label="高置信异常分页" />
       </div>
     </section>
   )
@@ -596,7 +596,7 @@ export function AiAnalysisPanel() {
         <div id="ai-results" className="detect-results">
           <div className="detect-empty">保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。</div>
         </div>
-        <div id="ai-results-pagination" className="results-pagination hidden" aria-label="AI 标签与命名结果分页" />
+        <div id="ai-results-pagination" aria-label="AI 标签与命名结果分页" />
       </div>
     </section>
   )
