@@ -219,6 +219,7 @@ import {
   renderNewTabSearchSuggestionsIsland,
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
+  renderSearchWidgetComboboxStateIsland,
   renderSearchWidgetPanelStateIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
@@ -5582,6 +5583,27 @@ function createSearchWidget(): HTMLElement | null {
   }
   const updateEngineButton = renderSearchWidgetButtons
   const updateNaturalButton = renderSearchWidgetButtons
+  let searchComboboxExpanded = false
+  let activeSearchDescendantId = ''
+  const renderSearchComboboxState = () => {
+    renderSearchWidgetComboboxStateIsland(slot, {
+      activeDescendantId: activeSearchDescendantId,
+      expanded: searchComboboxExpanded
+    })
+  }
+  const openSearchCombobox = () => {
+    searchComboboxExpanded = true
+    renderSearchComboboxState()
+  }
+  const closeSearchCombobox = () => {
+    searchComboboxExpanded = false
+    activeSearchDescendantId = ''
+    renderSearchComboboxState()
+  }
+  const setActiveSearchDescendant = (id: string) => {
+    activeSearchDescendantId = id
+    renderSearchComboboxState()
+  }
   let searchPanelVisible = false
   let searchSuggestionListVisible = true
   const renderSearchWidgetPanelState = () => {
@@ -5725,8 +5747,7 @@ function createSearchWidget(): HTMLElement | null {
     renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
     renderNewTabSearchHintIsland(suggestionsHint, { type: 'empty' })
     hideSearchPanel()
-    input.setAttribute('aria-expanded', 'false')
-    input.removeAttribute('aria-activedescendant')
+    closeSearchCombobox()
   }
 
   const renderSuggestions = (suggestionList: NewTabSearchSuggestion[], {
@@ -5749,7 +5770,7 @@ function createSearchWidget(): HTMLElement | null {
       activeSuggestionIndex = -1
       renderNewTabSearchSuggestionsIsland(suggestions, [])
       setSearchSuggestionsListVisible(false)
-      input.removeAttribute('aria-activedescendant')
+      setActiveSearchDescendant('')
       if (!trimmedQuery) {
         hideSuggestions()
         return
@@ -5765,14 +5786,14 @@ function createSearchWidget(): HTMLElement | null {
           text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
         })
         showSearchPanel()
-        input.setAttribute('aria-expanded', 'true')
+        openSearchCombobox()
         return
       }
 
       renderNewTabSearchSectionLabelIsland(suggestionsHeading, '网页搜索')
       renderNewTabSearchHintIsland(suggestionsHint, createSearchWebFallbackState(trimmedQuery))
       showSearchPanel()
-      input.setAttribute('aria-expanded', 'true')
+      openSearchCombobox()
       return
     }
 
@@ -5812,12 +5833,12 @@ function createSearchWidget(): HTMLElement | null {
       type: 'text',
       text: getSearchSuggestionHintText()
     })
-    input.setAttribute('aria-expanded', 'true')
+    openSearchCombobox()
 
     if (activeSuggestionIndex >= 0) {
-      input.setAttribute('aria-activedescendant', getSearchSuggestionElementId(activeSuggestionIndex))
+      setActiveSearchDescendant(getSearchSuggestionElementId(activeSuggestionIndex))
     } else {
-      input.removeAttribute('aria-activedescendant')
+      setActiveSearchDescendant('')
     }
   }
 
@@ -5910,8 +5931,8 @@ function createSearchWidget(): HTMLElement | null {
       text: '正在准备索引…'
     })
     showSearchPanel()
-    input.setAttribute('aria-expanded', 'true')
-    input.removeAttribute('aria-activedescendant')
+    openSearchCombobox()
+    setActiveSearchDescendant('')
   }
 
   const moveActiveSuggestion = (direction: 1 | -1) => {
@@ -6034,6 +6055,7 @@ function createSearchWidget(): HTMLElement | null {
 
   updateEngineButton()
   updateNaturalButton()
+  renderSearchComboboxState()
   renderSearchWidgetPanelState()
   syncSearchInputActions(slot, input)
   return slot

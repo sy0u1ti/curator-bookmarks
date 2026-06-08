@@ -20,6 +20,7 @@ import type { NewTabTimeSettings } from '../time-settings'
 const roots = new WeakMap<Element, Root>()
 const searchWidgetActionStores = new WeakMap<Element, SearchWidgetActionStore>()
 const searchWidgetButtonStores = new WeakMap<Element, SearchWidgetButtonStore>()
+const searchWidgetComboboxStores = new WeakMap<Element, SearchWidgetComboboxStore>()
 const searchWidgetPanelStores = new WeakMap<Element, SearchWidgetPanelStore>()
 
 function renderIsland(container: Element, node: React.ReactNode): void {
@@ -257,6 +258,11 @@ export interface SearchWidgetActionState {
   hasInputValue: boolean
 }
 
+export interface SearchWidgetComboboxState {
+  activeDescendantId: string
+  expanded: boolean
+}
+
 interface SearchWidgetActionStore {
   getSnapshot: () => SearchWidgetActionState
   setState: (state: SearchWidgetActionState) => void
@@ -266,6 +272,12 @@ interface SearchWidgetActionStore {
 interface SearchWidgetButtonStore {
   getSnapshot: () => SearchWidgetButtonStates
   setState: (state: SearchWidgetButtonStates) => void
+  subscribe: (listener: () => void) => () => void
+}
+
+interface SearchWidgetComboboxStore {
+  getSnapshot: () => SearchWidgetComboboxState
+  setState: (state: SearchWidgetComboboxState) => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -433,6 +445,10 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     canSubmit: false,
     hasInputValue: false
   })
+  const comboboxStore = getSearchWidgetComboboxStore(slot, {
+    activeDescendantId: '',
+    expanded: false
+  })
   const panelStore = getSearchWidgetPanelStore(slot, {
     panelVisible: false,
     suggestionsVisible: true
@@ -440,6 +456,10 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
   actionStore.setState({
     canSubmit: false,
     hasInputValue: false
+  })
+  comboboxStore.setState({
+    activeDescendantId: '',
+    expanded: false
   })
   buttonStore.setState({
     engine: state.engine,
@@ -453,6 +473,7 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     <SearchWidgetShell
       actionStore={actionStore}
       buttonStore={buttonStore}
+      comboboxStore={comboboxStore}
       panelStore={panelStore}
       state={state}
     />
@@ -477,6 +498,16 @@ export function renderSearchWidgetButtonStatesIsland(
   const buttonStore = getSearchWidgetButtonStore(container, state)
   flushSync(() => {
     buttonStore.setState(state)
+  })
+}
+
+export function renderSearchWidgetComboboxStateIsland(
+  container: HTMLElement,
+  state: SearchWidgetComboboxState
+): void {
+  const comboboxStore = getSearchWidgetComboboxStore(container, state)
+  flushSync(() => {
+    comboboxStore.setState(state)
   })
 }
 
@@ -841,6 +872,34 @@ function getSearchWidgetButtonStore(
   return store
 }
 
+function getSearchWidgetComboboxStore(
+  host: Element,
+  initialState: SearchWidgetComboboxState
+): SearchWidgetComboboxStore {
+  let store = searchWidgetComboboxStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  searchWidgetComboboxStores.set(host, store)
+  return store
+}
+
 function getSearchWidgetPanelStore(
   host: Element,
   initialState: SearchWidgetPanelState
@@ -877,6 +936,10 @@ function useSearchWidgetButtonStates(store: SearchWidgetButtonStore): SearchWidg
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
 
+function useSearchWidgetComboboxState(store: SearchWidgetComboboxStore): SearchWidgetComboboxState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
 function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetPanelState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
@@ -884,11 +947,13 @@ function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetP
 function SearchWidgetShell({
   actionStore,
   buttonStore,
+  comboboxStore,
   panelStore,
   state
 }: {
   actionStore: SearchWidgetActionStore
   buttonStore: SearchWidgetButtonStore
+  comboboxStore: SearchWidgetComboboxStore
   panelStore: SearchWidgetPanelStore
   state: SearchWidgetShellState
 }) {
@@ -907,20 +972,7 @@ function SearchWidgetShell({
         aria-label={state.ariaLabel}
       >
         <Icon name="Search" className="newtab-search-icon" size={16} aria-hidden="true" />
-        <Input
-          className="newtab-search-input"
-          type="search"
-          autoComplete="off"
-          enterKeyHint="search"
-          placeholder={state.placeholder}
-          spellCheck={false}
-          role="combobox"
-          aria-label={state.inputAriaLabel}
-          aria-autocomplete="list"
-          aria-controls="newtab-search-suggestions"
-          aria-expanded="false"
-          unstyled
-        />
+        <SearchWidgetInput comboboxStore={comboboxStore} state={state} />
         <SearchWidgetClearButton actionStore={actionStore} />
         <SearchWidgetSeparator actionStore={actionStore} />
         <SearchWidgetNaturalButton buttonStore={buttonStore} />
@@ -929,6 +981,34 @@ function SearchWidgetShell({
       </form>
       <SearchWidgetSuggestionsPanel panelStore={panelStore} />
     </>
+  )
+}
+
+function SearchWidgetInput({
+  comboboxStore,
+  state
+}: {
+  comboboxStore: SearchWidgetComboboxStore
+  state: SearchWidgetShellState
+}) {
+  const combobox = useSearchWidgetComboboxState(comboboxStore)
+
+  return (
+    <Input
+      className="newtab-search-input"
+      type="search"
+      autoComplete="off"
+      enterKeyHint="search"
+      placeholder={state.placeholder}
+      spellCheck={false}
+      role="combobox"
+      aria-label={state.inputAriaLabel}
+      aria-autocomplete="list"
+      aria-controls="newtab-search-suggestions"
+      aria-expanded={combobox.expanded}
+      aria-activedescendant={combobox.activeDescendantId || undefined}
+      unstyled
+    />
   )
 }
 
