@@ -1948,7 +1948,6 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     scheduleAdaptiveNewTabLayoutUpdate()
     dispatchNewtabSettingsDrawerOpen(true, 'open')
     settingsDrawer?.removeAttribute('inert')
-    setSettingsModalBackgroundInert(true)
     if (focusFirstControl) {
       window.requestAnimationFrame(() => {
         focusFirstSettingsDrawerControl()
@@ -2015,34 +2014,12 @@ function closeSettingsDrawer(): void {
 
   dispatchNewtabSettingsDrawerOpen(false, 'closing')
   settingsDrawer?.setAttribute('inert', '')
-  setSettingsModalBackgroundInert(false)
   window.setTimeout(() => {
     if (getNewtabSettingsDrawerView().phase === 'closing') {
       dispatchNewtabSettingsDrawerOpen(false, 'closed')
     }
   }, 260)
   restoreSettingsDrawerFocus()
-}
-
-function setSettingsModalBackgroundInert(inert: boolean): void {
-  const backgroundElements = [
-    root,
-    settingsTrigger instanceof HTMLElement ? settingsTrigger : null,
-    dashboardTrigger instanceof HTMLElement ? dashboardTrigger : null
-  ]
-
-  for (const element of backgroundElements) {
-    if (!element) {
-      continue
-    }
-    if (inert) {
-      element.setAttribute('inert', '')
-      element.setAttribute('aria-hidden', 'true')
-    } else {
-      element.removeAttribute('inert')
-      element.removeAttribute('aria-hidden')
-    }
-  }
 }
 
 function isSettingsDrawerOpen(): boolean {

@@ -34,6 +34,12 @@ export function NewtabApp() {
 function NewtabShell() {
   const dashboardOverlay = useNewtabDashboardOverlayView()
   const settingsDrawer = useNewtabSettingsDrawerView()
+  const settingsBackgroundProps = settingsDrawer.open
+    ? {
+        'aria-hidden': true,
+        inert: true
+      }
+    : {}
 
   useEffect(() => {
     document.body.classList.toggle('settings-open', settingsDrawer.open)
@@ -63,6 +69,7 @@ function NewtabShell() {
           aria-label="打开书签仪表盘"
           aria-controls="newtab-dashboard-overlay"
           aria-expanded={dashboardOverlay.open ? 'true' : 'false'}
+          {...settingsBackgroundProps}
           onClick={(event) => {
             event.preventDefault()
             dispatchNewtabDashboardOverlayOpenRequest()
@@ -79,6 +86,7 @@ function NewtabShell() {
           aria-label="打开设置"
           aria-controls="newtab-settings-drawer"
           aria-expanded={settingsDrawer.open ? 'true' : 'false'}
+          {...settingsBackgroundProps}
           onClick={dispatchNewtabSettingsDrawerToggleRequest}
           unstyled
         >
@@ -97,7 +105,7 @@ function NewtabShell() {
         data-close-settings
         onClick={() => dispatchNewtabSettingsDrawerOpenChange(false)}
       ></div>
-      <div id="newtab-root" className="newtab-shell">
+      <div id="newtab-root" className="newtab-shell" {...settingsBackgroundProps}>
         <NewtabContentHost />
       </div>
       <DashboardOverlayHost />
