@@ -1,17 +1,20 @@
+import { AiProviderCard } from '../../ui/ai/AiProviderCard.js'
+import { AiTaskStatus } from '../../ui/ai/AiTaskStatus.js'
+import { Fieldset } from '../../ui/base/Fieldset.js'
+import { Button } from '../../ui/primitives/Button.js'
 import {
-  Button,
   CollapsiblePanel,
   CollapsibleRoot,
-  CollapsibleTrigger,
-  AiProviderCard,
-  AiTaskStatus,
-  Input,
+  CollapsibleTrigger
+} from '../../ui/primitives/Collapsible.js'
+import { Input } from '../../ui/primitives/Input.js'
+import {
   PopoverPopup,
   PopoverPortal,
   PopoverPositioner,
-  PopoverRoot,
-  SwitchControl
-} from '../../ui'
+  PopoverRoot
+} from '../../ui/primitives/Popover.js'
+import { SwitchControl } from '../../ui/primitives/Switch.js'
 
 const featureSwitches = [
   {
@@ -43,12 +46,12 @@ const featureSwitches = [
 ]
 
 const aiProviderSteps = [
-  ['1', '填写密钥', '先填 API Key；Base URL 在高级选项'],
-  ['2', '获取模型', '读取可用列表'],
-  ['3', '选择模型', '用于命名与分类'],
-  ['4', '测试连接', '确认模型可用'],
-  ['5', '保存', '同步到 AI 功能']
-]
+  { id: 'api-key', index: '1', title: '填写密钥', copy: '先填 API Key；Base URL 在高级选项' },
+  { id: 'fetch-models', index: '2', title: '获取模型', copy: '读取可用列表' },
+  { id: 'select-model', index: '3', title: '选择模型', copy: '用于命名与分类' },
+  { id: 'test-connection', index: '4', title: '测试连接', copy: '确认模型可用' },
+  { id: 'save-settings', index: '5', title: '保存', copy: '同步到 AI 功能' }
+] as const
 
 const availabilityDecisionMetrics = [
   ['本次范围', 'availability-decision-scope', '全部书签'],
@@ -92,11 +95,41 @@ const aiDecisionMetrics = [
   ['失败', 'ai-failed']
 ]
 
+const featureSettingsTitle = <h2 className="ai-settings-subtitle">功能设置</h2>
+
+const contentSnapshotTitle = (
+  <div>
+    <strong>网页内容索引</strong>
+    <p id="content-snapshot-status" className="ai-settings-subtitle">用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
+  </div>
+)
+
+const contentSnapshotStatus = <span className="options-chip muted">本地内容记忆</span>
+
+const aiProviderTitle = <h2 className="ai-settings-subtitle">自定义 AI 渠道</h2>
+
+const aiProviderDescription = (
+  <>
+    <p id="ai-provider-notice-text" className="ai-provider-notice">填写 API Key 后，系统将获取可用模型并用于书签智能分析。</p>
+    <p className="ai-provider-subtitle">API Key 仅保存在本地，不会上传到 Curator Bookmark 服务器。</p>
+  </>
+)
+
+const aiProviderStatus = <span id="ai-config-status" className="options-chip muted">待配置</span>
+
+const aiProgressTitle = <strong id="ai-progress-text">未开始</strong>
+
+const aiProgressDescription = (
+  <p id="ai-progress-copy" className="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>
+)
+
+const aiDecisionStatus = <span id="ai-decision-status" className="option-value">未开始</span>
+
 function HelpTooltip({ copy }: { copy: string }) {
   return (
-    <span className="ai-help-tooltip" tabIndex={0} aria-label={copy} data-tooltip={copy}>
+    <button className="ai-help-tooltip" type="button" aria-label={copy} data-tooltip={copy}>
       ?
-    </span>
+    </button>
   )
 }
 
@@ -148,7 +181,7 @@ export function GeneralPanel() {
 
       <AiProviderCard
         className="options-group ai-provider-card ai-feature-settings-card"
-        title={<h2 className="ai-settings-subtitle">功能设置</h2>}
+        title={featureSettingsTitle}
         headerClassName="ai-feature-settings-head"
         iconName="Sparkles"
         bodyClassName="ai-provider-layout"
@@ -174,13 +207,8 @@ export function GeneralPanel() {
 
       <AiProviderCard
         className="options-group ai-naming-settings-card"
-        title={
-          <div>
-            <strong>网页内容索引</strong>
-            <p id="content-snapshot-status" className="ai-settings-subtitle">用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
-          </div>
-        }
-        status={<span className="options-chip muted">本地内容记忆</span>}
+        title={contentSnapshotTitle}
+        status={contentSnapshotStatus}
         headerClassName="ai-feature-settings-head"
         iconName="ArchiveRestore"
         bodyClassName="ai-provider-layout"
@@ -209,48 +237,25 @@ export function GeneralPanel() {
         </CollapsibleRoot>
       </AiProviderCard>
 
-      <div className="options-group ai-provider-card">
-        <div className="ai-provider-head">
-          <div className="ai-provider-copy">
-            <h2 className="ai-settings-subtitle">快捷键</h2>
-            <p className="ai-provider-notice">为打开搜索、智能分类和切换自动分析设置快捷键。</p>
-            <p className="ai-provider-subtitle">Chrome 只允许在扩展快捷键页修改绑定。</p>
-          </div>
-          <span id="shortcut-status" className="options-chip muted">读取中</span>
-        </div>
-        <p id="shortcut-status-detail" className="shortcut-status-detail hidden" />
-        <div id="shortcut-list" className="shortcut-list">
-          <div className="detect-empty">正在读取当前快捷键绑定…</div>
-        </div>
-        <div className="shortcut-actions">
-          <Button id="open-shortcuts-settings" className="options-button small" size="sm" type="button" aria-label="打开 Chrome 扩展快捷键设置">打开快捷键设置</Button>
-          <Button id="copy-shortcuts-url" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="复制 Chrome 扩展快捷键设置地址">复制设置地址</Button>
-          <Button id="refresh-shortcuts" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="刷新扩展快捷键绑定状态">刷新状态</Button>
-        </div>
-      </div>
+      <div id="shortcut-controls" />
 
       <AiProviderCard
         id="ai-provider-settings"
         className="options-group ai-provider-card"
-        title={<h2 className="ai-settings-subtitle">自定义 AI 渠道</h2>}
-        description={
-          <>
-            <p id="ai-provider-notice-text" className="ai-provider-notice">填写 API Key 后，系统将获取可用模型并用于书签智能分析。</p>
-            <p className="ai-provider-subtitle">API Key 仅保存在本地，不会上传到 Curator Bookmark 服务器。</p>
-          </>
-        }
-        status={<span id="ai-config-status" className="options-chip muted">待配置</span>}
+        title={aiProviderTitle}
+        description={aiProviderDescription}
+        status={aiProviderStatus}
         headerClassName="ai-provider-head"
         copyClassName="ai-provider-copy"
         iconName="Bot"
         bodyClassName="ai-provider-layout"
       >
           <ol className="ai-provider-flow" aria-label="AI 渠道配置流程">
-            {aiProviderSteps.map(([index, title, copy]) => (
-              <li className="ai-flow-step" key={index}>
-                <span className="ai-flow-index">{index}</span>
-                <strong>{title}</strong>
-                <p>{copy}</p>
+            {aiProviderSteps.map((step) => (
+              <li className="ai-flow-step" key={step.id}>
+                <span className="ai-flow-index">{step.index}</span>
+                <strong>{step.title}</strong>
+                <p>{step.copy}</p>
               </li>
             ))}
           </ol>
@@ -265,13 +270,12 @@ export function GeneralPanel() {
             <AiSwitch id="ai-reveal-api-key" label="显示密码" />
           </label>
 
-          <div className="ai-provider-field" role="group" aria-label="AI 模型">
-            <span>模型</span>
+          <Fieldset className="ai-provider-field" legend="模型" unstyled>
             <div className="ai-model-field-controls">
               <div id="ai-model-selector-host" className="ai-model-selector-host" />
               <Button id="ai-fetch-models" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="从自定义 AI 渠道获取模型列表">获取模型</Button>
             </div>
-          </div>
+          </Fieldset>
 
           <p id="ai-fetch-models-status" className="ai-provider-connectivity muted hidden" />
           <p id="ai-connectivity-copy" className="ai-provider-connectivity muted hidden" />
@@ -537,13 +541,13 @@ export function AiAnalysisPanel() {
         status="idle"
         className="availability-decision-panel ai-decision-panel"
         label="执行进度"
-        title={<strong id="ai-progress-text">未开始</strong>}
+        title={aiProgressTitle}
         titleId="ai-progress-text"
-        description={<p id="ai-progress-copy" className="detect-status-copy">先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。</p>}
+        description={aiProgressDescription}
         progress={0}
         progressId="ai-progress-bar"
         progressClassName="detect-progress-track"
-        statusNode={<span id="ai-decision-status" className="option-value">未开始</span>}
+        statusNode={aiDecisionStatus}
         aria-label="书签智能分析决策概览"
       >
         <div className="availability-decision-header">

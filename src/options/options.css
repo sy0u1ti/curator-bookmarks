@@ -5159,13 +5159,25 @@ body.dashboard-fullscreen-active {
   gap: 10px;
 }
 
+.ai-provider-field {
+  border: 0;
+  margin: 0;
+  min-inline-size: 0;
+  padding: 0;
+}
+
 .ai-provider-field > span,
+.ai-provider-field > [data-base-ui-fieldset-legend],
 .ai-settings-field > span,
 .ai-settings-toggle span {
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
+}
+
+.ai-provider-field > [data-base-ui-fieldset-legend] {
+  padding: 0;
 }
 
 .ai-provider-input,

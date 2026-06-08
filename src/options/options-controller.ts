@@ -256,7 +256,7 @@ import {
   renameTagInIndex,
   stopActiveTagCloud
 } from './sections/tag-management.js'
-import { renderShortcutListIsland } from './components/ShortcutListIsland.js'
+import { renderShortcutControlsIsland } from './components/ShortcutListIsland.js'
 import { renderResultsPaginationIsland } from './components/ResultsPaginationIsland.js'
 import {
   renderAiModelPickerResultsIsland,
@@ -310,6 +310,10 @@ import {
   BACKUP_ACTION_EVENT,
   type BackupActionDetail
 } from './components/backup-events.js'
+import {
+  SHORTCUT_ACTION_EVENT,
+  type ShortcutActionDetail
+} from './components/shortcut-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1103,13 +1107,7 @@ function bindEvents() {
   dom.aiModelPickerTrigger?.addEventListener('click', openAiModelPickerModal)
   dom.aiFetchModels?.addEventListener('click', handleFetchAiModels)
   dom.aiManageModels?.addEventListener('click', openAiModelModal)
-  dom.openShortcutsSettings?.addEventListener('click', openShortcutsSettingsPage)
-  dom.copyShortcutsUrl?.addEventListener('click', () => {
-    void copyShortcutsUrl()
-  })
-  dom.refreshShortcuts?.addEventListener('click', () => {
-    void hydrateShortcutCommands()
-  })
+  window.addEventListener(SHORTCUT_ACTION_EVENT, handleShortcutAction)
   window.addEventListener('options:ai-provider-select-change', handleAiProviderSelectChange)
   dom.aiTimeoutMs?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiBatchSize?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
@@ -3742,36 +3740,25 @@ function getAllExtensionCommands(): Promise<chrome.commands.Command[]> {
 }
 
 function renderShortcutSettingsSection() {
-  if (!dom.shortcutList) {
+  if (!dom.shortcutControls) {
     return
   }
 
   const commands = getOrderedShortcutCommands()
-  if (dom.shortcutStatus) {
-    const statusTone = String(managerState.shortcutStatusTone || 'muted')
-    dom.shortcutStatus.className = `options-chip ${statusTone}`
-    dom.shortcutStatus.textContent = getShortcutStatusLabel()
-  }
-  if (dom.shortcutStatusDetail) {
-    const statusTone = String(managerState.shortcutStatusTone || 'muted')
-    const statusDetail = getShortcutStatusDetail()
-    dom.shortcutStatusDetail.className = `shortcut-status-detail ${statusTone}`
-    dom.shortcutStatusDetail.textContent = statusDetail
-    dom.shortcutStatusDetail.classList.toggle('hidden', !statusDetail)
-  }
+  const statusTone = String(managerState.shortcutStatusTone || 'muted')
+  const loading = managerState.shortcutStatus === 'loading'
 
-  renderShortcutListIsland(
-    dom.shortcutList,
-    managerState.shortcutStatus === 'loading'
+  renderShortcutControlsIsland(dom.shortcutControls, {
+    detail: getShortcutStatusDetail(),
+    list: loading
       ? { kind: 'loading' }
       : !commands.length
         ? { kind: 'empty' }
-        : { kind: 'commands', commands }
-  )
-
-  if (dom.refreshShortcuts) {
-    dom.refreshShortcuts.disabled = managerState.shortcutStatus === 'loading'
-  }
+        : { kind: 'commands', commands },
+    loading,
+    statusLabel: getShortcutStatusLabel(),
+    statusTone
+  })
 }
 
 function getOrderedShortcutCommands() {
@@ -4637,6 +4624,21 @@ function handleBackupAction(event: Event): void {
   }
   if (detail?.action === 'restore' && detail.mode) {
     void handleFullBackupRestore(detail.mode)
+  }
+}
+
+function handleShortcutAction(event: Event): void {
+  const detail = (event as CustomEvent<ShortcutActionDetail>).detail
+  if (detail?.action === 'open-settings') {
+    void openShortcutsSettingsPage()
+    return
+  }
+  if (detail?.action === 'copy-url') {
+    void copyShortcutsUrl()
+    return
+  }
+  if (detail?.action === 'refresh') {
+    void hydrateShortcutCommands()
   }
 }
 
