@@ -42,7 +42,6 @@ const roots = new WeakMap<Element, Root>()
 export function renderAiModelSelectorIsland(container: Element, state: AiModelSelectorState): void {
   let root = roots.get(container)
   if (!root) {
-    container.replaceChildren()
     root = createRoot(container)
     roots.set(container, root)
   }
@@ -59,7 +58,6 @@ export function renderAiModelSelectorIsland(container: Element, state: AiModelSe
 export function renderAiModelPickerResultsIsland(container: Element, state: AiModelPickerResultsState): void {
   let root = roots.get(container)
   if (!root) {
-    container.replaceChildren()
     root = createRoot(container)
     roots.set(container, root)
   }
