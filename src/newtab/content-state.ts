@@ -23,13 +23,6 @@ export interface ResolveNewTabContentStateInput {
   visibleFolderCount: number
 }
 
-export interface NewTabElementModule {
-  kind: 'element'
-  id: string
-  element: HTMLElement
-  placement: 'utility' | 'primary'
-}
-
 export interface NewTabOnboardingModule {
   id: 'onboarding'
   kind: 'onboarding'
@@ -80,7 +73,6 @@ export type NewTabPageModule =
   | NewTabBookmarksModule
   | NewTabClockModule
   | NewTabClockSpacerModule
-  | NewTabElementModule
   | NewTabLoadingModule
   | NewTabMissingFolderModule
   | NewTabOnboardingModule

@@ -1,9 +1,8 @@
-import { type CSSProperties, useCallback } from 'react'
+import { type CSSProperties } from 'react'
 import { Button } from '../../ui/primitives/Button'
 import { DotMatrixLoader } from '../../ui/primitives/DotMatrixLoader'
 import {
   type NewTabContentView,
-  type NewTabElementModule,
   type NewTabMissingFolderModule,
   type NewTabOnboardingModule,
   type NewTabPageModule
@@ -71,25 +70,10 @@ function UtilityModule({ module }: { module: NewTabPageModule }) {
     return <SearchModule />
   }
 
-  if (module.kind === 'element') {
-    return <MountedElementModule module={module} />
-  }
-
   return null
 }
 
 function PrimarySlot({ module }: { module: NewTabPageModule | undefined }) {
-  const mountPrimaryElement = useCallback((node: HTMLDivElement | null) => {
-    if (!node || !module || module.kind !== 'element') {
-      return
-    }
-    module.element.dataset.newtabModule = module.id
-    if (module.element.parentElement === node) {
-      return
-    }
-    node.replaceChildren(module.element)
-  }, [module])
-
   if (!module) {
     return <div className="newtab-primary-slot" />
   }
@@ -118,22 +102,7 @@ function PrimarySlot({ module }: { module: NewTabPageModule | undefined }) {
     )
   }
 
-  return <div className="newtab-primary-slot" ref={mountPrimaryElement} />
-}
-
-function MountedElementModule({ module }: { module: NewTabElementModule }) {
-  const mountElement = useCallback((node: HTMLDivElement | null) => {
-    if (!node) {
-      return
-    }
-    module.element.dataset.newtabModule = module.id
-    if (module.element.parentElement === node.parentElement) {
-      return
-    }
-    node.replaceWith(module.element)
-  }, [module])
-
-  return <div hidden ref={mountElement} />
+  return <div className="newtab-primary-slot" />
 }
 
 function SearchModule() {

@@ -80,7 +80,6 @@ import {
   type AdaptiveSearchOffsetBounds,
   type NewTabContentState,
   type NewTabContentView,
-  type NewTabElementModule,
   type NewTabBookmarksModule,
   type PortalQuickAccessItem,
   resolveNewTabContentState,
@@ -5306,7 +5305,7 @@ function getSearchAutoVerticalCenterNextModule(page: HTMLElement, slot: HTMLElem
   return page.querySelector<HTMLElement>(':scope > .newtab-primary-slot > :first-child')
 }
 
-function createNewTabLayout(primaryContent: HTMLElement | NewTabPageModule): NewTabContentView {
+function createNewTabLayout(primaryContent: NewTabPageModule): NewTabContentView {
   const modules: NewTabPageModule[] = []
 
   const onboarding = createNewTabOnboardingStrip()
@@ -5333,22 +5332,9 @@ function createNewTabLayout(primaryContent: HTMLElement | NewTabPageModule): New
     })
   }
 
-  modules.push(toPrimaryNewTabModule(primaryContent))
+  modules.push(primaryContent)
 
   return createNewTabPage({ modules })
-}
-
-function toPrimaryNewTabModule(primaryContent: HTMLElement | NewTabPageModule): NewTabPageModule {
-  if (!(primaryContent instanceof HTMLElement)) {
-    return primaryContent
-  }
-
-  return {
-    kind: 'element',
-    id: primaryContent.classList.contains('newtab-content') ? 'bookmarks' : 'state',
-    element: primaryContent,
-    placement: 'primary'
-  } satisfies NewTabElementModule
 }
 
 function normalizeNewTabOnboardingCompleted(rawState: unknown): boolean {
