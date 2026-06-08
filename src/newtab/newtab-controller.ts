@@ -1076,7 +1076,6 @@ function bindEvents(): void {
   window.addEventListener('hashchange', syncDashboardRoute)
   window.addEventListener('message', handleDashboardMessage)
   syncDashboardRoute()
-  settingsBackdrop?.addEventListener('click', closeSettingsDrawer)
   document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', (event) => {
     const target = event.target

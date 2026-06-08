@@ -13,6 +13,7 @@ import {
   useNewtabDashboardOverlayView
 } from './newtab-dashboard-overlay-store'
 import {
+  dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerToggleRequest,
   useNewtabSettingsDrawerView
 } from './newtab-settings-drawer-store'
@@ -75,7 +76,12 @@ function NewtabShell() {
         </Button>
       </div>
 
-      <div id="newtab-settings-backdrop" className="settings-backdrop" data-close-settings></div>
+      <div
+        id="newtab-settings-backdrop"
+        className="settings-backdrop"
+        data-close-settings
+        onClick={() => dispatchNewtabSettingsDrawerOpenChange(false)}
+      ></div>
       <div id="newtab-root" className="newtab-shell">
         <NewtabContentHost />
       </div>
