@@ -1,5 +1,7 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { Button } from '../base/Button'
+import { Input } from '../base/Input'
 import { cx } from '../primitives/utils'
 
 export type ModelSelectorProps = ComponentPropsWithoutRef<typeof BaseDialog.Root>
@@ -38,12 +40,12 @@ export function ModelSelectorContent({
   )
 }
 
-export type ModelSelectorInputProps = ComponentPropsWithoutRef<'input'>
+export type ModelSelectorInputProps = ComponentPropsWithoutRef<typeof Input>
 
 export function ModelSelectorInput({ className, ...props }: ModelSelectorInputProps) {
   return (
     <div className="model-selector-input-wrapper">
-      <input className={cx('model-selector-input', className)} {...props} />
+      <Input className={cx('model-selector-input', className)} unstyled {...props} />
     </div>
   )
 }
@@ -73,7 +75,7 @@ export function ModelSelectorGroup({ children, className, heading, ...props }: M
   )
 }
 
-export interface ModelSelectorItemProps extends Omit<ComponentPropsWithoutRef<'button'>, 'onSelect'> {
+export interface ModelSelectorItemProps extends Omit<ComponentPropsWithoutRef<typeof Button>, 'onSelect'> {
   current?: boolean
   onSelect?: () => void
   value: string
@@ -89,12 +91,13 @@ export function ModelSelectorItem({
   ...props
 }: ModelSelectorItemProps) {
   return (
-    <button
+    <Button
       className={cx('model-selector-item', current ? 'current' : '', className)}
       type="button"
       role="option"
       aria-selected={current ? 'true' : 'false'}
       data-ai-model-id={value}
+      unstyled
       onClick={(event) => {
         onClick?.(event)
         if (!event.defaultPrevented) {
@@ -104,7 +107,7 @@ export function ModelSelectorItem({
       {...props}
     >
       {children}
-    </button>
+    </Button>
   )
 }
 

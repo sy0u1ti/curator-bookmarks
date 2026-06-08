@@ -111,17 +111,15 @@ function AiModelSelector({ state }: { state: AiModelSelectorState }) {
         }
       }}
     >
-      <ModelSelectorTrigger render={<span />}>
-        <button
-          id="ai-model-selector-trigger"
-          className="model-selector-trigger"
-          type="button"
-          aria-label="选择 AI 模型"
-          disabled={state.disabled}
-        >
-          {selectedMeta.provider ? <ModelSelectorLogo provider={selectedMeta.provider} /> : null}
-          <ModelSelectorName id="ai-model-selector-label">{selectedModel || '选择模型'}</ModelSelectorName>
-        </button>
+      <ModelSelectorTrigger
+        id="ai-model-selector-trigger"
+        className="model-selector-trigger"
+        type="button"
+        aria-label="选择 AI 模型"
+        disabled={state.disabled}
+      >
+        {selectedMeta.provider ? <ModelSelectorLogo provider={selectedMeta.provider} /> : null}
+        <ModelSelectorName id="ai-model-selector-label">{selectedModel || '选择模型'}</ModelSelectorName>
       </ModelSelectorTrigger>
       <ModelSelectorContent dialogTitle="选择 AI 模型">
         <ModelSelectorInput
