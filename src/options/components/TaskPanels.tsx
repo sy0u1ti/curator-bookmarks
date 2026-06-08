@@ -2,12 +2,6 @@ import { Button } from '../../ui/primitives/Button.js'
 import { Card } from '../../ui/primitives/Card.js'
 import { Input } from '../../ui/primitives/Input.js'
 
-const historyMetrics = [
-  { label: '新增异常', valueId: 'availability-history-new' },
-  { label: '持续异常', valueId: 'availability-history-persistent' },
-  { label: '已恢复', valueId: 'availability-history-recovered' }
-]
-
 const duplicateMetrics = [
   { label: '重复分组', valueId: 'duplicate-summary-groups', className: 'metric-total' },
   { label: '建议清理', valueId: 'duplicate-summary-candidates', className: 'metric-info' },
@@ -93,40 +87,7 @@ export function HistoryPanel() {
       </div>
 
       <div className="options-group detect-history-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>检测历史</strong>
-            <p id="availability-history-subtitle" className="detect-results-subtitle">
-              完成一次检测后，这里会生成一条检测日志，保留最近多次结果用于趋势和连续异常对比。
-            </p>
-          </div>
-          <div className="detect-results-actions">
-            <span id="availability-history-timestamp" className="option-value">尚无历史</span>
-            <Button id="availability-clear-history" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空可用性检测历史日志">
-              清空历史日志
-            </Button>
-          </div>
-        </div>
-        <div className="detect-history-grid">
-          {historyMetrics.map((metric) => (
-            <Card className="summary-card compact" key={metric.valueId}>
-              <span className="summary-label">{metric.label}</span>
-              <strong id={metric.valueId}>0</strong>
-            </Card>
-          ))}
-        </div>
-        <div className="detect-results-header history-subheader">
-          <div>
-            <strong>检测日志</strong>
-            <p className="detect-results-subtitle">每条日志会同时展示异常数量变化、新增异常、已恢复结果，以及各异常书签的连续异常次数。</p>
-          </div>
-          <div className="detect-results-actions">
-            <span id="availability-history-log-count" className="option-value">0 次记录</span>
-            <Button id="availability-toggle-history-logs" className="options-button secondary small" size="sm" type="button" variant="secondary">
-              收起日志
-            </Button>
-          </div>
-        </div>
+        <div id="availability-history-controls" />
         <div id="availability-history-log-list" className="detect-results compact">
           <EmptyCta
             emptyKey="availability-history"

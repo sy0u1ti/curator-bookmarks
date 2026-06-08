@@ -290,6 +290,10 @@ import {
   REDIRECT_ACTION_EVENT,
   type RedirectActionDetail
 } from './components/redirect-events.js'
+import {
+  HISTORY_ACTION_EVENT,
+  type HistoryActionDetail
+} from './components/history-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1144,8 +1148,7 @@ function bindEvents() {
   dom.availabilityFailedPagination?.addEventListener('click', (event) => {
     handleResultsPaginationClick(event, 'availability-failed')
   })
-  dom.availabilityClearHistory?.addEventListener('click', () => clearDetectionHistoryLogs(historyCallbacks))
-  dom.availabilityToggleHistoryLogs?.addEventListener('click', () => toggleHistoryLogsCollapsed(historyCallbacks))
+  window.addEventListener(HISTORY_ACTION_EVENT, handleHistoryAction)
   dom.bookmarkAddHistoryHeader?.addEventListener('click', (event) => {
     const target = event.target as HTMLElement | null
     if (!target?.closest('#bookmark-add-history-clear')) {
@@ -4652,6 +4655,17 @@ function handleRedirectAction(event: Event): void {
   }
   if (detail?.action === 'delete-all') {
     void deleteAllRedirects(redirectsCallbacks)
+  }
+}
+
+function handleHistoryAction(event: Event): void {
+  const detail = (event as CustomEvent<HistoryActionDetail>).detail
+  if (detail?.action === 'clear-history') {
+    void clearDetectionHistoryLogs(historyCallbacks)
+    return
+  }
+  if (detail?.action === 'toggle-logs') {
+    toggleHistoryLogsCollapsed(historyCallbacks)
   }
 }
 

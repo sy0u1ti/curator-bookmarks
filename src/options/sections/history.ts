@@ -15,6 +15,7 @@ import {
   renderAvailabilityHistoryLogIsland,
   renderAvailabilityRecoveredHistoryIsland
 } from '../components/AvailabilityHistoryIsland.js'
+import { renderAvailabilityHistoryControlsIsland } from '../components/AvailabilityHistoryControlsIsland.js'
 
 function normalizeHistoryResultArray(entries) {
   if (!Array.isArray(entries)) {
@@ -389,34 +390,30 @@ function renderHistoryLogList(callbacks) {
 }
 
 export function renderAvailabilityHistory(callbacks) {
-  if (!dom.availabilityHistorySubtitle) {
+  if (!dom.availabilityHistoryControls) {
     return
   }
 
   const scopeMeta = callbacks.getCurrentAvailabilityScopeMeta()
   const scopeRuns = getHistoryRunsForScope(callbacks)
   const latestRun = scopeRuns[0] || null
-  dom.availabilityHistoryNew.textContent = String(managerState.historyNewCount)
-  dom.availabilityHistoryPersistent.textContent = String(managerState.historyPersistentCount)
-  dom.availabilityHistoryRecovered.textContent = String(managerState.historyRecoveredResults.length)
-  dom.availabilityHistoryTimestamp.textContent = managerState.historyLastRunAt
-    ? formatDateTime(managerState.historyLastRunAt)
-    : '尚无历史'
-  dom.availabilityClearHistory.disabled =
-    availabilityState.deleting ||
-    availabilityState.running ||
-    availabilityState.retestingSelection ||
-    managerState.historyRuns.length === 0
-  dom.availabilityHistoryLogCount.textContent = `${scopeRuns.length} 次记录`
-  if (dom.availabilityToggleHistoryLogs) {
-    dom.availabilityToggleHistoryLogs.disabled = scopeRuns.length === 0
-    dom.availabilityToggleHistoryLogs.textContent = managerState.historyLogsCollapsed ? '展开日志' : '收起日志'
-  }
-  dom.availabilityHistorySubtitle.textContent = scopeRuns.length
-    ? `当前显示范围：${scopeMeta.label}。已保留该范围最近 ${scopeRuns.length} 次检测日志，最近一次完成于 ${formatDateTime(latestRun?.completedAt || 0)}。`
-    : managerState.historyRuns.length
-      ? `当前显示范围：${scopeMeta.label}。该范围还没有检测历史；全部范围共保留 ${managerState.historyRuns.length} 次日志。`
-      : '完成一次检测后，这里会生成一条检测日志，保留最近多次结果用于趋势和连续异常对比。'
+  renderAvailabilityHistoryControlsIsland(dom.availabilityHistoryControls, {
+    clearDisabled:
+      availabilityState.deleting ||
+      availabilityState.running ||
+      availabilityState.retestingSelection ||
+      managerState.historyRuns.length === 0,
+    logCount: scopeRuns.length,
+    logToggleDisabled: scopeRuns.length === 0,
+    logToggleLabel: managerState.historyLogsCollapsed ? '展开日志' : '收起日志',
+    metrics: {
+      newCount: managerState.historyNewCount,
+      persistentCount: managerState.historyPersistentCount,
+      recoveredCount: managerState.historyRecoveredResults.length
+    },
+    subtitle: getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun),
+    timestamp: managerState.historyLastRunAt ? formatDateTime(managerState.historyLastRunAt) : '尚无历史'
+  })
 
   renderHistoryLogList(callbacks)
 
@@ -429,6 +426,16 @@ export function renderAvailabilityHistory(callbacks) {
         ? '当前范围还没有已恢复记录。'
         : '完成检测后，这里会展示相较于上一次已恢复的书签。'
   )
+}
+
+function getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun): string {
+  if (scopeRuns.length) {
+    return `当前显示范围：${scopeMeta.label}。已保留该范围最近 ${scopeRuns.length} 次检测日志，最近一次完成于 ${formatDateTime(latestRun?.completedAt || 0)}。`
+  }
+  if (managerState.historyRuns.length) {
+    return `当前显示范围：${scopeMeta.label}。该范围还没有检测历史；全部范围共保留 ${managerState.historyRuns.length} 次日志。`
+  }
+  return '完成一次检测后，这里会生成一条检测日志，保留最近多次结果用于趋势和连续异常对比。'
 }
 
 export async function clearDetectionHistoryLogs(callbacks) {
