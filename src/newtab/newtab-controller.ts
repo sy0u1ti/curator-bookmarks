@@ -263,6 +263,7 @@ import type {
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
   dispatchNewtabSettingsDrawerOpen,
+  dispatchNewtabSettingsDrawerSaveStatus,
   registerNewtabSettingsDrawerActions
 } from './newtab-settings-drawer-store.js'
 import {
@@ -10723,14 +10724,7 @@ function setSettingsSaveStatus(nextState: SettingsSaveState, message: string): v
 }
 
 function syncSettingsSaveStatus(): void {
-  const status = cachedEl('settings-save-status')
-  if (!(status instanceof HTMLElement)) {
-    return
-  }
-
-  status.dataset.state = state.settingsSaveState
-  status.hidden = state.settingsSaveState === 'idle'
-  status.textContent = state.settingsSaveMessage
+  dispatchNewtabSettingsDrawerSaveStatus(state.settingsSaveState, state.settingsSaveMessage)
 }
 
 function renderIconPreviewIfNeeded(): void {

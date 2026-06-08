@@ -254,12 +254,22 @@ export interface SettingsDrawerProps {
 }
 
 function SettingsDrawerHeader() {
+  const view = useNewtabSettingsDrawerView()
+
   return (
     <header className="settings-drawer-header">
       <p className="settings-drawer-kicker">New Tab</p>
       <h1 id="newtab-settings-title">新标签页设置</h1>
       <p id="newtab-settings-summary" className="settings-drawer-summary">书签来源、背景、卡片布局、时间与搜索栏。</p>
-      <output id="settings-save-status" className="settings-save-status" aria-live="polite" data-state="idle" />
+      <output
+        id="settings-save-status"
+        className="settings-save-status"
+        aria-live="polite"
+        data-state={view.saveState}
+        hidden={view.saveState === 'idle'}
+      >
+        {view.saveMessage}
+      </output>
     </header>
   )
 }

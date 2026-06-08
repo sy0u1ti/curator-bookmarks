@@ -1,9 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import type { SettingsDrawerSection } from './settings-group-sync'
 
+export type NewtabSettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
+
 export interface NewtabSettingsDrawerView {
   activeGroup: SettingsDrawerSection
   open: boolean
+  saveMessage: string
+  saveState: NewtabSettingsSaveState
 }
 
 export interface NewtabSettingsDrawerActions {
@@ -22,7 +26,9 @@ const EMPTY_ACTIONS: NewtabSettingsDrawerActions = {
 
 let settingsDrawerView: NewtabSettingsDrawerView = {
   activeGroup: 'source',
-  open: false
+  open: false,
+  saveMessage: '',
+  saveState: 'idle'
 }
 let settingsDrawerActions: NewtabSettingsDrawerActions = EMPTY_ACTIONS
 
@@ -54,7 +60,7 @@ export function useNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
   return useSyncExternalStore(
     subscribeSettingsDrawer,
     () => settingsDrawerView,
-    () => ({ activeGroup: 'source', open: false })
+    () => ({ activeGroup: 'source', open: false, saveMessage: '', saveState: 'idle' })
   )
 }
 
@@ -76,6 +82,21 @@ export function dispatchNewtabSettingsDrawerActiveGroup(group: SettingsDrawerSec
   settingsDrawerView = {
     ...settingsDrawerView,
     activeGroup: group
+  }
+  emitSettingsDrawerChange()
+}
+
+export function dispatchNewtabSettingsDrawerSaveStatus(
+  saveState: NewtabSettingsSaveState,
+  saveMessage: string
+): void {
+  if (settingsDrawerView.saveState === saveState && settingsDrawerView.saveMessage === saveMessage) {
+    return
+  }
+  settingsDrawerView = {
+    ...settingsDrawerView,
+    saveMessage,
+    saveState
   }
   emitSettingsDrawerChange()
 }
