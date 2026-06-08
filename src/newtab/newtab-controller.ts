@@ -11278,6 +11278,9 @@ function createFeaturedBackgroundPickerCardViewModel({
     id: item.id,
     imageUrl,
     initialPreviewUrl,
+    onClearHoverPreview: clearFeaturedBackgroundHoverPreview,
+    onFavoriteToggle: (_card, id) => toggleFeaturedBackgroundFavorite(id),
+    onSelect: (_card, id) => selectFeaturedBackgroundFromPicker(id),
     previewAccentColor,
     previewFallbackUrls,
     remotePreviewUrl,
@@ -11342,39 +11345,6 @@ function bindFeaturedBackgroundCardDelegation(grid: HTMLElement | null): void {
     if (!card) return
     if (isInsideSameCard(card, event.relatedTarget)) return
     clearFeaturedBackgroundHoverPreview(card)
-  })
-
-  grid.addEventListener('focusout', (event) => {
-    const card = findCard(event.target)
-    if (!card) return
-    if (isInsideSameCard(card, event.relatedTarget)) return
-    clearFeaturedBackgroundHoverPreview(card)
-  })
-
-  grid.addEventListener('click', (event) => {
-    const card = findCard(event.target)
-    if (!card) return
-    const target = event.target instanceof Element ? event.target : null
-    const favoriteButton = target?.closest<HTMLElement>('.featured-wallpaper-favorite')
-    if (favoriteButton && card.contains(favoriteButton)) {
-      event.preventDefault()
-      event.stopPropagation()
-      clearFeaturedBackgroundHoverPreview(card)
-      void toggleFeaturedBackgroundFavorite(String(card.dataset.featuredBackgroundId || ''))
-      return
-    }
-    clearFeaturedBackgroundHoverPreview(card)
-    selectFeaturedBackgroundFromPicker(String(card.dataset.featuredBackgroundId || ''))
-  })
-
-  grid.addEventListener('keydown', (event) => {
-    const card = findCard(event.target)
-    if (!card) return
-    if (event.target !== card) return
-    if (event.key !== 'Enter' && event.key !== ' ') return
-    event.preventDefault()
-    clearFeaturedBackgroundHoverPreview(card)
-    selectFeaturedBackgroundFromPicker(String(card.dataset.featuredBackgroundId || ''))
   })
 }
 

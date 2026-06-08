@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import {
@@ -184,6 +184,9 @@ export interface FeaturedBackgroundPickerCardViewModel {
   id: string
   imageUrl: string
   initialPreviewUrl: string
+  onClearHoverPreview: (card: HTMLElement) => void
+  onFavoriteToggle: (card: HTMLElement, id: string) => void | Promise<void>
+  onSelect: (card: HTMLElement, id: string) => void
   previewAccentColor: string
   previewFallbackUrls: string[]
   remotePreviewUrl: string
@@ -1860,6 +1863,7 @@ function FeaturedBackgroundPickerCardGrid({
 
 function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPickerCardViewModel }) {
   const [previewState, setPreviewState] = useState<'ready' | 'loading'>(card.initialPreviewUrl ? 'ready' : 'loading')
+  const cardRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     setPreviewState(card.initialPreviewUrl ? 'ready' : 'loading')
   }, [card.initialPreviewUrl])
@@ -1885,6 +1889,26 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
       data-featured-background-preview-url={card.imageUrl}
       data-featured-background-preview-title={card.title}
       data-featured-background-resolved-preview-url={card.initialPreviewUrl}
+      ref={cardRef}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget
+        if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+          return
+        }
+        card.onClearHoverPreview(event.currentTarget)
+      }}
+      onClick={(event) => {
+        card.onClearHoverPreview(event.currentTarget)
+        card.onSelect(event.currentTarget, card.id)
+      }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') {
+          return
+        }
+        event.preventDefault()
+        card.onClearHoverPreview(event.currentTarget)
+        card.onSelect(event.currentTarget, card.id)
+      }}
     >
       <span className="featured-wallpaper-preview" style={previewStyle}>
         <img
@@ -1912,6 +1936,16 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
           type="button"
           aria-pressed={card.favorite}
           aria-label={card.favorite ? '取消收藏这张精选图' : '收藏这张精选图'}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            const cardElement = cardRef.current
+            if (!cardElement) {
+              return
+            }
+            card.onClearHoverPreview(cardElement)
+            void card.onFavoriteToggle(cardElement, card.id)
+          }}
           unstyled
         >
           <Icon name="Heart" aria-hidden="true" />
