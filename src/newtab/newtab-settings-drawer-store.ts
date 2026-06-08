@@ -15,13 +15,15 @@ export interface NewtabSettingsDrawerActions {
   onFeaturedPickerClick: () => void
   onOpenChange: (open: boolean, event?: Event) => void
   onReady: () => void
+  onToggleRequest: () => void
 }
 
 const EMPTY_ACTIONS: NewtabSettingsDrawerActions = {
   onActiveGroupChange: () => {},
   onFeaturedPickerClick: () => {},
   onOpenChange: () => {},
-  onReady: () => {}
+  onReady: () => {},
+  onToggleRequest: () => {}
 }
 
 let settingsDrawerView: NewtabSettingsDrawerView = {
@@ -115,4 +117,8 @@ export function dispatchNewtabSettingsDrawerFeaturedPickerClick(): void {
 
 export function dispatchNewtabSettingsDrawerOpenChange(open: boolean, event?: Event): void {
   settingsDrawerActions.onOpenChange(open, event)
+}
+
+export function dispatchNewtabSettingsDrawerToggleRequest(): void {
+  settingsDrawerActions.onToggleRequest()
 }

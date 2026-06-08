@@ -997,7 +997,10 @@ function bindEvents(): void {
         closeSettingsDrawer()
       }
     },
-    onReady: initializeSettingsDrawer
+    onReady: initializeSettingsDrawer,
+    onToggleRequest: () => {
+      openSettingsDrawer()
+    }
   })
   registerNewtabFeaturedBackgroundModalActions({
     onCloseRequest: handleFeaturedBackgroundModalCloseRequest,
@@ -1076,9 +1079,6 @@ function bindEvents(): void {
   window.addEventListener('hashchange', syncDashboardRoute)
   window.addEventListener('message', handleDashboardMessage)
   syncDashboardRoute()
-  settingsTrigger?.addEventListener('click', () => {
-    openSettingsDrawer()
-  })
   settingsBackdrop?.addEventListener('click', closeSettingsDrawer)
   document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', (event) => {
@@ -1973,7 +1973,6 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     dispatchNewtabSettingsDrawerOpen(true)
     settingsDrawer?.setAttribute('aria-hidden', 'false')
     settingsDrawer?.removeAttribute('inert')
-    settingsTrigger?.setAttribute('aria-expanded', 'true')
     document.body.classList.add('settings-open')
     setSettingsModalBackgroundInert(true)
     if (focusFirstControl) {
@@ -2049,7 +2048,6 @@ function closeSettingsDrawer(): void {
   settingsBackdrop?.classList.add('is-closing')
   settingsDrawer?.setAttribute('aria-hidden', 'true')
   settingsDrawer?.setAttribute('inert', '')
-  settingsTrigger?.setAttribute('aria-expanded', 'false')
   document.body.classList.remove('settings-open')
   setSettingsModalBackgroundInert(false)
   window.setTimeout(() => {

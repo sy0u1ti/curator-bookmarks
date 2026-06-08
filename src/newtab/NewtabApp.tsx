@@ -8,6 +8,10 @@ import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModa
 import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
+import {
+  dispatchNewtabSettingsDrawerToggleRequest,
+  useNewtabSettingsDrawerView
+} from './newtab-settings-drawer-store'
 
 export function NewtabApp() {
   useNewtabController()
@@ -20,6 +24,8 @@ export function NewtabApp() {
 }
 
 function NewtabShell() {
+  const settingsDrawer = useNewtabSettingsDrawerView()
+
   return (
     <>
       <div id="newtab-background-mask" className="newtab-background-mask" aria-hidden="true"></div>
@@ -51,7 +57,8 @@ function NewtabShell() {
           type="button"
           aria-label="打开设置"
           aria-controls="newtab-settings-drawer"
-          aria-expanded="false"
+          aria-expanded={settingsDrawer.open ? 'true' : 'false'}
+          onClick={dispatchNewtabSettingsDrawerToggleRequest}
           unstyled
         >
           <Icon name="Settings" size={18} aria-hidden="true" />
