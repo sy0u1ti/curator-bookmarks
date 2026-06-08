@@ -10,7 +10,9 @@ import {
 } from '../content-state'
 import { useNewtabContentView } from '../newtab-content-store'
 import { useNewtabClockView } from '../newtab-clock-store'
+import { useNewtabSearchWidgetView } from '../newtab-search-widget-store'
 import { ClockWidgetContent } from './RuntimeIslands'
+import { NewtabSearchWidget } from './NewtabSearchWidget'
 
 export function NewtabContentHost() {
   const view = useNewtabContentView()
@@ -62,6 +64,10 @@ function UtilityModule({ module }: { module: NewTabPageModule }) {
 
   if (module.kind === 'clock-spacer') {
     return <div className="newtab-clock-spacer" aria-hidden="true" />
+  }
+
+  if (module.kind === 'search') {
+    return <SearchModule />
   }
 
   if (module.kind === 'element') {
@@ -119,6 +125,15 @@ function MountedElementModule({ module }: { module: NewTabElementModule }) {
   }, [module])
 
   return <div hidden ref={mountElement} />
+}
+
+function SearchModule() {
+  const view = useNewtabSearchWidgetView()
+  if (!view) {
+    return null
+  }
+
+  return <NewtabSearchWidget view={view} />
 }
 
 function ClockModule() {

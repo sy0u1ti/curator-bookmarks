@@ -50,6 +50,12 @@ export interface NewTabClockSpacerModule {
   placement: 'utility'
 }
 
+export interface NewTabSearchModule {
+  id: 'search'
+  kind: 'search'
+  placement: 'utility'
+}
+
 export interface NewTabLoadingModule {
   kind: 'loading'
   id: 'state'
@@ -70,6 +76,7 @@ export type NewTabPageModule =
   | NewTabLoadingModule
   | NewTabMissingFolderModule
   | NewTabOnboardingModule
+  | NewTabSearchModule
 
 export interface NewTabPageOptions {
   modules: NewTabPageModule[]

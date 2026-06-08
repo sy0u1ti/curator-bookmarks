@@ -199,20 +199,8 @@ import {
   appendBookmarkTileIslandElements,
   createBookmarkContentIslandElement,
   createBookmarkTileIslandElement,
-  createSearchWidgetIslandElement,
   mountNewTabDragGhostBridge,
-  renderNewTabSavedSearchesIsland,
-  renderNewTabSearchChipsIsland,
-  renderNewTabSearchHintIsland,
-  renderNewTabSearchSectionLabelIsland,
-  renderNewTabSearchSuggestionsIsland,
   renderBookmarkTileIslandElement,
-  renderSearchWidgetActionStateIsland,
-  renderSearchWidgetButtonStatesIsland,
-  renderSearchWidgetComboboxStateIsland,
-  renderSearchWidgetEngineMenuStateIsland,
-  renderSearchWidgetInteractionStateIsland,
-  renderSearchWidgetPanelStateIsland,
   replaceBookmarkContentIslandChildren,
   type BookmarkContentViewModel,
   type BookmarkFolderSectionViewModel,
@@ -224,15 +212,25 @@ import {
   type PortalPanelState,
   type QuickAccessGroupViewModel,
   type QuickAccessPanelState,
+  type SourceNavigationState,
+  type SpeedDialCardViewModel
+} from './components/RuntimeIslands.js'
+import {
+  createDefaultSearchWidgetInteractionState,
+  createEmptySavedSearchesState,
+  dispatchNewtabSearchWidgetView,
+  getNewtabSearchWidgetNodes,
+  getNewtabSearchWidgetView,
+  patchNewtabSearchWidgetView,
+  type NewtabSearchWidgetNodes,
   type SavedSearchesState,
   type SearchChipViewModel,
   type SearchEngineMenuItemViewModel,
-  type SourceNavigationState,
-  type SearchWidgetEngineMenuState,
   type SearchHintState,
   type SearchSuggestionViewModel,
-  type SpeedDialCardViewModel
-} from './components/RuntimeIslands.js'
+  type SearchWidgetEngineMenuState,
+  type SearchWidgetShellState
+} from './newtab-search-widget-store.js'
 import {
   dispatchNewtabModuleSettingsView,
   registerNewtabModuleSettingsActions,
@@ -1221,7 +1219,7 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
     return
   }
 
-  const input = document.querySelector<HTMLInputElement>('.newtab-search-input')
+  const input = getNewtabSearchWidgetNodes().input
   if (!input) {
     return
   }
@@ -1655,7 +1653,7 @@ function applySearchSettingsLive(): void {
   const settings = state.searchSettings
   const widthBounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
   const offsetBounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
-  const slot = root?.querySelector<HTMLElement>('.newtab-search-slot')
+  const slot = getNewtabSearchWidgetNodes().slot || root?.querySelector<HTMLElement>('.newtab-search-slot')
   const form = slot?.querySelector<HTMLElement>('.newtab-search')
   const width = clampNumber(settings.width, widthBounds.min, widthBounds.max, DEFAULT_SEARCH_SETTINGS.width)
   const offsetY = clampNumber(settings.offsetY, offsetBounds.min, offsetBounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)
@@ -1674,6 +1672,13 @@ function applySearchSettingsLive(): void {
   form?.style.setProperty('--search-width', `${width}vw`)
   form?.style.setProperty('--search-height', `${settings.height}px`)
   form?.style.setProperty('--search-bg-alpha', String(settings.background / 100))
+  patchSearchWidgetShellState({
+    autoVerticalCenter: settings.autoVerticalCenter,
+    backgroundAlpha: String(settings.background / 100),
+    height: settings.height,
+    offsetY,
+    width
+  })
 }
 
 function scheduleSearchSettingsSettle(): void {
@@ -5253,7 +5258,10 @@ function scheduleAdaptiveNewTabLayoutUpdate(): void {
 
 function runBatchedAdaptiveLayoutUpdate(): void {
   const page = root?.querySelector<HTMLElement>('.newtab-page')
-  const slot = page?.querySelector<HTMLElement>('.newtab-search-slot')
+  const registeredSlot = getNewtabSearchWidgetNodes().slot
+  const slot = registeredSlot && page?.contains(registeredSlot)
+    ? registeredSlot
+    : page?.querySelector<HTMLElement>('.newtab-search-slot')
   if (!page || !slot) {
     state.searchOffsetBounds = { ...SEARCH_OFFSET_BOUNDS_FALLBACK }
     state.searchWidthBounds = { ...SEARCH_WIDTH_BOUNDS_FALLBACK }
@@ -5320,17 +5328,25 @@ function runBatchedAdaptiveLayoutUpdate(): void {
 
   state.searchOffsetBounds = bounds
   state.searchWidthBounds = widthBounds
+  const nextSearchWidth = clampNumber(state.searchSettings.width, widthBounds.min, widthBounds.max, DEFAULT_SEARCH_SETTINGS.width)
+  let nextSearchOffsetY = getCurrentSearchOffsetY(slot)
   slot.style.setProperty(
     '--search-width',
-    `${clampNumber(state.searchSettings.width, widthBounds.min, widthBounds.max, DEFAULT_SEARCH_SETTINGS.width)}vw`
+    `${nextSearchWidth}vw`
   )
   if (!state.searchSettings.autoVerticalCenter) {
+    nextSearchOffsetY = clampNumber(
+      state.searchSettings.offsetY,
+      bounds.min,
+      bounds.max,
+      DEFAULT_SEARCH_SETTINGS.offsetY
+    )
     slot.style.setProperty(
       '--search-offset-y',
-      `${clampNumber(state.searchSettings.offsetY, bounds.min, bounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)}px`
+      `${nextSearchOffsetY}px`
     )
   } else {
-    const offsetY = getAutoCenteredSearchOffsetY({
+    nextSearchOffsetY = getAutoCenteredSearchOffsetY({
       currentOffsetY,
       searchTop: slotRect.top,
       searchBottom: slotRect.bottom,
@@ -5344,8 +5360,13 @@ function runBatchedAdaptiveLayoutUpdate(): void {
       fallbackOffsetY: currentOffsetY
     })
     slot.dataset.searchAutoVerticalCenter = 'true'
-    slot.style.setProperty('--search-offset-y', `${offsetY}px`)
+    slot.style.setProperty('--search-offset-y', `${nextSearchOffsetY}px`)
   }
+  patchSearchWidgetShellState({
+    autoVerticalCenter: state.searchSettings.autoVerticalCenter,
+    offsetY: nextSearchOffsetY,
+    width: nextSearchWidth
+  })
   if (collisionWriteAction === 'apply') {
     page.style.setProperty('--primary-collision-offset-y', `${collisionOffset}px`)
   } else if (collisionWriteAction === 'remove') {
@@ -5393,12 +5414,10 @@ function createNewTabLayout(primaryContent: HTMLElement | NewTabPageModule): New
     })
   }
 
-  const search = createSearchWidget()
-  if (search) {
+  if (initializeSearchWidget()) {
     modules.push({
-      kind: 'element',
       id: 'search',
-      element: search,
+      kind: 'search',
       placement: 'utility'
     })
   }
@@ -5458,177 +5477,179 @@ async function completeNewTabOnboarding(): Promise<void> {
   render()
 }
 
-function createSearchWidget(): HTMLElement | null {
+function initializeSearchWidget(): boolean {
   const settings = state.searchSettings
   if (!settings.enabled) {
-    return null
+    dispatchNewtabSearchWidgetView(null)
+    return false
   }
-  const webSearchEnabled = settings.webSearchEnabled !== false
-  const searchPlaceholder = getSearchPlaceholder(settings)
   let engineMenuExpanded = false
-
-  const slot = createSearchWidgetIslandElement({
-    ariaLabel: webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令',
-    autoVerticalCenter: settings.autoVerticalCenter,
-    backgroundAlpha: String(settings.background / 100),
-    engine: getSearchEngineButtonState(),
-    height: settings.height,
-    inputAriaLabel: webSearchEnabled
-      ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
-      : '输入关键词搜索本地书签或命令',
-    natural: getNaturalSearchButtonState(),
-    offsetY: settings.offsetY,
-    placeholder: searchPlaceholder,
-    width: settings.width
-  })
-  const input = slot.querySelector<HTMLInputElement>('.newtab-search-input')
-  const engineButton = slot.querySelector<HTMLButtonElement>('.newtab-search-engine')
-  const suggestions = slot.querySelector<HTMLElement>('#newtab-search-suggestions')
-  const suggestionsHeading = slot.querySelector<HTMLElement>('.newtab-search-section-label')
-  const suggestionsHint = slot.querySelector<HTMLElement>('.newtab-search-hint')
-  const searchChips = slot.querySelector<HTMLElement>('.newtab-search-chips')
-  const savedSearches = slot.querySelector<HTMLElement>('.newtab-saved-searches')
-  if (
-    !input ||
-    !engineButton ||
-    !suggestions ||
-    !suggestionsHeading ||
-    !suggestionsHint ||
-    !searchChips ||
-    !savedSearches
-  ) {
-    return slot
-  }
-
-  const renderSearchWidgetButtons = () => {
-    renderSearchWidgetButtonStatesIsland(slot, {
-      engine: getSearchEngineButtonState(),
-      natural: getNaturalSearchButtonState()
-    })
-  }
-  const updateEngineButton = renderSearchWidgetButtons
-  const updateNaturalButton = renderSearchWidgetButtons
-  const renderSearchWidgetInteractions = () => {
-    renderSearchWidgetInteractionStateIsland(slot, {
-      onClear: () => {
-        input.value = ''
-        syncSearchInputActions(slot, input)
-        hideSuggestions()
-        input.focus()
-      },
-      onEngineKeyDown: (event) => {
-        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-          return
-        }
-
-        event.preventDefault()
-        renderEngineMenu(event.key === 'ArrowDown' ? 'first' : 'last')
-      },
-      onEngineToggle: () => {
-        if (state.searchSettings.webSearchEnabled === false) {
-          return
-        }
-        if (engineMenuExpanded) {
-          closeEngineMenu()
-          return
-        }
-        renderEngineMenu('active')
-      },
-      onInputFocus: () => {
-        scheduleSuggestionsRender({ immediate: true })
-      },
-      onInputInput: () => {
-        syncSearchInputActions(slot, input)
-        scheduleSuggestionsRender()
-      },
-      onInputKeyDown: (event) => {
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-          event.preventDefault()
-          moveActiveSuggestion(event.key === 'ArrowDown' ? 1 : -1)
-          return
-        }
-
-        if (event.key === 'Enter' && activeSuggestionIndex >= 0 && !event.metaKey && !event.ctrlKey) {
-          const suggestion = searchSuggestions[activeSuggestionIndex]
-          if (suggestion) {
-            event.preventDefault()
-            input.value = suggestion.title
-            syncSearchInputActions(slot, input)
-            hideSuggestions()
-            openSearchSuggestion(suggestion)
-          }
-          return
-        }
-
-        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault()
-          closeEngineMenu()
-          hideSuggestions()
-          if (state.searchSettings.webSearchEnabled === false) {
-            return
-          }
-          submitSearch(input.value, true)
-          return
-        }
-
-        if (event.key !== 'Escape') {
-          return
-        }
-
-        event.preventDefault()
-        if (searchSuggestions.length || searchPanelVisible) {
-          hideSuggestions()
-          return
-        }
-
-        if (input.value) {
-          input.value = ''
-          syncSearchInputActions(slot, input)
-          return
-        }
-
-        input.blur()
-      },
-      onRootBlur: () => {
-        window.setTimeout(() => {
-          if (!slot.contains(document.activeElement)) {
-            closeEngineMenu()
-            hideSuggestions()
-          }
-        }, 0)
-      },
-      onSubmit: (event) => {
-        event.preventDefault()
-        closeEngineMenu()
-        hideSuggestions()
-        if (state.searchSettings.webSearchEnabled === false) {
-          return
-        }
-        submitSearch(input.value)
-      },
-      onToggleNatural: () => {
-        void toggleNewTabNaturalSearch({
-          input,
-          updateNaturalButton,
-          scheduleSuggestionsRender
-        })
-      }
-    })
-  }
   let searchEngineMenuState: SearchWidgetEngineMenuState = {
     hint: '',
     items: [],
     open: false
   }
-  const renderSearchEngineMenuState = () => {
-    renderSearchWidgetEngineMenuStateIsland(slot, searchEngineMenuState)
-  }
   let searchComboboxExpanded = false
   let activeSearchDescendantId = ''
+  let searchPanelVisible = false
+  let searchSuggestionListVisible = true
+  let searchSuggestions: NewTabSearchSuggestion[] = []
+  let activeSuggestionIndex = -1
+  let suggestionDebounceTimer = 0
+  let suggestionRequestId = 0
+
+  const getSearchNodes = (): NewtabSearchWidgetNodes => getNewtabSearchWidgetNodes()
+  const getSearchInput = (): HTMLInputElement | null => getSearchNodes().input
+  const getSearchSlot = (): HTMLElement | null => getSearchNodes().slot
+  const getSearchEngineButton = (): HTMLButtonElement | null => getSearchNodes().engineButton
+
+  const syncSearchWidgetButtons = () => {
+    patchNewtabSearchWidgetView({
+      buttons: {
+        engine: getSearchEngineButtonState(),
+        natural: getNaturalSearchButtonState()
+      }
+    })
+  }
+  const updateEngineButton = syncSearchWidgetButtons
+  const updateNaturalButton = syncSearchWidgetButtons
+  const syncSearchWidgetInteractions = () => {
+    patchNewtabSearchWidgetView({
+      interactions: {
+        onClear: () => {
+          const input = getSearchInput()
+          if (!input) {
+            return
+          }
+          input.value = ''
+          syncSearchInputActions(input)
+          hideSuggestions()
+          input.focus()
+        },
+        onEngineKeyDown: (event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+            return
+          }
+
+          event.preventDefault()
+          renderEngineMenu(event.key === 'ArrowDown' ? 'first' : 'last')
+        },
+        onEngineToggle: () => {
+          if (state.searchSettings.webSearchEnabled === false) {
+            return
+          }
+          if (engineMenuExpanded) {
+            closeEngineMenu()
+            return
+          }
+          renderEngineMenu('active')
+        },
+        onInputFocus: () => {
+          scheduleSuggestionsRender({ immediate: true })
+        },
+        onInputInput: () => {
+          const input = getSearchInput()
+          if (!input) {
+            return
+          }
+          syncSearchInputActions(input)
+          scheduleSuggestionsRender()
+        },
+        onInputKeyDown: (event) => {
+          const input = getSearchInput()
+          if (!input) {
+            return
+          }
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            moveActiveSuggestion(event.key === 'ArrowDown' ? 1 : -1)
+            return
+          }
+
+          if (event.key === 'Enter' && activeSuggestionIndex >= 0 && !event.metaKey && !event.ctrlKey) {
+            const suggestion = searchSuggestions[activeSuggestionIndex]
+            if (suggestion) {
+              event.preventDefault()
+              input.value = suggestion.title
+              syncSearchInputActions(input)
+              hideSuggestions()
+              openSearchSuggestion(suggestion)
+            }
+            return
+          }
+
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault()
+            closeEngineMenu()
+            hideSuggestions()
+            if (state.searchSettings.webSearchEnabled === false) {
+              return
+            }
+            submitSearch(input.value, true)
+            return
+          }
+
+          if (event.key !== 'Escape') {
+            return
+          }
+
+          event.preventDefault()
+          if (searchSuggestions.length || searchPanelVisible) {
+            hideSuggestions()
+            return
+          }
+
+          if (input.value) {
+            input.value = ''
+            syncSearchInputActions(input)
+            return
+          }
+
+          input.blur()
+        },
+        onRootBlur: () => {
+          window.setTimeout(() => {
+            const slot = getSearchSlot()
+            if (slot && !slot.contains(document.activeElement)) {
+              closeEngineMenu()
+              hideSuggestions()
+            }
+          }, 0)
+        },
+        onSubmit: (event) => {
+          const input = getSearchInput()
+          event.preventDefault()
+          closeEngineMenu()
+          hideSuggestions()
+          if (!input || state.searchSettings.webSearchEnabled === false) {
+            return
+          }
+          submitSearch(input.value)
+        },
+        onToggleNatural: () => {
+          const input = getSearchInput()
+          if (!input) {
+            return
+          }
+          void toggleNewTabNaturalSearch({
+            input,
+            updateNaturalButton,
+            scheduleSuggestionsRender
+          })
+        }
+      }
+    })
+  }
+
+  const renderSearchEngineMenuState = () => {
+    patchNewtabSearchWidgetView({ engineMenu: searchEngineMenuState })
+  }
   const renderSearchComboboxState = () => {
-    renderSearchWidgetComboboxStateIsland(slot, {
-      activeDescendantId: activeSearchDescendantId,
-      expanded: searchComboboxExpanded
+    patchNewtabSearchWidgetView({
+      combobox: {
+        activeDescendantId: activeSearchDescendantId,
+        expanded: searchComboboxExpanded
+      }
     })
   }
   const openSearchCombobox = () => {
@@ -5644,25 +5665,25 @@ function createSearchWidget(): HTMLElement | null {
     activeSearchDescendantId = id
     renderSearchComboboxState()
   }
-  let searchPanelVisible = false
-  let searchSuggestionListVisible = true
-  const renderSearchWidgetPanelState = () => {
-    renderSearchWidgetPanelStateIsland(slot, {
-      panelVisible: searchPanelVisible,
-      suggestionsVisible: searchSuggestionListVisible
+  const syncSearchWidgetPanelState = () => {
+    patchNewtabSearchWidgetView({
+      panel: {
+        panelVisible: searchPanelVisible,
+        suggestionsVisible: searchSuggestionListVisible
+      }
     })
   }
   const hideSearchPanel = () => {
     searchPanelVisible = false
-    renderSearchWidgetPanelState()
+    syncSearchWidgetPanelState()
   }
   const showSearchPanel = () => {
     searchPanelVisible = true
-    renderSearchWidgetPanelState()
+    syncSearchWidgetPanelState()
   }
   const setSearchSuggestionsListVisible = (visible: boolean) => {
     searchSuggestionListVisible = visible
-    renderSearchWidgetPanelState()
+    syncSearchWidgetPanelState()
   }
 
   const closeEngineMenu = ({ restoreFocus = false } = {}) => {
@@ -5674,11 +5695,11 @@ function createSearchWidget(): HTMLElement | null {
     engineMenuExpanded = false
     updateEngineButton()
     if (restoreFocus) {
-      engineButton.focus()
+      getSearchEngineButton()?.focus()
     }
   }
 
-  const getCurrentEngineMenu = () => slot.querySelector<HTMLElement>('.newtab-search-engine-menu')
+  const getCurrentEngineMenu = () => getSearchNodes().engineMenu
 
   const focusEngineMenuItem = (menu: HTMLElement, direction: 1 | -1 | 'first' | 'last') => {
     const items = [...menu.querySelectorAll<HTMLButtonElement>('.newtab-search-engine-item')]
@@ -5716,6 +5737,7 @@ function createSearchWidget(): HTMLElement | null {
         id: engineId,
         label: engine.name,
         onSelect: () => {
+          const input = getSearchInput()
           state.searchSettings = normalizeSearchSettings({
             ...state.searchSettings,
             engine: engineId
@@ -5723,7 +5745,7 @@ function createSearchWidget(): HTMLElement | null {
           scheduleSearchSettingsSave()
           updateEngineButton()
           closeEngineMenu()
-          input.focus()
+          input?.focus()
           scheduleSuggestionsRender({ preserveActive: true, immediate: true })
         }
       })
@@ -5770,60 +5792,60 @@ function createSearchWidget(): HTMLElement | null {
     updateEngineButton()
 
     if (initialFocus !== 'none') {
-      const menu = getCurrentEngineMenu()
-      if (!menu) {
-        return
-      }
-      focusEngineMenuItem(menu, initialFocus === 'last' ? 'last' : initialFocus === 'first' ? 'first' : 1)
+      window.setTimeout(() => {
+        const menu = getCurrentEngineMenu()
+        if (!menu) {
+          return
+        }
+        focusEngineMenuItem(menu, initialFocus === 'last' ? 'last' : initialFocus === 'first' ? 'first' : 1)
+      }, 0)
     }
   }
-
-  let searchSuggestions: NewTabSearchSuggestion[] = []
-  let activeSuggestionIndex = -1
-  let suggestionDebounceTimer = 0
-  let suggestionRequestId = 0
 
   const hideSuggestions = () => {
     window.clearTimeout(suggestionDebounceTimer)
     suggestionDebounceTimer = 0
     searchSuggestions = []
     activeSuggestionIndex = -1
-    renderNewTabSearchSuggestionsIsland(suggestions, [])
-    renderNewTabSearchChipsIsland(searchChips, [])
-    renderNewTabSavedSearchesIsland(savedSearches, {
-      canSaveCurrent: false,
-      error: '',
-      hasCurrentSaved: false,
-      items: [],
-      onSaveCurrent: () => undefined,
-      show: false
+    patchNewtabSearchWidgetView({
+      chips: [],
+      hint: { type: 'empty' },
+      savedSearches: createEmptySavedSearchesState(),
+      sectionLabel: '书签匹配',
+      suggestions: []
     })
     setSearchSuggestionsListVisible(true)
-    renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
-    renderNewTabSearchHintIsland(suggestionsHint, { type: 'empty' })
     hideSearchPanel()
     closeSearchCombobox()
   }
 
   const renderSuggestions = (suggestionList: NewTabSearchSuggestion[], {
     preserveActive = false,
-    query = input.value
+    query = getSearchInput()?.value || ''
   }: {
     preserveActive?: boolean
     query?: string
   } = {}) => {
+    const input = getSearchInput()
+    if (!input) {
+      return
+    }
     const trimmedQuery = String(query || '').trim()
     const previousActiveIndex = activeSuggestionIndex
     const advancedSearch = isNewTabAdvancedSearchQuery(trimmedQuery)
-    renderNewTabSearchChips(searchChips, trimmedQuery)
-    renderNewTabSavedSearches(savedSearches, trimmedQuery, input, () => {
-      syncSearchInputActions(slot, input)
+    const chips = createNewTabSearchChips(trimmedQuery)
+    const savedSearches = createNewTabSavedSearches(trimmedQuery, input, () => {
+      syncSearchInputActions(input)
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
     searchSuggestions = suggestionList
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
-      renderNewTabSearchSuggestionsIsland(suggestions, [])
+      patchNewtabSearchWidgetView({
+        chips,
+        savedSearches,
+        suggestions: []
+      })
       setSearchSuggestionsListVisible(false)
       setActiveSearchDescendant('')
       if (!trimmedQuery) {
@@ -5832,49 +5854,57 @@ function createSearchWidget(): HTMLElement | null {
       }
 
       if (state.searchSettings.webSearchEnabled === false) {
-        renderNewTabSearchSectionLabelIsland(
-          suggestionsHeading,
-          advancedSearch ? '语法搜索匹配' : '关键词书签匹配'
-        )
-        renderNewTabSearchHintIsland(suggestionsHint, {
-          type: 'text',
-          text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
+        patchNewtabSearchWidgetView({
+          hint: {
+            type: 'text',
+            text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
+          },
+          sectionLabel: advancedSearch ? '语法搜索匹配' : '关键词书签匹配'
         })
         showSearchPanel()
         openSearchCombobox()
         return
       }
 
-      renderNewTabSearchSectionLabelIsland(suggestionsHeading, '网页搜索')
-      renderNewTabSearchHintIsland(suggestionsHint, createSearchWebFallbackState(trimmedQuery))
+      patchNewtabSearchWidgetView({
+        hint: createSearchWebFallbackState(trimmedQuery),
+        sectionLabel: '网页搜索'
+      })
       showSearchPanel()
       openSearchCombobox()
       return
     }
 
     setSearchSuggestionsListVisible(true)
-    renderNewTabSearchSectionLabelIsland(
-      suggestionsHeading,
-      searchSuggestions.some(isCommandSuggestion)
-        ? '书签与命令'
-        : advancedSearch
-          ? '语法搜索匹配'
-          : '关键词书签匹配'
-    )
+    const sectionLabel = searchSuggestions.some(isCommandSuggestion)
+      ? '书签与命令'
+      : advancedSearch
+        ? '语法搜索匹配'
+        : '关键词书签匹配'
     activeSuggestionIndex = preserveActive && previousActiveIndex >= 0
       ? Math.min(previousActiveIndex, searchSuggestions.length - 1)
       : -1
 
     const onSelectSuggestion = (selectedSuggestion: NewTabSearchSuggestion) => {
-      input.value = selectedSuggestion.title
-      syncSearchInputActions(slot, input)
+      const currentInput = getSearchInput()
+      if (!currentInput) {
+        return
+      }
+      currentInput.value = selectedSuggestion.title
+      syncSearchInputActions(currentInput)
       hideSuggestions()
       openSearchSuggestion(selectedSuggestion)
     }
 
-    renderNewTabSearchSuggestionsIsland(
-      suggestions,
-      searchSuggestions.map((suggestion, index) =>
+    patchNewtabSearchWidgetView({
+      chips,
+      hint: {
+        type: 'text',
+        text: getSearchSuggestionHintText()
+      },
+      savedSearches,
+      sectionLabel,
+      suggestions: searchSuggestions.map((suggestion, index) =>
         createSearchSuggestionViewModel(
           suggestion,
           index,
@@ -5882,12 +5912,8 @@ function createSearchWidget(): HTMLElement | null {
           onSelectSuggestion
         )
       )
-    )
-    showSearchPanel()
-    renderNewTabSearchHintIsland(suggestionsHint, {
-      type: 'text',
-      text: getSearchSuggestionHintText()
     })
+    showSearchPanel()
     openSearchCombobox()
 
     if (activeSuggestionIndex >= 0) {
@@ -5898,16 +5924,25 @@ function createSearchWidget(): HTMLElement | null {
   }
 
   const scheduleSuggestionsRender = ({ preserveActive = false, immediate = false } = {}) => {
+    const input = getSearchInput()
+    if (!input) {
+      return
+    }
     const query = input.value
     const requestId = suggestionRequestId + 1
     suggestionRequestId = requestId
     window.clearTimeout(suggestionDebounceTimer)
 
     const renderCurrentSuggestions = () => {
+      const currentInput = getSearchInput()
+      if (!currentInput) {
+        return
+      }
       if (!state.searchIndexReady && query.trim()) {
         renderSearchIndexPreparingState(query)
         void state.searchIndexReadyPromise.then(() => {
-          if (requestId !== suggestionRequestId || input.value !== query) {
+          const latestInput = getSearchInput()
+          if (requestId !== suggestionRequestId || latestInput?.value !== query) {
             return
           }
 
@@ -5965,7 +6000,11 @@ function createSearchWidget(): HTMLElement | null {
   }
 
   const renderSearchIndexPreparingState = (query: string) => {
+    const input = getSearchInput()
     const trimmedQuery = String(query || '').trim()
+    if (!input) {
+      return
+    }
     if (!trimmedQuery) {
       hideSuggestions()
       return
@@ -5973,18 +6012,20 @@ function createSearchWidget(): HTMLElement | null {
 
     searchSuggestions = []
     activeSuggestionIndex = -1
-    renderNewTabSearchChips(searchChips, trimmedQuery)
-    renderNewTabSavedSearches(savedSearches, trimmedQuery, input, () => {
-      syncSearchInputActions(slot, input)
-      scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+    patchNewtabSearchWidgetView({
+      chips: createNewTabSearchChips(trimmedQuery),
+      hint: {
+        type: 'text',
+        text: '正在准备索引…'
+      },
+      savedSearches: createNewTabSavedSearches(trimmedQuery, input, () => {
+        syncSearchInputActions(input)
+        scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+      }),
+      sectionLabel: '书签匹配',
+      suggestions: []
     })
-    renderNewTabSearchSuggestionsIsland(suggestions, [])
     setSearchSuggestionsListVisible(false)
-    renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
-    renderNewTabSearchHintIsland(suggestionsHint, {
-      type: 'text',
-      text: '正在准备索引…'
-    })
     showSearchPanel()
     openSearchCombobox()
     setActiveSearchDescendant('')
@@ -6001,17 +6042,40 @@ function createSearchWidget(): HTMLElement | null {
     activeSuggestionIndex = activeSuggestionIndex < 0
       ? (direction > 0 ? 0 : searchSuggestions.length - 1)
       : (activeSuggestionIndex + direction + searchSuggestions.length) % searchSuggestions.length
-    renderSuggestions(searchSuggestions, { preserveActive: true, query: input.value })
+    renderSuggestions(searchSuggestions, { preserveActive: true, query: getSearchInput()?.value || '' })
   }
 
-  updateEngineButton()
-  updateNaturalButton()
-  renderSearchWidgetInteractions()
+  dispatchNewtabSearchWidgetView({
+    action: {
+      canSubmit: false,
+      hasInputValue: false
+    },
+    buttons: {
+      engine: getSearchEngineButtonState(),
+      natural: getNaturalSearchButtonState()
+    },
+    chips: [],
+    combobox: {
+      activeDescendantId: activeSearchDescendantId,
+      expanded: searchComboboxExpanded
+    },
+    engineMenu: searchEngineMenuState,
+    hint: { type: 'empty' },
+    interactions: createDefaultSearchWidgetInteractionState(),
+    panel: {
+      panelVisible: searchPanelVisible,
+      suggestionsVisible: searchSuggestionListVisible
+    },
+    savedSearches: createEmptySavedSearchesState(),
+    sectionLabel: '书签匹配',
+    shell: createSearchWidgetShellState(settings),
+    suggestions: []
+  })
+  syncSearchWidgetInteractions()
   renderSearchEngineMenuState()
   renderSearchComboboxState()
-  renderSearchWidgetPanelState()
-  syncSearchInputActions(slot, input)
-  return slot
+  syncSearchWidgetPanelState()
+  return true
 
   function createSearchWebFallbackState(query: string): SearchHintState {
     const label = `未找到书签；按 Enter 仅在本页用 ${getSearchEngineDisplayName()} 搜索网页`
@@ -6079,12 +6143,11 @@ function createSearchWidget(): HTMLElement | null {
   }
 }
 
-function renderNewTabSearchChips(container: HTMLElement, query: string): void {
-  const chips: SearchChipViewModel[] = parseSearchQuery(query).chips.map((chip) => ({
+function createNewTabSearchChips(query: string): SearchChipViewModel[] {
+  return parseSearchQuery(query).chips.map((chip) => ({
     kind: chip.kind,
     label: chip.label
   }))
-  renderNewTabSearchChipsIsland(container, chips)
 }
 
 function isNewTabAdvancedSearchQuery(query: string): boolean {
@@ -6147,12 +6210,11 @@ async function toggleNewTabNaturalSearch({
   scheduleSuggestionsRender({ preserveActive: true, immediate: true })
 }
 
-function renderNewTabSavedSearches(
-  container: HTMLElement,
+function createNewTabSavedSearches(
   query: string,
   input: HTMLInputElement,
   onApply: () => void
-): void {
+): SavedSearchesState {
   const savedSearches = state.savedSearches
     ? getSavedSearchesForScope(state.savedSearches, 'popup')
     : []
@@ -6161,7 +6223,7 @@ function renderNewTabSavedSearches(
   const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeNewTabSearchText(item.query) === normalizedQuery)
   const show = Boolean(canSaveCurrent || savedSearches.length > 0 || state.savedSearchesError)
 
-  const viewModel: SavedSearchesState = {
+  return {
     canSaveCurrent,
     error: state.savedSearchesError,
     hasCurrentSaved,
@@ -6179,7 +6241,6 @@ function renderNewTabSavedSearches(
     onSaveCurrent: () => saveNewTabCurrentSearch(query).then(onApply),
     show
   }
-  renderNewTabSavedSearchesIsland(container, viewModel)
 }
 
 function createSearchSuggestionViewModel(
@@ -6285,10 +6346,43 @@ function truncateNewTabSearchText(value: unknown, limit = 60): string {
   return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
 }
 
-function syncSearchInputActions(slot: HTMLElement, input: HTMLInputElement): void {
-  renderSearchWidgetActionStateIsland(slot, {
-    canSubmit: Boolean(input.value.trim()),
-    hasInputValue: Boolean(input.value)
+function syncSearchInputActions(input: HTMLInputElement): void {
+  patchNewtabSearchWidgetView({
+    action: {
+      canSubmit: Boolean(input.value.trim()),
+      hasInputValue: Boolean(input.value)
+    }
+  })
+}
+
+function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS): SearchWidgetShellState {
+  const webSearchEnabled = settings.webSearchEnabled !== false
+
+  return {
+    ariaLabel: webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令',
+    autoVerticalCenter: settings.autoVerticalCenter,
+    backgroundAlpha: String(settings.background / 100),
+    height: settings.height,
+    inputAriaLabel: webSearchEnabled
+      ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
+      : '输入关键词搜索本地书签或命令',
+    offsetY: settings.offsetY,
+    placeholder: getSearchPlaceholder(settings),
+    width: settings.width
+  }
+}
+
+function patchSearchWidgetShellState(patch: Partial<SearchWidgetShellState>): void {
+  const view = getNewtabSearchWidgetView()
+  if (!view) {
+    return
+  }
+
+  patchNewtabSearchWidgetView({
+    shell: {
+      ...view.shell,
+      ...patch
+    }
   })
 }
 

@@ -1,5 +1,5 @@
 import { Button as BaseButton } from '@base-ui/react/button'
-import type { ComponentPropsWithoutRef } from 'react'
+import { forwardRef, type ComponentPropsWithoutRef, type ComponentRef } from 'react'
 import { cx } from './utils'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
@@ -25,19 +25,20 @@ const sizeClass: Record<ButtonSize, string> = {
   lg: 'h-10 px-4 text-sm'
 }
 
-export function Button({
+export const Button = forwardRef<ComponentRef<typeof BaseButton>, ButtonProps>(function Button({
   className,
   variant = 'secondary',
   size = 'md',
   unstyled = false,
   ...props
-}: ButtonProps) {
+}, ref) {
   if (unstyled) {
-    return <BaseButton className={className} {...props} />
+    return <BaseButton ref={ref} className={className} {...props} />
   }
 
   return (
     <BaseButton
+      ref={ref}
       className={cx(
         'inline-flex items-center justify-center gap-2 rounded-md border font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-white/30 disabled:pointer-events-none disabled:opacity-50',
         variantClass[variant],
@@ -47,4 +48,4 @@ export function Button({
       {...props}
     />
   )
-}
+})
