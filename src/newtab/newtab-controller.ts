@@ -243,6 +243,7 @@ import {
   registerNewtabFolderSourceActions,
   type NewtabFolderCandidateItemView,
   type NewtabFolderCandidateState,
+  type NewtabGeneralSettingToggleKey,
   type NewtabSelectedFolderSourceItemView,
   type NewtabSelectedFolderSourceState
 } from './newtab-folder-source-store.js'
@@ -999,6 +1000,8 @@ function bindEvents(): void {
     onCandidateSearchKeyDown: handleFolderCandidateSearchKeydown,
     onCandidateSelect: handleFolderCandidateSelect,
     onCandidateQueryChange: handleFolderCandidateSearch,
+    onFolderHideNamesToggle: handleFolderHideNamesToggle,
+    onGeneralToggle: handleGeneralSettingToggle,
     onRemoveSelected: handleSelectedFolderRemove,
     onToggleCandidates: toggleFolderCandidates
   })
@@ -1337,19 +1340,9 @@ function bindIconSettingsEvents(): void {
 }
 
 function bindGeneralSettingsEvents(): void {
-  cachedEl('general-hide-settings-trigger')
-    ?.addEventListener('change', handleGeneralSettingsChange)
-  cachedEl('general-show-quick-access')
-    ?.addEventListener('change', handleGeneralSettingsChange)
-  cachedEl('general-open-bookmarks-new-tab')
-    ?.addEventListener('change', handleGeneralSettingsChange)
 }
 
 function bindFolderSettingsEvents(): void {
-  cachedEl('folder-hide-names')
-    ?.addEventListener('change', handleFolderSettingsChange)
-  cachedEl('folder-show-source-navigation')
-    ?.addEventListener('change', handleGeneralSettingsChange)
 }
 
 function bindSettingsGroupTabs(): void {
@@ -1447,9 +1440,12 @@ function enrichSettingsSectionRoles(): void {
   }
 }
 
-function handleGeneralSettingsChange(): void {
+function handleGeneralSettingToggle(key: NewtabGeneralSettingToggleKey, enabled: boolean): void {
   const previousSettings = state.generalSettings
-  state.generalSettings = readGeneralSettingsFromControls()
+  state.generalSettings = normalizeGeneralSettings({
+    ...state.generalSettings,
+    [key]: enabled
+  })
   void saveGeneralSettings().catch((error) => {
     console.warn('新标签页通用设置保存失败。', error)
   })
@@ -1463,9 +1459,12 @@ function handleGeneralSettingsChange(): void {
   }
 }
 
-function handleFolderSettingsChange(): void {
+function handleFolderHideNamesToggle(enabled: boolean): void {
   const previousSettings = state.folderSettings
-  state.folderSettings = readFolderSettingsFromControls()
+  state.folderSettings = normalizeFolderSettings({
+    ...state.folderSettings,
+    hideFolderNames: enabled
+  })
   void saveFolderSettings().catch((error) => {
     console.warn('新标签页文件夹设置保存失败。', error)
   })
@@ -10702,46 +10701,8 @@ function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_
   }
 }
 
-function readGeneralSettingsFromControls(): typeof DEFAULT_GENERAL_SETTINGS {
-  const hideInput = cachedEl('general-hide-settings-trigger')
-  const showQuickAccessInput = cachedEl('general-show-quick-access')
-  const openBookmarksInput = cachedEl('general-open-bookmarks-new-tab')
-  const showSourceNavigationInput = cachedEl('folder-show-source-navigation')
-
-  return normalizeGeneralSettings({
-    hideSettingsTrigger: hideInput instanceof HTMLInputElement
-      ? hideInput.checked
-      : state.generalSettings.hideSettingsTrigger,
-    showQuickAccess: showQuickAccessInput instanceof HTMLInputElement
-      ? showQuickAccessInput.checked
-      : state.generalSettings.showQuickAccess,
-    showSourceNavigation: showSourceNavigationInput instanceof HTMLInputElement
-      ? showSourceNavigationInput.checked
-      : state.generalSettings.showSourceNavigation,
-    openBookmarksInNewTab: openBookmarksInput instanceof HTMLInputElement
-      ? openBookmarksInput.checked
-      : state.generalSettings.openBookmarksInNewTab
-  })
-}
-
 function syncGeneralSettingsControls(): void {
-  const hideInput = cachedEl('general-hide-settings-trigger')
-  const showQuickAccessInput = cachedEl('general-show-quick-access')
-  const openBookmarksInput = cachedEl('general-open-bookmarks-new-tab')
-  const showSourceNavigationInput = cachedEl('folder-show-source-navigation')
-
-  if (hideInput instanceof HTMLInputElement) {
-    hideInput.checked = state.generalSettings.hideSettingsTrigger
-  }
-  if (showQuickAccessInput instanceof HTMLInputElement) {
-    showQuickAccessInput.checked = state.generalSettings.showQuickAccess
-  }
-  if (openBookmarksInput instanceof HTMLInputElement) {
-    openBookmarksInput.checked = state.generalSettings.openBookmarksInNewTab
-  }
-  if (showSourceNavigationInput instanceof HTMLInputElement) {
-    showSourceNavigationInput.checked = state.generalSettings.showSourceNavigation
-  }
+  dispatchNewtabFolderSourceView(createFolderSourceView())
 }
 
 async function saveGeneralSettings(): Promise<void> {
@@ -10757,25 +10718,8 @@ function applyGeneralSettings(): void {
   )
 }
 
-function readFolderSettingsFromControls(): NewTabFolderSettings {
-  const hideInput = cachedEl('folder-hide-names')
-
-  return normalizeFolderSettings({
-    selectedFolderIds: state.folderSettings.selectedFolderIds,
-    hideFolderNames: hideInput instanceof HTMLInputElement
-      ? hideInput.checked
-      : state.folderSettings.hideFolderNames
-  })
-}
-
 function syncFolderSettingsControls(): void {
   measureNow('newtab.syncFolderSettingsControls', () => {
-    const hideInput = cachedEl('folder-hide-names')
-
-    if (hideInput instanceof HTMLInputElement) {
-      hideInput.checked = state.folderSettings.hideFolderNames
-    }
-
     dispatchNewtabFolderSourceView(createFolderSourceView())
   })
 }
@@ -10840,6 +10784,13 @@ function createFolderSourceView() {
     candidateQuery: state.folderCandidateQuery,
     candidates: createFolderCandidateControlsState(),
     candidatesExpanded: state.folderCandidatesExpanded,
+    general: {
+      hideSettingsTrigger: state.generalSettings.hideSettingsTrigger,
+      openBookmarksInNewTab: state.generalSettings.openBookmarksInNewTab,
+      showQuickAccess: state.generalSettings.showQuickAccess,
+      showSourceNavigation: state.generalSettings.showSourceNavigation
+    },
+    hideFolderNames: state.folderSettings.hideFolderNames,
     selected: createSelectedFolderControlsState(),
     selectedCount: state.folderSettings.selectedFolderIds.length
   }

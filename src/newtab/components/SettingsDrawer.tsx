@@ -36,6 +36,8 @@ import {
   dispatchNewtabFolderCandidateSearchKeyDown,
   dispatchNewtabFolderCandidateSelect,
   dispatchNewtabFolderCandidatesToggle,
+  dispatchNewtabFolderHideNamesToggle,
+  dispatchNewtabGeneralSettingToggle,
   dispatchNewtabSelectedFolderRemove,
   useNewtabFolderSourceView,
   type NewtabFolderCandidateItemView,
@@ -68,12 +70,16 @@ function SwitchRow({
   id,
   title,
   description,
-  defaultChecked = false
+  checked,
+  defaultChecked = false,
+  onCheckedChange
 }: {
   id: string
   title: string
   description: string
+  checked?: boolean
   defaultChecked?: boolean
+  onCheckedChange?: (checked: boolean) => void
 }) {
   return (
     <label className="setting-row">
@@ -84,8 +90,10 @@ function SwitchRow({
       <SwitchControl
         id={id}
         className="setting-switch"
+        checked={checked}
         defaultChecked={defaultChecked}
         inputClassName="setting-switch-input"
+        onCheckedChange={onCheckedChange}
         syncInputState
         thumbClassName="setting-switch-thumb"
         unstyled
@@ -247,12 +255,30 @@ function SettingsDrawerTabs({
 }
 
 function AdvancedSettingsSection() {
+  const folderSource = useNewtabFolderSourceView()
+
   return (
     <section className="settings-section" data-settings-group="advanced" aria-labelledby="settings-general-title">
       <h2 id="settings-general-title">高级</h2>
       <Surface className="settings-list" variant="plain">
-        <SwitchRow id="general-hide-settings-trigger" title="隐藏设置图标" description="桌面端移到右上角时显示，触屏设备始终显示。" />
-        <SwitchRow id="general-open-bookmarks-new-tab" title="新标签页打开" description="点击书签图标时在新标签页打开，当前新标签页保持不变。" />
+        <SwitchRow
+          id="general-hide-settings-trigger"
+          title="隐藏设置图标"
+          description="桌面端移到右上角时显示，触屏设备始终显示。"
+          checked={folderSource.general.hideSettingsTrigger}
+          onCheckedChange={(checked) => {
+            dispatchNewtabGeneralSettingToggle('hideSettingsTrigger', checked)
+          }}
+        />
+        <SwitchRow
+          id="general-open-bookmarks-new-tab"
+          title="新标签页打开"
+          description="点击书签图标时在新标签页打开，当前新标签页保持不变。"
+          checked={folderSource.general.openBookmarksInNewTab}
+          onCheckedChange={(checked) => {
+            dispatchNewtabGeneralSettingToggle('openBookmarksInNewTab', checked)
+          }}
+        />
       </Surface>
     </section>
   )
@@ -325,8 +351,22 @@ function SourceSettingsSection() {
             </div>
           </div>
         </div>
-        <SwitchRow id="folder-hide-names" title="隐藏文件夹名" description="只保留图标网格，适合单一来源或极简布局。" />
-        <SwitchRow id="folder-show-source-navigation" title="显示来源导航" description="在多个来源之间快速跳转，不影响文件夹和书签拖拽排序。" defaultChecked />
+        <SwitchRow
+          id="folder-hide-names"
+          title="隐藏文件夹名"
+          description="只保留图标网格，适合单一来源或极简布局。"
+          checked={folderSource.hideFolderNames}
+          onCheckedChange={dispatchNewtabFolderHideNamesToggle}
+        />
+        <SwitchRow
+          id="folder-show-source-navigation"
+          title="显示来源导航"
+          description="在多个来源之间快速跳转，不影响文件夹和书签拖拽排序。"
+          checked={folderSource.general.showSourceNavigation}
+          onCheckedChange={(checked) => {
+            dispatchNewtabGeneralSettingToggle('showSourceNavigation', checked)
+          }}
+        />
       </Surface>
     </section>
   )
@@ -421,12 +461,21 @@ function FolderCandidateItem({ item }: { item: NewtabFolderCandidateItemView }) 
 
 function ModuleSettingsSection() {
   const moduleSettings = useNewtabModuleSettingsView()
+  const folderSource = useNewtabFolderSourceView()
 
   return (
     <section className="settings-section" data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
       <h2 id="settings-speed-dial-title">模块</h2>
       <Surface className="settings-list" variant="plain">
-        <SwitchRow id="general-show-quick-access" title="显示 Curator 常用和新近添加" description="仅基于当前来源内的固定、本页打开记录和添加时间，不读取浏览历史。" defaultChecked />
+        <SwitchRow
+          id="general-show-quick-access"
+          title="显示 Curator 常用和新近添加"
+          description="仅基于当前来源内的固定、本页打开记录和添加时间，不读取浏览历史。"
+          checked={folderSource.general.showQuickAccess}
+          onCheckedChange={(checked) => {
+            dispatchNewtabGeneralSettingToggle('showQuickAccess', checked)
+          }}
+        />
         <div id="newtab-speed-dial-setting" className="newtab-module-settings-list" aria-label="Speed Dial 模块">
           {moduleSettings.rows.map((row) => (
             <ModuleSettingRow row={row} key={row.key} />

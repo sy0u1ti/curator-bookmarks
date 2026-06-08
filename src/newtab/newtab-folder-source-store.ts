@@ -30,6 +30,13 @@ export interface NewtabFolderSourceView {
   candidateQuery: string
   candidates: NewtabFolderCandidateState
   candidatesExpanded: boolean
+  general: {
+    hideSettingsTrigger: boolean
+    openBookmarksInNewTab: boolean
+    showQuickAccess: boolean
+    showSourceNavigation: boolean
+  }
+  hideFolderNames: boolean
   selected: NewtabSelectedFolderSourceState
   selectedCount: number
 }
@@ -40,14 +47,29 @@ export interface NewtabFolderSourceActions {
   onCandidateSearchKeyDown: (key: string) => boolean
   onCandidateSelect: (folderId: string) => void
   onCandidateQueryChange: (query: string) => void
+  onFolderHideNamesToggle: (enabled: boolean) => void
+  onGeneralToggle: (key: NewtabGeneralSettingToggleKey, enabled: boolean) => void
   onRemoveSelected: (folderId: string) => void
   onToggleCandidates: () => void
 }
+
+export type NewtabGeneralSettingToggleKey =
+  | 'hideSettingsTrigger'
+  | 'openBookmarksInNewTab'
+  | 'showQuickAccess'
+  | 'showSourceNavigation'
 
 const EMPTY_VIEW: NewtabFolderSourceView = {
   candidateQuery: '',
   candidates: { type: 'empty', message: '没有匹配的文件夹。请清空搜索词，或选择其他来源文件夹。' },
   candidatesExpanded: false,
+  general: {
+    hideSettingsTrigger: false,
+    openBookmarksInNewTab: false,
+    showQuickAccess: true,
+    showSourceNavigation: true
+  },
+  hideFolderNames: false,
   selected: {
     type: 'empty',
     message: '未选择来源文件夹。选择来源只会决定新标签页显示哪些书签，不会移动、删除或重排原有书签。'
@@ -61,6 +83,8 @@ const EMPTY_ACTIONS: NewtabFolderSourceActions = {
   onCandidateSearchKeyDown: () => false,
   onCandidateSelect: () => {},
   onCandidateQueryChange: () => {},
+  onFolderHideNamesToggle: () => {},
+  onGeneralToggle: () => {},
   onRemoveSelected: () => {},
   onToggleCandidates: () => {}
 }
@@ -127,6 +151,17 @@ export function dispatchNewtabFolderCandidateSelect(folderId: string): void {
 
 export function dispatchNewtabFolderCandidateFocus(folderId: string): void {
   folderSourceActions.onCandidateFocus(folderId)
+}
+
+export function dispatchNewtabFolderHideNamesToggle(enabled: boolean): void {
+  folderSourceActions.onFolderHideNamesToggle(enabled)
+}
+
+export function dispatchNewtabGeneralSettingToggle(
+  key: NewtabGeneralSettingToggleKey,
+  enabled: boolean
+): void {
+  folderSourceActions.onGeneralToggle(key, enabled)
 }
 
 export function dispatchNewtabSelectedFolderRemove(folderId: string): void {
