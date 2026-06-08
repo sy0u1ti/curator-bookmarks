@@ -186,6 +186,10 @@ export function renderDashboardFolderSidebarIsland(
   renderIsland(container, <DashboardFolderSidebar items={items} />)
 }
 
+export function renderDashboardFolderSidebarCountIsland(container: Element, countText: string): void {
+  renderIsland(container, <>{countText}</>)
+}
+
 export function renderDashboardLoadingLabelIsland(
   container: Element,
   state: DashboardLoadingLabelState

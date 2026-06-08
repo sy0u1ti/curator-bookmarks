@@ -75,6 +75,7 @@ import {
   renderDashboardDragPreviewIsland,
   renderDashboardEmptyStateIsland,
   renderDashboardFolderDropGridIsland,
+  renderDashboardFolderSidebarCountIsland,
   renderDashboardFolderSidebarIsland,
   renderDashboardLoadingLabelIsland,
   renderDashboardSearchChipsIsland,
@@ -3192,9 +3193,7 @@ function renderDashboardFolderSidebar(model: DashboardModel): void {
   const folderItems = getCachedDashboardFolderSidebarItems(model, selectedFolderId, folderBookmarkCounts)
   const folderCountText = `${model.totalFolders} 个文件夹`
 
-  if (dom.dashboardFolderSidebarCount.textContent !== folderCountText) {
-    dom.dashboardFolderSidebarCount.textContent = folderCountText
-  }
+  renderDashboardFolderSidebarCountIsland(dom.dashboardFolderSidebarCount, folderCountText)
   renderDashboardFolderSidebarIsland(dom.dashboardFolderTree, folderItems)
   restorePendingDashboardFolderFocus()
 }
