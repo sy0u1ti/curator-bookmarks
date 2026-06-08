@@ -1,3 +1,4 @@
+import { useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import {
@@ -17,6 +18,7 @@ import type { SpeedDialEmptyState } from '../speed-dial-types'
 import type { NewTabTimeSettings } from '../time-settings'
 
 const roots = new WeakMap<Element, Root>()
+const searchWidgetButtonStores = new WeakMap<Element, SearchWidgetButtonStore>()
 
 function renderIsland(container: Element, node: React.ReactNode): void {
   let root = roots.get(container)
@@ -225,6 +227,7 @@ export interface SearchWidgetNaturalButtonState extends SearchWidgetButtonState 
 
 export interface SearchWidgetEngineButtonState extends SearchWidgetButtonState {
   disabled: boolean
+  expanded?: boolean
 }
 
 export interface SearchWidgetShellState {
@@ -238,6 +241,14 @@ export interface SearchWidgetShellState {
   width: number
   engine: SearchWidgetEngineButtonState
   natural: SearchWidgetNaturalButtonState
+}
+
+export type SearchWidgetButtonStates = Pick<SearchWidgetShellState, 'engine' | 'natural'>
+
+interface SearchWidgetButtonStore {
+  getSnapshot: () => SearchWidgetButtonStates
+  setState: (state: SearchWidgetButtonStates) => void
+  subscribe: (listener: () => void) => () => void
 }
 
 export interface SearchEngineMenuItemViewModel {
@@ -390,8 +401,26 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
   slot.style.setProperty('--search-offset-y', `${state.offsetY}px`)
   slot.dataset.searchAutoVerticalCenter = String(state.autoVerticalCenter)
   slot.setAttribute('aria-label', state.ariaLabel)
-  renderIsland(slot, <SearchWidgetShell state={state} />)
+  const buttonStore = getSearchWidgetButtonStore(slot, {
+    engine: state.engine,
+    natural: state.natural
+  })
+  buttonStore.setState({
+    engine: state.engine,
+    natural: state.natural
+  })
+  renderIsland(slot, <SearchWidgetShell buttonStore={buttonStore} state={state} />)
   return slot
+}
+
+export function renderSearchWidgetButtonStatesIsland(
+  container: HTMLElement,
+  state: SearchWidgetButtonStates
+): void {
+  const buttonStore = getSearchWidgetButtonStore(container, state)
+  flushSync(() => {
+    buttonStore.setState(state)
+  })
 }
 
 export function createClockWidgetIslandElement(state: ClockWidgetState): HTMLElement {
@@ -689,7 +718,45 @@ function copyElementPresentationState(source: HTMLElement, target: HTMLElement):
   }
 }
 
-function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
+function getSearchWidgetButtonStore(
+  host: Element,
+  initialState: SearchWidgetButtonStates
+): SearchWidgetButtonStore {
+  let store = searchWidgetButtonStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  searchWidgetButtonStores.set(host, store)
+  return store
+}
+
+function useSearchWidgetButtonStates(store: SearchWidgetButtonStore): SearchWidgetButtonStates {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
+function SearchWidgetShell({
+  buttonStore,
+  state
+}: {
+  buttonStore: SearchWidgetButtonStore
+  state: SearchWidgetShellState
+}) {
   const formStyle = {
     '--search-width': `${state.width}vw`,
     '--search-height': `${state.height}px`,
@@ -723,28 +790,8 @@ function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
           <Icon name="X" size={14} aria-hidden="true" />
         </Button>
         <span className="newtab-search-separator hidden" aria-hidden="true" />
-        <Button
-          className={getNaturalSearchButtonClassName(state.natural)}
-          type="button"
-          aria-pressed={state.natural.active}
-          aria-label={state.natural.ariaLabel}
-          title={state.natural.title}
-          unstyled
-        >
-          {state.natural.label}
-        </Button>
-        <Button
-          className="newtab-search-engine"
-          type="button"
-          aria-haspopup="menu"
-          aria-expanded="false"
-          aria-label={state.engine.ariaLabel}
-          disabled={state.engine.disabled}
-          title={state.engine.title}
-          unstyled
-        >
-          {state.engine.label}
-        </Button>
+        <SearchWidgetNaturalButton buttonStore={buttonStore} />
+        <SearchWidgetEngineButton buttonStore={buttonStore} />
         <Button
           className="newtab-search-submit"
           type="submit"
@@ -770,6 +817,42 @@ function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
         <div className="newtab-saved-searches" aria-label="已保存搜索" />
       </div>
     </>
+  )
+}
+
+function SearchWidgetNaturalButton({ buttonStore }: { buttonStore: SearchWidgetButtonStore }) {
+  const { natural } = useSearchWidgetButtonStates(buttonStore)
+
+  return (
+    <Button
+      className={getNaturalSearchButtonClassName(natural)}
+      type="button"
+      aria-pressed={natural.active}
+      aria-label={natural.ariaLabel}
+      title={natural.title}
+      unstyled
+    >
+      {natural.label}
+    </Button>
+  )
+}
+
+function SearchWidgetEngineButton({ buttonStore }: { buttonStore: SearchWidgetButtonStore }) {
+  const { engine } = useSearchWidgetButtonStates(buttonStore)
+
+  return (
+    <Button
+      className="newtab-search-engine"
+      type="button"
+      aria-haspopup="menu"
+      aria-expanded={engine.expanded ? 'true' : 'false'}
+      aria-label={engine.ariaLabel}
+      disabled={engine.disabled}
+      title={engine.title}
+      unstyled
+    >
+      {engine.label}
+    </Button>
   )
 }
 

@@ -217,6 +217,7 @@ import {
   renderNewTabSearchHintIsland,
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
+  renderSearchWidgetButtonStatesIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
   type BookmarkContentViewModel,
@@ -5530,6 +5531,7 @@ function createSearchWidget(): HTMLElement | null {
   }
   const webSearchEnabled = settings.webSearchEnabled !== false
   const searchPlaceholder = getSearchPlaceholder(settings)
+  let engineMenuExpanded = false
 
   const slot = createSearchWidgetIslandElement({
     ariaLabel: webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令',
@@ -5576,32 +5578,20 @@ function createSearchWidget(): HTMLElement | null {
     return slot
   }
 
-  const updateEngineButton = () => {
-    const buttonState = getSearchEngineButtonState()
-    engineButton.textContent = buttonState.label
-    engineButton.disabled = buttonState.disabled
-    engineButton.title = buttonState.title
-    engineButton.setAttribute('aria-label', buttonState.ariaLabel)
+  const renderSearchWidgetButtons = () => {
+    renderSearchWidgetButtonStatesIsland(slot, {
+      engine: getSearchEngineButtonState(),
+      natural: getNaturalSearchButtonState()
+    })
   }
-
-  const updateNaturalButton = () => {
-    const buttonState = getNaturalSearchButtonState()
-    naturalButton.className = [
-      'newtab-search-natural',
-      buttonState.active ? 'active' : '',
-      buttonState.pending ? 'pending' : '',
-      buttonState.fallback ? 'fallback' : ''
-    ].filter(Boolean).join(' ')
-    naturalButton.textContent = buttonState.label
-    naturalButton.title = buttonState.title
-    naturalButton.setAttribute('aria-pressed', String(buttonState.active))
-    naturalButton.setAttribute('aria-label', buttonState.ariaLabel)
-  }
+  const updateEngineButton = renderSearchWidgetButtons
+  const updateNaturalButton = renderSearchWidgetButtons
 
   const closeEngineMenu = ({ restoreFocus = false } = {}) => {
     const existingMenu = slot.querySelector<HTMLElement>('.newtab-search-engine-menu')
     existingMenu?.remove()
-    engineButton.setAttribute('aria-expanded', 'false')
+    engineMenuExpanded = false
+    updateEngineButton()
     if (restoreFocus) {
       engineButton.focus()
     }
@@ -5687,7 +5677,8 @@ function createSearchWidget(): HTMLElement | null {
     })
 
     mountSearchEngineMenuIslandElement(slot, menu)
-    engineButton.setAttribute('aria-expanded', 'true')
+    engineMenuExpanded = true
+    updateEngineButton()
 
     if (initialFocus !== 'none') {
       focusEngineMenuItem(menu, initialFocus === 'last' ? 'last' : initialFocus === 'first' ? 'first' : 1)
@@ -6059,6 +6050,7 @@ function createSearchWidget(): HTMLElement | null {
     return {
       ariaLabel: `选择搜索引擎，当前为 ${engine?.name || label}`,
       disabled,
+      expanded: engineMenuExpanded,
       label,
       title: disabled
         ? '网页搜索已关闭。可在新标签页设置中重新启用。'
