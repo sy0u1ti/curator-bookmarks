@@ -51,14 +51,12 @@ export interface SearchWidgetComboboxState {
 }
 
 export interface SearchWidgetEngineMenuState extends SearchEngineMenuState {
-  onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void
   open: boolean
 }
 
 export interface SearchWidgetInteractionState {
   onClear: () => void
-  onEngineKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
-  onEngineToggle: () => void
+  onEngineOpenChange: (open: boolean) => void
   onInputFocus: () => void
   onInputInput: () => void
   onInputKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
@@ -170,8 +168,7 @@ export function createEmptySavedSearchesState(): SavedSearchesState {
 export function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionState {
   return {
     onClear: noop,
-    onEngineKeyDown: noop,
-    onEngineToggle: noop,
+    onEngineOpenChange: noop,
     onInputFocus: noop,
     onInputInput: noop,
     onInputKeyDown: noop,

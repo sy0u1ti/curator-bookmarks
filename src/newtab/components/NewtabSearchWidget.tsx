@@ -1,5 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, type CSSProperties, type Ref } from 'react'
-import { Button, Icon, InlineMenuList, Input } from '../../ui'
+import { Menu as BaseMenu } from '@base-ui/react/menu'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type CSSProperties,
+  type ReactElement,
+  type Ref,
+  type RefObject
+} from 'react'
+import { Button, Icon, Input } from '../../ui'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
@@ -74,10 +84,11 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
           <SearchWidgetClearButton view={view} />
           <SearchWidgetSeparator view={view} />
           <SearchWidgetNaturalButton view={view} />
-          <SearchWidgetEngineButton view={view} buttonRef={engineButtonRef} />
+          <SearchWidgetEngineMenuRoot view={view} buttonRef={engineButtonRef} menuRef={engineMenuRef}>
+            <SearchWidgetEngineButton view={view} buttonRef={engineButtonRef} />
+          </SearchWidgetEngineMenuRoot>
           <SearchWidgetSubmitButton view={view} />
         </form>
-        <SearchWidgetEngineMenu view={view} menuRef={engineMenuRef} />
         <SearchWidgetSuggestionsPanel view={view} />
       </div>
     </section>
@@ -189,46 +200,58 @@ function SearchWidgetEngineButton({
   const { engine } = view.buttons
 
   return (
-    <Button
+    <BaseMenu.Trigger
       className="newtab-search-engine"
       type="button"
-      aria-haspopup="menu"
-      aria-expanded={engine.expanded ? 'true' : 'false'}
       aria-label={engine.ariaLabel}
       disabled={engine.disabled}
       title={engine.title}
-      onClick={view.interactions.onEngineToggle}
-      onKeyDown={view.interactions.onEngineKeyDown}
       ref={buttonRef}
-      unstyled
     >
       {engine.label}
-    </Button>
+    </BaseMenu.Trigger>
   )
 }
 
-function SearchWidgetEngineMenu({
+function SearchWidgetEngineMenuRoot({
+  buttonRef,
+  children,
   menuRef,
   view
 }: {
+  buttonRef: RefObject<HTMLButtonElement | null>
+  children: ReactElement
   menuRef: Ref<HTMLDivElement>
   view: NewtabSearchWidgetView
 }) {
   const { engineMenu } = view
-  if (!engineMenu.open) {
-    return null
-  }
 
   return (
-    <div
-      className="newtab-search-engine-menu"
-      role="menu"
-      aria-label="搜索引擎"
-      onKeyDown={engineMenu.onKeyDown}
-      ref={menuRef}
+    <BaseMenu.Root
+      open={engineMenu.open}
+      modal={false}
+      onOpenChange={(open) => {
+        view.interactions.onEngineOpenChange(open)
+      }}
     >
-      <SearchEngineMenu state={engineMenu} />
-    </div>
+      {children}
+      <BaseMenu.Portal>
+        <BaseMenu.Positioner
+          className="newtab-search-engine-menu-positioner"
+          positionMethod="absolute"
+          sideOffset={8}
+        >
+          <BaseMenu.Popup
+            className="newtab-search-engine-menu"
+            aria-label="搜索引擎"
+            finalFocus={buttonRef}
+            ref={menuRef}
+          >
+            <SearchEngineMenu state={engineMenu} />
+          </BaseMenu.Popup>
+        </BaseMenu.Positioner>
+      </BaseMenu.Portal>
+    </BaseMenu.Root>
   )
 }
 
@@ -279,22 +302,28 @@ function getNaturalSearchButtonClassName(state: SearchWidgetNaturalButtonState):
 function SearchEngineMenu({ state }: { state: SearchEngineMenuState }) {
   return (
     <>
-      <InlineMenuList
-        actions={state.items.map((item) => ({
-          id: item.id,
-          label: item.label,
-          className: item.active ? 'newtab-search-engine-item active' : 'newtab-search-engine-item',
-          closeOnSelect: false,
-          onSelect: item.onSelect,
-          attributes: {
-            role: 'menuitemradio',
-            'aria-checked': String(item.active),
-            tabIndex: '-1'
-          }
-        }))}
+      <BaseMenu.RadioGroup
         className="newtab-search-engine-menu-items"
-        label="搜索引擎"
-      />
+        value={state.items.find((item) => item.active)?.id || ''}
+      >
+        {state.items.map((item) => (
+          <BaseMenu.RadioItem
+            className="newtab-search-engine-item"
+            closeOnClick={false}
+            key={item.id}
+            label={item.label}
+            onClick={() => {
+              void item.onSelect()
+            }}
+            value={item.id}
+          >
+            <span>{item.label}</span>
+            <BaseMenu.RadioItemIndicator className="newtab-search-engine-item-indicator">
+              <Icon name="Check" size={12} aria-hidden="true" />
+            </BaseMenu.RadioItemIndicator>
+          </BaseMenu.RadioItem>
+        ))}
+      </BaseMenu.RadioGroup>
       <div className="newtab-search-engine-menu-hint">{state.hint}</div>
     </>
   )

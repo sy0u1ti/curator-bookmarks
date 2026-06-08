@@ -702,11 +702,12 @@ body.background-mask-enabled .newtab-background-mask {
   display: none;
 }
 
-.newtab-search-engine-menu {
-  position: absolute;
-  top: calc(var(--search-height) + 8px);
-  right: max(0px, calc((100% - var(--search-effective-width)) / 2));
+.newtab-search-engine-menu-positioner {
   z-index: 3;
+  outline: none;
+}
+
+.newtab-search-engine-menu {
   display: grid;
   width: 176px;
   gap: 3px;
@@ -727,9 +728,11 @@ body.background-mask-enabled .newtab-background-mask {
 }
 
 .newtab-search-engine-item {
-  display: grid;
+  display: flex;
   min-height: 30px;
+  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   padding: 0 9px;
   border-radius: 7px;
   background: transparent;
@@ -743,10 +746,17 @@ body.background-mask-enabled .newtab-background-mask {
 
 .newtab-search-engine-item:hover,
 .newtab-search-engine-item:focus-visible,
-.newtab-search-engine-item.active {
+.newtab-search-engine-item[data-highlighted],
+.newtab-search-engine-item[data-checked] {
   background: rgba(245, 245, 247, 0.085);
   color: var(--text);
   outline: none;
+}
+
+.newtab-search-engine-item-indicator {
+  display: inline-flex;
+  align-items: center;
+  color: currentColor;
 }
 
 .newtab-search-engine-menu-hint {
@@ -2535,7 +2545,8 @@ body.settings-trigger-auto-hide .settings-trigger[aria-expanded="true"] ~ .dashb
 .newtab-search-suggestion.active,
 .newtab-search-engine-item:hover,
 .newtab-search-engine-item:focus-visible,
-.newtab-search-engine-item.active,
+.newtab-search-engine-item[data-highlighted],
+.newtab-search-engine-item[data-checked],
 .newtab-quick-link:hover,
 .newtab-quick-link:focus-visible,
 .source-navigation-link:hover,

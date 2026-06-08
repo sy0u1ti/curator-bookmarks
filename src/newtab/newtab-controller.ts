@@ -5424,23 +5424,16 @@ function initializeSearchWidget(): boolean {
           hideSuggestions()
           input.focus()
         },
-        onEngineKeyDown: (event) => {
-          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-            return
-          }
-
-          event.preventDefault()
-          renderEngineMenu(event.key === 'ArrowDown' ? 'first' : 'last')
-        },
-        onEngineToggle: () => {
+        onEngineOpenChange: (open) => {
           if (state.searchSettings.webSearchEnabled === false) {
-            return
-          }
-          if (engineMenuExpanded) {
             closeEngineMenu()
             return
           }
-          renderEngineMenu('active')
+          if (!open) {
+            closeEngineMenu()
+            return
+          }
+          renderEngineMenu()
         },
         onInputFocus: () => {
           scheduleSuggestionsRender({ immediate: true })
@@ -5597,31 +5590,7 @@ function initializeSearchWidget(): boolean {
     }
   }
 
-  const getCurrentEngineMenu = () => getSearchNodes().engineMenu
-
-  const focusEngineMenuItem = (menu: HTMLElement, direction: 1 | -1 | 'first' | 'last') => {
-    const items = [...menu.querySelectorAll<HTMLButtonElement>('.newtab-search-engine-item')]
-    if (!items.length) {
-      return
-    }
-
-    const activeElement = document.activeElement
-    const currentIndex = items.findIndex((item) => item === activeElement)
-    let nextIndex = items.findIndex((item) => item.classList.contains('active'))
-    if (direction === 'first') {
-      nextIndex = 0
-    } else if (direction === 'last') {
-      nextIndex = items.length - 1
-    } else if (currentIndex >= 0) {
-      nextIndex = (currentIndex + direction + items.length) % items.length
-    } else if (nextIndex < 0) {
-      nextIndex = direction > 0 ? 0 : items.length - 1
-    }
-
-    items[Math.max(0, nextIndex)]?.focus()
-  }
-
-  const renderEngineMenu = (initialFocus: 'active' | 'first' | 'last' | 'none' = 'none') => {
+  const renderEngineMenu = () => {
     closeEngineMenu()
     const items: SearchEngineMenuItemViewModel[] = []
     for (const engineId of state.searchSettings.enabledEngines) {
@@ -5649,55 +5618,14 @@ function initializeSearchWidget(): boolean {
       })
     }
 
-    const handleEngineMenuKeydown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-      const menu = getCurrentEngineMenu()
-      if (!menu) {
-        return
-      }
-      if (
-        event.key !== 'ArrowDown' &&
-        event.key !== 'ArrowUp' &&
-        event.key !== 'Home' &&
-        event.key !== 'End' &&
-        event.key !== 'Escape'
-      ) {
-        return
-      }
-
-      event.preventDefault()
-      if (event.key === 'Escape') {
-        closeEngineMenu({ restoreFocus: true })
-        return
-      }
-
-      if (event.key === 'Home') {
-        focusEngineMenuItem(menu, 'first')
-      } else if (event.key === 'End') {
-        focusEngineMenuItem(menu, 'last')
-      } else {
-        focusEngineMenuItem(menu, event.key === 'ArrowDown' ? 1 : -1)
-      }
-    }
-
     searchEngineMenuState = {
       hint: `Cmd/Ctrl+Enter 打开前 ${SEARCH_MULTI_OPEN_LIMIT} 个启用引擎`,
       items,
-      onKeyDown: handleEngineMenuKeydown,
       open: true
     }
     renderSearchEngineMenuState()
     engineMenuExpanded = true
     updateEngineButton()
-
-    if (initialFocus !== 'none') {
-      window.setTimeout(() => {
-        const menu = getCurrentEngineMenu()
-        if (!menu) {
-          return
-        }
-        focusEngineMenuItem(menu, initialFocus === 'last' ? 'last' : initialFocus === 'first' ? 'first' : 1)
-      }, 0)
-    }
   }
 
   const hideSuggestions = () => {
