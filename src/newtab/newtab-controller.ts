@@ -215,6 +215,7 @@ import {
   renderNewTabSearchHintIsland,
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
+  renderClockWidgetStateIsland,
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
   renderSearchWidgetComboboxStateIsland,
@@ -6957,16 +6958,7 @@ function createClockWidget(): HTMLElement | null {
     return null
   }
 
-  const now = new Date()
-  const clock = createClockWidgetIslandElement({
-    ariaLabel: getFallbackClockAriaLabel(now, settings),
-    dateDateTime: getFallbackClockDateTime(now),
-    dateText: formatFallbackClockDate(now),
-    periodText: formatFallbackClockPeriod(now),
-    settings,
-    timeDateTime: getFallbackClockTimeDateTime(now),
-    timeText: formatFallbackClockTime(now, settings)
-  })
+  const clock = createClockWidgetIslandElement(createFallbackClockWidgetState(new Date(), settings))
 
   hydrateClockText(clock)
 
@@ -12006,57 +11998,47 @@ function updateClockText(): void {
     return
   }
 
-  const clockNode = document.querySelector('.newtab-clock')
-  const timeNode = document.querySelector('[data-clock-time]')
-  const dateNode = document.querySelector('[data-clock-date]')
-  const periodNode = document.querySelector('[data-clock-period]')
-  if (!timeNode && !dateNode && !periodNode) {
+  const clockNode = document.querySelector<HTMLElement>('.newtab-clock')
+  if (!clockNode) {
     return
   }
 
   const now = new Date()
   const settings = timeSettingsModule.normalizeTimeSettings(state.timeSettings)
   state.timeSettings = settings
-  if (clockNode instanceof HTMLElement) {
-    clockNode.setAttribute('aria-label', timeSettingsModule.getClockAriaLabel(now, settings))
-  }
-  if (timeNode instanceof HTMLTimeElement) {
-    timeNode.textContent = timeSettingsModule.formatClockTime(now, settings)
-    timeNode.dateTime = timeSettingsModule.formatClockTimeDateTime(now, settings)
-  }
-  if (periodNode) {
-    periodNode.textContent = timeSettingsModule.formatClockPeriod(now, settings)
-  }
-  if (dateNode instanceof HTMLTimeElement) {
-    dateNode.textContent = timeSettingsModule.formatClockDate(now, settings)
-    dateNode.dateTime = timeSettingsModule.formatClockDateTime(now, settings)
-  }
+  renderClockWidgetStateIsland(clockNode, {
+    ariaLabel: timeSettingsModule.getClockAriaLabel(now, settings),
+    dateDateTime: timeSettingsModule.formatClockDateTime(now, settings),
+    dateText: timeSettingsModule.formatClockDate(now, settings),
+    periodText: timeSettingsModule.formatClockPeriod(now, settings),
+    settings,
+    timeDateTime: timeSettingsModule.formatClockTimeDateTime(now, settings),
+    timeText: timeSettingsModule.formatClockTime(now, settings)
+  })
 }
 
 function updateClockTextFallback(): void {
-  const clockNode = document.querySelector('.newtab-clock')
-  const timeNode = document.querySelector('[data-clock-time]')
-  const dateNode = document.querySelector('[data-clock-date]')
-  const periodNode = document.querySelector('[data-clock-period]')
-  if (!timeNode && !dateNode && !periodNode) {
+  const clockNode = document.querySelector<HTMLElement>('.newtab-clock')
+  if (!clockNode) {
     return
   }
 
   const now = new Date()
-  const settings = state.timeSettings
-  if (clockNode instanceof HTMLElement) {
-    clockNode.setAttribute('aria-label', getFallbackClockAriaLabel(now, settings))
-  }
-  if (timeNode instanceof HTMLTimeElement) {
-    timeNode.textContent = formatFallbackClockTime(now, settings)
-    timeNode.dateTime = getFallbackClockTimeDateTime(now)
-  }
-  if (periodNode) {
-    periodNode.textContent = formatFallbackClockPeriod(now)
-  }
-  if (dateNode instanceof HTMLTimeElement) {
-    dateNode.textContent = formatFallbackClockDate(now)
-    dateNode.dateTime = getFallbackClockDateTime(now)
+  renderClockWidgetStateIsland(clockNode, createFallbackClockWidgetState(now, state.timeSettings))
+}
+
+function createFallbackClockWidgetState(
+  date: Date,
+  settings: NewTabTimeSettings
+) {
+  return {
+    ariaLabel: getFallbackClockAriaLabel(date, settings),
+    dateDateTime: getFallbackClockDateTime(date),
+    dateText: formatFallbackClockDate(date),
+    periodText: formatFallbackClockPeriod(date),
+    settings,
+    timeDateTime: getFallbackClockTimeDateTime(date),
+    timeText: formatFallbackClockTime(date, settings)
   }
 }
 

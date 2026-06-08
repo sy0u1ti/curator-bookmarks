@@ -24,6 +24,7 @@ const searchWidgetComboboxStores = new WeakMap<Element, SearchWidgetComboboxStor
 const searchWidgetEngineMenuStores = new WeakMap<Element, SearchWidgetEngineMenuStore>()
 const searchWidgetInteractionStores = new WeakMap<Element, SearchWidgetInteractionStore>()
 const searchWidgetPanelStores = new WeakMap<Element, SearchWidgetPanelStore>()
+const clockWidgetStores = new WeakMap<Element, ClockWidgetStore>()
 
 const noop = () => undefined
 
@@ -319,6 +320,12 @@ interface SearchWidgetPanelStore {
   subscribe: (listener: () => void) => () => void
 }
 
+interface ClockWidgetStore {
+  getSnapshot: () => ClockWidgetState
+  setState: (state: ClockWidgetState) => void
+  subscribe: (listener: () => void) => () => void
+}
+
 export interface SearchEngineMenuItemViewModel {
   active: boolean
   id: string
@@ -589,16 +596,22 @@ export function renderSearchWidgetPanelStateIsland(
 
 export function createClockWidgetIslandElement(state: ClockWidgetState): HTMLElement {
   const clock = document.createElement('section')
-  const { settings } = state
   clock.className = 'newtab-clock'
-  clock.style.setProperty('--clock-scale', String(settings.clockSize / 100))
-  clock.dataset.clockDisplayMode = settings.displayMode
-  clock.dataset.clockDensity = settings.density
-  clock.dataset.clockShowSeconds = String(settings.showSeconds && settings.displayMode !== 'date')
-  clock.dataset.clockHour12 = String(settings.hour12 && settings.displayMode !== 'date')
-  clock.setAttribute('aria-label', state.ariaLabel)
-  renderIsland(clock, <ClockWidget state={state} />)
+  syncClockWidgetHost(clock, state)
+  const clockStore = getClockWidgetStore(clock, state)
+  renderIsland(clock, <ClockWidget store={clockStore} />)
   return clock
+}
+
+export function renderClockWidgetStateIsland(
+  container: HTMLElement,
+  state: ClockWidgetState
+): void {
+  syncClockWidgetHost(container, state)
+  const clockStore = getClockWidgetStore(container, state)
+  flushSync(() => {
+    clockStore.setState(state)
+  })
 }
 
 export function createClockSpacerIslandElement(): HTMLElement {
@@ -1037,6 +1050,44 @@ function getSearchWidgetPanelStore(
   return store
 }
 
+function getClockWidgetStore(
+  host: Element,
+  initialState: ClockWidgetState
+): ClockWidgetStore {
+  let store = clockWidgetStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  clockWidgetStores.set(host, store)
+  return store
+}
+
+function syncClockWidgetHost(clock: HTMLElement, state: ClockWidgetState): void {
+  const { settings } = state
+  clock.style.setProperty('--clock-scale', String(settings.clockSize / 100))
+  clock.dataset.clockDisplayMode = settings.displayMode
+  clock.dataset.clockDensity = settings.density
+  clock.dataset.clockShowSeconds = String(settings.showSeconds && settings.displayMode !== 'date')
+  clock.dataset.clockHour12 = String(settings.hour12 && settings.displayMode !== 'date')
+  clock.setAttribute('aria-label', state.ariaLabel)
+}
+
 function useSearchWidgetActionState(store: SearchWidgetActionStore): SearchWidgetActionState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
@@ -1058,6 +1109,10 @@ function useSearchWidgetInteractionState(store: SearchWidgetInteractionStore): S
 }
 
 function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetPanelState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
+function useClockWidgetState(store: ClockWidgetStore): ClockWidgetState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
 
@@ -2261,7 +2316,8 @@ function SourceNavigation({ state }: { state: SourceNavigationState }) {
   )
 }
 
-function ClockWidget({ state }: { state: ClockWidgetState }) {
+function ClockWidget({ store }: { store: ClockWidgetStore }) {
+  const state = useClockWidgetState(store)
   const { settings } = state
 
   return (
