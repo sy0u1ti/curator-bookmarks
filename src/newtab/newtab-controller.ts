@@ -298,6 +298,11 @@ import {
   registerNewtabSearchSettingsActions,
   type NewtabSearchSettingsToggleKey
 } from './newtab-search-settings-store.js'
+import {
+  createNewtabBackgroundSettingsView,
+  dispatchNewtabBackgroundSettingsView,
+  registerNewtabBackgroundSettingsActions
+} from './newtab-background-settings-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -1028,6 +1033,9 @@ function bindEvents(): void {
   registerNewtabSearchSettingsActions({
     onToggle: handleSearchSettingToggle
   })
+  registerNewtabBackgroundSettingsActions({
+    onMaskToggle: handleBackgroundMaskToggle
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1299,7 +1307,6 @@ function bindBackgroundSettingsEvents(): void {
   backgroundUrlInput?.addEventListener('change', () => {
     void handleBackgroundUrlCommit()
   })
-  cachedEl('background-mask-enabled')?.addEventListener('change', handleBackgroundSettingsChange)
   cachedEl('background-mask-style')?.addEventListener('change', handleBackgroundSettingsChange)
   cachedEl('background-mask-blur')?.addEventListener('input', handleBackgroundSettingsChange)
   cachedEl('background-image-picker')?.addEventListener('click', () => {
@@ -1881,6 +1888,22 @@ function scheduleSearchSettingsSettle(): void {
 function handleBackgroundSettingsChange(): void {
   const previousSettings = state.backgroundSettings
   const nextSettings = readBackgroundSettingsFromControls()
+  commitBackgroundSettings(previousSettings, nextSettings)
+}
+
+function handleBackgroundMaskToggle(enabled: boolean): void {
+  const previousSettings = state.backgroundSettings
+  const nextSettings = normalizeBackgroundSettings({
+    ...state.backgroundSettings,
+    maskEnabled: enabled
+  })
+  commitBackgroundSettings(previousSettings, nextSettings)
+}
+
+function commitBackgroundSettings(
+  previousSettings: typeof DEFAULT_BACKGROUND_SETTINGS,
+  nextSettings: typeof DEFAULT_BACKGROUND_SETTINGS
+): void {
   const shouldClearUrlCache = shouldClearBackgroundUrlCache(previousSettings, nextSettings)
   state.backgroundSettings = nextSettings
   updateBackgroundStartupCacheStatus(nextSettings)
@@ -8696,7 +8719,6 @@ function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTING
   const colorInput = cachedEl('background-color')
   const featuredInput = cachedEl('background-featured-id')
   const urlInput = cachedEl('background-url')
-  const maskEnabledInput = cachedEl('background-mask-enabled')
   const maskStyleInput = cachedEl('background-mask-style')
   const maskBlurInput = cachedEl('background-mask-blur')
 
@@ -8709,9 +8731,7 @@ function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTING
     featuredId: featuredInput instanceof HTMLInputElement
       ? featuredInput.value
       : state.backgroundSettings.featuredId,
-    maskEnabled: maskEnabledInput instanceof HTMLInputElement
-      ? maskEnabledInput.checked
-      : state.backgroundSettings.maskEnabled,
+    maskEnabled: state.backgroundSettings.maskEnabled,
     maskStyle: isValueControl(maskStyleInput)
       ? maskStyleInput.value
       : state.backgroundSettings.maskStyle,
@@ -8745,7 +8765,6 @@ function syncBackgroundSettingsControls(): void {
   const colorValue = cachedEl('background-color-value')
   const imageButton = cachedEl('background-image-picker')
   const videoButton = cachedEl('background-video-picker')
-  const maskEnabledInput = cachedEl('background-mask-enabled')
   const maskStyleInput = cachedEl('background-mask-style')
   const maskBlurInput = cachedEl('background-mask-blur')
   const maskStyleRow = cachedEl('background-mask-style-row')
@@ -8843,9 +8862,7 @@ function syncBackgroundSettingsControls(): void {
       videoButton.removeAttribute('title')
     }
   }
-  if (maskEnabledInput instanceof HTMLInputElement) {
-    maskEnabledInput.checked = settings.maskEnabled
-  }
+  dispatchNewtabBackgroundSettingsView(createNewtabBackgroundSettingsView(settings))
   if (isValueControl(maskStyleInput)) {
     maskStyleInput.value = settings.maskStyle
     maskStyleInput.disabled = !settings.maskEnabled

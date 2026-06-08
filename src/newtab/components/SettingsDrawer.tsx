@@ -27,6 +27,10 @@ import {
   dispatchNewtabSearchSettingToggle,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
+import {
+  dispatchNewtabBackgroundMaskToggle,
+  useNewtabBackgroundSettingsView
+} from '../newtab-background-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
@@ -560,6 +564,8 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
 }
 
 function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
+  const backgroundSettings = useNewtabBackgroundSettingsView()
+
   return (
     <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-background-title">
       <h2 id="settings-background-title">背景</h2>
@@ -630,7 +636,13 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
           </span>
         </div>
         <output id="background-status" className="setting-status" aria-live="polite" hidden />
-        <SwitchRow id="background-mask-enabled" title="背景蒙版" description="提升复杂背景上的图标和文字可读性。" />
+        <SwitchRow
+          id="background-mask-enabled"
+          title="背景蒙版"
+          description="提升复杂背景上的图标和文字可读性。"
+          checked={backgroundSettings.maskEnabled}
+          onCheckedChange={dispatchNewtabBackgroundMaskToggle}
+        />
         <div id="background-mask-style-row" className="setting-row" hidden>
           <span>模糊样式</span>
           <Select
