@@ -320,6 +320,7 @@ import {
   registerNewtabBackgroundSettingsActions,
   type NewtabBackgroundSettingsFieldKey
 } from './newtab-background-settings-store.js'
+import { dispatchNewtabDragUiView } from './newtab-drag-ui-store.js'
 const FAVICON_SIZE = 64
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
@@ -2321,15 +2322,15 @@ function beginSpeedDialDrag(): void {
   state.speedDialDragLongPressTimer = 0
   state.speedDialDragOriginalOrderIds = originalOrderIds
   state.speedDialDragSuppressClick = true
-  document.body.classList.add('speed-dial-dragging')
+  dispatchNewtabDragUiView({ speedDialDragging: true })
   const sourceCard = getActiveSpeedDialDragCard()
   createSpeedDialDragGhost(sourceCard)
   captureSpeedDialDragLayout()
   sourceCard?.classList.add('dragging')
-  document.body.classList.add('bookmark-drag-preview-initializing')
+  dispatchNewtabDragUiView({ previewInitializing: true })
   syncSpeedDialDragVisualPreview()
   window.requestAnimationFrame(() => {
-    document.body.classList.remove('bookmark-drag-preview-initializing')
+    dispatchNewtabDragUiView({ previewInitializing: false })
   })
 }
 
@@ -2413,8 +2414,10 @@ function clearSpeedDialDragState({ keepSuppressClick = false } = {}): void {
   state.speedDialDragPendingInsertIndex = -1
   removeSpeedDialDragGhost()
   clearSpeedDialDragVisualPreview()
-  document.body.classList.remove('bookmark-drag-preview-initializing')
-  document.body.classList.remove('speed-dial-dragging')
+  dispatchNewtabDragUiView({
+    previewInitializing: false,
+    speedDialDragging: false
+  })
 
   if (keepSuppressClick) {
     state.speedDialDragSuppressClick = true
@@ -2787,15 +2790,15 @@ function beginBookmarkDrag(): void {
   state.dragLongPressTimer = 0
   state.dragOriginalOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
   state.dragSuppressClick = true
-  document.body.classList.add('bookmark-dragging')
+  dispatchNewtabDragUiView({ bookmarkDragging: true })
   const sourceTile = getActiveDragTile()
   createBookmarkDragGhost(sourceTile)
   captureBookmarkDragLayout()
   sourceTile?.classList.add('dragging')
-  document.body.classList.add('bookmark-drag-preview-initializing')
+  dispatchNewtabDragUiView({ previewInitializing: true })
   syncBookmarkDragVisualPreview()
   window.requestAnimationFrame(() => {
-    document.body.classList.remove('bookmark-drag-preview-initializing')
+    dispatchNewtabDragUiView({ previewInitializing: false })
   })
 }
 
@@ -2876,8 +2879,10 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   state.dragPendingInsertIndex = -1
   removeBookmarkDragGhost()
   clearBookmarkDragVisualPreview()
-  document.body.classList.remove('bookmark-drag-preview-initializing')
-  document.body.classList.remove('bookmark-dragging')
+  dispatchNewtabDragUiView({
+    bookmarkDragging: false,
+    previewInitializing: false
+  })
 
   if (keepSuppressClick) {
     state.dragSuppressClick = true
@@ -3380,7 +3385,7 @@ function beginFolderDrag(): void {
       })
   )
   state.folderDragSuppressClick = true
-  document.body.classList.add('folder-order-dragging')
+  dispatchNewtabDragUiView({ folderOrderDragging: true })
   const sourceHeader = getActiveFolderDragHeader()
   createFolderDragGhost(sourceHeader)
   sourceHeader?.classList.add('dragging')
@@ -3485,7 +3490,7 @@ function clearFolderDragState({ keepSuppressClick = false } = {}): void {
   state.folderDragOriginalSections = []
   folderDragSectionRectSnapshot = null
   removeFolderDragGhost()
-  document.body.classList.remove('folder-order-dragging')
+  dispatchNewtabDragUiView({ folderOrderDragging: false })
 
   if (keepSuppressClick) {
     state.folderDragSuppressClick = true
