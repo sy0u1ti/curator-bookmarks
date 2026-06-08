@@ -7,6 +7,7 @@ import { useNewtabController } from './newtab-controller'
 import { DashboardOverlayHost } from './components/DashboardOverlay'
 import { BookmarkMenusHost } from './components/BookmarkMenusHost'
 import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModal'
+import { NewtabBodyClassesHost } from './components/NewtabBodyClassesHost'
 import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
@@ -100,6 +101,7 @@ function NewtabShell() {
         <NewtabContentHost />
       </div>
       <DashboardOverlayHost />
+      <NewtabBodyClassesHost />
       <SettingsDrawerHost />
       <FeaturedBackgroundModalHost />
       <NewtabDeleteToastHost />

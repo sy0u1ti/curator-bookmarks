@@ -9614,8 +9614,6 @@ function rgbToHex(red: number, green: number, blue: number): string {
 
 function applyBackgroundMaskSettings(settings = state.backgroundSettings): void {
   const mask = cachedEl('newtab-background-mask')
-  document.body.classList.toggle('background-mask-enabled', settings.maskEnabled)
-  document.body.dataset.backgroundMaskStyle = settings.maskStyle
   document.documentElement.style.setProperty('--background-mask-blur', `${settings.maskBlur}px`)
 
   if (mask instanceof HTMLElement) {
@@ -10277,10 +10275,7 @@ async function saveGeneralSettings(): Promise<void> {
 }
 
 function applyGeneralSettings(): void {
-  document.body.classList.toggle(
-    'settings-trigger-auto-hide',
-    state.generalSettings.hideSettingsTrigger
-  )
+  dispatchNewtabFolderSourceView(createFolderSourceView())
 }
 
 function syncFolderSettingsControls(): void {
@@ -10498,10 +10493,7 @@ function clearFolderReorderStatus(): void {
 }
 
 function applyFolderSettings(): void {
-  document.body.classList.toggle(
-    'folder-names-hidden',
-    state.folderSettings.hideFolderNames
-  )
+  dispatchNewtabFolderSourceView(createFolderSourceView())
 }
 
 function syncIconSettingsControls(): void {
