@@ -459,32 +459,8 @@ export function RecyclePanel() {
       <p className="options-section-label">Recycle Bin</p>
       <h1 id="recycle-title">回收站</h1>
 
-      <div id="recycle-selection-group" className="options-group detect-selection-group hidden">
-        <div className="detect-results-header">
-          <div>
-            <strong id="recycle-selection-count">0 条已选择</strong>
-            <p className="detect-results-subtitle">可批量恢复选中的回收站书签，也可只清除回收站记录。</p>
-          </div>
-          <div className="detect-results-actions">
-            <Button id="recycle-clear-selection" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空回收站已选书签">清空选择</Button>
-            <Button id="recycle-restore-selection" className="options-button small" size="sm" type="button" aria-label="批量恢复回收站已选书签">批量恢复</Button>
-            <Button id="recycle-clear-selected" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="清除回收站已选记录">清除所选</Button>
-          </div>
-        </div>
-      </div>
-
       <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>回收站条目</strong>
-            <p id="recycle-results-subtitle" className="detect-results-subtitle">恢复时会优先尝试放回原文件夹；若原文件夹已不存在，则回到书签栏。</p>
-          </div>
-          <div className="detect-results-actions">
-            <Button id="recycle-select-all" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="全选回收站条目">全选本区</Button>
-            <Button id="recycle-clear-all" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="清空全部回收站记录">清空回收站</Button>
-            <span id="recycle-count" className="option-value">0 条回收站条目</span>
-          </div>
-        </div>
+        <div id="recycle-controls" />
         <div id="recycle-results" className="detect-results">
           <EmptyCta
             emptyKey="recycle"

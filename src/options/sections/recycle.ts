@@ -18,6 +18,7 @@ import { availabilityState, managerState } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
 import { syncSelectionSet } from '../shared-options/utils.js'
 import { renderRecycleBinIsland } from '../components/RecycleBinIsland.js'
+import { renderRecycleControlsIsland } from '../components/RecycleControlsIsland.js'
 
 export function normalizeRecycleBin(rawEntries) {
   if (!Array.isArray(rawEntries)) {
@@ -82,13 +83,13 @@ export function renderRecycleSection(callbacks) {
     new Set(managerState.recycleBin.map((entry) => String(entry.recycleId)))
   )
 
-  dom.recycleCount.textContent = `${managerState.recycleBin.length} 条回收站条目`
-  dom.recycleSelectionGroup.classList.toggle('hidden', managerState.selectedRecycleIds.size === 0)
-  dom.recycleSelectionCount.textContent = `${managerState.selectedRecycleIds.size} 条已选择`
-  dom.recycleRestoreSelection.disabled = availabilityState.deleting || managerState.selectedRecycleIds.size === 0
-  dom.recycleClearSelected.disabled = availabilityState.deleting || managerState.selectedRecycleIds.size === 0
-  dom.recycleSelectAll.disabled = managerState.recycleBin.length === 0
-  dom.recycleClearAll.disabled = managerState.recycleBin.length === 0 || availabilityState.deleting
+  if (dom.recycleControls) {
+    renderRecycleControlsIsland(dom.recycleControls, {
+      busy: availabilityState.deleting,
+      entryCount: managerState.recycleBin.length,
+      selectedCount: managerState.selectedRecycleIds.size
+    })
+  }
 
   renderRecycleBinIsland(dom.recycleResults, {
     entries: managerState.recycleBin,

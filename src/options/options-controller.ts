@@ -282,6 +282,10 @@ import {
   TAG_MANAGEMENT_ACTION_EVENT,
   type TagManagementActionDetail
 } from './components/tag-management-events.js'
+import {
+  RECYCLE_ACTION_EVENT,
+  type RecycleActionDetail
+} from './components/recycle-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1202,11 +1206,7 @@ function bindEvents() {
   dom.ignoreClearDomains?.addEventListener('click', () => clearIgnoreRules('domain', ignoreCallbacks))
   dom.ignoreClearFolders?.addEventListener('click', () => clearIgnoreRules('folder', ignoreCallbacks))
   dom.recycleResults?.addEventListener('click', (event) => handleRecycleResultsClick(event, recycleCallbacks))
-  dom.recycleClearSelection?.addEventListener('click', () => clearRecycleSelection(recycleCallbacks))
-  dom.recycleRestoreSelection?.addEventListener('click', () => restoreSelectedRecycleEntries(recycleCallbacks))
-  dom.recycleClearSelected?.addEventListener('click', () => clearSelectedRecycleEntries(recycleCallbacks))
-  dom.recycleSelectAll?.addEventListener('click', () => selectAllRecycleEntries(recycleCallbacks))
-  dom.recycleClearAll?.addEventListener('click', () => clearRecycleBin(recycleCallbacks))
+  window.addEventListener(RECYCLE_ACTION_EVENT, handleRecycleAction)
   dom.deleteFailedBookmarks?.addEventListener('click', openDeleteModal)
   dom.cancelDeleteModal?.addEventListener('click', closeDeleteModal)
   dom.confirmDeleteModal?.addEventListener('click', confirmDeleteFailedBookmarks)
@@ -4606,6 +4606,29 @@ function handleTagManagementAction(event: Event): void {
   }
   if (detail?.action === 'delete') {
     void handleTagManagementDelete(detail.sourceTag)
+  }
+}
+
+function handleRecycleAction(event: Event): void {
+  const detail = (event as CustomEvent<RecycleActionDetail>).detail
+  if (detail?.action === 'clear-selection') {
+    clearRecycleSelection(recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'restore-selected') {
+    void restoreSelectedRecycleEntries(recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'clear-selected') {
+    void clearSelectedRecycleEntries(recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'select-all') {
+    selectAllRecycleEntries(recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'clear-all') {
+    void clearRecycleBin(recycleCallbacks)
   }
 }
 
