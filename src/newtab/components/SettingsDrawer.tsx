@@ -19,6 +19,10 @@ import {
   dispatchNewtabIconVerticalCenterToggle,
   useNewtabIconPreviewView
 } from '../newtab-icon-preview-store'
+import {
+  dispatchNewtabTimeSettingToggle,
+  useNewtabTimeSettingsView
+} from '../newtab-time-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
@@ -76,6 +80,7 @@ function SwitchRow({
   description,
   checked,
   defaultChecked = false,
+  disabled = false,
   onCheckedChange
 }: {
   id: string
@@ -83,10 +88,11 @@ function SwitchRow({
   description: string
   checked?: boolean
   defaultChecked?: boolean
+  disabled?: boolean
   onCheckedChange?: (checked: boolean) => void
 }) {
   return (
-    <label className="setting-row">
+    <label className={`setting-row${disabled ? ' setting-row-disabled' : ''}`}>
       <span className="setting-label-stack">
         <span>{title}</span>
         <small>{description}</small>
@@ -96,6 +102,7 @@ function SwitchRow({
         className="setting-switch"
         checked={checked}
         defaultChecked={defaultChecked}
+        disabled={disabled}
         inputClassName="setting-switch-input"
         onCheckedChange={onCheckedChange}
         syncInputState
@@ -809,16 +816,38 @@ const iconPresetCards = (Object.entries(ICON_PRESET_META) as Array<[
 }))
 
 function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
+  const timeSettings = useNewtabTimeSettingsView()
+
   return (
     <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-time-title">
       <h2 id="settings-time-title">时间和日期</h2>
       <Surface className="settings-list" variant="plain">
-        <SwitchRow id="time-enabled" title="显示时间模块" description="放在搜索栏上方，关闭后保留原布局间距。" defaultChecked />
+        <SwitchRow
+          id="time-enabled"
+          title="显示时间模块"
+          description="放在搜索栏上方，关闭后保留原布局间距。"
+          checked={timeSettings.enabled}
+          onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('enabled', checked)}
+        />
         <SettingsSelect id="time-display-mode" label="显示内容" description="保留时间+日期、仅时间、仅日期三种模式。" ariaLabel="时间显示内容" portalContainer={panelElement} options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]} />
         <SettingsSelect id="time-time-zone" label="时区" description="自动跟随系统，也可固定为常用城市。" ariaLabel="时区" portalContainer={panelElement} options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]} />
         <SettingsSelect id="time-date-format" label="日期格式" description="仅在显示日期时生效。" ariaLabel="日期格式" portalContainer={panelElement} options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]} />
-        <SwitchRow id="time-show-seconds" title="显示秒数" description="开启后每秒更新；关闭时按分钟更新以减少渲染。" />
-        <SwitchRow id="time-hour12" title="12 小时制" description="显示 AM/PM，24 小时制会隐藏该标记。" />
+        <SwitchRow
+          id="time-show-seconds"
+          title="显示秒数"
+          description="开启后每秒更新；关闭时按分钟更新以减少渲染。"
+          checked={timeSettings.showSeconds}
+          disabled={timeSettings.switchesDisabled}
+          onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('showSeconds', checked)}
+        />
+        <SwitchRow
+          id="time-hour12"
+          title="12 小时制"
+          description="显示 AM/PM，24 小时制会隐藏该标记。"
+          checked={timeSettings.hour12}
+          disabled={timeSettings.switchesDisabled}
+          onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
+        />
         <SettingsSelect id="time-density" label="布局密度" description="切换时间模块的排版结构，不改变字号。" ariaLabel="时间布局密度" portalContainer={panelElement} options={[['compact', '极简单行'], ['balanced', '平衡胶囊'], ['comfortable', '独立卡片']]} />
         <SliderRow id="time-clock-size" label="字号" valueId="time-clock-size-value" value="100%" min="70" max="140" defaultValue="100" ariaLabel="时间字号" description="只影响时间和日期，不改变搜索和书签区域。" />
       </Surface>

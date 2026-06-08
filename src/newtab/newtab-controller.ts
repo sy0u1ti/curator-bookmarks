@@ -286,6 +286,12 @@ import {
   dispatchNewtabBookmarkEditMenuView
 } from './newtab-bookmark-menu-store.js'
 import { registerNewtabIconSettingsActions } from './newtab-icon-preview-store.js'
+import {
+  createNewtabTimeSettingsView,
+  dispatchNewtabTimeSettingsView,
+  registerNewtabTimeSettingsActions,
+  type NewtabTimeSettingsToggleKey
+} from './newtab-time-settings-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -1010,6 +1016,9 @@ function bindEvents(): void {
     onShowTitlesToggle: handleIconShowTitlesToggle,
     onVerticalCenterToggle: handleIconVerticalCenterToggle
   })
+  registerNewtabTimeSettingsActions({
+    onToggle: handleTimeSettingToggle
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1259,9 +1268,6 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
 }
 
 function bindTimeSettingsEvents(): void {
-  cachedEl('time-enabled')?.addEventListener('change', handleTimeSettingsChange)
-  cachedEl('time-show-seconds')?.addEventListener('change', handleTimeSettingsChange)
-  cachedEl('time-hour12')?.addEventListener('change', handleTimeSettingsChange)
   cachedEl('time-date-format')?.addEventListener('change', handleTimeSettingsChange)
   cachedEl('time-time-zone')?.addEventListener('change', handleTimeSettingsChange)
   cachedEl('time-display-mode')?.addEventListener('change', handleTimeSettingsChange)
@@ -1956,7 +1962,18 @@ async function handleBackgroundFileChange(
 }
 
 function handleTimeSettingsChange(): void {
-  state.timeSettings = readTimeSettingsFromControls()
+  commitTimeSettings(readTimeSettingsFromControls())
+}
+
+function handleTimeSettingToggle(key: NewtabTimeSettingsToggleKey, enabled: boolean): void {
+  commitTimeSettings(normalizeTimeSettingsLocal({
+    ...state.timeSettings,
+    [key]: enabled
+  }))
+}
+
+function commitTimeSettings(nextSettings: NewTabTimeSettings): void {
+  state.timeSettings = nextSettings
   scheduleTimeSettingsSave()
   scheduleRender({ updateClock: true })
   syncTimeSettingsControls()
@@ -12599,9 +12616,6 @@ function normalizeTimeSettingsLocal(rawSettings: unknown): NewTabTimeSettings {
 }
 
 function readTimeSettingsFromControls(): NewTabTimeSettings {
-  const enabledInput = cachedEl('time-enabled')
-  const secondsInput = cachedEl('time-show-seconds')
-  const hour12Input = cachedEl('time-hour12')
   const sizeInput = cachedEl('time-clock-size')
   const dateFormatInput = cachedEl('time-date-format')
   const timeZoneInput = cachedEl('time-time-zone')
@@ -12609,9 +12623,9 @@ function readTimeSettingsFromControls(): NewTabTimeSettings {
   const densityInput = cachedEl('time-density')
 
   return normalizeTimeSettingsLocal({
-    enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : state.timeSettings.enabled,
-    showSeconds: secondsInput instanceof HTMLInputElement ? secondsInput.checked : state.timeSettings.showSeconds,
-    hour12: hour12Input instanceof HTMLInputElement ? hour12Input.checked : state.timeSettings.hour12,
+    enabled: state.timeSettings.enabled,
+    showSeconds: state.timeSettings.showSeconds,
+    hour12: state.timeSettings.hour12,
     clockSize: sizeInput instanceof HTMLInputElement ? Number(sizeInput.value) : state.timeSettings.clockSize,
     dateFormat: isValueControl(dateFormatInput) ? dateFormatInput.value : state.timeSettings.dateFormat,
     timeZone: isValueControl(timeZoneInput) ? timeZoneInput.value : state.timeSettings.timeZone,
@@ -12622,17 +12636,12 @@ function readTimeSettingsFromControls(): NewTabTimeSettings {
 
 function syncTimeSettingsControls(): void {
   const settings = state.timeSettings
-  const enabledInput = cachedEl('time-enabled')
-  const secondsInput = cachedEl('time-show-seconds')
-  const hour12Input = cachedEl('time-hour12')
   const sizeInput = cachedEl('time-clock-size')
   const dateFormatInput = cachedEl('time-date-format')
   const timeZoneInput = cachedEl('time-time-zone')
   const displayInput = cachedEl('time-display-mode')
   const densityInput = cachedEl('time-density')
   const dependentControls = [
-    secondsInput,
-    hour12Input,
     sizeInput,
     dateFormatInput,
     timeZoneInput,
@@ -12640,17 +12649,7 @@ function syncTimeSettingsControls(): void {
     densityInput
   ]
 
-  if (enabledInput instanceof HTMLInputElement) {
-    enabledInput.checked = settings.enabled
-  }
-  if (secondsInput instanceof HTMLInputElement) {
-    secondsInput.checked = settings.showSeconds
-    secondsInput.disabled = !settings.enabled || settings.displayMode === 'date'
-  }
-  if (hour12Input instanceof HTMLInputElement) {
-    hour12Input.checked = settings.hour12
-    hour12Input.disabled = !settings.enabled || settings.displayMode === 'date'
-  }
+  dispatchNewtabTimeSettingsView(createNewtabTimeSettingsView(settings))
   if (sizeInput instanceof HTMLInputElement) {
     sizeInput.value = String(settings.clockSize)
     sizeInput.disabled = !settings.enabled
