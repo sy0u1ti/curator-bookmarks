@@ -8,6 +8,7 @@ import { Input } from '../../ui/primitives/Input'
 import { Select } from '../../ui/primitives/Select'
 import { SliderControl } from '../../ui/primitives/Slider'
 import { SwitchControl } from '../../ui/primitives/Switch'
+import { Icon } from '../../ui/icons/Icon'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
 import {
   ICON_PRESET_META,
@@ -28,6 +29,20 @@ import {
   useNewtabModuleSettingsView,
   type NewtabModuleSettingRowView
 } from '../newtab-module-settings-store'
+import {
+  dispatchNewtabFolderCandidateFocus,
+  dispatchNewtabFolderCandidateKeyDown,
+  dispatchNewtabFolderCandidateQueryChange,
+  dispatchNewtabFolderCandidateSearchKeyDown,
+  dispatchNewtabFolderCandidateSelect,
+  dispatchNewtabFolderCandidatesToggle,
+  dispatchNewtabSelectedFolderRemove,
+  useNewtabFolderSourceView,
+  type NewtabFolderCandidateItemView,
+  type NewtabFolderCandidateState,
+  type NewtabSelectedFolderSourceItemView,
+  type NewtabSelectedFolderSourceState
+} from '../newtab-folder-source-store'
 
 const settingsTabs = [
   ['source', '来源', true],
@@ -244,6 +259,11 @@ function AdvancedSettingsSection() {
 }
 
 function SourceSettingsSection() {
+  const folderSource = useNewtabFolderSourceView()
+  const candidatesPanelClassName = folderSource.candidatesExpanded
+    ? 'folder-candidates-panel is-expanded'
+    : 'folder-candidates-panel is-collapsed'
+
   return (
     <section className="settings-section" data-settings-group="source" aria-labelledby="settings-folder-title">
       <h2 id="settings-folder-title">书签来源</h2>
@@ -251,18 +271,57 @@ function SourceSettingsSection() {
         <div className="folder-source-panel">
           <div className="folder-source-summary">
             <span>已选文件夹</span>
-            <strong id="folder-selected-count">0</strong>
+            <strong id="folder-selected-count">{folderSource.selectedCount}</strong>
           </div>
-          <div id="folder-selected-list" className="folder-selected-list" />
-          <Button unstyled id="folder-candidates-toggle" className="folder-candidates-toggle" type="button" aria-expanded="false" aria-controls="folder-candidates-panel">
-            <span data-folder-toggle-label>展开候选文件夹</span>
+          <div id="folder-selected-list" className="folder-selected-list">
+            <SelectedFolderSourceList state={folderSource.selected} />
+          </div>
+          <Button
+            unstyled
+            id="folder-candidates-toggle"
+            className={folderSource.candidatesExpanded ? 'folder-candidates-toggle expanded' : 'folder-candidates-toggle'}
+            type="button"
+            aria-expanded={folderSource.candidatesExpanded}
+            aria-controls="folder-candidates-panel"
+            onClick={dispatchNewtabFolderCandidatesToggle}
+          >
+            <span data-folder-toggle-label>
+              {folderSource.candidatesExpanded ? '收起候选文件夹' : '展开候选文件夹'}
+            </span>
           </Button>
-          <div id="folder-candidates-panel" className="folder-candidates-panel" hidden>
+          <div
+            id="folder-candidates-panel"
+            className={candidatesPanelClassName}
+            aria-hidden={!folderSource.candidatesExpanded}
+            inert={!folderSource.candidatesExpanded}
+          >
             <div className="reveal-panel-body">
               <label className="folder-search-field" htmlFor="folder-candidate-search">
-                <Input id="folder-candidate-search" className="folder-search-input" type="search" placeholder="搜索文件夹" aria-label="搜索候选文件夹" aria-controls="folder-candidate-list" spellCheck={false} unstyled />
+                <Input
+                  id="folder-candidate-search"
+                  className="folder-search-input"
+                  type="search"
+                  placeholder="搜索文件夹"
+                  aria-label="搜索候选文件夹"
+                  aria-controls="folder-candidate-list"
+                  spellCheck={false}
+                  value={folderSource.candidateQuery}
+                  onValueChange={dispatchNewtabFolderCandidateQueryChange}
+                  onKeyDown={(event) => {
+                    if (dispatchNewtabFolderCandidateSearchKeyDown(event.key)) {
+                      event.preventDefault()
+                    }
+                  }}
+                  unstyled
+                />
               </label>
-              <div id="folder-candidate-list" className="folder-candidate-list" aria-label="候选文件夹列表" />
+              <div
+                id="folder-candidate-list"
+                className="folder-candidate-list"
+                aria-label="候选文件夹列表"
+              >
+                <FolderCandidateList state={folderSource.candidates} />
+              </div>
             </div>
           </div>
         </div>
@@ -270,6 +329,93 @@ function SourceSettingsSection() {
         <SwitchRow id="folder-show-source-navigation" title="显示来源导航" description="在多个来源之间快速跳转，不影响文件夹和书签拖拽排序。" defaultChecked />
       </Surface>
     </section>
+  )
+}
+
+function SelectedFolderSourceList({ state }: { state: NewtabSelectedFolderSourceState }) {
+  if (state.type === 'empty') {
+    return <p className="folder-source-empty">{state.message}</p>
+  }
+
+  return (
+    <>
+      {state.items.map((item) => (
+        <div className="folder-source-selected-item" key={item.folderId}>
+          <span className="folder-source-selected-copy">
+            <strong>{item.title}</strong>
+            <span>{item.path}</span>
+            <span>{item.stats}</span>
+          </span>
+          <Button
+            className="folder-source-remove"
+            type="button"
+            data-folder-remove-id={item.folderId}
+            aria-label={getFolderSourceRemoveLabel(item)}
+            title={getFolderSourceRemoveLabel(item)}
+            onClick={() => {
+              dispatchNewtabSelectedFolderRemove(item.folderId)
+            }}
+            unstyled
+          >
+            <Icon name="X" size={12} aria-hidden="true" />
+          </Button>
+        </div>
+      ))}
+    </>
+  )
+}
+
+function getFolderSourceRemoveLabel(item: NewtabSelectedFolderSourceItemView): string {
+  return `从新标签页移除「${item.title || '文件夹'}」，将隐藏 ${item.affectedCount} 个书签，不会删除书签`
+}
+
+function FolderCandidateList({ state }: { state: NewtabFolderCandidateState }) {
+  if (state.type === 'empty') {
+    return (
+      <p className="folder-source-empty" role="status" aria-live="polite">
+        {state.message}
+      </p>
+    )
+  }
+
+  return (
+    <>
+      {state.items.map((item) => (
+        <FolderCandidateItem item={item} key={item.folderId} />
+      ))}
+    </>
+  )
+}
+
+function FolderCandidateItem({ item }: { item: NewtabFolderCandidateItemView }) {
+  return (
+    <Button
+      className={item.selected ? 'folder-candidate-card selected' : 'folder-candidate-card'}
+      type="button"
+      data-folder-candidate-id={item.folderId}
+      tabIndex={item.active ? 0 : -1}
+      title={item.path || item.title}
+      aria-pressed={item.selected}
+      onClick={() => {
+        dispatchNewtabFolderCandidateSelect(item.folderId)
+      }}
+      onFocus={() => {
+        dispatchNewtabFolderCandidateFocus(item.folderId)
+      }}
+      onKeyDown={(event) => {
+        if (dispatchNewtabFolderCandidateKeyDown(event.key)) {
+          event.preventDefault()
+        }
+      }}
+      unstyled
+    >
+      <span className="folder-candidate-copy">
+        <strong>{item.title || '未命名文件夹'}</strong>
+        <span>{item.path || item.title || '未命名文件夹'}</span>
+        <span>{item.stats}</span>
+      </span>
+      <span className="folder-candidate-badge">{item.badge}</span>
+    </Button>
   )
 }
 

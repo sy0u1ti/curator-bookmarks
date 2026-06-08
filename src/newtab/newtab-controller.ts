@@ -212,12 +212,10 @@ import {
   mountNewTabDragGhostBridge,
   mountSearchEngineMenuIslandElement,
   renderFeaturedBackgroundPickerIsland,
-  renderFolderCandidateListIsland,
   renderNewTabSavedSearchesIsland,
   renderNewTabSearchChipsIsland,
   renderNewTabSearchHintIsland,
   renderNewTabSearchSuggestionsIsland,
-  renderSelectedFolderSourceListIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
   type BookmarkContentViewModel,
@@ -227,16 +225,12 @@ import {
   type FeaturedBackgroundPickerGridSectionViewModel,
   type FeaturedBackgroundPickerProviderGroupViewModel,
   type FeaturedBackgroundPickerState,
-  type FolderCandidateItemViewModel,
-  type FolderCandidateListState,
   type QuickAccessGroupViewModel,
   type SavedSearchesState,
   type SearchChipViewModel,
   type SearchEngineMenuItemViewModel,
   type SearchHintState,
   type SearchSuggestionViewModel,
-  type SelectedFolderSourceItemViewModel,
-  type SelectedFolderSourceListState,
   type SpeedDialCardViewModel
 } from './components/RuntimeIslands.js'
 import {
@@ -244,6 +238,14 @@ import {
   registerNewtabModuleSettingsActions,
   type NewtabModuleSettingRowView
 } from './newtab-module-settings-store.js'
+import {
+  dispatchNewtabFolderSourceView,
+  registerNewtabFolderSourceActions,
+  type NewtabFolderCandidateItemView,
+  type NewtabFolderCandidateState,
+  type NewtabSelectedFolderSourceItemView,
+  type NewtabSelectedFolderSourceState
+} from './newtab-folder-source-store.js'
 import type {
   BookmarkAddMenuViewModel,
   BookmarkEditMenuViewModel,
@@ -991,6 +993,15 @@ function bindEvents(): void {
     onMove: handleModuleSettingMove,
     onToggle: handleModuleSettingToggle
   })
+  registerNewtabFolderSourceActions({
+    onCandidateFocus: handleFolderCandidateFocus,
+    onCandidateKeyDown: handleFolderCandidateListKeydown,
+    onCandidateSearchKeyDown: handleFolderCandidateSearchKeydown,
+    onCandidateSelect: handleFolderCandidateSelect,
+    onCandidateQueryChange: handleFolderCandidateSearch,
+    onRemoveSelected: handleSelectedFolderRemove,
+    onToggleCandidates: toggleFolderCandidates
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1339,20 +1350,6 @@ function bindFolderSettingsEvents(): void {
     ?.addEventListener('change', handleFolderSettingsChange)
   cachedEl('folder-show-source-navigation')
     ?.addEventListener('change', handleGeneralSettingsChange)
-  cachedEl('folder-candidates-toggle')
-    ?.addEventListener('click', toggleFolderCandidates)
-  cachedEl('folder-candidate-search')
-    ?.addEventListener('input', handleFolderCandidateSearch)
-  cachedEl('folder-candidate-search')
-    ?.addEventListener('keydown', handleFolderCandidateSearchKeydown)
-  cachedEl('folder-candidate-list')
-    ?.addEventListener('click', handleFolderCandidateClick)
-  cachedEl('folder-candidate-list')
-    ?.addEventListener('keydown', handleFolderCandidateListKeydown)
-  cachedEl('folder-candidate-list')
-    ?.addEventListener('focusin', handleFolderCandidateFocus)
-  cachedEl('folder-selected-list')
-    ?.addEventListener('click', handleSelectedFolderClick)
 }
 
 function bindSettingsGroupTabs(): void {
@@ -1496,39 +1493,27 @@ function toggleFolderCandidates(): void {
   }
 }
 
-function handleFolderCandidateSearch(event: Event): void {
-  const target = event.target
-  state.folderCandidateQuery = target instanceof HTMLInputElement ? target.value : ''
+function handleFolderCandidateSearch(query: string): void {
+  state.folderCandidateQuery = query
   state.folderCandidateActiveId = ''
   syncFolderSettingsControls()
 }
 
-function handleFolderCandidateSearchKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-    return
+function handleFolderCandidateSearchKeydown(key: string): boolean {
+  if (key !== 'ArrowDown' && key !== 'ArrowUp') {
+    return false
   }
 
   const candidates = getFilteredFolderCandidates()
   if (!candidates.length) {
-    return
+    return false
   }
 
-  event.preventDefault()
-  focusFolderCandidateOption(event.key === 'ArrowDown' ? 'first' : 'last')
+  focusFolderCandidateOption(key === 'ArrowDown' ? 'first' : 'last')
+  return true
 }
 
-function handleFolderCandidateClick(event: Event): void {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
-
-  const button = target.closest('[data-folder-candidate-id]')
-  if (!(button instanceof HTMLElement)) {
-    return
-  }
-
-  const folderId = String(button.dataset.folderCandidateId || '').trim()
+function handleFolderCandidateSelect(folderId: string): void {
   if (!folderId) {
     return
   }
@@ -1541,30 +1526,30 @@ function handleFolderCandidateClick(event: Event): void {
   })
 }
 
-function handleFolderCandidateListKeydown(event: KeyboardEvent): void {
+function handleFolderCandidateListKeydown(key: string): boolean {
   if (
-    event.key !== 'ArrowDown' &&
-    event.key !== 'ArrowUp' &&
-    event.key !== 'Home' &&
-    event.key !== 'End' &&
-    event.key !== 'Escape'
+    key !== 'ArrowDown' &&
+    key !== 'ArrowUp' &&
+    key !== 'Home' &&
+    key !== 'End' &&
+    key !== 'Escape'
   ) {
-    return
+    return false
   }
 
-  event.preventDefault()
-  if (event.key === 'Escape') {
+  if (key === 'Escape') {
     cachedEl('folder-candidate-search')?.focus()
-    return
+    return true
   }
 
-  if (event.key === 'Home') {
+  if (key === 'Home') {
     focusFolderCandidateOption('first')
-  } else if (event.key === 'End') {
+  } else if (key === 'End') {
     focusFolderCandidateOption('last')
   } else {
-    focusFolderCandidateOption(event.key === 'ArrowDown' ? 1 : -1)
+    focusFolderCandidateOption(key === 'ArrowDown' ? 1 : -1)
   }
+  return true
 }
 
 function getFolderCandidateOptionButtons(): HTMLButtonElement[] {
@@ -1642,28 +1627,16 @@ function focusFolderCandidateOption(direction: 1 | -1 | 'first' | 'last'): void 
   }
 }
 
-function handleFolderCandidateFocus(event: FocusEvent): void {
-  const target = event.target
-  if (!(target instanceof HTMLElement) || !target.dataset.folderCandidateId) {
+function handleFolderCandidateFocus(folderId: string): void {
+  if (!folderId) {
     return
   }
 
-  state.folderCandidateActiveId = target.dataset.folderCandidateId
+  state.folderCandidateActiveId = folderId
   syncFolderCandidateOptionTabStops(state.folderCandidateActiveId)
 }
 
-function handleSelectedFolderClick(event: Event): void {
-  const target = event.target
-  if (!(target instanceof Element)) {
-    return
-  }
-
-  const button = target.closest('[data-folder-remove-id]')
-  if (!(button instanceof HTMLElement)) {
-    return
-  }
-
-  const folderId = String(button.dataset.folderRemoveId || '').trim()
+function handleSelectedFolderRemove(folderId: string): void {
   if (!folderId) {
     return
   }
@@ -10798,45 +10771,12 @@ function readFolderSettingsFromControls(): NewTabFolderSettings {
 function syncFolderSettingsControls(): void {
   measureNow('newtab.syncFolderSettingsControls', () => {
     const hideInput = cachedEl('folder-hide-names')
-    const selectedList = cachedEl('folder-selected-list')
-    const selectedCount = cachedEl('folder-selected-count')
-    const toggle = cachedEl('folder-candidates-toggle')
-    const panel = cachedEl('folder-candidates-panel')
-    const searchInput = cachedEl('folder-candidate-search')
-    const candidateList = cachedEl('folder-candidate-list')
 
     if (hideInput instanceof HTMLInputElement) {
       hideInput.checked = state.folderSettings.hideFolderNames
     }
 
-    if (selectedCount) {
-      selectedCount.textContent = String(state.folderSettings.selectedFolderIds.length)
-    }
-
-    if (selectedList instanceof HTMLElement) {
-      renderSelectedFolderControls(selectedList)
-    }
-
-    if (toggle instanceof HTMLButtonElement) {
-      toggle.setAttribute('aria-expanded', String(state.folderCandidatesExpanded))
-      toggle.classList.toggle('expanded', state.folderCandidatesExpanded)
-      const label = toggle.querySelector('[data-folder-toggle-label]')
-      if (label) {
-        label.textContent = state.folderCandidatesExpanded ? '收起候选文件夹' : '展开候选文件夹'
-      }
-    }
-
-    if (panel instanceof HTMLElement) {
-      setRevealPanelExpanded(panel, state.folderCandidatesExpanded)
-    }
-
-    if (searchInput instanceof HTMLInputElement && searchInput.value !== state.folderCandidateQuery) {
-      searchInput.value = state.folderCandidateQuery
-    }
-
-    if (candidateList instanceof HTMLElement) {
-      renderFolderCandidateControls(candidateList)
-    }
+    dispatchNewtabFolderSourceView(createFolderSourceView())
   })
 }
 
@@ -10895,18 +10835,27 @@ function handleModuleSettingMove(key: NewTabModuleSettingKey, direction: -1 | 1)
   scheduleRender({ updateClock: true })
 }
 
-function renderSelectedFolderControls(container: HTMLElement): void {
+function createFolderSourceView() {
+  return {
+    candidateQuery: state.folderCandidateQuery,
+    candidates: createFolderCandidateControlsState(),
+    candidatesExpanded: state.folderCandidatesExpanded,
+    selected: createSelectedFolderControlsState(),
+    selectedCount: state.folderSettings.selectedFolderIds.length
+  }
+}
+
+function createSelectedFolderControlsState(): NewtabSelectedFolderSourceState {
   const selectedIds = state.folderSettings.selectedFolderIds
   if (!selectedIds.length) {
-    renderSelectedFolderSourceListIsland(container, {
+    return {
       type: 'empty',
       message: '未选择来源文件夹。选择来源只会决定新标签页显示哪些书签，不会移动、删除或重排原有书签。'
-    })
-    return
+    }
   }
 
   const folders = getFolderCandidateMap()
-  const items: SelectedFolderSourceItemViewModel[] = selectedIds.map((folderId) => {
+  const items: NewtabSelectedFolderSourceItemView[] = selectedIds.map((folderId) => {
     const folder = folders.get(folderId)
     return {
       affectedCount: folder?.totalBookmarkCount || 0,
@@ -10916,23 +10865,21 @@ function renderSelectedFolderControls(container: HTMLElement): void {
       title: folder?.title || '已删除的文件夹'
     }
   })
-  const stateModel: SelectedFolderSourceListState = { type: 'items', items }
-  renderSelectedFolderSourceListIsland(container, stateModel)
+  return { type: 'items', items }
 }
 
-function renderFolderCandidateControls(container: HTMLElement): void {
+function createFolderCandidateControlsState(): NewtabFolderCandidateState {
   const candidates = getFilteredFolderCandidates()
   if (!candidates.length) {
-    renderFolderCandidateListIsland(container, {
+    return {
       type: 'empty',
       message: '没有匹配的文件夹。请清空搜索词，或选择其他来源文件夹。'
-    })
-    return
+    }
   }
 
   const selectedIds = new Set(state.folderSettings.selectedFolderIds)
   const activeId = resolveFolderCandidateActiveId(candidates)
-  const items: FolderCandidateItemViewModel[] = candidates.map((folder) => {
+  const items: NewtabFolderCandidateItemView[] = candidates.map((folder) => {
     const selected = selectedIds.has(folder.id)
     return {
       active: folder.id === activeId,
@@ -10944,8 +10891,7 @@ function renderFolderCandidateControls(container: HTMLElement): void {
       title: folder.title || '未命名文件夹'
     }
   })
-  const stateModel: FolderCandidateListState = { type: 'items', items }
-  renderFolderCandidateListIsland(container, stateModel)
+  return { type: 'items', items }
 }
 
 function getFilteredFolderCandidates(): NewTabFolderCandidate[] {
