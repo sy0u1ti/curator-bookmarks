@@ -201,7 +201,6 @@ import {
   createBookmarkTileIslandElement,
   createSearchWidgetIslandElement,
   mountNewTabDragGhostBridge,
-  renderFeaturedBackgroundPickerIsland,
   renderNewTabSavedSearchesIsland,
   renderNewTabSearchChipsIsland,
   renderNewTabSearchHintIsland,
@@ -283,6 +282,7 @@ import {
   dispatchNewtabSpeedDialView,
   getNewtabSpeedDialView
 } from './newtab-speed-dial-store.js'
+import { dispatchNewtabFeaturedBackgroundPickerView } from './newtab-featured-background-picker-store.js'
 import {
   dispatchNewtabDeleteToastView,
   registerNewtabDeleteToastActions
@@ -10718,13 +10718,13 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
     hasRenderedContent: () =>
       !!featuredBackgroundModalGrid?.querySelector('.featured-wallpaper-card'),
     showLoading: () => {
-      renderFeaturedBackgroundPickerIsland(featuredBackgroundModalGrid, {
+      dispatchNewtabFeaturedBackgroundPickerView({
         type: 'state',
         label: '正在载入精选图库'
       })
     },
     showError: () => {
-      renderFeaturedBackgroundPickerIsland(featuredBackgroundModalGrid, {
+      dispatchNewtabFeaturedBackgroundPickerView({
         type: 'state',
         label: '精选图库载入失败'
       })
@@ -10780,6 +10780,7 @@ function closeFeaturedBackgroundPicker(): void {
   disconnectFeaturedBackgroundCardPreviewObserver()
   featuredBackgroundCardPreviewRegistry.resetVisibility()
   dispatchNewtabFeaturedBackgroundModalOpen(false)
+  dispatchNewtabFeaturedBackgroundPickerView(null)
   dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
 
   const returnElement = featuredBackgroundModalReturnFocusElement
@@ -10950,7 +10951,7 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
 
   const refreshedNasaItems = pickerSections.refreshed.filter((item) => item.provider === 'nasa')
   const refreshedWikimediaItems = pickerSections.refreshed.filter((item) => item.provider === 'wikimedia')
-  renderFeaturedBackgroundPickerIsland(featuredBackgroundModalGrid, {
+  dispatchNewtabFeaturedBackgroundPickerView({
     type: 'sections',
     sections: [
       {
@@ -10988,9 +10989,14 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
       }
     ]
   })
-  registerFeaturedBackgroundRenderedCards(featuredBackgroundModalGrid)
   featuredBackgroundPickerRenderSignature = renderSignature
-  observeFeaturedBackgroundCardPreviews()
+  window.requestAnimationFrame(() => {
+    if (!(featuredBackgroundModalGrid instanceof HTMLElement) || !isFeaturedBackgroundPickerOpen()) {
+      return
+    }
+    registerFeaturedBackgroundRenderedCards(featuredBackgroundModalGrid)
+    observeFeaturedBackgroundCardPreviews()
+  })
 }
 
 function createFeaturedBackgroundPickerProviderGroupViewModel(

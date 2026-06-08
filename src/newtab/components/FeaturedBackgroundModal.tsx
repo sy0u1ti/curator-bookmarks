@@ -10,7 +10,12 @@ import {
   dispatchNewtabFeaturedBackgroundModalRefreshClick,
   useNewtabFeaturedBackgroundModalView
 } from '../newtab-featured-background-modal-store'
+import {
+  useNewtabFeaturedBackgroundPickerView,
+  type FeaturedBackgroundPickerView
+} from '../newtab-featured-background-picker-store'
 import { FeaturedBackgroundHoverPreviewHost } from './FeaturedBackgroundHoverPreview'
+import { FeaturedBackgroundPicker } from './RuntimeIslands'
 
 export interface FeaturedBackgroundModalProps {
   open: boolean
@@ -22,6 +27,7 @@ export interface FeaturedBackgroundModalProps {
   onGridScroll: () => void
   onModalPointerDownCapture: (event: PointerEvent) => void
   onRefreshClick: () => void
+  pickerView: FeaturedBackgroundPickerView | null
 }
 
 export function FeaturedBackgroundModal({
@@ -33,7 +39,8 @@ export function FeaturedBackgroundModal({
   onGridScroll,
   onOpenChange,
   onModalPointerDownCapture,
-  onRefreshClick
+  onRefreshClick,
+  pickerView
 }: FeaturedBackgroundModalProps) {
   const modalClassName = [
     'featured-wallpaper-modal',
@@ -106,7 +113,9 @@ export function FeaturedBackgroundModal({
           className="featured-wallpaper-grid"
           aria-label="精选图库壁纸列表"
           onScroll={onGridScroll}
-        />
+        >
+          {pickerView ? <FeaturedBackgroundPicker state={pickerView} /> : null}
+        </div>
         <FeaturedBackgroundHoverPreviewHost />
       </DialogPanel>
     </DialogOverlay>
@@ -115,6 +124,7 @@ export function FeaturedBackgroundModal({
 
 export function FeaturedBackgroundModalHost() {
   const view = useNewtabFeaturedBackgroundModalView()
+  const pickerView = useNewtabFeaturedBackgroundPickerView()
 
   useEffect(() => {
     dispatchNewtabFeaturedBackgroundModalReady()
@@ -131,6 +141,7 @@ export function FeaturedBackgroundModalHost() {
       onOpenChange={dispatchNewtabFeaturedBackgroundModalOpenChange}
       onModalPointerDownCapture={dispatchNewtabFeaturedBackgroundModalPointerDownCapture}
       onRefreshClick={dispatchNewtabFeaturedBackgroundModalRefreshClick}
+      pickerView={pickerView}
     />
   )
 }

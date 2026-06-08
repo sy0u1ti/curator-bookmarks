@@ -538,13 +538,6 @@ export function appendBookmarkTileIslandElements(
   return tiles
 }
 
-export function renderFeaturedBackgroundPickerIsland(
-  container: HTMLElement,
-  state: FeaturedBackgroundPickerState
-): void {
-  renderIsland(container, <FeaturedBackgroundPicker state={state} />)
-}
-
 export function renderNewTabSearchChipsIsland(container: HTMLElement, chips: SearchChipViewModel[]): void {
   renderIsland(container, <SearchChips chips={chips} />)
 }
@@ -1357,7 +1350,7 @@ function SavedSearches({ state }: { state: SavedSearchesState }) {
   )
 }
 
-function FeaturedBackgroundPicker({ state }: { state: FeaturedBackgroundPickerState }) {
+export function FeaturedBackgroundPicker({ state }: { state: FeaturedBackgroundPickerState }) {
   if (state.type === 'state') {
     return <div className="featured-wallpaper-state">{state.label}</div>
   }
