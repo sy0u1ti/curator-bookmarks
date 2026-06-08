@@ -16,35 +16,6 @@ import {
 } from '../../ui/primitives/Popover.js'
 import { SwitchControl } from '../../ui/primitives/Switch.js'
 
-const featureSwitches = [
-  {
-    id: 'ai-auto-analyze-bookmarks',
-    label: '自动分析',
-    statusId: 'ai-auto-analyze-status',
-    status: '未开启',
-    help: '添加网页书签后，自动分析内容并归类到合适文件夹。状态会在 popup 和扩展图标上轻量提示。'
-  },
-  {
-    id: 'ai-allow-remote-parser',
-    label: '开启 Jina Reader 远程解析 URL',
-    statusId: 'ai-remote-parser-status',
-    status: '未开启',
-    help: '开启后，弹窗智能分类、书签智能分析和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。'
-  },
-  {
-    id: 'inbox-auto-move-to-recommended-folder',
-    label: '自动移动到推荐文件夹',
-    statusId: 'inbox-workflow-status',
-    status: 'Inbox 开启',
-    help: '快捷键收藏会先进入 Inbox / 待整理；AI 置信度足够时自动移动到推荐文件夹。'
-  },
-  {
-    id: 'inbox-tag-only-no-auto-move',
-    label: '只打标签，不自动移动',
-    help: '开启后，快捷键收藏仍保存到 Inbox / 待整理，只生成标签和摘要，不移动文件夹。'
-  }
-]
-
 const aiProviderSteps = [
   { id: 'api-key', index: '1', title: '填写密钥', copy: '先填 API Key；Base URL 在高级选项' },
   { id: 'fetch-models', index: '2', title: '获取模型', copy: '读取可用列表' },
@@ -95,8 +66,6 @@ const aiDecisionMetrics = [
   ['失败', 'ai-failed']
 ]
 
-const featureSettingsTitle = <h2 className="ai-settings-subtitle">功能设置</h2>
-
 const aiProviderTitle = <h2 className="ai-settings-subtitle">自定义 AI 渠道</h2>
 
 const aiProviderDescription = (
@@ -115,35 +84,6 @@ const aiProgressDescription = (
 )
 
 const aiDecisionStatus = <span id="ai-decision-status" className="option-value">未开始</span>
-
-function HelpTooltip({ copy }: { copy: string }) {
-  return (
-    <button className="ai-help-tooltip" type="button" aria-label={copy} data-tooltip={copy}>
-      ?
-    </button>
-  )
-}
-
-function AiSwitch({
-  id,
-  label
-}: {
-  id: string
-  label?: string
-}) {
-  return (
-    <span className="ai-switch">
-      <SwitchControl
-        id={id}
-        aria-label={label}
-        className="ai-switch-control"
-        thumbClassName="ai-switch-thumb"
-        syncInputState
-        unstyled
-      />
-    </span>
-  )
-}
 
 function ScopePickerButton({
   id,
@@ -170,31 +110,7 @@ export function GeneralPanel() {
       <p className="options-section-label">General</p>
       <h1 id="general-title">通用设置</h1>
 
-      <AiProviderCard
-        className="options-group ai-provider-card ai-feature-settings-card"
-        title={featureSettingsTitle}
-        headerClassName="ai-feature-settings-head"
-        iconName="Sparkles"
-        bodyClassName="ai-provider-layout"
-      >
-          {featureSwitches.map((item) => (
-            <div className="ai-feature-switch-row" key={item.id}>
-              <div className="ai-feature-switch-copy">
-                <div className="ai-feature-title-row">
-                  <strong>
-                    {item.label} <HelpTooltip copy={item.help} />
-                  </strong>
-                  {item.statusId ? (
-                    <span id={item.statusId} className="options-chip muted ai-inline-status">
-                      {item.status}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-              <AiSwitch id={item.id} label={item.label} />
-            </div>
-          ))}
-      </AiProviderCard>
+      <div id="feature-settings-controls" />
 
       <div id="content-snapshot-controls" />
 
@@ -228,7 +144,16 @@ export function GeneralPanel() {
 
           <label className="ai-provider-check ai-provider-check-switch" htmlFor="ai-reveal-api-key">
             <span>显示密码</span>
-            <AiSwitch id="ai-reveal-api-key" label="显示密码" />
+            <span className="ai-switch">
+              <SwitchControl
+                id="ai-reveal-api-key"
+                aria-label="显示密码"
+                className="ai-switch-control"
+                thumbClassName="ai-switch-thumb"
+                syncInputState
+                unstyled
+              />
+            </span>
           </label>
 
           <Fieldset className="ai-provider-field" legend="模型" unstyled>

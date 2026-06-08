@@ -256,6 +256,7 @@ import {
   renameTagInIndex,
   stopActiveTagCloud
 } from './sections/tag-management.js'
+import { renderFeatureSettingsControlsIsland } from './components/FeatureSettingsControlsIsland.js'
 import { renderContentSnapshotControlsIsland } from './components/ContentSnapshotControlsIsland.js'
 import { renderShortcutControlsIsland } from './components/ShortcutListIsland.js'
 import { renderResultsPaginationIsland } from './components/ResultsPaginationIsland.js'
@@ -319,6 +320,10 @@ import {
   CONTENT_SNAPSHOT_SETTINGS_EVENT,
   type ContentSnapshotSettingsChangeDetail
 } from './components/content-snapshot-events.js'
+import {
+  FEATURE_SETTINGS_EVENT,
+  type FeatureSettingsChangeDetail
+} from './components/feature-settings-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1116,14 +1121,7 @@ function bindEvents() {
   window.addEventListener('options:ai-provider-select-change', handleAiProviderSelectChange)
   dom.aiTimeoutMs?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
   dom.aiBatchSize?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
-  dom.aiAllowRemoteParser?.addEventListener('change', handleAiRemoteParserChange)
-  dom.aiAutoAnalyzeBookmarks?.addEventListener('change', handleAutoAnalyzeBookmarksChange)
-  dom.inboxAutoMoveToRecommendedFolder?.addEventListener('change', () => {
-    void handleInboxWorkflowSettingChange('autoMoveToRecommendedFolder')
-  })
-  dom.inboxTagOnlyNoAutoMove?.addEventListener('change', () => {
-    void handleInboxWorkflowSettingChange('tagOnlyNoAutoMove')
-  })
+  window.addEventListener(FEATURE_SETTINGS_EVENT, handleFeatureSettingsChange)
   window.addEventListener(CONTENT_SNAPSHOT_SETTINGS_EVENT, handleContentSnapshotSettingsChange)
   dom.availabilitySettingsTrigger?.addEventListener('click', toggleAvailabilitySettingsPopover)
   dom.availabilitySettingsSave?.addEventListener('click', () => {
@@ -3509,8 +3507,8 @@ function syncAiNamingSettingsDraftFromDom({ markDirty = false } = {}) {
     timeoutMs: dom.aiTimeoutMs.value,
     batchSize: dom.aiBatchSize.value,
     autoSelectHighConfidence: true,
-    allowRemoteParsing: Boolean(dom.aiAllowRemoteParser?.checked),
-    autoAnalyzeBookmarks: Boolean(dom.aiAutoAnalyzeBookmarks?.checked),
+    allowRemoteParsing: Boolean(aiNamingManagerState.settings.allowRemoteParsing),
+    autoAnalyzeBookmarks: Boolean(aiNamingManagerState.settings.autoAnalyzeBookmarks),
     systemPrompt: ''
   })
 
@@ -3545,6 +3543,25 @@ function handleAiProviderSelectChange(event: Event) {
 function handleContentSnapshotSettingsChange(event: Event): void {
   const detail = (event as CustomEvent<ContentSnapshotSettingsChangeDetail>).detail
   void saveContentSnapshotSettingsFromChange(detail || {})
+}
+
+function handleFeatureSettingsChange(event: Event): void {
+  const detail = (event as CustomEvent<FeatureSettingsChangeDetail>).detail
+  if (!detail) {
+    return
+  }
+
+  if (detail.key === 'autoAnalyzeBookmarks') {
+    void handleAutoAnalyzeBookmarksChange(detail.checked)
+    return
+  }
+  if (detail.key === 'allowRemoteParsing') {
+    void handleAiRemoteParserChange(detail.checked)
+    return
+  }
+  if (detail.key === 'autoMoveToRecommendedFolder' || detail.key === 'tagOnlyNoAutoMove') {
+    void handleInboxWorkflowSettingChange(detail.key, detail.checked)
+  }
 }
 
 async function saveContentSnapshotSettingsFromChange(
@@ -3890,11 +3907,7 @@ async function saveAiNamingSettingsFromDom({ validateRequired = true } = {}) {
   }
 }
 
-async function handleAutoAnalyzeBookmarksChange() {
-  if (!dom.aiAutoAnalyzeBookmarks) {
-    return
-  }
-
+async function handleAutoAnalyzeBookmarksChange(checked: boolean) {
   if (aiNamingState.pendingFeatureSwitch) {
     renderAiNamingSection()
     return
@@ -3902,15 +3915,18 @@ async function handleAutoAnalyzeBookmarksChange() {
 
   const previousSettings = normalizeAiNamingSettings(aiNamingManagerState.settings)
   aiNamingState.pendingFeatureSwitch = 'autoAnalyzeBookmarks'
+  aiNamingManagerState.settings = normalizeAiNamingSettings({
+    ...previousSettings,
+    autoAnalyzeBookmarks: checked
+  })
   renderAvailabilitySection()
 
   try {
     const saved = await saveAiNamingSettingsFromDom({
-      validateRequired: Boolean(dom.aiAutoAnalyzeBookmarks.checked)
+      validateRequired: checked
     })
     if (!saved) {
       aiNamingManagerState.settings = previousSettings
-      dom.aiAutoAnalyzeBookmarks.checked = Boolean(previousSettings.autoAnalyzeBookmarks)
       renderAvailabilitySection()
     }
   } finally {
@@ -3922,22 +3938,23 @@ async function handleAutoAnalyzeBookmarksChange() {
 }
 
 async function handleInboxWorkflowSettingChange(
-  source: 'autoMoveToRecommendedFolder' | 'tagOnlyNoAutoMove'
+  source: 'autoMoveToRecommendedFolder' | 'tagOnlyNoAutoMove',
+  checked: boolean
 ) {
-  if (!dom.inboxAutoMoveToRecommendedFolder || !dom.inboxTagOnlyNoAutoMove) {
-    return
-  }
-
   if (aiNamingState.pendingFeatureSwitch) {
     renderAiNamingSection()
     return
   }
 
   const previousSettings = normalizeInboxSettings(managerState.inboxSettings)
-  const tagOnlyNoAutoMove = Boolean(dom.inboxTagOnlyNoAutoMove.checked)
+  const tagOnlyNoAutoMove = source === 'tagOnlyNoAutoMove'
+    ? checked
+    : previousSettings.tagOnlyNoAutoMove
   const autoMoveToRecommendedFolder = source === 'tagOnlyNoAutoMove' && tagOnlyNoAutoMove
     ? false
-    : Boolean(dom.inboxAutoMoveToRecommendedFolder.checked)
+    : source === 'autoMoveToRecommendedFolder'
+      ? checked
+      : previousSettings.autoMoveToRecommendedFolder
 
   try {
     aiNamingState.pendingFeatureSwitch = source
@@ -3962,17 +3979,13 @@ async function handleInboxWorkflowSettingChange(
   }
 }
 
-async function handleAiRemoteParserChange() {
-  if (!dom.aiAllowRemoteParser) {
-    return
-  }
-
+async function handleAiRemoteParserChange(nextEnabled: boolean) {
   if (aiNamingState.pendingFeatureSwitch) {
     renderAiNamingSection()
     return
   }
 
-  const nextEnabled = Boolean(dom.aiAllowRemoteParser.checked)
+  const previousSettings = normalizeAiNamingSettings(aiNamingManagerState.settings)
 
   try {
     aiNamingState.pendingFeatureSwitch = 'allowRemoteParsing'
@@ -3998,14 +4011,16 @@ async function handleAiRemoteParserChange() {
     }
 
     await saveAiNamingSettings(settings)
+    aiNamingManagerState.settings = settings
     aiNamingState.settingsDirty = false
     await hydrateAiNamingPermissionState()
   } catch (error) {
     const settings = normalizeAiNamingSettings({
-      ...aiNamingManagerState.settings,
+      ...previousSettings,
       allowRemoteParsing: false
     })
     await saveAiNamingSettings(settings).catch(() => {})
+    aiNamingManagerState.settings = settings
     aiNamingState.settingsDirty = false
     aiNamingState.remoteParserPermissionGranted = await hasJinaReaderPermission()
     aiNamingState.lastError =
@@ -4017,6 +4032,99 @@ async function handleAiRemoteParserChange() {
     }
     renderAvailabilitySection()
   }
+}
+
+function renderFeatureSettingsControls(
+  settings,
+  {
+    featureSwitchesLocked,
+    featureSwitchInFlight
+  }: {
+    featureSwitchesLocked: boolean
+    featureSwitchInFlight: string
+  }
+): void {
+  if (!dom.featureSettingsControls) {
+    return
+  }
+
+  const inboxSettings = normalizeInboxSettings(managerState.inboxSettings)
+  const remoteParserEnabled = Boolean(settings.allowRemoteParsing)
+  const remoteParserGranted = Boolean(aiNamingState.remoteParserPermissionGranted)
+  const remoteParserStatusTone = remoteParserEnabled
+    ? remoteParserGranted
+      ? 'success'
+      : 'warning'
+    : 'muted'
+  const inboxStatusText = managerState.inboxSettingsStatus ||
+    (inboxSettings.tagOnlyNoAutoMove
+      ? '只生成标签'
+      : inboxSettings.autoMoveToRecommendedFolder
+        ? '自动移动开启'
+        : '保留在 Inbox')
+  const inboxStatusTone = managerState.inboxSettingsStatus
+    ? managerState.inboxSettingsStatus.includes('失败') || managerState.inboxSettingsStatus.includes('Error')
+      ? 'warning'
+      : 'success'
+    : inboxSettings.autoMoveToRecommendedFolder && !inboxSettings.tagOnlyNoAutoMove
+      ? 'success'
+      : 'muted'
+
+  renderFeatureSettingsControlsIsland(dom.featureSettingsControls, {
+    switches: [
+      {
+        checked: Boolean(settings.autoAnalyzeBookmarks),
+        disabled:
+          featureSwitchesLocked ||
+          aiNamingState.testingConnection ||
+          featureSwitchInFlight === 'autoAnalyzeBookmarks',
+        help: '添加网页书签后，自动分析内容并归类到合适文件夹。状态会在 popup 和扩展图标上轻量提示。',
+        key: 'autoAnalyzeBookmarks',
+        label: '自动分析',
+        status: Boolean(settings.autoAnalyzeBookmarks) ? '自动分析开启' : '未开启',
+        statusId: 'ai-auto-analyze-status',
+        statusTone: Boolean(settings.autoAnalyzeBookmarks) ? 'success' : 'muted'
+      },
+      {
+        checked: remoteParserEnabled,
+        disabled:
+          featureSwitchesLocked ||
+          featureSwitchInFlight === 'allowRemoteParsing',
+        help: '开启后，弹窗智能分类、书签智能分析和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。',
+        key: 'allowRemoteParsing',
+        label: '开启 Jina Reader 远程解析 URL',
+        status: remoteParserEnabled
+          ? remoteParserGranted
+            ? '已授权'
+            : '待授权'
+          : '未开启',
+        statusId: 'ai-remote-parser-status',
+        statusTone: remoteParserStatusTone
+      },
+      {
+        checked: Boolean(inboxSettings.autoMoveToRecommendedFolder),
+        disabled:
+          Boolean(inboxSettings.tagOnlyNoAutoMove) ||
+          featureSwitchesLocked ||
+          featureSwitchInFlight === 'autoMoveToRecommendedFolder',
+        help: '快捷键收藏会先进入 Inbox / 待整理；AI 置信度足够时自动移动到推荐文件夹。',
+        key: 'autoMoveToRecommendedFolder',
+        label: '自动移动到推荐文件夹',
+        status: inboxStatusText,
+        statusId: 'inbox-workflow-status',
+        statusTone: inboxStatusTone
+      },
+      {
+        checked: Boolean(inboxSettings.tagOnlyNoAutoMove),
+        disabled:
+          featureSwitchesLocked ||
+          featureSwitchInFlight === 'tagOnlyNoAutoMove',
+        help: '开启后，快捷键收藏仍保存到 Inbox / 待整理，只生成标签和摘要，不移动文件夹。',
+        key: 'tagOnlyNoAutoMove',
+        label: '只打标签，不自动移动'
+      }
+    ]
+  })
 }
 
 async function handleAiConnectivityTest() {
@@ -4100,70 +4208,10 @@ function renderAiNamingSection() {
   if (dom.aiBatchSize && dom.aiBatchSize !== document.activeElement) {
     dom.aiBatchSize.value = String(settings.batchSize)
   }
-  if (dom.aiAllowRemoteParser) {
-    dom.aiAllowRemoteParser.checked = Boolean(settings.allowRemoteParsing)
-    dom.aiAllowRemoteParser.disabled =
-      featureSwitchesLocked ||
-      featureSwitchInFlight === 'allowRemoteParsing'
-  }
-  if (dom.aiRemoteParserStatus) {
-    const remoteParserEnabled = Boolean(settings.allowRemoteParsing)
-    const remoteParserGranted = Boolean(aiNamingState.remoteParserPermissionGranted)
-    const statusTone = remoteParserEnabled
-      ? remoteParserGranted
-        ? 'success'
-        : 'warning'
-      : 'muted'
-    dom.aiRemoteParserStatus.className = `options-chip ai-inline-status ${statusTone}`
-    dom.aiRemoteParserStatus.textContent = remoteParserEnabled
-      ? remoteParserGranted
-        ? '已授权'
-        : '待授权'
-      : '未开启'
-  }
-  if (dom.aiAutoAnalyzeBookmarks) {
-    dom.aiAutoAnalyzeBookmarks.checked = Boolean(settings.autoAnalyzeBookmarks)
-    dom.aiAutoAnalyzeBookmarks.disabled =
-      featureSwitchesLocked ||
-      aiNamingState.testingConnection ||
-      featureSwitchInFlight === 'autoAnalyzeBookmarks'
-  }
-  if (dom.aiAutoAnalyzeStatus) {
-    const autoAnalyzeEnabled = Boolean(settings.autoAnalyzeBookmarks)
-    dom.aiAutoAnalyzeStatus.className = `options-chip ai-inline-status ${autoAnalyzeEnabled ? 'success' : 'muted'}`
-    dom.aiAutoAnalyzeStatus.textContent = autoAnalyzeEnabled ? '自动分析开启' : '未开启'
-  }
-  const inboxSettings = normalizeInboxSettings(managerState.inboxSettings)
-  if (dom.inboxAutoMoveToRecommendedFolder) {
-    dom.inboxAutoMoveToRecommendedFolder.checked = Boolean(inboxSettings.autoMoveToRecommendedFolder)
-    dom.inboxAutoMoveToRecommendedFolder.disabled =
-      Boolean(inboxSettings.tagOnlyNoAutoMove) ||
-      featureSwitchesLocked ||
-      featureSwitchInFlight === 'autoMoveToRecommendedFolder'
-  }
-  if (dom.inboxTagOnlyNoAutoMove) {
-    dom.inboxTagOnlyNoAutoMove.checked = Boolean(inboxSettings.tagOnlyNoAutoMove)
-    dom.inboxTagOnlyNoAutoMove.disabled =
-      featureSwitchesLocked ||
-      featureSwitchInFlight === 'tagOnlyNoAutoMove'
-  }
-  if (dom.inboxWorkflowStatus) {
-    const statusText = managerState.inboxSettingsStatus ||
-      (inboxSettings.tagOnlyNoAutoMove
-        ? '只生成标签'
-        : inboxSettings.autoMoveToRecommendedFolder
-          ? '自动移动开启'
-          : '保留在 Inbox')
-    const statusTone = managerState.inboxSettingsStatus
-      ? managerState.inboxSettingsStatus.includes('失败') || managerState.inboxSettingsStatus.includes('Error')
-        ? 'warning'
-        : 'success'
-      : inboxSettings.autoMoveToRecommendedFolder && !inboxSettings.tagOnlyNoAutoMove
-        ? 'success'
-        : 'muted'
-    dom.inboxWorkflowStatus.className = `options-chip ai-inline-status ${statusTone}`
-    dom.inboxWorkflowStatus.textContent = statusText
-  }
+  renderFeatureSettingsControls(settings, {
+    featureSwitchesLocked,
+    featureSwitchInFlight
+  })
   renderContentSnapshotSettings()
 
   const hasRequiredConfig = Boolean(settings.baseUrl && settings.apiKey && settings.model)
