@@ -10275,39 +10275,22 @@ function syncSearchSettingsControls(): void {
   }))
   syncSearchWidthControl()
   syncSearchOffsetControl()
-
-  setTextContent('search-height-value', `${settings.height}px`)
-  setTextContent('search-background-value', `${settings.background}%`)
 }
 
 function syncSearchWidthControl(): void {
   const bounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
-  const value = clampNumber(
-    state.searchSettings.width,
-    bounds.min,
-    bounds.max,
-    DEFAULT_SEARCH_SETTINGS.width
-  )
   dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(state.searchSettings, {
     offset: state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK,
     width: bounds
   }))
-  setTextContent('search-width-value', `${value}vw`)
 }
 
 function syncSearchOffsetControl(): void {
   const bounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
-  const value = clampNumber(
-    state.searchSettings.offsetY,
-    bounds.min,
-    bounds.max,
-    DEFAULT_SEARCH_SETTINGS.offsetY
-  )
   dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(state.searchSettings, {
     offset: bounds,
     width: state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
   }))
-  setTextContent('search-offset-y-value', state.searchSettings.autoVerticalCenter ? '自动' : `${value}px`)
 }
 
 async function saveSearchSettings(): Promise<void> {
@@ -10583,16 +10566,6 @@ function applyFolderSettings(): void {
 
 function syncIconSettingsControls(): void {
   measureNow('newtab.syncIconSettingsControls', () => {
-    const settings = state.iconSettings
-
-    setTextContent('icon-page-width-value', `${settings.pageWidth}%`)
-    setTextContent('icon-tile-width-value', `${settings.tileWidth}px`)
-    setTextContent('icon-shell-size-value', `${settings.iconShellSize}px`)
-    setTextContent('icon-column-gap-value', `${getIconGapPx(settings.columnGap)}px`)
-    setTextContent('icon-row-gap-value', `${getIconRowGapPx(settings.rowGap)}px`)
-    setTextContent('icon-folder-gap-value', `${getFolderGapPx(settings.folderGap)}px`)
-    setTextContent('icon-columns-value', String(settings.columns))
-
     renderIconPreviewIfNeeded()
   })
 }
@@ -10681,13 +10654,6 @@ function resetIconSettingsToDefaults(): void {
   applyIconSettingsLive()
   syncIconSettingsControls()
   updateClockText()
-}
-
-function setTextContent(elementId: string, text: string): void {
-  const element = cachedEl(elementId)
-  if (element) {
-    element.textContent = text
-  }
 }
 
 async function saveSettingsWithFeedback(values: Record<string, unknown>): Promise<void> {
@@ -12000,8 +11966,6 @@ function normalizeTimeSettingsLocal(rawSettings: unknown): NewTabTimeSettings {
 function syncTimeSettingsControls(): void {
   const settings = state.timeSettings
   dispatchNewtabTimeSettingsView(createNewtabTimeSettingsView(settings))
-
-  setTextContent('time-clock-size-value', `${settings.clockSize}%`)
 }
 
 async function saveTimeSettings(): Promise<void> {
