@@ -3,12 +3,21 @@ import {
   dispatchPopupSmartClassifierTitleChange,
   usePopupSmartClassifierView
 } from '../popup-controller-store'
+import { useEffect } from 'react'
 import { PopupSmartClassifier } from './PopupSmartClassifier'
 
 export function PopupSmartClassifierHost() {
   const state = usePopupSmartClassifierView()
 
   const hidden = state.status === 'hidden'
+  const active = ['loading', 'results', 'error', 'permission'].includes(state.status)
+
+  useEffect(() => {
+    document.body.classList.toggle('smart-active', active)
+    return () => {
+      document.body.classList.remove('smart-active')
+    }
+  }, [active])
 
   return (
     <section

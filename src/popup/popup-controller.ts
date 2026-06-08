@@ -211,7 +211,7 @@ function startPopupController(): () => void {
       perfMark('popup.interactive')
       perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
       void consumePopupCommandIntent().then((handled) => {
-        if (!handled && !document.body.classList.contains('smart-active')) {
+        if (!handled && !isSmartOverlayActive()) {
           focusSearchInput()
         }
       })
@@ -1711,9 +1711,6 @@ function hasBlockingPopupActionPending() {
 function renderSmartClassifier() {
   const currentUrl = String(state.currentTab?.url || '').trim()
   const smartAvailable = isSmartClassifiableUrl(currentUrl)
-  const smartOverlayActive =
-    smartAvailable && ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
-  document.body.classList.toggle('smart-active', smartOverlayActive)
 
   if (state.isLoading && state.smartStatus !== 'results') {
     dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('page-loading'))
@@ -2993,7 +2990,7 @@ function handleSearchFocusShortcut(event) {
   if ((!isCommandSearch && !isSlashSearch) || isEditableTarget(event.target)) {
     return false
   }
-  if (document.body.classList.contains('smart-active')) {
+  if (isSmartOverlayActive()) {
     return false
   }
   event.preventDefault()
@@ -3110,7 +3107,7 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   state.confirmDeleteBookmarkId = null
   clearEditDraft()
   render()
-  if (document.body.classList.contains('smart-active')) {
+  if (isSmartOverlayActive()) {
     return
   }
   restoreDialogReturnFocus()
@@ -3189,6 +3186,11 @@ function getMenuToggleForBookmark(bookmarkId) {
   return document.querySelector<HTMLElement>(
     `[data-bookmark-id="${CSS.escape(String(bookmarkId))}"]`
   )
+}
+function isSmartOverlayActive(): boolean {
+  const currentUrl = String(state.currentTab?.url || '').trim()
+  return isSmartClassifiableUrl(currentUrl) &&
+    ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
 }
 function resetSmartClassification() {
   state.smartRunId += 1
