@@ -2,15 +2,23 @@ import { useSyncExternalStore } from 'react'
 import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences'
 
 export interface NewtabBackgroundSettingsView {
+  backgroundStatus: string
+  backgroundStatusTone: 'info' | 'success' | 'warning' | 'error'
   color: string
   displaySize: number
   displaySizeMax: number
   displaySizeMin: number
+  featuredCreditHref: string
   featuredCreditHidden: boolean
+  featuredCreditText: string
+  featuredCreditTitle: string
   featuredDisplayHidden: boolean
   featuredId: string
   featuredPickerDisabled: boolean
+  featuredPickerExpanded: boolean
   featuredPickerHidden: boolean
+  featuredPickerLabel: string
+  featuredPickerSelected: boolean
   imageName: string
   imageRowHidden: boolean
   maskBlur: number
@@ -61,15 +69,23 @@ export interface NewtabBackgroundSettingsActions {
 }
 
 const EMPTY_VIEW: NewtabBackgroundSettingsView = {
+  backgroundStatus: '',
+  backgroundStatusTone: 'info',
   color: '#101013',
   displaySize: 100,
   displaySizeMax: 180,
   displaySizeMin: 100,
+  featuredCreditHref: 'https://images.nasa.gov/',
   featuredCreditHidden: true,
+  featuredCreditText: 'NASA Image and Video Library',
+  featuredCreditTitle: '',
   featuredDisplayHidden: true,
   featuredId: '',
   featuredPickerDisabled: true,
+  featuredPickerExpanded: false,
   featuredPickerHidden: true,
+  featuredPickerLabel: '选择壁纸',
+  featuredPickerSelected: false,
   imageName: '',
   imageRowHidden: true,
   maskBlur: 12,
@@ -119,18 +135,39 @@ export function createNewtabBackgroundSettingsView(
     displaySize: { min: number; max: number }
     positionX: { min: number; max: number }
     positionY: { min: number; max: number }
-  }
+  },
+  ui: Partial<Pick<
+    NewtabBackgroundSettingsView,
+    | 'backgroundStatus'
+    | 'backgroundStatusTone'
+    | 'featuredCreditHref'
+    | 'featuredCreditText'
+    | 'featuredCreditTitle'
+    | 'featuredPickerExpanded'
+    | 'featuredPickerLabel'
+    | 'featuredPickerSelected'
+  >> = {}
 ): NewtabBackgroundSettingsView {
+  const featuredPickerSelected = ui.featuredPickerSelected ?? Boolean(settings.featuredId)
+
   return {
+    backgroundStatus: ui.backgroundStatus ?? '',
+    backgroundStatusTone: ui.backgroundStatusTone ?? 'info',
     color: settings.color,
     displaySize: preferences.displaySize,
     displaySizeMax: limits.displaySize.max,
     displaySizeMin: limits.displaySize.min,
+    featuredCreditHref: ui.featuredCreditHref ?? 'https://images.nasa.gov/',
     featuredCreditHidden: settings.type !== 'featured',
+    featuredCreditText: ui.featuredCreditText ?? 'NASA Image and Video Library',
+    featuredCreditTitle: ui.featuredCreditTitle ?? '',
     featuredDisplayHidden: settings.type !== 'featured',
     featuredId: settings.featuredId,
     featuredPickerDisabled: settings.type !== 'featured',
+    featuredPickerExpanded: ui.featuredPickerExpanded ?? false,
     featuredPickerHidden: settings.type !== 'featured',
+    featuredPickerLabel: ui.featuredPickerLabel ?? '选择壁纸',
+    featuredPickerSelected,
     imageName: settings.imageName,
     imageRowHidden: settings.type !== 'image',
     maskBlur: settings.maskBlur,

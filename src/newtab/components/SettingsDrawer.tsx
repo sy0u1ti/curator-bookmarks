@@ -630,16 +630,17 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
           <Button
             unstyled
             id="background-featured-picker"
-            className="setting-picker-button"
+            className={backgroundSettings.featuredPickerSelected ? 'setting-picker-button is-custom-selected' : 'setting-picker-button'}
             type="button"
             aria-haspopup="dialog"
             aria-controls="background-featured-modal"
+            aria-expanded={backgroundSettings.featuredPickerExpanded ? 'true' : 'false'}
             disabled={backgroundSettings.featuredPickerDisabled}
             onClick={() => {
               dispatchNewtabSettingsDrawerFeaturedPickerClick()
             }}
           >
-            <span id="background-featured-picker-label">选择壁纸</span>
+            <span id="background-featured-picker-label">{backgroundSettings.featuredPickerLabel}</span>
           </Button>
           <Input
             id="background-featured-id"
@@ -651,7 +652,16 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
         </div>
         <div id="background-featured-credit-row" className="setting-row background-featured-credit-row" hidden={backgroundSettings.featuredCreditHidden}>
           <span>图片来源</span>
-          <a id="background-featured-credit" className="background-featured-credit" href="https://images.nasa.gov/" target="_blank" rel="noreferrer">NASA Image and Video Library</a>
+          <a
+            id="background-featured-credit"
+            className="background-featured-credit"
+            href={backgroundSettings.featuredCreditHref}
+            title={backgroundSettings.featuredCreditTitle}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {backgroundSettings.featuredCreditText}
+          </a>
         </div>
         <SliderRow rowId="background-featured-display-size-row" id="background-featured-display-size" label="背景大小" valueId="background-featured-display-size-value" value={`${backgroundSettings.displaySize}%`} min={String(backgroundSettings.displaySizeMin)} max={String(backgroundSettings.displaySizeMax)} defaultValue="100" ariaLabel="精选图库背景大小" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('displaySize', value)} sliderValue={backgroundSettings.displaySize} />
         <SliderRow rowId="background-featured-position-x-row" id="background-featured-position-x" label="水平位置" valueId="background-featured-position-x-value" value={`${backgroundSettings.positionX}%`} min={String(backgroundSettings.positionXMin)} max={String(backgroundSettings.positionXMax)} defaultValue="50" ariaLabel="精选图库背景水平位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionX', value)} sliderValue={backgroundSettings.positionX} />
@@ -673,7 +683,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
         </label>
         <div id="background-image-row" className="setting-row" hidden={backgroundSettings.imageRowHidden}>
           <span>背景图片</span>
-          <Button unstyled id="background-image-picker" className="setting-file-button" type="button" onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
+          <Button unstyled id="background-image-picker" className="setting-file-button" type="button" title={backgroundSettings.imageName || undefined} onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
           <Input
             id="background-image-file"
             ref={imageFileInputRef}
@@ -689,7 +699,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
         </div>
         <div id="background-video-row" className="setting-row" hidden={backgroundSettings.videoRowHidden}>
           <span>背景视频</span>
-          <Button unstyled id="background-video-picker" className="setting-file-button" type="button" onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
+          <Button unstyled id="background-video-picker" className="setting-file-button" type="button" title={backgroundSettings.videoName || undefined} onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
           <Input
             id="background-video-file"
             ref={videoFileInputRef}
@@ -720,7 +730,15 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             />
           </span>
         </div>
-        <output id="background-status" className="setting-status" aria-live="polite" hidden />
+        <output
+          id="background-status"
+          className="setting-status"
+          aria-live="polite"
+          data-tone={backgroundSettings.backgroundStatusTone}
+          hidden={!backgroundSettings.backgroundStatus}
+        >
+          {backgroundSettings.backgroundStatus}
+        </output>
         <SwitchRow
           id="background-mask-enabled"
           title="背景蒙版"

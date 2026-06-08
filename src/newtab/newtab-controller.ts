@@ -821,6 +821,7 @@ const backgroundImageNaturalSizeByUrl = new Map<string, BackgroundImageNaturalSi
 let preloadedBackgroundSettings: typeof DEFAULT_BACKGROUND_SETTINGS | null = null
 let backgroundSettingsMutationVersion = 0
 let backgroundUiAppliedFromPreload = false
+let featuredBackgroundOptionsHydratedDateSeed = ''
 let bookmarkDragSlotRects = new Map<string, DOMRect>()
 let bookmarkDragSlotOrderIds: string[] = []
 let speedDialDragSlotRects = new Map<string, DOMRect>()
@@ -8531,64 +8532,37 @@ function normalizePositiveDimension(value: unknown): number | undefined {
 function syncBackgroundSettingsControls(): void {
   const settings = state.backgroundSettings
   updateBackgroundStartupCacheStatus(settings)
-  const featuredPicker = cachedEl('background-featured-picker')
-  const featuredPickerLabel = cachedEl('background-featured-picker-label')
-  const featuredCredit = cachedEl('background-featured-credit')
-  const backgroundStatus = cachedEl('background-status')
-  const imageButton = cachedEl('background-image-picker')
-  const videoButton = cachedEl('background-video-picker')
 
   if (settings.type === 'featured') {
     void hydrateFeaturedBackgroundOptions()
   }
-  if (featuredPicker instanceof HTMLButtonElement) {
-    featuredPicker.setAttribute('aria-expanded', String(isFeaturedBackgroundPickerOpen()))
-    featuredPicker.classList.toggle('is-custom-selected', Boolean(settings.featuredId))
+  syncFeaturedBackgroundDisplayPreferenceControls()
+}
+
+function createBackgroundSettingsView() {
+  const settings = state.backgroundSettings
+  const featuredItem = settings.type === 'featured'
+    ? getActiveFeaturedBackgroundItemSync(settings)
+    : null
+  if (settings.type === 'featured' && !featuredItem) {
+    void hydrateFeaturedBackgroundCredit(settings)
   }
-  if (featuredPickerLabel instanceof HTMLElement) {
-    featuredPickerLabel.textContent = getFeaturedBackgroundPickerLabel(settings)
-  }
-  if (featuredCredit instanceof HTMLAnchorElement) {
-    const featuredItem = getActiveFeaturedBackgroundItemSync(settings)
-    if (featuredItem) {
-      featuredCredit.textContent = `${featuredItem.title} · ${featuredItem.credit}`
-      featuredCredit.href = featuredItem.sourceUrl
-      featuredCredit.title = `${featuredItem.license} · ${featuredItem.sourceUrl}`
-    } else {
-      featuredCredit.textContent = '正在载入精选图库'
-      featuredCredit.href = 'https://images.nasa.gov/'
-      featuredCredit.title = ''
-      if (settings.type === 'featured') {
-        void hydrateFeaturedBackgroundCredit(settings)
-      }
-    }
-  }
-  if (backgroundStatus instanceof HTMLElement) {
-    backgroundStatus.textContent = state.backgroundStatus
-    backgroundStatus.hidden = !state.backgroundStatus
-    backgroundStatus.dataset.tone = state.backgroundStatusTone
-  }
-  if (imageButton) {
-    if (settings.imageName) {
-      imageButton.setAttribute('title', settings.imageName)
-    } else {
-      imageButton.removeAttribute('title')
-    }
-  }
-  if (videoButton) {
-    if (settings.videoName) {
-      videoButton.setAttribute('title', settings.videoName)
-    } else {
-      videoButton.removeAttribute('title')
-    }
-  }
-  dispatchNewtabBackgroundSettingsView(createNewtabBackgroundSettingsView(
+
+  return createNewtabBackgroundSettingsView(
     settings,
     state.featuredBackgroundPreferences,
-    FEATURED_BACKGROUND_DISPLAY_LIMITS
-  ))
-  setTextContent('background-mask-blur-value', `${settings.maskBlur}px`)
-  syncFeaturedBackgroundDisplayPreferenceControls()
+    FEATURED_BACKGROUND_DISPLAY_LIMITS,
+    {
+      backgroundStatus: state.backgroundStatus,
+      backgroundStatusTone: state.backgroundStatusTone,
+      featuredCreditHref: featuredItem?.sourceUrl || 'https://images.nasa.gov/',
+      featuredCreditText: featuredItem ? `${featuredItem.title} · ${featuredItem.credit}` : '正在载入精选图库',
+      featuredCreditTitle: featuredItem ? `${featuredItem.license} · ${featuredItem.sourceUrl}` : '',
+      featuredPickerExpanded: isFeaturedBackgroundPickerOpen(),
+      featuredPickerLabel: getFeaturedBackgroundPickerLabel(settings),
+      featuredPickerSelected: Boolean(settings.featuredId)
+    }
+  )
 }
 
 async function saveBackgroundSettings(): Promise<void> {
@@ -10786,25 +10760,20 @@ function renderIconPreview(): void {
 }
 
 async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
-  const input = cachedEl('background-featured-id')
   const dateSeed = getFeaturedBackgroundDateSeed()
   if (state.backgroundSettings.type !== 'featured' ||
-    !(input instanceof HTMLInputElement) ||
-    (!force && input.dataset.hydrated === 'true' && input.dataset.dateSeed === dateSeed)) {
+    (!force && featuredBackgroundOptionsHydratedDateSeed === dateSeed)) {
     return
   }
 
   await loadBackgroundGalleryModule()
   const currentDateSeed = getFeaturedBackgroundDateSeed()
-  if (!input.isConnected ||
-    (!force && input.dataset.hydrated === 'true' && input.dataset.dateSeed === currentDateSeed)) {
+  if (!force && featuredBackgroundOptionsHydratedDateSeed === currentDateSeed) {
     return
   }
 
-  input.dataset.hydrated = 'true'
-  input.dataset.dateSeed = currentDateSeed
-  input.value = state.backgroundSettings.featuredId
-  syncFeaturedBackgroundPickerLabel()
+  featuredBackgroundOptionsHydratedDateSeed = currentDateSeed
+  dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
 }
 
 let featuredBackgroundModalReady = false
@@ -10854,7 +10823,7 @@ async function openFeaturedBackgroundPicker(): Promise<void> {
     ? document.activeElement
     : null
   dispatchNewtabFeaturedBackgroundModalOpen(true)
-  featuredBackgroundPicker?.setAttribute('aria-expanded', 'true')
+  dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
 
   await openFeaturedBackgroundPickerContent({
     getLoadedGallery: () => backgroundGalleryModule,
@@ -10925,7 +10894,7 @@ function closeFeaturedBackgroundPicker(): void {
   disconnectFeaturedBackgroundCardPreviewObserver()
   featuredBackgroundCardPreviewRegistry.resetVisibility()
   dispatchNewtabFeaturedBackgroundModalOpen(false)
-  featuredBackgroundPicker?.setAttribute('aria-expanded', 'false')
+  dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
 
   const returnElement = featuredBackgroundModalReturnFocusElement
   featuredBackgroundModalReturnFocusElement = null
@@ -11672,15 +11641,7 @@ function updateInstantWallpaperDisplayCss(
 }
 
 function syncFeaturedBackgroundDisplayPreferenceControls(): void {
-  const preferences = state.featuredBackgroundPreferences
-  dispatchNewtabBackgroundSettingsView(createNewtabBackgroundSettingsView(
-    state.backgroundSettings,
-    preferences,
-    FEATURED_BACKGROUND_DISPLAY_LIMITS
-  ))
-  setTextContent('background-featured-display-size-value', `${preferences.displaySize}%`)
-  setTextContent('background-featured-position-x-value', `${preferences.positionX}%`)
-  setTextContent('background-featured-position-y-value', `${preferences.positionY}%`)
+  dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
 }
 
 function syncFeaturedBackgroundModalControls(): void {
@@ -11899,13 +11860,7 @@ function getFeaturedBackgroundRefreshErrorMessage(error: unknown): string {
 }
 
 function selectFeaturedBackgroundFromPicker(featuredId: string): void {
-  const input = cachedEl('background-featured-id')
-  if (!(input instanceof HTMLInputElement)) {
-    return
-  }
-
-  input.value = featuredId
-  input.dispatchEvent(new Event('change', { bubbles: true }))
+  handleBackgroundSettingFieldChange('featuredId', featuredId)
   closeFeaturedBackgroundPicker()
 }
 
@@ -11918,27 +11873,14 @@ function getFeaturedBackgroundPickerLabel(settings = state.backgroundSettings): 
   return activeItem?.title || '当前精选图片'
 }
 
-function syncFeaturedBackgroundPickerLabel(): void {
-  const featuredPickerLabel = cachedEl('background-featured-picker-label')
-  if (featuredPickerLabel instanceof HTMLElement) {
-    featuredPickerLabel.textContent = getFeaturedBackgroundPickerLabel()
-  }
-}
-
 async function hydrateFeaturedBackgroundCredit(settings: typeof DEFAULT_BACKGROUND_SETTINGS): Promise<void> {
   const hydrateVersion = ++featuredBackgroundUiVersion
   try {
-    const featuredItem = await getActiveFeaturedBackgroundItem(settings)
+    await getActiveFeaturedBackgroundItem(settings)
     if (hydrateVersion !== featuredBackgroundUiVersion) {
       return
     }
-    const featuredCredit = cachedEl('background-featured-credit')
-    if (!(featuredCredit instanceof HTMLAnchorElement)) {
-      return
-    }
-    featuredCredit.textContent = `${featuredItem.title} · ${featuredItem.credit}`
-    featuredCredit.href = featuredItem.sourceUrl
-    featuredCredit.title = `${featuredItem.license} · ${featuredItem.sourceUrl}`
+    dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
   } catch {
     // The credit link is an enhancement for featured backgrounds; keep the generic source link if loading fails.
   }
