@@ -276,6 +276,9 @@ export interface SearchWidgetInteractionState {
   onClear: () => void
   onEngineKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void
   onEngineToggle: () => void
+  onInputFocus: () => void
+  onInputInput: () => void
+  onInputKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
   onToggleNatural: () => void
 }
@@ -1063,6 +1066,9 @@ function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionSta
     onClear: noop,
     onEngineKeyDown: noop,
     onEngineToggle: noop,
+    onInputFocus: noop,
+    onInputInput: noop,
+    onInputKeyDown: noop,
     onSubmit: (event) => {
       event.preventDefault()
     },
@@ -1104,7 +1110,7 @@ function SearchWidgetShell({
         onSubmit={interactions.onSubmit}
       >
         <Icon name="Search" className="newtab-search-icon" size={16} aria-hidden="true" />
-        <SearchWidgetInput comboboxStore={comboboxStore} state={state} />
+        <SearchWidgetInput comboboxStore={comboboxStore} interactions={interactions} state={state} />
         <SearchWidgetClearButton actionStore={actionStore} onClear={interactions.onClear} />
         <SearchWidgetSeparator actionStore={actionStore} />
         <SearchWidgetNaturalButton buttonStore={buttonStore} onToggleNatural={interactions.onToggleNatural} />
@@ -1123,9 +1129,11 @@ function SearchWidgetShell({
 
 function SearchWidgetInput({
   comboboxStore,
+  interactions,
   state
 }: {
   comboboxStore: SearchWidgetComboboxStore
+  interactions: SearchWidgetInteractionState
   state: SearchWidgetShellState
 }) {
   const combobox = useSearchWidgetComboboxState(comboboxStore)
@@ -1144,6 +1152,9 @@ function SearchWidgetInput({
       aria-controls="newtab-search-suggestions"
       aria-expanded={combobox.expanded}
       aria-activedescendant={combobox.activeDescendantId || undefined}
+      onFocus={interactions.onInputFocus}
+      onInput={interactions.onInputInput}
+      onKeyDown={interactions.onInputKeyDown}
       unstyled
     />
   )

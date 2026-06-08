@@ -5604,6 +5604,61 @@ function createSearchWidget(): HTMLElement | null {
         }
         renderEngineMenu('active')
       },
+      onInputFocus: () => {
+        scheduleSuggestionsRender({ immediate: true })
+      },
+      onInputInput: () => {
+        syncSearchInputActions(slot, input)
+        scheduleSuggestionsRender()
+      },
+      onInputKeyDown: (event) => {
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+          event.preventDefault()
+          moveActiveSuggestion(event.key === 'ArrowDown' ? 1 : -1)
+          return
+        }
+
+        if (event.key === 'Enter' && activeSuggestionIndex >= 0 && !event.metaKey && !event.ctrlKey) {
+          const suggestion = searchSuggestions[activeSuggestionIndex]
+          if (suggestion) {
+            event.preventDefault()
+            input.value = suggestion.title
+            syncSearchInputActions(slot, input)
+            hideSuggestions()
+            openSearchSuggestion(suggestion)
+          }
+          return
+        }
+
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault()
+          closeEngineMenu()
+          hideSuggestions()
+          if (state.searchSettings.webSearchEnabled === false) {
+            return
+          }
+          submitSearch(input.value, true)
+          return
+        }
+
+        if (event.key !== 'Escape') {
+          return
+        }
+
+        event.preventDefault()
+        if (searchSuggestions.length || searchPanelVisible) {
+          hideSuggestions()
+          return
+        }
+
+        if (input.value) {
+          input.value = ''
+          syncSearchInputActions(slot, input)
+          return
+        }
+
+        input.blur()
+      },
       onSubmit: (event) => {
         event.preventDefault()
         closeEngineMenu()
@@ -6011,61 +6066,6 @@ function createSearchWidget(): HTMLElement | null {
     renderSuggestions(searchSuggestions, { preserveActive: true, query: input.value })
   }
 
-  input.addEventListener('input', () => {
-    syncSearchInputActions(slot, input)
-    scheduleSuggestionsRender()
-  })
-  input.addEventListener('focus', () => {
-    scheduleSuggestionsRender({ immediate: true })
-  })
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault()
-      moveActiveSuggestion(event.key === 'ArrowDown' ? 1 : -1)
-      return
-    }
-
-    if (event.key === 'Enter' && activeSuggestionIndex >= 0 && !event.metaKey && !event.ctrlKey) {
-      const suggestion = searchSuggestions[activeSuggestionIndex]
-      if (suggestion) {
-        event.preventDefault()
-        input.value = suggestion.title
-        syncSearchInputActions(slot, input)
-        hideSuggestions()
-        openSearchSuggestion(suggestion)
-      }
-      return
-    }
-
-    if (event.key !== 'Escape') {
-      return
-    }
-
-    event.preventDefault()
-    if (searchSuggestions.length || searchPanelVisible) {
-      hideSuggestions()
-      return
-    }
-
-    if (input.value) {
-      input.value = ''
-      syncSearchInputActions(slot, input)
-      return
-    }
-
-    input.blur()
-  })
-  input.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-      event.preventDefault()
-      closeEngineMenu()
-      hideSuggestions()
-      if (state.searchSettings.webSearchEnabled === false) {
-        return
-      }
-      submitSearch(input.value, true)
-    }
-  })
   slot.addEventListener('focusout', () => {
     window.setTimeout(() => {
       if (!slot.contains(document.activeElement)) {
