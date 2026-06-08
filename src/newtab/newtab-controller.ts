@@ -7200,11 +7200,6 @@ function bindSpeedDialPanelCards(
     if (!state.customIcons[bookmarkId]) {
       applyCachedFaviconAccent(link, bookmarkId, String(bookmark.url || ''))
     }
-    const iconShell = link.querySelector<HTMLElement>('.newtab-speed-dial-mark')
-    const icon = link.querySelector<HTMLImageElement>('.bookmark-favicon')
-    icon?.addEventListener('error', () => {
-      iconShell?.classList.add('favicon-missing')
-    })
   }
 }
 
@@ -7535,12 +7530,6 @@ function bindBookmarkTileRuntime(
   if (!state.customIcons[bookmarkId]) {
     applyCachedFaviconAccent(tile, bookmarkId, url)
   }
-
-  const iconShell = tile.querySelector<HTMLElement>('.bookmark-icon-shell')
-  const icon = tile.querySelector<HTMLImageElement>('.bookmark-favicon')
-  icon?.addEventListener('error', () => {
-    iconShell?.classList.add('favicon-missing')
-  })
 }
 
 function applyCachedFaviconAccent(item: HTMLElement, bookmarkId: string, url: string): void {

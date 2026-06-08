@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
 import {
@@ -2112,18 +2112,11 @@ function BookmarkMenuFeedback({
 function BookmarkTile({ state }: { state: BookmarkTileViewModel }) {
   return (
     <>
-      <span className="bookmark-icon-shell" aria-hidden="true">
-        <img
-          className={state.customIcon ? 'bookmark-favicon custom-icon' : 'bookmark-favicon'}
-          src={state.favicon.src}
-          alt=""
-          draggable={false}
-          loading={state.favicon.loading}
-          decoding="async"
-          fetchPriority={state.favicon.fetchpriority}
-        />
-        <span className="bookmark-fallback">{state.fallbackLabel}</span>
-      </span>
+      <BookmarkIconShell
+        customIcon={state.customIcon}
+        fallbackLabel={state.fallbackLabel}
+        favicon={state.favicon}
+      />
       <span className="bookmark-title">{state.title}</span>
     </>
   )
@@ -2174,18 +2167,12 @@ function SpeedDialContent({ state }: { state: SpeedDialContentState }) {
           aria-label={`打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`}
           key={item.id}
         >
-          <span className="newtab-speed-dial-mark bookmark-icon-shell" aria-hidden="true">
-            <img
-              className={item.customIcon ? 'bookmark-favicon custom-icon' : 'bookmark-favicon'}
-              src={item.favicon.src}
-              alt=""
-              draggable={false}
-              loading={item.favicon.loading}
-              decoding="async"
-              fetchPriority={item.favicon.fetchpriority}
-            />
-            <span className="bookmark-fallback">{item.fallbackLabel}</span>
-          </span>
+          <BookmarkIconShell
+            className="newtab-speed-dial-mark bookmark-icon-shell"
+            customIcon={item.customIcon}
+            fallbackLabel={item.fallbackLabel}
+            favicon={item.favicon}
+          />
           <span className="newtab-speed-dial-copy">
             <strong>{item.title}</strong>
             <span>{item.detail}</span>
@@ -2193,6 +2180,42 @@ function SpeedDialContent({ state }: { state: SpeedDialContentState }) {
         </a>
       ))}
     </div>
+  )
+}
+
+function BookmarkIconShell({
+  className = 'bookmark-icon-shell',
+  customIcon,
+  fallbackLabel,
+  favicon
+}: {
+  className?: string
+  customIcon: boolean
+  fallbackLabel: string
+  favicon: BookmarkTileViewModel['favicon'] | SpeedDialCardViewModel['favicon']
+}) {
+  const [missing, setMissing] = useState(false)
+
+  useEffect(() => {
+    setMissing(false)
+  }, [favicon.src])
+
+  return (
+    <span className={missing ? `${className} favicon-missing` : className} aria-hidden="true">
+      <img
+        className={customIcon ? 'bookmark-favicon custom-icon' : 'bookmark-favicon'}
+        src={favicon.src}
+        alt=""
+        draggable={false}
+        loading={favicon.loading}
+        decoding="async"
+        fetchPriority={favicon.fetchpriority}
+        onError={() => {
+          setMissing(true)
+        }}
+      />
+      <span className="bookmark-fallback">{fallbackLabel}</span>
+    </span>
   )
 }
 
