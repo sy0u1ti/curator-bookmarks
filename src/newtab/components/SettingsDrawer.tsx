@@ -25,6 +25,7 @@ import {
   useNewtabTimeSettingsView
 } from '../newtab-time-settings-store'
 import {
+  dispatchNewtabSearchSettingFieldChange,
   dispatchNewtabSearchSettingToggle,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
@@ -956,6 +957,16 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
 
 function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
   const searchSettings = useNewtabSearchSettingsView()
+  const handleSearchEngineToggle = (engine: string, checked: boolean) => {
+    const currentEngines = searchSettings.enabledEngines.includes(searchSettings.engine)
+      ? searchSettings.enabledEngines
+      : [...searchSettings.enabledEngines, searchSettings.engine]
+    const nextEngines = checked
+      ? [...new Set([...currentEngines, engine])]
+      : currentEngines.filter((item) => item !== engine)
+
+    dispatchNewtabSearchSettingFieldChange('enabledEngines', nextEngines)
+  }
 
   return (
     <section className="settings-section" data-settings-group="search" aria-labelledby="settings-search-title">
@@ -985,36 +996,107 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
           disabled={searchSettings.openInNewTabDisabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
         />
-        <SettingsSelect id="search-engine" label="搜索引擎" description="输入内容不是网址时使用此引擎。" ariaLabel="默认搜索引擎" portalContainer={panelElement} options={searchEngines.map(([value, label]) => [value, label])} />
+        <SettingsSelect
+          id="search-engine"
+          label="搜索引擎"
+          description="输入内容不是网址时使用此引擎。"
+          ariaLabel="默认搜索引擎"
+          disabled={searchSettings.engineControlsDisabled}
+          onValueChange={(value) => {
+            if (value) dispatchNewtabSearchSettingFieldChange('engine', value)
+          }}
+          portalContainer={panelElement}
+          value={searchSettings.engine}
+          options={searchEngines.map(([value, label]) => [value, label])}
+        />
         <div className="setting-row search-engine-setting-row">
           <span className="setting-label-stack">
             <span>启用引擎</span>
             <small>决定搜索框快捷菜单和 Cmd/Ctrl+Enter 的打开顺序。</small>
           </span>
           <div className="search-engine-toggle-grid" aria-label="启用的搜索引擎">
-            {searchEngines.map(([value, label, checked]) => (
-              <label className="search-engine-toggle" key={value}>
+            {searchEngines.map(([value, label]) => {
+              const isSelected = searchSettings.engine === value
+              const checked = searchSettings.enabledEngines.includes(value) || isSelected
+
+              return (
+              <label
+                className={`search-engine-toggle${checked ? ' active' : ''}${isSelected ? ' locked' : ''}`}
+                key={value}
+              >
                 <SwitchControl
                   aria-label={label}
-                  defaultChecked={checked}
+                  checked={checked}
+                  disabled={searchSettings.engineControlsDisabled || isSelected}
                   inputAttributes={{ 'data-search-engine-toggle': value }}
+                  onCheckedChange={(checked) => handleSearchEngineToggle(value, checked)}
                   syncInputState
                   unstyled
                 />
                 <span>{label}</span>
               </label>
-            ))}
+              )
+            })}
           </div>
         </div>
         <div className="setting-row">
           <span>占位符文本</span>
           <span className="setting-floating-field">
-            <Input id="search-placeholder" className="setting-text-input" type="text" placeholder="占位符文本" maxLength={40} aria-label="搜索栏占位符文本" unstyled />
+            <Input
+              id="search-placeholder"
+              className="setting-text-input"
+              type="text"
+              placeholder="占位符文本"
+              maxLength={40}
+              aria-label="搜索栏占位符文本"
+              disabled={searchSettings.placeholderDisabled}
+              onChange={(event) => {
+                dispatchNewtabSearchSettingFieldChange('placeholder', event.currentTarget.value)
+              }}
+              value={searchSettings.placeholder}
+              unstyled
+            />
           </span>
         </div>
-        <SliderRow id="search-width" label="宽度" valueId="search-width-value" value="44vw" min="16" max="72" defaultValue="44" ariaLabel="搜索栏宽度" />
-        <SliderRow id="search-height" label="高度" valueId="search-height-value" value="40px" min="28" max="56" defaultValue="40" ariaLabel="搜索栏高度" />
-        <SliderRow id="search-offset-y" label="上下位置" valueId="search-offset-y-value" value="0px" min="-240" max="240" defaultValue="0" ariaLabel="搜索栏上下位置" />
+        <SliderRow
+          id="search-width"
+          label="宽度"
+          valueId="search-width-value"
+          value={`${searchSettings.width}vw`}
+          min={String(searchSettings.widthMin)}
+          max={String(searchSettings.widthMax)}
+          defaultValue="44"
+          ariaLabel="搜索栏宽度"
+          disabled={searchSettings.widthDisabled}
+          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('width', value)}
+          sliderValue={searchSettings.width}
+        />
+        <SliderRow
+          id="search-height"
+          label="高度"
+          valueId="search-height-value"
+          value={`${searchSettings.height}px`}
+          min="28"
+          max="56"
+          defaultValue="40"
+          ariaLabel="搜索栏高度"
+          disabled={searchSettings.widthDisabled}
+          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('height', value)}
+          sliderValue={searchSettings.height}
+        />
+        <SliderRow
+          id="search-offset-y"
+          label="上下位置"
+          valueId="search-offset-y-value"
+          value={searchSettings.autoVerticalCenter ? '自动' : `${searchSettings.offsetY}px`}
+          min={String(searchSettings.offsetMin)}
+          max={String(searchSettings.offsetMax)}
+          defaultValue="0"
+          ariaLabel="搜索栏上下位置"
+          disabled={searchSettings.offsetDisabled}
+          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('offsetY', value)}
+          sliderValue={searchSettings.offsetY}
+        />
         <SwitchRow
           id="search-auto-vertical-center"
           title="自动垂直居中"
@@ -1023,7 +1105,19 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
           disabled={searchSettings.autoVerticalCenterDisabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('autoVerticalCenter', checked)}
         />
-        <SliderRow id="search-background" label="背景" valueId="search-background-value" value="30%" min="0" max="92" defaultValue="30" ariaLabel="搜索栏背景透明度" />
+        <SliderRow
+          id="search-background"
+          label="背景"
+          valueId="search-background-value"
+          value={`${searchSettings.background}%`}
+          min="0"
+          max="92"
+          defaultValue="30"
+          ariaLabel="搜索栏背景透明度"
+          disabled={searchSettings.backgroundDisabled}
+          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('background', value)}
+          sliderValue={searchSettings.background}
+        />
       </Surface>
     </section>
   )

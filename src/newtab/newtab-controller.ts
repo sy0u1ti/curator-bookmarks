@@ -297,6 +297,7 @@ import {
   createNewtabSearchSettingsView,
   dispatchNewtabSearchSettingsView,
   registerNewtabSearchSettingsActions,
+  type NewtabSearchSettingsFieldKey,
   type NewtabSearchSettingsToggleKey
 } from './newtab-search-settings-store.js'
 import {
@@ -1033,6 +1034,7 @@ function bindEvents(): void {
     onToggle: handleTimeSettingToggle
   })
   registerNewtabSearchSettingsActions({
+    onFieldChange: handleSearchSettingFieldChange,
     onToggle: handleSearchSettingToggle
   })
   registerNewtabBackgroundSettingsActions({
@@ -1321,22 +1323,6 @@ function bindBackgroundSettingsEvents(): void {
   cachedEl('background-video-file')?.addEventListener('change', (event) => {
     void handleBackgroundFileChange('video', event)
   })
-}
-
-function bindSearchSettingsEvents(): void {
-  cachedEl('search-engine')?.addEventListener('change', handleSearchSettingsChange)
-  document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]').forEach((input) => {
-    input.addEventListener('change', handleSearchSettingsChange)
-  })
-  cachedEl('search-placeholder')?.addEventListener('input', handleSearchSettingsChange)
-  cachedEl('search-width')?.addEventListener('input', handleSearchSettingsPreview)
-  cachedEl('search-height')?.addEventListener('input', handleSearchSettingsPreview)
-  cachedEl('search-offset-y')?.addEventListener('input', handleSearchSettingsPreview)
-  cachedEl('search-background')?.addEventListener('input', handleSearchSettingsPreview)
-  cachedEl('search-width')?.addEventListener('change', handleSearchSettingsCommit)
-  cachedEl('search-height')?.addEventListener('change', handleSearchSettingsCommit)
-  cachedEl('search-offset-y')?.addEventListener('change', handleSearchSettingsCommit)
-  cachedEl('search-background')?.addEventListener('change', handleSearchSettingsCommit)
 }
 
 function bindIconSettingsEvents(): void {
@@ -1793,24 +1779,30 @@ function handleIconTitleLinesClick(event: Event): void {
   }))
 }
 
-function handleSearchSettingsChange(): void {
-  commitSearchSettings(readSearchSettingsFromControls(), { render: true })
-}
-
-function handleSearchSettingsPreview(): void {
-  commitSearchSettings(readSearchSettingsFromControls(), { live: true })
-  scheduleSearchSettingsSettle()
-}
-
-function handleSearchSettingsCommit(): void {
-  commitSearchSettings(readSearchSettingsFromControls(), { render: true, syncControls: false })
-}
-
 function handleSearchSettingToggle(key: NewtabSearchSettingsToggleKey, enabled: boolean): void {
   commitSearchSettings(normalizeSearchSettings({
     ...state.searchSettings,
     [key]: enabled
   }), { render: true })
+}
+
+function handleSearchSettingFieldChange(
+  key: NewtabSearchSettingsFieldKey,
+  value: number | string | string[]
+): void {
+  const nextSettings = normalizeSearchSettings({
+    ...state.searchSettings,
+    [key]: value
+  })
+  const isLiveField = key === 'background' ||
+    key === 'height' ||
+    key === 'offsetY' ||
+    key === 'width'
+
+  commitSearchSettings(nextSettings, isLiveField ? { live: true } : { render: true })
+  if (isLiveField) {
+    scheduleSearchSettingsSettle()
+  }
 }
 
 function commitSearchSettings(
@@ -2077,7 +2069,6 @@ function initializeSettingsDrawer(): void {
   bindGeneralSettingsEvents()
   bindFolderSettingsEvents()
   bindBackgroundSettingsEvents()
-  bindSearchSettingsEvents()
   bindIconSettingsEvents()
   bindSettingsGroupTabs()
   settingsDrawerReady = true
@@ -10578,99 +10569,22 @@ function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string 
   return String(settings.placeholder || '').trim() || DEFAULT_SEARCH_SETTINGS.placeholder
 }
 
-function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
-  const engineInput = cachedEl('search-engine')
-  const engineToggleInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]')
-  )
-  const placeholderInput = cachedEl('search-placeholder')
-  const widthInput = cachedEl('search-width')
-  const heightInput = cachedEl('search-height')
-  const offsetYInput = cachedEl('search-offset-y')
-  const backgroundInput = cachedEl('search-background')
-
-  return normalizeSearchSettings({
-    enabled: state.searchSettings.enabled,
-    webSearchEnabled: state.searchSettings.webSearchEnabled,
-    openInNewTab: state.searchSettings.openInNewTab,
-    engine: isValueControl(engineInput) ? engineInput.value : state.searchSettings.engine,
-    enabledEngines: engineToggleInputs.length
-      ? engineToggleInputs
-        .filter((input) => input.checked)
-        .map((input) => input.dataset.searchEngineToggle || '')
-      : state.searchSettings.enabledEngines,
-    placeholder: placeholderInput instanceof HTMLInputElement ? placeholderInput.value : state.searchSettings.placeholder,
-    width: widthInput instanceof HTMLInputElement ? Number(widthInput.value) : state.searchSettings.width,
-    height: heightInput instanceof HTMLInputElement ? Number(heightInput.value) : state.searchSettings.height,
-    offsetY: offsetYInput instanceof HTMLInputElement ? Number(offsetYInput.value) : state.searchSettings.offsetY,
-    autoVerticalCenter: state.searchSettings.autoVerticalCenter,
-    background: backgroundInput instanceof HTMLInputElement ? Number(backgroundInput.value) : state.searchSettings.background
-  })
-}
-
 function syncSearchSettingsControls(): void {
   const settings = state.searchSettings
-  const engineInput = cachedEl('search-engine')
-  const engineToggleInputs = Array.from(
-    document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]')
-  )
-  const placeholderInput = cachedEl('search-placeholder')
-  const widthInput = cachedEl('search-width')
-  const heightInput = cachedEl('search-height')
-  const backgroundInput = cachedEl('search-background')
-  const dependentControls = [
-    engineInput,
-    ...engineToggleInputs,
-    placeholderInput,
-    widthInput,
-    heightInput,
-    backgroundInput
-  ]
-
-  dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(settings))
-  if (isValueControl(engineInput)) {
-    engineInput.value = settings.engine
-    engineInput.disabled = !settings.enabled || !settings.webSearchEnabled
-  }
-  for (const input of engineToggleInputs) {
-    const engineId = input.dataset.searchEngineToggle || ''
-    const isSelected = settings.engine === engineId
-    input.checked = settings.enabledEngines.includes(engineId as SearchEngineId)
-    input.disabled = !settings.enabled || !settings.webSearchEnabled || isSelected
-    input.closest<HTMLElement>('.search-engine-toggle')?.classList.toggle('active', input.checked)
-    input.closest<HTMLElement>('.search-engine-toggle')?.classList.toggle('locked', isSelected)
-  }
-  if (placeholderInput instanceof HTMLInputElement) {
-    placeholderInput.value = settings.placeholder
-    placeholderInput.disabled = !settings.enabled
-  }
+  const widthBounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
+  const offsetBounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
+  dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(settings, {
+    offset: offsetBounds,
+    width: widthBounds
+  }))
   syncSearchWidthControl()
-  if (heightInput instanceof HTMLInputElement) {
-    heightInput.value = String(settings.height)
-    heightInput.disabled = !settings.enabled
-  }
   syncSearchOffsetControl()
-  if (backgroundInput instanceof HTMLInputElement) {
-    backgroundInput.value = String(settings.background)
-    backgroundInput.disabled = !settings.enabled
-  }
 
   setTextContent('search-height-value', `${settings.height}px`)
   setTextContent('search-background-value', `${settings.background}%`)
-
-  for (const control of dependentControls) {
-    const row = control instanceof HTMLElement
-      ? control.closest<HTMLElement>('.setting-row')
-      : null
-    const disabled = !settings.enabled ||
-      ((control === engineInput || engineToggleInputs.includes(control as HTMLInputElement)) &&
-        !settings.webSearchEnabled)
-    row?.classList.toggle('setting-row-disabled', disabled)
-  }
 }
 
 function syncSearchWidthControl(): void {
-  const widthInput = cachedEl('search-width')
   const bounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
   const value = clampNumber(
     state.searchSettings.width,
@@ -10678,17 +10592,14 @@ function syncSearchWidthControl(): void {
     bounds.max,
     DEFAULT_SEARCH_SETTINGS.width
   )
-  if (widthInput instanceof HTMLInputElement) {
-    widthInput.min = String(bounds.min)
-    widthInput.max = String(bounds.max)
-    widthInput.value = String(value)
-    widthInput.disabled = !state.searchSettings.enabled
-  }
+  dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(state.searchSettings, {
+    offset: state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK,
+    width: bounds
+  }))
   setTextContent('search-width-value', `${value}vw`)
 }
 
 function syncSearchOffsetControl(): void {
-  const offsetYInput = cachedEl('search-offset-y')
   const bounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
   const value = clampNumber(
     state.searchSettings.offsetY,
@@ -10696,16 +10607,10 @@ function syncSearchOffsetControl(): void {
     bounds.max,
     DEFAULT_SEARCH_SETTINGS.offsetY
   )
-  if (offsetYInput instanceof HTMLInputElement) {
-    const disabled = !state.searchSettings.enabled || state.searchSettings.autoVerticalCenter
-    offsetYInput.min = String(bounds.min)
-    offsetYInput.max = String(bounds.max)
-    offsetYInput.value = String(value)
-    offsetYInput.disabled = disabled
-    offsetYInput
-      .closest<HTMLElement>('.setting-row')
-      ?.classList.toggle('setting-row-disabled', disabled)
-  }
+  dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(state.searchSettings, {
+    offset: bounds,
+    width: state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
+  }))
   setTextContent('search-offset-y-value', state.searchSettings.autoVerticalCenter ? '自动' : `${value}px`)
 }
 
