@@ -4904,10 +4904,10 @@
   bottom: 4px;
   left: 0;
   z-index: 0;
-  width: 0;
+  width: var(--active-tab-width, 0);
   border-radius: var(--ui-radius-pill);
   background: var(--tabs-pill-bg);
-  transform: translateX(0);
+  transform: translateX(var(--active-tab-left, 0));
   transition:
     transform var(--tabs-dur) var(--tabs-ease),
     width var(--tabs-dur) var(--tabs-ease);

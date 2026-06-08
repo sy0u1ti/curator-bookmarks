@@ -759,7 +759,6 @@ let dashboardFrame: HTMLIFrameElement | null = null
 const settingsTrigger = cachedEl('newtab-settings-trigger')
 let settingsDrawer: HTMLElement | null = null
 const settingsBackdrop = cachedEl('newtab-settings-backdrop')
-let settingsTabsResizeBound = false
 let featuredBackgroundModal: HTMLElement | null = null
 let featuredBackgroundModalGrid: HTMLElement | null = null
 let featuredBackgroundModalClose: HTMLElement | null = null
@@ -978,6 +977,9 @@ function recordNewTabBackgroundReady(): void {
 
 function bindEvents(): void {
   registerNewtabSettingsDrawerActions({
+    onActiveGroupChange: (group) => {
+      setActiveSettingsGroup(group)
+    },
     onFeaturedPickerClick: () => {
       void openFeaturedBackgroundPicker()
     },
@@ -1306,101 +1308,6 @@ function bindGeneralSettingsEvents(): void {
 }
 
 function bindFolderSettingsEvents(): void {
-}
-
-function bindSettingsGroupTabs(): void {
-  const tabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
-  syncSettingsTabsSlidingPill(false)
-
-  for (const button of tabs) {
-    button.addEventListener('click', () => {
-      setActiveSettingsGroup(normalizeSettingsDrawerSection(button.dataset.settingsGroupTab))
-      button.focus()
-    })
-    button.addEventListener('keydown', (event: KeyboardEvent) => {
-      handleSettingsGroupTabKeydown(event, tabs, button)
-    })
-  }
-
-  if (!settingsTabsResizeBound) {
-    settingsTabsResizeBound = true
-    window.addEventListener('resize', () => syncSettingsTabsSlidingPill(false))
-  }
-
-  window.requestAnimationFrame(() => syncSettingsTabsSlidingPill(false))
-  enrichSettingsSectionRoles()
-}
-
-function syncSettingsTabsSlidingPill(animate = true): void {
-  const bar = document.querySelector<HTMLElement>('[data-settings-tabs].t-tabs')
-  const pill = bar?.querySelector<HTMLElement>('.t-tabs-pill')
-  if (!bar || !pill) {
-    return
-  }
-
-  const tabs = Array.from(bar.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
-  const activeTab = tabs.find((tab) => tab.getAttribute('aria-selected') === 'true') || tabs[0]
-  if (!activeTab) {
-    return
-  }
-
-  const move = () => {
-    pill.style.transform = `translateX(${activeTab.offsetLeft}px)`
-    pill.style.width = `${activeTab.offsetWidth}px`
-  }
-
-  if (!animate) {
-    const previousTransition = pill.style.transition
-    pill.style.transition = 'none'
-    move()
-    void pill.offsetWidth
-    pill.style.transition = previousTransition
-    return
-  }
-
-  move()
-}
-
-function handleSettingsGroupTabKeydown(event: KeyboardEvent, tabs: HTMLElement[], current: HTMLElement): void {
-  const horizontal = event.key === 'ArrowRight' || event.key === 'ArrowLeft'
-  const home = event.key === 'Home'
-  const end = event.key === 'End'
-  if (!horizontal && !home && !end) {
-    return
-  }
-  event.preventDefault()
-
-  const index = tabs.indexOf(current)
-  let nextIndex = index
-  if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length
-  else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length
-  else if (home) nextIndex = 0
-  else if (end) nextIndex = tabs.length - 1
-
-  const target = tabs[nextIndex]
-  if (!target) return
-  setActiveSettingsGroup(normalizeSettingsDrawerSection(target.dataset.settingsGroupTab))
-  target.focus()
-}
-
-function enrichSettingsSectionRoles(): void {
-  const sectionsByGroup = new Map<string, HTMLElement[]>()
-  document.querySelectorAll<HTMLElement>('[data-settings-group]').forEach((panel) => {
-    const group = normalizeSettingsDrawerSection(panel.dataset.settingsGroup)
-    panel.setAttribute('role', 'tabpanel')
-    panel.setAttribute('aria-labelledby', `settings-tab-${group}`)
-    panel.tabIndex = 0
-    if (!sectionsByGroup.has(group)) {
-      sectionsByGroup.set(group, [])
-    }
-    sectionsByGroup.get(group)!.push(panel)
-  })
-  for (const [group, panels] of sectionsByGroup) {
-    if (!panels.length) continue
-    if (!panels[0].id) {
-      panels[0].id = `settings-panel-${group}`
-    }
-  }
 }
 
 function handleGeneralSettingToggle(key: NewtabGeneralSettingToggleKey, enabled: boolean): void {
@@ -1991,7 +1898,6 @@ function initializeSettingsDrawer(): void {
 
   bindGeneralSettingsEvents()
   bindFolderSettingsEvents()
-  bindSettingsGroupTabs()
   settingsDrawerReady = true
   resolveSettingsDrawerReady?.()
   hydrateFeaturedBackgroundOptions()
@@ -2111,23 +2017,6 @@ function setActiveSettingsGroup(
     const nextSection = normalizeSettingsDrawerSection(section)
     state.activeSettingsGroup = nextSection
     dispatchNewtabSettingsDrawerActiveGroup(nextSection)
-    settingsDrawer?.setAttribute('data-active-settings-group', nextSection)
-
-    const settingsTabs = Array.from(document.querySelectorAll<HTMLElement>('[data-settings-group-tab]'))
-    settingsTabs.forEach((tab) => {
-      const active = normalizeSettingsDrawerSection(tab.dataset.settingsGroupTab) === nextSection
-      tab.classList.toggle('active', active)
-      tab.setAttribute('aria-selected', String(active))
-      tab.setAttribute('aria-pressed', String(active))
-      tab.tabIndex = active ? 0 : -1
-    })
-    syncSettingsTabsSlidingPill(true)
-
-    document.querySelectorAll<HTMLElement>('[data-settings-group]').forEach((panel) => {
-      const active = normalizeSettingsDrawerSection(panel.dataset.settingsGroup) === nextSection
-      panel.hidden = !active
-      panel.setAttribute('aria-hidden', String(!active))
-    })
 
     if (scrollToTop) {
       const scrollHost = settingsDrawer?.querySelector<HTMLElement>('.settings-drawer-scroll')

@@ -7,12 +7,14 @@ export interface NewtabSettingsDrawerView {
 }
 
 export interface NewtabSettingsDrawerActions {
+  onActiveGroupChange: (group: SettingsDrawerSection) => void
   onFeaturedPickerClick: () => void
   onOpenChange: (open: boolean, event?: Event) => void
   onReady: () => void
 }
 
 const EMPTY_ACTIONS: NewtabSettingsDrawerActions = {
+  onActiveGroupChange: () => {},
   onFeaturedPickerClick: () => {},
   onOpenChange: () => {},
   onReady: () => {}
@@ -76,6 +78,10 @@ export function dispatchNewtabSettingsDrawerActiveGroup(group: SettingsDrawerSec
     activeGroup: group
   }
   emitSettingsDrawerChange()
+}
+
+export function dispatchNewtabSettingsDrawerActiveGroupChange(group: SettingsDrawerSection): void {
+  settingsDrawerActions.onActiveGroupChange(group)
 }
 
 export function dispatchNewtabSettingsDrawerReady(): void {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { Tabs as BaseTabs } from '@base-ui/react/tabs'
 import { Surface } from '../../ui/base/Surface'
@@ -42,7 +42,7 @@ import {
 } from '../newtab-background-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import {
-  dispatchNewtabSettingsDrawerActiveGroup,
+  dispatchNewtabSettingsDrawerActiveGroupChange,
   dispatchNewtabSettingsDrawerFeaturedPickerClick,
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerReady,
@@ -264,42 +264,40 @@ function SettingsDrawerHeader() {
   )
 }
 
-function SettingsDrawerTabs({
-  activeGroup,
-  onActiveGroupChange
+function SettingsDrawerTabs() {
+  return (
+    <BaseTabs.List className="settings-sliding-tabs t-tabs" aria-label="新标签页设置分组">
+      {settingsTabs.map(([group, label]) => (
+        <BaseTabs.Tab
+          className="settings-sliding-tab t-tab"
+          value={group}
+          id={`settings-tab-${group}`}
+          key={group}
+        >
+          {label}
+        </BaseTabs.Tab>
+      ))}
+      <BaseTabs.Indicator className="settings-sliding-tabs-pill t-tabs-pill" />
+    </BaseTabs.List>
+  )
+}
+
+function SettingsTabPanel({
+  value,
+  children
 }: {
-  activeGroup: SettingsDrawerSection
-  onActiveGroupChange: (group: SettingsDrawerSection) => void
+  value: SettingsDrawerSection
+  children: ReactNode
 }) {
   return (
-    <BaseTabs.Root
-      className="settings-sliding-tabs-root"
-      value={activeGroup}
-      onValueChange={(value) => {
-        onActiveGroupChange(value as SettingsDrawerSection)
-      }}
+    <BaseTabs.Panel
+      className="settings-tab-panel"
+      id={`settings-panel-${value}`}
+      value={value}
+      keepMounted
     >
-      <BaseTabs.List className="settings-sliding-tabs t-tabs" data-settings-tabs aria-label="新标签页设置分组">
-        <span className="settings-sliding-tabs-pill t-tabs-pill" aria-hidden="true"></span>
-        {settingsTabs.map(([group, label]) => {
-          const selected = activeGroup === group
-          return (
-            <BaseTabs.Tab
-              className="settings-sliding-tab t-tab"
-              value={group}
-              id={`settings-tab-${group}`}
-              data-settings-group-tab={group}
-              aria-controls={`settings-panel-${group}`}
-              aria-selected={selected}
-              tabIndex={selected ? 0 : -1}
-              key={group}
-            >
-              {label}
-            </BaseTabs.Tab>
-          )
-        })}
-      </BaseTabs.List>
-    </BaseTabs.Root>
+      {children}
+    </BaseTabs.Panel>
   )
 }
 
@@ -1219,7 +1217,7 @@ export function SettingsDrawerHost() {
     <SettingsDrawer
       open={view.open}
       activeGroup={view.activeGroup}
-      onActiveGroupChange={dispatchNewtabSettingsDrawerActiveGroup}
+      onActiveGroupChange={dispatchNewtabSettingsDrawerActiveGroupChange}
       onOpenChange={dispatchNewtabSettingsDrawerOpenChange}
     />
   )
@@ -1252,15 +1250,33 @@ export function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenC
         <SettingsDrawerClose />
 
         <div className="settings-drawer-scroll">
-        <SettingsDrawerHeader />
-        <SettingsDrawerTabs activeGroup={activeGroup} onActiveGroupChange={onActiveGroupChange} />
-        <AdvancedSettingsSection />
-        <SourceSettingsSection />
-        <ModuleSettingsSection />
-        <BackgroundSettingsSection panelElement={panelElement} />
-        <IconSettingsSection />
-        <TimeSettingsSection panelElement={panelElement} />
-        <SearchSettingsSection panelElement={panelElement} />
+          <BaseTabs.Root
+            className="settings-sliding-tabs-root"
+            value={activeGroup}
+            onValueChange={(value) => {
+              onActiveGroupChange(value as SettingsDrawerSection)
+            }}
+          >
+            <SettingsDrawerHeader />
+            <SettingsDrawerTabs />
+            <SettingsTabPanel value="advanced">
+              <AdvancedSettingsSection />
+            </SettingsTabPanel>
+            <SettingsTabPanel value="source">
+              <SourceSettingsSection />
+            </SettingsTabPanel>
+            <SettingsTabPanel value="modules">
+              <ModuleSettingsSection />
+            </SettingsTabPanel>
+            <SettingsTabPanel value="appearance">
+              <BackgroundSettingsSection panelElement={panelElement} />
+              <IconSettingsSection />
+              <TimeSettingsSection panelElement={panelElement} />
+            </SettingsTabPanel>
+            <SettingsTabPanel value="search">
+              <SearchSettingsSection panelElement={panelElement} />
+            </SettingsTabPanel>
+          </BaseTabs.Root>
         </div>
       </DrawerPanel>
     </DrawerOverlay>
