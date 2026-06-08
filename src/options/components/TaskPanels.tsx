@@ -1,4 +1,6 @@
-import { Button, Card, Input } from '../../ui'
+import { Button } from '../../ui/primitives/Button.js'
+import { Card } from '../../ui/primitives/Card.js'
+import { Input } from '../../ui/primitives/Input.js'
 
 const historyMetrics = [
   { label: '新增异常', valueId: 'availability-history-new' },
@@ -21,12 +23,6 @@ const folderCleanupMetrics = [
   { label: '深层低价值', valueId: 'folder-cleanup-summary-deep', className: 'metric-warning' },
   { label: '同名合并', valueId: 'folder-cleanup-summary-same-name', className: 'metric-info' },
   { label: '超大拆分', valueId: 'folder-cleanup-summary-large', className: 'metric-muted' }
-]
-
-const ignoreMetrics = [
-  { label: '书签规则', valueId: 'ignore-bookmark-count' },
-  { label: '域名规则', valueId: 'ignore-domain-count' },
-  { label: '文件夹规则', valueId: 'ignore-folder-count' }
 ]
 
 const duplicateStrategies = [
@@ -246,11 +242,11 @@ export function TagManagementPanel() {
 
         <div className="tag-management-toolbar">
           <div className="tag-management-form">
-            <label>
+            <label htmlFor="tag-management-rename-source">
               <span>原标签</span>
               <Input id="tag-management-rename-source" type="text" autoComplete="off" placeholder="选择或输入标签" />
             </label>
-            <label>
+            <label htmlFor="tag-management-rename-target">
               <span>新标签</span>
               <Input id="tag-management-rename-target" type="text" autoComplete="off" placeholder="用于重命名" />
             </label>
@@ -442,14 +438,7 @@ export function IgnoreRulesPanel() {
         </div>
       </div>
 
-      <div className="detect-summary-grid compact-grid">
-        {ignoreMetrics.map((metric) => (
-          <Card className="summary-card compact" key={metric.valueId}>
-            <span className="summary-label">{metric.label}</span>
-            <strong id={metric.valueId}>0</strong>
-          </Card>
-        ))}
-      </div>
+      <div id="ignore-summary" />
 
       <div className="options-group detect-results-group">
         <div className="detect-results-header">

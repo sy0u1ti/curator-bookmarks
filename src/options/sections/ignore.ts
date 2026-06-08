@@ -5,7 +5,11 @@ import {
   createEmptyIgnoreRules
 } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import { renderIgnoreRulesIsland } from '../components/IgnoreRulesIsland.js'
+import {
+  renderIgnoreRulesIsland,
+  renderIgnoreRulesSummaryIsland,
+  type IgnoreRulesSummaryState
+} from '../components/IgnoreRulesIsland.js'
 
 export function normalizeIgnoreRules(rawRules) {
   const normalized = createEmptyIgnoreRules()
@@ -116,14 +120,17 @@ export function matchesIgnoreRules(result) {
 }
 
 export function renderIgnoreSection() {
-  if (!dom.ignoreBookmarkRules) {
+  if (!dom.ignoreSummary || !dom.ignoreBookmarkRules) {
     return
   }
 
-  dom.ignoreBookmarkCount.textContent = String(managerState.ignoreRules.bookmarks.length)
-  dom.ignoreDomainCount.textContent = String(managerState.ignoreRules.domains.length)
-  dom.ignoreFolderCount.textContent = String(managerState.ignoreRules.folders.length)
+  const summaryState: IgnoreRulesSummaryState = {
+    bookmarkCount: managerState.ignoreRules.bookmarks.length,
+    domainCount: managerState.ignoreRules.domains.length,
+    folderCount: managerState.ignoreRules.folders.length
+  }
 
+  renderIgnoreRulesSummaryIsland(dom.ignoreSummary, summaryState)
   renderIgnoreRuleList(dom.ignoreBookmarkRules, managerState.ignoreRules.bookmarks, 'bookmark')
   renderIgnoreRuleList(dom.ignoreDomainRules, managerState.ignoreRules.domains, 'domain')
   renderIgnoreRuleList(dom.ignoreFolderRules, managerState.ignoreRules.folders, 'folder')

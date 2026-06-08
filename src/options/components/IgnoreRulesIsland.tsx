@@ -1,7 +1,10 @@
 import { flushSync } from 'react-dom'
 import { createRoot, type Root } from 'react-dom/client'
+import type { ReactNode } from 'react'
 import { displayUrl } from '../../shared/text.js'
-import { Button, ThemeProvider } from '../../ui'
+import { Button } from '../../ui/primitives/Button.js'
+import { Card } from '../../ui/primitives/Card.js'
+import { ThemeProvider } from '../../ui/theme/ThemeProvider.js'
 
 export type IgnoreRuleKind = 'bookmark' | 'domain' | 'folder'
 
@@ -36,6 +39,23 @@ export function renderIgnoreRulesIsland(
   kind: IgnoreRuleKind,
   rules: IgnoreRuleViewModel[]
 ): void {
+  renderIgnoreNode(container, <IgnoreRuleList kind={kind} rules={rules} />)
+}
+
+export interface IgnoreRulesSummaryState {
+  bookmarkCount: number
+  domainCount: number
+  folderCount: number
+}
+
+export function renderIgnoreRulesSummaryIsland(
+  container: Element,
+  state: IgnoreRulesSummaryState
+): void {
+  renderIgnoreNode(container, <IgnoreRulesSummary state={state} />)
+}
+
+function renderIgnoreNode(container: Element, node: ReactNode): void {
   let root = roots.get(container)
   if (!root) {
     root = createRoot(container)
@@ -43,12 +63,31 @@ export function renderIgnoreRulesIsland(
   }
 
   flushSync(() => {
-    root.render(
-      <ThemeProvider>
-        <IgnoreRuleList kind={kind} rules={rules} />
-      </ThemeProvider>
-    )
+    root.render(<ThemeProvider>{node}</ThemeProvider>)
   })
+}
+
+const ignoreSummaryMetrics = [
+  { key: 'bookmarkCount', label: '书签规则', valueId: 'ignore-bookmark-count' },
+  { key: 'domainCount', label: '域名规则', valueId: 'ignore-domain-count' },
+  { key: 'folderCount', label: '文件夹规则', valueId: 'ignore-folder-count' }
+] satisfies Array<{
+  key: keyof IgnoreRulesSummaryState
+  label: string
+  valueId: string
+}>
+
+function IgnoreRulesSummary({ state }: { state: IgnoreRulesSummaryState }) {
+  return (
+    <div className="detect-summary-grid compact-grid">
+      {ignoreSummaryMetrics.map((metric) => (
+        <Card className="summary-card compact" key={metric.valueId}>
+          <span className="summary-label">{metric.label}</span>
+          <strong id={metric.valueId}>{state[metric.key]}</strong>
+        </Card>
+      ))}
+    </div>
+  )
 }
 
 function IgnoreRuleList({
