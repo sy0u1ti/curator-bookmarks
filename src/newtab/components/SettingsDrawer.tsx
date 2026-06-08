@@ -23,6 +23,10 @@ import {
   dispatchNewtabTimeSettingToggle,
   useNewtabTimeSettingsView
 } from '../newtab-time-settings-store'
+import {
+  dispatchNewtabSearchSettingToggle,
+  useNewtabSearchSettingsView
+} from '../newtab-search-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
@@ -856,14 +860,36 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
 }
 
 function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
+  const searchSettings = useNewtabSearchSettingsView()
+
   return (
     <section className="settings-section" data-settings-group="search" aria-labelledby="settings-search-title">
       <h2 id="settings-search-title">搜索栏</h2>
       <Surface className="settings-list" variant="plain">
         <p className="setting-trust-note">仅影响 Curator 新标签页内搜索，不会修改 Chrome 默认搜索引擎或启动页；搜索栏可随时关闭。</p>
-        <SwitchRow id="search-enabled" title="启用" description="在新标签页顶部搜索本地书签、命令和可选网页搜索。" defaultChecked />
-        <SwitchRow id="search-web-enabled" title="启用网页搜索" description="提交网页搜索时，关键词会发送给所选搜索引擎；关闭后仅保留本地书签搜索。" defaultChecked />
-        <SwitchRow id="search-open-new-tab" title="在新标签页打开链接" description="保留当前 Curator 新标签页。" />
+        <SwitchRow
+          id="search-enabled"
+          title="启用"
+          description="在新标签页顶部搜索本地书签、命令和可选网页搜索。"
+          checked={searchSettings.enabled}
+          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('enabled', checked)}
+        />
+        <SwitchRow
+          id="search-web-enabled"
+          title="启用网页搜索"
+          description="提交网页搜索时，关键词会发送给所选搜索引擎；关闭后仅保留本地书签搜索。"
+          checked={searchSettings.webSearchEnabled}
+          disabled={searchSettings.webSearchDisabled}
+          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('webSearchEnabled', checked)}
+        />
+        <SwitchRow
+          id="search-open-new-tab"
+          title="在新标签页打开链接"
+          description="保留当前 Curator 新标签页。"
+          checked={searchSettings.openInNewTab}
+          disabled={searchSettings.openInNewTabDisabled}
+          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
+        />
         <SettingsSelect id="search-engine" label="搜索引擎" description="输入内容不是网址时使用此引擎。" ariaLabel="默认搜索引擎" portalContainer={panelElement} options={searchEngines.map(([value, label]) => [value, label])} />
         <div className="setting-row search-engine-setting-row">
           <span className="setting-label-stack">
@@ -894,7 +920,14 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
         <SliderRow id="search-width" label="宽度" valueId="search-width-value" value="44vw" min="16" max="72" defaultValue="44" ariaLabel="搜索栏宽度" />
         <SliderRow id="search-height" label="高度" valueId="search-height-value" value="40px" min="28" max="56" defaultValue="40" ariaLabel="搜索栏高度" />
         <SliderRow id="search-offset-y" label="上下位置" valueId="search-offset-y-value" value="0px" min="-240" max="240" defaultValue="0" ariaLabel="搜索栏上下位置" />
-        <SwitchRow id="search-auto-vertical-center" title="自动垂直居中" description="根据上方和下方模块之间的可用空间自动居中搜索栏。" />
+        <SwitchRow
+          id="search-auto-vertical-center"
+          title="自动垂直居中"
+          description="根据上方和下方模块之间的可用空间自动居中搜索栏。"
+          checked={searchSettings.autoVerticalCenter}
+          disabled={searchSettings.autoVerticalCenterDisabled}
+          onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('autoVerticalCenter', checked)}
+        />
         <SliderRow id="search-background" label="背景" valueId="search-background-value" value="30%" min="0" max="92" defaultValue="30" ariaLabel="搜索栏背景透明度" />
       </Surface>
     </section>

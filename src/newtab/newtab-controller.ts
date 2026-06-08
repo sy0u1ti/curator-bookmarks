@@ -292,6 +292,12 @@ import {
   registerNewtabTimeSettingsActions,
   type NewtabTimeSettingsToggleKey
 } from './newtab-time-settings-store.js'
+import {
+  createNewtabSearchSettingsView,
+  dispatchNewtabSearchSettingsView,
+  registerNewtabSearchSettingsActions,
+  type NewtabSearchSettingsToggleKey
+} from './newtab-search-settings-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
@@ -1019,6 +1025,9 @@ function bindEvents(): void {
   registerNewtabTimeSettingsActions({
     onToggle: handleTimeSettingToggle
   })
+  registerNewtabSearchSettingsActions({
+    onToggle: handleSearchSettingToggle
+  })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
@@ -1314,11 +1323,7 @@ function bindBackgroundSettingsEvents(): void {
 }
 
 function bindSearchSettingsEvents(): void {
-  cachedEl('search-enabled')?.addEventListener('change', handleSearchSettingsChange)
-  cachedEl('search-web-enabled')?.addEventListener('change', handleSearchSettingsChange)
-  cachedEl('search-open-new-tab')?.addEventListener('change', handleSearchSettingsChange)
   cachedEl('search-engine')?.addEventListener('change', handleSearchSettingsChange)
-  cachedEl('search-auto-vertical-center')?.addEventListener('change', handleSearchSettingsChange)
   document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]').forEach((input) => {
     input.addEventListener('change', handleSearchSettingsChange)
   })
@@ -1788,24 +1793,40 @@ function handleIconTitleLinesClick(event: Event): void {
 }
 
 function handleSearchSettingsChange(): void {
-  state.searchSettings = readSearchSettingsFromControls()
-  scheduleSearchSettingsSave()
-  scheduleRender({ updateClock: true })
-  syncSearchSettingsControls()
+  commitSearchSettings(readSearchSettingsFromControls(), { render: true })
 }
 
 function handleSearchSettingsPreview(): void {
-  state.searchSettings = readSearchSettingsFromControls()
-  scheduleSearchSettingsSave()
-  applySearchSettingsLive()
-  syncSearchSettingsControls()
+  commitSearchSettings(readSearchSettingsFromControls(), { live: true })
   scheduleSearchSettingsSettle()
 }
 
 function handleSearchSettingsCommit(): void {
-  state.searchSettings = readSearchSettingsFromControls()
+  commitSearchSettings(readSearchSettingsFromControls(), { render: true, syncControls: false })
+}
+
+function handleSearchSettingToggle(key: NewtabSearchSettingsToggleKey, enabled: boolean): void {
+  commitSearchSettings(normalizeSearchSettings({
+    ...state.searchSettings,
+    [key]: enabled
+  }), { render: true })
+}
+
+function commitSearchSettings(
+  nextSettings: typeof DEFAULT_SEARCH_SETTINGS,
+  options: { live?: boolean; render?: boolean; syncControls?: boolean } = {}
+): void {
+  state.searchSettings = nextSettings
   scheduleSearchSettingsSave()
-  scheduleRender({ updateClock: true })
+  if (options.live) {
+    applySearchSettingsLive()
+  }
+  if (options.render) {
+    scheduleRender({ updateClock: true })
+  }
+  if (options.syncControls !== false) {
+    syncSearchSettingsControls()
+  }
 }
 
 function handleFeaturedBackgroundDisplayPreferencePreview(): void {
@@ -10545,9 +10566,6 @@ function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string 
 }
 
 function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
-  const enabledInput = cachedEl('search-enabled')
-  const webEnabledInput = cachedEl('search-web-enabled')
-  const openInput = cachedEl('search-open-new-tab')
   const engineInput = cachedEl('search-engine')
   const engineToggleInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]')
@@ -10556,15 +10574,12 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
   const widthInput = cachedEl('search-width')
   const heightInput = cachedEl('search-height')
   const offsetYInput = cachedEl('search-offset-y')
-  const autoVerticalCenterInput = cachedEl('search-auto-vertical-center')
   const backgroundInput = cachedEl('search-background')
 
   return normalizeSearchSettings({
-    enabled: enabledInput instanceof HTMLInputElement ? enabledInput.checked : state.searchSettings.enabled,
-    webSearchEnabled: webEnabledInput instanceof HTMLInputElement
-      ? webEnabledInput.checked
-      : state.searchSettings.webSearchEnabled,
-    openInNewTab: openInput instanceof HTMLInputElement ? openInput.checked : state.searchSettings.openInNewTab,
+    enabled: state.searchSettings.enabled,
+    webSearchEnabled: state.searchSettings.webSearchEnabled,
+    openInNewTab: state.searchSettings.openInNewTab,
     engine: isValueControl(engineInput) ? engineInput.value : state.searchSettings.engine,
     enabledEngines: engineToggleInputs.length
       ? engineToggleInputs
@@ -10575,18 +10590,13 @@ function readSearchSettingsFromControls(): typeof DEFAULT_SEARCH_SETTINGS {
     width: widthInput instanceof HTMLInputElement ? Number(widthInput.value) : state.searchSettings.width,
     height: heightInput instanceof HTMLInputElement ? Number(heightInput.value) : state.searchSettings.height,
     offsetY: offsetYInput instanceof HTMLInputElement ? Number(offsetYInput.value) : state.searchSettings.offsetY,
-    autoVerticalCenter: autoVerticalCenterInput instanceof HTMLInputElement
-      ? autoVerticalCenterInput.checked
-      : state.searchSettings.autoVerticalCenter,
+    autoVerticalCenter: state.searchSettings.autoVerticalCenter,
     background: backgroundInput instanceof HTMLInputElement ? Number(backgroundInput.value) : state.searchSettings.background
   })
 }
 
 function syncSearchSettingsControls(): void {
   const settings = state.searchSettings
-  const enabledInput = cachedEl('search-enabled')
-  const webEnabledInput = cachedEl('search-web-enabled')
-  const openInput = cachedEl('search-open-new-tab')
   const engineInput = cachedEl('search-engine')
   const engineToggleInputs = Array.from(
     document.querySelectorAll<HTMLInputElement>('[data-search-engine-toggle]')
@@ -10594,31 +10604,17 @@ function syncSearchSettingsControls(): void {
   const placeholderInput = cachedEl('search-placeholder')
   const widthInput = cachedEl('search-width')
   const heightInput = cachedEl('search-height')
-  const autoVerticalCenterInput = cachedEl('search-auto-vertical-center')
   const backgroundInput = cachedEl('search-background')
   const dependentControls = [
-    webEnabledInput,
-    openInput,
     engineInput,
     ...engineToggleInputs,
     placeholderInput,
     widthInput,
     heightInput,
-    autoVerticalCenterInput,
     backgroundInput
   ]
 
-  if (enabledInput instanceof HTMLInputElement) {
-    enabledInput.checked = settings.enabled
-  }
-  if (webEnabledInput instanceof HTMLInputElement) {
-    webEnabledInput.checked = settings.webSearchEnabled
-    webEnabledInput.disabled = !settings.enabled
-  }
-  if (openInput instanceof HTMLInputElement) {
-    openInput.checked = settings.openInNewTab
-    openInput.disabled = !settings.enabled || !settings.webSearchEnabled
-  }
+  dispatchNewtabSearchSettingsView(createNewtabSearchSettingsView(settings))
   if (isValueControl(engineInput)) {
     engineInput.value = settings.engine
     engineInput.disabled = !settings.enabled || !settings.webSearchEnabled
@@ -10641,10 +10637,6 @@ function syncSearchSettingsControls(): void {
     heightInput.disabled = !settings.enabled
   }
   syncSearchOffsetControl()
-  if (autoVerticalCenterInput instanceof HTMLInputElement) {
-    autoVerticalCenterInput.checked = settings.autoVerticalCenter
-    autoVerticalCenterInput.disabled = !settings.enabled
-  }
   if (backgroundInput instanceof HTMLInputElement) {
     backgroundInput.value = String(settings.background)
     backgroundInput.disabled = !settings.enabled
@@ -10658,7 +10650,7 @@ function syncSearchSettingsControls(): void {
       ? control.closest<HTMLElement>('.setting-row')
       : null
     const disabled = !settings.enabled ||
-      ((control === openInput || control === engineInput || engineToggleInputs.includes(control as HTMLInputElement)) &&
+      ((control === engineInput || engineToggleInputs.includes(control as HTMLInputElement)) &&
         !settings.webSearchEnabled)
     row?.classList.toggle('setting-row-disabled', disabled)
   }
