@@ -5724,7 +5724,6 @@ function createSearchWidget(): HTMLElement | null {
     suggestionsHeading.textContent = '书签匹配'
     suggestionsHeading.hidden = false
     renderNewTabSearchHintIsland(suggestionsHint, { type: 'empty' })
-    suggestionsHint.hidden = true
     suggestionsPanel.classList.add('hidden')
     input.setAttribute('aria-expanded', 'false')
     input.removeAttribute('aria-activedescendant')
@@ -5764,7 +5763,6 @@ function createSearchWidget(): HTMLElement | null {
           type: 'text',
           text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
         })
-        suggestionsHint.hidden = false
         suggestionsPanel.classList.remove('hidden')
         input.setAttribute('aria-expanded', 'true')
         return
@@ -5773,7 +5771,6 @@ function createSearchWidget(): HTMLElement | null {
       suggestionsHeading.textContent = '网页搜索'
       suggestionsHeading.hidden = false
       renderNewTabSearchHintIsland(suggestionsHint, createSearchWebFallbackState(trimmedQuery))
-      suggestionsHint.hidden = false
       suggestionsPanel.classList.remove('hidden')
       input.setAttribute('aria-expanded', 'true')
       return
@@ -5829,7 +5826,6 @@ function createSearchWidget(): HTMLElement | null {
       type: 'text',
       text: getSearchSuggestionHintText()
     })
-    suggestionsHint.hidden = false
     input.setAttribute('aria-expanded', 'true')
 
     if (activeSuggestionIndex >= 0) {
@@ -5929,7 +5925,6 @@ function createSearchWidget(): HTMLElement | null {
       type: 'text',
       text: '正在准备索引…'
     })
-    suggestionsHint.hidden = false
     suggestionsPanel.classList.remove('hidden')
     input.setAttribute('aria-expanded', 'true')
     input.removeAttribute('aria-activedescendant')

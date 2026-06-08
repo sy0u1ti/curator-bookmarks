@@ -957,6 +957,10 @@ body.background-mask-enabled .newtab-background-mask {
   line-height: 1.35;
 }
 
+.newtab-search-hint:empty {
+  display: none;
+}
+
 .newtab-search-web-hint {
   display: block;
   width: 100%;

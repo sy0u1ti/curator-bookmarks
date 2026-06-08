@@ -762,7 +762,7 @@ function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
           role="listbox"
           aria-label="匹配的书签"
         />
-        <div className="newtab-search-hint" role="status" aria-live="polite" hidden />
+        <div className="newtab-search-hint" role="status" aria-live="polite" />
         <div className="newtab-saved-searches" aria-label="已保存搜索" />
       </div>
     </>
