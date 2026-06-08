@@ -25,10 +25,7 @@ export function getIconPreviewSignature(settings: IconSettings): string {
   ].join('|')
 }
 
-export function renderIconPreviewElement(
-  preview: HTMLElement,
-  settings: IconSettings
-): void {
+export function dispatchIconPreviewViewForSettings(settings: IconSettings): void {
   const previewColumnGap = Math.max(4, Math.round(getIconGapPx(settings.columnGap) * 0.34))
   const previewRowGap = Math.max(4, Math.round(getIconRowGapPx(settings.rowGap) * 0.34))
   const effectiveTileWidth = getEffectiveIconTileWidthPx(settings)
@@ -47,12 +44,7 @@ export function renderIconPreviewElement(
   ].join(' · ')
   const signature = getIconPreviewSignature(settings)
 
-  if (preview.dataset.iconPreviewSignature === signature && preview.firstElementChild) {
-    return
-  }
-
   const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
-  preview.dataset.iconPreviewSignature = signature
   dispatchNewtabIconPreviewView(createNewtabIconPreviewView(
     settings,
     {

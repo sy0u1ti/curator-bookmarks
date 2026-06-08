@@ -56,8 +56,8 @@ import {
   normalizeIconSettings
 } from './icon-settings.js'
 import {
+  dispatchIconPreviewViewForSettings,
   getIconPreviewSignature,
-  renderIconPreviewElement
 } from './icon-preview.js'
 import {
   buildNewTabSearchIndex,
@@ -782,6 +782,7 @@ const featuredBackgroundCardPreviewRegistry = createFeaturedBackgroundCardPrevie
 let featuredBackgroundGalleryPreviewObjectUrlWarmTask: Promise<void> | null = null
 let featuredBackgroundGalleryPreviewObjectUrlWarmSignature = ''
 let featuredBackgroundGalleryPreviewWarmTimer = 0
+let lastIconPreviewSignature = ''
 let instantWallpaperRemoteReadyFallbackTimer = 0
 let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
@@ -10444,29 +10445,17 @@ function syncSettingsSaveStatus(): void {
 }
 
 function renderIconPreviewIfNeeded(): void {
-  const preview = cachedEl('icon-live-preview')
-  if (!preview) {
-    return
-  }
-
   const signature = getIconPreviewSignature(state.iconSettings)
-  if (preview.dataset.iconPreviewSignature === signature && preview.firstElementChild) {
+  if (lastIconPreviewSignature === signature) {
     return
   }
 
+  lastIconPreviewSignature = signature
   renderIconPreview()
 }
 
 function renderIconPreview(): void {
-  const preview = cachedEl('icon-live-preview')
-  if (!preview) {
-    return
-  }
-
-  renderIconPreviewElement(
-    preview,
-    state.iconSettings
-  )
+  dispatchIconPreviewViewForSettings(state.iconSettings)
 }
 
 async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
