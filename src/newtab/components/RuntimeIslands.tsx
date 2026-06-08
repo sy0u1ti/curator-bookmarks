@@ -63,6 +63,7 @@ export interface ClockWidgetState {
 
 export interface EmptyFolderState {
   folderId: string
+  onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   onOpenFolderSettings: () => void
 }
 
@@ -224,6 +225,7 @@ export interface FolderSectionHeaderState {
   bookmarkCount: number
   dragging: boolean
   folderId: string
+  onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   path: string
   title: string
 }
@@ -450,6 +452,7 @@ export interface BookmarkFolderSectionViewModel {
   dragging: boolean
   folderId: string
   grid: BookmarkFolderGridViewModel | null
+  onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   onOpenFolderSettings: () => void
   path: string
   title: string
@@ -1469,6 +1472,7 @@ function BookmarkFolderSection({ section }: { section: BookmarkFolderSectionView
           dragging: section.dragging,
           folderId: section.folderId,
           path: section.path,
+          onAddBookmark: section.onAddBookmark,
           title: section.title
         }} />
       </div>
@@ -1484,6 +1488,7 @@ function BookmarkFolderSection({ section }: { section: BookmarkFolderSectionView
         <div className="bookmark-folder-empty-state">
           <EmptyFolder state={{
             folderId: section.folderId,
+            onAddBookmark: section.onAddBookmark,
             onOpenFolderSettings: section.onOpenFolderSettings
           }} />
         </div>
@@ -2318,6 +2323,11 @@ function FolderSectionHeader({ state }: { state: FolderSectionHeaderState }) {
         data-add-bookmark-folder-id={state.folderId}
         title={addTitle}
         aria-label={addTitle}
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          state.onAddBookmark(event.currentTarget, state.folderId)
+        }}
         onPointerDown={(event) => {
           event.stopPropagation()
         }}
@@ -2372,6 +2382,11 @@ function EmptyFolder({ state }: { state: EmptyFolderState }) {
           className="newtab-button secondary"
           type="button"
           data-add-bookmark-folder-id={state.folderId}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            state.onAddBookmark(event.currentTarget, state.folderId)
+          }}
           unstyled
         >
           添加书签到这里

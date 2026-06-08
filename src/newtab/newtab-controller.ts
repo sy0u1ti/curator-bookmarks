@@ -1107,15 +1107,6 @@ function bindEvents(): void {
       return
     }
 
-    const addButton = target.closest('[data-add-bookmark-folder-id]')
-    if (addButton instanceof HTMLElement) {
-      event.preventDefault()
-      event.stopPropagation()
-      const folderId = String(addButton.dataset.addBookmarkFolderId || '').trim()
-      openAddBookmarkMenuForElement(addButton, folderId)
-      return
-    }
-
     if (
       (state.dragSuppressClick && target.closest('[data-bookmark-id]')) ||
       (state.speedDialDragSuppressClick && target.closest('[data-speed-dial-bookmark-id]')) ||
@@ -6924,6 +6915,7 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
       dragging,
       folderId: section.id,
       grid: null,
+      onAddBookmark: openAddBookmarkMenuForElement,
       onOpenFolderSettings: openFolderSourceSettings,
       path: section.path,
       title: section.title
