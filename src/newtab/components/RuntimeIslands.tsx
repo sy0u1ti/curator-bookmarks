@@ -22,7 +22,10 @@ const searchWidgetActionStores = new WeakMap<Element, SearchWidgetActionStore>()
 const searchWidgetButtonStores = new WeakMap<Element, SearchWidgetButtonStore>()
 const searchWidgetComboboxStores = new WeakMap<Element, SearchWidgetComboboxStore>()
 const searchWidgetEngineMenuStores = new WeakMap<Element, SearchWidgetEngineMenuStore>()
+const searchWidgetInteractionStores = new WeakMap<Element, SearchWidgetInteractionStore>()
 const searchWidgetPanelStores = new WeakMap<Element, SearchWidgetPanelStore>()
+
+const noop = () => undefined
 
 function renderIsland(container: Element, node: React.ReactNode): void {
   let root = roots.get(container)
@@ -269,6 +272,14 @@ export interface SearchWidgetEngineMenuState extends SearchEngineMenuState {
   open: boolean
 }
 
+export interface SearchWidgetInteractionState {
+  onClear: () => void
+  onEngineKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void
+  onEngineToggle: () => void
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void
+  onToggleNatural: () => void
+}
+
 interface SearchWidgetActionStore {
   getSnapshot: () => SearchWidgetActionState
   setState: (state: SearchWidgetActionState) => void
@@ -290,6 +301,12 @@ interface SearchWidgetComboboxStore {
 interface SearchWidgetEngineMenuStore {
   getSnapshot: () => SearchWidgetEngineMenuState
   setState: (state: SearchWidgetEngineMenuState) => void
+  subscribe: (listener: () => void) => () => void
+}
+
+interface SearchWidgetInteractionStore {
+  getSnapshot: () => SearchWidgetInteractionState
+  setState: (state: SearchWidgetInteractionState) => void
   subscribe: (listener: () => void) => () => void
 }
 
@@ -466,6 +483,7 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     items: [],
     open: false
   })
+  const interactionStore = getSearchWidgetInteractionStore(slot, createDefaultSearchWidgetInteractionState())
   const panelStore = getSearchWidgetPanelStore(slot, {
     panelVisible: false,
     suggestionsVisible: true
@@ -483,6 +501,7 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     items: [],
     open: false
   })
+  interactionStore.setState(createDefaultSearchWidgetInteractionState())
   buttonStore.setState({
     engine: state.engine,
     natural: state.natural
@@ -497,6 +516,7 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
       buttonStore={buttonStore}
       comboboxStore={comboboxStore}
       engineMenuStore={engineMenuStore}
+      interactionStore={interactionStore}
       panelStore={panelStore}
       state={state}
     />
@@ -541,6 +561,16 @@ export function renderSearchWidgetEngineMenuStateIsland(
   const engineMenuStore = getSearchWidgetEngineMenuStore(container, state)
   flushSync(() => {
     engineMenuStore.setState(state)
+  })
+}
+
+export function renderSearchWidgetInteractionStateIsland(
+  container: HTMLElement,
+  state: SearchWidgetInteractionState
+): void {
+  const interactionStore = getSearchWidgetInteractionStore(container, state)
+  flushSync(() => {
+    interactionStore.setState(state)
   })
 }
 
@@ -948,6 +978,34 @@ function getSearchWidgetEngineMenuStore(
   return store
 }
 
+function getSearchWidgetInteractionStore(
+  host: Element,
+  initialState: SearchWidgetInteractionState
+): SearchWidgetInteractionStore {
+  let store = searchWidgetInteractionStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  searchWidgetInteractionStores.set(host, store)
+  return store
+}
+
 function getSearchWidgetPanelStore(
   host: Element,
   initialState: SearchWidgetPanelState
@@ -992,8 +1050,24 @@ function useSearchWidgetEngineMenuState(store: SearchWidgetEngineMenuStore): Sea
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
 
+function useSearchWidgetInteractionState(store: SearchWidgetInteractionStore): SearchWidgetInteractionState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
 function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetPanelState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
+function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionState {
+  return {
+    onClear: noop,
+    onEngineKeyDown: noop,
+    onEngineToggle: noop,
+    onSubmit: (event) => {
+      event.preventDefault()
+    },
+    onToggleNatural: noop
+  }
 }
 
 function SearchWidgetShell({
@@ -1001,6 +1075,7 @@ function SearchWidgetShell({
   buttonStore,
   comboboxStore,
   engineMenuStore,
+  interactionStore,
   panelStore,
   state
 }: {
@@ -1008,9 +1083,11 @@ function SearchWidgetShell({
   buttonStore: SearchWidgetButtonStore
   comboboxStore: SearchWidgetComboboxStore
   engineMenuStore: SearchWidgetEngineMenuStore
+  interactionStore: SearchWidgetInteractionStore
   panelStore: SearchWidgetPanelStore
   state: SearchWidgetShellState
 }) {
+  const interactions = useSearchWidgetInteractionState(interactionStore)
   const formStyle = {
     '--search-width': `${state.width}vw`,
     '--search-height': `${state.height}px`,
@@ -1024,13 +1101,18 @@ function SearchWidgetShell({
         style={formStyle}
         role="search"
         aria-label={state.ariaLabel}
+        onSubmit={interactions.onSubmit}
       >
         <Icon name="Search" className="newtab-search-icon" size={16} aria-hidden="true" />
         <SearchWidgetInput comboboxStore={comboboxStore} state={state} />
-        <SearchWidgetClearButton actionStore={actionStore} />
+        <SearchWidgetClearButton actionStore={actionStore} onClear={interactions.onClear} />
         <SearchWidgetSeparator actionStore={actionStore} />
-        <SearchWidgetNaturalButton buttonStore={buttonStore} />
-        <SearchWidgetEngineButton buttonStore={buttonStore} />
+        <SearchWidgetNaturalButton buttonStore={buttonStore} onToggleNatural={interactions.onToggleNatural} />
+        <SearchWidgetEngineButton
+          buttonStore={buttonStore}
+          onEngineKeyDown={interactions.onEngineKeyDown}
+          onEngineToggle={interactions.onEngineToggle}
+        />
         <SearchWidgetSubmitButton actionStore={actionStore} />
       </form>
       <SearchWidgetEngineMenu engineMenuStore={engineMenuStore} />
@@ -1067,7 +1149,13 @@ function SearchWidgetInput({
   )
 }
 
-function SearchWidgetClearButton({ actionStore }: { actionStore: SearchWidgetActionStore }) {
+function SearchWidgetClearButton({
+  actionStore,
+  onClear
+}: {
+  actionStore: SearchWidgetActionStore
+  onClear: () => void
+}) {
   const { hasInputValue } = useSearchWidgetActionState(actionStore)
 
   return (
@@ -1075,6 +1163,7 @@ function SearchWidgetClearButton({ actionStore }: { actionStore: SearchWidgetAct
       className={hasInputValue ? 'newtab-search-clear' : 'newtab-search-clear hidden'}
       type="button"
       aria-label="清空搜索"
+      onClick={onClear}
       unstyled
     >
       <Icon name="X" size={14} aria-hidden="true" />
@@ -1111,7 +1200,13 @@ function SearchWidgetSubmitButton({ actionStore }: { actionStore: SearchWidgetAc
   )
 }
 
-function SearchWidgetNaturalButton({ buttonStore }: { buttonStore: SearchWidgetButtonStore }) {
+function SearchWidgetNaturalButton({
+  buttonStore,
+  onToggleNatural
+}: {
+  buttonStore: SearchWidgetButtonStore
+  onToggleNatural: () => void
+}) {
   const { natural } = useSearchWidgetButtonStates(buttonStore)
 
   return (
@@ -1121,6 +1216,7 @@ function SearchWidgetNaturalButton({ buttonStore }: { buttonStore: SearchWidgetB
       aria-pressed={natural.active}
       aria-label={natural.ariaLabel}
       title={natural.title}
+      onClick={onToggleNatural}
       unstyled
     >
       {natural.label}
@@ -1128,7 +1224,15 @@ function SearchWidgetNaturalButton({ buttonStore }: { buttonStore: SearchWidgetB
   )
 }
 
-function SearchWidgetEngineButton({ buttonStore }: { buttonStore: SearchWidgetButtonStore }) {
+function SearchWidgetEngineButton({
+  buttonStore,
+  onEngineKeyDown,
+  onEngineToggle
+}: {
+  buttonStore: SearchWidgetButtonStore
+  onEngineKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => void
+  onEngineToggle: () => void
+}) {
   const { engine } = useSearchWidgetButtonStates(buttonStore)
 
   return (
@@ -1140,6 +1244,8 @@ function SearchWidgetEngineButton({ buttonStore }: { buttonStore: SearchWidgetBu
       aria-label={engine.ariaLabel}
       disabled={engine.disabled}
       title={engine.title}
+      onClick={onEngineToggle}
+      onKeyDown={onEngineKeyDown}
       unstyled
     >
       {engine.label}

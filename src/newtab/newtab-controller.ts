@@ -219,6 +219,7 @@ import {
   renderSearchWidgetButtonStatesIsland,
   renderSearchWidgetComboboxStateIsland,
   renderSearchWidgetEngineMenuStateIsland,
+  renderSearchWidgetInteractionStateIsland,
   renderSearchWidgetPanelStateIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
@@ -5550,10 +5551,7 @@ function createSearchWidget(): HTMLElement | null {
     placeholder: searchPlaceholder,
     width: settings.width
   })
-  const form = slot.querySelector<HTMLFormElement>('.newtab-search')
   const input = slot.querySelector<HTMLInputElement>('.newtab-search-input')
-  const clearButton = slot.querySelector<HTMLButtonElement>('.newtab-search-clear')
-  const naturalButton = slot.querySelector<HTMLButtonElement>('.newtab-search-natural')
   const engineButton = slot.querySelector<HTMLButtonElement>('.newtab-search-engine')
   const suggestions = slot.querySelector<HTMLElement>('#newtab-search-suggestions')
   const suggestionsHeading = slot.querySelector<HTMLElement>('.newtab-search-section-label')
@@ -5561,10 +5559,7 @@ function createSearchWidget(): HTMLElement | null {
   const searchChips = slot.querySelector<HTMLElement>('.newtab-search-chips')
   const savedSearches = slot.querySelector<HTMLElement>('.newtab-saved-searches')
   if (
-    !form ||
     !input ||
-    !clearButton ||
-    !naturalButton ||
     !engineButton ||
     !suggestions ||
     !suggestionsHeading ||
@@ -5583,6 +5578,50 @@ function createSearchWidget(): HTMLElement | null {
   }
   const updateEngineButton = renderSearchWidgetButtons
   const updateNaturalButton = renderSearchWidgetButtons
+  const renderSearchWidgetInteractions = () => {
+    renderSearchWidgetInteractionStateIsland(slot, {
+      onClear: () => {
+        input.value = ''
+        syncSearchInputActions(slot, input)
+        hideSuggestions()
+        input.focus()
+      },
+      onEngineKeyDown: (event) => {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+          return
+        }
+
+        event.preventDefault()
+        renderEngineMenu(event.key === 'ArrowDown' ? 'first' : 'last')
+      },
+      onEngineToggle: () => {
+        if (state.searchSettings.webSearchEnabled === false) {
+          return
+        }
+        if (engineMenuExpanded) {
+          closeEngineMenu()
+          return
+        }
+        renderEngineMenu('active')
+      },
+      onSubmit: (event) => {
+        event.preventDefault()
+        closeEngineMenu()
+        hideSuggestions()
+        if (state.searchSettings.webSearchEnabled === false) {
+          return
+        }
+        submitSearch(input.value)
+      },
+      onToggleNatural: () => {
+        void toggleNewTabNaturalSearch({
+          input,
+          updateNaturalButton,
+          scheduleSuggestionsRender
+        })
+      }
+    })
+  }
   let searchEngineMenuState: SearchWidgetEngineMenuState = {
     hint: '',
     items: [],
@@ -6016,46 +6055,6 @@ function createSearchWidget(): HTMLElement | null {
 
     input.blur()
   })
-  clearButton.addEventListener('click', () => {
-    input.value = ''
-    syncSearchInputActions(slot, input)
-    hideSuggestions()
-    input.focus()
-  })
-  naturalButton.addEventListener('click', () => {
-    void toggleNewTabNaturalSearch({
-      input,
-      updateNaturalButton,
-      scheduleSuggestionsRender
-    })
-  })
-  engineButton.addEventListener('click', () => {
-    if (state.searchSettings.webSearchEnabled === false) {
-      return
-    }
-    if (engineButton.getAttribute('aria-expanded') === 'true') {
-      closeEngineMenu()
-      return
-    }
-    renderEngineMenu('active')
-  })
-  engineButton.addEventListener('keydown', (event) => {
-    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-      return
-    }
-
-    event.preventDefault()
-    renderEngineMenu(event.key === 'ArrowDown' ? 'first' : 'last')
-  })
-  form.addEventListener('submit', (event) => {
-    event.preventDefault()
-    closeEngineMenu()
-    hideSuggestions()
-    if (state.searchSettings.webSearchEnabled === false) {
-      return
-    }
-    submitSearch(input.value)
-  })
   input.addEventListener('keydown', (event) => {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
       event.preventDefault()
@@ -6078,6 +6077,7 @@ function createSearchWidget(): HTMLElement | null {
 
   updateEngineButton()
   updateNaturalButton()
+  renderSearchWidgetInteractions()
   renderSearchEngineMenuState()
   renderSearchComboboxState()
   renderSearchWidgetPanelState()
