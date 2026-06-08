@@ -1695,9 +1695,7 @@ export async function handleDashboardPointerUp(event: PointerEvent, callbacks: D
   if (dropOnDeleteTarget) {
     dragState.moving = true
     dom.dashboardDragOverlay?.classList.add('is-moving')
-    if (dom.dashboardDragHint) {
-      dom.dashboardDragHint.textContent = '等待确认删除...'
-    }
+    renderDashboardDragHint('等待确认删除...')
 
     await closeDashboardDragForFollowUp({ silent: true })
     await deleteDashboardBookmarkFromDrop(bookmarkId, callbacks)
@@ -1711,9 +1709,7 @@ export async function handleDashboardPointerUp(event: PointerEvent, callbacks: D
 
   dragState.moving = true
   dom.dashboardDragOverlay?.classList.add('is-moving')
-  if (dom.dashboardDragHint) {
-    dom.dashboardDragHint.textContent = '正在移动书签...'
-  }
+  renderDashboardDragHint('正在移动书签...')
 
   await moveDashboardBookmarkToFolder(bookmarkId, folderId, callbacks)
   cancelDashboardDrag({ silent: true })
@@ -3162,7 +3158,6 @@ function renderDashboardFolderBreadcrumbs(): void {
     ? availabilityState.folderMap.get(selectedFolderId)
     : null
 
-  dom.dashboardFolderBreadcrumbs.classList.toggle('hidden', !selectedFolder)
   renderDashboardBreadcrumbsIsland(
     dom.dashboardFolderBreadcrumbs,
     selectedFolder ? getDashboardFolderBreadcrumbSegments(selectedFolder) : []
@@ -5395,13 +5390,10 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
   dom.dashboardDragOverlay.classList.toggle('is-moving', dragState.moving)
   dom.dashboardDragOverlay.setAttribute('aria-hidden', 'false')
   setDashboardDeleteDropHover(dragState.hoverDeleteTarget)
-  if (dom.dashboardDragHint) {
-    setDashboardLoadingLabel(dom.dashboardDragHint, dragState.moving ? '正在移动书签...' : '选择目标文件夹后松开即可移动。', {
-      busy: dragState.moving,
-      wrapperClass: 'status-loading-label',
-      loaderClass: 'dashboard-status-dot-loader'
-    })
-  }
+  renderDashboardDragHint(
+    dragState.moving ? '正在移动书签...' : '选择目标文件夹后松开即可移动。',
+    { busy: dragState.moving }
+  )
 
   renderDashboardFolderDropGridIsland(
     dom.dashboardFolderDropGrid,
@@ -5431,6 +5423,18 @@ function updateDashboardDragPreviewPosition(): void {
 
   dom.dashboardDragPreview.style.transform =
     `translate3d(${dragState.currentX}px, ${dragState.currentY}px, 0) translate3d(-50%, -50%, 0)`
+}
+
+function renderDashboardDragHint(label: string, { busy = false }: { busy?: boolean } = {}): void {
+  if (!dom.dashboardDragHint) {
+    return
+  }
+
+  setDashboardLoadingLabel(dom.dashboardDragHint, label, {
+    busy,
+    wrapperClass: 'status-loading-label',
+    loaderClass: 'dashboard-status-dot-loader'
+  })
 }
 
 function updateDashboardDropHoverFromPoint(x: number, y: number): void {

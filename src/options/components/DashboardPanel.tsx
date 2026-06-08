@@ -124,7 +124,7 @@ export function DashboardPanel() {
             </span>
           </label>
           <div id="dashboard-search-chips" className="dashboard-search-chips hidden" aria-label="当前搜索条件" />
-          <nav id="dashboard-folder-breadcrumbs" className="dashboard-folder-breadcrumbs hidden" aria-label="当前 Dashboard 文件夹路径" />
+          <nav id="dashboard-folder-breadcrumbs" className="dashboard-folder-breadcrumbs" aria-label="当前 Dashboard 文件夹路径" />
         </div>
         <div className="dashboard-title-actions">
           <span id="dashboard-status" className="ai-provider-save-state muted" />
