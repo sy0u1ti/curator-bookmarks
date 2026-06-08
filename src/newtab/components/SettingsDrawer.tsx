@@ -20,6 +20,7 @@ import {
   useNewtabIconPreviewView
 } from '../newtab-icon-preview-store'
 import {
+  dispatchNewtabTimeSettingFieldChange,
   dispatchNewtabTimeSettingToggle,
   useNewtabTimeSettingsView
 } from '../newtab-time-settings-store'
@@ -132,7 +133,11 @@ function SliderRow({
   ariaLabel,
   rowId,
   hidden = false,
-  description
+  description,
+  disabled = false,
+  onValueChange,
+  onValueCommitted,
+  sliderValue
 }: {
   id: string
   label: string
@@ -145,9 +150,13 @@ function SliderRow({
   rowId?: string
   hidden?: boolean
   description?: string
+  disabled?: boolean
+  onValueChange?: (value: number) => void
+  onValueCommitted?: (value: number) => void
+  sliderValue?: number
 }) {
   return (
-    <label id={rowId} className="setting-row slider-row" hidden={hidden}>
+    <label id={rowId} className={`setting-row slider-row${disabled ? ' setting-row-disabled' : ''}`} hidden={hidden}>
       <span className={description ? 'setting-label-stack' : undefined}>
         <span>
           {label} <output id={valueId} className="setting-value">{value}</output>
@@ -160,14 +169,18 @@ function SliderRow({
         className="setting-slider"
         controlClassName="setting-slider-control"
         defaultValue={defaultValue}
+        disabled={disabled}
         indicatorClassName="setting-slider-indicator"
         inputClassName="setting-range"
         max={max}
         min={min}
+        onValueChange={onValueChange}
+        onValueCommitted={onValueCommitted}
         syncInputState
         thumbClassName="setting-slider-thumb"
         trackClassName="setting-slider-track"
         unstyled
+        value={sliderValue}
       />
     </label>
   )
@@ -180,7 +193,10 @@ function SettingsSelect({
   ariaLabel,
   defaultValue,
   options,
-  portalContainer
+  portalContainer,
+  disabled = false,
+  onValueChange,
+  value
 }: {
   id: string
   label: string
@@ -189,9 +205,12 @@ function SettingsSelect({
   defaultValue?: string
   options: Array<readonly [string, string]>
   portalContainer?: HTMLElement | null
+  disabled?: boolean
+  onValueChange?: (value: string | null) => void
+  value?: string | null
 }) {
   return (
-    <div className="setting-row">
+    <div className={`setting-row${disabled ? ' setting-row-disabled' : ''}`}>
       <span className="setting-label-stack">
         <span>{label}</span>
         {description ? <small>{description}</small> : null}
@@ -199,9 +218,11 @@ function SettingsSelect({
       <Select
         id={id}
         defaultValue={defaultValue}
+        disabled={disabled}
         inputAttributes={{ 'aria-label': ariaLabel, id }}
         inputClassName="setting-select-input"
         itemClassName="custom-select-option"
+        onValueChange={onValueChange}
         options={options.map(([value, label]) => ({ value, label }))}
         modal={false}
         popupClassName="custom-select-setting-list"
@@ -210,6 +231,7 @@ function SettingsSelect({
         syncInputState
         triggerClassName="setting-select custom-select-trigger"
         unstyled
+        value={value}
         valueClassName="custom-select-trigger-label"
       />
     </div>
@@ -845,9 +867,45 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
           checked={timeSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('enabled', checked)}
         />
-        <SettingsSelect id="time-display-mode" label="显示内容" description="保留时间+日期、仅时间、仅日期三种模式。" ariaLabel="时间显示内容" portalContainer={panelElement} options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]} />
-        <SettingsSelect id="time-time-zone" label="时区" description="自动跟随系统，也可固定为常用城市。" ariaLabel="时区" portalContainer={panelElement} options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]} />
-        <SettingsSelect id="time-date-format" label="日期格式" description="仅在显示日期时生效。" ariaLabel="日期格式" portalContainer={panelElement} options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]} />
+        <SettingsSelect
+          id="time-display-mode"
+          label="显示内容"
+          description="保留时间+日期、仅时间、仅日期三种模式。"
+          ariaLabel="时间显示内容"
+          disabled={timeSettings.settingsDisabled}
+          onValueChange={(value) => {
+            if (value) dispatchNewtabTimeSettingFieldChange('displayMode', value)
+          }}
+          portalContainer={panelElement}
+          value={timeSettings.displayMode}
+          options={[['time-date', '时间和日期'], ['time', '仅时间'], ['date', '仅日期']]}
+        />
+        <SettingsSelect
+          id="time-time-zone"
+          label="时区"
+          description="自动跟随系统，也可固定为常用城市。"
+          ariaLabel="时区"
+          disabled={timeSettings.settingsDisabled}
+          onValueChange={(value) => {
+            if (value) dispatchNewtabTimeSettingFieldChange('timeZone', value)
+          }}
+          portalContainer={panelElement}
+          value={timeSettings.timeZone}
+          options={[['auto', '自动跟随系统'], ['UTC', 'UTC'], ['Asia/Shanghai', '北京'], ['Asia/Hong_Kong', '香港'], ['Asia/Tokyo', '东京'], ['Asia/Singapore', '新加坡'], ['Europe/London', '伦敦'], ['Europe/Paris', '巴黎'], ['America/New_York', '纽约'], ['America/Los_Angeles', '洛杉矶']]}
+        />
+        <SettingsSelect
+          id="time-date-format"
+          label="日期格式"
+          description="仅在显示日期时生效。"
+          ariaLabel="日期格式"
+          disabled={timeSettings.settingsDisabled || timeSettings.displayMode === 'time'}
+          onValueChange={(value) => {
+            if (value) dispatchNewtabTimeSettingFieldChange('dateFormat', value)
+          }}
+          portalContainer={panelElement}
+          value={timeSettings.dateFormat}
+          options={[['year-month-day-weekday', '2026.05.01 周五'], ['chinese-date-weekday', '2026年5月1日 周五'], ['month-day-weekday', '05.01 周五'], ['weekday-month-day', '周五 05/01'], ['weekday-day-month', '周五 01/05'], ['year-month-day', '2026.05.01']]}
+        />
         <SwitchRow
           id="time-show-seconds"
           title="显示秒数"
@@ -864,8 +922,33 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
           disabled={timeSettings.switchesDisabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
         />
-        <SettingsSelect id="time-density" label="布局密度" description="切换时间模块的排版结构，不改变字号。" ariaLabel="时间布局密度" portalContainer={panelElement} options={[['compact', '极简单行'], ['balanced', '平衡胶囊'], ['comfortable', '独立卡片']]} />
-        <SliderRow id="time-clock-size" label="字号" valueId="time-clock-size-value" value="100%" min="70" max="140" defaultValue="100" ariaLabel="时间字号" description="只影响时间和日期，不改变搜索和书签区域。" />
+        <SettingsSelect
+          id="time-density"
+          label="布局密度"
+          description="切换时间模块的排版结构，不改变字号。"
+          ariaLabel="时间布局密度"
+          disabled={timeSettings.settingsDisabled}
+          onValueChange={(value) => {
+            if (value) dispatchNewtabTimeSettingFieldChange('density', value)
+          }}
+          portalContainer={panelElement}
+          value={timeSettings.density}
+          options={[['compact', '极简单行'], ['balanced', '平衡胶囊'], ['comfortable', '独立卡片']]}
+        />
+        <SliderRow
+          id="time-clock-size"
+          label="字号"
+          valueId="time-clock-size-value"
+          value={`${timeSettings.clockSize}%`}
+          min="70"
+          max="140"
+          defaultValue="100"
+          ariaLabel="时间字号"
+          description="只影响时间和日期，不改变搜索和书签区域。"
+          disabled={timeSettings.settingsDisabled}
+          onValueChange={(value) => dispatchNewtabTimeSettingFieldChange('clockSize', value)}
+          sliderValue={timeSettings.clockSize}
+        />
       </Surface>
     </section>
   )
