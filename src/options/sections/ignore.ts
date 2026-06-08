@@ -5,11 +5,7 @@ import {
   createEmptyIgnoreRules
 } from '../shared-options/state.js'
 import { dom } from '../shared-options/dom.js'
-import {
-  renderIgnoreRulesIsland,
-  renderIgnoreRulesSummaryIsland,
-  type IgnoreRulesSummaryState
-} from '../components/IgnoreRulesIsland.js'
+import { renderIgnoreRulesPanelIsland } from '../components/IgnoreRulesIsland.js'
 
 export function normalizeIgnoreRules(rawRules) {
   const normalized = createEmptyIgnoreRules()
@@ -120,46 +116,18 @@ export function matchesIgnoreRules(result) {
 }
 
 export function renderIgnoreSection() {
-  if (!dom.ignoreSummary || !dom.ignoreBookmarkRules) {
+  if (!dom.ignoreRules) {
     return
   }
 
-  const summaryState: IgnoreRulesSummaryState = {
-    bookmarkCount: managerState.ignoreRules.bookmarks.length,
-    domainCount: managerState.ignoreRules.domains.length,
-    folderCount: managerState.ignoreRules.folders.length
-  }
-
-  renderIgnoreRulesSummaryIsland(dom.ignoreSummary, summaryState)
-  renderIgnoreRuleList(dom.ignoreBookmarkRules, managerState.ignoreRules.bookmarks, 'bookmark')
-  renderIgnoreRuleList(dom.ignoreDomainRules, managerState.ignoreRules.domains, 'domain')
-  renderIgnoreRuleList(dom.ignoreFolderRules, managerState.ignoreRules.folders, 'folder')
+  renderIgnoreRulesPanelIsland(dom.ignoreRules, {
+    bookmarks: managerState.ignoreRules.bookmarks,
+    domains: managerState.ignoreRules.domains,
+    folders: managerState.ignoreRules.folders
+  })
 }
 
-function renderIgnoreRuleList(container, rules, kind) {
-  if (!container) {
-    return
-  }
-
-  renderIgnoreRulesIsland(container, kind, rules)
-}
-
-export function handleIgnoreRulesClick(event, callbacks) {
-  const removeButton = event.target.closest('[data-ignore-remove]')
-  if (!removeButton) {
-    return
-  }
-
-  const kind = String(removeButton.getAttribute('data-ignore-remove') || '').trim()
-  const ruleId = String(removeButton.getAttribute('data-ignore-id') || '').trim()
-  if (!kind || !ruleId) {
-    return
-  }
-
-  removeIgnoreRule(kind, ruleId, callbacks)
-}
-
-async function removeIgnoreRule(kind, ruleId, callbacks) {
+export async function removeIgnoreRule(kind, ruleId, callbacks) {
   if (kind === 'bookmark') {
     managerState.ignoreRules.bookmarks = managerState.ignoreRules.bookmarks.filter((rule) => {
       return String(rule.bookmarkId) !== ruleId

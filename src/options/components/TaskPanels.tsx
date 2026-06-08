@@ -245,46 +245,7 @@ export function IgnoreRulesPanel() {
         </div>
       </div>
 
-      <div id="ignore-summary" />
-
-      <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>按书签忽略</strong>
-            <p className="detect-results-subtitle">仅压制指定书签本身的异常提示。</p>
-          </div>
-          <Button id="ignore-clear-bookmarks" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空按书签忽略规则">清空本类</Button>
-        </div>
-        <div id="ignore-bookmark-rules" className="detect-results">
-          <div className="detect-empty">暂无按书签忽略的规则。</div>
-        </div>
-      </div>
-
-      <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>按域名忽略</strong>
-            <p className="detect-results-subtitle">同一域名下的异常提示会被压制。</p>
-          </div>
-          <Button id="ignore-clear-domains" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空按域名忽略规则">清空本类</Button>
-        </div>
-        <div id="ignore-domain-rules" className="detect-results">
-          <div className="detect-empty">暂无按域名忽略的规则。</div>
-        </div>
-      </div>
-
-      <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>按文件夹忽略</strong>
-            <p className="detect-results-subtitle">命中该文件夹及其子层级的异常提示会被压制。</p>
-          </div>
-          <Button id="ignore-clear-folders" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空按文件夹忽略规则">清空本类</Button>
-        </div>
-        <div id="ignore-folder-rules" className="detect-results">
-          <div className="detect-empty">暂无按文件夹忽略的规则。</div>
-        </div>
-      </div>
+      <div id="ignore-rules" />
     </section>
   )
 }

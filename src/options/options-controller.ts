@@ -159,7 +159,7 @@ import {
   saveIgnoreRules,
   matchesIgnoreRules,
   renderIgnoreSection,
-  handleIgnoreRulesClick,
+  removeIgnoreRule,
   clearIgnoreRules
 } from './sections/ignore.js'
 import {
@@ -302,6 +302,10 @@ import {
   DUPLICATE_ACTION_EVENT,
   type DuplicateActionDetail
 } from './components/duplicate-events.js'
+import {
+  IGNORE_RULE_ACTION_EVENT,
+  type IgnoreRuleActionDetail
+} from './components/ignore-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -426,6 +430,14 @@ const folderCleanupCallbacks = {
   renderAvailabilitySection,
   hydrateAvailabilityCatalog,
   confirm: requestConfirmation
+}
+
+const ignoreCallbacks = {
+  confirm: requestConfirmation,
+  onIgnoreRulesChanged() {
+    repartitionAvailabilityResultsByIgnoreRules()
+    renderAvailabilitySection()
+  }
 }
 
 let optionsControllerStarted = false
@@ -1034,15 +1046,6 @@ function scrollToSectionAnchor() {
 
 
 function bindEvents() {
-  const ignoreCallbacks = {
-    confirm: requestConfirmation,
-    onIgnoreRulesChanged() {
-      repartitionAvailabilityResultsByIgnoreRules()
-      renderAvailabilitySection()
-    }
-  }
-
-
   document.addEventListener('click', handleSectionNavigationClick)
   document.addEventListener('click', handleEmptyStateCta)
   dom.availabilityScopeTrigger?.addEventListener('click', () => openScopeModal('availability'))
@@ -1206,12 +1209,7 @@ function bindEvents() {
     handleFolderCleanupPreviewClick(event, folderCleanupCallbacks)
     void handleFolderCleanupClick(event, folderCleanupCallbacks)
   })
-  dom.ignoreBookmarkRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
-  dom.ignoreDomainRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
-  dom.ignoreFolderRules?.addEventListener('click', (event) => handleIgnoreRulesClick(event, ignoreCallbacks))
-  dom.ignoreClearBookmarks?.addEventListener('click', () => clearIgnoreRules('bookmark', ignoreCallbacks))
-  dom.ignoreClearDomains?.addEventListener('click', () => clearIgnoreRules('domain', ignoreCallbacks))
-  dom.ignoreClearFolders?.addEventListener('click', () => clearIgnoreRules('folder', ignoreCallbacks))
+  window.addEventListener(IGNORE_RULE_ACTION_EVENT, handleIgnoreRuleAction)
   dom.recycleResults?.addEventListener('click', (event) => handleRecycleResultsClick(event, recycleCallbacks))
   window.addEventListener(RECYCLE_ACTION_EVENT, handleRecycleAction)
   dom.deleteFailedBookmarks?.addEventListener('click', openDeleteModal)
@@ -4674,6 +4672,17 @@ function handleDuplicateAction(event: Event): void {
   }
   if (detail?.action === 'strategy') {
     applyDuplicateStrategy(detail.strategy, duplicatesCallbacks)
+  }
+}
+
+function handleIgnoreRuleAction(event: Event): void {
+  const detail = (event as CustomEvent<IgnoreRuleActionDetail>).detail
+  if (detail?.action === 'clear') {
+    void clearIgnoreRules(detail.kind, ignoreCallbacks)
+    return
+  }
+  if (detail?.action === 'remove' && detail.ruleId) {
+    void removeIgnoreRule(detail.kind, detail.ruleId, ignoreCallbacks)
   }
 }
 

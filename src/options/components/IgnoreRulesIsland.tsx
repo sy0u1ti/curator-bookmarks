@@ -5,6 +5,7 @@ import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/primitives/Button.js'
 import { Card } from '../../ui/primitives/Card.js'
 import { ThemeProvider } from '../../ui/theme/ThemeProvider.js'
+import { dispatchIgnoreRuleAction } from './ignore-events.js'
 
 export type IgnoreRuleKind = 'bookmark' | 'domain' | 'folder'
 
@@ -32,6 +33,12 @@ export type IgnoreRuleViewModel =
   | DomainIgnoreRuleViewModel
   | FolderIgnoreRuleViewModel
 
+export interface IgnoreRulesState {
+  bookmarks: BookmarkIgnoreRuleViewModel[]
+  domains: DomainIgnoreRuleViewModel[]
+  folders: FolderIgnoreRuleViewModel[]
+}
+
 const roots = new WeakMap<Element, Root>()
 
 export function renderIgnoreRulesIsland(
@@ -53,6 +60,13 @@ export function renderIgnoreRulesSummaryIsland(
   state: IgnoreRulesSummaryState
 ): void {
   renderIgnoreNode(container, <IgnoreRulesSummary state={state} />)
+}
+
+export function renderIgnoreRulesPanelIsland(
+  container: Element,
+  state: IgnoreRulesState
+): void {
+  renderIgnoreNode(container, <IgnoreRulesPanelControls state={state} />)
 }
 
 function renderIgnoreNode(container: Element, node: ReactNode): void {
@@ -87,6 +101,82 @@ function IgnoreRulesSummary({ state }: { state: IgnoreRulesSummaryState }) {
         </Card>
       ))}
     </div>
+  )
+}
+
+function IgnoreRulesPanelControls({ state }: { state: IgnoreRulesState }) {
+  const summaryState: IgnoreRulesSummaryState = {
+    bookmarkCount: state.bookmarks.length,
+    domainCount: state.domains.length,
+    folderCount: state.folders.length
+  }
+  const groups = [
+    {
+      clearId: 'ignore-clear-bookmarks',
+      clearLabel: '清空按书签忽略规则',
+      detail: '仅压制指定书签本身的异常提示。',
+      kind: 'bookmark',
+      listId: 'ignore-bookmark-rules',
+      rules: state.bookmarks,
+      title: '按书签忽略'
+    },
+    {
+      clearId: 'ignore-clear-domains',
+      clearLabel: '清空按域名忽略规则',
+      detail: '同一域名下的异常提示会被压制。',
+      kind: 'domain',
+      listId: 'ignore-domain-rules',
+      rules: state.domains,
+      title: '按域名忽略'
+    },
+    {
+      clearId: 'ignore-clear-folders',
+      clearLabel: '清空按文件夹忽略规则',
+      detail: '命中该文件夹及其子层级的异常提示会被压制。',
+      kind: 'folder',
+      listId: 'ignore-folder-rules',
+      rules: state.folders,
+      title: '按文件夹忽略'
+    }
+  ] satisfies Array<{
+    clearId: string
+    clearLabel: string
+    detail: string
+    kind: IgnoreRuleKind
+    listId: string
+    rules: IgnoreRuleViewModel[]
+    title: string
+  }>
+
+  return (
+    <>
+      <IgnoreRulesSummary state={summaryState} />
+      {groups.map((group) => (
+        <div className="options-group detect-results-group" key={group.kind}>
+          <div className="detect-results-header">
+            <div>
+              <strong>{group.title}</strong>
+              <p className="detect-results-subtitle">{group.detail}</p>
+            </div>
+            <Button
+              id={group.clearId}
+              className="options-button secondary small"
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label={group.clearLabel}
+              disabled={group.rules.length === 0}
+              onClick={() => dispatchIgnoreRuleAction({ action: 'clear', kind: group.kind })}
+            >
+              清空本类
+            </Button>
+          </div>
+          <div id={group.listId} className="detect-results">
+            <IgnoreRuleList kind={group.kind} rules={group.rules} />
+          </div>
+        </div>
+      ))}
+    </>
   )
 }
 
@@ -138,6 +228,7 @@ function IgnoreRuleCard({
             data-ignore-remove={kind}
             data-ignore-id={ruleId}
             aria-label={deleteLabel}
+            onClick={() => dispatchIgnoreRuleAction({ action: 'remove', kind, ruleId })}
             unstyled
           >
             删除规则
