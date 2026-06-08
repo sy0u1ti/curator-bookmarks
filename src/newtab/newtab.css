@@ -777,6 +777,10 @@ body.background-mask-enabled .newtab-background-mask {
   line-height: 1.3;
 }
 
+.newtab-search-section-label:empty {
+  display: none;
+}
+
 .newtab-search-chips,
 .newtab-saved-search-list {
   display: flex;

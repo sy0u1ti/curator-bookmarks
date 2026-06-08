@@ -560,6 +560,10 @@ export function renderNewTabSearchSuggestionsIsland(
   renderIsland(container, <SearchSuggestions suggestions={suggestions} />)
 }
 
+export function renderNewTabSearchSectionLabelIsland(container: HTMLElement, label: string): void {
+  renderIsland(container, <SearchSectionLabel label={label} />)
+}
+
 export function renderNewTabSearchHintIsland(container: HTMLElement, state: SearchHintState): void {
   renderIsland(container, <SearchHint state={state} />)
 }
@@ -755,7 +759,7 @@ function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
       </form>
       <div id="newtab-search-suggestions-panel" className="newtab-search-suggestions-panel hidden">
         <div className="newtab-search-chips" aria-label="当前搜索条件" />
-        <div className="newtab-search-section-label">书签匹配</div>
+        <div className="newtab-search-section-label" />
         <div
           id="newtab-search-suggestions"
           className="newtab-search-suggestions"
@@ -1069,6 +1073,10 @@ function SearchSuggestions({ suggestions }: { suggestions: SearchSuggestionViewM
       ))}
     </>
   )
+}
+
+function SearchSectionLabel({ label }: { label: string }) {
+  return label ? <>{label}</> : null
 }
 
 function SearchHint({ state }: { state: SearchHintState }) {

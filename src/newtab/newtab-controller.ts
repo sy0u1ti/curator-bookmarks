@@ -215,6 +215,7 @@ import {
   renderNewTabSavedSearchesIsland,
   renderNewTabSearchChipsIsland,
   renderNewTabSearchHintIsland,
+  renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
   renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
@@ -5721,8 +5722,7 @@ function createSearchWidget(): HTMLElement | null {
       show: false
     })
     suggestions.hidden = false
-    suggestionsHeading.textContent = '书签匹配'
-    suggestionsHeading.hidden = false
+    renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
     renderNewTabSearchHintIsland(suggestionsHint, { type: 'empty' })
     suggestionsPanel.classList.add('hidden')
     input.setAttribute('aria-expanded', 'false')
@@ -5757,8 +5757,10 @@ function createSearchWidget(): HTMLElement | null {
       }
 
       if (state.searchSettings.webSearchEnabled === false) {
-        suggestionsHeading.textContent = advancedSearch ? '语法搜索匹配' : '关键词书签匹配'
-        suggestionsHeading.hidden = false
+        renderNewTabSearchSectionLabelIsland(
+          suggestionsHeading,
+          advancedSearch ? '语法搜索匹配' : '关键词书签匹配'
+        )
         renderNewTabSearchHintIsland(suggestionsHint, {
           type: 'text',
           text: '未找到本地书签。网页搜索已关闭，可在设置中重新启用。'
@@ -5768,8 +5770,7 @@ function createSearchWidget(): HTMLElement | null {
         return
       }
 
-      suggestionsHeading.textContent = '网页搜索'
-      suggestionsHeading.hidden = false
+      renderNewTabSearchSectionLabelIsland(suggestionsHeading, '网页搜索')
       renderNewTabSearchHintIsland(suggestionsHint, createSearchWebFallbackState(trimmedQuery))
       suggestionsPanel.classList.remove('hidden')
       input.setAttribute('aria-expanded', 'true')
@@ -5777,11 +5778,14 @@ function createSearchWidget(): HTMLElement | null {
     }
 
     suggestions.hidden = false
-    suggestionsHeading.textContent = searchSuggestions.some(isCommandSuggestion)
-      ? '书签与命令'
-      : advancedSearch
-        ? '语法搜索匹配'
-        : '关键词书签匹配'
+    renderNewTabSearchSectionLabelIsland(
+      suggestionsHeading,
+      searchSuggestions.some(isCommandSuggestion)
+        ? '书签与命令'
+        : advancedSearch
+          ? '语法搜索匹配'
+          : '关键词书签匹配'
+    )
     activeSuggestionIndex = preserveActive && previousActiveIndex >= 0
       ? Math.min(previousActiveIndex, searchSuggestions.length - 1)
       : -1
@@ -5821,7 +5825,6 @@ function createSearchWidget(): HTMLElement | null {
       renderedSuggestionKeys = nextSuggestionKeys
     }
     suggestionsPanel.classList.remove('hidden')
-    suggestionsHeading.hidden = false
     renderNewTabSearchHintIsland(suggestionsHint, {
       type: 'text',
       text: getSearchSuggestionHintText()
@@ -5919,8 +5922,7 @@ function createSearchWidget(): HTMLElement | null {
     renderNewTabSearchSuggestionsIsland(suggestions, [])
     renderedSuggestionKeys = []
     suggestions.hidden = true
-    suggestionsHeading.textContent = '书签匹配'
-    suggestionsHeading.hidden = false
+    renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
     renderNewTabSearchHintIsland(suggestionsHint, {
       type: 'text',
       text: '正在准备索引…'
