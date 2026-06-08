@@ -679,6 +679,14 @@ export function renderSpeedDialPanelIsland(container: HTMLElement, state: SpeedD
 
 export function createBookmarkTileIslandElement(state: BookmarkTileViewModel): HTMLAnchorElement {
   const tile = document.createElement('a')
+  renderBookmarkTileIslandElement(tile, state)
+  return tile
+}
+
+export function renderBookmarkTileIslandElement(
+  tile: HTMLAnchorElement,
+  state: BookmarkTileViewModel
+): void {
   tile.className = state.dragging ? 'bookmark-tile dragging' : 'bookmark-tile'
   tile.href = state.url
   tile.title = state.title
@@ -686,7 +694,6 @@ export function createBookmarkTileIslandElement(state: BookmarkTileViewModel): H
   tile.dataset.bookmarkId = state.id
   tile.dataset.folderId = state.folderId
   renderIsland(tile, <BookmarkTile state={state} />)
-  return tile
 }
 
 export function appendBookmarkTileIslandElements(

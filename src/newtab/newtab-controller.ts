@@ -216,6 +216,7 @@ import {
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
   renderBookmarkGridPlaceholderIslandElement,
+  renderBookmarkTileIslandElement,
   renderClockWidgetStateIsland,
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
@@ -3844,43 +3845,32 @@ function patchBookmarkInPlace(
     node.url = changeInfo.url
   }
 
-  const titleForDisplay = String(node.title || '').trim() || String(node.url || '')
+  let updatedTiles = 0
   const tiles = document.querySelectorAll<HTMLAnchorElement>(
     `.bookmark-tile[data-bookmark-id="${CSS.escape(bookmarkId)}"]`
   )
   tiles.forEach((tile) => {
-    if (changeInfo.url !== undefined) {
-      tile.href = changeInfo.url
+    const folderId = String(tile.dataset.folderId || node.parentId || '').trim()
+    renderBookmarkTileIslandElement(tile, createBookmarkTileViewModel(node, folderId))
+    if (!state.customIcons[bookmarkId]) {
+      applyCachedFaviconAccent(tile, bookmarkId, String(node.url || ''))
     }
-    if (changeInfo.title !== undefined) {
-      const label = tile.querySelector<HTMLElement>('.bookmark-title')
-      if (label) {
-        label.textContent = titleForDisplay
-      }
-      const fallback = tile.querySelector<HTMLElement>('.bookmark-fallback')
-      if (fallback) {
-        fallback.textContent = getFallbackLabel(titleForDisplay)
-      }
-    }
+    updatedTiles += 1
   })
 
   const speedDialCards = document.querySelectorAll<HTMLAnchorElement>(
     `.newtab-speed-dial-card[data-speed-dial-bookmark-id="${CSS.escape(bookmarkId)}"]`
   )
-  speedDialCards.forEach((card) => {
-    if (changeInfo.url !== undefined) {
-      card.href = changeInfo.url
+  const updatedSpeedDial = speedDialCards.length > 0
+  if (updatedSpeedDial) {
+    const speedDialPanel = document.querySelector<HTMLElement>('.newtab-speed-dial')
+    if (speedDialPanel) {
+      hydrateSpeedDialPanel(speedDialPanel)
     }
-    if (changeInfo.title !== undefined) {
-      const strong = card.querySelector<HTMLElement>('.newtab-speed-dial-copy > strong')
-      if (strong) {
-        strong.textContent = titleForDisplay
-      }
-    }
-  })
+  }
 
   invalidateQuickAccessCache()
-  return tiles.length > 0 || speedDialCards.length > 0
+  return updatedTiles > 0 || updatedSpeedDial
 }
 
 function invalidateQuickAccessCache(): void {
@@ -7767,12 +7757,18 @@ function bindBookmarkNavigation(
   link: HTMLAnchorElement,
   bookmark: chrome.bookmarks.BookmarkTreeNode
 ): void {
-  const url = String(bookmark.url || '').trim()
-  if (!url) {
+  const bookmarkId = String(bookmark.id || link.dataset.bookmarkId || '').trim()
+  if (!bookmarkId || !String(bookmark.url || '').trim()) {
     return
   }
 
   link.addEventListener('click', (event) => {
+    const currentBookmark = state.allBookmarkMap.get(bookmarkId) || getBookmarkById(bookmarkId) || bookmark
+    const url = String(currentBookmark.url || link.getAttribute('href') || link.href || '').trim()
+    if (!url) {
+      return
+    }
+
     if (
       state.dragSuppressClick ||
       state.speedDialDragSuppressClick ||
@@ -7785,7 +7781,7 @@ function bindBookmarkNavigation(
     }
 
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
-      void recordBookmarkOpen(bookmark)
+      void recordBookmarkOpen(currentBookmark)
       return
     }
 
@@ -7795,11 +7791,11 @@ function bindBookmarkNavigation(
       if (opened) {
         opened.opener = null
       }
-      void recordBookmarkOpen(bookmark)
+      void recordBookmarkOpen(currentBookmark)
       return
     }
 
-    void recordBookmarkOpen(bookmark)
+    void recordBookmarkOpen(currentBookmark)
     window.location.assign(url)
   })
 }
