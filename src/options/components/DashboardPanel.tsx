@@ -235,10 +235,7 @@ export function DashboardPanel() {
                     <span id="dashboard-tag-editor-meta" />
                   </div>
                 </div>
-                <label className="dashboard-tag-editor-field">
-                  <span>标签</span>
-                  <Textarea id="dashboard-tag-editor-input" rows={5} placeholder="用逗号、顿号或换行分隔标签" />
-                </label>
+                <div id="dashboard-tag-editor-field" />
                 <p id="dashboard-tag-editor-help" className="dashboard-tag-editor-help">每行一个标签，也可以用逗号、顿号分隔；保存后会自动去重。</p>
                 <p id="dashboard-tag-editor-status" className="detect-results-subtitle dashboard-tag-editor-status" role="status" aria-live="polite" aria-atomic="true" />
                 <div id="dashboard-tag-editor-actions" className="dashboard-tag-editor-actions" />

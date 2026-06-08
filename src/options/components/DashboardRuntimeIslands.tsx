@@ -11,6 +11,7 @@ import {
   PopoverPortal,
   PopoverPositioner,
   PopoverRoot,
+  Textarea,
   type InlineMenuAction,
   type IconName
 } from '../../ui'
@@ -115,6 +116,11 @@ export interface DashboardTagEditorActionsState {
   regenerateAiDisabled: boolean
   saveBusy: boolean
   saveDisabled: boolean
+}
+
+export interface DashboardTagEditorFieldState {
+  disabled: boolean
+  value: string
 }
 
 export interface DashboardCardFaviconViewModel {
@@ -251,6 +257,13 @@ export function renderDashboardTagEditorActionsIsland(
   state: DashboardTagEditorActionsState
 ): void {
   renderIsland(container, <DashboardTagEditorActions state={state} />)
+}
+
+export function renderDashboardTagEditorFieldIsland(
+  container: Element,
+  state: DashboardTagEditorFieldState
+): void {
+  renderIsland(container, <DashboardTagEditorField state={state} />)
 }
 
 export function createDashboardCardIslandElement(state: DashboardCardViewModel): HTMLElement {
@@ -736,6 +749,22 @@ function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActions
         />
       </Button>
     </>
+  )
+}
+
+function DashboardTagEditorField({ state }: { state: DashboardTagEditorFieldState }) {
+  return (
+    <label className="dashboard-tag-editor-field">
+      <span>标签</span>
+      <Textarea
+        id="dashboard-tag-editor-input"
+        key={state.value}
+        defaultValue={state.value}
+        disabled={state.disabled}
+        rows={5}
+        placeholder="用逗号、顿号或换行分隔标签"
+      />
+    </label>
   )
 }
 

@@ -82,6 +82,7 @@ import {
   renderDashboardSearchControlsIsland,
   renderDashboardSelectionBarIsland,
   renderDashboardTagEditorActionsIsland,
+  renderDashboardTagEditorFieldIsland,
   renderDashboardTagEditorMetaIsland,
   renderDashboardTagEditorStatusIsland,
   renderDashboardTagEditorTitleIsland,
@@ -95,7 +96,8 @@ import {
   type DashboardFolderSidebarItemViewModel,
   type DashboardLoadingLabelState,
   type DashboardSearchChipViewModel,
-  type DashboardTagEditorActionsState
+  type DashboardTagEditorActionsState,
+  type DashboardTagEditorFieldState
 } from '../components/DashboardRuntimeIslands.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
 import type { NaturalSearchPlan, NaturalSearchResultSet } from '../../popup/natural-search.js'
@@ -5002,15 +5004,29 @@ function renderDashboardTagEditor(existingModel?: DashboardModel): void {
 
   dom.dashboardTagEditor.classList.remove('hidden')
   dom.dashboardTagEditor.setAttribute('aria-hidden', 'false')
-  dom.dashboardTagEditorInput.value = dashboardState.tagEditorDraft
-  dom.dashboardTagEditorInput.disabled = dashboardState.tagEditorSaving
   const statusText = dashboardState.tagEditorStatus || '用逗号、顿号或换行分隔标签。'
 
   renderDashboardTagEditorTitleIsland(dom.dashboardTagEditorTitle, item.title || '未命名书签')
   renderDashboardTagEditorMetaIsland(dom.dashboardTagEditorMeta, `${displayUrl(item.url)} · ${item.path || '未归档路径'}`)
+  renderDashboardTagEditorField()
   renderDashboardTagEditorStatusIsland(dom.dashboardTagEditorStatus, statusText)
   renderDashboardTagEditorActions()
   positionDashboardTagEditor(bookmarkId)
+}
+
+function renderDashboardTagEditorField(): void {
+  if (!dom.dashboardTagEditorField) {
+    return
+  }
+
+  const state: DashboardTagEditorFieldState = {
+    disabled: dashboardState.tagEditorSaving,
+    value: dashboardState.tagEditorDraft
+  }
+  renderDashboardTagEditorFieldIsland(dom.dashboardTagEditorField, state)
+  dom.dashboardTagEditorInput = dom.dashboardTagEditorField.querySelector<HTMLTextAreaElement>(
+    '#dashboard-tag-editor-input'
+  ) as unknown as typeof dom.dashboardTagEditorInput
 }
 
 function renderDashboardTagEditorActions(): void {

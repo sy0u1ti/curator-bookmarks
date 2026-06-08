@@ -47,6 +47,7 @@ export function cacheDom() {
   dom.dashboardTagEditor = byId('dashboard-tag-editor')
   dom.dashboardTagEditorTitle = byId('dashboard-tag-editor-title')
   dom.dashboardTagEditorMeta = byId('dashboard-tag-editor-meta')
+  dom.dashboardTagEditorField = byId('dashboard-tag-editor-field')
   dom.dashboardTagEditorInput = byId('dashboard-tag-editor-input')
   dom.dashboardTagEditorStatus = byId('dashboard-tag-editor-status')
   dom.dashboardTagEditorActions = byId('dashboard-tag-editor-actions')
