@@ -217,6 +217,7 @@ import {
   renderNewTabSearchHintIsland,
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
+  renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
   renderSearchWidgetPanelStateIsland,
   renderSpeedDialPanelIsland,
@@ -5553,8 +5554,6 @@ function createSearchWidget(): HTMLElement | null {
   const clearButton = slot.querySelector<HTMLButtonElement>('.newtab-search-clear')
   const naturalButton = slot.querySelector<HTMLButtonElement>('.newtab-search-natural')
   const engineButton = slot.querySelector<HTMLButtonElement>('.newtab-search-engine')
-  const separator = slot.querySelector<HTMLElement>('.newtab-search-separator')
-  const submitButton = slot.querySelector<HTMLButtonElement>('.newtab-search-submit')
   const suggestions = slot.querySelector<HTMLElement>('#newtab-search-suggestions')
   const suggestionsHeading = slot.querySelector<HTMLElement>('.newtab-search-section-label')
   const suggestionsHint = slot.querySelector<HTMLElement>('.newtab-search-hint')
@@ -5566,8 +5565,6 @@ function createSearchWidget(): HTMLElement | null {
     !clearButton ||
     !naturalButton ||
     !engineButton ||
-    !separator ||
-    !submitButton ||
     !suggestions ||
     !suggestionsHeading ||
     !suggestionsHint ||
@@ -5744,7 +5741,7 @@ function createSearchWidget(): HTMLElement | null {
     const advancedSearch = isNewTabAdvancedSearchQuery(trimmedQuery)
     renderNewTabSearchChips(searchChips, trimmedQuery)
     renderNewTabSavedSearches(savedSearches, trimmedQuery, input, () => {
-      syncSearchInputActions(input, clearButton, separator, submitButton)
+      syncSearchInputActions(slot, input)
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
     searchSuggestions = suggestionList
@@ -5794,7 +5791,7 @@ function createSearchWidget(): HTMLElement | null {
 
     const onSelectSuggestion = (selectedSuggestion: NewTabSearchSuggestion) => {
       input.value = selectedSuggestion.title
-      syncSearchInputActions(input, clearButton, separator, submitButton)
+      syncSearchInputActions(slot, input)
       hideSuggestions()
       openSearchSuggestion(selectedSuggestion)
     }
@@ -5902,7 +5899,7 @@ function createSearchWidget(): HTMLElement | null {
     activeSuggestionIndex = -1
     renderNewTabSearchChips(searchChips, trimmedQuery)
     renderNewTabSavedSearches(savedSearches, trimmedQuery, input, () => {
-      syncSearchInputActions(input, clearButton, separator, submitButton)
+      syncSearchInputActions(slot, input)
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
     renderNewTabSearchSuggestionsIsland(suggestions, [])
@@ -5932,7 +5929,7 @@ function createSearchWidget(): HTMLElement | null {
   }
 
   input.addEventListener('input', () => {
-    syncSearchInputActions(input, clearButton, separator, submitButton)
+    syncSearchInputActions(slot, input)
     scheduleSuggestionsRender()
   })
   input.addEventListener('focus', () => {
@@ -5950,7 +5947,7 @@ function createSearchWidget(): HTMLElement | null {
       if (suggestion) {
         event.preventDefault()
         input.value = suggestion.title
-        syncSearchInputActions(input, clearButton, separator, submitButton)
+        syncSearchInputActions(slot, input)
         hideSuggestions()
         openSearchSuggestion(suggestion)
       }
@@ -5969,7 +5966,7 @@ function createSearchWidget(): HTMLElement | null {
 
     if (input.value) {
       input.value = ''
-      syncSearchInputActions(input, clearButton, separator, submitButton)
+      syncSearchInputActions(slot, input)
       return
     }
 
@@ -5977,7 +5974,7 @@ function createSearchWidget(): HTMLElement | null {
   })
   clearButton.addEventListener('click', () => {
     input.value = ''
-    syncSearchInputActions(input, clearButton, separator, submitButton)
+    syncSearchInputActions(slot, input)
     hideSuggestions()
     input.focus()
   })
@@ -6038,7 +6035,7 @@ function createSearchWidget(): HTMLElement | null {
   updateEngineButton()
   updateNaturalButton()
   renderSearchWidgetPanelState()
-  syncSearchInputActions(input, clearButton, separator, submitButton)
+  syncSearchInputActions(slot, input)
   return slot
 
   function createSearchWebFallbackState(query: string): SearchHintState {
@@ -6313,17 +6310,11 @@ function truncateNewTabSearchText(value: unknown, limit = 60): string {
   return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
 }
 
-function syncSearchInputActions(
-  input: HTMLInputElement,
-  clearButton: HTMLButtonElement,
-  separator: HTMLElement,
-  submitButton: HTMLButtonElement
-): void {
-  const hasValue = Boolean(input.value.trim())
-  clearButton.classList.toggle('hidden', !input.value)
-  separator.classList.toggle('hidden', !input.value)
-  submitButton.disabled = !hasValue
-  submitButton.setAttribute('aria-disabled', String(!hasValue))
+function syncSearchInputActions(slot: HTMLElement, input: HTMLInputElement): void {
+  renderSearchWidgetActionStateIsland(slot, {
+    canSubmit: Boolean(input.value.trim()),
+    hasInputValue: Boolean(input.value)
+  })
 }
 
 function mergeNewTabCommandSuggestions(
@@ -12280,3 +12271,4 @@ function formatNewTabLocalDate(value: unknown): string {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+

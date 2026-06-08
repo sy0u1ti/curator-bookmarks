@@ -18,6 +18,7 @@ import type { SpeedDialEmptyState } from '../speed-dial-types'
 import type { NewTabTimeSettings } from '../time-settings'
 
 const roots = new WeakMap<Element, Root>()
+const searchWidgetActionStores = new WeakMap<Element, SearchWidgetActionStore>()
 const searchWidgetButtonStores = new WeakMap<Element, SearchWidgetButtonStore>()
 const searchWidgetPanelStores = new WeakMap<Element, SearchWidgetPanelStore>()
 
@@ -251,6 +252,17 @@ export interface SearchWidgetPanelState {
   suggestionsVisible: boolean
 }
 
+export interface SearchWidgetActionState {
+  canSubmit: boolean
+  hasInputValue: boolean
+}
+
+interface SearchWidgetActionStore {
+  getSnapshot: () => SearchWidgetActionState
+  setState: (state: SearchWidgetActionState) => void
+  subscribe: (listener: () => void) => () => void
+}
+
 interface SearchWidgetButtonStore {
   getSnapshot: () => SearchWidgetButtonStates
   setState: (state: SearchWidgetButtonStates) => void
@@ -417,9 +429,17 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     engine: state.engine,
     natural: state.natural
   })
+  const actionStore = getSearchWidgetActionStore(slot, {
+    canSubmit: false,
+    hasInputValue: false
+  })
   const panelStore = getSearchWidgetPanelStore(slot, {
     panelVisible: false,
     suggestionsVisible: true
+  })
+  actionStore.setState({
+    canSubmit: false,
+    hasInputValue: false
   })
   buttonStore.setState({
     engine: state.engine,
@@ -429,8 +449,25 @@ export function createSearchWidgetIslandElement(state: SearchWidgetShellState): 
     panelVisible: false,
     suggestionsVisible: true
   })
-  renderIsland(slot, <SearchWidgetShell buttonStore={buttonStore} panelStore={panelStore} state={state} />)
+  renderIsland(slot, (
+    <SearchWidgetShell
+      actionStore={actionStore}
+      buttonStore={buttonStore}
+      panelStore={panelStore}
+      state={state}
+    />
+  ))
   return slot
+}
+
+export function renderSearchWidgetActionStateIsland(
+  container: HTMLElement,
+  state: SearchWidgetActionState
+): void {
+  const actionStore = getSearchWidgetActionStore(container, state)
+  flushSync(() => {
+    actionStore.setState(state)
+  })
 }
 
 export function renderSearchWidgetButtonStatesIsland(
@@ -748,6 +785,34 @@ function copyElementPresentationState(source: HTMLElement, target: HTMLElement):
   }
 }
 
+function getSearchWidgetActionStore(
+  host: Element,
+  initialState: SearchWidgetActionState
+): SearchWidgetActionStore {
+  let store = searchWidgetActionStores.get(host)
+  if (store) {
+    return store
+  }
+
+  let currentState = initialState
+  const listeners = new Set<() => void>()
+  store = {
+    getSnapshot: () => currentState,
+    setState: (state) => {
+      currentState = state
+      listeners.forEach((listener) => listener())
+    },
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }
+  }
+  searchWidgetActionStores.set(host, store)
+  return store
+}
+
 function getSearchWidgetButtonStore(
   host: Element,
   initialState: SearchWidgetButtonStates
@@ -804,6 +869,10 @@ function getSearchWidgetPanelStore(
   return store
 }
 
+function useSearchWidgetActionState(store: SearchWidgetActionStore): SearchWidgetActionState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
+}
+
 function useSearchWidgetButtonStates(store: SearchWidgetButtonStore): SearchWidgetButtonStates {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot)
 }
@@ -813,10 +882,12 @@ function useSearchWidgetPanelState(store: SearchWidgetPanelStore): SearchWidgetP
 }
 
 function SearchWidgetShell({
+  actionStore,
   buttonStore,
   panelStore,
   state
 }: {
+  actionStore: SearchWidgetActionStore
   buttonStore: SearchWidgetButtonStore
   panelStore: SearchWidgetPanelStore
   state: SearchWidgetShellState
@@ -850,26 +921,58 @@ function SearchWidgetShell({
           aria-expanded="false"
           unstyled
         />
-        <Button className="newtab-search-clear hidden" type="button" aria-label="清空搜索" unstyled>
-          <Icon name="X" size={14} aria-hidden="true" />
-        </Button>
-        <span className="newtab-search-separator hidden" aria-hidden="true" />
+        <SearchWidgetClearButton actionStore={actionStore} />
+        <SearchWidgetSeparator actionStore={actionStore} />
         <SearchWidgetNaturalButton buttonStore={buttonStore} />
         <SearchWidgetEngineButton buttonStore={buttonStore} />
-        <Button
-          className="newtab-search-submit"
-          type="submit"
-          aria-label="搜索网页"
-          aria-disabled="true"
-          title="搜索网页"
-          disabled
-          unstyled
-        >
-          <Icon name="Search" className="newtab-search-submit-icon" size={14} aria-hidden="true" />
-        </Button>
+        <SearchWidgetSubmitButton actionStore={actionStore} />
       </form>
       <SearchWidgetSuggestionsPanel panelStore={panelStore} />
     </>
+  )
+}
+
+function SearchWidgetClearButton({ actionStore }: { actionStore: SearchWidgetActionStore }) {
+  const { hasInputValue } = useSearchWidgetActionState(actionStore)
+
+  return (
+    <Button
+      className={hasInputValue ? 'newtab-search-clear' : 'newtab-search-clear hidden'}
+      type="button"
+      aria-label="清空搜索"
+      unstyled
+    >
+      <Icon name="X" size={14} aria-hidden="true" />
+    </Button>
+  )
+}
+
+function SearchWidgetSeparator({ actionStore }: { actionStore: SearchWidgetActionStore }) {
+  const { hasInputValue } = useSearchWidgetActionState(actionStore)
+
+  return (
+    <span
+      className={hasInputValue ? 'newtab-search-separator' : 'newtab-search-separator hidden'}
+      aria-hidden="true"
+    />
+  )
+}
+
+function SearchWidgetSubmitButton({ actionStore }: { actionStore: SearchWidgetActionStore }) {
+  const { canSubmit } = useSearchWidgetActionState(actionStore)
+
+  return (
+    <Button
+      className="newtab-search-submit"
+      type="submit"
+      aria-label="搜索网页"
+      aria-disabled={!canSubmit}
+      title="搜索网页"
+      disabled={!canSubmit}
+      unstyled
+    >
+      <Icon name="Search" className="newtab-search-submit-icon" size={14} aria-hidden="true" />
+    </Button>
   )
 }
 
