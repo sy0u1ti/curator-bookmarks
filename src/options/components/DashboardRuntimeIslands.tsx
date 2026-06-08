@@ -87,6 +87,12 @@ export interface DashboardDragPreviewState {
   title: string
 }
 
+export interface DashboardSelectionBarState {
+  canSelectVisible: boolean
+  selectedCount: number
+  selectionActionsDisabled: boolean
+}
+
 export interface DashboardCardFaviconViewModel {
   pageUrl: string
   source: 'cache' | 'chrome'
@@ -184,6 +190,13 @@ export function renderDashboardDragPreviewIsland(
   state: DashboardDragPreviewState | null
 ): void {
   renderIsland(container, state ? <DashboardDragPreview state={state} /> : null)
+}
+
+export function renderDashboardSelectionBarIsland(
+  container: Element,
+  state: DashboardSelectionBarState
+): void {
+  renderIsland(container, <DashboardSelectionBar state={state} />)
 }
 
 export function createDashboardCardIslandElement(state: DashboardCardViewModel): HTMLElement {
@@ -489,6 +502,67 @@ function DashboardDragPreview({ state }: { state: DashboardDragPreviewState }) {
       </span>
       <span>{state.title}</span>
     </>
+  )
+}
+
+function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState }) {
+  return (
+    <div className="detect-results-header">
+      <div>
+        <strong id="dashboard-selection-count">{state.selectedCount} 条已选择</strong>
+        <p className="detect-results-subtitle">所选书签可批量移动到目标文件夹，或删除并移入回收站。</p>
+      </div>
+      <div className="detect-results-actions">
+        <Button
+          id="dashboard-select-visible-top"
+          className="options-button secondary small"
+          size="sm"
+          type="button"
+          data-dashboard-action="select-visible"
+          variant="secondary"
+          aria-label="选择当前可见的 Dashboard 书签"
+          disabled={!state.canSelectVisible}
+        >
+          选择当前可见
+        </Button>
+        <Button
+          id="dashboard-clear-selection"
+          className="options-button secondary small"
+          size="sm"
+          type="button"
+          data-dashboard-action="clear-selection"
+          variant="secondary"
+          aria-label="清空 Dashboard 已选书签"
+          disabled={state.selectionActionsDisabled}
+        >
+          清空选择
+        </Button>
+        <Button
+          id="dashboard-move-selection"
+          className="options-button secondary small"
+          size="sm"
+          type="button"
+          data-dashboard-action="move-selected"
+          variant="secondary"
+          aria-label="批量移动 Dashboard 已选书签"
+          disabled={state.selectionActionsDisabled}
+        >
+          批量移动
+        </Button>
+        <Button
+          id="dashboard-delete-selection"
+          className="options-button danger small"
+          size="sm"
+          type="button"
+          data-dashboard-action="delete-selected"
+          variant="danger"
+          aria-label="批量删除 Dashboard 已选书签"
+          disabled={state.selectionActionsDisabled}
+        >
+          批量删除
+        </Button>
+      </div>
+    </div>
   )
 }
 

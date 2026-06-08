@@ -78,6 +78,7 @@ import {
   renderDashboardFolderSidebarIsland,
   renderDashboardLoadingLabelIsland,
   renderDashboardSearchChipsIsland,
+  renderDashboardSelectionBarIsland,
   renderDashboardTitleIsland,
   renderDashboardVirtualWindowShellIsland,
   replaceDashboardVirtualWindowIslandNodes,
@@ -3346,6 +3347,11 @@ function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
   const shouldHideSelection = selectedCount === 0
   const selectionVisibilityChanged = dom.dashboardSelectionGroup.classList.contains('is-empty') !== shouldHideSelection
   const useCompositeMotion = shouldUseDashboardSelectionCompositeMotion()
+  const state = {
+    canSelectVisible: !availabilityState.deleting && visibleItems.length > 0,
+    selectedCount,
+    selectionActionsDisabled: availabilityState.deleting || selectedCount === 0
+  }
 
   dom.dashboardPanel?.setAttribute(
     'data-dashboard-selection-motion',
@@ -3360,17 +3366,7 @@ function renderDashboardSelectionBar(visibleItems: DashboardItem[]): void {
     dom.dashboardSelectionGroup.classList.remove('hidden')
     dom.dashboardSelectionGroup.classList.toggle('is-empty', shouldHideSelection)
   }
-  dom.dashboardSelectionCount.textContent = `${selectedCount} 条已选择`
-  dom.dashboardSelectVisible.disabled = availabilityState.deleting || visibleItems.length === 0
-  dom.dashboardClearSelection.disabled = availabilityState.deleting || selectedCount === 0
-  dom.dashboardMoveSelection.disabled = availabilityState.deleting || selectedCount === 0
-  dom.dashboardDeleteSelection.disabled = availabilityState.deleting || selectedCount === 0
-
-  dom.dashboardPanel
-    ?.querySelectorAll<HTMLButtonElement>('[data-dashboard-action="select-visible"]')
-    .forEach((button) => {
-      button.disabled = availabilityState.deleting || visibleItems.length === 0
-    })
+  renderDashboardSelectionBarIsland(dom.dashboardSelectionGroup, state)
 }
 
 function shouldUseDashboardSelectionCompositeMotion(): boolean {
