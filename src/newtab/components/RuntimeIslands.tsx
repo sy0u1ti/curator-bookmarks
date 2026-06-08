@@ -187,6 +187,7 @@ export interface FeaturedBackgroundPickerCardViewModel {
   onClearHoverPreview: (card: HTMLElement) => void
   onFavoriteToggle: (card: HTMLElement, id: string) => void | Promise<void>
   onSelect: (card: HTMLElement, id: string) => void
+  onScheduleHoverPreview: (card: HTMLElement) => void
   previewAccentColor: string
   previewFallbackUrls: string[]
   remotePreviewUrl: string
@@ -1908,6 +1909,15 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
         event.preventDefault()
         card.onClearHoverPreview(event.currentTarget)
         card.onSelect(event.currentTarget, card.id)
+      }}
+      onPointerEnter={(event) => {
+        if (event.pointerType !== 'mouse') {
+          return
+        }
+        card.onScheduleHoverPreview(event.currentTarget)
+      }}
+      onPointerLeave={(event) => {
+        card.onClearHoverPreview(event.currentTarget)
       }}
     >
       <span className="featured-wallpaper-preview" style={previewStyle}>

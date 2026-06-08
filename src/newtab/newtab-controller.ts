@@ -10650,7 +10650,6 @@ async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
 let featuredBackgroundModalReady = false
 let featuredBackgroundModalReadyPromise: Promise<void> | null = null
 let resolveFeaturedBackgroundModalReady: (() => void) | null = null
-let featuredBackgroundCardDelegationGrid: HTMLElement | null = null
 
 function ensureFeaturedBackgroundModalReady(): Promise<void> {
   if (featuredBackgroundModalReady) return Promise.resolve()
@@ -10671,11 +10670,6 @@ function initializeFeaturedBackgroundModal(): void {
   if (!featuredBackgroundModal || !featuredBackgroundModalGrid) {
     window.requestAnimationFrame(initializeFeaturedBackgroundModal)
     return
-  }
-
-  if (featuredBackgroundCardDelegationGrid !== featuredBackgroundModalGrid) {
-    bindFeaturedBackgroundCardDelegation(featuredBackgroundModalGrid)
-    featuredBackgroundCardDelegationGrid = featuredBackgroundModalGrid
   }
 
   featuredBackgroundModalReady = true
@@ -11281,6 +11275,7 @@ function createFeaturedBackgroundPickerCardViewModel({
     onClearHoverPreview: clearFeaturedBackgroundHoverPreview,
     onFavoriteToggle: (_card, id) => toggleFeaturedBackgroundFavorite(id),
     onSelect: (_card, id) => selectFeaturedBackgroundFromPicker(id),
+    onScheduleHoverPreview: scheduleFeaturedBackgroundHoverPreview,
     previewAccentColor,
     previewFallbackUrls,
     remotePreviewUrl,
@@ -11317,35 +11312,6 @@ function formatFeaturedBackgroundResolution(item: Pick<FeaturedBackgroundItem, '
     return ''
   }
   return `${Math.round(width)} x ${Math.round(height)}`
-}
-
-function bindFeaturedBackgroundCardDelegation(grid: HTMLElement | null): void {
-  if (!grid) return
-
-  const findCard = (target: EventTarget | null): HTMLElement | null => {
-    if (!(target instanceof Element)) return null
-    const card = target.closest<HTMLElement>('.featured-wallpaper-card')
-    return card && grid.contains(card) ? card : null
-  }
-
-  const isInsideSameCard = (card: HTMLElement, related: EventTarget | null): boolean => {
-    return related instanceof Node && card.contains(related)
-  }
-
-  grid.addEventListener('pointerover', (event) => {
-    if (event.pointerType !== 'mouse') return
-    const card = findCard(event.target)
-    if (!card) return
-    if (isInsideSameCard(card, event.relatedTarget)) return
-    scheduleFeaturedBackgroundHoverPreview(card)
-  })
-
-  grid.addEventListener('pointerout', (event) => {
-    const card = findCard(event.target)
-    if (!card) return
-    if (isInsideSameCard(card, event.relatedTarget)) return
-    clearFeaturedBackgroundHoverPreview(card)
-  })
 }
 
 function scheduleFeaturedBackgroundHoverPreview(card: HTMLElement): void {
