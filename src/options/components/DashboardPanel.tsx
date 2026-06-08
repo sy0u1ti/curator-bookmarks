@@ -95,28 +95,31 @@ export function DashboardPanel() {
                   spellCheck={false}
                   placeholder="关键词搜索"
                 />
-                <Button
-                  id="dashboard-clear-search"
-                  className="dashboard-clear-search hidden"
-                  type="button"
-                  data-dashboard-action="clear-search"
-                  aria-label="清空 Dashboard 搜索"
-                  unstyled
-                >
-                  清空
-                </Button>
-                <Button
-                  id="dashboard-natural-search-toggle"
-                  className="dashboard-natural-search-toggle"
-                  type="button"
-                  data-dashboard-action="toggle-natural-search"
-                  aria-pressed="false"
-                  aria-label="开启 Dashboard 自然语言搜索"
-                  unstyled
-                >
-                  <span className="dashboard-natural-search-marker" aria-hidden="true" />
-                  <span className="dashboard-natural-search-label">语义</span>
-                </Button>
+                <span id="dashboard-search-controls" className="dashboard-search-controls">
+                  <Button
+                    id="dashboard-clear-search"
+                    className="dashboard-clear-search hidden"
+                    type="button"
+                    data-dashboard-action="clear-search"
+                    aria-label="清空 Dashboard 搜索"
+                    unstyled
+                  >
+                    清空
+                  </Button>
+                  <Button
+                    id="dashboard-natural-search-toggle"
+                    className="dashboard-natural-search-toggle"
+                    type="button"
+                    data-dashboard-action="toggle-natural-search"
+                    aria-pressed="false"
+                    aria-label="开启 Dashboard AI 语义搜索"
+                    title="开启 AI 语义搜索"
+                    unstyled
+                  >
+                    <span className="dashboard-natural-search-marker" aria-hidden="true" />
+                    <span className="dashboard-natural-search-label">语义</span>
+                  </Button>
+                </span>
               </span>
             </span>
           </label>

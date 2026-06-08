@@ -39,6 +39,18 @@ export interface DashboardSearchChipViewModel {
   label: string
 }
 
+export interface DashboardSearchControlsState {
+  natural: {
+    active: boolean
+    ariaLabel: string
+    fallback: boolean
+    label: string
+    pending: boolean
+    title: string
+  }
+  showClearSearch: boolean
+}
+
 export interface DashboardBreadcrumbSegmentViewModel {
   current: boolean
   id: string
@@ -151,6 +163,13 @@ export function renderDashboardCardsTitleIsland(container: Element, title: strin
 
 export function renderDashboardSearchChipsIsland(container: Element, chips: DashboardSearchChipViewModel[]): void {
   renderIsland(container, <DashboardSearchChips chips={chips} />)
+}
+
+export function renderDashboardSearchControlsIsland(
+  container: Element,
+  state: DashboardSearchControlsState
+): void {
+  renderIsland(container, <DashboardSearchControls state={state} />)
 }
 
 export function renderDashboardBreadcrumbsIsland(
@@ -331,6 +350,44 @@ function DashboardSearchChips({ chips }: { chips: DashboardSearchChipViewModel[]
           {chip.label}
         </span>
       ))}
+    </>
+  )
+}
+
+function DashboardSearchControls({ state }: { state: DashboardSearchControlsState }) {
+  const natural = state.natural
+  const naturalClassName = [
+    'dashboard-natural-search-toggle',
+    natural.active ? 'active' : '',
+    natural.pending ? 'pending' : '',
+    natural.fallback ? 'fallback' : ''
+  ].filter(Boolean).join(' ')
+
+  return (
+    <>
+      <Button
+        id="dashboard-clear-search"
+        className={state.showClearSearch ? 'dashboard-clear-search' : 'dashboard-clear-search hidden'}
+        type="button"
+        data-dashboard-action="clear-search"
+        aria-label="清空 Dashboard 搜索"
+        unstyled
+      >
+        清空
+      </Button>
+      <Button
+        id="dashboard-natural-search-toggle"
+        className={naturalClassName}
+        type="button"
+        data-dashboard-action="toggle-natural-search"
+        aria-pressed={natural.active ? 'true' : 'false'}
+        aria-label={natural.ariaLabel}
+        title={natural.title}
+        unstyled
+      >
+        <span className="dashboard-natural-search-marker" aria-hidden="true" />
+        <span className="dashboard-natural-search-label">{natural.label}</span>
+      </Button>
     </>
   )
 }

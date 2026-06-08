@@ -78,6 +78,7 @@ import {
   renderDashboardFolderSidebarIsland,
   renderDashboardLoadingLabelIsland,
   renderDashboardSearchChipsIsland,
+  renderDashboardSearchControlsIsland,
   renderDashboardSelectionBarIsland,
   renderDashboardTitleIsland,
   renderDashboardVirtualWindowShellIsland,
@@ -2642,7 +2643,6 @@ function getDashboardTagRecord(bookmarkId: string): BookmarkTagRecord | null {
 function renderDashboardSearchTools(): void {
   const parsed = parseSearchQuery(dashboardState.query)
   const chips = parsed.chips
-  dom.dashboardClearSearch?.classList.toggle('hidden', !String(dashboardState.query || '').trim())
   renderDashboardNaturalSearchToggle()
 
   dom.dashboardSearchChips?.classList.toggle('hidden', chips.length === 0)
@@ -2658,24 +2658,24 @@ function renderDashboardSearchTools(): void {
 }
 
 function renderDashboardNaturalSearchToggle(): void {
-  const button = dom.dashboardNaturalSearchToggle
-  if (!button) {
+  if (!dom.dashboardSearchControls) {
     return
   }
 
   const active = dashboardState.naturalSearchEnabled
   const pending = dashboardState.naturalSearchPending
   const fallback = Boolean(active && dashboardState.naturalSearchError)
-  const label = button.querySelector<HTMLElement>('.dashboard-natural-search-label')
-  button.classList.toggle('active', active)
-  button.classList.toggle('pending', pending)
-  button.classList.toggle('fallback', fallback)
-  if (label) {
-    label.textContent = getDashboardNaturalSearchToggleText()
-  }
-  button.setAttribute('aria-pressed', String(active))
-  button.setAttribute('aria-label', active ? '关闭 Dashboard AI 语义搜索' : '开启 Dashboard AI 语义搜索')
-  button.title = getDashboardNaturalSearchToggleTitle()
+  renderDashboardSearchControlsIsland(dom.dashboardSearchControls, {
+    natural: {
+      active,
+      ariaLabel: active ? '关闭 Dashboard AI 语义搜索' : '开启 Dashboard AI 语义搜索',
+      fallback,
+      label: getDashboardNaturalSearchToggleText(),
+      pending,
+      title: getDashboardNaturalSearchToggleTitle()
+    },
+    showClearSearch: Boolean(String(dashboardState.query || '').trim())
+  })
 }
 
 function applyDashboardSearchQuery(query: string): void {
