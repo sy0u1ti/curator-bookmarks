@@ -5698,12 +5698,6 @@ function createSearchWidget(): HTMLElement | null {
   let activeSuggestionIndex = -1
   let suggestionDebounceTimer = 0
   let suggestionRequestId = 0
-  let renderedSuggestionKeys: string[] = []
-
-  const getSuggestionKey = (suggestion: NewTabSearchSuggestion): string => {
-    const type = suggestion.suggestionType === 'command' ? 'cmd' : 'bm'
-    return `${type}:${suggestion.id}`
-  }
 
   const hideSuggestions = () => {
     window.clearTimeout(suggestionDebounceTimer)
@@ -5711,7 +5705,6 @@ function createSearchWidget(): HTMLElement | null {
     searchSuggestions = []
     activeSuggestionIndex = -1
     renderNewTabSearchSuggestionsIsland(suggestions, [])
-    renderedSuggestionKeys = []
     renderNewTabSearchChipsIsland(searchChips, [])
     renderNewTabSavedSearchesIsland(savedSearches, {
       canSaveCurrent: false,
@@ -5748,7 +5741,6 @@ function createSearchWidget(): HTMLElement | null {
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
       renderNewTabSearchSuggestionsIsland(suggestions, [])
-      renderedSuggestionKeys = []
       suggestions.hidden = true
       input.removeAttribute('aria-activedescendant')
       if (!trimmedQuery) {
@@ -5797,33 +5789,17 @@ function createSearchWidget(): HTMLElement | null {
       openSearchSuggestion(selectedSuggestion)
     }
 
-    const nextSuggestionKeys = searchSuggestions.map(getSuggestionKey)
-    const existingButtons = Array.from(suggestions.children) as HTMLButtonElement[]
-    const keysUnchanged = existingButtons.length === nextSuggestionKeys.length &&
-      nextSuggestionKeys.every((key, index) => renderedSuggestionKeys[index] === key)
-
-    if (keysUnchanged) {
-      existingButtons.forEach((button, index) => {
-        const suggestion = searchSuggestions[index]
-        const active = index === activeSuggestionIndex
-        const command = isCommandSuggestion(suggestion)
-        button.className = `newtab-search-suggestion${command ? ' command' : ''}${active ? ' active' : ''}`
-        button.setAttribute('aria-selected', String(active))
-      })
-    } else {
-      renderNewTabSearchSuggestionsIsland(
-        suggestions,
-        searchSuggestions.map((suggestion, index) =>
-          createSearchSuggestionViewModel(
-            suggestion,
-            index,
-            index === activeSuggestionIndex,
-            onSelectSuggestion
-          )
+    renderNewTabSearchSuggestionsIsland(
+      suggestions,
+      searchSuggestions.map((suggestion, index) =>
+        createSearchSuggestionViewModel(
+          suggestion,
+          index,
+          index === activeSuggestionIndex,
+          onSelectSuggestion
         )
       )
-      renderedSuggestionKeys = nextSuggestionKeys
-    }
+    )
     suggestionsPanel.classList.remove('hidden')
     renderNewTabSearchHintIsland(suggestionsHint, {
       type: 'text',
@@ -5920,7 +5896,6 @@ function createSearchWidget(): HTMLElement | null {
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
     })
     renderNewTabSearchSuggestionsIsland(suggestions, [])
-    renderedSuggestionKeys = []
     suggestions.hidden = true
     renderNewTabSearchSectionLabelIsland(suggestionsHeading, '书签匹配')
     renderNewTabSearchHintIsland(suggestionsHint, {
