@@ -1020,6 +1020,7 @@ function bindEvents(): void {
     onFrameError: () => {
       setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
     },
+    onOpenRequest: openDashboardRoute,
     onReady: initializeDashboardOverlay
   })
   registerNewtabDeleteToastActions({
@@ -1072,10 +1073,6 @@ function bindEvents(): void {
   initializeFeaturedBackgroundModal()
   initializeDashboardOverlay()
 
-  dashboardTrigger?.addEventListener('click', (event) => {
-    event.preventDefault()
-    openDashboardRoute()
-  })
   window.addEventListener('hashchange', syncDashboardRoute)
   window.addEventListener('message', handleDashboardMessage)
   syncDashboardRoute()
@@ -5158,7 +5155,6 @@ function renderDashboard(): void {
     open: state.dashboardOpen,
     ready: state.dashboardFrameReady && !hasDashboardError
   })
-  dashboardTrigger?.setAttribute('aria-expanded', state.dashboardOpen ? 'true' : 'false')
 
   if (state.dashboardOpen) {
     ensureDashboardFrameLoaded()

@@ -11,6 +11,7 @@ export interface NewtabDashboardOverlayActions {
   onFallbackRetry: () => void
   onFallbackReturn: () => void
   onFrameError: () => void
+  onOpenRequest: () => void
   onReady: () => void
 }
 
@@ -19,6 +20,7 @@ const EMPTY_ACTIONS: NewtabDashboardOverlayActions = {
   onFallbackRetry: () => {},
   onFallbackReturn: () => {},
   onFrameError: () => {},
+  onOpenRequest: () => {},
   onReady: () => {}
 }
 
@@ -76,6 +78,10 @@ export function dispatchNewtabDashboardOverlayControls(view: NewtabDashboardOver
 
 export function dispatchNewtabDashboardOverlayReady(): void {
   dashboardOverlayActions.onReady()
+}
+
+export function dispatchNewtabDashboardOverlayOpenRequest(): void {
+  dashboardOverlayActions.onOpenRequest()
 }
 
 export function dispatchNewtabDashboardOverlayOpenChange(open: boolean, event?: Event): void {

@@ -9,6 +9,10 @@ import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
 import {
+  dispatchNewtabDashboardOverlayOpenRequest,
+  useNewtabDashboardOverlayView
+} from './newtab-dashboard-overlay-store'
+import {
   dispatchNewtabSettingsDrawerToggleRequest,
   useNewtabSettingsDrawerView
 } from './newtab-settings-drawer-store'
@@ -24,6 +28,7 @@ export function NewtabApp() {
 }
 
 function NewtabShell() {
+  const dashboardOverlay = useNewtabDashboardOverlayView()
   const settingsDrawer = useNewtabSettingsDrawerView()
 
   return (
@@ -46,6 +51,11 @@ function NewtabShell() {
           href="#dashboard"
           aria-label="打开书签仪表盘"
           aria-controls="newtab-dashboard-overlay"
+          aria-expanded={dashboardOverlay.open ? 'true' : 'false'}
+          onClick={(event) => {
+            event.preventDefault()
+            dispatchNewtabDashboardOverlayOpenRequest()
+          }}
         >
           <Icon name="Bookmark" size={18} aria-hidden="true" />
           <span>打开书签仪表盘</span>
