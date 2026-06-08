@@ -97,15 +97,6 @@ const aiDecisionMetrics = [
 
 const featureSettingsTitle = <h2 className="ai-settings-subtitle">功能设置</h2>
 
-const contentSnapshotTitle = (
-  <div>
-    <strong>网页内容索引</strong>
-    <p id="content-snapshot-status" className="ai-settings-subtitle">用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
-  </div>
-)
-
-const contentSnapshotStatus = <span className="options-chip muted">本地内容记忆</span>
-
 const aiProviderTitle = <h2 className="ai-settings-subtitle">自定义 AI 渠道</h2>
 
 const aiProviderDescription = (
@@ -205,37 +196,7 @@ export function GeneralPanel() {
           ))}
       </AiProviderCard>
 
-      <AiProviderCard
-        className="options-group ai-naming-settings-card"
-        title={contentSnapshotTitle}
-        status={contentSnapshotStatus}
-        headerClassName="ai-feature-settings-head"
-        iconName="ArchiveRestore"
-        bodyClassName="ai-provider-layout"
-      >
-        <label className="ai-feature-switch-row" htmlFor="content-snapshot-enabled">
-          <span className="ai-feature-switch-copy">
-            <strong>保存网页内容索引</strong>
-            <span className="ai-feature-secondary">新增网页书签后保存标题、摘要和链接信息，让本地搜索/AI 分类更容易找到它。</span>
-          </span>
-          <AiSwitch id="content-snapshot-enabled" label="保存网页内容索引" />
-        </label>
-        <label className="ai-feature-switch-row" htmlFor="content-snapshot-full-text">
-          <span className="ai-feature-switch-copy">
-            <strong>增强：记住正文，搜索更准</strong>
-            <span className="ai-feature-secondary">适合长文档和教程。开启后会保存可提取的正文，并把正文纳入本地搜索。</span>
-          </span>
-          <AiSwitch id="content-snapshot-full-text" label="增强：记住正文，搜索更准" />
-        </label>
-        <CollapsibleRoot className="ai-advanced-details content-snapshot-advanced">
-          <CollapsibleTrigger className="ai-advanced-summary">高级说明</CollapsibleTrigger>
-          <CollapsiblePanel className="ai-advanced-body">
-            <p className="ai-advanced-note">
-              默认只保存摘要、标题和链接信息。开启增强后，正文只保存在本机，较长正文会放到浏览器的大数据存储区以减少普通设置占用。
-            </p>
-          </CollapsiblePanel>
-        </CollapsibleRoot>
-      </AiProviderCard>
+      <div id="content-snapshot-controls" />
 
       <div id="shortcut-controls" />
 

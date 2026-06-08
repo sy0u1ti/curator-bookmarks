@@ -256,6 +256,7 @@ import {
   renameTagInIndex,
   stopActiveTagCloud
 } from './sections/tag-management.js'
+import { renderContentSnapshotControlsIsland } from './components/ContentSnapshotControlsIsland.js'
 import { renderShortcutControlsIsland } from './components/ShortcutListIsland.js'
 import { renderResultsPaginationIsland } from './components/ResultsPaginationIsland.js'
 import {
@@ -314,6 +315,10 @@ import {
   SHORTCUT_ACTION_EVENT,
   type ShortcutActionDetail
 } from './components/shortcut-events.js'
+import {
+  CONTENT_SNAPSHOT_SETTINGS_EVENT,
+  type ContentSnapshotSettingsChangeDetail
+} from './components/content-snapshot-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1119,18 +1124,7 @@ function bindEvents() {
   dom.inboxTagOnlyNoAutoMove?.addEventListener('change', () => {
     void handleInboxWorkflowSettingChange('tagOnlyNoAutoMove')
   })
-  dom.contentSnapshotEnabled?.addEventListener('change', () => {
-    void saveContentSnapshotSettingsFromDom()
-  })
-  dom.contentSnapshotFullText?.addEventListener('change', () => {
-    void saveContentSnapshotSettingsFromDom({ syncFullTextSearch: true })
-  })
-  dom.contentSnapshotSearchFullText?.addEventListener('change', () => {
-    void saveContentSnapshotSettingsFromDom()
-  })
-  dom.contentSnapshotLocalOnly?.addEventListener('change', () => {
-    void saveContentSnapshotSettingsFromDom()
-  })
+  window.addEventListener(CONTENT_SNAPSHOT_SETTINGS_EVENT, handleContentSnapshotSettingsChange)
   dom.availabilitySettingsTrigger?.addEventListener('click', toggleAvailabilitySettingsPopover)
   dom.availabilitySettingsSave?.addEventListener('click', () => {
     void saveAvailabilitySettingsFromDom()
@@ -3548,22 +3542,26 @@ function handleAiProviderSelectChange(event: Event) {
   renderAiNamingSection()
 }
 
-async function saveContentSnapshotSettingsFromDom({
-  syncFullTextSearch = false
-}: {
-  syncFullTextSearch?: boolean
-} = {}) {
+function handleContentSnapshotSettingsChange(event: Event): void {
+  const detail = (event as CustomEvent<ContentSnapshotSettingsChangeDetail>).detail
+  void saveContentSnapshotSettingsFromChange(detail || {})
+}
+
+async function saveContentSnapshotSettingsFromChange(
+  detail: ContentSnapshotSettingsChangeDetail = {}
+): Promise<void> {
   const previousSettings = contentSnapshotState.settings
-  const saveFullText = readCheckboxSetting(dom.contentSnapshotFullText, previousSettings.saveFullText)
+  const saveFullText = detail.saveFullText ?? previousSettings.saveFullText
   const nextSettings = normalizeContentSnapshotSettings({
     ...previousSettings,
-    enabled: readCheckboxSetting(dom.contentSnapshotEnabled, previousSettings.enabled),
+    enabled: detail.enabled ?? previousSettings.enabled,
     saveFullText,
-    fullTextSearchEnabled: dom.contentSnapshotSearchFullText
-      ? readCheckboxSetting(dom.contentSnapshotSearchFullText, previousSettings.fullTextSearchEnabled)
-      : syncFullTextSearch ? saveFullText : previousSettings.fullTextSearchEnabled,
-    localOnlyNoAiUpload: readCheckboxSetting(dom.contentSnapshotLocalOnly, previousSettings.localOnlyNoAiUpload)
+    fullTextSearchEnabled: detail.syncFullTextSearch ? saveFullText : previousSettings.fullTextSearchEnabled
   })
+
+  contentSnapshotState.settings = nextSettings
+  contentSnapshotState.statusMessage = ''
+  renderContentSnapshotSettings()
 
   try {
     contentSnapshotState.settings = await saveContentSnapshotSettings(nextSettings)
@@ -3576,6 +3574,7 @@ async function saveContentSnapshotSettingsFromDom({
     resetContentSnapshotFullTextSearchMapRetry()
     contentSnapshotState.statusMessage = '网页内容索引设置已保存。'
   } catch (error) {
+    contentSnapshotState.settings = previousSettings
     contentSnapshotState.statusMessage =
       error instanceof Error ? `网页内容索引设置保存失败：${error.message}` : '网页内容索引设置保存失败。'
   } finally {
@@ -3584,39 +3583,26 @@ async function saveContentSnapshotSettingsFromDom({
   }
 }
 
-function readCheckboxSetting(element: typeof dom.contentSnapshotEnabled | undefined, fallback: boolean): boolean {
-  return element ? Boolean(element.checked) : fallback
-}
-
 function renderContentSnapshotSettings() {
   const settings = contentSnapshotState.settings
   const snapshotRecords = Object.values(contentSnapshotState.index.records || {})
   const snapshotCount = snapshotRecords.length
   const fullTextCount = snapshotRecords.filter((record) => record.hasFullText).length
-  if (dom.contentSnapshotEnabled) {
-    dom.contentSnapshotEnabled.checked = Boolean(settings.enabled)
+  if (!dom.contentSnapshotControls) {
+    return
   }
-  if (dom.contentSnapshotFullText) {
-    dom.contentSnapshotFullText.checked = Boolean(settings.saveFullText)
-    dom.contentSnapshotFullText.disabled = !settings.enabled
-  }
-  if (dom.contentSnapshotSearchFullText) {
-    dom.contentSnapshotSearchFullText.checked = Boolean(settings.saveFullText)
-    dom.contentSnapshotSearchFullText.disabled = !settings.enabled || !settings.saveFullText
-  }
-  if (dom.contentSnapshotLocalOnly) {
-    dom.contentSnapshotLocalOnly.checked = Boolean(settings.localOnlyNoAiUpload)
-    dom.contentSnapshotLocalOnly.disabled = !settings.enabled
-  }
-  if (dom.contentSnapshotStatus) {
-    const modeCopy = settings.enabled
-      ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
-      : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
-    const aiRunCopy = buildContentSnapshotAiRunStatusCopy()
-    dom.contentSnapshotStatus.textContent = contentSnapshotState.statusMessage ||
-      aiRunCopy ||
-      modeCopy
-  }
+
+  const modeCopy = settings.enabled
+    ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
+    : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
+  const aiRunCopy = buildContentSnapshotAiRunStatusCopy()
+
+  renderContentSnapshotControlsIsland(dom.contentSnapshotControls, {
+    enabled: Boolean(settings.enabled),
+    fullTextDisabled: !settings.enabled,
+    saveFullText: Boolean(settings.saveFullText),
+    statusCopy: contentSnapshotState.statusMessage || aiRunCopy || modeCopy
+  })
 }
 
 function buildContentSnapshotStatusCopy(saveFullText: boolean, snapshotCount: number, fullTextCount: number): string {
