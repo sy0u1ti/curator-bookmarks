@@ -4,14 +4,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import {
   Button,
   Icon,
-  InlineDialogPanel,
   InlineMenuList,
   Input,
-  Select,
-  SwitchControl,
-  ToastList,
-  type IconName,
-  type InlineMenuAction
+  SwitchControl
 } from '../../ui'
 import type { NewTabSourceNavigationItem } from '../content-state'
 import type { SpeedDialEmptyState } from '../speed-dial-types'
@@ -37,17 +32,6 @@ function renderIsland(container: Element, node: React.ReactNode): void {
   flushSync(() => {
     root.render(node)
   })
-}
-
-export interface NewTabOnboardingState {
-  onOpenFolderSettings: () => void
-  onSkip: () => void
-}
-
-export interface DeleteToastState {
-  bookmarkLabel: string
-  busy: boolean
-  detail: string
 }
 
 export interface ClockWidgetState {
@@ -132,53 +116,6 @@ export interface BookmarkTileViewModel {
   id: string
   title: string
   url: string
-}
-
-export type BookmarkMenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
-
-export interface BookmarkMenuTextFieldViewModel {
-  disabled: boolean
-  id: string
-  label: string
-  onChange: (value: string) => void
-  onEnter: () => void | Promise<void>
-  placeholder: string
-  type: 'text' | 'url'
-  value: string
-}
-
-export interface BookmarkMenuActionViewModel {
-  actionId?: string
-  ariaLabel: string
-  disabled: boolean
-  icon: BookmarkMenuActionIcon
-  id: string
-  label: string
-  onSelect: () => void | Promise<void>
-  variant?: 'danger' | ''
-}
-
-export interface BookmarkEditMenuViewModel {
-  actions: BookmarkMenuActionViewModel[]
-  error: string
-  fields: [BookmarkMenuTextFieldViewModel, BookmarkMenuTextFieldViewModel]
-  iconMode: 'website' | 'custom'
-  iconModeDisabled: boolean
-  onIconModeChange: (value: string) => void | Promise<void>
-  status: string
-  statusTone?: 'warning' | ''
-  x: number
-  y: number
-}
-
-export interface BookmarkAddMenuViewModel {
-  actions: BookmarkMenuActionViewModel[]
-  error: string
-  expanded: boolean
-  fields: [BookmarkMenuTextFieldViewModel, BookmarkMenuTextFieldViewModel]
-  onExpand: () => void | Promise<void>
-  x: number
-  y: number
 }
 
 export interface FeaturedBackgroundPickerCardViewModel {
@@ -380,41 +317,6 @@ export interface SavedSearchesState {
   show: boolean
 }
 
-export interface ModuleSettingRowViewModel {
-  description: string
-  enabled: boolean
-  index: number
-  key: string
-  label: string
-  total: number
-}
-
-export type SelectedFolderSourceListState =
-  | { type: 'empty'; message: string }
-  | { type: 'items'; items: SelectedFolderSourceItemViewModel[] }
-
-export interface SelectedFolderSourceItemViewModel {
-  affectedCount: number
-  folderId: string
-  path: string
-  stats: string
-  title: string
-}
-
-export type FolderCandidateListState =
-  | { type: 'empty'; message: string }
-  | { type: 'items'; items: FolderCandidateItemViewModel[] }
-
-export interface FolderCandidateItemViewModel {
-  active: boolean
-  badge: string
-  folderId: string
-  path: string
-  selected: boolean
-  stats: string
-  title: string
-}
-
 export interface BookmarkContentStyleState {
   columnGap: number
   columns: number
@@ -466,10 +368,6 @@ export interface BookmarkReorderStatusViewModel {
 export interface BookmarkGridPlaceholderViewModel {
   folderTitle: string
   remainingCount: number
-}
-
-export interface FeaturedBackgroundHoverPreviewViewModel {
-  hidden: boolean
 }
 
 export function createSearchWidgetIslandElement(state: SearchWidgetShellState): HTMLElement {
@@ -598,25 +496,6 @@ export function renderSearchWidgetPanelStateIsland(
   })
 }
 
-export function createNewTabOnboardingIslandElement(state: NewTabOnboardingState): HTMLElement {
-  const section = document.createElement('section')
-  section.className = 'newtab-onboarding-strip'
-  section.setAttribute('aria-label', 'Curator 首次使用引导')
-  renderIsland(section, <NewTabOnboardingStrip state={state} />)
-  return section
-}
-
-export function createDeleteToastIslandElement(state: DeleteToastState): HTMLElement {
-  const toast = document.createElement('section')
-  toast.className = 'newtab-delete-toast'
-  renderIsland(toast, <DeleteToast state={state} />)
-  return toast
-}
-
-export function mountDeleteToastIslandElement(toast: HTMLElement): void {
-  document.body.append(toast)
-}
-
 export function createSourceNavigationIslandElement(state: SourceNavigationState): HTMLElement {
   const nav = document.createElement('nav')
   nav.className = 'source-navigation'
@@ -694,32 +573,6 @@ export function appendBookmarkTileIslandElements(
   return tiles
 }
 
-export function createBookmarkEditMenuIslandElement(state: BookmarkEditMenuViewModel): HTMLElement {
-  const menu = document.createElement('section')
-  menu.className = 'bookmark-edit-menu'
-  menu.style.left = `${state.x}px`
-  menu.style.top = `${state.y}px`
-  renderIsland(menu, <BookmarkEditMenu state={state} />)
-  return menu
-}
-
-export function mountBookmarkEditMenuIslandElement(menu: HTMLElement): void {
-  document.body.append(menu)
-}
-
-export function createBookmarkAddMenuIslandElement(state: BookmarkAddMenuViewModel): HTMLElement {
-  const menu = document.createElement('section')
-  menu.className = state.expanded ? 'bookmark-add-menu expanded' : 'bookmark-add-menu'
-  menu.style.left = `${state.x}px`
-  menu.style.top = `${state.y}px`
-  renderIsland(menu, <BookmarkAddMenu state={state} />)
-  return menu
-}
-
-export function mountBookmarkAddMenuIslandElement(menu: HTMLElement): void {
-  document.body.append(menu)
-}
-
 export function renderFeaturedBackgroundPickerIsland(
   container: HTMLElement,
   state: FeaturedBackgroundPickerState
@@ -748,32 +601,6 @@ export function renderNewTabSearchHintIsland(container: HTMLElement, state: Sear
 
 export function renderNewTabSavedSearchesIsland(container: HTMLElement, state: SavedSearchesState): void {
   renderIsland(container, <SavedSearches state={state} />)
-}
-
-export function createModuleSettingRowIslandElement(state: ModuleSettingRowViewModel): HTMLElement {
-  const row = document.createElement('div')
-  row.className = 'setting-row newtab-module-setting-row'
-  row.dataset.moduleSettingRow = state.key
-  renderIsland(row, <ModuleSettingRow state={state} />)
-  return row
-}
-
-export function renderModuleSettingRowIsland(
-  container: HTMLElement,
-  state: ModuleSettingRowViewModel
-): void {
-  container.replaceChildren(createModuleSettingRowIslandElement(state))
-}
-
-export function renderSelectedFolderSourceListIsland(
-  container: HTMLElement,
-  state: SelectedFolderSourceListState
-): void {
-  renderIsland(container, <SelectedFolderSourceList state={state} />)
-}
-
-export function renderFolderCandidateListIsland(container: HTMLElement, state: FolderCandidateListState): void {
-  renderIsland(container, <FolderCandidateList state={state} />)
 }
 
 export function createBookmarkContentIslandElement(state: BookmarkContentViewModel): HTMLElement {
@@ -815,24 +642,6 @@ export function mountBookmarkGridPlaceholderIslandElement(
   placeholder: HTMLElement
 ): void {
   container.append(placeholder)
-}
-
-export function createFeaturedBackgroundHoverPreviewIslandElement(
-  state: FeaturedBackgroundHoverPreviewViewModel
-): HTMLElement {
-  const preview = document.createElement('div')
-  preview.className = 'featured-wallpaper-hover-preview'
-  preview.setAttribute('role', 'img')
-  preview.setAttribute('aria-hidden', String(state.hidden))
-  renderIsland(preview, <FeaturedBackgroundHoverPreview />)
-  return preview
-}
-
-export function mountFeaturedBackgroundHoverPreviewIslandElement(
-  container: HTMLElement | null,
-  preview: HTMLElement
-): void {
-  container?.append(preview)
 }
 
 export function mountNewTabDragGhostBridge(ghost: HTMLElement): void {
@@ -1345,10 +1154,6 @@ function BookmarkGridPlaceholder({ state }: { state: BookmarkGridPlaceholderView
   return <>继续载入 {state.remainingCount} 个书签</>
 }
 
-function FeaturedBackgroundHoverPreview() {
-  return null
-}
-
 function PortalPanel({ content }: { content: HTMLElement }) {
   return <MountedElement element={content} />
 }
@@ -1419,126 +1224,6 @@ function BookmarkFolderSection({ section }: { section: BookmarkFolderSectionView
         </div>
       )}
     </section>
-  )
-}
-
-function ModuleSettingRow({ state }: { state: ModuleSettingRowViewModel }) {
-  return (
-    <>
-      <span className="setting-label-stack">
-        <span>{state.label}</span>
-        <small>{state.description}</small>
-      </span>
-      <span className="module-setting-controls">
-        <Button
-          className="module-setting-order-button"
-          type="button"
-          data-module-setting-move={state.key}
-          data-module-setting-direction="up"
-          disabled={state.index <= 0}
-          aria-label={`上移模块：${state.label}`}
-          title={`上移 ${state.label}`}
-          unstyled
-        >
-          {'\u2191'}
-        </Button>
-        <Button
-          className="module-setting-order-button"
-          type="button"
-          data-module-setting-move={state.key}
-          data-module-setting-direction="down"
-          disabled={state.index >= state.total - 1}
-          aria-label={`下移模块：${state.label}`}
-          title={`下移 ${state.label}`}
-          unstyled
-        >
-          {'\u2193'}
-        </Button>
-        <label
-          className="module-setting-switch-label"
-          aria-label={`${state.enabled ? '隐藏' : '显示'}模块：${state.label}`}
-        >
-          <SwitchControl
-            className="setting-switch"
-            defaultChecked={state.enabled}
-            inputAttributes={{ 'data-module-setting-toggle': state.key }}
-            inputClassName="setting-switch-input"
-            syncInputState
-            thumbClassName="setting-switch-thumb"
-            unstyled
-          />
-        </label>
-      </span>
-    </>
-  )
-}
-
-function SelectedFolderSourceList({ state }: { state: SelectedFolderSourceListState }) {
-  if (state.type === 'empty') {
-    return <p className="folder-source-empty">{state.message}</p>
-  }
-
-  return (
-    <>
-      {state.items.map((item) => (
-        <div className="folder-source-selected-item" key={item.folderId}>
-          <span className="folder-source-selected-copy">
-            <strong>{item.title}</strong>
-            <span>{item.path}</span>
-            <span>{item.stats}</span>
-          </span>
-          <Button
-            className="folder-source-remove"
-            type="button"
-            data-folder-remove-id={item.folderId}
-            aria-label={getFolderSourceRemoveLabel(item)}
-            title={getFolderSourceRemoveLabel(item)}
-            unstyled
-          >
-            <Icon name="X" size={12} aria-hidden="true" />
-          </Button>
-        </div>
-      ))}
-    </>
-  )
-}
-
-function getFolderSourceRemoveLabel(item: SelectedFolderSourceItemViewModel): string {
-  return `从新标签页移除「${item.title || '文件夹'}」，将隐藏 ${item.affectedCount} 个书签，不会删除书签`
-}
-
-function FolderCandidateList({ state }: { state: FolderCandidateListState }) {
-  if (state.type === 'empty') {
-    return (
-      <p className="folder-source-empty" role="status" aria-live="polite">
-        {state.message}
-      </p>
-    )
-  }
-
-  return (
-    <>
-      {state.items.map((item) => (
-        <Button
-          className={item.selected ? 'folder-candidate-card selected' : 'folder-candidate-card'}
-          type="button"
-          data-folder-candidate-id={item.folderId}
-          tabIndex={item.active ? 0 : -1}
-          title={item.path || item.title}
-          role="option"
-          aria-selected={item.selected}
-          unstyled
-          key={item.folderId}
-        >
-          <span className="folder-candidate-copy">
-            <strong>{item.title || '未命名文件夹'}</strong>
-            <span>{item.path || item.title || '未命名文件夹'}</span>
-            <span>{item.stats}</span>
-          </span>
-          <span className="folder-candidate-badge">{item.badge}</span>
-        </Button>
-      ))}
-    </>
   )
 }
 
@@ -1707,25 +1392,6 @@ function SavedSearches({ state }: { state: SavedSearchesState }) {
           ))}
         </div>
       ) : null}
-    </>
-  )
-}
-
-function NewTabOnboardingStrip({ state }: { state: NewTabOnboardingState }) {
-  return (
-    <>
-      <div className="newtab-onboarding-copy">
-        <strong>Curator 已将新标签页设为书签搜索和快捷入口</strong>
-        <span>核心书签功能默认本地；网页搜索、精选远程背景、AI/Jina 和链接检测可关闭或跳过。</span>
-      </div>
-      <div className="newtab-onboarding-actions">
-        <Button type="button" onClick={state.onOpenFolderSettings} unstyled>
-          选择来源
-        </Button>
-        <Button className="secondary" type="button" onClick={state.onSkip} unstyled>
-          我知道了
-        </Button>
-      </div>
     </>
   )
 }
@@ -1942,175 +1608,6 @@ function parseFeaturedBackgroundPreviewFallbackUrls(value: unknown): string[] {
   } catch {
     return []
   }
-}
-
-function BookmarkEditMenu({ state }: { state: BookmarkEditMenuViewModel }) {
-  return (
-    <InlineDialogPanel
-      className="bookmark-menu-popover-shell"
-      aria-label="书签设置"
-      initialFocus={false}
-      finalFocus={false}
-    >
-      <BookmarkMenuTextField field={state.fields[0]} />
-      <BookmarkMenuTextField field={state.fields[1]} />
-      <label className="bookmark-menu-row">
-        <span>图标</span>
-        <Select
-          disabled={state.iconModeDisabled}
-          inputAttributes={{ 'aria-label': '图标' }}
-          itemClassName="custom-select-option"
-          value={state.iconMode}
-          options={[
-            { value: 'website', label: '网站图标' },
-            { value: 'custom', label: '自定义图片' }
-          ]}
-          onValueChange={(value) => {
-            void state.onIconModeChange(value || state.iconMode)
-          }}
-          popupClassName="custom-select-list"
-          positionerClassName="custom-select-positioner"
-          triggerClassName="bookmark-menu-control custom-select-trigger"
-          unstyled
-          valueClassName="custom-select-trigger-label"
-        />
-      </label>
-      <BookmarkMenuSeparator />
-      <BookmarkMenuActions actions={state.actions} label="书签操作" />
-      <BookmarkMenuFeedback error={state.error} status={state.status} statusTone={state.statusTone} />
-    </InlineDialogPanel>
-  )
-}
-
-function BookmarkAddMenu({ state }: { state: BookmarkAddMenuViewModel }) {
-  return (
-    <InlineDialogPanel
-      className="bookmark-menu-popover-shell"
-      aria-label="添加新标签页书签"
-      initialFocus={false}
-      finalFocus={false}
-    >
-      {state.expanded ? (
-        <>
-          <BookmarkMenuTextField field={state.fields[0]} />
-          <BookmarkMenuTextField field={state.fields[1]} />
-          <BookmarkMenuSeparator />
-          <BookmarkMenuActions actions={state.actions} label="添加书签操作" />
-        </>
-      ) : (
-        <Button
-          className="bookmark-add-trigger"
-          type="button"
-          onClick={() => {
-            void state.onExpand()
-          }}
-          unstyled
-        >
-          <MenuActionIcon icon="plus" />
-          添加书签
-        </Button>
-      )}
-      <BookmarkMenuFeedback error={state.error} status="" />
-    </InlineDialogPanel>
-  )
-}
-
-function BookmarkMenuTextField({ field }: { field: BookmarkMenuTextFieldViewModel }) {
-  return (
-    <label className="bookmark-menu-row">
-      <span>{field.label}</span>
-      <Input
-        className="bookmark-menu-input"
-        type={field.type}
-        placeholder={field.placeholder}
-        value={field.value}
-        disabled={field.disabled}
-        spellCheck={false}
-        onChange={(event) => {
-          field.onChange(event.currentTarget.value)
-        }}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            void field.onEnter()
-          }
-        }}
-        unstyled
-      />
-    </label>
-  )
-}
-
-function BookmarkMenuSeparator() {
-  return <div className="bookmark-menu-separator" />
-}
-
-function BookmarkMenuActions({ actions, label }: { actions: BookmarkMenuActionViewModel[]; label: string }) {
-  return (
-    <InlineMenuList
-      actions={actions.map(toInlineMenuAction)}
-      className="bookmark-menu-actions"
-      label={label}
-    />
-  )
-}
-
-function toInlineMenuAction(action: BookmarkMenuActionViewModel): InlineMenuAction {
-  return {
-    id: action.id,
-    label: <BookmarkMenuActionContent icon={action.icon} label={action.label} />,
-    disabled: action.disabled,
-    destructive: action.variant === 'danger',
-    className: action.variant ? `bookmark-menu-action ${action.variant}` : 'bookmark-menu-action',
-    onSelect: action.onSelect,
-    closeOnSelect: false,
-    attributes: {
-      ...(action.actionId ? { 'data-menu-action': action.actionId } : {}),
-      'aria-label': action.ariaLabel
-    }
-  }
-}
-
-function BookmarkMenuActionContent({ icon, label }: { icon: BookmarkMenuActionIcon; label: string }) {
-  return (
-    <>
-      <MenuActionIcon icon={icon} />
-      {label}
-    </>
-  )
-}
-
-function MenuActionIcon({ icon }: { icon: BookmarkMenuActionIcon }) {
-  const iconNameByAction: Record<BookmarkMenuActionIcon, IconName> = {
-    copy: 'Copy',
-    pin: 'Pin',
-    plus: 'Plus',
-    refresh: 'RefreshCw',
-    save: 'Save',
-    trash: 'Trash2'
-  }
-  return <Icon name={iconNameByAction[icon]} aria-hidden="true" />
-}
-
-function BookmarkMenuFeedback({
-  error,
-  status,
-  statusTone
-}: {
-  error: string
-  status: string
-  statusTone?: 'warning' | ''
-}) {
-  return (
-    <>
-      {error ? <p className="bookmark-menu-error">{error}</p> : null}
-      {status ? (
-        <p className={statusTone === 'warning' ? 'bookmark-menu-status is-warning' : 'bookmark-menu-status'}>
-          {status}
-        </p>
-      ) : null}
-    </>
-  )
 }
 
 function BookmarkTile({ state }: { state: BookmarkTileViewModel }) {
@@ -2381,45 +1878,5 @@ export function ClockWidgetContent({ state }: { state: ClockWidgetState }) {
         </time>
       ) : null}
     </>
-  )
-}
-
-function DeleteToast({ state }: { state: DeleteToastState }) {
-  return (
-    <ToastList
-      contentClassName="newtab-delete-toast-copy"
-      descriptionClassName="newtab-delete-toast-description"
-      items={[{
-        actions: (
-          <div className="newtab-delete-toast-actions">
-            <Button
-              type="button"
-              data-undo-delete="true"
-              disabled={state.busy}
-              aria-label={`撤销删除：${state.bookmarkLabel}`}
-              unstyled
-            >
-              {state.busy ? '恢复中' : '撤销'}
-            </Button>
-            <Button
-              type="button"
-              data-open-recycle="true"
-              aria-label={`打开回收站查看：${state.bookmarkLabel}`}
-              unstyled
-            >
-              回收站
-            </Button>
-          </div>
-        ),
-        description: state.detail,
-        id: 'newtab-delete-toast',
-        title: '已删除书签',
-        type: 'success'
-      }]}
-      rootClassName="newtab-delete-toast-panel"
-      titleClassName="newtab-delete-toast-title"
-      timeout={0}
-      unstyled
-    />
   )
 }
