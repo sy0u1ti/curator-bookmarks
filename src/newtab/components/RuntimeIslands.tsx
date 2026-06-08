@@ -9,6 +9,7 @@ import {
   SwitchControl
 } from '../../ui'
 import type { NewTabSourceNavigationItem } from '../content-state'
+import { useNewtabSpeedDialView } from '../newtab-speed-dial-store'
 import type { SpeedDialEmptyState } from '../speed-dial-types'
 import type { NewTabTimeSettings } from '../time-settings'
 
@@ -344,6 +345,7 @@ export interface BookmarkContentViewModel {
   reorderStatus: BookmarkReorderStatusViewModel | null
   sections: BookmarkFolderSectionViewModel[]
   sourceNavigation: SourceNavigationState | null
+  speedDial: boolean
 }
 
 export interface BookmarkFolderSectionViewModel {
@@ -499,19 +501,6 @@ export function renderSearchWidgetPanelStateIsland(
   flushSync(() => {
     panelStore.setState(state)
   })
-}
-
-export function createSpeedDialPanelIslandElement(state: SpeedDialPanelState): HTMLElement {
-  const section = document.createElement('section')
-  section.className = 'newtab-speed-dial'
-  section.setAttribute('aria-label', 'Speed Dial')
-  renderSpeedDialPanelIsland(section, state)
-  return section
-}
-
-export function renderSpeedDialPanelIsland(container: HTMLElement, state: SpeedDialPanelState): void {
-  container.setAttribute('aria-busy', String(state.ariaBusy))
-  renderIsland(container, <SpeedDialPanel state={state} />)
 }
 
 export function createBookmarkTileIslandElement(state: BookmarkTileViewModel): HTMLAnchorElement {
@@ -1116,6 +1105,7 @@ function BookmarkContent({ state }: { state: BookmarkContentViewModel }) {
   return (
     <>
       <MountedElements elements={state.modules} />
+      {state.speedDial ? <SpeedDialPanelHost /> : null}
       {state.portal ? <PortalPanel state={state.portal} /> : null}
       {state.sourceNavigation ? (
         <nav className="source-navigation" aria-label="书签来源导航">
@@ -1133,6 +1123,19 @@ function BookmarkContent({ state }: { state: BookmarkContentViewModel }) {
         ) : null}
       </div>
     </>
+  )
+}
+
+function SpeedDialPanelHost() {
+  const state = useNewtabSpeedDialView()
+  if (!state) {
+    return null
+  }
+
+  return (
+    <section className="newtab-speed-dial" aria-label="Speed Dial" aria-busy={state.ariaBusy}>
+      <SpeedDialPanel state={state} />
+    </section>
   )
 }
 

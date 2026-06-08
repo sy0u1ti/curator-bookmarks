@@ -201,7 +201,6 @@ import {
   createBookmarkGridPlaceholderIslandElement,
   createBookmarkTileIslandElement,
   createSearchWidgetIslandElement,
-  createSpeedDialPanelIslandElement,
   mountBookmarkGridPlaceholderIslandElement,
   mountNewTabDragGhostBridge,
   renderFeaturedBackgroundPickerIsland,
@@ -218,7 +217,6 @@ import {
   renderSearchWidgetEngineMenuStateIsland,
   renderSearchWidgetInteractionStateIsland,
   renderSearchWidgetPanelStateIsland,
-  renderSpeedDialPanelIsland,
   replaceBookmarkContentIslandChildren,
   type BookmarkContentViewModel,
   type BookmarkFolderSectionViewModel,
@@ -284,6 +282,10 @@ import {
 } from './newtab-dashboard-overlay-store.js'
 import { dispatchNewtabContentView } from './newtab-content-store.js'
 import { dispatchNewtabClockView, type NewtabClockView } from './newtab-clock-store.js'
+import {
+  dispatchNewtabSpeedDialView,
+  getNewtabSpeedDialView
+} from './newtab-speed-dial-store.js'
 import {
   dispatchNewtabDeleteToastView,
   registerNewtabDeleteToastActions
@@ -2689,8 +2691,25 @@ async function persistSpeedDialOrder(
 }
 
 function syncSpeedDialReorderBusyState(): void {
-  const section = document.querySelector<HTMLElement>('.newtab-speed-dial')
-  section?.setAttribute('aria-busy', state.reorderingSpeedDial ? 'true' : 'false')
+  const current = getNewtabSpeedDialView()
+  if (!current) {
+    return
+  }
+
+  const content = current.content.type === 'items'
+    ? {
+        ...current.content,
+        busy: state.reorderingSpeedDial
+      }
+    : current.content
+
+  dispatchNewtabSpeedDialView({
+    ...current,
+    ariaBusy: state.reorderingSpeedDial,
+    content,
+    meta: state.speedDialReorderError || current.meta,
+    metaTone: state.speedDialReorderError ? 'error' : current.metaTone
+  })
 }
 
 function handleBookmarkPointerDown(event: PointerEvent): void {
@@ -3799,10 +3818,7 @@ function patchBookmarkInPlace(
   )
   const updatedSpeedDial = speedDialCards.length > 0
   if (updatedSpeedDial) {
-    const speedDialPanel = document.querySelector<HTMLElement>('.newtab-speed-dial')
-    if (speedDialPanel) {
-      hydrateSpeedDialPanel(speedDialPanel)
-    }
+    refreshSpeedDialPanel()
   }
 
   invalidateQuickAccessCache()
@@ -6889,9 +6905,12 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
   }
 
   const modules: HTMLElement[] = []
+  let speedDial = false
   for (const moduleKey of getVisibleNewTabModules(state.moduleSettings)) {
     const module = createConfigurableNewTabModule(moduleKey)
-    if (module) {
+    if (module === 'speedDial') {
+      speedDial = true
+    } else if (module) {
       modules.push(module)
     }
   }
@@ -6965,12 +6984,13 @@ function createBookmarkSections(sections: NewTabFolderSection[]): HTMLElement {
         }
       : null,
     sections: sectionModels,
-    sourceNavigation
+    sourceNavigation,
+    speedDial
   }
   return createBookmarkContentIslandElement(viewModel)
 }
 
-function createConfigurableNewTabModule(key: NewTabModuleSettingKey): HTMLElement | null {
+function createConfigurableNewTabModule(key: NewTabModuleSettingKey): HTMLElement | 'speedDial' | null {
   if (key === 'speedDial') {
     return createSpeedDialPanel()
   }
@@ -7004,27 +7024,27 @@ function getSpeedDialPinActionCopyLocal(isPinned: boolean): {
       }
 }
 
-function createSpeedDialPanel(): HTMLElement | null {
+function createSpeedDialPanel(): 'speedDial' | null {
   if (!state.moduleSettings.speedDial) {
+    dispatchNewtabSpeedDialView(null)
     return null
   }
 
-  const section = createSpeedDialPanelIslandElement({
+  dispatchNewtabSpeedDialView({
     ariaBusy: true,
     content: { type: 'loading', label: '载入固定入口' },
     meta: '正在载入'
   })
-  hydrateSpeedDialPanel(section)
-  return section
+  hydrateSpeedDialPanel()
+  return 'speedDial'
 }
 
-function hydrateSpeedDialPanel(section: HTMLElement): void {
+function hydrateSpeedDialPanel(): void {
   const renderVersion = ++speedDialRenderVersion
   void loadSpeedDialModule()
     .then((speedDial) => {
       if (
         renderVersion !== speedDialRenderVersion ||
-        !section.isConnected ||
         !state.moduleSettings.speedDial
       ) {
         return
@@ -7035,13 +7055,10 @@ function hydrateSpeedDialPanel(section: HTMLElement): void {
         pinnedIds: activeWorkspace.pinnedIds,
         bookmarks: state.allBookmarkMap
       })
-      renderSpeedDialPanel(section, items, speedDial.createSpeedDialEmptyState)
+      renderSpeedDialPanel(items, speedDial.createSpeedDialEmptyState)
     })
     .catch(() => {
-      if (!section.isConnected) {
-        return
-      }
-      renderSpeedDialPanelIsland(section, {
+      dispatchNewtabSpeedDialView({
         ariaBusy: false,
         content: { type: 'loading', label: '载入固定入口' },
         meta: '暂时无法载入',
@@ -7050,13 +7067,20 @@ function hydrateSpeedDialPanel(section: HTMLElement): void {
     })
 }
 
+function refreshSpeedDialPanel(): void {
+  if (state.moduleSettings.speedDial) {
+    hydrateSpeedDialPanel()
+  } else {
+    dispatchNewtabSpeedDialView(null)
+  }
+}
+
 function renderSpeedDialPanel(
-  section: HTMLElement,
   items: SpeedDialItem[],
   createSpeedDialEmptyState: SpeedDialModule['createSpeedDialEmptyState']
 ): void {
   if (!items.length) {
-    renderSpeedDialPanelIsland(section, {
+    dispatchNewtabSpeedDialView({
       ariaBusy: false,
       content: { type: 'empty', state: createSpeedDialEmptyState() },
       meta: state.speedDialReorderError || '0 个固定入口',
@@ -7075,7 +7099,7 @@ function renderSpeedDialPanel(
     cardModels.push(createSpeedDialCardViewModel(item, bookmark, renderIndex))
   }
 
-  renderSpeedDialPanelIsland(section, {
+  dispatchNewtabSpeedDialView({
     ariaBusy: false,
     content: {
       type: 'items',
