@@ -7441,7 +7441,7 @@ function bindBookmarkTileRuntime(
   bookmark: chrome.bookmarks.BookmarkTreeNode,
   bookmarkId: string
 ): void {
-  bindBookmarkNavigation(tile, bookmark)
+  syncBookmarkNavigation(tile, bookmark)
   const url = String(bookmark.url || '')
   if (!state.customIcons[bookmarkId]) {
     applyCachedFaviconAccent(tile, bookmarkId, url)
@@ -7686,18 +7686,19 @@ function revokeFeaturedBackgroundGalleryPreviewObjectUrls(): void {
   featuredBackgroundGalleryPreviewObjectUrlCache.clear()
 }
 
-function bindBookmarkNavigation(
+function syncBookmarkNavigation(
   link: HTMLAnchorElement,
   bookmark: chrome.bookmarks.BookmarkTreeNode
 ): void {
   const bookmarkId = String(bookmark.id || link.dataset.bookmarkId || '').trim()
   if (!bookmarkId || !String(bookmark.url || '').trim()) {
+    link.onclick = null
     return
   }
 
-  link.addEventListener('click', (event) => {
+  link.onclick = (event) => {
     handleBookmarkNavigation(event, bookmark, link.getAttribute('href') || link.href)
-  })
+  }
 }
 
 function handleBookmarkNavigation(
