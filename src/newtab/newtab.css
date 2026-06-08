@@ -790,6 +790,10 @@ body.background-mask-enabled .newtab-background-mask {
   display: none;
 }
 
+.newtab-search-chips:empty {
+  display: none;
+}
+
 .newtab-search-chip,
 .newtab-saved-search-chip {
   min-height: 22px;

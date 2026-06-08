@@ -754,7 +754,7 @@ function SearchWidgetShell({ state }: { state: SearchWidgetShellState }) {
         </Button>
       </form>
       <div id="newtab-search-suggestions-panel" className="newtab-search-suggestions-panel hidden">
-        <div className="newtab-search-chips hidden" aria-label="当前搜索条件" />
+        <div className="newtab-search-chips" aria-label="当前搜索条件" />
         <div className="newtab-search-section-label">书签匹配</div>
         <div
           id="newtab-search-suggestions"
@@ -1021,6 +1021,10 @@ function SearchEngineMenu({ state }: { state: SearchEngineMenuState }) {
 }
 
 function SearchChips({ chips }: { chips: SearchChipViewModel[] }) {
+  if (!chips.length) {
+    return null
+  }
+
   return (
     <>
       {chips.map((chip) => (

@@ -5712,7 +5712,6 @@ function createSearchWidget(): HTMLElement | null {
     renderNewTabSearchSuggestionsIsland(suggestions, [])
     renderedSuggestionKeys = []
     renderNewTabSearchChipsIsland(searchChips, [])
-    searchChips.classList.add('hidden')
     renderNewTabSavedSearchesIsland(savedSearches, {
       canSaveCurrent: false,
       error: '',
@@ -6130,7 +6129,6 @@ function renderNewTabSearchChips(container: HTMLElement, query: string): void {
     kind: chip.kind,
     label: chip.label
   }))
-  container.classList.toggle('hidden', chips.length === 0)
   renderNewTabSearchChipsIsland(container, chips)
 }
 
