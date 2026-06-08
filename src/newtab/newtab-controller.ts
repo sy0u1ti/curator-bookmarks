@@ -1045,6 +1045,9 @@ function bindEvents(): void {
     onToggle: handleSearchSettingToggle
   })
   registerNewtabBackgroundSettingsActions({
+    onFileSelect: (mediaType, file) => {
+      void handleBackgroundFileChange(mediaType, file)
+    },
     onFieldChange: handleBackgroundSettingFieldChange,
     onMaskToggle: handleBackgroundMaskToggle,
     onUrlCommit: () => {
@@ -1297,27 +1300,6 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
     target.getAttribute('role') === 'combobox' ||
     target.isContentEditable ||
     target.getAttribute('contenteditable') === 'true'
-}
-
-function bindBackgroundSettingsEvents(): void {
-  cachedEl('background-image-picker')?.addEventListener('click', () => {
-    const input = cachedEl('background-image-file')
-    if (input instanceof HTMLInputElement) {
-      input.click()
-    }
-  })
-  cachedEl('background-video-picker')?.addEventListener('click', () => {
-    const input = cachedEl('background-video-file')
-    if (input instanceof HTMLInputElement) {
-      input.click()
-    }
-  })
-  cachedEl('background-image-file')?.addEventListener('change', (event) => {
-    void handleBackgroundFileChange('image', event)
-  })
-  cachedEl('background-video-file')?.addEventListener('change', (event) => {
-    void handleBackgroundFileChange('video', event)
-  })
 }
 
 function bindGeneralSettingsEvents(): void {
@@ -1886,19 +1868,8 @@ async function applyBackgroundSettingsAfterCacheUpdate(shouldClearUrlCache: bool
 
 async function handleBackgroundFileChange(
   mediaType: 'image' | 'video',
-  event: Event
+  file: File
 ): Promise<void> {
-  const input = event.target
-  if (!(input instanceof HTMLInputElement)) {
-    return
-  }
-
-  const file = input.files?.[0] || null
-  input.value = ''
-  if (!file) {
-    return
-  }
-
   const expectedPrefix = mediaType === 'image' ? 'image/' : 'video/'
   if (!file.type.startsWith(expectedPrefix)) {
     setBackgroundStatus(
@@ -2020,7 +1991,6 @@ function initializeSettingsDrawer(): void {
 
   bindGeneralSettingsEvents()
   bindFolderSettingsEvents()
-  bindBackgroundSettingsEvents()
   bindSettingsGroupTabs()
   settingsDrawerReady = true
   resolveSettingsDrawerReady?.()

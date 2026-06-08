@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { Tabs as BaseTabs } from '@base-ui/react/tabs'
 import { Surface } from '../../ui/base/Surface'
@@ -34,6 +34,7 @@ import {
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
 import {
+  dispatchNewtabBackgroundFileSelect,
   dispatchNewtabBackgroundMaskToggle,
   dispatchNewtabBackgroundSettingFieldChange,
   dispatchNewtabBackgroundUrlCommit,
@@ -594,6 +595,12 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
 
 function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
   const backgroundSettings = useNewtabBackgroundSettingsView()
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null)
+  const videoFileInputRef = useRef<HTMLInputElement | null>(null)
+  const handleBackgroundFileChange = (mediaType: 'image' | 'video', file: File | null) => {
+    if (!file) return
+    dispatchNewtabBackgroundFileSelect(mediaType, file)
+  }
 
   return (
     <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-background-title">
@@ -668,13 +675,35 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
         </label>
         <div id="background-image-row" className="setting-row" hidden={backgroundSettings.imageRowHidden}>
           <span>背景图片</span>
-          <Button unstyled id="background-image-picker" className="setting-file-button" type="button">{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
-          <Input id="background-image-file" className="setting-file-input" type="file" accept="image/*" unstyled />
+          <Button unstyled id="background-image-picker" className="setting-file-button" type="button" onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
+          <Input
+            id="background-image-file"
+            ref={imageFileInputRef}
+            className="setting-file-input"
+            type="file"
+            accept="image/*"
+            onChange={(event) => {
+              handleBackgroundFileChange('image', event.currentTarget.files?.[0] || null)
+              event.currentTarget.value = ''
+            }}
+            unstyled
+          />
         </div>
         <div id="background-video-row" className="setting-row" hidden={backgroundSettings.videoRowHidden}>
           <span>背景视频</span>
-          <Button unstyled id="background-video-picker" className="setting-file-button" type="button">{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
-          <Input id="background-video-file" className="setting-file-input" type="file" accept="video/*" unstyled />
+          <Button unstyled id="background-video-picker" className="setting-file-button" type="button" onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
+          <Input
+            id="background-video-file"
+            ref={videoFileInputRef}
+            className="setting-file-input"
+            type="file"
+            accept="video/*"
+            onChange={(event) => {
+              handleBackgroundFileChange('video', event.currentTarget.files?.[0] || null)
+              event.currentTarget.value = ''
+            }}
+            unstyled
+          />
         </div>
         <div id="background-url-row" className="setting-row" hidden={backgroundSettings.urlRowHidden}>
           <span>图片链接</span>

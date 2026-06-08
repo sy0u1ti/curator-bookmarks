@@ -54,6 +54,7 @@ export type NewtabBackgroundSettingsFieldKey =
   | 'url'
 
 export interface NewtabBackgroundSettingsActions {
+  onFileSelect: (mediaType: 'image' | 'video', file: File) => void
   onFieldChange: (key: NewtabBackgroundSettingsFieldKey, value: number | string) => void
   onMaskToggle: (enabled: boolean) => void
   onUrlCommit: () => void
@@ -89,6 +90,7 @@ const EMPTY_VIEW: NewtabBackgroundSettingsView = {
 }
 
 const EMPTY_ACTIONS: NewtabBackgroundSettingsActions = {
+  onFileSelect: () => {},
   onFieldChange: () => {},
   onMaskToggle: () => {},
   onUrlCommit: () => {}
@@ -186,4 +188,11 @@ export function dispatchNewtabBackgroundSettingFieldChange(
 
 export function dispatchNewtabBackgroundUrlCommit(): void {
   backgroundSettingsActions.onUrlCommit()
+}
+
+export function dispatchNewtabBackgroundFileSelect(
+  mediaType: 'image' | 'video',
+  file: File
+): void {
+  backgroundSettingsActions.onFileSelect(mediaType, file)
 }
