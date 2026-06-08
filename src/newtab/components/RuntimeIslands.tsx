@@ -1859,10 +1859,16 @@ function FeaturedBackgroundPickerCardGrid({
 }
 
 function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPickerCardViewModel }) {
+  const [previewState, setPreviewState] = useState<'ready' | 'loading'>(card.initialPreviewUrl ? 'ready' : 'loading')
+  useEffect(() => {
+    setPreviewState(card.initialPreviewUrl ? 'ready' : 'loading')
+  }, [card.initialPreviewUrl])
+
   const className = [
     'featured-wallpaper-card',
     card.selected ? 'is-selected' : '',
-    'has-preview-image'
+    previewState === 'ready' ? 'has-preview-image' : '',
+    previewState === 'loading' ? 'is-loading' : ''
   ].filter(Boolean).join(' ')
   const previewStyle = {
     '--featured-wallpaper-preview-placeholder': card.previewAccentColor
@@ -1891,8 +1897,12 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
           draggable={false}
           data-remote-preview-url={card.remotePreviewUrl}
           data-preview-fallback-urls={JSON.stringify(card.previewFallbackUrls)}
-          onError={handleFeaturedBackgroundPreviewError}
-          onLoad={handleFeaturedBackgroundPreviewLoad}
+          onError={(event) => {
+            handleFeaturedBackgroundPreviewError(event, setPreviewState)
+          }}
+          onLoad={(event) => {
+            handleFeaturedBackgroundPreviewLoad(event, setPreviewState)
+          }}
         />
         <span className="featured-wallpaper-resolution" data-state={card.resolutionState}>
           {card.resolutionText}
@@ -1911,7 +1921,10 @@ function FeaturedBackgroundPickerCard({ card }: { card: FeaturedBackgroundPicker
   )
 }
 
-function handleFeaturedBackgroundPreviewError(event: React.SyntheticEvent<HTMLImageElement>) {
+function handleFeaturedBackgroundPreviewError(
+  event: React.SyntheticEvent<HTMLImageElement>,
+  setPreviewState: (state: 'ready' | 'loading') => void
+) {
   const image = event.currentTarget
   const card = image.closest<HTMLElement>('.featured-wallpaper-card')
   const fallbackUrls = parseFeaturedBackgroundPreviewFallbackUrls(image.dataset.previewFallbackUrls)
@@ -1921,26 +1934,26 @@ function handleFeaturedBackgroundPreviewError(event: React.SyntheticEvent<HTMLIm
     return
   }
   if (!fallbackUrl) {
-    card.classList.remove('has-preview-image')
-    card.classList.add('is-loading')
+    setPreviewState('loading')
     return
   }
 
   image.src = fallbackUrl
   card.dataset.featuredBackgroundResolvedPreviewUrl = fallbackUrl
-  card.classList.add('has-preview-image')
-  card.classList.remove('is-loading')
+  setPreviewState('ready')
 }
 
-function handleFeaturedBackgroundPreviewLoad(event: React.SyntheticEvent<HTMLImageElement>) {
+function handleFeaturedBackgroundPreviewLoad(
+  event: React.SyntheticEvent<HTMLImageElement>,
+  setPreviewState: (state: 'ready' | 'loading') => void
+) {
   const image = event.currentTarget
   const card = image.closest<HTMLElement>('.featured-wallpaper-card')
   if (!card) {
     return
   }
   card.dataset.featuredBackgroundResolvedPreviewUrl = image.currentSrc || image.src
-  card.classList.add('has-preview-image')
-  card.classList.remove('is-loading')
+  setPreviewState('ready')
 }
 
 function parseFeaturedBackgroundPreviewFallbackUrls(value: unknown): string[] {

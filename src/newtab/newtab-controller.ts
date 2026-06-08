@@ -10890,16 +10890,12 @@ function hydrateFeaturedBackgroundCardPreview(card: HTMLElement): void {
   if (cachedPreviewObjectUrl && image.src !== cachedPreviewObjectUrl) {
     image.src = cachedPreviewObjectUrl
     card.dataset.featuredBackgroundResolvedPreviewUrl = cachedPreviewObjectUrl
-    card.classList.add('has-preview-image')
-    card.classList.remove('is-loading')
     return
   }
   if (!image.src) {
     image.src = remotePreviewUrl
     card.dataset.featuredBackgroundResolvedPreviewUrl = remotePreviewUrl
   }
-  card.classList.add('has-preview-image')
-  card.classList.remove('is-loading')
 }
 
 function observeFeaturedBackgroundCardPreviews(): void {
@@ -11337,8 +11333,6 @@ function registerFeaturedBackgroundRenderedCards(grid: HTMLElement): void {
     if (initialPreviewUrl) {
       card.dataset.featuredBackgroundResolvedPreviewUrl = initialPreviewUrl
     }
-    card.classList.add('has-preview-image')
-    card.classList.remove('is-loading')
   }
 }
 
