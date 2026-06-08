@@ -8,6 +8,10 @@ import {
   syncSelectionSet
 } from '../shared-options/utils.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
+import {
+  renderDuplicateControlsIsland,
+  renderDuplicateResultsControlsIsland
+} from '../components/DuplicateControlsIsland.js'
 import { renderDuplicateGroupsIsland } from '../components/DuplicateGroupsIsland.js'
 
 const DUPLICATE_STRATEGY_LABELS = {
@@ -260,17 +264,12 @@ export function renderDuplicateSection() {
   const selectionStats = getDuplicateSelectionStats()
   const visibleGroups = managerState.duplicateGroups
 
-  renderDuplicateSummary(summary)
-  renderDuplicateSelectionState(selectionStats)
-  renderDuplicateStrategyControls(visibleGroups)
-
-  dom.duplicateGroupCount.textContent = `${managerState.duplicateGroups.length} 组重复`
-
-  if (dom.duplicateResultsSubtitle) {
-    const candidateCount = visibleGroups.reduce((count, group) => count + Math.max(0, group.items.length - 1), 0)
-    dom.duplicateResultsSubtitle.textContent = selectionStats.deleteCount > 0
-      ? `已选 ${selectionStats.deleteCount} 条待移入回收站；确认前可继续调整勾选。`
-      : `${visibleGroups.length} 组重复。可按推荐选择，或逐条勾选要移入回收站的副本；建议最多处理 ${candidateCount} 条。`
+  const controlsState = buildDuplicateControlsState(summary, selectionStats, visibleGroups)
+  if (dom.duplicateControls) {
+    renderDuplicateControlsIsland(dom.duplicateControls, controlsState)
+  }
+  if (dom.duplicateResultsControls) {
+    renderDuplicateResultsControlsIsland(dom.duplicateResultsControls, controlsState)
   }
 
   renderDuplicateGroupsIsland(dom.duplicateGroups, {
@@ -284,52 +283,19 @@ export function renderDuplicateSection() {
   })
 }
 
-function renderDuplicateSummary(summary) {
-  setDomText(dom.duplicateSummaryGroups, String(summary.totalGroups))
-  setDomText(dom.duplicateSummaryCandidates, String(summary.deleteCandidates))
-  setDomText(dom.duplicateSummaryCrossFolder, String(summary.crossFolderGroups))
-  setDomText(dom.duplicateSummaryTitleVariants, String(summary.titleVariantGroups))
-  setDomText(dom.duplicateSummaryHighRisk, String(summary.highRiskGroups))
-  setDomText(dom.duplicateSummarySelected, String(summary.selectedItems))
-}
+function buildDuplicateControlsState(summary, selectionStats, visibleGroups) {
+  const candidateCount = visibleGroups.reduce((count, group) => count + Math.max(0, group.items.length - 1), 0)
 
-function renderDuplicateSelectionState(selectionStats) {
-  dom.duplicateSelectionGroup.classList.add('hidden')
-  dom.duplicateSelectionCount.textContent = `${selectionStats.deleteCount} 条待移入回收站`
-
-  if (dom.duplicateSelectionImpact) {
-    dom.duplicateSelectionImpact.textContent =
-      `将移入回收站 ${selectionStats.deleteCount} 条，保留 ${selectionStats.keepCount} 条，涉及 ${selectionStats.groupCount} 组。`
-  }
-
-  if (dom.duplicateSelectionWarning) {
-    const unsafe = selectionStats.unsafeGroupCount > 0
-    dom.duplicateSelectionWarning.classList.toggle('hidden', !unsafe)
-    dom.duplicateSelectionWarning.textContent = unsafe
-      ? `${selectionStats.unsafeGroupCount} 组重复已被全选；每组至少保留 1 条后才能移入回收站。`
-      : ''
-  }
-
-  dom.duplicateDeleteSelection.disabled =
-    isInteractionLocked() || selectionStats.deleteCount === 0 || selectionStats.unsafeGroupCount > 0
-}
-
-function renderDuplicateStrategyControls(visibleGroups) {
-  if (dom.duplicateStrategyControls) {
-    const disabled = isInteractionLocked() || visibleGroups.length === 0
-    for (const button of dom.duplicateStrategyControls.querySelectorAll<HTMLButtonElement>('[data-duplicate-strategy]')) {
-      const strategy = normalizeDuplicateStrategy(button.getAttribute('data-duplicate-strategy'))
-      const visible = strategy !== 'folder' && strategy !== 'scope-or-shorter'
-      button.classList.toggle('hidden', !visible)
-      button.setAttribute('aria-hidden', visible ? 'false' : 'true')
-      button.textContent = strategy === 'recommended' ? '按推荐选择当前结果' : DUPLICATE_STRATEGY_LABELS[strategy]
-      button.disabled = disabled || !visible
-    }
-  }
-
-  if (dom.duplicateStrategyStatus) {
-    dom.duplicateStrategyStatus.textContent =
-      managerState.duplicateStrategyStatus || '先选择待移入回收站的副本，再确认处理。'
+  return {
+    groupCountLabel: `${managerState.duplicateGroups.length} 组重复`,
+    locked: isInteractionLocked(),
+    resultCount: visibleGroups.length,
+    resultsSubtitle: selectionStats.deleteCount > 0
+      ? `已选 ${selectionStats.deleteCount} 条待移入回收站；确认前可继续调整勾选。`
+      : `${visibleGroups.length} 组重复。可按推荐选择，或逐条勾选要移入回收站的副本；建议最多处理 ${candidateCount} 条。`,
+    selectionStats,
+    strategyStatus: managerState.duplicateStrategyStatus || '先选择待移入回收站的副本，再确认处理。',
+    summary
   }
 }
 
@@ -402,18 +368,15 @@ export function handleDuplicateGroupsClick(event, callbacks) {
   callbacks.renderAvailabilitySection()
 }
 
-export function handleDuplicateToolbarClick(event, callbacks) {
-  if (!(event.target instanceof Element)) {
+export function applyDuplicateStrategy(strategy, callbacks) {
+  if (isInteractionLocked()) {
     return
   }
 
-  const strategyButton = event.target.closest('[data-duplicate-strategy]')
-  if (strategyButton && !isInteractionLocked()) {
-    const strategy = normalizeDuplicateStrategy(strategyButton.getAttribute('data-duplicate-strategy'))
-    const result = selectDuplicateGroupsByStrategy(strategy, managerState.duplicateGroups)
-    setDuplicateStrategyStatus(result, DUPLICATE_STRATEGY_LABELS[strategy])
-    callbacks.renderAvailabilitySection()
-  }
+  const normalizedStrategy = normalizeDuplicateStrategy(strategy)
+  const result = selectDuplicateGroupsByStrategy(normalizedStrategy, managerState.duplicateGroups)
+  setDuplicateStrategyStatus(result, DUPLICATE_STRATEGY_LABELS[normalizedStrategy])
+  callbacks.renderAvailabilitySection()
 }
 
 export function clearDuplicateSelection(callbacks) {
@@ -902,10 +865,4 @@ function hashDuplicateKey(value) {
   }
 
   return Math.abs(hash).toString(36)
-}
-
-function setDomText(element, text) {
-  if (element) {
-    element.textContent = text
-  }
 }

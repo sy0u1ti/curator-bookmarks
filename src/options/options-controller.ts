@@ -177,7 +177,7 @@ import {
   buildDuplicateGroups,
   renderDuplicateSection,
   handleDuplicateGroupsClick,
-  handleDuplicateToolbarClick,
+  applyDuplicateStrategy,
   clearDuplicateSelection,
   deleteSelectedDuplicates
 } from './sections/duplicates.js'
@@ -298,6 +298,10 @@ import {
   FOLDER_CLEANUP_ACTION_EVENT,
   type FolderCleanupActionDetail
 } from './components/folder-cleanup-events.js'
+import {
+  DUPLICATE_ACTION_EVENT,
+  type DuplicateActionDetail
+} from './components/duplicate-events.js'
 
 const IS_OPTIONS_DASHBOARD_EMBED_MODE =
   new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
@@ -1196,9 +1200,7 @@ function bindEvents() {
   })
   window.addEventListener(REDIRECT_ACTION_EVENT, handleRedirectAction)
   dom.duplicateGroups?.addEventListener('click', (event) => handleDuplicateGroupsClick(event, duplicatesCallbacks))
-  dom.duplicateStrategyControls?.addEventListener('click', (event) => handleDuplicateToolbarClick(event, duplicatesCallbacks))
-  dom.duplicateClearSelection?.addEventListener('click', () => clearDuplicateSelection(duplicatesCallbacks))
-  dom.duplicateDeleteSelection?.addEventListener('click', () => deleteSelectedDuplicates(duplicatesCallbacks))
+  window.addEventListener(DUPLICATE_ACTION_EVENT, handleDuplicateAction)
   window.addEventListener(FOLDER_CLEANUP_ACTION_EVENT, handleFolderCleanupAction)
   dom.folderCleanupResults?.addEventListener('click', (event) => {
     handleFolderCleanupPreviewClick(event, folderCleanupCallbacks)
@@ -4657,6 +4659,21 @@ function handleRedirectAction(event: Event): void {
   }
   if (detail?.action === 'delete-all') {
     void deleteAllRedirects(redirectsCallbacks)
+  }
+}
+
+function handleDuplicateAction(event: Event): void {
+  const detail = (event as CustomEvent<DuplicateActionDetail>).detail
+  if (detail?.action === 'clear-selection') {
+    clearDuplicateSelection(duplicatesCallbacks)
+    return
+  }
+  if (detail?.action === 'delete-selection') {
+    void deleteSelectedDuplicates(duplicatesCallbacks)
+    return
+  }
+  if (detail?.action === 'strategy') {
+    applyDuplicateStrategy(detail.strategy, duplicatesCallbacks)
   }
 }
 

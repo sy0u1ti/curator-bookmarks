@@ -1,24 +1,5 @@
 import { Button } from '../../ui/primitives/Button.js'
-import { Card } from '../../ui/primitives/Card.js'
 import { Input } from '../../ui/primitives/Input.js'
-
-const duplicateMetrics = [
-  { label: '重复分组', valueId: 'duplicate-summary-groups', className: 'metric-total' },
-  { label: '建议清理', valueId: 'duplicate-summary-candidates', className: 'metric-info' },
-  { label: '跨文件夹', valueId: 'duplicate-summary-cross-folder', className: 'metric-warning' },
-  { label: '标题差异', valueId: 'duplicate-summary-title-variants', className: 'metric-warning' },
-  { label: '高风险', valueId: 'duplicate-summary-high-risk', className: 'metric-danger' },
-  { label: '已选择', valueId: 'duplicate-summary-selected', className: 'metric-success' }
-]
-
-const duplicateStrategies = [
-  { label: '保留最新', value: 'newest' },
-  { label: '保留最早', value: 'oldest' },
-  { label: '保留路径最短', value: 'shorter-path' },
-  { label: '保留有标签', value: 'tagged' },
-  { label: '保留新标签页来源', value: 'newtab-source' },
-  { label: '保留最近访问', value: 'recent' }
-]
 
 function EmptyCta({
   title,
@@ -221,56 +202,10 @@ export function DuplicatesPanel() {
       <p className="options-section-label">Duplicates</p>
       <h1 id="duplicates-title">重复书签检测</h1>
 
-      <div id="duplicate-selection-group" className="options-group detect-selection-group hidden">
-        <div className="detect-results-header">
-          <div>
-            <strong id="duplicate-selection-count">0 条已选择</strong>
-            <p id="duplicate-selection-impact" className="detect-results-subtitle">将删除 0 条，保留 0 条。</p>
-            <p id="duplicate-selection-warning" className="duplicate-selection-warning hidden" />
-          </div>
-          <div className="detect-results-actions">
-            <Button id="duplicate-clear-selection" className="options-button secondary small" size="sm" type="button" variant="secondary" aria-label="清空重复书签已选项">清空选择</Button>
-            <Button id="duplicate-delete-selection" className="options-button danger small" size="sm" type="button" variant="danger" aria-label="将重复书签已选项移入回收站">移入回收站</Button>
-          </div>
-        </div>
-      </div>
-
-      <div className="detect-summary-grid compact-grid duplicate-summary-grid">
-        {duplicateMetrics.map((metric) => (
-          <Card className={`summary-card compact metric-card ${metric.className}`} key={metric.valueId}>
-            <span className="summary-label">{metric.label}</span>
-            <strong id={metric.valueId}>0</strong>
-          </Card>
-        ))}
-      </div>
+      <div id="duplicate-controls" />
 
       <div className="options-group detect-results-group">
-        <div className="detect-results-header">
-          <div>
-            <strong>重复分组</strong>
-            <p id="duplicate-results-subtitle" className="detect-results-subtitle">同一归一化地址下出现多个书签时，会归到同一组。</p>
-          </div>
-          <span id="duplicate-group-count" className="option-value">0 组重复</span>
-        </div>
-        <div className="duplicate-toolbar">
-          <div id="duplicate-strategy-controls" className="duplicate-strategy-controls duplicate-primary-action-row" aria-label="重复书签选择策略">
-            <Button className="options-button small duplicate-primary-action" size="sm" type="button" data-duplicate-strategy="recommended" aria-label="按推荐选择重复书签当前结果">按推荐选择当前结果</Button>
-            {duplicateStrategies.map((strategy) => (
-              <Button
-                className="options-button secondary small"
-                size="sm"
-                type="button"
-                variant="secondary"
-                data-duplicate-strategy={strategy.value}
-                aria-label={`${strategy.label}重复书签`}
-                key={strategy.value}
-              >
-                {strategy.label}
-              </Button>
-            ))}
-            <span id="duplicate-strategy-status" className="duplicate-strategy-status" />
-          </div>
-        </div>
+        <div id="duplicate-results-controls" />
         <div id="duplicate-groups" className="detect-results">
           <div className="detect-empty">正在分析重复书签。</div>
         </div>
