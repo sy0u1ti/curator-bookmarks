@@ -9,6 +9,7 @@ import { Input } from '../../ui/primitives/Input'
 import { Select } from '../../ui/primitives/Select'
 import { SliderControl } from '../../ui/primitives/Slider'
 import { SwitchControl } from '../../ui/primitives/Switch'
+import { cx } from '../../ui/primitives/utils'
 import { Icon } from '../../ui/icons/Icon'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
 import {
@@ -46,7 +47,8 @@ import {
   dispatchNewtabSettingsDrawerFeaturedPickerClick,
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerReady,
-  useNewtabSettingsDrawerView
+  useNewtabSettingsDrawerView,
+  type NewtabSettingsDrawerPhase
 } from '../newtab-settings-drawer-store'
 import {
   dispatchNewtabModuleSettingMove,
@@ -248,6 +250,7 @@ function SettingsSelect({
 
 export interface SettingsDrawerProps {
   open: boolean
+  phase: NewtabSettingsDrawerPhase
   activeGroup: SettingsDrawerSection
   onActiveGroupChange: (group: SettingsDrawerSection) => void
   onOpenChange: (open: boolean, event?: Event) => void
@@ -1244,6 +1247,7 @@ export function SettingsDrawerHost() {
   return (
     <SettingsDrawer
       open={view.open}
+      phase={view.phase}
       activeGroup={view.activeGroup}
       onActiveGroupChange={dispatchNewtabSettingsDrawerActiveGroupChange}
       onOpenChange={dispatchNewtabSettingsDrawerOpenChange}
@@ -1251,13 +1255,18 @@ export function SettingsDrawerHost() {
   )
 }
 
-export function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
+export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
 
   return (
     <DrawerOverlay
       id="newtab-settings-drawer"
-      className={open ? 'settings-drawer open' : 'settings-drawer'}
+      className={cx(
+        'settings-drawer',
+        open ? 'open' : '',
+        phase === 'opening' ? 'is-opening' : '',
+        phase === 'closing' ? 'is-closing' : ''
+      )}
       open={open}
       onOpenChange={onOpenChange}
       triggerId="newtab-settings-trigger"

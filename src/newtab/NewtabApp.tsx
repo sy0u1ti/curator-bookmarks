@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { Icon } from '../ui/icons/Icon'
 import { Button } from '../ui/primitives/Button'
+import { cx } from '../ui/primitives/utils'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { useNewtabController } from './newtab-controller'
 import { DashboardOverlayHost } from './components/DashboardOverlay'
@@ -31,6 +33,13 @@ export function NewtabApp() {
 function NewtabShell() {
   const dashboardOverlay = useNewtabDashboardOverlayView()
   const settingsDrawer = useNewtabSettingsDrawerView()
+
+  useEffect(() => {
+    document.body.classList.toggle('settings-open', settingsDrawer.open)
+    return () => {
+      document.body.classList.remove('settings-open')
+    }
+  }, [settingsDrawer.open])
 
   return (
     <>
@@ -78,7 +87,12 @@ function NewtabShell() {
 
       <div
         id="newtab-settings-backdrop"
-        className="settings-backdrop"
+        className={cx(
+          'settings-backdrop',
+          settingsDrawer.open ? 'open' : '',
+          settingsDrawer.phase === 'opening' ? 'is-opening' : '',
+          settingsDrawer.phase === 'closing' ? 'is-closing' : ''
+        )}
         data-close-settings
         onClick={() => dispatchNewtabSettingsDrawerOpenChange(false)}
       ></div>

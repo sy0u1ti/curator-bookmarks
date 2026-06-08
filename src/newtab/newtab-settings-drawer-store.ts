@@ -2,10 +2,12 @@ import { useSyncExternalStore } from 'react'
 import type { SettingsDrawerSection } from './settings-group-sync'
 
 export type NewtabSettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
+export type NewtabSettingsDrawerPhase = 'closed' | 'opening' | 'open' | 'closing'
 
 export interface NewtabSettingsDrawerView {
   activeGroup: SettingsDrawerSection
   open: boolean
+  phase: NewtabSettingsDrawerPhase
   saveMessage: string
   saveState: NewtabSettingsSaveState
 }
@@ -29,6 +31,7 @@ const EMPTY_ACTIONS: NewtabSettingsDrawerActions = {
 let settingsDrawerView: NewtabSettingsDrawerView = {
   activeGroup: 'source',
   open: false,
+  phase: 'closed',
   saveMessage: '',
   saveState: 'idle'
 }
@@ -62,17 +65,25 @@ export function useNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
   return useSyncExternalStore(
     subscribeSettingsDrawer,
     () => settingsDrawerView,
-    () => ({ activeGroup: 'source', open: false, saveMessage: '', saveState: 'idle' })
+    () => ({ activeGroup: 'source', open: false, phase: 'closed', saveMessage: '', saveState: 'idle' })
   )
 }
 
-export function dispatchNewtabSettingsDrawerOpen(open: boolean): void {
-  if (settingsDrawerView.open === open) {
+export function getNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
+  return settingsDrawerView
+}
+
+export function dispatchNewtabSettingsDrawerOpen(
+  open: boolean,
+  phase: NewtabSettingsDrawerPhase = open ? 'open' : 'closed'
+): void {
+  if (settingsDrawerView.open === open && settingsDrawerView.phase === phase) {
     return
   }
   settingsDrawerView = {
     ...settingsDrawerView,
-    open
+    open,
+    phase
   }
   emitSettingsDrawerChange()
 }

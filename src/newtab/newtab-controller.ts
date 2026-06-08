@@ -265,6 +265,7 @@ import type {
 } from './bookmark-menu-view-models.js'
 import {
   dispatchNewtabSettingsDrawerActiveGroup,
+  getNewtabSettingsDrawerView,
   dispatchNewtabSettingsDrawerOpen,
   dispatchNewtabSettingsDrawerSaveStatus,
   registerNewtabSettingsDrawerActions
@@ -320,7 +321,6 @@ import {
   type NewtabBackgroundSettingsFieldKey
 } from './newtab-background-settings-store.js'
 const FAVICON_SIZE = 64
-const MOTION_CLOSE_TOKEN = 'motionCloseToken'
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
 const SETTINGS_SAVE_DEBOUNCE_MS = 260
@@ -432,13 +432,6 @@ let featuredBackgroundUiVersion = 0
 let featuredBackgroundPickerRenderSignature = ''
 let speedDialRenderVersion = 0
 let clockHydrationVersion = 0
-
-function cancelExitMotion(element: Element, closingClass = 'is-closing'): void {
-  if (element instanceof HTMLElement) {
-    delete element.dataset[MOTION_CLOSE_TOKEN]
-  }
-  element.classList.remove(closingClass)
-}
 
 const SEARCH_SUGGESTION_LIMIT = 6
 const SEARCH_SUGGESTION_DEBOUNCE_MS = 120
@@ -1269,7 +1262,7 @@ function shouldFocusSearchFromKeydown(event: KeyboardEvent): boolean {
     state.draggingFolderId ||
     state.activeMenuBookmarkId ||
     state.addMenuOpen ||
-    document.body.classList.contains('settings-open')
+    isSettingsDrawerOpen()
   ) {
     return false
   }
@@ -1934,19 +1927,13 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: S
 
 function primeSettingsDrawerOpenTransition(): void {
   if (settingsDrawer) {
-    cancelExitMotion(settingsDrawer)
-    settingsDrawer.classList.remove('open')
-    settingsDrawer.classList.add('is-opening')
-    settingsDrawer.setAttribute('aria-hidden', 'true')
     settingsDrawer.removeAttribute('inert')
     settingsDrawer.getBoundingClientRect()
   }
   if (settingsBackdrop) {
-    cancelExitMotion(settingsBackdrop)
-    settingsBackdrop.classList.remove('open')
-    settingsBackdrop.classList.add('is-opening')
     settingsBackdrop.getBoundingClientRect()
   }
+  dispatchNewtabSettingsDrawerOpen(false, 'opening')
 }
 
 function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
@@ -1956,22 +1943,10 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     settingsDrawerReturnFocusElement = document.activeElement instanceof HTMLElement
       ? document.activeElement
       : null
-    if (settingsDrawer) {
-      cancelExitMotion(settingsDrawer)
-    }
-    if (settingsBackdrop) {
-      cancelExitMotion(settingsBackdrop)
-    }
     syncSettingsSaveStatus()
     scheduleAdaptiveNewTabLayoutUpdate()
-    settingsDrawer?.classList.add('open')
-    settingsBackdrop?.classList.add('open')
-    settingsDrawer?.classList.remove('is-opening')
-    settingsBackdrop?.classList.remove('is-opening')
-    dispatchNewtabSettingsDrawerOpen(true)
-    settingsDrawer?.setAttribute('aria-hidden', 'false')
+    dispatchNewtabSettingsDrawerOpen(true, 'open')
     settingsDrawer?.removeAttribute('inert')
-    document.body.classList.add('settings-open')
     setSettingsModalBackgroundInert(true)
     if (focusFirstControl) {
       window.requestAnimationFrame(() => {
@@ -2037,20 +2012,13 @@ function closeSettingsDrawer(): void {
     return
   }
 
-  settingsDrawer?.classList.remove('open')
-  settingsBackdrop?.classList.remove('open')
-  dispatchNewtabSettingsDrawerOpen(false)
-  settingsDrawer?.classList.remove('is-opening')
-  settingsBackdrop?.classList.remove('is-opening')
-  settingsDrawer?.classList.add('is-closing')
-  settingsBackdrop?.classList.add('is-closing')
-  settingsDrawer?.setAttribute('aria-hidden', 'true')
+  dispatchNewtabSettingsDrawerOpen(false, 'closing')
   settingsDrawer?.setAttribute('inert', '')
-  document.body.classList.remove('settings-open')
   setSettingsModalBackgroundInert(false)
   window.setTimeout(() => {
-    settingsDrawer?.classList.remove('is-closing')
-    settingsBackdrop?.classList.remove('is-closing')
+    if (getNewtabSettingsDrawerView().phase === 'closing') {
+      dispatchNewtabSettingsDrawerOpen(false, 'closed')
+    }
   }, 260)
   restoreSettingsDrawerFocus()
 }
@@ -2077,7 +2045,7 @@ function setSettingsModalBackgroundInert(inert: boolean): void {
 }
 
 function isSettingsDrawerOpen(): boolean {
-  return document.body.classList.contains('settings-open')
+  return getNewtabSettingsDrawerView().open
 }
 
 function focusFirstSettingsDrawerControl(): void {
