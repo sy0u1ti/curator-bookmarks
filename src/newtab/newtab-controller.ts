@@ -215,6 +215,7 @@ import {
   renderNewTabSearchHintIsland,
   renderNewTabSearchSectionLabelIsland,
   renderNewTabSearchSuggestionsIsland,
+  renderBookmarkGridPlaceholderIslandElement,
   renderClockWidgetStateIsland,
   renderSearchWidgetActionStateIsland,
   renderSearchWidgetButtonStatesIsland,
@@ -7270,8 +7271,10 @@ function scheduleBookmarkTileChunkRender(
 
     if (endIndex < section.bookmarks.length) {
       if (placeholder?.isConnected) {
-        placeholder.dataset.pendingBookmarks = String(section.bookmarks.length - endIndex)
-        placeholder.textContent = `继续载入 ${section.bookmarks.length - endIndex} 个书签`
+        renderBookmarkGridPlaceholderIslandElement(placeholder, {
+          folderTitle: section.title || '文件夹',
+          remainingCount: section.bookmarks.length - endIndex
+        })
       }
       scheduleBookmarkTileChunkRender(
         list,

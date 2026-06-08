@@ -811,12 +811,19 @@ export function replaceBookmarkContentIslandChildren(
 export function createBookmarkGridPlaceholderIslandElement(state: BookmarkGridPlaceholderViewModel): HTMLElement {
   const placeholder = document.createElement('div')
   placeholder.className = 'bookmark-grid-placeholder'
+  renderBookmarkGridPlaceholderIslandElement(placeholder, state)
+  return placeholder
+}
+
+export function renderBookmarkGridPlaceholderIslandElement(
+  placeholder: HTMLElement,
+  state: BookmarkGridPlaceholderViewModel
+): void {
   placeholder.dataset.pendingBookmarks = String(Math.max(0, state.remainingCount))
   placeholder.setAttribute('role', 'status')
   placeholder.setAttribute('aria-live', 'polite')
   placeholder.title = `${state.folderTitle || '文件夹'}还有 ${state.remainingCount} 个书签将在滚动到此处时载入`
   renderIsland(placeholder, <BookmarkGridPlaceholder state={state} />)
-  return placeholder
 }
 
 export function mountBookmarkGridPlaceholderIslandElement(
