@@ -34,6 +34,8 @@ import {
 } from '../newtab-search-settings-store'
 import {
   dispatchNewtabBackgroundMaskToggle,
+  dispatchNewtabBackgroundSettingFieldChange,
+  dispatchNewtabBackgroundUrlCommit,
   useNewtabBackgroundSettingsView
 } from '../newtab-background-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
@@ -601,8 +603,11 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
           label="背景类型"
           description="可选择精选图库、纯色、本地图片/视频或远程图片链接。"
           ariaLabel="背景类型"
-          defaultValue="color"
+          onValueChange={(value) => {
+            if (value) dispatchNewtabBackgroundSettingFieldChange('type', value)
+          }}
           portalContainer={panelElement}
+          value={backgroundSettings.type}
           options={[
             ['featured', '精选图库'],
             ['image', '图片'],
@@ -611,7 +616,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             ['color', '纯色']
           ]}
         />
-        <div id="background-featured-row" className="setting-row">
+        <div id="background-featured-row" className="setting-row" hidden={backgroundSettings.featuredPickerHidden}>
           <span className="setting-label-stack">
             <span>精选图库</span>
             <small>主动选择后会访问 NASA 与 Wikimedia Commons 等第三方图片域名并自动缓存。</small>
@@ -623,42 +628,68 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             type="button"
             aria-haspopup="dialog"
             aria-controls="background-featured-modal"
+            disabled={backgroundSettings.featuredPickerDisabled}
             onClick={() => {
               dispatchNewtabSettingsDrawerFeaturedPickerClick()
             }}
           >
             <span id="background-featured-picker-label">选择壁纸</span>
           </Button>
-          <Input id="background-featured-id" type="hidden" defaultValue="" unstyled />
+          <Input
+            id="background-featured-id"
+            type="hidden"
+            value={backgroundSettings.featuredId}
+            onChange={(event) => dispatchNewtabBackgroundSettingFieldChange('featuredId', event.currentTarget.value)}
+            unstyled
+          />
         </div>
-        <div id="background-featured-credit-row" className="setting-row background-featured-credit-row">
+        <div id="background-featured-credit-row" className="setting-row background-featured-credit-row" hidden={backgroundSettings.featuredCreditHidden}>
           <span>图片来源</span>
           <a id="background-featured-credit" className="background-featured-credit" href="https://images.nasa.gov/" target="_blank" rel="noreferrer">NASA Image and Video Library</a>
         </div>
-        <SliderRow rowId="background-featured-display-size-row" id="background-featured-display-size" label="背景大小" valueId="background-featured-display-size-value" value="100%" min="50" max="180" defaultValue="100" ariaLabel="精选图库背景大小" />
-        <SliderRow rowId="background-featured-position-x-row" id="background-featured-position-x" label="水平位置" valueId="background-featured-position-x-value" value="50%" min="0" max="100" defaultValue="50" ariaLabel="精选图库背景水平位置" />
-        <SliderRow rowId="background-featured-position-y-row" id="background-featured-position-y" label="垂直位置" valueId="background-featured-position-y-value" value="50%" min="0" max="100" defaultValue="50" ariaLabel="精选图库背景垂直位置" />
-        <label id="background-color-row" className="setting-row" htmlFor="background-color">
+        <SliderRow rowId="background-featured-display-size-row" id="background-featured-display-size" label="背景大小" valueId="background-featured-display-size-value" value={`${backgroundSettings.displaySize}%`} min={String(backgroundSettings.displaySizeMin)} max={String(backgroundSettings.displaySizeMax)} defaultValue="100" ariaLabel="精选图库背景大小" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('displaySize', value)} sliderValue={backgroundSettings.displaySize} />
+        <SliderRow rowId="background-featured-position-x-row" id="background-featured-position-x" label="水平位置" valueId="background-featured-position-x-value" value={`${backgroundSettings.positionX}%`} min={String(backgroundSettings.positionXMin)} max={String(backgroundSettings.positionXMax)} defaultValue="50" ariaLabel="精选图库背景水平位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionX', value)} sliderValue={backgroundSettings.positionX} />
+        <SliderRow rowId="background-featured-position-y-row" id="background-featured-position-y" label="垂直位置" valueId="background-featured-position-y-value" value={`${backgroundSettings.positionY}%`} min={String(backgroundSettings.positionYMin)} max={String(backgroundSettings.positionYMax)} defaultValue="50" ariaLabel="精选图库背景垂直位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionY', value)} sliderValue={backgroundSettings.positionY} />
+        <label id="background-color-row" className="setting-row" htmlFor="background-color" hidden={backgroundSettings.type !== 'color'}>
           <span>背景颜色</span>
-          <span id="background-color-control" className="setting-color">
-            <span id="background-color-value">#000000</span>
-            <Input id="background-color" className="setting-color-input" type="color" defaultValue="#000000" aria-label="背景颜色" unstyled />
+          <span id="background-color-control" className="setting-color" style={{ backgroundColor: backgroundSettings.color }}>
+            <span id="background-color-value">{backgroundSettings.color.toUpperCase()}</span>
+            <Input
+              id="background-color"
+              className="setting-color-input"
+              type="color"
+              value={backgroundSettings.color}
+              onChange={(event) => dispatchNewtabBackgroundSettingFieldChange('color', event.currentTarget.value)}
+              aria-label="背景颜色"
+              unstyled
+            />
           </span>
         </label>
-        <div id="background-image-row" className="setting-row" hidden>
+        <div id="background-image-row" className="setting-row" hidden={backgroundSettings.imageRowHidden}>
           <span>背景图片</span>
-          <Button unstyled id="background-image-picker" className="setting-file-button" type="button">选择图片</Button>
+          <Button unstyled id="background-image-picker" className="setting-file-button" type="button">{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
           <Input id="background-image-file" className="setting-file-input" type="file" accept="image/*" unstyled />
         </div>
-        <div id="background-video-row" className="setting-row" hidden>
+        <div id="background-video-row" className="setting-row" hidden={backgroundSettings.videoRowHidden}>
           <span>背景视频</span>
-          <Button unstyled id="background-video-picker" className="setting-file-button" type="button">选择视频</Button>
+          <Button unstyled id="background-video-picker" className="setting-file-button" type="button">{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
           <Input id="background-video-file" className="setting-file-input" type="file" accept="video/*" unstyled />
         </div>
-        <div id="background-url-row" className="setting-row" hidden>
+        <div id="background-url-row" className="setting-row" hidden={backgroundSettings.urlRowHidden}>
           <span>图片链接</span>
           <span className="setting-floating-field">
-            <Input id="background-url" className="setting-url-input" type="url" placeholder="图片链接" aria-label="背景图片链接" spellCheck={false} unstyled />
+            <Input
+              id="background-url"
+              className="setting-url-input"
+              type="url"
+              placeholder="图片链接"
+              aria-label="背景图片链接"
+              spellCheck={false}
+              value={backgroundSettings.url}
+              onBlur={dispatchNewtabBackgroundUrlCommit}
+              onChange={(event) => dispatchNewtabBackgroundSettingFieldChange('url', event.currentTarget.value)}
+              unstyled
+            />
           </span>
         </div>
         <output id="background-status" className="setting-status" aria-live="polite" hidden />
@@ -669,13 +700,16 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
           checked={backgroundSettings.maskEnabled}
           onCheckedChange={dispatchNewtabBackgroundMaskToggle}
         />
-        <div id="background-mask-style-row" className="setting-row" hidden>
+        <div id="background-mask-style-row" className="setting-row" hidden={backgroundSettings.maskStyleHidden}>
           <span>模糊样式</span>
           <Select
             id="background-mask-style"
             inputAttributes={{ 'aria-label': '背景蒙版样式', id: 'background-mask-style' }}
             inputClassName="setting-select-input"
             itemClassName="custom-select-option"
+            onValueChange={(value) => {
+              if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
+            }}
             options={[
               { value: 'dark', label: '暗色增强' },
               { value: 'frosted', label: '磨砂柔化' },
@@ -689,10 +723,11 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             syncInputState
             triggerClassName="setting-select custom-select-trigger"
             unstyled
+            value={backgroundSettings.maskStyle}
             valueClassName="custom-select-trigger-label"
           />
         </div>
-        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value="12px" min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden />
+        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
       </Surface>
     </section>
   )

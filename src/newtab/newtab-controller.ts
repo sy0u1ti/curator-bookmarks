@@ -306,7 +306,8 @@ import {
 import {
   createNewtabBackgroundSettingsView,
   dispatchNewtabBackgroundSettingsView,
-  registerNewtabBackgroundSettingsActions
+  registerNewtabBackgroundSettingsActions,
+  type NewtabBackgroundSettingsFieldKey
 } from './newtab-background-settings-store.js'
 const FAVICON_SIZE = 64
 const MOTION_CLOSE_TOKEN = 'motionCloseToken'
@@ -1044,7 +1045,11 @@ function bindEvents(): void {
     onToggle: handleSearchSettingToggle
   })
   registerNewtabBackgroundSettingsActions({
-    onMaskToggle: handleBackgroundMaskToggle
+    onFieldChange: handleBackgroundSettingFieldChange,
+    onMaskToggle: handleBackgroundMaskToggle,
+    onUrlCommit: () => {
+      void handleBackgroundUrlCommit()
+    }
   })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
@@ -1295,22 +1300,6 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
 }
 
 function bindBackgroundSettingsEvents(): void {
-  cachedEl('background-type')?.addEventListener('change', handleBackgroundSettingsChange)
-  cachedEl('background-featured-id')?.addEventListener('change', handleBackgroundSettingsChange)
-  cachedEl('background-featured-display-size')?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
-  cachedEl('background-featured-position-x')?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
-  cachedEl('background-featured-position-y')?.addEventListener('input', handleFeaturedBackgroundDisplayPreferencePreview)
-  cachedEl('background-featured-display-size')?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
-  cachedEl('background-featured-position-x')?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
-  cachedEl('background-featured-position-y')?.addEventListener('change', handleFeaturedBackgroundDisplayPreferenceCommit)
-  cachedEl('background-color')?.addEventListener('input', handleBackgroundSettingsChange)
-  const backgroundUrlInput = cachedEl('background-url')
-  backgroundUrlInput?.addEventListener('input', handleBackgroundSettingsChange)
-  backgroundUrlInput?.addEventListener('change', () => {
-    void handleBackgroundUrlCommit()
-  })
-  cachedEl('background-mask-style')?.addEventListener('change', handleBackgroundSettingsChange)
-  cachedEl('background-mask-blur')?.addEventListener('input', handleBackgroundSettingsChange)
   cachedEl('background-image-picker')?.addEventListener('click', () => {
     const input = cachedEl('background-image-file')
     if (input instanceof HTMLInputElement) {
@@ -1788,22 +1777,6 @@ function commitSearchSettings(
   }
 }
 
-function handleFeaturedBackgroundDisplayPreferencePreview(): void {
-  state.featuredBackgroundPreferences = readFeaturedBackgroundPreferencesFromControls()
-  applyFeaturedBackgroundDisplayPreferences()
-  syncFeaturedBackgroundDisplayPreferenceControls()
-  scheduleFeaturedBackgroundPreferencesSave()
-}
-
-function handleFeaturedBackgroundDisplayPreferenceCommit(): void {
-  state.featuredBackgroundPreferences = readFeaturedBackgroundPreferencesFromControls()
-  applyFeaturedBackgroundDisplayPreferences()
-  syncFeaturedBackgroundDisplayPreferenceControls()
-  void saveFeaturedBackgroundPreferences().catch((error) => {
-    console.warn('精选图库显示设置保存失败。', error)
-  })
-}
-
 function applySearchSettingsLive(): void {
   const settings = state.searchSettings
   const widthBounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
@@ -1837,17 +1810,34 @@ function scheduleSearchSettingsSettle(): void {
   }, SETTINGS_SAVE_DEBOUNCE_MS)
 }
 
-function handleBackgroundSettingsChange(): void {
-  const previousSettings = state.backgroundSettings
-  const nextSettings = readBackgroundSettingsFromControls()
-  commitBackgroundSettings(previousSettings, nextSettings)
-}
-
 function handleBackgroundMaskToggle(enabled: boolean): void {
   const previousSettings = state.backgroundSettings
   const nextSettings = normalizeBackgroundSettings({
     ...state.backgroundSettings,
     maskEnabled: enabled
+  })
+  commitBackgroundSettings(previousSettings, nextSettings)
+}
+
+function handleBackgroundSettingFieldChange(
+  key: NewtabBackgroundSettingsFieldKey,
+  value: number | string
+): void {
+  if (key === 'displaySize' || key === 'positionX' || key === 'positionY') {
+    state.featuredBackgroundPreferences = normalizeFeaturedBackgroundPreferences({
+      ...state.featuredBackgroundPreferences,
+      [key]: value
+    })
+    applyFeaturedBackgroundDisplayPreferences()
+    syncBackgroundSettingsControls()
+    scheduleFeaturedBackgroundPreferencesSave()
+    return
+  }
+
+  const previousSettings = state.backgroundSettings
+  const nextSettings = normalizeBackgroundSettings({
+    ...state.backgroundSettings,
+    [key]: value
   })
   commitBackgroundSettings(previousSettings, nextSettings)
 }
@@ -8667,98 +8657,25 @@ function normalizePositiveDimension(value: unknown): number | undefined {
   return Number.isFinite(dimension) && dimension > 0 ? dimension : undefined
 }
 
-function readBackgroundSettingsFromControls(): typeof DEFAULT_BACKGROUND_SETTINGS {
-  const typeInput = cachedEl('background-type')
-  const colorInput = cachedEl('background-color')
-  const featuredInput = cachedEl('background-featured-id')
-  const urlInput = cachedEl('background-url')
-  const maskStyleInput = cachedEl('background-mask-style')
-  const maskBlurInput = cachedEl('background-mask-blur')
-
-  return normalizeBackgroundSettings({
-    type: isValueControl(typeInput) ? typeInput.value : state.backgroundSettings.type,
-    color: colorInput instanceof HTMLInputElement ? colorInput.value : state.backgroundSettings.color,
-    imageName: state.backgroundSettings.imageName,
-    videoName: state.backgroundSettings.videoName,
-    url: urlInput instanceof HTMLInputElement ? urlInput.value : state.backgroundSettings.url,
-    featuredId: featuredInput instanceof HTMLInputElement
-      ? featuredInput.value
-      : state.backgroundSettings.featuredId,
-    maskEnabled: state.backgroundSettings.maskEnabled,
-    maskStyle: isValueControl(maskStyleInput)
-      ? maskStyleInput.value
-      : state.backgroundSettings.maskStyle,
-    maskBlur: maskBlurInput instanceof HTMLInputElement
-      ? Number(maskBlurInput.value)
-      : state.backgroundSettings.maskBlur
-  })
-}
-
 function syncBackgroundSettingsControls(): void {
   const settings = state.backgroundSettings
   updateBackgroundStartupCacheStatus(settings)
-  const typeInput = cachedEl('background-type')
-  const colorInput = cachedEl('background-color')
-  const featuredInput = cachedEl('background-featured-id')
   const featuredPicker = cachedEl('background-featured-picker')
   const featuredPickerLabel = cachedEl('background-featured-picker-label')
-  const urlInput = cachedEl('background-url')
-  const colorRow = cachedEl('background-color-row')
-  const featuredRow = cachedEl('background-featured-row')
-  const featuredCreditRow = cachedEl('background-featured-credit-row')
   const featuredCredit = cachedEl('background-featured-credit')
-  const featuredDisplaySizeRow = cachedEl('background-featured-display-size-row')
-  const featuredPositionXRow = cachedEl('background-featured-position-x-row')
-  const featuredPositionYRow = cachedEl('background-featured-position-y-row')
-  const imageRow = cachedEl('background-image-row')
-  const videoRow = cachedEl('background-video-row')
-  const urlRow = cachedEl('background-url-row')
   const backgroundStatus = cachedEl('background-status')
-  const colorControl = cachedEl('background-color-control')
-  const colorValue = cachedEl('background-color-value')
   const imageButton = cachedEl('background-image-picker')
   const videoButton = cachedEl('background-video-picker')
-  const maskStyleInput = cachedEl('background-mask-style')
-  const maskBlurInput = cachedEl('background-mask-blur')
-  const maskStyleRow = cachedEl('background-mask-style-row')
-  const maskBlurRow = cachedEl('background-mask-blur-row')
 
-  if (isValueControl(typeInput)) {
-    typeInput.value = settings.type
-  }
-  if (colorInput instanceof HTMLInputElement) {
-    colorInput.value = settings.color
-  }
-  if (featuredInput instanceof HTMLInputElement) {
+  if (settings.type === 'featured') {
     void hydrateFeaturedBackgroundOptions()
-    featuredInput.value = settings.featuredId
   }
   if (featuredPicker instanceof HTMLButtonElement) {
-    featuredPicker.hidden = settings.type !== 'featured'
-    featuredPicker.disabled = settings.type !== 'featured'
     featuredPicker.setAttribute('aria-expanded', String(isFeaturedBackgroundPickerOpen()))
     featuredPicker.classList.toggle('is-custom-selected', Boolean(settings.featuredId))
   }
   if (featuredPickerLabel instanceof HTMLElement) {
     featuredPickerLabel.textContent = getFeaturedBackgroundPickerLabel(settings)
-  }
-  if (urlInput instanceof HTMLInputElement) {
-    urlInput.value = settings.url
-  }
-  if (featuredRow instanceof HTMLElement) {
-    featuredRow.hidden = settings.type !== 'featured'
-  }
-  if (featuredCreditRow instanceof HTMLElement) {
-    featuredCreditRow.hidden = settings.type !== 'featured'
-  }
-  if (featuredDisplaySizeRow instanceof HTMLElement) {
-    featuredDisplaySizeRow.hidden = settings.type !== 'featured'
-  }
-  if (featuredPositionXRow instanceof HTMLElement) {
-    featuredPositionXRow.hidden = settings.type !== 'featured'
-  }
-  if (featuredPositionYRow instanceof HTMLElement) {
-    featuredPositionYRow.hidden = settings.type !== 'featured'
   }
   if (featuredCredit instanceof HTMLAnchorElement) {
     const featuredItem = getActiveFeaturedBackgroundItemSync(settings)
@@ -8775,32 +8692,12 @@ function syncBackgroundSettingsControls(): void {
       }
     }
   }
-  if (colorRow instanceof HTMLElement) {
-    colorRow.hidden = settings.type !== 'color'
-  }
-  if (imageRow instanceof HTMLElement) {
-    imageRow.hidden = settings.type !== 'image'
-  }
-  if (videoRow instanceof HTMLElement) {
-    videoRow.hidden = settings.type !== 'video'
-  }
-  if (urlRow instanceof HTMLElement) {
-    urlRow.hidden = settings.type !== 'urls'
-  }
   if (backgroundStatus instanceof HTMLElement) {
     backgroundStatus.textContent = state.backgroundStatus
     backgroundStatus.hidden = !state.backgroundStatus
     backgroundStatus.dataset.tone = state.backgroundStatusTone
   }
-  if (colorControl instanceof HTMLElement) {
-    colorControl.style.backgroundColor = settings.color
-    colorControl.style.color = getReadableTextColor(settings.color)
-  }
-  if (colorValue) {
-    colorValue.textContent = settings.color.toUpperCase()
-  }
   if (imageButton) {
-    imageButton.textContent = settings.imageName ? '更换图片' : '选择图片'
     if (settings.imageName) {
       imageButton.setAttribute('title', settings.imageName)
     } else {
@@ -8808,31 +8705,18 @@ function syncBackgroundSettingsControls(): void {
     }
   }
   if (videoButton) {
-    videoButton.textContent = settings.videoName ? '更换视频' : '选择视频'
     if (settings.videoName) {
       videoButton.setAttribute('title', settings.videoName)
     } else {
       videoButton.removeAttribute('title')
     }
   }
-  dispatchNewtabBackgroundSettingsView(createNewtabBackgroundSettingsView(settings))
-  if (isValueControl(maskStyleInput)) {
-    maskStyleInput.value = settings.maskStyle
-    maskStyleInput.disabled = !settings.maskEnabled
-  }
-  if (maskBlurInput instanceof HTMLInputElement) {
-    maskBlurInput.value = String(settings.maskBlur)
-    maskBlurInput.disabled = !settings.maskEnabled
-  }
+  dispatchNewtabBackgroundSettingsView(createNewtabBackgroundSettingsView(
+    settings,
+    state.featuredBackgroundPreferences,
+    FEATURED_BACKGROUND_DISPLAY_LIMITS
+  ))
   setTextContent('background-mask-blur-value', `${settings.maskBlur}px`)
-  if (maskStyleRow instanceof HTMLElement) {
-    maskStyleRow.hidden = !settings.maskEnabled
-    maskStyleRow.classList.remove('setting-row-disabled')
-  }
-  if (maskBlurRow instanceof HTMLElement) {
-    maskBlurRow.hidden = !settings.maskEnabled
-    maskBlurRow.classList.remove('setting-row-disabled')
-  }
   syncFeaturedBackgroundDisplayPreferenceControls()
 }
 
@@ -11909,25 +11793,6 @@ function clearFeaturedBackgroundHoverPreview(card?: HTMLElement): void {
   dispatchNewtabFeaturedBackgroundHoverPreviewHidden()
 }
 
-function readFeaturedBackgroundPreferencesFromControls(): FeaturedBackgroundPreferences {
-  const featuredBackgroundDisplaySizeInput = cachedEl('background-featured-display-size')
-  const featuredBackgroundPositionXInput = cachedEl('background-featured-position-x')
-  const featuredBackgroundPositionYInput = cachedEl('background-featured-position-y')
-
-  return normalizeFeaturedBackgroundPreferences({
-    ...state.featuredBackgroundPreferences,
-    displaySize: featuredBackgroundDisplaySizeInput instanceof HTMLInputElement
-      ? Number(featuredBackgroundDisplaySizeInput.value)
-      : state.featuredBackgroundPreferences.displaySize,
-    positionX: featuredBackgroundPositionXInput instanceof HTMLInputElement
-      ? Number(featuredBackgroundPositionXInput.value)
-      : state.featuredBackgroundPreferences.positionX,
-    positionY: featuredBackgroundPositionYInput instanceof HTMLInputElement
-      ? Number(featuredBackgroundPositionYInput.value)
-      : state.featuredBackgroundPreferences.positionY
-  })
-}
-
 function applyFeaturedBackgroundDisplayPreferences(): void {
   const displayCss = getBackgroundDisplayCssForSettings(state.backgroundSettings)
   document.documentElement.style.setProperty('--instant-wallpaper-size', displayCss.backgroundSize)
@@ -11960,25 +11825,11 @@ function updateInstantWallpaperDisplayCss(
 
 function syncFeaturedBackgroundDisplayPreferenceControls(): void {
   const preferences = state.featuredBackgroundPreferences
-  const featuredBackgroundDisplaySizeInput = cachedEl('background-featured-display-size')
-  const featuredBackgroundPositionXInput = cachedEl('background-featured-position-x')
-  const featuredBackgroundPositionYInput = cachedEl('background-featured-position-y')
-
-  if (featuredBackgroundDisplaySizeInput instanceof HTMLInputElement) {
-    featuredBackgroundDisplaySizeInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.min)
-    featuredBackgroundDisplaySizeInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.displaySize.max)
-    featuredBackgroundDisplaySizeInput.value = String(preferences.displaySize)
-  }
-  if (featuredBackgroundPositionXInput instanceof HTMLInputElement) {
-    featuredBackgroundPositionXInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionX.min)
-    featuredBackgroundPositionXInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionX.max)
-    featuredBackgroundPositionXInput.value = String(preferences.positionX)
-  }
-  if (featuredBackgroundPositionYInput instanceof HTMLInputElement) {
-    featuredBackgroundPositionYInput.min = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionY.min)
-    featuredBackgroundPositionYInput.max = String(FEATURED_BACKGROUND_DISPLAY_LIMITS.positionY.max)
-    featuredBackgroundPositionYInput.value = String(preferences.positionY)
-  }
+  dispatchNewtabBackgroundSettingsView(createNewtabBackgroundSettingsView(
+    state.backgroundSettings,
+    preferences,
+    FEATURED_BACKGROUND_DISPLAY_LIMITS
+  ))
   setTextContent('background-featured-display-size-value', `${preferences.displaySize}%`)
   setTextContent('background-featured-position-x-value', `${preferences.positionX}%`)
   setTextContent('background-featured-position-y-value', `${preferences.positionY}%`)
