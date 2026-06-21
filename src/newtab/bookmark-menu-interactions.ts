@@ -1,8 +1,5 @@
 const BOOKMARK_MENU_INTERACTION_SELECTOR = [
-  '.bookmark-edit-menu',
-  '.bookmark-add-menu',
-  '.newtab-delete-toast',
-  '.custom-select-list',
+  '[data-newtab-bookmark-menu-surface]',
   '[data-bookmark-id]'
 ].join(', ')
 

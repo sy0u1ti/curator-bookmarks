@@ -15,10 +15,9 @@ import {
 import { createAutoBackupBeforeDangerousOperation, type DangerousOperationKind } from '../../shared/backup.js'
 import { displayUrl } from '../../shared/text.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
 import { syncSelectionSet } from '../shared-options/utils.js'
-import { renderRecycleBinIsland } from '../components/RecycleBinIsland.js'
-import { renderRecycleControlsIsland } from '../components/RecycleControlsIsland.js'
+import { publishRecycleBin } from '../components/recycle-bin-store.js'
+import { publishRecycleControls } from '../components/recycle-controls-store.js'
 
 export function normalizeRecycleBin(rawEntries) {
   if (!Array.isArray(rawEntries)) {
@@ -74,75 +73,63 @@ function buildRecycleEntry(bookmark, source) {
 }
 
 export function renderRecycleSection(callbacks) {
-  if (!dom.recycleResults) {
-    return
-  }
-
   syncSelectionSet(
     managerState.selectedRecycleIds,
     new Set(managerState.recycleBin.map((entry) => String(entry.recycleId)))
   )
 
-  if (dom.recycleControls) {
-    renderRecycleControlsIsland(dom.recycleControls, {
-      busy: availabilityState.deleting,
-      entryCount: managerState.recycleBin.length,
-      selectedCount: managerState.selectedRecycleIds.size
-    })
-  }
+  publishRecycleControls({
+    busy: availabilityState.deleting,
+    entryCount: managerState.recycleBin.length,
+    selectedCount: managerState.selectedRecycleIds.size
+  })
 
-  renderRecycleBinIsland(dom.recycleResults, {
+  publishRecycleBin({
     entries: managerState.recycleBin,
     selectedIds: managerState.selectedRecycleIds,
     disabled: availabilityState.deleting
   })
 }
 
-export function handleRecycleResultsClick(event, callbacks) {
-  const selectionControl = event.target.closest('[data-recycle-select]')
-  if (selectionControl) {
-    const recycleId = String(selectionControl.getAttribute('data-recycle-id') || '').trim()
-    if (
-      availabilityState.deleting ||
-      !recycleId ||
-      selectionControl.hasAttribute('disabled') ||
-      selectionControl.getAttribute('aria-disabled') === 'true'
-    ) {
-      return
-    }
-
-    if (managerState.selectedRecycleIds.has(recycleId)) {
-      managerState.selectedRecycleIds.delete(recycleId)
-    } else {
-      managerState.selectedRecycleIds.add(recycleId)
-    }
-    callbacks.renderAvailabilitySection()
-    return
-  }
-
-  const clearButton = event.target.closest('[data-recycle-clear]')
-  if (clearButton && !availabilityState.deleting) {
-    clearRecycleEntriesByIds(
-      [String(clearButton.getAttribute('data-recycle-clear') || '').trim()],
-      callbacks
-    )
-    return
-  }
-
-  const restoreButton = event.target.closest('[data-recycle-restore]')
-  if (!restoreButton || availabilityState.deleting) {
-    return
-  }
-
-  restoreRecycleEntriesByIds(
-    [String(restoreButton.getAttribute('data-recycle-restore') || '').trim()],
-    callbacks
-  )
-}
-
 export function clearRecycleSelection(callbacks) {
   managerState.selectedRecycleIds.clear()
   callbacks.renderAvailabilitySection()
+}
+
+export function toggleRecycleEntrySelection(recycleId, checked, callbacks) {
+  const normalizedRecycleId = String(recycleId || '').trim()
+  if (availabilityState.deleting || !normalizedRecycleId) {
+    return
+  }
+
+  if (checked === true) {
+    managerState.selectedRecycleIds.add(normalizedRecycleId)
+  } else if (checked === false) {
+    managerState.selectedRecycleIds.delete(normalizedRecycleId)
+  } else if (managerState.selectedRecycleIds.has(normalizedRecycleId)) {
+    managerState.selectedRecycleIds.delete(normalizedRecycleId)
+  } else {
+    managerState.selectedRecycleIds.add(normalizedRecycleId)
+  }
+  callbacks.renderAvailabilitySection()
+}
+
+export function clearRecycleEntry(recycleId, callbacks) {
+  const normalizedRecycleId = String(recycleId || '').trim()
+  if (availabilityState.deleting || !normalizedRecycleId) {
+    return
+  }
+
+  void clearRecycleEntriesByIds([normalizedRecycleId], callbacks)
+}
+
+export function restoreRecycleEntry(recycleId, callbacks) {
+  const normalizedRecycleId = String(recycleId || '').trim()
+  if (availabilityState.deleting || !normalizedRecycleId) {
+    return
+  }
+
+  restoreRecycleEntriesByIds([normalizedRecycleId], callbacks)
 }
 
 async function clearRecycleEntriesByIds(recycleIds, callbacks) {

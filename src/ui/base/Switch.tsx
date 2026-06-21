@@ -14,9 +14,8 @@ type BaseSwitchRootProps = ComponentPropsWithoutRef<typeof BaseSwitch.Root>
 
 export type SwitchControlProps = Omit<BaseSwitchRootProps, 'className' | 'children' | 'inputRef'> & {
   className?: string
-  inputAttributes?: Record<string, string | number | boolean | null | undefined>
-  inputClassName?: string
   inputRef?: Ref<HTMLInputElement>
+  rootRef?: Ref<HTMLElement>
   syncInputState?: boolean
   thumbClassName?: string
   unstyled?: boolean
@@ -32,10 +31,9 @@ export function SwitchControl({
   checked: checkedProp,
   defaultChecked,
   disabled: disabledProp,
-  inputAttributes,
-  inputClassName,
   inputRef,
   onCheckedChange,
+  rootRef,
   syncInputState = false,
   thumbClassName,
   unstyled = false,
@@ -68,44 +66,6 @@ export function SwitchControl({
     }
     onCheckedChange?.(nextChecked, eventDetails)
   }
-
-  useLayoutEffect(() => {
-    const input = inputElementRef.current
-    if (!input) {
-      return undefined
-    }
-
-    const previousClassName = input.className
-    const previousAttributes = new Map<string, string | null>()
-
-    if (inputClassName !== undefined) {
-      input.className = inputClassName
-    }
-
-    if (inputAttributes) {
-      for (const [name, value] of Object.entries(inputAttributes)) {
-        previousAttributes.set(name, input.getAttribute(name))
-        if (value === false || value === null || value === undefined) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, value === true ? '' : String(value))
-        }
-      }
-    }
-
-    return () => {
-      if (inputClassName !== undefined) {
-        input.className = previousClassName
-      }
-      for (const [name, value] of previousAttributes) {
-        if (value === null) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, value)
-        }
-      }
-    }
-  }, [inputAttributes, inputClassName])
 
   useLayoutEffect(() => {
     if (!syncInputState) {
@@ -172,6 +132,7 @@ export function SwitchControl({
       disabled={disabled}
       inputRef={handleInputRef}
       onCheckedChange={handleCheckedChange}
+      ref={rootRef}
       {...props}
     >
       <BaseSwitch.Thumb

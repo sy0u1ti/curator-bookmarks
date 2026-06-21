@@ -1,49 +1,26 @@
-import { Button } from '../../ui'
+import { BookmarkAddHistory } from './BookmarkAddHistory.js'
+import {
+  OPTION_PANEL_CLASS,
+  OPTION_PANEL_TITLE_CLASS,
+  OPTION_SECTION_LABEL_CLASS
+} from './option-layout-classes.js'
 
-export function BookmarkHistoryPanel() {
+const BOOKMARK_HISTORY_GROUP_CLASS =
+  'mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none max-[760px]:p-4'
+
+export function BookmarkHistoryPanel({ hidden }: { hidden: boolean }) {
   return (
     <section
       id="bookmark-history"
-      className="options-panel"
-      data-section-panel="bookmark-history"
+      className={OPTION_PANEL_CLASS}
       aria-labelledby="bookmark-history-title"
-      hidden
+      hidden={hidden}
     >
-      <p className="options-section-label">Auto Analysis Add History</p>
-      <h1 id="bookmark-history-title">自动分析添加历史</h1>
+      <p className={OPTION_SECTION_LABEL_CLASS}>Auto Analysis Add History</p>
+      <h1 id="bookmark-history-title" className={OPTION_PANEL_TITLE_CLASS}>自动分析添加历史</h1>
 
-      <div className="options-group detect-history-group">
-        <div id="bookmark-add-history-header" />
-
-        <div id="bookmark-add-history-summary" />
-
-        <div id="bookmark-add-history-results" className="detect-results compact bookmark-add-history-results">
-          <div className="detect-empty with-cta" data-empty-key="bookmark-add-history">
-            <p className="detect-empty-title">还没有自动分析添加记录</p>
-            <p className="detect-empty-detail">
-              开启「自动分析」后，新增普通网页书签并完成分类时会写入这里。
-            </p>
-            <div className="detect-empty-actions">
-              <Button
-                className="options-button primary small"
-                size="sm"
-                type="button"
-                data-empty-cta="open-auto-analyze"
-              >
-                开启自动分析
-              </Button>
-              <Button
-                className="options-button secondary small"
-                size="sm"
-                type="button"
-                variant="secondary"
-                data-empty-cta="configure-ai"
-              >
-                配置 AI 渠道
-              </Button>
-            </div>
-          </div>
-        </div>
+      <div className={BOOKMARK_HISTORY_GROUP_CLASS}>
+        <BookmarkAddHistory />
       </div>
     </section>
   )

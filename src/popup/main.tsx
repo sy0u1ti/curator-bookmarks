@@ -9,4 +9,4 @@ if (!root) {
   throw new Error('Missing popup React root')
 }
 
-createRoot(root).render(<PopupApp />)
+createRoot(root).render(<PopupApp portalContainer={root} />)

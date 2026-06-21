@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { Tabs as BaseTabs } from '@base-ui/react/tabs'
 import { Surface } from '../../ui/base/Surface'
 import { ToggleGroup } from '../../ui/base/ToggleGroup'
-import { Button } from '../../ui/primitives/Button'
-import { DrawerOverlay, DrawerPanel } from '../../ui/primitives/Drawer'
-import { Input } from '../../ui/primitives/Input'
-import { Select } from '../../ui/primitives/Select'
-import { SliderControl } from '../../ui/primitives/Slider'
-import { SwitchControl } from '../../ui/primitives/Switch'
-import { cx } from '../../ui/primitives/utils'
+import { Button } from '../../ui/base/Button'
+import { DrawerOverlay, DrawerPanel } from '../../ui/base/Drawer'
+import { Input } from '../../ui/base/Input'
+import { Select } from '../../ui/base/Select'
+import { SliderControl } from '../../ui/base/Slider'
+import { SwitchControl } from '../../ui/base/Switch'
+import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
 import {
@@ -47,9 +47,13 @@ import {
   dispatchNewtabSettingsDrawerFeaturedPickerClick,
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerReady,
+  getNewtabSettingsDrawerNodes,
+  setNewtabSettingsDrawerNodes,
+  useNewtabSettingsDrawerLayoutRequest,
   useNewtabSettingsDrawerView,
   type NewtabSettingsDrawerPhase
 } from '../newtab-settings-drawer-store'
+import { setNewtabFeaturedBackgroundPickerNodes } from '../newtab-featured-background-picker-store'
 import {
   dispatchNewtabModuleSettingMove,
   dispatchNewtabModuleSettingToggle,
@@ -66,7 +70,9 @@ import {
   dispatchNewtabFolderHideNamesToggle,
   dispatchNewtabGeneralSettingToggle,
   dispatchNewtabSelectedFolderRemove,
+  useNewtabFolderCandidateFocusRequest,
   useNewtabFolderSourceView,
+  type NewtabFolderCandidateFocusRequest,
   type NewtabFolderCandidateItemView,
   type NewtabFolderCandidateState,
   type NewtabSelectedFolderSourceItemView,
@@ -80,6 +86,32 @@ const settingsTabs = [
   ['modules', '模块', false],
   ['advanced', '高级', false]
 ] as const
+const SETTINGS_DRAWER_CLASS = 'settings-drawer !border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-autospace:no-autospace]'
+const SETTINGS_NESTED_SURFACE_CLASS = '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-control)] !bg-[var(--ui-surface)] !shadow-none'
+const SETTINGS_SELECTED_SURFACE_CLASS = '!border-[var(--ui-divider-strong)] !bg-[var(--ui-surface-selected)] !text-[var(--ui-text-primary)] !shadow-none'
+const SETTINGS_SEGMENTED_BUTTON_CLASS = `setting-segmented-button data-[pressed]:!border-[var(--ui-divider-strong)] data-[pressed]:!bg-[var(--ui-surface-selected)] data-[pressed]:!text-[var(--ui-text-primary)] data-[pressed]:!shadow-none`
+const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:!shadow-none [&::after]:!shadow-none'
+const SETTINGS_TRANSPARENT_SURFACE_CLASS = '!border-transparent ![background:transparent] !shadow-none'
+const SETTINGS_SECTION_CLASS = cx('settings-section', SETTINGS_TRANSPARENT_SURFACE_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS)
+const SETTINGS_INPUT_SURFACE_CLASS = '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-control)] !bg-[var(--ui-surface-raised)] !text-[var(--ui-text-primary)] !shadow-none'
+const SETTINGS_INPUT_INTERACTION_CLASS = 'hover:!border-[var(--ui-divider-strong)] hover:![background:var(--ui-surface-hover)] hover:!text-[var(--ui-text-primary)] hover:!shadow-none hover:!outline-none focus-visible:!border-[var(--ui-divider-strong)] focus-visible:![background:var(--ui-surface-hover)] focus-visible:!text-[var(--ui-text-primary)] focus-visible:!shadow-none focus-visible:!outline-none'
+const SETTINGS_CONTROL_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS)
+const SETTINGS_TEXT_INPUT_FOCUS_CLASS = '[&&:focus]:!border-[var(--ui-focus-ring)] [&&:focus]:![background:var(--ui-surface-hover)] [&&:focus]:!shadow-none [&&:focus]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus]:!outline-offset-2 [&&:focus-visible]:!border-[var(--ui-focus-ring)] [&&:focus-visible]:![background:var(--ui-surface-hover)] [&&:focus-visible]:!shadow-none [&&:focus-visible]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus-visible]:!outline-offset-2'
+const SETTINGS_TEXT_INPUT_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, SETTINGS_TEXT_INPUT_FOCUS_CLASS)
+
+function settingsControlClassName(...classNames: Array<string | false | null | undefined>): string {
+  return cx(SETTINGS_CONTROL_CLASS, ...classNames)
+}
+
+function settingsInputClassName(...classNames: Array<string | false | null | undefined>): string {
+  return cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, ...classNames)
+}
+
+type SettingsSectionRef = (element: HTMLElement | null) => void
+
+function settingRowClassName(...classNames: Array<string | false | null | undefined>): string {
+  return cx('setting-row', SETTINGS_TRANSPARENT_SURFACE_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS, ...classNames)
+}
 
 const searchEngines = [
   ['google', 'Google', true],
@@ -100,6 +132,7 @@ function SwitchRow({
   checked,
   defaultChecked = false,
   disabled = false,
+  controlRef,
   onCheckedChange
 }: {
   id: string
@@ -108,22 +141,23 @@ function SwitchRow({
   checked?: boolean
   defaultChecked?: boolean
   disabled?: boolean
+  controlRef?: Ref<HTMLElement>
   onCheckedChange?: (checked: boolean) => void
 }) {
   return (
-    <label className={`setting-row${disabled ? ' setting-row-disabled' : ''}`}>
+    <label className={settingRowClassName(disabled ? 'setting-row-disabled' : undefined)}>
       <span className="setting-label-stack">
         <span>{title}</span>
         <small>{description}</small>
       </span>
       <SwitchControl
         id={id}
-        className="setting-switch"
+        className={settingsControlClassName('setting-switch')}
         checked={checked}
         defaultChecked={defaultChecked}
         disabled={disabled}
-        inputClassName="setting-switch-input"
         onCheckedChange={onCheckedChange}
+        rootRef={controlRef}
         syncInputState
         thumbClassName="setting-switch-thumb"
         unstyled
@@ -166,7 +200,7 @@ function SliderRow({
   sliderValue?: number
 }) {
   return (
-    <label id={rowId} className={`setting-row slider-row${disabled ? ' setting-row-disabled' : ''}`} hidden={hidden}>
+    <label id={rowId} className={settingRowClassName('slider-row', disabled ? 'setting-row-disabled' : undefined)} hidden={hidden}>
       <span className={description ? 'setting-label-stack' : undefined}>
         <span>
           {label} <output id={valueId} className="setting-value">{value}</output>
@@ -181,7 +215,6 @@ function SliderRow({
         defaultValue={defaultValue}
         disabled={disabled}
         indicatorClassName="setting-slider-indicator"
-        inputClassName="setting-range"
         max={max}
         min={min}
         onValueChange={onValueChange}
@@ -206,7 +239,8 @@ function SettingsSelect({
   portalContainer,
   disabled = false,
   onValueChange,
-  value
+  value,
+  triggerRef
 }: {
   id: string
   label: string
@@ -218,19 +252,19 @@ function SettingsSelect({
   disabled?: boolean
   onValueChange?: (value: string | null) => void
   value?: string | null
+  triggerRef?: Ref<HTMLButtonElement>
 }) {
   return (
-    <div className={`setting-row${disabled ? ' setting-row-disabled' : ''}`}>
+    <div className={settingRowClassName(disabled ? 'setting-row-disabled' : undefined)}>
       <span className="setting-label-stack">
         <span>{label}</span>
         {description ? <small>{description}</small> : null}
       </span>
       <Select
         id={id}
+        ariaLabel={ariaLabel}
         defaultValue={defaultValue}
         disabled={disabled}
-        inputAttributes={{ 'aria-label': ariaLabel, id }}
-        inputClassName="setting-select-input"
         itemClassName="custom-select-option"
         onValueChange={onValueChange}
         options={options.map(([value, label]) => ({ value, label }))}
@@ -239,7 +273,8 @@ function SettingsSelect({
         portalContainer={portalContainer}
         positionerClassName="custom-select-setting-positioner"
         syncInputState
-        triggerClassName="setting-select custom-select-trigger"
+        triggerClassName={settingsControlClassName('setting-select', 'custom-select-trigger')}
+        triggerRef={triggerRef}
         unstyled
         value={value}
         valueClassName="custom-select-trigger-label"
@@ -314,17 +349,24 @@ function SettingsTabPanel({
   )
 }
 
-function AdvancedSettingsSection() {
+function AdvancedSettingsSection({
+  firstControlRef,
+  sectionRef
+}: {
+  firstControlRef?: Ref<HTMLElement>
+  sectionRef?: SettingsSectionRef
+}) {
   const folderSource = useNewtabFolderSourceView()
 
   return (
-    <section className="settings-section" data-settings-group="advanced" aria-labelledby="settings-general-title">
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="advanced" aria-labelledby="settings-general-title">
       <h2 id="settings-general-title">高级</h2>
       <Surface className="settings-list" variant="plain">
         <SwitchRow
           id="general-hide-settings-trigger"
           title="隐藏设置图标"
           description="桌面端移到右上角时显示，触屏设备始终显示。"
+          controlRef={firstControlRef}
           checked={folderSource.general.hideSettingsTrigger}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('hideSettingsTrigger', checked)
@@ -344,14 +386,31 @@ function AdvancedSettingsSection() {
   )
 }
 
-function SourceSettingsSection() {
+function SourceSettingsSection({
+  folderCandidateSearchRef,
+  sectionRef
+}: {
+  folderCandidateSearchRef: RefObject<HTMLInputElement | null>
+  sectionRef?: SettingsSectionRef
+}) {
   const folderSource = useNewtabFolderSourceView()
-  const candidatesPanelClassName = folderSource.candidatesExpanded
-    ? 'folder-candidates-panel is-expanded'
-    : 'folder-candidates-panel is-collapsed'
+  const folderCandidateFocusRequest = useNewtabFolderCandidateFocusRequest()
+  const candidatesPanelClassName = cx(
+    'folder-candidates-panel',
+    SETTINGS_NESTED_SURFACE_CLASS,
+    folderSource.candidatesExpanded ? 'is-expanded' : 'is-collapsed'
+  )
+
+  useEffect(() => {
+    if (folderCandidateFocusRequest.requestId === 0 ||
+      folderCandidateFocusRequest.target !== 'search') {
+      return
+    }
+    folderCandidateSearchRef.current?.focus({ preventScroll: folderCandidateFocusRequest.preventScroll })
+  }, [folderCandidateFocusRequest, folderCandidateSearchRef])
 
   return (
-    <section className="settings-section" data-settings-group="source" aria-labelledby="settings-folder-title">
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="source" aria-labelledby="settings-folder-title">
       <h2 id="settings-folder-title">书签来源</h2>
       <Surface className="settings-list" variant="plain">
         <div className="folder-source-panel">
@@ -365,7 +424,7 @@ function SourceSettingsSection() {
           <Button
             unstyled
             id="folder-candidates-toggle"
-            className={folderSource.candidatesExpanded ? 'folder-candidates-toggle expanded' : 'folder-candidates-toggle'}
+            className={settingsControlClassName('folder-candidates-toggle', folderSource.candidatesExpanded ? 'expanded' : undefined)}
             type="button"
             aria-expanded={folderSource.candidatesExpanded}
             aria-controls="folder-candidates-panel"
@@ -385,8 +444,9 @@ function SourceSettingsSection() {
               <label className="folder-search-field" htmlFor="folder-candidate-search">
                 <Input
                   id="folder-candidate-search"
-                  className="folder-search-input"
+                  className={cx('folder-search-input', SETTINGS_TEXT_INPUT_CLASS)}
                   type="search"
+                  ref={folderCandidateSearchRef}
                   placeholder="搜索文件夹"
                   aria-label="搜索候选文件夹"
                   aria-controls="folder-candidate-list"
@@ -396,6 +456,7 @@ function SourceSettingsSection() {
                   onKeyDown={(event) => {
                     if (dispatchNewtabFolderCandidateSearchKeyDown(event.key)) {
                       event.preventDefault()
+                      event.stopPropagation()
                     }
                   }}
                   unstyled
@@ -406,7 +467,10 @@ function SourceSettingsSection() {
                 className="folder-candidate-list"
                 aria-label="候选文件夹列表"
               >
-                <FolderCandidateList state={folderSource.candidates} />
+                <FolderCandidateList
+                  focusRequest={folderCandidateFocusRequest}
+                  state={folderSource.candidates}
+                />
               </div>
             </div>
           </div>
@@ -469,7 +533,35 @@ function getFolderSourceRemoveLabel(item: NewtabSelectedFolderSourceItemView): s
   return `从新标签页移除「${item.title || '文件夹'}」，将隐藏 ${item.affectedCount} 个书签，不会删除书签`
 }
 
-function FolderCandidateList({ state }: { state: NewtabFolderCandidateState }) {
+function FolderCandidateList({
+  focusRequest,
+  state
+}: {
+  focusRequest: NewtabFolderCandidateFocusRequest
+  state: NewtabFolderCandidateState
+}) {
+  const candidateRefs = useRef<Map<string, HTMLButtonElement> | null>(null)
+  if (!candidateRefs.current) {
+    candidateRefs.current = new Map<string, HTMLButtonElement>()
+  }
+
+  useEffect(() => {
+    if (focusRequest.requestId === 0 ||
+      focusRequest.target !== 'candidate' ||
+      !focusRequest.folderId) {
+      return
+    }
+    candidateRefs.current?.get(focusRequest.folderId)?.focus({ preventScroll: focusRequest.preventScroll })
+  }, [focusRequest])
+
+  const setCandidateRef = (folderId: string) => (element: HTMLButtonElement | null) => {
+    if (element) {
+      candidateRefs.current?.set(folderId, element)
+      return
+    }
+    candidateRefs.current?.delete(folderId)
+  }
+
   if (state.type === 'empty') {
     return (
       <p className="folder-source-empty" role="status" aria-live="polite">
@@ -481,18 +573,31 @@ function FolderCandidateList({ state }: { state: NewtabFolderCandidateState }) {
   return (
     <>
       {state.items.map((item) => (
-        <FolderCandidateItem item={item} key={item.folderId} />
+        <FolderCandidateItem
+          buttonRef={setCandidateRef(item.folderId)}
+          item={item}
+          key={item.folderId}
+        />
       ))}
     </>
   )
 }
 
-function FolderCandidateItem({ item }: { item: NewtabFolderCandidateItemView }) {
+function FolderCandidateItem({
+  buttonRef,
+  item
+}: {
+  buttonRef: (element: HTMLButtonElement | null) => void
+  item: NewtabFolderCandidateItemView
+}) {
   return (
     <Button
-      className={item.selected ? 'folder-candidate-card selected' : 'folder-candidate-card'}
+      className={cx(
+        'folder-candidate-card',
+        item.selected ? cx('selected', SETTINGS_SELECTED_SURFACE_CLASS) : undefined
+      )}
       type="button"
-      data-folder-candidate-id={item.folderId}
+      ref={buttonRef}
       tabIndex={item.active ? 0 : -1}
       title={item.path || item.title}
       aria-pressed={item.selected}
@@ -503,8 +608,9 @@ function FolderCandidateItem({ item }: { item: NewtabFolderCandidateItemView }) 
         dispatchNewtabFolderCandidateFocus(item.folderId)
       }}
       onKeyDown={(event) => {
-        if (dispatchNewtabFolderCandidateKeyDown(event.key)) {
+        if (dispatchNewtabFolderCandidateKeyDown(event.key, item.folderId)) {
           event.preventDefault()
+          event.stopPropagation()
         }
       }}
       unstyled
@@ -519,18 +625,25 @@ function FolderCandidateItem({ item }: { item: NewtabFolderCandidateItemView }) 
   )
 }
 
-function ModuleSettingsSection() {
+function ModuleSettingsSection({
+  firstControlRef,
+  sectionRef
+}: {
+  firstControlRef?: Ref<HTMLElement>
+  sectionRef?: SettingsSectionRef
+}) {
   const moduleSettings = useNewtabModuleSettingsView()
   const folderSource = useNewtabFolderSourceView()
 
   return (
-    <section className="settings-section" data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
       <h2 id="settings-speed-dial-title">模块</h2>
       <Surface className="settings-list" variant="plain">
         <SwitchRow
           id="general-show-quick-access"
           title="显示 Curator 常用和新近添加"
           description="仅基于当前来源内的固定、本页打开记录和添加时间，不读取浏览历史。"
+          controlRef={firstControlRef}
           checked={folderSource.general.showQuickAccess}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('showQuickAccess', checked)
@@ -548,14 +661,14 @@ function ModuleSettingsSection() {
 
 function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
   return (
-    <div className="setting-row newtab-module-setting-row" data-module-setting-row={row.key}>
+    <div className={settingRowClassName('newtab-module-setting-row')} data-module-setting-row={row.key}>
       <span className="setting-label-stack">
         <span>{row.label}</span>
         <small>{row.description}</small>
       </span>
       <span className="module-setting-controls">
         <Button
-          className="module-setting-order-button"
+          className={settingsControlClassName('module-setting-order-button')}
           type="button"
           data-module-setting-move={row.key}
           data-module-setting-direction="up"
@@ -570,7 +683,7 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
           {'\u2191'}
         </Button>
         <Button
-          className="module-setting-order-button"
+          className={settingsControlClassName('module-setting-order-button')}
           type="button"
           data-module-setting-move={row.key}
           data-module-setting-direction="down"
@@ -588,9 +701,8 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
           <SwitchControl
             aria-label={`${row.enabled ? '隐藏' : '显示'}模块：${row.label}`}
             checked={row.enabled}
-            className="setting-switch"
-            inputAttributes={{ 'data-module-setting-toggle': row.key }}
-            inputClassName="setting-switch-input"
+            className={settingsControlClassName('setting-switch')}
+            data-module-setting-toggle={row.key}
             onCheckedChange={(checked) => {
               dispatchNewtabModuleSettingToggle(row.key, checked)
             }}
@@ -604,17 +716,38 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
   )
 }
 
-function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
+function handleBackgroundFileChange(mediaType: 'image' | 'video', file: File | null): void {
+  if (!file) return
+  dispatchNewtabBackgroundFileSelect(mediaType, file)
+}
+
+function BackgroundSettingsSection({
+  firstControlRef,
+  panelElement,
+  sectionRef
+}: {
+  firstControlRef?: Ref<HTMLButtonElement>
+  panelElement: HTMLElement | null
+  sectionRef?: SettingsSectionRef
+}) {
   const backgroundSettings = useNewtabBackgroundSettingsView()
+  const featuredPickerRef = useRef<HTMLButtonElement | null>(null)
   const imageFileInputRef = useRef<HTMLInputElement | null>(null)
   const videoFileInputRef = useRef<HTMLInputElement | null>(null)
-  const handleBackgroundFileChange = (mediaType: 'image' | 'video', file: File | null) => {
-    if (!file) return
-    dispatchNewtabBackgroundFileSelect(mediaType, file)
-  }
+
+  useLayoutEffect(() => {
+    setNewtabFeaturedBackgroundPickerNodes({
+      trigger: featuredPickerRef.current
+    })
+    return () => {
+      setNewtabFeaturedBackgroundPickerNodes({
+        trigger: null
+      })
+    }
+  }, [])
 
   return (
-    <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-background-title">
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-background-title">
       <h2 id="settings-background-title">背景</h2>
       <Surface className="settings-list" variant="plain">
         <SettingsSelect
@@ -626,6 +759,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             if (value) dispatchNewtabBackgroundSettingFieldChange('type', value)
           }}
           portalContainer={panelElement}
+          triggerRef={firstControlRef}
           value={backgroundSettings.type}
           options={[
             ['featured', '精选图库'],
@@ -635,7 +769,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             ['color', '纯色']
           ]}
         />
-        <div id="background-featured-row" className="setting-row" hidden={backgroundSettings.featuredPickerHidden}>
+        <div id="background-featured-row" className={settingRowClassName()} hidden={backgroundSettings.featuredPickerHidden}>
           <span className="setting-label-stack">
             <span>精选图库</span>
             <small>主动选择后会访问 NASA 与 Wikimedia Commons 等第三方图片域名并自动缓存。</small>
@@ -643,7 +777,8 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
           <Button
             unstyled
             id="background-featured-picker"
-            className={backgroundSettings.featuredPickerSelected ? 'setting-picker-button is-custom-selected' : 'setting-picker-button'}
+            ref={featuredPickerRef}
+            className={settingsControlClassName('setting-picker-button', backgroundSettings.featuredPickerSelected ? 'is-custom-selected' : undefined)}
             type="button"
             aria-haspopup="dialog"
             aria-controls="background-featured-modal"
@@ -663,7 +798,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             unstyled
           />
         </div>
-        <div id="background-featured-credit-row" className="setting-row background-featured-credit-row" hidden={backgroundSettings.featuredCreditHidden}>
+        <div id="background-featured-credit-row" className={settingRowClassName('background-featured-credit-row')} hidden={backgroundSettings.featuredCreditHidden}>
           <span>图片来源</span>
           <a
             id="background-featured-credit"
@@ -679,13 +814,13 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
         <SliderRow rowId="background-featured-display-size-row" id="background-featured-display-size" label="背景大小" valueId="background-featured-display-size-value" value={`${backgroundSettings.displaySize}%`} min={String(backgroundSettings.displaySizeMin)} max={String(backgroundSettings.displaySizeMax)} defaultValue="100" ariaLabel="精选图库背景大小" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('displaySize', value)} sliderValue={backgroundSettings.displaySize} />
         <SliderRow rowId="background-featured-position-x-row" id="background-featured-position-x" label="水平位置" valueId="background-featured-position-x-value" value={`${backgroundSettings.positionX}%`} min={String(backgroundSettings.positionXMin)} max={String(backgroundSettings.positionXMax)} defaultValue="50" ariaLabel="精选图库背景水平位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionX', value)} sliderValue={backgroundSettings.positionX} />
         <SliderRow rowId="background-featured-position-y-row" id="background-featured-position-y" label="垂直位置" valueId="background-featured-position-y-value" value={`${backgroundSettings.positionY}%`} min={String(backgroundSettings.positionYMin)} max={String(backgroundSettings.positionYMax)} defaultValue="50" ariaLabel="精选图库背景垂直位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionY', value)} sliderValue={backgroundSettings.positionY} />
-        <label id="background-color-row" className="setting-row" htmlFor="background-color" hidden={backgroundSettings.type !== 'color'}>
+        <label id="background-color-row" className={settingRowClassName()} htmlFor="background-color" hidden={backgroundSettings.type !== 'color'}>
           <span>背景颜色</span>
           <span id="background-color-control" className="setting-color" style={{ backgroundColor: backgroundSettings.color }}>
             <span id="background-color-value">{backgroundSettings.color.toUpperCase()}</span>
             <Input
               id="background-color"
-              className="setting-color-input"
+              className={settingsInputClassName('setting-color-input')}
               type="color"
               value={backgroundSettings.color}
               onChange={(event) => dispatchNewtabBackgroundSettingFieldChange('color', event.currentTarget.value)}
@@ -694,13 +829,13 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             />
           </span>
         </label>
-        <div id="background-image-row" className="setting-row" hidden={backgroundSettings.imageRowHidden}>
+        <div id="background-image-row" className={settingRowClassName()} hidden={backgroundSettings.imageRowHidden}>
           <span>背景图片</span>
-          <Button unstyled id="background-image-picker" className="setting-file-button" type="button" title={backgroundSettings.imageName || undefined} onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
+          <Button unstyled id="background-image-picker" className={settingsControlClassName('setting-file-button')} type="button" title={backgroundSettings.imageName || undefined} onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
           <Input
             id="background-image-file"
             ref={imageFileInputRef}
-            className="setting-file-input"
+            className={settingsInputClassName('setting-file-input')}
             type="file"
             accept="image/*"
             onChange={(event) => {
@@ -710,13 +845,13 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             unstyled
           />
         </div>
-        <div id="background-video-row" className="setting-row" hidden={backgroundSettings.videoRowHidden}>
+        <div id="background-video-row" className={settingRowClassName()} hidden={backgroundSettings.videoRowHidden}>
           <span>背景视频</span>
-          <Button unstyled id="background-video-picker" className="setting-file-button" type="button" title={backgroundSettings.videoName || undefined} onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
+          <Button unstyled id="background-video-picker" className={settingsControlClassName('setting-file-button')} type="button" title={backgroundSettings.videoName || undefined} onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
           <Input
             id="background-video-file"
             ref={videoFileInputRef}
-            className="setting-file-input"
+            className={settingsInputClassName('setting-file-input')}
             type="file"
             accept="video/*"
             onChange={(event) => {
@@ -726,12 +861,12 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             unstyled
           />
         </div>
-        <div id="background-url-row" className="setting-row" hidden={backgroundSettings.urlRowHidden}>
+        <div id="background-url-row" className={settingRowClassName()} hidden={backgroundSettings.urlRowHidden}>
           <span>图片链接</span>
           <span className="setting-floating-field">
             <Input
               id="background-url"
-              className="setting-url-input"
+              className={cx('setting-url-input', SETTINGS_TEXT_INPUT_CLASS)}
               type="url"
               placeholder="图片链接"
               aria-label="背景图片链接"
@@ -759,12 +894,11 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
           checked={backgroundSettings.maskEnabled}
           onCheckedChange={dispatchNewtabBackgroundMaskToggle}
         />
-        <div id="background-mask-style-row" className="setting-row" hidden={backgroundSettings.maskStyleHidden}>
+        <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
           <span>模糊样式</span>
           <Select
             id="background-mask-style"
-            inputAttributes={{ 'aria-label': '背景蒙版样式', id: 'background-mask-style' }}
-            inputClassName="setting-select-input"
+            ariaLabel="背景蒙版样式"
             itemClassName="custom-select-option"
             onValueChange={(value) => {
               if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
@@ -780,7 +914,7 @@ function BackgroundSettingsSection({ panelElement }: { panelElement: HTMLElement
             portalContainer={panelElement}
             positionerClassName="custom-select-setting-positioner"
             syncInputState
-            triggerClassName="setting-select custom-select-trigger"
+            triggerClassName={settingsControlClassName('setting-select', 'custom-select-trigger')}
             unstyled
             value={backgroundSettings.maskStyle}
             valueClassName="custom-select-trigger-label"
@@ -805,7 +939,7 @@ function IconSettingsSection() {
   } as React.CSSProperties
 
   return (
-    <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-icon-title">
+    <section className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-icon-title">
       <h2 id="settings-icon-title">书签卡片</h2>
       <Surface className="settings-list icon-settings-list" variant="plain">
         <div className="icon-live-preview-panel">
@@ -841,7 +975,12 @@ function IconSettingsSection() {
         <div id="icon-preset-row" className="icon-preset-row">
           {iconPresetCards.map((card) => (
             <Button
-              className={`icon-preset-card${iconPreview.preset === card.key ? ' selected' : ''}`}
+              className={cx(
+                'icon-preset-card',
+                SETTINGS_NESTED_SURFACE_CLASS,
+                SETTINGS_PSEUDO_SHADOW_RESET_CLASS,
+                iconPreview.preset === card.key ? cx('selected', SETTINGS_SELECTED_SURFACE_CLASS) : undefined
+              )}
               type="button"
               data-preset={card.key}
               aria-pressed={iconPreview.preset === card.key}
@@ -872,7 +1011,7 @@ function IconSettingsSection() {
             </Button>
           ))}
         </div>
-        <div className="setting-row icon-control-row">
+        <div className={settingRowClassName('icon-control-row')}>
           <span className="setting-label-stack">
             <span>布局方式</span>
             <small>自动适配屏幕宽度；固定列数会在窄屏收缩。</small>
@@ -881,7 +1020,7 @@ function IconSettingsSection() {
             id="icon-layout-control"
             aria-label="布局方式"
             className="setting-segmented"
-            itemClassName="setting-segmented-button"
+            itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
             onValueChange={(value) => {
               const nextValue = value[0]
               if (nextValue) dispatchNewtabIconSettingFieldChange('layoutMode', nextValue)
@@ -908,13 +1047,13 @@ function IconSettingsSection() {
           checked={iconPreview.showTitles}
           onCheckedChange={dispatchNewtabIconShowTitlesToggle}
         />
-        <div id="icon-title-lines-row" className={`setting-row icon-control-row${iconPreview.titleLinesDisabled ? ' setting-row-disabled' : ''}`}>
+        <div id="icon-title-lines-row" className={settingRowClassName('icon-control-row', iconPreview.titleLinesDisabled ? 'setting-row-disabled' : undefined)}>
           <span>标题行数</span>
           <ToggleGroup
             id="icon-title-lines-control"
             aria-label="标题行数"
             className="setting-segmented"
-            itemClassName="setting-segmented-button"
+            itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
             onValueChange={(value) => {
               const nextValue = value[0]
               if (nextValue) dispatchNewtabIconSettingFieldChange('titleLines', Number(nextValue))
@@ -930,7 +1069,7 @@ function IconSettingsSection() {
         <BaseCollapsible.Root>
           <BaseCollapsible.Trigger
             id="icon-advanced-toggle"
-            className="icon-advanced-toggle"
+            className={settingsControlClassName('icon-advanced-toggle')}
             aria-controls="icon-advanced-panel"
           >
             <span>卡片细节</span>
@@ -972,7 +1111,7 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
   const timeSettings = useNewtabTimeSettingsView()
 
   return (
-    <section className="settings-section" data-settings-group="appearance" aria-labelledby="settings-time-title">
+    <section className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-time-title">
       <h2 id="settings-time-title">时间和日期</h2>
       <Surface className="settings-list" variant="plain">
         <SwitchRow
@@ -1069,7 +1208,15 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
   )
 }
 
-function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
+function SearchSettingsSection({
+  firstControlRef,
+  panelElement,
+  sectionRef
+}: {
+  firstControlRef?: Ref<HTMLElement>
+  panelElement: HTMLElement | null
+  sectionRef?: SettingsSectionRef
+}) {
   const searchSettings = useNewtabSearchSettingsView()
   const handleSearchEngineToggle = (engine: string, checked: boolean) => {
     const currentEngines = searchSettings.enabledEngines.includes(searchSettings.engine)
@@ -1083,7 +1230,7 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
   }
 
   return (
-    <section className="settings-section" data-settings-group="search" aria-labelledby="settings-search-title">
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="search" aria-labelledby="settings-search-title">
       <h2 id="settings-search-title">搜索栏</h2>
       <Surface className="settings-list" variant="plain">
         <p className="setting-trust-note">仅影响 Curator 新标签页内搜索，不会修改 Chrome 默认搜索引擎或启动页；搜索栏可随时关闭。</p>
@@ -1091,6 +1238,7 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
           id="search-enabled"
           title="启用"
           description="在新标签页顶部搜索本地书签、命令和可选网页搜索。"
+          controlRef={firstControlRef}
           checked={searchSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('enabled', checked)}
         />
@@ -1123,7 +1271,7 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
           value={searchSettings.engine}
           options={searchEngines.map(([value, label]) => [value, label])}
         />
-        <div className="setting-row search-engine-setting-row">
+        <div className={settingRowClassName('search-engine-setting-row')}>
           <span className="setting-label-stack">
             <span>启用引擎</span>
             <small>决定搜索框快捷菜单和 Cmd/Ctrl+Enter 的打开顺序。</small>
@@ -1135,14 +1283,14 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
 
               return (
               <label
-                className={`search-engine-toggle${checked ? ' active' : ''}${isSelected ? ' locked' : ''}`}
+                className={settingsControlClassName('search-engine-toggle', checked ? 'active' : undefined, isSelected ? 'locked' : undefined)}
                 key={value}
               >
                 <SwitchControl
                   aria-label={label}
                   checked={checked}
                   disabled={searchSettings.engineControlsDisabled || isSelected}
-                  inputAttributes={{ 'data-search-engine-toggle': value }}
+                  data-search-engine-toggle={value}
                   onCheckedChange={(checked) => handleSearchEngineToggle(value, checked)}
                   syncInputState
                   unstyled
@@ -1153,12 +1301,12 @@ function SearchSettingsSection({ panelElement }: { panelElement: HTMLElement | n
             })}
           </div>
         </div>
-        <div className="setting-row">
+        <div className={settingRowClassName()}>
           <span>占位符文本</span>
           <span className="setting-floating-field">
             <Input
               id="search-placeholder"
-              className="setting-text-input"
+              className={cx('setting-text-input', SETTINGS_TEXT_INPUT_CLASS)}
               type="text"
               placeholder="占位符文本"
               maxLength={40}
@@ -1256,13 +1404,80 @@ export function SettingsDrawerHost() {
 }
 
 export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
+  const [drawerElement, setDrawerElement] = useState<HTMLDivElement | null>(null)
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
+  const layoutRequest = useNewtabSettingsDrawerLayoutRequest()
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const firstControlRefs = useRef<Record<SettingsDrawerSection, HTMLElement | null>>({
+    advanced: null,
+    appearance: null,
+    modules: null,
+    search: null,
+    source: null
+  })
+  const scrollHostRef = useRef<HTMLDivElement | null>(null)
+  const folderCandidateSearchRef = useRef<HTMLInputElement | null>(null)
+  const sectionRefs = useRef<Record<SettingsDrawerSection, HTMLElement | null>>({
+    advanced: null,
+    appearance: null,
+    modules: null,
+    search: null,
+    source: null
+  })
+
+  useLayoutEffect(() => {
+    setNewtabSettingsDrawerNodes({
+      drawer: drawerElement
+    })
+
+    return () => {
+      setNewtabSettingsDrawerNodes({
+        drawer: null
+      })
+    }
+  }, [drawerElement])
+
+  useEffect(() => {
+    if (!open || layoutRequest.requestId === 0) {
+      return
+    }
+
+    if (layoutRequest.action === 'scroll-top') {
+      scrollHostRef.current?.scrollTo({ top: 0, behavior: layoutRequest.behavior })
+      return
+    }
+
+    if (layoutRequest.action === 'focus-first-control') {
+      ;(closeButtonRef.current || panelElement)?.focus()
+      return
+    }
+
+    if (layoutRequest.action === 'focus-section') {
+      const targetSection = sectionRefs.current[layoutRequest.section]
+      targetSection?.scrollIntoView({ block: 'start', behavior: layoutRequest.behavior })
+
+      if (layoutRequest.section === 'source') {
+        folderCandidateSearchRef.current?.focus()
+        return
+      }
+
+      firstControlRefs.current[layoutRequest.section]?.focus()
+    }
+  }, [layoutRequest, open, panelElement])
+
+  const setSectionRef = (section: SettingsDrawerSection): SettingsSectionRef => (element) => {
+    sectionRefs.current[section] = element
+  }
+
+  const setFirstControlRef = (section: SettingsDrawerSection) => (element: HTMLElement | null) => {
+    firstControlRefs.current[section] = element
+  }
 
   return (
     <DrawerOverlay
       id="newtab-settings-drawer"
       className={cx(
-        'settings-drawer',
+        SETTINGS_DRAWER_CLASS,
         open ? 'open' : '',
         phase === 'opening' ? 'is-opening' : '',
         phase === 'closing' ? 'is-closing' : ''
@@ -1270,10 +1485,12 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
       open={open}
       onOpenChange={onOpenChange}
       triggerId="newtab-settings-trigger"
+      modal="trap-focus"
       aria-hidden={open ? 'false' : 'true'}
       inert={!open}
       tabIndex={-1}
       disablePointerDismissal
+      overlayRef={setDrawerElement}
     >
       <DrawerPanel
         className="settings-drawer-panel"
@@ -1281,12 +1498,12 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
         aria-labelledby="newtab-settings-title"
         aria-describedby="newtab-settings-summary"
         initialFocus={false}
-        finalFocus={false}
+        finalFocus={() => getNewtabSettingsDrawerNodes().trigger}
         unanimated
       >
-        <SettingsDrawerClose />
+        <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
 
-        <div className="settings-drawer-scroll">
+        <div className="settings-drawer-scroll" ref={scrollHostRef}>
           <BaseTabs.Root
             className="settings-sliding-tabs-root"
             value={activeGroup}
@@ -1297,21 +1514,38 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
             <SettingsDrawerHeader />
             <SettingsDrawerTabs />
             <SettingsTabPanel value="advanced">
-              <AdvancedSettingsSection />
+              <AdvancedSettingsSection
+                firstControlRef={setFirstControlRef('advanced')}
+                sectionRef={setSectionRef('advanced')}
+              />
             </SettingsTabPanel>
             <SettingsTabPanel value="source">
-              <SourceSettingsSection />
+              <SourceSettingsSection
+                folderCandidateSearchRef={folderCandidateSearchRef}
+                sectionRef={setSectionRef('source')}
+              />
             </SettingsTabPanel>
             <SettingsTabPanel value="modules">
-              <ModuleSettingsSection />
+              <ModuleSettingsSection
+                firstControlRef={setFirstControlRef('modules')}
+                sectionRef={setSectionRef('modules')}
+              />
             </SettingsTabPanel>
             <SettingsTabPanel value="appearance">
-              <BackgroundSettingsSection panelElement={panelElement} />
+              <BackgroundSettingsSection
+                firstControlRef={setFirstControlRef('appearance')}
+                panelElement={panelElement}
+                sectionRef={setSectionRef('appearance')}
+              />
               <IconSettingsSection />
               <TimeSettingsSection panelElement={panelElement} />
             </SettingsTabPanel>
             <SettingsTabPanel value="search">
-              <SearchSettingsSection panelElement={panelElement} />
+              <SearchSettingsSection
+                firstControlRef={setFirstControlRef('search')}
+                panelElement={panelElement}
+                sectionRef={setSectionRef('search')}
+              />
             </SettingsTabPanel>
           </BaseTabs.Root>
         </div>

@@ -27,18 +27,19 @@ export interface SelectProps {
   options: SelectOption[]
   placeholder?: ReactNode
   label?: ReactNode
+  ariaLabel?: string
   className?: string
   disabled?: boolean
-  inputAttributes?: Record<string, string | number | boolean | null | undefined>
-  inputClassName?: string
   inputRef?: Ref<HTMLInputElement>
   itemClassName?: string
   listClassName?: string
+  popupAttributes?: Record<`data-${string}`, string | undefined>
   popupClassName?: string
   portalContainer?: ComponentPropsWithoutRef<typeof BaseSelect.Portal>['container']
   positionerClassName?: string
   modal?: boolean
   syncInputState?: boolean
+  triggerRef?: Ref<HTMLButtonElement>
   valueClassName?: string
   triggerClassName?: string
   unstyled?: boolean
@@ -52,18 +53,19 @@ export function Select({
   options,
   placeholder = 'Select',
   label,
+  ariaLabel,
   className,
   disabled: disabledProp,
-  inputAttributes,
-  inputClassName,
   inputRef,
   itemClassName,
   listClassName,
+  popupAttributes,
   popupClassName,
   portalContainer,
   positionerClassName,
   modal,
   syncInputState = false,
+  triggerRef,
   valueClassName,
   triggerClassName,
   unstyled = false
@@ -71,9 +73,6 @@ export function Select({
   const generatedId = useId()
   const rootId = id ? `${id}-root` : `select-${generatedId}`
   const triggerId = id ? `${id}-control` : undefined
-  const inputAriaLabel = typeof inputAttributes?.['aria-label'] === 'string'
-    ? inputAttributes['aria-label']
-    : undefined
   const resolvedDefaultValue = defaultValue ?? null
   const [valueState, setValueState] = useState<string | null>(() => value !== undefined ? value : resolvedDefaultValue)
   const [disabledState, setDisabledState] = useState(() => Boolean(disabledProp))
@@ -118,40 +117,6 @@ export function Select({
       })
     }
   }
-
-  useLayoutEffect(() => {
-    const input = inputElementRef.current
-    if (!input) {
-      return undefined
-    }
-
-    const previousClassName = input.className
-    const previousAttributes = new Map<string, string | null>()
-
-    input.className = cx(previousClassName, 'base-select-hidden-input', inputClassName)
-
-    if (inputAttributes) {
-      for (const [name, attributeValue] of Object.entries(inputAttributes)) {
-        previousAttributes.set(name, input.getAttribute(name))
-        if (attributeValue === false || attributeValue === null || attributeValue === undefined) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, attributeValue === true ? '' : String(attributeValue))
-        }
-      }
-    }
-
-    return () => {
-      input.className = previousClassName
-      for (const [name, attributeValue] of previousAttributes) {
-        if (attributeValue === null) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, attributeValue)
-        }
-      }
-    }
-  }, [inputAttributes, inputClassName])
 
   useLayoutEffect(() => {
     if (!syncInputState) {
@@ -222,7 +187,8 @@ export function Select({
         <BaseSelect.Trigger
           disabled={disabled}
           id={triggerId}
-          aria-label={inputAriaLabel}
+          aria-label={ariaLabel}
+          ref={triggerRef}
           className={unstyled ? cx('base-select-trigger', triggerClassName) : cx(
             'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start gap-2 rounded-md border border-curator-border bg-curator-bg-panel px-3 text-sm text-curator-text outline-none transition-colors data-[popup-open]:border-curator-border-strong focus-visible:ring-2 focus-visible:ring-white/20 disabled:opacity-50',
             triggerClassName
@@ -241,10 +207,13 @@ export function Select({
       </div>
       <BaseSelect.Portal container={portalContainer}>
         <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
-          <BaseSelect.Popup className={unstyled ? cx('base-select-popup', popupClassName) : cx(
+          <BaseSelect.Popup
+            {...popupAttributes}
+            className={unstyled ? cx('base-select-popup', popupClassName) : cx(
             'base-select-popup z-50 max-h-64 min-w-[var(--anchor-width)] overflow-hidden rounded-md border border-curator-border bg-curator-bg-elevated p-1 text-curator-text shadow-[var(--shadow-popover)] outline-none',
             popupClassName
-          )}>
+          )}
+          >
             <BaseSelect.List className={cx('base-select-list', listClassName ?? (unstyled ? undefined : 'contents'))}>
               {options.map((option) => (
                 <BaseSelect.Item

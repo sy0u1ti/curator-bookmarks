@@ -117,7 +117,6 @@ import {
 } from '../shared/content-snapshots.js'
 import { parseSearchQuery } from '../shared/search-query.js'
 import {
-  SECTION_META,
   NAVIGATION_TIMEOUT_MS,
   NAVIGATION_RETRY_TIMEOUT_MS,
   AI_NAMING_DEFAULT_MODEL,
@@ -129,6 +128,11 @@ import {
   AI_NAMING_RESPONSE_SCHEMA
 } from './shared-options/constants.js'
 import {
+  isOptionsDashboardEmbedMode,
+  normalizeOptionsSectionKey,
+  type OptionsSectionKey
+} from './options-section-store.js'
+import {
   availabilityState,
   managerState,
   folderCleanupState,
@@ -138,13 +142,11 @@ import {
   contentSnapshotState,
   backupRestoreState
 } from './shared-options/state.js'
-import { dom, cacheDom } from './shared-options/dom.js'
 import {
   isInteractionLocked,
   compareByPathTitle,
   syncSelectionSet,
-  formatDateTime,
-  setModalHidden
+  formatDateTime
 } from './shared-options/utils.js'
 import {
   collectRequestOrigins,
@@ -154,6 +156,8 @@ import {
   requestPermissions
 } from './shared-options/permissions.js'
 import { truncateText } from './shared-options/text.js'
+import { writeClipboardText as copyTextToClipboard } from '../shared/clipboard.js'
+import { downloadJsonFile } from '../shared/download.js'
 import {
   normalizeIgnoreRules,
   saveIgnoreRules,
@@ -165,7 +169,9 @@ import {
 import {
   normalizeRecycleBin,
   renderRecycleSection,
-  handleRecycleResultsClick,
+  clearRecycleEntry,
+  restoreRecycleEntry,
+  toggleRecycleEntrySelection,
   clearRecycleSelection,
   selectAllRecycleEntries,
   restoreSelectedRecycleEntries,
@@ -176,9 +182,10 @@ import {
 import {
   buildDuplicateGroups,
   renderDuplicateSection,
-  handleDuplicateGroupsClick,
   applyDuplicateStrategy,
+  applyDuplicateGroupStrategy,
   clearDuplicateSelection,
+  toggleDuplicateItemSelection,
   deleteSelectedDuplicates
 } from './sections/duplicates.js'
 import {
@@ -186,8 +193,9 @@ import {
   analyzeFolderCleanupSuggestions,
   rescanFolderCleanupSuggestions,
   renderFolderCleanupSection,
-  handleFolderCleanupClick,
-  handleFolderCleanupPreviewClick
+  executeFolderCleanupAction,
+  toggleFolderCleanupPreview,
+  undoFolderCleanupSplitAction
 } from './sections/folder-cleanup.js'
 import {
   normalizeRedirectCache,
@@ -197,7 +205,8 @@ import {
   persistRedirectCacheSnapshot,
   removeRedirectIdsFromState,
   renderRedirectSection,
-  handleRedirectResultsClick,
+  toggleRedirectResultSelection,
+  updateRedirectResult,
   clearRedirectSelection,
   selectAllRedirects,
   updateSelectedRedirects,
@@ -225,19 +234,8 @@ import {
   closeDashboardTagEditor,
   closeDashboardTagPopover,
   getSelectedDashboardBookmarks,
-  handleDashboardClick,
-  handleDashboardDocumentClick,
-  handleDashboardDocumentFocusIn,
-  handleDashboardError,
-  handleDashboardLoad,
-  handleDashboardInput,
   handleDashboardKeydown,
-  handleDashboardPointerCancel,
-  handleDashboardPointerDown,
-  handleDashboardPointerMove,
-  handleDashboardPointerUp,
-  handleDashboardTagPointerOut,
-  handleDashboardTagPointerOver,
+  handleDashboardViewAction as handleDashboardViewActionLazy,
   applyNewTabSpeedDialStateMessage,
   hydrateDashboardSpeedDialState,
   isDashboardViewReady,
@@ -253,87 +251,84 @@ import {
 import {
   deleteTagFromIndex,
   renderTagManagementSection,
-  renameTagInIndex,
-  stopActiveTagCloud
+  renameTagInIndex
 } from './sections/tag-management.js'
-import { renderFeatureSettingsControlsIsland } from './components/FeatureSettingsControlsIsland.js'
-import { renderContentSnapshotControlsIsland } from './components/ContentSnapshotControlsIsland.js'
-import { renderShortcutControlsIsland } from './components/ShortcutListIsland.js'
-import { renderResultsPaginationIsland } from './components/ResultsPaginationIsland.js'
+import { publishResultsPagination } from './components/results-pagination-store.js'
+import type { ResultsPaginationActionDetail } from './components/results-pagination-types.js'
+import { publishBackupControls } from './components/backup-controls-store.js'
 import {
-  renderAiModelPickerResultsIsland,
-  renderAiModelSelectorIsland,
-  type AiModelSelectorChangeDetail
-} from './components/AiModelSelectorIsland.js'
-import { renderAiModelToolsIsland } from './components/AiModelToolsIsland.js'
-import { renderBackupControlsIsland } from './components/BackupPreviewIsland.js'
-import { renderFolderPickerResultsIsland } from './components/FolderPickerResultsIsland.js'
-import { renderAiNamingResultsIsland } from './components/AiNamingResultsIsland.js'
+  getFolderPickerResultsSnapshot,
+  patchFolderPickerResults,
+  publishFolderPickerResults
+} from './components/folder-picker-results-store.js'
+import type { FolderPickerActionDetail } from './components/folder-picker-results-types.js'
+import type { DashboardViewActionDetail } from './components/dashboard-view-types.js'
+import { publishAvailabilityResults } from './components/availability-results-store.js'
+import type { AvailabilityResultActionDetail } from './components/availability-results-types.js'
+import { patchTagManagementControlsForm } from './components/tag-management-controls-store.js'
+import type { TagManagementActionDetail } from './components/tag-management-controls-types.js'
+import type {
+  RecycleAction,
+  RecycleActionDetail
+} from './components/recycle-bin-types.js'
+import type { RedirectActionDetail } from './components/redirect-controls-types.js'
+import type {
+  FolderCleanupAction,
+  FolderCleanupActionDetail
+} from './components/folder-cleanup-controls-types.js'
+import type { DuplicateActionDetail } from './components/duplicate-controls-types.js'
+import type { IgnoreRuleActionDetail } from './components/ignore-rules-types.js'
+import type { BackupActionDetail } from './components/backup-controls-types.js'
+import { publishShortcutControls } from './components/shortcut-store.js'
+import type { ShortcutAction } from './components/shortcut-types.js'
+import { publishContentSnapshotControls } from './components/content-snapshot-store.js'
+import type { ContentSnapshotSettingsChangeDetail } from './components/content-snapshot-types.js'
+import { publishFeatureSettingsControls } from './components/feature-settings-store.js'
+import type { FeatureSettingsChangeDetail } from './components/feature-settings-types.js'
+import type { AiProviderSettingsActionDetail } from './components/ai-provider-settings-types.js'
+import { publishAiProviderSettings } from './components/ai-provider-settings-store.js'
+import { publishAiConfigLinkState } from './components/ai-config-link-store.js'
 import {
-  renderAiResultsFilterControlsIsland,
-  type AiResultsFilterChangeDetail
-} from './components/AiResultsFilterControlsIsland.js'
+  publishAiAnalysisDecisionMetrics,
+  publishAiAnalysisDuration,
+  publishAiAnalysisProgress,
+  publishAiAnalysisActions,
+  publishAiAnalysisResults,
+  publishAiAnalysisResultsFilter,
+  publishAiAnalysisResultsHeader,
+  publishAiAnalysisResultsPagination,
+  publishAiAnalysisScopePicker,
+  publishAiAnalysisSelectionActions,
+  publishAiAnalysisStatus
+} from './components/ai-analysis-status-store.js'
+import type {
+  AiAnalysisAction,
+  AiAnalysisActionDetail,
+  AiAnalysisResultActionDetail,
+  AiAnalysisResultsFilterActionDetail,
+  AiAnalysisResultsPaginationActionDetail
+} from './components/AiAnalysisResultsTypes.js'
+import { publishAvailabilityControls } from './components/availability-controls-store.js'
+import type {
+  AvailabilityControlsActionDetail,
+  AvailabilityControlsState,
+  AvailabilitySettingsDraft
+} from './components/availability-controls-types.js'
+import type { AvailabilityPanelActionDetail } from './components/availability-overview-types.js'
 import {
-  renderAiProviderSelectIsland,
-  type AiProviderSelectChangeDetail
-} from './components/AiProviderSelectIsland.js'
-import { renderAvailabilityResultsIsland } from './components/AvailabilityResultsIsland.js'
-import { renderLoadingLabelIsland } from './components/LoadingLabelIsland.js'
-import { renderDoubleConfirmLabelIsland } from './components/DoubleConfirmLabelIsland.js'
-import {
-  dispatchTagManagementForm,
-  TAG_MANAGEMENT_ACTION_EVENT,
-  type TagManagementActionDetail
-} from './components/tag-management-events.js'
-import {
-  RECYCLE_ACTION_EVENT,
-  type RecycleActionDetail
-} from './components/recycle-events.js'
-import {
-  REDIRECT_ACTION_EVENT,
-  type RedirectActionDetail
-} from './components/redirect-events.js'
-import {
-  HISTORY_ACTION_EVENT,
-  type HistoryActionDetail
-} from './components/history-events.js'
-import {
-  FOLDER_CLEANUP_ACTION_EVENT,
-  type FolderCleanupActionDetail
-} from './components/folder-cleanup-events.js'
-import {
-  DUPLICATE_ACTION_EVENT,
-  type DuplicateActionDetail
-} from './components/duplicate-events.js'
-import {
-  IGNORE_RULE_ACTION_EVENT,
-  type IgnoreRuleActionDetail
-} from './components/ignore-events.js'
-import {
-  BACKUP_ACTION_EVENT,
-  type BackupActionDetail
-} from './components/backup-events.js'
-import {
-  SHORTCUT_ACTION_EVENT,
-  type ShortcutActionDetail
-} from './components/shortcut-events.js'
-import {
-  CONTENT_SNAPSHOT_SETTINGS_EVENT,
-  type ContentSnapshotSettingsChangeDetail
-} from './components/content-snapshot-events.js'
-import {
-  FEATURE_SETTINGS_EVENT,
-  type FeatureSettingsChangeDetail
-} from './components/feature-settings-events.js'
-import {
-  AI_MODEL_TOOLS_EVENT,
-  type AiModelToolsActionDetail
-} from './components/ai-model-tools-events.js'
+  publishAvailabilityDecisionMetrics,
+  publishAvailabilityFilters,
+  publishAvailabilityProgress,
+  publishAvailabilityResultsHeader,
+  publishAvailabilitySelectionActions
+} from './components/availability-overview-store.js'
+import { publishScopePickerTrigger } from './components/scope-picker-store.js'
+import type { ScopePickerSource } from './components/scope-picker-types.js'
+import { publishOptionsOverview } from './components/options-overview-store.js'
+import { publishOptionsModals } from './components/options-modals-store.js'
+import type { OptionsModalActionDetail } from './components/options-modals-types.js'
 
-const IS_OPTIONS_DASHBOARD_EMBED_MODE =
-  new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
-
-applyOptionsDashboardEmbedClasses()
+const IS_OPTIONS_DASHBOARD_EMBED_MODE = isOptionsDashboardEmbedMode()
 
 let newTabDashboardReadyPosted = false
 let activeSectionKey = ''
@@ -341,6 +336,7 @@ let availabilityRenderFrame = 0
 let availabilityDurationTimer = 0
 let aiNamingDurationTimer = 0
 let availabilityPauseResolvers: Array<() => void> = []
+let availabilitySettingsDraft: AvailabilitySettingsDraft | null = null
 let largeRepositoryHydrationStarted = false
 const AVAILABILITY_FILTERS = new Set([
   'all',
@@ -358,21 +354,6 @@ const AI_API_STYLE_OPTIONS = [
   { value: 'chat_completions', label: 'Chat Completions' }
 ]
 let confirmModalResolve: ((confirmed: boolean) => void) | null = null
-let activeManagedModalKey = ''
-let modalReturnFocusElement = null
-const COLLAPSIBLE_NAV_ANIMATION_MS = 240
-const COLLAPSIBLE_NAV_GROUP_SECTIONS: Record<string, Set<string>> = {
-  'availability-tools': new Set(['availability', 'history', 'redirects', 'ignore'])
-}
-
-const MODAL_FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled]):not([type="hidden"])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])'
-].join(',')
 
 const LEGACY_AI_NAMING_CACHE_STORAGE_KEYS = [
   'curatorBookmarkAiMetadataCache',
@@ -464,10 +445,15 @@ const ignoreCallbacks = {
 }
 
 let optionsControllerStarted = false
-
 export function useOptionsController(): void {
   useEffect(() => {
-    void startOptionsController()
+    const startHandle = window.setTimeout(() => {
+      void startOptionsController()
+    }, 0)
+
+    return () => {
+      window.clearTimeout(startHandle)
+    }
   }, [])
 }
 
@@ -477,30 +463,11 @@ async function startOptionsController(): Promise<void> {
   }
   optionsControllerStarted = true
 
-  applyOptionsDashboardEmbedClasses()
-  cacheDom()
-  bindEvents()
-
-  if ('scrollRestoration' in window.history) {
-    window.history.scrollRestoration = 'manual'
-  }
-
   const initialSectionKey = normalizeSectionKey(getCurrentSectionKey())
   if (initialSectionKey !== getCurrentSectionKey()) {
     window.history.replaceState(null, '', `#${initialSectionKey}`)
   }
   syncPageSection()
-  resetOptionsScrollPosition()
-  window.addEventListener('hashchange', () => {
-    syncPageSection()
-    resetOptionsScrollPosition()
-  })
-  window.addEventListener('popstate', () => {
-    syncPageSection()
-    resetOptionsScrollPosition()
-  })
-  window.addEventListener('curator:dashboard-view-ready', notifyNewTabDashboardReady)
-  window.addEventListener('message', handleNewTabDashboardMessage)
   void hydrateShortcutCommands()
 
   await hydratePersistentState()
@@ -512,11 +479,14 @@ async function startOptionsController(): Promise<void> {
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
   renderAvailabilitySection()
-  bindBookmarkChangeListeners()
+}
+
+export function handleOptionsWindowSectionChange(_event?: Event): void {
+  syncPageSection()
 }
 
 let bookmarkChangeRefreshHandle = 0
-function scheduleBookmarkChangeRefresh(): void {
+export function handleOptionsBookmarkTreeChanged(): void {
   if (bookmarkChangeRefreshHandle) {
     window.clearTimeout(bookmarkChangeRefreshHandle)
   }
@@ -530,27 +500,6 @@ function scheduleBookmarkChangeRefresh(): void {
         console.warn('Curator: 书签变更后的 dashboard 重新加载失败。', error)
       })
   }, 240)
-}
-
-function bindBookmarkChangeListeners(): void {
-  if (typeof chrome === 'undefined' || !chrome.bookmarks) {
-    return
-  }
-
-  try {
-    chrome.bookmarks.onCreated.addListener(scheduleBookmarkChangeRefresh)
-    chrome.bookmarks.onRemoved.addListener(scheduleBookmarkChangeRefresh)
-    chrome.bookmarks.onChanged.addListener(scheduleBookmarkChangeRefresh)
-    chrome.bookmarks.onMoved.addListener(scheduleBookmarkChangeRefresh)
-    if (chrome.bookmarks.onChildrenReordered) {
-      chrome.bookmarks.onChildrenReordered.addListener(scheduleBookmarkChangeRefresh)
-    }
-    if (chrome.bookmarks.onImportEnded) {
-      chrome.bookmarks.onImportEnded.addListener(scheduleBookmarkChangeRefresh)
-    }
-  } catch (error) {
-    console.warn('Curator: 注册书签事件监听失败。', error)
-  }
 }
 
 async function hydratePersistentState() {
@@ -745,9 +694,6 @@ function syncPageSection() {
   const rawKey = getCurrentSectionKey()
   const key = normalizeSectionKey(rawKey)
   const previousSectionKey = activeSectionKey
-  const section = SECTION_META[key]
-  const links = document.querySelectorAll('[data-section-link]')
-  const panels = document.querySelectorAll<HTMLElement>('[data-section-panel]')
 
   if (rawKey !== key) {
     window.history.replaceState(null, '', `#${key}`)
@@ -765,32 +711,7 @@ function syncPageSection() {
   syncAvailabilityDurationTimer()
   syncAiNamingDurationTimer()
 
-  document.body.classList.toggle('dashboard-fullscreen-active', key === 'dashboard')
-  document.body.classList.toggle('dashboard-performance-mode-active', key === 'dashboard')
-  dom.dashboardPanel?.classList.add('dashboard-performance-mode')
-
-  links.forEach((link) => {
-    const linkKey = link.getAttribute('data-section-link')
-    const isActive = linkKey === key
-    link.classList.toggle('active', isActive)
-    if (isActive) {
-      link.setAttribute('aria-current', 'page')
-    } else {
-      link.removeAttribute('aria-current')
-    }
-  })
-
-  syncCollapsibleNavGroups(key)
-
-  panels.forEach((panel) => {
-    panel.hidden = panel.getAttribute('data-section-panel') !== key
-  })
-
-  document.title = `${section.title} · Curator Bookmark`
-
-  if (dom.availabilityAction) {
-    renderAvailabilitySection()
-  }
+  renderAvailabilitySection()
 
   if (key === 'general') {
     renderAiNamingSection()
@@ -798,19 +719,7 @@ function syncPageSection() {
 
   if (key === 'tags') {
     renderTagManagementSectionFromState()
-  } else if (previousSectionKey === 'tags') {
-    stopActiveTagCloud()
   }
-
-  scrollToSectionAnchor()
-}
-
-function applyOptionsDashboardEmbedClasses(): void {
-  document.documentElement.classList.toggle(
-    'options-dashboard-embed-root',
-    IS_OPTIONS_DASHBOARD_EMBED_MODE
-  )
-  document.body?.classList.toggle('options-dashboard-embed', IS_OPTIONS_DASHBOARD_EMBED_MODE)
 }
 
 function exitDashboard(): void {
@@ -825,7 +734,7 @@ function exitDashboard(): void {
   window.location.hash = '#general'
 }
 
-function notifyNewTabDashboardReady(): void {
+export function handleOptionsDashboardViewReady(_event?: Event): void {
   if (
     !IS_OPTIONS_DASHBOARD_EMBED_MODE ||
     newTabDashboardReadyPosted ||
@@ -847,7 +756,7 @@ function notifyNewTabDashboardReady(): void {
   })
 }
 
-function handleNewTabDashboardMessage(event: MessageEvent): void {
+export function handleOptionsWindowMessage(event: MessageEvent): void {
   if (!IS_OPTIONS_DASHBOARD_EMBED_MODE || event.origin !== window.location.origin) {
     return
   }
@@ -862,448 +771,65 @@ function handleNewTabDashboardMessage(event: MessageEvent): void {
   applyNewTabSpeedDialStateMessage(event.data)
 }
 
-function syncCollapsibleNavGroups(activeSectionKey) {
-  Object.entries(COLLAPSIBLE_NAV_GROUP_SECTIONS).forEach(([groupKey, sectionKeys]) => {
-    const trigger = document.querySelector(
-      `[data-nav-group-trigger="${CSS.escape(groupKey)}"]`
-    ) as HTMLButtonElement | null
-    const panel = document.querySelector(
-      `[data-nav-group-panel="${CSS.escape(groupKey)}"]`
-    ) as HTMLElement | null
-    if (!trigger || !panel) {
+export function handleDashboardViewAction(detail: DashboardViewActionDetail): void {
+  if (!detail) {
+    return
+  }
+
+  void handleDashboardViewActionLazy(detail, dashboardCallbacks)
+}
+
+export function handleOptionsModalAction(detail: OptionsModalActionDetail): void {
+  if (!detail) {
+    return
+  }
+
+  if (detail.modal === 'confirm') {
+    resolveConfirmModal(detail.action === 'confirm')
+    return
+  }
+
+  if (detail.modal === 'scope') {
+    if (detail.action === 'search-change') {
+      managerState.scopeSearchQuery = String(detail.query || '')
+      managerState.scopeFolderActiveId = null
+      renderScopeModal()
       return
     }
-
-    const isActive = sectionKeys.has(String(activeSectionKey))
-    if (isActive) {
-      setCollapsibleNavGroupExpanded(trigger, panel, true, { animated: false })
-    } else {
-      setCollapsibleNavGroupExpanded(
-        trigger,
-        panel,
-        trigger.getAttribute('aria-expanded') !== 'false',
-        { animated: false }
-      )
-    }
-    trigger.classList.remove('active')
-  })
-}
-
-function setCollapsibleNavGroupExpanded(
-  trigger: HTMLButtonElement,
-  panel: HTMLElement,
-  expanded: boolean,
-  options: { animated?: boolean } = {}
-) {
-  const animated = options.animated !== false
-  const wasExpanded = trigger.getAttribute('aria-expanded') !== 'false' && !panel.hidden
-  trigger.setAttribute('aria-expanded', expanded ? 'true' : 'false')
-  trigger.classList.toggle('collapsed', !expanded)
-
-  if (!animated || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    panel.hidden = !expanded
-    panel.style.maxHeight = ''
-    panel.style.opacity = ''
-    panel.removeAttribute('data-nav-animating')
-    return
-  }
-
-  if (expanded === wasExpanded && panel.getAttribute('data-nav-animating') !== 'true') {
-    return
-  }
-
-  panel.setAttribute('data-nav-animating', 'true')
-  panel.hidden = false
-  panel.style.overflow = 'hidden'
-
-  if (expanded) {
-    panel.style.maxHeight = '0px'
-    panel.style.opacity = '0'
-    panel.getBoundingClientRect()
-    panel.style.maxHeight = `${panel.scrollHeight}px`
-    panel.style.opacity = '1'
-  } else {
-    panel.style.maxHeight = `${panel.scrollHeight}px`
-    panel.style.opacity = '1'
-    panel.getBoundingClientRect()
-    panel.style.maxHeight = '0px'
-    panel.style.opacity = '0'
-  }
-
-  window.setTimeout(() => {
-    if (trigger.getAttribute('aria-expanded') === 'false') {
-      panel.hidden = true
-    }
-    panel.style.maxHeight = ''
-    panel.style.opacity = ''
-    panel.style.overflow = ''
-    panel.removeAttribute('data-nav-animating')
-  }, COLLAPSIBLE_NAV_ANIMATION_MS)
-}
-
-function handleCollapsibleNavGroupClick(event) {
-  if (!(event.target instanceof Element)) {
-    return
-  }
-
-  const trigger = event.target.closest('[data-nav-group-trigger]') as HTMLButtonElement | null
-  if (!trigger) {
-    return
-  }
-
-  event.preventDefault()
-  const groupKey = String(trigger.getAttribute('data-nav-group-trigger') || '').trim()
-  const panel = document.querySelector(
-    `[data-nav-group-panel="${CSS.escape(groupKey)}"]`
-  ) as HTMLElement | null
-  if (!panel) {
-    return
-  }
-
-  setCollapsibleNavGroupExpanded(trigger, panel, trigger.getAttribute('aria-expanded') === 'false')
-}
-
-function handleSectionNavigationClick(event) {
-  if (!(event.target instanceof Element)) {
-    return
-  }
-
-  const link = event.target.closest('a[data-section-link]') as HTMLAnchorElement | null
-  const key = link?.getAttribute('data-section-link') || ''
-  if (!link || !(key in SECTION_META)) {
-    return
-  }
-
-  const targetUrl = new URL(link.href, window.location.href)
-  if (targetUrl.origin !== window.location.origin || targetUrl.pathname !== window.location.pathname) {
-    return
-  }
-
-  const nextHash = targetUrl.hash || `#${key}`
-  const nextSectionKey = normalizeSectionKey(nextHash.replace(/^#/, '').split(':')[0] || key)
-  if (nextSectionKey !== key) {
-    return
-  }
-
-  event.preventDefault()
-  if (window.location.hash !== nextHash) {
-    window.history.pushState(null, '', nextHash)
-  }
-  syncPageSection()
-  resetOptionsScrollPosition()
-}
-
-function resetOptionsScrollPosition() {
-  if (getCurrentSectionAnchor()) {
-    return
-  }
-
-  const reset = () => {
-    window.scrollTo(0, 0)
-    document.documentElement.scrollTop = 0
-    document.body.scrollTop = 0
-  }
-
-  reset()
-  window.requestAnimationFrame(() => {
-    reset()
-    window.requestAnimationFrame(reset)
-  })
-  window.setTimeout(reset, 0)
-}
-
-const EMPTY_STATE_CTA_NAVIGATION: Record<string, string> = {
-  'run-availability': '#availability',
-  'open-auto-analyze': '#ai',
-  'configure-ai': '#ai',
-  'open-dashboard': '#dashboard',
-  'redirect-info': '#redirects',
-  'availability-info': '#availability',
-  'recycle-info': '#recycle'
-}
-
-function handleEmptyStateCta(event: Event) {
-  if (!(event.target instanceof Element)) {
-    return
-  }
-
-  const button = event.target.closest('[data-empty-cta]') as HTMLButtonElement | null
-  if (!button) {
-    return
-  }
-
-  const action = button.getAttribute('data-empty-cta') || ''
-  const targetHash = EMPTY_STATE_CTA_NAVIGATION[action]
-  if (!targetHash) {
-    return
-  }
-
-  event.preventDefault()
-  if (window.location.hash !== targetHash) {
-    window.history.pushState(null, '', targetHash)
-  }
-  syncPageSection()
-  resetOptionsScrollPosition()
-}
-
-function scrollToSectionAnchor() {
-  if (normalizeSectionKey(getCurrentSectionKey()) !== 'general') {
-    return
-  }
-
-  if (getCurrentSectionAnchor() !== 'ai-provider') {
-    return
-  }
-
-  const target = document.getElementById('ai-provider-settings')
-  if (!target) {
-    return
-  }
-
-  window.requestAnimationFrame(() => {
-    target.scrollIntoView({ block: 'start', behavior: 'smooth' })
-    target.classList.add('attention')
-    window.setTimeout(() => target.classList.remove('attention'), 1400)
-  })
-}
-
-
-function bindEvents() {
-  document.addEventListener('click', handleSectionNavigationClick)
-  document.addEventListener('click', handleEmptyStateCta)
-  dom.availabilityScopeTrigger?.addEventListener('click', () => openScopeModal('availability'))
-  dom.dashboardPanel?.addEventListener('click', (event) => {
-    void handleDashboardClick(event, dashboardCallbacks)
-  })
-  dom.dashboardPanel?.addEventListener('input', handleDashboardInput)
-  dom.dashboardPanel?.addEventListener('change', handleDashboardInput)
-  dom.dashboardPanel?.addEventListener('keydown', handleDashboardKeydown)
-  dom.dashboardPanel?.addEventListener('load', handleDashboardLoad, true)
-  dom.dashboardPanel?.addEventListener('error', (event) => handleDashboardError(event, dashboardCallbacks), true)
-  dom.dashboardPanel?.addEventListener('pointerdown', handleDashboardPointerDown)
-  dom.dashboardPanel?.addEventListener('pointerover', handleDashboardTagPointerOver)
-  dom.dashboardPanel?.addEventListener('pointerout', handleDashboardTagPointerOut)
-  document.addEventListener('pointermove', handleDashboardPointerMove)
-  document.addEventListener('pointerup', (event) => {
-    void handleDashboardPointerUp(event, dashboardCallbacks)
-  })
-  document.addEventListener('pointercancel', handleDashboardPointerCancel)
-  document.addEventListener('click', handleDashboardDocumentClick)
-  document.addEventListener('click', handleAvailabilitySettingsDocumentClick)
-  document.addEventListener('focusin', handleDashboardDocumentFocusIn)
-  dom.historyScopeTrigger?.addEventListener('click', () => openScopeModal('history'))
-  dom.aiScopeTrigger?.addEventListener('click', () => openScopeModal('ai'))
-  dom.aiSaveSettings?.addEventListener('click', () => {
-    void saveAiNamingSettingsFromDom()
-  })
-  dom.aiTestConnection?.addEventListener('click', handleAiConnectivityTest)
-  dom.aiAction?.addEventListener('click', handleAiNamingAction)
-  dom.aiPauseAction?.addEventListener('click', toggleAiNamingPause)
-  dom.aiStopAction?.addEventListener('click', requestAiNamingStop)
-  dom.aiSelectAll?.addEventListener('click', selectAllAiNamingResults)
-  dom.aiSelectHighConfidence?.addEventListener('click', selectHighConfidenceAiResults)
-  dom.aiClearSelection?.addEventListener('click', clearAiNamingSelection)
-  dom.aiApplySelection?.addEventListener('click', applySelectedAiNamingResults)
-  dom.aiMoveSelectionToSuggested?.addEventListener('click', handleMoveSelectedAiNamingResults)
-  dom.aiResults?.addEventListener('click', handleAiResultsClick)
-  dom.aiResults?.addEventListener('change', handleAiResultsChange)
-  dom.aiResultsPagination?.addEventListener('click', (event) => {
-    handleResultsPaginationClick(event, 'ai-results')
-  })
-  window.addEventListener('options:ai-results-filter-change', handleAiResultsFilterControlChange)
-  dom.aiFilterQuery?.addEventListener('input', handleAiResultsFilterChange)
-  dom.aiClearFilters?.addEventListener('click', clearAiResultsFilters)
-  window.addEventListener(BACKUP_ACTION_EVENT, handleBackupAction)
-  window.addEventListener(TAG_MANAGEMENT_ACTION_EVENT, handleTagManagementAction)
-  dom.aiBaseUrl?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
-  dom.aiApiKey?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
-  dom.aiRevealApiKey?.addEventListener('change', handleAiRevealApiKeyChange)
-  window.addEventListener('options:ai-model-selector-change', handleAiModelSelectorChange)
-  dom.aiModelPickerTrigger?.addEventListener('click', openAiModelPickerModal)
-  window.addEventListener(AI_MODEL_TOOLS_EVENT, handleAiModelToolsAction)
-  window.addEventListener(SHORTCUT_ACTION_EVENT, handleShortcutAction)
-  window.addEventListener('options:ai-provider-select-change', handleAiProviderSelectChange)
-  dom.aiTimeoutMs?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
-  dom.aiBatchSize?.addEventListener('input', () => syncAiNamingSettingsDraftFromDom({ markDirty: true }))
-  window.addEventListener(FEATURE_SETTINGS_EVENT, handleFeatureSettingsChange)
-  window.addEventListener(CONTENT_SNAPSHOT_SETTINGS_EVENT, handleContentSnapshotSettingsChange)
-  dom.availabilitySettingsTrigger?.addEventListener('click', toggleAvailabilitySettingsPopover)
-  dom.availabilitySettingsSave?.addEventListener('click', () => {
-    void saveAvailabilitySettingsFromDom()
-  })
-  dom.availabilitySettingsReset?.addEventListener('click', () => {
-    void resetAvailabilitySettings()
-  })
-  dom.availabilityConcurrencyInput?.addEventListener('input', syncAvailabilitySettingsDraftFromDom)
-  dom.availabilityTimeoutInput?.addEventListener('input', syncAvailabilitySettingsDraftFromDom)
-  dom.availabilityAction?.addEventListener('click', handleAvailabilityAction)
-  dom.availabilityPauseAction?.addEventListener('click', toggleAvailabilityPause)
-  dom.availabilityStopAction?.addEventListener('click', requestAvailabilityStop)
-  dom.availabilityFilterBar?.addEventListener('click', handleAvailabilityFilterClick)
-  dom.availabilityReviewResults?.addEventListener('click', handleReviewResultAction)
-  dom.availabilityResults?.addEventListener('click', handleFailedResultAction)
-  dom.availabilityReviewPagination?.addEventListener('click', (event) => {
-    handleResultsPaginationClick(event, 'availability-review')
-  })
-  dom.availabilityFailedPagination?.addEventListener('click', (event) => {
-    handleResultsPaginationClick(event, 'availability-failed')
-  })
-  window.addEventListener(HISTORY_ACTION_EVENT, handleHistoryAction)
-  dom.bookmarkAddHistoryHeader?.addEventListener('click', (event) => {
-    const target = event.target as HTMLElement | null
-    if (!target?.closest('#bookmark-add-history-clear')) {
-      return
-    }
-    void clearBookmarkAddHistory({
-      renderAvailabilitySection,
-      confirm: requestConfirmation
-    })
-  })
-  dom.availabilityClearSelection?.addEventListener('click', clearAvailabilitySelection)
-  dom.availabilitySelectionRetest?.addEventListener('click', retestSelectedAvailabilityResults)
-  dom.availabilitySelectionPromote?.addEventListener('click', () => {
-    moveSelectedAvailabilityResults('failed')
-  })
-  dom.availabilitySelectionDemote?.addEventListener('click', () => {
-    moveSelectedAvailabilityResults('review')
-  })
-  dom.availabilitySelectionMove?.addEventListener('click', () => {
-    openMoveModal('availability')
-  })
-  dom.availabilitySelectionIgnoreBookmark?.addEventListener('click', () => {
-    ignoreSelectedAvailabilityResults('bookmark')
-  })
-  dom.availabilitySelectionIgnoreDomain?.addEventListener('click', () => {
-    ignoreSelectedAvailabilityResults('domain')
-  })
-  dom.availabilitySelectionIgnoreFolder?.addEventListener('click', () => {
-    ignoreSelectedAvailabilityResults('folder')
-  })
-  dom.availabilitySelectionDelete?.addEventListener('click', deleteSelectedAvailabilityResults)
-  dom.availabilitySelectAllReview?.addEventListener('click', () => {
-    selectAvailabilityResultsByStatus('review')
-  })
-  dom.availabilitySelectAllFailed?.addEventListener('click', () => {
-    selectAvailabilityResultsByStatus('failed')
-  })
-  dom.redirectResults?.addEventListener('click', (event) => handleRedirectResultsClick(event, redirectsCallbacks))
-  dom.redirectPagination?.addEventListener('click', (event) => {
-    handleResultsPaginationClick(event, 'redirects')
-  })
-  window.addEventListener(REDIRECT_ACTION_EVENT, handleRedirectAction)
-  dom.duplicateGroups?.addEventListener('click', (event) => handleDuplicateGroupsClick(event, duplicatesCallbacks))
-  window.addEventListener(DUPLICATE_ACTION_EVENT, handleDuplicateAction)
-  window.addEventListener(FOLDER_CLEANUP_ACTION_EVENT, handleFolderCleanupAction)
-  dom.folderCleanupResults?.addEventListener('click', (event) => {
-    handleFolderCleanupPreviewClick(event, folderCleanupCallbacks)
-    void handleFolderCleanupClick(event, folderCleanupCallbacks)
-  })
-  window.addEventListener(IGNORE_RULE_ACTION_EVENT, handleIgnoreRuleAction)
-  dom.recycleResults?.addEventListener('click', (event) => handleRecycleResultsClick(event, recycleCallbacks))
-  window.addEventListener(RECYCLE_ACTION_EVENT, handleRecycleAction)
-  dom.deleteFailedBookmarks?.addEventListener('click', openDeleteModal)
-  dom.cancelDeleteModal?.addEventListener('click', closeDeleteModal)
-  dom.confirmDeleteModal?.addEventListener('click', confirmDeleteFailedBookmarks)
-  dom.cancelConfirmModal?.addEventListener('click', () => resolveConfirmModal(false))
-  dom.confirmModalConfirm?.addEventListener('click', () => resolveConfirmModal(true))
-  dom.moveSearchInput?.addEventListener('input', () => {
-    managerState.moveSearchQuery = dom.moveSearchInput.value
-    managerState.moveFolderActiveId = ''
-    renderMoveModal()
-  })
-  dom.moveSearchInput?.addEventListener('keydown', handleMoveSearchKeydown)
-  dom.moveFolderResults?.addEventListener('click', handleMoveFolderResultsClick)
-  dom.moveFolderResults?.addEventListener('keydown', handleMoveFolderResultsKeydown)
-  dom.moveFolderResults?.addEventListener('focusin', handleMoveFolderResultsFocus)
-  dom.cancelMoveModal?.addEventListener('click', closeMoveModal)
-  dom.scopeSearchInput?.addEventListener('input', () => {
-    managerState.scopeSearchQuery = dom.scopeSearchInput.value
-    managerState.scopeFolderActiveId = null
-    renderScopeModal()
-  })
-  dom.scopeSearchInput?.addEventListener('keydown', handleScopeSearchKeydown)
-  dom.scopeFolderResults?.addEventListener('click', handleScopeFolderResultsClick)
-  dom.scopeFolderResults?.addEventListener('keydown', handleScopeFolderResultsKeydown)
-  dom.scopeFolderResults?.addEventListener('focusin', handleScopeFolderResultsFocus)
-  dom.cancelScopeModal?.addEventListener('click', closeScopeModal)
-  dom.closeAiModelModal?.addEventListener('click', closeAiModelModal)
-  dom.cancelAiModelModal?.addEventListener('click', closeAiModelModal)
-  dom.saveAiModelModal?.addEventListener('click', saveAiModelModalSettings)
-  dom.aiModelPickerSearchInput?.addEventListener('input', () => {
-    managerState.aiModelPickerSearchQuery = dom.aiModelPickerSearchInput.value
-    managerState.aiModelPickerActiveId = ''
-    renderAiModelPickerModal()
-  })
-  dom.aiModelPickerSearchInput?.addEventListener('keydown', handleAiModelPickerSearchKeydown)
-  dom.aiModelPickerResults?.addEventListener('click', handleAiModelPickerResultsClick)
-  dom.aiModelPickerResults?.addEventListener('keydown', handleAiModelPickerResultsKeydown)
-  dom.aiModelPickerResults?.addEventListener('focusin', handleAiModelPickerResultsFocus)
-  dom.closeAiModelPickerModal?.addEventListener('click', closeAiModelPickerModal)
-  dom.cancelAiModelPickerModal?.addEventListener('click', closeAiModelPickerModal)
-  dom.aiModelPickerFetchButton?.addEventListener('click', handleFetchAiModels)
-  dom.aiModelPickerManageButton?.addEventListener('click', () => {
-    closeAiModelPickerModal()
-    openAiModelModal()
-  })
-  document.addEventListener('keydown', handleKeydown)
-  window.addEventListener('options:managed-modal-close', handleManagedModalCloseRequest)
-  dom.deleteModalBackdrop?.addEventListener('click', (event) => {
-    if (event.target === dom.deleteModalBackdrop) {
-      closeDeleteModal()
-    }
-  })
-  dom.confirmModalBackdrop?.addEventListener('click', (event) => {
-    if (event.target === dom.confirmModalBackdrop) {
-      resolveConfirmModal(false)
-    }
-  })
-  dom.moveModalBackdrop?.addEventListener('click', (event) => {
-    if (event.target === dom.moveModalBackdrop) {
-      closeMoveModal()
-    }
-  })
-  dom.scopeModalBackdrop?.addEventListener('click', (event) => {
-    if (event.target === dom.scopeModalBackdrop) {
-      closeScopeModal()
-    }
-  })
-  dom.aiModelModalBackdrop?.addEventListener('click', (event) => {
-    if (event.target === dom.aiModelModalBackdrop) {
-      closeAiModelModal()
-    }
-  })
-  dom.aiModelPickerModalBackdrop?.addEventListener('click', (event) => {
-    if (event.target === dom.aiModelPickerModalBackdrop) {
-      closeAiModelPickerModal()
-    }
-  })
-}
-
-function handleManagedModalCloseRequest(event) {
-  const key = String(event?.detail?.key || '')
-  if (key === 'confirm') {
-    resolveConfirmModal(false)
-    return
-  }
-  if (key === 'ai-model') {
-    closeAiModelModal()
-    return
-  }
-  if (key === 'ai-model-picker') {
-    closeAiModelPickerModal()
-    return
-  }
-  if (key === 'scope') {
     closeScopeModal()
     return
   }
-  if (key === 'move') {
+
+  if (detail.modal === 'move') {
+    if (detail.action === 'search-change') {
+      managerState.moveSearchQuery = String(detail.query || '')
+      managerState.moveFolderActiveId = ''
+      renderMoveModal()
+      return
+    }
     closeMoveModal()
     return
   }
-  if (key === 'delete') {
+
+  if (detail.modal === 'delete') {
+    if (detail.action === 'confirm') {
+      void confirmDeleteFailedBookmarks()
+      return
+    }
     closeDeleteModal()
   }
+}
+
+export function handleScopePickerTriggerOpen(source: ScopePickerSource): void {
+  if (source !== 'availability' && source !== 'history') {
+    return
+  }
+
+  openScopeModal(source)
+}
+
+export function handleAiAnalysisScopePickerOpen(): void {
+  openScopeModal('ai')
 }
 
 function getCurrentSectionKey() {
@@ -1314,35 +840,19 @@ function getCurrentSectionKey() {
   return window.location.hash.replace(/^#/, '').split(':')[0] || 'overview'
 }
 
-function getCurrentSectionAnchor() {
-  if (IS_OPTIONS_DASHBOARD_EMBED_MODE) {
-    return ''
-  }
-
-  const [, anchor = ''] = window.location.hash.replace(/^#/, '').split(':')
-  return anchor
+function normalizeSectionKey(key: string): OptionsSectionKey {
+  return normalizeOptionsSectionKey(key)
 }
 
-function normalizeSectionKey(key: string): keyof typeof SECTION_META {
-  if (key === 'ai-tag-data') {
-    return 'backup'
-  }
-
-  return key in SECTION_META ? (key as keyof typeof SECTION_META) : 'overview'
-}
-
-function handleKeydown(event) {
-  if (event.key === 'Tab' && trapModalFocus(event)) {
-    return
+export function handleDashboardPanelKeyDown(event: KeyboardEvent): void {
+  if (getCurrentSectionKey() === 'dashboard') {
+    handleDashboardKeydown(event)
+    if (event.defaultPrevented) {
+      return
+    }
   }
 
   if (event.key !== 'Escape') {
-    return
-  }
-
-  if (availabilityState.settingsOpen) {
-    event.preventDefault()
-    closeAvailabilitySettingsPopover()
     return
   }
 
@@ -1361,159 +871,10 @@ function handleKeydown(event) {
     return
   }
 
-  if (managerState.confirmModalOpen) {
-    event.preventDefault()
-    resolveConfirmModal(false)
-    return
-  }
-
-  if (managerState.aiModelModalOpen) {
-    event.preventDefault()
-    closeAiModelModal()
-    return
-  }
-
-  if (managerState.aiModelPickerModalOpen) {
-    event.preventDefault()
-    closeAiModelPickerModal()
-    return
-  }
-
-  if (managerState.scopeModalOpen) {
-    event.preventDefault()
-    closeScopeModal()
-    return
-  }
-
-  if (managerState.moveModalOpen) {
-    event.preventDefault()
-    closeMoveModal()
-    return
-  }
-
-  if (availabilityState.deleteModalOpen) {
-    event.preventDefault()
-    closeDeleteModal()
-    return
-  }
-
   if (getCurrentSectionKey() === 'dashboard') {
     event.preventDefault()
     exitDashboard()
   }
-}
-
-function setManagedModalHidden(key, backdrop, open, preferredFocus = null) {
-  if (!backdrop) {
-    return
-  }
-
-  const wasOpen = backdrop.dataset.modalOpen === 'true'
-  const visibilityUpdate = setModalHidden(backdrop, open)
-  backdrop.dataset.modalOpen = open ? 'true' : 'false'
-  window.dispatchEvent(new CustomEvent('options:managed-modal-state', {
-    detail: { key, open }
-  }))
-
-  if (open && !wasOpen) {
-    activeManagedModalKey = key
-    const activeElement = document.activeElement
-    if (activeElement instanceof HTMLElement && !backdrop.contains(activeElement)) {
-      modalReturnFocusElement = activeElement
-    }
-    void Promise.resolve(visibilityUpdate).then(() => {
-      window.setTimeout(() => focusModal(backdrop, preferredFocus), 0)
-    })
-    return
-  }
-
-  if (!open && wasOpen && activeManagedModalKey === key) {
-    activeManagedModalKey = ''
-    const returnFocusElement = modalReturnFocusElement
-    modalReturnFocusElement = null
-    void Promise.resolve(visibilityUpdate).then(() => {
-      if (
-        activeManagedModalKey ||
-        !(returnFocusElement instanceof HTMLElement) ||
-        !document.contains(returnFocusElement) ||
-        returnFocusElement.hasAttribute('disabled')
-      ) {
-        return
-      }
-      returnFocusElement.focus()
-    })
-  }
-}
-
-function focusModal(backdrop, preferredFocus = null) {
-  const target = preferredFocus instanceof HTMLElement && backdrop.contains(preferredFocus)
-    ? preferredFocus
-    : getModalFocusableElements(backdrop)[0]
-
-  if (target instanceof HTMLElement) {
-    target.focus()
-  }
-}
-
-function getModalFocusableElements(backdrop) {
-  return [...backdrop.querySelectorAll(MODAL_FOCUSABLE_SELECTOR)].filter((element) => {
-    return (
-      element instanceof HTMLElement &&
-      !element.hasAttribute('disabled') &&
-      !element.getAttribute('aria-hidden') &&
-      element.getClientRects().length > 0
-    )
-  })
-}
-
-function getOpenModalBackdrop() {
-  return [
-    dom.confirmModalBackdrop,
-    dom.aiModelModalBackdrop,
-  dom.aiModelPickerModalBackdrop,
-  dom.scopeModalBackdrop,
-  dom.moveModalBackdrop,
-  dom.deleteModalBackdrop
-  ].find((backdrop) => {
-    return backdrop?.dataset?.modalOpen === 'true' && !backdrop.classList.contains('hidden')
-  }) || null
-}
-
-function trapModalFocus(event) {
-  const backdrop = getOpenModalBackdrop()
-  if (!backdrop) {
-    return false
-  }
-
-  const focusableElements = getModalFocusableElements(backdrop)
-  if (!focusableElements.length) {
-    event.preventDefault()
-    return true
-  }
-
-  const firstElement = focusableElements[0]
-  const lastElement = focusableElements[focusableElements.length - 1]
-  const activeElement = document.activeElement
-
-  if (event.shiftKey && activeElement === firstElement) {
-    event.preventDefault()
-    lastElement.focus()
-    return true
-  }
-
-  if (!event.shiftKey && activeElement === lastElement) {
-    event.preventDefault()
-    firstElement.focus()
-    return true
-  }
-
-  if (!backdrop.contains(activeElement)) {
-    event.preventDefault()
-    firstElement.focus()
-    return true
-  }
-
-  return false
 }
 
 function getPaginationStateKey(kind) {
@@ -1543,29 +904,37 @@ function getPaginatedResults(kind, results, pageSize = RESULTS_PAGE_SIZE) {
   return results.slice(start, start + pageSize)
 }
 
-function renderResultsPagination(container, kind, totalCount, label, pageSize = RESULTS_PAGE_SIZE) {
-  if (!container) {
-    return
-  }
-
+function renderResultsPagination(kind, totalCount, label, pageSize = RESULTS_PAGE_SIZE) {
   const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / pageSize))
   const page = getClampedResultsPage(kind, totalCount, pageSize)
   const start = totalCount ? (page - 1) * pageSize + 1 : 0
   const end = Math.min(totalCount, page * pageSize)
-  renderResultsPaginationIsland(
-    container,
-    totalPages > 1
-      ? {
-          kind,
-          label,
-          page,
-          totalPages,
-          start,
-          end,
-          totalCount
-        }
-      : null
-  )
+  publishResultsPagination(kind, {
+    end,
+    kind,
+    label,
+    page,
+    start,
+    totalCount,
+    totalPages,
+    visible: totalPages > 1
+  })
+}
+
+function publishAiResultsPagination(totalCount, label = 'AI 结果', pageSize = RESULTS_PAGE_SIZE) {
+  const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / pageSize))
+  const page = getClampedResultsPage('ai-results', totalCount, pageSize)
+  const start = totalCount ? (page - 1) * pageSize + 1 : 0
+  const end = Math.min(totalCount, page * pageSize)
+  publishAiAnalysisResultsPagination({
+    end,
+    label,
+    page,
+    start,
+    totalCount,
+    totalPages,
+    visible: totalPages > 1
+  })
 }
 
 function resetResultsPage(kind) {
@@ -1573,90 +942,151 @@ function resetResultsPage(kind) {
   state[key] = 1
 }
 
-function handleResultsPaginationClick(event, expectedKind) {
-  const button = event.target.closest('[data-results-page]')
-  if (!button || button.hasAttribute('disabled')) {
+export function handleResultsPagination(detail: ResultsPaginationActionDetail): void {
+  const kind = String(detail?.kind || '')
+  const direction = detail?.direction
+  if (!kind || (direction !== 'next' && direction !== 'prev')) {
     return
   }
 
-  const kind = String(button.getAttribute('data-results-page') || '')
-  if (kind !== expectedKind) {
+  if (kind !== 'availability-review' && kind !== 'availability-failed' && kind !== 'redirects') {
     return
   }
 
-  const direction = String(button.getAttribute('data-page-direction') || '')
   const { state, key } = getPaginationStateKey(kind)
   state[key] = Math.max(1, (Number(state[key]) || 1) + (direction === 'next' ? 1 : -1))
   renderAvailabilitySection()
 }
 
-function handleReviewResultAction(event) {
-  const selectionInput = event.target.closest('input[data-availability-select]')
-  if (selectionInput) {
-    toggleAvailabilitySelection(selectionInput.getAttribute('data-bookmark-id'), selectionInput.checked)
+export function handleAiResultsPagination(detail: AiAnalysisResultsPaginationActionDetail): void {
+  const direction = detail?.direction
+  if (direction !== 'next' && direction !== 'prev') {
     return
   }
 
-  const handled = handleAvailabilityResultQuickAction(event)
-  if (handled) {
-    return
-  }
-
-  const actionButton = event.target.closest('[data-review-action="promote-failed"]')
-  if (
-    !actionButton ||
-    availabilityState.deleting ||
-    availabilityState.stopRequested ||
-    (availabilityState.running && !availabilityState.paused)
-  ) {
-    return
-  }
-
-  const bookmarkId = String(actionButton.getAttribute('data-bookmark-id') || '').trim()
-  if (!bookmarkId) {
-    return
-  }
-
-  promoteReviewResultToFailed(bookmarkId)
+  aiNamingState.resultsPage = Math.max(1, (Number(aiNamingState.resultsPage) || 1) + (direction === 'next' ? 1 : -1))
+  renderAvailabilitySection()
 }
 
-function handleFailedResultAction(event) {
-  const selectionInput = event.target.closest('input[data-availability-select]')
-  if (selectionInput) {
-    toggleAvailabilitySelection(selectionInput.getAttribute('data-bookmark-id'), selectionInput.checked)
+export function handleAvailabilityResultAction(detail: AvailabilityResultActionDetail): void {
+  const bookmarkId = String(detail?.bookmarkId || '').trim()
+  if (!detail || !bookmarkId) {
     return
   }
 
-  const handled = handleAvailabilityResultQuickAction(event)
-  if (handled) {
+  if (detail.action === 'toggle-selection') {
+    toggleAvailabilitySelection(bookmarkId, detail.checked)
     return
   }
 
-  const actionButton = event.target.closest('[data-failed-action="demote-review"]')
   if (
-    !actionButton ||
-    availabilityState.deleting ||
-    availabilityState.stopRequested ||
-    (availabilityState.running && !availabilityState.paused)
+    detail.action === 'promote-failed' ||
+    detail.action === 'demote-review'
   ) {
+    if (
+      availabilityState.deleting ||
+      availabilityState.stopRequested ||
+      (availabilityState.running && !availabilityState.paused)
+    ) {
+      return
+    }
+
+    if (detail.action === 'promote-failed') {
+      promoteReviewResultToFailed(bookmarkId)
+      return
+    }
+
+    demoteFailedResultToReview(bookmarkId)
     return
   }
 
-  const bookmarkId = String(actionButton.getAttribute('data-bookmark-id') || '').trim()
-  if (!bookmarkId) {
+  if (isAvailabilityResultActionLocked()) {
     return
   }
 
-  demoteFailedResultToReview(bookmarkId)
+  const action = detail.action
+  if (action === 'hide-run') {
+    hideAvailabilityResultForCurrentRun(bookmarkId)
+    return
+  }
+
+  if (action === 'ignore-bookmark' || action === 'ignore-domain' || action === 'ignore-folder') {
+    void ignoreSingleAvailabilityResult(bookmarkId, action.replace('ignore-', ''))
+  }
 }
 
-function handleAvailabilityFilterClick(event) {
-  const button = event.target.closest('[data-availability-filter]')
-  if (!button) {
+export function handleAvailabilityPanelAction(detail: AvailabilityPanelActionDetail): void {
+  if (!detail) {
     return
   }
 
-  const filter = String(button.getAttribute('data-availability-filter') || 'all').trim()
+  if (detail.action === 'filter-change') {
+    setAvailabilityFilter(detail.filter)
+    return
+  }
+
+  if (detail.action === 'clear-selection') {
+    clearAvailabilitySelection()
+    return
+  }
+
+  if (detail.action === 'retest-selection') {
+    void retestSelectedAvailabilityResults()
+    return
+  }
+
+  if (detail.action === 'promote-selection') {
+    moveSelectedAvailabilityResults('failed')
+    return
+  }
+
+  if (detail.action === 'demote-selection') {
+    moveSelectedAvailabilityResults('review')
+    return
+  }
+
+  if (detail.action === 'move-selection') {
+    openMoveModal('availability')
+    return
+  }
+
+  if (detail.action === 'ignore-bookmarks') {
+    ignoreSelectedAvailabilityResults('bookmark')
+    return
+  }
+
+  if (detail.action === 'ignore-domains') {
+    ignoreSelectedAvailabilityResults('domain')
+    return
+  }
+
+  if (detail.action === 'ignore-folders') {
+    ignoreSelectedAvailabilityResults('folder')
+    return
+  }
+
+  if (detail.action === 'delete-selected') {
+    void deleteSelectedAvailabilityResults()
+    return
+  }
+
+  if (detail.action === 'select-review') {
+    selectAvailabilityResultsByStatus('review')
+    return
+  }
+
+  if (detail.action === 'select-failed') {
+    selectAvailabilityResultsByStatus('failed')
+    return
+  }
+
+  if (detail.action === 'delete-failed') {
+    openDeleteModal()
+  }
+}
+
+function setAvailabilityFilter(nextFilter: unknown): void {
+  const filter = String(nextFilter || 'all').trim()
   if (!AVAILABILITY_FILTERS.has(filter)) {
     return
   }
@@ -1668,35 +1098,6 @@ function handleAvailabilityFilterClick(event) {
     resetResultsPage('availability-review')
   }
   renderAvailabilitySection()
-}
-
-function handleAvailabilityResultQuickAction(event) {
-  const actionButton = event.target.closest('[data-availability-result-action]')
-  if (!actionButton) {
-    return false
-  }
-
-  if (isAvailabilityResultActionLocked()) {
-    return true
-  }
-
-  const action = String(actionButton.getAttribute('data-availability-result-action') || '').trim()
-  const bookmarkId = String(actionButton.getAttribute('data-bookmark-id') || '').trim()
-  if (!action || !bookmarkId) {
-    return true
-  }
-
-  if (action === 'hide-run') {
-    hideAvailabilityResultForCurrentRun(bookmarkId)
-    return true
-  }
-
-  if (action === 'ignore-bookmark' || action === 'ignore-domain' || action === 'ignore-folder') {
-    void ignoreSingleAvailabilityResult(bookmarkId, action.replace('ignore-', ''))
-    return true
-  }
-
-  return true
 }
 
 function collectNewTabShortcutFolderIds(
@@ -2810,56 +2211,11 @@ function applyAvailabilityResult(result) {
 }
 
 function renderAvailabilitySection() {
-  if (!dom.availabilityAction) {
-    return
-  }
-
   synchronizeRedirectResults()
   renderAvailabilityScopeControls()
   const scopeMeta = getCurrentAvailabilityScopeMeta()
   renderAvailabilitySettingsControl()
-
-  dom.availabilityPermissionBadge.className = `options-chip ${getModeBadgeTone()}`
-  dom.availabilityPermissionBadge.textContent = getModeBadgeText()
-  dom.availabilityPermissionCopy.textContent = getModeCopyText()
-
-  dom.availabilityAction.disabled =
-    availabilityState.running ||
-    availabilityState.retestingSelection ||
-    availabilityState.catalogLoading ||
-    availabilityState.requestingPermission ||
-    availabilityState.deleting
-  setLoadingLabel(dom.availabilityAction, getAvailabilityActionText(), {
-    busy: isAvailabilityPrimaryActionBusy(),
-    wrapperClass: 'button-loading-label',
-    loaderClass: 'button-dot-loader'
-  })
-  dom.availabilityPauseAction?.classList.toggle('hidden', !availabilityState.running)
-  dom.availabilityStopAction?.classList.toggle('hidden', !availabilityState.running)
-
-  if (dom.availabilityPauseAction) {
-    dom.availabilityPauseAction.disabled =
-      !availabilityState.running ||
-      availabilityState.deleting ||
-      availabilityState.stopRequested
-    dom.availabilityPauseAction.textContent = availabilityState.paused ? '继续检测' : '暂停检测'
-  }
-
-  if (dom.availabilityStopAction) {
-    dom.availabilityStopAction.disabled =
-      !availabilityState.running ||
-      availabilityState.deleting ||
-      availabilityState.stopRequested
-    setLoadingLabel(
-      dom.availabilityStopAction,
-      availabilityState.stopRequested ? '停止中…' : '停止本次检测',
-      {
-        busy: availabilityState.stopRequested,
-        wrapperClass: 'button-loading-label',
-        loaderClass: 'button-dot-loader'
-      }
-    )
-  }
+  publishAvailabilityControls(getAvailabilityControlsState())
 
   const progressTotal = availabilityState.retestingSelection
     ? availabilityState.retestSelectionTotal
@@ -2867,69 +2223,24 @@ function renderAvailabilitySection() {
   const progressCompleted = availabilityState.retestingSelection
     ? availabilityState.retestSelectionCompleted
     : availabilityState.checkedBookmarks
-  const progressLabel = progressTotal
-    ? `${progressCompleted} / ${progressTotal}`
-    : '未开始'
-  const progressValue = progressTotal
-    ? Math.round((progressCompleted / progressTotal) * 100)
-    : 0
-
-  const availabilityProgressLabel = availabilityState.retestingSelection
-    ? `重测中 ${progressLabel}`
-    : availabilityState.running
-    ? availabilityState.stopRequested
-      ? `正在停止 ${progressLabel}`
-      : availabilityState.paused
-        ? `已暂停 ${progressLabel}`
-        : `检测中 ${progressLabel}`
-    : availabilityState.lastCompletedAt
-      ? availabilityState.lastRunOutcome === 'stopped'
-        ? `已停止 ${progressLabel}`
-        : `已完成 ${progressLabel}`
-      : progressLabel
-  setLoadingLabel(dom.availabilityProgressText, availabilityProgressLabel, {
-    busy: isAvailabilityProgressBusy(),
-    wrapperClass: 'status-loading-label',
-    loaderClass: 'status-dot-loader'
-  })
-  dom.availabilityProgressBar.style.width = `${Math.max(0, Math.min(progressValue, 100))}%`
-  dom.availabilityStatusCopy.textContent = getAvailabilityStatusCopy()
-  renderAvailabilityDecisionSummary(scopeMeta, progressCompleted, progressTotal)
-  renderAvailabilityFilterBar()
-
-  if (dom.availabilityReviewTitle) {
-    dom.availabilityReviewTitle.textContent = getAvailabilityPanelTitle('review')
-  }
-  if (dom.availabilityFailedTitle) {
-    dom.availabilityFailedTitle.textContent = getAvailabilityPanelTitle('failed')
-  }
-  dom.availabilityReviewSubtitle.textContent = getAvailabilityReviewSubtitle()
-  const panelCounts = getAvailabilityPanelCounts()
-  dom.availabilityReviewCount.textContent = `${panelCounts.review} 条${getAvailabilityPanelCountLabel('review')}`
-  dom.availabilityLastRun.textContent = availabilityState.lastCompletedAt
-    ? `${availabilityState.lastRunOutcome === 'stopped' ? '最近一次停止于' : '最近一次完成于'} ${formatDateTime(availabilityState.lastCompletedAt)}`
-    : '尚未执行检测'
-  dom.availabilityErrorCount.textContent = `${panelCounts.failed} 条${getAvailabilityPanelCountLabel('failed')}`
-
-  dom.deleteFailedBookmarks.disabled =
-    isInteractionLocked() ||
-    availabilityState.failedResults.length === 0
-  dom.deleteFailedBookmarks.textContent = availabilityState.deleting ? '正在删除…' : '批量删除'
+  publishAvailabilityProgress(getAvailabilityProgressState(progressCompleted, progressTotal))
+  publishAvailabilityDecisionMetrics(getAvailabilityDecisionMetricsState(scopeMeta, progressCompleted, progressTotal))
+  publishAvailabilityFilters(getAvailabilityFiltersState())
+  publishAvailabilityResultsHeader(getAvailabilityResultsHeaderState())
+  publishAvailabilitySelectionActions(getAvailabilitySelectionActionsState())
+  syncAvailabilityDurationTimer()
 
   renderActiveOptionsSection()
   renderScopeModal()
   renderMoveModal()
   renderDeleteModal()
   renderConfirmModal()
-  renderAiModelModal()
-  renderAiModelPickerModal()
 }
 
 function renderActiveOptionsSection() {
   const activeSection = normalizeSectionKey(getCurrentSectionKey())
 
   if (activeSection === 'availability') {
-    renderAvailabilitySelectionGroup()
     renderReviewResults()
     renderFailedResults()
     return
@@ -2942,7 +2253,7 @@ function renderActiveOptionsSection() {
 
   if (activeSection === 'dashboard') {
     renderDashboardSection()
-    notifyNewTabDashboardReady()
+    handleOptionsDashboardViewReady()
     return
   }
 
@@ -3006,17 +2317,21 @@ function renderActiveOptionsSection() {
 function renderOptionsOverviewSection(): void {
   const totalBookmarks = availabilityState.allBookmarks.length || availabilityState.bookmarks.length
   const checkableBookmarks = availabilityState.eligibleBookmarks || availabilityState.bookmarks.length
-  setTextContent('overview-total-bookmarks', totalBookmarks ? String(totalBookmarks) : '读取中')
-  setTextContent('overview-checkable-bookmarks', checkableBookmarks ? String(checkableBookmarks) : '读取中')
-  setTextContent('overview-issue-count', String(
-    availabilityState.failedResults.length +
-    availabilityState.reviewResults.length +
-    getRedirectSectionState(redirectsCallbacks).results.length +
-    managerState.recycleBin.length
-  ))
-  setTextContent('overview-recycle-count', String(managerState.recycleBin.length))
-  setTextContent('overview-next-step-title', getOverviewNextStepTitle())
-  setTextContent('overview-next-step-copy', getOverviewNextStepCopy())
+  publishOptionsOverview({
+    metrics: {
+      checkableBookmarks: checkableBookmarks ? String(checkableBookmarks) : '读取中',
+      issueCount: String(
+        availabilityState.failedResults.length +
+        availabilityState.reviewResults.length +
+        getRedirectSectionState(redirectsCallbacks).results.length +
+        managerState.recycleBin.length
+      ),
+      recycleCount: String(managerState.recycleBin.length),
+      totalBookmarks: totalBookmarks ? String(totalBookmarks) : '读取中'
+    },
+    nextStepCopy: getOverviewNextStepCopy(),
+    nextStepTitle: getOverviewNextStepTitle()
+  })
 }
 
 function getOverviewNextStepTitle(): string {
@@ -3049,13 +2364,6 @@ function getOverviewNextStepCopy(): string {
     return '配置 API Key 后才会启用 AI 分析主按钮；未配置时不会出现必然失败的执行路径。'
   }
   return '重复、文件夹清理和重定向更新均使用预览优先、确认执行、可恢复路径。'
-}
-
-function setTextContent(id: string, value: string): void {
-  const element = document.getElementById(id)
-  if (element) {
-    element.textContent = value
-  }
 }
 
 function recordPrivacyAudit(input: PrivacyAuditInput): void {
@@ -3100,51 +2408,6 @@ function getSafeAuditTarget(url: unknown): string {
   }
 }
 
-function renderAvailabilityDecisionSummary(scopeMeta, progressCompleted, progressTotal) {
-  const decisionStats = getAvailabilityDecisionStats()
-
-  if (dom.availabilityDecisionScope) {
-    dom.availabilityDecisionScope.textContent = scopeMeta.label
-  }
-  if (dom.availabilityDecisionProgress) {
-    dom.availabilityDecisionProgress.textContent = `${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`
-  }
-  updateAvailabilityDurationDisplay()
-  syncAvailabilityDurationTimer()
-  if (dom.availabilityDecisionNew) {
-    dom.availabilityDecisionNew.textContent = String(decisionStats.newCount)
-  }
-  if (dom.availabilityDecisionPersistent) {
-    dom.availabilityDecisionPersistent.textContent = String(decisionStats.persistentCount)
-  }
-  if (dom.availabilityDecisionRecovered) {
-    dom.availabilityDecisionRecovered.textContent = String(decisionStats.recoveredCount)
-  }
-  if (dom.availabilityDecisionIgnored) {
-    dom.availabilityDecisionIgnored.textContent = String(availabilityState.ignoredCount)
-  }
-}
-
-function renderAvailabilityFilterBar() {
-  if (!dom.availabilityFilterBar) {
-    return
-  }
-
-  const activeFilter = getAvailabilityFilter()
-  const counts = getAvailabilityFilterCounts()
-  const buttons = dom.availabilityFilterBar.querySelectorAll('[data-availability-filter]')
-
-  buttons.forEach((button) => {
-    const filter = String(button.getAttribute('data-availability-filter') || 'all').trim()
-    const active = filter === activeFilter
-    const label = getAvailabilityFilterLabel(filter)
-    const count = counts[filter] ?? 0
-    button.classList.toggle('active', active)
-    button.setAttribute('aria-pressed', active ? 'true' : 'false')
-    button.textContent = `${label} ${count}`
-  })
-}
-
 function getAvailabilityFilter() {
   const filter = String(availabilityState.availabilityFilter || 'all').trim()
   return AVAILABILITY_FILTERS.has(filter) ? filter : 'all'
@@ -3177,36 +2440,177 @@ function getAvailabilityFilterCounts() {
   }
 }
 
+function getAvailabilityProgressState(progressCompleted: number, progressTotal: number) {
+  const progressLabel = progressTotal
+    ? `${progressCompleted} / ${progressTotal}`
+    : '未开始'
+  const progressValue = progressTotal
+    ? Math.round((progressCompleted / progressTotal) * 100)
+    : 0
+
+  const availabilityProgressLabel = availabilityState.retestingSelection
+    ? `重测中 ${progressLabel}`
+    : availabilityState.running
+    ? availabilityState.stopRequested
+      ? `正在停止 ${progressLabel}`
+      : availabilityState.paused
+        ? `已暂停 ${progressLabel}`
+        : `检测中 ${progressLabel}`
+    : availabilityState.lastCompletedAt
+      ? availabilityState.lastRunOutcome === 'stopped'
+        ? `已停止 ${progressLabel}`
+        : `已完成 ${progressLabel}`
+      : progressLabel
+
+  return {
+    busy: isAvailabilityProgressBusy(),
+    durationLabel: getAvailabilityDurationLabel(),
+    progressLabel: availabilityProgressLabel,
+    progressValue: Math.max(0, Math.min(progressValue, 100)),
+    statusCopy: getAvailabilityStatusCopy()
+  }
+}
+
+function getAvailabilityDecisionMetricsState(scopeMeta, progressCompleted: number, progressTotal: number) {
+  const decisionStats = getAvailabilityDecisionStats()
+
+  return {
+    ignored: String(availabilityState.ignoredCount),
+    newCount: String(decisionStats.newCount),
+    persistent: String(decisionStats.persistentCount),
+    progress: `${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`,
+    recovered: String(decisionStats.recoveredCount),
+    scope: scopeMeta.label
+  }
+}
+
+function getAvailabilityFiltersState() {
+  const activeFilter = getAvailabilityFilter()
+  const counts = getAvailabilityFilterCounts()
+  const filters = [
+    'all',
+    'failed',
+    'review',
+    'redirected',
+    'new',
+    'persistent',
+    'recovered',
+    'ignored'
+  ]
+
+  return {
+    filters: filters.map((filter) => ({
+      active: filter === activeFilter,
+      count: counts[filter] ?? 0,
+      filter,
+      label: getAvailabilityFilterLabel(filter)
+    }))
+  }
+}
+
+function getAvailabilityResultsHeaderState() {
+  const panelCounts = getAvailabilityPanelCounts()
+
+  return {
+    deleteFailedDisabled: (
+      isInteractionLocked() ||
+      availabilityState.failedResults.length === 0
+    ),
+    deleteFailedLabel: availabilityState.deleting ? '正在删除…' : '批量删除',
+    failedCount: `${panelCounts.failed} 条${getAvailabilityPanelCountLabel('failed')}`,
+    failedLastRun: availabilityState.lastCompletedAt
+      ? `${availabilityState.lastRunOutcome === 'stopped' ? '最近一次停止于' : '最近一次完成于'} ${formatDateTime(availabilityState.lastCompletedAt)}`
+      : '尚未执行检测',
+    failedTitle: getAvailabilityPanelTitle('failed'),
+    reviewCount: `${panelCounts.review} 条${getAvailabilityPanelCountLabel('review')}`,
+    reviewSubtitle: getAvailabilityReviewSubtitle(),
+    reviewTitle: getAvailabilityPanelTitle('review')
+  }
+}
+
+function getAvailabilitySelectionActionsState() {
+  const selectedResults = getSelectedAvailabilityResults()
+  const selectedReviewCount = selectedResults.filter((result) => result.status === 'review').length
+  const selectedFailedCount = selectedResults.filter((result) => result.status === 'failed').length
+  const interactionLocked = isInteractionLocked()
+
+  return {
+    clearDisabled: selectedResults.length === 0,
+    countLabel: `${selectedResults.length} 条已选择`,
+    deleteDisabled: interactionLocked || selectedResults.length === 0,
+    demoteDisabled: interactionLocked || selectedFailedCount === 0,
+    hidden: selectedResults.length === 0,
+    ignoreBookmarkDisabled: interactionLocked || selectedResults.length === 0,
+    ignoreDomainDisabled: interactionLocked || selectedResults.length === 0,
+    ignoreFolderDisabled: interactionLocked || selectedResults.length === 0,
+    moveDisabled: interactionLocked || selectedResults.length === 0,
+    promoteDisabled: interactionLocked || selectedReviewCount === 0,
+    retestDisabled: (
+      interactionLocked ||
+      availabilityState.catalogLoading ||
+      availabilityState.requestingPermission ||
+      selectedResults.length === 0
+    ),
+    retestLabel: availabilityState.retestingSelection ? '重新测试中…' : '重新测试'
+  }
+}
+
+function getAvailabilityControlsState(): AvailabilityControlsState {
+  const actionDisabled = (
+    availabilityState.running ||
+    availabilityState.retestingSelection ||
+    availabilityState.catalogLoading ||
+    availabilityState.requestingPermission ||
+    availabilityState.deleting
+  )
+  const pauseDisabled = (
+    !availabilityState.running ||
+    availabilityState.deleting ||
+    availabilityState.stopRequested
+  )
+  const stopDisabled = (
+    !availabilityState.running ||
+    availabilityState.deleting ||
+    availabilityState.stopRequested
+  )
+
+  return {
+    actionBusy: isAvailabilityPrimaryActionBusy(),
+    actionDisabled,
+    actionLabel: getAvailabilityActionText(),
+    badgeText: getModeBadgeText(),
+    badgeTone: getModeBadgeTone(),
+    pauseDisabled,
+    pauseHidden: !availabilityState.running,
+    pauseLabel: availabilityState.paused ? '继续检测' : '暂停检测',
+    permissionCopy: getModeCopyText(),
+    settingsDisabled: isAvailabilitySettingsDisabled(),
+    settingsDraft: availabilitySettingsDraft || createAvailabilitySettingsDraft(availabilityState.settings),
+    settingsOpen: availabilityState.settingsOpen,
+    settingsStatus: availabilityState.settingsStatus || '',
+    settingsStatusTone: String(availabilityState.settingsStatusTone || 'muted'),
+    stopBusy: availabilityState.stopRequested,
+    stopDisabled,
+    stopHidden: !availabilityState.running,
+    stopLabel: availabilityState.stopRequested ? '停止中…' : '停止本次检测'
+  }
+}
+
+function isAvailabilitySettingsDisabled(): boolean {
+  return (
+    availabilityState.running ||
+    availabilityState.retestingSelection ||
+    availabilityState.catalogLoading ||
+    availabilityState.storageLoading
+  )
+}
+
 function renderAvailabilitySettingsControl() {
   const settings = normalizeAvailabilityRunnerUserSettings(availabilityState.settings)
   availabilityState.settings = settings
 
-  if (dom.availabilitySettingsTrigger) {
-    dom.availabilitySettingsTrigger.disabled =
-      availabilityState.running ||
-      availabilityState.retestingSelection ||
-      availabilityState.catalogLoading ||
-      availabilityState.storageLoading
-    dom.availabilitySettingsTrigger.setAttribute('aria-expanded', availabilityState.settingsOpen ? 'true' : 'false')
-  }
-
-  if (dom.availabilitySettingsPopover) {
-    dom.availabilitySettingsPopover.classList.toggle('hidden', !availabilityState.settingsOpen)
-  }
-
-  if (availabilityState.settingsOpen) {
-    if (dom.availabilityConcurrencyInput && dom.availabilityConcurrencyInput !== document.activeElement) {
-      dom.availabilityConcurrencyInput.value = String(settings.concurrency)
-    }
-    if (dom.availabilityTimeoutInput && dom.availabilityTimeoutInput !== document.activeElement) {
-      dom.availabilityTimeoutInput.value = String(Math.round(settings.navigationTimeoutMs / 1000))
-    }
-  }
-
-  if (dom.availabilitySettingsStatus) {
-    const tone = String(availabilityState.settingsStatusTone || 'muted')
-    dom.availabilitySettingsStatus.className = `options-inline-status ${tone}`
-    dom.availabilitySettingsStatus.textContent = availabilityState.settingsStatus || ''
+  if (!availabilitySettingsDraft || !availabilityState.settingsOpen) {
+    availabilitySettingsDraft = createAvailabilitySettingsDraft(settings)
   }
 }
 
@@ -3222,11 +2626,8 @@ function openAvailabilitySettingsPopover() {
 
   availabilityState.settingsOpen = true
   availabilityState.settingsStatus = ''
+  availabilitySettingsDraft = createAvailabilitySettingsDraft(availabilityState.settings)
   renderAvailabilitySection()
-  window.setTimeout(() => {
-    dom.availabilityConcurrencyInput?.focus()
-    dom.availabilityConcurrencyInput?.select?.()
-  }, 0)
 }
 
 function closeAvailabilitySettingsPopover() {
@@ -3236,61 +2637,90 @@ function closeAvailabilitySettingsPopover() {
 
   availabilityState.settingsOpen = false
   availabilityState.settingsStatus = ''
+  availabilitySettingsDraft = null
   renderAvailabilitySection()
 }
 
-function toggleAvailabilitySettingsPopover() {
-  if (availabilityState.settingsOpen) {
-    closeAvailabilitySettingsPopover()
+export function handleAvailabilityControlsAction(detail: AvailabilityControlsActionDetail): void {
+  if (!detail) {
     return
   }
 
-  openAvailabilitySettingsPopover()
+  if (detail.action === 'start') {
+    void handleAvailabilityAction()
+    return
+  }
+
+  if (detail.action === 'pause-toggle') {
+    toggleAvailabilityPause()
+    return
+  }
+
+  if (detail.action === 'stop') {
+    requestAvailabilityStop()
+    return
+  }
+
+  if (detail.action === 'settings-open-change') {
+    if (detail.open) {
+      openAvailabilitySettingsPopover()
+    } else {
+      closeAvailabilitySettingsPopover()
+    }
+    return
+  }
+
+  if (detail.action === 'settings-draft-change') {
+    syncAvailabilitySettingsDraft(detail.draft)
+    return
+  }
+
+  if (detail.action === 'settings-save') {
+    void saveAvailabilitySettingsFromDraft()
+    return
+  }
+
+  if (detail.action === 'settings-reset') {
+    void resetAvailabilitySettings()
+  }
 }
 
-function handleAvailabilitySettingsDocumentClick(event) {
-  if (!availabilityState.settingsOpen) {
-    return
+function createAvailabilitySettingsDraft(settings = availabilityState.settings): AvailabilitySettingsDraft {
+  const normalizedSettings = normalizeAvailabilityRunnerUserSettings(settings)
+  return {
+    concurrency: String(normalizedSettings.concurrency),
+    navigationTimeoutSeconds: String(Math.round(normalizedSettings.navigationTimeoutMs / 1000))
   }
-
-  const target = event.target
-  if (!(target instanceof Node)) {
-    return
-  }
-
-  if (
-    dom.availabilitySettingsPopover?.contains(target) ||
-    dom.availabilitySettingsTrigger?.contains(target)
-  ) {
-    return
-  }
-
-  closeAvailabilitySettingsPopover()
 }
 
-function readAvailabilitySettingsFromDom() {
+function readAvailabilitySettingsFromDraft() {
+  const draft = availabilitySettingsDraft || createAvailabilitySettingsDraft(availabilityState.settings)
   return normalizeAvailabilityRunnerUserSettings({
-    concurrency: Number(dom.availabilityConcurrencyInput?.value),
-    navigationTimeoutMs: Number(dom.availabilityTimeoutInput?.value) * 1000
+    concurrency: Number(draft.concurrency),
+    navigationTimeoutMs: Number(draft.navigationTimeoutSeconds) * 1000
   })
 }
 
-function syncAvailabilitySettingsDraftFromDom() {
+function syncAvailabilitySettingsDraft(draft: AvailabilitySettingsDraft) {
   if (!availabilityState.settingsOpen) {
     return
   }
 
-  availabilityState.settings = readAvailabilitySettingsFromDom()
+  availabilitySettingsDraft = {
+    concurrency: String(draft.concurrency ?? ''),
+    navigationTimeoutSeconds: String(draft.navigationTimeoutSeconds ?? '')
+  }
+  availabilityState.settings = readAvailabilitySettingsFromDraft()
   availabilityState.settingsStatus = '未保存'
   availabilityState.settingsStatusTone = 'muted'
   updateAvailabilityRunnerStatus()
-  renderAvailabilitySettingsControl()
-  dom.availabilityPermissionCopy.textContent = getModeCopyText()
+  renderAvailabilitySection()
 }
 
-async function saveAvailabilitySettingsFromDom() {
-  const nextSettings = readAvailabilitySettingsFromDom()
+async function saveAvailabilitySettingsFromDraft() {
+  const nextSettings = readAvailabilitySettingsFromDraft()
   availabilityState.settings = nextSettings
+  availabilitySettingsDraft = createAvailabilitySettingsDraft(nextSettings)
   availabilityState.settingsStatus = '已保存'
   availabilityState.settingsStatusTone = 'success'
 
@@ -3309,6 +2739,7 @@ async function saveAvailabilitySettingsFromDom() {
 
 async function resetAvailabilitySettings() {
   availabilityState.settings = getDefaultAvailabilityRunnerUserSettings()
+  availabilitySettingsDraft = createAvailabilitySettingsDraft(availabilityState.settings)
   availabilityState.settingsStatus = '已恢复'
   availabilityState.settingsStatusTone = 'success'
 
@@ -3361,10 +2792,14 @@ function getAvailabilityDurationLabel() {
   return '未开始'
 }
 
-function updateAvailabilityDurationDisplay() {
-  if (dom.availabilityDecisionDuration) {
-    dom.availabilityDecisionDuration.textContent = getAvailabilityDurationLabel()
-  }
+function publishAvailabilityProgressTick() {
+  const progressTotal = availabilityState.retestingSelection
+    ? availabilityState.retestSelectionTotal
+    : availabilityState.eligibleBookmarks
+  const progressCompleted = availabilityState.retestingSelection
+    ? availabilityState.retestSelectionCompleted
+    : availabilityState.checkedBookmarks
+  publishAvailabilityProgress(getAvailabilityProgressState(progressCompleted, progressTotal))
 }
 
 function syncAvailabilityDurationTimer() {
@@ -3383,7 +2818,7 @@ function syncAvailabilityDurationTimer() {
     return
   }
 
-  availabilityDurationTimer = window.setInterval(updateAvailabilityDurationDisplay, 1000)
+  availabilityDurationTimer = window.setInterval(publishAvailabilityProgressTick, 1000)
 }
 
 function clearAvailabilityDurationTimer() {
@@ -3496,20 +2931,12 @@ function getAvailabilityReviewSubtitle() {
     : '当前轮未获得目标网站授权，因此没有继续访问这些网站。'
 }
 
-function syncAiNamingSettingsDraftFromDom({ markDirty = false } = {}) {
-  if (!dom.aiBaseUrl) {
-    return aiNamingManagerState.settings
-  }
-
+function syncAiNamingSettingsDraftFromState({ markDirty = false } = {}) {
   aiNamingManagerState.settings = normalizeAiNamingSettings({
-    baseUrl: dom.aiBaseUrl.value,
-    apiKey: dom.aiApiKey.value,
+    ...aiNamingManagerState.settings,
     model: aiNamingManagerState.settings.model,
     customModels: aiNamingManagerState.settings.customModels,
     fetchedModels: aiNamingManagerState.settings.fetchedModels,
-    apiStyle: aiNamingManagerState.settings.apiStyle,
-    timeoutMs: dom.aiTimeoutMs.value,
-    batchSize: dom.aiBatchSize.value,
     autoSelectHighConfidence: true,
     allowRemoteParsing: Boolean(aiNamingManagerState.settings.allowRemoteParsing),
     autoAnalyzeBookmarks: Boolean(aiNamingManagerState.settings.autoAnalyzeBookmarks),
@@ -3525,32 +2952,81 @@ function syncAiNamingSettingsDraftFromDom({ markDirty = false } = {}) {
   return aiNamingManagerState.settings
 }
 
-function handleAiProviderSelectChange(event: Event) {
-  const detail = (event as CustomEvent<AiProviderSelectChangeDetail>).detail
+export function handleAiProviderSettingsAction(detail: AiProviderSettingsActionDetail): void {
   if (!detail) {
     return
   }
 
-  if (detail.key !== 'apiStyle') {
+  if (detail.action === 'save') {
+    void saveAiNamingSettingsFromState()
     return
   }
 
+  if (detail.action === 'test-connection') {
+    void handleAiConnectivityTest()
+    return
+  }
+
+  if (detail.action === 'toggle-api-key') {
+    managerState.aiRevealApiKey = Boolean(detail.value)
+    renderAiNamingSection()
+    return
+  }
+
+  if (detail.action === 'custom-models-save') {
+    const customModels = normalizeAiNamingCustomModels(detail.value)
+    aiNamingManagerState.settings = normalizeAiNamingSettings({
+      ...syncAiNamingSettingsDraftFromState(),
+      customModels
+    })
+    aiNamingState.settingsDirty = true
+    resetAiNamingConnectivityState()
+    renderAiNamingSection()
+    return
+  }
+
+  if (detail.action === 'fetch-models') {
+    void handleFetchAiModels()
+    return
+  }
+
+  if (detail.action === 'api-style-change') {
+    aiNamingManagerState.settings = normalizeAiNamingSettings({
+      ...syncAiNamingSettingsDraftFromState(),
+      apiStyle: String(detail.value || '')
+    })
+    aiNamingState.settingsDirty = true
+    resetAiNamingConnectivityState()
+    renderAiNamingSection()
+    return
+  }
+
+  if (detail.action === 'model-change') {
+    applyAiModelSelectorChange(String(detail.value || ''))
+    return
+  }
+
+  if (detail.action !== 'change' || !detail.field) {
+    return
+  }
+
+  const previousSettings = syncAiNamingSettingsDraftFromState()
   aiNamingManagerState.settings = normalizeAiNamingSettings({
-    ...syncAiNamingSettingsDraftFromDom(),
-    apiStyle: detail.value
+    ...previousSettings,
+    [detail.field]: String(detail.value ?? '')
   })
   aiNamingState.settingsDirty = true
   resetAiNamingConnectivityState()
   renderAiNamingSection()
 }
 
-function handleContentSnapshotSettingsChange(event: Event): void {
-  const detail = (event as CustomEvent<ContentSnapshotSettingsChangeDetail>).detail
-  void saveContentSnapshotSettingsFromChange(detail || {})
+export function handleContentSnapshotSettingsChange(
+  detail: ContentSnapshotSettingsChangeDetail = {}
+): void {
+  void saveContentSnapshotSettingsFromChange(detail)
 }
 
-function handleFeatureSettingsChange(event: Event): void {
-  const detail = (event as CustomEvent<FeatureSettingsChangeDetail>).detail
+export function handleFeatureSettingsChange(detail: FeatureSettingsChangeDetail): void {
   if (!detail) {
     return
   }
@@ -3565,17 +3041,6 @@ function handleFeatureSettingsChange(event: Event): void {
   }
   if (detail.key === 'autoMoveToRecommendedFolder' || detail.key === 'tagOnlyNoAutoMove') {
     void handleInboxWorkflowSettingChange(detail.key, detail.checked)
-  }
-}
-
-function handleAiModelToolsAction(event: Event): void {
-  const detail = (event as CustomEvent<AiModelToolsActionDetail>).detail
-  if (detail?.action === 'fetch-models') {
-    void handleFetchAiModels()
-    return
-  }
-  if (detail?.action === 'manage-models') {
-    openAiModelModal()
   }
 }
 
@@ -3620,16 +3085,13 @@ function renderContentSnapshotSettings() {
   const snapshotRecords = Object.values(contentSnapshotState.index.records || {})
   const snapshotCount = snapshotRecords.length
   const fullTextCount = snapshotRecords.filter((record) => record.hasFullText).length
-  if (!dom.contentSnapshotControls) {
-    return
-  }
 
   const modeCopy = settings.enabled
     ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
     : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
   const aiRunCopy = buildContentSnapshotAiRunStatusCopy()
 
-  renderContentSnapshotControlsIsland(dom.contentSnapshotControls, {
+  publishContentSnapshotControls({
     enabled: Boolean(settings.enabled),
     fullTextDisabled: !settings.enabled,
     saveFullText: Boolean(settings.saveFullText),
@@ -3666,58 +3128,6 @@ function resetAiNamingConnectivityState() {
   aiNamingState.lastConnectivityTestAt = 0
   aiNamingState.lastConnectivityTestStatus = ''
   aiNamingState.lastConnectivityTestMessage = ''
-}
-
-function setLoadingLabel(
-  element,
-  label,
-  {
-    busy = false,
-    variant = 'bar',
-    wrapperClass,
-    loaderClass
-  }: {
-    busy?: boolean
-    variant?: string
-    wrapperClass?: string
-    loaderClass?: string
-  } = {}
-) {
-  if (!element) {
-    return
-  }
-
-  renderLoadingLabelIsland(element, {
-    busy,
-    label,
-    loaderClass: loaderClass || 'status-dot-loader',
-    variant: variant === 'spiral' ? 'spiral' : 'bar',
-    wrapperClass: wrapperClass || 'status-loading-label'
-  })
-}
-
-async function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-    return
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = text
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.left = '-9999px'
-  textarea.style.top = '0'
-  document.body.appendChild(textarea)
-  textarea.select()
-
-  try {
-    if (!document.execCommand('copy')) {
-      throw new Error('copy command failed')
-    }
-  } finally {
-    textarea.remove()
-  }
 }
 
 async function hydrateShortcutCommands() {
@@ -3758,15 +3168,11 @@ function getAllExtensionCommands(): Promise<chrome.commands.Command[]> {
 }
 
 function renderShortcutSettingsSection() {
-  if (!dom.shortcutControls) {
-    return
-  }
-
   const commands = getOrderedShortcutCommands()
   const statusTone = String(managerState.shortcutStatusTone || 'muted')
   const loading = managerState.shortcutStatus === 'loading'
 
-  renderShortcutControlsIsland(dom.shortcutControls, {
+  publishShortcutControls({
     detail: getShortcutStatusDetail(),
     list: loading
       ? { kind: 'loading' }
@@ -3887,9 +3293,9 @@ function isAiProgressBusy() {
   return aiNamingState.running && !aiNamingState.paused
 }
 
-async function saveAiNamingSettingsFromDom({ validateRequired = true } = {}) {
+async function saveAiNamingSettingsFromState({ validateRequired = true } = {}) {
   try {
-    const settings = syncAiNamingSettingsDraftFromDom()
+    const settings = syncAiNamingSettingsDraftFromState()
     if (validateRequired || settings.autoAnalyzeBookmarks) {
       validateAiNamingSettings(settings)
     }
@@ -3937,7 +3343,7 @@ async function handleAutoAnalyzeBookmarksChange(checked: boolean) {
   renderAvailabilitySection()
 
   try {
-    const saved = await saveAiNamingSettingsFromDom({
+    const saved = await saveAiNamingSettingsFromState({
       validateRequired: checked
     })
     if (!saved) {
@@ -4006,7 +3412,7 @@ async function handleAiRemoteParserChange(nextEnabled: boolean) {
     aiNamingState.pendingFeatureSwitch = 'allowRemoteParsing'
     aiNamingState.lastError = ''
     const settings = normalizeAiNamingSettings({
-      ...syncAiNamingSettingsDraftFromDom(),
+      ...syncAiNamingSettingsDraftFromState(),
       allowRemoteParsing: nextEnabled
     })
 
@@ -4059,10 +3465,6 @@ function renderFeatureSettingsControls(
     featureSwitchInFlight: string
   }
 ): void {
-  if (!dom.featureSettingsControls) {
-    return
-  }
-
   const inboxSettings = normalizeInboxSettings(managerState.inboxSettings)
   const remoteParserEnabled = Boolean(settings.allowRemoteParsing)
   const remoteParserGranted = Boolean(aiNamingState.remoteParserPermissionGranted)
@@ -4085,7 +3487,7 @@ function renderFeatureSettingsControls(
       ? 'success'
       : 'muted'
 
-  renderFeatureSettingsControlsIsland(dom.featureSettingsControls, {
+  publishFeatureSettingsControls({
     switches: [
       {
         checked: Boolean(settings.autoAnalyzeBookmarks),
@@ -4097,7 +3499,6 @@ function renderFeatureSettingsControls(
         key: 'autoAnalyzeBookmarks',
         label: '自动分析',
         status: Boolean(settings.autoAnalyzeBookmarks) ? '自动分析开启' : '未开启',
-        statusId: 'ai-auto-analyze-status',
         statusTone: Boolean(settings.autoAnalyzeBookmarks) ? 'success' : 'muted'
       },
       {
@@ -4113,7 +3514,6 @@ function renderFeatureSettingsControls(
             ? '已授权'
             : '待授权'
           : '未开启',
-        statusId: 'ai-remote-parser-status',
         statusTone: remoteParserStatusTone
       },
       {
@@ -4126,7 +3526,6 @@ function renderFeatureSettingsControls(
         key: 'autoMoveToRecommendedFolder',
         label: '自动移动到推荐文件夹',
         status: inboxStatusText,
-        statusId: 'inbox-workflow-status',
         statusTone: inboxStatusTone
       },
       {
@@ -4148,7 +3547,7 @@ async function handleAiConnectivityTest() {
   }
 
   try {
-    const settings = syncAiNamingSettingsDraftFromDom()
+    const settings = syncAiNamingSettingsDraftFromState()
     validateAiNamingSettings(settings)
     aiNamingState.lastError = ''
     resetAiNamingConnectivityState()
@@ -4181,54 +3580,10 @@ async function handleAiConnectivityTest() {
 }
 
 function renderAiNamingSection() {
-  if (!dom.aiAction) {
-    return
-  }
-
   const settings = aiNamingManagerState.settings
   const hasSavedApiKey = Boolean(settings.apiKey)
   const featureSwitchInFlight = aiNamingState.pendingFeatureSwitch
   const featureSwitchesLocked = aiNamingState.running || aiNamingState.applying
-  if (dom.aiBaseUrl && dom.aiBaseUrl !== document.activeElement) {
-    dom.aiBaseUrl.value = settings.baseUrl
-  }
-  if (dom.aiApiKey && dom.aiApiKey !== document.activeElement) {
-    dom.aiApiKey.value = settings.apiKey
-    dom.aiApiKey.type = managerState.aiRevealApiKey ? 'text' : 'password'
-    dom.aiApiKey.setAttribute(
-      'placeholder',
-      hasSavedApiKey ? maskAiApiKey(settings.apiKey) : '未保存 API Key'
-    )
-  }
-  if (dom.aiRevealApiKey) {
-    dom.aiRevealApiKey.checked = managerState.aiRevealApiKey
-  }
-  renderAiModelPickerTrigger(settings)
-  renderAiModelSelector(settings)
-  renderAiModelTools(settings)
-  if (managerState.aiModelPickerModalOpen) {
-    renderAiModelPickerModal()
-  }
-  if (dom.aiApiStyleControl) {
-    renderAiProviderSelectIsland(dom.aiApiStyleControl, {
-      key: 'apiStyle',
-      label: '接口类型',
-      options: AI_API_STYLE_OPTIONS,
-      value: settings.apiStyle
-    })
-  }
-  if (dom.aiTimeoutMs && dom.aiTimeoutMs !== document.activeElement) {
-    dom.aiTimeoutMs.value = String(settings.timeoutMs)
-  }
-  if (dom.aiBatchSize && dom.aiBatchSize !== document.activeElement) {
-    dom.aiBatchSize.value = String(settings.batchSize)
-  }
-  renderFeatureSettingsControls(settings, {
-    featureSwitchesLocked,
-    featureSwitchInFlight
-  })
-  renderContentSnapshotSettings()
-
   const hasRequiredConfig = Boolean(settings.baseUrl && settings.apiKey && settings.model)
   const configTone = aiNamingState.settingsDirty
     ? 'warning'
@@ -4241,48 +3596,28 @@ function renderAiNamingSection() {
       ? '已配置'
       : '待配置'
   const connectivityMeta = getAiNamingConnectivityMeta()
+  const showSaveSettingsButton = aiNamingState.settingsDirty || !hasRequiredConfig
 
-  if (dom.aiProviderNoticeText) {
-    dom.aiProviderNoticeText.textContent = aiNamingState.settingsDirty
-      ? '有未保存改动，保存后会用于所有 AI 功能。'
-      : hasRequiredConfig
-        ? '配置已保存，可继续获取模型或测试连接。'
-        : '填写 API Key 后即可获取模型并测试连接。'
-  }
+  renderAiProviderSettings(settings, {
+    configText,
+    configTone,
+    connectivityMeta,
+    hasRequiredConfig,
+    showSaveSettingsButton
+  })
+  renderFeatureSettingsControls(settings, {
+    featureSwitchesLocked,
+    featureSwitchInFlight
+  })
+  renderContentSnapshotSettings()
 
-  dom.aiConfigStatus.className = `options-chip ai-provider-status-chip ${configTone}`
-  dom.aiConfigStatus.textContent = configText
-  if (dom.aiSaveStatus) {
-    dom.aiSaveStatus.className = `ai-provider-save-state ${configTone}`
-    dom.aiSaveStatus.textContent = aiNamingState.settingsDirty
-      ? '有未保存改动'
-      : hasRequiredConfig
-        ? '已保存'
-        : '待配置'
-  }
-  if (dom.aiConnectivityCopy) {
-    dom.aiConnectivityCopy.className = `ai-provider-connectivity ${connectivityMeta.tone}`
-    dom.aiConnectivityCopy.classList.toggle('hidden', !connectivityMeta.visible)
-    setLoadingLabel(dom.aiConnectivityCopy, connectivityMeta.copy, {
-      busy: aiNamingState.testingConnection,
-      wrapperClass: 'status-loading-label',
-      loaderClass: 'status-dot-loader'
-    })
-  }
-  if (dom.aiConfigLink) {
-    dom.aiConfigLink.textContent = hasSavedApiKey ? '已配置 API KEY' : '配置 API Key'
-    dom.aiConfigLink.classList.toggle('configured', hasSavedApiKey)
-    dom.aiConfigLink.setAttribute(
-      'aria-label',
-      hasSavedApiKey ? '已配置 API KEY，前往通用设置查看或修改' : '配置 API Key'
-    )
-  }
+  publishAiConfigLinkState({ configured: hasSavedApiKey })
 
-  dom.aiRunBadge.className = `options-chip ${getAiNamingBadgeTone()}`
-  dom.aiRunBadge.textContent = getAiNamingBadgeText()
-  dom.aiStatusCopy.textContent = getAiNamingStatusCopy()
-  dom.aiProgressCopy.textContent = getAiNamingProgressCopy()
-
+  publishAiAnalysisStatus({
+    badgeText: getAiNamingBadgeText(),
+    badgeTone: getAiNamingBadgeTone(),
+    statusCopy: getAiNamingStatusCopy()
+  })
   const progressLabel = aiNamingState.eligibleBookmarks
     ? `${aiNamingState.checkedBookmarks} / ${aiNamingState.eligibleBookmarks}`
     : '未开始'
@@ -4299,61 +3634,44 @@ function renderAiNamingSection() {
     : aiNamingState.lastCompletedAt
       ? `已完成 ${progressLabel}`
       : progressLabel
-  setLoadingLabel(dom.aiProgressText, aiProgressLabel, {
+  publishAiAnalysisProgress({
     busy: isAiProgressBusy(),
-    wrapperClass: 'status-loading-label',
-    loaderClass: 'status-dot-loader'
+    progressCopy: getAiNamingProgressCopy(),
+    progressLabel: aiProgressLabel,
+    progressValue: Math.max(0, Math.min(progressValue, 100))
   })
-  dom.aiProgressBar.style.width = `${Math.max(0, Math.min(progressValue, 100))}%`
 
   renderBookmarkTagDataCard()
 
-  dom.aiAction.disabled =
-    availabilityState.catalogLoading ||
-    !hasRequiredConfig ||
-    aiNamingState.testingConnection ||
-    aiNamingState.running ||
-    aiNamingState.applying ||
-    aiNamingState.requestingPermission
-  dom.aiAction.textContent = aiNamingState.lastCompletedAt ? '重新分析并生成建议' : '开始分析并生成建议'
-  if (dom.aiPauseAction) {
-    dom.aiPauseAction.classList.toggle('hidden', !aiNamingState.running)
-    dom.aiPauseAction.disabled = !aiNamingState.running || aiNamingState.stopRequested
-    dom.aiPauseAction.textContent = aiNamingState.paused ? '继续生成' : '暂停生成'
-  }
-  dom.aiStopAction.classList.toggle('hidden', !aiNamingState.running)
-  dom.aiStopAction.disabled = !aiNamingState.running || aiNamingState.stopRequested
-  dom.aiStopAction.textContent = aiNamingState.stopRequested ? '停止中…' : '停止本次生成'
-  const showSaveSettingsButton = aiNamingState.settingsDirty || !hasRequiredConfig
-  dom.aiSaveSettings.classList.toggle('hidden', !showSaveSettingsButton)
-  dom.aiSaveSettings.classList.remove('secondary')
-  dom.aiSaveSettings.disabled = aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
-  dom.aiSaveSettings.textContent = '保存设置'
-  if (dom.aiTestConnection) {
-    dom.aiTestConnection.classList.toggle('secondary', showSaveSettingsButton)
-    dom.aiTestConnection.disabled =
+  publishAiAnalysisActions({
+    actionDisabled:
+      availabilityState.catalogLoading ||
       !hasRequiredConfig ||
       aiNamingState.testingConnection ||
       aiNamingState.running ||
       aiNamingState.applying ||
-      aiNamingState.requestingPermission
-    setLoadingLabel(dom.aiTestConnection, aiNamingState.testingConnection ? '测试中' : '测试连接', {
-      busy: aiNamingState.testingConnection,
-      wrapperClass: 'button-loading-label',
-      loaderClass: 'button-dot-loader'
-    })
-  }
+      aiNamingState.requestingPermission,
+    actionLabel: aiNamingState.lastCompletedAt ? '重新分析并生成建议' : '开始分析并生成建议',
+    pauseDisabled: !aiNamingState.running || aiNamingState.stopRequested,
+    pauseHidden: !aiNamingState.running,
+    pauseLabel: aiNamingState.paused ? '继续生成' : '暂停生成',
+    stopDisabled: !aiNamingState.running || aiNamingState.stopRequested,
+    stopHidden: !aiNamingState.running,
+    stopLabel: aiNamingState.stopRequested ? '停止中…' : '停止本次生成'
+  })
 
-  dom.aiEligible.textContent = String(aiNamingState.eligibleBookmarks)
-  dom.aiSuggested.textContent = String(aiNamingState.suggestedCount)
-  dom.aiManualReview.textContent = aiNamingState.rejectedCount
-    ? `${aiNamingState.manualReviewCount} / 已拒绝 ${aiNamingState.rejectedCount}`
-    : String(aiNamingState.manualReviewCount)
-  dom.aiUnchanged.textContent = String(aiNamingState.unchangedCount)
-  dom.aiHighConfidence.textContent = String(aiNamingState.highConfidenceCount)
-  dom.aiMediumConfidence.textContent = String(aiNamingState.mediumConfidenceCount)
-  dom.aiLowConfidence.textContent = String(aiNamingState.lowConfidenceCount)
-  dom.aiFailed.textContent = String(aiNamingState.failedCount)
+  publishAiAnalysisDecisionMetrics({
+    eligible: String(aiNamingState.eligibleBookmarks),
+    suggested: String(aiNamingState.suggestedCount),
+    manualReview: aiNamingState.rejectedCount
+      ? `${aiNamingState.manualReviewCount} / 已拒绝 ${aiNamingState.rejectedCount}`
+      : String(aiNamingState.manualReviewCount),
+    unchanged: String(aiNamingState.unchangedCount),
+    highConfidence: String(aiNamingState.highConfidenceCount),
+    mediumConfidence: String(aiNamingState.mediumConfidenceCount),
+    lowConfidence: String(aiNamingState.lowConfidenceCount),
+    failed: String(aiNamingState.failedCount)
+  })
   updateAiNamingDurationDisplay()
   syncAiNamingDurationTimer()
 
@@ -4361,44 +3679,42 @@ function renderAiNamingSection() {
   const highConfidenceResults = selectableResults.filter((result) => result.confidence === 'high')
   const selectedResults = getSelectedAiNamingResults()
   const selectedMovableResults = selectedResults.filter((result) => canMoveAiNamingResultToSuggestedFolder(result))
-  dom.aiSelectionGroup.classList.toggle('hidden', selectableResults.length === 0)
-  dom.aiSelectionCount.textContent = `${selectedResults.length} 条已选择`
-  dom.aiSelectAll.disabled =
-    aiNamingState.running ||
-    aiNamingState.applying ||
-    selectableResults.length === 0
-  dom.aiSelectHighConfidence.disabled =
-    aiNamingState.running ||
-    aiNamingState.applying ||
-    highConfidenceResults.length === 0
-  dom.aiClearSelection.disabled = selectedResults.length === 0
-  dom.aiApplySelection.disabled = aiNamingState.running || aiNamingState.applying || selectedResults.length === 0
-  if (dom.aiMoveSelectionToSuggested) {
-    const pending = aiNamingState.pendingMoveSelection && selectedMovableResults.length > 0
-    dom.aiMoveSelectionToSuggested.disabled =
+  const pendingSelectionMove = aiNamingState.pendingMoveSelection && selectedMovableResults.length > 0
+  publishAiAnalysisSelectionActions({
+    applyDisabled: aiNamingState.running || aiNamingState.applying || selectedResults.length === 0,
+    clearDisabled: selectedResults.length === 0,
+    countLabel: `${selectedResults.length} 条已选择`,
+    hidden: selectableResults.length === 0,
+    moveConfirm: pendingSelectionMove,
+    moveDisabled:
       aiNamingState.running ||
       aiNamingState.applying ||
-      selectedMovableResults.length === 0
-    dom.aiMoveSelectionToSuggested.classList.toggle('confirm', pending)
-    renderDoubleConfirmLabelIsland(dom.aiMoveSelectionToSuggested, {
-      confirm: pending,
-      confirmLabel: '确认移动',
-      label: '移动至推荐文件夹'
-    })
-    dom.aiMoveSelectionToSuggested.title = selectedMovableResults.length
-      ? pending
+      selectedMovableResults.length === 0,
+    moveLabel: '移动至推荐文件夹',
+    moveTitle: selectedMovableResults.length
+      ? pendingSelectionMove
         ? `再次点击，移动 ${selectedMovableResults.length} 条书签到各自推荐文件夹`
         : `移动 ${selectedMovableResults.length} 条书签到各自推荐文件夹`
-      : '所选结果没有可用的推荐文件夹'
-  }
+      : '所选结果没有可用的推荐文件夹',
+    selectAllDisabled:
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      selectableResults.length === 0,
+    selectHighConfidenceDisabled:
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      highConfidenceResults.length === 0
+  })
 
   const visibleAiResults = getVisibleAiNamingResults()
-  dom.aiResultCount.textContent = visibleAiResults.length === aiNamingState.results.length
-    ? `${aiNamingState.results.length} 条结果`
-    : `${visibleAiResults.length} / ${aiNamingState.results.length} 条结果`
-  dom.aiResultsSubtitle.textContent = aiNamingState.lastCompletedAt
-    ? `最近一次完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。建议改名 ${aiNamingState.suggestedCount} 条，待确认 ${aiNamingState.manualReviewCount} 条，已拒绝 ${aiNamingState.rejectedCount} 条，失败 ${aiNamingState.failedCount} 条。网页标签每次都会重新生成；已拒绝的同一标题建议不会重复展示。`
-    : '在通用设置中配置 AI 渠道后，开始分析并生成建议，这里会展示当前标题、建议标题、标签、置信度与原因。'
+  publishAiAnalysisResultsHeader({
+    resultCount: visibleAiResults.length === aiNamingState.results.length
+      ? `${aiNamingState.results.length} 条结果`
+      : `${visibleAiResults.length} / ${aiNamingState.results.length} 条结果`,
+    subtitle: aiNamingState.lastCompletedAt
+      ? `最近一次完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。建议改名 ${aiNamingState.suggestedCount} 条，待确认 ${aiNamingState.manualReviewCount} 条，已拒绝 ${aiNamingState.rejectedCount} 条，失败 ${aiNamingState.failedCount} 条。网页标签每次都会重新生成；已拒绝的同一标题建议不会重复展示。`
+      : '在通用设置中配置 AI 渠道后，开始分析并生成建议，这里会展示当前标题、建议标题、标签、置信度与原因。'
+  })
 
   renderAiResultsFilterControls()
 
@@ -4424,9 +3740,7 @@ function getAiNamingDurationLabel() {
 }
 
 function updateAiNamingDurationDisplay() {
-  if (dom.aiDecisionStatus) {
-    dom.aiDecisionStatus.textContent = getAiNamingDurationLabel()
-  }
+  publishAiAnalysisDuration({ durationLabel: getAiNamingDurationLabel() })
 }
 
 function syncAiNamingDurationTimer() {
@@ -4461,11 +3775,49 @@ function renderBookmarkTagDataCard() {
   renderBackupControls()
 }
 
-function renderBackupControls() {
-  if (!dom.backupControls) {
+export function handleAiAnalysisAction(action: AiAnalysisAction | AiAnalysisActionDetail): void {
+  const detailAction = typeof action === 'string' ? action : action.action
+  if (detailAction === 'start') {
+    void handleAiNamingAction()
     return
   }
 
+  if (detailAction === 'pause-toggle') {
+    toggleAiNamingPause()
+    return
+  }
+
+  if (detailAction === 'stop') {
+    requestAiNamingStop()
+    return
+  }
+
+  if (detailAction === 'select-all') {
+    selectAllAiNamingResults()
+    return
+  }
+
+  if (detailAction === 'select-high-confidence') {
+    selectHighConfidenceAiResults()
+    return
+  }
+
+  if (detailAction === 'clear-selection') {
+    clearAiNamingSelection()
+    return
+  }
+
+  if (detailAction === 'apply-selection') {
+    void applySelectedAiNamingResults()
+    return
+  }
+
+  if (detailAction === 'move-selection-to-suggested') {
+    void handleMoveSelectedAiNamingResults()
+  }
+}
+
+function renderBackupControls() {
   const index = normalizeBookmarkTagIndex(aiNamingState.tagIndex)
   const records = Object.values(index.records)
   const latestUpdatedAt = records.length
@@ -4477,7 +3829,7 @@ function renderBackupControls() {
   const hasBackup = Boolean(backupRestoreState.backup && backupRestoreState.preview)
   const backupBusy = Boolean(backupRestoreState.restoring)
 
-  renderBackupControlsIsland(dom.backupControls, {
+  publishBackupControls({
     backup: {
       busy: backupBusy,
       hasBackup,
@@ -4617,8 +3969,7 @@ async function refreshTagManagementData() {
   }
 }
 
-function handleTagManagementAction(event: Event): void {
-  const detail = (event as CustomEvent<TagManagementActionDetail>).detail
+export function handleTagManagementAction(detail: TagManagementActionDetail): void {
   if (detail?.action === 'refresh') {
     void refreshTagManagementData()
     return
@@ -4632,8 +3983,7 @@ function handleTagManagementAction(event: Event): void {
   }
 }
 
-function handleBackupAction(event: Event): void {
-  const detail = (event as CustomEvent<BackupActionDetail>).detail
+export function handleBackupAction(detail: BackupActionDetail): void {
   if (detail?.action === 'export-tags') {
     void handleBookmarkTagExport()
     return
@@ -4659,23 +4009,22 @@ function handleBackupAction(event: Event): void {
   }
 }
 
-function handleShortcutAction(event: Event): void {
-  const detail = (event as CustomEvent<ShortcutActionDetail>).detail
-  if (detail?.action === 'open-settings') {
+export function handleShortcutAction(action: ShortcutAction): void {
+  if (action === 'open-settings') {
     void openShortcutsSettingsPage()
     return
   }
-  if (detail?.action === 'copy-url') {
+  if (action === 'copy-url') {
     void copyShortcutsUrl()
     return
   }
-  if (detail?.action === 'refresh') {
+  if (action === 'refresh') {
     void hydrateShortcutCommands()
   }
 }
 
-function handleRecycleAction(event: Event): void {
-  const detail = (event as CustomEvent<RecycleActionDetail>).detail
+export function handleRecycleAction(action: RecycleAction | RecycleActionDetail): void {
+  const detail = typeof action === 'string' ? { action } : action
   if (detail?.action === 'clear-selection') {
     clearRecycleSelection(recycleCallbacks)
     return
@@ -4694,11 +4043,22 @@ function handleRecycleAction(event: Event): void {
   }
   if (detail?.action === 'clear-all') {
     void clearRecycleBin(recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'toggle-entry') {
+    toggleRecycleEntrySelection(detail.recycleId, detail.checked, recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'restore-entry') {
+    restoreRecycleEntry(detail.recycleId, recycleCallbacks)
+    return
+  }
+  if (detail?.action === 'clear-entry') {
+    clearRecycleEntry(detail.recycleId, recycleCallbacks)
   }
 }
 
-function handleRedirectAction(event: Event): void {
-  const detail = (event as CustomEvent<RedirectActionDetail>).detail
+export function handleRedirectAction(detail: RedirectActionDetail): void {
   if (detail?.action === 'clear-selection') {
     clearRedirectSelection(redirectsCallbacks)
     return
@@ -4717,11 +4077,18 @@ function handleRedirectAction(event: Event): void {
   }
   if (detail?.action === 'delete-all') {
     void deleteAllRedirects(redirectsCallbacks)
+    return
+  }
+  if (detail?.action === 'toggle-result') {
+    toggleRedirectResultSelection(detail.bookmarkId, detail.checked, redirectsCallbacks)
+    return
+  }
+  if (detail?.action === 'update-result') {
+    updateRedirectResult(detail.bookmarkId, redirectsCallbacks)
   }
 }
 
-function handleDuplicateAction(event: Event): void {
-  const detail = (event as CustomEvent<DuplicateActionDetail>).detail
+export function handleDuplicateAction(detail: DuplicateActionDetail): void {
   if (detail?.action === 'clear-selection') {
     clearDuplicateSelection(duplicatesCallbacks)
     return
@@ -4732,11 +4099,18 @@ function handleDuplicateAction(event: Event): void {
   }
   if (detail?.action === 'strategy') {
     applyDuplicateStrategy(detail.strategy, duplicatesCallbacks)
+    return
+  }
+  if (detail?.action === 'group-strategy') {
+    applyDuplicateGroupStrategy(detail.groupId, detail.strategy, duplicatesCallbacks)
+    return
+  }
+  if (detail?.action === 'toggle-item') {
+    toggleDuplicateItemSelection(detail.bookmarkId, detail.checked, duplicatesCallbacks)
   }
 }
 
-function handleIgnoreRuleAction(event: Event): void {
-  const detail = (event as CustomEvent<IgnoreRuleActionDetail>).detail
+export function handleIgnoreRuleAction(detail: IgnoreRuleActionDetail): void {
   if (detail?.action === 'clear') {
     void clearIgnoreRules(detail.kind, ignoreCallbacks)
     return
@@ -4746,21 +4120,39 @@ function handleIgnoreRuleAction(event: Event): void {
   }
 }
 
-function handleHistoryAction(event: Event): void {
-  const detail = (event as CustomEvent<HistoryActionDetail>).detail
-  if (detail?.action === 'clear-history') {
+export function handleHistoryControlAction(action: 'clear-history' | 'toggle-logs'): void {
+  if (action === 'clear-history') {
     void clearDetectionHistoryLogs(historyCallbacks)
     return
   }
-  if (detail?.action === 'toggle-logs') {
+  if (action === 'toggle-logs') {
     toggleHistoryLogsCollapsed(historyCallbacks)
   }
 }
 
-function handleFolderCleanupAction(event: Event): void {
-  const detail = (event as CustomEvent<FolderCleanupActionDetail>).detail
+export function handleBookmarkAddHistoryClear(): void {
+  void clearBookmarkAddHistory({
+    renderAvailabilitySection,
+    confirm: requestConfirmation
+  })
+}
+
+export function handleFolderCleanupAction(action: FolderCleanupAction | FolderCleanupActionDetail): void {
+  const detail = typeof action === 'string' ? { action } : action
   if (detail?.action === 'rescan') {
     void rescanFolderCleanupSuggestions(folderCleanupCallbacks)
+    return
+  }
+  if (detail?.action === 'preview') {
+    toggleFolderCleanupPreview(detail.suggestionId, folderCleanupCallbacks)
+    return
+  }
+  if (detail?.action === 'execute') {
+    void executeFolderCleanupAction(detail.suggestionId, folderCleanupCallbacks)
+    return
+  }
+  if (detail?.action === 'undo-split') {
+    void undoFolderCleanupSplitAction(folderCleanupCallbacks)
   }
 }
 
@@ -4805,7 +4197,7 @@ async function handleTagManagementRename(sourceTagInput = '', targetTagInput = '
     const savedIndex = await saveBookmarkTagIndex(nextIndex)
     aiNamingState.tagIndex = savedIndex
     aiNamingState.tagDataStatus = `已将 ${affectedCount} 条书签中的「${sourceTag}」重命名为「${targetTag}」。`
-    dispatchTagManagementForm({ sourceTag: targetTag, targetTag: '' })
+    patchTagManagementControlsForm({ sourceTag: targetTag, targetTag: '' })
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签重命名失败。'
   } finally {
@@ -4840,7 +4232,7 @@ async function handleTagManagementDelete(sourceTagInput = '') {
     const savedIndex = await saveBookmarkTagIndex(nextIndex)
     aiNamingState.tagIndex = savedIndex
     aiNamingState.tagDataStatus = `已从 ${affectedCount} 条书签中删除标签「${sourceTag}」。`
-    dispatchTagManagementForm({ sourceTag: '' })
+    patchTagManagementControlsForm({ sourceTag: '' })
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签删除失败。'
   } finally {
@@ -4972,18 +4364,6 @@ function readTextFile(file: File): Promise<string> {
   })
 }
 
-function downloadJsonFile(filename: string, payload: unknown): void {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], {
-    type: 'application/json'
-  })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
 function getAiNamingModelOptions(settings = aiNamingManagerState.settings) {
   const options = []
   const seen = new Set()
@@ -5010,43 +4390,79 @@ function getAiNamingModelOptions(settings = aiNamingManagerState.settings) {
   return options
 }
 
-function handleAiRevealApiKeyChange(event) {
-  managerState.aiRevealApiKey = Boolean(event?.target?.checked)
-  renderAiNamingSection()
+function renderAiProviderSettings(
+  settings = aiNamingManagerState.settings,
+  {
+    configText,
+    configTone,
+    connectivityMeta,
+    hasRequiredConfig,
+    showSaveSettingsButton
+  }: {
+    configText: string
+    configTone: string
+    connectivityMeta: { copy: string; tone: string; visible: boolean }
+    hasRequiredConfig: boolean
+    showSaveSettingsButton: boolean
+  }
+): void {
+  publishAiProviderSettings({
+    apiKey: settings.apiKey,
+    apiKeyPlaceholder: settings.apiKey ? maskAiApiKey(settings.apiKey) : '未保存 API Key',
+    apiStyle: settings.apiStyle,
+    apiStyleOptions: AI_API_STYLE_OPTIONS,
+    baseUrl: settings.baseUrl,
+    batchSize: String(settings.batchSize),
+    configStatusText: configText,
+    configTone,
+    connectivityBusy: aiNamingState.testingConnection,
+    connectivityCopy: connectivityMeta.copy,
+    connectivityTone: connectivityMeta.tone,
+    connectivityVisible: connectivityMeta.visible,
+    customModels: settings.customModels,
+    hasRequiredConfig,
+    modelTools: buildAiProviderModelToolsState(settings),
+    modelToolsDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    noticeText: aiNamingState.settingsDirty
+      ? '有未保存改动，保存后会用于所有 AI 功能。'
+      : hasRequiredConfig
+        ? '配置已保存，可继续获取模型或测试连接。'
+        : '填写 API Key 后即可获取模型并测试连接。',
+    revealApiKey: managerState.aiRevealApiKey,
+    saveDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    saveStatusText: aiNamingState.settingsDirty
+      ? '有未保存改动'
+      : hasRequiredConfig
+        ? '已保存'
+        : '待配置',
+    showSaveSettingsButton,
+    testButtonSecondary: showSaveSettingsButton,
+    testDisabled:
+      !hasRequiredConfig ||
+      aiNamingState.testingConnection ||
+      aiNamingState.running ||
+      aiNamingState.applying ||
+      aiNamingState.requestingPermission,
+    testLabel: aiNamingState.testingConnection ? '测试中' : '测试连接',
+    testingConnection: aiNamingState.testingConnection,
+    timeoutMs: String(settings.timeoutMs)
+  })
 }
 
-function renderAiModelPickerTrigger(settings = aiNamingManagerState.settings) {
-  if (dom.aiModelPickerLabel) {
-    dom.aiModelPickerLabel.textContent = settings.model || AI_NAMING_DEFAULT_MODEL
-  }
-  if (dom.aiModelPickerTrigger) {
-    dom.aiModelPickerTrigger.disabled =
-      aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
-  }
-}
-
-function renderAiModelSelector(settings = aiNamingManagerState.settings) {
-  if (!dom.aiModelSelectorHost) {
-    return
-  }
-
-  renderAiModelSelectorIsland(dom.aiModelSelectorHost, {
+function buildAiModelSelectorState(settings = aiNamingManagerState.settings) {
+  return {
     currentModel: settings.model || AI_NAMING_DEFAULT_MODEL,
     customModels: settings.customModels,
     disabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
     fetchedModels: settings.fetchedModels,
     models: getAiNamingModelOptions(settings),
     presetModels: AI_NAMING_PRESET_MODELS
-  })
+  }
 }
 
-function renderAiModelTools(settings = aiNamingManagerState.settings) {
-  if (!dom.aiModelTools) {
-    return
-  }
-
+function buildAiProviderModelToolsState(settings = aiNamingManagerState.settings) {
   const status = getAiFetchModelsStatus()
-  renderAiModelToolsIsland(dom.aiModelTools, {
+  return {
     fetchDisabled:
       !String(settings.apiKey || '').trim() ||
       aiNamingState.running ||
@@ -5059,12 +4475,13 @@ function renderAiModelTools(settings = aiNamingManagerState.settings) {
     fetchModelsStatusBusy: aiNamingState.fetchingModels,
     fetchModelsStatusTone: status.tone,
     fetchingModels: aiNamingState.fetchingModels,
-    manageDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
-  })
+    manageDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    selector: buildAiModelSelectorState(settings)
+  }
 }
 
-function handleAiModelSelectorChange(event: Event) {
-  const model = String((event as CustomEvent<AiModelSelectorChangeDetail>).detail?.model || '').trim()
+function applyAiModelSelectorChange(value: string) {
+  const model = String(value || '').trim()
   if (!model || aiNamingState.running || aiNamingState.applying) {
     return
   }
@@ -5073,12 +4490,12 @@ function handleAiModelSelectorChange(event: Event) {
     ...aiNamingManagerState.settings,
     model
   })
-  syncAiNamingSettingsDraftFromDom({ markDirty: true })
+  syncAiNamingSettingsDraftFromState({ markDirty: true })
   renderAiNamingSection()
 }
 
 function renderAiFetchModelsStatus() {
-  renderAiModelTools()
+  renderAiNamingSection()
 }
 
 function getAiFetchModelsStatus(): { copy: string; tone: string } {
@@ -5093,277 +4510,6 @@ function getAiFetchModelsStatus(): { copy: string; tone: string } {
     return { copy: `已获取 ${aiNamingState.lastFetchModelsCount} 个模型 · ${timeLabel}`, tone: 'success' }
   }
   return { copy: '', tone: 'muted' }
-}
-
-function openAiModelPickerModal() {
-  if (aiNamingState.running || aiNamingState.applying) {
-    return
-  }
-
-  managerState.aiModelPickerModalOpen = true
-  managerState.aiModelPickerSearchQuery = ''
-  managerState.aiModelPickerActiveId = aiNamingManagerState.settings.model || AI_NAMING_DEFAULT_MODEL
-  renderAiModelPickerModal()
-
-  window.setTimeout(() => {
-    if (dom.aiModelPickerSearchInput) {
-      dom.aiModelPickerSearchInput.value = ''
-      dom.aiModelPickerSearchInput.focus()
-    }
-  }, 0)
-}
-
-function closeAiModelPickerModal() {
-  managerState.aiModelPickerModalOpen = false
-  managerState.aiModelPickerSearchQuery = ''
-  managerState.aiModelPickerActiveId = ''
-  renderAiModelPickerModal()
-}
-
-function renderAiModelPickerModal() {
-  if (!dom.aiModelPickerModalBackdrop) {
-    return
-  }
-
-  setManagedModalHidden(
-    'ai-model-picker',
-    dom.aiModelPickerModalBackdrop,
-    managerState.aiModelPickerModalOpen,
-    dom.aiModelPickerSearchInput
-  )
-
-  if (!managerState.aiModelPickerModalOpen) {
-    return
-  }
-
-  const settings = aiNamingManagerState.settings
-  const allModels = getAiNamingModelOptions(settings)
-  const fetchedCount = settings.fetchedModels.length
-  const lastFetchedAt = aiNamingState.lastFetchModelsAt
-  const lastFetchedLabel = lastFetchedAt ? formatDateTime(lastFetchedAt) : ''
-
-  if (dom.aiModelPickerModalCopy) {
-    let copy = '输入关键字筛选，点击卡片即可选中。可点击「获取模型」从 API 拉取最新列表。'
-    if (aiNamingState.fetchingModels) {
-      copy = '正在从 API 拉取模型列表…'
-    } else if (aiNamingState.lastFetchModelsError) {
-      copy = `上次拉取失败：${aiNamingState.lastFetchModelsError}`
-    } else if (fetchedCount > 0) {
-      copy = lastFetchedLabel
-        ? `已从 API 拉取 ${fetchedCount} 个模型（${lastFetchedLabel}）。支持搜索预设 + 自定义 + 已拉取模型。`
-        : `已从 API 拉取 ${fetchedCount} 个模型。支持搜索预设 + 自定义 + 已拉取模型。`
-    }
-    setLoadingLabel(dom.aiModelPickerModalCopy, copy, {
-      busy: aiNamingState.fetchingModels,
-      wrapperClass: 'status-loading-label',
-      loaderClass: 'status-dot-loader'
-    })
-  }
-
-  if (dom.aiModelPickerSearchInput && dom.aiModelPickerSearchInput !== document.activeElement) {
-    dom.aiModelPickerSearchInput.value = managerState.aiModelPickerSearchQuery
-  }
-
-  if (dom.aiModelPickerFetchButton) {
-    dom.aiModelPickerFetchButton.disabled =
-      !String(settings.apiKey || '').trim() ||
-      aiNamingState.fetchingModels ||
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.testingConnection ||
-      aiNamingState.requestingPermission
-    setLoadingLabel(dom.aiModelPickerFetchButton, aiNamingState.fetchingModels ? '拉取中' : '获取模型', {
-      busy: aiNamingState.fetchingModels,
-      wrapperClass: 'button-loading-label',
-      loaderClass: 'button-dot-loader'
-    })
-  }
-  if (dom.aiModelPickerManageButton) {
-    dom.aiModelPickerManageButton.disabled =
-      aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection
-  }
-
-  if (!dom.aiModelPickerResults) {
-    return
-  }
-
-  const normalizedQuery = normalizeText(managerState.aiModelPickerSearchQuery)
-  const filteredModels = normalizedQuery
-    ? allModels.filter((model) => normalizeText(model).includes(normalizedQuery))
-    : allModels
-
-  if (!filteredModels.length) {
-    managerState.aiModelPickerActiveId = ''
-    renderAiModelPickerResultsIsland(dom.aiModelPickerResults, {
-      activeId: '',
-      currentModel: settings.model || '',
-      customModels: settings.customModels,
-      emptyMessage: normalizedQuery
-        ? '没有匹配的模型。'
-        : '尚未加载模型，可点击下方「获取模型」从 API 拉取。',
-      fetchedModels: settings.fetchedModels,
-      models: [],
-      presetModels: AI_NAMING_PRESET_MODELS
-    })
-    return
-  }
-
-  resolveAiModelPickerActiveId(filteredModels, settings)
-  renderAiModelPickerResultsIsland(dom.aiModelPickerResults, {
-    activeId: managerState.aiModelPickerActiveId,
-    currentModel: settings.model || '',
-    customModels: settings.customModels,
-    emptyMessage: '',
-    fetchedModels: settings.fetchedModels,
-    models: filteredModels,
-    presetModels: AI_NAMING_PRESET_MODELS
-  })
-}
-
-function resolveAiModelPickerActiveId(models, settings = aiNamingManagerState.settings) {
-  if (!models.length) {
-    managerState.aiModelPickerActiveId = ''
-    return ''
-  }
-
-  const activeId = models.some((model) => model === managerState.aiModelPickerActiveId)
-    ? managerState.aiModelPickerActiveId
-    : models.some((model) => model === settings.model)
-      ? settings.model
-      : models[0] || ''
-  managerState.aiModelPickerActiveId = activeId
-  return activeId
-}
-
-function getAiModelPickerOptionButtons() {
-  return [...dom.aiModelPickerResults.querySelectorAll<HTMLButtonElement>('[data-ai-model-id]')]
-}
-
-function handleAiModelPickerSearchKeydown(event) {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-    return
-  }
-
-  if (!getAiModelPickerOptionButtons().length) {
-    return
-  }
-
-  event.preventDefault()
-  focusAiModelPickerOption(event.key === 'ArrowDown' ? 'first' : 'last')
-}
-
-function handleAiModelPickerResultsKeydown(event) {
-  if (
-    event.key !== 'ArrowDown' &&
-    event.key !== 'ArrowUp' &&
-    event.key !== 'Home' &&
-    event.key !== 'End' &&
-    event.key !== 'Escape'
-  ) {
-    return
-  }
-
-  event.preventDefault()
-  if (event.key === 'Escape') {
-    dom.aiModelPickerSearchInput?.focus()
-    return
-  }
-
-  if (event.key === 'Home') {
-    focusAiModelPickerOption('first')
-  } else if (event.key === 'End') {
-    focusAiModelPickerOption('last')
-  } else {
-    focusAiModelPickerOption(event.key === 'ArrowDown' ? 1 : -1)
-  }
-}
-
-function handleAiModelPickerResultsFocus(event) {
-  const target = event.target
-  if (!(target instanceof HTMLElement) || !target.dataset.aiModelId) {
-    return
-  }
-
-  managerState.aiModelPickerActiveId = target.dataset.aiModelId
-  syncAiModelPickerTabStops(managerState.aiModelPickerActiveId)
-}
-
-function syncAiModelPickerTabStops(activeId) {
-  for (const button of getAiModelPickerOptionButtons()) {
-    button.tabIndex = button.dataset.aiModelId === activeId ? 0 : -1
-  }
-}
-
-function focusAiModelPickerOptionById(modelId) {
-  let targetButton = null
-  for (const button of getAiModelPickerOptionButtons()) {
-    const isTarget = button.dataset.aiModelId === modelId
-    button.tabIndex = isTarget ? 0 : -1
-    if (isTarget) {
-      targetButton = button
-    }
-  }
-
-  if (!targetButton) {
-    return false
-  }
-
-  managerState.aiModelPickerActiveId = modelId
-  targetButton.focus()
-  return true
-}
-
-function focusAiModelPickerOption(direction) {
-  const buttons = getAiModelPickerOptionButtons()
-  if (!buttons.length) {
-    return
-  }
-
-  const currentIndex = buttons.findIndex((button) => button === document.activeElement)
-  let nextIndex = managerState.aiModelPickerActiveId
-    ? buttons.findIndex((button) => button.dataset.aiModelId === managerState.aiModelPickerActiveId)
-    : -1
-
-  if (direction === 'first') {
-    nextIndex = 0
-  } else if (direction === 'last') {
-    nextIndex = buttons.length - 1
-  } else if (currentIndex >= 0) {
-    nextIndex = (currentIndex + direction + buttons.length) % buttons.length
-  } else if (nextIndex < 0) {
-    nextIndex = direction > 0 ? 0 : buttons.length - 1
-  }
-
-  const button = buttons[Math.max(0, nextIndex)]
-  const modelId = String(button?.dataset.aiModelId || '')
-  if (modelId) {
-    focusAiModelPickerOptionById(modelId)
-  }
-}
-
-function handleAiModelPickerResultsClick(event) {
-  if (aiNamingState.running || aiNamingState.applying) {
-    return
-  }
-
-  const targetButton = event.target.closest('[data-ai-model-id]')
-  if (!targetButton) {
-    return
-  }
-
-  const modelId = String(targetButton.getAttribute('data-ai-model-id') || '').trim()
-  if (!modelId) {
-    return
-  }
-
-  managerState.aiModelPickerActiveId = modelId
-  aiNamingManagerState.settings = normalizeAiNamingSettings({
-    ...aiNamingManagerState.settings,
-    model: modelId
-  })
-  syncAiNamingSettingsDraftFromDom({ markDirty: true })
-  closeAiModelPickerModal()
-  renderAiNamingSection()
 }
 
 function getAiModelsEndpoint(settings) {
@@ -5403,7 +4549,7 @@ async function handleFetchAiModels() {
     return
   }
 
-  syncAiNamingSettingsDraftFromDom()
+  syncAiNamingSettingsDraftFromState()
   const settings = aiNamingManagerState.settings
   const baseUrl = String(settings.baseUrl || '').trim()
   const apiKey = String(settings.apiKey || '').trim()
@@ -5415,9 +4561,6 @@ async function handleFetchAiModels() {
     aiNamingState.lastFetchModelsAt = 0
     aiNamingState.lastFetchModelsCount = 0
     renderAiFetchModelsStatus()
-    if (managerState.aiModelPickerModalOpen) {
-      renderAiModelPickerModal()
-    }
     return
   }
 
@@ -5430,18 +4573,12 @@ async function handleFetchAiModels() {
     aiNamingState.lastFetchModelsAt = 0
     aiNamingState.lastFetchModelsCount = 0
     renderAiFetchModelsStatus()
-    if (managerState.aiModelPickerModalOpen) {
-      renderAiModelPickerModal()
-    }
     return
   }
 
   aiNamingState.fetchingModels = true
   aiNamingState.lastFetchModelsError = ''
   renderAiFetchModelsStatus()
-  if (managerState.aiModelPickerModalOpen) {
-    renderAiModelPickerModal()
-  }
 
   try {
     const url = getAiModelsEndpoint(settings)
@@ -5507,85 +4644,25 @@ async function handleFetchAiModels() {
     aiNamingState.fetchingModels = false
     renderAiFetchModelsStatus()
     renderAiNamingSection()
-    if (managerState.aiModelPickerModalOpen) {
-      renderAiModelPickerModal()
-    }
   }
-}
-
-function openAiModelModal() {
-  if (aiNamingState.running || aiNamingState.applying) {
-    return
-  }
-
-  managerState.aiModelModalOpen = true
-  renderAiModelModal()
-
-  window.setTimeout(() => {
-    dom.aiCustomModelsInput?.focus()
-  }, 0)
-}
-
-function closeAiModelModal() {
-  managerState.aiModelModalOpen = false
-  renderAiModelModal()
-}
-
-function renderAiModelModal() {
-  if (!dom.aiModelModalBackdrop) {
-    return
-  }
-
-  setManagedModalHidden(
-    'ai-model',
-    dom.aiModelModalBackdrop,
-    managerState.aiModelModalOpen,
-    dom.aiCustomModelsInput
-  )
-
-  if (!managerState.aiModelModalOpen) {
-    return
-  }
-
-  if (dom.aiCustomModelsInput && dom.aiCustomModelsInput !== document.activeElement) {
-    dom.aiCustomModelsInput.value = formatAiCustomModelsInput(aiNamingManagerState.settings.customModels)
-  }
-}
-
-function formatAiCustomModelsInput(models) {
-  return normalizeAiNamingCustomModels(models).join('\n')
-}
-
-async function saveAiModelModalSettings() {
-  const customModels = normalizeAiNamingCustomModels(dom.aiCustomModelsInput?.value)
-  aiNamingManagerState.settings = normalizeAiNamingSettings({
-    ...aiNamingManagerState.settings,
-    customModels
-  })
-  aiNamingState.settingsDirty = true
-  resetAiNamingConnectivityState()
-  closeAiModelModal()
-  renderAvailabilitySection()
 }
 
 function renderAiResultsFilterControls() {
-  if (dom.aiResultsFilterControls) {
-    renderAiResultsFilterControlsIsland(dom.aiResultsFilterControls, {
-      confidence: aiNamingState.filterConfidence,
-      status: aiNamingState.filterStatus
-    })
-  }
-  if (dom.aiFilterQuery && dom.aiFilterQuery !== document.activeElement) {
-    dom.aiFilterQuery.value = aiNamingState.filterQuery
-  }
-  if (dom.aiClearFilters) {
-    dom.aiClearFilters.disabled = !hasActiveAiResultsFilter()
-  }
+  publishAiAnalysisResultsFilter({
+    clearDisabled: !hasActiveAiResultsFilter(),
+    confidence: aiNamingState.filterConfidence,
+    query: aiNamingState.filterQuery,
+    status: aiNamingState.filterStatus
+  })
 }
 
-function handleAiResultsFilterControlChange(event: Event) {
-  const detail = (event as CustomEvent<AiResultsFilterChangeDetail>).detail
+export function handleAiResultsFilterChange(detail: AiAnalysisResultsFilterActionDetail): void {
   if (!detail) {
+    return
+  }
+
+  if (detail.action === 'clear') {
+    clearAiResultsFilters()
     return
   }
 
@@ -5593,17 +4670,11 @@ function handleAiResultsFilterControlChange(event: Event) {
     aiNamingState.filterStatus = detail.value || 'all'
   } else if (detail.key === 'confidence') {
     aiNamingState.filterConfidence = detail.value || 'all'
+  } else if (detail.key === 'query') {
+    aiNamingState.filterQuery = String(detail.value || '').trim()
   } else {
     return
   }
-
-  aiNamingState.filterQuery = String(dom.aiFilterQuery?.value || '').trim()
-  resetResultsPage('ai-results')
-  renderAvailabilitySection()
-}
-
-function handleAiResultsFilterChange() {
-  aiNamingState.filterQuery = String(dom.aiFilterQuery?.value || '').trim()
   resetResultsPage('ai-results')
   renderAvailabilitySection()
 }
@@ -5625,10 +4696,6 @@ function hasActiveAiResultsFilter() {
 }
 
 function renderAiNamingResults() {
-  if (!dom.aiResults) {
-    return
-  }
-
   const visibleResults = getVisibleAiNamingResults()
   const visibleResultIds = new Set(visibleResults.map((result) => String(result.id)))
   aiNamingState.expandedTagResultIds = new Set(
@@ -5636,11 +4703,11 @@ function renderAiNamingResults() {
   )
 
   if (aiNamingState.running && !aiNamingState.results.length) {
-    renderAiNamingResultsIsland(dom.aiResults, {
+    publishAiAnalysisResults({
       emptyMessage: '正在读取网页内容、生成标签并生成命名建议，请稍候。',
       results: []
     })
-    renderResultsPagination(dom.aiResultsPagination, 'ai-results', 0, 'AI 结果')
+    publishAiResultsPagination(0)
     return
   }
 
@@ -5650,54 +4717,29 @@ function renderAiNamingResults() {
       : aiNamingState.lastCompletedAt
         ? '最近一次生成已完成，当前没有待处理的书签智能分析结果。'
         : '保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。'
-    renderAiNamingResultsIsland(dom.aiResults, {
+    publishAiAnalysisResults({
       emptyMessage,
       results: []
     })
-    renderResultsPagination(dom.aiResultsPagination, 'ai-results', 0, 'AI 结果')
+    publishAiResultsPagination(0)
     return
   }
 
   if (!visibleResults.length) {
-    renderAiNamingResultsIsland(dom.aiResults, {
+    publishAiAnalysisResults({
       emptyMessage: '当前筛选条件下没有匹配的书签智能分析结果。',
       results: []
     })
-    renderResultsPagination(dom.aiResultsPagination, 'ai-results', 0, 'AI 结果')
+    publishAiResultsPagination(0)
     return
   }
 
   const pageResults = getPaginatedResults('ai-results', visibleResults)
-  renderAiNamingResultsIsland(dom.aiResults, {
+  publishAiAnalysisResults({
     emptyMessage: '',
     results: pageResults.map((result) => buildAiNamingResultCardViewModel(result))
   })
-  renderResultsPagination(dom.aiResultsPagination, 'ai-results', visibleResults.length, 'AI 结果')
-  syncAiResultTagOverflow()
-}
-
-function syncAiResultTagOverflow() {
-  if (!dom.aiResults) {
-    return
-  }
-
-  window.requestAnimationFrame(() => {
-    dom.aiResults.querySelectorAll<HTMLElement>('[data-ai-tag-shell]').forEach((shell) => {
-      const resultId = String(shell.getAttribute('data-ai-tag-shell') || '')
-      const list = shell.querySelector<HTMLElement>('[data-ai-tag-list]')
-      const toggle = shell.querySelector<HTMLElement>('[data-ai-toggle-tags]')
-      if (!resultId || !list || !toggle) {
-        return
-      }
-
-      const expanded = aiNamingState.expandedTagResultIds.has(resultId)
-      shell.classList.toggle('expanded', expanded)
-      toggle.textContent = expanded ? '收起标签' : '展开标签'
-      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false')
-      const hasOverflow = list.scrollHeight > list.clientHeight + 1
-      toggle.classList.toggle('hidden', !expanded && !hasOverflow)
-    })
-  })
+  publishAiResultsPagination(visibleResults.length)
 }
 
 function getVisibleAiNamingResults() {
@@ -6126,38 +5168,33 @@ function selectHighConfidenceAiResults() {
   renderAvailabilitySection()
 }
 
-function handleAiResultsChange(event) {
+export function handleAiAnalysisResultAction(detail: AiAnalysisResultActionDetail): void {
+  if (!detail?.id) {
+    return
+  }
+
   if (aiNamingState.running || aiNamingState.applying) {
     return
   }
 
-  const selectionInput = event.target.closest('input[data-ai-select]')
-  if (!selectionInput) {
-    return
-  }
-
-  const bookmarkId = String(selectionInput.getAttribute('data-ai-select') || '').trim()
+  const bookmarkId = String(detail.id || '').trim()
   if (!bookmarkId) {
     return
   }
 
-  if (selectionInput.checked) {
-    aiNamingState.selectedResultIds.add(bookmarkId)
-  } else {
-    aiNamingState.selectedResultIds.delete(bookmarkId)
+  if (detail.action === 'select') {
+    if (detail.checked) {
+      aiNamingState.selectedResultIds.add(bookmarkId)
+    } else {
+      aiNamingState.selectedResultIds.delete(bookmarkId)
+    }
+
+    aiNamingState.pendingMoveSelection = false
+    renderAvailabilitySection()
+    return
   }
 
-  aiNamingState.pendingMoveSelection = false
-  renderAvailabilitySection()
-}
-
-function handleAiResultsClick(event) {
-  const tagToggle = event.target.closest('[data-ai-toggle-tags]')
-  if (tagToggle) {
-    const bookmarkId = String(tagToggle.getAttribute('data-ai-toggle-tags') || '').trim()
-    if (!bookmarkId) {
-      return
-    }
+  if (detail.action === 'toggle-tags') {
     if (aiNamingState.expandedTagResultIds.has(bookmarkId)) {
       aiNamingState.expandedTagResultIds.delete(bookmarkId)
     } else {
@@ -6167,15 +5204,9 @@ function handleAiResultsClick(event) {
     return
   }
 
-  const moveButton = event.target.closest('[data-ai-move-recommended]')
-  if (moveButton) {
-    if (aiNamingState.running || aiNamingState.applying) {
-      return
-    }
-
-    const bookmarkId = String(moveButton.getAttribute('data-ai-move-recommended') || '').trim()
+  if (detail.action === 'move-recommended') {
     const targetResult = aiNamingState.results.find((result) => String(result.id) === bookmarkId)
-    if (!bookmarkId || !targetResult || !canMoveAiNamingResultToSuggestedFolder(targetResult)) {
+    if (!targetResult || !canMoveAiNamingResultToSuggestedFolder(targetResult)) {
       return
     }
 
@@ -6190,32 +5221,14 @@ function handleAiResultsClick(event) {
     return
   }
 
-  const rejectButton = event.target.closest('[data-ai-reject]')
-  if (rejectButton) {
-    if (aiNamingState.running || aiNamingState.applying) {
-      return
-    }
-
-    const bookmarkId = String(rejectButton.getAttribute('data-ai-reject') || '').trim()
-    if (!bookmarkId) {
-      return
-    }
-
+  if (detail.action === 'reject') {
     void rejectAiNamingResult(bookmarkId)
     return
   }
 
-  const applyButton = event.target.closest('[data-ai-apply]')
-  if (!applyButton || aiNamingState.running || aiNamingState.applying) {
-    return
+  if (detail.action === 'apply') {
+    void applyAiNamingResultsByIds([bookmarkId])
   }
-
-  const bookmarkId = String(applyButton.getAttribute('data-ai-apply') || '').trim()
-  if (!bookmarkId) {
-    return
-  }
-
-  applyAiNamingResultsByIds([bookmarkId])
 }
 
 async function rejectAiNamingResult(bookmarkId: string): Promise<void> {
@@ -6255,7 +5268,7 @@ async function handleAiNamingAction() {
   }
 
   try {
-    const settings = syncAiNamingSettingsDraftFromDom()
+    const settings = syncAiNamingSettingsDraftFromState()
     validateAiNamingSettings(settings)
     await saveAiNamingSettings(settings)
     aiNamingState.settingsDirty = false
@@ -8127,92 +7140,37 @@ function cleanAiSuggestedTitle(title) {
   )
 }
 
-function renderAvailabilitySelectionGroup() {
-  if (!dom.availabilitySelectionGroup) {
-    return
-  }
-
-  const selectedResults = getSelectedAvailabilityResults()
-  const selectedReviewCount = selectedResults.filter((result) => result.status === 'review').length
-  const selectedFailedCount = selectedResults.filter((result) => result.status === 'failed').length
-  const interactionLocked = isInteractionLocked()
-
-  dom.availabilitySelectionGroup.classList.toggle('hidden', selectedResults.length === 0)
-  dom.availabilitySelectionCount.textContent = `${selectedResults.length} 条已选择`
-  dom.availabilitySelectionRetest.disabled =
-    interactionLocked ||
-    availabilityState.catalogLoading ||
-    availabilityState.requestingPermission ||
-    selectedResults.length === 0
-  dom.availabilitySelectionRetest.textContent = availabilityState.retestingSelection ? '重新测试中…' : '重新测试'
-  dom.availabilitySelectionPromote.disabled = interactionLocked || selectedReviewCount === 0
-  dom.availabilitySelectionDemote.disabled = interactionLocked || selectedFailedCount === 0
-  dom.availabilitySelectionMove.disabled = interactionLocked || selectedResults.length === 0
-  dom.availabilitySelectionIgnoreBookmark.disabled = interactionLocked || selectedResults.length === 0
-  dom.availabilitySelectionIgnoreDomain.disabled = interactionLocked || selectedResults.length === 0
-  dom.availabilitySelectionIgnoreFolder.disabled = interactionLocked || selectedResults.length === 0
-  dom.availabilitySelectionDelete.disabled = interactionLocked || selectedResults.length === 0
-}
-
 function renderAvailabilityScopeControls() {
   const scopeMeta = getCurrentAvailabilityScopeMeta()
   const aiScopeMeta = getCurrentAiNamingScopeMeta()
-  renderScopeTriggerControl(
-    dom.availabilityScopeTrigger,
-    dom.availabilityScopeLabel,
-    dom.availabilityScopeCopy,
-    {
-      disabled: availabilityState.running || availabilityState.retestingSelection || availabilityState.deleting || availabilityState.catalogLoading,
-      label: scopeMeta.label,
-      copy: `当前范围：${scopeMeta.label}。本轮只会检测该范围内的书签，历史对比也只与同范围的上一次检测结果进行比较。`
-    }
-  )
-  renderScopeTriggerControl(
-    dom.historyScopeTrigger,
-    dom.historyScopeLabel,
-    dom.historyScopeCopy,
-    {
-      disabled: availabilityState.running || availabilityState.retestingSelection || availabilityState.deleting || availabilityState.catalogLoading,
-      label: scopeMeta.label,
-      copy: `当前显示范围：${scopeMeta.label}。这里只展示该检测范围对应的历史日志、异常趋势和已恢复记录。`
-    }
-  )
-  renderScopeTriggerControl(
-    dom.aiScopeTrigger,
-    dom.aiScopeLabel,
-    dom.aiScopeCopy,
-    {
-      disabled: aiNamingState.running || aiNamingState.applying || availabilityState.catalogLoading,
-      label: aiScopeMeta.label,
-      copy: `当前范围：${aiScopeMeta.label}。书签智能分析只会读取该范围里的 http/https 书签，并基于网页内容生成标签和标题建议。`
-    }
-  )
-}
-
-function renderScopeTriggerControl(triggerElement, labelElement, copyElement, { disabled, label, copy }) {
-  if (!triggerElement || !labelElement || !copyElement) {
-    return
-  }
-
-  labelElement.textContent = label
-  triggerElement.disabled = disabled
-  triggerElement.title = label
-  copyElement.textContent = copy
+  const scopeDisabled = availabilityState.running || availabilityState.retestingSelection || availabilityState.deleting || availabilityState.catalogLoading
+  publishScopePickerTrigger('availability', {
+    disabled: scopeDisabled,
+    label: scopeMeta.label,
+    copy: `当前范围：${scopeMeta.label}。本轮只会检测该范围内的书签，历史对比也只与同范围的上一次检测结果进行比较。`
+  })
+  publishScopePickerTrigger('history', {
+    disabled: scopeDisabled,
+    label: scopeMeta.label,
+    copy: `当前显示范围：${scopeMeta.label}。这里只展示该检测范围对应的历史日志、异常趋势和已恢复记录。`
+  })
+  publishAiAnalysisScopePicker({
+    disabled: aiNamingState.running || aiNamingState.applying || availabilityState.catalogLoading,
+    label: aiScopeMeta.label,
+    copy: `当前范围：${aiScopeMeta.label}。书签智能分析只会读取该范围里的 http/https 书签，并基于网页内容生成标签和标题建议。`
+  })
 }
 
 function renderScopeModal() {
-  if (!dom.scopeModalBackdrop) {
-    return
-  }
-
-  setManagedModalHidden(
-    'scope',
-    dom.scopeModalBackdrop,
-    managerState.scopeModalOpen,
-    dom.scopeSearchInput
-  )
-
   if (!managerState.scopeModalOpen) {
+    publishOptionsModals({
+      scope: {
+        copy: '请选择一个文件夹作为当前筛选范围，可直接搜索文件夹名称或路径。',
+        finalFocusId: getScopeModalFinalFocusId(),
+        open: false,
+        query: managerState.scopeSearchQuery
+      }
+    })
     return
   }
 
@@ -8233,10 +7191,16 @@ function renderScopeModal() {
     })
     .sort((left, right) => compareByPathTitle(left, right))
 
-  dom.scopeModalCopy.textContent = managerState.scopeModalSource === 'ai'
-    ? '请选择一个文件夹作为当前书签智能分析范围，支持搜索文件夹名称或路径；选择后会立即更新可处理书签列表。'
-    : `请选择一个文件夹作为当前${sourceLabel}，支持搜索文件夹名称或路径；选择后会立即更新可用性检测与历史记录视图。`
-  dom.scopeSearchInput.value = managerState.scopeSearchQuery
+  publishOptionsModals({
+    scope: {
+      copy: managerState.scopeModalSource === 'ai'
+        ? '请选择一个文件夹作为当前书签智能分析范围，支持搜索文件夹名称或路径；选择后会立即更新可处理书签列表。'
+        : `请选择一个文件夹作为当前${sourceLabel}，支持搜索文件夹名称或路径；选择后会立即更新可用性检测与历史记录视图。`,
+      finalFocusId: getScopeModalFinalFocusId(),
+      open: true,
+      query: managerState.scopeSearchQuery
+    }
+  })
 
   const activeScopeFolderId = getCurrentScopeFolderId()
   const allSelected = !activeScopeFolderId
@@ -8257,9 +7221,10 @@ function renderScopeModal() {
     }))
   ]
 
-  renderFolderPickerResultsIsland(dom.scopeFolderResults, {
+  publishFolderPickerResults('scope', {
     activeId,
     emptyMessage: '没有匹配的文件夹。',
+    focusRequestId: undefined,
     kind: 'scope',
     options: scopeOptions,
     showEmpty: !folders.length
@@ -8272,8 +7237,16 @@ function getCurrentScopeFolderId() {
     : availabilityState.scopeFolderId
 }
 
-function getScopeFolderOptionButtons() {
-  return [...dom.scopeFolderResults.querySelectorAll<HTMLButtonElement>('[data-scope-folder-id]')]
+function getScopeModalFinalFocusId(): string {
+  if (managerState.scopeModalSource === 'history') {
+    return 'history-scope-trigger'
+  }
+
+  if (managerState.scopeModalSource === 'ai') {
+    return 'ai-scope-trigger'
+  }
+
+  return 'availability-scope-trigger'
 }
 
 function resolveScopeFolderActiveId(folders, activeScopeFolderId = getCurrentScopeFolderId()) {
@@ -8293,128 +7266,110 @@ function resolveScopeFolderActiveId(folders, activeScopeFolderId = getCurrentSco
 }
 
 function renderReviewResults() {
-  if (!dom.availabilityReviewResults) {
-    return
-  }
-
   const panelResults = getAvailabilityPanelResults('review')
   const activeFilter = getAvailabilityFilter()
   const emptyLabel = getAvailabilityPanelCountLabel('review')
 
   if (isAvailabilityPanelHidden('review')) {
-    renderAvailabilityResultsIsland(dom.availabilityReviewResults, {
+    publishAvailabilityResults('review', {
       emptyMessage: '当前筛选不包含低置信异常区。可切换到“全部”或“待确认”查看。',
       results: []
     })
-    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, '低置信异常')
+    renderResultsPagination('availability-review', 0, '低置信异常')
     return
   }
 
   if (!availabilityState.lastCompletedAt && !availabilityState.running) {
-    renderAvailabilityResultsIsland(dom.availabilityReviewResults, {
+    publishAvailabilityResults('review', {
       emptyMessage: '开始检测后，这里会展示证据不足以直接判定为高置信异常的书签。',
       results: []
     })
-    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, '低置信异常')
+    renderResultsPagination('availability-review', 0, '低置信异常')
     return
   }
 
   if (availabilityState.running && !panelResults.length) {
-    renderAvailabilityResultsIsland(dom.availabilityReviewResults, {
+    publishAvailabilityResults('review', {
       emptyMessage: `正在多层检测，暂时还没有${emptyLabel}。`,
       results: []
     })
-    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, emptyLabel)
+    renderResultsPagination('availability-review', 0, emptyLabel)
     return
   }
 
   if (!panelResults.length) {
-    renderAvailabilityResultsIsland(dom.availabilityReviewResults, {
+    publishAvailabilityResults('review', {
       emptyMessage: getAvailabilityEmptyCopy('review', activeFilter),
       results: []
     })
-    renderResultsPagination(dom.availabilityReviewPagination, 'availability-review', 0, emptyLabel)
+    renderResultsPagination('availability-review', 0, emptyLabel)
     return
   }
 
   const pageResults = getPaginatedResults('availability-review', panelResults)
-  renderAvailabilityResultsIsland(dom.availabilityReviewResults, {
+  publishAvailabilityResults('review', {
     emptyMessage: '',
     results: pageResults.map((result) => buildAvailabilityResultCardViewModel(result, 'review'))
   })
-  renderResultsPagination(
-    dom.availabilityReviewPagination,
-    'availability-review',
-    panelResults.length,
-    emptyLabel
-  )
+  renderResultsPagination('availability-review', panelResults.length, emptyLabel)
 }
 
 function renderFailedResults() {
-  if (!dom.availabilityResults) {
-    return
-  }
-
   const panelResults = getAvailabilityPanelResults('failed')
   const activeFilter = getAvailabilityFilter()
   const emptyLabel = getAvailabilityPanelCountLabel('failed')
 
   if (isAvailabilityPanelHidden('failed')) {
-    renderAvailabilityResultsIsland(dom.availabilityResults, {
+    publishAvailabilityResults('failed', {
       emptyMessage: '当前筛选不包含高置信异常区。可切换到“全部”或“高置信”查看。',
       results: []
     })
-    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, '高置信异常')
+    renderResultsPagination('availability-failed', 0, '高置信异常')
     return
   }
 
   if (availabilityState.running && !panelResults.length) {
-    renderAvailabilityResultsIsland(dom.availabilityResults, {
+    publishAvailabilityResults('failed', {
       emptyMessage: `正在多层检测，暂时还没有发现${emptyLabel}。`,
       results: []
     })
-    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, emptyLabel)
+    renderResultsPagination('availability-failed', 0, emptyLabel)
     return
   }
 
   if (availabilityState.lastError && !availabilityState.lastCompletedAt && !panelResults.length) {
-    renderAvailabilityResultsIsland(dom.availabilityResults, {
+    publishAvailabilityResults('failed', {
       emptyMessage: availabilityState.lastError,
       results: []
     })
-    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, emptyLabel)
+    renderResultsPagination('availability-failed', 0, emptyLabel)
     return
   }
 
   if (!availabilityState.lastCompletedAt && !availabilityState.running) {
-    renderAvailabilityResultsIsland(dom.availabilityResults, {
+    publishAvailabilityResults('failed', {
       emptyMessage: '开始检测后，这里会展示多层验证后仍可判定为高置信异常的书签。',
       results: []
     })
-    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, '高置信异常')
+    renderResultsPagination('availability-failed', 0, '高置信异常')
     return
   }
 
   if (!panelResults.length) {
-    renderAvailabilityResultsIsland(dom.availabilityResults, {
+    publishAvailabilityResults('failed', {
       emptyMessage: getAvailabilityEmptyCopy('failed', activeFilter),
       results: []
     })
-    renderResultsPagination(dom.availabilityFailedPagination, 'availability-failed', 0, emptyLabel)
+    renderResultsPagination('availability-failed', 0, emptyLabel)
     return
   }
 
   const pageResults = getPaginatedResults('availability-failed', panelResults)
-  renderAvailabilityResultsIsland(dom.availabilityResults, {
+  publishAvailabilityResults('failed', {
     emptyMessage: '',
     results: pageResults.map((result) => buildAvailabilityResultCardViewModel(result, 'failed'))
   })
-  renderResultsPagination(
-    dom.availabilityFailedPagination,
-    'availability-failed',
-    panelResults.length,
-    emptyLabel
-  )
+  renderResultsPagination('availability-failed', panelResults.length, emptyLabel)
 }
 
 function getAvailabilityPanelResults(panel) {
@@ -8504,18 +7459,15 @@ function getAvailabilityEmptyCopy(panel, filter) {
 }
 
 function renderMoveModal() {
-  if (!dom.moveModalBackdrop) {
-    return
-  }
-
-  setManagedModalHidden(
-    'move',
-    dom.moveModalBackdrop,
-    managerState.moveModalOpen,
-    dom.moveSearchInput
-  )
-
   if (!managerState.moveModalOpen) {
+    publishOptionsModals({
+      move: {
+        copy: '请选择一个目标文件夹，所选书签会被一起移动到该位置。',
+        finalFocusId: getMoveModalFinalFocusId(),
+        open: false,
+        query: managerState.moveSearchQuery
+      }
+    })
     return
   }
 
@@ -8536,18 +7488,25 @@ function renderMoveModal() {
     })
     .sort((left, right) => compareByPathTitle(left, right))
 
-  dom.moveModalCopy.textContent = managerState.moveSelectionSource === 'dashboard-single'
-    ? '请选择一个目标文件夹，这条书签会被移动到该位置。'
-    : selectedResults.length
-      ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
-      : '请选择一个目标文件夹，所选书签会被一起移动到该位置。'
-  dom.moveSearchInput.value = managerState.moveSearchQuery
+  publishOptionsModals({
+    move: {
+      copy: managerState.moveSelectionSource === 'dashboard-single'
+        ? '请选择一个目标文件夹，这条书签会被移动到该位置。'
+        : selectedResults.length
+          ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
+          : '请选择一个目标文件夹，所选书签会被一起移动到该位置。',
+      finalFocusId: getMoveModalFinalFocusId(),
+      open: true,
+      query: managerState.moveSearchQuery
+    }
+  })
 
   if (!folders.length) {
     managerState.moveFolderActiveId = ''
-    renderFolderPickerResultsIsland(dom.moveFolderResults, {
+    publishFolderPickerResults('move', {
       activeId: '',
       emptyMessage: '没有匹配的目标文件夹。',
+      focusRequestId: undefined,
       kind: 'move',
       options: []
     })
@@ -8555,15 +7514,24 @@ function renderMoveModal() {
   }
 
   resolveMoveFolderActiveId(folders)
-  renderFolderPickerResultsIsland(dom.moveFolderResults, {
+  publishFolderPickerResults('move', {
     activeId: managerState.moveFolderActiveId,
     emptyMessage: '没有匹配的目标文件夹。',
+    focusRequestId: undefined,
     kind: 'move',
     options: folders.map((folder) => ({
       disabled: isInteractionLocked(),
       folder
     }))
   })
+}
+
+function getMoveModalFinalFocusId(): string {
+  if (managerState.moveSelectionSource === 'dashboard' || managerState.moveSelectionSource === 'dashboard-single') {
+    return 'dashboard-move-selection'
+  }
+
+  return 'availability-selection-move'
 }
 
 function buildAvailabilityResultCardViewModel(result, panel) {
@@ -9422,10 +8390,6 @@ function openMoveModal(source) {
   managerState.moveFolderActiveId = ''
   managerState.moveModalOpen = true
   renderMoveModal()
-
-  window.setTimeout(() => {
-    dom.moveSearchInput?.focus()
-  }, 0)
 }
 
 function openScopeModal(source) {
@@ -9442,10 +8406,6 @@ function openScopeModal(source) {
   managerState.scopeFolderActiveId = getCurrentScopeFolderId()
   managerState.scopeModalOpen = true
   renderScopeModal()
-
-  window.setTimeout(() => {
-    dom.scopeSearchInput?.focus()
-  }, 0)
 }
 
 function closeMoveModal() {
@@ -9471,14 +8431,55 @@ function closeScopeModal() {
   renderScopeModal()
 }
 
-async function handleMoveFolderResultsClick(event) {
-  const targetButton = event.target.closest('[data-move-target-folder]')
-  if (!targetButton || isInteractionLocked()) {
+export function handleFolderPickerAction(detail: FolderPickerActionDetail): void {
+  if (!detail) {
     return
   }
 
-  const folderId = String(targetButton.getAttribute('data-move-target-folder') || '').trim()
-  if (!folderId) {
+  if (detail.action === 'focus') {
+    const folderId = String(detail.folderId || '').trim()
+    handleFolderPickerFocus(detail.kind, folderId)
+    return
+  }
+
+  if (detail.action === 'search-keydown') {
+    handleFolderPickerSearchKeydown(detail.kind, detail.key)
+    return
+  }
+
+  if (detail.action === 'results-keydown') {
+    handleFolderPickerResultsKeydown(detail.kind, detail.key)
+    return
+  }
+
+  if (detail.action !== 'select') {
+    return
+  }
+
+  if (detail.kind === 'move') {
+    const folderId = String(detail.folderId || '').trim()
+    void handleMoveFolderSelection(folderId)
+    return
+  }
+
+  const folderId = String(detail.folderId || '').trim()
+  void handleScopeFolderSelection(folderId)
+}
+
+function handleFolderPickerFocus(kind: 'move' | 'scope', folderId: string): void {
+  if (kind === 'move') {
+    if (!folderId) {
+      return
+    }
+    updateFolderPickerActiveId('move', folderId)
+    return
+  }
+
+  updateFolderPickerActiveId('scope', folderId)
+}
+
+async function handleMoveFolderSelection(folderId: string): Promise<void> {
+  if (isInteractionLocked() || !folderId) {
     return
   }
   managerState.moveFolderActiveId = folderId
@@ -9495,57 +8496,34 @@ async function handleMoveFolderResultsClick(event) {
   await moveSelectedAvailabilityToFolder(folderId)
 }
 
-function handleMoveSearchKeydown(event) {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+function handleFolderPickerSearchKeydown(kind: 'move' | 'scope', key: string): void {
+  if (key !== 'ArrowDown' && key !== 'ArrowUp') {
     return
   }
 
-  if (!getMoveFolderOptionButtons().length) {
-    return
-  }
-
-  event.preventDefault()
-  focusMoveFolderOption(event.key === 'ArrowDown' ? 'first' : 'last')
+  focusFolderPickerOption(kind, key === 'ArrowDown' ? 'first' : 'last')
 }
 
-function handleMoveFolderResultsKeydown(event) {
+function handleFolderPickerResultsKeydown(kind: 'move' | 'scope', key: string): void {
   if (
-    event.key !== 'ArrowDown' &&
-    event.key !== 'ArrowUp' &&
-    event.key !== 'Home' &&
-    event.key !== 'End' &&
-    event.key !== 'Escape'
+    key !== 'ArrowDown' &&
+    key !== 'ArrowUp' &&
+    key !== 'Home' &&
+    key !== 'End' &&
+    key !== 'Escape'
   ) {
     return
   }
 
-  event.preventDefault()
-  if (event.key === 'Escape') {
-    dom.moveSearchInput?.focus()
-    return
-  }
+  const focusDirection = key === 'Home'
+    ? 'first'
+    : key === 'End'
+      ? 'last'
+      : key === 'ArrowDown'
+        ? 1
+        : -1
 
-  if (event.key === 'Home') {
-    focusMoveFolderOption('first')
-  } else if (event.key === 'End') {
-    focusMoveFolderOption('last')
-  } else {
-    focusMoveFolderOption(event.key === 'ArrowDown' ? 1 : -1)
-  }
-}
-
-function handleMoveFolderResultsFocus(event) {
-  const target = event.target
-  if (!(target instanceof HTMLElement) || !target.dataset.moveTargetFolder) {
-    return
-  }
-
-  managerState.moveFolderActiveId = target.dataset.moveTargetFolder
-  syncMoveFolderTabStops(managerState.moveFolderActiveId)
-}
-
-function getMoveFolderOptionButtons() {
-  return [...dom.moveFolderResults.querySelectorAll<HTMLButtonElement>('[data-move-target-folder]')]
+  focusFolderPickerOption(kind, focusDirection)
 }
 
 function resolveMoveFolderActiveId(folders) {
@@ -9561,69 +8539,54 @@ function resolveMoveFolderActiveId(folders) {
   return activeId
 }
 
-function syncMoveFolderTabStops(activeId) {
-  for (const button of getMoveFolderOptionButtons()) {
-    button.tabIndex = button.dataset.moveTargetFolder === activeId ? 0 : -1
+function updateFolderPickerActiveId(kind: 'move' | 'scope', activeId: string, focus = false): void {
+  if (kind === 'move') {
+    managerState.moveFolderActiveId = activeId
+  } else {
+    managerState.scopeFolderActiveId = activeId
   }
+
+  patchFolderPickerResults(kind, {
+    activeId,
+    focusRequestId: focus ? activeId : undefined
+  })
 }
 
-function focusMoveFolderOptionById(folderId) {
-  let targetButton = null
-  for (const button of getMoveFolderOptionButtons()) {
-    const isTarget = button.dataset.moveTargetFolder === folderId
-    button.tabIndex = isTarget ? 0 : -1
-    if (isTarget) {
-      targetButton = button
-    }
-  }
-
-  if (!targetButton) {
-    return false
-  }
-
-  managerState.moveFolderActiveId = folderId
-  targetButton.focus()
-  return true
+function getFolderPickerOptionIds(kind: 'move' | 'scope'): string[] {
+  return getFolderPickerResultsSnapshot(kind).options.map((option) => String(option.folder.id || ''))
 }
 
-function focusMoveFolderOption(direction) {
-  const buttons = getMoveFolderOptionButtons()
-  if (!buttons.length) {
+function focusFolderPickerOption(kind: 'move' | 'scope', direction: 'first' | 'last' | 1 | -1): void {
+  const optionIds = getFolderPickerOptionIds(kind)
+  if (!optionIds.length) {
     return
   }
 
-  const currentIndex = buttons.findIndex((button) => button === document.activeElement)
-  let nextIndex = managerState.moveFolderActiveId
-    ? buttons.findIndex((button) => button.dataset.moveTargetFolder === managerState.moveFolderActiveId)
-    : -1
+  const activeId = kind === 'move'
+    ? managerState.moveFolderActiveId
+    : managerState.scopeFolderActiveId === null
+      ? ''
+      : String(managerState.scopeFolderActiveId || '')
+  let nextIndex = optionIds.indexOf(activeId)
 
   if (direction === 'first') {
     nextIndex = 0
   } else if (direction === 'last') {
-    nextIndex = buttons.length - 1
-  } else if (currentIndex >= 0) {
-    nextIndex = (currentIndex + direction + buttons.length) % buttons.length
-  } else if (nextIndex < 0) {
-    nextIndex = direction > 0 ? 0 : buttons.length - 1
+    nextIndex = optionIds.length - 1
+  } else if (nextIndex >= 0) {
+    nextIndex = (nextIndex + direction + optionIds.length) % optionIds.length
+  } else {
+    nextIndex = direction > 0 ? 0 : optionIds.length - 1
   }
 
-  const button = buttons[Math.max(0, nextIndex)]
-  const folderId = String(button?.dataset.moveTargetFolder || '')
-  if (folderId) {
-    focusMoveFolderOptionById(folderId)
-  }
+  updateFolderPickerActiveId(kind, optionIds[Math.max(0, nextIndex)], true)
 }
 
-async function handleScopeFolderResultsClick(event) {
-  const targetButton = event.target.closest('[data-scope-folder-id]')
-  if (
-    !targetButton ||
-    availabilityState.catalogLoading
-  ) {
+async function handleScopeFolderSelection(folderId: string): Promise<void> {
+  if (availabilityState.catalogLoading) {
     return
   }
 
-  const folderId = String(targetButton.getAttribute('data-scope-folder-id') || '').trim()
   managerState.scopeFolderActiveId = folderId
   const source = managerState.scopeModalSource
   if (source === 'ai' && (aiNamingState.running || aiNamingState.applying)) {
@@ -9641,111 +8604,6 @@ async function handleScopeFolderResultsClick(event) {
   }
 
   await handleAvailabilityScopeChange(folderId)
-}
-
-function handleScopeSearchKeydown(event) {
-  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-    return
-  }
-
-  if (!getScopeFolderOptionButtons().length) {
-    return
-  }
-
-  event.preventDefault()
-  focusScopeFolderOption(event.key === 'ArrowDown' ? 'first' : 'last')
-}
-
-function handleScopeFolderResultsKeydown(event) {
-  if (
-    event.key !== 'ArrowDown' &&
-    event.key !== 'ArrowUp' &&
-    event.key !== 'Home' &&
-    event.key !== 'End' &&
-    event.key !== 'Escape'
-  ) {
-    return
-  }
-
-  event.preventDefault()
-  if (event.key === 'Escape') {
-    dom.scopeSearchInput?.focus()
-    return
-  }
-
-  if (event.key === 'Home') {
-    focusScopeFolderOption('first')
-  } else if (event.key === 'End') {
-    focusScopeFolderOption('last')
-  } else {
-    focusScopeFolderOption(event.key === 'ArrowDown' ? 1 : -1)
-  }
-}
-
-function handleScopeFolderResultsFocus(event) {
-  const target = event.target
-  if (!(target instanceof HTMLElement) || !target.hasAttribute('data-scope-folder-id')) {
-    return
-  }
-
-  managerState.scopeFolderActiveId = String(target.getAttribute('data-scope-folder-id') || '')
-  syncScopeFolderTabStops(managerState.scopeFolderActiveId)
-}
-
-function syncScopeFolderTabStops(activeId) {
-  for (const button of getScopeFolderOptionButtons()) {
-    button.tabIndex = String(button.getAttribute('data-scope-folder-id') || '') === activeId ? 0 : -1
-  }
-}
-
-function focusScopeFolderOptionById(folderId) {
-  const normalizedFolderId = String(folderId || '')
-  let targetButton = null
-  for (const button of getScopeFolderOptionButtons()) {
-    const isTarget = String(button.getAttribute('data-scope-folder-id') || '') === normalizedFolderId
-    button.tabIndex = isTarget ? 0 : -1
-    if (isTarget) {
-      targetButton = button
-    }
-  }
-
-  if (!targetButton) {
-    return false
-  }
-
-  managerState.scopeFolderActiveId = normalizedFolderId
-  targetButton.focus()
-  return true
-}
-
-function focusScopeFolderOption(direction) {
-  const buttons = getScopeFolderOptionButtons()
-  if (!buttons.length) {
-    return
-  }
-
-  const currentIndex = buttons.findIndex((button) => button === document.activeElement)
-  const storedActiveId = managerState.scopeFolderActiveId === null
-    ? null
-    : String(managerState.scopeFolderActiveId || '')
-  let nextIndex = storedActiveId === null
-    ? -1
-    : buttons.findIndex((button) => String(button.getAttribute('data-scope-folder-id') || '') === storedActiveId)
-
-  if (direction === 'first') {
-    nextIndex = 0
-  } else if (direction === 'last') {
-    nextIndex = buttons.length - 1
-  } else if (currentIndex >= 0) {
-    nextIndex = (currentIndex + direction + buttons.length) % buttons.length
-  } else if (nextIndex < 0) {
-    nextIndex = direction > 0 ? 0 : buttons.length - 1
-  }
-
-  const button = buttons[Math.max(0, nextIndex)]
-  if (button) {
-    focusScopeFolderOptionById(String(button.getAttribute('data-scope-folder-id') || ''))
-  }
 }
 
 async function moveSelectedAvailabilityToFolder(folderId) {
@@ -9891,21 +8749,16 @@ function getBookmarkRecord(bookmarkId) {
 }
 
 function renderDeleteModal() {
-  if (!dom.deleteModalBackdrop) {
-    return
-  }
-
-  setManagedModalHidden(
-    'delete',
-    dom.deleteModalBackdrop,
-    availabilityState.deleteModalOpen,
-    dom.cancelDeleteModal
-  )
-  dom.deleteModalCopy.textContent = availabilityState.failedResults.length
-    ? `确认删除当前 ${availabilityState.failedResults.length} 条高置信异常书签？这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。`
-    : '这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。'
-  dom.confirmDeleteModal.disabled = availabilityState.deleting
-  dom.confirmDeleteModal.textContent = availabilityState.deleting ? '正在删除…' : '确认删除'
+  publishOptionsModals({
+    delete: {
+      confirmDisabled: availabilityState.deleting,
+      confirmLabel: availabilityState.deleting ? '正在删除…' : '确认删除',
+      copy: availabilityState.failedResults.length
+        ? `确认删除当前 ${availabilityState.failedResults.length} 条高置信异常书签？这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。`
+        : '这些书签会从 Chrome 书签中移除，并先进入回收站；低置信异常结果会保留。',
+      open: availabilityState.deleteModalOpen
+    }
+  })
 }
 
 function requestConfirmation({
@@ -9923,10 +8776,6 @@ function requestConfirmation({
   tone?: string
   label?: string
 } = {}): Promise<boolean> {
-  if (!dom.confirmModalBackdrop) {
-    return Promise.resolve(false)
-  }
-
   if (confirmModalResolve) {
     confirmModalResolve(false)
     confirmModalResolve = null
@@ -9962,39 +8811,32 @@ function resolveConfirmModal(confirmed) {
 }
 
 function renderConfirmModal() {
-  if (!dom.confirmModalBackdrop) {
-    return
-  }
-
-  setManagedModalHidden(
-    'confirm',
-    dom.confirmModalBackdrop,
-    managerState.confirmModalOpen,
-    dom.cancelConfirmModal
-  )
-
   if (!managerState.confirmModalOpen) {
+    publishOptionsModals({
+      confirm: {
+        cancelLabel: managerState.confirmModalCancelLabel,
+        confirmLabel: managerState.confirmModalConfirmLabel,
+        copy: managerState.confirmModalCopy,
+        label: managerState.confirmModalLabel,
+        open: false,
+        tone: managerState.confirmModalTone === 'warning' ? 'warning' : 'danger',
+        title: managerState.confirmModalTitle
+      }
+    })
     return
   }
 
-  const tone = managerState.confirmModalTone === 'warning' ? 'warning' : 'danger'
-  if (dom.confirmModalLabel) {
-    dom.confirmModalLabel.className = `options-section-label ${tone}`
-    dom.confirmModalLabel.textContent = managerState.confirmModalLabel
-  }
-  if (dom.confirmModalTitle) {
-    dom.confirmModalTitle.textContent = managerState.confirmModalTitle
-  }
-  if (dom.confirmModalCopy) {
-    dom.confirmModalCopy.textContent = managerState.confirmModalCopy
-  }
-  if (dom.cancelConfirmModal) {
-    dom.cancelConfirmModal.textContent = managerState.confirmModalCancelLabel
-  }
-  if (dom.confirmModalConfirm) {
-    dom.confirmModalConfirm.className = `options-button ${tone === 'danger' ? 'danger' : ''}`.trim()
-    dom.confirmModalConfirm.textContent = managerState.confirmModalConfirmLabel
-  }
+  publishOptionsModals({
+    confirm: {
+      cancelLabel: managerState.confirmModalCancelLabel,
+      confirmLabel: managerState.confirmModalConfirmLabel,
+      copy: managerState.confirmModalCopy,
+      label: managerState.confirmModalLabel,
+      open: true,
+      tone: managerState.confirmModalTone === 'warning' ? 'warning' : 'danger',
+      title: managerState.confirmModalTitle
+    }
+  })
 }
 
 function reconcileCatalogAfterMutation() {

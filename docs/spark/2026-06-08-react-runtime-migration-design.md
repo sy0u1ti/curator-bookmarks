@@ -17,7 +17,7 @@ The final state must not depend on `popup-runtime.ts`, `newtab-runtime.ts`, `opt
 
 The final state must also treat Tailwind as the primary styling system and Base UI as the primary foundation for accessible interactive components. Existing handcrafted primitives and large page-level CSS files may be used only as migration scaffolding; they are not the desired end state.
 
-## Current State
+## Starting State
 
 The extension pages already mount React:
 
@@ -25,20 +25,20 @@ The extension pages already mount React:
 - `src/options/main.tsx` renders `OptionsApp`.
 - `src/newtab/main.tsx` renders `NewtabApp`.
 
-Each App then imports a legacy runtime:
+At the start of this migration, each App imported a legacy runtime:
 
 - `PopupApp` imports `popup-runtime.js`.
 - `OptionsApp` imports `options-runtime.js`.
 - `NewtabApp` imports `newtab-runtime.js`.
 
-Large runtime files still own most UI behavior:
+At the start of this migration, large runtime files still owned most UI behavior:
 
 - `src/popup/popup-runtime.ts`
 - `src/newtab/newtab-runtime.ts`
 - `src/options/options-runtime.ts`
 - `src/options/sections/dashboard-runtime.ts`
 
-There are also React island files, such as `PopupRuntimeIslands.tsx`, `RuntimeIslands.tsx`, and `DashboardRuntimeIslands.tsx`. These are useful stepping stones, but they are not the final architecture because legacy runtimes still decide when and where to render them.
+There were also React island files, such as `PopupRuntimeIslands.tsx`, `RuntimeIslands.tsx`, and `DashboardRuntimeIslands.tsx`. These were useful stepping stones, but they are not the final architecture because legacy runtimes still decide when and where to render them.
 
 The project already includes Tailwind and Base UI dependencies:
 

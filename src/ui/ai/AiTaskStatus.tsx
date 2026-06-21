@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
-import { Badge, Progress, Spinner } from '../index'
+import { Badge } from '../base/Badge'
+import { Progress } from '../base/Progress'
+import { Spinner } from '../base/Spinner'
 import { cx } from '../base/utils'
 
 export interface AiTaskStatusProps {
@@ -7,12 +9,11 @@ export interface AiTaskStatusProps {
   className?: string
   descriptionClassName?: string
   label?: ReactNode
+  progressIndicatorClassName?: string
   progressClassName?: string
-  progressId?: string
   status: 'idle' | 'running' | 'success' | 'warning' | 'error'
   statusNode?: ReactNode
   title: ReactNode
-  titleId?: string
   description?: ReactNode
   progress?: number | null
 }
@@ -25,6 +26,9 @@ const toneByStatus = {
   error: 'danger'
 } as const
 
+const AI_TASK_STATUS_LABEL_CLASS =
+  'block text-[11px] font-semibold uppercase tracking-[0] text-[var(--ui-text-disabled)]'
+
 export function AiTaskStatus({
   children,
   className,
@@ -32,20 +36,19 @@ export function AiTaskStatus({
   descriptionClassName,
   label,
   progress,
+  progressIndicatorClassName,
   progressClassName,
-  progressId,
   status,
   statusNode,
-  title,
-  titleId
+  title
 }: AiTaskStatusProps) {
   return (
     <section className={cx('grid gap-2 rounded-lg border border-curator-border bg-curator-bg-panel p-3 text-curator-text', className)}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          {label ? <span className="summary-label">{label}</span> : null}
+          {label ? <span className={AI_TASK_STATUS_LABEL_CLASS}>{label}</span> : null}
           {status === 'running' ? <Spinner /> : null}
-          {typeof title === 'string' ? <strong id={titleId} className="text-sm">{title}</strong> : title}
+          {typeof title === 'string' ? <strong className="text-sm">{title}</strong> : title}
         </div>
         {statusNode || <Badge tone={toneByStatus[status]}>{status}</Badge>}
       </div>
@@ -56,7 +59,13 @@ export function AiTaskStatus({
           description
         )
       ) : null}
-      {typeof progress === 'number' ? <Progress id={progressId} value={progress} className={progressClassName} /> : null}
+      {typeof progress === 'number' ? (
+        <Progress
+          value={progress}
+          className={progressClassName}
+          indicatorClassName={progressIndicatorClassName}
+        />
+      ) : null}
       {children}
     </section>
   )

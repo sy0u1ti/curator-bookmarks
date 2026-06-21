@@ -29,7 +29,7 @@ export function Tabs({ value, defaultValue, onValueChange, items, className }: T
           <BaseTabs.Tab
             key={item.value}
             value={item.value}
-            className="rounded px-3 py-1.5 text-sm text-curator-text-muted outline-none transition-colors data-[selected]:bg-curator-muted data-[selected]:text-curator-text focus-visible:ring-2 focus-visible:ring-white/20"
+            className="rounded px-3 py-1.5 text-sm text-curator-text-muted outline-none transition-colors data-active:bg-curator-muted data-active:text-curator-text focus-visible:ring-2 focus-visible:ring-white/20"
           >
             {item.label}
           </BaseTabs.Tab>

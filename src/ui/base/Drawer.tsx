@@ -1,5 +1,5 @@
 import { Drawer as BaseDrawer } from '@base-ui/react/drawer'
-import { forwardRef, type ComponentPropsWithoutRef, type ElementRef, type ReactNode } from 'react'
+import type { ComponentPropsWithoutRef, ReactNode, Ref } from 'react'
 import { Presence } from '../motion/Presence'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx } from './utils'
@@ -34,24 +34,26 @@ export function Drawer({
       <BaseDrawer.Portal>
         <Presence>
           <BaseDrawer.Backdrop className="fixed inset-0 z-40 bg-black/55" />
-          <BaseDrawer.Popup
-            render={
-              <MotionPanel
-                variant="drawer"
-                className="fixed right-0 top-0 z-50 grid h-dvh w-[min(92vw,28rem)] content-start gap-4 border border-y-0 border-r-0 border-curator-border bg-curator-bg-elevated p-4 text-curator-text shadow-[var(--shadow-popover)] outline-none"
-              />
-            }
-          >
-            <header className="grid gap-1">
-              <BaseDrawer.Title className="text-base font-semibold">{title}</BaseDrawer.Title>
-              {description ? (
-                <BaseDrawer.Description className="text-sm text-curator-text-muted">
-                  {description}
-                </BaseDrawer.Description>
-              ) : null}
-            </header>
-            {children}
-          </BaseDrawer.Popup>
+          <BaseDrawer.Viewport>
+            <BaseDrawer.Popup
+              render={
+                <MotionPanel
+                  variant="drawer"
+                  className="fixed right-0 top-0 z-50 grid h-dvh w-[min(92vw,28rem)] content-start gap-4 border-l border-curator-border bg-curator-bg-elevated p-4 text-curator-text shadow-[var(--shadow-popover)] outline-none"
+                />
+              }
+            >
+              <header className="grid gap-1">
+                <BaseDrawer.Title className="text-base font-semibold">{title}</BaseDrawer.Title>
+                {description ? (
+                  <BaseDrawer.Description className="text-sm text-curator-text-muted">
+                    {description}
+                  </BaseDrawer.Description>
+                ) : null}
+              </header>
+              {children}
+            </BaseDrawer.Popup>
+          </BaseDrawer.Viewport>
         </Presence>
       </BaseDrawer.Portal>
     </BaseDrawer.Root>
@@ -70,6 +72,7 @@ export interface DrawerOverlayProps extends Omit<ComponentPropsWithoutRef<'div'>
   modal?: BaseDrawerRootProps['modal']
   disablePointerDismissal?: BaseDrawerRootProps['disablePointerDismissal']
   keepMounted?: BaseDrawerPortalProps['keepMounted']
+  overlayRef?: Ref<HTMLDivElement>
   portalContainer?: BaseDrawerPortalProps['container']
   swipeDirection?: BaseDrawerRootProps['swipeDirection']
 }
@@ -81,6 +84,7 @@ export function DrawerOverlay({
   modal,
   disablePointerDismissal,
   keepMounted = true,
+  overlayRef,
   portalContainer,
   swipeDirection = 'right',
   children,
@@ -98,7 +102,9 @@ export function DrawerOverlay({
       swipeDirection={swipeDirection}
     >
       <BaseDrawer.Portal keepMounted={keepMounted} container={portalContainer}>
-        <div {...overlayProps}>{children}</div>
+        <div {...overlayProps} ref={overlayRef}>
+          <BaseDrawer.Viewport>{children}</BaseDrawer.Viewport>
+        </div>
       </BaseDrawer.Portal>
     </BaseDrawer.Root>
   )
@@ -108,16 +114,18 @@ export interface DrawerPanelProps extends Omit<BaseDrawerPopupProps, 'className'
   className?: string
   motionClassName?: string
   motionVariant?: ComponentPropsWithoutRef<typeof MotionPanel>['variant']
+  ref?: Ref<HTMLDivElement>
   unanimated?: boolean
 }
 
-export const DrawerPanel = forwardRef<ElementRef<typeof BaseDrawer.Popup>, DrawerPanelProps>(function DrawerPanel({
+export function DrawerPanel({
   className,
   motionClassName,
   motionVariant = 'drawer',
+  ref,
   unanimated = false,
   ...props
-}, ref) {
+}: DrawerPanelProps) {
   if (unanimated) {
     return <BaseDrawer.Popup ref={ref} className={className} {...props} />
   }
@@ -129,7 +137,7 @@ export const DrawerPanel = forwardRef<ElementRef<typeof BaseDrawer.Popup>, Drawe
       {...props}
     />
   )
-})
+}
 
 export function DrawerClose(props: BaseDrawerCloseProps) {
   return <BaseDrawer.Close {...props} />

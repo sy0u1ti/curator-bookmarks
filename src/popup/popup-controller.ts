@@ -121,11 +121,13 @@ import {
   hydratePopupBaseData,
   hydratePopupDeferredEnhancements
 } from './popup-hydration.js'
+import { registerPopupBrowserEventActions } from './popup-browser-events-store.js'
 import {
   getPopupEditBookmarkDraftState,
   getPopupEditBookmarkSavePlan
 } from './edit-bookmark-draft.js'
 import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
+import { writeClipboardText } from '../shared/clipboard.js'
 const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
@@ -149,8 +151,8 @@ let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> 
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
-let popupControllerEventController: AbortController | null = null
 let unregisterPopupActionHandlers: (() => void) | null = null
+let unregisterPopupBrowserEventActions: (() => void) | null = null
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -197,11 +199,9 @@ function startPopupController(): () => void {
     return cleanupPopupController
   }
   popupControllerStarted = true
-  popupControllerEventController = new AbortController()
-  const { signal } = popupControllerEventController
 
   perfMark('popup.domContentLoaded')
-  bindEvents(signal)
+  bindEvents()
   render()
   perfMark('popup.firstRender')
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
@@ -219,11 +219,10 @@ function startPopupController(): () => void {
   })
   void hydrateAutoAnalyzeStatus()
 
-  window.addEventListener('pagehide', cleanupPopupController, { signal })
   return cleanupPopupController
 }
 
-function bindEvents(signal: AbortSignal) {
+function bindEvents() {
   unregisterPopupActionHandlers = registerPopupActionHandlers({
     autoAnalyzeStatus: handleAutoAnalyzeStatusAction,
     chrome: handleChromeAction,
@@ -236,8 +235,12 @@ function bindEvents(signal: AbortSignal) {
     smartClassifierTitleChange: handleSmartClassifierTitleChange,
     toast: handleToastAction
   })
-  chrome.storage?.onChanged?.addListener(handleAutoAnalyzeStorageChanged)
-  document.addEventListener('keydown', handleDocumentKeydown, { signal })
+  unregisterPopupBrowserEventActions?.()
+  unregisterPopupBrowserEventActions = registerPopupBrowserEventActions({
+    onDocumentKeyDown: handleDocumentKeydown,
+    onPageHide: cleanupPopupController,
+    onStorageChanged: handleAutoAnalyzeStorageChanged
+  })
 }
 async function hydratePopupPreferences() {
   try {
@@ -487,7 +490,7 @@ function handleChromeAction(detail: PopupChromeActionDetail) {
     return
   }
   if (action === 'toggle-natural-search') {
-    void toggleNaturalLanguageSearch()
+    void toggleNaturalLanguageSearch(detail.returnFocusElement || null)
   }
 }
 
@@ -1032,13 +1035,12 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
   return map
 }
 function cleanupPopupController() {
-  popupControllerEventController?.abort()
-  popupControllerEventController = null
   unregisterPopupActionHandlers?.()
   unregisterPopupActionHandlers = null
+  unregisterPopupBrowserEventActions?.()
+  unregisterPopupBrowserEventActions = null
   popupControllerStarted = false
   abortNaturalSearchRequest()
-  chrome.storage?.onChanged?.removeListener?.(handleAutoAnalyzeStorageChanged)
   clearTimeout(state.searchTimer)
   state.searchTimer = null
   clearViewNotice()
@@ -1141,7 +1143,7 @@ function setSearchQuery(value, { immediate = false } = {}) {
   }, debounceMs)
   render()
 }
-async function toggleNaturalLanguageSearch() {
+async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | null = null) {
   const enabled = !state.naturalSearchEnabled
   if (enabled) {
     await refreshNaturalSearchAiConfiguredState()
@@ -1153,7 +1155,7 @@ async function toggleNaturalLanguageSearch() {
       state.naturalSearchPlan = null
       state.searchHighlightQuery = ''
       abortNaturalSearchRequest()
-      openAiProviderPromptDialog()
+      openAiProviderPromptDialog(returnFocusElement)
       void savePopupPreferences().catch(() => {})
       return
     }
@@ -1827,7 +1829,7 @@ function getPopupSmartRecommendationViewModels() {
     }
   })
 }
-function renderMainContent() {
+function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}) {
   const hasQuery = Boolean(state.debouncedQuery)
   const showNaturalSearchSetup =
     state.naturalSearchSetupRequired &&
@@ -1880,8 +1882,9 @@ function renderMainContent() {
     }
   }
 
+  const shouldPreserveScroll = preserveScroll ?? (!hasQuery || Boolean(state.isLoading))
   replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
-    preserveScroll: !hasQuery || Boolean(state.isLoading)
+    preserveScroll: shouldPreserveScroll
   })
 }
 
@@ -2060,14 +2063,15 @@ function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
     return []
   }
   const baseDepth = state.folderMap.get(rootId)?.depth || 1
-  return bookmarks.map((bookmark) => {
+  return bookmarks.map((bookmark, index) => {
     const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
-    return buildBookmarkRowViewModel(bookmark, depth)
+    return buildBookmarkRowViewModel(bookmark, depth, index === state.activeResultIndex)
   })
 }
 
-function buildBookmarkRowViewModel(bookmark, depth): PopupContentBookmarkRowViewModel {
+function buildBookmarkRowViewModel(bookmark, depth, active = false): PopupContentBookmarkRowViewModel {
   return {
+    active,
     bookmarkId: String(bookmark.id || ''),
     depth,
     displayUrl: bookmark.displayUrl || '',
@@ -2638,7 +2642,7 @@ function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
     return
   }
   if (detail.action === 'current-page') {
-    handleCurrentPageQuickAction(detail.currentPageAction || '')
+    handleCurrentPageQuickAction(detail.currentPageAction || '', detail.returnFocusElement || null)
     return
   }
   if (detail.action === 'recommendation') {
@@ -2664,7 +2668,7 @@ function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
     return
   }
   if (action === 'manual-folder') {
-    openSmartFolderDialog()
+    openSmartFolderDialog(detail.returnFocusElement || null)
     return
   }
   if (action === 'reset') {
@@ -2704,10 +2708,10 @@ function handleSavedSearchAction(action: string, searchId: string) {
     void deletePopupSavedSearch(searchId)
   }
 }
-function handleCurrentPageQuickAction(action) {
+function handleCurrentPageQuickAction(action, returnFocusElement: HTMLElement | null = null) {
   const bookmarkId = state.currentPageBookmarkId
   if (action === 'save') {
-    openSmartFolderDialog()
+    openSmartFolderDialog(returnFocusElement)
     return
   }
   if (!bookmarkId) {
@@ -2715,7 +2719,7 @@ function handleCurrentPageQuickAction(action) {
     return
   }
   if (action === 'edit') {
-    openEditDialog(bookmarkId)
+    openEditDialog(bookmarkId, returnFocusElement)
     return
   }
   if (action === 'pin-newtab') {
@@ -2740,11 +2744,11 @@ function handleContentAction(detail: PopupContentActionDetail) {
     const bookmarkId = detail.bookmarkId || ''
     const action = detail.menuAction || ''
     if (action === 'edit') {
-      openEditDialog(bookmarkId)
+      openEditDialog(bookmarkId, detail.returnFocusElement)
       return
     }
     if (action === 'move') {
-      openMoveDialog(bookmarkId)
+      openMoveDialog(bookmarkId, detail.returnFocusElement)
       return
     }
     if (action === 'copy-url') {
@@ -2756,7 +2760,7 @@ function handleContentAction(detail: PopupContentActionDetail) {
       return
     }
     if (action === 'delete') {
-      openDeleteDialog(bookmarkId)
+      openDeleteDialog(bookmarkId, detail.returnFocusElement)
     }
     return
   }
@@ -2946,7 +2950,8 @@ function handleDocumentKeydown(event) {
   if (handleSearchFocusShortcut(event)) {
     return
   }
-  if (!state.debouncedQuery || !state.searchResults.length) {
+  const keyboardBookmarks = getKeyboardNavigationBookmarks()
+  if (!keyboardBookmarks.length) {
     return
   }
   if (event.key === 'ArrowDown') {
@@ -2960,10 +2965,10 @@ function handleDocumentKeydown(event) {
     return
   }
   if (event.key === 'Enter') {
-    const activeResult = state.searchResults[state.activeResultIndex]
-    if (activeResult) {
+    const activeBookmark = keyboardBookmarks[state.activeResultIndex]
+    if (activeBookmark) {
       event.preventDefault()
-      openBookmark(activeResult.id)
+      openBookmark(activeBookmark.id)
     }
   }
 }
@@ -3045,21 +3050,21 @@ function toggleMoveFolder(folderId) {
   }
   renderModals()
 }
-function openMoveDialog(bookmarkId) {
+function openMoveDialog(bookmarkId, returnFocusElement = null) {
   if (hasBlockingPopupActionPending()) {
     return
   }
   if (shouldBlockDirtyEditClose()) {
     return
   }
-  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
+  rememberDialogReturnFocus(returnFocusElement)
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = null
   state.moveTargetBookmarkId = bookmarkId
   state.moveSearchQuery = ''
   render()
 }
-function openEditDialog(bookmarkId) {
+function openEditDialog(bookmarkId, returnFocusElement = null) {
   if (hasBlockingPopupActionPending()) {
     return
   }
@@ -3070,21 +3075,21 @@ function openEditDialog(bookmarkId) {
   if (!bookmark) {
     return
   }
-  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
+  rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = bookmarkId
   resetEditDraft(bookmark)
   render()
 }
-function openDeleteDialog(bookmarkId) {
+function openDeleteDialog(bookmarkId, returnFocusElement = null) {
   if (hasBlockingPopupActionPending()) {
     return
   }
   if (shouldBlockDirtyEditClose()) {
     return
   }
-  rememberDialogReturnFocus(getMenuToggleForBookmark(bookmarkId))
+  rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = bookmarkId
@@ -3128,7 +3133,7 @@ function clearFolderFilter() {
   }
   applyFolderFilter(null)
 }
-function openSmartFolderDialog() {
+function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
   if (hasBlockingPopupActionPending()) {
     return
   }
@@ -3139,7 +3144,7 @@ function openSmartFolderDialog() {
     showToast({ type: 'error', message: '当前页面无法保存为普通网页书签。' })
     return
   }
-  rememberDialogReturnFocus()
+  rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
@@ -3147,14 +3152,14 @@ function openSmartFolderDialog() {
   state.smartFolderSearchQuery = ''
   render()
 }
-function openAiProviderPromptDialog() {
+function openAiProviderPromptDialog(returnFocusElement: HTMLElement | null = null) {
   if (hasBlockingPopupActionPending()) {
     return
   }
   if (shouldBlockDirtyEditClose()) {
     return
   }
-  rememberDialogReturnFocus()
+  rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
   state.smartFolderPickerOpen = false
   state.editTargetBookmarkId = null
@@ -3162,30 +3167,21 @@ function openAiProviderPromptDialog() {
   state.aiProviderPromptOpen = true
   render()
 }
-function rememberDialogReturnFocus(preferredElement = null) {
-  const activeElement = document.activeElement
+function rememberDialogReturnFocus(preferredElement: HTMLElement | null = null) {
   popupDialogReturnFocusElement = preferredElement instanceof HTMLElement
     ? preferredElement
-    : activeElement instanceof HTMLElement
-      ? activeElement
-      : null
+    : null
 }
 function restoreDialogReturnFocus() {
   const returnElement = popupDialogReturnFocusElement
   popupDialogReturnFocusElement = null
-  if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
-    returnElement.focus()
-    return
-  }
-  focusSearchInput()
-}
-function getMenuToggleForBookmark(bookmarkId) {
-  if (!bookmarkId) {
-    return null
-  }
-  return document.querySelector<HTMLElement>(
-    `[data-bookmark-id="${CSS.escape(String(bookmarkId))}"]`
-  )
+  window.requestAnimationFrame(() => {
+    if (returnElement?.isConnected && !returnElement.hasAttribute('disabled')) {
+      returnElement.focus()
+      return
+    }
+    focusSearchInput()
+  })
 }
 function isSmartOverlayActive(): boolean {
   const currentUrl = String(state.currentTab?.url || '').trim()
@@ -3781,30 +3777,6 @@ async function copyBookmarkUrl(bookmarkId) {
     setPopupActionPending('copy-url', bookmarkId, false)
   }
 }
-function writeClipboardText(text) {
-  if (navigator.clipboard?.writeText) {
-    return navigator.clipboard.writeText(text)
-  }
-  const textarea = document.createElement('textarea')
-  textarea.value = String(text || '')
-  textarea.setAttribute('readonly', '')
-  textarea.style.position = 'fixed'
-  textarea.style.top = '-9999px'
-  textarea.style.left = '-9999px'
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-  try {
-    if (!document.execCommand('copy')) {
-      throw new Error('浏览器拒绝写入剪贴板。')
-    }
-    return Promise.resolve()
-  } catch (error) {
-    return Promise.reject(error)
-  } finally {
-    textarea.remove()
-  }
-}
 async function loadAiProviderSettings() {
   const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
   const { normalizeAiNamingSettings } = await loadAiSettingsModule()
@@ -3972,17 +3944,24 @@ function isAbortError(error) {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 function setActiveResultIndex(nextIndex) {
-  if (!state.debouncedQuery || !state.searchResults.length) {
+  const keyboardBookmarks = getKeyboardNavigationBookmarks()
+  if (!keyboardBookmarks.length) {
     return
   }
-  const clampedIndex = Math.max(0, Math.min(nextIndex, state.searchResults.length - 1))
+  const clampedIndex = Math.max(0, Math.min(nextIndex, keyboardBookmarks.length - 1))
   if (clampedIndex === state.activeResultIndex) {
     return
   }
   const previousIndex = state.activeResultIndex
   state.activeResultIndex = clampedIndex
   updateActiveSearchResult(previousIndex, clampedIndex)
-  renderMainContent()
+  renderMainContent({ preserveScroll: false })
+}
+function getKeyboardNavigationBookmarks() {
+  if (state.debouncedQuery) {
+    return state.searchResults
+  }
+  return getFilteredBookmarks()
 }
 function updateActiveSearchResult(previousIndex, nextIndex) {
   void previousIndex

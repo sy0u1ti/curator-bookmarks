@@ -1,5 +1,12 @@
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
-import { createElement, useRef, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import {
+  createElement,
+  useCallback,
+  useState,
+  type ComponentPropsWithoutRef,
+  type ReactNode,
+  type Ref
+} from 'react'
 import { Presence } from '../motion/Presence'
 import { MotionPanel } from '../motion/MotionPanel'
 import { Button } from './Button'
@@ -81,6 +88,7 @@ export interface DialogOverlayProps extends Omit<ComponentPropsWithoutRef<'div'>
   disablePointerDismissal?: BaseDialogRootProps['disablePointerDismissal']
   keepMounted?: BaseDialogPortalProps['keepMounted']
   portalContainer?: BaseDialogPortalProps['container']
+  ref?: Ref<HTMLDivElement>
 }
 
 export function DialogOverlay({
@@ -92,6 +100,7 @@ export function DialogOverlay({
   keepMounted = true,
   portalContainer,
   children,
+  ref,
   ...overlayProps
 }: DialogOverlayProps) {
   return (
@@ -105,7 +114,7 @@ export function DialogOverlay({
       disablePointerDismissal={disablePointerDismissal}
     >
       <BaseDialog.Portal keepMounted={keepMounted} container={portalContainer}>
-        <div {...overlayProps}>{children}</div>
+        <div ref={ref} {...overlayProps}>{children}</div>
       </BaseDialog.Portal>
     </BaseDialog.Root>
   )
@@ -115,6 +124,7 @@ export interface DialogPanelProps extends Omit<BaseDialogPopupProps, 'className'
   className?: string
   motionVariant?: ComponentPropsWithoutRef<typeof MotionPanel>['variant']
   motionClassName?: string
+  ref?: Ref<HTMLDivElement>
   unanimated?: boolean
 }
 
@@ -122,15 +132,17 @@ export function DialogPanel({
   className,
   motionClassName,
   motionVariant = 'dialog',
+  ref,
   unanimated = false,
   ...props
 }: DialogPanelProps) {
   if (unanimated) {
-    return <BaseDialog.Popup className={className} {...props} />
+    return <BaseDialog.Popup ref={ref} className={className} {...props} />
   }
 
   return (
     <BaseDialog.Popup
+      ref={ref}
       render={<MotionPanel variant={motionVariant} className={cx(className, motionClassName)} />}
       {...props}
     />
@@ -142,14 +154,19 @@ export interface InlineDialogPanelProps extends Omit<BaseDialogPopupProps, 'clas
 }
 
 export function InlineDialogPanel({ className, ...props }: InlineDialogPanelProps) {
-  const inlinePortalRef = useRef<HTMLDivElement>(null)
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null)
+  const setInlinePortalContainer = useCallback((element: HTMLDivElement | null) => {
+    setPortalContainer(element)
+  }, [])
 
   return (
     <BaseDialog.Root open modal={false}>
-      <BaseDialog.Portal keepMounted container={inlinePortalRef}>
-        <BaseDialog.Popup className={className} {...props} />
-      </BaseDialog.Portal>
-      <div ref={inlinePortalRef} />
+      {portalContainer ? (
+        <BaseDialog.Portal keepMounted container={portalContainer}>
+          <BaseDialog.Popup className={className} {...props} />
+        </BaseDialog.Portal>
+      ) : null}
+      <div ref={setInlinePortalContainer} />
     </BaseDialog.Root>
   )
 }

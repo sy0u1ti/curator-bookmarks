@@ -57,6 +57,7 @@ export interface PopupActionMenuViewModel {
 }
 
 export interface PopupContentBookmarkRowViewModel {
+  active?: boolean
   bookmarkId: string
   depth: number
   displayUrl: string

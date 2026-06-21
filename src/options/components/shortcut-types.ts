@@ -5,6 +5,11 @@ export interface ShortcutCommandViewModel {
   shortcut: string
 }
 
+export type ShortcutAction =
+  | 'copy-url'
+  | 'open-settings'
+  | 'refresh'
+
 export type ShortcutListState =
   | { kind: 'loading' }
   | { kind: 'empty' }

@@ -1,0 +1,147 @@
+import { displayUrl } from '../../shared/text.js'
+import { Button } from '../../ui/base/Button.js'
+import { CheckboxControl } from '../../ui/base/Checkbox.js'
+import { handleRecycleAction } from '../options-controller'
+import { formatDateTime } from '../shared-options/utils.js'
+import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
+import { useRecycleBinState } from './recycle-bin-store.js'
+import type { RecycleEntryViewModel } from './recycle-bin-types.js'
+
+const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
+const RECYCLE_EMPTY_CLASS =
+  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[18px_16px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+const RECYCLE_CARD_CLASS =
+  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[14px_16px] [transition:border-color_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)]'
+const RECYCLE_CARD_SELECTED_CLASS = '!border-[rgba(245,245,247,0.22)] !bg-[#1e1e22]'
+const RECYCLE_CARD_HEAD_CLASS =
+  'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
+const RECYCLE_CARD_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
+const RECYCLE_CHECK_CLASS =
+  'inline-flex items-center gap-2 text-xs font-semibold text-[var(--ui-text-secondary)]'
+const RECYCLE_CARD_ACTIONS_CLASS = 'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
+const RECYCLE_CARD_ACTION_CLASS =
+  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-[var(--ui-text-disabled)] [transition:color_var(--ui-motion-standard)_var(--ui-ease-standard)] hover:text-[var(--ui-text-primary)] focus-visible:text-[var(--ui-text-primary)] disabled:cursor-default disabled:opacity-50 disabled:hover:text-[var(--ui-text-disabled)] disabled:focus-visible:text-[var(--ui-text-disabled)] data-[disabled]:cursor-default data-[disabled]:opacity-50 data-[disabled]:hover:text-[var(--ui-text-disabled)] data-[disabled]:focus-visible:text-[var(--ui-text-disabled)]'
+const RECYCLE_CARD_DANGER_ACTION_CLASS = '!text-red-200 hover:!text-red-100 focus-visible:!text-red-100'
+const RECYCLE_CARD_COPY_CLASS = 'mt-3 min-w-0'
+const RECYCLE_CARD_TITLE_CLASS =
+  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+const RECYCLE_CARD_URL_CLASS =
+  'mt-[7px] inline-block text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+const RECYCLE_CARD_DETAIL_CLASS =
+  'mt-[7px] text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+const RECYCLE_CARD_PATH_CLASS =
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere] [word-break:break-word]'
+const RECYCLE_STATUS_BADGE_CLASS =
+  'inline-flex min-h-7 max-w-full flex-none items-center justify-center rounded-full border border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] px-[11px] text-[11px] font-semibold leading-none tracking-[0] text-[var(--ui-text-secondary)] whitespace-nowrap max-[760px]:whitespace-normal'
+
+export function RecycleBin() {
+  const state = useRecycleBinState()
+
+  return (
+    <div className={RECYCLE_RESULTS_LIST_CLASS}>
+      {state.entries.length ? (
+        state.entries.map((entry) => (
+          <RecycleEntryCard
+            disabled={state.disabled}
+            entry={entry}
+            key={entry.recycleId}
+            selected={state.selectedIds.has(String(entry.recycleId))}
+          />
+        ))
+      ) : (
+        <div className={RECYCLE_EMPTY_CLASS}>回收站当前为空。</div>
+      )}
+    </div>
+  )
+}
+
+function RecycleEntryCard({
+  disabled,
+  entry,
+  selected
+}: {
+  disabled: boolean
+  entry: RecycleEntryViewModel
+  selected: boolean
+}) {
+  const selectionLabel = getRecycleEntryActionLabel('选择回收站书签', entry)
+  const restoreLabel = getRecycleEntryActionLabel('恢复书签', entry)
+  const clearLabel = getRecycleEntryActionLabel('清除回收站记录', entry)
+
+  return (
+    <article
+      className={[
+        RECYCLE_CARD_CLASS,
+        selected ? RECYCLE_CARD_SELECTED_CLASS : ''
+      ].filter(Boolean).join(' ')}
+    >
+      <div className={RECYCLE_CARD_HEAD_CLASS}>
+        <div className={RECYCLE_CARD_HEAD_LEFT_CLASS}>
+          <label className={RECYCLE_CHECK_CLASS}>
+            <CheckboxControl
+              aria-label={selectionLabel}
+              checked={selected}
+              className={OPTION_RESULT_CHECKBOX_CLASS}
+              disabled={disabled}
+              onCheckedChange={(checked) => handleRecycleAction({
+                action: 'toggle-entry',
+                checked,
+                recycleId: entry.recycleId
+              })}
+              unstyled
+            />
+            <span>选择</span>
+          </label>
+          <span className={RECYCLE_STATUS_BADGE_CLASS}>回收站</span>
+        </div>
+        <div className={RECYCLE_CARD_ACTIONS_CLASS}>
+          <Button
+            className={RECYCLE_CARD_ACTION_CLASS}
+            type="button"
+            aria-label={restoreLabel}
+            disabled={disabled}
+            onClick={() => handleRecycleAction({
+              action: 'restore-entry',
+              recycleId: entry.recycleId
+            })}
+            unstyled
+          >
+            恢复书签
+          </Button>
+          <Button
+            className={[RECYCLE_CARD_ACTION_CLASS, RECYCLE_CARD_DANGER_ACTION_CLASS].join(' ')}
+            type="button"
+            aria-label={clearLabel}
+            disabled={disabled}
+            onClick={() => handleRecycleAction({
+              action: 'clear-entry',
+              recycleId: entry.recycleId
+            })}
+            unstyled
+          >
+            清除
+          </Button>
+        </div>
+      </div>
+      <div className={RECYCLE_CARD_COPY_CLASS}>
+        <strong className={RECYCLE_CARD_TITLE_CLASS}>{entry.title || '未命名书签'}</strong>
+        <div className={RECYCLE_CARD_URL_CLASS}>{displayUrl(entry.url)}</div>
+        <div className={RECYCLE_CARD_DETAIL_CLASS}>
+          来源：{entry.source || '删除'} · 删除于 {formatDateTime(entry.deletedAt)}
+        </div>
+        <div className={RECYCLE_CARD_PATH_CLASS} title={entry.path || '未归档路径'}>
+          {entry.path || '未归档路径'}
+        </div>
+      </div>
+    </article>
+  )
+}
+
+function getRecycleEntryActionLabel(action: string, entry: RecycleEntryViewModel): string {
+  const title = String(entry?.title || displayUrl(entry?.url) || '未命名书签')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}...` : title
+
+  return `${action}：${safeTitle || '未命名书签'}`
+}

@@ -1,64 +1,52 @@
-import { useEffect } from 'react'
+import type { CSSProperties } from 'react'
 import { useNewtabBackgroundSettingsView } from '../newtab-background-settings-store'
 import { useNewtabDragUiView } from '../newtab-drag-ui-store'
 import { useNewtabFolderSourceView } from '../newtab-folder-source-store'
+import { useNewtabInstantWallpaperView } from '../newtab-instant-wallpaper-store'
 import { useNewtabSettingsDrawerView } from '../newtab-settings-drawer-store'
 
-export function NewtabBodyClassesHost() {
+const DRAG_ACTIVE_CLASS = 'cursor-default select-none'
+
+export function useNewtabAppChromeAttributes() {
   const background = useNewtabBackgroundSettingsView()
   const dragUi = useNewtabDragUiView()
   const folderSource = useNewtabFolderSourceView()
+  const instantWallpaper = useNewtabInstantWallpaperView()
   const settingsDrawer = useNewtabSettingsDrawerView()
+  const dragActive = dragUi.bookmarkDragging || dragUi.folderOrderDragging || dragUi.speedDialDragging
 
-  useEffect(() => {
-    document.body.classList.toggle('settings-open', settingsDrawer.open)
-    return () => {
-      document.body.classList.remove('settings-open')
-    }
-  }, [settingsDrawer.open])
+  const className = [
+    'newtab-app',
+    instantWallpaper.loading ? 'loading-wallpaper' : '',
+    instantWallpaper.booting ? 'newtab-booting' : '',
+    instantWallpaper.ready ? 'instant-wallpaper-ready' : '',
+    instantWallpaper.remoteReady ? 'instant-wallpaper-remote-ready' : '',
+    settingsDrawer.open ? 'settings-open' : '',
+    background.maskEnabled ? 'background-mask-enabled' : '',
+    folderSource.hideFolderNames ? 'folder-names-hidden' : '',
+    folderSource.general.hideSettingsTrigger ? 'settings-trigger-auto-hide' : '',
+    dragUi.bookmarkDragging ? 'bookmark-dragging' : '',
+    dragUi.previewInitializing ? 'bookmark-drag-preview-initializing' : '',
+    dragUi.folderOrderDragging ? 'folder-order-dragging' : '',
+    dragUi.speedDialDragging ? 'speed-dial-dragging' : '',
+    dragActive ? DRAG_ACTIVE_CLASS : ''
+  ].filter(Boolean).join(' ')
+  const style = {
+    '--background-mask-blur': `${background.maskBlur}px`,
+    '--bg': instantWallpaper.backgroundColor,
+    '--wallpaper-placeholder-bg': instantWallpaper.placeholderColor,
+    '--instant-wallpaper-image': instantWallpaper.image || undefined,
+    '--instant-wallpaper-preview-image': instantWallpaper.previewImage || undefined,
+    '--instant-wallpaper-size': instantWallpaper.size,
+    '--instant-wallpaper-position': instantWallpaper.position
+  } as CSSProperties
 
-  useEffect(() => {
-    document.body.classList.toggle('background-mask-enabled', background.maskEnabled)
-    document.body.dataset.backgroundMaskStyle = background.maskStyle
-    return () => {
-      document.body.classList.remove('background-mask-enabled')
-      delete document.body.dataset.backgroundMaskStyle
-    }
-  }, [background.maskEnabled, background.maskStyle])
-
-  useEffect(() => {
-    document.body.classList.toggle('folder-names-hidden', folderSource.hideFolderNames)
-    return () => {
-      document.body.classList.remove('folder-names-hidden')
-    }
-  }, [folderSource.hideFolderNames])
-
-  useEffect(() => {
-    document.body.classList.toggle('settings-trigger-auto-hide', folderSource.general.hideSettingsTrigger)
-    return () => {
-      document.body.classList.remove('settings-trigger-auto-hide')
-    }
-  }, [folderSource.general.hideSettingsTrigger])
-
-  useEffect(() => {
-    document.body.classList.toggle('bookmark-dragging', dragUi.bookmarkDragging)
-    document.body.classList.toggle('bookmark-drag-preview-initializing', dragUi.previewInitializing)
-    document.body.classList.toggle('folder-order-dragging', dragUi.folderOrderDragging)
-    document.body.classList.toggle('speed-dial-dragging', dragUi.speedDialDragging)
-    return () => {
-      document.body.classList.remove(
-        'bookmark-dragging',
-        'bookmark-drag-preview-initializing',
-        'folder-order-dragging',
-        'speed-dial-dragging'
-      )
-    }
-  }, [
-    dragUi.bookmarkDragging,
-    dragUi.folderOrderDragging,
-    dragUi.previewInitializing,
-    dragUi.speedDialDragging
-  ])
-
-  return null
+  return {
+    'data-instant-wallpaper-pending': instantWallpaper.pending ? 'true' : undefined,
+    'data-instant-wallpaper-remote-ready': instantWallpaper.remoteReady ? 'true' : undefined,
+    'data-instant-wallpaper-signature': instantWallpaper.signature || undefined,
+    'data-background-mask-style': background.maskStyle,
+    className,
+    style
+  }
 }

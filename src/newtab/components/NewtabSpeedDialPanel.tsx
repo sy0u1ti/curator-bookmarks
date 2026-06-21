@@ -1,7 +1,35 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
-import { useNewtabSpeedDialView } from '../newtab-speed-dial-store'
+import {
+  useCallback,
+  useLayoutEffect,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent
+} from 'react'
+import {
+  setNewtabSpeedDialCardIconNode,
+  setNewtabSpeedDialCardNode,
+  setNewtabSpeedDialGridNode,
+  useNewtabSpeedDialView
+} from '../newtab-speed-dial-store'
+import { useNewtabDragUiView, type NewtabDragUiView } from '../newtab-drag-ui-store'
 import type { SpeedDialEmptyState } from '../speed-dial-types'
 import { BookmarkIconShell, type BookmarkIconShellFavicon } from './BookmarkIconShell'
+import {
+  SPEED_DIAL_COPY_CLASS,
+  SPEED_DIAL_COPY_DETAIL_CLASS,
+  SPEED_DIAL_COPY_TITLE_CLASS,
+  SPEED_DIAL_EMPTY_CLASS,
+  SPEED_DIAL_EMPTY_COPY_CLASS,
+  SPEED_DIAL_EMPTY_DETAIL_CLASS,
+  SPEED_DIAL_EMPTY_TITLE_CLASS,
+  SPEED_DIAL_GRID_CLASS,
+  SPEED_DIAL_HEADING_CLASS,
+  SPEED_DIAL_MARK_CLASS,
+  SPEED_DIAL_META_CLASS,
+  SPEED_DIAL_PANEL_CLASS,
+  SPEED_DIAL_TITLE_CLASS,
+  getSpeedDialCardClass
+} from './speedDialClasses'
 
 export interface SpeedDialCardViewModel {
   customIcon: boolean
@@ -10,6 +38,8 @@ export interface SpeedDialCardViewModel {
   fallbackLabel: string
   favicon: BookmarkIconShellFavicon
   id: string
+  onContextMenu: (event: ReactMouseEvent<HTMLAnchorElement>) => void
+  onDragPointerDown: (event: ReactPointerEvent<HTMLAnchorElement>) => void
   onNavigate: (event: ReactMouseEvent<HTMLAnchorElement>) => void
   style?: CSSProperties
   title: string
@@ -30,76 +60,124 @@ export interface SpeedDialPanelState {
 
 export function SpeedDialPanelHost() {
   const state = useNewtabSpeedDialView()
+  const dragUi = useNewtabDragUiView()
   if (!state) {
     return null
   }
 
   return (
-    <section className="newtab-speed-dial" aria-label="Speed Dial" aria-busy={state.ariaBusy}>
-      <SpeedDialPanel state={state} />
+    <section className={SPEED_DIAL_PANEL_CLASS} aria-label="Speed Dial" aria-busy={state.ariaBusy}>
+      <SpeedDialPanel dragUi={dragUi} state={state} />
     </section>
   )
 }
 
-function SpeedDialPanel({ state }: { state: SpeedDialPanelState }) {
+function SpeedDialPanel({ dragUi, state }: { dragUi: NewtabDragUiView; state: SpeedDialPanelState }) {
   return (
     <>
-      <div className="newtab-module-heading">
-        <h2>Speed Dial</h2>
-        <span data-tone={state.metaTone || undefined}>{state.meta}</span>
+      <div className={SPEED_DIAL_HEADING_CLASS}>
+        <h2 className={SPEED_DIAL_TITLE_CLASS}>Speed Dial</h2>
+        <span className={SPEED_DIAL_META_CLASS} data-tone={state.metaTone || undefined}>{state.meta}</span>
       </div>
-      <SpeedDialContent state={state.content} />
+      <SpeedDialContent dragUi={dragUi} state={state.content} />
     </>
   )
 }
 
-function SpeedDialContent({ state }: { state: SpeedDialContentState }) {
+function SpeedDialContent({ dragUi, state }: { dragUi: NewtabDragUiView; state: SpeedDialContentState }) {
   if (state.type === 'loading') {
     return (
-      <div className="newtab-speed-dial-empty" role="status">
+      <output className={SPEED_DIAL_EMPTY_CLASS} aria-live="polite">
         {state.label}
-      </div>
+      </output>
     )
   }
 
   if (state.type === 'empty') {
     return (
-      <div className="newtab-speed-dial-empty">
-        <div className="newtab-speed-dial-empty-copy">
-          <strong>{state.state.title}</strong>
-          <span>{state.state.detail}</span>
+      <div className={SPEED_DIAL_EMPTY_CLASS}>
+        <div className={SPEED_DIAL_EMPTY_COPY_CLASS}>
+          <strong className={SPEED_DIAL_EMPTY_TITLE_CLASS}>{state.state.title}</strong>
+          <span className={SPEED_DIAL_EMPTY_DETAIL_CLASS}>{state.state.detail}</span>
         </div>
       </div>
     )
   }
 
+  return <SpeedDialItemsGrid dragUi={dragUi} state={state} />
+}
+
+function SpeedDialItemsGrid({
+  dragUi,
+  state
+}: {
+  dragUi: NewtabDragUiView
+  state: Extract<SpeedDialContentState, { type: 'items' }>
+}) {
+  const setGridRef = useCallback((element: HTMLDivElement | null) => {
+    setNewtabSpeedDialGridNode(element)
+  }, [])
+
+  useLayoutEffect(() => {
+    return () => {
+      setNewtabSpeedDialGridNode(null)
+    }
+  }, [])
+
   return (
-    <div className="newtab-speed-dial-grid" aria-busy={state.busy ? 'true' : 'false'}>
+    <div className={SPEED_DIAL_GRID_CLASS} aria-busy={state.busy ? 'true' : 'false'} ref={setGridRef}>
       {state.items.map((item) => (
-        <a
-          className={item.dragging ? 'newtab-speed-dial-card dragging' : 'newtab-speed-dial-card'}
-          href={item.url}
-          title={item.title}
-          draggable={false}
-          data-bookmark-id={item.id}
-          data-speed-dial-bookmark-id={item.id}
-          aria-label={`打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`}
-          onClick={item.onNavigate}
-          style={item.style}
-          key={item.id}
-        >
-          <BookmarkIconShell
-            className="newtab-speed-dial-mark bookmark-icon-shell"
-            customIcon={item.customIcon}
-            fallbackLabel={item.fallbackLabel}
-            favicon={item.favicon}
-          />
-          <span className="newtab-speed-dial-copy">
-            <strong>{item.title}</strong>
-            <span>{item.detail}</span>
-          </span>
-        </a>
+        <SpeedDialCard dragUi={dragUi} item={item} key={item.id} />
       ))}
     </div>
+  )
+}
+
+function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: SpeedDialCardViewModel }) {
+  const setCardRef = useCallback((element: HTMLAnchorElement | null) => {
+    setNewtabSpeedDialCardNode(item.id, element)
+  }, [item.id])
+  const setIconRef = useCallback((element: HTMLSpanElement | null) => {
+    setNewtabSpeedDialCardIconNode(item.id, element)
+  }, [item.id])
+
+  useLayoutEffect(() => {
+    return () => {
+      setNewtabSpeedDialCardNode(item.id, null)
+      setNewtabSpeedDialCardIconNode(item.id, null)
+    }
+  }, [item.id])
+
+  return (
+    <a
+      className={getSpeedDialCardClass({
+        dragActive: dragUi.speedDialDragging,
+        dragging: item.dragging,
+        previewInitializing: dragUi.previewInitializing
+      })}
+      href={item.url}
+      title={item.title}
+      draggable={false}
+      data-bookmark-id={item.id}
+      data-speed-dial-bookmark-id={item.id}
+      aria-label={`打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`}
+      onClick={item.onNavigate}
+      onContextMenu={item.onContextMenu}
+      onPointerDown={item.onDragPointerDown}
+      ref={setCardRef}
+      style={item.style}
+    >
+      <BookmarkIconShell
+        className={SPEED_DIAL_MARK_CLASS}
+        customIcon={item.customIcon}
+        fallbackLabel={item.fallbackLabel}
+        favicon={item.favicon}
+        ref={setIconRef}
+      />
+      <span className={SPEED_DIAL_COPY_CLASS}>
+        <strong className={SPEED_DIAL_COPY_TITLE_CLASS}>{item.title}</strong>
+        <span className={SPEED_DIAL_COPY_DETAIL_CLASS}>{item.detail}</span>
+      </span>
+    </a>
   )
 }

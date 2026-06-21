@@ -1,8 +1,9 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type RefObject } from 'react'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui/primitives/Button'
-import { Input } from '../../ui/primitives/Input'
+import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
+import { cx } from '../../ui/base/utils'
 import {
   dispatchPopupModalAction,
   usePopupModalsView,
@@ -10,44 +11,174 @@ import {
 } from '../popup-controller-store'
 import { PopupFolderPickerHost } from './PopupFolderPickerHost'
 
+const folderSearchShellClass = [
+  'flex min-h-10 w-full items-center gap-1.5 rounded-[var(--ui-radius-pill)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] py-0 pl-3 pr-1.5 text-[var(--ui-text-primary)]',
+  'transition-[border-color,background,box-shadow] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)]',
+  'focus-within:border-[var(--ui-focus-ring)] focus-within:bg-[var(--ui-surface-hover)] focus-within:shadow-[0_0_0_3px_var(--ui-focus-ring-soft)]'
+].join(' ')
+const folderSearchIconClass =
+  'pointer-events-none flex-none text-[var(--ui-text-tertiary)] transition-colors duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]'
+const folderSearchInputClass =
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-[var(--ui-text-primary)] outline-none placeholder:text-[var(--ui-text-tertiary)] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+const modalButtonBaseClass = [
+  'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-[var(--ui-radius-control)] border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
+  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'active:scale-[0.985]',
+  'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+].join(' ')
+const modalSecondaryButtonClass = [
+  modalButtonBaseClass,
+  'border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-primary)]',
+  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
+  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)]'
+].join(' ')
+const modalPrimaryButtonClass = [
+  modalButtonBaseClass,
+  'border-[var(--ui-divider-strong)] bg-[var(--ui-text-primary)] text-[var(--ui-bg-main)]',
+  'hover:border-[var(--ui-divider-strong)] hover:bg-white hover:text-[var(--ui-bg-main)]',
+  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-white focus-visible:text-[var(--ui-bg-main)]'
+].join(' ')
+const modalDangerButtonClass = [
+  modalButtonBaseClass,
+  'border-[rgba(255,138,130,0.62)] bg-[#5a2624] text-[#ffe7e3]',
+  'hover:border-[rgba(255,183,176,0.86)] hover:bg-[#73302c] hover:text-[#fff2ef]',
+  'focus-visible:border-[rgba(255,183,176,0.86)] focus-visible:bg-[#73302c] focus-visible:text-[#fff2ef]'
+].join(' ')
+const modalCompactButtonClass =
+  cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
+const modalCloseButtonClass = [
+  'inline-flex min-h-[30px] items-center justify-center rounded-[var(--ui-radius-icon)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2.5 py-1.5 text-xs font-semibold leading-none text-[var(--ui-text-secondary)] shadow-none',
+  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
+  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'active:scale-[0.96]',
+  'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+].join(' ')
+const modalFormClass = 'flex flex-col gap-[9px]'
+const modalFieldClass = 'flex flex-col gap-1.5'
+const modalLabelClass = 'text-xs font-medium leading-tight text-[var(--ui-text-secondary)]'
+const modalInputClass = [
+  'min-h-[42px] w-full rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-[11px] text-[13px] leading-normal text-[var(--ui-text-primary)] outline-none',
+  'transition-[border-color,background,box-shadow] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'placeholder:text-[var(--ui-text-tertiary)]',
+  'focus:border-[var(--ui-focus-ring)] focus:bg-[var(--ui-surface-hover)] focus:shadow-none',
+  'focus-visible:border-[var(--ui-focus-ring)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  '[&&:focus]:!border-[var(--ui-focus-ring)] [&&:focus]:![background:var(--ui-surface-hover)] [&&:focus]:!shadow-none',
+  '[&&:focus-visible]:!border-[var(--ui-focus-ring)] [&&:focus-visible]:![background:var(--ui-surface-hover)] [&&:focus-visible]:!shadow-none [&&:focus-visible]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus-visible]:!outline-offset-2',
+  'disabled:opacity-50 data-[disabled]:opacity-50'
+].join(' ')
+const modalHeaderClass = 'flex items-center justify-between gap-2.5'
+const modalHeaderCompactClass = cx(modalHeaderClass, 'items-start')
+const modalHeaderCopyClass = 'min-w-0'
+const modalTitleClass =
+  'm-0 mt-0.5 min-w-0 text-base font-semibold leading-[1.1] text-[var(--ui-text-primary)]'
+const modalEyebrowClass =
+  'm-0 text-[11px] font-semibold uppercase leading-[1.35] text-[var(--ui-text-tertiary)]'
+const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-[#ffb1aa]')
+const modalBookmarkCardClass =
+  'relative flex flex-col gap-[5px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-3 py-2.5 shadow-none'
+const modalCardLabelClass =
+  'm-0 text-[11px] leading-[1.35] tracking-[0.01em] text-[var(--ui-text-tertiary)]'
+const modalCardTitleClass =
+  'm-0 min-w-0 break-words text-xs font-semibold leading-[1.35] text-[var(--ui-text-primary)]'
+const modalCardPathClass =
+  'm-0 min-w-0 [overflow-wrap:anywhere] text-[11px] leading-[1.35] tracking-[0.01em] text-[var(--ui-text-tertiary)]'
+const modalCardPathChangedClass = 'text-[var(--ui-text-secondary)]'
+const modalPathRowClass = 'flex items-center gap-2'
+const modalAiSetupPromptClass = [
+  'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-[9px]',
+  '[&_.ai-setup-prompt-copy]:grid [&_.ai-setup-prompt-copy]:gap-1',
+  '[&_.ai-setup-prompt-icon]:inline-flex [&_.ai-setup-prompt-icon]:h-[26px] [&_.ai-setup-prompt-icon]:w-[26px] [&_.ai-setup-prompt-icon]:items-center [&_.ai-setup-prompt-icon]:justify-center',
+  '[&_.ai-setup-prompt-icon]:rounded-lg [&_.ai-setup-prompt-icon]:border [&_.ai-setup-prompt-icon]:border-white/10 [&_.ai-setup-prompt-icon]:bg-white/[0.04] [&_.ai-setup-prompt-icon]:text-[var(--ui-text-secondary)]'
+].join(' ')
+const modalNoteClass = 'm-0 text-[13px] leading-[1.55] text-[var(--ui-text-secondary)]'
+const modalActionsClass = 'flex items-center justify-between gap-2.5'
+const modalStackClass =
+  'relative grid h-full max-h-full min-h-0 w-full min-w-0 place-items-center overflow-hidden p-[18px] outline-none'
+const modalDismissLayerClass = 'absolute inset-0 z-0 block cursor-default border-0 bg-transparent'
+const modalSurfaceMotionClass = [
+  'origin-center scale-100 opacity-100 pointer-events-auto',
+  'transition-[transform,scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] [will-change:transform,scale,opacity]',
+  'motion-reduce:transition-none'
+].join(' ')
+const modalCardShellClass = [
+  modalSurfaceMotionClass,
+  'relative z-[1] flex min-h-0 flex-col gap-[11px] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] p-[13px] text-[var(--ui-text-primary)] shadow-none outline-none',
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.86)] focus-visible:outline-offset-2'
+].join(' ')
+const modalStandardCardClass = cx(
+  modalCardShellClass,
+  'w-[min(398px,calc(100vw_-_28px))] max-w-[398px] max-h-[calc(100%_-_28px)]'
+)
+const modalSmallCardClass = cx(
+  modalCardShellClass,
+  'w-[min(398px,calc(100vw_-_28px))] max-w-[360px] max-h-[calc(100%_-_28px)]'
+)
+const modalWideCardClass = cx(
+  modalCardShellClass,
+  'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
+)
+const modalListClass = [
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5',
+  '[scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]',
+  '[&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:bg-transparent'
+].join(' ')
+const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
+const editFolderPickerClass = 'flex min-h-0 flex-col gap-2'
+
 export function PopupModalsHost() {
   const state = usePopupModalsView()
   const previousActiveRef = useRef<PopupModalsView['active']>(null)
   const previousEditPickerOpenRef = useRef(false)
+  const moveSearchRef = useRef<HTMLInputElement | null>(null)
+  const smartFolderSearchRef = useRef<HTMLInputElement | null>(null)
+  const aiProviderSettingsRef = useRef<HTMLButtonElement | null>(null)
+  const editTitleRef = useRef<HTMLInputElement | null>(null)
+  const editFolderSearchRef = useRef<HTMLInputElement | null>(null)
+  const cancelDeleteRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     if (state.active !== previousActiveRef.current) {
       previousActiveRef.current = state.active
-      focusInitialModalControl(state.active)
+      focusInitialModalControl(state.active, {
+        aiProviderSettingsRef,
+        cancelDeleteRef,
+        editTitleRef,
+        moveSearchRef,
+        smartFolderSearchRef
+      })
     }
 
     if (state.edit.folderPickerOpen && !previousEditPickerOpenRef.current) {
-      focusElement('edit-folder-search-input')
+      focusElement(editFolderSearchRef)
     }
     previousEditPickerOpenRef.current = state.edit.folderPickerOpen
   }, [state.active, state.edit.folderPickerOpen])
 
   return (
     <div
-      className="popup-modal-stack"
+      className={modalStackClass}
     >
       <Button
-        className="popup-modal-dismiss-layer"
+        className={modalDismissLayerClass}
         type="button"
         aria-label="关闭弹窗"
         onClick={() => dispatchPopupModalAction('close')}
         unstyled
       />
-      {state.move.open ? <MoveBookmarkModal view={state.move} /> : null}
-      {state.smartFolder.open ? <SmartFolderModal view={state.smartFolder} /> : null}
-      {state.aiProvider.open ? <AiProviderPromptModal /> : null}
-      {state.edit.open ? <EditBookmarkModal view={state.edit} /> : null}
-      {state.delete.open ? <DeleteBookmarkModal view={state.delete} /> : null}
+      {state.move.open ? <MoveBookmarkModal searchRef={moveSearchRef} view={state.move} /> : null}
+      {state.smartFolder.open ? <SmartFolderModal searchRef={smartFolderSearchRef} view={state.smartFolder} /> : null}
+      {state.aiProvider.open ? <AiProviderPromptModal settingsButtonRef={aiProviderSettingsRef} /> : null}
+      {state.edit.open ? <EditBookmarkModal folderSearchRef={editFolderSearchRef} titleRef={editTitleRef} view={state.edit} /> : null}
+      {state.delete.open ? <DeleteBookmarkModal cancelButtonRef={cancelDeleteRef} view={state.delete} /> : null}
     </div>
   )
 }
 
 function FolderSearch({
+  inputRef,
   htmlFor,
   inputId,
   placeholder,
@@ -62,16 +193,18 @@ function FolderSearch({
   disabled?: boolean
   htmlFor: string
   inputId: string
+  inputRef?: RefObject<HTMLInputElement | null>
   label: string
   placeholder: string
   value: string
 }) {
   return (
-    <label className="cb-search modal-search" htmlFor={htmlFor}>
-      <Icon name="Search" className="cb-search__icon" size={16} aria-hidden="true" />
+    <label className={folderSearchShellClass} htmlFor={htmlFor}>
+      <Icon name="Search" className={folderSearchIconClass} size={16} aria-hidden="true" />
       <Input
+        ref={inputRef}
         id={inputId}
-        className="cb-search__input"
+        className={folderSearchInputClass}
         type="text"
         role="searchbox"
         spellCheck={false}
@@ -88,24 +221,31 @@ function FolderSearch({
   )
 }
 
-function MoveBookmarkModal({ view }: { view: PopupModalsView['move'] }) {
+function MoveBookmarkModal({
+  searchRef,
+  view
+}: {
+  searchRef: RefObject<HTMLInputElement | null>
+  view: PopupModalsView['move']
+}) {
   return (
-    <section id="move-modal" className="modal-card t-modal is-open" aria-labelledby="move-modal-title" tabIndex={-1}>
-      <header className="modal-header">
-        <div>
-          <p className="modal-eyebrow">移动书签</p>
-          <h2 id="move-modal-title">选择目标文件夹</h2>
+    <section id="move-modal" className={modalWideCardClass} aria-labelledby="move-modal-title" tabIndex={-1}>
+      <header className={modalHeaderClass}>
+        <div className={modalHeaderCopyClass}>
+          <p className={modalEyebrowClass}>移动书签</p>
+          <h2 id="move-modal-title" className={modalTitleClass}>选择目标文件夹</h2>
         </div>
-        <Button id="close-move-modal" className="icon-button ghost" type="button" aria-label="关闭移动面板" onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-move-modal" className={modalCloseButtonClass} type="button" aria-label="关闭移动面板" onClick={() => dispatchPopupModalAction('close')} unstyled>
           关闭
         </Button>
       </header>
-      <div className="modal-bookmark-card">
-        <p className="modal-card-label">当前书签</p>
-        <p id="move-bookmark-title" className="modal-card-title">{view.title}</p>
-        <p id="move-bookmark-path" className="modal-card-path">{view.path}</p>
+      <div className={modalBookmarkCardClass}>
+        <p className={modalCardLabelClass}>当前书签</p>
+        <p id="move-bookmark-title" className={modalCardTitleClass}>{view.title}</p>
+        <p id="move-bookmark-path" className={modalCardPathClass}>{view.path}</p>
       </div>
       <FolderSearch
+        inputRef={searchRef}
         htmlFor="move-search-input"
         inputId="move-search-input"
         placeholder="搜索目标文件夹"
@@ -114,29 +254,36 @@ function MoveBookmarkModal({ view }: { view: PopupModalsView['move'] }) {
         value={view.query}
         action="move-query-change"
       />
-      <PopupFolderPickerHost id="move-folder-list" className="modal-list" mode="move" />
+      <PopupFolderPickerHost id="move-folder-list" className={modalListClass} mode="move" />
     </section>
   )
 }
 
-function SmartFolderModal({ view }: { view: PopupModalsView['smartFolder'] }) {
+function SmartFolderModal({
+  searchRef,
+  view
+}: {
+  searchRef: RefObject<HTMLInputElement | null>
+  view: PopupModalsView['smartFolder']
+}) {
   return (
-    <section id="smart-folder-modal" className="modal-card t-modal is-open" aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
-      <header className="modal-header">
-        <div>
-          <p className="modal-eyebrow">当前网页</p>
-          <h2 id="smart-folder-modal-title">选择保存文件夹</h2>
+    <section id="smart-folder-modal" className={modalWideCardClass} aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
+      <header className={modalHeaderClass}>
+        <div className={modalHeaderCopyClass}>
+          <p className={modalEyebrowClass}>当前网页</p>
+          <h2 id="smart-folder-modal-title" className={modalTitleClass}>选择保存文件夹</h2>
         </div>
-        <Button id="close-smart-folder-modal" className="icon-button ghost" type="button" aria-label="关闭文件夹选择" onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-smart-folder-modal" className={modalCloseButtonClass} type="button" aria-label="关闭文件夹选择" onClick={() => dispatchPopupModalAction('close')} unstyled>
           关闭
         </Button>
       </header>
-      <div className="modal-bookmark-card">
-        <p className="modal-card-label">即将保存</p>
-        <p id="smart-folder-page-title" className="modal-card-title">{view.title}</p>
-        <p id="smart-folder-page-url" className="modal-card-path">{view.urlLabel}</p>
+      <div className={modalBookmarkCardClass}>
+        <p className={modalCardLabelClass}>即将保存</p>
+        <p id="smart-folder-page-title" className={modalCardTitleClass}>{view.title}</p>
+        <p id="smart-folder-page-url" className={modalCardPathClass}>{view.urlLabel}</p>
       </div>
       <FolderSearch
+        inputRef={searchRef}
         htmlFor="smart-folder-search-input"
         inputId="smart-folder-search-input"
         placeholder="搜索目标文件夹"
@@ -145,59 +292,71 @@ function SmartFolderModal({ view }: { view: PopupModalsView['smartFolder'] }) {
         value={view.query}
         action="smart-folder-query-change"
       />
-      <PopupFolderPickerHost id="smart-folder-list" className="modal-list" mode="smart" />
+      <PopupFolderPickerHost id="smart-folder-list" className={modalListClass} mode="smart" />
     </section>
   )
 }
 
-function AiProviderPromptModal() {
+function AiProviderPromptModal({
+  settingsButtonRef
+}: {
+  settingsButtonRef: RefObject<HTMLButtonElement | null>
+}) {
   return (
-    <section id="ai-provider-prompt-modal" className="modal-card t-modal small is-open" aria-labelledby="ai-provider-prompt-title" tabIndex={-1}>
-      <header className="modal-header compact">
-        <div>
-          <p className="modal-eyebrow">AI 搜索</p>
-          <h2 id="ai-provider-prompt-title">请配置 AI 渠道</h2>
+    <section id="ai-provider-prompt-modal" className={modalSmallCardClass} aria-labelledby="ai-provider-prompt-title" tabIndex={-1}>
+      <header className={modalHeaderCompactClass}>
+        <div className={modalHeaderCopyClass}>
+          <p className={modalEyebrowClass}>AI 搜索</p>
+          <h2 id="ai-provider-prompt-title" className={modalTitleClass}>请配置 AI 渠道</h2>
         </div>
-        <Button id="close-ai-provider-prompt" className="icon-button ghost" type="button" aria-label="关闭 AI 渠道配置提示" onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-ai-provider-prompt" className={modalCloseButtonClass} type="button" aria-label="关闭 AI 渠道配置提示" onClick={() => dispatchPopupModalAction('close')} unstyled>
           关闭
         </Button>
       </header>
       <AiSetupPrompt
-        className="modal-ai-setup-prompt"
+        className={modalAiSetupPromptClass}
         description="普通搜索已包含本地规则。语义搜索需要先配置 AI 渠道。"
-        descriptionClassName="modal-note"
+        descriptionClassName={modalNoteClass}
         titleClassName="sr-only"
         title="AI 渠道配置提示"
       />
-      <footer className="modal-actions">
-        <Button id="cancel-ai-provider-prompt" className="secondary-button" type="button" onClick={() => dispatchPopupModalAction('close')} unstyled>暂不配置</Button>
-        <Button id="open-ai-provider-settings" className="secondary-button primary-button" type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 渠道</Button>
+      <footer className={modalActionsClass}>
+        <Button id="cancel-ai-provider-prompt" className={modalSecondaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('close')} unstyled>暂不配置</Button>
+        <Button ref={settingsButtonRef} id="open-ai-provider-settings" className={modalPrimaryButtonClass} type="button" onClick={() => dispatchPopupModalAction('open-ai-settings')} unstyled>配置 AI 渠道</Button>
       </footer>
     </section>
   )
 }
 
-function EditBookmarkModal({ view }: { view: PopupModalsView['edit'] }) {
+function EditBookmarkModal({
+  folderSearchRef,
+  titleRef,
+  view
+}: {
+  folderSearchRef: RefObject<HTMLInputElement | null>
+  titleRef: RefObject<HTMLInputElement | null>
+  view: PopupModalsView['edit']
+}) {
   return (
-    <section id="edit-modal" className="modal-card t-modal is-open" aria-labelledby="edit-modal-title" tabIndex={-1}>
-      <header className="modal-header">
-        <div>
-          <p className="modal-eyebrow">编辑书签</p>
-          <h2 id="edit-modal-title">修改标题与网址</h2>
+    <section id="edit-modal" className={modalStandardCardClass} aria-labelledby="edit-modal-title" tabIndex={-1}>
+      <header className={modalHeaderClass}>
+        <div className={modalHeaderCopyClass}>
+          <p className={modalEyebrowClass}>编辑书签</p>
+          <h2 id="edit-modal-title" className={modalTitleClass}>修改标题与网址</h2>
         </div>
-        <Button id="close-edit-modal" className="icon-button ghost" type="button" aria-label="关闭编辑面板" disabled={view.closeDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-edit-modal" className={modalCloseButtonClass} type="button" aria-label="关闭编辑面板" disabled={view.closeDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>
           关闭
         </Button>
       </header>
-      <div className="modal-bookmark-card">
-        <p className="modal-card-label">来源路径</p>
-        <div className="modal-path-row">
-          <p id="edit-bookmark-path" className={['modal-card-path', view.pathChanged ? 'changed' : ''].filter(Boolean).join(' ')}>
+      <div className={modalBookmarkCardClass}>
+        <p className={modalCardLabelClass}>来源路径</p>
+        <div className={modalPathRowClass}>
+          <p id="edit-bookmark-path" className={cx(modalCardPathClass, 'flex-auto', view.pathChanged ? modalCardPathChangedClass : '')}>
             {view.path}
           </p>
           <Button
             id="edit-folder-picker-button"
-            className="secondary-button compact"
+            className={modalCompactButtonClass}
             type="button"
             aria-expanded={view.folderPickerOpen}
             aria-controls="edit-folder-picker"
@@ -209,8 +368,9 @@ function EditBookmarkModal({ view }: { view: PopupModalsView['edit'] }) {
           </Button>
         </div>
       </div>
-      <section id="edit-folder-picker" className={['edit-folder-picker', view.folderPickerOpen ? '' : 'hidden'].filter(Boolean).join(' ')} aria-label="选择新的来源路径">
+      <section id="edit-folder-picker" className={editFolderPickerClass} aria-label="选择新的来源路径" hidden={!view.folderPickerOpen}>
         <FolderSearch
+          inputRef={folderSearchRef}
           htmlFor="edit-folder-search-input"
           inputId="edit-folder-search-input"
           placeholder="搜索目标文件夹"
@@ -220,14 +380,15 @@ function EditBookmarkModal({ view }: { view: PopupModalsView['edit'] }) {
           action="edit-folder-query-change"
           disabled={view.folderSearchDisabled}
         />
-        <PopupFolderPickerHost id="edit-folder-list" className="modal-list compact" mode="edit" />
+        <PopupFolderPickerHost id="edit-folder-list" className={modalCompactListClass} mode="edit" />
       </section>
-      <div className="modal-form">
-        <label className="modal-field" htmlFor="edit-title-input">
-          <span className="modal-label">标题</span>
+      <div className={modalFormClass}>
+        <label className={modalFieldClass} htmlFor="edit-title-input">
+          <span className={modalLabelClass}>标题</span>
           <Input
+            ref={titleRef}
             id="edit-title-input"
-            className="modal-input"
+            className={modalInputClass}
             type="text"
             spellCheck={false}
             maxLength={512}
@@ -238,11 +399,11 @@ function EditBookmarkModal({ view }: { view: PopupModalsView['edit'] }) {
             unstyled
           />
         </label>
-        <label className="modal-field" htmlFor="edit-url-input">
-          <span className="modal-label">网址</span>
+        <label className={modalFieldClass} htmlFor="edit-url-input">
+          <span className={modalLabelClass}>网址</span>
           <Input
             id="edit-url-input"
-            className="modal-input"
+            className={modalInputClass}
             type="url"
             spellCheck={false}
             inputMode="url"
@@ -254,31 +415,37 @@ function EditBookmarkModal({ view }: { view: PopupModalsView['edit'] }) {
           />
         </label>
       </div>
-      <footer className="modal-actions">
-        <Button id="cancel-edit" className="secondary-button" type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
-        <Button id="save-edit" className="secondary-button primary-button" type="button" disabled={view.saveDisabled} onClick={() => dispatchPopupModalAction('save-edit')} unstyled>{view.saveLabel}</Button>
+      <footer className={modalActionsClass}>
+        <Button id="cancel-edit" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
+        <Button id="save-edit" className={modalPrimaryButtonClass} type="button" disabled={view.saveDisabled} onClick={() => dispatchPopupModalAction('save-edit')} unstyled>{view.saveLabel}</Button>
       </footer>
     </section>
   )
 }
 
-function DeleteBookmarkModal({ view }: { view: PopupModalsView['delete'] }) {
+function DeleteBookmarkModal({
+  cancelButtonRef,
+  view
+}: {
+  cancelButtonRef: RefObject<HTMLButtonElement | null>
+  view: PopupModalsView['delete']
+}) {
   return (
-    <section id="delete-modal" className="modal-card t-modal small is-open" aria-labelledby="delete-modal-title" tabIndex={-1}>
-      <header className="modal-header compact">
-        <div>
-          <p className="modal-eyebrow danger">删除确认</p>
-          <h2 id="delete-modal-title">确认删除该书签？</h2>
+    <section id="delete-modal" className={modalSmallCardClass} aria-labelledby="delete-modal-title" tabIndex={-1}>
+      <header className={modalHeaderCompactClass}>
+        <div className={modalHeaderCopyClass}>
+          <p className={modalDangerEyebrowClass}>删除确认</p>
+          <h2 id="delete-modal-title" className={modalTitleClass}>确认删除该书签？</h2>
         </div>
       </header>
-      <div className="modal-bookmark-card">
-        <p className="modal-card-label">即将删除</p>
-        <p id="delete-bookmark-title" className="modal-card-title">{view.title}</p>
-        <p id="delete-bookmark-path" className="modal-card-path">{view.path}</p>
+      <div className={modalBookmarkCardClass}>
+        <p className={modalCardLabelClass}>即将删除</p>
+        <p id="delete-bookmark-title" className={modalCardTitleClass}>{view.title}</p>
+        <p id="delete-bookmark-path" className={modalCardPathClass}>{view.path}</p>
       </div>
-      <footer className="modal-actions">
-        <Button id="cancel-delete" className="secondary-button" type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
-        <Button id="confirm-delete" className="danger-button" type="button" disabled={view.confirmDisabled} onClick={() => dispatchPopupModalAction('confirm-delete')} unstyled>{view.confirmLabel}</Button>
+      <footer className={modalActionsClass}>
+        <Button ref={cancelButtonRef} id="cancel-delete" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
+        <Button id="confirm-delete" className={modalDangerButtonClass} type="button" disabled={view.confirmDisabled} onClick={() => dispatchPopupModalAction('confirm-delete')} unstyled>{view.confirmLabel}</Button>
       </footer>
     </section>
   )
@@ -291,31 +458,39 @@ function handleEditInputKeydown(event: React.KeyboardEvent<HTMLInputElement>) {
   }
 }
 
-function focusInitialModalControl(active: PopupModalsView['active']) {
+interface ModalFocusRefs {
+  aiProviderSettingsRef: RefObject<HTMLElement | null>
+  cancelDeleteRef: RefObject<HTMLElement | null>
+  editTitleRef: RefObject<HTMLInputElement | null>
+  moveSearchRef: RefObject<HTMLElement | null>
+  smartFolderSearchRef: RefObject<HTMLElement | null>
+}
+
+function focusInitialModalControl(active: PopupModalsView['active'], refs: ModalFocusRefs) {
   if (active === 'move') {
-    focusElement('move-search-input')
+    focusElement(refs.moveSearchRef)
     return
   }
   if (active === 'smart-folder') {
-    focusElement('smart-folder-search-input')
+    focusElement(refs.smartFolderSearchRef)
     return
   }
   if (active === 'ai-provider') {
-    focusElement('open-ai-provider-settings')
+    focusElement(refs.aiProviderSettingsRef)
     return
   }
   if (active === 'edit') {
-    focusElement('edit-title-input', true)
+    focusElement(refs.editTitleRef, true)
     return
   }
   if (active === 'delete') {
-    focusElement('cancel-delete')
+    focusElement(refs.cancelDeleteRef)
   }
 }
 
-function focusElement(id: string, select = false) {
+function focusElement(ref: RefObject<HTMLElement | null>, select = false) {
   window.requestAnimationFrame(() => {
-    const element = document.getElementById(id)
+    const element = ref.current
     if (!(element instanceof HTMLElement)) {
       return
     }

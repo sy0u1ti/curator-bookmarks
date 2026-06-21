@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useState, type Ref } from 'react'
+import { cx } from '../../ui/base/utils'
 
 export interface BookmarkIconShellFavicon {
   fetchpriority: 'high' | 'low' | 'auto'
@@ -6,38 +7,66 @@ export interface BookmarkIconShellFavicon {
   src: string
 }
 
-export function BookmarkIconShell({
-  className = 'bookmark-icon-shell',
-  customIcon,
-  fallbackLabel,
-  favicon
-}: {
+export interface BookmarkIconShellProps {
   className?: string
   customIcon: boolean
   fallbackLabel: string
   favicon: BookmarkIconShellFavicon
-}) {
-  const [missing, setMissing] = useState(false)
+  ref?: Ref<HTMLSpanElement>
+}
 
-  useEffect(() => {
-    setMissing(false)
-  }, [favicon.src])
+const BOOKMARK_ICON_SHELL_CLASS = 'bookmark-icon-shell relative grid h-[var(--icon-shell-size)] w-[var(--icon-shell-size)] place-items-center overflow-hidden rounded-[var(--ui-radius-control)] border border-[rgb(var(--bookmark-card-rgb)/0.12)] bg-[rgba(0,0,0,0.34)] shadow-none [transition:var(--bookmark-icon-transition,border-color_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard))] group-hover/bookmark-tile:border-[rgb(var(--bookmark-card-rgb)/0.12)] group-hover/bookmark-tile:bg-[rgba(0,0,0,0.34)] group-focus-visible/bookmark-tile:border-[rgb(var(--bookmark-card-rgb)/0.12)] group-focus-visible/bookmark-tile:bg-[rgba(0,0,0,0.34)] group-active/bookmark-tile:border-[var(--bookmark-icon-active-border,rgb(var(--bookmark-card-rgb)/0.16))] group-active/bookmark-tile:bg-[var(--bookmark-icon-active-bg,rgba(0,0,0,0.48))] group-active/bookmark-tile:duration-[60ms]'
+const BOOKMARK_FAVICON_CLASS = 'bookmark-favicon relative z-[1] h-[calc(var(--icon-shell-size)*0.66)] w-[calc(var(--icon-shell-size)*0.66)] rounded-[5px] object-contain [-webkit-user-drag:none]'
+const BOOKMARK_CUSTOM_FAVICON_CLASS = 'custom-icon h-[calc(var(--icon-shell-size)*0.78)] w-[calc(var(--icon-shell-size)*0.78)] rounded-[7px] object-cover'
+const BOOKMARK_FALLBACK_CLASS = 'bookmark-fallback absolute h-[calc(var(--icon-shell-size)*0.78)] w-[calc(var(--icon-shell-size)*0.78)] place-items-center rounded-[7px] bg-[rgba(245,245,247,0.08)] text-[13px] font-extrabold leading-none text-[rgba(245,245,247,0.86)]'
+
+export function BookmarkIconShell({
+  className,
+  customIcon,
+  fallbackLabel,
+  favicon,
+  ref
+}: BookmarkIconShellProps) {
+  const [fallback, setFallback] = useState(() => ({
+    missing: false,
+    src: favicon.src
+  }))
+  const missing = fallback.src === favicon.src ? fallback.missing : false
+  if (fallback.src !== favicon.src) {
+    setFallback({
+      missing: false,
+      src: favicon.src
+    })
+  }
 
   return (
-    <span className={missing ? `${className} favicon-missing` : className} aria-hidden="true">
+    <span
+      className={cx(BOOKMARK_ICON_SHELL_CLASS, className, missing && 'favicon-missing')}
+      aria-hidden="true"
+      ref={ref}
+    >
       <img
-        className={customIcon ? 'bookmark-favicon custom-icon' : 'bookmark-favicon'}
+        className={cx(BOOKMARK_FAVICON_CLASS, !missing && 'block', customIcon && BOOKMARK_CUSTOM_FAVICON_CLASS)}
         src={favicon.src}
         alt=""
         draggable={false}
+        hidden={missing}
         loading={favicon.loading}
         decoding="async"
         fetchPriority={favicon.fetchpriority}
         onError={() => {
-          setMissing(true)
+          setFallback((current) => {
+            if (current.src === favicon.src && current.missing) {
+              return current
+            }
+            return {
+              missing: true,
+              src: favicon.src
+            }
+          })
         }}
       />
-      <span className="bookmark-fallback">{fallbackLabel}</span>
+      <span className={cx(BOOKMARK_FALLBACK_CLASS, missing && 'grid')} hidden={!missing}>{fallbackLabel}</span>
     </span>
   )
 }

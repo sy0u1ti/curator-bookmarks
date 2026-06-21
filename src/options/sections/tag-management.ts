@@ -7,11 +7,8 @@ import {
   type BookmarkTagUsageStat
 } from '../../shared/tag-management.js'
 import type { BookmarkRecord } from '../../shared/types.js'
-import { buildTagCloudItems } from '../../shared/tag-cloud.js'
-import { dom } from '../shared-options/dom.js'
-import { startTagCloudPhysics, stopTagCloudPhysics } from './tag-cloud-runtime.js'
-import { renderTagManagementCloudIsland } from '../components/TagManagementCloudIsland.js'
-import { renderTagManagementControlsIsland } from '../components/TagManagementControlsIsland.js'
+import { publishTagManagementControls } from '../components/tag-management-controls-store.js'
+import { publishTagManagementCloud } from '../components/tag-management-cloud-store.js'
 
 export interface TagManagementSummary {
   totalTags: number
@@ -78,40 +75,16 @@ export function renderTagManagementSection({
   status?: string
   loading?: boolean
 }): void {
-  if (!dom.tagManagementResults) {
-    return
-  }
-  stopActiveTagCloud()
-
   const summary = buildTagUsageSummary(index, bookmarks)
-  if (dom.tagManagementControls) {
-    renderTagManagementControlsIsland(dom.tagManagementControls, {
-      loading,
-      manualTags: summary.manualTags,
-      status: status || (loading ? '正在读取标签统计...' : ''),
-      taggedBookmarks: summary.taggedBookmarks,
-      totalTags: summary.totalTags
-    })
-  }
-
-  const cloud = renderTagCloud(summary.stats)
-  if (cloud) {
-    startTagCloudPhysics(cloud)
-  }
-}
-
-function renderTagCloud(stats: BookmarkTagUsageStat[]): HTMLElement | null {
-  const widthPx = Math.max(960, Math.floor(dom.tagManagementResults?.clientWidth || 0))
-  const heightPx = Math.min(820, Math.max(520, Math.floor(window.innerHeight * 0.68)))
-  const items = buildTagCloudItems(stats, {
-    widthPx,
-    heightPx
+  publishTagManagementControls({
+    loading,
+    manualTags: summary.manualTags,
+    status: status || (loading ? '正在读取标签统计...' : ''),
+    taggedBookmarks: summary.taggedBookmarks,
+    totalTags: summary.totalTags
   })
 
-  return renderTagManagementCloudIsland(dom.tagManagementResults, items)
-}
-
-export function stopActiveTagCloud(): void {
-  const cloud = dom.tagManagementResults?.querySelector<HTMLElement>('[data-tag-cloud-root]')
-  stopTagCloudPhysics(cloud)
+  publishTagManagementCloud({
+    stats: summary.stats
+  })
 }

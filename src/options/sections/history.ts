@@ -5,17 +5,12 @@ import {
   managerState,
   normalizeHistoryRunScope
 } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
 import {
   compareByPathTitle,
   formatDateTime
 } from '../shared-options/utils.js'
 import { HISTORY_LOG_LIMIT } from '../shared-options/constants.js'
-import {
-  renderAvailabilityHistoryLogIsland,
-  renderAvailabilityRecoveredHistoryIsland
-} from '../components/AvailabilityHistoryIsland.js'
-import { renderAvailabilityHistoryControlsIsland } from '../components/AvailabilityHistoryControlsIsland.js'
+import { publishAvailabilityHistory } from '../components/availability-history-store.js'
 
 function normalizeHistoryResultArray(entries) {
   if (!Array.isArray(entries)) {
@@ -349,31 +344,18 @@ export function upsertAvailabilityHistoryEntry(result) {
   managerState.currentHistoryEntries[existingIndex] = nextEntry
 }
 
-function renderHistoryLogList(callbacks) {
-  if (!dom.availabilityHistoryLogList) {
-    return
-  }
-
+function getAvailabilityHistoryLogState(callbacks) {
   const scopeRuns = getHistoryRunsForScope(callbacks)
-  dom.availabilityHistoryLogList.classList.toggle(
-    'hidden',
-    managerState.historyLogsCollapsed && scopeRuns.length > 0
-  )
-
-  if (managerState.historyLogsCollapsed && scopeRuns.length > 0) {
-    return
-  }
 
   if (!scopeRuns.length) {
-    renderAvailabilityHistoryLogIsland(
-      dom.availabilityHistoryLogList,
-      [],
-      managerState.historyRuns.length
+    return {
+      collapsed: false,
+      emptyCopy: managerState.historyRuns.length
         ? '当前范围还没有检测日志，切换范围或完成一次检测后会在这里展示。'
         : '完成检测后，这里会保留最近多次检测日志。',
-      1
-    )
-    return
+      maxAbnormalCount: 1,
+      runs: []
+    }
   }
 
   const maxAbnormalCount = Math.max(
@@ -381,51 +363,47 @@ function renderHistoryLogList(callbacks) {
     1
   )
 
-  renderAvailabilityHistoryLogIsland(
-    dom.availabilityHistoryLogList,
-    scopeRuns,
-    '',
-    maxAbnormalCount
-  )
+  return {
+    collapsed: managerState.historyLogsCollapsed,
+    emptyCopy: '',
+    maxAbnormalCount,
+    runs: scopeRuns
+  }
 }
 
 export function renderAvailabilityHistory(callbacks) {
-  if (!dom.availabilityHistoryControls) {
-    return
-  }
-
   const scopeMeta = callbacks.getCurrentAvailabilityScopeMeta()
   const scopeRuns = getHistoryRunsForScope(callbacks)
   const latestRun = scopeRuns[0] || null
-  renderAvailabilityHistoryControlsIsland(dom.availabilityHistoryControls, {
-    clearDisabled:
-      availabilityState.deleting ||
-      availabilityState.running ||
-      availabilityState.retestingSelection ||
-      managerState.historyRuns.length === 0,
-    logCount: scopeRuns.length,
-    logToggleDisabled: scopeRuns.length === 0,
-    logToggleLabel: managerState.historyLogsCollapsed ? '展开日志' : '收起日志',
-    metrics: {
-      newCount: managerState.historyNewCount,
-      persistentCount: managerState.historyPersistentCount,
-      recoveredCount: managerState.historyRecoveredResults.length
+
+  publishAvailabilityHistory({
+    controls: {
+      clearDisabled:
+        availabilityState.deleting ||
+        availabilityState.running ||
+        availabilityState.retestingSelection ||
+        managerState.historyRuns.length === 0,
+      logCount: scopeRuns.length,
+      logToggleDisabled: scopeRuns.length === 0,
+      logToggleLabel: managerState.historyLogsCollapsed ? '展开日志' : '收起日志',
+      metrics: {
+        newCount: managerState.historyNewCount,
+        persistentCount: managerState.historyPersistentCount,
+        recoveredCount: managerState.historyRecoveredResults.length
+      },
+      subtitle: getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun),
+      timestamp: managerState.historyLastRunAt ? formatDateTime(managerState.historyLastRunAt) : '尚无历史'
     },
-    subtitle: getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun),
-    timestamp: managerState.historyLastRunAt ? formatDateTime(managerState.historyLastRunAt) : '尚无历史'
+    log: getAvailabilityHistoryLogState(callbacks),
+    recovered: {
+      results: managerState.historyRecoveredResults,
+      emptyCopy: managerState.historyLastRunAt
+        ? '最近一次完整检测未发现已恢复书签。'
+        : managerState.historyRuns.length
+          ? '当前范围还没有已恢复记录。'
+          : '完成检测后，这里会展示相较于上一次已恢复的书签。'
+    },
   })
-
-  renderHistoryLogList(callbacks)
-
-  renderAvailabilityRecoveredHistoryIsland(
-    dom.availabilityHistoryRecoveredList,
-    managerState.historyRecoveredResults,
-    managerState.historyLastRunAt
-      ? '最近一次完整检测未发现已恢复书签。'
-      : managerState.historyRuns.length
-        ? '当前范围还没有已恢复记录。'
-        : '完成检测后，这里会展示相较于上一次已恢复的书签。'
-  )
 }
 
 function getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun): string {

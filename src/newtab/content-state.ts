@@ -88,6 +88,7 @@ export interface NewTabPageView {
   hasSearch: boolean
   iconVerticalCenter: string
   modules: NewTabPageModule[]
+  primaryCollisionOffsetY: number
   type: 'page'
 }
 
@@ -1064,6 +1065,7 @@ export function createNewTabPage({ modules }: NewTabPageOptions): NewTabPageView
     hasSearch: modules.some((module) => module.id === 'search'),
     iconVerticalCenter: bookmarkModule ? String(bookmarkModule.iconVerticalCenter) : 'false',
     modules,
+    primaryCollisionOffsetY: 0,
     type: 'page'
   }
 }

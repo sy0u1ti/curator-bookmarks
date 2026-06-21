@@ -412,7 +412,7 @@ export function preloadDashboardFavicon(url: string): Promise<HTMLImageElement> 
     image.decoding = 'async'
     image.addEventListener('load', () => resolve(image), { once: true })
     image.addEventListener('error', () => reject(new Error('dashboard favicon warmup failed')), { once: true })
-    image.setAttribute('src', url)
+    image.src = url
   })
 }
 

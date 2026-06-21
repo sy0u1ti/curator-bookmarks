@@ -1,65 +1,103 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { Button, DialogOverlay, DialogPanel, Input } from '../../ui'
-
-const modalKeyByBackdropId: Record<string, string> = {
-  'delete-modal-backdrop': 'delete',
-  'confirm-modal-backdrop': 'confirm',
-  'move-modal-backdrop': 'move',
-  'scope-modal-backdrop': 'scope'
-}
+import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
+import { Button } from '../../ui/base/Button.js'
+import { DialogOverlay, DialogPanel } from '../../ui/base/Dialog.js'
+import { Input } from '../../ui/base/Input.js'
+import { cx } from '../../ui/base/utils.js'
+import { handleFolderPickerAction, handleOptionsModalAction } from '../options-controller'
+import { FolderPickerResults } from './FolderPickerResults.js'
+import { getOptionsFocusTarget } from './options-focus-target-store.js'
+import {
+  OPTIONS_MODAL_ACTIONS_CLASS,
+  OPTIONS_MODAL_BACKDROP_CLASS,
+  OPTIONS_MODAL_BUTTON_CLASS,
+  OPTIONS_MODAL_COPY_CLASS,
+  OPTIONS_MODAL_DANGER_BUTTON_CLASS,
+  OPTIONS_MODAL_EYEBROW_CLASS,
+  OPTIONS_MODAL_EYEBROW_TONE_CLASS,
+  OPTIONS_MODAL_PANEL_CLASS,
+  OPTIONS_MODAL_PRIMARY_BUTTON_CLASS,
+  OPTIONS_MODAL_RESULTS_CLASS,
+  OPTIONS_MODAL_SEARCH_CLASS,
+  OPTIONS_MODAL_SEARCH_INPUT_CLASS,
+  OPTIONS_MODAL_SEARCH_LABEL_CLASS,
+  OPTIONS_MODAL_TITLE_CLASS,
+  OPTIONS_MODAL_WIDE_PANEL_CLASS
+} from './options-modal-classes.js'
+import { useOptionsModalsState } from './options-modals-store.js'
+import type { OptionsModalKey } from './options-modals-types.js'
 
 function ModalBackdrop({
-  id,
   labelledBy,
   describedBy,
-  className = 'options-modal',
+  className = OPTIONS_MODAL_PANEL_CLASS,
+  finalFocusId,
+  initialFocusRef,
+  modal,
+  open,
   children
 }: {
-  id: string
   labelledBy: string
   describedBy?: string
   className?: string
+  finalFocusId?: string
+  initialFocusRef?: RefObject<HTMLElement | null>
+  modal: OptionsModalKey
+  open: boolean
   children: ReactNode
 }) {
-  const [open, setOpen] = useState(false)
-  const modalKey = modalKeyByBackdropId[id]
+  const wasOpenRef = useRef(open)
 
   useEffect(() => {
-    const handleState = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string; open?: boolean }>).detail
-      if (!detail || detail.key !== modalKey) {
-        return
-      }
-      setOpen(Boolean(detail.open))
+    const wasOpen = wasOpenRef.current
+    wasOpenRef.current = open
+    if (!wasOpen || open || !finalFocusId) {
+      return
     }
 
-    window.addEventListener('options:managed-modal-state', handleState)
-    return () => {
-      window.removeEventListener('options:managed-modal-state', handleState)
-    }
-  }, [modalKey])
+    window.requestAnimationFrame(() => {
+      const target = getOptionsFocusTarget(finalFocusId)
+      if (!target) {
+        return
+      }
+
+      const activeElement = document.activeElement
+      const activeIsConnected = activeElement instanceof HTMLElement && activeElement.isConnected
+      const activeIsHidden = activeElement instanceof HTMLElement && !activeElement.offsetParent
+      if (activeElement === target || (activeIsConnected && !activeIsHidden)) {
+        return
+      }
+
+      target.focus()
+    })
+  }, [finalFocusId, open])
 
   return (
     <DialogOverlay
-      id={id}
-      className={open ? 'options-modal-backdrop' : 'options-modal-backdrop hidden'}
+      className={OPTIONS_MODAL_BACKDROP_CLASS}
+      hidden={!open}
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen && open) {
-          window.dispatchEvent(new CustomEvent('options:managed-modal-close', { detail: { key: modalKey } }))
-          return
+          handleOptionsModalAction({ action: 'dismiss', modal })
         }
-        setOpen(nextOpen)
       }}
+      modal={open}
       aria-hidden={open ? 'false' : 'true'}
       disablePointerDismissal
+      onClick={(event) => {
+        if (open && event.target === event.currentTarget) {
+          handleOptionsModalAction({ action: 'dismiss', modal })
+        }
+      }}
     >
       <DialogPanel
         className={className}
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
-        initialFocus={false}
-        finalFocus={false}
+        initialFocus={() => initialFocusRef?.current || true}
+        finalFocus={() => {
+          return getOptionsFocusTarget(finalFocusId) || false
+        }}
         unanimated
       >
         {children}
@@ -68,95 +106,160 @@ function ModalBackdrop({
   )
 }
 
+function modalEyebrowClass(tone?: string) {
+  return cx(OPTIONS_MODAL_EYEBROW_CLASS, tone ? OPTIONS_MODAL_EYEBROW_TONE_CLASS[tone] : undefined)
+}
+
+function confirmButtonClass(tone: 'danger' | 'warning') {
+  return cx(
+    OPTIONS_MODAL_BUTTON_CLASS,
+    tone === 'danger' ? OPTIONS_MODAL_DANGER_BUTTON_CLASS : OPTIONS_MODAL_PRIMARY_BUTTON_CLASS
+  )
+}
+
 export function OptionsModals() {
+  const modals = useOptionsModalsState()
+  const cancelDeleteRef = useRef<HTMLElement | null>(null)
+  const cancelConfirmRef = useRef<HTMLElement | null>(null)
+  const moveSearchRef = useRef<HTMLInputElement | null>(null)
+  const scopeSearchRef = useRef<HTMLInputElement | null>(null)
+
   return (
     <>
-      <ModalBackdrop id="delete-modal-backdrop" labelledBy="delete-modal-title" describedBy="delete-modal-copy">
+      <ModalBackdrop
+        labelledBy="delete-modal-title"
+        describedBy="delete-modal-copy"
+        initialFocusRef={cancelDeleteRef}
+        modal="delete"
+        open={modals.delete.open}
+      >
         <>
-          <p className="options-section-label danger">删除</p>
-          <h2 id="delete-modal-title">批量删除高置信异常书签？</h2>
-          <p id="delete-modal-copy" className="options-modal-copy">
-            这些书签会从 Chrome 书签中移除，并直接从当前高置信异常列表里消失；低置信异常结果会保留。
+          <p className={modalEyebrowClass('danger')}>删除</p>
+          <h2 id="delete-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量删除高置信异常书签？</h2>
+          <p id="delete-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
+            {modals.delete.copy}
           </p>
-          <div className="options-modal-actions">
+          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
             <Button
-              id="cancel-delete-modal"
-              className="options-button secondary"
+              className={OPTIONS_MODAL_BUTTON_CLASS}
+              ref={cancelDeleteRef}
               type="button"
               variant="secondary"
               aria-label="取消批量删除高置信异常书签"
+              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'delete' })}
             >
               取消
             </Button>
             <Button
-              id="confirm-delete-modal"
-              className="options-button danger"
+              className={cx(OPTIONS_MODAL_BUTTON_CLASS, OPTIONS_MODAL_DANGER_BUTTON_CLASS)}
               type="button"
               variant="danger"
               aria-label="确认批量删除高置信异常书签"
+              disabled={modals.delete.confirmDisabled}
+              focusableWhenDisabled={modals.delete.confirmDisabled}
+              onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'delete' })}
             >
-              确认删除
+              {modals.delete.confirmLabel}
             </Button>
           </div>
         </>
       </ModalBackdrop>
 
-      <ModalBackdrop id="confirm-modal-backdrop" labelledBy="confirm-modal-title" describedBy="confirm-modal-copy">
+      <ModalBackdrop
+        labelledBy="confirm-modal-title"
+        describedBy="confirm-modal-copy"
+        initialFocusRef={cancelConfirmRef}
+        modal="confirm"
+        open={modals.confirm.open}
+      >
         <>
-          <p id="confirm-modal-label" className="options-section-label danger">确认</p>
-          <h2 id="confirm-modal-title">确认操作？</h2>
-          <p id="confirm-modal-copy" className="options-modal-copy">请确认是否继续。</p>
-          <div className="options-modal-actions">
+          <p className={modalEyebrowClass(modals.confirm.tone)}>
+            {modals.confirm.label}
+          </p>
+          <h2 id="confirm-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>{modals.confirm.title}</h2>
+          <p id="confirm-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>{modals.confirm.copy}</p>
+          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
             <Button
-              id="cancel-confirm-modal"
-              className="options-button secondary"
+              className={OPTIONS_MODAL_BUTTON_CLASS}
+              ref={cancelConfirmRef}
               type="button"
               variant="secondary"
               aria-label="取消当前确认操作"
+              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'confirm' })}
             >
-              取消
+              {modals.confirm.cancelLabel}
             </Button>
             <Button
-              id="confirm-modal-confirm"
-              className="options-button danger"
+              className={confirmButtonClass(modals.confirm.tone)}
               type="button"
-              variant="danger"
+              variant={modals.confirm.tone === 'danger' ? 'danger' : 'primary'}
               aria-label="确认当前操作"
+              onClick={() => handleOptionsModalAction({ action: 'confirm', modal: 'confirm' })}
             >
-              确认
+              {modals.confirm.confirmLabel}
             </Button>
           </div>
         </>
       </ModalBackdrop>
 
-      <ModalBackdrop id="move-modal-backdrop" labelledBy="move-modal-title" describedBy="move-modal-copy" className="options-modal options-modal-wide">
+      <ModalBackdrop
+        labelledBy="move-modal-title"
+        describedBy="move-modal-copy"
+        className={OPTIONS_MODAL_WIDE_PANEL_CLASS}
+        initialFocusRef={moveSearchRef}
+        finalFocusId={modals.move.finalFocusId}
+        modal="move"
+        open={modals.move.open}
+      >
         <>
-          <p className="options-section-label">Move</p>
-          <h2 id="move-modal-title">批量移动书签</h2>
-          <p id="move-modal-copy" className="options-modal-copy">
-            请选择一个目标文件夹，所选书签会被一起移动到该位置。
+          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>Move</p>
+          <h2 id="move-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量移动书签</h2>
+          <p id="move-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
+            {modals.move.copy}
           </p>
-          <label className="options-search">
-            <span className="options-search-label">搜索目标文件夹</span>
+          <label className={OPTIONS_MODAL_SEARCH_CLASS} htmlFor="move-search-input">
+            <span className={OPTIONS_MODAL_SEARCH_LABEL_CLASS}>搜索目标文件夹</span>
             <Input
               id="move-search-input"
-              className="options-search-input"
+              ref={moveSearchRef}
+              className={OPTIONS_MODAL_SEARCH_INPUT_CLASS}
               type="search"
               placeholder="搜索文件夹名称或路径"
               aria-label="搜索移动目标文件夹"
               aria-controls="move-folder-results"
+              value={modals.move.query}
+              onValueChange={(query) => handleOptionsModalAction({
+                action: 'search-change',
+                modal: 'move',
+                query
+              })}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+                  return
+                }
+                event.preventDefault()
+                handleFolderPickerAction({
+                  action: 'search-keydown',
+                  key: event.key,
+                  kind: 'move'
+                })
+              }}
             />
           </label>
-          <div id="move-folder-results" className="detect-results modal-results" role="listbox" aria-label="移动目标文件夹">
-            <div className="detect-empty">正在加载文件夹列表。</div>
-          </div>
-          <div className="options-modal-actions">
+          <ul
+            id="move-folder-results"
+            className={OPTIONS_MODAL_RESULTS_CLASS}
+            aria-label="移动目标文件夹"
+          >
+            <FolderPickerResults kind="move" searchInputRef={moveSearchRef} />
+          </ul>
+          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
             <Button
-              id="cancel-move-modal"
-              className="options-button secondary"
+              className={OPTIONS_MODAL_BUTTON_CLASS}
               type="button"
               variant="secondary"
               aria-label="取消批量移动书签"
+              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'move' })}
             >
               取消
             </Button>
@@ -164,34 +267,64 @@ export function OptionsModals() {
         </>
       </ModalBackdrop>
 
-      <ModalBackdrop id="scope-modal-backdrop" labelledBy="scope-modal-title" describedBy="scope-modal-copy" className="options-modal options-modal-wide">
+      <ModalBackdrop
+        labelledBy="scope-modal-title"
+        describedBy="scope-modal-copy"
+        className={OPTIONS_MODAL_WIDE_PANEL_CLASS}
+        initialFocusRef={scopeSearchRef}
+        finalFocusId={modals.scope.finalFocusId}
+        modal="scope"
+        open={modals.scope.open}
+      >
         <>
-          <p className="options-section-label">Folder Filter</p>
-          <h2 id="scope-modal-title">选择筛选文件夹</h2>
-          <p id="scope-modal-copy" className="options-modal-copy">
-            请选择一个文件夹作为当前筛选范围，可直接搜索文件夹名称或路径。
+          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>Folder Filter</p>
+          <h2 id="scope-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>选择筛选文件夹</h2>
+          <p id="scope-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
+            {modals.scope.copy}
           </p>
-          <label className="options-search">
-            <span className="options-search-label">搜索文件夹</span>
+          <label className={OPTIONS_MODAL_SEARCH_CLASS} htmlFor="scope-search-input">
+            <span className={OPTIONS_MODAL_SEARCH_LABEL_CLASS}>搜索文件夹</span>
             <Input
               id="scope-search-input"
-              className="options-search-input"
+              ref={scopeSearchRef}
+              className={OPTIONS_MODAL_SEARCH_INPUT_CLASS}
               type="search"
               placeholder="搜索文件夹名称或路径"
               aria-label="搜索筛选文件夹"
               aria-controls="scope-folder-results"
+              value={modals.scope.query}
+              onValueChange={(query) => handleOptionsModalAction({
+                action: 'search-change',
+                modal: 'scope',
+                query
+              })}
+              onKeyDown={(event) => {
+                if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+                  return
+                }
+                event.preventDefault()
+                handleFolderPickerAction({
+                  action: 'search-keydown',
+                  key: event.key,
+                  kind: 'scope'
+                })
+              }}
             />
           </label>
-          <div id="scope-folder-results" className="detect-results modal-results" role="listbox" aria-label="筛选文件夹">
-            <div className="detect-empty">正在加载文件夹列表。</div>
-          </div>
-          <div className="options-modal-actions">
+          <ul
+            id="scope-folder-results"
+            className={OPTIONS_MODAL_RESULTS_CLASS}
+            aria-label="筛选文件夹"
+          >
+            <FolderPickerResults kind="scope" searchInputRef={scopeSearchRef} />
+          </ul>
+          <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
             <Button
-              id="cancel-scope-modal"
-              className="options-button secondary"
+              className={OPTIONS_MODAL_BUTTON_CLASS}
               type="button"
               variant="secondary"
               aria-label="关闭筛选文件夹弹窗"
+              onClick={() => handleOptionsModalAction({ action: 'cancel', modal: 'scope' })}
             >
               关闭
             </Button>

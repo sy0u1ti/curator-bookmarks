@@ -27,5 +27,7 @@ REPOSITORY_REVIEW_SUGGESTIONS.md
 .superpowers/
 docs/
 test/
-scripts/
+scripts/*
+!scripts/run-tests.mjs
+!scripts/smoke-extension.mjs
 playwright-visual.config.mjs

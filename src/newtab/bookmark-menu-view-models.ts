@@ -1,4 +1,5 @@
 export type BookmarkMenuActionIcon = 'trash' | 'refresh' | 'save' | 'plus' | 'copy' | 'pin'
+export type BookmarkIconMode = 'website' | 'custom'
 
 export interface BookmarkMenuTextFieldViewModel {
   disabled: boolean
@@ -26,9 +27,11 @@ export interface BookmarkEditMenuViewModel {
   actions: BookmarkMenuActionViewModel[]
   error: string
   fields: [BookmarkMenuTextFieldViewModel, BookmarkMenuTextFieldViewModel]
-  iconMode: 'website' | 'custom'
+  iconMode: BookmarkIconMode
   iconModeDisabled: boolean
-  onIconModeChange: (value: string) => void | Promise<void>
+  onCustomIconFileSelect: (file: File | null) => void | Promise<void>
+  onCloseRequest: () => void
+  onIconModeChange: (value: BookmarkIconMode) => void | Promise<void>
   status: string
   statusTone?: 'warning' | ''
   x: number
@@ -40,6 +43,7 @@ export interface BookmarkAddMenuViewModel {
   error: string
   expanded: boolean
   fields: [BookmarkMenuTextFieldViewModel, BookmarkMenuTextFieldViewModel]
+  onCloseRequest: () => void
   onExpand: () => void | Promise<void>
   x: number
   y: number

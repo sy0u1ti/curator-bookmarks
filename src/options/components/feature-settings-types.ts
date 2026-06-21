@@ -1,5 +1,16 @@
 export type FeatureSwitchStatusTone = 'muted' | 'success' | 'warning'
 
+export type FeatureSettingKey =
+  | 'allowRemoteParsing'
+  | 'autoAnalyzeBookmarks'
+  | 'autoMoveToRecommendedFolder'
+  | 'tagOnlyNoAutoMove'
+
+export interface FeatureSettingsChangeDetail {
+  checked: boolean
+  key: FeatureSettingKey
+}
+
 export interface FeatureSwitchItemState {
   checked: boolean
   disabled: boolean
@@ -7,7 +18,6 @@ export interface FeatureSwitchItemState {
   key: string
   label: string
   status?: string
-  statusId?: string
   statusTone?: FeatureSwitchStatusTone
 }
 

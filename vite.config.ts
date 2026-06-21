@@ -20,7 +20,6 @@ export default defineConfig(({ mode }) => {
               return 'vendor-pinyin'
             }
             if (
-              id.includes('/src/options/sections/dashboard-runtime.ts') ||
               id.includes('/src/options/sections/dashboard-virtual.ts') ||
               id.includes('/src/options/sections/dashboard-favicons.ts')
             ) {

@@ -1,3 +1,4 @@
+@import "../shared/ui-refresh.css";
 @import "./tokens.css";
 @import "./tailwind.css";
 
@@ -9,30 +10,91 @@ body {
   position: relative;
 }
 
-.t-modal {
-  transform-origin: center;
-  transform: scale(var(--modal-scale));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--modal-open-dur) var(--modal-ease),
-    opacity   var(--modal-open-dur) var(--modal-ease);
-  will-change: transform, opacity;
-}
-.t-modal.is-open {
-  transform: scale(1);
-  opacity: 1;
-  pointer-events: auto;
-}
-.t-modal.is-closing {
-  transform: scale(var(--modal-scale-close));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--modal-close-dur) var(--modal-ease),
-    opacity   var(--modal-close-dur) var(--modal-ease);
+@keyframes auto-analyze-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .t-modal { transition: none !important; }
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+  }
+}
+
+@keyframes popup-skeleton-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: var(--pulse-min);
+  }
+}
+
+@keyframes popup-skeleton-shimmer {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+@keyframes cb-search-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.35;
+    transform: scale(0.65);
+  }
+}
+
+@keyframes tag-cloud-word-enter {
+  to { opacity: 1; }
+}
+
+@keyframes dot-matrix-spiral {
+  0% { opacity: 0; }
+  4% { opacity: 1; }
+  26% { opacity: 0.08; }
+  100% { opacity: 0; }
+}
+
+@keyframes dot-matrix-bar {
+  0% { opacity: 0; }
+  8% { opacity: 1; }
+  36% { opacity: 0.05; }
+  100% { opacity: 0; }
 }

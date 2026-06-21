@@ -1,5 +1,4 @@
 import { availabilityState } from './state.js'
-import { cancelExitMotion, closeWithExitMotion } from '../../shared/motion.js'
 
 interface PathTitleComparable {
   path?: string
@@ -39,35 +38,4 @@ export function formatDateTime(timestamp: number): string {
     second: '2-digit',
     hour12: false
   }).format(timestamp)
-}
-
-export async function setModalHidden(backdrop: HTMLElement | null | undefined, open: boolean): Promise<void> {
-  if (!backdrop) {
-    return
-  }
-
-  if (open) {
-    cancelExitMotion(backdrop)
-    backdrop.classList.remove('hidden', 'is-closing')
-    backdrop.setAttribute('aria-hidden', 'false')
-    return
-  }
-
-  if (!open) {
-    const active = document.activeElement
-    if (active && active !== document.body && backdrop.contains(active)) {
-      const activeElement = active as HTMLElement
-      activeElement.blur()
-    }
-  }
-
-  backdrop.setAttribute('aria-hidden', 'true')
-
-  if (backdrop.classList.contains('hidden') || backdrop.classList.contains('is-closing')) {
-    return
-  }
-
-  await closeWithExitMotion(backdrop, 'is-closing', () => {
-    backdrop.classList.add('hidden')
-  })
 }

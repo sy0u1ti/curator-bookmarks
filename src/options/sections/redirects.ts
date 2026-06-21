@@ -10,7 +10,6 @@ import {
   createEmptyRedirectCache,
   normalizeHistoryRunScope
 } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
 import {
   isInteractionLocked,
   syncSelectionSet,
@@ -18,9 +17,9 @@ import {
 } from '../shared-options/utils.js'
 import { isRedirectedNavigation } from './classifier.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
-import { renderResultsPaginationIsland } from '../components/ResultsPaginationIsland.js'
-import { renderRedirectResultsIsland } from '../components/RedirectResultsIsland.js'
-import { renderRedirectControlsIsland } from '../components/RedirectControlsIsland.js'
+import { publishResultsPagination } from '../components/results-pagination-store.js'
+import { publishRedirectControls } from '../components/redirect-controls-store.js'
+import { publishRedirectResults } from '../components/redirect-results-store.js'
 
 const REDIRECT_RESULTS_PAGE_SIZE = 25
 
@@ -218,10 +217,6 @@ export function removeRedirectIdsFromState(bookmarkIds) {
 }
 
 export function renderRedirectSection(callbacks) {
-  if (!dom.redirectResults) {
-    return
-  }
-
   const redirectSection = getRedirectSectionState(callbacks)
   const redirectResults = redirectSection.results
 
@@ -230,14 +225,12 @@ export function renderRedirectSection(callbacks) {
     new Set(redirectResults.map((result) => String(result.id)))
   )
 
-  if (dom.redirectControls) {
-    renderRedirectControlsIsland(dom.redirectControls, {
-      count: redirectResults.length,
-      locked: isInteractionLocked(),
-      selectedCount: managerState.selectedRedirectIds.size,
-      subtitle: getRedirectResultsSubtitle(redirectSection, redirectResults.length)
-    })
-  }
+  publishRedirectControls({
+    count: redirectResults.length,
+    locked: isInteractionLocked(),
+    selectedCount: managerState.selectedRedirectIds.size,
+    subtitle: getRedirectResultsSubtitle(redirectSection, redirectResults.length)
+  })
 
   if (!redirectResults.length) {
     const emptyMessage = availabilityState.lastCompletedAt
@@ -245,7 +238,7 @@ export function renderRedirectSection(callbacks) {
       : redirectSection.useCachedResults && redirectSection.savedAt
         ? '当前没有可直接更新的重定向缓存结果。完成新的检测后，这里会重新生成待更新列表。'
         : '完成一次检测后，这里会展示可一键更新的重定向书签。'
-    renderRedirectResultsIsland(dom.redirectResults, {
+    publishRedirectResults({
       emptyMessage,
       locked: isInteractionLocked(),
       results: [],
@@ -256,7 +249,7 @@ export function renderRedirectSection(callbacks) {
   }
 
   const pageResults = getRedirectPageResults(redirectResults)
-  renderRedirectResultsIsland(dom.redirectResults, {
+  publishRedirectResults({
     emptyMessage: '',
     locked: isInteractionLocked(),
     results: pageResults,
@@ -275,39 +268,36 @@ function getRedirectResultsSubtitle(redirectSection, resultCount): string {
   return '当前展示的是本次设置页会话中的重定向检测结果；刷新页面后，这里的待更新列表会回退到本地缓存结果。'
 }
 
-export function handleRedirectResultsClick(event, callbacks) {
-  const selectionControl = event.target.closest('[data-redirect-select]')
-  if (selectionControl) {
-    const bookmarkId = String(selectionControl.getAttribute('data-bookmark-id') || '').trim()
-    if (
-      isInteractionLocked() ||
-      !bookmarkId ||
-      selectionControl.hasAttribute('disabled') ||
-      selectionControl.getAttribute('aria-disabled') === 'true'
-    ) {
-      return
-    }
-
-    if (managerState.selectedRedirectIds.has(bookmarkId)) {
-      managerState.selectedRedirectIds.delete(bookmarkId)
-    } else {
-      managerState.selectedRedirectIds.add(bookmarkId)
-    }
-    callbacks.renderAvailabilitySection()
+export function toggleRedirectResultSelection(bookmarkId, checked, callbacks) {
+  const normalizedBookmarkId = String(bookmarkId || '').trim()
+  if (isInteractionLocked() || !normalizedBookmarkId) {
     return
   }
 
-  const updateButton = event.target.closest('[data-redirect-update]')
-  if (!updateButton || isInteractionLocked()) {
+  if (checked === true) {
+    managerState.selectedRedirectIds.add(normalizedBookmarkId)
+  } else if (checked === false) {
+    managerState.selectedRedirectIds.delete(normalizedBookmarkId)
+  } else if (managerState.selectedRedirectIds.has(normalizedBookmarkId)) {
+    managerState.selectedRedirectIds.delete(normalizedBookmarkId)
+  } else {
+    managerState.selectedRedirectIds.add(normalizedBookmarkId)
+  }
+  callbacks.renderAvailabilitySection()
+}
+
+export function updateRedirectResult(bookmarkId, callbacks) {
+  const normalizedBookmarkId = String(bookmarkId || '').trim()
+  if (isInteractionLocked()) {
     return
   }
 
-  const bookmarkId = String(updateButton.getAttribute('data-redirect-update') || '').trim()
-  if (!bookmarkId) {
+  const bookmarkIdValue = normalizedBookmarkId
+  if (!bookmarkIdValue) {
     return
   }
 
-  updateRedirectEntries([bookmarkId], callbacks)
+  updateRedirectEntries([bookmarkIdValue], callbacks)
 }
 
 export function clearRedirectSelection(callbacks) {
@@ -511,29 +501,21 @@ function getRedirectPage(totalCount) {
 }
 
 function renderRedirectPagination(totalCount) {
-  if (!dom.redirectPagination) {
-    return
-  }
-
   const totalPages = Math.max(1, Math.ceil(Math.max(0, totalCount) / REDIRECT_RESULTS_PAGE_SIZE))
   const page = getRedirectPage(totalCount)
   const start = totalCount ? (page - 1) * REDIRECT_RESULTS_PAGE_SIZE + 1 : 0
   const end = Math.min(totalCount, page * REDIRECT_RESULTS_PAGE_SIZE)
 
-  renderResultsPaginationIsland(
-    dom.redirectPagination,
-    totalPages > 1
-      ? {
-          kind: 'redirects',
-          label: '重定向结果',
-          page,
-          totalPages,
-          start,
-          end,
-          totalCount
-        }
-      : null
-  )
+  publishResultsPagination('redirects', {
+    end,
+    kind: 'redirects',
+    label: '重定向结果',
+    page,
+    start,
+    totalCount,
+    totalPages,
+    visible: totalPages > 1
+  })
 }
 
 function formatRedirectImpactList(results) {

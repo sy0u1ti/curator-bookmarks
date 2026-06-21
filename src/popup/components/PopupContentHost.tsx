@@ -7,6 +7,8 @@ import {
 import { PopupContent } from './PopupContent'
 import type { PopupContentViewModel } from './PopupViewModels'
 
+const contentHostClass = 'relative z-0 block h-full min-h-0 overflow-hidden'
+
 const INITIAL_CONTENT_STATE: PopupContentViewModel = {
   loading: true,
   rows: [],
@@ -15,14 +17,15 @@ const INITIAL_CONTENT_STATE: PopupContentViewModel = {
 
 export function PopupContentHost() {
   const contentRef = useRef<HTMLDivElement | null>(null)
+  const mainListRef = useRef<HTMLUListElement | null>(null)
+  const activeResultRef = useRef<HTMLLIElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const shouldRevealActiveResultRef = useRef(false)
   const [state, setState] = useState<PopupContentViewModel>(INITIAL_CONTENT_STATE)
 
   useEffect(() => {
     return subscribePopupContentChange((detail) => {
-      const root = contentRef.current
-      const scrollContainer = root?.querySelector<HTMLElement>('[data-popup-main-list]') || root
+      const scrollContainer = mainListRef.current || contentRef.current
 
       pendingScrollTopRef.current = detail.preserveScroll && scrollContainer
         ? scrollContainer.scrollTop
@@ -33,12 +36,11 @@ export function PopupContentHost() {
   }, [])
 
   useLayoutEffect(() => {
-    const root = contentRef.current
-    if (!root) {
+    const scrollContainer = mainListRef.current || contentRef.current
+    if (!scrollContainer) {
       return
     }
 
-    const scrollContainer = root.querySelector<HTMLElement>('[data-popup-main-list]') || root
     const pendingScrollTop = pendingScrollTopRef.current
     if (pendingScrollTop !== null) {
       scrollContainer.scrollTop = pendingScrollTop
@@ -52,14 +54,16 @@ export function PopupContentHost() {
     }
 
     shouldRevealActiveResultRef.current = false
-    const activeResult = root.querySelector<HTMLElement>('[data-result-index].active')
+    const activeResult = activeResultRef.current
     if (!activeResult) {
       return
     }
 
     const maxScrollTop = Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight)
-    const resultIndex = Number(activeResult.getAttribute('data-result-index'))
-    if (resultIndex === 0) {
+    const activeResultRowIndex = (state.mainRows || state.rows).findIndex((row) => {
+      return row.kind !== 'folder' && Boolean(row.active)
+    })
+    if (activeResultRowIndex === 0) {
       scrollContainer.scrollTop = 0
       return
     }
@@ -81,10 +85,11 @@ export function PopupContentHost() {
   return (
     <div
       id="content"
-      className="content"
+      className={contentHostClass}
       ref={contentRef}
     >
       <PopupContent
+        activeResultRef={activeResultRef}
         handlers={{
           onBookmarkOpen: (bookmarkId) => {
             dispatchPopupContentAction({ action: 'open-bookmark', bookmarkId })
@@ -95,13 +100,14 @@ export function PopupContentHost() {
           onFolderFilter: (folderId) => {
             dispatchPopupContentAction({ action: 'filter-folder', folderId })
           },
-          onMenuAction: (bookmarkId, menuAction) => {
-            dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction })
+          onMenuAction: (bookmarkId, menuAction, returnFocusElement) => {
+            dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction, returnFocusElement })
           },
           onResultHover: (index) => {
             dispatchPopupContentResultHover(index)
           }
         }}
+        mainListRef={mainListRef}
         state={state}
       />
     </div>

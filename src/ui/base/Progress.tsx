@@ -3,7 +3,6 @@ import type { CSSProperties, HTMLAttributes } from 'react'
 import { cx } from './utils'
 
 export interface ProgressProps extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
-  id?: string
   value?: number | null
   max?: number
   label?: string
@@ -17,7 +16,6 @@ export interface ProgressProps extends Omit<HTMLAttributes<HTMLDivElement>, 'chi
 }
 
 export function Progress({
-  id,
   value = null,
   max = 100,
   label,
@@ -48,7 +46,6 @@ export function Progress({
         trackClassName
       )}>
         <BaseProgress.Indicator
-          id={id}
           className={unstyled ? indicatorClassName : cx(
             'base-progress-indicator h-full rounded-full bg-curator-text transition-transform',
             indicatorClassName

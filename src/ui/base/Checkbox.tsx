@@ -17,8 +17,6 @@ type BaseCheckboxRootProps = ComponentPropsWithoutRef<typeof BaseCheckbox.Root>
 export type CheckboxControlProps = Omit<BaseCheckboxRootProps, 'className' | 'children' | 'inputRef'> & {
   className?: string
   indicatorClassName?: string
-  inputAttributes?: Record<string, string | number | boolean | null | undefined>
-  inputClassName?: string
   inputRef?: Ref<HTMLInputElement>
   syncInputState?: boolean
   unstyled?: boolean
@@ -37,8 +35,6 @@ export function CheckboxControl({
   defaultChecked,
   disabled: disabledProp,
   indicatorClassName,
-  inputAttributes,
-  inputClassName,
   inputRef,
   onCheckedChange,
   syncInputState = false,
@@ -72,44 +68,6 @@ export function CheckboxControl({
     }
     onCheckedChange?.(nextChecked, eventDetails)
   }
-
-  useLayoutEffect(() => {
-    const input = inputElementRef.current
-    if (!input) {
-      return undefined
-    }
-
-    const previousClassName = input.className
-    const previousAttributes = new Map<string, string | null>()
-
-    if (inputClassName !== undefined) {
-      input.className = inputClassName
-    }
-
-    if (inputAttributes) {
-      for (const [name, value] of Object.entries(inputAttributes)) {
-        previousAttributes.set(name, input.getAttribute(name))
-        if (value === false || value === null || value === undefined) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, value === true ? '' : String(value))
-        }
-      }
-    }
-
-    return () => {
-      if (inputClassName !== undefined) {
-        input.className = previousClassName
-      }
-      for (const [name, value] of previousAttributes) {
-        if (value === null) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, value)
-        }
-      }
-    }
-  }, [inputAttributes, inputClassName])
 
   useLayoutEffect(() => {
     if (!syncInputState) {

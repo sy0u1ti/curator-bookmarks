@@ -13,10 +13,9 @@ import {
   type FolderCleanupSuggestion
 } from '../../shared/folder-cleanup.js'
 import { availabilityState, aiNamingState, folderCleanupState, managerState } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
 import { formatDateTime, isInteractionLocked } from '../shared-options/utils.js'
-import { renderFolderCleanupIsland } from '../components/FolderCleanupIsland.js'
-import { renderFolderCleanupControlsIsland } from '../components/FolderCleanupControlsIsland.js'
+import { publishFolderCleanupControls } from '../components/folder-cleanup-controls-store.js'
+import { publishFolderCleanupResults } from '../components/folder-cleanup-results-store.js'
 
 interface FolderCleanupCallbacks {
   confirm: (options?: {
@@ -127,38 +126,32 @@ async function runFolderCleanupAnalysis(
 }
 
 export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
-  if (!dom.folderCleanupResults) {
-    return
-  }
-
   const suggestions = folderCleanupState.suggestions.filter((suggestion) => (
     !folderCleanupState.executedSuggestionIds.has(suggestion.id)
   ))
   const summary = summarizeSuggestions(suggestions)
   const locked = isInteractionLocked() || folderCleanupState.running || folderCleanupState.executing
 
-  if (dom.folderCleanupControls) {
-    renderFolderCleanupControlsIsland(dom.folderCleanupControls, {
-      analyzeDisabled: locked || availabilityState.catalogLoading,
-      analyzeLabel: folderCleanupState.running ? '扫描中...' : '重新扫描',
-      countLabel: `${suggestions.length} 条建议`,
-      resultsSubtitle: getResultsSubtitle(),
-      status: {
-        label: getStatusText(suggestions.length),
-        tone: folderCleanupState.running ? 'warning' : suggestions.length ? 'success' : 'muted'
-      },
-      summary: {
-        deep: summary.deep,
-        empty: summary.empty,
-        large: summary.large,
-        sameName: summary.sameName,
-        total: suggestions.length
-      }
-    })
-  }
+  publishFolderCleanupControls({
+    analyzeDisabled: locked || availabilityState.catalogLoading,
+    analyzeLabel: folderCleanupState.running ? '扫描中...' : '重新扫描',
+    countLabel: `${suggestions.length} 条建议`,
+    resultsSubtitle: getResultsSubtitle(),
+    status: {
+      label: getStatusText(suggestions.length),
+      tone: folderCleanupState.running ? 'warning' : suggestions.length ? 'success' : 'muted'
+    },
+    summary: {
+      deep: summary.deep,
+      empty: summary.empty,
+      large: summary.large,
+      sameName: summary.sameName,
+      total: suggestions.length
+    }
+  })
 
   if (availabilityState.catalogLoading) {
-    renderFolderCleanupIsland(dom.folderCleanupResults, {
+    publishFolderCleanupResults({
       emptyMessage: '正在读取书签树，请稍候…',
       locked,
       selectedSuggestionId: folderCleanupState.selectedSuggestionId,
@@ -169,7 +162,7 @@ export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
   }
 
   if (!folderCleanupState.rootNode) {
-    renderFolderCleanupIsland(dom.folderCleanupResults, {
+    publishFolderCleanupResults({
       emptyMessage: '暂未读取到书签树，请刷新页面后重试。',
       locked,
       selectedSuggestionId: folderCleanupState.selectedSuggestionId,
@@ -179,7 +172,7 @@ export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
     return
   }
 
-  renderFolderCleanupIsland(dom.folderCleanupResults, {
+  publishFolderCleanupResults({
     emptyMessage: folderCleanupState.statusMessage || '当前未发现需要清理的文件夹。',
     locked,
     selectedSuggestionId: folderCleanupState.selectedSuggestionId,
@@ -188,25 +181,13 @@ export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
   })
 }
 
-export async function handleFolderCleanupClick(event: Event, callbacks: FolderCleanupCallbacks) {
-  const target = event.target
-  if (!(target instanceof Element)) {
+export async function executeFolderCleanupAction(suggestionId, callbacks: FolderCleanupCallbacks) {
+  if (folderCleanupState.running || folderCleanupState.executing || isInteractionLocked()) {
     return
   }
 
-  const actionButton = target.closest('[data-folder-cleanup-action]') as HTMLElement | null
-  const undoButton = target.closest('[data-folder-cleanup-undo-split]') as HTMLElement | null
-  if (undoButton) {
-    await handleSplitUndoClick(callbacks)
-    return
-  }
-
-  if (!actionButton || folderCleanupState.running || folderCleanupState.executing || isInteractionLocked()) {
-    return
-  }
-
-  const suggestionId = String(actionButton.getAttribute('data-folder-cleanup-action') || '')
-  const suggestion = folderCleanupState.suggestions.find((item) => item.id === suggestionId)
+  const normalizedSuggestionId = String(suggestionId || '').trim()
+  const suggestion = folderCleanupState.suggestions.find((item) => item.id === normalizedSuggestionId)
   if (!suggestion || !suggestion.canExecute) {
     return
   }
@@ -517,21 +498,19 @@ function getFolderCleanupActionContext(value: unknown, fallback: string): string
   return safeValue || fallback
 }
 
-export function handleFolderCleanupPreviewClick(event: Event, callbacks: FolderCleanupCallbacks) {
-  const target = event.target
-  if (!(target instanceof Element)) {
+export function toggleFolderCleanupPreview(suggestionId, callbacks: FolderCleanupCallbacks) {
+  const normalizedSuggestionId = String(suggestionId || '').trim()
+  if (!normalizedSuggestionId) {
     return
   }
 
-  const previewButton = target.closest('[data-folder-cleanup-preview]') as HTMLElement | null
-  if (!previewButton) {
-    return
-  }
-
-  const suggestionId = String(previewButton.getAttribute('data-folder-cleanup-preview') || '')
   folderCleanupState.selectedSuggestionId =
-    folderCleanupState.selectedSuggestionId === suggestionId ? '' : suggestionId
+    folderCleanupState.selectedSuggestionId === normalizedSuggestionId ? '' : normalizedSuggestionId
   renderFolderCleanupSection(callbacks)
+}
+
+export async function undoFolderCleanupSplitAction(callbacks: FolderCleanupCallbacks) {
+  await handleSplitUndoClick(callbacks)
 }
 
 function summarizeSuggestions(suggestions: FolderCleanupSuggestion[]) {

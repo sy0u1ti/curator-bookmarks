@@ -2,9 +2,8 @@ import { Slider as BaseSlider } from '@base-ui/react/slider'
 import {
   useCallback,
   useLayoutEffect,
-  useMemo,
+  useReducer,
   useRef,
-  useState,
   type ComponentPropsWithoutRef,
   type Ref
 } from 'react'
@@ -22,8 +21,6 @@ export type SliderControlProps = Omit<
   defaultValue?: number | string
   disabled?: boolean
   indicatorClassName?: string
-  inputAttributes?: Record<string, string | number | boolean | null | undefined>
-  inputClassName?: string
   inputRef?: Ref<HTMLInputElement>
   max?: number | string
   min?: number | string
@@ -38,6 +35,16 @@ export type SliderControlProps = Omit<
   value?: number | string
 }
 
+interface SliderInternalState {
+  disabled: boolean
+  max: number
+  min: number
+  step: number
+  value: number
+}
+
+type SliderInternalStatePatch = Partial<SliderInternalState>
+
 export function SliderControl({
   ariaLabel,
   className,
@@ -46,8 +53,6 @@ export function SliderControl({
   disabled: disabledProp,
   id,
   indicatorClassName,
-  inputAttributes,
-  inputClassName,
   inputRef,
   max: maxProp,
   min: minProp,
@@ -66,11 +71,13 @@ export function SliderControl({
   const initialMax = normalizeNumber(maxProp, 100)
   const initialStep = normalizeNumber(stepProp, 1)
   const initialValue = normalizeNumber(valueProp ?? defaultValue, initialMin)
-  const [valueState, setValueState] = useState(initialValue)
-  const [minState, setMinState] = useState(initialMin)
-  const [maxState, setMaxState] = useState(initialMax)
-  const [stepState, setStepState] = useState(initialStep)
-  const [disabledState, setDisabledState] = useState(() => Boolean(disabledProp))
+  const [internalState, updateInternalState] = useReducer(sliderInternalStateReducer, {
+    disabled: Boolean(disabledProp),
+    max: initialMax,
+    min: initialMin,
+    step: initialStep,
+    value: initialValue
+  })
   const inputElementRef = useRef<HTMLInputElement | null>(null)
   const dispatchingLegacyEventRef = useRef(false)
   const valueRef = useRef(initialValue)
@@ -87,12 +94,12 @@ export function SliderControl({
   const minControlled = minProp !== undefined && !syncInputState
   const maxControlled = maxProp !== undefined && !syncInputState
   const stepControlled = stepProp !== undefined && !syncInputState
-  const currentMin = minControlled ? normalizeNumber(minProp, minState) : minState
-  const currentMax = maxControlled ? normalizeNumber(maxProp, maxState) : maxState
-  const currentStep = Math.max(stepControlled ? normalizeNumber(stepProp, stepState) : stepState, Number.EPSILON)
-  const currentValue = valueProp !== undefined ? normalizeNumber(valueProp, valueState) : valueState
+  const currentMin = minControlled ? normalizeNumber(minProp, internalState.min) : internalState.min
+  const currentMax = maxControlled ? normalizeNumber(maxProp, internalState.max) : internalState.max
+  const currentStep = Math.max(stepControlled ? normalizeNumber(stepProp, internalState.step) : internalState.step, Number.EPSILON)
+  const currentValue = valueProp !== undefined ? normalizeNumber(valueProp, internalState.value) : internalState.value
   const resolvedMax = currentMax === currentMin ? currentMax + currentStep : currentMax
-  const disabled = disabledProp ?? disabledState
+  const disabled = disabledProp ?? internalState.disabled
 
   valueRef.current = currentValue
   minRef.current = currentMin
@@ -104,19 +111,6 @@ export function SliderControl({
   maxControlledRef.current = maxControlled
   stepControlledRef.current = stepControlled
   disabledControlledRef.current = disabledProp !== undefined
-
-  const resolvedInputAttributes = useMemo(() => {
-    const attributes: Record<string, string | number | boolean | null | undefined> = {
-      ...inputAttributes
-    }
-    if (id) {
-      attributes.id = id
-    }
-    if (ariaLabel) {
-      attributes['aria-label'] = ariaLabel
-    }
-    return attributes
-  }, [ariaLabel, id, inputAttributes])
 
   const handleInputRef = useCallback((node: HTMLInputElement | null) => {
     inputElementRef.current = node
@@ -155,7 +149,7 @@ export function SliderControl({
       return
     }
     if (valueProp === undefined) {
-      setValueState(nextValue)
+      updateInternalState({ value: nextValue })
     }
     syncInputValue(nextValue)
     onValueChange?.(nextValue, eventDetails)
@@ -172,42 +166,6 @@ export function SliderControl({
     onValueCommitted?.(nextValue, eventDetails)
     dispatchInputEvent('change')
   }
-
-  useLayoutEffect(() => {
-    const input = inputElementRef.current
-    if (!input) {
-      return undefined
-    }
-
-    const previousClassName = input.className
-    const previousAttributes = new Map<string, string | null>()
-
-    if (inputClassName !== undefined) {
-      input.className = inputClassName
-    }
-
-    for (const [name, attributeValue] of Object.entries(resolvedInputAttributes)) {
-      previousAttributes.set(name, input.getAttribute(name))
-      if (attributeValue === false || attributeValue === null || attributeValue === undefined) {
-        input.removeAttribute(name)
-      } else {
-        input.setAttribute(name, attributeValue === true ? '' : String(attributeValue))
-      }
-    }
-
-    return () => {
-      if (inputClassName !== undefined) {
-        input.className = previousClassName
-      }
-      for (const [name, attributeValue] of previousAttributes) {
-        if (attributeValue === null) {
-          input.removeAttribute(name)
-        } else {
-          input.setAttribute(name, attributeValue)
-        }
-      }
-    }
-  }, [inputClassName, resolvedInputAttributes])
 
   useLayoutEffect(() => {
     if (!syncInputState) {
@@ -255,7 +213,7 @@ export function SliderControl({
         const normalizedValue = normalizeNumber(nextValue, valueRef.current)
         if (!valueControlledRef.current && valueRef.current !== normalizedValue) {
           valueRef.current = normalizedValue
-          setValueState(normalizedValue)
+          updateInternalState({ value: normalizedValue })
         }
       }
     })
@@ -270,7 +228,7 @@ export function SliderControl({
         const normalizedDisabled = Boolean(nextDisabled)
         if (!disabledControlledRef.current && disabledRef.current !== normalizedDisabled) {
           disabledRef.current = normalizedDisabled
-          setDisabledState(normalizedDisabled)
+          updateInternalState({ disabled: normalizedDisabled })
         }
       }
     })
@@ -285,7 +243,7 @@ export function SliderControl({
         const normalizedMax = normalizeNumber(nextMax, maxRef.current)
         if (!maxControlledRef.current && maxRef.current !== normalizedMax) {
           maxRef.current = normalizedMax
-          setMaxState(normalizedMax)
+          updateInternalState({ max: normalizedMax })
         }
       }
     })
@@ -300,7 +258,7 @@ export function SliderControl({
         const normalizedMin = normalizeNumber(nextMin, minRef.current)
         if (!minControlledRef.current && minRef.current !== normalizedMin) {
           minRef.current = normalizedMin
-          setMinState(normalizedMin)
+          updateInternalState({ min: normalizedMin })
         }
       }
     })
@@ -315,7 +273,7 @@ export function SliderControl({
         const normalizedStep = normalizeNumber(nextStep, stepRef.current)
         if (!stepControlledRef.current && stepRef.current !== normalizedStep) {
           stepRef.current = normalizedStep
-          setStepState(normalizedStep)
+          updateInternalState({ step: normalizedStep })
         }
       }
     })
@@ -375,6 +333,23 @@ export function SliderControl({
       </BaseSlider.Control>
     </BaseSlider.Root>
   )
+}
+
+function sliderInternalStateReducer(
+  state: SliderInternalState,
+  patch: SliderInternalStatePatch
+): SliderInternalState {
+  const next = {
+    ...state,
+    ...patch
+  }
+  return (
+    next.disabled === state.disabled &&
+    next.max === state.max &&
+    next.min === state.min &&
+    next.step === state.step &&
+    next.value === state.value
+  ) ? state : next
 }
 
 function normalizeNumber(value: number | string | null | undefined, fallback: number): number {

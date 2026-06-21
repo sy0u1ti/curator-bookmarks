@@ -1,6 +1,7 @@
-import type { CSSProperties } from 'react'
-import { Button } from '../../ui/primitives/Button'
+import type { CSSProperties, RefObject } from 'react'
+import { Button } from '../../ui/base/Button'
 import { Icon, type IconName } from '../../ui/icons/Icon'
+import { cx } from '../../ui/base/utils'
 import { HighlightedText } from './HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
 import type {
@@ -16,7 +17,7 @@ export interface PopupContentActionHandlers {
   onBookmarkOpen?: (bookmarkId: string) => void
   onEmptyAction?: (action: string) => void
   onFolderFilter?: (folderId: string) => void
-  onMenuAction?: (bookmarkId: string, action: string) => void
+  onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   onResultHover?: (index: number) => void
 }
 
@@ -39,11 +40,124 @@ const POPUP_CONTENT_SKELETON_BOOKMARK_ROWS = [
   { width: 0.74, url: 0.56, path: 0.5 }
 ] as const
 
+const workspaceShellClass =
+  'relative h-full min-h-0'
+const workspaceLayerClass = 'absolute inset-0 min-h-0'
+const workspaceSkeletonLayerClass = cx(
+  workspaceLayerClass,
+  'z-[1] opacity-100 transition-[opacity,filter] duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none',
+  '[&>*]:animate-[popup-skeleton-pulse_var(--pulse-dur)_ease-in-out_var(--pulse-count)] motion-reduce:[&>*]:animate-none'
+)
+const workspaceSkeletonHiddenClass = 'pointer-events-none opacity-0 blur-[var(--reveal-blur)]'
+const workspaceContentLayerClass = cx(
+  workspaceLayerClass,
+  'z-[2] opacity-0 transition-[opacity,filter] duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none'
+)
+const workspaceContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
+const workspaceContentReadyClass = 'opacity-100'
+const workspaceClass =
+  'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5'
+const workspacePlaceholderClass = 'pointer-events-none'
+const paneClass =
+  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[var(--popup-line)] bg-[#101114]'
+const mainPaneClass = cx(paneClass, 'bg-[#101113]')
+const paneHeaderClass =
+  'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-[var(--popup-line)] px-[13px] text-xs font-[760] text-[#dce1eb]'
+const paneMetaClass = 'whitespace-nowrap text-xs font-medium text-[var(--popup-faint)]'
+const folderTreeClass =
+  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:#333741_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+const mainListClass =
+  'm-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:#333741_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+const folderRowClass = 'relative block min-h-[34px]'
+const mainRowClass =
+  'relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0'
+const folderCardClass = [
+  'grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-[var(--popup-text)] outline-none',
+  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'hover:border-[#272a32] hover:bg-[#191b20] focus-visible:border-[#272a32] focus-visible:bg-[#191b20] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
+].join(' ')
+const folderCardActiveClass = 'border-[#272a32] bg-[#191b20]'
+const folderBranchClass =
+  'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-[#a7afbf]'
+const rootFolderBranchClass = 'rounded-full border border-white/30'
+const folderMainClass =
+  'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-[7px]'
+const folderTitleClass =
+  'min-w-0 truncate text-left text-xs font-bold leading-tight text-[var(--popup-text)]'
+const folderCountClass =
+  'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-bold leading-tight text-[#8f9bb0] [font-variant-numeric:tabular-nums]'
+const folderCountActiveClass = 'text-[#d8f1df]'
+const listButtonClass = [
+  'flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-[var(--popup-text)] outline-none',
+  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'hover:border-[#272a32] hover:bg-[#191b20] focus-visible:border-[#272a32] focus-visible:bg-[#191b20] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
+].join(' ')
+const listButtonBaseStyle: CSSProperties = {
+  padding: '8px 13px'
+}
+const rowMainClass = 'grid min-w-0 gap-0.5'
+const rowTitleClass =
+  'min-w-0 truncate text-left text-[13px] font-[760] leading-tight text-[var(--popup-text)]'
+const rowSubtitleClass =
+  'min-w-0 truncate text-left text-xs font-medium leading-tight text-[var(--popup-faint)]'
+const rowPathClass = cx(rowSubtitleClass, 'text-[#858d9d]')
+const resultCopyClass = 'grid min-w-0 gap-0.5'
+const resultPathShellClass = 'block min-w-0'
+const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
+const resultMatchTokenClass =
+  'inline-flex min-h-[18px] items-center rounded-[5px] border border-[#30343d] bg-[#181a1f] px-1.5 text-[10px] font-semibold text-[#aeb6c5]'
+const rowActionsClass = 'inline-flex items-center justify-end gap-1.5 pr-0.5'
+const rowActionButtonClass = [
+  'inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#3a3f49] bg-[#20232a] text-white outline-none',
+  'transition-[border-color,background,color,transform,opacity] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'hover:border-[#3a3f49] hover:bg-[#20232a] focus-visible:border-[#3a3f49] focus-visible:bg-[#20232a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'active:scale-95 disabled:cursor-default disabled:opacity-45'
+].join(' ')
+const rowActionDangerClass =
+  'hover:border-[rgba(255,138,130,0.42)] hover:text-[#ffaaa4] focus-visible:border-[rgba(255,138,130,0.42)] focus-visible:text-[#ffaaa4]'
+const compactStateClass =
+  'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-[var(--popup-faint)]'
+const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
+const skeletonBarClass =
+  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.055),rgba(255,255,255,0.12),rgba(255,255,255,0.055))] bg-[length:220%_100%] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] animate-[popup-skeleton-shimmer_1500ms_ease-in-out_infinite] motion-reduce:animate-none'
+const skeletonDotClass =
+  'block h-7 w-7 overflow-hidden rounded-md bg-[linear-gradient(90deg,rgba(255,255,255,0.055),rgba(255,255,255,0.12),rgba(255,255,255,0.055))] bg-[length:220%_100%] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] animate-[popup-skeleton-shimmer_1500ms_ease-in-out_infinite] motion-reduce:animate-none'
+const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
+const skeletonFolderCountClass =
+  cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')
+const skeletonMetaClass = cx(skeletonBarClass, 'h-2.5 w-[54px]')
+const skeletonBookmarkTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-[124px]')
+const skeletonBookmarkUrlClass = cx(skeletonBarClass, 'h-2 min-w-[150px] opacity-75')
+const skeletonBookmarkPathClass = cx(skeletonBarClass, 'h-2 min-w-[92px] opacity-60')
+const searchSkeletonClass = 'grid w-[min(100%,390px)] gap-3 self-stretch'
+const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-white/[0.018] px-[9px] py-2'
+
+function getFolderDepthStyle(depth: number): CSSProperties {
+  const normalizedDepth = Math.max(0, Number(depth) || 0)
+  return { paddingLeft: `${8 + normalizedDepth * 16}px` }
+}
+
+function getBookmarkButtonStyle(active?: boolean): CSSProperties {
+  if (!active) {
+    return listButtonBaseStyle
+  }
+
+  return {
+    ...listButtonBaseStyle,
+    backgroundColor: 'rgba(245,245,247,0.08)',
+    boxShadow: '0 0 18px rgba(245,245,247,0.10)'
+  }
+}
+
 export function PopupContent({
+  activeResultRef,
   handlers,
+  mainListRef,
   state
 }: {
+  activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
+  mainListRef?: RefObject<HTMLUListElement | null>
   state: PopupContentViewModel
 }) {
   const sidebarRows = state.sidebarRows || state.rows.filter((row): row is PopupContentFolderRowViewModel => row.kind === 'folder')
@@ -55,24 +169,20 @@ export function PopupContent({
 
   return (
     <div
-      className={[
-        'bookmark-workspace-shell',
-        't-skel',
-        isLoading ? 'is-loading' : 'is-revealed'
-      ].join(' ')}
+      className={workspaceShellClass}
       data-state={isLoading ? 'loading' : 'ready'}
       aria-busy={isLoading ? 'true' : 'false'}
     >
-      <div className="bookmark-workspace-skeleton t-skel-skeleton is-pulsing" aria-hidden="true">
+      <div className={cx(workspaceSkeletonLayerClass, isLoading ? '' : workspaceSkeletonHiddenClass)} aria-hidden="true">
         <PopupContentSkeleton mode={mode} title={title} />
       </div>
-      <div className="bookmark-workspace-content t-skel-content">
-        <div className={['bookmark-workspace', `bookmark-workspace-${mode}`].join(' ')}>
-          <aside className="bookmark-sidebar" aria-label="文件夹树">
-            <header className="bookmark-pane-head">
+      <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : workspaceContentReadyClass)}>
+        <div className={workspaceClass}>
+          <aside className={paneClass} aria-label="文件夹树">
+            <header className={paneHeaderClass}>
               <span>全部文件夹</span>
             </header>
-            <div className="bookmark-folder-tree" role="tree">
+            <div className={folderTreeClass} role="tree">
               {sidebarRows.map((row) => (
                 <PopupFolderRow
                   onFolderFilter={handlers?.onFolderFilter}
@@ -82,23 +192,23 @@ export function PopupContent({
               ))}
             </div>
           </aside>
-          <section className="bookmark-main-pane" aria-label={title}>
-            <header className="bookmark-pane-head bookmark-main-head">
+          <section className={mainPaneClass} aria-label={title}>
+            <header className={paneHeaderClass}>
               <span>{title}</span>
-              <span className="bookmark-pane-meta">{meta}</span>
+              <span className={paneMetaClass}>{meta}</span>
             </header>
-            <ul className="bookmark-main-list" data-popup-main-list>
+            <ul className={mainListClass} ref={mainListRef}>
               {state.mainState ? (
                 <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
               ) : mainRows.length ? (
                 mainRows.map((row) => {
                   if (row.kind === 'bookmark') {
-                    return <PopupBookmarkRow handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
+                    return <PopupBookmarkRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
                   }
-                  return <PopupSearchResultRow handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
+                  return <PopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
                 })
               ) : (
-                <li className="state-panel compact">{state.emptyLabel || '暂无可展示书签'}</li>
+                <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
               )}
             </ul>
           </section>
@@ -116,49 +226,49 @@ function PopupContentSkeleton({
   title: string
 }) {
   return (
-    <div className={['bookmark-workspace', `bookmark-workspace-${mode}`, 'bookmark-workspace-placeholder'].join(' ')}>
-      <aside className="bookmark-sidebar" aria-label="文件夹树加载占位">
-        <header className="bookmark-pane-head">
+    <div className={cx(workspaceClass, workspacePlaceholderClass)}>
+      <aside className={paneClass} aria-label="文件夹树加载占位">
+        <header className={paneHeaderClass}>
           <span>全部文件夹</span>
         </header>
-        <div className="bookmark-folder-tree" role="presentation">
+        <div className={folderTreeClass} role="presentation">
           {POPUP_CONTENT_SKELETON_FOLDER_ROWS.map((row, index) => (
             <div
-              className="tree-row folder-row skeleton-folder-row"
+              className={folderRowClass}
               style={{ '--depth': row.depth } as CSSProperties}
               key={`folder-skeleton:${index}`}
             >
-              <div className="folder-card popup-list-row sidebar-folder-card">
-                <span className="folder-tree-branch" aria-hidden="true"></span>
-                <span className="row-main folder-row-main">
-                  <span className="popup-skeleton-bar skeleton-folder-title" style={{ '--skeleton-width': row.width } as CSSProperties}></span>
-                  <span className="popup-skeleton-bar skeleton-folder-count" style={{ '--skeleton-width': row.count } as CSSProperties}></span>
+              <div className={cx(folderCardClass, 'cursor-default')} style={getFolderDepthStyle(row.depth)}>
+                <span className={folderBranchClass} aria-hidden="true"></span>
+                <span className={folderMainClass}>
+                  <span className={skeletonFolderTitleClass} style={{ '--skeleton-width': row.width } as CSSProperties}></span>
+                  <span className={skeletonFolderCountClass} style={{ '--skeleton-width': row.count } as CSSProperties}></span>
                 </span>
               </div>
             </div>
           ))}
         </div>
       </aside>
-      <section className="bookmark-main-pane" aria-label={`${title}加载占位`}>
-        <header className="bookmark-pane-head bookmark-main-head">
+      <section className={mainPaneClass} aria-label={`${title}加载占位`}>
+        <header className={paneHeaderClass}>
           <span>{title}</span>
-          <span className="bookmark-pane-meta">
-            <span className="popup-skeleton-bar skeleton-meta"></span>
+          <span className={paneMetaClass}>
+            <span className={skeletonMetaClass}></span>
           </span>
         </header>
-        <div className="bookmark-main-list" role="presentation">
+        <div className={mainListClass} role="presentation">
           {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row, index) => (
-            <div className="tree-row bookmark-row skeleton-bookmark-row" key={`bookmark-skeleton:${index}`}>
-              <div className="bookmark-card popup-list-row">
-                <span className="row-main">
-                  <span className="popup-skeleton-bar skeleton-bookmark-title" style={{ '--skeleton-width': row.width } as CSSProperties}></span>
-                  <span className="popup-skeleton-bar skeleton-bookmark-url" style={{ '--skeleton-width': row.url } as CSSProperties}></span>
-                  <span className="popup-skeleton-bar skeleton-bookmark-path" style={{ '--skeleton-width': row.path } as CSSProperties}></span>
+            <div className={mainRowClass} key={`bookmark-skeleton:${index}`}>
+              <div className={cx(listButtonClass, 'cursor-default')} style={listButtonBaseStyle}>
+                <span className={rowMainClass}>
+                  <span className={skeletonBookmarkTitleClass} style={{ '--skeleton-width': row.width } as CSSProperties}></span>
+                  <span className={skeletonBookmarkUrlClass} style={{ '--skeleton-width': row.url } as CSSProperties}></span>
+                  <span className={skeletonBookmarkPathClass} style={{ '--skeleton-width': row.path } as CSSProperties}></span>
                 </span>
               </div>
-              <div className="popup-row-actions skeleton-row-actions">
-                <span className="popup-skeleton-dot"></span>
-                <span className="popup-skeleton-dot"></span>
+              <div className={cx(rowActionsClass, 'opacity-80')}>
+                <span className={skeletonDotClass}></span>
+                <span className={skeletonDotClass}></span>
               </div>
             </div>
           ))}
@@ -177,7 +287,7 @@ function PopupMainStatePanel({
 }) {
   if (state.kind === 'loading') {
     return (
-      <li className="state-panel compact bookmark-main-state" aria-live="polite">
+      <li className={mainStateClass} aria-live="polite">
         <PopupMainLoadingSkeleton label={state.label || '正在搜索书签…'} />
       </li>
     )
@@ -185,14 +295,14 @@ function PopupMainStatePanel({
 
   if (state.kind === 'natural-setup' || state.kind === 'search-empty') {
     return (
-      <li className="state-panel compact bookmark-main-state">
+      <li className={mainStateClass}>
         <PopupEmptyState onAction={onEmptyAction} state={state.state || { kind: 'none' }} />
       </li>
     )
   }
 
   return (
-    <li className="state-panel compact bookmark-main-state">
+    <li className={mainStateClass}>
       {state.label || '暂无可展示书签'}
     </li>
   )
@@ -200,11 +310,11 @@ function PopupMainStatePanel({
 
 function PopupMainLoadingSkeleton({ label }: { label: string }) {
   return (
-    <div className="popup-search-skeleton" aria-label={label}>
+    <div className={searchSkeletonClass} aria-label={label}>
       {[0.82, 0.66, 0.74].map((width, index) => (
-        <div className="popup-search-skeleton-row" key={`search-skeleton:${index}`}>
-          <span className="popup-skeleton-bar skeleton-bookmark-title" style={{ '--skeleton-width': width } as CSSProperties}></span>
-          <span className="popup-skeleton-bar skeleton-bookmark-url" style={{ '--skeleton-width': 0.46 + index * 0.08 } as CSSProperties}></span>
+        <div className={searchSkeletonRowClass} key={`search-skeleton:${index}`}>
+          <span className={skeletonBookmarkTitleClass} style={{ '--skeleton-width': width } as CSSProperties}></span>
+          <span className={skeletonBookmarkUrlClass} style={{ '--skeleton-width': 0.46 + index * 0.08 } as CSSProperties}></span>
         </div>
       ))}
     </div>
@@ -221,20 +331,20 @@ function PopupFolderRow({
   const style = { '--depth': row.depth } as CSSProperties
 
   return (
-    <div className={['tree-row', 'folder-row', row.root ? 'root-folder-row' : '', row.active ? 'active' : ''].filter(Boolean).join(' ')} style={style}>
+    <div className={folderRowClass} style={style}>
       <Button
-        className={['folder-card', 'popup-list-row', 'sidebar-folder-card', row.root ? 'root-folder-card' : '', row.active ? 'active' : ''].filter(Boolean).join(' ')}
+        className={cx(folderCardClass, row.active ? folderCardActiveClass : '')}
         type="button"
-        data-sidebar-folder-filter={row.root ? 'all' : row.folderId}
+        style={getFolderDepthStyle(row.depth)}
         aria-current={row.active ? 'page' : undefined}
         title={row.subtitle}
         onClick={() => onFolderFilter?.(row.root ? 'all' : row.folderId)}
         unstyled
       >
-        <span className="folder-tree-branch" aria-hidden="true"></span>
-        <span className="row-main folder-row-main">
-          <span className="row-title">{row.title}</span>
-          <span className="folder-tree-count" title={`${row.countLabel} 个书签`}>{row.countLabel}</span>
+        <span className={cx(folderBranchClass, row.root ? rootFolderBranchClass : '')} aria-hidden="true"></span>
+        <span className={folderMainClass}>
+          <span className={folderTitleClass}>{row.title}</span>
+          <span className={cx(folderCountClass, row.active ? folderCountActiveClass : '')} title={`${row.countLabel} 个书签`}>{row.countLabel}</span>
         </span>
       </Button>
     </div>
@@ -242,27 +352,34 @@ function PopupFolderRow({
 }
 
 function PopupBookmarkRow({
+  activeResultRef,
   handlers,
   row
 }: {
+  activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
   row: PopupContentBookmarkRowViewModel
 }) {
   const style = { '--depth': row.depth } as CSSProperties
 
   return (
-    <li className="tree-row bookmark-row" style={style}>
+    <li
+      className={mainRowClass}
+      data-active={row.active ? 'true' : undefined}
+      ref={row.active ? activeResultRef : undefined}
+      style={style}
+    >
       <Button
-        className="bookmark-card popup-list-row"
+        className={listButtonClass}
         type="button"
-        data-open-bookmark={row.bookmarkId}
+        style={getBookmarkButtonStyle(row.active)}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
         unstyled
       >
-        <span className="row-main">
-          <span className="row-title">{row.title}</span>
-          <span className="row-subtitle" title={row.url}>{row.displayUrl}</span>
-          {row.path ? <span className="row-path" title={row.path}>{row.path}</span> : null}
+        <span className={rowMainClass}>
+          <span className={rowTitleClass}>{row.title}</span>
+          <span className={rowSubtitleClass} title={row.url}>{row.displayUrl}</span>
+          {row.path ? <span className={rowPathClass} title={row.path}>{row.path}</span> : null}
         </span>
       </Button>
       <PopupRowActions
@@ -276,39 +393,42 @@ function PopupBookmarkRow({
 }
 
 function PopupSearchResultRow({
+  activeResultRef,
   handlers,
   row
 }: {
+  activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
   row: PopupContentSearchResultViewModel
 }) {
   return (
     <li
-      className={['result-card', row.active ? 'active' : ''].filter(Boolean).join(' ')}
-      data-result-index={row.index}
+      className={mainRowClass}
+      data-active={row.active ? 'true' : undefined}
+      ref={row.active ? activeResultRef : undefined}
     >
       <Button
-        className="result-main popup-list-row"
+        className={listButtonClass}
         type="button"
-        data-open-bookmark={row.bookmarkId}
+        style={getBookmarkButtonStyle(row.active)}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
         onPointerOver={() => handlers?.onResultHover?.(row.index)}
         unstyled
       >
-        <span className="result-copy">
-          <span className="result-title">
+        <span className={resultCopyClass}>
+          <span className={rowTitleClass}>
             <HighlightedText text={row.title} query={row.highlightQuery} />
           </span>
-          <span className="result-url" title={row.url}>
+          <span className={rowSubtitleClass} title={row.url}>
             <HighlightedText text={row.displayUrl} query={row.highlightQuery} />
           </span>
-          <span className="result-path-shell">
-            <span className="result-path" title={row.path}>{row.path}</span>
+          <span className={resultPathShellClass}>
+            <span className={rowPathClass} title={row.path}>{row.path}</span>
           </span>
           {row.reasonTokens.length ? (
-            <span className="result-match-reasons" title={row.reasonTitle} aria-label={row.reasonLabel}>
+            <span className={resultMatchReasonsClass} title={row.reasonTitle} aria-label={row.reasonLabel}>
               {row.reasonTokens.map((token) => (
-                <span className="result-match-token" key={token}>{token}</span>
+                <span className={resultMatchTokenClass} key={token}>{token}</span>
               ))}
             </span>
           ) : null}
@@ -335,7 +455,7 @@ function PopupRowActions({
   bookmarkId: string
   label: string
   menu: PopupActionMenuViewModel
-  onMenuAction?: (bookmarkId: string, action: string) => void
+  onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   title?: string
 }) {
   const quickActions = menu.items.filter((item) => {
@@ -343,17 +463,15 @@ function PopupRowActions({
   })
 
   return (
-    <div className="popup-row-actions" aria-label="书签快捷操作">
+    <div className={rowActionsClass} aria-label="书签快捷操作">
       {quickActions.map((item) => (
         <Button
-          className={['row-action-button', item.danger ? 'danger' : ''].filter(Boolean).join(' ')}
+          className={cx(rowActionButtonClass, item.danger ? rowActionDangerClass : '')}
           type="button"
-          data-menu-action={item.action}
-          data-bookmark-id={item.bookmarkId}
           aria-label={item.ariaLabel}
           title={item.label}
           disabled={item.disabled}
-          onClick={() => onMenuAction?.(item.bookmarkId, item.action)}
+          onClick={(event) => onMenuAction?.(item.bookmarkId, item.action, event.currentTarget)}
           key={`${item.bookmarkId}:${item.action}`}
           unstyled
         >

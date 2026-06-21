@@ -5,11 +5,14 @@ import {
   useMemo,
   useRef,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type Ref,
   type RefObject
 } from 'react'
-import { Button, Icon, Input } from '../../ui'
+import { Icon } from '../../ui/icons/Icon'
+import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
@@ -17,9 +20,53 @@ import {
   type SearchEngineMenuState,
   type SearchHintState,
   type SearchSuggestionViewModel,
-  type SearchWidgetNaturalButtonState,
   type SavedSearchesState
 } from '../newtab-search-widget-store'
+import {
+  SAVED_SEARCH_APPLY_CLASS,
+  SAVED_SEARCH_CHIP_CLASS,
+  SAVED_SEARCH_DELETE_CLASS,
+  SAVED_SEARCH_HEAD_CLASS,
+  SAVED_SEARCH_HEAD_ERROR_CLASS,
+  SAVED_SEARCH_LIST_CLASS,
+  SAVED_SEARCH_SAVE_CLASS,
+  SAVED_SEARCHES_CLASS,
+  SEARCH_CHIPS_CLASS,
+  SEARCH_CLEAR_BUTTON_CLASS,
+  SEARCH_ENGINE_BUTTON_CLASS,
+  SEARCH_ENGINE_CARET_CLASS,
+  SEARCH_ENGINE_ITEM_CLASS,
+  SEARCH_ENGINE_ITEM_INDICATOR_CLASS,
+  SEARCH_ENGINE_MENU_CLASS,
+  SEARCH_ENGINE_MENU_HINT_CLASS,
+  SEARCH_ENGINE_MENU_ITEMS_CLASS,
+  SEARCH_ENGINE_MENU_POSITIONER_CLASS,
+  SEARCH_FORM_CLASS,
+  SEARCH_HINT_CLASS,
+  SEARCH_ICON_CLASS,
+  SEARCH_INPUT_CLASS,
+  SEARCH_NATURAL_PENDING_DOT_CLASS,
+  SEARCH_PANEL_CLASS,
+  SEARCH_SECTION_LABEL_CLASS,
+  SEARCH_SEPARATOR_CLASS,
+  SEARCH_SHELL_CLASS,
+  SEARCH_SLOT_CLASS,
+  SEARCH_SUBMIT_BUTTON_CLASS,
+  SEARCH_SUBMIT_ICON_CLASS,
+  SEARCH_SUGGESTION_COPY_CLASS,
+  SEARCH_SUGGESTION_META_CLASS,
+  SEARCH_SUGGESTION_TITLE_CLASS,
+  SEARCH_SUGGESTIONS_CLASS,
+  SEARCH_WEB_HINT_CLASS,
+  getSearchChipClass,
+  getSearchNaturalButtonClass,
+  getSearchSuggestionClass,
+  getSearchSuggestionMarkClass
+} from './searchWidgetClasses'
+
+function handleSearchContextMenu(event: ReactMouseEvent<HTMLDivElement>): void {
+  event.stopPropagation()
+}
 
 export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   const slotRef = useRef<HTMLElement | null>(null)
@@ -65,21 +112,25 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
 
   return (
     <section
-      className="newtab-search-slot"
+      className={SEARCH_SLOT_CLASS}
       style={slotStyle}
       data-search-auto-vertical-center={String(shell.autoVerticalCenter)}
       aria-label={shell.ariaLabel}
       ref={slotRef}
     >
-      <div className="newtab-search-shell" onBlur={view.interactions.onRootBlur}>
+      <div
+        className={SEARCH_SHELL_CLASS}
+        onBlur={view.interactions.onRootBlur}
+        onContextMenu={handleSearchContextMenu}
+      >
         <form
-          className="newtab-search"
+          className={SEARCH_FORM_CLASS}
           style={formStyle}
           role="search"
           aria-label={shell.ariaLabel}
           onSubmit={view.interactions.onSubmit}
         >
-          <Icon name="Search" className="newtab-search-icon" size={16} aria-hidden="true" />
+          <Icon name="Search" className={SEARCH_ICON_CLASS} size={16} aria-hidden="true" />
           <SearchWidgetInput view={view} inputRef={inputRef} />
           <SearchWidgetClearButton view={view} />
           <SearchWidgetSeparator view={view} />
@@ -106,7 +157,7 @@ function SearchWidgetInput({
 
   return (
     <Input
-      className="newtab-search-input"
+      className={SEARCH_INPUT_CLASS}
       type="search"
       autoComplete="off"
       enterKeyHint="search"
@@ -132,9 +183,10 @@ function SearchWidgetClearButton({ view }: { view: NewtabSearchWidgetView }) {
 
   return (
     <Button
-      className={hasInputValue ? 'newtab-search-clear' : 'newtab-search-clear hidden'}
+      className={SEARCH_CLEAR_BUTTON_CLASS}
       type="button"
       aria-label="清空搜索"
+      hidden={!hasInputValue}
       onClick={view.interactions.onClear}
       unstyled
     >
@@ -148,8 +200,9 @@ function SearchWidgetSeparator({ view }: { view: NewtabSearchWidgetView }) {
 
   return (
     <span
-      className={hasInputValue ? 'newtab-search-separator' : 'newtab-search-separator hidden'}
+      className={SEARCH_SEPARATOR_CLASS}
       aria-hidden="true"
+      hidden={!hasInputValue}
     />
   )
 }
@@ -159,7 +212,7 @@ function SearchWidgetSubmitButton({ view }: { view: NewtabSearchWidgetView }) {
 
   return (
     <Button
-      className="newtab-search-submit"
+      className={SEARCH_SUBMIT_BUTTON_CLASS}
       type="submit"
       aria-label="搜索网页"
       aria-disabled={!canSubmit}
@@ -167,7 +220,7 @@ function SearchWidgetSubmitButton({ view }: { view: NewtabSearchWidgetView }) {
       disabled={!canSubmit}
       unstyled
     >
-      <Icon name="Search" className="newtab-search-submit-icon" size={14} aria-hidden="true" />
+      <Icon name="Search" className={SEARCH_SUBMIT_ICON_CLASS} size={14} aria-hidden="true" />
     </Button>
   )
 }
@@ -177,7 +230,7 @@ function SearchWidgetNaturalButton({ view }: { view: NewtabSearchWidgetView }) {
 
   return (
     <Button
-      className={getNaturalSearchButtonClassName(natural)}
+      className={getSearchNaturalButtonClass(natural)}
       type="button"
       aria-pressed={natural.active}
       aria-label={natural.ariaLabel}
@@ -185,6 +238,7 @@ function SearchWidgetNaturalButton({ view }: { view: NewtabSearchWidgetView }) {
       onClick={view.interactions.onToggleNatural}
       unstyled
     >
+      {natural.pending ? <span className={SEARCH_NATURAL_PENDING_DOT_CLASS} aria-hidden="true" /> : null}
       {natural.label}
     </Button>
   )
@@ -201,14 +255,21 @@ function SearchWidgetEngineButton({
 
   return (
     <BaseMenu.Trigger
-      className="newtab-search-engine"
+      className={SEARCH_ENGINE_BUTTON_CLASS}
       type="button"
       aria-label={engine.ariaLabel}
       disabled={engine.disabled}
       title={engine.title}
+      onMouseDown={(event) => {
+        if (!engine.disabled) {
+          event.preventDefault()
+          view.interactions.onEngineOpenChange(true)
+        }
+      }}
       ref={buttonRef}
     >
       {engine.label}
+      <Icon name="ChevronDown" className={SEARCH_ENGINE_CARET_CLASS} size={12} aria-hidden="true" />
     </BaseMenu.Trigger>
   )
 }
@@ -237,12 +298,12 @@ function SearchWidgetEngineMenuRoot({
       {children}
       <BaseMenu.Portal>
         <BaseMenu.Positioner
-          className="newtab-search-engine-menu-positioner"
+          className={SEARCH_ENGINE_MENU_POSITIONER_CLASS}
           positionMethod="absolute"
           sideOffset={8}
         >
           <BaseMenu.Popup
-            className="newtab-search-engine-menu"
+            className={SEARCH_ENGINE_MENU_CLASS}
             aria-label="搜索引擎"
             finalFocus={buttonRef}
             ref={menuRef}
@@ -261,54 +322,43 @@ function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }
   return (
     <div
       id="newtab-search-suggestions-panel"
-      className={panel.panelVisible
-        ? 'newtab-search-suggestions-panel'
-        : 'newtab-search-suggestions-panel hidden'}
+      className={SEARCH_PANEL_CLASS}
+      hidden={!panel.panelVisible}
     >
-      <div className="newtab-search-chips" aria-label="当前搜索条件">
+      <div className={SEARCH_CHIPS_CLASS} aria-label="当前搜索条件">
         <SearchChips chips={view.chips} />
       </div>
-      <div className="newtab-search-section-label">
+      <div className={SEARCH_SECTION_LABEL_CLASS}>
         <SearchSectionLabel label={view.sectionLabel} />
       </div>
       <div
         id="newtab-search-suggestions"
-        className="newtab-search-suggestions"
-        role="listbox"
+        className={SEARCH_SUGGESTIONS_CLASS}
         aria-label="匹配的书签"
         hidden={!panel.suggestionsVisible}
       >
         <SearchSuggestions suggestions={view.suggestions} />
       </div>
-      <div className="newtab-search-hint" role="status" aria-live="polite">
+      <output className={SEARCH_HINT_CLASS} aria-live="polite">
         <SearchHint state={view.hint} />
-      </div>
-      <div className="newtab-saved-searches" aria-label="已保存搜索">
+      </output>
+      <div className={SAVED_SEARCHES_CLASS} aria-label="已保存搜索">
         <SavedSearches state={view.savedSearches} />
       </div>
     </div>
   )
 }
 
-function getNaturalSearchButtonClassName(state: SearchWidgetNaturalButtonState): string {
-  return [
-    'newtab-search-natural',
-    state.active ? 'active' : '',
-    state.pending ? 'pending' : '',
-    state.fallback ? 'fallback' : ''
-  ].filter(Boolean).join(' ')
-}
-
 function SearchEngineMenu({ state }: { state: SearchEngineMenuState }) {
   return (
     <>
       <BaseMenu.RadioGroup
-        className="newtab-search-engine-menu-items"
+        className={SEARCH_ENGINE_MENU_ITEMS_CLASS}
         value={state.items.find((item) => item.active)?.id || ''}
       >
         {state.items.map((item) => (
           <BaseMenu.RadioItem
-            className="newtab-search-engine-item"
+            className={SEARCH_ENGINE_ITEM_CLASS}
             closeOnClick={false}
             key={item.id}
             label={item.label}
@@ -318,13 +368,13 @@ function SearchEngineMenu({ state }: { state: SearchEngineMenuState }) {
             value={item.id}
           >
             <span>{item.label}</span>
-            <BaseMenu.RadioItemIndicator className="newtab-search-engine-item-indicator">
+            <BaseMenu.RadioItemIndicator className={SEARCH_ENGINE_ITEM_INDICATOR_CLASS}>
               <Icon name="Check" size={12} aria-hidden="true" />
             </BaseMenu.RadioItemIndicator>
           </BaseMenu.RadioItem>
         ))}
       </BaseMenu.RadioGroup>
-      <div className="newtab-search-engine-menu-hint">{state.hint}</div>
+      <div className={SEARCH_ENGINE_MENU_HINT_CLASS}>{state.hint}</div>
     </>
   )
 }
@@ -337,7 +387,7 @@ function SearchChips({ chips }: { chips: SearchChipViewModel[] }) {
   return (
     <>
       {chips.map((chip) => (
-        <span className={`newtab-search-chip ${chip.kind}`} key={`${chip.kind}:${chip.label}`}>
+        <span className={getSearchChipClass(chip.kind)} key={`${chip.kind}:${chip.label}`}>
           {chip.label}
         </span>
       ))}
@@ -351,14 +401,12 @@ function SearchSuggestions({ suggestions }: { suggestions: SearchSuggestionViewM
       {suggestions.map((suggestion) => (
         <Button
           id={suggestion.elementId}
-          className={[
-            'newtab-search-suggestion',
-            suggestion.command ? 'command' : '',
-            suggestion.active ? 'active' : ''
-          ].filter(Boolean).join(' ')}
+          className={getSearchSuggestionClass({
+            active: suggestion.active,
+            command: Boolean(suggestion.command)
+          })}
           type="button"
-          role="option"
-          aria-selected={suggestion.active}
+          aria-current={suggestion.active ? 'true' : undefined}
           aria-label={suggestion.ariaLabel}
           onPointerDown={(event) => {
             event.preventDefault()
@@ -367,12 +415,12 @@ function SearchSuggestions({ suggestions }: { suggestions: SearchSuggestionViewM
           unstyled
           key={suggestion.id}
         >
-          <span className="newtab-search-suggestion-mark" aria-hidden="true">
+          <span className={getSearchSuggestionMarkClass(Boolean(suggestion.command))} aria-hidden="true">
             {suggestion.mark}
           </span>
-          <span className="newtab-search-suggestion-copy">
-            <strong>{suggestion.title}</strong>
-            <span>{suggestion.meta}</span>
+          <span className={SEARCH_SUGGESTION_COPY_CLASS}>
+            <strong className={SEARCH_SUGGESTION_TITLE_CLASS}>{suggestion.title}</strong>
+            <span className={SEARCH_SUGGESTION_META_CLASS}>{suggestion.meta}</span>
           </span>
         </Button>
       ))}
@@ -392,7 +440,7 @@ function SearchHint({ state }: { state: SearchHintState }) {
   if (state.type === 'webFallback') {
     return (
       <Button
-        className="newtab-search-web-hint"
+        className={SEARCH_WEB_HINT_CLASS}
         type="button"
         title={state.title}
         aria-label={state.ariaLabel}
@@ -417,11 +465,11 @@ function SavedSearches({ state }: { state: SavedSearchesState }) {
 
   return (
     <>
-      <div className="newtab-saved-search-head">
-        <span className={state.error ? 'error' : ''}>{state.error || '保存搜索'}</span>
+      <div className={SAVED_SEARCH_HEAD_CLASS}>
+        <span className={state.error ? SAVED_SEARCH_HEAD_ERROR_CLASS : ''}>{state.error || '保存搜索'}</span>
         {state.canSaveCurrent ? (
           <Button
-            className="newtab-saved-search-save"
+            className={SAVED_SEARCH_SAVE_CLASS}
             type="button"
             disabled={state.hasCurrentSaved}
             onPointerDown={(event) => {
@@ -437,11 +485,11 @@ function SavedSearches({ state }: { state: SavedSearchesState }) {
         ) : null}
       </div>
       {state.items.length ? (
-        <div className="newtab-saved-search-list">
+        <div className={SAVED_SEARCH_LIST_CLASS}>
           {state.items.map((item) => (
-            <span className="newtab-saved-search-chip" key={item.id}>
+            <span className={SAVED_SEARCH_CHIP_CLASS} key={item.id}>
               <Button
-                className="newtab-saved-search-apply"
+                className={SAVED_SEARCH_APPLY_CLASS}
                 type="button"
                 title={item.query}
                 onPointerDown={(event) => {
@@ -453,7 +501,7 @@ function SavedSearches({ state }: { state: SavedSearchesState }) {
                 {item.label}
               </Button>
               <Button
-                className="newtab-saved-search-delete"
+                className={SAVED_SEARCH_DELETE_CLASS}
                 type="button"
                 aria-label={`删除保存搜索：${item.label}`}
                 onPointerDown={(event) => {

@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 
 export interface NewtabDashboardOverlayView {
   errorMessage: string
+  frameSrc: string
   open: boolean
   ready: boolean
 }
@@ -11,8 +12,14 @@ export interface NewtabDashboardOverlayActions {
   onFallbackRetry: () => void
   onFallbackReturn: () => void
   onFrameError: () => void
-  onOpenRequest: () => void
+  onOpenRequest: (returnFocusElement?: HTMLElement | null) => void
   onReady: () => void
+}
+
+export interface NewtabDashboardOverlayNodes {
+  frame: HTMLIFrameElement | null
+  overlay: HTMLElement | null
+  trigger: HTMLElement | null
 }
 
 const EMPTY_ACTIONS: NewtabDashboardOverlayActions = {
@@ -26,12 +33,19 @@ const EMPTY_ACTIONS: NewtabDashboardOverlayActions = {
 
 let dashboardOverlayView: NewtabDashboardOverlayView = {
   errorMessage: '',
+  frameSrc: '',
   open: false,
   ready: false
 }
 let dashboardOverlayActions: NewtabDashboardOverlayActions = EMPTY_ACTIONS
+let dashboardOverlayNodes: NewtabDashboardOverlayNodes = {
+  frame: null,
+  overlay: null,
+  trigger: null
+}
 
 const listeners = new Set<() => void>()
+const nodesListeners = new Set<() => void>()
 
 function subscribeDashboardOverlay(listener: () => void): () => void {
   listeners.add(listener)
@@ -42,6 +56,10 @@ function subscribeDashboardOverlay(listener: () => void): () => void {
 
 function emitDashboardOverlayChange(): void {
   listeners.forEach((listener) => listener())
+}
+
+function emitDashboardOverlayNodesChange(): void {
+  nodesListeners.forEach((listener) => listener())
 }
 
 export function registerNewtabDashboardOverlayActions(
@@ -59,13 +77,14 @@ export function useNewtabDashboardOverlayView(): NewtabDashboardOverlayView {
   return useSyncExternalStore(
     subscribeDashboardOverlay,
     () => dashboardOverlayView,
-    () => ({ errorMessage: '', open: false, ready: false })
+    () => ({ errorMessage: '', frameSrc: '', open: false, ready: false })
   )
 }
 
 export function dispatchNewtabDashboardOverlayControls(view: NewtabDashboardOverlayView): void {
   if (
     dashboardOverlayView.errorMessage === view.errorMessage &&
+    dashboardOverlayView.frameSrc === view.frameSrc &&
     dashboardOverlayView.open === view.open &&
     dashboardOverlayView.ready === view.ready
   ) {
@@ -76,12 +95,42 @@ export function dispatchNewtabDashboardOverlayControls(view: NewtabDashboardOver
   emitDashboardOverlayChange()
 }
 
+export function setNewtabDashboardOverlayNodes(nodes: Partial<NewtabDashboardOverlayNodes>): void {
+  const nextNodes = {
+    ...dashboardOverlayNodes,
+    ...nodes
+  }
+  const changed =
+    nextNodes.frame !== dashboardOverlayNodes.frame ||
+    nextNodes.overlay !== dashboardOverlayNodes.overlay ||
+    nextNodes.trigger !== dashboardOverlayNodes.trigger
+
+  dashboardOverlayNodes = {
+    ...nextNodes
+  }
+
+  if (changed) {
+    queueMicrotask(emitDashboardOverlayNodesChange)
+  }
+}
+
+export function getNewtabDashboardOverlayNodes(): NewtabDashboardOverlayNodes {
+  return dashboardOverlayNodes
+}
+
+export function subscribeNewtabDashboardOverlayNodes(listener: () => void): () => void {
+  nodesListeners.add(listener)
+  return () => {
+    nodesListeners.delete(listener)
+  }
+}
+
 export function dispatchNewtabDashboardOverlayReady(): void {
   dashboardOverlayActions.onReady()
 }
 
-export function dispatchNewtabDashboardOverlayOpenRequest(): void {
-  dashboardOverlayActions.onOpenRequest()
+export function dispatchNewtabDashboardOverlayOpenRequest(returnFocusElement?: HTMLElement | null): void {
+  dashboardOverlayActions.onOpenRequest(returnFocusElement)
 }
 
 export function dispatchNewtabDashboardOverlayOpenChange(open: boolean, event?: Event): void {

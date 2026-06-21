@@ -1,11 +1,13 @@
 import { getQueryTerms, normalizeQuery } from '../search.js'
 
+const markClass = 'rounded-md bg-white/[0.12] px-[0.02em] text-white shadow-none'
+
 export function HighlightedText({ text, query }: { text: string; query: string }) {
   return (
     <>
       {splitHighlightText(text, query).map((part, index) => {
         const key = `${index}:${part.text}`
-        return part.highlight ? <mark key={key}>{part.text}</mark> : <span key={key}>{part.text}</span>
+        return part.highlight ? <mark className={markClass} key={key}>{part.text}</mark> : <span key={key}>{part.text}</span>
       })}
     </>
   )

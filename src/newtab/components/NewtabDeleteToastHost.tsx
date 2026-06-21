@@ -1,5 +1,5 @@
-import { Button } from '../../ui/primitives/Button'
-import { ToastList } from '../../ui/primitives/Toast'
+import { Button } from '../../ui/base/Button'
+import { ToastList } from '../../ui/base/Toast'
 import {
   dispatchNewtabDeleteToastOpenRecycle,
   dispatchNewtabDeleteToastUndo,
@@ -14,7 +14,7 @@ export function NewtabDeleteToastHost() {
   }
 
   return (
-    <section className="newtab-delete-toast">
+    <section className="newtab-delete-toast" data-newtab-bookmark-menu-surface="">
       <ToastList
         contentClassName="newtab-delete-toast-copy"
         descriptionClassName="newtab-delete-toast-description"

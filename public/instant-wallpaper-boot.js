@@ -6,6 +6,9 @@
   const remoteRevealFallbackMs = 3200
   const loaderRevealDelayMs = 320
   let loaderRevealTimer = 0
+  const startupView = createStartupView()
+
+  cacheBootView()
 
   try {
     const targetRecord = readRecord(targetKey)
@@ -64,6 +67,36 @@
     globalThis[key] = record
   }
 
+  function cacheBootView() {
+    if (globalThis.__CURATOR_INSTANT_WALLPAPER_BOOT_VIEW_CONSUMED__ === true) {
+      return
+    }
+    globalThis.__CURATOR_INSTANT_WALLPAPER_BOOT_VIEW__ = { ...startupView }
+  }
+
+  function updateBootView(nextView) {
+    Object.assign(startupView, nextView)
+    cacheBootView()
+  }
+
+  function createStartupView() {
+    return {
+      backgroundColor: fallbackColor,
+      booting: true,
+      image: '',
+      loaderVisible: false,
+      loading: true,
+      pending: false,
+      placeholderColor: fallbackColor,
+      position: 'center',
+      previewImage: '',
+      ready: false,
+      remoteReady: false,
+      signature: '',
+      size: 'cover'
+    }
+  }
+
   function createBootRecord(targetRecord, thumbnailDataUrl) {
     return {
       signature: targetRecord.signature,
@@ -89,6 +122,17 @@
     }
     root.classList.remove('instant-wallpaper-remote-ready')
     delete root.dataset.instantWallpaperRemoteReady
+    updateBootView({
+      backgroundColor: placeholderColor,
+      image: imageUrl ? `url("${escapeCssUrl(imageUrl)}")` : 'none',
+      placeholderColor,
+      position: backgroundPosition,
+      previewImage: previewUrl ? `url("${escapeCssUrl(previewUrl)}")` : 'none',
+      ready: false,
+      remoteReady: false,
+      signature: signature || '',
+      size: backgroundSize
+    })
   }
 
   function showWallpaperLoaderWhenDelayed() {
@@ -99,12 +143,14 @@
 
     if (typeof window.setTimeout !== 'function') {
       root.dataset.instantWallpaperLoaderVisible = 'true'
+      updateBootView({ loaderVisible: true })
       return
     }
 
     loaderRevealTimer = window.setTimeout(() => {
       loaderRevealTimer = 0
       root.dataset.instantWallpaperLoaderVisible = 'true'
+      updateBootView({ loaderVisible: true })
     }, loaderRevealDelayMs)
   }
 
@@ -115,11 +161,13 @@
     }
     loaderRevealTimer = 0
     delete root.dataset.instantWallpaperLoaderVisible
+    updateBootView({ loaderVisible: false })
   }
 
   function revealWallpaperWhenImageReady(imageUrl) {
     const root = document.documentElement
     root.dataset.instantWallpaperPending = 'true'
+    updateBootView({ pending: true })
 
     try {
       const image = new Image()
@@ -173,6 +221,7 @@
     const root = document.documentElement
     root.classList.add('instant-wallpaper-remote-ready')
     root.dataset.instantWallpaperRemoteReady = 'true'
+    updateBootView({ remoteReady: true })
   }
 
   function revealWallpaper() {
@@ -181,6 +230,13 @@
     root.classList.add('instant-wallpaper-ready')
     root.classList.remove('loading-wallpaper', 'newtab-booting')
     delete root.dataset.instantWallpaperPending
+    updateBootView({
+      booting: false,
+      loaderVisible: false,
+      loading: false,
+      pending: false,
+      ready: true
+    })
   }
 
   function getTargetImageUrl(targetRecord) {

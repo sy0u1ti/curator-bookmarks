@@ -1,13 +1,19 @@
 import { Popover as BasePopover } from '@base-ui/react/popover'
-import { type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from 'react'
+import { useCallback, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from 'react'
 import { Icon } from '../icons/Icon'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx } from './utils'
+
+type BasePopoverRootProps = ComponentPropsWithoutRef<typeof BasePopover.Root>
+type BasePopoverPortalProps = ComponentPropsWithoutRef<typeof BasePopover.Portal>
+type BasePopoverPositionerProps = ComponentPropsWithoutRef<typeof BasePopover.Positioner>
+type BasePopoverPopupProps = ComponentPropsWithoutRef<typeof BasePopover.Popup>
 
 export interface PopoverProps {
   align?: 'start' | 'center' | 'end'
   className?: string
   id?: string
+  modal?: BasePopoverRootProps['modal']
   onOpenChange?: (open: boolean) => void
   open?: boolean
   popupClassName?: string
@@ -16,6 +22,7 @@ export interface PopoverProps {
   sideOffset?: number
   trigger: ReactElement
   triggerId?: string
+  triggerNativeButton?: boolean
   title?: ReactNode
   children: ReactNode
 }
@@ -24,6 +31,7 @@ export function Popover({
   align = 'center',
   className,
   id,
+  modal = false,
   onOpenChange,
   open,
   popupClassName,
@@ -32,6 +40,7 @@ export function Popover({
   sideOffset = 8,
   trigger,
   triggerId,
+  triggerNativeButton,
   title,
   children
 }: PopoverProps) {
@@ -58,19 +67,14 @@ export function Popover({
   )
 
   return (
-    <BasePopover.Root open={open} onOpenChange={onOpenChange} triggerId={triggerId}>
-      <BasePopover.Trigger render={trigger} />
+    <BasePopover.Root open={open} onOpenChange={onOpenChange} triggerId={triggerId} modal={modal}>
+      <BasePopover.Trigger id={triggerId} render={trigger} nativeButton={triggerNativeButton} />
       <PopoverPortal container={portal ? undefined : null} keepMounted>
         {popup}
       </PopoverPortal>
     </BasePopover.Root>
   )
 }
-
-type BasePopoverRootProps = ComponentPropsWithoutRef<typeof BasePopover.Root>
-type BasePopoverPortalProps = ComponentPropsWithoutRef<typeof BasePopover.Portal>
-type BasePopoverPositionerProps = ComponentPropsWithoutRef<typeof BasePopover.Positioner>
-type BasePopoverPopupProps = ComponentPropsWithoutRef<typeof BasePopover.Popup>
 
 export interface PopoverRootProps {
   open: boolean
@@ -84,7 +88,7 @@ export function PopoverRoot({
   open,
   onOpenChange,
   triggerId,
-  modal,
+  modal = false,
   children
 }: PopoverRootProps) {
   return (
@@ -108,8 +112,26 @@ export function PopoverPortal({
   children,
   ...props
 }: PopoverPortalProps) {
+  const [inlinePortalContainer, setInlinePortalContainer] = useState<HTMLDivElement | null>(null)
+  const handleInlinePortalRef = useCallback((node: HTMLDivElement | null) => {
+    setInlinePortalContainer(node)
+  }, [])
+
+  if (container === null) {
+    return (
+      <>
+        {inlinePortalContainer ? (
+          <BasePopover.Portal {...props} container={inlinePortalContainer}>
+            {children}
+          </BasePopover.Portal>
+        ) : null}
+        <div ref={handleInlinePortalRef} />
+      </>
+    )
+  }
+
   return (
-    <BasePopover.Portal {...props} container={container === null ? undefined : container}>
+    <BasePopover.Portal {...props} container={container}>
       {children}
     </BasePopover.Portal>
   )

@@ -55,6 +55,7 @@ export interface PopupContentActionDetail {
   emptyAction?: string
   folderId?: string
   menuAction?: string
+  returnFocusElement?: HTMLElement | null
 }
 
 export interface PopupContentResultHoverDetail {
@@ -65,6 +66,7 @@ export interface PopupSmartClassifierActionDetail {
   action: string
   currentPageAction?: string
   recommendationId?: string
+  returnFocusElement?: HTMLElement | null
 }
 
 export interface PopupSmartClassifierTitleChangeDetail {
@@ -96,6 +98,7 @@ export interface PopupChromeView {
 
 export interface PopupChromeActionDetail {
   action: string
+  returnFocusElement?: HTMLElement | null
   value?: string
 }
 
@@ -509,8 +512,12 @@ export function dispatchPopupChromeChange(state: PopupChromeView): void {
   updatePopupViewStore({ chrome: { ...state, search: { ...state.search } } })
 }
 
-export function dispatchPopupChromeAction(action: string, value?: string): void {
-  popupActionHandlers.chrome?.({ action, value })
+export function dispatchPopupChromeAction(
+  action: string,
+  value?: string,
+  returnFocusElement?: HTMLElement | null
+): void {
+  popupActionHandlers.chrome?.({ action, value, returnFocusElement })
 }
 
 export function dispatchPopupSearchFocusRequest(select = false): void {

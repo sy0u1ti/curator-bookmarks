@@ -1,18 +1,14 @@
 import { displayUrl } from '../../shared/text.js'
 import { getEffectiveBookmarkTags } from '../../shared/bookmark-tags.js'
 import { availabilityState, aiNamingState, contentSnapshotState, managerState } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
 import {
   isInteractionLocked,
   compareByPathTitle,
   syncSelectionSet
 } from '../shared-options/utils.js'
 import { deleteBookmarksToRecycle } from './recycle.js'
-import {
-  renderDuplicateControlsIsland,
-  renderDuplicateResultsControlsIsland
-} from '../components/DuplicateControlsIsland.js'
-import { renderDuplicateGroupsIsland } from '../components/DuplicateGroupsIsland.js'
+import { publishDuplicateControls } from '../components/duplicate-controls-store.js'
+import { publishDuplicateGroups } from '../components/duplicate-groups-store.js'
 
 const DUPLICATE_STRATEGY_LABELS = {
   recommended: '按推荐选择',
@@ -251,10 +247,6 @@ function buildDuplicateRecommendation({
 }
 
 export function renderDuplicateSection() {
-  if (!dom.duplicateGroups) {
-    return
-  }
-
   const validIds = new Set(
     managerState.duplicateGroups.flatMap((group) => group.items.map((item) => String(item.id)))
   )
@@ -265,14 +257,9 @@ export function renderDuplicateSection() {
   const visibleGroups = managerState.duplicateGroups
 
   const controlsState = buildDuplicateControlsState(summary, selectionStats, visibleGroups)
-  if (dom.duplicateControls) {
-    renderDuplicateControlsIsland(dom.duplicateControls, controlsState)
-  }
-  if (dom.duplicateResultsControls) {
-    renderDuplicateResultsControlsIsland(dom.duplicateResultsControls, controlsState)
-  }
+  publishDuplicateControls(controlsState)
 
-  renderDuplicateGroupsIsland(dom.duplicateGroups, {
+  publishDuplicateGroups({
     catalogLoading: availabilityState.catalogLoading,
     currentScopeFolderId: String(availabilityState.scopeFolderId || ''),
     groups: visibleGroups,
@@ -299,72 +286,33 @@ function buildDuplicateControlsState(summary, selectionStats, visibleGroups) {
   }
 }
 
-export function handleDuplicateGroupsClick(event, callbacks) {
-  if (!(event.target instanceof Element)) {
+export function toggleDuplicateItemSelection(bookmarkId, checked, callbacks) {
+  const normalizedBookmarkId = String(bookmarkId || '').trim()
+  if (isInteractionLocked() || !normalizedBookmarkId) {
     return
   }
 
-  const inlineClearButton = event.target.closest('[data-duplicate-clear-selection]')
-  if (inlineClearButton && !isInteractionLocked()) {
-    clearDuplicateSelection(callbacks)
+  if (checked === true) {
+    managerState.selectedDuplicateIds.add(normalizedBookmarkId)
+  } else if (checked === false) {
+    managerState.selectedDuplicateIds.delete(normalizedBookmarkId)
+  } else if (managerState.selectedDuplicateIds.has(normalizedBookmarkId)) {
+    managerState.selectedDuplicateIds.delete(normalizedBookmarkId)
+  } else {
+    managerState.selectedDuplicateIds.add(normalizedBookmarkId)
+  }
+  managerState.duplicateStrategyStatus = '已手动调整选择。'
+  callbacks.renderAvailabilitySection()
+}
+
+export function applyDuplicateGroupStrategy(groupId, strategy, callbacks) {
+  if (isInteractionLocked()) {
     return
   }
 
-  const inlineDeleteButton = event.target.closest('[data-duplicate-delete-selection]')
-  if (inlineDeleteButton && !isInteractionLocked()) {
-    void deleteSelectedDuplicates(callbacks)
-    return
-  }
-
-  const selectionControl = event.target.closest('[data-duplicate-select]')
-  if (selectionControl) {
-    const bookmarkId = String(selectionControl.getAttribute('data-bookmark-id') || '').trim()
-    if (
-      isInteractionLocked() ||
-      !bookmarkId ||
-      selectionControl.hasAttribute('disabled') ||
-      selectionControl.getAttribute('aria-disabled') === 'true'
-    ) {
-      return
-    }
-
-    if (managerState.selectedDuplicateIds.has(bookmarkId)) {
-      managerState.selectedDuplicateIds.delete(bookmarkId)
-    } else {
-      managerState.selectedDuplicateIds.add(bookmarkId)
-    }
-    managerState.duplicateStrategyStatus = '已手动调整选择。'
-    callbacks.renderAvailabilitySection()
-    return
-  }
-
-  const strategyButton = event.target.closest('[data-duplicate-keep-strategy]')
-  if (strategyButton && !isInteractionLocked()) {
-    const groupId = String(strategyButton.getAttribute('data-duplicate-group-id') || '').trim()
-    const strategy = normalizeDuplicateStrategy(strategyButton.getAttribute('data-duplicate-keep-strategy'))
-    const result = selectDuplicateGroupByStrategy(groupId, strategy)
-    setDuplicateStrategyStatus(result, DUPLICATE_STRATEGY_LABELS[strategy])
-    callbacks.renderAvailabilitySection()
-    return
-  }
-
-  const keepFolderButton = event.target.closest('[data-duplicate-keep-folder]')
-  if (!keepFolderButton || isInteractionLocked()) {
-    return
-  }
-
-  const groupId = String(keepFolderButton.getAttribute('data-duplicate-keep-folder') || '').trim()
-  const select =
-    event.currentTarget instanceof Element
-      ? event.currentTarget.querySelector(`[data-duplicate-folder-select="${CSS.escape(groupId)}"]`)
-      : null
-  const folderId = String(select?.value || '').trim()
-  if (!groupId || !folderId) {
-    return
-  }
-
-  const result = selectDuplicateGroupFolder(groupId, folderId)
-  setDuplicateStrategyStatus(result, DUPLICATE_STRATEGY_LABELS.folder)
+  const normalizedStrategy = normalizeDuplicateStrategy(strategy)
+  const result = selectDuplicateGroupByStrategy(String(groupId || '').trim(), normalizedStrategy)
+  setDuplicateStrategyStatus(result, DUPLICATE_STRATEGY_LABELS[normalizedStrategy])
   callbacks.renderAvailabilitySection()
 }
 

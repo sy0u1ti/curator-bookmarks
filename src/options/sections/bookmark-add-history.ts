@@ -4,15 +4,12 @@ import {
 } from '../../shared/constants.js'
 import { setLocalStorage } from '../../shared/storage.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
 import { formatDateTime } from '../shared-options/utils.js'
-import {
-  renderBookmarkAddHistoryHeaderIsland,
-  renderBookmarkAddHistoryIsland,
-  renderBookmarkAddHistorySummaryIsland,
-  type BookmarkAddHistoryHeaderState,
-  type BookmarkAddHistorySummaryState
-} from '../components/BookmarkAddHistoryIsland.js'
+import { publishBookmarkAddHistory } from '../components/bookmark-add-history-store.js'
+import type {
+  BookmarkAddHistoryHeaderState,
+  BookmarkAddHistorySummaryState
+} from '../components/BookmarkAddHistoryTypes.js'
 
 export interface BookmarkAddHistoryEntry {
   id: string
@@ -133,10 +130,6 @@ function getBookmarkAddHistorySummary() {
 }
 
 export function renderBookmarkAddHistory(): void {
-  if (!dom.bookmarkAddHistoryHeader || !dom.bookmarkAddHistorySummary || !dom.bookmarkAddHistoryResults) {
-    return
-  }
-
   const entries = managerState.bookmarkAddHistory
   const summary = getBookmarkAddHistorySummary()
   const latestEntry = entries[0] || null
@@ -157,9 +150,11 @@ export function renderBookmarkAddHistory(): void {
     total: summary.total
   }
 
-  renderBookmarkAddHistoryHeaderIsland(dom.bookmarkAddHistoryHeader, headerState)
-  renderBookmarkAddHistorySummaryIsland(dom.bookmarkAddHistorySummary, summaryState)
-  renderBookmarkAddHistoryIsland(dom.bookmarkAddHistoryResults, entries)
+  publishBookmarkAddHistory({
+    entries,
+    header: headerState,
+    summary: summaryState
+  })
 }
 
 export async function clearBookmarkAddHistory(callbacks: {

@@ -41,9 +41,16 @@ export interface NewtabFolderSourceView {
   selectedCount: number
 }
 
+export interface NewtabFolderCandidateFocusRequest {
+  folderId: string
+  preventScroll: boolean
+  requestId: number
+  target: 'candidate' | 'search'
+}
+
 export interface NewtabFolderSourceActions {
   onCandidateFocus: (folderId: string) => void
-  onCandidateKeyDown: (key: string) => boolean
+  onCandidateKeyDown: (key: string, folderId: string) => boolean
   onCandidateSearchKeyDown: (key: string) => boolean
   onCandidateSelect: (folderId: string) => void
   onCandidateQueryChange: (query: string) => void
@@ -91,8 +98,15 @@ const EMPTY_ACTIONS: NewtabFolderSourceActions = {
 
 let folderSourceView: NewtabFolderSourceView = EMPTY_VIEW
 let folderSourceActions: NewtabFolderSourceActions = EMPTY_ACTIONS
+let folderCandidateFocusRequest: NewtabFolderCandidateFocusRequest = {
+  folderId: '',
+  preventScroll: true,
+  requestId: 0,
+  target: 'candidate'
+}
 
 const listeners = new Set<() => void>()
+const focusRequestListeners = new Set<() => void>()
 
 function subscribeFolderSource(listener: () => void): () => void {
   listeners.add(listener)
@@ -103,6 +117,17 @@ function subscribeFolderSource(listener: () => void): () => void {
 
 function emitFolderSourceChange(): void {
   listeners.forEach((listener) => listener())
+}
+
+function subscribeFolderCandidateFocusRequest(listener: () => void): () => void {
+  focusRequestListeners.add(listener)
+  return () => {
+    focusRequestListeners.delete(listener)
+  }
+}
+
+function emitFolderCandidateFocusRequestChange(): void {
+  focusRequestListeners.forEach((listener) => listener())
 }
 
 export function registerNewtabFolderSourceActions(
@@ -121,11 +146,34 @@ export function dispatchNewtabFolderSourceView(view: NewtabFolderSourceView): vo
   emitFolderSourceChange()
 }
 
+export function dispatchNewtabFolderCandidateFocusRequest(
+  request: Omit<NewtabFolderCandidateFocusRequest, 'requestId'>
+): void {
+  folderCandidateFocusRequest = {
+    ...request,
+    requestId: folderCandidateFocusRequest.requestId + 1
+  }
+  emitFolderCandidateFocusRequestChange()
+}
+
 export function useNewtabFolderSourceView(): NewtabFolderSourceView {
   return useSyncExternalStore(
     subscribeFolderSource,
     () => folderSourceView,
     () => EMPTY_VIEW
+  )
+}
+
+export function useNewtabFolderCandidateFocusRequest(): NewtabFolderCandidateFocusRequest {
+  return useSyncExternalStore(
+    subscribeFolderCandidateFocusRequest,
+    () => folderCandidateFocusRequest,
+    () => ({
+      folderId: '',
+      preventScroll: true,
+      requestId: 0,
+      target: 'candidate'
+    })
   )
 }
 
@@ -141,8 +189,8 @@ export function dispatchNewtabFolderCandidateSearchKeyDown(key: string): boolean
   return folderSourceActions.onCandidateSearchKeyDown(key)
 }
 
-export function dispatchNewtabFolderCandidateKeyDown(key: string): boolean {
-  return folderSourceActions.onCandidateKeyDown(key)
+export function dispatchNewtabFolderCandidateKeyDown(key: string, folderId: string): boolean {
+  return folderSourceActions.onCandidateKeyDown(key, folderId)
 }
 
 export function dispatchNewtabFolderCandidateSelect(folderId: string): void {

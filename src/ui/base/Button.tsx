@@ -1,11 +1,11 @@
 import { Button as BaseButton } from '@base-ui/react/button'
-import type { ComponentPropsWithoutRef } from 'react'
+import type { ComponentPropsWithRef } from 'react'
 import { cx } from './utils'
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
-export type ButtonProps = Omit<ComponentPropsWithoutRef<typeof BaseButton>, 'className'> & {
+export type ButtonProps = Omit<ComponentPropsWithRef<typeof BaseButton>, 'className'> & {
   className?: string
   variant?: ButtonVariant
   size?: ButtonSize
@@ -31,21 +31,23 @@ export function Button({
   size = 'md',
   unstyled = false,
   nativeButton,
+  ref,
   render,
   ...props
 }: ButtonProps) {
   const resolvedNativeButton = nativeButton ?? (render ? false : undefined)
 
   if (unstyled) {
-    return <BaseButton className={className} nativeButton={resolvedNativeButton} render={render} {...props} />
+    return <BaseButton ref={ref} className={className} nativeButton={resolvedNativeButton} render={render} {...props} />
   }
 
   return (
     <BaseButton
+      ref={ref}
       nativeButton={resolvedNativeButton}
       render={render}
       className={cx(
-        'inline-flex items-center justify-center gap-2 rounded-[var(--ui-radius-control)] border font-medium leading-none outline-none transition-colors focus-visible:border-[var(--ui-focus-ring)] focus-visible:ring-2 focus-visible:ring-white/18 disabled:pointer-events-none disabled:opacity-50',
+        'inline-flex items-center justify-center gap-2 rounded-[var(--ui-radius-control)] border font-medium leading-none outline-none transition-colors focus-visible:border-[var(--ui-focus-ring)] focus-visible:ring-2 focus-visible:ring-white/18 disabled:pointer-events-none disabled:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50',
         variantClass[variant],
         sizeClass[size],
         className

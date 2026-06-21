@@ -8,6 +8,7 @@ export interface AiSetupPromptProps {
   description: ReactNode
   descriptionClassName?: string
   iconClassName?: string
+  iconHidden?: boolean
   title: ReactNode
   titleClassName?: string
 }
@@ -18,12 +19,13 @@ export function AiSetupPrompt({
   description,
   descriptionClassName,
   iconClassName,
+  iconHidden = false,
   title,
   titleClassName
 }: AiSetupPromptProps) {
   return (
     <div className={cx('ai-setup-prompt', className)}>
-      <span className={cx('ai-setup-prompt-icon', iconClassName)} aria-hidden="true">
+      <span className={cx('ai-setup-prompt-icon', iconClassName)} hidden={iconHidden} aria-hidden="true">
         <Icon name="Bot" size={17} />
       </span>
       <div className="ai-setup-prompt-copy">

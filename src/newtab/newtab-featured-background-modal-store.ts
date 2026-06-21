@@ -14,15 +14,18 @@ export interface NewtabFeaturedBackgroundModalView {
 export interface NewtabFeaturedBackgroundModalActions {
   onCloseRequest: (event: Event) => void
   onGridScroll: () => void
-  onModalPointerDownCapture: (event: PointerEvent) => void
   onReady: () => void
   onRefreshClick: () => void
+}
+
+export interface NewtabFeaturedBackgroundModalNodes {
+  grid: HTMLElement | null
+  modal: HTMLElement | null
 }
 
 const EMPTY_ACTIONS: NewtabFeaturedBackgroundModalActions = {
   onCloseRequest: () => {},
   onGridScroll: () => {},
-  onModalPointerDownCapture: () => {},
   onReady: () => {},
   onRefreshClick: () => {}
 }
@@ -35,6 +38,10 @@ let featuredBackgroundModalView: NewtabFeaturedBackgroundModalView = {
   statusTone: 'info'
 }
 let featuredBackgroundModalActions: NewtabFeaturedBackgroundModalActions = EMPTY_ACTIONS
+let featuredBackgroundModalNodes: NewtabFeaturedBackgroundModalNodes = {
+  grid: null,
+  modal: null
+}
 let closeTimer = 0
 
 const listeners = new Set<() => void>()
@@ -115,6 +122,14 @@ export function getNewtabFeaturedBackgroundModalOpen(): boolean {
   return featuredBackgroundModalView.open && !featuredBackgroundModalView.closing
 }
 
+export function setNewtabFeaturedBackgroundModalNodes(nodes: NewtabFeaturedBackgroundModalNodes): void {
+  featuredBackgroundModalNodes = { ...nodes }
+}
+
+export function getNewtabFeaturedBackgroundModalNodes(): NewtabFeaturedBackgroundModalNodes {
+  return featuredBackgroundModalNodes
+}
+
 export function dispatchNewtabFeaturedBackgroundModalControls({
   refreshing,
   status,
@@ -159,8 +174,4 @@ export function dispatchNewtabFeaturedBackgroundModalOpenChange(open: boolean, e
 
 export function dispatchNewtabFeaturedBackgroundModalGridScroll(): void {
   featuredBackgroundModalActions.onGridScroll()
-}
-
-export function dispatchNewtabFeaturedBackgroundModalPointerDownCapture(event: PointerEvent): void {
-  featuredBackgroundModalActions.onModalPointerDownCapture(event)
 }

@@ -1,8 +1,9 @@
 import type { BookmarkRecord } from '../../shared/types.js'
 import type { NewTabSpeedDialStateMessage } from '../../shared/constants.js'
+import type { DashboardViewActionDetail } from '../components/dashboard-view-types.js'
 
 type DashboardModule = typeof import('./dashboard-controller.js')
-type DashboardCallbacks = Parameters<DashboardModule['handleDashboardClick']>[1]
+type DashboardCallbacks = Parameters<DashboardModule['handleDashboardViewAction']>[1]
 
 let dashboardModule: DashboardModule | null = null
 let dashboardModulePromise: Promise<DashboardModule> | null = null
@@ -74,60 +75,24 @@ export function applyNewTabSpeedDialStateMessage(message: NewTabSpeedDialStateMe
   loadedDashboardModule()?.applyNewTabSpeedDialStateMessage(message)
 }
 
-export function handleDashboardInput(event: Event): void {
-  loadedDashboardModule()?.handleDashboardInput(event)
-}
-
 export function handleDashboardKeydown(event: KeyboardEvent): void {
   loadedDashboardModule()?.handleDashboardKeydown(event)
 }
 
-export async function handleDashboardClick(event: Event, callbacks: DashboardCallbacks): Promise<void> {
+export async function handleDashboardViewAction(
+  detail: DashboardViewActionDetail,
+  callbacks: DashboardCallbacks
+): Promise<void> {
   const mod = await loadDashboardModule()
-  await mod.handleDashboardClick(event, callbacks)
+  await mod.handleDashboardViewAction(detail, callbacks)
 }
 
-export function handleDashboardError(event: Event, callbacks: DashboardCallbacks): void {
-  void loadDashboardModule().then((mod) => mod.handleDashboardError(event, callbacks))
+export function handleDashboardPanelClick(event: MouseEvent): void {
+  loadedDashboardModule()?.handleDashboardPanelClick(event)
 }
 
-export function handleDashboardLoad(event: Event): void {
-  loadedDashboardModule()?.handleDashboardLoad(event)
-}
-
-export function handleDashboardTagPointerOver(event: PointerEvent): void {
-  loadedDashboardModule()?.handleDashboardTagPointerOver(event)
-}
-
-export function handleDashboardTagPointerOut(event: PointerEvent): void {
-  loadedDashboardModule()?.handleDashboardTagPointerOut(event)
-}
-
-export function handleDashboardDocumentClick(event: MouseEvent): void {
-  loadedDashboardModule()?.handleDashboardDocumentClick(event)
-}
-
-export function handleDashboardDocumentFocusIn(event: FocusEvent): void {
-  loadedDashboardModule()?.handleDashboardDocumentFocusIn(event)
-}
-
-export function handleDashboardPointerDown(event: PointerEvent): void {
-  loadedDashboardModule()?.handleDashboardPointerDown(event)
-}
-
-export function handleDashboardPointerMove(event: PointerEvent): void {
-  loadedDashboardModule()?.handleDashboardPointerMove(event)
-}
-
-export async function handleDashboardPointerUp(event: PointerEvent, callbacks: DashboardCallbacks): Promise<void> {
-  const mod = loadedDashboardModule()
-  if (mod) {
-    await mod.handleDashboardPointerUp(event, callbacks)
-  }
-}
-
-export function handleDashboardPointerCancel(): void {
-  loadedDashboardModule()?.handleDashboardPointerCancel()
+export function handleDashboardPanelFocusIn(event: FocusEvent): void {
+  loadedDashboardModule()?.handleDashboardPanelFocusIn(event)
 }
 
 export async function moveSelectedDashboardBookmarks(

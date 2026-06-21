@@ -1,8 +1,18 @@
-import { useEffect, useMemo, useReducer } from 'react'
-import { DialogOverlay } from '../ui/primitives/Dialog'
+import { useEffect, useReducer } from 'react'
+import { DialogOverlay } from '../ui/base/Dialog'
+import { cx } from '../ui/base/utils'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getModalCloseDurationMs } from '../shared/motion'
-import { dispatchPopupModalAction, usePopupModalsView } from './popup-controller-store'
+import {
+  dispatchPopupModalAction,
+  usePopupModalsView,
+  usePopupSmartClassifierView
+} from './popup-controller-store'
+import {
+  dispatchPopupDocumentKeyDown,
+  dispatchPopupPageHide,
+  dispatchPopupStorageChanged
+} from './popup-browser-events-store'
 import { usePopupController } from './popup-controller'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
@@ -11,25 +21,50 @@ import { PopupModalsHost } from './components/PopupModalsHost'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { PopupToasts } from './components/PopupToasts'
 
-export function PopupApp() {
+const appShellBaseClass = [
+  'group relative flex h-full flex-col overflow-hidden border border-[#1b1d22] bg-[#0f1012] text-[var(--ui-text-primary)]',
+  'px-3.5 pb-3.5 pt-0 [font-family:var(--font-sans)] tracking-normal [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start]'
+].join(' ')
+const appShellDefaultClass = 'gap-[14px]'
+const appShellSmartClass = 'gap-2'
+const contentShellClass =
+  'relative z-[1] grid min-h-0 flex-[1_1_auto] overflow-hidden border-0 bg-transparent [height:auto]'
+const modalBackdropBaseClass = [
+  'absolute inset-0 z-20 grid place-items-center bg-black/[0.78] p-3.5 opacity-100',
+  'backdrop-blur-[18px] backdrop-saturate-[1.08]',
+  'transition-opacity duration-[var(--modal-close-dur)] ease-[var(--modal-ease)] motion-reduce:transition-none'
+].join(' ')
+
+export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | null }) {
   usePopupController()
 
   return (
     <ThemeProvider>
-      <PopupShell />
+      <PopupShell portalContainer={portalContainer} />
     </ThemeProvider>
   )
 }
 
-function PopupShell() {
+function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null }) {
   const modalsView = usePopupModalsView()
+  const smartClassifierView = usePopupSmartClassifierView()
   const modalOpen = modalsView.open
+  const smartActive = ['loading', 'results', 'error', 'permission'].includes(smartClassifierView.status)
   const [modalPresence, dispatchModalPresence] = useReducer(reduceModalPresence, {
     closing: false,
     visible: modalOpen
   })
-  const modalPortalContainer = useMemo(() => {
-    return typeof document === 'undefined' ? null : document.getElementById('popup-root')
+  useEffect(() => {
+    const storage = typeof chrome === 'undefined' ? null : chrome.storage
+
+    document.addEventListener('keydown', dispatchPopupDocumentKeyDown)
+    window.addEventListener('pagehide', dispatchPopupPageHide)
+    storage?.onChanged?.addListener(dispatchPopupStorageChanged)
+    return () => {
+      document.removeEventListener('keydown', dispatchPopupDocumentKeyDown)
+      window.removeEventListener('pagehide', dispatchPopupPageHide)
+      storage?.onChanged?.removeListener(dispatchPopupStorageChanged)
+    }
   }, [])
 
   useEffect(() => {
@@ -54,34 +89,38 @@ function PopupShell() {
     }
   }, [modalOpen, modalPresence.visible])
 
-  const modalBackdropClassName = [
-    'modal-backdrop',
-    modalPresence.visible ? '' : 'hidden',
-    modalPresence.closing ? 'is-closing' : ''
-  ].filter(Boolean).join(' ')
+  const modalBackdropClassName = cx(
+    modalBackdropBaseClass,
+    modalPresence.closing ? 'pointer-events-none opacity-0' : ''
+  )
+  const appShellClassName = cx(
+    appShellBaseClass,
+    smartActive ? appShellSmartClass : appShellDefaultClass
+  )
 
   return (
     <>
       <main
         id="popup-app-shell"
-        className="app-shell"
+        className={appShellClassName}
         aria-hidden={modalOpen && !modalPresence.closing ? 'true' : 'false'}
         inert={modalOpen && !modalPresence.closing}
       >
-        <PopupChromeHost>
+        <PopupChromeHost smartActive={smartActive}>
           <PopupSmartClassifierHost />
         </PopupChromeHost>
 
-        <section className="content-shell">
+        <section className={contentShellClass} hidden={smartActive}>
           <PopupContentHost />
         </section>
 
-        <PopupAutoAnalyzeStatus />
+        <PopupAutoAnalyzeStatus smartActive={smartActive} />
       </main>
 
       <DialogOverlay
         id="modal-backdrop"
         className={modalBackdropClassName}
+        hidden={!modalPresence.visible}
         open={modalPresence.visible}
         onOpenChange={(open) => {
           if (!open && modalOpen) {
@@ -91,7 +130,7 @@ function PopupShell() {
         }}
         aria-hidden={modalPresence.visible && !modalPresence.closing ? 'false' : 'true'}
         disablePointerDismissal
-        portalContainer={modalPortalContainer ?? undefined}
+        portalContainer={portalContainer ?? undefined}
       >
         <PopupModalsHost />
       </DialogOverlay>

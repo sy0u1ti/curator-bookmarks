@@ -4,8 +4,7 @@ import {
   managerState,
   createEmptyIgnoreRules
 } from '../shared-options/state.js'
-import { dom } from '../shared-options/dom.js'
-import { renderIgnoreRulesPanelIsland } from '../components/IgnoreRulesIsland.js'
+import { publishIgnoreRules } from '../components/ignore-rules-store.js'
 
 export function normalizeIgnoreRules(rawRules) {
   const normalized = createEmptyIgnoreRules()
@@ -116,11 +115,7 @@ export function matchesIgnoreRules(result) {
 }
 
 export function renderIgnoreSection() {
-  if (!dom.ignoreRules) {
-    return
-  }
-
-  renderIgnoreRulesPanelIsland(dom.ignoreRules, {
+  publishIgnoreRules({
     bookmarks: managerState.ignoreRules.bookmarks,
     domains: managerState.ignoreRules.domains,
     folders: managerState.ignoreRules.folders

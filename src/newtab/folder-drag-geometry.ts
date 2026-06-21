@@ -4,16 +4,6 @@ export interface FolderDragSectionRectInput {
   height: number
 }
 
-export interface FolderDragSectionElementLike {
-  dataset: {
-    folderSectionId?: string
-  }
-  getBoundingClientRect: () => {
-    top: number
-    height: number
-  }
-}
-
 export interface FolderDragSectionRectSnapshot {
   orderIds: string[]
   rects: Map<string, FolderDragSectionRectInput>
@@ -49,28 +39,6 @@ export function createFolderDragSectionRectSnapshot(
     orderIds,
     rects
   }
-}
-
-export function createFolderDragSectionRectSnapshotFromElements(
-  sections: Iterable<FolderDragSectionElementLike>
-): FolderDragSectionRectSnapshot {
-  const rects: FolderDragSectionRectInput[] = []
-
-  for (const section of sections) {
-    const folderId = String(section.dataset.folderSectionId || '').trim()
-    if (!folderId) {
-      continue
-    }
-
-    const rect = section.getBoundingClientRect()
-    rects.push({
-      id: folderId,
-      top: Number(rect.top) || 0,
-      height: Math.max(0, Number(rect.height) || 0)
-    })
-  }
-
-  return createFolderDragSectionRectSnapshot(rects)
 }
 
 export function getFolderInsertIndexFromSnapshot(
