@@ -29,11 +29,12 @@ import {
   upsertBookmarkTagFromAnalysis
 } from '../shared/bookmark-tags.js'
 import {
-  extractAiErrorMessage,
-  extractChatCompletionsJsonText,
-  extractResponsesJsonText,
-  getAiEndpoint
-} from '../shared/ai-response.js'
+  buildAiFolderCandidates,
+  requestStructuredAiOutput,
+  toAiFolderCandidatePayload,
+  validateKnownFolderId,
+  type AiFolderCandidate
+} from '../shared/ai-runtime.js'
 import { isAllowedAiProviderBaseUrl } from '../shared/ai-provider-url.js'
 import {
   normalizeAiNamingSettings,
@@ -1832,44 +1833,29 @@ async function requestAutoClassification({
   bookmark: BookmarkRecord
   folders: FolderRecord[]
 }): Promise<AutoClassifyResult> {
-  const endpoint = getAiEndpoint(settings)
-  const requestBody = buildAutoClassifyRequestBody({ settings, pageContext, bookmark, folders })
-  const response = await fetchWithAutoTimeout(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify(requestBody)
-  }, settings.timeoutMs)
-  const payload = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    throw new Error(extractAiErrorMessage(payload, response.status))
-  }
-
-  const rawJsonText = settings.apiStyle === 'responses'
-    ? extractResponsesJsonText(payload)
-    : extractChatCompletionsJsonText(payload)
-
-  try {
-    return normalizeAutoAiResult(JSON.parse(rawJsonText))
-  } catch {
-    throw new Error('AI 返回了无法解析的 JSON 结果。')
-  }
+  const folderCandidates = buildAiFolderCandidates(folders, { limit: AUTO_CLASSIFY_FOLDER_LIMIT })
+  const prompt = buildAutoClassifyPrompt({ pageContext, bookmark, folderCandidates })
+  const result = await requestStructuredAiOutput<Record<string, any>>({
+    settings,
+    schema: AUTO_CLASSIFY_SCHEMA,
+    schemaName: 'auto_bookmark_classification',
+    systemPrompt: prompt.systemPrompt,
+    userPrompt: prompt.userPrompt,
+    timeoutMs: settings.timeoutMs,
+    validate: (payload) => validateAutoFolderIds(payload, folderCandidates)
+  })
+  return normalizeAutoAiResult(result.data)
 }
 
-function buildAutoClassifyRequestBody({
-  settings,
+function buildAutoClassifyPrompt({
   pageContext,
   bookmark,
-  folders
+  folderCandidates
 }: {
-  settings: AiNamingSettings
   pageContext: PageContentContext
   bookmark: BookmarkRecord
-  folders: FolderRecord[]
-}): Record<string, unknown> {
+  folderCandidates: AiFolderCandidate[]
+}): { systemPrompt: string; userPrompt: string } {
   const systemPrompt = [
     '你是浏览器书签自动分类助手。',
     '你需要根据当前网页内容和用户已有书签文件夹，为新增书签推荐保存位置。',
@@ -1896,55 +1882,22 @@ function buildAutoClassifyRequestBody({
       domain: extractDomain(bookmark.url),
       page_context: buildPageContextForAi(normalizePageContentContext(pageContext), { mainTextLimit: 4200 })
     },
-    existing_folders: buildAutoFolderCandidates(folders)
+    existing_folders: folderCandidates.map(toAiFolderCandidatePayload)
   }, null, 2)
 
-  if (settings.apiStyle === 'chat_completions') {
-    const schemaHint = '\n\n请严格按以下 JSON 格式返回结果，不要添加任何额外文本或 markdown 标记：\n' + JSON.stringify(AUTO_CLASSIFY_SCHEMA, null, 2)
-    return {
-      model: settings.model,
-      messages: [
-        { role: 'system', content: systemPrompt + schemaHint },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' }
-    }
-  }
-
   return {
-    model: settings.model,
-    input: [
-      {
-        role: 'system',
-        content: [{ type: 'input_text', text: systemPrompt }]
-      },
-      {
-        role: 'user',
-        content: [{ type: 'input_text', text: userPrompt }]
-      }
-    ],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'auto_bookmark_classification',
-        strict: true,
-        schema: AUTO_CLASSIFY_SCHEMA
-      }
-    }
+    systemPrompt,
+    userPrompt
   }
 }
 
-function buildAutoFolderCandidates(folders: FolderRecord[]): Array<Record<string, unknown>> {
-  return folders
-    .slice()
-    .sort(compareFoldersByDepth)
-    .slice(0, AUTO_CLASSIFY_FOLDER_LIMIT)
-    .map((folder) => ({
-      folder_id: String(folder.id),
-      folder_path: String(folder.path || folder.title || ''),
-      title: String(folder.title || ''),
-      depth: Number(folder.depth) || 0
-    }))
+function validateAutoFolderIds(payload: Record<string, any>, folderCandidates: AiFolderCandidate[]): void {
+  const existingFolders = Array.isArray(payload?.existing_folders)
+    ? payload.existing_folders
+    : []
+  existingFolders.forEach((item) => {
+    validateKnownFolderId(item?.folder_id, folderCandidates)
+  })
 }
 
 function chooseAutoFolderRecommendation(

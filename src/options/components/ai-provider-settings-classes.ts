@@ -47,7 +47,9 @@ export const AI_PROVIDER_FLOW_COPY_CLASS =
   'm-0 mt-[5px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-[1.35] text-[var(--ui-text-disabled)]'
 
 export const AI_PROVIDER_QUICK_ROW_CLASS =
-  'grid grid-cols-[minmax(260px,1fr)_minmax(260px,0.62fr)] items-end gap-3 max-[900px]:grid-cols-1'
+  'grid grid-cols-[minmax(260px,1fr)_minmax(260px,0.62fr)] items-start gap-3 max-[900px]:grid-cols-1'
+
+export const AI_PROVIDER_API_KEY_GROUP_CLASS = 'flex min-w-0 flex-col gap-3'
 
 export const AI_PROVIDER_FIELD_CLASS = 'm-0 flex min-w-0 flex-col gap-2.5 border-0 p-0'
 
@@ -60,21 +62,21 @@ export const AI_PROVIDER_INPUT_CLASS =
 export const AI_PROVIDER_MODEL_FIELD_CLASS = 'min-w-0'
 
 export const AI_PROVIDER_MODEL_TOOLS_CLASS =
-  'grid grid-cols-[minmax(180px,1fr)_auto] items-end gap-3 max-[760px]:grid-cols-1'
+  'grid grid-cols-[minmax(180px,1fr)_auto] items-start gap-3 max-[760px]:grid-cols-1'
 
-export const AI_PROVIDER_MODEL_CONTROL_CLASS = 'min-w-0'
+export const AI_PROVIDER_MODEL_CONTROL_CLASS = 'flex min-w-0 flex-col gap-2.5'
 
 export const AI_PROVIDER_MODEL_LABEL_CLASS =
-  'mb-[7px] block text-xs font-semibold leading-[1.2] text-[rgba(245,245,247,0.72)]'
+  'block text-xs font-semibold leading-[1.2] text-[rgba(245,245,247,0.72)]'
 
 export const AI_PROVIDER_SELECT_HOST_CLASS = 'min-w-0'
 
 export const AI_PROVIDER_SELECT_ROOT_CLASS = 'w-full'
 
 export const AI_PROVIDER_SELECT_TRIGGER_CLASS =
-  'min-h-10 w-full rounded-[var(--ui-radius-control)] border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-primary)] focus-visible:ring-[rgba(59,130,246,0.12)]'
+  'min-h-[50px] w-full rounded-[var(--ui-radius-control)] border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-primary)] focus-visible:ring-[rgba(59,130,246,0.12)]'
 
-export const AI_PROVIDER_FETCH_BUTTON_CLASS = 'min-h-10 w-full min-w-[72px]'
+export const AI_PROVIDER_FETCH_BUTTON_CLASS = 'min-h-[50px] w-full min-w-[72px]'
 
 export const AI_PROVIDER_CHECK_CLASS =
   'inline-flex w-fit cursor-pointer items-center gap-3 text-[13px] text-[var(--ui-text-secondary)]'
@@ -123,7 +125,7 @@ export const AI_PROVIDER_ADVANCED_NOTE_CLASS =
   'm-0 mb-3.5 rounded-[14px] bg-[rgba(255,255,255,0.035)] p-3.5 text-[13px] leading-[1.65] text-[var(--ui-text-tertiary)]'
 
 export const AI_PROVIDER_GRID_CLASS =
-  'grid grid-cols-2 gap-3.5 max-[760px]:grid-cols-1'
+  'grid grid-cols-2 items-start gap-3.5 max-[760px]:grid-cols-1'
 
 export const AI_PROVIDER_DIALOG_BACKDROP_CLASS =
   `fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 backdrop-blur-[14px] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`

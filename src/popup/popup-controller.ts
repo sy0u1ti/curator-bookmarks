@@ -3785,7 +3785,7 @@ async function loadAiProviderSettings() {
 function buildSmartRecommendations(aiResult) {
   const byFolderId = new Map()
   for (const suggestion of aiResult.existingFolders) {
-    const folder = findBestExistingFolder(suggestion.folderPath)
+    const folder = findBestExistingFolder(suggestion)
     if (!folder) {
       continue
     }
@@ -3902,7 +3902,18 @@ function normalizeSmartTextList(value, limit, itemLimit) {
   }
   return output
 }
-function findBestExistingFolder(rawPath) {
+function findBestExistingFolder(suggestion) {
+  const folderId = typeof suggestion === 'string'
+    ? ''
+    : String(suggestion?.folderId || '').trim()
+  if (folderId) {
+    const exactIdMatch = state.folderMap.get(folderId)
+    if (exactIdMatch) {
+      return exactIdMatch
+    }
+  }
+
+  const rawPath = typeof suggestion === 'string' ? suggestion : suggestion?.folderPath
   const normalizedPath = normalizeText(rawPath)
   if (!normalizedPath) {
     return null

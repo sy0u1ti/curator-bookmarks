@@ -23,6 +23,7 @@ import {
   AI_PROVIDER_ADVANCED_CLASS,
   AI_PROVIDER_ADVANCED_PANEL_CLASS,
   AI_PROVIDER_ADVANCED_TRIGGER_CLASS,
+  AI_PROVIDER_API_KEY_GROUP_CLASS,
   AI_PROVIDER_BODY_CLASS,
   AI_PROVIDER_CARD_CLASS,
   AI_PROVIDER_CARD_ATTENTION_CLASS,
@@ -163,24 +164,44 @@ export function AiProviderSettings({
         </ol>
 
         <div className={AI_PROVIDER_QUICK_ROW_CLASS}>
-          <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-api-key">
-            <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>API Key</span>
-            <Input
-              id="ai-api-key"
-              className={AI_PROVIDER_INPUT_CLASS}
-              type={state.revealApiKey ? 'text' : 'password'}
-              spellCheck={false}
-              autoComplete="off"
-              placeholder={state.apiKeyPlaceholder}
-              value={state.apiKey}
-              onValueChange={(value) => handleAiProviderSettingsAction({
-                action: 'change',
-                field: 'apiKey',
-                value
-              })}
-              unstyled
-            />
-          </label>
+          <div className={AI_PROVIDER_API_KEY_GROUP_CLASS}>
+            <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-api-key">
+              <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>API Key</span>
+              <Input
+                id="ai-api-key"
+                className={AI_PROVIDER_INPUT_CLASS}
+                type={state.revealApiKey ? 'text' : 'password'}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={state.apiKeyPlaceholder}
+                value={state.apiKey}
+                onValueChange={(value) => handleAiProviderSettingsAction({
+                  action: 'change',
+                  field: 'apiKey',
+                  value
+                })}
+                unstyled
+              />
+            </label>
+
+            <label className={AI_PROVIDER_CHECK_CLASS} htmlFor="ai-api-key-reveal">
+              <span>显示密码</span>
+              <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
+                <SwitchControl
+                  id="ai-api-key-reveal"
+                  aria-label="显示密码"
+                  checked={state.revealApiKey}
+                  className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
+                  thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
+                  onCheckedChange={(checked) => handleAiProviderSettingsAction({
+                    action: 'toggle-api-key',
+                    value: checked
+                  })}
+                  unstyled
+                />
+              </span>
+            </label>
+          </div>
 
           <div className={AI_PROVIDER_MODEL_FIELD_CLASS}>
             <AiProviderModelToolsContent
@@ -189,23 +210,6 @@ export function AiProviderSettings({
             />
           </div>
         </div>
-
-        <label className={AI_PROVIDER_CHECK_CLASS}>
-          <span>显示密码</span>
-          <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
-            <SwitchControl
-              aria-label="显示密码"
-              checked={state.revealApiKey}
-              className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
-              thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
-              onCheckedChange={(checked) => handleAiProviderSettingsAction({
-                action: 'toggle-api-key',
-                value: checked
-              })}
-              unstyled
-            />
-          </span>
-        </label>
 
         {state.connectivityVisible ? (
           <p className={connectivityClassName}>
@@ -244,9 +248,9 @@ export function AiProviderSettings({
                 <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>接口类型</span>
                 <div className={AI_PROVIDER_SELECT_HOST_CLASS}>
                   <Select
+                    ariaLabel="接口类型"
                     className={AI_PROVIDER_SELECT_ROOT_CLASS}
                     disabled={state.modelToolsDisabled}
-                    label="接口类型"
                     options={apiStyleOptions}
                     triggerClassName={AI_PROVIDER_SELECT_TRIGGER_CLASS}
                     value={state.apiStyle}

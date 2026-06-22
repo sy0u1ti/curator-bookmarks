@@ -18,8 +18,9 @@ const TOAST_ROOT_CLASS = [
   'pointer-events-auto relative flex min-w-60 max-w-80 items-center gap-3',
   'rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-3.5 py-3 text-[var(--ui-text-primary)] shadow-none',
   'data-[type=success]:border-[rgba(245,245,247,0.48)] data-[type=error]:border-[rgba(255,138,130,0.48)]',
-  'data-[starting-style]:animate-[toast-enter_var(--ui-motion-standard)_var(--ui-ease-spring)_both]',
-  'data-[ending-style]:pointer-events-none data-[ending-style]:animate-[toast-exit_var(--ui-motion-fast)_var(--ui-ease-in)_both]'
+  'opacity-100 [transform:translateY(0)_scale(1)] transition-[opacity,transform] duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-spring)] will-change-transform motion-reduce:transition-none motion-reduce:transform-none',
+  'data-[starting-style]:opacity-0 data-[starting-style]:[transform:translateY(8px)_scale(0.985)]',
+  'data-[ending-style]:pointer-events-none data-[ending-style]:opacity-0 data-[ending-style]:duration-[var(--ui-motion-fast)] data-[ending-style]:ease-[var(--ui-ease-standard)] data-[ending-style]:[transform:translateY(8px)_scale(0.985)]'
 ].join(' ')
 
 export function PopupToasts() {

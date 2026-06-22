@@ -1,18 +1,13 @@
 import { STORAGE_KEYS } from '../shared/constants.js'
 import {
-  extractAiErrorMessage,
-  extractChatCompletionsJsonText,
-  extractResponsesJsonText,
-  getAiEndpoint
-} from '../shared/ai-response.js'
+  requestStructuredAiOutput
+} from '../shared/ai-runtime.js'
 import { getAiProviderBaseUrlIssue } from '../shared/ai-provider-url.js'
 import { getLocalStorage } from '../shared/storage.js'
 import {
   normalizeNaturalSearchAiPlan,
   type NaturalSearchPlan
 } from './natural-search.js'
-
-const NATURAL_SEARCH_AI_DEFAULT_TIMEOUT_MS = 30000
 
 let aiSettingsModulePromise: Promise<typeof import('../options/sections/ai-settings.js')> | null = null
 
@@ -120,33 +115,17 @@ export async function requestNaturalSearchAiPlan({
   await ensureNaturalSearchAiPermissions(settings, { interactive: false })
 
   throwIfAborted(signal)
-  const endpoint = getAiEndpoint(settings)
-  const requestBody = buildNaturalSearchRequestBody({ settings, query, localPlan })
-  const response = await fetchWithTimeout(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify(requestBody),
-    signal
-  }, settings.timeoutMs)
-  throwIfAborted(signal)
-  const payload = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    throw new Error(extractAiErrorMessage(payload, response.status))
-  }
-
-  const rawJsonText = settings.apiStyle === 'responses'
-    ? extractResponsesJsonText(payload)
-    : extractChatCompletionsJsonText(payload)
-
-  try {
-    return normalizeNaturalSearchAiPlan(JSON.parse(rawJsonText), localPlan)
-  } catch {
-    throw new Error('AI 返回了无法解析的自然语言搜索结果。')
-  }
+  const prompt = buildNaturalSearchPrompt({ query, localPlan })
+  const result = await requestStructuredAiOutput<unknown>({
+    settings,
+    schema: NATURAL_SEARCH_SCHEMA,
+    schemaName: 'popup_natural_language_search',
+    systemPrompt: prompt.systemPrompt,
+    userPrompt: prompt.userPrompt,
+    signal,
+    timeoutMs: settings.timeoutMs
+  })
+  return normalizeNaturalSearchAiPlan(result.data, localPlan)
 }
 
 export function normalizeNaturalSearchAiError(error: unknown): string {
@@ -170,12 +149,10 @@ export function isNaturalSearchAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError'
 }
 
-function buildNaturalSearchRequestBody({
-  settings,
+function buildNaturalSearchPrompt({
   query,
   localPlan
 }: {
-  settings: AiNamingSettings
   query: string
   localPlan: NaturalSearchPlan
 }) {
@@ -226,38 +203,9 @@ function buildNaturalSearchRequestBody({
     ]
   }, null, 2)
 
-  if (settings.apiStyle === 'chat_completions') {
-    const schemaHint = '\n\n请严格按以下 JSON 格式返回结果，不要添加任何额外文本或 markdown 标记：\n' + JSON.stringify(NATURAL_SEARCH_SCHEMA, null, 2)
-    return {
-      model: settings.model,
-      messages: [
-        { role: 'system', content: systemPrompt + schemaHint },
-        { role: 'user', content: userPrompt }
-      ],
-      response_format: { type: 'json_object' }
-    }
-  }
-
   return {
-    model: settings.model,
-    input: [
-      {
-        role: 'system',
-        content: [{ type: 'input_text', text: systemPrompt }]
-      },
-      {
-        role: 'user',
-        content: [{ type: 'input_text', text: userPrompt }]
-      }
-    ],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'popup_natural_language_search',
-        strict: true,
-        schema: NATURAL_SEARCH_SCHEMA
-      }
-    }
+    systemPrompt,
+    userPrompt
   }
 }
 
@@ -273,36 +221,6 @@ function getPreviousWeekDateRange(): NaturalSearchPlan['dateRange'] {
     to: thisWeekStart.getTime(),
     label: '上周收藏'
   }
-}
-
-function fetchWithTimeout(
-  url: string,
-  options: RequestInit = {},
-  timeoutMs = NATURAL_SEARCH_AI_DEFAULT_TIMEOUT_MS
-): Promise<Response> {
-  const controller = new AbortController()
-  const externalSignal = options.signal
-  const abortCurrentFetch = () => {
-    controller.abort()
-  }
-
-  if (externalSignal?.aborted) {
-    controller.abort()
-  } else {
-    externalSignal?.addEventListener('abort', abortCurrentFetch, { once: true })
-  }
-
-  const timeoutId = globalThis.setTimeout(() => {
-    controller.abort()
-  }, Math.max(1000, Number(timeoutMs) || NATURAL_SEARCH_AI_DEFAULT_TIMEOUT_MS))
-
-  return fetch(url, {
-    ...options,
-    signal: controller.signal
-  }).finally(() => {
-    globalThis.clearTimeout(timeoutId)
-    externalSignal?.removeEventListener('abort', abortCurrentFetch)
-  })
 }
 
 function throwIfAborted(signal?: AbortSignal | null): void {

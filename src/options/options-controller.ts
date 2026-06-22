@@ -60,10 +60,18 @@ import {
 } from '../shared/privacy-audit.js'
 import {
   extractAiErrorMessage,
-  extractChatCompletionsJsonText,
-  extractResponsesJsonText,
   getAiEndpoint
 } from '../shared/ai-response.js'
+import {
+  AiRuntimeError,
+  buildAiFolderCandidates as buildRuntimeAiFolderCandidates,
+  normalizeAiFolderDecision,
+  requestStructuredAiOutput,
+  toAiFolderCandidatePayload,
+  validateKnownFolderId,
+  type AiFolderCandidate,
+  type AiProviderSettings
+} from '../shared/ai-runtime.js'
 import { getAiProviderBaseUrlIssue } from '../shared/ai-provider-url.js'
 import {
   normalizeAiNamingSettings,
@@ -4911,18 +4919,39 @@ function canMoveAiNamingResultToSuggestedFolder(result) {
     return false
   }
 
-  const suggestedFolder = normalizeAiSuggestedFolderPath(result.suggestedFolder)
+  const existingFolderId = getAiExistingFolderDecisionId(result)
+  if (existingFolderId) {
+    return String(existingFolderId) !== String(result.parentId || '')
+  }
+
+  const suggestedFolder = normalizeAiSuggestedFolderPath(getAiSuggestedFolderPathForResult(result))
   if (!suggestedFolder) {
     return false
   }
 
-  const matchedFolder = findAiSuggestedFolder(result.suggestedFolder, result.parentId)
+  const matchedFolder = findAiSuggestedFolder(suggestedFolder, result.parentId)
   if (matchedFolder) {
     return String(matchedFolder.id) !== String(result.parentId || '')
   }
 
   const currentPath = normalizeAiSuggestedFolderPath(result.path)
   return normalizeText(suggestedFolder) !== normalizeText(currentPath)
+}
+
+function getAiExistingFolderDecisionId(result) {
+  return result?.folderDecision?.kind === 'existing'
+    ? String(result.folderDecision.folderId || '').trim()
+    : ''
+}
+
+function getAiSuggestedFolderPathForResult(result) {
+  if (result?.folderDecision?.kind === 'new' && result.folderDecision.folderPath) {
+    return result.folderDecision.folderPath
+  }
+  if (result?.folderDecision?.kind === 'existing' && result.folderDecision.folderPath) {
+    return result.folderDecision.folderPath
+  }
+  return result?.suggestedFolder || ''
 }
 
 function splitAiSuggestedFolderPath(value) {
@@ -5078,6 +5107,19 @@ function getAiFolderCreationRoot(rawSegments) {
     rootTitle: String(bookmarksBar?.title || '书签栏'),
     segments: rawSegments.slice()
   }
+}
+
+async function resolveAiSuggestedFolderId(result, folderCache = new Map()) {
+  const existingFolderId = getAiExistingFolderDecisionId(result)
+  if (existingFolderId) {
+    const folder = availabilityState.folderMap.get(existingFolderId)
+    if (!folder) {
+      throw new Error('AI 推荐的已有文件夹已不存在，请刷新后重试。')
+    }
+    return String(folder.id)
+  }
+
+  return ensureAiSuggestedFolderPath(getAiSuggestedFolderPathForResult(result), folderCache)
 }
 
 async function ensureAiSuggestedFolderPath(value, folderCache = new Map()) {
@@ -5593,7 +5635,7 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
 
     for (const result of targetResults) {
       try {
-        const targetFolderId = await ensureAiSuggestedFolderPath(result.suggestedFolder, folderCache)
+        const targetFolderId = await resolveAiSuggestedFolderId(result, folderCache)
         if (!targetFolderId || String(targetFolderId) === String(result.parentId || '')) {
           continue
         }
@@ -5641,7 +5683,7 @@ function formatAiNamingRenameImpactList(results) {
 function formatAiNamingMoveImpactList(results) {
   return formatAiNamingImpactList(results, (result) => {
     const title = result.currentTitle || result.suggestedTitle || result.url || result.id
-    return `${title} -> ${result.suggestedFolder}`
+    return `${title} -> ${getAiSuggestedFolderPathForResult(result)}`
   })
 }
 
@@ -6284,6 +6326,7 @@ function buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem = nu
     contentType: normalizeAiResultText(modelItem.contentType || preparedItem?.pageContext?.content_type, 80),
     topics: normalizeAiResultTextList(modelItem.topics, 8, 48),
     suggestedFolder: normalizeAiResultText(modelItem.suggestedFolder, 180),
+    folderDecision: modelItem.folderDecision || null,
     tags: normalizeBookmarkTags(modelItem.tags),
     aliases: normalizeAiResultTextList(modelItem.aliases, 20, 40),
     extractionStatus: String(preparedItem?.pageContext?.extraction?.status || ''),
@@ -6376,33 +6419,14 @@ function getAiNamingFailureMessage(error) {
   return error instanceof Error ? error.message : '生成建议失败。'
 }
 
-function buildAiFolderCandidates(bookmark) {
-  const candidates = []
-  const seen = new Set()
-  const appendFolder = (value) => {
-    const folderPath = String(value || '').replace(/\s+/g, ' ').trim()
-    const key = normalizeText(folderPath)
-    if (!folderPath || !key || seen.has(key)) {
-      return
+function buildAiFolderCandidates(bookmark): AiFolderCandidate[] {
+  return buildRuntimeAiFolderCandidates(
+    availabilityState.allFolders,
+    {
+      currentFolderPath: bookmark?.path,
+      limit: 80
     }
-
-    seen.add(key)
-    candidates.push(folderPath)
-  }
-
-  appendFolder(bookmark?.path)
-  availabilityState.allFolders
-    .slice()
-    .sort((left, right) => {
-      const leftSameDomain = String(bookmark?.path || '').startsWith(String(left.path || left.title || '')) ? -1 : 0
-      const rightSameDomain = String(bookmark?.path || '').startsWith(String(right.path || right.title || '')) ? -1 : 0
-      return leftSameDomain - rightSameDomain || compareByPathTitle(left, right)
-    })
-    .forEach((folder) => {
-      appendFolder(folder.path || folder.title)
-    })
-
-  return candidates.slice(0, 80)
+  )
 }
 
 async function buildAiNamingPreparedItem(bookmark, timeoutMs, options: { signal?: AbortSignal | null } = {}) {
@@ -6410,10 +6434,12 @@ async function buildAiNamingPreparedItem(bookmark, timeoutMs, options: { signal?
   const metadata = await getAiMetadataForBookmark(bookmark, timeoutMs, options)
   throwIfAborted(options.signal)
   const pageContext = buildPageContextForAi(metadata)
+  const folderCandidates = buildAiFolderCandidates(bookmark)
   const preparedItem = {
     bookmark,
     pageMetadata: metadata,
     pageContext,
+    folderCandidates,
     requestItem: {
       bookmark_id: String(bookmark.id),
       current_title: String(bookmark.title || '未命名书签'),
@@ -6421,7 +6447,7 @@ async function buildAiNamingPreparedItem(bookmark, timeoutMs, options: { signal?
       final_url: String(metadata.finalUrl || bookmark.url || ''),
       folder_path: String(bookmark.path || ''),
       domain: String(bookmark.domain || extractDomain(metadata.finalUrl || bookmark.url || '')),
-      existing_folders: buildAiFolderCandidates(bookmark),
+      existing_folders: folderCandidates.map(toAiFolderCandidatePayload),
       page_context: pageContext
     }
   }
@@ -6770,34 +6796,19 @@ function normalizeAiNamingConnectivityError(error, timeoutMs = aiNamingManagerSt
 async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSignal | null } = {}) {
   const settings = aiNamingManagerState.settings
   const endpoint = getAiEndpoint(settings)
-  const requestBody = buildAiNamingRequestBody(preparedItems, settings)
+  const prompt = buildAiNamingPrompt(preparedItems, settings)
   throwIfAborted(options.signal)
   try {
-    const response = await fetchWithRequestTimeout(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.apiKey}`
-      },
-      body: JSON.stringify(requestBody),
-      signal: options.signal
-    }, settings.timeoutMs)
-
-    throwIfAborted(options.signal)
-    const payload = await response.json().catch(() => null)
-    if (!response.ok) {
-      throw new Error(extractAiErrorMessage(payload, response.status))
-    }
-
-    const rawJsonText = settings.apiStyle === 'responses'
-      ? extractResponsesJsonText(payload)
-      : extractChatCompletionsJsonText(payload)
-    let parsedPayload = null
-    try {
-      parsedPayload = JSON.parse(rawJsonText)
-    } catch (error) {
-      throw new Error('AI 返回了无法解析的 JSON 结果。')
-    }
+    const result = await requestStructuredAiOutput({
+      settings: settings as AiProviderSettings,
+      schema: AI_NAMING_RESPONSE_SCHEMA,
+      schemaName: 'bookmark_naming_batch',
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+      signal: options.signal,
+      timeoutMs: settings.timeoutMs,
+      validate: (payload) => validateAiNamingFolderDecisions(payload, preparedItems)
+    })
     recordPrivacyAudit({
       feature: 'ai-naming',
       label: '书签智能分析',
@@ -6808,7 +6819,7 @@ async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSign
       status: 'success',
       reason: `已完成 ${preparedItems.length} 条书签分析请求。`
     })
-    return normalizeAiNamingResponseItems(parsedPayload, preparedItems)
+    return normalizeAiNamingResponseItems(result.data, preparedItems)
   } catch (error) {
     recordPrivacyAudit({
       feature: 'ai-naming',
@@ -6824,58 +6835,13 @@ async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSign
   }
 }
 
-function buildAiNamingRequestBody(preparedItems, settings) {
+function buildAiNamingPrompt(preparedItems, settings) {
   const systemPrompt = settings.systemPrompt || getDefaultAiNamingSystemPrompt()
   const userPrompt = buildAiNamingUserPrompt(preparedItems)
 
-  if (settings.apiStyle === 'chat_completions') {
-    const schemaHint = '\n\n请严格按以下 JSON 格式返回结果，不要添加任何额外文本或 markdown 标记：\n' + JSON.stringify(AI_NAMING_RESPONSE_SCHEMA, null, 2)
-    return {
-      model: settings.model,
-      messages: [
-        {
-          role: 'system',
-          content: systemPrompt + schemaHint
-        },
-        {
-          role: 'user',
-          content: userPrompt
-        }
-      ],
-      response_format: { type: 'json_object' }
-    }
-  }
-
   return {
-    model: settings.model,
-    input: [
-      {
-        role: 'system',
-        content: [
-          {
-            type: 'input_text',
-            text: systemPrompt
-          }
-        ]
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: userPrompt
-          }
-        ]
-      }
-    ],
-    text: {
-      format: {
-        type: 'json_schema',
-        name: 'bookmark_naming_batch',
-        strict: true,
-        schema: AI_NAMING_RESPONSE_SCHEMA
-      }
-    }
+    systemPrompt,
+    userPrompt
   }
 }
 
@@ -6893,7 +6859,8 @@ function getDefaultAiNamingSystemPrompt() {
     '默认优先输出自然中文标题；但如果页面主体明显是英文或其他语言，则翻译原语言核心标题，在源语言核心标题后方用冒号添加译文。格式示例：`核心标题: 中文译文`。',
     '不要凭空补充页面中没有出现的实体、结论、时间或用途。',
     'summary 要概括页面主要内容；content_type 从文档、博客、论文、工具、新闻、GitHub 项目、视频、商品页、论坛、登录页、网页中选择最贴近的一类。',
-    'suggested_folder 优先从 existing_folders 中选择；如果都明显不合适，可以给出一个简短的新文件夹建议。',
+    'suggested_folder 保留为用户可读的兼容字段；优先从 existing_folders 中选择，若都明显不合适，可以给出一个简短的新文件夹建议。',
+    'folder_decision 用于安全移动：选择已有文件夹时必须返回 kind="existing" 且原样带回输入候选中的 folder_id；建议新文件夹时返回 kind="new" 和 folder_path；不确定时返回 kind="manual_review"。',
     'topics 是主题归类，可稍长；tags 是界面展示和筛选用短标签，必须短、原子、稳定。',
     'tags 规则：每个 tag 只表达一个概念；中文优先 2-6 个字，英文优先 1-3 个词；通常输出 4-8 个高价值 tag。',
     '禁止把句子、标题、描述、多个概念组合成 tag；如果包含“与、和、及、逗号或斜杠”等多个概念，请拆成多个短 tag。',
@@ -6919,20 +6886,53 @@ function buildAiNamingUserPrompt(preparedItems) {
   ].join('\n\n')
 }
 
+function validateAiNamingFolderDecisions(payload, preparedItems) {
+  const items = Array.isArray(payload?.items) ? payload.items : []
+  const preparedItemMap = new Map<string, any>(
+    preparedItems.map((item) => [String(item.bookmark.id), item])
+  )
+
+  for (const item of items) {
+    const preparedItem = preparedItemMap.get(String(item?.bookmark_id || '').trim())
+    if (!preparedItem || !item?.folder_decision) {
+      continue
+    }
+
+    const decision = item.folder_decision
+    if (decision.kind === 'existing') {
+      validateKnownFolderId(decision.folder_id, preparedItem.folderCandidates || [])
+      continue
+    }
+
+    if (decision.kind === 'new' && !normalizeAiSuggestedFolderPath(decision.folder_path)) {
+      throw new AiRuntimeError('schema', 'AI 返回了 new folder_decision，但缺少 folder_path。')
+    }
+  }
+}
+
 function normalizeAiNamingResponseItems(payload, preparedItems) {
   if (!payload || typeof payload !== 'object' || !Array.isArray(payload.items)) {
     throw new Error('AI 返回结果缺少 items 数组。')
   }
 
-  const validIds = new Set(preparedItems.map((item) => String(item.bookmark.id)))
+  const preparedItemMap = new Map<string, any>(
+    preparedItems.map((item) => [String(item.bookmark.id), item])
+  )
   return payload.items
     .map((item) => {
       const bookmarkId = String(item?.bookmark_id || '').trim()
-      if (!validIds.has(bookmarkId)) {
+      const preparedItem = preparedItemMap.get(bookmarkId)
+      if (!preparedItem) {
         return null
       }
 
       const action = String(item?.action || '').trim()
+      const suggestedFolder = normalizeAiResultText(item?.suggested_folder, 180)
+      const folderDecision = normalizeAiFolderDecision(
+        item?.folder_decision,
+        preparedItem.folderCandidates || [],
+        suggestedFolder
+      )
 
       return {
         bookmarkId,
@@ -6944,7 +6944,8 @@ function normalizeAiNamingResponseItems(payload, preparedItems) {
         contentType: normalizeAiResultText(item?.content_type, 80),
         topics: normalizeAiResultTextList(item?.topics, 8, 48),
         suggestedTitle: cleanAiSuggestedTitle(item?.suggested_title),
-        suggestedFolder: normalizeAiResultText(item?.suggested_folder, 180),
+        suggestedFolder: suggestedFolder || folderDecision.folderPath,
+        folderDecision,
         tags: normalizeBookmarkTags(item?.tags),
         aliases: normalizeAiResultTextList(item?.aliases, 20, 40),
         confidence: normalizeAiConfidence(item?.confidence),
@@ -7038,6 +7039,7 @@ function buildAiNamingFailedResult(bookmark, error) {
     contentType: '',
     topics: [],
     suggestedFolder: '',
+    folderDecision: null,
     tags: [],
     extractionStatus: '',
     extractionSource: '',

@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 
 const checks = [
+  ['ai runtime', ['run', 'test:ai']],
   ['typecheck', ['run', 'typecheck']],
   ['build', ['run', 'build']]
 ]

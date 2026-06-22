@@ -48,8 +48,8 @@ export const navLinkClass = [
 
 export const navSublistClass = [
   'grid gap-1 ml-2.5 pl-2.5 border-l border-[rgba(255,255,255,0.08)]',
-  '[transition:max-height_240ms_cubic-bezier(0.55,0,0.25,1),opacity_160ms_cubic-bezier(0.55,0,0.25,1)]',
-  '[&[hidden]]:hidden data-[nav-animating=true]:overflow-hidden data-[nav-animating=true]:will-change-[max-height,opacity]',
+  'origin-top [transform:translateY(0)] transition-[opacity,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  '[&[hidden]]:hidden data-[starting-style]:overflow-hidden data-[starting-style]:opacity-0 data-[starting-style]:[transform:translateY(-4px)] data-[starting-style]:will-change-[opacity,transform] data-[ending-style]:overflow-hidden data-[ending-style]:opacity-0 data-[ending-style]:[transform:translateY(-4px)] data-[ending-style]:will-change-[opacity,transform]',
   'motion-reduce:transition-none max-[920px]:ml-0 max-[920px]:mt-1.5 max-[920px]:border-l-0'
 ].join(' ')
 

@@ -137,6 +137,34 @@ export const AI_NAMING_RESPONSE_SCHEMA = {
             type: 'string',
             maxLength: 180
           },
+          folder_decision: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'reason', 'confidence'],
+            properties: {
+              kind: {
+                type: 'string',
+                enum: ['existing', 'new', 'manual_review']
+              },
+              folder_id: {
+                type: 'string',
+                maxLength: 80
+              },
+              folder_path: {
+                type: 'string',
+                maxLength: 180
+              },
+              reason: {
+                type: 'string',
+                maxLength: 180
+              },
+              confidence: {
+                type: 'number',
+                minimum: 0,
+                maximum: 1
+              }
+            }
+          },
           tags: {
             type: 'array',
             maxItems: 12,

@@ -69,9 +69,9 @@ const placeholderPrimaryActionClass = cx(
 )
 
 const skeletonBarClass =
-  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.055),rgba(255,255,255,0.12),rgba(255,255,255,0.055))] bg-[length:220%_100%] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] animate-[popup-skeleton-shimmer_1500ms_ease-in-out_infinite] motion-reduce:animate-none'
+  'relative block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
 const skeletonDotClass =
-  'block h-7 w-7 overflow-hidden rounded-md bg-[linear-gradient(90deg,rgba(255,255,255,0.055),rgba(255,255,255,0.12),rgba(255,255,255,0.055))] bg-[length:220%_100%] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] animate-[popup-skeleton-shimmer_1500ms_ease-in-out_infinite] motion-reduce:animate-none'
+  'relative block h-7 w-7 overflow-hidden rounded-md bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
 const pageSkeletonCopyClass = 'grid min-w-0 gap-[7px]'
 const pageSkeletonTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-24')
 const pageSkeletonStatusClass = cx(skeletonBarClass, 'h-2 min-w-[132px] opacity-[0.68]')
@@ -145,7 +145,7 @@ const loadingCopyClass =
 const loadingStepClass = 'text-[11px] font-medium text-[var(--ui-text-secondary)]'
 const progressTrackClass = 'h-[5px] overflow-hidden rounded-full bg-white/[0.08]'
 const progressBarClass =
-  'block h-full w-full origin-left rounded-[inherit] bg-[linear-gradient(90deg,#f5f5f7,#8e8e93)] transition-transform duration-[760ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none'
+  'block h-full w-full origin-left rounded-[inherit] bg-[linear-gradient(90deg,#f5f5f7,#8e8e93)] transition-transform duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none'
 
 const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden p-[18px]')
 const titleRowClass = 'mb-3.5 grid grid-cols-[minmax(0,1fr)] gap-2'

@@ -86,7 +86,12 @@ const settingsTabs = [
   ['modules', '模块', false],
   ['advanced', '高级', false]
 ] as const
-const SETTINGS_DRAWER_CLASS = 'settings-drawer !border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-autospace:no-autospace]'
+const SETTINGS_DRAWER_CLASS = 'settings-drawer fixed inset-0 z-[10020] overflow-hidden bg-transparent'
+const SETTINGS_DRAWER_SURFACE_CLASS = '!border !border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-autospace:no-autospace]'
+const SETTINGS_DRAWER_PANEL_CLASS = 'settings-drawer-panel fixed inset-y-0 right-0 z-[1] h-dvh w-[min(520px,calc(100vw-24px))] max-w-full overflow-hidden transition-transform duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] will-change-transform motion-reduce:transition-none'
+const SETTINGS_DRAWER_PANEL_OPEN_CLASS = 'translate-x-0'
+const SETTINGS_DRAWER_PANEL_CLOSED_CLASS = 'translate-x-full'
+const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll'
 const SETTINGS_NESTED_SURFACE_CLASS = '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-control)] !bg-[var(--ui-surface)] !shadow-none'
 const SETTINGS_SELECTED_SURFACE_CLASS = '!border-[var(--ui-divider-strong)] !bg-[var(--ui-surface-selected)] !text-[var(--ui-text-primary)] !shadow-none'
 const SETTINGS_SEGMENTED_BUTTON_CLASS = `setting-segmented-button data-[pressed]:!border-[var(--ui-divider-strong)] data-[pressed]:!bg-[var(--ui-surface-selected)] data-[pressed]:!text-[var(--ui-text-primary)] data-[pressed]:!shadow-none`
@@ -1478,6 +1483,7 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
       id="newtab-settings-drawer"
       className={cx(
         SETTINGS_DRAWER_CLASS,
+        open ? 'pointer-events-auto' : 'pointer-events-none',
         open ? 'open' : '',
         phase === 'opening' ? 'is-opening' : '',
         phase === 'closing' ? 'is-closing' : ''
@@ -1493,7 +1499,11 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
       overlayRef={setDrawerElement}
     >
       <DrawerPanel
-        className="settings-drawer-panel"
+        className={cx(
+          SETTINGS_DRAWER_PANEL_CLASS,
+          SETTINGS_DRAWER_SURFACE_CLASS,
+          open ? SETTINGS_DRAWER_PANEL_OPEN_CLASS : SETTINGS_DRAWER_PANEL_CLOSED_CLASS
+        )}
         ref={setPanelElement}
         aria-labelledby="newtab-settings-title"
         aria-describedby="newtab-settings-summary"
@@ -1503,7 +1513,7 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
       >
         <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
 
-        <div className="settings-drawer-scroll" ref={scrollHostRef}>
+        <div className={SETTINGS_DRAWER_SCROLL_CLASS} ref={scrollHostRef}>
           <BaseTabs.Root
             className="settings-sliding-tabs-root"
             value={activeGroup}

@@ -37,7 +37,7 @@ const featuredWallpaperModalClosingClass =
 const featuredWallpaperPanelLayoutClass =
   'grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
 const featuredWallpaperPanelSurfaceClass =
-  '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)]'
+  '!border !border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)]'
 const featuredWallpaperStatusClass =
   'featured-wallpaper-status border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-secondary)] shadow-none'
 const featuredWallpaperActionClass = `featured-wallpaper-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`

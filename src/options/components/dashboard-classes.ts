@@ -181,7 +181,7 @@ export const DASHBOARD_NATURAL_SEARCH_TOGGLE_PENDING_STATE_CLASS =
   `${DASHBOARD_NATURAL_SEARCH_TOGGLE_ACTIVE_STATE_CLASS} animate-pulse motion-reduce:animate-none`
 
 export const DASHBOARD_SEARCH_HELP_BUTTON_CLASS = [
-  'absolute top-1/2 left-[-40px] z-[2] inline-flex size-7 min-h-7 min-w-7 flex-none -translate-y-1/2 cursor-help items-center justify-center whitespace-nowrap',
+  'absolute top-1/2 left-[-40px] z-[2] inline-flex size-7 min-h-7 min-w-7 flex-none -translate-y-1/2 cursor-help items-center justify-center whitespace-nowrap max-[920px]:left-2',
   'rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] p-0 text-[10px] font-[650] leading-none text-[var(--ui-text-secondary)] [font-family:inherit] [box-shadow:none]',
   'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
   'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/[0.72]',
@@ -388,7 +388,7 @@ export const DASHBOARD_TAG_EDITOR_ROOT_CLOSING_STATE_CLASS =
   'pointer-events-none'
 
 export const DASHBOARD_TAG_EDITOR_PANEL_CLASS = [
-  'rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] p-4 text-[var(--dashboard-text)] shadow-none',
+  'dashboard-tag-editor-panel rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] p-4 text-[var(--dashboard-text)] shadow-none',
   '[-webkit-backdrop-filter:none] [backdrop-filter:none] [transform-origin:top_center]',
   '![opacity:var(--dashboard-tag-editor-opacity,1)] ![transform:var(--dashboard-tag-editor-transform,translateY(0)_scale(1))] ![transition:opacity_220ms_var(--dashboard-tag-editor-ease,var(--ui-ease-spring)),transform_220ms_var(--dashboard-tag-editor-ease,var(--ui-ease-spring))]',
   'starting:[--dashboard-tag-editor-opacity:0] starting:[--dashboard-tag-editor-transform:translateY(6px)_scale(0.985)] motion-reduce:![transition:none]'

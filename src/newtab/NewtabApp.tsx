@@ -88,6 +88,9 @@ const DASHBOARD_TRIGGER_CLASS = 'dashboard-trigger right-[66px] w-10 min-w-10 p-
 const DASHBOARD_SHORTCUT_HINT_BASE_CLASS = 'dashboard-shortcut-hint absolute top-6 right-[116px] inline-flex min-h-7 max-w-[min(220px,calc(100vw-168px))] items-center overflow-hidden rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.09)] bg-[rgba(24,24,26,0.42)] px-[9px] text-[11px] font-[650] leading-[1.2] text-[rgba(245,245,247,0.54)] pointer-events-none text-ellipsis whitespace-nowrap [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
 const DASHBOARD_SHORTCUT_HINT_VISIBLE_CLASS = 'opacity-100'
 const DASHBOARD_SHORTCUT_HINT_AUTO_HIDE_CLASS = 'opacity-0 transition-opacity duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] group-hover/settings-trigger-zone:opacity-100 group-focus-within/settings-trigger-zone:opacity-100 [@media(hover:none)]:opacity-100'
+const SETTINGS_BACKDROP_BASE_CLASS = 'settings-backdrop fixed inset-0 z-[10015] bg-[rgba(0,0,0,0.44)] opacity-0 pointer-events-none transition-opacity duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] motion-reduce:transition-none'
+const SETTINGS_BACKDROP_OPEN_CLASS = 'opacity-100 pointer-events-auto'
+const SETTINGS_BACKDROP_CLOSING_CLASS = 'opacity-0 pointer-events-none'
 const WALLPAPER_LOADING_INDICATOR_CLASS = 'wallpaper-loading-indicator fixed inset-0 z-[2] grid place-items-center p-6 pointer-events-none'
 const WALLPAPER_LOADING_INDICATOR_HIDDEN_CLASS = 'opacity-0 invisible translate-y-1 scale-[0.98] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_var(--ui-motion-standard)]'
 const WALLPAPER_LOADING_INDICATOR_VISIBLE_CLASS = 'opacity-100 visible translate-y-0 scale-100 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
@@ -252,10 +255,10 @@ function NewtabShell() {
       <Button
         id="newtab-settings-backdrop"
         className={cx(
-          'settings-backdrop',
-          settingsDrawer.open ? 'open' : '',
-          settingsDrawer.phase === 'opening' ? 'is-opening' : '',
-          settingsDrawer.phase === 'closing' ? 'is-closing' : ''
+          SETTINGS_BACKDROP_BASE_CLASS,
+          settingsDrawer.open ? SETTINGS_BACKDROP_OPEN_CLASS : '',
+          settingsDrawer.phase === 'opening' ? 'open is-opening' : '',
+          settingsDrawer.phase === 'closing' ? `is-closing ${SETTINGS_BACKDROP_CLOSING_CLASS}` : ''
         )}
         ref={settingsBackdropRef}
         type="button"

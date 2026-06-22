@@ -121,7 +121,7 @@ const modalWideCardClass = cx(
   'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
 )
 const modalListClass = [
-  'min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5',
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] p-1 pr-1.5',
   '[scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]',
   '[&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:bg-transparent'
 ].join(' ')

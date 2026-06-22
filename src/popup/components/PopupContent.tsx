@@ -119,9 +119,9 @@ const compactStateClass =
   'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-[var(--popup-faint)]'
 const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
 const skeletonBarClass =
-  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[linear-gradient(90deg,rgba(255,255,255,0.055),rgba(255,255,255,0.12),rgba(255,255,255,0.055))] bg-[length:220%_100%] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] animate-[popup-skeleton-shimmer_1500ms_ease-in-out_infinite] motion-reduce:animate-none'
+  'relative block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
 const skeletonDotClass =
-  'block h-7 w-7 overflow-hidden rounded-md bg-[linear-gradient(90deg,rgba(255,255,255,0.055),rgba(255,255,255,0.12),rgba(255,255,255,0.055))] bg-[length:220%_100%] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] animate-[popup-skeleton-shimmer_1500ms_ease-in-out_infinite] motion-reduce:animate-none'
+  'relative block h-7 w-7 overflow-hidden rounded-md bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
 const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
 const skeletonFolderCountClass =
   cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')

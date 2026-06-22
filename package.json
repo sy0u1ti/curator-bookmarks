@@ -23,6 +23,8 @@
     "dev": "vite",
     "lint": "npm run typecheck",
     "test": "node scripts/run-tests.mjs",
+    "test:ai": "node scripts/run-ai-runtime-tests.mjs",
+    "eval:ai": "node scripts/eval-ai.mjs",
     "smoke:extension": "node scripts/smoke-extension.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",

@@ -27,7 +27,14 @@ export interface DashboardOverlayProps {
 const DEFAULT_DASHBOARD_ERROR_MESSAGE = '加载耗时过长。你可以返回新标签页，或重试打开仪表盘。'
 // The iframe embeds this extension's own dashboard page, which needs scripts and same-origin access for Chrome APIs.
 const DASHBOARD_FRAME_SANDBOX = 'allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts'
-const DASHBOARD_SURFACE_CLASS = '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)]'
+const DASHBOARD_SURFACE_CLASS = '!border !border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)]'
+const DASHBOARD_OVERLAY_CLASS = 'newtab-dashboard-overlay fixed inset-0 z-[10010] overflow-hidden bg-[var(--ui-bg-main)]'
+const DASHBOARD_PANEL_CLASS = `newtab-dashboard-surface fixed inset-0 grid h-dvh w-screen overflow-hidden ${DASHBOARD_SURFACE_CLASS}`
+const DASHBOARD_LOADING_CLASS = `newtab-dashboard-loading fixed inset-0 z-[2] grid place-items-center ${DASHBOARD_SURFACE_CLASS}`
+const DASHBOARD_FALLBACK_CLASS = `newtab-dashboard-fallback fixed inset-0 z-[3] grid place-items-center p-6 ${DASHBOARD_SURFACE_CLASS}`
+const DASHBOARD_FRAME_CLASS = `newtab-dashboard-frame h-full w-full border-0 ${DASHBOARD_SURFACE_CLASS}`
+const DASHBOARD_FRAME_VISIBLE_CLASS = 'opacity-100'
+const DASHBOARD_FRAME_LOADING_CLASS = 'opacity-0'
 const DASHBOARD_CARD_CLASS = 'border border-[var(--ui-divider)] rounded-[var(--ui-radius-control)] bg-[var(--ui-surface)] shadow-none'
 
 export function DashboardOverlay({
@@ -61,7 +68,7 @@ export function DashboardOverlay({
   return (
     <DialogOverlay
       id="newtab-dashboard-overlay"
-      className={`newtab-dashboard-overlay ${DASHBOARD_SURFACE_CLASS}`}
+      className={DASHBOARD_OVERLAY_CLASS}
       ref={setOverlayRef}
       open={open}
       onOpenChange={onOpenChange}
@@ -74,16 +81,17 @@ export function DashboardOverlay({
       disablePointerDismissal
     >
       <DialogPanel
-        className="newtab-dashboard-surface"
+        className={DASHBOARD_PANEL_CLASS}
         aria-label="书签仪表盘"
         initialFocus={false}
         finalFocus={false}
         unanimated
       >
         <output
-          className={`newtab-dashboard-loading ${DASHBOARD_SURFACE_CLASS}`}
+          className={DASHBOARD_LOADING_CLASS}
           aria-live="polite"
           aria-label="正在打开书签仪表盘"
+          hidden={ready || hasError}
         >
           <div className={`newtab-dashboard-loading-card ${DASHBOARD_CARD_CLASS}`}>
             <DotMatrixLoader className="newtab-dashboard-loading-loader" />
@@ -91,7 +99,7 @@ export function DashboardOverlay({
         </output>
         <div
           id="newtab-dashboard-fallback"
-          className={`newtab-dashboard-fallback ${DASHBOARD_SURFACE_CLASS}`}
+          className={DASHBOARD_FALLBACK_CLASS}
           role="alert"
           aria-live="assertive"
           hidden={!hasError}
@@ -126,7 +134,7 @@ export function DashboardOverlay({
         </div>
         <iframe
           id="newtab-dashboard-frame"
-          className={`newtab-dashboard-frame ${DASHBOARD_SURFACE_CLASS}`}
+          className={`${DASHBOARD_FRAME_CLASS} ${ready && !hasError ? DASHBOARD_FRAME_VISIBLE_CLASS : DASHBOARD_FRAME_LOADING_CLASS}`}
           ref={setFrameRef}
           title="书签仪表盘"
           loading="lazy"

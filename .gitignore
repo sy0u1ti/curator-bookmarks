@@ -25,9 +25,12 @@ CLAUDE.md
 AGENT_OVERNIGHT_REPORT.md
 REPOSITORY_REVIEW_SUGGESTIONS.md
 .superpowers/
-docs/
+docs/*
+!docs/ai-runtime-stability-refactor-notes.md
 test/
 scripts/*
 !scripts/run-tests.mjs
 !scripts/smoke-extension.mjs
+!scripts/run-ai-runtime-tests.mjs
+!scripts/eval-ai.mjs
 playwright-visual.config.mjs

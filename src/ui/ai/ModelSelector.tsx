@@ -6,7 +6,7 @@ import { Input } from '../base/Input'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
-  'inline-flex min-h-10 w-full items-center justify-start gap-2 rounded-lg border border-[rgba(255,255,255,0.14)] bg-[#101011] px-3 text-sm font-[650] leading-none text-[rgba(245,245,247,0.94)] shadow-none outline-none transition-[border-color,background-color,color] duration-[140ms] ease-[var(--ui-ease-standard)] hover:not-disabled:border-[rgba(255,255,255,0.24)] hover:not-disabled:bg-[#151516] focus-visible:border-[rgba(255,255,255,0.24)] focus-visible:bg-[#151516] focus-visible:shadow-[0_0_0_3px_rgba(80,147,255,0.18)] disabled:cursor-not-allowed disabled:opacity-[0.58]'
+  'inline-flex min-h-[50px] w-full items-center justify-start gap-2 rounded-lg border border-[rgba(255,255,255,0.14)] bg-[#101011] px-3 text-sm font-[650] leading-none text-[rgba(245,245,247,0.94)] shadow-none outline-none transition-[border-color,background-color,color] duration-[140ms] ease-[var(--ui-ease-standard)] hover:not-disabled:border-[rgba(255,255,255,0.24)] hover:not-disabled:bg-[#151516] focus-visible:border-[rgba(255,255,255,0.24)] focus-visible:bg-[#151516] focus-visible:shadow-[0_0_0_3px_rgba(80,147,255,0.18)] disabled:cursor-not-allowed disabled:opacity-[0.58]'
 const MODEL_SELECTOR_BACKDROP_CLASS =
   'fixed inset-0 z-[1200] min-h-dvh bg-[rgba(0,0,0,0.62)] transition-opacity duration-[140ms] ease-[var(--ui-ease-standard)] data-ending-style:opacity-0 data-starting-style:opacity-0 supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =
