@@ -1,5 +1,5 @@
 html {
-  background: var(--ui-bg-page);
+  background: var(--ds-bg-page);
   overflow: hidden;
   scrollbar-gutter: stable;
 }

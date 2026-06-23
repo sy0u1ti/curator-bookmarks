@@ -29,16 +29,16 @@ export function Meter({
       min={min}
       value={value}
     >
-      {label ? <BaseMeter.Label className="text-xs text-curator-text-muted">{label}</BaseMeter.Label> : null}
+      {label ? <BaseMeter.Label className="text-xs text-ds-text-secondary">{label}</BaseMeter.Label> : null}
       <BaseMeter.Track
         className={unstyled ? trackClassName : cx(
-          'base-meter-track h-2 overflow-hidden rounded-full bg-curator-muted',
+          'base-meter-track h-2 overflow-hidden rounded-full bg-ds-hover',
           trackClassName
         )}
       >
         <BaseMeter.Indicator
           className={unstyled ? indicatorClassName : cx(
-            'base-meter-indicator h-full rounded-full bg-curator-text transition-transform',
+            'base-meter-indicator h-full rounded-full bg-ds-accent transition-transform',
             indicatorClassName
           )}
         />

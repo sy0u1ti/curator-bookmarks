@@ -1,5 +1,5 @@
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
-import { Button } from '../../ui/base/Button'
+import { Button } from '../../ui'
 import type { PopupEmptyStateViewModel } from './PopupViewModels'
 
 const EMPTY_STATE_CLASS = [
@@ -14,21 +14,21 @@ const EMPTY_STATE_CLASS = [
   '[&_.ai-setup-prompt-actions]:gap-[7px]'
 ].join(' ')
 
-const EMPTY_TITLE_CLASS = 'm-0 text-[13px] font-[750] [color:var(--ui-text-primary)]'
-const EMPTY_HINT_CLASS = 'm-0 [color:var(--ui-text-secondary)]'
+const EMPTY_TITLE_CLASS = 'm-0 text-[13px] font-[750] [color:var(--ds-text-primary)]'
+const EMPTY_HINT_CLASS = 'm-0 [color:var(--ds-text-secondary)]'
 const EMPTY_ACTIONS_CLASS = 'mt-0.5 flex flex-wrap justify-center gap-[7px]'
 const EMPTY_ACTION_CLASS = [
   'inline-flex min-h-7 items-center justify-center rounded-[7px] border px-2.5 text-xs font-bold',
-  'border-[rgba(245,245,247,0.28)] bg-[#171719] [color:var(--ui-text-secondary)]',
-  'transition-[background,border-color,color,transform] duration-150 ease-[var(--ui-ease-standard)]',
-  'hover:border-[rgba(245,245,247,0.54)] hover:bg-[#26262a] hover:[color:var(--ui-text-primary)]',
-  'focus-visible:border-[rgba(245,245,247,0.54)] focus-visible:bg-[#26262a] focus-visible:[color:var(--ui-text-primary)]',
+  'border-[rgba(245,245,247,0.28)] bg-ds-surface-2 [color:var(--ds-text-secondary)]',
+  'transition-[background,border-color,color,transform] duration-150 ease-ds-standard',
+  'hover:border-[rgba(245,245,247,0.54)] hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
+  'focus-visible:border-[rgba(245,245,247,0.54)] focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]',
   'active:scale-[0.98]'
 ].join(' ')
 const EMPTY_PRIMARY_ACTION_CLASS = [
-  'border-[rgba(245,245,247,0.86)] bg-[#f5f5f7] text-[#111113]',
-  'hover:border-white hover:bg-white hover:text-[#111113]',
-  'focus-visible:border-white focus-visible:bg-white focus-visible:text-[#111113]'
+  'border-[rgba(245,245,247,0.86)] bg-ds-text-primary text-ds-text-inverse',
+  'hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse',
+  'focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
 ].join(' ')
 
 export function PopupEmptyState({

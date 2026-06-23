@@ -8,17 +8,16 @@ import {
   type RefObject,
   type SyntheticEvent
 } from 'react'
-import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui/base/Button'
+import { Button, Icon } from '../../ui'
 import { useNewtabFeaturedBackgroundPickerFocusRequest } from '../newtab-featured-background-picker-store'
 import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClasses'
 
 const FEATURED_BACKGROUND_INITIAL_PREVIEW_HYDRATION_LIMIT = 16
 const FEATURED_BACKGROUND_PREVIEW_OBSERVER_ROOT_MARGIN = '280px 0px'
 const FEATURED_BACKGROUND_PICKER_CARD_CLASS =
-  'featured-wallpaper-card border border-[var(--ui-divider)] rounded-[var(--ui-radius-control)] bg-[var(--ui-surface)] shadow-none [&::before]:!shadow-none [&::after]:!shadow-none'
+  'featured-wallpaper-card rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none [&::before]:shadow-none [&::after]:shadow-none'
 const FEATURED_BACKGROUND_PICKER_CARD_SELECTED_CLASS =
-  'border-[var(--ui-divider-strong)] bg-[var(--ui-surface-selected)] text-[var(--ui-text-primary)] shadow-none'
+  'border-ds-border-hover bg-ds-selected text-ds-text-primary shadow-none'
 const FEATURED_BACKGROUND_FAVORITE_CLASS = `featured-wallpaper-favorite ${FEATURED_WALLPAPER_CONTROL_CLASS}`
 const FEATURED_BACKGROUND_FAVORITE_SELECTED_CLASS = FEATURED_BACKGROUND_FAVORITE_CLASS
 

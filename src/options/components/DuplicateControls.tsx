@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
 
@@ -21,32 +21,32 @@ const duplicateStrategies = [
 ] as const
 
 const SELECTION_GROUP_CLASS =
-  'mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none max-[760px]:p-4'
+  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none max-[760px]:p-4'
 const RESULTS_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const RESULTS_HEADER_COPY_CLASS = 'min-w-0'
 const RESULTS_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-[var(--ui-text-primary)]'
-const RESULTS_SUBTITLE_CLASS = 'mt-2.5 text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
+const RESULTS_SUBTITLE_CLASS = 'mt-2.5 text-[13px] leading-[1.7] text-ds-text-secondary'
 const RESULTS_ACTIONS_CLASS =
   'flex flex-none flex-wrap items-center justify-end gap-2.5 max-[760px]:w-full max-[760px]:justify-start'
 const SELECTION_WARNING_CLASS =
-  'mt-2 text-xs font-semibold leading-[1.6] text-[#ffb7b0]'
+  'mt-2 text-xs font-semibold leading-[1.6] text-ds-danger-text'
 const SUMMARY_GRID_CLASS =
   'mt-[18px] grid grid-cols-4 gap-3 max-[1180px]:grid-cols-3 max-[760px]:grid-cols-1'
 const SUMMARY_CARD_CLASS =
-  'relative min-w-0 overflow-hidden rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[#050505] p-[14px_16px] text-[var(--ui-text-primary)] shadow-none transition-colors before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:content-[""] hover:border-[var(--ui-divider)] hover:bg-[#080808]'
+  'relative min-w-0 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-ds-text-primary shadow-none transition-colors before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:content-[""] hover:border-ds-border hover:bg-ds-hover'
 const SUMMARY_ACCENT_CLASS = {
-  danger: 'before:bg-[rgba(255,183,176,0.78)]',
-  info: 'before:bg-[rgba(141,181,255,0.62)]',
-  success: 'before:bg-[rgba(189,243,202,0.72)]',
-  total: 'before:bg-[rgba(245,245,247,0.4)]',
-  warning: 'before:bg-[rgba(255,220,165,0.72)]'
+  danger: 'before:bg-ds-danger',
+  info: 'before:bg-ds-accent',
+  success: 'before:bg-ds-success',
+  total: 'before:bg-ds-border-hover',
+  warning: 'before:bg-ds-warning'
 } as const
 const SUMMARY_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-[var(--ui-text-disabled)]'
+  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
 const SUMMARY_VALUE_CLASS =
-  'mt-2 block text-2xl font-[650] leading-none tracking-[0] text-[var(--ui-text-primary)]'
+  'mt-2 block text-2xl font-[650] leading-none tracking-[0] text-ds-text-primary'
 const TOOLBAR_CLASS = 'mt-4 grid gap-2.5 border-t border-[rgba(255,255,255,0.075)] pt-4'
 const STRATEGY_CONTROLS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-start gap-[7px]'

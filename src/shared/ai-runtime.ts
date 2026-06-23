@@ -152,13 +152,13 @@ export function buildAiPromptRequestBody({
 }: AiPromptEnvelope): Record<string, unknown> {
   if (settings.apiStyle === 'chat_completions') {
     const schemaHint =
-      '\n\n请严格按以下 JSON Schema 返回结果，不要添加任何额外文本或 markdown 标记：\n' +
+      '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
       JSON.stringify(schema, null, 2)
     return {
       model: settings.model,
       messages: [
         { role: 'system', content: systemPrompt + schemaHint },
-        { role: 'user', content: userPrompt }
+        { role: 'user', content: `${userPrompt}\n\n请只返回符合 schema 的 json 对象。` }
       ],
       response_format: { type: 'json_object' }
     }
@@ -169,11 +169,11 @@ export function buildAiPromptRequestBody({
     input: [
       {
         role: 'system',
-        content: [{ type: 'input_text', text: systemPrompt }]
+        content: systemPrompt
       },
       {
         role: 'user',
-        content: [{ type: 'input_text', text: userPrompt }]
+        content: userPrompt
       }
     ],
     text: {
@@ -437,15 +437,25 @@ function requestAiProviderPayload({
     signal
   }, timeoutMs || settings.timeoutMs)
     .then(async (response) => {
-      const payload = await response.json().catch(() => null)
+      const { payload, rawBody } = await readAiProviderResponseBody(response)
       if (!response.ok) {
         throw new AiRuntimeError(
           'provider',
-          extractAiErrorMessage(payload, response.status),
+          extractAiErrorMessage(payload, response.status, rawBody),
           {
             status: response.status,
             retryable: isRetryableProviderStatus(response.status),
-            details: payload
+            details: payload ?? { rawBody: cleanAiRuntimeText(rawBody, 1200) }
+          }
+        )
+      }
+      if (payload === null && rawBody.trim()) {
+        throw new AiRuntimeError(
+          'parse',
+          `AI 返回了无效的 JSON 响应：${cleanAiRuntimeText(rawBody, 220)}`,
+          {
+            retryable: true,
+            details: { rawBody: cleanAiRuntimeText(rawBody, 1200) }
           }
         )
       }
@@ -458,6 +468,8 @@ function requestAiProviderPayload({
   function fetchAiWithTimeout(url: string, options: RequestInit, requestTimeoutMs = 30000): Promise<Response> {
     const controller = new AbortController()
     const externalSignal = options.signal
+    const effectiveTimeoutMs = normalizeAiRequestTimeoutMs(requestTimeoutMs)
+    let timedOut = false
     const abortCurrentFetch = () => {
       controller.abort()
     }
@@ -469,17 +481,58 @@ function requestAiProviderPayload({
     }
 
     const timeoutId = globalThis.setTimeout(() => {
+      timedOut = true
       controller.abort()
-    }, Math.max(1000, Number(requestTimeoutMs) || 30000))
+    }, effectiveTimeoutMs)
 
     return fetchImpl(url, {
       ...options,
       signal: controller.signal
-    }).finally(() => {
-      globalThis.clearTimeout(timeoutId)
-      externalSignal?.removeEventListener('abort', abortCurrentFetch)
     })
+      .catch((error) => {
+        if (timedOut) {
+          throw new AiRuntimeError(
+            'abort',
+            buildAiTimeoutMessage(effectiveTimeoutMs),
+            {
+              cause: error,
+              details: { timeoutMs: effectiveTimeoutMs }
+            }
+          )
+        }
+        if (externalSignal?.aborted && isAbortError(error)) {
+          throw new AiRuntimeError('abort', 'AI 请求已取消。', { cause: error })
+        }
+        throw error
+      })
+      .finally(() => {
+        globalThis.clearTimeout(timeoutId)
+        externalSignal?.removeEventListener('abort', abortCurrentFetch)
+      })
   }
+}
+
+async function readAiProviderResponseBody(response: Response): Promise<{ payload: unknown | null; rawBody: string }> {
+  const rawBody = await response.text()
+  const trimmedBody = rawBody.trim()
+  if (!trimmedBody) {
+    return { payload: null, rawBody }
+  }
+
+  try {
+    return { payload: JSON.parse(trimmedBody), rawBody }
+  } catch {
+    return { payload: null, rawBody }
+  }
+}
+
+function normalizeAiRequestTimeoutMs(timeoutMs: unknown): number {
+  return Math.max(1000, Number(timeoutMs) || 30000)
+}
+
+function buildAiTimeoutMessage(timeoutMs: number): string {
+  const seconds = Math.max(1, Math.round(normalizeAiRequestTimeoutMs(timeoutMs) / 1000))
+  return `AI 请求超时，超过 ${seconds} 秒仍未返回。请稍后重试或在通用设置里调大请求超时。`
 }
 
 function validateSchemaNode(value: unknown, schema: JsonSchema, path: string, issues: string[]): void {

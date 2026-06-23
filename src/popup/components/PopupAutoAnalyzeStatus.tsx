@@ -1,32 +1,32 @@
-import { Button } from '../../ui/base/Button'
-import { cx } from '../../ui/base/utils'
+import { Button } from '../../ui'
+import { cx } from '../../ui'
 import {
   dispatchPopupAutoAnalyzeStatusAction,
   usePopupAutoAnalyzeStatusView
 } from '../popup-controller-store'
 
 const STATUS_BASE_CLASS =
-  'relative z-[1] grid min-h-[38px] flex-none grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-[7px] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-2 py-[7px] pl-2.5 shadow-none'
+  'relative z-[1] grid min-h-[38px] flex-none grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-[7px] border border-ds-border bg-ds-surface-1 px-2 py-[7px] pl-2.5 shadow-none'
 
 const STATUS_STATE_CLASS: Record<string, string> = {
-  queued: 'border-[var(--ui-accent-line)] bg-[var(--ui-surface-selected)] text-[var(--ui-accent-text)]',
-  processing: 'border-[var(--ui-accent-line)] bg-[var(--ui-surface-selected)] text-[var(--ui-accent-text)]',
-  completed: 'border-[var(--ui-accent-line)] bg-[var(--ui-surface-selected)] text-[var(--ui-accent-text)]',
-  failed: 'border-[rgba(255,154,147,0.45)] bg-[var(--ui-surface-danger)]'
+  queued: 'border-ds-accent-line bg-ds-selected text-ds-accent-text',
+  processing: 'border-ds-accent-line bg-ds-selected text-ds-accent-text',
+  completed: 'border-ds-accent-line bg-ds-selected text-ds-accent-text',
+  failed: 'border-ds-danger bg-ds-danger-soft'
 }
 
 const STATUS_INDICATOR_CLASS: Record<string, string> = {
-  queued: 'bg-[#a8a8ad] shadow-[0_0_0_3px_rgba(245,245,247,0.1)]',
-  processing: 'animate-[auto-analyze-pulse_1400ms_ease-in-out_infinite] bg-[var(--ui-accent-strong)] shadow-[0_0_0_3px_rgba(142,230,168,0.12)]',
-  completed: 'bg-[var(--ui-accent-strong)] shadow-[0_0_0_3px_rgba(142,230,168,0.12)]',
-  failed: 'bg-[#ff8a82] shadow-[0_0_0_3px_rgba(255,138,130,0.12)]'
+  queued: 'bg-ds-text-secondary shadow-none',
+  processing: 'animate-[auto-analyze-pulse_1400ms_ease-in-out_infinite] bg-ds-accent-hover shadow-none',
+  completed: 'bg-ds-accent-hover shadow-none',
+  failed: 'bg-ds-danger-text shadow-none'
 }
 
 const actionClass =
-  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-2 text-[11px] font-semibold leading-none text-[var(--ui-text-primary)] outline-none transition-colors hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)]'
+  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-1 px-2 text-[11px] font-semibold leading-none text-ds-text-primary outline-none transition-colors hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
 
 const ghostActionClass =
-  'border-transparent bg-transparent text-[var(--ui-text-secondary)] hover:text-[var(--ui-text-primary)] focus-visible:text-[var(--ui-text-primary)]'
+  'border-transparent bg-transparent text-ds-text-secondary hover:text-ds-text-primary focus-visible:text-ds-text-primary'
 
 export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: boolean }) {
   const state = usePopupAutoAnalyzeStatusView()
@@ -56,17 +56,17 @@ export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: 
         <>
           <div
             className={cx(
-              'h-2 w-2 rounded-full bg-[#d7d7dc] shadow-[0_0_0_3px_rgba(245,245,247,0.1)]',
+                'h-2 w-2 rounded-full bg-ds-text-primary shadow-none',
               STATUS_INDICATOR_CLASS[state.status]
             )}
             aria-hidden="true"
           ></div>
           <output className="min-w-0">
-            <p className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-tight text-[var(--ui-text-primary)]">
+            <p className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-tight text-ds-text-primary">
               {state.title}
             </p>
             <p className={cx(
-              'mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-[var(--ui-text-secondary)]'
+              'mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-ds-text-secondary'
             )} hidden={state.collapsed}>
               {state.detail}
             </p>

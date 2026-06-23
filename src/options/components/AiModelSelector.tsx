@@ -13,7 +13,7 @@ import {
   ModelSelectorName,
   ModelSelectorTag,
   ModelSelectorTrigger
-} from '../../ui/ai/ModelSelector.js'
+} from '../../ui'
 import {
   type AiModelSelectorState
 } from './ai-model-selector-types.js'

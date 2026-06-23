@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react'
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui/base/Button.js'
-import { Card } from '../../ui/base/Card.js'
-import { cx } from '../../ui/base/utils.js'
+import { Button } from '../../ui'
+import { Card } from '../../ui'
+import { cx } from '../../ui'
 import { handleHistoryControlAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
@@ -18,62 +18,62 @@ const HISTORY_HEADER_CLASS = 'flex flex-wrap items-center justify-between gap-3'
 const HISTORY_HEADER_SPACED_CLASS = `${HISTORY_HEADER_CLASS} mt-[18px]`
 const HISTORY_HEADER_COPY_CLASS = 'min-w-0'
 const HISTORY_HEADER_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-[var(--ui-text-primary)]'
+  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const HISTORY_HEADER_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
 const HISTORY_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const HISTORY_METRIC_GRID_CLASS =
   'mt-4 grid grid-cols-3 gap-3 max-[760px]:grid-cols-1'
 const HISTORY_METRIC_CARD_CLASS =
-  'min-w-0 !rounded-[20px] !border-[var(--ui-divider-subtle)] !bg-[var(--ui-surface)] !p-[16px_16px_14px]'
+  'min-w-0 rounded-ds-sm border-ds-border-subtle bg-ds-surface-1 p-[16px_16px_14px]'
 const HISTORY_METRIC_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-[var(--ui-text-disabled)]'
+  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
 const HISTORY_METRIC_VALUE_CLASS =
-  'mt-2 block text-[22px] font-[650] leading-none tracking-[0] text-[var(--ui-text-primary)]'
+  'mt-2 block text-[22px] font-[650] leading-none tracking-[0] text-ds-text-primary'
 const HISTORY_EMPTY_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[18px_16px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const HISTORY_CARD_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[13px_15px]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[13px_15px]'
 const HISTORY_RUN_CARD_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[16px_16px_15px]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px_16px_15px]'
 const HISTORY_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const HISTORY_CARD_HEAD_LEFT_CLASS =
   'flex min-w-0 flex-wrap items-center gap-2.5'
 const HISTORY_CARD_COPY_CLASS = 'mt-3 min-w-0'
 const HISTORY_CARD_TITLE_CLASS =
-  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 const HISTORY_CARD_URL_CLASS =
-  'mt-[7px] inline-block text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] inline-block text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const HISTORY_CARD_PATH_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const HISTORY_CARD_DETAIL_CLASS =
-  'mt-[7px] text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const HISTORY_RUN_TREND_CLASS = 'mb-3 grid gap-2.5'
 const HISTORY_TREND_META_CLASS =
   'flex items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const HISTORY_TREND_META_TITLE_CLASS =
-  'text-sm font-semibold leading-normal text-[var(--ui-text-primary)]'
+  'text-sm font-semibold leading-normal text-ds-text-primary'
 const HISTORY_TREND_META_COPY_CLASS =
-  'text-[13px] leading-[1.65] text-[var(--ui-text-secondary)]'
+  'text-[13px] leading-[1.65] text-ds-text-secondary'
 const HISTORY_TREND_BAR_TRACK_CLASS =
-  'h-[9px] overflow-hidden rounded-full bg-[var(--ui-surface-raised)]'
+  'h-[9px] overflow-hidden rounded-full bg-ds-surface-2'
 const HISTORY_TREND_BAR_CLASS =
-  'block h-full rounded-[inherit] bg-[linear-gradient(90deg,rgba(245,245,247,0.28)_0%,rgba(245,245,247,0.82)_100%)]'
+  'block h-full rounded-[inherit] bg-ds-accent'
 const HISTORY_RUN_COPY_CLASS =
-  'text-[13px] leading-[1.65] text-[var(--ui-text-secondary)]'
+  'text-[13px] leading-[1.65] text-ds-text-secondary'
 const HISTORY_RUN_SECTION_CLASS = 'mt-3'
 const HISTORY_RUN_SECTION_TITLE_CLASS =
-  'block text-[13px] font-semibold leading-normal text-[var(--ui-text-primary)]'
+  'block text-[13px] font-semibold leading-normal text-ds-text-primary'
 const HISTORY_RUN_LIST_CLASS =
-  'mt-2 mb-0 pl-[18px] text-[13px] leading-[1.65] text-[var(--ui-text-secondary)] [&_li+li]:mt-1'
+  'mt-2 mb-0 pl-[18px] text-[13px] leading-[1.65] text-ds-text-secondary [&_li+li]:mt-1'
 const HISTORY_BADGE_BASE_CLASS =
   'inline-flex min-h-6 max-w-full items-center justify-center rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0] [overflow-wrap:anywhere]'
 const HISTORY_BADGE_TONE_CLASSES: Record<'muted' | 'success' | 'warning', string> = {
-  muted: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-tertiary)]',
-  success: 'border-[rgba(170,237,189,0.32)] bg-[rgba(170,237,189,0.16)] text-[#e2ffe9]',
-  warning: 'border-[rgba(255,206,141,0.2)] bg-[rgba(255,206,141,0.12)] text-[#ffdca5]'
+  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 
 function HistoryBadge({

@@ -1,6 +1,6 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui/base/Button.js'
-import { CheckboxControl } from '../../ui/base/Checkbox.js'
+import { Button } from '../../ui'
+import { CheckboxControl } from '../../ui'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
@@ -9,30 +9,30 @@ import type { RecycleEntryViewModel } from './recycle-bin-types.js'
 
 const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const RECYCLE_EMPTY_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[18px_16px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const RECYCLE_CARD_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[14px_16px] [transition:border-color_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)]'
-const RECYCLE_CARD_SELECTED_CLASS = '!border-[rgba(245,245,247,0.22)] !bg-[#1e1e22]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover'
+const RECYCLE_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
 const RECYCLE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const RECYCLE_CARD_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
 const RECYCLE_CHECK_CLASS =
-  'inline-flex items-center gap-2 text-xs font-semibold text-[var(--ui-text-secondary)]'
+  'inline-flex items-center gap-2 text-xs font-semibold text-ds-text-secondary'
 const RECYCLE_CARD_ACTIONS_CLASS = 'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
 const RECYCLE_CARD_ACTION_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-[var(--ui-text-disabled)] [transition:color_var(--ui-motion-standard)_var(--ui-ease-standard)] hover:text-[var(--ui-text-primary)] focus-visible:text-[var(--ui-text-primary)] disabled:cursor-default disabled:opacity-50 disabled:hover:text-[var(--ui-text-disabled)] disabled:focus-visible:text-[var(--ui-text-disabled)] data-[disabled]:cursor-default data-[disabled]:opacity-50 data-[disabled]:hover:text-[var(--ui-text-disabled)] data-[disabled]:focus-visible:text-[var(--ui-text-disabled)]'
-const RECYCLE_CARD_DANGER_ACTION_CLASS = '!text-red-200 hover:!text-red-100 focus-visible:!text-red-100'
+  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary disabled:cursor-default disabled:opacity-50 disabled:hover:text-ds-text-disabled disabled:focus-visible:text-ds-text-disabled data-[disabled]:cursor-default data-[disabled]:opacity-50 data-[disabled]:hover:text-ds-text-disabled data-[disabled]:focus-visible:text-ds-text-disabled'
+const RECYCLE_CARD_DANGER_ACTION_CLASS = 'text-ds-danger-text hover:text-ds-danger-text focus-visible:text-ds-danger-text'
 const RECYCLE_CARD_COPY_CLASS = 'mt-3 min-w-0'
 const RECYCLE_CARD_TITLE_CLASS =
-  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 const RECYCLE_CARD_URL_CLASS =
-  'mt-[7px] inline-block text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] inline-block text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const RECYCLE_CARD_DETAIL_CLASS =
-  'mt-[7px] text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const RECYCLE_CARD_PATH_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const RECYCLE_STATUS_BADGE_CLASS =
-  'inline-flex min-h-7 max-w-full flex-none items-center justify-center rounded-full border border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] px-[11px] text-[11px] font-semibold leading-none tracking-[0] text-[var(--ui-text-secondary)] whitespace-nowrap max-[760px]:whitespace-normal'
+  'inline-flex min-h-7 max-w-full flex-none items-center justify-center rounded-full border border-ds-hover bg-ds-surface-2 px-[11px] text-[11px] font-semibold leading-none tracking-[0] text-ds-text-secondary whitespace-nowrap max-[760px]:whitespace-normal'
 
 export function RecycleBin() {
   const state = useRecycleBinState()

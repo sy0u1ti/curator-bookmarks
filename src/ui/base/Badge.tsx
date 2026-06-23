@@ -8,17 +8,17 @@ export type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
 }
 
 const toneClass: Record<BadgeTone, string> = {
-  neutral: 'border-curator-border bg-curator-muted text-curator-text-muted',
-  success: 'border-emerald-400/25 bg-emerald-500/10 text-emerald-200',
-  warning: 'border-amber-400/25 bg-amber-500/10 text-amber-200',
-  danger: 'border-red-400/25 bg-red-500/10 text-red-200'
+  neutral: 'border-ds-border bg-ds-hover text-ds-text-secondary',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning',
+  danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text'
 }
 
 export function Badge({ className, tone = 'neutral', ...props }: BadgeProps) {
   return (
     <span
       className={cx(
-        'inline-flex min-h-6 items-center rounded-[var(--ui-radius-control)] border px-2 py-0.5 text-xs font-medium leading-none',
+        'inline-flex min-h-6 items-center rounded-ds-sm border px-2 py-0.5 text-xs font-medium leading-none',
         toneClass[tone],
         className
       )}

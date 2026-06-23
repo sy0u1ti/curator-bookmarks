@@ -52,14 +52,14 @@ export function Popover({
           <MotionPanel
             variant="popover"
             className={cx(
-              'z-50 grid max-w-80 gap-2 rounded-[var(--ui-radius-panel)] border border-curator-border bg-curator-bg-elevated p-3 text-sm text-curator-text shadow-[var(--shadow-popover)] outline-none',
+              'z-50 grid max-w-80 gap-2 rounded-ds-lg border border-ds-border bg-ds-surface-2 p-3 text-sm text-ds-text-primary shadow-ds-popover outline-none',
               popupClassName,
               className
             )}
           />
         }
       >
-        <BasePopover.Arrow className="text-curator-bg-elevated" />
+        <BasePopover.Arrow className="text-ds-accent-contrast-elevated" />
         {title ? <BasePopover.Title className="font-semibold">{title}</BasePopover.Title> : null}
         {children}
       </BasePopover.Popup>
@@ -156,7 +156,7 @@ export function PopoverPopup(props: PopoverPopupProps) {
 
 export function HelpTrigger({ label = 'Help' }: { label?: string }) {
   return (
-    <span className="inline-flex size-7 items-center justify-center rounded-[var(--ui-radius-icon)] border border-curator-border text-curator-text-muted">
+    <span className="inline-flex size-7 items-center justify-center rounded-ds-sm border border-ds-border text-ds-text-secondary">
       <Icon name="CircleHelp" size={15} aria-label={label} />
     </span>
   )

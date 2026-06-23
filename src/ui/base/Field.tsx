@@ -23,20 +23,20 @@ export function Field({
   ...props
 }: FieldProps) {
   return (
-    <BaseField.Root className={cx('grid gap-1.5 text-sm text-curator-text', className)} {...props}>
+    <BaseField.Root className={cx('grid gap-1.5 text-sm text-ds-text-primary', className)} {...props}>
       {label ? (
-        <BaseField.Label className={cx('font-medium text-curator-text', labelClassName)}>
+        <BaseField.Label className={cx('font-medium text-ds-text-primary', labelClassName)}>
           {label}
         </BaseField.Label>
       ) : null}
       {children}
       {description ? (
-        <BaseField.Description className={cx('text-xs leading-5 text-curator-text-muted', descriptionClassName)}>
+        <BaseField.Description className={cx('text-xs leading-5 text-ds-text-secondary', descriptionClassName)}>
           {description}
         </BaseField.Description>
       ) : null}
       {error ? (
-        <BaseField.Error className="text-xs leading-5 text-curator-danger">
+        <BaseField.Error className="text-xs leading-5 text-ds-danger-text">
           {error}
         </BaseField.Error>
       ) : null}

@@ -1,7 +1,5 @@
 import { useEffect, useReducer } from 'react'
-import { DialogOverlay } from '../ui/base/Dialog'
-import { cx } from '../ui/base/utils'
-import { ThemeProvider } from '../ui/theme/ThemeProvider'
+import { DialogOverlay, ThemeProvider, cx } from '../ui'
 import { getModalCloseDurationMs } from '../shared/motion'
 import {
   dispatchPopupModalAction,
@@ -22,7 +20,7 @@ import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { PopupToasts } from './components/PopupToasts'
 
 const appShellBaseClass = [
-  'group relative flex h-full flex-col overflow-hidden border border-[#1b1d22] bg-[#0f1012] text-[var(--ui-text-primary)]',
+  'group relative flex h-full flex-col overflow-hidden border border-ds-border bg-ds-app text-ds-text-primary',
   'px-3.5 pb-3.5 pt-0 [font-family:var(--font-sans)] tracking-normal [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start]'
 ].join(' ')
 const appShellDefaultClass = 'gap-[14px]'
@@ -30,9 +28,8 @@ const appShellSmartClass = 'gap-2'
 const contentShellClass =
   'relative z-[1] grid min-h-0 flex-[1_1_auto] overflow-hidden border-0 bg-transparent [height:auto]'
 const modalBackdropBaseClass = [
-  'absolute inset-0 z-20 grid place-items-center bg-black/[0.78] p-3.5 opacity-100',
-  'backdrop-blur-[18px] backdrop-saturate-[1.08]',
-  'transition-opacity duration-[var(--modal-close-dur)] ease-[var(--modal-ease)] motion-reduce:transition-none'
+  'absolute inset-0 z-20 grid place-items-center bg-ds-overlay p-3.5 opacity-100',
+  'transition-opacity duration-ds-fast ease-ds-standard motion-reduce:transition-none'
 ].join(' ')
 
 export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | null }) {

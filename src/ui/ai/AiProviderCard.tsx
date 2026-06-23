@@ -38,7 +38,7 @@ export function AiProviderCard({
             {typeof title === 'string' ? <strong className="text-sm">{title}</strong> : title}
           </div>
           {typeof description === 'string' ? (
-            <p className={cx('text-sm text-curator-text-muted', descriptionClassName)}>{description}</p>
+            <p className={cx('text-sm text-ds-text-secondary', descriptionClassName)}>{description}</p>
           ) : description}
         </div>
         {status}

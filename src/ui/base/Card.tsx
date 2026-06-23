@@ -7,7 +7,7 @@ export function Card({ className, ...props }: CardProps) {
   return (
     <article
       className={cx(
-        'rounded-[var(--ui-radius-group)] border border-curator-border bg-curator-bg-panel p-4 text-curator-text',
+        'rounded-ds-md border border-ds-border bg-ds-surface-1 p-4 text-ds-text-primary',
         className
       )}
       {...props}

@@ -1,39 +1,39 @@
 import type { CSSProperties } from 'react'
-import { Button } from '../../ui/base/Button'
+import { Button } from '../../ui'
 import { Icon } from '../../ui/icons/Icon'
-import { cx } from '../../ui/base/utils'
+import { cx } from '../../ui'
 import { HighlightedText } from './HighlightedText'
 import type { PopupFolderPickerState, PopupFolderTreeOptionViewModel } from './PopupViewModels'
 
 const pickerRowClass =
   'relative grid min-h-[31px] grid-cols-[18px_minmax(0,1fr)] items-center gap-1'
 const toggleButtonClass = [
-  'inline-flex h-[26px] min-h-[26px] w-[18px] min-w-[18px] items-center justify-center rounded-md border border-transparent bg-transparent text-[var(--ui-text-tertiary)] outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--ui-divider)] hover:bg-white/[0.055] hover:text-[var(--ui-text-primary)]',
-  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-white/[0.055] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1',
+  'inline-flex h-[26px] min-h-[26px] w-[18px] min-w-[18px] items-center justify-center rounded-md border border-transparent bg-transparent text-ds-text-muted outline-none',
+  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1',
   'active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
 ].join(' ')
 const toggleIconClass =
-  'transition-transform duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]'
+  'transition-transform duration-ds-fast ease-ds-standard'
 const pickerCardClass = [
-  'grid min-h-[31px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-0 text-left text-[var(--ui-text-primary)] shadow-none outline-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-white/10 hover:bg-white/[0.055] focus-visible:border-white/10 focus-visible:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1',
+  'grid min-h-[31px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-0 text-left text-ds-text-primary shadow-none outline-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-text-primary/10 hover:bg-ds-text-primary/[0.055] focus-visible:border-ds-text-primary/10 focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1',
   'active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
-const pickerCardCurrentClass = 'border-white/20 bg-white/[0.11]'
+const pickerCardCurrentClass = 'border-ds-border bg-ds-text-primary/[0.11]'
 const pickerBranchClass = 'h-2.5 w-2.5 justify-self-center rounded-full border border-white/18 bg-transparent'
 const pickerMainClass = 'grid min-w-0 max-w-full gap-px text-left leading-normal'
 const pickerTitleClass =
-  'block min-w-0 truncate text-left text-xs font-semibold leading-[1.28] text-[var(--ui-text-primary)]'
+  'block min-w-0 truncate text-left text-xs font-semibold leading-[1.28] text-ds-text-primary'
 const pickerPathClass =
-  'm-0 block min-w-0 truncate text-left text-[11px] leading-tight text-[var(--ui-text-tertiary)]'
+  'm-0 block min-w-0 truncate text-left text-[11px] leading-tight text-ds-text-muted'
 const pickerBadgeClass =
-  'inline-flex min-h-[18px] w-fit items-center justify-self-start rounded-full bg-white/[0.07] px-[7px] py-0.5 text-[10px] font-bold leading-tight text-[var(--ui-text-primary)]'
-const pickerBadgeMutedClass = 'text-[var(--ui-text-disabled)]'
+  'inline-flex min-h-[18px] w-fit items-center justify-self-start rounded-full bg-ds-text-primary/[0.07] px-[7px] py-0.5 text-[10px] font-bold leading-tight text-ds-text-primary'
+const pickerBadgeMutedClass = 'text-ds-text-disabled'
 const pickerEmptyStateClass =
-  'grid h-full place-items-center rounded-[var(--ui-radius-control)] px-5 py-5 text-center text-xs leading-[1.55] tracking-[0.01em] text-[var(--ui-text-tertiary)]'
+  'grid h-full place-items-center rounded-ds-sm px-5 py-5 text-center text-xs leading-[1.55] tracking-[0.01em] text-ds-text-muted'
 
 function getPickerDepthStyle(depth: number): CSSProperties {
   const normalizedDepth = Math.max(0, Number(depth) || 0)

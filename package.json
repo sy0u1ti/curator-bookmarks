@@ -26,6 +26,7 @@
     "test:ai": "node scripts/run-ai-runtime-tests.mjs",
     "eval:ai": "node scripts/eval-ai.mjs",
     "smoke:extension": "node scripts/smoke-extension.mjs",
+    "lint:ui-boundaries": "node scripts/check-ui-boundaries.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "validate": "npm test"

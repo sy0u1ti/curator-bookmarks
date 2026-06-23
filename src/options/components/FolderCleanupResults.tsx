@@ -16,11 +16,11 @@ const KIND_LABELS = {
 
 const FOLDER_CLEANUP_RESULTS_CLASS = 'mt-4 flex flex-col gap-3'
 const FOLDER_CLEANUP_EMPTY_CLASS =
-  'rounded-lg border border-[var(--ui-divider-subtle)] bg-[#171719] px-4 py-[18px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const FOLDER_CLEANUP_CARD_CLASS =
-  'rounded-lg border border-[var(--ui-divider-subtle)] bg-[#171719] p-[14px_16px]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const SPLIT_UNDO_CARD_CLASS =
-  'rounded-lg border border-[rgba(255,206,141,0.2)] bg-[rgba(255,206,141,0.08)] p-[14px_16px]'
+  'rounded-ds-sm border border-ds-warning/35 bg-ds-warning-soft p-[14px_16px]'
 const FOLDER_CLEANUP_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const FOLDER_CLEANUP_ACTIONS_CLASS =
@@ -28,28 +28,28 @@ const FOLDER_CLEANUP_ACTIONS_CLASS =
 const FOLDER_CLEANUP_BADGE_BASE_CLASS =
   'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border px-[10px] text-[11px] font-semibold leading-none tracking-[0]'
 const FOLDER_CLEANUP_BADGE_TONE_CLASS = {
-  danger: 'border-[rgba(255,138,130,0.22)] bg-[rgba(255,138,130,0.12)] text-[#ffb7b0]',
-  info: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-tertiary)]',
-  muted: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-tertiary)]',
-  warning: 'border-[rgba(255,206,141,0.2)] bg-[rgba(255,206,141,0.12)] text-[#ffdca5]'
+  danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
+  info: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 } as const
 const FOLDER_CLEANUP_ACTION_BUTTON_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-[var(--ui-text-disabled)] transition-colors hover:text-[var(--ui-text-secondary)] focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-focus-ring)] disabled:cursor-default disabled:opacity-50 data-disabled:cursor-default data-disabled:opacity-50'
+  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors hover:text-ds-text-secondary focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus disabled:cursor-default disabled:opacity-50 data-disabled:cursor-default data-disabled:opacity-50'
 const FOLDER_CLEANUP_DANGER_ACTION_BUTTON_CLASS =
-  `${FOLDER_CLEANUP_ACTION_BUTTON_CLASS} text-[#ffb7b0] hover:text-[#ffe7e3]`
+  `${FOLDER_CLEANUP_ACTION_BUTTON_CLASS} text-ds-danger-text hover:text-ds-danger-text`
 const FOLDER_CLEANUP_COPY_CLASS = 'mt-3 min-w-0'
 const FOLDER_CLEANUP_TITLE_CLASS =
-  'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-[var(--ui-text-primary)] max-[760px]:whitespace-normal'
+  'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-ds-text-primary max-[760px]:whitespace-normal'
 const FOLDER_CLEANUP_PATH_CLASS =
-  'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-[var(--ui-text-secondary)]'
+  'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-ds-text-secondary'
 const FOLDER_CLEANUP_DETAIL_CLASS =
-  'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-[var(--ui-text-disabled)]'
+  'mt-1 min-w-0 [overflow-wrap:anywhere] text-[13px] leading-[1.55] text-ds-text-disabled'
 const SPLIT_PREVIEW_CLASS = 'mt-3 flex flex-wrap gap-2'
-const PREVIEW_CLASS = 'mt-3 grid gap-2 border-t border-[var(--ui-divider-subtle)] pt-3'
+const PREVIEW_CLASS = 'mt-3 grid gap-2 border-t border-ds-border-subtle pt-3'
 const PREVIEW_ROW_CLASS =
-  'flex min-w-0 items-center justify-between gap-3 text-xs leading-[1.5] text-[var(--ui-text-disabled)]'
+  'flex min-w-0 items-center justify-between gap-3 text-xs leading-[1.5] text-ds-text-disabled'
 const PREVIEW_ROW_TITLE_CLASS =
-  'min-w-0 [overflow-wrap:anywhere] !text-[13px] !font-semibold !text-[var(--ui-text-secondary)]'
+  'min-w-0 [overflow-wrap:anywhere] text-[13px] font-semibold text-ds-text-secondary'
 
 export function FolderCleanupResults() {
   const state = useFolderCleanupResultsState()

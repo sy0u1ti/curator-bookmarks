@@ -16,12 +16,12 @@ const metrics: Array<{
 ]
 
 const AVAILABILITY_DECISION_GRID_CLASS =
-  'mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-[var(--ui-radius-control)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-divider-subtle)] max-[760px]:grid-cols-1'
-const AVAILABILITY_DECISION_METRIC_CLASS = 'min-w-0 bg-[#151516] p-[10px_12px]'
+  'mt-3 grid grid-cols-3 gap-px overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-[var(--ds-border-subtle)] max-[760px]:grid-cols-1'
+const AVAILABILITY_DECISION_METRIC_CLASS = 'min-w-0 bg-ds-surface-1 p-[10px_12px]'
 const AVAILABILITY_DECISION_LABEL_CLASS =
-  'block font-mono text-[11px] font-semibold uppercase leading-normal tracking-[0] text-[var(--ui-text-disabled)]'
+  'block font-mono text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
 const AVAILABILITY_DECISION_VALUE_CLASS =
-  'mt-1.5 block [overflow-wrap:anywhere] text-base font-[650] leading-[1.2] text-[var(--ui-text-primary)]'
+  'mt-1.5 block [overflow-wrap:anywhere] text-base font-[650] leading-[1.2] text-ds-text-primary'
 
 export function AvailabilityDecisionMetrics() {
   const state = useAvailabilityDecisionMetrics()

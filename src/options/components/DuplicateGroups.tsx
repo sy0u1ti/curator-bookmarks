@@ -13,30 +13,30 @@ type BadgeTone = 'danger' | 'muted' | 'success' | 'warning'
 
 const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#050505] p-[18px_16px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)] shadow-none transition-colors hover:border-[var(--ui-divider)] hover:bg-[#080808]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const DOCKED_SELECTION_CLASS =
-  'sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-lg border border-[rgba(255,183,176,0.24)] bg-[rgba(13,13,14,0.96)] p-[12px_14px] shadow-[0_12px_32px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.04)] max-[760px]:static max-[760px]:grid-cols-1'
+  'sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] shadow-ds-card max-[760px]:static max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
-const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-[var(--ui-text-primary)]'
+const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
 const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'
-const DOCKED_WARNING_CLASS = `${DOCKED_TEXT_CLASS} !font-semibold !text-[#ffb7b0]`
+const DOCKED_WARNING_CLASS = `${DOCKED_TEXT_CLASS} font-semibold text-ds-danger-text`
 const DOCKED_ACTIONS_CLASS =
   'flex flex-wrap items-center justify-end gap-2 max-[760px]:justify-start'
 const DOCKED_ACTION_BUTTON_CLASS = 'max-[760px]:flex-1 max-[760px]:basis-[132px]'
 const GROUP_CARD_CLASS =
-  'rounded-[18px] border bg-[#050505] p-4 shadow-none transition-colors hover:border-[var(--ui-divider)] hover:bg-[#080808]'
+  'rounded-ds-sm border bg-ds-surface-1 p-4 shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const GROUP_CARD_RISK_CLASS = {
-  high: 'border-[rgba(255,183,176,0.2)]',
-  low: 'border-[rgba(189,243,202,0.16)]'
+  high: 'border-ds-danger/30',
+  low: 'border-ds-success/25'
 } as const
 const GROUP_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-start justify-between gap-2.5 max-[760px]:flex-col max-[760px]:items-stretch'
 const GROUP_COPY_CLASS = 'min-w-0'
 const GROUP_TITLE_ROW_CLASS = 'flex min-w-0 flex-wrap items-start gap-2.5'
 const GROUP_TITLE_CLASS =
-  'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-normal text-[var(--ui-text-primary)] max-[760px]:whitespace-normal'
+  'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-normal text-ds-text-primary max-[760px]:whitespace-normal'
 const GROUP_TAGS_CLASS = 'inline-flex flex-wrap items-center gap-1.5'
-const GROUP_SUBTITLE_CLASS = 'mt-2.5 text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+const GROUP_SUBTITLE_CLASS = 'mt-2.5 text-[13px] leading-[1.7] text-ds-text-secondary'
 const RECOMMENDATION_CLASS =
   'mt-3.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 border-y border-[rgba(255,255,255,0.075)] py-3 max-[760px]:flex max-[760px]:flex-col max-[760px]:items-stretch'
 const RECOMMENDATION_COPY_CLASS = 'min-w-0'
@@ -50,30 +50,30 @@ const GROUP_ACTIONS_CLASS =
 const ACCEPT_ACTION_CLASS = 'min-w-[132px]'
 const ITEM_LIST_CLASS = 'mt-3.5 flex flex-col gap-2.5'
 const ITEM_ROW_CLASS =
-  'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-lg border border-[var(--ui-divider-subtle)] bg-[#050505] p-[13px_14px] shadow-none transition-colors hover:border-[var(--ui-divider)] hover:bg-[#080808] max-[760px]:grid-cols-1'
-const ITEM_ROW_PENDING_CLASS = '!border-[rgba(255,183,176,0.24)] !bg-[rgba(255,183,176,0.055)]'
-const ITEM_ROW_RECOMMENDED_CLASS = '!border-[rgba(189,243,202,0.2)]'
+  'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[13px_14px] shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover max-[760px]:grid-cols-1'
+const ITEM_ROW_PENDING_CLASS = 'border-ds-danger/35 bg-ds-danger-soft'
+const ITEM_ROW_RECOMMENDED_CLASS = 'border-ds-success/35'
 const ITEM_CHECK_LABEL_CLASS =
-  'inline-flex min-w-[78px] items-center gap-2 self-start pt-0.5 text-xs font-semibold !text-[var(--ui-text-secondary)] max-[760px]:min-w-0'
+  'inline-flex min-w-[78px] items-center gap-2 self-start pt-0.5 text-xs font-semibold text-ds-text-secondary max-[760px]:min-w-0'
 const ITEM_COPY_CLASS = 'min-w-0'
 const ITEM_META_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-2.5'
 const ITEM_TITLE_CLASS =
-  'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold text-[var(--ui-text-primary)] max-[760px]:whitespace-normal'
+  'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold text-ds-text-primary max-[760px]:whitespace-normal'
 const ITEM_BADGES_CLASS = 'inline-flex flex-wrap items-center gap-1.5'
 const ITEM_URL_CLASS =
-  'mt-[7px] inline-block text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] inline-block text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const ITEM_DETAIL_CLASS =
-  'mt-[7px] text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const ITEM_PATH_CLASS =
-  'mt-[7px] text-[13px] leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const BADGE_CLASS =
   'inline-flex min-h-6 flex-none items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold leading-none tracking-[0]'
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
-  danger: 'border-[rgba(255,138,130,0.22)] bg-[rgba(255,138,130,0.12)] text-[#ffb7b0]',
-  muted: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-tertiary)]',
-  success: 'border-[rgba(170,237,189,0.32)] bg-[rgba(170,237,189,0.16)] text-[#e2ffe9]',
-  warning: 'border-[rgba(255,206,141,0.2)] bg-[rgba(255,206,141,0.12)] text-[#ffdca5]'
+  danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
+  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 
 export function DuplicateGroups() {

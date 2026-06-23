@@ -19,11 +19,11 @@ const metrics: Array<{
 ]
 
 const AI_ANALYSIS_DECISION_GRID_CLASS =
-  'mt-3 grid grid-cols-4 gap-px overflow-hidden rounded-[10px] border border-[var(--ui-divider-subtle)] bg-[var(--ui-divider-subtle)] max-[760px]:grid-cols-1'
+  'mt-3 grid grid-cols-4 gap-px overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-[var(--ds-border-subtle)] max-[760px]:grid-cols-1'
 const AI_ANALYSIS_DECISION_CELL_CLASS =
-  'min-w-0 bg-[#151516] p-[10px_12px]'
+  'min-w-0 bg-ds-surface-1 p-[10px_12px]'
 const AI_ANALYSIS_DECISION_VALUE_CLASS =
-  'mt-1.5 block text-base font-[650] leading-[1.2] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'mt-1.5 block text-base font-[650] leading-[1.2] text-ds-text-primary [overflow-wrap:anywhere]'
 
 export function AiAnalysisDecisionMetrics() {
   const state = useAiAnalysisDecisionMetrics()

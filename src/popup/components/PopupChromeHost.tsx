@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui/base/Button'
-import { Input } from '../../ui/base/Input'
-import { Popover } from '../../ui/base/Popover'
+import { Button } from '../../ui'
+import { Input } from '../../ui'
+import { Popover } from '../../ui'
 import {
   dispatchPopupChromeAction,
   usePopupChromeView,
@@ -12,92 +12,92 @@ import { PopupSavedSearches } from './PopupSavedSearches'
 import { PopupSearchChips } from './PopupSearchChips'
 
 const searchHelpPopoverClass =
-  'w-[min(260px,calc(100vw-28px))] max-w-[260px] gap-2 rounded-[var(--ui-radius-panel)] border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] p-3 text-[11px] leading-snug text-[var(--ui-text-secondary)] shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
+  'w-[min(260px,calc(100vw-28px))] max-w-[260px] gap-2 rounded-ds-lg border-ds-border bg-ds-surface-2 p-3 text-[11px] leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
 
-const searchHelpTitleClass = 'text-xs font-semibold text-[var(--ui-text-primary)]'
+const searchHelpTitleClass = 'text-xs font-semibold text-ds-text-primary'
 const searchHelpListClass = 'm-0 grid list-none gap-1.5 p-0'
 const searchHelpItemClass = 'grid grid-cols-[52px_minmax(0,1fr)] items-baseline gap-2'
 const searchHelpTagClass =
-  'inline-flex min-h-5 items-center justify-center rounded-[var(--ui-radius-pill)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-1.5 text-[10px] font-semibold text-[var(--ui-text-secondary)]'
+  'inline-flex min-h-5 items-center justify-center rounded-full border border-ds-border bg-ds-surface-1 px-1.5 text-[10px] font-semibold text-ds-text-secondary'
 const searchHelpExampleClass =
-  'flex min-w-0 flex-wrap items-center gap-1 text-[var(--ui-text-primary)]'
+  'flex min-w-0 flex-wrap items-center gap-1 text-ds-text-primary'
 const searchHelpCodeClass =
-  'rounded-[5px] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] px-1 py-0.5 font-mono text-[10px] text-[var(--ui-text-primary)]'
-const searchHelpHintClass = 'text-[10px] text-[var(--ui-text-muted)]'
+  'rounded-[5px] border border-ds-border bg-ds-app px-1 py-0.5 font-mono text-[10px] text-ds-text-primary'
+const searchHelpHintClass = 'text-[10px] text-ds-text-muted'
 const searchHelpToggleClass = [
-  'relative inline-flex h-[18px] min-h-[18px] w-[18px] min-w-[18px] flex-none cursor-help items-center justify-center rounded-[var(--ui-radius-icon)] border border-[#3a3d46] bg-[#16181c] p-0 text-[var(--ui-text-secondary)] shadow-none',
-  'transition-[background,border-color,color,transform] duration-150 ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
-  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'relative inline-flex h-[18px] min-h-[18px] w-[18px] min-w-[18px] flex-none cursor-help items-center justify-center rounded-ds-sm border border-ds-border-hover bg-ds-surface-2 p-0 text-ds-text-secondary shadow-none',
+  'transition-[background,border-color,color,transform] duration-150 ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.96]'
 ].join(' ')
 const errorBannerClass =
-  'relative z-[1] flex-none rounded-[var(--ui-radius-panel)] border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-[#ffd5d0] shadow-none'
+  'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 const toolbarClass =
   'relative z-[1] flex min-h-[18px] items-center justify-between gap-2.5 px-px'
 const viewCaptionClass =
-  'm-0 min-w-0 text-[11px] font-semibold leading-normal tracking-[0.01em] text-[var(--ui-text-primary)]'
+  'm-0 min-w-0 text-[11px] font-semibold leading-normal tracking-[0.01em] text-ds-text-primary'
 const keyHintClass =
-  'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-[var(--ui-text-disabled)] opacity-60 transition-opacity duration-150 ease-[var(--ui-ease-standard)] group-focus-within:opacity-100'
+  'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-ds-text-disabled opacity-60 transition-opacity duration-150 ease-ds-standard group-focus-within:opacity-100'
 const heroBaseClass =
-  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-hidden border-b border-[#202228] bg-[#1a1c1d] px-3.5'
+  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-hidden border-b border-ds-border bg-ds-surface-2 px-3.5'
 const heroBrandClass =
   'hero-brand flex min-w-0 flex-none items-center justify-start gap-2.5'
 const heroMarkClass =
-  'hero-mark relative block h-[27px] w-[27px] flex-none overflow-hidden rounded-lg border border-[#2d3038] bg-[#050607] shadow-none'
+  'hero-mark relative block h-[27px] w-[27px] flex-none overflow-hidden rounded-lg border border-ds-border bg-ds-page shadow-none'
 const heroLogoClass =
   'hero-logo block h-full w-full object-cover'
 const heroCopyClass =
   'hero-copy flex min-w-0 flex-none flex-col gap-px'
 const heroEyebrowClass =
-  'hero-eyebrow m-0 text-[11px] font-semibold uppercase tracking-[0.01em] text-[var(--ui-text-disabled)]'
+  'hero-eyebrow m-0 text-[11px] font-semibold uppercase tracking-[0.01em] text-ds-text-disabled'
 const heroTitleRowClass =
   'hero-title-row flex min-w-0 items-center gap-[5px]'
 const heroActionsClass =
   'hero-actions inline-flex items-center gap-3.5'
 const heroSettingsButtonClass = [
-  'hero-settings-button inline-flex h-6 min-h-6 min-w-0 items-center justify-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-[720] text-[#c7ccd7] shadow-none',
-  'transition-[color,background,transform] duration-150 ease-[var(--ui-ease-standard)]',
-  'hover:bg-transparent hover:text-white',
-  'focus-visible:bg-transparent focus-visible:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'hero-settings-button inline-flex h-6 min-h-6 min-w-0 items-center justify-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-[720] text-ds-text-secondary shadow-none',
+  'transition-[color,background,transform] duration-150 ease-ds-standard',
+  'hover:bg-transparent hover:text-ds-text-primary',
+  'focus-visible:bg-transparent focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.96]'
 ].join(' ')
 const commandPanelBaseClass = 'grid gap-2'
 const commandPanelDefaultClass =
-  'min-h-[67px] flex-none rounded-lg border border-[var(--popup-line)] bg-[#101114] p-3'
+  'min-h-[67px] flex-none rounded-lg border border-ds-border bg-ds-surface-1 p-3'
 const commandPanelSmartClass =
   'min-h-0 flex-auto grid-rows-[minmax(0,1fr)] border-0 bg-transparent p-0'
 const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
-  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-[var(--ui-radius-pill)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] py-0 pl-3 pr-1.5 text-[var(--ui-text-primary)]',
-  'transition-[border-color,background,box-shadow] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)]',
-  'focus-within:border-[var(--ui-focus-ring)] focus-within:bg-[var(--ui-surface-hover)] focus-within:shadow-[0_0_0_3px_var(--ui-focus-ring-soft)]'
+  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
+  'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover',
+  'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const searchIconClass =
-  'pointer-events-none flex-none text-[var(--ui-text-tertiary)] transition-colors duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)] group-focus-within/search:text-[var(--ui-text-secondary)]'
+  'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
 const searchInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-[var(--ui-text-primary)] outline-none placeholder:text-[var(--ui-text-tertiary)] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const clearSearchButtonClass = [
-  'inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[var(--ui-radius-pill)] border-0 bg-transparent p-0 text-[var(--ui-text-tertiary)]',
-  'transition-[background,color] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:bg-[var(--ui-surface-pressed)] hover:text-[var(--ui-text-primary)]',
-  'focus-visible:bg-[var(--ui-surface-pressed)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline-none'
+  'inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border-0 bg-transparent p-0 text-ds-text-muted',
+  'transition-[background,color] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-active hover:text-ds-text-primary',
+  'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none'
 ].join(' ')
 const semanticSearchBaseClass = [
-  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-[var(--ui-radius-pill)] border border-[var(--ui-divider)] bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-[var(--ui-text-secondary)]',
-  'transition-[background,border-color,color,box-shadow] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
-  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:shadow-[0_0_0_3px_var(--ui-focus-ring-soft)] focus-visible:outline-none'
+  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border border-ds-border bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary',
+  'transition-[background,border-color,color,box-shadow] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_var(--ds-accent-soft)] focus-visible:outline-none'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
-  'border-dashed text-[var(--ui-text-disabled)] hover:text-[var(--ui-text-secondary)] focus-visible:text-[var(--ui-text-secondary)]'
+  'border-dashed text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
 const semanticSearchActiveClass =
-  'border-[var(--ui-accent)] bg-[var(--ui-accent)] text-[var(--ui-text-inverse)] hover:border-[var(--ui-accent-strong)] hover:bg-[var(--ui-accent-strong)] hover:text-[var(--ui-text-inverse)] focus-visible:border-[var(--ui-accent-strong)] focus-visible:bg-[var(--ui-accent-strong)] focus-visible:text-[var(--ui-text-inverse)]'
+  'border-ds-accent bg-ds-accent text-ds-accent-contrast hover:border-[var(--ds-accent-hover)] hover:bg-ds-accent-hover hover:text-ds-accent-contrast focus-visible:border-[var(--ds-accent-hover)] focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 const semanticSearchFallbackClass =
-  'border-[var(--ui-warning)] bg-[rgba(248,214,109,0.14)] text-[var(--ui-warning)] hover:border-[var(--ui-warning)] hover:bg-[rgba(248,214,109,0.14)] hover:text-[var(--ui-warning)] focus-visible:border-[var(--ui-warning)] focus-visible:bg-[rgba(248,214,109,0.14)] focus-visible:text-[var(--ui-warning)]'
+  'border-ds-warning bg-[rgba(248,214,109,0.14)] text-ds-warning hover:border-ds-warning hover:bg-[rgba(248,214,109,0.14)] hover:text-ds-warning focus-visible:border-ds-warning focus-visible:bg-[rgba(248,214,109,0.14)] focus-visible:text-ds-warning'
 const semanticSearchPendingDotClass =
-  'h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ui-ease-standard)_infinite] motion-reduce:animate-none'
+  'h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ds-ease-standard)_infinite] motion-reduce:animate-none'
 
 export function PopupChromeHost({
   children,

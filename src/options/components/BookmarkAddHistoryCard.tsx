@@ -4,27 +4,27 @@ import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 import type { BookmarkAddHistoryEntry } from '../sections/bookmark-add-history.js'
 
 const BOOKMARK_ADD_HISTORY_CARD_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[16px_16px_15px]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px_16px_15px]'
 const BOOKMARK_ADD_HISTORY_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const BOOKMARK_ADD_HISTORY_HEAD_LEFT_CLASS =
   'flex min-w-0 flex-wrap items-center gap-2.5'
 const BOOKMARK_ADD_HISTORY_COPY_CLASS = 'mt-3 min-w-0'
 const BOOKMARK_ADD_HISTORY_TITLE_CLASS =
-  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 const BOOKMARK_ADD_HISTORY_URL_CLASS =
-  'mt-[7px] inline-block text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] inline-block text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const BOOKMARK_ADD_HISTORY_PATH_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const BOOKMARK_ADD_HISTORY_DETAIL_CLASS =
-  'mt-[7px] text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const BOOKMARK_ADD_HISTORY_SUMMARY_CLASS =
-  'text-[13px] leading-[1.65] text-[var(--ui-text-secondary)]'
+  'text-[13px] leading-[1.65] text-ds-text-secondary'
 const BOOKMARK_ADD_HISTORY_BADGE_BASE_CLASS =
   'inline-flex min-h-7 max-w-full flex-none items-center justify-center rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0] whitespace-nowrap max-[760px]:whitespace-normal'
 const BOOKMARK_ADD_HISTORY_BADGE_TONE_CLASS = {
-  muted: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-secondary)]',
-  success: 'border-[rgba(170,237,189,0.32)] bg-[rgba(170,237,189,0.16)] text-[#e2ffe9]'
+  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-secondary',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text'
 } as const
 
 export function BookmarkAddHistoryCard({ entry }: { entry: BookmarkAddHistoryEntry }) {

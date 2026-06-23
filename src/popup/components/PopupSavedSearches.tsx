@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button'
+import { Button } from '../../ui'
 import { Icon } from '../../ui/icons/Icon'
 import {
   dispatchPopupSavedSearchAction,
@@ -10,34 +10,34 @@ const ROOT_CLASS = [
 ].join(' ')
 const ROOT_COLLAPSED_CLASS = 'max-h-14 gap-0 py-1'
 const HEAD_CLASS = [
-  'flex min-h-[22px] items-center justify-between gap-2 text-[11px] font-bold [color:var(--ui-text-tertiary)]'
+  'flex min-h-[22px] items-center justify-between gap-2 text-[11px] font-bold [color:var(--ds-text-muted)]'
 ].join(' ')
 const TOGGLE_CLASS = [
   'inline-flex min-h-[22px] items-center gap-1 rounded-md border border-transparent px-1.5 text-[11px] font-bold tracking-[0.01em]',
-  '[color:var(--ui-text-secondary)]',
-  'hover:border-[rgba(245,245,247,0.18)] hover:bg-[rgba(245,245,247,0.04)] hover:[color:var(--ui-text-primary)]',
-  'focus-visible:border-[rgba(245,245,247,0.18)] focus-visible:bg-[rgba(245,245,247,0.04)] focus-visible:[color:var(--ui-text-primary)]'
+  '[color:var(--ds-text-secondary)]',
+  'hover:border-[rgba(245,245,247,0.18)] hover:bg-[rgba(245,245,247,0.04)] hover:[color:var(--ds-text-primary)]',
+  'focus-visible:border-[rgba(245,245,247,0.18)] focus-visible:bg-[rgba(245,245,247,0.04)] focus-visible:[color:var(--ds-text-primary)]'
 ].join(' ')
 const SAVE_CLASS = [
-  'inline-flex min-h-[22px] items-center justify-center rounded-[7px] border border-[rgba(245,245,247,0.18)] bg-[#171719] px-[7px] text-[11px] font-bold leading-none',
-  '[color:var(--ui-text-secondary)] disabled:cursor-default disabled:opacity-[0.55]',
-  'hover:bg-[#2a2a2d] hover:[color:var(--ui-text-primary)]',
-  'focus-visible:bg-[#2a2a2d] focus-visible:[color:var(--ui-text-primary)]'
+  'inline-flex min-h-[22px] items-center justify-center rounded-[7px] border border-[rgba(245,245,247,0.18)] bg-ds-surface-2 px-[7px] text-[11px] font-bold leading-none',
+  '[color:var(--ds-text-secondary)] disabled:cursor-default disabled:opacity-[0.55]',
+  'hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
+  'focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]'
 ].join(' ')
-const STATUS_CLASS = 'text-[11px] leading-tight [color:var(--ui-text-disabled)]'
-const ERROR_STATUS_CLASS = 'text-[#ff8a82]'
+const STATUS_CLASS = 'text-[11px] leading-tight [color:var(--ds-text-disabled)]'
+const ERROR_STATUS_CLASS = 'text-ds-danger-text'
 const LIST_CLASS = 'flex flex-wrap gap-[5px]'
 const CHIP_CLASS = [
-  'inline-flex min-w-0 max-w-full overflow-hidden rounded-[var(--ui-radius-pill)] border border-[rgba(245,245,247,0.18)] bg-[#202024]'
+  'inline-flex min-w-0 max-w-full overflow-hidden rounded-full border border-[rgba(245,245,247,0.18)] bg-ds-surface-3'
 ].join(' ')
 const CHIP_ACTIVE_CLASS = 'border-[rgba(245,245,247,0.48)] bg-[rgba(245,245,247,0.11)]'
 const APPLY_CLASS = [
   'inline-flex min-h-[22px] max-w-60 items-center justify-center overflow-hidden text-ellipsis whitespace-nowrap px-[7px] text-[11px] font-bold leading-none',
-  '[color:var(--ui-text-secondary)] hover:bg-[#2a2a2d] hover:[color:var(--ui-text-primary)] focus-visible:bg-[#2a2a2d] focus-visible:[color:var(--ui-text-primary)]'
+  '[color:var(--ds-text-secondary)] hover:bg-ds-hover hover:[color:var(--ds-text-primary)] focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]'
 ].join(' ')
 const DELETE_CLASS = [
   'inline-flex min-h-[22px] w-[22px] items-center justify-center border-l border-[rgba(245,245,247,0.18)] text-[11px] font-bold leading-none',
-  '[color:var(--ui-text-tertiary)] hover:bg-[#2a2a2d] hover:[color:var(--ui-text-primary)] focus-visible:bg-[#2a2a2d] focus-visible:[color:var(--ui-text-primary)]'
+  '[color:var(--ds-text-muted)] hover:bg-ds-hover hover:[color:var(--ds-text-primary)] focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]'
 ].join(' ')
 
 export function PopupSavedSearches() {

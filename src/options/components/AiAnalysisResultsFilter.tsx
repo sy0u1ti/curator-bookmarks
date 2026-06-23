@@ -1,6 +1,6 @@
-import { Button } from '../../ui/base/Button.js'
-import { Input } from '../../ui/base/Input.js'
-import { Select, type SelectOption } from '../../ui/base/Select.js'
+import { Button } from '../../ui'
+import { Input } from '../../ui'
+import { Select, type SelectOption } from '../../ui'
 import { handleAiResultsFilterChange } from '../options-controller'
 import { AI_ANALYSIS_SMALL_BUTTON_CLASS } from './ai-analysis-classes.js'
 import { useAiAnalysisResultsFilter } from './ai-analysis-status-store.js'
@@ -25,7 +25,7 @@ const AI_RESULTS_FILTER_ROW_CLASS =
 const AI_RESULTS_FILTER_ACTIONS_CLASS =
   'flex min-w-0 flex-[0_0_auto] flex-wrap items-center justify-start gap-2.5 max-[760px]:w-full'
 const AI_RESULTS_FILTER_QUERY_CLASS =
-  'h-[42px] min-h-[42px] w-[min(260px,100%)] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-3.5 font-[inherit] text-sm font-medium leading-[42px] text-[var(--ui-text-primary)] outline-none shadow-none placeholder:text-[rgba(255,255,255,0.58)] focus:border-[var(--ui-divider)] focus:bg-[var(--ui-surface-raised)] focus:outline focus:outline-1 focus:outline-offset-2 focus:outline-[var(--ui-focus-ring)] max-[760px]:w-full'
+  'h-[42px] min-h-[42px] w-[min(260px,100%)] rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3.5 font-[inherit] text-sm font-medium leading-[42px] text-ds-text-primary outline-none shadow-none placeholder:text-[rgba(255,255,255,0.58)] focus:border-ds-border focus:bg-ds-surface-2 focus:outline focus:outline-1 focus:outline-offset-2 focus:outline-ds-focus max-[760px]:w-full'
 const AI_RESULTS_FILTER_CONTROLS_CLASS = 'contents'
 const AI_RESULTS_FILTER_SELECT_CLASS = 'w-[min(220px,100%)] max-[760px]:w-full'
 const AI_RESULTS_FILTER_SELECT_TRIGGER_CLASS = 'min-h-[42px] w-full'

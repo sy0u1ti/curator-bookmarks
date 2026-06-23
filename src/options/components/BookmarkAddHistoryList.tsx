@@ -1,14 +1,14 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { navigateToOptionsEmptyStateAction } from '../options-section-store.js'
 import type { BookmarkAddHistoryEntry } from '../sections/bookmark-add-history.js'
 import { BookmarkAddHistoryCard } from './BookmarkAddHistoryCard.js'
 
 const EMPTY_STATE_CLASS =
-  'grid gap-2 rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[22px_22px_20px] text-left text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'grid gap-2 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[22px_22px_20px] text-left text-[13px] leading-[1.7] text-ds-text-secondary'
 const EMPTY_TITLE_CLASS =
-  'm-0 text-sm font-bold leading-[1.4] text-[var(--ui-text-primary)]'
+  'm-0 text-sm font-bold leading-[1.4] text-ds-text-primary'
 const EMPTY_DETAIL_CLASS =
-  'm-0 text-xs leading-[1.6] text-[var(--ui-text-secondary)]'
+  'm-0 text-xs leading-[1.6] text-ds-text-secondary'
 const EMPTY_ACTIONS_CLASS = 'mt-1 flex flex-wrap gap-2'
 
 export function BookmarkAddHistoryList({ entries }: { entries: BookmarkAddHistoryEntry[] }) {

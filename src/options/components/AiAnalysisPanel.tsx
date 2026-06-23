@@ -23,9 +23,9 @@ const AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS =
 const AI_ANALYSIS_DECISION_HEADER_CLASS =
   'flex min-w-0 items-start justify-between gap-[14px] max-[760px]:flex-col'
 const AI_ANALYSIS_DECISION_TITLE_CLASS =
-  'font-[650] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'font-[650] text-ds-text-primary [overflow-wrap:anywhere]'
 const AI_ANALYSIS_DECISION_COPY_CLASS =
-  'mt-[5px] mb-0 text-[13px] leading-[1.5] text-[var(--ui-text-tertiary)]'
+  'mt-[5px] mb-0 text-[13px] leading-[1.5] text-ds-text-muted'
 
 interface OptionsPanelVisibilityProps {
   hidden: boolean

@@ -36,6 +36,9 @@ async function run(): Promise<void> {
   await testResponsesProviderEnvelope()
   await testChatCompletionsEnvelope()
   await testParseRepairRetry()
+  await testResponsesProviderErrorDoesNotFallback()
+  await testProviderTextErrorBody()
+  await testTimeoutErrorMessage()
   await testNoRetryForAbort()
 }
 
@@ -112,6 +115,9 @@ async function testResponsesProviderEnvelope(): Promise<void> {
   assert(result.data.action === 'rename', 'Responses payload should parse')
   assert(result.metadata.apiStyle === 'responses', 'metadata should retain API style')
   assert(JSON.stringify(calls[0]).includes('"json_schema"'), 'Responses body should request json_schema')
+  const responsesInput = (calls[0] as { input?: Array<{ content?: unknown }> })?.input || []
+  assert(typeof responsesInput[0]?.content === 'string', 'Responses system content should use plain string input')
+  assert(typeof responsesInput[1]?.content === 'string', 'Responses user content should use plain string input')
 }
 
 async function testChatCompletionsEnvelope(): Promise<void> {
@@ -134,6 +140,12 @@ async function testChatCompletionsEnvelope(): Promise<void> {
 
   assert(result.data.action === 'keep', 'Chat Completions payload should parse fenced JSON')
   assert(JSON.stringify(calls[0]).includes('"json_object"'), 'Chat body should request json_object')
+  const chatMessages = (calls[0] as { messages?: Array<{ content?: unknown }> })?.messages || []
+  assert(
+    String(chatMessages[0]?.content || '').includes('json') &&
+      String(chatMessages[1]?.content || '').includes('json'),
+    'Chat prompt should include lower-case json cues for strict JSON mode gateways'
+  )
 }
 
 async function testParseRepairRetry(): Promise<void> {
@@ -153,6 +165,86 @@ async function testParseRepairRetry(): Promise<void> {
   assert(result.metadata.attempts === 2, 'parse failure should retry once')
   assert(result.metadata.repaired, 'second attempt should be marked repaired')
   assert(JSON.stringify(calls[1]).includes('上一次 sample 输出未通过本地校验'), 'repair prompt should describe failure')
+}
+
+async function testResponsesProviderErrorDoesNotFallback(): Promise<void> {
+  const calls: Array<{ url: string; body: any }> = []
+  const error = await assertRejectsKind(async () => {
+    await requestStructuredAiOutput<Record<string, unknown>>({
+      settings: getSettings('responses'),
+      schema: SAMPLE_SCHEMA,
+      schemaName: 'sample',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      retry: false,
+      fetchImpl: (async (url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(url),
+          body: init?.body ? JSON.parse(String(init.body)) : null
+        })
+        return new Response(
+          "failed to transform response: failed to unmarshal responses api response: invalid character 'e' looking for beginning of value",
+          {
+            status: 500,
+            headers: { 'Content-Type': 'text/plain' }
+          }
+        )
+      }) as typeof fetch
+    })
+  }, 'provider')
+
+  assert(error.message.includes('failed to transform response'), 'Responses provider error should remain visible')
+  assert(calls.length === 1, 'Responses provider error should not switch API style automatically')
+  assert(calls[0].url.endsWith('/responses'), 'only call should use Responses endpoint')
+}
+
+async function testProviderTextErrorBody(): Promise<void> {
+  const error = await assertRejectsKind(async () => {
+    await requestStructuredAiOutput({
+      settings: getSettings('responses'),
+      schema: SAMPLE_SCHEMA,
+      schemaName: 'sample',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      retry: false,
+      fetchImpl: (async () => new Response('upstream overloaded without json', {
+        status: 500,
+        headers: { 'Content-Type': 'text/plain' }
+      })) as typeof fetch
+    })
+  }, 'provider')
+
+  assert(error.status === 500, 'provider text error should keep HTTP status')
+  assert(error.message.includes('upstream overloaded without json'), 'provider text error should preserve raw body excerpt')
+}
+
+async function testTimeoutErrorMessage(): Promise<void> {
+  const error = await assertRejectsKind(async () => {
+    await requestStructuredAiOutput({
+      settings: getSettings('responses'),
+      schema: SAMPLE_SCHEMA,
+      schemaName: 'sample',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      retry: false,
+      timeoutMs: 1,
+      fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+        return await new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal
+          if (signal?.aborted) {
+            reject(new DOMException('The operation was aborted.', 'AbortError'))
+            return
+          }
+          signal?.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'))
+          }, { once: true })
+        })
+      }) as typeof fetch
+    })
+  }, 'abort')
+
+  assert(error.message.includes('AI 请求超时'), 'timeout should be reported as a timeout, not a generic abort')
+  assert(error.message.includes('1 秒'), 'timeout message should include the effective timeout seconds')
 }
 
 async function testNoRetryForAbort(): Promise<void> {
@@ -217,13 +309,13 @@ function assertThrowsKind(callback: () => void, kind: string): void {
   throw new Error(`expected ${kind} error`)
 }
 
-async function assertRejectsKind(callback: () => Promise<void>, kind: string): Promise<void> {
+async function assertRejectsKind(callback: () => Promise<void>, kind: string): Promise<AiRuntimeError> {
   try {
     await callback()
   } catch (error) {
     assert(error instanceof AiRuntimeError, 'expected AiRuntimeError')
     assert(error.kind === kind, `expected ${kind}, got ${error.kind}`)
-    return
+    return error
   }
   throw new Error(`expected ${kind} rejection`)
 }

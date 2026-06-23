@@ -27,7 +27,7 @@ const toneByStatus = {
 } as const
 
 const AI_TASK_STATUS_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase tracking-[0] text-[var(--ui-text-disabled)]'
+  'block text-[11px] font-semibold uppercase tracking-[0] text-ds-text-disabled'
 
 export function AiTaskStatus({
   children,
@@ -43,7 +43,7 @@ export function AiTaskStatus({
   title
 }: AiTaskStatusProps) {
   return (
-    <section className={cx('grid gap-2 rounded-lg border border-curator-border bg-curator-bg-panel p-3 text-curator-text', className)}>
+    <section className={cx('grid gap-2 rounded-ds-md border border-ds-border bg-ds-surface-1 p-3 text-ds-text-primary', className)}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {label ? <span className={AI_TASK_STATUS_LABEL_CLASS}>{label}</span> : null}
@@ -54,7 +54,7 @@ export function AiTaskStatus({
       </div>
       {description ? (
         typeof description === 'string' ? (
-          <p className={cx('text-sm text-curator-text-muted', descriptionClassName)}>{description}</p>
+          <p className={cx('text-sm text-ds-text-secondary', descriptionClassName)}>{description}</p>
         ) : (
           description
         )

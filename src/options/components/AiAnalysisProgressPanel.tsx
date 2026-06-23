@@ -1,4 +1,4 @@
-import { AiTaskStatus } from '../../ui/ai/AiTaskStatus.js'
+import { AiTaskStatus } from '../../ui'
 import { StatusBusyLoadingLabel } from './LoadingLabel.js'
 import {
   useAiAnalysisDuration,
@@ -7,12 +7,12 @@ import {
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 
 const OPTIONS_PROGRESS_TRACK_CLASS =
-  '!mt-[14px] !h-[7px] !rounded-none !border !border-[var(--ui-divider-subtle)] !bg-black'
-const OPTIONS_PROGRESS_BAR_CLASS = '!rounded-none !bg-[var(--ui-accent-strong)]'
+  'mt-[14px] h-[7px] rounded-ds-sm border border-ds-border-subtle bg-ds-surface-2'
+const OPTIONS_PROGRESS_BAR_CLASS = 'rounded-ds-sm bg-ds-accent-hover'
 const AI_ANALYSIS_DECISION_PANEL_CLASS =
-  'mt-[18px] !rounded-[12px] !border-[var(--ui-divider-subtle)] !bg-[rgba(255,255,255,0.025)] !p-[14px_16px_16px]'
+  'mt-[18px] border-ds-border-subtle bg-ds-surface-1'
 const AI_ANALYSIS_PROGRESS_COPY_CLASS =
-  'mt-0 mb-0 text-[13px] leading-[1.65] text-[var(--ui-text-tertiary)]'
+  'mt-0 mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
 
 export function AiAnalysisProgressPanel({ children }: { children: React.ReactNode }) {
   const state = useAiAnalysisProgress()

@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import {
   AI_ANALYSIS_PRIMARY_BUTTON_CLASS,
   AI_ANALYSIS_SMALL_BUTTON_CLASS
@@ -13,6 +13,7 @@ export function AiAnalysisActions() {
     <>
       <Button
         className={AI_ANALYSIS_PRIMARY_BUTTON_CLASS}
+        size="lg"
         type="button"
         variant="primary"
         disabled={state.actionDisabled}

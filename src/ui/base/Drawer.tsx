@@ -33,20 +33,20 @@ export function Drawer({
       {trigger ? <BaseDrawer.Trigger render={<span />}>{trigger}</BaseDrawer.Trigger> : null}
       <BaseDrawer.Portal>
         <Presence>
-          <BaseDrawer.Backdrop className="fixed inset-0 z-40 bg-black/55" />
+          <BaseDrawer.Backdrop className="fixed inset-0 z-40 bg-ds-overlay" />
           <BaseDrawer.Viewport>
             <BaseDrawer.Popup
               render={
                 <MotionPanel
                   variant="drawer"
-                  className="fixed right-0 top-0 z-50 grid h-dvh w-[min(92vw,28rem)] content-start gap-4 border-l border-curator-border bg-curator-bg-elevated p-4 text-curator-text shadow-[var(--shadow-popover)] outline-none"
+                  className="fixed right-0 top-0 z-50 grid h-dvh w-[min(92vw,28rem)] content-start gap-4 border-l border-ds-border bg-ds-surface-2 p-4 text-ds-text-primary shadow-ds-dialog outline-none"
                 />
               }
             >
               <header className="grid gap-1">
                 <BaseDrawer.Title className="text-base font-semibold">{title}</BaseDrawer.Title>
                 {description ? (
-                  <BaseDrawer.Description className="text-sm text-curator-text-muted">
+                  <BaseDrawer.Description className="text-sm text-ds-text-secondary">
                     {description}
                   </BaseDrawer.Description>
                 ) : null}

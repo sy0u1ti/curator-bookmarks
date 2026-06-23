@@ -52,6 +52,7 @@ import {
   DASHBOARD_CARD_TOOLTIP_CLASS,
   DASHBOARD_CARD_URL_CLASS,
   DASHBOARD_TAG_POPOVER_CLASS,
+  DASHBOARD_TAG_POPOVER_LAYER_CLASS,
   DASHBOARD_TAG_POPOVER_LIST_CLASS,
   DASHBOARD_TAG_POPOVER_POSITIONER_CLASS,
   DASHBOARD_TAG_POPOVER_TITLE_CLASS,
@@ -78,14 +79,10 @@ import {
   DASHBOARD_FOLDER_DROP_CARD_CLASS,
   DASHBOARD_FOLDER_DROP_CARD_MOVING_STATE_CLASS,
   DASHBOARD_NATURAL_SEARCH_MARKER_CLASS,
-  DASHBOARD_NATURAL_SEARCH_MARKER_ACTIVE_STATE_CLASS,
-  DASHBOARD_NATURAL_SEARCH_MARKER_FALLBACK_STATE_CLASS,
-  DASHBOARD_NATURAL_SEARCH_MARKER_PENDING_STATE_CLASS,
   DASHBOARD_NATURAL_SEARCH_LABEL_CLASS,
   DASHBOARD_NATURAL_SEARCH_TOGGLE_CLASS,
   DASHBOARD_NATURAL_SEARCH_TOGGLE_ACTIVE_STATE_CLASS,
   DASHBOARD_NATURAL_SEARCH_TOGGLE_FALLBACK_STATE_CLASS,
-  DASHBOARD_NATURAL_SEARCH_TOGGLE_PENDING_STATE_CLASS,
   DASHBOARD_SEARCH_CHIPS_CLASS,
   DASHBOARD_SEARCH_CHIP_CLASS,
   DASHBOARD_LOADING_EMPTY_STATE_CLASS,
@@ -300,20 +297,11 @@ function DashboardSearchChips({ chips }: { chips: DashboardSearchChipViewModel[]
 
 function DashboardSearchControls({ state }: { state: DashboardSearchControlsState }) {
   const natural = state.natural
-  const naturalToggleStateClass = natural.pending
-    ? DASHBOARD_NATURAL_SEARCH_TOGGLE_PENDING_STATE_CLASS
-    : natural.fallback
-      ? DASHBOARD_NATURAL_SEARCH_TOGGLE_FALLBACK_STATE_CLASS
-      : natural.active
-        ? DASHBOARD_NATURAL_SEARCH_TOGGLE_ACTIVE_STATE_CLASS
-        : ''
-  const naturalMarkerStateClass = natural.pending
-    ? DASHBOARD_NATURAL_SEARCH_MARKER_PENDING_STATE_CLASS
-    : natural.fallback
-      ? DASHBOARD_NATURAL_SEARCH_MARKER_FALLBACK_STATE_CLASS
-      : natural.active
-        ? DASHBOARD_NATURAL_SEARCH_MARKER_ACTIVE_STATE_CLASS
-        : ''
+  const naturalToggleStateClass = natural.fallback
+    ? DASHBOARD_NATURAL_SEARCH_TOGGLE_FALLBACK_STATE_CLASS
+    : natural.active
+      ? DASHBOARD_NATURAL_SEARCH_TOGGLE_ACTIVE_STATE_CLASS
+      : ''
 
   return (
     <>
@@ -325,7 +313,7 @@ function DashboardSearchControls({ state }: { state: DashboardSearchControlsStat
         onClick={() => handleDashboardViewAction({ action: 'clear-search' })}
         unstyled
       >
-        清空
+        <Icon name="X" size={14} aria-hidden="true" />
       </Button>
       <Button
         className={[
@@ -339,13 +327,7 @@ function DashboardSearchControls({ state }: { state: DashboardSearchControlsStat
         onClick={() => handleDashboardViewAction({ action: 'toggle-natural-search' })}
         unstyled
       >
-        <span
-          className={[
-            DASHBOARD_NATURAL_SEARCH_MARKER_CLASS,
-            naturalMarkerStateClass
-          ].filter(Boolean).join(' ')}
-          aria-hidden="true"
-        />
+        {natural.pending ? <span className={DASHBOARD_NATURAL_SEARCH_MARKER_CLASS} aria-hidden="true" /> : null}
         <span className={DASHBOARD_NATURAL_SEARCH_LABEL_CLASS}>{natural.label}</span>
       </Button>
     </>
@@ -1055,10 +1037,12 @@ function DashboardCardContents({
         <DashboardCardMoreMenu state={state} focusRequest={focusRequest} />
       </div>
       {state.expanded && state.tags.length ? (
-        <DashboardTagPopoverShell
-          state={state}
-          triggerRef={tagToggleRef}
-        />
+        <div className={DASHBOARD_TAG_POPOVER_LAYER_CLASS}>
+          <DashboardTagPopoverShell
+            state={state}
+            triggerRef={tagToggleRef}
+          />
+        </div>
       ) : null}
     </>
   )

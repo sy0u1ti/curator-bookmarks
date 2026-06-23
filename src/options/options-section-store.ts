@@ -14,11 +14,11 @@ export function normalizeOptionsSectionKey(key: string): OptionsSectionKey {
     return 'backup'
   }
 
-  return key in SECTION_META ? (key as OptionsSectionKey) : 'overview'
+  return key in SECTION_META ? (key as OptionsSectionKey) : 'general'
 }
 
 export function getOptionsSectionKeyFromHash(hash: string): OptionsSectionKey {
-  const rawKey = hash.replace(/^#/, '').split(':')[0] || 'overview'
+  const rawKey = hash.replace(/^#/, '').split(':')[0] || 'general'
   return normalizeOptionsSectionKey(rawKey)
 }
 

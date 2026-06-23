@@ -3,7 +3,7 @@ import {
   dispatchPopupSmartClassifierTitleChange,
   usePopupSmartClassifierView
 } from '../popup-controller-store'
-import { cx } from '../../ui/base/utils'
+import { cx } from '../../ui'
 import { PopupSmartClassifier } from './PopupSmartClassifier'
 
 const smartClassifierBaseClass = 'relative z-[1] min-h-[auto] flex-none pb-0'

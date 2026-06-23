@@ -20,6 +20,9 @@ const STORAGE_KEYS = {
 
 const SMOKE_TIMEOUT_MS = 45_000
 const PAGE_TIMEOUT_MS = 20_000
+const DASHBOARD_LAYOUT_MIN_CARD_WIDTH = 240
+const DASHBOARD_LAYOUT_SEED_BOOKMARK_COUNT = 90
+const DASHBOARD_ACTION_MOVE_TOLERANCE_PX = 1
 
 let context
 let userDataDir = ''
@@ -108,7 +111,7 @@ function getExtensionId(worker) {
 }
 
 async function seedExtensionData(worker) {
-  return await worker.evaluate(async ({ storageKeys }) => {
+  return await worker.evaluate(async ({ dashboardLayoutSeedBookmarkCount, storageKeys }) => {
     const callChrome = (target, method, ...args) => new Promise((resolve, reject) => {
       target[method](...args, (result) => {
         const error = chrome.runtime.lastError
@@ -144,7 +147,7 @@ async function seedExtensionData(worker) {
       title: 'Gamma Newtab Smoke',
       url: 'https://react.dev/'
     })
-    for (let index = 0; index < 14; index += 1) {
+    for (let index = 0; index < dashboardLayoutSeedBookmarkCount; index += 1) {
       await callChrome(chrome.bookmarks, 'create', {
         parentId: folder.id,
         title: `Keyboard Scroll Smoke ${String(index).padStart(2, '0')}`,
@@ -162,7 +165,7 @@ async function seedExtensionData(worker) {
       summary: 'Dashboard smoke seed bookmark',
       contentType: 'documentation',
       topics: ['extensions'],
-      tags: ['smoke', 'dashboard'],
+      tags: ['smoke', 'dashboard', 'extensions', 'mv3', 'docs'],
       aliases: [],
       confidence: 0.99,
       source: 'manual',
@@ -214,7 +217,10 @@ async function seedExtensionData(worker) {
       betaId: beta.id,
       gammaId: gamma.id
     }
-  }, { storageKeys: STORAGE_KEYS })
+  }, {
+    dashboardLayoutSeedBookmarkCount: DASHBOARD_LAYOUT_SEED_BOOKMARK_COUNT,
+    storageKeys: STORAGE_KEYS
+  })
 }
 
 async function smokePopup() {
@@ -302,6 +308,7 @@ async function smokeNewtab() {
   await expect(overlay).toBeVisible()
   const frame = newtab.frameLocator('#newtab-dashboard-frame')
   await expect(frame.locator('#dashboard')).toBeVisible()
+  await frame.locator('#dashboard-query').fill('Beta Dashboard')
   await expect(frame.getByText('Beta Dashboard Smoke').first()).toBeVisible()
   const frameSrc = await newtab.locator('#newtab-dashboard-frame').getAttribute('src')
   expect(frameSrc || '').toContain('/src/options/options.html?embed=newtab-dashboard')
@@ -318,8 +325,10 @@ async function smokeOptionsDashboard(worker) {
 
   await expect(options.locator('#dashboard')).toBeVisible()
   await expect(options.locator('#dashboard-query')).toBeVisible()
+  await assertDashboardLayoutStable(options)
   await options.fill('#dashboard-query', 'Beta Dashboard')
   await expect(options.getByText('Beta Dashboard Smoke').first()).toBeVisible()
+  await assertDashboardTagPopoverDoesNotMoveActions(options, 'Beta Dashboard Smoke')
 
   await options.getByRole('checkbox', { name: /选择书签：Beta Dashboard Smoke/ }).click()
   await options.getByRole('button', { name: '批量移动 Dashboard 已选书签' }).click()
@@ -357,6 +366,96 @@ async function smokeOptionsDashboard(worker) {
       })
     })
   })
+}
+
+async function assertDashboardLayoutStable(options) {
+  await options.waitForFunction(() => document.querySelectorAll('#dashboard article').length > 0, null, {
+    timeout: PAGE_TIMEOUT_MS
+  })
+
+  await expect.poll(async () => {
+    const snapshot = await readDashboardLayoutSnapshot(options)
+    if (snapshot.loaderHidden && snapshot.firstCardWidth >= DASHBOARD_LAYOUT_MIN_CARD_WIDTH) {
+      return 'ready'
+    }
+    return JSON.stringify(snapshot)
+  }, { timeout: PAGE_TIMEOUT_MS }).toBe('ready')
+}
+
+async function readDashboardLayoutSnapshot(options) {
+  return await options.evaluate(() => {
+    const round = (value) => Math.round(Number(value) || 0)
+    const loader = document.querySelector('output[aria-label="正在读取书签仪表盘"]')
+    const loaderStyle = loader ? getComputedStyle(loader) : null
+    const firstCard = document.querySelector('#dashboard article')
+    const virtualWindow = firstCard?.parentElement || null
+    const virtualSpacer = virtualWindow?.parentElement || null
+    const resultsGrid = virtualSpacer?.parentElement || null
+    const cardRect = firstCard?.getBoundingClientRect()
+    const windowRect = virtualWindow?.getBoundingClientRect()
+    const spacerRect = virtualSpacer?.getBoundingClientRect()
+    const gridRect = resultsGrid?.getBoundingClientRect()
+    const gridStyle = resultsGrid ? getComputedStyle(resultsGrid) : null
+
+    return {
+      cardCount: document.querySelectorAll('#dashboard article').length,
+      firstCardWidth: round(cardRect?.width),
+      gridDisplay: gridStyle?.display || '',
+      gridTemplateColumns: gridStyle?.gridTemplateColumns || '',
+      gridWidth: round(gridRect?.width),
+      loaderHidden: !loader || loaderStyle?.visibility === 'hidden' || Number(loaderStyle?.opacity || 0) < 0.05,
+      loaderOpacity: loaderStyle?.opacity || '',
+      loaderVisibility: loaderStyle?.visibility || '',
+      spacerWidth: round(spacerRect?.width),
+      virtualWindowGridTemplateColumns: virtualWindow instanceof HTMLElement
+        ? getComputedStyle(virtualWindow).gridTemplateColumns
+        : '',
+      virtualWindowWidth: round(windowRect?.width)
+    }
+  })
+}
+
+async function assertDashboardTagPopoverDoesNotMoveActions(options, bookmarkTitle) {
+  const before = await readDashboardCardActionSnapshot(options, bookmarkTitle)
+  const tagToggle = options.getByRole('button', { name: /查看 \d+ 个隐藏标签/ }).first()
+  const tagToggleBox = await tagToggle.boundingBox()
+  if (!tagToggleBox) {
+    throw new Error('Unable to measure Dashboard hidden tag toggle.')
+  }
+
+  await options.mouse.move(
+    tagToggleBox.x + tagToggleBox.width / 2,
+    tagToggleBox.y + tagToggleBox.height / 2
+  )
+  await expect(options.getByText('全部标签')).toBeVisible()
+  await options.waitForTimeout(150)
+
+  const after = await readDashboardCardActionSnapshot(options, bookmarkTitle)
+  expect(Math.abs(after.openButtonTop - before.openButtonTop)).toBeLessThanOrEqual(DASHBOARD_ACTION_MOVE_TOLERANCE_PX)
+  expect(Math.abs(after.copyButtonTop - before.copyButtonTop)).toBeLessThanOrEqual(DASHBOARD_ACTION_MOVE_TOLERANCE_PX)
+  expect(Math.abs(after.moreButtonTop - before.moreButtonTop)).toBeLessThanOrEqual(DASHBOARD_ACTION_MOVE_TOLERANCE_PX)
+
+  await options.mouse.move(20, 20)
+}
+
+async function readDashboardCardActionSnapshot(options, bookmarkTitle) {
+  return await options.evaluate((title) => {
+    const titleElement = [...document.querySelectorAll('#dashboard article strong')]
+      .find((candidate) => candidate.textContent?.trim() === title)
+    const card = titleElement?.closest('article')
+    if (!card) {
+      throw new Error(`Unable to find Dashboard card for ${title}`)
+    }
+    const openButton = card.querySelector('a[aria-label^="打开书签"]')
+    const copyButton = card.querySelector('button[aria-label^="复制书签"]')
+    const moreButton = card.querySelector('button[aria-label^="更多操作"]')
+
+    return {
+      copyButtonTop: Math.round(copyButton?.getBoundingClientRect().top || 0),
+      moreButtonTop: Math.round(moreButton?.getBoundingClientRect().top || 0),
+      openButtonTop: Math.round(openButton?.getBoundingClientRect().top || 0)
+    }
+  }, bookmarkTitle)
 }
 
 async function assertPermissions(worker) {

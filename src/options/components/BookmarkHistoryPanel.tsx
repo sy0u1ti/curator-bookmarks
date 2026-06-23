@@ -6,7 +6,7 @@ import {
 } from './option-layout-classes.js'
 
 const BOOKMARK_HISTORY_GROUP_CLASS =
-  'mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none max-[760px]:p-4'
+  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none max-[760px]:p-4'
 
 export function BookmarkHistoryPanel({ hidden }: { hidden: boolean }) {
   return (

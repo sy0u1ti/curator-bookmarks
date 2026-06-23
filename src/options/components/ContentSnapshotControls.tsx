@@ -1,10 +1,10 @@
-import { AiProviderCard } from '../../ui/ai/AiProviderCard.js'
+import { AiProviderCard } from '../../ui'
 import {
   CollapsiblePanel,
   CollapsibleRoot,
   CollapsibleTrigger
-} from '../../ui/base/Collapsible.js'
-import { SwitchControl } from '../../ui/base/Switch.js'
+} from '../../ui'
+import { SwitchControl } from '../../ui'
 import {
   AI_SETTINGS_ADVANCED_CLASS,
   AI_SETTINGS_ADVANCED_NOTE_CLASS,

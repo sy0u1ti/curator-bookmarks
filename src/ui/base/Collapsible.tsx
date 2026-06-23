@@ -28,7 +28,7 @@ export function CollapsibleRoot({ className, ...props }: CollapsibleRootProps) {
 export function CollapsibleTrigger({ className, ...props }: CollapsibleTriggerProps) {
   return (
     <BaseCollapsible.Trigger
-      className={cx('outline-none focus-visible:ring-2 focus-visible:ring-white/20', className)}
+      className={cx('outline-none focus-visible:shadow-ds-focus', className)}
       {...props}
     />
   )

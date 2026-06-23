@@ -1,38 +1,38 @@
 import { useRef } from 'react'
-import { Button } from '../../ui/base/Button.js'
-import { Input } from '../../ui/base/Input.js'
+import { Button } from '../../ui'
+import { Input } from '../../ui'
 import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
 import type { BackupControlsState, BackupPreviewState } from './backup-controls-types.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 
 const BACKUP_CARD_CLASS =
-  'mt-7 rounded-[var(--ui-radius-group)] border border-white/[0.055] bg-[rgba(28,28,30,0.86)] p-[18px_20px_16px]'
+  'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
 const BACKUP_HEADER_CLASS =
   'flex flex-wrap items-start justify-between gap-4'
-const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-white/[0.075] pb-[14px]`
+const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-ds-border-subtle pb-[14px]`
 const BACKUP_ROW_CLASS = `${BACKUP_HEADER_CLASS} pt-[14px]`
 const BACKUP_COPY_COLUMN_CLASS = 'min-w-0'
 const BACKUP_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-[var(--ui-text-primary)]'
+  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const BACKUP_COPY_CLASS =
-  'mt-2.5 mb-0 max-w-[760px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'mt-2.5 mb-0 max-w-[760px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const BACKUP_STATUS_CLASS =
-  'mt-2.5 mb-0 max-w-[760px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'mt-2.5 mb-0 max-w-[760px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const BACKUP_ROW_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 self-end max-[760px]:justify-start'
 const BACKUP_PREVIEW_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const BACKUP_EMPTY_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[18px_16px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const BACKUP_PREVIEW_CARD_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[14px_16px]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const BACKUP_PREVIEW_COPY_CLASS = 'mt-0 min-w-0'
 const BACKUP_PREVIEW_TITLE_CLASS =
-  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 const BACKUP_PREVIEW_DETAIL_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const BACKUP_WARNING_LIST_CLASS =
-  'mt-[10px] mb-0 pl-[18px] text-[13px] leading-[1.65] text-[var(--ui-text-secondary)] [&_li+li]:mt-1'
+  'mt-[10px] mb-0 pl-[18px] text-[13px] leading-[1.65] text-ds-text-secondary [&_li+li]:mt-1'
 
 export function BackupControls() {
   const state = useBackupControlsState()

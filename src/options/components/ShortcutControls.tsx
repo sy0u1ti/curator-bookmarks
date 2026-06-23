@@ -1,33 +1,33 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleShortcutAction } from '../options-controller'
 import { ShortcutList } from './ShortcutList.js'
 import { useShortcutControlsState } from './shortcut-store.js'
 
 const SHORTCUT_DETAIL_BASE_CLASS =
-  'mt-3 mb-0 whitespace-normal rounded-lg border border-[rgba(245,245,247,0.08)] bg-[rgba(245,245,247,0.035)] px-3 py-2.5 text-xs leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere]'
+  'mt-3 mb-0 whitespace-normal rounded-ds-sm border border-ds-border-subtle bg-ds-surface-2 px-3 py-2.5 text-xs leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere]'
 const SHORTCUT_DETAIL_TONE_CLASSES: Record<string, string> = {
-  danger: 'border-[rgba(255,206,141,0.18)] bg-[rgba(255,206,141,0.08)] text-[#ffdca5]',
-  success: 'border-[rgba(170,237,189,0.16)] bg-[rgba(170,237,189,0.08)] text-[#bdf3ca]',
-  warning: 'border-[rgba(255,206,141,0.18)] bg-[rgba(255,206,141,0.08)] text-[#ffdca5]'
+  danger: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 const SHORTCUT_CARD_CLASS =
-  'mt-7 rounded-[var(--ui-radius-group)] border border-white/[0.06] bg-[rgba(24,24,26,0.92)] p-[26px_24px_24px] max-[760px]:mt-5 max-[760px]:p-[18px_16px]'
+  'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[26px_24px_24px] max-[760px]:mt-5 max-[760px]:p-[18px_16px]'
 const SHORTCUT_HEAD_CLASS =
   'flex items-start justify-between gap-[18px] max-[760px]:flex-col max-[760px]:items-stretch'
 const SHORTCUT_COPY_CLASS = 'min-w-0'
 const SHORTCUT_TITLE_CLASS =
-  'm-0 text-[17px] font-[720] leading-[1.35] tracking-[0] text-[var(--ui-text-primary)]'
+  'm-0 text-[17px] font-[720] leading-[1.35] tracking-[0] text-ds-text-primary'
 const SHORTCUT_NOTICE_CLASS =
-  'mt-3 mb-0 text-sm font-[560] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'mt-3 mb-0 text-sm font-[560] leading-[1.7] text-ds-text-secondary'
 const SHORTCUT_SUBTITLE_CLASS =
-  'mt-2 mb-0 text-[13px] leading-[1.7] text-[var(--ui-text-disabled)]'
+  'mt-2 mb-0 text-[13px] leading-[1.7] text-ds-text-disabled'
 const SHORTCUT_STATUS_BASE_CLASS =
   'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'
 const SHORTCUT_STATUS_TONE_CLASSES: Record<string, string> = {
-  danger: 'border-[rgba(255,138,130,0.22)] bg-[rgba(255,138,130,0.12)] text-[#ffb7b0]',
-  muted: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-tertiary)]',
-  success: 'border-[rgba(170,237,189,0.32)] bg-[rgba(170,237,189,0.16)] text-[#e2ffe9]',
-  warning: 'border-[rgba(255,206,141,0.2)] bg-[rgba(255,206,141,0.12)] text-[#ffdca5]'
+  danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
+  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 const SHORTCUT_LIST_CLASS = 'mt-5 flex flex-col gap-2'
 const SHORTCUT_ACTIONS_CLASS =

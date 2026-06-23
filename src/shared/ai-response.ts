@@ -91,15 +91,35 @@ export function stripMarkdownCodeFences(text: unknown): string {
   return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
 }
 
-export function extractAiErrorMessage(payload: unknown, statusCode: unknown): string {
-  const responsePayload = payload as {
-    error?: { message?: unknown }
-    message?: unknown
-  } | null
-  const message = responsePayload?.error?.message || responsePayload?.message || ''
+export function extractAiErrorMessage(payload: unknown, statusCode: unknown, rawBody: unknown = ''): string {
+  const responsePayload = payload && typeof payload === 'object'
+    ? payload as {
+      error?: { message?: unknown } | string
+      message?: unknown
+      detail?: unknown
+      error_description?: unknown
+    }
+    : null
+  const errorValue = responsePayload?.error
+  const message = [
+    errorValue && typeof errorValue === 'object' ? errorValue.message : '',
+    typeof errorValue === 'string' ? errorValue : '',
+    responsePayload?.message,
+    responsePayload?.detail,
+    responsePayload?.error_description,
+    typeof payload === 'string' ? payload : ''
+  ]
+    .map((item) => String(item || '').replace(/\s+/g, ' ').trim())
+    .find(Boolean)
+  const rawExcerpt = message
+    ? ''
+    : truncateText(String(rawBody || '').replace(/\s+/g, ' ').trim(), 220)
+
   return message
     ? `AI 请求失败（${statusCode}）：${message}`
-    : `AI 请求失败（${statusCode}）。`
+    : rawExcerpt
+      ? `AI 请求失败（${statusCode}）：${rawExcerpt}`
+      : `AI 请求失败（${statusCode}）。`
 }
 
 export function buildAiStructuredOutputRefusalError(refusal: unknown): string {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleFolderPickerAction } from '../options-controller'
 import { useFolderPickerResultsState } from './folder-picker-results-store.js'
 import {

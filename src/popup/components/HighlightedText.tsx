@@ -1,6 +1,6 @@
 import { getQueryTerms, normalizeQuery } from '../search.js'
 
-const markClass = 'rounded-md bg-white/[0.12] px-[0.02em] text-white shadow-none'
+const markClass = 'rounded-md bg-ds-text-primary/[0.12] px-[0.02em] text-ds-text-primary shadow-none'
 
 export function HighlightedText({ text, query }: { text: string; query: string }) {
   return (

@@ -1,7 +1,7 @@
 import type { CSSProperties, RefObject } from 'react'
-import { Button } from '../../ui/base/Button'
+import { Button } from '../../ui'
 import { Icon, type IconName } from '../../ui/icons/Icon'
-import { cx } from '../../ui/base/utils'
+import { cx } from '../../ui'
 import { HighlightedText } from './HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
 import type {
@@ -59,64 +59,64 @@ const workspaceClass =
   'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
-  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-[var(--popup-line)] bg-[#101114]'
-const mainPaneClass = cx(paneClass, 'bg-[#101113]')
+  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1'
+const mainPaneClass = cx(paneClass, 'bg-ds-surface-1')
 const paneHeaderClass =
-  'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-[var(--popup-line)] px-[13px] text-xs font-[760] text-[#dce1eb]'
-const paneMetaClass = 'whitespace-nowrap text-xs font-medium text-[var(--popup-faint)]'
+  'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'
+const paneMetaClass = 'whitespace-nowrap text-xs font-medium text-ds-text-muted'
 const folderTreeClass =
-  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:#333741_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
-  'm-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:#333741_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'm-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderRowClass = 'relative block min-h-[34px]'
 const mainRowClass =
   'relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0'
 const folderCardClass = [
-  'grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-[var(--popup-text)] outline-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[#272a32] hover:bg-[#191b20] focus-visible:border-[#272a32] focus-visible:bg-[#191b20] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
+  'grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
-const folderCardActiveClass = 'border-[#272a32] bg-[#191b20]'
+const folderCardActiveClass = 'border-ds-border-hover bg-ds-hover'
 const folderBranchClass =
-  'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-[#a7afbf]'
+  'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
 const rootFolderBranchClass = 'rounded-full border border-white/30'
 const folderMainClass =
   'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-[7px]'
 const folderTitleClass =
-  'min-w-0 truncate text-left text-xs font-bold leading-tight text-[var(--popup-text)]'
+  'min-w-0 truncate text-left text-xs font-bold leading-tight text-ds-text-primary'
 const folderCountClass =
-  'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-bold leading-tight text-[#8f9bb0] [font-variant-numeric:tabular-nums]'
-const folderCountActiveClass = 'text-[#d8f1df]'
+  'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-bold leading-tight text-ds-text-muted [font-variant-numeric:tabular-nums]'
+const folderCountActiveClass = 'text-ds-success-text'
 const listButtonClass = [
-  'flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-[var(--popup-text)] outline-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[#272a32] hover:bg-[#191b20] focus-visible:border-[#272a32] focus-visible:bg-[#191b20] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
+  'flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
   padding: '8px 13px'
 }
 const rowMainClass = 'grid min-w-0 gap-0.5'
 const rowTitleClass =
-  'min-w-0 truncate text-left text-[13px] font-[760] leading-tight text-[var(--popup-text)]'
+  'min-w-0 truncate text-left text-[13px] font-[760] leading-tight text-ds-text-primary'
 const rowSubtitleClass =
-  'min-w-0 truncate text-left text-xs font-medium leading-tight text-[var(--popup-faint)]'
-const rowPathClass = cx(rowSubtitleClass, 'text-[#858d9d]')
+  'min-w-0 truncate text-left text-xs font-medium leading-tight text-ds-text-muted'
+const rowPathClass = cx(rowSubtitleClass, 'text-ds-text-muted')
 const resultCopyClass = 'grid min-w-0 gap-0.5'
 const resultPathShellClass = 'block min-w-0'
 const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
 const resultMatchTokenClass =
-  'inline-flex min-h-[18px] items-center rounded-[5px] border border-[#30343d] bg-[#181a1f] px-1.5 text-[10px] font-semibold text-[#aeb6c5]'
+  'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-semibold text-ds-text-secondary'
 const rowActionsClass = 'inline-flex items-center justify-end gap-1.5 pr-0.5'
 const rowActionButtonClass = [
-  'inline-flex h-7 w-7 items-center justify-center rounded-md border border-[#3a3f49] bg-[#20232a] text-white outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[#3a3f49] hover:bg-[#20232a] focus-visible:border-[#3a3f49] focus-visible:bg-[#20232a] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'inline-flex h-7 w-7 items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
+  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-95 disabled:cursor-default disabled:opacity-45'
 ].join(' ')
 const rowActionDangerClass =
-  'hover:border-[rgba(255,138,130,0.42)] hover:text-[#ffaaa4] focus-visible:border-[rgba(255,138,130,0.42)] focus-visible:text-[#ffaaa4]'
+  'hover:border-[rgba(255,138,130,0.42)] hover:text-ds-danger-text focus-visible:border-[rgba(255,138,130,0.42)] focus-visible:text-ds-danger-text'
 const compactStateClass =
-  'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-[var(--popup-faint)]'
+  'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
 const skeletonBarClass =
   'relative block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
@@ -130,7 +130,7 @@ const skeletonBookmarkTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-[124px]'
 const skeletonBookmarkUrlClass = cx(skeletonBarClass, 'h-2 min-w-[150px] opacity-75')
 const skeletonBookmarkPathClass = cx(skeletonBarClass, 'h-2 min-w-[92px] opacity-60')
 const searchSkeletonClass = 'grid w-[min(100%,390px)] gap-3 self-stretch'
-const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-white/[0.018] px-[9px] py-2'
+const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-ds-text-primary/[0.018] px-[9px] py-2'
 
 function getFolderDepthStyle(depth: number): CSSProperties {
   const normalizedDepth = Math.max(0, Number(depth) || 0)

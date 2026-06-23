@@ -1,12 +1,12 @@
-import { Button } from '../../ui/base/Button.js'
-import { cx } from '../../ui/base/utils.js'
+import { Button } from '../../ui'
+import { cx } from '../../ui'
 import { handleAvailabilityPanelAction } from '../options-controller'
 import { useAvailabilityFilters } from './availability-overview-store.js'
 
 const AVAILABILITY_FILTER_BAR_CLASS = 'mt-3 flex flex-wrap items-center gap-2'
-const AVAILABILITY_FILTER_BUTTON_CLASS = 'rounded-[var(--ui-radius-control)] whitespace-nowrap'
+const AVAILABILITY_FILTER_BUTTON_CLASS = 'rounded-ds-sm whitespace-nowrap'
 const AVAILABILITY_FILTER_BUTTON_ACTIVE_CLASS =
-  '!border-[rgba(255,255,255,0.42)] !bg-[rgba(255,255,255,0.12)] !text-[var(--ui-text-primary)]'
+  'border-ds-border-hover bg-ds-selected text-ds-text-primary'
 
 export function AvailabilityFilterBar() {
   const state = useAvailabilityFilters()

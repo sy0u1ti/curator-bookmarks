@@ -1,16 +1,25 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
-import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
-import { Tabs as BaseTabs } from '@base-ui/react/tabs'
-import { Surface } from '../../ui/base/Surface'
-import { ToggleGroup } from '../../ui/base/ToggleGroup'
-import { Button } from '../../ui/base/Button'
-import { DrawerOverlay, DrawerPanel } from '../../ui/base/Drawer'
-import { Input } from '../../ui/base/Input'
-import { Select } from '../../ui/base/Select'
-import { SliderControl } from '../../ui/base/Slider'
-import { SwitchControl } from '../../ui/base/Switch'
-import { cx } from '../../ui/base/utils'
-import { Icon } from '../../ui/icons/Icon'
+import {
+  Button,
+  CollapsiblePanel,
+  CollapsibleRoot,
+  CollapsibleTrigger,
+  DrawerOverlay,
+  DrawerPanel,
+  Icon,
+  Input,
+  Select,
+  SliderControl,
+  Surface,
+  SwitchControl,
+  TabsIndicator,
+  TabsList,
+  TabsPanel,
+  TabsRoot,
+  TabsTab,
+  ToggleGroup,
+  cx
+} from '../../ui'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
 import {
   ICON_PRESET_META,
@@ -86,23 +95,97 @@ const settingsTabs = [
   ['modules', '模块', false],
   ['advanced', '高级', false]
 ] as const
-const SETTINGS_DRAWER_CLASS = 'settings-drawer fixed inset-0 z-[10020] overflow-hidden bg-transparent'
-const SETTINGS_DRAWER_SURFACE_CLASS = '!border !border-[var(--ui-divider)] !rounded-[var(--ui-radius-panel)] !bg-[var(--ui-bg-main)] !text-[var(--ui-text-primary)] !shadow-[var(--ui-shadow-panel)] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.setting-url-input)]:[text-autospace:no-autospace]'
-const SETTINGS_DRAWER_PANEL_CLASS = 'settings-drawer-panel fixed inset-y-0 right-0 z-[1] h-dvh w-[min(520px,calc(100vw-24px))] max-w-full overflow-hidden transition-transform duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] will-change-transform motion-reduce:transition-none'
+const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
+const SETTINGS_DRAWER_SURFACE_CLASS = 'rounded-ds-lg border border-ds-border bg-ds-app text-ds-text-primary shadow-ds-dialog [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
+const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-transform duration-ds-standard ease-ds-standard will-change-transform motion-reduce:transition-none'
 const SETTINGS_DRAWER_PANEL_OPEN_CLASS = 'translate-x-0'
 const SETTINGS_DRAWER_PANEL_CLOSED_CLASS = 'translate-x-full'
-const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll'
-const SETTINGS_NESTED_SURFACE_CLASS = '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-control)] !bg-[var(--ui-surface)] !shadow-none'
-const SETTINGS_SELECTED_SURFACE_CLASS = '!border-[var(--ui-divider-strong)] !bg-[var(--ui-surface-selected)] !text-[var(--ui-text-primary)] !shadow-none'
-const SETTINGS_SEGMENTED_BUTTON_CLASS = `setting-segmented-button data-[pressed]:!border-[var(--ui-divider-strong)] data-[pressed]:!bg-[var(--ui-surface-selected)] data-[pressed]:!text-[var(--ui-text-primary)] data-[pressed]:!shadow-none`
-const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:!shadow-none [&::after]:!shadow-none'
-const SETTINGS_TRANSPARENT_SURFACE_CLASS = '!border-transparent ![background:transparent] !shadow-none'
-const SETTINGS_SECTION_CLASS = cx('settings-section', SETTINGS_TRANSPARENT_SURFACE_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS)
-const SETTINGS_INPUT_SURFACE_CLASS = '!border-[var(--ui-divider)] !rounded-[var(--ui-radius-control)] !bg-[var(--ui-surface-raised)] !text-[var(--ui-text-primary)] !shadow-none'
-const SETTINGS_INPUT_INTERACTION_CLASS = 'hover:!border-[var(--ui-divider-strong)] hover:![background:var(--ui-surface-hover)] hover:!text-[var(--ui-text-primary)] hover:!shadow-none hover:!outline-none focus-visible:!border-[var(--ui-divider-strong)] focus-visible:![background:var(--ui-surface-hover)] focus-visible:!text-[var(--ui-text-primary)] focus-visible:!shadow-none focus-visible:!outline-none'
+const SETTINGS_DRAWER_SCROLL_CLASS = 'h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin] max-[700px]:px-4 max-[700px]:pb-5'
+const SETTINGS_ROOT_CLASS = 'grid gap-4'
+const SETTINGS_HEADER_CLASS = 'grid gap-1 pr-14'
+const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-semibold uppercase text-ds-text-secondary'
+const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
+const SETTINGS_SUMMARY_CLASS = 'm-0 text-sm leading-relaxed text-ds-text-secondary'
+const SETTINGS_SAVE_STATUS_CLASS = 'mt-1 justify-self-start text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
+const SETTINGS_TABS_LIST_CLASS = 'sticky top-0 z-[1] grid grid-cols-5 gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1'
+const SETTINGS_TAB_CLASS = 'min-h-8 min-w-0 rounded-ds-sm bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:bg-ds-hover hover:text-ds-text-primary data-[active]:bg-ds-selected data-[active]:text-ds-text-primary data-[selected]:bg-ds-selected data-[selected]:text-ds-text-primary data-[state=active]:bg-ds-selected data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus'
+const SETTINGS_TABS_INDICATOR_CLASS = 'hidden'
+const SETTINGS_TAB_PANEL_CLASS = 'grid min-w-0 gap-4 outline-none'
+const SETTINGS_NESTED_SURFACE_CLASS = 'border-ds-border rounded-ds-sm bg-ds-surface-1 shadow-none'
+const SETTINGS_SELECTED_SURFACE_CLASS = 'border-ds-border-hover bg-ds-selected text-ds-text-primary shadow-none'
+const SETTINGS_SEGMENTED_BUTTON_CLASS = 'min-h-7 min-w-20 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary shadow-none data-[pressed]:border-ds-border-hover data-[pressed]:bg-ds-selected data-[pressed]:text-ds-text-primary data-[pressed]:shadow-none'
+const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:shadow-none [&::after]:shadow-none'
+const SETTINGS_TRANSPARENT_SURFACE_CLASS = 'border-transparent bg-transparent shadow-none'
+const SETTINGS_SECTION_CLASS = 'grid min-w-0 gap-2.5'
+const SETTINGS_SECTION_TITLE_CLASS = 'm-0 text-sm font-semibold leading-snug text-ds-text-primary'
+const SETTINGS_LIST_CLASS = 'grid gap-2'
+const SETTINGS_INPUT_SURFACE_CLASS = 'border-ds-border rounded-ds-sm bg-ds-surface-2 text-ds-text-primary shadow-none'
+const SETTINGS_INPUT_INTERACTION_CLASS = 'outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary hover:shadow-none hover:outline-none focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
 const SETTINGS_CONTROL_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS)
-const SETTINGS_TEXT_INPUT_FOCUS_CLASS = '[&&:focus]:!border-[var(--ui-focus-ring)] [&&:focus]:![background:var(--ui-surface-hover)] [&&:focus]:!shadow-none [&&:focus]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus]:!outline-offset-2 [&&:focus-visible]:!border-[var(--ui-focus-ring)] [&&:focus-visible]:![background:var(--ui-surface-hover)] [&&:focus-visible]:!shadow-none [&&:focus-visible]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus-visible]:!outline-offset-2'
-const SETTINGS_TEXT_INPUT_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, SETTINGS_TEXT_INPUT_FOCUS_CLASS)
+const SETTINGS_TEXT_INPUT_FOCUS_CLASS = 'focus:border-ds-focus focus:bg-ds-hover focus:outline-none focus:shadow-ds-focus focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus'
+const SETTINGS_TEXT_INPUT_CLASS = cx('h-9 min-h-9 w-full min-w-0 px-3 text-xs font-semibold', SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, SETTINGS_TEXT_INPUT_FOCUS_CLASS)
+const SETTINGS_ROW_CLASS = 'grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 py-2.5 max-[700px]:grid-cols-1 max-[700px]:justify-items-stretch'
+const SETTINGS_ROW_DISABLED_CLASS = 'opacity-60'
+const SETTINGS_ROW_SLIDER_CLASS = 'grid-cols-[minmax(0,1fr)_minmax(150px,42%)]'
+const SETTINGS_LABEL_STACK_CLASS = 'grid min-w-0 gap-1'
+const SETTINGS_LABEL_CLASS = 'min-w-0 text-sm font-semibold leading-snug text-ds-text-primary'
+const SETTINGS_DESCRIPTION_CLASS = 'text-xs font-medium leading-snug text-ds-text-secondary'
+const SETTINGS_VALUE_CLASS = 'text-ds-text-secondary tabular-nums'
+const SETTINGS_SWITCH_CLASS = 'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-surface-2 outline-none transition-colors duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:shadow-ds-focus disabled:opacity-50'
+const SETTINGS_SWITCH_THUMB_CLASS = 'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-text-primary transition-transform duration-ds-fast ease-ds-standard data-[checked]:translate-x-5 data-[checked]:bg-ds-accent-contrast'
+const SETTINGS_SLIDER_CLASS = 'min-w-36 max-[700px]:w-full'
+const SETTINGS_SELECT_TRIGGER_CLASS = 'min-h-9 min-w-36 max-w-56 justify-between text-xs font-semibold max-[700px]:w-full max-[700px]:max-w-none'
+const SETTINGS_SELECT_VALUE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap'
+const SETTINGS_SELECT_POPUP_CLASS = 'max-h-80'
+const SETTINGS_SELECT_POSITIONER_CLASS = 'z-[10040]'
+const SETTINGS_FIELD_CLASS = 'block min-w-0 max-[700px]:w-full'
+const SETTINGS_NOTE_CLASS = 'm-0 text-xs leading-relaxed text-ds-text-secondary'
+const SETTINGS_WIDE_BUTTON_CLASS = 'min-h-9 w-full justify-between px-3 text-xs font-semibold'
+const SETTINGS_COMPACT_BUTTON_CLASS = 'size-8 min-h-8 min-w-8 p-0'
+const SETTINGS_PICKER_BUTTON_CLASS = 'min-h-9 min-w-32 max-w-56 justify-center overflow-hidden px-3 text-xs font-semibold text-ellipsis whitespace-nowrap max-[700px]:w-full max-[700px]:max-w-none'
+const SETTINGS_FILE_INPUT_CLASS = 'sr-only'
+const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2 text-xs leading-snug text-ds-text-secondary data-[tone=error]:border-ds-danger data-[tone=error]:bg-ds-danger-soft data-[tone=error]:text-ds-danger-text data-[tone=success]:border-ds-accent-line data-[tone=success]:bg-ds-accent-soft data-[tone=success]:text-ds-accent-text'
+const FOLDER_STACK_CLASS = 'grid min-w-0 gap-2'
+const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2'
+const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-secondary'
+const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
+const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 px-2.5 py-2', SETTINGS_NESTED_SURFACE_CLASS)
+const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto'
+const FOLDER_CANDIDATE_CARD_CLASS = 'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
+const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
+const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-snug text-ds-text-primary'
+const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
+const FOLDER_CANDIDATE_BADGE_CLASS = 'inline-flex min-h-5 items-center justify-center rounded-full bg-ds-surface-1 px-2 text-xs font-semibold text-ds-text-secondary whitespace-nowrap'
+const MODULE_CONTROLS_CLASS = 'inline-flex items-center gap-1.5'
+const MODULE_SWITCH_LABEL_CLASS = 'inline-flex items-center'
+const BACKGROUND_CREDIT_ROW_CLASS = 'grid-cols-[auto_minmax(0,1fr)]'
+const BACKGROUND_CREDIT_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right text-xs font-semibold text-ds-accent-text'
+const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1fr)_34px] items-center gap-2 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 pl-2.5'
+const SETTING_COLOR_VALUE_CLASS = 'text-xs font-semibold text-ds-text-primary'
+const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden rounded-ds-sm border-0 bg-transparent p-0'
+const ICON_PREVIEW_PANEL_CLASS = 'grid gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3'
+const ICON_PREVIEW_HEADER_CLASS = 'flex items-baseline justify-between gap-3 text-xs font-semibold text-ds-text-primary'
+const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right text-xs font-medium text-ds-text-secondary'
+const ICON_LIVE_PREVIEW_CLASS = 'm-0 grid min-h-36 justify-items-center overflow-hidden rounded-ds-sm border border-ds-border bg-ds-app px-2.5 py-4'
+const ICON_LIVE_PREVIEW_GRID_CLASS = 'grid w-[min(var(--preview-page-width),var(--preview-grid-max-width))] content-center justify-center'
+const ICON_LIVE_PREVIEW_TILE_CLASS = 'grid min-w-0 justify-items-center gap-1.5 [width:var(--preview-tile-width)]'
+const ICON_LIVE_PREVIEW_SHELL_CLASS = 'grid place-items-center rounded-ds-sm border border-ds-border bg-ds-surface-1 [height:var(--preview-shell-size)] [width:var(--preview-shell-size)]'
+const ICON_LIVE_PREVIEW_MARK_CLASS = 'text-xs font-semibold text-ds-text-primary'
+const ICON_LIVE_PREVIEW_TITLE_CLASS = 'max-w-full overflow-hidden text-center text-xs leading-tight text-ds-text-secondary [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:var(--preview-title-lines)]'
+const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2 max-[700px]:grid-cols-1'
+const ICON_PRESET_CARD_CLASS = 'grid min-h-32 min-w-0 content-start gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2.5 text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
+const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
+const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-sm bg-ds-surface-2'
+const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs font-semibold text-ds-text-primary'
+const ICON_PRESET_DETAIL_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs leading-snug text-ds-text-secondary'
+const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 max-[700px]:w-full'
+const ICON_CONTROL_ROW_CLASS = 'grid-cols-[minmax(0,1fr)_auto]'
+const ICON_ADVANCED_PANEL_CLASS = 'grid'
+const ICON_RESET_DEFAULTS_CLASS = 'min-h-9 w-full justify-center px-3 text-xs font-semibold'
+const SEARCH_ENGINE_ROW_CLASS = 'items-start'
+const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-52 grid-cols-3 gap-1.5 max-[700px]:grid-cols-1'
+const SEARCH_ENGINE_TOGGLE_CLASS = 'relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
+const SEARCH_ENGINE_HIDDEN_SWITCH_CLASS = 'pointer-events-none absolute h-px w-px opacity-0'
 
 function settingsControlClassName(...classNames: Array<string | false | null | undefined>): string {
   return cx(SETTINGS_CONTROL_CLASS, ...classNames)
@@ -115,7 +198,22 @@ function settingsInputClassName(...classNames: Array<string | false | null | und
 type SettingsSectionRef = (element: HTMLElement | null) => void
 
 function settingRowClassName(...classNames: Array<string | false | null | undefined>): string {
-  return cx('setting-row', SETTINGS_TRANSPARENT_SURFACE_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS, ...classNames)
+  return cx(SETTINGS_ROW_CLASS, SETTINGS_PSEUDO_SHADOW_RESET_CLASS, ...classNames)
+}
+
+function SettingLabelStack({
+  title,
+  description
+}: {
+  title: ReactNode
+  description?: ReactNode
+}) {
+  return (
+    <span className={SETTINGS_LABEL_STACK_CLASS}>
+      <span className={SETTINGS_LABEL_CLASS}>{title}</span>
+      {description ? <small className={SETTINGS_DESCRIPTION_CLASS}>{description}</small> : null}
+    </span>
+  )
 }
 
 const searchEngines = [
@@ -150,21 +248,18 @@ function SwitchRow({
   onCheckedChange?: (checked: boolean) => void
 }) {
   return (
-    <label className={settingRowClassName(disabled ? 'setting-row-disabled' : undefined)}>
-      <span className="setting-label-stack">
-        <span>{title}</span>
-        <small>{description}</small>
-      </span>
+    <label className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
+      <SettingLabelStack title={title} description={description} />
       <SwitchControl
         id={id}
-        className={settingsControlClassName('setting-switch')}
+        className={SETTINGS_SWITCH_CLASS}
         checked={checked}
         defaultChecked={defaultChecked}
         disabled={disabled}
         onCheckedChange={onCheckedChange}
         rootRef={controlRef}
         syncInputState
-        thumbClassName="setting-switch-thumb"
+        thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
         unstyled
       />
     </label>
@@ -205,29 +300,24 @@ function SliderRow({
   sliderValue?: number
 }) {
   return (
-    <label id={rowId} className={settingRowClassName('slider-row', disabled ? 'setting-row-disabled' : undefined)} hidden={hidden}>
-      <span className={description ? 'setting-label-stack' : undefined}>
-        <span>
-          {label} <output id={valueId} className="setting-value">{value}</output>
+    <label id={rowId} className={settingRowClassName(SETTINGS_ROW_SLIDER_CLASS, disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
+      <span className={description ? SETTINGS_LABEL_STACK_CLASS : SETTINGS_LABEL_CLASS}>
+        <span className={description ? SETTINGS_LABEL_CLASS : undefined}>
+          {label} <output id={valueId} className={SETTINGS_VALUE_CLASS}>{value}</output>
         </span>
-        {description ? <small>{description}</small> : null}
+        {description ? <small className={SETTINGS_DESCRIPTION_CLASS}>{description}</small> : null}
       </span>
       <SliderControl
         id={id}
         ariaLabel={ariaLabel}
-        className="setting-slider"
-        controlClassName="setting-slider-control"
+        className={SETTINGS_SLIDER_CLASS}
         defaultValue={defaultValue}
         disabled={disabled}
-        indicatorClassName="setting-slider-indicator"
         max={max}
         min={min}
         onValueChange={onValueChange}
         onValueCommitted={onValueCommitted}
         syncInputState
-        thumbClassName="setting-slider-thumb"
-        trackClassName="setting-slider-track"
-        unstyled
         value={sliderValue}
       />
     </label>
@@ -260,29 +350,24 @@ function SettingsSelect({
   triggerRef?: Ref<HTMLButtonElement>
 }) {
   return (
-    <div className={settingRowClassName(disabled ? 'setting-row-disabled' : undefined)}>
-      <span className="setting-label-stack">
-        <span>{label}</span>
-        {description ? <small>{description}</small> : null}
-      </span>
+    <div className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
+      <SettingLabelStack title={label} description={description} />
       <Select
         id={id}
         ariaLabel={ariaLabel}
         defaultValue={defaultValue}
         disabled={disabled}
-        itemClassName="custom-select-option"
         onValueChange={onValueChange}
         options={options.map(([value, label]) => ({ value, label }))}
         modal={false}
-        popupClassName="custom-select-setting-list"
+        popupClassName={SETTINGS_SELECT_POPUP_CLASS}
         portalContainer={portalContainer}
-        positionerClassName="custom-select-setting-positioner"
+        positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}
         syncInputState
-        triggerClassName={settingsControlClassName('setting-select', 'custom-select-trigger')}
+        triggerClassName={SETTINGS_SELECT_TRIGGER_CLASS}
         triggerRef={triggerRef}
-        unstyled
         value={value}
-        valueClassName="custom-select-trigger-label"
+        valueClassName={SETTINGS_SELECT_VALUE_CLASS}
       />
     </div>
   )
@@ -300,13 +385,13 @@ function SettingsDrawerHeader() {
   const view = useNewtabSettingsDrawerView()
 
   return (
-    <header className="settings-drawer-header">
-      <p className="settings-drawer-kicker">New Tab</p>
-      <h1 id="newtab-settings-title">新标签页设置</h1>
-      <p id="newtab-settings-summary" className="settings-drawer-summary">书签来源、背景、卡片布局、时间与搜索栏。</p>
+    <header className={SETTINGS_HEADER_CLASS}>
+      <p className={SETTINGS_KICKER_CLASS}>New Tab</p>
+      <h1 id="newtab-settings-title" className={SETTINGS_TITLE_CLASS}>新标签页设置</h1>
+      <p id="newtab-settings-summary" className={SETTINGS_SUMMARY_CLASS}>书签来源、背景、卡片布局、时间与搜索栏。</p>
       <output
         id="settings-save-status"
-        className="settings-save-status"
+        className={SETTINGS_SAVE_STATUS_CLASS}
         aria-live="polite"
         data-state={view.saveState}
         hidden={view.saveState === 'idle'}
@@ -319,19 +404,19 @@ function SettingsDrawerHeader() {
 
 function SettingsDrawerTabs() {
   return (
-    <BaseTabs.List className="settings-sliding-tabs t-tabs" aria-label="新标签页设置分组">
+    <TabsList className={SETTINGS_TABS_LIST_CLASS} aria-label="新标签页设置分组">
       {settingsTabs.map(([group, label]) => (
-        <BaseTabs.Tab
-          className="settings-sliding-tab t-tab"
+        <TabsTab
+          className={SETTINGS_TAB_CLASS}
           value={group}
           id={`settings-tab-${group}`}
           key={group}
         >
           {label}
-        </BaseTabs.Tab>
+        </TabsTab>
       ))}
-      <BaseTabs.Indicator className="settings-sliding-tabs-pill t-tabs-pill" />
-    </BaseTabs.List>
+      <TabsIndicator className={SETTINGS_TABS_INDICATOR_CLASS} />
+    </TabsList>
   )
 }
 
@@ -343,14 +428,14 @@ function SettingsTabPanel({
   children: ReactNode
 }) {
   return (
-    <BaseTabs.Panel
-      className="settings-tab-panel"
+    <TabsPanel
+      className={SETTINGS_TAB_PANEL_CLASS}
       id={`settings-panel-${value}`}
       value={value}
       keepMounted
     >
       {children}
-    </BaseTabs.Panel>
+    </TabsPanel>
   )
 }
 
@@ -365,8 +450,8 @@ function AdvancedSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="advanced" aria-labelledby="settings-general-title">
-      <h2 id="settings-general-title">高级</h2>
-      <Surface className="settings-list" variant="plain">
+      <h2 id="settings-general-title" className={SETTINGS_SECTION_TITLE_CLASS}>高级</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SwitchRow
           id="general-hide-settings-trigger"
           title="隐藏设置图标"
@@ -401,9 +486,8 @@ function SourceSettingsSection({
   const folderSource = useNewtabFolderSourceView()
   const folderCandidateFocusRequest = useNewtabFolderCandidateFocusRequest()
   const candidatesPanelClassName = cx(
-    'folder-candidates-panel',
-    SETTINGS_NESTED_SURFACE_CLASS,
-    folderSource.candidatesExpanded ? 'is-expanded' : 'is-collapsed'
+    FOLDER_CANDIDATES_PANEL_CLASS,
+    folderSource.candidatesExpanded ? undefined : 'hidden'
   )
 
   useEffect(() => {
@@ -416,20 +500,20 @@ function SourceSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="source" aria-labelledby="settings-folder-title">
-      <h2 id="settings-folder-title">书签来源</h2>
-      <Surface className="settings-list" variant="plain">
-        <div className="folder-source-panel">
-          <div className="folder-source-summary">
-            <span>已选文件夹</span>
-            <strong id="folder-selected-count">{folderSource.selectedCount}</strong>
+      <h2 id="settings-folder-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签来源</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
+        <div className={FOLDER_STACK_CLASS}>
+          <div className={FOLDER_SUMMARY_CLASS}>
+            <span className={SETTINGS_LABEL_CLASS}>已选文件夹</span>
+            <strong id="folder-selected-count" className="text-sm font-semibold text-ds-text-primary tabular-nums">{folderSource.selectedCount}</strong>
           </div>
-          <div id="folder-selected-list" className="folder-selected-list">
+          <div id="folder-selected-list" className={FOLDER_STACK_CLASS}>
             <SelectedFolderSourceList state={folderSource.selected} />
           </div>
           <Button
             unstyled
             id="folder-candidates-toggle"
-            className={settingsControlClassName('folder-candidates-toggle', folderSource.candidatesExpanded ? 'expanded' : undefined)}
+            className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS)}
             type="button"
             aria-expanded={folderSource.candidatesExpanded}
             aria-controls="folder-candidates-panel"
@@ -445,11 +529,11 @@ function SourceSettingsSection({
             aria-hidden={!folderSource.candidatesExpanded}
             inert={!folderSource.candidatesExpanded}
           >
-            <div className="reveal-panel-body">
-              <label className="folder-search-field" htmlFor="folder-candidate-search">
+            <div className={FOLDER_STACK_CLASS}>
+              <label className={SETTINGS_FIELD_CLASS} htmlFor="folder-candidate-search">
                 <Input
                   id="folder-candidate-search"
-                  className={cx('folder-search-input', SETTINGS_TEXT_INPUT_CLASS)}
+                  className={SETTINGS_TEXT_INPUT_CLASS}
                   type="search"
                   ref={folderCandidateSearchRef}
                   placeholder="搜索文件夹"
@@ -469,7 +553,7 @@ function SourceSettingsSection({
               </label>
               <div
                 id="folder-candidate-list"
-                className="folder-candidate-list"
+                className={FOLDER_CANDIDATE_LIST_CLASS}
                 aria-label="候选文件夹列表"
               >
                 <FolderCandidateList
@@ -503,20 +587,20 @@ function SourceSettingsSection({
 
 function SelectedFolderSourceList({ state }: { state: NewtabSelectedFolderSourceState }) {
   if (state.type === 'empty') {
-    return <p className="folder-source-empty">{state.message}</p>
+    return <p className={FOLDER_EMPTY_CLASS}>{state.message}</p>
   }
 
   return (
     <>
       {state.items.map((item) => (
-        <div className="folder-source-selected-item" key={item.folderId}>
-          <span className="folder-source-selected-copy">
-            <strong>{item.title}</strong>
-            <span>{item.path}</span>
-            <span>{item.stats}</span>
+        <div className={FOLDER_SUMMARY_CLASS} key={item.folderId}>
+          <span className={FOLDER_SELECTED_COPY_CLASS}>
+            <strong className={SETTINGS_LABEL_CLASS}>{item.title}</strong>
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{item.path}</span>
+            <span className="overflow-hidden text-ellipsis whitespace-nowrap">{item.stats}</span>
           </span>
           <Button
-            className="folder-source-remove"
+            className={settingsControlClassName(SETTINGS_COMPACT_BUTTON_CLASS)}
             type="button"
             data-folder-remove-id={item.folderId}
             aria-label={getFolderSourceRemoveLabel(item)}
@@ -569,7 +653,7 @@ function FolderCandidateList({
 
   if (state.type === 'empty') {
     return (
-      <p className="folder-source-empty" role="status" aria-live="polite">
+      <p className={FOLDER_EMPTY_CLASS} role="status" aria-live="polite">
         {state.message}
       </p>
     )
@@ -598,8 +682,8 @@ function FolderCandidateItem({
   return (
     <Button
       className={cx(
-        'folder-candidate-card',
-        item.selected ? cx('selected', SETTINGS_SELECTED_SURFACE_CLASS) : undefined
+        FOLDER_CANDIDATE_CARD_CLASS,
+        item.selected ? SETTINGS_SELECTED_SURFACE_CLASS : undefined
       )}
       type="button"
       ref={buttonRef}
@@ -620,12 +704,12 @@ function FolderCandidateItem({
       }}
       unstyled
     >
-      <span className="folder-candidate-copy">
-        <strong>{item.title || '未命名文件夹'}</strong>
-        <span>{item.path || item.title || '未命名文件夹'}</span>
-        <span>{item.stats}</span>
+      <span className={FOLDER_CANDIDATE_COPY_CLASS}>
+        <strong className={FOLDER_CANDIDATE_TITLE_CLASS}>{item.title || '未命名文件夹'}</strong>
+        <span className={FOLDER_CANDIDATE_META_CLASS}>{item.path || item.title || '未命名文件夹'}</span>
+        <span className={FOLDER_CANDIDATE_META_CLASS}>{item.stats}</span>
       </span>
-      <span className="folder-candidate-badge">{item.badge}</span>
+      <span className={FOLDER_CANDIDATE_BADGE_CLASS}>{item.badge}</span>
     </Button>
   )
 }
@@ -642,8 +726,8 @@ function ModuleSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
-      <h2 id="settings-speed-dial-title">模块</h2>
-      <Surface className="settings-list" variant="plain">
+      <h2 id="settings-speed-dial-title" className={SETTINGS_SECTION_TITLE_CLASS}>模块</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SwitchRow
           id="general-show-quick-access"
           title="显示 Curator 常用和新近添加"
@@ -654,7 +738,7 @@ function ModuleSettingsSection({
             dispatchNewtabGeneralSettingToggle('showQuickAccess', checked)
           }}
         />
-        <div id="newtab-speed-dial-setting" className="newtab-module-settings-list" aria-label="Speed Dial 模块">
+        <div id="newtab-speed-dial-setting" className={FOLDER_STACK_CLASS} aria-label="Speed Dial 模块">
           {moduleSettings.rows.map((row) => (
             <ModuleSettingRow row={row} key={row.key} />
           ))}
@@ -666,14 +750,11 @@ function ModuleSettingsSection({
 
 function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
   return (
-    <div className={settingRowClassName('newtab-module-setting-row')} data-module-setting-row={row.key}>
-      <span className="setting-label-stack">
-        <span>{row.label}</span>
-        <small>{row.description}</small>
-      </span>
-      <span className="module-setting-controls">
+    <div className={settingRowClassName()} data-module-row={row.key}>
+      <SettingLabelStack title={row.label} description={row.description} />
+      <span className={MODULE_CONTROLS_CLASS}>
         <Button
-          className={settingsControlClassName('module-setting-order-button')}
+          className={settingsControlClassName(SETTINGS_COMPACT_BUTTON_CLASS)}
           type="button"
           data-module-setting-move={row.key}
           data-module-setting-direction="up"
@@ -688,7 +769,7 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
           {'\u2191'}
         </Button>
         <Button
-          className={settingsControlClassName('module-setting-order-button')}
+          className={settingsControlClassName(SETTINGS_COMPACT_BUTTON_CLASS)}
           type="button"
           data-module-setting-move={row.key}
           data-module-setting-direction="down"
@@ -702,17 +783,17 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
         >
           {'\u2193'}
         </Button>
-        <span className="module-setting-switch-label">
+        <span className={MODULE_SWITCH_LABEL_CLASS}>
           <SwitchControl
             aria-label={`${row.enabled ? '隐藏' : '显示'}模块：${row.label}`}
             checked={row.enabled}
-            className={settingsControlClassName('setting-switch')}
+            className={SETTINGS_SWITCH_CLASS}
             data-module-setting-toggle={row.key}
             onCheckedChange={(checked) => {
               dispatchNewtabModuleSettingToggle(row.key, checked)
             }}
             syncInputState
-            thumbClassName="setting-switch-thumb"
+            thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
             unstyled
           />
         </span>
@@ -753,8 +834,8 @@ function BackgroundSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-background-title">
-      <h2 id="settings-background-title">背景</h2>
-      <Surface className="settings-list" variant="plain">
+      <h2 id="settings-background-title" className={SETTINGS_SECTION_TITLE_CLASS}>背景</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SettingsSelect
           id="background-type"
           label="背景类型"
@@ -775,15 +856,12 @@ function BackgroundSettingsSection({
           ]}
         />
         <div id="background-featured-row" className={settingRowClassName()} hidden={backgroundSettings.featuredPickerHidden}>
-          <span className="setting-label-stack">
-            <span>精选图库</span>
-            <small>主动选择后会访问 NASA 与 Wikimedia Commons 等第三方图片域名并自动缓存。</small>
-          </span>
+          <SettingLabelStack title="精选图库" description="主动选择后会访问 NASA 与 Wikimedia Commons 等第三方图片域名并自动缓存。" />
           <Button
             unstyled
             id="background-featured-picker"
             ref={featuredPickerRef}
-            className={settingsControlClassName('setting-picker-button', backgroundSettings.featuredPickerSelected ? 'is-custom-selected' : undefined)}
+            className={settingsControlClassName(SETTINGS_PICKER_BUTTON_CLASS, backgroundSettings.featuredPickerSelected ? SETTINGS_SELECTED_SURFACE_CLASS : undefined)}
             type="button"
             aria-haspopup="dialog"
             aria-controls="background-featured-modal"
@@ -803,11 +881,11 @@ function BackgroundSettingsSection({
             unstyled
           />
         </div>
-        <div id="background-featured-credit-row" className={settingRowClassName('background-featured-credit-row')} hidden={backgroundSettings.featuredCreditHidden}>
-          <span>图片来源</span>
+        <div id="background-featured-credit-row" className={settingRowClassName(BACKGROUND_CREDIT_ROW_CLASS)} hidden={backgroundSettings.featuredCreditHidden}>
+          <span className={SETTINGS_LABEL_CLASS}>图片来源</span>
           <a
             id="background-featured-credit"
-            className="background-featured-credit"
+            className={BACKGROUND_CREDIT_CLASS}
             href={backgroundSettings.featuredCreditHref}
             title={backgroundSettings.featuredCreditTitle}
             target="_blank"
@@ -820,12 +898,12 @@ function BackgroundSettingsSection({
         <SliderRow rowId="background-featured-position-x-row" id="background-featured-position-x" label="水平位置" valueId="background-featured-position-x-value" value={`${backgroundSettings.positionX}%`} min={String(backgroundSettings.positionXMin)} max={String(backgroundSettings.positionXMax)} defaultValue="50" ariaLabel="精选图库背景水平位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionX', value)} sliderValue={backgroundSettings.positionX} />
         <SliderRow rowId="background-featured-position-y-row" id="background-featured-position-y" label="垂直位置" valueId="background-featured-position-y-value" value={`${backgroundSettings.positionY}%`} min={String(backgroundSettings.positionYMin)} max={String(backgroundSettings.positionYMax)} defaultValue="50" ariaLabel="精选图库背景垂直位置" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('positionY', value)} sliderValue={backgroundSettings.positionY} />
         <label id="background-color-row" className={settingRowClassName()} htmlFor="background-color" hidden={backgroundSettings.type !== 'color'}>
-          <span>背景颜色</span>
-          <span id="background-color-control" className="setting-color" style={{ backgroundColor: backgroundSettings.color }}>
-            <span id="background-color-value">{backgroundSettings.color.toUpperCase()}</span>
+          <span className={SETTINGS_LABEL_CLASS}>背景颜色</span>
+          <span id="background-color-control" className={SETTING_COLOR_CLASS}>
+            <span id="background-color-value" className={SETTING_COLOR_VALUE_CLASS}>{backgroundSettings.color.toUpperCase()}</span>
             <Input
               id="background-color"
-              className={settingsInputClassName('setting-color-input')}
+              className={settingsInputClassName(SETTING_COLOR_INPUT_CLASS)}
               type="color"
               value={backgroundSettings.color}
               onChange={(event) => dispatchNewtabBackgroundSettingFieldChange('color', event.currentTarget.value)}
@@ -835,12 +913,12 @@ function BackgroundSettingsSection({
           </span>
         </label>
         <div id="background-image-row" className={settingRowClassName()} hidden={backgroundSettings.imageRowHidden}>
-          <span>背景图片</span>
-          <Button unstyled id="background-image-picker" className={settingsControlClassName('setting-file-button')} type="button" title={backgroundSettings.imageName || undefined} onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
+          <span className={SETTINGS_LABEL_CLASS}>背景图片</span>
+          <Button unstyled id="background-image-picker" className={settingsControlClassName(SETTINGS_PICKER_BUTTON_CLASS)} type="button" title={backgroundSettings.imageName || undefined} onClick={() => imageFileInputRef.current?.click()}>{backgroundSettings.imageName ? '更换图片' : '选择图片'}</Button>
           <Input
             id="background-image-file"
             ref={imageFileInputRef}
-            className={settingsInputClassName('setting-file-input')}
+            className={settingsInputClassName(SETTINGS_FILE_INPUT_CLASS)}
             type="file"
             accept="image/*"
             onChange={(event) => {
@@ -851,12 +929,12 @@ function BackgroundSettingsSection({
           />
         </div>
         <div id="background-video-row" className={settingRowClassName()} hidden={backgroundSettings.videoRowHidden}>
-          <span>背景视频</span>
-          <Button unstyled id="background-video-picker" className={settingsControlClassName('setting-file-button')} type="button" title={backgroundSettings.videoName || undefined} onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
+          <span className={SETTINGS_LABEL_CLASS}>背景视频</span>
+          <Button unstyled id="background-video-picker" className={settingsControlClassName(SETTINGS_PICKER_BUTTON_CLASS)} type="button" title={backgroundSettings.videoName || undefined} onClick={() => videoFileInputRef.current?.click()}>{backgroundSettings.videoName ? '更换视频' : '选择视频'}</Button>
           <Input
             id="background-video-file"
             ref={videoFileInputRef}
-            className={settingsInputClassName('setting-file-input')}
+            className={settingsInputClassName(SETTINGS_FILE_INPUT_CLASS)}
             type="file"
             accept="video/*"
             onChange={(event) => {
@@ -867,11 +945,11 @@ function BackgroundSettingsSection({
           />
         </div>
         <div id="background-url-row" className={settingRowClassName()} hidden={backgroundSettings.urlRowHidden}>
-          <span>图片链接</span>
-          <span className="setting-floating-field">
+          <span className={SETTINGS_LABEL_CLASS}>图片链接</span>
+          <span className={SETTINGS_FIELD_CLASS}>
             <Input
               id="background-url"
-              className={cx('setting-url-input', SETTINGS_TEXT_INPUT_CLASS)}
+              className={SETTINGS_TEXT_INPUT_CLASS}
               type="url"
               placeholder="图片链接"
               aria-label="背景图片链接"
@@ -885,7 +963,7 @@ function BackgroundSettingsSection({
         </div>
         <output
           id="background-status"
-          className="setting-status"
+          className={SETTINGS_STATUS_CLASS}
           aria-live="polite"
           data-tone={backgroundSettings.backgroundStatusTone}
           hidden={!backgroundSettings.backgroundStatus}
@@ -900,11 +978,10 @@ function BackgroundSettingsSection({
           onCheckedChange={dispatchNewtabBackgroundMaskToggle}
         />
         <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
-          <span>模糊样式</span>
+          <span className={SETTINGS_LABEL_CLASS}>模糊样式</span>
           <Select
             id="background-mask-style"
             ariaLabel="背景蒙版样式"
-            itemClassName="custom-select-option"
             onValueChange={(value) => {
               if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
             }}
@@ -914,15 +991,14 @@ function BackgroundSettingsSection({
               { value: 'noise', label: '胶片噪点' },
               { value: 'light', label: '亮色柔化' }
             ]}
-            popupClassName="custom-select-setting-list"
+            popupClassName={SETTINGS_SELECT_POPUP_CLASS}
             modal={false}
             portalContainer={panelElement}
-            positionerClassName="custom-select-setting-positioner"
+            positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}
             syncInputState
-            triggerClassName={settingsControlClassName('setting-select', 'custom-select-trigger')}
-            unstyled
+            triggerClassName={SETTINGS_SELECT_TRIGGER_CLASS}
             value={backgroundSettings.maskStyle}
-            valueClassName="custom-select-trigger-label"
+            valueClassName={SETTINGS_SELECT_VALUE_CLASS}
           />
         </div>
         <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
@@ -945,46 +1021,44 @@ function IconSettingsSection() {
 
   return (
     <section className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-icon-title">
-      <h2 id="settings-icon-title">书签卡片</h2>
-      <Surface className="settings-list icon-settings-list" variant="plain">
-        <div className="icon-live-preview-panel">
-          <div className="icon-live-preview-header">
+      <h2 id="settings-icon-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签卡片</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
+        <div className={ICON_PREVIEW_PANEL_CLASS}>
+          <div className={ICON_PREVIEW_HEADER_CLASS}>
             <span>实时预览</span>
-            <span id="icon-live-preview-summary" className="icon-live-preview-summary">
+            <span id="icon-live-preview-summary" className={ICON_PREVIEW_SUMMARY_CLASS}>
               {iconPreview.summary}
             </span>
           </div>
           <figure
             id="icon-live-preview"
-            className="icon-live-preview"
+            className={ICON_LIVE_PREVIEW_CLASS}
             aria-label="书签卡片布局预览"
             data-icon-layout-mode={iconPreview.layoutMode}
-            data-icon-show-titles={String(iconPreview.showTitles)}
             style={previewStyle}
           >
             <div
-              className="icon-live-preview-grid"
+              className={ICON_LIVE_PREVIEW_GRID_CLASS}
               style={{ gridTemplateColumns: `repeat(${iconPreview.columns}, minmax(0, 1fr))` }}
             >
               {iconPreview.tiles.map((item) => (
-                <span className="icon-live-preview-tile" key={item.id}>
-                  <span className="icon-live-preview-shell">
-                    <span className="icon-live-preview-mark">{item.mark}</span>
+                <span className={ICON_LIVE_PREVIEW_TILE_CLASS} key={item.id}>
+                  <span className={ICON_LIVE_PREVIEW_SHELL_CLASS}>
+                    <span className={ICON_LIVE_PREVIEW_MARK_CLASS}>{item.mark}</span>
                   </span>
-                  <span className="icon-live-preview-title">{item.title}</span>
+                  {iconPreview.showTitles ? <span className={ICON_LIVE_PREVIEW_TITLE_CLASS}>{item.title}</span> : null}
                 </span>
               ))}
             </div>
           </figure>
         </div>
-        <div id="icon-preset-row" className="icon-preset-row">
+        <div id="icon-preset-row" className={ICON_PRESET_ROW_CLASS}>
           {iconPresetCards.map((card) => (
             <Button
               className={cx(
-                'icon-preset-card',
-                SETTINGS_NESTED_SURFACE_CLASS,
+                ICON_PRESET_CARD_CLASS,
                 SETTINGS_PSEUDO_SHADOW_RESET_CLASS,
-                iconPreview.preset === card.key ? cx('selected', SETTINGS_SELECTED_SURFACE_CLASS) : undefined
+                iconPreview.preset === card.key ? SETTINGS_SELECTED_SURFACE_CLASS : undefined
               )}
               type="button"
               data-preset={card.key}
@@ -995,7 +1069,7 @@ function IconSettingsSection() {
               unstyled
             >
               <span
-                className="icon-preset-preview"
+                className={ICON_PRESET_PREVIEW_CLASS}
                 style={{
                   gap: card.previewGap,
                   gridTemplateColumns: `repeat(${card.previewColumnCount}, 1fr)`,
@@ -1004,27 +1078,24 @@ function IconSettingsSection() {
               >
                 {Array.from({ length: card.previewColumnCount * card.previewRowCount }, (_, index) => (
                   <span
-                    className="icon-preset-preview-cell"
+                    className={ICON_PRESET_PREVIEW_CELL_CLASS}
                     style={{ height: card.previewCellHeight }}
                     key={`${card.key}:${index}`}
                   />
                 ))}
               </span>
-              <span className="icon-preset-name">{card.name}</span>
-              <span className="icon-preset-desc">{card.desc}</span>
-              <span className="icon-preset-detail">{card.detail}</span>
+              <span className={ICON_PRESET_NAME_CLASS}>{card.name}</span>
+              <span className={ICON_PRESET_DETAIL_CLASS}>{card.desc}</span>
+              <span className={ICON_PRESET_DETAIL_CLASS}>{card.detail}</span>
             </Button>
           ))}
         </div>
-        <div className={settingRowClassName('icon-control-row')}>
-          <span className="setting-label-stack">
-            <span>布局方式</span>
-            <small>自动适配屏幕宽度；固定列数会在窄屏收缩。</small>
-          </span>
+        <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
+          <SettingLabelStack title="布局方式" description="自动适配屏幕宽度；固定列数会在窄屏收缩。" />
           <ToggleGroup
             id="icon-layout-control"
             aria-label="布局方式"
-            className="setting-segmented"
+            className={SETTINGS_SEGMENTED_CLASS}
             itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
             onValueChange={(value) => {
               const nextValue = value[0]
@@ -1052,12 +1123,12 @@ function IconSettingsSection() {
           checked={iconPreview.showTitles}
           onCheckedChange={dispatchNewtabIconShowTitlesToggle}
         />
-        <div id="icon-title-lines-row" className={settingRowClassName('icon-control-row', iconPreview.titleLinesDisabled ? 'setting-row-disabled' : undefined)}>
-          <span>标题行数</span>
+        <div id="icon-title-lines-row" className={settingRowClassName(ICON_CONTROL_ROW_CLASS, iconPreview.titleLinesDisabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
+          <span className={SETTINGS_LABEL_CLASS}>标题行数</span>
           <ToggleGroup
             id="icon-title-lines-control"
             aria-label="标题行数"
-            className="setting-segmented"
+            className={SETTINGS_SEGMENTED_CLASS}
             itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
             onValueChange={(value) => {
               const nextValue = value[0]
@@ -1071,17 +1142,17 @@ function IconSettingsSection() {
             value={String(iconPreview.titleLines)}
           />
         </div>
-        <BaseCollapsible.Root>
-          <BaseCollapsible.Trigger
+        <CollapsibleRoot>
+          <CollapsibleTrigger
             id="icon-advanced-toggle"
-            className={settingsControlClassName('icon-advanced-toggle')}
+            className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS)}
             aria-controls="icon-advanced-panel"
           >
             <span>卡片细节</span>
-          </BaseCollapsible.Trigger>
-          <BaseCollapsible.Panel id="icon-advanced-panel" className="icon-advanced-panel">
-            <div className="reveal-panel-body">
-              <Button unstyled id="icon-reset-defaults" className="icon-reset-defaults" type="button" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
+          </CollapsibleTrigger>
+          <CollapsiblePanel id="icon-advanced-panel" className={ICON_ADVANCED_PANEL_CLASS}>
+            <div className={FOLDER_STACK_CLASS}>
+              <Button unstyled id="icon-reset-defaults" className={settingsControlClassName(ICON_RESET_DEFAULTS_CLASS)} type="button" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
               <SliderRow id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value={`${iconPreview.pageWidth}%`} min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('pageWidth', value)} sliderValue={iconPreview.pageWidth} />
               <SliderRow rowId="icon-tile-width-row" id="icon-tile-width" label="卡片宽度" valueId="icon-tile-width-value" value={`${iconPreview.tileWidth}px`} min="132" max="260" defaultValue="184" ariaLabel="书签卡片宽度" disabled={iconPreview.tileWidthDisabled} onValueChange={(value) => dispatchNewtabIconSettingFieldChange('tileWidth', value)} sliderValue={iconPreview.tileWidth} />
               <SliderRow id="icon-shell-size" label="图标区域" valueId="icon-shell-size-value" value={`${iconPreview.iconShellSize}px`} min="24" max="48" defaultValue="32" ariaLabel="书签图标区域尺寸" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('iconShellSize', value)} sliderValue={iconPreview.iconShellSize} />
@@ -1090,8 +1161,8 @@ function IconSettingsSection() {
               <SliderRow id="icon-folder-gap" label="文件夹间距" valueId="icon-folder-gap-value" value={`${iconPreview.effectiveFolderGap}px`} min="0" max="120" defaultValue="20" ariaLabel="书签文件夹间距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('folderGap', value)} sliderValue={iconPreview.folderGap} />
               <SliderRow rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value={String(iconPreview.fixedColumns)} min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" disabled={iconPreview.fixedColumnsDisabled} onValueChange={(value) => dispatchNewtabIconSettingFieldChange('columns', value)} sliderValue={iconPreview.fixedColumns} />
             </div>
-          </BaseCollapsible.Panel>
-        </BaseCollapsible.Root>
+          </CollapsiblePanel>
+        </CollapsibleRoot>
       </Surface>
     </section>
   )
@@ -1117,8 +1188,8 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
 
   return (
     <section className={SETTINGS_SECTION_CLASS} data-settings-group="appearance" aria-labelledby="settings-time-title">
-      <h2 id="settings-time-title">时间和日期</h2>
-      <Surface className="settings-list" variant="plain">
+      <h2 id="settings-time-title" className={SETTINGS_SECTION_TITLE_CLASS}>时间和日期</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <SwitchRow
           id="time-enabled"
           title="显示时间模块"
@@ -1236,9 +1307,9 @@ function SearchSettingsSection({
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="search" aria-labelledby="settings-search-title">
-      <h2 id="settings-search-title">搜索栏</h2>
-      <Surface className="settings-list" variant="plain">
-        <p className="setting-trust-note">仅影响 Curator 新标签页内搜索，不会修改 Chrome 默认搜索引擎或启动页；搜索栏可随时关闭。</p>
+      <h2 id="settings-search-title" className={SETTINGS_SECTION_TITLE_CLASS}>搜索栏</h2>
+      <Surface className={SETTINGS_LIST_CLASS} variant="plain">
+        <p className={SETTINGS_NOTE_CLASS}>仅影响 Curator 新标签页内搜索，不会修改 Chrome 默认搜索引擎或启动页；搜索栏可随时关闭。</p>
         <SwitchRow
           id="search-enabled"
           title="启用"
@@ -1276,25 +1347,23 @@ function SearchSettingsSection({
           value={searchSettings.engine}
           options={searchEngines.map(([value, label]) => [value, label])}
         />
-        <div className={settingRowClassName('search-engine-setting-row')}>
-          <span className="setting-label-stack">
-            <span>启用引擎</span>
-            <small>决定搜索框快捷菜单和 Cmd/Ctrl+Enter 的打开顺序。</small>
-          </span>
-          <div className="search-engine-toggle-grid" aria-label="启用的搜索引擎">
+        <div className={settingRowClassName(SEARCH_ENGINE_ROW_CLASS)}>
+          <SettingLabelStack title="启用引擎" description="决定搜索框快捷菜单和 Cmd/Ctrl+Enter 的打开顺序。" />
+          <div className={SEARCH_ENGINE_GRID_CLASS} aria-label="启用的搜索引擎">
             {searchEngines.map(([value, label]) => {
               const isSelected = searchSettings.engine === value
               const checked = searchSettings.enabledEngines.includes(value) || isSelected
 
               return (
               <label
-                className={settingsControlClassName('search-engine-toggle', checked ? 'active' : undefined, isSelected ? 'locked' : undefined)}
+                className={settingsControlClassName(SEARCH_ENGINE_TOGGLE_CLASS, checked ? SETTINGS_SELECTED_SURFACE_CLASS : undefined, isSelected ? 'opacity-80' : undefined)}
                 key={value}
               >
                 <SwitchControl
                   aria-label={label}
                   checked={checked}
                   disabled={searchSettings.engineControlsDisabled || isSelected}
+                  className={SEARCH_ENGINE_HIDDEN_SWITCH_CLASS}
                   data-search-engine-toggle={value}
                   onCheckedChange={(checked) => handleSearchEngineToggle(value, checked)}
                   syncInputState
@@ -1307,11 +1376,11 @@ function SearchSettingsSection({
           </div>
         </div>
         <div className={settingRowClassName()}>
-          <span>占位符文本</span>
-          <span className="setting-floating-field">
+          <span className={SETTINGS_LABEL_CLASS}>占位符文本</span>
+          <span className={SETTINGS_FIELD_CLASS}>
             <Input
               id="search-placeholder"
-              className={cx('setting-text-input', SETTINGS_TEXT_INPUT_CLASS)}
+              className={SETTINGS_TEXT_INPUT_CLASS}
               type="text"
               placeholder="占位符文本"
               maxLength={40}
@@ -1514,8 +1583,8 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
         <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
 
         <div className={SETTINGS_DRAWER_SCROLL_CLASS} ref={scrollHostRef}>
-          <BaseTabs.Root
-            className="settings-sliding-tabs-root"
+          <TabsRoot
+            className={SETTINGS_ROOT_CLASS}
             value={activeGroup}
             onValueChange={(value) => {
               onActiveGroupChange(value as SettingsDrawerSection)
@@ -1557,7 +1626,7 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
                 sectionRef={setSectionRef('search')}
               />
             </SettingsTabPanel>
-          </BaseTabs.Root>
+          </TabsRoot>
         </div>
       </DrawerPanel>
     </DrawerOverlay>

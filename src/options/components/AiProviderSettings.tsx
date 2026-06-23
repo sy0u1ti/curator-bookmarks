@@ -1,16 +1,22 @@
-import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { useEffect, useRef, useState } from 'react'
-import { AiProviderCard } from '../../ui/ai/AiProviderCard.js'
-import { Button } from '../../ui/base/Button.js'
 import {
+  AiProviderCard,
+  Button,
   CollapsiblePanel,
   CollapsibleRoot,
-  CollapsibleTrigger
-} from '../../ui/base/Collapsible.js'
-import { Input } from '../../ui/base/Input.js'
-import { Select, type SelectOption } from '../../ui/base/Select.js'
-import { SwitchControl } from '../../ui/base/Switch.js'
-import { Textarea } from '../../ui/base/Textarea.js'
+  CollapsibleTrigger,
+  DialogBackdrop,
+  DialogClose,
+  DialogDescription,
+  DialogOverlay,
+  DialogPanel,
+  DialogTitle,
+  Input,
+  Select,
+  SwitchControl,
+  Textarea,
+  type SelectOption
+} from '../../ui'
 import { AiModelSelector } from './AiModelSelector.js'
 import {
   ButtonBusyLoadingLabel,
@@ -93,8 +99,11 @@ export function AiProviderSettings({
   attentionRequestId?: number
 }) {
   const state = useAiProviderSettingsState()
-  const attentionTimerRef = useRef<number>(0)
-  const [attention, setAttention] = useState(false)
+  const [attentionState, setAttentionState] = useState({ requestId: 0, visible: false })
+  if (attentionRequestId > 0 && attentionRequestId !== attentionState.requestId) {
+    setAttentionState({ requestId: attentionRequestId, visible: true })
+  }
+  const attention = attentionState.visible
   const [customModelsOpen, setCustomModelsOpen] = useState(false)
   const description = (
     <>
@@ -119,23 +128,19 @@ export function AiProviderSettings({
   }))
 
   useEffect(() => {
-    const showAttention = () => {
-      window.clearTimeout(attentionTimerRef.current)
-      setAttention(true)
-      attentionTimerRef.current = window.setTimeout(() => {
-        setAttention(false)
-        attentionTimerRef.current = 0
-      }, 1400)
+    if (!attentionState.visible) {
+      return undefined
     }
-
-    if (attentionRequestId > 0) {
-      showAttention()
-    }
+    const timer = window.setTimeout(() => {
+      setAttentionState((current) => current.requestId === attentionState.requestId
+        ? { ...current, visible: false }
+        : current)
+    }, 1400)
 
     return () => {
-      window.clearTimeout(attentionTimerRef.current)
+      window.clearTimeout(timer)
     }
-  }, [attentionRequestId])
+  }, [attentionState.requestId, attentionState.visible])
 
   return (
     <>
@@ -447,7 +452,7 @@ function AiCustomModelsDialog({
   }, [open, value])
 
   return (
-    <BaseDialog.Root
+    <DialogOverlay
       open={open}
       onOpenChange={(nextOpen) => {
         if (disabled && nextOpen) {
@@ -455,56 +460,55 @@ function AiCustomModelsDialog({
         }
         onOpenChange(nextOpen)
       }}
+      keepMounted={false}
     >
-      <BaseDialog.Portal keepMounted={false}>
-        <BaseDialog.Backdrop className={AI_PROVIDER_DIALOG_BACKDROP_CLASS} />
-        <BaseDialog.Popup
-          className={AI_PROVIDER_DIALOG_CLASS}
-          aria-describedby="ai-model-modal-copy"
-          initialFocus={false}
-          finalFocus={false}
-        >
-          <p className={AI_PROVIDER_DIALOG_EYEBROW_CLASS}>AI Models</p>
-          <BaseDialog.Title className={AI_PROVIDER_DIALOG_TITLE_CLASS}>自定义模型列表</BaseDialog.Title>
-          <BaseDialog.Description id="ai-model-modal-copy" className={AI_PROVIDER_DIALOG_COPY_CLASS}>
-            每行一个模型 ID，保存后会加入模型选择器。已拉取模型和预设模型不会被这里删除。
-          </BaseDialog.Description>
-          <label className={AI_PROVIDER_DIALOG_FIELD_CLASS} htmlFor="ai-custom-models-input">
-            <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>模型 ID</span>
-            <Textarea
-              id="ai-custom-models-input"
-              className={AI_PROVIDER_TEXTAREA_CLASS}
-              value={draft}
-              onChange={(event) => setDraft(event.currentTarget.value)}
-              placeholder={'gpt-4o\nclaude-3-5-sonnet-latest\nmy-custom-model'}
-            />
-          </label>
-          <p className={AI_PROVIDER_DIALOG_HINT_CLASS}>重复项会自动合并，空行会被忽略。</p>
-          <div className={AI_PROVIDER_DIALOG_ACTIONS_CLASS}>
-            <BaseDialog.Close
-              className={AI_PROVIDER_DIALOG_CLOSE_CLASS}
-              type="button"
-              aria-label="取消自定义模型设置"
-            >
-              取消
-            </BaseDialog.Close>
-            <Button
-              variant="primary"
-              type="button"
-              aria-label="保存自定义模型列表"
-              onClick={() => {
-                handleAiProviderSettingsAction({
-                  action: 'custom-models-save',
-                  value: draft.split(/\r?\n/)
-                })
-                onOpenChange(false)
-              }}
-            >
-              保存模型
-            </Button>
-          </div>
-        </BaseDialog.Popup>
-      </BaseDialog.Portal>
-    </BaseDialog.Root>
+      <DialogBackdrop className={AI_PROVIDER_DIALOG_BACKDROP_CLASS} />
+      <DialogPanel
+        className={AI_PROVIDER_DIALOG_CLASS}
+        aria-describedby="ai-model-modal-copy"
+        initialFocus={false}
+        finalFocus={false}
+      >
+        <p className={AI_PROVIDER_DIALOG_EYEBROW_CLASS}>AI Models</p>
+        <DialogTitle className={AI_PROVIDER_DIALOG_TITLE_CLASS}>自定义模型列表</DialogTitle>
+        <DialogDescription id="ai-model-modal-copy" className={AI_PROVIDER_DIALOG_COPY_CLASS}>
+          每行一个模型 ID，保存后会加入模型选择器。已拉取模型和预设模型不会被这里删除。
+        </DialogDescription>
+        <label className={AI_PROVIDER_DIALOG_FIELD_CLASS} htmlFor="ai-custom-models-input">
+          <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>模型 ID</span>
+          <Textarea
+            id="ai-custom-models-input"
+            className={AI_PROVIDER_TEXTAREA_CLASS}
+            value={draft}
+            onChange={(event) => setDraft(event.currentTarget.value)}
+            placeholder={'gpt-4o\nclaude-3-5-sonnet-latest\nmy-custom-model'}
+          />
+        </label>
+        <p className={AI_PROVIDER_DIALOG_HINT_CLASS}>重复项会自动合并，空行会被忽略。</p>
+        <div className={AI_PROVIDER_DIALOG_ACTIONS_CLASS}>
+          <DialogClose
+            className={AI_PROVIDER_DIALOG_CLOSE_CLASS}
+            type="button"
+            aria-label="取消自定义模型设置"
+          >
+            取消
+          </DialogClose>
+          <Button
+            variant="primary"
+            type="button"
+            aria-label="保存自定义模型列表"
+            onClick={() => {
+              handleAiProviderSettingsAction({
+                action: 'custom-models-save',
+                value: draft.split(/\r?\n/)
+              })
+              onOpenChange(false)
+            }}
+          >
+            保存模型
+          </Button>
+        </div>
+      </DialogPanel>
+    </DialogOverlay>
   )
 }

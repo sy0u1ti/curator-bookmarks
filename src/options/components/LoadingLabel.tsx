@@ -1,5 +1,5 @@
-import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader.js'
-import { cx } from '../../ui/base/utils.js'
+import { DotMatrixLoader } from '../../ui'
+import { cx } from '../../ui'
 import {
   LOADING_LABEL_BUTTON_LOADER_CLASS,
   LOADING_LABEL_BUTTON_WRAPPER_CLASS,

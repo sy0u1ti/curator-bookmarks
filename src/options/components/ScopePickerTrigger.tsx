@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import {
   OPTION_GROUP_CLASS,
   OPTION_COPY_CLASS,

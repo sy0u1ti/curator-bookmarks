@@ -19,7 +19,7 @@ interface OptionsPanelVisibilityProps {
 }
 
 const AVAILABILITY_RESULTS_GROUP_CLASS =
-  `mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const AVAILABILITY_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 
 export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {

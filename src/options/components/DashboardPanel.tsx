@@ -12,16 +12,16 @@ import {
   type RefObject
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui/base/Button'
-import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
-import { Input } from '../../ui/base/Input'
+import { Button } from '../../ui'
+import { Input } from '../../ui'
+import { RoseCurveLoader } from '../../ui'
 import {
   Popover,
   PopoverPopup,
   PopoverPortal,
   PopoverPositioner,
   PopoverRoot
-} from '../../ui/base/Popover'
+} from '../../ui'
 import {
   DASHBOARD_CARD_HEIGHT,
   DASHBOARD_CARD_MIN_WIDTH
@@ -60,6 +60,7 @@ import {
 } from './dashboard-view-store'
 import {
   DASHBOARD_RESULTS_GROUP_CLASS,
+  DASHBOARD_RESULTS_GRID_STATE_CLASS,
   DASHBOARD_RESULTS_TITLE_CLASS,
   DASHBOARD_RESULTS_TRANSITION_STATE_CLASS,
   DASHBOARD_RESULTS_WINDOWED_STATE_CLASS,
@@ -74,6 +75,7 @@ import {
   DASHBOARD_LOADING_CARD_CLASS,
   DASHBOARD_LOADING_LOADER_CLASS,
   DASHBOARD_LOADING_SCREEN_CLASS,
+  DASHBOARD_LOADING_SCREEN_ACTIVE_STATE_CLASS,
   DASHBOARD_META_PILL_CLASS,
   DASHBOARD_QUERY_ROW_CLASS,
   DASHBOARD_PANEL_CLASS,
@@ -243,12 +245,12 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
       <output
         className={[
           DASHBOARD_LOADING_SCREEN_CLASS,
-          panelChrome.ready ? DASHBOARD_LOADING_SCREEN_READY_STATE_CLASS : ''
+          panelChrome.ready ? DASHBOARD_LOADING_SCREEN_READY_STATE_CLASS : DASHBOARD_LOADING_SCREEN_ACTIVE_STATE_CLASS
         ].filter(Boolean).join(' ')}
         aria-label="正在读取书签仪表盘"
       >
         <div className={DASHBOARD_LOADING_CARD_CLASS}>
-          <DotMatrixLoader className={DASHBOARD_LOADING_LOADER_CLASS} />
+          <RoseCurveLoader className={DASHBOARD_LOADING_LOADER_CLASS} />
         </div>
       </output>
 
@@ -516,7 +518,7 @@ function DashboardResultsSection({
           className={[
             DASHBOARD_CARD_GRID_CLASS,
             panelChrome.resultsUpdating ? DASHBOARD_RESULTS_TRANSITION_STATE_CLASS : '',
-            panelChrome.resultsVirtualized ? DASHBOARD_RESULTS_WINDOWED_STATE_CLASS : '',
+            panelChrome.resultsVirtualized ? DASHBOARD_RESULTS_WINDOWED_STATE_CLASS : DASHBOARD_RESULTS_GRID_STATE_CLASS,
             hasDashboardFloatingSurface(results) ? DASHBOARD_FLOATING_SURFACE_CONTAINMENT_CLASS : ''
           ].filter(Boolean).join(' ')}
           onScroll={(event) => {

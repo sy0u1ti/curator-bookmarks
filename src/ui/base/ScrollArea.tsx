@@ -30,9 +30,8 @@ export function ScrollArea({
         className="flex w-2.5 justify-center rounded-full bg-transparent p-0.5 opacity-70 transition-opacity hover:opacity-100"
         orientation="vertical"
       >
-        <BaseScrollArea.Thumb className="w-1.5 rounded-full bg-white/20" />
+        <BaseScrollArea.Thumb className="w-1.5 rounded-full bg-ds-border-hover" />
       </BaseScrollArea.Scrollbar>
     </BaseScrollArea.Root>
   )
 }
-

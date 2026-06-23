@@ -41,13 +41,13 @@ export function Progress({
       {...props}
     >
       <BaseProgress.Track className={unstyled ? className : cx(
-        'base-progress-track h-2 overflow-hidden rounded-full bg-curator-muted',
+        'base-progress-track h-2 overflow-hidden rounded-full bg-ds-hover',
         className,
         trackClassName
       )}>
         <BaseProgress.Indicator
           className={unstyled ? indicatorClassName : cx(
-            'base-progress-indicator h-full rounded-full bg-curator-text transition-transform',
+            'base-progress-indicator h-full rounded-full bg-ds-accent transition-transform',
             indicatorClassName
           )}
           style={indicatorStyle ?? defaultIndicatorStyle}

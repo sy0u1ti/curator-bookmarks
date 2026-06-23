@@ -1,7 +1,7 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui/base/Button.js'
-import { CheckboxControl } from '../../ui/base/Checkbox.js'
-import { cx } from '../../ui/base/utils.js'
+import { Button } from '../../ui'
+import { CheckboxControl } from '../../ui'
+import { cx } from '../../ui'
 import { handleAvailabilityResultAction } from '../options-controller'
 import { useAvailabilityResultsState } from './availability-results-store.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
@@ -11,44 +11,44 @@ import type {
 } from './availability-results-types.js'
 
 const AVAILABILITY_RESULT_CARD_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[14px_16px]'
-const AVAILABILITY_RESULT_CARD_SELECTED_CLASS = '!border-[rgba(245,245,247,0.22)] !bg-[#1e1e22]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
+const AVAILABILITY_RESULT_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
 const AVAILABILITY_RESULT_EMPTY_CLASS =
-  'rounded-[18px] border border-[var(--ui-divider-subtle)] bg-[#171719] p-[18px_16px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const AVAILABILITY_RESULT_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const AVAILABILITY_RESULT_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
 const AVAILABILITY_RESULT_CHECK_CLASS =
-  'inline-flex items-center gap-2 text-xs font-semibold text-[var(--ui-text-secondary)]'
+  'inline-flex items-center gap-2 text-xs font-semibold text-ds-text-secondary'
 const AVAILABILITY_RESULT_ACTIONS_CLASS = 'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
 const AVAILABILITY_RESULT_LINK_CLASS =
-  'border-0 bg-transparent p-0 text-xs font-semibold text-[var(--ui-text-disabled)] transition-colors duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] hover:text-[var(--ui-text-primary)] focus-visible:text-[var(--ui-text-primary)]'
+  'border-0 bg-transparent p-0 text-xs font-semibold text-ds-text-disabled transition-colors duration-ds-standard ease-ds-standard hover:text-ds-text-primary focus-visible:text-ds-text-primary'
 const AVAILABILITY_RESULT_COPY_CLASS = 'mt-3 min-w-0'
 const AVAILABILITY_RESULT_TITLE_CLASS =
-  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-[var(--ui-text-primary)] [overflow-wrap:anywhere]'
+  'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
 const AVAILABILITY_RESULT_URL_CLASS =
-  'mt-[7px] inline-block text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] inline-block text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const AVAILABILITY_RESULT_DETAIL_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-secondary)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const AVAILABILITY_RESULT_PATH_CLASS =
-  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere] [word-break:break-word]'
+  'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const AVAILABILITY_RESULT_ACTION_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-[var(--ui-text-disabled)] transition-colors duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] hover:text-[var(--ui-text-primary)] focus-visible:text-[var(--ui-text-primary)] disabled:cursor-default disabled:opacity-50 disabled:hover:text-[var(--ui-text-disabled)] disabled:focus-visible:text-[var(--ui-text-disabled)]'
+  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors duration-ds-standard ease-ds-standard hover:text-ds-text-primary focus-visible:text-ds-text-primary disabled:cursor-default disabled:opacity-50 disabled:hover:text-ds-text-disabled disabled:focus-visible:text-ds-text-disabled'
 const AVAILABILITY_RESULT_META_CLASS = 'mt-2.5 flex flex-wrap gap-2'
 const AVAILABILITY_RESULT_META_ITEM_CLASS =
-  'max-w-full text-xs leading-[1.45] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere]'
+  'max-w-full text-xs leading-[1.45] text-ds-text-disabled [overflow-wrap:anywhere]'
 const AVAILABILITY_RESULT_QUICK_ACTIONS_CLASS =
-  'mt-[13px] flex flex-wrap items-start gap-2 border-t border-[var(--ui-divider-subtle)] pt-3'
+  'mt-[13px] flex flex-wrap items-start gap-2 border-t border-ds-border-subtle pt-3'
 const AVAILABILITY_RESULT_QUICK_ACTION_PAIR_CLASS = 'inline-flex min-w-0 items-baseline gap-1.5'
 const AVAILABILITY_RESULT_QUICK_ACTION_IMPACT_CLASS =
-  'max-w-[190px] text-xs leading-[1.45] text-[var(--ui-text-disabled)] [overflow-wrap:anywhere]'
+  'max-w-[190px] text-xs leading-[1.45] text-ds-text-disabled [overflow-wrap:anywhere]'
 const AVAILABILITY_RESULT_BADGE_BASE_CLASS =
   'inline-flex min-h-6 max-w-full items-center justify-center rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0] [overflow-wrap:anywhere]'
 const AVAILABILITY_RESULT_BADGE_TONE_CLASSES: Record<string, string> = {
-  danger: 'border-[rgba(255,138,130,0.22)] bg-[rgba(255,138,130,0.12)] text-[#ffb7b0]',
-  muted: 'border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-tertiary)]',
-  success: 'border-[rgba(170,237,189,0.32)] bg-[rgba(170,237,189,0.16)] text-[#e2ffe9]',
-  warning: 'border-[rgba(255,206,141,0.2)] bg-[rgba(255,206,141,0.12)] text-[#ffdca5]'
+  danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
+  muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
+  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
+  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 
 export function AvailabilityResults({ kind }: { kind: AvailabilityResultPanelKind }) {

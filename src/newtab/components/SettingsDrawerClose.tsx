@@ -1,7 +1,7 @@
 import type { Ref } from 'react'
-import { CloseButton } from '../../ui/base/CloseButton'
-import { DrawerClose } from '../../ui/base/Drawer'
-import { cx } from '../../ui/base/utils'
+import { CloseButton } from '../../ui'
+import { DrawerClose } from '../../ui'
+import { cx } from '../../ui'
 
 export function SettingsDrawerClose({
   buttonRef,
@@ -15,7 +15,7 @@ export function SettingsDrawerClose({
       render={
         <CloseButton
           id="newtab-settings-close"
-          className={cx('settings-close', className)}
+          className={cx('absolute right-3.5 top-3.5 z-[2] size-10 min-h-10 min-w-10 rounded-ds-sm p-0', className)}
           type="button"
           label="关闭设置"
           iconSize={20}

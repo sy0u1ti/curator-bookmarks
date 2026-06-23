@@ -11,7 +11,7 @@ export function Separator({ className, orientation = 'horizontal', unstyled = fa
   return (
     <BaseSeparator
       className={unstyled ? className : cx(
-        orientation === 'vertical' ? 'h-full w-px bg-curator-border' : 'h-px w-full bg-curator-border',
+        orientation === 'vertical' ? 'h-full w-px bg-ds-border' : 'h-px w-full bg-ds-border',
         className
       )}
       orientation={orientation}

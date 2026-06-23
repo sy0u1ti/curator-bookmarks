@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleResultsPagination } from '../options-controller'
 import { useResultsPaginationState } from './results-pagination-store.js'
 import {

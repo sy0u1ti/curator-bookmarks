@@ -1,8 +1,4 @@
 export const SECTION_META = {
-  overview: {
-    label: 'Overview',
-    title: '概览'
-  },
   general: {
     label: 'General',
     title: '通用设置'
@@ -30,10 +26,6 @@ export const SECTION_META = {
   backup: {
     label: 'Data & Backup',
     title: '数据与备份'
-  },
-  tags: {
-    label: 'Tag Management',
-    title: '标签管理中心'
   },
   redirects: {
     label: 'Redirects',

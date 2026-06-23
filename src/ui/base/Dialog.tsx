@@ -38,19 +38,19 @@ export function Dialog({
       {trigger ? <BaseDialog.Trigger render={<span />}>{trigger}</BaseDialog.Trigger> : null}
       <BaseDialog.Portal>
         <Presence>
-          <BaseDialog.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-black/60 supports-[-webkit-touch-callout:none]:absolute" />
+          <BaseDialog.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute" />
           <BaseDialog.Popup
             render={
               <MotionPanel
                 variant="dialog"
-                className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-[var(--ui-radius-panel)] border border-curator-border bg-curator-bg-elevated p-4 text-curator-text shadow-[var(--shadow-popover)] outline-none"
+                className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-ds-lg border border-ds-border bg-ds-surface-2 p-4 text-ds-text-primary shadow-ds-dialog outline-none"
               />
             }
           >
             <header className="grid gap-1">
               <BaseDialog.Title className="text-base font-semibold">{title}</BaseDialog.Title>
               {description ? (
-                <BaseDialog.Description className="text-sm text-curator-text-muted">
+                <BaseDialog.Description className="text-sm text-ds-text-secondary">
                   {description}
                 </BaseDialog.Description>
               ) : null}
@@ -76,6 +76,8 @@ type BaseDialogRootProps = ComponentPropsWithoutRef<typeof BaseDialog.Root>
 type BaseDialogPortalProps = ComponentPropsWithoutRef<typeof BaseDialog.Portal>
 type BaseDialogPopupProps = ComponentPropsWithoutRef<typeof BaseDialog.Popup>
 type BaseDialogTitleProps = ComponentPropsWithoutRef<typeof BaseDialog.Title>
+type BaseDialogDescriptionProps = ComponentPropsWithoutRef<typeof BaseDialog.Description>
+type BaseDialogBackdropProps = ComponentPropsWithoutRef<typeof BaseDialog.Backdrop>
 type BaseDialogCloseProps = ComponentPropsWithoutRef<typeof BaseDialog.Close>
 
 type DialogTitleElement = 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
@@ -182,6 +184,14 @@ export function DialogTitle({ as, render, ...props }: DialogTitleProps) {
       {...props}
     />
   )
+}
+
+export function DialogDescription(props: BaseDialogDescriptionProps) {
+  return <BaseDialog.Description {...props} />
+}
+
+export function DialogBackdrop(props: BaseDialogBackdropProps) {
+  return <BaseDialog.Backdrop {...props} />
 }
 
 export function DialogClose(props: BaseDialogCloseProps) {

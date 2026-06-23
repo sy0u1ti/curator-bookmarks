@@ -1,72 +1,72 @@
 :root {
   color-scheme: dark;
-  --font-sans: "SF Pro Text", "SF Pro Display", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
 
-  --ui-bg-page: #0b0b0c;
-  --ui-bg-main: #0f0f0f;
-  --ui-bg-ambient: #101112;
-  --ui-surface: #151516;
-  --ui-surface-raised: #1a1b1d;
-  --ui-surface-elevated: #202124;
-  --ui-surface-hover: #242529;
-  --ui-surface-pressed: #2a2c30;
-  --ui-surface-selected: #1b251d;
-  --ui-surface-danger: rgba(255, 123, 114, 0.12);
+  /* Temporary compatibility aliases for out-of-scope newtab main styles. */
+  --ui-bg-page: var(--ds-bg-page);
+  --ui-bg-main: var(--ds-bg-app);
+  --ui-bg-ambient: var(--ds-surface-1);
+  --ui-surface: var(--ds-surface-1);
+  --ui-surface-raised: var(--ds-surface-2);
+  --ui-surface-elevated: var(--ds-surface-3);
+  --ui-surface-hover: var(--ds-hover);
+  --ui-surface-pressed: var(--ds-active);
+  --ui-surface-selected: var(--ds-selected);
+  --ui-surface-danger: var(--ds-danger-soft);
 
-  --ui-text: #f4f4f5;
-  --ui-text-primary: #f4f4f5;
-  --ui-text-secondary: rgba(244, 244, 245, 0.72);
-  --ui-text-tertiary: rgba(244, 244, 245, 0.52);
-  --ui-text-disabled: rgba(244, 244, 245, 0.34);
-  --ui-text-inverse: #101510;
+  --ui-text: var(--ds-text-primary);
+  --ui-text-primary: var(--ds-text-primary);
+  --ui-text-secondary: var(--ds-text-secondary);
+  --ui-text-tertiary: var(--ds-text-muted);
+  --ui-text-disabled: var(--ds-text-disabled);
+  --ui-text-inverse: var(--ds-text-inverse);
 
-  --ui-accent: #9fcea1;
-  --ui-accent-strong: #add8ad;
-  --ui-accent-text: #d8f4d9;
-  --ui-accent-soft: rgba(159, 206, 161, 0.16);
-  --ui-accent-line: rgba(159, 206, 161, 0.48);
-  --ui-danger: #ff7b72;
-  --ui-danger-soft: rgba(255, 123, 114, 0.14);
-  --ui-warning: #f8d66d;
-  --ui-success: #3dd68c;
+  --ui-accent: var(--ds-accent);
+  --ui-accent-strong: var(--ds-accent-hover);
+  --ui-accent-text: var(--ds-accent-text);
+  --ui-accent-soft: var(--ds-accent-soft);
+  --ui-accent-line: var(--ds-accent-line);
+  --ui-danger: var(--ds-danger-text);
+  --ui-danger-soft: var(--ds-danger-soft);
+  --ui-warning: var(--ds-warning);
+  --ui-success: var(--ds-success);
 
-  --ui-divider-subtle: rgba(245, 245, 247, 0.07);
-  --ui-divider: rgba(245, 245, 247, 0.12);
-  --ui-divider-strong: rgba(245, 245, 247, 0.2);
-  --ui-focus-ring: rgba(159, 206, 161, 0.58);
+  --ui-divider-subtle: var(--ds-border-subtle);
+  --ui-divider: var(--ds-border);
+  --ui-divider-strong: var(--ds-border-hover);
+  --ui-focus-ring: var(--ds-focus);
 
-  --ui-radius-page-group: 24px;
-  --ui-radius-panel: 28px;
-  --ui-radius-group: 20px;
-  --ui-radius-control: 14px;
-  --ui-radius-small: 10px;
-  --ui-radius-icon: 11px;
-  --ui-radius-pill: 999px;
+  --ui-radius-page-group: var(--ds-radius-xl);
+  --ui-radius-panel: var(--ds-radius-lg);
+  --ui-radius-group: var(--ds-radius-md);
+  --ui-radius-control: var(--ds-radius-sm);
+  --ui-radius-small: var(--ds-radius-sm);
+  --ui-radius-icon: var(--ds-radius-sm);
+  --ui-radius-pill: var(--ds-radius-full);
 
-  --ui-shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  --ui-shadow-panel: 0 26px 70px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  --ui-shadow-menu: 0 18px 54px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --ui-shadow-soft: var(--ds-shadow-card);
+  --ui-shadow-panel: var(--ds-shadow-dialog);
+  --ui-shadow-menu: var(--ds-shadow-popover);
 
-  --ui-motion-fast: 140ms;
-  --ui-motion-standard: 200ms;
-  --ui-motion-surface: 280ms;
-  --ui-ease-standard: cubic-bezier(0.22, 0.72, 0.18, 1);
-  --ui-ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ui-ease-spring: cubic-bezier(0.2, 0.88, 0.22, 1);
-  --modal-open-dur: 250ms;
-  --modal-close-dur: 150ms;
-  --modal-scale: 0.96;
-  --modal-scale-close: 0.96;
-  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --ui-press-scale: 0.985;
-  --ui-hover-lift: -1px;
-  --ui-sheet-offset: 12px;
+  --ui-motion-fast: var(--ds-motion-fast);
+  --ui-motion-standard: var(--ds-motion-standard);
+  --ui-motion-surface: var(--ds-motion-surface);
+  --ui-ease-standard: var(--ds-ease-standard);
+  --ui-ease-in: var(--ds-ease-in);
+  --ui-ease-spring: var(--ds-ease-spring);
+  --modal-open-dur: var(--ds-motion-standard);
+  --modal-close-dur: var(--ds-motion-fast);
+  --modal-scale: 0.98;
+  --modal-scale-close: 0.98;
+  --modal-ease: var(--ds-ease-standard);
+  --ui-press-scale: var(--ds-press-scale);
+  --ui-hover-lift: var(--ds-hover-lift);
+  --ui-sheet-offset: var(--ds-sheet-offset);
 
-  --ui-row-height: 52px;
-  --ui-row-height-compact: 40px;
-  --ui-group-padding: 12px;
-  --ui-toolbar-height: 46px;
-  --ui-icon-size: 32px;
+  --ui-row-height: var(--ds-row-height);
+  --ui-row-height-compact: var(--ds-row-height-compact);
+  --ui-group-padding: var(--ds-group-padding);
+  --ui-toolbar-height: var(--ds-toolbar-height);
+  --ui-icon-size: var(--ds-icon-size);
 }
 
 @media (prefers-reduced-motion: reduce) {

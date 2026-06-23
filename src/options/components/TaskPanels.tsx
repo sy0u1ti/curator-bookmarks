@@ -6,7 +6,6 @@ import { FolderCleanupResults } from './FolderCleanupResults.js'
 import { IgnoreRules } from './IgnoreRules.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_WIDE_PANEL_CLASS,
   OPTION_GROUP_CLASS,
   OPTION_COPY_CLASS,
   OPTION_COPY_TEXT_CLASS,
@@ -23,27 +22,22 @@ import { RecycleBin } from './RecycleBin.js'
 import { RecycleControls } from './RecycleControls.js'
 import { ResultsPagination } from './ResultsPagination.js'
 import { ScopePickerTrigger } from './ScopePickerTrigger.js'
-import { TagManagementCloud } from './TagManagementCloud.js'
-import { TagManagementControls } from './TagManagementControls.js'
 import { AvailabilityHistory } from './AvailabilityHistory.js'
 
 interface OptionsPanelVisibilityProps {
   hidden: boolean
 }
 
-const TAG_MANAGEMENT_USAGE_CLASS =
-  'mt-7 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[14px_16px_16px] shadow-none max-[760px]:mt-5 max-[760px]:p-4'
-const TAG_MANAGEMENT_RESULTS_CLASS = 'mt-3'
 const AVAILABILITY_HISTORY_GROUP_CLASS =
-  'mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none max-[760px]:p-4'
+  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none max-[760px]:p-4'
 const REDIRECTS_GROUP_CLASS =
-  `mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const RECYCLE_GROUP_CLASS =
-  `mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const FOLDER_CLEANUP_GROUP_CLASS =
-  `mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const DUPLICATES_GROUP_CLASS =
-  `mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 
 export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
@@ -67,22 +61,6 @@ export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
       <h1 id="backup-title" className={OPTION_PANEL_TITLE_CLASS}>数据与备份</h1>
 
       <BackupControls />
-    </section>
-  )
-}
-
-export function TagManagementPanel({ hidden }: OptionsPanelVisibilityProps) {
-  return (
-    <section id="tags" className={OPTION_WIDE_PANEL_CLASS} aria-labelledby="tags-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Tag Management</p>
-      <h1 id="tags-title" className={OPTION_PANEL_TITLE_CLASS}>标签管理中心</h1>
-
-      <div className={TAG_MANAGEMENT_USAGE_CLASS}>
-        <TagManagementControls />
-        <div className={TAG_MANAGEMENT_RESULTS_CLASS}>
-          {hidden ? null : <TagManagementCloud />}
-        </div>
-      </div>
     </section>
   )
 }

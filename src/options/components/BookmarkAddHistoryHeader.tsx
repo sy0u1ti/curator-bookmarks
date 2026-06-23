@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleBookmarkAddHistoryClear } from '../options-controller'
 import type { BookmarkAddHistoryHeaderState } from './BookmarkAddHistoryTypes.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
@@ -7,9 +7,9 @@ const BOOKMARK_ADD_HISTORY_HEADER_CLASS =
   'flex flex-wrap items-center justify-between gap-3'
 const BOOKMARK_ADD_HISTORY_HEADER_COPY_CLASS = 'min-w-0'
 const BOOKMARK_ADD_HISTORY_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-normal tracking-[0] text-[var(--ui-text-primary)]'
+  'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const BOOKMARK_ADD_HISTORY_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
 const BOOKMARK_ADD_HISTORY_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
 

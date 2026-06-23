@@ -3,16 +3,72 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --color-curator-bg: var(--color-bg);
-  --color-curator-elevated: var(--color-bg-elevated);
-  --color-curator-panel: var(--color-bg-panel);
-  --color-curator-muted: var(--color-bg-muted);
-  --color-curator-border: var(--color-border);
-  --color-curator-border-strong: var(--color-border-strong);
-  --color-curator-text: var(--color-text);
-  --color-curator-text-muted: var(--color-text-muted);
-  --color-curator-text-subtle: var(--color-text-subtle);
-  --color-curator-danger: var(--color-danger);
-  --color-curator-warning: var(--color-warning);
-  --color-curator-success: var(--color-success);
+  --font-sans: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+
+  --color-ds-page: var(--ds-bg-page);
+  --color-ds-app: var(--ds-bg-app);
+  --color-ds-surface-1: var(--ds-surface-1);
+  --color-ds-surface-2: var(--ds-surface-2);
+  --color-ds-surface-3: var(--ds-surface-3);
+  --color-ds-hover: var(--ds-hover);
+  --color-ds-active: var(--ds-active);
+  --color-ds-selected: var(--ds-selected);
+  --color-ds-border: var(--ds-border);
+  --color-ds-border-subtle: var(--ds-border-subtle);
+  --color-ds-border-hover: var(--ds-border-hover);
+  --color-ds-overlay: var(--ds-overlay);
+  --color-ds-text-primary: var(--ds-text-primary);
+  --color-ds-text-secondary: var(--ds-text-secondary);
+  --color-ds-text-muted: var(--ds-text-muted);
+  --color-ds-text-disabled: var(--ds-text-disabled);
+  --color-ds-text-inverse: var(--ds-text-inverse);
+  --color-ds-accent: var(--ds-accent);
+  --color-ds-accent-hover: var(--ds-accent-hover);
+  --color-ds-accent-text: var(--ds-accent-text);
+  --color-ds-accent-soft: var(--ds-accent-soft);
+  --color-ds-accent-line: var(--ds-accent-line);
+  --color-ds-accent-contrast: var(--ds-accent-contrast);
+  --color-ds-focus: var(--ds-focus);
+  --color-ds-danger: var(--ds-danger);
+  --color-ds-danger-text: var(--ds-danger-text);
+  --color-ds-danger-soft: var(--ds-danger-soft);
+  --color-ds-warning: var(--ds-warning);
+  --color-ds-warning-text: var(--ds-warning-text);
+  --color-ds-warning-soft: var(--ds-warning-soft);
+  --color-ds-success: var(--ds-success);
+  --color-ds-success-text: var(--ds-success-text);
+  --color-ds-success-soft: var(--ds-success-soft);
+
+  --radius-ds-sm: var(--ds-radius-sm);
+  --radius-ds-md: var(--ds-radius-md);
+  --radius-ds-lg: var(--ds-radius-lg);
+  --radius-ds-xl: var(--ds-radius-xl);
+
+  --shadow-ds-card: var(--ds-shadow-card);
+  --shadow-ds-popover: var(--ds-shadow-popover);
+  --shadow-ds-dialog: var(--ds-shadow-dialog);
+  --shadow-ds-focus: var(--ds-shadow-focus);
+
+  --duration-ds-fast: var(--ds-motion-fast);
+  --duration-ds-standard: var(--ds-motion-standard);
+  --duration-ds-surface: var(--ds-motion-surface);
+  --ease-ds-standard: var(--ds-ease-standard);
+  --ease-ds-in: var(--ds-ease-in);
+  --ease-ds-spring: var(--ds-ease-spring);
+
+  --color-curator-bg: var(--ds-bg-page);
+  --color-curator-bg-elevated: var(--ds-surface-2);
+  --color-curator-bg-panel: var(--ds-surface-1);
+  --color-curator-elevated: var(--ds-surface-2);
+  --color-curator-panel: var(--ds-surface-1);
+  --color-curator-muted: var(--ds-surface-2);
+  --color-curator-border: var(--ds-border);
+  --color-curator-border-strong: var(--ds-border-hover);
+  --color-curator-text: var(--ds-text-primary);
+  --color-curator-text-muted: var(--ds-text-secondary);
+  --color-curator-text-subtle: var(--ds-text-muted);
+  --color-curator-danger: var(--ds-danger);
+  --color-curator-warning: var(--ds-warning);
+  --color-curator-success: var(--ds-success);
 }

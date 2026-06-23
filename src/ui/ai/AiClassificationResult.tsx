@@ -35,8 +35,8 @@ export function AiClassificationResult({
       </div>
       {actions}
       {meta}
-      {description ? <p className="text-sm text-curator-text-muted">{description}</p> : null}
-      {folder ? <p className="text-sm text-curator-text">{folder}</p> : null}
+      {description ? <p className="text-sm text-ds-text-secondary">{description}</p> : null}
+      {folder ? <p className="text-sm text-ds-text-primary">{folder}</p> : null}
       {children ? <div className={bodyClassName}>{children}</div> : null}
     </Surface>
   )

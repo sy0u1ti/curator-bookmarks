@@ -1,15 +1,15 @@
 import type { CSSProperties } from 'react'
-import { Button } from '../../ui/base/Button'
-import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
-import { Input } from '../../ui/base/Input'
-import { Progress } from '../../ui/base/Progress'
-import { Toolbar } from '../../ui/base/Toolbar'
-import { cx } from '../../ui/base/utils'
+import { Button } from '../../ui'
+import { DotMatrixLoader } from '../../ui'
+import { Input } from '../../ui'
+import { Progress } from '../../ui'
+import { Toolbar } from '../../ui'
+import { cx } from '../../ui'
 import { Icon } from '../../ui/icons/Icon'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
 
 const SMART_ERROR_BANNER_CLASS =
-  'relative z-[1] flex-none rounded-[var(--ui-radius-panel)] border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-[#ffd5d0] shadow-none'
+  'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
 const pageRevealShellClass = 'relative min-h-12 w-full'
 const pageLayerClass = 'absolute inset-0 min-h-12'
@@ -26,46 +26,46 @@ const pageContentLayerClass = cx(
 const pageContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
 const pageContentReadyClass = 'opacity-100'
 const pageCardClass =
-  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-lg border border-[var(--popup-line)] bg-[#101114] px-[7px] py-1.5 shadow-none'
+  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1 px-[7px] py-1.5 shadow-none'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-[7px]'
 const pageIconClass =
-  'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border border-[var(--popup-line)] bg-[#15171b] text-sm font-bold leading-none text-[var(--popup-text)]'
+  'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
 const pageFaviconClass = 'block h-full w-full object-cover'
 const pageCopyClass = 'min-w-0'
-const pageTitleClass = 'm-0 min-w-0 truncate text-[13px] font-[760] leading-tight text-[var(--popup-text)]'
-const pageStatusClass = 'mt-[3px] mb-0 min-w-0 truncate text-[11px] leading-tight text-[var(--popup-faint)]'
-const placeholderPageCardClass = 'text-[#9da4b3]'
-const placeholderIconClass = 'border-[var(--popup-line)] bg-[#15171b] text-[#aeb7c6]'
-const placeholderTitleClass = 'text-[#dce2ed]'
-const placeholderStatusClass = 'text-[var(--popup-faint)]'
+const pageTitleClass = 'm-0 min-w-0 truncate text-[13px] font-[760] leading-tight text-ds-text-primary'
+const pageStatusClass = 'mt-[3px] mb-0 min-w-0 truncate text-[11px] leading-tight text-ds-text-muted'
+const placeholderPageCardClass = 'text-ds-text-secondary'
+const placeholderIconClass = 'border-ds-border bg-ds-surface-2 text-ds-text-secondary'
+const placeholderTitleClass = 'text-ds-text-primary'
+const placeholderStatusClass = 'text-ds-text-muted'
 
 const currentPageActionsClass =
   'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end'
 const currentPageActionBaseClass = [
   'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-md border px-[7px] text-[11px] font-[750] leading-none outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98] disabled:cursor-default disabled:opacity-70'
 ].join(' ')
 const currentPageSecondaryActionClass = cx(
   currentPageActionBaseClass,
-  'min-w-[42px] border-white/20 bg-[#171719] text-[rgba(244,246,251,0.72)] hover:border-white/40 hover:bg-[#26262a] hover:text-[var(--popup-text)] focus-visible:border-white/40 focus-visible:bg-[#26262a] focus-visible:text-[var(--popup-text)]'
+  'min-w-[42px] border-ds-border bg-ds-surface-2 text-[rgba(244,246,251,0.72)] hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
 )
 const currentPagePrimaryActionClass = cx(
   currentPageActionBaseClass,
-  'w-full border-[rgba(245,245,247,0.82)] bg-[#f5f5f7] text-[#111113] hover:border-white hover:bg-white hover:text-[#111113] focus-visible:border-white focus-visible:bg-white focus-visible:text-[#111113]'
+  'w-full border-[rgba(245,245,247,0.82)] bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary hover:text-ds-text-inverse focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary focus-visible:text-ds-text-inverse'
 )
 const currentPagePinnedActionClass = cx(
   currentPageActionBaseClass,
-  'w-full border-[rgba(245,245,247,0.5)] bg-[#203026] text-[#d6f6dc] hover:border-[rgba(245,245,247,0.62)] hover:bg-[#26382d] hover:text-[#e6fbe9] focus-visible:border-[rgba(245,245,247,0.62)] focus-visible:bg-[#26382d] focus-visible:text-[#e6fbe9]'
+  'w-full border-[rgba(245,245,247,0.5)] bg-ds-success-soft text-ds-success-text hover:border-[rgba(245,245,247,0.62)] hover:bg-ds-success-soft hover:text-ds-success-text focus-visible:border-[rgba(245,245,247,0.62)] focus-visible:bg-ds-success-soft focus-visible:text-ds-success-text'
 )
 const placeholderSecondaryActionClass = cx(
   currentPageActionBaseClass,
-  'min-w-[42px] border-[var(--popup-line)] bg-[#15171b] text-[#737d8c] disabled:opacity-100'
+  'min-w-[42px] border-ds-border bg-ds-surface-2 text-ds-text-disabled disabled:opacity-100'
 )
 const placeholderPrimaryActionClass = cx(
   currentPageActionBaseClass,
-  'w-full border-[var(--popup-line-strong)] bg-[#1a1d22] text-[#8992a1] disabled:opacity-100'
+  'w-full border-ds-border-hover bg-ds-surface-2 text-ds-text-muted disabled:opacity-100'
 )
 
 const skeletonBarClass =
@@ -80,17 +80,17 @@ const pageSkeletonActionClass = cx(skeletonBarClass, 'h-6 w-full rounded-md')
 const pageSkeletonSecondaryActionClass = cx(pageSkeletonActionClass, 'min-w-[42px]')
 
 const panelCardClass =
-  'w-full rounded-lg border border-[var(--popup-line)] bg-[#101114] shadow-none'
+  'w-full rounded-lg border border-ds-border bg-ds-surface-1 shadow-none'
 const panelHeaderClass = 'flex items-center justify-between gap-3'
-const panelHeaderTitleClass = 'm-0 text-xs font-[650] text-[var(--ui-text-secondary)]'
+const panelHeaderTitleClass = 'm-0 text-xs font-[650] text-ds-text-secondary'
 const panelHeaderWithMarginClass = cx(panelHeaderClass, 'mb-3')
 const panelHeaderLargeMarginClass = cx(panelHeaderClass, 'mb-[22px]')
 const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
-  'inline-flex h-7 min-w-[42px] items-center justify-center rounded-md border border-[var(--popup-line)] bg-[#171719] px-2 text-xs font-[650] text-[var(--ui-text-secondary)] outline-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--popup-line-strong)] hover:bg-[#26262a] hover:text-[var(--popup-text)]',
-  'focus-visible:border-[var(--popup-line-strong)] focus-visible:bg-[#26262a] focus-visible:text-[var(--popup-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'inline-flex h-7 min-w-[42px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98]'
 ].join(' ')
 
@@ -98,81 +98,81 @@ const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] ga
 const actionsThreeClass = cx(actionsClass, 'grid-cols-3')
 const actionButtonBaseClass = [
   'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 text-[13px] font-[750] leading-none outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98] disabled:cursor-default'
 ].join(' ')
 const secondaryActionButtonClass = cx(
   actionButtonBaseClass,
-  'border-[var(--popup-line)] bg-[#171719] text-[var(--popup-text)] hover:border-[var(--popup-line-strong)] hover:bg-[#202126] focus-visible:border-[var(--popup-line-strong)] focus-visible:bg-[#202126]'
+  'border-ds-border bg-ds-surface-2 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
 )
 const settingsActionButtonClass = cx(
   actionButtonBaseClass,
-  'border-[#3f3f46] bg-[#222226] text-[var(--popup-text)] hover:border-[#5a5a63] hover:bg-[#2c2c31] focus-visible:border-[#5a5a63] focus-visible:bg-[#2c2c31]'
+  'border-ds-border-hover bg-ds-surface-3 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3'
 )
 const primaryActionButtonClass = cx(
   actionButtonBaseClass,
-  'border-[rgba(245,245,247,0.92)] bg-[#f5f5f7] text-[#111113] hover:border-white hover:bg-white focus-visible:border-white focus-visible:bg-white'
+  'border-[rgba(245,245,247,0.92)] bg-ds-text-primary text-ds-text-inverse hover:border-ds-text-primary hover:bg-ds-text-primary focus-visible:border-ds-text-primary focus-visible:bg-ds-text-primary'
 )
 const savedActionButtonClass =
-  'border-[rgba(245,245,247,0.36)] bg-[rgba(245,245,247,0.16)] !text-[#9bd8ad] disabled:opacity-100'
+  'border-ds-success bg-ds-success-soft text-ds-success-text disabled:opacity-100'
 
 const manualButtonClass = [
-  'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-[var(--ui-text-secondary)] outline-none',
-  'transition-[color,background,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:bg-[var(--ui-surface-hover)] hover:text-[var(--popup-text)]',
-  'focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--popup-text)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
+  'transition-[color,background,transform] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98]'
 ].join(' ')
-const folderIconClass = 'h-3.5 w-3.5 flex-none text-[var(--ui-text-secondary)]'
+const folderIconClass = 'h-3.5 w-3.5 flex-none text-ds-text-secondary'
 
 const permissionCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden p-[18px]')
 const permissionBodyClass = 'grid gap-2.5'
-const permissionCopyClass = 'm-0 text-xs leading-[1.55] text-[var(--ui-text-secondary)]'
-const permissionErrorClass = 'm-0 text-xs leading-[1.55] text-[#ffd1cc]'
+const permissionCopyClass = 'm-0 text-xs leading-[1.55] text-ds-text-secondary'
+const permissionErrorClass = 'm-0 text-xs leading-[1.55] text-ds-danger-text'
 const permissionOriginsClass = 'flex flex-wrap gap-1.5'
 const permissionOriginClass =
-  'max-w-full overflow-hidden truncate whitespace-nowrap rounded-md border border-[var(--popup-line)] bg-[#171719] px-2 py-1.5 text-[11px] leading-tight text-[var(--popup-text)]'
+  'max-w-full overflow-hidden truncate whitespace-nowrap rounded-md border border-ds-border bg-ds-surface-2 px-2 py-1.5 text-[11px] leading-tight text-ds-text-primary'
 
 const buttonLoadingLabelClass = 'inline-flex min-w-0 items-center justify-center gap-[7px]'
 const buttonDotLoaderClass = 'h-3.5 w-3.5'
 const loadingCardClass = cx(panelCardClass, 'grid h-full min-h-0 content-center overflow-hidden p-[18px]')
 const loadingBodyClass = 'grid grid-cols-[46px_minmax(0,1fr)] items-center gap-3.5'
-const loadingLoaderClass = 'h-[46px] w-[46px] text-[var(--popup-text)]'
+const loadingLoaderClass = 'h-[46px] w-[46px] text-ds-text-primary'
 const loadingContentClass = 'min-w-0'
 const loadingCopyClass =
-  'mb-2.5 mt-0 flex items-center justify-between gap-3 text-[13px] font-[650] text-[var(--popup-text)]'
-const loadingStepClass = 'text-[11px] font-medium text-[var(--ui-text-secondary)]'
-const progressTrackClass = 'h-[5px] overflow-hidden rounded-full bg-white/[0.08]'
+  'mb-2.5 mt-0 flex items-center justify-between gap-3 text-[13px] font-[650] text-ds-text-primary'
+const loadingStepClass = 'text-[11px] font-medium text-ds-text-secondary'
+const progressTrackClass = 'h-[5px] overflow-hidden rounded-full bg-ds-text-primary/[0.08]'
 const progressBarClass =
-  'block h-full w-full origin-left rounded-[inherit] bg-[linear-gradient(90deg,#f5f5f7,#8e8e93)] transition-transform duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none'
+  'block h-full w-full origin-left rounded-[inherit] bg-ds-accent transition-transform duration-ds-fast ease-ds-standard will-change-transform motion-reduce:transition-none'
 
 const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden p-[18px]')
 const titleRowClass = 'mb-3.5 grid grid-cols-[minmax(0,1fr)] gap-2'
 const titleInputClass =
-  'min-h-9 w-full rounded-md border border-[var(--popup-line)] bg-[#15171b] px-3 text-[13px] font-[650] leading-tight text-[var(--popup-text)] outline-none placeholder:text-[rgba(244,246,251,0.38)] focus:border-[var(--ui-focus-ring)] focus:bg-[var(--ui-surface-hover)] focus:shadow-none focus-visible:border-[var(--ui-focus-ring)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 [&&:focus]:!border-[var(--ui-focus-ring)] [&&:focus]:![background:var(--ui-surface-hover)] [&&:focus]:!shadow-none [&&:focus-visible]:!border-[var(--ui-focus-ring)] [&&:focus-visible]:![background:var(--ui-surface-hover)] [&&:focus-visible]:!shadow-none [&&:focus-visible]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus-visible]:!outline-offset-2'
-const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-[var(--ui-text-secondary)]'
+  'min-h-9 w-full rounded-md border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none placeholder:text-ds-text-muted focus:border-ds-focus focus:bg-ds-hover focus:shadow-none focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus'
+const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-secondary'
 const recommendationsClass =
-  'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:#333741_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderOptionBaseClass = [
-  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-[var(--popup-line)] bg-[#15171b] px-3 py-2.5 text-left outline-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--popup-line-strong)] hover:bg-[#202126] focus-visible:border-[var(--popup-line-strong)] focus-visible:bg-[#202126] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.993]'
 ].join(' ')
 const folderOptionSelectedClass =
-  'border-[var(--popup-line-strong)] bg-[var(--ui-surface-selected)] text-[var(--popup-text)]'
+  'border-ds-border-hover bg-ds-selected text-ds-text-primary'
 const folderMainClass = 'grid min-w-0 gap-1'
 const folderHeadClass = 'flex min-w-0 items-center gap-2'
-const folderNameClass = 'min-w-0 truncate text-[13px] font-bold leading-tight text-[var(--popup-text)]'
-const folderPathClass = 'ml-[22px] min-w-0 break-all text-[11px] leading-snug text-[var(--ui-text-secondary)]'
+const folderNameClass = 'min-w-0 truncate text-[13px] font-bold leading-tight text-ds-text-primary'
+const folderPathClass = 'ml-[22px] min-w-0 break-all text-[11px] leading-snug text-ds-text-secondary'
 const folderMetaClass =
-  'flex items-start gap-2 text-[11px] font-[650] text-[var(--ui-text-secondary)]'
-const checkIconClass = 'h-3.5 w-3.5 text-[var(--popup-text)]'
+  'flex items-start gap-2 text-[11px] font-[650] text-ds-text-secondary'
+const checkIconClass = 'h-3.5 w-3.5 text-ds-text-primary'
 const newBadgeClass =
-  'inline-flex min-h-[18px] items-center rounded-full border border-[var(--popup-line)] bg-[var(--ui-surface-raised)] px-1.5 text-[10px] font-extrabold text-[var(--ui-text-secondary)]'
+  'inline-flex min-h-[18px] items-center rounded-full border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-extrabold text-ds-text-secondary'
 const compactStateClass =
-  'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-[var(--popup-faint)]'
+  'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 
 export interface PopupSmartClassifierActionHandlers {
   onAction?: (action: string, returnFocusElement?: HTMLElement | null) => void

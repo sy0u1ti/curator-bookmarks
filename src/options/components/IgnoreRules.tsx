@@ -1,6 +1,6 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui/base/Button.js'
-import { Card } from '../../ui/base/Card.js'
+import { Button } from '../../ui'
+import { Card } from '../../ui'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
 import { OPTION_REVEAL_ENTER_CLASS } from './option-layout-classes.js'
@@ -22,42 +22,42 @@ const ignoreSummaryMetrics = [
 const IGNORE_SUMMARY_GRID_CLASS =
   'mt-5 grid grid-cols-3 gap-3 max-[920px]:grid-cols-1'
 const IGNORE_SUMMARY_CARD_CLASS =
-  'min-h-[96px] rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-4 shadow-none'
+  'min-h-[96px] rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-4 shadow-none'
 const IGNORE_SUMMARY_LABEL_CLASS =
-  'block text-xs font-semibold leading-[1.3] text-[var(--ui-text-tertiary)]'
+  'block text-xs font-semibold leading-[1.3] text-ds-text-muted'
 const IGNORE_SUMMARY_VALUE_CLASS =
-  'mt-2 block text-[26px] font-bold leading-none tracking-[0] text-[var(--ui-text-primary)]'
+  'mt-2 block text-[26px] font-bold leading-none tracking-[0] text-ds-text-primary'
 const IGNORE_RULE_GROUP_CLASS =
-  `mt-5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider-subtle)] bg-[var(--ui-surface)] p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const IGNORE_RULE_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3'
 const IGNORE_RULE_HEADER_COPY_CLASS = 'min-w-0'
 const IGNORE_RULE_TITLE_CLASS =
-  'block text-[15px] font-semibold leading-[1.35] tracking-[0] text-[var(--ui-text-primary)]'
+  'block text-[15px] font-semibold leading-[1.35] tracking-[0] text-ds-text-primary'
 const IGNORE_RULE_SUBTITLE_CLASS =
-  'mt-2 text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'mt-2 text-[13px] leading-[1.7] text-ds-text-secondary'
 const IGNORE_RULE_CLEAR_BUTTON_CLASS =
   'justify-center whitespace-nowrap max-[760px]:w-full'
 const IGNORE_RULE_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const IGNORE_RULE_EMPTY_CLASS =
-  'rounded-lg border border-[var(--ui-divider-subtle)] bg-[#171719] px-4 py-[18px] text-[13px] leading-[1.7] text-[var(--ui-text-secondary)]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const IGNORE_RULE_CARD_CLASS =
-  'rounded-lg border border-[var(--ui-divider-subtle)] bg-[#171719] p-[14px_16px]'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const IGNORE_RULE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const IGNORE_RULE_CARD_HEAD_LEFT_CLASS =
   'flex min-w-0 flex-wrap items-center gap-2'
 const IGNORE_RULE_BADGE_CLASS =
-  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border border-[var(--ui-surface-hover)] bg-[var(--ui-surface-raised)] px-[10px] text-[11px] font-semibold leading-none tracking-[0] text-[var(--ui-text-tertiary)]'
+  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border border-ds-hover bg-ds-surface-2 px-[10px] text-[11px] font-semibold leading-none tracking-[0] text-ds-text-muted'
 const IGNORE_RULE_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
 const IGNORE_RULE_DELETE_BUTTON_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-[var(--ui-text-disabled)] transition-colors hover:text-[var(--ui-text-secondary)] focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-focus-ring)]'
+  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors hover:text-ds-text-secondary focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
 const IGNORE_RULE_COPY_CLASS = 'mt-3 min-w-0'
 const IGNORE_RULE_COPY_TITLE_CLASS =
-  'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-[var(--ui-text-primary)] max-[760px]:whitespace-normal'
+  'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-ds-text-primary max-[760px]:whitespace-normal'
 const IGNORE_RULE_DETAIL_CLASS =
-  'mt-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-[1.55] text-[var(--ui-text-secondary)] max-[760px]:whitespace-normal'
+  'mt-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-[1.55] text-ds-text-secondary max-[760px]:whitespace-normal'
 
 export function IgnoreRules() {
   const state = useIgnoreRulesState()

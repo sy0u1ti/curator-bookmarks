@@ -19,7 +19,7 @@ export function Fieldset({
 }: FieldsetProps) {
   return (
     <BaseFieldset.Root
-      className={unstyled ? className : cx('base-fieldset grid gap-3 border-0 p-0 text-curator-text', className)}
+      className={unstyled ? className : cx('base-fieldset grid gap-3 border-0 p-0 text-ds-text-primary', className)}
       {...props}
     >
       {legend ? (

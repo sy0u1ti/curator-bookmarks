@@ -128,7 +128,7 @@ export function CheckboxControl({
     <BaseCheckbox.Root
       checked={checked}
       className={unstyled ? className : cx(
-        'flex size-4 items-center justify-center rounded-[var(--ui-radius-small)] border border-curator-border bg-curator-bg-panel text-curator-text outline-none transition-colors data-[checked]:border-curator-border-strong data-[checked]:bg-curator-text data-[checked]:text-curator-bg focus-visible:border-[var(--ui-focus-ring)] focus-visible:ring-2 focus-visible:ring-white/14',
+        'flex size-4 items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-1 text-ds-text-primary outline-none transition-colors data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent data-[checked]:text-ds-accent-contrast focus-visible:border-ds-focus focus-visible:shadow-ds-focus',
         className
       )}
       disabled={disabled}
@@ -155,7 +155,7 @@ export function Checkbox({
   return (
     <label
       {...labelAttributes}
-      className={cx('inline-flex items-center gap-2 text-sm text-curator-text', labelClassName)}
+      className={cx('inline-flex items-center gap-2 text-sm text-ds-text-primary', labelClassName)}
     >
       <CheckboxControl className={className} indicatorClassName={indicatorClassName} {...props} />
       {label ?? children}

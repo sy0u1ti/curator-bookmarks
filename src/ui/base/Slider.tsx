@@ -311,20 +311,20 @@ export function SliderControl({
       >
         <BaseSlider.Track
           className={unstyled ? trackClassName : cx(
-            'absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-curator-muted',
+            'absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-ds-hover',
             trackClassName
           )}
         >
           <BaseSlider.Indicator
             className={unstyled ? indicatorClassName : cx(
-              'h-full rounded-full bg-curator-text',
+              'h-full rounded-full bg-ds-accent',
               indicatorClassName
             )}
           />
         </BaseSlider.Track>
         <BaseSlider.Thumb
           className={unstyled ? thumbClassName : cx(
-            'size-4 rounded-full border border-curator-border-strong bg-curator-text outline-none focus-within:ring-2 focus-within:ring-white/20',
+            'size-4 rounded-full border border-ds-border-hover bg-ds-accent outline-none focus-within:ring-2 focus-within:shadow-ds-focus',
             thumbClassName
           )}
           getAriaLabel={ariaLabel ? () => ariaLabel : undefined}

@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleAiAnalysisScopePickerOpen } from '../options-controller'
 import { useAiAnalysisScopePicker } from './ai-analysis-status-store.js'
 import {

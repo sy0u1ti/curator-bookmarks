@@ -126,7 +126,7 @@ export function SwitchControl({
     <BaseSwitch.Root
       checked={checked}
       className={unstyled ? className : cx(
-        'relative inline-block h-6 w-11 rounded-full border border-curator-border bg-curator-muted outline-none transition-colors data-[checked]:border-curator-border-strong data-[checked]:bg-curator-text focus-visible:border-[var(--ui-focus-ring)] focus-visible:ring-2 focus-visible:ring-white/14 data-[disabled]:opacity-50',
+        'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-colors data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus data-[disabled]:opacity-50',
         className
       )}
       disabled={disabled}
@@ -137,7 +137,7 @@ export function SwitchControl({
     >
       <BaseSwitch.Thumb
         className={unstyled ? thumbClassName : cx(
-          'absolute left-0.5 top-0.5 size-5 rounded-full bg-curator-text-subtle transition-transform data-[checked]:translate-x-5 data-[checked]:bg-curator-bg',
+          'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page',
           thumbClassName
         )}
       />
@@ -147,7 +147,7 @@ export function SwitchControl({
 
 export function Switch({ className, label, children, thumbClassName, ...props }: SwitchProps) {
   return (
-    <label className="inline-flex items-center gap-3 text-sm text-curator-text">
+    <label className="inline-flex items-center gap-3 text-sm text-ds-text-primary">
       <SwitchControl className={className} thumbClassName={thumbClassName} {...props} />
       {label ?? children}
     </label>

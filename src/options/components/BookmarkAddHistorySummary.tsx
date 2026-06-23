@@ -1,4 +1,4 @@
-import { Card } from '../../ui/base/Card.js'
+import { Card } from '../../ui'
 import type { BookmarkAddHistorySummaryState } from './BookmarkAddHistoryTypes.js'
 
 const historyMetrics = [
@@ -26,11 +26,11 @@ const historyMetrics = [
 const BOOKMARK_ADD_HISTORY_GRID_CLASS =
   'grid grid-cols-4 gap-3 mt-4 max-[1180px]:grid-cols-3 max-[760px]:grid-cols-1'
 const BOOKMARK_ADD_HISTORY_SUMMARY_CARD_CLASS =
-  'min-w-0 !rounded-[20px] !border-[var(--ui-divider-subtle)] !bg-[var(--ui-surface)] !p-[16px_16px_14px]'
+  'min-w-0 rounded-ds-sm border-ds-border-subtle bg-ds-surface-1 p-[16px_16px_14px]'
 const BOOKMARK_ADD_HISTORY_SUMMARY_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-[var(--ui-text-disabled)]'
+  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
 const BOOKMARK_ADD_HISTORY_SUMMARY_VALUE_CLASS =
-  'mt-2 block text-[22px] font-[650] leading-none tracking-[0] text-[var(--ui-text-primary)]'
+  'mt-2 block text-[22px] font-[650] leading-none tracking-[0] text-ds-text-primary'
 
 export function BookmarkAddHistorySummary({ state }: { state: BookmarkAddHistorySummaryState }) {
   return (

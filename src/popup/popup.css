@@ -7,10 +7,6 @@
   --reveal-dur: 400ms;
   --reveal-blur: 2px;
   --reveal-ease: ease-in-out;
-  --popup-line: #26282e;
-  --popup-line-strong: #343740;
-  --popup-text: #f4f6fb;
-  --popup-faint: #727a89;
 }
 
 * {
@@ -20,16 +16,16 @@
 html,
 body {
   margin: 0;
-  width: 758px !important;
-  min-width: 758px !important;
-  max-width: 758px !important;
-  height: 609px !important;
-  min-height: 609px !important;
-  max-height: 609px !important;
+  width: 758px;
+  min-width: 758px;
+  max-width: 758px;
+  height: 609px;
+  min-height: 609px;
+  max-height: 609px;
   overflow: hidden;
   overscroll-behavior: none;
-  background: #0b0c0e !important;
-  color: var(--ui-text-primary);
+  background: var(--ds-bg-app);
+  color: var(--ds-text-primary);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -42,7 +38,7 @@ body {
 
 body::before,
 body::after {
-  content: none !important;
+  content: none;
 }
 
 :where(
@@ -86,7 +82,7 @@ input:focus-visible {
 }
 
 button:focus-visible {
-  outline: 2px solid var(--ui-focus-ring);
+  outline: 2px solid var(--ds-focus);
   outline-offset: 2px;
 }
 
@@ -117,13 +113,13 @@ button:focus-visible {
   *,
   *::before,
   *::after {
-    animation: none !important;
-    transition: none !important;
-    scroll-behavior: auto !important;
+    animation: none;
+    transition: none;
+    scroll-behavior: auto;
   }
 
   #popup-root :where(*, *::before, *::after),
   #toast-root :where(*, *::before, *::after) {
-    transform: none !important;
+    transform: none;
   }
 }

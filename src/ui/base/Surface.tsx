@@ -9,10 +9,10 @@ export interface SurfaceProps extends HTMLAttributes<HTMLElement> {
 }
 
 const variantClass: Record<SurfaceVariant, string> = {
-  plain: 'bg-transparent text-curator-text',
-  group: 'rounded-[var(--ui-radius-group)] border border-curator-border bg-curator-bg-panel text-curator-text shadow-none',
-  panel: 'rounded-[var(--ui-radius-panel)] border border-curator-border bg-curator-bg-elevated text-curator-text shadow-[var(--ui-shadow-panel)]',
-  row: 'border-curator-border bg-transparent text-curator-text'
+  plain: 'bg-transparent text-ds-text-primary',
+  group: 'rounded-ds-md border border-ds-border bg-ds-surface-1 text-ds-text-primary shadow-none',
+  panel: 'rounded-ds-lg border border-ds-border bg-ds-surface-2 text-ds-text-primary shadow-ds-dialog',
+  row: 'border-ds-border bg-transparent text-ds-text-primary'
 }
 
 export function Surface({

@@ -35,7 +35,7 @@ export function ToggleGroup({
   return (
     <BaseToggleGroup
       className={unstyled ? className : cx(
-        'base-toggle-group inline-flex items-center gap-1 rounded-[var(--ui-radius-control)] border border-curator-border bg-curator-bg-panel p-1',
+        'base-toggle-group inline-flex items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1',
         className
       )}
       defaultValue={defaultValue ? [defaultValue] : undefined}
@@ -78,7 +78,7 @@ function ToggleGroupButton({
   return (
     <BaseToggle
       className={unstyled ? itemClassName : cx(
-        'base-toggle-group-item rounded-[var(--ui-radius-small)] px-3 py-1.5 text-sm text-curator-text-muted outline-none transition-colors data-[pressed]:bg-curator-muted data-[pressed]:text-curator-text focus-visible:ring-2 focus-visible:ring-white/20 disabled:opacity-45',
+        'base-toggle-group-item rounded-ds-sm px-3 py-1.5 text-sm text-ds-text-secondary outline-none transition-colors data-[pressed]:bg-ds-hover data-[pressed]:text-ds-text-primary focus-visible:shadow-ds-focus disabled:opacity-45',
         itemClassName
       )}
       disabled={disabled}

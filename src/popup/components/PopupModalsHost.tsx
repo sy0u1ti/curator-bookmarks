@@ -1,9 +1,9 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui/base/Button'
-import { Input } from '../../ui/base/Input'
-import { cx } from '../../ui/base/utils'
+import { Button } from '../../ui'
+import { Input } from '../../ui'
+import { cx } from '../../ui'
 import {
   dispatchPopupModalAction,
   usePopupModalsView,
@@ -12,88 +12,86 @@ import {
 import { PopupFolderPickerHost } from './PopupFolderPickerHost'
 
 const folderSearchShellClass = [
-  'flex min-h-10 w-full items-center gap-1.5 rounded-[var(--ui-radius-pill)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] py-0 pl-3 pr-1.5 text-[var(--ui-text-primary)]',
-  'transition-[border-color,background,box-shadow] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)]',
-  'focus-within:border-[var(--ui-focus-ring)] focus-within:bg-[var(--ui-surface-hover)] focus-within:shadow-[0_0_0_3px_var(--ui-focus-ring-soft)]'
+  'flex min-h-10 w-full items-center gap-1.5 rounded-full border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
+  'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover',
+  'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
 ].join(' ')
 const folderSearchIconClass =
-  'pointer-events-none flex-none text-[var(--ui-text-tertiary)] transition-colors duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]'
+  'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard'
 const folderSearchInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-[var(--ui-text-primary)] outline-none placeholder:text-[var(--ui-text-tertiary)] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const modalButtonBaseClass = [
-  'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-[var(--ui-radius-control)] border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
+  'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-ds-sm border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.985]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
 const modalSecondaryButtonClass = [
   modalButtonBaseClass,
-  'border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-[var(--ui-text-primary)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
-  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)]'
+  'border-ds-border bg-ds-surface-2 text-ds-text-primary',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
 ].join(' ')
 const modalPrimaryButtonClass = [
   modalButtonBaseClass,
-  'border-[var(--ui-divider-strong)] bg-[var(--ui-text-primary)] text-[var(--ui-bg-main)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-white hover:text-[var(--ui-bg-main)]',
-  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-white focus-visible:text-[var(--ui-bg-main)]'
+  'border-ds-border-hover bg-[var(--ds-text-primary)] text-[var(--ds-bg-app)]',
+  'hover:border-ds-border-hover hover:bg-ds-text-primary hover:text-[var(--ds-bg-app)]',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary focus-visible:text-[var(--ds-bg-app)]'
 ].join(' ')
 const modalDangerButtonClass = [
   modalButtonBaseClass,
-  'border-[rgba(255,138,130,0.62)] bg-[#5a2624] text-[#ffe7e3]',
-  'hover:border-[rgba(255,183,176,0.86)] hover:bg-[#73302c] hover:text-[#fff2ef]',
-  'focus-visible:border-[rgba(255,183,176,0.86)] focus-visible:bg-[#73302c] focus-visible:text-[#fff2ef]'
+  'border-[rgba(255,138,130,0.62)] bg-ds-danger-soft text-ds-danger-text',
+  'hover:border-[rgba(255,183,176,0.86)] hover:bg-ds-danger-soft hover:text-ds-danger-text',
+  'focus-visible:border-[rgba(255,183,176,0.86)] focus-visible:bg-ds-danger-soft focus-visible:text-ds-danger-text'
 ].join(' ')
 const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
-  'inline-flex min-h-[30px] items-center justify-center rounded-[var(--ui-radius-icon)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-2.5 py-1.5 text-xs font-semibold leading-none text-[var(--ui-text-secondary)] shadow-none',
-  'transition-[border-color,background,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)]',
-  'focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
+  'inline-flex min-h-[30px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-1.5 text-xs font-semibold leading-none text-ds-text-secondary shadow-none',
+  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.96]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
 const modalFormClass = 'flex flex-col gap-[9px]'
 const modalFieldClass = 'flex flex-col gap-1.5'
-const modalLabelClass = 'text-xs font-medium leading-tight text-[var(--ui-text-secondary)]'
+const modalLabelClass = 'text-xs font-medium leading-tight text-ds-text-secondary'
 const modalInputClass = [
-  'min-h-[42px] w-full rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-[11px] text-[13px] leading-normal text-[var(--ui-text-primary)] outline-none',
-  'transition-[border-color,background,box-shadow] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)]',
-  'placeholder:text-[var(--ui-text-tertiary)]',
-  'focus:border-[var(--ui-focus-ring)] focus:bg-[var(--ui-surface-hover)] focus:shadow-none',
-  'focus-visible:border-[var(--ui-focus-ring)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
-  '[&&:focus]:!border-[var(--ui-focus-ring)] [&&:focus]:![background:var(--ui-surface-hover)] [&&:focus]:!shadow-none',
-  '[&&:focus-visible]:!border-[var(--ui-focus-ring)] [&&:focus-visible]:![background:var(--ui-surface-hover)] [&&:focus-visible]:!shadow-none [&&:focus-visible]:![outline:1px_solid_var(--ui-focus-ring)] [&&:focus-visible]:!outline-offset-2',
+  'min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-[11px] text-[13px] leading-normal text-ds-text-primary outline-none',
+  'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
+  'placeholder:text-ds-text-muted',
+  'focus:border-ds-focus focus:bg-ds-hover focus:shadow-none',
+  'focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus',
   'disabled:opacity-50 data-[disabled]:opacity-50'
 ].join(' ')
 const modalHeaderClass = 'flex items-center justify-between gap-2.5'
 const modalHeaderCompactClass = cx(modalHeaderClass, 'items-start')
 const modalHeaderCopyClass = 'min-w-0'
 const modalTitleClass =
-  'm-0 mt-0.5 min-w-0 text-base font-semibold leading-[1.1] text-[var(--ui-text-primary)]'
+  'm-0 mt-0.5 min-w-0 text-base font-semibold leading-[1.1] text-ds-text-primary'
 const modalEyebrowClass =
-  'm-0 text-[11px] font-semibold uppercase leading-[1.35] text-[var(--ui-text-tertiary)]'
-const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-[#ffb1aa]')
+  'm-0 text-[11px] font-semibold uppercase leading-[1.35] text-ds-text-muted'
+const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-ds-danger-text')
 const modalBookmarkCardClass =
-  'relative flex flex-col gap-[5px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-3 py-2.5 shadow-none'
+  'relative flex flex-col gap-[5px] rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 py-2.5 shadow-none'
 const modalCardLabelClass =
-  'm-0 text-[11px] leading-[1.35] tracking-[0.01em] text-[var(--ui-text-tertiary)]'
+  'm-0 text-[11px] leading-[1.35] tracking-[0.01em] text-ds-text-muted'
 const modalCardTitleClass =
-  'm-0 min-w-0 break-words text-xs font-semibold leading-[1.35] text-[var(--ui-text-primary)]'
+  'm-0 min-w-0 break-words text-xs font-semibold leading-[1.35] text-ds-text-primary'
 const modalCardPathClass =
-  'm-0 min-w-0 [overflow-wrap:anywhere] text-[11px] leading-[1.35] tracking-[0.01em] text-[var(--ui-text-tertiary)]'
-const modalCardPathChangedClass = 'text-[var(--ui-text-secondary)]'
+  'm-0 min-w-0 [overflow-wrap:anywhere] text-[11px] leading-[1.35] tracking-[0.01em] text-ds-text-muted'
+const modalCardPathChangedClass = 'text-ds-text-secondary'
 const modalPathRowClass = 'flex items-center gap-2'
 const modalAiSetupPromptClass = [
   'grid grid-cols-[auto_minmax(0,1fr)] items-start gap-[9px]',
   '[&_.ai-setup-prompt-copy]:grid [&_.ai-setup-prompt-copy]:gap-1',
   '[&_.ai-setup-prompt-icon]:inline-flex [&_.ai-setup-prompt-icon]:h-[26px] [&_.ai-setup-prompt-icon]:w-[26px] [&_.ai-setup-prompt-icon]:items-center [&_.ai-setup-prompt-icon]:justify-center',
-  '[&_.ai-setup-prompt-icon]:rounded-lg [&_.ai-setup-prompt-icon]:border [&_.ai-setup-prompt-icon]:border-white/10 [&_.ai-setup-prompt-icon]:bg-white/[0.04] [&_.ai-setup-prompt-icon]:text-[var(--ui-text-secondary)]'
+  '[&_.ai-setup-prompt-icon]:rounded-lg [&_.ai-setup-prompt-icon]:border [&_.ai-setup-prompt-icon]:border-white/10 [&_.ai-setup-prompt-icon]:bg-ds-text-primary/[0.04] [&_.ai-setup-prompt-icon]:text-ds-text-secondary'
 ].join(' ')
-const modalNoteClass = 'm-0 text-[13px] leading-[1.55] text-[var(--ui-text-secondary)]'
+const modalNoteClass = 'm-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const modalActionsClass = 'flex items-center justify-between gap-2.5'
 const modalStackClass =
   'relative grid h-full max-h-full min-h-0 w-full min-w-0 place-items-center overflow-hidden p-[18px] outline-none'
@@ -105,7 +103,7 @@ const modalSurfaceMotionClass = [
 ].join(' ')
 const modalCardShellClass = [
   modalSurfaceMotionClass,
-  'relative z-[1] flex min-h-0 flex-col gap-[11px] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] p-[13px] text-[var(--ui-text-primary)] shadow-none outline-none',
+  'relative z-[1] flex min-h-0 flex-col gap-[11px] overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-1 p-[13px] text-ds-text-primary shadow-none outline-none',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.86)] focus-visible:outline-offset-2'
 ].join(' ')
 const modalStandardCardClass = cx(
@@ -121,9 +119,9 @@ const modalWideCardClass = cx(
   'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
 )
 const modalListClass = [
-  'min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] p-1 pr-1.5',
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1 pr-1.5',
   '[scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]',
-  '[&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-white/20 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:bg-transparent'
+  '[&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-ds-text-primary/20 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:bg-transparent'
 ].join(' ')
 const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
 const editFolderPickerClass = 'flex min-h-0 flex-col gap-2'

@@ -1,4 +1,4 @@
-import { Button } from '../../ui/base/Button.js'
+import { Button } from '../../ui'
 import { handleAiResultsPagination } from '../options-controller'
 import { useAiAnalysisResultsPagination } from './ai-analysis-status-store.js'
 import {

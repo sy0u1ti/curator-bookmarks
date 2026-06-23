@@ -27,14 +27,12 @@ import {
 import {
   buildBookmarkTagExport,
   clearBookmarkTagIndex,
-  getEffectiveBookmarkTags,
   loadBookmarkTagIndex,
   mergeBookmarkTagImport,
   normalizeBookmarkTags,
   normalizeBookmarkTagIndex,
   saveBookmarkTagIndex,
-  upsertBookmarkTagFromAnalysis,
-  type BookmarkTagIndex
+  upsertBookmarkTagFromAnalysis
 } from '../shared/bookmark-tags.js'
 import {
   normalizeInboxSettings,
@@ -256,11 +254,6 @@ import {
   removeDashboardSelectionIds,
   renderDashboardSection
 } from './sections/dashboard-lazy.js'
-import {
-  deleteTagFromIndex,
-  renderTagManagementSection,
-  renameTagInIndex
-} from './sections/tag-management.js'
 import { publishResultsPagination } from './components/results-pagination-store.js'
 import type { ResultsPaginationActionDetail } from './components/results-pagination-types.js'
 import { publishBackupControls } from './components/backup-controls-store.js'
@@ -273,8 +266,6 @@ import type { FolderPickerActionDetail } from './components/folder-picker-result
 import type { DashboardViewActionDetail } from './components/dashboard-view-types.js'
 import { publishAvailabilityResults } from './components/availability-results-store.js'
 import type { AvailabilityResultActionDetail } from './components/availability-results-types.js'
-import { patchTagManagementControlsForm } from './components/tag-management-controls-store.js'
-import type { TagManagementActionDetail } from './components/tag-management-controls-types.js'
 import type {
   RecycleAction,
   RecycleActionDetail
@@ -332,7 +323,6 @@ import {
 } from './components/availability-overview-store.js'
 import { publishScopePickerTrigger } from './components/scope-picker-store.js'
 import type { ScopePickerSource } from './components/scope-picker-types.js'
-import { publishOptionsOverview } from './components/options-overview-store.js'
 import { publishOptionsModals } from './components/options-modals-store.js'
 import type { OptionsModalActionDetail } from './components/options-modals-types.js'
 
@@ -580,7 +570,7 @@ function scheduleLargeRepositoryHydration(): void {
   window.setTimeout(hydrate, 0)
 }
 
-const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['dashboard', 'ai', 'tags'])
+const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['dashboard', 'ai'])
 
 function maybeHydrateLargeRepositoryForSection(key: string): void {
   if (SECTIONS_NEEDING_LARGE_REPOSITORY.has(key)) {
@@ -724,10 +714,6 @@ function syncPageSection() {
   if (key === 'general') {
     renderAiNamingSection()
   }
-
-  if (key === 'tags') {
-    renderTagManagementSectionFromState()
-  }
 }
 
 function exitDashboard(): void {
@@ -845,7 +831,7 @@ function getCurrentSectionKey() {
     return 'dashboard'
   }
 
-  return window.location.hash.replace(/^#/, '').split(':')[0] || 'overview'
+  return window.location.hash.replace(/^#/, '').split(':')[0] || 'general'
 }
 
 function normalizeSectionKey(key: string): OptionsSectionKey {
@@ -2254,11 +2240,6 @@ function renderActiveOptionsSection() {
     return
   }
 
-  if (activeSection === 'overview') {
-    renderOptionsOverviewSection()
-    return
-  }
-
   if (activeSection === 'dashboard') {
     renderDashboardSection()
     handleOptionsDashboardViewReady()
@@ -2292,11 +2273,6 @@ function renderActiveOptionsSection() {
     return
   }
 
-  if (activeSection === 'tags') {
-    renderTagManagementSectionFromState()
-    return
-  }
-
   if (activeSection === 'redirects') {
     renderRedirectSection(redirectsCallbacks)
     return
@@ -2320,58 +2296,6 @@ function renderActiveOptionsSection() {
   if (activeSection === 'recycle') {
     renderRecycleSection(recycleCallbacks)
   }
-}
-
-function renderOptionsOverviewSection(): void {
-  const totalBookmarks = availabilityState.allBookmarks.length || availabilityState.bookmarks.length
-  const checkableBookmarks = availabilityState.eligibleBookmarks || availabilityState.bookmarks.length
-  publishOptionsOverview({
-    metrics: {
-      checkableBookmarks: checkableBookmarks ? String(checkableBookmarks) : '读取中',
-      issueCount: String(
-        availabilityState.failedResults.length +
-        availabilityState.reviewResults.length +
-        getRedirectSectionState(redirectsCallbacks).results.length +
-        managerState.recycleBin.length
-      ),
-      recycleCount: String(managerState.recycleBin.length),
-      totalBookmarks: totalBookmarks ? String(totalBookmarks) : '读取中'
-    },
-    nextStepCopy: getOverviewNextStepCopy(),
-    nextStepTitle: getOverviewNextStepTitle()
-  })
-}
-
-function getOverviewNextStepTitle(): string {
-  if (availabilityState.catalogLoading || availabilityState.storageLoading) {
-    return '正在读取书签目录'
-  }
-  if (!availabilityState.lastCompletedAt) {
-    return '建议先运行一次可用性检测'
-  }
-  if (availabilityState.failedResults.length || availabilityState.reviewResults.length) {
-    return '先复核异常书签，再决定移动或删除'
-  }
-  if (!aiNamingManagerState.settings.apiKey) {
-    return 'AI 可稍后配置，普通整理功能可直接使用'
-  }
-  return '可以继续做重复检测或文件夹清理'
-}
-
-function getOverviewNextStepCopy(): string {
-  if (availabilityState.catalogLoading || availabilityState.storageLoading) {
-    return '读取完成后这里会显示建议下一步和当前影响范围。'
-  }
-  if (!availabilityState.lastCompletedAt) {
-    return '检测会先申请当前范围的站点权限；不会自动删除或修改书签。'
-  }
-  if (availabilityState.failedResults.length || availabilityState.reviewResults.length) {
-    return '删除类操作都会先确认、自动备份，并进入回收站；建议先重测或抽样打开。'
-  }
-  if (!aiNamingManagerState.settings.apiKey) {
-    return '配置 API Key 后才会启用 AI 分析主按钮；未配置时不会出现必然失败的执行路径。'
-  }
-  return '重复、文件夹清理和重定向更新均使用预览优先、确认执行、可恢复路径。'
 }
 
 function recordPrivacyAudit(input: PrivacyAuditInput): void {
@@ -3951,46 +3875,6 @@ async function handleBookmarkTagClear() {
   }
 }
 
-function renderTagManagementSectionFromState(status = aiNamingState.tagDataStatus || '') {
-  renderTagManagementSection({
-    index: normalizeBookmarkTagIndex(aiNamingState.tagIndex),
-    bookmarks: availabilityState.allBookmarks,
-    status,
-    loading: availabilityState.catalogLoading
-  })
-}
-
-async function refreshTagManagementData() {
-  aiNamingState.tagDataStatus = '正在刷新标签统计...'
-  renderTagManagementSectionFromState()
-
-  try {
-    aiNamingState.tagIndex = await loadBookmarkTagIndex()
-    if (!availabilityState.allBookmarks.length) {
-      await hydrateAvailabilityCatalog({ preserveResults: true, analyzeFolderCleanup: false })
-    }
-    aiNamingState.tagDataStatus = '标签统计已刷新。'
-  } catch (error) {
-    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签统计刷新失败。'
-  } finally {
-    renderTagManagementSectionFromState()
-  }
-}
-
-export function handleTagManagementAction(detail: TagManagementActionDetail): void {
-  if (detail?.action === 'refresh') {
-    void refreshTagManagementData()
-    return
-  }
-  if (detail?.action === 'rename') {
-    void handleTagManagementRename(detail.sourceTag, detail.targetTag)
-    return
-  }
-  if (detail?.action === 'delete') {
-    void handleTagManagementDelete(detail.sourceTag)
-  }
-}
-
 export function handleBackupAction(detail: BackupActionDetail): void {
   if (detail?.action === 'export-tags') {
     void handleBookmarkTagExport()
@@ -4162,101 +4046,6 @@ export function handleFolderCleanupAction(action: FolderCleanupAction | FolderCl
   if (detail?.action === 'undo-split') {
     void undoFolderCleanupSplitAction(folderCleanupCallbacks)
   }
-}
-
-async function handleTagManagementRename(sourceTagInput = '', targetTagInput = '') {
-  const sourceTag = String(sourceTagInput || '').trim()
-  const targetTag = String(targetTagInput || '').trim()
-  if (!sourceTag || !targetTag) {
-    aiNamingState.tagDataStatus = '请输入要重命名的标签和新标签名。'
-    renderTagManagementSectionFromState()
-    return
-  }
-  if (sourceTag.toLowerCase() === targetTag.toLowerCase()) {
-    aiNamingState.tagDataStatus = '新标签名与原标签相同。'
-    renderTagManagementSectionFromState()
-    return
-  }
-
-  const currentIndex = normalizeBookmarkTagIndex(aiNamingState.tagIndex)
-  const affectedCount = countRecordsWithEffectiveTag(currentIndex, sourceTag)
-  if (!affectedCount) {
-    aiNamingState.tagDataStatus = `没有找到标签「${sourceTag}」。`
-    renderTagManagementSectionFromState()
-    return
-  }
-
-  const confirmed = await requestConfirmation({
-    title: `重命名标签「${sourceTag}」？`,
-    copy: `将把 ${affectedCount} 条书签本地标签数据中的「${sourceTag}」改为「${targetTag}」。不会删除、移动或重命名 Chrome 书签；建议先导出标签数据或完整备份。`,
-    confirmLabel: '重命名标签',
-    cancelLabel: '取消',
-    tone: 'warning',
-    label: '重命名标签'
-  })
-  if (!confirmed) {
-    aiNamingState.tagDataStatus = '已取消标签重命名。'
-    renderTagManagementSectionFromState()
-    return
-  }
-
-  try {
-    const nextIndex = renameTagInIndex(currentIndex, sourceTag, targetTag)
-    const savedIndex = await saveBookmarkTagIndex(nextIndex)
-    aiNamingState.tagIndex = savedIndex
-    aiNamingState.tagDataStatus = `已将 ${affectedCount} 条书签中的「${sourceTag}」重命名为「${targetTag}」。`
-    patchTagManagementControlsForm({ sourceTag: targetTag, targetTag: '' })
-  } catch (error) {
-    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签重命名失败。'
-  } finally {
-    renderTagManagementSectionFromState()
-  }
-}
-
-async function handleTagManagementDelete(sourceTagInput = '') {
-  const sourceTag = String(sourceTagInput || '').trim()
-  const currentIndex = normalizeBookmarkTagIndex(aiNamingState.tagIndex)
-  const affectedCount = countRecordsWithEffectiveTag(currentIndex, sourceTag)
-  if (!affectedCount) {
-    aiNamingState.tagDataStatus = sourceTag ? `没有找到标签「${sourceTag}」。` : '请输入要删除的标签。'
-    renderTagManagementSectionFromState()
-    return
-  }
-
-  const confirmed = await requestConfirmation({
-    title: `删除标签「${sourceTag}」？`,
-    copy: `将从 ${affectedCount} 条书签的本地标签数据中移除此标签，不会删除 Chrome 书签。建议先导出标签数据或完整备份。`,
-    confirmLabel: '删除标签',
-    cancelLabel: '取消',
-    tone: 'danger',
-    label: 'Delete tag'
-  })
-  if (!confirmed) {
-    return
-  }
-
-  try {
-    const nextIndex = deleteTagFromIndex(currentIndex, sourceTag)
-    const savedIndex = await saveBookmarkTagIndex(nextIndex)
-    aiNamingState.tagIndex = savedIndex
-    aiNamingState.tagDataStatus = `已从 ${affectedCount} 条书签中删除标签「${sourceTag}」。`
-    patchTagManagementControlsForm({ sourceTag: '' })
-  } catch (error) {
-    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签删除失败。'
-  } finally {
-    renderTagManagementSectionFromState()
-  }
-}
-
-function countRecordsWithEffectiveTag(index: BookmarkTagIndex, sourceTag: string): number {
-  const source = normalizeBookmarkTags([sourceTag], 1)[0] || ''
-  if (!source) {
-    return 0
-  }
-  const sourceKey = source.toLowerCase()
-  return Object.values(normalizeBookmarkTagIndex(index).records).filter((record) => {
-    return getEffectiveBookmarkTags(record).some((tag) => tag.toLowerCase() === sourceKey)
-  }).length
 }
 
 function renderBackupRestoreSection() {
