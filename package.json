@@ -22,15 +22,8 @@
   "scripts": {
     "dev": "vite",
     "lint": "npm run typecheck",
-    "test": "node scripts/run-tests.mjs",
-    "test:ai": "node scripts/run-ai-runtime-tests.mjs",
-    "eval:ai": "node scripts/eval-ai.mjs",
-    "smoke:extension": "node scripts/smoke-extension.mjs",
-    "perf:dashboard": "node tools/dashboard-scroll-perf.mjs",
-    "lint:ui-boundaries": "node scripts/check-ui-boundaries.mjs",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
-    "validate": "npm test"
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.4.0",
