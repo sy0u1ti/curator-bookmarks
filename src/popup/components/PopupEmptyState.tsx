@@ -1,8 +1,9 @@
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
-import { Button } from '../../ui'
+import { Button, useMotionEntrance } from '../../ui'
 import type { PopupEmptyStateViewModel } from './PopupViewModels'
 
 const EMPTY_STATE_CLASS = [
+  't-stagger',
   'grid max-w-[320px] justify-items-center gap-[9px]',
   '[&_.ai-setup-prompt-copy]:grid',
   '[&_.ai-setup-prompt-copy]:justify-items-center',
@@ -38,6 +39,9 @@ export function PopupEmptyState({
   onAction?: (action: string) => void
   state: PopupEmptyStateViewModel
 }) {
+  const entered = useMotionEntrance(state.kind !== 'none')
+  const emptyStateClassName = [EMPTY_STATE_CLASS, entered ? 'is-shown' : ''].filter(Boolean).join(' ')
+
   if (state.kind === 'none') {
     return null
   }
@@ -49,10 +53,10 @@ export function PopupEmptyState({
   if (state.kind === 'natural-setup') {
     return (
       <AiSetupPrompt
-        className={EMPTY_STATE_CLASS}
+        className={emptyStateClassName}
         iconHidden
-        title={<p className={EMPTY_TITLE_CLASS}>请配置 AI 渠道</p>}
-        description={<p className={EMPTY_HINT_CLASS}>普通搜索已包含本地规则。语义搜索需要配置 AI 渠道后使用。</p>}
+        title={<p className={`t-stagger-line t-stagger-line--1 ${EMPTY_TITLE_CLASS}`}>请配置 AI 渠道</p>}
+        description={<p className={`t-stagger-line t-stagger-line--2 ${EMPTY_HINT_CLASS}`}>普通搜索已包含本地规则。语义搜索需要配置 AI 渠道后使用。</p>}
         actions={
           <>
             <Button
@@ -78,9 +82,9 @@ export function PopupEmptyState({
   }
 
   return (
-    <div className={EMPTY_STATE_CLASS}>
-      <p className={EMPTY_TITLE_CLASS}>{state.title}</p>
-      <p className={EMPTY_HINT_CLASS}>{state.hint}</p>
+    <div className={emptyStateClassName}>
+      <p className={`t-stagger-line t-stagger-line--1 ${EMPTY_TITLE_CLASS}`}>{state.title}</p>
+      <p className={`t-stagger-line t-stagger-line--2 ${EMPTY_HINT_CLASS}`}>{state.hint}</p>
       <div className={EMPTY_ACTIONS_CLASS}>
         {state.actions.map((action) => (
           <Button

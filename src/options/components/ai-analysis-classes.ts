@@ -2,7 +2,7 @@ export const AI_ANALYSIS_RESULTS_GROUP_CLASS =
   'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] max-[760px]:p-4'
 
 export const AI_ANALYSIS_SELECTION_GROUP_CLASS =
-  'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] max-[760px]:mt-5 max-[760px]:p-4'
+  't-panel-slide mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] [--panel-translate-y:12px] max-[760px]:mt-5 max-[760px]:p-4'
 
 export const AI_ANALYSIS_PRIMARY_BUTTON_CLASS =
   'font-bold active:scale-[0.985]'

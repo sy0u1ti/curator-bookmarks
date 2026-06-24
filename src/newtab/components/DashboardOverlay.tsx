@@ -45,6 +45,7 @@ export function DashboardOverlay({
   onOpenChange
 }: DashboardOverlayProps) {
   const hasError = Boolean(errorMessage)
+  const frameVisible = Boolean(frameSrc) && !hasError
   const frameRef = useRef<HTMLIFrameElement | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
 
@@ -121,7 +122,7 @@ export function DashboardOverlay({
         </div>
         <iframe
           id="newtab-dashboard-frame"
-          className={`${DASHBOARD_FRAME_CLASS} ${ready && !hasError ? DASHBOARD_FRAME_VISIBLE_CLASS : DASHBOARD_FRAME_LOADING_CLASS}`}
+          className={`${DASHBOARD_FRAME_CLASS} ${frameVisible ? DASHBOARD_FRAME_VISIBLE_CLASS : DASHBOARD_FRAME_LOADING_CLASS}`}
           ref={setFrameRef}
           title="书签仪表盘"
           loading="lazy"

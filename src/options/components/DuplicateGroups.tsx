@@ -1,5 +1,5 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button, Checkbox } from '../../ui'
+import { Button, Checkbox, TextSwap, useMotionEntrance } from '../../ui'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateGroupsState } from './duplicate-groups-store.js'
 import type {
@@ -15,7 +15,7 @@ const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const DOCKED_SELECTION_CLASS =
-  'sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] shadow-ds-card max-[760px]:static max-[760px]:grid-cols-1'
+  't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] shadow-ds-card [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
 const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
 const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'
@@ -112,6 +112,8 @@ function DuplicateDockedSelection({
   locked: boolean
   selectionStats: DuplicateSelectionStatsViewModel
 }) {
+  const entered = useMotionEntrance(Boolean(selectionStats.deleteCount))
+
   if (!selectionStats.deleteCount) {
     return null
   }
@@ -119,9 +121,11 @@ function DuplicateDockedSelection({
   const unsafe = selectionStats.unsafeGroupCount > 0
 
   return (
-    <div className={DOCKED_SELECTION_CLASS} role="region" aria-label="已选重复书签操作">
+    <div className={DOCKED_SELECTION_CLASS} data-open={entered ? 'true' : 'false'} role="region" aria-label="已选重复书签操作">
       <div className={DOCKED_COPY_CLASS}>
-        <strong className={DOCKED_TITLE_CLASS}>已选 {selectionStats.deleteCount} 条待移入回收站</strong>
+        <strong className={DOCKED_TITLE_CLASS}>
+          <TextSwap text={`已选 ${selectionStats.deleteCount} 条待移入回收站`} />
+        </strong>
         <p className={DOCKED_TEXT_CLASS}>
           将保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组；确认前不会处理。
         </p>

@@ -1,9 +1,9 @@
-import { Button } from '../../ui'
+import { Button, TextSwap, useMotionEntrance } from '../../ui'
 import { handleAvailabilityPanelAction } from '../options-controller'
 import { useAvailabilitySelectionActions } from './availability-overview-store.js'
 import { useOptionsFocusTargetRef } from './options-focus-target-store.js'
 
-const AVAILABILITY_SELECTION_GROUP_CLASS = 'mt-7 p-[18px_20px_20px] max-[760px]:p-4'
+const AVAILABILITY_SELECTION_GROUP_CLASS = 't-panel-slide mt-7 p-[18px_20px_20px] [--panel-translate-y:12px] max-[760px]:p-4'
 const AVAILABILITY_SELECTION_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const AVAILABILITY_SELECTION_HEADER_COPY_CLASS = 'min-w-0'
@@ -18,17 +18,18 @@ const AVAILABILITY_SELECTION_BUTTON_CLASS = 'max-[760px]:w-full'
 export function AvailabilitySelectionActions() {
   const state = useAvailabilitySelectionActions()
   const moveSelectionRef = useOptionsFocusTargetRef<HTMLButtonElement>('availability-selection-move')
+  const entered = useMotionEntrance(!state.hidden)
 
   if (state.hidden) {
     return null
   }
 
   return (
-    <div className={AVAILABILITY_SELECTION_GROUP_CLASS}>
+    <div className={AVAILABILITY_SELECTION_GROUP_CLASS} data-open={entered ? 'true' : 'false'}>
       <div className={AVAILABILITY_SELECTION_HEADER_CLASS}>
         <div className={AVAILABILITY_SELECTION_HEADER_COPY_CLASS}>
           <strong className={AVAILABILITY_SELECTION_HEADER_TITLE_CLASS}>
-            {state.countLabel}
+            <TextSwap text={state.countLabel} />
           </strong>
           <p className={AVAILABILITY_SELECTION_SUBTITLE_CLASS}>可对当前低/高置信异常执行批量移动、忽略或删除。</p>
         </div>

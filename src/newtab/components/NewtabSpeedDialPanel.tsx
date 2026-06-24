@@ -5,6 +5,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import {
   setNewtabSpeedDialCardIconNode,
   setNewtabSpeedDialCardNode,
@@ -85,6 +86,8 @@ function SpeedDialPanel({ dragUi, state }: { dragUi: NewtabDragUiView; state: Sp
 }
 
 function SpeedDialContent({ dragUi, state }: { dragUi: NewtabDragUiView; state: SpeedDialContentState }) {
+  const emptyEntered = useMotionEntrance(state.type === 'empty')
+
   if (state.type === 'loading') {
     return (
       <output className={SPEED_DIAL_EMPTY_CLASS} aria-live="polite">
@@ -95,10 +98,10 @@ function SpeedDialContent({ dragUi, state }: { dragUi: NewtabDragUiView; state: 
 
   if (state.type === 'empty') {
     return (
-      <div className={SPEED_DIAL_EMPTY_CLASS}>
+      <div className={['t-stagger', SPEED_DIAL_EMPTY_CLASS, emptyEntered ? 'is-shown' : ''].filter(Boolean).join(' ')}>
         <div className={SPEED_DIAL_EMPTY_COPY_CLASS}>
-          <strong className={SPEED_DIAL_EMPTY_TITLE_CLASS}>{state.state.title}</strong>
-          <span className={SPEED_DIAL_EMPTY_DETAIL_CLASS}>{state.state.detail}</span>
+          <strong className={['t-stagger-line t-stagger-line--1', SPEED_DIAL_EMPTY_TITLE_CLASS].join(' ')}>{state.state.title}</strong>
+          <span className={['t-stagger-line t-stagger-line--2', SPEED_DIAL_EMPTY_DETAIL_CLASS].join(' ')}>{state.state.detail}</span>
         </div>
       </div>
     )

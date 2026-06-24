@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, TextSwap, useMotionEntrance } from '../../ui'
 import { Icon } from '../../ui/icons/Icon'
 import {
   dispatchPopupSavedSearchAction,
@@ -6,7 +6,7 @@ import {
 } from '../popup-controller-store'
 
 const ROOT_CLASS = [
-  'grid gap-[5px] rounded-lg border border-[rgba(245,245,247,0.12)] bg-[rgba(255,255,255,0.035)] px-[7px] py-1.5'
+  't-panel-slide grid gap-[5px] rounded-lg border border-[rgba(245,245,247,0.12)] bg-[rgba(255,255,255,0.035)] px-[7px] py-1.5 [--panel-translate-y:8px]'
 ].join(' ')
 const ROOT_COLLAPSED_CLASS = 'max-h-14 gap-0 py-1'
 const HEAD_CLASS = [
@@ -42,6 +42,7 @@ const DELETE_CLASS = [
 
 export function PopupSavedSearches() {
   const state = usePopupSavedSearchesView()
+  const entered = useMotionEntrance(state.show)
 
   const className = [
     ROOT_CLASS,
@@ -50,7 +51,7 @@ export function PopupSavedSearches() {
   const visibleItems = state.items.slice(0, 6)
 
   return (
-    <div id="saved-searches" className={className} aria-label="已保存搜索" hidden={!state.show}>
+    <div id="saved-searches" className={className} data-open={entered ? 'true' : 'false'} aria-label="已保存搜索" hidden={!state.show}>
       {state.show ? (
         <>
           <div className={HEAD_CLASS}>
@@ -69,7 +70,7 @@ export function PopupSavedSearches() {
                   className={['opacity-70 transition-transform duration-150', state.expanded ? '' : '-rotate-90'].filter(Boolean).join(' ')}
                   aria-hidden="true"
                 />
-                <span>已保存 {state.items.length}</span>
+                <TextSwap text={`已保存 ${state.items.length}`} />
               </Button>
             ) : (
               <span className={STATUS_CLASS} hidden={!state.expanded}>暂无保存项</span>

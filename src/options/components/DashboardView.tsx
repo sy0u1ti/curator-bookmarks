@@ -11,6 +11,7 @@ import {
 } from '../../ui/Popover'
 import { Textarea } from '../../ui/Textarea'
 import { Tooltip, TooltipTriggerShell } from '../../ui/Tooltip'
+import { TextSwap } from '../../ui/motion/TextSwap'
 import { handleDashboardViewAction } from '../options-controller'
 import { useDashboardViewState } from './dashboard-view-store.js'
 import { BusyLoadingLabel } from './LoadingLabel.js'
@@ -585,7 +586,9 @@ function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState })
 
   return (
     <div className={DASHBOARD_SELECTION_BAR_CLASS}>
-      <strong className={DASHBOARD_SELECTION_COUNT_CLASS}>{state.selectedCount} 条已选择</strong>
+      <strong className={DASHBOARD_SELECTION_COUNT_CLASS}>
+        <TextSwap text={`${state.selectedCount} 条已选择`} />
+      </strong>
       <div className={DASHBOARD_SELECTION_ACTIONS_CLASS}>
         <Button
           className={DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS}

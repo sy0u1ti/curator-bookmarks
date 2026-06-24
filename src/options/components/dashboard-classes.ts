@@ -199,6 +199,17 @@ export const DASHBOARD_RESULTS_GROUP_CLASS = [
 
 export const DASHBOARD_RESULTS_TITLE_CLASS = 'sr-only'
 
+export const DASHBOARD_RESULTS_SKELETON_ROOT_CLASS = [
+  't-skel min-h-0 flex-[1_1_auto] overflow-hidden',
+  '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.58] [--reveal-dur:360ms]'
+].join(' ')
+
+export const DASHBOARD_RESULTS_SKELETON_LAYER_CLASS =
+  't-skel-skeleton is-pulsing h-full min-h-0 overflow-hidden pointer-events-none'
+
+export const DASHBOARD_RESULTS_CONTENT_LAYER_CLASS =
+  't-skel-content h-full min-h-0'
+
 export const DASHBOARD_CONTENT_LAYOUT_CLASS =
   'grid min-h-0 flex-[1_1_auto] grid-cols-[minmax(190px,204px)_minmax(0,1fr)] items-stretch gap-3.5 bg-transparent p-0 max-[900px]:grid-cols-[minmax(170px,190px)_minmax(0,1fr)] max-[760px]:grid-cols-[minmax(0,1fr)]'
 
@@ -257,6 +268,33 @@ export const DASHBOARD_CARD_GRID_CLASS = [
   'm-0 [padding:0_2px_0_0] [contain:layout_paint] [scrollbar-gutter:stable]',
   'select-none [-webkit-user-select:none]'
 ].join(' ')
+
+export const DASHBOARD_SKELETON_BAR_CLASS =
+  'block h-2.5 rounded-full bg-white/[0.055] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)]'
+
+export const DASHBOARD_SKELETON_DOT_CLASS =
+  'block size-2.5 rounded-full border border-white/[0.14] bg-white/[0.035]'
+
+export const DASHBOARD_SKELETON_FOLDER_ITEM_CLASS =
+  'grid min-h-[30px] grid-cols-[12px_minmax(0,1fr)_38px] items-center gap-[7px] rounded-ds-sm py-0 pr-2 pl-[calc(8px+var(--folder-depth-offset))] [--folder-depth-offset:0px]'
+
+export const DASHBOARD_SKELETON_CARD_GRID_CLASS =
+  'pointer-events-none overflow-hidden'
+
+export const DASHBOARD_SKELETON_CARD_CLASS =
+  'flex h-full min-h-0 flex-col gap-3 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3'
+
+export const DASHBOARD_SKELETON_CARD_HEADER_CLASS =
+  'flex min-w-0 items-start justify-between gap-3'
+
+export const DASHBOARD_SKELETON_CARD_ICON_CLASS =
+  'block size-9 flex-none rounded-ds-sm border border-ds-border-subtle bg-white/[0.045]'
+
+export const DASHBOARD_SKELETON_CARD_COPY_CLASS =
+  'grid min-w-0 flex-1 gap-2 pt-0.5'
+
+export const DASHBOARD_SKELETON_CARD_META_CLASS =
+  'mt-auto flex flex-wrap items-center gap-1.5'
 
 export const DASHBOARD_RESULTS_GRID_STATE_CLASS =
   'grid [grid-template-columns:repeat(auto-fill,minmax(min(var(--dashboard-card-min-width),100%),1fr))] [grid-auto-rows:var(--dashboard-card-height)]'

@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, TextSwap, useMotionEntrance } from '../../ui'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
 
@@ -21,7 +21,7 @@ const duplicateStrategies = [
 ] as const
 
 const SELECTION_GROUP_CLASS =
-  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none max-[760px]:p-4'
+  't-panel-slide mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none [--panel-translate-y:12px] max-[760px]:p-4'
 const RESULTS_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const RESULTS_HEADER_COPY_CLASS = 'min-w-0'
@@ -58,15 +58,16 @@ export function DuplicateControls() {
   const state = useDuplicateControlsState()
   const hasSelection = state.selectionStats.deleteCount > 0
   const unsafe = state.selectionStats.unsafeGroupCount > 0
+  const selectionEntered = useMotionEntrance(hasSelection)
 
   return (
     <>
       {hasSelection ? (
-        <div className={SELECTION_GROUP_CLASS}>
+        <div className={SELECTION_GROUP_CLASS} data-open={selectionEntered ? 'true' : 'false'}>
           <div className={RESULTS_HEADER_CLASS}>
             <div className={RESULTS_HEADER_COPY_CLASS}>
               <strong className={RESULTS_TITLE_CLASS}>
-                {state.selectionStats.deleteCount} 条待移入回收站
+                <TextSwap text={`${state.selectionStats.deleteCount} 条待移入回收站`} />
               </strong>
               <p className={RESULTS_SUBTITLE_CLASS}>
                 将移入回收站 {state.selectionStats.deleteCount} 条，保留 {state.selectionStats.keepCount}

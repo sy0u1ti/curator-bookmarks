@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, TextSwap, useMotionEntrance } from '../../ui'
 import { handleRecycleAction } from '../options-controller'
 import { useRecycleControlsState } from './recycle-controls-store.js'
 
@@ -11,21 +11,22 @@ const RECYCLE_HEADER_SUBTITLE_CLASS =
 const RECYCLE_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const RECYCLE_SELECTION_GROUP_CLASS =
-  'mb-[18px] rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px]'
+  't-panel-slide mb-[18px] rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px] [--panel-translate-y:12px]'
 
 export function RecycleControls() {
   const state = useRecycleControlsState()
   const hasEntries = state.entryCount > 0
   const hasSelection = state.selectedCount > 0
+  const selectionEntered = useMotionEntrance(hasSelection)
 
   return (
     <>
       {hasSelection ? (
-        <div className={RECYCLE_SELECTION_GROUP_CLASS}>
+        <div className={RECYCLE_SELECTION_GROUP_CLASS} data-open={selectionEntered ? 'true' : 'false'}>
           <div className={RECYCLE_HEADER_CLASS}>
             <div className={RECYCLE_HEADER_COPY_CLASS}>
               <strong className={RECYCLE_HEADER_TITLE_CLASS}>
-                {state.selectedCount} 条已选择
+                <TextSwap text={`${state.selectedCount} 条已选择`} />
               </strong>
               <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复选中的回收站书签，也可只清除回收站记录。</p>
             </div>

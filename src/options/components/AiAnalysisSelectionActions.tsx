@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, TextSwap, useMotionEntrance } from '../../ui'
 import {
   AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS,
   AI_ANALYSIS_CONFIRM_ICON_CLASS,
@@ -21,16 +21,19 @@ const AI_SELECTION_ACTIONS_CLASS =
 
 export function AiAnalysisSelectionActions() {
   const state = useAiAnalysisSelectionActions()
+  const entered = useMotionEntrance(!state.hidden)
 
   if (state.hidden) {
     return null
   }
 
   return (
-    <div className={AI_ANALYSIS_SELECTION_GROUP_CLASS}>
+    <div className={AI_ANALYSIS_SELECTION_GROUP_CLASS} data-open={entered ? 'true' : 'false'}>
       <div className={AI_SELECTION_HEADER_CLASS}>
         <div className={AI_SELECTION_HEADER_COPY_CLASS}>
-          <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>{state.countLabel}</strong>
+          <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>
+            <TextSwap text={state.countLabel} />
+          </strong>
           <p className={AI_SELECTION_SUBTITLE_CLASS}>只会应用状态为“建议改名”的条目；“待确认”与“失败”结果需要先人工判断。</p>
         </div>
         <div className={AI_SELECTION_ACTIONS_CLASS}>

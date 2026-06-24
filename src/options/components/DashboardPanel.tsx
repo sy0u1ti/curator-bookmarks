@@ -58,9 +58,13 @@ import {
   patchDashboardSearchControlsState,
   useDashboardViewState
 } from './dashboard-view-store'
+import { prefersReducedMotion } from '../../shared/motion'
 import {
   DASHBOARD_RESULTS_GROUP_CLASS,
   DASHBOARD_RESULTS_GRID_STATE_CLASS,
+  DASHBOARD_RESULTS_CONTENT_LAYER_CLASS,
+  DASHBOARD_RESULTS_SKELETON_LAYER_CLASS,
+  DASHBOARD_RESULTS_SKELETON_ROOT_CLASS,
   DASHBOARD_RESULTS_TITLE_CLASS,
   DASHBOARD_RESULTS_TRANSITION_STATE_CLASS,
   DASHBOARD_RESULTS_WINDOWED_STATE_CLASS,
@@ -77,6 +81,15 @@ import {
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PERFORMANCE_CLASS,
   DASHBOARD_SELECTION_GROUP_CLASS,
+  DASHBOARD_SKELETON_BAR_CLASS,
+  DASHBOARD_SKELETON_CARD_CLASS,
+  DASHBOARD_SKELETON_CARD_COPY_CLASS,
+  DASHBOARD_SKELETON_CARD_GRID_CLASS,
+  DASHBOARD_SKELETON_CARD_HEADER_CLASS,
+  DASHBOARD_SKELETON_CARD_ICON_CLASS,
+  DASHBOARD_SKELETON_CARD_META_CLASS,
+  DASHBOARD_SKELETON_DOT_CLASS,
+  DASHBOARD_SKELETON_FOLDER_ITEM_CLASS,
   DASHBOARD_SEARCH_BOX_CLASS,
   DASHBOARD_FOLDER_BREADCRUMBS_CLASS,
   DASHBOARD_SEARCH_INPUT_CLASS,
@@ -131,6 +144,29 @@ import type {
   DashboardSearchControlsState,
   DashboardTagEditorState
 } from './dashboard-view-types'
+
+const DASHBOARD_SKELETON_FOLDER_ROWS = [
+  { countWidth: '34%', depth: 0, labelWidth: '74%' },
+  { countWidth: '28%', depth: 1, labelWidth: '62%' },
+  { countWidth: '22%', depth: 1, labelWidth: '82%' },
+  { countWidth: '30%', depth: 2, labelWidth: '56%' },
+  { countWidth: '24%', depth: 1, labelWidth: '68%' },
+  { countWidth: '26%', depth: 2, labelWidth: '48%' },
+  { countWidth: '20%', depth: 2, labelWidth: '72%' }
+] as const
+
+const DASHBOARD_SKELETON_CARDS = [
+  { detailWidth: '64%', metaWidth: '36%', titleWidth: '78%' },
+  { detailWidth: '72%', metaWidth: '44%', titleWidth: '66%' },
+  { detailWidth: '58%', metaWidth: '30%', titleWidth: '86%' },
+  { detailWidth: '68%', metaWidth: '40%', titleWidth: '58%' },
+  { detailWidth: '54%', metaWidth: '34%', titleWidth: '74%' },
+  { detailWidth: '76%', metaWidth: '42%', titleWidth: '62%' },
+  { detailWidth: '62%', metaWidth: '28%', titleWidth: '82%' },
+  { detailWidth: '70%', metaWidth: '38%', titleWidth: '68%' }
+] as const
+
+const DASHBOARD_SKELETON_MIN_VISIBLE_MS = 180
 
 export function DashboardPanel({ hidden }: { hidden: boolean }) {
   const [tagEditorPosition, setTagEditorPosition] = useState<DashboardTagEditorPosition>(() => getHiddenDashboardTagEditorPosition())
@@ -410,6 +446,66 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
   scrollRequest: DashboardResultsScrollRequestState
 }) {
   const resultsRef = useRef<HTMLDivElement | null>(null)
+  const skeletonShownAtRef = useRef(0)
+  const wasActiveRef = useRef(false)
+  const previousReadyRef = useRef(panelChrome.ready)
+  const [resultsRevealed, setResultsRevealed] = useState(false)
+  const [skeletonReplayKey, setSkeletonReplayKey] = useState(0)
+
+  useLayoutEffect(() => {
+    if (!active) {
+      wasActiveRef.current = false
+      previousReadyRef.current = panelChrome.ready
+      skeletonShownAtRef.current = 0
+      setResultsRevealed(false)
+      return
+    }
+
+    const entering = !wasActiveRef.current
+    const loadingRestarted = previousReadyRef.current && !panelChrome.ready
+    wasActiveRef.current = true
+    previousReadyRef.current = panelChrome.ready
+
+    if (entering || loadingRestarted) {
+      skeletonShownAtRef.current = performance.now()
+      setSkeletonReplayKey((key) => key + 1)
+      setResultsRevealed(false)
+    }
+  }, [active, panelChrome.ready])
+
+  useEffect(() => {
+    if (!active || !panelChrome.ready) {
+      return
+    }
+
+    if (prefersReducedMotion()) {
+      skeletonShownAtRef.current = 0
+      setResultsRevealed(true)
+      return
+    }
+
+    const shownAt = skeletonShownAtRef.current
+    if (!shownAt) {
+      setResultsRevealed(true)
+      return
+    }
+
+    const remainingMs = Math.max(0, DASHBOARD_SKELETON_MIN_VISIBLE_MS - (performance.now() - shownAt))
+    if (remainingMs <= 0) {
+      skeletonShownAtRef.current = 0
+      setResultsRevealed(true)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      skeletonShownAtRef.current = 0
+      setResultsRevealed(true)
+    }, remainingMs)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [active, panelChrome.ready, skeletonReplayKey])
 
   useLayoutEffect(() => {
     if (!active || !scrollRequest.requestId) {
@@ -472,62 +568,149 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
 
   return (
     <section
-      className={[
-        DASHBOARD_RESULTS_GROUP_CLASS,
-        panelChrome.ready ? '' : DASHBOARD_PANEL_NOT_READY_STATE_CLASS
-      ].filter(Boolean).join(' ')}
+      className={DASHBOARD_RESULTS_GROUP_CLASS}
       aria-labelledby="dashboard-cards-title"
+      aria-busy={resultsRevealed ? 'false' : 'true'}
     >
       <h2 id="dashboard-cards-title" className={DASHBOARD_RESULTS_TITLE_CLASS}>
         <DashboardCardsTitleContent />
       </h2>
-      <div className={DASHBOARD_CONTENT_LAYOUT_CLASS}>
-        <aside className={DASHBOARD_FOLDER_SIDEBAR_CLASS} aria-labelledby="dashboard-folder-sidebar-title" aria-label="书签文件夹">
-          <div className={DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS}>
-            <strong id="dashboard-folder-sidebar-title" className={DASHBOARD_FOLDER_SIDEBAR_TITLE_CLASS}>文件夹</strong>
-            <span className={DASHBOARD_META_PILL_CLASS}>
-              <DashboardFolderSidebarCountContent />
-            </span>
-          </div>
-          <nav
-            className={DASHBOARD_FOLDER_TREE_CLASS}
-            aria-label="按文件夹筛选书签"
-          >
-            <DashboardFolderTreeContent />
-          </nav>
-        </aside>
+      <div
+        className={[
+          DASHBOARD_RESULTS_SKELETON_ROOT_CLASS,
+          resultsRevealed ? 'is-revealed' : ''
+        ].filter(Boolean).join(' ')}
+        data-state={resultsRevealed ? 'ready' : 'loading'}
+      >
         <div
-          ref={resultsRef}
+          key={`dashboard-results-skeleton:${skeletonReplayKey}`}
           className={[
-            DASHBOARD_CARD_GRID_CLASS,
-            panelChrome.resultsUpdating ? DASHBOARD_RESULTS_TRANSITION_STATE_CLASS : '',
-            panelChrome.resultsVirtualized ? DASHBOARD_RESULTS_WINDOWED_STATE_CLASS : DASHBOARD_RESULTS_GRID_STATE_CLASS,
-            hasDashboardFloatingSurface(results) ? DASHBOARD_FLOATING_SURFACE_CONTAINMENT_CLASS : ''
-          ].filter(Boolean).join(' ')}
-          onScroll={(event) => {
-            const target = event.currentTarget
-            handleDashboardViewAction({
-              action: 'results-scroll',
-              scrollTop: target.scrollTop
-            })
-          }}
-          style={{
-            '--dashboard-card-height': `${DASHBOARD_CARD_HEIGHT}px`,
-            '--dashboard-card-min-width': `${DASHBOARD_CARD_MIN_WIDTH}px`,
-            '--dashboard-results-stable-height': panelChrome.resultsStableHeight || undefined
-          } as CSSProperties}
+            DASHBOARD_RESULTS_SKELETON_LAYER_CLASS,
+            DASHBOARD_CONTENT_LAYOUT_CLASS
+          ].join(' ')}
+          aria-hidden="true"
         >
-          <DashboardResults
-            state={results}
-            dimCards={cardsDimmed}
-            focusRequest={focusRequest}
-            registerCardElement={registerCardElement}
-          />
+          <DashboardResultsSkeleton />
+        </div>
+        <div
+          className={[
+            DASHBOARD_RESULTS_CONTENT_LAYER_CLASS,
+            DASHBOARD_CONTENT_LAYOUT_CLASS,
+            resultsRevealed ? '' : 'pointer-events-none'
+          ].filter(Boolean).join(' ')}
+          aria-hidden={resultsRevealed ? undefined : 'true'}
+          inert={!resultsRevealed}
+        >
+          <aside className={DASHBOARD_FOLDER_SIDEBAR_CLASS} aria-labelledby="dashboard-folder-sidebar-title" aria-label="书签文件夹">
+            <div className={DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS}>
+              <strong id="dashboard-folder-sidebar-title" className={DASHBOARD_FOLDER_SIDEBAR_TITLE_CLASS}>文件夹</strong>
+              <span className={DASHBOARD_META_PILL_CLASS}>
+                <DashboardFolderSidebarCountContent />
+              </span>
+            </div>
+            <nav
+              className={DASHBOARD_FOLDER_TREE_CLASS}
+              aria-label="按文件夹筛选书签"
+            >
+              <DashboardFolderTreeContent />
+            </nav>
+          </aside>
+          <div
+            ref={resultsRef}
+            className={[
+              DASHBOARD_CARD_GRID_CLASS,
+              panelChrome.resultsUpdating ? DASHBOARD_RESULTS_TRANSITION_STATE_CLASS : '',
+              panelChrome.resultsVirtualized ? DASHBOARD_RESULTS_WINDOWED_STATE_CLASS : DASHBOARD_RESULTS_GRID_STATE_CLASS,
+              hasDashboardFloatingSurface(results) ? DASHBOARD_FLOATING_SURFACE_CONTAINMENT_CLASS : ''
+            ].filter(Boolean).join(' ')}
+            onScroll={(event) => {
+              const target = event.currentTarget
+              handleDashboardViewAction({
+                action: 'results-scroll',
+                scrollTop: target.scrollTop
+              })
+            }}
+            style={getDashboardResultsGridStyle(panelChrome)}
+          >
+            <DashboardResults
+              state={results}
+              dimCards={cardsDimmed}
+              focusRequest={focusRequest}
+              registerCardElement={registerCardElement}
+            />
+          </div>
         </div>
       </div>
     </section>
   )
 })
+
+function DashboardResultsSkeleton() {
+  return (
+    <>
+      <aside className={DASHBOARD_FOLDER_SIDEBAR_CLASS} aria-label="书签文件夹加载占位">
+        <div className={DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS}>
+          <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('46%')}></span>
+          <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('28%')}></span>
+        </div>
+        <div className={DASHBOARD_FOLDER_TREE_CLASS}>
+          {DASHBOARD_SKELETON_FOLDER_ROWS.map((row, index) => (
+            <div
+              className={DASHBOARD_SKELETON_FOLDER_ITEM_CLASS}
+              key={`dashboard-folder-skeleton:${index}`}
+              style={getDashboardSkeletonFolderStyle(row.depth)}
+            >
+              <span className={DASHBOARD_SKELETON_DOT_CLASS}></span>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle(row.labelWidth)}></span>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle(row.countWidth)}></span>
+            </div>
+          ))}
+        </div>
+      </aside>
+      <div
+        className={[
+          DASHBOARD_CARD_GRID_CLASS,
+          DASHBOARD_RESULTS_GRID_STATE_CLASS,
+          DASHBOARD_SKELETON_CARD_GRID_CLASS
+        ].join(' ')}
+        style={getDashboardResultsGridStyle()}
+      >
+        {DASHBOARD_SKELETON_CARDS.map((card, index) => (
+          <article className={DASHBOARD_SKELETON_CARD_CLASS} key={`dashboard-card-skeleton:${index}`}>
+            <div className={DASHBOARD_SKELETON_CARD_HEADER_CLASS}>
+              <span className={DASHBOARD_SKELETON_CARD_ICON_CLASS}></span>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('18%')}></span>
+            </div>
+            <div className={DASHBOARD_SKELETON_CARD_COPY_CLASS}>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle(card.titleWidth)}></span>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle(card.detailWidth)}></span>
+            </div>
+            <div className={DASHBOARD_SKELETON_CARD_META_CLASS}>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle(card.metaWidth)}></span>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('24%')}></span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </>
+  )
+}
+
+function getDashboardResultsGridStyle(panelChrome?: DashboardPanelChromeState): CSSProperties {
+  return {
+    '--dashboard-card-height': `${DASHBOARD_CARD_HEIGHT}px`,
+    '--dashboard-card-min-width': `${DASHBOARD_CARD_MIN_WIDTH}px`,
+    '--dashboard-results-stable-height': panelChrome?.resultsStableHeight || undefined
+  } as CSSProperties
+}
+
+function getDashboardSkeletonFolderStyle(depth: number): CSSProperties {
+  return { '--folder-depth-offset': `${Math.max(0, depth) * 13}px` } as CSSProperties
+}
+
+function getSkeletonWidthStyle(width: string): CSSProperties {
+  return { width }
+}
 
 function getDashboardResultsMetrics(element: HTMLElement) {
   return {

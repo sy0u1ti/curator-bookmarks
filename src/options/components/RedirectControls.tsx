@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, TextSwap, useMotionEntrance } from '../../ui'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectControlsState } from './redirect-controls-store.js'
 
@@ -11,21 +11,22 @@ const REDIRECT_HEADER_SUBTITLE_CLASS =
 const REDIRECT_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const REDIRECT_SELECTION_GROUP_CLASS =
-  'mb-[18px] rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px]'
+  't-panel-slide mb-[18px] rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px] [--panel-translate-y:12px]'
 
 export function RedirectControls() {
   const state = useRedirectControlsState()
   const hasResults = state.count > 0
   const hasSelection = state.selectedCount > 0
+  const selectionEntered = useMotionEntrance(hasSelection)
 
   return (
     <>
       {hasSelection ? (
-        <div className={REDIRECT_SELECTION_GROUP_CLASS}>
+        <div className={REDIRECT_SELECTION_GROUP_CLASS} data-open={selectionEntered ? 'true' : 'false'}>
           <div className={REDIRECT_HEADER_CLASS}>
             <div className={REDIRECT_HEADER_COPY_CLASS}>
               <strong className={REDIRECT_HEADER_TITLE_CLASS}>
-                {state.selectedCount} 条已选择
+                <TextSwap text={`${state.selectedCount} 条已选择`} />
               </strong>
               <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>可批量更新这些重定向书签为最终地址，或直接批量删除并移入回收站。</p>
             </div>
