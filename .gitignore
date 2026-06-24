@@ -1,11 +1,13 @@
 node_modules/
 dist/
+.tmp/
 .tmp-test/
 tmp/playwright-extension-smoke*/
 .perf-fixtures/
 .perf-results/
 .e2e-results/
 e2e/
+fixtures/ai-eval/
 playwright.config.ts
 playwright-report/
 test-results/
