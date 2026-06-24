@@ -34,3 +34,4 @@ scripts/*
 !scripts/run-ai-runtime-tests.mjs
 !scripts/eval-ai.mjs
 playwright-visual.config.mjs
+DESIGN.md
