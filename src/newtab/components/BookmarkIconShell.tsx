@@ -27,17 +27,8 @@ export function BookmarkIconShell({
   favicon,
   ref
 }: BookmarkIconShellProps) {
-  const [fallback, setFallback] = useState(() => ({
-    missing: false,
-    src: favicon.src
-  }))
-  const missing = fallback.src === favicon.src ? fallback.missing : false
-  if (fallback.src !== favicon.src) {
-    setFallback({
-      missing: false,
-      src: favicon.src
-    })
-  }
+  const [failedSources, setFailedSources] = useState(() => new Set<string>())
+  const missing = failedSources.has(favicon.src)
 
   return (
     <span
@@ -55,14 +46,13 @@ export function BookmarkIconShell({
         decoding="async"
         fetchPriority={favicon.fetchpriority}
         onError={() => {
-          setFallback((current) => {
-            if (current.src === favicon.src && current.missing) {
+          setFailedSources((current) => {
+            if (current.has(favicon.src)) {
               return current
             }
-            return {
-              missing: true,
-              src: favicon.src
-            }
+            const next = new Set(current)
+            next.add(favicon.src)
+            return next
           })
         }}
       />

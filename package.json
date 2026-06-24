@@ -1,7 +1,7 @@
 {
   "name": "curator-bookmarks",
   "private": true,
-  "version": "1.4.37",
+  "version": "1.5.1",
   "description": "Curator — Chrome 本地书签管理扩展",
   "license": "MIT",
   "keywords": [
@@ -26,6 +26,7 @@
     "test:ai": "node scripts/run-ai-runtime-tests.mjs",
     "eval:ai": "node scripts/eval-ai.mjs",
     "smoke:extension": "node scripts/smoke-extension.mjs",
+    "perf:dashboard": "node tools/dashboard-scroll-perf.mjs",
     "lint:ui-boundaries": "node scripts/check-ui-boundaries.mjs",
     "build": "vite build",
     "typecheck": "tsc --noEmit",

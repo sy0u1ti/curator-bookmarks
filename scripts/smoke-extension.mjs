@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   onboardingState: 'curatorBookmarkOnboardingState',
   recycleBin: 'curatorBookmarkRecycleBin',
   newTabFolderSettings: 'curatorBookmarkNewTabFolderSettings',
+  newTabTimeSettings: 'curatorBookmarkNewTabTimeSettings',
   newTabWorkspaceSettings: 'curatorBookmarkNewTabWorkspaceSettings',
   bookmarkTagIndex: 'curatorBookmarkTagIndex'
 }
@@ -25,6 +26,8 @@ const POPUP_FRAME_HEIGHT = 609
 const DASHBOARD_LAYOUT_MIN_CARD_WIDTH = 240
 const DASHBOARD_LAYOUT_SEED_BOOKMARK_COUNT = 90
 const DASHBOARD_ACTION_MOVE_TOLERANCE_PX = 1
+const NEWTAB_STRESS_FOLDER_COUNT = 4
+const NEWTAB_STRESS_BOOKMARK_COUNT = 80
 
 let context
 let userDataDir = ''
@@ -113,7 +116,12 @@ function getExtensionId(worker) {
 }
 
 async function seedExtensionData(worker) {
-  return await worker.evaluate(async ({ dashboardLayoutSeedBookmarkCount, storageKeys }) => {
+  return await worker.evaluate(async ({
+    dashboardLayoutSeedBookmarkCount,
+    newtabStressBookmarkCount,
+    newtabStressFolderCount,
+    storageKeys
+  }) => {
     const callChrome = (target, method, ...args) => new Promise((resolve, reject) => {
       target[method](...args, (result) => {
         const error = chrome.runtime.lastError
@@ -155,6 +163,21 @@ async function seedExtensionData(worker) {
         title: `Keyboard Scroll Smoke ${String(index).padStart(2, '0')}`,
         url: `https://example.com/keyboard-scroll-smoke-${index}`
       })
+    }
+    const stressFolderIds = []
+    for (let folderIndex = 0; folderIndex < newtabStressFolderCount; folderIndex += 1) {
+      const stressFolder = await callChrome(chrome.bookmarks, 'create', {
+        parentId: folder.id,
+        title: `Newtab Stress ${String(folderIndex + 1).padStart(2, '0')}`
+      })
+      stressFolderIds.push(stressFolder.id)
+      for (let bookmarkIndex = 0; bookmarkIndex < newtabStressBookmarkCount; bookmarkIndex += 1) {
+        await callChrome(chrome.bookmarks, 'create', {
+          parentId: stressFolder.id,
+          title: `Newtab Stress ${String(folderIndex + 1).padStart(2, '0')}-${String(bookmarkIndex + 1).padStart(3, '0')}`,
+          url: `https://example.com/newtab-stress-${folderIndex + 1}-${bookmarkIndex + 1}`
+        })
+      }
     }
     const tagRecord = {
       schemaVersion: 1,
@@ -217,10 +240,13 @@ async function seedExtensionData(worker) {
       archiveId: archive.id,
       alphaId: alpha.id,
       betaId: beta.id,
-      gammaId: gamma.id
+      gammaId: gamma.id,
+      stressFolderIds
     }
   }, {
     dashboardLayoutSeedBookmarkCount: DASHBOARD_LAYOUT_SEED_BOOKMARK_COUNT,
+    newtabStressBookmarkCount: NEWTAB_STRESS_BOOKMARK_COUNT,
+    newtabStressFolderCount: NEWTAB_STRESS_FOLDER_COUNT,
     storageKeys: STORAGE_KEYS
   })
 }
@@ -286,10 +312,12 @@ async function smokePopup() {
 async function smokeNewtab() {
   const newtab = await newExtensionPage(`chrome-extension://${extensionId}/src/newtab/newtab.html`, { width: 1280, height: 900 })
 
+  await assertNewtabNotBlackScreen(newtab, 'initial newtab render')
   await expect(newtab.getByRole('link', { name: 'Beta Dashboard Smoke', exact: true })).toBeVisible()
   const faviconSrc = await newtab.locator('.bookmark-favicon').first().getAttribute('src')
   expect(faviconSrc || '').toContain(`chrome-extension://${extensionId}/_favicon/`)
   expect(faviconSrc || '').toContain('pageUrl=')
+  await expect(newtab.locator('[data-bookmark-grid-folder-id]')).toHaveCount(1 + seed.stressFolderIds.length)
 
   const settingsTrigger = newtab.locator('#newtab-settings-trigger')
   await settingsTrigger.click()
@@ -297,6 +325,7 @@ async function smokeNewtab() {
   await expect(drawer).toBeVisible()
   await expect(drawer).toHaveAttribute('aria-hidden', 'false')
   await expect(drawer).toHaveJSProperty('inert', false)
+  await assertNewtabSettingsControlsPersist(newtab)
   await newtab.mouse.click(32, 80)
   await expect(drawer).toHaveAttribute('aria-hidden', 'true')
   await expect(drawer).toHaveJSProperty('inert', true)
@@ -314,12 +343,16 @@ async function smokeNewtab() {
   await expect(drawer).toHaveAttribute('aria-hidden', 'true')
   await expect(drawer).toHaveJSProperty('inert', true)
   await expect(settingsTrigger).toBeFocused()
+  await assertNewtabQuickAccessRemovedAndAddBookmarkHealthy(newtab)
 
   await newtab.locator('#newtab-dashboard-trigger').click()
   const overlay = newtab.locator('#newtab-dashboard-overlay')
   await expect(overlay).toBeVisible()
   const frame = newtab.frameLocator('#newtab-dashboard-frame')
   await expect(frame.locator('#dashboard')).toBeVisible()
+  await expect(overlay).toHaveAttribute('data-dashboard-ready', 'true')
+  await expect(overlay.locator('#newtab-dashboard-fallback')).toBeHidden()
+  await assertDashboardFrameSandboxDoesNotTriggerChromeWarning(newtab)
   await frame.locator('#dashboard-query').fill('Beta Dashboard')
   await expect(frame.getByText('Beta Dashboard Smoke').first()).toBeVisible()
   const frameSrc = await newtab.locator('#newtab-dashboard-frame').getAttribute('src')
@@ -330,6 +363,93 @@ async function smokeNewtab() {
   await expect(overlay).toBeHidden()
 
   await newtab.close()
+}
+
+async function assertNewtabSettingsControlsPersist(newtab) {
+  const hideNamesSwitch = newtab.getByRole('switch', { name: '隐藏文件夹名' })
+  await expect(hideNamesSwitch).toHaveAttribute('aria-checked', 'false')
+  await hideNamesSwitch.click()
+  await expect(hideNamesSwitch).toHaveAttribute('aria-checked', 'true')
+  await expect.poll(async () => {
+    const settings = await getStorage(STORAGE_KEYS.newTabFolderSettings)
+    return settings?.hideFolderNames === true
+  }, { timeout: PAGE_TIMEOUT_MS }).toBe(true)
+
+  await newtab.getByRole('tab', { name: '模块' }).click()
+  await expect(newtab.getByRole('switch', { name: '显示 Curator 常用和新近添加' })).toHaveCount(0)
+  await assertNewtabQuickAccessRemoved(newtab, 'quick access setting removed')
+
+  await newtab.getByRole('tab', { name: '外观' }).click()
+  await expect(newtab.getByRole('switch', { name: '显示时间模块' })).toBeVisible()
+  const displayModeSelect = newtab.getByRole('combobox', { name: '时间显示内容' })
+  await displayModeSelect.click()
+  await newtab.getByRole('option', { name: '仅时间' }).click()
+  await expect(displayModeSelect).toContainText('仅时间')
+  await expect.poll(async () => {
+    const settings = await getStorage(STORAGE_KEYS.newTabTimeSettings)
+    return settings?.displayMode === 'time'
+  }, { timeout: PAGE_TIMEOUT_MS }).toBe(true)
+}
+
+async function assertNewtabQuickAccessRemovedAndAddBookmarkHealthy(newtab) {
+  await assertNewtabQuickAccessRemoved(newtab, 'quick access removed after settings close')
+
+  const addBookmarkButton = newtab.locator('[data-add-bookmark-folder-id]').first()
+  await expect(addBookmarkButton).toBeVisible()
+  await addBookmarkButton.click()
+  await expect(newtab.locator('.bookmark-add-menu')).toBeVisible()
+  await assertNewtabNotBlackScreen(newtab, 'add bookmark menu opened')
+  await newtab.keyboard.press('Escape')
+  await expect(newtab.locator('.bookmark-add-menu')).toBeHidden()
+}
+
+async function assertNewtabQuickAccessRemoved(newtab, label) {
+  await expect(newtab.locator('.newtab-portal')).toHaveCount(0)
+  await expect(newtab.locator('.newtab-quick-heading').filter({ hasText: '新近添加' })).toHaveCount(0)
+  await expect(newtab.locator('.newtab-quick-link')).toHaveCount(0)
+  await assertNewtabNotBlackScreen(newtab, label)
+}
+
+async function assertNewtabNotBlackScreen(newtab, label) {
+  assertNoNewtabReactUpdateDepthErrors(label)
+  const state = await newtab.evaluate(() => {
+    const root = document.querySelector('#newtab-root')
+    const rootRect = root?.getBoundingClientRect()
+    const style = root ? window.getComputedStyle(root) : null
+    return {
+      interactiveCount: document.querySelectorAll('#newtab-root a[href], #newtab-root button, #newtab-settings-trigger, #newtab-dashboard-trigger').length,
+      rootExists: Boolean(root),
+      rootVisible: Boolean(
+        root &&
+        rootRect &&
+        rootRect.width > 0 &&
+        rootRect.height > 0 &&
+        style?.visibility !== 'hidden' &&
+        style?.display !== 'none'
+      )
+    }
+  })
+  expect(state.rootExists, `${label}: newtab root exists`).toBe(true)
+  expect(state.rootVisible, `${label}: newtab root visible`).toBe(true)
+  expect(state.interactiveCount, `${label}: rendered interactive content`).toBeGreaterThan(0)
+  assertNoNewtabReactUpdateDepthErrors(label)
+}
+
+function assertNoNewtabReactUpdateDepthErrors(label) {
+  const updateDepthErrors = pageErrors.filter((entry) =>
+    entry.includes('/src/newtab/newtab.html') &&
+    (entry.includes('Minified React error #185') || entry.includes('Maximum update depth exceeded'))
+  )
+  expect(updateDepthErrors, `${label}: no React update-depth errors`).toEqual([])
+}
+
+async function assertDashboardFrameSandboxDoesNotTriggerChromeWarning(newtab) {
+  const sandbox = await newtab.locator('#newtab-dashboard-frame').getAttribute('sandbox')
+  const sandboxTokens = new Set(String(sandbox || '').split(/\s+/).filter(Boolean))
+  expect(
+    sandboxTokens.has('allow-scripts') &&
+    sandboxTokens.has('allow-same-origin')
+  ).toBe(false)
 }
 
 async function smokeOptionsDashboard(worker) {
@@ -553,36 +673,30 @@ async function assertPopupWorkspaceNotBlurred(popup) {
 }
 
 async function assertPopupFolderTreeHierarchy(popup, parentLabel, childLabel) {
-  const metrics = await popup.evaluate(({ childLabel, parentLabel }) => {
-    const buttons = [...document.querySelectorAll('[role="tree"] button')]
-    const getRowMetrics = (label) => {
-      const button = buttons.find((candidate) => candidate.textContent?.includes(label))
-      const title = button
-        ? [...button.querySelectorAll('span')].find((candidate) => candidate.textContent?.trim() === label)
-        : null
+  await expect.poll(async () => {
+    return await popup.evaluate(({ childLabel, parentLabel }) => {
+      const buttons = [...document.querySelectorAll('[role="tree"] button')]
+      const getRowMetrics = (label) => {
+        const button = buttons.find((candidate) => candidate.textContent?.includes(label))
+        const title = button
+          ? [...button.querySelectorAll('span')].find((candidate) => candidate.textContent?.trim() === label)
+          : null
 
-      if (!button || !title) {
-        return null
+        if (!button || !title) {
+          return null
+        }
+
+        return {
+          buttonPaddingLeft: getComputedStyle(button).paddingLeft,
+          titleLeft: title.getBoundingClientRect().left
+        }
       }
 
-      return {
-        buttonPaddingLeft: getComputedStyle(button).paddingLeft,
-        titleLeft: title.getBoundingClientRect().left
-      }
-    }
-
-    const parent = getRowMetrics(parentLabel)
-    const child = getRowMetrics(childLabel)
-    return {
-      child,
-      indentDelta: parent && child ? child.titleLeft - parent.titleLeft : 0,
-      parent
-    }
-  }, { childLabel, parentLabel })
-
-  expect(metrics.parent).toBeTruthy()
-  expect(metrics.child).toBeTruthy()
-  expect(metrics.indentDelta).toBeGreaterThanOrEqual(12)
+      const parent = getRowMetrics(parentLabel)
+      const child = getRowMetrics(childLabel)
+      return parent && child ? child.titleLeft - parent.titleLeft : -1
+    }, { childLabel, parentLabel })
+  }, { timeout: PAGE_TIMEOUT_MS }).toBeGreaterThanOrEqual(12)
 }
 
 async function assertPopupKeyboardActiveBookmark(popup) {

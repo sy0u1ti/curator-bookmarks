@@ -2,6 +2,7 @@ import {
   useCallback,
   useLayoutEffect,
   useEffect,
+  memo,
   useRef,
   useState,
   type ComponentPropsWithRef,
@@ -11,17 +12,16 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject
 } from 'react'
+import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui'
-import { Input } from '../../ui'
-import { RoseCurveLoader } from '../../ui'
+import { Input } from '../../ui/Input'
 import {
   Popover,
   PopoverPopup,
   PopoverPortal,
   PopoverPositioner,
   PopoverRoot
-} from '../../ui'
+} from '../../ui/Popover'
 import {
   DASHBOARD_CARD_HEIGHT,
   DASHBOARD_CARD_MIN_WIDTH
@@ -72,10 +72,6 @@ import {
   DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS,
   DASHBOARD_FOLDER_SIDEBAR_TITLE_CLASS,
   DASHBOARD_FOLDER_TREE_CLASS,
-  DASHBOARD_LOADING_CARD_CLASS,
-  DASHBOARD_LOADING_LOADER_CLASS,
-  DASHBOARD_LOADING_SCREEN_CLASS,
-  DASHBOARD_LOADING_SCREEN_ACTIVE_STATE_CLASS,
   DASHBOARD_META_PILL_CLASS,
   DASHBOARD_QUERY_ROW_CLASS,
   DASHBOARD_PANEL_CLASS,
@@ -124,7 +120,6 @@ import {
   DASHBOARD_DROP_PANEL_CLOSING_STATE_CLASS,
   DASHBOARD_DROP_TITLE_CLASS,
   DASHBOARD_FOLDER_DROP_GRID_CLASS,
-  DASHBOARD_LOADING_SCREEN_READY_STATE_CLASS,
   DASHBOARD_PANEL_NOT_READY_STATE_CLASS
 } from './dashboard-classes'
 import type {
@@ -242,18 +237,6 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
       onFocusCapture={handleDashboardPanelFocus}
       onKeyDownCapture={handleDashboardPanelKeyDown}
     >
-      <output
-        className={[
-          DASHBOARD_LOADING_SCREEN_CLASS,
-          panelChrome.ready ? DASHBOARD_LOADING_SCREEN_READY_STATE_CLASS : DASHBOARD_LOADING_SCREEN_ACTIVE_STATE_CLASS
-        ].filter(Boolean).join(' ')}
-        aria-label="正在读取书签仪表盘"
-      >
-        <div className={DASHBOARD_LOADING_CARD_CLASS}>
-          <RoseCurveLoader className={DASHBOARD_LOADING_LOADER_CLASS} />
-        </div>
-      </output>
-
       <h1 id="dashboard-title" className="sr-only">
         <DashboardTitleContent />
       </h1>
@@ -284,7 +267,7 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
   )
 }
 
-function DashboardToolbar({
+const DashboardToolbar = memo(function DashboardToolbar({
   ready,
   searchControls
 }: {
@@ -374,7 +357,7 @@ function DashboardToolbar({
       </div>
     </div>
   )
-}
+})
 
 function DashboardSearchHelpButton({
   className,
@@ -396,7 +379,7 @@ function DashboardSearchHelpButton({
   )
 }
 
-function DashboardSelectionGroup({ ready }: { ready: boolean }) {
+const DashboardSelectionGroup = memo(function DashboardSelectionGroup({ ready }: { ready: boolean }) {
   return (
     <div
       className={[
@@ -407,9 +390,9 @@ function DashboardSelectionGroup({ ready }: { ready: boolean }) {
       <DashboardSelectionBarContent />
     </div>
   )
-}
+})
 
-function DashboardResultsSection({
+const DashboardResultsSection = memo(function DashboardResultsSection({
   active,
   cardsDimmed,
   focusRequest,
@@ -525,7 +508,7 @@ function DashboardResultsSection({
             const target = event.currentTarget
             handleDashboardViewAction({
               action: 'results-scroll',
-              ...getDashboardResultsMetrics(target)
+              scrollTop: target.scrollTop
             })
           }}
           style={{
@@ -544,7 +527,7 @@ function DashboardResultsSection({
       </div>
     </section>
   )
-}
+})
 
 function getDashboardResultsMetrics(element: HTMLElement) {
   return {
@@ -562,7 +545,7 @@ function hasDashboardFloatingSurface(results: DashboardResultsState): boolean {
   return results.cards.some((card) => card.activeMenu || card.expanded)
 }
 
-function DashboardTagEditorLayer({
+const DashboardTagEditorLayer = memo(function DashboardTagEditorLayer({
   open,
   position,
   refObject,
@@ -626,7 +609,7 @@ function DashboardTagEditorLayer({
       </PopoverRoot>
     </div>
   )
-}
+})
 
 function clearDashboardDragHover(): void {
   handleDashboardViewAction({
@@ -650,7 +633,7 @@ function handleDashboardOverlayPointerCancel(): void {
   handleDashboardViewAction({ action: 'drag-pointer-cancel' })
 }
 
-function DashboardDragOverlay({ state }: { state: DashboardDragOverlayState }) {
+const DashboardDragOverlay = memo(function DashboardDragOverlay({ state }: { state: DashboardDragOverlayState }) {
   const handleOverlayPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     handleDashboardViewAction({
       action: 'drag-pointer-move',
@@ -756,7 +739,7 @@ function DashboardDragOverlay({ state }: { state: DashboardDragOverlayState }) {
       </div>
     </div>
   )
-}
+})
 
 function isDashboardFolderDropOptionEvent(event: PointerEvent, panel: HTMLElement): boolean {
   return event.composedPath().some((item) => {

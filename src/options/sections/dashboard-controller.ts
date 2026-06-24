@@ -310,7 +310,6 @@ const DASHBOARD_SEARCH_SCROLL_PREFETCH_MIN_INTERVAL_MS = 450
 const DASHBOARD_SEARCH_SCROLL_PREFETCH_IDLE_TIMEOUT_MS = 650
 const DASHBOARD_SCROLL_IDLE_MS = 110
 const DASHBOARD_SCROLL_SETTLE_MS = 160
-const DASHBOARD_VIRTUAL_SCROLL_GUARD_ROWS = 3
 const DASHBOARD_FAVICON_DIRTY_SYNC_DELAY_MS = 160
 const DASHBOARD_FAVICON_DIRTY_SYNC_SCROLL_DELAY_MS = 220
 const DASHBOARD_FAVICON_WARMUP_DEBUG_DELAY_MS = 1400
@@ -3490,11 +3489,25 @@ function updateDashboardVirtualShellGeometry(
     updateRenderedOffset?: boolean
   } = {}
 ): void {
+  const view = getDashboardViewSnapshot()
+  const currentResults = view.results
+  if (
+    currentResults.mode === 'virtual' &&
+    currentResults.columnCount === virtualWindow.columnCount &&
+    currentResults.offsetY === virtualWindow.offsetY &&
+    currentResults.totalHeight === virtualWindow.totalHeight
+  ) {
+    return
+  }
+
   const renderedItems = virtualState.items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
+  const cards = currentResults.mode === 'virtual'
+    ? currentResults.cards
+    : renderedItems.map(buildDashboardCardViewModel)
   publishDashboardViewState({
     results: {
       mode: 'virtual',
-      cards: renderedItems.map(buildDashboardCardViewModel),
+      cards,
       columnCount: virtualWindow.columnCount,
       offsetY: virtualWindow.offsetY,
       totalHeight: virtualWindow.totalHeight
@@ -3555,7 +3568,7 @@ function getDashboardCardRenderKey(item: DashboardItem): string {
 }
 
 function getDashboardVirtualCardRenderMode(): 'full' | 'scroll' {
-  return 'full'
+  return virtualState.isFastScrolling ? 'scroll' : 'full'
 }
 
 function getDashboardRenderedCardMode(): 'full' | 'scroll' {
@@ -3850,10 +3863,6 @@ function handleDashboardVirtualScroll(detail: Extract<DashboardViewActionDetail,
   virtualState.isFastScrolling = velocity >= DASHBOARD_VIRTUAL_FAST_SCROLL_PX_PER_MS
   scheduleDashboardScrollIdle()
   maybePrefetchDashboardSearchResults(detail)
-  if (!canReuseDashboardVirtualWindowAtScrollTop(nextScrollTop)) {
-    renderDashboardVirtualScrollWindow(nextScrollTop, { syncContainerScroll: false })
-    return
-  }
   scheduleDashboardVirtualRender()
 }
 
@@ -3861,53 +3870,6 @@ function handleDashboardVirtualScrollSync(detail: Extract<DashboardViewActionDet
   const metrics = updateDashboardResultsMetricsSnapshot(detail)
   virtualState.scrollTop = metrics.scrollTop
   virtualState.lastScrollTop = metrics.scrollTop
-}
-
-function canReuseDashboardVirtualWindowAtScrollTop(scrollTop: number): boolean {
-  const items = virtualState.items
-  if (
-    !isDashboardResultsVirtualized() ||
-    !items.length ||
-    virtualState.pendingInitialMeasure ||
-    virtualState.contentWidth < DASHBOARD_VIRTUAL_MIN_READY_WIDTH ||
-    virtualState.containerHeight < DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
-  ) {
-    return true
-  }
-
-  const viewportWindow = computeDashboardVirtualWindow({
-    itemCount: items.length,
-    contentWidth: virtualState.contentWidth,
-    containerHeight: virtualState.containerHeight,
-    scrollTop,
-    cardHeight: virtualState.cardHeight,
-    minCardWidth: virtualState.minCardWidth,
-    overscanRows: 0
-  })
-
-  if (!canReuseDashboardVirtualShell(items, viewportWindow, viewportWindow, {
-    validateRenderKey: false,
-    allowAnchoredGeometry: true
-  })) {
-    return false
-  }
-
-  const columnCount = Math.max(1, virtualState.renderedColumnCount || viewportWindow.columnCount)
-  const renderedStartRow = Math.floor(Math.max(0, virtualState.renderedStartIndex) / columnCount)
-  const renderedEndRow = Math.ceil(Math.max(0, virtualState.renderedEndIndex) / columnCount)
-  const guardRows = Math.min(
-    DASHBOARD_VIRTUAL_SCROLL_GUARD_ROWS,
-    Math.max(0, Math.floor((renderedEndRow - renderedStartRow - (viewportWindow.endRow - viewportWindow.startRow)) / 2))
-  )
-
-  if (guardRows <= 0) {
-    return true
-  }
-
-  return (
-    viewportWindow.startRow - renderedStartRow >= guardRows &&
-    renderedEndRow - viewportWindow.endRow >= guardRows
-  )
 }
 
 function getDashboardNow(): number {
@@ -3954,12 +3916,8 @@ function scheduleDashboardScrollIdle(): void {
 }
 
 function maybePrefetchDashboardSearchResults({
-  clientHeight,
-  scrollHeight,
   scrollTop
 }: {
-  clientHeight: number
-  scrollHeight: number
   scrollTop: number
 }): void {
   if (!dashboardActiveSearchKey || !dashboardState.query.trim()) {
@@ -3973,6 +3931,8 @@ function maybePrefetchDashboardSearchResults({
     return
   }
 
+  const clientHeight = virtualState.resultsMetrics?.clientHeight || virtualState.containerHeight
+  const scrollHeight = virtualState.resultsMetrics?.scrollHeight || 0
   const remainingPx = Math.max(
     0,
     (Number(scrollHeight) || 0) - (Number(scrollTop) || 0) - (Number(clientHeight) || 0)
@@ -4495,7 +4455,42 @@ function publishDashboardTagEditorClosingState(closing: boolean): void {
 }
 
 function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewModel {
+  const renderMode = getDashboardVirtualCardRenderMode()
   const selected = dashboardState.selectedIds.has(String(item.id))
+  if (renderMode === 'scroll') {
+    return {
+      activeMenu: false,
+      bookmarkId: String(item.id),
+      copyActionLabel: '',
+      copyText: '',
+      copyTooltip: '',
+      deleting: availabilityState.deleting,
+      deleteLabel: '',
+      displayUrl: displayUrl(item.url),
+      editTagsLabel: '',
+      expanded: false,
+      fallbackLabel: getFallbackLabel(item.title),
+      favicon: null,
+      hiddenTagCount: 0,
+      itemPath: formatBookmarkPath(item.path) || '未归档路径',
+      moreLabel: '',
+      moveLabel: '',
+      openLabel: '',
+      parentId: String(item.parentId || ''),
+      renderMode,
+      selected,
+      selectionLabel: '',
+      speedDialActionLabel: '',
+      speedDialActionText: '',
+      speedDialPinned: false,
+      tagStatusTitle: '',
+      tags: [],
+      title: item.title || '未命名书签',
+      url: item.url,
+      visibleTags: []
+    }
+  }
+
   const expanded = dashboardState.expandedTagIds.has(String(item.id))
   const selectionLabel = getDashboardSelectionLabel(item)
   const openLabel = getDashboardCardActionLabel('打开书签', item)
@@ -4538,6 +4533,7 @@ function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewMode
     moveLabel,
     openLabel,
     parentId: String(item.parentId || ''),
+    renderMode,
     selected,
     selectionLabel,
     speedDialActionLabel,

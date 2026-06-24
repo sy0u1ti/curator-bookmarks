@@ -1,4 +1,4 @@
-import type { IconName } from '../../ui'
+import type { IconName } from '../../ui/icons/icon-map'
 
 export type DashboardViewActionDetail =
   | {
@@ -84,9 +84,6 @@ export type DashboardViewActionDetail =
     }
   | {
       action: 'results-scroll'
-      clientHeight: number
-      clientWidth: number
-      scrollHeight: number
       scrollTop: number
     }
   | {
@@ -238,6 +235,7 @@ export interface DashboardCardViewModel {
   moveLabel: string
   openLabel: string
   parentId: string
+  renderMode: 'full' | 'scroll'
   selected: boolean
   selectionLabel: string
   speedDialActionLabel: string

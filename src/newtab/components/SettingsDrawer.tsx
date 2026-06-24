@@ -20,6 +20,11 @@ import {
   ToggleGroup,
   cx
 } from '../../ui'
+import {
+  OPTION_SWITCH_CONTROL_CLASS,
+  OPTION_SWITCH_THUMB_CLASS,
+  OPTION_SWITCH_WRAP_CLASS
+} from '../../ui/switch-classes'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
 import {
   ICON_PRESET_META,
@@ -94,6 +99,7 @@ const settingsTabs = [
   ['modules', '模块', false],
   ['advanced', '高级', false]
 ] as const
+const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
 const SETTINGS_DRAWER_SURFACE_CLASS = 'rounded-ds-lg border border-ds-border bg-ds-app text-ds-text-primary shadow-ds-dialog [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
 const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-transform duration-ds-standard ease-ds-standard will-change-transform motion-reduce:transition-none max-[420px]:w-full max-[420px]:rounded-none max-[420px]:border-x-0'
@@ -130,8 +136,9 @@ const SETTINGS_LABEL_STACK_CLASS = 'grid min-w-0 gap-1'
 const SETTINGS_LABEL_CLASS = 'min-w-0 text-sm font-semibold leading-snug text-ds-text-primary'
 const SETTINGS_DESCRIPTION_CLASS = 'text-xs font-medium leading-snug text-ds-text-secondary'
 const SETTINGS_VALUE_CLASS = 'text-ds-text-secondary tabular-nums'
-const SETTINGS_SWITCH_CLASS = 'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-surface-2 outline-none transition-colors duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:shadow-ds-focus disabled:opacity-50'
-const SETTINGS_SWITCH_THUMB_CLASS = 'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-text-primary transition-transform duration-ds-fast ease-ds-standard data-[checked]:translate-x-5 data-[checked]:bg-ds-accent-contrast'
+const SETTINGS_SWITCH_WRAP_CLASS = OPTION_SWITCH_WRAP_CLASS
+const SETTINGS_SWITCH_CLASS = OPTION_SWITCH_CONTROL_CLASS
+const SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
 const SETTINGS_SLIDER_CLASS = 'min-w-36 max-[700px]:w-full'
 const SETTINGS_SELECT_TRIGGER_CLASS = 'min-h-9 min-w-36 max-w-56 justify-between text-xs font-semibold max-[700px]:w-full max-[700px]:max-w-none'
 const SETTINGS_SELECT_VALUE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap'
@@ -155,7 +162,7 @@ const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
 const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-snug text-ds-text-primary'
 const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
 const FOLDER_CANDIDATE_BADGE_CLASS = 'inline-flex min-h-5 items-center justify-center rounded-full bg-ds-surface-1 px-2 text-xs font-semibold text-ds-text-secondary whitespace-nowrap'
-const MODULE_SWITCH_LABEL_CLASS = 'inline-flex items-center'
+const MODULE_SWITCH_LABEL_CLASS = SETTINGS_SWITCH_WRAP_CLASS
 const BACKGROUND_CREDIT_ROW_CLASS = '-mt-1 flex min-h-6 min-w-0 items-center gap-1.5 px-1.5 text-xs leading-none text-ds-text-muted'
 const BACKGROUND_CREDIT_LABEL_CLASS = 'shrink-0 font-medium text-ds-text-secondary'
 const BACKGROUND_CREDIT_CLASS = 'group inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-ds-sm text-xs font-medium leading-none text-ds-text-muted outline-none transition-colors duration-ds-fast ease-ds-standard hover:text-ds-text-primary focus-visible:shadow-ds-focus'
@@ -258,20 +265,22 @@ function SwitchRow({
   return (
     <div className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
       <SettingLabelStack title={title} titleId={labelId} description={description} descriptionId={descriptionId} />
-      <SwitchControl
-        id={id}
-        aria-labelledby={labelId}
-        aria-describedby={descriptionId}
-        className={SETTINGS_SWITCH_CLASS}
-        checked={checked}
-        defaultChecked={defaultChecked}
-        disabled={disabled}
-        onCheckedChange={onCheckedChange}
-        rootRef={controlRef}
-        syncInputState
-        thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
-        unstyled
-      />
+      <span className={SETTINGS_SWITCH_WRAP_CLASS}>
+        <SwitchControl
+          id={id}
+          aria-labelledby={labelId}
+          aria-describedby={descriptionId}
+          className={SETTINGS_SWITCH_CLASS}
+          checked={checked}
+          defaultChecked={defaultChecked}
+          disabled={disabled}
+          onCheckedChange={onCheckedChange}
+          rootRef={controlRef}
+          syncInputState
+          thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
+          unstyled
+        />
+      </span>
     </div>
   )
 }
@@ -371,6 +380,7 @@ function SettingsSelect({
         options={options.map(([value, label]) => ({ value, label }))}
         modal={false}
         popupClassName={SETTINGS_SELECT_POPUP_CLASS}
+        popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
         portalContainer={portalContainer}
         positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}
         syncInputState
@@ -728,25 +738,14 @@ function ModuleSettingsSection({
   sectionRef?: SettingsSectionRef
 }) {
   const moduleSettings = useNewtabModuleSettingsView()
-  const folderSource = useNewtabFolderSourceView()
 
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="modules" aria-labelledby="settings-speed-dial-title">
       <h2 id="settings-speed-dial-title" className={SETTINGS_SECTION_TITLE_CLASS}>模块</h2>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
-        <SwitchRow
-          id="general-show-quick-access"
-          title="显示 Curator 常用和新近添加"
-          description="仅基于当前来源内的固定、本页打开记录和添加时间，不读取浏览历史。"
-          controlRef={firstControlRef}
-          checked={folderSource.general.showQuickAccess}
-          onCheckedChange={(checked) => {
-            dispatchNewtabGeneralSettingToggle('showQuickAccess', checked)
-          }}
-        />
         <div id="newtab-speed-dial-setting" className={FOLDER_STACK_CLASS} aria-label="Speed Dial 模块">
-          {moduleSettings.rows.map((row) => (
-            <ModuleSettingRow row={row} key={row.key} />
+          {moduleSettings.rows.map((row, index) => (
+            <ModuleSettingRow controlRef={index === 0 ? firstControlRef : undefined} row={row} key={row.key} />
           ))}
         </div>
       </Surface>
@@ -754,7 +753,13 @@ function ModuleSettingsSection({
   )
 }
 
-function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
+function ModuleSettingRow({
+  controlRef,
+  row
+}: {
+  controlRef?: Ref<HTMLElement>
+  row: NewtabModuleSettingRowView
+}) {
   return (
     <div className={settingRowClassName()} data-module-row={row.key}>
       <SettingLabelStack title={row.label} description={row.description} />
@@ -767,6 +772,7 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
           onCheckedChange={(checked) => {
             dispatchNewtabModuleSettingToggle(row.key, checked)
           }}
+          rootRef={controlRef}
           syncInputState
           thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
           unstyled
@@ -969,6 +975,7 @@ function BackgroundSettingsSection({
               { value: 'light', label: '亮色柔化' }
             ]}
             popupClassName={SETTINGS_SELECT_POPUP_CLASS}
+            popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
             modal={false}
             portalContainer={panelElement}
             positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}

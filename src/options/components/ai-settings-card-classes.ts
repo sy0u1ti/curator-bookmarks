@@ -1,3 +1,9 @@
+import {
+  OPTION_SWITCH_CONTROL_CLASS,
+  OPTION_SWITCH_THUMB_CLASS,
+  OPTION_SWITCH_WRAP_CLASS
+} from '../../ui/switch-classes'
+
 export const AI_SETTINGS_CARD_CLASS =
   'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[22px_24px] text-ds-text-primary shadow-none max-[760px]:p-4'
 
@@ -39,14 +45,11 @@ export const AI_SETTINGS_ROW_TITLE_CLASS =
 export const AI_SETTINGS_SECONDARY_CLASS =
   'mt-[3px] block text-[13px] leading-[1.65] text-ds-text-disabled'
 
-export const AI_SETTINGS_SWITCH_WRAP_CLASS =
-  'relative inline-block h-[1.8em] w-[3.7em] flex-none cursor-pointer text-sm has-[[data-disabled]]:cursor-default'
+export const AI_SETTINGS_SWITCH_WRAP_CLASS = OPTION_SWITCH_WRAP_CLASS
 
-export const AI_SETTINGS_SWITCH_CONTROL_CLASS =
-  'absolute inset-0 rounded-full bg-ds-surface-3 outline-none transition-colors duration-ds-standard data-[checked]:bg-ds-accent data-[disabled]:opacity-50 focus-visible:shadow-ds-focus'
+export const AI_SETTINGS_SWITCH_CONTROL_CLASS = OPTION_SWITCH_CONTROL_CLASS
 
-export const AI_SETTINGS_SWITCH_THUMB_CLASS =
-  'absolute bottom-[0.2em] left-[0.2em] size-[1.4em] rounded-full bg-ds-text-secondary transition-[transform,background-color] duration-ds-surface data-[checked]:translate-x-[1.9em] data-[checked]:bg-ds-accent-contrast'
+export const AI_SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
 
 export const AI_SETTINGS_ADVANCED_CLASS =
   'mt-4 grid border-t border-[rgba(255,255,255,0.075)] pt-4'

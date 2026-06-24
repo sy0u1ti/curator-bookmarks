@@ -5,12 +5,29 @@ import {
   useRef,
   useState,
   type ComponentPropsWithoutRef,
+  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
   type Ref
 } from 'react'
 import { cx } from './utils'
 
 type BaseSwitchRootProps = ComponentPropsWithoutRef<typeof BaseSwitch.Root>
+type InputStyle = ComponentPropsWithoutRef<'input'>['style']
+
+const VISUALLY_HIDDEN_INPUT_STYLE: InputStyle = {
+  border: 0,
+  clipPath: 'inset(50%)',
+  height: 1,
+  left: 0,
+  margin: -1,
+  overflow: 'hidden',
+  padding: 0,
+  position: 'fixed',
+  top: 0,
+  whiteSpace: 'nowrap',
+  width: 1
+}
 
 export type SwitchControlProps = Omit<BaseSwitchRootProps, 'className' | 'children' | 'inputRef'> & {
   className?: string
@@ -121,6 +138,110 @@ export function SwitchControl({
       restorePropertyDescriptor(input, 'disabled', ownDisabledDescriptor)
     }
   }, [syncInputState])
+
+  useLayoutEffect(() => {
+    if (!syncInputState) {
+      return
+    }
+
+    const input = inputElementRef.current
+    if (!input) {
+      return
+    }
+
+    if (input.checked !== Boolean(checked)) {
+      input.checked = Boolean(checked)
+    }
+    if (input.defaultChecked !== Boolean(checked)) {
+      input.defaultChecked = Boolean(checked)
+    }
+    if (input.disabled !== Boolean(disabled)) {
+      input.disabled = Boolean(disabled)
+    }
+  }, [checked, disabled, syncInputState])
+
+  if (syncInputState) {
+    const {
+      id,
+      onClick,
+      onKeyDown,
+      tabIndex,
+      ...rootProps
+    } = props as ComponentPropsWithoutRef<'span'> & { id?: string }
+    const toggleChecked = (event: MouseEvent<HTMLElement> | KeyboardEvent<HTMLElement>) => {
+      if (disabledRef.current) {
+        return
+      }
+
+      const nextChecked = !checkedRef.current
+      if (!checkedControlledRef.current) {
+        setCheckedState(nextChecked)
+      }
+      onCheckedChange?.(nextChecked, {
+        allowPropagation: () => {},
+        cancel: () => {},
+        event: event.nativeEvent,
+        isCanceled: false,
+        isPropagationAllowed: true,
+        reason: 'none',
+        trigger: event.currentTarget
+      } as unknown as Parameters<NonNullable<BaseSwitchRootProps['onCheckedChange']>>[1])
+    }
+
+    return (
+      <span
+        {...rootProps}
+        aria-checked={Boolean(checked)}
+        aria-disabled={disabled ? true : undefined}
+        className={unstyled ? className : cx(
+          'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-colors data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus data-[disabled]:opacity-50',
+          className
+        )}
+        data-checked={checked ? '' : undefined}
+        data-disabled={disabled ? '' : undefined}
+        data-unchecked={checked ? undefined : ''}
+        onClick={(event) => {
+          onClick?.(event)
+          if (event.defaultPrevented) {
+            return
+          }
+          toggleChecked(event)
+        }}
+        onKeyDown={(event) => {
+          onKeyDown?.(event)
+          if (event.defaultPrevented || (event.key !== ' ' && event.key !== 'Enter')) {
+            return
+          }
+          event.preventDefault()
+          toggleChecked(event)
+        }}
+        ref={rootRef}
+        role="switch"
+        tabIndex={disabled ? -1 : tabIndex ?? 0}
+      >
+        <span
+          className={unstyled ? thumbClassName : cx(
+            'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page',
+            thumbClassName
+          )}
+          data-checked={checked ? '' : undefined}
+          data-disabled={disabled ? '' : undefined}
+          data-unchecked={checked ? undefined : ''}
+        />
+        <input
+          id={id}
+          aria-hidden="true"
+          checked={Boolean(checked)}
+          disabled={Boolean(disabled)}
+          onChange={() => {}}
+          ref={handleInputRef}
+          tabIndex={-1}
+          type="checkbox"
+          style={VISUALLY_HIDDEN_INPUT_STYLE}
+        />
+      </span>
+    )
+  }
 
   return (
     <BaseSwitch.Root

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { Button, DialogOverlay, DialogPanel, RoseCurveLoader } from '../../ui'
+import { Button } from '../../ui/Button'
+import { DialogOverlay, DialogPanel } from '../../ui/Dialog'
 import {
   dispatchNewtabDashboardOverlayFallbackRetry,
   dispatchNewtabDashboardOverlayFallbackReturn,
@@ -23,19 +24,15 @@ export interface DashboardOverlayProps {
 }
 
 const DEFAULT_DASHBOARD_ERROR_MESSAGE = '加载耗时过长。你可以返回新标签页，或重试打开仪表盘。'
-// The iframe embeds this extension's own dashboard page, which needs scripts and same-origin access for Chrome APIs.
-const DASHBOARD_FRAME_SANDBOX = 'allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts'
+const DASHBOARD_FRAME_SANDBOX = 'allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-scripts'
 const DASHBOARD_SURFACE_CLASS = 'border border-ds-border rounded-ds-lg bg-ds-app text-ds-text-primary shadow-ds-dialog'
 const DASHBOARD_OVERLAY_CLASS = 'newtab-dashboard-overlay fixed inset-0 z-[10010] overflow-hidden bg-ds-app'
 const DASHBOARD_PANEL_CLASS = `newtab-dashboard-surface fixed inset-0 grid h-dvh w-screen overflow-hidden ${DASHBOARD_SURFACE_CLASS}`
-const DASHBOARD_LOADING_CLASS = `newtab-dashboard-loading fixed inset-0 z-[2] grid place-items-center ${DASHBOARD_SURFACE_CLASS}`
 const DASHBOARD_FALLBACK_CLASS = `newtab-dashboard-fallback fixed inset-0 z-[3] grid place-items-center p-6 ${DASHBOARD_SURFACE_CLASS}`
 const DASHBOARD_FRAME_CLASS = `newtab-dashboard-frame h-full w-full border-0 ${DASHBOARD_SURFACE_CLASS}`
 const DASHBOARD_FRAME_VISIBLE_CLASS = 'opacity-100'
 const DASHBOARD_FRAME_LOADING_CLASS = 'opacity-0'
 const DASHBOARD_CARD_CLASS = 'rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none'
-const DASHBOARD_LOADING_CARD_CLASS = 'newtab-dashboard-loading-card grid size-[86px] place-items-center rounded-ds-sm border border-ds-border bg-ds-surface-1 text-ds-text-primary shadow-none'
-const DASHBOARD_LOADING_LOADER_CLASS = 'newtab-dashboard-loading-loader size-[58px]'
 
 export function DashboardOverlay({
   errorMessage,
@@ -87,16 +84,6 @@ export function DashboardOverlay({
         finalFocus={false}
         unanimated
       >
-        <output
-          className={DASHBOARD_LOADING_CLASS}
-          aria-live="polite"
-          aria-label="正在打开书签仪表盘"
-          hidden={ready || hasError}
-        >
-          <div className={DASHBOARD_LOADING_CARD_CLASS}>
-            <RoseCurveLoader className={DASHBOARD_LOADING_LOADER_CLASS} />
-          </div>
-        </output>
         <div
           id="newtab-dashboard-fallback"
           className={DASHBOARD_FALLBACK_CLASS}

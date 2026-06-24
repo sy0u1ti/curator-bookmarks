@@ -259,21 +259,8 @@ function BookmarkFolderGrid({
   }, [grid.folderId])
   const totalCount = grid.items.length
   const initialVisibleCount = getInitialVisibleCount(grid)
-  const [visibleState, setVisibleState] = useState(() => ({
-    folderId: grid.folderId,
-    visibleCount: initialVisibleCount
-  }))
-  let visibleCount = visibleState.folderId === grid.folderId
-    ? visibleState.visibleCount
-    : initialVisibleCount
-  const normalizedVisibleCount = Math.min(totalCount, Math.max(visibleCount, initialVisibleCount))
-  if (visibleState.folderId !== grid.folderId || visibleState.visibleCount !== normalizedVisibleCount) {
-    visibleCount = normalizedVisibleCount
-    setVisibleState({
-      folderId: grid.folderId,
-      visibleCount: normalizedVisibleCount
-    })
-  }
+  const [visibleCountState, setVisibleCountState] = useState(initialVisibleCount)
+  const visibleCount = normalizeVisibleCount(visibleCountState, initialVisibleCount, totalCount)
   const expandFrameRef = useRef(0)
   const placeholderRef = useRef<HTMLOutputElement | null>(null)
   const visibleCountRef = useRef(visibleCount)
@@ -300,14 +287,12 @@ function BookmarkFolderGrid({
           Math.max(visibleCountRef.current, initialVisibleCount) + grid.chunkSize
         )
         visibleCountRef.current = nextVisibleCount
-        setVisibleState((current) => {
-          if (current.folderId !== grid.folderId) {
+        setVisibleCountState((current) => {
+          const visibleCount = Math.max(current, nextVisibleCount)
+          if (current === visibleCount) {
             return current
           }
-          return {
-            ...current,
-            visibleCount: Math.max(current.visibleCount, nextVisibleCount)
-          }
+          return visibleCount
         })
 
         if (nextVisibleCount < totalCount) {
@@ -317,7 +302,7 @@ function BookmarkFolderGrid({
     }
 
     runFrame()
-  }, [grid.chunkSize, grid.folderId, initialVisibleCount, totalCount])
+  }, [grid.chunkSize, initialVisibleCount, totalCount])
 
   useEffect(() => {
     return () => {
@@ -387,6 +372,14 @@ function BookmarkFolderGrid({
 
 function getInitialVisibleCount(grid: BookmarkFolderGridViewModel): number {
   return Math.min(grid.items.length, Math.max(0, grid.initialVisibleCount))
+}
+
+function normalizeVisibleCount(
+  visibleCount: number,
+  initialVisibleCount: number,
+  totalCount: number
+): number {
+  return Math.min(totalCount, Math.max(visibleCount, initialVisibleCount))
 }
 
 function BookmarkGridPlaceholder({

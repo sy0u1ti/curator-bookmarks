@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { Button } from '../../ui/Button'
+import { CheckboxControl } from '../../ui/Checkbox'
+import { Icon } from '../../ui/icons/Icon'
+import { InlineMenu, type InlineMenuAction } from '../../ui/Menu'
 import {
-  Button,
-  CheckboxControl,
-  Icon,
-  InlineMenu,
   PopoverPopup,
   PopoverPortal,
   PopoverPositioner,
-  PopoverRoot,
-  Textarea,
-  Tooltip,
-  TooltipTriggerShell,
-  type InlineMenuAction,
-} from '../../ui'
+  PopoverRoot
+} from '../../ui/Popover'
+import { Textarea } from '../../ui/Textarea'
+import { Tooltip, TooltipTriggerShell } from '../../ui/Tooltip'
 import { handleDashboardViewAction } from '../options-controller'
 import { useDashboardViewState } from './dashboard-view-store.js'
 import { BusyLoadingLabel } from './LoadingLabel.js'
@@ -342,7 +340,7 @@ function DashboardBreadcrumbs({ segments }: { segments: DashboardBreadcrumbSegme
   return (
     <ol className={DASHBOARD_FOLDER_BREADCRUMB_LIST_CLASS}>
       {segments.map((segment, index) => (
-        <FragmentWithSeparator index={index} isLast={index === segments.length - 1} key={`${segment.id || 'current'}:${index}`}>
+        <FragmentWithSeparator index={index} isLast={index === segments.length - 1} key={getDashboardBreadcrumbSegmentKey(segment)}>
           {segment.current || !segment.id ? (
             <span className={DASHBOARD_FOLDER_BREADCRUMB_CURRENT_CLASS} aria-current="page" title={segment.path}>
               {segment.label}
@@ -367,6 +365,15 @@ function DashboardBreadcrumbs({ segments }: { segments: DashboardBreadcrumbSegme
   )
 }
 
+function getDashboardBreadcrumbSegmentKey(segment: DashboardBreadcrumbSegmentViewModel): string {
+  return [
+    segment.id || 'current',
+    segment.path,
+    segment.label,
+    segment.current ? 'current' : 'link'
+  ].join(':')
+}
+
 function FragmentWithSeparator({
   children,
   index,
@@ -387,8 +394,11 @@ function FragmentWithSeparator({
 }
 
 function DashboardFolderSidebar({ state }: { state: { focusRequestId: string; items: DashboardFolderSidebarItemViewModel[] } }) {
-  const itemRefs = useRef(new Map<string, HTMLButtonElement>())
+  const itemRefs = useRef<Map<string, HTMLButtonElement> | null>(null)
   const items = state.items
+  if (!itemRefs.current) {
+    itemRefs.current = new Map()
+  }
 
   useEffect(() => {
     if (!state.focusRequestId) {
@@ -396,16 +406,16 @@ function DashboardFolderSidebar({ state }: { state: { focusRequestId: string; it
     }
 
     window.requestAnimationFrame(() => {
-      itemRefs.current.get(state.focusRequestId)?.focus({ preventScroll: true })
+      itemRefs.current?.get(state.focusRequestId)?.focus({ preventScroll: true })
     })
   }, [state.focusRequestId, items])
 
   const setItemRef = (id: string) => (node: HTMLButtonElement | null) => {
     if (node) {
-      itemRefs.current.set(id, node)
+      itemRefs.current?.set(id, node)
       return
     }
-    itemRefs.current.delete(id)
+    itemRefs.current?.delete(id)
   }
 
   const handleFolderKeyDown = (event: KeyboardEvent<HTMLButtonElement>, itemId: string) => {
@@ -711,6 +721,7 @@ function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActions
 
 function DashboardTagEditorField({ state }: { state: DashboardTagEditorFieldState }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const textareaId = 'dashboard-tag-editor-tags'
 
   useEffect(() => {
     if (!state.focusRequestId) {
@@ -723,9 +734,10 @@ function DashboardTagEditorField({ state }: { state: DashboardTagEditorFieldStat
   }, [state.focusRequestId])
 
   return (
-    <label className={DASHBOARD_TAG_EDITOR_FIELD_CLASS}>
+    <label className={DASHBOARD_TAG_EDITOR_FIELD_CLASS} htmlFor={textareaId}>
       <span className={DASHBOARD_TAG_EDITOR_FIELD_LABEL_CLASS}>标签</span>
       <Textarea
+        id={textareaId}
         className={DASHBOARD_TAG_EDITOR_TEXTAREA_CLASS}
         key={state.value}
         ref={textareaRef}
@@ -784,7 +796,7 @@ function getDashboardFolderKeyboardTargetId(
   return items[items.length - 1]?.id || ''
 }
 
-function DashboardCard({
+const DashboardCard = memo(function DashboardCard({
   dimmed,
   state,
   focusRequest,
@@ -884,6 +896,93 @@ function DashboardCard({
       <DashboardCardContents state={state} focusRequest={focusRequest} />
     </article>
   )
+}, areDashboardCardPropsEqual)
+
+function areDashboardCardPropsEqual(
+  previous: {
+    dimmed: boolean
+    state: DashboardCardViewModel
+    focusRequest: DashboardCardMenuFocusRequestState
+    registerCardElement?: DashboardCardElementRegistrar
+    staticVisibility?: boolean
+  },
+  next: {
+    dimmed: boolean
+    state: DashboardCardViewModel
+    focusRequest: DashboardCardMenuFocusRequestState
+    registerCardElement?: DashboardCardElementRegistrar
+    staticVisibility?: boolean
+  }
+): boolean {
+  return (
+    previous.dimmed === next.dimmed &&
+    previous.registerCardElement === next.registerCardElement &&
+    Boolean(previous.staticVisibility) === Boolean(next.staticVisibility) &&
+    getDashboardCardFocusRequestId(previous.focusRequest, previous.state.bookmarkId) ===
+      getDashboardCardFocusRequestId(next.focusRequest, next.state.bookmarkId) &&
+    areDashboardCardStatesEqual(previous.state, next.state)
+  )
+}
+
+function getDashboardCardFocusRequestId(
+  focusRequest: DashboardCardMenuFocusRequestState,
+  bookmarkId: string
+): number {
+  return focusRequest.bookmarkId === bookmarkId ? focusRequest.requestId : 0
+}
+
+function areDashboardCardStatesEqual(previous: DashboardCardViewModel, next: DashboardCardViewModel): boolean {
+  return (
+    previous.activeMenu === next.activeMenu &&
+    previous.bookmarkId === next.bookmarkId &&
+    previous.copyActionLabel === next.copyActionLabel &&
+    previous.copyText === next.copyText &&
+    previous.copyTooltip === next.copyTooltip &&
+    previous.deleting === next.deleting &&
+    previous.deleteLabel === next.deleteLabel &&
+    previous.displayUrl === next.displayUrl &&
+    previous.editTagsLabel === next.editTagsLabel &&
+    previous.expanded === next.expanded &&
+    previous.fallbackLabel === next.fallbackLabel &&
+    areDashboardFaviconsEqual(previous.favicon, next.favicon) &&
+    previous.hiddenTagCount === next.hiddenTagCount &&
+    previous.itemPath === next.itemPath &&
+    previous.moreLabel === next.moreLabel &&
+    previous.moveLabel === next.moveLabel &&
+    previous.openLabel === next.openLabel &&
+    previous.parentId === next.parentId &&
+    previous.renderMode === next.renderMode &&
+    previous.selected === next.selected &&
+    previous.selectionLabel === next.selectionLabel &&
+    previous.speedDialActionLabel === next.speedDialActionLabel &&
+    previous.speedDialActionText === next.speedDialActionText &&
+    previous.speedDialPinned === next.speedDialPinned &&
+    previous.tagStatusTitle === next.tagStatusTitle &&
+    previous.title === next.title &&
+    previous.url === next.url &&
+    areStringArraysEqual(previous.tags, next.tags) &&
+    areStringArraysEqual(previous.visibleTags, next.visibleTags)
+  )
+}
+
+function areDashboardFaviconsEqual(
+  previous: DashboardCardFaviconViewModel | null,
+  next: DashboardCardFaviconViewModel | null
+): boolean {
+  return (
+    previous === next ||
+    Boolean(previous) === Boolean(next) &&
+      previous?.pageUrl === next?.pageUrl &&
+      previous?.source === next?.source &&
+      previous?.src === next?.src
+  )
+}
+
+function areStringArraysEqual(previous: string[], next: string[]): boolean {
+  if (previous === next) {
+    return true
+  }
+  return previous.length === next.length && previous.every((value, index) => value === next[index])
 }
 
 const DASHBOARD_CARD_DRAG_IGNORED_TAGS = new Set(['A', 'BUTTON', 'INPUT', 'LABEL', 'SELECT', 'TEXTAREA'])
@@ -917,13 +1016,14 @@ function DashboardCardContents({
   state: DashboardCardViewModel
   focusRequest: DashboardCardMenuFocusRequestState
 }) {
-  const tagRowVisible = state.visibleTags.length > 0 || state.hiddenTagCount > 0
+  const isScrollCard = state.renderMode === 'scroll'
+  const tagRowVisible = !isScrollCard && (state.visibleTags.length > 0 || state.hiddenTagCount > 0)
   const tagToggleRef = useRef<HTMLButtonElement | null>(null)
   const tagsPanelId = getDashboardTagsPanelId(state.bookmarkId)
 
   return (
     <>
-      <label className={DASHBOARD_CARD_CHECK_CLASS}>
+      {!isScrollCard ? <label className={DASHBOARD_CARD_CHECK_CLASS}>
         <CheckboxControl
           aria-label={state.selectionLabel}
           className={OPTION_RESULT_CHECKBOX_CLASS}
@@ -937,7 +1037,7 @@ function DashboardCardContents({
           unstyled
         />
         <span className="sr-only">{state.selectionLabel}</span>
-      </label>
+      </label> : null}
       <div className={DASHBOARD_CARD_BODY_CLASS}>
         <DashboardFavicon state={state} />
         <div className={DASHBOARD_CARD_COPY_CLASS}>
@@ -952,19 +1052,25 @@ function DashboardCardContents({
             {state.displayUrl}
           </a>
           <div className={DASHBOARD_CARD_META_CLASS}>
-            <Button
-              className={DASHBOARD_CARD_PATH_CHIP_CLASS}
-              type="button"
-              title={state.itemPath}
-              aria-label={`按文件夹筛选：${state.itemPath}`}
-              onClick={() => handleDashboardViewAction({
-                action: 'folder-filter',
-                bookmarkId: state.parentId
-              })}
-              unstyled
-            >
-              {state.itemPath}
-            </Button>
+            {isScrollCard ? (
+              <span className={DASHBOARD_CARD_PATH_CHIP_CLASS} title={state.itemPath}>
+                {state.itemPath}
+              </span>
+            ) : (
+              <Button
+                className={DASHBOARD_CARD_PATH_CHIP_CLASS}
+                type="button"
+                title={state.itemPath}
+                aria-label={`按文件夹筛选：${state.itemPath}`}
+                onClick={() => handleDashboardViewAction({
+                  action: 'folder-filter',
+                  bookmarkId: state.parentId
+                })}
+                unstyled
+              >
+                {state.itemPath}
+              </Button>
+            )}
             {tagRowVisible ? (
               <div className={DASHBOARD_CARD_TAG_ROW_CLASS}>
                 {state.visibleTags.map((tag) => (
@@ -1006,14 +1112,14 @@ function DashboardCardContents({
           </div>
         </div>
       </div>
-      <span
+      {!isScrollCard ? <span
         className={[
           DASHBOARD_CARD_STATUS_DOT_CLASS,
           state.tags.length ? DASHBOARD_CARD_STATUS_DOT_TAGGED_STATE_CLASS : ''
         ].filter(Boolean).join(' ')}
         title={state.tagStatusTitle}
-      ></span>
-      <div className={DASHBOARD_CARD_FOOTER_CLASS}>
+      ></span> : null}
+      {!isScrollCard ? <div className={DASHBOARD_CARD_FOOTER_CLASS}>
         <DashboardCardAction
           as="a"
           icon="open"
@@ -1035,7 +1141,7 @@ function DashboardCardContents({
           text={state.copyText}
         />
         <DashboardCardMoreMenu state={state} focusRequest={focusRequest} />
-      </div>
+      </div> : null}
       {state.expanded && state.tags.length ? (
         <div className={DASHBOARD_TAG_POPOVER_LAYER_CLASS}>
           <DashboardTagPopoverShell
@@ -1197,7 +1303,7 @@ function DashboardFavicon({ state }: { state: DashboardCardViewModel }) {
     <DashboardFaviconShell
       bookmarkId={state.bookmarkId}
       fallbackLabel={state.fallbackLabel}
-      favicon={state.favicon}
+      favicon={state.renderMode === 'scroll' ? null : state.favicon}
       selected={state.selected}
     />
   )
@@ -1214,14 +1320,6 @@ function DashboardFaviconShell({
   favicon: DashboardCardFaviconViewModel | null
   selected?: boolean
 }) {
-  const [loadedSrc, setLoadedSrc] = useState('')
-
-  useEffect(() => {
-    setLoadedSrc('')
-  }, [favicon?.src])
-
-  const hasLoadedFavicon = Boolean(favicon?.src && loadedSrc === favicon.src)
-
   return (
     <span
       className={[
@@ -1231,42 +1329,82 @@ function DashboardFaviconShell({
       aria-hidden="true"
     >
       {favicon ? (
-        <img
-          className={[
-            DASHBOARD_CARD_FAVICON_IMAGE_CLASS,
-            selected ? DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS : '',
-            hasLoadedFavicon ? DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS : ''
-          ].filter(Boolean).join(' ')}
-          src={favicon.src}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          draggable={false}
-          onLoad={() => {
-            setLoadedSrc(favicon.src)
-            handleDashboardViewAction({
-              action: 'favicon-load',
-              bookmarkId,
-              pageUrl: favicon.pageUrl,
-              source: favicon.source,
-              src: favicon.src
-            })
-          }}
-          onError={() => handleDashboardViewAction({
-            action: 'favicon-error',
+        <DashboardFaviconImage
+          bookmarkId={bookmarkId}
+          fallbackLabel={fallbackLabel}
+          favicon={favicon}
+          selected={selected}
+          key={`${favicon.source}:${favicon.pageUrl}:${favicon.src}`}
+        />
+      ) : (
+        <DashboardFaviconFallback label={fallbackLabel} />
+      )}
+    </span>
+  )
+}
+
+function DashboardFaviconImage({
+  bookmarkId,
+  fallbackLabel,
+  favicon,
+  selected
+}: {
+  bookmarkId: string
+  fallbackLabel: string
+  favicon: DashboardCardFaviconViewModel
+  selected: boolean
+}) {
+  const [loaded, setLoaded] = useState(false)
+
+  return (
+    <>
+      <img
+        className={[
+          DASHBOARD_CARD_FAVICON_IMAGE_CLASS,
+          selected ? DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS : '',
+          loaded ? DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS : ''
+        ].filter(Boolean).join(' ')}
+        src={favicon.src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        draggable={false}
+        onLoad={() => {
+          setLoaded(true)
+          handleDashboardViewAction({
+            action: 'favicon-load',
             bookmarkId,
             pageUrl: favicon.pageUrl,
             source: favicon.source,
             src: favicon.src
-          })}
-        />
-      ) : null}
-      <span
-        className={DASHBOARD_CARD_FAVICON_FALLBACK_CLASS}
-        hidden={hasLoadedFavicon}
-      >
-        {fallbackLabel}
-      </span>
+          })
+        }}
+        onError={() => handleDashboardViewAction({
+          action: 'favicon-error',
+          bookmarkId,
+          pageUrl: favicon.pageUrl,
+          source: favicon.source,
+          src: favicon.src
+        })}
+      />
+      <DashboardFaviconFallback label={fallbackLabel} hidden={loaded} />
+    </>
+  )
+}
+
+function DashboardFaviconFallback({
+  hidden = false,
+  label
+}: {
+  hidden?: boolean
+  label: string
+}) {
+  return (
+    <span
+      className={DASHBOARD_CARD_FAVICON_FALLBACK_CLASS}
+      hidden={hidden}
+    >
+      {label}
     </span>
   )
 }

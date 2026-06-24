@@ -572,6 +572,8 @@ const FEATURED_BACKGROUND_HOVER_PREVIEW_DELAY_MS = 220
 const QUICK_ACCESS_ITEM_LIMIT = 6
 const ACTIVITY_RECORD_LIMIT = 160
 const DASHBOARD_FRAME_READY_TIMEOUT_MS = 12000
+const DASHBOARD_FRAME_OPAQUE_ORIGIN = 'null'
+const DASHBOARD_FRAME_MESSAGE_TARGET_ORIGIN = '*'
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false,
   showQuickAccess: true,
@@ -5183,7 +5185,7 @@ function postDashboardOpenMessage(): void {
 
   frame.contentWindow?.postMessage(
     { type: NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE },
-    window.location.origin
+    DASHBOARD_FRAME_MESSAGE_TARGET_ORIGIN
   )
 }
 
@@ -5220,7 +5222,10 @@ function handleDashboardMessage(event: MessageEvent): void {
     return
   }
 
-  if (event.origin !== window.location.origin) {
+  if (
+    event.origin !== window.location.origin &&
+    event.origin !== DASHBOARD_FRAME_OPAQUE_ORIGIN
+  ) {
     return
   }
 
@@ -5254,7 +5259,7 @@ function postDashboardSpeedDialState(): void {
   frame.contentWindow?.postMessage({
     type: NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
     pinnedIds: getActiveWorkspacePinnedIds()
-  }, window.location.origin)
+  }, DASHBOARD_FRAME_MESSAGE_TARGET_ORIGIN)
 }
 
 async function toggleDashboardBookmarkSpeedDial(bookmarkId: string): Promise<void> {
@@ -7103,7 +7108,6 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
     }
   }
 
-  const portal = createPortalPanel()
   const sourceNavigation = createSourceNavigation(sections)
   let renderedBookmarkIndex = 0
   const sectionModels: BookmarkFolderSectionViewModel[] = sections.map((section) => {
@@ -7149,7 +7153,7 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
   const reorderStatusMessage = state.bookmarkReorderError || state.folderReorderStatus
   const viewModel: BookmarkContentViewModel = {
     content: createBookmarkContentStyleState(),
-    portal,
+    portal: null,
     reorderStatus: reorderStatusMessage
       ? {
           message: reorderStatusMessage,

@@ -43,15 +43,17 @@ export function Drawer({
                 />
               }
             >
-              <header className="grid gap-1">
-                <BaseDrawer.Title className="text-base font-semibold">{title}</BaseDrawer.Title>
-                {description ? (
-                  <BaseDrawer.Description className="text-sm text-ds-text-secondary">
-                    {description}
-                  </BaseDrawer.Description>
-                ) : null}
-              </header>
-              {children}
+              <BaseDrawer.Content className="contents">
+                <header className="grid gap-1">
+                  <BaseDrawer.Title className="text-base font-semibold">{title}</BaseDrawer.Title>
+                  {description ? (
+                    <BaseDrawer.Description className="text-sm text-ds-text-secondary">
+                      {description}
+                    </BaseDrawer.Description>
+                  ) : null}
+                </header>
+                {children}
+              </BaseDrawer.Content>
             </BaseDrawer.Popup>
           </BaseDrawer.Viewport>
         </Presence>
@@ -124,18 +126,27 @@ export function DrawerPanel({
   motionVariant = 'drawer',
   ref,
   unanimated = false,
-  ...props
+  children,
+  ...popupProps
 }: DrawerPanelProps) {
+  const content = <BaseDrawer.Content className="contents">{children}</BaseDrawer.Content>
+
   if (unanimated) {
-    return <BaseDrawer.Popup ref={ref} className={className} {...props} />
+    return (
+      <BaseDrawer.Popup ref={ref} className={className} {...popupProps}>
+        {content}
+      </BaseDrawer.Popup>
+    )
   }
 
   return (
     <BaseDrawer.Popup
       ref={ref}
       render={<MotionPanel variant={motionVariant} className={cx(className, motionClassName)} />}
-      {...props}
-    />
+      {...popupProps}
+    >
+      {content}
+    </BaseDrawer.Popup>
   )
 }
 

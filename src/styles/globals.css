@@ -74,9 +74,3 @@ body {
   36% { opacity: 0.05; }
   100% { opacity: 0; }
 }
-
-@keyframes rose-curve-loader-path {
-  to {
-    stroke-dashoffset: -100;
-  }
-}

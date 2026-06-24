@@ -94,22 +94,6 @@ export const DASHBOARD_PERFORMANCE_CLASS = [
   '[&_:where(*)]:duration-0 [&_:where(*)]:[animation-duration:0ms]'
 ].join(' ')
 
-export const DASHBOARD_LOADING_SCREEN_CLASS = [
-  'absolute inset-0 z-[12] grid place-items-center pointer-events-none',
-  '[transition:opacity_var(--ds-motion-fast)_var(--ds-ease-standard),visibility_0s]'
-].join(' ')
-
-export const DASHBOARD_LOADING_SCREEN_ACTIVE_STATE_CLASS =
-  'visible opacity-100'
-
-export const DASHBOARD_LOADING_SCREEN_READY_STATE_CLASS =
-  'invisible opacity-0 [transition:opacity_var(--ds-motion-fast)_var(--ds-ease-standard),visibility_0s_linear_var(--ds-motion-fast)]'
-
-export const DASHBOARD_LOADING_CARD_CLASS =
-  'grid size-[86px] place-items-center rounded-ds-sm border border-ds-border bg-ds-surface-1 text-ds-text-primary shadow-none'
-
-export const DASHBOARD_LOADING_LOADER_CLASS = 'size-[58px]'
-
 export const DASHBOARD_TITLE_ACTIONS_CLASS =
   'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start justify-end gap-2 pt-0 [--dashboard-status-width:minmax(0,1fr)] [grid-column:3] max-[920px]:[grid-column:1]'
 
