@@ -550,7 +550,7 @@ export const DASHBOARD_CARD_FAVICON_IMAGE_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS =
-  '[filter:drop-shadow(0_0_1px_rgba(59,130,246,0.9))_drop-shadow(0_0_7px_rgba(59,130,246,0.38))]'
+  '[filter:drop-shadow(0_0_1px_rgba(245,245,247,0.96))_drop-shadow(0_0_7px_rgba(245,245,247,0.42))]'
 
 export const DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS =
   'opacity-100'

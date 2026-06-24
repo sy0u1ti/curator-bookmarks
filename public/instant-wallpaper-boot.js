@@ -22,7 +22,7 @@
     const targetPreviewUrl = getTargetPreviewUrl(targetRecord)
 
     const thumbnailRecord = readRecord(thumbnailKey)
-    const thumbnailDataUrl = getMatchingThumbnailDataUrl(thumbnailRecord, targetRecord.signature) || readDataUrl(thumbnailDataUrlKey)
+    const thumbnailDataUrl = getMatchingThumbnailDataUrl(thumbnailRecord, targetRecord.signature)
     cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_RECORD__', createBootRecord(targetRecord, thumbnailDataUrl))
     cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_DATA_URL__', thumbnailDataUrl)
     const startupImageUrl = targetImageUrl || thumbnailDataUrl
@@ -122,6 +122,11 @@
     }
     root.classList.remove('instant-wallpaper-remote-ready')
     delete root.dataset.instantWallpaperRemoteReady
+    if (imageUrl && previewUrl && imageUrl === previewUrl) {
+      root.dataset.instantWallpaperPreviewOnly = 'true'
+    } else {
+      delete root.dataset.instantWallpaperPreviewOnly
+    }
     updateBootView({
       backgroundColor: placeholderColor,
       image: imageUrl ? `url("${escapeCssUrl(imageUrl)}")` : 'none',
@@ -254,7 +259,13 @@
       return ''
     }
     const dataUrl = typeof thumbnailRecord.dataUrl === 'string' ? thumbnailRecord.dataUrl : ''
-    return dataUrl.startsWith('data:image/') ? dataUrl : ''
+    if (dataUrl.startsWith('data:image/')) {
+      return dataUrl
+    }
+    const dataUrlRef = typeof thumbnailRecord.dataUrlRef === 'string' && thumbnailRecord.dataUrlRef.trim()
+      ? thumbnailRecord.dataUrlRef.trim()
+      : thumbnailDataUrlKey
+    return readDataUrl(dataUrlRef)
   }
 
   function escapeCssUrl(value) {

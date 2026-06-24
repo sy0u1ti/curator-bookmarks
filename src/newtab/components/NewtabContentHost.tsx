@@ -6,9 +6,7 @@ import {
   type ReactNode,
   type RefObject
 } from 'react'
-import { Button } from '../../ui/base/Button'
-import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
-import { cx } from '../../ui/base/utils'
+import { Button, DotMatrixLoader, cx } from '../../ui'
 import {
   type NewTabContentView,
   type NewTabMissingFolderModule,
@@ -41,11 +39,11 @@ const STATE_MISSING_CLASS = 'folder-missing w-[min(560px,100%)] py-[22px]'
 const STATE_ACTIONS_CLASS = 'newtab-state-actions flex flex-wrap justify-center gap-2.5'
 const STATE_TITLE_CLASS = 'm-0 text-xl font-bold leading-[1.25] text-[var(--ui-text-primary)]'
 const STATE_COPY_CLASS = 'm-0 max-w-[440px] text-sm leading-[1.7] text-[var(--ui-text-secondary)]'
-const ONBOARDING_STRIP_CLASS = 'newtab-onboarding-strip grid w-[min(100%,980px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] px-3 py-2.5 text-[rgba(245,245,247,0.9)] shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] backdrop-blur-[12px] backdrop-saturate-[1.12]'
+const ONBOARDING_STRIP_CLASS = 'newtab-onboarding-strip grid w-[min(100%,980px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] px-3 py-2.5 text-[rgba(245,245,247,0.9)] shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] backdrop-blur-[12px] backdrop-saturate-[1.12] max-[640px]:grid-cols-[minmax(0,1fr)]'
 const ONBOARDING_COPY_CLASS = 'newtab-onboarding-copy grid min-w-0 gap-[3px]'
-const ONBOARDING_TITLE_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] leading-[1.2]'
-const ONBOARDING_TEXT_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] text-[rgba(245,245,247,0.55)]'
-const ONBOARDING_ACTIONS_CLASS = 'newtab-onboarding-actions flex flex-wrap justify-end gap-2'
+const ONBOARDING_TITLE_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] leading-[1.2] max-[640px]:whitespace-normal'
+const ONBOARDING_TEXT_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] text-[rgba(245,245,247,0.55)] max-[640px]:whitespace-normal'
+const ONBOARDING_ACTIONS_CLASS = 'newtab-onboarding-actions flex flex-wrap justify-end gap-2 max-[640px]:justify-start'
 const ONBOARDING_BUTTON_CLASS = 'min-h-[30px] rounded-[7px] border border-[rgba(245,245,247,0.12)] bg-[rgba(245,245,247,0.08)] px-2.5 text-xs font-[680] text-[rgba(245,245,247,0.9)] hover:border-[rgba(245,245,247,0.22)] hover:bg-[rgba(245,245,247,0.12)] focus-visible:border-[rgba(245,245,247,0.22)] focus-visible:bg-[rgba(245,245,247,0.12)]'
 const ONBOARDING_SECONDARY_BUTTON_CLASS = 'text-[rgba(245,245,247,0.62)]'
 

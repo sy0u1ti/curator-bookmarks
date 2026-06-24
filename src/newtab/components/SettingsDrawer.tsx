@@ -64,7 +64,6 @@ import {
 } from '../newtab-settings-drawer-store'
 import { setNewtabFeaturedBackgroundPickerNodes } from '../newtab-featured-background-picker-store'
 import {
-  dispatchNewtabModuleSettingMove,
   dispatchNewtabModuleSettingToggle,
   useNewtabModuleSettingsView,
   type NewtabModuleSettingRowView
@@ -97,7 +96,7 @@ const settingsTabs = [
 ] as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
 const SETTINGS_DRAWER_SURFACE_CLASS = 'rounded-ds-lg border border-ds-border bg-ds-app text-ds-text-primary shadow-ds-dialog [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
-const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-transform duration-ds-standard ease-ds-standard will-change-transform motion-reduce:transition-none'
+const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-transform duration-ds-standard ease-ds-standard will-change-transform motion-reduce:transition-none max-[420px]:w-full max-[420px]:rounded-none max-[420px]:border-x-0'
 const SETTINGS_DRAWER_PANEL_OPEN_CLASS = 'translate-x-0'
 const SETTINGS_DRAWER_PANEL_CLOSED_CLASS = 'translate-x-full'
 const SETTINGS_DRAWER_SCROLL_CLASS = 'h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin] max-[700px]:px-4 max-[700px]:pb-5'
@@ -107,9 +106,9 @@ const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-semibold uppercase text-ds-text-
 const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
 const SETTINGS_SUMMARY_CLASS = 'm-0 text-sm leading-relaxed text-ds-text-secondary'
 const SETTINGS_SAVE_STATUS_CLASS = 'mt-1 justify-self-start text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
-const SETTINGS_TABS_LIST_CLASS = 'sticky top-0 z-[1] grid grid-cols-5 gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1'
-const SETTINGS_TAB_CLASS = 'min-h-8 min-w-0 rounded-ds-sm bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:bg-ds-hover hover:text-ds-text-primary data-[active]:bg-ds-selected data-[active]:text-ds-text-primary data-[selected]:bg-ds-selected data-[selected]:text-ds-text-primary data-[state=active]:bg-ds-selected data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus'
-const SETTINGS_TABS_INDICATOR_CLASS = 'hidden'
+const SETTINGS_TABS_LIST_CLASS = 't-tabs sticky top-0 z-[1] grid grid-cols-5 gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1 max-[380px]:grid-cols-3'
+const SETTINGS_TAB_CLASS = 't-tab min-h-8 min-w-0 rounded-ds-sm bg-transparent px-2 text-xs font-semibold outline-none hover:text-ds-text-primary data-[active]:text-ds-text-primary data-[selected]:text-ds-text-primary data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus'
+const SETTINGS_TABS_INDICATOR_CLASS = 't-tabs-pill'
 const SETTINGS_TAB_PANEL_CLASS = 'grid min-w-0 gap-4 outline-none'
 const SETTINGS_NESTED_SURFACE_CLASS = 'border-ds-border rounded-ds-sm bg-ds-surface-1 shadow-none'
 const SETTINGS_SELECTED_SURFACE_CLASS = 'border-ds-border-hover bg-ds-selected text-ds-text-primary shadow-none'
@@ -151,15 +150,17 @@ const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-se
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
 const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 px-2.5 py-2', SETTINGS_NESTED_SURFACE_CLASS)
 const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto'
-const FOLDER_CANDIDATE_CARD_CLASS = 'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
+const FOLDER_CANDIDATE_CARD_CLASS = 'grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
 const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
 const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-snug text-ds-text-primary'
 const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
 const FOLDER_CANDIDATE_BADGE_CLASS = 'inline-flex min-h-5 items-center justify-center rounded-full bg-ds-surface-1 px-2 text-xs font-semibold text-ds-text-secondary whitespace-nowrap'
-const MODULE_CONTROLS_CLASS = 'inline-flex items-center gap-1.5'
 const MODULE_SWITCH_LABEL_CLASS = 'inline-flex items-center'
-const BACKGROUND_CREDIT_ROW_CLASS = 'grid-cols-[auto_minmax(0,1fr)]'
-const BACKGROUND_CREDIT_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right text-xs font-semibold text-ds-accent-text'
+const BACKGROUND_CREDIT_ROW_CLASS = '-mt-1 flex min-h-6 min-w-0 items-center gap-1.5 px-1.5 text-xs leading-none text-ds-text-muted'
+const BACKGROUND_CREDIT_LABEL_CLASS = 'shrink-0 font-medium text-ds-text-secondary'
+const BACKGROUND_CREDIT_CLASS = 'group inline-flex min-w-0 flex-1 items-center gap-1.5 rounded-ds-sm text-xs font-medium leading-none text-ds-text-muted outline-none transition-colors duration-ds-fast ease-ds-standard hover:text-ds-text-primary focus-visible:shadow-ds-focus'
+const BACKGROUND_CREDIT_TEXT_CLASS = 'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap'
+const BACKGROUND_CREDIT_ICON_CLASS = 'shrink-0 text-ds-text-disabled transition-colors duration-ds-fast ease-ds-standard group-hover:text-ds-text-secondary'
 const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1fr)_34px] items-center gap-2 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 pl-2.5'
 const SETTING_COLOR_VALUE_CLASS = 'text-xs font-semibold text-ds-text-primary'
 const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden rounded-ds-sm border-0 bg-transparent p-0'
@@ -203,15 +204,19 @@ function settingRowClassName(...classNames: Array<string | false | null | undefi
 
 function SettingLabelStack({
   title,
-  description
+  description,
+  descriptionId,
+  titleId
 }: {
   title: ReactNode
   description?: ReactNode
+  descriptionId?: string
+  titleId?: string
 }) {
   return (
     <span className={SETTINGS_LABEL_STACK_CLASS}>
-      <span className={SETTINGS_LABEL_CLASS}>{title}</span>
-      {description ? <small className={SETTINGS_DESCRIPTION_CLASS}>{description}</small> : null}
+      <span id={titleId} className={SETTINGS_LABEL_CLASS}>{title}</span>
+      {description ? <small id={descriptionId} className={SETTINGS_DESCRIPTION_CLASS}>{description}</small> : null}
     </span>
   )
 }
@@ -247,11 +252,16 @@ function SwitchRow({
   controlRef?: Ref<HTMLElement>
   onCheckedChange?: (checked: boolean) => void
 }) {
+  const labelId = `${id}-label`
+  const descriptionId = `${id}-description`
+
   return (
-    <label className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
-      <SettingLabelStack title={title} description={description} />
+    <div className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
+      <SettingLabelStack title={title} titleId={labelId} description={description} descriptionId={descriptionId} />
       <SwitchControl
         id={id}
+        aria-labelledby={labelId}
+        aria-describedby={descriptionId}
         className={SETTINGS_SWITCH_CLASS}
         checked={checked}
         defaultChecked={defaultChecked}
@@ -262,7 +272,7 @@ function SwitchRow({
         thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
         unstyled
       />
-    </label>
+    </div>
   )
 }
 
@@ -681,10 +691,7 @@ function FolderCandidateItem({
 }) {
   return (
     <Button
-      className={cx(
-        FOLDER_CANDIDATE_CARD_CLASS,
-        item.selected ? SETTINGS_SELECTED_SURFACE_CLASS : undefined
-      )}
+      className={FOLDER_CANDIDATE_CARD_CLASS}
       type="button"
       ref={buttonRef}
       tabIndex={item.active ? 0 : -1}
@@ -706,8 +713,7 @@ function FolderCandidateItem({
     >
       <span className={FOLDER_CANDIDATE_COPY_CLASS}>
         <strong className={FOLDER_CANDIDATE_TITLE_CLASS}>{item.title || '未命名文件夹'}</strong>
-        <span className={FOLDER_CANDIDATE_META_CLASS}>{item.path || item.title || '未命名文件夹'}</span>
-        <span className={FOLDER_CANDIDATE_META_CLASS}>{item.stats}</span>
+        <span className={FOLDER_CANDIDATE_META_CLASS}>{`${item.path || item.title || '未命名文件夹'} · ${item.stats}`}</span>
       </span>
       <span className={FOLDER_CANDIDATE_BADGE_CLASS}>{item.badge}</span>
     </Button>
@@ -752,51 +758,19 @@ function ModuleSettingRow({ row }: { row: NewtabModuleSettingRowView }) {
   return (
     <div className={settingRowClassName()} data-module-row={row.key}>
       <SettingLabelStack title={row.label} description={row.description} />
-      <span className={MODULE_CONTROLS_CLASS}>
-        <Button
-          className={settingsControlClassName(SETTINGS_COMPACT_BUTTON_CLASS)}
-          type="button"
-          data-module-setting-move={row.key}
-          data-module-setting-direction="up"
-          disabled={row.index <= 0}
-          aria-label={`上移模块：${row.label}`}
-          title={`上移 ${row.label}`}
-          onClick={() => {
-            dispatchNewtabModuleSettingMove(row.key, -1)
+      <span className={MODULE_SWITCH_LABEL_CLASS}>
+        <SwitchControl
+          aria-label={`${row.enabled ? '隐藏' : '显示'}模块：${row.label}`}
+          checked={row.enabled}
+          className={SETTINGS_SWITCH_CLASS}
+          data-module-setting-toggle={row.key}
+          onCheckedChange={(checked) => {
+            dispatchNewtabModuleSettingToggle(row.key, checked)
           }}
+          syncInputState
+          thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
           unstyled
-        >
-          {'\u2191'}
-        </Button>
-        <Button
-          className={settingsControlClassName(SETTINGS_COMPACT_BUTTON_CLASS)}
-          type="button"
-          data-module-setting-move={row.key}
-          data-module-setting-direction="down"
-          disabled={row.index >= row.total - 1}
-          aria-label={`下移模块：${row.label}`}
-          title={`下移 ${row.label}`}
-          onClick={() => {
-            dispatchNewtabModuleSettingMove(row.key, 1)
-          }}
-          unstyled
-        >
-          {'\u2193'}
-        </Button>
-        <span className={MODULE_SWITCH_LABEL_CLASS}>
-          <SwitchControl
-            aria-label={`${row.enabled ? '隐藏' : '显示'}模块：${row.label}`}
-            checked={row.enabled}
-            className={SETTINGS_SWITCH_CLASS}
-            data-module-setting-toggle={row.key}
-            onCheckedChange={(checked) => {
-              dispatchNewtabModuleSettingToggle(row.key, checked)
-            }}
-            syncInputState
-            thumbClassName={SETTINGS_SWITCH_THUMB_CLASS}
-            unstyled
-          />
-        </span>
+        />
       </span>
     </div>
   )
@@ -881,17 +855,20 @@ function BackgroundSettingsSection({
             unstyled
           />
         </div>
-        <div id="background-featured-credit-row" className={settingRowClassName(BACKGROUND_CREDIT_ROW_CLASS)} hidden={backgroundSettings.featuredCreditHidden}>
-          <span className={SETTINGS_LABEL_CLASS}>图片来源</span>
+        <div id="background-featured-credit-row" className={BACKGROUND_CREDIT_ROW_CLASS} hidden={backgroundSettings.featuredCreditHidden}>
+          <span className={BACKGROUND_CREDIT_LABEL_CLASS}>来源</span>
+          <span aria-hidden="true" className="shrink-0 text-ds-text-disabled">·</span>
           <a
             id="background-featured-credit"
             className={BACKGROUND_CREDIT_CLASS}
             href={backgroundSettings.featuredCreditHref}
+            aria-label={`打开图片来源：${backgroundSettings.featuredCreditText}`}
             title={backgroundSettings.featuredCreditTitle}
             target="_blank"
             rel="noreferrer"
           >
-            {backgroundSettings.featuredCreditText}
+            <span className={BACKGROUND_CREDIT_TEXT_CLASS}>{backgroundSettings.featuredCreditText}</span>
+            <Icon className={BACKGROUND_CREDIT_ICON_CLASS} name="ExternalLink" size={13} aria-hidden="true" />
           </a>
         </div>
         <SliderRow rowId="background-featured-display-size-row" id="background-featured-display-size" label="背景大小" valueId="background-featured-display-size-value" value={`${backgroundSettings.displaySize}%`} min={String(backgroundSettings.displaySizeMin)} max={String(backgroundSettings.displaySizeMax)} defaultValue="100" ariaLabel="精选图库背景大小" hidden={backgroundSettings.featuredDisplayHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('displaySize', value)} sliderValue={backgroundSettings.displaySize} />
@@ -1564,7 +1541,6 @@ export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, 
       aria-hidden={open ? 'false' : 'true'}
       inert={!open}
       tabIndex={-1}
-      disablePointerDismissal
       overlayRef={setDrawerElement}
     >
       <DrawerPanel

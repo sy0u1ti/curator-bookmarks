@@ -141,7 +141,6 @@ import {
   buildNewTabModuleSettingRows,
   DEFAULT_NEW_TAB_MODULE_SETTINGS,
   getVisibleNewTabModules,
-  moveNewTabModuleSetting,
   normalizeNewTabModuleSettings,
   type NewTabModuleSettingKey,
   type NewTabModuleSettings
@@ -391,9 +390,9 @@ type DragStartPointerEvent = Pick<
   'button' | 'clientX' | 'clientY' | 'pointerId' | 'pointerType'
 >
 const INSTANT_WALLPAPER_STARTUP_CACHE_ATTEMPTS = [
-  { maxDimension: 320, quality: 0.54 },
-  { maxDimension: 224, quality: 0.5 },
-  { maxDimension: 144, quality: 0.46 }
+  { maxDimension: 480, quality: 0.68 },
+  { maxDimension: 360, quality: 0.62 },
+  { maxDimension: 256, quality: 0.56 }
 ] as const
 const FEATURED_BACKGROUND_DAILY_REFRESH_GRACE_MS = 1500
 const DEFAULT_BACKGROUND_SETTINGS = {
@@ -438,6 +437,8 @@ const DEFAULT_TIME_SETTINGS: NewTabTimeSettings = {
 const SEARCH_OFFSET_BOUNDS_FALLBACK: AdaptiveSearchOffsetBounds = { min: -32, max: 72 }
 const SEARCH_OFFSET_ABSOLUTE_MIN = -240
 const SEARCH_OFFSET_ABSOLUTE_MAX = 240
+const AUTO_SEARCH_OFFSET_CACHE_KEY = 'curatorNewTabAutoSearchOffsetY'
+const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 2
 const SEARCH_WIDTH_BOUNDS_FALLBACK = { min: 16, max: 72 }
 const NEWTAB_LAYOUT_SAFE_GAP = 12
 const NEWTAB_COMMAND_SCORE = -100000
@@ -743,6 +744,7 @@ const state = {
   folderSettings: { ...DEFAULT_FOLDER_SETTINGS } as NewTabFolderSettings,
   moduleSettings: { ...DEFAULT_NEW_TAB_MODULE_SETTINGS } as NewTabModuleSettings,
   workspaceSettings: normalizeNewTabWorkspaceSettings(null) as NewTabWorkspaceSettings,
+  utilitySettingsHydrated: false,
   folderCandidateCache: {
     signature: '',
     candidates: []
@@ -787,6 +789,8 @@ let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
 let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
 let deferredRenderFrame = 0
+let autoSearchLayoutStableFrames = 0
+let autoSearchLayoutStableSignature = ''
 let featuredBackgroundPreviewCard: HTMLElement | null = null
 const featuredBackgroundGalleryObjectUrlCache = createBackgroundObjectUrlCache()
 const featuredBackgroundGalleryPreviewObjectUrlCache = createBackgroundObjectUrlCache()
@@ -1028,7 +1032,6 @@ function bindEvents(): void {
     }
   })
   registerNewtabModuleSettingsActions({
-    onMove: handleModuleSettingMove,
     onToggle: handleModuleSettingToggle
   })
   registerNewtabFolderSourceActions({
@@ -1250,7 +1253,16 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
 }
 
 function handleNewtabContentLayoutNodesChange(): void {
-  scheduleAdaptiveNewTabLayoutUpdate()
+  runBatchedAdaptiveLayoutUpdate()
+}
+
+function handleSearchWidgetNodesChange(nodes: NewtabSearchWidgetNodes): void {
+  if (!nodes.slot) {
+    return
+  }
+
+  resetAutoSearchLayoutSettle()
+  runBatchedAdaptiveLayoutUpdate()
 }
 
 function handleSettingsDrawerNodesChange(): void {
@@ -1663,15 +1675,19 @@ function applySearchSettingsLive(): void {
   const widthBounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
   const offsetBounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
   const width = clampNumber(settings.width, widthBounds.min, widthBounds.max, DEFAULT_SEARCH_SETTINGS.width)
-  const offsetY = clampNumber(settings.offsetY, offsetBounds.min, offsetBounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)
+  const offsetY = settings.autoVerticalCenter
+    ? readCachedAutoSearchOffsetY(DEFAULT_SEARCH_SETTINGS.offsetY)
+    : clampNumber(settings.offsetY, offsetBounds.min, offsetBounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)
 
   if (settings.autoVerticalCenter) {
+    resetAutoSearchLayoutSettle()
     scheduleAdaptiveNewTabLayoutUpdate()
   }
   patchSearchWidgetShellState({
     autoVerticalCenter: settings.autoVerticalCenter,
     backgroundAlpha: String(settings.background / 100),
     height: settings.height,
+    layoutReady: !settings.autoVerticalCenter,
     offsetY,
     width
   })
@@ -4592,8 +4608,10 @@ async function refreshNewTab(): Promise<void> {
   const backgroundMutationVersionAtStart = backgroundSettingsMutationVersion
   state.loading = true
   state.error = ''
+  state.utilitySettingsHydrated = false
   state.bookmarkReorderError = ''
   clearFolderReorderStatus()
+  resetAutoSearchLayoutSettle()
   resetSearchIndexReadyState()
   render()
 
@@ -4660,6 +4678,7 @@ async function refreshNewTab(): Promise<void> {
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
     state.generalSettings = normalizeGeneralSettings(stored[STORAGE_KEYS.newTabGeneralSettings])
     state.timeSettings = normalizeTimeSettingsLocal(stored[STORAGE_KEYS.newTabTimeSettings])
+    state.utilitySettingsHydrated = true
     onboardingCompleted = normalizeNewTabOnboardingCompleted(stored[STORAGE_KEYS.onboardingState])
   } catch (error) {
     state.error = error instanceof Error ? error.message : '新标签页加载失败，请刷新后重试。'
@@ -5320,6 +5339,7 @@ function runBatchedAdaptiveLayoutUpdate(): void {
     ? registeredSlot
     : null
   if (!page || !slot) {
+    resetAutoSearchLayoutSettle()
     state.searchOffsetBounds = { ...SEARCH_OFFSET_BOUNDS_FALLBACK }
     state.searchWidthBounds = { ...SEARCH_WIDTH_BOUNDS_FALLBACK }
     patchNewtabPageCollisionOffset(0)
@@ -5400,15 +5420,63 @@ function runBatchedAdaptiveLayoutUpdate(): void {
       maxOffsetY: bounds.max,
       fallbackOffsetY: currentOffsetY
     })
+    writeCachedAutoSearchOffsetY(nextSearchOffsetY)
   }
+  const nextSearchLayoutReady = getNextAutoSearchLayoutReadyState({
+    autoVerticalCenter: state.searchSettings.autoVerticalCenter,
+    offsetY: nextSearchOffsetY,
+    width: nextSearchWidth
+  })
   patchSearchWidgetShellState({
     autoVerticalCenter: state.searchSettings.autoVerticalCenter,
+    layoutReady: nextSearchLayoutReady,
     offsetY: nextSearchOffsetY,
     width: nextSearchWidth
   })
   patchNewtabPageCollisionOffset(collisionOffset)
   syncSearchWidthControl()
   syncSearchOffsetControl()
+}
+
+function getNextAutoSearchLayoutReadyState({
+  autoVerticalCenter,
+  offsetY,
+  width
+}: {
+  autoVerticalCenter: boolean
+  offsetY: number
+  width: number
+}): boolean {
+  if (!autoVerticalCenter) {
+    resetAutoSearchLayoutSettle()
+    return true
+  }
+
+  const view = getNewtabSearchWidgetView()
+  if (view?.shell.layoutReady) {
+    resetAutoSearchLayoutSettle()
+    return true
+  }
+
+  const signature = `${Math.round(offsetY)}:${Math.round(width)}`
+  if (autoSearchLayoutStableSignature !== signature) {
+    autoSearchLayoutStableSignature = signature
+    autoSearchLayoutStableFrames = AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT
+  }
+
+  if (autoSearchLayoutStableFrames > 0) {
+    autoSearchLayoutStableFrames -= 1
+    scheduleAdaptiveNewTabLayoutUpdate()
+    return false
+  }
+
+  resetAutoSearchLayoutSettle()
+  return true
+}
+
+function resetAutoSearchLayoutSettle(): void {
+  autoSearchLayoutStableFrames = 0
+  autoSearchLayoutStableSignature = ''
 }
 
 function getCurrentSearchOffsetY(slot: HTMLElement): number {
@@ -5451,6 +5519,13 @@ function getSearchAutoVerticalCenterNextModule(
 
 function createNewTabLayout(primaryContent: NewTabPageModule): NewTabContentView {
   const modules: NewTabPageModule[] = []
+
+  if (!state.utilitySettingsHydrated) {
+    dispatchNewtabClockView(null)
+    dispatchNewtabSearchWidgetView(null)
+    modules.push(primaryContent)
+    return createNewTabPage({ modules })
+  }
 
   const onboarding = createNewTabOnboardingStrip()
   if (onboarding) {
@@ -6046,6 +6121,7 @@ function initializeSearchWidget(): boolean {
     savedSearches: createEmptySavedSearchesState(),
     sectionLabel: '书签匹配',
     shell: createSearchWidgetShellState(settings),
+    onNodesChange: handleSearchWidgetNodesChange,
     suggestions: []
   })
   syncSearchWidgetInteractions()
@@ -6334,6 +6410,9 @@ function syncSearchInputActions(input: HTMLInputElement): void {
 
 function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS): SearchWidgetShellState {
   const webSearchEnabled = settings.webSearchEnabled !== false
+  const initialOffsetY = settings.autoVerticalCenter
+    ? readCachedAutoSearchOffsetY(settings.offsetY)
+    : settings.offsetY
 
   return {
     ariaLabel: webSearchEnabled ? '搜索书签、网页或命令' : '搜索书签或命令',
@@ -6343,9 +6422,38 @@ function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS):
     inputAriaLabel: webSearchEnabled
       ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
       : '输入关键词搜索本地书签或命令',
-    offsetY: settings.offsetY,
+    layoutReady: !settings.autoVerticalCenter,
+    offsetY: initialOffsetY,
     placeholder: getSearchPlaceholder(settings),
     width: settings.width
+  }
+}
+
+function readCachedAutoSearchOffsetY(fallback: number): number {
+  if (typeof window === 'undefined') {
+    return fallback
+  }
+
+  try {
+    const value = window.localStorage.getItem(AUTO_SEARCH_OFFSET_CACHE_KEY)
+    if (value === null) {
+      return fallback
+    }
+    return clampNumber(value, SEARCH_OFFSET_ABSOLUTE_MIN, SEARCH_OFFSET_ABSOLUTE_MAX, fallback)
+  } catch {
+    return fallback
+  }
+}
+
+function writeCachedAutoSearchOffsetY(offsetY: number): void {
+  if (typeof window === 'undefined' || !Number.isFinite(offsetY)) {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(AUTO_SEARCH_OFFSET_CACHE_KEY, String(Math.round(offsetY)))
+  } catch {
+    // Ignore storage failures; this cache only improves first-paint positioning.
   }
 }
 
@@ -6355,12 +6463,32 @@ function patchSearchWidgetShellState(patch: Partial<SearchWidgetShellState>): vo
     return
   }
 
+  const shell = {
+    ...view.shell,
+    ...patch
+  }
+  if (isSearchWidgetShellStateEqual(view.shell, shell)) {
+    return
+  }
+
   patchNewtabSearchWidgetView({
-    shell: {
-      ...view.shell,
-      ...patch
-    }
+    shell
   })
+}
+
+function isSearchWidgetShellStateEqual(
+  left: SearchWidgetShellState,
+  right: SearchWidgetShellState
+): boolean {
+  return left.ariaLabel === right.ariaLabel &&
+    left.autoVerticalCenter === right.autoVerticalCenter &&
+    left.backgroundAlpha === right.backgroundAlpha &&
+    left.height === right.height &&
+    left.inputAriaLabel === right.inputAriaLabel &&
+    left.layoutReady === right.layoutReady &&
+    left.offsetY === right.offsetY &&
+    left.placeholder === right.placeholder &&
+    left.width === right.width
 }
 
 function mergeNewTabCommandSuggestions(
@@ -7537,6 +7665,7 @@ function cleanupNewTabController(): void {
   verticalCenterCollisionFrame = 0
   window.cancelAnimationFrame(deferredRenderFrame)
   deferredRenderFrame = 0
+  resetAutoSearchLayoutSettle()
   removeBookmarkDragGhost()
   removeSpeedDialDragGhost()
   removeFolderDragGhost()
@@ -10148,22 +10277,18 @@ function syncNewTabModernSettingsControls(): void {
 function syncModuleSettingsControls(): void {
   const rows = buildNewTabModuleSettingRows(state.moduleSettings)
   dispatchNewtabModuleSettingsView({
-    rows: rows.map((setting, index) => createModuleSettingRowViewModel(setting, index, rows.length))
+    rows: rows.map((setting) => createModuleSettingRowViewModel(setting))
   })
 }
 
 function createModuleSettingRowViewModel(
-  setting: ReturnType<typeof buildNewTabModuleSettingRows>[number],
-  index = 0,
-  total = 1
+  setting: ReturnType<typeof buildNewTabModuleSettingRows>[number]
 ): NewtabModuleSettingRowView {
   return {
     description: setting.description,
     enabled: setting.enabled,
-    index,
     key: setting.key,
-    label: setting.label,
-    total
+    label: setting.label
   }
 }
 
@@ -10178,19 +10303,6 @@ function handleModuleSettingToggle(key: NewTabModuleSettingKey, enabled: boolean
   })
   void saveNewTabModuleSettings().catch((error) => {
     setSettingsSaveStatus('error', error instanceof Error ? error.message : '模块设置保存失败')
-  })
-  syncNewTabModernSettingsControls()
-  scheduleRender({ updateClock: true })
-}
-
-function handleModuleSettingMove(key: NewTabModuleSettingKey, direction: -1 | 1): void {
-  if (!key || !(key in state.moduleSettings)) {
-    return
-  }
-
-  state.moduleSettings = moveNewTabModuleSetting(state.moduleSettings, key, direction)
-  void saveNewTabModuleSettings().catch((error) => {
-    setSettingsSaveStatus('error', error instanceof Error ? error.message : '模块排序保存失败')
   })
   syncNewTabModernSettingsControls()
   scheduleRender({ updateClock: true })

@@ -9,13 +9,19 @@
         color-scheme: dark;
         --bg: #101013;
         --wallpaper-placeholder-bg: #101013;
+        --instant-wallpaper-preview-blur: 18px;
+        --instant-wallpaper-preview-loading-blur: 22px;
+        --instant-wallpaper-preview-loading-opacity: 0.54;
+        --instant-wallpaper-preview-loading-scale: 1.06;
+        --instant-wallpaper-preview-opacity: 0.68;
+        --instant-wallpaper-preview-scale: 1.045;
         background-color: #101013;
       }
 
       html,
       body {
         width: 100%;
-        min-width: 320px;
+        min-width: 0;
         height: 100%;
         margin: 0;
         overflow: hidden;
@@ -32,16 +38,40 @@
       body::before {
         content: "";
         position: fixed;
-        inset: -24px;
+        inset: -56px;
         z-index: 0;
         background-color: var(--wallpaper-placeholder-bg, #101013);
         background-image: var(--instant-wallpaper-preview-image, none);
         background-position: var(--instant-wallpaper-position, center);
         background-repeat: no-repeat;
         background-size: var(--instant-wallpaper-size, cover);
-        opacity: 0.82;
+        filter: blur(var(--instant-wallpaper-preview-blur, 18px)) saturate(1.04) brightness(0.9);
+        opacity: var(--instant-wallpaper-preview-opacity, 0.68);
         pointer-events: none;
-        transform: scale(1.02);
+        transform: scale(var(--instant-wallpaper-preview-scale, 1.045));
+        transform-origin: center;
+        transition:
+          opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
+          filter 400ms ease-in-out,
+          transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: opacity, filter, transform;
+      }
+
+      html.loading-wallpaper:not(.instant-wallpaper-ready) body::before {
+        filter: blur(var(--instant-wallpaper-preview-loading-blur, 22px)) saturate(1.02) brightness(0.82);
+        opacity: var(--instant-wallpaper-preview-loading-opacity, 0.54);
+        transform: scale(var(--instant-wallpaper-preview-loading-scale, 1.06));
+      }
+
+      html.instant-wallpaper-remote-ready:not([data-instant-wallpaper-preview-only="true"]) body::before {
+        filter: blur(10px) saturate(1) brightness(0.92);
+        opacity: 0;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        body::before {
+          transition: none;
+        }
       }
     </style>
     <script defer src="/instant-wallpaper-boot.js"></script>

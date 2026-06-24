@@ -1,10 +1,18 @@
 import type { FolderRecord } from '../../shared/types.js'
 
-export interface FolderPickerOptionViewModel {
-  current?: boolean
-  description?: string
-  disabled?: boolean
+export interface FolderPickerTreeOptionViewModel {
+  badges: Array<{ label: string; muted?: boolean }>
+  disabled: boolean
+  expanded: boolean
   folder: Pick<FolderRecord, 'id' | 'title' | 'path'>
+  hasChildren: boolean
+  id: string
+  path: string
+  rowCurrent: boolean
+  selected: boolean
+  title: string
+  toggleLabel: string
+  depth: number
 }
 
 export type FolderPickerKind = 'scope' | 'move'
@@ -21,6 +29,11 @@ export type FolderPickerActionDetail =
       kind: FolderPickerKind
     }
   | {
+      action: 'toggle'
+      folderId: string
+      kind: FolderPickerKind
+    }
+  | {
       action: 'results-keydown' | 'search-keydown'
       key: string
       kind: FolderPickerKind
@@ -31,6 +44,7 @@ export interface FolderPickerResultsState {
   emptyMessage?: string
   focusRequestId?: string
   kind: FolderPickerKind
-  options: FolderPickerOptionViewModel[]
+  query?: string
   showEmpty?: boolean
+  treeOptions: FolderPickerTreeOptionViewModel[]
 }

@@ -8,7 +8,7 @@ html,
 body {
   width: 100%;
   height: 100%;
-  min-width: 320px;
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   background: var(--wallpaper-placeholder-bg, var(--bg));
@@ -26,6 +26,39 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.newtab-app,
+#newtab-settings-drawer {
+  --ds-selected: rgba(245, 245, 247, 0.16);
+  --ds-accent: rgba(245, 245, 247, 0.22);
+  --ds-accent-hover: rgba(245, 245, 247, 0.28);
+  --ds-accent-text: rgba(245, 245, 247, 0.92);
+  --ds-accent-soft: rgba(245, 245, 247, 0.12);
+  --ds-accent-line: rgba(245, 245, 247, 0.24);
+  --ds-accent-contrast: rgba(245, 245, 247, 0.94);
+  --ds-focus: rgba(245, 245, 247, 0.42);
+  --ds-shadow-focus: 0 0 0 2px rgba(0, 0, 0, 0.28), 0 0 0 4px rgba(245, 245, 247, 0.24);
+  --ds-text-inverse: rgba(245, 245, 247, 0.94);
+  --color-ds-selected: var(--ds-selected);
+  --color-ds-accent: var(--ds-accent);
+  --color-ds-accent-hover: var(--ds-accent-hover);
+  --color-ds-accent-text: var(--ds-accent-text);
+  --color-ds-accent-soft: var(--ds-accent-soft);
+  --color-ds-accent-line: var(--ds-accent-line);
+  --color-ds-accent-contrast: var(--ds-accent-contrast);
+  --color-ds-focus: var(--ds-focus);
+  --color-ds-text-inverse: var(--ds-text-inverse);
+  --ui-surface-selected: var(--ds-selected);
+  --ui-accent: var(--ds-accent);
+  --ui-accent-strong: var(--ds-accent-hover);
+  --ui-accent-text: var(--ds-accent-text);
+  --ui-accent-soft: var(--ds-accent-soft);
+  --ui-accent-line: var(--ds-accent-line);
+  --ui-focus-ring: var(--ds-focus);
+  --ui-focus-ring-soft: rgba(245, 245, 247, 0.16);
+  --ui-text-inverse: var(--ds-text-inverse);
+  --tabs-pill-bg: var(--ds-selected);
+}
+
 .newtab-app {
   position: relative;
   isolation: isolate;
@@ -36,29 +69,90 @@ body {
   color: var(--ds-text-primary);
 }
 
+.newtab-app .t-tabs,
+#newtab-settings-drawer .t-tabs {
+  position: relative;
+  isolation: isolate;
+  background: var(--tabs-bar-bg);
+}
+
+.newtab-app .t-tab,
+#newtab-settings-drawer .t-tab {
+  position: relative;
+  z-index: 1;
+  color: var(--tabs-text-muted);
+  transition: color var(--tabs-dur) var(--tabs-ease);
+}
+
+.newtab-app .t-tab:not([data-active]):hover,
+.newtab-app .t-tab[data-active],
+.newtab-app .t-tab[data-selected],
+.newtab-app .t-tab[data-state="active"],
+#newtab-settings-drawer .t-tab:not([data-active]):hover,
+#newtab-settings-drawer .t-tab[data-active],
+#newtab-settings-drawer .t-tab[data-selected],
+#newtab-settings-drawer .t-tab[data-state="active"] {
+  color: var(--tabs-text-active);
+}
+
+.newtab-app .t-tabs-pill,
+#newtab-settings-drawer .t-tabs-pill {
+  position: absolute;
+  top: var(--active-tab-top, 4px);
+  left: 0;
+  z-index: 0;
+  width: var(--active-tab-width, 0);
+  height: var(--active-tab-height, 32px);
+  border-radius: var(--ds-radius-sm);
+  background: var(--tabs-pill-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  pointer-events: none;
+  transform: translateX(var(--active-tab-left, 0));
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width var(--tabs-dur) var(--tabs-ease),
+    height var(--tabs-dur) var(--tabs-ease),
+    top var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newtab-app .t-tabs-pill,
+  .newtab-app .t-tab,
+  #newtab-settings-drawer .t-tabs-pill,
+  #newtab-settings-drawer .t-tab {
+    transition: none;
+  }
+}
+
 .newtab-app::before {
   content: "";
   position: fixed;
-  inset: -24px;
+  inset: -56px;
   z-index: 0;
   background-color: var(--wallpaper-placeholder-bg, #101013);
   background-image: var(--instant-wallpaper-preview-image, none);
   background-position: var(--instant-wallpaper-position, center);
   background-size: var(--instant-wallpaper-size, cover);
+  filter: blur(var(--instant-wallpaper-preview-blur, 18px)) saturate(1.04) brightness(0.9);
   opacity: 0;
   pointer-events: none;
-  transform: scale(1.02);
+  transform: scale(var(--instant-wallpaper-preview-scale, 1.045));
+  transform-origin: center;
   transition:
     opacity 320ms var(--ds-ease-standard),
+    filter 400ms ease-in-out,
     transform 420ms var(--ds-ease-standard);
+  will-change: opacity, filter, transform;
 }
 
 .newtab-app.instant-wallpaper-ready:not(.instant-wallpaper-remote-ready)::before {
-  opacity: 1;
+  opacity: var(--instant-wallpaper-preview-opacity, 0.72);
 }
 
 .newtab-app.instant-wallpaper-remote-ready::before {
   opacity: 0;
+  filter: blur(10px) saturate(1) brightness(0.92);
 }
 
 .newtab-app.loading-wallpaper {
@@ -70,15 +164,26 @@ body {
 }
 
 .newtab-app.loading-wallpaper:not(.instant-wallpaper-ready)::before {
-  opacity: 0.72;
-  transform: scale(1.03);
-  transition: opacity 320ms var(--ds-ease-standard);
+  filter: blur(var(--instant-wallpaper-preview-loading-blur, 22px)) saturate(1.02) brightness(0.82);
+  opacity: var(--instant-wallpaper-preview-loading-opacity, 0.54);
+  transform: scale(var(--instant-wallpaper-preview-loading-scale, 1.06));
+  transition:
+    opacity 320ms var(--ds-ease-standard),
+    filter 400ms ease-in-out,
+    transform 420ms var(--ds-ease-standard);
 }
 
 .newtab-app.instant-wallpaper-ready {
   background-image: var(--instant-wallpaper-image);
   background-position: var(--instant-wallpaper-position, center);
   background-size: var(--instant-wallpaper-size, cover);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newtab-app::before,
+  .newtab-app.loading-wallpaper:not(.instant-wallpaper-ready)::before {
+    transition: none;
+  }
 }
 
 @keyframes wallpaper-loading-loader-pulse {

@@ -60,6 +60,7 @@ import {
   AI_PROVIDER_INLINE_ACTION_CLASS,
   AI_PROVIDER_INPUT_CLASS,
   AI_PROVIDER_MODEL_CONTROL_CLASS,
+  AI_PROVIDER_MODEL_FETCH_STATUS_CLASS,
   AI_PROVIDER_MODEL_FIELD_CLASS,
   AI_PROVIDER_MODEL_LABEL_CLASS,
   AI_PROVIDER_MODEL_TOOLS_CLASS,
@@ -366,7 +367,7 @@ function AiProviderModelToolsContent({
 }) {
   const modelTools = state.modelTools
   const fetchModelsStatusClassName = [
-    AI_PROVIDER_CONNECTIVITY_CLASS,
+    AI_PROVIDER_MODEL_FETCH_STATUS_CLASS,
     aiProviderToneClass(modelTools.fetchModelsStatusTone, AI_PROVIDER_CONNECTIVITY_TONE_CLASS)
   ].filter(Boolean).join(' ')
 

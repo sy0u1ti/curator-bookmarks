@@ -1,4 +1,4 @@
-import { cx } from '../../ui/base/utils'
+import { cx } from '../../ui'
 
 const NEWTAB_PAGE_BASE_CLASS = 'newtab-page relative flex h-full w-full max-w-[1280px] flex-col items-center [--primary-collision-offset-y:0px]'
 const NEWTAB_UTILITY_STACK_BASE_CLASS = 'newtab-utility-stack grid w-[min(100%,1229px)] justify-items-center gap-[var(--newtab-utility-gap)]'

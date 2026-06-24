@@ -183,10 +183,10 @@ function OptionsHeader({
           <img className={optionsBrandMarkImageClass} src="../assets/icon128.png" alt="" />
         </span>
         <span className={optionsBrandCopyClass}>
-          <span className="whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0] text-ds-text-disabled">
+          <span className="truncate whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0] text-ds-text-disabled">
             Chrome Bookmark Manager
           </span>
-          <strong className="block whitespace-nowrap text-[17px] font-[650] leading-none tracking-[0] text-ds-text-primary max-[760px]:text-[20px]">
+          <strong className="block truncate whitespace-nowrap text-[17px] font-[650] leading-none tracking-[0] text-ds-text-primary max-[760px]:text-[20px]">
             Curator Bookmark
           </strong>
         </span>

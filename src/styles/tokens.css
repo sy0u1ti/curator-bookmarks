@@ -62,6 +62,13 @@
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
+  --tabs-dur: 250ms;
+  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-text-muted: var(--ds-text-secondary);
+  --tabs-text-active: var(--ds-text-primary);
+  --tabs-bar-bg: var(--ds-surface-1);
+  --tabs-pill-bg: var(--ds-selected);
+
   --ds-row-height: 52px;
   --ds-row-height-compact: 40px;
   --ds-group-padding: 12px;

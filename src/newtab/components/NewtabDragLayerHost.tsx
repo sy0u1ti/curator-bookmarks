@@ -69,14 +69,14 @@ function BookmarkDragGhost({ view }: { view: BookmarkDragGhostView }) {
   } as CSSProperties
 
   return (
-    <a className={getBookmarkTileClass({ ghost: true, showTitles: view.showTitles })} style={style} aria-hidden="true">
+    <div className={getBookmarkTileClass({ ghost: true, showTitles: view.showTitles })} style={style} aria-hidden="true">
       <BookmarkIconShell
         customIcon={view.customIcon}
         fallbackLabel={view.fallbackLabel}
         favicon={view.favicon}
       />
       <span className={getBookmarkTitleClass()} hidden={!view.showTitles}>{view.title}</span>
-    </a>
+    </div>
   )
 }
 

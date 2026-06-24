@@ -25,6 +25,7 @@ export interface SearchWidgetShellState {
   backgroundAlpha: string
   height: number
   inputAriaLabel: string
+  layoutReady: boolean
   offsetY: number
   placeholder: string
   width: number

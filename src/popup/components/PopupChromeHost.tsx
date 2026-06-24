@@ -38,9 +38,9 @@ const toolbarClass =
 const viewCaptionClass =
   'm-0 min-w-0 text-[11px] font-semibold leading-normal tracking-[0.01em] text-ds-text-primary'
 const keyHintClass =
-  'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-ds-text-disabled opacity-60 transition-opacity duration-150 ease-ds-standard group-focus-within:opacity-100'
+  'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-ds-text-disabled opacity-60 transition-opacity duration-150 ease-ds-standard group-focus-within:opacity-100 max-[520px]:hidden'
 const heroBaseClass =
-  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-hidden border-b border-ds-border bg-ds-surface-2 px-3.5'
+  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-hidden border-b border-ds-border bg-ds-surface-2 px-3.5 max-[520px]:-mx-2.5 max-[520px]:px-2.5'
 const heroBrandClass =
   'hero-brand flex min-w-0 flex-none items-center justify-start gap-2.5'
 const heroMarkClass =
@@ -69,15 +69,15 @@ const commandPanelSmartClass =
   'min-h-0 flex-auto grid-rows-[minmax(0,1fr)] border-0 bg-transparent p-0'
 const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
-  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
+  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
   'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
-  'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
+  'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
 ].join(' ')
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
 const searchInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted max-[520px]:min-h-8 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const clearSearchButtonClass = [
   'inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border-0 bg-transparent p-0 text-ds-text-muted',
   'transition-[background,color] duration-ds-fast ease-ds-standard',
@@ -85,7 +85,7 @@ const clearSearchButtonClass = [
   'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none'
 ].join(' ')
 const semanticSearchBaseClass = [
-  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border border-ds-border bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary',
+  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border border-ds-border bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:min-w-0 max-[520px]:px-2.5',
   'transition-[background,border-color,color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_var(--ds-accent-soft)] focus-visible:outline-none'

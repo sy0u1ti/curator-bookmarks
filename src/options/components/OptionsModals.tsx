@@ -246,13 +246,14 @@ export function OptionsModals() {
               }}
             />
           </label>
-          <ul
+          <div
             id="move-folder-results"
             className={OPTIONS_MODAL_RESULTS_CLASS}
+            role="tree"
             aria-label="移动目标文件夹"
           >
             <FolderPickerResults kind="move" searchInputRef={moveSearchRef} />
-          </ul>
+          </div>
           <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
             <Button
               className={OPTIONS_MODAL_BUTTON_CLASS}
@@ -311,13 +312,14 @@ export function OptionsModals() {
               }}
             />
           </label>
-          <ul
+          <div
             id="scope-folder-results"
             className={OPTIONS_MODAL_RESULTS_CLASS}
+            role="tree"
             aria-label="筛选文件夹"
           >
             <FolderPickerResults kind="scope" searchInputRef={scopeSearchRef} />
-          </ul>
+          </div>
           <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
             <Button
               className={OPTIONS_MODAL_BUTTON_CLASS}

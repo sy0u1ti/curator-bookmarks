@@ -84,6 +84,9 @@ export const AI_PROVIDER_CHECK_CLASS =
 export const AI_PROVIDER_CONNECTIVITY_CLASS =
   'rounded-[16px] border p-3.5 text-[13px] leading-[1.65]'
 
+export const AI_PROVIDER_MODEL_FETCH_STATUS_CLASS =
+  `${AI_PROVIDER_CONNECTIVITY_CLASS} mt-3`
+
 export const AI_PROVIDER_CONNECTIVITY_TONE_CLASS: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   muted: 'border-ds-border-subtle bg-ds-surface-2 text-ds-text-muted',

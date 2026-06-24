@@ -56,7 +56,7 @@ const workspaceContentLayerClass = cx(
 const workspaceContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
 const workspaceContentReadyClass = 'opacity-100'
 const workspaceClass =
-  'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5'
+  'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
   'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1'
@@ -70,7 +70,7 @@ const mainListClass =
   'm-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderRowClass = 'relative block min-h-[34px]'
 const mainRowClass =
-  'relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0'
+  'relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
 const folderCardClass = [
   'grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
@@ -106,7 +106,7 @@ const resultPathShellClass = 'block min-w-0'
 const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
 const resultMatchTokenClass =
   'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-semibold text-ds-text-secondary'
-const rowActionsClass = 'inline-flex items-center justify-end gap-1.5 pr-0.5'
+const rowActionsClass = 'inline-flex items-center justify-end gap-1.5 pr-0.5 max-[430px]:justify-start max-[430px]:pl-[13px]'
 const rowActionButtonClass = [
   'inline-flex h-7 w-7 items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',

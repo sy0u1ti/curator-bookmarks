@@ -80,6 +80,18 @@ const LEGACY_DATE_FORMAT_MAP: Record<string, NewTabDateFormat> = {
   zh: 'month-day-weekday',
   iso: 'year-month-day'
 }
+const LOCAL_WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
+const CLOCK_PARTS_FORMATTER_OPTIONS: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  weekday: 'long',
+  hour: 'numeric',
+  minute: 'numeric',
+  second: 'numeric',
+  hourCycle: 'h23'
+}
+const clockPartsFormatterCache = new Map<NewTabTimeZone, Intl.DateTimeFormat>()
 
 export function normalizeTimeSettings(rawSettings: unknown): NewTabTimeSettings {
   if (!rawSettings || typeof rawSettings !== 'object' || Array.isArray(rawSettings)) {
@@ -213,30 +225,18 @@ export function getClockZoneLabel(settings: NewTabTimeSettings): string {
 export function getClockParts(date: Date, settings: NewTabTimeSettings): ClockParts {
   const { timeZone } = settings
   if (timeZone === 'auto') {
-    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
     return {
       year: date.getFullYear(),
       month: date.getMonth() + 1,
       day: date.getDate(),
-      weekday: weekdays[date.getDay()],
+      weekday: LOCAL_WEEKDAYS[date.getDay()],
       hours: date.getHours(),
       minutes: date.getMinutes(),
       seconds: date.getSeconds()
     }
   }
 
-  const formatter = new Intl.DateTimeFormat('zh-CN-u-ca-gregory', {
-    timeZone,
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    weekday: 'long',
-    hour: 'numeric',
-    minute: 'numeric',
-    second: 'numeric',
-    hourCycle: 'h23'
-  })
-  const formattedParts = formatter.formatToParts(date)
+  const formattedParts = getClockPartsFormatter(timeZone).formatToParts(date)
   const getPart = (type: Intl.DateTimeFormatPartTypes): string =>
     formattedParts.find((part) => part.type === type)?.value || ''
 
@@ -249,6 +249,20 @@ export function getClockParts(date: Date, settings: NewTabTimeSettings): ClockPa
     minutes: Number(getPart('minute')) || 0,
     seconds: Number(getPart('second')) || 0
   }
+}
+
+function getClockPartsFormatter(timeZone: NewTabTimeZone): Intl.DateTimeFormat {
+  const existing = clockPartsFormatterCache.get(timeZone)
+  if (existing) {
+    return existing
+  }
+
+  const formatter = new Intl.DateTimeFormat('zh-CN-u-ca-gregory', {
+    ...CLOCK_PARTS_FORMATTER_OPTIONS,
+    timeZone
+  })
+  clockPartsFormatterCache.set(timeZone, formatter)
+  return formatter
 }
 
 function getDateOnlyUpdateDelay(date: Date, settings: NewTabTimeSettings): number {

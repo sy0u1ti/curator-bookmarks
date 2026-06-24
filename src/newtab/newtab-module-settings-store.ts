@@ -4,10 +4,8 @@ import type { NewTabModuleSettingKey } from './module-settings'
 export interface NewtabModuleSettingRowView {
   description: string
   enabled: boolean
-  index: number
   key: NewTabModuleSettingKey
   label: string
-  total: number
 }
 
 export interface NewtabModuleSettingsView {
@@ -15,7 +13,6 @@ export interface NewtabModuleSettingsView {
 }
 
 export interface NewtabModuleSettingsActions {
-  onMove: (key: NewTabModuleSettingKey, direction: -1 | 1) => void
   onToggle: (key: NewTabModuleSettingKey, enabled: boolean) => void
 }
 
@@ -24,7 +21,6 @@ const EMPTY_VIEW: NewtabModuleSettingsView = {
 }
 
 const EMPTY_ACTIONS: NewtabModuleSettingsActions = {
-  onMove: () => {},
   onToggle: () => {}
 }
 
@@ -66,13 +62,6 @@ export function useNewtabModuleSettingsView(): NewtabModuleSettingsView {
     () => moduleSettingsView,
     () => EMPTY_VIEW
   )
-}
-
-export function dispatchNewtabModuleSettingMove(
-  key: NewTabModuleSettingKey,
-  direction: -1 | 1
-): void {
-  moduleSettingsActions.onMove(key, direction)
 }
 
 export function dispatchNewtabModuleSettingToggle(

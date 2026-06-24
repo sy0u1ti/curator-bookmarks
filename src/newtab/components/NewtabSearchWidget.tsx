@@ -57,6 +57,7 @@ import {
   SEARCH_SUGGESTION_META_CLASS,
   SEARCH_SUGGESTION_TITLE_CLASS,
   SEARCH_SUGGESTIONS_CLASS,
+  SEARCH_SLOT_PENDING_LAYOUT_CLASS,
   SEARCH_WEB_HINT_CLASS,
   getSearchChipClass,
   getSearchNaturalButtonClass,
@@ -77,8 +78,15 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   const slotStyle = useMemo(() => ({
     '--search-width': `${shell.width}vw`,
     '--search-height': `${shell.height}px`,
-    '--search-offset-y': `${shell.offsetY}px`
-  }) as CSSProperties, [shell.height, shell.offsetY, shell.width])
+    '--search-offset-y': `${shell.offsetY}px`,
+    ...(shell.autoVerticalCenter && !shell.layoutReady
+      ? {
+          opacity: 0,
+          pointerEvents: 'none',
+          visibility: 'hidden'
+        }
+      : null)
+  }) as CSSProperties, [shell.autoVerticalCenter, shell.height, shell.layoutReady, shell.offsetY, shell.width])
   const formStyle = useMemo(() => ({
     '--search-width': `${shell.width}vw`,
     '--search-height': `${shell.height}px`,
@@ -112,9 +120,13 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
 
   return (
     <section
-      className={SEARCH_SLOT_CLASS}
+      className={[
+        SEARCH_SLOT_CLASS,
+        shell.autoVerticalCenter && !shell.layoutReady && SEARCH_SLOT_PENDING_LAYOUT_CLASS
+      ].filter(Boolean).join(' ')}
       style={slotStyle}
       data-search-auto-vertical-center={String(shell.autoVerticalCenter)}
+      data-search-layout-ready={String(shell.layoutReady)}
       aria-label={shell.ariaLabel}
       ref={slotRef}
     >

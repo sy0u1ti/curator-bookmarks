@@ -75,27 +75,6 @@ export function buildNewTabModuleSettingRows(rawSettings: unknown): NewTabModule
   }))
 }
 
-export function moveNewTabModuleSetting(
-  rawSettings: unknown,
-  key: NewTabModuleSettingKey,
-  direction: -1 | 1
-): NewTabModuleSettings {
-  const settings = normalizeNewTabModuleSettings(rawSettings)
-  const fromIndex = settings.order.indexOf(key)
-  const toIndex = fromIndex + direction
-  if (fromIndex < 0 || toIndex < 0 || toIndex >= settings.order.length) {
-    return settings
-  }
-
-  const order = settings.order.slice()
-  const [item] = order.splice(fromIndex, 1)
-  order.splice(toIndex, 0, item)
-  return {
-    ...settings,
-    order
-  }
-}
-
 function readBooleanSetting(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }

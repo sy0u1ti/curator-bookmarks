@@ -9,13 +9,13 @@ const defaultStates: Record<FolderPickerKind, FolderPickerResultsState> = {
     activeId: '',
     emptyMessage: '正在加载文件夹列表。',
     kind: 'move',
-    options: []
+    treeOptions: []
   },
   scope: {
     activeId: '',
     emptyMessage: '正在加载文件夹列表。',
     kind: 'scope',
-    options: []
+    treeOptions: []
   }
 }
 

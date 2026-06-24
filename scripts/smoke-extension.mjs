@@ -20,6 +20,8 @@ const STORAGE_KEYS = {
 
 const SMOKE_TIMEOUT_MS = 45_000
 const PAGE_TIMEOUT_MS = 20_000
+const POPUP_FRAME_WIDTH = 758
+const POPUP_FRAME_HEIGHT = 609
 const DASHBOARD_LAYOUT_MIN_CARD_WIDTH = 240
 const DASHBOARD_LAYOUT_SEED_BOOKMARK_COUNT = 90
 const DASHBOARD_ACTION_MOVE_TOLERANCE_PX = 1
@@ -224,8 +226,12 @@ async function seedExtensionData(worker) {
 }
 
 async function smokePopup() {
-  const popup = await newExtensionPage(`chrome-extension://${extensionId}/src/popup/popup.html`, { width: 520, height: 720 })
+  const popup = await newExtensionPage(`chrome-extension://${extensionId}/src/popup/popup.html`, {
+    width: POPUP_FRAME_WIDTH,
+    height: POPUP_FRAME_HEIGHT
+  })
 
+  await assertPopupFrameSize(popup)
   await expect(popup.locator('#search-input')).toBeVisible()
   await assertPopupFolderTreeHierarchy(popup, seed.folderTitle, seed.archiveTitle)
   await assertPopupKeyboardActiveBookmark(popup)
@@ -289,6 +295,12 @@ async function smokeNewtab() {
   await settingsTrigger.click()
   const drawer = newtab.locator('#newtab-settings-drawer')
   await expect(drawer).toBeVisible()
+  await expect(drawer).toHaveAttribute('aria-hidden', 'false')
+  await expect(drawer).toHaveJSProperty('inert', false)
+  await newtab.mouse.click(32, 80)
+  await expect(drawer).toHaveAttribute('aria-hidden', 'true')
+  await expect(drawer).toHaveJSProperty('inert', true)
+  await settingsTrigger.click()
   await expect(drawer).toHaveAttribute('aria-hidden', 'false')
   await expect(drawer).toHaveJSProperty('inert', false)
   await newtab.keyboard.press('Tab')
@@ -477,6 +489,35 @@ async function assertPermissions(worker) {
     favicon: true,
     storage: true,
     exampleHost: false
+  })
+}
+
+async function assertPopupFrameSize(popup) {
+  await expect.poll(async () => {
+    return await popup.evaluate(() => {
+      const body = document.body.getBoundingClientRect()
+      const shell = document.querySelector('#popup-app-shell')?.getBoundingClientRect()
+      const bodyStyle = getComputedStyle(document.body)
+      return {
+        bodyHeight: Math.round(body.height),
+        bodyMaxHeight: bodyStyle.maxHeight,
+        bodyMaxWidth: bodyStyle.maxWidth,
+        bodyMinHeight: bodyStyle.minHeight,
+        bodyMinWidth: bodyStyle.minWidth,
+        bodyWidth: Math.round(body.width),
+        shellHeight: Math.round(shell?.height || 0),
+        shellWidth: Math.round(shell?.width || 0)
+      }
+    })
+  }, { timeout: PAGE_TIMEOUT_MS }).toEqual({
+    bodyHeight: POPUP_FRAME_HEIGHT,
+    bodyMaxHeight: `${POPUP_FRAME_HEIGHT}px`,
+    bodyMaxWidth: `${POPUP_FRAME_WIDTH}px`,
+    bodyMinHeight: `${POPUP_FRAME_HEIGHT}px`,
+    bodyMinWidth: `${POPUP_FRAME_WIDTH}px`,
+    bodyWidth: POPUP_FRAME_WIDTH,
+    shellHeight: POPUP_FRAME_HEIGHT,
+    shellWidth: POPUP_FRAME_WIDTH
   })
 }
 

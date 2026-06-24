@@ -26,7 +26,7 @@ const pageContentLayerClass = cx(
 const pageContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
 const pageContentReadyClass = 'opacity-100'
 const pageCardClass =
-  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1 px-[7px] py-1.5 shadow-none'
+  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1 px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-[7px]'
 const pageIconClass =
   'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
@@ -40,7 +40,7 @@ const placeholderTitleClass = 'text-ds-text-primary'
 const placeholderStatusClass = 'text-ds-text-muted'
 
 const currentPageActionsClass =
-  'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end'
+  'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end max-[520px]:w-full max-[520px]:grid-cols-2 max-[520px]:justify-self-stretch'
 const currentPageActionBaseClass = [
   'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-md border px-[7px] text-[11px] font-[750] leading-none outline-none',
   'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
@@ -95,7 +95,7 @@ const exitButtonClass = [
 ].join(' ')
 
 const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] gap-2'
-const actionsThreeClass = cx(actionsClass, 'grid-cols-3')
+const actionsThreeClass = cx(actionsClass, 'grid-cols-3 max-[430px]:grid-cols-1')
 const actionButtonBaseClass = [
   'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 text-[13px] font-[750] leading-none outline-none',
   'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
@@ -137,7 +137,7 @@ const permissionOriginClass =
 const buttonLoadingLabelClass = 'inline-flex min-w-0 items-center justify-center gap-[7px]'
 const buttonDotLoaderClass = 'h-3.5 w-3.5'
 const loadingCardClass = cx(panelCardClass, 'grid h-full min-h-0 content-center overflow-hidden p-[18px]')
-const loadingBodyClass = 'grid grid-cols-[46px_minmax(0,1fr)] items-center gap-3.5'
+const loadingBodyClass = 'grid grid-cols-[46px_minmax(0,1fr)] items-center gap-3.5 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:justify-items-center max-[430px]:text-center'
 const loadingLoaderClass = 'h-[46px] w-[46px] text-ds-text-primary'
 const loadingContentClass = 'min-w-0'
 const loadingCopyClass =
@@ -155,7 +155,7 @@ const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-seco
 const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderOptionBaseClass = [
-  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none',
+  'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none max-[430px]:grid-cols-[minmax(0,1fr)]',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.993]'

@@ -262,7 +262,10 @@ import {
   patchFolderPickerResults,
   publishFolderPickerResults
 } from './components/folder-picker-results-store.js'
-import type { FolderPickerActionDetail } from './components/folder-picker-results-types.js'
+import type {
+  FolderPickerActionDetail,
+  FolderPickerTreeOptionViewModel
+} from './components/folder-picker-results-types.js'
 import type { DashboardViewActionDetail } from './components/dashboard-view-types.js'
 import { publishAvailabilityResults } from './components/availability-results-store.js'
 import type { AvailabilityResultActionDetail } from './components/availability-results-types.js'
@@ -1173,6 +1176,7 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
     availabilityState.allFolders = extracted.folders
     availabilityState.bookmarkMap = extracted.bookmarkMap
     availabilityState.folderMap = extracted.folderMap
+    syncOptionsFolderPickerExpandedState()
     if (dashboardState.folderId && !availabilityState.folderMap.has(String(dashboardState.folderId))) {
       dashboardState.folderId = ''
     }
@@ -1186,6 +1190,8 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
     availabilityState.allFolders = []
     availabilityState.bookmarkMap = new Map()
     availabilityState.folderMap = new Map()
+    managerState.scopeExpandedFolderIds = new Set()
+    managerState.moveExpandedFolderIds = new Set()
     availabilityState.bookmarks = []
     availabilityState.requestOrigins = []
     availabilityState.totalBookmarks = 0
@@ -1205,6 +1211,27 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
     }
     renderAvailabilitySection()
   }
+}
+
+function syncOptionsFolderPickerExpandedState(): void {
+  const folderIds = new Set(availabilityState.allFolders.map((folder) => String(folder.id || '')).filter(Boolean))
+  managerState.scopeExpandedFolderIds = normalizeOptionsFolderPickerExpandedSet(
+    managerState.scopeExpandedFolderIds,
+    folderIds
+  )
+  managerState.moveExpandedFolderIds = normalizeOptionsFolderPickerExpandedSet(
+    managerState.moveExpandedFolderIds,
+    folderIds
+  )
+}
+
+function normalizeOptionsFolderPickerExpandedSet(current: Set<string>, folderIds: Set<string>): Set<string> {
+  if (!folderIds.size || !current.size) {
+    return new Set(folderIds)
+  }
+
+  const next = new Set([...current].filter((folderId) => folderIds.has(folderId)))
+  return next.size ? next : new Set(folderIds)
 }
 
 async function hydrateProbePermission() {
@@ -6972,15 +6999,6 @@ function renderScopeModal() {
         ? '书签智能分析范围'
         : '检测范围'
   const normalizedQuery = normalizeText(managerState.scopeSearchQuery)
-  const folders = availabilityState.allFolders
-    .filter((folder) => {
-      if (!normalizedQuery) {
-        return true
-      }
-
-      return folder.normalizedTitle.includes(normalizedQuery) || folder.normalizedPath.includes(normalizedQuery)
-    })
-    .sort((left, right) => compareByPathTitle(left, right))
 
   publishOptionsModals({
     scope: {
@@ -6994,31 +7012,23 @@ function renderScopeModal() {
   })
 
   const activeScopeFolderId = getCurrentScopeFolderId()
-  const allSelected = !activeScopeFolderId
-  const activeId = resolveScopeFolderActiveId(folders, activeScopeFolderId)
-  const scopeOptions = [
-    {
-      current: allSelected,
-      description: '不限制来源文件夹',
-      folder: {
-        id: '',
-        title: '全部书签',
-        path: ''
-      }
-    },
-    ...folders.map((folder) => ({
-      current: String(folder.id) === String(activeScopeFolderId || ''),
-      folder
-    }))
-  ]
+  const treeOptions = buildFolderPickerTreeOptions({
+    includeAllOption: true,
+    kind: 'scope',
+    query: normalizedQuery,
+    selectedFolderId: activeScopeFolderId
+  })
+  const activeId = resolveScopeFolderActiveId(treeOptions, activeScopeFolderId)
+  const hasFolderOptions = treeOptions.some((option) => option.id)
 
   publishFolderPickerResults('scope', {
     activeId,
     emptyMessage: '没有匹配的文件夹。',
     focusRequestId: undefined,
     kind: 'scope',
-    options: scopeOptions,
-    showEmpty: !folders.length
+    query: managerState.scopeSearchQuery,
+    showEmpty: !hasFolderOptions,
+    treeOptions
   })
 }
 
@@ -7040,8 +7050,11 @@ function getScopeModalFinalFocusId(): string {
   return 'availability-scope-trigger'
 }
 
-function resolveScopeFolderActiveId(folders, activeScopeFolderId = getCurrentScopeFolderId()) {
-  const optionIds = new Set(['', ...folders.map((folder) => String(folder.id || ''))])
+function resolveScopeFolderActiveId(
+  treeOptions: FolderPickerTreeOptionViewModel[],
+  activeScopeFolderId = getCurrentScopeFolderId()
+) {
+  const optionIds = new Set(treeOptions.map((option) => String(option.id || '')))
   const storedActiveId = managerState.scopeFolderActiveId === null
     ? null
     : String(managerState.scopeFolderActiveId || '')
@@ -7054,6 +7067,176 @@ function resolveScopeFolderActiveId(folders, activeScopeFolderId = getCurrentSco
 
   managerState.scopeFolderActiveId = activeId
   return activeId
+}
+
+function buildFolderPickerTreeOptions({
+  disabled = false,
+  includeAllOption = false,
+  kind,
+  query,
+  selectedFolderId = ''
+}: {
+  disabled?: boolean
+  includeAllOption?: boolean
+  kind: 'move' | 'scope'
+  query: string
+  selectedFolderId?: string
+}): FolderPickerTreeOptionViewModel[] {
+  const normalizedQuery = String(query || '').trim()
+  const selectedId = String(selectedFolderId || '').trim()
+  const rootOptions = (folderCleanupState.rootNode?.children || [])
+    .filter((node) => !node.url)
+    .flatMap((node) => buildFolderPickerTreeNodeOptions(node, 0, {
+      disabled,
+      expandedFolderIds: getFolderPickerExpandedFolderIds(kind),
+      kind,
+      query: normalizedQuery,
+      selectedFolderId: selectedId
+    }))
+  const folderOptions = rootOptions.length || !availabilityState.allFolders.length
+    ? rootOptions
+    : buildFallbackFolderPickerTreeOptions({
+      disabled,
+      kind,
+      query: normalizedQuery,
+      selectedFolderId: selectedId
+    })
+
+  if (!includeAllOption) {
+    return folderOptions
+  }
+
+  return [
+    {
+      badges: selectedId ? [] : [{ label: '当前范围' }],
+      depth: 0,
+      disabled: false,
+      expanded: false,
+      folder: {
+        id: '',
+        path: '不限制来源文件夹',
+        title: '全部书签'
+      },
+      hasChildren: false,
+      id: '',
+      path: '不限制来源文件夹',
+      rowCurrent: !selectedId,
+      selected: !selectedId,
+      title: '全部书签',
+      toggleLabel: '全部书签'
+    },
+    ...folderOptions
+  ]
+}
+
+function buildFolderPickerTreeNodeOptions(
+  node: chrome.bookmarks.BookmarkTreeNode,
+  depth: number,
+  context: {
+    disabled: boolean
+    expandedFolderIds: Set<string>
+    kind: 'move' | 'scope'
+    query: string
+    selectedFolderId: string
+  }
+): FolderPickerTreeOptionViewModel[] {
+  if (node.url || String(node.id) === ROOT_ID) {
+    return []
+  }
+
+  const folderId = String(node.id || '')
+  const folder = availabilityState.folderMap.get(folderId)
+  if (!folder) {
+    return []
+  }
+
+  const childFolders = (node.children || []).filter((child) => !child.url)
+  const isFilterMode = Boolean(context.query)
+  const isExpanded = isFilterMode || context.expandedFolderIds.has(folderId)
+  const childOptions = (isFilterMode || isExpanded)
+    ? childFolders.flatMap((child) => buildFolderPickerTreeNodeOptions(child, depth + 1, context))
+    : []
+  const matchesCurrent =
+    !context.query ||
+    folder.normalizedTitle.includes(context.query) ||
+    folder.normalizedPath.includes(context.query)
+
+  if (isFilterMode && !matchesCurrent && !childOptions.length) {
+    return []
+  }
+
+  const isSelectedFolder = context.kind === 'scope' && context.selectedFolderId === folderId
+  const folderPath = folder.path || folder.title || '未命名文件夹'
+
+  return [
+    {
+      badges: isSelectedFolder ? [{ label: '当前范围' }] : [],
+      depth,
+      disabled: context.disabled,
+      expanded: isExpanded,
+      folder,
+      hasChildren: Boolean(childFolders.length),
+      id: folderId,
+      path: folderPath,
+      rowCurrent: isSelectedFolder,
+      selected: isSelectedFolder,
+      title: folder.title || '未命名文件夹',
+      toggleLabel: getFolderPickerToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
+    },
+    ...(isExpanded ? childOptions : [])
+  ]
+}
+
+function buildFallbackFolderPickerTreeOptions({
+  disabled,
+  kind,
+  query,
+  selectedFolderId
+}: {
+  disabled: boolean
+  kind: 'move' | 'scope'
+  query: string
+  selectedFolderId: string
+}): FolderPickerTreeOptionViewModel[] {
+  return availabilityState.allFolders
+    .filter((folder) => {
+      if (!query) {
+        return true
+      }
+
+      return folder.normalizedTitle.includes(query) || folder.normalizedPath.includes(query)
+    })
+    .sort((left, right) => compareByPathTitle(left, right))
+    .map((folder) => {
+      const folderId = String(folder.id || '')
+      const isSelectedFolder = kind === 'scope' && selectedFolderId === folderId
+      const folderPath = folder.path || folder.title || '未命名文件夹'
+      return {
+        badges: isSelectedFolder ? [{ label: '当前范围' }] : [],
+        depth: Math.max(0, Number(folder.depth || 1) - 1),
+        disabled,
+        expanded: false,
+        folder,
+        hasChildren: false,
+        id: folderId,
+        path: folderPath,
+        rowCurrent: isSelectedFolder,
+        selected: isSelectedFolder,
+        title: folder.title || '未命名文件夹',
+        toggleLabel: folderPath
+      }
+    })
+}
+
+function getFolderPickerExpandedFolderIds(kind: 'move' | 'scope'): Set<string> {
+  return kind === 'move'
+    ? managerState.moveExpandedFolderIds
+    : managerState.scopeExpandedFolderIds
+}
+
+function getFolderPickerToggleLabel(action: string, folderPath: string): string {
+  const target = String(folderPath || '').trim()
+  return target ? `${action}：${target}` : action
 }
 
 function renderReviewResults() {
@@ -7268,16 +7451,11 @@ function renderMoveModal() {
       ? [getSingleDashboardMoveBookmark()].filter(Boolean)
       : getSelectedAvailabilityResults()
   const normalizedQuery = normalizeText(managerState.moveSearchQuery)
-  const folders = availabilityState.allFolders
-    .filter((folder) => String(folder.id) !== ROOT_ID)
-    .filter((folder) => {
-      if (!normalizedQuery) {
-        return true
-      }
-
-      return folder.normalizedTitle.includes(normalizedQuery) || folder.normalizedPath.includes(normalizedQuery)
-    })
-    .sort((left, right) => compareByPathTitle(left, right))
+  const treeOptions = buildFolderPickerTreeOptions({
+    disabled: isInteractionLocked(),
+    kind: 'move',
+    query: normalizedQuery
+  })
 
   publishOptionsModals({
     move: {
@@ -7292,28 +7470,27 @@ function renderMoveModal() {
     }
   })
 
-  if (!folders.length) {
+  if (!treeOptions.length) {
     managerState.moveFolderActiveId = ''
     publishFolderPickerResults('move', {
       activeId: '',
       emptyMessage: '没有匹配的目标文件夹。',
       focusRequestId: undefined,
       kind: 'move',
-      options: []
+      query: managerState.moveSearchQuery,
+      treeOptions: []
     })
     return
   }
 
-  resolveMoveFolderActiveId(folders)
+  resolveMoveFolderActiveId(treeOptions)
   publishFolderPickerResults('move', {
     activeId: managerState.moveFolderActiveId,
     emptyMessage: '没有匹配的目标文件夹。',
     focusRequestId: undefined,
     kind: 'move',
-    options: folders.map((folder) => ({
-      disabled: isInteractionLocked(),
-      folder
-    }))
+    query: managerState.moveSearchQuery,
+    treeOptions
   })
 }
 
@@ -8233,6 +8410,12 @@ export function handleFolderPickerAction(detail: FolderPickerActionDetail): void
     return
   }
 
+  if (detail.action === 'toggle') {
+    const folderId = String(detail.folderId || '').trim()
+    toggleFolderPickerFolder(detail.kind, folderId)
+    return
+  }
+
   if (detail.action === 'search-keydown') {
     handleFolderPickerSearchKeydown(detail.kind, detail.key)
     return
@@ -8299,10 +8482,17 @@ function handleFolderPickerResultsKeydown(kind: 'move' | 'scope', key: string): 
   if (
     key !== 'ArrowDown' &&
     key !== 'ArrowUp' &&
+    key !== 'ArrowLeft' &&
+    key !== 'ArrowRight' &&
     key !== 'Home' &&
     key !== 'End' &&
     key !== 'Escape'
   ) {
+    return
+  }
+
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    handleFolderPickerHorizontalKeydown(kind, key)
     return
   }
 
@@ -8317,15 +8507,41 @@ function handleFolderPickerResultsKeydown(kind: 'move' | 'scope', key: string): 
   focusFolderPickerOption(kind, focusDirection)
 }
 
-function resolveMoveFolderActiveId(folders) {
-  if (!folders.length) {
+function handleFolderPickerHorizontalKeydown(kind: 'move' | 'scope', key: 'ArrowLeft' | 'ArrowRight'): void {
+  const state = getFolderPickerResultsSnapshot(kind)
+  if (state.query) {
+    return
+  }
+
+  const activeId = kind === 'move'
+    ? managerState.moveFolderActiveId
+    : managerState.scopeFolderActiveId === null
+      ? ''
+      : String(managerState.scopeFolderActiveId || '')
+  const activeOption = state.treeOptions.find((option) => String(option.id || '') === activeId)
+  if (!activeOption?.hasChildren) {
+    return
+  }
+
+  if (key === 'ArrowLeft' && activeOption.expanded) {
+    toggleFolderPickerFolder(kind, activeOption.id, true)
+    return
+  }
+
+  if (key === 'ArrowRight' && !activeOption.expanded) {
+    toggleFolderPickerFolder(kind, activeOption.id, true)
+  }
+}
+
+function resolveMoveFolderActiveId(treeOptions: FolderPickerTreeOptionViewModel[]) {
+  if (!treeOptions.length) {
     managerState.moveFolderActiveId = ''
     return ''
   }
 
-  const activeId = folders.some((folder) => folder.id === managerState.moveFolderActiveId)
+  const activeId = treeOptions.some((option) => option.id === managerState.moveFolderActiveId)
     ? managerState.moveFolderActiveId
-    : folders[0]?.id || ''
+    : treeOptions[0]?.id || ''
   managerState.moveFolderActiveId = activeId
   return activeId
 }
@@ -8344,7 +8560,7 @@ function updateFolderPickerActiveId(kind: 'move' | 'scope', activeId: string, fo
 }
 
 function getFolderPickerOptionIds(kind: 'move' | 'scope'): string[] {
-  return getFolderPickerResultsSnapshot(kind).options.map((option) => String(option.folder.id || ''))
+  return getFolderPickerResultsSnapshot(kind).treeOptions.map((option) => String(option.id || ''))
 }
 
 function focusFolderPickerOption(kind: 'move' | 'scope', direction: 'first' | 'last' | 1 | -1): void {
@@ -8371,6 +8587,29 @@ function focusFolderPickerOption(kind: 'move' | 'scope', direction: 'first' | 'l
   }
 
   updateFolderPickerActiveId(kind, optionIds[Math.max(0, nextIndex)], true)
+}
+
+function toggleFolderPickerFolder(kind: 'move' | 'scope', folderId: string, focus = false): void {
+  if (!folderId) {
+    return
+  }
+
+  const expandedFolderIds = getFolderPickerExpandedFolderIds(kind)
+  if (expandedFolderIds.has(folderId)) {
+    expandedFolderIds.delete(folderId)
+  } else {
+    expandedFolderIds.add(folderId)
+  }
+
+  if (kind === 'move') {
+    renderMoveModal()
+  } else {
+    renderScopeModal()
+  }
+
+  if (focus) {
+    updateFolderPickerActiveId(kind, folderId, true)
+  }
 }
 
 async function handleScopeFolderSelection(folderId: string): Promise<void> {

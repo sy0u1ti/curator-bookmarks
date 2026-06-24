@@ -43,25 +43,40 @@ export const OPTIONS_MODAL_SEARCH_INPUT_CLASS =
   'min-h-[46px] bg-ds-surface-2 placeholder:text-ds-text-disabled focus:bg-ds-hover focus-visible:bg-ds-hover'
 
 export const OPTIONS_MODAL_RESULTS_CLASS =
-  'm-0 max-h-[360px] list-none overflow-auto rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2'
+  'max-h-[360px] overflow-auto rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2'
 
 export const FOLDER_PICKER_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-2 p-4 text-sm leading-[1.65] text-ds-text-muted'
+  'grid min-h-[92px] place-items-center rounded-ds-sm px-5 py-5 text-center text-sm leading-[1.6] text-ds-text-muted'
+
+export const FOLDER_PICKER_TREE_ROW_CLASS =
+  'relative grid min-h-[34px] grid-cols-[20px_minmax(0,1fr)] items-center gap-1'
+
+export const FOLDER_PICKER_TOGGLE_CLASS =
+  'inline-flex h-7 min-h-7 w-5 min-w-5 items-center justify-center rounded-md border border-transparent bg-transparent text-ds-text-muted outline-none transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-ds-border hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1 active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
+
+export const FOLDER_PICKER_TOGGLE_ICON_CLASS =
+  'transition-transform duration-ds-fast ease-ds-standard'
 
 export const FOLDER_PICKER_CARD_CLASS =
-  'grid min-h-14 w-full min-w-0 cursor-pointer grid-cols-[minmax(0,1fr)] items-start justify-stretch gap-[3px] rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 py-[9px] text-left font-[inherit] leading-normal text-ds-text-primary outline-none transition-[background,border-color,transform] hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:ring-2 focus-visible:ring-ds-focus/35 active:scale-[0.988] disabled:cursor-default disabled:opacity-55 data-disabled:cursor-default data-disabled:opacity-55 aria-[current=true]:border-ds-border-hover aria-[current=true]:bg-ds-selected'
+  'grid min-h-[34px] w-full min-w-0 cursor-pointer grid-cols-[12px_minmax(0,1fr)] items-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1 text-left font-[inherit] leading-normal text-ds-text-primary shadow-none outline-none transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard hover:border-ds-text-primary/10 hover:bg-ds-text-primary/[0.055] focus-visible:border-ds-text-primary/10 focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1 active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
-export const FOLDER_PICKER_HEAD_CLASS =
-  'grid min-w-0 grid-cols-[22px_minmax(0,1fr)] items-center gap-2 text-left'
+export const FOLDER_PICKER_CARD_CURRENT_CLASS =
+  'border-ds-border bg-ds-text-primary/[0.11]'
 
-export const FOLDER_PICKER_ICON_CLASS =
-  'size-[22px] rounded-ds-sm border border-ds-border bg-ds-surface-3'
+export const FOLDER_PICKER_BRANCH_CLASS =
+  'h-2.5 w-2.5 justify-self-center rounded-full border border-white/18 bg-transparent'
+
+export const FOLDER_PICKER_MAIN_CLASS =
+  'grid min-w-0 max-w-full gap-px text-left leading-normal'
 
 export const FOLDER_PICKER_TITLE_CLASS =
-  'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.4] text-ds-text-primary'
+  'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-semibold leading-[1.3] text-ds-text-primary'
 
 export const FOLDER_PICKER_DESCRIPTION_CLASS =
-  'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[13px] leading-[1.55] text-ds-text-secondary'
+  'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-tight text-ds-text-muted'
 
-export const FOLDER_PICKER_SCOPE_DESCRIPTION_CLASS =
-  `${FOLDER_PICKER_DESCRIPTION_CLASS} pl-[30px]`
+export const FOLDER_PICKER_BADGE_CLASS =
+  'inline-flex min-h-[18px] w-fit items-center justify-self-start rounded-full bg-ds-text-primary/[0.07] px-[7px] py-0.5 text-[10px] font-bold leading-tight text-ds-text-primary'
+
+export const FOLDER_PICKER_BADGE_MUTED_CLASS =
+  'text-ds-text-disabled'
