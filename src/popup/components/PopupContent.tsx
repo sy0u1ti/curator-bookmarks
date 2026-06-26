@@ -59,7 +59,7 @@ const workspaceClass =
   'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
-  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border border-ds-border bg-ds-surface-1'
+  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
 const mainPaneClass = cx(paneClass, 'bg-ds-surface-1')
 const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'

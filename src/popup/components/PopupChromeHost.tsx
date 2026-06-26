@@ -39,9 +39,9 @@ const viewCaptionClass =
 const keyHintClass =
   'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-ds-text-disabled opacity-60 transition-opacity duration-150 ease-ds-standard group-focus-within:opacity-100 max-[520px]:hidden'
 const heroBaseClass =
-  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-hidden border-b border-ds-border bg-ds-surface-2 px-3.5 max-[520px]:-mx-2.5 max-[520px]:px-2.5'
+  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-visible border-0 bg-transparent px-3.5 max-[520px]:-mx-2.5 max-[520px]:px-2.5'
 const heroBrandClass =
-  'hero-brand flex min-w-0 flex-none items-center justify-start gap-2.5'
+  'hero-brand flex min-w-0 flex-none translate-y-[5px] items-center justify-start gap-2.5'
 const heroMarkClass =
   'hero-mark relative block h-[27px] w-[27px] flex-none overflow-hidden rounded-lg border border-ds-border bg-ds-page shadow-none'
 const heroLogoClass =
@@ -53,7 +53,7 @@ const heroEyebrowClass =
 const heroTitleRowClass =
   'hero-title-row flex min-w-0 items-center gap-[5px]'
 const heroActionsClass =
-  'hero-actions inline-flex items-center gap-3.5'
+  'hero-actions inline-flex translate-y-[5px] items-center gap-3.5'
 const heroSettingsButtonClass = [
   'hero-settings-button inline-flex h-6 min-h-6 min-w-0 items-center justify-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-[720] text-ds-text-secondary shadow-none',
   'transition-[color,background,transform] duration-150 ease-ds-standard',
@@ -68,10 +68,10 @@ const commandPanelSmartClass =
   'min-h-0 flex-auto grid-rows-[minmax(0,1fr)] border-0 bg-transparent p-0'
 const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
-  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
-  'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover',
-  'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
+  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border-0 bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
+  'transition-[background,box-shadow] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-hover',
+  'focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
 ].join(' ')
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
@@ -84,17 +84,17 @@ const clearSearchButtonClass = [
   'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none'
 ].join(' ')
 const semanticSearchBaseClass = [
-  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border border-ds-border bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:min-w-0 max-[520px]:px-2.5',
-  'transition-[background,border-color,color,box-shadow] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)] focus-visible:outline-none'
+  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:min-w-0 max-[520px]:px-2.5',
+  'transition-[background,color,box-shadow] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-hover hover:text-ds-text-primary',
+  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)] focus-visible:outline-none'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
-  'border-dashed text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
+  'text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
 const semanticSearchActiveClass =
-  'border-ds-accent bg-ds-accent text-ds-accent-contrast hover:border-[var(--ds-accent-hover)] hover:bg-ds-accent-hover hover:text-ds-accent-contrast focus-visible:border-[var(--ds-accent-hover)] focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
+  'bg-ds-accent text-ds-accent-contrast hover:bg-ds-accent-hover hover:text-ds-accent-contrast focus-visible:bg-ds-accent-hover focus-visible:text-ds-accent-contrast'
 const semanticSearchFallbackClass =
-  'border-ds-warning bg-[rgba(248,214,109,0.14)] text-ds-warning hover:border-ds-warning hover:bg-[rgba(248,214,109,0.14)] hover:text-ds-warning focus-visible:border-ds-warning focus-visible:bg-[rgba(248,214,109,0.14)] focus-visible:text-ds-warning'
+  'bg-[rgba(248,214,109,0.14)] text-ds-warning hover:bg-[rgba(248,214,109,0.14)] hover:text-ds-warning focus-visible:bg-[rgba(248,214,109,0.14)] focus-visible:text-ds-warning'
 const semanticSearchPendingDotClass =
   'h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ds-ease-standard)_infinite] motion-reduce:animate-none'
 
