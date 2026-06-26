@@ -12,22 +12,19 @@ import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './P
 const SMART_ERROR_BANNER_CLASS =
   'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
-const pageRevealShellClass = 'relative min-h-12 w-full'
+const pageRevealShellClass = 'popup-page-reveal relative min-h-12 w-full'
 const pageLayerClass = 'absolute inset-0 min-h-12'
 const pageSkeletonLayerClass = cx(
   pageLayerClass,
-  'z-[1] opacity-100 transition-[opacity,filter] duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none',
+  'popup-page-skeleton z-[1]',
   '[&>*]:animate-[popup-skeleton-pulse_var(--pulse-dur)_ease-in-out_var(--pulse-count)] motion-reduce:[&>*]:animate-none'
 )
-const pageSkeletonHiddenClass = 'pointer-events-none opacity-0 blur-[var(--reveal-blur)]'
 const pageContentLayerClass = cx(
   pageLayerClass,
-  'z-[2] opacity-0 transition-[opacity,filter] duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none'
+  'popup-page-content z-[2]'
 )
-const pageContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
-const pageContentReadyClass = 'opacity-100'
 const pageCardClass =
-  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1 px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
+  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-transparent px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-[7px]'
 const pageIconClass =
   'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
@@ -292,10 +289,10 @@ function PopupSmartPageRevealCard({
       role={loading ? 'status' : undefined}
       aria-live="polite"
     >
-      <div className={cx(pageCardClass, pageSkeletonLayerClass, loading ? '' : pageSkeletonHiddenClass)} aria-hidden="true">
+      <div className={cx(pageCardClass, pageSkeletonLayerClass)} aria-hidden="true">
         <PopupSmartPageSkeletonContent />
       </div>
-      <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass, loading ? pageContentLoadingClass : pageContentReadyClass)}>
+      <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass)}>
         <PopupSmartPageCardContent handlers={handlers} page={page} />
       </article>
     </div>

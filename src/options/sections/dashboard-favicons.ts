@@ -418,54 +418,15 @@ export function preloadDashboardFavicon(url: string): Promise<HTMLImageElement> 
 
 export async function warmDashboardFavicon(
   chromeFaviconUrl: string,
-  item: DashboardFaviconWarmupItem,
-  cacheStore: DashboardFaviconCacheStore,
-  options: DashboardFaviconWarmOptions = {}
+  _item: DashboardFaviconWarmupItem,
+  _cacheStore: DashboardFaviconCacheStore,
+  _options: DashboardFaviconWarmOptions = {}
 ): Promise<void> {
+  // Direct remote favicon fetches from extension pages create user-visible CORS errors.
+  // Chrome's favicon endpoint can warm and serve the icon without exposing those failures.
   try {
     await preloadDashboardFavicon(chromeFaviconUrl)
   } catch {}
-
-  if (
-    hasFreshDashboardFaviconCacheEntry(cacheStore.getCache(), item.pageUrl) ||
-    shouldSkipDashboardRemoteFaviconFetch(cacheStore.getCache(), item.pageUrl)
-  ) {
-    return
-  }
-
-  const canFetchRemote = await Promise.resolve(options.canFetchRemote?.(item.pageUrl) ?? true)
-  if (!canFetchRemote) {
-    cacheStore.markFailed(item.pageUrl)
-    return
-  }
-
-  const defaultRemoteFaviconUrl = getDashboardDefaultRemoteFaviconUrl(item.pageUrl)
-  if (defaultRemoteFaviconUrl) {
-    try {
-      const dataUrl = await fetchDashboardFaviconAsDataUrl(defaultRemoteFaviconUrl, {
-        cache: 'force-cache',
-        credentials: 'omit',
-        redirect: 'follow',
-        referrerPolicy: 'no-referrer'
-      })
-      cacheStore.upsert(item.pageUrl, dataUrl)
-      return
-    } catch {}
-  }
-
-  try {
-    const iconUrl = await discoverDashboardRemoteFavicon(item.pageUrl)
-    const dataUrl = await fetchDashboardFaviconAsDataUrl(iconUrl, {
-      cache: 'force-cache',
-      credentials: 'omit',
-      redirect: 'follow',
-      referrerPolicy: 'no-referrer'
-    })
-    cacheStore.upsert(item.pageUrl, dataUrl)
-  } catch (error) {
-    cacheStore.markFailed(item.pageUrl)
-    throw error
-  }
 }
 
 export function clampDashboardInteger(value: unknown, min: number, max: number, fallback: number): number {

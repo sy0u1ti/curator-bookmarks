@@ -1,9 +1,6 @@
-import { SAVED_SEARCH_LIMIT, STORAGE_KEYS } from './constants.js'
-import { getLocalStorage, setLocalStorage } from './storage.js'
 import { normalizeText, stripCommonUrlPrefix } from './text.js'
 
 export type SearchChipKind = 'site' | 'folder' | 'type' | 'time' | 'exclude'
-export type SavedSearchScope = 'popup' | 'dashboard' | 'both'
 
 type RelativeTimeUnit = 'day' | 'week' | 'month'
 type FixedTimeUnit = 'current-month' | 'current-week' | 'last-month' | 'last-week' | 'half-year' | 'today' | 'yesterday' | 'before-yesterday'
@@ -23,27 +20,6 @@ export interface ParsedSearchQuery {
   excludedTerms: string[]
   dateRange: SearchDateRange | null
   chips: Array<{ kind: SearchChipKind; label: string; value: string }>
-}
-
-export interface SavedSearch {
-  id: string
-  name: string
-  query: string
-  scope: SavedSearchScope
-  createdAt: number
-  updatedAt: number
-}
-
-export interface SavedSearchIndex {
-  version: 1
-  updatedAt: number
-  searches: SavedSearch[]
-}
-
-const EMPTY_INDEX: SavedSearchIndex = {
-  version: 1,
-  updatedAt: 0,
-  searches: []
 }
 
 const RELATIVE_TIME_PATTERN = /^(?:最近|近|过去)(\d+|一|两|二|三|四|五|六|七|八|九|十)(天|日|周|星期|礼拜|个月|月)$/
@@ -238,79 +214,6 @@ export function matchesParsedSearchQuery(
   }
 
   return true
-}
-
-export function normalizeSavedSearchIndex(value: unknown): SavedSearchIndex {
-  if (!value || typeof value !== 'object') {
-    return { ...EMPTY_INDEX, searches: [] }
-  }
-
-  const raw = value as Partial<SavedSearchIndex>
-  const searches = Array.isArray(raw.searches)
-    ? raw.searches.map(normalizeSavedSearch).filter(Boolean) as SavedSearch[]
-    : []
-
-  return {
-    version: 1,
-    updatedAt: normalizeTimestamp(raw.updatedAt),
-    searches: searches
-      .sort((left, right) => right.updatedAt - left.updatedAt)
-      .slice(0, SAVED_SEARCH_LIMIT)
-  }
-}
-
-export async function loadSavedSearchIndex(): Promise<SavedSearchIndex> {
-  const stored = await getLocalStorage([STORAGE_KEYS.savedSearches])
-  return normalizeSavedSearchIndex(stored[STORAGE_KEYS.savedSearches])
-}
-
-export async function saveSearch(
-  index: SavedSearchIndex,
-  input: { name: string; query: string; scope: SavedSearchScope; now?: number }
-): Promise<SavedSearchIndex> {
-  const now = normalizeTimestamp(input.now || Date.now())
-  const query = String(input.query || '').trim()
-  const name = String(input.name || '').trim().slice(0, 60) || query.slice(0, 60) || '未命名搜索'
-  const scope: SavedSearchScope = ['popup', 'dashboard', 'both'].includes(input.scope) ? input.scope : 'both'
-  const normalized = normalizeSavedSearchIndex(index)
-  const duplicate = normalized.searches.find((item) => item.query === query && item.scope === scope)
-  const nextSearch: SavedSearch = duplicate
-    ? { ...duplicate, name, updatedAt: now }
-    : {
-      id: createSavedSearchId(now),
-      name,
-      query,
-      scope,
-      createdAt: now,
-      updatedAt: now
-    }
-
-  const nextIndex: SavedSearchIndex = {
-    version: 1,
-    updatedAt: now,
-    searches: [
-      nextSearch,
-      ...normalized.searches.filter((item) => item.id !== nextSearch.id)
-    ].slice(0, SAVED_SEARCH_LIMIT)
-  }
-
-  await persistSavedSearchIndex(nextIndex)
-  return nextIndex
-}
-
-export async function deleteSavedSearch(index: SavedSearchIndex, id: string): Promise<SavedSearchIndex> {
-  const normalized = normalizeSavedSearchIndex(index)
-  const nextIndex: SavedSearchIndex = {
-    version: 1,
-    updatedAt: Date.now(),
-    searches: normalized.searches.filter((item) => item.id !== String(id))
-  }
-  await persistSavedSearchIndex(nextIndex)
-  return nextIndex
-}
-
-export function getSavedSearchesForScope(index: SavedSearchIndex, scope: SavedSearchScope): SavedSearch[] {
-  return normalizeSavedSearchIndex(index).searches.filter((item) => item.scope === 'both' || item.scope === scope)
 }
 
 function parseSearchOperatorTerm(term: string): { kind: 'site' | 'folder' | 'type'; value: string } | null {
@@ -528,49 +431,6 @@ function endOfDay(timestamp: number): number {
   const date = new Date(timestamp)
   date.setHours(23, 59, 59, 999)
   return date.getTime()
-}
-
-function normalizeSavedSearch(value: unknown): SavedSearch | null {
-  if (!value || typeof value !== 'object') {
-    return null
-  }
-
-  const raw = value as Partial<SavedSearch>
-  const query = String(raw.query || '').trim()
-  if (!query) {
-    return null
-  }
-
-  const scope = ['popup', 'dashboard', 'both'].includes(String(raw.scope))
-    ? raw.scope as SavedSearchScope
-    : 'both'
-  const updatedAt = normalizeTimestamp(raw.updatedAt || raw.createdAt)
-  const createdAt = normalizeTimestamp(raw.createdAt || updatedAt)
-
-  return {
-    id: String(raw.id || createSavedSearchId(createdAt)).trim(),
-    name: String(raw.name || query).trim().slice(0, 60),
-    query,
-    scope,
-    createdAt,
-    updatedAt
-  }
-}
-
-async function persistSavedSearchIndex(index: SavedSearchIndex): Promise<void> {
-  await setLocalStorage({ [STORAGE_KEYS.savedSearches]: normalizeSavedSearchIndex(index) })
-}
-
-function normalizeTimestamp(value: unknown): number {
-  const timestamp = Number(value)
-  return Number.isFinite(timestamp) && timestamp > 0 ? timestamp : Date.now()
-}
-
-function createSavedSearchId(now: number): string {
-  const random = globalThis.crypto
-    ? Array.from(globalThis.crypto.getRandomValues(new Uint32Array(2))).map((value) => value.toString(36)).join('')
-    : Math.random().toString(36).slice(2)
-  return `search-${now.toString(36)}-${random}`
 }
 
 function normalizeRawSearchQuery(value: unknown): string {

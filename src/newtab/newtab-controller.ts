@@ -29,14 +29,7 @@ import {
   type FolderCandidateCacheState,
   type NewTabFolderCandidate
 } from './folder-candidate-cache.js'
-import {
-  deleteSavedSearch,
-  getSavedSearchesForScope,
-  loadSavedSearchIndex,
-  parseSearchQuery,
-  saveSearch,
-  type SavedSearchIndex
-} from '../shared/search-query.js'
+import { parseSearchQuery } from '../shared/search-query.js'
 import type { NaturalSearchPlan } from '../popup/natural-search.js'
 import type {
   BookmarkTagExtraction,
@@ -223,13 +216,11 @@ import {
 } from './newtab-bookmark-content-store.js'
 import {
   createDefaultSearchWidgetInteractionState,
-  createEmptySavedSearchesState,
   dispatchNewtabSearchWidgetView,
   getNewtabSearchWidgetNodes,
   getNewtabSearchWidgetView,
   patchNewtabSearchWidgetView,
   type NewtabSearchWidgetNodes,
-  type SavedSearchesState,
   type SearchChipViewModel,
   type SearchEngineMenuItemViewModel,
   type SearchHintState,
@@ -655,9 +646,6 @@ const state = {
   preparedSearchIndex: prepareNewTabSearchIndex([]) as NewTabPreparedSearchIndex,
   searchIndexReady: false,
   searchIndexReadyPromise: Promise.resolve() as Promise<void>,
-  savedSearches: null as SavedSearchIndex | null,
-  savedSearchesLoaded: false,
-  savedSearchesError: '',
   naturalSearchPending: false,
   naturalSearchError: '',
   naturalSearchPlan: null as NaturalSearchPlan | null,
@@ -902,7 +890,6 @@ function startNewTabController(): void {
   bindEvents()
   hydrateFeaturedBackgroundOptions()
   void backgroundPreloadPromise
-  void hydrateNewTabSavedSearches()
   void refreshNewTab()
 }
 
@@ -5867,7 +5854,6 @@ function initializeSearchWidget(): boolean {
     patchNewtabSearchWidgetView({
       chips: [],
       hint: { type: 'empty' },
-      savedSearches: createEmptySavedSearchesState(),
       sectionLabel: '书签匹配',
       suggestions: []
     })
@@ -5891,16 +5877,11 @@ function initializeSearchWidget(): boolean {
     const previousActiveIndex = activeSuggestionIndex
     const advancedSearch = isNewTabAdvancedSearchQuery(trimmedQuery)
     const chips = createNewTabSearchChips(trimmedQuery)
-    const savedSearches = createNewTabSavedSearches(trimmedQuery, input, () => {
-      syncSearchInputActions(input)
-      scheduleSuggestionsRender({ preserveActive: true, immediate: true })
-    })
     searchSuggestions = suggestionList
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
       patchNewtabSearchWidgetView({
         chips,
-        savedSearches,
         suggestions: []
       })
       setSearchSuggestionsListVisible(false)
@@ -5959,7 +5940,6 @@ function initializeSearchWidget(): boolean {
         type: 'text',
         text: getSearchSuggestionHintText()
       },
-      savedSearches,
       sectionLabel,
       suggestions: searchSuggestions.map((suggestion, index) =>
         createSearchSuggestionViewModel(
@@ -6075,10 +6055,6 @@ function initializeSearchWidget(): boolean {
         type: 'text',
         text: '正在准备索引…'
       },
-      savedSearches: createNewTabSavedSearches(trimmedQuery, input, () => {
-        syncSearchInputActions(input)
-        scheduleSuggestionsRender({ preserveActive: true, immediate: true })
-      }),
       sectionLabel: '书签匹配',
       suggestions: []
     })
@@ -6123,7 +6099,6 @@ function initializeSearchWidget(): boolean {
       panelVisible: searchPanelVisible,
       suggestionsVisible: searchSuggestionListVisible
     },
-    savedSearches: createEmptySavedSearchesState(),
     sectionLabel: '书签匹配',
     shell: createSearchWidgetShellState(settings),
     onNodesChange: handleSearchWidgetNodesChange,
@@ -6268,39 +6243,6 @@ async function toggleNewTabNaturalSearch({
   scheduleSuggestionsRender({ preserveActive: true, immediate: true })
 }
 
-function createNewTabSavedSearches(
-  query: string,
-  input: HTMLInputElement,
-  onApply: () => void
-): SavedSearchesState {
-  const savedSearches = state.savedSearches
-    ? getSavedSearchesForScope(state.savedSearches, 'popup')
-    : []
-  const normalizedQuery = normalizeNewTabSearchText(query)
-  const canSaveCurrent = Boolean(normalizedQuery && isNewTabAdvancedSearchQuery(query))
-  const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeNewTabSearchText(item.query) === normalizedQuery)
-  const show = Boolean(canSaveCurrent || savedSearches.length > 0 || state.savedSearchesError)
-
-  return {
-    canSaveCurrent,
-    error: state.savedSearchesError,
-    hasCurrentSaved,
-    items: savedSearches.slice(0, 6).map((search) => ({
-      id: search.id,
-      label: search.name || search.query,
-      query: search.query,
-      onApply: () => {
-        input.value = search.query
-        onApply()
-        input.focus()
-      },
-      onDelete: () => deleteNewTabSavedSearch(search.id).then(onApply)
-    })),
-    onSaveCurrent: () => saveNewTabCurrentSearch(query).then(onApply),
-    show
-  }
-}
-
 function createSearchSuggestionViewModel(
   suggestion: NewTabSearchSuggestion,
   index: number,
@@ -6331,77 +6273,6 @@ function createSearchSuggestionViewModel(
 function getSearchSuggestionKey(suggestion: NewTabSearchSuggestion, index: number): string {
   const type = isCommandSuggestion(suggestion) ? 'command' : 'bookmark'
   return `${type}:${suggestion.id}:${index}`
-}
-
-async function hydrateNewTabSavedSearches(): Promise<void> {
-  if (state.savedSearchesLoaded) {
-    return
-  }
-
-  try {
-    state.savedSearches = await loadSavedSearchIndex()
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = ''
-  } catch {
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = '保存搜索读取失败'
-  }
-}
-
-async function ensureNewTabSavedSearchIndex(): Promise<SavedSearchIndex> {
-  if (state.savedSearches) {
-    return state.savedSearches
-  }
-
-  state.savedSearches = await loadSavedSearchIndex()
-  state.savedSearchesLoaded = true
-  return state.savedSearches
-}
-
-async function saveNewTabCurrentSearch(query: string): Promise<void> {
-  const trimmedQuery = String(query || '').trim()
-  if (!trimmedQuery) {
-    return
-  }
-
-  try {
-    const index = await ensureNewTabSavedSearchIndex()
-    state.savedSearches = await saveSearch(index, {
-      name: createNewTabSavedSearchName(trimmedQuery),
-      query: trimmedQuery,
-      scope: 'both'
-    })
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = ''
-  } catch (error) {
-    state.savedSearchesError = error instanceof Error ? error.message : '保存搜索失败'
-  }
-}
-
-async function deleteNewTabSavedSearch(searchId: string): Promise<void> {
-  try {
-    const index = await ensureNewTabSavedSearchIndex()
-    state.savedSearches = await deleteSavedSearch(index, String(searchId || ''))
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = ''
-  } catch (error) {
-    state.savedSearchesError = error instanceof Error ? error.message : '删除保存搜索失败'
-  }
-}
-
-function createNewTabSavedSearchName(query: string): string {
-  const parsed = parseSearchQuery(query)
-  const chipLabels = parsed.chips.map((chip) => chip.label.replace(/^[^：]+：/, '')).filter(Boolean)
-  const terms = parsed.textTerms.join(' ')
-  return truncateNewTabSearchText([...chipLabels, terms].filter(Boolean).join(' · ') || query, 60) || '未命名搜索'
-}
-
-function truncateNewTabSearchText(value: unknown, limit = 60): string {
-  const text = String(value || '').replace(/\s+/g, ' ').trim()
-  if (text.length <= limit) {
-    return text
-  }
-  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
 }
 
 function syncSearchInputActions(input: HTMLInputElement): void {

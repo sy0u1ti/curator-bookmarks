@@ -1,11 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { createElement } from 'react'
 import { SMART_LOADING_STAGE_STARTS } from '../smart-loading-progress.js'
+import { EMPTY_POPUP_SMART_CLASSIFIER } from '../popup-controller-store.js'
 import { PopupSmartClassifier } from './PopupSmartClassifier'
-import type { PopupSmartClassifierViewModel } from './PopupViewModels.js'
+import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels.js'
 
 function run(): void {
   testLoadingProgressIsClampedToVisibleStage()
+  testInitialSmartClassifierStateShowsPageSkeleton()
+  testReadyPageRevealLayersAvoidConflictingOpacityUtilities()
 }
 
 function testLoadingProgressIsClampedToVisibleStage(): void {
@@ -31,6 +34,36 @@ function testLoadingProgressIsClampedToVisibleStage(): void {
   assert(!markup.includes('scaleX('), 'progress indicator should not scale an already width-based bar')
 }
 
+function testInitialSmartClassifierStateShowsPageSkeleton(): void {
+  const markup = renderToStaticMarkup(
+    createElement(PopupSmartClassifier, {
+      state: EMPTY_POPUP_SMART_CLASSIFIER
+    })
+  )
+
+  assert(markup.includes('data-state="loading"'), 'initial smart classifier should render the page skeleton')
+  assert(markup.includes('popup-page-skeleton'), 'initial smart classifier should include the page skeleton layer')
+}
+
+function testReadyPageRevealLayersAvoidConflictingOpacityUtilities(): void {
+  const markup = renderToStaticMarkup(
+    createElement(PopupSmartClassifier, {
+      state: {
+        ...getBaseSmartClassifierState(),
+        page: getLoadedPageState(),
+        status: 'idle'
+      }
+    })
+  )
+
+  assert(markup.includes('data-state="ready"'), 'ready reveal shell should expose ready state')
+  const layerClasses = Array.from(markup.matchAll(/class="([^"]*popup-page-(?:skeleton|content)[^"]*)"/g), (match) => match[1])
+  assert(layerClasses.length === 2, `ready reveal should render skeleton and content layers, got ${layerClasses.length}`)
+  for (const className of layerClasses) {
+    assert(!/\bopacity-(?:0|100)\b/.test(className), `reveal layer should not use conflicting opacity utilities: ${className}`)
+  }
+}
+
 function getBaseSmartClassifierState(): PopupSmartClassifierViewModel {
   return {
     error: '',
@@ -46,6 +79,20 @@ function getBaseSmartClassifierState(): PopupSmartClassifierViewModel {
     saving: false,
     status: 'hidden',
     suggestedTitle: ''
+  }
+}
+
+function getLoadedPageState(): PopupSmartPageViewModel {
+  return {
+    bookmarked: false,
+    fallbackIcon: '小',
+    favicon: '',
+    pinLabel: '固定',
+    pinPending: false,
+    pinned: false,
+    status: '未收藏 · 可快速保存到文件夹',
+    statusTitle: '未收藏 · 可快速保存到文件夹',
+    title: '小红书体育的小红书直播间'
   }
 }
 

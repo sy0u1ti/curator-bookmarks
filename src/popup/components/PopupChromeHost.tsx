@@ -8,7 +8,6 @@ import {
   usePopupChromeView,
   usePopupSearchFocusRequest
 } from '../popup-controller-store'
-import { PopupSavedSearches } from './PopupSavedSearches'
 import { PopupSearchChips } from './PopupSearchChips'
 
 const searchHelpPopoverClass =
@@ -36,7 +35,7 @@ const errorBannerClass =
 const toolbarClass =
   'relative z-[1] flex min-h-[18px] items-center justify-between gap-2.5 px-px'
 const viewCaptionClass =
-  'm-0 min-w-0 text-[11px] font-semibold leading-normal tracking-[0.01em] text-ds-text-primary'
+  'm-0 min-w-0 text-[11px] font-semibold leading-normal tracking-[0.01em] text-ds-text-secondary'
 const keyHintClass =
   'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-ds-text-disabled opacity-60 transition-opacity duration-150 ease-ds-standard group-focus-within:opacity-100 max-[520px]:hidden'
 const heroBaseClass =
@@ -64,7 +63,7 @@ const heroSettingsButtonClass = [
 ].join(' ')
 const commandPanelBaseClass = 'grid gap-2'
 const commandPanelDefaultClass =
-  'min-h-[67px] flex-none rounded-lg border border-ds-border bg-ds-surface-1 p-3'
+  'flex-none'
 const commandPanelSmartClass =
   'min-h-0 flex-auto grid-rows-[minmax(0,1fr)] border-0 bg-transparent p-0'
 const searchBlockClass = 'flex flex-col gap-2'
@@ -180,7 +179,6 @@ export function PopupChromeHost({
                 spellCheck={false}
                 autoComplete="off"
                 placeholder={state.search.placeholder}
-                autoFocus
                 aria-label={state.search.ariaLabel}
                 value={state.search.query}
                 onValueChange={(nextValue) => dispatchPopupChromeAction('search-change', nextValue)}
@@ -213,7 +211,6 @@ export function PopupChromeHost({
             </label>
 
             <PopupSearchChips />
-            <PopupSavedSearches />
           </section>
         )}
         {children}

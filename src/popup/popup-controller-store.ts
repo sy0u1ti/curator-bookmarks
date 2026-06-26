@@ -23,27 +23,6 @@ export interface PopupSearchChipView {
   label: string
 }
 
-export interface PopupSavedSearchItemView {
-  active: boolean
-  id: string
-  label: string
-  query: string
-}
-
-export interface PopupSavedSearchesView {
-  canSaveCurrent: boolean
-  error: string
-  expanded: boolean
-  hasCurrentSaved: boolean
-  items: PopupSavedSearchItemView[]
-  show: boolean
-}
-
-export interface PopupSavedSearchActionDetail {
-  action: string
-  searchId: string
-}
-
 export interface PopupContentChangeDetail {
   preserveScroll: boolean
   state: PopupContentViewModel
@@ -238,15 +217,6 @@ export const EMPTY_POPUP_MODALS_VIEW: PopupModalsView = {
   }
 }
 
-export const EMPTY_POPUP_SAVED_SEARCHES_VIEW: PopupSavedSearchesView = {
-  canSaveCurrent: false,
-  error: '',
-  expanded: false,
-  hasCurrentSaved: false,
-  items: [],
-  show: false
-}
-
 export const EMPTY_POPUP_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
   error: '',
   loadingLabel: '',
@@ -259,7 +229,7 @@ export const EMPTY_POPUP_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
   recommendations: [],
   saved: false,
   saving: false,
-  status: 'hidden',
+  status: 'page-loading',
   suggestedTitle: ''
 }
 
@@ -284,7 +254,6 @@ interface PopupViewStoreSnapshot {
   content: PopupContentChangeDetail
   folderPickers: Record<PopupFolderPickerState['mode'], PopupFolderPickerState>
   modals: PopupModalsView
-  savedSearches: PopupSavedSearchesView
   searchChips: PopupSearchChipView[]
   searchFocusRequest: PopupSearchFocusRequestState
   smartClassifier: PopupSmartClassifierViewModel
@@ -298,7 +267,6 @@ interface PopupActionHandlers {
   contentResultHover?: (detail: PopupContentResultHoverDetail) => void
   folderPicker?: (detail: PopupFolderPickerActionDetail) => void
   modal?: (detail: PopupModalActionDetail) => void
-  savedSearch?: (detail: PopupSavedSearchActionDetail) => void
   smartClassifier?: (detail: PopupSmartClassifierActionDetail) => void
   smartClassifierTitleChange?: (detail: PopupSmartClassifierTitleChangeDetail) => void
   toast?: (detail: PopupToastActionDetail) => void
@@ -318,7 +286,6 @@ let popupViewStoreSnapshot: PopupViewStoreSnapshot = {
     smart: getEmptyPopupFolderPickerState('smart')
   },
   modals: EMPTY_POPUP_MODALS_VIEW,
-  savedSearches: EMPTY_POPUP_SAVED_SEARCHES_VIEW,
   searchChips: [],
   searchFocusRequest: { id: 0, select: false },
   smartClassifier: EMPTY_POPUP_SMART_CLASSIFIER,
@@ -391,14 +358,6 @@ export function usePopupModalsView(): PopupModalsView {
   )
 }
 
-export function usePopupSavedSearchesView(): PopupSavedSearchesView {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.savedSearches,
-    () => EMPTY_POPUP_SAVED_SEARCHES_VIEW
-  )
-}
-
 export function usePopupSearchChips(): PopupSearchChipView[] {
   return useSyncExternalStore(
     subscribePopupViewStore,
@@ -441,19 +400,6 @@ export function dispatchPopupAutoAnalyzeStatusAction(action: string): void {
 
 export function dispatchPopupSearchChipsChange(chips: PopupSearchChipView[]): void {
   updatePopupViewStore({ searchChips: chips.map((chip) => ({ ...chip })) })
-}
-
-export function dispatchPopupSavedSearchesChange(state: PopupSavedSearchesView): void {
-  updatePopupViewStore({
-    savedSearches: {
-      ...state,
-      items: state.items.map((item) => ({ ...item }))
-    }
-  })
-}
-
-export function dispatchPopupSavedSearchAction(action: string, searchId = ''): void {
-  popupActionHandlers.savedSearch?.({ action, searchId })
 }
 
 export function dispatchPopupContentChange(

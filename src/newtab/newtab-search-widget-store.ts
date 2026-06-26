@@ -100,23 +100,6 @@ export type SearchHintState =
   | { type: 'text'; text: string }
   | { type: 'webFallback'; ariaLabel: string; label: string; onSelect: () => void; title: string }
 
-export interface SavedSearchItemViewModel {
-  id: string
-  label: string
-  onApply: () => void
-  onDelete: () => void | Promise<void>
-  query: string
-}
-
-export interface SavedSearchesState {
-  canSaveCurrent: boolean
-  error: string
-  hasCurrentSaved: boolean
-  items: SavedSearchItemViewModel[]
-  onSaveCurrent: () => void | Promise<void>
-  show: boolean
-}
-
 export interface NewtabSearchWidgetNodes {
   engineButton: HTMLButtonElement | null
   engineMenu: HTMLElement | null
@@ -134,7 +117,6 @@ export interface NewtabSearchWidgetView {
   interactions: SearchWidgetInteractionState
   onNodesChange?: (nodes: NewtabSearchWidgetNodes) => void
   panel: SearchWidgetPanelState
-  savedSearches: SavedSearchesState
   sectionLabel: string
   shell: SearchWidgetShellState
   suggestions: SearchSuggestionViewModel[]
@@ -153,17 +135,6 @@ function subscribeNewtabSearchWidget(listener: () => void): () => void {
 
 function emitNewtabSearchWidgetChange(): void {
   listeners.forEach((listener) => listener())
-}
-
-export function createEmptySavedSearchesState(): SavedSearchesState {
-  return {
-    canSaveCurrent: false,
-    error: '',
-    hasCurrentSaved: false,
-    items: [],
-    onSaveCurrent: noop,
-    show: false
-  }
 }
 
 export function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionState {

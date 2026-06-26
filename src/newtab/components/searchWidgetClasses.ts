@@ -34,18 +34,7 @@ export const SEARCH_CHIPS_CLASS = 'newtab-search-chips flex flex-wrap gap-[5px] 
 export const SEARCH_SECTION_LABEL_CLASS = 'newtab-search-section-label px-2 pt-0.5 pb-px text-[10px] font-bold leading-[1.3] text-[rgba(245,245,247,0.5)] empty:hidden'
 export const SEARCH_SUGGESTIONS_CLASS = 'newtab-search-suggestions grid gap-[3px]'
 export const SEARCH_HINT_CLASS = 'newtab-search-hint px-2 pt-[3px] pb-0.5 text-[10px] font-[560] leading-[1.35] text-[rgba(245,245,247,0.46)] empty:hidden'
-export const SAVED_SEARCHES_CLASS = 'newtab-saved-searches mt-0.5 grid gap-1 border-t border-[rgba(245,245,247,0.08)] pt-[5px] empty:hidden'
-export const SAVED_SEARCH_LIST_CLASS = 'newtab-saved-search-list flex flex-wrap gap-[5px] px-1.5 py-0.5 empty:hidden'
 export const SEARCH_CHIP_CLASS = 'newtab-search-chip inline-flex min-h-[22px] max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-[var(--ui-radius-pill)] border border-[var(--ui-accent-line)] bg-[var(--ui-surface-selected)] px-[7px] text-[10px] font-[680] leading-[1.2] text-[var(--ui-accent-text)]'
-export const SAVED_SEARCH_CHIP_CLASS = 'newtab-saved-search-chip inline-flex min-h-[22px] items-center overflow-hidden rounded-[7px] border border-[rgba(245,245,247,0.13)] bg-[rgba(245,245,247,0.06)] text-[10px] font-[680] leading-[1.2] text-[rgba(245,245,247,0.82)]'
-export const SAVED_SEARCH_HEAD_CLASS = 'newtab-saved-search-head flex items-center justify-between gap-2 px-2 pt-0.5 pb-px text-[10px] font-bold text-[rgba(245,245,247,0.5)]'
-export const SAVED_SEARCH_HEAD_ERROR_CLASS = 'error text-[#fecaca]'
-export const SAVED_SEARCH_HEAD_TEXT_CLASS = ''
-
-const SAVED_SEARCH_BUTTON_CLASS = 'min-h-[22px] rounded-md px-[7px] font-[inherit] text-[inherit] hover:bg-[rgba(245,245,247,0.1)] hover:text-[var(--ui-text-primary)] focus-visible:bg-[rgba(245,245,247,0.1)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline-none'
-export const SAVED_SEARCH_SAVE_CLASS = cx('newtab-saved-search-save bg-[rgba(245,245,247,0.06)] disabled:cursor-default disabled:opacity-50 disabled:hover:bg-[rgba(245,245,247,0.06)] disabled:hover:text-[inherit]', SAVED_SEARCH_BUTTON_CLASS)
-export const SAVED_SEARCH_APPLY_CLASS = cx('newtab-saved-search-apply max-w-[150px] overflow-hidden text-ellipsis whitespace-nowrap bg-[rgba(245,245,247,0.06)]', SAVED_SEARCH_BUTTON_CLASS)
-export const SAVED_SEARCH_DELETE_CLASS = cx('newtab-saved-search-delete inline-flex w-[22px] items-center justify-center p-0 text-[rgba(245,245,247,0.5)]', SAVED_SEARCH_BUTTON_CLASS)
 
 const SEARCH_SUGGESTION_ACTIVE_CLASS = 'bg-[var(--ui-surface-hover)] text-[var(--ui-text-primary)]'
 export const SEARCH_SUGGESTION_MARK_CLASS = 'newtab-search-suggestion-mark grid h-[30px] w-[30px] place-items-center rounded-lg border border-[rgba(245,245,247,0.1)] bg-[rgba(245,245,247,0.07)] text-xs font-extrabold leading-none text-[rgba(245,245,247,0.82)]'

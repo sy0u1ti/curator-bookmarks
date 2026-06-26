@@ -59,8 +59,7 @@ export const STORAGE_KEYS = {
   inboxState: 'curatorBookmarkInboxState',
   inboxSettings: 'curatorBookmarkInboxSettings',
   contentSnapshotSettings: 'curatorBookmarkContentSnapshotSettings',
-  contentSnapshotIndex: 'curatorBookmarkContentSnapshotIndex',
-  savedSearches: 'curatorBookmarkSavedSearches'
+  contentSnapshotIndex: 'curatorBookmarkContentSnapshotIndex'
 } as const
 
 export const BOOKMARK_ADD_HISTORY_LIMIT = 200
@@ -72,6 +71,5 @@ export const POPUP_COMMAND_INTENT_TTL_MS = 45 * 1000
 export const COMMAND_FEEDBACK_BADGE_TTL_MS = 3000
 export const AUTO_BACKUP_RETENTION_LIMIT = 5
 export const CONTENT_SNAPSHOT_LOCAL_TEXT_LIMIT = 20 * 1024
-export const SAVED_SEARCH_LIMIT = 30
 export const INBOX_AUTO_MOVE_MIN_CONFIDENCE = 0.72
 export const DEFAULT_INBOX_FOLDER_TITLE = 'Inbox / 待整理'

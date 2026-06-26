@@ -48,14 +48,7 @@ import {
   searchBookmarksFirstBatch,
   type PopupSearchResult
 } from './search.js'
-import {
-  deleteSavedSearch,
-  getSavedSearchesForScope,
-  loadSavedSearchIndex,
-  parseSearchQuery,
-  saveSearch
-} from '../shared/search-query.js'
-import type { SavedSearch, SavedSearchIndex } from '../shared/search-query.js'
+import { parseSearchQuery } from '../shared/search-query.js'
 import {
   DEFAULT_NEW_TAB_WORKSPACE_ID,
   getActiveNewTabWorkspace,
@@ -96,7 +89,6 @@ import {
   dispatchPopupContentChange,
   dispatchPopupFolderPickerChange,
   dispatchPopupModalsChange,
-  dispatchPopupSavedSearchesChange,
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
@@ -110,8 +102,6 @@ import {
   type PopupFolderPickerActionDetail,
   type PopupModalActionDetail,
   type PopupModalsView,
-  type PopupSavedSearchActionDetail,
-  type PopupSavedSearchesView,
   type PopupSearchChipView,
   type PopupSmartClassifierActionDetail,
   type PopupSmartClassifierTitleChangeDetail,
@@ -240,7 +230,6 @@ function bindEvents() {
     contentResultHover: handleContentResultHover,
     folderPicker: handleFolderPickerAction,
     modal: handleModalAction,
-    savedSearch: ({ action, searchId }) => handleSavedSearchAction(action, searchId),
     smartClassifier: handleSmartClassifierAction,
     smartClassifierTitleChange: handleSmartClassifierTitleChange,
     toast: handleToastAction
@@ -291,74 +280,6 @@ async function refreshNaturalSearchAiConfiguredState() {
   } finally {
     state.naturalSearchAiConfigChecked = true
   }
-}
-async function hydrateSavedSearches() {
-  if (state.savedSearchesLoaded) {
-    return
-  }
-  try {
-    state.savedSearches = await loadSavedSearchIndex()
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = ''
-  } catch {
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = '保存搜索读取失败'
-  } finally {
-    renderSearchTools()
-  }
-}
-async function saveCurrentSearchQuery() {
-  const query = state.searchQuery.trim()
-  if (!query) {
-    showViewNotice('请输入查询后再保存')
-    focusSearchInput()
-    return
-  }
-  try {
-    const index = await ensureSavedSearchIndex()
-    state.savedSearches = await saveSearch(index, {
-      name: createSavedSearchName(query),
-      query,
-      scope: 'both'
-    })
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = ''
-    renderSearchTools()
-    showViewNotice('已保存搜索，可在 popup 复用')
-  } catch (error) {
-    state.savedSearchesError = error instanceof Error ? error.message : '保存搜索失败'
-    renderSearchTools()
-    showToast({ type: 'error', message: '保存搜索失败，请稍后重试。' })
-  }
-}
-async function deletePopupSavedSearch(searchId) {
-  try {
-    const index = await ensureSavedSearchIndex()
-    state.savedSearches = await deleteSavedSearch(index, String(searchId || ''))
-    state.savedSearchesLoaded = true
-    state.savedSearchesError = ''
-    renderSearchTools()
-    showViewNotice('已删除保存搜索')
-  } catch (error) {
-    state.savedSearchesError = error instanceof Error ? error.message : '删除保存搜索失败'
-    renderSearchTools()
-    showToast({ type: 'error', message: '删除保存搜索失败，请稍后重试。' })
-  }
-}
-async function ensureSavedSearchIndex(): Promise<SavedSearchIndex> {
-  if (state.savedSearches) {
-    return state.savedSearches
-  }
-  state.savedSearches = await loadSavedSearchIndex()
-  state.savedSearchesLoaded = true
-  return state.savedSearches
-}
-function createSavedSearchName(query) {
-  const parsed = parseSearchQuery(query)
-  const chipLabels = parsed.chips.map((chip) => chip.label.replace(/^[^：]+：/, '')).filter(Boolean)
-  const terms = parsed.textTerms.join(' ')
-  const label = [...chipLabels, terms].filter(Boolean).join(' · ')
-  return cleanSmartText(label || query, 60) || '未命名搜索'
 }
 async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'general') {
   const hash = target === 'ai-provider' ? 'general:ai-provider' : 'general'
@@ -884,7 +805,6 @@ function hydratePopupDeferredRefreshData(baseData: PopupRefreshBaseData): Promis
     }
     render()
   })
-  void hydrateSavedSearches()
   return indexHydration
 }
 async function loadPopupSearchEnhancementData(): Promise<PopupRefreshDeferredData> {
@@ -1535,43 +1455,6 @@ function renderSearchTools() {
       label: String(chip.label || '')
     }))
   )
-  renderSavedSearches()
-}
-
-function renderSavedSearches() {
-  const savedSearches = state.savedSearches
-    ? getSavedSearchesForScope(state.savedSearches, 'popup')
-    : []
-  const normalizedQuery = normalizeQuery(state.searchQuery)
-  const canSaveCurrent = Boolean(normalizedQuery && queryHasAdvancedSearchSyntax(state.searchQuery))
-  const hasCurrentSaved = canSaveCurrent && savedSearches.some((item) => normalizeQuery(item.query) === normalizedQuery)
-  const show = savedSearches.length > 0 || Boolean(state.savedSearchesError) || canSaveCurrent
-  const hasError = Boolean(state.savedSearchesError)
-  const expanded = Boolean(state.savedSearchesExpanded) || hasError
-  const viewModel: PopupSavedSearchesView = {
-    canSaveCurrent,
-    error: state.savedSearchesError || '',
-    expanded,
-    hasCurrentSaved,
-    items: savedSearches.map((item) => ({
-      active: normalizeQuery(item.query) === normalizedQuery,
-      id: String(item.id || ''),
-      label: item.name || item.query,
-      query: item.query
-    })),
-    show
-  }
-
-  dispatchPopupSavedSearchesChange(viewModel)
-}
-function queryHasAdvancedSearchSyntax(query: string): boolean {
-  const value = String(query || '').trim()
-  if (!value) {
-    return false
-  }
-  return /\b(?:site|folder|type):\s*\S/i.test(value) ||
-    /(^|\s)-(?=\S)/.test(value) ||
-    /(最近\s*\d+\s*(?:天|周|月|年)|昨天|前天|上个月|本周|本月|今年)/.test(value)
 }
 function getSearchInputPlaceholder() {
   return state.naturalSearchEnabled ? 'AI 语义搜索' : '关键词搜索'
@@ -2647,13 +2530,6 @@ function renderToasts() {
   dispatchPopupToastsChange(state.toasts)
 }
 function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
-  if (detail.action === 'saved-search') {
-    handleSavedSearchAction(
-      detail.currentPageAction || '',
-      detail.recommendationId || ''
-    )
-    return
-  }
   if (detail.action === 'current-page') {
     handleCurrentPageQuickAction(detail.currentPageAction || '', detail.returnFocusElement || null)
     return
@@ -2694,31 +2570,6 @@ function handleSmartClassifierAction(detail: PopupSmartClassifierActionDetail) {
   }
   if (action === 'save') {
     saveSmartRecommendation()
-  }
-}
-function handleSavedSearchAction(action: string, searchId: string) {
-  if (action === 'toggle') {
-    state.savedSearchesExpanded = !state.savedSearchesExpanded
-    renderSavedSearches()
-    return
-  }
-  if (action === 'save-current') {
-    void saveCurrentSearchQuery()
-    return
-  }
-  if (action === 'apply') {
-    const savedSearch = state.savedSearches
-      ? getSavedSearchesForScope(state.savedSearches, 'popup').find((item) => item.id === searchId)
-      : null
-    if (savedSearch) {
-      setSearchQuery(savedSearch.query, { immediate: true })
-      showViewNotice(`已应用保存搜索：${savedSearch.name}`)
-      focusSearchInput()
-    }
-    return
-  }
-  if (action === 'delete') {
-    void deletePopupSavedSearch(searchId)
   }
 }
 function handleCurrentPageQuickAction(action, returnFocusElement: HTMLElement | null = null) {

@@ -59,11 +59,12 @@ const workspaceClass =
   'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
-  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-ds-border bg-ds-surface-1'
+  'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border border-ds-border bg-ds-surface-1'
 const mainPaneClass = cx(paneClass, 'bg-ds-surface-1')
 const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'
 const paneMetaClass = 'whitespace-nowrap text-xs font-medium text-ds-text-muted'
+const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const folderTreeClass =
   'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
@@ -72,11 +73,12 @@ const folderRowClass = 'relative block min-h-[34px]'
 const mainRowClass =
   'relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
 const folderCardClass = [
-  'grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
+  'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
-const folderCardActiveClass = 'border-ds-border-hover bg-ds-hover'
+const folderCardActiveClass =
+  'border-ds-border-hover bg-ds-text-primary/[0.055] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[2px] before:rounded-full before:bg-ds-text-primary/70 before:content-[""]'
 const folderBranchClass =
   'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
 const rootFolderBranchClass = 'rounded-full border border-white/30'
@@ -85,8 +87,8 @@ const folderMainClass =
 const folderTitleClass =
   'min-w-0 truncate text-left text-xs font-bold leading-tight text-ds-text-primary'
 const folderCountClass =
-  'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-bold leading-tight text-ds-text-muted [font-variant-numeric:tabular-nums]'
-const folderCountActiveClass = 'text-ds-success-text'
+  'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-semibold leading-tight text-ds-text-disabled [font-variant-numeric:tabular-nums]'
+const folderCountActiveClass = 'text-ds-text-secondary'
 const listButtonClass = [
   'flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
@@ -194,8 +196,7 @@ export function PopupContent({
           </aside>
           <section className={mainPaneClass} aria-label={title}>
             <header className={paneHeaderClass}>
-              <span>{title}</span>
-              <span className={paneMetaClass}>{meta}</span>
+              <span>{title} <span className={paneTitleMetaClass}>· {meta}</span></span>
             </header>
             <ul className={mainListClass} ref={mainListRef}>
               {state.mainState ? (

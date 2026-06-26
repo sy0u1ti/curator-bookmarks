@@ -1,9 +1,9 @@
 import { useEffect, useRef, type RefObject } from 'react'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui'
-import { Input } from '../../ui'
-import { cx } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
+import { cx } from '../../ui/base/utils'
 import {
   dispatchPopupModalAction,
   usePopupModalsView,
@@ -285,7 +285,7 @@ function SmartFolderModal({
         htmlFor="smart-folder-search-input"
         inputId="smart-folder-search-input"
         placeholder="搜索目标文件夹"
-        label="搜索保存目标文件夹"
+        label="搜索目标文件夹"
         controls="smart-folder-list"
         value={view.query}
         action="smart-folder-query-change"

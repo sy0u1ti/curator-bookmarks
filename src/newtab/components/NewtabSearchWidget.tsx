@@ -20,18 +20,9 @@ import {
   type SearchChipViewModel,
   type SearchEngineMenuState,
   type SearchHintState,
-  type SearchSuggestionViewModel,
-  type SavedSearchesState
+  type SearchSuggestionViewModel
 } from '../newtab-search-widget-store'
 import {
-  SAVED_SEARCH_APPLY_CLASS,
-  SAVED_SEARCH_CHIP_CLASS,
-  SAVED_SEARCH_DELETE_CLASS,
-  SAVED_SEARCH_HEAD_CLASS,
-  SAVED_SEARCH_HEAD_ERROR_CLASS,
-  SAVED_SEARCH_LIST_CLASS,
-  SAVED_SEARCH_SAVE_CLASS,
-  SAVED_SEARCHES_CLASS,
   SEARCH_CHIPS_CLASS,
   SEARCH_CLEAR_BUTTON_CLASS,
   SEARCH_ENGINE_BUTTON_CLASS,
@@ -361,9 +352,6 @@ function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }
       <output className={SEARCH_HINT_CLASS} aria-live="polite">
         <SearchHint state={view.hint} />
       </output>
-      <div className={SAVED_SEARCHES_CLASS} aria-label="已保存搜索">
-        <SavedSearches state={view.savedSearches} />
-      </div>
     </div>
   )
 }
@@ -475,68 +463,4 @@ function SearchHint({ state }: { state: SearchHintState }) {
   }
 
   return <>{state.text}</>
-}
-
-function SavedSearches({ state }: { state: SavedSearchesState }) {
-  if (!state.show) {
-    return null
-  }
-
-  return (
-    <>
-      <div className={SAVED_SEARCH_HEAD_CLASS}>
-        <span className={state.error ? SAVED_SEARCH_HEAD_ERROR_CLASS : ''}>{state.error || '保存搜索'}</span>
-        {state.canSaveCurrent ? (
-          <Button
-            className={SAVED_SEARCH_SAVE_CLASS}
-            type="button"
-            disabled={state.hasCurrentSaved}
-            onPointerDown={(event) => {
-              event.preventDefault()
-            }}
-            onClick={() => {
-              void state.onSaveCurrent()
-            }}
-            unstyled
-          >
-            {state.hasCurrentSaved ? '已保存' : '保存'}
-          </Button>
-        ) : null}
-      </div>
-      {state.items.length ? (
-        <div className={SAVED_SEARCH_LIST_CLASS}>
-          {state.items.map((item) => (
-            <span className={SAVED_SEARCH_CHIP_CLASS} key={item.id}>
-              <Button
-                className={SAVED_SEARCH_APPLY_CLASS}
-                type="button"
-                title={item.query}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                }}
-                onClick={item.onApply}
-                unstyled
-              >
-                {item.label}
-              </Button>
-              <Button
-                className={SAVED_SEARCH_DELETE_CLASS}
-                type="button"
-                aria-label={`删除保存搜索：${item.label}`}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                }}
-                onClick={() => {
-                  void item.onDelete()
-                }}
-                unstyled
-              >
-                <Icon name="X" size={12} aria-hidden="true" />
-              </Button>
-            </span>
-          ))}
-        </div>
-      ) : null}
-    </>
-  )
 }
