@@ -16,14 +16,14 @@ const BACKUP_COPY_COLUMN_CLASS = 'min-w-0'
 const BACKUP_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const BACKUP_COPY_CLASS =
-  'mt-2.5 mb-0 max-w-[760px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 max-w-[680px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const BACKUP_STATUS_CLASS =
-  'mt-2.5 mb-0 max-w-[760px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 max-w-[680px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const BACKUP_ROW_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 self-end max-[760px]:justify-start'
 const BACKUP_PREVIEW_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const BACKUP_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const BACKUP_PREVIEW_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const BACKUP_PREVIEW_COPY_CLASS = 'mt-0 min-w-0'
@@ -51,7 +51,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>标签数据</strong>
             <p className={BACKUP_COPY_CLASS}>
-              这里保存 AI 生成的摘要、主题和别名，以及 AI 生成或手动维护的标签。可单独导出/导入，也会包含在完整备份中；清空只删除本地标签索引，不删除 Chrome 书签。
+              保存 AI 摘要、别名和标签；清空不会删除 Chrome 书签。
             </p>
           </div>
           <span className={OPTION_VALUE_CLASS}>{state.tagData.countLabel}</span>
@@ -59,7 +59,9 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
         <div className={BACKUP_ROW_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <p className={BACKUP_COPY_CLASS}>{state.tagData.updatedLabel}</p>
-            <p className={BACKUP_STATUS_CLASS}>{state.tagData.status}</p>
+            {state.tagData.status ? (
+              <p className={BACKUP_STATUS_CLASS}>{state.tagData.status}</p>
+            ) : null}
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
             <Button
@@ -115,7 +117,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>完整备份</strong>
             <p className={BACKUP_COPY_CLASS}>
-              导出 Chrome 书签树、标签数据、回收站、忽略规则、重定向历史、新标签页配置和 AI 设置；不会导出 API Key、浏览器密码、Cookie 或网页正文缓存。
+              导出书签、标签、规则和设置；不包含 API Key、密码或 Cookie。
             </p>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
@@ -153,7 +155,9 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             }}
           />
         </div>
-        <p className={BACKUP_STATUS_CLASS}>{state.backup.status}</p>
+        {state.backup.status ? (
+          <p className={BACKUP_STATUS_CLASS}>{state.backup.status}</p>
+        ) : null}
       </div>
 
       <div className={BACKUP_CARD_CLASS}>
@@ -161,7 +165,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>恢复预览</strong>
             <p className={BACKUP_COPY_CLASS}>
-              导入文件后先查看差异，再选择恢复范围；标签恢复按当前书签 URL 匹配，新标签页恢复只写入设置项，安全完整恢复会复制缺失书签到恢复文件夹，不会直接替换整个 Chrome 书签树。
+              先查看差异，再选择恢复范围；完整恢复只补齐缺失书签。
             </p>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>

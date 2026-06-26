@@ -119,7 +119,7 @@ export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
         <div className={OPTION_ROW_CLASS}>
           <div className={OPTION_COPY_CLASS}>
             <strong className={OPTION_COPY_TITLE_CLASS}>规则来源说明</strong>
-            <p className={OPTION_COPY_TEXT_CLASS}>忽略规则是从检测结果里指定的，不是提前手动录入。请先完成一次检测，再从低/高置信异常结果里添加要忽略的书签、域名或文件夹。</p>
+            <p className={OPTION_COPY_TEXT_CLASS}>忽略规则从检测结果添加，不能提前手动录入。</p>
           </div>
           <span className={OPTION_VALUE_CLASS}>检测结果生成</span>
         </div>

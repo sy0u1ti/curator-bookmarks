@@ -25,16 +25,17 @@ export function Tabs({ value, defaultValue, onValueChange, items, className }: T
       onValueChange={onValueChange}
       className={cx('grid gap-3', className)}
     >
-      <BaseTabs.List className="relative flex gap-1 rounded-md border border-ds-border bg-ds-surface-1 p-1">
+      <BaseTabs.List className="t-tabs relative flex gap-1 rounded-md border border-ds-border bg-ds-surface-1 p-1">
         {items.map((item) => (
           <BaseTabs.Tab
             key={item.value}
             value={item.value}
-            className="rounded px-3 py-1.5 text-sm text-ds-text-secondary outline-none transition-colors data-active:bg-ds-hover data-active:text-ds-text-primary focus-visible:shadow-ds-focus"
+            className="t-tab rounded px-3 py-1.5 text-sm text-ds-text-secondary outline-none transition-colors data-active:text-ds-text-primary focus-visible:shadow-ds-focus"
           >
             {item.label}
           </BaseTabs.Tab>
         ))}
+        <BaseTabs.Indicator className="t-tabs-pill" />
       </BaseTabs.List>
       {items.map((item) => (
         <BaseTabs.Panel key={item.value} value={item.value} className="outline-none">

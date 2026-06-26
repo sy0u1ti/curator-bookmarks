@@ -11,6 +11,7 @@ import {
   CollapsibleRoot,
   CollapsibleTrigger
 } from '../ui'
+import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui'
 import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
 import { AiAnalysisPanel, AvailabilityPanel, GeneralPanel } from './components/CorePanels'
@@ -239,6 +240,9 @@ function OptionsSidebar({
                   aria-controls={group.collapsible.panelId}
                 >
                   <span>{group.collapsible.trigger}</span>
+                  <span className="t-acc-chevron text-ds-text-disabled" aria-hidden="true">
+                    <Icon name="ChevronDown" size={14} />
+                  </span>
                 </CollapsibleTrigger>
                 <CollapsiblePanel
                   id={group.collapsible.panelId}

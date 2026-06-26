@@ -12,7 +12,7 @@ const defaultProgressState: AvailabilityProgressState = {
   durationLabel: '未开始',
   progressLabel: '未开始',
   progressValue: 0,
-  statusCopy: '仅检测 `http/https` 书签，其它协议会自动跳过。'
+  statusCopy: '仅检测 http/https 书签。'
 }
 
 const defaultDecisionMetricsState: AvailabilityDecisionMetricsState = {
@@ -44,7 +44,7 @@ const defaultResultsHeaderState: AvailabilityResultsHeaderState = {
   failedLastRun: '尚未执行检测',
   failedTitle: '高置信异常',
   reviewCount: '0 条低置信异常',
-  reviewSubtitle: '导航失败但证据不足以直接判定为高置信异常，建议人工确认',
+  reviewSubtitle: '证据不足的异常，建议人工确认',
   reviewTitle: '低置信异常'
 }
 

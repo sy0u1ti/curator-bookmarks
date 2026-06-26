@@ -4,7 +4,7 @@ export const OPTIONS_MODAL_BACKDROP_CLASS =
   `fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 backdrop-blur-[14px] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_PANEL_CLASS =
-  `w-full max-w-[420px] max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none transition-[scale,opacity] duration-100 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `w-full max-w-[420px] max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none transition-[scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_WIDE_PANEL_CLASS = `${OPTIONS_MODAL_PANEL_CLASS} max-w-[620px]`
 

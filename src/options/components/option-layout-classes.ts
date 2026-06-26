@@ -79,10 +79,9 @@ export const OPTION_RESULT_CHECKBOX_CLASS =
 
 export const SCOPE_PICKER_TRIGGER_CLASS = [
   'relative inline-flex min-h-9 min-w-[220px] max-w-full items-center justify-start gap-2 overflow-visible',
-  'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[0_12px_0_32px]',
+  'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[0_12px]',
   'font-[var(--font-sans)] text-[13px] font-semibold leading-[1.25] text-ds-text-primary text-left',
   'transition-[background,border-color,color,transform,opacity] duration-200 ease-ds-standard',
-  'before:absolute before:left-3 before:content-[">"] before:font-mono before:text-ds-accent-hover before:font-bold',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-focus focus-visible:bg-ds-surface-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-ds-focus focus-visible:shadow-none',
   'active:scale-[0.985] disabled:cursor-default disabled:opacity-55 data-disabled:cursor-default data-disabled:opacity-55',

@@ -20,7 +20,7 @@ const HISTORY_HEADER_COPY_CLASS = 'min-w-0'
 const HISTORY_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const HISTORY_HEADER_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const HISTORY_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const HISTORY_METRIC_GRID_CLASS =
@@ -32,7 +32,7 @@ const HISTORY_METRIC_LABEL_CLASS =
 const HISTORY_METRIC_VALUE_CLASS =
   'mt-2 block text-[22px] font-[650] leading-none tracking-[0] text-ds-text-primary'
 const HISTORY_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const HISTORY_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[13px_15px]'
 const HISTORY_RUN_CARD_CLASS =
@@ -109,7 +109,7 @@ export function AvailabilityHistory() {
       <div className={HISTORY_HEADER_SPACED_CLASS}>
         <div className={HISTORY_HEADER_COPY_CLASS}>
           <strong className={HISTORY_HEADER_TITLE_CLASS}>最近一次已恢复</strong>
-          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>这里会展示相较于上一轮已恢复的书签。</p>
+          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>展示上一轮后恢复的书签。</p>
         </div>
       </div>
       <div className={HISTORY_RESULTS_LIST_CLASS}>
@@ -169,7 +169,7 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
       <div className={HISTORY_HEADER_SPACED_CLASS}>
         <div className={HISTORY_HEADER_COPY_CLASS}>
           <strong className={HISTORY_HEADER_TITLE_CLASS}>检测日志</strong>
-          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>每条日志会同时展示异常数量变化、新增异常、已恢复结果，以及各异常书签的连续异常次数。</p>
+          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>查看异常变化、恢复结果和连续次数。</p>
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
           <span className={OPTION_VALUE_CLASS}>{state.logCount} 次记录</span>
@@ -312,8 +312,8 @@ function HistoryRunCard({
         </div>
         <div className={HISTORY_RUN_COPY_CLASS}>
           {topStreak > 0
-            ? `当前记录中最高连续异常为 ${topStreak} 次，检测范围为 ${scopeLabel}。`
-            : `本次检测没有发现异常，检测范围为 ${scopeLabel}。`}
+            ? `最高连续 ${topStreak} 次 · ${scopeLabel}`
+            : `本次无异常 · ${scopeLabel}`}
         </div>
         <HistoryRunResultSection
           emptyCopy="本次没有新增异常。"

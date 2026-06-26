@@ -12,10 +12,10 @@ import {
 import { PopupFolderPickerHost } from './PopupFolderPickerHost'
 
 const folderSearchShellClass = [
-  'flex min-h-10 w-full items-center gap-1.5 rounded-full border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
+  'flex min-h-10 w-full items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
   'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
-  'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
+  'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
 ].join(' ')
 const folderSearchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard'
@@ -63,8 +63,8 @@ const modalInputClass = [
   'min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-[11px] text-[13px] leading-normal text-ds-text-primary outline-none',
   'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
   'placeholder:text-ds-text-muted',
-  'focus:border-ds-focus focus:bg-ds-hover focus:shadow-none',
-  'focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus',
+  'focus:border-ds-text-primary/45 focus:bg-ds-hover focus:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]',
+  'focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]',
   'disabled:opacity-50 data-[disabled]:opacity-50'
 ].join(' ')
 const modalHeaderClass = 'flex items-center justify-between gap-2.5'

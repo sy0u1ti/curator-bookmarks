@@ -278,10 +278,10 @@ function buildDuplicateControlsState(summary, selectionStats, visibleGroups) {
     locked: isInteractionLocked(),
     resultCount: visibleGroups.length,
     resultsSubtitle: selectionStats.deleteCount > 0
-      ? `已选 ${selectionStats.deleteCount} 条待移入回收站；确认前可继续调整勾选。`
-      : `${visibleGroups.length} 组重复。可按推荐选择，或逐条勾选要移入回收站的副本；建议最多处理 ${candidateCount} 条。`,
+      ? `已选 ${selectionStats.deleteCount} 条，可继续调整。`
+      : `${visibleGroups.length} 组重复，建议清理 ${candidateCount} 条。`,
     selectionStats,
-    strategyStatus: managerState.duplicateStrategyStatus || '先选择待移入回收站的副本，再确认处理。',
+    strategyStatus: managerState.duplicateStrategyStatus || '先选择副本，再确认处理。',
     summary
   }
 }

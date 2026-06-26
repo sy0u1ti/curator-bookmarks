@@ -12,6 +12,7 @@ import {
 import { Textarea } from '../../ui/Textarea'
 import { Tooltip, TooltipTriggerShell } from '../../ui/Tooltip'
 import { TextSwap } from '../../ui/motion/TextSwap'
+import { useTimedPresence } from '../../ui/motion/useTimedPresence'
 import { handleDashboardViewAction } from '../options-controller'
 import { useDashboardViewState } from './dashboard-view-store.js'
 import { BusyLoadingLabel } from './LoadingLabel.js'
@@ -40,8 +41,6 @@ import {
   DASHBOARD_CARD_ROOT_CLASS,
   DASHBOARD_CARD_SELECTED_STATE_CLASS,
   DASHBOARD_CARD_MENU_OPEN_STATE_CLASS,
-  DASHBOARD_CARD_STATUS_DOT_CLASS,
-  DASHBOARD_CARD_STATUS_DOT_TAGGED_STATE_CLASS,
   DASHBOARD_CARD_STATIC_VISIBILITY_CLASS,
   DASHBOARD_CARD_TAGS_EXPANDED_STATE_CLASS,
   DASHBOARD_CARD_TAG_ROW_CLASS,
@@ -960,7 +959,6 @@ function areDashboardCardStatesEqual(previous: DashboardCardViewModel, next: Das
     previous.speedDialActionLabel === next.speedDialActionLabel &&
     previous.speedDialActionText === next.speedDialActionText &&
     previous.speedDialPinned === next.speedDialPinned &&
-    previous.tagStatusTitle === next.tagStatusTitle &&
     previous.title === next.title &&
     previous.url === next.url &&
     areStringArraysEqual(previous.tags, next.tags) &&
@@ -1023,6 +1021,8 @@ function DashboardCardContents({
   const tagRowVisible = !isScrollCard && (state.visibleTags.length > 0 || state.hiddenTagCount > 0)
   const tagToggleRef = useRef<HTMLButtonElement | null>(null)
   const tagsPanelId = getDashboardTagsPanelId(state.bookmarkId)
+  const tagPopoverOpen = state.expanded && state.tags.length > 0
+  const tagPopoverPresence = useTimedPresence(tagPopoverOpen, '--dropdown-close-dur', 190)
 
   return (
     <>
@@ -1115,13 +1115,6 @@ function DashboardCardContents({
           </div>
         </div>
       </div>
-      {!isScrollCard ? <span
-        className={[
-          DASHBOARD_CARD_STATUS_DOT_CLASS,
-          state.tags.length ? DASHBOARD_CARD_STATUS_DOT_TAGGED_STATE_CLASS : ''
-        ].filter(Boolean).join(' ')}
-        title={state.tagStatusTitle}
-      ></span> : null}
       {!isScrollCard ? <div className={DASHBOARD_CARD_FOOTER_CLASS}>
         <DashboardCardAction
           as="a"
@@ -1145,9 +1138,10 @@ function DashboardCardContents({
         />
         <DashboardCardMoreMenu state={state} focusRequest={focusRequest} />
       </div> : null}
-      {state.expanded && state.tags.length ? (
+      {tagPopoverPresence.mounted ? (
         <div className={DASHBOARD_TAG_POPOVER_LAYER_CLASS}>
           <DashboardTagPopoverShell
+            open={tagPopoverOpen}
             state={state}
             triggerRef={tagToggleRef}
           />
@@ -1516,16 +1510,18 @@ function DashboardCardMenuItemContent({
 }
 
 function DashboardTagPopoverShell({
+  open,
   state,
   triggerRef
 }: {
+  open: boolean
   state: DashboardCardViewModel
   triggerRef: RefObject<HTMLButtonElement | null>
 }) {
   const tagsPanelId = getDashboardTagsPanelId(state.bookmarkId)
 
   return (
-    <PopoverRoot open triggerId={`dashboard-tag-more-${state.bookmarkId}`}>
+    <PopoverRoot open={open} triggerId={`dashboard-tag-more-${state.bookmarkId}`}>
       <PopoverPortal keepMounted container={null}>
         <PopoverPositioner
           className={DASHBOARD_TAG_POPOVER_POSITIONER_CLASS}
@@ -1534,10 +1530,16 @@ function DashboardTagPopoverShell({
         >
           <PopoverPopup
             id={tagsPanelId}
-            className={DASHBOARD_TAG_POPOVER_CLASS}
+            className={[
+              DASHBOARD_TAG_POPOVER_CLASS,
+              't-dropdown',
+              open ? 'is-open' : 'is-closing'
+            ].join(' ')}
+            data-origin="bottom-right"
             aria-label="全部标签"
             initialFocus={false}
             finalFocus={false}
+            unanimated
             onPointerEnter={() => handleDashboardViewAction({
               action: 'tag-hover-open',
               bookmarkId: state.bookmarkId

@@ -18,7 +18,7 @@ export const AI_SETTINGS_BODY_CLASS = 'mt-4 flex flex-col gap-3.5'
 export const AI_SETTINGS_TITLE_CLASS = 'm-0 text-base font-bold leading-[1.35] text-ds-text-primary'
 
 export const AI_SETTINGS_SUBTITLE_CLASS =
-  'mt-1.5 text-[13px] leading-[1.7] text-ds-text-disabled'
+  'mt-1.5 mb-0 text-[13px] leading-[1.7] text-ds-text-disabled'
 
 export const AI_SETTINGS_STATUS_BADGE_CLASS =
   'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border border-ds-hover bg-ds-surface-2 px-2.5 text-[11px] font-semibold leading-none tracking-[0] text-ds-text-muted'

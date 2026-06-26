@@ -20,6 +20,7 @@ import {
   AI_SETTINGS_SECONDARY_CLASS,
   AI_SETTINGS_STATUS_BADGE_CLASS,
   AI_SETTINGS_SUBTITLE_CLASS,
+  AI_SETTINGS_TITLE_CLASS,
   AI_SETTINGS_SWITCH_CONTROL_CLASS,
   AI_SETTINGS_SWITCH_THUMB_CLASS,
   AI_SETTINGS_SWITCH_WRAP_CLASS
@@ -27,11 +28,9 @@ import {
 import { handleContentSnapshotSettingsChange } from '../options-controller'
 import { useContentSnapshotControlsState } from './content-snapshot-store.js'
 
-const contentSnapshotTitle = (
-  <div>
-    <strong>网页内容索引</strong>
-    <p className={AI_SETTINGS_SUBTITLE_CLASS}>用于让本地搜索和 AI 分类记住网页摘要，不是备份网页。</p>
-  </div>
+const contentSnapshotTitle = <h2 className={AI_SETTINGS_TITLE_CLASS}>网页内容索引</h2>
+const contentSnapshotDescription = (
+  <p className={AI_SETTINGS_SUBTITLE_CLASS}>为本地搜索和 AI 分类保存网页摘要。</p>
 )
 
 const contentSnapshotStatus = <span className={AI_SETTINGS_STATUS_BADGE_CLASS}>本地内容记忆</span>
@@ -43,6 +42,7 @@ export function ContentSnapshotControls() {
     <AiProviderCard
       className={AI_SETTINGS_NARROW_CARD_CLASS}
       title={contentSnapshotTitle}
+      description={contentSnapshotDescription}
       status={contentSnapshotStatus}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
       iconName="ArchiveRestore"
@@ -51,7 +51,7 @@ export function ContentSnapshotControls() {
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存网页内容索引</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>新增网页书签后保存标题、摘要和链接信息，让本地搜索/AI 分类更容易找到它。</span>
+          <span className={AI_SETTINGS_SECONDARY_CLASS}>保存标题、摘要和链接信息。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           <SwitchControl
@@ -67,7 +67,7 @@ export function ContentSnapshotControls() {
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>增强：记住正文，搜索更准</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>适合长文档和教程。开启后会保存可提取的正文，并把正文纳入本地搜索。</span>
+          <span className={AI_SETTINGS_SECONDARY_CLASS}>保存可提取正文，并纳入本地搜索。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           <SwitchControl
@@ -88,7 +88,7 @@ export function ContentSnapshotControls() {
         <CollapsibleTrigger className={AI_SETTINGS_ADVANCED_TRIGGER_CLASS}>高级说明</CollapsibleTrigger>
         <CollapsiblePanel className={AI_SETTINGS_ADVANCED_PANEL_CLASS}>
           <p className={AI_SETTINGS_ADVANCED_NOTE_CLASS}>
-            默认只保存摘要、标题和链接信息。开启增强后，正文只保存在本机，较长正文会放到浏览器的大数据存储区以减少普通设置占用。
+            正文仅保存在本机；长正文会进入浏览器大数据存储区。
           </p>
         </CollapsiblePanel>
       </CollapsibleRoot>

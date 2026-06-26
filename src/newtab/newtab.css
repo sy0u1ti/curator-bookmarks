@@ -229,6 +229,35 @@ body {
   }
 }
 
+.bookmark-add-menu-content {
+  display: grid;
+  gap: 0;
+  opacity: 1;
+  filter: blur(0);
+  transform: translateY(0);
+  animation: newtab-bookmark-add-content-enter var(--resize-dur) var(--resize-ease) both;
+}
+
+@keyframes newtab-bookmark-add-content-enter {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bookmark-add-menu-content {
+    animation: none !important;
+  }
+}
+
 .featured-wallpaper-status[data-tone="success"] {
   border-color: var(--ds-accent-line);
   background: var(--ds-selected);

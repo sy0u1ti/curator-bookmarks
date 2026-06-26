@@ -112,7 +112,7 @@ export function AiModelSelector({
             ))
           ) : (
             <ModelSelectorEmpty>
-              {query ? '没有匹配的模型。' : '尚未加载模型，可点击「获取模型」从 API 拉取。'}
+              {query ? '没有匹配的模型。' : '尚未加载模型。'}
             </ModelSelectorEmpty>
           )}
         </ModelSelectorList>

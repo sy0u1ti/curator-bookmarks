@@ -8,7 +8,7 @@ import type { RedirectResultViewModel } from './redirect-results-types.js'
 
 const REDIRECT_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const REDIRECT_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const REDIRECT_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover'
 const REDIRECT_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
@@ -129,7 +129,7 @@ function RedirectResultCard({
           最终地址：<span className={REDIRECT_INLINE_URL_CLASS}>{displayUrl(finalUrl)}</span>
         </div>
         <div className={REDIRECT_CARD_DETAIL_CLASS}>
-          建议：先打开最终链接确认；更新前会重新读取书签，只有当前 URL 仍等于检测时原地址才会写入。
+          建议：先打开最终链接确认。
         </div>
         <p className={REDIRECT_CARD_PATH_CLASS} title={result.path || '未归档路径'}>
           {result.path || '未归档路径'}

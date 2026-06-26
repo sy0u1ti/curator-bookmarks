@@ -5,7 +5,7 @@ const defaultContentSnapshotControlsState: ContentSnapshotControlsState = {
   enabled: false,
   fullTextDisabled: true,
   saveFullText: false,
-  statusCopy: '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
+  statusCopy: '网页内容索引已关闭。'
 }
 
 let currentContentSnapshotControlsState = defaultContentSnapshotControlsState

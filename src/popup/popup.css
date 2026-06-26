@@ -41,6 +41,47 @@ body::after {
   content: none;
 }
 
+@keyframes smart-progress-sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+
+  100% {
+    transform: translateX(360%);
+  }
+}
+
+.smart-progress-track::before,
+.smart-progress-track::after {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  z-index: 2;
+  width: 1px;
+  border-radius: 9999px;
+  background: rgba(237, 237, 237, 0.18);
+  content: "";
+  pointer-events: none;
+}
+
+.smart-progress-track::before {
+  left: 33.333333%;
+}
+
+.smart-progress-track::after {
+  left: 66.666667%;
+}
+
+.smart-progress-bar::after {
+  position: absolute;
+  inset: -1px auto -1px 0;
+  width: 33.333333%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  content: "";
+  transform: translateX(-120%);
+  animation: smart-progress-sheen 1400ms linear infinite;
+}
+
 :where(
   input,
   textarea,

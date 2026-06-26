@@ -18,8 +18,11 @@ export interface PopoverProps {
   open?: boolean
   popupClassName?: string
   portal?: boolean
+  positionMethod?: BasePopoverPositionerProps['positionMethod']
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
+  collisionAvoidance?: BasePopoverPositionerProps['collisionAvoidance']
+  collisionPadding?: BasePopoverPositionerProps['collisionPadding']
   trigger: ReactElement
   triggerId?: string
   triggerNativeButton?: boolean
@@ -36,8 +39,11 @@ export function Popover({
   open,
   popupClassName,
   portal = true,
+  positionMethod,
   side = 'bottom',
   sideOffset = 8,
+  collisionAvoidance,
+  collisionPadding,
   trigger,
   triggerId,
   triggerNativeButton,
@@ -45,7 +51,14 @@ export function Popover({
   children
 }: PopoverProps) {
   const popup = (
-    <BasePopover.Positioner align={align} side={side} sideOffset={sideOffset}>
+    <BasePopover.Positioner
+      align={align}
+      collisionAvoidance={collisionAvoidance}
+      collisionPadding={collisionPadding}
+      positionMethod={positionMethod}
+      side={side}
+      sideOffset={sideOffset}
+    >
       <BasePopover.Popup
         id={id}
         render={
@@ -143,9 +156,15 @@ export function PopoverPositioner(props: PopoverPositionerProps) {
   return <BasePopover.Positioner {...props} />
 }
 
-export interface PopoverPopupProps extends BasePopoverPopupProps {}
+export interface PopoverPopupProps extends BasePopoverPopupProps {
+  unanimated?: boolean
+}
 
-export function PopoverPopup(props: PopoverPopupProps) {
+export function PopoverPopup({ unanimated = false, ...props }: PopoverPopupProps) {
+  if (unanimated) {
+    return <BasePopover.Popup {...props} />
+  }
+
   return (
     <BasePopover.Popup
       render={<MotionPanel variant="popover" />}

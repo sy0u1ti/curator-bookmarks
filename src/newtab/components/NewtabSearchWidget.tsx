@@ -13,6 +13,7 @@ import {
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
+import { useTimedPresence } from '../../ui/motion/useTimedPresence'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
@@ -298,6 +299,7 @@ function SearchWidgetEngineMenuRoot({
   view: NewtabSearchWidgetView
 }) {
   const { engineMenu } = view
+  const menuPresence = useTimedPresence(engineMenu.open, '--dropdown-close-dur', 190)
 
   return (
     <BaseMenu.Root
@@ -308,14 +310,19 @@ function SearchWidgetEngineMenuRoot({
       }}
     >
       {children}
-      <BaseMenu.Portal>
+      {menuPresence.mounted ? <BaseMenu.Portal keepMounted>
         <BaseMenu.Positioner
           className={SEARCH_ENGINE_MENU_POSITIONER_CLASS}
           positionMethod="absolute"
           sideOffset={8}
         >
           <BaseMenu.Popup
-            className={SEARCH_ENGINE_MENU_CLASS}
+            className={[
+              SEARCH_ENGINE_MENU_CLASS,
+              't-dropdown',
+              engineMenu.open ? 'is-open' : 'is-closing'
+            ].join(' ')}
+            data-origin="top-right"
             aria-label="搜索引擎"
             finalFocus={buttonRef}
             ref={menuRef}
@@ -323,7 +330,7 @@ function SearchWidgetEngineMenuRoot({
             <SearchEngineMenu state={engineMenu} />
           </BaseMenu.Popup>
         </BaseMenu.Positioner>
-      </BaseMenu.Portal>
+      </BaseMenu.Portal> : null}
     </BaseMenu.Root>
   )
 }

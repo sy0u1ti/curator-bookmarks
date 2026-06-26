@@ -16,7 +16,7 @@ const KIND_LABELS = {
 
 const FOLDER_CLEANUP_RESULTS_CLASS = 'mt-4 flex flex-col gap-3'
 const FOLDER_CLEANUP_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-[14px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const FOLDER_CLEANUP_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const SPLIT_UNDO_CARD_CLASS =
@@ -107,7 +107,7 @@ function SplitUndoNotice({
         <strong className={FOLDER_CLEANUP_TITLE_CLASS}>{splitUndo.title}</strong>
         <p className={FOLDER_CLEANUP_DETAIL_CLASS}>
           已记录 {splitUndo.moves.length}
-          {' '}个书签的拆分前位置。撤销会先确认并触发自动备份 hook，然后移回书签并删除本次新建的空拆分文件夹。
+          {' '}个书签的拆分前位置，可撤销本次拆分。
         </p>
       </div>
     </article>

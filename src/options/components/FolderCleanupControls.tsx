@@ -35,7 +35,7 @@ const FOLDER_CLEANUP_HEADER_COPY_CLASS = 'min-w-0'
 const FOLDER_CLEANUP_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-[1.35] tracking-[0] text-ds-text-primary'
 const FOLDER_CLEANUP_HEADER_SUBTITLE_CLASS =
-  'mt-2 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export function FolderCleanupControls() {
   const state = useFolderCleanupControlsState()
@@ -53,7 +53,7 @@ export function FolderCleanupControls() {
         <div className={OPTION_ROW_CLASS}>
           <div className={OPTION_COPY_CLASS}>
             <strong className={OPTION_COPY_TITLE_CLASS}>建议和预览优先</strong>
-            <p className={OPTION_COPY_TEXT_CLASS}>先重新读取当前 Chrome 书签树，再扫描空文件夹、深层低价值文件夹、单一路径、同名文件夹和超大文件夹；删除、合并、移动和拆分都会在确认后执行，并先调用自动备份 hook。拆分会记录本次移动，可在建议区撤销本次拆分。</p>
+            <p className={OPTION_COPY_TEXT_CLASS}>扫描文件夹结构并生成清理建议；执行前会确认并自动备份。</p>
           </div>
           <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
             <span

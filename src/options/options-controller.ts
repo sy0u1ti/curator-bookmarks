@@ -2873,21 +2873,21 @@ function getAvailabilityPanelTitle(panel) {
 function getAvailabilityReviewSubtitle() {
   const filter = getAvailabilityFilter()
   if (filter === 'recovered') {
-    return '这些书签在上一次同范围检测中异常，本轮结果中未再次出现。'
+    return '上轮异常，本轮已恢复。'
   }
   if (filter === 'new') {
-    return '这里只显示相较上一次同范围检测新增的低置信异常。'
+    return '相比上轮新增的低置信异常。'
   }
   if (filter === 'persistent') {
-    return '这里只显示连续多轮出现的低置信异常。'
+    return '连续出现的低置信异常。'
   }
   if (filter === 'review') {
-    return '导航失败但证据不足以直接判定为高置信异常，建议人工确认。'
+    return '证据不足，建议人工确认。'
   }
 
   return availabilityState.currentRunProbeEnabled
-    ? '导航失败但证据不足以直接判定为高置信异常，已归为低置信异常'
-    : '当前轮未获得目标网站授权，因此没有继续访问这些网站。'
+    ? '证据不足，归为低置信。'
+    : '未获站点授权，未继续访问。'
 }
 
 function syncAiNamingSettingsDraftFromState({ markDirty = false } = {}) {
@@ -3047,7 +3047,7 @@ function renderContentSnapshotSettings() {
 
   const modeCopy = settings.enabled
     ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
-    : '已关闭网页内容索引；不会为新增网页书签保存摘要或正文。'
+    : '网页内容索引已关闭。'
   const aiRunCopy = buildContentSnapshotAiRunStatusCopy()
 
   publishContentSnapshotControls({
@@ -3060,9 +3060,9 @@ function renderContentSnapshotSettings() {
 
 function buildContentSnapshotStatusCopy(saveFullText: boolean, snapshotCount: number, fullTextCount: number): string {
   if (saveFullText) {
-    return `已保存 ${snapshotCount} 条网页内容索引，其中 ${fullTextCount} 条包含正文；当前用于摘要和正文搜索。`
+    return `已保存 ${snapshotCount} 条索引，${fullTextCount} 条含正文。`
   }
-  return `已保存 ${snapshotCount} 条网页内容索引；当前只保存摘要、标题和链接，不保存正文。`
+  return `已保存 ${snapshotCount} 条索引，仅摘要模式。`
 }
 
 function buildContentSnapshotAiRunStatusCopy(): string {
@@ -3074,12 +3074,12 @@ function buildContentSnapshotAiRunStatusCopy(): string {
 
   const totalCount = Object.keys(contentSnapshotState.index.records || {}).length
   if (failedCount) {
-    return `书签智能分析已同步 ${savedCount} 条网页内容索引，${failedCount} 条保存失败；当前共 ${totalCount} 条索引。`
+    return `已同步 ${savedCount} 条，失败 ${failedCount} 条；共 ${totalCount} 条。`
   }
   if (aiNamingState.running) {
-    return `书签智能分析正在同步网页内容索引，本轮已保存 ${savedCount} 条；当前共 ${totalCount} 条索引。`
+    return `正在同步索引，已保存 ${savedCount} 条；共 ${totalCount} 条。`
   }
-  return `书签智能分析本轮已保存 ${savedCount} 条网页内容索引；当前共 ${totalCount} 条索引。`
+  return `本轮已保存 ${savedCount} 条；共 ${totalCount} 条。`
 }
 
 function resetAiNamingConnectivityState() {
@@ -3090,16 +3090,23 @@ function resetAiNamingConnectivityState() {
 }
 
 async function hydrateShortcutCommands() {
+  const previousCommands = Array.isArray(managerState.shortcutCommands)
+    ? managerState.shortcutCommands
+    : []
+  const hasCachedCommands = previousCommands.length > 0
+
   managerState.shortcutStatus = 'loading'
   managerState.shortcutStatusTone = 'muted'
-  renderShortcutSettingsSection()
+  renderShortcutSettingsSection({ keepCommandsWhileLoading: hasCachedCommands })
 
   try {
     managerState.shortcutCommands = await getAllExtensionCommands()
     managerState.shortcutStatus = 'ready'
     managerState.shortcutStatusTone = 'success'
   } catch (error) {
-    managerState.shortcutCommands = []
+    if (!hasCachedCommands) {
+      managerState.shortcutCommands = []
+    }
     managerState.shortcutStatus = error instanceof Error ? error.message : '快捷键读取失败'
     managerState.shortcutStatusTone = 'warning'
   } finally {
@@ -3126,7 +3133,9 @@ function getAllExtensionCommands(): Promise<chrome.commands.Command[]> {
   })
 }
 
-function renderShortcutSettingsSection() {
+function renderShortcutSettingsSection({
+  keepCommandsWhileLoading = false
+}: { keepCommandsWhileLoading?: boolean } = {}) {
   const commands = getOrderedShortcutCommands()
   const statusTone = String(managerState.shortcutStatusTone || 'muted')
   const loading = managerState.shortcutStatus === 'loading'
@@ -3134,7 +3143,9 @@ function renderShortcutSettingsSection() {
   publishShortcutControls({
     detail: getShortcutStatusDetail(),
     list: loading
-      ? { kind: 'loading' }
+      ? keepCommandsWhileLoading && commands.length
+        ? { kind: 'commands', commands }
+        : { kind: 'loading' }
       : !commands.length
         ? { kind: 'empty' }
         : { kind: 'commands', commands },
@@ -3454,7 +3465,7 @@ function renderFeatureSettingsControls(
           featureSwitchesLocked ||
           aiNamingState.testingConnection ||
           featureSwitchInFlight === 'autoAnalyzeBookmarks',
-        help: '添加网页书签后，自动分析内容并归类到合适文件夹。状态会在 popup 和扩展图标上轻量提示。',
+        help: '新增网页书签后自动分析并归类。',
         key: 'autoAnalyzeBookmarks',
         label: '自动分析',
         status: Boolean(settings.autoAnalyzeBookmarks) ? '自动分析开启' : '未开启',
@@ -3465,7 +3476,7 @@ function renderFeatureSettingsControls(
         disabled:
           featureSwitchesLocked ||
           featureSwitchInFlight === 'allowRemoteParsing',
-        help: '开启后，弹窗智能分类、书签智能分析和自动分析会同时使用本地抽取内容和 Jina Reader 解析内容。第三方服务会接收目标 URL，请谨慎用于隐私页面。',
+        help: '结合 Jina Reader 内容；第三方服务会收到目标 URL。',
         key: 'allowRemoteParsing',
         label: '开启 Jina Reader 远程解析 URL',
         status: remoteParserEnabled
@@ -3481,7 +3492,7 @@ function renderFeatureSettingsControls(
           Boolean(inboxSettings.tagOnlyNoAutoMove) ||
           featureSwitchesLocked ||
           featureSwitchInFlight === 'autoMoveToRecommendedFolder',
-        help: '快捷键收藏会先进入 Inbox / 待整理；AI 置信度足够时自动移动到推荐文件夹。',
+        help: '快捷键收藏先进入 Inbox，高置信时自动移动。',
         key: 'autoMoveToRecommendedFolder',
         label: '自动移动到推荐文件夹',
         status: inboxStatusText,
@@ -3492,7 +3503,7 @@ function renderFeatureSettingsControls(
         disabled:
           featureSwitchesLocked ||
           featureSwitchInFlight === 'tagOnlyNoAutoMove',
-        help: '开启后，快捷键收藏仍保存到 Inbox / 待整理，只生成标签和摘要，不移动文件夹。',
+        help: '快捷键收藏仍进 Inbox，只生成标签和摘要。',
         key: 'tagOnlyNoAutoMove',
         label: '只打标签，不自动移动'
       }
@@ -3652,8 +3663,8 @@ function renderAiNamingSection() {
     moveLabel: '移动至推荐文件夹',
     moveTitle: selectedMovableResults.length
       ? pendingSelectionMove
-        ? `再次点击，移动 ${selectedMovableResults.length} 条书签到各自推荐文件夹`
-        : `移动 ${selectedMovableResults.length} 条书签到各自推荐文件夹`
+        ? `再次点击移动 ${selectedMovableResults.length} 条`
+        : `移动 ${selectedMovableResults.length} 条`
       : '所选结果没有可用的推荐文件夹',
     selectAllDisabled:
       aiNamingState.running ||
@@ -3671,8 +3682,8 @@ function renderAiNamingSection() {
       ? `${aiNamingState.results.length} 条结果`
       : `${visibleAiResults.length} / ${aiNamingState.results.length} 条结果`,
     subtitle: aiNamingState.lastCompletedAt
-      ? `最近一次完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。建议改名 ${aiNamingState.suggestedCount} 条，待确认 ${aiNamingState.manualReviewCount} 条，已拒绝 ${aiNamingState.rejectedCount} 条，失败 ${aiNamingState.failedCount} 条。网页标签每次都会重新生成；已拒绝的同一标题建议不会重复展示。`
-      : '在通用设置中配置 AI 渠道后，开始分析并生成建议，这里会展示当前标题、建议标题、标签、置信度与原因。'
+      ? `最近完成：${formatDateTime(aiNamingState.lastCompletedAt)} · 建议 ${aiNamingState.suggestedCount} · 待确认 ${aiNamingState.manualReviewCount} · 已拒绝 ${aiNamingState.rejectedCount} · 失败 ${aiNamingState.failedCount}`
+      : '展示标题建议、标签、置信度和原因。'
   })
 
   renderAiResultsFilterControls()
@@ -5630,7 +5641,7 @@ function getAiNamingStatusCopy() {
   }
 
   if (aiNamingState.testingConnection) {
-    return '正在测试当前模型，请稍候。'
+    return '正在测试模型。'
   }
 
   const readiness = getAiNamingReadinessMeta()
@@ -5639,24 +5650,24 @@ function getAiNamingStatusCopy() {
   }
 
   if (aiNamingState.settingsDirty) {
-    return '设置已修改，开始分析前会自动按当前输入保存。'
+    return '设置已修改，开始前会自动保存。'
   }
 
   if (aiNamingState.running) {
     if (aiNamingState.paused) {
-      return '书签智能分析已暂停。继续后会保留当前结果并从下一条书签继续处理。'
+      return '已暂停，继续后从下一条处理。'
     }
 
     return aiNamingManagerState.settings.allowRemoteParsing
-      ? '正在结合本地内容和 Jina Reader 解析结果生成智能分析建议，并同步网页内容索引。你可以随时停止当前批次。'
-      : '正在读取网页内容、生成书签智能分析建议，并同步网页内容索引。你可以随时停止当前批次。'
+      ? '正在结合本地与 Jina Reader 内容生成建议。'
+      : '正在读取网页并生成建议。'
   }
 
   if (aiNamingState.lastCompletedAt) {
-    return `最近一次书签智能分析完成于 ${formatDateTime(aiNamingState.lastCompletedAt)}。`
+    return `最近完成：${formatDateTime(aiNamingState.lastCompletedAt)}`
   }
 
-  return '配置 AI 渠道后，可批量生成更适合收藏、检索和重命名的书签标签与标题。应用前你可以逐条预览。'
+  return '配置 AI 渠道后，可批量生成标签和标题建议。'
 }
 
 function getAiNamingReadinessMeta() {
@@ -5673,7 +5684,7 @@ function getAiNamingReadinessMeta() {
     return {
       ready: false,
       badge: '待配置',
-      copy: `请先在“通用设置 > 自定义 AI 渠道”配置 ${missing.join(' 和 ')}；未配置完成前不会启动 AI 批处理。`
+      copy: `请先配置 ${missing.join(' 和 ')}。`
     }
   }
 
@@ -5685,7 +5696,7 @@ function getAiNamingReadinessMeta() {
     return {
       ready: false,
       badge: '待授权',
-      copy: `开始分析前需要授权访问${permissionTargets.join('、')}。点击开始时会弹出权限确认；未授权不会发起抓取或 AI 请求。`
+      copy: `开始前需要授权：${permissionTargets.join('、')}。`
     }
   }
 
@@ -5693,7 +5704,7 @@ function getAiNamingReadinessMeta() {
     return {
       ready: false,
       badge: '远程解析待授权',
-      copy: '已开启 Jina Reader 远程解析，但尚未授权 r.jina.ai；开始分析前会先请求该权限，拒绝后不会运行远程解析批处理。'
+      copy: 'Jina Reader 尚未授权。'
     }
   }
 
@@ -5711,9 +5722,9 @@ function getAiNamingProgressCopy() {
     return readiness.copy
   }
   const remoteCopy = aiNamingManagerState.settings.allowRemoteParsing
-    ? '已开启 Jina Reader 远程解析，本轮会结合本地抽取与远程解析内容。'
-    : '仅使用本地网页抓取与内容抽取。'
-  return `当前范围：${scopeMeta.label}。本轮会处理 ${aiNamingState.eligibleBookmarks} 条 http/https 书签，并调用模型 ${aiNamingManagerState.settings.model || '未配置'} 生成书签智能分析建议。${remoteCopy}`
+    ? '远程解析已开启。'
+    : '本地解析。'
+  return `范围：${scopeMeta.label} · ${aiNamingState.eligibleBookmarks} 条 · 模型：${aiNamingManagerState.settings.model || '未配置'}。${remoteCopy}`
 }
 
 function getAiNamingConnectivityMeta() {
@@ -5721,7 +5732,7 @@ function getAiNamingConnectivityMeta() {
     return {
       visible: true,
       tone: 'warning',
-      copy: '正在测试当前模型，请稍候。'
+      copy: '正在测试模型。'
     }
   }
 
@@ -6965,17 +6976,17 @@ function renderAvailabilityScopeControls() {
   publishScopePickerTrigger('availability', {
     disabled: scopeDisabled,
     label: scopeMeta.label,
-    copy: `当前范围：${scopeMeta.label}。本轮只会检测该范围内的书签，历史对比也只与同范围的上一次检测结果进行比较。`
+    copy: `当前范围：${scopeMeta.label}。`
   })
   publishScopePickerTrigger('history', {
     disabled: scopeDisabled,
     label: scopeMeta.label,
-    copy: `当前显示范围：${scopeMeta.label}。这里只展示该检测范围对应的历史日志、异常趋势和已恢复记录。`
+    copy: `当前范围：${scopeMeta.label}。`
   })
   publishAiAnalysisScopePicker({
     disabled: aiNamingState.running || aiNamingState.applying || availabilityState.catalogLoading,
     label: aiScopeMeta.label,
-    copy: `当前范围：${aiScopeMeta.label}。书签智能分析只会读取该范围里的 http/https 书签，并基于网页内容生成标签和标题建议。`
+    copy: `当前范围：${aiScopeMeta.label}。`
   })
 }
 
@@ -6983,7 +6994,7 @@ function renderScopeModal() {
   if (!managerState.scopeModalOpen) {
     publishOptionsModals({
       scope: {
-        copy: '请选择一个文件夹作为当前筛选范围，可直接搜索文件夹名称或路径。',
+        copy: '选择文件夹作为当前范围。',
         finalFocusId: getScopeModalFinalFocusId(),
         open: false,
         query: managerState.scopeSearchQuery
@@ -7003,8 +7014,8 @@ function renderScopeModal() {
   publishOptionsModals({
     scope: {
       copy: managerState.scopeModalSource === 'ai'
-        ? '请选择一个文件夹作为当前书签智能分析范围，支持搜索文件夹名称或路径；选择后会立即更新可处理书签列表。'
-        : `请选择一个文件夹作为当前${sourceLabel}，支持搜索文件夹名称或路径；选择后会立即更新可用性检测与历史记录视图。`,
+        ? '选择智能分析范围。'
+        : `选择当前${sourceLabel}。`,
       finalFocusId: getScopeModalFinalFocusId(),
       open: true,
       query: managerState.scopeSearchQuery
@@ -9000,18 +9011,18 @@ function getModeBadgeText() {
 
 function getModeCopyText() {
   if (availabilityState.catalogLoading) {
-    return '正在读取书签并准备多层可用性校验。'
+    return '正在读取书签并准备校验。'
   }
 
   if (!availabilityState.bookmarks.length) {
-    return '当前没有可检测的 http/https 书签，因此不会请求站点授权或启动后台标签页。'
+    return '当前没有可检测的 http/https 书签。'
   }
 
   if (availabilityState.probePermissionGranted) {
-    return `当前范围已授权，会按“后台导航 -> 失败重试 -> 网络探测”三层方式校验。${getAvailabilityRunnerStatusCopy()}`
+    return '当前范围已授权，会执行多层校验。'
   }
 
-  return `点击开始检测时会按当前范围的目标网站申请可选主机权限；授权后执行后台导航、失败重试和网络探测，未授权则不会访问这些网站。${getAvailabilityRunnerStatusCopy()}`
+  return '开始检测时申请站点权限；授权后执行多层校验。'
 }
 
 function getAvailabilityResultRecommendation(result): string {
@@ -9020,14 +9031,14 @@ function getAvailabilityResultRecommendation(result): string {
   const finalUrl = String(result?.finalUrl || '')
 
   if (status === 'redirected' || (finalUrl && isRedirectedNavigation(result?.url || '', finalUrl))) {
-    return '建议：先打开最终链接确认目标页面正确；更新前系统会重新读取书签并确认当前 URL 仍等于检测时原地址。'
+    return '建议：先打开最终链接确认。'
   }
 
   if (status === 'failed' || badgeText.includes('高置信')) {
-    return '建议：先重测或抽样打开确认；确认失效后可移动归档或批量删除到回收站。'
+    return '建议：先重测或抽样确认。'
   }
 
-  return '建议：先人工打开确认；若是登录、地区限制、反爬或临时失败，可保留在低置信或加入忽略规则。'
+  return '建议：人工确认，或加入忽略规则。'
 }
 
 function getAvailabilityActionText() {
@@ -9067,46 +9078,47 @@ function getAvailabilityStatusCopy() {
   }
 
   if (availabilityState.catalogLoading) {
-    return '正在读取书签并准备检测目录。'
+    return '正在读取书签。'
   }
 
   if (availabilityState.storageLoading) {
-    return '正在读取忽略规则、检测历史与回收站。'
+    return '正在读取本地数据。'
   }
 
   if (availabilityState.requestingPermission) {
-    return '正在为当前书签范围申请目标网站访问权限。'
+    return '正在申请站点权限。'
   }
 
   if (availabilityState.retestingSelection) {
-    return `正在重新测试已选书签，当前进度 ${availabilityState.retestSelectionCompleted} / ${availabilityState.retestSelectionTotal}。本次会继续执行后台导航、失败重试和网络探测。`
+    return `重测中 ${availabilityState.retestSelectionCompleted} / ${availabilityState.retestSelectionTotal}。`
   }
 
   if (availabilityState.running) {
     if (availabilityState.stopRequested) {
-      return '正在停止本次检测。当前已开始的检测步骤结束后，会保留已完成结果并停止继续排队。'
+      return '正在停止，已完成结果会保留。'
     }
 
     if (availabilityState.paused) {
-      return '检测已暂停。继续后会从当前进度继续；已经开始的单条检测会在当前步骤结束后暂停。'
+      return '已暂停，可继续。'
     }
 
     if (availabilityState.currentRunProbeEnabled) {
-      return `本轮依次执行后台导航、失败重试和网络探测。${getAvailabilityRunnerStatusCopy()}`
+      return '正在执行多层校验。'
     }
 
-    return `本轮未获得目标网站访问权限，不会继续访问这些网站。${getAvailabilityRunnerStatusCopy()}`
+    return '未获站点授权，本轮不会访问目标网站。'
   }
 
   if (availabilityState.lastCompletedAt) {
+    const abnormalCount = availabilityState.reviewCount + availabilityState.failedCount
     if (availabilityState.lastRunOutcome === 'stopped') {
-      return `本轮检测范围为“${getCurrentAvailabilityScopeMeta().label}”，已手动停止，已完成 ${availabilityState.checkedBookmarks} 条书签，可访问 ${availabilityState.availableCount} 条，重定向 ${availabilityState.redirectedCount} 条，低置信异常 ${availabilityState.reviewCount} 条，高置信异常 ${availabilityState.failedCount} 条。`
+      return `已停止 · 完成 ${availabilityState.checkedBookmarks} · 可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount}`
     }
 
-    return `本轮检测范围为“${getCurrentAvailabilityScopeMeta().label}”，共检查 ${availabilityState.eligibleBookmarks} 条书签，可访问 ${availabilityState.availableCount} 条，重定向 ${availabilityState.redirectedCount} 条，低置信异常 ${availabilityState.reviewCount} 条，高置信异常 ${availabilityState.failedCount} 条，已忽略 ${availabilityState.ignoredCount} 条。`
+    return `已完成 ${availabilityState.eligibleBookmarks} 条 · 可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount} · 忽略 ${availabilityState.ignoredCount}`
   }
 
-  return '仅检测 http/https 书签；开始检测前会请求当前范围的目标网站访问权限。'
+  return '仅检测 http/https 书签。'
 }
 
 function scheduleAvailabilityRender() {

@@ -12,7 +12,7 @@ const OPTIONS_PROGRESS_BAR_CLASS = 'rounded-ds-sm bg-ds-accent-hover'
 const AI_ANALYSIS_DECISION_PANEL_CLASS =
   'mt-[18px] border-ds-border-subtle bg-ds-surface-1'
 const AI_ANALYSIS_PROGRESS_COPY_CLASS =
-  'mt-0 mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
+  'mt-0 mb-0 text-[13px] leading-[1.55] text-ds-text-muted'
 
 export function AiAnalysisProgressPanel({ children }: { children: React.ReactNode }) {
   const state = useAiAnalysisProgress()

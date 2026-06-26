@@ -1,12 +1,12 @@
 export const motionDurations = {
-  fast: 0.12,
-  base: 0.18,
-  slow: 0.26,
-  modalOpen: 0.25,
-  modalClose: 0.15
+  fast: 0.2,
+  base: 0.26,
+  slow: 0.34,
+  modalOpen: 0.32,
+  modalClose: 0.22
 }
 
-export const motionEase = [0.22, 0.72, 0.18, 1] as const
+export const motionEase = [0.22, 1, 0.36, 1] as const
 export const modalEase = [0.22, 1, 0.36, 1] as const
 
 export const panelTransitions = {

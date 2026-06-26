@@ -84,12 +84,12 @@ export interface AiAnalysisResultsPaginationState {
 const defaultState: AiAnalysisStatusState = {
   badgeText: '书签智能分析',
   badgeTone: 'muted',
-  statusCopy: '保存通用 AI 渠道后，系统会先读取网页内容，再分批生成书签智能分析建议并同步网页内容索引。建议生成后，你可以先预览并手动选择要应用的标题。'
+  statusCopy: '配置 AI 渠道后，可批量生成标签和标题建议。'
 }
 
 const defaultProgressState: AiAnalysisProgressState = {
   busy: false,
-  progressCopy: '先读取书签指向的网页内容，再把结果分批发送给 AI 模型生成书签智能分析建议。',
+  progressCopy: '先读取网页内容，再分批生成建议。',
   progressLabel: '未开始',
   progressValue: 0
 }
@@ -135,7 +135,7 @@ const defaultSelectionActionsState: AiAnalysisSelectionActionsState = {
 
 const defaultResultsHeaderState: AiAnalysisResultsHeaderState = {
   resultCount: '0 条结果',
-  subtitle: '在通用设置中配置 AI 渠道后，开始分析并生成建议，这里会展示当前标题、建议标题、标签、置信度与原因。'
+  subtitle: '展示标题建议、标签、置信度和原因。'
 }
 
 const defaultResultsFilterState: AiAnalysisResultsFilterState = {
@@ -146,12 +146,12 @@ const defaultResultsFilterState: AiAnalysisResultsFilterState = {
 }
 
 const defaultResultsState: AiNamingResultsState = {
-  emptyMessage: '保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。',
+  emptyMessage: '开始分析后，这里会显示结果。',
   results: []
 }
 
 const defaultScopePickerState: AiAnalysisScopePickerState = {
-  copy: '当前范围：全部书签。你可以切换到某个文件夹，只处理该文件夹及其子层级里的 `http/https` 书签。',
+  copy: '当前范围：全部书签。可切换到文件夹。',
   disabled: false,
   label: '全部书签'
 }

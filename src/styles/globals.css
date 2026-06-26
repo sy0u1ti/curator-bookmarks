@@ -102,6 +102,95 @@ body {
   .t-text-swap { transition: none !important; }
 }
 
+.t-tabs {
+  position: relative;
+  isolation: isolate;
+  background: var(--tabs-bar-bg);
+}
+.t-tabs:not(.grid) {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 48px;
+}
+.t-tab {
+  position: relative;
+  z-index: 1;
+  color: var(--tabs-text-muted);
+  transition: color var(--tabs-dur) var(--tabs-ease);
+}
+.t-tabs:not(.grid) .t-tab {
+  appearance: none;
+  height: 30px;
+  border: 0;
+  border-radius: 48px;
+  background: transparent;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+.t-tab:not([aria-selected="true"]):hover,
+.t-tab[aria-selected="true"],
+.t-tab[data-active],
+.t-tab[data-selected],
+.t-tab[data-state="active"] {
+  color: var(--tabs-text-active);
+}
+.t-tabs-pill {
+  position: absolute;
+  top: var(--active-tab-top, 3px);
+  left: 0;
+  z-index: 0;
+  width: var(--active-tab-width, 0);
+  height: var(--active-tab-height, 30px);
+  border-radius: 48px;
+  background: var(--tabs-pill-bg);
+  pointer-events: none;
+  transform: translateX(var(--active-tab-left, 0));
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    width     var(--tabs-dur) var(--tabs-ease),
+    height    var(--tabs-dur) var(--tabs-ease),
+    top       var(--tabs-dur) var(--tabs-ease);
+  will-change: transform, width;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-tabs-pill, .t-tab { transition: none !important; }
+}
+
+.t-tt {
+  background: var(--tt-bg);
+  color: var(--tt-fg);
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: center;
+  transition:
+    opacity   var(--tt-in-dur) var(--tt-in-ease),
+    transform var(--tt-in-dur) var(--tt-in-ease);
+  will-change: transform, opacity;
+}
+.t-tt[data-side="top"] { transform-origin: 50% 100%; }
+.t-tt[data-side="bottom"] { transform-origin: 50% 0; }
+.t-tt[data-side="left"] { transform-origin: 100% 50%; }
+.t-tt[data-side="right"] { transform-origin: 0 50%; }
+.t-tt[data-starting-style],
+.t-tt[data-ending-style] {
+  opacity: 0;
+  transform: scale(var(--tt-scale));
+}
+.t-tt[data-ending-style] {
+  transition-duration: var(--tt-out-dur);
+  transition-timing-function: var(--tt-out-ease);
+}
+.t-tt[data-instant] {
+  transition-duration: 0ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-tt { transition: none !important; }
+}
+
 .t-panel-slide {
   transform: translateY(var(--panel-translate-y));
   opacity: 0;
@@ -126,6 +215,181 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .t-panel-slide { transition: none !important; }
+}
+
+.t-acc-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open] .t-acc-panel,
+.t-acc-panel[data-open] {
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
+}
+.t-acc-panel-inner {
+  min-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity var(--acc-collapse) var(--acc-ease),
+    filter  var(--acc-collapse) var(--acc-ease);
+}
+.t-acc[data-open] .t-acc-panel-inner,
+.t-acc-panel[data-open] .t-acc-panel-inner {
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--acc-expand) var(--acc-ease),
+    filter  var(--acc-expand) var(--acc-ease);
+}
+@starting-style {
+  .t-acc[data-open] .t-acc-panel,
+  .t-acc-panel[data-open] {
+    grid-template-rows: 0fr;
+  }
+  .t-acc[data-open] .t-acc-panel-inner,
+  .t-acc-panel[data-open] .t-acc-panel-inner {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+.t-acc-chevron {
+  display: inline-flex;
+  transform: scaleY(1);
+  transform-origin: center;
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+.t-acc-chevron path { vector-effect: non-scaling-stroke; }
+.t-acc[data-open] .t-acc-chevron,
+.t-acc-head[data-panel-open] .t-acc-chevron {
+  transform: scaleY(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-acc-panel, .t-acc-panel-inner, .t-acc-chevron {
+    transition: none !important;
+  }
+}
+
+.t-resize {
+  transition:
+    width  var(--resize-dur) var(--resize-ease),
+    height var(--resize-dur) var(--resize-ease);
+  will-change: width, height;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-resize { transition: none !important; }
+}
+
+.t-dropdown {
+  transform-origin: top left;
+  transform: scale(var(--dropdown-pre-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-open-dur) var(--dropdown-ease),
+    opacity   var(--dropdown-open-dur) var(--dropdown-ease);
+  will-change: transform, opacity;
+}
+.t-dropdown[data-origin="top-right"]     { transform-origin: top right; }
+.t-dropdown[data-origin="top-center"]    { transform-origin: top center; }
+.t-dropdown[data-origin="bottom-left"]   { transform-origin: bottom left; }
+.t-dropdown[data-origin="bottom-center"] { transform-origin: bottom center; }
+.t-dropdown[data-origin="bottom-right"]  { transform-origin: bottom right; }
+.t-dropdown.is-open,
+.t-dropdown[data-open="true"] {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-dropdown.is-closing,
+.t-dropdown[data-ending-style] {
+  transform: scale(var(--dropdown-closing-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--dropdown-close-dur) var(--dropdown-ease),
+    opacity   var(--dropdown-close-dur) var(--dropdown-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-dropdown { transition: none !important; }
+}
+
+.t-modal {
+  transform-origin: center;
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-open-dur) var(--modal-ease),
+    opacity   var(--modal-open-dur) var(--modal-ease);
+  will-change: transform, opacity;
+}
+.t-modal.is-open,
+.t-modal[data-open="true"] {
+  transform: scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-modal.is-closing,
+.t-modal[data-ending-style] {
+  transform: scale(var(--modal-scale-close));
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform var(--modal-close-dur) var(--modal-ease),
+    opacity   var(--modal-close-dur) var(--modal-ease);
+}
+.t-modal-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--modal-open-dur) var(--modal-ease);
+}
+.t-modal-backdrop.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.t-modal-backdrop.is-closing {
+  opacity: 0;
+  pointer-events: none;
+  transition-duration: var(--modal-close-dur);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-modal, .t-modal-backdrop { transition: none !important; }
+}
+
+.t-icon-swap {
+  position: relative;
+  display: inline-grid;
+}
+.t-icon-swap .t-icon {
+  grid-area: 1 / 1;
+  transition:
+    opacity   var(--icon-swap-dur) var(--icon-swap-ease),
+    filter    var(--icon-swap-dur) var(--icon-swap-ease),
+    transform var(--icon-swap-dur) var(--icon-swap-ease);
+  will-change: opacity, filter, transform;
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="a"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="b"] {
+  opacity: 1;
+  filter: blur(0);
+  transform: scale(1);
+}
+.t-icon-swap[data-state="a"] .t-icon[data-icon="b"],
+.t-icon-swap[data-state="b"] .t-icon[data-icon="a"] {
+  opacity: 0;
+  filter: blur(var(--icon-swap-blur));
+  transform: scale(var(--icon-swap-start-scale));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-icon-swap .t-icon { transition: none !important; }
 }
 
 /* The wrap stacks two layers on the same coordinates. The

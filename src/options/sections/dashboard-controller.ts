@@ -1299,7 +1299,7 @@ export function openDashboardTagEditor(bookmarkId: string): void {
   dashboardState.tagEditorReturnFocusId = String(item.id)
   dashboardState.tagEditorDraft = item.tags.join('\n')
   dashboardState.tagEditorStatus = item.hasManualTags
-    ? '当前显示的是手动标签，AI 标签仍可单独重新生成或清除。'
+    ? '当前显示手动标签。'
     : item.tags.length
       ? '当前显示的是 AI 标签，保存后会作为手动标签保留。'
       : '当前没有标签，保存后会创建手动标签。'
@@ -4483,7 +4483,6 @@ function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewMode
       speedDialActionLabel: '',
       speedDialActionText: '',
       speedDialPinned: false,
-      tagStatusTitle: '',
       tags: [],
       title: item.title || '未命名书签',
       url: item.url,
@@ -4507,11 +4506,6 @@ function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewMode
   const tags = item.tags.slice(0, visibleTagLimit)
   const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
   const copyLabel = dashboardState.copyFeedbackId === String(item.id) ? '已复制' : '复制'
-  const tagStatusTitle = item.hasManualTags
-    ? '已有手动标签'
-    : item.aiTags.length
-      ? '已有 AI 标签'
-      : '未生成 AI 标签'
   const itemPath = formatBookmarkPath(item.path) || '未归档路径'
 
   return {
@@ -4539,7 +4533,6 @@ function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewMode
     speedDialActionLabel,
     speedDialActionText,
     speedDialPinned,
-    tagStatusTitle,
     tags: item.tags,
     title: item.title || '未命名书签',
     url: item.url,
@@ -4781,7 +4774,7 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
       closing: false,
       deleteTargetActive: dragState.hoverDeleteTarget,
       dragHint: createDashboardDragHintState(
-        dragState.moving ? '正在移动书签...' : '选择目标文件夹后松开即可移动。',
+        dragState.moving ? '正在移动书签...' : '松开即可移动。',
         { busy: dragState.moving }
       ),
       dropTargets: model.folderTargets.map((folder): DashboardFolderDropTargetViewModel => ({

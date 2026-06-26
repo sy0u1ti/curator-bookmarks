@@ -351,8 +351,8 @@ function getAvailabilityHistoryLogState(callbacks) {
     return {
       collapsed: false,
       emptyCopy: managerState.historyRuns.length
-        ? '当前范围还没有检测日志，切换范围或完成一次检测后会在这里展示。'
-        : '完成检测后，这里会保留最近多次检测日志。',
+        ? '当前范围暂无检测日志。'
+        : '完成检测后会保留日志。',
       maxAbnormalCount: 1,
       runs: []
     }
@@ -398,22 +398,22 @@ export function renderAvailabilityHistory(callbacks) {
     recovered: {
       results: managerState.historyRecoveredResults,
       emptyCopy: managerState.historyLastRunAt
-        ? '最近一次完整检测未发现已恢复书签。'
+        ? '最近一次未发现已恢复。'
         : managerState.historyRuns.length
-          ? '当前范围还没有已恢复记录。'
-          : '完成检测后，这里会展示相较于上一次已恢复的书签。'
+          ? '当前范围暂无已恢复记录。'
+          : '完成检测后显示已恢复书签。'
     },
   })
 }
 
 function getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun): string {
   if (scopeRuns.length) {
-    return `当前显示范围：${scopeMeta.label}。已保留该范围最近 ${scopeRuns.length} 次检测日志，最近一次完成于 ${formatDateTime(latestRun?.completedAt || 0)}。`
+    return `${scopeMeta.label} · ${scopeRuns.length} 次记录 · ${formatDateTime(latestRun?.completedAt || 0)}`
   }
   if (managerState.historyRuns.length) {
-    return `当前显示范围：${scopeMeta.label}。该范围还没有检测历史；全部范围共保留 ${managerState.historyRuns.length} 次日志。`
+    return `${scopeMeta.label} 暂无历史；全部范围 ${managerState.historyRuns.length} 次。`
   }
-  return '完成一次检测后，这里会生成一条检测日志，保留最近多次结果用于趋势和连续异常对比。'
+  return '完成检测后保留日志和趋势。'
 }
 
 export async function clearDetectionHistoryLogs(callbacks) {

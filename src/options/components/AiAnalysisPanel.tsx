@@ -52,7 +52,7 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
         <div className={AI_ANALYSIS_DECISION_HEADER_CLASS}>
           <div>
             <strong className={AI_ANALYSIS_DECISION_TITLE_CLASS}>决策面板</strong>
-            <p className={AI_ANALYSIS_DECISION_COPY_CLASS}>先查看可直接应用的建议，再处理待确认、低置信和失败项。</p>
+            <p className={AI_ANALYSIS_DECISION_COPY_CLASS}>先应用高置信，再处理待确认。</p>
           </div>
         </div>
         <AiAnalysisDecisionMetrics />

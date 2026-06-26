@@ -10,7 +10,7 @@ const defaultState: AvailabilityControlsState = {
   pauseDisabled: true,
   pauseHidden: true,
   pauseLabel: '暂停检测',
-  permissionCopy: '点击开始检测时会按当前范围的目标网站申请可选主机权限；授权后执行后台导航、失败重试和网络探测。检测过程中会短暂创建并自动关闭后台标签页。',
+  permissionCopy: '开始检测时申请当前范围的站点权限；授权后执行多层校验。',
   settingsDisabled: true,
   settingsDraft: {
     concurrency: '2',

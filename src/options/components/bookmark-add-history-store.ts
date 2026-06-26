@@ -15,7 +15,7 @@ const defaultBookmarkAddHistoryState: BookmarkAddHistoryState = {
   entries: [],
   header: {
     clearDisabled: true,
-    subtitle: '开启“自动分析”后，新增普通网页书签完成 AI 分类时会在这里记录保存位置。',
+    subtitle: '自动分析完成后，这里记录新增书签的保存位置。',
     timestamp: '尚无历史'
   },
   summary: {

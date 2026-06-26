@@ -3,6 +3,7 @@ import { Button } from '../../ui'
 import { DialogOverlay, DialogPanel } from '../../ui'
 import { Input } from '../../ui'
 import { cx } from '../../ui'
+import { useTimedPresence } from '../../ui/motion/useTimedPresence'
 import { handleFolderPickerAction, handleOptionsModalAction } from '../options-controller'
 import { FolderPickerResults } from './FolderPickerResults.js'
 import { getOptionsFocusTarget } from './options-focus-target-store.js'
@@ -46,6 +47,7 @@ function ModalBackdrop({
   children: ReactNode
 }) {
   const wasOpenRef = useRef(open)
+  const presence = useTimedPresence(open, '--modal-close-dur', 220)
 
   useEffect(() => {
     const wasOpen = wasOpenRef.current
@@ -73,8 +75,12 @@ function ModalBackdrop({
 
   return (
     <DialogOverlay
-      className={OPTIONS_MODAL_BACKDROP_CLASS}
-      hidden={!open}
+      className={cx(
+        OPTIONS_MODAL_BACKDROP_CLASS,
+        't-modal-backdrop',
+        open ? 'is-open' : presence.closing ? 'is-closing' : ''
+      )}
+      hidden={!presence.mounted}
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen && open) {
@@ -91,7 +97,11 @@ function ModalBackdrop({
       }}
     >
       <DialogPanel
-        className={className}
+        className={cx(
+          className,
+          't-modal',
+          open ? 'is-open' : presence.closing ? 'is-closing' : ''
+        )}
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
         initialFocus={() => initialFocusRef?.current || true}

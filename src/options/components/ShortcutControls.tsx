@@ -1,5 +1,6 @@
-import { Button } from '../../ui'
+import { Button, Icon } from '../../ui'
 import { handleShortcutAction } from '../options-controller'
+import { AI_SETTINGS_TITLE_CLASS } from './ai-settings-card-classes.js'
 import { ShortcutList } from './ShortcutList.js'
 import { useShortcutControlsState } from './shortcut-store.js'
 
@@ -15,8 +16,10 @@ const SHORTCUT_CARD_CLASS =
 const SHORTCUT_HEAD_CLASS =
   'flex items-start justify-between gap-[18px] max-[760px]:flex-col max-[760px]:items-stretch'
 const SHORTCUT_COPY_CLASS = 'min-w-0'
-const SHORTCUT_TITLE_CLASS =
-  'm-0 text-[17px] font-[720] leading-[1.35] tracking-[0] text-ds-text-primary'
+const SHORTCUT_TITLE_ROW_CLASS =
+  'grid min-w-0 grid-cols-[18px_minmax(0,1fr)] items-start gap-2.5'
+const SHORTCUT_TITLE_ICON_CLASS =
+  'mt-[2px] inline-grid size-[18px] shrink-0 place-items-center text-ds-text-secondary'
 const SHORTCUT_NOTICE_CLASS =
   'mt-3 mb-0 text-sm font-[560] leading-[1.7] text-ds-text-secondary'
 const SHORTCUT_SUBTITLE_CLASS =
@@ -51,7 +54,12 @@ export function ShortcutControls() {
     <div className={SHORTCUT_CARD_CLASS}>
       <div className={SHORTCUT_HEAD_CLASS}>
         <div className={SHORTCUT_COPY_CLASS}>
-          <h2 className={SHORTCUT_TITLE_CLASS}>快捷键</h2>
+          <div className={SHORTCUT_TITLE_ROW_CLASS}>
+            <span className={SHORTCUT_TITLE_ICON_CLASS}>
+              <Icon name="Keyboard" size={16} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <h2 className={AI_SETTINGS_TITLE_CLASS}>快捷键</h2>
+          </div>
           <p className={SHORTCUT_NOTICE_CLASS}>为打开搜索、智能分类和切换自动分析设置快捷键。</p>
           <p className={SHORTCUT_SUBTITLE_CLASS}>Chrome 只允许在扩展快捷键页修改绑定。</p>
         </div>

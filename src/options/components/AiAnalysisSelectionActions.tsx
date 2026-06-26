@@ -15,7 +15,7 @@ const AI_SELECTION_HEADER_COPY_CLASS = 'min-w-0'
 const AI_SELECTION_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const AI_SELECTION_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const AI_SELECTION_ACTIONS_CLASS =
   'flex min-w-0 flex-[0_0_auto] flex-wrap items-center justify-end gap-2.5 max-[760px]:flex-col max-[760px]:items-start max-[760px]:justify-start'
 
@@ -34,7 +34,7 @@ export function AiAnalysisSelectionActions() {
           <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>
             <TextSwap text={state.countLabel} />
           </strong>
-          <p className={AI_SELECTION_SUBTITLE_CLASS}>只会应用状态为“建议改名”的条目；“待确认”与“失败”结果需要先人工判断。</p>
+          <p className={AI_SELECTION_SUBTITLE_CLASS}>仅应用“建议改名”条目。</p>
         </div>
         <div className={AI_SELECTION_ACTIONS_CLASS}>
           <Button

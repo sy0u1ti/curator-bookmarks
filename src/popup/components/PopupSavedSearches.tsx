@@ -67,7 +67,7 @@ export function PopupSavedSearches() {
                 <Icon
                   name="ChevronDown"
                   size={14}
-                  className={['opacity-70 transition-transform duration-150', state.expanded ? '' : '-rotate-90'].filter(Boolean).join(' ')}
+                  className={['opacity-70 transition-transform duration-[var(--acc-chevron)] ease-[var(--acc-ease)]', state.expanded ? '' : '-rotate-90'].filter(Boolean).join(' ')}
                   aria-hidden="true"
                 />
                 <TextSwap text={`已保存 ${state.items.length}`} />

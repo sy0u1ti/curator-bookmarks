@@ -12,7 +12,7 @@ import { PopupSavedSearches } from './PopupSavedSearches'
 import { PopupSearchChips } from './PopupSearchChips'
 
 const searchHelpPopoverClass =
-  'w-[min(260px,calc(100vw-28px))] max-w-[260px] gap-2 rounded-ds-lg border-ds-border bg-ds-surface-2 p-3 text-[11px] leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
+  '[z-index:90] w-[min(260px,calc(100vw-28px))] max-w-[260px] gap-2 rounded-ds-lg border-ds-border bg-ds-surface-2 p-3 text-[11px] leading-snug text-ds-text-secondary shadow-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2'
 
 const searchHelpTitleClass = 'text-xs font-semibold text-ds-text-primary'
 const searchHelpListClass = 'm-0 grid list-none gap-1.5 p-0'
@@ -69,7 +69,7 @@ const commandPanelSmartClass =
   'min-h-0 flex-auto grid-rows-[minmax(0,1fr)] border-0 bg-transparent p-0'
 const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
-  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
+  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
   'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
   'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
@@ -88,7 +88,7 @@ const semanticSearchBaseClass = [
   'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border border-ds-border bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:min-w-0 max-[520px]:px-2.5',
   'transition-[background,border-color,color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_var(--ds-accent-soft)] focus-visible:outline-none'
+  'focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)] focus-visible:outline-none'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
   'border-dashed text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
@@ -242,10 +242,13 @@ function SearchHelpControl() {
       className={searchHelpPopoverClass}
       open={open}
       onOpenChange={setOpen}
-      portal={false}
+      positionMethod="fixed"
       triggerId="search-help-toggle"
       align="start"
-      sideOffset={6}
+      side="bottom"
+      sideOffset={8}
+      collisionPadding={10}
+      collisionAvoidance={{ side: 'shift', align: 'shift', fallbackAxisSide: 'none' }}
       trigger={
         <Button
           id="search-help-toggle"

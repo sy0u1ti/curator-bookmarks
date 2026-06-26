@@ -7,7 +7,7 @@ const AI_ANALYSIS_STATUS_META_CLASS =
 const AI_ANALYSIS_STATUS_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
 const AI_ANALYSIS_STATUS_COPY_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const AI_ANALYSIS_STATUS_BADGE_BASE_CLASS =
   'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'
 const AI_ANALYSIS_STATUS_BADGE_TONE_CLASSES: Record<string, string> = {

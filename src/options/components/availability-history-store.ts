@@ -12,17 +12,17 @@ const defaultAvailabilityHistoryState: AvailabilityHistoryState = {
       persistentCount: 0,
       recoveredCount: 0
     },
-    subtitle: '完成一次检测后，这里会生成一条检测日志，保留最近多次结果用于趋势和连续异常对比。',
+    subtitle: '保留最近检测，用于查看趋势和连续异常。',
     timestamp: '尚无历史'
   },
   log: {
     collapsed: false,
-    emptyCopy: '完成检测后，这里会保留最近多次检测日志。',
+    emptyCopy: '完成检测后，这里会保留日志。',
     maxAbnormalCount: 1,
     runs: []
   },
   recovered: {
-    emptyCopy: '完成检测后，这里会展示相较于上一次已恢复的书签。',
+    emptyCopy: '完成检测后，这里会显示已恢复书签。',
     results: []
   }
 }

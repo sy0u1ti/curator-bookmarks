@@ -60,6 +60,8 @@ import {
 } from './dashboard-view-store'
 import { prefersReducedMotion } from '../../shared/motion'
 import {
+  DASHBOARD_CHROME_SKELETON_CONTENT_CLASS,
+  DASHBOARD_CHROME_SKELETON_LAYER_CLASS,
   DASHBOARD_RESULTS_GROUP_CLASS,
   DASHBOARD_RESULTS_GRID_STATE_CLASS,
   DASHBOARD_RESULTS_CONTENT_LAYER_CLASS,
@@ -80,7 +82,11 @@ import {
   DASHBOARD_QUERY_ROW_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PERFORMANCE_CLASS,
+  DASHBOARD_SELECTION_ACTIONS_CLASS,
+  DASHBOARD_SELECTION_BAR_CLASS,
   DASHBOARD_SELECTION_GROUP_CLASS,
+  DASHBOARD_SELECTION_SKELETON_BUTTON_CLASS,
+  DASHBOARD_SELECTION_SKELETON_ROOT_CLASS,
   DASHBOARD_SKELETON_BAR_CLASS,
   DASHBOARD_SKELETON_CARD_CLASS,
   DASHBOARD_SKELETON_CARD_COPY_CLASS,
@@ -92,6 +98,7 @@ import {
   DASHBOARD_SKELETON_FOLDER_ITEM_CLASS,
   DASHBOARD_SEARCH_BOX_CLASS,
   DASHBOARD_FOLDER_BREADCRUMBS_CLASS,
+  DASHBOARD_SEARCH_HELP_SKELETON_CLASS,
   DASHBOARD_SEARCH_INPUT_CLASS,
   DASHBOARD_SEARCH_INPUT_FIELD_CLASS,
   DASHBOARD_SEARCH_LABEL_CLASS,
@@ -99,6 +106,8 @@ import {
   DASHBOARD_SEARCH_HELP_BUTTON_CLASS,
   DASHBOARD_SEARCH_HELP_POPOVER_CLASS,
   DASHBOARD_SEARCH_HELP_TITLE_CLASS,
+  DASHBOARD_SEARCH_SKELETON_ACTION_CLASS,
+  DASHBOARD_SEARCH_SKELETON_ICON_CLASS,
   DASHBOARD_TAG_EDITOR_ACTIONS_CLASS,
   DASHBOARD_TAG_EDITOR_HEAD_CLASS,
   DASHBOARD_TAG_EDITOR_HELP_CLASS,
@@ -111,6 +120,7 @@ import {
   DASHBOARD_TAG_EDITOR_STATUS_CLASS,
   DASHBOARD_TAG_EDITOR_TITLE_CLASS,
   DASHBOARD_TITLE_ACTIONS_CLASS,
+  DASHBOARD_TOOLBAR_SKELETON_ROOT_CLASS,
   DASHBOARD_TOOLBAR_CLASS,
   DASHBOARD_TOOLBAR_EXIT_BUTTON_CLASS,
   DASHBOARD_TOOLBAR_STATUS_CLASS,
@@ -132,8 +142,7 @@ import {
   DASHBOARD_DROP_PANEL_CLASS,
   DASHBOARD_DROP_PANEL_CLOSING_STATE_CLASS,
   DASHBOARD_DROP_TITLE_CLASS,
-  DASHBOARD_FOLDER_DROP_GRID_CLASS,
-  DASHBOARD_PANEL_NOT_READY_STATE_CLASS
+  DASHBOARD_FOLDER_DROP_GRID_CLASS
 } from './dashboard-classes'
 import type {
   DashboardCardMenuFocusRequestState,
@@ -167,6 +176,71 @@ const DASHBOARD_SKELETON_CARDS = [
 ] as const
 
 const DASHBOARD_SKELETON_MIN_VISIBLE_MS = 180
+
+function useDashboardSkeletonReveal(active: boolean, ready: boolean) {
+  const skeletonShownAtRef = useRef(0)
+  const wasActiveRef = useRef(false)
+  const previousReadyRef = useRef(ready)
+  const [revealed, setRevealed] = useState(false)
+  const [replayKey, setReplayKey] = useState(0)
+
+  useLayoutEffect(() => {
+    if (!active) {
+      wasActiveRef.current = false
+      previousReadyRef.current = ready
+      skeletonShownAtRef.current = 0
+      setRevealed(false)
+      return
+    }
+
+    const entering = !wasActiveRef.current
+    const loadingRestarted = previousReadyRef.current && !ready
+    wasActiveRef.current = true
+    previousReadyRef.current = ready
+
+    if (entering || loadingRestarted) {
+      skeletonShownAtRef.current = performance.now()
+      setReplayKey((key) => key + 1)
+      setRevealed(false)
+    }
+  }, [active, ready])
+
+  useEffect(() => {
+    if (!active || !ready) {
+      return
+    }
+
+    if (prefersReducedMotion()) {
+      skeletonShownAtRef.current = 0
+      setRevealed(true)
+      return
+    }
+
+    const shownAt = skeletonShownAtRef.current
+    if (!shownAt) {
+      setRevealed(true)
+      return
+    }
+
+    const remainingMs = Math.max(0, DASHBOARD_SKELETON_MIN_VISIBLE_MS - (performance.now() - shownAt))
+    if (remainingMs <= 0) {
+      skeletonShownAtRef.current = 0
+      setRevealed(true)
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      skeletonShownAtRef.current = 0
+      setRevealed(true)
+    }, remainingMs)
+
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [active, ready, replayKey])
+
+  return { revealed, replayKey }
+}
 
 export function DashboardPanel({ hidden }: { hidden: boolean }) {
   const [tagEditorPosition, setTagEditorPosition] = useState<DashboardTagEditorPosition>(() => getHiddenDashboardTagEditorPosition())
@@ -277,9 +351,9 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
         <DashboardTitleContent />
       </h1>
 
-      <DashboardToolbar ready={panelChrome.ready} searchControls={searchControls} />
+      <DashboardToolbar active={!hidden} ready={panelChrome.ready} searchControls={searchControls} />
 
-      <DashboardSelectionGroup ready={panelChrome.ready} />
+      <DashboardSelectionGroup active={!hidden} ready={panelChrome.ready} />
 
       <DashboardResultsSection
         active={!hidden}
@@ -304,13 +378,16 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
 }
 
 const DashboardToolbar = memo(function DashboardToolbar({
+  active,
   ready,
   searchControls
 }: {
+  active: boolean
   ready: boolean
   searchControls: DashboardSearchControlsState
 }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const skeleton = useDashboardSkeletonReveal(active, ready)
 
   useEffect(() => {
     if (!searchControls.focusRequestId) {
@@ -325,22 +402,57 @@ const DashboardToolbar = memo(function DashboardToolbar({
   return (
     <div
       className={[
-        DASHBOARD_TOOLBAR_CLASS,
-        ready ? '' : DASHBOARD_PANEL_NOT_READY_STATE_CLASS
+        DASHBOARD_TOOLBAR_SKELETON_ROOT_CLASS,
+        skeleton.revealed ? 'is-revealed' : ''
       ].filter(Boolean).join(' ')}
+      data-state={skeleton.revealed ? 'ready' : 'loading'}
     >
+      <div
+        key={`dashboard-toolbar-skeleton:${skeleton.replayKey}`}
+        className={DASHBOARD_CHROME_SKELETON_LAYER_CLASS}
+        aria-hidden="true"
+      >
+        <DashboardToolbarSkeleton />
+      </div>
+      <div
+        className={[
+          DASHBOARD_CHROME_SKELETON_CONTENT_CLASS,
+          skeleton.revealed ? '' : 'pointer-events-none'
+        ].filter(Boolean).join(' ')}
+        aria-hidden={skeleton.revealed ? undefined : 'true'}
+        inert={!skeleton.revealed}
+      >
+        <DashboardToolbarContent searchControls={searchControls} searchInputRef={searchInputRef} />
+      </div>
+    </div>
+  )
+})
+
+function DashboardToolbarContent({
+  searchControls,
+  searchInputRef
+}: {
+  searchControls: DashboardSearchControlsState
+  searchInputRef: RefObject<HTMLInputElement | null>
+}) {
+  return (
+    <div className={DASHBOARD_TOOLBAR_CLASS}>
       <div className={DASHBOARD_SEARCH_BOX_CLASS}>
         <label className={DASHBOARD_SEARCH_LABEL_CLASS} htmlFor="dashboard-query">
           <span className={DASHBOARD_SEARCH_LABEL_TEXT_CLASS}>搜索书签</span>
           <span className={DASHBOARD_QUERY_ROW_CLASS}>
             <Popover
+              id="dashboard-search-help-popover"
               className={DASHBOARD_SEARCH_HELP_POPOVER_CLASS}
               open={searchControls.searchHelpOpen}
               onOpenChange={(open) => patchDashboardSearchControlsState({ searchHelpOpen: open })}
-              portal={false}
+              positionMethod="fixed"
               triggerNativeButton
               align="end"
+              side="bottom"
               sideOffset={8}
+              collisionPadding={12}
+              collisionAvoidance={{ side: 'shift', align: 'shift', fallbackAxisSide: 'none' }}
               trigger={<DashboardSearchHelpButton />}
             >
               <strong className={DASHBOARD_SEARCH_HELP_TITLE_CLASS}>高级搜索语法</strong>
@@ -393,7 +505,35 @@ const DashboardToolbar = memo(function DashboardToolbar({
       </div>
     </div>
   )
-})
+}
+
+function DashboardToolbarSkeleton() {
+  return (
+    <div className={DASHBOARD_TOOLBAR_CLASS} aria-hidden="true">
+      <div className={DASHBOARD_SEARCH_BOX_CLASS}>
+        <div className={DASHBOARD_SEARCH_LABEL_CLASS}>
+          <span className={DASHBOARD_QUERY_ROW_CLASS}>
+            <span className={DASHBOARD_SEARCH_HELP_SKELETON_CLASS}></span>
+            <span className={DASHBOARD_SEARCH_INPUT_FIELD_CLASS}>
+              <span className={DASHBOARD_SEARCH_SKELETON_ICON_CLASS}></span>
+              <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('34%')}></span>
+              <span className={DASHBOARD_SEARCH_SKELETON_ACTION_CLASS}></span>
+            </span>
+          </span>
+        </div>
+        <div className={DASHBOARD_FOLDER_BREADCRUMBS_CLASS}>
+          <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('24%')}></span>
+        </div>
+      </div>
+      <div className={DASHBOARD_TITLE_ACTIONS_CLASS}>
+        <span className={DASHBOARD_TOOLBAR_STATUS_CLASS}>
+          <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('112px')}></span>
+        </span>
+        <span className={DASHBOARD_SELECTION_SKELETON_BUTTON_CLASS} style={getSkeletonWidthStyle('54px')}></span>
+      </div>
+    </div>
+  )
+}
 
 function DashboardSearchHelpButton({
   className,
@@ -415,18 +555,58 @@ function DashboardSearchHelpButton({
   )
 }
 
-const DashboardSelectionGroup = memo(function DashboardSelectionGroup({ ready }: { ready: boolean }) {
+const DashboardSelectionGroup = memo(function DashboardSelectionGroup({ active, ready }: { active: boolean; ready: boolean }) {
+  const skeleton = useDashboardSkeletonReveal(active, ready)
+
   return (
     <div
       className={[
-        DASHBOARD_SELECTION_GROUP_CLASS,
-        ready ? '' : DASHBOARD_PANEL_NOT_READY_STATE_CLASS
+        DASHBOARD_SELECTION_SKELETON_ROOT_CLASS,
+        skeleton.revealed ? 'is-revealed' : ''
       ].filter(Boolean).join(' ')}
+      data-state={skeleton.revealed ? 'ready' : 'loading'}
     >
-      <DashboardSelectionBarContent />
+      <div
+        key={`dashboard-selection-skeleton:${skeleton.replayKey}`}
+        className={DASHBOARD_CHROME_SKELETON_LAYER_CLASS}
+        aria-hidden="true"
+      >
+        <DashboardSelectionSkeleton />
+      </div>
+      <div
+        className={[
+          DASHBOARD_CHROME_SKELETON_CONTENT_CLASS,
+          skeleton.revealed ? '' : 'pointer-events-none'
+        ].filter(Boolean).join(' ')}
+        aria-hidden={skeleton.revealed ? undefined : 'true'}
+        inert={!skeleton.revealed}
+      >
+        <div className={DASHBOARD_SELECTION_GROUP_CLASS}>
+          <DashboardSelectionBarContent />
+        </div>
+      </div>
     </div>
   )
 })
+
+function DashboardSelectionSkeleton() {
+  return (
+    <div className={DASHBOARD_SELECTION_GROUP_CLASS} aria-hidden="true">
+      <div className={DASHBOARD_SELECTION_BAR_CLASS}>
+        <span className={DASHBOARD_SKELETON_BAR_CLASS} style={getSkeletonWidthStyle('96px')}></span>
+        <div className={DASHBOARD_SELECTION_ACTIONS_CLASS}>
+          {['112px', '78px', '78px', '78px'].map((width, index) => (
+            <span
+              className={DASHBOARD_SELECTION_SKELETON_BUTTON_CLASS}
+              key={`dashboard-selection-action-skeleton:${index}`}
+              style={getSkeletonWidthStyle(width)}
+            ></span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const DashboardResultsSection = memo(function DashboardResultsSection({
   active,
@@ -446,66 +626,7 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
   scrollRequest: DashboardResultsScrollRequestState
 }) {
   const resultsRef = useRef<HTMLDivElement | null>(null)
-  const skeletonShownAtRef = useRef(0)
-  const wasActiveRef = useRef(false)
-  const previousReadyRef = useRef(panelChrome.ready)
-  const [resultsRevealed, setResultsRevealed] = useState(false)
-  const [skeletonReplayKey, setSkeletonReplayKey] = useState(0)
-
-  useLayoutEffect(() => {
-    if (!active) {
-      wasActiveRef.current = false
-      previousReadyRef.current = panelChrome.ready
-      skeletonShownAtRef.current = 0
-      setResultsRevealed(false)
-      return
-    }
-
-    const entering = !wasActiveRef.current
-    const loadingRestarted = previousReadyRef.current && !panelChrome.ready
-    wasActiveRef.current = true
-    previousReadyRef.current = panelChrome.ready
-
-    if (entering || loadingRestarted) {
-      skeletonShownAtRef.current = performance.now()
-      setSkeletonReplayKey((key) => key + 1)
-      setResultsRevealed(false)
-    }
-  }, [active, panelChrome.ready])
-
-  useEffect(() => {
-    if (!active || !panelChrome.ready) {
-      return
-    }
-
-    if (prefersReducedMotion()) {
-      skeletonShownAtRef.current = 0
-      setResultsRevealed(true)
-      return
-    }
-
-    const shownAt = skeletonShownAtRef.current
-    if (!shownAt) {
-      setResultsRevealed(true)
-      return
-    }
-
-    const remainingMs = Math.max(0, DASHBOARD_SKELETON_MIN_VISIBLE_MS - (performance.now() - shownAt))
-    if (remainingMs <= 0) {
-      skeletonShownAtRef.current = 0
-      setResultsRevealed(true)
-      return
-    }
-
-    const timer = window.setTimeout(() => {
-      skeletonShownAtRef.current = 0
-      setResultsRevealed(true)
-    }, remainingMs)
-
-    return () => {
-      window.clearTimeout(timer)
-    }
-  }, [active, panelChrome.ready, skeletonReplayKey])
+  const skeleton = useDashboardSkeletonReveal(active, panelChrome.ready)
 
   useLayoutEffect(() => {
     if (!active || !scrollRequest.requestId) {
@@ -570,7 +691,7 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
     <section
       className={DASHBOARD_RESULTS_GROUP_CLASS}
       aria-labelledby="dashboard-cards-title"
-      aria-busy={resultsRevealed ? 'false' : 'true'}
+      aria-busy={skeleton.revealed ? 'false' : 'true'}
     >
       <h2 id="dashboard-cards-title" className={DASHBOARD_RESULTS_TITLE_CLASS}>
         <DashboardCardsTitleContent />
@@ -578,12 +699,12 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
       <div
         className={[
           DASHBOARD_RESULTS_SKELETON_ROOT_CLASS,
-          resultsRevealed ? 'is-revealed' : ''
+          skeleton.revealed ? 'is-revealed' : ''
         ].filter(Boolean).join(' ')}
-        data-state={resultsRevealed ? 'ready' : 'loading'}
+        data-state={skeleton.revealed ? 'ready' : 'loading'}
       >
         <div
-          key={`dashboard-results-skeleton:${skeletonReplayKey}`}
+          key={`dashboard-results-skeleton:${skeleton.replayKey}`}
           className={[
             DASHBOARD_RESULTS_SKELETON_LAYER_CLASS,
             DASHBOARD_CONTENT_LAYOUT_CLASS
@@ -596,10 +717,10 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
           className={[
             DASHBOARD_RESULTS_CONTENT_LAYER_CLASS,
             DASHBOARD_CONTENT_LAYOUT_CLASS,
-            resultsRevealed ? '' : 'pointer-events-none'
+            skeleton.revealed ? '' : 'pointer-events-none'
           ].filter(Boolean).join(' ')}
-          aria-hidden={resultsRevealed ? undefined : 'true'}
-          inert={!resultsRevealed}
+          aria-hidden={skeleton.revealed ? undefined : 'true'}
+          inert={!skeleton.revealed}
         >
           <aside className={DASHBOARD_FOLDER_SIDEBAR_CLASS} aria-labelledby="dashboard-folder-sidebar-title" aria-label="书签文件夹">
             <div className={DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS}>
@@ -778,7 +899,7 @@ const DashboardTagEditorLayer = memo(function DashboardTagEditorLayer({
               </div>
               <DashboardTagEditorFieldContent />
               <p id="dashboard-tag-editor-help" className={DASHBOARD_TAG_EDITOR_HELP_CLASS}>
-                每行一个标签，也可以用逗号、顿号分隔；保存后会自动去重。
+                每行一个标签，保存后自动去重。
               </p>
               <p id="dashboard-tag-editor-status" className={DASHBOARD_TAG_EDITOR_STATUS_CLASS} role="status" aria-live="polite" aria-atomic="true">
                 <DashboardTagEditorStatusContent />

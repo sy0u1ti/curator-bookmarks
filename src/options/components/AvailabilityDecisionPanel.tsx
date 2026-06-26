@@ -33,7 +33,7 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
       <div className={AVAILABILITY_DECISION_HEADER_CLASS}>
         <div className={AVAILABILITY_DECISION_HEADER_COPY_CLASS}>
           <strong className={AVAILABILITY_DECISION_TITLE_CLASS}>决策面板</strong>
-          <p className={AVAILABILITY_DECISION_SUBTITLE_CLASS}>异常项可直接忽略书签、域名或文件夹；确认失效后再移动或删除。</p>
+          <p className={AVAILABILITY_DECISION_SUBTITLE_CLASS}>确认失效后再移动、删除或忽略。</p>
         </div>
         <span className={OPTION_VALUE_CLASS}>{state.durationLabel}</span>
       </div>

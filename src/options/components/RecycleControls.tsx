@@ -7,7 +7,7 @@ const RECYCLE_HEADER_COPY_CLASS = 'min-w-0'
 const RECYCLE_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const RECYCLE_HEADER_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const RECYCLE_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const RECYCLE_SELECTION_GROUP_CLASS =
@@ -28,7 +28,7 @@ export function RecycleControls() {
               <strong className={RECYCLE_HEADER_TITLE_CLASS}>
                 <TextSwap text={`${state.selectedCount} 条已选择`} />
               </strong>
-              <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复选中的回收站书签，也可只清除回收站记录。</p>
+              <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复或清除记录。</p>
             </div>
             <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
               <Button
@@ -70,7 +70,7 @@ export function RecycleControls() {
         <div className={RECYCLE_HEADER_COPY_CLASS}>
           <strong className={RECYCLE_HEADER_TITLE_CLASS}>回收站条目</strong>
           <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>
-            恢复时会优先尝试放回原文件夹；若原文件夹已不存在，则回到书签栏。
+            恢复时优先放回原文件夹。
           </p>
         </div>
         <div className={RECYCLE_HEADER_ACTIONS_CLASS}>

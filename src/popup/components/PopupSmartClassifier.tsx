@@ -6,6 +6,7 @@ import { Progress } from '../../ui'
 import { Toolbar } from '../../ui'
 import { cx } from '../../ui'
 import { Icon } from '../../ui/icons/Icon'
+import { getSmartDisplayProgress } from '../smart-loading-progress.js'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
 
 const SMART_ERROR_BANNER_CLASS =
@@ -80,11 +81,11 @@ const pageSkeletonActionClass = cx(skeletonBarClass, 'h-6 w-full rounded-md')
 const pageSkeletonSecondaryActionClass = cx(pageSkeletonActionClass, 'min-w-[42px]')
 
 const panelCardClass =
-  'w-full rounded-lg border border-ds-border bg-ds-surface-1 shadow-none'
-const panelHeaderClass = 'flex items-center justify-between gap-3'
+  'w-full bg-transparent shadow-none'
+const panelHeaderClass = 'flex items-center justify-between gap-3 px-px'
 const panelHeaderTitleClass = 'm-0 text-xs font-[650] text-ds-text-secondary'
-const panelHeaderWithMarginClass = cx(panelHeaderClass, 'mb-3')
-const panelHeaderLargeMarginClass = cx(panelHeaderClass, 'mb-[22px]')
+const panelHeaderWithMarginClass = cx(panelHeaderClass, 'mb-3.5')
+const panelHeaderLargeMarginClass = panelHeaderClass
 const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
   'inline-flex h-7 min-w-[42px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
@@ -124,10 +125,11 @@ const manualButtonClass = [
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98]'
 ].join(' ')
+const manualButtonSlotClass = 'mt-auto flex justify-center pt-4'
 const folderIconClass = 'h-3.5 w-3.5 flex-none text-ds-text-secondary'
 
-const permissionCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden p-[18px]')
-const permissionBodyClass = 'grid gap-2.5'
+const permissionCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
+const permissionBodyClass = 'mx-auto grid w-full max-w-[560px] gap-2.5 py-8'
 const permissionCopyClass = 'm-0 text-xs leading-[1.55] text-ds-text-secondary'
 const permissionErrorClass = 'm-0 text-xs leading-[1.55] text-ds-danger-text'
 const permissionOriginsClass = 'flex flex-wrap gap-1.5'
@@ -136,21 +138,27 @@ const permissionOriginClass =
 
 const buttonLoadingLabelClass = 'inline-flex min-w-0 items-center justify-center gap-[7px]'
 const buttonDotLoaderClass = 'h-3.5 w-3.5'
-const loadingCardClass = cx(panelCardClass, 'grid h-full min-h-0 content-center overflow-hidden p-[18px]')
-const loadingBodyClass = 'grid grid-cols-[46px_minmax(0,1fr)] items-center gap-3.5 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:justify-items-center max-[430px]:text-center'
+const loadingCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
+const loadingStageClass = 'flex min-h-0 flex-1 items-center justify-center pb-8'
+const loadingBodyClass = 'grid w-full max-w-[590px] grid-cols-[46px_minmax(0,1fr)] items-center gap-3.5 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:justify-items-center max-[430px]:text-center'
 const loadingLoaderClass = 'h-[46px] w-[46px] text-ds-text-primary'
 const loadingContentClass = 'min-w-0'
 const loadingCopyClass =
   'mb-2.5 mt-0 flex items-center justify-between gap-3 text-[13px] font-[650] text-ds-text-primary'
 const loadingStepClass = 'text-[11px] font-medium text-ds-text-secondary'
-const progressTrackClass = 'h-[5px] overflow-hidden rounded-full bg-ds-text-primary/[0.08]'
-const progressBarClass =
-  'block h-full w-full origin-left rounded-[inherit] bg-ds-accent transition-transform duration-ds-fast ease-ds-standard will-change-transform motion-reduce:transition-none'
+const progressTrackClass =
+  'smart-progress-track relative h-[6px] overflow-hidden rounded-full bg-ds-text-primary/[0.08] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]'
+const progressBarClass = [
+  'smart-progress-bar relative block h-full overflow-hidden rounded-[inherit]',
+  'bg-[linear-gradient(90deg,var(--ds-accent)_0%,var(--ds-focus)_55%,var(--ds-accent)_100%)]',
+  'shadow-[0_0_12px_rgba(0,110,254,0.24)]',
+  'transition-[width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none'
+].join(' ')
 
-const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden p-[18px]')
+const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const titleRowClass = 'mb-3.5 grid grid-cols-[minmax(0,1fr)] gap-2'
 const titleInputClass =
-  'min-h-9 w-full rounded-md border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none placeholder:text-ds-text-muted focus:border-ds-focus focus:bg-ds-hover focus:shadow-none focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus'
+  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none placeholder:text-ds-text-muted focus:border-ds-text-primary/45 focus:bg-ds-hover focus:shadow-[0_0_0_3px_rgba(245,245,247,0.14)] focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
 const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-secondary'
 const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
@@ -201,12 +209,7 @@ export function PopupSmartClassifier({
   }
 
   if (state.status === 'results') {
-    return (
-      <>
-        <PopupSmartResult handlers={handlers} state={state} />
-        <PopupSmartManualButton handlers={handlers} />
-      </>
-    )
+    return <PopupSmartResult handlers={handlers} state={state} />
   }
 
   if (state.status === 'error') {
@@ -527,32 +530,40 @@ function PopupSmartLoading({
   handlers?: PopupSmartClassifierActionHandlers
   state: PopupSmartClassifierViewModel
 }) {
+  const loadingProgress = getSmartDisplayProgress(state.loadingProgress, state.loadingStep)
+  const loadingStartProgress = Math.min(
+    getSmartDisplayProgress(state.loadingStartProgress, state.loadingStep),
+    loadingProgress
+  )
+
   return (
     <article className={loadingCardClass}>
       <div className={panelHeaderLargeMarginClass}>
         <p className={panelHeaderTitleClass}>智能分类</p>
         <PopupSmartExitButton handlers={handlers} />
       </div>
-      <div className={loadingBodyClass}>
-        <DotMatrixLoader variant="spiral" className={loadingLoaderClass} />
-        <div className={loadingContentClass}>
-          <p className={loadingCopyClass}>
-            <span>{state.loadingLabel}</span>
-            <small className={loadingStepClass}>{state.loadingStep}/{state.loadingStepCount}</small>
-          </p>
-          <Progress
-            className={progressTrackClass}
-            indicatorClassName={progressBarClass}
-            indicatorProps={{ 'data-smart-progress-target': state.loadingProgress } as Record<string, string | number>}
-            indicatorStyle={{
-              '--smart-progress-scale': state.loadingProgress / 100,
-              '--smart-progress-start': state.loadingStartProgress / 100,
-              transform: `scaleX(${state.loadingProgress / 100})`
-            } as CSSProperties}
-            label="智能分类进度"
-            value={state.loadingProgress}
-            unstyled
-          />
+      <div className={loadingStageClass}>
+        <div className={loadingBodyClass}>
+          <DotMatrixLoader variant="spiral" className={loadingLoaderClass} />
+          <div className={loadingContentClass}>
+            <p className={loadingCopyClass}>
+              <span>{state.loadingLabel}</span>
+              <small className={loadingStepClass}>{state.loadingStep}/{state.loadingStepCount}</small>
+            </p>
+            <Progress
+              className={progressTrackClass}
+              indicatorClassName={progressBarClass}
+              indicatorProps={{ 'data-smart-progress-target': loadingProgress } as Record<string, string | number>}
+              indicatorStyle={{
+                '--smart-progress-scale': loadingProgress / 100,
+                '--smart-progress-start': loadingStartProgress / 100
+              } as CSSProperties}
+              label="智能分类进度"
+              value={loadingProgress}
+              aria-valuetext={`${state.loadingLabel} ${state.loadingStep}/${state.loadingStepCount}`}
+              unstyled
+            />
+          </div>
         </div>
       </div>
     </article>
@@ -617,6 +628,9 @@ function PopupSmartResult({
         ) : (
           <div className={compactStateClass}>未生成可用推荐，请手动选择文件夹。</div>
         )}
+      </div>
+      <div className={manualButtonSlotClass}>
+        <PopupSmartManualButton handlers={handlers} />
       </div>
       <Toolbar className={actionsClass} unstyled>
         <Button

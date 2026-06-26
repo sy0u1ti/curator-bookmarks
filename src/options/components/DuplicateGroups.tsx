@@ -13,7 +13,7 @@ type BadgeTone = 'danger' | 'muted' | 'success' | 'warning'
 
 const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const DOCKED_SELECTION_CLASS =
   't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] shadow-ds-card [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
@@ -36,7 +36,7 @@ const GROUP_TITLE_ROW_CLASS = 'flex min-w-0 flex-wrap items-start gap-2.5'
 const GROUP_TITLE_CLASS =
   'block min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-normal text-ds-text-primary max-[760px]:whitespace-normal'
 const GROUP_TAGS_CLASS = 'inline-flex flex-wrap items-center gap-1.5'
-const GROUP_SUBTITLE_CLASS = 'mt-2.5 text-[13px] leading-[1.7] text-ds-text-secondary'
+const GROUP_SUBTITLE_CLASS = 'mt-2 text-[13px] leading-[1.55] text-ds-text-secondary'
 const RECOMMENDATION_CLASS =
   'mt-3.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 border-y border-[rgba(255,255,255,0.075)] py-3 max-[760px]:flex max-[760px]:flex-col max-[760px]:items-stretch'
 const RECOMMENDATION_COPY_CLASS = 'min-w-0'
@@ -127,7 +127,7 @@ function DuplicateDockedSelection({
           <TextSwap text={`已选 ${selectionStats.deleteCount} 条待移入回收站`} />
         </strong>
         <p className={DOCKED_TEXT_CLASS}>
-          将保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组；确认前不会处理。
+          保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组。
         </p>
         {unsafe ? (
           <p className={DOCKED_WARNING_CLASS}>
@@ -173,8 +173,8 @@ function DuplicateGroupCard({
   const recommendedItem = getDuplicateGroupItem(group, group.recommendedKeepId) || group.items[0]
   const recommendedDeleteCount = Math.max(0, group.items.length - 1)
   const currentSelectionCopy = selectedCount > 0
-    ? `已选 ${selectedCount} 条待移入回收站，保留 ${keepCount} 条。`
-    : `按推荐可选择 ${recommendedDeleteCount} 条移入回收站，保留 1 条。`
+    ? `已选 ${selectedCount} 条，保留 ${keepCount} 条。`
+    : `推荐选择 ${recommendedDeleteCount} 条，保留 1 条。`
 
   return (
     <article
@@ -201,8 +201,8 @@ function DuplicateGroupCard({
           <DuplicateBadge label="推荐保留" tone="success" />
           <strong className={RECOMMENDATION_TITLE_CLASS}>{recommendedItem?.title || '未命名书签'}</strong>
           <p className={RECOMMENDATION_TEXT_CLASS}>
-            {group.recommendation.reason} 按推荐会选择 {recommendedDeleteCount}
-            {' '}条移入回收站；也可逐条勾选。
+            {group.recommendation.reason} 可选择 {recommendedDeleteCount}
+            {' '}条移入回收站。
           </p>
           <div className={RECOMMENDATION_SIGNALS_CLASS} aria-label="推荐依据">
             <DuplicateRecommendationSignals group={group} />

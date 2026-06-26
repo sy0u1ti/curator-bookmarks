@@ -109,7 +109,7 @@ export function AiProviderSettings({
   const description = (
     <>
       <p className={AI_PROVIDER_NOTICE_CLASS}>{state.noticeText}</p>
-      <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地，不会上传到 Curator Bookmark 服务器。</p>
+      <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地。</p>
     </>
   )
   const status = (
@@ -416,7 +416,7 @@ function AiProviderModelToolsContent({
         </p>
       ) : null}
       <p className={AI_PROVIDER_FIELD_TIP_CLASS}>
-        支持搜索预设、自定义和已拉取的模型；若目标服务使用自定义模型 ID，可在{' '}
+        可搜索模型；自定义 ID 可在{' '}
         <Button
           className={AI_PROVIDER_INLINE_ACTION_CLASS}
           type="button"
@@ -473,7 +473,7 @@ function AiCustomModelsDialog({
         <p className={AI_PROVIDER_DIALOG_EYEBROW_CLASS}>AI Models</p>
         <DialogTitle className={AI_PROVIDER_DIALOG_TITLE_CLASS}>自定义模型列表</DialogTitle>
         <DialogDescription id="ai-model-modal-copy" className={AI_PROVIDER_DIALOG_COPY_CLASS}>
-          每行一个模型 ID，保存后会加入模型选择器。已拉取模型和预设模型不会被这里删除。
+          每行一个模型 ID，保存后加入选择器。
         </DialogDescription>
         <label className={AI_PROVIDER_DIALOG_FIELD_CLASS} htmlFor="ai-custom-models-input">
           <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>模型 ID</span>

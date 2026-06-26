@@ -537,8 +537,8 @@ function getStatusText(visibleSuggestionCount: number): string {
 
 function getResultsSubtitle(): string {
   return folderCleanupState.lastAnalyzedAt
-    ? `上次扫描：${formatDateTime(folderCleanupState.lastAnalyzedAt)}。删除、合并、移动和拆分都会先确认并触发自动备份 hook；拆分会记录本次撤销信息。`
-    : '所有建议默认只预览，不会自动修改书签。'
+    ? `上次扫描：${formatDateTime(folderCleanupState.lastAnalyzedAt)}。执行前会确认并备份。`
+    : '默认只预览，不会自动修改书签。'
 }
 
 function getReservedFolderCleanupTitles(): string[] {

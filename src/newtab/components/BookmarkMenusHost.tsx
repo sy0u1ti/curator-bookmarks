@@ -29,8 +29,8 @@ const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   trash: 'Trash2'
 }
 
-const MENU_SURFACE_CLASS = 'fixed z-[10030] rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--ui-motion-fast)_var(--ui-ease-spring)_both] motion-reduce:animate-none'
-const MENU_CLOSING_CLASS = 'pointer-events-none animate-[newtab-menu-exit_var(--ui-motion-fast)_var(--ui-ease-standard)_both] motion-reduce:animate-none'
+const MENU_SURFACE_CLASS = 't-resize fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--dropdown-open-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
+const MENU_CLOSING_CLASS = 'pointer-events-none animate-[newtab-menu-exit_var(--dropdown-close-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
 const MENU_FULL_WIDTH_CLASS = 'w-[252px]'
 const MENU_ADD_COLLAPSED_CLASS = 'w-[196px]'
 const MENU_ROW_CLASS = 'grid min-h-9 grid-cols-[42px_minmax(0,1fr)] items-center gap-2 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-0 py-[3px] text-[13px] leading-[1.3] text-[var(--ui-text-secondary)] shadow-none'
@@ -367,23 +367,27 @@ function BookmarkAddMenu({
     >
       {menu.expanded ? (
         <>
-          <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
-          <BookmarkMenuTextField field={menu.fields[1]} />
-          <BookmarkMenuSeparator />
-          <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
+          <div className="bookmark-add-menu-content is-expanded">
+            <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
+            <BookmarkMenuTextField field={menu.fields[1]} />
+            <BookmarkMenuSeparator />
+            <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
+          </div>
         </>
       ) : (
-        <Button
-          className={MENU_ACTION_CLASS}
-          type="button"
-          onClick={() => {
-            void menu.onExpand()
-          }}
-          unstyled
-        >
-          <MenuActionIcon icon="plus" />
-          添加书签
-        </Button>
+        <div className="bookmark-add-menu-content is-collapsed">
+          <Button
+            className={MENU_ACTION_CLASS}
+            type="button"
+            onClick={() => {
+              void menu.onExpand()
+            }}
+            unstyled
+          >
+            <MenuActionIcon icon="plus" />
+            添加书签
+          </Button>
+        </div>
       )}
       <BookmarkMenuFeedback error={menu.error} status="" />
     </InlineDialogPanel>

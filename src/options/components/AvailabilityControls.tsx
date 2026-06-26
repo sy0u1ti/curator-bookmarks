@@ -16,7 +16,7 @@ const AVAILABILITY_PERMISSION_META_CLASS =
 const AVAILABILITY_PERMISSION_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
 const AVAILABILITY_PERMISSION_COPY_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const AVAILABILITY_CONTROLS_ACTIONS_CLASS =
   'flex flex-wrap items-center justify-end gap-3 max-[1180px]:justify-start max-[760px]:flex-col max-[760px]:items-start'
 const AVAILABILITY_BADGE_BASE_CLASS =
@@ -177,7 +177,7 @@ export function AvailabilityControls() {
                 }}
               />
             </label>
-            <p className={SETTINGS_NOTE_CLASS}>单域名仍会自动限流；遇到超时或 HTTP 429 会降速。</p>
+            <p className={SETTINGS_NOTE_CLASS}>超时或 HTTP 429 时会自动降速。</p>
             <div className={SETTINGS_ACTIONS_CLASS}>
               <Button
                 className={AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}

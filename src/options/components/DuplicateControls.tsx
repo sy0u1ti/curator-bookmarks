@@ -27,7 +27,7 @@ const RESULTS_HEADER_CLASS =
 const RESULTS_HEADER_COPY_CLASS = 'min-w-0'
 const RESULTS_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
-const RESULTS_SUBTITLE_CLASS = 'mt-2.5 text-[13px] leading-[1.7] text-ds-text-secondary'
+const RESULTS_SUBTITLE_CLASS = 'mt-2 text-[13px] leading-[1.55] text-ds-text-secondary'
 const RESULTS_ACTIONS_CLASS =
   'flex flex-none flex-wrap items-center justify-end gap-2.5 max-[760px]:w-full max-[760px]:justify-start'
 const SELECTION_WARNING_CLASS =
@@ -70,8 +70,7 @@ export function DuplicateControls() {
                 <TextSwap text={`${state.selectionStats.deleteCount} 条待移入回收站`} />
               </strong>
               <p className={RESULTS_SUBTITLE_CLASS}>
-                将移入回收站 {state.selectionStats.deleteCount} 条，保留 {state.selectionStats.keepCount}
-                {' '}条，涉及 {state.selectionStats.groupCount} 组。
+                保留 {state.selectionStats.keepCount} 条，涉及 {state.selectionStats.groupCount} 组。
               </p>
               {unsafe ? (
                 <p className={SELECTION_WARNING_CLASS}>

@@ -6,7 +6,7 @@ const AI_RESULTS_HEADER_COPY_CLASS = 'min-w-0'
 const AI_RESULTS_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const AI_RESULTS_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export function AiAnalysisResultsHeader() {
   const state = useAiAnalysisResultsHeader()

@@ -234,10 +234,10 @@ export function renderRedirectSection(callbacks) {
 
   if (!redirectResults.length) {
     const emptyMessage = availabilityState.lastCompletedAt
-      ? '最近一次检测没有发现需要更新最终 URL 的重定向书签。'
+      ? '最近一次检测没有待更新重定向。'
       : redirectSection.useCachedResults && redirectSection.savedAt
-        ? '当前没有可直接更新的重定向缓存结果。完成新的检测后，这里会重新生成待更新列表。'
-        : '完成一次检测后，这里会展示可一键更新的重定向书签。'
+        ? '当前没有可更新的缓存结果。'
+        : '完成检测后显示待更新重定向。'
     publishRedirectResults({
       emptyMessage,
       locked: isInteractionLocked(),
@@ -260,12 +260,12 @@ export function renderRedirectSection(callbacks) {
 
 function getRedirectResultsSubtitle(redirectSection, resultCount): string {
   if (redirectSection.useCachedResults && redirectSection.savedAt && resultCount) {
-    return `当前展示的是 ${formatDateTime(redirectSection.savedAt)} 的本地缓存结果，来源范围：${redirectSection.scope.label}。刷新页面后仍可直接更新，不需要重新检测。`
+    return `缓存结果 · ${redirectSection.scope.label} · ${formatDateTime(redirectSection.savedAt)}`
   }
   if (redirectSection.useCachedResults) {
-    return '完成检测后，这里会展示原书签地址与最终落地地址不一致的结果。结果会本地缓存，刷新页面后仍可直接更新。'
+    return '完成检测后显示原地址与最终地址不同的结果。'
   }
-  return '当前展示的是本次设置页会话中的重定向检测结果；刷新页面后，这里的待更新列表会回退到本地缓存结果。'
+  return '本次会话的重定向结果。'
 }
 
 export function toggleRedirectResultSelection(bookmarkId, checked, callbacks) {

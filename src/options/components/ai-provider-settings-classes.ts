@@ -131,10 +131,10 @@ export const AI_PROVIDER_GRID_CLASS =
   'grid grid-cols-2 items-start gap-3.5 max-[760px]:grid-cols-1'
 
 export const AI_PROVIDER_DIALOG_BACKDROP_CLASS =
-  `fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 backdrop-blur-[14px] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 backdrop-blur-[14px] transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:opacity-0 data-starting-style:opacity-0 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_CLASS =
-  `fixed left-1/2 top-1/2 z-40 max-h-[calc(100vh-40px)] w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-ds-md border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none transition-[scale,opacity] duration-100 data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:max-w-[calc(100vw-32px)] max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `fixed left-1/2 top-1/2 z-40 max-h-[calc(100vh-40px)] w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-ds-md border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none transition-[scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:max-w-[calc(100vw-32px)] max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_EYEBROW_CLASS =
   'm-0 text-[11px] font-bold uppercase tracking-[0.18em] text-ds-text-disabled'

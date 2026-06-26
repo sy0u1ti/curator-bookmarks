@@ -29,7 +29,7 @@ const contentShellClass =
   'relative z-[1] grid min-h-0 flex-[1_1_auto] overflow-hidden border-0 bg-transparent [height:auto]'
 const modalBackdropBaseClass = [
   'absolute inset-0 z-20 grid place-items-center bg-ds-overlay p-3.5 opacity-100',
-  'transition-opacity duration-ds-fast ease-ds-standard motion-reduce:transition-none'
+  'transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] motion-reduce:transition-none'
 ].join(' ')
 
 export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | null }) {
@@ -88,7 +88,7 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
 
   const modalBackdropClassName = cx(
     modalBackdropBaseClass,
-    modalPresence.closing ? 'pointer-events-none opacity-0' : ''
+    modalPresence.closing ? 'pointer-events-none opacity-0 duration-[var(--modal-close-dur)]' : ''
   )
   const appShellClassName = cx(
     appShellBaseClass,

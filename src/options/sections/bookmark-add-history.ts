@@ -139,8 +139,8 @@ export function renderBookmarkAddHistory(): void {
   const headerState: BookmarkAddHistoryHeaderState = {
     clearDisabled: summary.total === 0,
     subtitle: summary.total
-      ? `已保留最近 ${summary.total} 条自动分析添加记录，最近一次发生于 ${formatDateTime(latestEntry!.createdAt)}。`
-      : '开启“自动分析”后，新增普通网页书签完成 AI 分类时会在这里记录保存位置。',
+      ? `最近 ${summary.total} 条记录 · ${formatDateTime(latestEntry!.createdAt)}`
+      : '自动分析完成后，这里记录新增书签的位置。',
     timestamp
   }
   const summaryState: BookmarkAddHistorySummaryState = {

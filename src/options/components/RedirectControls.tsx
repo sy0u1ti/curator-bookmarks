@@ -7,7 +7,7 @@ const REDIRECT_HEADER_COPY_CLASS = 'min-w-0'
 const REDIRECT_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const REDIRECT_HEADER_SUBTITLE_CLASS =
-  'mt-2.5 mb-0 text-[13px] leading-[1.7] text-ds-text-secondary'
+  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const REDIRECT_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const REDIRECT_SELECTION_GROUP_CLASS =
@@ -28,7 +28,7 @@ export function RedirectControls() {
               <strong className={REDIRECT_HEADER_TITLE_CLASS}>
                 <TextSwap text={`${state.selectedCount} 条已选择`} />
               </strong>
-              <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>可批量更新这些重定向书签为最终地址，或直接批量删除并移入回收站。</p>
+              <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>可批量更新最终地址或移入回收站。</p>
             </div>
             <div className={REDIRECT_HEADER_ACTIONS_CLASS}>
               <Button

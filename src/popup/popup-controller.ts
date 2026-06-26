@@ -128,13 +128,22 @@ import {
 } from './edit-bookmark-draft.js'
 import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
 import { writeClipboardText } from '../shared/clipboard.js'
+import {
+  SMART_LOADING_PROGRESS_COMPLETE_MS,
+  SMART_LOADING_PROGRESS_TICK_MS,
+  SMART_LOADING_STEP_COUNT,
+  advanceSmartProgressToStageStart,
+  getNextSmartProgress,
+  getSmartDisplayProgress,
+  getSmartProgressTarget,
+  normalizeSmartLoadingStep
+} from './smart-loading-progress.js'
 const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
 const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
 const SMART_RECOMMENDATION_LIMIT = 3
-const SMART_LOADING_STEP_COUNT = 3
 const POPUP_DEFAULT_WORKSPACE_STORAGE = {
   activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID,
   workspaces: []
@@ -148,6 +157,7 @@ let naturalSearchAiModulePromise: Promise<typeof import('./natural-search-ai.js'
 let aiSettingsModulePromise: Promise<typeof import('../options/sections/ai-settings.js')> | null = null
 let smartClassifierModulePromise: Promise<typeof import('./smart-classifier.js')> | null = null
 let recycleBinModulePromise: Promise<typeof import('../shared/recycle-bin.js')> | null = null
+let smartProgressTimer: number | null = null
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
@@ -1041,6 +1051,7 @@ function cleanupPopupController() {
   unregisterPopupBrowserEventActions = null
   popupControllerStarted = false
   abortNaturalSearchRequest()
+  stopSmartProgressTicker()
   clearTimeout(state.searchTimer)
   state.searchTimer = null
   clearViewNotice()
@@ -1727,7 +1738,6 @@ function renderSmartClassifier() {
   if (state.smartStatus === 'loading') {
     const viewModel = getPopupSmartClassifierViewModel('loading')
     dispatchPopupSmartClassifierChange(viewModel)
-    state.smartProgressPercent = viewModel.loadingProgress
     return
   }
 
@@ -1751,9 +1761,12 @@ function renderSmartClassifier() {
 function getPopupSmartClassifierViewModel(
   status: PopupSmartClassifierViewModel['status']
 ): PopupSmartClassifierViewModel {
-  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
-  const progress = getSmartProgressTarget()
-  const startProgress = Math.max(0, Math.min(Number(state.smartProgressPercent) || 0, progress))
+  const step = normalizeSmartLoadingStep(state.smartStep)
+  const targetProgress = getSmartProgressTarget(step)
+  const progress = status === 'loading'
+    ? getSmartDisplayProgress(state.smartProgressPercent, step)
+    : targetProgress
+  const startProgress = Math.max(0, Math.min(getSmartDisplayProgress(state.smartProgressPercent, step), progress))
 
   return {
     error: state.smartError || '',
@@ -3190,6 +3203,7 @@ function isSmartOverlayActive(): boolean {
 }
 function resetSmartClassification() {
   state.smartRunId += 1
+  stopSmartProgressTicker()
   state.smartStatus = 'idle'
   state.smartError = ''
   state.smartStep = 0
@@ -3238,6 +3252,7 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
   state.smartExtraction = { status: '', source: '', warnings: [] }
   state.smartPermissionRequest = null
   renderSmartClassifier()
+  startSmartProgressTicker(runId)
   try {
     const smartClassifier = await loadSmartClassifierModule()
     const settings = await loadAiProviderSettings()
@@ -3253,8 +3268,7 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
       settings
     })
     if (state.smartRunId !== runId) return
-    state.smartStep = 2
-    renderSmartClassifier()
+    if (!(await completeSmartProgressStage(runId, 2))) return
     const aiResult = await smartClassifier.requestSmartClassification({
       settings,
       pageContext,
@@ -3263,8 +3277,7 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
       allFolders: state.allFolders
     })
     if (state.smartRunId !== runId) return
-    state.smartStep = 3
-    renderSmartClassifier()
+    if (!(await completeSmartProgressStage(runId, 3))) return
     await waitForSmartLoadingPaint()
     if (state.smartRunId !== runId) return
     const recommendations = buildSmartRecommendations(aiResult)
@@ -3279,10 +3292,16 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     state.smartExtraction = smartClassifier.buildSmartExtractionSnapshot(pageContext)
     state.smartRecommendations = recommendations
     state.smartSelectedRecommendationId = recommendations[0]?.id || ''
+    state.smartProgressPercent = 100
+    stopSmartProgressTicker()
+    renderSmartClassifier()
+    await waitForSmartProgressCompletion()
+    if (state.smartRunId !== runId) return
     state.smartStatus = 'results'
     renderSmartClassifier()
   } catch (error) {
     if (state.smartRunId !== runId) return
+    stopSmartProgressTicker()
     if (isSmartPermissionRequiredError(error)) {
       state.smartStatus = 'permission'
       state.smartPermissionRequest = error.smartPermissionRequest
@@ -3294,6 +3313,27 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     state.smartError = normalizeSmartError(error)
     renderSmartClassifier()
   }
+}
+async function completeSmartProgressStage(runId: number, nextStep: number): Promise<boolean> {
+  if (!isSmartLoadingRunActive(runId)) {
+    return false
+  }
+
+  const step = normalizeSmartLoadingStep(nextStep)
+  state.smartProgressPercent = advanceSmartProgressToStageStart(state.smartProgressPercent, step)
+  renderSmartClassifier()
+  await waitForSmartProgressCompletion()
+  if (!isSmartLoadingRunActive(runId)) {
+    return false
+  }
+
+  state.smartStep = step
+  state.smartProgressPercent = advanceSmartProgressToStageStart(state.smartProgressPercent, step)
+  renderSmartClassifier()
+  return true
+}
+function isSmartLoadingRunActive(runId: number): boolean {
+  return state.smartRunId === runId && state.smartStatus === 'loading'
 }
 async function grantSmartPermissionAndClassify() {
   if (state.smartStatus === 'loading' || state.smartSaving) {
@@ -3451,6 +3491,7 @@ async function pinCurrentPageToNewTab(bookmarkId) {
 }
 async function finishSmartSave({ message, closeModal = true }) {
   state.smartRunId += 1
+  stopSmartProgressTicker()
   state.smartSaving = false
   state.smartSaved = true
   state.smartStatus = 'idle'
@@ -4051,9 +4092,45 @@ function getSmartLoadingLabel() {
   }
   return '匹配已有文件夹…'
 }
-function getSmartProgressTarget() {
-  const step = Math.max(1, Math.min(state.smartStep || 1, SMART_LOADING_STEP_COUNT))
-  return Math.max(10, Math.min((step / SMART_LOADING_STEP_COUNT) * 100, 100))
+function startSmartProgressTicker(runId: number) {
+  stopSmartProgressTicker()
+
+  const tick = () => {
+    if (state.smartRunId !== runId || state.smartStatus !== 'loading') {
+      smartProgressTimer = null
+      return
+    }
+
+    const nextProgress = getNextSmartProgress(
+      Number(state.smartProgressPercent) || 0,
+      state.smartStep
+    )
+
+    if (Math.abs(nextProgress - state.smartProgressPercent) >= 0.01) {
+      state.smartProgressPercent = nextProgress
+      renderSmartClassifier()
+    }
+
+    smartProgressTimer = window.setTimeout(tick, SMART_LOADING_PROGRESS_TICK_MS)
+  }
+
+  smartProgressTimer = window.setTimeout(tick, SMART_LOADING_PROGRESS_TICK_MS)
+}
+function stopSmartProgressTicker() {
+  if (smartProgressTimer === null) {
+    return
+  }
+  window.clearTimeout(smartProgressTimer)
+  smartProgressTimer = null
+}
+function waitForSmartProgressCompletion() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(resolve, SMART_LOADING_PROGRESS_COMPLETE_MS)
+      })
+    })
+  })
 }
 function waitForSmartLoadingPaint() {
   return new Promise((resolve) => {

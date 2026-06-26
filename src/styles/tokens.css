@@ -52,9 +52,9 @@
   --ds-shadow-dialog: 0 1px 1px rgba(0, 0, 0, 0.02), 0 8px 16px -4px rgba(0, 0, 0, 0.04), 0 24px 32px -8px rgba(0, 0, 0, 0.06);
   --ds-shadow-focus: 0 0 0 2px var(--ds-bg-page), 0 0 0 4px var(--ds-focus);
 
-  --ds-motion-fast: 150ms;
-  --ds-motion-standard: 200ms;
-  --ds-motion-surface: 300ms;
+  --ds-motion-fast: 170ms;
+  --ds-motion-standard: 240ms;
+  --ds-motion-surface: 340ms;
   --ds-ease-standard: cubic-bezier(0.175, 0.885, 0.32, 1.1);
   --ds-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ds-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
@@ -62,12 +62,46 @@
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
-  --tabs-dur: 250ms;
+  --tabs-dur: 300ms;
   --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-text-muted: var(--ds-text-secondary);
   --tabs-text-active: var(--ds-text-primary);
   --tabs-bar-bg: var(--ds-surface-1);
   --tabs-pill-bg: var(--ds-selected);
+
+  --tt-in-dur: 180ms;
+  --tt-out-dur: 90ms;
+  --tt-scale: 0.98;
+  --tt-delay: 80ms;
+  --tt-in-ease: ease-out;
+  --tt-out-ease: ease-out;
+  --tt-bg: var(--ds-surface-2);
+  --tt-fg: var(--ds-text-primary);
+
+  --acc-expand: 320ms;
+  --acc-collapse: 260ms;
+  --acc-chevron: 300ms;
+  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --resize-dur: 380ms;
+  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --dropdown-open-dur: 300ms;
+  --dropdown-close-dur: 190ms;
+  --dropdown-pre-scale: 0.97;
+  --dropdown-closing-scale: 0.99;
+  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --modal-open-dur: 320ms;
+  --modal-close-dur: 220ms;
+  --modal-scale: 0.96;
+  --modal-scale-close: 0.96;
+  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --icon-swap-dur: 300ms;
+  --icon-swap-blur: 2px;
+  --icon-swap-start-scale: 0.25;
+  --icon-swap-ease: ease-in-out;
 
   --pulse-dur: 1000ms;
   --pulse-count: 1;
@@ -76,7 +110,7 @@
   --reveal-blur: 2px;
   --reveal-ease: ease-in-out;
 
-  --text-swap-dur: 150ms;
+  --text-swap-dur: 180ms;
   --text-swap-translate-y: 4px;
   --text-swap-blur: 2px;
   --text-swap-ease: ease-in-out;
@@ -129,5 +163,24 @@
     --ds-press-scale: 1;
     --ds-hover-lift: 0px;
     --ds-sheet-offset: 0px;
+    --tabs-dur: 1ms;
+    --tt-in-dur: 1ms;
+    --tt-out-dur: 1ms;
+    --acc-expand: 1ms;
+    --acc-collapse: 1ms;
+    --acc-chevron: 1ms;
+    --resize-dur: 1ms;
+    --dropdown-open-dur: 1ms;
+    --dropdown-close-dur: 1ms;
+    --modal-open-dur: 1ms;
+    --modal-close-dur: 1ms;
+    --modal-scale: 1;
+    --modal-scale-close: 1;
+    --icon-swap-dur: 1ms;
+    --reveal-dur: 1ms;
+    --text-swap-dur: 1ms;
+    --panel-open-dur: 1ms;
+    --panel-close-dur: 1ms;
+    --stagger-dur: 1ms;
   }
 }

@@ -6,7 +6,7 @@ import type {
 } from './scope-picker-types.js'
 
 const defaultTriggerState: ScopePickerTriggerState = {
-  copy: '当前范围：全部书签。你可以切换到某个文件夹，只检测该文件夹及其子层级里的书签。',
+  copy: '当前范围：全部书签。可切换到文件夹。',
   disabled: false,
   label: '全部书签'
 }
@@ -14,7 +14,7 @@ const defaultTriggerState: ScopePickerTriggerState = {
 const defaultState: ScopePickerTriggersState = {
   availability: defaultTriggerState,
   history: {
-    copy: '当前显示范围：全部书签。这里只展示对应检测范围的历史日志与趋势变化。',
+    copy: '当前范围：全部书签。只显示对应历史。',
     disabled: false,
     label: '全部书签'
   }

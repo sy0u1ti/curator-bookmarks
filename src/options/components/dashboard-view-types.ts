@@ -241,7 +241,6 @@ export interface DashboardCardViewModel {
   speedDialActionLabel: string
   speedDialActionText: string
   speedDialPinned: boolean
-  tagStatusTitle: string
   tags: string[]
   title: string
   url: string

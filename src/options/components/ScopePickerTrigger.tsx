@@ -1,4 +1,5 @@
 import { Button } from '../../ui'
+import { Icon } from '../../ui/icons/Icon'
 import {
   OPTION_GROUP_CLASS,
   OPTION_COPY_CLASS,
@@ -50,6 +51,7 @@ export function ScopePickerTrigger({
           onClick={() => handleScopePickerTriggerOpen(source)}
           unstyled
         >
+          <Icon className="text-ds-accent-hover" name="ChevronDown" size={14} aria-hidden="true" />
           <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
         </Button>
       </div>
