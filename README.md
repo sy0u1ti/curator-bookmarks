@@ -24,11 +24,7 @@
   <img src="https://img.shields.io/github/v/release/sy0u1ti/curator-bookmarks" alt="GitHub Release">
 </p>
 
-<p align="center">
-  <a href="https://raw.githubusercontent.com/sy0u1ti/curator-bookmarks/main/src/assets/curator-product-demo.mp4">
-    <img src="src/assets/curator-product-demo.gif" alt="Curator 产品演示视频" width="960">
-  </a>
-</p>
+https://github.com/user-attachments/assets/bf3dc67c-e283-412d-b568-bf0554e9d076
 
 
 
