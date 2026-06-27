@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import {
   type BookmarkContentStyleState,
   type BookmarkContentViewModel,
@@ -400,7 +401,7 @@ function BookmarkGridPlaceholder({
       title={title}
       ref={refNode}
     >
-      继续载入 {remainingCount} 个书签
+      继续载入 <NumberPop text={remainingCount} /> 个书签
     </output>
   )
 }
@@ -574,7 +575,9 @@ function FolderSectionHeader({ state }: { state: FolderSectionHeaderState }) {
         unstyled
       >
         <span className={FOLDER_SECTION_TITLE_CLASS}>{displayTitle}</span>
-        <span className={FOLDER_SECTION_COUNT_CLASS}>{state.bookmarkCount}</span>
+        <span className={FOLDER_SECTION_COUNT_CLASS}>
+          <NumberPop text={state.bookmarkCount} />
+        </span>
       </Button>
       <Button
         className={FOLDER_SECTION_ADD_CLASS}
@@ -624,7 +627,9 @@ function SourceNavigation({
             key={item.id}
           >
             <span className={SOURCE_NAVIGATION_TITLE_CLASS}>{item.title}</span>
-            <span className={SOURCE_NAVIGATION_COUNT_CLASS}>{item.bookmarkCount}</span>
+            <span className={SOURCE_NAVIGATION_COUNT_CLASS}>
+              <NumberPop text={item.bookmarkCount} />
+            </span>
           </Button>
         ))}
       </div>

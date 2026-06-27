@@ -31,7 +31,7 @@ export function BusyLoadingLabel({
   return (
     <span className={getLoadingLabelWrapperClassName(wrapperClassName)}>
       <DotMatrixLoader variant={variant} className={getLoadingLabelLoaderClassName(loaderClassName)} />
-      <span>{label}</span>
+      <span className="t-shimmer" data-text={label}>{label}</span>
     </span>
   )
 }

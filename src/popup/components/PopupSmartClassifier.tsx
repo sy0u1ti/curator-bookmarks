@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { Button } from '../../ui'
 import { DotMatrixLoader } from '../../ui'
 import { Input } from '../../ui'
+import { NumberPop } from '../../ui'
 import { Progress } from '../../ui'
 import { Toolbar } from '../../ui'
 import { cx } from '../../ui'
@@ -515,7 +516,7 @@ function PopupButtonLoadingLabel({ label }: { label: string }) {
   return (
     <span className={buttonLoadingLabelClass}>
       <DotMatrixLoader variant="bar" className={buttonDotLoaderClass} />
-      <span>{label}</span>
+      <span className="t-shimmer" data-text={label}>{label}</span>
     </span>
   )
 }
@@ -544,8 +545,10 @@ function PopupSmartLoading({
           <DotMatrixLoader variant="spiral" className={loadingLoaderClass} />
           <div className={loadingContentClass}>
             <p className={loadingCopyClass}>
-              <span>{state.loadingLabel}</span>
-              <small className={loadingStepClass}>{state.loadingStep}/{state.loadingStepCount}</small>
+              <span className="t-shimmer" data-text={state.loadingLabel}>{state.loadingLabel}</span>
+              <small className={loadingStepClass}>
+                <NumberPop text={`${state.loadingStep}/${state.loadingStepCount}`} />
+              </small>
             </p>
             <Progress
               className={progressTrackClass}

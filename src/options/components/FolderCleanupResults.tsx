@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, NumberPop } from '../../ui'
 import type {
   FolderCleanupSplitUndo,
   FolderCleanupSuggestion
@@ -106,7 +106,7 @@ function SplitUndoNotice({
       <div className={FOLDER_CLEANUP_COPY_CLASS}>
         <strong className={FOLDER_CLEANUP_TITLE_CLASS}>{splitUndo.title}</strong>
         <p className={FOLDER_CLEANUP_DETAIL_CLASS}>
-          已记录 {splitUndo.moves.length}
+          已记录 <NumberPop text={splitUndo.moves.length} />
           {' '}个书签的拆分前位置，可撤销本次拆分。
         </p>
       </div>
@@ -186,7 +186,7 @@ function SuggestionCard({
                 className={`${FOLDER_CLEANUP_BADGE_BASE_CLASS} ${FOLDER_CLEANUP_BADGE_TONE_CLASS.muted}`}
                 key={`${suggestion.id}:${group.label}`}
               >
-                {group.label} · {group.count}
+                {group.label} · <NumberPop text={group.count} />
               </span>
             ))}
           </div>
@@ -196,7 +196,9 @@ function SuggestionCard({
             {suggestion.folders.map((folder) => (
               <div className={PREVIEW_ROW_CLASS} key={folder.id}>
                 <strong className={PREVIEW_ROW_TITLE_CLASS}>{folder.path || folder.title}</strong>
-                <span>{folder.descendantBookmarkCount} 个书签 · {folder.depth} 层</span>
+                <span>
+                  <NumberPop text={folder.descendantBookmarkCount} /> 个书签 · <NumberPop text={folder.depth} /> 层
+                </span>
               </div>
             ))}
           </div>

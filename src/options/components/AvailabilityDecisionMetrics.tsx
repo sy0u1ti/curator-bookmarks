@@ -1,6 +1,7 @@
 import {
   useAvailabilityDecisionMetrics
 } from './availability-overview-store.js'
+import { NumberPop } from '../../ui'
 import type { AvailabilityDecisionMetricsState } from './availability-overview-types.js'
 
 const metrics: Array<{
@@ -31,7 +32,9 @@ export function AvailabilityDecisionMetrics() {
       {metrics.map((metric) => (
         <div key={metric.key} className={AVAILABILITY_DECISION_METRIC_CLASS}>
           <span className={AVAILABILITY_DECISION_LABEL_CLASS}>{metric.label}</span>
-          <strong className={AVAILABILITY_DECISION_VALUE_CLASS}>{state[metric.key]}</strong>
+          <strong className={AVAILABILITY_DECISION_VALUE_CLASS}>
+            {metric.key === 'scope' ? state[metric.key] : <NumberPop text={state[metric.key]} />}
+          </strong>
         </div>
       ))}
     </div>

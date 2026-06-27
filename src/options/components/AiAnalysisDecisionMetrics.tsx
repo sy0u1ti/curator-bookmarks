@@ -2,6 +2,7 @@ import {
   type AiAnalysisDecisionMetricsState,
   useAiAnalysisDecisionMetrics
 } from './ai-analysis-status-store.js'
+import { NumberPop } from '../../ui'
 import { AI_ANALYSIS_METRIC_LABEL_CLASS } from './ai-analysis-classes.js'
 
 const metrics: Array<{
@@ -33,7 +34,9 @@ export function AiAnalysisDecisionMetrics() {
       {metrics.map((metric) => (
         <div className={AI_ANALYSIS_DECISION_CELL_CLASS} key={metric.key}>
           <span className={AI_ANALYSIS_METRIC_LABEL_CLASS}>{metric.label}</span>
-          <strong className={AI_ANALYSIS_DECISION_VALUE_CLASS}>{state[metric.key]}</strong>
+          <strong className={AI_ANALYSIS_DECISION_VALUE_CLASS}>
+            <NumberPop text={state[metric.key]} />
+          </strong>
         </div>
       ))}
     </div>

@@ -1,4 +1,4 @@
-import { Card } from '../../ui'
+import { Card, NumberPop } from '../../ui'
 import type { BookmarkAddHistorySummaryState } from './BookmarkAddHistoryTypes.js'
 
 const historyMetrics = [
@@ -39,7 +39,7 @@ export function BookmarkAddHistorySummary({ state }: { state: BookmarkAddHistory
         <Card className={BOOKMARK_ADD_HISTORY_SUMMARY_CARD_CLASS} key={metric.key}>
           <span className={BOOKMARK_ADD_HISTORY_SUMMARY_LABEL_CLASS}>{metric.label}</span>
           <strong className={BOOKMARK_ADD_HISTORY_SUMMARY_VALUE_CLASS}>
-            {state[metric.key]}
+            <NumberPop text={state[metric.key]} />
           </strong>
         </Card>
       ))}

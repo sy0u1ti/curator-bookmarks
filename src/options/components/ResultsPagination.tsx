@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button, NumberPop } from '../../ui'
 import { handleResultsPagination } from '../options-controller'
 import { useResultsPaginationState } from './results-pagination-store.js'
 import {
@@ -21,7 +21,7 @@ export function ResultsPagination({
       {state.visible ? (
         <div className={OPTION_PAGINATION_CLASS}>
           <span className={OPTION_PAGINATION_LABEL_CLASS}>
-            {state.label} {state.start}-{state.end} / {state.totalCount}
+            {state.label} <NumberPop text={`${state.start}-${state.end} / ${state.totalCount}`} />
           </span>
           <Button
             size="sm"
@@ -33,7 +33,7 @@ export function ResultsPagination({
             上一页
           </Button>
           <span className={OPTION_VALUE_CLASS}>
-            {state.page} / {state.totalPages}
+            <NumberPop text={`${state.page} / ${state.totalPages}`} />
           </span>
           <Button
             size="sm"

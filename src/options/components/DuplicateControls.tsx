@@ -1,4 +1,4 @@
-import { Button, TextSwap, useMotionEntrance } from '../../ui'
+import { Button, NumberPop, TextSwap, useMotionEntrance } from '../../ui'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
 
@@ -113,7 +113,9 @@ export function DuplicateControls() {
             key={metric.key}
           >
             <span className={SUMMARY_LABEL_CLASS}>{metric.label}</span>
-            <strong className={SUMMARY_VALUE_CLASS}>{state.summary[metric.key]}</strong>
+            <strong className={SUMMARY_VALUE_CLASS}>
+              <NumberPop text={state.summary[metric.key]} />
+            </strong>
           </article>
         ))}
       </div>

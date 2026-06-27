@@ -1,5 +1,6 @@
 import type { CSSProperties, RefObject } from 'react'
 import { Button } from '../../ui'
+import { NumberPop } from '../../ui'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui'
 import { HighlightedText } from './HighlightedText'
@@ -196,7 +197,7 @@ export function PopupContent({
           </aside>
           <section className={mainPaneClass} aria-label={title}>
             <header className={paneHeaderClass}>
-              <span>{title} <span className={paneTitleMetaClass}>· {meta}</span></span>
+              <span>{title} <span className={paneTitleMetaClass}>· <NumberPop text={meta} /></span></span>
             </header>
             <ul className={mainListClass} ref={mainListRef}>
               {state.mainState ? (
@@ -345,7 +346,9 @@ function PopupFolderRow({
         <span className={cx(folderBranchClass, row.root ? rootFolderBranchClass : '')} aria-hidden="true"></span>
         <span className={folderMainClass}>
           <span className={folderTitleClass}>{row.title}</span>
-          <span className={cx(folderCountClass, row.active ? folderCountActiveClass : '')} title={`${row.countLabel} 个书签`}>{row.countLabel}</span>
+          <span className={cx(folderCountClass, row.active ? folderCountActiveClass : '')} title={`${row.countLabel} 个书签`}>
+            <NumberPop text={row.countLabel} />
+          </span>
         </span>
       </Button>
     </div>

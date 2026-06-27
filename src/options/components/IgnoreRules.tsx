@@ -1,6 +1,5 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui'
-import { Card } from '../../ui'
+import { Button, Card, NumberPop } from '../../ui'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
 import { OPTION_REVEAL_ENTER_CLASS } from './option-layout-classes.js'
@@ -133,7 +132,9 @@ function IgnoreRulesSummary({ state }: { state: IgnoreRulesSummaryState }) {
       {ignoreSummaryMetrics.map((metric) => (
         <Card className={IGNORE_SUMMARY_CARD_CLASS} key={metric.key}>
           <span className={IGNORE_SUMMARY_LABEL_CLASS}>{metric.label}</span>
-          <strong className={IGNORE_SUMMARY_VALUE_CLASS}>{state[metric.key]}</strong>
+          <strong className={IGNORE_SUMMARY_VALUE_CLASS}>
+            <NumberPop text={state[metric.key]} />
+          </strong>
         </Card>
       ))}
     </div>

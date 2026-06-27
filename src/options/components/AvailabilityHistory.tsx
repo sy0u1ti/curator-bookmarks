@@ -3,6 +3,7 @@ import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui'
 import { Card } from '../../ui'
 import { cx } from '../../ui'
+import { NumberPop } from '../../ui'
 import { handleHistoryControlAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
@@ -150,19 +151,19 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
         <Card className={HISTORY_METRIC_CARD_CLASS}>
           <span className={HISTORY_METRIC_LABEL_CLASS}>新增异常</span>
           <strong className={HISTORY_METRIC_VALUE_CLASS}>
-            {state.metrics.newCount}
+            <NumberPop text={state.metrics.newCount} />
           </strong>
         </Card>
         <Card className={HISTORY_METRIC_CARD_CLASS}>
           <span className={HISTORY_METRIC_LABEL_CLASS}>持续异常</span>
           <strong className={HISTORY_METRIC_VALUE_CLASS}>
-            {state.metrics.persistentCount}
+            <NumberPop text={state.metrics.persistentCount} />
           </strong>
         </Card>
         <Card className={HISTORY_METRIC_CARD_CLASS}>
           <span className={HISTORY_METRIC_LABEL_CLASS}>已恢复</span>
           <strong className={HISTORY_METRIC_VALUE_CLASS}>
-            {state.metrics.recoveredCount}
+            <NumberPop text={state.metrics.recoveredCount} />
           </strong>
         </Card>
       </div>

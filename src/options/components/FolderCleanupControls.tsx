@@ -1,5 +1,4 @@
-import { Button } from '../../ui'
-import { Card } from '../../ui'
+import { Button, Card, NumberPop } from '../../ui'
 import { handleFolderCleanupAction } from '../options-controller'
 import { useFolderCleanupControlsState } from './folder-cleanup-controls-store.js'
 import {
@@ -80,7 +79,9 @@ export function FolderCleanupControls() {
         {metrics.map((metric) => (
           <Card className={FOLDER_CLEANUP_SUMMARY_CARD_CLASS} key={metric.key}>
             <span className={FOLDER_CLEANUP_SUMMARY_LABEL_CLASS}>{metric.label}</span>
-            <strong className={FOLDER_CLEANUP_SUMMARY_VALUE_CLASS}>{metric.value}</strong>
+            <strong className={FOLDER_CLEANUP_SUMMARY_VALUE_CLASS}>
+              <NumberPop text={metric.value} />
+            </strong>
           </Card>
         ))}
       </div>

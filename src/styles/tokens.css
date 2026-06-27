@@ -86,6 +86,14 @@
   --resize-dur: 380ms;
   --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
+  --digit-dur: 500ms;
+  --digit-distance: 8px;
+  --digit-stagger: 70ms;
+  --digit-blur: 2px;
+  --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --digit-dir-x: 0;
+  --digit-dir-y: 1;
+
   --dropdown-open-dur: 300ms;
   --dropdown-close-dur: 190ms;
   --dropdown-pre-scale: 0.97;
@@ -126,6 +134,12 @@
   --stagger-stagger: 40ms;
   --stagger-blur: 3px;
   --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --shimmer-dur: 2000ms;
+  --shimmer-base: var(--ds-text-muted);
+  --shimmer-highlight: var(--ds-text-primary);
+  --shimmer-band: 400%;
+  --shimmer-ease: linear;
 
   --ds-row-height: 52px;
   --ds-row-height-compact: 40px;
@@ -170,6 +184,7 @@
     --acc-collapse: 1ms;
     --acc-chevron: 1ms;
     --resize-dur: 1ms;
+    --digit-dur: 1ms;
     --dropdown-open-dur: 1ms;
     --dropdown-close-dur: 1ms;
     --modal-open-dur: 1ms;
@@ -182,5 +197,6 @@
     --panel-open-dur: 1ms;
     --panel-close-dur: 1ms;
     --stagger-dur: 1ms;
+    --shimmer-dur: 1ms;
   }
 }
