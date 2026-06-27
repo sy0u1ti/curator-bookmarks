@@ -34,3 +34,4 @@ scripts/
 tools/
 playwright-visual.config.mjs
 DESIGN.md
+hyperframes/
