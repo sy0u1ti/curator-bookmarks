@@ -25,7 +25,9 @@
 </p>
 
 <p align="center">
-  <img src="src/assets/curator-bookmarks-intro.gif" alt="Curator Bookmark 功能演示">
+  <a href="src/assets/curator-product-demo.mp4">
+    <img src="src/assets/curator-product-demo.gif" alt="Curator 产品演示视频" width="960">
+  </a>
 </p>
 
 
