@@ -25,7 +25,7 @@
 </p>
 
 <p align="center">
-  <a href="src/assets/curator-product-demo.mp4">
+  <a href="https://raw.githubusercontent.com/sy0u1ti/curator-bookmarks/main/src/assets/curator-product-demo.mp4">
     <img src="src/assets/curator-product-demo.gif" alt="Curator 产品演示视频" width="960">
   </a>
 </p>
