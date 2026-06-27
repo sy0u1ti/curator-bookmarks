@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from 'react'
+import { memo, useState, type CSSProperties, type RefObject } from 'react'
 import { Button } from '../../ui'
 import { NumberPop } from '../../ui'
 import { Icon, type IconName } from '../../ui/icons/Icon'
@@ -72,7 +72,7 @@ const mainListClass =
   'm-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderRowClass = 'relative block min-h-[34px]'
 const mainRowClass =
-  'relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
+  'popup-main-row relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
 const folderCardClass = [
   'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
@@ -109,13 +109,15 @@ const resultPathShellClass = 'block min-w-0'
 const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
 const resultMatchTokenClass =
   'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-semibold text-ds-text-secondary'
-const rowActionsClass = 'inline-flex items-center justify-end gap-1.5 pr-0.5 max-[430px]:justify-start max-[430px]:pl-[13px]'
+const rowActionsClass = 'popup-row-actions t-resize'
+const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
-  'inline-flex h-7 w-7 items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
+  'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-95 disabled:cursor-default disabled:opacity-45'
 ].join(' ')
+const rowActionTriggerClass = cx(rowActionButtonClass, 'popup-row-actions-trigger')
 const rowActionDangerClass =
   'hover:border-[rgba(255,138,130,0.42)] hover:text-ds-danger-text focus-visible:border-[rgba(255,138,130,0.42)] focus-visible:text-ds-danger-text'
 const compactStateClass =
@@ -205,9 +207,9 @@ export function PopupContent({
               ) : mainRows.length ? (
                 mainRows.map((row) => {
                   if (row.kind === 'bookmark') {
-                    return <PopupBookmarkRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
+                    return <MemoPopupBookmarkRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
                   }
-                  return <PopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
+                  return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
                 })
               ) : (
                 <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
@@ -387,6 +389,7 @@ function PopupBookmarkRow({
         </span>
       </Button>
       <PopupRowActions
+        active={row.active}
         bookmarkId={row.bookmarkId}
         label={row.menuLabel}
         menu={row.menu}
@@ -439,6 +442,7 @@ function PopupSearchResultRow({
         </span>
       </Button>
       <PopupRowActions
+        active={row.active}
         bookmarkId={row.bookmarkId}
         label={row.menuLabel}
         menu={row.menu}
@@ -449,39 +453,172 @@ function PopupSearchResultRow({
   )
 }
 
+const MemoPopupBookmarkRow = memo(PopupBookmarkRow, arePopupBookmarkRowPropsEqual)
+const MemoPopupSearchResultRow = memo(PopupSearchResultRow, arePopupSearchResultRowPropsEqual)
+
+function arePopupBookmarkRowPropsEqual(
+  previous: {
+    activeResultRef?: RefObject<HTMLLIElement | null>
+    handlers?: PopupContentActionHandlers
+    row: PopupContentBookmarkRowViewModel
+  },
+  next: {
+    activeResultRef?: RefObject<HTMLLIElement | null>
+    handlers?: PopupContentActionHandlers
+    row: PopupContentBookmarkRowViewModel
+  }
+) {
+  return previous.activeResultRef === next.activeResultRef &&
+    previous.handlers === next.handlers &&
+    areBookmarkRowsEqual(previous.row, next.row)
+}
+
+function arePopupSearchResultRowPropsEqual(
+  previous: {
+    activeResultRef?: RefObject<HTMLLIElement | null>
+    handlers?: PopupContentActionHandlers
+    row: PopupContentSearchResultViewModel
+  },
+  next: {
+    activeResultRef?: RefObject<HTMLLIElement | null>
+    handlers?: PopupContentActionHandlers
+    row: PopupContentSearchResultViewModel
+  }
+) {
+  return previous.activeResultRef === next.activeResultRef &&
+    previous.handlers === next.handlers &&
+    areSearchResultRowsEqual(previous.row, next.row)
+}
+
+function areBookmarkRowsEqual(
+  previous: PopupContentBookmarkRowViewModel,
+  next: PopupContentBookmarkRowViewModel
+) {
+  return Boolean(previous.active) === Boolean(next.active) &&
+    previous.bookmarkId === next.bookmarkId &&
+    previous.depth === next.depth &&
+    previous.displayUrl === next.displayUrl &&
+    previous.menuLabel === next.menuLabel &&
+    previous.path === next.path &&
+    previous.title === next.title &&
+    previous.url === next.url &&
+    areActionMenusEqual(previous.menu, next.menu)
+}
+
+function areSearchResultRowsEqual(
+  previous: PopupContentSearchResultViewModel,
+  next: PopupContentSearchResultViewModel
+) {
+  return previous.active === next.active &&
+    previous.bookmarkId === next.bookmarkId &&
+    previous.depth === next.depth &&
+    previous.displayUrl === next.displayUrl &&
+    previous.highlightQuery === next.highlightQuery &&
+    previous.index === next.index &&
+    previous.menuLabel === next.menuLabel &&
+    previous.path === next.path &&
+    previous.reasonLabel === next.reasonLabel &&
+    previous.reasonTitle === next.reasonTitle &&
+    previous.title === next.title &&
+    previous.url === next.url &&
+    areStringArraysEqual(previous.reasonTokens, next.reasonTokens) &&
+    areActionMenusEqual(previous.menu, next.menu)
+}
+
+function areActionMenusEqual(
+  previous: PopupActionMenuViewModel,
+  next: PopupActionMenuViewModel
+) {
+  if (previous.items.length !== next.items.length) {
+    return false
+  }
+
+  return previous.items.every((item, index) => {
+    const nextItem = next.items[index]
+    return item.action === nextItem.action &&
+      item.ariaLabel === nextItem.ariaLabel &&
+      item.bookmarkId === nextItem.bookmarkId &&
+      item.danger === nextItem.danger &&
+      item.disabled === nextItem.disabled &&
+      item.label === nextItem.label
+  })
+}
+
+function areStringArraysEqual(previous: string[], next: string[]) {
+  if (previous.length !== next.length) {
+    return false
+  }
+
+  return previous.every((item, index) => item === next[index])
+}
+
 function PopupRowActions({
+  active = false,
   bookmarkId,
   label,
   menu,
   onMenuAction,
   title
 }: {
+  active?: boolean
   bookmarkId: string
   label: string
   menu: PopupActionMenuViewModel
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   title?: string
 }) {
+  const [focusExpanded, setFocusExpanded] = useState(false)
   const quickActions = menu.items.filter((item) => {
     return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)
   })
+  const expanded = active || focusExpanded
+  const triggerLabel = title || label || '显示书签快捷操作'
 
   return (
-    <div className={rowActionsClass} aria-label="书签快捷操作">
-      {quickActions.map((item) => (
-        <Button
-          className={cx(rowActionButtonClass, item.danger ? rowActionDangerClass : '')}
-          type="button"
-          aria-label={item.ariaLabel}
-          title={item.label}
-          disabled={item.disabled}
-          onClick={(event) => onMenuAction?.(item.bookmarkId, item.action, event.currentTarget)}
-          key={`${item.bookmarkId}:${item.action}`}
-          unstyled
-        >
-          <Icon name={getPopupActionIconName(item.action)} size={14} aria-hidden="true" />
-        </Button>
-      ))}
+    <div
+      className={rowActionsClass}
+      aria-label="书签快捷操作"
+      data-active={active ? 'true' : undefined}
+      data-open={expanded ? 'true' : 'false'}
+      onBlur={(event) => {
+        const nextTarget = event.relatedTarget
+        if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {
+          setFocusExpanded(false)
+        }
+      }}
+      onFocus={() => setFocusExpanded(true)}
+    >
+      <div className={rowActionRailClass}>
+        {quickActions.map((item) => (
+          <Button
+            className={cx(rowActionButtonClass, item.danger ? rowActionDangerClass : '')}
+            type="button"
+            aria-label={item.ariaLabel}
+            title={item.label}
+            disabled={item.disabled}
+            tabIndex={expanded ? undefined : -1}
+            onClick={(event) => {
+              onMenuAction?.(item.bookmarkId, item.action, event.currentTarget)
+              setFocusExpanded(false)
+            }}
+            key={`${item.bookmarkId}:${item.action}`}
+            unstyled
+          >
+            <Icon name={getPopupActionIconName(item.action)} size={14} aria-hidden="true" />
+          </Button>
+        ))}
+      </div>
+      <Button
+        className={rowActionTriggerClass}
+        type="button"
+        aria-label={triggerLabel}
+        aria-expanded={expanded}
+        title={triggerLabel}
+        onClick={() => setFocusExpanded(true)}
+        unstyled
+      >
+        <Icon name="MoreHorizontal" size={14} aria-hidden="true" />
+      </Button>
     </div>
   )
 }

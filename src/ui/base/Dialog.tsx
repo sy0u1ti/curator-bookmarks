@@ -10,7 +10,7 @@ import {
 import { Presence } from '../motion/Presence'
 import { MotionPanel } from '../motion/MotionPanel'
 import { Button } from './Button'
-import { cx } from './utils'
+import { cx, cxState } from './utils'
 
 export interface DialogProps {
   open?: boolean
@@ -38,7 +38,7 @@ export function Dialog({
       {trigger ? <BaseDialog.Trigger render={<span />}>{trigger}</BaseDialog.Trigger> : null}
       <BaseDialog.Portal>
         <Presence>
-          <BaseDialog.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute" />
+          <BaseDialog.Backdrop className="t-modal-backdrop fixed inset-0 z-40 min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute" />
           <BaseDialog.Popup
             render={
               <MotionPanel
@@ -190,8 +190,8 @@ export function DialogDescription(props: BaseDialogDescriptionProps) {
   return <BaseDialog.Description {...props} />
 }
 
-export function DialogBackdrop(props: BaseDialogBackdropProps) {
-  return <BaseDialog.Backdrop {...props} />
+export function DialogBackdrop({ className, ...props }: BaseDialogBackdropProps) {
+  return <BaseDialog.Backdrop className={cxState('t-modal-backdrop', className)} {...props} />
 }
 
 export function DialogClose(props: BaseDialogCloseProps) {

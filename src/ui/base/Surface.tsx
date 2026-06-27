@@ -21,6 +21,14 @@ export function Surface({
   variant = 'group',
   ...props
 }: SurfaceProps) {
-  return <Component className={cx(variantClass[variant], className)} {...props} />
+  return (
+    <Component
+      className={cx(
+        variantClass[variant],
+        'transition-[background-color,border-color,box-shadow,transform,opacity] duration-ds-fast ease-ds-standard motion-reduce:transition-none',
+        className
+      )}
+      {...props}
+    />
+  )
 }
-

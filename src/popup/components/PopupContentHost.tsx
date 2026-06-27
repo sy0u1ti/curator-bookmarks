@@ -1,10 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   dispatchPopupContentAction,
   dispatchPopupContentResultHover,
   subscribePopupContentChange
 } from '../popup-controller-store'
-import { PopupContent } from './PopupContent'
+import { PopupContent, type PopupContentActionHandlers } from './PopupContent'
 import type { PopupContentViewModel } from './PopupViewModels'
 
 const contentHostClass = 'relative z-0 block h-full min-h-0 overflow-hidden'
@@ -22,6 +22,23 @@ export function PopupContentHost() {
   const pendingScrollTopRef = useRef<number | null>(null)
   const shouldRevealActiveResultRef = useRef(false)
   const [state, setState] = useState<PopupContentViewModel>(INITIAL_CONTENT_STATE)
+  const handlers = useMemo<PopupContentActionHandlers>(() => ({
+    onBookmarkOpen: (bookmarkId) => {
+      dispatchPopupContentAction({ action: 'open-bookmark', bookmarkId })
+    },
+    onEmptyAction: (emptyAction) => {
+      dispatchPopupContentAction({ action: 'empty-action', emptyAction })
+    },
+    onFolderFilter: (folderId) => {
+      dispatchPopupContentAction({ action: 'filter-folder', folderId })
+    },
+    onMenuAction: (bookmarkId, menuAction, returnFocusElement) => {
+      dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction, returnFocusElement })
+    },
+    onResultHover: (index) => {
+      dispatchPopupContentResultHover(index)
+    }
+  }), [])
 
   useEffect(() => {
     return subscribePopupContentChange((detail) => {
@@ -90,23 +107,7 @@ export function PopupContentHost() {
     >
       <PopupContent
         activeResultRef={activeResultRef}
-        handlers={{
-          onBookmarkOpen: (bookmarkId) => {
-            dispatchPopupContentAction({ action: 'open-bookmark', bookmarkId })
-          },
-          onEmptyAction: (emptyAction) => {
-            dispatchPopupContentAction({ action: 'empty-action', emptyAction })
-          },
-          onFolderFilter: (folderId) => {
-            dispatchPopupContentAction({ action: 'filter-folder', folderId })
-          },
-          onMenuAction: (bookmarkId, menuAction, returnFocusElement) => {
-            dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction, returnFocusElement })
-          },
-          onResultHover: (index) => {
-            dispatchPopupContentResultHover(index)
-          }
-        }}
+        handlers={handlers}
         mainListRef={mainListRef}
         state={state}
       />

@@ -128,7 +128,7 @@ export function CheckboxControl({
     <BaseCheckbox.Root
       checked={checked}
       className={unstyled ? className : cx(
-        'flex size-4 items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-1 text-ds-text-primary outline-none transition-colors data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent data-[checked]:text-ds-accent-contrast focus-visible:border-ds-focus focus-visible:shadow-ds-focus',
+        'flex size-4 items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-1 text-ds-text-primary outline-none transition-[background-color,border-color,color,transform] duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent data-[checked]:text-ds-accent-contrast focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100',
         className
       )}
       disabled={disabled}
@@ -136,7 +136,10 @@ export function CheckboxControl({
       onCheckedChange={handleCheckedChange}
       {...props}
     >
-      <BaseCheckbox.Indicator className={indicatorClassName}>
+      <BaseCheckbox.Indicator className={unstyled ? indicatorClassName : cx(
+        'grid place-items-center opacity-100 scale-100 transition-[opacity,transform] duration-ds-fast ease-ds-standard data-[starting-style]:opacity-0 data-[starting-style]:scale-50 data-[ending-style]:opacity-0 data-[ending-style]:scale-50 motion-reduce:transition-none',
+        indicatorClassName
+      )}>
         <Icon name="Check" size={13} aria-hidden="true" />
       </BaseCheckbox.Indicator>
     </BaseCheckbox.Root>

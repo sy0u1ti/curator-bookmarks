@@ -190,7 +190,7 @@ export function Select({
           aria-label={ariaLabel}
           ref={triggerRef}
           className={unstyled ? cx('base-select-trigger', triggerClassName) : cx(
-            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start gap-2 rounded-md border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-colors data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50',
+            'base-select-trigger inline-flex h-9 min-w-36 items-center justify-start gap-2 rounded-md border border-ds-border bg-ds-surface-1 px-3 text-sm text-ds-text-primary outline-none transition-[background-color,border-color,color] duration-ds-fast ease-ds-standard data-[popup-open]:border-ds-border-hover focus-visible:shadow-ds-focus disabled:opacity-50 motion-reduce:transition-none',
             triggerClassName
           )}
         >
@@ -212,8 +212,8 @@ export function Select({
         <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
           <BaseSelect.Popup
             {...popupAttributes}
-            className={unstyled ? cx('base-select-popup', popupClassName) : cx(
-            'base-select-popup z-50 max-h-64 min-w-[var(--anchor-width)] overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary shadow-ds-popover outline-none',
+            className={unstyled ? cx('base-select-popup t-dropdown', popupClassName) : cx(
+            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary shadow-ds-popover outline-none',
             popupClassName
           )}
           >
@@ -224,7 +224,7 @@ export function Select({
                   value={option.value}
                   disabled={option.disabled}
                   className={itemClassNameResolver ?? cx(
-                    'base-select-option flex cursor-default items-center justify-between gap-3 rounded px-2.5 py-2 text-sm outline-none data-[highlighted]:bg-ds-hover data-[disabled]:opacity-45',
+                    'base-select-option flex cursor-default items-center justify-between gap-3 rounded px-2.5 py-2 text-sm outline-none transition-colors duration-ds-fast ease-ds-standard data-[highlighted]:bg-ds-hover data-[disabled]:opacity-45 motion-reduce:transition-none',
                     itemClassName
                   )}
                 >

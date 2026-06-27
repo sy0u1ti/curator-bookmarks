@@ -38,7 +38,7 @@ export function Meter({
       >
         <BaseMeter.Indicator
           className={unstyled ? indicatorClassName : cx(
-            'base-meter-indicator h-full rounded-full bg-ds-accent transition-transform',
+            'base-meter-indicator h-full rounded-full bg-ds-accent transition-transform duration-ds-standard ease-ds-standard will-change-transform motion-reduce:transition-none',
             indicatorClassName
           )}
         />

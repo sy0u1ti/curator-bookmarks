@@ -485,6 +485,116 @@ body {
   opacity: 1;
 }
 
+.newtab-delete-toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 10050;
+  pointer-events: none;
+}
+
+.newtab-delete-toast-panel {
+  display: flex;
+  width: min(360px, calc(100vw - 36px));
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  background: rgba(10, 10, 12, 0.82);
+  box-shadow: var(--ds-shadow-popover);
+  color: var(--ds-text-primary);
+  padding: 12px;
+  pointer-events: auto;
+  -webkit-backdrop-filter: blur(14px) saturate(1.12);
+  backdrop-filter: blur(14px) saturate(1.12);
+}
+
+.newtab-delete-toast-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+
+.newtab-delete-toast-title,
+.newtab-delete-toast-description {
+  margin: 0;
+}
+
+.newtab-delete-toast-title {
+  color: var(--ds-text-primary);
+  font-size: 13px;
+  font-weight: 720;
+  line-height: 1.25;
+}
+
+.newtab-delete-toast-description {
+  overflow: hidden;
+  color: var(--ds-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newtab-delete-toast-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+.newtab-delete-toast-actions button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  background: var(--ds-hover);
+  color: var(--ds-text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 0 9px;
+  transition:
+    transform var(--ds-motion-fast) var(--ds-ease-standard),
+    border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    color var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+.newtab-delete-toast-actions button:hover,
+.newtab-delete-toast-actions button:focus-visible {
+  border-color: var(--ds-border-hover);
+  background: var(--ds-active);
+  color: var(--ds-text-primary);
+}
+
+.newtab-delete-toast-actions button:focus-visible {
+  outline: none;
+  box-shadow: var(--ds-shadow-focus);
+}
+
+.newtab-delete-toast-actions button:active {
+  transform: scale(var(--ds-press-scale));
+}
+
+.newtab-delete-toast-actions button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newtab-delete-toast-actions button {
+    transition: none !important;
+  }
+
+  .newtab-delete-toast-actions button:active {
+    transform: none;
+  }
+}
+
 @media (max-width: 700px) {
   .featured-wallpaper-head {
     grid-template-columns: minmax(0, 1fr);

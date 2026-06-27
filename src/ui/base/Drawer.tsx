@@ -33,7 +33,7 @@ export function Drawer({
       {trigger ? <BaseDrawer.Trigger render={<span />}>{trigger}</BaseDrawer.Trigger> : null}
       <BaseDrawer.Portal>
         <Presence>
-          <BaseDrawer.Backdrop className="fixed inset-0 z-40 bg-ds-overlay" />
+          <BaseDrawer.Backdrop className="t-modal-backdrop fixed inset-0 z-40 bg-ds-overlay" />
           <BaseDrawer.Viewport>
             <BaseDrawer.Popup
               render={

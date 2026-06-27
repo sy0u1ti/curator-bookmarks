@@ -100,6 +100,12 @@
   --dropdown-closing-scale: 0.99;
   --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
+  --toast-open-dur: 250ms;
+  --toast-close-dur: 150ms;
+  --toast-offset-y: 8px;
+  --toast-scale: 0.98;
+  --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
   --modal-open-dur: 320ms;
   --modal-close-dur: 220ms;
   --modal-scale: 0.96;
@@ -126,6 +132,7 @@
   --panel-open-dur: 400ms;
   --panel-close-dur: 350ms;
   --panel-translate-y: 12px;
+  --tabs-panel-translate-y: 6px;
   --panel-blur: 2px;
   --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
@@ -187,6 +194,9 @@
     --digit-dur: 1ms;
     --dropdown-open-dur: 1ms;
     --dropdown-close-dur: 1ms;
+    --toast-open-dur: 1ms;
+    --toast-close-dur: 1ms;
+    --toast-scale: 1;
     --modal-open-dur: 1ms;
     --modal-close-dur: 1ms;
     --modal-scale: 1;

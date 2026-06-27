@@ -18,7 +18,7 @@ export function Badge({ className, tone = 'neutral', ...props }: BadgeProps) {
   return (
     <span
       className={cx(
-        'inline-flex min-h-6 items-center rounded-ds-sm border px-2 py-0.5 text-xs font-medium leading-none',
+        'inline-flex min-h-6 items-center rounded-ds-sm border px-2 py-0.5 text-xs font-medium leading-none transition-[background-color,border-color,color,opacity,transform] duration-ds-fast ease-ds-standard motion-reduce:transition-none',
         toneClass[tone],
         className
       )}

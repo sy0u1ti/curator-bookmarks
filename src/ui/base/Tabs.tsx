@@ -1,7 +1,7 @@
 import { Tabs as BaseTabs } from '@base-ui/react/tabs'
 import type { ComponentPropsWithoutRef } from 'react'
 import type { ReactNode } from 'react'
-import { cx } from './utils'
+import { cx, cxState } from './utils'
 
 export interface TabItem {
   value: string
@@ -38,7 +38,7 @@ export function Tabs({ value, defaultValue, onValueChange, items, className }: T
         <BaseTabs.Indicator className="t-tabs-pill" />
       </BaseTabs.List>
       {items.map((item) => (
-        <BaseTabs.Panel key={item.value} value={item.value} className="outline-none">
+        <BaseTabs.Panel key={item.value} value={item.value} className="t-tabs-panel outline-none">
           {item.panel}
         </BaseTabs.Panel>
       ))}
@@ -64,8 +64,8 @@ export function TabsTab(props: TabsTabProps) {
   return <BaseTabs.Tab {...props} />
 }
 
-export function TabsPanel(props: TabsPanelProps) {
-  return <BaseTabs.Panel {...props} />
+export function TabsPanel({ className, ...props }: TabsPanelProps) {
+  return <BaseTabs.Panel className={cxState('t-tabs-panel outline-none', className)} {...props} />
 }
 
 export function TabsIndicator(props: TabsIndicatorProps) {

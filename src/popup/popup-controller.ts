@@ -133,6 +133,7 @@ const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
 const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
+const KEYBOARD_NAVIGATION_SETTLE_MS = 120
 const SMART_RECOMMENDATION_LIMIT = 3
 const POPUP_DEFAULT_WORKSPACE_STORAGE = {
   activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID,
@@ -153,6 +154,9 @@ let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
 let unregisterPopupActionHandlers: (() => void) | null = null
 let unregisterPopupBrowserEventActions: (() => void) | null = null
+let queuedActiveResultIndex: number | null = null
+let activeResultFrame = 0
+let keyboardNavigationSettleTimer = 0
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -972,6 +976,7 @@ function cleanupPopupController() {
   popupControllerStarted = false
   abortNaturalSearchRequest()
   stopSmartProgressTicker()
+  clearQueuedKeyboardNavigation()
   clearTimeout(state.searchTimer)
   state.searchTimer = null
   clearViewNotice()
@@ -2820,16 +2825,16 @@ function handleDocumentKeydown(event) {
   }
   if (event.key === 'ArrowDown') {
     event.preventDefault()
-    setActiveResultIndex(state.activeResultIndex + 1)
+    queueActiveResultDelta(1)
     return
   }
   if (event.key === 'ArrowUp') {
     event.preventDefault()
-    setActiveResultIndex(state.activeResultIndex - 1)
+    queueActiveResultDelta(-1)
     return
   }
   if (event.key === 'Enter') {
-    const activeBookmark = keyboardBookmarks[state.activeResultIndex]
+    const activeBookmark = keyboardBookmarks[queuedActiveResultIndex ?? state.activeResultIndex]
     if (activeBookmark) {
       event.preventDefault()
       openBookmark(activeBookmark.id)
@@ -3845,6 +3850,59 @@ function formatPermissionOrigin(origin) {
 }
 function isAbortError(error) {
   return error instanceof DOMException && error.name === 'AbortError'
+}
+function queueActiveResultDelta(delta: number) {
+  const keyboardBookmarks = getKeyboardNavigationBookmarks()
+  if (!keyboardBookmarks.length) {
+    return
+  }
+
+  const baseIndex = queuedActiveResultIndex ?? state.activeResultIndex
+  const nextIndex = Math.max(0, Math.min(baseIndex + delta, keyboardBookmarks.length - 1))
+  if (nextIndex === baseIndex) {
+    return
+  }
+
+  markKeyboardNavigationActive()
+  queuedActiveResultIndex = nextIndex
+  if (activeResultFrame) {
+    return
+  }
+
+  activeResultFrame = window.requestAnimationFrame(flushQueuedActiveResultIndex)
+}
+function flushQueuedActiveResultIndex() {
+  activeResultFrame = 0
+  const nextIndex = queuedActiveResultIndex
+  queuedActiveResultIndex = null
+  if (nextIndex === null) {
+    return
+  }
+
+  setActiveResultIndex(nextIndex)
+}
+function markKeyboardNavigationActive() {
+  document.getElementById('popup-app-shell')?.setAttribute('data-keyboard-nav', 'true')
+  if (keyboardNavigationSettleTimer) {
+    window.clearTimeout(keyboardNavigationSettleTimer)
+  }
+
+  keyboardNavigationSettleTimer = window.setTimeout(() => {
+    keyboardNavigationSettleTimer = 0
+    document.getElementById('popup-app-shell')?.removeAttribute('data-keyboard-nav')
+  }, KEYBOARD_NAVIGATION_SETTLE_MS)
+}
+function clearQueuedKeyboardNavigation() {
+  if (activeResultFrame) {
+    window.cancelAnimationFrame(activeResultFrame)
+    activeResultFrame = 0
+  }
+  queuedActiveResultIndex = null
+  if (keyboardNavigationSettleTimer) {
+    window.clearTimeout(keyboardNavigationSettleTimer)
+    keyboardNavigationSettleTimer = 0
+  }
+  document.getElementById('popup-app-shell')?.removeAttribute('data-keyboard-nav')
 }
 function setActiveResultIndex(nextIndex) {
   const keyboardBookmarks = getKeyboardNavigationBookmarks()

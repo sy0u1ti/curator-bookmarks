@@ -47,7 +47,7 @@ export function Progress({
       )}>
         <BaseProgress.Indicator
           className={unstyled ? indicatorClassName : cx(
-            'base-progress-indicator h-full rounded-full bg-ds-accent transition-transform',
+            'base-progress-indicator h-full rounded-full bg-ds-accent transition-transform duration-ds-standard ease-ds-standard will-change-transform motion-reduce:transition-none',
             indicatorClassName
           )}
           style={indicatorStyle ?? defaultIndicatorStyle}

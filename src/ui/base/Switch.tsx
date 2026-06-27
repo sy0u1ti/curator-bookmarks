@@ -194,7 +194,7 @@ export function SwitchControl({
         aria-checked={Boolean(checked)}
         aria-disabled={disabled ? true : undefined}
         className={unstyled ? className : cx(
-          'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-colors data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus data-[disabled]:opacity-50',
+          'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-[background-color,border-color,transform] duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] data-[disabled]:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100',
           className
         )}
         data-checked={checked ? '' : undefined}
@@ -221,7 +221,7 @@ export function SwitchControl({
       >
         <span
           className={unstyled ? thumbClassName : cx(
-            'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page',
+            'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-[transform,background-color] duration-ds-fast ease-ds-standard will-change-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page motion-reduce:transition-none',
             thumbClassName
           )}
           data-checked={checked ? '' : undefined}
@@ -247,7 +247,7 @@ export function SwitchControl({
     <BaseSwitch.Root
       checked={checked}
       className={unstyled ? className : cx(
-        'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-colors data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus data-[disabled]:opacity-50',
+        'relative inline-block h-6 w-11 rounded-full border border-ds-border bg-ds-hover outline-none transition-[background-color,border-color,transform] duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] data-[disabled]:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100',
         className
       )}
       disabled={disabled}
@@ -258,7 +258,7 @@ export function SwitchControl({
     >
       <BaseSwitch.Thumb
         className={unstyled ? thumbClassName : cx(
-          'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page',
+          'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-[transform,background-color] duration-ds-fast ease-ds-standard will-change-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page motion-reduce:transition-none',
           thumbClassName
         )}
       />

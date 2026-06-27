@@ -251,6 +251,33 @@ body {
   .t-panel-slide { transition: none !important; }
 }
 
+.t-tabs-panel {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition:
+    transform var(--panel-open-dur) var(--panel-ease),
+    opacity   var(--panel-open-dur) var(--panel-ease),
+    filter    var(--panel-open-dur) var(--panel-ease);
+  will-change: transform, opacity, filter;
+}
+.t-tabs-panel[data-starting-style],
+.t-tabs-panel[data-ending-style] {
+  opacity: 0;
+  transform: translateY(var(--tabs-panel-translate-y));
+  filter: blur(var(--panel-blur));
+}
+.t-tabs-panel[data-ending-style] {
+  transition:
+    transform var(--panel-close-dur) var(--panel-ease),
+    opacity   var(--panel-close-dur) var(--panel-ease),
+    filter    var(--panel-close-dur) var(--panel-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-tabs-panel { transition: none !important; }
+}
+
 .t-acc-panel {
   display: grid;
   grid-template-rows: 0fr;
@@ -333,11 +360,25 @@ body {
 .t-dropdown[data-origin="bottom-left"]   { transform-origin: bottom left; }
 .t-dropdown[data-origin="bottom-center"] { transform-origin: bottom center; }
 .t-dropdown[data-origin="bottom-right"]  { transform-origin: bottom right; }
+.t-dropdown[data-side="bottom"] { transform-origin: top center; }
+.t-dropdown[data-side="bottom"][data-align="start"] { transform-origin: top left; }
+.t-dropdown[data-side="bottom"][data-align="end"] { transform-origin: top right; }
+.t-dropdown[data-side="top"] { transform-origin: bottom center; }
+.t-dropdown[data-side="top"][data-align="start"] { transform-origin: bottom left; }
+.t-dropdown[data-side="top"][data-align="end"] { transform-origin: bottom right; }
+.t-dropdown[data-side="right"] { transform-origin: left center; }
+.t-dropdown[data-side="left"] { transform-origin: right center; }
 .t-dropdown.is-open,
-.t-dropdown[data-open="true"] {
+.t-dropdown[data-open="true"],
+.t-dropdown[data-open]:not([data-open="false"]) {
   transform: scale(1);
   opacity: 1;
   pointer-events: auto;
+}
+.t-dropdown[data-starting-style] {
+  transform: scale(var(--dropdown-pre-scale));
+  opacity: 0;
+  pointer-events: none;
 }
 .t-dropdown.is-closing,
 .t-dropdown[data-ending-style] {
@@ -353,6 +394,48 @@ body {
   .t-dropdown { transition: none !important; }
 }
 
+.base-select-trigger-arrow,
+.custom-select-trigger-arrow {
+  transition: transform var(--dropdown-open-dur) var(--dropdown-ease);
+  will-change: transform;
+}
+.base-select-trigger[data-popup-open] .base-select-trigger-arrow,
+.base-select-trigger[data-popup-open] .custom-select-trigger-arrow {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .base-select-trigger-arrow,
+  .custom-select-trigger-arrow {
+    transition: none !important;
+  }
+}
+
+.t-toast {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    transform var(--toast-open-dur) var(--toast-ease),
+    opacity   var(--toast-open-dur) var(--toast-ease);
+  will-change: transform, opacity;
+}
+.t-toast[data-starting-style] {
+  opacity: 0;
+  transform: translateY(var(--toast-offset-y)) scale(var(--toast-scale));
+}
+.t-toast[data-ending-style] {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(var(--toast-offset-y)) scale(var(--toast-scale));
+  transition:
+    transform var(--toast-close-dur) var(--toast-ease),
+    opacity   var(--toast-close-dur) var(--toast-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-toast { transition: none !important; }
+}
+
 .t-modal {
   transform-origin: center;
   transform: scale(var(--modal-scale));
@@ -364,10 +447,16 @@ body {
   will-change: transform, opacity;
 }
 .t-modal.is-open,
-.t-modal[data-open="true"] {
+.t-modal[data-open="true"],
+.t-modal[data-open]:not([data-open="false"]) {
   transform: scale(1);
   opacity: 1;
   pointer-events: auto;
+}
+.t-modal[data-starting-style] {
+  transform: scale(var(--modal-scale));
+  opacity: 0;
+  pointer-events: none;
 }
 .t-modal.is-closing,
 .t-modal[data-ending-style] {
@@ -383,11 +472,17 @@ body {
   pointer-events: none;
   transition: opacity var(--modal-open-dur) var(--modal-ease);
 }
-.t-modal-backdrop.is-open {
+.t-modal-backdrop.is-open,
+.t-modal-backdrop[data-open]:not([data-open="false"]) {
   opacity: 1;
   pointer-events: auto;
 }
-.t-modal-backdrop.is-closing {
+.t-modal-backdrop[data-starting-style] {
+  opacity: 0;
+  pointer-events: none;
+}
+.t-modal-backdrop.is-closing,
+.t-modal-backdrop[data-ending-style] {
   opacity: 0;
   pointer-events: none;
   transition-duration: var(--modal-close-dur);

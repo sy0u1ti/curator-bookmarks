@@ -9,16 +9,17 @@ import {
 export function NewtabDeleteToastHost() {
   const toast = useNewtabDeleteToastView()
 
-  if (!toast) {
-    return null
-  }
-
   return (
-    <section className="newtab-delete-toast" data-newtab-bookmark-menu-surface="">
+    <section
+      className="newtab-delete-toast"
+      data-newtab-bookmark-menu-surface=""
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <ToastList
         contentClassName="newtab-delete-toast-copy"
         descriptionClassName="newtab-delete-toast-description"
-        items={[{
+        items={toast ? [{
           actions: (
             <div className="newtab-delete-toast-actions">
               <Button
@@ -44,8 +45,8 @@ export function NewtabDeleteToastHost() {
           id: 'newtab-delete-toast',
           title: '已删除书签',
           type: 'success'
-        }]}
-        rootClassName="newtab-delete-toast-panel"
+        }] : []}
+        rootClassName="t-toast newtab-delete-toast-panel"
         titleClassName="newtab-delete-toast-title"
         timeout={0}
         unstyled
