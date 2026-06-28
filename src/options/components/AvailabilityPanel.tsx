@@ -8,18 +8,22 @@ import { AvailabilitySelectionActions } from './AvailabilitySelectionActions.js'
 import {
   OPTION_PANEL_CLASS,
   OPTION_PANEL_TITLE_CLASS,
-  OPTION_REVEAL_ENTER_CLASS,
-  OPTION_SECTION_LABEL_CLASS
+  OPTION_RUN_CELL_CLASS,
+  OPTION_RUN_CELL_TEXT_CLASS,
+  OPTION_RUN_CELL_TITLE_CLASS,
+  OPTION_RUN_HEADER_CLASS,
+  OPTION_SECTION_LABEL_CLASS,
+  OPTION_TOOL_PANEL_CLASS
 } from './option-layout-classes.js'
 import { ResultsPagination } from './ResultsPagination.js'
-import { ScopePickerTrigger } from './ScopePickerTrigger.js'
+import { ScopePickerTriggerButton } from './ScopePickerTrigger.js'
 
 interface OptionsPanelVisibilityProps {
   hidden: boolean
 }
 
 const AVAILABILITY_RESULTS_GROUP_CLASS =
-  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  OPTION_TOOL_PANEL_CLASS
 const AVAILABILITY_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 
 export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
@@ -28,9 +32,16 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
       <p className={OPTION_SECTION_LABEL_CLASS}>Availability</p>
       <h1 id="availability-title" className={OPTION_PANEL_TITLE_CLASS}>书签可用性检测</h1>
 
-      <ScopePickerTrigger source="availability" />
-
-      <AvailabilityControls />
+      <div className={OPTION_RUN_HEADER_CLASS}>
+        <div className={OPTION_RUN_CELL_CLASS}>
+          <strong className={OPTION_RUN_CELL_TITLE_CLASS}>检测范围</strong>
+          <p className={OPTION_RUN_CELL_TEXT_CLASS}>先限定范围，再执行多层校验。</p>
+          <div className="mt-3">
+            <ScopePickerTriggerButton className="min-w-full" source="availability" />
+          </div>
+        </div>
+        <AvailabilityControls />
+      </div>
 
       <AvailabilityDecisionPanel>
         <AvailabilityDecisionMetrics />

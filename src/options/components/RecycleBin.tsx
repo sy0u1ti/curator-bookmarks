@@ -4,12 +4,11 @@ import { CheckboxControl } from '../../ui'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import { useRecycleBinState } from './recycle-bin-store.js'
 import type { RecycleEntryViewModel } from './recycle-bin-types.js'
 
 const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
-const RECYCLE_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const RECYCLE_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover'
 const RECYCLE_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
@@ -49,7 +48,10 @@ export function RecycleBin() {
           />
         ))
       ) : (
-        <div className={RECYCLE_EMPTY_CLASS}>回收站当前为空。</div>
+        <OptionEmptyState
+          title="回收站当前为空"
+          description="重复清理、重定向删除和异常书签删除会优先进入这里；恢复时会尽量放回原文件夹。"
+        />
       )}
     </div>
   )

@@ -3,6 +3,7 @@ import { Button, Card, NumberPop } from '../../ui'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
 import { OPTION_REVEAL_ENTER_CLASS } from './option-layout-classes.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   IgnoreRuleKind,
   IgnoreRuleViewModel,
@@ -65,6 +66,7 @@ export function IgnoreRules() {
     domainCount: state.domains.length,
     folderCount: state.folders.length
   }
+  const totalRules = summaryState.bookmarkCount + summaryState.domainCount + summaryState.folderCount
   const groups = [
     {
       clearLabel: '清空按书签忽略规则',
@@ -98,7 +100,16 @@ export function IgnoreRules() {
   return (
     <>
       <IgnoreRulesSummary state={summaryState} />
-      {groups.map((group) => (
+      {totalRules === 0 ? (
+        <div className="mt-5">
+          <OptionEmptyState
+            title="当前没有忽略规则"
+            description="忽略规则只能从可用性检测结果里添加。完成检测后，可在异常结果中按书签、域名或文件夹压制误报。"
+            actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
+          />
+        </div>
+      ) : null}
+      {groups.filter((group) => group.rules.length > 0).map((group) => (
         <div className={IGNORE_RULE_GROUP_CLASS} key={group.kind}>
           <div className={IGNORE_RULE_HEADER_CLASS}>
             <div className={IGNORE_RULE_HEADER_COPY_CLASS}>
@@ -111,7 +122,6 @@ export function IgnoreRules() {
               type="button"
               variant="secondary"
               aria-label={group.clearLabel}
-              disabled={group.rules.length === 0}
               onClick={() => handleIgnoreRuleAction({ action: 'clear', kind: group.kind })}
             >
               清空本类

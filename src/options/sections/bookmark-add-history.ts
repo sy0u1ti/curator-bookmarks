@@ -174,8 +174,8 @@ export async function clearBookmarkAddHistory(callbacks: {
   const confirmed = callbacks.confirm
     ? await callbacks.confirm({
         title: `清空 ${managerState.bookmarkAddHistory.length} 条添加书签历史？`,
-        copy: '只会清空自动分析添加记录，不会删除已经保存的书签。',
-        confirmLabel: '清空添加历史',
+        copy: '只会清空 AI 整理记录，不会删除已经保存的书签。',
+        confirmLabel: '清空整理记录',
         label: '清空历史',
         tone: 'warning'
       })

@@ -73,29 +73,30 @@ export function RedirectControls() {
             {state.subtitle}
           </p>
         </div>
-        <div className={REDIRECT_HEADER_ACTIONS_CLASS}>
-          <Button
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="全选待更新重定向书签"
-            disabled={!hasResults}
-            onClick={() => handleRedirectAction({ action: 'select-all' })}
-          >
-            全选本区
-          </Button>
-          <Button
-            size="sm"
-            type="button"
-            variant="danger"
-            aria-label="批量删除待更新重定向书签"
-            disabled={state.locked || !hasResults}
-            focusableWhenDisabled={state.locked}
-            onClick={() => handleRedirectAction({ action: 'delete-all' })}
-          >
-            批量删除本区
-          </Button>
-        </div>
+        {hasResults ? (
+          <div className={REDIRECT_HEADER_ACTIONS_CLASS}>
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="全选待更新重定向书签"
+              onClick={() => handleRedirectAction({ action: 'select-all' })}
+            >
+              全选本区
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              variant="danger"
+              aria-label="批量删除待更新重定向书签"
+              disabled={state.locked}
+              focusableWhenDisabled={state.locked}
+              onClick={() => handleRedirectAction({ action: 'delete-all' })}
+            >
+              批量删除本区
+            </Button>
+          </div>
+        ) : null}
       </div>
     </>
   )

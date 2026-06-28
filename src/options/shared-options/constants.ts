@@ -16,8 +16,8 @@ export const SECTION_META = {
     title: '检测历史'
   },
   'bookmark-history': {
-    label: 'Auto Analysis Add History',
-    title: '自动分析添加历史'
+    label: 'AI Organizing History',
+    title: 'AI 整理记录'
   },
   ai: {
     label: 'Smart Bookmark Analysis',

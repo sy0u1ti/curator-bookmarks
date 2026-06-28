@@ -6,11 +6,14 @@ import { cx } from '../../ui'
 import { ButtonBusyLoadingLabel } from './LoadingLabel.js'
 import { handleAvailabilityControlsAction } from '../options-controller'
 import { useAvailabilityControls } from './availability-controls-store.js'
+import {
+  OPTION_RUN_ACTIONS_CLASS,
+  OPTION_RUN_ACTION_BUTTON_CLASS,
+  OPTION_RUN_CELL_CLASS
+} from './option-layout-classes.js'
 
-const AVAILABILITY_CONTROLS_TOOLBAR_CLASS =
-  'mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 max-[1180px]:grid-cols-[minmax(0,1fr)] max-[1180px]:items-start'
 const AVAILABILITY_PERMISSION_CARD_CLASS =
-  'rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px] max-[760px]:px-4'
+  OPTION_RUN_CELL_CLASS
 const AVAILABILITY_PERMISSION_META_CLASS =
   'flex flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const AVAILABILITY_PERMISSION_TITLE_CLASS =
@@ -18,7 +21,7 @@ const AVAILABILITY_PERMISSION_TITLE_CLASS =
 const AVAILABILITY_PERMISSION_COPY_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const AVAILABILITY_CONTROLS_ACTIONS_CLASS =
-  'flex flex-wrap items-center justify-end gap-3 max-[1180px]:justify-start max-[760px]:flex-col max-[760px]:items-start'
+  OPTION_RUN_ACTIONS_CLASS
 const AVAILABILITY_BADGE_BASE_CLASS =
   'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'
 const AVAILABILITY_BADGE_TONE_CLASSES: Record<string, string> = {
@@ -27,7 +30,7 @@ const AVAILABILITY_BADGE_TONE_CLASSES: Record<string, string> = {
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
-const AVAILABILITY_BUTTON_MOBILE_FULL_CLASS = 'max-[760px]:w-full'
+const AVAILABILITY_BUTTON_MOBILE_FULL_CLASS = OPTION_RUN_ACTION_BUTTON_CLASS
 const SETTINGS_ANCHOR_CLASS = `relative shrink-0 ${AVAILABILITY_BUTTON_MOBILE_FULL_CLASS}`
 const SETTINGS_POPOVER_CLASS =
   'w-[min(320px,calc(100vw_-_48px))]'
@@ -96,7 +99,7 @@ export function AvailabilityControls() {
   }
 
   return (
-    <div className={AVAILABILITY_CONTROLS_TOOLBAR_CLASS}>
+    <>
       <div className={AVAILABILITY_PERMISSION_CARD_CLASS}>
         <div className={AVAILABILITY_PERMISSION_META_CLASS}>
           <span className={badgeClassName}>
@@ -237,6 +240,6 @@ export function AvailabilityControls() {
           </Button>
         )}
       </div>
-    </div>
+    </>
   )
 }

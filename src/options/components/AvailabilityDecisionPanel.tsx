@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { StatusBusyLoadingLabel } from './LoadingLabel.js'
+import { useMotionEntrance } from '../../ui'
 import { useAvailabilityProgress } from './availability-overview-store.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 
@@ -27,6 +28,8 @@ const AVAILABILITY_PROGRESS_COPY_CLASS =
 
 export function AvailabilityDecisionPanel({ children }: { children: ReactNode }) {
   const state = useAvailabilityProgress()
+  const hasRunSignal = state.busy || state.durationLabel !== '未开始' || state.progressValue > 0
+  const emptyEntered = useMotionEntrance(!hasRunSignal)
 
   return (
     <div className={AVAILABILITY_DECISION_PANEL_CLASS} aria-label="可用性检测决策概览">
@@ -37,28 +40,41 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
         </div>
         <span className={OPTION_VALUE_CLASS}>{state.durationLabel}</span>
       </div>
-      <div className={AVAILABILITY_PROGRESS_ROW_CLASS}>
-        <div>
-          <span className={AVAILABILITY_LABEL_CLASS}>检测进度</span>
-          <strong className={AVAILABILITY_PROGRESS_META_TITLE_CLASS}>
-            {state.busy ? (
-              <StatusBusyLoadingLabel label={state.progressLabel} />
-            ) : (
-              state.progressLabel
-            )}
-          </strong>
-        </div>
-        <div>
-          <div className={AVAILABILITY_PROGRESS_TRACK_CLASS} aria-hidden="true">
-            <span
-              className={AVAILABILITY_PROGRESS_BAR_CLASS}
-              style={{ width: `${Math.max(0, Math.min(state.progressValue, 100))}%` }}
-            />
+      {hasRunSignal ? (
+        <>
+          <div className={AVAILABILITY_PROGRESS_ROW_CLASS}>
+            <div>
+              <span className={AVAILABILITY_LABEL_CLASS}>检测进度</span>
+              <strong className={AVAILABILITY_PROGRESS_META_TITLE_CLASS}>
+                {state.busy ? (
+                  <StatusBusyLoadingLabel label={state.progressLabel} />
+                ) : (
+                  state.progressLabel
+                )}
+              </strong>
+            </div>
+            <div>
+              <div className={AVAILABILITY_PROGRESS_TRACK_CLASS} aria-hidden="true">
+                <span
+                  className={AVAILABILITY_PROGRESS_BAR_CLASS}
+                  style={{ width: `${Math.max(0, Math.min(state.progressValue, 100))}%` }}
+                />
+              </div>
+              <p className={AVAILABILITY_PROGRESS_COPY_CLASS}>{state.statusCopy}</p>
+            </div>
           </div>
-          <p className={AVAILABILITY_PROGRESS_COPY_CLASS}>{state.statusCopy}</p>
+          {children}
+        </>
+      ) : (
+        <div className={['t-stagger mt-4 border-t border-ds-border-subtle pt-4', emptyEntered ? 'is-shown' : ''].filter(Boolean).join(' ')}>
+          <strong className="t-stagger-line t-stagger-line--1 block text-sm font-semibold text-ds-text-primary">
+            尚未开始本轮检测
+          </strong>
+          <p className="t-stagger-line t-stagger-line--2 mt-2 mb-0 text-[13px] leading-[1.65] text-ds-text-secondary">
+            设置范围和检测方式后启动检测，决策指标和结果筛选会在这里展开。
+          </p>
         </div>
-      </div>
-      {children}
+      )}
     </div>
   )
 }

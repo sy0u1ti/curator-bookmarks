@@ -30,8 +30,6 @@ export function ScopePickerTrigger({
   source: ScopePickerSource
 }) {
   const state = useScopePickerTrigger(source)
-  const prefix = source === 'availability' ? 'availability' : 'history'
-  const triggerRef = useOptionsFocusTargetRef<HTMLButtonElement>(`${prefix}-scope-trigger`)
 
   return (
     <div className={OPTION_GROUP_CLASS}>
@@ -40,21 +38,37 @@ export function ScopePickerTrigger({
           <strong className={OPTION_COPY_TITLE_CLASS}>{sourceLabels[source]}</strong>
           <p className={OPTION_COPY_TEXT_CLASS}>{state.copy}</p>
         </div>
-        <Button
-          ref={triggerRef}
-          className={SCOPE_PICKER_TRIGGER_CLASS}
-          type="button"
-          aria-label={sourceAriaLabels[source]}
-          title={state.label}
-          disabled={state.disabled}
-          focusableWhenDisabled={state.disabled}
-          onClick={() => handleScopePickerTriggerOpen(source)}
-          unstyled
-        >
-          <Icon className="text-ds-accent-hover" name="ChevronDown" size={14} aria-hidden="true" />
-          <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
-        </Button>
+        <ScopePickerTriggerButton source={source} />
       </div>
     </div>
+  )
+}
+
+export function ScopePickerTriggerButton({
+  className = '',
+  source
+}: {
+  className?: string
+  source: ScopePickerSource
+}) {
+  const state = useScopePickerTrigger(source)
+  const prefix = source === 'availability' ? 'availability' : 'history'
+  const triggerRef = useOptionsFocusTargetRef<HTMLButtonElement>(`${prefix}-scope-trigger`)
+
+  return (
+    <Button
+      ref={triggerRef}
+      className={[SCOPE_PICKER_TRIGGER_CLASS, className].filter(Boolean).join(' ')}
+      type="button"
+      aria-label={sourceAriaLabels[source]}
+      title={state.label}
+      disabled={state.disabled}
+      focusableWhenDisabled={state.disabled}
+      onClick={() => handleScopePickerTriggerOpen(source)}
+      unstyled
+    >
+      <Icon className="text-ds-accent-hover" name="ChevronDown" size={14} aria-hidden="true" />
+      <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
+    </Button>
   )
 }

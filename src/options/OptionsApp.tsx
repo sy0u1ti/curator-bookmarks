@@ -103,7 +103,7 @@ const bookmarkLinks: NavLink[] = [
 
 const aiLinks: NavLink[] = [
   { section: 'ai', href: '#ai', label: '书签智能分析' },
-  { section: 'bookmark-history', href: '#bookmark-history', label: '自动分析添加历史' }
+  { section: 'bookmark-history', href: '#bookmark-history', label: 'AI 整理记录' }
 ]
 
 const availabilitySectionKeys = new Set(availabilityLinks.map((link) => link.section))

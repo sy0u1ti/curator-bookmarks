@@ -15,6 +15,8 @@ const AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS = 'max-[760px]:w-full'
 
 export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' }) {
   const state = useAvailabilityResultsHeader()
+  const failedCount = getLeadingCount(state.failedCount)
+  const reviewCount = getLeadingCount(state.reviewCount)
 
   if (kind === 'failed') {
     return (
@@ -25,30 +27,32 @@ export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' 
           </strong>
           <p className={AVAILABILITY_RESULTS_SUBTITLE_CLASS}>{state.failedLastRun}</p>
         </div>
-        <div className={AVAILABILITY_RESULTS_ACTIONS_CLASS}>
-          <Button
-            className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="全选高置信异常书签"
-            onClick={() => handleAvailabilityPanelAction({ action: 'select-failed' })}
-          >
-            全选本区
-          </Button>
-          <Button
-            className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="danger"
-            aria-label="批量删除高置信异常书签"
-            disabled={state.deleteFailedDisabled}
-            focusableWhenDisabled={state.deleteFailedDisabled}
-            onClick={() => handleAvailabilityPanelAction({ action: 'delete-failed' })}
-          >
-            {state.deleteFailedLabel}
-          </Button>
-        </div>
+        {failedCount > 0 ? (
+          <div className={AVAILABILITY_RESULTS_ACTIONS_CLASS}>
+            <Button
+              className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="全选高置信异常书签"
+              onClick={() => handleAvailabilityPanelAction({ action: 'select-failed' })}
+            >
+              全选本区
+            </Button>
+            <Button
+              className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="danger"
+              aria-label="批量删除高置信异常书签"
+              disabled={state.deleteFailedDisabled}
+              focusableWhenDisabled={state.deleteFailedDisabled}
+              onClick={() => handleAvailabilityPanelAction({ action: 'delete-failed' })}
+            >
+              {state.deleteFailedLabel}
+            </Button>
+          </div>
+        ) : null}
       </div>
     )
   }
@@ -63,18 +67,25 @@ export function AvailabilityResultsHeader({ kind }: { kind: 'failed' | 'review' 
           {state.reviewSubtitle}
         </p>
       </div>
-      <div className={AVAILABILITY_RESULTS_ACTIONS_CLASS}>
-        <Button
-          className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
-          size="sm"
-          type="button"
-          variant="secondary"
-          aria-label="全选低置信异常书签"
-          onClick={() => handleAvailabilityPanelAction({ action: 'select-review' })}
-        >
-          全选本区
-        </Button>
-      </div>
+      {reviewCount > 0 ? (
+        <div className={AVAILABILITY_RESULTS_ACTIONS_CLASS}>
+          <Button
+            className={AVAILABILITY_RESULTS_ACTION_BUTTON_CLASS}
+            size="sm"
+            type="button"
+            variant="secondary"
+            aria-label="全选低置信异常书签"
+            onClick={() => handleAvailabilityPanelAction({ action: 'select-review' })}
+          >
+            全选本区
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
+}
+
+function getLeadingCount(label: string): number {
+  const match = String(label || '').match(/\d+/)
+  return match ? Number(match[0]) || 0 : 0
 }

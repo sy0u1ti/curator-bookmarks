@@ -5,15 +5,15 @@ import {
 } from '../../ui/switch-classes'
 
 export const AI_SETTINGS_CARD_CLASS =
-  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[22px_24px] text-ds-text-primary shadow-none max-[760px]:p-4'
+  'mt-5 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-0 text-ds-text-primary shadow-none'
 
 export const AI_SETTINGS_NARROW_CARD_CLASS =
-  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[22px_24px_20px] text-ds-text-primary shadow-none max-[760px]:p-4'
+  'mt-5 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-0 text-ds-text-primary shadow-none'
 
 export const AI_SETTINGS_HEADER_CLASS =
-  'mb-2 flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
+  'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-ds-border-subtle p-[14px_16px] max-[760px]:flex-col'
 
-export const AI_SETTINGS_BODY_CLASS = 'mt-4 flex flex-col gap-3.5'
+export const AI_SETTINGS_BODY_CLASS = 'mt-0 flex flex-col divide-y divide-ds-border-subtle'
 
 export const AI_SETTINGS_TITLE_CLASS = 'm-0 text-base font-bold leading-[1.35] text-ds-text-primary'
 
@@ -33,7 +33,7 @@ export const AI_SETTINGS_STATUS_TONE_CLASS = {
 } as const
 
 export const AI_SETTINGS_ROW_CLASS =
-  'grid min-h-[34px] grid-cols-[minmax(0,1fr)_auto] items-center gap-[18px] max-[760px]:grid-cols-1 max-[760px]:items-start'
+  'grid min-h-[54px] grid-cols-[minmax(0,1fr)_auto] items-center gap-[18px] px-4 py-3 max-[760px]:grid-cols-1 max-[760px]:items-start'
 
 export const AI_SETTINGS_COPY_CLASS = 'min-w-0'
 
@@ -52,7 +52,7 @@ export const AI_SETTINGS_SWITCH_CONTROL_CLASS = OPTION_SWITCH_CONTROL_CLASS
 export const AI_SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
 
 export const AI_SETTINGS_ADVANCED_CLASS =
-  'mt-4 grid border-t border-[rgba(255,255,255,0.075)] pt-4'
+  'grid px-4 py-3'
 
 export const AI_SETTINGS_ADVANCED_TRIGGER_CLASS =
   'w-fit rounded-ds-sm border border-ds-hover bg-ds-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ds-text-secondary transition-colors hover:border-ds-border hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
@@ -63,7 +63,7 @@ export const AI_SETTINGS_ADVANCED_PANEL_CLASS =
 export const AI_SETTINGS_ADVANCED_NOTE_CLASS = 'm-0'
 
 export const AI_SETTINGS_FIELD_TIP_CLASS =
-  'mt-3 text-[13px] leading-[1.65] text-ds-text-muted'
+  'm-0 px-4 py-3 text-[13px] leading-[1.65] text-ds-text-muted'
 
 export const AI_SETTINGS_HELP_TOOLTIP_CLASS =
   'ml-1.5 inline-flex size-4 cursor-help items-center justify-center rounded-full border border-ds-hover bg-transparent p-0 text-[11px] leading-none text-ds-text-secondary align-[1px] shadow-none hover:border-ds-border hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'

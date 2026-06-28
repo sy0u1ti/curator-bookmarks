@@ -5,9 +5,10 @@ import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
 import type { BackupControlsState, BackupPreviewState } from './backup-controls-types.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 
 const BACKUP_CARD_CLASS =
-  'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
+  't-resize mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
 const BACKUP_HEADER_CLASS =
   'flex flex-wrap items-start justify-between gap-4'
 const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-ds-border-subtle pb-[14px]`
@@ -64,17 +65,19 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             ) : null}
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            <Button
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="导出书签标签数据"
-              disabled={!state.tagData.hasRecords || state.tagData.busy}
-              focusableWhenDisabled={state.tagData.busy}
-              onClick={() => handleBackupAction({ action: 'export-tags' })}
-            >
-              导出标签数据
-            </Button>
+            {state.tagData.hasRecords ? (
+              <Button
+                size="sm"
+                type="button"
+                variant="secondary"
+                aria-label="导出书签标签数据"
+                disabled={state.tagData.busy}
+                focusableWhenDisabled={state.tagData.busy}
+                onClick={() => handleBackupAction({ action: 'export-tags' })}
+              >
+                导出标签数据
+              </Button>
+            ) : null}
             <Button
               size="sm"
               type="button"
@@ -86,17 +89,19 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             >
               导入标签数据
             </Button>
-            <Button
-              size="sm"
-              type="button"
-              variant="danger"
-              aria-label="清空全部书签标签数据"
-              disabled={!state.tagData.hasRecords || state.tagData.busy}
-              focusableWhenDisabled={state.tagData.busy}
-              onClick={() => handleBackupAction({ action: 'clear-tags' })}
-            >
-              清空标签数据
-            </Button>
+            {state.tagData.hasRecords ? (
+              <Button
+                size="sm"
+                type="button"
+                variant="danger"
+                aria-label="清空全部书签标签数据"
+                disabled={state.tagData.busy}
+                focusableWhenDisabled={state.tagData.busy}
+                onClick={() => handleBackupAction({ action: 'clear-tags' })}
+              >
+                清空标签数据
+              </Button>
+            ) : null}
           </div>
           <Input
             ref={tagImportInputRef}
@@ -124,6 +129,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             <Button
               size="sm"
               type="button"
+              variant="secondary"
               aria-label="导出完整书签备份"
               disabled={state.backup.busy}
               focusableWhenDisabled={state.backup.busy}
@@ -134,7 +140,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             <Button
               size="sm"
               type="button"
-              variant="secondary"
+              variant="primary"
               aria-label="导入完整备份并预览"
               disabled={state.backup.busy}
               focusableWhenDisabled={state.backup.busy}
@@ -168,52 +174,70 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
               先查看差异，再选择恢复范围；完整恢复只补齐缺失书签。
             </p>
           </div>
-          <div className={BACKUP_ROW_ACTIONS_CLASS}>
-            <Button
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="从备份预览只恢复书签标签数据"
-              disabled={!state.backup.hasBackup || state.backup.busy}
-              focusableWhenDisabled={state.backup.busy}
-              onClick={() => handleBackupAction({ action: 'restore', mode: 'tagsOnly' })}
-            >
-              只恢复标签数据
-            </Button>
-            <Button
-              size="sm"
-              type="button"
-              variant="secondary"
-              aria-label="从备份预览只恢复新标签页设置"
-              disabled={!state.backup.hasBackup || state.backup.busy}
-              focusableWhenDisabled={state.backup.busy}
-              onClick={() => handleBackupAction({ action: 'restore', mode: 'newTabOnly' })}
-            >
-              只恢复新标签页设置
-            </Button>
-            <Button
-              size="sm"
-              type="button"
-              aria-label="从备份预览恢复全部可安全恢复的数据"
-              disabled={!state.backup.hasBackup || state.backup.busy}
-              focusableWhenDisabled={state.backup.busy}
-              onClick={() => handleBackupAction({ action: 'restore', mode: 'safeFull' })}
-            >
-              恢复全部可安全恢复的数据
-            </Button>
-          </div>
+          {state.backup.hasBackup ? (
+            <div className={BACKUP_ROW_ACTIONS_CLASS}>
+              <Button
+                size="sm"
+                type="button"
+                variant="secondary"
+                aria-label="从备份预览只恢复书签标签数据"
+                disabled={state.backup.busy}
+                focusableWhenDisabled={state.backup.busy}
+                onClick={() => handleBackupAction({ action: 'restore', mode: 'tagsOnly' })}
+              >
+                只恢复标签数据
+              </Button>
+              <Button
+                size="sm"
+                type="button"
+                variant="secondary"
+                aria-label="从备份预览只恢复新标签页设置"
+                disabled={state.backup.busy}
+                focusableWhenDisabled={state.backup.busy}
+                onClick={() => handleBackupAction({ action: 'restore', mode: 'newTabOnly' })}
+              >
+                只恢复新标签页设置
+              </Button>
+              <Button
+                size="sm"
+                type="button"
+                aria-label="从备份预览恢复全部可安全恢复的数据"
+                disabled={state.backup.busy}
+                focusableWhenDisabled={state.backup.busy}
+                onClick={() => handleBackupAction({ action: 'restore', mode: 'safeFull' })}
+              >
+                恢复全部可安全恢复的数据
+              </Button>
+            </div>
+          ) : null}
         </div>
         <div className={BACKUP_PREVIEW_LIST_CLASS}>
-          <BackupPreview state={{ preview: state.backup.preview }} />
+          <BackupPreview
+            state={{ preview: state.backup.preview }}
+            onImportPreview={() => backupImportInputRef.current?.click()}
+          />
         </div>
       </div>
     </>
   )
 }
 
-function BackupPreview({ state }: { state: BackupPreviewState }) {
+function BackupPreview({
+  onImportPreview,
+  state
+}: {
+  onImportPreview: () => void
+  state: BackupPreviewState
+}) {
   if (!state.preview) {
-    return <div className={BACKUP_EMPTY_CLASS}>请选择备份文件进行预览。</div>
+    return (
+      <OptionEmptyState
+        title="先导入备份文件"
+        description="选择备份文件后会先显示差异和风险，确认无误后才会出现恢复动作。"
+        actions={[{ label: '导入并预览', onClick: onImportPreview, variant: 'primary' }]}
+        className={BACKUP_EMPTY_CLASS}
+      />
+    )
   }
 
   const { counts } = state.preview

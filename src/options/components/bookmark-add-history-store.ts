@@ -15,7 +15,7 @@ const defaultBookmarkAddHistoryState: BookmarkAddHistoryState = {
   entries: [],
   header: {
     clearDisabled: true,
-    subtitle: '自动分析完成后，这里记录新增书签的保存位置。',
+    subtitle: 'AI 自动整理完成后，这里记录新增书签的保存位置。',
     timestamp: '尚无历史'
   },
   summary: {

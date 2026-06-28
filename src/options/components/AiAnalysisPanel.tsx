@@ -5,21 +5,25 @@ import { AiAnalysisResults } from './AiAnalysisResults.js'
 import { AiAnalysisResultsFilter } from './AiAnalysisResultsFilter.js'
 import { AiAnalysisResultsHeader } from './AiAnalysisResultsHeader.js'
 import { AiAnalysisResultsPagination } from './AiAnalysisResultsPagination.js'
-import { AiAnalysisScopePicker } from './AiAnalysisScopePicker.js'
+import { AiAnalysisScopePickerButton } from './AiAnalysisScopePicker.js'
 import { AiAnalysisSelectionActions } from './AiAnalysisSelectionActions.js'
 import { AiAnalysisStatusCard } from './AiAnalysisStatusCard.js'
 import { AiConfigLink } from './AiConfigLink.js'
 import { AI_ANALYSIS_RESULTS_GROUP_CLASS } from './ai-analysis-classes.js'
+import { useAiConfigLinkState } from './ai-config-link-store.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import {
   OPTION_PANEL_CLASS,
   OPTION_PANEL_TITLE_CLASS,
+  OPTION_RUN_ACTIONS_CLASS,
+  OPTION_RUN_CELL_CLASS,
+  OPTION_RUN_CELL_TEXT_CLASS,
+  OPTION_RUN_CELL_TITLE_CLASS,
+  OPTION_RUN_HEADER_CLASS,
   OPTION_SECTION_LABEL_CLASS
 } from './option-layout-classes.js'
 
-const AI_ANALYSIS_TOOLBAR_CLASS =
-  'mt-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 max-[1180px]:grid-cols-[minmax(0,1fr)] max-[1180px]:items-start'
-const AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS =
-  'flex flex-wrap items-center justify-end gap-3 max-[1180px]:justify-start max-[760px]:flex-col max-[760px]:items-start'
+const AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS = OPTION_RUN_ACTIONS_CLASS
 const AI_ANALYSIS_DECISION_HEADER_CLASS =
   'flex min-w-0 items-start justify-between gap-[14px] max-[760px]:flex-col'
 const AI_ANALYSIS_DECISION_TITLE_CLASS =
@@ -32,40 +36,58 @@ interface OptionsPanelVisibilityProps {
 }
 
 export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
+  const { configured } = useAiConfigLinkState()
+
   return (
     <section id="ai" className={OPTION_PANEL_CLASS} aria-labelledby="ai-title" hidden={hidden}>
       <p className={OPTION_SECTION_LABEL_CLASS}>Smart Bookmark Analysis</p>
       <h1 id="ai-title" className={OPTION_PANEL_TITLE_CLASS}>书签智能分析</h1>
 
-      <AiAnalysisScopePicker />
-
-      <div className={AI_ANALYSIS_TOOLBAR_CLASS}>
-        <AiAnalysisStatusCard />
-
-        <div className={AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS}>
-          <AiConfigLink />
-          <AiAnalysisActions />
-        </div>
-      </div>
-
-      <AiAnalysisProgressPanel>
-        <div className={AI_ANALYSIS_DECISION_HEADER_CLASS}>
-          <div>
-            <strong className={AI_ANALYSIS_DECISION_TITLE_CLASS}>决策面板</strong>
-            <p className={AI_ANALYSIS_DECISION_COPY_CLASS}>先应用高置信，再处理待确认。</p>
+      {configured ? (
+        <>
+          <div className={OPTION_RUN_HEADER_CLASS}>
+            <div className={OPTION_RUN_CELL_CLASS}>
+              <strong className={OPTION_RUN_CELL_TITLE_CLASS}>分析范围</strong>
+              <p className={OPTION_RUN_CELL_TEXT_CLASS}>选择要生成标题、标签和归档建议的书签范围。</p>
+              <div className="mt-3">
+                <AiAnalysisScopePickerButton className="min-w-full" />
+              </div>
+            </div>
+            <AiAnalysisStatusCard />
+            <div className={AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS}>
+              <AiConfigLink />
+              <AiAnalysisActions />
+            </div>
           </div>
+
+          <AiAnalysisProgressPanel>
+            <div className={AI_ANALYSIS_DECISION_HEADER_CLASS}>
+              <div>
+                <strong className={AI_ANALYSIS_DECISION_TITLE_CLASS}>决策面板</strong>
+                <p className={AI_ANALYSIS_DECISION_COPY_CLASS}>先应用高置信，再处理待确认。</p>
+              </div>
+            </div>
+            <AiAnalysisDecisionMetrics />
+          </AiAnalysisProgressPanel>
+
+          <AiAnalysisSelectionActions />
+
+          <div className={AI_ANALYSIS_RESULTS_GROUP_CLASS}>
+            <AiAnalysisResultsHeader />
+            <AiAnalysisResultsFilter />
+            <AiAnalysisResults />
+            <AiAnalysisResultsPagination />
+          </div>
+        </>
+      ) : (
+        <div className="mt-6">
+          <OptionEmptyState
+            title="先配置 AI 渠道"
+            description="API Key 仅保存在本地。配置并测试连接后，这里会显示分析范围、运行控制、决策指标和结果筛选。"
+            actions={[{ action: 'configure-ai', label: '配置 API Key', variant: 'primary' }]}
+          />
         </div>
-        <AiAnalysisDecisionMetrics />
-      </AiAnalysisProgressPanel>
-
-      <AiAnalysisSelectionActions />
-
-      <div className={AI_ANALYSIS_RESULTS_GROUP_CLASS}>
-        <AiAnalysisResultsHeader />
-        <AiAnalysisResultsFilter />
-        <AiAnalysisResults />
-        <AiAnalysisResultsPagination />
-      </div>
+      )}
     </section>
   )
 }

@@ -11,9 +11,9 @@ import {
   OPTION_COPY_TEXT_CLASS,
   OPTION_COPY_TITLE_CLASS,
   OPTION_PANEL_TITLE_CLASS,
-  OPTION_REVEAL_ENTER_CLASS,
   OPTION_ROW_CLASS,
   OPTION_SECTION_LABEL_CLASS,
+  OPTION_TOOL_PANEL_CLASS,
   OPTION_VALUE_CLASS
 } from './option-layout-classes.js'
 import { RedirectControls } from './RedirectControls.js'
@@ -29,15 +29,15 @@ interface OptionsPanelVisibilityProps {
 }
 
 const AVAILABILITY_HISTORY_GROUP_CLASS =
-  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none max-[760px]:p-4'
+  OPTION_TOOL_PANEL_CLASS
 const REDIRECTS_GROUP_CLASS =
-  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  OPTION_TOOL_PANEL_CLASS
 const RECYCLE_GROUP_CLASS =
-  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  OPTION_TOOL_PANEL_CLASS
 const FOLDER_CLEANUP_GROUP_CLASS =
-  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  OPTION_TOOL_PANEL_CLASS
 const DUPLICATES_GROUP_CLASS =
-  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  OPTION_TOOL_PANEL_CLASS
 
 export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (

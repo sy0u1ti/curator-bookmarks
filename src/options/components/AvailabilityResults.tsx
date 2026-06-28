@@ -5,6 +5,7 @@ import { cx } from '../../ui'
 import { handleAvailabilityResultAction } from '../options-controller'
 import { useAvailabilityResultsState } from './availability-results-store.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   AvailabilityResultCardViewModel,
   AvailabilityResultPanelKind
@@ -13,8 +14,6 @@ import type {
 const AVAILABILITY_RESULT_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const AVAILABILITY_RESULT_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
-const AVAILABILITY_RESULT_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
 const AVAILABILITY_RESULT_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const AVAILABILITY_RESULT_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
@@ -55,7 +54,12 @@ export function AvailabilityResults({ kind }: { kind: AvailabilityResultPanelKin
   const state = useAvailabilityResultsState(kind)
 
   if (!state.results.length) {
-    return <div className={AVAILABILITY_RESULT_EMPTY_CLASS}>{state.emptyMessage}</div>
+    return (
+      <OptionEmptyState
+        title={kind === 'failed' ? '没有高置信异常' : '没有待确认异常'}
+        description={state.emptyMessage}
+      />
+    )
   }
 
   return (

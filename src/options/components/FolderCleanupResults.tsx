@@ -35,8 +35,8 @@ const FOLDER_CLEANUP_BADGE_TONE_CLASS = {
 } as const
 const FOLDER_CLEANUP_ACTION_BUTTON_CLASS =
   'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors hover:text-ds-text-secondary focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus disabled:cursor-default disabled:opacity-50 data-disabled:cursor-default data-disabled:opacity-50'
-const FOLDER_CLEANUP_DANGER_ACTION_BUTTON_CLASS =
-  `${FOLDER_CLEANUP_ACTION_BUTTON_CLASS} text-ds-danger-text hover:text-ds-danger-text`
+const FOLDER_CLEANUP_REVIEW_BUTTON_CLASS = 'justify-center whitespace-nowrap'
+const FOLDER_CLEANUP_CONFIRM_BUTTON_CLASS = 'justify-center whitespace-nowrap'
 const FOLDER_CLEANUP_COPY_CLASS = 'mt-3 min-w-0'
 const FOLDER_CLEANUP_TITLE_CLASS =
   'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-ds-text-primary max-[760px]:whitespace-normal'
@@ -124,11 +124,14 @@ function SuggestionCard({
   suggestion: FolderCleanupSuggestion
 }) {
   const operationCopy = getOperationCopy(suggestion)
+  const operationDisplayCopy = suggestion.canExecute && !previewOpen
+    ? `预览后${operationCopy}`
+    : operationCopy
   const previewLabel = getFolderCleanupSuggestionActionLabel(
     previewOpen ? '收起文件夹清理预览' : '查看文件夹清理预览',
     suggestion
   )
-  const operationLabel = getFolderCleanupSuggestionActionLabel(operationCopy, suggestion)
+  const operationLabel = getFolderCleanupSuggestionActionLabel(operationDisplayCopy, suggestion)
   const severityClass = suggestion.severity === 'danger'
     ? 'danger'
     : suggestion.severity === 'warning'
@@ -141,31 +144,33 @@ function SuggestionCard({
         <span className={`${FOLDER_CLEANUP_BADGE_BASE_CLASS} ${FOLDER_CLEANUP_BADGE_TONE_CLASS[severityClass]}`}>{KIND_LABELS[suggestion.kind]}</span>
         <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
           <Button
-            className={FOLDER_CLEANUP_ACTION_BUTTON_CLASS}
+            className={FOLDER_CLEANUP_REVIEW_BUTTON_CLASS}
+            size="sm"
             type="button"
+            variant="secondary"
             aria-label={previewLabel}
             onClick={() => handleFolderCleanupAction({
               action: 'preview',
               suggestionId: suggestion.id
             })}
-            unstyled
           >
             {previewOpen ? '收起预览' : '查看预览'}
           </Button>
           <Button
-            className={suggestion.severity === 'danger'
-              ? FOLDER_CLEANUP_DANGER_ACTION_BUTTON_CLASS
-              : FOLDER_CLEANUP_ACTION_BUTTON_CLASS}
+            className={FOLDER_CLEANUP_CONFIRM_BUTTON_CLASS}
+            size="sm"
             type="button"
+            variant={suggestion.severity === 'danger' ? 'danger' : 'secondary'}
             aria-label={operationLabel}
-            disabled={locked || !suggestion.canExecute}
+            title={suggestion.canExecute && !previewOpen ? '先查看预览，再确认执行' : undefined}
+            disabled={locked || !suggestion.canExecute || !previewOpen}
+            focusableWhenDisabled={locked}
             onClick={() => handleFolderCleanupAction({
               action: 'execute',
               suggestionId: suggestion.id
             })}
-            unstyled
           >
-            {operationCopy}
+            {operationDisplayCopy}
           </Button>
         </div>
       </div>

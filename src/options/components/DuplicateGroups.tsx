@@ -2,6 +2,7 @@ import { displayUrl } from '../../shared/text.js'
 import { Button, Checkbox, TextSwap, useMotionEntrance } from '../../ui'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateGroupsState } from './duplicate-groups-store.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   DuplicateBookmarkViewModel,
   DuplicateGroupViewModel,
@@ -24,11 +25,7 @@ const DOCKED_ACTIONS_CLASS =
   'flex flex-wrap items-center justify-end gap-2 max-[760px]:justify-start'
 const DOCKED_ACTION_BUTTON_CLASS = 'max-[760px]:flex-1 max-[760px]:basis-[132px]'
 const GROUP_CARD_CLASS =
-  'rounded-ds-sm border bg-ds-surface-1 p-4 shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
-const GROUP_CARD_RISK_CLASS = {
-  high: 'border-ds-danger/30',
-  low: 'border-ds-success/25'
-} as const
+  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4 shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const GROUP_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-start justify-between gap-2.5 max-[760px]:flex-col max-[760px]:items-stretch'
 const GROUP_COPY_CLASS = 'min-w-0'
@@ -82,7 +79,10 @@ export function DuplicateGroups() {
   if (!state.catalogLoading && !state.groups.length) {
     return (
       <div className={RESULTS_CLASS}>
-        <div className={EMPTY_CLASS}>当前未发现重复书签。</div>
+        <OptionEmptyState
+          title="当前未发现重复书签"
+          description="重复检测会按 URL 聚合书签。发现重复后，这里会先展示推荐保留项，再让你选择要移入回收站的副本。"
+        />
       </div>
     )
   }
@@ -178,10 +178,7 @@ function DuplicateGroupCard({
 
   return (
     <article
-      className={[
-        GROUP_CARD_CLASS,
-        group.risk === 'high' ? GROUP_CARD_RISK_CLASS.high : GROUP_CARD_RISK_CLASS.low
-      ].join(' ')}
+      className={GROUP_CARD_CLASS}
     >
       <div className={GROUP_HEADER_CLASS}>
         <div className={GROUP_COPY_CLASS}>

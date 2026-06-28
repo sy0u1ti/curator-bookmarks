@@ -15,9 +15,9 @@ export function BookmarkAddHistoryList({ entries }: { entries: BookmarkAddHistor
   if (!entries.length) {
     return (
       <div className={EMPTY_STATE_CLASS}>
-        <p className={EMPTY_TITLE_CLASS}>还没有自动分析添加记录</p>
+        <p className={EMPTY_TITLE_CLASS}>还没有 AI 整理记录</p>
         <p className={EMPTY_DETAIL_CLASS}>
-          自动分析完成后会记录到这里。
+          AI 自动整理完成后会记录新增书签的保存位置。
         </p>
         <div className={EMPTY_ACTIONS_CLASS}>
           <Button

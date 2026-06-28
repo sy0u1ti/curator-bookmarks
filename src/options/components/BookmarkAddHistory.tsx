@@ -7,11 +7,12 @@ const BOOKMARK_ADD_HISTORY_RESULTS_CLASS = 'mt-[18px] flex flex-col gap-3'
 
 export function BookmarkAddHistory() {
   const state = useBookmarkAddHistoryState()
+  const hasSummary = Number(state.summary.total) > 0
 
   return (
     <>
       <BookmarkAddHistoryHeader state={state.header} />
-      <BookmarkAddHistorySummary state={state.summary} />
+      {hasSummary ? <BookmarkAddHistorySummary state={state.summary} /> : null}
       <div className={BOOKMARK_ADD_HISTORY_RESULTS_CLASS}>
         <BookmarkAddHistoryList entries={state.entries} />
       </div>

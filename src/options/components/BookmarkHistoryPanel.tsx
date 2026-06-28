@@ -16,8 +16,8 @@ export function BookmarkHistoryPanel({ hidden }: { hidden: boolean }) {
       aria-labelledby="bookmark-history-title"
       hidden={hidden}
     >
-      <p className={OPTION_SECTION_LABEL_CLASS}>Auto Analysis Add History</p>
-      <h1 id="bookmark-history-title" className={OPTION_PANEL_TITLE_CLASS}>自动分析添加历史</h1>
+      <p className={OPTION_SECTION_LABEL_CLASS}>AI Organizing History</p>
+      <h1 id="bookmark-history-title" className={OPTION_PANEL_TITLE_CLASS}>AI 整理记录</h1>
 
       <div className={BOOKMARK_HISTORY_GROUP_CLASS}>
         <BookmarkAddHistory />

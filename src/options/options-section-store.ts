@@ -66,8 +66,8 @@ export function navigateToOptionsSectionHash(hash: string): void {
 
 const OPTIONS_EMPTY_STATE_CTA_NAVIGATION: Record<string, string> = {
   'run-availability': '#availability',
-  'open-auto-analyze': '#ai',
-  'configure-ai': '#ai',
+  'open-auto-analyze': '#general',
+  'configure-ai': '#general:ai-provider',
   'open-dashboard': '#dashboard',
   'redirect-info': '#redirects',
   'availability-info': '#availability',

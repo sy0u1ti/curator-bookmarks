@@ -73,29 +73,30 @@ export function RecycleControls() {
             恢复时优先放回原文件夹。
           </p>
         </div>
-        <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
-          <Button
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="全选回收站条目"
-            disabled={!hasEntries}
-            onClick={() => handleRecycleAction('select-all')}
-          >
-            全选本区
-          </Button>
-          <Button
-            size="sm"
-            type="button"
-            variant="danger"
-            aria-label="清空全部回收站记录"
-            disabled={!hasEntries || state.busy}
-            focusableWhenDisabled={state.busy}
-            onClick={() => handleRecycleAction('clear-all')}
-          >
-            清空回收站
-          </Button>
-        </div>
+        {hasEntries ? (
+          <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="全选回收站条目"
+              onClick={() => handleRecycleAction('select-all')}
+            >
+              全选本区
+            </Button>
+            <Button
+              size="sm"
+              type="button"
+              variant="danger"
+              aria-label="清空全部回收站记录"
+              disabled={state.busy}
+              focusableWhenDisabled={state.busy}
+              onClick={() => handleRecycleAction('clear-all')}
+            >
+              清空回收站
+            </Button>
+          </div>
+        ) : null}
       </div>
     </>
   )

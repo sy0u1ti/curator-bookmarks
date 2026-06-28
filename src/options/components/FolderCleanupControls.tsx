@@ -2,13 +2,13 @@ import { Button, Card, NumberPop } from '../../ui'
 import { handleFolderCleanupAction } from '../options-controller'
 import { useFolderCleanupControlsState } from './folder-cleanup-controls-store.js'
 import {
-  OPTION_GROUP_CLASS,
   OPTION_COPY_CLASS,
   OPTION_COPY_TEXT_CLASS,
-  OPTION_COPY_TITLE_CLASS,
-  OPTION_ROW_CLASS,
+  OPTION_COPY_TITLE_CLASS
 } from './option-layout-classes.js'
 
+const FOLDER_CLEANUP_RUN_HEADER_CLASS =
+  'grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-2 p-[14px_16px] max-[760px]:grid-cols-1 max-[760px]:items-start'
 const FOLDER_CLEANUP_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:w-full max-[760px]:justify-start'
 const FOLDER_CLEANUP_STATUS_BASE_CLASS =
@@ -48,30 +48,28 @@ export function FolderCleanupControls() {
 
   return (
     <>
-      <div className={OPTION_GROUP_CLASS}>
-        <div className={OPTION_ROW_CLASS}>
-          <div className={OPTION_COPY_CLASS}>
-            <strong className={OPTION_COPY_TITLE_CLASS}>建议和预览优先</strong>
-            <p className={OPTION_COPY_TEXT_CLASS}>扫描文件夹结构并生成清理建议；执行前会确认并自动备份。</p>
-          </div>
-          <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
-            <span
-              className={`${FOLDER_CLEANUP_STATUS_BASE_CLASS} ${FOLDER_CLEANUP_STATUS_TONE_CLASS[state.status.tone]}`}
-            >
-              {state.status.label}
-            </span>
-            <Button
-              className={FOLDER_CLEANUP_ANALYZE_BUTTON_CLASS}
-              size="sm"
-              type="button"
-              variant="primary"
-              disabled={state.analyzeDisabled}
-              focusableWhenDisabled={state.analyzeLabel === '扫描中...'}
-              onClick={() => handleFolderCleanupAction({ action: 'rescan' })}
-            >
-              {state.analyzeLabel}
-            </Button>
-          </div>
+      <div className={FOLDER_CLEANUP_RUN_HEADER_CLASS}>
+        <div className={OPTION_COPY_CLASS}>
+          <strong className={OPTION_COPY_TITLE_CLASS}>建议和预览优先</strong>
+          <p className={OPTION_COPY_TEXT_CLASS}>扫描文件夹结构并生成清理建议；执行前会确认并自动备份。</p>
+        </div>
+        <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
+          <span
+            className={`${FOLDER_CLEANUP_STATUS_BASE_CLASS} ${FOLDER_CLEANUP_STATUS_TONE_CLASS[state.status.tone]}`}
+          >
+            {state.status.label}
+          </span>
+          <Button
+            className={FOLDER_CLEANUP_ANALYZE_BUTTON_CLASS}
+            size="sm"
+            type="button"
+            variant="primary"
+            disabled={state.analyzeDisabled}
+            focusableWhenDisabled={state.analyzeLabel === '扫描中...'}
+            onClick={() => handleFolderCleanupAction({ action: 'rescan' })}
+          >
+            {state.analyzeLabel}
+          </Button>
         </div>
       </div>
 

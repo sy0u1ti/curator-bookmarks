@@ -7,6 +7,7 @@ import { NumberPop } from '../../ui'
 import { handleHistoryControlAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { OptionEmptyState } from './OptionEmptyState.js'
 import { useAvailabilityHistoryState } from './availability-history-store.js'
 import type {
   AvailabilityHistoryControlsState,
@@ -94,6 +95,8 @@ function HistoryBadge({
 export function AvailabilityHistory() {
   const state = useAvailabilityHistoryState()
   const showLogList = !state.log.collapsed || state.log.runs.length === 0
+  const hasHistory = state.log.runs.length > 0
+  const hasRecovered = state.recovered.results.length > 0
 
   return (
     <>
@@ -107,18 +110,22 @@ export function AvailabilityHistory() {
           />
         </div>
       ) : null}
-      <div className={HISTORY_HEADER_SPACED_CLASS}>
-        <div className={HISTORY_HEADER_COPY_CLASS}>
-          <strong className={HISTORY_HEADER_TITLE_CLASS}>最近一次已恢复</strong>
-          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>展示上一轮后恢复的书签。</p>
-        </div>
-      </div>
-      <div className={HISTORY_RESULTS_LIST_CLASS}>
-        <RecoveredHistoryList
-          emptyCopy={state.recovered.emptyCopy}
-          results={state.recovered.results}
-        />
-      </div>
+      {hasHistory || hasRecovered ? (
+        <>
+          <div className={HISTORY_HEADER_SPACED_CLASS}>
+            <div className={HISTORY_HEADER_COPY_CLASS}>
+              <strong className={HISTORY_HEADER_TITLE_CLASS}>最近一次已恢复</strong>
+              <p className={HISTORY_HEADER_SUBTITLE_CLASS}>展示上一轮后恢复的书签。</p>
+            </div>
+          </div>
+          <div className={HISTORY_RESULTS_LIST_CLASS}>
+            <RecoveredHistoryList
+              emptyCopy={state.recovered.emptyCopy}
+              results={state.recovered.results}
+            />
+          </div>
+        </>
+      ) : null}
     </>
   )
 }
@@ -135,16 +142,17 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
           <span className={OPTION_VALUE_CLASS}>{state.timestamp}</span>
-          <Button
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="清空可用性检测历史日志"
-            disabled={state.clearDisabled}
-            onClick={() => handleHistoryControlAction('clear-history')}
-          >
-            清空历史日志
-          </Button>
+          {!state.clearDisabled ? (
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="清空可用性检测历史日志"
+              onClick={() => handleHistoryControlAction('clear-history')}
+            >
+              清空历史日志
+            </Button>
+          ) : null}
         </div>
       </div>
       <div className={HISTORY_METRIC_GRID_CLASS}>
@@ -174,15 +182,16 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
           <span className={OPTION_VALUE_CLASS}>{state.logCount} 次记录</span>
-          <Button
-            size="sm"
-            type="button"
-            variant="secondary"
-            disabled={state.logToggleDisabled}
-            onClick={() => handleHistoryControlAction('toggle-logs')}
-          >
-            {state.logToggleLabel}
-          </Button>
+          {!state.logToggleDisabled ? (
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              onClick={() => handleHistoryControlAction('toggle-logs')}
+            >
+              {state.logToggleLabel}
+            </Button>
+          ) : null}
         </div>
       </div>
     </>
@@ -199,7 +208,13 @@ function AvailabilityHistoryLogList({
   runs: AvailabilityHistoryRunViewModel[]
 }) {
   if (!runs.length) {
-    return <div className={HISTORY_EMPTY_CLASS}>{emptyCopy}</div>
+    return (
+      <OptionEmptyState
+        title="还没有检测历史"
+        description={`${emptyCopy} 完成一次书签可用性检测后，这里会显示异常变化、恢复记录和趋势。`}
+        actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
+      />
+    )
   }
 
   return (

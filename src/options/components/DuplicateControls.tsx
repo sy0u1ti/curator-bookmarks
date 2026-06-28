@@ -35,16 +35,16 @@ const SELECTION_WARNING_CLASS =
 const SUMMARY_GRID_CLASS =
   'mt-[18px] grid grid-cols-4 gap-3 max-[1180px]:grid-cols-3 max-[760px]:grid-cols-1'
 const SUMMARY_CARD_CLASS =
-  'relative min-w-0 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-ds-text-primary shadow-none transition-colors before:absolute before:inset-x-0 before:top-0 before:h-0.5 before:content-[""] hover:border-ds-border hover:bg-ds-hover'
-const SUMMARY_ACCENT_CLASS = {
-  danger: 'before:bg-ds-danger',
-  info: 'before:bg-ds-accent',
-  success: 'before:bg-ds-success',
-  total: 'before:bg-ds-border-hover',
-  warning: 'before:bg-ds-warning'
+  'min-w-0 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-ds-text-primary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
+const SUMMARY_LABEL_ROW_CLASS =
+  'flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
+const SUMMARY_DOT_CLASS = {
+  danger: 'bg-ds-danger',
+  info: 'bg-ds-text-muted',
+  success: 'bg-ds-success',
+  total: 'bg-ds-border-hover',
+  warning: 'bg-ds-warning'
 } as const
-const SUMMARY_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
 const SUMMARY_VALUE_CLASS =
   'mt-2 block text-2xl font-[650] leading-none tracking-[0] text-ds-text-primary'
 const TOOLBAR_CLASS = 'mt-4 grid gap-2.5 border-t border-[rgba(255,255,255,0.075)] pt-4'
@@ -109,10 +109,13 @@ export function DuplicateControls() {
       <div className={SUMMARY_GRID_CLASS}>
         {duplicateMetrics.map((metric) => (
           <article
-            className={`${SUMMARY_CARD_CLASS} ${SUMMARY_ACCENT_CLASS[metric.tone]}`}
+            className={SUMMARY_CARD_CLASS}
             key={metric.key}
           >
-            <span className={SUMMARY_LABEL_CLASS}>{metric.label}</span>
+            <span className={SUMMARY_LABEL_ROW_CLASS}>
+              <span className={`size-1.5 rounded-full ${SUMMARY_DOT_CLASS[metric.tone]}`} aria-hidden="true" />
+              {metric.label}
+            </span>
             <strong className={SUMMARY_VALUE_CLASS}>
               <NumberPop text={state.summary[metric.key]} />
             </strong>
@@ -137,7 +140,8 @@ export function DuplicateResultsControls() {
           </p>
         </div>
       </div>
-      <div className={TOOLBAR_CLASS}>
+      {hasResults ? (
+        <div className={TOOLBAR_CLASS}>
         <div
           className={STRATEGY_CONTROLS_CLASS}
           aria-label="重复书签选择策略"
@@ -172,7 +176,8 @@ export function DuplicateResultsControls() {
             {state.strategyStatus}
           </span>
         </div>
-      </div>
+        </div>
+      ) : null}
     </>
   )
 }
