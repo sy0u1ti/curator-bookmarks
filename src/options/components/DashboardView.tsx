@@ -21,7 +21,6 @@ import {
   DASHBOARD_CARD_DIMMED_CLASS,
   DASHBOARD_CARD_FAVICON_FALLBACK_CLASS,
   DASHBOARD_CARD_FAVICON_IMAGE_CLASS,
-  DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS,
   DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS,
   DASHBOARD_CARD_FAVICON_SHELL_CLASS,
   DASHBOARD_CARD_FAVICON_SHELL_SELECTED_STATE_CLASS,
@@ -1441,7 +1440,6 @@ function DashboardFaviconShell({
       {favicon ? (
         <DashboardFaviconImage
           bookmarkId={bookmarkId}
-          fallbackLabel={fallbackLabel}
           favicon={favicon}
           selected={selected}
           key={`${favicon.source}:${favicon.pageUrl}:${favicon.src}`}
@@ -1455,46 +1453,32 @@ function DashboardFaviconShell({
 
 function DashboardFaviconImage({
   bookmarkId,
-  fallbackLabel,
   favicon,
   selected
 }: {
   bookmarkId: string
-  fallbackLabel: string
   favicon: DashboardCardFaviconViewModel
   selected: boolean
 }) {
-  const loadedRef = useRef(false)
-  const fallbackRef = useRef<HTMLSpanElement | null>(null)
-
   return (
-    <>
-      <img
-        className={[
-          DASHBOARD_CARD_FAVICON_IMAGE_CLASS,
-          selected ? DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS : '',
-          loadedRef.current ? DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS : ''
-        ].filter(Boolean).join(' ')}
-        src={favicon.src}
-        alt=""
-        loading="eager"
-        decoding="async"
-        draggable={false}
-        onLoad={(event) => {
-          loadedRef.current = true
-          event.currentTarget.classList.add(DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS)
-          fallbackRef.current?.setAttribute('hidden', '')
-        }}
-        onError={() => handleDashboardViewAction({
-          action: 'favicon-error',
-          bookmarkId,
-          pageUrl: favicon.pageUrl,
-          source: favicon.source,
-          src: favicon.src
-        })}
-      />
-      <DashboardFaviconFallback fallbackRef={fallbackRef} hidden={loadedRef.current} label={fallbackLabel} />
-    </>
+    <img
+      className={[
+        DASHBOARD_CARD_FAVICON_IMAGE_CLASS,
+        selected ? DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS : ''
+      ].filter(Boolean).join(' ')}
+      src={favicon.src}
+      alt=""
+      loading="eager"
+      decoding="async"
+      draggable={false}
+      onError={() => handleDashboardViewAction({
+        action: 'favicon-error',
+        bookmarkId,
+        pageUrl: favicon.pageUrl,
+        source: favicon.source,
+        src: favicon.src
+      })}
+    />
   )
 }
 

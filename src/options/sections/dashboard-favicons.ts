@@ -15,6 +15,7 @@ export interface DashboardFaviconWarmupItem {
   id: string
   pageUrl: string
   faviconUrl: string
+  source?: 'cache' | 'chrome'
 }
 
 export interface DashboardFaviconCacheEntry {
@@ -244,27 +245,36 @@ export function buildDashboardFaviconWarmupItems({
     const cachedEntry = cacheKey ? remoteCache[cacheKey] : null
     const originKey = getDashboardFaviconOriginKey(pageUrl)
     const defaultFaviconUrl = getDashboardDefaultRemoteFaviconUrl(pageUrl)
+    const cachedIconUrl = hasFreshDashboardFaviconCacheEntryForEntry(cachedEntry, now)
+      ? String(cachedEntry?.iconUrl || '').trim()
+      : ''
     if (
       !pageUrl ||
       !isDashboardRemoteFaviconPageUrl(pageUrl) ||
       seenPageUrls.has(cacheKey || pageUrl) ||
-      (originKey && seenOrigins.has(originKey)) ||
-      (defaultFaviconUrl && seenFaviconUrls.has(defaultFaviconUrl)) ||
-      shouldSkipDashboardRemoteFaviconFetchForEntry(cachedEntry, now)
+      (!cachedIconUrl && originKey && seenOrigins.has(originKey)) ||
+      (!cachedIconUrl && defaultFaviconUrl && seenFaviconUrls.has(defaultFaviconUrl)) ||
+      (!cachedIconUrl && shouldSkipDashboardRemoteFaviconFetchForEntry(cachedEntry, now))
     ) {
       continue
     }
     seenPageUrls.add(cacheKey || pageUrl)
-    if (originKey) {
+    if (!cachedIconUrl && originKey) {
       seenOrigins.add(originKey)
     }
-    if (defaultFaviconUrl) {
+    if (!cachedIconUrl && defaultFaviconUrl) {
       seenFaviconUrls.add(defaultFaviconUrl)
     }
+    const faviconUrl = cachedIconUrl || buildDashboardFaviconUrl(faviconEndpointUrl, pageUrl, { size })
+    if (!faviconUrl || seenFaviconUrls.has(faviconUrl)) {
+      continue
+    }
+    seenFaviconUrls.add(faviconUrl)
     items.push({
       id: String(bookmark.id || pageUrl),
       pageUrl: cacheKey || pageUrl,
-      faviconUrl: buildDashboardFaviconUrl(faviconEndpointUrl, pageUrl, { size })
+      faviconUrl,
+      source: cachedIconUrl ? 'cache' : 'chrome'
     })
   }
 

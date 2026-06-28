@@ -3339,7 +3339,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     return
   }
 
-  setDashboardVirtualRenderFullRange(virtualWindow)
+  setDashboardVirtualRenderFullRange(viewportWindow)
   const renderedIds = commitDashboardVirtualWindow(items, virtualWindow)
   endStableDashboardResultsUpdate()
   updateDashboardFloatingEditorPosition(renderedIds)
@@ -3472,8 +3472,8 @@ function renderDashboardVirtualScrollWindow(
     return
   }
 
-  setDashboardVirtualRenderFullRange(virtualWindow)
-  const renderedIds = commitDashboardVirtualWindow(items, virtualWindow)
+  setDashboardVirtualRenderFullRange(viewportWindow)
+  const renderedIds = commitDashboardVirtualWindow(items, virtualWindow, { validateRenderKey: false })
   updateDashboardFloatingEditorPosition(renderedIds)
 }
 
@@ -3490,14 +3490,23 @@ function scheduleDashboardFaviconWarmupForViewport(
 
 function commitDashboardVirtualWindow(
   items: DashboardItem[],
-  virtualWindow: DashboardVirtualWindow
+  virtualWindow: DashboardVirtualWindow,
+  {
+    validateRenderKey = true
+  }: {
+    validateRenderKey?: boolean
+  } = {}
 ): Set<string> {
   const renderedItems = items.slice(virtualWindow.startIndex, virtualWindow.endIndex)
   const renderedIds = new Set(renderedItems.map((item) => String(item.id)))
   reconcileDashboardTransientUiWithRenderedItems(renderedIds)
 
-  const stateKey = getDashboardVirtualRenderStateKey(renderedItems, virtualWindow.startIndex)
-  const virtualWindowKey = getDashboardStaticListRenderKey(renderedItems, stateKey, virtualWindow.startIndex)
+  const stateKey = validateRenderKey
+    ? getDashboardVirtualRenderStateKey(renderedItems, virtualWindow.startIndex)
+    : getDashboardVirtualScrollWindowStateKey(renderedItems, virtualWindow.startIndex)
+  const virtualWindowKey = validateRenderKey
+    ? getDashboardStaticListRenderKey(renderedItems, stateKey, virtualWindow.startIndex)
+    : stateKey
   const canReuseShell =
     virtualState.renderedStartIndex === virtualWindow.startIndex &&
     virtualState.renderedEndIndex === virtualWindow.endIndex &&
@@ -3528,6 +3537,19 @@ function commitDashboardVirtualWindow(
   virtualState.renderedStateKey = stateKey
   virtualState.renderedStaticListKey = virtualWindowKey
   return renderedIds
+}
+
+function getDashboardVirtualScrollWindowStateKey(renderedItems: DashboardItem[], startIndex: number): string {
+  return [
+    'scroll-window',
+    startIndex,
+    renderedItems.length,
+    renderedItems[0]?.id || '',
+    renderedItems[renderedItems.length - 1]?.id || '',
+    virtualState.fullStartIndex,
+    virtualState.fullEndIndex,
+    availabilityState.deleting ? 'deleting' : 'idle'
+  ].map((value) => String(value || '')).join('\u0001')
 }
 
 function syncDashboardVirtualRenderedShellGeometry(virtualWindow: DashboardVirtualWindow): void {
@@ -5526,7 +5548,9 @@ function syncDashboardFaviconWarmup(
       canFetchRemote: canFetchDashboardRemoteFavicon
     }),
     onWarm: (item) => {
-      scheduleDashboardFaviconForPageUrlSync(item.pageUrl)
+      if (item.source !== 'cache') {
+        scheduleDashboardFaviconForPageUrlSync(item.pageUrl)
+      }
     },
     onError: (item, error) => {
       aggregateDashboardFaviconWarmupError(item.pageUrl, error)

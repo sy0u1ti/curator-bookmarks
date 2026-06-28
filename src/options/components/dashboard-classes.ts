@@ -621,16 +621,12 @@ export const DASHBOARD_CARD_FAVICON_SHELL_SELECTED_STATE_CLASS =
   'border-transparent bg-transparent shadow-none'
 
 export const DASHBOARD_CARD_FAVICON_IMAGE_CLASS = [
-  'absolute z-[1] size-[23px] object-contain opacity-0',
-  '[filter:drop-shadow(0_0_1px_rgba(245,245,240,0.92))_drop-shadow(0_0_5px_rgba(245,245,240,0.34))]',
-  'transition-[filter,opacity] duration-ds-standard ease-ds-standard',
-  '[-webkit-user-drag:none]',
-  'group-hover/dashboard-card:[filter:drop-shadow(0_0_1px_rgba(245,245,240,0.96))_drop-shadow(0_0_7px_rgba(245,245,240,0.44))]',
-  'group-focus-within/dashboard-card:[filter:drop-shadow(0_0_1px_rgba(245,245,240,0.96))_drop-shadow(0_0_7px_rgba(245,245,240,0.44))]'
+  'absolute z-[1] size-[23px] object-contain opacity-100',
+  '[filter:none] transition-none [-webkit-user-drag:none]'
 ].join(' ')
 
 export const DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS =
-  '[filter:drop-shadow(0_0_1px_rgba(245,245,247,0.96))_drop-shadow(0_0_7px_rgba(245,245,247,0.42))]'
+  '[filter:none]'
 
 export const DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS =
   'opacity-100'
