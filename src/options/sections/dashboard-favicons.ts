@@ -1,8 +1,8 @@
 export const DASHBOARD_FAVICON_SIZE = 32
-export const DASHBOARD_FAVICON_WARMUP_CONCURRENCY = 1
-export const DASHBOARD_FAVICON_WARMUP_BATCH_SIZE = 4
-export const DASHBOARD_FAVICON_WARMUP_BATCH_DELAY_MS = 160
-export const DASHBOARD_FAVICON_WARMUP_OVERSCAN_ROWS = 2
+export const DASHBOARD_FAVICON_WARMUP_CONCURRENCY = 3
+export const DASHBOARD_FAVICON_WARMUP_BATCH_SIZE = 12
+export const DASHBOARD_FAVICON_WARMUP_BATCH_DELAY_MS = 48
+export const DASHBOARD_FAVICON_WARMUP_OVERSCAN_ROWS = 14
 export const DASHBOARD_FAVICON_CACHE_LIMIT = 2500
 export const DASHBOARD_FAVICON_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 export const DASHBOARD_FAVICON_FAILURE_RETRY_MS = 24 * 60 * 60 * 1000
@@ -410,7 +410,15 @@ export function preloadDashboardFavicon(url: string): Promise<HTMLImageElement> 
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.decoding = 'async'
-    image.addEventListener('load', () => resolve(image), { once: true })
+    image.addEventListener('load', () => {
+      if (typeof image.decode !== 'function') {
+        resolve(image)
+        return
+      }
+      image.decode()
+        .catch(() => {})
+        .then(() => resolve(image))
+    }, { once: true })
     image.addEventListener('error', () => reject(new Error('dashboard favicon warmup failed')), { once: true })
     image.src = url
   })

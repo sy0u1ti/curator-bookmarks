@@ -83,6 +83,10 @@ export type DashboardViewActionDetail =
       scrollTop: number
     }
   | {
+      action: 'results-scroll-activity'
+      scrollTop: number
+    }
+  | {
       action: 'results-scroll'
       scrollTop: number
     }
@@ -167,8 +171,18 @@ export interface DashboardLoadingLabelState {
 }
 
 export interface DashboardEmptyState {
+  actions: DashboardEmptyStateAction[]
   loading: boolean
   message: string
+  suggestions: string[]
+  title: string
+}
+
+export interface DashboardEmptyStateAction {
+  action: 'clear-search' | 'exit-dashboard' | 'folder-filter'
+  bookmarkId?: string
+  label: string
+  variant: 'primary' | 'secondary'
 }
 
 export interface DashboardFolderDropTargetViewModel {
@@ -235,12 +249,14 @@ export interface DashboardCardViewModel {
   moveLabel: string
   openLabel: string
   parentId: string
+  interactionMode: 'full' | 'preview'
   renderMode: 'full' | 'scroll'
   selected: boolean
   selectionLabel: string
   speedDialActionLabel: string
   speedDialActionText: string
   speedDialPinned: boolean
+  slotKey?: string
   tags: string[]
   title: string
   url: string

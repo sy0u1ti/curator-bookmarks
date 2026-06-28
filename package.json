@@ -23,7 +23,9 @@
     "dev": "vite",
     "lint": "npm run typecheck",
     "build": "vite build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:dashboard-virtual",
+    "test:dashboard-virtual": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/options/sections --outDir .tmp-test/dashboard-virtual --noEmit false src/options/sections/dashboard-virtual.ts src/options/sections/dashboard-virtual.test.ts && node .tmp-test/dashboard-virtual/dashboard-virtual.test.js"
   },
   "devDependencies": {
     "@crxjs/vite-plugin": "^2.4.0",

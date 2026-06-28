@@ -54,6 +54,16 @@ export function renderDashboardSection(): void {
   void loadDashboardModule().then((mod) => mod.renderDashboardSection())
 }
 
+export function renderDashboardSectionWhenIdle(): void {
+  const mod = loadedDashboardModule()
+  if (mod) {
+    mod.renderDashboardSectionWhenIdle()
+    return
+  }
+
+  void loadDashboardModule().then((loaded) => loaded.renderDashboardSectionWhenIdle())
+}
+
 export function prepareDashboardSectionEntry(): void {
   void loadDashboardModule().then((mod) => mod.prepareDashboardSectionEntry())
 }
@@ -79,12 +89,17 @@ export function handleDashboardKeydown(event: KeyboardEvent): void {
   loadedDashboardModule()?.handleDashboardKeydown(event)
 }
 
-export async function handleDashboardViewAction(
+export function handleDashboardViewAction(
   detail: DashboardViewActionDetail,
   callbacks: DashboardCallbacks
-): Promise<void> {
-  const mod = await loadDashboardModule()
-  await mod.handleDashboardViewAction(detail, callbacks)
+): void {
+  const mod = loadedDashboardModule()
+  if (mod) {
+    void mod.handleDashboardViewAction(detail, callbacks)
+    return
+  }
+
+  void loadDashboardModule().then((loaded) => loaded.handleDashboardViewAction(detail, callbacks))
 }
 
 export function handleDashboardPanelClick(event: MouseEvent): void {

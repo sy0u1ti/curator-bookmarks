@@ -1,6 +1,5 @@
-import { memo, useCallback, useEffect, useRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { memo, useCallback, useEffect, useRef, type ComponentPropsWithoutRef, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
 import { Button } from '../../ui/Button'
-import { CheckboxControl } from '../../ui/Checkbox'
 import { Icon } from '../../ui/icons/Icon'
 import { InlineMenu, type InlineMenuAction } from '../../ui/Menu'
 import {
@@ -10,11 +9,9 @@ import {
   PopoverRoot
 } from '../../ui/Popover'
 import { Textarea } from '../../ui/Textarea'
-import { Tooltip, TooltipTriggerShell } from '../../ui/Tooltip'
 import { TextSwap } from '../../ui/motion/TextSwap'
-import { useTimedPresence } from '../../ui/motion/useTimedPresence'
 import { handleDashboardViewAction } from '../options-controller'
-import { useDashboardViewState } from './dashboard-view-store.js'
+import { useDashboardViewSelector } from './dashboard-view-store.js'
 import { BusyLoadingLabel } from './LoadingLabel.js'
 import {
   DASHBOARD_CARD_BODY_CLASS,
@@ -47,17 +44,21 @@ import {
   DASHBOARD_CARD_TAG_CHIP_CLASS,
   DASHBOARD_CARD_TAG_TOGGLE_CLASS,
   DASHBOARD_CARD_TITLE_CLASS,
-  DASHBOARD_CARD_TOOLTIP_CLASS,
   DASHBOARD_CARD_URL_CLASS,
   DASHBOARD_TAG_POPOVER_CLASS,
-  DASHBOARD_TAG_POPOVER_LAYER_CLASS,
   DASHBOARD_TAG_POPOVER_LIST_CLASS,
   DASHBOARD_TAG_POPOVER_POSITIONER_CLASS,
   DASHBOARD_TAG_POPOVER_TITLE_CLASS,
   DASHBOARD_CLEAR_SEARCH_CLASS,
   DASHBOARD_DROP_EMPTY_STATE_CLASS,
   DASHBOARD_DRAG_PREVIEW_TITLE_CLASS,
+  DASHBOARD_EMPTY_STATE_ACTIONS_CLASS,
+  DASHBOARD_EMPTY_STATE_PRIMARY_ACTION_CLASS,
+  DASHBOARD_EMPTY_STATE_SECONDARY_ACTION_CLASS,
   DASHBOARD_EMPTY_STATE_CLASS,
+  DASHBOARD_EMPTY_STATE_SUGGESTIONS_CLASS,
+  DASHBOARD_EMPTY_STATE_TEXT_CLASS,
+  DASHBOARD_EMPTY_STATE_TITLE_CLASS,
   DASHBOARD_FOLDER_BREADCRUMB_CURRENT_CLASS,
   DASHBOARD_FOLDER_BREADCRUMB_CURRENT_ITEM_CLASS,
   DASHBOARD_FOLDER_BREADCRUMB_ITEM_CLASS,
@@ -88,14 +89,15 @@ import {
   DASHBOARD_SELECTION_BAR_CLASS,
   DASHBOARD_SELECTION_COUNT_CLASS,
   DASHBOARD_SELECTION_DANGER_BUTTON_CLASS,
-  DASHBOARD_SELECTION_EMPTY_ACTION_CLASS,
   DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS,
   DASHBOARD_VIRTUAL_SPACER_CLASS,
   DASHBOARD_VIRTUAL_WINDOW_CLASS,
   DASHBOARD_TAG_EDITOR_DANGER_BUTTON_CLASS,
   DASHBOARD_TAG_EDITOR_FIELD_CLASS,
   DASHBOARD_TAG_EDITOR_FIELD_LABEL_CLASS,
+  DASHBOARD_TAG_EDITOR_AI_ACTIONS_CLASS,
   DASHBOARD_TAG_EDITOR_PRIMARY_BUTTON_CLASS,
+  DASHBOARD_TAG_EDITOR_PRIMARY_ACTIONS_CLASS,
   DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS,
   DASHBOARD_TAG_EDITOR_TEXTAREA_CLASS
 } from './dashboard-classes.js'
@@ -115,6 +117,7 @@ import type {
   DashboardCardViewModel,
   DashboardDragPreviewState,
   DashboardEmptyState,
+  DashboardEmptyStateAction,
   DashboardFolderDropTargetViewModel,
   DashboardFolderSidebarItemViewModel,
   DashboardLoadingLabelState,
@@ -129,53 +132,55 @@ import type {
 import { dashboardCardActionIconByKind } from './dashboard-view-types.js'
 
 export function DashboardTitleContent() {
-  const { title } = useDashboardViewState()
+  const title = useDashboardViewSelector((state) => state.title)
   return <DashboardTitle state={title} />
 }
 
 export function DashboardCardsTitleContent() {
-  const { cardsTitle } = useDashboardViewState()
+  const cardsTitle = useDashboardViewSelector((state) => state.cardsTitle)
   return <>{cardsTitle}</>
 }
 
 export function DashboardSearchChipsContent() {
-  const { searchChips } = useDashboardViewState()
+  const searchChips = useDashboardViewSelector((state) => state.searchChips)
   return <DashboardSearchChips chips={searchChips} />
 }
 
 export function DashboardSearchControlsContent() {
-  const { searchControls } = useDashboardViewState()
+  const searchControls = useDashboardViewSelector((state) => state.searchControls)
   return <DashboardSearchControls state={searchControls} />
 }
 
 export function DashboardBreadcrumbsContent() {
-  const { breadcrumbs } = useDashboardViewState()
+  const breadcrumbs = useDashboardViewSelector((state) => state.breadcrumbs)
   return <DashboardBreadcrumbs segments={breadcrumbs} />
 }
 
 export function DashboardFolderSidebarCountContent() {
-  const { folderSidebar } = useDashboardViewState()
-  return <>{folderSidebar.countText}</>
+  const countText = useDashboardViewSelector((state) => state.folderSidebar.countText)
+  return <>{countText}</>
 }
 
 export function DashboardFolderTreeContent() {
-  const { folderSidebar } = useDashboardViewState()
+  const folderSidebar = useDashboardViewSelector((state) => state.folderSidebar)
   return <DashboardFolderSidebar state={folderSidebar} />
 }
 
 export function DashboardStatusContent() {
-  const { status } = useDashboardViewState()
+  const status = useDashboardViewSelector((state) => state.status)
   return <DashboardLoadingLabel state={status} />
 }
 
 export function DashboardSelectionBarContent() {
-  const { selectionBar } = useDashboardViewState()
+  const selectionBar = useDashboardViewSelector((state) => state.selectionBar)
   return <DashboardSelectionBar state={selectionBar} />
 }
 
 export function DashboardResultsContent() {
-  const { cardMenuFocusRequest, dragOverlay, results } = useDashboardViewState()
-  return <DashboardResults state={results} focusRequest={cardMenuFocusRequest} dimCards={dragOverlay.visible} />
+  const cardMenuFocusRequest = useDashboardViewSelector((state) => state.cardMenuFocusRequest)
+  const dragOverlayVisible = useDashboardViewSelector((state) => state.dragOverlay.visible)
+  const results = useDashboardViewSelector((state) => state.results)
+  return <DashboardResults state={results} focusRequest={cardMenuFocusRequest} dimCards={dragOverlayVisible} />
 }
 
 export type DashboardCardElementRegistrar = (bookmarkId: string, node: HTMLElement | null) => void
@@ -234,42 +239,43 @@ export function DashboardResults({
 }
 
 export function DashboardFolderDropGridContent() {
-  const { dragOverlay } = useDashboardViewState()
-  return <DashboardFolderDropGrid targets={dragOverlay.dropTargets} moving={dragOverlay.moving} />
+  const dropTargets = useDashboardViewSelector((state) => state.dragOverlay.dropTargets)
+  const moving = useDashboardViewSelector((state) => state.dragOverlay.moving)
+  return <DashboardFolderDropGrid targets={dropTargets} moving={moving} />
 }
 
 export function DashboardDragPreviewContent() {
-  const { dragOverlay } = useDashboardViewState()
-  return dragOverlay.dragPreview ? <DashboardDragPreview state={dragOverlay.dragPreview} /> : null
+  const dragPreview = useDashboardViewSelector((state) => state.dragOverlay.dragPreview)
+  return dragPreview ? <DashboardDragPreview state={dragPreview} /> : null
 }
 
 export function DashboardDragHintContent() {
-  const { dragOverlay } = useDashboardViewState()
-  return <DashboardLoadingLabel state={dragOverlay.dragHint} />
+  const dragHint = useDashboardViewSelector((state) => state.dragOverlay.dragHint)
+  return <DashboardLoadingLabel state={dragHint} />
 }
 
 export function DashboardTagEditorTitleContent() {
-  const { tagEditor } = useDashboardViewState()
-  return <>{tagEditor.title}</>
+  const title = useDashboardViewSelector((state) => state.tagEditor.title)
+  return <>{title}</>
 }
 
 export function DashboardTagEditorMetaContent() {
-  const { tagEditor } = useDashboardViewState()
-  return <>{tagEditor.meta}</>
+  const meta = useDashboardViewSelector((state) => state.tagEditor.meta)
+  return <>{meta}</>
 }
 
 export function DashboardTagEditorFieldContent() {
-  const { tagEditor } = useDashboardViewState()
+  const tagEditor = useDashboardViewSelector((state) => state.tagEditor)
   return tagEditor.visible ? <DashboardTagEditorField state={tagEditor.field} /> : null
 }
 
 export function DashboardTagEditorStatusContent() {
-  const { tagEditor } = useDashboardViewState()
-  return <>{tagEditor.status}</>
+  const status = useDashboardViewSelector((state) => state.tagEditor.status)
+  return <>{status}</>
 }
 
 export function DashboardTagEditorActionsContent() {
-  const { tagEditor } = useDashboardViewState()
+  const tagEditor = useDashboardViewSelector((state) => state.tagEditor)
   return tagEditor.visible ? <DashboardTagEditorActions state={tagEditor.actions} /> : null
 }
 
@@ -509,10 +515,56 @@ function DashboardEmptyStatePanel({ state }: { state: DashboardEmptyState }) {
           }}
         />
       ) : (
-        state.message
+        <>
+          <strong className={DASHBOARD_EMPTY_STATE_TITLE_CLASS}>{state.title}</strong>
+          <p className={DASHBOARD_EMPTY_STATE_TEXT_CLASS}>{state.message}</p>
+          {state.suggestions.length ? (
+            <ul className={DASHBOARD_EMPTY_STATE_SUGGESTIONS_CLASS}>
+              {state.suggestions.map((suggestion) => (
+                <li key={suggestion}>{suggestion}</li>
+              ))}
+            </ul>
+          ) : null}
+          {state.actions.length ? (
+            <div className={DASHBOARD_EMPTY_STATE_ACTIONS_CLASS}>
+              {state.actions.map((action) => (
+                <Button
+                  className={
+                    action.variant === 'primary'
+                      ? DASHBOARD_EMPTY_STATE_PRIMARY_ACTION_CLASS
+                      : DASHBOARD_EMPTY_STATE_SECONDARY_ACTION_CLASS
+                  }
+                  type="button"
+                  variant={action.variant}
+                  key={`${action.action}:${action.bookmarkId || ''}:${action.label}`}
+                  onClick={() => handleDashboardEmptyStateAction(action)}
+                >
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   )
+}
+
+function handleDashboardEmptyStateAction(action: DashboardEmptyStateAction): void {
+  if (action.action === 'clear-search') {
+    handleDashboardViewAction({ action: 'clear-search' })
+    return
+  }
+
+  if (action.action === 'folder-filter') {
+    handleDashboardViewAction({
+      action: 'folder-filter',
+      bookmarkId: action.bookmarkId || ''
+    })
+    return
+  }
+
+  handleDashboardViewAction({ action: 'exit-dashboard' })
 }
 
 function DashboardFolderDropGrid({ targets, moving }: { targets: DashboardFolderDropTargetViewModel[]; moving: boolean }) {
@@ -581,7 +633,6 @@ function DashboardDragPreview({ state }: { state: DashboardDragPreviewState }) {
 
 function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState }) {
   const moveSelectionRef = useOptionsFocusTargetRef<HTMLButtonElement>('dashboard-move-selection')
-  const emptySelectionActionClass = state.selectedCount === 0 ? DASHBOARD_SELECTION_EMPTY_ACTION_CLASS : ''
 
   return (
     <div className={DASHBOARD_SELECTION_BAR_CLASS}>
@@ -601,7 +652,7 @@ function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState })
           选择当前可见
         </Button>
         <Button
-          className={[DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS, emptySelectionActionClass].filter(Boolean).join(' ')}
+          className={DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS}
           size="sm"
           type="button"
           variant="secondary"
@@ -613,7 +664,7 @@ function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState })
         </Button>
         <Button
           ref={moveSelectionRef}
-          className={[DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS, emptySelectionActionClass].filter(Boolean).join(' ')}
+          className={DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS}
           size="sm"
           type="button"
           variant="secondary"
@@ -624,7 +675,7 @@ function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState })
           批量移动
         </Button>
         <Button
-          className={[DASHBOARD_SELECTION_DANGER_BUTTON_CLASS, emptySelectionActionClass].filter(Boolean).join(' ')}
+          className={DASHBOARD_SELECTION_DANGER_BUTTON_CLASS}
           size="sm"
           type="button"
           variant="danger"
@@ -642,81 +693,85 @@ function DashboardSelectionBar({ state }: { state: DashboardSelectionBarState })
 function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActionsState }) {
   return (
     <>
-      <Button
-        className={DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS}
-        size="sm"
-        type="button"
-        variant="secondary"
-        aria-label="清除当前 Dashboard 书签的 AI 标签"
-        disabled={state.clearAiDisabled}
-        focusableWhenDisabled={state.clearAiBusy}
-        onClick={() => handleDashboardViewAction({ action: 'clear-ai-tags' })}
-      >
-        <DashboardLoadingLabel
-          state={{
-            busy: state.clearAiBusy,
-            label: state.clearAiBusy ? '清除中...' : '清除 AI 标签',
-            loaderClass: LOADING_LABEL_BUTTON_LOADER_CLASS,
-            variant: 'bar',
-            wrapperClass: LOADING_LABEL_BUTTON_WRAPPER_CLASS
-          }}
-        />
-      </Button>
-      <Button
-        className={DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS}
-        size="sm"
-        type="button"
-        variant="secondary"
-        aria-label="重新生成当前 Dashboard 书签的 AI 标签"
-        disabled={state.regenerateAiDisabled}
-        focusableWhenDisabled={state.regenerateAiBusy}
-        onClick={() => handleDashboardViewAction({ action: 'regenerate-ai-tags' })}
-      >
-        <DashboardLoadingLabel
-          state={{
-            busy: state.regenerateAiBusy,
-            label: state.regenerateAiBusy ? '生成中...' : '重新生成 AI 标签',
-            loaderClass: LOADING_LABEL_BUTTON_LOADER_CLASS,
-            variant: 'spiral',
-            wrapperClass: LOADING_LABEL_BUTTON_WRAPPER_CLASS
-          }}
-        />
-      </Button>
-      <Button
-        className={
-          state.cancelDanger
-            ? DASHBOARD_TAG_EDITOR_DANGER_BUTTON_CLASS
-            : DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS
-        }
-        size="sm"
-        type="button"
-        variant={state.cancelDanger ? 'danger' : 'secondary'}
-        aria-label="取消编辑当前 Dashboard 书签标签"
-        disabled={state.cancelDisabled}
-        focusableWhenDisabled={state.cancelDanger}
-        onClick={() => handleDashboardViewAction({ action: 'close-tag-editor' })}
-      >
-        {state.cancelLabel}
-      </Button>
-      <Button
-        className={DASHBOARD_TAG_EDITOR_PRIMARY_BUTTON_CLASS}
-        size="sm"
-        type="button"
-        aria-label="保存当前 Dashboard 书签标签"
-        disabled={state.saveDisabled}
-        focusableWhenDisabled={state.saveBusy}
-        onClick={() => handleDashboardViewAction({ action: 'save-tags' })}
-      >
-        <DashboardLoadingLabel
-          state={{
-            busy: state.saveBusy,
-            label: state.saveBusy ? '保存中...' : '保存标签',
-            loaderClass: LOADING_LABEL_BUTTON_LOADER_CLASS,
-            variant: 'bar',
-            wrapperClass: LOADING_LABEL_BUTTON_WRAPPER_CLASS
-          }}
-        />
-      </Button>
+      <div className={DASHBOARD_TAG_EDITOR_AI_ACTIONS_CLASS} aria-label="AI 标签操作">
+        <Button
+          className={DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS}
+          size="sm"
+          type="button"
+          variant="secondary"
+          aria-label="清除当前 Dashboard 书签的 AI 标签"
+          disabled={state.clearAiDisabled}
+          focusableWhenDisabled={state.clearAiBusy}
+          onClick={() => handleDashboardViewAction({ action: 'clear-ai-tags' })}
+        >
+          <DashboardLoadingLabel
+            state={{
+              busy: state.clearAiBusy,
+              label: state.clearAiBusy ? '清除中...' : '清除 AI 标签',
+              loaderClass: LOADING_LABEL_BUTTON_LOADER_CLASS,
+              variant: 'bar',
+              wrapperClass: LOADING_LABEL_BUTTON_WRAPPER_CLASS
+            }}
+          />
+        </Button>
+        <Button
+          className={DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS}
+          size="sm"
+          type="button"
+          variant="secondary"
+          aria-label="重新生成当前 Dashboard 书签的 AI 标签"
+          disabled={state.regenerateAiDisabled}
+          focusableWhenDisabled={state.regenerateAiBusy}
+          onClick={() => handleDashboardViewAction({ action: 'regenerate-ai-tags' })}
+        >
+          <DashboardLoadingLabel
+            state={{
+              busy: state.regenerateAiBusy,
+              label: state.regenerateAiBusy ? '生成中...' : '重新生成 AI 标签',
+              loaderClass: LOADING_LABEL_BUTTON_LOADER_CLASS,
+              variant: 'spiral',
+              wrapperClass: LOADING_LABEL_BUTTON_WRAPPER_CLASS
+            }}
+          />
+        </Button>
+      </div>
+      <div className={DASHBOARD_TAG_EDITOR_PRIMARY_ACTIONS_CLASS}>
+        <Button
+          className={
+            state.cancelDanger
+              ? DASHBOARD_TAG_EDITOR_DANGER_BUTTON_CLASS
+              : DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS
+          }
+          size="sm"
+          type="button"
+          variant={state.cancelDanger ? 'danger' : 'secondary'}
+          aria-label="取消编辑当前 Dashboard 书签标签"
+          disabled={state.cancelDisabled}
+          focusableWhenDisabled={state.cancelDanger}
+          onClick={() => handleDashboardViewAction({ action: 'close-tag-editor' })}
+        >
+          {state.cancelLabel}
+        </Button>
+        <Button
+          className={DASHBOARD_TAG_EDITOR_PRIMARY_BUTTON_CLASS}
+          size="sm"
+          type="button"
+          aria-label="保存当前 Dashboard 书签标签"
+          disabled={state.saveDisabled}
+          focusableWhenDisabled={state.saveBusy}
+          onClick={() => handleDashboardViewAction({ action: 'save-tags' })}
+        >
+          <DashboardLoadingLabel
+            state={{
+              busy: state.saveBusy,
+              label: state.saveBusy ? '保存中...' : '保存标签',
+              loaderClass: LOADING_LABEL_BUTTON_LOADER_CLASS,
+              variant: 'bar',
+              wrapperClass: LOADING_LABEL_BUTTON_WRAPPER_CLASS
+            }}
+          />
+        </Button>
+      </div>
     </>
   )
 }
@@ -812,6 +867,7 @@ const DashboardCard = memo(function DashboardCard({
   staticVisibility?: boolean
 }) {
   const dragPointerIdRef = useRef<number | null>(null)
+  const interactionsEnabled = state.interactionMode === 'full'
   const setCardRef = useCallback((node: HTMLElement | null) => {
     registerCardElement?.(state.bookmarkId, node)
   }, [registerCardElement, state.bookmarkId])
@@ -881,11 +937,13 @@ const DashboardCard = memo(function DashboardCard({
   return (
     <article
       ref={setCardRef}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      onLostPointerCapture={handleLostPointerCapture}
+      data-bookmark-id={state.bookmarkId}
+      data-render-mode={state.renderMode}
+      onPointerDown={interactionsEnabled ? handlePointerDown : undefined}
+      onPointerMove={interactionsEnabled ? handlePointerMove : undefined}
+      onPointerUp={interactionsEnabled ? handlePointerUp : undefined}
+      onPointerCancel={interactionsEnabled ? handlePointerCancel : undefined}
+      onLostPointerCapture={interactionsEnabled ? handleLostPointerCapture : undefined}
       className={[
         DASHBOARD_CARD_ROOT_CLASS,
         state.selected ? DASHBOARD_CARD_SELECTED_STATE_CLASS : '',
@@ -934,6 +992,10 @@ function getDashboardCardFocusRequestId(
 }
 
 function areDashboardCardStatesEqual(previous: DashboardCardViewModel, next: DashboardCardViewModel): boolean {
+  if (previous === next) {
+    return true
+  }
+
   return (
     previous.activeMenu === next.activeMenu &&
     previous.bookmarkId === next.bookmarkId &&
@@ -948,6 +1010,7 @@ function areDashboardCardStatesEqual(previous: DashboardCardViewModel, next: Das
     previous.fallbackLabel === next.fallbackLabel &&
     areDashboardFaviconsEqual(previous.favicon, next.favicon) &&
     previous.hiddenTagCount === next.hiddenTagCount &&
+    previous.interactionMode === next.interactionMode &&
     previous.itemPath === next.itemPath &&
     previous.moreLabel === next.moreLabel &&
     previous.moveLabel === next.moveLabel &&
@@ -1018,29 +1081,48 @@ function DashboardCardContents({
   focusRequest: DashboardCardMenuFocusRequestState
 }) {
   const isScrollCard = state.renderMode === 'scroll'
-  const tagRowVisible = !isScrollCard && (state.visibleTags.length > 0 || state.hiddenTagCount > 0)
+  const hasFullContent = !isScrollCard
+  const hasFullInteractions = hasFullContent && state.interactionMode === 'full'
+  const tagRowVisible = hasFullContent && (state.visibleTags.length > 0 || state.hiddenTagCount > 0)
   const tagToggleRef = useRef<HTMLButtonElement | null>(null)
   const tagsPanelId = getDashboardTagsPanelId(state.bookmarkId)
-  const tagPopoverOpen = state.expanded && state.tags.length > 0
-  const tagPopoverPresence = useTimedPresence(tagPopoverOpen, '--dropdown-close-dur', 190)
+  const tagPopoverOpen = hasFullInteractions && state.expanded && state.tags.length > 0
 
   return (
     <>
-      {!isScrollCard ? <label className={DASHBOARD_CARD_CHECK_CLASS}>
-        <CheckboxControl
-          aria-label={state.selectionLabel}
-          className={OPTION_RESULT_CHECKBOX_CLASS}
-          checked={state.selected}
-          disabled={state.deleting}
-          onCheckedChange={(checked) => handleDashboardViewAction({
-            action: 'toggle-selection',
-            bookmarkId: state.bookmarkId,
-            checked
-          })}
-          unstyled
-        />
-        <span className="sr-only">{state.selectionLabel}</span>
-      </label> : null}
+      {hasFullContent ? (
+        <span className={DASHBOARD_CARD_CHECK_CLASS}>
+          {hasFullInteractions ? (
+            <button
+              type="button"
+              role="checkbox"
+              aria-label={state.selectionLabel}
+              aria-checked={state.selected ? 'true' : 'false'}
+              className={OPTION_RESULT_CHECKBOX_CLASS}
+              disabled={state.deleting}
+              data-checked={state.selected ? '' : undefined}
+              data-disabled={state.deleting ? '' : undefined}
+              onClick={() => handleDashboardViewAction({
+                action: 'toggle-selection',
+                bookmarkId: state.bookmarkId,
+                checked: !state.selected
+              })}
+            >
+              <Icon name="Check" size={13} className={state.selected ? '' : 'opacity-0'} aria-hidden="true" />
+            </button>
+          ) : (
+            <span
+              role="presentation"
+              className={OPTION_RESULT_CHECKBOX_CLASS}
+              data-checked={state.selected ? '' : undefined}
+              data-disabled={state.deleting ? '' : undefined}
+            >
+              <Icon name="Check" size={13} className={state.selected ? '' : 'opacity-0'} aria-hidden="true" />
+            </span>
+          )}
+          <span className="sr-only">{state.selectionLabel}</span>
+        </span>
+      ) : null}
       <div className={DASHBOARD_CARD_BODY_CLASS}>
         <DashboardFavicon state={state} />
         <div className={DASHBOARD_CARD_COPY_CLASS}>
@@ -1055,12 +1137,12 @@ function DashboardCardContents({
             {state.displayUrl}
           </a>
           <div className={DASHBOARD_CARD_META_CLASS}>
-            {isScrollCard ? (
+            {!hasFullInteractions ? (
               <span className={DASHBOARD_CARD_PATH_CHIP_CLASS} title={state.itemPath}>
                 {state.itemPath}
               </span>
             ) : (
-              <Button
+              <button
                 className={DASHBOARD_CARD_PATH_CHIP_CLASS}
                 type="button"
                 title={state.itemPath}
@@ -1069,17 +1151,16 @@ function DashboardCardContents({
                   action: 'folder-filter',
                   bookmarkId: state.parentId
                 })}
-                unstyled
               >
                 {state.itemPath}
-              </Button>
+              </button>
             )}
             {tagRowVisible ? (
               <div className={DASHBOARD_CARD_TAG_ROW_CLASS}>
                 {state.visibleTags.map((tag) => (
                   <span className={DASHBOARD_CARD_TAG_CHIP_CLASS} key={tag}>{tag}</span>
                 ))}
-                {state.hiddenTagCount > 0 ? (
+                {state.hiddenTagCount > 0 && hasFullInteractions ? (
                   <Button
                     id={`dashboard-tag-more-${state.bookmarkId}`}
                     ref={tagToggleRef}
@@ -1088,10 +1169,15 @@ function DashboardCardContents({
                     aria-expanded={state.expanded ? 'true' : 'false'}
                     aria-controls={tagsPanelId}
                     aria-label={`查看 ${state.hiddenTagCount} 个隐藏标签`}
-                    onClick={() => handleDashboardViewAction({
-                      action: 'toggle-tags',
-                      bookmarkId: state.bookmarkId
-                    })}
+                    onClick={() => {
+                      if (state.expanded) {
+                        return
+                      }
+                      handleDashboardViewAction({
+                        action: 'toggle-tags',
+                        bookmarkId: state.bookmarkId
+                      })
+                    }}
                     onPointerEnter={() => handleDashboardViewAction({
                       action: 'tag-hover-open',
                       bookmarkId: state.bookmarkId
@@ -1109,43 +1195,47 @@ function DashboardCardContents({
                   >
                     +{state.hiddenTagCount}
                   </Button>
+                ) : state.hiddenTagCount > 0 ? (
+                  <span className={DASHBOARD_CARD_TAG_TOGGLE_CLASS}>
+                    +{state.hiddenTagCount}
+                  </span>
                 ) : null}
               </div>
             ) : null}
           </div>
         </div>
       </div>
-      {!isScrollCard ? <div className={DASHBOARD_CARD_FOOTER_CLASS}>
-        <DashboardCardAction
-          as="a"
-          icon="open"
-          label={state.openLabel}
-          tooltip="打开书签"
-          className={DASHBOARD_CARD_OPEN_ACTION_CLASS}
-          href={state.url}
-          text="打开"
-        />
-        <DashboardCardAction
-          icon="copy"
-          label={state.copyActionLabel}
-          tooltip={state.copyTooltip}
-          className={DASHBOARD_CARD_COPY_ACTION_CLASS}
-          onClick={() => handleDashboardViewAction({
-            action: 'copy-bookmark',
-            bookmarkId: state.bookmarkId
-          })}
-          text={state.copyText}
-        />
-        <DashboardCardMoreMenu state={state} focusRequest={focusRequest} />
-      </div> : null}
-      {tagPopoverPresence.mounted ? (
-        <div className={DASHBOARD_TAG_POPOVER_LAYER_CLASS}>
-          <DashboardTagPopoverShell
-            open={tagPopoverOpen}
-            state={state}
-            triggerRef={tagToggleRef}
+      {hasFullContent ? (
+        <div className={DASHBOARD_CARD_FOOTER_CLASS}>
+          <DashboardCardAction
+            as="a"
+            icon="open"
+            label={state.openLabel}
+            tooltip="打开书签"
+            className={DASHBOARD_CARD_OPEN_ACTION_CLASS}
+            href={state.url}
+            text="打开"
           />
+          <DashboardCardAction
+            icon="copy"
+            label={state.copyActionLabel}
+            tooltip={state.copyTooltip}
+            className={DASHBOARD_CARD_COPY_ACTION_CLASS}
+            onClick={() => handleDashboardViewAction({
+              action: 'copy-bookmark',
+              bookmarkId: state.bookmarkId
+            })}
+            text={state.copyText}
+          />
+          <DashboardCardMoreMenu state={state} focusRequest={focusRequest} />
         </div>
+      ) : null}
+      {hasFullInteractions && tagPopoverOpen ? (
+        <DashboardTagPopoverShell
+          open
+          state={state}
+          triggerRef={tagToggleRef}
+        />
       ) : null}
     </>
   )
@@ -1161,16 +1251,6 @@ function DashboardCardMoreMenu({
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const focusRequestId = focusRequest.bookmarkId === state.bookmarkId ? focusRequest.requestId : 0
 
-  useEffect(() => {
-    if (!focusRequestId) {
-      return
-    }
-
-    window.setTimeout(() => {
-      triggerRef.current?.focus()
-    }, 0)
-  }, [focusRequestId])
-
   return (
     <div
       className={[
@@ -1179,50 +1259,83 @@ function DashboardCardMoreMenu({
       ].filter(Boolean).join(' ')}
       onPointerDown={stopDashboardCardDragPropagation}
     >
-      <InlineMenu
-        actions={getDashboardCardMenuActions(state)}
-        className={DASHBOARD_CARD_MENU_CLASS}
-        label={state.moreLabel}
-        open={state.activeMenu}
-        onOpenChange={(open, eventDetails) => {
-          if (!open && eventDetails.reason === 'escape-key') {
-            eventDetails.event.preventDefault()
-            eventDetails.event.stopPropagation()
-          }
+      {state.activeMenu ? (
+        <InlineMenu
+          actions={getDashboardCardMenuActions(state)}
+          className={DASHBOARD_CARD_MENU_CLASS}
+          label={state.moreLabel}
+          open
+          onOpenChange={(open, eventDetails) => {
+            if (!open && eventDetails.reason === 'escape-key') {
+              eventDetails.event.preventDefault()
+              eventDetails.event.stopPropagation()
+            }
 
-          handleDashboardViewAction({
+            handleDashboardViewAction({
+              action: 'card-menu-open-change',
+              bookmarkId: state.bookmarkId,
+              open
+            })
+          }}
+          trigger={
+            <>
+              <Icon name="MoreHorizontal" aria-hidden="true" />
+              <span className="sr-only">更多</span>
+            </>
+          }
+          triggerProps={{
+            className: DASHBOARD_CARD_MORE_TRIGGER_CLASS,
+            type: 'button',
+            'aria-label': state.moreLabel,
+            'aria-haspopup': 'menu',
+            'aria-expanded': 'true',
+            title: '更多操作',
+            ref: triggerRef
+          }}
+        />
+      ) : (
+        <button
+          ref={triggerRef}
+          className={DASHBOARD_CARD_MORE_TRIGGER_CLASS}
+          type="button"
+          aria-label={state.moreLabel}
+          aria-haspopup="menu"
+          aria-expanded="false"
+          title="更多操作"
+          onClick={() => handleDashboardViewAction({
             action: 'card-menu-open-change',
             bookmarkId: state.bookmarkId,
-            open
-          })
-        }}
-        trigger={
-          <>
-            <Icon name="MoreHorizontal" aria-hidden="true" />
-            <span className="sr-only">更多</span>
-          </>
-        }
-        triggerProps={{
-          className: DASHBOARD_CARD_MORE_TRIGGER_CLASS,
-          type: 'button',
-          'aria-label': state.moreLabel,
-          'aria-haspopup': 'menu',
-          'aria-expanded': state.activeMenu ? 'true' : 'false',
-          ref: triggerRef
-        }}
-        triggerWrapper={(menuTrigger) => (
-          <TooltipTriggerShell
-            content="更多操作"
-            delay={180}
-            popupClassName={DASHBOARD_CARD_TOOLTIP_CLASS}
-            sideOffset={8}
-          >
-            {menuTrigger}
-          </TooltipTriggerShell>
-        )}
-      />
+            open: true
+          })}
+        >
+          <Icon name="MoreHorizontal" aria-hidden="true" />
+          <span className="sr-only">更多</span>
+        </button>
+      )}
+      {focusRequestId ? (
+        <DashboardCardMoreFocusRestorer
+          focusRequestId={focusRequestId}
+          triggerRef={triggerRef}
+        />
+      ) : null}
     </div>
   )
+}
+
+function DashboardCardMoreFocusRestorer({
+  focusRequestId,
+  triggerRef
+}: {
+  focusRequestId: number
+  triggerRef: RefObject<HTMLButtonElement | null>
+}) {
+  useEffect(() => {
+    window.setTimeout(() => {
+      triggerRef.current?.focus()
+    }, 0)
+  }, [focusRequestId, triggerRef])
+
+  return null
 }
 
 function getDashboardCardMenuActions(state: DashboardCardViewModel): InlineMenuAction[] {
@@ -1300,7 +1413,7 @@ function DashboardFavicon({ state }: { state: DashboardCardViewModel }) {
     <DashboardFaviconShell
       bookmarkId={state.bookmarkId}
       fallbackLabel={state.fallbackLabel}
-      favicon={state.renderMode === 'scroll' ? null : state.favicon}
+      favicon={state.favicon}
       selected={state.selected}
     />
   )
@@ -1351,7 +1464,8 @@ function DashboardFaviconImage({
   favicon: DashboardCardFaviconViewModel
   selected: boolean
 }) {
-  const [loaded, setLoaded] = useState(false)
+  const loadedRef = useRef(false)
+  const fallbackRef = useRef<HTMLSpanElement | null>(null)
 
   return (
     <>
@@ -1359,22 +1473,17 @@ function DashboardFaviconImage({
         className={[
           DASHBOARD_CARD_FAVICON_IMAGE_CLASS,
           selected ? DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS : '',
-          loaded ? DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS : ''
+          loadedRef.current ? DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS : ''
         ].filter(Boolean).join(' ')}
         src={favicon.src}
         alt=""
-        loading="lazy"
+        loading="eager"
         decoding="async"
         draggable={false}
-        onLoad={() => {
-          setLoaded(true)
-          handleDashboardViewAction({
-            action: 'favicon-load',
-            bookmarkId,
-            pageUrl: favicon.pageUrl,
-            source: favicon.source,
-            src: favicon.src
-          })
+        onLoad={(event) => {
+          loadedRef.current = true
+          event.currentTarget.classList.add(DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS)
+          fallbackRef.current?.setAttribute('hidden', '')
         }}
         onError={() => handleDashboardViewAction({
           action: 'favicon-error',
@@ -1384,27 +1493,30 @@ function DashboardFaviconImage({
           src: favicon.src
         })}
       />
-      <DashboardFaviconFallback label={fallbackLabel} hidden={loaded} />
+      <DashboardFaviconFallback fallbackRef={fallbackRef} hidden={loadedRef.current} label={fallbackLabel} />
     </>
   )
 }
 
-function DashboardFaviconFallback({
+const DashboardFaviconFallback = memo(function DashboardFaviconFallback({
+  fallbackRef,
   hidden = false,
   label
 }: {
+  fallbackRef?: RefObject<HTMLSpanElement | null>
   hidden?: boolean
   label: string
 }) {
   return (
     <span
+      ref={fallbackRef}
       className={DASHBOARD_CARD_FAVICON_FALLBACK_CLASS}
       hidden={hidden}
     >
       {label}
     </span>
   )
-}
+})
 
 type DashboardCardActionBaseProps = {
   icon: DashboardCardActionIcon
@@ -1416,7 +1528,7 @@ type DashboardCardActionBaseProps = {
 
 type DashboardCardActionButtonProps = DashboardCardActionBaseProps & {
   as?: 'button'
-} & Omit<ComponentPropsWithoutRef<typeof Button>, 'aria-label' | 'children' | 'className' | 'type'>
+} & Omit<ComponentPropsWithoutRef<'button'>, 'aria-label' | 'children' | 'className' | 'type'>
 
 type DashboardCardActionLinkProps = DashboardCardActionBaseProps & {
   as: 'a'
@@ -1444,53 +1556,31 @@ function DashboardCardAction({
   if (as === 'a') {
     const { href, ...linkProps } = props as DashboardCardActionLinkProps
     return (
-      <DashboardCardIconTooltip content={tooltip}>
-        <a
-          className={className}
-          href={href}
-          target="_blank"
-          rel="noreferrer noopener"
-          draggable={false}
-          aria-label={label}
-          {...linkProps}
-        >
-          {content}
-        </a>
-      </DashboardCardIconTooltip>
+      <a
+        className={className}
+        href={href}
+        target="_blank"
+        rel="noreferrer noopener"
+        draggable={false}
+        aria-label={label}
+        title={tooltip}
+        {...linkProps}
+      >
+        {content}
+      </a>
     )
   }
 
   return (
-    <DashboardCardIconTooltip content={tooltip}>
-      <Button
-        className={className}
-        type="button"
-        aria-label={label}
-        unstyled
-        {...props as DashboardCardActionButtonProps}
-      >
-        {content}
-      </Button>
-    </DashboardCardIconTooltip>
-  )
-}
-
-function DashboardCardIconTooltip({
-  children,
-  content
-}: {
-  children: ReactElement
-  content: string
-}) {
-  return (
-    <Tooltip
-      content={content}
-      delay={180}
-      popupClassName={DASHBOARD_CARD_TOOLTIP_CLASS}
-      sideOffset={8}
+    <button
+      className={className}
+      type="button"
+      aria-label={label}
+      title={tooltip}
+      {...props as DashboardCardActionButtonProps}
     >
-      {children}
-    </Tooltip>
+      {content}
+    </button>
   )
 }
 
@@ -1522,10 +1612,16 @@ function DashboardTagPopoverShell({
 
   return (
     <PopoverRoot open={open} triggerId={`dashboard-tag-more-${state.bookmarkId}`}>
-      <PopoverPortal keepMounted container={null}>
+      <PopoverPortal keepMounted>
         <PopoverPositioner
           className={DASHBOARD_TAG_POPOVER_POSITIONER_CLASS}
-          anchor={() => triggerRef.current}
+          anchor={() => triggerRef.current?.closest('article') || triggerRef.current}
+          align="center"
+          positionMethod="fixed"
+          side="right"
+          sideOffset={8}
+          collisionPadding={12}
+          collisionAvoidance={{ side: 'flip', align: 'shift' }}
           onPointerDown={stopDashboardCardDragPropagation}
         >
           <PopoverPopup
@@ -1535,7 +1631,6 @@ function DashboardTagPopoverShell({
               't-dropdown',
               open ? 'is-open' : 'is-closing'
             ].join(' ')}
-            data-origin="bottom-right"
             aria-label="全部标签"
             initialFocus={false}
             finalFocus={false}

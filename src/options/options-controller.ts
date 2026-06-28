@@ -252,7 +252,8 @@ import {
   moveSingleDashboardBookmark,
   moveSelectedDashboardBookmarks,
   removeDashboardSelectionIds,
-  renderDashboardSection
+  renderDashboardSection,
+  renderDashboardSectionWhenIdle
 } from './sections/dashboard-lazy.js'
 import { publishResultsPagination } from './components/results-pagination-store.js'
 import type { ResultsPaginationActionDetail } from './components/results-pagination-types.js'
@@ -2268,7 +2269,7 @@ function renderActiveOptionsSection() {
   }
 
   if (activeSection === 'dashboard') {
-    renderDashboardSection()
+    renderDashboardSectionWhenIdle()
     handleOptionsDashboardViewReady()
     return
   }
@@ -6347,7 +6348,7 @@ function renderDashboardSectionIfVisible(): void {
     return
   }
 
-  renderDashboardSection()
+  renderDashboardSectionWhenIdle()
 }
 
 function shouldHydrateContentSnapshotFullTextSearchMapForDashboard(): boolean {

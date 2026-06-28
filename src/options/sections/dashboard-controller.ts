@@ -13,7 +13,7 @@ import {
   type BookmarkTagIndex,
   type BookmarkTagRecord
 } from '../../shared/bookmark-tags.js'
-import { displayUrl, normalizeText } from '../../shared/text.js'
+import { displayUrl, extractDomain, normalizeText } from '../../shared/text.js'
 import { moveBookmark } from '../../shared/bookmarks-api.js'
 import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { createMemoryCache, type MemoryCache } from '../../shared/cache.js'
@@ -80,6 +80,7 @@ import {
   type DashboardLoadingLabelState,
   type DashboardPanelChromeState,
   type DashboardSearchChipViewModel,
+  type DashboardEmptyStateAction,
   type DashboardTagEditorActionsState,
   type DashboardTagEditorFieldState
 } from '../components/dashboard-view-types.js'
@@ -113,7 +114,10 @@ import {
   DASHBOARD_VIRTUAL_MIN_READY_HEIGHT,
   DASHBOARD_VIRTUAL_MIN_READY_WIDTH,
   computeDashboardVirtualWindow,
+  computeDashboardVirtualFullRenderRange,
   getDashboardVirtualColumnCount,
+  shouldDashboardUseVirtualRendering,
+  type DashboardVirtualFullRenderRange,
   type DashboardVirtualWindow
 } from './dashboard-virtual.js'
 import {
@@ -177,6 +181,12 @@ interface DashboardVirtualState {
   renderedColumnCount: number
   renderedTotalHeight: number
   renderedOffsetY: number
+  renderedFullStartIndex: number
+  renderedFullEndIndex: number
+  desiredFullStartIndex: number
+  desiredFullEndIndex: number
+  fullStartIndex: number
+  fullEndIndex: number
   renderedStateKey: string
   renderedStaticListKey: string
   renderedItems: DashboardItem[] | null
@@ -191,9 +201,12 @@ interface DashboardVirtualState {
   lastResizeColumnCount: number
   lastScrollTop: number
   lastScrollAt: number
+  lastScrollDirection: -1 | 0 | 1
   isFastScrolling: boolean
   scrollIdleTimer: number
   scrollSettleTimer: number
+  scrollRestoreIdleCallback: number
+  scrollRestoreTimer: number
   resultsMetrics: DashboardResultsMetricsSnapshot | null
 }
 
@@ -237,6 +250,29 @@ interface DashboardRenderCache {
   sidebarSelectedFolderId: string
   sidebarItems: DashboardFolderSidebarItemViewModel[] | null
   sidebarTotalFolders: number
+  fullCardStaticViewModels: Map<string, DashboardFullCardStaticViewModel>
+  scrollCardViewModels: Map<string, DashboardCardViewModel>
+}
+
+interface DashboardFullCardStaticViewModel {
+  copyActionLabel: string
+  deleteLabel: string
+  displayUrl: string
+  editTagsLabel: string
+  fallbackLabel: string
+  hiddenTagCount: number
+  itemPath: string
+  moreLabel: string
+  moveLabel: string
+  openLabel: string
+  parentId: string
+  selectionLabel: string
+  speedDialAddLabel: string
+  speedDialRemoveLabel: string
+  tags: string[]
+  title: string
+  url: string
+  visibleTags: string[]
 }
 
 interface DashboardNaturalSearchCacheEntry {
@@ -297,7 +333,6 @@ interface DashboardCallbacks {
 }
 
 export const DASHBOARD_DRAG_MOVE_THRESHOLD = 4
-const DASHBOARD_VIRTUAL_THRESHOLD = 90
 const DASHBOARD_NEWTAB_EMBED_PARAM = 'newtab-dashboard'
 const DASHBOARD_NATURAL_SEARCH_CACHE_LIMIT = 24
 const DASHBOARD_NATURAL_SEARCH_CACHE_TTL_MS = 5 * 60 * 1000
@@ -308,8 +343,10 @@ const DASHBOARD_SEARCH_MAX_SYNC_LIMIT = 1000
 const DASHBOARD_SEARCH_SCROLL_PREFETCH_PX = 1200
 const DASHBOARD_SEARCH_SCROLL_PREFETCH_MIN_INTERVAL_MS = 450
 const DASHBOARD_SEARCH_SCROLL_PREFETCH_IDLE_TIMEOUT_MS = 650
+const DASHBOARD_SCROLL_FRAME_BUDGET_MS = 16.7
 const DASHBOARD_SCROLL_IDLE_MS = 110
 const DASHBOARD_SCROLL_SETTLE_MS = 160
+const DASHBOARD_SCROLL_RESTORE_DELAY_MS = 720
 const DASHBOARD_FAVICON_DIRTY_SYNC_DELAY_MS = 160
 const DASHBOARD_FAVICON_DIRTY_SYNC_SCROLL_DELAY_MS = 220
 const DASHBOARD_FAVICON_WARMUP_DEBUG_DELAY_MS = 1400
@@ -329,6 +366,7 @@ let dashboardCardsRenderVersion = 0
 let dashboardCardsCommittedRenderVersion = 0
 let dashboardListRenderFrame = 0
 let dashboardListRenderPendingForScroll = false
+let dashboardSectionRenderPendingForScroll = false
 let pendingDashboardFolderFocusId = ''
 let dashboardSearchFocusRequestId = 0
 let dashboardTagEditorFocusRequestId = 0
@@ -340,9 +378,6 @@ let dashboardFaviconWarmupKey = ''
 let dashboardFaviconWarmupStartIndex = -1
 let dashboardFaviconWarmupEndIndex = -1
 let dashboardFaviconWarmupEndpointUrl = ''
-let dashboardFaviconWarmupPendingItems: DashboardItem[] | null = null
-let dashboardFaviconWarmupPendingStartIndex = -1
-let dashboardFaviconWarmupPendingEndIndex = -1
 let dashboardFaviconLoadSyncFrame = 0
 let dashboardFaviconLoadSyncTimer = 0
 let dashboardFaviconDirtySyncTimer = 0
@@ -413,7 +448,9 @@ const dashboardRenderCache: DashboardRenderCache = {
   sidebarModel: null,
   sidebarSelectedFolderId: '',
   sidebarItems: null,
-  sidebarTotalFolders: -1
+  sidebarTotalFolders: -1,
+  fullCardStaticViewModels: new Map(),
+  scrollCardViewModels: new Map()
 }
 
 const virtualState: DashboardVirtualState = {
@@ -433,6 +470,12 @@ const virtualState: DashboardVirtualState = {
   renderedColumnCount: 0,
   renderedTotalHeight: -1,
   renderedOffsetY: -1,
+  renderedFullStartIndex: -1,
+  renderedFullEndIndex: -1,
+  desiredFullStartIndex: -1,
+  desiredFullEndIndex: -1,
+  fullStartIndex: -1,
+  fullEndIndex: -1,
   renderedStateKey: '',
   renderedStaticListKey: '',
   renderedItems: null,
@@ -447,9 +490,12 @@ const virtualState: DashboardVirtualState = {
   lastResizeColumnCount: 0,
   lastScrollTop: 0,
   lastScrollAt: 0,
+  lastScrollDirection: 0,
   isFastScrolling: false,
   scrollIdleTimer: 0,
   scrollSettleTimer: 0,
+  scrollRestoreIdleCallback: 0,
+  scrollRestoreTimer: 0,
   resultsMetrics: null
 }
 
@@ -887,25 +933,34 @@ export function renderDashboardSection(): void {
   }
 }
 
+export function renderDashboardSectionWhenIdle(): void {
+  if (shouldDeferDashboardRenderForScroll()) {
+    dashboardSectionRenderPendingForScroll = true
+    return
+  }
+
+  renderDashboardSection()
+}
+
 export function isDashboardViewReady(): boolean {
   return !availabilityState.catalogLoading && dashboardViewReady
 }
 
 export function prepareDashboardSectionEntry(): void {
   dashboardSectionActive = true
+  dashboardSectionRenderPendingForScroll = false
   resetDashboardPanelReveal()
   dashboardFaviconWarmupItems = null
   dashboardFaviconWarmupKey = ''
-  clearPendingDashboardFaviconWarmup()
   scheduleDashboardFaviconLoadSync()
   startDashboardNaturalSearch()
 }
 
 export function teardownDashboardSectionExit(): void {
   dashboardSectionActive = false
+  dashboardSectionRenderPendingForScroll = false
   cancelDashboardDrag({ silent: true })
   resetDashboardSearchWorker()
-  clearPendingDashboardFaviconWarmup()
   dashboardFaviconWarmupItems = null
   dashboardFaviconWarmupKey = ''
   releaseDashboardCaches()
@@ -913,6 +968,7 @@ export function teardownDashboardSectionExit(): void {
 
 export function releaseDashboardCaches(): void {
   clearStableDashboardResultsUpdate()
+  dashboardSectionRenderPendingForScroll = false
   resetDashboardVirtualRenderCache({ clearItems: true })
   invalidateDashboardPopupSearchCaches()
   dashboardNaturalSearchCache.clear()
@@ -937,6 +993,8 @@ export function releaseDashboardCaches(): void {
   dashboardRenderCache.sidebarSelectedFolderId = ''
   dashboardRenderCache.sidebarItems = null
   dashboardRenderCache.sidebarTotalFolders = -1
+  dashboardRenderCache.fullCardStaticViewModels.clear()
+  dashboardRenderCache.scrollCardViewModels.clear()
   if (dashboardStatusTimer) {
     window.clearTimeout(dashboardStatusTimer)
     dashboardStatusTimer = 0
@@ -1070,6 +1128,8 @@ export async function handleDashboardViewAction(
   } else if (detail.action === 'results-resize') {
     updateDashboardResultsMetricsSnapshot(detail)
     handleDashboardVirtualResize()
+  } else if (detail.action === 'results-scroll-activity') {
+    handleDashboardVirtualScrollActivity(detail)
   } else if (detail.action === 'results-scroll') {
     handleDashboardVirtualScroll(detail)
   } else if (detail.action === 'results-scroll-sync') {
@@ -1969,6 +2029,8 @@ function getCachedDashboardModel({
   dashboardRenderCache.folderBookmarkCounts = null
   dashboardRenderCache.sidebarModel = null
   dashboardRenderCache.sidebarItems = null
+  dashboardRenderCache.fullCardStaticViewModels.clear()
+  dashboardRenderCache.scrollCardViewModels.clear()
   dashboardPopupSearchIndexCache.model = null
   dashboardPopupSearchIndexCache.bookmarks = null
   dashboardPopupSearchIndexCache.bookmarkById = null
@@ -3163,7 +3225,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   if (availabilityState.catalogLoading) {
     resetDashboardVirtualRenderCache({ clearItems: true })
     clearStableDashboardResultsUpdate()
-    renderDashboardEmptyState('正在读取书签目录。', { loading: true })
+    renderDashboardEmptyState('正在读取书签目录。', { kind: 'loading', loading: true })
     commitDashboardCardsRender(renderVersion)
     return
   }
@@ -3171,9 +3233,12 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   if (!items.length) {
     resetDashboardVirtualRenderCache({ clearItems: true })
     if (isDashboardWorkerSearchPending()) {
-      renderDashboardEmptyState('正在搜索书签。', { loading: true })
+      renderDashboardEmptyState('正在搜索书签。', { kind: 'search-loading', loading: true })
     } else {
-      renderDashboardEmptyState(dashboardState.query ? '当前搜索没有匹配的书签。' : '没有可展示的书签。')
+      renderDashboardEmptyState(
+        dashboardState.query ? '当前搜索没有匹配的书签。' : '没有可展示的书签。',
+        { kind: dashboardState.query ? 'search-empty' : 'scope-empty' }
+      )
     }
     endStableDashboardResultsUpdate()
     commitDashboardCardsRender(renderVersion)
@@ -3186,7 +3251,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   applyDashboardVirtualFilterReset(items)
   const metricsReady = updateDashboardVirtualMetrics()
 
-  if (items.length < DASHBOARD_VIRTUAL_THRESHOLD) {
+  if (!shouldDashboardUseVirtualRendering(items.length)) {
     virtualState.items = items
     const renderedIds = new Set(items.map((item) => String(item.id)))
     const stateKey = getDashboardVirtualRenderStateKey(items)
@@ -3214,11 +3279,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     }
     virtualState.renderedItems = items
 
-    if (isDashboardLargeVirtualSet(items)) {
-      stopDashboardFaviconWarmup()
-    } else {
-      syncDashboardFaviconWarmup(items)
-    }
+    syncDashboardFaviconWarmup(items)
     reconcileDashboardTransientUiWithRenderedItems(renderedIds)
     updateDashboardFloatingEditorPosition(renderedIds)
     endStableDashboardResultsUpdate()
@@ -3242,7 +3303,8 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     scrollTop,
     cardHeight: virtualState.cardHeight,
     minCardWidth: virtualState.minCardWidth,
-    fastScrolling: virtualState.isFastScrolling
+    fastScrolling: virtualState.isFastScrolling,
+    scrollDirection: virtualState.lastScrollDirection
   })
   const viewportWindow = computeDashboardVirtualWindow({
     itemCount: items.length,
@@ -3253,6 +3315,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     minCardWidth: virtualState.minCardWidth,
     overscanRows: 0
   })
+  setDashboardVirtualDesiredFullRenderRange(viewportWindow)
 
   if (getDashboardVirtualScrollTop() !== virtualWindow.scrollTop) {
     publishDashboardResultsScrollRequest(virtualWindow.scrollTop)
@@ -3262,15 +3325,11 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
   virtualState.scrollTop = virtualWindow.scrollTop
   virtualState.columnCount = virtualWindow.columnCount
   virtualState.rowStride = virtualWindow.rowStride
-  if (isDashboardLargeVirtualSet(items)) {
-    stopDashboardFaviconWarmup()
-  } else {
-    scheduleDashboardFaviconWarmup(
-      items,
-      getDashboardFaviconWarmupStartIndex(viewportWindow),
-      getDashboardFaviconWarmupEndIndex(viewportWindow, items.length)
-    )
-  }
+  scheduleDashboardFaviconWarmup(
+    items,
+    getDashboardFaviconWarmupStartIndex(viewportWindow),
+    getDashboardFaviconWarmupEndIndex(viewportWindow, items.length)
+  )
 
   if (canReuseDashboardVirtualShell(items, virtualWindow, viewportWindow)) {
     syncDashboardVirtualRenderedShellGeometry(virtualWindow)
@@ -3280,6 +3339,7 @@ function renderDashboardCards(items: DashboardItem[], renderVersion = beginDashb
     return
   }
 
+  setDashboardVirtualRenderFullRange(virtualWindow)
   const renderedIds = commitDashboardVirtualWindow(items, virtualWindow)
   endStableDashboardResultsUpdate()
   updateDashboardFloatingEditorPosition(renderedIds)
@@ -3316,13 +3376,21 @@ function canReuseDashboardVirtualShell(
     return false
   }
 
+  if (!isDashboardRenderedFullRangeCoveringDesiredRange()) {
+    return false
+  }
+
   if (!validateRenderKey) {
     return true
   }
 
   const renderedItems = items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
-  const stateKey = getDashboardVirtualRenderStateKey(renderedItems)
-  return virtualState.renderedStaticListKey === getDashboardStaticListRenderKey(renderedItems, stateKey)
+  const stateKey = getDashboardVirtualRenderStateKey(renderedItems, virtualState.renderedStartIndex)
+  return virtualState.renderedStaticListKey === getDashboardStaticListRenderKey(
+    renderedItems,
+    stateKey,
+    virtualState.renderedStartIndex
+  )
 }
 
 function renderDashboardVirtualScrollFrame(): void {
@@ -3358,11 +3426,9 @@ function renderDashboardVirtualScrollWindow(
     minCardWidth: virtualState.minCardWidth,
     overscanRows: 0
   })
+  setDashboardVirtualDesiredFullRenderRange(viewportWindow)
 
-  const shouldRefreshScrollCards = getDashboardRenderedCardMode() === 'scroll' &&
-    getDashboardVirtualCardRenderMode() === 'full'
   if (
-    !shouldRefreshScrollCards &&
     canReuseDashboardVirtualShell(items, viewportWindow, viewportWindow, {
       validateRenderKey: false,
       allowAnchoredGeometry: true
@@ -3382,7 +3448,8 @@ function renderDashboardVirtualScrollWindow(
     scrollTop,
     cardHeight: virtualState.cardHeight,
     minCardWidth: virtualState.minCardWidth,
-    fastScrolling: virtualState.isFastScrolling
+    fastScrolling: virtualState.isFastScrolling,
+    scrollDirection: virtualState.lastScrollDirection
   })
 
   if (syncContainerScroll && getDashboardVirtualScrollTop() !== virtualWindow.scrollTop) {
@@ -3398,7 +3465,6 @@ function renderDashboardVirtualScrollWindow(
   scheduleDashboardFaviconWarmupForViewport(items, viewportWindow)
 
   if (
-    !shouldRefreshScrollCards &&
     canReuseDashboardVirtualShell(items, virtualWindow, viewportWindow, { validateRenderKey: false })
   ) {
     syncDashboardVirtualRenderedShellGeometry(virtualWindow)
@@ -3406,23 +3472,15 @@ function renderDashboardVirtualScrollWindow(
     return
   }
 
+  setDashboardVirtualRenderFullRange(virtualWindow)
   const renderedIds = commitDashboardVirtualWindow(items, virtualWindow)
   updateDashboardFloatingEditorPosition(renderedIds)
-}
-
-function isDashboardLargeVirtualSet(items = virtualState.items): boolean {
-  return items.length >= 500
 }
 
 function scheduleDashboardFaviconWarmupForViewport(
   items: DashboardItem[],
   viewportWindow: DashboardVirtualWindow
 ): void {
-  if (isDashboardLargeVirtualSet(items)) {
-    stopDashboardFaviconWarmup()
-    return
-  }
-
   scheduleDashboardFaviconWarmup(
     items,
     getDashboardFaviconWarmupStartIndex(viewportWindow),
@@ -3438,8 +3496,8 @@ function commitDashboardVirtualWindow(
   const renderedIds = new Set(renderedItems.map((item) => String(item.id)))
   reconcileDashboardTransientUiWithRenderedItems(renderedIds)
 
-  const stateKey = getDashboardVirtualRenderStateKey(renderedItems)
-  const virtualWindowKey = getDashboardStaticListRenderKey(renderedItems, stateKey)
+  const stateKey = getDashboardVirtualRenderStateKey(renderedItems, virtualWindow.startIndex)
+  const virtualWindowKey = getDashboardStaticListRenderKey(renderedItems, stateKey, virtualWindow.startIndex)
   const canReuseShell =
     virtualState.renderedStartIndex === virtualWindow.startIndex &&
     virtualState.renderedEndIndex === virtualWindow.endIndex &&
@@ -3453,8 +3511,11 @@ function commitDashboardVirtualWindow(
       renderedItems,
       totalHeight: virtualWindow.totalHeight,
       offsetY: virtualWindow.offsetY,
-      columnCount: virtualWindow.columnCount
+      columnCount: virtualWindow.columnCount,
+      startIndex: virtualWindow.startIndex
     })
+    virtualState.renderedFullStartIndex = virtualState.fullStartIndex
+    virtualState.renderedFullEndIndex = virtualState.fullEndIndex
   } else {
     updateDashboardVirtualShellGeometry(virtualWindow)
   }
@@ -3503,7 +3564,7 @@ function updateDashboardVirtualShellGeometry(
   const renderedItems = virtualState.items.slice(virtualState.renderedStartIndex, virtualState.renderedEndIndex)
   const cards = currentResults.mode === 'virtual'
     ? currentResults.cards
-    : renderedItems.map(buildDashboardCardViewModel)
+    : renderedItems.map((item, index) => buildDashboardCardViewModel(item, virtualState.renderedStartIndex + index))
   publishDashboardViewState({
     results: {
       mode: 'virtual',
@@ -3530,7 +3591,8 @@ function reconcileDashboardVirtualTransientUiAfterScroll(items: DashboardItem[])
   updateDashboardFloatingEditorPosition(stableRenderedIds)
 }
 
-function getDashboardStaticListRenderKey(items: DashboardItem[], stateKey: string): string {
+function getDashboardStaticListRenderKey(items: DashboardItem[], stateKey: string, startIndex = 0): string {
+  const virtualized = shouldDashboardUseVirtualRendering(virtualState.items.length)
   if (stateKey.startsWith('scroll\u0001')) {
     return [
       stateKey,
@@ -3543,13 +3605,31 @@ function getDashboardStaticListRenderKey(items: DashboardItem[], stateKey: strin
   return [
     stateKey,
     items.length,
-    ...items.map(getDashboardCardRenderKey)
+    ...items.map((item, index) => getDashboardCardRenderKey(item, virtualized ? startIndex + index : -1))
   ].join('\u0001')
 }
 
-function getDashboardCardRenderKey(item: DashboardItem): string {
+function getDashboardCardRenderKey(item: DashboardItem, itemIndex = -1): string {
+  const renderMode = getDashboardVirtualCardRenderModeForIndex(itemIndex)
+  const interactionMode = getDashboardCardInteractionModeForItem(item, renderMode)
+  if (renderMode === 'scroll') {
+    return [
+      renderMode,
+      interactionMode,
+      item.id,
+      item.title,
+      item.url,
+      item.parentId,
+      item.path,
+      dashboardState.selectedIds.has(String(item.id)) ? 'selection:on' : 'selection:off',
+      availabilityState.deleting ? 'deleting' : 'idle',
+      getDashboardFaviconViewModelRenderKey(item.url)
+    ].map((value) => String(value || '')).join('\u0002')
+  }
+
   return [
-    getDashboardVirtualCardRenderMode(),
+    renderMode,
+    interactionMode,
     item.id,
     item.title,
     item.url,
@@ -3563,16 +3643,105 @@ function getDashboardCardRenderKey(item: DashboardItem): string {
     availabilityState.deleting ? 'deleting' : 'idle',
     item.hasManualTags ? 'manual' : 'auto',
     item.aiTags.length,
-    ...item.tags
+    ...item.tags,
+    getDashboardFaviconViewModelRenderKey(item.url)
   ].map((value) => String(value || '')).join('\u0002')
 }
 
 function getDashboardVirtualCardRenderMode(): 'full' | 'scroll' {
-  return virtualState.isFastScrolling ? 'scroll' : 'full'
+  return 'full'
+}
+
+function getDashboardVirtualCardRenderModeForIndex(itemIndex: number): 'full' | 'scroll' {
+  if (!isDashboardResultsVirtualized() || itemIndex < 0) {
+    return getDashboardVirtualCardRenderMode()
+  }
+
+  return itemIndex >= virtualState.fullStartIndex && itemIndex < virtualState.fullEndIndex
+    ? 'full'
+    : 'scroll'
+}
+
+function getDashboardCardInteractionModeForItem(
+  item: DashboardItem,
+  renderMode = getDashboardVirtualCardRenderMode()
+): 'full' | 'preview' {
+  if (renderMode === 'scroll') {
+    return 'preview'
+  }
+  return shouldUseStaticDashboardCardInteractions()
+    ? 'preview'
+    : 'full'
+}
+
+function shouldUseStaticDashboardCardInteractions(): boolean {
+  return Boolean(
+    shouldDashboardUseVirtualRendering(virtualState.items.length) &&
+    (
+      virtualState.scrollIdleTimer ||
+      virtualState.isFastScrolling ||
+      virtualState.frame
+    )
+  )
+}
+
+function setDashboardVirtualDesiredFullRenderRange(viewportWindow: DashboardVirtualWindow): void {
+  const range = getDashboardVirtualFullRenderRange(viewportWindow)
+  virtualState.desiredFullStartIndex = range.startIndex
+  virtualState.desiredFullEndIndex = range.endIndex
+}
+
+function setDashboardVirtualRenderFullRange(viewportWindow: DashboardVirtualWindow): void {
+  const range = getDashboardVirtualFullRenderRange(viewportWindow)
+  virtualState.fullStartIndex = range.startIndex
+  virtualState.fullEndIndex = range.endIndex
+}
+
+function getDashboardVirtualFullRenderRange(
+  viewportWindow: DashboardVirtualWindow
+): DashboardVirtualFullRenderRange {
+  return computeDashboardVirtualFullRenderRange({
+    fastScrolling: virtualState.isFastScrolling,
+    itemCount: virtualState.items.length,
+    scrollDirection: virtualState.lastScrollDirection,
+    viewportWindow
+  })
+}
+
+function isDashboardRenderedFullRangeCoveringDesiredRange(): boolean {
+  return isDashboardRenderedFullRangeCovering({
+    startIndex: virtualState.desiredFullStartIndex,
+    endIndex: virtualState.desiredFullEndIndex
+  })
+}
+
+function isDashboardRenderedFullRangeCovering(range: DashboardVirtualFullRenderRange): boolean {
+  if (range.startIndex < 0 || range.endIndex <= range.startIndex) {
+    return true
+  }
+
+  return (
+    virtualState.renderedFullStartIndex <= range.startIndex &&
+    virtualState.renderedFullEndIndex >= range.endIndex
+  )
 }
 
 function getDashboardRenderedCardMode(): 'full' | 'scroll' {
-  return virtualState.renderedStateKey.startsWith('scroll\u0001') ? 'scroll' : 'full'
+  if (virtualState.renderedStartIndex < 0 || virtualState.renderedEndIndex <= virtualState.renderedStartIndex) {
+    return 'full'
+  }
+
+  return (
+    virtualState.renderedFullStartIndex <= virtualState.renderedStartIndex &&
+    virtualState.renderedFullEndIndex >= virtualState.renderedEndIndex
+  )
+    ? 'full'
+    : 'scroll'
+}
+
+function getDashboardFaviconViewModelRenderKey(pageUrl: string): string {
+  const favicon = getDashboardFaviconImageViewModel(pageUrl)
+  return favicon ? `${favicon.source}\u0002${favicon.src}` : ''
 }
 
 function getDashboardFaviconWarmupStartIndex(window: DashboardVirtualWindow): number {
@@ -3589,17 +3758,19 @@ function renderDashboardVirtualWindow({
   renderedItems,
   totalHeight,
   offsetY,
-  columnCount
+  columnCount,
+  startIndex
 }: {
   renderedItems: DashboardItem[]
   totalHeight: number
   offsetY: number
   columnCount: number
+  startIndex: number
 }): void {
   publishDashboardViewState({
     results: {
       mode: 'virtual',
-      cards: renderedItems.map(buildDashboardCardViewModel),
+      cards: renderedItems.map((item, index) => buildDashboardCardViewModel(item, startIndex + index)),
       columnCount,
       offsetY,
       totalHeight
@@ -3628,12 +3799,19 @@ function resetDashboardVirtualRenderCache({
   virtualState.renderedColumnCount = 0
   virtualState.renderedTotalHeight = -1
   virtualState.renderedOffsetY = -1
+  virtualState.renderedFullStartIndex = -1
+  virtualState.renderedFullEndIndex = -1
+  virtualState.desiredFullStartIndex = -1
+  virtualState.desiredFullEndIndex = -1
+  virtualState.fullStartIndex = -1
+  virtualState.fullEndIndex = -1
   virtualState.renderedStateKey = ''
   virtualState.renderedStaticListKey = ''
   virtualState.pendingInitialMeasure = false
   virtualState.isFastScrolling = false
   virtualState.lastScrollTop = 0
   virtualState.lastScrollAt = 0
+  virtualState.lastScrollDirection = 0
   if (virtualState.scrollIdleTimer) {
     window.clearTimeout(virtualState.scrollIdleTimer)
     virtualState.scrollIdleTimer = 0
@@ -3642,6 +3820,7 @@ function resetDashboardVirtualRenderCache({
     window.clearTimeout(virtualState.scrollSettleTimer)
     virtualState.scrollSettleTimer = 0
   }
+  cancelDashboardScrollRestoreRender()
   if (virtualState.measureRetryFrame) {
     window.cancelAnimationFrame(virtualState.measureRetryFrame)
     virtualState.measureRetryFrame = 0
@@ -3704,30 +3883,17 @@ function markDashboardVirtualFilterChange(reason: DashboardVirtualFilterChangeRe
   virtualState.scrollResetKey = getDashboardVirtualScrollResetKey()
 }
 
-function getDashboardVirtualRenderStateKey(renderedItems: DashboardItem[]): string {
-  if (getDashboardVirtualCardRenderMode() === 'scroll') {
-    return [
-      'scroll',
-      availabilityState.deleting ? 'deleting' : 'idle',
-      renderedItems.length,
-      renderedItems[0]?.id || '',
-      renderedItems[renderedItems.length - 1]?.id || ''
-    ].join('\u0001')
-  }
-
-  const itemState = renderedItems.map((item) => {
-    const id = String(item.id)
-    return [
-      id,
-      dashboardState.copyFeedbackId === id ? '1' : '0',
-      dashboardState.speedDialPinnedIds.has(id) ? '1' : '0'
-    ].join(':')
-  }).join('|')
-
+function getDashboardVirtualRenderStateKey(renderedItems: DashboardItem[], startIndex = 0): string {
+  const virtualized = shouldDashboardUseVirtualRendering(virtualState.items.length)
   return [
-    getDashboardVirtualCardRenderMode(),
+    virtualized ? 'mixed' : 'full',
     availabilityState.deleting ? 'deleting' : 'idle',
-    itemState
+    virtualized ? virtualState.fullStartIndex : 0,
+    virtualized ? virtualState.fullEndIndex : renderedItems.length,
+    renderedItems.length,
+    renderedItems[0]?.id || '',
+    renderedItems[renderedItems.length - 1]?.id || '',
+    ...renderedItems.map((item, index) => getDashboardCardRenderKey(item, virtualized ? startIndex + index : -1))
   ].join('\u0001')
 }
 
@@ -3745,6 +3911,7 @@ function handleDashboardVirtualResultsMounted(scrollTop: number): void {
   virtualState.resultsMounted = true
   virtualState.lastScrollTop = safeScrollTop
   virtualState.lastScrollAt = 0
+  virtualState.lastScrollDirection = 0
   virtualState.isFastScrolling = false
 }
 
@@ -3763,6 +3930,7 @@ function handleDashboardVirtualResultsUnmounted(): void {
     window.clearTimeout(virtualState.scrollSettleTimer)
     virtualState.scrollSettleTimer = 0
   }
+  cancelDashboardScrollRestoreRender()
   if (virtualState.measureRetryFrame) {
     window.cancelAnimationFrame(virtualState.measureRetryFrame)
     virtualState.measureRetryFrame = 0
@@ -3776,12 +3944,13 @@ function handleDashboardVirtualResultsUnmounted(): void {
   virtualState.lastResizeColumnCount = 0
   virtualState.lastScrollTop = 0
   virtualState.lastScrollAt = 0
+  virtualState.lastScrollDirection = 0
   virtualState.isFastScrolling = false
 }
 
 function handleDashboardVirtualResize(): void {
   const metrics = getDashboardVirtualMetricsForController()
-  if (!isDashboardVirtualMetricsReady(metrics) && virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD) {
+  if (!isDashboardVirtualMetricsReady(metrics) && shouldDashboardUseVirtualRendering(virtualState.items.length)) {
     virtualState.pendingInitialMeasure = true
     scheduleDashboardVirtualMeasureRetry()
     return
@@ -3821,7 +3990,7 @@ function commitDashboardVirtualResize({
     virtualState.frame = 0
   }
   const metrics = getDashboardVirtualMetricsForController()
-  if (!isDashboardVirtualMetricsReady(metrics) && virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD) {
+  if (!isDashboardVirtualMetricsReady(metrics) && shouldDashboardUseVirtualRendering(virtualState.items.length)) {
     virtualState.pendingInitialMeasure = true
     scheduleDashboardVirtualMeasureRetry()
     return
@@ -3849,21 +4018,115 @@ function handleDashboardVirtualScroll(detail: Extract<DashboardViewActionDetail,
     return
   }
 
-  const now = getDashboardNow()
   const metrics = updateDashboardResultsMetricsSnapshot(detail)
   const nextScrollTop = metrics.scrollTop
-  const previousScrollTop = virtualState.lastScrollTop
-  const previousScrollAt = virtualState.lastScrollAt
-  const elapsedMs = previousScrollAt ? Math.max(1, now - previousScrollAt) : Number.POSITIVE_INFINITY
-  const velocity = Math.abs(nextScrollTop - previousScrollTop) / elapsedMs
-
-  virtualState.scrollTop = nextScrollTop
-  virtualState.lastScrollTop = nextScrollTop
-  virtualState.lastScrollAt = now
-  virtualState.isFastScrolling = velocity >= DASHBOARD_VIRTUAL_FAST_SCROLL_PX_PER_MS
+  updateDashboardVirtualScrollMomentum(nextScrollTop)
   scheduleDashboardScrollIdle()
   maybePrefetchDashboardSearchResults(detail)
-  scheduleDashboardVirtualRender()
+
+  const coverage = getDashboardVirtualRenderCoverage(nextScrollTop)
+  if (coverage.needsRenderedWindow) {
+    cancelPendingDashboardVirtualRender()
+    renderDashboardVirtualScrollWindow(nextScrollTop, { syncContainerScroll: false })
+  } else if (coverage.needsViewportFullRender || coverage.needsPreloadRender) {
+    scheduleDashboardVirtualRender()
+  } else {
+    cancelPendingDashboardVirtualRender()
+  }
+}
+
+function handleDashboardVirtualScrollActivity(detail: Extract<DashboardViewActionDetail, { action: 'results-scroll-activity' }>): void {
+  const metrics = updateDashboardResultsMetricsSnapshot(detail)
+  updateDashboardVirtualScrollMomentum(metrics.scrollTop)
+  scheduleDashboardScrollIdle()
+  maybePrefetchDashboardSearchResults({ scrollTop: metrics.scrollTop })
+  const coverage = getDashboardVirtualRenderCoverage(metrics.scrollTop)
+  if (coverage.needsRenderedWindow) {
+    cancelPendingDashboardVirtualRender()
+    renderDashboardVirtualScrollWindow(metrics.scrollTop, { syncContainerScroll: false })
+  } else if (coverage.needsViewportFullRender || coverage.needsPreloadRender) {
+    scheduleDashboardVirtualRender()
+  } else {
+    cancelPendingDashboardVirtualRender()
+  }
+}
+
+function updateDashboardVirtualScrollMomentum(scrollTop: number): void {
+  const now = getDashboardNow()
+  const nextScrollTop = Math.max(0, Number(scrollTop) || 0)
+  const previousScrollTop = virtualState.lastScrollTop
+  const previousScrollAt = virtualState.lastScrollAt
+  const elapsedMs = previousScrollAt ? Math.max(1, now - previousScrollAt) : DASHBOARD_SCROLL_FRAME_BUDGET_MS
+  const scrollDelta = nextScrollTop - previousScrollTop
+  const velocity = Math.abs(scrollDelta) / elapsedMs
+
+  virtualState.scrollTop = nextScrollTop
+  if (scrollDelta === 0) {
+    if (!virtualState.lastScrollAt) {
+      virtualState.lastScrollAt = now
+    }
+    return
+  }
+
+  virtualState.lastScrollTop = nextScrollTop
+  virtualState.lastScrollAt = now
+  if (scrollDelta > 0) {
+    virtualState.lastScrollDirection = 1
+  } else if (scrollDelta < 0) {
+    virtualState.lastScrollDirection = -1
+  }
+  virtualState.isFastScrolling = velocity >= DASHBOARD_VIRTUAL_FAST_SCROLL_PX_PER_MS
+}
+
+function getDashboardVirtualRenderCoverage(scrollTop: number): {
+  needsRenderedWindow: boolean
+  needsPreloadRender: boolean
+  needsViewportFullRender: boolean
+  needsViewportRender: boolean
+} {
+  if (
+    !isDashboardResultsVirtualized() ||
+    !virtualState.items.length ||
+    virtualState.pendingInitialMeasure ||
+    virtualState.contentWidth < DASHBOARD_VIRTUAL_MIN_READY_WIDTH ||
+    virtualState.containerHeight < DASHBOARD_VIRTUAL_MIN_READY_HEIGHT
+  ) {
+    return {
+      needsRenderedWindow: false,
+      needsPreloadRender: false,
+      needsViewportFullRender: false,
+      needsViewportRender: false
+    }
+  }
+
+  const viewportWindow = computeDashboardVirtualWindow({
+    itemCount: virtualState.items.length,
+    contentWidth: virtualState.contentWidth,
+    containerHeight: virtualState.containerHeight,
+    scrollTop,
+    cardHeight: virtualState.cardHeight,
+    minCardWidth: virtualState.minCardWidth,
+    overscanRows: 0
+  })
+  const fullRange = getDashboardVirtualFullRenderRange(viewportWindow)
+  const viewportRange = {
+    startIndex: viewportWindow.startIndex,
+    endIndex: viewportWindow.endIndex
+  }
+  const needsRenderedWindow = (
+    virtualState.renderedStartIndex < 0 ||
+    virtualState.renderedEndIndex <= virtualState.renderedStartIndex ||
+    virtualState.renderedStartIndex > viewportWindow.startIndex ||
+    virtualState.renderedEndIndex < viewportWindow.endIndex
+  )
+  const needsViewportFullRender = !isDashboardRenderedFullRangeCovering(viewportRange)
+
+  return {
+    needsRenderedWindow,
+    needsPreloadRender: !needsRenderedWindow && !needsViewportFullRender && !isDashboardRenderedFullRangeCovering(fullRange),
+    needsViewportFullRender,
+    needsViewportRender: needsRenderedWindow || needsViewportFullRender
+  }
 }
 
 function handleDashboardVirtualScrollSync(detail: Extract<DashboardViewActionDetail, { action: 'results-scroll-sync' }>): void {
@@ -3881,6 +4144,7 @@ function getDashboardNow(): number {
 }
 
 function scheduleDashboardScrollIdle(): void {
+  cancelDashboardScrollRestoreRender()
   if (virtualState.scrollIdleTimer) {
     window.clearTimeout(virtualState.scrollIdleTimer)
   }
@@ -3896,23 +4160,71 @@ function scheduleDashboardScrollIdle(): void {
   virtualState.scrollIdleTimer = window.setTimeout(() => {
     virtualState.scrollIdleTimer = 0
     const wasFastScrolling = virtualState.isFastScrolling
-    virtualState.isFastScrolling = false
-    if (dashboardListRenderPendingForScroll) {
+    if (dashboardSectionRenderPendingForScroll) {
+      dashboardSectionRenderPendingForScroll = false
+      dashboardListRenderPendingForScroll = false
+      scheduleDashboardSectionRender()
+    } else if (dashboardListRenderPendingForScroll) {
       dashboardListRenderPendingForScroll = false
       scheduleDashboardListRender()
     }
     virtualState.scrollSettleTimer = window.setTimeout(() => {
       virtualState.scrollSettleTimer = 0
-      flushPendingDashboardFaviconWarmup()
       flushDashboardFaviconDirtySync()
       if (
-        virtualState.items.length >= DASHBOARD_VIRTUAL_THRESHOLD &&
+        shouldDashboardUseVirtualRendering(virtualState.items.length) &&
         (wasFastScrolling || getDashboardRenderedCardMode() === 'scroll')
       ) {
-        scheduleDashboardVirtualRender()
+        scheduleDashboardScrollRestoreRender()
       }
     }, DASHBOARD_SCROLL_SETTLE_MS)
   }, DASHBOARD_SCROLL_IDLE_MS)
+}
+
+function scheduleDashboardScrollRestoreRender(): void {
+  if (virtualState.scrollRestoreIdleCallback || virtualState.scrollRestoreTimer) {
+    return
+  }
+
+  const runRestore = () => {
+    virtualState.scrollRestoreIdleCallback = 0
+    virtualState.scrollRestoreTimer = 0
+    if (virtualState.scrollIdleTimer || !dashboardSectionActive) {
+      return
+    }
+    virtualState.isFastScrolling = false
+    scheduleDashboardVirtualRender()
+  }
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number
+    cancelIdleCallback?: (handle: number) => void
+  }
+
+  virtualState.scrollRestoreTimer = window.setTimeout(() => {
+    virtualState.scrollRestoreTimer = 0
+    if (virtualState.scrollIdleTimer || !dashboardSectionActive) {
+      return
+    }
+    if (typeof idleWindow.requestIdleCallback === 'function') {
+      virtualState.scrollRestoreIdleCallback = idleWindow.requestIdleCallback(runRestore, { timeout: 900 })
+      return
+    }
+    runRestore()
+  }, DASHBOARD_SCROLL_RESTORE_DELAY_MS)
+}
+
+function cancelDashboardScrollRestoreRender(): void {
+  const idleWindow = window as Window & {
+    cancelIdleCallback?: (handle: number) => void
+  }
+  if (virtualState.scrollRestoreIdleCallback) {
+    idleWindow.cancelIdleCallback?.(virtualState.scrollRestoreIdleCallback)
+    virtualState.scrollRestoreIdleCallback = 0
+  }
+  if (virtualState.scrollRestoreTimer) {
+    window.clearTimeout(virtualState.scrollRestoreTimer)
+    virtualState.scrollRestoreTimer = 0
+  }
 }
 
 function maybePrefetchDashboardSearchResults({
@@ -4054,7 +4366,7 @@ function scheduleDashboardListRender(): void {
     return
   }
 
-  if (virtualState.scrollIdleTimer) {
+  if (shouldDeferDashboardRenderForScroll()) {
     dashboardListRenderPendingForScroll = true
     return
   }
@@ -4067,6 +4379,18 @@ function scheduleDashboardListRender(): void {
     dashboardListRenderFrame = 0
     renderDashboardListOnly()
   })
+}
+
+function shouldDeferDashboardRenderForScroll(): boolean {
+  return Boolean(
+    dashboardSectionActive &&
+    shouldDashboardUseVirtualRendering(virtualState.items.length) &&
+    (
+      virtualState.scrollIdleTimer ||
+      virtualState.isFastScrolling ||
+      virtualState.frame
+    )
+  )
 }
 
 function renderDashboardListOnly(): void {
@@ -4210,7 +4534,6 @@ function commitDashboardCardsRender(renderVersion: number): void {
   }
 
   dashboardCardsCommittedRenderVersion = safeRenderVersion
-  scheduleDashboardFaviconLoadSync()
   scheduleDashboardPanelReveal(safeRenderVersion)
 }
 
@@ -4454,90 +4777,98 @@ function publishDashboardTagEditorClosingState(closing: boolean): void {
   })
 }
 
-function buildDashboardCardViewModel(item: DashboardItem): DashboardCardViewModel {
-  const renderMode = getDashboardVirtualCardRenderMode()
+function buildDashboardCardViewModel(item: DashboardItem, itemIndex = -1): DashboardCardViewModel {
+  const renderMode = getDashboardVirtualCardRenderModeForIndex(itemIndex)
+  const interactionMode = getDashboardCardInteractionModeForItem(item, renderMode)
   const selected = dashboardState.selectedIds.has(String(item.id))
   if (renderMode === 'scroll') {
-    return {
-      activeMenu: false,
-      bookmarkId: String(item.id),
-      copyActionLabel: '',
-      copyText: '',
-      copyTooltip: '',
-      deleting: availabilityState.deleting,
-      deleteLabel: '',
-      displayUrl: displayUrl(item.url),
-      editTagsLabel: '',
-      expanded: false,
-      fallbackLabel: getFallbackLabel(item.title),
-      favicon: null,
-      hiddenTagCount: 0,
-      itemPath: formatBookmarkPath(item.path) || '未归档路径',
-      moreLabel: '',
-      moveLabel: '',
-      openLabel: '',
-      parentId: String(item.parentId || ''),
-      renderMode,
-      selected,
-      selectionLabel: '',
-      speedDialActionLabel: '',
-      speedDialActionText: '',
-      speedDialPinned: false,
-      tags: [],
-      title: item.title || '未命名书签',
-      url: item.url,
-      visibleTags: []
-    }
+    return getCachedDashboardPreviewCardViewModel(item, selected, renderMode)
   }
 
+  const staticView = getCachedDashboardFullCardStaticViewModel(item)
   const expanded = dashboardState.expandedTagIds.has(String(item.id))
-  const selectionLabel = getDashboardSelectionLabel(item)
-  const openLabel = getDashboardCardActionLabel('打开书签', item)
-  const copyActionLabel = getDashboardCardActionLabel('复制书签链接', item)
-  const editTagsLabel = getDashboardCardActionLabel('修改书签标签', item)
-  const moveLabel = getDashboardCardActionLabel('移动书签', item)
-  const deleteLabel = getDashboardCardActionLabel('删除书签', item)
   const speedDialPinned = dashboardState.speedDialPinnedIds.has(String(item.id))
   const speedDialActionText = speedDialPinned ? '从 Speed Dial 移除' : '添加进 Speed Dial'
-  const speedDialTooltip = speedDialPinned ? '从 Speed Dial 移除' : '添加进 Speed Dial'
-  const speedDialActionLabel = getDashboardCardActionLabel(speedDialTooltip, item)
-  const moreLabel = getDashboardCardActionLabel('更多操作', item)
-  const visibleTagLimit = 1
-  const tags = item.tags.slice(0, visibleTagLimit)
-  const hiddenTagCount = Math.max(0, item.tags.length - tags.length)
   const copyLabel = dashboardState.copyFeedbackId === String(item.id) ? '已复制' : '复制'
-  const itemPath = formatBookmarkPath(item.path) || '未归档路径'
 
   return {
     activeMenu: dashboardState.activeCardMenuBookmarkId === String(item.id),
     bookmarkId: String(item.id),
-    copyActionLabel,
+    copyActionLabel: staticView.copyActionLabel,
     copyText: copyLabel,
     copyTooltip: copyLabel === '已复制' ? '已复制' : '复制链接',
     deleting: availabilityState.deleting,
-    deleteLabel,
-    displayUrl: displayUrl(item.url),
-    editTagsLabel,
+    deleteLabel: staticView.deleteLabel,
+    displayUrl: staticView.displayUrl,
+    editTagsLabel: staticView.editTagsLabel,
     expanded,
-    fallbackLabel: getFallbackLabel(item.title),
+    fallbackLabel: staticView.fallbackLabel,
     favicon: getDashboardFaviconImageViewModel(item.url),
-    hiddenTagCount,
-    itemPath,
-    moreLabel,
-    moveLabel,
-    openLabel,
-    parentId: String(item.parentId || ''),
+    hiddenTagCount: staticView.hiddenTagCount,
+    itemPath: staticView.itemPath,
+    moreLabel: staticView.moreLabel,
+    moveLabel: staticView.moveLabel,
+    openLabel: staticView.openLabel,
+    parentId: staticView.parentId,
+    interactionMode,
     renderMode,
     selected,
-    selectionLabel,
-    speedDialActionLabel,
+    selectionLabel: staticView.selectionLabel,
+    speedDialActionLabel: speedDialPinned ? staticView.speedDialRemoveLabel : staticView.speedDialAddLabel,
     speedDialActionText,
     speedDialPinned,
+    tags: staticView.tags,
+    title: staticView.title,
+    url: staticView.url,
+    visibleTags: staticView.visibleTags
+  }
+}
+
+function getCachedDashboardFullCardStaticViewModel(item: DashboardItem): DashboardFullCardStaticViewModel {
+  const cacheKey = [
+    item.id,
+    item.title,
+    item.url,
+    item.parentId,
+    item.path,
+    item.hasManualTags ? 'manual' : 'auto',
+    item.aiTags.length,
+    ...item.tags
+  ].map((value) => String(value || '')).join('\u0001')
+  const cached = dashboardRenderCache.fullCardStaticViewModels.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  if (dashboardRenderCache.fullCardStaticViewModels.size > 8000) {
+    dashboardRenderCache.fullCardStaticViewModels.clear()
+  }
+
+  const visibleTagLimit = 1
+  const visibleTags = item.tags.slice(0, visibleTagLimit)
+  const viewModel: DashboardFullCardStaticViewModel = {
+    copyActionLabel: getDashboardCardActionLabel('复制书签链接', item),
+    deleteLabel: getDashboardCardActionLabel('删除书签', item),
+    displayUrl: displayUrl(item.url),
+    editTagsLabel: getDashboardCardActionLabel('修改书签标签', item),
+    fallbackLabel: getFallbackLabel(item.title, item.url),
+    hiddenTagCount: Math.max(0, item.tags.length - visibleTags.length),
+    itemPath: formatBookmarkPath(item.path) || '未归档路径',
+    moreLabel: getDashboardCardActionLabel('更多操作', item),
+    moveLabel: getDashboardCardActionLabel('移动书签', item),
+    openLabel: getDashboardCardActionLabel('打开书签', item),
+    parentId: String(item.parentId || ''),
+    selectionLabel: getDashboardSelectionLabel(item),
+    speedDialAddLabel: getDashboardCardActionLabel('添加进 Speed Dial', item),
+    speedDialRemoveLabel: getDashboardCardActionLabel('从 Speed Dial 移除', item),
     tags: item.tags,
     title: item.title || '未命名书签',
     url: item.url,
-    visibleTags: tags
+    visibleTags
   }
+
+  dashboardRenderCache.fullCardStaticViewModels.set(cacheKey, viewModel)
+  return viewModel
 }
 
 async function copyDashboardBookmarkUrl(bookmarkId: string): Promise<void> {
@@ -4583,11 +4914,15 @@ function scheduleDashboardFaviconLoadSync(): void {
 
   dashboardFaviconLoadSyncTimer = window.setTimeout(() => {
     dashboardFaviconLoadSyncTimer = 0
+    if (shouldDeferDashboardRenderForScroll()) {
+      scheduleDashboardFaviconLoadSync()
+      return
+    }
     dashboardFaviconLoadSyncFrame = window.requestAnimationFrame(() => {
       dashboardFaviconLoadSyncFrame = 0
       scheduleDashboardListRender()
     })
-  }, virtualState.scrollIdleTimer ? DASHBOARD_FAVICON_DIRTY_SYNC_SCROLL_DELAY_MS : 0)
+  }, shouldDeferDashboardRenderForScroll() ? DASHBOARD_FAVICON_DIRTY_SYNC_SCROLL_DELAY_MS : 0)
 }
 
 async function moveDashboardBookmarkToFolder(
@@ -4692,16 +5027,155 @@ function createDashboardLoadingLabelState(
   }
 }
 
-function renderDashboardEmptyState(label: string, { loading = false }: { loading?: boolean } = {}): void {
+type DashboardEmptyStateKind = 'loading' | 'scope-empty' | 'search-empty' | 'search-loading'
+
+function renderDashboardEmptyState(
+  label: string,
+  {
+    kind = 'scope-empty',
+    loading = false
+  }: {
+    kind?: DashboardEmptyStateKind
+    loading?: boolean
+  } = {}
+): void {
+  const emptyCopy = getDashboardEmptyStateCopy(label, kind, loading)
   publishDashboardViewState({
     results: {
       mode: 'empty',
       empty: {
+        actions: emptyCopy.actions,
         loading,
-        message: label
+        message: emptyCopy.message,
+        suggestions: emptyCopy.suggestions,
+        title: emptyCopy.title
       }
     }
   })
+}
+
+function cancelPendingDashboardVirtualRender(): void {
+  if (!virtualState.frame) {
+    return
+  }
+
+  window.cancelAnimationFrame(virtualState.frame)
+  virtualState.frame = 0
+}
+
+function getCachedDashboardPreviewCardViewModel(
+  item: DashboardItem,
+  selected: boolean,
+  renderMode: 'full' | 'scroll'
+): DashboardCardViewModel {
+  const favicon = renderMode === 'scroll'
+    ? null
+    : getDashboardFaviconImageViewModel(item.url)
+  const cacheKey = [
+    renderMode,
+    item.id,
+    item.title,
+    item.url,
+    item.parentId,
+    item.path,
+    selected ? '1' : '0',
+    availabilityState.deleting ? '1' : '0',
+    favicon?.source || '',
+    favicon?.src || ''
+  ].map((value) => String(value || '')).join('\u0001')
+  const cached = dashboardRenderCache.scrollCardViewModels.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  if (dashboardRenderCache.scrollCardViewModels.size > 8000) {
+    dashboardRenderCache.scrollCardViewModels.clear()
+  }
+
+  const viewModel: DashboardCardViewModel = {
+    activeMenu: false,
+    bookmarkId: String(item.id),
+    copyActionLabel: '',
+    copyText: '',
+    copyTooltip: '',
+    deleting: availabilityState.deleting,
+    deleteLabel: '',
+    displayUrl: displayUrl(item.url),
+    editTagsLabel: '',
+    expanded: false,
+    fallbackLabel: getFallbackLabel(item.title, item.url),
+    favicon,
+    hiddenTagCount: 0,
+    itemPath: formatBookmarkPath(item.path) || '未归档路径',
+    moreLabel: '',
+    moveLabel: '',
+    openLabel: '',
+    parentId: String(item.parentId || ''),
+    interactionMode: 'preview',
+    renderMode,
+    selected,
+    selectionLabel: '',
+    speedDialActionLabel: '',
+    speedDialActionText: '',
+    speedDialPinned: false,
+    tags: [],
+    title: item.title || '未命名书签',
+    url: item.url,
+    visibleTags: []
+  }
+
+  dashboardRenderCache.scrollCardViewModels.set(cacheKey, viewModel)
+  return viewModel
+}
+
+function getDashboardEmptyStateCopy(
+  label: string,
+  kind: DashboardEmptyStateKind,
+  loading: boolean
+): {
+  actions: DashboardEmptyStateAction[]
+  message: string
+  suggestions: string[]
+  title: string
+} {
+  if (loading) {
+    return {
+      actions: [],
+      message: label,
+      suggestions: [],
+      title: label.replace(/[。.]$/, '')
+    }
+  }
+
+  if (kind === 'search-empty') {
+    return {
+      actions: [
+        { action: 'clear-search', label: '清空搜索', variant: 'primary' },
+        { action: 'folder-filter', bookmarkId: getDashboardDefaultFolderId(), label: '切回书签栏', variant: 'secondary' }
+      ],
+      message: '当前关键词、结构化筛选或自然语言条件没有命中结果。',
+      suggestions: [
+        '清空搜索后查看当前文件夹。',
+        '切回书签栏排除文件夹范围影响。',
+        '减少 site、folder、type 或排除词。'
+      ],
+      title: '没有匹配的书签'
+    }
+  }
+
+  return {
+    actions: [
+      { action: 'folder-filter', bookmarkId: getDashboardDefaultFolderId(), label: '查看书签栏', variant: 'primary' },
+      { action: 'exit-dashboard', label: '返回选项页', variant: 'secondary' }
+    ],
+    message: '当前文件夹没有可展示的书签，或扩展还没有读到 Chrome 书签数据。',
+    suggestions: [
+      '切回书签栏查看根范围。',
+      '在浏览器里添加书签后重新打开 Dashboard。',
+      '如果仍为空，检查扩展的书签权限。'
+    ],
+    title: label.replace(/[。.]$/, '') || '没有可展示的书签'
+  }
 }
 
 function startDashboardDrag(): void {
@@ -4786,7 +5260,7 @@ function renderDashboardDragOverlay(existingModel?: DashboardModel): void {
         title: folder.title || '未命名文件夹'
       })),
       dragPreview: {
-        fallbackLabel: getFallbackLabel(bookmark?.title || ''),
+        fallbackLabel: getFallbackLabel(bookmark?.title || '', bookmark?.url || ''),
         favicon: getDashboardFaviconImageViewModel(bookmark?.url || ''),
         title: bookmark?.title || '未命名书签'
       },
@@ -4980,9 +5454,14 @@ function getDashboardFaviconRenderKey(pageUrl: string, source: string, src: stri
   return `${normalizedSource}\u0001${normalizedPageUrl}\u0001${normalizedSrc}`
 }
 
-function getFallbackLabel(title: string): string {
-  const trimmed = String(title || '').trim()
-  return (trimmed[0] || '*').toUpperCase()
+function getFallbackLabel(title: string, url = ''): string {
+  const domain = extractDomain(url)
+  const source = domain
+    .split('.')
+    .find((part) => /^[a-z0-9]/i.test(part)) ||
+    String(title || '').trim()
+  const initial = [...source][0] || '*'
+  return initial.toUpperCase()
 }
 
 function syncDashboardFaviconWarmup(
@@ -5061,32 +5540,7 @@ function scheduleDashboardFaviconWarmup(
   startIndex = 0,
   endIndex = items.length
 ): void {
-  if (!virtualState.scrollIdleTimer) {
-    syncDashboardFaviconWarmup(items, startIndex, endIndex)
-    return
-  }
-
-  dashboardFaviconWarmupPendingItems = items
-  dashboardFaviconWarmupPendingStartIndex = startIndex
-  dashboardFaviconWarmupPendingEndIndex = endIndex
-}
-
-function flushPendingDashboardFaviconWarmup(): void {
-  const items = dashboardFaviconWarmupPendingItems
-  if (!items) {
-    return
-  }
-
-  const startIndex = dashboardFaviconWarmupPendingStartIndex
-  const endIndex = dashboardFaviconWarmupPendingEndIndex
-  clearPendingDashboardFaviconWarmup()
   syncDashboardFaviconWarmup(items, startIndex, endIndex)
-}
-
-function clearPendingDashboardFaviconWarmup(): void {
-  dashboardFaviconWarmupPendingItems = null
-  dashboardFaviconWarmupPendingStartIndex = -1
-  dashboardFaviconWarmupPendingEndIndex = -1
 }
 
 function stopDashboardFaviconWarmup(): void {
@@ -5097,7 +5551,6 @@ function stopDashboardFaviconWarmup(): void {
   dashboardFaviconWarmupStartIndex = -1
   dashboardFaviconWarmupEndIndex = -1
   dashboardFaviconWarmupEndpointUrl = ''
-  clearPendingDashboardFaviconWarmup()
   dashboardFaviconDirtyPageUrls.clear()
   if (dashboardFaviconDirtySyncTimer) {
     globalThis.clearTimeout(dashboardFaviconDirtySyncTimer)

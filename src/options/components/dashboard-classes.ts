@@ -6,8 +6,8 @@ export const DASHBOARD_PANEL_CLASS = [
   '[--dashboard-card-height:150px] [--dashboard-card-min-width:260px] [--dashboard-grid-pad:clamp(18px,2.2vw,24px)]',
   'font-[var(--font-sans)] text-ds-text-primary',
   'pt-0 px-0 pb-12 border-0 rounded-none bg-transparent shadow-none',
-  '[.dashboard-fullscreen-active_&]:grid [.dashboard-fullscreen-active_&]:[grid-template-areas:"dashboard-toolbar"_"dashboard-selection"_"dashboard-results"]',
-  '[.dashboard-fullscreen-active_&]:[grid-template-rows:auto_auto_minmax(0,1fr)] [.dashboard-fullscreen-active_&]:min-h-screen [.dashboard-fullscreen-active_&]:max-h-screen',
+  '[.dashboard-fullscreen-active_&]:grid [.dashboard-fullscreen-active_&]:[grid-template-areas:"dashboard-chrome"_"dashboard-results"]',
+  '[.dashboard-fullscreen-active_&]:[grid-template-rows:auto_minmax(0,1fr)] [.dashboard-fullscreen-active_&]:min-h-screen [.dashboard-fullscreen-active_&]:max-h-screen',
   '[.dashboard-fullscreen-active_&]:overflow-hidden [.dashboard-fullscreen-active_&]:border-0 [.dashboard-fullscreen-active_&]:rounded-none',
   '[.dashboard-fullscreen-active_&]:w-full [.dashboard-fullscreen-active_&]:max-w-none [.dashboard-fullscreen-active_&]:mx-0',
   '[.dashboard-fullscreen-active_&]:bg-ds-app [.dashboard-fullscreen-active_&]:p-[8px_clamp(18px,2.6vw,40px)_14px]',
@@ -15,41 +15,40 @@ export const DASHBOARD_PANEL_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_SELECTION_GROUP_CLASS = [
-  'mx-auto mt-2 block w-[min(100%,680px)] max-w-[min(100%,1080px)] min-w-0 overflow-visible',
+  'relative z-[2] block w-full max-w-[620px] min-w-0 overflow-visible [grid-column:3] [grid-row:1] justify-self-stretch',
+  '[.dashboard-fullscreen-active_&]:relative [.dashboard-fullscreen-active_&]:z-[2] [.dashboard-fullscreen-active_&]:self-start [.dashboard-fullscreen-active_&]:flex-none',
+  'max-[980px]:max-w-[680px] max-[980px]:justify-self-center max-[980px]:[grid-column:1] max-[980px]:[grid-row:2]',
+  'max-[760px]:max-w-none max-[760px]:justify-self-stretch max-[760px]:[grid-column:1/3]'
+].join(' ')
+
+export const DASHBOARD_SELECTION_GROUP_ACTIVE_CLASS = [
   'rounded-ds-md border border-ds-border bg-ds-surface-1 p-[8px_10px] shadow-none',
-  '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-selection]',
-  '[.dashboard-fullscreen-active_&]:relative [.dashboard-fullscreen-active_&]:z-[2] [.dashboard-fullscreen-active_&]:self-start [.dashboard-fullscreen-active_&]:flex-none'
+  'max-[760px]:rounded-ds-sm max-[760px]:p-2'
 ].join(' ')
 
 export const DASHBOARD_PANEL_NOT_READY_STATE_CLASS =
   'pointer-events-none invisible opacity-0'
 
 export const DASHBOARD_CHROME_SKELETON_CONTENT_CLASS =
-  't-skel-content !relative !inset-auto min-w-0'
+  't-skel-content !relative !inset-auto min-w-0 [grid-area:1/1]'
 
 export const DASHBOARD_CHROME_SKELETON_LAYER_CLASS =
-  't-skel-skeleton is-pulsing pointer-events-none'
+  't-skel-skeleton is-pulsing pointer-events-none !relative !inset-auto [grid-area:1/1]'
 
 export const DASHBOARD_TOOLBAR_SKELETON_ROOT_CLASS = [
-  't-skel block w-full overflow-visible',
+  't-skel grid w-full overflow-visible',
   '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.58] [--reveal-dur:360ms]',
-  '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-toolbar]'
-].join(' ')
-
-export const DASHBOARD_SELECTION_SKELETON_ROOT_CLASS = [
-  't-skel block w-full overflow-visible',
-  '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.58] [--reveal-dur:360ms]',
-  '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-selection]'
+  '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-chrome]'
 ].join(' ')
 
 export const DASHBOARD_SELECTION_BAR_CLASS =
-  'grid min-h-8 w-full max-w-full grid-cols-[minmax(0,auto)_max-content] items-center justify-between gap-3 border-0 bg-transparent p-0 max-[900px]:flex max-[900px]:flex-col max-[900px]:items-start'
+  'grid min-h-8 w-full max-w-full grid-cols-[minmax(84px,1fr)_max-content] items-center justify-between gap-3 border-0 bg-transparent p-0 max-[560px]:flex max-[560px]:flex-col max-[560px]:items-start'
 
 export const DASHBOARD_SELECTION_COUNT_CLASS =
-  'block w-24 justify-self-end whitespace-nowrap bg-transparent text-right font-mono text-[11px] font-bold leading-normal tracking-[0] text-ds-text-muted tabular-nums max-[900px]:justify-self-start max-[900px]:text-left'
+  'block w-24 justify-self-start whitespace-nowrap bg-transparent text-left font-mono text-[11px] font-bold leading-normal tracking-[0] text-ds-text-muted tabular-nums'
 
 export const DASHBOARD_SELECTION_ACTIONS_CLASS =
-  'flex min-w-0 flex-none flex-wrap items-center justify-start gap-2 bg-transparent max-[900px]:w-full'
+  'flex min-w-0 flex-none flex-wrap items-center justify-end gap-2 bg-transparent max-[560px]:w-full max-[560px]:justify-start'
 
 export const DASHBOARD_SELECTION_BUTTON_CLASS =
   'min-h-8 whitespace-nowrap rounded-ds-sm px-2.5 text-xs font-medium leading-none tracking-[0] shadow-none transition-colors disabled:cursor-default data-disabled:cursor-default'
@@ -71,16 +70,16 @@ export const DASHBOARD_SELECTION_DANGER_BUTTON_CLASS = [
   'data-disabled:border-ds-border data-disabled:bg-ds-surface-2 data-disabled:text-ds-text-disabled'
 ].join(' ')
 
-export const DASHBOARD_SELECTION_EMPTY_ACTION_CLASS =
-  'opacity-[0.42] disabled:opacity-[0.42] data-disabled:opacity-[0.42]'
-
 export const DASHBOARD_SELECTION_SKELETON_BUTTON_CLASS =
   'block h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2'
+
+export const DASHBOARD_TOOLBAR_EXIT_SKELETON_CLASS =
+  'block h-[38px] w-[60px] rounded-ds-sm border border-ds-border bg-ds-surface-2'
 
 export const DASHBOARD_CARD_ROOT_CLASS = [
   'group/dashboard-card relative z-0 flex h-[150px] min-h-[150px] min-w-0 flex-col gap-[9px] overflow-visible rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3 select-none',
   'before:pointer-events-none before:absolute before:[inset:0_auto_0_0] before:z-0 before:block before:w-0 before:rounded-[var(--ds-radius-full)_0_0_var(--ds-radius-full)] before:bg-transparent before:content-[""]',
-  '[--dashboard-card-height:168px] [box-shadow:none] [contain:layout_paint_style] [contain-intrinsic-size:var(--dashboard-card-height)]',
+  '[box-shadow:none] [contain:layout_paint_style] [contain-intrinsic-size:var(--dashboard-card-height)]',
   '[-webkit-backdrop-filter:none] [backdrop-filter:none] hover:[box-shadow:none]',
   '[-webkit-user-select:none] [touch-action:manipulation]',
   '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
@@ -99,16 +98,17 @@ export const DASHBOARD_CARD_TAGS_EXPANDED_STATE_CLASS =
   'z-[90] [contain:layout_style] [content-visibility:visible]'
 
 export const DASHBOARD_CARD_STATIC_VISIBILITY_CLASS =
-  '[content-visibility:auto]'
+  ''
 
 export const DASHBOARD_CARD_DIMMED_CLASS =
   'opacity-[0.72] [transform:none]'
 
 export const DASHBOARD_TOOLBAR_CLASS = [
-  'grid w-full grid-cols-[minmax(96px,1fr)_minmax(280px,680px)_minmax(96px,1fr)] items-start gap-3',
-  'm-0 border-0 bg-transparent p-[10px_clamp(18px,2.6vw,40px)_8px] [box-shadow:none] shadow-none [-webkit-backdrop-filter:none] [backdrop-filter:none]',
-  '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-toolbar]',
-  'max-[920px]:grid-cols-[minmax(0,1fr)] max-[920px]:px-4'
+  'grid w-full grid-cols-[minmax(0,1fr)_minmax(320px,680px)_minmax(440px,620px)_minmax(72px,1fr)] items-start gap-3',
+  'm-0 border-0 bg-transparent p-[10px_0_8px] [box-shadow:none] shadow-none [-webkit-backdrop-filter:none] [backdrop-filter:none]',
+  '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-chrome]',
+  'max-[980px]:grid-cols-[minmax(0,1fr)_auto] max-[980px]:px-0',
+  'max-[760px]:grid-cols-[minmax(0,1fr)_auto] max-[760px]:items-start max-[760px]:gap-2 max-[760px]:p-[8px_0_6px]'
 ].join(' ')
 
 export const DASHBOARD_PERFORMANCE_CLASS = [
@@ -116,13 +116,13 @@ export const DASHBOARD_PERFORMANCE_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_TITLE_ACTIONS_CLASS =
-  'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start justify-end gap-2 pt-0 [--dashboard-status-width:minmax(0,1fr)] [grid-column:3] max-[920px]:[grid-column:1]'
+  'grid min-w-0 justify-self-end grid-cols-[minmax(0,1fr)_auto] items-start justify-end gap-2 pt-0 [--dashboard-status-width:minmax(0,1fr)] [grid-column:4] [grid-row:1] max-[980px]:[grid-column:2] max-[760px]:![grid-column:2] max-[760px]:grid-cols-[auto]'
 
 export const DASHBOARD_TOOLBAR_STATUS_CLASS =
-  'relative inline-flex min-h-[38px] w-auto max-w-full min-w-0 items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap pl-0 text-right text-[13px] font-semibold leading-[1.2] text-ds-text-muted empty:invisible before:hidden'
+  'relative inline-flex min-h-[38px] w-auto max-w-full min-w-0 items-center justify-end overflow-hidden text-ellipsis whitespace-nowrap pl-0 text-right text-[13px] font-semibold leading-[1.2] text-ds-text-muted empty:invisible before:hidden max-[760px]:hidden'
 
 export const DASHBOARD_SEARCH_BOX_CLASS =
-  'relative grid min-w-0 w-full max-w-[680px] grid-cols-[minmax(0,1fr)] gap-[7px] bg-transparent [grid-column:2] [box-shadow:none] [margin-inline:0] [.dashboard-fullscreen-active_&]:gap-[5px] max-[920px]:[grid-column:1]'
+  'relative grid min-w-0 w-full max-w-[680px] grid-cols-[minmax(0,1fr)] gap-[5px] bg-transparent [grid-column:2] [grid-row:1] [box-shadow:none] [margin-inline:0] [.dashboard-fullscreen-active_&]:gap-[5px] max-[980px]:justify-self-center max-[980px]:[grid-column:1] max-[760px]:[grid-column:1]'
 
 export const DASHBOARD_SEARCH_LABEL_CLASS =
   'm-0 flex w-full max-w-[680px] flex-col gap-2.5 bg-transparent [box-shadow:none] [margin-inline:0]'
@@ -171,26 +171,28 @@ export const DASHBOARD_NATURAL_SEARCH_TOGGLE_FALLBACK_STATE_CLASS =
   'border-ds-warning bg-[rgba(248,214,109,0.14)] text-ds-warning hover:border-ds-warning hover:bg-[rgba(248,214,109,0.14)] hover:text-ds-warning focus-visible:border-ds-warning focus-visible:bg-[rgba(248,214,109,0.14)] focus-visible:text-ds-warning'
 
 export const DASHBOARD_SEARCH_HELP_BUTTON_CLASS = [
-  'absolute top-1/2 left-[-40px] z-[2] inline-flex size-7 min-h-7 min-w-7 flex-none -translate-y-1/2 cursor-help items-center justify-center whitespace-nowrap max-[920px]:left-2',
+  'relative z-[2] inline-flex size-7 min-h-7 min-w-7 flex-none cursor-help items-center justify-center whitespace-nowrap',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-0 text-[10px] font-[650] leading-none text-ds-text-secondary [font-family:inherit] [box-shadow:none]',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/[0.72]',
-  'active:scale-[0.96] [&[aria-expanded=true]]:border-ds-accent-line [&[aria-expanded=true]]:bg-ds-selected [&[aria-expanded=true]]:text-ds-accent-text',
-  'max-[760px]:left-0'
+  'active:scale-[0.96] [&[aria-expanded=true]]:border-ds-accent-line [&[aria-expanded=true]]:bg-ds-selected [&[aria-expanded=true]]:text-ds-accent-text'
 ].join(' ')
 
 export const DASHBOARD_SEARCH_HELP_SKELETON_CLASS =
-  'absolute top-1/2 left-[-40px] z-[2] block size-7 -translate-y-1/2 rounded-ds-sm border border-ds-border bg-ds-surface-2 max-[920px]:left-2 max-[760px]:left-0'
+  'block size-7 flex-none rounded-ds-sm border border-ds-border bg-ds-surface-2'
 
 export const DASHBOARD_SEARCH_HELP_POPOVER_CLASS = [
-  '[z-index:150] grid w-[min(300px,calc(100vw-48px))] max-w-[min(300px,calc(100vw-48px))] gap-[5px]',
+  '[z-index:150] grid w-[min(332px,calc(100vw-32px))] max-w-[min(332px,calc(100vw-32px))] gap-[7px]',
   'rounded-ds-md border border-ds-border bg-ds-surface-2 p-[10px_12px]',
-  'text-left text-[12px] font-medium leading-[1.6] text-ds-text-primary shadow-none',
+  'text-left text-[12px] font-medium leading-[1.45] text-ds-text-primary shadow-none',
   'whitespace-normal outline-none [-webkit-backdrop-filter:none] [backdrop-filter:none]'
 ].join(' ')
 
 export const DASHBOARD_SEARCH_HELP_TITLE_CLASS =
   'text-[12px] font-bold text-ds-text-primary'
+
+export const DASHBOARD_SEARCH_HELP_EXAMPLE_CLASS =
+  'grid min-w-0 grid-cols-[minmax(0,118px)_minmax(0,1fr)] items-baseline gap-2 rounded-ds-sm border border-ds-border-subtle bg-ds-app px-2 py-1 text-[11px] leading-[1.35] text-ds-text-muted [&_code]:min-w-0 [&_code]:overflow-hidden [&_code]:text-ellipsis [&_code]:whitespace-nowrap [&_code]:font-mono [&_code]:text-ds-text-primary'
 
 export const DASHBOARD_SEARCH_SKELETON_ACTION_CLASS =
   'block h-7 w-14 flex-none rounded-lg border border-ds-border bg-ds-surface-2 max-[520px]:h-8'
@@ -224,7 +226,8 @@ export const DASHBOARD_RESULTS_GROUP_CLASS = [
   'border border-ds-border bg-ds-surface-1 p-3 [box-shadow:none]',
   '[-webkit-user-select:none] [-webkit-backdrop-filter:none] [backdrop-filter:none]',
   '[.dashboard-fullscreen-active_&]:relative [.dashboard-fullscreen-active_&]:z-[1] [.dashboard-fullscreen-active_&]:[grid-area:dashboard-results]',
-  '[.dashboard-fullscreen-active_&]:mt-2.5 [.dashboard-fullscreen-active_&]:flex-[1_1_auto]'
+  '[.dashboard-fullscreen-active_&]:mt-2.5 [.dashboard-fullscreen-active_&]:flex-[1_1_auto]',
+  'max-[760px]:mt-2 max-[760px]:p-2'
 ].join(' ')
 
 export const DASHBOARD_RESULTS_TITLE_CLASS = 'sr-only'
@@ -241,13 +244,13 @@ export const DASHBOARD_RESULTS_CONTENT_LAYER_CLASS =
   't-skel-content h-full min-h-0'
 
 export const DASHBOARD_CONTENT_LAYOUT_CLASS =
-  'grid min-h-0 flex-[1_1_auto] grid-cols-[minmax(190px,204px)_minmax(0,1fr)] items-stretch gap-3.5 bg-transparent p-0 max-[900px]:grid-cols-[minmax(170px,190px)_minmax(0,1fr)] max-[760px]:grid-cols-[minmax(0,1fr)]'
+  'grid min-h-0 flex-[1_1_auto] grid-cols-[minmax(190px,204px)_minmax(0,1fr)] items-stretch gap-3.5 bg-transparent p-0 max-[900px]:grid-cols-[minmax(170px,190px)_minmax(0,1fr)] max-[760px]:grid-cols-[minmax(0,1fr)] max-[760px]:gap-2'
 
 export const DASHBOARD_FOLDER_SIDEBAR_CLASS =
-  'mt-0 flex min-h-0 min-w-0 select-none flex-col overflow-hidden rounded-ds-md border border-ds-border bg-ds-surface-1 [box-shadow:none] [backdrop-filter:none] [-webkit-backdrop-filter:none] max-[760px]:max-h-[220px]'
+  'mt-0 flex min-h-0 min-w-0 select-none flex-col overflow-hidden rounded-ds-md border border-ds-border bg-ds-surface-1 [box-shadow:none] [backdrop-filter:none] [-webkit-backdrop-filter:none] max-[760px]:max-h-10 max-[760px]:rounded-none max-[760px]:border-0 max-[760px]:bg-transparent'
 
 export const DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS =
-  'flex flex-[0_0_auto] items-center justify-between gap-2.5 border-b border-ds-border-subtle bg-transparent p-[12px_12px_10px]'
+  'flex flex-[0_0_auto] items-center justify-between gap-2.5 border-b border-ds-border-subtle bg-transparent p-[12px_12px_10px] max-[760px]:hidden'
 
 export const DASHBOARD_FOLDER_SIDEBAR_TITLE_CLASS =
   'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] text-ds-text-primary'
@@ -260,7 +263,7 @@ export const DASHBOARD_META_PILL_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_FOLDER_TREE_CLASS =
-  'flex min-h-0 flex-[1_1_auto] flex-col gap-0.5 overflow-auto p-2'
+  'flex min-h-0 flex-[1_1_auto] flex-col gap-0.5 overflow-auto p-2 max-[760px]:flex-row max-[760px]:gap-1.5 max-[760px]:overflow-x-auto max-[760px]:overflow-y-hidden max-[760px]:p-[0_0_4px] max-[760px]:[scrollbar-gutter:auto] max-[760px]:[scrollbar-width:none] max-[760px]:[&::-webkit-scrollbar]:hidden'
 
 export const DASHBOARD_FOLDER_TREE_ITEM_CLASS = [
   'grid min-h-[30px] w-full cursor-pointer grid-cols-[12px_minmax(0,1fr)_max-content] items-center justify-stretch gap-[7px]',
@@ -272,20 +275,21 @@ export const DASHBOARD_FOLDER_TREE_ITEM_CLASS = [
   '[&[aria-selected=true]]:bg-ds-selected [&[aria-selected=true]]:text-ds-accent-text',
   '[&[aria-selected=true]:hover]:bg-ds-selected [&[aria-selected=true]:hover]:text-ds-accent-text',
   '[&[aria-selected=true]:focus-visible]:bg-ds-selected [&[aria-selected=true]:focus-visible]:text-ds-accent-text',
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/35'
+  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/35',
+  'max-[760px]:inline-flex max-[760px]:min-h-8 max-[760px]:w-auto max-[760px]:max-w-[180px] max-[760px]:flex-none max-[760px]:grid-cols-none max-[760px]:gap-1.5 max-[760px]:border max-[760px]:border-ds-border-subtle max-[760px]:bg-ds-app max-[760px]:px-2.5 max-[760px]:pl-2.5'
 ].join(' ')
 
 export const DASHBOARD_FOLDER_TREE_BRANCH_CLASS =
-  'relative h-2.5 w-2.5 rounded-bl-[4px] border-b border-l border-b-white/[0.22] border-l-white/20'
+  'relative h-2.5 w-2.5 rounded-bl-[4px] border-b border-l border-b-white/[0.22] border-l-white/20 max-[760px]:hidden'
 
 export const DASHBOARD_FOLDER_TREE_ROOT_BRANCH_CLASS =
-  'relative h-2.5 w-2.5 rounded-full border border-white/[0.28]'
+  'relative h-2.5 w-2.5 rounded-full border border-white/[0.28] max-[760px]:hidden'
 
 export const DASHBOARD_FOLDER_TREE_LABEL_CLASS =
   'min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap text-xs font-[680]'
 
 export const DASHBOARD_FOLDER_TREE_COUNT_CLASS =
-  'min-w-0 justify-self-end rounded-full border-0 border-transparent bg-transparent p-0 text-right text-[11px] font-[720] leading-[1.25] text-ds-text-secondary tabular-nums [[aria-selected=true]_&]:text-ds-accent-text'
+  'min-w-0 justify-self-end rounded-full border-0 border-transparent bg-transparent p-0 text-right text-[11px] font-[720] leading-[1.25] text-ds-text-secondary tabular-nums [[aria-selected=true]_&]:text-ds-accent-text max-[760px]:text-[10px]'
 
 export const DASHBOARD_NATURAL_SEARCH_LABEL_CLASS =
   'block min-w-0 overflow-hidden text-center [text-overflow:clip] whitespace-nowrap leading-none'
@@ -295,7 +299,7 @@ export const DASHBOARD_FOLDER_BREADCRUMB_SEPARATOR_CLASS =
 
 export const DASHBOARD_CARD_GRID_CLASS = [
   'relative min-h-0 min-w-0 flex-[1_1_auto] items-stretch gap-2.5 overflow-auto bg-transparent [box-shadow:none]',
-  'm-0 [padding:0_2px_0_0] [contain:layout_paint] [scrollbar-gutter:stable]',
+  'm-0 [padding:0_18px_0_0] [contain:layout_paint] [scrollbar-gutter:stable]',
   'select-none [-webkit-user-select:none]'
 ].join(' ')
 
@@ -306,7 +310,7 @@ export const DASHBOARD_SKELETON_DOT_CLASS =
   'block size-2.5 rounded-full border border-white/[0.14] bg-white/[0.035]'
 
 export const DASHBOARD_SKELETON_FOLDER_ITEM_CLASS =
-  'grid min-h-[30px] grid-cols-[12px_minmax(0,1fr)_38px] items-center gap-[7px] rounded-ds-sm py-0 pr-2 pl-[calc(8px+var(--folder-depth-offset))] [--folder-depth-offset:0px]'
+  'grid min-h-[30px] grid-cols-[12px_minmax(0,1fr)_38px] items-center gap-[7px] rounded-ds-sm py-0 pr-2 pl-[calc(8px+var(--folder-depth-offset))] [--folder-depth-offset:0px] max-[760px]:min-h-8'
 
 export const DASHBOARD_SKELETON_CARD_GRID_CLASS =
   'pointer-events-none overflow-hidden'
@@ -402,7 +406,13 @@ export const DASHBOARD_TAG_EDITOR_HELP_CLASS =
   'm-[8px_0_0] font-[var(--font-sans)] text-[12px] font-[620] leading-[1.5] tracking-[0] text-ds-text-muted'
 
 export const DASHBOARD_TAG_EDITOR_ACTIONS_CLASS =
-  'mt-[13px] flex flex-wrap justify-end gap-2'
+  'mt-[13px] flex flex-wrap items-end justify-between gap-2.5'
+
+export const DASHBOARD_TAG_EDITOR_AI_ACTIONS_CLASS =
+  'flex min-w-0 flex-wrap items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-app p-1 max-[520px]:w-full'
+
+export const DASHBOARD_TAG_EDITOR_PRIMARY_ACTIONS_CLASS =
+  'ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-[520px]:w-full'
 
 export const DASHBOARD_TAG_EDITOR_POSITIONER_CLASS = 'contents'
 
@@ -423,10 +433,28 @@ export const DASHBOARD_TAG_EDITOR_PANEL_CLOSING_STATE_CLASS =
   '[--dashboard-tag-editor-dur:var(--dropdown-close-dur)] [--dashboard-tag-editor-ease:var(--dropdown-ease)] [--dashboard-tag-editor-opacity:0] [--dashboard-tag-editor-transform:translateY(4px)_scale(0.985)]'
 
 export const DASHBOARD_EMPTY_STATE_CLASS =
-  'col-span-full rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-muted'
+  't-stagger is-shown col-span-full grid gap-3 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-muted'
 
 export const DASHBOARD_LOADING_EMPTY_STATE_CLASS =
   `${DASHBOARD_EMPTY_STATE_CLASS} flex items-center justify-center`
+
+export const DASHBOARD_EMPTY_STATE_TITLE_CLASS =
+  't-stagger-line t-stagger-line--1 block text-[14px] font-[760] leading-[1.35] text-ds-text-primary'
+
+export const DASHBOARD_EMPTY_STATE_TEXT_CLASS =
+  't-stagger-line t-stagger-line--2 m-0 max-w-[680px] text-[13px] leading-[1.65] text-ds-text-muted'
+
+export const DASHBOARD_EMPTY_STATE_SUGGESTIONS_CLASS =
+  't-stagger-line t-stagger-line--2 m-0 grid max-w-[760px] list-none gap-1.5 p-0 text-[12px] leading-[1.5] text-ds-text-secondary [&_li]:relative [&_li]:pl-4 [&_li]:before:absolute [&_li]:before:left-0 [&_li]:before:top-[0.62em] [&_li]:before:size-1 [&_li]:before:rounded-full [&_li]:before:bg-ds-text-disabled'
+
+export const DASHBOARD_EMPTY_STATE_ACTIONS_CLASS =
+  't-stagger-line t-stagger-line--3 flex flex-wrap gap-2'
+
+export const DASHBOARD_EMPTY_STATE_PRIMARY_ACTION_CLASS =
+  DASHBOARD_TAG_EDITOR_PRIMARY_BUTTON_CLASS
+
+export const DASHBOARD_EMPTY_STATE_SECONDARY_ACTION_CLASS =
+  DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS
 
 export const DASHBOARD_DROP_EMPTY_STATE_CLASS =
   `${DASHBOARD_EMPTY_STATE_CLASS} text-center`
@@ -478,9 +506,9 @@ export const DASHBOARD_FOLDER_DROP_META_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[650] text-ds-text-muted'
 
 export const DASHBOARD_DELETE_DROP_TARGET_CLASS = [
-  'fixed left-1/2 top-[clamp(26px,6vh,56px)] z-[4]',
-  'grid w-[min(420px,calc(100vw_-_48px))] min-h-[72px] [grid-template-columns:42px_minmax(0,1fr)] items-center gap-3',
-  'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[12px_14px] text-ds-text-secondary shadow-none',
+  'fixed left-1/2 top-[clamp(18px,4vh,34px)] z-[4]',
+  'grid w-[min(760px,calc(100vw_-_48px))] min-h-[76px] [grid-template-columns:42px_minmax(0,1fr)] items-center gap-3',
+  'rounded-ds-sm border border-ds-danger/45 bg-ds-danger-soft p-[12px_16px] text-ds-danger-text shadow-none',
   'pointer-events-auto [transform:translateX(-50%)_translateY(0)_scale(1)] [transform-origin:center]',
   '[-webkit-backdrop-filter:none] [backdrop-filter:none]',
   '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),opacity_var(--ds-motion-standard)_var(--ds-ease-spring),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
@@ -489,7 +517,7 @@ export const DASHBOARD_DELETE_DROP_TARGET_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_DELETE_DROP_TARGET_ACTIVE_STATE_CLASS =
-  '![border-color:var(--ds-danger)] ![background:var(--ds-danger-soft)] ![color:var(--ds-text-primary)] ![box-shadow:0_22px_64px_rgba(255,88,80,0.20),0_18px_52px_rgba(0,0,0,0.36)]'
+  '![border-color:var(--ds-danger)] ![background:rgba(226,22,42,0.24)] ![color:var(--ds-text-primary)] ![box-shadow:0_18px_48px_rgba(226,22,42,0.20),0_18px_52px_rgba(0,0,0,0.34)]'
 
 export const DASHBOARD_DELETE_DROP_TARGET_ACTIVE_TRANSFORM_STATE_CLASS =
   '![transform:translateX(-50%)_translateY(-1px)_scale(1.015)]'
@@ -507,14 +535,14 @@ export const DASHBOARD_DELETE_DROP_COPY_CLASS =
   'flex min-w-0 flex-col gap-[3px]'
 
 export const DASHBOARD_DELETE_DROP_TITLE_CLASS =
-  'overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] text-ds-text-primary'
+  'overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] text-ds-danger-text'
 
 export const DASHBOARD_DELETE_DROP_DESCRIPTION_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[650] text-ds-text-muted'
 
 export const DASHBOARD_DRAG_OVERLAY_CLASS = [
   'fixed inset-0 z-[120] block p-7',
-  'bg-black/[0.72] [backdrop-filter:blur(10px)_saturate(1.04)] [-webkit-backdrop-filter:blur(10px)_saturate(1.04)]',
+  'bg-black/[0.78] [backdrop-filter:none] [-webkit-backdrop-filter:none]',
   'isolate pointer-events-auto select-none [-webkit-user-select:none]',
   'opacity-100 transition-opacity duration-ds-standard ease-ds-standard starting:opacity-0 motion-reduce:transition-none'
 ].join(' ')
@@ -653,15 +681,12 @@ export const DASHBOARD_CARD_TAG_TOGGLE_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_TAG_POPOVER_POSITIONER_CLASS =
-  'contents'
-
-export const DASHBOARD_TAG_POPOVER_LAYER_CLASS =
-  'absolute inset-0 z-[80] pointer-events-none'
+  'z-[100] pointer-events-none'
 
 export const DASHBOARD_TAG_POPOVER_CLASS = [
-  'absolute right-3 bottom-[38px] left-[46px] z-[90] max-h-[148px] overflow-auto rounded-ds-md border border-ds-border',
+  'z-[100] w-[min(260px,calc(100vw-32px))] max-h-[156px] overflow-auto rounded-ds-md border border-ds-border',
   'pointer-events-auto bg-ds-surface-2 p-2.5 text-ds-text-primary shadow-none outline-none [-webkit-backdrop-filter:none] [backdrop-filter:none]',
-  '[transform-origin:80%_100%]'
+  'motion-reduce:transition-none'
 ].join(' ')
 
 export const DASHBOARD_TAG_POPOVER_TITLE_CLASS =

@@ -79,8 +79,11 @@ const defaultDashboardViewState: DashboardViewState = {
   results: {
     mode: 'empty',
     empty: {
+      actions: [],
       loading: false,
-      message: '正在读取书签目录。'
+      message: '正在读取书签目录。',
+      suggestions: [],
+      title: '正在读取书签目录'
     }
   },
   searchChips: [],
@@ -170,4 +173,12 @@ export function getDashboardViewSnapshot(): DashboardViewState {
 
 export function useDashboardViewState(): DashboardViewState {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
+
+export function useDashboardViewSelector<T>(selector: (state: DashboardViewState) => T): T {
+  return useSyncExternalStore(
+    subscribe,
+    () => selector(currentDashboardViewState),
+    () => selector(currentDashboardViewState)
+  )
 }
