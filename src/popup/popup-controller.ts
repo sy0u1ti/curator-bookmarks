@@ -112,6 +112,7 @@ import {
   hydratePopupDeferredEnhancements
 } from './popup-hydration.js'
 import { registerPopupBrowserEventActions } from './popup-browser-events-store.js'
+import { getPopupSearchFocusPlan } from './popup-search-focus.js'
 import {
   getPopupEditBookmarkDraftState,
   getPopupEditBookmarkSavePlan
@@ -211,7 +212,7 @@ function startPopupController(): () => void {
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
   void hydratePopupPreferences().finally(() => {
     render()
-    refreshData({ initial: true, preserveSearch: false }).finally(() => {
+    refreshData({ initial: true, preserveSearch: true }).finally(() => {
       perfMark('popup.interactive')
       perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
       void consumePopupCommandIntent().then((handled) => {
@@ -597,7 +598,7 @@ function focusSearchFromCommand(intent) {
   }
   render()
   window.requestAnimationFrame(() => {
-    focusSearchInput({ select: true })
+    focusSearchInput(getPopupSearchFocusPlan('command-intent'))
     showViewNotice(intent.message || (state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入'))
   })
 }
@@ -2869,7 +2870,7 @@ function handleSearchFocusShortcut(event) {
   }
   event.preventDefault()
   renderMainContent()
-  focusSearchInput({ select: true })
+  focusSearchInput(getPopupSearchFocusPlan('in-page-shortcut'))
   showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
   return true
 }

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Icon } from '../../ui/icons/Icon'
-import { Button } from '../../ui'
-import { Input } from '../../ui'
-import { Popover } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
+import { Popover } from '../../ui/base/Popover'
 import {
   dispatchPopupChromeAction,
   usePopupChromeView,
@@ -108,19 +108,39 @@ export function PopupChromeHost({
   const state = usePopupChromeView()
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const initialSearchFocusAppliedRef = useRef(false)
+
+  const focusSearchInputElement = useCallback((select = false) => {
+    const input = searchInputRef.current
+    if (!input) {
+      return
+    }
+
+    input.focus({ preventScroll: true })
+    if (select) {
+      input.select()
+    }
+  }, [])
+
+  useLayoutEffect(() => {
+    if (smartActive || initialSearchFocusAppliedRef.current) {
+      return
+    }
+
+    initialSearchFocusAppliedRef.current = true
+    focusSearchInputElement()
+  }, [focusSearchInputElement, smartActive])
 
   useEffect(() => {
     if (!searchFocusRequest.id) {
       return
     }
 
-    window.requestAnimationFrame(() => {
-      searchInputRef.current?.focus()
-      if (searchFocusRequest.select) {
-        searchInputRef.current?.select()
-      }
+    const focusFrame = window.requestAnimationFrame(() => {
+      focusSearchInputElement(searchFocusRequest.select)
     })
-  }, [searchFocusRequest])
+    return () => window.cancelAnimationFrame(focusFrame)
+  }, [focusSearchInputElement, searchFocusRequest])
 
   const commandPanelClassName = [
     commandPanelBaseClass,
