@@ -6,7 +6,7 @@ import {
   type ReactNode,
   type RefObject
 } from 'react'
-import { Button, DotMatrixLoader, cx } from '../../ui'
+import { Button, cx } from '../../ui'
 import {
   type NewTabContentView,
   type NewTabMissingFolderModule,
@@ -33,16 +33,14 @@ import { getNewtabButtonClass } from './newtabButtonClass'
 const STATE_BASE_CLASS = 'newtab-state grid justify-items-center gap-4 text-center'
 const STATE_HAS_SEARCH_CLASS = 'mt-2.5'
 const STATE_DEFAULT_WIDTH_CLASS = 'w-[min(520px,100%)]'
-const STATE_LOADING_CLASS = 'newtab-loading-state w-auto min-h-[104px] place-items-center text-[rgba(245,245,247,0.86)]'
-const STATE_LOADER_CLASS = 'newtab-state-loader h-[52px] w-[52px] [filter:drop-shadow(0_12px_24px_rgba(0,0,0,0.32))]'
 const STATE_MISSING_CLASS = 'folder-missing w-[min(560px,100%)] py-[22px]'
 const STATE_ACTIONS_CLASS = 'newtab-state-actions flex flex-wrap justify-center gap-2.5'
 const STATE_TITLE_CLASS = 'm-0 text-xl font-bold leading-[1.25] text-[var(--ui-text-primary)]'
 const STATE_COPY_CLASS = 'm-0 max-w-[440px] text-sm leading-[1.7] text-[var(--ui-text-secondary)]'
 const ONBOARDING_STRIP_CLASS = 'newtab-onboarding-strip grid w-[min(100%,980px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] px-3 py-2.5 text-[rgba(245,245,247,0.9)] shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] backdrop-blur-[12px] backdrop-saturate-[1.12] max-[640px]:grid-cols-[minmax(0,1fr)]'
-const ONBOARDING_COPY_CLASS = 'newtab-onboarding-copy grid min-w-0 gap-[3px]'
-const ONBOARDING_TITLE_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] leading-[1.2] max-[640px]:whitespace-normal'
-const ONBOARDING_TEXT_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] text-[rgba(245,245,247,0.55)] max-[640px]:whitespace-normal'
+const ONBOARDING_COPY_CLASS = 'newtab-onboarding-copy t-stagger is-shown grid min-w-0 gap-[3px]'
+const ONBOARDING_TITLE_CLASS = 't-stagger-line t-stagger-line--1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] leading-[1.2] max-[640px]:whitespace-normal'
+const ONBOARDING_TEXT_CLASS = 't-stagger-line t-stagger-line--2 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] text-[rgba(245,245,247,0.55)] max-[640px]:whitespace-normal'
 const ONBOARDING_ACTIONS_CLASS = 'newtab-onboarding-actions flex flex-wrap justify-end gap-2 max-[640px]:justify-start'
 const ONBOARDING_BUTTON_CLASS = 'min-h-[30px] rounded-[7px] border border-[rgba(245,245,247,0.12)] bg-[rgba(245,245,247,0.08)] px-2.5 text-xs font-[680] text-[rgba(245,245,247,0.9)] hover:border-[rgba(245,245,247,0.22)] hover:bg-[rgba(245,245,247,0.12)] focus-visible:border-[rgba(245,245,247,0.22)] focus-visible:bg-[rgba(245,245,247,0.12)]'
 const ONBOARDING_SECONDARY_BUTTON_CLASS = 'text-[rgba(245,245,247,0.62)]'
@@ -303,9 +301,10 @@ function OnboardingStrip({ module }: { module: NewTabOnboardingModule }) {
 }
 
 function LoadingState({ hasSearch, label }: { hasSearch: boolean; label: string }) {
+  void hasSearch
   return (
-    <section className={cx(STATE_BASE_CLASS, STATE_LOADING_CLASS, hasSearch && STATE_HAS_SEARCH_CLASS)} aria-label={label}>
-      <DotMatrixLoader className={STATE_LOADER_CLASS} />
+    <section className="sr-only" aria-label={label}>
+      {label}
     </section>
   )
 }

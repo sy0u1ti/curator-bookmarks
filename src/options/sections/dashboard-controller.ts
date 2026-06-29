@@ -3417,6 +3417,7 @@ function renderDashboardVirtualScrollWindow(
   }
 
   const scrollTop = scrollTopOverride == null ? getDashboardVirtualScrollTop() : scrollTopOverride
+  const validateRenderKey = !shouldUseStaticDashboardCardInteractions()
   const viewportWindow = computeDashboardVirtualWindow({
     itemCount: items.length,
     contentWidth: virtualState.contentWidth,
@@ -3430,7 +3431,7 @@ function renderDashboardVirtualScrollWindow(
 
   if (
     canReuseDashboardVirtualShell(items, viewportWindow, viewportWindow, {
-      validateRenderKey: false,
+      validateRenderKey,
       allowAnchoredGeometry: true
     })
   ) {
@@ -3465,7 +3466,7 @@ function renderDashboardVirtualScrollWindow(
   scheduleDashboardFaviconWarmupForViewport(items, viewportWindow)
 
   if (
-    canReuseDashboardVirtualShell(items, virtualWindow, viewportWindow, { validateRenderKey: false })
+    canReuseDashboardVirtualShell(items, virtualWindow, viewportWindow, { validateRenderKey })
   ) {
     syncDashboardVirtualRenderedShellGeometry(virtualWindow)
     reconcileDashboardVirtualTransientUiAfterScroll(items)
@@ -3473,7 +3474,7 @@ function renderDashboardVirtualScrollWindow(
   }
 
   setDashboardVirtualRenderFullRange(viewportWindow)
-  const renderedIds = commitDashboardVirtualWindow(items, virtualWindow, { validateRenderKey: false })
+  const renderedIds = commitDashboardVirtualWindow(items, virtualWindow, { validateRenderKey })
   updateDashboardFloatingEditorPosition(renderedIds)
 }
 

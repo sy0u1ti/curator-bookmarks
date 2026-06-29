@@ -703,6 +703,7 @@ function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActions
           focusableWhenDisabled={state.clearAiBusy}
           onClick={() => handleDashboardViewAction({ action: 'clear-ai-tags' })}
         >
+          {state.clearAiBusy ? null : <Icon name="Trash2" size={14} aria-hidden="true" />}
           <DashboardLoadingLabel
             state={{
               busy: state.clearAiBusy,
@@ -723,6 +724,7 @@ function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActions
           focusableWhenDisabled={state.regenerateAiBusy}
           onClick={() => handleDashboardViewAction({ action: 'regenerate-ai-tags' })}
         >
+          {state.regenerateAiBusy ? null : <Icon name="Sparkles" size={14} aria-hidden="true" />}
           <DashboardLoadingLabel
             state={{
               busy: state.regenerateAiBusy,
@@ -749,6 +751,7 @@ function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActions
           focusableWhenDisabled={state.cancelDanger}
           onClick={() => handleDashboardViewAction({ action: 'close-tag-editor' })}
         >
+          <Icon name="X" size={14} aria-hidden="true" />
           {state.cancelLabel}
         </Button>
         <Button
@@ -760,6 +763,7 @@ function DashboardTagEditorActions({ state }: { state: DashboardTagEditorActions
           focusableWhenDisabled={state.saveBusy}
           onClick={() => handleDashboardViewAction({ action: 'save-tags' })}
         >
+          {state.saveBusy ? null : <Icon name="Save" size={14} aria-hidden="true" />}
           <DashboardLoadingLabel
             state={{
               busy: state.saveBusy,

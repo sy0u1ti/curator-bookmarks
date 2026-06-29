@@ -1202,9 +1202,19 @@ function getHiddenDashboardTagEditorPosition(): DashboardTagEditorPosition {
 function getDashboardTagEditorPosition(editor: HTMLElement, card: HTMLElement): DashboardTagEditorPosition {
   const margin = 16
   const gap = 12
+  if (window.innerWidth <= 760) {
+    return {
+      style: {
+        left: '14px',
+        right: '14px',
+        top: '18px'
+      }
+    }
+  }
+
   const cardRect = card.getBoundingClientRect()
   const editorRect = editor.getBoundingClientRect()
-  const editorWidth = Math.min(editorRect.width || 430, window.innerWidth - margin * 2)
+  const editorWidth = Math.min(editorRect.width || 472, window.innerWidth - margin * 2)
   const editorHeight = Math.min(editorRect.height || 300, window.innerHeight - margin * 2)
   const hasRightSpace = cardRect.right + gap + editorWidth <= window.innerWidth - margin
   const hasLeftSpace = cardRect.left - gap - editorWidth >= margin

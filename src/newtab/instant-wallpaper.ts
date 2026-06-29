@@ -1,7 +1,7 @@
 const INSTANT_WALLPAPER_KEY = 'curatorNewTabInstantWallpaper'
 const INSTANT_WALLPAPER_DATA_URL_KEY = 'curatorNewTabInstantWallpaperDataUrl'
 const INSTANT_WALLPAPER_TARGET_KEY = 'curatorNewTabInstantWallpaperTarget'
-const INSTANT_WALLPAPER_MAX_DIMENSION = 480
+const INSTANT_WALLPAPER_MAX_DIMENSION = 960
 const INSTANT_WALLPAPER_QUALITY = 0.68
 const DEFAULT_INSTANT_WALLPAPER_PLACEHOLDER = '#101013'
 const DEFAULT_INSTANT_WALLPAPER_DATA_URL_REF = INSTANT_WALLPAPER_DATA_URL_KEY
@@ -281,7 +281,7 @@ export async function createInstantWallpaperDataUrl(
 function normalizeInstantWallpaperMaxDimension(value: unknown): number {
   const dimension = Math.round(Number(value))
   if (Number.isFinite(dimension) && dimension >= 64) {
-    return Math.min(512, dimension)
+    return Math.min(960, dimension)
   }
   return INSTANT_WALLPAPER_MAX_DIMENSION
 }

@@ -1,4 +1,4 @@
-export type SettingsDrawerSection = 'source' | 'appearance' | 'search' | 'modules' | 'advanced'
+export type SettingsDrawerSection = 'source' | 'appearance' | 'search' | 'advanced'
 
 export type SettingsGroupControlSyncAction =
   | 'folder'
@@ -12,9 +12,12 @@ export type SettingsGroupControlSyncAction =
 
 export function normalizeSettingsDrawerSection(value: unknown): SettingsDrawerSection {
   const section = String(value || '')
+  if (section === 'modules') {
+    return 'advanced'
+  }
+
   return section === 'appearance' ||
     section === 'search' ||
-    section === 'modules' ||
     section === 'advanced'
     ? section
     : 'source'
@@ -28,10 +31,8 @@ export function getSettingsGroupControlSyncActions(
       return ['background', 'featuredBackgroundDisplay', 'icon', 'time']
     case 'search':
       return ['search']
-    case 'modules':
-      return ['modules']
     case 'advanced':
-      return ['general']
+      return ['general', 'modules']
     case 'source':
     default:
       return ['folder']

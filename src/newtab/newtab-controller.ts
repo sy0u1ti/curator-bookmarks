@@ -374,16 +374,16 @@ const FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY = 2
 const BACKGROUND_IMAGE_READY_TIMEOUT_MS = 2200
 const REMOTE_BACKGROUND_READY_TIMEOUT_MS = 900
 const BACKGROUND_STARTUP_CACHE_IDLE_DELAY_MS = 2400
-const INSTANT_WALLPAPER_REMOTE_READY_FALLBACK_MS = 1400
 
 type DragStartPointerEvent = Pick<
   PointerEvent,
   'button' | 'clientX' | 'clientY' | 'pointerId' | 'pointerType'
 >
 const INSTANT_WALLPAPER_STARTUP_CACHE_ATTEMPTS = [
-  { maxDimension: 480, quality: 0.68 },
-  { maxDimension: 360, quality: 0.62 },
-  { maxDimension: 256, quality: 0.56 }
+  { maxDimension: 960, quality: 0.68 },
+  { maxDimension: 720, quality: 0.62 },
+  { maxDimension: 520, quality: 0.56 },
+  { maxDimension: 360, quality: 0.5 }
 ] as const
 const FEATURED_BACKGROUND_DAILY_REFRESH_GRACE_MS = 1500
 const DEFAULT_BACKGROUND_SETTINGS = {
@@ -788,7 +788,6 @@ let featuredBackgroundGalleryPreviewObjectUrlWarmTask: Promise<void> | null = nu
 let featuredBackgroundGalleryPreviewObjectUrlWarmSignature = ''
 let featuredBackgroundGalleryPreviewWarmTimer = 0
 let lastIconPreviewSignature = ''
-let instantWallpaperRemoteReadyFallbackTimer = 0
 let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let searchSettingsSettleTimer = 0
@@ -8693,10 +8692,11 @@ function markWallpaperReady(): void {
 }
 
 function markWallpaperPending(): void {
+  const instantWallpaper = getNewtabInstantWallpaperView()
   dispatchNewtabInstantWallpaperView({
     loading: true,
     pending: true,
-    ready: false,
+    ready: hasUsableInstantWallpaperPreview(instantWallpaper.previewImage),
     remoteReady: false
   })
 }
@@ -8707,12 +8707,15 @@ function markRuntimeWallpaperApplied(): void {
   })
 }
 
+function hasUsableInstantWallpaperPreview(previewImage: string): boolean {
+  const normalizedPreviewImage = String(previewImage || '').trim()
+  return Boolean(normalizedPreviewImage && normalizedPreviewImage !== 'none')
+}
+
 function markInstantWallpaperRemoteReady(mediaSignature = lastAppliedBackgroundMediaSignature): void {
   if (!mediaSignature) {
     return
   }
-  window.clearTimeout(instantWallpaperRemoteReadyFallbackTimer)
-  instantWallpaperRemoteReadyFallbackTimer = 0
   const instantWallpaper = getNewtabInstantWallpaperView()
   if (instantWallpaper.signature && instantWallpaper.signature !== mediaSignature) {
     return
@@ -8758,7 +8761,7 @@ function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
   )
   dispatchNewtabInstantWallpaperView({
     backgroundColor: placeholderColor,
-    image: `url("${escapeCssUrl(dataUrl)}")`,
+    image: '',
     pending: false,
     placeholderColor,
     position: instantWallpaper.backgroundPosition || 'center',
@@ -8768,11 +8771,6 @@ function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
     signature: mediaSignature,
     size: normalizeStoredBackgroundSizeCss(instantWallpaper.backgroundSize)
   })
-  window.clearTimeout(instantWallpaperRemoteReadyFallbackTimer)
-  instantWallpaperRemoteReadyFallbackTimer = window.setTimeout(() => {
-    instantWallpaperRemoteReadyFallbackTimer = 0
-    markInstantWallpaperRemoteReady(mediaSignature)
-  }, INSTANT_WALLPAPER_REMOTE_READY_FALLBACK_MS)
   return true
 }
 
@@ -8802,7 +8800,9 @@ async function applyBackgroundSettings(): Promise<void> {
     mediaSignature === lastAppliedBackgroundMediaSignature &&
     hasAppliedBackgroundMedia(settings)
   ) {
-    markInstantWallpaperRemoteReady(mediaSignature)
+    if (settings.type === 'video' || getNewtabInstantWallpaperView().remoteReady) {
+      markInstantWallpaperRemoteReady(mediaSignature)
+    }
     markWallpaperReady()
     return
   }
@@ -8984,7 +8984,6 @@ async function applyUrlBackgroundImage(
       }
       if (ready) {
         lastAppliedBackgroundMediaSignature = mediaSignature
-        markInstantWallpaperRemoteReady(mediaSignature)
         await updateInstantWallpaperFromBlob(cachedRecord.blob, mediaSignature, settings)
       }
       markWallpaperReady()
@@ -9028,7 +9027,6 @@ function applyDirectRemoteBackgroundImage(
       if (readyImage) {
         setActiveBackgroundImageNaturalSize(imageUrl, readyImage, mediaSignature)
         applyFeaturedBackgroundDisplayPreferences()
-        markInstantWallpaperRemoteReady(mediaSignature)
       }
       if (revealWhenReady) {
         markWallpaperReady()
@@ -9185,7 +9183,6 @@ async function applyCachedRemoteBackgroundBlobToCurrentPage(
   }
 
   lastAppliedBackgroundMediaSignature = mediaSignature
-  markInstantWallpaperRemoteReady(mediaSignature)
   markWallpaperReady()
   return true
 }
@@ -9300,7 +9297,6 @@ async function setBackgroundImageFromBlob(
     applyFeaturedBackgroundDisplayPreferences()
     setBackgroundImageMedia(objectUrl)
     markRuntimeWallpaperApplied()
-    markInstantWallpaperRemoteReady(mediaSignature)
   } else {
     if (preserveCurrentUntilReady) {
       URL.revokeObjectURL(objectUrl)
@@ -9425,7 +9421,7 @@ function getFeaturedBackgroundPreviewImageUrl(
       return url.href
     }
     if (item.provider === 'nasa' && url.hostname === 'images-assets.nasa.gov') {
-      url.pathname = url.pathname.replace(/~(?:orig|large|medium)(\.[a-z0-9]+)$/i, '~small$1')
+      url.pathname = url.pathname.replace(/~(?:orig|large|medium|small)(\.[a-z0-9]+)$/i, '~large$1')
       return url.href
     }
     if (item.provider === 'wikimedia' && url.hostname === 'upload.wikimedia.org') {
@@ -9491,8 +9487,6 @@ function clearInstantWallpaperIfSignatureChanged(mediaSignature: string): void {
 }
 
 function clearInstantWallpaperFallbackStyles(): void {
-  window.clearTimeout(instantWallpaperRemoteReadyFallbackTimer)
-  instantWallpaperRemoteReadyFallbackTimer = 0
   dispatchNewtabInstantWallpaperView({
     image: '',
     pending: false,
@@ -10036,7 +10030,9 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
   }
 
   const settings = rawSettings as Record<string, unknown>
-  const placeholder = String(settings.placeholder || '').trim() || DEFAULT_SEARCH_SETTINGS.placeholder
+  const placeholder = Object.prototype.hasOwnProperty.call(settings, 'placeholder')
+    ? String(settings.placeholder ?? '').trim()
+    : DEFAULT_SEARCH_SETTINGS.placeholder
   const engine = normalizeSearchEngineId(settings.engine, DEFAULT_SEARCH_SETTINGS.engine)
   return {
     enabled: settings.enabled !== false,
@@ -10061,7 +10057,7 @@ function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SE
 }
 
 function getSearchPlaceholder(settings: typeof DEFAULT_SEARCH_SETTINGS): string {
-  return String(settings.placeholder || '').trim() || DEFAULT_SEARCH_SETTINGS.placeholder
+  return String(settings.placeholder ?? '').trim()
 }
 
 function syncSearchSettingsControls(): void {

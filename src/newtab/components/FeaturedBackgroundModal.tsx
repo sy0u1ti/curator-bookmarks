@@ -25,9 +25,9 @@ const featuredWallpaperPanelClosedClass = 'pointer-events-none'
 const featuredWallpaperPanelClosingClass =
   'scale-[var(--modal-scale-close)] opacity-0 pointer-events-none duration-[var(--modal-close-dur)]'
 const featuredWallpaperModalLayoutClass =
-  'fixed inset-0 z-[10020] grid place-items-center bg-ds-overlay p-6 transition-opacity motion-reduce:transition-none'
+  'fixed inset-0 z-[10020] grid place-items-center bg-[rgba(0,0,0,0.46)] p-6 transition-opacity [-webkit-backdrop-filter:blur(10px)_saturate(1.05)] [backdrop-filter:blur(10px)_saturate(1.05)] motion-reduce:transition-none'
 const featuredWallpaperModalOpenClass =
-  'opacity-100 pointer-events-auto duration-ds-surface ease-ds-standard'
+  'opacity-100 pointer-events-auto duration-[var(--modal-open-dur)] ease-[var(--modal-ease)]'
 const featuredWallpaperModalClosedClass =
   'opacity-0 pointer-events-none duration-ds-surface ease-ds-standard [content-visibility:hidden] [contain-intrinsic-size:100vw_100vh]'
 const featuredWallpaperModalClosingClass =
@@ -35,9 +35,9 @@ const featuredWallpaperModalClosingClass =
 const featuredWallpaperPanelLayoutClass =
   'grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
 const featuredWallpaperPanelSurfaceClass =
-  'rounded-ds-lg border border-ds-border bg-ds-app text-ds-text-primary shadow-ds-dialog'
+  'rounded-ds-lg border border-[rgba(245,245,247,0.13)] bg-[rgba(6,7,9,0.78)] text-ds-text-primary shadow-[0_28px_80px_rgba(0,0,0,0.36),inset_0_1px_0_rgba(255,255,255,0.065)] [-webkit-backdrop-filter:blur(18px)_saturate(1.14)] [backdrop-filter:blur(18px)_saturate(1.14)]'
 const featuredWallpaperStatusClass =
-  'featured-wallpaper-status border border-ds-border bg-ds-surface-2 text-ds-text-secondary shadow-none'
+  'featured-wallpaper-status border border-[rgba(245,245,247,0.12)] bg-[rgba(245,245,247,0.065)] text-ds-text-secondary shadow-none'
 const featuredWallpaperActionClass = `featured-wallpaper-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`
 
 export interface FeaturedBackgroundModalProps {

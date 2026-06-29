@@ -9,12 +9,10 @@
         color-scheme: dark;
         --bg: #101013;
         --wallpaper-placeholder-bg: #101013;
-        --instant-wallpaper-preview-blur: 18px;
-        --instant-wallpaper-preview-loading-blur: 22px;
-        --instant-wallpaper-preview-loading-opacity: 0.54;
-        --instant-wallpaper-preview-loading-scale: 1.06;
-        --instant-wallpaper-preview-opacity: 0.68;
-        --instant-wallpaper-preview-scale: 1.045;
+        --instant-wallpaper-preview-blur: 2px;
+        --instant-wallpaper-preview-loading-blur: 2px;
+        --instant-wallpaper-preview-loading-opacity: 1;
+        --instant-wallpaper-preview-opacity: 1;
         background-color: #101013;
       }
 
@@ -26,10 +24,7 @@
         margin: 0;
         overflow: hidden;
         background-color: var(--wallpaper-placeholder-bg, #101013);
-      }
-
-      body {
-        background-image: var(--instant-wallpaper-image, none);
+        background-image: var(--instant-wallpaper-preview-image, none);
         background-position: var(--instant-wallpaper-position, center);
         background-repeat: no-repeat;
         background-size: var(--instant-wallpaper-size, cover);
@@ -38,33 +33,26 @@
       body::before {
         content: "";
         position: fixed;
-        inset: -56px;
+        inset: 0;
         z-index: 0;
-        background-color: var(--wallpaper-placeholder-bg, #101013);
+        background-color: transparent;
         background-image: var(--instant-wallpaper-preview-image, none);
         background-position: var(--instant-wallpaper-position, center);
         background-repeat: no-repeat;
         background-size: var(--instant-wallpaper-size, cover);
-        filter: blur(var(--instant-wallpaper-preview-blur, 18px)) saturate(1.04) brightness(0.9);
-        opacity: var(--instant-wallpaper-preview-opacity, 0.68);
+        filter: blur(var(--instant-wallpaper-preview-blur, 2px)) saturate(1.02);
+        opacity: var(--instant-wallpaper-preview-opacity, 1);
         pointer-events: none;
-        transform: scale(var(--instant-wallpaper-preview-scale, 1.045));
-        transform-origin: center;
-        transition:
-          opacity 320ms cubic-bezier(0.22, 1, 0.36, 1),
-          filter 400ms ease-in-out,
-          transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
-        will-change: opacity, filter, transform;
+        transition: opacity 840ms cubic-bezier(0.22, 1, 0.36, 1);
+        will-change: opacity;
       }
 
       html.loading-wallpaper:not(.instant-wallpaper-ready) body::before {
-        filter: blur(var(--instant-wallpaper-preview-loading-blur, 22px)) saturate(1.02) brightness(0.82);
-        opacity: var(--instant-wallpaper-preview-loading-opacity, 0.54);
-        transform: scale(var(--instant-wallpaper-preview-loading-scale, 1.06));
+        filter: blur(var(--instant-wallpaper-preview-loading-blur, 2px)) saturate(1.02);
+        opacity: var(--instant-wallpaper-preview-loading-opacity, 1);
       }
 
       html.instant-wallpaper-remote-ready:not([data-instant-wallpaper-preview-only="true"]) body::before {
-        filter: blur(10px) saturate(1) brightness(0.92);
         opacity: 0;
       }
 
@@ -74,7 +62,6 @@
         }
       }
     </style>
-    <script defer src="/instant-wallpaper-boot.js"></script>
   </head>
   <body>
     <div id="newtab-react-root"></div>

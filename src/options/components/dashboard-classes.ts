@@ -352,11 +352,11 @@ export const DASHBOARD_VIRTUAL_WINDOW_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_TAG_EDITOR_BUTTON_CLASS =
-  'h-[34px] min-h-[34px] flex-none whitespace-nowrap rounded-[9px] px-3 text-[13px] font-bold leading-none tracking-[0] shadow-none [word-break:keep-all] active:scale-[0.985]'
+  'h-8 min-h-8 flex-none gap-1.5 whitespace-nowrap rounded-ds-sm px-2.5 text-xs font-[680] leading-none tracking-[0] shadow-none [word-break:keep-all] active:scale-[0.985] [&_svg]:size-[14px] [&_svg]:shrink-0'
 
 export const DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS = [
   DASHBOARD_TAG_EDITOR_BUTTON_CLASS,
-  'border-ds-border bg-ds-surface-2 text-ds-text-primary',
+  'border-ds-border-subtle bg-transparent text-ds-text-secondary',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
 ].join(' ')
@@ -381,7 +381,7 @@ export const DASHBOARD_TOOLBAR_EXIT_BUTTON_CLASS =
   DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS
 
 export const DASHBOARD_TAG_EDITOR_HEAD_CLASS =
-  'mb-3.5 flex items-start justify-between gap-3.5'
+  'mb-4 flex items-start justify-between gap-3.5'
 
 export const DASHBOARD_TAG_EDITOR_TITLE_CLASS =
   'block text-[15px] font-[760] leading-[1.35] tracking-[0] text-ds-text-primary [overflow-wrap:anywhere]'
@@ -396,20 +396,20 @@ export const DASHBOARD_TAG_EDITOR_FIELD_LABEL_CLASS =
   'text-[12px] font-bold leading-normal tracking-[0] text-ds-text-muted'
 
 export const DASHBOARD_TAG_EDITOR_TEXTAREA_CLASS = [
-  'min-h-[116px] w-full resize-y rounded-ds-sm border border-ds-border',
-  'bg-ds-surface-2 p-[10px_11px] text-[13px] leading-[1.55] text-ds-text-primary [font-family:var(--font-sans)] placeholder:text-ds-text-muted',
+  'min-h-[124px] w-full resize-y rounded-ds-sm border border-ds-border',
+  'bg-ds-app p-[11px_12px] text-[13px] leading-[1.55] text-ds-text-primary [font-family:var(--font-sans)] placeholder:text-ds-text-muted',
   'select-text [-webkit-user-select:text]',
   'focus:ring-0 focus-visible:border-ds-focus focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
 ].join(' ')
 
 export const DASHBOARD_TAG_EDITOR_HELP_CLASS =
-  'm-[8px_0_0] font-[var(--font-sans)] text-[12px] font-[620] leading-[1.5] tracking-[0] text-ds-text-muted'
+  'm-[9px_0_0] font-[var(--font-sans)] text-[12px] font-[620] leading-[1.45] tracking-[0] text-ds-text-muted'
 
 export const DASHBOARD_TAG_EDITOR_ACTIONS_CLASS =
-  'mt-[13px] flex flex-wrap items-end justify-between gap-2.5'
+  'mt-4 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-t border-ds-border-subtle pt-3 max-[520px]:grid-cols-1 max-[520px]:gap-2.5'
 
 export const DASHBOARD_TAG_EDITOR_AI_ACTIONS_CLASS =
-  'flex min-w-0 flex-wrap items-center gap-1.5 rounded-ds-sm border border-ds-border-subtle bg-ds-app p-1 max-[520px]:w-full'
+  'flex min-w-0 flex-wrap items-center gap-1.5 p-0 max-[520px]:w-full'
 
 export const DASHBOARD_TAG_EDITOR_PRIMARY_ACTIONS_CLASS =
   'ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2 max-[520px]:w-full'
@@ -417,13 +417,13 @@ export const DASHBOARD_TAG_EDITOR_PRIMARY_ACTIONS_CLASS =
 export const DASHBOARD_TAG_EDITOR_POSITIONER_CLASS = 'contents'
 
 export const DASHBOARD_TAG_EDITOR_ROOT_CLASS =
-  'fixed left-0 top-0 z-[132] w-[min(430px,calc(100vw_-_36px))] max-[760px]:left-3.5 max-[760px]:right-3.5 max-[760px]:top-[18px] max-[760px]:w-auto'
+  'fixed left-0 top-0 z-[132] w-[min(472px,calc(100vw_-_36px))] max-[760px]:left-3.5 max-[760px]:right-3.5 max-[760px]:top-[18px] max-[760px]:w-auto'
 
 export const DASHBOARD_TAG_EDITOR_ROOT_CLOSING_STATE_CLASS =
   'pointer-events-none'
 
 export const DASHBOARD_TAG_EDITOR_PANEL_CLASS = [
-  'dashboard-tag-editor-panel rounded-ds-md border border-ds-border bg-ds-surface-2 p-4 text-ds-text-primary shadow-none',
+  'dashboard-tag-editor-panel rounded-ds-md border border-ds-border bg-ds-surface-2 p-[18px] text-ds-text-primary shadow-none',
   '[-webkit-backdrop-filter:none] [backdrop-filter:none] [transform-origin:top_center]',
   '[opacity:var(--dashboard-tag-editor-opacity,1)] [transform:var(--dashboard-tag-editor-transform,translateY(0)_scale(1))] [transition:opacity_var(--dashboard-tag-editor-dur,var(--dropdown-open-dur))_var(--dashboard-tag-editor-ease,var(--dropdown-ease)),transform_var(--dashboard-tag-editor-dur,var(--dropdown-open-dur))_var(--dashboard-tag-editor-ease,var(--dropdown-ease))]',
   'starting:[--dashboard-tag-editor-opacity:0] starting:[--dashboard-tag-editor-transform:translateY(6px)_scale(0.985)] motion-reduce:[transition:none]'
@@ -656,7 +656,7 @@ export const DASHBOARD_CARD_META_CLASS =
   'mt-[7px] grid max-h-none min-w-0 grid-rows-[14px_20px] gap-[5px] overflow-hidden'
 
 export const DASHBOARD_CARD_PATH_CHIP_CLASS = [
-  'block h-auto w-full min-w-0 overflow-hidden border-0 border-t-0 bg-transparent p-0 pt-0 text-left text-[10px] leading-[1.2]',
+  'block h-[14px] min-h-[14px] w-full min-w-0 appearance-none overflow-hidden border-0 border-t-0 bg-transparent p-0 pt-0 text-left text-[10px] leading-[14px]',
   'font-mono [font-weight:680] text-ds-text-muted text-ellipsis whitespace-nowrap outline-none',
   '[direction:ltr] [unicode-bidi:plaintext] [line-break:auto] [hanging-punctuation:none] [text-spacing-trim:space-all] [text-autospace:no-autospace]',
   'hover:bg-transparent hover:text-ds-text-secondary focus-visible:bg-transparent focus-visible:text-ds-text-secondary focus-visible:outline-none'
@@ -713,4 +713,4 @@ export const DASHBOARD_CARD_MENU_ITEM_DANGER_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_TAG_EDITOR_STATUS_CLASS =
-  'm-[8px_0_0] min-h-[18px] font-[var(--font-sans)] text-[12px] leading-[1.5] tracking-[0] text-ds-text-muted'
+  'm-[5px_0_0] min-h-[17px] font-[var(--font-sans)] text-[12px] leading-[1.45] tracking-[0] text-ds-text-disabled'
