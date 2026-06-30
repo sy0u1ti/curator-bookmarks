@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
-import { Button } from '../../ui'
+import { Button } from '../../ui/base/Button'
 import { Icon } from '../../ui/icons/Icon'
-import { cx } from '../../ui'
+import { cx } from '../../ui/base/utils'
 import { HighlightedText } from './HighlightedText'
 import type { PopupFolderPickerState, PopupFolderTreeOptionViewModel } from './PopupViewModels'
 

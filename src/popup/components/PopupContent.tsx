@@ -1,8 +1,8 @@
 import { memo, useState, type CSSProperties, type RefObject } from 'react'
-import { Button } from '../../ui'
-import { NumberPop } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import { Icon, type IconName } from '../../ui/icons/Icon'
-import { cx } from '../../ui'
+import { cx } from '../../ui/base/utils'
 import { HighlightedText } from './HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
 import type {
@@ -272,10 +272,10 @@ function PopupContentSkeleton({
           </span>
         </header>
         <ul className={mainListClass} role="presentation">
-          {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row, index) => (
+          {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row) => (
             <li
               className={mainRowClass}
-              key={`bookmark-skeleton:${index}`}
+              key={`bookmark-skeleton:${row.title}:${row.url}:${row.path}`}
             >
               <div className={cx(listButtonClass, 'cursor-default')} style={getBookmarkButtonStyle(false)}>
                 <span className={rowMainClass}>
@@ -563,11 +563,7 @@ function areActionMenusEqual(
   previous: PopupActionMenuViewModel,
   next: PopupActionMenuViewModel
 ) {
-  if (previous.items.length !== next.items.length) {
-    return false
-  }
-
-  return previous.items.every((item, index) => {
+  return previous.items.length === next.items.length && previous.items.every((item, index) => {
     const nextItem = next.items[index]
     return item.action === nextItem.action &&
       item.ariaLabel === nextItem.ariaLabel &&
@@ -579,11 +575,7 @@ function areActionMenusEqual(
 }
 
 function areStringArraysEqual(previous: string[], next: string[]) {
-  if (previous.length !== next.length) {
-    return false
-  }
-
-  return previous.every((item, index) => item === next[index])
+  return previous.length === next.length && previous.every((item, index) => item === next[index])
 }
 
 function PopupRowActions({

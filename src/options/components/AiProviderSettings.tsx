@@ -1,22 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import {
-  AiProviderCard,
-  Button,
-  CollapsiblePanel,
-  CollapsibleRoot,
-  CollapsibleTrigger,
-  DialogBackdrop,
-  DialogClose,
-  DialogDescription,
-  DialogOverlay,
-  DialogPanel,
-  DialogTitle,
-  Input,
-  Select,
-  SwitchControl,
-  Textarea,
-  type SelectOption
-} from '../../ui'
+import { useEffect, useMemo, useState } from 'react'
+import { AiProviderCard } from '../../ui/ai/AiProviderCard'
+import { Button } from '../../ui/base/Button'
+import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
+import { DialogBackdrop, DialogClose, DialogDescription, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
+import { Input } from '../../ui/base/Input'
+import { Select, type SelectOption } from '../../ui/base/Select'
+import { SwitchControl } from '../../ui/base/Switch'
+import { Textarea } from '../../ui/base/Textarea'
 import { AiModelSelector } from './AiModelSelector.js'
 import {
   ButtonBusyLoadingLabel,
@@ -106,19 +96,19 @@ export function AiProviderSettings({
   }
   const attention = attentionState.visible
   const [customModelsOpen, setCustomModelsOpen] = useState(false)
-  const description = (
+  const description = useMemo(() => (
     <>
       <p className={AI_PROVIDER_NOTICE_CLASS}>{state.noticeText}</p>
       <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地。</p>
     </>
-  )
-  const status = (
+  ), [state.noticeText])
+  const status = useMemo(() => (
     <span
       className={`${AI_PROVIDER_STATUS_BADGE_CLASS} ${aiProviderToneClass(state.configTone, AI_PROVIDER_STATUS_TONE_CLASS)}`}
     >
       {state.configStatusText}
     </span>
-  )
+  ), [state.configStatusText, state.configTone])
   const connectivityClassName = [
     AI_PROVIDER_CONNECTIVITY_CLASS,
     aiProviderToneClass(state.connectivityTone, AI_PROVIDER_CONNECTIVITY_TONE_CLASS)
@@ -143,6 +133,8 @@ export function AiProviderSettings({
     }
   }, [attentionState.requestId, attentionState.visible])
 
+  const title = useMemo(() => <h2 className={AI_PROVIDER_TITLE_CLASS}>自定义 AI 渠道</h2>, [])
+
   return (
     <>
       <AiProviderCard
@@ -151,7 +143,7 @@ export function AiProviderSettings({
           AI_PROVIDER_CARD_CLASS,
           attention ? AI_PROVIDER_CARD_ATTENTION_CLASS : ''
         ].filter(Boolean).join(' ')}
-        title={<h2 className={AI_PROVIDER_TITLE_CLASS}>自定义 AI 渠道</h2>}
+        title={title}
         description={description}
         status={status}
         headerClassName={AI_PROVIDER_HEADER_CLASS}
@@ -349,6 +341,7 @@ export function AiProviderSettings({
         </div>
       </AiProviderCard>
       <AiCustomModelsDialog
+        key={state.customModels.join('\n')}
         disabled={state.modelToolsDisabled}
         open={customModelsOpen}
         value={state.customModels.join('\n')}
@@ -444,23 +437,20 @@ function AiCustomModelsDialog({
   open: boolean
   value: string
 }) {
-  const [draft, setDraft] = useState(value)
+  const [draft, setDraft] = useState(() => value)
 
-  useEffect(() => {
-    if (!open) {
-      setDraft(value)
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (disabled && nextOpen) {
+      return
     }
-  }, [open, value])
+    setDraft(value)
+    onOpenChange(nextOpen)
+  }
 
   return (
     <DialogOverlay
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (disabled && nextOpen) {
-          return
-        }
-        onOpenChange(nextOpen)
-      }}
+      onOpenChange={handleOpenChange}
       keepMounted={false}
     >
       <DialogBackdrop className={AI_PROVIDER_DIALOG_BACKDROP_CLASS} />

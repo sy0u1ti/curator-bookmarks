@@ -558,10 +558,12 @@ function buildNaturalMatchReasons(
 
 function mergeReasons(left: string[], right: string[]): string[] {
   const output: string[] = []
+  const seen = new Set<string>()
   for (const reason of [...left, ...right]) {
     const text = cleanNaturalText(reason, 120)
-    if (text && !output.includes(text)) {
+    if (text && !seen.has(text)) {
       output.push(text)
+      seen.add(text)
     }
   }
 
@@ -613,9 +615,7 @@ function getNaturalKeywordSummary(plan: NaturalSearchPlan): string {
 function formatNaturalTerms(terms: string[], limit: number): string {
   const uniqueTerms = uniqueNormalizedTerms(terms)
   const visibleTerms = uniqueTerms
-    .slice(0, Math.max(1, limit))
-    .map((term) => cleanNaturalText(term, 20))
-    .filter(Boolean)
+    .slice(0, Math.max(1, limit)).flatMap(term => { const mappedResult = cleanNaturalText(term, 20); return mappedResult ? [mappedResult] : [] })
 
   if (!visibleTerms.length) {
     return ''

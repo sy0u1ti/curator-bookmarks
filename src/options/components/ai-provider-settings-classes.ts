@@ -124,9 +124,6 @@ export const AI_PROVIDER_ADVANCED_TRIGGER_CLASS =
 
 export const AI_PROVIDER_ADVANCED_PANEL_CLASS = 'mt-4 overflow-hidden'
 
-export const AI_PROVIDER_ADVANCED_NOTE_CLASS =
-  'm-0 mb-3.5 rounded-ds-sm bg-ds-surface-2 p-3.5 text-[13px] leading-[1.65] text-ds-text-muted'
-
 export const AI_PROVIDER_GRID_CLASS =
   'grid grid-cols-2 items-start gap-3.5 max-[760px]:grid-cols-1'
 
@@ -160,7 +157,7 @@ export const AI_PROVIDER_DIALOG_CLOSE_CLASS =
   'inline-flex h-9 items-center justify-center gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-medium leading-none text-ds-text-primary outline-none transition-colors hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
 
 export const AI_CONFIG_LINK_CLASS =
-  'inline-flex min-h-[38px] items-center justify-center rounded-ds-sm border px-4 text-xs font-medium leading-[1.2] no-underline transition-colors focus-visible:outline-none'
+  'inline-flex min-h-[38px] cursor-pointer appearance-none items-center justify-center rounded-ds-sm border px-4 text-xs font-medium leading-[1.2] no-underline transition-colors focus-visible:outline-none'
 
 export const AI_CONFIG_LINK_DEFAULT_CLASS =
   'border-ds-border bg-ds-surface-2 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'

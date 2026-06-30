@@ -59,7 +59,6 @@ export const AI_NAMING_DEFAULT_TIMEOUT_MS = 30000
 export const AI_NAMING_DEFAULT_BATCH_SIZE = 6
 export const AI_NAMING_MAX_BATCH_SIZE = 20
 export const AI_NAMING_MAX_TEXT_LENGTH = 80
-export const AI_NAMING_MANAGE_MODELS_VALUE = '__manage_custom_models__'
 export const AI_NAMING_MODELS_ENDPOINT_SUFFIX = 'models'
 export const AI_NAMING_FETCHED_MODELS_LIMIT = 200
 export const AI_NAMING_JINA_READER_ORIGIN = 'https://r.jina.ai/*'

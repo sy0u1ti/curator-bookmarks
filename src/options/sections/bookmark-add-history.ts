@@ -68,7 +68,7 @@ function normalizeHistoryEntry(entry: any): BookmarkAddHistoryEntry | null {
   }
 }
 
-export function normalizeBookmarkAddHistory(rawHistory: unknown): BookmarkAddHistoryEntry[] {
+function normalizeBookmarkAddHistory(rawHistory: unknown): BookmarkAddHistoryEntry[] {
   const source = rawHistory && typeof rawHistory === 'object'
     ? rawHistory as { entries?: unknown }
     : {}
@@ -78,9 +78,7 @@ export function normalizeBookmarkAddHistory(rawHistory: unknown): BookmarkAddHis
       ? rawHistory
       : []
 
-  return entries
-    .map((entry) => normalizeHistoryEntry(entry))
-    .filter(Boolean)
+  return entries.flatMap(entry => { const mappedResult = normalizeHistoryEntry(entry); return mappedResult ? [mappedResult] : [] })
     .sort((left, right) => right!.createdAt - left!.createdAt)
     .slice(0, BOOKMARK_ADD_HISTORY_LIMIT) as BookmarkAddHistoryEntry[]
 }

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
-import { Badge, Icon, Surface, type SurfaceProps } from '../index'
+import { Badge } from '../base/Badge'
+import { Surface, type SurfaceProps } from '../base/Surface'
 import { cx } from '../base/utils'
+import { Icon } from '../icons/Icon'
 
 export interface AiClassificationResultProps extends Omit<SurfaceProps, 'title'> {
   actions?: ReactNode

@@ -185,7 +185,7 @@ export function normalizeContentSnapshotTextList(values: unknown, limit: number,
   return output
 }
 
-export function normalizeContentSnapshotObject(value: unknown): Record<string, unknown> {
+function normalizeContentSnapshotObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}

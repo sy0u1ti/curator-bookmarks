@@ -165,9 +165,7 @@ async function fetchNasaFeaturedItems(
   })
   const candidates = rotateFeaturedCandidates(
     dedupeFeaturedItems(
-      collectionItems
-        .map(normalizeNasaCandidate)
-        .filter(Boolean) as FeaturedBackgroundItem[]
+      collectionItems.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = (normalizeNasaCandidate)(flatMapValue); return mappedResult ? [mappedResult] : [] }) as FeaturedBackgroundItem[]
     ),
     seed
   )
@@ -215,9 +213,7 @@ function normalizeNasaCandidate(rawItem: unknown): FeaturedBackgroundItem | null
 
 function selectNasaHighResolutionImageUrl(assetList: unknown): string {
   const urls = Array.isArray(assetList) ? assetList.map((value) => String(value || '').trim()) : []
-  const candidates = urls
-    .filter((url) => /\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url))
-    .filter((url) => !/~thumb\.|~small\./i.test(url))
+  const candidates = urls.filter((combineValue, combineIndex, combineArray) => ((url) => /\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url))(combineValue) && ((url) => !/~thumb\.|~small\./i.test(url))(combineValue))
   const preferred = candidates.find((url) => /~orig\./i.test(url)) ||
     candidates.find((url) => /~large\./i.test(url))
   return preferred || ''
@@ -240,9 +236,7 @@ async function fetchWikimediaFeaturedItems(
         if (!rawPages || typeof rawPages !== 'object' || Array.isArray(rawPages)) {
           return []
         }
-        return Object.values(rawPages)
-          .map((page) => normalizeWikimediaFeaturedItem(page, options))
-          .filter(Boolean) as FeaturedBackgroundItem[]
+        return Object.values(rawPages).flatMap(page => { const mappedResult = normalizeWikimediaFeaturedItem(page, options); return mappedResult ? [mappedResult] : [] }) as FeaturedBackgroundItem[]
       })
     ),
     seed
@@ -366,12 +360,17 @@ async function mapWithConcurrency<T, R>(
   const results: R[] = new Array(items.length)
   let cursor = 0
   const workerCount = Math.max(1, Math.min(Math.floor(concurrency), items.length))
-  const workers = Array.from({ length: workerCount }, async () => {
-    while (cursor < items.length) {
-      const index = cursor
-      cursor += 1
-      results[index] = await mapper(items[index])
+  const runWorker = async (): Promise<void> => {
+    if (cursor >= items.length) {
+      return
     }
+    const index = cursor
+    cursor += 1
+    results[index] = await mapper(items[index])
+    await runWorker()
+  }
+  const workers = Array.from({ length: workerCount }, () => {
+    return runWorker()
   })
   await Promise.all(workers)
   return results

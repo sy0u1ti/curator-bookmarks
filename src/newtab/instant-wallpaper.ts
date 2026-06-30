@@ -187,7 +187,7 @@ export function clearInstantWallpaper(): void {
   }
 }
 
-export function normalizeInstantWallpaper(rawValue: unknown): InstantWallpaperRecord | null {
+function normalizeInstantWallpaper(rawValue: unknown): InstantWallpaperRecord | null {
   const record = parseInstantWallpaperRecord(rawValue)
   if (!record) {
     return null
@@ -214,7 +214,7 @@ export function normalizeInstantWallpaper(rawValue: unknown): InstantWallpaperRe
   return normalizedRecord
 }
 
-export function normalizeInstantWallpaperTarget(rawValue: unknown): InstantWallpaperTargetRecord | null {
+function normalizeInstantWallpaperTarget(rawValue: unknown): InstantWallpaperTargetRecord | null {
   const record = parseInstantWallpaperTargetRecord(rawValue)
   if (!record) {
     return null

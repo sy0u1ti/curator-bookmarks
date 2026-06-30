@@ -1,6 +1,6 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui'
-import { CheckboxControl } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { CheckboxControl } from '../../ui/base/Checkbox'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
@@ -79,8 +79,9 @@ function RecycleEntryCard({
     >
       <div className={RECYCLE_CARD_HEAD_CLASS}>
         <div className={RECYCLE_CARD_HEAD_LEFT_CLASS}>
-          <label className={RECYCLE_CHECK_CLASS}>
+          <label className={RECYCLE_CHECK_CLASS} htmlFor={`recycle-entry-${entry.recycleId}`}>
             <CheckboxControl
+              id={`recycle-entry-${entry.recycleId}`}
               aria-label={selectionLabel}
               checked={selected}
               className={OPTION_RESULT_CHECKBOX_CLASS}

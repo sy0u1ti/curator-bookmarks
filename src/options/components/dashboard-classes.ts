@@ -26,9 +26,6 @@ export const DASHBOARD_SELECTION_GROUP_ACTIVE_CLASS = [
   'max-[760px]:rounded-ds-sm max-[760px]:p-2'
 ].join(' ')
 
-export const DASHBOARD_PANEL_NOT_READY_STATE_CLASS =
-  'pointer-events-none invisible opacity-0'
-
 export const DASHBOARD_CHROME_SKELETON_CONTENT_CLASS =
   't-skel-content !relative !inset-auto min-w-0 [grid-area:1/1]'
 
@@ -50,7 +47,7 @@ export const DASHBOARD_SELECTION_COUNT_CLASS =
 export const DASHBOARD_SELECTION_ACTIONS_CLASS =
   'flex min-w-0 flex-none flex-wrap items-center justify-end gap-2 bg-transparent max-[560px]:w-full max-[560px]:justify-start'
 
-export const DASHBOARD_SELECTION_BUTTON_CLASS =
+const DASHBOARD_SELECTION_BUTTON_CLASS =
   'min-h-8 whitespace-nowrap rounded-ds-sm px-2.5 text-xs font-medium leading-none tracking-[0] shadow-none transition-colors disabled:cursor-default data-disabled:cursor-default'
 
 export const DASHBOARD_SELECTION_SECONDARY_BUTTON_CLASS = [
@@ -351,7 +348,7 @@ export const DASHBOARD_VIRTUAL_WINDOW_CLASS = [
   DASHBOARD_FLOATING_SURFACE_CONTAINMENT_CLASS
 ].join(' ')
 
-export const DASHBOARD_TAG_EDITOR_BUTTON_CLASS =
+const DASHBOARD_TAG_EDITOR_BUTTON_CLASS =
   'h-8 min-h-8 flex-none gap-1.5 whitespace-nowrap rounded-ds-sm px-2.5 text-xs font-[680] leading-none tracking-[0] shadow-none [word-break:keep-all] active:scale-[0.985] [&_svg]:size-[14px] [&_svg]:shrink-0'
 
 export const DASHBOARD_TAG_EDITOR_SECONDARY_BUTTON_CLASS = [
@@ -582,7 +579,7 @@ export const DASHBOARD_CARD_MORE_CLASS =
 export const DASHBOARD_CARD_MORE_MENU_OPEN_STATE_CLASS =
   'z-[60] pointer-events-auto'
 
-export const DASHBOARD_CARD_ICON_ACTION_CLASS = [
+const DASHBOARD_CARD_ICON_ACTION_CLASS = [
   'relative inline-grid size-[26px] min-h-[26px] min-w-[26px] flex-[0_0_26px] place-items-center',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-0 text-ds-text-secondary opacity-[0.82] no-underline shadow-none outline-none',
   'transition-[background,border-color,color,opacity,transform] duration-150 ease-ds-standard',
@@ -593,9 +590,6 @@ export const DASHBOARD_CARD_ICON_ACTION_CLASS = [
   'data-[popup-open]:border-ds-border-hover data-[popup-open]:bg-ds-hover data-[popup-open]:text-ds-text-primary data-[popup-open]:opacity-100 data-[popup-open]:shadow-none',
   'active:scale-[0.92] disabled:pointer-events-none disabled:cursor-default disabled:opacity-45 data-disabled:pointer-events-none data-disabled:cursor-default data-disabled:opacity-45'
 ].join(' ')
-
-export const DASHBOARD_CARD_TOOLTIP_CLASS =
-  'z-[140] max-w-[180px] rounded-ds-sm border border-ds-border bg-ds-surface-2 px-[7px] py-[5px] text-[11px] font-[650] leading-[1.2] text-ds-text-primary shadow-none'
 
 export const DASHBOARD_CARD_OPEN_ACTION_CLASS =
   DASHBOARD_CARD_ICON_ACTION_CLASS
@@ -627,9 +621,6 @@ export const DASHBOARD_CARD_FAVICON_IMAGE_CLASS = [
 
 export const DASHBOARD_CARD_FAVICON_IMAGE_SELECTED_STATE_CLASS =
   '[filter:none]'
-
-export const DASHBOARD_CARD_FAVICON_IMAGE_LOADED_STATE_CLASS =
-  'opacity-100'
 
 export const DASHBOARD_CARD_FAVICON_FALLBACK_CLASS =
   'relative z-0'

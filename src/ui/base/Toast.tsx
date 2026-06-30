@@ -1,5 +1,5 @@
 import { Toast as BaseToast } from '@base-ui/react/toast'
-import { useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Button } from './Button'
 import { cx } from './utils'
 
@@ -76,24 +76,29 @@ function ToastListViewport({
   unstyled
 }: Omit<ToastListProps, 'limit'>) {
   const manager = BaseToast.useToastManager()
-  const syncedSignaturesRef = useRef(new Map<string, string>())
+  const syncedSignaturesRef = useRef<Map<string, string> | null>(null)
+  if (syncedSignaturesRef.current === null) {
+    syncedSignaturesRef.current = new Map()
+  }
+  const syncedSignatures = syncedSignaturesRef.current
   const itemById = useMemo(() => {
     return new Map(items.map((item) => [item.id, item]))
   }, [items])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const nextIds = new Set(items.map((item) => item.id))
     for (const toast of manager.toasts) {
       if (!nextIds.has(toast.id) && toast.transitionStatus !== 'ending') {
         manager.close(toast.id)
-        syncedSignaturesRef.current.delete(toast.id)
+        syncedSignatures.delete(toast.id)
       }
     }
 
+    const toastById = new Map(manager.toasts.map((toast) => [toast.id, toast]))
     for (const item of items) {
       const signature = getToastItemSignature(item)
-      const existingToast = manager.toasts.find((toast) => toast.id === item.id)
-      if (existingToast && syncedSignaturesRef.current.get(item.id) === signature) {
+      const existingToast = toastById.get(item.id)
+      if (existingToast && syncedSignatures.get(item.id) === signature) {
         continue
       }
 
@@ -110,9 +115,9 @@ function ToastListViewport({
         timeout,
         type: item.type
       })
-      syncedSignaturesRef.current.set(item.id, signature)
+      syncedSignatures.set(item.id, signature)
     }
-  }, [items, manager, timeout])
+  }, [items, manager, syncedSignatures, timeout])
 
   return (
     <BaseToast.Viewport className={className}>

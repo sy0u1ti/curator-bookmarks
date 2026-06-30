@@ -21,16 +21,20 @@ export function useOptionsSectionChrome({
   isDashboardEmbed: boolean
   navigateToSectionHash: (hash: string) => void
 } {
-  const [sectionKey, setSectionKey] = useState(() => readOptionsSectionKey())
-  const [sectionAnchor, setSectionAnchor] = useState(() => readOptionsSectionAnchor())
-  const [sectionRevision, setSectionRevision] = useState(0)
+  const [sectionState, setSectionState] = useState(() => ({
+    sectionKey: readOptionsSectionKey(),
+    sectionAnchor: readOptionsSectionAnchor(),
+    sectionRevision: 0
+  }))
   const isDashboardEmbed = useMemo(() => isOptionsDashboardEmbedMode(), [])
 
   useEffect(() => {
     const syncSection = () => {
-      setSectionKey(readOptionsSectionKey())
-      setSectionAnchor(readOptionsSectionAnchor())
-      setSectionRevision((revision) => revision + 1)
+      setSectionState((current) => ({
+        sectionKey: readOptionsSectionKey(),
+        sectionAnchor: readOptionsSectionAnchor(),
+        sectionRevision: current.sectionRevision + 1
+      }))
       onSectionChange?.()
     }
 
@@ -45,18 +49,18 @@ export function useOptionsSectionChrome({
   }, [onSectionChange])
 
   useEffect(() => {
-    document.title = `${SECTION_META[sectionKey].title} · Curator Bookmark`
-  }, [sectionKey])
+    document.title = `${SECTION_META[sectionState.sectionKey].title} · Curator Bookmark`
+  }, [sectionState.sectionKey])
 
   const navigateToSectionHash = useCallback((hash: string) => {
     navigateToOptionsSectionHash(hash)
   }, [])
 
   return {
-    sectionKey,
-    sectionAnchor,
-    sectionRevision,
-    isDashboardActive: sectionKey === 'dashboard',
+    sectionKey: sectionState.sectionKey,
+    sectionAnchor: sectionState.sectionAnchor,
+    sectionRevision: sectionState.sectionRevision,
+    isDashboardActive: sectionState.sectionKey === 'dashboard',
     isDashboardEmbed,
     navigateToSectionHash
   }

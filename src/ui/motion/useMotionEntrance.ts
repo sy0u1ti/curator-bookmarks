@@ -1,23 +1,58 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useReducer } from 'react'
+
+type MotionEntranceState = {
+  active: boolean
+  entered: boolean
+}
+type MotionEntranceAction =
+  | { type: 'enter' }
+  | { type: 'retarget'; active: boolean }
 
 export function useMotionEntrance(active = true) {
-  const [entered, setEntered] = useState(false)
+  const [state, dispatch] = useReducer(motionEntranceReducer, active, createMotionEntranceState)
+
+  if (active !== state.active) {
+    dispatch({ type: 'retarget', active })
+  }
 
   useEffect(() => {
-    if (!active) {
-      setEntered(false)
+    if (!state.active || state.entered) {
       return
     }
 
-    setEntered(false)
     const frame = window.requestAnimationFrame(() => {
-      setEntered(true)
+      dispatch({ type: 'enter' })
     })
 
     return () => {
       window.cancelAnimationFrame(frame)
     }
-  }, [active])
+  }, [state.active, state.entered])
 
-  return entered
+  return active && state.active === active && state.entered
+}
+
+function createMotionEntranceState(active: boolean): MotionEntranceState {
+  return {
+    active,
+    entered: false
+  }
+}
+
+function motionEntranceReducer(
+  state: MotionEntranceState,
+  action: MotionEntranceAction
+): MotionEntranceState {
+  switch (action.type) {
+    case 'enter':
+      return state.entered ? state : { ...state, entered: true }
+    case 'retarget':
+      if (action.active === state.active) {
+        return state
+      }
+      return {
+        active: action.active,
+        entered: false
+      }
+  }
 }

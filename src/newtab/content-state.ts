@@ -191,23 +191,6 @@ export interface PortalBookmarkSourceItem {
   dateAdded?: number
 }
 
-export interface PortalQuickAccessItem {
-  id: string
-  reason: 'pinned' | 'frequent' | 'added'
-  detail: string
-  badge: string
-}
-
-export interface PortalQuickAccessInput {
-  bookmarks: PortalBookmarkSourceItem[]
-  pinnedIds: string[]
-  records: Record<string, PortalBookmarkActivityRecord>
-  now: number
-  itemLimit: number
-  showFrequent: boolean
-  showRecent: boolean
-}
-
 export interface BookmarkTreeSourceItem extends PortalBookmarkSourceItem {
   children?: BookmarkTreeSourceItem[]
 }
@@ -607,14 +590,12 @@ function buildNewTabEntrySearchText({
     snapshotRecord?.finalUrl,
     snapshotRecord?.contentType,
     ...(snapshotRecord?.headings || [])
-  ]
-    .map((value) => normalizeNewTabSearchText(String(value || '')))
-    .filter(Boolean)
+  ].flatMap(value => { const mappedResult = normalizeNewTabSearchText(String(value || '')); return mappedResult ? [mappedResult] : [] })
     .join(' ')
 }
 
 function getNewTabSearchFolderTitle(path: string): string {
-  const parts = String(path || '').split('/').map((part) => part.trim()).filter(Boolean)
+  const parts = String(path || '').split('/').flatMap(part => { const mappedResult = part.trim(); return mappedResult ? [mappedResult] : [] })
   return parts.at(-1) || '未归档路径'
 }
 
@@ -648,7 +629,7 @@ export function getNewTabSourceAnchorId(sourceId: string): string {
   return `newtab-source-${safeId || 'folder'}`
 }
 
-export function getSearchBookmarkSuggestionsFromIndex(
+function getSearchBookmarkSuggestionsFromIndex(
   query: string,
   index: NewTabSearchIndexEntry[] | NewTabPreparedSearchIndex,
   limit: number,
@@ -711,24 +692,28 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
     return getSearchBookmarkSuggestionsFromIndex(query, preparedIndex, limit, options)
   }
 
-  const {
-    indexBookmarkForSearch,
-    searchBookmarksTopK
-  } = await import('../popup/search-lookup.js')
-  const {
-    buildLocalNaturalSearchPlan,
-    filterBookmarksByNaturalDateRange,
-    mergeNaturalSearchResultSets
-  } = await import('../popup/natural-search.js')
+  const [
+    {
+      indexBookmarkForSearch,
+      searchBookmarksTopK
+    },
+    {
+      buildLocalNaturalSearchPlan,
+      filterBookmarksByNaturalDateRange,
+      mergeNaturalSearchResultSets
+    }
+  ] = await Promise.all([
+    import('../popup/search-lookup.js'),
+    import('../popup/natural-search.js')
+  ])
 
   const plan = options.naturalSearchPlan || buildLocalNaturalSearchPlan(query, options.now)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
-  const naturalQueriesNeedingPinyin = [query, ...plan.queries].some((value) => value)
-  if (naturalQueriesNeedingPinyin) {
-    await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
-    for (const naturalQuery of plan.queries) {
-      await ensurePopupBookmarksHavePinyinIfNeeded(naturalQuery, preparedIndex, popupBookmarks)
-    }
+  const pinyinQuery = [query, ...plan.queries].find((value) => {
+    return Boolean(value && requiresPinyinTokens(value))
+  })
+  if (pinyinQuery) {
+    await ensurePopupBookmarksHavePinyinIfNeeded(pinyinQuery, preparedIndex, popupBookmarks)
   }
   const bookmarks = filterBookmarksByNaturalDateRange(popupBookmarks, plan)
   const resultSets: NaturalSearchResultSet[] = []
@@ -881,9 +866,7 @@ function getFallbackPopupSearchBookmarks(entries: NewTabSearchIndexEntry[]): Pop
         domain,
         entry.folderTitle,
         folderPath
-      ]
-        .map((value) => normalizeNewTabSearchText(String(value || '')))
-        .filter(Boolean)
+      ].flatMap(value => { const mappedResult = normalizeNewTabSearchText(String(value || '')); return mappedResult ? [mappedResult] : [] })
         .join(' ')),
       searchText: [
         title,
@@ -891,108 +874,10 @@ function getFallbackPopupSearchBookmarks(entries: NewTabSearchIndexEntry[]): Pop
         domain,
         entry.folderTitle,
         folderPath
-      ]
-        .map((value) => normalizeNewTabSearchText(String(value || '')))
-        .filter(Boolean)
+      ].flatMap(value => { const mappedResult = normalizeNewTabSearchText(String(value || '')); return mappedResult ? [mappedResult] : [] })
         .join(' ')
     } as PopupSearchBookmark
   })
-}
-
-export function getPortalQuickAccessItems({
-  bookmarks,
-  pinnedIds,
-  records,
-  now,
-  itemLimit,
-  showFrequent,
-  showRecent
-}: PortalQuickAccessInput): {
-  frequentItems: PortalQuickAccessItem[]
-  recentItems: PortalQuickAccessItem[]
-} {
-  const bookmarkMap = new Map(
-    bookmarks
-      .filter((bookmark) => String(bookmark.id || '').trim() && String(bookmark.url || '').trim())
-      .map((bookmark) => [String(bookmark.id), bookmark])
-  )
-  const limit = Math.max(0, Math.floor(itemLimit))
-  const frequentItems: PortalQuickAccessItem[] = []
-  const recentItems: PortalQuickAccessItem[] = []
-  const usedIds = new Set<string>()
-
-  if (showFrequent && limit > 0) {
-    for (const bookmarkId of pinnedIds) {
-      const id = String(bookmarkId || '').trim()
-      if (!id || usedIds.has(id) || !bookmarkMap.has(id)) {
-        continue
-      }
-
-      frequentItems.push({
-        id,
-        reason: 'pinned',
-        detail: '已固定',
-        badge: '固'
-      })
-      usedIds.add(id)
-      if (frequentItems.length >= limit) {
-        break
-      }
-    }
-
-    if (frequentItems.length < limit) {
-      const frequentRecords = Object.values(records)
-        .filter((record) =>
-          Number(record.openCount) > 0 &&
-          !usedIds.has(String(record.bookmarkId)) &&
-          bookmarkMap.has(String(record.bookmarkId))
-        )
-        .sort((left, right) =>
-          Number(right.openCount) - Number(left.openCount) ||
-          Number(right.lastOpenedAt) - Number(left.lastOpenedAt)
-        )
-
-      for (const record of frequentRecords) {
-        const id = String(record.bookmarkId)
-        frequentItems.push({
-          id,
-          reason: 'frequent',
-          detail: `打开 ${Math.min(Math.floor(Number(record.openCount) || 0), 9999)} 次`,
-          badge: '常'
-        })
-        usedIds.add(id)
-        if (frequentItems.length >= limit) {
-          break
-        }
-      }
-    }
-  }
-
-  if (showRecent && limit > 0) {
-    const recentlyAdded = [...bookmarkMap.values()]
-      .filter((bookmark) =>
-        !usedIds.has(String(bookmark.id)) &&
-        Number.isFinite(Number(bookmark.dateAdded)) &&
-        Number(bookmark.dateAdded) > 0
-      )
-      .sort((left, right) => Number(right.dateAdded) - Number(left.dateAdded))
-
-    for (const bookmark of recentlyAdded) {
-      const id = String(bookmark.id)
-      recentItems.push({
-        id,
-        reason: 'added',
-        detail: formatNewTabRelativeActivityTime(Number(bookmark.dateAdded), '添加', now),
-        badge: '新'
-      })
-      usedIds.add(id)
-      if (recentItems.length >= limit) {
-        break
-      }
-    }
-  }
-
-  return { frequentItems, recentItems }
 }
 
 export function collectPortalBookmarkSourceItems(
@@ -1016,34 +901,6 @@ export function collectPortalBookmarkSourceItems(
 
   walk(rootNode)
   return bookmarks
-}
-
-export function formatNewTabRelativeActivityTime(
-  timestamp: number,
-  label: string,
-  now = Date.now()
-): string {
-  if (!Number.isFinite(timestamp) || timestamp <= 0) {
-    return `${label}时间未知`
-  }
-
-  const diffMs = Math.max(0, now - timestamp)
-  const minuteMs = 60 * 1000
-  const hourMs = 60 * minuteMs
-  const dayMs = 24 * hourMs
-
-  if (diffMs < hourMs) {
-    return `${label}于刚刚`
-  }
-  if (diffMs < dayMs) {
-    return `${label}于 ${Math.max(1, Math.floor(diffMs / hourMs))} 小时前`
-  }
-  if (diffMs < 30 * dayMs) {
-    return `${label}于 ${Math.max(1, Math.floor(diffMs / dayMs))} 天前`
-  }
-
-  const date = new Date(timestamp)
-  return `${label}于 ${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
 }
 
 export function normalizeNewTabSearchText(value: string): string {

@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button } from '../../ui/base/Button'
 import { handleAvailabilityPanelAction } from '../options-controller'
 import { useAvailabilityResultsHeader } from './availability-overview-store.js'
 

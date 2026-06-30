@@ -230,9 +230,7 @@ function formatNavigationAttemptSummary(attempts: NavigationAttempt[]): string {
 }
 
 function joinEvidenceDetail(...fragments: string[]): string {
-  const normalized = fragments
-    .map((fragment) => stripEvidencePunctuation(fragment))
-    .filter(Boolean)
+  const normalized = fragments.flatMap(fragment => { const mappedResult = stripEvidencePunctuation(fragment); return mappedResult ? [mappedResult] : [] })
 
   return normalized.length ? `${normalized.join('。')}。` : ''
 }
@@ -291,10 +289,8 @@ export function shouldAcceptNavigationSuccess(result: NavigationAttempt | null |
   return Boolean(evidence?.requestSent && statusCode > 0 && statusCode < 400)
 }
 
-export function summarizeNavigationEvidence(attempts: NavigationAttempt[]): NavigationEvidence {
-  const errorCodes = attempts
-    .map((attempt) => String(attempt?.errorCode || '').trim())
-    .filter(Boolean)
+function summarizeNavigationEvidence(attempts: NavigationAttempt[]): NavigationEvidence {
+  const errorCodes = attempts.flatMap(attempt => { const mappedResult = String(attempt?.errorCode || '').trim(); return mappedResult ? [mappedResult] : [] })
 
   const strongFailures = errorCodes.filter((errorCode) => {
     return STRONG_NAVIGATION_ERRORS.has(errorCode)
@@ -319,7 +315,7 @@ export function summarizeNavigationEvidence(attempts: NavigationAttempt[]): Navi
   }
 }
 
-export function shouldClassifyAsHighConfidence(
+function shouldClassifyAsHighConfidence(
   navigationEvidence: NavigationEvidence | null | undefined,
   probeKind: ProbeKind | string
 ): boolean {
@@ -400,7 +396,7 @@ export function classifyProbeResponse(
   }
 }
 
-export function classifyNavigationNetworkEvidence(
+function classifyNavigationNetworkEvidence(
   evidence: NavigationNetworkEvidence | null | undefined
 ): ProbeResult | null {
   if (!evidence) {
@@ -460,7 +456,7 @@ function isUnverifiedRedirectEvidence(evidence: NavigationNetworkEvidence): bool
   return statusCode >= 300 && statusCode < 400 && evidence.finalResponseObserved === false
 }
 
-export function classifyNavigationNetworkEvidenceFromAttempts(
+function classifyNavigationNetworkEvidenceFromAttempts(
   attempts: NavigationAttempt[]
 ): ProbeResult | null {
   for (let index = attempts.length - 1; index >= 0; index -= 1) {
@@ -520,7 +516,7 @@ function classifyHttpStatusProbe(statusCode: number, method: string, detail: str
   }
 }
 
-export function formatNavigationNetworkEvidence(
+function formatNavigationNetworkEvidence(
   evidence: NavigationNetworkEvidence | null | undefined
 ): string {
   if (!evidence) {
@@ -595,7 +591,7 @@ export function isRedirectedNavigation(originalUrl: unknown, finalUrl: unknown):
   return normalizeNavigationUrl(originalUrl) !== normalizeNavigationUrl(finalUrl)
 }
 
-export function normalizeNavigationUrl(url: unknown): string {
+function normalizeNavigationUrl(url: unknown): string {
   try {
     const parsedUrl = new URL(String(url || ''))
     parsedUrl.hash = ''

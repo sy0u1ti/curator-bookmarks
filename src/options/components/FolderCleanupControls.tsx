@@ -1,4 +1,6 @@
-import { Button, Card, NumberPop } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Card } from '../../ui/base/Card'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import { handleFolderCleanupAction } from '../options-controller'
 import { useFolderCleanupControlsState } from './folder-cleanup-controls-store.js'
 import {

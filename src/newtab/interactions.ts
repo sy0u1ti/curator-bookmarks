@@ -1,7 +1,6 @@
 export const BACKGROUND_URL_FETCH_TIMEOUT_MS = 12000
 export const BACKGROUND_URL_PREVIEW_MAX_BYTES = 8 * 1024 * 1024
 export const BACKGROUND_URL_FULL_MAX_BYTES = 32 * 1024 * 1024
-export const BACKGROUND_URL_MAX_BYTES = BACKGROUND_URL_PREVIEW_MAX_BYTES
 
 export interface BookmarkMoveOperation {
   id: string
@@ -68,22 +67,27 @@ export function buildMinimalBookmarkMoveOperations(
   const stableIds = new Set(stableIndexes.map((index) => original[index]))
 
   const current = [...original]
+  const currentIndexById = new Map(current.map((id, index) => [id, index]))
   const operations: BookmarkMoveOperation[] = []
   for (let index = 0; index < final.length; index += 1) {
-    if (current[index] === final[index]) {
+    const targetId = final[index]
+    if (current[index] === targetId) {
       continue
     }
-    if (stableIds.has(final[index])) {
+    if (stableIds.has(targetId)) {
       continue
     }
 
-    const currentIndex = current.indexOf(final[index])
+    const currentIndex = currentIndexById.get(targetId) ?? -1
     if (currentIndex < 0) {
       return []
     }
 
     const [movedId] = current.splice(currentIndex, 1)
     current.splice(index, 0, movedId)
+    for (let cursor = Math.min(currentIndex, index); cursor <= Math.max(currentIndex, index); cursor += 1) {
+      currentIndexById.set(current[cursor], cursor)
+    }
     const chromeMoveIndex = currentIndex < index ? index + 1 : index
     operations.push({
       id: movedId,
@@ -123,6 +127,7 @@ export function applyBookmarkMoveOperationsToChildren(
   }
 
   const nextChildren = [...children]
+  const nextChildIndexById = new Map(nextChildren.map((child, index) => [String(child.id), index]))
   for (const operation of operations) {
     const bookmarkId = String(operation.id || '').trim()
     const parentId = String(operation.parentId || '').trim()
@@ -130,7 +135,7 @@ export function applyBookmarkMoveOperationsToChildren(
       return null
     }
 
-    const currentIndex = nextChildren.findIndex((child) => String(child.id) === bookmarkId)
+    const currentIndex = nextChildIndexById.get(bookmarkId) ?? -1
     if (currentIndex < 0) {
       return null
     }
@@ -152,33 +157,15 @@ export function applyBookmarkMoveOperationsToChildren(
       ...movedNode,
       parentId
     })
+    for (let cursor = Math.min(currentIndex, insertIndex); cursor <= Math.max(currentIndex, insertIndex); cursor += 1) {
+      nextChildIndexById.set(String(nextChildren[cursor].id), cursor)
+    }
   }
 
   return nextChildren.map((child, index) => ({
     ...child,
     index
   }))
-}
-
-export function shouldInsertAfterBookmarkTile(
-  pointer: { x: number; y: number },
-  targetRect: BookmarkTileRectLike
-): boolean {
-  const targetCenterX = targetRect.left + targetRect.width / 2
-  const targetCenterY = targetRect.top + targetRect.height / 2
-  const verticalThreshold = Math.max(
-    6,
-    targetRect.height * 0.24
-  )
-
-  if (pointer.y < targetCenterY - verticalThreshold) {
-    return false
-  }
-  if (pointer.y > targetCenterY + verticalThreshold) {
-    return true
-  }
-
-  return pointer.x > targetCenterX
 }
 
 export function resolveBookmarkDragInsertIndex(
@@ -212,11 +199,7 @@ function groupBookmarkDragSlotRows(
   const rows: BookmarkDragSlotRectLike[][] = []
   for (const slot of slotRects) {
     const centerY = slot.top + slot.height / 2
-    const row = rows.find((items) => {
-      const first = items[0]
-      const firstCenterY = first.top + first.height / 2
-      return Math.abs(centerY - firstCenterY) <= Math.max(8, Math.min(first.height, slot.height) * 0.5)
-    })
+    const row = findBookmarkDragSlotRow(rows, slot, centerY)
     if (row) {
       row.push(slot)
     } else {
@@ -229,6 +212,21 @@ function groupBookmarkDragSlotRows(
   }
   rows.sort((left, right) => left[0].top - right[0].top)
   return rows
+}
+
+function findBookmarkDragSlotRow(
+  rows: BookmarkDragSlotRectLike[][],
+  slot: BookmarkDragSlotRectLike,
+  centerY: number
+): BookmarkDragSlotRectLike[] | null {
+  for (const items of rows) {
+    const first = items[0]
+    const firstCenterY = first.top + first.height / 2
+    if (Math.abs(centerY - firstCenterY) <= Math.max(8, Math.min(first.height, slot.height) * 0.5)) {
+      return items
+    }
+  }
+  return null
 }
 
 function findBookmarkDragTargetRow(

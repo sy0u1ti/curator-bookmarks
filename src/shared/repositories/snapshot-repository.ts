@@ -1,5 +1,5 @@
 import { STORAGE_KEYS } from '../constants.js'
-import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../storage.js'
+import { getLocalStorage, setLocalStorage } from '../storage.js'
 import type {
   ContentSnapshotIndex,
   ContentSnapshotRecord
@@ -7,7 +7,6 @@ import type {
 import {
   CURATOR_DATA_STORES,
   applyCuratorDataStoreDelta,
-  clearCuratorDataStore,
   isCuratorDataDbAvailable,
   readCuratorDataStore,
   readCuratorDataStoreMeta,
@@ -57,25 +56,6 @@ export async function loadContentSnapshotIndexFromRepository(): Promise<ContentS
   return normalizeIndex(localIndex)
 }
 
-export async function saveContentSnapshotIndexToRepository(
-  index: ContentSnapshotIndex
-): Promise<ContentSnapshotIndex> {
-  const { normalizeIndex } = requireContentSnapshotRepositoryNormalizers()
-  const normalized = normalizeIndex(index)
-  if (!isCuratorDataDbAvailable()) {
-    await writeContentSnapshotIndexToLocalStorage(normalized)
-    return normalized
-  }
-
-  try {
-    await replaceContentSnapshotIndexInIndexedDb(normalized)
-    await compactContentSnapshotIndexLocalStorage(normalized).catch(() => {})
-  } catch {
-    await writeContentSnapshotIndexToLocalStorage(normalized)
-  }
-  return normalized
-}
-
 export async function updateContentSnapshotIndexInRepository(
   updater: (index: ContentSnapshotIndex) => ContentSnapshotIndex
 ): Promise<ContentSnapshotIndex> {
@@ -105,18 +85,6 @@ export async function updateContentSnapshotIndexInRepository(
     await writeContentSnapshotIndexToLocalStorage(nextIndex)
   }
   return nextIndex
-}
-
-export async function clearContentSnapshotIndexInRepository(): Promise<void> {
-  if (isCuratorDataDbAvailable()) {
-    await clearCuratorDataStore(CURATOR_DATA_STORES.contentSnapshots)
-    await writeContentSnapshotRepositoryMeta({
-      version: 1,
-      updatedAt: Date.now(),
-      records: {}
-    })
-  }
-  await removeLocalStorage(STORAGE_KEYS.contentSnapshotIndex)
 }
 
 export function resetContentSnapshotRepositoryForTest(): void {

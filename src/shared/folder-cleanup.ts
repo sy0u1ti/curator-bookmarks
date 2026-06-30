@@ -192,9 +192,7 @@ function collectFolders(
 }
 
 function buildEmptyFolderSuggestions(folderModels: FolderNodeModel[]): FolderCleanupSuggestion[] {
-  return folderModels
-    .filter((folder) => folder.depth > 1 && folder.descendantBookmarkCount === 0 && folder.directFolderCount === 0)
-    .map((folder) => ({
+  return folderModels.flatMap((combineValue, combineIndex, combineArray) => { if (!((folder) => folder.depth > 1 && folder.descendantBookmarkCount === 0 && folder.directFolderCount === 0)(combineValue)) return []; const combinedResult = ((folder): FolderCleanupSuggestion => ({
       id: `empty-folder:${folder.id}`,
       kind: 'empty-folder',
       operation: 'delete',
@@ -208,7 +206,7 @@ function buildEmptyFolderSuggestions(folderModels: FolderNodeModel[]): FolderCle
       folders: [toFolderSummary(folder)],
       bookmarks: [],
       canExecute: true
-    }))
+    }))(combineValue); return [combinedResult] })
 }
 
 function buildDeepSingleBookmarkSuggestions(
@@ -216,14 +214,12 @@ function buildDeepSingleBookmarkSuggestions(
   options: FolderCleanupAnalysisOptions
 ): FolderCleanupSuggestion[] {
   const minDepth = options.deepFolderMinDepth ?? 4
-  return folderModels
-    .filter((folder) => (
+  return folderModels.flatMap((combineValue, combineIndex, combineArray) => { if (!((folder) => (
       folder.depth >= minDepth &&
       folder.descendantBookmarkCount === 1 &&
       folder.directFolderCount === 0 &&
       Boolean(folder.parentId)
-    ))
-    .map((folder) => ({
+    ))(combineValue)) return []; const combinedResult = ((folder): FolderCleanupSuggestion => ({
       id: `deep-single-bookmark:${folder.id}`,
       kind: 'deep-single-bookmark',
       operation: 'move',
@@ -238,7 +234,7 @@ function buildDeepSingleBookmarkSuggestions(
       folders: [toFolderSummary(folder)],
       bookmarks: folder.descendantBookmarks,
       canExecute: true
-    }))
+    }))(combineValue); return [combinedResult] })
 }
 
 function buildSinglePathChainSuggestions(
@@ -306,9 +302,7 @@ function buildSameNameFolderSuggestions(folderModels: FolderNodeModel[]): Folder
     groups.get(key)?.push(folder)
   }
 
-  return [...groups.values()]
-    .filter((folders) => folders.length > 1)
-    .map((folders) => {
+  return [...groups.values()].flatMap((combineValue, combineIndex, combineArray) => { if (!((folders) => folders.length > 1)(combineValue)) return []; const combinedResult = ((folders) => {
       const sortedFolders = folders.slice().sort((left, right) => (
         right.descendantBookmarkCount - left.descendantBookmarkCount ||
         left.path.localeCompare(right.path, 'zh-CN')
@@ -331,7 +325,7 @@ function buildSameNameFolderSuggestions(folderModels: FolderNodeModel[]): Folder
         bookmarks: sources.flatMap((folder) => folder.descendantBookmarks).slice(0, 12),
         canExecute: sources.length > 0
       } satisfies FolderCleanupSuggestion
-    })
+    })(combineValue); return [combinedResult] })
 }
 
 function buildLargeFolderSuggestions(
@@ -340,9 +334,7 @@ function buildLargeFolderSuggestions(
 ): FolderCleanupSuggestion[] {
   const minBookmarks = options.largeFolderMinBookmarks ?? 40
 
-  return folderModels
-    .filter((folder) => folder.descendantBookmarkCount >= minBookmarks)
-    .map((folder) => {
+  return folderModels.flatMap((combineValue, combineIndex, combineArray) => { if (!((folder) => folder.descendantBookmarkCount >= minBookmarks)(combineValue)) return []; const combinedResult = ((folder) => {
       const splitGroups = buildSplitGroups(folder, options.tagIndex)
       return {
         id: `large-folder-split:${folder.id}`,
@@ -363,7 +355,7 @@ function buildLargeFolderSuggestions(
         splitGroups,
         canExecute: splitGroups.length > 0
       } satisfies FolderCleanupSuggestion
-    })
+    })(combineValue); return [combinedResult] })
 }
 
 export function createFolderCleanupSplitUndo(
@@ -430,15 +422,15 @@ export function normalizeFolderCleanupSplitUndo(rawUndo: unknown): FolderCleanup
 
   const undo = rawUndo as Partial<FolderCleanupSplitUndo>
   const moves = Array.isArray(undo.moves)
-    ? undo.moves.map((move) => ({
+    ? undo.moves.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((move) => ({
         bookmarkId: String(move?.bookmarkId || '').trim(),
         fromParentId: String(move?.fromParentId || '').trim(),
         fromIndex: Number.isFinite(Number(move?.fromIndex)) ? Number(move?.fromIndex) : undefined,
         toFolderId: String(move?.toFolderId || '').trim()
-      })).filter((move) => move.bookmarkId && move.fromParentId && move.toFolderId)
+      }))(combineValue); return ((move) => move.bookmarkId && move.fromParentId && move.toFolderId)(combinedResult) ? [combinedResult] : [] })
     : []
   const createdFolderIds = Array.isArray(undo.createdFolderIds)
-    ? undo.createdFolderIds.map((folderId) => String(folderId || '').trim()).filter(Boolean)
+    ? undo.createdFolderIds.flatMap(folderId => { const mappedResult = String(folderId || '').trim(); return mappedResult ? [mappedResult] : [] })
     : []
 
   if (!moves.length || !createdFolderIds.length) {

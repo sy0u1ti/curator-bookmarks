@@ -17,7 +17,7 @@ export function normalizeOptionsSectionKey(key: string): OptionsSectionKey {
   return key in SECTION_META ? (key as OptionsSectionKey) : 'general'
 }
 
-export function getOptionsSectionKeyFromHash(hash: string): OptionsSectionKey {
+function getOptionsSectionKeyFromHash(hash: string): OptionsSectionKey {
   const rawKey = hash.replace(/^#/, '').split(':')[0] || 'general'
   return normalizeOptionsSectionKey(rawKey)
 }
@@ -83,7 +83,7 @@ export function navigateToOptionsEmptyStateAction(action: string): void {
   navigateToOptionsSectionHash(targetHash)
 }
 
-export function notifyOptionsSectionChanged(): void {
+function notifyOptionsSectionChanged(): void {
   optionsSectionChangeListeners.forEach((listener) => listener())
 }
 

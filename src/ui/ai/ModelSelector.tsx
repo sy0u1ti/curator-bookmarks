@@ -34,8 +34,6 @@ const MODEL_SELECTOR_LOGO_GROUP_CLASS = 'ml-auto inline-flex flex-none items-cen
 const MODEL_SELECTOR_TAG_CLASS =
   '-ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-ds-border bg-ds-surface-1 px-[5px] text-[9px] font-bold leading-none text-ds-text-secondary'
 const MODEL_SELECTOR_NAME_CLASS = 'min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap'
-const MODEL_SELECTOR_SHORTCUT_CLASS = 'text-xs text-ds-text-muted'
-const MODEL_SELECTOR_SEPARATOR_CLASS = 'my-1 border-0 border-t border-ds-border-subtle'
 
 export type ModelSelectorProps = ComponentPropsWithoutRef<typeof BaseDialog.Root>
 
@@ -173,15 +171,7 @@ export function ModelSelectorItem({
 
 export type ModelSelectorShortcutProps = ComponentPropsWithoutRef<'span'>
 
-export function ModelSelectorShortcut({ className, ...props }: ModelSelectorShortcutProps) {
-  return <span className={cx(MODEL_SELECTOR_SHORTCUT_CLASS, className)} {...props} />
-}
-
 export type ModelSelectorSeparatorProps = ComponentPropsWithoutRef<'hr'>
-
-export function ModelSelectorSeparator({ className, ...props }: ModelSelectorSeparatorProps) {
-  return <hr className={cx(MODEL_SELECTOR_SEPARATOR_CLASS, className)} {...props} />
-}
 
 export interface ModelSelectorLogoProps extends Omit<ComponentPropsWithoutRef<'img'>, 'src' | 'alt'> {
   provider: string

@@ -391,14 +391,12 @@ function normalizeSmartAiResult(payload: unknown, currentTitle: string): PopupSm
     tags: normalizeBookmarkTags(source.tags),
     aliases: normalizeSmartTextList(source.aliases, 20, 40),
     confidence: normalizeSmartConfidence(source.confidence),
-    existingFolders: existingFolders
-      .map((item) => ({
+    existingFolders: existingFolders.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((item) => ({
         folderId: cleanSmartText(item?.folder_id, 80),
         folderPath: cleanSmartText(item?.folder_path, 240),
         reason: cleanSmartText(item?.reason, 180),
         confidence: normalizeSmartConfidence(item?.confidence)
-      }))
-      .filter((item) => item.folderId || item.folderPath),
+      }))(combineValue); return ((item) => item.folderId || item.folderPath)(combinedResult) ? [combinedResult] : [] }),
     newFolder: {
       folderPath: cleanSmartText(source.new_folder?.folder_path, 240),
       reason: cleanSmartText(source.new_folder?.reason, 180),
@@ -442,7 +440,7 @@ export function createSmartPermissionRequiredError(
 ): PopupSmartPermissionError {
   const error = new Error(message) as PopupSmartPermissionError
   error.smartPermissionRequest = {
-    origins: [...new Set(origins.map((origin) => String(origin || '')).filter(Boolean))]
+    origins: [...new Set(origins.flatMap(origin => { const mappedResult = String(origin || ''); return mappedResult ? [mappedResult] : [] }))]
   }
   return error
 }
@@ -474,17 +472,17 @@ async function getMissingPermissionOrigins(origins: string[]): Promise<string[]>
   } catch {
   }
 
-  const missingOrigins = []
-  for (const origin of uniqueOrigins) {
+  const missingOriginResults = await Promise.all(uniqueOrigins.map(async (origin) => {
     try {
       if (!(await containsPermissions({ origins: [origin] }))) {
-        missingOrigins.push(origin)
+        return origin
       }
     } catch {
-      missingOrigins.push(origin)
+      return origin
     }
-  }
-  return missingOrigins
+    return ''
+  }))
+  return missingOriginResults.filter(Boolean)
 }
 
 async function hasOptionalOriginPermission(origin: string): Promise<boolean> {

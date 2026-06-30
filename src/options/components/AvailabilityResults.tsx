@@ -1,7 +1,7 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui'
-import { CheckboxControl } from '../../ui'
-import { cx } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { CheckboxControl } from '../../ui/base/Checkbox'
+import { cx } from '../../ui/base/utils'
 import { handleAvailabilityResultAction } from '../options-controller'
 import { useAvailabilityResultsState } from './availability-results-store.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
@@ -97,8 +97,9 @@ function AvailabilityResultCard({
       <div className={AVAILABILITY_RESULT_HEAD_CLASS}>
         <div className={AVAILABILITY_RESULT_HEAD_LEFT_CLASS}>
           {result.selectable ? (
-            <label className={AVAILABILITY_RESULT_CHECK_CLASS}>
+            <label className={AVAILABILITY_RESULT_CHECK_CLASS} htmlFor={`availability-result-${kind}-${result.bookmarkId}`}>
               <CheckboxControl
+                id={`availability-result-${kind}-${result.bookmarkId}`}
                 aria-label={result.selectionLabel}
                 className={OPTION_RESULT_CHECKBOX_CLASS}
                 checked={result.selected}

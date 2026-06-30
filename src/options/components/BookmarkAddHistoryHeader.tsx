@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button } from '../../ui/base/Button'
 import { handleBookmarkAddHistoryClear } from '../options-controller'
 import type { BookmarkAddHistoryHeaderState } from './BookmarkAddHistoryTypes.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'

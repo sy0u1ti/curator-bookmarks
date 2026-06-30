@@ -1,13 +1,9 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { displayUrl } from '../../shared/text.js'
-import {
-  AiClassificationResult,
-  Button,
-  CheckboxControl,
-  CollapsiblePanel,
-  CollapsibleRoot,
-  CollapsibleTrigger
-} from '../../ui'
+import { AiClassificationResult } from '../../ui/ai/AiClassificationResult'
+import { Button } from '../../ui/base/Button'
+import { CheckboxControl } from '../../ui/base/Checkbox'
+import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import {
   AI_ANALYSIS_CHECKBOX_CLASS,
   AI_ANALYSIS_CONFIRM_ICON_CLASS,
@@ -86,77 +82,98 @@ export function AiAnalysisResults() {
 }
 
 function AiNamingResultCard({ result }: { result: AiNamingResultCardViewModel }) {
+  const title = useMemo(() => (
+    <div className={AI_RESULT_HEAD_LEFT_CLASS}>
+      <label className={AI_RESULT_CHECK_CLASS} htmlFor={`ai-analysis-result-${result.id}`}>
+        <CheckboxControl
+          id={`ai-analysis-result-${result.id}`}
+          aria-label={result.selectionLabel}
+          className={AI_ANALYSIS_CHECKBOX_CLASS}
+          checked={result.selectable && result.isSelected}
+          disabled={!result.selectable || result.interactionLocked}
+          onCheckedChange={(checked) => handleAiAnalysisResultAction({
+            action: 'select',
+            checked,
+            id: result.id
+          })}
+          unstyled
+        />
+        <span>{result.selectable ? '选择' : '不可直接应用'}</span>
+      </label>
+      <span className={`${AI_ANALYSIS_STATUS_BADGE_CLASS} ${aiAnalysisToneClass(result.badgeTone)}`}>
+        {result.statusLabel}
+      </span>
+    </div>
+  ), [
+    result.badgeTone,
+    result.id,
+    result.interactionLocked,
+    result.isSelected,
+    result.selectable,
+    result.selectionLabel,
+    result.statusLabel
+  ])
+  const confidence = useMemo(() => (
+    <>
+      {result.confidenceLabel}
+      {result.confidenceScorePercent !== null ? ` · ${result.confidenceScorePercent}%` : ''}
+    </>
+  ), [result.confidenceLabel, result.confidenceScorePercent])
+  const actions = useMemo(() => (
+    <div className={AI_RESULT_ACTIONS_CLASS}>
+      <a
+        className={AI_RESULT_LINK_CLASS}
+        href={result.url}
+        target="_blank"
+        rel="noreferrer noopener"
+        aria-label={result.openLabel}
+      >
+        打开页面
+      </a>
+      {result.selectable ? (
+        <>
+          <Button
+            className={AI_RESULT_ACTION_CLASS}
+            type="button"
+            aria-label={result.applyLabel}
+            disabled={result.interactionLocked}
+            onClick={() => handleAiAnalysisResultAction({ action: 'apply', id: result.id })}
+            unstyled
+          >
+            应用建议
+          </Button>
+          <Button
+            className={AI_RESULT_ACTION_CLASS}
+            type="button"
+            aria-label={result.rejectLabel}
+            disabled={result.interactionLocked}
+            onClick={() => handleAiAnalysisResultAction({ action: 'reject', id: result.id })}
+            unstyled
+          >
+            拒绝建议
+          </Button>
+        </>
+      ) : null}
+    </div>
+  ), [
+    result.applyLabel,
+    result.id,
+    result.interactionLocked,
+    result.openLabel,
+    result.rejectLabel,
+    result.selectable,
+    result.url
+  ])
+
   return (
     <AiClassificationResult
       className={[
         AI_RESULT_CARD_CLASS,
         result.isSelected ? AI_RESULT_CARD_SELECTED_CLASS : ''
       ].filter(Boolean).join(' ')}
-      title={
-        <div className={AI_RESULT_HEAD_LEFT_CLASS}>
-          <label className={AI_RESULT_CHECK_CLASS}>
-            <CheckboxControl
-              aria-label={result.selectionLabel}
-              className={AI_ANALYSIS_CHECKBOX_CLASS}
-              checked={result.selectable && result.isSelected}
-              disabled={!result.selectable || result.interactionLocked}
-              onCheckedChange={(checked) => handleAiAnalysisResultAction({
-                action: 'select',
-                checked,
-                id: result.id
-              })}
-              unstyled
-            />
-            <span>{result.selectable ? '选择' : '不可直接应用'}</span>
-          </label>
-          <span className={`${AI_ANALYSIS_STATUS_BADGE_CLASS} ${aiAnalysisToneClass(result.badgeTone)}`}>
-            {result.statusLabel}
-          </span>
-        </div>
-      }
-      confidence={
-        <>
-          {result.confidenceLabel}
-          {result.confidenceScorePercent !== null ? ` · ${result.confidenceScorePercent}%` : ''}
-        </>
-      }
-      actions={
-        <div className={AI_RESULT_ACTIONS_CLASS}>
-          <a
-            className={AI_RESULT_LINK_CLASS}
-            href={result.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            aria-label={result.openLabel}
-          >
-            打开页面
-          </a>
-          {result.selectable ? (
-            <>
-              <Button
-                className={AI_RESULT_ACTION_CLASS}
-                type="button"
-                aria-label={result.applyLabel}
-                disabled={result.interactionLocked}
-                onClick={() => handleAiAnalysisResultAction({ action: 'apply', id: result.id })}
-                unstyled
-              >
-                应用建议
-              </Button>
-              <Button
-                className={AI_RESULT_ACTION_CLASS}
-                type="button"
-                aria-label={result.rejectLabel}
-                disabled={result.interactionLocked}
-                onClick={() => handleAiAnalysisResultAction({ action: 'reject', id: result.id })}
-                unstyled
-              >
-                拒绝建议
-              </Button>
-            </>
-          ) : null}
-        </div>
-      }
+      title={title}
+      confidence={confidence}
+      actions={actions}
       bodyClassName={AI_RESULT_COPY_CLASS}
     >
       <strong className={AI_RESULT_CURRENT_TITLE_CLASS}>{result.currentTitle || '未命名书签'}</strong>

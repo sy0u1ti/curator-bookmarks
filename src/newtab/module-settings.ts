@@ -1,5 +1,3 @@
-import { STORAGE_KEYS } from '../shared/constants.js'
-
 export type NewTabModuleSettingKey =
   | 'speedDial'
 
@@ -16,15 +14,13 @@ export interface NewTabModuleSettingRow {
   enabled: boolean
 }
 
-export const NEW_TAB_MODULE_SETTINGS_STORAGE_KEY = STORAGE_KEYS.newTabModuleSettings
-
 export const DEFAULT_NEW_TAB_MODULE_SETTINGS: NewTabModuleSettings = {
   version: 1,
   speedDial: true,
   order: ['speedDial']
 }
 
-export const NEW_TAB_MODULE_SETTING_META: Record<
+const NEW_TAB_MODULE_SETTING_META: Record<
   NewTabModuleSettingKey,
   Omit<NewTabModuleSettingRow, 'key' | 'enabled'>
 > = {
@@ -48,17 +44,6 @@ export function normalizeNewTabModuleSettings(rawSettings: unknown): NewTabModul
     speedDial: readCombinedSpeedDialSetting(source),
     order: normalizeModuleOrder(source.order)
   }
-}
-
-export function serializeNewTabModuleSettings(rawSettings: unknown): NewTabModuleSettings {
-  return normalizeNewTabModuleSettings(rawSettings)
-}
-
-export function isNewTabModuleEnabled(
-  rawSettings: unknown,
-  key: NewTabModuleSettingKey
-): boolean {
-  return normalizeNewTabModuleSettings(rawSettings)[key]
 }
 
 export function getVisibleNewTabModules(rawSettings: unknown): NewTabModuleSettingKey[] {
@@ -87,17 +72,20 @@ function readCombinedSpeedDialSetting(source: Record<string, unknown>): boolean 
 
 function normalizeModuleOrder(value: unknown): NewTabModuleSettingKey[] {
   const order: NewTabModuleSettingKey[] = []
+  const orderSet = new Set<NewTabModuleSettingKey>()
   if (Array.isArray(value)) {
     for (const item of value) {
-      if (isNewTabModuleSettingKey(item) && !order.includes(item)) {
+      if (isNewTabModuleSettingKey(item) && !orderSet.has(item)) {
         order.push(item)
+        orderSet.add(item)
       }
     }
   }
 
   for (const key of MODULE_SETTING_KEYS) {
-    if (!order.includes(key)) {
+    if (!orderSet.has(key)) {
       order.push(key)
+      orderSet.add(key)
     }
   }
   return order

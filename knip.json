@@ -1,0 +1,10 @@
+{
+  "$schema": "https://unpkg.com/knip@latest/schema.json",
+  "entry": [
+    "src/service-worker/service-worker.ts",
+    "src/popup/main.tsx",
+    "src/options/main.tsx",
+    "src/newtab/main.tsx",
+    "src/newtab/instant-wallpaper-boot.ts"
+  ]
+}

@@ -85,11 +85,6 @@ export function requestBookmarkSave(payload: Omit<BookmarkSaveMessage, 'type'>):
   return sendRuntimeMessage<BookmarkSaveResult>(message)
 }
 
-export function requestInboxUndoLastMove(): Promise<InboxUndoLastMoveResult> {
-  const message: InboxUndoLastMoveMessage = { type: 'inbox:undo-last-move' }
-  return sendRuntimeMessage<InboxUndoLastMoveResult>(message)
-}
-
 export function requestRuntimeNotification(
   payload: Omit<RuntimeNotificationMessage, 'type'>
 ): Promise<void> {

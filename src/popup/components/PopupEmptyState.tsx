@@ -1,5 +1,6 @@
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
-import { Button, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import type { PopupEmptyStateViewModel } from './PopupViewModels'
 
 const EMPTY_STATE_CLASS = [

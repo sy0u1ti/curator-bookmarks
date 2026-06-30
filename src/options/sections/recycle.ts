@@ -5,7 +5,6 @@ import {
 import { createBookmark, getBookmarkTree } from '../../shared/bookmarks-api.js'
 import { buildBookmarkCatalogSnapshot } from '../../shared/bookmark-catalog.js'
 import {
-  appendRecycleEntries,
   deleteBookmarkToRecycle,
   loadRecycleBinEntries,
   mergeRecycleEntries,
@@ -13,7 +12,6 @@ import {
   type RecycleEntry
 } from '../../shared/recycle-bin.js'
 import { createAutoBackupBeforeDangerousOperation, type DangerousOperationKind } from '../../shared/backup.js'
-import { displayUrl } from '../../shared/text.js'
 import { availabilityState, managerState } from '../shared-options/state.js'
 import { syncSelectionSet } from '../shared-options/utils.js'
 import { publishRecycleBin } from '../components/recycle-bin-store.js'
@@ -24,8 +22,7 @@ export function normalizeRecycleBin(rawEntries) {
     return []
   }
 
-  return rawEntries
-    .map((entry) => {
+  return rawEntries.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((entry) => {
       return {
         recycleId: String(entry?.recycleId || '').trim(),
         bookmarkId: String(entry?.bookmarkId || '').trim(),
@@ -37,25 +34,8 @@ export function normalizeRecycleBin(rawEntries) {
         source: String(entry?.source || '删除').trim() || '删除',
         deletedAt: Number(entry?.deletedAt) || Date.now()
       }
-    })
-    .filter((entry) => entry.recycleId && entry.url)
+    })(combineValue); return ((entry) => entry.recycleId && entry.url)(combinedResult) ? [combinedResult] : [] })
     .sort((left, right) => right.deletedAt - left.deletedAt)
-}
-
-export function getRecycleEntryActionLabel(action, entry) {
-  const title = String(entry?.title || displayUrl(entry?.url) || '未命名书签')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
-
-  return `${action}：${safeTitle || '未命名书签'}`
-}
-
-export async function saveRecycleBin() {
-  const nextEntries = mergeRecycleEntries(managerState.recycleBin as RecycleEntry[])
-  managerState.recycleBin = nextEntries
-  await appendRecycleEntries(nextEntries)
-  await refreshRecycleBinState()
 }
 
 function buildRecycleEntry(bookmark, source) {
@@ -133,7 +113,7 @@ export function restoreRecycleEntry(recycleId, callbacks) {
 }
 
 async function clearRecycleEntriesByIds(recycleIds, callbacks) {
-  const targetSet = new Set<string>(recycleIds.map((id) => String(id)).filter(Boolean))
+  const targetSet = new Set<string>(recycleIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   const targetEntries = managerState.recycleBin.filter((entry) => {
     return targetSet.has(String(entry.recycleId))
   })
@@ -196,7 +176,7 @@ export async function clearSelectedRecycleEntries(callbacks) {
 }
 
 async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
-  const targetSet = new Set(recycleIds.map((id) => String(id)).filter(Boolean))
+  const targetSet = new Set(recycleIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   const targetEntries = managerState.recycleBin.filter((entry) => {
     return targetSet.has(String(entry.recycleId))
   })
@@ -214,7 +194,7 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
 
   try {
     const currentFolderIds = await loadCurrentFolderIds()
-    for (const entry of targetEntries) {
+    await runRecycleEntriesSequentially(targetEntries, async (entry) => {
       const fallbackParentId = currentFolderIds.has(String(entry.parentId))
         ? entry.parentId
         : BOOKMARKS_BAR_ID
@@ -226,7 +206,7 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
         url: entry.url
       })
       restoredIds.push(String(entry.recycleId))
-    }
+    })
   } catch (error) {
     restoreError = error
   } finally {
@@ -238,8 +218,10 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
         return !restoredSet.has(String(entry.recycleId))
       })
       await removeRecycleEntries(restoredIds)
-      await refreshRecycleBinState()
-      await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+      await Promise.all([
+        refreshRecycleBinState(),
+        callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+      ])
     }
 
     if (restoreError) {
@@ -253,6 +235,12 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+function runRecycleEntriesSequentially<T>(items: T[], task: (item: T, index: number) => Promise<void>): Promise<void> {
+  return items.reduce<Promise<void>>((chain, item, index) => {
+    return chain.then(() => task(item, index))
+  }, Promise.resolve())
 }
 
 async function loadCurrentFolderIds(): Promise<Set<string>> {
@@ -289,7 +277,7 @@ export async function clearRecycleBin(callbacks) {
 }
 
 export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: string, callbacks: any) {
-  const uniqueIds = [...new Set(bookmarkIds.map((id) => String(id)).filter(Boolean))]
+  const uniqueIds = [...new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))]
   if (!uniqueIds.length) {
     return
   }
@@ -311,17 +299,17 @@ export async function deleteBookmarksToRecycle(bookmarkIds: unknown[], source: s
       estimatedChangeCount: uniqueIds.length
     })
 
-    for (const bookmarkId of uniqueIds) {
+    await runRecycleEntriesSequentially(uniqueIds, async (bookmarkId) => {
       const bookmark = callbacks.getBookmarkRecord(bookmarkId)
       if (!bookmark?.url) {
-        continue
+        return
       }
 
       const recycleEntry = buildRecycleEntry(bookmark, source)
       await deleteBookmarkToRecycle(bookmarkId, recycleEntry)
       removedIds.push(bookmarkId)
       recycleEntries.push(recycleEntry)
-    }
+    })
   } catch (error) {
     removalError = error
   } finally {

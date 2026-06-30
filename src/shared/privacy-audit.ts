@@ -43,9 +43,7 @@ export interface PrivacyAuditInput {
   reason?: unknown
   now?: number
 }
-
-export const PRIVACY_AUDIT_LOG_LIMIT = 80
-export const PRIVACY_AUDIT_LOG_RETENTION_LIMIT = 20
+const PRIVACY_AUDIT_LOG_RETENTION_LIMIT = 20
 export const PRIVACY_AUDIT_LOG_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
 
 const FEATURE_LABELS: Record<PrivacyAuditFeature, string> = {
@@ -58,7 +56,7 @@ const FEATURE_LABELS: Record<PrivacyAuditFeature, string> = {
   'availability-check': '死链/重定向检测'
 }
 
-export function normalizePrivacyAuditLog(rawLog: unknown): PrivacyAuditLog {
+function normalizePrivacyAuditLog(rawLog: unknown): PrivacyAuditLog {
   const now = Date.now()
   const source = rawLog && typeof rawLog === 'object' && !Array.isArray(rawLog)
     ? rawLog as Record<string, unknown>
@@ -79,7 +77,7 @@ export function normalizePrivacyAuditLog(rawLog: unknown): PrivacyAuditLog {
   }
 }
 
-export async function loadPrivacyAuditLog(): Promise<PrivacyAuditLog> {
+async function loadPrivacyAuditLog(): Promise<PrivacyAuditLog> {
   const stored = await getLocalStorage([STORAGE_KEYS.privacyAuditLog])
   return normalizePrivacyAuditLog(stored[STORAGE_KEYS.privacyAuditLog])
 }
@@ -109,16 +107,6 @@ export async function appendPrivacyAuditLogEntry(input: PrivacyAuditInput): Prom
     [STORAGE_KEYS.privacyAuditLog]: nextLog
   })
   return nextLog
-}
-
-export async function clearPrivacyAuditLog(): Promise<void> {
-  await setLocalStorage({
-    [STORAGE_KEYS.privacyAuditLog]: normalizePrivacyAuditLog({
-      version: 1,
-      updatedAt: Date.now(),
-      entries: []
-    })
-  })
 }
 
 function normalizePrivacyAuditEntry(rawEntry: unknown): PrivacyAuditLogEntry | null {

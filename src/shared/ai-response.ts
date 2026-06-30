@@ -87,7 +87,7 @@ export function extractChatCompletionsJsonText(
   throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
 }
 
-export function stripMarkdownCodeFences(text: unknown): string {
+function stripMarkdownCodeFences(text: unknown): string {
   return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
 }
 
@@ -122,7 +122,7 @@ export function extractAiErrorMessage(payload: unknown, statusCode: unknown, raw
       : `AI 请求失败（${statusCode}）。`
 }
 
-export function buildAiStructuredOutputRefusalError(refusal: unknown): string {
+function buildAiStructuredOutputRefusalError(refusal: unknown): string {
   const normalizedRefusal = truncateText(
     String(refusal || '').replace(/\s+/g, ' ').trim(),
     120

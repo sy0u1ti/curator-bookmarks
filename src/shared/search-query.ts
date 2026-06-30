@@ -151,7 +151,7 @@ export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearch
   }
 }
 
-export function applySafeLocalSearchRules(query: unknown): { query: string; excludedTerms: string[] } {
+function applySafeLocalSearchRules(query: unknown): { query: string; excludedTerms: string[] } {
   const rawQuery = normalizeRawSearchQuery(query)
   const protectedParts: string[] = []
   const protectedQuery = protectSafeLocalStructuredSearch(rawQuery, protectedParts)
@@ -161,7 +161,7 @@ export function applySafeLocalSearchRules(query: unknown): { query: string; excl
     protectedParts
   )
   const excludedTerms = uniqueTerms(exclusion.terms)
-  const negativeTerms = excludedTerms.map((term) => `-${formatSafeLocalRuleTerm(term)}`).filter(Boolean)
+  const negativeTerms = excludedTerms.flatMap(term => { const mappedResult = `-${formatSafeLocalRuleTerm(term)}`; return mappedResult ? [mappedResult] : [] })
 
   return {
     query: [cleanedQuery, ...negativeTerms].filter(Boolean).join(' ') || rawQuery,
@@ -511,7 +511,7 @@ function normalizeFilterValue(value: unknown): string {
 }
 
 function uniqueTerms(values: string[]): string[] {
-  return [...new Set(values.map((value) => normalizeFilterValue(value)).filter(Boolean))]
+  return [...new Set(values.flatMap(value => { const mappedResult = normalizeFilterValue(value); return mappedResult ? [mappedResult] : [] }))]
 }
 
 function tokenizeSearchQuery(query: string): string[] {

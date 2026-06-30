@@ -7,9 +7,7 @@ import {
   type ReactNode,
   type Ref
 } from 'react'
-import { Presence } from '../motion/Presence'
 import { MotionPanel } from '../motion/MotionPanel'
-import { Button } from './Button'
 import { cx, cxState } from './utils'
 
 export interface DialogProps {
@@ -21,55 +19,6 @@ export interface DialogProps {
   description?: ReactNode
   children: ReactNode
   footer?: ReactNode
-}
-
-export function Dialog({
-  open,
-  defaultOpen,
-  onOpenChange,
-  trigger,
-  title,
-  description,
-  children,
-  footer
-}: DialogProps) {
-  return (
-    <BaseDialog.Root open={open} defaultOpen={defaultOpen} onOpenChange={onOpenChange}>
-      {trigger ? <BaseDialog.Trigger render={<span />}>{trigger}</BaseDialog.Trigger> : null}
-      <BaseDialog.Portal>
-        <Presence>
-          <BaseDialog.Backdrop className="t-modal-backdrop fixed inset-0 z-40 min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute" />
-          <BaseDialog.Popup
-            render={
-              <MotionPanel
-                variant="dialog"
-                className="fixed left-1/2 top-1/2 z-50 grid w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-ds-lg border border-ds-border bg-ds-surface-2 p-4 text-ds-text-primary shadow-ds-dialog outline-none"
-              />
-            }
-          >
-            <header className="grid gap-1">
-              <BaseDialog.Title className="text-base font-semibold">{title}</BaseDialog.Title>
-              {description ? (
-                <BaseDialog.Description className="text-sm text-ds-text-secondary">
-                  {description}
-                </BaseDialog.Description>
-              ) : null}
-            </header>
-            {children}
-            {footer ? <footer className="flex justify-end gap-2">{footer}</footer> : null}
-          </BaseDialog.Popup>
-        </Presence>
-      </BaseDialog.Portal>
-    </BaseDialog.Root>
-  )
-}
-
-export function DialogCloseButton({ children = 'Close' }: { children?: ReactNode }) {
-  return (
-    <BaseDialog.Close render={<Button variant="secondary" />}>
-      {children}
-    </BaseDialog.Close>
-  )
 }
 
 type BaseDialogRootProps = ComponentPropsWithoutRef<typeof BaseDialog.Root>

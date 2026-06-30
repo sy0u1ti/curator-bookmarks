@@ -42,7 +42,6 @@ export function dispatchIconPreviewViewForSettings(settings: IconSettings): void
     `${settings.iconShellSize}px 图标区`,
     settings.showTitles ? `${settings.titleLines} 行标题` : '图标模式'
   ].join(' · ')
-  const signature = getIconPreviewSignature(settings)
 
   const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
   dispatchNewtabIconPreviewView(createNewtabIconPreviewView(

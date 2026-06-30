@@ -524,7 +524,10 @@ export async function enrichPinyinTokensCooperatively(
   let processed = 0
   let enriched = 0
 
-  for (let index = 0; index < targets.length; index += batchSize) {
+  const processBatch = async (index = 0): Promise<{ processed: number; enriched: number; aborted: boolean }> => {
+    if (index >= targets.length) {
+      return { processed, enriched, aborted: false }
+    }
     if (!isActive()) {
       return { processed, enriched, aborted: true }
     }
@@ -545,10 +548,13 @@ export async function enrichPinyinTokensCooperatively(
 
     if (end < targets.length) {
       await yieldWork()
+      return processBatch(end)
     }
+
+    return { processed, enriched, aborted: false }
   }
 
-  return { processed, enriched, aborted: false }
+  return processBatch()
 }
 
 function getCompactPinyinTokens(text: string): PinyinTokens {

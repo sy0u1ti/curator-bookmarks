@@ -7,7 +7,7 @@ import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './P
 
 function run(): void {
   testLoadingProgressIsClampedToVisibleStage()
-  testInitialSmartClassifierStateShowsPageSkeleton()
+  testInitialSmartClassifierStateUsesStablePlaceholder()
   testReadyPageRevealLayersAvoidConflictingOpacityUtilities()
 }
 
@@ -34,15 +34,16 @@ function testLoadingProgressIsClampedToVisibleStage(): void {
   assert(!markup.includes('scaleX('), 'progress indicator should not scale an already width-based bar')
 }
 
-function testInitialSmartClassifierStateShowsPageSkeleton(): void {
+function testInitialSmartClassifierStateUsesStablePlaceholder(): void {
   const markup = renderToStaticMarkup(
     createElement(PopupSmartClassifier, {
       state: EMPTY_POPUP_SMART_CLASSIFIER
     })
   )
 
-  assert(markup.includes('data-state="loading"'), 'initial smart classifier should render the page skeleton')
-  assert(markup.includes('popup-page-skeleton'), 'initial smart classifier should include the page skeleton layer')
+  assert(markup.includes('data-state="ready"'), 'initial smart classifier should use the stable ready placeholder')
+  assert(!markup.includes('aria-busy="true"'), 'initial smart classifier should not announce a loading page')
+  assert(markup.includes('当前标签页'), 'initial smart classifier should reserve the current-page row')
 }
 
 function testReadyPageRevealLayersAvoidConflictingOpacityUtilities(): void {

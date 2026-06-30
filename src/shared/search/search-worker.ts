@@ -130,7 +130,7 @@ function filterWorkerSearchIndex(
 
 function normalizeWorkerIdList(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    ? value.flatMap(item => { const mappedResult = String(item || '').trim(); return mappedResult ? [mappedResult] : [] })
     : []
 }
 

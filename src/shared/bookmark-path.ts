@@ -9,15 +9,11 @@ export interface BookmarkPathSegment {
 
 export function splitBookmarkPath(value: unknown): string[] {
   return String(value || '')
-    .split(/\s*(?:\/|>|›|»|\\)\s*/g)
-    .map((segment) => segment.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
+    .split(/\s*(?:\/|>|›|»|\\)\s*/g).flatMap(segment => { const mappedResult = segment.replace(/\s+/g, ' ').trim(); return mappedResult ? [mappedResult] : [] })
 }
 
-export function joinBookmarkPathSegments(segments: unknown[], separator = ' > '): string {
-  return segments
-    .map((segment) => String(segment || '').replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
+function joinBookmarkPathSegments(segments: unknown[], separator = ' > '): string {
+  return segments.flatMap(segment => { const mappedResult = String(segment || '').replace(/\s+/g, ' ').trim(); return mappedResult ? [mappedResult] : [] })
     .join(separator)
 }
 
@@ -86,7 +82,7 @@ export function formatFolderPath(
     : formatBookmarkPath(folder?.path || folder?.title, separator)
 }
 
-export function findFolderByPath(
+function findFolderByPath(
   path: unknown,
   folderMap: Map<string, Pick<FolderRecord, 'id' | 'title' | 'path'>>
 ): Pick<FolderRecord, 'id' | 'title' | 'path'> | null {

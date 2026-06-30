@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button } from '../../ui/base/Button'
 import {
   AI_ANALYSIS_PRIMARY_BUTTON_CLASS,
   AI_ANALYSIS_SMALL_BUTTON_CLASS

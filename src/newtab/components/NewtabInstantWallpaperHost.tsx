@@ -67,7 +67,7 @@ export function NewtabInstantWallpaperHost() {
     return () => {
       window.clearTimeout(cleanupTimer)
     }
-  }, [view.booting, view.loading, view.previewImage, view.ready, view.remoteReady, view.signature])
+  }, [view])
 
   return null
 }

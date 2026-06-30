@@ -1,7 +1,7 @@
 import type { Ref } from 'react'
-import { CloseButton } from '../../ui'
-import { DrawerClose } from '../../ui'
-import { cx } from '../../ui'
+import { CloseButton } from '../../ui/base/CloseButton'
+import { DrawerClose } from '../../ui/base/Drawer'
+import { cx } from '../../ui/base/utils'
 
 export function SettingsDrawerClose({
   buttonRef,

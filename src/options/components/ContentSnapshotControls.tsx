@@ -1,10 +1,6 @@
-import { AiProviderCard } from '../../ui'
-import {
-  CollapsiblePanel,
-  CollapsibleRoot,
-  CollapsibleTrigger
-} from '../../ui'
-import { SwitchControl } from '../../ui'
+import { AiProviderCard } from '../../ui/ai/AiProviderCard'
+import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
+import { SwitchControl } from '../../ui/base/Switch'
 import {
   AI_SETTINGS_ADVANCED_CLASS,
   AI_SETTINGS_ADVANCED_NOTE_CLASS,

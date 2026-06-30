@@ -259,9 +259,10 @@ function preloadStartupImage(imageUrl: string): void {
 
 function getMatchingThumbnailDataUrl(
   thumbnailRecord: InstantWallpaperRecord | null,
-  targetSignature: string
+  targetKey: string
 ): string {
-  if (thumbnailRecord?.signature !== targetSignature || thumbnailRecord.ready === false) {
+  const thumbnailKey = thumbnailRecord?.signature || ''
+  if (thumbnailKey !== targetKey || thumbnailRecord?.ready === false) {
     return ''
   }
   return getStoredPreviewDataUrl(thumbnailRecord, thumbnailDataUrlKey)

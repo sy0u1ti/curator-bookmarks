@@ -64,7 +64,7 @@ export function buildBookmarkCatalogSnapshot({
   }
 }
 
-export function createBookmarkCatalogVersion({
+function createBookmarkCatalogVersion({
   extracted,
   tagIndex = null,
   snapshotState = null,

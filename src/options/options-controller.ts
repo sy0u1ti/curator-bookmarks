@@ -207,7 +207,6 @@ import {
   normalizeRedirectCache,
   saveRedirectCache,
   synchronizeRedirectResults,
-  getRedirectSectionState,
   persistRedirectCacheSnapshot,
   removeRedirectIdsFromState,
   renderRedirectSection,
@@ -1149,9 +1148,7 @@ function getSelectedNewTabFolderIds(rawFolderSettings?: unknown): string[] {
     return []
   }
 
-  return selectedFolderIds
-    .map((folderId) => String(folderId || '').trim())
-    .filter(Boolean)
+  return selectedFolderIds.flatMap(folderId => { const mappedResult = String(folderId || '').trim(); return mappedResult ? [mappedResult] : [] })
 }
 
 async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFolderCleanup = true } = {}) {
@@ -1215,7 +1212,7 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
 }
 
 function syncOptionsFolderPickerExpandedState(): void {
-  const folderIds = new Set(availabilityState.allFolders.map((folder) => String(folder.id || '')).filter(Boolean))
+  const folderIds = new Set(availabilityState.allFolders.flatMap(folder => { const mappedResult = String(folder.id || ''); return mappedResult ? [mappedResult] : [] }))
   managerState.scopeExpandedFolderIds = normalizeOptionsFolderPickerExpandedSet(
     managerState.scopeExpandedFolderIds,
     folderIds
@@ -1389,9 +1386,7 @@ function syncAiNamingCatalog({ preserveResults = false } = {}) {
     syncSelectionSet(
       aiNamingState.selectedResultIds,
       new Set(
-        aiNamingState.results
-          .filter((result) => result.status === 'suggested')
-          .map((result) => String(result.id))
+        aiNamingState.results.flatMap((combineValue, combineIndex, combineArray) => { if (!((result) => result.status === 'suggested')(combineValue)) return []; const combinedResult = ((result) => String(result.id))(combineValue); return [combinedResult] })
       )
     )
     recalculateAiNamingSummary()
@@ -1401,8 +1396,7 @@ function syncAiNamingCatalog({ preserveResults = false } = {}) {
 }
 
 function syncAiNamingResultMetadata(results) {
-  return results
-    .map((result) => {
+  return results.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((result) => {
       const latestBookmark = availabilityState.bookmarkMap.get(String(result.id))
       if (!latestBookmark) {
         return null
@@ -1424,15 +1418,14 @@ function syncAiNamingResultMetadata(results) {
         parentId: latestBookmark.parentId,
         index: latestBookmark.index
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
 function hydrateAiRejectedSuggestions(rawSuggestions: unknown): void {
   const normalized = normalizeAiRejectedSuggestions(rawSuggestions)
   aiNamingState.rejectedSuggestions = normalized
   aiNamingState.rejectedSuggestionKeys = new Set(
-    normalized.map((entry) => String(entry.key || '')).filter(Boolean)
+    normalized.flatMap(entry => { const mappedResult = String(entry.key || ''); return mappedResult ? [mappedResult] : [] })
   )
 }
 
@@ -1537,9 +1530,7 @@ function isAiNamingSuggestionRejected(result): boolean {
 
 function countCurrentAiRejectedSuggestions(): number {
   const currentKeys = new Set(
-    aiNamingState.bookmarks
-      .map((bookmark) => normalizeUrl(bookmark.url) || `bookmark:${String(bookmark.id || '').trim()}`)
-      .filter(Boolean)
+    aiNamingState.bookmarks.flatMap(bookmark => { const mappedResult = normalizeUrl(bookmark.url) || `bookmark:${String(bookmark.id || '').trim()}`; return mappedResult ? [mappedResult] : [] })
   )
   return aiNamingState.rejectedSuggestions.filter((entry) => {
     const targetKey = normalizeUrl(entry.url) || `bookmark:${String(entry.bookmarkId || '').trim()}`
@@ -1655,9 +1646,7 @@ async function ensureProbePermissionForRun({ interactive = true, origins = avail
 }
 
 function normalizeOriginPermissionList(origins): string[] {
-  return [...new Set(Array.isArray(origins) ? origins : [])]
-    .map((origin) => String(origin || '').trim())
-    .filter(Boolean)
+  return [...new Set(Array.isArray(origins) ? origins : [])].flatMap(origin => { const mappedResult = String(origin || '').trim(); return mappedResult ? [mappedResult] : [] })
     .sort((left, right) => left.localeCompare(right))
 }
 
@@ -1938,13 +1927,20 @@ async function notifyAvailabilityRunFinished({
 }
 
 async function waitForAvailabilityRun() {
-  while (availabilityState.paused && !availabilityState.stopRequested) {
-    await new Promise((resolve) => {
-      availabilityPauseResolvers.push(() => resolve(undefined))
-    })
+  if (!availabilityState.paused || availabilityState.stopRequested) {
+    return !availabilityState.stopRequested
   }
 
-  return !availabilityState.stopRequested
+  await new Promise((resolve) => {
+    availabilityPauseResolvers.push(() => resolve(undefined))
+  })
+  return waitForAvailabilityRun()
+}
+
+function runSequentially<T>(items: T[], task: (item: T, index: number) => Promise<void>): Promise<void> {
+  return items.reduce<Promise<void>>((chain, item, index) => {
+    return chain.then(() => task(item, index))
+  }, Promise.resolve())
 }
 
 function releaseAvailabilityPauseResolvers() {
@@ -2132,10 +2128,6 @@ function updateAvailabilityRunnerStatus(scheduler: AvailabilityRunScheduler | nu
   availabilityState.runnerStatusCopy = scheduler
     ? formatAvailabilityRunnerStatus(scheduler.getSnapshot())
     : formatAvailabilityRunnerStatus(createAvailabilityScheduler().getSnapshot())
-}
-
-function getAvailabilityRunnerStatusCopy() {
-  return availabilityState.runnerStatusCopy || formatAvailabilityRunnerStatus(createAvailabilityScheduler().getSnapshot())
 }
 
 async function fetchWithRequestTimeout(url, options: RequestInit = {}, timeoutMs = AI_NAMING_DEFAULT_TIMEOUT_MS) {
@@ -4163,14 +4155,16 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
   renderBackupRestoreSection()
 
   try {
-    await createAutoBackupBeforeDangerousOperation({
+    const result = await createAutoBackupBeforeDangerousOperation({
       kind: 'restore',
       source: 'options',
       reason: `恢复备份：${modeLabel}`
-    })
-    const result = await restoreCuratorBackup(backupRestoreState.backup, mode)
-    await hydrateAvailabilityCatalog({ preserveResults: true })
-    aiNamingState.tagIndex = await loadBookmarkTagIndex()
+    }).then(() => restoreCuratorBackup(backupRestoreState.backup, mode))
+    const [, tagIndex] = await Promise.all([
+      hydrateAvailabilityCatalog({ preserveResults: true }),
+      loadBookmarkTagIndex()
+    ])
+    aiNamingState.tagIndex = tagIndex
     backupRestoreState.status =
       `恢复完成：标签 ${result.restored.tags} 条，新标签页配置 ${result.restored.newTabSections} 项，本地数据 ${result.restored.storageSections} 项，复制缺失书签 ${result.restored.copiedBookmarks} 条；无法匹配标签 ${result.unmatchedTags} 条。`
   } catch (error) {
@@ -4367,8 +4361,7 @@ function extractFetchedModelIds(payload) {
         ? payload
         : []
 
-  return candidates
-    .map((entry) => {
+  return candidates.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry) => {
       if (!entry) {
         return ''
       }
@@ -4376,8 +4369,7 @@ function extractFetchedModelIds(payload) {
         return entry
       }
       return String(entry.id || entry.name || '').trim()
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
 async function handleFetchAiModels() {
@@ -4784,9 +4776,7 @@ function getAiSuggestedFolderPathForResult(result) {
 
 function splitAiSuggestedFolderPath(value) {
   return String(value || '')
-    .split(/\s*(?:->|\/|>|›|»|\\|·|•|→|➜)\s*/g)
-    .map((segment) => normalizeAiResultText(segment, 60))
-    .filter(Boolean)
+    .split(/\s*(?:->|\/|>|›|»|\\|·|•|→|➜)\s*/g).flatMap(segment => { const mappedResult = normalizeAiResultText(segment, 60); return mappedResult ? [mappedResult] : [] })
     .slice(0, 5)
 }
 
@@ -4883,12 +4873,20 @@ function findAiSuggestedFolder(value, currentParentId = '') {
       continue
     }
 
-    const currentFolder = matches.find((folder) => String(folder.id) === String(currentParentId || ''))
+    let currentFolder = null
+    for (const folder of matches) {
+      if (String(folder.id) === String(currentParentId || '')) {
+        currentFolder = folder
+        break
+      }
+    }
     if (currentFolder) {
       return currentFolder
     }
 
-    return matches.slice().sort(compareAiSuggestedFolderCandidates)[0]
+    return matches.reduce((best, folder) => (
+      compareAiSuggestedFolderCandidates(folder, best) < 0 ? folder : best
+    ))
   }
 
   return null
@@ -5009,9 +5007,7 @@ function getSelectedAiNamingResults() {
     getSelectableAiNamingResults().map((result) => [String(result.id), result])
   )
 
-  return [...aiNamingState.selectedResultIds]
-    .map((bookmarkId) => resultMap.get(String(bookmarkId)))
-    .filter(Boolean)
+  return [...aiNamingState.selectedResultIds].flatMap(bookmarkId => { const mappedResult = resultMap.get(String(bookmarkId)); return mappedResult ? [mappedResult] : [] })
 }
 
 function clearAiNamingSelection() {
@@ -5031,9 +5027,7 @@ function selectAllAiNamingResults() {
 function selectHighConfidenceAiResults() {
   aiNamingState.pendingMoveSelection = false
   aiNamingState.selectedResultIds = new Set(
-    getSelectableAiNamingResults()
-      .filter((result) => result.confidence === 'high')
-      .map((result) => String(result.id))
+    getSelectableAiNamingResults().flatMap((combineValue, combineIndex, combineArray) => { if (!((result) => result.confidence === 'high')(combineValue)) return []; const combinedResult = ((result) => String(result.id))(combineValue); return [combinedResult] })
   )
   renderAvailabilitySection()
 }
@@ -5186,13 +5180,14 @@ function toggleAiNamingPause() {
 }
 
 async function waitForAiNamingRun() {
-  while (aiNamingState.paused && !aiNamingState.stopRequested) {
-    await new Promise((resolve) => {
-      aiNamingState.pauseResolvers.push(resolve)
-    })
+  if (!aiNamingState.paused || aiNamingState.stopRequested) {
+    return !aiNamingState.stopRequested
   }
 
-  return !aiNamingState.stopRequested
+  await new Promise((resolve) => {
+    aiNamingState.pauseResolvers.push(resolve)
+  })
+  return waitForAiNamingRun()
 }
 
 function releaseAiNamingPauseResolvers() {
@@ -5432,7 +5427,7 @@ async function handleMoveSelectedAiNamingResults() {
 }
 
 async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
-  const targetIds = new Set(bookmarkIds.map((id) => String(id)).filter(Boolean))
+  const targetIds = new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   const targetResults = aiNamingState.results.filter((result) => {
     return targetIds.has(String(result.id)) && canMoveAiNamingResultToSuggestedFolder(result)
   })
@@ -5461,11 +5456,11 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
       estimatedChangeCount: targetResults.length
     })
 
-    for (const result of targetResults) {
+    await runSequentially(targetResults, async (result) => {
       try {
         const targetFolderId = await resolveAiSuggestedFolderId(result, folderCache)
         if (!targetFolderId || String(targetFolderId) === String(result.parentId || '')) {
-          continue
+          return
         }
 
         await moveBookmark(String(result.id), String(targetFolderId))
@@ -5475,7 +5470,7 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
         const message = error instanceof Error ? error.message : '未知错误'
         moveErrors.push(`${title}：${message}`)
       }
-    }
+    })
   } finally {
     aiNamingState.applying = false
     aiNamingState.pendingMoveSelection = false
@@ -5522,7 +5517,7 @@ function formatAiNamingImpactList(results, formatter) {
 }
 
 async function applyAiNamingResultsByIds(bookmarkIds) {
-  const targetIds = new Set(bookmarkIds.map((id) => String(id)).filter(Boolean))
+  const targetIds = new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   const targetResults = aiNamingState.results.filter((result) => {
     return targetIds.has(String(result.id)) && result.status === 'suggested'
   })
@@ -5547,12 +5542,12 @@ async function applyAiNamingResultsByIds(bookmarkIds) {
       estimatedChangeCount: targetResults.length
     })
 
-    for (const result of targetResults) {
+    await runSequentially(targetResults, async (result) => {
       await updateBookmark(result.id, {
         title: result.suggestedTitle
       })
       appliedIds.push(String(result.id))
-    }
+    })
   } catch (error) {
     applyError = error
   } finally {
@@ -5838,84 +5833,7 @@ async function runAiNamingSuggestions() {
   try {
     const settings = aiNamingManagerState.settings
     const bookmarks = aiNamingState.bookmarks.slice()
-
-    for (let start = 0; start < bookmarks.length; start += settings.batchSize) {
-      if (aiNamingState.stopRequested) {
-        break
-      }
-
-      const chunk = bookmarks.slice(start, start + settings.batchSize)
-      const preparedItems = []
-      const retryCandidates = []
-
-      for (const bookmark of chunk) {
-        if (!(await waitForAiNamingRun())) {
-          break
-        }
-
-        if (aiNamingState.stopRequested) {
-          break
-        }
-
-        try {
-          preparedItems.push(await buildAiNamingPreparedItem(bookmark, settings.timeoutMs, {
-            signal: controller.signal
-          }))
-          throwIfAborted(controller.signal)
-        } catch (error) {
-          retryCandidates.push({
-            bookmark,
-            initialError: error
-          })
-        } finally {
-          aiNamingState.checkedBookmarks += 1
-          recalculateAiNamingSummary()
-          scheduleAvailabilityRender()
-        }
-      }
-
-      if (!(await waitForAiNamingRun())) {
-        break
-      }
-
-      if (!preparedItems.length || aiNamingState.stopRequested) {
-        if (retryCandidates.length && !aiNamingState.stopRequested) {
-          await retryAiNamingBookmarks(retryCandidates, settings)
-        }
-        continue
-      }
-
-      try {
-        const aiResponseItems = await requestAiNamingBatch(preparedItems, {
-          signal: controller.signal
-        })
-        if (aiNamingState.stopRequested || controller.signal.aborted) {
-          break
-        }
-        const failedPreparedItems = await mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings)
-        retryCandidates.push(...failedPreparedItems.map((preparedItem) => {
-          return {
-            bookmark: preparedItem.bookmark,
-            preparedItem,
-            initialError: new Error('AI 返回中缺少该书签的命名结果。')
-          }
-        }))
-      } catch (error) {
-        retryCandidates.push(...preparedItems.map((preparedItem) => {
-          return {
-            bookmark: preparedItem.bookmark,
-            initialError: error
-          }
-        }))
-      }
-
-      if (retryCandidates.length && !aiNamingState.stopRequested) {
-        await retryAiNamingBookmarks(retryCandidates, settings)
-      }
-
-      recalculateAiNamingSummary()
-      scheduleAvailabilityRender()
-    }
+    await runAiNamingSuggestionChunks(bookmarks, settings, controller)
 
     aiNamingState.lastCompletedAt = Date.now()
     recalculateAiNamingSummary()
@@ -5940,6 +5858,109 @@ async function runAiNamingSuggestions() {
     recalculateAiNamingSummary()
     renderAvailabilitySection()
   }
+}
+
+async function runAiNamingSuggestionChunks(bookmarks, settings, controller, start = 0) {
+  if (start >= bookmarks.length || aiNamingState.stopRequested) {
+    return
+  }
+
+  const chunk = bookmarks.slice(start, start + settings.batchSize)
+  const preparedChunk = await waitForAiNamingRun().then((ready) => {
+    if (!ready) {
+      return null
+    }
+    return prepareAiNamingChunk(chunk, settings, controller).then((result) => {
+      return waitForAiNamingRun().then((aiNamingRunStillActive) => ({
+        ...result,
+        aiNamingRunStillActive
+      }))
+    })
+  })
+  if (!preparedChunk?.aiNamingRunStillActive) {
+    return
+  }
+  const { preparedItems, retryCandidates } = preparedChunk
+
+  if (!preparedItems.length || aiNamingState.stopRequested) {
+    if (retryCandidates.length && !aiNamingState.stopRequested) {
+      await retryAiNamingBookmarks(retryCandidates, settings)
+    }
+    await runAiNamingSuggestionChunks(bookmarks, settings, controller, start + settings.batchSize)
+    return
+  }
+
+  try {
+    const aiResponseItems = await requestAiNamingBatch(preparedItems, {
+      signal: controller.signal
+    })
+    const aiNamingRequestStillActive = !aiNamingState.stopRequested && !controller.signal.aborted
+    if (!aiNamingRequestStillActive) {
+      return
+    }
+    const failedPreparedItems = await mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings)
+    retryCandidates.push(...failedPreparedItems.map((preparedItem) => {
+      return {
+        bookmark: preparedItem.bookmark,
+        preparedItem,
+        initialError: new Error('AI 返回中缺少该书签的命名结果。')
+      }
+    }))
+  } catch (error) {
+    retryCandidates.push(...preparedItems.map((preparedItem) => {
+      return {
+        bookmark: preparedItem.bookmark,
+        initialError: error
+      }
+    }))
+  }
+
+  if (retryCandidates.length && !aiNamingState.stopRequested) {
+    await retryAiNamingBookmarks(retryCandidates, settings)
+  }
+
+  recalculateAiNamingSummary()
+  scheduleAvailabilityRender()
+  await runAiNamingSuggestionChunks(bookmarks, settings, controller, start + settings.batchSize)
+}
+
+async function prepareAiNamingChunk(chunk, settings, controller) {
+  const preparedItems: any[] = []
+  const retryCandidates: any[] = []
+  let shouldStopPreparing = false
+
+  await runSequentially(chunk, async (bookmark) => {
+    if (shouldStopPreparing) {
+      return
+    }
+    if (!(await waitForAiNamingRun())) {
+      shouldStopPreparing = true
+      return
+    }
+
+    if (aiNamingState.stopRequested) {
+      shouldStopPreparing = true
+      return
+    }
+
+    try {
+      preparedItems.push(await buildAiNamingPreparedItem(bookmark, settings.timeoutMs, {
+        signal: controller.signal
+      }))
+      throwIfAborted(controller.signal)
+    } catch (error) {
+      retryCandidates.push({
+        bookmark,
+        initialError: error
+      })
+    } finally {
+      aiNamingState.checkedBookmarks += 1
+      recalculateAiNamingSummary()
+      scheduleAvailabilityRender()
+    }
+  })
+
+  return { preparedItems, retryCandidates }
 }
 
 async function notifyAiNamingRunFinished({
@@ -6044,14 +6065,20 @@ function formatElapsedTime(elapsedMs: number): string {
   return `${minutes} 分 ${seconds} 秒`
 }
 
-async function retryAiNamingBookmarks(retryCandidates, settings = aiNamingManagerState.settings) {
-  for (const candidate of retryCandidates) {
+async function retryAiNamingBookmarks(retryCandidates: any[], settings = aiNamingManagerState.settings) {
+  let shouldStopRetry = false
+  await runSequentially(retryCandidates, async (candidate) => {
+    if (shouldStopRetry) {
+      return
+    }
     if (!(await waitForAiNamingRun())) {
-      break
+      shouldStopRetry = true
+      return
     }
 
     if (aiNamingState.stopRequested) {
-      break
+      shouldStopRetry = true
+      return
     }
 
     try {
@@ -6065,7 +6092,7 @@ async function retryAiNamingBookmarks(retryCandidates, settings = aiNamingManage
 
     recalculateAiNamingSummary()
     scheduleAvailabilityRender()
-  }
+  })
 
   sortAiNamingResults()
   scheduleAvailabilityRender()
@@ -6746,8 +6773,7 @@ function normalizeAiNamingResponseItems(payload, preparedItems) {
   const preparedItemMap = new Map<string, any>(
     preparedItems.map((item) => [String(item.bookmark.id), item])
   )
-  return payload.items
-    .map((item) => {
+  return payload.items.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((item) => {
       const bookmarkId = String(item?.bookmark_id || '').trim()
       const preparedItem = preparedItemMap.get(bookmarkId)
       if (!preparedItem) {
@@ -6780,24 +6806,23 @@ function normalizeAiNamingResponseItems(payload, preparedItems) {
         confidenceScore: normalizeAiConfidenceScore(item?.confidence),
         reason: String(item?.reason || '').replace(/\s+/g, ' ').trim()
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
-async function mergeAiNamingBatchResults(preparedItems, aiResponseItems, settings = aiNamingManagerState.settings) {
+async function mergeAiNamingBatchResults(preparedItems: any[], aiResponseItems: any[], settings = aiNamingManagerState.settings) {
   const responseMap = new Map(aiResponseItems.map((item) => [String(item.bookmarkId), item]))
-  const failedPreparedItems = []
+  const failedPreparedItems: any[] = []
 
-  for (const preparedItem of preparedItems) {
+  await runSequentially(preparedItems, async (preparedItem) => {
     const bookmark = preparedItem.bookmark
     const modelItem = responseMap.get(String(bookmark.id))
     if (!modelItem) {
       failedPreparedItems.push(preparedItem)
-      continue
+      return
     }
 
     await commitAiNamingResult(bookmark, modelItem, settings, preparedItem)
-  }
+  })
 
   sortAiNamingResults()
   return failedPreparedItems
@@ -6946,10 +6971,7 @@ function normalizeAiResultTextList(values, limit = 8, itemLimit = 48) {
       : []
   const seen = new Set()
 
-  return source
-    .map((value) => normalizeAiResultText(value, itemLimit))
-    .filter(Boolean)
-    .filter((value) => {
+  return source.flatMap((combineValue, combineIndex, combineArray) => { const combinedFlatValue = (value => { const mappedResult = normalizeAiResultText(value, itemLimit); return mappedResult ? [mappedResult] : [] })(combineValue); const combinedFlatItems = Array.isArray(combinedFlatValue) ? combinedFlatValue : [combinedFlatValue]; return combinedFlatItems.flatMap((combinedFlatItem) => ((value) => {
       const key = normalizeText(value)
       if (!key || seen.has(key)) {
         return false
@@ -6957,7 +6979,7 @@ function normalizeAiResultTextList(values, limit = 8, itemLimit = 48) {
 
       seen.add(key)
       return true
-    })
+    })(combinedFlatItem) ? [combinedFlatItem] : []) })
     .slice(0, limit)
 }
 
@@ -7096,15 +7118,13 @@ function buildFolderPickerTreeOptions({
 }): FolderPickerTreeOptionViewModel[] {
   const normalizedQuery = String(query || '').trim()
   const selectedId = String(selectedFolderId || '').trim()
-  const rootOptions = (folderCleanupState.rootNode?.children || [])
-    .filter((node) => !node.url)
-    .flatMap((node) => buildFolderPickerTreeNodeOptions(node, 0, {
+  const rootOptions = (folderCleanupState.rootNode?.children || []).flatMap((combineValue, combineIndex, combineArray) => ((node) => !node.url)(combineValue) ? ((node) => buildFolderPickerTreeNodeOptions(node, 0, {
       disabled,
       expandedFolderIds: getFolderPickerExpandedFolderIds(kind),
       kind,
       query: normalizedQuery,
       selectedFolderId: selectedId
-    }))
+    }))(combineValue) : [])
   const folderOptions = rootOptions.length || !availabilityState.allFolders.length
     ? rootOptions
     : buildFallbackFolderPickerTreeOptions({
@@ -7866,9 +7886,7 @@ function getSelectedAvailabilityResults() {
     ])
   )
 
-  return [...managerState.selectedAvailabilityIds]
-    .map((bookmarkId) => resultMap.get(String(bookmarkId)))
-    .filter(Boolean)
+  return [...managerState.selectedAvailabilityIds].flatMap(bookmarkId => { const mappedResult = resultMap.get(String(bookmarkId)); return mappedResult ? [mappedResult] : [] })
 }
 
 function selectAvailabilityResultsByStatus(status) {
@@ -7927,9 +7945,7 @@ async function retestSelectedAvailabilityResults() {
     return
   }
 
-  const targetBookmarks = selectedResults
-    .map((result) => availabilityState.bookmarkMap.get(String(result.id)) || result)
-    .filter((bookmark) => isCheckableUrl(bookmark?.url))
+  const targetBookmarks = selectedResults.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((result) => availabilityState.bookmarkMap.get(String(result.id)) || result)(combineValue); return ((bookmark) => isCheckableUrl(bookmark?.url))(combinedResult) ? [combinedResult] : [] })
 
   if (!targetBookmarks.length) {
     availabilityState.lastError = '所选书签中没有可重新测试的 http/https 链接。'
@@ -8672,10 +8688,10 @@ async function moveSelectedAvailabilityToFolder(folderId) {
       estimatedChangeCount: selectedResults.length
     })
 
-    for (const result of selectedResults) {
+    await runSequentially(selectedResults, async (result) => {
       await moveBookmark(result.id, folderId)
       movedIds.push(result.id)
-    }
+    })
   } catch (error) {
     moveError = error
   } finally {
@@ -8746,7 +8762,7 @@ async function confirmDeleteFailedBookmarks() {
 }
 
 function removeDeletedResultsFromState(bookmarkIds) {
-  const removedIdSet = new Set(bookmarkIds.map((id) => String(id)).filter(Boolean))
+  const removedIdSet = new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   if (!removedIdSet.size) {
     return
   }
@@ -8886,8 +8902,7 @@ function reconcileCatalogAfterMutation() {
   availabilityState.failedResults = syncBookmarkMetadataForResults(availabilityState.failedResults)
   availabilityState.redirectResults = syncBookmarkMetadataForResults(availabilityState.redirectResults)
   managerState.suppressedResults = syncBookmarkMetadataForResults(managerState.suppressedResults)
-  managerState.currentHistoryEntries = managerState.currentHistoryEntries
-    .map((entry) => {
+  managerState.currentHistoryEntries = managerState.currentHistoryEntries.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry) => {
       const latestBookmark = availabilityState.bookmarkMap.get(String(entry.id))
       if (!latestBookmark) {
         return null
@@ -8899,16 +8914,14 @@ function reconcileCatalogAfterMutation() {
         url: latestBookmark.url,
         path: latestBookmark.path
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 
   repartitionAvailabilityResultsByIgnoreRules()
   availabilityState.redirectedCount = availabilityState.redirectResults.length
 }
 
 function syncBookmarkMetadataForResults(results) {
-  return results
-    .map((result) => {
+  return results.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((result) => {
       const latestBookmark = availabilityState.bookmarkMap.get(String(result.id))
       if (!latestBookmark) {
         return null
@@ -8928,8 +8941,7 @@ function syncBookmarkMetadataForResults(results) {
         normalizedUrl: latestBookmark.normalizedUrl,
         duplicateKey: latestBookmark.duplicateKey
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
 function repartitionAvailabilityResultsByIgnoreRules() {

@@ -6,7 +6,7 @@ import {
 } from './constants.js'
 import { getLocalStorage, setLocalStorage } from './storage.js'
 
-export const INBOX_UNDO_MOVE_WINDOW_MS = 10 * 60 * 1000
+const INBOX_UNDO_MOVE_WINDOW_MS = 10 * 60 * 1000
 export { DEFAULT_INBOX_FOLDER_TITLE } from './constants.js'
 
 export interface InboxSettings {
@@ -125,9 +125,7 @@ export function normalizeInboxState(rawState: unknown): InboxState {
   return {
     version: 1,
     folderId: String(source.folderId || '').trim(),
-    items: items
-      .map(normalizeInboxItem)
-      .filter(Boolean)
+    items: items.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = (normalizeInboxItem)(flatMapValue); return mappedResult ? [mappedResult] : [] })
       .sort((left, right) => Number(right?.createdAt || 0) - Number(left?.createdAt || 0))
       .slice(0, 200) as InboxItem[],
     ...(lastUndoMove ? { lastUndoMove } : {})

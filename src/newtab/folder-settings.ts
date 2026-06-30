@@ -49,7 +49,7 @@ export function normalizeFolderSettingsWithDefault(
   }
 }
 
-export function findDefaultNewTabSourceFolder(
+function findDefaultNewTabSourceFolder(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
 ): chrome.bookmarks.BookmarkTreeNode | null {
   if (!rootNode) {

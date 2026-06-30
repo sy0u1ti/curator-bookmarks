@@ -1,5 +1,7 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button, Card, NumberPop } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Card } from '../../ui/base/Card'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
 import { OPTION_REVEAL_ENTER_CLASS } from './option-layout-classes.js'
@@ -109,7 +111,7 @@ export function IgnoreRules() {
           />
         </div>
       ) : null}
-      {groups.filter((group) => group.rules.length > 0).map((group) => (
+      {groups.flatMap((combineValue, combineIndex, combineArray) => { if (!((group) => group.rules.length > 0)(combineValue)) return []; const combinedResult = ((group) => (
         <div className={IGNORE_RULE_GROUP_CLASS} key={group.kind}>
           <div className={IGNORE_RULE_HEADER_CLASS}>
             <div className={IGNORE_RULE_HEADER_COPY_CLASS}>
@@ -131,7 +133,7 @@ export function IgnoreRules() {
             <IgnoreRuleList kind={group.kind} rules={group.rules} />
           </div>
         </div>
-      ))}
+      ))(combineValue); return [combinedResult] })}
     </>
   )
 }

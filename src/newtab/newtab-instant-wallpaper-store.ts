@@ -119,6 +119,8 @@ export function dispatchNewtabInstantWallpaperView(
     ...instantWallpaperView,
     ...nextView
   }
+  const nextViewKey = mergedView.signature
+  const currentViewKey = instantWallpaperView.signature
 
   if (
     mergedView.backgroundColor === instantWallpaperView.backgroundColor &&
@@ -132,7 +134,7 @@ export function dispatchNewtabInstantWallpaperView(
     mergedView.previewImage === instantWallpaperView.previewImage &&
     mergedView.ready === instantWallpaperView.ready &&
     mergedView.remoteReady === instantWallpaperView.remoteReady &&
-    mergedView.signature === instantWallpaperView.signature &&
+    nextViewKey === currentViewKey &&
     mergedView.size === instantWallpaperView.size
   ) {
     return

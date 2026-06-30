@@ -24,8 +24,9 @@
     "lint": "npm run typecheck",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:popup-search-focus && npm run test:dashboard-virtual && npm run test:dashboard-classes",
+    "test": "npm run test:popup-search-focus && npm run test:popup-session && npm run test:dashboard-virtual && npm run test:dashboard-classes",
     "test:popup-search-focus": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/popup --outDir .tmp-test/popup-search-focus --noEmit false src/popup/popup-search-focus.ts src/popup/popup-search-focus.test.ts && node .tmp-test/popup-search-focus/popup-search-focus.test.js",
+    "test:popup-session": "tsc --target ES2022 --module ESNext --moduleResolution bundler --jsx react-jsx --skipLibCheck --rootDir src --outDir .tmp-test/popup-session --noEmit false src/popup/popup-smart-classifier-status.test.ts src/popup/popup-controller-store.test.ts src/popup/popup-critical-shell.test.ts && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-smart-classifier-status.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-controller-store.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-critical-shell.test.js",
     "test:dashboard-virtual": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/options/sections --outDir .tmp-test/dashboard-virtual --noEmit false src/options/sections/dashboard-virtual.ts src/options/sections/dashboard-virtual.test.ts && node .tmp-test/dashboard-virtual/dashboard-virtual.test.js",
     "test:dashboard-classes": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/options/components --outDir .tmp-test/dashboard-classes --noEmit false src/options/components/option-layout-classes.ts src/options/components/dashboard-classes.ts src/options/components/dashboard-classes.test.ts && node .tmp-test/dashboard-classes/dashboard-classes.test.js"
   },
@@ -38,7 +39,6 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
-    "ai-elements": "^1.9.0",
     "tailwindcss": "^4.3.0",
     "typescript": "^5.6.3",
     "vite": "6.4.2"

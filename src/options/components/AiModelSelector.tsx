@@ -1,19 +1,6 @@
 import { CheckIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import {
-  ModelSelector,
-  ModelSelectorContent,
-  ModelSelectorEmpty,
-  ModelSelectorGroup,
-  ModelSelectorInput,
-  ModelSelectorItem,
-  ModelSelectorList,
-  ModelSelectorLogo,
-  ModelSelectorLogoGroup,
-  ModelSelectorName,
-  ModelSelectorTag,
-  ModelSelectorTrigger
-} from '../../ui'
+import { ModelSelector, ModelSelectorContent, ModelSelectorEmpty, ModelSelectorGroup, ModelSelectorInput, ModelSelectorItem, ModelSelectorList, ModelSelectorLogo, ModelSelectorLogoGroup, ModelSelectorName, ModelSelectorTag, ModelSelectorTrigger } from '../../ui/ai/ModelSelector'
 import {
   type AiModelSelectorState
 } from './ai-model-selector-types.js'

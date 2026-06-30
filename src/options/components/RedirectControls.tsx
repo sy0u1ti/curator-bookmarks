@@ -1,4 +1,6 @@
-import { Button, TextSwap, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { TextSwap } from '../../ui/motion/TextSwap'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectControlsState } from './redirect-controls-store.js'
 

@@ -33,7 +33,7 @@ const DASHBOARD_FRAME_VISIBLE_CLASS = 'opacity-100'
 const DASHBOARD_FRAME_LOADING_CLASS = 'opacity-0'
 const DASHBOARD_CARD_CLASS = 'rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none'
 
-export function DashboardOverlay({
+function DashboardOverlay({
   errorMessage,
   frameSrc,
   open,

@@ -2,7 +2,7 @@ import {
   type AiAnalysisDecisionMetricsState,
   useAiAnalysisDecisionMetrics
 } from './ai-analysis-status-store.js'
-import { NumberPop } from '../../ui'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import { AI_ANALYSIS_METRIC_LABEL_CLASS } from './ai-analysis-classes.js'
 
 const metrics: Array<{

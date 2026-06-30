@@ -1,6 +1,6 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button } from '../../ui'
-import { CheckboxControl } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { CheckboxControl } from '../../ui/base/Checkbox'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectResultsState } from './redirect-results-store.js'
@@ -81,8 +81,9 @@ function RedirectResultCard({
     >
       <div className={REDIRECT_CARD_HEAD_CLASS}>
         <div className={REDIRECT_CARD_HEAD_LEFT_CLASS}>
-          <label className={REDIRECT_CHECK_CLASS}>
+          <label className={REDIRECT_CHECK_CLASS} htmlFor={`redirect-result-${result.id}`}>
             <CheckboxControl
+              id={`redirect-result-${result.id}`}
               aria-label={selectionLabel}
               checked={selected}
               className={OPTION_RESULT_CHECKBOX_CLASS}

@@ -1,4 +1,4 @@
-export const motionDurations = {
+const motionDurations = {
   fast: 0.2,
   base: 0.26,
   slow: 0.34,
@@ -6,8 +6,8 @@ export const motionDurations = {
   modalClose: 0.22
 }
 
-export const motionEase = [0.22, 1, 0.36, 1] as const
-export const modalEase = [0.22, 1, 0.36, 1] as const
+const motionEase = [0.22, 1, 0.36, 1] as const
+const modalEase = [0.22, 1, 0.36, 1] as const
 
 export const panelTransitions = {
   dialog: {

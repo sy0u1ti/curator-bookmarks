@@ -1,4 +1,5 @@
-import { Button, NumberPop } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import { handleResultsPagination } from '../options-controller'
 import { useResultsPaginationState } from './results-pagination-store.js'
 import {

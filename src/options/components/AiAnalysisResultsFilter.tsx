@@ -1,6 +1,6 @@
-import { Button } from '../../ui'
-import { Input } from '../../ui'
-import { Select, type SelectOption } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
+import { Select, type SelectOption } from '../../ui/base/Select'
 import { handleAiResultsFilterChange } from '../options-controller'
 import { AI_ANALYSIS_SMALL_BUTTON_CLASS } from './ai-analysis-classes.js'
 import { useAiAnalysisResultsFilter } from './ai-analysis-status-store.js'
@@ -41,9 +41,10 @@ export function AiAnalysisResultsFilter() {
   return (
     <div className={AI_RESULTS_FILTER_ROW_CLASS}>
       <div className={AI_RESULTS_FILTER_ACTIONS_CLASS}>
-        <label className={AI_RESULTS_FILTER_FIELD_CLASS}>
+        <label className={AI_RESULTS_FILTER_FIELD_CLASS} htmlFor="ai-analysis-results-filter-query">
           <span className={AI_RESULTS_FILTER_LABEL_CLASS}>文件夹或域名</span>
           <Input
+            id="ai-analysis-results-filter-query"
             className={AI_RESULTS_FILTER_QUERY_CLASS}
             type="search"
             spellCheck={false}

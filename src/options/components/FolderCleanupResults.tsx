@@ -1,4 +1,5 @@
-import { Button, NumberPop } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import type {
   FolderCleanupSplitUndo,
   FolderCleanupSuggestion

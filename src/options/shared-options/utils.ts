@@ -5,6 +5,15 @@ interface PathTitleComparable {
   title?: string
 }
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false
+})
+
 export function isInteractionLocked(): boolean {
   return (
     availabilityState.deleting ||
@@ -30,12 +39,5 @@ export function syncSelectionSet(selectionSet: Set<unknown>, validIds: Set<strin
 }
 
 export function formatDateTime(timestamp: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).format(timestamp)
+  return DATE_TIME_FORMATTER.format(timestamp)
 }

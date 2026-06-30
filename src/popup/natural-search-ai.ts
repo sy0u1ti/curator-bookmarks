@@ -60,8 +60,10 @@ function loadAiSettingsModule(): Promise<typeof import('../options/sections/ai-s
 }
 
 export async function loadNaturalSearchAiProviderSettings(): Promise<AiNamingSettings> {
-  const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
-  const { normalizeAiNamingSettings } = await loadAiSettingsModule()
+  const [stored, { normalizeAiNamingSettings }] = await Promise.all([
+    getLocalStorage([STORAGE_KEYS.aiProviderSettings]),
+    loadAiSettingsModule()
+  ])
   return normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
 }
 
@@ -282,17 +284,17 @@ async function getMissingPermissionOrigins(origins: string[]): Promise<string[]>
   } catch {
   }
 
-  const missingOrigins: string[] = []
-  for (const origin of uniqueOrigins) {
+  const missingOriginResults = await Promise.all(uniqueOrigins.map(async (origin) => {
     try {
       if (!(await containsPermissions({ origins: [origin] }))) {
-        missingOrigins.push(origin)
+        return origin
       }
     } catch {
-      missingOrigins.push(origin)
+      return origin
     }
-  }
-  return missingOrigins
+    return ''
+  }))
+  return missingOriginResults.filter(Boolean)
 }
 
 function createNaturalSearchPermissionRequiredError(
@@ -303,7 +305,7 @@ function createNaturalSearchPermissionRequiredError(
     naturalSearchPermissionRequest?: { origins: string[] }
   }
   error.naturalSearchPermissionRequest = {
-    origins: [...new Set(origins.map((origin) => String(origin || '')).filter(Boolean))]
+    origins: [...new Set(origins.flatMap(origin => { const mappedResult = String(origin || ''); return mappedResult ? [mappedResult] : [] }))]
   }
   return error
 }

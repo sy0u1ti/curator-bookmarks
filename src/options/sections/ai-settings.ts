@@ -89,10 +89,7 @@ export function normalizeModelIdList(rawModels: unknown, limit = 40): string[] {
       : []
   const seen = new Set<string>()
 
-  return values
-    .map((value) => String(value || '').trim())
-    .filter(Boolean)
-    .filter((value) => {
+  return values.flatMap((combineValue, combineIndex, combineArray) => { const combinedFlatValue = (value => { const mappedResult = String(value || '').trim(); return mappedResult ? [mappedResult] : [] })(combineValue); const combinedFlatItems = Array.isArray(combinedFlatValue) ? combinedFlatValue : [combinedFlatValue]; return combinedFlatItems.flatMap((combinedFlatItem) => ((value) => {
       const normalized = normalizeText(value)
       if (!normalized || seen.has(normalized)) {
         return false
@@ -100,7 +97,7 @@ export function normalizeModelIdList(rawModels: unknown, limit = 40): string[] {
 
       seen.add(normalized)
       return true
-    })
+    })(combinedFlatItem) ? [combinedFlatItem] : []) })
     .slice(0, Math.max(1, limit))
 }
 

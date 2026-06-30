@@ -9,8 +9,7 @@ import {
 } from '../shared/content-snapshot-search.js'
 import type { BookmarkRecord } from '../shared/types.js'
 import type {
-  BookmarkCatalogSnapshot,
-  BookmarkCatalogSnapshotState
+  BookmarkCatalogSnapshot
 } from '../shared/bookmark-catalog.js'
 import type { CooperativeEnrichOptions } from '../shared/search/pinyin.js'
 import {
@@ -25,7 +24,7 @@ function loadPinyinModule(): Promise<typeof import('../shared/search/pinyin.js')
   return pinyinModulePromise
 }
 
-export const POPUP_SNAPSHOT_FULL_TEXT_LIMIT = 600
+const POPUP_SNAPSHOT_FULL_TEXT_LIMIT = 600
 
 export interface PopupSearchIndexSource {
   bookmarks: BookmarkRecord[]
@@ -58,8 +57,10 @@ export function buildLightPopupSearchIndex({
 }
 
 export async function loadPopupSearchIndexSnapshotState(): Promise<PopupSearchIndexSnapshotState> {
-  const settings = await loadContentSnapshotSettings().catch(() => null)
-  const index = await loadContentSnapshotIndex().catch(() => null)
+  const [settings, index] = await Promise.all([
+    loadContentSnapshotSettings().catch(() => null),
+    loadContentSnapshotIndex().catch(() => null)
+  ])
   return { settings, index }
 }
 
@@ -84,38 +85,6 @@ export function shouldWarmPopupSnapshotFullText(
   )
 }
 
-export async function enrichPopupSearchIndexWithSnapshotFullText({
-  bookmarks,
-  tagIndex,
-  snapshotIndex,
-  includeFullText = true
-}: PopupSearchIndexSource): Promise<PopupSearchBookmark[]> {
-  if (!snapshotIndex || !includeFullText) {
-    return buildLightPopupSearchIndex({ bookmarks, tagIndex, snapshotIndex })
-  }
-
-  const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
-  const snapshotSearchMap = await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
-    includeFullText: true,
-    maxRecords: POPUP_SNAPSHOT_FULL_TEXT_LIMIT
-  }).catch(() => new Map<string, string>())
-  const tagRecords = tagIndex?.records || {}
-
-  return bookmarks.map((bookmark) => {
-    const indexed = indexBookmarkForSearch(
-      bookmark,
-      tagRecords[bookmark.id] || null,
-      snapshotIndex.records?.[bookmark.id] || null,
-      { includeFullText: true }
-    )
-    const snapshotSearchText = snapshotSearchMap.get(bookmark.id)
-    if (snapshotSearchText) {
-      indexed.searchText = `${indexed.searchText} ${snapshotSearchText}`.trim()
-    }
-    return indexed
-  })
-}
-
 export function buildLightPopupSearchIndexFromCatalog(
   catalog: BookmarkCatalogSnapshot
 ): PopupSearchBookmark[] {
@@ -135,17 +104,6 @@ export function patchLightPopupSearchIndexFromCatalog(
   })
 }
 
-export async function enrichPopupSearchIndexWithSnapshotFullTextFromCatalog(
-  catalog: BookmarkCatalogSnapshot
-): Promise<PopupSearchBookmark[]> {
-  return enrichPopupSearchIndexWithSnapshotFullText({
-    bookmarks: catalog.extracted.bookmarks,
-    tagIndex: catalog.tagIndex,
-    snapshotIndex: catalog.snapshotState?.index || null,
-    includeFullText: true
-  })
-}
-
 export async function enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog(
   indexed: PopupSearchBookmark[],
   catalog: BookmarkCatalogSnapshot,
@@ -161,12 +119,16 @@ export async function enrichExistingPopupSearchIndexWithSnapshotFullTextFromCata
     return patchLightPopupSearchIndexFromCatalog(indexed, catalog)
   }
 
+  if (options.isActive && !options.isActive()) {
+    return 0
+  }
   const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
   const snapshotSearchMap = await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
     includeFullText: true,
     maxRecords: POPUP_SNAPSHOT_FULL_TEXT_LIMIT
   }).catch(() => new Map<string, string>())
-  if (options.isActive && !options.isActive()) {
+  const searchIndexStillActive = !(options.isActive && !options.isActive())
+  if (!searchIndexStillActive) {
     return 0
   }
 

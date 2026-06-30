@@ -1,4 +1,5 @@
-import { Button, Icon } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Icon } from '../../ui/icons/Icon'
 import { handleShortcutAction } from '../options-controller'
 import { AI_SETTINGS_TITLE_CLASS } from './ai-settings-card-classes.js'
 import { ShortcutList } from './ShortcutList.js'

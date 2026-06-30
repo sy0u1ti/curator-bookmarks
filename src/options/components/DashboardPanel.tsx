@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useEffect,
   memo,
+  startTransition,
   useReducer,
   useRef,
   useState,
@@ -14,7 +15,6 @@ import {
   type PointerEvent as ReactPointerEvent,
   type RefObject
 } from 'react'
-import { flushSync } from 'react-dom'
 import { Button } from '../../ui/Button'
 import { Icon } from '../../ui/icons/Icon'
 import { Input } from '../../ui/Input'
@@ -772,7 +772,7 @@ const DashboardResultsGrid = memo(function DashboardResultsGrid({
         window.cancelAnimationFrame(scrollFrameRef.current)
         scrollFrameRef.current = 0
       }
-      flushSync(() => {
+      startTransition(() => {
         dispatchResultsScroll(scrollTop)
       })
       return

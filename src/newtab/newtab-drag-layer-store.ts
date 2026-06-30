@@ -61,7 +61,7 @@ function emitNewtabDragLayerChange(): void {
   listeners.forEach((listener) => listener())
 }
 
-export function patchNewtabDragLayerView(
+function patchNewtabDragLayerView(
   patcher: (view: NewtabDragLayerView) => NewtabDragLayerView
 ): void {
   dragLayerView = patcher(dragLayerView)

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
-import { Icon, Surface, type IconName, type SurfaceProps } from '../index'
+import { Surface, type SurfaceProps } from '../base/Surface'
 import { cx } from '../base/utils'
+import { Icon, type IconName } from '../icons/Icon'
 
 export interface AiProviderCardProps extends Omit<SurfaceProps, 'title'> {
   title: ReactNode

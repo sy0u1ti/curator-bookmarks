@@ -266,15 +266,6 @@ export function SwitchControl({
   )
 }
 
-export function Switch({ className, label, children, thumbClassName, ...props }: SwitchProps) {
-  return (
-    <label className="inline-flex items-center gap-3 text-sm text-ds-text-primary">
-      <SwitchControl className={className} thumbClassName={thumbClassName} {...props} />
-      {label ?? children}
-    </label>
-  )
-}
-
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {
   if (!ref) {
     return

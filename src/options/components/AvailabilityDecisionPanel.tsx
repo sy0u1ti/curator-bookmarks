@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { StatusBusyLoadingLabel } from './LoadingLabel.js'
-import { useMotionEntrance } from '../../ui'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { useAvailabilityProgress } from './availability-overview-store.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 

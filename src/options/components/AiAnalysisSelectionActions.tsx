@@ -1,8 +1,9 @@
-import { Button, TextSwap, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { TextSwap } from '../../ui/motion/TextSwap'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import {
   AI_ANALYSIS_CONFIRM_BUTTON_ACTIVE_CLASS,
   AI_ANALYSIS_CONFIRM_ICON_CLASS,
-  AI_ANALYSIS_PRIMARY_BUTTON_CLASS,
   AI_ANALYSIS_SELECTION_GROUP_CLASS,
   AI_ANALYSIS_SMALL_BUTTON_CLASS
 } from './ai-analysis-classes.js'

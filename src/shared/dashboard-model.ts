@@ -15,6 +15,15 @@ import type { BookmarkRecord, FolderRecord } from './types.js'
 
 export type DashboardSortKey = 'date-desc' | 'date-asc' | 'title-asc' | 'domain-asc'
 
+const DASHBOARD_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false
+})
+
 export interface DashboardFilters {
   query?: string
   parsedQuery?: ParsedSearchQuery | null
@@ -138,7 +147,7 @@ export function buildDashboardModel({
     }
   })
 
-  const domainSet = new Set(items.map((item) => item.domain).filter(Boolean))
+  const domainSet = new Set(items.flatMap(item => { const mappedResult = item.domain; return mappedResult ? [mappedResult] : [] }))
   return {
     items,
     folders: folders.slice().sort(compareByPathTitle),
@@ -153,31 +162,6 @@ export function buildDashboardModel({
 export function filterDashboardItems(items: DashboardItem[], filters: DashboardFilters = {}): DashboardItem[] {
   const predicate = createDashboardItemPredicate(filters)
   return items.filter(predicate)
-}
-
-export function filterAndSortDashboardItems(
-  items: DashboardItem[],
-  filters: DashboardFilters = {},
-  options: DashboardFilterSortOptions = {}
-): DashboardItem[] {
-  const limit = Math.floor(Number(options.limit))
-  if (!Number.isFinite(limit) || limit <= 0) {
-    return sortDashboardItems(filterDashboardItems(items, filters), filters.sortKey)
-  }
-
-  const predicate = createDashboardItemPredicate(filters)
-  const comparator = getDashboardItemComparator(filters.sortKey)
-  const topItems: DashboardItem[] = []
-
-  for (const item of items) {
-    if (!predicate(item)) {
-      continue
-    }
-
-    retainTopDashboardItem(topItems, item, limit, comparator)
-  }
-
-  return topItems.sort(comparator)
 }
 
 function createDashboardItemPredicate(filters: DashboardFilters = {}): (item: DashboardItem) => boolean {
@@ -240,29 +224,6 @@ export function sortDashboardItems(
   return items.slice().sort(getDashboardItemComparator(sortKey))
 }
 
-function retainTopDashboardItem(
-  items: DashboardItem[],
-  item: DashboardItem,
-  limit: number,
-  comparator: (left: DashboardItem, right: DashboardItem) => number
-): void {
-  if (items.length < limit) {
-    items.push(item)
-    return
-  }
-
-  let worstIndex = 0
-  for (let index = 1; index < items.length; index += 1) {
-    if (comparator(items[index], items[worstIndex]) > 0) {
-      worstIndex = index
-    }
-  }
-
-  if (comparator(item, items[worstIndex]) < 0) {
-    items[worstIndex] = item
-  }
-}
-
 function getDashboardItemComparator(
   sortKey: DashboardSortKey = 'date-desc'
 ): (left: DashboardItem, right: DashboardItem) => number {
@@ -283,7 +244,7 @@ function getDashboardItemComparator(
   }
 }
 
-export function getDashboardFolderTargets(folders: FolderRecord[]): DashboardFolderTarget[] {
+function getDashboardFolderTargets(folders: FolderRecord[]): DashboardFolderTarget[] {
   return folders
     .filter((folder) => String(folder.id) !== ROOT_ID)
     .slice()
@@ -312,7 +273,7 @@ export function buildDashboardFolderBookmarkCounts(items: Pick<DashboardItem, 'a
   return counts
 }
 
-export function getDashboardTopFolder(
+function getDashboardTopFolder(
   bookmark: BookmarkRecord,
   folderMap: Map<string, FolderRecord>
 ): FolderRecord | null {
@@ -320,7 +281,7 @@ export function getDashboardTopFolder(
   return folderMap.get(ancestorIds[0] || '') || folderMap.get(String(bookmark.parentId || '')) || null
 }
 
-export function getDashboardDateMeta(value: unknown): { key: string; label: string; known: boolean } {
+function getDashboardDateMeta(value: unknown): { key: string; label: string; known: boolean } {
   const timestamp = Number(value)
   if (!Number.isFinite(timestamp) || timestamp <= 0) {
     return {
@@ -348,15 +309,15 @@ export function getDashboardDateMeta(value: unknown): { key: string; label: stri
   }
 }
 
-export function normalizeDashboardTextList(value: unknown): string[] {
+function normalizeDashboardTextList(value: unknown): string[] {
   return Array.isArray(value)
-    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    ? value.flatMap(item => { const mappedResult = String(item || '').trim(); return mappedResult ? [mappedResult] : [] })
     : []
 }
 
 function normalizeDashboardIdList(value: unknown): string[] {
   return Array.isArray(value)
-    ? [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))]
+    ? [...new Set(value.flatMap(item => { const mappedResult = String(item || '').trim(); return mappedResult ? [mappedResult] : [] }))]
     : []
 }
 
@@ -392,7 +353,7 @@ function compareByPathTitle(left: { path?: string; title?: string }, right: { pa
 function getDashboardRootFolderOrder(item: { path?: string; title?: string; id?: string }): number {
   const id = String(item.id || '').trim()
   const path = String(item.path || item.title || '').trim()
-  const rootTitle = path.split(/\s*(?:\/|>|›|»|\\)\s*/g).map((segment) => segment.trim()).filter(Boolean)[0] || path
+  const rootTitle = path.split(/\s*(?:\/|>|›|»|\\)\s*/g).flatMap(segment => { const mappedResult = segment.trim(); return mappedResult ? [mappedResult] : [] })[0] || path
 
   if (id === OTHER_BOOKMARKS_ID || rootTitle === '其他书签') {
     return 2
@@ -406,12 +367,5 @@ function getDashboardRootFolderOrder(item: { path?: string; title?: string; id?:
 }
 
 function formatDashboardDateTime(timestamp: number): string {
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).format(timestamp)
+  return DASHBOARD_DATE_TIME_FORMATTER.format(timestamp)
 }

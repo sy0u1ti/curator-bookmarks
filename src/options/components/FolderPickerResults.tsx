@@ -1,5 +1,7 @@
 import { useEffect, useRef, type CSSProperties, type RefObject } from 'react'
-import { Button, Icon, cx } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { cx } from '../../ui/base/utils'
+import { Icon } from '../../ui/icons/Icon'
 import { normalizeText } from '../../shared/text.js'
 import { handleFolderPickerAction } from '../options-controller'
 import { useFolderPickerResultsState } from './folder-picker-results-store.js'
@@ -35,7 +37,11 @@ export function FolderPickerResults({
   searchInputRef?: RefObject<HTMLInputElement | null>
 }) {
   const state = useFolderPickerResultsState(kind)
-  const optionRefs = useRef(new Map<string, HTMLElement>())
+  const optionRefs = useRef<Map<string, HTMLElement> | null>(null)
+  if (optionRefs.current === null) {
+    optionRefs.current = new Map()
+  }
+  const optionRefMap = optionRefs.current
 
   useEffect(() => {
     const focusId = state.focusRequestId
@@ -44,17 +50,17 @@ export function FolderPickerResults({
     }
 
     window.setTimeout(() => {
-      optionRefs.current.get(focusId)?.focus()
+      optionRefMap.get(focusId)?.focus()
     }, 0)
-  }, [state.focusRequestId])
+  }, [optionRefMap, state.focusRequestId])
 
   const setOptionRef = (folderId: string, button: HTMLElement | null) => {
     if (button) {
-      optionRefs.current.set(folderId, button)
+      optionRefMap.set(folderId, button)
       return
     }
 
-    optionRefs.current.delete(folderId)
+    optionRefMap.delete(folderId)
   }
 
   const options = state.treeOptions || []
@@ -218,9 +224,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
 function splitHighlightText(text: string, query: string): Array<{ highlight: boolean; text: string }> {
   const safeText = String(text || '')
   const terms = normalizeText(query)
-    .split(/\s+/g)
-    .map((term) => term.trim())
-    .filter(Boolean)
+    .split(/\s+/g).flatMap(term => { const mappedResult = term.trim(); return mappedResult ? [mappedResult] : [] })
 
   if (!terms.length || !safeText) {
     return [{ highlight: false, text: safeText }]

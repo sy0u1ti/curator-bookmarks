@@ -229,7 +229,7 @@ export const EMPTY_POPUP_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
   recommendations: [],
   saved: false,
   saving: false,
-  status: 'page-loading',
+  status: 'idle',
   suggestedTitle: ''
 }
 
@@ -276,20 +276,41 @@ const popupViewStoreListeners = new Set<() => void>()
 const popupContentChangeListeners = new Set<(detail: PopupContentChangeDetail) => void>()
 let popupActionHandlers: PopupActionHandlers = {}
 
-let popupViewStoreSnapshot: PopupViewStoreSnapshot = {
-  autoAnalyzeStatus: EMPTY_POPUP_AUTO_ANALYZE_STATUS,
-  chrome: EMPTY_POPUP_CHROME_VIEW,
-  content: EMPTY_POPUP_CONTENT_CHANGE_DETAIL,
-  folderPickers: {
-    edit: getEmptyPopupFolderPickerState('edit'),
-    move: getEmptyPopupFolderPickerState('move'),
-    smart: getEmptyPopupFolderPickerState('smart')
-  },
-  modals: EMPTY_POPUP_MODALS_VIEW,
-  searchChips: [],
-  searchFocusRequest: { id: 0, select: false },
-  smartClassifier: EMPTY_POPUP_SMART_CLASSIFIER,
-  toasts: EMPTY_POPUP_TOASTS
+let popupViewStoreSnapshot: PopupViewStoreSnapshot = createInitialPopupViewStoreSnapshot()
+
+function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
+  return {
+    autoAnalyzeStatus: { ...EMPTY_POPUP_AUTO_ANALYZE_STATUS },
+    chrome: {
+      ...EMPTY_POPUP_CHROME_VIEW,
+      search: { ...EMPTY_POPUP_CHROME_VIEW.search }
+    },
+    content: {
+      preserveScroll: EMPTY_POPUP_CONTENT_CHANGE_DETAIL.preserveScroll,
+      state: { ...EMPTY_POPUP_CONTENT_CHANGE_DETAIL.state }
+    },
+    folderPickers: {
+      edit: getEmptyPopupFolderPickerState('edit'),
+      move: getEmptyPopupFolderPickerState('move'),
+      smart: getEmptyPopupFolderPickerState('smart')
+    },
+    modals: {
+      ...EMPTY_POPUP_MODALS_VIEW,
+      aiProvider: { ...EMPTY_POPUP_MODALS_VIEW.aiProvider },
+      delete: { ...EMPTY_POPUP_MODALS_VIEW.delete },
+      edit: { ...EMPTY_POPUP_MODALS_VIEW.edit },
+      move: { ...EMPTY_POPUP_MODALS_VIEW.move },
+      smartFolder: { ...EMPTY_POPUP_MODALS_VIEW.smartFolder }
+    },
+    searchChips: [],
+    searchFocusRequest: { id: 0, select: false },
+    smartClassifier: {
+      ...EMPTY_POPUP_SMART_CLASSIFIER,
+      permissionOrigins: [],
+      recommendations: []
+    },
+    toasts: [...EMPTY_POPUP_TOASTS]
+  }
 }
 
 function subscribePopupViewStore(listener: () => void): () => void {
@@ -307,6 +328,16 @@ function updatePopupViewStore(nextSnapshot: Partial<PopupViewStoreSnapshot>): vo
     ...nextSnapshot
   }
   emitPopupViewStoreChange()
+}
+
+export function resetPopupViewStore(): void {
+  popupViewStoreSnapshot = createInitialPopupViewStoreSnapshot()
+  emitPopupViewStoreChange()
+  popupContentChangeListeners.forEach((listener) => listener(popupViewStoreSnapshot.content))
+}
+
+export function getPopupSmartClassifierSnapshot(): PopupSmartClassifierViewModel {
+  return popupViewStoreSnapshot.smartClassifier
 }
 
 export function subscribePopupContentChange(listener: (detail: PopupContentChangeDetail) => void): () => void {

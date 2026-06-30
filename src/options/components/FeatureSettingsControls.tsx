@@ -1,6 +1,6 @@
-import { AiProviderCard } from '../../ui'
-import { SwitchControl } from '../../ui'
-import { Tooltip } from '../../ui'
+import { AiProviderCard } from '../../ui/ai/AiProviderCard'
+import { SwitchControl } from '../../ui/base/Switch'
+import { Tooltip } from '../../ui/base/Tooltip'
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_CARD_CLASS,

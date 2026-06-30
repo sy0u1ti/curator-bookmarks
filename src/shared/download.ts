@@ -1,4 +1,4 @@
-export function downloadBlob(filename: string, blob: Blob): void {
+function downloadBlob(filename: string, blob: Blob): void {
   if (typeof document === 'undefined') {
     throw new Error('Download is unavailable.')
   }

@@ -45,9 +45,7 @@ import {
   buildDashboardFolderBookmarkCounts,
   buildDashboardModel,
   filterDashboardItems,
-  sortDashboardItems,
   type DashboardFilters,
-  type DashboardFolderTarget,
   type DashboardItem,
   type DashboardModel,
   type DashboardSortKey
@@ -597,9 +595,7 @@ export function applyNewTabSpeedDialStateMessage(
   }
 
   dashboardState.speedDialPinnedIds = new Set(
-    payload.pinnedIds
-      .map((id) => String(id || '').trim())
-      .filter(Boolean)
+    payload.pinnedIds.flatMap(id => { const mappedResult = String(id || '').trim(); return mappedResult ? [mappedResult] : [] })
   )
   renderDashboardSection()
   return true
@@ -765,9 +761,7 @@ export function shouldResetDashboardVirtualScrollForFilterChange({
 }
 
 export function getSelectedDashboardBookmarks(): BookmarkRecord[] {
-  return [...dashboardState.selectedIds]
-    .map((id) => availabilityState.bookmarkMap.get(String(id)))
-    .filter(Boolean)
+  return [...dashboardState.selectedIds].flatMap(id => { const mappedResult = availabilityState.bookmarkMap.get(String(id)); return mappedResult ? [mappedResult] : [] })
 }
 
 function applyDashboardSelection(bookmarkId: string, checked: boolean): boolean {
@@ -853,11 +847,6 @@ export function syncDashboardSelectionOnly(changedIds?: Set<string>): void {
   }
   renderDashboardSelectionBar(visibleItems)
   renderDashboardCards(visibleItems)
-}
-
-function syncDashboardCardMenuOnly(changedIds?: Set<string>): void {
-  void changedIds
-  renderDashboardSection()
 }
 
 export function __resetDashboardSearchCachesForTest(): void {
@@ -1867,13 +1856,7 @@ export async function moveSelectedDashboardBookmarks(
       estimatedChangeCount: selectedBookmarks.length
     })
 
-    for (const bookmark of selectedBookmarks) {
-      if (String(bookmark.parentId || '') === folderId) {
-        continue
-      }
-      await moveBookmark(bookmark.id, folderId)
-      movedIds.push(bookmark.id)
-    }
+    await moveDashboardBookmarksSequentially(selectedBookmarks, folderId, movedIds)
   } catch (error) {
     moveError = error
   } finally {
@@ -1898,6 +1881,22 @@ export async function moveSelectedDashboardBookmarks(
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+function moveDashboardBookmarksSequentially(
+  selectedBookmarks: BookmarkRecord[],
+  folderId: string,
+  movedIds: string[]
+): Promise<void> {
+  return selectedBookmarks.reduce<Promise<void>>((chain, bookmark) => {
+    return chain.then(async () => {
+      if (String(bookmark.parentId || '') === folderId) {
+        return
+      }
+      await moveBookmark(bookmark.id, folderId)
+      movedIds.push(bookmark.id)
+    })
+  }, Promise.resolve())
 }
 
 export async function moveSingleDashboardBookmark(
@@ -2619,8 +2618,8 @@ async function toggleDashboardNaturalSearch(): Promise<void> {
   const enabled = !dashboardState.naturalSearchEnabled
 
   if (enabled) {
-    await refreshDashboardNaturalSearchAiConfiguredState()
-    if (!dashboardState.naturalSearchAiConfigured) {
+    const naturalSearchAiConfigured = await refreshDashboardNaturalSearchAiConfiguredState()
+    if (!naturalSearchAiConfigured) {
       dashboardState.naturalSearchEnabled = false
       dashboardState.naturalSearchError = ''
       dashboardState.naturalSearchPlan = null
@@ -2653,8 +2652,8 @@ async function toggleDashboardNaturalSearch(): Promise<void> {
   markDashboardVirtualFilterChange('query')
   scheduleDashboardSectionRender()
   requestDashboardSearchFocus()
-  await prepareDashboardNaturalSearchAi()
-  if (!dashboardState.naturalSearchEnabled) {
+  const naturalSearchStillEnabled = await prepareDashboardNaturalSearchAi()
+  if (!naturalSearchStillEnabled) {
     renderDashboardSearchTools()
     return
   }
@@ -2663,7 +2662,7 @@ async function toggleDashboardNaturalSearch(): Promise<void> {
   scheduleDashboardSectionRender()
 }
 
-async function prepareDashboardNaturalSearchAi(): Promise<void> {
+async function prepareDashboardNaturalSearchAi(): Promise<boolean> {
   try {
     const naturalSearchAi = await loadDashboardNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
@@ -2674,7 +2673,7 @@ async function prepareDashboardNaturalSearchAi(): Promise<void> {
       dashboardState.naturalSearchError = ''
       setDashboardStatus('请配置 AI 渠道。')
       openDashboardAiProviderSettings()
-      return
+      return false
     }
 
     dashboardState.naturalSearchAiConfigured = true
@@ -2684,15 +2683,19 @@ async function prepareDashboardNaturalSearchAi(): Promise<void> {
   } catch {
     dashboardState.naturalSearchError = 'AI 未就绪，请检查 AI 渠道配置或授权。'
   }
+  return dashboardState.naturalSearchEnabled
 }
 
-async function refreshDashboardNaturalSearchAiConfiguredState(): Promise<void> {
+async function refreshDashboardNaturalSearchAiConfiguredState(): Promise<boolean> {
   try {
     const naturalSearchAi = await loadDashboardNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
-    dashboardState.naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
+    const naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
+    dashboardState.naturalSearchAiConfigured = naturalSearchAiConfigured
+    return naturalSearchAiConfigured
   } catch {
     dashboardState.naturalSearchAiConfigured = false
+    return false
   } finally {
     dashboardState.naturalSearchAiConfigChecked = true
   }
@@ -2740,10 +2743,10 @@ async function resolveDashboardNaturalSearch(
   renderDashboardSearchTools()
 
   try {
-    const naturalSearch = await loadDashboardNaturalSearchModule()
     if (!isCurrentDashboardNaturalSearchRequest(controller, normalizedQuery)) {
       return
     }
+    const naturalSearch = await loadDashboardNaturalSearchModule()
 
     const effectiveLocalPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
     const naturalSearchAi = await loadDashboardNaturalSearchAiModule()
@@ -2769,11 +2772,11 @@ async function resolveDashboardNaturalSearch(
       signal: controller.signal
     })
     dashboardState.naturalSearchError = ''
-
-    const results = await searchDashboardNaturalPlan(plan)
     if (!isCurrentDashboardNaturalSearchRequest(controller, normalizedQuery)) {
       return
     }
+
+    const results = await searchDashboardNaturalPlan(plan)
 
     dashboardState.naturalSearchPlan = plan
     dashboardNaturalSearchCache.set(cacheKey, { plan, results })
@@ -3162,9 +3165,7 @@ function getCachedDashboardFolderBookmarkCounts(model: DashboardModel): Map<stri
 
 function getDashboardFolderPathDepth(path: string): number {
   return String(path || '')
-    .split(/\s*(?:\/|>|›|»|\\)\s*/g)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
+    .split(/\s*(?:\/|>|›|»|\\)\s*/g).flatMap(segment => { const mappedResult = segment.trim(); return mappedResult ? [mappedResult] : [] })
     .length
 }
 

@@ -229,28 +229,40 @@ export async function searchBookmarksCooperatively(
   )
   const results: PopupSearchResult[] = []
 
-  for (let index = 0; index < candidates.length; index += SEARCH_CHUNK_SIZE) {
-    assertSearchActive(options)
-    const end = Math.min(index + SEARCH_CHUNK_SIZE, candidates.length)
-
-    for (let itemIndex = index; itemIndex < end; itemIndex += 1) {
-      const bookmark = candidates[itemIndex]
-      const match = scoreBookmarkWithReasons(bookmark, parsedQuery)
-      if (match.score > 0) {
-        appendTopSearchResult(results, {
-          ...bookmark,
-          score: match.score,
-          matchReasons: match.reasons
-        })
-      }
+  await processSearchChunks(candidates, options, (bookmark) => {
+    const match = scoreBookmarkWithReasons(bookmark, parsedQuery)
+    if (match.score > 0) {
+      appendTopSearchResult(results, {
+        ...bookmark,
+        score: match.score,
+        matchReasons: match.reasons
+      })
     }
-
-    if (end < candidates.length) {
-      await yieldSearchWork(options)
-    }
-  }
+  })
 
   return results
+}
+
+async function processSearchChunks<T>(
+  items: T[],
+  options: CooperativeSearchOptions,
+  processItem: (item: T, index: number) => void,
+  start = 0
+): Promise<void> {
+  if (start >= items.length) {
+    return
+  }
+
+  assertSearchActive(options)
+  const end = Math.min(start + SEARCH_CHUNK_SIZE, items.length)
+  for (let index = start; index < end; index += 1) {
+    processItem(items[index], index)
+  }
+
+  if (end < items.length) {
+    await yieldSearchWork(options)
+    await processSearchChunks(items, options, processItem, end)
+  }
 }
 
 export function getQueryTerms(query: string): string[] {
@@ -287,27 +299,6 @@ function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
 function isRecencyHintTerm(term: string): boolean {
   const normalized = normalizeText(term).replace(/^sort[:：]/, '')
   return RECENT_SORT_TERMS.has(normalized)
-}
-
-export function scoreBookmark(
-  bookmark: PopupSearchBookmark,
-  normalizedQuery: string,
-  queryTerms: string[]
-): number {
-  return scoreBookmarkWithReasons(bookmark, {
-    rawQuery: normalizedQuery,
-    normalizedQuery,
-    queryTerms,
-    siteFilters: [],
-    folderFilters: [],
-    typeFilters: [],
-    textTerms: queryTerms,
-    excludedTerms: [],
-    dateRange: null,
-    chips: [],
-    recencyHint: false,
-    hasStructuredFilters: false
-  }).score
 }
 
 function scoreBookmarkWithReasons(
@@ -410,7 +401,7 @@ function scoreBookmarkWithReasons(
 
   for (const term of queryTerms) {
     let termMatched = false
-    const termTitleIndex = title.indexOf(term)
+    const termTitleIndex = getTextSearchIndex(title, term)
     const termUrlIndex = getBestSearchIndex(url, domain, term)
 
     if (termTitleIndex !== -1) {
@@ -772,11 +763,11 @@ function scoreListField(
     } else if (value.startsWith(normalizedQuery)) {
       score += weight + 10
       matchedLabels.push(value)
-    } else if (value.includes(normalizedQuery)) {
+    } else if (textContainsSearchTerm(value, normalizedQuery)) {
       score += weight
       matchedLabels.push(value)
     } else {
-      const matchedTerms = queryTerms.filter((term) => value.includes(term))
+      const matchedTerms = queryTerms.filter((term) => textContainsSearchTerm(value, term))
       if (matchedTerms.length) {
         score += Math.round(weight * (matchedTerms.length / queryTerms.length))
         matchedLabels.push(value)
@@ -933,7 +924,7 @@ function scoreLatinApproximateTerms(
   let score = 0
   let matchedCount = 0
   for (const term of latinTerms) {
-    if (tokens.some((token) => token.includes(term))) {
+    if (tokens.some((token) => textContainsSearchTerm(token, term))) {
       matchedCount += 1
       score += 14
       continue
@@ -1069,7 +1060,7 @@ function normalizeSearchList(values: unknown): string[] {
   if (!Array.isArray(values)) {
     return []
   }
-  return [...new Set(values.map((value) => normalizeText(value)).filter(Boolean))]
+  return [...new Set(values.flatMap(value => { const mappedResult = normalizeText(value); return mappedResult ? [mappedResult] : [] }))]
 }
 
 function addReason(reasons: string[], reason: string): void {
@@ -1114,7 +1105,7 @@ function buildQueryCoverageReason(queryTerms: string[]): string {
 }
 
 function formatReasonTerms(terms: string[]): string {
-  const uniqueTerms = [...new Set(terms.map((term) => normalizeText(term)).filter(Boolean))]
+  const uniqueTerms = [...new Set(terms.flatMap(term => { const mappedResult = normalizeText(term); return mappedResult ? [mappedResult] : [] }))]
   const visibleTerms = uniqueTerms.slice(0, 4)
   if (!visibleTerms.length) {
     return ''
@@ -1198,54 +1189,53 @@ async function getSearchCandidatesCooperatively(
     return bookmarks.filter((bookmark) => matchesSearchCandidateFilters(bookmark, parsedQuery))
   }
 
-  const requiredTerms = getCandidateRequiredTerms(parsedQuery)
-  const directMatches: PopupSearchBookmark[] = []
-
-  for (let index = 0; index < bookmarks.length; index += SEARCH_CHUNK_SIZE) {
-    assertSearchActive(options)
-    const end = Math.min(index + SEARCH_CHUNK_SIZE, bookmarks.length)
-    for (let itemIndex = index; itemIndex < end; itemIndex += 1) {
-      const bookmark = bookmarks[itemIndex]
-      if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
-        continue
-      }
-      if (requiredTerms.every((term) => matchesSearchCandidateText(bookmark, term))) {
-        directMatches.push(bookmark)
-      }
-    }
-
-    if (end < bookmarks.length) {
-      await yieldSearchWork(options)
-    }
-  }
-
+  const directMatches = await getDirectSearchCandidateMatches(bookmarks, parsedQuery, options)
   if (directMatches.length) {
     return directMatches
   }
 
+  return getPrefixSearchCandidateMatches(bookmarks, parsedQuery, options)
+}
+
+async function getDirectSearchCandidateMatches(
+  bookmarks: PopupSearchBookmark[],
+  parsedQuery: ParsedPopupSearchQuery,
+  options: CooperativeSearchOptions
+): Promise<PopupSearchBookmark[]> {
+  const requiredTerms = getCandidateRequiredTerms(parsedQuery)
+  const directMatches: PopupSearchBookmark[] = []
+
+  await processSearchChunks(bookmarks, options, (bookmark) => {
+    if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
+      return
+    }
+    if (requiredTerms.every((term) => matchesSearchCandidateText(bookmark, term))) {
+      directMatches.push(bookmark)
+    }
+  })
+
+  return directMatches
+}
+
+async function getPrefixSearchCandidateMatches(
+  bookmarks: PopupSearchBookmark[],
+  parsedQuery: ParsedPopupSearchQuery,
+  options: CooperativeSearchOptions
+): Promise<PopupSearchBookmark[]> {
   const prefix = parsedQuery.normalizedQuery.slice(0, Math.min(parsedQuery.normalizedQuery.length, 3))
   if (!prefix) {
     return bookmarks
   }
 
   const prefixMatches: PopupSearchBookmark[] = []
-  for (let index = 0; index < bookmarks.length; index += SEARCH_CHUNK_SIZE) {
-    assertSearchActive(options)
-    const end = Math.min(index + SEARCH_CHUNK_SIZE, bookmarks.length)
-    for (let itemIndex = index; itemIndex < end; itemIndex += 1) {
-      const bookmark = bookmarks[itemIndex]
-      if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
-        continue
-      }
-      if (matchesSearchCandidateText(bookmark, prefix)) {
-        prefixMatches.push(bookmark)
-      }
+  await processSearchChunks(bookmarks, options, (bookmark) => {
+    if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) {
+      return
     }
-
-    if (end < bookmarks.length) {
-      await yieldSearchWork(options)
+    if (matchesSearchCandidateText(bookmark, prefix)) {
+      prefixMatches.push(bookmark)
     }
-  }
+  })
 
   return prefixMatches.length ? prefixMatches : bookmarks
 }
@@ -1303,6 +1293,14 @@ function matchesSearchCandidateText(bookmark: PopupSearchBookmark, term: string)
 function getBestSearchIndex(left: string, right: string, term: string): number {
   const indices = [left.indexOf(term), right.indexOf(term)].filter((index) => index >= 0)
   return indices.length ? Math.min(...indices) : -1
+}
+
+function getTextSearchIndex(text: string, term: string): number {
+  return text.indexOf(term)
+}
+
+function textContainsSearchTerm(text: string, term: string): boolean {
+  return text.includes(term)
 }
 
 function scoreDomainQueryMatch(domain: string, normalizedQuery: string): number {
@@ -1377,7 +1375,7 @@ function isSearchBoundaryChar(value: string): boolean {
 }
 
 function scoreOrderedTermProximity(text: string, terms: string[]): number {
-  const orderedTerms = [...new Set(terms.map((term) => normalizeText(term)).filter(Boolean))]
+  const orderedTerms = [...new Set(terms.flatMap(term => { const mappedResult = normalizeText(term); return mappedResult ? [mappedResult] : [] }))]
   if (!text || orderedTerms.length < 2) {
     return 0
   }

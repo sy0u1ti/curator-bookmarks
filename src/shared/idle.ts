@@ -11,7 +11,3 @@ export function runIdle(callback: () => void, options: RunIdleOptions = {}): voi
   }
   setTimeout(callback, 50)
 }
-
-export function runMicroIdle(callback: () => void): void {
-  setTimeout(callback, 0)
-}

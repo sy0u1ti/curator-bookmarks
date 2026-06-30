@@ -105,7 +105,7 @@ const BALANCED_PROFILE: AvailabilitySpeedProfile = {
   pollIntervalMs: 250
 }
 
-export const AVAILABILITY_SPEED_PROFILES: Record<AvailabilitySpeedProfileName, AvailabilitySpeedProfile> = {
+const AVAILABILITY_SPEED_PROFILES: Record<AvailabilitySpeedProfileName, AvailabilitySpeedProfile> = {
   balanced: BALANCED_PROFILE
 }
 
@@ -155,7 +155,7 @@ export function buildAvailabilityProfileFromUserSettings(
   })
 }
 
-export function normalizeAvailabilitySpeedProfile(
+function normalizeAvailabilitySpeedProfile(
   profile: Partial<AvailabilitySpeedProfile> | AvailabilitySpeedProfileName = 'balanced'
 ): AvailabilitySpeedProfile {
   const source = typeof profile === 'string'
@@ -332,26 +332,29 @@ export async function runAvailabilityQueue<TItem>({
   const workerCount = Math.min(scheduler.getConcurrency(), pendingEntries.length)
 
   async function worker(): Promise<void> {
-    while (pendingEntries.length) {
-      if (shouldContinue && !(await shouldContinue())) {
-        return
-      }
-
-      const nextEntry = takeNextQueueEntry(pendingEntries, scheduler, getUrl, shouldSkip)
-      if (!nextEntry) {
-        onWait?.(scheduler.getSnapshot())
-        await wait(getNextQueueDelay(pendingEntries, scheduler, getUrl))
-        continue
-      }
-
-      const { item, index, lease } = nextEntry
-      try {
-        await processItem(item, { index, scheduler })
-      } finally {
-        lease.release()
-        onItemSettled?.(item, index)
-      }
+    if (!pendingEntries.length) {
+      return
     }
+    if (shouldContinue && !(await shouldContinue())) {
+      return
+    }
+
+    const nextEntry = takeNextQueueEntry(pendingEntries, scheduler, getUrl, shouldSkip)
+    if (!nextEntry) {
+      onWait?.(scheduler.getSnapshot())
+      await wait(getNextQueueDelay(pendingEntries, scheduler, getUrl))
+      await worker()
+      return
+    }
+
+    const { item, index, lease } = nextEntry
+    try {
+      await processItem(item, { index, scheduler })
+    } finally {
+      lease.release()
+      onItemSettled?.(item, index)
+    }
+    await worker()
   }
 
   await Promise.all(Array.from({ length: workerCount }, () => worker()))
@@ -368,11 +371,7 @@ export function formatAvailabilityRunnerStatus(snapshot: AvailabilityRunnerSnaps
   return `${base}；遇到超时或 HTTP 429 会自动降速。`
 }
 
-export function getDefaultAvailabilityRunnerStatusCopy(): string {
-  return formatAvailabilityRunnerStatus(createAvailabilityRunScheduler().getSnapshot())
-}
-
-export function getAvailabilityDomainKey(url: unknown): string {
+function getAvailabilityDomainKey(url: unknown): string {
   try {
     return new URL(String(url || '')).hostname.replace(/^www\./i, '').toLowerCase() || '__unknown__'
   } catch {
@@ -411,9 +410,7 @@ function getNextQueueDelay<TItem>(
   scheduler: AvailabilityRunScheduler,
   getUrl: (item: TItem) => unknown
 ): number {
-  const delays = pendingEntries
-    .map((entry) => scheduler.getAcquireDelay(getUrl(entry.item)))
-    .filter((delay) => Number.isFinite(delay) && delay > 0)
+  const delays = pendingEntries.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((entry) => scheduler.getAcquireDelay(getUrl(entry.item)))(combineValue); return ((delay) => Number.isFinite(delay) && delay > 0)(combinedResult) ? [combinedResult] : [] })
 
   const nextDelay = delays.length ? Math.min(...delays) : scheduler.getProfile().pollIntervalMs
   return Math.max(1, Math.min(nextDelay, scheduler.getProfile().pollIntervalMs))

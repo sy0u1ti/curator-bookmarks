@@ -32,7 +32,7 @@ export async function removeRecycleEntry(recycleId: string): Promise<void> {
 }
 
 export async function removeRecycleEntries(recycleIds: string[]): Promise<void> {
-  const targetSet = new Set(recycleIds.map((id) => String(id || '').trim()).filter(Boolean))
+  const targetSet = new Set(recycleIds.flatMap(id => { const mappedResult = String(id || '').trim(); return mappedResult ? [mappedResult] : [] }))
   return updateRecycleBinEntries(
     (currentEntries) => removeRecycleEntriesById(currentEntries, targetSet),
     (latestEntries) => removeRecycleEntriesById(latestEntries, targetSet)

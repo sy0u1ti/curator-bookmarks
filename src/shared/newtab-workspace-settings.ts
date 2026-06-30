@@ -1,5 +1,4 @@
 export const DEFAULT_NEW_TAB_WORKSPACE_ID = 'default'
-export const MAX_NEW_TAB_WORKSPACES = 1
 export const MAX_WORKSPACE_PINNED_BOOKMARKS = 16
 
 export interface NewTabWorkspace {
@@ -96,16 +95,6 @@ export function getActiveNewTabWorkspace(settings: NewTabWorkspaceSettings): New
     normalizeNewTabWorkspaceSettings(null).workspaces[0]
 }
 
-export function setActiveNewTabWorkspace(
-  settings: NewTabWorkspaceSettings,
-  workspaceId: string
-): NewTabWorkspaceSettings {
-  void workspaceId
-  return settings.activeWorkspaceId === DEFAULT_NEW_TAB_WORKSPACE_ID
-    ? settings
-    : { ...settings, activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID }
-}
-
 export function toggleNewTabWorkspacePin(
   settings: NewTabWorkspaceSettings,
   workspaceId: string,
@@ -175,30 +164,6 @@ export function updateNewTabWorkspace(
         : workspace.pinnedIds,
       updatedAt: now
     }
-  })
-
-  return changed
-    ? { ...settings, workspaces }
-    : settings
-}
-
-export function pruneNewTabWorkspacePinnedIds(
-  settings: NewTabWorkspaceSettings,
-  validBookmarkIds: Iterable<string>
-): NewTabWorkspaceSettings {
-  const validIds = createValidIdSet(validBookmarkIds)
-  if (!validIds) {
-    return settings
-  }
-
-  let changed = false
-  const workspaces = settings.workspaces.map((workspace) => {
-    const pinnedIds = normalizeWorkspacePinnedIds(workspace.pinnedIds, validIds)
-    if (pinnedIds.length === workspace.pinnedIds.length) {
-      return workspace
-    }
-    changed = true
-    return { ...workspace, pinnedIds }
   })
 
   return changed

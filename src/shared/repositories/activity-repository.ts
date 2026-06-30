@@ -93,13 +93,15 @@ export async function upsertNewTabActivityRecordInRepository(
   }
 
   try {
-    await applyCuratorDataStoreDelta(
-      CURATOR_DATA_STORES.activityRecords,
-      [record],
-      []
-    )
-    await writeNewTabActivityRepositoryMeta(normalized)
-    await compactNewTabActivityLocalStorage(normalized).catch(() => {})
+    await Promise.all([
+      applyCuratorDataStoreDelta(
+        CURATOR_DATA_STORES.activityRecords,
+        [record],
+        []
+      ),
+      writeNewTabActivityRepositoryMeta(normalized),
+      compactNewTabActivityLocalStorage(normalized).catch(() => {})
+    ])
   } catch {
     await writeNewTabActivityToLocalStorage(normalized)
   }
@@ -124,13 +126,15 @@ export async function removeNewTabActivityRecordInRepository(
   }
 
   try {
-    await applyCuratorDataStoreDelta(
-      CURATOR_DATA_STORES.activityRecords,
-      [],
-      [normalizedId]
-    )
-    await writeNewTabActivityRepositoryMeta(normalized)
-    await compactNewTabActivityLocalStorage(normalized).catch(() => {})
+    await Promise.all([
+      applyCuratorDataStoreDelta(
+        CURATOR_DATA_STORES.activityRecords,
+        [],
+        [normalizedId]
+      ),
+      writeNewTabActivityRepositoryMeta(normalized),
+      compactNewTabActivityLocalStorage(normalized).catch(() => {})
+    ])
   } catch {
     await writeNewTabActivityToLocalStorage(normalized)
   }

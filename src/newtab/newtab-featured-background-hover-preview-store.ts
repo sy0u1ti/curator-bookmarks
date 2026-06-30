@@ -2,9 +2,9 @@ import { useSyncExternalStore } from 'react'
 
 export interface NewtabFeaturedBackgroundHoverPreviewView {
   ariaLabel: string
-  backgroundImage: string
   height: number
   left: number
+  src: string
   top: number
   visible: boolean
   width: number
@@ -12,9 +12,9 @@ export interface NewtabFeaturedBackgroundHoverPreviewView {
 
 const EMPTY_PREVIEW_VIEW: NewtabFeaturedBackgroundHoverPreviewView = {
   ariaLabel: '',
-  backgroundImage: '',
   height: 0,
   left: 0,
+  src: '',
   top: 0,
   visible: false,
   width: 0
@@ -42,27 +42,27 @@ export function dispatchNewtabFeaturedBackgroundHoverPreviewView(
   emitHoverPreviewChange()
 }
 
-export function dispatchNewtabFeaturedBackgroundHoverPreviewBackgroundImage(backgroundImage: string): void {
-  if (hoverPreviewView.backgroundImage === backgroundImage) {
+export function dispatchNewtabFeaturedBackgroundHoverPreviewSrc(src: string): void {
+  if (hoverPreviewView.src === src) {
     return
   }
 
   hoverPreviewView = {
     ...hoverPreviewView,
-    backgroundImage
+    src
   }
   emitHoverPreviewChange()
 }
 
 export function dispatchNewtabFeaturedBackgroundHoverPreviewHidden(): void {
-  if (!hoverPreviewView.visible && !hoverPreviewView.backgroundImage && !hoverPreviewView.ariaLabel) {
+  if (!hoverPreviewView.visible && !hoverPreviewView.src && !hoverPreviewView.ariaLabel) {
     return
   }
 
   hoverPreviewView = {
     ...hoverPreviewView,
     ariaLabel: '',
-    backgroundImage: '',
+    src: '',
     visible: false
   }
   emitHoverPreviewChange()

@@ -1,4 +1,5 @@
-import { Button, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { navigateToOptionsEmptyStateAction } from '../options-section-store.js'
 import {
   OPTION_EMPTY_STATE_ACTIONS_CLASS,
@@ -14,8 +15,10 @@ interface OptionEmptyStateAction {
   variant?: 'primary' | 'secondary'
 }
 
+const EMPTY_OPTION_EMPTY_STATE_ACTIONS: OptionEmptyStateAction[] = []
+
 export function OptionEmptyState({
-  actions = [],
+  actions = EMPTY_OPTION_EMPTY_STATE_ACTIONS,
   className = '',
   description,
   title

@@ -1,6 +1,6 @@
 import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
 
-export { normalizeBookmarkSaveUrl }
+{ normalizeBookmarkSaveUrl }
 
 export function shouldReuseBookmarkForSave(
   existingUrl: unknown,

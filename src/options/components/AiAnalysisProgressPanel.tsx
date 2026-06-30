@@ -1,4 +1,5 @@
-import { AiTaskStatus } from '../../ui'
+import { useMemo, type ReactNode } from 'react'
+import { AiTaskStatus } from '../../ui/ai/AiTaskStatus'
 import { StatusBusyLoadingLabel } from './LoadingLabel.js'
 import {
   useAiAnalysisDuration,
@@ -14,10 +15,10 @@ const AI_ANALYSIS_DECISION_PANEL_CLASS =
 const AI_ANALYSIS_PROGRESS_COPY_CLASS =
   'mt-0 mb-0 text-[13px] leading-[1.55] text-ds-text-muted'
 
-export function AiAnalysisProgressPanel({ children }: { children: React.ReactNode }) {
+export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
   const state = useAiAnalysisProgress()
   const { durationLabel } = useAiAnalysisDuration()
-  const title = (
+  const title = useMemo(() => (
     <strong>
       {state.busy ? (
         <StatusBusyLoadingLabel label={state.progressLabel} />
@@ -25,13 +26,13 @@ export function AiAnalysisProgressPanel({ children }: { children: React.ReactNod
         state.progressLabel
       )}
     </strong>
-  )
-  const description = (
+  ), [state.busy, state.progressLabel])
+  const description = useMemo(() => (
     <p className={AI_ANALYSIS_PROGRESS_COPY_CLASS}>
       {state.progressCopy}
     </p>
-  )
-  const statusNode = <span className={OPTION_VALUE_CLASS}>{durationLabel}</span>
+  ), [state.progressCopy])
+  const statusNode = useMemo(() => <span className={OPTION_VALUE_CLASS}>{durationLabel}</span>, [durationLabel])
 
   return (
     <AiTaskStatus

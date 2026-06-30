@@ -175,13 +175,6 @@ export function DashboardSelectionBarContent() {
   return <DashboardSelectionBar state={selectionBar} />
 }
 
-export function DashboardResultsContent() {
-  const cardMenuFocusRequest = useDashboardViewSelector((state) => state.cardMenuFocusRequest)
-  const dragOverlayVisible = useDashboardViewSelector((state) => state.dragOverlay.visible)
-  const results = useDashboardViewSelector((state) => state.results)
-  return <DashboardResults state={results} focusRequest={cardMenuFocusRequest} dimCards={dragOverlayVisible} />
-}
-
 export type DashboardCardElementRegistrar = (bookmarkId: string, node: HTMLElement | null) => void
 
 export function DashboardResults({

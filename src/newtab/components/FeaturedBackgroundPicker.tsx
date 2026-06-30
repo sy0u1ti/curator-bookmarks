@@ -8,7 +8,8 @@ import {
   type RefObject,
   type SyntheticEvent
 } from 'react'
-import { Button, Icon } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Icon } from '../../ui/icons/Icon'
 import { useNewtabFeaturedBackgroundPickerFocusRequest } from '../newtab-featured-background-picker-store'
 import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClasses'
 

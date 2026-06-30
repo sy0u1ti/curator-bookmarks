@@ -97,11 +97,9 @@ export const SEARCH_ENGINE_CONFIG_BY_ID = new Map(
 
 const SEARCH_ENGINE_IDS = new Set(SEARCH_ENGINE_CONFIGS.map((engine) => engine.id))
 
-export const DEFAULT_ENABLED_SEARCH_ENGINE_IDS = SEARCH_ENGINE_CONFIGS
-  .filter((engine) => engine.defaultEnabled)
-  .map((engine) => engine.id)
+export const DEFAULT_ENABLED_SEARCH_ENGINE_IDS = SEARCH_ENGINE_CONFIGS.flatMap((combineValue, combineIndex, combineArray) => { if (!((engine) => engine.defaultEnabled)(combineValue)) return []; const combinedResult = ((engine) => engine.id)(combineValue); return [combinedResult] })
 
-export function isSearchEngineId(value: unknown): value is SearchEngineId {
+function isSearchEngineId(value: unknown): value is SearchEngineId {
   return typeof value === 'string' && SEARCH_ENGINE_IDS.has(value as SearchEngineId)
 }
 
@@ -118,20 +116,22 @@ export function normalizeEnabledSearchEngineIds(
     : DEFAULT_ENABLED_SEARCH_ENGINE_IDS
 
   const deduped: SearchEngineId[] = []
+  const dedupedSet = new Set<SearchEngineId>()
   for (const id of ids) {
-    if (isSearchEngineId(id) && !deduped.includes(id)) {
+    if (isSearchEngineId(id) && !dedupedSet.has(id)) {
       deduped.push(id)
+      dedupedSet.add(id)
     }
   }
 
-  if (!deduped.includes(selectedEngine)) {
+  if (!dedupedSet.has(selectedEngine)) {
     deduped.unshift(selectedEngine)
   }
 
   return deduped.length ? deduped : [selectedEngine]
 }
 
-export function buildSearchEngineUrl(query: string, engineId: SearchEngineId): string {
+function buildSearchEngineUrl(query: string, engineId: SearchEngineId): string {
   const engine = SEARCH_ENGINE_CONFIG_BY_ID.get(engineId) || SEARCH_ENGINE_CONFIG_BY_ID.get('google')
   const encodedQuery = encodeURIComponent(String(query || '').trim())
   return String(engine?.urlTemplate || SEARCH_ENGINE_CONFIGS[0].urlTemplate).replace('{query}', encodedQuery)

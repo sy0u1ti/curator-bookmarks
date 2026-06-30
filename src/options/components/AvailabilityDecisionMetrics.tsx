@@ -1,7 +1,7 @@
 import {
   useAvailabilityDecisionMetrics
 } from './availability-overview-store.js'
-import { NumberPop } from '../../ui'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import type { AvailabilityDecisionMetricsState } from './availability-overview-types.js'
 
 const metrics: Array<{

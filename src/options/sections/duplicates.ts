@@ -29,9 +29,7 @@ export interface BuildDuplicateGroupsOptions {
 export function buildDuplicateGroups(bookmarks, options: BuildDuplicateGroupsOptions = {}) {
   const groupMap = new Map()
   const excludedFolderIds = new Set(
-    [...(options.excludedFolderIds || [])]
-      .map((folderId) => String(folderId || '').trim())
-      .filter(Boolean)
+    [...(options.excludedFolderIds || [])].flatMap(folderId => { const mappedResult = String(folderId || '').trim(); return mappedResult ? [mappedResult] : [] })
   )
 
   for (const bookmark of bookmarks) {
@@ -55,9 +53,7 @@ export function buildDuplicateGroups(bookmarks, options: BuildDuplicateGroupsOpt
     groupMap.get(duplicateKey).push(bookmark)
   }
 
-  return [...groupMap.entries()]
-    .filter(([, items]) => items.length > 1)
-    .map(([key, items]) => buildDuplicateGroupModel(key, items))
+  return [...groupMap.entries()].flatMap((combineValue, combineIndex, combineArray) => { if (!(([, items]) => items.length > 1)(combineValue)) return []; const combinedResult = (([key, items]) => buildDuplicateGroupModel(key, items))(combineValue); return [combinedResult] })
     .sort((left, right) => {
       return (
         right.riskWeight - left.riskWeight ||
@@ -416,10 +412,6 @@ function getDuplicateSelectionStats(groups = managerState.duplicateGroups) {
   }
 }
 
-function getDuplicateGroupSelectedCount(group) {
-  return group.items.filter((item) => managerState.selectedDuplicateIds.has(String(item.id))).length
-}
-
 function buildDuplicateTagBadgeLabels(groups) {
   const labels = {}
   for (const group of groups) {
@@ -461,23 +453,6 @@ function selectDuplicateGroupByStrategy(groupId, strategy) {
 
   const keepItem = getDuplicateKeepItem(group, strategy)
   return selectDuplicateGroupKeepItem(group, keepItem)
-}
-
-function selectDuplicateGroupFolder(groupId, folderId) {
-  const group = managerState.duplicateGroups.find((entry) => entry.id === groupId)
-  if (!group || group.items.length <= 1) {
-    return { groupCount: 0, deleteCount: 0, keepCount: 0 }
-  }
-
-  const matchingItems = group.items
-    .filter((item) => String(item.parentId) === String(folderId))
-    .sort(compareDuplicateItemsByNewest)
-
-  if (!matchingItems.length) {
-    return { groupCount: 0, deleteCount: 0, keepCount: 0 }
-  }
-
-  return selectDuplicateGroupKeepItem(group, matchingItems[0])
 }
 
 function selectDuplicateGroupKeepItem(group, keepItem) {
@@ -654,9 +629,7 @@ function compareDuplicateItemsByRecentActivity(left, right) {
 
 function getDuplicatePathDepth(item) {
   return String(item.path || '')
-    .split('/')
-    .map((part) => part.trim())
-    .filter(Boolean).length
+    .split('/').flatMap(part => { const mappedResult = part.trim(); return mappedResult ? [mappedResult] : [] }).length
 }
 
 function getDuplicatePathLength(item) {
@@ -790,19 +763,6 @@ function getDuplicateLastOpenedAt(item) {
   }
 
   return 0
-}
-
-function formatDuplicateDate(timestamp) {
-  const value = Number(timestamp)
-  if (!Number.isFinite(value) || value <= 0) {
-    return '未知时间'
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(value)
 }
 
 function hashDuplicateKey(value) {

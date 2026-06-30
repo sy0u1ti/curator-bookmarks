@@ -22,9 +22,9 @@ import {
   normalizeSettingsDrawerSection,
   type SettingsDrawerSection
 } from './settings-group-sync.js'
-import type { BookmarkRecord, ExtractedBookmarkData, FolderRecord } from '../shared/types.js'
+import type { ExtractedBookmarkData, FolderRecord } from '../shared/types.js'
 import {
-  buildFolderCandidateRenderSignature,
+  buildFolderCandidateRenderKey,
   getCachedFolderCandidates,
   type FolderCandidateCacheState,
   type NewTabFolderCandidate
@@ -65,7 +65,6 @@ import {
   createStateView,
   collectPortalBookmarkSourceItems,
   createLoadingStateView,
-  getPortalQuickAccessItems,
   getNaturalSearchBookmarkSuggestionsFromIndex,
   getNewTabSourceAnchorId,
   getAutoCenteredSearchOffsetY,
@@ -79,7 +78,6 @@ import {
   type NewTabContentState,
   type NewTabContentView,
   type NewTabBookmarksModule,
-  type PortalQuickAccessItem,
   resolveNewTabContentState,
   type NewTabPageModule,
   type NewTabSearchIndexEntry,
@@ -153,7 +151,7 @@ import {
   type FeaturedBackgroundPickerSections
 } from './featured-gallery-list.js'
 import { getSpeedDialFaviconLoadAttributes } from './speed-dial-load-attributes.js'
-import type { SpeedDialEmptyState, SpeedDialItem } from './speed-dial-types.js'
+import type { SpeedDialItem } from './speed-dial-types.js'
 import {
   createFolderDragSectionRectSnapshot,
   getFolderFlipDeltasFromSnapshots,
@@ -196,8 +194,7 @@ import type {
   FeaturedBackgroundHoverPreviewRequest,
   FeaturedBackgroundPickerCardViewModel,
   FeaturedBackgroundPickerGridSectionViewModel,
-  FeaturedBackgroundPickerProviderGroupViewModel,
-  FeaturedBackgroundPickerState
+  FeaturedBackgroundPickerProviderGroupViewModel
 } from './components/FeaturedBackgroundPicker.js'
 import type { SpeedDialCardViewModel } from './components/NewtabSpeedDialPanel.js'
 import {
@@ -208,9 +205,6 @@ import {
   type BookmarkContentViewModel,
   type BookmarkFolderSectionViewModel,
   type BookmarkTileViewModel,
-  type PortalPanelState,
-  type QuickAccessGroupViewModel,
-  type QuickAccessPanelState,
   type BookmarkContentStyleState,
   type SourceNavigationState
 } from './newtab-bookmark-content-store.js'
@@ -244,8 +238,6 @@ import {
   type NewtabSelectedFolderSourceState
 } from './newtab-folder-source-store.js'
 import type {
-  BookmarkAddMenuViewModel,
-  BookmarkEditMenuViewModel,
   BookmarkMenuActionIcon,
   BookmarkMenuActionViewModel,
   BookmarkMenuTextFieldViewModel
@@ -270,8 +262,8 @@ import {
   registerNewtabFeaturedBackgroundModalActions
 } from './newtab-featured-background-modal-store.js'
 import {
-  dispatchNewtabFeaturedBackgroundHoverPreviewBackgroundImage,
   dispatchNewtabFeaturedBackgroundHoverPreviewHidden,
+  dispatchNewtabFeaturedBackgroundHoverPreviewSrc,
   dispatchNewtabFeaturedBackgroundHoverPreviewView
 } from './newtab-featured-background-hover-preview-store.js'
 import {
@@ -470,7 +462,7 @@ let speedDialModulePromise: Promise<SpeedDialModule> | null = null
 let timeSettingsModulePromise: Promise<TimeSettingsModule> | null = null
 let timeSettingsModule: TimeSettingsModule | null = null
 let featuredBackgroundUiVersion = 0
-let featuredBackgroundPickerRenderSignature = ''
+let featuredBackgroundPickerRenderKey = ''
 let speedDialRenderVersion = 0
 let clockHydrationVersion = 0
 
@@ -599,16 +591,6 @@ interface NewTabActivityState {
 
 type NewTabActivityRepositoryModule = typeof import('../shared/repositories/activity-repository.js')
 
-interface QuickAccessItem {
-  id: string
-  title: string
-  url: string
-  detail: string
-  badge: string
-  reason: PortalQuickAccessItem['reason']
-  bookmark: chrome.bookmarks.BookmarkTreeNode
-}
-
 type MenuActionIcon = BookmarkMenuActionIcon
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -736,7 +718,7 @@ const state = {
   workspaceSettings: normalizeNewTabWorkspaceSettings(null) as NewTabWorkspaceSettings,
   utilitySettingsHydrated: false,
   folderCandidateCache: {
-    signature: '',
+    cacheKey: '',
     candidates: []
   } as FolderCandidateCacheState,
   activity: {
@@ -761,10 +743,6 @@ const state = {
 
 let onboardingCompleted = false
 
-function isValueControl(element: unknown): element is HTMLInputElement | HTMLSelectElement {
-  return element instanceof HTMLInputElement || element instanceof HTMLSelectElement
-}
-
 let clockTimer = 0
 let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
@@ -780,14 +758,14 @@ let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
 let deferredRenderFrame = 0
 let autoSearchLayoutStableFrames = 0
-let autoSearchLayoutStableSignature = ''
+let autoSearchLayoutStableKey = ''
 let featuredBackgroundPreviewCard: HTMLElement | null = null
 const featuredBackgroundGalleryObjectUrlCache = createBackgroundObjectUrlCache()
 const featuredBackgroundGalleryPreviewObjectUrlCache = createBackgroundObjectUrlCache()
 let featuredBackgroundGalleryPreviewObjectUrlWarmTask: Promise<void> | null = null
 let featuredBackgroundGalleryPreviewObjectUrlWarmSignature = ''
 let featuredBackgroundGalleryPreviewWarmTimer = 0
-let lastIconPreviewSignature = ''
+let lastIconPreviewKey = ''
 let deferredRenderClockUpdate = false
 let searchSettingsSaveTimer = 0
 let searchSettingsSettleTimer = 0
@@ -827,7 +805,7 @@ let searchIndexRebuildScheduled = false
 let lastBuiltSearchIndexCatalogVersion = ''
 let resolveSearchIndexReady: () => void = () => {}
 let searchIndexReadyPromise: Promise<void> = createSearchIndexReadyPromise()
-let lastRenderedContentSignature = ''
+let lastRenderedContentKey = ''
 let unregisterNewtabContentShellActions: () => void = () => {}
 let unregisterNewtabContentLayoutNodes: () => void = () => {}
 let unregisterNewtabDashboardOverlayNodes: () => void = () => {}
@@ -861,7 +839,7 @@ function getBookmarkCatalog(
   }
   return refreshBookmarkCatalog(rootNode)
 }
-let lastRenderedShellSignature = ''
+let lastRenderedShellKey = ''
 const backgroundPreloadPromise = preloadBackgroundSettings()
 
 state.searchIndexReadyPromise = searchIndexReadyPromise
@@ -3384,9 +3362,7 @@ async function persistBookmarkOrder(
   state.bookmarkReorderError = ''
   syncBookmarkReorderBusyState()
   try {
-    for (const operation of operations) {
-      await moveBookmarkLazy(operation.id, operation.parentId, operation.index)
-    }
+    await moveBookmarkOperationsSequentially(operations)
 
     if (!syncPersistedBookmarkOrderInState(folderId, operations, finalBookmarkIds)) {
       await refreshNewTab({ showLoading: false })
@@ -3403,6 +3379,14 @@ async function persistBookmarkOrder(
   }
 }
 
+function moveBookmarkOperationsSequentially(operations: BookmarkMoveOperation[]): Promise<void> {
+  return operations.reduce<Promise<void>>((chain, operation) => {
+    return chain.then(async () => {
+      await moveBookmarkLazy(operation.id, operation.parentId, operation.index)
+    })
+  }, Promise.resolve())
+}
+
 function syncPersistedBookmarkOrderInState(
   folderId: string,
   operations: BookmarkMoveOperation[],
@@ -3414,9 +3398,7 @@ function syncPersistedBookmarkOrderInState(
     return false
   }
 
-  const nextBookmarkIds = nextChildren
-    .filter((child) => Boolean(child.url))
-    .map((child) => String(child.id))
+  const nextBookmarkIds = nextChildren.flatMap((combineValue, combineIndex, combineArray) => { if (!((child) => Boolean(child.url))(combineValue)) return []; const combinedResult = ((child) => String(child.id))(combineValue); return [combinedResult] })
   if (!areStringArraysEqual(nextBookmarkIds, finalBookmarkIds)) {
     return false
   }
@@ -3839,11 +3821,7 @@ function restoreFolderDragOrder(
 }
 
 function areStringArraysEqual(left: string[], right: string[]): boolean {
-  if (left.length !== right.length) {
-    return false
-  }
-
-  return left.every((value, index) => value === right[index])
+  return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
 function isFolderRelevantToNewTab(folderId: string | null | undefined): boolean {
@@ -3959,7 +3937,6 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
   state.bookmarkMap = new Map(state.bookmarks.map((item) => [String(item.id), item]))
   state.allBookmarks = buildAllBookmarks(state.rootNode)
   state.allBookmarkMap = new Map(state.allBookmarks.map((item) => [String(item.id), item]))
-  invalidateQuickAccessCache()
   markSearchIndexDirty({ schedule: true })
   renderBookmarkSections()
   return true
@@ -4005,12 +3982,7 @@ function patchBookmarkInPlace(
     refreshSpeedDialPanel()
   }
 
-  invalidateQuickAccessCache()
   return updatedBookmarkContent || updatedSpeedDial
-}
-
-function invalidateQuickAccessCache(): void {
-  quickAccessViewModelCache = null
 }
 
 function handleBookmarkRemoved(bookmarkId: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo): void {
@@ -4041,7 +4013,6 @@ function removeBookmarkFromLocalState(bookmarkId: string): boolean {
 
   const removedAny = forgetBookmarkFromLocalMaps(bookmarkId)
   if (removedAny) {
-    invalidateQuickAccessCache()
     markSearchIndexDirty({ schedule: true })
     renderBookmarkSections()
     refreshSpeedDialPanel()
@@ -4212,7 +4183,6 @@ function moveBookmarkInPlace(
   state.bookmarkMap = new Map(nextBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
   state.folderNode = state.folderSections[0]?.node || null
   state.bookmarkCatalog = null
-  invalidateQuickAccessCache()
   markSearchIndexDirty({ schedule: true })
   renderBookmarkSections()
   if (isBookmarkPinnedInSpeedDial(getActiveWorkspacePinnedIds(), normalizedBookmarkId)) {
@@ -4443,19 +4413,33 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     if (deletedCustomIcon) {
       const nextIcons = { ...state.customIcons }
       delete nextIcons[bookmark.id]
-      await saveCustomIcons(nextIcons).catch((error) => {
-        console.warn('新标签页自定义图标清理失败。', error)
-      })
+      await Promise.all([
+        saveCustomIcons(nextIcons).catch((error) => {
+          console.warn('新标签页自定义图标清理失败。', error)
+        }),
+        deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
+          console.warn('新标签页网站图标色彩缓存清理失败。', error)
+        }),
+        removeBookmarkFromActivity(bookmark.id).catch((error) => {
+          console.warn('新标签页打开记录清理失败。', error)
+        }),
+        removeBookmarkFromWorkspacePins(bookmark.id).catch((error) => {
+          console.warn('新标签页 workspace 固定入口清理失败。', error)
+        })
+      ])
+    } else {
+      await Promise.all([
+        deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
+          console.warn('新标签页网站图标色彩缓存清理失败。', error)
+        }),
+        removeBookmarkFromActivity(bookmark.id).catch((error) => {
+          console.warn('新标签页打开记录清理失败。', error)
+        }),
+        removeBookmarkFromWorkspacePins(bookmark.id).catch((error) => {
+          console.warn('新标签页 workspace 固定入口清理失败。', error)
+        })
+      ])
     }
-    await deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
-      console.warn('新标签页网站图标色彩缓存清理失败。', error)
-    })
-    await removeBookmarkFromActivity(bookmark.id).catch((error) => {
-      console.warn('新标签页打开记录清理失败。', error)
-    })
-    await removeBookmarkFromWorkspacePins(bookmark.id).catch((error) => {
-      console.warn('新标签页 workspace 固定入口清理失败。', error)
-    })
 
     state.pendingDeleteBookmarkId = ''
     state.lastDeletedBookmark = {
@@ -4744,14 +4728,14 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
 
 async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion): Promise<void> {
   try {
+    if (refreshVersion !== newTabRefreshVersion) {
+      return
+    }
     const [tagIndex, snapshotIndex, activity] = await Promise.all([
       loadNewTabBookmarkTagIndexLazy(),
       loadNewTabContentSnapshotIndexLazy(),
       loadNewTabActivityLazy()
     ])
-    if (refreshVersion !== newTabRefreshVersion) {
-      return
-    }
 
     state.bookmarkTagIndex = normalizeNewTabBookmarkTagIndex(tagIndex)
     state.searchSnapshotIndex = normalizeNewTabContentSnapshotIndex(snapshotIndex)
@@ -4897,13 +4881,13 @@ function render(): void {
     selectedFolderCount: state.folderSettings.selectedFolderIds.length,
     visibleFolderCount: state.folderSections.length
   })
-  const contentSignature = getContentStateSignature(contentState)
-  const shellSignature = getNewTabShellSignature()
+  const contentKey = getContentStateSignature(contentState)
+  const shellKey = getNewTabShellSignature()
 
   if (
     contentState.type === 'bookmarks' &&
-    lastRenderedContentSignature === 'bookmarks' &&
-    lastRenderedShellSignature === shellSignature &&
+    lastRenderedContentKey === 'bookmarks' &&
+    lastRenderedShellKey === shellKey &&
     renderBookmarkSections()
   ) {
     scheduleAdaptiveNewTabLayoutUpdate()
@@ -4916,8 +4900,8 @@ function render(): void {
     dispatchNewtabBookmarkContentView(null)
   }
   dispatchNewtabContentView(createContentStateView(contentState))
-  lastRenderedContentSignature = contentSignature
-  lastRenderedShellSignature = shellSignature
+  lastRenderedContentKey = contentKey
+  lastRenderedShellKey = shellKey
   scheduleAdaptiveNewTabLayoutUpdate()
   recordContentStateRender(contentState)
 }
@@ -5474,9 +5458,9 @@ function getNextAutoSearchLayoutReadyState({
     return true
   }
 
-  const signature = `${Math.round(offsetY)}:${Math.round(width)}`
-  if (autoSearchLayoutStableSignature !== signature) {
-    autoSearchLayoutStableSignature = signature
+  const layoutKey = `${Math.round(offsetY)}:${Math.round(width)}`
+  if (autoSearchLayoutStableKey !== layoutKey) {
+    autoSearchLayoutStableKey = layoutKey
     autoSearchLayoutStableFrames = AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT
   }
 
@@ -5492,7 +5476,7 @@ function getNextAutoSearchLayoutReadyState({
 
 function resetAutoSearchLayoutSettle(): void {
   autoSearchLayoutStableFrames = 0
-  autoSearchLayoutStableSignature = ''
+  autoSearchLayoutStableKey = ''
 }
 
 function getCurrentSearchOffsetY(slot: HTMLElement): number {
@@ -6234,8 +6218,8 @@ async function toggleNewTabNaturalSearch({
   const enabled = !state.searchSettings.naturalSearchEnabled
 
   if (enabled) {
-    await refreshNewTabNaturalSearchAiConfiguredState()
-    if (!state.searchSettings.naturalSearchAiConfigured) {
+    const naturalSearchAiConfigured = await refreshNewTabNaturalSearchAiConfiguredState()
+    if (!naturalSearchAiConfigured) {
       state.searchSettings = normalizeSearchSettings({
         ...state.searchSettings,
         naturalSearchEnabled: false
@@ -6499,19 +6483,22 @@ function abortNewTabNaturalSearchRequest(): void {
   state.naturalSearchPending = false
 }
 
-async function refreshNewTabNaturalSearchAiConfiguredState(): Promise<void> {
+async function refreshNewTabNaturalSearchAiConfiguredState(): Promise<boolean> {
   try {
     const naturalSearchAi = await import('../popup/natural-search-ai.js')
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    const naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
     state.searchSettings = normalizeSearchSettings({
       ...state.searchSettings,
-      naturalSearchAiConfigured: naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
+      naturalSearchAiConfigured
     })
+    return naturalSearchAiConfigured
   } catch {
     state.searchSettings = normalizeSearchSettings({
       ...state.searchSettings,
       naturalSearchAiConfigured: false
     })
+    return false
   }
 }
 
@@ -6917,7 +6904,7 @@ function normalizeNewTabSnapshotText(value: unknown, limit = 500): string {
 
 function normalizeNewTabSnapshotTextList(value: unknown, limit: number): string[] {
   return Array.isArray(value)
-    ? value.map((item) => normalizeNewTabSnapshotText(item, 120)).filter(Boolean).slice(0, limit)
+    ? value.flatMap(item => { const mappedResult = normalizeNewTabSnapshotText(item, 120); return mappedResult ? [mappedResult] : [] }).slice(0, limit)
     : []
 }
 
@@ -7263,138 +7250,6 @@ function createSourceNavigation(sections: NewTabFolderSection[]): SourceNavigati
 
   return {
     items
-  }
-}
-
-function createPortalPanel(): PortalPanelState | null {
-  const quickAccess = createQuickAccessPanel()
-  if (!quickAccess) {
-    return null
-  }
-
-  return { quickAccess }
-}
-
-interface QuickAccessViewModel {
-  frequentItems: ReturnType<typeof getPortalQuickAccessItems>['frequentItems']
-  recentItems: ReturnType<typeof getPortalQuickAccessItems>['recentItems']
-}
-
-let quickAccessViewModelCache: {
-  bookmarksRef: typeof state.bookmarks | null
-  recordsRef: typeof state.activity.records | null
-  pinnedSignature: string
-  showQuickAccess: boolean
-  itemLimit: number
-  model: QuickAccessViewModel
-} | null = null
-
-function computeQuickAccessViewModel(): QuickAccessViewModel {
-  const pinnedIds = getActiveWorkspacePinnedIds()
-  const pinnedSignature = pinnedIds.join(',')
-  const show = state.generalSettings.showQuickAccess
-  if (
-    quickAccessViewModelCache &&
-    quickAccessViewModelCache.bookmarksRef === state.bookmarks &&
-    quickAccessViewModelCache.recordsRef === state.activity.records &&
-    quickAccessViewModelCache.pinnedSignature === pinnedSignature &&
-    quickAccessViewModelCache.showQuickAccess === show &&
-    quickAccessViewModelCache.itemLimit === QUICK_ACCESS_ITEM_LIMIT
-  ) {
-    return quickAccessViewModelCache.model
-  }
-
-  const model = getPortalQuickAccessItems({
-    bookmarks: state.bookmarks,
-    pinnedIds,
-    records: state.activity.records,
-    now: Date.now(),
-    itemLimit: QUICK_ACCESS_ITEM_LIMIT,
-    showFrequent: show,
-    showRecent: show
-  })
-
-  quickAccessViewModelCache = {
-    bookmarksRef: state.bookmarks,
-    recordsRef: state.activity.records,
-    pinnedSignature,
-    showQuickAccess: show,
-    itemLimit: QUICK_ACCESS_ITEM_LIMIT,
-    model
-  }
-  return model
-}
-
-function createQuickAccessPanel(): QuickAccessPanelState | null {
-  const { frequentItems, recentItems } = computeQuickAccessViewModel()
-
-  const frequentQuickAccessItems = frequentItems
-    .map(createQuickAccessItemFromPortalItem)
-    .filter((item): item is QuickAccessItem => Boolean(item))
-  const recentQuickAccessItems = recentItems
-    .map(createQuickAccessItemFromPortalItem)
-    .filter((item): item is QuickAccessItem => Boolean(item))
-
-  if (!frequentQuickAccessItems.length && !recentQuickAccessItems.length) {
-    return null
-  }
-
-  const groups: QuickAccessGroupViewModel[] = []
-  if (frequentQuickAccessItems.length) {
-    groups.push(createQuickAccessGroup('Curator 常用', frequentQuickAccessItems))
-  }
-  if (recentQuickAccessItems.length) {
-    groups.push(createQuickAccessGroup('新近添加', recentQuickAccessItems))
-  }
-
-  return { groups }
-}
-
-function createQuickAccessItemFromPortalItem(item: PortalQuickAccessItem): QuickAccessItem | null {
-  const bookmark = state.allBookmarkMap.get(item.id)
-  if (!bookmark?.url) {
-    return null
-  }
-
-  return createQuickAccessItem(bookmark, item.detail, item.badge, item.reason)
-}
-
-function createQuickAccessGroup(label: string, items: QuickAccessItem[]): QuickAccessGroupViewModel {
-  return {
-    label,
-    items: items.map((item) => ({
-      badge: item.badge,
-      detail: item.detail,
-      id: item.id,
-      onContextMenu: (event) => {
-        handleBookmarkContextMenu(item.id, event)
-      },
-      onNavigate: (event) => {
-        handleBookmarkNavigation(event, item.bookmark, item.url)
-      },
-      reason: item.reason,
-      title: item.title,
-      url: item.url
-    }))
-  }
-}
-
-function createQuickAccessItem(
-  bookmark: chrome.bookmarks.BookmarkTreeNode,
-  detail: string,
-  badge: string,
-  reason: PortalQuickAccessItem['reason']
-): QuickAccessItem {
-  const url = String(bookmark.url || '').trim()
-  const title = String(bookmark.title || '').trim() || url
-  return {
-    id: String(bookmark.id),
-    title,
-    url,
-    detail,
-    badge,
-    reason,
-    bookmark
   }
 }
 
@@ -7869,11 +7724,6 @@ function rebuildNewTabSearchIndex(): void {
   perfMeasure('newtab.searchReadyMs', 'newtab.domContentLoaded', 'newtab.searchReady')
 }
 
-function getAllBookmarkRecords(): BookmarkRecord[] {
-  const folderData = state.folderData || getBookmarkCatalog().extracted
-  return folderData.bookmarks
-}
-
 function getBookmarkById(bookmarkId: string): chrome.bookmarks.BookmarkTreeNode | null {
   return state.bookmarkMap.get(String(bookmarkId)) || state.allBookmarkMap.get(String(bookmarkId)) || null
 }
@@ -7932,13 +7782,14 @@ async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void
 
   let nextSettings = state.workspaceSettings
   for (const workspace of state.workspaceSettings.workspaces) {
-    if (!workspace.pinnedIds.includes(normalizedId)) {
+    const nextPinnedIds = workspace.pinnedIds.filter((id) => id !== normalizedId)
+    if (nextPinnedIds.length === workspace.pinnedIds.length) {
       continue
     }
     nextSettings = updateNewTabWorkspace(
       nextSettings,
       workspace.id,
-      { pinnedIds: workspace.pinnedIds.filter((id) => id !== normalizedId) },
+      { pinnedIds: nextPinnedIds },
       { validBookmarkIds: state.allBookmarkMap.keys() }
     )
   }
@@ -8448,7 +8299,7 @@ function normalizeFeaturedBackgroundGalleryItem(rawItem: unknown): FeaturedBackg
 
 function normalizeFeaturedBackgroundFavoriteIds(rawIds: unknown): string[] {
   const source = Array.isArray(rawIds) ? rawIds : []
-  return [...new Set(source.map((id) => String(id || '').trim()).filter(Boolean))].slice(0, 72)
+  return [...new Set(source.flatMap(id => { const mappedResult = String(id || '').trim(); return mappedResult ? [mappedResult] : [] }))].slice(0, 72)
 }
 
 function normalizePositiveDimension(value: unknown): number | undefined {
@@ -8655,11 +8506,12 @@ function getBackgroundMediaSaveErrorMessage(error: unknown): string {
 }
 
 function updateBackgroundStartupCacheStatus(settings = state.backgroundSettings): void {
-  const mediaSignature = getBackgroundMediaSignature(settings)
+  const mediaKey = getBackgroundMediaSignature(settings)
   const instantWallpaper = readInstantWallpaper()
+  const wallpaperKey = instantWallpaper?.signature || ''
   const cacheRequired = settings.type !== 'color'
   const cacheReady = !cacheRequired ||
-    (Boolean(mediaSignature) && instantWallpaper?.signature === mediaSignature && instantWallpaper.ready !== false)
+    (Boolean(mediaKey) && wallpaperKey === mediaKey && instantWallpaper?.ready !== false)
 
   if (!cacheRequired) {
     state.backgroundUrlCacheStatus = ''
@@ -8737,12 +8589,13 @@ function hasUsableInstantWallpaperPreview(previewImage: string): boolean {
   return Boolean(normalizedPreviewImage && normalizedPreviewImage !== 'none')
 }
 
-function markInstantWallpaperRemoteReady(mediaSignature = lastAppliedBackgroundMediaSignature): void {
-  if (!mediaSignature) {
+function markInstantWallpaperRemoteReady(mediaKey = lastAppliedBackgroundMediaSignature): void {
+  if (!mediaKey) {
     return
   }
   const instantWallpaper = getNewtabInstantWallpaperView()
-  if (instantWallpaper.signature && instantWallpaper.signature !== mediaSignature) {
+  const wallpaperKey = instantWallpaper.signature
+  if (wallpaperKey && wallpaperKey !== mediaKey) {
     return
   }
   dispatchNewtabInstantWallpaperView({
@@ -8750,20 +8603,22 @@ function markInstantWallpaperRemoteReady(mediaSignature = lastAppliedBackgroundM
   })
 }
 
-function getCurrentInstantWallpaper(mediaSignature: string): ReturnType<typeof readInstantWallpaper> {
+function getCurrentInstantWallpaper(mediaKey: string): ReturnType<typeof readInstantWallpaper> {
   const instantWallpaper = readInstantWallpaper()
+  const wallpaperKey = instantWallpaper?.signature || ''
   return (
-    mediaSignature &&
-    instantWallpaper?.signature === mediaSignature &&
+    mediaKey &&
+    wallpaperKey === mediaKey &&
     instantWallpaper.ready !== false
   ) ? instantWallpaper : null
 }
 
-function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
+function ensureInstantWallpaperFallbackStyles(mediaKey: string): boolean {
   const instantWallpaperView = getNewtabInstantWallpaperView()
+  const wallpaperKey = instantWallpaperView.signature
   if (
     instantWallpaperView.remoteReady &&
-    instantWallpaperView.signature === mediaSignature
+    wallpaperKey === mediaKey
   ) {
     dispatchNewtabInstantWallpaperView({
       pending: false,
@@ -8772,7 +8627,7 @@ function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
     return true
   }
 
-  const instantWallpaper = getCurrentInstantWallpaper(mediaSignature)
+  const instantWallpaper = getCurrentInstantWallpaper(mediaKey)
   if (!instantWallpaper) {
     return false
   }
@@ -8793,7 +8648,7 @@ function ensureInstantWallpaperFallbackStyles(mediaSignature: string): boolean {
     previewImage: `url("${escapeCssUrl(dataUrl)}")`,
     ready: true,
     remoteReady: false,
-    signature: mediaSignature,
+    signature: mediaKey,
     size: normalizeStoredBackgroundSizeCss(instantWallpaper.backgroundSize)
   })
   return true
@@ -8803,10 +8658,10 @@ async function applyBackgroundSettings(): Promise<void> {
   const applyToken = ++backgroundApplyToken
   const settings = state.backgroundSettings
   if (settings.type === 'featured' && !backgroundGalleryModule && !getActiveFeaturedBackgroundItemSync(settings)) {
-    const mediaSignature = getBackgroundMediaSignature(settings)
+    const mediaKey = getBackgroundMediaSignature(settings)
     setWallpaperPlaceholderColor(getBackgroundPlaceholderColor(settings))
-    syncInstantWallpaperTargetForSettings(settings, mediaSignature)
-    ensureInstantWallpaperFallbackStyles(mediaSignature)
+    syncInstantWallpaperTargetForSettings(settings, mediaKey)
+    ensureInstantWallpaperFallbackStyles(mediaKey)
     markWallpaperReady()
     void loadBackgroundGalleryModule()
       .then(() => {
@@ -8817,16 +8672,17 @@ async function applyBackgroundSettings(): Promise<void> {
       .catch(() => {})
     return
   }
-  const mediaSignature = getBackgroundMediaSignature(settings)
+  const mediaKey = getBackgroundMediaSignature(settings)
+  const appliedMediaKey = lastAppliedBackgroundMediaSignature
   applyFeaturedBackgroundDisplayPreferences()
   setWallpaperPlaceholderColor(getBackgroundPlaceholderColor(settings))
 
   if (
-    mediaSignature === lastAppliedBackgroundMediaSignature &&
+    mediaKey === appliedMediaKey &&
     hasAppliedBackgroundMedia(settings)
   ) {
     if (settings.type === 'video' || getNewtabInstantWallpaperView().remoteReady) {
-      markInstantWallpaperRemoteReady(mediaSignature)
+      markInstantWallpaperRemoteReady(mediaKey)
     }
     markWallpaperReady()
     return
@@ -8839,9 +8695,9 @@ async function applyBackgroundSettings(): Promise<void> {
     activeBackgroundImageNaturalSizeSignature = ''
     markRuntimeWallpaperApplied()
     clearInstantWallpaperIfSignatureChanged('')
-    syncInstantWallpaperTargetForSettings(settings, mediaSignature)
+    syncInstantWallpaperTargetForSettings(settings, mediaKey)
     setWallpaperPlaceholderColor(getBackgroundPlaceholderColor(settings))
-    lastAppliedBackgroundMediaSignature = mediaSignature
+    lastAppliedBackgroundMediaSignature = mediaKey
     markWallpaperReady()
     return
   }
@@ -8851,22 +8707,22 @@ async function applyBackgroundSettings(): Promise<void> {
   if (isRemoteBackgroundType(settings.type)) {
     const imageUrl = getRemoteBackgroundImageUrl(settings)
     if (imageUrl) {
-      syncInstantWallpaperTargetForSettings(settings, mediaSignature)
+      syncInstantWallpaperTargetForSettings(settings, mediaKey)
       clearBackgroundMedia()
       setActiveBackgroundObjectUrl('')
       activeBackgroundImageNaturalSize = getStoredBackgroundNaturalSizeForSettings(settings)
-      activeBackgroundImageNaturalSizeSignature = activeBackgroundImageNaturalSize ? mediaSignature : ''
-      const hasInstantWallpaperFallback = ensureInstantWallpaperFallbackStyles(mediaSignature)
+      activeBackgroundImageNaturalSizeSignature = activeBackgroundImageNaturalSize ? mediaKey : ''
+      const hasInstantWallpaperFallback = ensureInstantWallpaperFallbackStyles(mediaKey)
       if (!hasInstantWallpaperFallback) {
         markWallpaperPending()
       }
-      applyDirectRemoteBackgroundImage(imageUrl, mediaSignature, {
+      applyDirectRemoteBackgroundImage(imageUrl, mediaKey, {
         revealWhenReady: !hasInstantWallpaperFallback
       })
       if (hasInstantWallpaperFallback) {
         markWallpaperReady()
       }
-      void applyUrlBackgroundImage(imageUrl, applyToken, mediaSignature, settings)
+      void applyUrlBackgroundImage(imageUrl, applyToken, mediaKey, settings)
     } else {
       clearBackgroundMedia()
       setActiveBackgroundObjectUrl('')
@@ -8874,15 +8730,15 @@ async function applyBackgroundSettings(): Promise<void> {
       activeBackgroundImageNaturalSizeSignature = ''
       markRuntimeWallpaperApplied()
       clearInstantWallpaperIfSignatureChanged('')
-      syncInstantWallpaperTargetForSettings(settings, mediaSignature)
-      lastAppliedBackgroundMediaSignature = mediaSignature
+      syncInstantWallpaperTargetForSettings(settings, mediaKey)
+      lastAppliedBackgroundMediaSignature = mediaKey
       markWallpaperReady()
     }
     return
   }
 
   if (settings.type !== 'image' && settings.type !== 'video') {
-    lastAppliedBackgroundMediaSignature = mediaSignature
+    lastAppliedBackgroundMediaSignature = mediaKey
     markWallpaperReady()
     return
   }
@@ -8892,8 +8748,8 @@ async function applyBackgroundSettings(): Promise<void> {
   activeBackgroundImageNaturalSize = null
   activeBackgroundImageNaturalSizeSignature = ''
   clearInstantWallpaperIfSignatureChanged('')
-  syncInstantWallpaperTargetForSettings(settings, mediaSignature)
-  if (ensureInstantWallpaperFallbackStyles(mediaSignature)) {
+  syncInstantWallpaperTargetForSettings(settings, mediaKey)
+  if (ensureInstantWallpaperFallbackStyles(mediaKey)) {
     markWallpaperReady()
   } else {
     markWallpaperPending()
@@ -8919,26 +8775,26 @@ async function applyBackgroundSettings(): Promise<void> {
   const objectUrl = URL.createObjectURL(mediaRecord.blob)
   setActiveBackgroundObjectUrl(objectUrl)
   if (mediaType === 'image') {
-    const readyImage = await waitForBackgroundImageReady(objectUrl, applyToken)
     if (applyToken !== backgroundApplyToken) {
       return
     }
+    const readyImage = await waitForBackgroundImageReady(objectUrl, applyToken)
     if (readyImage) {
       setBackgroundImageMedia(objectUrl)
       markRuntimeWallpaperApplied()
-      lastAppliedBackgroundMediaSignature = mediaSignature
-      void updateInstantWallpaperFromBlob(mediaRecord.blob, mediaSignature)
+      lastAppliedBackgroundMediaSignature = mediaKey
+      void updateInstantWallpaperFromBlob(mediaRecord.blob, mediaKey)
     } else {
       setActiveBackgroundObjectUrl('')
     }
     markWallpaperReady()
     return
   }
-
-  const ready = await waitForBackgroundVideoSourceReady(objectUrl)
   if (applyToken !== backgroundApplyToken) {
     return
   }
+
+  const ready = await waitForBackgroundVideoSourceReady(objectUrl)
   if (ready) {
     dispatchNewtabBackgroundMediaView({
       backgroundPosition: 'center',
@@ -8947,7 +8803,7 @@ async function applyBackgroundSettings(): Promise<void> {
       src: objectUrl
     })
     markRuntimeWallpaperApplied()
-    lastAppliedBackgroundMediaSignature = mediaSignature
+    lastAppliedBackgroundMediaSignature = mediaKey
   } else {
     setActiveBackgroundObjectUrl('')
   }
@@ -8995,18 +8851,18 @@ async function applyUrlBackgroundImage(
   settings = state.backgroundSettings
 ): Promise<void> {
   try {
-    const cachedRecord = await getBackgroundUrlCache(imageUrl)
     if (applyToken !== backgroundApplyToken) {
       return
     }
+    const cachedRecord = await getBackgroundUrlCache(imageUrl)
 
     if (cachedRecord) {
-      const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken, {
-        preserveCurrentUntilReady: true
-      }, mediaSignature)
       if (applyToken !== backgroundApplyToken) {
         return
       }
+      const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken, {
+        preserveCurrentUntilReady: true
+      }, mediaSignature)
       if (ready) {
         lastAppliedBackgroundMediaSignature = mediaSignature
         await updateInstantWallpaperFromBlob(cachedRecord.blob, mediaSignature, settings)
@@ -9027,7 +8883,7 @@ async function applyUrlBackgroundImage(
 
 function applyDirectRemoteBackgroundImage(
   imageUrl: string,
-  mediaSignature: string,
+  mediaKey: string,
   {
     markApplied = true,
     revealWhenReady = false
@@ -9040,17 +8896,18 @@ function applyDirectRemoteBackgroundImage(
   clearBackgroundMedia()
   setActiveBackgroundObjectUrl('')
   applyFeaturedBackgroundDisplayPreferences()
-  syncInstantWallpaperTargetForSettings(state.backgroundSettings, mediaSignature)
+  syncInstantWallpaperTargetForSettings(state.backgroundSettings, mediaKey)
   setBackgroundImageMedia(imageUrl)
   markRuntimeWallpaperApplied()
   if (markApplied) {
-    lastAppliedBackgroundMediaSignature = mediaSignature
+    lastAppliedBackgroundMediaSignature = mediaKey
     void waitForBackgroundImageReady(imageUrl, applyToken).then((readyImage) => {
-      if (applyToken !== backgroundApplyToken || mediaSignature !== lastAppliedBackgroundMediaSignature) {
+      const appliedMediaKey = lastAppliedBackgroundMediaSignature
+      if (applyToken !== backgroundApplyToken || mediaKey !== appliedMediaKey) {
         return
       }
       if (readyImage) {
-        setActiveBackgroundImageNaturalSize(imageUrl, readyImage, mediaSignature)
+        setActiveBackgroundImageNaturalSize(imageUrl, readyImage, mediaKey)
         applyFeaturedBackgroundDisplayPreferences()
       }
       if (revealWhenReady) {
@@ -9185,58 +9042,53 @@ async function fetchStartupBackgroundUrlImage(previewUrl: string, imageUrl: stri
 
 async function applyCachedRemoteBackgroundBlobToCurrentPage(
   blob: Blob,
-  mediaSignature: string,
+  mediaKey: string,
   applyToken: number
 ): Promise<boolean> {
+  const currentMediaKey = getBackgroundMediaSignature(state.backgroundSettings)
   if (
     applyToken !== backgroundApplyToken ||
-    !mediaSignature ||
-    mediaSignature !== getBackgroundMediaSignature(state.backgroundSettings)
+    !mediaKey ||
+    mediaKey !== currentMediaKey
   ) {
     return false
   }
 
   const ready = await setBackgroundImageFromBlob(blob, applyToken, {
     preserveCurrentUntilReady: true
-  }, mediaSignature)
+  }, mediaKey)
+  const nextMediaKey = getBackgroundMediaSignature(state.backgroundSettings)
   if (
     !ready ||
     applyToken !== backgroundApplyToken ||
-    mediaSignature !== getBackgroundMediaSignature(state.backgroundSettings)
+    mediaKey !== nextMediaKey
   ) {
     return false
   }
 
-  lastAppliedBackgroundMediaSignature = mediaSignature
+  lastAppliedBackgroundMediaSignature = mediaKey
   markWallpaperReady()
   return true
 }
 
-function scheduleFeaturedBackgroundGalleryPreviewObjectUrlWarm(): void {
-  runIdle(() => {
-    if (!backgroundGalleryModule) {
-      return
-    }
-    void warmFeaturedBackgroundPickerPreviewObjectUrls(backgroundGalleryModule)
-  }, { timeout: 1600 })
-}
-
 async function warmFeaturedBackgroundPickerPreviewObjectUrls(gallery: BackgroundGalleryModule): Promise<void> {
   const urls = getFeaturedBackgroundPickerPreviewUrls(gallery)
-  const signature = urls.join('|')
-  if (!signature) {
+  const previewKey = urls.join('|')
+  if (!previewKey) {
     return
   }
+  const activePreviewKey = featuredBackgroundGalleryPreviewObjectUrlWarmSignature
   if (
     featuredBackgroundGalleryPreviewObjectUrlWarmTask &&
-    featuredBackgroundGalleryPreviewObjectUrlWarmSignature === signature
+    activePreviewKey === previewKey
   ) {
     return featuredBackgroundGalleryPreviewObjectUrlWarmTask
   }
 
-  featuredBackgroundGalleryPreviewObjectUrlWarmSignature = signature
+  featuredBackgroundGalleryPreviewObjectUrlWarmSignature = previewKey
   featuredBackgroundGalleryPreviewObjectUrlWarmTask = warmFeaturedBackgroundPreviewObjectUrls(urls).finally(() => {
-    if (featuredBackgroundGalleryPreviewObjectUrlWarmSignature === signature) {
+    const activePreviewKey = featuredBackgroundGalleryPreviewObjectUrlWarmSignature
+    if (activePreviewKey === previewKey) {
       featuredBackgroundGalleryPreviewObjectUrlWarmTask = null
     }
   })
@@ -9244,13 +9096,16 @@ async function warmFeaturedBackgroundPickerPreviewObjectUrls(gallery: Background
 }
 
 async function warmFeaturedBackgroundPreviewObjectUrls(urls: string[]): Promise<void> {
+  const runWorker = async (workerIndex: number, index = workerIndex): Promise<void> => {
+    if (index >= urls.length) {
+      return
+    }
+    await createFeaturedBackgroundPreviewObjectUrl(urls[index])
+    await runWorker(workerIndex, index + FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY)
+  }
   const workers = Array.from(
     { length: Math.min(FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY, urls.length) },
-    async (_, workerIndex) => {
-      for (let index = workerIndex; index < urls.length; index += FEATURED_BACKGROUND_PREVIEW_OBJECT_URL_WARM_CONCURRENCY) {
-        await createFeaturedBackgroundPreviewObjectUrl(urls[index])
-      }
-    }
+    (_, workerIndex) => runWorker(workerIndex)
   )
   await Promise.all(workers)
 }
@@ -9308,7 +9163,8 @@ async function setBackgroundImageFromBlob(
     setActiveBackgroundObjectUrl(objectUrl)
   }
   const readyImage = await waitForBackgroundImageReady(objectUrl, applyToken)
-  if (applyToken !== backgroundApplyToken) {
+  const backgroundApplyStillCurrent = applyToken === backgroundApplyToken
+  if (!backgroundApplyStillCurrent) {
     if (preserveCurrentUntilReady) {
       URL.revokeObjectURL(objectUrl)
     }
@@ -9351,23 +9207,27 @@ async function updateInstantWallpaperFromBlob(
     ready: true
   }
 
-  for (const attempt of INSTANT_WALLPAPER_STARTUP_CACHE_ATTEMPTS) {
-    const dataUrl = await createInstantWallpaperDataUrl(blob, attempt)
-    if (!dataUrl) {
-      continue
-    }
-    if (saveInstantWallpaper({
-      ...recordBase,
-      dataUrl
-    })) {
-      syncInstantWallpaperTargetForSettings(settings, mediaSignature)
-      updateBackgroundStartupCacheStatus(settings)
-      return
-    }
+  const dataUrl = await createFirstInstantWallpaperDataUrl(blob)
+  if (dataUrl && saveInstantWallpaper({
+    ...recordBase,
+    dataUrl
+  })) {
+    syncInstantWallpaperTargetForSettings(settings, mediaSignature)
+    updateBackgroundStartupCacheStatus(settings)
+    return
   }
 
   syncInstantWallpaperTargetForSettings(settings, mediaSignature)
   updateBackgroundStartupCacheStatus(settings)
+}
+
+async function createFirstInstantWallpaperDataUrl(blob: Blob, attemptIndex = 0): Promise<string | null> {
+  const attempt = INSTANT_WALLPAPER_STARTUP_CACHE_ATTEMPTS[attemptIndex]
+  if (!attempt) {
+    return null
+  }
+  const dataUrl = await createInstantWallpaperDataUrl(blob, attempt)
+  return dataUrl || createFirstInstantWallpaperDataUrl(blob, attemptIndex + 1)
 }
 
 function syncInstantWallpaperTargetForSettings(
@@ -9383,37 +9243,41 @@ function syncInstantWallpaperTargetForSettings(
 
   const existingTarget = readInstantWallpaperTarget()
   saveInstantWallpaperTarget(target)
-  if (existingTarget?.signature && existingTarget.signature !== target.signature) {
+  const existingTargetKey = existingTarget?.signature
+  const nextTargetKey = target.signature
+  if (existingTargetKey && existingTargetKey !== nextTargetKey) {
     clearInstantWallpaperFallbackStyles()
   }
-  clearInstantWallpaperIfSignatureChanged(target.signature)
+  clearInstantWallpaperIfSignatureChanged(nextTargetKey)
 }
 
 function buildInstantWallpaperTargetForSettings(
   settings: typeof DEFAULT_BACKGROUND_SETTINGS,
-  mediaSignature = getBackgroundMediaSignature(settings)
+  mediaKey = getBackgroundMediaSignature(settings)
 ): InstantWallpaperTargetRecord | null {
-  if (!mediaSignature) {
+  if (!mediaKey) {
     return null
   }
 
   const displayCss = getBackgroundDisplayCssForSettings(settings)
   const instantWallpaper = readInstantWallpaper()
   const existingTarget = readInstantWallpaperTarget()
-  const existingTargetMatches = existingTarget?.signature === mediaSignature
+  const existingTargetKey = existingTarget?.signature
+  const existingTargetMatches = existingTargetKey === mediaKey
   const resolvedImageUrl = isRemoteBackgroundType(settings.type) ? getRemoteBackgroundImageUrl(settings) : ''
   const imageUrl = resolvedImageUrl || (existingTargetMatches ? existingTarget.imageUrl : '')
   const previewUrl = getStartupPreviewImageUrl(settings, imageUrl) ||
     (existingTargetMatches ? existingTarget.previewUrl : '')
+  const instantWallpaperKey = instantWallpaper?.signature
   return {
-    signature: mediaSignature,
+    signature: mediaKey,
     imageUrl,
     previewUrl,
     backgroundSize: displayCss.backgroundSize,
     backgroundPosition: displayCss.backgroundPosition,
     placeholderColor: getBackgroundPlaceholderColor(settings),
     cacheRequired: settings.type !== 'color',
-    cacheReady: instantWallpaper?.signature === mediaSignature && instantWallpaper.ready !== false,
+    cacheReady: instantWallpaperKey === mediaKey && instantWallpaper.ready !== false,
     updatedAt: Date.now()
   }
 }
@@ -9503,9 +9367,10 @@ function normalizeStoredBackgroundSizeCss(value: unknown): string {
     : backgroundSize || 'cover'
 }
 
-function clearInstantWallpaperIfSignatureChanged(mediaSignature: string): void {
+function clearInstantWallpaperIfSignatureChanged(mediaKey: string): void {
   const instantWallpaper = readInstantWallpaper()
-  if (instantWallpaper && instantWallpaper.signature !== mediaSignature) {
+  const instantWallpaperKey = instantWallpaper?.signature
+  if (instantWallpaper && instantWallpaperKey !== mediaKey) {
     clearInstantWallpaper()
     clearInstantWallpaperFallbackStyles()
   }
@@ -9545,12 +9410,6 @@ function parseHexColor(value: string): { red: number; green: number; blue: numbe
     green: Number.parseInt(raw.slice(2, 4), 16),
     blue: Number.parseInt(raw.slice(4, 6), 16)
   }
-}
-
-function rgbToHex(red: number, green: number, blue: number): string {
-  return `#${[red, green, blue]
-    .map((value) => Math.round(value).toString(16).padStart(2, '0'))
-    .join('')}`
 }
 
 function clearBackgroundMedia(): void {
@@ -9601,7 +9460,7 @@ function getStoredBackgroundNaturalSizeForSettings(
 
 function getFeaturedBackgroundDisplayImageSize(
   settings: typeof DEFAULT_BACKGROUND_SETTINGS,
-  mediaSignature = getBackgroundMediaSignature(settings)
+  mediaKey = getBackgroundMediaSignature(settings)
 ): BackgroundImageNaturalSize | null {
   const activeItem = getActiveFeaturedBackgroundItemSync(settings)
   if (activeItem?.width && activeItem.height) {
@@ -9610,9 +9469,10 @@ function getFeaturedBackgroundDisplayImageSize(
       height: activeItem.height
     }
   }
+  const activeNaturalSizeKey = activeBackgroundImageNaturalSizeSignature
   if (
     activeBackgroundImageNaturalSize &&
-    activeBackgroundImageNaturalSizeSignature === mediaSignature
+    activeNaturalSizeKey === mediaKey
   ) {
     return activeBackgroundImageNaturalSize
   }
@@ -9729,8 +9589,9 @@ function applyFeaturedBackgroundDailyRefreshIfNeeded(): void {
     return
   }
 
-  const nextSignature = getBackgroundMediaSignature(state.backgroundSettings)
-  if (nextSignature === lastAppliedBackgroundMediaSignature) {
+  const nextMediaKey = getBackgroundMediaSignature(state.backgroundSettings)
+  const appliedMediaKey = lastAppliedBackgroundMediaSignature
+  if (nextMediaKey === appliedMediaKey) {
     scheduleFeaturedBackgroundDailyRefresh()
     return
   }
@@ -10282,7 +10143,7 @@ function getFilteredFolderCandidates(): NewTabFolderCandidate[] {
 }
 
 function getFolderCandidatesForCurrentRender(): NewTabFolderCandidate[] {
-  const signature = buildFolderCandidateRenderSignature({
+  const cacheKey = buildFolderCandidateRenderKey({
     rootNode: state.rootNode,
     folderData: state.folderData,
     folderNodeMap: state.folderNodeMap,
@@ -10290,7 +10151,7 @@ function getFolderCandidatesForCurrentRender(): NewTabFolderCandidate[] {
     selectedFolderIds: state.folderSettings.selectedFolderIds,
     folderCandidatesExpanded: state.folderCandidatesExpanded
   })
-  return getCachedFolderCandidates(state.folderCandidateCache, signature, getFolderCandidates)
+  return getCachedFolderCandidates(state.folderCandidateCache, cacheKey, getFolderCandidates)
 }
 
 function getFolderCandidates(): NewTabFolderCandidate[] {
@@ -10490,12 +10351,12 @@ function syncSettingsSaveStatus(): void {
 }
 
 function renderIconPreviewIfNeeded(): void {
-  const signature = getIconPreviewSignature(state.iconSettings)
-  if (lastIconPreviewSignature === signature) {
+  const previewKey = getIconPreviewSignature(state.iconSettings)
+  if (lastIconPreviewKey === previewKey) {
     return
   }
 
-  lastIconPreviewSignature = signature
+  lastIconPreviewKey = previewKey
   renderIconPreview()
 }
 
@@ -10642,12 +10503,12 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
   const selectedId = state.backgroundSettings.featuredId
   const pickerSections = getFeaturedBackgroundPickerSections(gallery)
   const pickerItems = [...pickerSections.favorites, ...pickerSections.refreshed]
-  const renderSignature = [
+  const renderKey = [
     selectedId,
     state.featuredBackgroundFavoriteIds.join(','),
     ...pickerItems.map((item) => `${item.id}:${item.imageUrl}`)
   ].join('|')
-  if (featuredBackgroundPickerRenderSignature === renderSignature &&
+  if (featuredBackgroundPickerRenderKey === renderKey &&
     hasRenderedFeaturedBackgroundPickerContent()) {
     syncFeaturedBackgroundModalControls()
     return
@@ -10695,7 +10556,7 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
       }
     ]
   })
-  featuredBackgroundPickerRenderSignature = renderSignature
+  featuredBackgroundPickerRenderKey = renderKey
 }
 
 function hasRenderedFeaturedBackgroundPickerContent(): boolean {
@@ -10822,30 +10683,6 @@ function getFeaturedBackgroundPreviewSourceUrl(
     : itemOrProvider.provider
   const candidates = getFeaturedBackgroundPreviewCandidates(imageUrl, provider)
   return candidates[0] || ''
-}
-
-function getFeaturedBackgroundProviderForUrl(imageUrl: string): FeaturedBackgroundItem['provider'] {
-  try {
-    const url = new URL(normalizeBackgroundImageUrl(imageUrl))
-    if (url.hostname === 'images-assets.nasa.gov') {
-      return 'nasa'
-    }
-    if (url.hostname === 'images.metmuseum.org') {
-      return 'met'
-    }
-    if (url.hostname === 'upload.wikimedia.org') {
-      return 'wikimedia'
-    }
-    if (url.hostname === 'www.artic.edu') {
-      return 'artic'
-    }
-    if (url.hostname === 'openaccess-cdn.clevelandart.org') {
-      return 'cleveland'
-    }
-  } catch {
-    // ignore
-  }
-  return 'wikimedia'
 }
 
 function getFeaturedBackgroundPreviewPlaceholderColor({
@@ -11077,9 +10914,9 @@ function showFeaturedBackgroundHoverPreview(request: FeaturedBackgroundHoverPrev
   featuredBackgroundPreviewCard = card
   dispatchNewtabFeaturedBackgroundHoverPreviewView({
     ariaLabel: `${request.title || '精选图库壁纸'} 大图预览`,
-    backgroundImage: `url("${escapeCssUrl(fallbackUrl)}")`,
     height: position.height,
     left: position.left,
+    src: fallbackUrl,
     top: position.top,
     visible: true,
     width: position.width
@@ -11088,7 +10925,7 @@ function showFeaturedBackgroundHoverPreview(request: FeaturedBackgroundHoverPrev
     if (!cachedUrl || featuredBackgroundPreviewCard !== card) {
       return
     }
-    dispatchNewtabFeaturedBackgroundHoverPreviewBackgroundImage(`url("${escapeCssUrl(cachedUrl)}")`)
+    dispatchNewtabFeaturedBackgroundHoverPreviewSrc(cachedUrl)
   })
 }
 
@@ -11155,14 +10992,15 @@ function applyFeaturedBackgroundDisplayPreferences(): void {
 }
 
 function updateInstantWallpaperDisplayCss(
-  mediaSignature: string,
+  mediaKey: string,
   displayCss = getBackgroundDisplayCssForSettings(state.backgroundSettings)
 ): void {
-  if (!mediaSignature) {
+  if (!mediaKey) {
     return
   }
   const instantWallpaper = readInstantWallpaper()
-  if (!instantWallpaper || instantWallpaper.signature !== mediaSignature) {
+  const instantWallpaperKey = instantWallpaper?.signature
+  if (!instantWallpaper || instantWallpaperKey !== mediaKey) {
     return
   }
   saveInstantWallpaper({
@@ -11171,7 +11009,7 @@ function updateInstantWallpaperDisplayCss(
     backgroundPosition: displayCss.backgroundPosition,
     updatedAt: Date.now()
   })
-  syncInstantWallpaperTargetForSettings(state.backgroundSettings, mediaSignature)
+  syncInstantWallpaperTargetForSettings(state.backgroundSettings, mediaKey)
 }
 
 function syncFeaturedBackgroundDisplayPreferenceControls(): void {
@@ -11279,7 +11117,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
       `已拉取 ${fetchedItems.length} 张高分辨率图片，收藏图片已保留。`,
       'success'
     )
-    featuredBackgroundPickerRenderSignature = ''
+    featuredBackgroundPickerRenderKey = ''
     await renderFeaturedBackgroundPickerAfterRefresh()
     void clearFeaturedBackgroundPreviewCache().catch((cacheError) => {
       console.warn('精选图库预览缓存清除失败。', cacheError)
@@ -11410,10 +11248,10 @@ function getFeaturedBackgroundPickerLabel(settings = state.backgroundSettings): 
 async function hydrateFeaturedBackgroundCredit(settings: typeof DEFAULT_BACKGROUND_SETTINGS): Promise<void> {
   const hydrateVersion = ++featuredBackgroundUiVersion
   try {
-    await getActiveFeaturedBackgroundItem(settings)
     if (hydrateVersion !== featuredBackgroundUiVersion) {
       return
     }
+    await getActiveFeaturedBackgroundItem(settings)
     dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
   } catch {
     // The credit link is an enhancement for featured backgrounds; keep the generic source link if loading fails.
@@ -11729,15 +11567,6 @@ function normalizeHexColor(value: unknown, fallback: string): string {
     return `#${color.slice(1).split('').map((char) => `${char}${char}`).join('')}`.toLowerCase()
   }
   return fallback
-}
-
-function getReadableTextColor(hexColor: string): string {
-  const color = normalizeHexColor(hexColor, DEFAULT_BACKGROUND_SETTINGS.color).slice(1)
-  const red = parseInt(color.slice(0, 2), 16)
-  const green = parseInt(color.slice(2, 4), 16)
-  const blue = parseInt(color.slice(4, 6), 16)
-  const luminance = (red * 299 + green * 587 + blue * 114) / 1000
-  return luminance > 150 ? '#111111' : '#ffffff'
 }
 
 function getFaviconUrl(url: string, bookmarkId = ''): string {

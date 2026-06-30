@@ -34,7 +34,7 @@ export function Tooltip({
   )
 }
 
-export function TooltipTriggerShell({
+function TooltipTriggerShell({
   children,
   closeDelay = 0,
   content,

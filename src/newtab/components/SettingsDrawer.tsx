@@ -1,25 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
-import {
-  Button,
-  CollapsiblePanel,
-  CollapsibleRoot,
-  CollapsibleTrigger,
-  DrawerOverlay,
-  DrawerPanel,
-  Icon,
-  Input,
-  Select,
-  SliderControl,
-  Surface,
-  SwitchControl,
-  TabsIndicator,
-  TabsList,
-  TabsPanel,
-  TabsRoot,
-  TabsTab,
-  ToggleGroup,
-  cx
-} from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
+import { cx } from '../../ui/base/utils'
+import { DrawerOverlay, DrawerPanel } from '../../ui/base/Drawer'
+import { Icon } from '../../ui/icons/Icon'
+import { Input } from '../../ui/base/Input'
+import { Select } from '../../ui/base/Select'
+import { SliderControl } from '../../ui/base/Slider'
+import { Surface } from '../../ui/base/Surface'
+import { SwitchControl } from '../../ui/base/Switch'
+import { TabsIndicator, TabsList, TabsPanel, TabsRoot, TabsTab } from '../../ui/base/Tabs'
+import { ToggleGroup } from '../../ui/base/ToggleGroup'
 import {
   OPTION_SWITCH_CONTROL_CLASS,
   OPTION_SWITCH_THUMB_CLASS,
@@ -134,7 +125,6 @@ const SETTINGS_NESTED_SURFACE_CLASS = 'border-[rgba(245,245,247,0.105)] rounded-
 const SETTINGS_SELECTED_SURFACE_CLASS = 'border-[rgba(245,245,247,0.24)] bg-[rgba(245,245,247,0.14)] text-ds-text-primary shadow-none'
 const SETTINGS_SEGMENTED_BUTTON_CLASS = 'min-h-7 min-w-20 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary shadow-none data-[pressed]:border-ds-border-hover data-[pressed]:bg-ds-selected data-[pressed]:text-ds-text-primary data-[pressed]:shadow-none'
 const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:shadow-none [&::after]:shadow-none'
-const SETTINGS_TRANSPARENT_SURFACE_CLASS = 'border-transparent bg-transparent shadow-none'
 const SETTINGS_SECTION_CLASS = 'grid min-w-0 gap-2.5'
 const SETTINGS_SECTION_TITLE_CLASS = 'm-0 text-sm font-semibold leading-snug text-ds-text-primary'
 const SETTINGS_LIST_CLASS = 'grid gap-2'
@@ -161,7 +151,6 @@ const SETTINGS_SELECT_POSITIONER_CLASS = 'z-[10040]'
 const SETTINGS_FIELD_CLASS = 'block min-w-0 max-[700px]:w-full'
 const SETTINGS_NOTE_CLASS = 'm-0 text-xs leading-relaxed text-ds-text-secondary'
 const SETTINGS_WIDE_BUTTON_CLASS = 'min-h-9 w-full justify-between px-3 text-xs font-semibold'
-const SETTINGS_COMPACT_BUTTON_CLASS = 'size-8 min-h-8 min-w-8 p-0'
 const SETTINGS_PICKER_BUTTON_CLASS = 'min-h-9 min-w-32 max-w-56 justify-center overflow-hidden px-3 text-xs font-semibold text-ellipsis whitespace-nowrap max-[700px]:w-full max-[700px]:max-w-none'
 const SETTINGS_FILE_INPUT_CLASS = 'sr-only'
 const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2 text-xs leading-snug text-ds-text-secondary data-[tone=error]:border-ds-danger data-[tone=error]:bg-ds-danger-soft data-[tone=error]:text-ds-danger-text data-[tone=success]:border-ds-accent-line data-[tone=success]:bg-ds-accent-soft data-[tone=success]:text-ds-accent-text'
@@ -1461,7 +1450,7 @@ export function SettingsDrawerHost() {
   )
 }
 
-export function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
+function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
   const [drawerElement, setDrawerElement] = useState<HTMLDivElement | null>(null)
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
   const [slideDirection, setSlideDirection] = useState<SettingsSlideDirection>('forward')

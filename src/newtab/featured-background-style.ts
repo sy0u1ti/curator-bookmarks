@@ -50,7 +50,7 @@ const FEATURED_BACKGROUND_STYLE_REJECT_PATTERNS = [
   /\b(?:drawings? and prints|print(?:s)?|drawing(?:s)?|etching|engraving|lithograph|pastel|charcoal|pencil|monotype)\b/i
 ]
 
-export function getFeaturedBackgroundStyleScore(candidate: FeaturedBackgroundStyleCandidate): number {
+function getFeaturedBackgroundStyleScore(candidate: FeaturedBackgroundStyleCandidate): number {
   const text = normalizeFeaturedBackgroundStyleText(candidate)
   if (!text) {
     return 0
@@ -80,36 +80,13 @@ export function isFeaturedBackgroundStyleSuitable(candidate: FeaturedBackgroundS
   return getFeaturedBackgroundStyleScore(candidate) >= minimumScore
 }
 
-export function compareFeaturedBackgroundStyleCandidates(
-  left: FeaturedBackgroundStyleCandidate,
-  right: FeaturedBackgroundStyleCandidate
-): number {
-  const scoreDifference = getFeaturedBackgroundStyleScore(right) - getFeaturedBackgroundStyleScore(left)
-  if (scoreDifference !== 0) {
-    return scoreDifference
-  }
-
-  const titleDifference = String(left.title || '').localeCompare(String(right.title || ''), 'zh-Hans-CN')
-  if (titleDifference !== 0) {
-    return titleDifference
-  }
-
-  return String(left.credit || '').localeCompare(String(right.credit || ''), 'zh-Hans-CN')
-}
-
-export function sortFeaturedBackgroundStyleCandidates<T extends FeaturedBackgroundStyleCandidate>(items: T[]): T[] {
-  return [...items].sort(compareFeaturedBackgroundStyleCandidates)
-}
-
 function normalizeFeaturedBackgroundStyleText(candidate: FeaturedBackgroundStyleCandidate): string {
   return [
     candidate.title,
     candidate.credit,
     candidate.provider,
     ...(candidate.metadata || [])
-  ]
-    .map((value) => String(value || '').trim())
-    .filter(Boolean)
+  ].flatMap(value => { const mappedResult = String(value || '').trim(); return mappedResult ? [mappedResult] : [] })
     .join(' ')
     .toLowerCase()
 }

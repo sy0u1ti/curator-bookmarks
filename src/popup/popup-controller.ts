@@ -93,6 +93,7 @@ import {
   dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
   registerPopupActionHandlers,
+  resetPopupViewStore,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
   type PopupChromeActionDetail,
@@ -107,6 +108,7 @@ import {
   type PopupSmartClassifierTitleChangeDetail,
   type PopupToastActionDetail
 } from './popup-controller-store.js'
+import { getPopupSmartClassifierRenderStatus } from './popup-smart-classifier-status.js'
 import {
   hydratePopupBaseData,
   hydratePopupDeferredEnhancements
@@ -254,8 +256,8 @@ async function hydratePopupPreferences() {
   } catch {
     state.naturalSearchEnabled = DEFAULT_POPUP_PREFERENCES.naturalSearchEnabled
   }
-  await refreshNaturalSearchAiConfiguredState()
-  if (!state.naturalSearchAiConfigured && state.naturalSearchEnabled) {
+  const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
+  if (!naturalSearchAiConfigured && state.naturalSearchEnabled) {
     state.naturalSearchEnabled = false
     void savePopupPreferences().catch(() => {})
   }
@@ -275,13 +277,16 @@ async function savePopupPreferences() {
     }
   })
 }
-async function refreshNaturalSearchAiConfiguredState() {
+async function refreshNaturalSearchAiConfiguredState(): Promise<boolean> {
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
-    state.naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
+    const naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
+    state.naturalSearchAiConfigured = naturalSearchAiConfigured
+    return naturalSearchAiConfigured
   } catch {
     state.naturalSearchAiConfigured = false
+    return false
   } finally {
     state.naturalSearchAiConfigChecked = true
   }
@@ -337,10 +342,10 @@ async function dismissAutoAnalyzeStatus() {
   await clearActionBadge()
 }
 async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
-  await clearActionBadge()
   if (!status) {
     return
   }
+  await clearActionBadge()
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
     const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
@@ -546,15 +551,18 @@ async function consumePopupCommandIntent(rawIntent = undefined): Promise<boolean
     }
     return false
   }
-  await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
+  const clearCommandIntent = removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
   if (intent.action === 'feedback') {
+    await clearCommandIntent
     showCommandFeedbackIntent(intent)
     return false
   }
   if (intent.action === 'smart-classifier') {
+    await clearCommandIntent
     await runSmartClassifierFromCommand(intent)
     return true
   }
+  await clearCommandIntent
   focusSearchFromCommand(intent)
   return true
 }
@@ -910,10 +918,10 @@ function ensurePinyinEnrichmentForQuery(query: string): void {
   schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
 async function hydrateCurrentTabState(refreshRunId = popupRefreshRunId) {
-  const currentTab = await getActiveTab().catch(() => null)
   if (refreshRunId !== popupRefreshRunId) {
     return
   }
+  const currentTab = await getActiveTab().catch(() => null)
   state.currentTab = currentTab
   applyCurrentTabBookmarkMatch()
 }
@@ -943,10 +951,10 @@ function applyCurrentTabBookmarkMatch() {
 }
 async function hydrateNewTabPinnedState(refreshRunId = popupRefreshRunId) {
   try {
-    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
     if (refreshRunId !== popupRefreshRunId) {
       return
     }
+    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
     const settings = normalizeNewTabWorkspaceSettings(
       stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
       { validBookmarkIds: state.bookmarkMap.keys() }
@@ -987,10 +995,40 @@ function cleanupPopupController() {
   }
   state.toastTimers.clear()
   state.toasts = []
-  state.contentRenderHtml = ''
+  state.contentRenderKey = ''
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
+  resetPopupSessionStateForNextOpen()
+  resetPopupViewStore()
   clearSearchCaches()
+}
+
+function resetPopupSessionStateForNextOpen() {
+  state.isLoading = true
+  state.loadError = ''
+  state.currentTab = null
+  state.currentPageBookmarkId = null
+  state.smartStatus = 'idle'
+  state.smartError = ''
+  state.smartStep = 0
+  state.smartProgressPercent = 0
+  state.smartSuggestedTitle = ''
+  state.smartSummary = ''
+  state.smartContentType = ''
+  state.smartTopics = []
+  state.smartTags = []
+  state.smartAliases = []
+  state.smartConfidence = 0
+  state.smartModel = ''
+  state.smartExtraction = { status: '', source: '', warnings: [] }
+  state.smartRecommendations = []
+  state.smartSelectedRecommendationId = ''
+  state.smartFolderPickerOpen = false
+  state.smartFolderSearchQuery = ''
+  state.smartSaving = false
+  state.smartSaved = false
+  state.smartPermissionRequest = null
+  state.pendingActionIds.clear()
 }
 function maybeWarmPopupSnapshotFullTextForSearch() {
   if (
@@ -1026,13 +1064,13 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
     includeFullText: true,
     extracted: popupBookmarkCatalog?.extracted || null
   })
-  await enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog(state.allBookmarks, catalog, {
-    isActive: () => state.searchSnapshotFullTextRunId === warmupRunId
-  })
 
   if (state.searchSnapshotFullTextRunId !== warmupRunId) {
     return
   }
+  await enrichExistingPopupSearchIndexWithSnapshotFullTextFromCatalog(state.allBookmarks, catalog, {
+    isActive: () => state.searchSnapshotFullTextRunId === warmupRunId
+  })
 
   popupBookmarkCatalog = catalog
   state.searchCache.setVersion(catalog.version)
@@ -1101,8 +1139,8 @@ function syncActiveSearchResultIndex(): void {
 async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | null = null) {
   const enabled = !state.naturalSearchEnabled
   if (enabled) {
-    await refreshNaturalSearchAiConfiguredState()
-    if (!state.naturalSearchAiConfigured) {
+    const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
+    if (!naturalSearchAiConfigured) {
       state.naturalSearchEnabled = false
       state.naturalSearchSetupRequired = false
       state.naturalSearchPending = false
@@ -1257,15 +1295,15 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     syncActiveSearchResultIndex()
   }
   try {
-    const naturalSearch = await loadNaturalSearchModule()
     if (state.searchRunId !== runId) {
       return
     }
+    const naturalSearch = await loadNaturalSearchModule()
     if (cachedResults) {
-      const cachedPlanResult = await resolveCachedNaturalSearchPlan(query, planCacheKey, naturalSearch)
       if (state.searchRunId !== runId) {
         return
       }
+      const cachedPlanResult = await resolveCachedNaturalSearchPlan(query, planCacheKey, naturalSearch)
       if (cachedPlanResult.canReuseResults) {
         state.naturalSearchPlan = cachedPlanResult.plan
         state.searchHighlightQuery = cachedPlanResult.plan.highlightQuery || normalizedQuery
@@ -1282,24 +1320,24 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
       state.searchResults = []
       syncActiveSearchResultIndex()
     }
-    const plan = await resolveNaturalSearchPlan(query, normalizedQuery, naturalSearch, {
-      signal: controller.signal
-    })
     if (state.searchRunId !== runId) {
       return
     }
+    const plan = await resolveNaturalSearchPlan(query, normalizedQuery, naturalSearch, {
+      signal: controller.signal
+    })
     state.naturalSearchPlan = plan
     state.searchHighlightQuery = plan.highlightQuery || normalizedQuery
     const bookmarks = naturalSearch.filterBookmarksByNaturalDateRange(getFilteredBookmarks(), plan)
-    const resultSets: NaturalSearchResultSet[] = []
-    for (const naturalQuery of plan.queries) {
+    const resultSets = await Promise.all(plan.queries.map(async (naturalQuery): Promise<NaturalSearchResultSet> => {
       if (state.searchRunId !== runId) {
-        return
+        throw new Error('search-cancelled')
       }
       const results = await searchNaturalQuery(naturalQuery, bookmarks, runId)
-      resultSets.push({ query: naturalQuery, results })
-    }
-    if (state.searchRunId !== runId) {
+      return { query: naturalQuery, results }
+    }))
+    const searchRunStillCurrent = state.searchRunId === runId
+    if (!searchRunStillCurrent) {
       return
     }
     const results = naturalSearch.mergeNaturalSearchResultSets(plan, resultSets)
@@ -1552,9 +1590,7 @@ function getNaturalKeywordSummaryFallback(plan: NaturalSearchPlan): string {
 function formatNaturalTermsFallback(terms: string[], limit: number): string {
   const uniqueTerms = [...new Set(terms)]
   const visibleTerms = uniqueTerms
-    .slice(0, Math.max(1, limit))
-    .map((term) => cleanSmartText(term, 20))
-    .filter(Boolean)
+    .slice(0, Math.max(1, limit)).flatMap(term => { const mappedResult = cleanSmartText(term, 20); return mappedResult ? [mappedResult] : [] })
   if (!visibleTerms.length) {
     return ''
   }
@@ -1618,40 +1654,13 @@ function hasBlockingPopupActionPending() {
 }
 function renderSmartClassifier() {
   const currentUrl = String(state.currentTab?.url || '').trim()
-  const smartAvailable = isSmartClassifiableUrl(currentUrl)
+  const status = getPopupSmartClassifierRenderStatus({
+    currentUrl,
+    isLoading: state.isLoading,
+    smartStatus: state.smartStatus
+  })
 
-  if (state.isLoading && state.smartStatus !== 'results') {
-    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('page-loading'))
-    return
-  }
-
-  if (!smartAvailable) {
-    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('idle'))
-    return
-  }
-
-  if (state.smartStatus === 'loading') {
-    const viewModel = getPopupSmartClassifierViewModel('loading')
-    dispatchPopupSmartClassifierChange(viewModel)
-    return
-  }
-
-  if (state.smartStatus === 'results') {
-    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('results'))
-    return
-  }
-
-  if (state.smartStatus === 'error') {
-    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('error'))
-    return
-  }
-
-  if (state.smartStatus === 'permission') {
-    dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('permission'))
-    return
-  }
-
-  dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel('idle'))
+  dispatchPopupSmartClassifierChange(getPopupSmartClassifierViewModel(status))
 }
 function getPopupSmartClassifierViewModel(
   status: PopupSmartClassifierViewModel['status']
@@ -1672,7 +1681,7 @@ function getPopupSmartClassifierViewModel(
     loadingStepCount: SMART_LOADING_STEP_COUNT,
     page: getPopupSmartPageViewModel(),
     permissionOrigins: Array.isArray(state.smartPermissionRequest?.origins)
-      ? [...new Set(state.smartPermissionRequest.origins)].filter(Boolean).map(formatPermissionOrigin)
+      ? [...new Set(state.smartPermissionRequest.origins)].flatMap((combineValue, combineIndex, combineArray) => { if (!(Boolean)(combineValue)) return []; const combinedResult = (formatPermissionOrigin)(combineValue); return [combinedResult] })
       : [],
     recommendations: getPopupSmartRecommendationViewModels(),
     saved: state.smartSaved,
@@ -1860,12 +1869,12 @@ function getPopupEmptyStateViewModel({
   }
 }
 function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserveScroll = false } = {}) {
-  const nextSignature = JSON.stringify(nextViewModel)
-  if (state.contentRenderHtml === nextSignature) {
+  const nextRenderKey = JSON.stringify(nextViewModel)
+  if (state.contentRenderKey === nextRenderKey) {
     return
   }
 
-  state.contentRenderHtml = nextSignature
+  state.contentRenderKey = nextRenderKey
   dispatchPopupContentChange(nextViewModel, { preserveScroll })
 }
 
@@ -2038,6 +2047,16 @@ const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
   { test: /^筛选：/, label: '时间筛选' },
   { test: /^排除：/, label: '已排除' }
 ]
+
+function findMatchReasonTokenPattern(text: string): { test: RegExp; label: string } | null {
+  for (const entry of MATCH_REASON_TOKEN_PATTERNS) {
+    if (entry.test.test(text)) {
+      return entry
+    }
+  }
+  return null
+}
+
 function summarizeMatchReasonTokens(reasons: unknown): string[] {
   if (!Array.isArray(reasons) || reasons.length === 0) {
     return []
@@ -2047,7 +2066,7 @@ function summarizeMatchReasonTokens(reasons: unknown): string[] {
   for (const value of reasons) {
     const text = String(value || '').trim()
     if (!text) continue
-    const matched = MATCH_REASON_TOKEN_PATTERNS.find((entry) => entry.test.test(text))
+    const matched = findMatchReasonTokenPattern(text)
     if (!matched) continue
     if (seen.has(matched.label)) continue
     seen.add(matched.label)
@@ -3123,19 +3142,25 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
   try {
     const smartClassifier = await loadSmartClassifierModule()
     const settings = await loadAiProviderSettings()
-    if (state.smartRunId !== runId) return
+    const settingsRunStillCurrent = state.smartRunId === runId
+    if (!settingsRunStillCurrent) return
     smartClassifier.validateSmartAiSettings(settings)
+    const validationRunStillCurrent = state.smartRunId === runId
+    if (!validationRunStillCurrent) return
     await smartClassifier.ensureSmartClassifyPermissions(settings, {
       interactive: requestMissingPermissions
     })
-    if (state.smartRunId !== runId) return
+    const permissionsRunStillCurrent = state.smartRunId === runId
+    if (!permissionsRunStillCurrent) return
+    if (!(await completeSmartProgressStage(runId, 2))) return
     const pageContext = await smartClassifier.buildCurrentPageContext({
       currentUrl,
       currentTitle: getCurrentPageTitle(),
       settings
     })
-    if (state.smartRunId !== runId) return
-    if (!(await completeSmartProgressStage(runId, 2))) return
+    const contextRunStillCurrent = state.smartRunId === runId
+    if (!contextRunStillCurrent) return
+    if (!(await completeSmartProgressStage(runId, 3))) return
     const aiResult = await smartClassifier.requestSmartClassification({
       settings,
       pageContext,
@@ -3143,10 +3168,9 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
       currentTitle: getCurrentPageTitle(),
       allFolders: state.allFolders
     })
-    if (state.smartRunId !== runId) return
-    if (!(await completeSmartProgressStage(runId, 3))) return
+    const classificationRunStillCurrent = state.smartRunId === runId
+    if (!classificationRunStillCurrent) return
     await waitForSmartLoadingPaint()
-    if (state.smartRunId !== runId) return
     const recommendations = buildSmartRecommendations(aiResult)
     state.smartSuggestedTitle = cleanSmartTitle(aiResult.title || getCurrentPageTitle())
     state.smartSummary = cleanSmartText(aiResult.summary, 360)
@@ -3162,8 +3186,8 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     state.smartProgressPercent = 100
     stopSmartProgressTicker()
     renderSmartClassifier()
-    await waitForSmartProgressCompletion()
     if (state.smartRunId !== runId) return
+    await waitForSmartProgressCompletion()
     state.smartStatus = 'results'
     renderSmartClassifier()
   } catch (error) {
@@ -3189,10 +3213,10 @@ async function completeSmartProgressStage(runId: number, nextStep: number): Prom
   const step = normalizeSmartLoadingStep(nextStep)
   state.smartProgressPercent = advanceSmartProgressToStageStart(state.smartProgressPercent, step)
   renderSmartClassifier()
-  await waitForSmartProgressCompletion()
   if (!isSmartLoadingRunActive(runId)) {
     return false
   }
+  await waitForSmartProgressCompletion()
 
   state.smartStep = step
   state.smartProgressPercent = advanceSmartProgressToStageStart(state.smartProgressPercent, step)
@@ -3686,8 +3710,10 @@ async function copyBookmarkUrl(bookmarkId) {
   }
 }
 async function loadAiProviderSettings() {
-  const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
-  const { normalizeAiNamingSettings } = await loadAiSettingsModule()
+  const [stored, { normalizeAiNamingSettings }] = await Promise.all([
+    getLocalStorage([STORAGE_KEYS.aiProviderSettings]),
+    loadAiSettingsModule()
+  ])
   return normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
 }
 function buildSmartRecommendations(aiResult) {
@@ -3752,8 +3778,7 @@ function buildLocalSmartFolderMatches() {
   const urlText = normalizeText(state.currentTab?.url || '')
   const domainText = normalizeText(extractDomain(state.currentTab?.url || ''))
   const haystack = [titleText, urlText, domainText].filter(Boolean).join(' ')
-  return state.allFolders
-    .map((folder) => {
+  return state.allFolders.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((folder) => {
       const title = normalizeText(folder.title)
       const path = normalizeText(folder.path)
       let score = 0
@@ -3776,8 +3801,7 @@ function buildLocalSmartFolderMatches() {
         confidence: Math.max(0.52, Math.min(score, 0.82)),
         reason: '基于当前网页标题、域名和文件夹路径的本地补充匹配。'
       }
-    })
-    .filter((item) => item.confidence > 0.54)
+    })(combineValue); return ((item) => item.confidence > 0.54)(combinedResult) ? [combinedResult] : [] })
     .sort((left, right) => {
       const leftFolder = state.folderMap.get(left.folderId)
       const rightFolder = state.folderMap.get(right.folderId)
@@ -3847,11 +3871,13 @@ function findBestExistingFolder(suggestion) {
   return containsMatches.length ? pickDeepestFolder(containsMatches) : null
 }
 function pickDeepestFolder(folders) {
-  return folders
-    .slice()
-    .sort((left, right) => {
-      return Number(right.depth || 0) - Number(left.depth || 0) || String(left.path).localeCompare(String(right.path), 'zh-Hans-CN')
-    })[0] || null
+  return folders.reduce((best, folder) => {
+    if (!best) {
+      return folder
+    }
+    const comparison = Number(folder.depth || 0) - Number(best.depth || 0) || String(best.path).localeCompare(String(folder.path), 'zh-Hans-CN')
+    return comparison > 0 ? folder : best
+  }, null)
 }
 function isSmartPermissionRequiredError(error) {
   return Boolean((error as { smartPermissionRequest?: { origins?: string[] } })?.smartPermissionRequest?.origins)
@@ -4085,9 +4111,7 @@ function normalizeSmartFolderPath(value) {
 }
 function splitSmartFolderPath(value) {
   return String(value || '')
-    .split(/\s*(?:\/|>|›|»|\\)\s*/g)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
+    .split(/\s*(?:\/|>|›|»|\\)\s*/g).flatMap(segment => { const mappedResult = segment.trim(); return mappedResult ? [mappedResult] : [] })
     .slice(0, 5)
 }
 function getLastPathSegment(value) {

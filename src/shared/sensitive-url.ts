@@ -125,14 +125,6 @@ export function isExternallyCheckableUrl(url: unknown): boolean {
   return !assessSensitiveExternalUrl(url).sensitive
 }
 
-export function isSensitiveExternalRequestUrl(url: unknown): boolean {
-  return assessSensitiveExternalUrl(url).sensitive
-}
-
-export function getSensitiveExternalUrlWarning(url: unknown): string {
-  return assessSensitiveExternalUrl(url).warning
-}
-
 function buildSensitiveDecision(reason: SensitiveExternalUrlReason): SensitiveExternalUrlDecision {
   return {
     sensitive: true,

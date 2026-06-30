@@ -1,5 +1,5 @@
-import { Button } from '../../ui'
-import { ToastList } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { ToastList } from '../../ui/base/Toast'
 import {
   dispatchPopupToastAction,
   usePopupToasts

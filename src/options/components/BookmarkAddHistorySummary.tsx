@@ -1,4 +1,5 @@
-import { Card, NumberPop } from '../../ui'
+import { Card } from '../../ui/base/Card'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import type { BookmarkAddHistorySummaryState } from './BookmarkAddHistoryTypes.js'
 
 const historyMetrics = [

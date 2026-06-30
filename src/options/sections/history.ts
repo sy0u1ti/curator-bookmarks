@@ -17,8 +17,7 @@ function normalizeHistoryResultArray(entries) {
     return []
   }
 
-  return entries
-    .map((entry) => {
+  return entries.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry) => {
       const bookmarkId = String(entry?.id || '').trim()
       if (!bookmarkId) {
         return null
@@ -32,8 +31,7 @@ function normalizeHistoryResultArray(entries) {
         status: String(entry?.status || '').trim() === 'failed' ? 'failed' : 'review',
         streak: Math.max(1, Number(entry?.streak) || 1)
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
 function normalizeDetectionHistoryRun(run) {
@@ -82,9 +80,7 @@ function normalizeDetectionHistoryRun(run) {
 
 function normalizeDetectionHistoryRuns(rawHistory) {
   if (Array.isArray(rawHistory.runs)) {
-    return rawHistory.runs
-      .map((run) => normalizeDetectionHistoryRun(run))
-      .filter(Boolean)
+    return rawHistory.runs.flatMap(run => { const mappedResult = normalizeDetectionHistoryRun(run); return mappedResult ? [mappedResult] : [] })
       .sort((left, right) => right.completedAt - left.completedAt)
   }
 
@@ -204,7 +200,8 @@ export function getHistoricalAbnormalStreak(bookmarkId, callbacks) {
       continue
     }
 
-    const entry = (run.results || []).find((result) => String(result.id) === normalizedId)
+    const resultById = new Map((run.results || []).map((result) => [String(result.id), result]))
+    const entry = resultById.get(normalizedId)
     if (!entry) {
       break
     }
@@ -281,11 +278,9 @@ export async function finalizeDetectionHistory(callbacks) {
     results: nextEntries.map((entry) => ({
       ...entry
     })),
-    newResults: nextEntries
-      .filter((entry) => !previousHistoryMap.has(entry.id))
-      .map((entry) => ({
+    newResults: nextEntries.flatMap((combineValue, combineIndex, combineArray) => { if (!((entry) => !previousHistoryMap.has(entry.id))(combineValue)) return []; const combinedResult = ((entry) => ({
         ...entry
-      })),
+      }))(combineValue); return [combinedResult] }),
     recoveredResults: managerState.historyRecoveredResults.map((entry) => ({
       ...entry
     })),

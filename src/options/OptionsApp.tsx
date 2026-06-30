@@ -6,13 +6,9 @@ import {
   useState,
   type MouseEvent
 } from 'react'
-import {
-  CollapsiblePanel,
-  CollapsibleRoot,
-  CollapsibleTrigger
-} from '../ui'
+import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../ui/base/Collapsible'
 import { Icon } from '../ui/icons/Icon'
-import { ThemeProvider } from '../ui'
+import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
 import { AiAnalysisPanel, AvailabilityPanel, GeneralPanel } from './components/CorePanels'
 import { DashboardPanel } from './components/DashboardPanel'

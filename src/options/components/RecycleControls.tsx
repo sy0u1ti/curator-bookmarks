@@ -1,4 +1,6 @@
-import { Button, TextSwap, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { TextSwap } from '../../ui/motion/TextSwap'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { handleRecycleAction } from '../options-controller'
 import { useRecycleControlsState } from './recycle-controls-store.js'
 

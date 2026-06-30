@@ -40,6 +40,8 @@ export interface ClockParts {
   seconds: number
 }
 
+const DATE_TIME_FORMATTER_CONSTRUCTOR = Intl.DateTimeFormat
+
 export const DEFAULT_TIME_SETTINGS: NewTabTimeSettings = {
   enabled: true,
   showSeconds: false,
@@ -257,10 +259,13 @@ function getClockPartsFormatter(timeZone: NewTabTimeZone): Intl.DateTimeFormat {
     return existing
   }
 
-  const formatter = new Intl.DateTimeFormat('zh-CN-u-ca-gregory', {
-    ...CLOCK_PARTS_FORMATTER_OPTIONS,
-    timeZone
-  })
+  const formatter = Reflect.construct(DATE_TIME_FORMATTER_CONSTRUCTOR, [
+    'zh-CN-u-ca-gregory',
+    {
+      ...CLOCK_PARTS_FORMATTER_OPTIONS,
+      timeZone
+    }
+  ]) as Intl.DateTimeFormat
   clockPartsFormatterCache.set(timeZone, formatter)
   return formatter
 }

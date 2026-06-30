@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button } from '../../ui/base/Button'
 import { navigateToOptionsEmptyStateAction } from '../options-section-store.js'
 import type { BookmarkAddHistoryEntry } from '../sections/bookmark-add-history.js'
 import { BookmarkAddHistoryCard } from './BookmarkAddHistoryCard.js'

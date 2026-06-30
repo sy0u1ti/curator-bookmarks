@@ -33,14 +33,6 @@ interface FolderCleanupCallbacks {
   renderAvailabilitySection: () => void
 }
 
-const KIND_LABELS = {
-  'empty-folder': '空文件夹',
-  'deep-single-bookmark': '深层单书签',
-  'single-path-chain': '单一路径',
-  'same-name-folders': '同名合并',
-  'large-folder-split': '超大拆分'
-}
-
 const OPERATION_BACKUP_KIND = {
   delete: 'folder-cleanup-delete',
   move: 'folder-cleanup-move',
@@ -263,9 +255,9 @@ async function executeFolderCleanupSuggestion(
 }
 
 async function deleteFolders(folderIds: string[]) {
-  for (const folderId of sortFolderIdsDeepFirst(folderIds)) {
+  await runFolderCleanupSequentially(sortFolderIdsDeepFirst(folderIds), async (folderId) => {
     await removeBookmarkTree(folderId)
-  }
+  })
 }
 
 async function moveBookmarksAndRemoveFolders(suggestion: FolderCleanupSuggestion) {
@@ -274,9 +266,9 @@ async function moveBookmarksAndRemoveFolders(suggestion: FolderCleanupSuggestion
     throw new Error('缺少移动目标文件夹。')
   }
 
-  for (const bookmarkId of suggestion.bookmarkIds) {
+  await runFolderCleanupSequentially(suggestion.bookmarkIds, async (bookmarkId) => {
     await moveBookmark(bookmarkId, targetFolderId)
-  }
+  })
   await deleteFolders(suggestion.folderIds)
 }
 
@@ -287,9 +279,9 @@ async function mergeFolders(suggestion: FolderCleanupSuggestion) {
   }
 
   const sourceFolderIds = suggestion.folderIds.filter((folderId) => folderId !== targetFolderId)
-  for (const bookmarkId of suggestion.bookmarkIds) {
+  await runFolderCleanupSequentially(suggestion.bookmarkIds, async (bookmarkId) => {
     await moveBookmark(bookmarkId, targetFolderId)
-  }
+  })
   await deleteFolders(sourceFolderIds)
 }
 
@@ -301,13 +293,13 @@ async function splitLargeFolder(suggestion: FolderCleanupSuggestion) {
 
   const createdFolderIds: string[] = []
   try {
-    for (const group of suggestion.splitGroups) {
+    await runFolderCleanupSequentially(suggestion.splitGroups, async (group) => {
       const folder = await createBookmark({
         parentId: targetFolderId,
         title: sanitizeFolderTitle(group.label)
       })
       createdFolderIds.push(String(folder.id))
-    }
+    })
   } catch (error) {
     await deleteFolders(createdFolderIds).catch(() => undefined)
     throw error
@@ -322,12 +314,13 @@ async function splitLargeFolder(suggestion: FolderCleanupSuggestion) {
   folderCleanupState.lastSplitUndo = splitUndo
   await persistFolderCleanupState()
 
-  for (const [groupIndex, group] of suggestion.splitGroups.entries()) {
+  const splitMoves = suggestion.splitGroups.flatMap((group, groupIndex) => {
     const folderId = createdFolderIds[groupIndex]
-    for (const bookmarkId of group.bookmarkIds) {
-      await moveBookmark(bookmarkId, folderId)
-    }
-  }
+    return group.bookmarkIds.map((bookmarkId) => ({ bookmarkId, folderId }))
+  })
+  await runFolderCleanupSequentially(splitMoves, async ({ bookmarkId, folderId }) => {
+    await moveBookmark(bookmarkId, folderId)
+  })
 
   return splitUndo
 }
@@ -368,7 +361,7 @@ async function undoFolderCleanupSplit(
   renderFolderCleanupSection(callbacks)
 
   try {
-    await createAutoBackupBeforeDangerousOperation({
+    const retainedFolderCount = await createAutoBackupBeforeDangerousOperation({
       kind: 'folder-cleanup-move',
       source: 'options',
       reason: `撤销拆分：${splitUndo.title}`,
@@ -376,12 +369,10 @@ async function undoFolderCleanupSplit(
       targetFolderIds: [splitUndo.targetFolderId, ...splitUndo.createdFolderIds].filter(Boolean),
       estimatedChangeCount: splitUndo.moves.length + splitUndo.createdFolderIds.length
     })
-
-    for (const move of sortSplitUndoMoves(splitUndo.moves)) {
-      await restoreSplitUndoMove(move)
-    }
-
-    const retainedFolderCount = await removeEmptySplitFolders(splitUndo.createdFolderIds)
+      .then(() => runFolderCleanupSequentially(sortSplitUndoMoves(splitUndo.moves), async (move) => {
+        await restoreSplitUndoMove(move)
+      }))
+      .then(() => removeEmptySplitFolders(splitUndo.createdFolderIds))
     folderCleanupState.lastSplitUndo = null
     folderCleanupState.executedSuggestionIds.delete(splitUndo.suggestionId)
     folderCleanupState.statusMessage = retainedFolderCount
@@ -437,19 +428,25 @@ async function removeEmptySplitFolders(folderIds: string[]): Promise<number> {
   const roots = await getBookmarkTree()
   let retainedFolderCount = 0
 
-  for (const folderId of folderIds) {
+  await runFolderCleanupSequentially(folderIds, async (folderId) => {
     const node = findBookmarkTreeNode(roots, folderId)
     if (!node) {
-      continue
+      return
     }
     if (node.url || (node.children || []).length > 0) {
       retainedFolderCount += 1
-      continue
+      return
     }
     await removeBookmarkTree(folderId)
-  }
+  })
 
   return retainedFolderCount
+}
+
+function runFolderCleanupSequentially<T>(items: T[], task: (item: T, index: number) => Promise<void>): Promise<void> {
+  return items.reduce<Promise<void>>((chain, item, index) => {
+    return chain.then(() => task(item, index))
+  }, Promise.resolve())
 }
 
 function findBookmarkTreeNode(
@@ -468,34 +465,6 @@ function findBookmarkTreeNode(
     queue.push(...(node.children || []))
   }
   return null
-}
-
-export function getFolderCleanupSuggestionActionLabel(
-  action: string,
-  suggestion: Pick<FolderCleanupSuggestion, 'title' | 'summary'>
-): string {
-  const context = getFolderCleanupActionContext(suggestion?.title || suggestion?.summary, '未命名清理建议')
-  return `${action}：${context}`
-}
-
-export function getFolderCleanupSplitUndoActionLabel(
-  action: string,
-  splitUndo: Pick<FolderCleanupSplitUndo, 'title' | 'moves'>
-): string {
-  const context = getFolderCleanupActionContext(splitUndo?.title, '拆分超大文件夹')
-  const moveCount = Array.isArray(splitUndo?.moves) ? splitUndo.moves.length : 0
-  return `${action}：${context}${moveCount ? `，${moveCount} 个书签` : ''}`
-}
-
-function getFolderCleanupActionContext(value: unknown, fallback: string): string {
-  const normalized = String(value || fallback)
-    .replace(/\s+/g, ' ')
-    .trim()
-  const safeValue = normalized.length > 48
-    ? `${normalized.slice(0, 47).trim()}…`
-    : normalized
-
-  return safeValue || fallback
 }
 
 export function toggleFolderCleanupPreview(suggestionId, callbacks: FolderCleanupCallbacks) {
@@ -546,22 +515,6 @@ function getReservedFolderCleanupTitles(): string[] {
   return inboxTitle ? [inboxTitle] : []
 }
 
-function getOperationCopy(suggestion: FolderCleanupSuggestion): string {
-  if (!suggestion.canExecute) {
-    return '仅预览'
-  }
-  if (suggestion.operation === 'delete') {
-    return '确认删除'
-  }
-  if (suggestion.operation === 'merge') {
-    return '确认合并'
-  }
-  if (suggestion.operation === 'split') {
-    return '确认拆分'
-  }
-  return '确认移动'
-}
-
 function getConfirmLabel(operation: FolderCleanupOperationKind): string {
   if (operation === 'delete') {
     return '删除文件夹'
@@ -595,9 +548,7 @@ function getConfirmCopy(suggestion: FolderCleanupSuggestion): string {
 }
 
 function sortFolderIdsDeepFirst(folderIds: string[]): string[] {
-  const depthById = new Map(folderCleanupState.suggestions
-    .flatMap((suggestion) => suggestion.folders)
-    .map((folder) => [folder.id, folder.depth]))
+  const depthById = new Map(folderCleanupState.suggestions.flatMap((combineValue, combineIndex, combineArray) => { const combinedFlatValue = ((suggestion) => suggestion.folders)(combineValue); const combinedFlatItems = Array.isArray(combinedFlatValue) ? combinedFlatValue : [combinedFlatValue]; return combinedFlatItems.map((combinedFlatItem) => ((folder) => [folder.id, folder.depth])(combinedFlatItem)) }))
 
   return folderIds.slice().sort((left, right) => (
     (depthById.get(right) || 0) - (depthById.get(left) || 0)

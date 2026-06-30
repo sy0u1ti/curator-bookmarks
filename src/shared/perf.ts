@@ -30,10 +30,6 @@ function getPerformance(): Performance | null {
   }
 }
 
-export function isPerfLoggingEnabled(): boolean {
-  return readPerfFlag()
-}
-
 export function mark(name: string): void {
   const perf = getPerformance()
   if (!perf?.mark) {
@@ -87,17 +83,6 @@ export function measureNow<T>(name: string, fn: () => T): T {
     if (Number.isFinite(duration) && readPerfFlag()) {
       perfConsole.log(`${PERF_LOG_PREFIX} ${name} ${duration.toFixed(1)}ms`)
     }
-  }
-}
-
-export async function withTimingAsync<T>(name: string, fn: () => Promise<T>): Promise<T> {
-  const start = `${name}.start`
-  const end = `${name}.end`
-  mark(start)
-  try {
-    return await fn()
-  } finally {
-    measure(name, start, end)
   }
 }
 

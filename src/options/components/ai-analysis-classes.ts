@@ -22,7 +22,7 @@ export const AI_ANALYSIS_METRIC_LABEL_CLASS =
 export const AI_ANALYSIS_STATUS_BADGE_CLASS =
   'inline-flex min-h-7 flex-none items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'
 
-export const AI_ANALYSIS_STATUS_TONE_CLASS: Record<string, string> = {
+const AI_ANALYSIS_STATUS_TONE_CLASS: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
   ready: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',

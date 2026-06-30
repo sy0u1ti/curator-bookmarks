@@ -40,8 +40,7 @@ function normalizeRedirectCacheResults(entries) {
     return []
   }
 
-  return entries
-    .map((entry) => {
+  return entries.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry) => {
       const bookmarkId = String(entry?.id || '').trim()
       const url = String(entry?.url || '').trim()
       const finalUrl = String(entry?.finalUrl || '').trim()
@@ -59,14 +58,13 @@ function normalizeRedirectCacheResults(entries) {
         parentId: String(entry?.parentId || '').trim(),
         index: Number.isFinite(Number(entry?.index)) ? Number(entry.index) : 0,
         ancestorIds: Array.isArray(entry?.ancestorIds)
-          ? entry.ancestorIds.map((folderId) => String(folderId)).filter(Boolean)
+          ? entry.ancestorIds.flatMap(folderId => { const mappedResult = String(folderId); return mappedResult ? [mappedResult] : [] })
           : [],
         badgeText: String(entry?.badgeText || '已跳转').trim() || '已跳转',
         detail: String(entry?.detail || '').trim(),
         status: 'redirected'
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
 function serializeRedirectCache(redirectCache = managerState.redirectCache) {
@@ -106,18 +104,8 @@ export function synchronizeRedirectResults() {
   }
 }
 
-export function getRedirectResultActionLabel(action, result) {
-  const title = String(result?.title || displayUrl(result?.finalUrl || result?.url) || '未命名书签')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const safeTitle = title.length > 48 ? `${title.slice(0, 47).trim()}…` : title
-
-  return `${action}：${safeTitle || '未命名书签'}`
-}
-
 function getCachedRedirectResults() {
-  return managerState.redirectCache.results
-    .map((cachedResult) => {
+  return managerState.redirectCache.results.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((cachedResult) => {
       const latestBookmark = availabilityState.bookmarkMap.get(String(cachedResult.id))
       if (!latestBookmark) {
         return null
@@ -142,8 +130,7 @@ function getCachedRedirectResults() {
         normalizedUrl: latestBookmark.normalizedUrl,
         duplicateKey: latestBookmark.duplicateKey
       }
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 }
 
 export function getRedirectSectionState(callbacks) {
@@ -176,11 +163,9 @@ export async function persistRedirectCacheSnapshot(callbacks, {
   managerState.redirectCache = {
     savedAt: Number(savedAt) || 0,
     scope: scopeMeta,
-    results: availabilityState.redirectResults
-      .filter((result) => {
+    results: availabilityState.redirectResults.flatMap((combineValue, combineIndex, combineArray) => { if (!((result) => {
         return Boolean(String(result?.id || '').trim()) && isRedirectedNavigation(result.url, result.finalUrl || result.url)
-      })
-      .map((result) => ({
+      })(combineValue)) return []; const combinedResult = ((result) => ({
         id: String(result.id),
         title: String(result.title || '未命名书签'),
         url: String(result.url || ''),
@@ -188,18 +173,18 @@ export async function persistRedirectCacheSnapshot(callbacks, {
         path: String(result.path || ''),
         parentId: String(result.parentId || ''),
         index: Number.isFinite(Number(result.index)) ? Number(result.index) : 0,
-        ancestorIds: Array.isArray(result.ancestorIds) ? result.ancestorIds.map((folderId) => String(folderId)).filter(Boolean) : [],
+        ancestorIds: Array.isArray(result.ancestorIds) ? result.ancestorIds.flatMap(folderId => { const mappedResult = String(folderId); return mappedResult ? [mappedResult] : [] }) : [],
         badgeText: String(result.badgeText || '已跳转'),
         detail: String(result.detail || ''),
         status: 'redirected'
-      }))
+      }))(combineValue); return [combinedResult] })
   }
 
   await saveRedirectCache()
 }
 
 export function removeRedirectIdsFromState(bookmarkIds) {
-  const removedIdSet = new Set(bookmarkIds.map((id) => String(id)).filter(Boolean))
+  const removedIdSet = new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   if (!removedIdSet.size) {
     return
   }
@@ -411,46 +396,17 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
   let updateError = null
 
   try {
-    await createAutoBackupBeforeDangerousOperation({
-      kind: 'redirect-url-update',
-      source: 'options',
-      reason: `批量更新 ${targetResults.length} 条重定向 URL`,
-      targetBookmarkIds: targetResults.map((result) => String(result.id)),
-      estimatedChangeCount: targetResults.length
-    })
-
-    const latestBookmarkMap = await getLatestBookmarkMap()
-
-    for (const result of targetResults) {
-      const finalUrl = String(result.finalUrl || '').trim()
-      if (!finalUrl || !isRedirectedNavigation(result.url, finalUrl)) {
-        skippedEntries.push({
-          id: result.id,
-          reason: '最终 URL 已不再构成有效重定向。'
-        })
-        continue
-      }
-
-      const latestBookmark = latestBookmarkMap.get(String(result.id))
-      if (!latestBookmark?.url) {
-        skippedEntries.push({
-          id: result.id,
-          reason: '书签已不存在。'
-        })
-        continue
-      }
-
-      if (String(latestBookmark.url) !== String(result.url || '')) {
-        skippedEntries.push({
-          id: result.id,
-          reason: `当前 URL 已变更为 ${displayUrl(latestBookmark.url)}。`
-        })
-        continue
-      }
-
-      await updateBookmark(result.id, { url: finalUrl })
-      updatedIds.push(result.id)
-    }
+    const [, latestBookmarkMap] = await Promise.all([
+      createAutoBackupBeforeDangerousOperation({
+        kind: 'redirect-url-update',
+        source: 'options',
+        reason: `批量更新 ${targetResults.length} 条重定向 URL`,
+        targetBookmarkIds: targetResults.map((result) => String(result.id)),
+        estimatedChangeCount: targetResults.length
+      }),
+      getLatestBookmarkMap()
+    ])
+    await updateRedirectResultsSequentially(targetResults, latestBookmarkMap, skippedEntries, updatedIds)
   } catch (error) {
     updateError = error
   } finally {
@@ -478,6 +434,41 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
 
     callbacks.renderAvailabilitySection()
   }
+}
+
+function updateRedirectResultsSequentially(targetResults, latestBookmarkMap, skippedEntries, updatedIds) {
+  return targetResults.reduce((chain, result) => {
+    return chain.then(async () => {
+      const finalUrl = String(result.finalUrl || '').trim()
+      if (!finalUrl || !isRedirectedNavigation(result.url, finalUrl)) {
+        skippedEntries.push({
+          id: result.id,
+          reason: '最终 URL 已不再构成有效重定向。'
+        })
+        return
+      }
+
+      const latestBookmark = latestBookmarkMap.get(String(result.id))
+      if (!latestBookmark?.url) {
+        skippedEntries.push({
+          id: result.id,
+          reason: '书签已不存在。'
+        })
+        return
+      }
+
+      if (String(latestBookmark.url) !== String(result.url || '')) {
+        skippedEntries.push({
+          id: result.id,
+          reason: `当前 URL 已变更为 ${displayUrl(latestBookmark.url)}。`
+        })
+        return
+      }
+
+      await updateBookmark(result.id, { url: finalUrl })
+      updatedIds.push(result.id)
+    })
+  }, Promise.resolve())
 }
 
 async function getLatestBookmarkMap() {

@@ -520,7 +520,7 @@ export function appendPageContentWarnings(
     ...context,
     warnings: [
       ...(Array.isArray(context.warnings) ? context.warnings : []),
-      ...warnings.map((warning) => String(warning || '')).filter(Boolean)
+      ...warnings.flatMap(warning => { const mappedResult = String(warning || ''); return mappedResult ? [mappedResult] : [] })
     ]
   })
 }
@@ -636,8 +636,7 @@ function collectHeadings(documentNode: Document): string[] {
 }
 
 function collectLinkContext(documentNode: Document, baseUrl: string): string[] {
-  const links = Array.from(documentNode.querySelectorAll('a[href]'))
-    .map((node) => {
+  const links = Array.from(documentNode.querySelectorAll('a[href]')).flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((node) => {
       const text = truncateCleanText(node.textContent || '', 72)
       const href = resolveUrl(node.getAttribute('href') || '', baseUrl)
       if (!text || text.length < 3 || !href) {
@@ -649,22 +648,19 @@ function collectLinkContext(documentNode: Document, baseUrl: string): string[] {
         ? `${parsedHref.hostname.replace(/^www\./i, '')}${parsedHref.pathname}`.replace(/\/+$/, '')
         : href
       return `${text} -> ${truncateCleanText(urlLabel, 80)}`
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
 
   return normalizeTextList(links, MAX_LINK_CONTEXT, 160)
 }
 
 function extractMainText(documentNode: Document): string {
-  const candidates = CONTENT_SELECTORS
-    .flatMap((selector) => Array.from(documentNode.querySelectorAll(selector)))
-    .filter(Boolean)
+  const candidates = CONTENT_SELECTORS.flatMap((combineValue, combineIndex, combineArray) => { const combinedFlatValue = ((selector) => Array.from(documentNode.querySelectorAll(selector)))(combineValue); const combinedFlatItems = Array.isArray(combinedFlatValue) ? combinedFlatValue : [combinedFlatValue]; return combinedFlatItems.flatMap((combinedFlatItem) => (Boolean)(combinedFlatItem) ? [combinedFlatItem] : []) })
   const target = candidates
     .map((element) => ({
       element,
       score: scoreContentCandidate(element)
     }))
-    .sort((left, right) => right.score - left.score)[0]?.element || documentNode.body
+    .reduce((best, candidate) => (candidate.score > best.score ? candidate : best), { element: documentNode.body, score: -Infinity }).element
 
   return extractReadableText(target)
 }
@@ -692,9 +688,7 @@ function extractReadableText(element: Element | null | undefined): string {
 
   const clone = element.cloneNode(true) as Element
   clone.querySelectorAll(NOISE_SELECTOR).forEach((node) => node.remove())
-  const blocks = Array.from(clone.querySelectorAll('p, li, blockquote, pre, h1, h2, h3'))
-    .map((node) => cleanText(node.textContent || ''))
-    .filter((text) => text.length >= 18)
+  const blocks = Array.from(clone.querySelectorAll('p, li, blockquote, pre, h1, h2, h3')).flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((node) => cleanText(node.textContent || ''))(combineValue); return ((text) => text.length >= 18)(combinedResult) ? [combinedResult] : [] })
   const text = blocks.length >= 3
     ? blocks.join('\n\n')
     : cleanText(clone.textContent || '')
@@ -767,9 +761,7 @@ function cleanMarkdownText(text: string): string {
 function collectMarkdownHeadings(text: string): string[] {
   return normalizeTextList(
     String(text || '')
-      .split('\n')
-      .map((line) => line.match(/^#{1,3}\s+(.+)$/)?.[1] || '')
-      .filter(Boolean),
+      .split('\n').flatMap(line => { const mappedResult = line.match(/^#{1,3}\s+(.+)$/)?.[1] || ''; return mappedResult ? [mappedResult] : [] }),
     MAX_HEADINGS,
     MAX_LIST_TEXT_LENGTH
   )
@@ -782,24 +774,20 @@ function matchLine(text: string, pattern: RegExp): string {
 function normalizeTextList(values: unknown, limit: number, itemLimit: number): string[] {
   const source = Array.isArray(values) ? values : []
   const seen = new Set<string>()
-  return source
-    .map((value) => truncateCleanText(value, itemLimit))
-    .filter(Boolean)
-    .filter((value) => {
+  return source.flatMap((combineValue, combineIndex, combineArray) => { const combinedFlatValue = (value => { const mappedResult = truncateCleanText(value, itemLimit); return mappedResult ? [mappedResult] : [] })(combineValue); const combinedFlatItems = Array.isArray(combinedFlatValue) ? combinedFlatValue : [combinedFlatValue]; return combinedFlatItems.flatMap((combinedFlatItem) => ((value) => {
       const key = value.toLowerCase()
       if (seen.has(key)) {
         return false
       }
       seen.add(key)
       return true
-    })
+    })(combinedFlatItem) ? [combinedFlatItem] : []) })
     .slice(0, limit)
 }
 
 function normalizeSourceContexts(values: unknown): PageContentSourceContext[] {
   const source = Array.isArray(values) ? values : []
-  return source
-    .map((value) => {
+  return source.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((value) => {
       const item = value && typeof value === 'object'
         ? value as Partial<PageContentSourceContext>
         : {}
@@ -816,8 +804,7 @@ function normalizeSourceContexts(values: unknown): PageContentSourceContext[] {
         contentLength: Number(item.contentLength) || mainText.length,
         warnings: normalizeTextList(item.warnings, 6, 160)
       }
-    })
-    .filter((item) => Boolean(item.title || item.description || item.mainText || item.headings.length))
+    })(combineValue); return ((item) => Boolean(item.title || item.description || item.mainText || item.headings.length))(combinedResult) ? [combinedResult] : [] })
     .slice(0, 4)
 }
 

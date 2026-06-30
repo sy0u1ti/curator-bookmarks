@@ -299,9 +299,7 @@ export async function getContentFullText(snapshotId: string): Promise<string> {
 
 export async function getContentFullTexts(snapshotIds: string[]): Promise<Map<string, string>> {
   const uniqueSnapshotIds = Array.from(new Set(
-    snapshotIds
-      .map((snapshotId) => String(snapshotId || '').trim())
-      .filter(Boolean)
+    snapshotIds.flatMap(snapshotId => { const mappedResult = String(snapshotId || '').trim(); return mappedResult ? [mappedResult] : [] })
   ))
   const fullTexts = new Map<string, string>()
   if (!uniqueSnapshotIds.length) {
@@ -372,8 +370,11 @@ async function getContentFullTextsWithSingleReads(
   getFullText: (snapshotId: string) => Promise<string>
 ): Promise<Map<string, string>> {
   const fullTexts = new Map<string, string>()
-  for (const snapshotId of snapshotIds) {
+  const fullTextEntries = await Promise.all(snapshotIds.map(async (snapshotId) => {
     const fullText = await getFullText(snapshotId).catch(() => '')
+    return { snapshotId, fullText }
+  }))
+  for (const { snapshotId, fullText } of fullTextEntries) {
     if (fullText) {
       fullTexts.set(snapshotId, fullText)
     }

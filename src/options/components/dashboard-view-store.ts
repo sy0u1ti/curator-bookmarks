@@ -146,10 +146,6 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
-function getSnapshot(): DashboardViewState {
-  return currentDashboardViewState
-}
-
 export function publishDashboardViewState(patch: Partial<DashboardViewState>): void {
   currentDashboardViewState = {
     ...currentDashboardViewState,
@@ -169,10 +165,6 @@ export function patchDashboardSearchControlsState(patch: Partial<DashboardSearch
 
 export function getDashboardViewSnapshot(): DashboardViewState {
   return currentDashboardViewState
-}
-
-export function useDashboardViewState(): DashboardViewState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }
 
 export function useDashboardViewSelector<T>(selector: (state: DashboardViewState) => T): T {

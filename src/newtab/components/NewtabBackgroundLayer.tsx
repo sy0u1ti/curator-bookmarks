@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useReducer, useRef } from 'react'
 import {
   getNewtabBackgroundMediaView,
   useNewtabBackgroundMediaView
@@ -22,15 +22,65 @@ interface StagedBackgroundImage {
   src: string
 }
 
+interface BackgroundImageLayerState {
+  visibleImage: StagedBackgroundImage | null
+  incomingImage: StagedBackgroundImage | null
+  incomingVisible: boolean
+}
+
+type BackgroundImageLayerAction =
+  | { type: 'commit'; image: StagedBackgroundImage }
+  | { type: 'hideIncoming' }
+  | { type: 'reset' }
+  | { type: 'reveal' }
+  | { type: 'stage'; image: StagedBackgroundImage }
+
+const EMPTY_BACKGROUND_IMAGE_LAYER_STATE: BackgroundImageLayerState = {
+  visibleImage: null,
+  incomingImage: null,
+  incomingVisible: false
+}
+
 interface NewtabBackgroundLayerProps {
   loadingWallpaper: boolean
 }
 
+function backgroundImageLayerReducer(
+  state: BackgroundImageLayerState,
+  action: BackgroundImageLayerAction
+): BackgroundImageLayerState {
+  switch (action.type) {
+    case 'commit':
+      return {
+        visibleImage: action.image,
+        incomingImage: null,
+        incomingVisible: false
+      }
+    case 'hideIncoming':
+      return state.incomingVisible ? { ...state, incomingVisible: false } : state
+    case 'reset':
+      return state.visibleImage || state.incomingImage || state.incomingVisible
+        ? EMPTY_BACKGROUND_IMAGE_LAYER_STATE
+        : state
+    case 'reveal':
+      return state.incomingVisible ? state : { ...state, incomingVisible: true }
+    case 'stage':
+      return {
+        ...state,
+        incomingImage: action.image,
+        incomingVisible: false
+      }
+    default:
+      return state
+  }
+}
+
 export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLayerProps) {
   const media = useNewtabBackgroundMediaView()
-  const [visibleImage, setVisibleImage] = useState<StagedBackgroundImage | null>(null)
-  const [incomingImage, setIncomingImage] = useState<StagedBackgroundImage | null>(null)
-  const [incomingVisible, setIncomingVisible] = useState(false)
+  const [imageState, dispatchImageState] = useReducer(
+    backgroundImageLayerReducer,
+    EMPTY_BACKGROUND_IMAGE_LAYER_STATE
+  )
   const visibleImageRef = useRef<StagedBackgroundImage | null>(null)
   const requestIdRef = useRef(0)
   const commitTimerRef = useRef(0)
@@ -39,8 +89,8 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
   const revealSecondFrameRef = useRef(0)
 
   useEffect(() => {
-    visibleImageRef.current = visibleImage
-  }, [visibleImage])
+    visibleImageRef.current = imageState.visibleImage
+  }, [imageState.visibleImage])
 
   useEffect(() => {
     if (media.kind !== 'image' || !media.src) {
@@ -51,9 +101,7 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
         revealFrameRef,
         revealSecondFrameRef
       )
-      setIncomingVisible(false)
-      setIncomingImage(null)
-      setVisibleImage(null)
+      dispatchImageState({ type: 'reset' })
       return
     }
 
@@ -71,7 +119,7 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
       revealFrameRef,
       revealSecondFrameRef
     )
-    setIncomingVisible(false)
+    dispatchImageState({ type: 'hideIncoming' })
 
     const image = new Image()
     let cancelled = false
@@ -89,23 +137,21 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
         src: nextSrc
       }
       const hasPreviewCover = hasInstantWallpaperPreviewCover(nextSrc)
-      setIncomingImage(stagedImage)
+      dispatchImageState({ type: 'stage', image: stagedImage })
       if (hasPreviewCover) {
         revealFrameRef.current = window.requestAnimationFrame(() => {
           revealSecondFrameRef.current = window.requestAnimationFrame(() => {
             if (cancelled || requestId !== requestIdRef.current || !isCurrentImageMedia(nextSrc)) {
               return
             }
-            setIncomingVisible(true)
+            dispatchImageState({ type: 'reveal' })
             markImageLayerReady(nextSrc)
             commitTimerRef.current = window.setTimeout(() => {
               if (requestId !== requestIdRef.current || !isCurrentImageMedia(nextSrc)) {
                 return
               }
               visibleImageRef.current = stagedImage
-              setVisibleImage(stagedImage)
-              setIncomingImage(null)
-              setIncomingVisible(false)
+              dispatchImageState({ type: 'commit', image: stagedImage })
             }, IMAGE_REVEAL_MS)
           })
         })
@@ -116,7 +162,7 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
           if (cancelled || requestId !== requestIdRef.current || !isCurrentImageMedia(nextSrc)) {
             return
           }
-          setIncomingVisible(true)
+          dispatchImageState({ type: 'reveal' })
           remoteReadyTimerRef.current = window.setTimeout(() => {
             markImageLayerReady(nextSrc)
           }, REMOTE_READY_REVEAL_DELAY_MS)
@@ -125,9 +171,7 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
               return
             }
             visibleImageRef.current = stagedImage
-            setVisibleImage(stagedImage)
-            setIncomingImage(null)
-            setIncomingVisible(false)
+            dispatchImageState({ type: 'commit', image: stagedImage })
           }, IMAGE_REVEAL_MS)
         })
       })
@@ -155,12 +199,12 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
     backgroundPosition: media.backgroundPosition,
     backgroundSize: media.backgroundSize
   }
-  const visibleImageStyle = getBackgroundImageLayerStyle(visibleImage?.src || '', imageBaseStyle)
-  const incomingImageStyle = getBackgroundImageLayerStyle(incomingImage?.src || '', imageBaseStyle)
+  const visibleImageStyle = getBackgroundImageLayerStyle(imageState.visibleImage?.src || '', imageBaseStyle)
+  const incomingImageStyle = getBackgroundImageLayerStyle(imageState.incomingImage?.src || '', imageBaseStyle)
 
   return (
     <>
-      {visibleImage ? (
+      {imageState.visibleImage ? (
         <div
           className={BACKGROUND_IMAGE_CLASS}
           style={visibleImageStyle}
@@ -168,12 +212,12 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
           aria-hidden="true"
         ></div>
       ) : null}
-      {incomingImage ? (
+      {imageState.incomingImage ? (
         <div
-          key={incomingImage.id}
+          key={imageState.incomingImage.id}
           className={BACKGROUND_IMAGE_CLASS}
           style={incomingImageStyle}
-          data-state={incomingVisible ? 'visible' : 'enter'}
+          data-state={imageState.incomingVisible ? 'visible' : 'enter'}
           aria-hidden="true"
         ></div>
       ) : null}
@@ -186,6 +230,7 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
           muted
           playsInline
           aria-hidden="true"
+          tabIndex={-1}
         />
       ) : null}
     </>

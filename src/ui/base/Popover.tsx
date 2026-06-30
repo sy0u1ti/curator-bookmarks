@@ -1,6 +1,5 @@
 import { Popover as BasePopover } from '@base-ui/react/popover'
 import { useCallback, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from 'react'
-import { Icon } from '../icons/Icon'
 import { MotionPanel } from '../motion/MotionPanel'
 import { cx } from './utils'
 
@@ -170,13 +169,5 @@ export function PopoverPopup({ unanimated = false, ...props }: PopoverPopupProps
       render={<MotionPanel variant="popover" />}
       {...props}
     />
-  )
-}
-
-export function HelpTrigger({ label = 'Help' }: { label?: string }) {
-  return (
-    <span className="inline-flex size-7 items-center justify-center rounded-ds-sm border border-ds-border text-ds-text-secondary">
-      <Icon name="CircleHelp" size={15} aria-label={label} />
-    </span>
   )
 }

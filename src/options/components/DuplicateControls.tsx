@@ -1,4 +1,7 @@
-import { Button, NumberPop, TextSwap, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { NumberPop } from '../../ui/motion/NumberPop'
+import { TextSwap } from '../../ui/motion/TextSwap'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
 

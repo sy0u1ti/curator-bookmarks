@@ -116,11 +116,7 @@ export class AiRuntimeError extends Error {
   }
 }
 
-export function isAiRuntimeError(error: unknown, kind?: AiErrorKind): error is AiRuntimeError {
-  return error instanceof AiRuntimeError && (!kind || error.kind === kind)
-}
-
-export function ensureAiProviderConfigured(settings: AiProviderSettings): void {
+function ensureAiProviderConfigured(settings: AiProviderSettings): void {
   if (!settings.baseUrl || !settings.apiKey || !settings.model) {
     throw new AiRuntimeError('configuration', '请先到通用设置配置“自定义AI渠道”。')
   }
@@ -131,19 +127,7 @@ export function ensureAiProviderConfigured(settings: AiProviderSettings): void {
   }
 }
 
-export function getAiOriginPermissionPattern(url: unknown): string {
-  try {
-    const parsedUrl = new URL(String(url || '').trim())
-    if (!/^https?:$/i.test(parsedUrl.protocol)) {
-      return ''
-    }
-    return `${parsedUrl.origin}/*`
-  } catch {
-    return ''
-  }
-}
-
-export function buildAiPromptRequestBody({
+function buildAiPromptRequestBody({
   settings,
   schema,
   schemaName,
@@ -202,15 +186,18 @@ export async function requestStructuredAiOutput<T>({
   ensureAiProviderConfigured(settings)
   const endpoint = getAiEndpoint(settings)
   const maxAttempts = retry ? 2 : 1
-  let lastError: unknown = null
-  let lastRawText = ''
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+  const runAttempt = async (
+    attempt: number,
+    lastError: unknown = null,
+    lastRawText = ''
+  ): Promise<AiRuntimeResult<T>> => {
     throwIfAiAborted(signal)
     const repaired = attempt > 1 && shouldUseRepairRetry(lastError)
     const effectiveUserPrompt = repaired
       ? buildRepairUserPrompt(userPrompt, schemaName, lastRawText, lastError)
       : userPrompt
+    let attemptRawText = lastRawText
 
     try {
       const requestBody = buildAiPromptRequestBody({
@@ -240,7 +227,7 @@ export async function requestStructuredAiOutput<T>({
           { cause: error }
         )
       }
-      lastRawText = rawText
+      attemptRawText = rawText
       const parsed = parseAiJson(rawText, schemaName)
       validateJsonSchema(parsed, schema, schemaName)
       validate?.(parsed as T)
@@ -258,14 +245,15 @@ export async function requestStructuredAiOutput<T>({
         }
       }
     } catch (error) {
-      lastError = normalizeAiRuntimeError(error)
-      if (attempt >= maxAttempts || !shouldRetryAiRuntimeError(lastError)) {
-        throw lastError
+      const normalizedError = normalizeAiRuntimeError(error)
+      if (attempt >= maxAttempts || !shouldRetryAiRuntimeError(normalizedError)) {
+        throw normalizedError
       }
+      return runAttempt(attempt + 1, normalizedError, attemptRawText)
     }
   }
 
-  throw normalizeAiRuntimeError(lastError)
+  return runAttempt(1)
 }
 
 export function validateJsonSchema(value: unknown, schema: JsonSchema, schemaName = 'structured_output'): void {
@@ -280,7 +268,7 @@ export function validateJsonSchema(value: unknown, schema: JsonSchema, schemaNam
   }
 }
 
-export function parseAiJson(rawText: unknown, schemaName = 'structured_output'): unknown {
+function parseAiJson(rawText: unknown, schemaName = 'structured_output'): unknown {
   try {
     return JSON.parse(String(rawText || ''))
   } catch (error) {
@@ -298,14 +286,12 @@ export function buildAiFolderCandidates(
 ): AiFolderCandidate[] {
   const limit = Math.max(1, Math.round(Number(options.limit) || 260))
   const currentFolderPath = normalizeFolderPath(options.currentFolderPath)
-  const candidates = folders
-    .map((folder): AiFolderCandidate => ({
+  const candidates = folders.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((folder): AiFolderCandidate => ({
       folderId: String(folder.id || '').trim(),
       folderPath: normalizeFolderPath(folder.path || folder.title),
       title: String(folder.title || '').trim(),
       depth: Math.max(0, Math.round(Number(folder.depth) || 0))
-    }))
-    .filter((folder) => folder.folderId && (folder.folderPath || folder.title))
+    }))(combineValue); return ((folder) => folder.folderId && (folder.folderPath || folder.title))(combinedResult) ? [combinedResult] : [] })
     .sort((left, right) => {
       const leftCurrent = currentFolderPath && currentFolderPath.startsWith(normalizeFolderPath(left.folderPath)) ? -1 : 0
       const rightCurrent = currentFolderPath && currentFolderPath.startsWith(normalizeFolderPath(right.folderPath)) ? -1 : 0
@@ -392,7 +378,7 @@ export function normalizeAiFolderDecision(
   }
 }
 
-export function normalizeAiRuntimeConfidence(value: unknown): number {
+function normalizeAiRuntimeConfidence(value: unknown): number {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? Math.max(0, Math.min(numeric, 1)) : 0
 }
@@ -405,11 +391,6 @@ export function cleanAiRuntimeText(value: unknown, limit = 180): string {
     return text
   }
   return `${text.slice(0, Math.max(1, limit - 1)).trim()}…`
-}
-
-export function normalizeAiRuntimeErrorMessage(error: unknown, fallback = 'AI 请求失败，请稍后重试。'): string {
-  const normalized = normalizeAiRuntimeError(error)
-  return normalized.message || fallback
 }
 
 function requestAiProviderPayload({
@@ -706,9 +687,7 @@ function isAbortError(error: unknown): boolean {
 
 function normalizeFolderPath(value: unknown): string {
   return String(value || '')
-    .split(/\s*(?:->|\/|>|›|»|\\|·|•|→|➜)\s*/g)
-    .map((segment) => segment.replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
+    .split(/\s*(?:->|\/|>|›|»|\\|·|•|→|➜)\s*/g).flatMap(segment => { const mappedResult = segment.replace(/\s+/g, ' ').trim(); return mappedResult ? [mappedResult] : [] })
     .slice(0, 5)
     .join(' / ')
 }

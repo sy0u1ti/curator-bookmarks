@@ -1,4 +1,4 @@
-import { cx } from '../../ui'
+import { cx } from '../../ui/base/utils'
 
 type NewtabButtonTone = 'primary' | 'secondary'
 

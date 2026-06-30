@@ -85,9 +85,7 @@ export function projectFolderDragSectionRectSnapshot(
   orderIds: string[]
 ): FolderDragSectionRectSnapshot {
   const rects = new Map<string, FolderDragSectionRectInput>()
-  const normalizedOrderIds = orderIds
-    .map((folderId) => String(folderId || '').trim())
-    .filter(Boolean)
+  const normalizedOrderIds = orderIds.flatMap(folderId => { const mappedResult = String(folderId || '').trim(); return mappedResult ? [mappedResult] : [] })
   const gap = getFolderDragSectionGap(previousSnapshot)
   const baseTop = previousSnapshot.rects.get(previousSnapshot.orderIds[0] || '')?.top ?? 0
   let top = baseTop

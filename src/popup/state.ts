@@ -97,7 +97,7 @@ export interface PopupState {
   searchHighlightQuery: string
   filteredBookmarksCacheKey: string
   filteredBookmarksCache: PopupSearchBookmark[]
-  contentRenderHtml: string
+  contentRenderKey: string
   searchChipsRenderSignature: string
   moveTargetBookmarkId: string | null
   moveSearchQuery: string
@@ -197,7 +197,7 @@ export const state: PopupState = {
   searchHighlightQuery: '',
   filteredBookmarksCacheKey: '',
   filteredBookmarksCache: [],
-  contentRenderHtml: '',
+  contentRenderKey: '',
   searchChipsRenderSignature: '',
   moveTargetBookmarkId: null,
   moveSearchQuery: '',

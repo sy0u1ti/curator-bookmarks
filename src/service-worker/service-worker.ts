@@ -495,63 +495,68 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
   const now = Date.now()
   const bookmarkId = String(createdNode.id)
 
-  await upsertInboxItem({
-    captureId: `inbox-${now}-${bookmarkId}`,
-    bookmarkId,
-    url,
-    title: String(createdNode.title || title),
-    inboxFolderId,
-    originalParentId: inboxFolderId,
-    status: 'captured',
-    createdAt: now,
-    updatedAt: now
-  })
-
-  const autoSettings = await loadAutoAnalyzeSettings()
+  const [, autoSettings] = await Promise.all([
+    upsertInboxItem({
+      captureId: `inbox-${now}-${bookmarkId}`,
+      bookmarkId,
+      url,
+      title: String(createdNode.title || title),
+      inboxFolderId,
+      originalParentId: inboxFolderId,
+      status: 'captured',
+      createdAt: now,
+      updatedAt: now
+    }),
+    loadAutoAnalyzeSettings()
+  ])
   if (hasUsableAiSettings(autoSettings)) {
     await enqueueAutoAnalyzeBookmark({
       bookmarkId,
       url,
       title
     })
-    await updateInboxItem(bookmarkId, { status: 'analyzing' }).catch(() => {})
-    await persistAutoAnalyzeStatus({
-      status: 'queued',
-      bookmarkId,
-      url,
-      title,
-      createdAt: now,
-      detail: '已保存到 Inbox / 待整理，正在后台分析。'
-    }).catch((error) => {
-      console.warn('[Curator] Inbox 自动分析排队状态写入失败', error)
-    })
     scheduleAutoAnalyzeQueueProcessing(AUTO_CLASSIFY_DELAY_MS)
     scheduleAutoAnalyzeQueueAlarm(AUTO_CLASSIFY_DELAY_MS)
-    await showTransientCommandBadge('IN', '#2f5f80')
-    await showInboxNotification({
-      notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
-      title: '已保存到 Inbox / 待整理',
-      message: '正在后台分析并生成标签。'
-    })
+    await Promise.all([
+      updateInboxItem(bookmarkId, { status: 'analyzing' }).catch(() => {}),
+      persistAutoAnalyzeStatus({
+        status: 'queued',
+        bookmarkId,
+        url,
+        title,
+        createdAt: now,
+        detail: '已保存到 Inbox / 待整理，正在后台分析。'
+      }).catch((error) => {
+        console.warn('[Curator] Inbox 自动分析排队状态写入失败', error)
+      }),
+      showTransientCommandBadge('IN', '#2f5f80'),
+      showInboxNotification({
+        notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
+        title: '已保存到 Inbox / 待整理',
+        message: '正在后台分析并生成标签。'
+      })
+    ])
     return
   }
 
-  await updateInboxItem(bookmarkId, {
-    status: 'needs-review',
-    lastError: '未配置 AI 渠道，已保留在 Inbox。'
-  }).catch(() => {})
-  await persistPopupCommandIntent({
-    action: 'feedback',
-    sourceCommand,
-    message: '已保存到 Inbox / 待整理。配置 AI 后可自动分析。',
-    tone: 'success'
-  })
-  await showTransientCommandBadge('IN', '#365f45')
-  await showInboxNotification({
-    notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
-    title: '已保存到 Inbox / 待整理',
-    message: '未配置 AI 渠道，书签会留在 Inbox 等待整理。'
-  })
+  await Promise.all([
+    updateInboxItem(bookmarkId, {
+      status: 'needs-review',
+      lastError: '未配置 AI 渠道，已保留在 Inbox。'
+    }).catch(() => {}),
+    persistPopupCommandIntent({
+      action: 'feedback',
+      sourceCommand,
+      message: '已保存到 Inbox / 待整理。配置 AI 后可自动分析。',
+      tone: 'success'
+    }),
+    showTransientCommandBadge('IN', '#365f45'),
+    showInboxNotification({
+      notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
+      title: '已保存到 Inbox / 待整理',
+      message: '未配置 AI 渠道，书签会留在 Inbox 等待整理。'
+    })
+  ])
 }
 
 function getActiveTab(): Promise<chrome.tabs.Tab | null> {
@@ -591,25 +596,29 @@ async function toggleAutoAnalyzeFromCommand(sourceCommand: string): Promise<void
       ...settings,
       autoAnalyzeBookmarks: false
     })
-    await persistPopupCommandIntent({
-      action: 'feedback',
-      sourceCommand,
-      message: '自动分析已关闭。',
-      tone: 'success'
-    })
-    await showTransientCommandBadge('OFF', '#5f3432')
+    await Promise.all([
+      persistPopupCommandIntent({
+        action: 'feedback',
+        sourceCommand,
+        message: '自动分析已关闭。',
+        tone: 'success'
+      }),
+      showTransientCommandBadge('OFF', '#5f3432')
+    ])
     return
   }
 
   const readiness = await getAutoAnalyzeCommandReadiness(settings)
   if (!readiness.ok) {
-    await persistPopupCommandIntent({
-      action: 'feedback',
-      sourceCommand,
-      message: readiness.message,
-      tone: 'warning'
-    })
-    await showTransientCommandBadge('!', '#5f3432')
+    await Promise.all([
+      persistPopupCommandIntent({
+        action: 'feedback',
+        sourceCommand,
+        message: readiness.message,
+        tone: 'warning'
+      }),
+      showTransientCommandBadge('!', '#5f3432')
+    ])
     return
   }
 
@@ -617,13 +626,15 @@ async function toggleAutoAnalyzeFromCommand(sourceCommand: string): Promise<void
     ...settings,
     autoAnalyzeBookmarks: true
   })
-  await persistPopupCommandIntent({
-    action: 'feedback',
-    sourceCommand,
-    message: '自动分析已开启。',
-    tone: 'success'
-  })
-  await showTransientCommandBadge('ON', '#365f45')
+  await Promise.all([
+    persistPopupCommandIntent({
+      action: 'feedback',
+      sourceCommand,
+      message: '自动分析已开启。',
+      tone: 'success'
+    }),
+    showTransientCommandBadge('ON', '#365f45')
+  ])
 }
 
 async function getAutoAnalyzeCommandReadiness(
@@ -796,8 +807,10 @@ async function handleBookmarkCreatedForAutoAnalysis(
     return
   }
 
-  const settings = await loadAutoAnalyzeSettings()
-  const snapshotSettings = await loadContentSnapshotSettings().catch(() => null)
+  const [settings, snapshotSettings] = await Promise.all([
+    loadAutoAnalyzeSettings(),
+    loadContentSnapshotSettings().catch(() => null)
+  ])
   const shouldAutoAnalyze = settings.autoAnalyzeBookmarks && hasUsableAiSettings(settings)
   const shouldSnapshot = Boolean(snapshotSettings?.enabled && snapshotSettings.autoCaptureOnBookmarkCreate)
   if (!shouldAutoAnalyze && !shouldSnapshot) {
@@ -833,69 +846,78 @@ async function processAutoAnalyzeQueue(): Promise<void> {
   autoAnalyzeQueueProcessing = true
 
   try {
-    while (true) {
-      const now = Date.now()
-      const queue = await loadAutoAnalyzeQueue()
-      const freshQueue = pruneAutoAnalyzeQueue(queue, now)
-      const entry = getNextRunnableAutoAnalyzeQueueEntry(freshQueue, now)
-
-      if (!entry) {
-        scheduleNextAutoAnalyzeQueueWake(freshQueue)
-        return
-      }
-
-      autoClassifyInFlight.add(entry.bookmarkId)
-
-      try {
-        await persistAutoAnalyzeStatus({
-          status: 'processing',
-          bookmarkId: entry.bookmarkId,
-          url: entry.url,
-          title: entry.title || '新增书签',
-          createdAt: entry.createdAt,
-          detail: '正在读取网页内容，整理标签和命名。'
-        }).catch((error) => {
-          console.warn('[Curator] 自动分析处理中状态写入失败', error)
-        })
-        await runAutoAnalysisForBookmark(entry, await getAutoAnalyzeTreeContext())
-        await removeAutoAnalyzeQueueEntry(entry.bookmarkId)
-      } catch (error) {
-        const message = getErrorMessage(error)
-        console.warn('[Curator] 自动分析书签失败', {
-          bookmarkId: entry.bookmarkId,
-          url: entry.url,
-          error: message
-        })
-        await markAutoAnalyzeQueueEntryFailed(entry.bookmarkId, message)
-        await updateInboxItem(entry.bookmarkId, {
-          status: 'failed',
-          lastError: message
-        }).catch((inboxError) => {
-          console.warn('[Curator] Inbox 失败状态写入失败', inboxError)
-        })
-        await persistAutoAnalyzeStatus({
-          status: 'failed',
-          bookmarkId: entry.bookmarkId,
-          url: entry.url,
-          title: entry.title || '新增书签',
-          error: message,
-          attempts: Number(entry.attempts || 0) + 1,
-          maxAttempts: AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS,
-          createdAt: entry.createdAt,
-          detail: Number(entry.attempts || 0) + 1 < AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS
-            ? '自动分析失败，已安排稍后重试。'
-            : '自动分析失败，请检查 AI 设置或稍后再试。'
-        }).catch((statusError) => {
-          console.warn('[Curator] 自动分析失败状态写入失败', statusError)
-        })
-      } finally {
-        autoClassifyInFlight.delete(entry.bookmarkId)
-      }
-    }
+    await processNextAutoAnalyzeQueueEntry()
   } finally {
     autoAnalyzeQueueProcessing = false
     autoAnalyzeTreeContext = null
   }
+}
+
+async function processNextAutoAnalyzeQueueEntry(): Promise<void> {
+  const now = Date.now()
+  const queue = await loadAutoAnalyzeQueue()
+  const freshQueue = pruneAutoAnalyzeQueue(queue, now)
+  const entry = getNextRunnableAutoAnalyzeQueueEntry(freshQueue, now)
+
+  if (!entry) {
+    scheduleNextAutoAnalyzeQueueWake(freshQueue)
+    return
+  }
+
+  autoClassifyInFlight.add(entry.bookmarkId)
+
+  try {
+    await Promise.all([
+      getAutoAnalyzeTreeContext(),
+      persistAutoAnalyzeStatus({
+        status: 'processing',
+        bookmarkId: entry.bookmarkId,
+        url: entry.url,
+        title: entry.title || '新增书签',
+        createdAt: entry.createdAt,
+        detail: '正在读取网页内容，整理标签和命名。'
+      }).catch((error) => {
+        console.warn('[Curator] 自动分析处理中状态写入失败', error)
+      })
+    ])
+      .then(([treeContext]) => runAutoAnalysisForBookmark(entry, treeContext))
+      .then(() => removeAutoAnalyzeQueueEntry(entry.bookmarkId))
+  } catch (error) {
+    const message = getErrorMessage(error)
+    console.warn('[Curator] 自动分析书签失败', {
+      bookmarkId: entry.bookmarkId,
+      url: entry.url,
+      error: message
+    })
+    await Promise.all([
+      markAutoAnalyzeQueueEntryFailed(entry.bookmarkId, message),
+      updateInboxItem(entry.bookmarkId, {
+        status: 'failed',
+        lastError: message
+      }).catch((inboxError) => {
+        console.warn('[Curator] Inbox 失败状态写入失败', inboxError)
+      }),
+      persistAutoAnalyzeStatus({
+        status: 'failed',
+        bookmarkId: entry.bookmarkId,
+        url: entry.url,
+        title: entry.title || '新增书签',
+        error: message,
+        attempts: Number(entry.attempts || 0) + 1,
+        maxAttempts: AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS,
+        createdAt: entry.createdAt,
+        detail: Number(entry.attempts || 0) + 1 < AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS
+          ? '自动分析失败，已安排稍后重试。'
+          : '自动分析失败，请检查 AI 设置或稍后再试。'
+      }).catch((statusError) => {
+        console.warn('[Curator] 自动分析失败状态写入失败', statusError)
+      })
+    ])
+  } finally {
+    autoClassifyInFlight.delete(entry.bookmarkId)
+  }
+
+  await processNextAutoAnalyzeQueueEntry()
 }
 
 let autoAnalyzeTreeContext: AutoAnalyzeTreeContext | null = null
@@ -927,9 +949,11 @@ async function runAutoAnalysisForBookmark(
   treeContext: AutoAnalyzeTreeContext
 ): Promise<void> {
   const bookmarkId = entry.bookmarkId
-  const inboxItem = await findInboxItemByBookmarkId(bookmarkId)
-  const settings = await loadAutoAnalyzeSettings()
-  const snapshotSettings = await loadContentSnapshotSettings().catch(() => null)
+  const [inboxItem, settings, snapshotSettings] = await Promise.all([
+    findInboxItemByBookmarkId(bookmarkId),
+    loadAutoAnalyzeSettings(),
+    loadContentSnapshotSettings().catch(() => null)
+  ])
   const shouldSnapshot = Boolean(snapshotSettings?.enabled && snapshotSettings.autoCaptureOnBookmarkCreate)
   const shouldUploadToAi = (settings.autoAnalyzeBookmarks || Boolean(inboxItem)) &&
     hasUsableAiSettings(settings) &&
@@ -1424,18 +1448,20 @@ async function undoLastInboxAutoMove(): Promise<InboxUndoLastMoveResult> {
   }
 
   const movedNode = await moveBookmarkNode(undoMove.bookmarkId, undoMove.fromFolderId)
-  await updateInboxItem(undoMove.bookmarkId, {
-    status: 'undone',
-    lastError: ''
-  }).catch((error) => {
-    console.warn('[Curator] Inbox 撤销状态更新失败', error)
-  })
-  await clearInboxUndoMove(undoMove.bookmarkId)
-  await showInboxNotification({
-    notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-${undoMove.bookmarkId}`,
-    title: '已撤销 Inbox 自动移动',
-    message: '书签已移回 Inbox / 待整理。'
-  })
+  await Promise.all([
+    updateInboxItem(undoMove.bookmarkId, {
+      status: 'undone',
+      lastError: ''
+    }).catch((error) => {
+      console.warn('[Curator] Inbox 撤销状态更新失败', error)
+    }),
+    clearInboxUndoMove(undoMove.bookmarkId),
+    showInboxNotification({
+      notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-${undoMove.bookmarkId}`,
+      title: '已撤销 Inbox 自动移动',
+      message: '书签已移回 Inbox / 待整理。'
+    })
+  ])
 
   return {
     bookmarkId: String(movedNode.id),
@@ -1447,8 +1473,7 @@ async function undoLastInboxAutoMove(): Promise<InboxUndoLastMoveResult> {
 async function markAutoAnalyzeQueueEntryFailed(bookmarkId: string, lastError: string): Promise<void> {
   const now = Date.now()
   const nextQueue = await updateAutoAnalyzeQueue((entries) => {
-    return entries
-      .map((entry) => {
+    return entries.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((entry) => {
         if (entry.bookmarkId !== bookmarkId) {
           return entry
         }
@@ -1460,8 +1485,7 @@ async function markAutoAnalyzeQueueEntryFailed(bookmarkId: string, lastError: st
           lastError,
           nextRunAt: now + AUTO_ANALYZE_QUEUE_RETRY_MS * attempts
         }
-      })
-      .filter((entry) => entry.attempts < AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS)
+      })(combineValue); return ((entry) => entry.attempts < AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS)(combinedResult) ? [combinedResult] : [] })
   })
   scheduleNextAutoAnalyzeQueueWake(nextQueue)
 }
@@ -1551,8 +1575,7 @@ function normalizeAutoAnalyzeQueue(rawQueue: unknown): AutoAnalyzeQueueEntry[] {
       ? rawQueue
       : []
 
-  return entries
-    .map((entry: any) => {
+  return entries.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry: any) => {
       const bookmarkId = String(entry?.bookmarkId || '').trim()
       const url = String(entry?.url || '').trim()
       const createdAt = Number(entry?.createdAt) || 0
@@ -1569,8 +1592,7 @@ function normalizeAutoAnalyzeQueue(rawQueue: unknown): AutoAnalyzeQueueEntry[] {
         nextRunAt: Number(entry?.nextRunAt) || createdAt,
         lastError: cleanText(entry?.lastError || '')
       } as AutoAnalyzeQueueEntry
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
     .sort((left, right) => Number(left?.nextRunAt || 0) - Number(right?.nextRunAt || 0))
     .slice(0, AUTO_ANALYZE_QUEUE_LIMIT) as AutoAnalyzeQueueEntry[]
 }
@@ -1713,9 +1735,7 @@ function buildAutoPageContentFromHtml(
   const ogType = cleanAutoText(matchMeta(rawHtml, 'og:type'))
   const lang = cleanAutoText(matchHtml(rawHtml, /<html[^>]*\slang=["']?([^"'\s>]+)/i))
   const canonicalUrl = cleanAutoText(matchHtml(rawHtml, /<link[^>]+rel=["'][^"']*canonical[^"']*["'][^>]*href=["']([^"']+)["']/i))
-  const headings = Array.from(rawHtml.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi))
-    .map((match) => cleanAutoText(match[1]))
-    .filter(Boolean)
+  const headings = Array.from(rawHtml.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi)).flatMap(match => { const mappedResult = cleanAutoText(match[1]); return mappedResult ? [mappedResult] : [] })
     .slice(0, 28)
   const mainText = extractAutoReadableHtmlText(rawHtml)
 
@@ -1905,8 +1925,7 @@ function chooseAutoFolderRecommendation(
   folders: FolderRecord[],
   bookmark: BookmarkRecord
 ): AutoFolderRecommendation | null {
-  const existingRecommendations = aiResult.existingFolders
-    .map((suggestion) => {
+  const existingRecommendations = aiResult.existingFolders.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((suggestion) => {
       const folder = findBestExistingFolder(suggestion, folders)
       if (!folder) {
         return null
@@ -1920,8 +1939,7 @@ function chooseAutoFolderRecommendation(
         confidence: normalizeAutoConfidence(suggestion.confidence),
         reason: suggestion.reason || ''
       }
-    })
-    .filter(Boolean) as AutoFolderRecommendation[]
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] }) as AutoFolderRecommendation[]
 
   const localFallbacks = buildLocalAutoFolderMatches(folders, bookmark)
   const merged = [...existingRecommendations, ...localFallbacks]
@@ -2001,7 +2019,12 @@ function findBestExistingFolder(
 }
 
 function pickDeepestFolder(folders: FolderRecord[]): FolderRecord | null {
-  return folders.slice().sort(compareFoldersByDepth)[0] || null
+  return folders.reduce<FolderRecord | null>((best, folder) => {
+    if (!best) {
+      return folder
+    }
+    return compareFoldersByDepth(folder, best) < 0 ? folder : best
+  }, null)
 }
 
 function compareFoldersByDepth(left: FolderRecord, right: FolderRecord): number {
@@ -2017,8 +2040,7 @@ function buildLocalAutoFolderMatches(
   const domainText = normalizeText(extractDomain(bookmark.url))
   const haystack = [titleText, urlText, domainText].filter(Boolean).join(' ')
 
-  return folders
-    .map((folder) => {
+  return folders.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((folder) => {
       const title = normalizeText(folder.title)
       const path = normalizeText(folder.path)
       let score = 0
@@ -2041,8 +2063,7 @@ function buildLocalAutoFolderMatches(
         confidence: Math.max(0.52, Math.min(score, 0.82)),
         reason: '基于当前网页标题、域名和文件夹路径的本地补充匹配。'
       }
-    })
-    .filter((item) => item.confidence > 0.54)
+    })(combineValue); return ((item) => item.confidence > 0.54)(combinedResult) ? [combinedResult] : [] })
 }
 
 function normalizeAutoAiResult(payload: any): AutoClassifyResult {
@@ -2057,14 +2078,12 @@ function normalizeAutoAiResult(payload: any): AutoClassifyResult {
     tags: normalizeBookmarkTags(payload?.tags),
     aliases: normalizeAutoTextList(payload?.aliases, 20, 40),
     confidence: normalizeAutoConfidence(payload?.confidence),
-    existingFolders: existingFolders
-      .map((item: any) => ({
+    existingFolders: existingFolders.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((item: any) => ({
         folderId: cleanText(item?.folder_id || ''),
         folderPath: cleanText(item?.folder_path || ''),
         reason: cleanText(item?.reason || ''),
         confidence: normalizeAutoConfidence(item?.confidence)
-      }))
-      .filter((item: AutoClassifySuggestion) => item.folderId || item.folderPath),
+      }))(combineValue); return ((item: AutoClassifySuggestion) => item.folderId || item.folderPath)(combinedResult) ? [combinedResult] : [] }),
     newFolder: {
       folderId: '',
       folderPath: cleanText(payload?.new_folder?.folder_path || ''),
@@ -2095,8 +2114,7 @@ function normalizeBookmarkAddHistoryEntries(rawHistory: unknown): BookmarkAddHis
       ? rawHistory
       : []
 
-  return entries
-    .map((entry: any) => {
+  return entries.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry: any) => {
       const bookmarkId = String(entry?.bookmarkId || '').trim()
       const url = String(entry?.url || '').trim()
       const createdAt = Number(entry?.createdAt) || 0
@@ -2120,8 +2138,7 @@ function normalizeBookmarkAddHistoryEntries(rawHistory: unknown): BookmarkAddHis
         summary: cleanText(entry?.summary || ''),
         suggestedTitle: cleanText(entry?.suggestedTitle || '')
       } as BookmarkAddHistoryEntry
-    })
-    .filter(Boolean)
+    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
     .sort((left, right) => Number(right?.createdAt || 0) - Number(left?.createdAt || 0))
     .slice(0, BOOKMARK_ADD_HISTORY_LIMIT) as BookmarkAddHistoryEntry[]
 }
@@ -2145,9 +2162,9 @@ function appendBookmarkAddHistory(entry: BookmarkAddHistoryEntry): Promise<void>
   return task
 }
 
-let lastPersistedAutoAnalyzeStatusSignature = ''
+let lastPersistedAutoAnalyzeStatusKey = ''
 
-function getAutoAnalyzeStatusSignature(status: AutoAnalyzeStatusSnapshot): string {
+function getAutoAnalyzeStatusKey(status: AutoAnalyzeStatusSnapshot): string {
   return [
     status.status,
     status.bookmarkId,
@@ -2194,12 +2211,12 @@ async function persistAutoAnalyzeStatus(
     return
   }
 
-  const signature = getAutoAnalyzeStatusSignature(status)
-  if (signature === lastPersistedAutoAnalyzeStatusSignature) {
+  const statusKey = getAutoAnalyzeStatusKey(status)
+  if (statusKey === lastPersistedAutoAnalyzeStatusKey) {
     scheduleAutoAnalyzeStatusClear(status.expiresAt)
     return
   }
-  lastPersistedAutoAnalyzeStatusSignature = signature
+  lastPersistedAutoAnalyzeStatusKey = statusKey
 
   await setLocalStorage({
     [STORAGE_KEYS.autoAnalyzeStatus]: status
@@ -2216,7 +2233,7 @@ async function clearAutoAnalyzeStatusForBookmark(bookmarkId: string): Promise<vo
     return
   }
 
-  lastPersistedAutoAnalyzeStatusSignature = ''
+  lastPersistedAutoAnalyzeStatusKey = ''
   await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
   await clearActionBadge().catch(() => {})
   clearAutoAnalyzeStatusAlarm()
@@ -2299,7 +2316,7 @@ async function restoreAutoAnalyzeStatusBadge(): Promise<void> {
 async function clearExpiredAutoAnalyzeStatus(): Promise<void> {
   const status = await loadAutoAnalyzeStatus()
   if (!status || status.expiresAt <= Date.now()) {
-    lastPersistedAutoAnalyzeStatusSignature = ''
+    lastPersistedAutoAnalyzeStatusKey = ''
     await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice])
     await clearActionBadge().catch(() => {})
     clearAutoAnalyzeStatusAlarm()
@@ -2481,9 +2498,7 @@ function normalizeAutoFolderPath(value: unknown): string {
 }
 
 function normalizeFolderPathForMatch(value: unknown): string {
-  const segments = splitFolderPath(String(value || ''))
-    .map((segment) => normalizeText(segment))
-    .filter(Boolean)
+  const segments = splitFolderPath(String(value || '')).flatMap(segment => { const mappedResult = normalizeText(segment); return mappedResult ? [mappedResult] : [] })
   return segments.length ? segments.join(' / ') : normalizeText(String(value || ''))
 }
 
@@ -2578,12 +2593,12 @@ function normalizeAutoUrl(url: string): string {
 async function saveBookmarkFromMessage(message: BookmarkSaveMessage): Promise<BookmarkSaveResult> {
   const url = String(message.url || '').trim()
   const title = String(message.title || '').trim() || '未命名网页'
-  const parentId = String(message.parentId || '').trim() ||
-    (message.folderPath ? await ensureBookmarkFolderPath(message.folderPath) : '')
-
   if (!/^https?:\/\//i.test(url)) {
     throw new Error('当前页面不是可保存的普通网页。')
   }
+
+  const parentId = String(message.parentId || '').trim() ||
+    (message.folderPath ? await ensureBookmarkFolderPath(message.folderPath) : '')
 
   if (!parentId) {
     throw new Error('未找到可保存的目标文件夹。')
@@ -2676,9 +2691,7 @@ async function ensureBookmarkFolderPath(path: string): Promise<string> {
 
   let parentNode = rootNode
   for (const segment of segments) {
-    const existingChild = (parentNode.children || []).find((child) => {
-      return !child.url && normalizeText(child.title || '') === normalizeText(segment)
-    })
+    const existingChild = findFolderChildByTitle(parentNode.children || [], segment)
 
     if (existingChild) {
       parentNode = existingChild
@@ -2692,6 +2705,19 @@ async function ensureBookmarkFolderPath(path: string): Promise<string> {
   }
 
   return String(parentNode.id)
+}
+
+function findFolderChildByTitle(
+  children: chrome.bookmarks.BookmarkTreeNode[],
+  title: string
+): chrome.bookmarks.BookmarkTreeNode | null {
+  const normalizedTitle = normalizeText(title)
+  for (const child of children) {
+    if (!child.url && normalizeText(child.title || '') === normalizedTitle) {
+      return child
+    }
+  }
+  return null
 }
 
 async function getBookmarksBarNode(): Promise<chrome.bookmarks.BookmarkTreeNode> {
@@ -2802,9 +2828,7 @@ function updateBookmarkNode(
 
 function splitFolderPath(value: string): string[] {
   return String(value || '')
-    .split(/\s*(?:->|\/|>|›|»|\\|·|•|→|➜)\s*/g)
-    .map((segment) => segment.trim())
-    .filter(Boolean)
+    .split(/\s*(?:->|\/|>|›|»|\\|·|•|→|➜)\s*/g).flatMap(segment => { const mappedResult = segment.trim(); return mappedResult ? [mappedResult] : [] })
     .slice(0, 5)
 }
 
@@ -2884,10 +2908,10 @@ async function performNavigationCheck({
 }
 
 async function startNavigationWithNetworkObserver(state: PendingCheckState, url: string): Promise<void> {
-  await attachWebRequestListeners(state)
   if (state.settled) {
     return
   }
+  await attachWebRequestListeners(state)
 
   await updateTab(state.tabId, { url })
 }

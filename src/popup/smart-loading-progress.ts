@@ -2,8 +2,8 @@ export const SMART_LOADING_STEP_COUNT = 3
 export const SMART_LOADING_STAGE_STARTS = [0, 100 / 3, 200 / 3] as const
 export const SMART_LOADING_PROGRESS_TARGETS = [100 / 3, 200 / 3, 100] as const
 export const SMART_LOADING_PROGRESS_TICK_MS = 80
-export const SMART_LOADING_PROGRESS_TRANSITION_MS = 420
-export const SMART_LOADING_PROGRESS_SETTLE_MS = 120
+const SMART_LOADING_PROGRESS_TRANSITION_MS = 420
+const SMART_LOADING_PROGRESS_SETTLE_MS = 120
 export const SMART_LOADING_PROGRESS_COMPLETE_MS =
   SMART_LOADING_PROGRESS_TRANSITION_MS + SMART_LOADING_PROGRESS_SETTLE_MS
 
@@ -13,7 +13,7 @@ export function normalizeSmartLoadingStep(rawStep: number): number {
   return Math.max(1, Math.min(step || 1, SMART_LOADING_STEP_COUNT))
 }
 
-export function getSmartStageStart(rawStep: number): number {
+function getSmartStageStart(rawStep: number): number {
   const step = normalizeSmartLoadingStep(rawStep)
   return SMART_LOADING_STAGE_STARTS[step - 1] ?? 0
 }

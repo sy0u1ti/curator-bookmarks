@@ -632,11 +632,8 @@ export function buildBookmarkTagExport(
   index: BookmarkTagIndex,
   bookmarks: Array<Partial<BookmarkRecord> & { id?: unknown }> = []
 ): { app: 'curator-bookmarks'; version: 1; exportedAt: number; records: BookmarkTagRecord[] } {
-  const validBookmarkIds = new Set(bookmarks.map((bookmark) => cleanText(bookmark.id)).filter(Boolean))
-  const records = Object.values(index.records)
-    .filter((record) => !validBookmarkIds.size || validBookmarkIds.has(record.bookmarkId))
-    .map((record) => normalizeBookmarkTagRecord(record))
-    .filter(Boolean) as BookmarkTagRecord[]
+  const validBookmarkIds = new Set(bookmarks.flatMap(bookmark => { const mappedResult = cleanText(bookmark.id); return mappedResult ? [mappedResult] : [] }))
+  const records = Object.values(index.records).flatMap((combineValue, combineIndex, combineArray) => ((record) => !validBookmarkIds.size || validBookmarkIds.has(record.bookmarkId))(combineValue) ? (record => { const mappedResult = normalizeBookmarkTagRecord(record); return mappedResult ? [mappedResult] : [] })(combineValue) : []) as BookmarkTagRecord[]
 
   return {
     app: 'curator-bookmarks',

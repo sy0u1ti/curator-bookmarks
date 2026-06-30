@@ -1,4 +1,4 @@
-import { Button } from '../../ui'
+import { Button } from '../../ui/base/Button'
 import { Icon } from '../../ui/icons/Icon'
 import {
   OPTION_GROUP_CLASS,

@@ -1,9 +1,5 @@
-const CHINESE_REGEX = /[㐀-鿿]/u
-const PINYIN_LIKE_REGEX = /^[a-z][a-z0-9]*$/i
 
-export function queryHasChinese(query: string): boolean {
-  return CHINESE_REGEX.test(String(query || ''))
-}
+const PINYIN_LIKE_REGEX = /^[a-z][a-z0-9]*$/i
 
 export function queryLooksLikePinyin(query: string): boolean {
   const trimmed = String(query || '').trim()

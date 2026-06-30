@@ -10,7 +10,7 @@ export interface NewTabFolderCandidate {
   totalBookmarkCount: number
 }
 
-export interface FolderCandidateRenderSignatureInput {
+export interface FolderCandidateRenderKeyInput {
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
   folderData: ExtractedBookmarkData | null
   folderNodeMap: Map<string, chrome.bookmarks.BookmarkTreeNode>
@@ -20,15 +20,15 @@ export interface FolderCandidateRenderSignatureInput {
 }
 
 export interface FolderCandidateCacheState {
-  signature: string
+  cacheKey: string
   candidates: NewTabFolderCandidate[]
 }
 
 const objectIdentityMap = new WeakMap<object, number>()
 let nextObjectIdentity = 1
 
-export function buildFolderCandidateRenderSignature(
-  input: FolderCandidateRenderSignatureInput
+export function buildFolderCandidateRenderKey(
+  input: FolderCandidateRenderKeyInput
 ): string {
   return [
     getObjectIdentity(input.rootNode),
@@ -42,15 +42,15 @@ export function buildFolderCandidateRenderSignature(
 
 export function getCachedFolderCandidates(
   cacheState: FolderCandidateCacheState,
-  signature: string,
+  cacheKey: string,
   buildCandidates: () => NewTabFolderCandidate[]
 ): NewTabFolderCandidate[] {
-  if (cacheState.signature === signature) {
+  if (cacheState.cacheKey === cacheKey) {
     return cacheState.candidates
   }
 
   const candidates = buildCandidates()
-  cacheState.signature = signature
+  cacheState.cacheKey = cacheKey
   cacheState.candidates = candidates
   return candidates
 }

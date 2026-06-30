@@ -16,7 +16,7 @@ export function getOptionsFocusTarget(id: string | undefined): HTMLElement | nul
   return target
 }
 
-export function registerOptionsFocusTarget(id: string, target: HTMLElement | null): void {
+function registerOptionsFocusTarget(id: string, target: HTMLElement | null): void {
   if (target) {
     focusTargets.set(id, target)
     return

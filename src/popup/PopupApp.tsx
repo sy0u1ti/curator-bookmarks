@@ -1,5 +1,7 @@
 import { useEffect, useReducer } from 'react'
-import { DialogOverlay, ThemeProvider, cx } from '../ui'
+import { cx } from '../ui/base/utils'
+import { DialogOverlay } from '../ui/base/Dialog'
+import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getModalCloseDurationMs } from '../shared/motion'
 import {
   dispatchPopupModalAction,

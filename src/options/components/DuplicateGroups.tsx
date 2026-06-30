@@ -1,5 +1,8 @@
 import { displayUrl } from '../../shared/text.js'
-import { Button, Checkbox, TextSwap, useMotionEntrance } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Checkbox } from '../../ui/base/Checkbox'
+import { TextSwap } from '../../ui/motion/TextSwap'
+import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateGroupsState } from './duplicate-groups-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
@@ -11,6 +14,12 @@ import type {
 } from './duplicate-groups-types.js'
 
 type BadgeTone = 'danger' | 'muted' | 'success' | 'warning'
+
+const DUPLICATE_DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
+})
 
 const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
@@ -121,7 +130,7 @@ function DuplicateDockedSelection({
   const unsafe = selectionStats.unsafeGroupCount > 0
 
   return (
-    <div className={DOCKED_SELECTION_CLASS} data-open={entered ? 'true' : 'false'} role="region" aria-label="已选重复书签操作">
+    <section className={DOCKED_SELECTION_CLASS} data-open={entered ? 'true' : 'false'} aria-label="已选重复书签操作">
       <div className={DOCKED_COPY_CLASS}>
         <strong className={DOCKED_TITLE_CLASS}>
           <TextSwap text={`已选 ${selectionStats.deleteCount} 条待移入回收站`} />
@@ -157,7 +166,7 @@ function DuplicateDockedSelection({
           移入回收站
         </Button>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -295,14 +304,12 @@ function DuplicateRecommendationSignals({ group }: { group: DuplicateGroupViewMo
 
   return (
     <>
-      {signals
-        .filter(([, bookmarkId]) => Boolean(bookmarkId))
-        .map(([label, bookmarkId]) => {
+      {signals.flatMap((combineValue, combineIndex, combineArray) => { if (!(([, bookmarkId]) => Boolean(bookmarkId))(combineValue)) return []; const combinedResult = (([label, bookmarkId]) => {
           const active = String(bookmarkId) === String(group.recommendedKeepId)
           return (
             <DuplicateBadge key={label} label={label} tone={active ? 'success' : 'muted'} />
           )
-        })}
+        })(combineValue); return [combinedResult] })}
     </>
   )
 }
@@ -404,17 +411,15 @@ function DuplicateItemBadges({
   const seen = new Set<string>()
   return (
     <>
-      {badges
-        .filter(([, label]) => {
+      {badges.flatMap((combineValue, combineIndex, combineArray) => { if (!(([, label]) => {
           if (seen.has(label)) {
             return false
           }
           seen.add(label)
           return true
-        })
-        .map(([tone, label]) => (
+        })(combineValue)) return []; const combinedResult = (([tone, label]) => (
           <DuplicateBadge key={label} label={label} tone={tone} />
-        ))}
+        ))(combineValue); return [combinedResult] })}
     </>
   )
 }
@@ -464,9 +469,5 @@ function formatDuplicateDate(timestamp: unknown): string {
     return '未知时间'
   }
 
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).format(value)
+  return DUPLICATE_DATE_FORMATTER.format(value)
 }

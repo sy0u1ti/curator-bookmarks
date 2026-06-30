@@ -1,5 +1,5 @@
-import { Button } from '../../ui'
-import { cx } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { cx } from '../../ui/base/utils'
 import { handleAvailabilityPanelAction } from '../options-controller'
 import { useAvailabilityFilters } from './availability-overview-store.js'
 

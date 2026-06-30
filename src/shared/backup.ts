@@ -147,14 +147,18 @@ export async function createCuratorBackupFile(
   now = Date.now()
 ): Promise<CuratorBackupFileV1> {
   const exportedAt = new Date(now).toISOString()
-  const tree = await getBookmarkTree()
-  const stored = await getBackupStorageSnapshot()
-  const bookmarkTagIndex = await loadBookmarkTagIndex().catch(() =>
-    normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
-  )
-  const newTabActivity = await loadNewTabActivityFromRepository(normalizeNewTabActivityForBackup).catch(() =>
-    normalizeNewTabActivityForBackup(stored[STORAGE_KEYS.newTabActivity])
-  )
+  const [tree, stored] = await Promise.all([
+    getBookmarkTree(),
+    getBackupStorageSnapshot()
+  ])
+  const [bookmarkTagIndex, newTabActivity] = await Promise.all([
+    loadBookmarkTagIndex().catch(() =>
+      normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
+    ),
+    loadNewTabActivityFromRepository(normalizeNewTabActivityForBackup).catch(() =>
+      normalizeNewTabActivityForBackup(stored[STORAGE_KEYS.newTabActivity])
+    )
+  ])
 
   return {
     app: BACKUP_APP,
@@ -404,7 +408,7 @@ export async function createAutoBackupBeforeDangerousOperation(
     const backupId = `auto-${createdAt}-${Math.random().toString(36).slice(2, 8)}`
     const fileName = getBackupFileName(createdAt)
     const sizeBytes = estimateJsonSizeBytes(backup)
-    await putAutoBackup({
+    const { pruned } = await putAutoBackup({
       backupId,
       createdAt,
       fileName,
@@ -415,8 +419,7 @@ export async function createAutoBackupBeforeDangerousOperation(
       targetFolderIds: options.targetFolderIds || [],
       estimatedChangeCount: options.estimatedChangeCount || 0,
       payload: backup
-    })
-    const { pruned } = await updateAutoBackupIndex({
+    }).then(() => updateAutoBackupIndex({
       backupId,
       fileName,
       createdAt,
@@ -425,7 +428,7 @@ export async function createAutoBackupBeforeDangerousOperation(
       kind: options.kind,
       source: options.source,
       operationReason: options.reason
-    }, retentionLimit)
+    }, retentionLimit))
     await pruneAutoBackups(pruned)
 
     return {
@@ -477,7 +480,7 @@ function normalizeNewTabActivityForBackup(rawActivity: unknown): NewTabActivityR
 
   return {
     pinnedIds: Array.isArray(source.pinnedIds)
-      ? source.pinnedIds.map((id) => String(id || '').trim()).filter(Boolean)
+      ? source.pinnedIds.flatMap(id => { const mappedResult = String(id || '').trim(); return mappedResult ? [mappedResult] : [] })
       : [],
     records
   }
@@ -573,13 +576,28 @@ async function copyMissingBookmarksToRestoreFolder(
   let copied = 0
   let skipped = 0
 
-  for (const child of rootChildren) {
-    const result = await copyMissingNode(child, String(restoreFolder.id), knownInstances, '')
-    copied += result.copied
-    skipped += result.skipped
-  }
+  const result = await copyMissingNodesSequentially(rootChildren, String(restoreFolder.id), knownInstances, '')
+  copied += result.copied
+  skipped += result.skipped
 
   return { copied, skipped }
+}
+
+function copyMissingNodesSequentially(
+  nodes: chrome.bookmarks.BookmarkTreeNode[],
+  parentId: string,
+  knownInstances: Set<string>,
+  folderPath: string
+): Promise<{ copied: number; skipped: number }> {
+  return nodes.reduce<Promise<{ copied: number; skipped: number }>>((chain, node) => {
+    return chain.then(async (totals) => {
+      const result = await copyMissingNode(node, parentId, knownInstances, folderPath)
+      return {
+        copied: totals.copied + result.copied,
+        skipped: totals.skipped + result.skipped
+      }
+    })
+  }, Promise.resolve({ copied: 0, skipped: 0 }))
 }
 
 async function copyMissingNode(
@@ -609,20 +627,11 @@ async function copyMissingNode(
   }
 
   let folder: chrome.bookmarks.BookmarkTreeNode | null = null
-  let copied = 0
-  let skipped = 0
-  for (const child of children) {
-    if (!folder) {
-      folder = await createBookmark({
-        parentId,
-        title: node.title || '未命名文件夹'
-      })
-    }
-    const result = await copyMissingNode(child, String(folder.id), knownInstances, nextFolderPath)
-    copied += result.copied
-    skipped += result.skipped
-  }
-  return { copied, skipped }
+  folder = await createBookmark({
+    parentId,
+    title: node.title || '未命名文件夹'
+  })
+  return copyMissingNodesSequentially(children, String(folder.id), knownInstances, nextFolderPath)
 }
 
 function nodeHasMissingBookmark(
@@ -818,8 +827,6 @@ async function updateAutoBackupIndex(
 
 async function pruneAutoBackups(prunedEntries: AutoBackupIndexEntry[]): Promise<void> {
   await Promise.all(
-    prunedEntries
-      .filter((entry) => entry?.backupId)
-      .map((entry) => deleteAutoBackup(entry.backupId))
+    prunedEntries.flatMap((combineValue, combineIndex, combineArray) => { if (!((entry) => entry?.backupId)(combineValue)) return []; const combinedResult = ((entry) => deleteAutoBackup(entry.backupId))(combineValue); return [combinedResult] })
   )
 }

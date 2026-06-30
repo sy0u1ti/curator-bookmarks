@@ -25,16 +25,14 @@ function normalizeBookmarkIgnoreRules(rules) {
     return []
   }
 
-  return rules
-    .map((rule) => {
+  return rules.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((rule) => {
       return {
         bookmarkId: String(rule?.bookmarkId || '').trim(),
         title: String(rule?.title || '未命名书签').trim() || '未命名书签',
         url: String(rule?.url || '').trim(),
         createdAt: Number(rule?.createdAt) || Date.now()
       }
-    })
-    .filter((rule) => rule.bookmarkId)
+    })(combineValue); return ((rule) => rule.bookmarkId)(combinedResult) ? [combinedResult] : [] })
 }
 
 function normalizeDomainIgnoreRules(rules) {
@@ -42,14 +40,12 @@ function normalizeDomainIgnoreRules(rules) {
     return []
   }
 
-  return rules
-    .map((rule) => {
+  return rules.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((rule) => {
       return {
         domain: String(rule?.domain || '').trim().toLowerCase(),
         createdAt: Number(rule?.createdAt) || Date.now()
       }
-    })
-    .filter((rule) => rule.domain)
+    })(combineValue); return ((rule) => rule.domain)(combinedResult) ? [combinedResult] : [] })
 }
 
 function normalizeFolderIgnoreRules(rules) {
@@ -57,19 +53,17 @@ function normalizeFolderIgnoreRules(rules) {
     return []
   }
 
-  return rules
-    .map((rule) => {
+  return rules.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((rule) => {
       return {
         folderId: String(rule?.folderId || '').trim(),
         title: String(rule?.title || '未命名文件夹').trim() || '未命名文件夹',
         path: String(rule?.path || '').trim(),
         createdAt: Number(rule?.createdAt) || Date.now()
       }
-    })
-    .filter((rule) => rule.folderId)
+    })(combineValue); return ((rule) => rule.folderId)(combinedResult) ? [combinedResult] : [] })
 }
 
-export function serializeIgnoreRules(ignoreRules) {
+function serializeIgnoreRules(ignoreRules) {
   return {
     bookmarks: ignoreRules.bookmarks.map((rule) => ({
       bookmarkId: rule.bookmarkId,

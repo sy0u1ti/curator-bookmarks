@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import { Button, CloseButton, DialogClose, DialogOverlay, DialogPanel, DialogTitle } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { CloseButton } from '../../ui/base/CloseButton'
+import { DialogClose, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
 import {
   dispatchNewtabFeaturedBackgroundModalGridScroll,
   dispatchNewtabFeaturedBackgroundModalOpenChange,
@@ -52,7 +54,7 @@ export interface FeaturedBackgroundModalProps {
   pickerView: FeaturedBackgroundPickerView | null
 }
 
-export function FeaturedBackgroundModal({
+function FeaturedBackgroundModal({
   open,
   closing = false,
   refreshing = false,

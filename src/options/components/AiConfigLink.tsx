@@ -11,19 +11,18 @@ export function AiConfigLink() {
   const label = configured ? '已配置 API KEY' : '配置 API Key'
 
   return (
-    <a
+    <button
+      type="button"
       className={[
         AI_CONFIG_LINK_CLASS,
         configured ? AI_CONFIG_LINK_CONFIGURED_CLASS : AI_CONFIG_LINK_DEFAULT_CLASS
       ].filter(Boolean).join(' ')}
-      href="#general:ai-provider"
       aria-label={configured ? '已配置 API KEY，前往通用设置查看或修改' : '配置 API Key'}
-      onClick={(event) => {
-        event.preventDefault()
+      onClick={() => {
         navigateToOptionsSectionHash('#general:ai-provider')
       }}
     >
       {label}
-    </a>
+    </button>
   )
 }

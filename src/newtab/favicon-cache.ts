@@ -12,8 +12,8 @@ export interface FaviconAccentCacheEntry {
 
 export type FaviconAccentCache = Record<string, FaviconAccentCacheEntry>
 
-export const FAVICON_ACCENT_CACHE_LIMIT = 1200
-export const FAVICON_ACCENT_CACHE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
+const FAVICON_ACCENT_CACHE_LIMIT = 1200
+const FAVICON_ACCENT_CACHE_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000
 
 interface FaviconCacheOptions {
   now?: number
@@ -90,51 +90,6 @@ export function getFaviconAccentCacheEntry(
   return entry
 }
 
-export function upsertFaviconAccentCacheEntry(
-  cache: FaviconAccentCache,
-  bookmarkId: string,
-  pageUrl: string,
-  color: FaviconAccentColor,
-  options: FaviconCacheOptions = {}
-): FaviconAccentCache {
-  const key = String(bookmarkId || '').trim()
-  const normalizedColor = normalizeFaviconAccentColor(color)
-  if (!key || !pageUrl || !normalizedColor) {
-    return normalizeFaviconAccentCache(cache, options)
-  }
-
-  return normalizeFaviconAccentCache({
-    ...cache,
-    [key]: {
-      url: pageUrl,
-      color: normalizedColor,
-      updatedAt: getFiniteTimestamp(options.now, Date.now())
-    }
-  }, options)
-}
-
-export function upsertFaviconAccentCacheEntryInPlace(
-  cache: FaviconAccentCache,
-  bookmarkId: string,
-  pageUrl: string,
-  color: FaviconAccentColor,
-  options: FaviconCacheOptions = {}
-): boolean {
-  const key = String(bookmarkId || '').trim()
-  const normalizedColor = normalizeFaviconAccentColor(color)
-  if (!key || !pageUrl || !normalizedColor) {
-    return false
-  }
-
-  cache[key] = {
-    url: pageUrl,
-    color: normalizedColor,
-    updatedAt: getFiniteTimestamp(options.now, Date.now())
-  }
-  pruneFaviconAccentCacheInPlace(cache, options)
-  return true
-}
-
 export function removeFaviconAccentCacheEntry(
   cache: FaviconAccentCache,
   bookmarkId: string
@@ -147,34 +102,6 @@ export function removeFaviconAccentCacheEntry(
   const nextCache = { ...cache }
   delete nextCache[key]
   return nextCache
-}
-
-function pruneFaviconAccentCacheInPlace(
-  cache: FaviconAccentCache,
-  options: FaviconCacheOptions = {}
-): void {
-  const now = getFiniteTimestamp(options.now, Date.now())
-  const maxAgeMs = getFiniteTimestamp(options.maxAgeMs, FAVICON_ACCENT_CACHE_MAX_AGE_MS)
-  const limit = clampInteger(options.limit, 1, FAVICON_ACCENT_CACHE_LIMIT, FAVICON_ACCENT_CACHE_LIMIT)
-  const entries = Object.entries(cache)
-
-  for (const [bookmarkId, entry] of entries) {
-    if (!normalizeFaviconAccentCacheEntry(entry, now, maxAgeMs)) {
-      delete cache[bookmarkId]
-    }
-  }
-
-  if (Object.keys(cache).length <= limit) {
-    return
-  }
-
-  const sortedEntries = Object.entries(cache).sort((left, right) => {
-    const updatedDiff = right[1].updatedAt - left[1].updatedAt
-    return updatedDiff || left[0].localeCompare(right[0])
-  })
-  for (const [bookmarkId] of sortedEntries.slice(limit)) {
-    delete cache[bookmarkId]
-  }
 }
 
 export function formatFaviconAccentCssRgb(color: FaviconAccentColor): string {

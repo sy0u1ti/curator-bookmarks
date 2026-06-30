@@ -1,6 +1,6 @@
 import { useRef } from 'react'
-import { Button } from '../../ui'
-import { Input } from '../../ui'
+import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
 import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
 import type { BackupControlsState, BackupPreviewState } from './backup-controls-types.js'
