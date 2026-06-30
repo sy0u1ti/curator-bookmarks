@@ -163,7 +163,7 @@ export const state: PopupState = {
   viewNoticeMessage: '',
   viewNoticeTimer: null,
   searchResults: [],
-  activeResultIndex: 0,
+  activeResultIndex: -1,
   searchTimer: null,
   searchRunId: 0,
   searchPending: false,

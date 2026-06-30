@@ -778,7 +778,7 @@ function resetSearchForPopupRefresh(preserveSearch: boolean): void {
   state.searchQuery = ''
   state.debouncedQuery = ''
   state.searchResults = []
-  state.activeResultIndex = 0
+  state.activeResultIndex = -1
   state.searchPending = false
   state.naturalSearchPending = false
   state.naturalSearchError = ''
@@ -1067,18 +1067,36 @@ function setSearchQuery(value, { immediate = false } = {}) {
   clearTimeout(state.searchTimer)
   ensurePinyinEnrichmentForQuery(value)
   if (immediate) {
-    state.debouncedQuery = value.trim()
-    runSearch()
+    applyDebouncedSearchQuery(value)
     render()
     return
   }
   const debounceMs = state.naturalSearchEnabled ? NATURAL_SEARCH_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS
   state.searchTimer = window.setTimeout(() => {
-    state.debouncedQuery = value.trim()
-    runSearch()
+    applyDebouncedSearchQuery(value)
     render()
   }, debounceMs)
   render()
+}
+function applyDebouncedSearchQuery(value: string): void {
+  const nextQuery = value.trim()
+  if (nextQuery !== state.debouncedQuery) {
+    clearQueuedKeyboardNavigation()
+    state.activeResultIndex = -1
+  }
+  state.debouncedQuery = nextQuery
+  runSearch()
+}
+function syncActiveSearchResultIndex(): void {
+  if (!state.debouncedQuery || !state.searchResults.length) {
+    state.activeResultIndex = -1
+    return
+  }
+  if (state.activeResultIndex < 0) {
+    state.activeResultIndex = 0
+    return
+  }
+  state.activeResultIndex = Math.min(state.activeResultIndex, state.searchResults.length - 1)
 }
 async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | null = null) {
   const enabled = !state.naturalSearchEnabled
@@ -1146,7 +1164,7 @@ function runSearch() {
   state.naturalSearchError = ''
   if (!normalizedQuery) {
     state.searchResults = []
-    state.activeResultIndex = 0
+    state.activeResultIndex = -1
     state.searchPending = false
     state.naturalSearchPending = false
     state.naturalSearchPlan = null
@@ -1170,10 +1188,7 @@ function runSearch() {
     if (cachedResults) {
       state.searchPending = false
       state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
-      state.activeResultIndex = Math.min(
-        state.activeResultIndex,
-        Math.max(state.searchResults.length - 1, 0)
-      )
+      syncActiveSearchResultIndex()
       return
     }
     if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
@@ -1181,15 +1196,12 @@ function runSearch() {
       cacheSearchResults(cacheKey, results)
       state.searchPending = false
       state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
-      state.activeResultIndex = Math.min(
-        state.activeResultIndex,
-        Math.max(state.searchResults.length - 1, 0)
-      )
+      syncActiveSearchResultIndex()
       return
     }
     state.searchPending = true
     state.searchResults = []
-    state.activeResultIndex = 0
+    syncActiveSearchResultIndex()
     const firstBatch = searchBookmarksFirstBatch(
       normalizedQuery,
       bookmarks,
@@ -1197,7 +1209,7 @@ function runSearch() {
     )
     if (firstBatch.results.length) {
       state.searchResults = firstBatch.results.slice(0, MAX_POPUP_SEARCH_RESULTS)
-      state.activeResultIndex = 0
+      syncActiveSearchResultIndex()
       render()
     }
     searchBookmarksCooperatively(normalizedQuery, bookmarks, {
@@ -1211,10 +1223,7 @@ function runSearch() {
         cacheSearchResults(cacheKey, results)
         state.searchPending = false
         state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
-        state.activeResultIndex = Math.min(
-          state.activeResultIndex,
-          Math.max(state.searchResults.length - 1, 0)
-        )
+        syncActiveSearchResultIndex()
         render()
       })
       .catch((error) => {
@@ -1223,12 +1232,14 @@ function runSearch() {
         }
         state.searchPending = false
         state.searchResults = []
+        syncActiveSearchResultIndex()
         state.loadError = error instanceof Error ? error.message : '查询失败，请重试。'
         render()
       })
   } catch (error) {
     state.searchPending = false
     state.searchResults = []
+    syncActiveSearchResultIndex()
     state.loadError = error instanceof Error ? error.message : '查询失败，请重试。'
   }
 }
@@ -1243,7 +1254,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     state.searchPending = true
     state.naturalSearchPending = true
     state.searchResults = []
-    state.activeResultIndex = 0
+    syncActiveSearchResultIndex()
   }
   try {
     const naturalSearch = await loadNaturalSearchModule()
@@ -1261,10 +1272,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
         state.searchPending = false
         state.naturalSearchPending = false
         state.searchResults = cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS)
-        state.activeResultIndex = Math.min(
-          state.activeResultIndex,
-          Math.max(state.searchResults.length - 1, 0)
-        )
+        syncActiveSearchResultIndex()
         render()
         return
       }
@@ -1272,7 +1280,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
       state.searchPending = true
       state.naturalSearchPending = true
       state.searchResults = []
-      state.activeResultIndex = 0
+      syncActiveSearchResultIndex()
     }
     const plan = await resolveNaturalSearchPlan(query, normalizedQuery, naturalSearch, {
       signal: controller.signal
@@ -1299,10 +1307,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     state.searchPending = false
     state.naturalSearchPending = false
     state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
-    state.activeResultIndex = Math.min(
-      state.activeResultIndex,
-      Math.max(state.searchResults.length - 1, 0)
-    )
+    syncActiveSearchResultIndex()
     render()
   } catch (error) {
     if (
@@ -1315,6 +1320,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     state.searchPending = false
     state.naturalSearchPending = false
     state.searchResults = []
+    syncActiveSearchResultIndex()
     if (error instanceof Error && error.message === 'ai-provider-not-configured') {
       state.naturalSearchEnabled = false
       state.naturalSearchPlan = null
@@ -2835,7 +2841,11 @@ function handleDocumentKeydown(event) {
     return
   }
   if (event.key === 'Enter') {
-    const activeBookmark = keyboardBookmarks[queuedActiveResultIndex ?? state.activeResultIndex]
+    const activeIndex = queuedActiveResultIndex ?? state.activeResultIndex
+    if (activeIndex < 0) {
+      return
+    }
+    const activeBookmark = keyboardBookmarks[activeIndex]
     if (activeBookmark) {
       event.preventDefault()
       openBookmark(activeBookmark.id)
@@ -3859,7 +3869,9 @@ function queueActiveResultDelta(delta: number) {
   }
 
   const baseIndex = queuedActiveResultIndex ?? state.activeResultIndex
-  const nextIndex = Math.max(0, Math.min(baseIndex + delta, keyboardBookmarks.length - 1))
+  const nextIndex = baseIndex < 0
+    ? (delta < 0 ? keyboardBookmarks.length - 1 : 0)
+    : Math.max(0, Math.min(baseIndex + delta, keyboardBookmarks.length - 1))
   if (nextIndex === baseIndex) {
     return
   }

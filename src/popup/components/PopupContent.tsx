@@ -34,12 +34,13 @@ const POPUP_CONTENT_SKELETON_FOLDER_ROWS = [
 ] as const
 
 const POPUP_CONTENT_SKELETON_BOOKMARK_ROWS = [
-  { width: 0.78, url: 0.58, path: 0.36 },
-  { width: 0.62, url: 0.74, path: 0.48 },
-  { width: 0.86, url: 0.52, path: 0.42 },
-  { width: 0.58, url: 0.68, path: 0.34 },
-  { width: 0.74, url: 0.56, path: 0.5 }
+  { title: '44px', url: '66px', path: '94px' },
+  { title: '16px', url: '36px', path: '94px' },
+  { title: '62px', url: '72px', path: '94px' },
+  { title: '48px', url: '56px', path: '94px' },
+  { title: '74px', url: '68px', path: '94px' }
 ] as const
+const POPUP_CONTENT_SKELETON_ACTION_COUNT = 5
 
 const workspaceShellClass =
   'relative h-full min-h-0'
@@ -64,7 +65,6 @@ const paneClass =
 const mainPaneClass = cx(paneClass, 'bg-ds-surface-1')
 const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'
-const paneMetaClass = 'whitespace-nowrap text-xs font-medium text-ds-text-muted'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const folderTreeClass =
   'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
@@ -123,17 +123,26 @@ const rowActionDangerClass =
 const compactStateClass =
   'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
-const skeletonBarClass =
-  'relative block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
+const skeletonBarBaseClass =
+  'relative overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
+const skeletonBarClass = cx(
+  skeletonBarBaseClass,
+  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)]'
+)
+const skeletonTextBarClass = cx(skeletonBarBaseClass, 'block max-w-full')
 const skeletonDotClass =
   'relative block h-7 w-7 overflow-hidden rounded-md bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
 const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
 const skeletonFolderCountClass =
   cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')
-const skeletonMetaClass = cx(skeletonBarClass, 'h-2.5 w-[54px]')
-const skeletonBookmarkTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-[124px]')
-const skeletonBookmarkUrlClass = cx(skeletonBarClass, 'h-2 min-w-[150px] opacity-75')
-const skeletonBookmarkPathClass = cx(skeletonBarClass, 'h-2 min-w-[92px] opacity-60')
+const skeletonHeaderMetaClass = cx(skeletonBarBaseClass, 'inline-block h-[7px] w-[68px] align-[1px]')
+const skeletonBookmarkTitleClass = cx(skeletonTextBarClass, 'h-2')
+const skeletonBookmarkUrlClass = cx(skeletonTextBarClass, 'h-[6px] opacity-75')
+const skeletonBookmarkPathClass = cx(skeletonTextBarClass, 'h-[6px] opacity-60')
+const skeletonBookmarkTitleLineClass = cx(rowTitleClass, 'flex h-4 items-center')
+const skeletonBookmarkSubtitleLineClass = cx(rowSubtitleClass, 'flex h-[15px] items-center')
+const skeletonBookmarkPathLineClass = cx(rowPathClass, 'flex h-[15px] items-center')
+const skeletonActionButtonClass = skeletonDotClass
 const searchSkeletonClass = 'grid w-[min(100%,390px)] gap-3 self-stretch'
 const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-ds-text-primary/[0.018] px-[9px] py-2'
 
@@ -255,29 +264,54 @@ function PopupContentSkeleton({
       </aside>
       <section className={mainPaneClass} aria-label={`${title}加载占位`}>
         <header className={paneHeaderClass}>
-          <span>{title}</span>
-          <span className={paneMetaClass}>
-            <span className={skeletonMetaClass}></span>
+          <span>
+            {title}{' '}
+            <span className={paneTitleMetaClass}>
+              · <span className={skeletonHeaderMetaClass}></span>
+            </span>
           </span>
         </header>
-        <div className={mainListClass} role="presentation">
+        <ul className={mainListClass} role="presentation">
           {POPUP_CONTENT_SKELETON_BOOKMARK_ROWS.map((row, index) => (
-            <div className={mainRowClass} key={`bookmark-skeleton:${index}`}>
-              <div className={cx(listButtonClass, 'cursor-default')} style={listButtonBaseStyle}>
+            <li
+              className={mainRowClass}
+              key={`bookmark-skeleton:${index}`}
+            >
+              <div className={cx(listButtonClass, 'cursor-default')} style={getBookmarkButtonStyle(false)}>
                 <span className={rowMainClass}>
-                  <span className={skeletonBookmarkTitleClass} style={{ '--skeleton-width': row.width } as CSSProperties}></span>
-                  <span className={skeletonBookmarkUrlClass} style={{ '--skeleton-width': row.url } as CSSProperties}></span>
-                  <span className={skeletonBookmarkPathClass} style={{ '--skeleton-width': row.path } as CSSProperties}></span>
+                  <span className={skeletonBookmarkTitleLineClass}>
+                    <span className={skeletonBookmarkTitleClass} style={{ width: row.title }}></span>
+                  </span>
+                  <span className={skeletonBookmarkSubtitleLineClass}>
+                    <span className={skeletonBookmarkUrlClass} style={{ width: row.url }}></span>
+                  </span>
+                  <span className={skeletonBookmarkPathLineClass}>
+                    <span className={skeletonBookmarkPathClass} style={{ width: row.path }}></span>
+                  </span>
                 </span>
               </div>
-              <div className={cx(rowActionsClass, 'opacity-80')}>
-                <span className={skeletonDotClass}></span>
-                <span className={skeletonDotClass}></span>
-              </div>
-            </div>
+              <PopupSkeletonRowActions expanded={false} />
+            </li>
           ))}
-        </div>
+        </ul>
       </section>
+    </div>
+  )
+}
+
+function PopupSkeletonRowActions({ expanded }: { expanded: boolean }) {
+  return (
+    <div
+      className={cx(rowActionsClass, 'opacity-80')}
+      data-active={expanded ? 'true' : undefined}
+      data-open={expanded ? 'true' : 'false'}
+    >
+      <div className={rowActionRailClass}>
+        {Array.from({ length: POPUP_CONTENT_SKELETON_ACTION_COUNT }, (_, index) => (
+          <span className={skeletonActionButtonClass} key={`bookmark-skeleton-action:${index}`}></span>
+        ))}
+      </div>
+      <span className={cx(skeletonActionButtonClass, 'popup-row-actions-trigger')}></span>
     </div>
   )
 }
@@ -568,10 +602,12 @@ function PopupRowActions({
   title?: string
 }) {
   const [focusExpanded, setFocusExpanded] = useState(false)
+  const [pinnedExpanded, setPinnedExpanded] = useState(false)
+  const [forcedCollapsed, setForcedCollapsed] = useState(false)
   const quickActions = menu.items.filter((item) => {
     return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)
   })
-  const expanded = active || focusExpanded
+  const expanded = (active || focusExpanded || pinnedExpanded) && !forcedCollapsed
   const triggerLabel = title || label || '显示书签快捷操作'
 
   return (
@@ -579,6 +615,7 @@ function PopupRowActions({
       className={rowActionsClass}
       aria-label="书签快捷操作"
       data-active={active ? 'true' : undefined}
+      data-collapsed={forcedCollapsed ? 'true' : undefined}
       data-open={expanded ? 'true' : 'false'}
       onBlur={(event) => {
         const nextTarget = event.relatedTarget
@@ -586,7 +623,12 @@ function PopupRowActions({
           setFocusExpanded(false)
         }
       }}
-      onFocus={() => setFocusExpanded(true)}
+      onFocus={() => {
+        if (!forcedCollapsed) {
+          setFocusExpanded(true)
+        }
+      }}
+      onPointerLeave={() => setForcedCollapsed(false)}
     >
       <div className={rowActionRailClass}>
         {quickActions.map((item) => (
@@ -613,8 +655,20 @@ function PopupRowActions({
         type="button"
         aria-label={triggerLabel}
         aria-expanded={expanded}
+        aria-pressed={pinnedExpanded && !forcedCollapsed}
         title={triggerLabel}
-        onClick={() => setFocusExpanded(true)}
+        onClick={(event) => {
+          if (pinnedExpanded && !forcedCollapsed) {
+            setPinnedExpanded(false)
+            setFocusExpanded(false)
+            setForcedCollapsed(true)
+            event.currentTarget.blur()
+            return
+          }
+
+          setPinnedExpanded(true)
+          setForcedCollapsed(false)
+        }}
         unstyled
       >
         <Icon name="MoreHorizontal" size={14} aria-hidden="true" />

@@ -1119,7 +1119,28 @@ function handleNewtabShellContextMenu(event: ReactMouseEvent<HTMLDivElement>): v
 
   event.preventDefault()
   closeBookmarkMenu({ animate: false })
-  openAddBookmarkMenu(event.clientX, event.clientY)
+  openAddBookmarkMenu(event.clientX, event.clientY, getAddBookmarkFolderIdFromContextMenuTarget(event.target))
+}
+
+function getAddBookmarkFolderIdFromContextMenuTarget(target: EventTarget | null): string {
+  if (!(target instanceof Element)) {
+    return ''
+  }
+
+  const folderElement = target.closest<HTMLElement>(
+    '[data-add-bookmark-folder-id],[data-bookmark-grid-folder-id],[data-folder-section-id]'
+  )
+  if (!folderElement) {
+    return ''
+  }
+
+  const folderId = String(
+    folderElement.dataset.addBookmarkFolderId ||
+    folderElement.dataset.bookmarkGridFolderId ||
+    folderElement.dataset.folderSectionId ||
+    ''
+  ).trim()
+  return folderId && state.folderNodeMap.has(folderId) ? folderId : ''
 }
 
 function handleNewtabShellPointerDownCapture(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -2009,12 +2030,12 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
   renderBookmarkMenu()
 }
 
-function openAddBookmarkMenu(clientX: number, clientY: number): void {
+function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): void {
   closeBookmarkMenu({ animate: false })
   window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = true
   state.addMenuExpanded = false
-  state.addFolderId = ''
+  state.addFolderId = folderId
   state.addMenuX = clientX
   state.addMenuY = clientY
   state.addTitle = ''
@@ -3368,11 +3389,11 @@ async function persistBookmarkOrder(
     }
 
     if (!syncPersistedBookmarkOrderInState(folderId, operations, finalBookmarkIds)) {
-      await refreshNewTab()
+      await refreshNewTab({ showLoading: false })
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : '书签排序保存失败，请刷新后重试。'
-    await refreshNewTab()
+    await refreshNewTab({ showLoading: false })
     state.bookmarkReorderError = message
     render()
     updateClockText()
@@ -4266,7 +4287,7 @@ async function flushBookmarkChangeRefresh(): Promise<void> {
   bookmarkChangeRefreshQueued = false
   bookmarkChangeRefreshInFlight = true
   try {
-    await refreshNewTab()
+    await refreshNewTab({ showLoading: false })
   } finally {
     bookmarkChangeRefreshInFlight = false
     if (bookmarkChangeRefreshQueued) {
@@ -4355,7 +4376,7 @@ async function saveBookmarkMenuChanges(): Promise<void> {
       state.faviconRefreshTokens.set(bookmark.id, Date.now())
     }
     closeBookmarkMenu()
-    await refreshNewTab()
+    await refreshNewTab({ showLoading: false })
   } catch (error) {
     state.menuBusy = false
     state.menuStatus = ''
@@ -4445,7 +4466,7 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     }
     state.deleteToastStatus = ''
     closeBookmarkMenu()
-    await refreshNewTab()
+    await refreshNewTab({ showLoading: false })
   } catch (error) {
     state.pendingDeleteBookmarkId = ''
     state.menuBusy = false
@@ -4456,9 +4477,7 @@ async function deleteActiveMenuBookmark(): Promise<void> {
 }
 
 function getDeleteBookmarkConfirmationText(bookmark: chrome.bookmarks.BookmarkTreeNode): string {
-  const title = getBookmarkDisplayTitle(bookmark)
-  const folderPath = getBookmarkFolderPath(bookmark) || DEFAULT_NEW_TAB_FOLDER_TITLE
-  return `再点一次“确认删除 1 个”会从 Chrome 书签中删除「${title}」，位置：${folderPath}。删除记录会进入回收站，可从回收站恢复。`
+  return '再次点击确认删除，可在回收站恢复。'
 }
 
 async function undoLastDeletedBookmark(): Promise<void> {
@@ -4495,7 +4514,7 @@ async function undoLastDeletedBookmark(): Promise<void> {
     state.lastDeletedBookmark = null
     state.deleteToastBusy = false
     state.deleteToastStatus = ''
-    await refreshNewTab()
+    await refreshNewTab({ showLoading: false })
     renderDeleteToast()
   } catch (error) {
     state.deleteToastBusy = false
@@ -4582,7 +4601,7 @@ async function saveAddedBookmark(): Promise<void> {
       url
     })
     closeAddBookmarkMenu()
-    await refreshNewTab()
+    await refreshNewTab({ showLoading: false })
   } catch (error) {
     state.addMenuBusy = false
     state.addMenuError =
@@ -4591,17 +4610,23 @@ async function saveAddedBookmark(): Promise<void> {
   }
 }
 
-async function refreshNewTab(): Promise<void> {
+interface RefreshNewTabOptions {
+  showLoading?: boolean
+}
+
+async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}): Promise<void> {
   const refreshVersion = ++newTabRefreshVersion
   const backgroundMutationVersionAtStart = backgroundSettingsMutationVersion
-  state.loading = true
   state.error = ''
   state.utilitySettingsHydrated = false
   state.bookmarkReorderError = ''
   clearFolderReorderStatus()
   resetAutoSearchLayoutSettle()
   resetSearchIndexReadyState()
-  render()
+  if (showLoading) {
+    state.loading = true
+    render()
+  }
 
   try {
     void backgroundPreloadPromise

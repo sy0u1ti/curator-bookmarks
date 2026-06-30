@@ -174,10 +174,10 @@ button:focus-visible {
   border-radius: var(--ds-radius-sm);
 }
 
-.popup-main-row:hover .popup-row-actions,
-.popup-main-row:focus-within .popup-row-actions,
-.popup-row-actions[data-active="true"],
-.popup-row-actions[data-open="true"] {
+.popup-main-row:hover .popup-row-actions:not([data-collapsed="true"]),
+.popup-main-row:focus-within .popup-row-actions:not([data-collapsed="true"]),
+.popup-row-actions[data-active="true"]:not([data-collapsed="true"]),
+.popup-row-actions[data-open="true"]:not([data-collapsed="true"]) {
   width: var(--popup-row-actions-open-width);
 }
 
@@ -207,10 +207,10 @@ button:focus-visible {
   will-change: opacity, transform, filter;
 }
 
-.popup-main-row:hover .popup-row-actions-menu,
-.popup-main-row:focus-within .popup-row-actions-menu,
-.popup-row-actions[data-active="true"] .popup-row-actions-menu,
-.popup-row-actions[data-open="true"] .popup-row-actions-menu {
+.popup-main-row:hover .popup-row-actions:not([data-collapsed="true"]) .popup-row-actions-menu,
+.popup-main-row:focus-within .popup-row-actions:not([data-collapsed="true"]) .popup-row-actions-menu,
+.popup-row-actions[data-active="true"]:not([data-collapsed="true"]) .popup-row-actions-menu,
+.popup-row-actions[data-open="true"]:not([data-collapsed="true"]) .popup-row-actions-menu {
   opacity: 1;
   pointer-events: auto;
   filter: blur(0);
@@ -226,10 +226,10 @@ button:focus-visible {
     transform var(--ds-motion-fast) var(--resize-ease);
 }
 
-.popup-main-row:hover .popup-row-actions-trigger,
-.popup-main-row:focus-within .popup-row-actions-trigger,
-.popup-row-actions[data-active="true"] .popup-row-actions-trigger,
-.popup-row-actions[data-open="true"] .popup-row-actions-trigger {
+.popup-main-row:hover .popup-row-actions:not([data-collapsed="true"]) .popup-row-actions-trigger,
+.popup-main-row:focus-within .popup-row-actions:not([data-collapsed="true"]) .popup-row-actions-trigger,
+.popup-row-actions[data-active="true"]:not([data-collapsed="true"]) .popup-row-actions-trigger,
+.popup-row-actions[data-open="true"]:not([data-collapsed="true"]) .popup-row-actions-trigger {
   background: var(--ds-surface-2);
   color: var(--ds-text-secondary);
 }

@@ -29,10 +29,11 @@ const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   trash: 'Trash2'
 }
 
-const MENU_SURFACE_CLASS = 't-resize fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--dropdown-open-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
+const MENU_SURFACE_CLASS = 'bookmark-menu-surface t-resize fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--dropdown-open-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
 const MENU_CLOSING_CLASS = 'pointer-events-none animate-[newtab-menu-exit_var(--dropdown-close-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
-const MENU_FULL_WIDTH_CLASS = 'w-[252px]'
-const MENU_ADD_COLLAPSED_CLASS = 'w-[196px]'
+const MENU_FULL_WIDTH_CLASS = 'w-[276px]'
+const MENU_ADD_EXPANDED_CLASS = 'w-[300px]'
+const MENU_ADD_COLLAPSED_CLASS = 'w-[236px]'
 const MENU_ROW_CLASS = 'grid min-h-9 grid-cols-[42px_minmax(0,1fr)] items-center gap-2 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface)] px-0 py-[3px] text-[13px] leading-[1.3] text-[var(--ui-text-secondary)] shadow-none'
 const MENU_ROW_LABEL_CLASS = 'min-w-0 pl-0.5 leading-[1.3]'
 const MENU_CONTROL_CLASS = 'min-h-[30px] w-full min-w-0 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] px-[9px] text-[13px] text-[var(--ui-text-primary)] outline-none placeholder:text-[var(--ui-text-disabled)] focus:border-[var(--ui-focus-ring)] focus:outline focus:outline-1 focus:outline-offset-2 focus:outline-[var(--ui-focus-ring)] focus-visible:border-[var(--ui-focus-ring)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-[var(--ui-focus-ring)] disabled:opacity-60'
@@ -40,13 +41,12 @@ const MENU_SELECT_TRIGGER_CLASS = 'base-select-trigger flex min-h-[30px] w-full 
 const MENU_SELECT_POPUP_CLASS = 'custom-select-list z-[10040] max-h-60 min-w-[var(--anchor-width)] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-1 text-[13px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] outline-none'
 const MENU_SELECT_OPTION_CLASS = 'flex cursor-default items-center justify-between gap-3 rounded-[var(--ui-radius-control)] px-2.5 py-2 outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] data-[highlighted]:bg-[var(--ui-surface-hover)] data-[disabled]:opacity-45 motion-reduce:transition-none'
 const MENU_ACTION_CLASS = 'bookmark-menu-action flex min-h-[30px] w-full cursor-pointer items-center justify-start gap-2.5 rounded-[var(--ui-radius-control)] bg-transparent px-2 text-left text-[13px] leading-none text-[var(--ui-text-primary)] outline-none [transition:background-color_var(--ui-motion-fast)_var(--ui-ease-standard),color_var(--ui-motion-fast)_var(--ui-ease-standard),transform_var(--ui-motion-fast)_var(--ui-ease-standard),opacity_var(--ui-motion-fast)_var(--ui-ease-standard)] hover:bg-[var(--ui-surface-hover)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:shadow-[0_0_0_3px_var(--ui-accent-soft)] active:[transform:scale(var(--ui-press-scale))] disabled:cursor-default disabled:opacity-60 data-[disabled]:cursor-default data-[disabled]:opacity-60 motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-[17px] [&_svg]:w-[17px] [&_svg]:shrink-0'
-const MENU_DANGER_ACTION_CLASS = 'text-[var(--ui-danger)] hover:bg-[var(--ui-danger-soft)] focus-visible:bg-[var(--ui-danger-soft)]'
-const MENU_SEPARATOR_CLASS = 'my-2 mx-0.5 h-px bg-[var(--ui-divider)]'
-const MENU_ACTIONS_CLASS = 'grid gap-0.5'
-const MENU_FEEDBACK_CLASS = 'mt-2 mx-0.5 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-xs leading-[1.45] shadow-none'
-const MENU_ERROR_CLASS = `${MENU_FEEDBACK_CLASS} text-[var(--ui-danger)]`
-const MENU_STATUS_CLASS = `${MENU_FEEDBACK_CLASS} text-[var(--ui-accent-text)]`
-const MENU_WARNING_STATUS_CLASS = `${MENU_FEEDBACK_CLASS} text-[var(--ui-warning)]`
+const MENU_DANGER_ACTION_CLASS = 'bookmark-menu-action-danger text-[var(--ui-danger)] hover:bg-[var(--ui-danger-soft)] focus-visible:bg-[var(--ui-danger-soft)]'
+const MENU_ACTIONS_CLASS = 'bookmark-menu-actions grid gap-0.5'
+const MENU_FEEDBACK_CLASS = 'bookmark-menu-feedback mt-2 mx-0.5 rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[var(--ui-surface-raised)] text-xs leading-[1.45] shadow-none'
+const MENU_ERROR_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-error text-[var(--ui-danger)]`
+const MENU_STATUS_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-status text-[var(--ui-accent-text)]`
+const MENU_WARNING_STATUS_CLASS = `${MENU_FEEDBACK_CLASS} bookmark-menu-status bookmark-menu-warning text-[var(--ui-warning)]`
 
 export function BookmarkMenusHost() {
   const menus = useNewtabBookmarkMenusView()
@@ -105,7 +105,7 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
   const className = [
     'bookmark-add-menu',
     MENU_SURFACE_CLASS,
-    view.menu.expanded ? cx('expanded', MENU_FULL_WIDTH_CLASS) : MENU_ADD_COLLAPSED_CLASS,
+    view.menu.expanded ? cx('expanded', MENU_ADD_EXPANDED_CLASS) : MENU_ADD_COLLAPSED_CLASS,
     view.closing ? cx('is-closing', MENU_CLOSING_CLASS) : ''
   ].filter(Boolean).join(' ')
 
@@ -119,6 +119,7 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
   return (
     <section
       className={className}
+      data-expanded={view.menu.expanded ? 'true' : 'false'}
       data-newtab-bookmark-menu-surface=""
       style={{ left: position.left, top: position.top }}
       onKeyDownCapture={(event) => {
@@ -302,47 +303,48 @@ function BookmarkEditMenu({
 
   return (
     <InlineDialogPanel
-      className="bookmark-menu-popover-shell"
+      className="bookmark-menu-popover-shell bookmark-edit-menu-shell"
       aria-label="书签设置"
       initialFocus={false}
       finalFocus={false}
     >
-      <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
-      <BookmarkMenuTextField field={menu.fields[1]} />
-      <div className={cx('bookmark-menu-row', MENU_ROW_CLASS)}>
-        <span className={MENU_ROW_LABEL_CLASS}>图标</span>
-        <Select
-          ariaLabel="图标"
-          disabled={menu.iconModeDisabled}
-          itemClassName={MENU_SELECT_OPTION_CLASS}
-          value={menu.iconMode}
-          options={[
-            { value: 'website', label: '网站图标' },
-            { value: 'custom', label: '自定义图片' }
-          ]}
-          onValueChange={handleIconModeChange}
-          popupAttributes={{ 'data-newtab-bookmark-menu-surface': '' }}
-          popupClassName={MENU_SELECT_POPUP_CLASS}
-          positionerClassName="z-[10040]"
-          triggerClassName={MENU_SELECT_TRIGGER_CLASS}
-          unstyled
-          valueClassName="min-w-0 truncate"
-        />
-        <Input
-          ref={customIconInputRef}
-          type="file"
-          accept="image/*"
-          hidden
-          tabIndex={-1}
-          onChange={(event) => {
-            const input = event.currentTarget
-            void menu.onCustomIconFileSelect(input.files?.[0] || null)
-            input.value = ''
-          }}
-          unstyled
-        />
+      <div className="bookmark-menu-fields">
+        <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
+        <BookmarkMenuTextField field={menu.fields[1]} />
+        <div className={cx('bookmark-menu-row', MENU_ROW_CLASS)}>
+          <span className={MENU_ROW_LABEL_CLASS}>图标</span>
+          <Select
+            ariaLabel="图标"
+            disabled={menu.iconModeDisabled}
+            itemClassName={MENU_SELECT_OPTION_CLASS}
+            value={menu.iconMode}
+            options={[
+              { value: 'website', label: '网站图标' },
+              { value: 'custom', label: '自定义图片' }
+            ]}
+            onValueChange={handleIconModeChange}
+            popupAttributes={{ 'data-newtab-bookmark-menu-surface': '' }}
+            popupClassName={MENU_SELECT_POPUP_CLASS}
+            positionerClassName="z-[10040]"
+            triggerClassName={MENU_SELECT_TRIGGER_CLASS}
+            unstyled
+            valueClassName="min-w-0 truncate"
+          />
+          <Input
+            ref={customIconInputRef}
+            type="file"
+            accept="image/*"
+            hidden
+            tabIndex={-1}
+            onChange={(event) => {
+              const input = event.currentTarget
+              void menu.onCustomIconFileSelect(input.files?.[0] || null)
+              input.value = ''
+            }}
+            unstyled
+          />
+        </div>
       </div>
-      <BookmarkMenuSeparator />
       <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="书签操作" />
       <BookmarkMenuFeedback error={menu.error} status={menu.status} statusTone={menu.statusTone} />
     </InlineDialogPanel>
@@ -360,32 +362,33 @@ function BookmarkAddMenu({
 }) {
   return (
     <InlineDialogPanel
-      className="bookmark-menu-popover-shell"
+      className="bookmark-menu-popover-shell bookmark-add-menu-shell"
       aria-label="添加新标签页书签"
       initialFocus={false}
       finalFocus={false}
     >
       {menu.expanded ? (
-        <>
-          <div className="bookmark-add-menu-content is-expanded">
+        <div className="bookmark-add-menu-content is-expanded">
+          <div className="bookmark-menu-fields bookmark-add-menu-fields">
             <BookmarkMenuTextField field={menu.fields[0]} inputRef={firstInputRef} />
             <BookmarkMenuTextField field={menu.fields[1]} />
-            <BookmarkMenuSeparator />
-            <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
           </div>
-        </>
+          <BookmarkMenuActions actionRefs={actionRefs} actions={menu.actions} label="添加书签操作" />
+        </div>
       ) : (
         <div className="bookmark-add-menu-content is-collapsed">
           <Button
-            className={MENU_ACTION_CLASS}
+            className={cx(MENU_ACTION_CLASS, 'bookmark-add-menu-trigger')}
             type="button"
             onClick={() => {
               void menu.onExpand()
             }}
             unstyled
           >
-            <MenuActionIcon icon="plus" />
-            添加书签
+            <span className="bookmark-add-menu-trigger-icon">
+              <MenuActionIcon icon="plus" />
+            </span>
+            <span className="bookmark-add-menu-trigger-label">添加书签</span>
           </Button>
         </div>
       )}
@@ -425,10 +428,6 @@ function BookmarkMenuTextField({
       />
     </label>
   )
-}
-
-function BookmarkMenuSeparator() {
-  return <div className={MENU_SEPARATOR_CLASS} />
 }
 
 function BookmarkMenuActions({
