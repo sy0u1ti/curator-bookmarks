@@ -1,4 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+  type Ref,
+  type RefObject
+} from 'react'
 import { Button } from '../../ui/base/Button'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { cx } from '../../ui/base/utils'
@@ -109,7 +120,7 @@ const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-
 const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-transform duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] motion-reduce:transition-none max-[420px]:w-full max-[420px]:rounded-none max-[420px]:border-x-0'
 const SETTINGS_DRAWER_PANEL_OPEN_CLASS = 'translate-x-0'
 const SETTINGS_DRAWER_PANEL_CLOSED_CLASS = 'translate-x-full'
-const SETTINGS_DRAWER_SCROLL_CLASS = 'h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin] max-[700px]:px-4 max-[700px]:pb-5'
+const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 max-[700px]:px-4 max-[700px]:pb-5'
 const SETTINGS_ROOT_CLASS = 'grid gap-4'
 const SETTINGS_HEADER_CLASS = 'grid gap-1 pr-14'
 const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-semibold uppercase text-ds-text-secondary'
@@ -200,6 +211,7 @@ const SEARCH_ENGINE_ROW_CLASS = 'items-start'
 const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-52 grid-cols-3 gap-1.5 max-[700px]:grid-cols-1'
 const SEARCH_ENGINE_TOGGLE_CLASS = 'relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
 const SEARCH_ENGINE_HIDDEN_SWITCH_CLASS = 'pointer-events-none absolute h-px w-px opacity-0'
+const SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT = 40
 
 function settingsControlClassName(...classNames: Array<string | false | null | undefined>): string {
   return cx(SETTINGS_CONTROL_CLASS, ...classNames)
@@ -462,6 +474,211 @@ function SettingsTabPanel({
     >
       {children}
     </TabsPanel>
+  )
+}
+
+interface SettingsScrollBarState {
+  hidden: boolean
+  thumbHeight: number
+  thumbTop: number
+}
+
+type SettingsScrollBarStyle = CSSProperties & {
+  '--settings-scrollbar-thumb-height': string
+  '--settings-scrollbar-thumb-top': string
+}
+
+const SETTINGS_SCROLLBAR_HIDDEN_STATE: SettingsScrollBarState = {
+  hidden: true,
+  thumbHeight: 100,
+  thumbTop: 0
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function getSettingsScrollBarState(
+  scrollHost: HTMLElement | null,
+  trackElement: HTMLElement | null
+): SettingsScrollBarState {
+  if (!scrollHost || scrollHost.scrollHeight <= scrollHost.clientHeight + 1) {
+    return SETTINGS_SCROLLBAR_HIDDEN_STATE
+  }
+
+  const trackHeight = Math.max(trackElement?.clientHeight || scrollHost.clientHeight, 1)
+  const maxScroll = Math.max(scrollHost.scrollHeight - scrollHost.clientHeight, 1)
+  const minThumbHeight = (SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT / trackHeight) * 100
+  const thumbHeight = clampNumber((scrollHost.clientHeight / scrollHost.scrollHeight) * 100, minThumbHeight, 100)
+  const thumbTop = clampNumber((scrollHost.scrollTop / maxScroll) * (100 - thumbHeight), 0, 100 - thumbHeight)
+
+  return {
+    hidden: false,
+    thumbHeight: Number(thumbHeight.toFixed(3)),
+    thumbTop: Number(thumbTop.toFixed(3))
+  }
+}
+
+function isSettingsScrollBarStateEqual(left: SettingsScrollBarState, right: SettingsScrollBarState): boolean {
+  return (
+    left.hidden === right.hidden &&
+    Math.abs(left.thumbHeight - right.thumbHeight) < 0.01 &&
+    Math.abs(left.thumbTop - right.thumbTop) < 0.01
+  )
+}
+
+function SettingsDrawerScrollBar({
+  activeGroup,
+  open,
+  scrollHostRef
+}: {
+  activeGroup: SettingsDrawerSection
+  open: boolean
+  scrollHostRef: RefObject<HTMLDivElement | null>
+}) {
+  const [scrollState, setScrollState] = useState<SettingsScrollBarState>(SETTINGS_SCROLLBAR_HIDDEN_STATE)
+  const [dragging, setDragging] = useState(false)
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const dragThumbOffsetRef = useRef<number | null>(null)
+
+  const syncScrollBar = useCallback(() => {
+    const nextState = getSettingsScrollBarState(scrollHostRef.current, trackRef.current)
+    setScrollState((previousState) => (
+      isSettingsScrollBarStateEqual(previousState, nextState) ? previousState : nextState
+    ))
+  }, [scrollHostRef])
+
+  const scrollToClientY = useCallback((clientY: number) => {
+    const scrollHost = scrollHostRef.current
+    const trackElement = trackRef.current
+
+    if (!scrollHost || !trackElement) {
+      return
+    }
+
+    const maxScroll = scrollHost.scrollHeight - scrollHost.clientHeight
+
+    if (maxScroll <= 0) {
+      return
+    }
+
+    const trackRect = trackElement.getBoundingClientRect()
+    const thumbHeight = clampNumber(
+      (scrollHost.clientHeight / scrollHost.scrollHeight) * trackRect.height,
+      SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT,
+      trackRect.height
+    )
+    const maxThumbTop = Math.max(trackRect.height - thumbHeight, 1)
+    const thumbOffset = dragThumbOffsetRef.current ?? thumbHeight / 2
+    const thumbTop = clampNumber(clientY - trackRect.top - thumbOffset, 0, maxThumbTop)
+
+    scrollHost.scrollTop = (thumbTop / maxThumbTop) * maxScroll
+  }, [scrollHostRef])
+
+  useLayoutEffect(() => {
+    const scrollHost = scrollHostRef.current
+
+    if (!scrollHost) {
+      setScrollState(SETTINGS_SCROLLBAR_HIDDEN_STATE)
+      return
+    }
+
+    syncScrollBar()
+    scrollHost.addEventListener('scroll', syncScrollBar, { passive: true })
+
+    const contentElement = scrollHost.firstElementChild
+    const resizeObserver = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(syncScrollBar)
+
+    resizeObserver?.observe(scrollHost)
+
+    if (contentElement) {
+      resizeObserver?.observe(contentElement)
+    }
+
+    window.addEventListener('resize', syncScrollBar)
+    const frameId = window.requestAnimationFrame(syncScrollBar)
+
+    return () => {
+      scrollHost.removeEventListener('scroll', syncScrollBar)
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', syncScrollBar)
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [activeGroup, syncScrollBar, scrollHostRef])
+
+  useEffect(() => {
+    if (!dragging) {
+      return
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      event.preventDefault()
+      scrollToClientY(event.clientY)
+    }
+    const handlePointerUp = () => {
+      dragThumbOffsetRef.current = null
+      setDragging(false)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
+    }
+  }, [dragging, scrollToClientY])
+
+  const handleTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    dragThumbOffsetRef.current = null
+    scrollToClientY(event.clientY)
+    setDragging(true)
+  }
+
+  const handleThumbPointerDown = (event: ReactPointerEvent<HTMLSpanElement>) => {
+    if (event.button !== 0) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    dragThumbOffsetRef.current = event.clientY - event.currentTarget.getBoundingClientRect().top
+    setDragging(true)
+  }
+
+  const style: SettingsScrollBarStyle = {
+    '--settings-scrollbar-thumb-height': `${scrollState.thumbHeight}%`,
+    '--settings-scrollbar-thumb-top': `${scrollState.thumbTop}%`
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className="settings-drawer-scrollbar"
+      data-dragging={dragging ? 'true' : 'false'}
+      data-visible={open && !scrollState.hidden ? 'true' : 'false'}
+      style={style}
+    >
+      <div
+        className="settings-drawer-scrollbar-track"
+        onPointerDown={handleTrackPointerDown}
+        ref={trackRef}
+      >
+        <span
+          className="settings-drawer-scrollbar-thumb"
+          onPointerDown={handleThumbPointerDown}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -825,7 +1042,7 @@ function BackgroundSettingsSection({
           ]}
         />
         <div id="background-featured-row" className={settingRowClassName()} hidden={backgroundSettings.featuredPickerHidden}>
-          <SettingLabelStack title="精选图库" description="主动选择后会访问 NASA 与 Wikimedia Commons 等第三方图片域名并自动缓存。" />
+          <SettingLabelStack title="精选图库" description="主动选择后会访问 NASA、Wikimedia Commons、The Met 等第三方图片域名并自动缓存。" />
           <Button
             unstyled
             id="background-featured-picker"
@@ -1617,6 +1834,11 @@ function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenC
             </div>
           </TabsRoot>
         </div>
+        <SettingsDrawerScrollBar
+          activeGroup={activeGroup}
+          open={open}
+          scrollHostRef={scrollHostRef}
+        />
       </DrawerPanel>
     </DrawerOverlay>
   )

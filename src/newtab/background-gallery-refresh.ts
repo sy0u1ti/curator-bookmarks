@@ -1,16 +1,26 @@
 import type { FeaturedBackgroundItem } from './background-gallery.js'
 import {
+  FEATURED_BACKGROUND_PROVIDER_DISPLAY_LIMIT,
+  isFeaturedBackgroundProvider
+} from './featured-background-providers.js'
+import {
   isFeaturedBackgroundStyleSuitable,
 } from './featured-background-style.js'
 
-const FEATURED_REFRESH_PROVIDER_TARGET_COUNT = 12
+const FEATURED_REFRESH_PROVIDER_TARGET_COUNT = FEATURED_BACKGROUND_PROVIDER_DISPLAY_LIMIT
 const FEATURED_REFRESH_SOURCE_LIMIT = 24
+const FEATURED_REFRESH_STORED_ITEM_LIMIT = 96
 const FEATURED_REFRESH_CONCURRENCY = 6
 const NASA_SEARCH_PAGE_SIZE = 16
-const NASA_SEARCH_PAGE_VARIANTS = 6
+const NASA_SEARCH_PAGE_VARIANTS = 12
 const FEATURED_BACKGROUND_HIGH_MIN_LONG_EDGE = 1920
 const FEATURED_BACKGROUND_HIGH_MIN_SHORT_EDGE = 1080
 const FEATURED_BACKGROUND_MIN_ASPECT_RATIO = 1.2
+const COMMONS_SEARCH_LIMIT = 24
+const COMMONS_SEARCH_OFFSET_VARIANTS = 8
+const MET_OBJECTS_PER_QUERY = 8
+const CLEVELAND_SEARCH_LIMIT = 12
+const CLEVELAND_SEARCH_OFFSET_VARIANTS = 12
 const NASA_SEARCH_QUERIES = [
   'nasa earth observatory landscape photograph',
   'iss earth horizon aurora photograph',
@@ -28,7 +38,26 @@ const COMMONS_SEARCH_QUERIES = [
   'aurora landscape public domain photograph',
   'desert landscape public domain photograph'
 ]
-const COMMONS_SEARCH_LIMIT = 24
+const MET_SEARCH_QUERIES = [
+  'landscape',
+  'seascape',
+  'mountain landscape',
+  'river landscape',
+  'forest landscape',
+  'garden landscape',
+  'sunset landscape',
+  'panorama'
+]
+const CLEVELAND_SEARCH_QUERIES = [
+  'landscape',
+  'seascape',
+  'mountain landscape',
+  'waterfall',
+  'river landscape',
+  'forest landscape',
+  'valley landscape',
+  'storm sky'
+]
 
 export interface FeaturedGalleryRefreshState {
   existingItems: FeaturedBackgroundItem[]
@@ -49,7 +78,11 @@ export const FEATURED_BACKGROUND_REFRESH_ORIGINS = [
   'https://images-api.nasa.gov/*',
   'https://images-assets.nasa.gov/*',
   'https://commons.wikimedia.org/*',
-  'https://upload.wikimedia.org/*'
+  'https://upload.wikimedia.org/*',
+  'https://collectionapi.metmuseum.org/*',
+  'https://images.metmuseum.org/*',
+  'https://openaccess-api.clevelandart.org/*',
+  'https://openaccess-cdn.clevelandart.org/*'
 ]
 
 export function getFeaturedBackgroundResolutionLabel(item: Pick<FeaturedBackgroundItem, 'width' | 'height'>): string {
@@ -65,17 +98,19 @@ export async function fetchFreshFeaturedBackgroundItems(
   client: FeaturedGalleryFetchClient,
   options: FeaturedGalleryRefreshOptions = {}
 ): Promise<FeaturedBackgroundItem[]> {
-  const [nasaItems, wikimediaItems] = await Promise.all([
+  const [nasaItems, wikimediaItems, metItems, clevelandItems] = await Promise.all([
     fetchNasaFeaturedItems(client, options).catch(() => []),
-    fetchWikimediaFeaturedItems(client, options).catch(() => [])
+    fetchWikimediaFeaturedItems(client, options).catch(() => []),
+    fetchMetFeaturedItems(client, options).catch(() => []),
+    fetchClevelandFeaturedItems(client, options).catch(() => [])
   ])
 
   const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
   return [
-    ...rotateFeaturedCandidates(dedupeFeaturedItems(nasaItems), seed)
-      .slice(0, FEATURED_REFRESH_PROVIDER_TARGET_COUNT),
-    ...rotateFeaturedCandidates(dedupeFeaturedItems(wikimediaItems), seed + 1)
-      .slice(0, FEATURED_REFRESH_PROVIDER_TARGET_COUNT)
+    ...pickFeaturedProviderItems(nasaItems, seed),
+    ...pickFeaturedProviderItems(wikimediaItems, seed + 1),
+    ...pickFeaturedProviderItems(metItems, seed + 2),
+    ...pickFeaturedProviderItems(clevelandItems, seed + 3)
   ]
 }
 
@@ -89,8 +124,11 @@ export function mergeFeaturedGalleryRefresh({
   const seen = new Set<string>()
 
   function addItem(item: FeaturedBackgroundItem | null | undefined): void {
+    if (!item || !isFeaturedBackgroundProvider(item.provider)) {
+      return
+    }
     const id = String(item?.id || '').trim()
-    if (!item || !id || seen.has(id)) {
+    if (!id || seen.has(id)) {
       return
     }
     seen.add(id)
@@ -110,8 +148,11 @@ export function mergeFeaturedGalleryRefresh({
   for (const item of fetchedItems) {
     addItem(item)
   }
+  for (const item of existingItems) {
+    addItem(item)
+  }
 
-  return merged
+  return limitFeaturedRefreshStoredItems(merged, favorites)
 }
 
 export function isHighResolutionFeaturedBackground(
@@ -148,14 +189,57 @@ export function getFeaturedBackgroundRefreshRequestOrigins(): string[] {
   return FEATURED_BACKGROUND_REFRESH_ORIGINS
 }
 
+export function getFeaturedBackgroundRefreshProviderCount(items: FeaturedBackgroundItem[]): number {
+  const providers = new Set<FeaturedBackgroundItem['provider']>()
+  for (const item of items) {
+    if (isFeaturedBackgroundProvider(item.provider)) {
+      providers.add(item.provider)
+    }
+  }
+  return providers.size
+}
+
+function pickFeaturedProviderItems(items: FeaturedBackgroundItem[], seed: number): FeaturedBackgroundItem[] {
+  return rotateFeaturedCandidates(dedupeFeaturedItems(items), seed)
+    .slice(0, FEATURED_REFRESH_PROVIDER_TARGET_COUNT)
+}
+
+function limitFeaturedRefreshStoredItems(
+  items: FeaturedBackgroundItem[],
+  favoriteIds: Set<string>
+): FeaturedBackgroundItem[] {
+  let retainedNonFavoriteCount = 0
+  const retainedProviderCounts = new Map<FeaturedBackgroundItem['provider'], number>()
+  return items.filter((item) => {
+    if (favoriteIds.has(item.id)) {
+      return true
+    }
+    if (retainedNonFavoriteCount >= FEATURED_REFRESH_STORED_ITEM_LIMIT) {
+      return false
+    }
+    const providerCount = retainedProviderCounts.get(item.provider) || 0
+    if (providerCount >= FEATURED_BACKGROUND_PROVIDER_DISPLAY_LIMIT) {
+      return false
+    }
+    retainedProviderCounts.set(item.provider, providerCount + 1)
+    retainedNonFavoriteCount += 1
+    return true
+  })
+}
+
 async function fetchNasaFeaturedItems(
   client: FeaturedGalleryFetchClient,
   options: FeaturedGalleryRefreshOptions
 ): Promise<FeaturedBackgroundItem[]> {
   const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
-  const searchResults = await Promise.all(NASA_SEARCH_QUERIES.map((query, index) => {
-    const page = 1 + ((seed + index) % NASA_SEARCH_PAGE_VARIANTS)
-    const url = `https://images-api.nasa.gov/search?media_type=image&q=${encodeURIComponent(query)}&page_size=${NASA_SEARCH_PAGE_SIZE}&page=${page}`
+  const searchUrls = NASA_SEARCH_QUERIES.flatMap((query, index) => {
+    const seededPage = 1 + ((seed + index) % NASA_SEARCH_PAGE_VARIANTS)
+    const pages = dedupeNumbers([1, seededPage])
+    return pages.map((page) => {
+      return `https://images-api.nasa.gov/search?media_type=image&q=${encodeURIComponent(query)}&page_size=${NASA_SEARCH_PAGE_SIZE}&page=${page}`
+    })
+  })
+  const searchResults = await Promise.all(searchUrls.map((url) => {
     return client.fetchJson(url).catch(() => null)
   }))
   const collectionItems = searchResults.flatMap((search) => {
@@ -193,9 +277,20 @@ function normalizeNasaCandidate(rawItem: unknown): FeaturedBackgroundItem | null
   const data = Array.isArray(item.data) ? getObject(item.data[0]) : {}
   const nasaId = String(data.nasa_id || '').trim()
   const title = String(data.title || nasaId || 'NASA Image').trim()
-  const assetUrl = String(item.href || '').trim()
+  const assetUrl = normalizeNasaAssetUrl(String(item.href || '').trim())
   const credit = String(data.secondary_creator || data.center || 'NASA Image and Video Library').trim()
-  if (!nasaId || !assetUrl || !isFeaturedBackgroundStyleSuitable({ title, credit, provider: 'nasa' })) {
+  const keywords = Array.isArray(data.keywords)
+    ? data.keywords.map(cleanSingleLine).filter(Boolean)
+    : []
+  if (!nasaId || !assetUrl || !isFeaturedBackgroundStyleSuitable({
+    title,
+    credit,
+    provider: 'nasa',
+    metadata: [
+      cleanSingleLine(data.description),
+      ...keywords
+    ]
+  })) {
     return null
   }
   return {
@@ -212,11 +307,29 @@ function normalizeNasaCandidate(rawItem: unknown): FeaturedBackgroundItem | null
 }
 
 function selectNasaHighResolutionImageUrl(assetList: unknown): string {
-  const urls = Array.isArray(assetList) ? assetList.map((value) => String(value || '').trim()) : []
-  const candidates = urls.filter((combineValue, combineIndex, combineArray) => ((url) => /\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url))(combineValue) && ((url) => !/~thumb\.|~small\./i.test(url))(combineValue))
+  const urls = Array.isArray(assetList)
+    ? assetList.map((value) => normalizeNasaAssetUrl(String(value || '').trim()))
+    : []
+  const candidates = urls.filter((url) => /\.(?:jpe?g|png|webp)(?:$|[?#])/i.test(url) && !/~thumb\.|~small\./i.test(url))
   const preferred = candidates.find((url) => /~orig\./i.test(url)) ||
     candidates.find((url) => /~large\./i.test(url))
   return preferred || ''
+}
+
+function normalizeNasaAssetUrl(rawUrl: string): string {
+  if (!rawUrl) {
+    return ''
+  }
+  try {
+    const url = new URL(rawUrl)
+    if (url.protocol === 'http:' && url.hostname === 'images-assets.nasa.gov') {
+      url.protocol = 'https:'
+      return url.href
+    }
+  } catch {
+    return rawUrl
+  }
+  return rawUrl
 }
 
 async function fetchWikimediaFeaturedItems(
@@ -224,8 +337,9 @@ async function fetchWikimediaFeaturedItems(
   options: FeaturedGalleryRefreshOptions
 ): Promise<FeaturedBackgroundItem[]> {
   const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
-  const searchResults = await Promise.all(COMMONS_SEARCH_QUERIES.map((query) => {
-    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query)}&gsrlimit=${COMMONS_SEARCH_LIMIT}&prop=imageinfo&iiprop=url|user|mime|size&iiurlwidth=1920&format=json&origin=*`
+  const searchResults = await Promise.all(COMMONS_SEARCH_QUERIES.map((query, index) => {
+    const offset = ((seed + index) % COMMONS_SEARCH_OFFSET_VARIANTS) * COMMONS_SEARCH_LIMIT
+    const url = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(query)}&gsrlimit=${COMMONS_SEARCH_LIMIT}&gsroffset=${offset}&prop=imageinfo&iiprop=url|user|mime|size&iiurlwidth=1920&format=json&origin=*`
     return client.fetchJson(url).catch(() => null)
   }))
   const pages = rotateFeaturedCandidates(
@@ -282,6 +396,182 @@ function normalizeWikimediaFeaturedItem(
     credit,
     license: 'Public domain / Wikimedia Commons',
     accentColor: '#101820',
+    dynamic: true,
+    width,
+    height
+  }
+}
+
+async function fetchMetFeaturedItems(
+  client: FeaturedGalleryFetchClient,
+  options: FeaturedGalleryRefreshOptions
+): Promise<FeaturedBackgroundItem[]> {
+  const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
+  const searchResults = await Promise.all(MET_SEARCH_QUERIES.map((query) => {
+    const url = buildFeaturedGalleryApiUrl('https://collectionapi.metmuseum.org/public/collection/v1/search', {
+      hasImages: 'true',
+      isPublicDomain: 'true',
+      q: query
+    })
+    return client.fetchJson(url).catch(() => null)
+  }))
+  const objectIds = rotateFeaturedCandidates(
+    dedupeStrings(searchResults.flatMap((raw) => {
+      const rawIds = getObject(raw).objectIDs
+      return Array.isArray(rawIds) ? rawIds.map((id) => String(id || '').trim()).filter(Boolean) : []
+    })),
+    seed
+  )
+  const hydrated = await mapWithConcurrency(
+    objectIds.slice(0, FEATURED_REFRESH_SOURCE_LIMIT),
+    FEATURED_REFRESH_CONCURRENCY,
+    async (objectId) => {
+      const rawObject = await client.fetchJson(
+        `https://collectionapi.metmuseum.org/public/collection/v1/objects/${encodeURIComponent(objectId)}`
+      ).catch(() => null)
+      const candidate = normalizeMetFeaturedItem(rawObject)
+      const imageSize = candidate ? await getHighResolutionImageSize(client, candidate.imageUrl, options) : null
+      if (!candidate || !imageSize) {
+        return null
+      }
+      return {
+        ...candidate,
+        width: imageSize.width,
+        height: imageSize.height
+      }
+    }
+  )
+  return hydrated.filter(Boolean) as FeaturedBackgroundItem[]
+}
+
+function normalizeMetFeaturedItem(rawObject: unknown): FeaturedBackgroundItem | null {
+  const item = getObject(rawObject)
+  if (item.isPublicDomain !== true) {
+    return null
+  }
+
+  const objectId = String(item.objectID || '').trim()
+  const imageUrl = String(item.primaryImage || '').trim()
+  const title = String(item.title || 'The Met Open Access').trim()
+  const credit = cleanSingleLine(item.artistDisplayName) || 'The Metropolitan Museum of Art'
+  const tags = Array.isArray(item.tags)
+    ? item.tags.map((tag) => cleanSingleLine(getObject(tag).term)).filter(Boolean)
+    : []
+  if (!objectId || !imageUrl || !isFeaturedBackgroundStyleSuitable({
+    title,
+    credit,
+    provider: 'met',
+    metadata: [
+      cleanSingleLine(item.department),
+      cleanSingleLine(item.classification),
+      cleanSingleLine(item.objectName),
+      ...tags
+    ]
+  })) {
+    return null
+  }
+
+  return {
+    id: `met-${slugifyId(objectId)}`,
+    title,
+    provider: 'met',
+    imageUrl,
+    sourceUrl: String(item.objectURL || '').trim() || `https://www.metmuseum.org/art/collection/search/${encodeURIComponent(objectId)}`,
+    credit,
+    license: 'Open Access / Public Domain',
+    accentColor: '#18200f',
+    dynamic: true
+  }
+}
+
+async function fetchClevelandFeaturedItems(
+  client: FeaturedGalleryFetchClient,
+  options: FeaturedGalleryRefreshOptions
+): Promise<FeaturedBackgroundItem[]> {
+  const seed = normalizeFeaturedRefreshSeed(options.refreshSeed)
+  const searchResults = await Promise.all(CLEVELAND_SEARCH_QUERIES.map((query, index) => {
+    const skip = ((seed + index) % CLEVELAND_SEARCH_OFFSET_VARIANTS) * CLEVELAND_SEARCH_LIMIT
+    const url = buildFeaturedGalleryApiUrl('https://openaccess-api.clevelandart.org/api/artworks/', {
+      cc0: '1',
+      has_image: '1',
+      limit: CLEVELAND_SEARCH_LIMIT,
+      q: query,
+      skip
+    })
+    return client.fetchJson(url).catch(() => null)
+  }))
+  const candidates = rotateFeaturedCandidates(
+    dedupeFeaturedItems(
+      searchResults.flatMap((raw) => {
+        const rawItems = getObject(raw).data
+        if (!Array.isArray(rawItems)) {
+          return []
+        }
+        return rawItems.flatMap((rawItem) => {
+          const item = normalizeClevelandFeaturedItem(rawItem, options)
+          return item ? [item] : []
+        }) as FeaturedBackgroundItem[]
+      })
+    ),
+    seed
+  )
+  return candidates.slice(0, FEATURED_REFRESH_SOURCE_LIMIT)
+}
+
+function normalizeClevelandFeaturedItem(
+  rawItem: unknown,
+  options: FeaturedGalleryRefreshOptions
+): FeaturedBackgroundItem | null {
+  const item = getObject(rawItem)
+  const licenseStatus = String(item.share_license_status || '').trim().toUpperCase()
+  if (licenseStatus && licenseStatus !== 'CC0') {
+    return null
+  }
+
+  const images = getObject(item.images)
+  const printImage = getObject(images.print)
+  const imageUrl = String(printImage.url || '').trim()
+  const width = Number(printImage.width)
+  const height = Number(printImage.height)
+  const threshold = getFeaturedBackgroundResolutionThreshold(options)
+  if (!imageUrl ||
+    !isHighResolutionFeaturedBackground(width, height, threshold.minLongEdge, threshold.minShortEdge)) {
+    return null
+  }
+
+  const rawId = String(item.accession_number || item.id || '').trim()
+  const title = String(item.title || 'Cleveland Museum of Art').trim()
+  const creators = Array.isArray(item.creators)
+    ? item.creators.map((creator) => cleanSingleLine(getObject(creator).description)).filter(Boolean)
+    : []
+  const credit = creators[0] || 'Cleveland Museum of Art'
+  const alternateTitles = Array.isArray(item.alternate_titles)
+    ? item.alternate_titles.map(cleanSingleLine).filter(Boolean)
+    : []
+  if (!rawId || !isFeaturedBackgroundStyleSuitable({
+    title,
+    credit,
+    provider: 'cleveland',
+    metadata: [
+      cleanSingleLine(item.current_location),
+      cleanSingleLine(item.department),
+      cleanSingleLine(item.collection),
+      cleanSingleLine(item.type),
+      ...alternateTitles
+    ]
+  })) {
+    return null
+  }
+
+  return {
+    id: `cleveland-${slugifyId(rawId)}`,
+    title,
+    provider: 'cleveland',
+    imageUrl,
+    sourceUrl: String(item.url || '').trim() || `https://www.clevelandart.org/art/${encodeURIComponent(rawId)}`,
+    credit,
+    license: 'CC0 / Cleveland Museum of Art',
+    accentColor: '#1c1518',
     dynamic: true,
     width,
     height
@@ -390,6 +680,34 @@ function dedupeFeaturedItems(items: FeaturedBackgroundItem[]): FeaturedBackgroun
   return deduped
 }
 
+function dedupeStrings(items: string[]): string[] {
+  const seen = new Set<string>()
+  const deduped: string[] = []
+  for (const item of items) {
+    const value = String(item || '').trim()
+    if (!value || seen.has(value)) {
+      continue
+    }
+    seen.add(value)
+    deduped.push(value)
+  }
+  return deduped
+}
+
+function dedupeNumbers(items: number[]): number[] {
+  const seen = new Set<number>()
+  const deduped: number[] = []
+  for (const item of items) {
+    const value = Math.max(1, Math.floor(item))
+    if (!Number.isFinite(value) || seen.has(value)) {
+      continue
+    }
+    seen.add(value)
+    deduped.push(value)
+  }
+  return deduped
+}
+
 function hashFeaturedBackgroundSeed(seed: string): number {
   let hash = 2166136261
   for (let index = 0; index < seed.length; index += 1) {
@@ -403,6 +721,20 @@ function getObject(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {}
+}
+
+function buildFeaturedGalleryApiUrl(baseUrl: string, params: Record<string, string | number>): string {
+  const url = new URL(baseUrl)
+  for (const [key, value] of Object.entries(params)) {
+    url.searchParams.set(key, String(value))
+  }
+  return url.href
+}
+
+function cleanSingleLine(value: unknown): string {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function slugifyId(value: unknown): string {

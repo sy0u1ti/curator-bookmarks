@@ -16,6 +16,7 @@ import {
 } from '../shared/bookmark-tree.js'
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { downloadBlobFile } from '../shared/download.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import {
   getSettingsGroupControlSyncActions,
@@ -150,6 +151,10 @@ import {
   buildFeaturedBackgroundPickerSections,
   type FeaturedBackgroundPickerSections
 } from './featured-gallery-list.js'
+import {
+  FEATURED_BACKGROUND_PROVIDERS,
+  isFeaturedBackgroundProvider
+} from './featured-background-providers.js'
 import { getSpeedDialFaviconLoadAttributes } from './speed-dial-load-attributes.js'
 import type { SpeedDialItem } from './speed-dial-types.js'
 import {
@@ -552,6 +557,20 @@ const BOOKMARK_TILE_RENDER_CHUNK_SIZE = 48
 const BOOKMARK_CHANGE_REFRESH_DEBOUNCE_MS = 320
 const FEATURED_GALLERY_HIGH_PRIORITY_PREVIEW_LIMIT = 12
 const FEATURED_BACKGROUND_HOVER_PREVIEW_DELAY_MS = 220
+const FEATURED_BACKGROUND_DOWNLOAD_TIMEOUT_MS = 30000
+const FEATURED_BACKGROUND_PROVIDER_ORDER: FeaturedBackgroundItem['provider'][] = [...FEATURED_BACKGROUND_PROVIDERS]
+const FEATURED_BACKGROUND_PROVIDER_LABELS: Record<FeaturedBackgroundItem['provider'], string> = {
+  cleveland: 'Cleveland Museum of Art',
+  met: 'The Met',
+  nasa: 'NASA',
+  wikimedia: 'Wikimedia'
+}
+const FEATURED_BACKGROUND_PROVIDER_EMPTY_TEXT: Record<FeaturedBackgroundItem['provider'], string> = {
+  cleveland: '刷新图库后会显示 Cleveland Museum of Art 图片',
+  met: '刷新图库后会显示 The Met 图片',
+  nasa: '刷新图库后会显示 NASA 图片',
+  wikimedia: '刷新图库后会显示 Wikimedia 图片'
+}
 const QUICK_ACCESS_ITEM_LIMIT = 6
 const ACTIVITY_RECORD_LIMIT = 160
 const DASHBOARD_FRAME_READY_TIMEOUT_MS = 12000
@@ -8233,7 +8252,7 @@ function normalizeFeaturedBackgroundId(value: unknown): string {
   if (!id) {
     return ''
   }
-  if (state.featuredBackgroundGallery.some((item) => item.id === id)) {
+  if (getStoredFeaturedBackgroundItemById(id)) {
     return id
   }
   if (!backgroundGalleryModule || !state.featuredBackgroundGalleryHydrated) {
@@ -8274,18 +8293,14 @@ function normalizeFeaturedBackgroundGalleryItem(rawItem: unknown): FeaturedBackg
   const credit = String(item.credit || '').trim()
   const license = String(item.license || '').trim()
   if (!id || !title || !imageUrl || !sourceUrl || !credit || !license ||
-    (provider !== 'nasa' &&
-      provider !== 'met' &&
-      provider !== 'wikimedia' &&
-      provider !== 'artic' &&
-      provider !== 'cleveland')) {
+    !isFeaturedBackgroundProvider(provider)) {
     return null
   }
 
   return {
     id,
     title,
-    provider: provider as FeaturedBackgroundItem['provider'],
+    provider,
     imageUrl,
     sourceUrl,
     credit,
@@ -9330,10 +9345,6 @@ function getFeaturedBackgroundPreviewImageUrl(
         return url.href
       }
     }
-    if (item.provider === 'artic' && url.hostname === 'www.artic.edu') {
-      url.pathname = url.pathname.replace('/full/2560,/', '/full/960,/')
-      return url.href
-    }
     if (item.provider === 'cleveland' && url.hostname === 'openaccess-cdn.clevelandart.org') {
       url.pathname = url.pathname.replace(/_print\.jpg$/i, '_web.jpg')
       return url.href
@@ -9551,7 +9562,8 @@ function getStoredFeaturedBackgroundItemById(id: unknown): FeaturedBackgroundIte
   if (!normalizedId) {
     return null
   }
-  return state.featuredBackgroundGallery.find((item) => item.id === normalizedId) || null
+  const item = state.featuredBackgroundGallery.find((galleryItem) => galleryItem.id === normalizedId)
+  return item && isFeaturedBackgroundProvider(item.provider) ? item : null
 }
 
 function getFeaturedBackgroundDateSeed(): string {
@@ -9886,6 +9898,50 @@ async function fetchBackgroundUrlImage(
   }
 }
 
+async function fetchFeaturedBackgroundDownloadBlob(imageUrl: string): Promise<Blob> {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => {
+    controller.abort()
+  }, FEATURED_BACKGROUND_DOWNLOAD_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(imageUrl, {
+      cache: 'force-cache',
+      signal: controller.signal
+    })
+    if (!response.ok) {
+      throw new Error(`图片请求失败：${response.status}`)
+    }
+
+    const declaredSize = validateBackgroundContentLength(
+      response.headers.get('content-length'),
+      BACKGROUND_URL_FULL_MAX_BYTES
+    )
+    if (!declaredSize.allowed) {
+      throw new Error(declaredSize.message)
+    }
+
+    const blob = await response.blob()
+    const contentType = response.headers.get('content-type') || blob.type
+    if (!blob.size || !isBackgroundImageResponse(contentType, imageUrl)) {
+      throw new Error('链接返回的内容不是图片。')
+    }
+
+    const finalSize = validateBackgroundBlobSize(blob.size, BACKGROUND_URL_FULL_MAX_BYTES)
+    if (!finalSize.allowed) {
+      throw new Error(finalSize.message)
+    }
+    return blob
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('图片下载超时。')
+    }
+    throw error
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
 function isBackgroundImageResponse(contentType: unknown, imageUrl: string): boolean {
   const normalizedType = String(contentType || '').toLowerCase()
   if (normalizedType.includes('image/svg+xml') || /\.svg(?:$|[?#])/i.test(imageUrl)) {
@@ -9908,6 +9964,59 @@ function isKnownImageUrlWithoutContentType(imageUrl: string): boolean {
   } catch {
     return false
   }
+}
+
+function getFeaturedBackgroundDownloadFilename(item: FeaturedBackgroundItem, blob: Blob): string {
+  const provider = slugifyDownloadFileSegment(item.provider) || 'featured'
+  const title = slugifyDownloadFileSegment(item.title) ||
+    slugifyDownloadFileSegment(item.id) ||
+    'wallpaper'
+  const extension = getImageDownloadExtension(item.imageUrl, blob.type)
+  return `curator-${provider}-${title}.${extension}`
+}
+
+function getImageDownloadExtension(imageUrl: string, contentType: string): string {
+  const normalizedType = String(contentType || '').toLowerCase()
+  if (normalizedType.includes('jpeg') || normalizedType.includes('jpg')) {
+    return 'jpg'
+  }
+  if (normalizedType.includes('png')) {
+    return 'png'
+  }
+  if (normalizedType.includes('webp')) {
+    return 'webp'
+  }
+
+  try {
+    const path = new URL(imageUrl).pathname
+    const match = /\.(jpe?g|png|webp)(?:$|[?#])/i.exec(path)
+    if (match) {
+      return match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase()
+    }
+  } catch {
+    return 'jpg'
+  }
+  return 'jpg'
+}
+
+function slugifyDownloadFileSegment(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+}
+
+function getFeaturedBackgroundDownloadErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  if (/permission|denied|权限/i.test(message)) {
+    return '下载失败：没有图片访问权限。'
+  }
+  if (/太大|不是图片|超时|请求失败/i.test(message)) {
+    return `下载失败：${message}`
+  }
+  return '下载失败：请检查网络后重试。'
 }
 
 function normalizeSearchSettings(rawSettings: unknown): typeof DEFAULT_SEARCH_SETTINGS {
@@ -10516,8 +10625,12 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
 
   syncFeaturedBackgroundModalControls()
 
-  const refreshedNasaItems = pickerSections.refreshed.filter((item) => item.provider === 'nasa')
-  const refreshedWikimediaItems = pickerSections.refreshed.filter((item) => item.provider === 'wikimedia')
+  const providerGroups = createFeaturedBackgroundPickerProviderGroups({
+    items: pickerSections.refreshed,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset: pickerSections.favorites.length
+  })
   dispatchNewtabFeaturedBackgroundPickerView({
     type: 'sections',
     sections: [
@@ -10535,24 +10648,7 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
       {
         type: 'providers',
         title: '刷新图库',
-        groups: [
-          createFeaturedBackgroundPickerProviderGroupViewModel({
-            title: 'NASA',
-            emptyText: '刷新图库后会显示 NASA 图片',
-            items: refreshedNasaItems,
-            staticFeaturedBackgroundIds,
-            selectedId,
-            renderIndexOffset: pickerSections.favorites.length
-          }),
-          createFeaturedBackgroundPickerProviderGroupViewModel({
-            title: 'Wikimedia',
-            emptyText: '刷新图库后会显示 Wikimedia 图片',
-            items: refreshedWikimediaItems,
-            staticFeaturedBackgroundIds,
-            selectedId,
-            renderIndexOffset: pickerSections.favorites.length + refreshedNasaItems.length
-          })
-        ]
+        groups: providerGroups
       }
     ]
   })
@@ -10572,6 +10668,52 @@ function hasRenderedFeaturedBackgroundPickerContent(): boolean {
 
     return section.groups.some((group) => group.cards.length > 0)
   })
+}
+
+function createFeaturedBackgroundPickerProviderGroups(
+  {
+    items,
+    staticFeaturedBackgroundIds,
+    selectedId,
+    renderIndexOffset
+  }: {
+    items: FeaturedBackgroundItem[]
+    staticFeaturedBackgroundIds: Set<string>
+    selectedId: string
+    renderIndexOffset: number
+  }
+): FeaturedBackgroundPickerProviderGroupViewModel[] {
+  const groups: FeaturedBackgroundPickerProviderGroupViewModel[] = []
+  const usedProviders = new Set<FeaturedBackgroundItem['provider']>()
+  let offset = renderIndexOffset
+
+  const addProviderGroup = (provider: FeaturedBackgroundItem['provider']) => {
+    const providerItems = items.filter((item) => item.provider === provider)
+    if (!providerItems.length) {
+      return
+    }
+    usedProviders.add(provider)
+    groups.push(createFeaturedBackgroundPickerProviderGroupViewModel({
+      title: FEATURED_BACKGROUND_PROVIDER_LABELS[provider],
+      emptyText: FEATURED_BACKGROUND_PROVIDER_EMPTY_TEXT[provider],
+      items: providerItems,
+      staticFeaturedBackgroundIds,
+      selectedId,
+      renderIndexOffset: offset
+    }))
+    offset += providerItems.length
+  }
+
+  for (const provider of FEATURED_BACKGROUND_PROVIDER_ORDER) {
+    addProviderGroup(provider)
+  }
+  for (const item of items) {
+    if (!usedProviders.has(item.provider)) {
+      addProviderGroup(item.provider)
+    }
+  }
+
+  return groups
 }
 
 function createFeaturedBackgroundPickerProviderGroupViewModel(
@@ -10709,11 +10851,9 @@ function getFeaturedBackgroundPreviewPlaceholderColor({
       ? '#18200f'
       : provider === 'nasa'
         ? '#06080d'
-        : provider === 'artic'
-          ? '#142026'
-          : provider === 'cleveland'
-            ? '#1c1518'
-            : '#14191d'
+        : provider === 'cleveland'
+          ? '#1c1518'
+          : '#14191d'
   )
 }
 
@@ -10844,6 +10984,7 @@ function createFeaturedBackgroundPickerCardViewModel({
     imageUrl,
     initialPreviewUrl,
     onClearHoverPreview: clearFeaturedBackgroundHoverPreview,
+    onDownload: (_card, id) => downloadFeaturedBackgroundFromPicker(id),
     onFavoriteToggle: (_card, id) => toggleFeaturedBackgroundFavorite(id),
     onResolvePreviewObjectUrl: resolveFeaturedBackgroundPickerCardPreviewObjectUrl,
     onSelect: (_card, id) => selectFeaturedBackgroundFromPicker(id),
@@ -11069,6 +11210,50 @@ async function toggleFeaturedBackgroundFavorite(featuredId: string): Promise<voi
   }
 }
 
+async function downloadFeaturedBackgroundFromPicker(featuredId: string): Promise<void> {
+  const id = String(featuredId || '').trim()
+  if (!id) {
+    return
+  }
+
+  try {
+    const item = await getFeaturedBackgroundDownloadItem(id)
+    const imageUrl = normalizeBackgroundImageUrl(String(item?.imageUrl || ''))
+    if (!item || !imageUrl) {
+      setFeaturedBackgroundStatus('没有找到可下载的精选图。', 'warning')
+      syncFeaturedBackgroundModalControls()
+      return
+    }
+
+    const permissionGranted = await ensureBackgroundImageFetchPermission(imageUrl, { request: true })
+    if (!permissionGranted) {
+      setFeaturedBackgroundStatus('未完成图片访问授权，暂时无法下载。', 'warning')
+      syncFeaturedBackgroundModalControls()
+      return
+    }
+
+    setFeaturedBackgroundStatus(`正在下载 ${item.title}...`, 'info')
+    syncFeaturedBackgroundModalControls()
+    const blob = await fetchFeaturedBackgroundDownloadBlob(imageUrl)
+    downloadBlobFile(getFeaturedBackgroundDownloadFilename(item, blob), blob)
+    setFeaturedBackgroundStatus(`已开始下载 ${item.title}。`, 'success')
+  } catch (error) {
+    setFeaturedBackgroundStatus(getFeaturedBackgroundDownloadErrorMessage(error), 'error')
+  } finally {
+    syncFeaturedBackgroundModalControls()
+  }
+}
+
+async function getFeaturedBackgroundDownloadItem(featuredId: string): Promise<FeaturedBackgroundItem | null> {
+  const storedItem = getStoredFeaturedBackgroundItemById(featuredId)
+  if (storedItem) {
+    return storedItem
+  }
+
+  const gallery = backgroundGalleryModule || await loadBackgroundGalleryModule()
+  return gallery.getFeaturedBackgroundItemById(featuredId)
+}
+
 async function saveFeaturedBackgroundFavorites(): Promise<void> {
   await setLocalStorage({
     [STORAGE_KEYS.newTabFeaturedBackgroundFavorites]: state.featuredBackgroundFavoriteIds
@@ -11087,7 +11272,7 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
   }
 
   state.featuredBackgroundRefreshing = true
-  setFeaturedBackgroundStatus('正在从 NASA、Wikimedia 拉取高清图...', 'info')
+  setFeaturedBackgroundStatus('正在从开放图库拉取高清图...', 'info')
   syncFeaturedBackgroundModalControls()
   try {
     const permissionGranted = await ensureFeaturedBackgroundPermissions()
@@ -11113,8 +11298,10 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
       fetchedItems
     })
     await saveFeaturedBackgroundGallery()
+    const fetchedProviderCount = refreshModule.getFeaturedBackgroundRefreshProviderCount(fetchedItems)
+    const providerText = fetchedProviderCount ? `，来自 ${fetchedProviderCount} 个渠道` : ''
     setFeaturedBackgroundStatus(
-      `已拉取 ${fetchedItems.length} 张高分辨率图片，收藏图片已保留。`,
+      `已拉取 ${fetchedItems.length} 张高分辨率图片${providerText}，收藏图片已保留。`,
       'success'
     )
     featuredBackgroundPickerRenderKey = ''

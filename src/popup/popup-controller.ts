@@ -119,6 +119,10 @@ import {
   getPopupEditBookmarkDraftState,
   getPopupEditBookmarkSavePlan
 } from './edit-bookmark-draft.js'
+import {
+  getPopupPrebootSearchAdoptionQuery,
+  readPopupPrebootSearchSnapshot
+} from './popup-preboot-input.js'
 import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
 import { writeClipboardText } from '../shared/clipboard.js'
 import {
@@ -209,6 +213,7 @@ function startPopupController(): () => void {
 
   perfMark('popup.domContentLoaded')
   bindEvents()
+  adoptInitialPopupPrebootSearchQuery()
   render()
   perfMark('popup.firstRender')
   perfMeasure('popup.shellReady', 'popup.domContentLoaded', 'popup.firstRender')
@@ -248,6 +253,19 @@ function bindEvents() {
     onStorageChanged: handleAutoAnalyzeStorageChanged
   })
 }
+
+function adoptInitialPopupPrebootSearchQuery(): void {
+  const snapshot = readPopupPrebootSearchSnapshot()
+  const nextQuery = getPopupPrebootSearchAdoptionQuery(snapshot, state.searchQuery)
+
+  if (nextQuery === state.searchQuery) {
+    return
+  }
+
+  state.searchQuery = nextQuery
+  state.debouncedQuery = nextQuery.trim()
+}
+
 async function hydratePopupPreferences() {
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])

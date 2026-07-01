@@ -119,6 +119,98 @@ html.instant-wallpaper-startup-preview body {
   backdrop-filter: blur(18px) saturate(1.14);
 }
 
+#newtab-settings-drawer .settings-drawer-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+#newtab-settings-drawer .settings-drawer-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar {
+  position: absolute;
+  top: 58px;
+  right: 7px;
+  bottom: 16px;
+  z-index: 3;
+  display: flex;
+  width: 14px;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(2px);
+  transition:
+    opacity var(--ds-motion-fast) var(--ds-ease-standard),
+    transform var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar[data-visible="true"] {
+  opacity: 0.58;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+#newtab-settings-drawer .settings-drawer-panel:hover .settings-drawer-scrollbar[data-visible="true"],
+#newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] {
+  opacity: 0.92;
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar-track {
+  position: relative;
+  width: 5px;
+  height: 100%;
+  border-radius: var(--ds-radius-full);
+  background: rgba(245, 245, 247, 0.045);
+  box-shadow: inset 0 0 0 1px rgba(245, 245, 247, 0.045);
+  cursor: pointer;
+  touch-action: none;
+  transition:
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    width var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar-track:hover,
+#newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-track {
+  width: 6px;
+  background: rgba(245, 245, 247, 0.07);
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar-thumb {
+  position: absolute;
+  top: var(--settings-scrollbar-thumb-top);
+  left: 0;
+  width: 100%;
+  height: var(--settings-scrollbar-thumb-height);
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(245, 245, 247, 0.56), rgba(245, 245, 247, 0.26)),
+    rgba(245, 245, 247, 0.2);
+  box-shadow:
+    0 0 0 1px rgba(245, 245, 247, 0.06),
+    0 8px 18px rgba(0, 0, 0, 0.24);
+  cursor: grab;
+  transition:
+    background-color var(--ds-motion-fast) var(--ds-ease-standard),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar-track:hover .settings-drawer-scrollbar-thumb,
+#newtab-settings-drawer .settings-drawer-scrollbar-thumb:hover,
+#newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
+  background:
+    linear-gradient(180deg, rgba(245, 245, 247, 0.72), rgba(245, 245, 247, 0.36)),
+    rgba(245, 245, 247, 0.28);
+  box-shadow:
+    0 0 0 1px rgba(245, 245, 247, 0.12),
+    0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
+  cursor: grabbing;
+}
+
 .newtab-app {
   position: relative;
   isolation: isolate;
@@ -139,6 +231,29 @@ html.instant-wallpaper-startup-preview .newtab-app {
   background-position: var(--instant-wallpaper-position, center);
   background-repeat: no-repeat;
   background-size: var(--instant-wallpaper-size, cover);
+}
+
+.newtab-solid-background-noise {
+  visibility: hidden;
+  opacity: 0;
+  mix-blend-mode: screen;
+  transition:
+    opacity var(--ui-motion-standard) var(--ui-ease-standard),
+    visibility 0s linear var(--ui-motion-standard);
+}
+
+.newtab-solid-background-noise[data-active="true"] {
+  visibility: visible;
+  opacity: 0.075;
+  transition:
+    opacity var(--ui-motion-standard) var(--ui-ease-standard),
+    visibility 0s linear 0s;
+}
+
+.newtab-solid-background-noise svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .newtab-app .t-tabs,
@@ -294,6 +409,17 @@ html.instant-wallpaper-startup-preview .newtab-app {
   #newtab-settings-drawer .settings-tab-panels > .t-tabs-panel[data-ending-style] {
     transition: none !important;
     transform: none;
+  }
+
+  #newtab-settings-drawer .settings-drawer-scrollbar,
+  #newtab-settings-drawer .settings-drawer-scrollbar-track,
+  #newtab-settings-drawer .settings-drawer-scrollbar-thumb {
+    transition: none !important;
+  }
+
+  .newtab-solid-background-noise,
+  .newtab-solid-background-noise[data-active="true"] {
+    transition: none;
   }
 }
 
@@ -1164,8 +1290,8 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .featured-wallpaper-preview {
   position: relative;
   display: block;
-  min-height: 140px;
-  aspect-ratio: 16 / 10;
+  height: 140px;
+  min-height: 0;
   overflow: hidden;
   border-radius: calc(var(--ds-radius-sm) - 1px);
   background: var(--featured-wallpaper-preview-placeholder, rgba(245, 245, 247, 0.08));
@@ -1209,14 +1335,25 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   color: rgba(245, 245, 247, 0.62);
 }
 
-.featured-wallpaper-favorite {
+.featured-wallpaper-card-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  z-index: 1;
+  display: inline-flex;
+  max-width: calc(100% - 16px);
+  align-items: center;
+  gap: 6px;
+}
+
+.featured-wallpaper-card-action {
+  position: static;
+  flex: 0 0 32px;
   width: 32px;
   min-width: 32px;
-  min-height: 32px;
-  padding: 0;
+  height: 32px;
+  min-height: 32px !important;
+  padding: 0 !important;
   border-radius: var(--ds-radius-full);
   border-color: rgba(245, 245, 247, 0.14);
   background: rgba(0, 0, 0, 0.3);
@@ -1232,10 +1369,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   backdrop-filter: blur(10px) saturate(1.1);
 }
 
-.featured-wallpaper-card:hover .featured-wallpaper-favorite,
-.featured-wallpaper-card:focus-visible .featured-wallpaper-favorite,
-.featured-wallpaper-favorite:focus-visible,
-.featured-wallpaper-favorite[aria-pressed="true"] {
+.featured-wallpaper-card:hover .featured-wallpaper-card-action,
+.featured-wallpaper-card:focus-visible .featured-wallpaper-card-action,
+.featured-wallpaper-card-action:focus-visible,
+.featured-wallpaper-card-action[aria-pressed="true"] {
   opacity: 1;
 }
 
@@ -1274,7 +1411,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   .featured-wallpaper-close,
   .featured-wallpaper-card,
   .featured-wallpaper-preview-image,
-  .featured-wallpaper-favorite,
+  .featured-wallpaper-card-action,
   .featured-wallpaper-hover-preview {
     transition: none !important;
   }

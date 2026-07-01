@@ -15,6 +15,10 @@ function downloadBlob(filename: string, blob: Blob): void {
   }
 }
 
+export function downloadBlobFile(filename: string, blob: Blob): void {
+  downloadBlob(filename, blob)
+}
+
 export function downloadJsonFile(filename: string, payload: unknown): void {
   downloadBlob(
     filename,

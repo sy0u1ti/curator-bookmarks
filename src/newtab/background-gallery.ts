@@ -1,6 +1,7 @@
 import { isFeaturedBackgroundStyleSuitable } from './featured-background-style.js'
+import type { FeaturedBackgroundProvider } from './featured-background-providers.js'
 
-export type FeaturedBackgroundProvider = 'nasa' | 'met' | 'wikimedia' | 'artic' | 'cleveland'
+export type { FeaturedBackgroundProvider } from './featured-background-providers.js'
 
 export interface FeaturedBackgroundItem {
   id: string

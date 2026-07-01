@@ -19,7 +19,9 @@ const FEATURED_BACKGROUND_PICKER_CARD_CLASS =
   'featured-wallpaper-card rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none [&::before]:shadow-none [&::after]:shadow-none'
 const FEATURED_BACKGROUND_PICKER_CARD_SELECTED_CLASS =
   'border-ds-border-hover bg-ds-selected text-ds-text-primary shadow-none'
-const FEATURED_BACKGROUND_FAVORITE_CLASS = `featured-wallpaper-favorite ${FEATURED_WALLPAPER_CONTROL_CLASS}`
+const FEATURED_BACKGROUND_CARD_ACTION_CLASS = `featured-wallpaper-card-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`
+const FEATURED_BACKGROUND_DOWNLOAD_CLASS = `featured-wallpaper-download ${FEATURED_BACKGROUND_CARD_ACTION_CLASS}`
+const FEATURED_BACKGROUND_FAVORITE_CLASS = `featured-wallpaper-favorite ${FEATURED_BACKGROUND_CARD_ACTION_CLASS}`
 const FEATURED_BACKGROUND_FAVORITE_SELECTED_CLASS = FEATURED_BACKGROUND_FAVORITE_CLASS
 
 export interface FeaturedBackgroundHoverPreviewRequest {
@@ -36,6 +38,7 @@ export interface FeaturedBackgroundPickerCardViewModel {
   imageUrl: string
   initialPreviewUrl: string
   onClearHoverPreview: (card?: HTMLElement) => void
+  onDownload: (card: HTMLElement, id: string) => void | Promise<void>
   onFavoriteToggle: (card: HTMLElement, id: string) => void | Promise<void>
   onResolvePreviewObjectUrl: (remotePreviewUrl: string, fallbackUrl: string) => Promise<string>
   onSelect: (card: HTMLElement, id: string) => void
@@ -380,25 +383,47 @@ function FeaturedBackgroundPickerCard({
         <span className="featured-wallpaper-resolution" data-state={card.resolutionState}>
           {card.resolutionText}
         </span>
-        <Button
-          className={card.favorite ? FEATURED_BACKGROUND_FAVORITE_SELECTED_CLASS : FEATURED_BACKGROUND_FAVORITE_CLASS}
-          type="button"
-          aria-pressed={card.favorite}
-          aria-label={card.favorite ? '取消收藏这张精选图' : '收藏这张精选图'}
-          onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            const cardElement = cardRef.current
-            if (!cardElement) {
-              return
-            }
-            card.onClearHoverPreview(cardElement)
-            void card.onFavoriteToggle(cardElement, card.id)
-          }}
-          unstyled
-        >
-          <Icon name="Heart" aria-hidden="true" />
-        </Button>
+        <span className="featured-wallpaper-card-actions">
+          <Button
+            className={FEATURED_BACKGROUND_DOWNLOAD_CLASS}
+            type="button"
+            aria-label="下载这张精选图"
+            title="下载原图"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              const cardElement = cardRef.current
+              if (!cardElement) {
+                return
+              }
+              card.onClearHoverPreview(cardElement)
+              void card.onDownload(cardElement, card.id)
+            }}
+            unstyled
+          >
+            <Icon name="Download" aria-hidden="true" />
+          </Button>
+          <Button
+            className={card.favorite ? FEATURED_BACKGROUND_FAVORITE_SELECTED_CLASS : FEATURED_BACKGROUND_FAVORITE_CLASS}
+            type="button"
+            aria-pressed={card.favorite}
+            aria-label={card.favorite ? '取消收藏这张精选图' : '收藏这张精选图'}
+            title={card.favorite ? '取消收藏' : '收藏'}
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              const cardElement = cardRef.current
+              if (!cardElement) {
+                return
+              }
+              card.onClearHoverPreview(cardElement)
+              void card.onFavoriteToggle(cardElement, card.id)
+            }}
+            unstyled
+          >
+            <Icon name="Heart" aria-hidden="true" />
+          </Button>
+        </span>
       </span>
     </Button>
   )

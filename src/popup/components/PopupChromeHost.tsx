@@ -8,6 +8,13 @@ import {
   usePopupChromeView,
   usePopupSearchFocusRequest
 } from '../popup-controller-store'
+import {
+  applyPopupPrebootSnapshotToInput,
+  getPopupPrebootSearchAdoptionQuery,
+  hasPopupPrebootSearchShell,
+  hidePopupPrebootSearchShell,
+  readPopupPrebootSearchSnapshot
+} from '../popup-preboot-input'
 import { PopupSearchChips } from './PopupSearchChips'
 
 const searchHelpPopoverClass =
@@ -109,6 +116,7 @@ export function PopupChromeHost({
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initialSearchFocusAppliedRef = useRef(false)
+  const [prebootAdopted, setPrebootAdopted] = useState(false)
 
   const focusSearchInputElement = useCallback((select = false) => {
     const input = searchInputRef.current
@@ -122,8 +130,30 @@ export function PopupChromeHost({
     }
   }, [])
 
+  const adoptPrebootSearchInput = useCallback(() => {
+    const input = searchInputRef.current
+    if (!input || prebootAdopted || !hasPopupPrebootSearchShell()) {
+      return true
+    }
+
+    const snapshot = readPopupPrebootSearchSnapshot()
+    const nextQuery = getPopupPrebootSearchAdoptionQuery(snapshot, state.search.query)
+    const nextSnapshot = { ...snapshot, value: nextQuery }
+    applyPopupPrebootSnapshotToInput(input, nextSnapshot)
+
+    if (nextQuery !== state.search.query) {
+      dispatchPopupChromeAction('search-change', nextQuery)
+      return false
+    }
+
+    input.focus({ preventScroll: true })
+    hidePopupPrebootSearchShell()
+    setPrebootAdopted(true)
+    return true
+  }, [prebootAdopted, state.search.query])
+
   useLayoutEffect(() => {
-    if (smartActive || initialSearchFocusAppliedRef.current) {
+    if (smartActive || initialSearchFocusAppliedRef.current || hasPopupPrebootSearchShell()) {
       return
     }
 
@@ -132,7 +162,31 @@ export function PopupChromeHost({
   }, [focusSearchInputElement, smartActive])
 
   useEffect(() => {
+    if (!smartActive || prebootAdopted) {
+      return
+    }
+
+    hidePopupPrebootSearchShell()
+    setPrebootAdopted(true)
+  }, [prebootAdopted, smartActive])
+
+  useEffect(() => {
+    if (smartActive || prebootAdopted || !hasPopupPrebootSearchShell()) {
+      return
+    }
+
+    const adoptFrame = window.requestAnimationFrame(() => {
+      adoptPrebootSearchInput()
+    })
+    return () => window.cancelAnimationFrame(adoptFrame)
+  }, [adoptPrebootSearchInput, prebootAdopted, smartActive, state.search.query])
+
+  useEffect(() => {
     if (!searchFocusRequest.id) {
+      return
+    }
+
+    if (!adoptPrebootSearchInput()) {
       return
     }
 
@@ -140,7 +194,7 @@ export function PopupChromeHost({
       focusSearchInputElement(searchFocusRequest.select)
     })
     return () => window.cancelAnimationFrame(focusFrame)
-  }, [focusSearchInputElement, searchFocusRequest])
+  }, [adoptPrebootSearchInput, focusSearchInputElement, searchFocusRequest])
 
   const commandPanelClassName = [
     commandPanelBaseClass,

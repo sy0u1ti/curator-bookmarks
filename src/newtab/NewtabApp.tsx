@@ -64,6 +64,7 @@ const BACKGROUND_MASK_STYLE_CLASS_BY_STYLE = {
   light: 'bg-[rgba(255,255,255,0.075)]',
   noise: 'bg-[rgba(0,0,0,0.14)] before:opacity-[0.16] before:[background-image:radial-gradient(rgba(255,255,255,0.18)_0.65px,transparent_0.9px),radial-gradient(rgba(0,0,0,0.24)_0.7px,transparent_1px)] before:[background-position:0_0,12px_14px] before:[background-size:4px_4px,5px_5px]'
 } as const
+const SOLID_BACKGROUND_NOISE_CLASS = 'newtab-solid-background-noise fixed inset-0 z-0 pointer-events-none overflow-hidden'
 const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
   'motion-reduce:[&_*]:![animation-duration:1ms]',
   'motion-reduce:[&_*::before]:![animation-duration:1ms]',
@@ -199,6 +200,7 @@ function NewtabShell() {
     <div {...appChromeAttributes} onPointerDownCapture={dispatchNewtabContentShellPointerDownCapture}>
       <NewtabInstantWallpaperHost />
       <NewtabBackgroundLayer loadingWallpaper={instantWallpaper.loading} />
+      <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
       <div
         id="newtab-background-mask"
         className={getBackgroundMaskClass(backgroundSettings)}
@@ -282,6 +284,30 @@ function NewtabShell() {
       <FeaturedBackgroundModalHost />
       <NewtabDeleteToastHost />
       <BookmarkMenusHost />
+    </div>
+  )
+}
+
+function SolidBackgroundNoiseLayer({ active }: { active: boolean }) {
+  return (
+    <div
+      id="newtab-solid-background-noise"
+      className={SOLID_BACKGROUND_NOISE_CLASS}
+      data-active={active ? 'true' : 'false'}
+      aria-hidden="true"
+    >
+      <svg width="100%" height="100%" preserveAspectRatio="none" focusable="false">
+        <filter id="newtab-solid-background-noise-filter">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.8"
+            numOctaves="4"
+            stitchTiles="stitch"
+          />
+          <feColorMatrix type="saturate" values="0" />
+        </filter>
+        <rect width="100%" height="100%" filter="url(#newtab-solid-background-noise-filter)" />
+      </svg>
     </div>
   )
 }

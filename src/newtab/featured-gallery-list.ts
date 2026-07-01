@@ -1,4 +1,8 @@
 import type { FeaturedBackgroundItem } from './background-gallery.js'
+import {
+  FEATURED_BACKGROUND_PROVIDER_DISPLAY_LIMIT,
+  isFeaturedBackgroundProvider
+} from './featured-background-providers.js'
 import { isFeaturedBackgroundStyleSuitable } from './featured-background-style.js'
 
 export interface FeaturedBackgroundPickerListInput {
@@ -25,6 +29,9 @@ export function buildFeaturedBackgroundPickerSections({
   const refreshedItems: FeaturedBackgroundItem[] = []
   const favoriteSeen = new Set<string>()
   const refreshedSeen = new Set<string>()
+  const refreshedProviderCounts = new Map<FeaturedBackgroundItem['provider'], number>()
+  const isSupportedItem = (item: FeaturedBackgroundItem) => Boolean(item.id) &&
+    isFeaturedBackgroundProvider(item.provider)
   const filterItem = (item: FeaturedBackgroundItem) => isFeaturedBackgroundStyleSuitable({
     title: item.title,
     credit: item.credit,
@@ -34,7 +41,7 @@ export function buildFeaturedBackgroundPickerSections({
 
   const addFavoriteItems = (sourceItems: FeaturedBackgroundItem[], filter: (item: FeaturedBackgroundItem) => boolean) => {
     for (const item of sourceItems) {
-      if (!item.id || favoriteSeen.has(item.id) || !filter(item)) {
+      if (!isSupportedItem(item) || favoriteSeen.has(item.id) || !filter(item)) {
         continue
       }
       favoriteSeen.add(item.id)
@@ -45,9 +52,14 @@ export function buildFeaturedBackgroundPickerSections({
   const addRefreshedItems = (sourceItems: FeaturedBackgroundItem[], filter: (item: FeaturedBackgroundItem) => boolean) => {
     for (const item of sourceItems) {
       const pinnedByUser = favorites.has(item.id) || item.id === selected
-      if (!item.id || refreshedSeen.has(item.id) || !filter(item) || (!pinnedByUser && !filterItem(item))) {
+      if (!isSupportedItem(item) || refreshedSeen.has(item.id) || !filter(item) || (!pinnedByUser && !filterItem(item))) {
         continue
       }
+      const providerCount = refreshedProviderCounts.get(item.provider) || 0
+      if (providerCount >= FEATURED_BACKGROUND_PROVIDER_DISPLAY_LIMIT) {
+        continue
+      }
+      refreshedProviderCounts.set(item.provider, providerCount + 1)
       refreshedSeen.add(item.id)
       refreshedItems.push(item)
     }

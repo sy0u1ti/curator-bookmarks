@@ -91,7 +91,7 @@ const folderCountClass =
   'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-semibold leading-tight text-ds-text-disabled [font-variant-numeric:tabular-nums]'
 const folderCountActiveClass = 'text-ds-text-secondary'
 const listButtonClass = [
-  'flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
+  'popup-list-button flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
@@ -151,16 +151,8 @@ function getFolderDepthStyle(depth: number): CSSProperties {
   return { paddingLeft: `${8 + normalizedDepth * 16}px` }
 }
 
-function getBookmarkButtonStyle(active?: boolean): CSSProperties {
-  if (!active) {
-    return listButtonBaseStyle
-  }
-
-  return {
-    ...listButtonBaseStyle,
-    backgroundColor: 'rgba(245,245,247,0.08)',
-    boxShadow: '0 0 18px rgba(245,245,247,0.10)'
-  }
+function getBookmarkButtonStyle(): CSSProperties {
+  return listButtonBaseStyle
 }
 
 export function PopupContent({
@@ -277,7 +269,7 @@ function PopupContentSkeleton({
               className={mainRowClass}
               key={`bookmark-skeleton:${row.title}:${row.url}:${row.path}`}
             >
-              <div className={cx(listButtonClass, 'cursor-default')} style={getBookmarkButtonStyle(false)}>
+              <div className={cx(listButtonClass, 'cursor-default')} style={getBookmarkButtonStyle()}>
                 <span className={rowMainClass}>
                   <span className={skeletonBookmarkTitleLineClass}>
                     <span className={skeletonBookmarkTitleClass} style={{ width: row.title }}></span>
@@ -412,7 +404,8 @@ function PopupBookmarkRow({
       <Button
         className={listButtonClass}
         type="button"
-        style={getBookmarkButtonStyle(row.active)}
+        data-active={row.active ? 'true' : undefined}
+        style={getBookmarkButtonStyle()}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
         unstyled
       >
@@ -451,7 +444,8 @@ function PopupSearchResultRow({
       <Button
         className={listButtonClass}
         type="button"
-        style={getBookmarkButtonStyle(row.active)}
+        data-active={row.active ? 'true' : undefined}
+        style={getBookmarkButtonStyle()}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
         onPointerOver={() => handlers?.onResultHover?.(row.index)}
         unstyled

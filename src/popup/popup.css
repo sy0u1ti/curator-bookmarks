@@ -157,6 +157,11 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+.popup-list-button[data-active="true"] {
+  background: rgba(245, 245, 247, 0.08);
+  box-shadow: 0 0 18px rgba(245, 245, 247, 0.10);
+}
+
 .popup-row-actions {
   --popup-row-actions-button-size: 28px;
   --popup-row-actions-gap: 6px;
@@ -235,11 +240,24 @@ button:focus-visible {
 }
 
 #popup-app-shell[data-keyboard-nav="true"] {
-  --resize-dur: 80ms;
+  --resize-dur: 1ms;
+  --popup-keyboard-selection-dur: 80ms;
+  --popup-keyboard-selection-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#popup-app-shell[data-keyboard-nav="true"] .popup-list-button {
+  transition-duration: var(--popup-keyboard-selection-dur);
+  transition-property: background, border-color, color;
+  transition-timing-function: var(--popup-keyboard-selection-ease);
+}
+
+#popup-app-shell[data-keyboard-nav="true"] .popup-list-button[data-active="true"] {
+  box-shadow: 0 0 0 1px rgba(245, 245, 247, 0.045);
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not(:focus-within) {
   width: var(--popup-row-actions-button-size);
+  transition-duration: 1ms !important;
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not(:focus-within) .popup-row-actions-menu {
@@ -247,6 +265,11 @@ button:focus-visible {
   pointer-events: none;
   filter: blur(2px);
   transform: translateX(var(--popup-row-actions-slide)) scale(0.98);
+  transition-duration: 1ms !important;
+}
+
+#popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not(:focus-within) .popup-row-actions-trigger {
+  transition-duration: 1ms !important;
 }
 
 @media (max-width: 430px) {

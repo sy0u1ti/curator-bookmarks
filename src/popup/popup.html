@@ -13,6 +13,7 @@
 
       html,
       body,
+      #popup-preboot-shell,
       #popup-root {
         width: 800px;
         min-width: 800px;
@@ -32,10 +33,12 @@
 
       body {
         padding: 0;
+        position: relative;
       }
 
       #popup-root {
         position: relative;
+        z-index: 1;
         display: block;
         background: #000;
         contain: size layout paint;
@@ -53,9 +56,116 @@
         min-height: 0;
         overflow: hidden;
       }
+
+      #popup-preboot-shell {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: block;
+        overflow: hidden;
+        padding: 43px 12px 0;
+        background: #000;
+        font-family:
+          Geist,
+          "Geist Sans",
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      #popup-preboot-shell[hidden],
+      #popup-preboot-shell[data-popup-preboot-adopted="true"] {
+        display: none;
+      }
+
+      .popup-preboot-search {
+        display: flex;
+        width: 100%;
+        height: 46px;
+        min-height: 46px;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 8px;
+        background: #1a1a1a;
+        padding: 0 12px;
+        color: #ededed;
+      }
+
+      .popup-preboot-search:focus-within {
+        background: #1f1f1f;
+        box-shadow: 0 0 0 3px rgba(245, 245, 247, 0.14);
+      }
+
+      .popup-preboot-search-mark {
+        position: relative;
+        width: 16px;
+        height: 16px;
+        flex: none;
+        color: #8f8f8f;
+      }
+
+      .popup-preboot-search-mark::before {
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        width: 10px;
+        height: 10px;
+        border: 1.5px solid currentColor;
+        border-radius: 9999px;
+        content: "";
+      }
+
+      .popup-preboot-search-mark::after {
+        position: absolute;
+        right: 2px;
+        bottom: 2px;
+        width: 5px;
+        height: 1.5px;
+        border-radius: 9999px;
+        background: currentColor;
+        content: "";
+        transform: rotate(45deg);
+        transform-origin: center;
+      }
+
+      #popup-preboot-search-input {
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        border: 0;
+        outline: 0;
+        background: transparent;
+        color: #ededed;
+        font: inherit;
+        font-size: 14px;
+        line-height: 20px;
+      }
+
+      #popup-preboot-search-input::placeholder {
+        color: #8f8f8f;
+      }
     </style>
   </head>
   <body>
+    <div id="popup-preboot-shell">
+      <label class="popup-preboot-search" for="popup-preboot-search-input">
+        <span class="popup-preboot-search-mark" aria-hidden="true"></span>
+        <input
+          id="popup-preboot-search-input"
+          type="text"
+          autofocus
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="关键词搜索"
+          aria-label="关键词搜索书签标题、网址、标签或高级语法"
+        >
+      </label>
+    </div>
     <div id="popup-root"></div>
     <script type="module" src="./main.tsx"></script>
   </body>

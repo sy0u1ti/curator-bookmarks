@@ -8,6 +8,8 @@ import manifest from './src/manifest.json' with { type: 'json' }
 
 const INSTANT_WALLPAPER_BOOT_ROUTE = '/instant-wallpaper-boot.js'
 const INSTANT_WALLPAPER_BOOT_ENTRY = 'src/newtab/instant-wallpaper-boot.ts'
+const POPUP_PREBOOT_ROUTE = '/popup-preboot.js'
+const POPUP_PREBOOT_ENTRY = 'src/popup/popup-preboot.ts'
 
 function instantWallpaperBootPlugin(minify: boolean): Plugin {
   return {
@@ -44,10 +46,53 @@ function instantWallpaperBootPlugin(minify: boolean): Plugin {
   }
 }
 
+function popupPrebootPlugin(minify: boolean): Plugin {
+  return {
+    name: 'curator-popup-preboot',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, context) {
+        if (!context.path.endsWith('/src/popup/popup.html') || html.includes(POPUP_PREBOOT_ROUTE)) {
+          return html
+        }
+        return html.replace('</body>', `    <script src="${POPUP_PREBOOT_ROUTE}"></script>\n  </body>`)
+      }
+    },
+    configureServer(server) {
+      server.middlewares.use(POPUP_PREBOOT_ROUTE, async (_request, response, next) => {
+        try {
+          const source = await buildPopupPrebootScript(minify)
+          response.statusCode = 200
+          response.setHeader('content-type', 'text/javascript; charset=utf-8')
+          response.end(source)
+        } catch (error) {
+          next(error)
+        }
+      })
+    },
+    async generateBundle() {
+      const source = await buildPopupPrebootScript(minify)
+      this.emitFile({
+        type: 'asset',
+        fileName: POPUP_PREBOOT_ROUTE.slice(1),
+        source
+      })
+    }
+  }
+}
+
 async function buildInstantWallpaperBootScript(minify: boolean): Promise<string> {
+  return buildBrowserIifeScript(INSTANT_WALLPAPER_BOOT_ENTRY, minify)
+}
+
+async function buildPopupPrebootScript(minify: boolean): Promise<string> {
+  return buildBrowserIifeScript(POPUP_PREBOOT_ENTRY, minify)
+}
+
+async function buildBrowserIifeScript(entryPoint: string, minify: boolean): Promise<string> {
   const result = await buildEsbuild({
     bundle: true,
-    entryPoints: [INSTANT_WALLPAPER_BOOT_ENTRY],
+    entryPoints: [entryPoint],
     format: 'iife',
     logLevel: 'silent',
     minify,
@@ -62,7 +107,7 @@ export default defineConfig(({ mode }) => {
   const debugSourcemap = mode === 'debug' || process.env.CURATOR_DEBUG_SOURCEMAP === '1'
 
   return {
-    plugins: [react(), tailwindcss(), instantWallpaperBootPlugin(!debugSourcemap), crx({ manifest })],
+    plugins: [react(), tailwindcss(), instantWallpaperBootPlugin(!debugSourcemap), popupPrebootPlugin(!debugSourcemap), crx({ manifest })],
     build: {
       outDir: 'dist',
       emptyOutDir: true,
