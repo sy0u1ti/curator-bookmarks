@@ -6,10 +6,10 @@
 }
 
 .newtab-app {
-  --newtab-wallpaper-focus-duration: 420ms;
+  --newtab-wallpaper-focus-duration: 280ms;
   --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --newtab-wallpaper-deblur-duration: 460ms;
-  --newtab-wallpaper-reveal-blur: 2px;
+  --newtab-wallpaper-deblur-duration: 260ms;
+  --newtab-wallpaper-reveal-blur: 0px;
   --newtab-glass-bg: rgba(14, 15, 17, 0.34);
   --newtab-glass-bg-faint: rgba(14, 15, 17, 0.26);
   --newtab-glass-bg-card: rgba(18, 19, 21, 0.34);
@@ -432,13 +432,11 @@ html.instant-wallpaper-startup-preview .newtab-app {
   background-image: var(--instant-wallpaper-preview-image, none);
   background-position: var(--instant-wallpaper-position, center);
   background-size: var(--instant-wallpaper-size, cover);
-  filter: blur(var(--instant-wallpaper-preview-blur, 2px)) saturate(1.02);
+  filter: none;
   opacity: 0;
   pointer-events: none;
-  transition:
-    opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease),
-    filter var(--newtab-wallpaper-deblur-duration) ease-in-out;
-  will-change: opacity, filter;
+  transition: opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease);
+  will-change: opacity;
 }
 
 .newtab-app.instant-wallpaper-ready:not(.instant-wallpaper-remote-ready)::before {
@@ -463,23 +461,21 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 .newtab-app.loading-wallpaper:not(.instant-wallpaper-ready)::before {
-  filter: blur(var(--instant-wallpaper-preview-loading-blur, 2px)) saturate(1.02);
+  filter: none;
   opacity: var(--instant-wallpaper-preview-loading-opacity, 1);
   transition: opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease);
 }
 
 .newtab-background-image {
   opacity: 0;
-  filter: blur(var(--newtab-wallpaper-reveal-blur, 3px)) saturate(1.02);
-  transition:
-    opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease),
-    filter var(--newtab-wallpaper-deblur-duration) ease-in-out;
-  will-change: opacity, filter;
+  filter: none;
+  transition: opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease);
+  will-change: opacity;
 }
 
 .newtab-background-image[data-state="visible"] {
   opacity: 1;
-  filter: blur(0) saturate(1);
+  filter: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

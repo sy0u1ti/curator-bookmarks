@@ -4,7 +4,7 @@
   --pulse-dur: 1000ms;
   --pulse-count: 1;
   --pulse-min: 0.5;
-  --reveal-dur: 400ms;
+  --reveal-dur: 380ms;
   --reveal-blur: 2px;
   --reveal-ease: ease-in-out;
 }
@@ -15,6 +15,7 @@
 
 .popup-page-reveal .popup-page-skeleton,
 .popup-page-reveal .popup-page-content {
+  will-change: opacity, filter;
   transition-duration: var(--reveal-dur);
   transition-property: opacity, filter;
   transition-timing-function: var(--reveal-ease);

@@ -14,7 +14,7 @@ const BACKGROUND_IMAGE_CLASS = `${BACKGROUND_LAYER_CLASS} newtab-background-imag
 const BACKGROUND_VIDEO_CLASS = `${BACKGROUND_LAYER_CLASS} newtab-background-video object-cover`
 const BACKGROUND_VIDEO_LOADING_CLASS = 'opacity-0'
 const BACKGROUND_VIDEO_READY_CLASS = 'opacity-100'
-const IMAGE_REVEAL_MS = 480
+const IMAGE_REVEAL_MS = 300
 const REMOTE_READY_REVEAL_DELAY_MS = 0
 
 interface StagedBackgroundImage {
