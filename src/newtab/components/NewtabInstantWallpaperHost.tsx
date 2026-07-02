@@ -3,7 +3,7 @@ import { useNewtabInstantWallpaperView } from '../newtab-instant-wallpaper-store
 
 const STARTUP_STYLE_ID = 'instant-wallpaper-startup-style'
 const STARTUP_PREVIEW_CLASS = 'instant-wallpaper-startup-preview'
-const STARTUP_PREVIEW_SETTLE_MS = 980
+const STARTUP_PREVIEW_SETTLE_MS = 480
 const STARTUP_HTML_CLASSES = [
   'loading-wallpaper',
   'newtab-booting',

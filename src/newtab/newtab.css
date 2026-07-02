@@ -6,10 +6,10 @@
 }
 
 .newtab-app {
-  --newtab-wallpaper-focus-duration: 840ms;
+  --newtab-wallpaper-focus-duration: 420ms;
   --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --newtab-wallpaper-deblur-duration: 920ms;
-  --newtab-wallpaper-reveal-blur: 3px;
+  --newtab-wallpaper-deblur-duration: 460ms;
+  --newtab-wallpaper-reveal-blur: 2px;
   --newtab-glass-bg: rgba(14, 15, 17, 0.34);
   --newtab-glass-bg-faint: rgba(14, 15, 17, 0.26);
   --newtab-glass-bg-card: rgba(18, 19, 21, 0.34);
