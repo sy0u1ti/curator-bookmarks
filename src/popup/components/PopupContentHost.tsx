@@ -44,6 +44,9 @@ export function PopupContentHost() {
   const contentRef = useRef<HTMLDivElement | null>(null)
   const mainListRef = useRef<HTMLUListElement | null>(null)
   const activeResultRef = useRef<HTMLLIElement | null>(null)
+  const folderTreeRef = useRef<HTMLDivElement | null>(null)
+  const activeFolderRef = useRef<HTMLDivElement | null>(null)
+  const workspaceRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const shouldRevealActiveResultRef = useRef(false)
   const [state, setState] = useState<PopupContentViewModel>(INITIAL_CONTENT_STATE)
@@ -89,6 +92,22 @@ export function PopupContentHost() {
     }
   }), [])
 
+  function remeasureIndicator() {
+    const workspace = workspaceRef.current
+    const inFolderPane = state.keyboardPane === 'folders'
+    if (inFolderPane) {
+      const folderDiv = activeFolderRef.current
+      const target = folderDiv?.querySelector<HTMLElement>('button') ?? folderDiv ?? null
+      updateActiveResultIndicator(setActiveResultIndicator, workspace, target)
+    } else {
+      const activeResult = activeResultRef.current
+      const target = activeResult
+        ? (activeResult.querySelector<HTMLElement>('.popup-list-button') ?? activeResult)
+        : null
+      updateActiveResultIndicator(setActiveResultIndicator, workspace, target)
+    }
+  }
+
   useEffect(() => {
     return subscribePopupContentChange((detail) => {
       const scrollContainer = mainListRef.current || contentRef.current
@@ -113,65 +132,99 @@ export function PopupContentHost() {
       scrollContainer.scrollTop = pendingScrollTop
       pendingScrollTopRef.current = null
       shouldRevealActiveResultRef.current = false
-      updateActiveResultIndicator(setActiveResultIndicator, mainListRef.current, activeResultRef.current)
+      remeasureIndicator()
       return
     }
 
     if (!shouldRevealActiveResultRef.current) {
-      updateActiveResultIndicator(setActiveResultIndicator, mainListRef.current, activeResultRef.current)
+      remeasureIndicator()
       return
     }
 
     shouldRevealActiveResultRef.current = false
+
+    // Scroll-reveal only applies to the bookmark pane
     const activeResult = activeResultRef.current
-    if (!activeResult) {
-      updateActiveResultIndicator(setActiveResultIndicator, mainListRef.current, null)
-      return
-    }
-
-    const resultRect = activeResult.getBoundingClientRect()
-    const scrollRect = scrollContainer.getBoundingClientRect()
-    const resultTop = getActiveResultContentTop({
-      activeResultTop: resultRect.top,
-      scrollContainerTop: scrollRect.top,
-      scrollTop: scrollContainer.scrollTop
-    })
-    const nextScrollTop = getActiveResultRevealScrollTop({
-      itemHeight: resultRect.height || activeResult.offsetHeight,
-      itemTop: resultTop,
-      maxScrollTop: Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight),
-      viewportHeight: scrollContainer.clientHeight,
-      viewportTop: scrollContainer.scrollTop
-    })
-
-    if (nextScrollTop !== null) {
-      scrollContainer.scrollTo({
-        behavior: getActiveResultRevealScrollBehavior(prefersReducedMotion()),
-        top: nextScrollTop
+    if (activeResult) {
+      const resultRect = activeResult.getBoundingClientRect()
+      const scrollRect = scrollContainer.getBoundingClientRect()
+      const resultTop = getActiveResultContentTop({
+        activeResultTop: resultRect.top,
+        scrollContainerTop: scrollRect.top,
+        scrollTop: scrollContainer.scrollTop
       })
+      const nextScrollTop = getActiveResultRevealScrollTop({
+        itemHeight: resultRect.height || activeResult.offsetHeight,
+        itemTop: resultTop,
+        maxScrollTop: Math.max(0, scrollContainer.scrollHeight - scrollContainer.clientHeight),
+        viewportHeight: scrollContainer.clientHeight,
+        viewportTop: scrollContainer.scrollTop
+      })
+      if (nextScrollTop !== null) {
+        scrollContainer.scrollTo({
+          behavior: getActiveResultRevealScrollBehavior(prefersReducedMotion()),
+          top: nextScrollTop
+        })
+      }
     }
-    updateActiveResultIndicator(setActiveResultIndicator, mainListRef.current, activeResult)
+
+    // Scroll-reveal for folder pane
+    const activeFolder = activeFolderRef.current
+    if (activeFolder && folderTreeRef.current) {
+      const tree = folderTreeRef.current
+      const folderRect = activeFolder.getBoundingClientRect()
+      const treeRect = tree.getBoundingClientRect()
+      const folderTop = folderRect.top - treeRect.top + tree.scrollTop
+      const nextFolderScrollTop = getActiveResultRevealScrollTop({
+        itemHeight: folderRect.height || activeFolder.offsetHeight,
+        itemTop: folderTop,
+        maxScrollTop: Math.max(0, tree.scrollHeight - tree.clientHeight),
+        viewportHeight: tree.clientHeight,
+        viewportTop: tree.scrollTop
+      })
+      if (nextFolderScrollTop !== null) {
+        tree.scrollTo({
+          behavior: getActiveResultRevealScrollBehavior(prefersReducedMotion()),
+          top: nextFolderScrollTop
+        })
+      }
+    }
+
+    remeasureIndicator()
   }, [state])
 
   useEffect(() => {
     const list = mainListRef.current
     const activeResult = activeResultRef.current
-    if (!list || !activeResult || typeof ResizeObserver === 'undefined') {
+    const folder = activeFolderRef.current
+    const workspace = workspaceRef.current
+    if (!workspace || typeof ResizeObserver === 'undefined') {
       return
     }
 
-    const target = getActiveResultIndicatorTarget(activeResult)
     const observer = new ResizeObserver(() => {
-      updateActiveResultIndicator(setActiveResultIndicator, list, activeResult)
+      remeasureIndicator()
     })
 
-    observer.observe(list)
-    observer.observe(activeResult)
-    if (target !== activeResult) {
-      observer.observe(target)
-    }
+    observer.observe(workspace)
+    if (list) observer.observe(list)
+    if (activeResult) observer.observe(activeResult)
+    if (folder) observer.observe(folder)
 
     return () => observer.disconnect()
+  }, [state])
+
+  // Remeasure when either scroll container scrolls
+  useEffect(() => {
+    const list = mainListRef.current
+    const tree = folderTreeRef.current
+    const handler = () => remeasureIndicator()
+    list?.addEventListener('scroll', handler, { passive: true })
+    tree?.addEventListener('scroll', handler, { passive: true })
+    return () => {
+      list?.removeEventListener('scroll', handler)
+      tree?.removeEventListener('scroll', handler)
+    }
   }, [state])
 
   return (
@@ -183,6 +236,9 @@ export function PopupContentHost() {
       <PopupContent
         activeResultIndicator={activeResultIndicatorView}
         activeResultRef={activeResultRef}
+        activeFolderRef={activeFolderRef}
+        folderTreeRef={folderTreeRef}
+        workspaceRef={workspaceRef}
         handlers={handlers}
         mainListRef={mainListRef}
         state={state}
@@ -193,25 +249,24 @@ export function PopupContentHost() {
 
 function updateActiveResultIndicator(
   setActiveResultIndicator: (updater: (current: ActiveResultIndicatorGeometry) => ActiveResultIndicatorGeometry) => void,
-  list: HTMLUListElement | null,
-  activeResult: HTMLLIElement | null
+  workspace: HTMLElement | null,
+  target: HTMLElement | null
 ): void {
-  const next = measureActiveResultIndicator(list, activeResult)
+  const next = measureWorkspaceIndicator(workspace, target)
   setActiveResultIndicator((current) => {
     return areActiveResultIndicatorsEqual(current, next) ? current : next
   })
 }
 
-function measureActiveResultIndicator(
-  list: HTMLUListElement | null,
-  activeResult: HTMLLIElement | null
+function measureWorkspaceIndicator(
+  workspace: HTMLElement | null,
+  target: HTMLElement | null
 ): ActiveResultIndicatorGeometry {
-  if (!list || !activeResult) {
+  if (!workspace || !target) {
     return HIDDEN_ACTIVE_RESULT_INDICATOR
   }
 
-  const target = getActiveResultIndicatorTarget(activeResult)
-  const listRect = list.getBoundingClientRect()
+  const workspaceRect = workspace.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
   const width = Math.max(0, targetRect.width)
   const height = Math.max(0, targetRect.height)
@@ -221,15 +276,11 @@ function measureActiveResultIndicator(
 
   return {
     height,
-    left: targetRect.left - listRect.left + list.scrollLeft,
-    top: targetRect.top - listRect.top + list.scrollTop,
+    left: targetRect.left - workspaceRect.left,
+    top: targetRect.top - workspaceRect.top,
     visible: true,
     width
   }
-}
-
-function getActiveResultIndicatorTarget(activeResult: HTMLLIElement): HTMLElement {
-  return activeResult.querySelector<HTMLElement>('.popup-list-button') || activeResult
 }
 
 function areActiveResultIndicatorsEqual(

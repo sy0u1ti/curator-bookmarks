@@ -71,6 +71,7 @@ export interface PopupContentBookmarkRowViewModel {
 
 export interface PopupContentFolderRowViewModel {
   active?: boolean
+  keyboardActive?: boolean
   countLabel: string
   depth: number
   expanded: boolean
@@ -111,6 +112,7 @@ export type PopupContentMainRowViewModel =
 
 export interface PopupContentViewModel {
   emptyLabel?: string
+  keyboardPane?: 'bookmarks' | 'folders'
   loading?: boolean
   mainState?: {
     kind: 'empty' | 'loading' | 'natural-setup' | 'search-empty'

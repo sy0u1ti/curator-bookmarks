@@ -63,7 +63,7 @@ const workspaceContentLayerClass = cx(
 const workspaceContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
 const workspaceContentReadyClass = 'opacity-100'
 const workspaceClass =
-  'grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
+  'relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
   'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
@@ -164,12 +164,18 @@ function getBookmarkButtonStyle(): CSSProperties {
 export function PopupContent({
   activeResultIndicator,
   activeResultRef,
+  activeFolderRef,
+  folderTreeRef,
+  workspaceRef,
   handlers,
   mainListRef,
   state
 }: {
   activeResultIndicator?: PopupActiveResultIndicatorState
   activeResultRef?: RefObject<HTMLLIElement | null>
+  activeFolderRef?: RefObject<HTMLDivElement | null>
+  folderTreeRef?: RefObject<HTMLDivElement | null>
+  workspaceRef?: RefObject<HTMLDivElement | null>
   handlers?: PopupContentActionHandlers
   mainListRef?: RefObject<HTMLUListElement | null>
   state: PopupContentViewModel
@@ -191,14 +197,15 @@ export function PopupContent({
         <PopupContentSkeleton mode={mode} title={title} />
       </div>
       <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : workspaceContentReadyClass)}>
-        <div className={workspaceClass}>
+        <div className={workspaceClass} ref={workspaceRef}>
           <aside className={paneClass} aria-label="文件夹树">
             <header className={paneHeaderClass}>
               <span>全部文件夹</span>
             </header>
-            <div className={folderTreeClass} role="tree">
+            <div className={folderTreeClass} role="tree" ref={folderTreeRef}>
               {sidebarRows.map((row) => (
                 <PopupFolderRow
+                  activeFolderRef={row.keyboardActive ? activeFolderRef : undefined}
                   onFolderFilter={handlers?.onFolderFilter}
                   row={row}
                   key={`folder:${row.folderId}`}
@@ -223,15 +230,16 @@ export function PopupContent({
               ) : (
                 <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
               )}
-              <li
-                className={activeResultIndicatorClass}
-                aria-hidden="true"
-                data-visible={activeResultIndicator?.visible ? 'true' : undefined}
-                role="presentation"
-                style={activeResultIndicator?.style}
-              ></li>
             </ul>
           </section>
+          {/* Workspace-level indicator — slides freely across both panes */}
+          <div
+            className={activeResultIndicatorClass}
+            aria-hidden="true"
+            data-visible={activeResultIndicator?.visible ? 'true' : undefined}
+            role="presentation"
+            style={activeResultIndicator?.style}
+          ></div>
         </div>
       </div>
     </div>
@@ -367,16 +375,18 @@ function PopupMainLoadingSkeleton({ label }: { label: string }) {
 }
 
 function PopupFolderRow({
+  activeFolderRef,
   onFolderFilter,
   row
 }: {
+  activeFolderRef?: RefObject<HTMLDivElement | null>
   onFolderFilter?: (folderId: string) => void
   row: PopupContentFolderRowViewModel
 }) {
   const style = { '--depth': row.depth } as CSSProperties
 
   return (
-    <div className={folderRowClass} style={style}>
+    <div className={folderRowClass} style={style} ref={activeFolderRef}>
       <Button
         className={cx(folderCardClass, row.active ? folderCardActiveClass : '')}
         type="button"

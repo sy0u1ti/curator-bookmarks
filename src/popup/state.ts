@@ -72,6 +72,8 @@ export interface PopupState {
   viewNoticeTimer: number | null
   searchResults: PopupSearchResult[]
   activeResultIndex: number
+  keyboardPane: 'bookmarks' | 'folders'
+  activeFolderKeyboardIndex: number
   searchTimer: number | null
   searchRunId: number
   searchPending: boolean
@@ -164,6 +166,8 @@ export const state: PopupState = {
   viewNoticeTimer: null,
   searchResults: [],
   activeResultIndex: -1,
+  keyboardPane: 'bookmarks',
+  activeFolderKeyboardIndex: -1,
   searchTimer: null,
   searchRunId: 0,
   searchPending: false,

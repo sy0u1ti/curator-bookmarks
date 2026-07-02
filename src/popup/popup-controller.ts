@@ -162,7 +162,9 @@ let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
 let unregisterPopupActionHandlers: (() => void) | null = null
 let unregisterPopupBrowserEventActions: (() => void) | null = null
 let queuedActiveResultIndex: number | null = null
+let queuedActiveFolderIndex: number | null = null
 let activeResultFrame = 0
+let activeFolderFrame = 0
 let keyboardNavigationSettleTimer = 0
 interface PopupRefreshBaseData {
   refreshRunId: number
@@ -1914,6 +1916,7 @@ function getPopupContentViewModel({
     const mainRows = getSearchResultRows()
     return {
       emptyLabel: '未找到相关书签',
+      keyboardPane: state.keyboardPane,
       loading,
       mainState,
       mainRows,
@@ -1928,6 +1931,7 @@ function getPopupContentViewModel({
   const mainRows = getTreeBookmarkRows()
   return {
     emptyLabel: '当前文件夹下暂无书签',
+    keyboardPane: state.keyboardPane,
     loading,
     mainState,
     mainRows,
@@ -1944,7 +1948,13 @@ function getSidebarFolderRows(currentRoot = getCurrentTreeRoot()): PopupContentF
     return []
   }
 
-  return buildSidebarFolderRows(currentRoot, 0)
+  const rows = buildSidebarFolderRows(currentRoot, 0)
+  // Stamp keyboardActive on the row at the current keyboard index
+  const ki = state.activeFolderKeyboardIndex
+  if (ki >= 0 && ki < rows.length) {
+    rows[ki] = { ...rows[ki], keyboardActive: true }
+  }
+  return rows
 }
 
 function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
@@ -1959,6 +1969,7 @@ function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
 
   const currentRow: PopupContentRowViewModel = {
     active: (!state.selectedFolderFilterId && isPinnedRoot) || state.selectedFolderFilterId === String(node.id || ''),
+    keyboardActive: false,
     countLabel: getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot),
     depth,
     expanded: isExpanded,
@@ -2863,6 +2874,42 @@ function handleDocumentKeydown(event) {
   if (handleSearchFocusShortcut(event)) {
     return
   }
+
+  // Left/right: switch keyboard focus between folder pane and bookmark pane (tree mode only)
+  if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && !state.debouncedQuery) {
+    const sidebarRows = getSidebarFolderRows()
+    if (!sidebarRows.length) {
+      return
+    }
+    event.preventDefault()
+    if (event.key === 'ArrowLeft') {
+      switchKeyboardToFolders(sidebarRows)
+    } else {
+      switchKeyboardToBookmarks()
+    }
+    return
+  }
+
+  // Up/down in folder pane
+  if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && state.keyboardPane === 'folders' && !state.debouncedQuery) {
+    event.preventDefault()
+    queueActiveFolderDelta(event.key === 'ArrowDown' ? 1 : -1)
+    return
+  }
+
+  // Enter in folder pane: apply filter and return to bookmarks
+  if (event.key === 'Enter' && state.keyboardPane === 'folders' && !state.debouncedQuery) {
+    const sidebarRows = getSidebarFolderRows()
+    const fi = queuedActiveFolderIndex ?? state.activeFolderKeyboardIndex
+    if (fi >= 0 && fi < sidebarRows.length) {
+      event.preventDefault()
+      const row = sidebarRows[fi]
+      applyFolderFilter(row.root ? null : row.folderId, { focusSearch: false })
+      switchKeyboardToBookmarks()
+    }
+    return
+  }
+
   const keyboardBookmarks = getKeyboardNavigationBookmarks()
   if (!keyboardBookmarks.length) {
     return
@@ -3955,11 +4002,72 @@ function clearQueuedKeyboardNavigation() {
     activeResultFrame = 0
   }
   queuedActiveResultIndex = null
+  if (activeFolderFrame) {
+    window.cancelAnimationFrame(activeFolderFrame)
+    activeFolderFrame = 0
+  }
+  queuedActiveFolderIndex = null
   if (keyboardNavigationSettleTimer) {
     window.clearTimeout(keyboardNavigationSettleTimer)
     keyboardNavigationSettleTimer = 0
   }
   document.getElementById('popup-app-shell')?.removeAttribute('data-keyboard-nav')
+}
+function switchKeyboardToFolders(sidebarRows: PopupContentFolderRowViewModel[]) {
+  // Initialise the keyboard cursor to the currently-selected folder row
+  const activeIdx = sidebarRows.findIndex((r) =>
+    (!state.selectedFolderFilterId && r.root) ||
+    (state.selectedFolderFilterId && r.folderId === state.selectedFolderFilterId)
+  )
+  state.keyboardPane = 'folders'
+  state.activeFolderKeyboardIndex = activeIdx >= 0 ? activeIdx : 0
+  markKeyboardNavigationActive()
+  renderMainContent({ preserveScroll: true })
+}
+function switchKeyboardToBookmarks() {
+  state.keyboardPane = 'bookmarks'
+  markKeyboardNavigationActive()
+  renderMainContent({ preserveScroll: true })
+}
+function queueActiveFolderDelta(delta: number) {
+  const sidebarRows = getSidebarFolderRows()
+  if (!sidebarRows.length) {
+    return
+  }
+  const baseIndex = queuedActiveFolderIndex ?? state.activeFolderKeyboardIndex
+  const nextIndex = baseIndex < 0
+    ? (delta < 0 ? sidebarRows.length - 1 : 0)
+    : Math.max(0, Math.min(baseIndex + delta, sidebarRows.length - 1))
+  if (nextIndex === baseIndex) {
+    return
+  }
+  markKeyboardNavigationActive()
+  queuedActiveFolderIndex = nextIndex
+  if (activeFolderFrame) {
+    return
+  }
+  activeFolderFrame = window.requestAnimationFrame(flushQueuedActiveFolderIndex)
+}
+function flushQueuedActiveFolderIndex() {
+  activeFolderFrame = 0
+  const nextIndex = queuedActiveFolderIndex
+  queuedActiveFolderIndex = null
+  if (nextIndex === null) {
+    return
+  }
+  setActiveFolderKeyboardIndex(nextIndex)
+}
+function setActiveFolderKeyboardIndex(nextIndex: number) {
+  const sidebarRows = getSidebarFolderRows()
+  if (!sidebarRows.length) {
+    return
+  }
+  const clampedIndex = Math.max(0, Math.min(nextIndex, sidebarRows.length - 1))
+  if (clampedIndex === state.activeFolderKeyboardIndex) {
+    return
+  }
+  state.activeFolderKeyboardIndex = clampedIndex
+  renderMainContent({ preserveScroll: true })
 }
 function setActiveResultIndex(nextIndex) {
   const keyboardBookmarks = getKeyboardNavigationBookmarks()
