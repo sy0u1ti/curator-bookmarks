@@ -29,7 +29,7 @@ const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   trash: 'Trash2'
 }
 
-const MENU_SURFACE_CLASS = 'bookmark-menu-surface t-resize fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--dropdown-open-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
+const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface t-resize fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--dropdown-open-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
 const MENU_CLOSING_CLASS = 'pointer-events-none animate-[newtab-menu-exit_var(--dropdown-close-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
 const MENU_FULL_WIDTH_CLASS = 'w-[276px]'
 const MENU_ADD_EXPANDED_CLASS = 'w-[300px]'

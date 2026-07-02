@@ -22,6 +22,11 @@ export interface PopupContentActionHandlers {
   onResultHover?: (index: number) => void
 }
 
+export interface PopupActiveResultIndicatorState {
+  style: CSSProperties
+  visible: boolean
+}
+
 const POPUP_CONTENT_SKELETON_FOLDER_ROWS = [
   { depth: 0, width: 0.72, count: 0.34 },
   { depth: 1, width: 0.64, count: 0.26 },
@@ -69,10 +74,11 @@ const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const folderTreeClass =
   'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
-  'm-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderRowClass = 'relative block min-h-[34px]'
 const mainRowClass =
-  'popup-main-row relative grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
+  'popup-main-row relative z-[1] grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
+const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardClass = [
   'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
   'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
@@ -156,11 +162,13 @@ function getBookmarkButtonStyle(): CSSProperties {
 }
 
 export function PopupContent({
+  activeResultIndicator,
   activeResultRef,
   handlers,
   mainListRef,
   state
 }: {
+  activeResultIndicator?: PopupActiveResultIndicatorState
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
   mainListRef?: RefObject<HTMLUListElement | null>
@@ -215,6 +223,13 @@ export function PopupContent({
               ) : (
                 <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
               )}
+              <li
+                className={activeResultIndicatorClass}
+                aria-hidden="true"
+                data-visible={activeResultIndicator?.visible ? 'true' : undefined}
+                role="presentation"
+                style={activeResultIndicator?.style}
+              ></li>
             </ul>
           </section>
         </div>

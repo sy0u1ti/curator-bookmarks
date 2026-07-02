@@ -10,7 +10,7 @@ export const optionsSidebarClass =
   'sticky top-0 max-[920px]:static z-[9] self-stretch h-auto w-full max-w-[244px] max-[1180px]:max-w-[220px] max-[920px]:max-w-none min-h-screen max-[920px]:min-h-0 max-h-screen max-[920px]:max-h-none mt-0 pt-[120px] pr-[16px] pb-[18px] pl-[16px] max-[920px]:pt-[18px] max-[920px]:pr-0 max-[920px]:pb-0 max-[920px]:pl-0 overflow-auto max-[920px]:overflow-visible max-[920px]:col-[1] max-[920px]:row-[1] bg-ds-page border-0 pointer-events-auto rounded-none shadow-none'
 
 export const optionsBrandClassBase =
-  'inline-flex min-h-[58px] min-w-0 items-center gap-3 p-[6px_0]'
+  'curator-motion-chip inline-flex min-h-[58px] min-w-0 items-center gap-3 p-[6px_0]'
 
 export const optionsBrandMarkClass =
   'h-[46px] w-[46px] flex-none overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none max-[760px]:h-[54px] max-[760px]:w-[54px]'
@@ -32,7 +32,7 @@ export const navClass =
 export const navCollapsibleClass = 'grid min-w-0 gap-[3px] max-[920px]:w-full'
 
 export const navLinkClass = [
-  'relative flex min-h-[34px] w-full items-center justify-start overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0 pl-6',
+  'curator-motion-row relative flex min-h-[34px] w-full items-center justify-start overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0 pl-6',
   '[font-family:var(--font-sans)] text-[13px] font-semibold text-left text-ds-text-secondary',
   '[transition:background_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
   'before:absolute before:left-[9px] before:font-mono before:text-ds-text-disabled before:font-bold before:content-["-"]',
@@ -54,7 +54,7 @@ export const navSublistClass = [
 ].join(' ')
 
 export const navGroupTriggerClass =
-  'relative flex items-center gap-2 min-h-[34px] max-[920px]:min-h-[38px] w-full cursor-pointer justify-between font-semibold rounded-ds-sm border-0 bg-transparent p-[0_10px] text-left text-[13px] text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary [font:inherit] [transition:background_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard)] max-[920px]:border max-[920px]:border-ds-border max-[920px]:bg-ds-surface-1 max-[920px]:hover:bg-ds-hover max-[920px]:focus-visible:bg-ds-hover max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb] max-[920px]:transform-none'
+  'curator-motion-row relative flex items-center gap-2 min-h-[34px] max-[920px]:min-h-[38px] w-full cursor-pointer justify-between font-semibold rounded-ds-sm border-0 bg-transparent p-[0_10px] text-left text-[13px] text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary [font:inherit] max-[920px]:border max-[920px]:border-ds-border max-[920px]:bg-ds-surface-1 max-[920px]:hover:bg-ds-hover max-[920px]:focus-visible:bg-ds-hover max-[920px]:[overflow-wrap:anywhere] max-[920px]:[writing-mode:horizontal-tb] max-[920px]:transform-none'
 
 export const navSubitemClass = [
   'flex min-h-8 w-full items-center justify-start pl-6 text-left font-semibold text-ds-text-secondary',
@@ -64,7 +64,7 @@ export const navSubitemClass = [
 ].join(' ')
 
 export const optionsDashboardEntryClass = [
-  'flex min-h-[58px] flex-col justify-center gap-1 mt-4 px-3.5 py-3',
+  'curator-motion-card flex min-h-[58px] flex-col justify-center gap-1 mt-4 px-3.5 py-3',
   'border border-transparent rounded-ds-sm bg-transparent text-ds-text-secondary shadow-none',
   '[font-family:var(--font-sans)] transition-[border-color,background,color] duration-ds-standard ease-ds-standard',
   'hover:border-ds-accent-line hover:bg-ds-selected hover:text-ds-accent-text',

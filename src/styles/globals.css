@@ -646,3 +646,93 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .t-stagger-line { transition: none !important; }
 }
+
+.curator-motion-surface {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    border-color var(--ds-motion-standard) var(--resize-ease),
+    background-color var(--ds-motion-standard) var(--resize-ease),
+    box-shadow var(--ds-motion-standard) var(--resize-ease),
+    opacity var(--ds-motion-standard) var(--resize-ease),
+    transform var(--ds-motion-standard) var(--resize-ease);
+}
+
+@starting-style {
+  .curator-motion-surface {
+    opacity: 0;
+    transform: translate3d(0, var(--curator-motion-enter-y, 6px), 0) scale(var(--curator-motion-enter-scale, 0.992));
+  }
+}
+
+.curator-motion-card {
+  transform: translate3d(0, 0, 0) scale(1);
+  transition:
+    border-color var(--ds-motion-fast) var(--resize-ease),
+    background-color var(--ds-motion-fast) var(--resize-ease),
+    box-shadow var(--ds-motion-fast) var(--resize-ease),
+    color var(--ds-motion-fast) var(--resize-ease),
+    opacity var(--ds-motion-standard) var(--resize-ease),
+    transform 130ms var(--resize-ease);
+}
+
+.curator-motion-row,
+.curator-motion-chip {
+  transform: translate3d(0, 0, 0);
+  transition:
+    border-color var(--ds-motion-fast) var(--resize-ease),
+    background-color var(--ds-motion-fast) var(--resize-ease),
+    color var(--ds-motion-fast) var(--resize-ease),
+    opacity var(--ds-motion-fast) var(--resize-ease),
+    transform 120ms var(--resize-ease);
+}
+
+.curator-motion-popover {
+  opacity: 1;
+  transform: translate3d(0, 0, 0) scale(1);
+  transform-origin: var(--transform-origin, var(--radix-popover-content-transform-origin, top right));
+  transition:
+    opacity var(--dropdown-open-dur) var(--dropdown-ease),
+    transform var(--dropdown-open-dur) var(--dropdown-ease);
+  will-change: opacity, transform;
+}
+
+.curator-motion-popover[data-starting-style],
+.curator-motion-popover[data-ending-style],
+.curator-motion-popover.is-closing {
+  opacity: 0;
+  transform: translate3d(0, -4px, 0) scale(0.985);
+  transition-duration: var(--dropdown-close-dur);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):hover,
+  .curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):focus-visible {
+    transform: translate3d(0, -1px, 0) scale(1.004);
+  }
+
+  .curator-motion-row:not([aria-current="page"]):not([aria-selected="true"]):hover,
+  .curator-motion-row:not([aria-current="page"]):not([aria-selected="true"]):focus-visible,
+  .curator-motion-chip:not([aria-current="page"]):not([aria-selected="true"]):hover,
+  .curator-motion-chip:not([aria-current="page"]):not([aria-selected="true"]):focus-visible {
+    transform: translate3d(1px, 0, 0);
+  }
+}
+
+.curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):active,
+.curator-motion-row:active,
+.curator-motion-chip:active {
+  transform: scale(var(--ds-press-scale, 0.985));
+  transition-duration: 80ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curator-motion-surface,
+  .curator-motion-card,
+  .curator-motion-row,
+  .curator-motion-chip,
+  .curator-motion-popover {
+    transition: none !important;
+    transform: none !important;
+  }
+}

@@ -74,13 +74,13 @@ export const DASHBOARD_TOOLBAR_EXIT_SKELETON_CLASS =
   'block h-[38px] w-[60px] rounded-ds-sm border border-ds-border bg-ds-surface-2'
 
 export const DASHBOARD_CARD_ROOT_CLASS = [
-  'group/dashboard-card relative z-0 flex h-[150px] min-h-[150px] min-w-0 flex-col gap-[9px] overflow-visible rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3 select-none',
+  'curator-motion-card group/dashboard-card relative z-0 flex h-[150px] min-h-[150px] min-w-0 flex-col gap-[9px] overflow-visible rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3 select-none',
   'before:pointer-events-none before:absolute before:[inset:0_auto_0_0] before:z-0 before:block before:w-0 before:rounded-[var(--ds-radius-full)_0_0_var(--ds-radius-full)] before:bg-transparent before:content-[""]',
   '[box-shadow:none] [contain:layout_paint_style] [contain-intrinsic-size:var(--dashboard-card-height)]',
   '[-webkit-backdrop-filter:none] [backdrop-filter:none] hover:[box-shadow:none]',
   '[-webkit-user-select:none] [touch-action:manipulation]',
   '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:[transform:none]'
+  'hover:border-ds-border-hover hover:bg-ds-hover'
 ].join(' ')
 
 export const DASHBOARD_CARD_SELECTED_STATE_CLASS = [
@@ -98,7 +98,7 @@ export const DASHBOARD_CARD_STATIC_VISIBILITY_CLASS =
   ''
 
 export const DASHBOARD_CARD_DIMMED_CLASS =
-  'opacity-[0.72] [transform:none]'
+  'curator-motion-disabled opacity-[0.72] [transform:none]'
 
 export const DASHBOARD_TOOLBAR_CLASS = [
   'grid w-full grid-cols-[minmax(0,1fr)_minmax(320px,680px)_minmax(440px,620px)_minmax(72px,1fr)] items-start gap-3',
@@ -109,7 +109,7 @@ export const DASHBOARD_TOOLBAR_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_PERFORMANCE_CLASS = [
-  '[&_:where(*)]:duration-0 [&_:where(*)]:[animation-duration:0ms]'
+  'motion-reduce:[&_:where(*)]:duration-0 motion-reduce:[&_:where(*)]:[animation-duration:0ms]'
 ].join(' ')
 
 export const DASHBOARD_TITLE_ACTIONS_CLASS =
@@ -131,7 +131,7 @@ export const DASHBOARD_QUERY_ROW_CLASS =
   'relative block min-w-0 bg-transparent p-0 [box-shadow:none]'
 
 export const DASHBOARD_SEARCH_INPUT_FIELD_CLASS = [
-  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
+  'curator-motion-surface group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
   'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
   'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
@@ -179,7 +179,7 @@ export const DASHBOARD_SEARCH_HELP_SKELETON_CLASS =
   'block size-7 flex-none rounded-ds-sm border border-ds-border bg-ds-surface-2'
 
 export const DASHBOARD_SEARCH_HELP_POPOVER_CLASS = [
-  '[z-index:150] grid w-[min(332px,calc(100vw-32px))] max-w-[min(332px,calc(100vw-32px))] gap-[7px]',
+  'curator-motion-popover [z-index:150] grid w-[min(332px,calc(100vw-32px))] max-w-[min(332px,calc(100vw-32px))] gap-[7px]',
   'rounded-ds-md border border-ds-border bg-ds-surface-2 p-[10px_12px]',
   'text-left text-[12px] font-medium leading-[1.45] text-ds-text-primary shadow-none',
   'whitespace-normal outline-none [-webkit-backdrop-filter:none] [backdrop-filter:none]'
@@ -213,13 +213,13 @@ export const DASHBOARD_FOLDER_BREADCRUMB_CURRENT_ITEM_CLASS =
   'flex-[1_1_auto]'
 
 export const DASHBOARD_FOLDER_BREADCRUMB_LINK_CLASS =
-  'inline-flex min-h-[22px] min-w-0 max-w-[220px] flex-[0_1_auto] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-1.5 py-0 text-[12px] font-[650] leading-[1.2] text-ds-text-secondary [box-shadow:none] hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary max-[760px]:max-w-[154px] [.dashboard-fullscreen-active_&]:min-h-5 [.dashboard-fullscreen-active_&]:text-[11px]'
+  'curator-motion-chip inline-flex min-h-[22px] min-w-0 max-w-[220px] flex-[0_1_auto] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-1.5 py-0 text-[12px] font-[650] leading-[1.2] text-ds-text-secondary [box-shadow:none] hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary max-[760px]:max-w-[154px] [.dashboard-fullscreen-active_&]:min-h-5 [.dashboard-fullscreen-active_&]:text-[11px]'
 
 export const DASHBOARD_FOLDER_BREADCRUMB_CURRENT_CLASS =
   'inline-flex min-h-[22px] min-w-0 max-w-[220px] flex-[0_1_auto] items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-1.5 py-0 text-[12px] font-[650] leading-[1.2] text-ds-text-secondary [box-shadow:none] max-[760px]:max-w-[154px] [.dashboard-fullscreen-active_&]:min-h-5 [.dashboard-fullscreen-active_&]:text-[11px]'
 
 export const DASHBOARD_RESULTS_GROUP_CLASS = [
-  'mt-3 flex min-h-0 select-none flex-col overflow-hidden rounded-ds-md',
+  'curator-motion-surface mt-3 flex min-h-0 select-none flex-col overflow-hidden rounded-ds-md',
   'border border-ds-border bg-ds-surface-1 p-3 [box-shadow:none]',
   '[-webkit-user-select:none] [-webkit-backdrop-filter:none] [backdrop-filter:none]',
   '[.dashboard-fullscreen-active_&]:relative [.dashboard-fullscreen-active_&]:z-[1] [.dashboard-fullscreen-active_&]:[grid-area:dashboard-results]',
@@ -263,7 +263,7 @@ export const DASHBOARD_FOLDER_TREE_CLASS =
   'flex min-h-0 flex-[1_1_auto] flex-col gap-0.5 overflow-auto p-2 max-[760px]:flex-row max-[760px]:gap-1.5 max-[760px]:overflow-x-auto max-[760px]:overflow-y-hidden max-[760px]:p-[0_0_4px] max-[760px]:[scrollbar-gutter:auto] max-[760px]:[scrollbar-width:none] max-[760px]:[&::-webkit-scrollbar]:hidden'
 
 export const DASHBOARD_FOLDER_TREE_ITEM_CLASS = [
-  'grid min-h-[30px] w-full cursor-pointer grid-cols-[12px_minmax(0,1fr)_max-content] items-center justify-stretch gap-[7px]',
+  'curator-motion-row grid min-h-[30px] w-full cursor-pointer grid-cols-[12px_minmax(0,1fr)_max-content] items-center justify-stretch gap-[7px]',
   'rounded-ds-sm border-0 border-transparent bg-transparent py-0 pr-2 pl-[calc(8px+var(--folder-depth-offset))]',
   'text-left text-xs leading-normal text-ds-text-secondary [--folder-depth-offset:0px]',
   'transition-colors duration-ds-standard ease-ds-standard',
@@ -473,7 +473,7 @@ export const DASHBOARD_FOLDER_DROP_GRID_CLASS =
   'grid [grid-template-columns:repeat(auto-fit,minmax(172px,1fr))] gap-2.5 max-h-[calc(min(calc(100vh_-_150px),820px)_-_72px)] overflow-auto p-3.5 max-[900px]:[grid-template-columns:repeat(auto-fit,minmax(156px,1fr))] max-[760px]:grid-cols-2 max-[760px]:gap-2 max-[760px]:max-h-[calc(100vh_-_220px)] max-[760px]:p-2.5'
 
 export const DASHBOARD_FOLDER_DROP_CARD_CLASS = [
-  'grid min-h-[72px] [grid-template-columns:28px_minmax(0,1fr)] gap-[9px]',
+  'curator-motion-card grid min-h-[72px] [grid-template-columns:28px_minmax(0,1fr)] gap-[9px]',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[9px_10px]',
   'cursor-pointer select-none text-left font-[inherit] text-ds-text-secondary shadow-none [-webkit-user-drag:none] [-webkit-user-select:none]',
   '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
@@ -662,7 +662,7 @@ export const DASHBOARD_CARD_TAG_CHIP_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_CARD_TAG_TOGGLE_CLASS = [
-  'inline-flex h-5 min-h-5 max-w-none min-w-0 flex-none cursor-pointer items-center overflow-hidden rounded-full border border-ds-border',
+  'curator-motion-chip inline-flex h-5 min-h-5 max-w-none min-w-0 flex-none cursor-pointer items-center overflow-hidden rounded-full border border-ds-border',
   'bg-ds-surface-2 px-[7px] text-[10px] font-[750] leading-none text-ds-text-secondary shadow-none text-ellipsis whitespace-nowrap outline-none',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none'
 ].join(' ')
@@ -671,7 +671,7 @@ export const DASHBOARD_TAG_POPOVER_POSITIONER_CLASS =
   'z-[100] pointer-events-none'
 
 export const DASHBOARD_TAG_POPOVER_CLASS = [
-  'z-[100] w-[min(260px,calc(100vw-32px))] max-h-[156px] overflow-auto rounded-ds-md border border-ds-border',
+  'curator-motion-popover z-[100] w-[min(260px,calc(100vw-32px))] max-h-[156px] overflow-auto rounded-ds-md border border-ds-border',
   'pointer-events-auto bg-ds-surface-2 p-2.5 text-ds-text-primary shadow-none outline-none [-webkit-backdrop-filter:none] [backdrop-filter:none]',
   'motion-reduce:transition-none'
 ].join(' ')
@@ -683,13 +683,13 @@ export const DASHBOARD_TAG_POPOVER_LIST_CLASS =
   'flex flex-wrap gap-1.5'
 
 export const DASHBOARD_CARD_MENU_CLASS = [
-  'absolute right-0 top-[calc(100%+8px)] bottom-auto z-[100] grid w-[168px] gap-1',
+  'curator-motion-popover absolute right-0 top-[calc(100%+8px)] bottom-auto z-[100] grid w-[168px] gap-1',
   'rounded-ds-md border border-ds-border bg-ds-surface-2 p-1.5 text-ds-text-primary shadow-none',
   'pointer-events-auto [-webkit-backdrop-filter:none] [backdrop-filter:none]'
 ].join(' ')
 
 export const DASHBOARD_CARD_MENU_ITEM_CLASS = [
-  'grid min-h-[30px] w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)] items-center justify-stretch justify-items-start gap-2',
+  'curator-motion-row grid min-h-[30px] w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)] items-center justify-stretch justify-items-start gap-2',
   'rounded-ds-sm border-0 bg-transparent px-2 py-0 text-left text-xs font-[680] leading-normal text-ds-text-secondary outline-none',
   'transition-colors duration-ds-standard ease-ds-standard',
   '[&_span]:min-w-0 [&_span]:justify-self-start [&_span]:text-left',
