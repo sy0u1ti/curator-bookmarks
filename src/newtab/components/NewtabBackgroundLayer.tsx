@@ -225,12 +225,16 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
         <video
           className={videoClassName}
           src={media.src}
+          poster={media.poster || undefined}
           autoPlay
           loop
           muted
           playsInline
           aria-hidden="true"
           tabIndex={-1}
+          onLoadedData={() => markVideoLayerReady(media.src)}
+          onCanPlay={() => markVideoLayerReady(media.src)}
+          onPlaying={() => markVideoLayerReady(media.src)}
         />
       ) : null}
     </>
@@ -281,8 +285,27 @@ function isCurrentImageMedia(src: string): boolean {
   return media.kind === 'image' && media.src === src
 }
 
+function isCurrentVideoMedia(src: string): boolean {
+  const media = getNewtabBackgroundMediaView()
+  return media.kind === 'video' && media.src === src
+}
+
 function markImageLayerReady(src: string): void {
   if (!isCurrentImageMedia(src)) {
+    return
+  }
+
+  dispatchNewtabInstantWallpaperView({
+    booting: false,
+    loaderVisible: false,
+    loading: false,
+    pending: false,
+    remoteReady: true
+  })
+}
+
+function markVideoLayerReady(src: string): void {
+  if (!isCurrentVideoMedia(src)) {
     return
   }
 

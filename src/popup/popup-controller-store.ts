@@ -33,6 +33,7 @@ export interface PopupContentActionDetail {
   bookmarkId?: string
   emptyAction?: string
   folderId?: string
+  index?: number
   menuAction?: string
   returnFocusElement?: HTMLElement | null
 }

@@ -9,7 +9,9 @@ import {
   usePopupModalsView,
   type PopupModalsView
 } from '../popup-controller-store'
+import { focusFolderPickerEdge } from '../popup-keyboard-navigation'
 import { PopupFolderPickerHost } from './PopupFolderPickerHost'
+import type { PopupFolderPickerState } from './PopupViewModels'
 
 const folderSearchShellClass = [
   'flex min-h-10 w-full items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
@@ -181,6 +183,7 @@ function FolderSearch({
   inputId,
   placeholder,
   label,
+  mode,
   controls,
   value,
   action,
@@ -193,6 +196,7 @@ function FolderSearch({
   inputId: string
   inputRef?: RefObject<HTMLInputElement | null>
   label: string
+  mode: PopupFolderPickerState['mode']
   placeholder: string
   value: string
 }) {
@@ -213,6 +217,17 @@ function FolderSearch({
         value={value}
         disabled={disabled}
         onValueChange={(nextValue) => dispatchPopupModalAction(action, nextValue)}
+        onKeyDown={(event) => {
+          if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+            return
+          }
+
+          const list = document.getElementById(controls)
+          const edge = event.key === 'ArrowUp' ? 'last' : 'first'
+          if (focusFolderPickerEdge(list, mode, edge)) {
+            event.preventDefault()
+          }
+        }}
         unstyled
       />
     </label>
@@ -248,6 +263,7 @@ function MoveBookmarkModal({
         inputId="move-search-input"
         placeholder="搜索目标文件夹"
         label="搜索移动目标文件夹"
+        mode="move"
         controls="move-folder-list"
         value={view.query}
         action="move-query-change"
@@ -286,6 +302,7 @@ function SmartFolderModal({
         inputId="smart-folder-search-input"
         placeholder="搜索目标文件夹"
         label="搜索目标文件夹"
+        mode="smart"
         controls="smart-folder-list"
         value={view.query}
         action="smart-folder-query-change"
@@ -373,6 +390,7 @@ function EditBookmarkModal({
           inputId="edit-folder-search-input"
           placeholder="搜索目标文件夹"
           label="搜索编辑目标文件夹"
+          mode="edit"
           controls="edit-folder-list"
           value={view.folderQuery}
           action="edit-folder-query-change"

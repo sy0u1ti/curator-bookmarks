@@ -9,8 +9,8 @@
         color-scheme: dark;
         --bg: #101013;
         --wallpaper-placeholder-bg: #101013;
-        --instant-wallpaper-preview-blur: 2px;
-        --instant-wallpaper-preview-loading-blur: 2px;
+        --instant-wallpaper-preview-blur: 0px;
+        --instant-wallpaper-preview-loading-blur: 0px;
         --instant-wallpaper-preview-loading-opacity: 1;
         --instant-wallpaper-preview-opacity: 1;
         background-color: #101013;
@@ -24,7 +24,7 @@
         margin: 0;
         overflow: hidden;
         background-color: var(--wallpaper-placeholder-bg, #101013);
-        background-image: var(--instant-wallpaper-preview-image, none);
+        background-image: var(--instant-wallpaper-image, none), var(--instant-wallpaper-preview-image, none);
         background-position: var(--instant-wallpaper-position, center);
         background-repeat: no-repeat;
         background-size: var(--instant-wallpaper-size, cover);
@@ -36,11 +36,11 @@
         inset: 0;
         z-index: 0;
         background-color: transparent;
-        background-image: var(--instant-wallpaper-preview-image, none);
+        background-image: var(--instant-wallpaper-image, none), var(--instant-wallpaper-preview-image, none);
         background-position: var(--instant-wallpaper-position, center);
         background-repeat: no-repeat;
         background-size: var(--instant-wallpaper-size, cover);
-        filter: blur(var(--instant-wallpaper-preview-blur, 2px)) saturate(1.02);
+        filter: none;
         opacity: var(--instant-wallpaper-preview-opacity, 1);
         pointer-events: none;
         transition: opacity 420ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -48,7 +48,7 @@
       }
 
       html.loading-wallpaper:not(.instant-wallpaper-ready) body::before {
-        filter: blur(var(--instant-wallpaper-preview-loading-blur, 2px)) saturate(1.02);
+        filter: none;
         opacity: var(--instant-wallpaper-preview-loading-opacity, 1);
       }
 

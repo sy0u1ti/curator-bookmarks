@@ -1,6 +1,7 @@
 interface InstantWallpaperTargetRecord {
   signature?: string
   imageUrl?: string
+  imageDataUrlRef?: string
   previewUrl?: string
   backgroundSize?: string
   backgroundPosition?: string
@@ -12,6 +13,8 @@ interface InstantWallpaperRecord {
   signature?: string
   dataUrl?: string
   dataUrlRef?: string
+  imageDataUrl?: string
+  imageDataUrlRef?: string
   ready?: boolean
 }
 
@@ -33,6 +36,7 @@ interface StartupWallpaperView {
 
 const thumbnailKey = 'curatorNewTabInstantWallpaper'
 const thumbnailDataUrlKey = 'curatorNewTabInstantWallpaperDataUrl'
+const imageDataUrlKey = 'curatorNewTabInstantWallpaperImageDataUrl'
 const targetKey = 'curatorNewTabInstantWallpaperTarget'
 const fallbackColor = '#101013'
 const bootGlobal = globalThis as Record<string, unknown>
@@ -51,15 +55,17 @@ try {
     const targetImageUrl = getTargetImageUrl(targetRecord)
     const thumbnailRecord = readRecord<InstantWallpaperRecord>(thumbnailKey)
     const thumbnailDataUrl = getMatchingThumbnailDataUrl(thumbnailRecord, targetRecord.signature)
-    cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_RECORD__', createBootRecord(targetRecord, thumbnailDataUrl))
+    const startupImageDataUrl = getMatchingImageDataUrl(thumbnailRecord, targetRecord)
+    cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_RECORD__', createBootRecord(targetRecord, thumbnailDataUrl, startupImageDataUrl))
     cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_DATA_URL__', thumbnailDataUrl)
+    cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_IMAGE_DATA_URL__', startupImageDataUrl)
 
-    const startupImageUrl = ''
-    const startupPreviewUrl = targetImageUrl || targetPreviewUrl || thumbnailDataUrl
+    const startupImageUrl = startupImageDataUrl || targetImageUrl
+    const startupPreviewUrl = startupImageUrl || targetPreviewUrl || thumbnailDataUrl
     const startupPreviewFallbackUrl = thumbnailDataUrl && thumbnailDataUrl !== startupPreviewUrl
       ? thumbnailDataUrl
       : ''
-    preloadStartupImage(startupPreviewUrl)
+    preloadStartupImage(startupImageUrl || startupPreviewUrl)
     const placeholderColor = normalizeColor(targetRecord.placeholderColor)
     applyStartupBackground(
       startupImageUrl,
@@ -146,23 +152,30 @@ function createStartupView(): StartupWallpaperView {
 
 function createBootRecord(
   targetRecord: InstantWallpaperTargetRecord,
-  thumbnailDataUrl: string
+  thumbnailDataUrl: string,
+  imageDataUrl: string
 ): InstantWallpaperRecord & {
   backgroundSize: string
   backgroundPosition: string
   placeholderColor: string
   updatedAt: number
 } {
+  const imageDataUrlRef = imageDataUrl ? getTargetImageDataUrlRef(targetRecord) || imageDataUrlKey : ''
   return {
     signature: targetRecord.signature,
-    dataUrlRef: thumbnailDataUrl ? thumbnailDataUrlKey : '',
+    dataUrlRef: thumbnailDataUrl
+      ? thumbnailDataUrlKey
+      : imageDataUrl
+        ? imageDataUrlRef
+        : '',
+    imageDataUrlRef,
     backgroundSize: normalizeBackgroundSize(targetRecord.backgroundSize),
     backgroundPosition: typeof targetRecord.backgroundPosition === 'string' && targetRecord.backgroundPosition
       ? targetRecord.backgroundPosition
       : 'center',
     placeholderColor: normalizeColor(targetRecord.placeholderColor),
     updatedAt: Number(targetRecord.updatedAt) || 0,
-    ready: Boolean(thumbnailDataUrl)
+    ready: Boolean(thumbnailDataUrl || imageDataUrl)
   }
 }
 
@@ -180,7 +193,11 @@ function applyStartupBackground(
   root.style.setProperty('--wallpaper-placeholder-bg', placeholderColor)
   root.style.setProperty('--instant-wallpaper-size', backgroundSize)
   root.style.setProperty('--instant-wallpaper-position', backgroundPosition)
-  root.style.setProperty('--instant-wallpaper-image', imageUrl ? `url("${escapeCssUrl(imageUrl)}")` : 'none')
+  if (imageUrl) {
+    root.style.setProperty('--instant-wallpaper-image', `url("${escapeCssUrl(imageUrl)}")`)
+  } else {
+    root.style.removeProperty('--instant-wallpaper-image')
+  }
   const previewImage = createPreviewImageValue(previewUrl, previewFallbackUrl)
   root.style.setProperty('--instant-wallpaper-preview-image', previewImage)
   if (signature) {
@@ -241,6 +258,12 @@ function getTargetImageUrl(targetRecord: InstantWallpaperTargetRecord): string {
   return typeof targetRecord.imageUrl === 'string' ? targetRecord.imageUrl.trim() : ''
 }
 
+function getTargetImageDataUrlRef(targetRecord: InstantWallpaperTargetRecord): string {
+  return typeof targetRecord.imageDataUrlRef === 'string' && targetRecord.imageDataUrlRef.trim()
+    ? targetRecord.imageDataUrlRef.trim()
+    : ''
+}
+
 function preloadStartupImage(imageUrl: string): void {
   if (!imageUrl || imageUrl.startsWith('data:image/')) {
     return
@@ -266,6 +289,27 @@ function getMatchingThumbnailDataUrl(
     return ''
   }
   return getStoredPreviewDataUrl(thumbnailRecord, thumbnailDataUrlKey)
+}
+
+function getMatchingImageDataUrl(
+  thumbnailRecord: InstantWallpaperRecord | null,
+  targetRecord: InstantWallpaperTargetRecord
+): string {
+  const recordKey = thumbnailRecord?.signature || ''
+  const targetSignature = targetRecord.signature || ''
+  if (recordKey !== targetSignature || thumbnailRecord?.ready === false) {
+    return ''
+  }
+
+  const inlineDataUrl = typeof thumbnailRecord.imageDataUrl === 'string' ? thumbnailRecord.imageDataUrl : ''
+  if (inlineDataUrl.startsWith('data:image/')) {
+    return inlineDataUrl
+  }
+  const dataUrlRef = getTargetImageDataUrlRef(targetRecord) ||
+    (typeof thumbnailRecord.imageDataUrlRef === 'string' && thumbnailRecord.imageDataUrlRef.trim()
+      ? thumbnailRecord.imageDataUrlRef.trim()
+      : imageDataUrlKey)
+  return readDataUrl(dataUrlRef)
 }
 
 function escapeCssUrl(value: string): string {

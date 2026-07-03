@@ -174,8 +174,11 @@ import {
   clearInstantWallpaper,
   clearInstantWallpaperTarget,
   createInstantWallpaperDataUrl,
+  createInstantWallpaperImageDataUrl,
+  createInstantWallpaperVideoPosterDataUrl,
   readInstantWallpaper,
   readInstantWallpaperDataUrl,
+  readInstantWallpaperImageDataUrl,
   readInstantWallpaperTarget,
   saveInstantWallpaper,
   saveInstantWallpaperTarget,
@@ -8373,7 +8376,7 @@ async function ensureCurrentBackgroundStartupCache(
   if (!mediaSignature || settings.type === 'color') {
     return
   }
-  if (getCurrentInstantWallpaper(mediaSignature)) {
+  if (hasCurrentInstantWallpaperStartupImage(mediaSignature, settings)) {
     updateBackgroundStartupCacheStatus(settings)
     return
   }
@@ -8406,7 +8409,7 @@ function scheduleCurrentBackgroundStartupCache(
   if (!getBackgroundMediaSignature(settings) || settings.type === 'color') {
     return
   }
-  if (getCurrentInstantWallpaper(getBackgroundMediaSignature(settings))) {
+  if (hasCurrentInstantWallpaperStartupImage(getBackgroundMediaSignature(settings), settings)) {
     updateBackgroundStartupCacheStatus(settings)
     return
   }
@@ -8522,11 +8525,8 @@ function getBackgroundMediaSaveErrorMessage(error: unknown): string {
 
 function updateBackgroundStartupCacheStatus(settings = state.backgroundSettings): void {
   const mediaKey = getBackgroundMediaSignature(settings)
-  const instantWallpaper = readInstantWallpaper()
-  const wallpaperKey = instantWallpaper?.signature || ''
   const cacheRequired = settings.type !== 'color'
-  const cacheReady = !cacheRequired ||
-    (Boolean(mediaKey) && wallpaperKey === mediaKey && instantWallpaper?.ready !== false)
+  const cacheReady = !cacheRequired || hasCurrentInstantWallpaperStartupImage(mediaKey, settings)
 
   if (!cacheRequired) {
     state.backgroundUrlCacheStatus = ''
@@ -8628,6 +8628,20 @@ function getCurrentInstantWallpaper(mediaKey: string): ReturnType<typeof readIns
   ) ? instantWallpaper : null
 }
 
+function hasCurrentInstantWallpaperStartupImage(
+  mediaKey: string,
+  settings = state.backgroundSettings
+): boolean {
+  const instantWallpaper = getCurrentInstantWallpaper(mediaKey)
+  if (!instantWallpaper) {
+    return false
+  }
+  if (readInstantWallpaperImageDataUrl(instantWallpaper) || readInstantWallpaperDataUrl(instantWallpaper)) {
+    return true
+  }
+  return isRemoteBackgroundType(settings.type) && Boolean(getRemoteBackgroundImageUrl(settings))
+}
+
 function ensureInstantWallpaperFallbackStyles(mediaKey: string): boolean {
   const instantWallpaperView = getNewtabInstantWallpaperView()
   const wallpaperKey = instantWallpaperView.signature
@@ -8646,7 +8660,8 @@ function ensureInstantWallpaperFallbackStyles(mediaKey: string): boolean {
   if (!instantWallpaper) {
     return false
   }
-  const dataUrl = readInstantWallpaperDataUrl(instantWallpaper)
+  const imageDataUrl = readInstantWallpaperImageDataUrl(instantWallpaper)
+  const dataUrl = imageDataUrl || readInstantWallpaperDataUrl(instantWallpaper)
   if (!dataUrl) {
     return false
   }
@@ -8656,7 +8671,7 @@ function ensureInstantWallpaperFallbackStyles(mediaKey: string): boolean {
   )
   dispatchNewtabInstantWallpaperView({
     backgroundColor: placeholderColor,
-    image: '',
+    image: imageDataUrl ? `url("${escapeCssUrl(imageDataUrl)}")` : '',
     pending: false,
     placeholderColor,
     position: instantWallpaper.backgroundPosition || 'center',
@@ -8762,7 +8777,7 @@ async function applyBackgroundSettings(): Promise<void> {
   setActiveBackgroundObjectUrl('')
   activeBackgroundImageNaturalSize = null
   activeBackgroundImageNaturalSizeSignature = ''
-  clearInstantWallpaperIfSignatureChanged('')
+  clearInstantWallpaperIfSignatureChanged(mediaKey)
   syncInstantWallpaperTargetForSettings(settings, mediaKey)
   if (ensureInstantWallpaperFallbackStyles(mediaKey)) {
     markWallpaperReady()
@@ -8811,14 +8826,10 @@ async function applyBackgroundSettings(): Promise<void> {
 
   const ready = await waitForBackgroundVideoSourceReady(objectUrl)
   if (ready) {
-    dispatchNewtabBackgroundMediaView({
-      backgroundPosition: 'center',
-      backgroundSize: 'cover',
-      kind: 'video',
-      src: objectUrl
-    })
+    setBackgroundVideoMedia(objectUrl, mediaKey)
     markRuntimeWallpaperApplied()
     lastAppliedBackgroundMediaSignature = mediaKey
+    void updateInstantWallpaperFromBlob(mediaRecord.blob, mediaKey)
   } else {
     setActiveBackgroundObjectUrl('')
   }
@@ -9222,10 +9233,18 @@ async function updateInstantWallpaperFromBlob(
     ready: true
   }
 
-  const dataUrl = await createFirstInstantWallpaperDataUrl(blob)
-  if (dataUrl && saveInstantWallpaper({
+  const isVideoWallpaper = settings.type === 'video' || String(blob.type || '').toLowerCase().startsWith('video/')
+  const [dataUrl, imageDataUrl] = isVideoWallpaper
+    ? ['', await createInstantWallpaperVideoPosterDataUrl(blob, { force: true })]
+    : await Promise.all([
+        createFirstInstantWallpaperDataUrl(blob),
+        createInstantWallpaperImageDataUrl(blob)
+      ])
+  const previewDataUrl = dataUrl || imageDataUrl
+  if ((previewDataUrl || imageDataUrl) && saveInstantWallpaper({
     ...recordBase,
-    dataUrl
+    dataUrl: previewDataUrl || undefined,
+    imageDataUrl: imageDataUrl || undefined
   })) {
     syncInstantWallpaperTargetForSettings(settings, mediaSignature)
     updateBackgroundStartupCacheStatus(settings)
@@ -9281,18 +9300,21 @@ function buildInstantWallpaperTargetForSettings(
   const existingTargetMatches = existingTargetKey === mediaKey
   const resolvedImageUrl = isRemoteBackgroundType(settings.type) ? getRemoteBackgroundImageUrl(settings) : ''
   const imageUrl = resolvedImageUrl || (existingTargetMatches ? existingTarget.imageUrl : '')
+  const imageDataUrlRef = instantWallpaper?.imageDataUrlRef ||
+    (existingTargetMatches ? existingTarget.imageDataUrlRef : '') ||
+    ''
   const previewUrl = getStartupPreviewImageUrl(settings, imageUrl) ||
     (existingTargetMatches ? existingTarget.previewUrl : '')
-  const instantWallpaperKey = instantWallpaper?.signature
   return {
     signature: mediaKey,
     imageUrl,
+    imageDataUrlRef,
     previewUrl,
     backgroundSize: displayCss.backgroundSize,
     backgroundPosition: displayCss.backgroundPosition,
     placeholderColor: getBackgroundPlaceholderColor(settings),
     cacheRequired: settings.type !== 'color',
-    cacheReady: instantWallpaperKey === mediaKey && instantWallpaper.ready !== false,
+    cacheReady: hasCurrentInstantWallpaperStartupImage(mediaKey, settings),
     updatedAt: Date.now()
   }
 }
@@ -9424,7 +9446,7 @@ function parseHexColor(value: string): { red: number; green: number; blue: numbe
 }
 
 function clearBackgroundMedia(): void {
-  dispatchNewtabBackgroundMediaView({ kind: 'none', src: '' })
+  dispatchNewtabBackgroundMediaView({ kind: 'none', poster: '', src: '' })
 }
 
 function setBackgroundImageMedia(src: string): void {
@@ -9433,8 +9455,27 @@ function setBackgroundImageMedia(src: string): void {
     backgroundPosition: displayCss.backgroundPosition,
     backgroundSize: displayCss.backgroundSize,
     kind: 'image',
+    poster: '',
     src
   })
+}
+
+function setBackgroundVideoMedia(src: string, mediaKey: string): void {
+  dispatchNewtabBackgroundMediaView({
+    backgroundPosition: 'center',
+    backgroundSize: 'cover',
+    kind: 'video',
+    poster: getInstantWallpaperPosterUrl(mediaKey),
+    src
+  })
+}
+
+function getInstantWallpaperPosterUrl(mediaKey: string): string {
+  const instantWallpaper = getCurrentInstantWallpaper(mediaKey)
+  if (!instantWallpaper) {
+    return ''
+  }
+  return readInstantWallpaperImageDataUrl(instantWallpaper) || readInstantWallpaperDataUrl(instantWallpaper)
 }
 
 function setActiveBackgroundObjectUrl(nextUrl: string): void {

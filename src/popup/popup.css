@@ -184,6 +184,13 @@ button:focus-visible {
   will-change: transform, opacity;
 }
 
+/* While hidden, suppress transform transition so position updates snap
+   instantly. When data-visible is added the indicator is already at the
+   correct position and only fades in, with no diagonal fly-in. */
+.popup-active-result-indicator:not([data-visible="true"]) {
+  transition: opacity 80ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .popup-active-result-indicator[data-visible="true"] {
   opacity: 1;
 }

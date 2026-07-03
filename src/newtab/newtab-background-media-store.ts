@@ -6,6 +6,7 @@ export interface NewtabBackgroundMediaView {
   backgroundPosition: string
   backgroundSize: string
   kind: NewtabBackgroundMediaKind
+  poster: string
   src: string
 }
 
@@ -13,6 +14,7 @@ const EMPTY_VIEW: NewtabBackgroundMediaView = {
   backgroundPosition: 'center',
   backgroundSize: 'cover',
   kind: 'none',
+  poster: '',
   src: ''
 }
 
@@ -41,6 +43,7 @@ export function dispatchNewtabBackgroundMediaView(
     mergedView.backgroundPosition === backgroundMediaView.backgroundPosition &&
     mergedView.backgroundSize === backgroundMediaView.backgroundSize &&
     mergedView.kind === backgroundMediaView.kind &&
+    mergedView.poster === backgroundMediaView.poster &&
     mergedView.src === backgroundMediaView.src
   ) {
     return

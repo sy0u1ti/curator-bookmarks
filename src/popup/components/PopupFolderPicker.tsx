@@ -98,14 +98,14 @@ function PopupTreeFolderOption({
   const style = getPickerDepthStyle(option.depth)
 
   return (
-    <div className={pickerRowClass} style={style}>
+    <div className={pickerRowClass} data-folder-picker-row="" style={style}>
       <Button
         className={toggleButtonClass}
         type="button"
-        role="treeitem"
-        aria-level={option.depth + 1}
         aria-expanded={option.hasChildren ? option.expanded : false}
         aria-label={option.toggleLabel}
+        disabled={!option.hasChildren}
+        tabIndex={option.hasChildren ? undefined : -1}
         unstyled
         {...(!option.hasChildren ? { 'data-disabled': 'true' } : {})}
         {...toggleAttrs}
@@ -128,6 +128,7 @@ function PopupTreeFolderOption({
         className={cx(pickerCardClass, option.rowCurrent ? pickerCardCurrentClass : '')}
         type="button"
         role="treeitem"
+        aria-expanded={option.hasChildren ? option.expanded : undefined}
         aria-level={option.depth + 1}
         aria-selected={option.selected ? 'true' : 'false'}
         disabled={option.disabled}

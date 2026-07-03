@@ -67,7 +67,7 @@ const MAX_HEADINGS = 28
 const MAX_LINK_CONTEXT = 18
 const MAX_LIST_TEXT_LENGTH = 120
 const MIN_USEFUL_MAIN_TEXT_LENGTH = 420
-const JINA_READER_PREFIX = 'https://r.jina.ai/http://'
+const JINA_READER_PREFIX = 'https://r.jina.ai/'
 
 const CONTENT_SELECTORS = [
   'article',
@@ -554,10 +554,12 @@ export function buildJinaReaderUrl(url: unknown): string {
     return ''
   }
 
-  const target = normalized
-    .replace(/^http:\/\//i, '')
-    .replace(/^https:\/\//i, 'https://')
-  return `${JINA_READER_PREFIX}${target}`
+  const parsedUrl = parseUrlSafely(normalized)
+  if (!parsedUrl || !/^https?:$/i.test(parsedUrl.protocol)) {
+    return ''
+  }
+
+  return `${JINA_READER_PREFIX}${parsedUrl.href}`
 }
 
 export function detectContentType(

@@ -1,4 +1,4 @@
-import { memo, useState, type CSSProperties, type RefObject } from 'react'
+import { memo, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react'
 import { Button } from '../../ui/base/Button'
 import { NumberPop } from '../../ui/motion/NumberPop'
 import { Icon, type IconName } from '../../ui/icons/Icon'
@@ -18,7 +18,10 @@ export interface PopupContentActionHandlers {
   onBookmarkOpen?: (bookmarkId: string) => void
   onEmptyAction?: (action: string) => void
   onFolderFilter?: (folderId: string) => void
+  onFolderFocus?: (index: number) => void
+  onKeyboardNavigate?: (key: string) => boolean
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
+  onRowFocus?: (index: number) => void
   onResultHover?: (index: number) => void
 }
 
@@ -206,6 +209,7 @@ export function PopupContent({
               {sidebarRows.map((row) => (
                 <PopupFolderRow
                   activeFolderRef={row.keyboardActive ? activeFolderRef : undefined}
+                  handlers={handlers}
                   onFolderFilter={handlers?.onFolderFilter}
                   row={row}
                   key={`folder:${row.folderId}`}
@@ -376,10 +380,12 @@ function PopupMainLoadingSkeleton({ label }: { label: string }) {
 
 function PopupFolderRow({
   activeFolderRef,
+  handlers,
   onFolderFilter,
   row
 }: {
   activeFolderRef?: RefObject<HTMLDivElement | null>
+  handlers?: PopupContentActionHandlers
   onFolderFilter?: (folderId: string) => void
   row: PopupContentFolderRowViewModel
 }) {
@@ -390,9 +396,17 @@ function PopupFolderRow({
       <Button
         className={cx(folderCardClass, row.active ? folderCardActiveClass : '')}
         type="button"
+        role="treeitem"
+        aria-expanded={row.expanded}
+        aria-level={row.depth + 1}
+        aria-selected={row.keyboardActive ? 'true' : 'false'}
         style={getFolderDepthStyle(row.depth)}
         aria-current={row.active ? 'page' : undefined}
         title={row.subtitle}
+        onFocus={() => handlers?.onFolderFocus?.(row.index)}
+        onKeyDown={(event) => {
+          handleContentNavigationKeyDown(event, handlers)
+        }}
         onClick={() => onFolderFilter?.(row.root ? 'all' : row.folderId)}
         unstyled
       >
@@ -431,6 +445,10 @@ function PopupBookmarkRow({
         type="button"
         data-active={row.active ? 'true' : undefined}
         style={getBookmarkButtonStyle()}
+        onFocus={() => handlers?.onRowFocus?.(row.index)}
+        onKeyDown={(event) => {
+          handleContentNavigationKeyDown(event, handlers)
+        }}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
         unstyled
       >
@@ -471,6 +489,10 @@ function PopupSearchResultRow({
         type="button"
         data-active={row.active ? 'true' : undefined}
         style={getBookmarkButtonStyle()}
+        onFocus={() => handlers?.onRowFocus?.(row.index)}
+        onKeyDown={(event) => {
+          handleContentNavigationKeyDown(event, handlers)
+        }}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
         onPointerOver={() => handlers?.onResultHover?.(row.index)}
         unstyled
@@ -551,6 +573,7 @@ function areBookmarkRowsEqual(
     previous.bookmarkId === next.bookmarkId &&
     previous.depth === next.depth &&
     previous.displayUrl === next.displayUrl &&
+    previous.index === next.index &&
     previous.menuLabel === next.menuLabel &&
     previous.path === next.path &&
     previous.title === next.title &&
@@ -595,6 +618,23 @@ function areActionMenusEqual(
 
 function areStringArraysEqual(previous: string[], next: string[]) {
   return previous.length === next.length && previous.every((item, index) => item === next[index])
+}
+
+function handleContentNavigationKeyDown(
+  event: KeyboardEvent<HTMLElement>,
+  handlers?: PopupContentActionHandlers
+): void {
+  if (event.altKey || event.ctrlKey || event.metaKey) {
+    return
+  }
+
+  if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Escape'].includes(event.key)) {
+    return
+  }
+
+  if (handlers?.onKeyboardNavigate?.(event.key)) {
+    event.preventDefault()
+  }
 }
 
 function PopupRowActions({

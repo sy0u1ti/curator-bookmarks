@@ -61,6 +61,7 @@ export interface PopupContentBookmarkRowViewModel {
   bookmarkId: string
   depth: number
   displayUrl: string
+  index: number
   kind: 'bookmark'
   menu: PopupActionMenuViewModel
   menuLabel: string
@@ -76,6 +77,7 @@ export interface PopupContentFolderRowViewModel {
   depth: number
   expanded: boolean
   folderId: string
+  index: number
   kind: 'folder'
   root: boolean
   subtitle: string

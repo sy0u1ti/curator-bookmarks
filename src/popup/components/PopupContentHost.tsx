@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   dispatchPopupContentAction,
   dispatchPopupContentResultHover,
@@ -14,7 +14,12 @@ import {
   getActiveResultRevealScrollBehavior,
   getActiveResultRevealScrollTop
 } from '../popup-active-result-scroll'
-import type { PopupContentViewModel } from './PopupViewModels'
+import type {
+  PopupContentFolderRowViewModel,
+  PopupContentMainRowViewModel,
+  PopupContentRowViewModel,
+  PopupContentViewModel
+} from './PopupViewModels'
 
 const contentHostClass = 'relative z-0 block h-full min-h-0 overflow-hidden'
 
@@ -84,29 +89,61 @@ export function PopupContentHost() {
     onFolderFilter: (folderId) => {
       dispatchPopupContentAction({ action: 'filter-folder', folderId })
     },
+    onFolderFocus: (index) => {
+      dispatchPopupContentAction({ action: 'set-active-folder', index })
+    },
+    onKeyboardNavigate: (key) => {
+      dispatchPopupContentAction({ action: 'keyboard-navigate', menuAction: key })
+      return true
+    },
     onMenuAction: (bookmarkId, menuAction, returnFocusElement) => {
       dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction, returnFocusElement })
+    },
+    onRowFocus: (index) => {
+      dispatchPopupContentAction({ action: 'set-active-result', index })
     },
     onResultHover: (index) => {
       dispatchPopupContentResultHover(index)
     }
   }), [])
+  const activeResultObserverKey = getActiveResultObserverKey(state)
+  const activeFolderObserverKey = getActiveFolderObserverKey(state)
 
-  function remeasureIndicator() {
+  // When going hidden to visible, this ref is set so the reveal useLayoutEffect
+  // can schedule the second phase (show) after the first phase (position) has painted.
+  const revealPendingRef = useRef(false)
+
+  const remeasureIndicator = useCallback(() => {
     const workspace = workspaceRef.current
     const inFolderPane = state.keyboardPane === 'folders'
-    if (inFolderPane) {
-      const folderDiv = activeFolderRef.current
-      const target = folderDiv?.querySelector<HTMLElement>('button') ?? folderDiv ?? null
-      updateActiveResultIndicator(setActiveResultIndicator, workspace, target)
-    } else {
-      const activeResult = activeResultRef.current
-      const target = activeResult
-        ? (activeResult.querySelector<HTMLElement>('.popup-list-button') ?? activeResult)
-        : null
-      updateActiveResultIndicator(setActiveResultIndicator, workspace, target)
-    }
-  }
+    const target = inFolderPane
+      ? (activeFolderRef.current?.querySelector<HTMLElement>('button') ?? activeFolderRef.current ?? null)
+      : (activeResultRef.current?.querySelector<HTMLElement>('.popup-list-button') ?? activeResultRef.current ?? null)
+    const next = measureWorkspaceIndicator(workspace, target)
+    setActiveResultIndicator((current) => {
+      if (areActiveResultIndicatorsEqual(current, next)) return current
+      // Two-phase reveal: phase 1 snaps position while hidden, then reveals in next frame.
+      if (next.visible && !current.visible) {
+        revealPendingRef.current = true
+        return { ...next, visible: false }
+      }
+      return next
+    })
+  }, [state.keyboardPane])
+
+  // Phase 2 of the two-phase reveal: after the browser paints the indicator at
+  // its correct position but still invisible, set visible=true so only opacity
+  // fades in.
+  useLayoutEffect(() => {
+    if (!revealPendingRef.current) return
+    revealPendingRef.current = false
+    const frameId = requestAnimationFrame(() => {
+      setActiveResultIndicator((current) =>
+        current.visible ? current : { ...current, visible: true }
+      )
+    })
+    return () => cancelAnimationFrame(frameId)
+  })
 
   useEffect(() => {
     return subscribePopupContentChange((detail) => {
@@ -191,7 +228,7 @@ export function PopupContentHost() {
     }
 
     remeasureIndicator()
-  }, [state])
+  }, [remeasureIndicator, state])
 
   useEffect(() => {
     const list = mainListRef.current
@@ -206,13 +243,30 @@ export function PopupContentHost() {
       remeasureIndicator()
     })
 
-    observer.observe(workspace)
-    if (list) observer.observe(list)
-    if (activeResult) observer.observe(activeResult)
-    if (folder) observer.observe(folder)
+    const observed = new Set<Element>()
+    const observeTarget = (target: Element | null) => {
+      if (!target || observed.has(target)) {
+        return
+      }
+      observer.observe(target)
+      observed.add(target)
+    }
+
+    observeTarget(workspace)
+    observeTarget(list)
+    const target = state.keyboardPane === 'folders'
+      ? (folder?.querySelector<HTMLElement>('button') ?? folder ?? null)
+      : (activeResult?.querySelector<HTMLElement>('.popup-list-button') ?? activeResult ?? null)
+    const activeRow = state.keyboardPane === 'folders' ? folder : activeResult
+    const rowActions = state.keyboardPane === 'folders'
+      ? null
+      : (activeResult?.querySelector<HTMLElement>('.popup-row-actions') ?? null)
+    observeTarget(activeRow)
+    observeTarget(target)
+    observeTarget(rowActions)
 
     return () => observer.disconnect()
-  }, [state])
+  }, [activeFolderObserverKey, activeResultObserverKey, remeasureIndicator, state.keyboardPane])
 
   // Remeasure when either scroll container scrolls
   useEffect(() => {
@@ -225,7 +279,7 @@ export function PopupContentHost() {
       list?.removeEventListener('scroll', handler)
       tree?.removeEventListener('scroll', handler)
     }
-  }, [state])
+  }, [remeasureIndicator])
 
   return (
     <div
@@ -292,6 +346,26 @@ function areActiveResultIndicatorsEqual(
     Math.round(current.left) === Math.round(next.left) &&
     Math.round(current.top) === Math.round(next.top) &&
     Math.round(current.width) === Math.round(next.width)
+}
+
+function getActiveResultObserverKey(state: PopupContentViewModel): string {
+  const rows = state.mainRows || state.rows.filter(isMainContentRow)
+  const activeRow = rows.find((row) => row.active)
+  return activeRow ? `${activeRow.kind}:${activeRow.bookmarkId}:${activeRow.index}` : ''
+}
+
+function getActiveFolderObserverKey(state: PopupContentViewModel): string {
+  const rows = state.sidebarRows || state.rows.filter(isFolderContentRow)
+  const activeRow = rows.find((row) => row.keyboardActive)
+  return activeRow ? `${activeRow.folderId}:${activeRow.index}` : ''
+}
+
+function isMainContentRow(row: PopupContentRowViewModel): row is PopupContentMainRowViewModel {
+  return row.kind !== 'folder'
+}
+
+function isFolderContentRow(row: PopupContentRowViewModel): row is PopupContentFolderRowViewModel {
+  return row.kind === 'folder'
 }
 
 function prefersReducedMotion(): boolean {

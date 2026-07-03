@@ -116,7 +116,7 @@ export function PopupChromeHost({
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initialSearchFocusAppliedRef = useRef(false)
-  const [prebootAdopted, setPrebootAdopted] = useState(false)
+  const prebootAdoptedRef = useRef(false)
 
   const focusSearchInputElement = useCallback((select = false) => {
     const input = searchInputRef.current
@@ -132,7 +132,7 @@ export function PopupChromeHost({
 
   const adoptPrebootSearchInput = useCallback(() => {
     const input = searchInputRef.current
-    if (!input || prebootAdopted || !hasPopupPrebootSearchShell()) {
+    if (!input || prebootAdoptedRef.current || !hasPopupPrebootSearchShell()) {
       return true
     }
 
@@ -148,9 +148,9 @@ export function PopupChromeHost({
 
     input.focus({ preventScroll: true })
     hidePopupPrebootSearchShell()
-    setPrebootAdopted(true)
+    prebootAdoptedRef.current = true
     return true
-  }, [prebootAdopted, state.search.query])
+  }, [state.search.query])
 
   useLayoutEffect(() => {
     if (smartActive || initialSearchFocusAppliedRef.current || hasPopupPrebootSearchShell()) {
@@ -162,16 +162,16 @@ export function PopupChromeHost({
   }, [focusSearchInputElement, smartActive])
 
   useEffect(() => {
-    if (!smartActive || prebootAdopted) {
+    if (!smartActive || prebootAdoptedRef.current) {
       return
     }
 
     hidePopupPrebootSearchShell()
-    setPrebootAdopted(true)
-  }, [prebootAdopted, smartActive])
+    prebootAdoptedRef.current = true
+  }, [smartActive])
 
   useEffect(() => {
-    if (smartActive || prebootAdopted || !hasPopupPrebootSearchShell()) {
+    if (smartActive || prebootAdoptedRef.current || !hasPopupPrebootSearchShell()) {
       return
     }
 
@@ -179,7 +179,7 @@ export function PopupChromeHost({
       adoptPrebootSearchInput()
     })
     return () => window.cancelAnimationFrame(adoptFrame)
-  }, [adoptPrebootSearchInput, prebootAdopted, smartActive, state.search.query])
+  }, [adoptPrebootSearchInput, smartActive])
 
   useEffect(() => {
     if (!searchFocusRequest.id) {
@@ -293,7 +293,7 @@ export function PopupChromeHost({
       {smartActive ? null : (
         <section className={toolbarClass} aria-label="当前视图状态">
           <p className={viewCaptionClass} id="view-caption">{state.viewCaption}</p>
-          <p className={keyHintClass}>↑ ↓ 切换 · Enter 打开 · Esc 返回</p>
+          <p className={keyHintClass}>↑ ↓ 导航 · ← → 分栏 · Enter 打开 · Esc 返回/清除</p>
         </section>
       )}
 
