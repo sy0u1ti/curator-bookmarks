@@ -10,6 +10,8 @@ const FILTER_SAMPLE_MAX_WIDTH = 520
 const FILTER_SAMPLE_MAX_HEIGHT = 320
 const FILTER_RENDER_MAX_WIDTH = 1920
 const FILTER_RENDER_MAX_HEIGHT = 1080
+const FILTER_BACKGROUND_COLOR = '#101013'
+const FILTER_HOVER_FADE_MS = 240
 
 interface FilterColor {
   red: number
@@ -33,6 +35,21 @@ interface RenderedMediaMetrics {
   scale: number
 }
 
+interface HoverRenderState {
+  intensity: number
+  x: number
+  y: number
+}
+
+interface AsciiGlyphMetrics {
+  font: string
+  fontSize: number
+  glyphHeight: number
+  glyphWidth: number
+}
+
+let asciiGlyphMetricsCache: AsciiGlyphMetrics | null = null
+
 export function NewtabWallpaperFilterLayer() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const media = useNewtabBackgroundMediaView()
@@ -48,7 +65,12 @@ export function NewtabWallpaperFilterLayer() {
     let cancelled = false
     let resizeTimer = 0
     let videoTimer = 0
+    let hoverFrame = 0
+    let hoverRenderFrame = 0
     let image: HTMLImageElement | null = null
+    let currentSampler: FilterSampler | null = null
+    let hoverState: HoverRenderState = { intensity: 0, x: 0, y: 0 }
+    let hoverFading = false
 
     const clear = () => {
       canvas.dataset.ready = 'false'
@@ -82,7 +104,8 @@ export function NewtabWallpaperFilterLayer() {
         canvas.style.mixBlendMode = 'overlay'
         canvas.style.opacity = String(0.08 + (0.22 * background.maskFilterStrength / 100))
       } else if (sampler) {
-        context.fillStyle = normalizeFilterBackgroundColor(background.color)
+        currentSampler = sampler
+        context.fillStyle = FILTER_BACKGROUND_COLOR
         context.fillRect(0, 0, viewport.width, viewport.height)
         if (background.maskStyle === 'halftone') {
           drawHalftone(
@@ -93,7 +116,8 @@ export function NewtabWallpaperFilterLayer() {
             media.backgroundPosition,
             background.maskFilterStrength,
             background.maskFilterSize,
-            background.maskFilterSpacing
+            background.maskFilterSpacing,
+            hoverState
           )
         } else {
           drawAscii(
@@ -104,7 +128,8 @@ export function NewtabWallpaperFilterLayer() {
             media.backgroundPosition,
             background.maskFilterStrength,
             background.maskFilterSize,
-            background.maskFilterSpacing
+            background.maskFilterSpacing,
+            hoverState
           )
         }
         canvas.style.mixBlendMode = 'normal'
@@ -163,6 +188,67 @@ export function NewtabWallpaperFilterLayer() {
       }, FILTER_RESIZE_DELAY_MS)
     }
 
+    const renderHoverState = () => {
+      if (!currentSampler || hoverRenderFrame) return
+      hoverRenderFrame = window.requestAnimationFrame(() => {
+        hoverRenderFrame = 0
+        if (currentSampler && !cancelled) {
+          renderSampler(currentSampler)
+        }
+      })
+    }
+
+    const fadeHoverState = () => {
+      if (hoverFading || hoverState.intensity <= 0.01) {
+        return
+      }
+      hoverFading = true
+      window.cancelAnimationFrame(hoverFrame)
+      window.cancelAnimationFrame(hoverRenderFrame)
+      hoverRenderFrame = 0
+      const startedAt = performance.now()
+      const startIntensity = hoverState.intensity
+      const tick = (now: number) => {
+        const progress = clampNumber((now - startedAt) / FILTER_HOVER_FADE_MS, 0, 1)
+        const eased = progress * progress * (3 - (2 * progress))
+        hoverState = { ...hoverState, intensity: startIntensity * (1 - eased) }
+        renderHoverState()
+        if (progress < 1 && !cancelled) {
+          hoverFrame = window.requestAnimationFrame(tick)
+        } else {
+          hoverFading = false
+        }
+      }
+      hoverFrame = window.requestAnimationFrame(tick)
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!background.maskFilterHover || !doesFilterStyleSupportHover(background.maskStyle)) {
+        return
+      }
+      if (isFilterHoverSafeTarget(event.target) || isPointerInFilterSafeZone(event.clientX, event.clientY)) {
+        fadeHoverState()
+        return
+      }
+      window.cancelAnimationFrame(hoverFrame)
+      hoverFading = false
+      const scaleX = canvas.width / Math.max(1, window.innerWidth)
+      const scaleY = canvas.height / Math.max(1, window.innerHeight)
+      hoverState = {
+        intensity: 1,
+        x: event.clientX * scaleX,
+        y: event.clientY * scaleY
+      }
+      renderHoverState()
+    }
+
+    const clearHoverState = () => {
+      window.cancelAnimationFrame(hoverFrame)
+      hoverFading = false
+      hoverState = { intensity: 0, x: 0, y: 0 }
+      renderHoverState()
+    }
+
     const renderVideoFrame = () => {
       if (cancelled || media.kind !== 'video') {
         return
@@ -186,6 +272,9 @@ export function NewtabWallpaperFilterLayer() {
       videoTimer = window.setTimeout(renderVideoFrame, FILTER_VIDEO_FRAME_INTERVAL_MS)
     }
     window.addEventListener('resize', scheduleResizeRender, { passive: true })
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    window.addEventListener('pointerleave', clearHoverState, { passive: true })
+    window.addEventListener('blur', clearHoverState)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
@@ -195,13 +284,19 @@ export function NewtabWallpaperFilterLayer() {
       }
       window.clearTimeout(resizeTimer)
       window.clearTimeout(videoTimer)
+      window.cancelAnimationFrame(hoverFrame)
+      window.cancelAnimationFrame(hoverRenderFrame)
       window.removeEventListener('resize', scheduleResizeRender)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerleave', clearHoverState)
+      window.removeEventListener('blur', clearHoverState)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [
     active,
     background.color,
     background.maskFilterSize,
+    background.maskFilterHover,
     background.maskFilterSpacing,
     background.maskFilterStrength,
     background.maskStyle,
@@ -339,7 +434,8 @@ function drawHalftone(
   backgroundPosition: string,
   strength: number,
   size: number,
-  spacing: number
+  spacing: number,
+  hoverState: HoverRenderState
 ) {
   const metrics = getRenderedMediaMetrics(sampler, viewport, backgroundSize, backgroundPosition)
   const step = getControlRange(spacing, viewport.width < 720 ? 9 : 10, viewport.width < 720 ? 23 : 26)
@@ -349,10 +445,12 @@ function drawHalftone(
     for (let x = step / 2; x < viewport.width + step; x += step) {
       const color = sampleColor(sampler, metrics, x, y)
       const tone = getEffectTone(getLuminance(color), strength)
-      if (tone <= 0.01) continue
-      const radius = clampNumber(tone * maxRadius, 0.7, maxRadius)
-      const ink = getCurvedEffectColor(color, tone, 0.2)
-      context.globalAlpha = clampNumber(0.28 + (tone * 0.72), 0.12, 1)
+      const hover = getHoverInfluence(x, y, viewport, hoverState)
+      const nextTone = clampNumber(tone + (hover * 0.24), 0, 1)
+      if (nextTone <= 0.01) continue
+      const radius = clampNumber(nextTone * maxRadius * (1 + (hover * 0.26)), 0.7, maxRadius * 1.24)
+      const ink = getCurvedEffectColor(color, nextTone, 0.2 + (hover * 0.24))
+      context.globalAlpha = clampNumber(0.28 + (nextTone * 0.72) + (hover * 0.14), 0.12, 1)
       context.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`
       context.beginPath()
       context.arc(x, y, radius, 0, Math.PI * 2)
@@ -370,34 +468,35 @@ function drawAscii(
   backgroundPosition: string,
   strength: number,
   size: number,
-  spacing: number
+  spacing: number,
+  hoverState: HoverRenderState
 ) {
   const metrics = getRenderedMediaMetrics(sampler, viewport, backgroundSize, backgroundPosition)
   const fontSize = Math.round(getControlRange(size, 8, viewport.width < 720 ? 24 : 26))
   context.font = `${fontSize}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`
   context.textBaseline = 'middle'
   context.textAlign = 'center'
-  const glyphWidth = Math.max(...ASCII_CHARS.split('').map((char) => context.measureText(char).width), fontSize * 0.62)
-  const glyphMetrics = context.measureText('@')
-  const glyphHeight = glyphMetrics.actualBoundingBoxAscent + glyphMetrics.actualBoundingBoxDescent
+  const glyphMetrics = getAsciiGlyphMetrics(context, fontSize)
   const xStep = Math.max(
     getControlRange(spacing, viewport.width < 720 ? 8 : 9, viewport.width < 720 ? 24 : 27),
-    glyphWidth * 1.12
+    glyphMetrics.glyphWidth * 1.12
   )
   const lineHeight = Math.max(
     getControlRange(spacing, 10, viewport.width < 720 ? 26 : 28),
-    glyphHeight * 1.16,
+    glyphMetrics.glyphHeight * 1.16,
     fontSize * 1.08
   )
   for (let y = lineHeight / 2; y < viewport.height + lineHeight; y += lineHeight) {
     for (let x = xStep / 2; x < viewport.width + xStep; x += xStep) {
       const color = sampleColor(sampler, metrics, x, y)
       const tone = getEffectTone(getLuminance(color), strength)
-      if (tone <= 0.015) continue
-      const char = ASCII_CHARS[Math.round(tone * (ASCII_CHARS.length - 1))]
+      const hover = getHoverInfluence(x, y, viewport, hoverState)
+      const nextTone = clampNumber(tone + (hover * 0.22), 0, 1)
+      if (nextTone <= 0.015) continue
+      const char = ASCII_CHARS[Math.round(nextTone * (ASCII_CHARS.length - 1))]
       if (!char || char === ' ') continue
-      const ink = getCurvedEffectColor(color, tone, 0.42)
-      context.globalAlpha = clampNumber(0.12 + (tone * 0.88), 0.08, 1)
+      const ink = getCurvedEffectColor(color, nextTone, 0.42 + (hover * 0.24))
+      context.globalAlpha = clampNumber(0.12 + (nextTone * 0.88) + (hover * 0.1), 0.08, 1)
       context.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`
       context.fillText(char, x, y)
     }
@@ -495,8 +594,69 @@ function getControlRange(value: number, minValue: number, maxValue: number): num
   return minValue + ((maxValue - minValue) * clampNumber(value, 0, 100) / 100)
 }
 
-function normalizeFilterBackgroundColor(value: string): string {
-  return parseHexColor(value) ? value : '#101013'
+function getHoverInfluence(
+  x: number,
+  y: number,
+  viewport: { width: number; height: number },
+  hoverState: HoverRenderState
+): number {
+  if (hoverState.intensity <= 0) return 0
+  const radius = viewport.width < 720 ? 92 : 132
+  const distance = Math.hypot(x - hoverState.x, y - hoverState.y)
+  if (distance > radius) return 0
+  const falloff = 1 - clampNumber(distance / radius, 0, 1)
+  const smoothed = falloff * falloff * (3 - (2 * falloff))
+  return Math.pow(smoothed, 1.18) * hoverState.intensity
+}
+
+function getAsciiGlyphMetrics(
+  context: CanvasRenderingContext2D,
+  fontSize: number
+): AsciiGlyphMetrics {
+  if (asciiGlyphMetricsCache?.font === context.font && asciiGlyphMetricsCache.fontSize === fontSize) {
+    return asciiGlyphMetricsCache
+  }
+  const glyphWidth = ASCII_CHARS.split('').reduce((maxWidth, char) => {
+    return char === ' ' ? maxWidth : Math.max(maxWidth, context.measureText(char).width)
+  }, fontSize * 0.62)
+  const measured = context.measureText('@')
+  asciiGlyphMetricsCache = {
+    font: context.font,
+    fontSize,
+    glyphWidth,
+    glyphHeight: measured.actualBoundingBoxAscent + measured.actualBoundingBoxDescent
+  }
+  return asciiGlyphMetricsCache
+}
+
+function doesFilterStyleSupportHover(value: string): boolean {
+  return value === 'halftone' || value === 'ascii'
+}
+
+function isFilterHoverSafeTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(
+    '#newtab-settings-drawer, #newtab-dashboard-overlay, .newtab-search-shell, ' +
+    '.bookmark-folder-section, .newtab-speed-dial-panel, button, a, input, textarea, select, ' +
+    '[role="button"], [contenteditable="true"]'
+  ))
+}
+
+function isPointerInFilterSafeZone(clientX: number, clientY: number): boolean {
+  const selectors = [
+    '.newtab-search-shell',
+    '.bookmark-folder-section',
+    '.newtab-speed-dial-panel'
+  ]
+  return selectors.some((selector) => {
+    return Array.from(document.querySelectorAll(selector)).some((element) => {
+      const rect = element.getBoundingClientRect()
+      const padding = 36
+      return clientX >= rect.left - padding &&
+        clientX <= rect.right + padding &&
+        clientY >= rect.top - padding &&
+        clientY <= rect.bottom + padding
+    })
+  })
 }
 
 function parseHexColor(value: string): FilterColor | null {

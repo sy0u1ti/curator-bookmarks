@@ -11,9 +11,17 @@ export type WallpaperFilterMaskStyle = (typeof WALLPAPER_FILTER_MASK_STYLES)[num
 
 export const DEFAULT_BACKGROUND_MASK_STYLE: BackgroundMaskStyle = 'dark'
 export const DEFAULT_BACKGROUND_MASK_BLUR = 12
+export const DEFAULT_BACKGROUND_MASK_OVERLAY = 50
 export const DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH = 50
 export const DEFAULT_BACKGROUND_MASK_FILTER_SIZE = 50
 export const DEFAULT_BACKGROUND_MASK_FILTER_SPACING = 50
+export const DEFAULT_BACKGROUND_MASK_FILTER_HOVER = true
+
+const DARK_BACKGROUND_MASK_OVERLAY_STOPS = {
+  top: 44,
+  mid: 20,
+  bottom: 50
+} as const
 
 const BACKGROUND_MASK_STYLE_SET = new Set<string>(BACKGROUND_MASK_STYLES)
 const LEGACY_BACKGROUND_MASK_STYLE_SET = new Set<string>(LEGACY_BACKGROUND_MASK_STYLES)
@@ -34,6 +42,13 @@ export function normalizeBackgroundMaskPercentage(value: unknown, fallback = 50)
   return Math.round(Math.min(100, Math.max(0, numericValue)))
 }
 
+export function snapBackgroundMaskPercentage(value: unknown): number {
+  const normalized = normalizeBackgroundMaskPercentage(value, 50)
+  if (Math.abs(normalized) <= 4) return 0
+  if (Math.abs(normalized - 50) <= 4) return 50
+  return normalized
+}
+
 export function isLegacyBackgroundMaskStyle(value: unknown): value is LegacyBackgroundMaskStyle {
   return LEGACY_BACKGROUND_MASK_STYLE_SET.has(String(value || ''))
 }
@@ -44,4 +59,29 @@ export function isWallpaperFilterMaskStyle(value: unknown): value is WallpaperFi
 
 export function doesBackgroundMaskFilterSupportGeometry(value: unknown): boolean {
   return value === 'halftone' || value === 'ascii'
+}
+
+export function getBackgroundMaskOverlayStops(value: unknown): {
+  top: number
+  mid: number
+  bottom: number
+} {
+  const strength = normalizeBackgroundMaskPercentage(value, DEFAULT_BACKGROUND_MASK_OVERLAY)
+  return {
+    top: getBackgroundMaskOverlayStop(DARK_BACKGROUND_MASK_OVERLAY_STOPS.top, strength),
+    mid: getBackgroundMaskOverlayStop(DARK_BACKGROUND_MASK_OVERLAY_STOPS.mid, strength),
+    bottom: getBackgroundMaskOverlayStop(DARK_BACKGROUND_MASK_OVERLAY_STOPS.bottom, strength)
+  }
+}
+
+function getBackgroundMaskOverlayStop(base: number, strength: number): number {
+  if (strength <= 50) {
+    return roundOverlayStop(base * Math.pow(strength / 50, 1.08))
+  }
+  const progress = (strength - 50) / 50
+  return roundOverlayStop(base + ((100 - base) * Math.pow(progress, 1.08)))
+}
+
+function roundOverlayStop(value: number): number {
+  return Number(value.toFixed(1))
 }

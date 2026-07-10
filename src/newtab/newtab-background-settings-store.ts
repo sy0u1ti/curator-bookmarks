@@ -30,12 +30,15 @@ export interface NewtabBackgroundSettingsView {
   maskBlur: number
   maskBlurHidden: boolean
   maskEnabled: boolean
+  maskFilterHover: boolean
+  maskFilterHoverHidden: boolean
   maskFilterSize: number
   maskFilterSizeHidden: boolean
   maskFilterSpacing: number
   maskFilterSpacingHidden: boolean
   maskFilterStrength: number
   maskFilterStrengthHidden: boolean
+  maskOverlay: number
   maskStyle: BackgroundMaskStyle
   maskStyleHidden: boolean
   positionX: number
@@ -56,10 +59,12 @@ export interface NewtabBackgroundSettingsSource {
   featuredId: string
   imageName: string
   maskEnabled: boolean
+  maskFilterHover: boolean
   maskBlur: number
   maskFilterSize: number
   maskFilterSpacing: number
   maskFilterStrength: number
+  maskOverlay: number
   maskStyle: BackgroundMaskStyle
   type: string
   url: string
@@ -74,6 +79,7 @@ export type NewtabBackgroundSettingsFieldKey =
   | 'maskFilterSize'
   | 'maskFilterSpacing'
   | 'maskFilterStrength'
+  | 'maskOverlay'
   | 'maskStyle'
   | 'positionX'
   | 'positionY'
@@ -84,6 +90,7 @@ export interface NewtabBackgroundSettingsActions {
   onFileSelect: (mediaType: 'image' | 'video', file: File) => void
   onFieldChange: (key: NewtabBackgroundSettingsFieldKey, value: number | string) => void
   onMaskToggle: (enabled: boolean) => void
+  onFilterHoverToggle: (enabled: boolean) => void
   onUrlCommit: () => void
 }
 
@@ -110,12 +117,15 @@ const EMPTY_VIEW: NewtabBackgroundSettingsView = {
   maskBlur: 12,
   maskBlurHidden: true,
   maskEnabled: false,
+  maskFilterHover: true,
+  maskFilterHoverHidden: true,
   maskFilterSize: 50,
   maskFilterSizeHidden: true,
   maskFilterSpacing: 50,
   maskFilterSpacingHidden: true,
   maskFilterStrength: 50,
   maskFilterStrengthHidden: true,
+  maskOverlay: 50,
   maskStyle: 'dark',
   maskStyleHidden: true,
   positionX: 50,
@@ -135,6 +145,7 @@ const EMPTY_ACTIONS: NewtabBackgroundSettingsActions = {
   onFileSelect: () => {},
   onFieldChange: () => {},
   onMaskToggle: () => {},
+  onFilterHoverToggle: () => {},
   onUrlCommit: () => {}
 }
 
@@ -202,12 +213,15 @@ export function createNewtabBackgroundSettingsView(
     maskBlur: settings.maskBlur,
     maskBlurHidden: maskControlsHidden || !isLegacyBackgroundMaskStyle(settings.maskStyle),
     maskEnabled: settings.maskEnabled,
+    maskFilterHover: settings.maskFilterHover,
+    maskFilterHoverHidden: maskControlsHidden || !maskFilterGeometrySupported,
     maskFilterSize: settings.maskFilterSize,
     maskFilterSizeHidden: maskControlsHidden || !maskFilterGeometrySupported,
     maskFilterSpacing: settings.maskFilterSpacing,
     maskFilterSpacingHidden: maskControlsHidden || !maskFilterGeometrySupported,
     maskFilterStrength: settings.maskFilterStrength,
     maskFilterStrengthHidden: maskControlsHidden || !maskFilterSelected,
+    maskOverlay: settings.maskOverlay,
     maskStyle: settings.maskStyle,
     maskStyleHidden: !settings.maskEnabled,
     positionX: preferences.positionX,
@@ -250,6 +264,10 @@ export function useNewtabBackgroundSettingsView(): NewtabBackgroundSettingsView 
 
 export function dispatchNewtabBackgroundMaskToggle(enabled: boolean): void {
   backgroundSettingsActions.onMaskToggle(enabled)
+}
+
+export function dispatchNewtabBackgroundFilterHoverToggle(enabled: boolean): void {
+  backgroundSettingsActions.onFilterHoverToggle(enabled)
 }
 
 export function dispatchNewtabBackgroundSettingFieldChange(

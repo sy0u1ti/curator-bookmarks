@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
 import { Button } from '../ui/base/Button'
 import { cx } from '../ui/base/utils'
 import { Icon } from '../ui/icons/Icon'
@@ -56,7 +56,7 @@ import {
 } from './newtab-background-settings-store'
 import { useNewtabInstantWallpaperView } from './newtab-instant-wallpaper-store'
 import { useNewtabFolderSourceView } from './newtab-folder-source-store'
-import { isLegacyBackgroundMaskStyle } from './background-mask-settings'
+import { getBackgroundMaskOverlayStops, isLegacyBackgroundMaskStyle } from './background-mask-settings'
 
 const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard)] before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay before:[transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)]'
 const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100'
@@ -207,6 +207,7 @@ function NewtabShell() {
       <div
         id="newtab-background-mask"
         className={getBackgroundMaskClass(backgroundSettings)}
+        style={getBackgroundMaskInlineStyle(backgroundSettings)}
         aria-hidden="true"
       ></div>
       <WallpaperLoadingIndicator />
@@ -328,6 +329,16 @@ function getBackgroundMaskStyleClass(maskStyle: string): string {
     return ''
   }
   return `${BACKGROUND_MASK_STYLE_CLASS_BY_STYLE[maskStyle]} newtab-background-mask-filter`
+}
+
+function getBackgroundMaskInlineStyle(background: NewtabBackgroundSettingsView): CSSProperties {
+  if (!background.maskEnabled) {
+    return {}
+  }
+  const stops = getBackgroundMaskOverlayStops(background.maskOverlay)
+  return {
+    backgroundImage: `linear-gradient(180deg, rgb(0 0 0 / ${stops.top}%) 0%, rgb(0 0 0 / ${stops.mid}%) 42%, rgb(0 0 0 / ${stops.bottom}%) 100%)`
+  }
 }
 
 function getSettingsTriggerButtonClass(autoHide: boolean, className = ''): string {

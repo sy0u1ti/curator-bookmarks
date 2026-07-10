@@ -52,12 +52,14 @@ import {
 } from '../newtab-search-settings-store'
 import {
   dispatchNewtabBackgroundFileSelect,
+  dispatchNewtabBackgroundFilterHoverToggle,
   dispatchNewtabBackgroundMaskToggle,
   dispatchNewtabBackgroundSettingFieldChange,
   dispatchNewtabBackgroundUrlCommit,
   useNewtabBackgroundSettingsView
 } from '../newtab-background-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
+import { snapBackgroundMaskPercentage } from '../background-mask-settings'
 import {
   dispatchNewtabSettingsDrawerActiveGroupChange,
   dispatchNewtabSettingsDrawerFeaturedPickerClick,
@@ -266,7 +268,8 @@ function SwitchRow({
   defaultChecked = false,
   disabled = false,
   controlRef,
-  onCheckedChange
+  onCheckedChange,
+  hidden = false
 }: {
   id: string
   title: string
@@ -276,12 +279,13 @@ function SwitchRow({
   disabled?: boolean
   controlRef?: Ref<HTMLElement>
   onCheckedChange?: (checked: boolean) => void
+  hidden?: boolean
 }) {
   const labelId = `${id}-label`
   const descriptionId = `${id}-description`
 
   return (
-    <div className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)}>
+    <div className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
       <SettingLabelStack title={title} titleId={labelId} description={description} descriptionId={descriptionId} />
       <span className={SETTINGS_SWITCH_WRAP_CLASS}>
         <SwitchControl
@@ -318,7 +322,8 @@ function SliderRow({
   disabled = false,
   onValueChange,
   onValueCommitted,
-  sliderValue
+  sliderValue,
+  ticks
 }: {
   id: string
   label: string
@@ -335,6 +340,7 @@ function SliderRow({
   onValueChange?: (value: number) => void
   onValueCommitted?: (value: number) => void
   sliderValue?: number
+  ticks?: readonly [string, string, string]
 }) {
   return (
     <label id={rowId} className={settingRowClassName(SETTINGS_ROW_SLIDER_CLASS, disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
@@ -344,19 +350,26 @@ function SliderRow({
         </span>
         {description ? <small className={SETTINGS_DESCRIPTION_CLASS}>{description}</small> : null}
       </span>
-      <SliderControl
-        id={id}
-        ariaLabel={ariaLabel}
-        className={SETTINGS_SLIDER_CLASS}
-        defaultValue={defaultValue}
-        disabled={disabled}
-        max={max}
-        min={min}
-        onValueChange={onValueChange}
-        onValueCommitted={onValueCommitted}
-        syncInputState
-        value={sliderValue}
-      />
+      <span className="grid min-w-36 gap-1.5 max-[700px]:w-full">
+        <SliderControl
+          id={id}
+          ariaLabel={ariaLabel}
+          className={SETTINGS_SLIDER_CLASS}
+          defaultValue={defaultValue}
+          disabled={disabled}
+          max={max}
+          min={min}
+          onValueChange={onValueChange}
+          onValueCommitted={onValueCommitted}
+          syncInputState
+          value={sliderValue}
+        />
+        {ticks ? (
+          <span className="flex justify-between px-0.5 text-[11px] leading-4 text-ds-text-tertiary" aria-hidden="true">
+            {ticks.map((tick) => <span key={tick}>{tick}</span>)}
+          </span>
+        ) : null}
+      </span>
     </label>
   )
 }
@@ -1166,8 +1179,9 @@ function BackgroundSettingsSection({
           checked={backgroundSettings.maskEnabled}
           onCheckedChange={dispatchNewtabBackgroundMaskToggle}
         />
+        <SliderRow rowId="background-mask-overlay-row" id="background-mask-overlay" label="遮罩效果" valueId="background-mask-overlay-value" value={`${backgroundSettings.maskOverlay}%`} min="0" max="100" defaultValue="50" ariaLabel="背景遮罩效果" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskOverlay', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskOverlay} ticks={['透明', '默认', '覆盖']} />
         <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
-          <span className={SETTINGS_LABEL_CLASS}>模糊样式</span>
+          <span className={SETTINGS_LABEL_CLASS}>蒙版样式</span>
           <Select
             id="background-mask-style"
             ariaLabel="背景蒙版样式"
@@ -1194,10 +1208,18 @@ function BackgroundSettingsSection({
             valueClassName={SETTINGS_SELECT_VALUE_CLASS}
           />
         </div>
+        <SwitchRow
+          id="background-mask-filter-hover"
+          title="悬停效果"
+          description="在空白背景区域移动指针时增强附近的滤镜纹理。"
+          checked={backgroundSettings.maskFilterHover}
+          hidden={backgroundSettings.maskFilterHoverHidden}
+          onCheckedChange={dispatchNewtabBackgroundFilterHoverToggle}
+        />
         <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
-        <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="采样强度" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', value)} sliderValue={backgroundSettings.maskFilterStrength} />
-        <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label="元素尺寸" valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素尺寸" hidden={backgroundSettings.maskFilterSizeHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', value)} sliderValue={backgroundSettings.maskFilterSize} />
-        <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label="元素间距" valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', value)} sliderValue={backgroundSettings.maskFilterSpacing} />
+        <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="采样强度" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterStrength} ticks={['0', '默认', '100%']} />
+        <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label="大小" valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素大小" hidden={backgroundSettings.maskFilterSizeHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterSize} ticks={['0', '默认', '100%']} />
+        <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label="间距" valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterSpacing} ticks={['0', '默认', '100%']} />
       </Surface>
     </section>
   )

@@ -26,7 +26,10 @@ assert.ok(
   ) &&
     settingsDrawer.includes('颗粒滤镜') &&
     settingsDrawer.includes('网点滤镜') &&
-    settingsDrawer.includes('ASCII 滤镜'),
+    settingsDrawer.includes('ASCII 滤镜') &&
+    settingsDrawer.includes('遮罩效果') &&
+    settingsDrawer.includes('悬停效果') &&
+    settingsDrawer.includes("ticks={['透明', '默认', '覆盖']}"),
   'The background mask selector should retain all four original styles and add the three wallpaper filters.'
 )
 
@@ -34,7 +37,11 @@ assert.ok(
   wallpaperFilter.includes("ASCII_CHARS = '  .,:;irsXA253hMHGS#9B&@'") &&
     wallpaperFilter.includes('drawGrain') &&
     wallpaperFilter.includes('drawHalftone') &&
-    wallpaperFilter.includes('drawAscii') &&
+  wallpaperFilter.includes('drawAscii') &&
+    wallpaperFilter.includes("FILTER_BACKGROUND_COLOR = '#101013'") &&
+    wallpaperFilter.includes('getHoverInfluence') &&
+    wallpaperFilter.includes('hoverRenderFrame = window.requestAnimationFrame') &&
+    wallpaperFilter.includes('asciiGlyphMetricsCache') &&
     newtabApp.indexOf('<NewtabWallpaperFilterLayer />') < newtabApp.indexOf('id="newtab-background-mask"'),
   'Wallpaper filters should use the sampled Canvas renderer below the existing mask layer.'
 )

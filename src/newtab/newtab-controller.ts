@@ -348,9 +348,11 @@ import {
 } from './newtab-background-settings-store.js'
 import {
   DEFAULT_BACKGROUND_MASK_BLUR,
+  DEFAULT_BACKGROUND_MASK_FILTER_HOVER,
   DEFAULT_BACKGROUND_MASK_FILTER_SIZE,
   DEFAULT_BACKGROUND_MASK_FILTER_SPACING,
   DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
+  DEFAULT_BACKGROUND_MASK_OVERLAY,
   DEFAULT_BACKGROUND_MASK_STYLE,
   normalizeBackgroundMaskPercentage,
   normalizeBackgroundMaskStyle
@@ -413,6 +415,8 @@ const DEFAULT_BACKGROUND_SETTINGS = {
   maskEnabled: false,
   maskStyle: DEFAULT_BACKGROUND_MASK_STYLE,
   maskBlur: DEFAULT_BACKGROUND_MASK_BLUR,
+  maskOverlay: DEFAULT_BACKGROUND_MASK_OVERLAY,
+  maskFilterHover: DEFAULT_BACKGROUND_MASK_FILTER_HOVER,
   maskFilterStrength: DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
   maskFilterSize: DEFAULT_BACKGROUND_MASK_FILTER_SIZE,
   maskFilterSpacing: DEFAULT_BACKGROUND_MASK_FILTER_SPACING
@@ -1064,6 +1068,7 @@ function bindEvents(): void {
       void handleBackgroundFileChange(mediaType, file)
     },
     onFieldChange: handleBackgroundSettingFieldChange,
+    onFilterHoverToggle: handleBackgroundFilterHoverToggle,
     onMaskToggle: handleBackgroundMaskToggle,
     onUrlCommit: () => {
       void handleBackgroundUrlCommit()
@@ -7220,6 +7225,15 @@ function createSpeedDialPanel(): 'speedDial' | null {
   return 'speedDial'
 }
 
+function handleBackgroundFilterHoverToggle(enabled: boolean): void {
+  const previousSettings = state.backgroundSettings
+  const nextSettings = normalizeBackgroundSettings({
+    ...state.backgroundSettings,
+    maskFilterHover: enabled
+  })
+  commitBackgroundSettings(previousSettings, nextSettings)
+}
+
 function hydrateSpeedDialPanel(): void {
   if (!state.moduleSettings.speedDial) {
     return
@@ -8300,6 +8314,11 @@ function normalizeBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKG
     url: String(settings.url || '').trim(),
     featuredId,
     maskEnabled: settings.maskEnabled === true,
+    maskOverlay: normalizeBackgroundMaskPercentage(
+      settings.maskOverlay,
+      DEFAULT_BACKGROUND_SETTINGS.maskOverlay
+    ),
+    maskFilterHover: settings.maskFilterHover !== false,
     maskStyle: normalizeBackgroundMaskStyle(settings.maskStyle),
     maskBlur: clampNumber(settings.maskBlur, 0, 32, DEFAULT_BACKGROUND_SETTINGS.maskBlur),
     maskFilterStrength: normalizeBackgroundMaskPercentage(
