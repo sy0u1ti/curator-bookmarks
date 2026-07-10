@@ -32,7 +32,6 @@ export function useNewtabAppChromeAttributes() {
     dragActive ? DRAG_ACTIVE_CLASS : ''
   ].filter(Boolean).join(' ')
   const style = {
-    '--background-mask-blur': `${background.maskBlur}px`,
     '--bg': instantWallpaper.backgroundColor,
     '--wallpaper-placeholder-bg': instantWallpaper.placeholderColor,
     '--instant-wallpaper-image': instantWallpaper.image || undefined,

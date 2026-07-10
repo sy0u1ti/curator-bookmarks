@@ -1,3 +1,10 @@
+import {
+  normalizeBackgroundMaskBlur,
+  normalizeBackgroundMaskPercentage,
+  normalizeBackgroundMaskStyle,
+  type BackgroundMaskStyle
+} from './background-mask-settings.js'
+
 const INSTANT_WALLPAPER_KEY = 'curatorNewTabInstantWallpaper'
 const INSTANT_WALLPAPER_DATA_URL_KEY = 'curatorNewTabInstantWallpaperDataUrl'
 const INSTANT_WALLPAPER_IMAGE_DATA_URL_KEY = 'curatorNewTabInstantWallpaperImageDataUrl'
@@ -44,6 +51,10 @@ export interface InstantWallpaperTargetRecord {
   backgroundSize: string
   backgroundPosition: string
   placeholderColor: string
+  maskEnabled: boolean
+  maskStyle: BackgroundMaskStyle
+  maskOverlay: number
+  maskBlur: number
   cacheRequired: boolean
   cacheReady: boolean
   updatedAt: number
@@ -231,6 +242,10 @@ export function saveInstantWallpaperTarget(record: InstantWallpaperTargetRecord)
     ...record,
     imageDataUrlRef: String(record.imageDataUrlRef || '').trim(),
     placeholderColor: normalizeInstantWallpaperColor(record.placeholderColor),
+    maskEnabled: record.maskEnabled === true,
+    maskStyle: normalizeBackgroundMaskStyle(record.maskStyle),
+    maskOverlay: normalizeBackgroundMaskPercentage(record.maskOverlay),
+    maskBlur: normalizeBackgroundMaskBlur(record.maskBlur),
     cacheRequired: record.cacheRequired === true,
     cacheReady: record.cacheReady === true
   }
@@ -318,6 +333,10 @@ function normalizeInstantWallpaperTarget(rawValue: unknown): InstantWallpaperTar
     backgroundSize: normalizeInstantWallpaperBackgroundSize(record.backgroundSize),
     backgroundPosition: String(record.backgroundPosition || 'center'),
     placeholderColor: normalizeInstantWallpaperColor(record.placeholderColor),
+    maskEnabled: record.maskEnabled === true,
+    maskStyle: normalizeBackgroundMaskStyle(record.maskStyle),
+    maskOverlay: normalizeBackgroundMaskPercentage(record.maskOverlay),
+    maskBlur: normalizeBackgroundMaskBlur(record.maskBlur),
     cacheRequired: record.cacheRequired === true,
     cacheReady: record.cacheReady === true,
     updatedAt: Number(record.updatedAt) || 0

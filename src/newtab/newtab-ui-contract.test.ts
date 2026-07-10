@@ -15,11 +15,37 @@ const paperShaderFilter = readFileSync('src/newtab/components/NewtabPaperShaderL
 const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
 const viteConfig = readFileSync('vite.config.ts', 'utf8')
 const selectSource = readFileSync('src/ui/base/Select.tsx', 'utf8')
+const instantWallpaperBoot = readFileSync('src/newtab/instant-wallpaper-boot.ts', 'utf8')
+const instantWallpaper = readFileSync('src/newtab/instant-wallpaper.ts', 'utf8')
+const newtabHtml = readFileSync('src/newtab/newtab.html', 'utf8')
 
 assert.ok(
   newtabCss.includes('--newtab-glass-bg-hero') &&
     newtabCss.includes('[data-background-media="true"]'),
   'Newtab glass surfaces should strengthen over image and video backgrounds.'
+)
+
+assert.ok(
+  instantWallpaper.includes('maskEnabled: boolean') &&
+    instantWallpaper.includes('maskStyle: BackgroundMaskStyle') &&
+    instantWallpaper.includes('maskOverlay: number') &&
+    instantWallpaper.includes('maskBlur: number') &&
+    instantWallpaperBoot.includes('applyStartupMask(targetRecord)') &&
+    instantWallpaperBoot.includes('Targets written before mask snapshots existed should fail dark') &&
+    newtabHtml.includes('id="newtab-startup-background-mask-style"') &&
+    instantWallpaperBoot.includes("--instant-wallpaper-mask-image") &&
+    newtabHtml.includes('id="newtab-startup-background-mask"') &&
+    newtabHtml.includes('background-color: var(--instant-wallpaper-mask-color, transparent)') &&
+    newtabHtml.includes('background-image: var(--instant-wallpaper-mask-image, none)') &&
+    newtabHtml.includes('backdrop-filter: var(--instant-wallpaper-mask-filter, none)') &&
+    controller.includes('let backgroundSettingsHydrated = false') &&
+    controller.includes('ready: backgroundSettingsHydrated') &&
+    controller.includes('const shouldSyncBackgroundUi = backgroundSettingsHydrated && !backgroundUiAlreadyApplied') &&
+    newtabApp.includes('{backgroundSettings.ready ? (') &&
+    newtabApp.includes('if (!backgroundSettings.ready) return') &&
+    newtabApp.includes("getElementById('newtab-startup-background-mask-style')?.remove()") &&
+    newtabApp.includes('removeStartupBackgroundMask()'),
+  'The saved background mask should exist during synchronous wallpaper startup and hand off to React without a bright frame.'
 )
 
 assert.ok(

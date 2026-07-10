@@ -354,6 +354,7 @@ import {
   DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
   DEFAULT_BACKGROUND_MASK_OVERLAY,
   DEFAULT_BACKGROUND_MASK_STYLE,
+  normalizeBackgroundMaskBlur,
   normalizeBackgroundMaskPercentage,
   normalizeBackgroundMaskStyle
 } from './background-mask-settings.js'
@@ -824,6 +825,7 @@ let activeBackgroundImageNaturalSize: BackgroundImageNaturalSize | null = null
 let activeBackgroundImageNaturalSizeSignature = ''
 const backgroundImageNaturalSizeByUrl = new Map<string, BackgroundImageNaturalSize>()
 let preloadedBackgroundSettings: typeof DEFAULT_BACKGROUND_SETTINGS | null = null
+let backgroundSettingsHydrated = false
 let backgroundSettingsMutationVersion = 0
 let backgroundUiAppliedFromPreload = false
 let featuredBackgroundOptionsHydratedDateSeed = ''
@@ -1827,6 +1829,7 @@ function commitBackgroundSettings(
   nextSettings: typeof DEFAULT_BACKGROUND_SETTINGS
 ): void {
   const shouldClearUrlCache = shouldClearBackgroundUrlCache(previousSettings, nextSettings)
+  backgroundSettingsHydrated = true
   state.backgroundSettings = nextSettings
   updateBackgroundStartupCacheStatus(nextSettings)
   backgroundSettingsMutationVersion += 1
@@ -1895,6 +1898,7 @@ async function handleBackgroundFileChange(
       imageName: mediaType === 'image' ? file.name : state.backgroundSettings.imageName,
       videoName: mediaType === 'video' ? file.name : state.backgroundSettings.videoName
     })
+    backgroundSettingsHydrated = true
     backgroundSettingsMutationVersion += 1
     preloadedBackgroundSettings = state.backgroundSettings
     await saveBackgroundSettings()
@@ -4794,17 +4798,16 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     state.loading = false
     render()
     renderDeleteToast()
-    const skipBackgroundUiSync = backgroundUiAppliedFromPreload
+    const backgroundUiAlreadyApplied = backgroundUiAppliedFromPreload
     backgroundUiAppliedFromPreload = false
-    if (!skipBackgroundUiSync) {
+    const shouldSyncBackgroundUi = backgroundSettingsHydrated && !backgroundUiAlreadyApplied
+    if (shouldSyncBackgroundUi) {
       scheduleFeaturedBackgroundDailyRefresh()
-    }
-    if (!skipBackgroundUiSync) {
       void applyBackgroundSettings()
     }
     applyGeneralSettings()
     applyFolderSettings()
-    if (!skipBackgroundUiSync) {
+    if (shouldSyncBackgroundUi) {
       syncBackgroundSettingsControls()
       syncFeaturedBackgroundDisplayPreferenceControls()
     }
@@ -4896,6 +4899,7 @@ async function preloadBackgroundSettings(): Promise<typeof DEFAULT_BACKGROUND_SE
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.newTabBackgroundSettings])
     const nextSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
+    backgroundSettingsHydrated = true
     if (backgroundMutationVersionAtStart === backgroundSettingsMutationVersion) {
       state.backgroundSettings = nextSettings
       preloadedBackgroundSettings = nextSettings
@@ -4907,9 +4911,12 @@ async function preloadBackgroundSettings(): Promise<typeof DEFAULT_BACKGROUND_SE
       scheduleFeaturedBackgroundDailyRefresh()
       void applyBackgroundSettings()
       backgroundUiAppliedFromPreload = true
+    } else {
+      syncBackgroundSettingsControls()
     }
     return nextSettings
   } catch (error) {
+    syncBackgroundSettingsControls()
     console.warn('新标签页背景预加载失败。', error)
     markWallpaperReady()
     recordNewTabBackgroundReady()
@@ -8328,7 +8335,7 @@ function normalizeBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKG
     ),
     maskFilterHover: settings.maskFilterHover !== false,
     maskStyle: normalizeBackgroundMaskStyle(settings.maskStyle),
-    maskBlur: clampNumber(settings.maskBlur, 0, 32, DEFAULT_BACKGROUND_SETTINGS.maskBlur),
+    maskBlur: normalizeBackgroundMaskBlur(settings.maskBlur, DEFAULT_BACKGROUND_SETTINGS.maskBlur),
     maskFilterStrength: normalizeBackgroundMaskPercentage(
       settings.maskFilterStrength,
       DEFAULT_BACKGROUND_SETTINGS.maskFilterStrength
@@ -8443,6 +8450,7 @@ function createBackgroundSettingsView() {
     state.featuredBackgroundPreferences,
     FEATURED_BACKGROUND_DISPLAY_LIMITS,
     {
+      ready: backgroundSettingsHydrated,
       backgroundStatus: state.backgroundStatus,
       backgroundStatusTone: state.backgroundStatusTone,
       featuredCreditHref: featuredItem?.sourceUrl || 'https://images.nasa.gov/',
@@ -9407,6 +9415,10 @@ function buildInstantWallpaperTargetForSettings(
     backgroundSize: displayCss.backgroundSize,
     backgroundPosition: displayCss.backgroundPosition,
     placeholderColor: getBackgroundPlaceholderColor(settings),
+    maskEnabled: settings.maskEnabled,
+    maskStyle: settings.maskStyle,
+    maskOverlay: settings.maskOverlay,
+    maskBlur: settings.maskBlur,
     cacheRequired: settings.type !== 'color',
     cacheReady: hasCurrentInstantWallpaperStartupImage(mediaKey, settings),
     updatedAt: Date.now()

@@ -33,6 +33,13 @@ const DARK_BACKGROUND_MASK_OVERLAY_STOPS = {
   bottom: 50
 } as const
 
+const LEGACY_BACKGROUND_MASK_BASE_COLOR_BY_STYLE: Record<LegacyBackgroundMaskStyle, string> = {
+  dark: 'rgba(0, 0, 0, 0.18)',
+  frosted: 'rgba(18, 18, 20, 0.1)',
+  light: 'rgba(255, 255, 255, 0.075)',
+  noise: 'rgba(0, 0, 0, 0.14)'
+}
+
 const BACKGROUND_MASK_STYLE_SET = new Set<string>(BACKGROUND_MASK_STYLES)
 const LEGACY_BACKGROUND_MASK_STYLE_SET = new Set<string>(LEGACY_BACKGROUND_MASK_STYLES)
 const WALLPAPER_FILTER_MASK_STYLE_SET = new Set<string>(WALLPAPER_FILTER_MASK_STYLES)
@@ -51,6 +58,14 @@ export function normalizeBackgroundMaskPercentage(value: unknown, fallback = 50)
     return fallback
   }
   return Math.round(Math.min(100, Math.max(0, numericValue)))
+}
+
+export function normalizeBackgroundMaskBlur(value: unknown, fallback = DEFAULT_BACKGROUND_MASK_BLUR): number {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) {
+    return fallback
+  }
+  return Math.round(Math.min(32, Math.max(0, numericValue)))
 }
 
 export function snapBackgroundMaskPercentage(value: unknown): number {
@@ -102,6 +117,25 @@ export function getBackgroundMaskOverlayStops(value: unknown): {
     mid: getBackgroundMaskOverlayStop(DARK_BACKGROUND_MASK_OVERLAY_STOPS.mid, strength),
     bottom: getBackgroundMaskOverlayStop(DARK_BACKGROUND_MASK_OVERLAY_STOPS.bottom, strength)
   }
+}
+
+export function getBackgroundMaskOverlayGradient(value: unknown): string {
+  const stops = getBackgroundMaskOverlayStops(value)
+  return `linear-gradient(180deg, rgb(0 0 0 / ${stops.top}%) 0%, rgb(0 0 0 / ${stops.mid}%) 42%, rgb(0 0 0 / ${stops.bottom}%) 100%)`
+}
+
+export function getBackgroundMaskBaseColor(value: unknown): string {
+  return isLegacyBackgroundMaskStyle(value)
+    ? LEGACY_BACKGROUND_MASK_BASE_COLOR_BY_STYLE[value]
+    : 'transparent'
+}
+
+export function getBackgroundMaskBackdropFilter(style: unknown, blur: unknown): string {
+  if (!isLegacyBackgroundMaskStyle(style)) {
+    return 'none'
+  }
+  const effectiveBlur = Math.min(8, normalizeBackgroundMaskBlur(blur) / 3)
+  return `blur(${Number(effectiveBlur.toFixed(4))}px) saturate(1.02) brightness(0.98)`
 }
 
 function getBackgroundMaskOverlayStop(base: number, strength: number): number {

@@ -1,3 +1,10 @@
+import {
+  getBackgroundMaskBaseColor,
+  getBackgroundMaskBackdropFilter,
+  getBackgroundMaskOverlayGradient,
+  normalizeBackgroundMaskStyle
+} from './background-mask-settings.js'
+
 interface InstantWallpaperTargetRecord {
   signature?: string
   imageUrl?: string
@@ -6,6 +13,10 @@ interface InstantWallpaperTargetRecord {
   backgroundSize?: string
   backgroundPosition?: string
   placeholderColor?: string
+  maskEnabled?: boolean
+  maskStyle?: unknown
+  maskOverlay?: unknown
+  maskBlur?: unknown
   updatedAt?: number
 }
 
@@ -47,6 +58,7 @@ cacheBootView()
 try {
   const targetRecord = readRecord<InstantWallpaperTargetRecord>(targetKey)
   cacheBootRecord('__CURATOR_INSTANT_WALLPAPER_BOOT_TARGET__', targetRecord)
+  applyStartupMask(targetRecord)
   if (!targetRecord?.signature) {
     applyStartupBackground('', '', '', fallbackColor, 'cover', 'center')
     revealWallpaper(false)
@@ -81,6 +93,7 @@ try {
     revealWallpaper(Boolean(startupImageUrl || startupPreviewUrl))
   }
 } catch {
+  applyStartupMask(null)
   applyStartupBackground('', '', '', fallbackColor, 'cover', 'center')
   revealWallpaper(false)
 }
@@ -176,6 +189,26 @@ function createBootRecord(
     placeholderColor: normalizeColor(targetRecord.placeholderColor),
     updatedAt: Number(targetRecord.updatedAt) || 0,
     ready: Boolean(thumbnailDataUrl || imageDataUrl)
+  }
+}
+
+function applyStartupMask(targetRecord: InstantWallpaperTargetRecord | null): void {
+  const root = document.documentElement
+  const hasExplicitMaskSnapshot = typeof targetRecord?.maskEnabled === 'boolean'
+  // Targets written before mask snapshots existed should fail dark, not flash a full-bright wallpaper.
+  const enabled = hasExplicitMaskSnapshot
+    ? targetRecord.maskEnabled === true
+    : Boolean(targetRecord?.signature)
+  root.dataset.instantWallpaperMask = enabled ? 'true' : 'false'
+  if (enabled) {
+    const maskStyle = normalizeBackgroundMaskStyle(targetRecord?.maskStyle)
+    root.style.setProperty('--instant-wallpaper-mask-color', getBackgroundMaskBaseColor(maskStyle))
+    root.style.setProperty('--instant-wallpaper-mask-filter', getBackgroundMaskBackdropFilter(maskStyle, targetRecord?.maskBlur))
+    root.style.setProperty('--instant-wallpaper-mask-image', getBackgroundMaskOverlayGradient(targetRecord?.maskOverlay))
+  } else {
+    root.style.removeProperty('--instant-wallpaper-mask-color')
+    root.style.removeProperty('--instant-wallpaper-mask-filter')
+    root.style.removeProperty('--instant-wallpaper-mask-image')
   }
 }
 

@@ -62,8 +62,25 @@
         }
       }
     </style>
+    <style id="newtab-startup-background-mask-style">
+      #newtab-startup-background-mask {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        background-color: var(--instant-wallpaper-mask-color, transparent);
+        background-image: var(--instant-wallpaper-mask-image, none);
+        -webkit-backdrop-filter: var(--instant-wallpaper-mask-filter, none);
+        backdrop-filter: var(--instant-wallpaper-mask-filter, none);
+        pointer-events: none;
+      }
+
+      html[data-instant-wallpaper-mask="false"] #newtab-startup-background-mask {
+        display: none;
+      }
+    </style>
   </head>
   <body>
+    <div id="newtab-startup-background-mask" aria-hidden="true"></div>
     <div id="newtab-react-root"></div>
     <script type="module" src="./main.tsx"></script>
   </body>

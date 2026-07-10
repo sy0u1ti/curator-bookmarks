@@ -3,12 +3,16 @@ import {
   BACKGROUND_MASK_STYLES,
   doesBackgroundMaskFilterSupportGeometry,
   doesBackgroundMaskFilterSupportHover,
+  getBackgroundMaskBaseColor,
+  getBackgroundMaskBackdropFilter,
   isBackgroundMaskFilterStyle,
   getBackgroundMaskOverlayStops,
+  getBackgroundMaskOverlayGradient,
   isLegacyBackgroundMaskStyle,
   isPaperShaderMaskStyle,
   isWallpaperFilterMaskStyle,
   normalizeBackgroundMaskPercentage,
+  normalizeBackgroundMaskBlur,
   normalizeBackgroundMaskStyle,
   snapBackgroundMaskPercentage
 } from './background-mask-settings.js'
@@ -27,6 +31,7 @@ assert.equal(normalizeBackgroundMaskStyle('unknown'), 'dark')
 assert.equal(normalizeBackgroundMaskPercentage(-20), 0)
 assert.equal(normalizeBackgroundMaskPercentage(140), 100)
 assert.equal(normalizeBackgroundMaskPercentage(undefined, 50), 50)
+assert.equal(normalizeBackgroundMaskBlur(48), 32)
 assert.equal(snapBackgroundMaskPercentage(3), 0)
 assert.equal(snapBackgroundMaskPercentage(47), 50)
 assert.equal(snapBackgroundMaskPercentage(96), 96)
@@ -39,7 +44,15 @@ assert.equal(doesBackgroundMaskFilterSupportGeometry('halftone'), true)
 assert.equal(doesBackgroundMaskFilterSupportGeometry('fluted-glass'), true)
 assert.equal(doesBackgroundMaskFilterSupportHover('halftone'), true)
 assert.equal(doesBackgroundMaskFilterSupportHover('fluted-glass'), false)
+assert.equal(getBackgroundMaskBaseColor('dark'), 'rgba(0, 0, 0, 0.18)')
+assert.equal(getBackgroundMaskBaseColor('paper-texture'), 'transparent')
+assert.equal(getBackgroundMaskBackdropFilter('dark', 12), 'blur(4px) saturate(1.02) brightness(0.98)')
+assert.equal(getBackgroundMaskBackdropFilter('paper-texture', 12), 'none')
 assert.deepEqual(getBackgroundMaskOverlayStops(50), { top: 44, mid: 20, bottom: 50 })
+assert.equal(
+  getBackgroundMaskOverlayGradient(50),
+  'linear-gradient(180deg, rgb(0 0 0 / 44%) 0%, rgb(0 0 0 / 20%) 42%, rgb(0 0 0 / 50%) 100%)'
+)
 assert.deepEqual(getBackgroundMaskOverlayStops(0), { top: 0, mid: 0, bottom: 0 })
 assert.deepEqual(getBackgroundMaskOverlayStops(100), { top: 100, mid: 100, bottom: 100 })
 
@@ -65,7 +78,10 @@ const limits = {
   positionX: { min: 0, max: 100 },
   positionY: { min: 0, max: 100 }
 }
-const filterView = createNewtabBackgroundSettingsView(baseSettings, preferences, limits)
+const pendingFilterView = createNewtabBackgroundSettingsView(baseSettings, preferences, limits)
+assert.equal(pendingFilterView.ready, false, 'Background settings should not hand off the startup mask before hydration.')
+const filterView = createNewtabBackgroundSettingsView(baseSettings, preferences, limits, { ready: true })
+assert.equal(filterView.ready, true, 'Hydrated background settings should be ready for startup-mask handoff.')
 assert.equal(filterView.maskBlurHidden, true)
 assert.equal(filterView.maskFilterStrengthHidden, false)
 assert.equal(filterView.maskFilterSizeHidden, false)

@@ -57,15 +57,20 @@ import {
 } from './newtab-background-settings-store'
 import { useNewtabInstantWallpaperView } from './newtab-instant-wallpaper-store'
 import { useNewtabFolderSourceView } from './newtab-folder-source-store'
-import { getBackgroundMaskOverlayStops, isLegacyBackgroundMaskStyle } from './background-mask-settings'
+import {
+  getBackgroundMaskBaseColor,
+  getBackgroundMaskBackdropFilter,
+  getBackgroundMaskOverlayGradient,
+  isLegacyBackgroundMaskStyle
+} from './background-mask-settings'
 
 const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard)] before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay before:[transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)]'
 const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100'
 const BACKGROUND_MASK_STYLE_CLASS_BY_STYLE = {
-  dark: 'bg-[rgba(0,0,0,0.18)]',
-  frosted: 'bg-[rgba(18,18,20,0.1)]',
-  light: 'bg-[rgba(255,255,255,0.075)]',
-  noise: 'bg-[rgba(0,0,0,0.14)] before:opacity-[0.16] before:[background-image:radial-gradient(rgba(255,255,255,0.18)_0.65px,transparent_0.9px),radial-gradient(rgba(0,0,0,0.24)_0.7px,transparent_1px)] before:[background-position:0_0,12px_14px] before:[background-size:4px_4px,5px_5px]'
+  dark: '',
+  frosted: '',
+  light: '',
+  noise: 'before:opacity-[0.16] before:[background-image:radial-gradient(rgba(255,255,255,0.18)_0.65px,transparent_0.9px),radial-gradient(rgba(0,0,0,0.24)_0.7px,transparent_1px)] before:[background-position:0_0,12px_14px] before:[background-size:4px_4px,5px_5px]'
 } as const
 const SOLID_BACKGROUND_NOISE_CLASS = 'newtab-solid-background-noise fixed inset-0 z-0 pointer-events-none overflow-hidden'
 const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
@@ -163,6 +168,11 @@ function NewtabShell() {
     }
   }, [])
 
+  useLayoutEffect(() => {
+    if (!backgroundSettings.ready) return
+    removeStartupBackgroundMask()
+  }, [backgroundSettings.ready])
+
   useEffect(() => {
     const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
     const handleVisibilityChange = () => {
@@ -206,12 +216,14 @@ function NewtabShell() {
       <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
       <NewtabWallpaperFilterLayer />
       <NewtabPaperShaderLayer />
-      <div
-        id="newtab-background-mask"
-        className={getBackgroundMaskClass(backgroundSettings)}
-        style={getBackgroundMaskInlineStyle(backgroundSettings)}
-        aria-hidden="true"
-      ></div>
+      {backgroundSettings.ready ? (
+        <div
+          id="newtab-background-mask"
+          className={getBackgroundMaskClass(backgroundSettings)}
+          style={getBackgroundMaskInlineStyle(backgroundSettings)}
+          aria-hidden="true"
+        ></div>
+      ) : null}
       <WallpaperLoadingIndicator />
 
       <div
@@ -330,16 +342,28 @@ function getBackgroundMaskStyleClass(maskStyle: string): string {
   if (!isLegacyBackgroundMaskStyle(maskStyle)) {
     return ''
   }
-  return `${BACKGROUND_MASK_STYLE_CLASS_BY_STYLE[maskStyle]} newtab-background-mask-filter`
+  return BACKGROUND_MASK_STYLE_CLASS_BY_STYLE[maskStyle]
+}
+
+function removeStartupBackgroundMask(): void {
+  document.getElementById('newtab-startup-background-mask')?.remove()
+  document.getElementById('newtab-startup-background-mask-style')?.remove()
+  document.documentElement.style.removeProperty('--instant-wallpaper-mask-color')
+  document.documentElement.style.removeProperty('--instant-wallpaper-mask-filter')
+  document.documentElement.style.removeProperty('--instant-wallpaper-mask-image')
+  delete document.documentElement.dataset.instantWallpaperMask
 }
 
 function getBackgroundMaskInlineStyle(background: NewtabBackgroundSettingsView): CSSProperties {
   if (!background.maskEnabled) {
     return {}
   }
-  const stops = getBackgroundMaskOverlayStops(background.maskOverlay)
+  const backdropFilter = getBackgroundMaskBackdropFilter(background.maskStyle, background.maskBlur)
   return {
-    backgroundImage: `linear-gradient(180deg, rgb(0 0 0 / ${stops.top}%) 0%, rgb(0 0 0 / ${stops.mid}%) 42%, rgb(0 0 0 / ${stops.bottom}%) 100%)`
+    backgroundColor: getBackgroundMaskBaseColor(background.maskStyle),
+    backgroundImage: getBackgroundMaskOverlayGradient(background.maskOverlay),
+    WebkitBackdropFilter: backdropFilter,
+    backdropFilter
   }
 }
 

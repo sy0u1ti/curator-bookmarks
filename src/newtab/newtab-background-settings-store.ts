@@ -9,6 +9,7 @@ import {
 } from './background-mask-settings.js'
 
 export interface NewtabBackgroundSettingsView {
+  ready: boolean
   backgroundStatus: string
   backgroundStatusTone: 'info' | 'success' | 'warning' | 'error'
   color: string
@@ -96,6 +97,7 @@ export interface NewtabBackgroundSettingsActions {
 }
 
 const EMPTY_VIEW: NewtabBackgroundSettingsView = {
+  ready: false,
   backgroundStatus: '',
   backgroundStatusTone: 'info',
   color: '#101013',
@@ -178,6 +180,7 @@ export function createNewtabBackgroundSettingsView(
     NewtabBackgroundSettingsView,
     | 'backgroundStatus'
     | 'backgroundStatusTone'
+    | 'ready'
     | 'featuredCreditHref'
     | 'featuredCreditText'
     | 'featuredCreditTitle'
@@ -193,6 +196,7 @@ export function createNewtabBackgroundSettingsView(
   const maskFilterHoverSupported = doesBackgroundMaskFilterSupportHover(settings.maskStyle)
 
   return {
+    ready: ui.ready ?? false,
     backgroundStatus: ui.backgroundStatus ?? '',
     backgroundStatusTone: ui.backgroundStatusTone ?? 'info',
     color: settings.color,

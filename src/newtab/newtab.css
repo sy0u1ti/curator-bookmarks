@@ -1,6 +1,5 @@
 :root {
   color-scheme: dark;
-  --background-mask-blur: 12px;
   --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
   font-family: var(--newtab-font-sans);
 }
@@ -43,11 +42,6 @@
   --newtab-glass-bg-popup: rgba(9, 10, 12, 0.84);
   --newtab-glass-border: rgba(245, 245, 247, 0.14);
   --newtab-bookmark-hover-overlay: rgba(245, 245, 247, 0.065);
-}
-
-.newtab-background-mask-filter {
-  -webkit-backdrop-filter: blur(clamp(0px, calc(var(--background-mask-blur) / 3), 8px)) saturate(1.02) brightness(0.98);
-  backdrop-filter: blur(clamp(0px, calc(var(--background-mask-blur) / 3), 8px)) saturate(1.02) brightness(0.98);
 }
 
 .newtab-wallpaper-filter {
