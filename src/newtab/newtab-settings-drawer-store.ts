@@ -27,6 +27,7 @@ export interface NewtabSettingsDrawerLayoutRequest {
 export interface NewtabSettingsDrawerNodes {
   backdrop: HTMLElement | null
   drawer: HTMLElement | null
+  panel: HTMLElement | null
   trigger: HTMLElement | null
 }
 
@@ -63,6 +64,7 @@ let settingsDrawerLayoutRequest: NewtabSettingsDrawerLayoutRequest = {
 let settingsDrawerNodes: NewtabSettingsDrawerNodes = {
   backdrop: null,
   drawer: null,
+  panel: null,
   trigger: null
 }
 
@@ -135,6 +137,7 @@ export function setNewtabSettingsDrawerNodes(nodes: Partial<NewtabSettingsDrawer
   const changed =
     nextNodes.backdrop !== settingsDrawerNodes.backdrop ||
     nextNodes.drawer !== settingsDrawerNodes.drawer ||
+    nextNodes.panel !== settingsDrawerNodes.panel ||
     nextNodes.trigger !== settingsDrawerNodes.trigger
 
   settingsDrawerNodes = { ...nextNodes }

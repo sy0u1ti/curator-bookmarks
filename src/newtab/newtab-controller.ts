@@ -2020,14 +2020,17 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: S
 }
 
 function primeSettingsDrawerOpenTransition(): void {
-  const { backdrop, drawer } = getNewtabSettingsDrawerNodes()
+  const { backdrop, drawer, panel } = getNewtabSettingsDrawerNodes()
+  dispatchNewtabSettingsDrawerOpen(false, 'closed')
   if (drawer) {
     drawer.getBoundingClientRect()
+  }
+  if (panel) {
+    panel.getBoundingClientRect()
   }
   if (backdrop) {
     backdrop.getBoundingClientRect()
   }
-  dispatchNewtabSettingsDrawerOpen(false, 'opening')
 }
 
 function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
@@ -2036,7 +2039,12 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     setActiveSettingsGroup(options?.section || state.activeSettingsGroup || 'source', { scrollToTop: false })
     syncSettingsSaveStatus()
     scheduleAdaptiveNewTabLayoutUpdate()
-    dispatchNewtabSettingsDrawerOpen(true, 'open')
+    dispatchNewtabSettingsDrawerOpen(true, 'opening')
+    window.requestAnimationFrame(() => {
+      if (getNewtabSettingsDrawerView().phase === 'opening') {
+        dispatchNewtabSettingsDrawerOpen(true, 'open')
+      }
+    })
     if (focusFirstControl) {
       window.requestAnimationFrame(() => {
         dispatchNewtabSettingsDrawerFocusFirstControl()

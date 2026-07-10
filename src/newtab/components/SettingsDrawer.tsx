@@ -1725,15 +1725,17 @@ function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenC
 
   useLayoutEffect(() => {
     setNewtabSettingsDrawerNodes({
-      drawer: drawerElement
+      drawer: drawerElement,
+      panel: panelElement
     })
 
     return () => {
       setNewtabSettingsDrawerNodes({
-        drawer: null
+        drawer: null,
+        panel: null
       })
     }
-  }, [drawerElement])
+  }, [drawerElement, panelElement])
 
   useLayoutEffect(() => {
     const previousGroup = activeGroupRef.current

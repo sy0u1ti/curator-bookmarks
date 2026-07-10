@@ -22,6 +22,13 @@ assert.ok(
 )
 
 assert.ok(
+  controller.includes("dispatchNewtabSettingsDrawerOpen(true, 'opening')") &&
+    controller.includes("getNewtabSettingsDrawerView().phase === 'opening'") &&
+    controller.includes('panel.getBoundingClientRect()'),
+  'The settings drawer should preserve a painted closed frame and an explicit opening phase on its first open.'
+)
+
+assert.ok(
   [
     'dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii',
     'paper-texture', 'fluted-glass', 'water', 'image-dithering', 'halftone-dots', 'halftone-cmyk'

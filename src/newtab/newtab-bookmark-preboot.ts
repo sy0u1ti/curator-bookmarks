@@ -6,7 +6,7 @@ const NEWTAB_BOOKMARK_PREBOOT_VERSION = 2
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
-const NEWTAB_BOOKMARK_PREBOOT_HIDE_DELAY_MS = 120
+const NEWTAB_BOOKMARK_PREBOOT_HIDE_DELAY_MS = 0
 const NEWTAB_BOOKMARK_PREBOOT_VIEWPORT_TOLERANCE_PX = 1
 
 export interface NewtabBookmarkPrebootItemView {
@@ -647,7 +647,7 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   font-family: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
   opacity: 1;
   pointer-events: none;
-  transition: opacity 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: none;
 }
 
 html.instant-wallpaper-startup-preview #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID},

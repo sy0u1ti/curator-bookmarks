@@ -7,6 +7,7 @@ import {
   type NewtabBookmarkPrebootItemView,
   type NewtabBookmarkPrebootView
 } from './newtab-bookmark-preboot.js'
+import { readFileSync } from 'node:fs'
 
 function run(): void {
   testSnapshotKeepsVisibleCardsAndExactCardRect()
@@ -16,6 +17,13 @@ function run(): void {
   testSnapshotClearsStorageWhenWriteFails()
   testSnapshotClearsStorageWhenNoCardsRemain()
   testSnapshotRejectsMismatchedViewport()
+  testPrebootHandoffIsAtomic()
+}
+
+function testPrebootHandoffIsAtomic(): void {
+  const source = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
+  assert(source.includes('NEWTAB_BOOKMARK_PREBOOT_HIDE_DELAY_MS = 0'))
+  assert(source.includes('transition: none;'))
 }
 
 function testSnapshotKeepsVisibleCardsAndExactCardRect(): void {
