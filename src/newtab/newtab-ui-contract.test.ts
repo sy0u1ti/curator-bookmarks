@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const newtabCss = readFileSync('src/newtab/newtab.css', 'utf8')
+const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkContent.tsx', 'utf8')
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
@@ -47,11 +48,28 @@ assert.ok(
   'Newtab should adapt density for short desktop viewports.'
 )
 
+const bookmarkHoverRule = newtabCss.match(/\.bookmark-tile:hover[^{]*\{([^}]*)\}/s)?.[1] || ''
+const bookmarkFocusRule = newtabCss.match(/\.bookmark-tile:focus-visible[^{]*\{([^}]*)\}/s)?.[1] || ''
+const bookmarkSectionVisibilityToggle = /\.bookmark-folder-section:(?:hover|focus-within)[^{]*\{[^}]*content-visibility\s*:/s
+
 assert.ok(
-  newtabCss.includes('.bookmark-folder-section:hover') &&
-    newtabCss.includes('.bookmark-folder-section:focus-within') &&
-    newtabCss.includes('content-visibility: visible'),
-  'Visible bookmark sections should release paint containment so edge-card shadows are not clipped.'
+  bookmarkContent.includes('[content-visibility:auto]') &&
+    !bookmarkSectionVisibilityToggle.test(newtabCss),
+  'Bookmark section paint containment should stay stable while a card is hovered or focused.'
+)
+
+assert.ok(
+  bookmarkHoverRule.includes('transform: none') &&
+    bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-shadow)') &&
+    newtabCss.includes('.bookmark-tile:hover::before'),
+  'Bookmark hover should illuminate in place without moving or expanding its outer shadow.'
+)
+
+assert.ok(
+  bookmarkFocusRule.includes('transform: none') &&
+    newtabCss.includes('.bookmark-tile:focus-visible::before') &&
+    newtabCss.includes('--newtab-bookmark-focus-inset'),
+  'Bookmark keyboard focus should use an unclipped inset treatment without moving the card.'
 )
 
 console.log('newtab UI contract tests passed')

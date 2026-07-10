@@ -8,9 +8,10 @@ const folderSectionClasses = readFileSync('src/newtab/components/folderSectionCl
 const speedDialClasses = readFileSync('src/newtab/components/speedDialClasses.ts', 'utf8')
 
 assert.ok(
-  bookmarkTileClasses.includes('curator-motion-card') &&
-    bookmarkTileClasses.includes('curator-motion-disabled'),
-  'Newtab bookmark tiles should use shared card motion and disable it during drag staging.'
+  bookmarkTileClasses.includes('bookmark-tile') &&
+    bookmarkTileClasses.includes('curator-motion-disabled') &&
+    !bookmarkTileClasses.includes('curator-motion-card'),
+  'Newtab bookmark tiles should keep drag staging support without the shared card lift motion.'
 )
 assert.ok(
   speedDialClasses.includes('curator-motion-surface') &&

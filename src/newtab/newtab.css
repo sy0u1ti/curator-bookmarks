@@ -20,6 +20,15 @@
   --newtab-glass-border-hover: rgba(245, 245, 247, 0.2);
   --newtab-glass-shadow: 0 18px 46px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  --newtab-bookmark-shadow: 0 12px 34px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+  --newtab-bookmark-hover-overlay: rgba(245, 245, 247, 0.05);
+  --newtab-bookmark-hover-inset:
+    inset 0 1px 0 rgba(255, 255, 255, 0.11),
+    inset 0 0 0 1px rgba(245, 245, 247, 0.13);
+  --newtab-bookmark-focus-inset:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 0 0 2px rgba(245, 245, 247, 0.5),
+    inset 0 0 0 3px rgba(0, 0, 0, 0.28);
   --newtab-glass-filter: blur(12px) saturate(1.12);
   --newtab-glass-filter-soft: blur(8px) saturate(1.06);
   --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.68), 0 0 0 4px rgba(245, 245, 247, 0.42);
@@ -33,6 +42,7 @@
   --newtab-glass-bg-hover: rgba(28, 29, 32, 0.7);
   --newtab-glass-bg-popup: rgba(9, 10, 12, 0.84);
   --newtab-glass-border: rgba(245, 245, 247, 0.14);
+  --newtab-bookmark-hover-overlay: rgba(245, 245, 247, 0.065);
 }
 
 .newtab-background-mask-filter {
@@ -902,7 +912,40 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   backdrop-filter: var(--newtab-glass-filter);
 }
 
-.bookmark-tile,
+/* Keep bookmark feedback inside the tile so section paint containment stays stable at the grid edges. */
+.bookmark-tile {
+  border-color: rgba(245, 245, 247, 0.08);
+  background: var(--newtab-glass-bg-card);
+  box-shadow: var(--newtab-bookmark-shadow);
+  -webkit-backdrop-filter: var(--newtab-glass-filter-soft);
+  backdrop-filter: var(--newtab-glass-filter-soft);
+  transform: none;
+}
+
+.bookmark-tile:not(.bookmark-drag-ghost) {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.bookmark-tile:not(.bookmark-drag-ghost)::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: var(--newtab-bookmark-hover-overlay);
+  box-shadow: var(--newtab-bookmark-hover-inset);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms var(--ui-ease-standard);
+}
+
+.bookmark-tile:not(.bookmark-drag-ghost) > * {
+  position: relative;
+  z-index: 1;
+}
+
 .newtab-speed-dial-card,
 .newtab-quick-link,
 .bookmark-grid-placeholder {
@@ -913,7 +956,18 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   backdrop-filter: var(--newtab-glass-filter-soft);
 }
 
-.bookmark-tile:hover,
+@media (hover: hover) and (pointer: fine) {
+  .bookmark-tile:hover {
+    border-color: var(--newtab-glass-border-hover);
+    box-shadow: var(--newtab-bookmark-shadow);
+    transform: none;
+  }
+
+  .bookmark-tile:hover::before {
+    opacity: 1;
+  }
+}
+
 .newtab-speed-dial-card:hover,
 .newtab-quick-link:hover {
   border-color: var(--newtab-glass-border-hover);
@@ -922,7 +976,23 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   transform: translateY(-1px);
 }
 
-.bookmark-tile:focus-visible,
+.bookmark-tile:focus-visible {
+  border-color: var(--newtab-glass-border-hover);
+  box-shadow: var(--newtab-bookmark-shadow);
+  transform: none;
+}
+
+.bookmark-tile:focus-visible::before {
+  box-shadow: var(--newtab-bookmark-focus-inset);
+  opacity: 1;
+  transition: none;
+}
+
+.bookmark-tile.curator-motion-disabled::before,
+.bookmark-tile.dragging::before {
+  opacity: 0;
+}
+
 .newtab-speed-dial-card:focus-visible,
 .newtab-quick-link:focus-visible,
 .newtab-speed-dial-empty button:focus-visible {
@@ -932,7 +1002,11 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   transform: translateY(-1px);
 }
 
-.bookmark-tile:active,
+.bookmark-tile:active {
+  box-shadow: var(--newtab-bookmark-shadow);
+  transform: scale(var(--ui-press-scale));
+}
+
 .newtab-speed-dial-card:active,
 .newtab-quick-link:active {
   transform: scale(var(--ui-press-scale));
@@ -1017,6 +1091,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .bookmark-tile::before {
+    transition: none;
+  }
+
   .bookmark-tile:hover,
   .bookmark-tile:focus-visible,
   .newtab-speed-dial-card:hover,
@@ -1037,12 +1115,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .newtab-speed-dial[data-content-type="empty"] .newtab-module-heading {
   grid-template-columns: auto auto;
   align-items: center;
-}
-
-.bookmark-folder-section:hover,
-.bookmark-folder-section:focus-within,
-.bookmark-folder-section.dragging-folder {
-  content-visibility: visible;
 }
 
 @media (max-height: 800px) {
