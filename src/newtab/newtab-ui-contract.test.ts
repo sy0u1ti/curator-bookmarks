@@ -11,6 +11,7 @@ const newtabMain = readFileSync('src/newtab/main.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
 const settingsDrawer = readFileSync('src/newtab/components/SettingsDrawer.tsx', 'utf8')
 const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx', 'utf8')
+const paperShaderFilter = readFileSync('src/newtab/components/NewtabPaperShaderLayer.tsx', 'utf8')
 const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
 const viteConfig = readFileSync('vite.config.ts', 'utf8')
 
@@ -21,16 +22,38 @@ assert.ok(
 )
 
 assert.ok(
-  ['dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii'].every((style) =>
+  [
+    'dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii',
+    'paper-texture', 'fluted-glass', 'water', 'image-dithering', 'halftone-dots', 'halftone-cmyk'
+  ].every((style) =>
     backgroundMaskSettings.includes(`'${style}'`)
   ) &&
     settingsDrawer.includes('颗粒滤镜') &&
     settingsDrawer.includes('网点滤镜') &&
     settingsDrawer.includes('ASCII 滤镜') &&
+    settingsDrawer.includes('Paper · 纸张纹理') &&
+    settingsDrawer.includes('Paper · 水面折射') &&
+    settingsDrawer.includes('Paper · 半色调 CMYK') &&
     settingsDrawer.includes('遮罩效果') &&
     settingsDrawer.includes('悬停效果') &&
     settingsDrawer.includes("ticks={['透明', '默认', '覆盖']}"),
-  'The background mask selector should retain all four original styles and add the three wallpaper filters.'
+  'The background mask selector should retain the original styles and expose the Paper image filters.'
+)
+
+assert.ok(
+  paperShaderFilter.includes("import('@paper-design/shaders-react')") &&
+    paperShaderFilter.includes('<PaperTexture') &&
+    paperShaderFilter.includes('<FlutedGlass') &&
+    paperShaderFilter.includes('<Water') &&
+    paperShaderFilter.includes('<ImageDithering') &&
+    paperShaderFilter.includes('<HalftoneDots') &&
+    paperShaderFilter.includes('<HalftoneCmyk') &&
+    paperShaderFilter.includes("getContext('webgl2')") &&
+    paperShaderFilter.includes('useShaderImageSource') &&
+    paperShaderFilter.includes("media.kind === 'video'") &&
+    paperShaderFilter.includes('originX:') &&
+    newtabApp.indexOf('<NewtabPaperShaderLayer />') < newtabApp.indexOf('id="newtab-background-mask"'),
+  'Paper image shaders should render in the wallpaper filter stack below the readability mask.'
 )
 
 assert.ok(

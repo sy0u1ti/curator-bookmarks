@@ -61,6 +61,26 @@
   opacity: 0 !important;
 }
 
+.newtab-paper-shader {
+  contain: strict;
+  isolation: isolate;
+  pointer-events: none;
+  transform: translateZ(0);
+  transition: opacity 180ms var(--ui-ease-standard);
+}
+
+.newtab-paper-shader > div,
+.newtab-paper-shader canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newtab-paper-shader {
+    transition: none;
+  }
+}
+
 html,
 body {
   width: 100%;

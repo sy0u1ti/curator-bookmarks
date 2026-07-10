@@ -2,8 +2,9 @@ import { useSyncExternalStore } from 'react'
 import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences.js'
 import {
   doesBackgroundMaskFilterSupportGeometry,
+  doesBackgroundMaskFilterSupportHover,
+  isBackgroundMaskFilterStyle,
   isLegacyBackgroundMaskStyle,
-  isWallpaperFilterMaskStyle,
   type BackgroundMaskStyle
 } from './background-mask-settings.js'
 
@@ -187,8 +188,9 @@ export function createNewtabBackgroundSettingsView(
 ): NewtabBackgroundSettingsView {
   const featuredPickerSelected = ui.featuredPickerSelected ?? Boolean(settings.featuredId)
   const maskControlsHidden = !settings.maskEnabled
-  const maskFilterSelected = isWallpaperFilterMaskStyle(settings.maskStyle)
+  const maskFilterSelected = isBackgroundMaskFilterStyle(settings.maskStyle)
   const maskFilterGeometrySupported = doesBackgroundMaskFilterSupportGeometry(settings.maskStyle)
+  const maskFilterHoverSupported = doesBackgroundMaskFilterSupportHover(settings.maskStyle)
 
   return {
     backgroundStatus: ui.backgroundStatus ?? '',
@@ -214,7 +216,7 @@ export function createNewtabBackgroundSettingsView(
     maskBlurHidden: maskControlsHidden || !isLegacyBackgroundMaskStyle(settings.maskStyle),
     maskEnabled: settings.maskEnabled,
     maskFilterHover: settings.maskFilterHover,
-    maskFilterHoverHidden: maskControlsHidden || !maskFilterGeometrySupported,
+    maskFilterHoverHidden: maskControlsHidden || !maskFilterHoverSupported,
     maskFilterSize: settings.maskFilterSize,
     maskFilterSizeHidden: maskControlsHidden || !maskFilterGeometrySupported,
     maskFilterSpacing: settings.maskFilterSpacing,

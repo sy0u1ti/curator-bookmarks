@@ -2,8 +2,11 @@ import assert from 'node:assert/strict'
 import {
   BACKGROUND_MASK_STYLES,
   doesBackgroundMaskFilterSupportGeometry,
+  doesBackgroundMaskFilterSupportHover,
+  isBackgroundMaskFilterStyle,
   getBackgroundMaskOverlayStops,
   isLegacyBackgroundMaskStyle,
+  isPaperShaderMaskStyle,
   isWallpaperFilterMaskStyle,
   normalizeBackgroundMaskPercentage,
   normalizeBackgroundMaskStyle,
@@ -13,8 +16,11 @@ import { createNewtabBackgroundSettingsView } from './newtab-background-settings
 
 assert.deepEqual(
   BACKGROUND_MASK_STYLES,
-  ['dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii'],
-  'Existing mask styles should remain available before the three wallpaper filters.'
+  [
+    'dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii',
+    'paper-texture', 'fluted-glass', 'water', 'image-dithering', 'halftone-dots', 'halftone-cmyk'
+  ],
+  'Existing mask styles should remain available before the Paper shader filters.'
 )
 assert.equal(normalizeBackgroundMaskStyle('ascii'), 'ascii')
 assert.equal(normalizeBackgroundMaskStyle('unknown'), 'dark')
@@ -26,8 +32,13 @@ assert.equal(snapBackgroundMaskPercentage(47), 50)
 assert.equal(snapBackgroundMaskPercentage(96), 96)
 assert.equal(isLegacyBackgroundMaskStyle('noise'), true)
 assert.equal(isWallpaperFilterMaskStyle('grain'), true)
+assert.equal(isPaperShaderMaskStyle('paper-texture'), true)
+assert.equal(isBackgroundMaskFilterStyle('water'), true)
 assert.equal(doesBackgroundMaskFilterSupportGeometry('grain'), false)
 assert.equal(doesBackgroundMaskFilterSupportGeometry('halftone'), true)
+assert.equal(doesBackgroundMaskFilterSupportGeometry('fluted-glass'), true)
+assert.equal(doesBackgroundMaskFilterSupportHover('halftone'), true)
+assert.equal(doesBackgroundMaskFilterSupportHover('fluted-glass'), false)
 assert.deepEqual(getBackgroundMaskOverlayStops(50), { top: 44, mid: 20, bottom: 50 })
 assert.deepEqual(getBackgroundMaskOverlayStops(0), { top: 0, mid: 0, bottom: 0 })
 assert.deepEqual(getBackgroundMaskOverlayStops(100), { top: 100, mid: 100, bottom: 100 })
@@ -69,5 +80,15 @@ const legacyView = createNewtabBackgroundSettingsView(
 )
 assert.equal(legacyView.maskBlurHidden, false)
 assert.equal(legacyView.maskFilterStrengthHidden, true)
+
+const paperShaderView = createNewtabBackgroundSettingsView(
+  { ...baseSettings, maskStyle: 'image-dithering' },
+  preferences,
+  limits
+)
+assert.equal(paperShaderView.maskFilterStrengthHidden, false)
+assert.equal(paperShaderView.maskFilterSizeHidden, false)
+assert.equal(paperShaderView.maskFilterSpacingHidden, false)
+assert.equal(paperShaderView.maskFilterHoverHidden, true)
 
 console.log('background mask settings tests passed')

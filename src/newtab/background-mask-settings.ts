@@ -1,13 +1,23 @@
 export const LEGACY_BACKGROUND_MASK_STYLES = ['dark', 'frosted', 'noise', 'light'] as const
 export const WALLPAPER_FILTER_MASK_STYLES = ['grain', 'halftone', 'ascii'] as const
+export const PAPER_SHADER_MASK_STYLES = [
+  'paper-texture',
+  'fluted-glass',
+  'water',
+  'image-dithering',
+  'halftone-dots',
+  'halftone-cmyk'
+] as const
 export const BACKGROUND_MASK_STYLES = [
   ...LEGACY_BACKGROUND_MASK_STYLES,
-  ...WALLPAPER_FILTER_MASK_STYLES
+  ...WALLPAPER_FILTER_MASK_STYLES,
+  ...PAPER_SHADER_MASK_STYLES
 ] as const
 
 export type BackgroundMaskStyle = (typeof BACKGROUND_MASK_STYLES)[number]
 export type LegacyBackgroundMaskStyle = (typeof LEGACY_BACKGROUND_MASK_STYLES)[number]
 export type WallpaperFilterMaskStyle = (typeof WALLPAPER_FILTER_MASK_STYLES)[number]
+export type PaperShaderMaskStyle = (typeof PAPER_SHADER_MASK_STYLES)[number]
 
 export const DEFAULT_BACKGROUND_MASK_STYLE: BackgroundMaskStyle = 'dark'
 export const DEFAULT_BACKGROUND_MASK_BLUR = 12
@@ -26,6 +36,7 @@ const DARK_BACKGROUND_MASK_OVERLAY_STOPS = {
 const BACKGROUND_MASK_STYLE_SET = new Set<string>(BACKGROUND_MASK_STYLES)
 const LEGACY_BACKGROUND_MASK_STYLE_SET = new Set<string>(LEGACY_BACKGROUND_MASK_STYLES)
 const WALLPAPER_FILTER_MASK_STYLE_SET = new Set<string>(WALLPAPER_FILTER_MASK_STYLES)
+const PAPER_SHADER_MASK_STYLE_SET = new Set<string>(PAPER_SHADER_MASK_STYLES)
 
 export function normalizeBackgroundMaskStyle(value: unknown): BackgroundMaskStyle {
   const style = String(value || '')
@@ -57,7 +68,26 @@ export function isWallpaperFilterMaskStyle(value: unknown): value is WallpaperFi
   return WALLPAPER_FILTER_MASK_STYLE_SET.has(String(value || ''))
 }
 
+export function isPaperShaderMaskStyle(value: unknown): value is PaperShaderMaskStyle {
+  return PAPER_SHADER_MASK_STYLE_SET.has(String(value || ''))
+}
+
+export function isBackgroundMaskFilterStyle(value: unknown): boolean {
+  return isWallpaperFilterMaskStyle(value) || isPaperShaderMaskStyle(value)
+}
+
 export function doesBackgroundMaskFilterSupportGeometry(value: unknown): boolean {
+  return value === 'halftone' ||
+    value === 'ascii' ||
+    value === 'paper-texture' ||
+    value === 'fluted-glass' ||
+    value === 'water' ||
+    value === 'image-dithering' ||
+    value === 'halftone-dots' ||
+    value === 'halftone-cmyk'
+}
+
+export function doesBackgroundMaskFilterSupportHover(value: unknown): boolean {
   return value === 'halftone' || value === 'ascii'
 }
 

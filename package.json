@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
+    "@paper-design/shaders-react": "0.0.77",
     "lucide-react": "^1.16.0",
     "motion": "^12.40.0",
     "pinyin-pro": "^3.28.1",

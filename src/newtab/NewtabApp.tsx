@@ -14,6 +14,7 @@ import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
 import { NewtabDragLayerHost } from './components/NewtabDragLayerHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
 import { NewtabWallpaperFilterLayer } from './components/NewtabWallpaperFilterLayer'
+import { NewtabPaperShaderLayer } from './components/NewtabPaperShaderLayer'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
 import {
   dispatchNewtabBookmarkChanged,
@@ -204,6 +205,7 @@ function NewtabShell() {
       <NewtabBackgroundLayer loadingWallpaper={instantWallpaper.loading} />
       <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
       <NewtabWallpaperFilterLayer />
+      <NewtabPaperShaderLayer />
       <div
         id="newtab-background-mask"
         className={getBackgroundMaskClass(backgroundSettings)}

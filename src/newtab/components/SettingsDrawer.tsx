@@ -1195,7 +1195,13 @@ function BackgroundSettingsSection({
               { value: 'light', label: '亮色柔化' },
               { value: 'grain', label: '颗粒滤镜' },
               { value: 'halftone', label: '网点滤镜' },
-              { value: 'ascii', label: 'ASCII 滤镜' }
+              { value: 'ascii', label: 'ASCII 滤镜' },
+              { value: 'paper-texture', label: 'Paper · 纸张纹理' },
+              { value: 'fluted-glass', label: 'Paper · 条纹玻璃' },
+              { value: 'water', label: 'Paper · 水面折射' },
+              { value: 'image-dithering', label: 'Paper · 图像抖动' },
+              { value: 'halftone-dots', label: 'Paper · 半色调网点' },
+              { value: 'halftone-cmyk', label: 'Paper · 半色调 CMYK' }
             ]}
             popupClassName={SETTINGS_SELECT_POPUP_CLASS}
             popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
