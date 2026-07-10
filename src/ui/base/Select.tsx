@@ -212,8 +212,8 @@ export function Select({
         <BaseSelect.Positioner className={positionerClassName} sideOffset={6} alignItemWithTrigger={false}>
           <BaseSelect.Popup
             {...popupAttributes}
-            className={unstyled ? cx('base-select-popup t-dropdown', popupClassName) : cx(
-            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary shadow-ds-popover outline-none',
+            className={unstyled ? cx('base-select-popup t-dropdown overflow-y-auto overscroll-contain', popupClassName) : cx(
+            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary shadow-ds-popover outline-none',
             popupClassName
           )}
           >

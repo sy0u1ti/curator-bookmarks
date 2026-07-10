@@ -14,11 +14,18 @@ const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilte
 const paperShaderFilter = readFileSync('src/newtab/components/NewtabPaperShaderLayer.tsx', 'utf8')
 const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
 const viteConfig = readFileSync('vite.config.ts', 'utf8')
+const selectSource = readFileSync('src/ui/base/Select.tsx', 'utf8')
 
 assert.ok(
   newtabCss.includes('--newtab-glass-bg-hero') &&
     newtabCss.includes('[data-background-media="true"]'),
   'Newtab glass surfaces should strengthen over image and video backgrounds.'
+)
+
+assert.ok(
+  selectSource.includes("base-select-popup t-dropdown overflow-y-auto overscroll-contain") &&
+    selectSource.includes('max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain'),
+  'Long select popups should keep their height constraint and expose a wheel-scrollable overflow container.'
 )
 
 assert.ok(
