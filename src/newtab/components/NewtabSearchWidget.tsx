@@ -124,6 +124,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
     >
       <div
         className={SEARCH_SHELL_CLASS}
+        data-panel-open={view.panel.panelVisible ? 'true' : 'false'}
         onBlur={view.interactions.onRootBlur}
         onContextMenu={handleSearchContextMenu}
       >

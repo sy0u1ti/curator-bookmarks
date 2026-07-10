@@ -128,6 +128,12 @@ import {
   planSearchOpenTargets,
   type SearchEngineId
 } from './search-engines.js'
+import {
+  canUseNewtabSearchFocus,
+  getNewtabSearchFocusIntent,
+  getNextNewtabSearchValue,
+  type NewtabSearchFocusIntent
+} from './newtab-search-focus.js'
 import type { NewTabTimeSettings } from './time-settings.js'
 import {
   buildNewTabModuleSettingRows,
@@ -1145,16 +1151,22 @@ function getAddBookmarkFolderIdFromContextMenuTarget(target: EventTarget | null)
 
 function handleNewtabShellPointerDownCapture(event: ReactPointerEvent<HTMLDivElement>): void {
   const target = event.target
-  if (!(target instanceof Element) || (!state.activeMenuBookmarkId && !state.addMenuOpen)) {
+  if (!(target instanceof Element)) {
     return
   }
 
-  if (isBookmarkMenuInteractionTarget(target)) {
-    return
+  if (state.activeMenuBookmarkId || state.addMenuOpen) {
+    if (isBookmarkMenuInteractionTarget(target)) {
+      return
+    }
+
+    closeBookmarkMenu()
+    closeAddBookmarkMenu()
   }
 
-  closeBookmarkMenu()
-  closeAddBookmarkMenu()
+  if (shouldFocusSearchFromPointerDown(event, target)) {
+    window.setTimeout(focusNewtabSearchInput, 0)
+  }
 }
 
 function handleNewtabWindowResize(): void {
@@ -1238,7 +1250,8 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
     return
   }
 
-  if (!shouldFocusSearchFromKeydown(event)) {
+  const focusIntent = getDocumentSearchFocusIntent(event)
+  if (!focusIntent) {
     return
   }
 
@@ -1247,18 +1260,7 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
     return
   }
 
-  event.preventDefault()
-  input.focus()
-
-  if (event.key === '/') {
-    input.select()
-    return
-  }
-
-  if (event.key.length === 1) {
-    input.value = event.key
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  }
+  applyNewtabSearchFocusIntent(input, focusIntent, event)
 }
 
 function handleNewtabContentLayoutNodesChange(): void {
@@ -1285,27 +1287,97 @@ function handleDashboardOverlayNodesChange(): void {
   }
 }
 
-function shouldFocusSearchFromKeydown(event: KeyboardEvent): boolean {
+function getDocumentSearchFocusIntent(event: KeyboardEvent): NewtabSearchFocusIntent | null {
+  if (!canUseNewtabSearchFocus({
+    dashboardOpen: state.dashboardOpen,
+    draggingBookmark: Boolean(state.draggingBookmarkId),
+    draggingFolder: Boolean(state.draggingFolderId),
+    draggingSpeedDial: Boolean(state.speedDialDraggingBookmarkId),
+    editableTarget: isEditableEventTarget(event.target),
+    enabled: state.searchSettings.enabled,
+    featuredPickerOpen: isFeaturedBackgroundPickerOpen(),
+    menuOpen: Boolean(
+      state.activeMenuBookmarkId ||
+      state.addMenuOpen ||
+      getNewtabSearchWidgetView()?.engineMenu.open
+    ),
+    settingsOpen: isSettingsDrawerOpen()
+  })) {
+    return null
+  }
+
+  return getNewtabSearchFocusIntent(event)
+}
+
+function applyNewtabSearchFocusIntent(
+  input: HTMLInputElement,
+  intent: NewtabSearchFocusIntent,
+  event: KeyboardEvent
+): void {
+  focusNewtabSearchInput(input)
+
+  if (intent.type === 'focus') {
+    return
+  }
+
+  event.preventDefault()
+
+  if (intent.type === 'select') {
+    input.select()
+    return
+  }
+
+  const currentValue = input.value
+  const nextValue = getNextNewtabSearchValue(currentValue, intent)
+
+  if (nextValue === currentValue) {
+    return
+  }
+
+  input.value = nextValue
+  input.setSelectionRange(nextValue.length, nextValue.length)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+function focusNewtabSearchInput(input = getNewtabSearchWidgetNodes().input): boolean {
+  if (!input || !state.searchSettings.enabled) {
+    return false
+  }
+
+  input.focus({ preventScroll: true })
+  return document.activeElement === input
+}
+
+function shouldFocusSearchFromPointerDown(
+  event: ReactPointerEvent<HTMLDivElement>,
+  target: Element
+): boolean {
   if (
-    event.defaultPrevented ||
-    event.metaKey ||
-    event.ctrlKey ||
-    event.altKey ||
+    event.button !== 0 ||
     !state.searchSettings.enabled ||
     state.draggingBookmarkId ||
     state.draggingFolderId ||
-    state.activeMenuBookmarkId ||
-    state.addMenuOpen ||
+    state.speedDialDraggingBookmarkId ||
+    state.dashboardOpen ||
+    isFeaturedBackgroundPickerOpen() ||
     isSettingsDrawerOpen()
   ) {
     return false
   }
 
-  if (isSearchShortcutInteractiveTarget(event.target)) {
-    return false
-  }
-
-  return event.key === '/'
+  return !target.closest([
+    'a',
+    'button',
+    'input',
+    'textarea',
+    'select',
+    '[contenteditable="true"]',
+    '[role="button"]',
+    '[role="combobox"]',
+    '[role="menuitem"]',
+    '[role="option"]',
+    '[data-newtab-bookmark-menu-surface]'
+  ].join(','))
 }
 
 function shouldOpenDashboardFromKeydown(event: KeyboardEvent): boolean {
@@ -1327,16 +1399,6 @@ function isEditableEventTarget(target: EventTarget | null): boolean {
     target.getAttribute('role') === 'combobox' ||
     target.isContentEditable ||
     target.getAttribute('contenteditable') === 'true'
-}
-
-function isSearchShortcutInteractiveTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) {
-    return false
-  }
-
-  return isEditableEventTarget(target) ||
-    target instanceof HTMLButtonElement ||
-    target instanceof HTMLAnchorElement
 }
 
 function bindGeneralSettingsEvents(): void {
@@ -2662,7 +2724,7 @@ async function persistSpeedDialOrder(
     await saveNewTabWorkspaceSettings()
     postDashboardSpeedDialState()
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Speed Dial 排序保存失败，请刷新后重试。'
+    const message = error instanceof Error ? error.message : '固定入口排序保存失败，请刷新后重试。'
     const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
     state.workspaceSettings = updateNewTabWorkspace(
       state.workspaceSettings,
@@ -5300,7 +5362,7 @@ async function toggleDashboardBookmarkSpeedDial(bookmarkId: string): Promise<voi
     postDashboardSpeedDialState()
     updateClockText()
   } catch (error) {
-    console.warn('从书签仪表盘切换 Speed Dial 固定状态失败。', error)
+    console.warn('从书签仪表盘切换固定入口状态失败。', error)
   }
 }
 
@@ -7125,13 +7187,13 @@ function getSpeedDialPinActionCopyLocal(isPinned: boolean): {
   return isPinned
     ? {
         label: '取消固定',
-        status: '已从 Speed Dial 取消固定',
-        ariaLabel: '从 Speed Dial 取消固定书签'
+        status: '已取消固定入口',
+        ariaLabel: '取消固定入口'
       }
     : {
-        label: '固定到 Speed Dial',
-        status: '已固定到 Speed Dial',
-        ariaLabel: '固定书签到 Speed Dial'
+        label: '设为固定入口',
+        status: '已添加固定入口',
+        ariaLabel: '将书签设为固定入口'
       }
 }
 
@@ -7193,8 +7255,12 @@ function renderSpeedDialPanel(
   if (!items.length) {
     dispatchNewtabSpeedDialView({
       ariaBusy: false,
-      content: { type: 'empty', state: createSpeedDialEmptyState() },
-      meta: state.speedDialReorderError || '0 个固定入口',
+      content: {
+        type: 'empty',
+        state: createSpeedDialEmptyState(),
+        onOpenDashboard: () => openDashboardRoute(getNewtabDashboardOverlayNodes().trigger)
+      },
+      meta: state.speedDialReorderError || '尚未固定',
       metaTone: state.speedDialReorderError ? 'error' : ''
     })
     return

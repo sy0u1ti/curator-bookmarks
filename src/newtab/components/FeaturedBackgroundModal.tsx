@@ -157,7 +157,7 @@ function FeaturedBackgroundModal({
       >
         <header className="featured-wallpaper-head">
           <div>
-            <p className="featured-wallpaper-kicker">Featured Gallery</p>
+            <p className="featured-wallpaper-kicker">精选图库</p>
             <DialogTitle as="h3" id="background-featured-modal-title">选择精选图库壁纸</DialogTitle>
           </div>
           <div className="featured-wallpaper-actions">

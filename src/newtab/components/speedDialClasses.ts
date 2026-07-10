@@ -1,6 +1,6 @@
 import { cx } from '../../ui/base/utils'
 
-export const SPEED_DIAL_PANEL_CLASS = 'curator-motion-surface newtab-speed-dial mb-3.5 grid w-full min-w-0 gap-2.5 rounded-lg border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
+export const SPEED_DIAL_PANEL_CLASS = 'curator-motion-surface newtab-speed-dial mb-3.5 grid w-full min-w-0 gap-2.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
 export const SPEED_DIAL_HEADING_CLASS = 'newtab-module-heading grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5'
 export const SPEED_DIAL_TITLE_CLASS = 'm-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[780] leading-[1.2] text-[rgba(245,245,247,0.9)]'
 export const SPEED_DIAL_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] leading-[1.2] text-[rgba(245,245,247,0.44)] data-[tone=error]:text-[#ffb7b0]'
@@ -18,12 +18,13 @@ const SPEED_DIAL_CARD_GHOST_CLASS = 'speed-dial-drag-ghost fixed top-0 left-0 z-
 export const SPEED_DIAL_MARK_CLASS = 'newtab-speed-dial-mark h-[34px] w-[34px] rounded-lg bg-[rgba(0,0,0,0.34)] text-[14px] font-[840] leading-none text-[rgba(245,245,247,0.9)] [&_.bookmark-fallback]:h-[26px] [&_.bookmark-fallback]:w-[26px] [&_.bookmark-favicon.custom-icon]:h-[26px] [&_.bookmark-favicon.custom-icon]:w-[26px] [&_.bookmark-favicon]:h-[22px] [&_.bookmark-favicon]:w-[22px]'
 export const SPEED_DIAL_COPY_CLASS = 'newtab-speed-dial-copy grid min-w-0 gap-[3px]'
 export const SPEED_DIAL_COPY_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-[720] leading-[1.2]'
-export const SPEED_DIAL_COPY_DETAIL_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.2] text-[rgba(245,245,247,0.44)]'
+export const SPEED_DIAL_COPY_DETAIL_CLASS = 'newtab-speed-dial-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.2] text-[rgba(245,245,247,0.44)]'
 
-export const SPEED_DIAL_EMPTY_CLASS = 'newtab-speed-dial-empty grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.12)] bg-[rgba(21,21,22,0.54)] p-2 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)]'
+export const SPEED_DIAL_EMPTY_CLASS = 'newtab-speed-dial-empty grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3'
 export const SPEED_DIAL_EMPTY_COPY_CLASS = 'newtab-speed-dial-empty-copy grid min-w-0 gap-1'
 export const SPEED_DIAL_EMPTY_TITLE_CLASS = 'text-[12px] leading-[1.25] text-[rgba(245,245,247,0.84)]'
 export const SPEED_DIAL_EMPTY_DETAIL_CLASS = 'text-[11px] leading-[1.45] text-[rgba(245,245,247,0.44)]'
+export const SPEED_DIAL_EMPTY_ACTION_CLASS = 'inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-border)] bg-[rgba(245,245,247,0.07)] px-3 text-[11px] font-[650] text-[rgba(245,245,247,0.82)] transition-[background-color,border-color,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)] hover:border-[var(--newtab-glass-border-hover)] hover:bg-[rgba(245,245,247,0.11)] hover:text-[var(--ui-text-primary)] focus-visible:outline-none active:scale-[var(--ui-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
 
 export function getSpeedDialCardClass({
   dragActive = false,

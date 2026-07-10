@@ -424,7 +424,7 @@ function SettingsDrawerHeader() {
 
   return (
     <header className={SETTINGS_HEADER_CLASS}>
-      <p className={SETTINGS_KICKER_CLASS}>New Tab</p>
+      <p className={SETTINGS_KICKER_CLASS}>新标签页</p>
       <h1 id="newtab-settings-title" className={SETTINGS_TITLE_CLASS}>新标签页设置</h1>
       <p id="newtab-settings-summary" className={SETTINGS_SUMMARY_CLASS}>书签来源、背景、卡片布局、时间与搜索栏。</p>
       <output

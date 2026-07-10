@@ -42,6 +42,8 @@ export function useNewtabAppChromeAttributes() {
   } as CSSProperties
 
   return {
+    'data-background-media': background.type === 'color' ? undefined : 'true',
+    'data-background-type': background.type,
     'data-instant-wallpaper-pending': instantWallpaper.pending ? 'true' : undefined,
     'data-instant-wallpaper-remote-ready': instantWallpaper.remoteReady ? 'true' : undefined,
     'data-instant-wallpaper-signature': instantWallpaper.signature || undefined,

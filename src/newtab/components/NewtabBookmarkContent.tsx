@@ -75,7 +75,7 @@ const QUICK_MARK_DEFAULT_CLASS = 'bg-[rgba(245,245,247,0.08)] text-[rgba(245,245
 const QUICK_MARK_PINNED_CLASS = 'bg-[rgba(245,245,247,0.16)] text-[rgba(245,245,247,0.9)]'
 const QUICK_COPY_CLASS = 'newtab-quick-copy grid min-w-0 gap-0.5'
 const QUICK_COPY_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[720] leading-[1.15]'
-const QUICK_COPY_DETAIL_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.15] text-[rgba(245,245,247,0.42)]'
+const QUICK_COPY_DETAIL_CLASS = 'newtab-quick-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.15] text-[rgba(245,245,247,0.42)]'
 
 export function NewtabBookmarkContent({ hasSearch = false }: { hasSearch?: boolean }) {
   const state = useNewtabBookmarkContentView()

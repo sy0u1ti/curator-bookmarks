@@ -45,7 +45,7 @@ export function buildSpeedDialItems({
 export function createSpeedDialEmptyState(): SpeedDialEmptyState {
   return {
     title: '暂无固定入口',
-    detail: '将常用网站固定到这里，打开新标签页即可一键访问。'
+    detail: '从书签仪表盘选择常用书签，固定后可拖拽调整顺序。'
   }
 }
 
@@ -57,13 +57,13 @@ export function getSpeedDialPinActionCopy(isPinned: boolean): {
   return isPinned
     ? {
         label: '取消固定',
-        status: '已从 Speed Dial 取消固定',
-        ariaLabel: '从 Speed Dial 取消固定书签'
+        status: '已取消固定入口',
+        ariaLabel: '取消固定入口'
       }
     : {
-        label: '固定到 Speed Dial',
-        status: '已固定到 Speed Dial',
-        ariaLabel: '固定书签到 Speed Dial'
+        label: '设为固定入口',
+        status: '已添加固定入口',
+        ariaLabel: '将书签设为固定入口'
       }
 }
 

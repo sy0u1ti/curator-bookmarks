@@ -92,7 +92,7 @@ function DashboardOverlay({
           hidden={!hasError}
         >
           <div className={`newtab-dashboard-fallback-card ${DASHBOARD_CARD_CLASS}`}>
-            <p className="newtab-dashboard-fallback-kicker">Dashboard</p>
+            <p className="newtab-dashboard-fallback-kicker">书签仪表盘</p>
             <h2>书签仪表盘暂时无法打开</h2>
             <p id="newtab-dashboard-fallback-copy">
               {errorMessage || DEFAULT_DASHBOARD_ERROR_MESSAGE}

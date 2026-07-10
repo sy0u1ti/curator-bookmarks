@@ -6,6 +6,8 @@ import {
   type PointerEvent as ReactPointerEvent
 } from 'react'
 import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
+import { Button } from '../../ui/base/Button'
+import { Icon } from '../../ui/icons/Icon'
 import {
   setNewtabSpeedDialCardIconNode,
   setNewtabSpeedDialCardNode,
@@ -20,6 +22,7 @@ import {
   SPEED_DIAL_COPY_DETAIL_CLASS,
   SPEED_DIAL_COPY_TITLE_CLASS,
   SPEED_DIAL_EMPTY_CLASS,
+  SPEED_DIAL_EMPTY_ACTION_CLASS,
   SPEED_DIAL_EMPTY_COPY_CLASS,
   SPEED_DIAL_EMPTY_DETAIL_CLASS,
   SPEED_DIAL_EMPTY_TITLE_CLASS,
@@ -49,7 +52,7 @@ export interface SpeedDialCardViewModel {
 
 export type SpeedDialContentState =
   | { type: 'loading'; label: string }
-  | { type: 'empty'; state: SpeedDialEmptyState }
+  | { type: 'empty'; onOpenDashboard: () => void; state: SpeedDialEmptyState }
   | { type: 'items'; busy: boolean; items: SpeedDialCardViewModel[] }
 
 export interface SpeedDialPanelState {
@@ -67,7 +70,12 @@ export function SpeedDialPanelHost() {
   }
 
   return (
-    <section className={SPEED_DIAL_PANEL_CLASS} aria-label="Speed Dial" aria-busy={state.ariaBusy}>
+    <section
+      className={SPEED_DIAL_PANEL_CLASS}
+      data-content-type={state.content.type}
+      aria-label="固定入口"
+      aria-busy={state.ariaBusy}
+    >
       <SpeedDialPanel dragUi={dragUi} state={state} />
     </section>
   )
@@ -77,7 +85,7 @@ function SpeedDialPanel({ dragUi, state }: { dragUi: NewtabDragUiView; state: Sp
   return (
     <>
       <div className={SPEED_DIAL_HEADING_CLASS}>
-        <h2 className={SPEED_DIAL_TITLE_CLASS}>Speed Dial</h2>
+        <h2 className={SPEED_DIAL_TITLE_CLASS}>固定入口</h2>
         <span className={SPEED_DIAL_META_CLASS} data-tone={state.metaTone || undefined}>{state.meta}</span>
       </div>
       <SpeedDialContent dragUi={dragUi} state={state.content} />
@@ -103,6 +111,15 @@ function SpeedDialContent({ dragUi, state }: { dragUi: NewtabDragUiView; state: 
           <strong className={['t-stagger-line t-stagger-line--1', SPEED_DIAL_EMPTY_TITLE_CLASS].join(' ')}>{state.state.title}</strong>
           <span className={['t-stagger-line t-stagger-line--2', SPEED_DIAL_EMPTY_DETAIL_CLASS].join(' ')}>{state.state.detail}</span>
         </div>
+        <Button
+          className={SPEED_DIAL_EMPTY_ACTION_CLASS}
+          type="button"
+          onClick={state.onOpenDashboard}
+          unstyled
+        >
+          添加固定入口
+          <Icon name="Plus" size={14} aria-hidden="true" />
+        </Button>
       </div>
     )
   }
@@ -163,7 +180,7 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
       draggable={false}
       data-bookmark-id={item.id}
       data-speed-dial-bookmark-id={item.id}
-      aria-label={`打开固定入口：${item.title}。长按拖拽调整 Speed Dial 顺序`}
+      aria-label={`打开固定入口：${item.title}。长按拖拽调整固定入口顺序`}
       onClick={item.onNavigate}
       onContextMenu={item.onContextMenu}
       onPointerDown={item.onDragPointerDown}

@@ -25,7 +25,7 @@ const NEW_TAB_MODULE_SETTING_META: Record<
   Omit<NewTabModuleSettingRow, 'key' | 'enabled'>
 > = {
   speedDial: {
-    label: 'Speed Dial',
+    label: '固定入口',
     description: '显示固定的高频书签入口。'
   }
 }
