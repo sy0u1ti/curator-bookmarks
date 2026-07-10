@@ -63,10 +63,17 @@ assert.ok(
 
 assert.ok(
   bookmarkContent.includes('writeNewtabBookmarkPrebootSnapshotFromView') &&
-    bookmarkContent.includes('hideNewtabBookmarkPreboot(') &&
-    bookmarkIconShell.includes('onLoad=') &&
-    bookmarkIconShell.includes('BOOKMARK_FALLBACK_HIDDEN_CLASS'),
+    bookmarkContent.includes('hideNewtabBookmarkPreboot('),
   'Live bookmark content should hand off from the snapshot and keep an icon fallback until favicons load.'
+)
+
+assert.ok(
+  bookmarkIconShell.includes('onLoad=') &&
+    bookmarkIconShell.includes('data-favicon-ready') &&
+    bookmarkIconShell.includes('data-[favicon-ready=true]:opacity-100') &&
+    bookmarkIconShell.includes('data-[favicon-ready=true]:opacity-0') &&
+    !bookmarkIconShell.includes('BOOKMARK_FALLBACK_HIDDEN_CLASS'),
+  'A loaded favicon should hide its fallback through a state selector that wins the CSS cascade.'
 )
 
 const backgroundMaskTransition = newtabApp.match(/const BACKGROUND_MASK_BASE_CLASS = '([^']+)'/)?.[1] || ''
