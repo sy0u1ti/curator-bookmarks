@@ -222,7 +222,6 @@ export const EMPTY_POPUP_SMART_CLASSIFIER: PopupSmartClassifierViewModel = {
   error: '',
   loadingLabel: '',
   loadingProgress: 0,
-  loadingStartProgress: 0,
   loadingStep: 1,
   loadingStepCount: 3,
   page: null,

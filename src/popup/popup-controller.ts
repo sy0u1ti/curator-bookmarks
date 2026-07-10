@@ -138,8 +138,8 @@ import {
   SMART_LOADING_PROGRESS_COMPLETE_MS,
   SMART_LOADING_PROGRESS_TICK_MS,
   SMART_LOADING_STEP_COUNT,
-  advanceSmartProgressToStageStart,
   getNextSmartProgress,
+  getSmartCheckpointProgress,
   getSmartDisplayProgress,
   getSmartProgressTarget,
   normalizeSmartLoadingStep
@@ -1699,13 +1699,11 @@ function getPopupSmartClassifierViewModel(
   const progress = status === 'loading'
     ? getSmartDisplayProgress(state.smartProgressPercent, step)
     : targetProgress
-  const startProgress = Math.max(0, Math.min(getSmartDisplayProgress(state.smartProgressPercent, step), progress))
 
   return {
     error: state.smartError || '',
     loadingLabel: getSmartLoadingLabel(),
     loadingProgress: progress,
-    loadingStartProgress: startProgress,
     loadingStep: step,
     loadingStepCount: SMART_LOADING_STEP_COUNT,
     page: getPopupSmartPageViewModel(),
@@ -3289,9 +3287,11 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
   startSmartProgressTicker(runId)
   try {
     const smartClassifier = await loadSmartClassifierModule()
+    updateSmartProgressCheckpoint(runId, 1, 0.08)
     const settings = await loadAiProviderSettings()
     const settingsRunStillCurrent = state.smartRunId === runId
     if (!settingsRunStillCurrent) return
+    updateSmartProgressCheckpoint(runId, 1, 0.12)
     smartClassifier.validateSmartAiSettings(settings)
     const validationRunStillCurrent = state.smartRunId === runId
     if (!validationRunStillCurrent) return
@@ -3300,26 +3300,30 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     })
     const permissionsRunStillCurrent = state.smartRunId === runId
     if (!permissionsRunStillCurrent) return
-    if (!(await completeSmartProgressStage(runId, 2))) return
+    updateSmartProgressCheckpoint(runId, 1, 0.18)
     const pageContext = await smartClassifier.buildCurrentPageContext({
       currentUrl,
       currentTitle: getCurrentPageTitle(),
-      settings
+      settings,
+      onProgress: (checkpoint) => updateSmartProgressCheckpoint(runId, 1, checkpoint)
     })
     const contextRunStillCurrent = state.smartRunId === runId
     if (!contextRunStillCurrent) return
-    if (!(await completeSmartProgressStage(runId, 3))) return
+    if (!advanceSmartProgressStage(runId, 2)) return
     const aiResult = await smartClassifier.requestSmartClassification({
       settings,
       pageContext,
       currentUrl,
       currentTitle: getCurrentPageTitle(),
-      allFolders: state.allFolders
+      allFolders: state.allFolders,
+      onProgress: (checkpoint) => updateSmartProgressCheckpoint(runId, 2, checkpoint)
     })
     const classificationRunStillCurrent = state.smartRunId === runId
     if (!classificationRunStillCurrent) return
-    await waitForSmartLoadingPaint()
+    if (!advanceSmartProgressStage(runId, 3)) return
+    updateSmartProgressCheckpoint(runId, 3, 0.18)
     const recommendations = buildSmartRecommendations(aiResult)
+    updateSmartProgressCheckpoint(runId, 3, 0.58)
     state.smartSuggestedTitle = cleanSmartTitle(aiResult.title || getCurrentPageTitle())
     state.smartSummary = cleanSmartText(aiResult.summary, 360)
     state.smartContentType = cleanSmartText(aiResult.contentType, 80)
@@ -3336,6 +3340,7 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     renderSmartClassifier()
     if (state.smartRunId !== runId) return
     await waitForSmartProgressCompletion()
+    if (!isSmartLoadingRunActive(runId)) return
     state.smartStatus = 'results'
     renderSmartClassifier()
   } catch (error) {
@@ -3353,23 +3358,34 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     renderSmartClassifier()
   }
 }
-async function completeSmartProgressStage(runId: number, nextStep: number): Promise<boolean> {
+function advanceSmartProgressStage(runId: number, nextStep: number): boolean {
   if (!isSmartLoadingRunActive(runId)) {
     return false
   }
 
   const step = normalizeSmartLoadingStep(nextStep)
-  state.smartProgressPercent = advanceSmartProgressToStageStart(state.smartProgressPercent, step)
-  renderSmartClassifier()
-  if (!isSmartLoadingRunActive(runId)) {
-    return false
-  }
-  await waitForSmartProgressCompletion()
-
   state.smartStep = step
-  state.smartProgressPercent = advanceSmartProgressToStageStart(state.smartProgressPercent, step)
+  state.smartProgressPercent = Math.max(
+    state.smartProgressPercent,
+    getSmartCheckpointProgress(step, 0)
+  )
   renderSmartClassifier()
   return true
+}
+function updateSmartProgressCheckpoint(runId: number, rawStep: number, checkpoint: number): void {
+  if (!isSmartLoadingRunActive(runId)) {
+    return
+  }
+  const step = normalizeSmartLoadingStep(rawStep)
+  if (state.smartStep !== step) {
+    return
+  }
+  const nextProgress = getSmartCheckpointProgress(step, checkpoint)
+  if (nextProgress <= state.smartProgressPercent) {
+    return
+  }
+  state.smartProgressPercent = nextProgress
+  renderSmartClassifier()
 }
 function isSmartLoadingRunActive(runId: number): boolean {
   return state.smartRunId === runId && state.smartStatus === 'loading'
@@ -4282,19 +4298,18 @@ function getSmartLoadingLabel() {
 }
 function startSmartProgressTicker(runId: number) {
   stopSmartProgressTicker()
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    return
+  }
 
   const tick = () => {
-    if (state.smartRunId !== runId || state.smartStatus !== 'loading') {
+    if (!isSmartLoadingRunActive(runId)) {
       smartProgressTimer = null
       return
     }
 
-    const nextProgress = getNextSmartProgress(
-      Number(state.smartProgressPercent) || 0,
-      state.smartStep
-    )
-
-    if (Math.abs(nextProgress - state.smartProgressPercent) >= 0.01) {
+    const nextProgress = getNextSmartProgress(state.smartProgressPercent, state.smartStep)
+    if (nextProgress > state.smartProgressPercent) {
       state.smartProgressPercent = nextProgress
       renderSmartClassifier()
     }
@@ -4318,11 +4333,6 @@ function waitForSmartProgressCompletion() {
         window.setTimeout(resolve, SMART_LOADING_PROGRESS_COMPLETE_MS)
       })
     })
-  })
-}
-function waitForSmartLoadingPaint() {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(resolve)
   })
 }
 function cleanSmartTitle(value) {

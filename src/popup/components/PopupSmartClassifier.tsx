@@ -148,9 +148,9 @@ const progressTrackClass =
   'smart-progress-track relative h-[6px] overflow-hidden rounded-full bg-ds-text-primary/[0.08] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]'
 const progressBarClass = [
   'smart-progress-bar relative block h-full overflow-hidden rounded-[inherit]',
-  'bg-[linear-gradient(90deg,var(--ds-accent)_0%,var(--ds-focus)_55%,var(--ds-accent)_100%)]',
-  'shadow-[0_0_12px_rgba(0,110,254,0.24)]',
-  'transition-[width] duration-[420ms] ease-[cubic-bezier(0.22,1,0.36,1)] will-change-[width] motion-reduce:transition-none'
+  'origin-left bg-[rgba(237,237,237,0.86)]',
+  'shadow-[inset_0_1px_0_rgba(255,255,255,0.34)]',
+  'transition-transform duration-[320ms] ease-linear will-change-transform motion-reduce:transition-none'
 ].join(' ')
 
 const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
@@ -529,10 +529,7 @@ function PopupSmartLoading({
   state: PopupSmartClassifierViewModel
 }) {
   const loadingProgress = getSmartDisplayProgress(state.loadingProgress, state.loadingStep)
-  const loadingStartProgress = Math.min(
-    getSmartDisplayProgress(state.loadingStartProgress, state.loadingStep),
-    loadingProgress
-  )
+  const loadingPercent = Math.round(loadingProgress)
 
   return (
     <article className={loadingCardClass}>
@@ -547,7 +544,7 @@ function PopupSmartLoading({
             <p className={loadingCopyClass}>
               <span className="t-shimmer" data-text={state.loadingLabel}>{state.loadingLabel}</span>
               <small className={loadingStepClass}>
-                <NumberPop text={`${state.loadingStep}/${state.loadingStepCount}`} />
+                <NumberPop text={`${loadingPercent}%`} />
               </small>
             </p>
             <Progress
@@ -555,12 +552,14 @@ function PopupSmartLoading({
               indicatorClassName={progressBarClass}
               indicatorProps={{ 'data-smart-progress-target': loadingProgress } as Record<string, string | number>}
               indicatorStyle={{
-                '--smart-progress-scale': loadingProgress / 100,
-                '--smart-progress-start': loadingStartProgress / 100
+                width: '100%',
+                transform: `scaleX(${loadingProgress / 100})`,
+                transformOrigin: 'left center',
+                '--smart-progress-scale': loadingProgress / 100
               } as CSSProperties}
               label="智能分类进度"
               value={loadingProgress}
-              aria-valuetext={`${state.loadingLabel} ${state.loadingStep}/${state.loadingStepCount}`}
+              aria-valuetext={`${state.loadingLabel} 第 ${state.loadingStep}/${state.loadingStepCount} 阶段，已完成 ${loadingPercent}%`}
               unstyled
             />
           </div>

@@ -19,7 +19,6 @@ function testLoadingProgressIsClampedToVisibleStage(): void {
         ...getBaseSmartClassifierState(),
         loadingLabel: 'AI 分析内容…',
         loadingProgress: rawProgress,
-        loadingStartProgress: rawProgress,
         loadingStep: 2,
         status: 'loading'
       }
@@ -31,7 +30,11 @@ function testLoadingProgressIsClampedToVisibleStage(): void {
     target >= SMART_LOADING_STAGE_STARTS[1],
     `step 2 progress should render at the first divider, got ${target}`
   )
-  assert(!markup.includes('scaleX('), 'progress indicator should not scale an already width-based bar')
+  assert(markup.includes('width:100%'), 'progress indicator should override Base UI width before scaling')
+  assert(markup.includes('scaleX('), 'progress indicator should animate with a compositor-friendly transform')
+  assert(markup.includes(`${Math.round(target)}%`), 'progress copy should expose the visible percentage')
+  assert(!markup.includes('var(--ds-accent)'), 'smart progress should not use the popup blue accent')
+  assert(!markup.includes('var(--ds-focus)'), 'smart progress should not use the popup focus blue')
 }
 
 function testInitialSmartClassifierStateUsesStablePlaceholder(): void {
@@ -70,7 +73,6 @@ function getBaseSmartClassifierState(): PopupSmartClassifierViewModel {
     error: '',
     loadingLabel: '',
     loadingProgress: 0,
-    loadingStartProgress: 0,
     loadingStep: 1,
     loadingStepCount: 3,
     page: null,

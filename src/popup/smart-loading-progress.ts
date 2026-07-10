@@ -1,8 +1,10 @@
 export const SMART_LOADING_STEP_COUNT = 3
 export const SMART_LOADING_STAGE_STARTS = [0, 100 / 3, 200 / 3] as const
 export const SMART_LOADING_PROGRESS_TARGETS = [100 / 3, 200 / 3, 100] as const
-export const SMART_LOADING_PROGRESS_TICK_MS = 80
-const SMART_LOADING_PROGRESS_TRANSITION_MS = 420
+export const SMART_LOADING_PROGRESS_TICK_MS = 240
+const SMART_LOADING_PROGRESS_CREEP_PER_TICK = 0.04
+const SMART_LOADING_PROGRESS_TARGET_GAP = 0.2
+const SMART_LOADING_PROGRESS_TRANSITION_MS = 320
 const SMART_LOADING_PROGRESS_SETTLE_MS = 120
 export const SMART_LOADING_PROGRESS_COMPLETE_MS =
   SMART_LOADING_PROGRESS_TRANSITION_MS + SMART_LOADING_PROGRESS_SETTLE_MS
@@ -31,33 +33,36 @@ export function getSmartDisplayProgress(rawProgress: number, rawStep: number): n
   return Math.max(stageStart, Math.min(progress, targetProgress))
 }
 
-export function advanceSmartProgressToStageStart(rawProgress: number, rawStep: number): number {
-  return Math.max(normalizeSmartProgressValue(rawProgress), getSmartStageStart(rawStep))
+export function getSmartCheckpointProgress(rawStep: number, rawCheckpoint: number): number {
+  const step = normalizeSmartLoadingStep(rawStep)
+  const stageStart = getSmartStageStart(step)
+  const targetProgress = getSmartProgressTarget(step)
+  const checkpoint = normalizeSmartCheckpoint(rawCheckpoint)
+  return stageStart + (targetProgress - stageStart) * checkpoint
 }
 
 export function getNextSmartProgress(currentProgress: number, rawStep: number): number {
   const step = normalizeSmartLoadingStep(rawStep)
   const stageStart = getSmartStageStart(step)
   const targetProgress = getSmartProgressTarget(step)
-  const current = Math.max(0, Math.min(normalizeSmartProgressValue(currentProgress), targetProgress))
+  const current = Math.max(stageStart, Math.min(normalizeSmartProgressValue(currentProgress), targetProgress))
+  const visualCeiling = Math.max(stageStart, targetProgress - SMART_LOADING_PROGRESS_TARGET_GAP)
 
-  if (current < stageStart) {
-    const catchUpDelta = stageStart - current
-    return Math.min(stageStart, current + Math.max(2.2, catchUpDelta * 0.28))
-  }
-
-  const remaining = targetProgress - current
-  if (remaining <= 0.08) {
+  if (current >= visualCeiling) {
     return current
   }
 
-  const easing = step === 1 ? 0.12 : step === 2 ? 0.006 : 0.035
-  const minimumStep = step === 1 ? 1.15 : step === 2 ? 0.06 : 0.28
-  return Math.min(targetProgress - 0.02, current + Math.max(minimumStep, remaining * easing))
+  return Math.min(visualCeiling, current + SMART_LOADING_PROGRESS_CREEP_PER_TICK)
 }
 
 function normalizeSmartProgressValue(value: number): number {
   const numericValue = Number(value)
   const progress = Number.isFinite(numericValue) ? numericValue : 0
   return Math.max(0, Math.min(progress, 100))
+}
+
+function normalizeSmartCheckpoint(value: number): number {
+  const numericValue = Number(value)
+  const checkpoint = Number.isFinite(numericValue) ? numericValue : 0
+  return Math.max(0, Math.min(checkpoint, 1))
 }

@@ -154,7 +154,6 @@ export interface PopupSmartClassifierViewModel {
   error: string
   loadingLabel: string
   loadingProgress: number
-  loadingStartProgress: number
   loadingStep: number
   loadingStepCount: number
   page: PopupSmartPageViewModel | null

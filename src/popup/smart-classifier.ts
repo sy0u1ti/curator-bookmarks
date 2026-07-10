@@ -152,18 +152,22 @@ export async function ensureSmartClassifyPermissions(
 export async function buildCurrentPageContext({
   currentUrl,
   currentTitle,
-  settings
+  settings,
+  onProgress
 }: {
   currentUrl: string
   currentTitle: string
   settings: PopupSmartSettings
+  onProgress?: (checkpoint: number) => void
 }) {
   const contentExtraction = await loadContentExtractionModule()
+  reportSmartProgress(onProgress, 0.08)
   const timeoutMs = settings.timeoutMs
   let context = null
   const originPattern = contentExtraction.getDirectPageFetchOriginPattern(currentUrl)
   const canFetchDirectly = originPattern ? Boolean(await hasOptionalOriginPermission(originPattern)) : false
   const directFetchDecision = contentExtraction.decideDirectPageFetch(currentUrl, canFetchDirectly)
+  reportSmartProgress(onProgress, 0.18)
 
   if (!directFetchDecision.allowed) {
     context = contentExtraction.appendPageContentWarnings(
@@ -172,8 +176,10 @@ export async function buildCurrentPageContext({
       }),
       [directFetchDecision.warning]
     )
+    reportSmartProgress(onProgress, 0.64)
   } else {
     try {
+      reportSmartProgress(onProgress, 0.24)
       const response = await fetchWithSmartTimeout(currentUrl, {
         method: 'GET',
         cache: 'no-store',
@@ -181,21 +187,25 @@ export async function buildCurrentPageContext({
         redirect: 'follow',
         referrerPolicy: 'no-referrer'
       }, timeoutMs)
+      reportSmartProgress(onProgress, 0.4)
       const finalUrl = String(response.url || currentUrl || '')
       const contentType = String(response.headers.get('content-type') || '').toLowerCase()
 
       if (contentType.includes('text/html')) {
         const html = await response.text()
+        reportSmartProgress(onProgress, 0.54)
         context = contentExtraction.extractPageContentFromHtml(html, {
           url: finalUrl,
           currentTitle,
           contentType
         })
+        reportSmartProgress(onProgress, 0.64)
       } else {
         context = contentExtraction.buildFallbackPageContentFromUrl(finalUrl, {
           currentTitle,
           contentType
         })
+        reportSmartProgress(onProgress, 0.64)
       }
     } catch (error) {
       context = contentExtraction.appendPageContentWarnings(
@@ -205,22 +215,27 @@ export async function buildCurrentPageContext({
         }),
         [contentExtraction.getDirectPageFetchFailureWarning(error)]
       )
+      reportSmartProgress(onProgress, 0.64)
     }
   }
 
   if (settings.allowRemoteParsing) {
     const canUseRemoteParser = await hasOptionalOriginPermission(POPUP_JINA_READER_ORIGIN)
+    reportSmartProgress(onProgress, 0.72)
     if (!canUseRemoteParser) {
-      return contentExtraction.normalizePageContentContext({
+      const normalizedContext = contentExtraction.normalizePageContentContext({
         ...context,
         warnings: [
           ...(context.warnings || []),
           'Jina Reader 未授权，本次已跳过远程解析。'
         ]
       })
+      reportSmartProgress(onProgress, 1)
+      return normalizedContext
     }
 
     try {
+      reportSmartProgress(onProgress, 0.78)
       const remoteContext = await fetchRemoteCurrentPageContext({
         url: context.finalUrl || currentUrl,
         timeoutMs,
@@ -228,18 +243,24 @@ export async function buildCurrentPageContext({
         currentTitle,
         contentExtraction
       })
-      return contentExtraction.combinePageContentContexts(context, remoteContext)
+      reportSmartProgress(onProgress, 0.94)
+      const combinedContext = contentExtraction.combinePageContentContexts(context, remoteContext)
+      reportSmartProgress(onProgress, 1)
+      return combinedContext
     } catch (error) {
-      return contentExtraction.normalizePageContentContext({
+      const normalizedContext = contentExtraction.normalizePageContentContext({
         ...context,
         warnings: [
           ...(context.warnings || []),
           `远程解析失败：${normalizeSmartError(error)}`
         ]
       })
+      reportSmartProgress(onProgress, 1)
+      return normalizedContext
     }
   }
 
+  reportSmartProgress(onProgress, 1)
   return context
 }
 
@@ -288,13 +309,15 @@ export async function requestSmartClassification({
   pageContext,
   currentUrl,
   currentTitle,
-  allFolders
+  allFolders,
+  onProgress
 }: {
   settings: PopupSmartSettings
   pageContext: unknown
   currentUrl: string
   currentTitle: string
   allFolders: PopupSmartFolderLike[]
+  onProgress?: (checkpoint: number) => void
 }): Promise<PopupSmartAiResult> {
   const contentExtraction = await loadContentExtractionModule()
   const folderCandidates = buildAiFolderCandidates(allFolders)
@@ -314,7 +337,17 @@ export async function requestSmartClassification({
     timeoutMs: settings.timeoutMs,
     validate: (payload) => validateSmartFolderIds(payload, folderCandidates)
   })
-  return normalizeSmartAiResult(result.data, currentTitle)
+  reportSmartProgress(onProgress, 0.9)
+  const normalizedResult = normalizeSmartAiResult(result.data, currentTitle)
+  reportSmartProgress(onProgress, 1)
+  return normalizedResult
+}
+
+function reportSmartProgress(
+  onProgress: ((checkpoint: number) => void) | undefined,
+  checkpoint: number
+): void {
+  onProgress?.(Math.max(0, Math.min(Number(checkpoint) || 0, 1)))
 }
 
 function buildSmartAiPrompt({

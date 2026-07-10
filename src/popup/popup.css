@@ -74,11 +74,11 @@ body::after {
 
 @keyframes smart-progress-sheen {
   0% {
-    transform: translateX(-120%);
+    transform: translateX(-140%);
   }
 
   100% {
-    transform: translateX(360%);
+    transform: translateX(520%);
   }
 }
 
@@ -106,11 +106,11 @@ body::after {
 .smart-progress-bar::after {
   position: absolute;
   inset: -1px auto -1px 0;
-  width: 33.333333%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  width: 22%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
   content: "";
-  transform: translateX(-120%);
-  animation: smart-progress-sheen 1400ms linear infinite;
+  transform: translateX(-140%);
+  animation: smart-progress-sheen 1600ms linear infinite;
 }
 
 :where(
@@ -359,5 +359,13 @@ button:focus-visible {
   #popup-root :where(*, *::before, *::after),
   #toast-root :where(*, *::before, *::after) {
     transform: none;
+  }
+
+  #popup-root .smart-progress-bar {
+    transform: scaleX(var(--smart-progress-scale)) !important;
+  }
+
+  #popup-root .smart-progress-bar::after {
+    animation: none !important;
   }
 }
