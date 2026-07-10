@@ -1178,7 +1178,10 @@ function BackgroundSettingsSection({
               { value: 'dark', label: '暗色增强' },
               { value: 'frosted', label: '磨砂柔化' },
               { value: 'noise', label: '胶片噪点' },
-              { value: 'light', label: '亮色柔化' }
+              { value: 'light', label: '亮色柔化' },
+              { value: 'grain', label: '颗粒滤镜' },
+              { value: 'halftone', label: '网点滤镜' },
+              { value: 'ascii', label: 'ASCII 滤镜' }
             ]}
             popupClassName={SETTINGS_SELECT_POPUP_CLASS}
             popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
@@ -1191,7 +1194,10 @@ function BackgroundSettingsSection({
             valueClassName={SETTINGS_SELECT_VALUE_CLASS}
           />
         </div>
-        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
+        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
+        <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="采样强度" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', value)} sliderValue={backgroundSettings.maskFilterStrength} />
+        <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label="元素尺寸" valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素尺寸" hidden={backgroundSettings.maskFilterSizeHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', value)} sliderValue={backgroundSettings.maskFilterSize} />
+        <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label="元素间距" valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', value)} sliderValue={backgroundSettings.maskFilterSpacing} />
       </Surface>
     </section>
   )

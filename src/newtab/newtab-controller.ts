@@ -347,6 +347,15 @@ import {
   type NewtabBackgroundSettingsFieldKey
 } from './newtab-background-settings-store.js'
 import {
+  DEFAULT_BACKGROUND_MASK_BLUR,
+  DEFAULT_BACKGROUND_MASK_FILTER_SIZE,
+  DEFAULT_BACKGROUND_MASK_FILTER_SPACING,
+  DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
+  DEFAULT_BACKGROUND_MASK_STYLE,
+  normalizeBackgroundMaskPercentage,
+  normalizeBackgroundMaskStyle
+} from './background-mask-settings.js'
+import {
   dispatchNewtabBackgroundMediaView,
   getNewtabBackgroundMediaView
 } from './newtab-background-media-store.js'
@@ -402,12 +411,14 @@ const DEFAULT_BACKGROUND_SETTINGS = {
   url: '',
   featuredId: '',
   maskEnabled: false,
-  maskStyle: 'dark',
-  maskBlur: 12
+  maskStyle: DEFAULT_BACKGROUND_MASK_STYLE,
+  maskBlur: DEFAULT_BACKGROUND_MASK_BLUR,
+  maskFilterStrength: DEFAULT_BACKGROUND_MASK_FILTER_STRENGTH,
+  maskFilterSize: DEFAULT_BACKGROUND_MASK_FILTER_SIZE,
+  maskFilterSpacing: DEFAULT_BACKGROUND_MASK_FILTER_SPACING
 }
 const DEFAULT_FEATURED_BACKGROUND_PLACEHOLDER_COLOR = '#18200f'
 const SUPPORTED_BACKGROUND_TYPES = new Set(['featured', 'image', 'video', 'urls', 'color'])
-const SUPPORTED_BACKGROUND_MASK_STYLES = new Set(['dark', 'frosted', 'noise', 'light'])
 const DEFAULT_SEARCH_SETTINGS = {
   enabled: true,
   webSearchEnabled: true,
@@ -8289,10 +8300,20 @@ function normalizeBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKG
     url: String(settings.url || '').trim(),
     featuredId,
     maskEnabled: settings.maskEnabled === true,
-    maskStyle: SUPPORTED_BACKGROUND_MASK_STYLES.has(String(settings.maskStyle))
-      ? String(settings.maskStyle)
-      : DEFAULT_BACKGROUND_SETTINGS.maskStyle,
-    maskBlur: clampNumber(settings.maskBlur, 0, 32, DEFAULT_BACKGROUND_SETTINGS.maskBlur)
+    maskStyle: normalizeBackgroundMaskStyle(settings.maskStyle),
+    maskBlur: clampNumber(settings.maskBlur, 0, 32, DEFAULT_BACKGROUND_SETTINGS.maskBlur),
+    maskFilterStrength: normalizeBackgroundMaskPercentage(
+      settings.maskFilterStrength,
+      DEFAULT_BACKGROUND_SETTINGS.maskFilterStrength
+    ),
+    maskFilterSize: normalizeBackgroundMaskPercentage(
+      settings.maskFilterSize,
+      DEFAULT_BACKGROUND_SETTINGS.maskFilterSize
+    ),
+    maskFilterSpacing: normalizeBackgroundMaskPercentage(
+      settings.maskFilterSpacing,
+      DEFAULT_BACKGROUND_SETTINGS.maskFilterSpacing
+    )
   }
 }
 

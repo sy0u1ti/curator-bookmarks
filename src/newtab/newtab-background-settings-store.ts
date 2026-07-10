@@ -1,5 +1,11 @@
 import { useSyncExternalStore } from 'react'
-import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences'
+import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences.js'
+import {
+  doesBackgroundMaskFilterSupportGeometry,
+  isLegacyBackgroundMaskStyle,
+  isWallpaperFilterMaskStyle,
+  type BackgroundMaskStyle
+} from './background-mask-settings.js'
 
 export interface NewtabBackgroundSettingsView {
   backgroundStatus: string
@@ -22,8 +28,15 @@ export interface NewtabBackgroundSettingsView {
   imageName: string
   imageRowHidden: boolean
   maskBlur: number
+  maskBlurHidden: boolean
   maskEnabled: boolean
-  maskStyle: string
+  maskFilterSize: number
+  maskFilterSizeHidden: boolean
+  maskFilterSpacing: number
+  maskFilterSpacingHidden: boolean
+  maskFilterStrength: number
+  maskFilterStrengthHidden: boolean
+  maskStyle: BackgroundMaskStyle
   maskStyleHidden: boolean
   positionX: number
   positionXMax: number
@@ -44,7 +57,10 @@ export interface NewtabBackgroundSettingsSource {
   imageName: string
   maskEnabled: boolean
   maskBlur: number
-  maskStyle: string
+  maskFilterSize: number
+  maskFilterSpacing: number
+  maskFilterStrength: number
+  maskStyle: BackgroundMaskStyle
   type: string
   url: string
   videoName: string
@@ -55,6 +71,9 @@ export type NewtabBackgroundSettingsFieldKey =
   | 'displaySize'
   | 'featuredId'
   | 'maskBlur'
+  | 'maskFilterSize'
+  | 'maskFilterSpacing'
+  | 'maskFilterStrength'
   | 'maskStyle'
   | 'positionX'
   | 'positionY'
@@ -89,7 +108,14 @@ const EMPTY_VIEW: NewtabBackgroundSettingsView = {
   imageName: '',
   imageRowHidden: true,
   maskBlur: 12,
+  maskBlurHidden: true,
   maskEnabled: false,
+  maskFilterSize: 50,
+  maskFilterSizeHidden: true,
+  maskFilterSpacing: 50,
+  maskFilterSpacingHidden: true,
+  maskFilterStrength: 50,
+  maskFilterStrengthHidden: true,
   maskStyle: 'dark',
   maskStyleHidden: true,
   positionX: 50,
@@ -149,6 +175,9 @@ export function createNewtabBackgroundSettingsView(
   >> = {}
 ): NewtabBackgroundSettingsView {
   const featuredPickerSelected = ui.featuredPickerSelected ?? Boolean(settings.featuredId)
+  const maskControlsHidden = !settings.maskEnabled
+  const maskFilterSelected = isWallpaperFilterMaskStyle(settings.maskStyle)
+  const maskFilterGeometrySupported = doesBackgroundMaskFilterSupportGeometry(settings.maskStyle)
 
   return {
     backgroundStatus: ui.backgroundStatus ?? '',
@@ -171,7 +200,14 @@ export function createNewtabBackgroundSettingsView(
     imageName: settings.imageName,
     imageRowHidden: settings.type !== 'image',
     maskBlur: settings.maskBlur,
+    maskBlurHidden: maskControlsHidden || !isLegacyBackgroundMaskStyle(settings.maskStyle),
     maskEnabled: settings.maskEnabled,
+    maskFilterSize: settings.maskFilterSize,
+    maskFilterSizeHidden: maskControlsHidden || !maskFilterGeometrySupported,
+    maskFilterSpacing: settings.maskFilterSpacing,
+    maskFilterSpacingHidden: maskControlsHidden || !maskFilterGeometrySupported,
+    maskFilterStrength: settings.maskFilterStrength,
+    maskFilterStrengthHidden: maskControlsHidden || !maskFilterSelected,
     maskStyle: settings.maskStyle,
     maskStyleHidden: !settings.maskEnabled,
     positionX: preferences.positionX,

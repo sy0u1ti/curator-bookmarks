@@ -13,6 +13,7 @@ import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
 import { NewtabDragLayerHost } from './components/NewtabDragLayerHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
+import { NewtabWallpaperFilterLayer } from './components/NewtabWallpaperFilterLayer'
 import { SettingsDrawerHost } from './components/SettingsDrawer'
 import {
   dispatchNewtabBookmarkChanged,
@@ -55,9 +56,10 @@ import {
 } from './newtab-background-settings-store'
 import { useNewtabInstantWallpaperView } from './newtab-instant-wallpaper-store'
 import { useNewtabFolderSourceView } from './newtab-folder-source-store'
+import { isLegacyBackgroundMaskStyle } from './background-mask-settings'
 
 const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard)] before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay before:[transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)]'
-const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100 newtab-background-mask-filter'
+const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100'
 const BACKGROUND_MASK_STYLE_CLASS_BY_STYLE = {
   dark: 'bg-[rgba(0,0,0,0.18)]',
   frosted: 'bg-[rgba(18,18,20,0.1)]',
@@ -201,6 +203,7 @@ function NewtabShell() {
       <NewtabInstantWallpaperHost />
       <NewtabBackgroundLayer loadingWallpaper={instantWallpaper.loading} />
       <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
+      <NewtabWallpaperFilterLayer />
       <div
         id="newtab-background-mask"
         className={getBackgroundMaskClass(backgroundSettings)}
@@ -321,11 +324,10 @@ function getBackgroundMaskClass(background: NewtabBackgroundSettingsView): strin
 }
 
 function getBackgroundMaskStyleClass(maskStyle: string): string {
-  if (maskStyle === 'frosted' || maskStyle === 'light' || maskStyle === 'noise') {
-    return BACKGROUND_MASK_STYLE_CLASS_BY_STYLE[maskStyle]
+  if (!isLegacyBackgroundMaskStyle(maskStyle)) {
+    return ''
   }
-
-  return BACKGROUND_MASK_STYLE_CLASS_BY_STYLE.dark
+  return `${BACKGROUND_MASK_STYLE_CLASS_BY_STYLE[maskStyle]} newtab-background-mask-filter`
 }
 
 function getSettingsTriggerButtonClass(autoHide: boolean, className = ''): string {

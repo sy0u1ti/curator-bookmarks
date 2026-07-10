@@ -50,6 +50,17 @@
   backdrop-filter: blur(clamp(0px, calc(var(--background-mask-blur) / 3), 8px)) saturate(1.02) brightness(0.98);
 }
 
+.newtab-wallpaper-filter {
+  opacity: 0;
+  contain: strict;
+  transform: translateZ(0);
+  transition: opacity 180ms var(--ui-ease-standard);
+}
+
+.newtab-wallpaper-filter[data-ready="false"] {
+  opacity: 0 !important;
+}
+
 html,
 body {
   width: 100%;

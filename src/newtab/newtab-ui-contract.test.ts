@@ -9,12 +9,34 @@ const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.
 const newtabApp = readFileSync('src/newtab/NewtabApp.tsx', 'utf8')
 const newtabMain = readFileSync('src/newtab/main.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
+const settingsDrawer = readFileSync('src/newtab/components/SettingsDrawer.tsx', 'utf8')
+const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx', 'utf8')
+const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
 const viteConfig = readFileSync('vite.config.ts', 'utf8')
 
 assert.ok(
   newtabCss.includes('--newtab-glass-bg-hero') &&
     newtabCss.includes('[data-background-media="true"]'),
   'Newtab glass surfaces should strengthen over image and video backgrounds.'
+)
+
+assert.ok(
+  ['dark', 'frosted', 'noise', 'light', 'grain', 'halftone', 'ascii'].every((style) =>
+    backgroundMaskSettings.includes(`'${style}'`)
+  ) &&
+    settingsDrawer.includes('颗粒滤镜') &&
+    settingsDrawer.includes('网点滤镜') &&
+    settingsDrawer.includes('ASCII 滤镜'),
+  'The background mask selector should retain all four original styles and add the three wallpaper filters.'
+)
+
+assert.ok(
+  wallpaperFilter.includes("ASCII_CHARS = '  .,:;irsXA253hMHGS#9B&@'") &&
+    wallpaperFilter.includes('drawGrain') &&
+    wallpaperFilter.includes('drawHalftone') &&
+    wallpaperFilter.includes('drawAscii') &&
+    newtabApp.indexOf('<NewtabWallpaperFilterLayer />') < newtabApp.indexOf('id="newtab-background-mask"'),
+  'Wallpaper filters should use the sampled Canvas renderer below the existing mask layer.'
 )
 
 const focusRingDeclaration = newtabCss.match(/--newtab-focus-ring:[^;]+;/)?.[0] || ''
