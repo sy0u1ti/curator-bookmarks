@@ -130,6 +130,7 @@ import {
 } from './search-engines.js'
 import {
   canUseNewtabSearchFocus,
+  getNewtabBlankPointerAction,
   getNewtabSearchFocusIntent,
   getNextNewtabSearchValue,
   type NewtabSearchFocusIntent
@@ -1164,8 +1165,16 @@ function handleNewtabShellPointerDownCapture(event: ReactPointerEvent<HTMLDivEle
     closeAddBookmarkMenu()
   }
 
-  if (shouldFocusSearchFromPointerDown(event, target)) {
-    window.setTimeout(focusNewtabSearchInput, 0)
+  if (shouldToggleSearchFocusFromPointerDown(event, target)) {
+    const input = getNewtabSearchWidgetNodes().input
+    const action = getNewtabBlankPointerAction(Boolean(input && document.activeElement === input))
+    window.setTimeout(() => {
+      if (action === 'blur') {
+        input?.blur()
+        return
+      }
+      focusNewtabSearchInput(input)
+    }, 0)
   }
 }
 
@@ -1348,7 +1357,7 @@ function focusNewtabSearchInput(input = getNewtabSearchWidgetNodes().input): boo
   return document.activeElement === input
 }
 
-function shouldFocusSearchFromPointerDown(
+function shouldToggleSearchFocusFromPointerDown(
   event: ReactPointerEvent<HTMLDivElement>,
   target: Element
 ): boolean {

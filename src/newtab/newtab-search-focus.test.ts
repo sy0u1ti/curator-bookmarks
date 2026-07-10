@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   canUseNewtabSearchFocus,
+  getNewtabBlankPointerAction,
   getNewtabSearchFocusIntent,
   getNextNewtabSearchValue
 } from './newtab-search-focus.js'
@@ -99,6 +100,17 @@ assert.equal(
 assert.equal(
   getNextNewtabSearchValue('git', { type: 'focus' }),
   'git'
+)
+
+assert.equal(
+  getNewtabBlankPointerAction(false),
+  'focus',
+  'The first blank click should focus search.'
+)
+assert.equal(
+  getNewtabBlankPointerAction(true),
+  'blur',
+  'A second blank click should release search focus.'
 )
 
 console.log('newtab search focus tests passed')

@@ -12,10 +12,11 @@ assert.ok(
   'Newtab glass surfaces should strengthen over image and video backgrounds.'
 )
 
+const focusRingDeclaration = newtabCss.match(/--newtab-focus-ring:[^;]+;/)?.[0] || ''
 assert.ok(
-  newtabCss.includes('--newtab-focus-ring') &&
-    newtabCss.includes('rgba(71, 168, 255'),
-  'Interactive glass surfaces should use the DESIGN.md blue focus ring.'
+  focusRingDeclaration.includes('rgba(245, 245, 247') &&
+    !focusRingDeclaration.includes('71, 168, 255'),
+  'Newtab focus feedback should stay inside the neutral gray-white palette.'
 )
 
 assert.ok(
@@ -28,7 +29,7 @@ assert.ok(
 
 assert.ok(
   controller.includes('getNewtabSearchFocusIntent') &&
-    controller.includes('shouldFocusSearchFromPointerDown'),
+    controller.includes('shouldToggleSearchFocusFromPointerDown'),
   'Typing and blank-surface pointer input should focus newtab search.'
 )
 
@@ -44,6 +45,13 @@ assert.ok(
     newtabCss.includes('@media (max-height: 680px)') &&
     newtabCss.includes('@media (max-width: 520px) and (max-height: 800px)'),
   'Newtab should adapt density for short desktop viewports.'
+)
+
+assert.ok(
+  newtabCss.includes('.bookmark-folder-section:hover') &&
+    newtabCss.includes('.bookmark-folder-section:focus-within') &&
+    newtabCss.includes('content-visibility: visible'),
+  'Visible bookmark sections should release paint containment so edge-card shadows are not clipped.'
 )
 
 console.log('newtab UI contract tests passed')

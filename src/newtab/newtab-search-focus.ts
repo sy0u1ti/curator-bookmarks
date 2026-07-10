@@ -15,6 +15,12 @@ export type NewtabSearchFocusIntent =
   | { type: 'focus' }
   | { type: 'select' }
 
+export type NewtabBlankPointerAction = 'blur' | 'focus'
+
+export function getNewtabBlankPointerAction(searchFocused: boolean): NewtabBlankPointerAction {
+  return searchFocused ? 'blur' : 'focus'
+}
+
 export interface NewtabSearchFocusContext {
   dashboardOpen: boolean
   draggingBookmark: boolean

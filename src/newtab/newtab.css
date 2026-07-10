@@ -22,7 +22,7 @@
   --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --newtab-glass-filter: blur(12px) saturate(1.12);
   --newtab-glass-filter-soft: blur(8px) saturate(1.06);
-  --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.72), 0 0 0 4px rgba(71, 168, 255, 0.86);
+  --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.68), 0 0 0 4px rgba(245, 245, 247, 0.42);
 }
 
 .newtab-app[data-background-media="true"] {
@@ -1001,7 +1001,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 .newtab-search-shell[data-panel-open="true"] .newtab-search {
-  border-color: rgba(71, 168, 255, 0.86);
+  border-color: rgba(245, 245, 247, 0.34);
   border-bottom-color: transparent;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
@@ -1011,7 +1011,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 
 .newtab-search-shell[data-panel-open="true"] .newtab-search-suggestions-panel {
   top: calc(var(--search-height) - 1px);
-  border-color: rgba(71, 168, 255, 0.86);
+  border-color: rgba(245, 245, 247, 0.34);
   border-top-color: transparent;
   border-radius: 0 0 var(--ui-radius-group) var(--ui-radius-group);
 }
@@ -1037,6 +1037,12 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .newtab-speed-dial[data-content-type="empty"] .newtab-module-heading {
   grid-template-columns: auto auto;
   align-items: center;
+}
+
+.bookmark-folder-section:hover,
+.bookmark-folder-section:focus-within,
+.bookmark-folder-section.dragging-folder {
+  content-visibility: visible;
 }
 
 @media (max-height: 800px) {
