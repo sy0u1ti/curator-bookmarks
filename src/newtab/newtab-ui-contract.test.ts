@@ -5,7 +5,11 @@ const newtabCss = readFileSync('src/newtab/newtab.css', 'utf8')
 const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkContent.tsx', 'utf8')
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
+const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.tsx', 'utf8')
+const newtabApp = readFileSync('src/newtab/NewtabApp.tsx', 'utf8')
+const newtabMain = readFileSync('src/newtab/main.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
+const viteConfig = readFileSync('vite.config.ts', 'utf8')
 
 assert.ok(
   newtabCss.includes('--newtab-glass-bg-hero') &&
@@ -39,6 +43,37 @@ assert.ok(
     speedDial.includes('添加固定入口') &&
     speedDial.includes('data-content-type'),
   'The empty fixed-entry module should provide a compact, actionable state.'
+)
+
+assert.ok(
+  newtabMain.includes('startNewTabController()') &&
+    newtabMain.includes('createRoot(root).render') &&
+    newtabMain.indexOf('startNewTabController()') < newtabMain.indexOf('createRoot(root).render') &&
+    controller.includes("from './speed-dial.js'") &&
+    !controller.includes("import('./speed-dial.js')"),
+  'Newtab data and fixed-entry state should begin hydrating before the first React render.'
+)
+
+assert.ok(
+  viteConfig.includes('NEWTAB_BOOKMARK_PREBOOT_ROUTE') &&
+    viteConfig.includes('NEWTAB_BOOKMARK_PREBOOT_ENTRY') &&
+    viteConfig.includes('`<body>\\n    <script src="${NEWTAB_BOOKMARK_PREBOOT_ROUTE}"></script>`'),
+  'Newtab should install its stable bookmark snapshot before the React root is parsed.'
+)
+
+assert.ok(
+  bookmarkContent.includes('writeNewtabBookmarkPrebootSnapshotFromView') &&
+    bookmarkContent.includes('hideNewtabBookmarkPreboot(') &&
+    bookmarkIconShell.includes('onLoad=') &&
+    bookmarkIconShell.includes('BOOKMARK_FALLBACK_HIDDEN_CLASS'),
+  'Live bookmark content should hand off from the snapshot and keep an icon fallback until favicons load.'
+)
+
+const backgroundMaskTransition = newtabApp.match(/const BACKGROUND_MASK_BASE_CLASS = '([^']+)'/)?.[1] || ''
+assert.ok(
+  backgroundMaskTransition.includes('transition:opacity_') &&
+    !backgroundMaskTransition.includes('backdrop-filter_var'),
+  'The background mask should not animate backdrop-filter during startup.'
 )
 
 assert.ok(

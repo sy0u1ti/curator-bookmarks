@@ -163,6 +163,7 @@ import {
   isFeaturedBackgroundProvider
 } from './featured-background-providers.js'
 import { getSpeedDialFaviconLoadAttributes } from './speed-dial-load-attributes.js'
+import { buildSpeedDialItems, createSpeedDialEmptyState } from './speed-dial.js'
 import type { SpeedDialItem } from './speed-dial-types.js'
 import {
   createFolderDragSectionRectSnapshot,
@@ -467,18 +468,15 @@ type NewTabSearchSuggestion =
   | NewTabCommandSearchSuggestion
 type BackgroundGalleryModule = typeof import('./background-gallery.js')
 type BackgroundGalleryRefreshModule = typeof import('./background-gallery-refresh.js')
-type SpeedDialModule = typeof import('./speed-dial.js')
 type TimeSettingsModule = typeof import('./time-settings.js')
 
 let backgroundGalleryModulePromise: Promise<BackgroundGalleryModule> | null = null
 let backgroundGalleryModule: BackgroundGalleryModule | null = null
 let backgroundGalleryRefreshModulePromise: Promise<BackgroundGalleryRefreshModule> | null = null
-let speedDialModulePromise: Promise<SpeedDialModule> | null = null
 let timeSettingsModulePromise: Promise<TimeSettingsModule> | null = null
 let timeSettingsModule: TimeSettingsModule | null = null
 let featuredBackgroundUiVersion = 0
 let featuredBackgroundPickerRenderKey = ''
-let speedDialRenderVersion = 0
 let clockHydrationVersion = 0
 
 const SEARCH_SUGGESTION_LIMIT = 6
@@ -547,11 +545,6 @@ function loadBackgroundGalleryModule(): Promise<BackgroundGalleryModule> {
 function loadBackgroundGalleryRefreshModule(): Promise<BackgroundGalleryRefreshModule> {
   backgroundGalleryRefreshModulePromise ||= import('./background-gallery-refresh.js')
   return backgroundGalleryRefreshModulePromise
-}
-
-function loadSpeedDialModule(): Promise<SpeedDialModule> {
-  speedDialModulePromise ||= import('./speed-dial.js')
-  return speedDialModulePromise
 }
 
 function loadTimeSettingsModule(): Promise<TimeSettingsModule> {
@@ -886,7 +879,7 @@ export function useNewtabController(): void {
   }, [])
 }
 
-function startNewTabController(): void {
+export function startNewTabController(): void {
   if (newTabControllerStarted) {
     return
   }
@@ -7212,41 +7205,20 @@ function createSpeedDialPanel(): 'speedDial' | null {
     return null
   }
 
-  dispatchNewtabSpeedDialView({
-    ariaBusy: true,
-    content: { type: 'loading', label: '载入固定入口' },
-    meta: '正在载入'
-  })
   hydrateSpeedDialPanel()
   return 'speedDial'
 }
 
 function hydrateSpeedDialPanel(): void {
-  const renderVersion = ++speedDialRenderVersion
-  void loadSpeedDialModule()
-    .then((speedDial) => {
-      if (
-        renderVersion !== speedDialRenderVersion ||
-        !state.moduleSettings.speedDial
-      ) {
-        return
-      }
-
-      const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
-      const items = speedDial.buildSpeedDialItems({
-        pinnedIds: activeWorkspace.pinnedIds,
-        bookmarks: state.allBookmarkMap
-      })
-      renderSpeedDialPanel(items, speedDial.createSpeedDialEmptyState)
-    })
-    .catch(() => {
-      dispatchNewtabSpeedDialView({
-        ariaBusy: false,
-        content: { type: 'loading', label: '载入固定入口' },
-        meta: '暂时无法载入',
-        metaTone: 'error'
-      })
-    })
+  if (!state.moduleSettings.speedDial) {
+    return
+  }
+  const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
+  const items = buildSpeedDialItems({
+    pinnedIds: activeWorkspace.pinnedIds,
+    bookmarks: state.allBookmarkMap
+  })
+  renderSpeedDialPanel(items)
 }
 
 function refreshSpeedDialPanel(): void {
@@ -7258,8 +7230,7 @@ function refreshSpeedDialPanel(): void {
 }
 
 function renderSpeedDialPanel(
-  items: SpeedDialItem[],
-  createSpeedDialEmptyState: SpeedDialModule['createSpeedDialEmptyState']
+  items: SpeedDialItem[]
 ): void {
   if (!items.length) {
     dispatchNewtabSpeedDialView({

@@ -8,6 +8,8 @@ import manifest from './src/manifest.json' with { type: 'json' }
 
 const INSTANT_WALLPAPER_BOOT_ROUTE = '/instant-wallpaper-boot.js'
 const INSTANT_WALLPAPER_BOOT_ENTRY = 'src/newtab/instant-wallpaper-boot.ts'
+const NEWTAB_BOOKMARK_PREBOOT_ROUTE = '/newtab-bookmark-preboot.js'
+const NEWTAB_BOOKMARK_PREBOOT_ENTRY = 'src/newtab/newtab-bookmark-preboot-entry.ts'
 const POPUP_PREBOOT_ROUTE = '/popup-preboot.js'
 const POPUP_PREBOOT_ENTRY = 'src/popup/popup-preboot.ts'
 
@@ -17,16 +19,39 @@ function instantWallpaperBootPlugin(minify: boolean): Plugin {
     transformIndexHtml: {
       order: 'post',
       handler(html, context) {
-        if (!context.path.endsWith('/src/newtab/newtab.html') || html.includes(INSTANT_WALLPAPER_BOOT_ROUTE)) {
+        if (!context.path.endsWith('/src/newtab/newtab.html')) {
           return html
         }
-        return html.replace('<head>', `<head>\n    <script src="${INSTANT_WALLPAPER_BOOT_ROUTE}"></script>`)
+        let transformedHtml = html
+        if (!transformedHtml.includes(INSTANT_WALLPAPER_BOOT_ROUTE)) {
+          transformedHtml = transformedHtml.replace(
+            '<head>',
+            `<head>\n    <script src="${INSTANT_WALLPAPER_BOOT_ROUTE}"></script>`
+          )
+        }
+        if (!transformedHtml.includes(NEWTAB_BOOKMARK_PREBOOT_ROUTE)) {
+          transformedHtml = transformedHtml.replace(
+            '<body>',
+            `<body>\n    <script src="${NEWTAB_BOOKMARK_PREBOOT_ROUTE}"></script>`
+          )
+        }
+        return transformedHtml
       }
     },
     configureServer(server) {
       server.middlewares.use(INSTANT_WALLPAPER_BOOT_ROUTE, async (_request, response, next) => {
         try {
           const source = await buildInstantWallpaperBootScript(minify)
+          response.statusCode = 200
+          response.setHeader('content-type', 'text/javascript; charset=utf-8')
+          response.end(source)
+        } catch (error) {
+          next(error)
+        }
+      })
+      server.middlewares.use(NEWTAB_BOOKMARK_PREBOOT_ROUTE, async (_request, response, next) => {
+        try {
+          const source = await buildNewtabBookmarkPrebootScript(minify)
           response.statusCode = 200
           response.setHeader('content-type', 'text/javascript; charset=utf-8')
           response.end(source)
@@ -41,6 +66,12 @@ function instantWallpaperBootPlugin(minify: boolean): Plugin {
         type: 'asset',
         fileName: INSTANT_WALLPAPER_BOOT_ROUTE.slice(1),
         source
+      })
+      const bookmarkPrebootSource = await buildNewtabBookmarkPrebootScript(minify)
+      this.emitFile({
+        type: 'asset',
+        fileName: NEWTAB_BOOKMARK_PREBOOT_ROUTE.slice(1),
+        source: bookmarkPrebootSource
       })
     }
   }
@@ -83,6 +114,10 @@ function popupPrebootPlugin(minify: boolean): Plugin {
 
 async function buildInstantWallpaperBootScript(minify: boolean): Promise<string> {
   return buildBrowserIifeScript(INSTANT_WALLPAPER_BOOT_ENTRY, minify)
+}
+
+async function buildNewtabBookmarkPrebootScript(minify: boolean): Promise<string> {
+  return buildBrowserIifeScript(NEWTAB_BOOKMARK_PREBOOT_ENTRY, minify)
 }
 
 async function buildPopupPrebootScript(minify: boolean): Promise<string> {

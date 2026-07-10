@@ -56,7 +56,7 @@ import {
 import { useNewtabInstantWallpaperView } from './newtab-instant-wallpaper-store'
 import { useNewtabFolderSourceView } from './newtab-folder-source-store'
 
-const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard),backdrop-filter_var(--ui-motion-standard)_var(--ui-ease-standard)] before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay before:[transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)]'
+const BACKGROUND_MASK_BASE_CLASS = 'newtab-background-mask fixed inset-0 z-0 pointer-events-none opacity-0 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard)] before:absolute before:inset-0 before:pointer-events-none before:opacity-0 before:mix-blend-overlay before:[transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)]'
 const BACKGROUND_MASK_ENABLED_CLASS = 'opacity-100 newtab-background-mask-filter'
 const BACKGROUND_MASK_STYLE_CLASS_BY_STYLE = {
   dark: 'bg-[rgba(0,0,0,0.18)]',

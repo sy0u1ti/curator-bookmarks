@@ -30,6 +30,10 @@ import {
 } from '../newtab-bookmark-content-store'
 import { useNewtabDragUiView, type NewtabDragUiView } from '../newtab-drag-ui-store'
 import { useNewtabFolderSourceView } from '../newtab-folder-source-store'
+import {
+  hideNewtabBookmarkPreboot,
+  writeNewtabBookmarkPrebootSnapshotFromView
+} from '../newtab-bookmark-preboot'
 import { BookmarkIconShell } from './BookmarkIconShell'
 import { SpeedDialPanelHost } from './NewtabSpeedDialPanel'
 import { getBookmarkTileClass, getBookmarkTitleClass } from './bookmarkTileClasses'
@@ -64,7 +68,7 @@ const BOOKMARK_REORDER_STATUS_CLASS = 'bookmark-reorder-status mt-1.5 mb-0 text-
 const BOOKMARK_REORDER_STATUS_WARNING_CLASS = 'text-[rgba(255,214,179,0.88)]'
 const BOOKMARK_REORDER_STATUS_SUCCESS_CLASS = 'text-[rgba(132,218,137,0.9)]'
 const BOOKMARK_REORDER_STATUS_ERROR_CLASS = 'text-[rgba(255,183,176,0.94)]'
-const PORTAL_PANEL_CLASS = 'curator-motion-surface newtab-portal quick-only [--portal-card-min-height:42px] [--portal-card-gap:6px] mb-[18px] grid w-full grid-cols-1 items-stretch gap-3.5 rounded-lg border border-[rgba(245,245,247,0.13)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
+const PORTAL_PANEL_CLASS = 'newtab-portal quick-only [--portal-card-min-height:42px] [--portal-card-gap:6px] mb-[18px] grid w-full grid-cols-1 items-stretch gap-3.5 rounded-lg border border-[rgba(245,245,247,0.13)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
 const QUICK_ACCESS_CLASS = 'newtab-quick-access grid w-full content-stretch gap-[var(--portal-card-gap)]'
 const QUICK_GROUP_CLASS = 'newtab-quick-group grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-2.5'
 const QUICK_HEADING_CLASS = 'newtab-quick-heading flex [min-height:auto] items-center whitespace-nowrap px-0.5 text-[11px] font-[750] leading-[1.2] tracking-[0] text-[rgba(245,245,247,0.48)]'
@@ -95,6 +99,7 @@ function BookmarkContent({
 }) {
   const dragUi = useNewtabDragUiView()
   const folderSource = useNewtabFolderSourceView()
+  const sectionsRootRef = useRef<HTMLDivElement | null>(null)
   const sectionRefs = useRef<Map<string, HTMLElement> | null>(null)
   if (!sectionRefs.current) {
     sectionRefs.current = new Map()
@@ -115,6 +120,25 @@ function BookmarkContent({
     section.focus({ preventScroll: true })
   }, [])
 
+  useEffect(() => {
+    let revealFrame = 0
+    let settleFrame = 0
+    revealFrame = window.requestAnimationFrame(() => {
+      settleFrame = window.requestAnimationFrame(() => {
+        const snapshot = writeNewtabBookmarkPrebootSnapshotFromView(state, {
+          sectionsElement: sectionsRootRef.current,
+          viewportHeight: window.innerHeight,
+          viewportWidth: window.innerWidth
+        })
+        hideNewtabBookmarkPreboot({ clearSnapshot: !snapshot })
+      })
+    })
+    return () => {
+      window.cancelAnimationFrame(revealFrame)
+      window.cancelAnimationFrame(settleFrame)
+    }
+  }, [state])
+
   return (
     <section
       className={getNewtabContentClass({ hasSearch, layoutMode: state.content.layoutMode })}
@@ -131,7 +155,7 @@ function BookmarkContent({
           <SourceNavigation onFocusSource={focusSource} state={state.sourceNavigation} />
         </nav>
       ) : null}
-      <div className={BOOKMARK_FOLDER_SECTIONS_CLASS}>
+      <div className={BOOKMARK_FOLDER_SECTIONS_CLASS} ref={sectionsRootRef}>
         {state.sections.map((section) => (
           <BookmarkFolderSection
             dragUi={dragUi}

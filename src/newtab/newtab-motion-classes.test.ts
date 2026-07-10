@@ -14,16 +14,18 @@ assert.ok(
   'Newtab bookmark tiles should keep drag staging support without the shared card lift motion.'
 )
 assert.ok(
-  speedDialClasses.includes('curator-motion-surface') &&
+  speedDialClasses.includes('newtab-speed-dial') &&
+    !speedDialClasses.includes('curator-motion-surface') &&
     speedDialClasses.includes('curator-motion-card') &&
     speedDialClasses.includes('curator-motion-disabled'),
-  'Newtab Speed Dial should use shared surface/card motion and disable card motion during drag staging.'
+  'Newtab Speed Dial should keep interactive card motion without replaying surface entrance motion at startup.'
 )
 assert.ok(
-  bookmarkContent.includes('curator-motion-surface') &&
+  bookmarkContent.includes('newtab-portal') &&
+    !bookmarkContent.includes('curator-motion-surface') &&
     bookmarkContent.includes('curator-motion-card') &&
     bookmarkContent.includes('curator-motion-chip'),
-  'Newtab portal, quick access, source chips, and folder controls should share the polished motion treatment.'
+  'Newtab portal should mount steadily while quick access, source chips, and folder controls retain interaction motion.'
 )
 assert.ok(
   folderSectionClasses.includes('curator-motion-chip'),

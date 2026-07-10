@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   type CSSProperties,
@@ -20,6 +21,7 @@ import {
 } from '../newtab-content-store'
 import { useNewtabClockView } from '../newtab-clock-store'
 import { useNewtabSearchWidgetView } from '../newtab-search-widget-store'
+import { hideNewtabBookmarkPreboot } from '../newtab-bookmark-preboot'
 import { ClockWidgetContent } from './ClockWidgetContent'
 import { CLOCK_SPACER_CLASS, getClockClass } from './clockClasses'
 import { NewtabBookmarkContent } from './NewtabBookmarkContent'
@@ -52,6 +54,20 @@ export function NewtabContentHost({
   shellRef: RefObject<HTMLDivElement | null>
 }) {
   const view = useNewtabContentView()
+
+  useEffect(() => {
+    if (!view) {
+      return
+    }
+    if (view.type === 'state') {
+      hideNewtabBookmarkPreboot({ clearSnapshot: true })
+      return
+    }
+    const primaryModule = view.modules.find((module) => module.placement === 'primary')
+    if (primaryModule?.kind === 'missing-folder') {
+      hideNewtabBookmarkPreboot({ clearSnapshot: true })
+    }
+  }, [view])
 
   if (!view) {
     return null

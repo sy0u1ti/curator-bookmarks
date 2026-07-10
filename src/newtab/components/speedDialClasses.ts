@@ -1,6 +1,6 @@
 import { cx } from '../../ui/base/utils'
 
-export const SPEED_DIAL_PANEL_CLASS = 'curator-motion-surface newtab-speed-dial mb-3.5 grid w-full min-w-0 gap-2.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
+export const SPEED_DIAL_PANEL_CLASS = 'newtab-speed-dial mb-3.5 grid w-full min-w-0 gap-2.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[0_14px_32px_rgba(0,0,0,0.14),inset_0_1px_0_rgba(255,255,255,0.075)] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
 export const SPEED_DIAL_HEADING_CLASS = 'newtab-module-heading grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5'
 export const SPEED_DIAL_TITLE_CLASS = 'm-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[780] leading-[1.2] text-[rgba(245,245,247,0.9)]'
 export const SPEED_DIAL_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] leading-[1.2] text-[rgba(245,245,247,0.44)] data-[tone=error]:text-[#ffb7b0]'
