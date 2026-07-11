@@ -6,6 +6,7 @@ const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkConten
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
 const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.tsx', 'utf8')
+const bookmarkPreboot = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
 const newtabApp = readFileSync('src/newtab/NewtabApp.tsx', 'utf8')
 const newtabMain = readFileSync('src/newtab/main.tsx', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
@@ -204,6 +205,13 @@ assert.ok(
     bookmarkIconShell.includes('data-[favicon-ready=true]:opacity-0') &&
     !bookmarkIconShell.includes('BOOKMARK_FALLBACK_HIDDEN_CLASS'),
   'A loaded favicon should hide its fallback through a state selector that wins the CSS cascade.'
+)
+
+assert.ok(
+  bookmarkPreboot.includes('markNewtabFaviconReady(image.src)') &&
+    bookmarkIconShell.includes('isNewtabFaviconReady(favicon.src)') &&
+    bookmarkIconShell.includes('markNewtabFaviconReady(favicon.src)'),
+  'The preboot snapshot should transfer favicon readiness to the live bookmark icon without showing the fallback again.'
 )
 
 const backgroundMaskTransition = newtabApp.match(/const BACKGROUND_MASK_BASE_CLASS = '([^']+)'/)?.[1] || ''

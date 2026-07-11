@@ -1,3 +1,8 @@
+import {
+  markNewtabFaviconNotReady,
+  markNewtabFaviconReady
+} from './newtab-favicon-readiness.js'
+
 export const NEWTAB_BOOKMARK_PREBOOT_ROOT_ID = 'newtab-bookmark-preboot'
 export const NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY = 'curatorNewTabBookmarkPreboot'
 
@@ -302,10 +307,12 @@ function createNewtabBookmarkPrebootTile(
     image.draggable = false
     image.loading = 'eager'
     image.addEventListener('load', () => {
+      markNewtabFaviconReady(image.src)
       image.dataset.ready = 'true'
       fallback.dataset.hidden = 'true'
     }, { once: true })
     image.addEventListener('error', () => {
+      markNewtabFaviconNotReady(image.src)
       image.remove()
       delete fallback.dataset.hidden
     }, { once: true })

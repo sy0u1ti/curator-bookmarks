@@ -8,6 +8,11 @@ import {
   type NewtabBookmarkPrebootView
 } from './newtab-bookmark-preboot.js'
 import { readFileSync } from 'node:fs'
+import {
+  isNewtabFaviconReady,
+  markNewtabFaviconNotReady,
+  markNewtabFaviconReady
+} from './newtab-favicon-readiness.js'
 
 function run(): void {
   testSnapshotKeepsVisibleCardsAndExactCardRect()
@@ -18,6 +23,20 @@ function run(): void {
   testSnapshotClearsStorageWhenNoCardsRemain()
   testSnapshotRejectsMismatchedViewport()
   testPrebootHandoffIsAtomic()
+  testFaviconReadinessHandoff()
+}
+
+function testFaviconReadinessHandoff(): void {
+  const source = 'chrome-extension://extension-id/_favicon/?pageUrl=https%3A%2F%2Fexample.com%2F&size=64'
+  assert.equal(isNewtabFaviconReady(source), false)
+  markNewtabFaviconReady(source)
+  assert.equal(isNewtabFaviconReady(source), true)
+  markNewtabFaviconNotReady(source)
+  assert.equal(isNewtabFaviconReady(source), false)
+
+  const inlineSource = 'data:image/png;base64,large-payload'
+  markNewtabFaviconReady(inlineSource)
+  assert.equal(isNewtabFaviconReady(inlineSource), false)
 }
 
 function testPrebootHandoffIsAtomic(): void {

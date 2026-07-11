@@ -1,5 +1,10 @@
 import { useState, type Ref } from 'react'
 import { cx } from '../../ui/base/utils'
+import {
+  isNewtabFaviconReady,
+  markNewtabFaviconNotReady,
+  markNewtabFaviconReady
+} from '../newtab-favicon-readiness'
 
 export interface BookmarkIconShellFavicon {
   fetchpriority: 'high' | 'low' | 'auto'
@@ -28,9 +33,15 @@ export function BookmarkIconShell({
   ref
 }: BookmarkIconShellProps) {
   const [failedSources, setFailedSources] = useState(() => new Set<string>())
-  const [loadedSources, setLoadedSources] = useState(() => new Set<string>())
+  const [loadedSources, setLoadedSources] = useState(() => {
+    const sources = new Set<string>()
+    if (isNewtabFaviconReady(favicon.src)) {
+      sources.add(favicon.src)
+    }
+    return sources
+  })
   const missing = failedSources.has(favicon.src)
-  const loaded = loadedSources.has(favicon.src)
+  const loaded = loadedSources.has(favicon.src) || isNewtabFaviconReady(favicon.src)
 
   return (
     <span
@@ -52,6 +63,7 @@ export function BookmarkIconShell({
         decoding="async"
         fetchPriority={favicon.fetchpriority}
         onLoad={() => {
+          markNewtabFaviconReady(favicon.src)
           setLoadedSources((current) => {
             if (current.has(favicon.src)) {
               return current
@@ -62,6 +74,7 @@ export function BookmarkIconShell({
           })
         }}
         onError={() => {
+          markNewtabFaviconNotReady(favicon.src)
           setFailedSources((current) => {
             if (current.has(favicon.src)) {
               return current
