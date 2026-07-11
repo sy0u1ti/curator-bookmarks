@@ -7,6 +7,11 @@ import {
   validateKnownFolderId,
   type JsonSchema
 } from './ai-runtime.js'
+import {
+  getModelReasoningProfile,
+  getReasoningEffortOptions,
+  resolveReasoningEffortForModel
+} from './ai-reasoning.js'
 
 const SAMPLE_SCHEMA: JsonSchema = {
   type: 'object',
@@ -46,6 +51,25 @@ async function run(): Promise<void> {
   await testResponseFormatFallback()
   await testRetryAfterBackoff()
   await testBodyReadTimeout()
+  await testReasoningEffortInjection()
+  await testReasoningEffortFallback()
+  testModelReasoningProfiles()
+}
+
+function testModelReasoningProfiles(): void {
+  assert(getModelReasoningProfile('gpt-5').levels.includes('minimal'), 'gpt-5 should offer minimal')
+  assert(!getModelReasoningProfile('gpt-5.5').levels.includes('minimal'), 'gpt-5.1+ should drop minimal')
+  assert(getModelReasoningProfile('o4-mini').supported, 'o-series should support effort')
+  assert(!getModelReasoningProfile('gpt-4o').supported, 'gpt-4o is not a reasoning model')
+  assert(getModelReasoningProfile('deepseek-v4-flash').supported, 'deepseek v4 should support effort')
+  assert(!getModelReasoningProfile('qwen3-max').supported, 'qwen uses thinking budget, not effort')
+  assert(getModelReasoningProfile('grok-4.3').supported, 'grok 4.3 should support effort')
+  assert(!getModelReasoningProfile('grok-4').supported, 'legacy grok-4 rejects reasoning_effort')
+  assert(getModelReasoningProfile('claude-sonnet-5').supported, 'claude via openrouter maps effort')
+  assert(getModelReasoningProfile('my-house-model').supported, 'unknown models fall back to standard levels')
+  assert(getReasoningEffortOptions('gpt-5').length === 5, 'gpt-5 options should include default + 4 levels')
+  assert(resolveReasoningEffortForModel('gpt-4o', 'high') === 'default', 'unsupported model resolves to default')
+  assert(resolveReasoningEffortForModel('gpt-5', 'minimal') === 'minimal', 'supported level passes through')
 }
 
 function testSchemaValidation(): void {
@@ -433,6 +457,78 @@ async function testBodyReadTimeout(): Promise<void> {
   }, 'abort')
 
   assert(error.message.includes('AI 请求超时'), 'hung response body should hit the timeout instead of hanging forever')
+}
+
+async function testReasoningEffortInjection(): Promise<void> {
+  const chatCalls: Array<Record<string, any>> = []
+  await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: { ...getSettings('chat_completions'), reasoningEffort: 'low' },
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub(chatCalls, {
+      choices: [{ message: { content: '{"action":"keep","confidence":0.4,"items":[{"id":"h"}]}' } }]
+    })
+  })
+  assert(chatCalls[0]?.reasoning_effort === 'low', 'chat body should carry reasoning_effort')
+
+  const responsesCalls: Array<Record<string, any>> = []
+  await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: { ...getSettings('responses'), reasoningEffort: 'high' },
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub(responsesCalls, {
+      output_text: '{"action":"keep","confidence":0.4,"items":[{"id":"i"}]}'
+    })
+  })
+  assert(responsesCalls[0]?.reasoning?.effort === 'high', 'responses body should carry reasoning.effort')
+
+  const defaultCalls: Array<Record<string, any>> = []
+  await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: { ...getSettings('chat_completions'), reasoningEffort: 'default' },
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub(defaultCalls, {
+      choices: [{ message: { content: '{"action":"keep","confidence":0.4,"items":[{"id":"j"}]}' } }]
+    })
+  })
+  assert(!('reasoning_effort' in (defaultCalls[0] ?? {})), 'default should not send reasoning_effort')
+}
+
+async function testReasoningEffortFallback(): Promise<void> {
+  const calls: Array<Record<string, any>> = []
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: { ...getSettings('chat_completions'), reasoningEffort: 'medium' },
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.body ? JSON.parse(String(init.body)) : {})
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({
+          error: { message: 'Unrecognized parameter: reasoning_effort' }
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        choices: [{ message: { content: '{"action":"rename","confidence":0.7,"items":[{"id":"k"}]}' } }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+  })
+
+  assert(calls.length === 2, 'reasoning_effort rejection should trigger one compatibility retry')
+  assert('reasoning_effort' in calls[0], 'first attempt should send reasoning_effort')
+  assert(!('reasoning_effort' in calls[1]), 'fallback attempt should drop reasoning_effort')
+  assert('response_format' in calls[1], 'fallback should keep response_format untouched')
+  assert(result.data.action === 'rename', 'fallback attempt should succeed')
 }
 
 function getSettings(apiStyle: 'responses' | 'chat_completions') {

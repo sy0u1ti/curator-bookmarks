@@ -33,7 +33,7 @@ export function AvailabilitySelectionActions() {
           <strong className={AVAILABILITY_SELECTION_HEADER_TITLE_CLASS}>
             <TextSwap text={state.countLabel} />
           </strong>
-          <p className={AVAILABILITY_SELECTION_SUBTITLE_CLASS}>可对当前低/高置信异常执行批量移动、忽略或删除。</p>
+          <p className={AVAILABILITY_SELECTION_SUBTITLE_CLASS}>对所选异常执行移动、忽略或删除。</p>
         </div>
         <Button
           className={AVAILABILITY_SELECTION_BUTTON_CLASS}
@@ -96,7 +96,7 @@ export function AvailabilitySelectionActions() {
           focusableWhenDisabled={state.moveDisabled}
           onClick={() => handleAvailabilityPanelAction({ action: 'move-selection' })}
         >
-          批量移动到文件夹
+          移动到文件夹
         </Button>
         <Button
           className={AVAILABILITY_SELECTION_BUTTON_CLASS}
@@ -144,7 +144,7 @@ export function AvailabilitySelectionActions() {
           focusableWhenDisabled={state.deleteDisabled}
           onClick={() => handleAvailabilityPanelAction({ action: 'delete-selected' })}
         >
-          批量删除所选
+          删除所选
         </Button>
       </div>
     </div>

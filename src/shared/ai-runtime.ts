@@ -23,6 +23,13 @@ export interface AiProviderSettings {
   model: string
   apiStyle: 'responses' | 'chat_completions'
   timeoutMs?: number
+  /**
+   * 推理强度：'default' 或空值 = 不发送任何推理参数（最大兼容）。
+   * 其余取值（none/minimal/low/medium/high）按 apiStyle 映射为
+   * reasoning_effort（chat）或 reasoning.effort（responses），
+   * 端点不支持时自动降级移除后重试。
+   */
+  reasoningEffort?: string
 }
 
 export interface AiRuntimeMetadata {
@@ -55,7 +62,7 @@ export interface AiStructuredRequest<T> {
 }
 
 export interface AiPromptEnvelope {
-  settings: Pick<AiProviderSettings, 'model' | 'apiStyle'>
+  settings: Pick<AiProviderSettings, 'model' | 'apiStyle' | 'reasoningEffort'>
   schema: JsonSchema
   schemaName: string
   systemPrompt: string
@@ -128,14 +135,26 @@ function ensureAiProviderConfigured(settings: AiProviderSettings): void {
   }
 }
 
+/** 归一推理强度：'default'/空/未知值 → null（不发送任何推理参数）。 */
+export function normalizeReasoningEffortValue(value: unknown): string | null {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  if (!normalized || normalized === 'default') {
+    return null
+  }
+  return ['none', 'minimal', 'low', 'medium', 'high'].includes(normalized) ? normalized : null
+}
+
 function buildAiPromptRequestBody({
   settings,
   schema,
   schemaName,
   systemPrompt,
   userPrompt
-}: AiPromptEnvelope, options: { useStructuredFormat?: boolean } = {}): Record<string, unknown> {
+}: AiPromptEnvelope, options: { useStructuredFormat?: boolean; useReasoningEffort?: boolean } = {}): Record<string, unknown> {
   const useStructuredFormat = options.useStructuredFormat !== false
+  const reasoningEffort = options.useReasoningEffort === false
+    ? null
+    : normalizeReasoningEffortValue(settings.reasoningEffort)
   if (settings.apiStyle === 'chat_completions') {
     // 紧凑序列化 schema：提示语义不变，显著减少每次请求的输入 token。
     const schemaHint =
@@ -153,11 +172,14 @@ function buildAiPromptRequestBody({
     if (useStructuredFormat) {
       body.response_format = { type: 'json_object' }
     }
+    if (reasoningEffort) {
+      body.reasoning_effort = reasoningEffort
+    }
     return body
   }
 
   if (!useStructuredFormat) {
-    return {
+    const fallbackBody: Record<string, unknown> = {
       model: settings.model,
       input: [
         {
@@ -173,9 +195,13 @@ function buildAiPromptRequestBody({
         }
       ]
     }
+    if (reasoningEffort) {
+      fallbackBody.reasoning = { effort: reasoningEffort }
+    }
+    return fallbackBody
   }
 
-  return {
+  const responsesBody: Record<string, unknown> = {
     model: settings.model,
     input: [
       {
@@ -196,6 +222,10 @@ function buildAiPromptRequestBody({
       }
     }
   }
+  if (reasoningEffort) {
+    responsesBody.reasoning = { effort: reasoningEffort }
+  }
+  return responsesBody
 }
 
 export async function requestStructuredAiOutput<T>({
@@ -217,6 +247,8 @@ export async function requestStructuredAiOutput<T>({
   let repairAttemptsLeft = retry ? 1 : 0
   // 结构化输出参数（response_format / text.format）兼容性降级最多一次。
   let useStructuredFormat = true
+  // 推理强度参数（reasoning_effort / reasoning.effort）兼容性降级最多一次。
+  let useReasoningEffort = true
 
   const runAttempt = async (
     attempt: number,
@@ -238,7 +270,7 @@ export async function requestStructuredAiOutput<T>({
         schemaName,
         systemPrompt,
         userPrompt: effectiveUserPrompt
-      }, { useStructuredFormat })
+      }, { useStructuredFormat, useReasoningEffort })
       const payload = await requestAiProviderPayload({
         endpoint,
         settings,
@@ -289,6 +321,18 @@ export async function requestStructuredAiOutput<T>({
             cause: normalizedError
           })
         }
+      }
+
+      // 端点不支持推理强度参数：先移除它降级重试（它是我们额外附加的可选参数，
+      // 泛式 unknown-parameter 类 400 优先归因于它）。
+      const reasoningWasSent = useReasoningEffort && Boolean(normalizeReasoningEffortValue(settings.reasoningEffort))
+      if (
+        reasoningWasSent &&
+        attempt < maxAttempts &&
+        isReasoningEffortCompatibilityError(normalizedError)
+      ) {
+        useReasoningEffort = false
+        return runAttempt(attempt + 1, normalizedError, attemptRawText)
       }
 
       // 端点不支持结构化输出参数：移除参数降级重试一次（不计入修复预算）。
@@ -785,6 +829,28 @@ function parseRetryAfterMs(rawValue: unknown): number | undefined {
     return Math.max(0, dateMs - Date.now())
   }
   return undefined
+}
+
+/**
+ * 识别「端点不支持推理强度参数」类错误。除明确提到 reasoning/thinking 外，
+ * 未指名参数的泛式 unknown-parameter 错误也优先归因于此（它是请求里唯一的
+ * 额外可选参数；若移除后仍失败，再由结构化输出降级接手）。
+ */
+function isReasoningEffortCompatibilityError(error: AiRuntimeError): boolean {
+  if (error.kind !== 'provider') {
+    return false
+  }
+  const status = Number(error.status)
+  if (status !== 400 && status !== 404 && status !== 415 && status !== 422) {
+    return false
+  }
+  const message = String(error.message || '')
+  if (/reasoning[\s_.-]*effort|['"“]?reasoning['"”]?|thinking/i.test(message)) {
+    return true
+  }
+  const mentionsStructuredOutput = /response_format|json_object|json_schema|text\.format/i.test(message)
+  const genericParameterError = /(?:unknown|unsupported|unexpected|invalid|unrecognized)[\s_-]*(?:parameter|param|field|argument|keyword)|does not support/i.test(message)
+  return genericParameterError && !mentionsStructuredOutput
 }
 
 /**

@@ -8,6 +8,7 @@ import { Select, type SelectOption } from '../../ui/base/Select'
 import { SwitchControl } from '../../ui/base/Switch'
 import { Textarea } from '../../ui/base/Textarea'
 import { AiModelSelector } from './AiModelSelector.js'
+import { ReasoningEffortSelector } from './ReasoningEffortSelector.js'
 import {
   ButtonBusyLoadingLabel,
   StatusBusyLoadingLabel
@@ -19,7 +20,6 @@ import {
   AI_PROVIDER_ADVANCED_CLASS,
   AI_PROVIDER_ADVANCED_PANEL_CLASS,
   AI_PROVIDER_ADVANCED_TRIGGER_CLASS,
-  AI_PROVIDER_API_KEY_GROUP_CLASS,
   AI_PROVIDER_BODY_CLASS,
   AI_PROVIDER_CARD_CLASS,
   AI_PROVIDER_CARD_ATTENTION_CLASS,
@@ -36,8 +36,10 @@ import {
   AI_PROVIDER_DIALOG_FIELD_CLASS,
   AI_PROVIDER_DIALOG_HINT_CLASS,
   AI_PROVIDER_DIALOG_TITLE_CLASS,
+  AI_PROVIDER_EFFORT_HOST_CLASS,
   AI_PROVIDER_FETCH_BUTTON_CLASS,
   AI_PROVIDER_FIELD_CLASS,
+  AI_PROVIDER_FIELD_HEAD_CLASS,
   AI_PROVIDER_FIELD_LABEL_CLASS,
   AI_PROVIDER_FIELD_TIP_CLASS,
   AI_PROVIDER_FLOW_CLASS,
@@ -47,15 +49,17 @@ import {
   AI_PROVIDER_FLOW_TITLE_CLASS,
   AI_PROVIDER_GRID_CLASS,
   AI_PROVIDER_HEADER_CLASS,
+  AI_PROVIDER_HINTS_CLASS,
   AI_PROVIDER_INLINE_ACTION_CLASS,
   AI_PROVIDER_INPUT_CLASS,
   AI_PROVIDER_MODEL_CONTROL_CLASS,
   AI_PROVIDER_MODEL_FETCH_STATUS_CLASS,
   AI_PROVIDER_MODEL_FIELD_CLASS,
+  AI_PROVIDER_MODEL_GROUP_CLASS,
   AI_PROVIDER_MODEL_LABEL_CLASS,
-  AI_PROVIDER_MODEL_TOOLS_CLASS,
+  AI_PROVIDER_MODEL_ROW_CLASS,
+  AI_PROVIDER_MODEL_SELECT_HOST_CLASS,
   AI_PROVIDER_NOTICE_CLASS,
-  AI_PROVIDER_QUICK_ROW_CLASS,
   AI_PROVIDER_SAVE_STATE_CLASS,
   AI_PROVIDER_SAVE_TONE_CLASS,
   AI_PROVIDER_SELECT_HOST_CLASS,
@@ -79,7 +83,7 @@ import {
 const aiProviderSteps = [
   { id: 'api-key', index: '1', title: '填写密钥', copy: '先填 API Key；Base URL 在高级选项' },
   { id: 'fetch-models', index: '2', title: '获取模型', copy: '读取可用列表' },
-  { id: 'select-model', index: '3', title: '选择模型', copy: '用于命名与分类' },
+  { id: 'select-model', index: '3', title: '选择模型', copy: '可按模型调推理强度' },
   { id: 'test-connection', index: '4', title: '测试连接', copy: '确认模型可用' },
   { id: 'save-settings', index: '5', title: '保存', copy: '同步到 AI 功能' }
 ] as const
@@ -161,27 +165,9 @@ export function AiProviderSettings({
           ))}
         </ol>
 
-        <div className={AI_PROVIDER_QUICK_ROW_CLASS}>
-          <div className={AI_PROVIDER_API_KEY_GROUP_CLASS}>
-            <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-api-key">
-              <span className={AI_PROVIDER_FIELD_LABEL_CLASS}>API Key</span>
-              <Input
-                id="ai-api-key"
-                className={AI_PROVIDER_INPUT_CLASS}
-                type={state.revealApiKey ? 'text' : 'password'}
-                spellCheck={false}
-                autoComplete="off"
-                placeholder={state.apiKeyPlaceholder}
-                value={state.apiKey}
-                onValueChange={(value) => handleAiProviderSettingsAction({
-                  action: 'change',
-                  field: 'apiKey',
-                  value
-                })}
-                unstyled
-              />
-            </label>
-
+        <div className={AI_PROVIDER_FIELD_CLASS}>
+          <div className={AI_PROVIDER_FIELD_HEAD_CLASS}>
+            <label className={AI_PROVIDER_FIELD_LABEL_CLASS} htmlFor="ai-api-key">API Key</label>
             <label className={AI_PROVIDER_CHECK_CLASS} htmlFor="ai-api-key-reveal">
               <span>显示密码</span>
               <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
@@ -200,13 +186,28 @@ export function AiProviderSettings({
               </span>
             </label>
           </div>
+          <Input
+            id="ai-api-key"
+            className={AI_PROVIDER_INPUT_CLASS}
+            type={state.revealApiKey ? 'text' : 'password'}
+            spellCheck={false}
+            autoComplete="off"
+            placeholder={state.apiKeyPlaceholder}
+            value={state.apiKey}
+            onValueChange={(value) => handleAiProviderSettingsAction({
+              action: 'change',
+              field: 'apiKey',
+              value
+            })}
+            unstyled
+          />
+        </div>
 
-          <div className={AI_PROVIDER_MODEL_FIELD_CLASS}>
-            <AiProviderModelToolsContent
-              state={state}
-              onOpenCustomModels={() => setCustomModelsOpen(true)}
-            />
-          </div>
+        <div className={AI_PROVIDER_MODEL_FIELD_CLASS}>
+          <AiProviderModelToolsContent
+            state={state}
+            onOpenCustomModels={() => setCustomModelsOpen(true)}
+          />
         </div>
 
         {state.connectivityVisible ? (
@@ -366,62 +367,82 @@ function AiProviderModelToolsContent({
 
   return (
     <>
-      <div className={AI_PROVIDER_MODEL_TOOLS_CLASS}>
+      <div className={AI_PROVIDER_MODEL_ROW_CLASS}>
         <div className={AI_PROVIDER_MODEL_CONTROL_CLASS}>
           <span className={AI_PROVIDER_MODEL_LABEL_CLASS}>模型</span>
-          <div className={AI_PROVIDER_SELECT_HOST_CLASS}>
-            <AiModelSelector
-              state={modelTools.selector}
-              onModelSelect={(model) => handleAiProviderSettingsAction({
-                action: 'model-change',
-                value: model
+          <div className={AI_PROVIDER_MODEL_GROUP_CLASS}>
+            <div className={AI_PROVIDER_MODEL_SELECT_HOST_CLASS}>
+              <AiModelSelector
+                state={modelTools.selector}
+                onModelSelect={(model) => handleAiProviderSettingsAction({
+                  action: 'model-change',
+                  value: model
+                })}
+              />
+            </div>
+            <Button
+              className={AI_PROVIDER_FETCH_BUTTON_CLASS}
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="从自定义 AI 渠道获取模型列表"
+              disabled={modelTools.fetchDisabled}
+              focusableWhenDisabled={modelTools.fetchingModels}
+              onClick={() => handleAiProviderSettingsAction({ action: 'fetch-models' })}
+            >
+              {modelTools.fetchingModels ? (
+                <ButtonBusyLoadingLabel label={modelTools.fetchLabel} />
+              ) : (
+                modelTools.fetchLabel
+              )}
+            </Button>
+          </div>
+        </div>
+        <div className={AI_PROVIDER_MODEL_CONTROL_CLASS}>
+          <span className={AI_PROVIDER_MODEL_LABEL_CLASS}>推理强度</span>
+          <div className={AI_PROVIDER_EFFORT_HOST_CLASS}>
+            <ReasoningEffortSelector
+              ariaLabel="推理强度"
+              levels={state.reasoningEffortOptions}
+              value={state.reasoningEffort}
+              disabled={state.modelToolsDisabled || !state.reasoningEffortSupported}
+              direction="down"
+              onChange={(id) => handleAiProviderSettingsAction({
+                action: 'reasoning-effort-change',
+                value: id
               })}
             />
           </div>
         </div>
-        <div className={AI_PROVIDER_MODEL_CONTROL_CLASS}>
-          <span className={AI_PROVIDER_MODEL_LABEL_CLASS}>拉取模型</span>
-          <Button
-            className={AI_PROVIDER_FETCH_BUTTON_CLASS}
-            size="sm"
-            type="button"
-            variant="secondary"
-            aria-label="从自定义 AI 渠道获取模型列表"
-            disabled={modelTools.fetchDisabled}
-            focusableWhenDisabled={modelTools.fetchingModels}
-            onClick={() => handleAiProviderSettingsAction({ action: 'fetch-models' })}
-          >
-            {modelTools.fetchingModels ? (
-              <ButtonBusyLoadingLabel label={modelTools.fetchLabel} />
-            ) : (
-              modelTools.fetchLabel
-            )}
-          </Button>
-        </div>
       </div>
-      {modelTools.fetchModelsStatus ? (
-        <p className={fetchModelsStatusClassName}>
-          {modelTools.fetchModelsStatusBusy ? (
-            <StatusBusyLoadingLabel label={modelTools.fetchModelsStatus} />
-          ) : (
-            modelTools.fetchModelsStatus
-          )}
+      <div className={AI_PROVIDER_HINTS_CLASS}>
+        {modelTools.fetchModelsStatus ? (
+          <p className={fetchModelsStatusClassName}>
+            {modelTools.fetchModelsStatusBusy ? (
+              <StatusBusyLoadingLabel label={modelTools.fetchModelsStatus} />
+            ) : (
+              modelTools.fetchModelsStatus
+            )}
+          </p>
+        ) : null}
+        {state.reasoningEffortNote ? (
+          <p className={AI_PROVIDER_FIELD_TIP_CLASS}>{state.reasoningEffortNote}</p>
+        ) : null}
+        <p className={AI_PROVIDER_FIELD_TIP_CLASS}>
+          可搜索模型；自定义 ID 可在{' '}
+          <Button
+            className={AI_PROVIDER_INLINE_ACTION_CLASS}
+            type="button"
+            aria-label="打开自定义模型列表设置"
+            disabled={modelTools.manageDisabled}
+            onClick={onOpenCustomModels}
+            unstyled
+          >
+            设置更多模型
+          </Button>
+          {' '}里追加。
         </p>
-      ) : null}
-      <p className={AI_PROVIDER_FIELD_TIP_CLASS}>
-        可搜索模型；自定义 ID 可在{' '}
-        <Button
-          className={AI_PROVIDER_INLINE_ACTION_CLASS}
-          type="button"
-          aria-label="打开自定义模型列表设置"
-          disabled={modelTools.manageDisabled}
-          onClick={onOpenCustomModels}
-          unstyled
-        >
-          设置更多模型
-        </Button>
-        {' '}里追加。
-      </p>
+      </div>
     </>
   )
 }

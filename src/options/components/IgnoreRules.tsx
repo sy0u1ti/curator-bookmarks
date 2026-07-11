@@ -47,15 +47,11 @@ const IGNORE_RULE_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const IGNORE_RULE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
-const IGNORE_RULE_CARD_HEAD_LEFT_CLASS =
-  'flex min-w-0 flex-wrap items-center gap-2'
-const IGNORE_RULE_BADGE_CLASS =
-  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border border-ds-hover bg-ds-surface-2 px-[10px] text-[11px] font-semibold leading-none tracking-[0] text-ds-text-muted'
 const IGNORE_RULE_ACTIONS_CLASS =
-  'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
+  'flex min-w-0 flex-none flex-wrap items-center justify-end gap-2.5'
 const IGNORE_RULE_DELETE_BUTTON_CLASS =
   'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors hover:text-ds-text-secondary focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
-const IGNORE_RULE_COPY_CLASS = 'mt-3 min-w-0'
+const IGNORE_RULE_COPY_CLASS = 'min-w-0'
 const IGNORE_RULE_COPY_TITLE_CLASS =
   'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-ds-text-primary max-[760px]:whitespace-normal'
 const IGNORE_RULE_DETAIL_CLASS =
@@ -191,8 +187,9 @@ function IgnoreRuleCard({
   return (
     <article className={IGNORE_RULE_CARD_CLASS}>
       <div className={IGNORE_RULE_CARD_HEAD_CLASS}>
-        <div className={IGNORE_RULE_CARD_HEAD_LEFT_CLASS}>
-          <span className={IGNORE_RULE_BADGE_CLASS}>忽略规则</span>
+        <div className={IGNORE_RULE_COPY_CLASS}>
+          <strong className={IGNORE_RULE_COPY_TITLE_CLASS}>{title || '未命名规则'}</strong>
+          {detail ? <div className={IGNORE_RULE_DETAIL_CLASS}>{detail}</div> : null}
         </div>
         <div className={IGNORE_RULE_ACTIONS_CLASS}>
           <Button
@@ -205,10 +202,6 @@ function IgnoreRuleCard({
             删除规则
           </Button>
         </div>
-      </div>
-      <div className={IGNORE_RULE_COPY_CLASS}>
-        <strong className={IGNORE_RULE_COPY_TITLE_CLASS}>{title || '未命名规则'}</strong>
-        <div className={IGNORE_RULE_DETAIL_CLASS}>{detail || ''}</div>
       </div>
     </article>
   )
@@ -234,7 +227,7 @@ function getIgnoreRuleDetail(rule: IgnoreRuleViewModel, kind: IgnoreRuleKind): s
   if (kind === 'folder' && 'path' in rule && 'title' in rule) {
     return rule.path || rule.title
   }
-  return '按域名忽略'
+  return ''
 }
 
 function getIgnoreRuleId(rule: IgnoreRuleViewModel, kind: IgnoreRuleKind): string {

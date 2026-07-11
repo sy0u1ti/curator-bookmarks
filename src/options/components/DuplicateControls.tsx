@@ -1,7 +1,5 @@
-import { Button } from '../../ui/base/Button'
 import { NumberPop } from '../../ui/motion/NumberPop'
-import { TextSwap } from '../../ui/motion/TextSwap'
-import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
+import { Button } from '../../ui/base/Button'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
 
@@ -23,18 +21,12 @@ const duplicateStrategies = [
   { label: '保留最近访问', value: 'recent' }
 ] as const
 
-const SELECTION_GROUP_CLASS =
-  't-panel-slide mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none [--panel-translate-y:12px] max-[760px]:p-4'
 const RESULTS_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const RESULTS_HEADER_COPY_CLASS = 'min-w-0'
 const RESULTS_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const RESULTS_SUBTITLE_CLASS = 'mt-2 text-[13px] leading-[1.55] text-ds-text-secondary'
-const RESULTS_ACTIONS_CLASS =
-  'flex flex-none flex-wrap items-center justify-end gap-2.5 max-[760px]:w-full max-[760px]:justify-start'
-const SELECTION_WARNING_CLASS =
-  'mt-2 text-xs font-semibold leading-[1.6] text-ds-danger-text'
 const SUMMARY_GRID_CLASS =
   'mt-[18px] grid grid-cols-4 gap-3 max-[1180px]:grid-cols-3 max-[760px]:grid-cols-1'
 const SUMMARY_CARD_CLASS =
@@ -59,73 +51,24 @@ const STRATEGY_STATUS_CLASS =
 
 export function DuplicateControls() {
   const state = useDuplicateControlsState()
-  const hasSelection = state.selectionStats.deleteCount > 0
-  const unsafe = state.selectionStats.unsafeGroupCount > 0
-  const selectionEntered = useMotionEntrance(hasSelection)
 
   return (
-    <>
-      {hasSelection ? (
-        <div className={SELECTION_GROUP_CLASS} data-open={selectionEntered ? 'true' : 'false'}>
-          <div className={RESULTS_HEADER_CLASS}>
-            <div className={RESULTS_HEADER_COPY_CLASS}>
-              <strong className={RESULTS_TITLE_CLASS}>
-                <TextSwap text={`${state.selectionStats.deleteCount} 条待移入回收站`} />
-              </strong>
-              <p className={RESULTS_SUBTITLE_CLASS}>
-                保留 {state.selectionStats.keepCount} 条，涉及 {state.selectionStats.groupCount} 组。
-              </p>
-              {unsafe ? (
-                <p className={SELECTION_WARNING_CLASS}>
-                  {state.selectionStats.unsafeGroupCount} 组重复已被全选；每组至少保留 1 条后才能移入回收站。
-                </p>
-              ) : null}
-            </div>
-            <div className={RESULTS_ACTIONS_CLASS}>
-              <Button
-                className="max-[760px]:w-full"
-                size="sm"
-                type="button"
-                variant="secondary"
-                aria-label="清空重复书签已选项"
-                onClick={() => handleDuplicateAction({ action: 'clear-selection' })}
-              >
-                清空选择
-              </Button>
-              <Button
-                className="max-[760px]:w-full"
-                size="sm"
-                type="button"
-                variant="danger"
-                aria-label="将重复书签已选项移入回收站"
-                disabled={state.locked || !hasSelection || unsafe}
-                focusableWhenDisabled={state.locked}
-                onClick={() => handleDuplicateAction({ action: 'delete-selection' })}
-              >
-                移入回收站
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      <div className={SUMMARY_GRID_CLASS}>
-        {duplicateMetrics.map((metric) => (
-          <article
-            className={SUMMARY_CARD_CLASS}
-            key={metric.key}
-          >
-            <span className={SUMMARY_LABEL_ROW_CLASS}>
-              <span className={`size-1.5 rounded-full ${SUMMARY_DOT_CLASS[metric.tone]}`} aria-hidden="true" />
-              {metric.label}
-            </span>
-            <strong className={SUMMARY_VALUE_CLASS}>
-              <NumberPop text={state.summary[metric.key]} />
-            </strong>
-          </article>
-        ))}
-      </div>
-    </>
+    <div className={SUMMARY_GRID_CLASS}>
+      {duplicateMetrics.map((metric) => (
+        <article
+          className={SUMMARY_CARD_CLASS}
+          key={metric.key}
+        >
+          <span className={SUMMARY_LABEL_ROW_CLASS}>
+            <span className={`size-1.5 rounded-full ${SUMMARY_DOT_CLASS[metric.tone]}`} aria-hidden="true" />
+            {metric.label}
+          </span>
+          <strong className={SUMMARY_VALUE_CLASS}>
+            <NumberPop text={state.summary[metric.key]} />
+          </strong>
+        </article>
+      ))}
+    </div>
   )
 }
 
@@ -159,7 +102,7 @@ export function DuplicateResultsControls() {
             focusableWhenDisabled={state.locked}
             onClick={() => handleDuplicateAction({ action: 'strategy', strategy: 'recommended' })}
           >
-            按推荐选择当前结果
+            按推荐选择
           </Button>
           {duplicateStrategies.map((strategy) => (
             <Button

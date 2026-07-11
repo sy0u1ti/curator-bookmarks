@@ -21,8 +21,6 @@ const SHORTCUT_TITLE_ROW_CLASS =
   'grid min-w-0 grid-cols-[18px_minmax(0,1fr)] items-start gap-2.5'
 const SHORTCUT_TITLE_ICON_CLASS =
   'mt-[2px] inline-grid size-[18px] shrink-0 place-items-center text-ds-text-secondary'
-const SHORTCUT_NOTICE_CLASS =
-  'mt-3 mb-0 text-sm font-[560] leading-[1.7] text-ds-text-secondary'
 const SHORTCUT_SUBTITLE_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.7] text-ds-text-disabled'
 const SHORTCUT_STATUS_BASE_CLASS =
@@ -61,8 +59,7 @@ export function ShortcutControls() {
             </span>
             <h2 className={AI_SETTINGS_TITLE_CLASS}>快捷键</h2>
           </div>
-          <p className={SHORTCUT_NOTICE_CLASS}>为打开搜索、智能分类和切换自动分析设置快捷键。</p>
-          <p className={SHORTCUT_SUBTITLE_CLASS}>Chrome 只允许在扩展快捷键页修改绑定。</p>
+          <p className={SHORTCUT_SUBTITLE_CLASS}>绑定需在 Chrome 扩展快捷键页修改，改完回来点「刷新状态」。</p>
         </div>
         <span className={statusClassName}>
           {state.statusLabel}
@@ -81,26 +78,6 @@ export function ShortcutControls() {
           className={SHORTCUT_ACTION_BUTTON_CLASS}
           size="sm"
           type="button"
-          variant="primary"
-          aria-label="打开 Chrome 扩展快捷键设置"
-          onClick={() => handleShortcutAction('open-settings')}
-        >
-          打开快捷键设置
-        </Button>
-        <Button
-          className={SHORTCUT_ACTION_BUTTON_CLASS}
-          size="sm"
-          type="button"
-          variant="secondary"
-          aria-label="复制 Chrome 扩展快捷键设置地址"
-          onClick={() => handleShortcutAction('copy-url')}
-        >
-          复制设置地址
-        </Button>
-        <Button
-          className={SHORTCUT_ACTION_BUTTON_CLASS}
-          size="sm"
-          type="button"
           variant="secondary"
           aria-label="刷新扩展快捷键绑定状态"
           disabled={state.loading}
@@ -108,6 +85,16 @@ export function ShortcutControls() {
           onClick={() => handleShortcutAction('refresh')}
         >
           刷新状态
+        </Button>
+        <Button
+          className={SHORTCUT_ACTION_BUTTON_CLASS}
+          size="sm"
+          type="button"
+          variant="primary"
+          aria-label="打开 Chrome 扩展快捷键设置"
+          onClick={() => handleShortcutAction('open-settings')}
+        >
+          打开快捷键设置
         </Button>
       </div>
     </div>

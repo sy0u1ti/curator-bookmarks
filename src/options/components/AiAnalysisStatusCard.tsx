@@ -27,10 +27,10 @@ export function AiAnalysisStatusCard() {
   return (
     <div className={AI_ANALYSIS_STATUS_CARD_CLASS}>
       <div className={AI_ANALYSIS_STATUS_META_CLASS}>
+        <strong className={AI_ANALYSIS_STATUS_TITLE_CLASS}>执行方式</strong>
         <span className={badgeClassName}>
           {state.badgeText}
         </span>
-        <strong className={AI_ANALYSIS_STATUS_TITLE_CLASS}>执行方式</strong>
       </div>
       <p className={AI_ANALYSIS_STATUS_COPY_CLASS}>
         {state.statusCopy}

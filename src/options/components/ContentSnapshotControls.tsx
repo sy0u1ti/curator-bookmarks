@@ -1,11 +1,6 @@
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
-import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { SwitchControl } from '../../ui/base/Switch'
 import {
-  AI_SETTINGS_ADVANCED_CLASS,
-  AI_SETTINGS_ADVANCED_NOTE_CLASS,
-  AI_SETTINGS_ADVANCED_PANEL_CLASS,
-  AI_SETTINGS_ADVANCED_TRIGGER_CLASS,
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_COPY_CLASS,
   AI_SETTINGS_FIELD_TIP_CLASS,
@@ -62,12 +57,12 @@ export function ContentSnapshotControls() {
       </div>
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
-          <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>增强：记住正文，搜索更准</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>保存可提取正文，并纳入本地搜索。</span>
+          <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存完整正文</strong>
+          <span className={AI_SETTINGS_SECONDARY_CLASS}>正文纳入本地搜索，仅保存在本机。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           <SwitchControl
-            aria-label="增强：记住正文，搜索更准"
+            aria-label="保存完整正文"
             checked={state.saveFullText}
             className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
             disabled={state.fullTextDisabled}
@@ -80,14 +75,6 @@ export function ContentSnapshotControls() {
           />
         </span>
       </div>
-      <CollapsibleRoot className={AI_SETTINGS_ADVANCED_CLASS}>
-        <CollapsibleTrigger className={AI_SETTINGS_ADVANCED_TRIGGER_CLASS}>高级说明</CollapsibleTrigger>
-        <CollapsiblePanel className={AI_SETTINGS_ADVANCED_PANEL_CLASS}>
-          <p className={AI_SETTINGS_ADVANCED_NOTE_CLASS}>
-            正文仅保存在本机；长正文会进入浏览器大数据存储区。
-          </p>
-        </CollapsiblePanel>
-      </CollapsibleRoot>
       <p className={AI_SETTINGS_FIELD_TIP_CLASS}>
         {state.statusCopy}
       </p>

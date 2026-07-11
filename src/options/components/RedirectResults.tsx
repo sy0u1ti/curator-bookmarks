@@ -50,7 +50,7 @@ export function RedirectResults() {
       ) : (
         <OptionEmptyState
           title="没有待更新的重定向"
-          description={`${state.emptyMessage} 完成一次书签可用性检测后，原地址和最终地址不同的结果会出现在这里。`}
+          description={`${state.emptyMessage} 检测发现原地址与最终地址不同的书签后，会出现在这里。`}
           actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
         />
       )}
@@ -68,7 +68,7 @@ function RedirectResultCard({
   selected: boolean
 }) {
   const selectionLabel = getRedirectResultActionLabel('选择重定向书签', result)
-  const updateLabel = getRedirectResultActionLabel('更新为最终 URL', result)
+  const updateLabel = getRedirectResultActionLabel('更新为最终地址', result)
   const openFinalLabel = getRedirectResultActionLabel('打开最终链接', result)
   const finalUrl = result.finalUrl || result.url
 
@@ -111,7 +111,7 @@ function RedirectResultCard({
             })}
             unstyled
           >
-            更新为最终 URL
+            更新为最终地址
           </Button>
           <a
             className={REDIRECT_CARD_LINK_CLASS}
@@ -131,9 +131,6 @@ function RedirectResultCard({
         </div>
         <div className={REDIRECT_CARD_DETAIL_CLASS}>
           最终地址：<span className={REDIRECT_INLINE_URL_CLASS}>{displayUrl(finalUrl)}</span>
-        </div>
-        <div className={REDIRECT_CARD_DETAIL_CLASS}>
-          建议：先打开最终链接确认。
         </div>
         <p className={REDIRECT_CARD_PATH_CLASS} title={result.path || '未归档路径'}>
           {result.path || '未归档路径'}

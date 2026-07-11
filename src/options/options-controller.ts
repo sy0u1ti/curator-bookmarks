@@ -289,6 +289,11 @@ import { publishFeatureSettingsControls } from './components/feature-settings-st
 import type { FeatureSettingsChangeDetail } from './components/feature-settings-types.js'
 import type { AiProviderSettingsActionDetail } from './components/ai-provider-settings-types.js'
 import { publishAiProviderSettings } from './components/ai-provider-settings-store.js'
+import {
+  getModelReasoningProfile,
+  getReasoningEffortOptions,
+  resolveReasoningEffortForModel
+} from '../shared/ai-reasoning.js'
 import { publishAiConfigLinkState } from './components/ai-config-link-store.js'
 import {
   publishAiAnalysisDecisionMetrics,
@@ -2958,6 +2963,16 @@ export function handleAiProviderSettingsAction(detail: AiProviderSettingsActionD
     return
   }
 
+  if (detail.action === 'reasoning-effort-change') {
+    aiNamingManagerState.settings = normalizeAiNamingSettings({
+      ...syncAiNamingSettingsDraftFromState(),
+      reasoningEffort: String(detail.value || 'default')
+    })
+    aiNamingState.settingsDirty = true
+    renderAiNamingSection()
+    return
+  }
+
   if (detail.action !== 'change' || !detail.field) {
     return
   }
@@ -4258,6 +4273,10 @@ function renderAiProviderSettings(
       : hasRequiredConfig
         ? '配置已保存，可继续获取模型或测试连接。'
         : '填写 API Key 后即可获取模型并测试连接。',
+    reasoningEffort: resolveReasoningEffortForModel(settings.model, settings.reasoningEffort),
+    reasoningEffortNote: getModelReasoningProfile(settings.model).note,
+    reasoningEffortOptions: getReasoningEffortOptions(settings.model),
+    reasoningEffortSupported: getModelReasoningProfile(settings.model).supported,
     revealApiKey: managerState.aiRevealApiKey,
     saveDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
     saveStatusText: aiNamingState.settingsDirty

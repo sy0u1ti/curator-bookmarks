@@ -46,12 +46,10 @@ export const AI_PROVIDER_FLOW_TITLE_CLASS =
 export const AI_PROVIDER_FLOW_COPY_CLASS =
   'm-0 mt-[5px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-[1.35] text-ds-text-disabled'
 
-export const AI_PROVIDER_QUICK_ROW_CLASS =
-  'grid grid-cols-[minmax(260px,1fr)_minmax(260px,0.62fr)] items-start gap-3 max-[900px]:grid-cols-1'
-
-export const AI_PROVIDER_API_KEY_GROUP_CLASS = 'flex min-w-0 flex-col gap-3'
-
 export const AI_PROVIDER_FIELD_CLASS = 'm-0 flex min-w-0 flex-col gap-2.5 border-0 p-0'
+
+export const AI_PROVIDER_FIELD_HEAD_CLASS =
+  'flex min-h-[22px] flex-wrap items-center justify-between gap-x-4 gap-y-1.5'
 
 export const AI_PROVIDER_FIELD_LABEL_CLASS =
   'text-xs font-semibold leading-[1.2] tracking-[0] text-ds-text-muted'
@@ -59,10 +57,18 @@ export const AI_PROVIDER_FIELD_LABEL_CLASS =
 export const AI_PROVIDER_INPUT_CLASS =
   'min-h-[50px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-4 text-sm text-ds-text-primary shadow-none outline-none placeholder:text-ds-text-disabled focus:border-ds-focus focus:bg-ds-hover focus:shadow-ds-focus focus:ring-0 focus-visible:border-ds-focus focus-visible:shadow-ds-focus focus-visible:ring-0'
 
-export const AI_PROVIDER_MODEL_FIELD_CLASS = 'min-w-0'
+export const AI_PROVIDER_MODEL_FIELD_CLASS = 'flex min-w-0 flex-col gap-3'
 
-export const AI_PROVIDER_MODEL_TOOLS_CLASS =
-  'grid grid-cols-[minmax(180px,1fr)_auto] items-start gap-3 max-[760px]:grid-cols-1'
+export const AI_PROVIDER_MODEL_ROW_CLASS =
+  'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-6 gap-y-3 max-[760px]:grid-cols-1'
+
+export const AI_PROVIDER_MODEL_GROUP_CLASS = 'flex items-stretch gap-2 max-[520px]:flex-col'
+
+export const AI_PROVIDER_MODEL_SELECT_HOST_CLASS = 'min-w-0 flex-1'
+
+export const AI_PROVIDER_EFFORT_HOST_CLASS = 'flex min-h-[50px] items-center'
+
+export const AI_PROVIDER_HINTS_CLASS = 'flex min-w-0 flex-col gap-1.5'
 
 export const AI_PROVIDER_MODEL_CONTROL_CLASS = 'flex min-w-0 flex-col gap-2.5'
 
@@ -76,22 +82,22 @@ export const AI_PROVIDER_SELECT_ROOT_CLASS = 'w-full'
 export const AI_PROVIDER_SELECT_TRIGGER_CLASS =
   'min-h-[50px] w-full rounded-ds-sm border-ds-border bg-ds-surface-2 text-ds-text-primary focus-visible:shadow-ds-focus'
 
-export const AI_PROVIDER_FETCH_BUTTON_CLASS = 'min-h-[50px] w-full min-w-[72px]'
+export const AI_PROVIDER_FETCH_BUTTON_CLASS =
+  'min-h-[50px] flex-none whitespace-nowrap px-4'
 
 export const AI_PROVIDER_CHECK_CLASS =
-  'inline-flex w-fit cursor-pointer items-center gap-3 text-[13px] text-ds-text-secondary'
+  'inline-flex w-fit cursor-pointer items-center gap-2 text-xs text-ds-text-secondary'
 
 export const AI_PROVIDER_CONNECTIVITY_CLASS =
-  'rounded-[16px] border p-3.5 text-[13px] leading-[1.65]'
+  'relative m-0 pl-[18px] text-[13px] font-medium leading-[1.65] before:absolute before:left-0 before:top-[7px] before:size-2 before:rounded-full'
 
-export const AI_PROVIDER_MODEL_FETCH_STATUS_CLASS =
-  `${AI_PROVIDER_CONNECTIVITY_CLASS} mt-3`
+export const AI_PROVIDER_MODEL_FETCH_STATUS_CLASS = AI_PROVIDER_CONNECTIVITY_CLASS
 
 export const AI_PROVIDER_CONNECTIVITY_TONE_CLASS: Record<string, string> = {
-  danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
-  muted: 'border-ds-border-subtle bg-ds-surface-2 text-ds-text-muted',
-  success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',
-  warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
+  danger: 'text-ds-danger-text before:bg-ds-danger',
+  muted: 'text-ds-text-muted before:bg-[rgba(245,245,247,0.28)]',
+  success: 'text-ds-success-text before:bg-ds-success before:shadow-[0_0_0_4px_var(--ds-success-soft)]',
+  warning: 'text-ds-warning before:bg-ds-warning before:shadow-[0_0_0_4px_var(--ds-warning-soft)]'
 }
 
 export const AI_PROVIDER_ACTIONS_CLASS =

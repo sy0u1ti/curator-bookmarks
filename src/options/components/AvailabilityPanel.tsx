@@ -9,7 +9,6 @@ import {
   OPTION_PANEL_CLASS,
   OPTION_PANEL_TITLE_CLASS,
   OPTION_RUN_CELL_CLASS,
-  OPTION_RUN_CELL_TEXT_CLASS,
   OPTION_RUN_CELL_TITLE_CLASS,
   OPTION_RUN_HEADER_CLASS,
   OPTION_SECTION_LABEL_CLASS,
@@ -35,7 +34,6 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
       <div className={OPTION_RUN_HEADER_CLASS}>
         <div className={OPTION_RUN_CELL_CLASS}>
           <strong className={OPTION_RUN_CELL_TITLE_CLASS}>检测范围</strong>
-          <p className={OPTION_RUN_CELL_TEXT_CLASS}>先限定范围，再执行多层校验。</p>
           <div className="mt-3">
             <ScopePickerTriggerButton className="min-w-full" source="availability" />
           </div>

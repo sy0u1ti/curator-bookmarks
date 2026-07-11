@@ -30,8 +30,6 @@ const RECYCLE_CARD_DETAIL_CLASS =
   'mt-[7px] text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 const RECYCLE_CARD_PATH_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
-const RECYCLE_STATUS_BADGE_CLASS =
-  'inline-flex min-h-7 max-w-full flex-none items-center justify-center rounded-full border border-ds-hover bg-ds-surface-2 px-[11px] text-[11px] font-semibold leading-none tracking-[0] text-ds-text-secondary whitespace-nowrap max-[760px]:whitespace-normal'
 
 export function RecycleBin() {
   const state = useRecycleBinState()
@@ -49,8 +47,8 @@ export function RecycleBin() {
         ))
       ) : (
         <OptionEmptyState
-          title="回收站当前为空"
-          description="重复清理、重定向删除和异常书签删除会优先进入这里；恢复时会尽量放回原文件夹。"
+          title="回收站为空"
+          description="各清理功能删除的书签会先进入这里，恢复时尽量放回原文件夹。"
         />
       )}
     </div>
@@ -95,7 +93,6 @@ function RecycleEntryCard({
             />
             <span>选择</span>
           </label>
-          <span className={RECYCLE_STATUS_BADGE_CLASS}>回收站</span>
         </div>
         <div className={RECYCLE_CARD_ACTIONS_CLASS}>
           <Button

@@ -48,7 +48,7 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
           <div className={OPTION_RUN_HEADER_CLASS}>
             <div className={OPTION_RUN_CELL_CLASS}>
               <strong className={OPTION_RUN_CELL_TITLE_CLASS}>分析范围</strong>
-              <p className={OPTION_RUN_CELL_TEXT_CLASS}>选择要生成标题、标签和归档建议的书签范围。</p>
+              <p className={OPTION_RUN_CELL_TEXT_CLASS}>为所选书签生成标题、标签和归档建议。</p>
               <div className="mt-3">
                 <AiAnalysisScopePickerButton className="min-w-full" />
               </div>
@@ -63,7 +63,7 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
           <AiAnalysisProgressPanel>
             <div className={AI_ANALYSIS_DECISION_HEADER_CLASS}>
               <div>
-                <strong className={AI_ANALYSIS_DECISION_TITLE_CLASS}>决策面板</strong>
+                <strong className={AI_ANALYSIS_DECISION_TITLE_CLASS}>分析概览</strong>
                 <p className={AI_ANALYSIS_DECISION_COPY_CLASS}>先应用高置信，再处理待确认。</p>
               </div>
             </div>
@@ -83,7 +83,7 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
         <div className="mt-6">
           <OptionEmptyState
             title="先配置 AI 渠道"
-            description="API Key 仅保存在本地。配置并测试连接后，这里会显示分析范围、运行控制、决策指标和结果筛选。"
+            description="配置并测试连接后，这里会显示分析控制和结果。API Key 仅保存在本地。"
             actions={[{ action: 'configure-ai', label: '配置 API Key', variant: 'primary' }]}
           />
         </div>

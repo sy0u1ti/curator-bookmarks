@@ -201,12 +201,13 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
               <Button
                 size="sm"
                 type="button"
+                variant="primary"
                 aria-label="从备份预览恢复全部可安全恢复的数据"
                 disabled={state.backup.busy}
                 focusableWhenDisabled={state.backup.busy}
                 onClick={() => handleBackupAction({ action: 'restore', mode: 'safeFull' })}
               >
-                恢复全部可安全恢复的数据
+                安全恢复全部
               </Button>
             </div>
           ) : null}
@@ -233,7 +234,7 @@ function BackupPreview({
     return (
       <OptionEmptyState
         title="先导入备份文件"
-        description="选择备份文件后会先显示差异和风险，确认无误后才会出现恢复动作。"
+        description="导入后先显示差异与风险，确认后才提供恢复操作。"
         actions={[{ label: '导入并预览', onClick: onImportPreview, variant: 'primary' }]}
         className={BACKUP_EMPTY_CLASS}
       />

@@ -102,10 +102,10 @@ export function AvailabilityControls() {
     <>
       <div className={AVAILABILITY_PERMISSION_CARD_CLASS}>
         <div className={AVAILABILITY_PERMISSION_META_CLASS}>
+          <strong className={AVAILABILITY_PERMISSION_TITLE_CLASS}>检测方式</strong>
           <span className={badgeClassName}>
             {state.badgeText}
           </span>
-          <strong className={AVAILABILITY_PERMISSION_TITLE_CLASS}>检测方式</strong>
         </div>
         <p className={AVAILABILITY_PERMISSION_COPY_CLASS}>
           {state.permissionCopy}

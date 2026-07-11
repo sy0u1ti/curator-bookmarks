@@ -8,6 +8,7 @@ export type AiProviderSettingsAction =
   | 'test-connection'
   | 'api-style-change'
   | 'model-change'
+  | 'reasoning-effort-change'
   | 'fetch-models'
   | 'custom-models-save'
 
@@ -41,6 +42,10 @@ export interface AiProviderSettingsState {
   modelTools: AiProviderModelToolsState
   modelToolsDisabled: boolean
   noticeText: string
+  reasoningEffort: string
+  reasoningEffortNote: string
+  reasoningEffortOptions: Array<{ id: string; label: string; hint: string }>
+  reasoningEffortSupported: boolean
   revealApiKey: boolean
   saveDisabled: boolean
   saveStatusText: string

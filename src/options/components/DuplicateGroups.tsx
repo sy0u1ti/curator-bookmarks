@@ -89,8 +89,8 @@ export function DuplicateGroups() {
     return (
       <div className={RESULTS_CLASS}>
         <OptionEmptyState
-          title="当前未发现重复书签"
-          description="重复检测会按 URL 聚合书签。发现重复后，这里会先展示推荐保留项，再让你选择要移入回收站的副本。"
+          title="未发现重复书签"
+          description="按 URL 聚合检测；发现重复后会给出推荐保留项，其余可移入回收站。"
         />
       </div>
     )

@@ -6,15 +6,9 @@ import { FolderCleanupResults } from './FolderCleanupResults.js'
 import { IgnoreRules } from './IgnoreRules.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_GROUP_CLASS,
-  OPTION_COPY_CLASS,
-  OPTION_COPY_TEXT_CLASS,
-  OPTION_COPY_TITLE_CLASS,
   OPTION_PANEL_TITLE_CLASS,
-  OPTION_ROW_CLASS,
   OPTION_SECTION_LABEL_CLASS,
-  OPTION_TOOL_PANEL_CLASS,
-  OPTION_VALUE_CLASS
+  OPTION_TOOL_PANEL_CLASS
 } from './option-layout-classes.js'
 import { RedirectControls } from './RedirectControls.js'
 import { RedirectResults } from './RedirectResults.js'
@@ -99,7 +93,7 @@ export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function FolderCleanupPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="folder-cleanup" className={OPTION_PANEL_CLASS} aria-labelledby="folder-cleanup-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>文件夹清理</p>
+      <p className={OPTION_SECTION_LABEL_CLASS}>Folder Cleanup</p>
       <h1 id="folder-cleanup-title" className={OPTION_PANEL_TITLE_CLASS}>文件夹清理</h1>
 
       <div className={FOLDER_CLEANUP_GROUP_CLASS}>
@@ -114,16 +108,7 @@ export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="ignore" className={OPTION_PANEL_CLASS} aria-labelledby="ignore-title" hidden={hidden}>
       <p className={OPTION_SECTION_LABEL_CLASS}>Ignore Rules</p>
-      <h1 id="ignore-title" className={OPTION_PANEL_TITLE_CLASS}>忽略规则 / 白名单</h1>
-      <div className={OPTION_GROUP_CLASS}>
-        <div className={OPTION_ROW_CLASS}>
-          <div className={OPTION_COPY_CLASS}>
-            <strong className={OPTION_COPY_TITLE_CLASS}>规则来源说明</strong>
-            <p className={OPTION_COPY_TEXT_CLASS}>忽略规则从检测结果添加，不能提前手动录入。</p>
-          </div>
-          <span className={OPTION_VALUE_CLASS}>检测结果生成</span>
-        </div>
-      </div>
+      <h1 id="ignore-title" className={OPTION_PANEL_TITLE_CLASS}>忽略规则</h1>
 
       <IgnoreRules />
     </section>

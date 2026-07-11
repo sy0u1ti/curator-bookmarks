@@ -14,7 +14,7 @@ export function AiAnalysisResultsHeader() {
   return (
     <div className={AI_RESULTS_HEADER_CLASS}>
       <div className={AI_RESULTS_HEADER_COPY_CLASS}>
-        <strong className={AI_RESULTS_HEADER_TITLE_CLASS}>书签智能分析</strong>
+        <strong className={AI_RESULTS_HEADER_TITLE_CLASS}>分析结果</strong>
         <p className={AI_RESULTS_SUBTITLE_CLASS}>{state.subtitle}</p>
       </div>
     </div>

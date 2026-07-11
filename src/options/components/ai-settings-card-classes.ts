@@ -51,17 +51,6 @@ export const AI_SETTINGS_SWITCH_CONTROL_CLASS = OPTION_SWITCH_CONTROL_CLASS
 
 export const AI_SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
 
-export const AI_SETTINGS_ADVANCED_CLASS =
-  'grid px-4 py-3'
-
-export const AI_SETTINGS_ADVANCED_TRIGGER_CLASS =
-  'w-fit rounded-ds-sm border border-ds-hover bg-ds-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ds-text-secondary transition-colors hover:border-ds-border hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
-
-export const AI_SETTINGS_ADVANCED_PANEL_CLASS =
-  'mt-2 overflow-hidden text-[13px] leading-[1.65] text-ds-text-muted'
-
-export const AI_SETTINGS_ADVANCED_NOTE_CLASS = 'm-0'
-
 export const AI_SETTINGS_FIELD_TIP_CLASS =
   'm-0 px-4 py-3 text-[13px] leading-[1.65] text-ds-text-muted'
 

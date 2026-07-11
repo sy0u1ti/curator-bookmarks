@@ -14,6 +14,7 @@ export interface AiNamingSettings {
   apiStyle: 'responses' | 'chat_completions'
   timeoutMs: number
   batchSize: number
+  reasoningEffort: string
   autoSelectHighConfidence: boolean
   allowRemoteParsing: boolean
   autoAnalyzeBookmarks: boolean
@@ -29,11 +30,14 @@ interface AiNamingSettingsSource {
   apiStyle?: unknown
   timeoutMs?: unknown
   batchSize?: unknown
+  reasoningEffort?: unknown
   autoSelectHighConfidence?: unknown
   allowRemoteParsing?: unknown
   autoAnalyzeBookmarks?: unknown
   systemPrompt?: unknown
 }
+
+const REASONING_EFFORT_VALUES = ['default', 'minimal', 'low', 'medium', 'high']
 
 export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSettings {
   const defaults = createDefaultAiNamingSettings() as AiNamingSettings
@@ -43,6 +47,7 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
   const apiStyle = String(source.apiStyle || defaults.apiStyle).trim()
   const timeoutMs = Number(source.timeoutMs)
   const batchSize = Number(source.batchSize)
+  const reasoningEffort = String(source.reasoningEffort ?? defaults.reasoningEffort ?? 'default').trim().toLowerCase()
 
   return {
     baseUrl: String(source.baseUrl || defaults.baseUrl).trim() || defaults.baseUrl,
@@ -57,6 +62,7 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
     batchSize: Number.isFinite(batchSize)
       ? Math.max(1, Math.min(Math.round(batchSize), AI_NAMING_MAX_BATCH_SIZE))
       : defaults.batchSize,
+    reasoningEffort: REASONING_EFFORT_VALUES.includes(reasoningEffort) ? reasoningEffort : 'default',
     autoSelectHighConfidence:
       typeof source.autoSelectHighConfidence === 'boolean'
         ? source.autoSelectHighConfidence
@@ -112,6 +118,7 @@ export function serializeAiNamingSettings(settings: unknown): AiNamingSettings {
     apiStyle: normalized.apiStyle,
     timeoutMs: normalized.timeoutMs,
     batchSize: normalized.batchSize,
+    reasoningEffort: normalized.reasoningEffort,
     autoSelectHighConfidence: normalized.autoSelectHighConfidence,
     allowRemoteParsing: normalized.allowRemoteParsing,
     autoAnalyzeBookmarks: normalized.autoAnalyzeBookmarks,

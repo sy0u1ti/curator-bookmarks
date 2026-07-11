@@ -17,7 +17,7 @@ export function BookmarkAddHistoryHeader({ state }: { state: BookmarkAddHistoryH
   return (
     <div className={BOOKMARK_ADD_HISTORY_HEADER_CLASS}>
       <div className={BOOKMARK_ADD_HISTORY_HEADER_COPY_CLASS}>
-        <strong className={BOOKMARK_ADD_HISTORY_TITLE_CLASS}>AI 整理记录</strong>
+        <strong className={BOOKMARK_ADD_HISTORY_TITLE_CLASS}>整理记录</strong>
         <p className={BOOKMARK_ADD_HISTORY_SUBTITLE_CLASS}>
           {state.subtitle}
         </p>
@@ -34,7 +34,7 @@ export function BookmarkAddHistoryHeader({ state }: { state: BookmarkAddHistoryH
             aria-label="清空 AI 整理记录"
             onClick={handleBookmarkAddHistoryClear}
           >
-            清空 AI 整理记录
+            清空记录
           </Button>
         ) : null}
       </div>

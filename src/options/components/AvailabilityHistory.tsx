@@ -211,7 +211,7 @@ function AvailabilityHistoryLogList({
     return (
       <OptionEmptyState
         title="还没有检测历史"
-        description={`${emptyCopy} 完成一次书签可用性检测后，这里会显示异常变化、恢复记录和趋势。`}
+        description={`${emptyCopy} 完成一次检测后，这里会显示异常变化、恢复记录和趋势。`}
         actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
       />
     )

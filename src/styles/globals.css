@@ -738,3 +738,59 @@ body {
   outline: 2px solid var(--ds-focus, #47a8ff) !important;
   outline-offset: 2px;
 }
+
+/* 推理强度选择器（设计复刻自 zanwei/claude-model-selector，MIT）：
+   方向感知的档名换字（±3px + blur）与面板 120ms 退场。 */
+@keyframes effort-label-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(var(--effort-exit-y, -3px));
+    filter: blur(2px);
+  }
+}
+
+@keyframes effort-label-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--effort-enter-y, 3px));
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.effort-level-outgoing {
+  animation: effort-label-exit 180ms cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+
+.effort-level-incoming {
+  animation: effort-label-enter 180ms cubic-bezier(0.2, 0, 0, 1) 24ms backwards;
+}
+
+@keyframes effort-panel-close {
+  to {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+.effort-panel-closing {
+  pointer-events: none;
+  animation: effort-panel-close 120ms var(--ds-ease-in) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .effort-level-outgoing,
+  .effort-level-incoming,
+  .effort-panel-closing {
+    animation: none;
+  }
+}

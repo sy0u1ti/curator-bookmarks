@@ -52,8 +52,8 @@ export function FolderCleanupControls() {
     <>
       <div className={FOLDER_CLEANUP_RUN_HEADER_CLASS}>
         <div className={OPTION_COPY_CLASS}>
-          <strong className={OPTION_COPY_TITLE_CLASS}>建议和预览优先</strong>
-          <p className={OPTION_COPY_TEXT_CLASS}>扫描文件夹结构并生成清理建议；执行前会确认并自动备份。</p>
+          <strong className={OPTION_COPY_TITLE_CLASS}>扫描文件夹结构</strong>
+          <p className={OPTION_COPY_TEXT_CLASS}>生成清理建议；执行前会确认并自动备份。</p>
         </div>
         <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
           <span

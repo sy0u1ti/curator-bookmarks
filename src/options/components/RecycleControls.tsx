@@ -50,7 +50,7 @@ export function RecycleControls() {
                 focusableWhenDisabled={state.busy}
                 onClick={() => handleRecycleAction('restore-selected')}
               >
-                批量恢复
+                恢复所选
               </Button>
               <Button
                 size="sm"

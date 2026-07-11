@@ -45,12 +45,12 @@ export function RedirectControls() {
               <Button
                 size="sm"
                 type="button"
-                aria-label="批量更新重定向已选书签为最终 URL"
+                aria-label="批量更新重定向已选书签为最终地址"
                 disabled={state.locked || !hasSelection}
                 focusableWhenDisabled={state.locked}
                 onClick={() => handleRedirectAction({ action: 'update-selected' })}
               >
-                批量更新最终 URL
+                更新为最终地址
               </Button>
               <Button
                 size="sm"

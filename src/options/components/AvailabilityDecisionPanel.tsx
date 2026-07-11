@@ -35,7 +35,7 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
     <div className={AVAILABILITY_DECISION_PANEL_CLASS} aria-label="可用性检测决策概览">
       <div className={AVAILABILITY_DECISION_HEADER_CLASS}>
         <div className={AVAILABILITY_DECISION_HEADER_COPY_CLASS}>
-          <strong className={AVAILABILITY_DECISION_TITLE_CLASS}>决策面板</strong>
+          <strong className={AVAILABILITY_DECISION_TITLE_CLASS}>检测概览</strong>
           <p className={AVAILABILITY_DECISION_SUBTITLE_CLASS}>确认失效后再移动、删除或忽略。</p>
         </div>
         <span className={OPTION_VALUE_CLASS}>{state.durationLabel}</span>
@@ -68,10 +68,10 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
       ) : (
         <div className={['t-stagger mt-4 border-t border-ds-border-subtle pt-4', emptyEntered ? 'is-shown' : ''].filter(Boolean).join(' ')}>
           <strong className="t-stagger-line t-stagger-line--1 block text-sm font-semibold text-ds-text-primary">
-            尚未开始本轮检测
+            尚未开始检测
           </strong>
           <p className="t-stagger-line t-stagger-line--2 mt-2 mb-0 text-[13px] leading-[1.65] text-ds-text-secondary">
-            设置范围和检测方式后启动检测，决策指标和结果筛选会在这里展开。
+            启动检测后，指标和结果筛选会在这里展开。
           </p>
         </div>
       )}

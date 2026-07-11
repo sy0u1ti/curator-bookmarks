@@ -7,17 +7,17 @@ import { useAiAnalysisResultsFilter } from './ai-analysis-status-store.js'
 
 const statusOptions: SelectOption[] = [
   { value: 'all', label: '全部状态' },
-  { value: 'suggested', label: '只看建议改名' },
-  { value: 'changed', label: '只看标题变化大' },
-  { value: 'manual_review', label: '只看待人工确认' },
-  { value: 'failed', label: '只看失败' }
+  { value: 'suggested', label: '建议改名' },
+  { value: 'changed', label: '标题变化大' },
+  { value: 'manual_review', label: '待人工确认' },
+  { value: 'failed', label: '失败' }
 ]
 
 const confidenceOptions: SelectOption[] = [
   { value: 'all', label: '全部置信度' },
-  { value: 'high', label: '只看高置信' },
-  { value: 'medium', label: '只看中置信' },
-  { value: 'low', label: '只看低置信' }
+  { value: 'high', label: '高置信' },
+  { value: 'medium', label: '中置信' },
+  { value: 'low', label: '低置信' }
 ]
 
 const AI_RESULTS_FILTER_ROW_CLASS =
