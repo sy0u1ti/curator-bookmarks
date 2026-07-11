@@ -167,6 +167,13 @@ assert.ok(
   controller.includes('const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 0'),
   'Auto-centered search should reveal after the first current-layout measurement instead of waiting through extra frames.'
 )
+assert.ok(
+  controller.includes("const AUTO_SEARCH_LAYOUT_PENDING_ATTRIBUTE = 'data-newtab-search-layout-pending'") &&
+    controller.includes('setAutoSearchLayoutPending(true)') &&
+    controller.includes('scheduleAutoSearchLayoutReveal()') &&
+    newtabCss.includes('html[data-newtab-search-layout-pending] .newtab-search-slot'),
+  'The document should keep auto-centered search hidden until the measured shell state has reached the DOM.'
+)
 
 assert.ok(
   !bookmarkTileClasses.includes('backdrop-filter:blur') &&

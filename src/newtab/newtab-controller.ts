@@ -454,6 +454,7 @@ const SEARCH_OFFSET_ABSOLUTE_MIN = -240
 const SEARCH_OFFSET_ABSOLUTE_MAX = 240
 const AUTO_SEARCH_OFFSET_CACHE_KEY = 'curatorNewTabAutoSearchOffsetY'
 const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 0
+const AUTO_SEARCH_LAYOUT_PENDING_ATTRIBUTE = 'data-newtab-search-layout-pending'
 const SEARCH_WIDTH_BOUNDS_FALLBACK = { min: 16, max: 72 }
 const NEWTAB_LAYOUT_SAFE_GAP = 12
 const NEWTAB_COMMAND_SCORE = -100000
@@ -794,6 +795,7 @@ let folderDragGhostFrame = 0
 let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
 let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
+let autoSearchLayoutRevealFrame = 0
 let deferredRenderFrame = 0
 let autoSearchLayoutStableFrames = 0
 let autoSearchLayoutStableKey = ''
@@ -1774,8 +1776,11 @@ function applySearchSettingsLive(): void {
     : clampNumber(settings.offsetY, offsetBounds.min, offsetBounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)
 
   if (settings.autoVerticalCenter) {
+    setAutoSearchLayoutPending(true)
     resetAutoSearchLayoutSettle()
     scheduleAdaptiveNewTabLayoutUpdate()
+  } else {
+    setAutoSearchLayoutPending(false)
   }
   patchSearchWidgetShellState({
     autoVerticalCenter: settings.autoVerticalCenter,
@@ -4789,6 +4794,7 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     }
     migrateStoredFeaturedBackgroundId()
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
+    setAutoSearchLayoutPending(state.searchSettings.autoVerticalCenter)
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
     state.generalSettings = normalizeGeneralSettings(stored[STORAGE_KEYS.newTabGeneralSettings])
     state.timeSettings = normalizeTimeSettingsLocal(stored[STORAGE_KEYS.newTabTimeSettings])
@@ -5450,6 +5456,45 @@ function scheduleAdaptiveNewTabLayoutUpdate(): void {
   })
 }
 
+function setAutoSearchLayoutPending(pending: boolean): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  if (!pending && autoSearchLayoutRevealFrame) {
+    window.cancelAnimationFrame(autoSearchLayoutRevealFrame)
+    autoSearchLayoutRevealFrame = 0
+  }
+  document.documentElement.toggleAttribute(AUTO_SEARCH_LAYOUT_PENDING_ATTRIBUTE, pending)
+}
+
+function scheduleAutoSearchLayoutReveal(): void {
+  if (autoSearchLayoutRevealFrame) {
+    window.cancelAnimationFrame(autoSearchLayoutRevealFrame)
+  }
+
+  autoSearchLayoutRevealFrame = window.requestAnimationFrame(() => {
+    autoSearchLayoutRevealFrame = 0
+    const view = getNewtabSearchWidgetView()
+    const slot = getNewtabSearchWidgetNodes().slot
+    if (!view?.shell.autoVerticalCenter) {
+      setAutoSearchLayoutPending(false)
+      return
+    }
+    if (!view.shell.layoutReady || !slot || slot.dataset.searchLayoutReady !== 'true') {
+      scheduleAutoSearchLayoutReveal()
+      return
+    }
+
+    const renderedOffsetY = slot.style.getPropertyValue('--search-offset-y')
+    if (renderedOffsetY !== `${view.shell.offsetY}px`) {
+      scheduleAutoSearchLayoutReveal()
+      return
+    }
+    setAutoSearchLayoutPending(false)
+  })
+}
+
 function runBatchedAdaptiveLayoutUpdate(): void {
   const layoutNodes = getNewtabContentLayoutNodes()
   const contentView = getNewtabContentView()
@@ -5553,6 +5598,11 @@ function runBatchedAdaptiveLayoutUpdate(): void {
     offsetY: nextSearchOffsetY,
     width: nextSearchWidth
   })
+  if (state.searchSettings.autoVerticalCenter && nextSearchLayoutReady) {
+    scheduleAutoSearchLayoutReveal()
+  } else if (!state.searchSettings.autoVerticalCenter) {
+    setAutoSearchLayoutPending(false)
+  }
   patchNewtabPageCollisionOffset(collisionOffset)
   syncSearchWidthControl()
   syncSearchOffsetControl()
@@ -5716,8 +5766,12 @@ async function completeNewTabOnboarding(): Promise<void> {
 function initializeSearchWidget(): boolean {
   const settings = state.searchSettings
   if (!settings.enabled) {
+    setAutoSearchLayoutPending(false)
     dispatchNewtabSearchWidgetView(null)
     return false
+  }
+  if (settings.autoVerticalCenter) {
+    setAutoSearchLayoutPending(true)
   }
   let engineMenuExpanded = false
   let searchEngineMenuState: SearchWidgetEngineMenuState = {
@@ -7540,9 +7594,12 @@ function cleanupNewTabController(): void {
   resizeLayoutFrame = 0
   window.cancelAnimationFrame(verticalCenterCollisionFrame)
   verticalCenterCollisionFrame = 0
+  window.cancelAnimationFrame(autoSearchLayoutRevealFrame)
+  autoSearchLayoutRevealFrame = 0
   window.cancelAnimationFrame(deferredRenderFrame)
   deferredRenderFrame = 0
   resetAutoSearchLayoutSettle()
+  setAutoSearchLayoutPending(false)
   removeBookmarkDragGhost()
   removeSpeedDialDragGhost()
   removeFolderDragGhost()

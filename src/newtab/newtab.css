@@ -4,6 +4,12 @@
   font-family: var(--newtab-font-sans);
 }
 
+html[data-newtab-search-layout-pending] .newtab-search-slot {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
 .newtab-app {
   --newtab-wallpaper-focus-duration: 280ms;
   --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
