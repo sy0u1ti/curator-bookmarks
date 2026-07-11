@@ -55,15 +55,15 @@ const workspaceShellClass =
 const workspaceLayerClass = 'absolute inset-0 min-h-0'
 const workspaceSkeletonLayerClass = cx(
   workspaceLayerClass,
-  'z-[1] opacity-100 [will-change:opacity,filter] transition-[opacity,filter] duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none',
+  'z-[1] opacity-100 [will-change:opacity] [contain:layout_paint] transition-opacity duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none',
   '[&>*]:animate-[popup-skeleton-pulse_var(--pulse-dur)_ease-in-out_var(--pulse-count)] motion-reduce:[&>*]:animate-none'
 )
-const workspaceSkeletonHiddenClass = 'pointer-events-none opacity-0 blur-[var(--reveal-blur)]'
+const workspaceSkeletonHiddenClass = 'pointer-events-none opacity-0'
 const workspaceContentLayerClass = cx(
   workspaceLayerClass,
-  'z-[2] opacity-0 [will-change:opacity,filter] transition-[opacity,filter] duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none'
+  'z-[2] opacity-0 [will-change:opacity] [contain:layout_paint] transition-opacity duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none'
 )
-const workspaceContentLoadingClass = 'pointer-events-none blur-[var(--reveal-blur)]'
+const workspaceContentLoadingClass = 'pointer-events-none'
 const workspaceContentReadyClass = 'opacity-100'
 const workspaceClass =
   'relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'

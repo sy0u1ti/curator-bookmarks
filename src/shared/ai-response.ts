@@ -31,15 +31,16 @@ export function extractResponsesJsonText(
   }
 
   if (typeof responsePayload?.output_text === 'string' && responsePayload.output_text.trim()) {
-    return responsePayload.output_text
+    return extractJsonPayloadText(responsePayload.output_text)
   }
 
-  const textNode = contentItems.find((item: any) => {
-    return typeof item?.text === 'string' && item.text.trim()
-  }) as { text?: string } | undefined
+  const joinedText = contentItems
+    .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
+    .filter((text) => text.trim())
+    .join('')
 
-  if (textNode?.text) {
-    return textNode.text
+  if (joinedText.trim()) {
+    return extractJsonPayloadText(joinedText)
   }
 
   throw new Error('Responses API 返回中未找到可解析的 JSON 文本。')
@@ -54,6 +55,8 @@ export function extractChatCompletionsJsonText(
       message?: {
         refusal?: unknown
         content?: unknown
+        reasoning_content?: unknown
+        reasoning?: unknown
       }
     }>
   } | null
@@ -65,7 +68,7 @@ export function extractChatCompletionsJsonText(
 
   const content = message?.content
   if (typeof content === 'string' && content.trim()) {
-    return stripMarkdownCodeFences(content)
+    return extractJsonPayloadText(content)
   }
 
   if (Array.isArray(content)) {
@@ -76,19 +79,148 @@ export function extractChatCompletionsJsonText(
       throw new Error(formatRefusal(refusalNode.refusal))
     }
 
-    const textNode = content.find((item: any) => {
-      return typeof item?.text === 'string' && item.text.trim()
-    }) as { text?: string } | undefined
-    if (textNode?.text) {
-      return stripMarkdownCodeFences(textNode.text)
+    const joinedText = content
+      .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
+      .filter((text) => text.trim())
+      .join('')
+    if (joinedText.trim()) {
+      return extractJsonPayloadText(joinedText)
     }
+  }
+
+  // 部分推理模型的兼容层会把全部输出塞进思考通道，正文为空；尽力从中打捞 JSON。
+  const reasoningText = [message?.reasoning_content, message?.reasoning]
+    .map((item) => (typeof item === 'string' ? item : ''))
+    .find((item) => item.trim())
+  if (reasoningText) {
+    const salvaged = extractJsonPayloadText(reasoningText)
+    if (looksLikeJsonPayload(salvaged)) {
+      return salvaged
+    }
+    throw new Error('模型把输出写入了思考通道（reasoning）且未包含 JSON 正文，请关闭思考模式或换用支持结构化输出的模型。')
   }
 
   throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
 }
 
-function stripMarkdownCodeFences(text: unknown): string {
-  return String(text || '').replace(/^```(?:json)?\s*\n?([\s\S]*?)\n?```\s*$/, '$1').trim()
+/**
+ * 从任意模型的自由文本输出中萃取 JSON 载荷：
+ * 1. 剥离推理模型的 <think>…</think> 思考段（含只有闭合标签的变体）
+ * 2. 优先取 markdown 代码围栏内容（允许围栏前后有说明文字）
+ * 3. 兜底做括号平衡扫描，截取首个完整的 JSON 对象/数组
+ * 提取失败时原样返回修剪后的文本，让上层 JSON.parse 给出错误。
+ */
+export function extractJsonPayloadText(text: unknown): string {
+  let value = String(text ?? '')
+  if (!value.trim()) {
+    return value.trim()
+  }
+
+  const closeThinkIndex = value.lastIndexOf('</think>')
+  if (closeThinkIndex !== -1) {
+    value = value.slice(closeThinkIndex + '</think>'.length)
+  } else {
+    value = value.replace(/<think>[\s\S]*?<\/think>/g, '')
+  }
+
+  const fencedMatch = value.match(/```(?:json[c5]?|javascript)?\s*\n?([\s\S]*?)```/i)
+  if (fencedMatch && fencedMatch[1].trim()) {
+    value = fencedMatch[1]
+  }
+
+  const trimmed = value.trim()
+  if (looksLikeJsonPayload(trimmed)) {
+    return trimmed
+  }
+
+  const balanced = extractBalancedJsonSlice(trimmed)
+  return balanced ?? trimmed
+}
+
+function looksLikeJsonPayload(text: string): boolean {
+  if (!text) {
+    return false
+  }
+  const first = text[0]
+  const last = text[text.length - 1]
+  return (first === '{' && last === '}') || (first === '[' && last === ']')
+}
+
+function extractBalancedJsonSlice(text: string): string | null {
+  const start = findJsonStart(text)
+  if (start === -1) {
+    return null
+  }
+
+  const openChar = text[start]
+  const closeChar = openChar === '{' ? '}' : ']'
+  let depth = 0
+  let inString = false
+  let escaped = false
+
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) {
+        escaped = false
+      } else if (char === '\\') {
+        escaped = true
+      } else if (char === '"') {
+        inString = false
+      }
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      continue
+    }
+    if (char === openChar) {
+      depth += 1
+    } else if (char === closeChar) {
+      depth -= 1
+      if (depth === 0) {
+        return text.slice(start, index + 1)
+      }
+    }
+  }
+  return null
+}
+
+function findJsonStart(text: string): number {
+  const objectIndex = text.indexOf('{')
+  const arrayIndex = text.indexOf('[')
+  if (objectIndex === -1) {
+    return arrayIndex
+  }
+  if (arrayIndex === -1) {
+    return objectIndex
+  }
+  return Math.min(objectIndex, arrayIndex)
+}
+
+/**
+ * 判断响应是否因输出上限被截断。截断时重试同一提示几乎必然再次截断，
+ * 上层应直接报错并给出可操作的建议，而不是浪费重试请求。
+ */
+export function getAiTruncationIssue(payload: unknown, apiStyle: unknown): string {
+  if (!payload || typeof payload !== 'object') {
+    return ''
+  }
+
+  if (apiStyle === 'chat_completions') {
+    const finishReason = (payload as { choices?: Array<{ finish_reason?: unknown }> }).choices?.[0]?.finish_reason
+    if (finishReason === 'length') {
+      return 'AI 输出因达到模型输出上限被截断（finish_reason=length）。请减小批量大小、缩短提示或调大模型输出上限后重试。'
+    }
+    return ''
+  }
+
+  const responsePayload = payload as { status?: unknown; incomplete_details?: { reason?: unknown } }
+  if (responsePayload.status === 'incomplete') {
+    const reason = String(responsePayload.incomplete_details?.reason || 'incomplete')
+    return `AI 输出未完成（${reason}）。请减小批量大小、缩短提示或调大模型输出上限后重试。`
+  }
+  return ''
 }
 
 export function extractAiErrorMessage(payload: unknown, statusCode: unknown, rawBody: unknown = ''): string {

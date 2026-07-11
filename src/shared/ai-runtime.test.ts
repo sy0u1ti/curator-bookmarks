@@ -40,6 +40,12 @@ async function run(): Promise<void> {
   await testProviderTextErrorBody()
   await testTimeoutErrorMessage()
   await testNoRetryForAbort()
+  await testThinkTagAndProseExtraction()
+  await testReasoningContentSalvage()
+  await testTruncationDetection()
+  await testResponseFormatFallback()
+  await testRetryAfterBackoff()
+  await testBodyReadTimeout()
 }
 
 function testSchemaValidation(): void {
@@ -268,6 +274,165 @@ async function testNoRetryForAbort(): Promise<void> {
   }, 'abort')
 
   assert(attempts === 0, 'abort should not call provider')
+}
+
+async function testThinkTagAndProseExtraction(): Promise<void> {
+  // DeepSeek-R1 / Qwen3 风格输出：<think> 思考段 + 说明文字包裹的裸 JSON。
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: getSettings('chat_completions'),
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub([], {
+      choices: [{
+        message: {
+          content: '<think>需要先分析书签语义，再决定动作。</think>好的，结果如下：\n{"action":"keep","confidence":0.5,"items":[{"id":"d"}]}\n希望对你有帮助！'
+        }
+      }]
+    })
+  })
+
+  assert(result.data.action === 'keep', 'think tag and surrounding prose should be stripped before parsing')
+}
+
+async function testReasoningContentSalvage(): Promise<void> {
+  // 部分兼容层把全部输出塞进 reasoning_content，正文为空。
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: getSettings('chat_completions'),
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub([], {
+      choices: [{
+        message: {
+          content: '',
+          reasoning_content: '让我推理一下……最终答案：{"action":"rename","confidence":0.8,"items":[{"id":"e"}]}'
+        }
+      }]
+    })
+  })
+
+  assert(result.data.action === 'rename', 'JSON inside reasoning_content should be salvaged')
+}
+
+async function testTruncationDetection(): Promise<void> {
+  let attempts = 0
+  const error = await assertRejectsKind(async () => {
+    await requestStructuredAiOutput({
+      settings: getSettings('chat_completions'),
+      schema: SAMPLE_SCHEMA,
+      schemaName: 'sample',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      fetchImpl: (async () => {
+        attempts += 1
+        return new Response(JSON.stringify({
+          choices: [{
+            finish_reason: 'length',
+            message: { content: '{"action":"keep","confidence":0.5,' }
+          }]
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }) as typeof fetch
+    })
+  }, 'provider')
+
+  assert(error.message.includes('截断'), 'length finish_reason should surface a truncation error')
+  assert(attempts === 1, 'truncated output should not waste retry attempts')
+}
+
+async function testResponseFormatFallback(): Promise<void> {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: getSettings('chat_completions'),
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.body ? JSON.parse(String(init.body)) : {})
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({
+          error: { message: "Unknown parameter: 'response_format'" }
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        choices: [{
+          message: { content: '{"action":"keep","confidence":0.4,"items":[{"id":"f"}]}' }
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+  })
+
+  assert(calls.length === 2, 'response_format rejection should trigger a compatibility retry')
+  assert('response_format' in calls[0], 'first attempt should request structured output')
+  assert(!('response_format' in calls[1]), 'fallback attempt should drop response_format')
+  assert(result.data.action === 'keep', 'fallback attempt should succeed')
+}
+
+async function testRetryAfterBackoff(): Promise<void> {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: getSettings('chat_completions'),
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.body ? JSON.parse(String(init.body)) : {})
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({ error: { message: 'rate limited' } }), {
+          status: 429,
+          headers: { 'Content-Type': 'application/json', 'Retry-After': '0' }
+        })
+      }
+      return new Response(JSON.stringify({
+        choices: [{
+          message: { content: '{"action":"rename","confidence":0.9,"items":[{"id":"g"}]}' }
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+  })
+
+  assert(calls.length === 2, '429 should retry after honoring Retry-After')
+  assert(result.metadata.attempts === 2, 'metadata should count the retry attempt')
+}
+
+async function testBodyReadTimeout(): Promise<void> {
+  const error = await assertRejectsKind(async () => {
+    await requestStructuredAiOutput({
+      settings: getSettings('responses'),
+      schema: SAMPLE_SCHEMA,
+      schemaName: 'sample',
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      retry: false,
+      timeoutMs: 1,
+      fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const signal = init?.signal
+        // headers 立即返回，body 永久挂起：超时保护必须覆盖读体阶段。
+        return {
+          ok: true,
+          status: 200,
+          headers: { get: () => null },
+          text: () => new Promise<string>((_resolve, reject) => {
+            if (signal?.aborted) {
+              reject(new DOMException('The operation was aborted.', 'AbortError'))
+              return
+            }
+            signal?.addEventListener('abort', () => {
+              reject(new DOMException('The operation was aborted.', 'AbortError'))
+            }, { once: true })
+          })
+        } as unknown as Response
+      }) as typeof fetch
+    })
+  }, 'abort')
+
+  assert(error.message.includes('AI 请求超时'), 'hung response body should hit the timeout instead of hanging forever')
 }
 
 function getSettings(apiStyle: 'responses' | 'chat_completions') {

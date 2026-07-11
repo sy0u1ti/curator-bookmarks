@@ -100,6 +100,7 @@ export interface PopupState {
   filteredBookmarksCacheKey: string
   filteredBookmarksCache: PopupSearchBookmark[]
   contentRenderKey: string
+  hasPresentedContent: boolean
   searchChipsRenderSignature: string
   moveTargetBookmarkId: string | null
   moveSearchQuery: string
@@ -202,6 +203,7 @@ export const state: PopupState = {
   filteredBookmarksCacheKey: '',
   filteredBookmarksCache: [],
   contentRenderKey: '',
+  hasPresentedContent: false,
   searchChipsRenderSignature: '',
   moveTargetBookmarkId: null,
   moveSearchQuery: '',

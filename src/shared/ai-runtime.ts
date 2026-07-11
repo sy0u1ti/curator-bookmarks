@@ -2,7 +2,8 @@ import {
   extractAiErrorMessage,
   extractChatCompletionsJsonText,
   extractResponsesJsonText,
-  getAiEndpoint
+  getAiEndpoint,
+  getAiTruncationIssue
 } from './ai-response.js'
 import { getAiProviderBaseUrlIssue } from './ai-provider-url.js'
 
@@ -133,18 +134,44 @@ function buildAiPromptRequestBody({
   schemaName,
   systemPrompt,
   userPrompt
-}: AiPromptEnvelope): Record<string, unknown> {
+}: AiPromptEnvelope, options: { useStructuredFormat?: boolean } = {}): Record<string, unknown> {
+  const useStructuredFormat = options.useStructuredFormat !== false
   if (settings.apiStyle === 'chat_completions') {
+    // 紧凑序列化 schema：提示语义不变，显著减少每次请求的输入 token。
     const schemaHint =
       '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
-      JSON.stringify(schema, null, 2)
-    return {
+      JSON.stringify(schema)
+    const body: Record<string, unknown> = {
       model: settings.model,
       messages: [
         { role: 'system', content: systemPrompt + schemaHint },
         { role: 'user', content: `${userPrompt}\n\n请只返回符合 schema 的 json 对象。` }
-      ],
-      response_format: { type: 'json_object' }
+      ]
+    }
+    // 部分 OpenAI 兼容端点不认识 response_format，会直接 400；
+    // 降级模式下移除该参数，仅靠提示词 + 本地 JSON 萃取兜底。
+    if (useStructuredFormat) {
+      body.response_format = { type: 'json_object' }
+    }
+    return body
+  }
+
+  if (!useStructuredFormat) {
+    return {
+      model: settings.model,
+      input: [
+        {
+          role: 'system',
+          content:
+            systemPrompt +
+            '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
+            JSON.stringify(schema)
+        },
+        {
+          role: 'user',
+          content: `${userPrompt}\n\n请只返回符合 schema 的 json 对象。`
+        }
+      ]
     }
   }
 
@@ -185,7 +212,11 @@ export async function requestStructuredAiOutput<T>({
 }: AiStructuredRequest<T>): Promise<AiRuntimeResult<T>> {
   ensureAiProviderConfigured(settings)
   const endpoint = getAiEndpoint(settings)
-  const maxAttempts = retry ? 2 : 1
+  const maxAttempts = retry ? 3 : 1
+  // 修复重试（parse/schema）最多一次：连续两轮结构仍不合法时，再重试收益极低。
+  let repairAttemptsLeft = retry ? 1 : 0
+  // 结构化输出参数（response_format / text.format）兼容性降级最多一次。
+  let useStructuredFormat = true
 
   const runAttempt = async (
     attempt: number,
@@ -198,6 +229,7 @@ export async function requestStructuredAiOutput<T>({
       ? buildRepairUserPrompt(userPrompt, schemaName, lastRawText, lastError)
       : userPrompt
     let attemptRawText = lastRawText
+    let attemptPayload: unknown = null
 
     try {
       const requestBody = buildAiPromptRequestBody({
@@ -206,7 +238,7 @@ export async function requestStructuredAiOutput<T>({
         schemaName,
         systemPrompt,
         userPrompt: effectiveUserPrompt
-      })
+      }, { useStructuredFormat })
       const payload = await requestAiProviderPayload({
         endpoint,
         settings,
@@ -215,6 +247,7 @@ export async function requestStructuredAiOutput<T>({
         timeoutMs,
         fetchImpl
       })
+      attemptPayload = payload
       let rawText = ''
       try {
         rawText = settings.apiStyle === 'responses'
@@ -245,9 +278,40 @@ export async function requestStructuredAiOutput<T>({
         }
       }
     } catch (error) {
-      const normalizedError = normalizeAiRuntimeError(error)
+      let normalizedError = normalizeAiRuntimeError(error)
+
+      // 输出被模型上限截断时，重试同一提示几乎必然复现，直接给出可操作的错误。
+      if (normalizedError.kind === 'parse' || normalizedError.kind === 'schema') {
+        const truncationIssue = getAiTruncationIssue(attemptPayload, settings.apiStyle)
+        if (truncationIssue) {
+          throw new AiRuntimeError('provider', truncationIssue, {
+            retryable: false,
+            cause: normalizedError
+          })
+        }
+      }
+
+      // 端点不支持结构化输出参数：移除参数降级重试一次（不计入修复预算）。
+      if (
+        useStructuredFormat &&
+        attempt < maxAttempts &&
+        isStructuredFormatCompatibilityError(normalizedError)
+      ) {
+        useStructuredFormat = false
+        return runAttempt(attempt + 1, normalizedError, attemptRawText)
+      }
+
       if (attempt >= maxAttempts || !shouldRetryAiRuntimeError(normalizedError)) {
         throw normalizedError
+      }
+      if (shouldUseRepairRetry(normalizedError)) {
+        if (repairAttemptsLeft <= 0) {
+          throw normalizedError
+        }
+        repairAttemptsLeft -= 1
+      } else {
+        // 限流/服务端错误/网络抖动：退避后重试，优先尊重 Retry-After。
+        await waitForAiRetryDelay(normalizedError, attempt, signal)
       }
       return runAttempt(attempt + 1, normalizedError, attemptRawText)
     }
@@ -393,7 +457,7 @@ export function cleanAiRuntimeText(value: unknown, limit = 180): string {
   return `${text.slice(0, Math.max(1, limit - 1)).trim()}…`
 }
 
-function requestAiProviderPayload({
+async function requestAiProviderPayload({
   endpoint,
   settings,
   requestBody,
@@ -408,88 +472,81 @@ function requestAiProviderPayload({
   timeoutMs?: number
   fetchImpl: typeof fetch
 }): Promise<unknown> {
-  return fetchAiWithTimeout(endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${settings.apiKey}`
-    },
-    body: JSON.stringify(requestBody),
-    signal
-  }, timeoutMs || settings.timeoutMs)
-    .then(async (response) => {
-      const { payload, rawBody } = await readAiProviderResponseBody(response)
-      if (!response.ok) {
-        throw new AiRuntimeError(
-          'provider',
-          extractAiErrorMessage(payload, response.status, rawBody),
-          {
-            status: response.status,
-            retryable: isRetryableProviderStatus(response.status),
-            details: payload ?? { rawBody: cleanAiRuntimeText(rawBody, 1200) }
-          }
-        )
-      }
-      if (payload === null && rawBody.trim()) {
-        throw new AiRuntimeError(
-          'parse',
-          `AI 返回了无效的 JSON 响应：${cleanAiRuntimeText(rawBody, 220)}`,
-          {
-            retryable: true,
-            details: { rawBody: cleanAiRuntimeText(rawBody, 1200) }
-          }
-        )
-      }
-      return payload
-    })
-    .catch((error) => {
-      throw normalizeAiRuntimeError(error)
-    })
+  const controller = new AbortController()
+  const externalSignal = signal
+  const effectiveTimeoutMs = normalizeAiRequestTimeoutMs(timeoutMs || settings.timeoutMs)
+  let timedOut = false
+  const abortCurrentFetch = () => {
+    controller.abort()
+  }
 
-  function fetchAiWithTimeout(url: string, options: RequestInit, requestTimeoutMs = 30000): Promise<Response> {
-    const controller = new AbortController()
-    const externalSignal = options.signal
-    const effectiveTimeoutMs = normalizeAiRequestTimeoutMs(requestTimeoutMs)
-    let timedOut = false
-    const abortCurrentFetch = () => {
-      controller.abort()
-    }
+  if (externalSignal?.aborted) {
+    controller.abort()
+  } else {
+    externalSignal?.addEventListener('abort', abortCurrentFetch, { once: true })
+  }
 
-    if (externalSignal?.aborted) {
-      controller.abort()
-    } else {
-      externalSignal?.addEventListener('abort', abortCurrentFetch, { once: true })
-    }
+  // 超时计时覆盖「发起请求 → 响应体读取完成」全程：
+  // 非流式 LLM 响应的主要耗时在生成期（body 阶段），只保护到 headers 会让超时形同虚设。
+  const timeoutId = globalThis.setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, effectiveTimeoutMs)
 
-    const timeoutId = globalThis.setTimeout(() => {
-      timedOut = true
-      controller.abort()
-    }, effectiveTimeoutMs)
-
-    return fetchImpl(url, {
-      ...options,
+  try {
+    const response = await fetchImpl(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${settings.apiKey}`
+      },
+      body: JSON.stringify(requestBody),
       signal: controller.signal
     })
-      .catch((error) => {
-        if (timedOut) {
-          throw new AiRuntimeError(
-            'abort',
-            buildAiTimeoutMessage(effectiveTimeoutMs),
-            {
-              cause: error,
-              details: { timeoutMs: effectiveTimeoutMs }
-            }
-          )
+    const { payload, rawBody } = await readAiProviderResponseBody(response)
+    if (!response.ok) {
+      throw new AiRuntimeError(
+        'provider',
+        extractAiErrorMessage(payload, response.status, rawBody),
+        {
+          status: response.status,
+          retryable: isRetryableProviderStatus(response.status),
+          details: {
+            retryAfterMs: parseRetryAfterMs(response.headers?.get?.('retry-after')),
+            body: payload ?? { rawBody: cleanAiRuntimeText(rawBody, 1200) }
+          }
         }
-        if (externalSignal?.aborted && isAbortError(error)) {
-          throw new AiRuntimeError('abort', 'AI 请求已取消。', { cause: error })
+      )
+    }
+    if (payload === null && rawBody.trim()) {
+      throw new AiRuntimeError(
+        'parse',
+        `AI 返回了无效的 JSON 响应：${cleanAiRuntimeText(rawBody, 220)}`,
+        {
+          retryable: true,
+          details: { rawBody: cleanAiRuntimeText(rawBody, 1200) }
         }
-        throw error
-      })
-      .finally(() => {
-        globalThis.clearTimeout(timeoutId)
-        externalSignal?.removeEventListener('abort', abortCurrentFetch)
-      })
+      )
+    }
+    return payload
+  } catch (error) {
+    if (timedOut && isAbortError(error)) {
+      throw new AiRuntimeError(
+        'abort',
+        buildAiTimeoutMessage(effectiveTimeoutMs),
+        {
+          cause: error,
+          details: { timeoutMs: effectiveTimeoutMs }
+        }
+      )
+    }
+    if (externalSignal?.aborted && isAbortError(error)) {
+      throw new AiRuntimeError('abort', 'AI 请求已取消。', { cause: error })
+    }
+    throw normalizeAiRuntimeError(error)
+  } finally {
+    globalThis.clearTimeout(timeoutId)
+    externalSignal?.removeEventListener('abort', abortCurrentFetch)
   }
 }
 
@@ -673,6 +730,77 @@ function buildRepairUserPrompt(userPrompt: string, schemaName: string, rawText: 
 function isRetryableProviderStatus(status: unknown): boolean {
   const statusCode = Number(status)
   return statusCode === 408 || statusCode === 409 || statusCode === 425 || statusCode === 429 || statusCode >= 500
+}
+
+const AI_RETRY_BASE_DELAY_MS = 600
+const AI_RETRY_MAX_DELAY_MS = 15000
+
+/** 限流/服务端错误的退避等待：优先尊重 Retry-After，否则指数退避 + 抖动。 */
+async function waitForAiRetryDelay(error: AiRuntimeError, attempt: number, signal?: AbortSignal | null): Promise<void> {
+  const retryAfterMs = error.details && typeof error.details === 'object'
+    ? Number((error.details as { retryAfterMs?: unknown }).retryAfterMs)
+    : Number.NaN
+  const backoffMs = Math.min(
+    AI_RETRY_MAX_DELAY_MS,
+    AI_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1)
+  ) + Math.floor(Math.random() * 250)
+  const delayMs = Number.isFinite(retryAfterMs) && retryAfterMs >= 0
+    ? Math.min(retryAfterMs, AI_RETRY_MAX_DELAY_MS)
+    : backoffMs
+  if (delayMs <= 0) {
+    return
+  }
+  await sleepWithAbort(delayMs, signal)
+}
+
+function sleepWithAbort(delayMs: number, signal?: AbortSignal | null): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new AiRuntimeError('abort', 'AI 请求已取消。'))
+      return
+    }
+    const timeoutId = globalThis.setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delayMs)
+    const onAbort = () => {
+      globalThis.clearTimeout(timeoutId)
+      reject(new AiRuntimeError('abort', 'AI 请求已取消。'))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function parseRetryAfterMs(rawValue: unknown): number | undefined {
+  const value = String(rawValue ?? '').trim()
+  if (!value) {
+    return undefined
+  }
+  const seconds = Number(value)
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.round(seconds * 1000)
+  }
+  const dateMs = Date.parse(value)
+  if (Number.isFinite(dateMs)) {
+    return Math.max(0, dateMs - Date.now())
+  }
+  return undefined
+}
+
+/**
+ * 识别「端点不支持结构化输出参数」类错误（response_format / text.format），
+ * 命中后移除该参数降级重试，让任意 OpenAI 兼容模型都能继续工作。
+ */
+function isStructuredFormatCompatibilityError(error: AiRuntimeError): boolean {
+  if (error.kind !== 'provider') {
+    return false
+  }
+  const status = Number(error.status)
+  if (status !== 400 && status !== 404 && status !== 415 && status !== 422) {
+    return false
+  }
+  const message = String(error.message || '')
+  return /response_format|json_object|json_schema|text\.format|structured[\s_-]*output|(?:unknown|unsupported|unexpected|invalid|unrecognized)[\s_-]*(?:parameter|param|field|argument|keyword)|does not support/i.test(message)
 }
 
 function throwIfAiAborted(signal?: AbortSignal | null): void {

@@ -78,7 +78,7 @@ const searchShellClass = [
   'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border-0 bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
   'transition-[background,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover',
-  'focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
+  'focus-within:bg-ds-hover focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
 ].join(' ')
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
@@ -94,7 +94,7 @@ const semanticSearchBaseClass = [
   'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:min-w-0 max-[520px]:px-2.5',
   'transition-[background,color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)] focus-visible:outline-none'
+  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
   'text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'

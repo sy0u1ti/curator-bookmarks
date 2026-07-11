@@ -1,0 +1,214 @@
+import { generateClipPath, getLayoutSize, observeResize, parseBoxShadow } from '@lisse/core'
+
+/**
+ * 全局 squircle 引擎：把页面上所有普通圆角方框升级为 Figma/iOS 同款
+ * 连续曲率圆角（squircle），基于 @lisse/core 的路径生成。
+ *
+ * 策略（对现有设计系统零侵入）：
+ * - 只写 inline `clip-path`，保留元素原有的 border-radius —— squircle
+ *   路径恒在圆角矩形内侧（preserveSmoothing: false 固定半径），二者相交
+ *   即纯 squircle 轮廓；clip 未生效时优雅回退为普通圆角。
+ * - 不注入任何 DOM、不剥离任何 CSS（Lisse auto-effects 的挂载时快照
+ *   会冻结主题色、破坏 hover 过渡，这里不采用），对 React 树安全。
+ * - 带外部 box-shadow 的元素跳过（clip-path 会裁掉阴影）：把外阴影迁
+ *   移为 filter: drop-shadow(...)（跟随 squircle 轮廓）后自动纳入。
+ * - 胶囊/圆形（rounded-full）天然平滑，跳过；已有 clip-path 的元素
+ *   （如 Switch、遮罩）不碰；`data-squircle="off"` 显式退出。
+ * - 依赖 focus-visible box-shadow 焦点环的元素打上 data-sq-focus，
+ *   由全局 CSS 提供 outline 兜底（环会被 clip 裁掉）。
+ */
+
+const SMOOTHING = 0.6
+const MIN_RADIUS_PX = 3
+const ENGINE_FLAG = '__curatorSquircleEngine'
+
+interface TrackedEntry {
+  unobserve: () => void
+}
+
+const tracked = new Map<HTMLElement, TrackedEntry>()
+
+let pendingScan: Set<HTMLElement> | null = null
+let scanScheduled = false
+
+function parseRadiusPx(raw: string): number | null {
+  // 计算样式可能返回 "8px"、"8px 12px"（椭圆角）或百分比；只处理单值 px。
+  if (!raw || raw.includes('%') || raw.includes(' ')) return null
+  const value = Number.parseFloat(raw)
+  return Number.isFinite(value) ? value : null
+}
+
+function readCornerRadii(style: CSSStyleDeclaration): [number, number, number, number] | null {
+  const topLeft = parseRadiusPx(style.borderTopLeftRadius)
+  const topRight = parseRadiusPx(style.borderTopRightRadius)
+  const bottomRight = parseRadiusPx(style.borderBottomRightRadius)
+  const bottomLeft = parseRadiusPx(style.borderBottomLeftRadius)
+  if (topLeft === null || topRight === null || bottomRight === null || bottomLeft === null) return null
+  return [topLeft, topRight, bottomRight, bottomLeft]
+}
+
+function hasOuterBoxShadow(style: CSSStyleDeclaration): boolean {
+  const raw = style.boxShadow
+  if (!raw || raw === 'none') return false
+  const parsed = parseBoxShadow(raw)
+  return Boolean(parsed.shadow && parsed.shadow.length > 0)
+}
+
+/** hover / focus-within 状态才出现的外阴影无法在扫描时探测，按类名静态判定。 */
+function declaresStatefulOuterShadow(className: string): boolean {
+  return /(?:hover|focus-within):shadow-(?:\[0|ds-(?:card|popover|dialog))/.test(className)
+}
+
+function declaresFocusRingShadow(className: string): boolean {
+  return /focus-visible:shadow-(?:\[0|ds-focus)/.test(className)
+}
+
+function cornerOptions(radii: [number, number, number, number]) {
+  const corner = (radius: number) => ({ radius, smoothing: SMOOTHING, preserveSmoothing: false })
+  return {
+    topLeft: corner(radii[0]),
+    topRight: corner(radii[1]),
+    bottomRight: corner(radii[2]),
+    bottomLeft: corner(radii[3]),
+  }
+}
+
+function applyClip(el: HTMLElement): void {
+  if (!el.isConnected) return
+  const style = getComputedStyle(el)
+  const radii = readCornerRadii(style)
+  if (!radii) {
+    clearClip(el)
+    return
+  }
+  const maxRadius = Math.max(...radii)
+  if (maxRadius < MIN_RADIUS_PX) {
+    clearClip(el)
+    return
+  }
+  if (hasOuterBoxShadow(style)) {
+    clearClip(el)
+    return
+  }
+  const { width, height } = getLayoutSize(el)
+  if (width < 2 || height < 2) {
+    clearClip(el)
+    return
+  }
+  // 胶囊 / 圆形：圆弧已占满短边，squircle 退化为圆，交给原生渲染。
+  if (maxRadius * 2 >= Math.min(width, height) - 0.5) {
+    clearClip(el)
+    return
+  }
+  el.style.clipPath = generateClipPath(width, height, cornerOptions(radii))
+  if (el.dataset.sq !== 'on') el.dataset.sq = 'on'
+}
+
+function clearClip(el: HTMLElement): void {
+  if (el.dataset.sq === 'on') {
+    el.style.clipPath = ''
+    delete el.dataset.sq
+  }
+}
+
+function consider(el: HTMLElement): void {
+  if (tracked.has(el) || !el.isConnected) return
+  if (el.dataset.squircle === 'off') return
+  const className = el.getAttribute('class') ?? ''
+  const style = getComputedStyle(el)
+  // 元素自带 clip-path（开关滑块、壁纸遮罩等）不参与，避免互相覆盖。
+  if (style.clipPath !== 'none') return
+  const radii = readCornerRadii(style)
+  if (!radii || Math.max(...radii) < MIN_RADIUS_PX) return
+  if (declaresStatefulOuterShadow(className)) return
+  if (hasOuterBoxShadow(style)) return
+  if (declaresFocusRingShadow(className)) el.dataset.sqFocus = 'ring'
+  const unobserve = observeResize(el, () => applyClip(el))
+  tracked.set(el, { unobserve })
+}
+
+function untrack(el: HTMLElement): void {
+  const entry = tracked.get(el)
+  if (!entry) return
+  entry.unobserve()
+  tracked.delete(el)
+  clearClip(el)
+}
+
+function scanSubtree(root: Element): void {
+  if (root instanceof HTMLElement) consider(root)
+  const descendants = root.querySelectorAll<HTMLElement>('*')
+  for (const el of descendants) consider(el)
+}
+
+function flushPendingScan(): void {
+  scanScheduled = false
+  const batch = pendingScan
+  pendingScan = null
+  if (batch) {
+    for (const el of batch) {
+      if (!el.isConnected) continue
+      scanSubtree(el)
+    }
+  }
+  for (const el of tracked.keys()) {
+    if (!el.isConnected) untrack(el)
+  }
+}
+
+function scheduleScan(el: HTMLElement): void {
+  pendingScan ??= new Set()
+  pendingScan.add(el)
+  if (!scanScheduled) {
+    scanScheduled = true
+    // rAF 合批：与 core 的 ResizeObserver 节奏一致，每帧最多一次样式读取。
+    requestAnimationFrame(flushPendingScan)
+  }
+}
+
+function handleMutations(mutations: MutationRecord[]): void {
+  let sawRemoval = false
+  for (const mutation of mutations) {
+    if (mutation.type === 'attributes') {
+      const target = mutation.target
+      if (target instanceof HTMLElement) {
+        // 类名 / 开关变化：撤销既有跟踪后按新状态重新评估。
+        untrack(target)
+        scheduleScan(target)
+      }
+      continue
+    }
+    if (mutation.removedNodes.length > 0) sawRemoval = true
+    for (const node of mutation.addedNodes) {
+      if (node instanceof HTMLElement) scheduleScan(node)
+    }
+  }
+  if (sawRemoval && !scanScheduled && tracked.size > 0) {
+    scanScheduled = true
+    requestAnimationFrame(flushPendingScan)
+  }
+}
+
+export function initSquircleEngine(): void {
+  const host = window as typeof window & Record<string, unknown>
+  if (host[ENGINE_FLAG]) return
+  host[ENGINE_FLAG] = true
+  if (typeof ResizeObserver === 'undefined') return
+
+  const start = () => {
+    scanSubtree(document.documentElement)
+    const observer = new MutationObserver(handleMutations)
+    observer.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'data-squircle'],
+    })
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start, { once: true })
+  } else {
+    start()
+  }
+}

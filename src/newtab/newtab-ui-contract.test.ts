@@ -194,7 +194,8 @@ assert.ok(
 
 assert.ok(
   bookmarkHoverRule.includes('transform: none') &&
-    bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-shadow)') &&
+    bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-inset)') &&
+    !bookmarkHoverRule.includes('filter:') &&
     newtabCss.includes('.bookmark-tile:hover::before'),
   'Bookmark hover should illuminate in place without moving or expanding its outer shadow.'
 )

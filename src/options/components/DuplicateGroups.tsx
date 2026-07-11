@@ -25,7 +25,7 @@ const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const DOCKED_SELECTION_CLASS =
-  't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] shadow-ds-card [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
+  't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] [filter:var(--ds-filter-card)] [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
 const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
 const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'

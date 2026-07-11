@@ -213,7 +213,7 @@ export function Select({
           <BaseSelect.Popup
             {...popupAttributes}
             className={unstyled ? cx('base-select-popup t-dropdown overflow-y-auto overscroll-contain', popupClassName) : cx(
-            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary shadow-ds-popover outline-none',
+            'base-select-popup t-dropdown z-50 max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain rounded-md border border-ds-border bg-ds-surface-2 p-1 text-ds-text-primary [filter:var(--ds-filter-popover)] outline-none',
             popupClassName
           )}
           >

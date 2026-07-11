@@ -520,7 +520,9 @@ body {
 /* The wrap stacks two layers on the same coordinates. The
    skeleton owns the cold pulse + the fade-out side of the
    reveal; the content owns the fade-in side. They share the
-   same duration / ease so the swap reads as one motion. */
+   same duration / ease so the swap reads as one motion.
+   opacity 交叉淡入即可：filter blur 是重绘属性，大列表揭示时
+   会随主线程繁忙而冻结在模糊态。 */
 .t-skel { position: relative; }
 .t-skel-skeleton,
 .t-skel-content {
@@ -531,26 +533,18 @@ body {
 .t-skel-skeleton {
   z-index: 1;
   opacity: 1;
-  filter: blur(0);
-  transition:
-    opacity var(--reveal-dur) var(--reveal-ease),
-    filter  var(--reveal-dur) var(--reveal-ease);
+  transition: opacity var(--reveal-dur) var(--reveal-ease);
 }
 .t-skel-content {
   z-index: 2;
   opacity: 0;
-  filter: blur(var(--reveal-blur));
-  transition:
-    opacity var(--reveal-dur) var(--reveal-ease),
-    filter  var(--reveal-dur) var(--reveal-ease);
+  transition: opacity var(--reveal-dur) var(--reveal-ease);
 }
 .t-skel.is-revealed .t-skel-skeleton {
   opacity: 0;
-  filter: blur(var(--reveal-blur));
 }
 .t-skel.is-revealed .t-skel-content {
   opacity: 1;
-  filter: blur(0);
 }
 /* Snap-back when replaying: kill transitions so the reverse
    (revealed → skeleton) is instant. Drop `.is-resetting`
@@ -735,4 +729,12 @@ body {
     transition: none !important;
     transform: none !important;
   }
+}
+
+/* Squircle 引擎（@lisse/core）配套：clip-path 会裁掉 box-shadow 焦点环，
+   对声明了 focus-visible 阴影环的被裁剪元素改用 outline 兜底。
+   !important 用于压过工具类里的 focus-visible:outline-none。 */
+[data-sq-focus='ring']:focus-visible {
+  outline: 2px solid var(--ds-focus, #47a8ff) !important;
+  outline-offset: 2px;
 }

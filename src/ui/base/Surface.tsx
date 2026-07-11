@@ -11,7 +11,7 @@ export interface SurfaceProps extends HTMLAttributes<HTMLElement> {
 const variantClass: Record<SurfaceVariant, string> = {
   plain: 'bg-transparent text-ds-text-primary',
   group: 'rounded-ds-md border border-ds-border bg-ds-surface-1 text-ds-text-primary shadow-none',
-  panel: 'rounded-ds-lg border border-ds-border bg-ds-surface-2 text-ds-text-primary shadow-ds-dialog',
+  panel: 'rounded-ds-lg border border-ds-border bg-ds-surface-2 text-ds-text-primary [filter:var(--ds-filter-dialog)]',
   row: 'border-ds-border bg-transparent text-ds-text-primary'
 }
 

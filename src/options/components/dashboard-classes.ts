@@ -134,7 +134,7 @@ export const DASHBOARD_SEARCH_INPUT_FIELD_CLASS = [
   'curator-motion-surface group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-lg border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
   'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
-  'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:shadow-[0_0_0_3px_var(--ds-accent-soft)]'
+  'focus-within:border-ds-focus focus-within:bg-ds-hover focus-within:[outline:3px_solid_var(--ds-accent-soft)] focus-within:outline-offset-0'
 ].join(' ')
 
 export const DASHBOARD_SEARCH_INPUT_CLASS = [
@@ -158,7 +158,7 @@ export const DASHBOARD_NATURAL_SEARCH_TOGGLE_CLASS = [
   'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border border-ds-border bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary',
   'transition-[background,border-color,color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-[0_0_0_3px_var(--ds-accent-soft)] focus-visible:outline-none'
+  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_var(--ds-accent-soft)] focus-visible:outline-offset-0'
 ].join(' ')
 
 export const DASHBOARD_NATURAL_SEARCH_TOGGLE_ACTIVE_STATE_CLASS =
@@ -476,11 +476,11 @@ export const DASHBOARD_FOLDER_DROP_CARD_CLASS = [
   'curator-motion-card grid min-h-[72px] [grid-template-columns:28px_minmax(0,1fr)] gap-[9px]',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[9px_10px]',
   'cursor-pointer select-none text-left font-[inherit] text-ds-text-secondary shadow-none [-webkit-user-drag:none] [-webkit-user-select:none]',
-  '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
-  'hover:border-ds-accent-line hover:bg-ds-selected hover:text-ds-accent-text hover:shadow-[0_10px_26px_rgba(0,0,0,0.24)] hover:[transform:translateY(-1px)_scale(1.012)]',
-  'focus-visible:border-ds-accent-line focus-visible:bg-ds-selected focus-visible:text-ds-accent-text focus-visible:shadow-[0_10px_26px_rgba(0,0,0,0.24)] focus-visible:[transform:translateY(-1px)_scale(1.012)]',
+  '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),filter_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
+  'hover:border-ds-accent-line hover:bg-ds-selected hover:text-ds-accent-text hover:[filter:drop-shadow(0_10px_26px_rgba(0,0,0,0.24))] hover:[transform:translateY(-1px)_scale(1.012)]',
+  'focus-visible:border-ds-accent-line focus-visible:bg-ds-selected focus-visible:text-ds-accent-text focus-visible:[filter:drop-shadow(0_10px_26px_rgba(0,0,0,0.24))] focus-visible:[transform:translateY(-1px)_scale(1.012)]',
   '[&[aria-selected=true]]:border-ds-accent-line [&[aria-selected=true]]:bg-ds-selected [&[aria-selected=true]]:text-ds-accent-text',
-  '[&[aria-selected=true]]:shadow-[0_10px_26px_rgba(0,0,0,0.24)] [&[aria-selected=true]]:[transform:translateY(-1px)_scale(1.012)]',
+  '[&[aria-selected=true]]:[filter:drop-shadow(0_10px_26px_rgba(0,0,0,0.24))] [&[aria-selected=true]]:[transform:translateY(-1px)_scale(1.012)]',
   'max-[760px]:min-h-[68px] max-[760px]:[grid-template-columns:24px_minmax(0,1fr)] max-[760px]:gap-2 max-[760px]:p-2'
 ].join(' ')
 

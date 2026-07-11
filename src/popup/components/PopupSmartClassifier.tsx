@@ -4,6 +4,7 @@ import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
 import { Input } from '../../ui/base/Input'
 import { NumberPop } from '../../ui/motion/NumberPop'
 import { Progress } from '../../ui/base/Progress'
+import { TextSwap } from '../../ui/motion/TextSwap'
 import { Toolbar } from '../../ui/base/Toolbar'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
@@ -156,7 +157,7 @@ const progressBarClass = [
 const resultCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const titleRowClass = 'mb-3.5 grid grid-cols-[minmax(0,1fr)] gap-2'
 const titleInputClass =
-  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none placeholder:text-ds-text-muted focus:border-ds-text-primary/45 focus:bg-ds-hover focus:shadow-[0_0_0_3px_rgba(245,245,247,0.14)] focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-[0_0_0_3px_rgba(245,245,247,0.14)]'
+  'min-h-9 w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-[13px] font-[650] leading-tight text-ds-text-primary outline-none placeholder:text-ds-text-muted focus:border-ds-text-primary/45 focus:bg-ds-hover focus:[outline:3px_solid_rgba(245,245,247,0.14)] focus:outline-offset-0 focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0'
 const sectionLabelClass = 'mb-[9px] mt-0 text-xs font-semibold text-ds-text-secondary'
 const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
@@ -649,7 +650,18 @@ function PopupSmartResult({
           onClick={() => handlers?.onAction?.('save')}
           unstyled
         >
-          {state.saved ? '已保存' : state.saving ? <PopupButtonLoadingLabel label="保存中" /> : '确认保存'}
+          {state.saving ? (
+            <PopupButtonLoadingLabel label="保存中" />
+          ) : (
+            <span className="popup-save-action-label">
+              {state.saved ? (
+                <svg className="popup-saved-check" viewBox="0 0 16 16" aria-hidden="true">
+                  <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" />
+                </svg>
+              ) : null}
+              <TextSwap text={state.saved ? '已保存' : '确认保存'} />
+            </span>
+          )}
         </Button>
       </Toolbar>
     </article>

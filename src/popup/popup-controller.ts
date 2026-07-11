@@ -664,7 +664,9 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   const refreshRunId = popupRefreshRunId + 1
   popupRefreshRunId = refreshRunId
   perfMark('popup.refreshData.start')
-  state.isLoading = true
+  // 已经向用户呈现过内容（会话快照或上一轮数据）时静默刷新：
+  // 不再把可见内容拉回骨架 + 渐隐态，数据就绪后直接原地替换。
+  state.isLoading = !state.hasPresentedContent
   state.loadError = ''
   render()
   try {
@@ -1896,6 +1898,9 @@ function getPopupEmptyStateViewModel({
   }
 }
 function replaceContentViewModel(nextViewModel: PopupContentViewModel, { preserveScroll = false } = {}) {
+  if (!nextViewModel.loading && ((nextViewModel.rows?.length ?? 0) || (nextViewModel.mainRows?.length ?? 0) || (nextViewModel.sidebarRows?.length ?? 0))) {
+    state.hasPresentedContent = true
+  }
   const nextRenderKey = JSON.stringify(nextViewModel)
   if (state.contentRenderKey === nextRenderKey) {
     return

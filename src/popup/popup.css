@@ -13,34 +13,32 @@
   box-sizing: border-box;
 }
 
+/* 页面揭示（骨架 → 内容）只用 opacity 交叉淡入：filter blur 属于重绘属性，
+   在首屏大量行渲染时会随主线程饥饿而视觉冻结（内容长时间停在模糊态）。 */
 .popup-page-reveal .popup-page-skeleton,
 .popup-page-reveal .popup-page-content {
-  will-change: opacity, filter;
+  will-change: opacity;
   transition-duration: var(--reveal-dur);
-  transition-property: opacity, filter;
+  transition-property: opacity;
   transition-timing-function: var(--reveal-ease);
 }
 
 .popup-page-reveal .popup-page-skeleton {
   opacity: 1;
-  filter: none;
 }
 
 .popup-page-reveal .popup-page-content {
   opacity: 0;
-  filter: blur(var(--reveal-blur));
   pointer-events: none;
 }
 
 .popup-page-reveal[data-state="ready"] .popup-page-skeleton {
   opacity: 0;
-  filter: blur(var(--reveal-blur));
   pointer-events: none;
 }
 
 .popup-page-reveal[data-state="ready"] .popup-page-content {
   opacity: 1;
-  filter: none;
   pointer-events: auto;
 }
 
@@ -345,6 +343,41 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+/* 智能分类「已保存」成功时刻：对勾描画（success check 简化版，纯动画）。
+   下方全局 prefers-reduced-motion 守卫会禁用动画，此时对勾以完成态直接显示。 */
+.popup-save-action-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.popup-saved-check {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.popup-saved-check path {
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+  /* path 总长 ≈ 13.5px，dasharray 取整加 1 余量避免预露/过描 */
+  stroke-dasharray: 14;
+  stroke-dashoffset: 0;
+  animation: popup-saved-check-draw 320ms var(--ds-ease-standard) 60ms backwards;
+}
+
+@keyframes popup-saved-check-draw {
+  from {
+    stroke-dashoffset: 14;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
