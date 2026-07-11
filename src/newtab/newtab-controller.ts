@@ -1766,8 +1766,11 @@ function applySearchSettingsLive(): void {
   const widthBounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
   const offsetBounds = state.searchOffsetBounds || SEARCH_OFFSET_BOUNDS_FALLBACK
   const width = clampNumber(settings.width, widthBounds.min, widthBounds.max, DEFAULT_SEARCH_SETTINGS.width)
+  const cachedAutoOffsetY = settings.autoVerticalCenter
+    ? readCachedAutoSearchOffsetYValue()
+    : null
   const offsetY = settings.autoVerticalCenter
-    ? readCachedAutoSearchOffsetY(DEFAULT_SEARCH_SETTINGS.offsetY)
+    ? cachedAutoOffsetY ?? DEFAULT_SEARCH_SETTINGS.offsetY
     : clampNumber(settings.offsetY, offsetBounds.min, offsetBounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)
 
   if (settings.autoVerticalCenter) {
@@ -1778,7 +1781,7 @@ function applySearchSettingsLive(): void {
     autoVerticalCenter: settings.autoVerticalCenter,
     backgroundAlpha: String(settings.background / 100),
     height: settings.height,
-    layoutReady: !settings.autoVerticalCenter,
+    layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null,
     offsetY,
     width
   })
@@ -4727,7 +4730,6 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
   }
 
   try {
-    void backgroundPreloadPromise
     const [tree, stored] = await Promise.all([
       getBookmarkTree(),
       getLocalStorage([
@@ -4744,7 +4746,8 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
         STORAGE_KEYS.newTabWorkspaceSettings,
         STORAGE_KEYS.newTabModuleSettings,
         STORAGE_KEYS.onboardingState
-      ])
+      ]),
+      backgroundPreloadPromise
     ])
     perfMark('newtab.storageLoaded')
     const rootNode = tree[0] || null
@@ -6411,8 +6414,11 @@ function syncSearchInputActions(input: HTMLInputElement): void {
 
 function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS): SearchWidgetShellState {
   const webSearchEnabled = settings.webSearchEnabled !== false
+  const cachedAutoOffsetY = settings.autoVerticalCenter
+    ? readCachedAutoSearchOffsetYValue()
+    : null
   const initialOffsetY = settings.autoVerticalCenter
-    ? readCachedAutoSearchOffsetY(settings.offsetY)
+    ? cachedAutoOffsetY ?? settings.offsetY
     : settings.offsetY
 
   return {
@@ -6423,26 +6429,35 @@ function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS):
     inputAriaLabel: webSearchEnabled
       ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
       : '输入关键词搜索本地书签或命令',
-    layoutReady: !settings.autoVerticalCenter,
+    layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null,
     offsetY: initialOffsetY,
     placeholder: getSearchPlaceholder(settings),
     width: settings.width
   }
 }
 
-function readCachedAutoSearchOffsetY(fallback: number): number {
+function readCachedAutoSearchOffsetYValue(): number | null {
   if (typeof window === 'undefined') {
-    return fallback
+    return null
   }
 
   try {
     const value = window.localStorage.getItem(AUTO_SEARCH_OFFSET_CACHE_KEY)
     if (value === null) {
-      return fallback
+      return null
     }
-    return clampNumber(value, SEARCH_OFFSET_ABSOLUTE_MIN, SEARCH_OFFSET_ABSOLUTE_MAX, fallback)
+    const numericValue = Number(value)
+    if (!Number.isFinite(numericValue)) {
+      return null
+    }
+    return clampNumber(
+      numericValue,
+      SEARCH_OFFSET_ABSOLUTE_MIN,
+      SEARCH_OFFSET_ABSOLUTE_MAX,
+      DEFAULT_SEARCH_SETTINGS.offsetY
+    )
   } catch {
-    return fallback
+    return null
   }
 }
 

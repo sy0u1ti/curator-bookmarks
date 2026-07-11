@@ -12,14 +12,14 @@
   --newtab-glass-bg-hero: rgba(10, 11, 13, 0.62);
   --newtab-glass-bg: rgba(14, 15, 17, 0.38);
   --newtab-glass-bg-faint: rgba(14, 15, 17, 0.24);
-  --newtab-glass-bg-card: rgba(18, 19, 21, 0.3);
+  --newtab-glass-bg-card: rgba(18, 19, 21, 0.44);
   --newtab-glass-bg-hover: rgba(28, 29, 32, 0.58);
   --newtab-glass-bg-popup: rgba(10, 11, 13, 0.76);
   --newtab-glass-border: rgba(245, 245, 247, 0.11);
   --newtab-glass-border-hover: rgba(245, 245, 247, 0.2);
   --newtab-glass-shadow: 0 18px 46px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --newtab-bookmark-shadow: 0 12px 34px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+  --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
   /* squircle 引擎配套：外阴影拆为 drop-shadow 滤镜（跟随 clip-path 轮廓），
      inset 高光留在 box-shadow（clip 内侧，不受影响）。 */
   --newtab-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
@@ -46,7 +46,7 @@
   --newtab-glass-bg-hero: rgba(9, 10, 12, 0.72);
   --newtab-glass-bg: rgba(12, 13, 15, 0.5);
   --newtab-glass-bg-faint: rgba(12, 13, 15, 0.4);
-  --newtab-glass-bg-card: rgba(16, 17, 19, 0.46);
+  --newtab-glass-bg-card: rgba(16, 17, 19, 0.56);
   --newtab-glass-bg-hover: rgba(28, 29, 32, 0.7);
   --newtab-glass-bg-popup: rgba(9, 10, 12, 0.84);
   --newtab-glass-border: rgba(245, 245, 247, 0.14);
@@ -959,10 +959,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .bookmark-tile {
   border-color: rgba(245, 245, 247, 0.08);
   background: var(--newtab-glass-bg-card);
-  box-shadow: var(--newtab-bookmark-inset);
-  filter: var(--newtab-bookmark-drop);
-  -webkit-backdrop-filter: var(--newtab-glass-filter-soft);
-  backdrop-filter: var(--newtab-glass-filter-soft);
+  box-shadow: var(--newtab-bookmark-shadow);
+  filter: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
   transform: none;
 }
 
@@ -995,10 +995,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .bookmark-grid-placeholder {
   border-color: rgba(245, 245, 247, 0.08);
   background: var(--newtab-glass-bg-card);
-  box-shadow: var(--newtab-bookmark-inset);
-  filter: var(--newtab-bookmark-drop);
-  -webkit-backdrop-filter: var(--newtab-glass-filter-soft);
-  backdrop-filter: var(--newtab-glass-filter-soft);
+  box-shadow: var(--newtab-bookmark-shadow);
+  filter: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1018,7 +1018,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   border-color: var(--newtab-glass-border-hover);
   background: var(--newtab-glass-bg-hover);
   box-shadow: var(--newtab-glass-inset-hover);
-  filter: var(--newtab-glass-drop-hover);
+  filter: none;
   transform: translateY(-1px);
 }
 
@@ -1045,7 +1045,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   border-color: var(--newtab-glass-border-hover);
   background: var(--newtab-glass-bg-hover);
   box-shadow: var(--newtab-glass-inset-hover);
-  filter: var(--newtab-glass-drop-hover);
+  filter: none;
   outline: var(--newtab-focus-outline);
   outline-offset: 2px;
   transform: translateY(-1px);

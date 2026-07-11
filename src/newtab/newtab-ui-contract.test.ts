@@ -18,6 +18,8 @@ const selectSource = readFileSync('src/ui/base/Select.tsx', 'utf8')
 const instantWallpaperBoot = readFileSync('src/newtab/instant-wallpaper-boot.ts', 'utf8')
 const instantWallpaper = readFileSync('src/newtab/instant-wallpaper.ts', 'utf8')
 const newtabHtml = readFileSync('src/newtab/newtab.html', 'utf8')
+const bookmarkTileClasses = readFileSync('src/newtab/components/bookmarkTileClasses.ts', 'utf8')
+const speedDialClasses = readFileSync('src/newtab/components/speedDialClasses.ts', 'utf8')
 
 assert.ok(
   newtabCss.includes('--newtab-glass-bg-hero') &&
@@ -144,6 +146,23 @@ assert.ok(
     controller.includes("from './speed-dial.js'") &&
     !controller.includes("import('./speed-dial.js')"),
   'Newtab data and fixed-entry state should begin hydrating before the first React render.'
+)
+
+assert.ok(
+  /getLocalStorage\(\[[\s\S]+?backgroundPreloadPromise\s*\n\s*\]\)/.test(controller) &&
+    /useLayoutEffect\(\(\) => \{\s*hideNewtabBookmarkPreboot\(\)/.test(bookmarkContent) &&
+    /useEffect\(\(\) => \{[\s\S]+?writeNewtabBookmarkPrebootSnapshotFromView/.test(bookmarkContent) &&
+    controller.includes('layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null'),
+  'The final newtab surface should wait for the saved background and replace bookmark preboot before the first live paint.'
+)
+
+assert.ok(
+  !bookmarkTileClasses.includes('backdrop-filter:blur') &&
+    !speedDialClasses.includes('speed-dial-card-filter') &&
+    newtabCss.includes('.bookmark-tile {') &&
+    newtabCss.includes('-webkit-backdrop-filter: none;') &&
+    newtabCss.includes('backdrop-filter: none;'),
+  'Repeated small cards should avoid individual backdrop-filter layers during startup.'
 )
 
 assert.ok(

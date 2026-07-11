@@ -22,7 +22,8 @@ function run(): void {
 
 function testPrebootHandoffIsAtomic(): void {
   const source = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
-  assert(source.includes('NEWTAB_BOOKMARK_PREBOOT_HIDE_DELAY_MS = 0'))
+  assert(source.includes('root.remove()'))
+  assert(!source.includes('window.setTimeout(() => {\n    root.remove()'))
   assert(source.includes('transition: none;'))
 }
 

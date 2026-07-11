@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -61,7 +62,7 @@ const SOURCE_NAVIGATION_LINK_CLASS = 'curator-motion-chip source-navigation-link
 const SOURCE_NAVIGATION_TITLE_CLASS = 'source-navigation-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[650] leading-none'
 const SOURCE_NAVIGATION_COUNT_CLASS = 'source-navigation-count inline-grid h-4 min-w-[18px] place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-[10px] font-[760] leading-none text-[var(--ui-accent-text)]'
 const FOLDER_SECTION_ADD_CLASS = 'curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-transparent bg-transparent p-0 leading-none text-[rgba(245,245,247,0.56)] opacity-70 cursor-pointer hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] hover:opacity-100 focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
-const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.24)] px-2.5 py-2 text-[11px] font-[620] text-[rgba(245,245,247,0.46)] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)]'
+const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.42)] px-2.5 py-2 text-[11px] font-[620] text-[rgba(245,245,247,0.46)]'
 const BOOKMARK_FOLDER_SECTION_CLASS = 'bookmark-folder-section group/bookmark-folder-section grid w-full content-start items-start justify-items-stretch gap-1.5 [scroll-margin-top:clamp(28px,5vh,48px)] [content-visibility:auto] [contain-intrinsic-size:0_320px] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard)] focus:bg-transparent focus:[box-shadow:none] focus:[outline:0] focus-visible:bg-transparent focus-visible:[box-shadow:none] focus-visible:[outline:0]'
 const BOOKMARK_FOLDER_SECTION_DRAGGING_CLASS = 'dragging-folder opacity-[0.54]'
 const BOOKMARK_REORDER_STATUS_CLASS = 'bookmark-reorder-status mt-1.5 mb-0 text-xs font-[650] leading-[1.4]'
@@ -73,7 +74,7 @@ const QUICK_ACCESS_CLASS = 'newtab-quick-access grid w-full content-stretch gap-
 const QUICK_GROUP_CLASS = 'newtab-quick-group grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-2.5'
 const QUICK_HEADING_CLASS = 'newtab-quick-heading flex [min-height:auto] items-center whitespace-nowrap px-0.5 text-[11px] font-[750] leading-[1.2] tracking-[0] text-[rgba(245,245,247,0.48)]'
 const QUICK_LIST_CLASS = 'newtab-quick-list grid min-w-0 grid-cols-[repeat(auto-fill,minmax(136px,1fr))] auto-rows-[minmax(var(--portal-card-min-height),1fr)] gap-[var(--portal-card-gap)]'
-const QUICK_LINK_CLASS = 'curator-motion-card newtab-quick-link grid min-h-[var(--portal-card-min-height)] min-w-0 grid-cols-[24px_minmax(0,1fr)] items-center gap-[7px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[rgba(21,21,22,0.54)] py-1 pr-2 pl-[5px] text-[rgba(245,245,247,0.84)] no-underline shadow-[inset_0_1px_0_rgba(255,255,255,0.075)] [filter:drop-shadow(0_14px_32px_rgba(0,0,0,0.14))] [transform:none] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)] hover:border-[rgba(245,245,247,0.16)] hover:bg-[rgba(31,32,35,0.62)] hover:text-[var(--ui-text-primary)] hover:no-underline focus-visible:border-[rgba(245,245,247,0.16)] focus-visible:bg-[rgba(31,32,35,0.62)] focus-visible:text-[var(--ui-text-primary)] focus-visible:no-underline focus-visible:outline-none'
+const QUICK_LINK_CLASS = 'curator-motion-card newtab-quick-link grid min-h-[var(--portal-card-min-height)] min-w-0 grid-cols-[24px_minmax(0,1fr)] items-center gap-[7px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[rgba(21,21,22,0.64)] py-1 pr-2 pl-[5px] text-[rgba(245,245,247,0.84)] no-underline shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] [transform:none] hover:border-[rgba(245,245,247,0.16)] hover:bg-[rgba(31,32,35,0.72)] hover:text-[var(--ui-text-primary)] hover:no-underline focus-visible:border-[rgba(245,245,247,0.16)] focus-visible:bg-[rgba(31,32,35,0.72)] focus-visible:text-[var(--ui-text-primary)] focus-visible:no-underline focus-visible:outline-none'
 const QUICK_MARK_CLASS = 'newtab-quick-mark grid h-6 w-6 place-items-center rounded-md text-[11px] font-extrabold leading-none'
 const QUICK_MARK_DEFAULT_CLASS = 'bg-[rgba(245,245,247,0.08)] text-[rgba(245,245,247,0.72)]'
 const QUICK_MARK_PINNED_CLASS = 'bg-[rgba(245,245,247,0.16)] text-[rgba(245,245,247,0.9)]'
@@ -120,6 +121,10 @@ function BookmarkContent({
     section.focus({ preventScroll: true })
   }, [])
 
+  useLayoutEffect(() => {
+    hideNewtabBookmarkPreboot()
+  }, [])
+
   useEffect(() => {
     let revealFrame = 0
     let settleFrame = 0
@@ -130,7 +135,9 @@ function BookmarkContent({
           viewportHeight: window.innerHeight,
           viewportWidth: window.innerWidth
         })
-        hideNewtabBookmarkPreboot({ clearSnapshot: !snapshot })
+        if (!snapshot) {
+          hideNewtabBookmarkPreboot({ clearSnapshot: true })
+        }
       })
     })
     return () => {

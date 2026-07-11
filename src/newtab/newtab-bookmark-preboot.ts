@@ -6,7 +6,6 @@ const NEWTAB_BOOKMARK_PREBOOT_VERSION = 2
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
-const NEWTAB_BOOKMARK_PREBOOT_HIDE_DELAY_MS = 0
 const NEWTAB_BOOKMARK_PREBOOT_VIEWPORT_TOLERANCE_PX = 1
 
 export interface NewtabBookmarkPrebootItemView {
@@ -179,14 +178,11 @@ export function hideNewtabBookmarkPreboot({ clearSnapshot = false } = {}): void 
   }
 
   const root = document.getElementById(NEWTAB_BOOKMARK_PREBOOT_ROOT_ID)
-  if (!root || root.dataset.hiding === 'true') {
+  if (!root) {
     return
   }
-  root.dataset.hiding = 'true'
-  window.setTimeout(() => {
-    root.remove()
-    document.getElementById(NEWTAB_BOOKMARK_PREBOOT_STYLE_ID)?.remove()
-  }, NEWTAB_BOOKMARK_PREBOOT_HIDE_DELAY_MS)
+  root.remove()
+  document.getElementById(NEWTAB_BOOKMARK_PREBOOT_STYLE_ID)?.remove()
 }
 
 export function isRenderableNewtabBookmarkPrebootSnapshot(
@@ -637,7 +633,7 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
 
 const NEWTAB_BOOKMARK_PREBOOT_CSS = `
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
-  --preboot-card-bg: rgba(18, 19, 21, 0.32);
+  --preboot-card-bg: rgba(18, 19, 21, 0.44);
   position: fixed;
   inset: 0;
   z-index: 2;
@@ -652,11 +648,7 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
 
 html.instant-wallpaper-startup-preview #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID},
 html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
-  --preboot-card-bg: rgba(16, 17, 19, 0.46);
-}
-
-#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID}[data-hiding="true"] {
-  opacity: 0;
+  --preboot-card-bg: rgba(16, 17, 19, 0.56);
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-content {
@@ -695,7 +687,7 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   border: 1px solid rgba(245, 245, 247, 0.08);
   border-radius: 8px;
   background: var(--preboot-card-bg);
-  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-tile[data-icon-only="true"] {
