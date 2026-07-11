@@ -151,9 +151,21 @@ assert.ok(
 assert.ok(
   /getLocalStorage\(\[[\s\S]+?backgroundPreloadPromise\s*\n\s*\]\)/.test(controller) &&
     /useLayoutEffect\(\(\) => \{\s*hideNewtabBookmarkPreboot\(\)/.test(bookmarkContent) &&
-    /useEffect\(\(\) => \{[\s\S]+?writeNewtabBookmarkPrebootSnapshotFromView/.test(bookmarkContent) &&
-    controller.includes('layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null'),
+    /useEffect\(\(\) => \{[\s\S]+?writeNewtabBookmarkPrebootSnapshotFromView/.test(bookmarkContent),
   'The final newtab surface should wait for the saved background and replace bookmark preboot before the first live paint.'
+)
+
+const autoCenteredLayoutReadyAssignments = [
+  ...controller.matchAll(/layoutReady:\s*([^,\r\n]+)/g)
+].map((match) => match[1]?.trim())
+assert.ok(
+  autoCenteredLayoutReadyAssignments.filter((value) => value === '!settings.autoVerticalCenter').length >= 2 &&
+    !controller.includes('layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null'),
+  'Auto-centered search should stay hidden until the current page layout is measured, even when a cached offset exists.'
+)
+assert.ok(
+  controller.includes('const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 0'),
+  'Auto-centered search should reveal after the first current-layout measurement instead of waiting through extra frames.'
 )
 
 assert.ok(

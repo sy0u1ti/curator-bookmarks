@@ -453,7 +453,7 @@ const SEARCH_OFFSET_BOUNDS_FALLBACK: AdaptiveSearchOffsetBounds = { min: -32, ma
 const SEARCH_OFFSET_ABSOLUTE_MIN = -240
 const SEARCH_OFFSET_ABSOLUTE_MAX = 240
 const AUTO_SEARCH_OFFSET_CACHE_KEY = 'curatorNewTabAutoSearchOffsetY'
-const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 2
+const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 0
 const SEARCH_WIDTH_BOUNDS_FALLBACK = { min: 16, max: 72 }
 const NEWTAB_LAYOUT_SAFE_GAP = 12
 const NEWTAB_COMMAND_SCORE = -100000
@@ -1781,7 +1781,7 @@ function applySearchSettingsLive(): void {
     autoVerticalCenter: settings.autoVerticalCenter,
     backgroundAlpha: String(settings.background / 100),
     height: settings.height,
-    layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null,
+    layoutReady: !settings.autoVerticalCenter,
     offsetY,
     width
   })
@@ -6429,7 +6429,7 @@ function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS):
     inputAriaLabel: webSearchEnabled
       ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
       : '输入关键词搜索本地书签或命令',
-    layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null,
+    layoutReady: !settings.autoVerticalCenter,
     offsetY: initialOffsetY,
     placeholder: getSearchPlaceholder(settings),
     width: settings.width
