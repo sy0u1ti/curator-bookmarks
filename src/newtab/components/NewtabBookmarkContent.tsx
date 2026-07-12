@@ -34,6 +34,7 @@ import { useNewtabDragUiView, type NewtabDragUiView } from '../newtab-drag-ui-st
 import { useNewtabFolderSourceView } from '../newtab-folder-source-store'
 import {
   hideNewtabBookmarkPreboot,
+  scheduleNewtabBookmarkPrebootHandoff,
   writeNewtabBookmarkPrebootSnapshotFromView
 } from '../newtab-bookmark-preboot'
 import { BookmarkIconShell } from './BookmarkIconShell'
@@ -120,7 +121,7 @@ function BookmarkContent({
   }, [])
 
   useLayoutEffect(() => {
-    hideNewtabBookmarkPreboot()
+    return scheduleNewtabBookmarkPrebootHandoff()
   }, [])
 
   useEffect(() => {

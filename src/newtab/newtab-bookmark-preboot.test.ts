@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import {
   NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY,
   createNewtabBookmarkPrebootSnapshot,
+  getNewtabBookmarkPrebootFaviconLoadAttributes,
   isRenderableNewtabBookmarkPrebootSnapshot,
   writeNewtabBookmarkPrebootSnapshotFromView,
   type NewtabBookmarkPrebootItemView,
@@ -24,6 +25,22 @@ function run(): void {
   testSnapshotRejectsMismatchedViewport()
   testPrebootHandoffIsAtomic()
   testFaviconReadinessHandoff()
+  testPrebootFaviconLoadingPriorities()
+}
+
+function testPrebootFaviconLoadingPriorities(): void {
+  assert.deepEqual(
+    getNewtabBookmarkPrebootFaviconLoadAttributes(0),
+    { fetchPriority: 'high', loading: 'eager' }
+  )
+  assert.deepEqual(
+    getNewtabBookmarkPrebootFaviconLoadAttributes(6),
+    { fetchPriority: 'low', loading: 'eager' }
+  )
+  assert.deepEqual(
+    getNewtabBookmarkPrebootFaviconLoadAttributes(12),
+    { fetchPriority: 'low', loading: 'lazy' }
+  )
 }
 
 function testFaviconReadinessHandoff(): void {

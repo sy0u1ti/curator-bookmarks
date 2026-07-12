@@ -11,7 +11,13 @@ const NEWTAB_BOOKMARK_PREBOOT_VERSION = 2
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
+const NEWTAB_BOOKMARK_PREBOOT_EAGER_FAVICON_LIMIT = 12
+const NEWTAB_BOOKMARK_PREBOOT_HIGH_PRIORITY_FAVICON_LIMIT = 6
 const NEWTAB_BOOKMARK_PREBOOT_VIEWPORT_TOLERANCE_PX = 1
+const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX = 0.5
+const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES = 2
+const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FALLBACK_MS = 600
+const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_MAX_WAIT_MS = 1200
 
 export interface NewtabBookmarkPrebootItemView {
   customIcon: boolean
@@ -96,6 +102,11 @@ export interface NewtabBookmarkPrebootSnapshotOptions {
   sectionsElement?: HTMLElement | null
   viewportHeight?: number
   viewportWidth?: number
+}
+
+export interface NewtabBookmarkPrebootFaviconLoadAttributes {
+  fetchPriority: 'high' | 'low'
+  loading: 'eager' | 'lazy'
 }
 
 type BookmarkPrebootStorage = Pick<Storage, 'getItem' | 'removeItem' | 'setItem'>
@@ -190,6 +201,72 @@ export function hideNewtabBookmarkPreboot({ clearSnapshot = false } = {}): void 
   document.getElementById(NEWTAB_BOOKMARK_PREBOOT_STYLE_ID)?.remove()
 }
 
+export function scheduleNewtabBookmarkPrebootHandoff(): () => void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return () => undefined
+  }
+
+  const root = document.getElementById(NEWTAB_BOOKMARK_PREBOOT_ROOT_ID)
+  if (!root) {
+    return () => undefined
+  }
+
+  let frame = 0
+  let alignedFrames = 0
+  let lastLiveGeometry = ''
+  let lastLiveGeometryChangeAt = performance.now()
+  const startedAt = lastLiveGeometryChangeAt
+
+  const finish = () => {
+    if (frame) {
+      window.cancelAnimationFrame(frame)
+      frame = 0
+    }
+    hideNewtabBookmarkPreboot()
+  }
+
+  const sample = (now: number) => {
+    frame = 0
+    const handoff = measureNewtabBookmarkPrebootHandoff(root)
+    if (handoff.state === 'stale') {
+      finish()
+      return
+    }
+
+    if (handoff.liveGeometry && handoff.liveGeometry !== lastLiveGeometry) {
+      lastLiveGeometry = handoff.liveGeometry
+      lastLiveGeometryChangeAt = now
+    }
+    alignedFrames = handoff.state === 'aligned' ? alignedFrames + 1 : 0
+
+    const liveLayoutSettled = Boolean(
+      handoff.liveGeometry &&
+      document.readyState === 'complete' &&
+      now - startedAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FALLBACK_MS &&
+      now - lastLiveGeometryChangeAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FALLBACK_MS
+    )
+    if (
+      alignedFrames >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES ||
+      liveLayoutSettled ||
+      now - startedAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_MAX_WAIT_MS
+    ) {
+      finish()
+      return
+    }
+
+    frame = window.requestAnimationFrame(sample)
+  }
+
+  frame = window.requestAnimationFrame(sample)
+  return () => {
+    if (frame) {
+      window.cancelAnimationFrame(frame)
+      frame = 0
+    }
+    hideNewtabBookmarkPreboot()
+  }
+}
+
 export function isRenderableNewtabBookmarkPrebootSnapshot(
   snapshot: NewtabBookmarkPrebootSnapshot,
   windowRef: BookmarkPrebootWindow
@@ -202,6 +279,16 @@ export function isRenderableNewtabBookmarkPrebootSnapshot(
     Math.abs(viewportWidth - snapshot.rect.viewportWidth) <= NEWTAB_BOOKMARK_PREBOOT_VIEWPORT_TOLERANCE_PX &&
     Math.abs(viewportHeight - snapshot.rect.viewportHeight) <= NEWTAB_BOOKMARK_PREBOOT_VIEWPORT_TOLERANCE_PX
   )
+}
+
+export function getNewtabBookmarkPrebootFaviconLoadAttributes(
+  renderIndex: number
+): NewtabBookmarkPrebootFaviconLoadAttributes {
+  const normalizedIndex = Math.max(0, Math.floor(Number(renderIndex) || 0))
+  return {
+    fetchPriority: normalizedIndex < NEWTAB_BOOKMARK_PREBOOT_HIGH_PRIORITY_FAVICON_LIMIT ? 'high' : 'low',
+    loading: normalizedIndex < NEWTAB_BOOKMARK_PREBOOT_EAGER_FAVICON_LIMIT ? 'eager' : 'lazy'
+  }
 }
 
 function readNewtabBookmarkPrebootSnapshot(
@@ -251,8 +338,15 @@ function renderNewtabBookmarkPrebootSnapshot(
 
   const sections = documentRef.createElement('div')
   sections.className = 'newtab-bookmark-preboot-sections'
+  let renderIndex = 0
   for (const section of snapshot.sections) {
-    sections.appendChild(createNewtabBookmarkPrebootSection(documentRef, section, snapshot.content))
+    sections.appendChild(createNewtabBookmarkPrebootSection(
+      documentRef,
+      section,
+      snapshot.content,
+      renderIndex
+    ))
+    renderIndex += section.items.length
   }
   content.appendChild(sections)
   root.appendChild(content)
@@ -261,13 +355,19 @@ function renderNewtabBookmarkPrebootSnapshot(
 function createNewtabBookmarkPrebootSection(
   documentRef: Document,
   section: NewtabBookmarkPrebootSection,
-  content: NewtabBookmarkPrebootContentStyle
+  content: NewtabBookmarkPrebootContentStyle,
+  renderIndexOffset: number
 ): HTMLElement {
   const sectionElement = documentRef.createElement('section')
   sectionElement.className = 'newtab-bookmark-preboot-section'
   sectionElement.dataset.folderId = section.folderId
-  for (const item of section.items) {
-    sectionElement.appendChild(createNewtabBookmarkPrebootTile(documentRef, item, content))
+  for (const [index, item] of section.items.entries()) {
+    sectionElement.appendChild(createNewtabBookmarkPrebootTile(
+      documentRef,
+      item,
+      content,
+      renderIndexOffset + index
+    ))
   }
   return sectionElement
 }
@@ -275,7 +375,8 @@ function createNewtabBookmarkPrebootSection(
 function createNewtabBookmarkPrebootTile(
   documentRef: Document,
   item: NewtabBookmarkPrebootItem,
-  content: NewtabBookmarkPrebootContentStyle
+  content: NewtabBookmarkPrebootContentStyle,
+  renderIndex: number
 ): HTMLElement {
   const tile = documentRef.createElement('span')
   tile.className = 'newtab-bookmark-preboot-tile'
@@ -300,12 +401,14 @@ function createNewtabBookmarkPrebootTile(
   iconShell.appendChild(fallback)
 
   if (item.faviconSrc) {
+    const loadAttributes = getNewtabBookmarkPrebootFaviconLoadAttributes(renderIndex)
     const image = documentRef.createElement('img')
     image.className = 'newtab-bookmark-preboot-favicon'
     image.alt = ''
     image.decoding = 'async'
     image.draggable = false
-    image.loading = 'eager'
+    image.fetchPriority = loadAttributes.fetchPriority
+    image.loading = loadAttributes.loading
     image.addEventListener('load', () => {
       markNewtabFaviconReady(image.src)
       image.dataset.ready = 'true'
@@ -586,6 +689,112 @@ function applyNewtabBookmarkPrebootContentStyle(
   element.style.setProperty('--icon-fixed-grid-width', `${content.fixedGridWidth}px`)
   element.style.setProperty('--icon-columns', String(content.columns))
   element.style.setProperty('--icon-title-lines', String(content.titleLines))
+}
+
+function measureNewtabBookmarkPrebootHandoff(
+  root: HTMLElement
+): {
+  liveGeometry: string
+  state: 'aligned' | 'pending' | 'stale'
+} {
+  const prebootTiles = Array.from(
+    root.querySelectorAll<HTMLElement>('.newtab-bookmark-preboot-tile[data-bookmark-id]')
+  )
+  const liveTiles = Array.from(
+    document.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]:not(.bookmark-drag-ghost)')
+  )
+  if (!prebootTiles.length) {
+    return { liveGeometry: '', state: 'stale' }
+  }
+  if (!liveTiles.length) {
+    return { liveGeometry: '', state: 'pending' }
+  }
+
+  const prebootIds = prebootTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
+  const comparableCount = Math.min(prebootIds.length, liveTiles.length)
+  for (let index = 0; index < comparableCount; index += 1) {
+    if (String(liveTiles[index].dataset.bookmarkId || '') !== prebootIds[index]) {
+      return { liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles), state: 'stale' }
+    }
+  }
+  if (liveTiles.length < prebootIds.length) {
+    return { liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles), state: 'pending' }
+  }
+
+  const liveTilesById = new Map(
+    liveTiles.map((tile) => [String(tile.dataset.bookmarkId || ''), tile])
+  )
+  const visiblePrebootTiles = prebootTiles.filter((tile) => isNewtabBookmarkPrebootTileVisible(tile))
+  if (!visiblePrebootTiles.length) {
+    return { liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles), state: 'stale' }
+  }
+
+  const aligned = visiblePrebootTiles.every((prebootTile) => {
+    const liveTile = liveTilesById.get(String(prebootTile.dataset.bookmarkId || ''))
+    if (!liveTile || !areNewtabBookmarkRectsAligned(
+      prebootTile.getBoundingClientRect(),
+      liveTile.getBoundingClientRect()
+    )) {
+      return false
+    }
+
+    const prebootTitle = prebootTile.querySelector<HTMLElement>('.newtab-bookmark-preboot-title')
+    const liveTitle = liveTile.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
+    if (!prebootTitle && !liveTitle) {
+      return true
+    }
+    return Boolean(
+      prebootTitle &&
+      liveTitle &&
+      areNewtabBookmarkRectsAligned(
+        prebootTitle.getBoundingClientRect(),
+        liveTitle.getBoundingClientRect()
+      )
+    )
+  })
+
+  return {
+    liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles),
+    state: aligned ? 'aligned' : 'pending'
+  }
+}
+
+function createNewtabBookmarkLiveGeometry(liveTiles: HTMLElement[]): string {
+  return liveTiles
+    .filter((tile) => isNewtabBookmarkPrebootTileVisible(tile))
+    .slice(0, 12)
+    .map((tile) => {
+      const rect = tile.getBoundingClientRect()
+      return [
+        tile.dataset.bookmarkId || '',
+        roundPrebootLength(rect.left),
+        roundPrebootLength(rect.top),
+        roundPrebootLength(rect.width),
+        roundPrebootLength(rect.height)
+      ].join(':')
+    })
+    .join('|')
+}
+
+function isNewtabBookmarkPrebootTileVisible(tile: HTMLElement): boolean {
+  const rect = tile.getBoundingClientRect()
+  return Boolean(
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.right > 0 &&
+    rect.bottom > 0 &&
+    rect.left < window.innerWidth &&
+    rect.top < window.innerHeight
+  )
+}
+
+function areNewtabBookmarkRectsAligned(left: DOMRect, right: DOMRect): boolean {
+  return Boolean(
+    Math.abs(left.left - right.left) <= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX &&
+    Math.abs(left.top - right.top) <= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX &&
+    Math.abs(left.width - right.width) <= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX &&
+    Math.abs(left.height - right.height) <= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX
+  )
 }
 
 function getOrCreateNewtabBookmarkPrebootRoot(documentRef: Document): HTMLElement | null {

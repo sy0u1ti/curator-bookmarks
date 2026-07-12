@@ -170,9 +170,17 @@ assert.ok(
 
 assert.ok(
   /getLocalStorage\(\[[\s\S]+?backgroundPreloadPromise\s*\n\s*\]\)/.test(controller) &&
-    /useLayoutEffect\(\(\) => \{\s*hideNewtabBookmarkPreboot\(\)/.test(bookmarkContent) &&
+    /useLayoutEffect\(\(\) => \{\s*return scheduleNewtabBookmarkPrebootHandoff\(\)/.test(bookmarkContent) &&
+    bookmarkPreboot.includes('measureNewtabBookmarkPrebootHandoff') &&
     /useEffect\(\(\) => \{[\s\S]+?writeNewtabBookmarkPrebootSnapshotFromView/.test(bookmarkContent),
-  'The final newtab surface should wait for the saved background and replace bookmark preboot before the first live paint.'
+  'The final newtab surface should wait for the saved background and keep bookmark preboot until live geometry is stable.'
+)
+
+assert.ok(
+  newtabApp.includes("import('./components/SettingsDrawer')") &&
+    !newtabApp.includes("from './components/SettingsDrawer'") &&
+    newtabApp.includes('SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS'),
+  'The closed settings drawer should stay outside the bookmark first-paint bundle and warm after the critical path.'
 )
 
 const autoCenteredLayoutReadyAssignments = [

@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { Button } from '../ui/base/Button'
 import { cx } from '../ui/base/utils'
 import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
+import { runIdle } from '../shared/idle'
 import { useNewtabController } from './newtab-controller'
 import { DashboardOverlayHost } from './components/DashboardOverlay'
 import { BookmarkMenusHost } from './components/BookmarkMenusHost'
@@ -15,7 +16,6 @@ import { NewtabDragLayerHost } from './components/NewtabDragLayerHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
 import { NewtabWallpaperFilterLayer } from './components/NewtabWallpaperFilterLayer'
 import { NewtabPaperShaderLayer } from './components/NewtabPaperShaderLayer'
-import { SettingsDrawerHost } from './components/SettingsDrawer'
 import {
   dispatchNewtabBookmarkChanged,
   dispatchNewtabBookmarkCreated,
@@ -84,6 +84,7 @@ const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
 ].join(' ')
 const NEWTAB_REDUCED_MOTION_SELF_CLASS =
   'motion-reduce:![animation:none] motion-reduce:![transform:none]'
+const SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS = 450
 const LOADING_VISIBILITY_CLASS = 'opacity-100 visible [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
 const SETTINGS_TRIGGER_ZONE_BASE_CLASS = `settings-trigger-zone group/settings-trigger-zone fixed top-0 right-0 z-30 h-24 w-[min(360px,calc(100vw-18px))] ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
 const SETTINGS_TRIGGER_ZONE_VISIBLE_CLASS = 'pointer-events-none'
@@ -103,6 +104,22 @@ const WALLPAPER_LOADING_CARD_CLASS = 'wallpaper-loading-card grid h-12 w-12 plac
 const WALLPAPER_LOADING_LOADER_CLASS = 'wallpaper-loading-loader inline-flex h-3.5 w-[30px] items-center gap-1'
 const WALLPAPER_LOADING_DOT_CLASS = 'block h-1.5 w-1.5 rounded-full bg-current opacity-[0.32] animate-[wallpaper-loading-loader-pulse_900ms_var(--ui-ease-standard)_infinite_both] motion-reduce:animate-none'
 const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh items-start justify-items-center overflow-x-hidden overflow-y-auto px-[clamp(14px,5vw,72px)] pt-[clamp(18px,5vh,46px)] pb-[clamp(24px,6vh,64px)] select-none [-webkit-user-select:none] [scrollbar-color:rgba(245,245,247,0.18)_transparent] [scrollbar-width:thin] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-autospace:no-autospace] [&_a]:[-webkit-user-drag:none] [&_img]:[-webkit-user-drag:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(245,245,247,0.18)] [&::-webkit-scrollbar-thumb]:bg-clip-padding ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS}`
+
+type SettingsDrawerHostComponent = (typeof import('./components/SettingsDrawer'))['SettingsDrawerHost']
+
+let settingsDrawerHostComponent: SettingsDrawerHostComponent | null = null
+let settingsDrawerHostPromise: Promise<SettingsDrawerHostComponent> | null = null
+
+function loadSettingsDrawerHost(): Promise<SettingsDrawerHostComponent> {
+  if (settingsDrawerHostComponent) {
+    return Promise.resolve(settingsDrawerHostComponent)
+  }
+  settingsDrawerHostPromise ||= import('./components/SettingsDrawer').then((module) => {
+    settingsDrawerHostComponent = module.SettingsDrawerHost
+    return module.SettingsDrawerHost
+  })
+  return settingsDrawerHostPromise
+}
 
 function subscribeToNewtabBookmarkEvents(): () => void {
   const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
@@ -146,6 +163,7 @@ function NewtabShell() {
   const settingsBackdropRef = useRef<HTMLButtonElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
   const pendingHandoffFrame = useRef(0)
+  const [settingsDrawerHostRequested, setSettingsDrawerHostRequested] = useState(false)
   const settingsBackgroundProps = settingsDrawer.open && settingsDrawerModal
     ? {
         'aria-hidden': true,
@@ -288,7 +306,10 @@ function NewtabShell() {
           aria-controls="newtab-settings-drawer"
           aria-expanded={settingsDrawer.open ? 'true' : 'false'}
           {...settingsBackgroundProps}
-          onClick={dispatchNewtabSettingsDrawerToggleRequest}
+          onClick={() => {
+            setSettingsDrawerHostRequested(true)
+            dispatchNewtabSettingsDrawerToggleRequest()
+          }}
           unstyled
         >
           <Icon name="Settings" size={18} aria-hidden="true" />
@@ -318,12 +339,49 @@ function NewtabShell() {
       </div>
       <NewtabDragLayerHost />
       <DashboardOverlayHost />
-      <SettingsDrawerHost />
+      <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawer.open} />
       <FeaturedBackgroundModalHost />
       <NewtabDeleteToastHost />
       <BookmarkMenusHost />
     </div>
   )
+}
+
+function DeferredSettingsDrawerHost({ requested }: { requested: boolean }) {
+  const [Host, setHost] = useState<SettingsDrawerHostComponent | null>(settingsDrawerHostComponent)
+
+  useEffect(() => {
+    if (Host) {
+      return
+    }
+
+    let active = true
+    let delayTimer = 0
+    const mountHost = () => {
+      void loadSettingsDrawerHost().then((Component) => {
+        if (active) {
+          setHost(() => Component)
+        }
+      })
+    }
+
+    if (requested) {
+      mountHost()
+    } else {
+      // The closed settings inspector is not part of the bookmark first paint.
+      // Warm it after the critical card path, or immediately on explicit intent.
+      delayTimer = window.setTimeout(() => {
+        runIdle(mountHost, { timeout: 1200 })
+      }, SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS)
+    }
+
+    return () => {
+      active = false
+      window.clearTimeout(delayTimer)
+    }
+  }, [Host, requested])
+
+  return Host ? <Host /> : null
 }
 
 function SolidBackgroundNoiseLayer({ active }: { active: boolean }) {
