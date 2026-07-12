@@ -879,6 +879,13 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   transition: none;
 }
 
+/* The cached cards use translucent glass, so an unsettled live grid would
+   otherwise remain visible underneath and make its titles appear to jump.
+   Visibility preserves layout and geometry measurements for the handoff. */
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} ~ #newtab-react-root .bookmark-folder-sections {
+  visibility: hidden !important;
+}
+
 html.instant-wallpaper-startup-preview #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID},
 html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   --preboot-card-bg: rgba(16, 17, 19, 0.56);
