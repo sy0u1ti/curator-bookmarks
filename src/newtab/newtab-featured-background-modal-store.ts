@@ -1,10 +1,8 @@
 import { useSyncExternalStore } from 'react'
-import { getModalCloseDurationMs } from '../shared/motion'
 
 export type FeaturedBackgroundStatusTone = 'info' | 'success' | 'warning' | 'error'
 
 export interface NewtabFeaturedBackgroundModalView {
-  closing: boolean
   open: boolean
   refreshing: boolean
   status: string
@@ -31,7 +29,6 @@ const EMPTY_ACTIONS: NewtabFeaturedBackgroundModalActions = {
 }
 
 let featuredBackgroundModalView: NewtabFeaturedBackgroundModalView = {
-  closing: false,
   open: false,
   refreshing: false,
   status: '',
@@ -42,8 +39,6 @@ let featuredBackgroundModalNodes: NewtabFeaturedBackgroundModalNodes = {
   grid: null,
   modal: null
 }
-let closeTimer = 0
-
 const listeners = new Set<() => void>()
 
 function subscribeFeaturedBackgroundModal(listener: () => void): () => void {
@@ -73,7 +68,6 @@ export function useNewtabFeaturedBackgroundModalView(): NewtabFeaturedBackground
     subscribeFeaturedBackgroundModal,
     () => featuredBackgroundModalView,
     () => ({
-      closing: false,
       open: false,
       refreshing: false,
       status: '',
@@ -83,43 +77,18 @@ export function useNewtabFeaturedBackgroundModalView(): NewtabFeaturedBackground
 }
 
 export function dispatchNewtabFeaturedBackgroundModalOpen(open: boolean): void {
-  window.clearTimeout(closeTimer)
-
-  if (open) {
-    if (featuredBackgroundModalView.open && !featuredBackgroundModalView.closing) {
-      return
-    }
-    featuredBackgroundModalView = {
-      ...featuredBackgroundModalView,
-      closing: false,
-      open: true
-    }
-    emitFeaturedBackgroundModalChange()
+  if (featuredBackgroundModalView.open === open) {
     return
   }
-
-  if (!featuredBackgroundModalView.open || featuredBackgroundModalView.closing) {
-    return
-  }
-
   featuredBackgroundModalView = {
     ...featuredBackgroundModalView,
-    closing: true
+    open
   }
   emitFeaturedBackgroundModalChange()
-
-  closeTimer = window.setTimeout(() => {
-    featuredBackgroundModalView = {
-      ...featuredBackgroundModalView,
-      closing: false,
-      open: false
-    }
-    emitFeaturedBackgroundModalChange()
-  }, getModalCloseDurationMs())
 }
 
 export function getNewtabFeaturedBackgroundModalOpen(): boolean {
-  return featuredBackgroundModalView.open && !featuredBackgroundModalView.closing
+  return featuredBackgroundModalView.open
 }
 
 export function setNewtabFeaturedBackgroundModalNodes(nodes: NewtabFeaturedBackgroundModalNodes): void {

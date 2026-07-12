@@ -1,15 +1,15 @@
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
 
 export const OPTIONS_MODAL_BACKDROP_CLASS =
-  `fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 backdrop-blur-[14px] transition-opacity data-ending-style:opacity-0 data-starting-style:opacity-0 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `absolute inset-0 bg-black/70 backdrop-blur-[14px] ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_PANEL_CLASS =
-  `w-full max-w-[420px] max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none transition-[scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `pointer-events-auto relative z-10 w-full max-w-[420px] max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_WIDE_PANEL_CLASS = `${OPTIONS_MODAL_PANEL_CLASS} max-w-[620px]`
 
 export const OPTIONS_MODAL_EYEBROW_CLASS =
-  'm-0 text-[11px] font-bold uppercase leading-none tracking-[0.18em] text-ds-text-disabled'
+  'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
 
 export const OPTIONS_MODAL_EYEBROW_TONE_CLASS: Record<string, string> = {
   danger: 'text-ds-danger-text',
@@ -17,7 +17,7 @@ export const OPTIONS_MODAL_EYEBROW_TONE_CLASS: Record<string, string> = {
 }
 
 export const OPTIONS_MODAL_TITLE_CLASS =
-  'm-0 mt-2.5 text-[26px] font-[650] leading-[1.1] tracking-[0] text-ds-text-primary [overflow-wrap:anywhere] max-[640px]:text-[23px]'
+  'm-0 mt-2 text-[26px] font-[650] leading-[1.1] tracking-[-0.025em] text-ds-text-primary [overflow-wrap:anywhere] max-[640px]:text-[23px]'
 
 export const OPTIONS_MODAL_COPY_CLASS =
   'm-0 mt-3.5 text-sm leading-[1.75] text-ds-text-secondary [overflow-wrap:anywhere]'

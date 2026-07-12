@@ -9,6 +9,7 @@ import {
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../ui/base/Collapsible'
 import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
+import { getMotionAwareScrollBehavior } from '../shared/motion'
 import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
 import { AiAnalysisPanel, AvailabilityPanel, GeneralPanel } from './components/CorePanels'
 import { DashboardPanel } from './components/DashboardPanel'
@@ -180,9 +181,6 @@ function OptionsHeader({
           <img className={optionsBrandMarkImageClass} src="../assets/icon128.png" alt="" />
         </span>
         <span className={optionsBrandCopyClass}>
-          <span className="truncate whitespace-nowrap text-[9px] font-semibold uppercase tracking-[0] text-ds-text-disabled">
-            Chrome Bookmark Manager
-          </span>
           <strong className="block truncate whitespace-nowrap text-[17px] font-[650] leading-none tracking-[0] text-ds-text-primary max-[760px]:text-[20px]">
             Curator Bookmark
           </strong>
@@ -279,6 +277,28 @@ function OptionsSidebar({
   )
 }
 
+function subscribeToOptionsBookmarkEvents(): () => void {
+  const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
+  if (!bookmarks) {
+    return () => undefined
+  }
+
+  bookmarks.onCreated.addListener(handleOptionsBookmarkTreeChanged)
+  bookmarks.onRemoved.addListener(handleOptionsBookmarkTreeChanged)
+  bookmarks.onChanged.addListener(handleOptionsBookmarkTreeChanged)
+  bookmarks.onMoved.addListener(handleOptionsBookmarkTreeChanged)
+  bookmarks.onChildrenReordered.addListener(handleOptionsBookmarkTreeChanged)
+  bookmarks.onImportEnded.addListener(handleOptionsBookmarkTreeChanged)
+  return () => {
+    bookmarks.onCreated.removeListener(handleOptionsBookmarkTreeChanged)
+    bookmarks.onRemoved.removeListener(handleOptionsBookmarkTreeChanged)
+    bookmarks.onChanged.removeListener(handleOptionsBookmarkTreeChanged)
+    bookmarks.onMoved.removeListener(handleOptionsBookmarkTreeChanged)
+    bookmarks.onChildrenReordered.removeListener(handleOptionsBookmarkTreeChanged)
+    bookmarks.onImportEnded.removeListener(handleOptionsBookmarkTreeChanged)
+  }
+}
+
 export function OptionsApp() {
   useOptionsController()
   const {
@@ -327,22 +347,7 @@ export function OptionsApp() {
   }, [isDashboardEmbed])
 
   useEffect(() => {
-    const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
-
-    bookmarks?.onCreated?.addListener(handleOptionsBookmarkTreeChanged)
-    bookmarks?.onRemoved?.addListener(handleOptionsBookmarkTreeChanged)
-    bookmarks?.onChanged?.addListener(handleOptionsBookmarkTreeChanged)
-    bookmarks?.onMoved?.addListener(handleOptionsBookmarkTreeChanged)
-    bookmarks?.onChildrenReordered?.addListener(handleOptionsBookmarkTreeChanged)
-    bookmarks?.onImportEnded?.addListener(handleOptionsBookmarkTreeChanged)
-    return () => {
-      bookmarks?.onCreated?.removeListener(handleOptionsBookmarkTreeChanged)
-      bookmarks?.onRemoved?.removeListener(handleOptionsBookmarkTreeChanged)
-      bookmarks?.onChanged?.removeListener(handleOptionsBookmarkTreeChanged)
-      bookmarks?.onMoved?.removeListener(handleOptionsBookmarkTreeChanged)
-      bookmarks?.onChildrenReordered?.removeListener(handleOptionsBookmarkTreeChanged)
-      bookmarks?.onImportEnded?.removeListener(handleOptionsBookmarkTreeChanged)
-    }
+    return subscribeToOptionsBookmarkEvents()
   }, [])
 
   useEffect(() => {
@@ -376,10 +381,13 @@ export function OptionsApp() {
         const top = scrollHost.scrollTop + targetRect.top - hostRect.top - 24
         scrollHost.scrollTo({
           top: Math.max(0, Math.min(top, scrollHost.scrollHeight - scrollHost.clientHeight)),
-          behavior: 'smooth'
+          behavior: getMotionAwareScrollBehavior('smooth')
         })
       } else {
-        target.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        target.scrollIntoView({
+          block: 'start',
+          behavior: getMotionAwareScrollBehavior('smooth')
+        })
       }
       setAiProviderAttentionRequestId((requestId) => requestId + 1)
     })

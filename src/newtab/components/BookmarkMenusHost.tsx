@@ -29,8 +29,8 @@ const MENU_ACTION_ICON_BY_ACTION: Record<BookmarkMenuActionIcon, IconName> = {
   trash: 'Trash2'
 }
 
-const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface t-resize fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right animate-[newtab-menu-enter_var(--dropdown-open-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
-const MENU_CLOSING_CLASS = 'pointer-events-none animate-[newtab-menu-exit_var(--dropdown-close-dur)_var(--dropdown-ease)_both] motion-reduce:animate-none'
+const MENU_SURFACE_CLASS = 'curator-motion-popover bookmark-menu-surface fixed z-[10030] overflow-hidden rounded-[var(--ui-radius-panel)] border border-[var(--ui-divider)] bg-[var(--ui-bg-main)] p-[10px_12px_12px] text-[var(--ui-text-primary)] shadow-[var(--ui-shadow-panel)] origin-top-right'
+const MENU_CLOSING_CLASS = 'is-closing pointer-events-none'
 const MENU_FULL_WIDTH_CLASS = 'w-[276px]'
 const MENU_ADD_EXPANDED_CLASS = 'w-[300px]'
 const MENU_ADD_COLLAPSED_CLASS = 'w-[236px]'
@@ -90,6 +90,11 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
           view.menu.onCloseRequest()
         }
       }}
+      onTransitionEnd={(event) => {
+        if (view.closing && event.target === event.currentTarget && event.propertyName === 'opacity') {
+          view.onExitComplete()
+        }
+      }}
       ref={ref}
     >
       <BookmarkEditMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
@@ -129,6 +134,11 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
           view.menu.onCloseRequest()
         }
       }}
+      onTransitionEnd={(event) => {
+        if (view.closing && event.target === event.currentTarget && event.propertyName === 'opacity') {
+          view.onExitComplete()
+        }
+      }}
       ref={ref}
     >
       <BookmarkAddMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
@@ -139,20 +149,14 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
 type BookmarkActionRefMap = Map<string, RefObject<HTMLElement | null>>
 
 function useBookmarkActionRefs(actions: BookmarkMenuActionViewModel[]): BookmarkActionRefMap {
-  const refMapRef = useRef<BookmarkActionRefMap | null>(null)
-  if (refMapRef.current === null) {
-    refMapRef.current = new Map()
-  }
-
   return useMemo(() => {
     const next = new Map<string, RefObject<HTMLElement | null>>()
     for (const action of actions) {
       if (!action.actionId) {
         continue
       }
-      next.set(action.actionId, refMapRef.current?.get(action.actionId) ?? { current: null })
+      next.set(action.actionId, { current: null })
     }
-    refMapRef.current = next
     return next
   }, [actions])
 }

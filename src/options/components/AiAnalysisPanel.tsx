@@ -19,8 +19,7 @@ import {
   OPTION_RUN_CELL_CLASS,
   OPTION_RUN_CELL_TEXT_CLASS,
   OPTION_RUN_CELL_TITLE_CLASS,
-  OPTION_RUN_HEADER_CLASS,
-  OPTION_SECTION_LABEL_CLASS
+  OPTION_RUN_HEADER_CLASS
 } from './option-layout-classes.js'
 
 const AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS = OPTION_RUN_ACTIONS_CLASS
@@ -40,7 +39,6 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
 
   return (
     <section id="ai" className={OPTION_PANEL_CLASS} aria-labelledby="ai-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Smart Bookmark Analysis</p>
       <h1 id="ai-title" className={OPTION_PANEL_TITLE_CLASS}>书签智能分析</h1>
 
       {configured ? (

@@ -69,9 +69,9 @@ const placeholderPrimaryActionClass = cx(
 )
 
 const skeletonBarClass =
-  'relative block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
+  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] rounded-full bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
 const skeletonDotClass =
-  'relative block h-7 w-7 overflow-hidden rounded-md bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
+  'block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
 const pageSkeletonCopyClass = 'grid min-w-0 gap-[7px]'
 const pageSkeletonTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-24')
 const pageSkeletonStatusClass = cx(skeletonBarClass, 'h-2 min-w-[132px] opacity-[0.68]')
@@ -659,7 +659,7 @@ function PopupSmartResult({
                   <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" />
                 </svg>
               ) : null}
-              <TextSwap text={state.saved ? '已保存' : '确认保存'} />
+              <TextSwap animate text={state.saved ? '已保存' : '确认保存'} />
             </span>
           )}
         </Button>

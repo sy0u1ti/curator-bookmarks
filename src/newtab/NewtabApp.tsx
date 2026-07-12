@@ -51,6 +51,7 @@ import {
   setNewtabSettingsDrawerNodes,
   useNewtabSettingsDrawerView
 } from './newtab-settings-drawer-store'
+import { useSettingsDrawerModalMode } from './settings-drawer-mode'
 import {
   useNewtabBackgroundSettingsView,
   type NewtabBackgroundSettingsView
@@ -74,18 +75,15 @@ const BACKGROUND_MASK_STYLE_CLASS_BY_STYLE = {
 } as const
 const SOLID_BACKGROUND_NOISE_CLASS = 'newtab-solid-background-noise fixed inset-0 z-0 pointer-events-none overflow-hidden'
 const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
-  'motion-reduce:[&_*]:![animation-duration:1ms]',
-  'motion-reduce:[&_*::before]:![animation-duration:1ms]',
-  'motion-reduce:[&_*::after]:![animation-duration:1ms]',
-  'motion-reduce:[&_*]:![transition-duration:1ms]',
-  'motion-reduce:[&_*::before]:![transition-duration:1ms]',
-  'motion-reduce:[&_*::after]:![transition-duration:1ms]',
+  'motion-reduce:[&_*]:![animation:none]',
+  'motion-reduce:[&_*::before]:![animation:none]',
+  'motion-reduce:[&_*::after]:![animation:none]',
   'motion-reduce:[&_*]:![transform:none]',
   'motion-reduce:[&_*::before]:![transform:none]',
   'motion-reduce:[&_*::after]:![transform:none]'
 ].join(' ')
 const NEWTAB_REDUCED_MOTION_SELF_CLASS =
-  'motion-reduce:![animation-duration:1ms] motion-reduce:![transition-duration:1ms] motion-reduce:![transform:none]'
+  'motion-reduce:![animation:none] motion-reduce:![transform:none]'
 const LOADING_VISIBILITY_CLASS = 'opacity-100 visible [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
 const SETTINGS_TRIGGER_ZONE_BASE_CLASS = `settings-trigger-zone group/settings-trigger-zone fixed top-0 right-0 z-30 h-24 w-[min(360px,calc(100vw-18px))] ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
 const SETTINGS_TRIGGER_ZONE_VISIBLE_CLASS = 'pointer-events-none'
@@ -98,14 +96,31 @@ const DASHBOARD_SHORTCUT_HINT_BASE_CLASS = 'dashboard-shortcut-hint absolute top
 const DASHBOARD_SHORTCUT_HINT_VISIBLE_CLASS = 'opacity-100'
 const DASHBOARD_SHORTCUT_HINT_AUTO_HIDE_CLASS = 'opacity-0 transition-opacity duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] group-hover/settings-trigger-zone:opacity-100 group-focus-within/settings-trigger-zone:opacity-100 [@media(hover:none)]:opacity-100'
 const SETTINGS_BACKDROP_BASE_CLASS = 'settings-backdrop fixed inset-0 z-[10015] bg-transparent pointer-events-none'
-const SETTINGS_BACKDROP_OPEN_CLASS = 'pointer-events-auto'
 const WALLPAPER_LOADING_INDICATOR_CLASS = 'wallpaper-loading-indicator fixed inset-0 z-[2] grid place-items-center p-6 pointer-events-none'
 const WALLPAPER_LOADING_INDICATOR_HIDDEN_CLASS = 'opacity-0 invisible translate-y-1 scale-[0.98] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_var(--ui-motion-standard)]'
 const WALLPAPER_LOADING_INDICATOR_VISIBLE_CLASS = 'opacity-100 visible translate-y-0 scale-100 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
-const WALLPAPER_LOADING_CARD_CLASS = 'wallpaper-loading-card grid h-14 w-14 place-items-center rounded-lg border border-[rgba(245,245,247,0.12)] [background:linear-gradient(180deg,rgba(255,255,255,0.105),rgba(255,255,255,0.025)),rgba(21,21,22,0.54)] text-[rgba(245,245,247,0.84)] shadow-[inset_0_1px_0_rgba(255,255,255,0.075)] [filter:drop-shadow(0_14px_32px_rgba(0,0,0,0.14))] backdrop-blur-[8px] backdrop-saturate-[1.06]'
+const WALLPAPER_LOADING_CARD_CLASS = 'wallpaper-loading-card grid h-12 w-12 place-items-center rounded-ds-sm border border-[rgba(245,245,247,0.14)] bg-[rgba(18,18,19,0.9)] text-[rgba(245,245,247,0.78)]'
 const WALLPAPER_LOADING_LOADER_CLASS = 'wallpaper-loading-loader inline-flex h-3.5 w-[30px] items-center gap-1'
-const WALLPAPER_LOADING_DOT_CLASS = 'block h-1.5 w-1.5 rounded-full bg-current opacity-[0.32] animate-[wallpaper-loading-loader-pulse_900ms_var(--ui-ease-standard)_infinite_both]'
+const WALLPAPER_LOADING_DOT_CLASS = 'block h-1.5 w-1.5 rounded-full bg-current opacity-[0.32] animate-[wallpaper-loading-loader-pulse_900ms_var(--ui-ease-standard)_infinite_both] motion-reduce:animate-none'
 const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh items-start justify-items-center overflow-x-hidden overflow-y-auto px-[clamp(14px,5vw,72px)] pt-[clamp(18px,5vh,46px)] pb-[clamp(24px,6vh,64px)] select-none [-webkit-user-select:none] [scrollbar-color:rgba(245,245,247,0.18)_transparent] [scrollbar-width:thin] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-autospace:no-autospace] [&_a]:[-webkit-user-drag:none] [&_img]:[-webkit-user-drag:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(245,245,247,0.18)] [&::-webkit-scrollbar-thumb]:bg-clip-padding ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS}`
+
+function subscribeToNewtabBookmarkEvents(): () => void {
+  const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
+  if (!bookmarks) {
+    return () => undefined
+  }
+
+  bookmarks.onCreated.addListener(dispatchNewtabBookmarkCreated)
+  bookmarks.onRemoved.addListener(dispatchNewtabBookmarkRemoved)
+  bookmarks.onChanged.addListener(dispatchNewtabBookmarkChanged)
+  bookmarks.onMoved.addListener(dispatchNewtabBookmarkMoved)
+  return () => {
+    bookmarks.onCreated.removeListener(dispatchNewtabBookmarkCreated)
+    bookmarks.onRemoved.removeListener(dispatchNewtabBookmarkRemoved)
+    bookmarks.onChanged.removeListener(dispatchNewtabBookmarkChanged)
+    bookmarks.onMoved.removeListener(dispatchNewtabBookmarkMoved)
+  }
+}
 
 export function NewtabApp() {
   useNewtabController()
@@ -123,6 +138,7 @@ function NewtabShell() {
   const folderSource = useNewtabFolderSourceView()
   const instantWallpaper = useNewtabInstantWallpaperView()
   const settingsDrawer = useNewtabSettingsDrawerView()
+  const settingsDrawerModal = useSettingsDrawerModalMode()
   const appChromeAttributes = useNewtabAppChromeAttributes()
   const autoHideSettingsTrigger = folderSource.general.hideSettingsTrigger
   const dashboardTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -130,7 +146,7 @@ function NewtabShell() {
   const settingsBackdropRef = useRef<HTMLButtonElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
   const pendingHandoffFrame = useRef(0)
-  const settingsBackgroundProps = settingsDrawer.open
+  const settingsBackgroundProps = settingsDrawer.open && settingsDrawerModal
     ? {
         'aria-hidden': true,
         inert: true
@@ -187,15 +203,11 @@ function NewtabShell() {
   }, [backgroundSettings.ready])
 
   useEffect(() => {
-    const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
     const handleVisibilityChange = () => {
       dispatchNewtabVisibilityChange(document.visibilityState)
     }
+    const unsubscribeBookmarkEvents = subscribeToNewtabBookmarkEvents()
 
-    bookmarks?.onCreated?.addListener(dispatchNewtabBookmarkCreated)
-    bookmarks?.onRemoved?.addListener(dispatchNewtabBookmarkRemoved)
-    bookmarks?.onChanged?.addListener(dispatchNewtabBookmarkChanged)
-    bookmarks?.onMoved?.addListener(dispatchNewtabBookmarkMoved)
     document.addEventListener('keydown', dispatchNewtabDocumentKeyDown)
     document.addEventListener('visibilitychange', handleVisibilityChange)
     window.addEventListener('hashchange', dispatchNewtabWindowHashChange)
@@ -206,10 +218,7 @@ function NewtabShell() {
     window.addEventListener('pointerup', dispatchNewtabWindowPointerUp)
     window.addEventListener('resize', dispatchNewtabWindowResize)
     return () => {
-      bookmarks?.onCreated?.removeListener(dispatchNewtabBookmarkCreated)
-      bookmarks?.onRemoved?.removeListener(dispatchNewtabBookmarkRemoved)
-      bookmarks?.onChanged?.removeListener(dispatchNewtabBookmarkChanged)
-      bookmarks?.onMoved?.removeListener(dispatchNewtabBookmarkMoved)
+      unsubscribeBookmarkEvents()
       document.removeEventListener('keydown', dispatchNewtabDocumentKeyDown)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
       window.removeEventListener('hashchange', dispatchNewtabWindowHashChange)
@@ -288,13 +297,12 @@ function NewtabShell() {
 
       <Button
         id="newtab-settings-backdrop"
-        className={cx(
-          SETTINGS_BACKDROP_BASE_CLASS,
-          settingsDrawer.open ? SETTINGS_BACKDROP_OPEN_CLASS : ''
-        )}
+        className={SETTINGS_BACKDROP_BASE_CLASS}
         ref={settingsBackdropRef}
         type="button"
         aria-label="关闭设置"
+        aria-hidden="true"
+        tabIndex={-1}
         data-close-settings
         onClick={() => dispatchNewtabSettingsDrawerOpenChange(false)}
         unstyled

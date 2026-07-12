@@ -9,12 +9,14 @@ export interface NewtabBookmarkEditMenuView {
   focusAction: string
   focusFirst: boolean
   menu: BookmarkEditMenuViewModel
+  onExitComplete: () => void
 }
 
 export interface NewtabBookmarkAddMenuView {
   closing: boolean
   focusFirst: boolean
   menu: BookmarkAddMenuViewModel
+  onExitComplete: () => void
 }
 
 export interface NewtabBookmarkMenusView {

@@ -56,7 +56,7 @@ const heroLogoClass =
 const heroCopyClass =
   'hero-copy flex min-w-0 flex-none flex-col gap-px'
 const heroEyebrowClass =
-  'hero-eyebrow m-0 text-[11px] font-semibold uppercase tracking-[0.01em] text-ds-text-disabled'
+  'hero-eyebrow m-0 text-xs font-medium leading-4 text-ds-text-secondary'
 const heroTitleRowClass =
   'hero-title-row flex min-w-0 items-center gap-[5px]'
 const heroActionsClass =

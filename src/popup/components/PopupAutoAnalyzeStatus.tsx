@@ -9,16 +9,16 @@ const STATUS_BASE_CLASS =
   'relative z-[1] grid min-h-[38px] flex-none grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-[7px] border border-ds-border bg-ds-surface-1 px-2 py-[7px] pl-2.5 shadow-none'
 
 const STATUS_STATE_CLASS: Record<string, string> = {
-  queued: 'border-ds-accent-line bg-ds-selected text-ds-accent-text',
-  processing: 'border-ds-accent-line bg-ds-selected text-ds-accent-text',
-  completed: 'border-ds-accent-line bg-ds-selected text-ds-accent-text',
-  failed: 'border-ds-danger bg-ds-danger-soft'
+  queued: '',
+  processing: '',
+  completed: '',
+  failed: 'border-ds-danger/60'
 }
 
 const STATUS_INDICATOR_CLASS: Record<string, string> = {
   queued: 'bg-ds-text-secondary shadow-none',
-  processing: 'animate-[auto-analyze-pulse_1400ms_ease-in-out_infinite] bg-ds-accent-hover shadow-none',
-  completed: 'bg-ds-accent-hover shadow-none',
+  processing: 'animate-[auto-analyze-pulse_1400ms_ease-in-out_infinite] bg-ds-text-primary shadow-none motion-reduce:animate-none',
+  completed: 'bg-ds-success-text shadow-none',
   failed: 'bg-ds-danger-text shadow-none'
 }
 

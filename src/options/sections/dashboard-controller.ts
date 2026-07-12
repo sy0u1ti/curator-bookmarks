@@ -17,7 +17,7 @@ import { displayUrl, extractDomain, normalizeText } from '../../shared/text.js'
 import { moveBookmark } from '../../shared/bookmarks-api.js'
 import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
 import { createMemoryCache, type MemoryCache } from '../../shared/cache.js'
-import { prefersReducedMotion } from '../../shared/motion.js'
+import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion.js'
 import {
   buildSearchTextQuery,
   parseSearchQuery
@@ -160,6 +160,9 @@ export interface DashboardDragStateSnapshot {
 
 interface DashboardDragState extends DashboardDragStateSnapshot {
   captureElement: HTMLElement | null
+  grabOffsetX: number
+  grabOffsetY: number
+  pointerType: string
 }
 
 interface DashboardVirtualState {
@@ -509,7 +512,10 @@ function loadDashboardNaturalSearchAiModule(): Promise<typeof import('../../popu
 
 const dragState: DashboardDragState = {
   ...createDashboardDragState(),
-  captureElement: null
+  captureElement: null,
+  grabOffsetX: 0,
+  grabOffsetY: 0,
+  pointerType: ''
 }
 
 export function createDashboardDragState(
@@ -1283,7 +1289,7 @@ export function closeDashboardTagEditor(): boolean {
 
   closingDashboardTagEditor = true
   publishDashboardTagEditorClosingState(true)
-  const closeDelay = prefersReducedMotion() ? 0 : 220
+  const closeDelay = prefersReducedMotion() ? 0 : getMotionDurationMs('--modal-close-dur', 220)
   window.setTimeout(() => {
     clearDashboardTagEditorState()
     closingDashboardTagEditor = false
@@ -1546,7 +1552,9 @@ function handleDashboardCardDragStart(
     return
   }
 
-  suppressDashboardNativeDragTextSelection(event)
+  if (event.pointerType !== 'touch') {
+    suppressDashboardNativeDragTextSelection(event)
+  }
   cancelDashboardDrag({ silent: true })
 
   dragState.armed = true
@@ -1557,15 +1565,14 @@ function handleDashboardCardDragStart(
   dragState.originY = event.clientY
   dragState.currentX = event.clientX
   dragState.currentY = event.clientY
+  const cardRect = card.getBoundingClientRect()
+  dragState.grabOffsetX = event.clientX - cardRect.left
+  dragState.grabOffsetY = event.clientY - cardRect.top
+  dragState.pointerType = event.pointerType
   dragState.hoverFolderId = ''
   dragState.hoverDeleteTarget = false
   dragState.captureElement = card
 
-  try {
-    card.setPointerCapture(event.pointerId)
-  } catch {
-    // Some synthetic events and older Chromium edge cases cannot capture; drag still works via bubbling.
-  }
 }
 
 export function handleDashboardPointerMove(event: PointerEvent): void {
@@ -1579,6 +1586,15 @@ export function handleDashboardPointerMove(event: PointerEvent): void {
 
   dragState.currentX = event.clientX
   dragState.currentY = event.clientY
+
+  if (dragState.armed && dragState.pointerType === 'touch') {
+    const deltaX = event.clientX - dragState.originX
+    const deltaY = event.clientY - dragState.originY
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.hypot(deltaX, deltaY) >= DASHBOARD_DRAG_MOVE_THRESHOLD) {
+      cancelDashboardDrag({ silent: true })
+      return
+    }
+  }
 
   if (
     dragState.armed &&
@@ -1630,8 +1646,44 @@ export async function handleDashboardPointerUp(event: PointerEvent, callbacks: D
   publishDashboardDragOverlayState({ moving: true })
   renderDashboardDragHint('正在移动书签...')
 
-  await moveDashboardBookmarkToFolder(bookmarkId, folderId, callbacks)
+  await Promise.all([
+    moveDashboardBookmarkToFolder(bookmarkId, folderId, callbacks),
+    settleDashboardDragPreview(folderId)
+  ])
   cancelDashboardDrag({ silent: true })
+}
+
+async function settleDashboardDragPreview(folderId: string): Promise<void> {
+  if (prefersReducedMotion()) {
+    return
+  }
+  const preview = document.querySelector<HTMLElement>('.dashboard-drag-preview')
+  const target = document.querySelector<HTMLElement>(
+    `[data-dashboard-folder-drop-id="${CSS.escape(folderId)}"]`
+  )
+  if (!preview || !target) {
+    return
+  }
+  const previewRect = preview.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const targetX = targetRect.left + Math.min(16, Math.max(8, targetRect.width * 0.08))
+  const targetY = targetRect.top + (targetRect.height - previewRect.height) / 2
+  const animation = preview.animate(
+    [
+      { transform: getComputedStyle(preview).transform },
+      { transform: `translate3d(${targetX}px, ${targetY}px, 0) scale(0.94)` }
+    ],
+    {
+      duration: getMotionDurationMs('--drag-settle-dur', 160),
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'forwards'
+    }
+  )
+  try {
+    await animation.finished
+  } catch {
+    // A cancelled animation means the drag overlay was dismissed early.
+  }
 }
 
 export function handleDashboardPointerCancel(): void {
@@ -5215,15 +5267,18 @@ function startDashboardDrag(): void {
 
   dragState.armed = false
   dragState.active = true
-  releaseDashboardPointerCapture()
-  dragState.captureElement = null
-  renderDashboardDragOverlay()
+  try {
+    dragState.captureElement?.setPointerCapture(dragState.pointerId)
+  } catch {
+    // Pointer capture is an enhancement; window-level listeners remain active.
+  }
   updateDashboardDragPreviewPosition()
+  renderDashboardDragOverlay()
 }
 
 function getDashboardDragPreviewTransform(): string {
   return dragState.active
-    ? `translate3d(${dragState.currentX}px, ${dragState.currentY}px, 0) translate3d(-50%, -50%, 0)`
+    ? 'translate3d(var(--dashboard-drag-preview-x), var(--dashboard-drag-preview-y), 0)'
     : ''
 }
 
@@ -5300,10 +5355,14 @@ function updateDashboardDragPreviewPosition(): void {
   if (!dragState.active) {
     return
   }
-
-  publishDashboardDragOverlayState({
-    previewTransform: getDashboardDragPreviewTransform()
-  })
+  document.documentElement.style.setProperty(
+    '--dashboard-drag-preview-x',
+    `${dragState.currentX - dragState.grabOffsetX}px`
+  )
+  document.documentElement.style.setProperty(
+    '--dashboard-drag-preview-y',
+    `${dragState.currentY - dragState.grabOffsetY}px`
+  )
 }
 
 function renderDashboardDragHint(label: string, { busy = false }: { busy?: boolean } = {}): void {
@@ -5345,7 +5404,7 @@ function hideDashboardDragOverlay(): Promise<void> {
     return Promise.resolve()
   }
 
-  const closeDelay = prefersReducedMotion() ? 0 : 220
+  const closeDelay = prefersReducedMotion() ? 0 : getMotionDurationMs('--modal-close-dur', 220)
   const closeToken = dashboardDragOverlayCloseToken + 1
   dashboardDragOverlayCloseToken = closeToken
   publishDashboardDragOverlayState({
@@ -5370,6 +5429,8 @@ function hideDashboardDragOverlay(): Promise<void> {
 function clearDashboardDragOverlayContent(): void {
   dragState.hoverDeleteTarget = false
   dragState.hoverFolderId = ''
+  document.documentElement.style.removeProperty('--dashboard-drag-preview-x')
+  document.documentElement.style.removeProperty('--dashboard-drag-preview-y')
   publishDashboardDragOverlayState({
     closing: false,
     deleteTargetActive: false,
@@ -5400,7 +5461,10 @@ function resetDashboardDragState(): boolean {
   const wasActive = dragState.active || dragState.armed
   releaseDashboardPointerCapture()
   Object.assign(dragState, createDashboardDragState(), {
-    captureElement: null
+    captureElement: null,
+    grabOffsetX: 0,
+    grabOffsetY: 0,
+    pointerType: ''
   })
   return wasActive
 }

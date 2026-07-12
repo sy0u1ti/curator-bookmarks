@@ -1,4 +1,3 @@
-import { NumberPop } from '../../ui/motion/NumberPop'
 import { Button } from '../../ui/base/Button'
 import { handleDuplicateAction } from '../options-controller'
 import { useDuplicateControlsState } from './duplicate-controls-store.js'
@@ -28,20 +27,15 @@ const RESULTS_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
 const RESULTS_SUBTITLE_CLASS = 'mt-2 text-[13px] leading-[1.55] text-ds-text-secondary'
 const SUMMARY_GRID_CLASS =
-  'mt-[18px] grid grid-cols-4 gap-3 max-[1180px]:grid-cols-3 max-[760px]:grid-cols-1'
-const SUMMARY_CARD_CLASS =
-  'min-w-0 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-ds-text-primary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
+  'mt-[18px] grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
+const SUMMARY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
+const SUMMARY_LIST_CLASS = 'grid grid-cols-3 gap-x-5 gap-y-2 max-[980px]:grid-cols-2 max-[520px]:grid-cols-1'
+const SUMMARY_ITEM_CLASS = 'flex min-w-0 items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'
 const SUMMARY_LABEL_ROW_CLASS =
-  'flex min-w-0 items-center gap-2 text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
-const SUMMARY_DOT_CLASS = {
-  danger: 'bg-ds-danger',
-  info: 'bg-ds-text-muted',
-  success: 'bg-ds-success',
-  total: 'bg-ds-border-hover',
-  warning: 'bg-ds-warning'
-} as const
+  'min-w-0 text-xs font-medium leading-4 text-ds-text-secondary'
 const SUMMARY_VALUE_CLASS =
-  'mt-2 block text-2xl font-[650] leading-none tracking-[0] text-ds-text-primary'
+  'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
+const SUMMARY_PRIMARY_VALUE_CLASS = 'text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const TOOLBAR_CLASS = 'mt-4 grid gap-2.5 border-t border-[rgba(255,255,255,0.075)] pt-4'
 const STRATEGY_CONTROLS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-start gap-[7px]'
@@ -54,20 +48,18 @@ export function DuplicateControls() {
 
   return (
     <div className={SUMMARY_GRID_CLASS}>
-      {duplicateMetrics.map((metric) => (
-        <article
-          className={SUMMARY_CARD_CLASS}
-          key={metric.key}
-        >
-          <span className={SUMMARY_LABEL_ROW_CLASS}>
-            <span className={`size-1.5 rounded-full ${SUMMARY_DOT_CLASS[metric.tone]}`} aria-hidden="true" />
-            {metric.label}
-          </span>
-          <strong className={SUMMARY_VALUE_CLASS}>
-            <NumberPop text={state.summary[metric.key]} />
-          </strong>
-        </article>
-      ))}
+      <div className={SUMMARY_PRIMARY_CLASS}>
+        <span className={SUMMARY_LABEL_ROW_CLASS}>重复分组</span>
+        <strong className={SUMMARY_PRIMARY_VALUE_CLASS}>{state.summary.totalGroups}</strong>
+      </div>
+      <dl className={SUMMARY_LIST_CLASS}>
+        {duplicateMetrics.slice(1).map((metric) => (
+          <div className={SUMMARY_ITEM_CLASS} key={metric.key}>
+            <dt className={SUMMARY_LABEL_ROW_CLASS}>{metric.label}</dt>
+            <dd className={SUMMARY_VALUE_CLASS}>{state.summary[metric.key]}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }

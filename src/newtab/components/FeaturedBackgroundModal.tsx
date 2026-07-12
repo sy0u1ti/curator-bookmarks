@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { Button } from '../../ui/base/Button'
 import { CloseButton } from '../../ui/base/CloseButton'
-import { DialogClose, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
+import { DialogBackdrop, DialogClose, DialogOverlay, DialogPanel, DialogTitle } from '../../ui/base/Dialog'
 import {
   dispatchNewtabFeaturedBackgroundModalGridScroll,
   dispatchNewtabFeaturedBackgroundModalOpenChange,
@@ -20,22 +20,12 @@ import { FeaturedBackgroundHoverPreviewHost } from './FeaturedBackgroundHoverPre
 import { FeaturedBackgroundPicker } from './FeaturedBackgroundPicker'
 import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClasses'
 
-const featuredWallpaperPanelMotionClass =
-  'origin-center scale-[var(--modal-scale)] opacity-0 transition-[transform,scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] [will-change:transform,scale,opacity] motion-reduce:transition-none'
-const featuredWallpaperPanelOpenClass = 'scale-100 opacity-100 pointer-events-auto'
-const featuredWallpaperPanelClosedClass = 'pointer-events-none'
-const featuredWallpaperPanelClosingClass =
-  'scale-[var(--modal-scale-close)] opacity-0 pointer-events-none duration-[var(--modal-close-dur)]'
 const featuredWallpaperModalLayoutClass =
-  'fixed inset-0 z-[10020] grid place-items-center bg-[rgba(0,0,0,0.46)] p-6 transition-opacity [-webkit-backdrop-filter:blur(10px)_saturate(1.05)] [backdrop-filter:blur(10px)_saturate(1.05)] motion-reduce:transition-none'
-const featuredWallpaperModalOpenClass =
-  'opacity-100 pointer-events-auto duration-[var(--modal-open-dur)] ease-[var(--modal-ease)]'
-const featuredWallpaperModalClosedClass =
-  'opacity-0 pointer-events-none duration-ds-surface ease-ds-standard [content-visibility:hidden] [contain-intrinsic-size:100vw_100vh]'
-const featuredWallpaperModalClosingClass =
-  'opacity-0 pointer-events-none duration-[var(--modal-close-dur)] ease-[var(--modal-ease)]'
+  'fixed inset-0 z-[10020] grid place-items-center p-6 pointer-events-none'
+const featuredWallpaperBackdropClass =
+  'fixed inset-0 bg-[rgba(0,0,0,0.46)] [-webkit-backdrop-filter:blur(10px)_saturate(1.05)] [backdrop-filter:blur(10px)_saturate(1.05)]'
 const featuredWallpaperPanelLayoutClass =
-  'grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
+  'pointer-events-auto relative z-[1] grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
 const featuredWallpaperPanelSurfaceClass =
   'rounded-ds-lg border border-[rgba(245,245,247,0.13)] bg-[rgba(6,7,9,0.78)] text-ds-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.065)] [filter:drop-shadow(0_28px_80px_rgba(0,0,0,0.36))] [-webkit-backdrop-filter:blur(18px)_saturate(1.14)] [backdrop-filter:blur(18px)_saturate(1.14)]'
 const featuredWallpaperStatusClass =
@@ -44,7 +34,6 @@ const featuredWallpaperActionClass = `featured-wallpaper-action ${FEATURED_WALLP
 
 export interface FeaturedBackgroundModalProps {
   open: boolean
-  closing?: boolean
   refreshing?: boolean
   status?: string
   statusTone?: string
@@ -56,7 +45,6 @@ export interface FeaturedBackgroundModalProps {
 
 function FeaturedBackgroundModal({
   open,
-  closing = false,
   refreshing = false,
   status = '',
   statusTone = 'info',
@@ -70,51 +58,17 @@ function FeaturedBackgroundModal({
   const panelRef = useRef<HTMLDivElement | null>(null)
   const gridRef = useRef<HTMLElement | null>(null)
   const focusRequest = useNewtabFeaturedBackgroundPickerFocusRequest()
-  const modalClassName = [
-    'featured-wallpaper-modal',
-    featuredWallpaperModalLayoutClass,
-    open ? 'open' : '',
-    open && !closing ? featuredWallpaperModalOpenClass : '',
-    closing ? 'is-closing' : '',
-    closing ? featuredWallpaperModalClosingClass : '',
-    !open ? featuredWallpaperModalClosedClass : ''
-  ].filter(Boolean).join(' ')
-  const panelClassName = [
-    'featured-wallpaper-panel',
-    featuredWallpaperPanelLayoutClass,
-    featuredWallpaperPanelSurfaceClass,
-    featuredWallpaperPanelMotionClass,
-    open && !closing ? featuredWallpaperPanelOpenClass : '',
-    !open ? featuredWallpaperPanelClosedClass : '',
-    closing ? featuredWallpaperPanelClosingClass : ''
-  ].filter(Boolean).join(' ')
+  const modalClassName = `featured-wallpaper-modal ${featuredWallpaperModalLayoutClass}`
+  const panelClassName = `featured-wallpaper-panel ${featuredWallpaperPanelLayoutClass} ${featuredWallpaperPanelSurfaceClass}`
 
   useEffect(() => {
     if (!open ||
-      closing ||
       focusRequest.requestId === 0 ||
       hasFocusableFeaturedBackgroundPickerCard(pickerView)) {
       return
     }
     closeButtonRef.current?.focus()
-  }, [closing, focusRequest.requestId, open, pickerView])
-
-  useEffect(() => {
-    if (!open || !closing) {
-      return
-    }
-
-    const frame = window.requestAnimationFrame(() => {
-      const trigger = getNewtabFeaturedBackgroundPickerNodes().trigger
-      if (trigger?.isConnected) {
-        trigger.focus({ preventScroll: true })
-      }
-    })
-
-    return () => {
-      window.cancelAnimationFrame(frame)
-    }
-  }, [closing, open])
+  }, [focusRequest.requestId, open, pickerView])
 
   useLayoutEffect(() => {
     setNewtabFeaturedBackgroundModalNodes({
@@ -127,7 +81,7 @@ function FeaturedBackgroundModal({
         modal: null
       })
     }
-  }, [open, closing])
+  }, [open])
 
   return (
     <DialogOverlay
@@ -137,23 +91,18 @@ function FeaturedBackgroundModal({
       open={open}
       onOpenChange={onOpenChange}
       triggerId="background-featured-picker"
-      aria-hidden={open && !closing ? 'false' : 'true'}
-      inert={!open || closing}
-      onPointerDownCapture={(event) => {
-        if (event.target !== event.currentTarget) {
-          return
-        }
-        onOpenChange(false, event.nativeEvent)
-      }}
-      modal={open && !closing}
+      modal
       disablePointerDismissal
     >
+      <DialogBackdrop
+        className={featuredWallpaperBackdropClass}
+        onClick={(event) => onOpenChange(false, event.nativeEvent)}
+      />
       <DialogPanel
         className={panelClassName}
         ref={panelRef}
         initialFocus={false}
         finalFocus={() => getNewtabFeaturedBackgroundPickerNodes().trigger}
-        unanimated
       >
         <header className="featured-wallpaper-head">
           <div>
@@ -237,7 +186,6 @@ export function FeaturedBackgroundModalHost() {
   return (
     <FeaturedBackgroundModal
       open={view.open}
-      closing={view.closing}
       refreshing={view.refreshing}
       status={view.status}
       statusTone={view.statusTone}

@@ -89,6 +89,32 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.68), 0 0 0 4px rgba(245, 245, 247, 0.42);
 }
 
+.newtab-search-suggestions-panel:not([hidden]) {
+  opacity: 1;
+  translate: 0 0;
+  scale: 1;
+  transition:
+    opacity var(--ds-motion-fast) var(--ds-ease-standard),
+    translate var(--ds-motion-fast) var(--ds-ease-standard),
+    scale var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+@starting-style {
+  .newtab-search-suggestions-panel:not([hidden]) {
+    opacity: 0;
+    translate: 0 -2px;
+    scale: 0.995;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newtab-search-suggestions-panel:not([hidden]) {
+    translate: none;
+    scale: 1;
+    transition: opacity 80ms linear;
+  }
+}
+
 .newtab-app[data-background-media="true"] {
   --newtab-glass-bg-hero: rgba(9, 10, 12, 0.72);
   --newtab-glass-bg: rgba(12, 13, 15, 0.5);
@@ -273,43 +299,40 @@ html.instant-wallpaper-startup-preview body {
   touch-action: none;
   transition:
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
-    width var(--ds-motion-fast) var(--ds-ease-standard);
+    transform var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar-track:hover,
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-track {
-  width: 6px;
+  transform: scaleX(1.2);
   background: rgba(245, 245, 247, 0.07);
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar-thumb {
   position: absolute;
-  top: var(--settings-scrollbar-thumb-top);
+  top: 0;
   left: 0;
   width: 100%;
-  height: var(--settings-scrollbar-thumb-height);
+  height: 100%;
   border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(245, 245, 247, 0.56), rgba(245, 245, 247, 0.26)),
-    rgba(245, 245, 247, 0.2);
-  box-shadow:
-    0 0 0 1px rgba(245, 245, 247, 0.06),
-    0 8px 18px rgba(0, 0, 0, 0.24);
+  background: rgba(245, 245, 247, 0.42);
+  box-shadow: none;
   cursor: grab;
+  transform: translate3d(0, 0, 0) scaleY(1);
+  transform-origin: top;
   transition:
-    background-color var(--ds-motion-fast) var(--ds-ease-standard),
-    box-shadow var(--ds-motion-fast) var(--ds-ease-standard);
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+#newtab-settings-drawer .settings-drawer-scrollbar[data-visible="true"] .settings-drawer-scrollbar-thumb,
+#newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
+  will-change: transform;
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar-track:hover .settings-drawer-scrollbar-thumb,
 #newtab-settings-drawer .settings-drawer-scrollbar-thumb:hover,
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
-  background:
-    linear-gradient(180deg, rgba(245, 245, 247, 0.72), rgba(245, 245, 247, 0.36)),
-    rgba(245, 245, 247, 0.28);
-  box-shadow:
-    0 0 0 1px rgba(245, 245, 247, 0.12),
-    0 10px 22px rgba(0, 0, 0, 0.28);
+  background: rgba(245, 245, 247, 0.64);
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-thumb {
@@ -400,12 +423,7 @@ html.instant-wallpaper-startup-preview .newtab-app {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   pointer-events: none;
   transform: translateX(var(--active-tab-left, 0));
-  transition:
-    transform var(--tabs-dur) var(--tabs-ease),
-    width var(--tabs-dur) var(--tabs-ease),
-    height var(--tabs-dur) var(--tabs-ease),
-    top var(--tabs-dur) var(--tabs-ease);
-  will-change: transform, width;
+  transition: transform var(--tabs-dur) var(--tabs-ease);
 }
 
 #newtab-settings-drawer .settings-tab-panels > .t-tabs-panel {
@@ -476,21 +494,17 @@ html.instant-wallpaper-startup-preview .newtab-app {
   min-height: 0;
   overflow: hidden;
   opacity: 0;
-  filter: blur(2px);
   transform: translateY(-4px);
   transition:
     opacity var(--acc-collapse) var(--acc-ease),
-    filter var(--acc-collapse) var(--acc-ease),
     transform var(--acc-collapse) var(--acc-ease);
 }
 
 #newtab-settings-drawer .folder-candidates-motion[data-open="true"] .folder-candidates-motion-inner {
   opacity: 1;
-  filter: blur(0);
   transform: translateY(0);
   transition:
     opacity var(--acc-expand) var(--acc-ease),
-    filter var(--acc-expand) var(--acc-ease),
     transform var(--acc-expand) var(--acc-ease);
 }
 
@@ -615,30 +629,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   --wallpaper-placeholder-bg: var(--ds-bg-page);
 }
 
-@keyframes newtab-menu-enter {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.975);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes newtab-menu-exit {
-  from {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.975);
-  }
-}
-
 .bookmark-menu-surface {
   --bookmark-control-bg: rgba(245, 245, 247, 0.065);
   --bookmark-control-bg-hover: rgba(245, 245, 247, 0.09);
@@ -652,12 +642,9 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   filter: var(--newtab-glass-drop);
   transform-origin: top right;
   transition:
-    width var(--resize-dur) var(--resize-ease),
-    min-height var(--resize-dur) var(--resize-ease),
     border-color var(--dropdown-open-dur) var(--dropdown-ease),
     background-color var(--dropdown-open-dur) var(--dropdown-ease),
-    box-shadow var(--dropdown-open-dur) var(--dropdown-ease),
-    filter var(--dropdown-open-dur) var(--dropdown-ease);
+    box-shadow var(--dropdown-open-dur) var(--dropdown-ease);
   -webkit-backdrop-filter: var(--newtab-glass-filter);
   backdrop-filter: var(--newtab-glass-filter);
 }
@@ -695,7 +682,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 
 .bookmark-add-menu-content {
   opacity: 1;
-  filter: blur(0);
   transform: translateY(0) scale(1);
   transform-origin: top right;
   animation: newtab-bookmark-add-content-enter var(--dropdown-open-dur) var(--dropdown-ease) both;
@@ -884,13 +870,11 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 @keyframes newtab-bookmark-add-content-enter {
   from {
     opacity: 0;
-    filter: blur(2px);
     transform: translateY(6px) scale(var(--dropdown-pre-scale));
   }
 
   to {
     opacity: 1;
-    filter: blur(0);
     transform: translateY(0) scale(1);
   }
 }
@@ -1067,7 +1051,13 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   background: var(--newtab-glass-bg-hover);
   box-shadow: var(--newtab-glass-inset-hover);
   filter: none;
-  transform: translateY(-1px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .newtab-speed-dial-card:hover,
+  .newtab-quick-link:hover {
+    transform: translateY(-1px);
+  }
 }
 
 .bookmark-tile:focus-visible {
@@ -1096,7 +1086,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   filter: none;
   outline: var(--newtab-focus-outline);
   outline-offset: 2px;
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .bookmark-tile:active {
@@ -1114,6 +1104,16 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .bookmark-drag-ghost,
 .speed-dial-drag-ghost {
   transform: none;
+}
+
+/* Pointer-following previews must update in the same frame as the pointer.
+   The shared motion-card/chip transitions otherwise interpolate each transform
+   assignment and make the preview visibly lag behind the grab point. Drop
+   settling is handled explicitly with the Web Animations API. */
+.bookmark-drag-ghost,
+.speed-dial-drag-ghost,
+.folder-drag-ghost {
+  transition: none !important;
 }
 
 .source-navigation-link {
@@ -1558,9 +1558,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
     transform var(--dropdown-open-dur) var(--dropdown-ease),
     border-color var(--dropdown-open-dur) var(--dropdown-ease),
     background-color var(--dropdown-open-dur) var(--dropdown-ease),
-    box-shadow var(--dropdown-open-dur) var(--dropdown-ease),
-    filter var(--dropdown-open-dur) var(--dropdown-ease);
-  will-change: transform;
+    box-shadow var(--dropdown-open-dur) var(--dropdown-ease);
 }
 
 .featured-wallpaper-card:hover,
@@ -1593,13 +1591,12 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 420ms var(--dropdown-ease), filter 420ms var(--dropdown-ease);
+  transition: transform var(--ui-motion-standard) var(--dropdown-ease);
 }
 
 .featured-wallpaper-card:hover .featured-wallpaper-preview-image,
 .featured-wallpaper-card:focus-visible .featured-wallpaper-preview-image,
 .featured-wallpaper-card[aria-pressed="true"] .featured-wallpaper-preview-image {
-  filter: saturate(1.04) contrast(1.02);
   transform: scale(1.025);
 }
 

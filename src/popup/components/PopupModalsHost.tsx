@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
@@ -75,7 +75,7 @@ const modalHeaderCopyClass = 'min-w-0'
 const modalTitleClass =
   'm-0 mt-0.5 min-w-0 text-base font-semibold leading-[1.1] text-ds-text-primary'
 const modalEyebrowClass =
-  'm-0 text-[11px] font-semibold uppercase leading-[1.35] text-ds-text-muted'
+  'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
 const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-ds-danger-text')
 const modalBookmarkCardClass =
   'relative flex flex-col gap-[5px] rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 py-2.5 shadow-none'
@@ -100,7 +100,7 @@ const modalStackClass =
 const modalDismissLayerClass = 'absolute inset-0 z-0 block cursor-default border-0 bg-transparent'
 const modalSurfaceMotionClass = [
   'origin-center scale-100 opacity-100 pointer-events-auto',
-  'transition-[transform,scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] [will-change:transform,scale,opacity]',
+  'transition-[transform,scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)]',
   'motion-reduce:transition-none'
 ].join(' ')
 const modalCardShellClass = [
@@ -129,7 +129,9 @@ const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
 const editFolderPickerClass = 'flex min-h-0 flex-col gap-2'
 
 export function PopupModalsHost() {
-  const state = usePopupModalsView()
+  const liveState = usePopupModalsView()
+  const lastOpenStateRef = useRef(liveState)
+  const state = liveState.open ? liveState : lastOpenStateRef.current
   const previousActiveRef = useRef<PopupModalsView['active']>(null)
   const previousEditPickerOpenRef = useRef(false)
   const moveSearchRef = useRef<HTMLInputElement | null>(null)
@@ -138,6 +140,12 @@ export function PopupModalsHost() {
   const editTitleRef = useRef<HTMLInputElement | null>(null)
   const editFolderSearchRef = useRef<HTMLInputElement | null>(null)
   const cancelDeleteRef = useRef<HTMLButtonElement | null>(null)
+
+  useLayoutEffect(() => {
+    if (liveState.open) {
+      lastOpenStateRef.current = liveState
+    }
+  }, [liveState])
 
   useEffect(() => {
     if (state.active !== previousActiveRef.current) {

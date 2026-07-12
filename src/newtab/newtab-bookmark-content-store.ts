@@ -1,6 +1,7 @@
 import {
   useSyncExternalStore,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
@@ -49,7 +50,8 @@ export interface BookmarkTileViewModel {
   folderId: string
   id: string
   onContextMenu: (event: ReactMouseEvent<HTMLAnchorElement>) => void
-  onDragPointerDown: (event: ReactPointerEvent<HTMLAnchorElement>) => void
+  onDragPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
+  onReorderKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void
   onNavigate: (event: ReactMouseEvent<HTMLAnchorElement>) => void
   style?: CSSProperties
   title: string
@@ -63,6 +65,7 @@ export interface FolderSectionHeaderState {
   onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void
   onDragPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
   path: string
   title: string
 }
@@ -101,6 +104,7 @@ export interface BookmarkFolderSectionViewModel {
   onAddBookmark: (anchor: HTMLElement, folderId: string) => void
   onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void
   onDragPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
+  onReorderKeyDown: (event: ReactKeyboardEvent<HTMLButtonElement>) => void
   onOpenFolderSettings: () => void
   path: string
   title: string

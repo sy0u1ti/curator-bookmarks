@@ -259,6 +259,9 @@ export const DASHBOARD_META_PILL_CLASS = [
   'max-[760px]:w-fit max-[760px]:whitespace-normal'
 ].join(' ')
 
+export const DASHBOARD_META_TEXT_CLASS =
+  'min-w-0 flex-none overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-semibold leading-normal text-ds-text-muted tabular-nums'
+
 export const DASHBOARD_FOLDER_TREE_CLASS =
   'flex min-h-0 flex-[1_1_auto] flex-col gap-0.5 overflow-auto p-2 max-[760px]:flex-row max-[760px]:gap-1.5 max-[760px]:overflow-x-auto max-[760px]:overflow-y-hidden max-[760px]:p-[0_0_4px] max-[760px]:[scrollbar-gutter:auto] max-[760px]:[scrollbar-width:none] max-[760px]:[&::-webkit-scrollbar]:hidden'
 
@@ -467,7 +470,7 @@ export const DASHBOARD_DROP_PANEL_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_DROP_PANEL_CLOSING_STATE_CLASS =
-  'opacity-0 [transform:translate(-50%,-48%)_scale(0.985)] duration-ds-fast ease-[cubic-bezier(0.4,0,1,1)]'
+  'opacity-0 [transform:translate(-50%,-48%)_scale(0.985)] duration-ds-fast ease-[var(--dropdown-ease)]'
 
 export const DASHBOARD_FOLDER_DROP_GRID_CLASS =
   'grid [grid-template-columns:repeat(auto-fit,minmax(172px,1fr))] gap-2.5 max-h-[calc(min(calc(100vh_-_150px),820px)_-_72px)] overflow-auto p-3.5 max-[900px]:[grid-template-columns:repeat(auto-fit,minmax(156px,1fr))] max-[760px]:grid-cols-2 max-[760px]:gap-2 max-[760px]:max-h-[calc(100vh_-_220px)] max-[760px]:p-2.5'
@@ -476,11 +479,10 @@ export const DASHBOARD_FOLDER_DROP_CARD_CLASS = [
   'curator-motion-card grid min-h-[72px] [grid-template-columns:28px_minmax(0,1fr)] gap-[9px]',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[9px_10px]',
   'cursor-pointer select-none text-left font-[inherit] text-ds-text-secondary shadow-none [-webkit-user-drag:none] [-webkit-user-select:none]',
-  '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),filter_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
-  'hover:border-ds-accent-line hover:bg-ds-selected hover:text-ds-accent-text hover:[filter:drop-shadow(0_10px_26px_rgba(0,0,0,0.24))] hover:[transform:translateY(-1px)_scale(1.012)]',
-  'focus-visible:border-ds-accent-line focus-visible:bg-ds-selected focus-visible:text-ds-accent-text focus-visible:[filter:drop-shadow(0_10px_26px_rgba(0,0,0,0.24))] focus-visible:[transform:translateY(-1px)_scale(1.012)]',
+  '[transition:border-color_var(--ds-motion-fast)_var(--ds-ease-standard),background_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard)]',
+  'hover:border-ds-accent-line hover:bg-ds-selected hover:text-ds-accent-text',
+  'focus-visible:border-ds-accent-line focus-visible:bg-ds-selected focus-visible:text-ds-accent-text',
   '[&[aria-selected=true]]:border-ds-accent-line [&[aria-selected=true]]:bg-ds-selected [&[aria-selected=true]]:text-ds-accent-text',
-  '[&[aria-selected=true]]:[filter:drop-shadow(0_10px_26px_rgba(0,0,0,0.24))] [&[aria-selected=true]]:[transform:translateY(-1px)_scale(1.012)]',
   'max-[760px]:min-h-[68px] max-[760px]:[grid-template-columns:24px_minmax(0,1fr)] max-[760px]:gap-2 max-[760px]:p-2'
 ].join(' ')
 
@@ -508,7 +510,7 @@ export const DASHBOARD_DELETE_DROP_TARGET_CLASS = [
   'rounded-ds-sm border border-ds-danger/45 bg-ds-danger-soft p-[12px_16px] text-ds-danger-text shadow-none',
   'pointer-events-auto [transform:translateX(-50%)_translateY(0)_scale(1)] [transform-origin:center]',
   '[-webkit-backdrop-filter:none] [backdrop-filter:none]',
-  '[transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),opacity_var(--ds-motion-standard)_var(--ds-ease-spring),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
+  '[transition:border-color_var(--ds-motion-fast)_var(--ds-ease-standard),background_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard),opacity_var(--ds-motion-fast)_var(--dropdown-ease),transform_var(--ds-motion-fast)_var(--dropdown-ease)]',
   'opacity-100 starting:opacity-0 starting:[transform:translateX(-50%)_translateY(-6px)_scale(0.985)] motion-reduce:transition-none',
   'max-[760px]:top-[18px] max-[760px]:w-[calc(100vw_-_28px)] max-[760px]:min-h-[66px] max-[760px]:[grid-template-columns:38px_minmax(0,1fr)] max-[760px]:p-[10px_12px]'
 ].join(' ')
@@ -523,7 +525,7 @@ export const DASHBOARD_DELETE_DROP_TARGET_MOVING_STATE_CLASS =
   'pointer-events-none opacity-[0.72]'
 
 export const DASHBOARD_DELETE_DROP_TARGET_CLOSING_STATE_CLASS =
-  'opacity-0 [transform:translateX(-50%)_translateY(-6px)_scale(0.985)] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background_var(--ds-motion-standard)_var(--ds-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),opacity_var(--ds-motion-fast)_cubic-bezier(0.4,0,1,1),transform_var(--ds-motion-fast)_cubic-bezier(0.4,0,1,1)]'
+  'opacity-0 [transform:translateX(-50%)_translateY(-6px)_scale(0.985)] [transition:border-color_var(--ds-motion-fast)_var(--ds-ease-standard),background_var(--ds-motion-fast)_var(--ds-ease-standard),color_var(--ds-motion-fast)_var(--ds-ease-standard),opacity_var(--ds-motion-fast)_var(--dropdown-ease),transform_var(--ds-motion-fast)_var(--dropdown-ease)]'
 
 export const DASHBOARD_DELETE_DROP_ICON_CLASS =
   'relative inline-grid size-10 place-items-center rounded-ds-sm border border-ds-danger/30 bg-ds-danger-soft before:h-[18px] before:w-4 before:rounded-[0_0_4px_4px] before:border-2 before:border-t-0 before:border-current before:opacity-[0.72] before:content-[""] after:absolute after:left-3 after:top-[11px] after:h-0.5 after:w-4 after:rounded-full after:bg-current after:opacity-[0.72] after:shadow-[4px_-4px_0_-1px_currentColor] after:content-[""]'
@@ -545,7 +547,7 @@ export const DASHBOARD_DRAG_OVERLAY_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_DRAG_OVERLAY_CLOSING_STATE_CLASS =
-  'pointer-events-none opacity-0 duration-ds-fast ease-[cubic-bezier(0.4,0,1,1)]'
+  'pointer-events-none opacity-0 duration-ds-fast ease-[var(--dropdown-ease)]'
 
 export const DASHBOARD_DROP_HEAD_CLASS =
   'flex items-start justify-between gap-4 border-b border-white/[0.07] p-[16px_18px_12px] max-[760px]:flex-col'
@@ -557,7 +559,7 @@ export const DASHBOARD_DROP_HINT_CLASS =
   'm-[5px_0_0] text-[12px] leading-[1.5] text-ds-text-disabled'
 
 export const DASHBOARD_DRAG_PREVIEW_CLASS = [
-  'fixed left-0 top-0 z-[6] inline-grid max-w-[260px] grid-cols-[38px_minmax(0,180px)] items-center gap-2.5',
+  'dashboard-drag-preview fixed left-0 top-0 z-[6] inline-grid max-w-[260px] grid-cols-[38px_minmax(0,180px)] items-center gap-2.5',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-2.5 text-[12px] font-bold leading-[1.35] text-ds-text-primary shadow-none',
   'pointer-events-none select-none [-webkit-user-select:none] opacity-100 transition-opacity duration-ds-fast ease-ds-standard motion-reduce:transition-none [will-change:transform]',
   'starting:opacity-0',
@@ -565,7 +567,7 @@ export const DASHBOARD_DRAG_PREVIEW_CLASS = [
 ].join(' ')
 
 export const DASHBOARD_DRAG_PREVIEW_CLOSING_STATE_CLASS =
-  'opacity-0 ease-[cubic-bezier(0.4,0,1,1)]'
+  'opacity-0 ease-[var(--dropdown-ease)]'
 
 export const DASHBOARD_DRAG_PREVIEW_TITLE_CLASS =
   'overflow-hidden text-ellipsis whitespace-nowrap'

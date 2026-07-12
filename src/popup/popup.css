@@ -4,9 +4,9 @@
   --pulse-dur: 1000ms;
   --pulse-count: 1;
   --pulse-min: 0.5;
-  --reveal-dur: 380ms;
-  --reveal-blur: 2px;
-  --reveal-ease: ease-in-out;
+  --reveal-dur: 180ms;
+  --reveal-blur: 0px;
+  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -17,7 +17,6 @@
    在首屏大量行渲染时会随主线程饥饿而视觉冻结（内容长时间停在模糊态）。 */
 .popup-page-reveal .popup-page-skeleton,
 .popup-page-reveal .popup-page-content {
-  will-change: opacity;
   transition-duration: var(--reveal-dur);
   transition-property: opacity;
   transition-timing-function: var(--reveal-ease);
@@ -70,16 +69,6 @@ body::after {
   content: none;
 }
 
-@keyframes smart-progress-sheen {
-  0% {
-    transform: translateX(-140%);
-  }
-
-  100% {
-    transform: translateX(520%);
-  }
-}
-
 .smart-progress-track::before,
 .smart-progress-track::after {
   position: absolute;
@@ -102,13 +91,7 @@ body::after {
 }
 
 .smart-progress-bar::after {
-  position: absolute;
-  inset: -1px auto -1px 0;
-  width: 22%;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
-  content: "";
-  transform: translateX(-140%);
-  animation: smart-progress-sheen 1600ms linear infinite;
+  content: none;
 }
 
 :where(
@@ -233,14 +216,11 @@ button:focus-visible {
   gap: var(--popup-row-actions-gap);
   opacity: 0;
   pointer-events: none;
-  filter: blur(2px);
   transform: translateX(var(--popup-row-actions-slide)) scale(0.98);
   transform-origin: right center;
   transition:
     opacity var(--ds-motion-fast) var(--resize-ease),
-    transform var(--resize-dur) var(--resize-ease),
-    filter var(--ds-motion-fast) var(--resize-ease);
-  will-change: opacity, transform, filter;
+    transform var(--ds-motion-fast) var(--resize-ease);
 }
 
 .popup-main-row:hover .popup-row-actions:not([data-collapsed="true"]) .popup-row-actions-menu,
@@ -249,7 +229,6 @@ button:focus-visible {
 .popup-row-actions[data-open="true"]:not([data-collapsed="true"]) .popup-row-actions-menu {
   opacity: 1;
   pointer-events: auto;
-  filter: blur(0);
   transform: translateX(0) scale(1);
 }
 
@@ -290,7 +269,6 @@ button:focus-visible {
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not(:focus-within) .popup-row-actions-menu {
   opacity: 0;
   pointer-events: none;
-  filter: blur(2px);
   transform: translateX(var(--popup-row-actions-slide)) scale(0.98);
   transition-duration: 1ms !important;
 }
@@ -385,7 +363,7 @@ button:focus-visible {
   *::before,
   *::after {
     animation: none;
-    transition: none;
+    transition-duration: 80ms !important;
     scroll-behavior: auto;
   }
 

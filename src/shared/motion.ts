@@ -9,20 +9,28 @@ export function prefersReducedMotion(): boolean {
   )
 }
 
+export function getMotionAwareScrollBehavior(
+  behavior: ScrollBehavior = 'smooth'
+): ScrollBehavior {
+  return behavior === 'smooth' && prefersReducedMotion() ? 'auto' : behavior
+}
+
+export function getMotionDurationMs(variableName: string, fallbackMs: number): number {
+  if (typeof document === 'undefined') {
+    return fallbackMs
+  }
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(variableName).trim()
+  const value = Number.parseFloat(raw)
+  if (!Number.isFinite(value)) {
+    return fallbackMs
+  }
+  return raw.endsWith('s') && !raw.endsWith('ms') ? value * 1000 : value
+}
+
 export function getModalCloseDurationMs(fallbackMs = DEFAULT_MODAL_CLOSE_MS): number {
   if (prefersReducedMotion()) {
     return REDUCED_MOTION_DURATION_MS
   }
 
-  if (typeof document === 'undefined') {
-    return fallbackMs
-  }
-
-  const raw = getComputedStyle(document.documentElement).getPropertyValue('--modal-close-dur').trim()
-  const value = Number.parseFloat(raw)
-  if (!Number.isFinite(value)) {
-    return fallbackMs
-  }
-
-  return raw.endsWith('s') && !raw.endsWith('ms') ? value * 1000 : value
+  return getMotionDurationMs('--modal-close-dur', fallbackMs)
 }

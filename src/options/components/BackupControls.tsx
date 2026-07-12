@@ -8,7 +8,7 @@ import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 
 const BACKUP_CARD_CLASS =
-  't-resize mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
+  'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
 const BACKUP_HEADER_CLASS =
   'flex flex-wrap items-start justify-between gap-4'
 const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-ds-border-subtle pb-[14px]`

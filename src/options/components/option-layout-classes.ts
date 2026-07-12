@@ -38,10 +38,10 @@ export const OPTION_GROUP_CLASS =
   'curator-motion-surface mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 py-2 max-[760px]:mt-5'
 
 export const OPTION_TOOL_PANEL_CLASS =
-  `curator-motion-surface t-resize mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `curator-motion-surface mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 
 export const OPTION_RUN_HEADER_CLASS = [
-  'curator-motion-surface t-resize mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
+  'curator-motion-surface mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
   'max-[1180px]:grid-cols-[minmax(0,1fr)_auto]',
   'max-[860px]:grid-cols-1'
 ].join(' ')
@@ -91,19 +91,15 @@ export const OPTION_EMPTY_STATE_TEXT_CLASS =
 export const OPTION_EMPTY_STATE_ACTIONS_CLASS =
   'mt-4 flex flex-wrap items-center gap-2.5'
 
-export const OPTION_SECTION_LABEL_CLASS =
-  'm-0 font-[var(--font-sans)] text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-accent-hover opacity-100'
-
 export const OPTION_PANEL_TITLE_CLASS =
-  'mt-[9px] mb-0 max-w-[780px] text-[clamp(27px,2.2vw,34px)] font-[720] leading-[1.15] tracking-[0] text-ds-text-primary'
+  'm-0 max-w-[780px] text-[clamp(27px,2.2vw,34px)] font-[720] leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
 
 export const OPTION_PANEL_DESCRIPTION_CLASS =
   'mt-[10px] mb-0 max-w-[760px] text-[13px] leading-[1.7] tracking-[0] text-ds-text-secondary'
 
 export const OPTION_VALUE_CLASS = [
-  'curator-motion-chip inline-flex min-h-6 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap',
-  'rounded-full border border-ds-hover bg-ds-surface-2 px-3.5',
-  'font-[var(--font-sans)] text-xs font-semibold leading-normal tracking-[0] text-ds-text-secondary',
+  'inline-flex min-h-5 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap',
+  'font-[var(--font-sans)] text-xs font-medium leading-normal text-ds-text-secondary tabular-nums',
   'max-[760px]:w-fit max-[760px]:whitespace-normal'
 ].join(' ')
 

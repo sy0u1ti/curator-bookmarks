@@ -2,6 +2,7 @@ import {
   useCallback,
   useLayoutEffect,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
@@ -20,6 +21,7 @@ import {
   SPEED_DIAL_COPY_CLASS,
   SPEED_DIAL_COPY_DETAIL_CLASS,
   SPEED_DIAL_COPY_TITLE_CLASS,
+  SPEED_DIAL_DRAG_HANDLE_CLASS,
   SPEED_DIAL_EMPTY_CLASS,
   SPEED_DIAL_EMPTY_ACTION_CLASS,
   SPEED_DIAL_EMPTY_COPY_CLASS,
@@ -42,7 +44,8 @@ export interface SpeedDialCardViewModel {
   favicon: BookmarkIconShellFavicon
   id: string
   onContextMenu: (event: ReactMouseEvent<HTMLAnchorElement>) => void
-  onDragPointerDown: (event: ReactPointerEvent<HTMLAnchorElement>) => void
+  onDragPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
+  onReorderKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void
   onNavigate: (event: ReactMouseEvent<HTMLAnchorElement>) => void
   style?: CSSProperties
   title: string
@@ -178,9 +181,15 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
       data-bookmark-id={item.id}
       data-speed-dial-bookmark-id={item.id}
       aria-label={`打开固定入口：${item.title}。长按拖拽调整固定入口顺序`}
+      aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
       onClick={item.onNavigate}
       onContextMenu={item.onContextMenu}
-      onPointerDown={item.onDragPointerDown}
+      onKeyDown={item.onReorderKeyDown}
+      onPointerDown={(event) => {
+        if (event.pointerType === 'mouse') {
+          item.onDragPointerDown(event)
+        }
+      }}
       ref={setCardRef}
       style={item.style}
     >
@@ -194,6 +203,23 @@ function SpeedDialCard({ dragUi, item }: { dragUi: NewtabDragUiView; item: Speed
       <span className={SPEED_DIAL_COPY_CLASS}>
         <strong className={SPEED_DIAL_COPY_TITLE_CLASS}>{item.title}</strong>
         <span className={SPEED_DIAL_COPY_DETAIL_CLASS}>{item.detail}</span>
+      </span>
+      <span
+        className={SPEED_DIAL_DRAG_HANDLE_CLASS}
+        data-speed-dial-drag-handle=""
+        data-drag-pending={dragUi.speedDialPendingId === item.id ? 'true' : undefined}
+        aria-hidden="true"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          item.onDragPointerDown(event)
+        }}
+      >
+        <Icon name="Move" size={15} aria-hidden="true" />
       </span>
     </a>
   )

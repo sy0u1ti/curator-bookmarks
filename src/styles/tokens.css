@@ -60,9 +60,10 @@
   --ds-filter-dialog: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.02)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.04))
     drop-shadow(0 24px 24px rgba(0, 0, 0, 0.06));
 
-  --ds-motion-fast: 170ms;
-  --ds-motion-standard: 240ms;
-  --ds-motion-surface: 340ms;
+  --ds-motion-feedback: 100ms;
+  --ds-motion-fast: 130ms;
+  --ds-motion-standard: 190ms;
+  --ds-motion-surface: 300ms;
   --ds-ease-standard: cubic-bezier(0.175, 0.885, 0.32, 1.1);
   --ds-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ds-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
@@ -70,7 +71,7 @@
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
-  --tabs-dur: 300ms;
+  --tabs-dur: 190ms;
   --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --tabs-text-muted: var(--ds-text-secondary);
   --tabs-text-active: var(--ds-text-primary);
@@ -94,16 +95,16 @@
   --resize-dur: 380ms;
   --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --digit-dur: 500ms;
+  --digit-dur: 130ms;
   --digit-distance: 8px;
-  --digit-stagger: 70ms;
-  --digit-blur: 2px;
-  --digit-ease: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --digit-stagger: 0ms;
+  --digit-blur: 0px;
+  --digit-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --digit-dir-x: 0;
   --digit-dir-y: 1;
 
-  --dropdown-open-dur: 300ms;
-  --dropdown-close-dur: 190ms;
+  --dropdown-open-dur: 200ms;
+  --dropdown-close-dur: 140ms;
   --dropdown-pre-scale: 0.97;
   --dropdown-closing-scale: 0.99;
   --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -114,40 +115,41 @@
   --toast-scale: 0.98;
   --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --modal-open-dur: 320ms;
-  --modal-close-dur: 220ms;
+  --modal-open-dur: 260ms;
+  --modal-close-dur: 180ms;
   --modal-scale: 0.96;
   --modal-scale-close: 0.96;
   --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --icon-swap-dur: 300ms;
-  --icon-swap-blur: 2px;
-  --icon-swap-start-scale: 0.25;
+  --icon-swap-dur: 130ms;
+  --icon-swap-blur: 0px;
+  --icon-swap-start-scale: 0.9;
   --icon-swap-ease: ease-in-out;
 
   --pulse-dur: 1000ms;
   --pulse-count: 1;
   --pulse-min: 0.5;
-  --reveal-dur: 400ms;
-  --reveal-blur: 2px;
-  --reveal-ease: ease-in-out;
+  --reveal-dur: 180ms;
+  --reveal-blur: 0px;
+  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --text-swap-dur: 180ms;
-  --text-swap-translate-y: 4px;
-  --text-swap-blur: 2px;
-  --text-swap-ease: ease-in-out;
+  --text-swap-dur: 120ms;
+  --text-swap-translate-y: 2px;
+  --text-swap-blur: 0px;
+  --text-swap-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --panel-open-dur: 400ms;
-  --panel-close-dur: 350ms;
+  --panel-open-dur: 280ms;
+  --panel-close-dur: 220ms;
   --panel-translate-y: 12px;
   --tabs-panel-translate-y: 6px;
-  --panel-blur: 2px;
+  --panel-blur: 0px;
   --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --drag-settle-dur: 160ms;
 
-  --stagger-dur: 500ms;
-  --stagger-distance: 12px;
-  --stagger-stagger: 40ms;
-  --stagger-blur: 3px;
+  --stagger-dur: 220ms;
+  --stagger-distance: 6px;
+  --stagger-stagger: 24ms;
+  --stagger-blur: 0px;
   --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --shimmer-dur: 2000ms;
@@ -186,35 +188,49 @@
 
 @media (prefers-reduced-motion: reduce) {
   :root {
-    --ds-motion-fast: 1ms;
-    --ds-motion-standard: 1ms;
-    --ds-motion-surface: 1ms;
+    --ds-motion-feedback: 80ms;
+    --ds-motion-fast: 80ms;
+    --ds-motion-standard: 80ms;
+    --ds-motion-surface: 80ms;
     --ds-press-scale: 1;
     --ds-hover-lift: 0px;
     --ds-sheet-offset: 0px;
-    --tabs-dur: 1ms;
-    --tt-in-dur: 1ms;
-    --tt-out-dur: 1ms;
+    --tabs-dur: 80ms;
+    --tt-in-dur: 80ms;
+    --tt-out-dur: 80ms;
     --acc-expand: 1ms;
     --acc-collapse: 1ms;
     --acc-chevron: 1ms;
     --resize-dur: 1ms;
-    --digit-dur: 1ms;
-    --dropdown-open-dur: 1ms;
-    --dropdown-close-dur: 1ms;
-    --toast-open-dur: 1ms;
-    --toast-close-dur: 1ms;
+    --digit-dur: 80ms;
+    --dropdown-open-dur: 80ms;
+    --dropdown-close-dur: 80ms;
+    --toast-open-dur: 80ms;
+    --toast-close-dur: 80ms;
     --toast-scale: 1;
-    --modal-open-dur: 1ms;
-    --modal-close-dur: 1ms;
+    --modal-open-dur: 80ms;
+    --modal-close-dur: 80ms;
     --modal-scale: 1;
     --modal-scale-close: 1;
     --icon-swap-dur: 1ms;
     --reveal-dur: 1ms;
-    --text-swap-dur: 1ms;
-    --panel-open-dur: 1ms;
-    --panel-close-dur: 1ms;
+    --text-swap-dur: 80ms;
+    --panel-open-dur: 80ms;
+    --panel-close-dur: 80ms;
+    --drag-settle-dur: 1ms;
     --stagger-dur: 1ms;
     --shimmer-dur: 1ms;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --ds-border-subtle: #ffffff3d;
+    --ds-border: #ffffff82;
+    --ds-border-hover: #ffffffeb;
+    --ds-text-secondary: #ededed;
+    --ds-text-muted: #d0d0d0;
+    --ds-text-disabled: #a0a0a0;
+    --ds-focus: #eaf6ff;
   }
 }

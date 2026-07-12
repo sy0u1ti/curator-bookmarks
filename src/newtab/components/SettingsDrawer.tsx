@@ -1,16 +1,17 @@
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
-  type CSSProperties,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type Ref,
   type RefObject
 } from 'react'
 import { Button } from '../../ui/base/Button'
+import { getMotionAwareScrollBehavior } from '../../shared/motion'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { cx } from '../../ui/base/utils'
 import { DrawerOverlay, DrawerPanel } from '../../ui/base/Drawer'
@@ -59,6 +60,7 @@ import {
   useNewtabBackgroundSettingsView
 } from '../newtab-background-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
+import { useSettingsDrawerModalMode } from '../settings-drawer-mode'
 import { snapBackgroundMaskPercentage } from '../background-mask-settings'
 import {
   dispatchNewtabSettingsDrawerActiveGroupChange,
@@ -99,7 +101,7 @@ const settingsTabs = [
   ['source', '来源', true],
   ['appearance', '外观', false],
   ['search', '搜索', false],
-  ['advanced', '高级', false]
+  ['advanced', '高级设置', false]
 ] as const
 type SettingsSlideDirection = 'forward' | 'backward'
 
@@ -118,11 +120,11 @@ function getSettingsSlideDirection(
 const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
 const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-lg border border-[rgba(245,245,247,0.13)] bg-transparent text-ds-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.065)] [filter:drop-shadow(0_28px_72px_rgba(0,0,0,0.34))] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
-const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden [transform:translateX(var(--drawer-swipe-movement-x))] transition-transform duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-none max-[420px]:w-full max-[420px]:rounded-none max-[420px]:border-x-0'
+const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] transition-[transform,opacity] duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
 const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 max-[700px]:px-4 max-[700px]:pb-5'
 const SETTINGS_ROOT_CLASS = 'grid gap-4'
 const SETTINGS_HEADER_CLASS = 'grid gap-1 pr-14'
-const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-semibold uppercase text-ds-text-secondary'
+const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
 const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
 const SETTINGS_SUMMARY_CLASS = 'm-0 text-sm leading-relaxed text-ds-text-secondary'
 const SETTINGS_SAVE_STATUS_CLASS = 'mt-1 justify-self-start text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
@@ -163,11 +165,11 @@ const SETTINGS_NOTE_CLASS = 'm-0 text-xs leading-relaxed text-ds-text-secondary'
 const SETTINGS_WIDE_BUTTON_CLASS = 'min-h-9 w-full justify-between px-3 text-xs font-semibold'
 const SETTINGS_PICKER_BUTTON_CLASS = 'min-h-9 min-w-32 max-w-56 justify-center overflow-hidden px-3 text-xs font-semibold text-ellipsis whitespace-nowrap max-[700px]:w-full max-[700px]:max-w-none'
 const SETTINGS_FILE_INPUT_CLASS = 'sr-only'
-const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2 text-xs leading-snug text-ds-text-secondary data-[tone=error]:border-ds-danger data-[tone=error]:bg-ds-danger-soft data-[tone=error]:text-ds-danger-text data-[tone=success]:border-ds-accent-line data-[tone=success]:bg-ds-accent-soft data-[tone=success]:text-ds-accent-text'
+const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2 text-xs leading-snug text-ds-text-secondary data-[tone=error]:border-ds-danger/60 data-[tone=error]:text-ds-danger-text data-[tone=success]:text-ds-text-primary'
 const FOLDER_STACK_CLASS = 'grid min-w-0 gap-2'
 const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2'
 const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-secondary'
-const FOLDER_REMOVE_BUTTON_CLASS = 'group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.58)] outline-none transition-[background-color,border-color,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
+const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.58)] outline-none transition-[background-color,border-color,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
 const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 px-2.5 py-2', SETTINGS_NESTED_SURFACE_CLASS)
 const FOLDER_CANDIDATES_MOTION_CLASS = 'folder-candidates-motion'
@@ -492,11 +494,6 @@ interface SettingsScrollBarState {
   thumbTop: number
 }
 
-type SettingsScrollBarStyle = CSSProperties & {
-  '--settings-scrollbar-thumb-height': string
-  '--settings-scrollbar-thumb-top': string
-}
-
 const SETTINGS_SCROLLBAR_HIDDEN_STATE: SettingsScrollBarState = {
   hidden: true,
   thumbHeight: 100,
@@ -528,14 +525,6 @@ function getSettingsScrollBarState(
   }
 }
 
-function isSettingsScrollBarStateEqual(left: SettingsScrollBarState, right: SettingsScrollBarState): boolean {
-  return (
-    left.hidden === right.hidden &&
-    Math.abs(left.thumbHeight - right.thumbHeight) < 0.01 &&
-    Math.abs(left.thumbTop - right.thumbTop) < 0.01
-  )
-}
-
 function SettingsDrawerScrollBar({
   activeGroup,
   open,
@@ -545,17 +534,31 @@ function SettingsDrawerScrollBar({
   open: boolean
   scrollHostRef: RefObject<HTMLDivElement | null>
 }) {
-  const [scrollState, setScrollState] = useState<SettingsScrollBarState>(SETTINGS_SCROLLBAR_HIDDEN_STATE)
   const [dragging, setDragging] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
   const trackRef = useRef<HTMLDivElement | null>(null)
+  const thumbRef = useRef<HTMLSpanElement | null>(null)
   const dragThumbOffsetRef = useRef<number | null>(null)
+  const syncFrameRef = useRef(0)
+
+  const syncScrollBarNow = useCallback(() => {
+    syncFrameRef.current = 0
+    const nextState = getSettingsScrollBarState(scrollHostRef.current, trackRef.current)
+    const root = rootRef.current
+    const thumb = thumbRef.current
+    if (!root || !thumb) {
+      return
+    }
+    thumb.style.transform = `translate3d(0, ${nextState.thumbTop}%, 0) scaleY(${nextState.thumbHeight / 100})`
+    root.dataset.visible = open && !nextState.hidden ? 'true' : 'false'
+  }, [open, scrollHostRef])
 
   const syncScrollBar = useCallback(() => {
-    const nextState = getSettingsScrollBarState(scrollHostRef.current, trackRef.current)
-    setScrollState((previousState) => (
-      isSettingsScrollBarStateEqual(previousState, nextState) ? previousState : nextState
-    ))
-  }, [scrollHostRef])
+    if (syncFrameRef.current) {
+      return
+    }
+    syncFrameRef.current = window.requestAnimationFrame(syncScrollBarNow)
+  }, [syncScrollBarNow])
 
   const scrollToClientY = useCallback((clientY: number) => {
     const scrollHost = scrollHostRef.current
@@ -583,12 +586,17 @@ function SettingsDrawerScrollBar({
 
     scrollHost.scrollTop = (thumbTop / maxThumbTop) * maxScroll
   }, [scrollHostRef])
+  const scrollToClientYFromEffect = useEffectEvent((clientY: number) => {
+    scrollToClientY(clientY)
+  })
 
   useLayoutEffect(() => {
     const scrollHost = scrollHostRef.current
 
     if (!scrollHost) {
-      setScrollState(SETTINGS_SCROLLBAR_HIDDEN_STATE)
+      if (rootRef.current) {
+        rootRef.current.dataset.visible = 'false'
+      }
       return
     }
 
@@ -614,8 +622,14 @@ function SettingsDrawerScrollBar({
       resizeObserver?.disconnect()
       window.removeEventListener('resize', syncScrollBar)
       window.cancelAnimationFrame(frameId)
+      window.cancelAnimationFrame(syncFrameRef.current)
+      syncFrameRef.current = 0
     }
   }, [activeGroup, syncScrollBar, scrollHostRef])
+
+  useLayoutEffect(() => {
+    syncScrollBar()
+  }, [open, syncScrollBar])
 
   useEffect(() => {
     if (!dragging) {
@@ -624,7 +638,7 @@ function SettingsDrawerScrollBar({
 
     const handlePointerMove = (event: PointerEvent) => {
       event.preventDefault()
-      scrollToClientY(event.clientY)
+      scrollToClientYFromEffect(event.clientY)
     }
     const handlePointerUp = () => {
       dragThumbOffsetRef.current = null
@@ -640,7 +654,7 @@ function SettingsDrawerScrollBar({
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerUp)
     }
-  }, [dragging, scrollToClientY])
+  }, [dragging])
 
   const handleTrackPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
@@ -664,18 +678,13 @@ function SettingsDrawerScrollBar({
     setDragging(true)
   }
 
-  const style: SettingsScrollBarStyle = {
-    '--settings-scrollbar-thumb-height': `${scrollState.thumbHeight}%`,
-    '--settings-scrollbar-thumb-top': `${scrollState.thumbTop}%`
-  }
-
   return (
     <div
       aria-hidden="true"
       className="settings-drawer-scrollbar"
       data-dragging={dragging ? 'true' : 'false'}
-      data-visible={open && !scrollState.hidden ? 'true' : 'false'}
-      style={style}
+      data-visible="false"
+      ref={rootRef}
     >
       <div
         className="settings-drawer-scrollbar-track"
@@ -685,6 +694,7 @@ function SettingsDrawerScrollBar({
         <span
           className="settings-drawer-scrollbar-thumb"
           onPointerDown={handleThumbPointerDown}
+          ref={thumbRef}
         />
       </div>
     </div>
@@ -887,10 +897,7 @@ function FolderCandidateList({
   focusRequest: NewtabFolderCandidateFocusRequest
   state: NewtabFolderCandidateState
 }) {
-  const candidateRefs = useRef<Map<string, HTMLButtonElement> | null>(null)
-  if (!candidateRefs.current) {
-    candidateRefs.current = new Map<string, HTMLButtonElement>()
-  }
+  const candidateRefs = useRef(new Map<string, HTMLButtonElement>())
 
   useEffect(() => {
     if (focusRequest.requestId === 0 ||
@@ -898,15 +905,15 @@ function FolderCandidateList({
       !focusRequest.folderId) {
       return
     }
-    candidateRefs.current?.get(focusRequest.folderId)?.focus({ preventScroll: focusRequest.preventScroll })
+    candidateRefs.current.get(focusRequest.folderId)?.focus({ preventScroll: focusRequest.preventScroll })
   }, [focusRequest])
 
   const setCandidateRef = (folderId: string) => (element: HTMLButtonElement | null) => {
     if (element) {
-      candidateRefs.current?.set(folderId, element)
+      candidateRefs.current.set(folderId, element)
       return
     }
-    candidateRefs.current?.delete(folderId)
+    candidateRefs.current.delete(folderId)
   }
 
   if (state.type === 'empty') {
@@ -1514,6 +1521,7 @@ function SearchSettingsSection({
   sectionRef?: SettingsSectionRef
 }) {
   const searchSettings = useNewtabSearchSettingsView()
+  const enabledEngineSet = new Set(searchSettings.enabledEngines)
   const handleSearchEngineToggle = (engine: string, checked: boolean) => {
     const currentEngines = searchSettings.enabledEngines.includes(searchSettings.engine)
       ? searchSettings.enabledEngines
@@ -1572,7 +1580,7 @@ function SearchSettingsSection({
           <div className={SEARCH_ENGINE_GRID_CLASS} aria-label="启用的搜索引擎">
             {searchEngines.map(([value, label]) => {
               const isSelected = searchSettings.engine === value
-              const checked = searchSettings.enabledEngines.includes(value) || isSelected
+              const checked = enabledEngineSet.has(value) || isSelected
 
               return (
               <label
@@ -1697,6 +1705,7 @@ export function SettingsDrawerHost() {
 }
 
 function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
+  const modal = useSettingsDrawerModalMode()
   const [drawerElement, setDrawerElement] = useState<HTMLDivElement | null>(null)
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
   const [slideDirection, setSlideDirection] = useState<SettingsSlideDirection>('forward')
@@ -1749,7 +1758,10 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
     }
 
     if (layoutRequest.action === 'scroll-top') {
-      scrollHostRef.current?.scrollTo({ top: 0, behavior: layoutRequest.behavior })
+      scrollHostRef.current?.scrollTo({
+        top: 0,
+        behavior: getMotionAwareScrollBehavior(layoutRequest.behavior)
+      })
       return
     }
 
@@ -1760,7 +1772,10 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
 
     if (layoutRequest.action === 'focus-section') {
       const targetSection = sectionRefs.current[layoutRequest.section]
-      targetSection?.scrollIntoView({ block: 'start', behavior: layoutRequest.behavior })
+      targetSection?.scrollIntoView({
+        block: 'start',
+        behavior: getMotionAwareScrollBehavior(layoutRequest.behavior)
+      })
 
       if (layoutRequest.section === 'source') {
         folderCandidateSearchRef.current?.focus()
@@ -1796,13 +1811,13 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
       id="newtab-settings-drawer"
       className={cx(
         SETTINGS_DRAWER_CLASS,
-        open ? 'pointer-events-auto' : 'pointer-events-none',
+        open && modal ? 'pointer-events-auto' : 'pointer-events-none',
         open ? 'open' : ''
       )}
       open={open}
       onOpenChange={onOpenChange}
       triggerId="newtab-settings-trigger"
-      modal="trap-focus"
+      modal={modal ? 'trap-focus' : false}
       aria-hidden={open ? 'false' : 'true'}
       inert={!open}
       tabIndex={-1}

@@ -20,6 +20,7 @@ export interface PopoverProps {
   positionMethod?: BasePopoverPositionerProps['positionMethod']
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
+  showArrow?: boolean
   collisionAvoidance?: BasePopoverPositionerProps['collisionAvoidance']
   collisionPadding?: BasePopoverPositionerProps['collisionPadding']
   trigger: ReactElement
@@ -41,6 +42,7 @@ export function Popover({
   positionMethod,
   side = 'bottom',
   sideOffset = 8,
+  showArrow = true,
   collisionAvoidance,
   collisionPadding,
   trigger,
@@ -71,7 +73,7 @@ export function Popover({
           />
         }
       >
-        <BasePopover.Arrow className="text-ds-accent-contrast-elevated" />
+        {showArrow ? <BasePopover.Arrow className="text-ds-accent-contrast-elevated" /> : null}
         {title ? <BasePopover.Title className="font-semibold">{title}</BasePopover.Title> : null}
         {children}
       </BasePopover.Popup>

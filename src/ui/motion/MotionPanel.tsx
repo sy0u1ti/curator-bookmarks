@@ -1,32 +1,22 @@
-import { LazyMotion, domAnimation, m, useReducedMotion } from 'motion/react'
-import type { ComponentPropsWithoutRef } from 'react'
-import { panelTransitions } from './transitions'
+import type { ComponentPropsWithRef } from 'react'
+import { cx } from '../base/utils'
 
-export type MotionPanelProps = ComponentPropsWithoutRef<typeof m.div> & {
-  variant?: keyof typeof panelTransitions
+export type MotionPanelVariant = 'dialog' | 'drawer' | 'list' | 'menu' | 'popover'
+
+export type MotionPanelProps = ComponentPropsWithRef<'div'> & {
+  variant?: MotionPanelVariant
 }
 
-export function MotionPanel({ variant = 'dialog', ...props }: MotionPanelProps) {
-  const shouldReduceMotion = useReducedMotion()
-  const transition = panelTransitions[variant]
-
-  if (shouldReduceMotion) {
-    return (
-      <LazyMotion features={domAnimation}>
-        <m.div
-          initial={{ opacity: transition.initial.opacity ?? 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: transition.exit.opacity ?? 0 }}
-          transition={{ duration: 0.01 }}
-          {...props}
-        />
-      </LazyMotion>
-    )
-  }
-
+/**
+ * Base UI owns the mount lifecycle for shared surfaces. Its starting/ending
+ * attributes are intentionally styled in CSS so every open, close, and
+ * interrupted reversal starts from the element's current presentation state.
+ */
+export function MotionPanel({ className, variant = 'dialog', ...props }: MotionPanelProps) {
   return (
-    <LazyMotion features={domAnimation}>
-      <m.div {...transition} {...props} />
-    </LazyMotion>
+    <div
+      className={cx('curator-overlay-panel', `curator-overlay-panel--${variant}`, className)}
+      {...props}
+    />
   )
 }

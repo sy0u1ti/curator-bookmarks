@@ -10,6 +10,7 @@ import {
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
+import { getMotionAwareScrollBehavior } from '../../shared/motion'
 import { NumberPop } from '../../ui/motion/NumberPop'
 import {
   type BookmarkContentStyleState,
@@ -37,7 +38,7 @@ import {
 } from '../newtab-bookmark-preboot'
 import { BookmarkIconShell } from './BookmarkIconShell'
 import { SpeedDialPanelHost } from './NewtabSpeedDialPanel'
-import { getBookmarkTileClass, getBookmarkTitleClass } from './bookmarkTileClasses'
+import { BOOKMARK_DRAG_HANDLE_CLASS, getBookmarkTileClass, getBookmarkTitleClass } from './bookmarkTileClasses'
 import {
   FOLDER_SECTION_COUNT_CLASS,
   FOLDER_SECTION_TITLE_CLASS,
@@ -52,16 +53,16 @@ import {
 import { getNewtabButtonClass } from './newtabButtonClass'
 
 const EMPTY_FOLDER_STATE_CLASS = 'bookmark-folder-empty-state grid justify-items-start gap-2.5'
-const EMPTY_FOLDER_COPY_CLASS = 'bookmark-folder-empty justify-self-start mt-1 mb-0 text-xs leading-[1.4] text-[rgba(245,245,247,0.4)]'
+const EMPTY_FOLDER_COPY_CLASS = 'bookmark-folder-empty justify-self-start mt-1 mb-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.72)]'
 const EMPTY_FOLDER_ACTIONS_CLASS = 'bookmark-folder-empty-actions flex flex-wrap gap-2'
 const EMPTY_FOLDER_BUTTON_CLASS = getNewtabButtonClass('secondary', '!min-h-[34px] !px-3 !text-xs')
 const SOURCE_NAVIGATION_CLASS = 'source-navigation mb-3.5 inline-grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center justify-self-start gap-2'
-const SOURCE_NAVIGATION_LABEL_CLASS = 'source-navigation-label whitespace-nowrap text-[11px] font-[720] leading-none text-[rgba(245,245,247,0.42)]'
+const SOURCE_NAVIGATION_LABEL_CLASS = 'source-navigation-label inline-flex h-[26px] items-center whitespace-nowrap rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.1)] bg-[rgba(8,8,9,0.72)] px-2 text-[11px] font-[680] leading-none text-[rgba(245,245,247,0.88)] shadow-[0_1px_2px_rgba(0,0,0,0.16)] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)]'
 const SOURCE_NAVIGATION_LIST_CLASS = 'source-navigation-list flex min-w-0 max-w-full flex-wrap gap-1.5'
 const SOURCE_NAVIGATION_LINK_CLASS = 'curator-motion-chip source-navigation-link inline-flex h-[26px] max-w-[min(180px,100%)] items-center justify-start gap-1.5 rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.1)] bg-[rgba(10,10,12,0.28)] px-2 text-left leading-normal text-[rgba(245,245,247,0.72)] no-underline [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:[outline:2px_solid_rgba(245,245,247,0.12)] focus-visible:outline-offset-0'
 const SOURCE_NAVIGATION_TITLE_CLASS = 'source-navigation-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[650] leading-none'
 const SOURCE_NAVIGATION_COUNT_CLASS = 'source-navigation-count inline-grid h-4 min-w-[18px] place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-[10px] font-[760] leading-none text-[var(--ui-accent-text)]'
-const FOLDER_SECTION_ADD_CLASS = 'curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-transparent bg-transparent p-0 leading-none text-[rgba(245,245,247,0.56)] opacity-70 cursor-pointer hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] hover:opacity-100 focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
+const FOLDER_SECTION_ADD_CLASS = 'curator-compact-hit-target curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-[rgba(245,245,247,0.1)] bg-[rgba(8,8,9,0.68)] p-0 leading-none text-[rgba(245,245,247,0.78)] cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.14)] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
 const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.42)] px-2.5 py-2 text-[11px] font-[620] text-[rgba(245,245,247,0.46)]'
 const BOOKMARK_FOLDER_SECTION_CLASS = 'bookmark-folder-section group/bookmark-folder-section grid w-full content-start items-start justify-items-stretch gap-1.5 [scroll-margin-top:clamp(28px,5vh,48px)] [content-visibility:auto] [contain-intrinsic-size:0_320px] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard)] focus:bg-transparent focus:[box-shadow:none] focus:[outline:0] focus-visible:bg-transparent focus-visible:[box-shadow:none] focus-visible:[outline:0]'
 const BOOKMARK_FOLDER_SECTION_DRAGGING_CLASS = 'dragging-folder opacity-[0.54]'
@@ -72,7 +73,7 @@ const BOOKMARK_REORDER_STATUS_ERROR_CLASS = 'text-[rgba(255,183,176,0.94)]'
 const PORTAL_PANEL_CLASS = 'newtab-portal quick-only [--portal-card-min-height:42px] [--portal-card-gap:6px] mb-[18px] grid w-full grid-cols-1 items-stretch gap-3.5 rounded-lg border border-[rgba(245,245,247,0.13)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.075)] [filter:drop-shadow(0_14px_32px_rgba(0,0,0,0.14))] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
 const QUICK_ACCESS_CLASS = 'newtab-quick-access grid w-full content-stretch gap-[var(--portal-card-gap)]'
 const QUICK_GROUP_CLASS = 'newtab-quick-group grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-2.5'
-const QUICK_HEADING_CLASS = 'newtab-quick-heading flex [min-height:auto] items-center whitespace-nowrap px-0.5 text-[11px] font-[750] leading-[1.2] tracking-[0] text-[rgba(245,245,247,0.48)]'
+const QUICK_HEADING_CLASS = 'newtab-quick-heading flex [min-height:auto] items-center whitespace-nowrap px-0.5 text-[11px] font-[700] leading-[1.2] text-[rgba(245,245,247,0.72)]'
 const QUICK_LIST_CLASS = 'newtab-quick-list grid min-w-0 grid-cols-[repeat(auto-fill,minmax(136px,1fr))] auto-rows-[minmax(var(--portal-card-min-height),1fr)] gap-[var(--portal-card-gap)]'
 const QUICK_LINK_CLASS = 'curator-motion-card newtab-quick-link grid min-h-[var(--portal-card-min-height)] min-w-0 grid-cols-[24px_minmax(0,1fr)] items-center gap-[7px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[rgba(21,21,22,0.64)] py-1 pr-2 pl-[5px] text-[rgba(245,245,247,0.84)] no-underline shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] [transform:none] hover:border-[rgba(245,245,247,0.16)] hover:bg-[rgba(31,32,35,0.72)] hover:text-[var(--ui-text-primary)] hover:no-underline focus-visible:border-[rgba(245,245,247,0.16)] focus-visible:bg-[rgba(31,32,35,0.72)] focus-visible:text-[var(--ui-text-primary)] focus-visible:no-underline focus-visible:outline-none'
 const QUICK_MARK_CLASS = 'newtab-quick-mark grid h-6 w-6 place-items-center rounded-md text-[11px] font-extrabold leading-none'
@@ -80,7 +81,7 @@ const QUICK_MARK_DEFAULT_CLASS = 'bg-[rgba(245,245,247,0.08)] text-[rgba(245,245
 const QUICK_MARK_PINNED_CLASS = 'bg-[rgba(245,245,247,0.16)] text-[rgba(245,245,247,0.9)]'
 const QUICK_COPY_CLASS = 'newtab-quick-copy grid min-w-0 gap-0.5'
 const QUICK_COPY_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[720] leading-[1.15]'
-const QUICK_COPY_DETAIL_CLASS = 'newtab-quick-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.15] text-[rgba(245,245,247,0.42)]'
+const QUICK_COPY_DETAIL_CLASS = 'newtab-quick-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.25] text-[rgba(245,245,247,0.7)]'
 
 export function NewtabBookmarkContent({ hasSearch = false }: { hasSearch?: boolean }) {
   const state = useNewtabBookmarkContentView()
@@ -101,23 +102,20 @@ function BookmarkContent({
   const dragUi = useNewtabDragUiView()
   const folderSource = useNewtabFolderSourceView()
   const sectionsRootRef = useRef<HTMLDivElement | null>(null)
-  const sectionRefs = useRef<Map<string, HTMLElement> | null>(null)
-  if (!sectionRefs.current) {
-    sectionRefs.current = new Map()
-  }
+  const sectionRefs = useRef(new Map<string, HTMLElement>())
   const setSectionElement = useCallback((anchorId: string, element: HTMLElement | null) => {
     if (element) {
-      sectionRefs.current?.set(anchorId, element)
+      sectionRefs.current.set(anchorId, element)
       return
     }
-    sectionRefs.current?.delete(anchorId)
+    sectionRefs.current.delete(anchorId)
   }, [])
   const focusSource = useCallback((anchorId: string) => {
-    const section = sectionRefs.current?.get(anchorId)
+    const section = sectionRefs.current.get(anchorId)
     if (!section) {
       return
     }
-    section.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    section.scrollIntoView({ block: 'start', behavior: getMotionAwareScrollBehavior('smooth') })
     section.focus({ preventScroll: true })
   }, [])
 
@@ -179,6 +177,8 @@ function BookmarkContent({
             className={getBookmarkReorderStatusClass(state.reorderStatus.tone)}
             data-tone={state.reorderStatus.tone}
             role="status"
+            aria-live="polite"
+            aria-atomic="true"
           >
             {state.reorderStatus.message}
           </p>
@@ -247,7 +247,7 @@ function BookmarkFolderSection({
         forceVisible: dragUi.folderOrderDragging,
         hideNames: hideFolderNames
       })}>
-        <FolderSectionHeader state={{
+        <FolderSectionHeader pending={dragUi.folderPendingId === section.folderId} state={{
           bookmarkCount: section.bookmarkCount,
           dragging: section.dragging,
           folderId: section.folderId,
@@ -255,6 +255,7 @@ function BookmarkFolderSection({
           onAddBookmark: section.onAddBookmark,
           onClick: section.onClick,
           onDragPointerDown: section.onDragPointerDown,
+          onReorderKeyDown: section.onReorderKeyDown,
           title: section.title
         }} />
       </div>
@@ -296,7 +297,10 @@ function BookmarkFolderGrid({
   const expandFrameRef = useRef(0)
   const placeholderRef = useRef<HTMLOutputElement | null>(null)
   const visibleCountRef = useRef(visibleCount)
-  visibleCountRef.current = visibleCount
+
+  useLayoutEffect(() => {
+    visibleCountRef.current = visibleCount
+  }, [visibleCount])
 
   const cancelExpandFrame = useCallback(() => {
     if (!expandFrameRef.current) {
@@ -307,7 +311,7 @@ function BookmarkFolderGrid({
   }, [])
 
   const expandVisibleItems = useCallback(() => {
-    if (expandFrameRef.current || visibleCountRef.current >= totalCount) {
+    if (expandFrameRef.current || visibleCountRef.current >= grid.items.length) {
       return
     }
 
@@ -315,7 +319,7 @@ function BookmarkFolderGrid({
       expandFrameRef.current = window.requestAnimationFrame(() => {
         expandFrameRef.current = 0
         const nextVisibleCount = Math.min(
-          totalCount,
+          grid.items.length,
           Math.max(visibleCountRef.current, initialVisibleCount) + grid.chunkSize
         )
         visibleCountRef.current = nextVisibleCount
@@ -327,14 +331,14 @@ function BookmarkFolderGrid({
           return visibleCount
         })
 
-        if (nextVisibleCount < totalCount) {
+        if (nextVisibleCount < grid.items.length) {
           runFrame()
         }
       })
     }
 
     runFrame()
-  }, [grid.chunkSize, initialVisibleCount, totalCount])
+  }, [grid.chunkSize, grid.items.length, initialVisibleCount])
 
   useEffect(() => {
     return () => {
@@ -344,7 +348,7 @@ function BookmarkFolderGrid({
   }, [cancelExpandFrame, grid.folderId])
 
   useEffect(() => {
-    if (visibleCount >= totalCount) {
+    if (visibleCount >= grid.items.length) {
       cancelExpandFrame()
       return
     }
@@ -370,7 +374,7 @@ function BookmarkFolderGrid({
     return () => {
       observer.disconnect()
     }
-  }, [cancelExpandFrame, expandVisibleItems, totalCount, visibleCount])
+  }, [cancelExpandFrame, expandVisibleItems, grid.items.length, visibleCount])
 
   const visibleItems = useMemo(
     () => grid.items.slice(0, visibleCount),
@@ -453,7 +457,9 @@ function BookmarkTile({
     setNewtabBookmarkTileIconNode(state.id, element)
   }, [state.id])
   const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLAnchorElement>) => {
-    state.onDragPointerDown(event)
+    if (event.pointerType === 'mouse') {
+      state.onDragPointerDown(event)
+    }
   }, [state])
 
   useEffect(() => {
@@ -476,8 +482,11 @@ function BookmarkTile({
       draggable={false}
       data-bookmark-id={state.id}
       data-folder-id={state.folderId}
+      aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight Alt+Shift+ArrowLeft Alt+Shift+ArrowRight"
+      aria-label={`${state.title}。按 Alt 加方向键调整顺序，按 Alt+Shift 加左右方向键移动到相邻来源文件夹`}
       onClick={state.onNavigate}
       onContextMenu={state.onContextMenu}
+      onKeyDown={state.onReorderKeyDown}
       onPointerDown={handlePointerDown}
       ref={setTileRef}
       style={state.style}
@@ -489,6 +498,23 @@ function BookmarkTile({
         ref={setIconRef}
       />
       <span className={getBookmarkTitleClass()} hidden={!showTitles}>{state.title}</span>
+      <span
+        className={BOOKMARK_DRAG_HANDLE_CLASS}
+        data-bookmark-drag-handle=""
+        data-drag-pending={dragUi.bookmarkPendingId === state.id ? 'true' : undefined}
+        aria-hidden="true"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          state.onDragPointerDown(event)
+        }}
+      >
+        <Icon name="Move" size={15} aria-hidden="true" />
+      </span>
     </a>
   )
 }
@@ -576,7 +602,7 @@ function EmptyFolder({ state }: { state: EmptyFolderState }) {
   )
 }
 
-function FolderSectionHeader({ state }: { state: FolderSectionHeaderState }) {
+function FolderSectionHeader({ pending, state }: { pending: boolean; state: FolderSectionHeaderState }) {
   const displayTitle = state.title || '未命名文件夹'
   const addTitle = `添加书签到「${displayTitle}」`
   const setHeaderRef = useCallback((element: HTMLButtonElement | null) => {
@@ -595,12 +621,14 @@ function FolderSectionHeader({ state }: { state: FolderSectionHeaderState }) {
   return (
     <>
       <Button
-        className={getFolderSectionHeaderClass({ dragging: state.dragging })}
+        className={getFolderSectionHeaderClass({ dragging: state.dragging, pending })}
         type="button"
         data-folder-drag-handle={state.folderId}
         title={state.path || state.title}
         aria-label={`${state.title}，长按拖拽调整文件夹顺序`}
+        aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
         onClick={state.onClick}
+        onKeyDown={state.onReorderKeyDown}
         onPointerDown={handlePointerDown}
         ref={setHeaderRef}
         unstyled

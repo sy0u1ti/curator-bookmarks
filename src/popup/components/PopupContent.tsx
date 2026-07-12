@@ -118,7 +118,7 @@ const resultPathShellClass = 'block min-w-0'
 const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
 const resultMatchTokenClass =
   'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-semibold text-ds-text-secondary'
-const rowActionsClass = 'popup-row-actions t-resize'
+const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
   'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
@@ -133,14 +133,14 @@ const compactStateClass =
   'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
 const skeletonBarBaseClass =
-  'relative overflow-hidden rounded-full bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
+  'rounded-full bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
 const skeletonBarClass = cx(
   skeletonBarBaseClass,
   'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)]'
 )
 const skeletonTextBarClass = cx(skeletonBarBaseClass, 'block max-w-full')
 const skeletonDotClass =
-  'relative block h-7 w-7 overflow-hidden rounded-md bg-[rgba(255,255,255,0.055)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.018)] before:absolute before:inset-y-0 before:left-0 before:w-3/5 before:bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.095),transparent)] before:animate-[popup-skeleton-sheen_1500ms_ease-in-out_infinite] before:will-change-transform motion-reduce:before:animate-none'
+  'block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
 const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
 const skeletonFolderCountClass =
   cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')

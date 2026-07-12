@@ -83,6 +83,7 @@ import {
   DASHBOARD_FOLDER_SIDEBAR_TITLE_CLASS,
   DASHBOARD_FOLDER_TREE_CLASS,
   DASHBOARD_META_PILL_CLASS,
+  DASHBOARD_META_TEXT_CLASS,
   DASHBOARD_QUERY_ROW_CLASS,
   DASHBOARD_PANEL_CLASS,
   DASHBOARD_PERFORMANCE_CLASS,
@@ -292,7 +293,7 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
   const [tagEditorPosition, setTagEditorPosition] = useState<DashboardTagEditorPosition>(() => getHiddenDashboardTagEditorPosition())
   const panelRef = useRef<HTMLElement | null>(null)
   const tagEditorRef = useRef<HTMLDivElement | null>(null)
-  const cardElementRefs = useRef<Map<string, HTMLElement> | null>(null)
+  const cardElementRefs = useRef(new Map<string, HTMLElement>())
   const cardMenuFocusRequest = useDashboardViewSelector((state) => state.cardMenuFocusRequest)
   const dragOverlay = useDashboardViewSelector((state) => state.dragOverlay)
   const panelChrome = useDashboardViewSelector((state) => state.panelChrome)
@@ -301,20 +302,16 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
   const tagEditor = useDashboardViewSelector((state) => state.tagEditor)
   const tagEditorOpen = !hidden && tagEditor.visible
 
-  if (!cardElementRefs.current) {
-    cardElementRefs.current = new Map()
-  }
-
   const registerDashboardCardElement = useCallback((bookmarkId: string, node: HTMLElement | null) => {
     const safeBookmarkId = String(bookmarkId || '').trim()
     if (!safeBookmarkId) {
       return
     }
     if (node) {
-      cardElementRefs.current?.set(safeBookmarkId, node)
+      cardElementRefs.current.set(safeBookmarkId, node)
       return
     }
-    cardElementRefs.current?.delete(safeBookmarkId)
+    cardElementRefs.current.delete(safeBookmarkId)
   }, [])
 
   useLayoutEffect(() => {
@@ -324,7 +321,7 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
     }
 
     const editor = tagEditorRef.current
-    const card = cardElementRefs.current?.get(tagEditor.bookmarkId)
+    const card = cardElementRefs.current.get(tagEditor.bookmarkId)
     if (!editor || !card) {
       return
     }
@@ -550,9 +547,10 @@ function DashboardChromeContent({
           size="sm"
           type="button"
           variant="secondary"
+          aria-label="退出书签仪表盘"
           onClick={() => handleDashboardViewAction({ action: 'exit-dashboard' })}
         >
-          退出
+          退出仪表盘
         </Button>
       </div>
     </div>
@@ -681,7 +679,7 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
           <aside className={DASHBOARD_FOLDER_SIDEBAR_CLASS} aria-labelledby="dashboard-folder-sidebar-title" aria-label="书签文件夹">
             <div className={DASHBOARD_FOLDER_SIDEBAR_HEAD_CLASS}>
               <strong id="dashboard-folder-sidebar-title" className={DASHBOARD_FOLDER_SIDEBAR_TITLE_CLASS}>文件夹</strong>
-              <span className={DASHBOARD_META_PILL_CLASS}>
+              <span className={DASHBOARD_META_TEXT_CLASS}>
                 <DashboardFolderSidebarCountContent />
               </span>
             </div>

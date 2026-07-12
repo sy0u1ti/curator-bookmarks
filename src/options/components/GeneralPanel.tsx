@@ -4,8 +4,7 @@ import { ContentSnapshotControls } from './ContentSnapshotControls.js'
 import { FeatureSettingsControls } from './FeatureSettingsControls.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_PANEL_TITLE_CLASS,
-  OPTION_SECTION_LABEL_CLASS
+  OPTION_PANEL_TITLE_CLASS
 } from './option-layout-classes.js'
 import { ShortcutControls } from './ShortcutControls.js'
 
@@ -22,7 +21,6 @@ export function GeneralPanel({
 }: OptionsPanelVisibilityProps) {
   return (
     <section id="general" className={OPTION_PANEL_CLASS} aria-labelledby="general-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>General</p>
       <h1 id="general-title" className={OPTION_PANEL_TITLE_CLASS}>通用设置</h1>
 
       <FeatureSettingsControls />

@@ -53,35 +53,33 @@ export function InlineMenu({
     >
       {triggerWrapper ? triggerWrapper(menuTrigger) : menuTrigger}
       <span ref={portalContainerRef} />
-      {open ? (
-        <BaseMenu.Portal container={portalContainerRef}>
-          <BaseMenu.Positioner sideOffset={6} positionMethod="absolute">
-            <BaseMenu.Popup
-              id={id}
-              aria-label={label}
-              render={<MotionPanel variant="menu" className={className} />}
-            >
-              {actions.map((action) => (
-                <BaseMenu.Item
-                  key={action.id}
-                  disabled={action.disabled}
-                  closeOnClick={action.closeOnSelect ?? true}
-                  nativeButton
-                  render={<button type="button" aria-label={getInlineMenuActionLabel(action)} />}
-                  className={action.className || (action.destructive ? 'danger' : '')}
-                  ref={action.itemRef}
-                  onClick={() => {
-                    void action.onSelect?.()
-                  }}
-                  {...action.attributes}
-                >
-                  {action.label}
-                </BaseMenu.Item>
-              ))}
-            </BaseMenu.Popup>
-          </BaseMenu.Positioner>
-        </BaseMenu.Portal>
-      ) : null}
+      <BaseMenu.Portal keepMounted container={portalContainerRef}>
+        <BaseMenu.Positioner sideOffset={6} positionMethod="absolute">
+          <BaseMenu.Popup
+            id={id}
+            aria-label={label}
+            render={<MotionPanel variant="menu" className={className} />}
+          >
+            {actions.map((action) => (
+              <BaseMenu.Item
+                key={action.id}
+                disabled={action.disabled}
+                closeOnClick={action.closeOnSelect ?? true}
+                nativeButton
+                render={<button type="button" aria-label={getInlineMenuActionLabel(action)} />}
+                className={action.className || (action.destructive ? 'danger' : '')}
+                ref={action.itemRef}
+                onClick={() => {
+                  void action.onSelect?.()
+                }}
+                {...action.attributes}
+              >
+                {action.label}
+              </BaseMenu.Item>
+            ))}
+          </BaseMenu.Popup>
+        </BaseMenu.Positioner>
+      </BaseMenu.Portal>
     </BaseMenu.Root>
   )
 }

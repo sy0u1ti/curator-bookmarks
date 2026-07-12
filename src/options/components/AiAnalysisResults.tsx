@@ -42,7 +42,7 @@ const AI_RESULT_FOLDER_CLASS =
   'mt-[9px] flex flex-wrap items-center gap-2.5 text-[13px] leading-normal text-ds-text-secondary'
 const AI_RESULT_FOLDER_COPY_CLASS = 'inline-flex min-w-0 flex-wrap items-center gap-2'
 const AI_RESULT_FOLDER_LABEL_CLASS =
-  'flex-[0_0_auto] rounded-full border border-ds-border bg-ds-surface-2 px-2 py-0.5 text-xs font-semibold text-ds-text-disabled'
+  'flex-[0_0_auto] text-xs font-medium text-ds-text-muted'
 const AI_RESULT_FOLDER_VALUE_CLASS =
   'min-w-0 text-[13px] font-semibold text-ds-text-primary [overflow-wrap:anywhere]'
 const AI_RESULT_MOVE_ACTION_CLASS = 'flex-[0_0_auto]'

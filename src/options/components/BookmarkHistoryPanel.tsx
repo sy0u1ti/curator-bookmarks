@@ -1,8 +1,7 @@
 import { BookmarkAddHistory } from './BookmarkAddHistory.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_PANEL_TITLE_CLASS,
-  OPTION_SECTION_LABEL_CLASS
+  OPTION_PANEL_TITLE_CLASS
 } from './option-layout-classes.js'
 
 const BOOKMARK_HISTORY_GROUP_CLASS =
@@ -16,7 +15,6 @@ export function BookmarkHistoryPanel({ hidden }: { hidden: boolean }) {
       aria-labelledby="bookmark-history-title"
       hidden={hidden}
     >
-      <p className={OPTION_SECTION_LABEL_CLASS}>AI Organizing History</p>
       <h1 id="bookmark-history-title" className={OPTION_PANEL_TITLE_CLASS}>AI 整理记录</h1>
 
       <div className={BOOKMARK_HISTORY_GROUP_CLASS}>

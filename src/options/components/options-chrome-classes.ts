@@ -22,7 +22,7 @@ export const optionsBrandCopyClass =
   'min-w-0 flex flex-col gap-[5px] [font-family:var(--font-sans)]'
 
 export const optionsSidebarLabelClass =
-  'm-0 [font-family:var(--font-sans)] text-[11px] font-semibold uppercase tracking-[0] text-ds-text-disabled max-[920px]:[overflow-wrap:anywhere]'
+  'm-0 [font-family:var(--font-sans)] text-xs font-medium leading-4 text-ds-text-muted max-[920px]:[overflow-wrap:anywhere]'
 
 export const navGroupClass = 'grid min-w-0 gap-2'
 
@@ -32,15 +32,13 @@ export const navClass =
 export const navCollapsibleClass = 'grid min-w-0 gap-[3px] max-[920px]:w-full'
 
 export const navLinkClass = [
-  'curator-motion-row relative flex min-h-[34px] w-full items-center justify-start overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0 pl-6',
+  'curator-motion-row relative flex min-h-[34px] w-full items-center justify-start overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0',
   '[font-family:var(--font-sans)] text-[13px] font-semibold text-left text-ds-text-secondary',
   '[transition:background_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
-  'before:absolute before:left-[9px] before:font-mono before:text-ds-text-disabled before:font-bold before:content-["-"]',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary',
   'active:scale-[0.985]',
   '[&[aria-current=page]]:border-ds-accent-line [&[aria-current=page]]:bg-ds-selected [&[aria-current=page]]:text-ds-accent-text [&[aria-current=page]]:shadow-none [&[aria-current=page]]:transform-none',
-  '[&[aria-current=page]]:before:text-ds-accent-hover',
   'max-[920px]:min-h-[38px] max-[920px]:border-ds-border max-[920px]:bg-ds-surface-1 max-[920px]:[overflow-wrap:anywhere] max-[920px]:transform-none',
   'max-[920px]:hover:transform-none max-[920px]:focus-visible:transform-none max-[920px]:active:transform-none max-[920px]:[&[aria-current=page]]:transform-none',
   'max-[760px]:bg-ds-surface-1'
@@ -76,10 +74,10 @@ export const optionsDashboardEntryClass = [
 ].join(' ')
 
 export const optionsDashboardEntryEyebrowClass =
-  'font-mono text-[11px] font-bold uppercase tracking-[0] text-ds-text-disabled'
+  'font-[var(--font-sans)] text-xs font-medium text-ds-text-muted'
 
 export const optionsDashboardEntryTitleClass =
-  'font-mono text-sm font-semibold text-ds-text-secondary'
+  'font-[var(--font-sans)] text-sm font-semibold text-ds-text-secondary'
 
 export const optionsLayoutClass = [
   'grid h-screen min-h-0 w-full min-w-0 grid-cols-[244px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] items-stretch relative z-[1] gap-0 m-0 bg-ds-page pointer-events-none [grid-column:1/-1] [grid-row:1] max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[920px]:h-auto max-[920px]:w-[min(100%,760px)] max-[920px]:grid-cols-[minmax(0,1fr)] max-[920px]:gap-5 max-[920px]:mx-auto max-[920px]:pointer-events-auto max-[760px]:max-w-full',

@@ -1,7 +1,5 @@
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
-import { Card } from '../../ui/base/Card'
-import { NumberPop } from '../../ui/motion/NumberPop'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
 import { OPTION_REVEAL_ENTER_CLASS } from './option-layout-classes.js'
@@ -22,13 +20,15 @@ const ignoreSummaryMetrics = [
 }>
 
 const IGNORE_SUMMARY_GRID_CLASS =
-  'mt-5 grid grid-cols-3 gap-3 max-[920px]:grid-cols-1'
-const IGNORE_SUMMARY_CARD_CLASS =
-  'min-h-[96px] rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-4 shadow-none'
+  'mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
+const IGNORE_SUMMARY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
+const IGNORE_SUMMARY_LIST_CLASS = 'grid grid-cols-3 gap-x-5 gap-y-2 max-[620px]:grid-cols-1'
+const IGNORE_SUMMARY_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'
 const IGNORE_SUMMARY_LABEL_CLASS =
   'block text-xs font-semibold leading-[1.3] text-ds-text-muted'
 const IGNORE_SUMMARY_VALUE_CLASS =
-  'mt-2 block text-[26px] font-bold leading-none tracking-[0] text-ds-text-primary'
+  'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
+const IGNORE_SUMMARY_PRIMARY_VALUE_CLASS = 'text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const IGNORE_RULE_GROUP_CLASS =
   `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const IGNORE_RULE_HEADER_CLASS =
@@ -135,16 +135,21 @@ export function IgnoreRules() {
 }
 
 function IgnoreRulesSummary({ state }: { state: IgnoreRulesSummaryState }) {
+  const total = state.bookmarkCount + state.domainCount + state.folderCount
   return (
     <div className={IGNORE_SUMMARY_GRID_CLASS}>
-      {ignoreSummaryMetrics.map((metric) => (
-        <Card className={IGNORE_SUMMARY_CARD_CLASS} key={metric.key}>
-          <span className={IGNORE_SUMMARY_LABEL_CLASS}>{metric.label}</span>
-          <strong className={IGNORE_SUMMARY_VALUE_CLASS}>
-            <NumberPop text={state[metric.key]} />
-          </strong>
-        </Card>
-      ))}
+      <div className={IGNORE_SUMMARY_PRIMARY_CLASS}>
+        <span className={IGNORE_SUMMARY_LABEL_CLASS}>规则总数</span>
+        <strong className={IGNORE_SUMMARY_PRIMARY_VALUE_CLASS}>{total}</strong>
+      </div>
+      <dl className={IGNORE_SUMMARY_LIST_CLASS}>
+        {ignoreSummaryMetrics.map((metric) => (
+          <div className={IGNORE_SUMMARY_ITEM_CLASS} key={metric.key}>
+            <dt className={IGNORE_SUMMARY_LABEL_CLASS}>{metric.label}</dt>
+            <dd className={IGNORE_SUMMARY_VALUE_CLASS}>{state[metric.key]}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   )
 }

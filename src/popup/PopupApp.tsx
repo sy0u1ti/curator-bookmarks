@@ -1,8 +1,7 @@
-import { useEffect, useReducer } from 'react'
+import { useEffect } from 'react'
 import { cx } from '../ui/base/utils'
-import { DialogOverlay } from '../ui/base/Dialog'
+import { DialogBackdrop, DialogOverlay, DialogPanel } from '../ui/base/Dialog'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
-import { getModalCloseDurationMs } from '../shared/motion'
 import {
   dispatchPopupModalAction,
   usePopupModalsView,
@@ -29,10 +28,9 @@ const appShellDefaultClass = 'gap-[14px]'
 const appShellSmartClass = 'gap-2'
 const contentShellClass =
   'relative z-[1] grid min-h-0 flex-[1_1_auto] overflow-hidden border-0 bg-transparent [height:auto]'
-const modalBackdropBaseClass = [
-  'absolute inset-0 z-20 grid place-items-center bg-ds-overlay p-3.5 opacity-100',
-  'transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] motion-reduce:transition-none'
-].join(' ')
+const modalPortalClass = 'absolute inset-0 z-20 grid place-items-center pointer-events-none'
+const modalBackdropClass = 'absolute inset-0 bg-ds-overlay'
+const modalPanelClass = 'pointer-events-auto h-full w-full bg-transparent outline-none'
 
 export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | null }) {
   usePopupController()
@@ -44,54 +42,35 @@ export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | 
   )
 }
 
+function subscribeToPopupStorageChanges(): () => void {
+  const storage = typeof chrome === 'undefined' ? null : chrome.storage
+  if (!storage) {
+    return () => undefined
+  }
+
+  storage.onChanged.addListener(dispatchPopupStorageChanged)
+  return () => {
+    storage.onChanged.removeListener(dispatchPopupStorageChanged)
+  }
+}
+
 function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null }) {
   const modalsView = usePopupModalsView()
   const smartClassifierView = usePopupSmartClassifierView()
   const modalOpen = modalsView.open
   const smartActive = ['loading', 'results', 'error', 'permission'].includes(smartClassifierView.status)
-  const [modalPresence, dispatchModalPresence] = useReducer(reduceModalPresence, {
-    closing: false,
-    visible: modalOpen
-  })
   useEffect(() => {
-    const storage = typeof chrome === 'undefined' ? null : chrome.storage
+    const unsubscribeStorageChanges = subscribeToPopupStorageChanges()
 
     document.addEventListener('keydown', dispatchPopupDocumentKeyDown)
     window.addEventListener('pagehide', dispatchPopupPageHide)
-    storage?.onChanged?.addListener(dispatchPopupStorageChanged)
     return () => {
+      unsubscribeStorageChanges()
       document.removeEventListener('keydown', dispatchPopupDocumentKeyDown)
       window.removeEventListener('pagehide', dispatchPopupPageHide)
-      storage?.onChanged?.removeListener(dispatchPopupStorageChanged)
     }
   }, [])
 
-  useEffect(() => {
-    let modalCloseTimer = 0
-    if (modalOpen) {
-      dispatchModalPresence({ type: 'open' })
-      return () => window.clearTimeout(modalCloseTimer)
-    }
-
-    if (!modalPresence.visible) {
-      dispatchModalPresence({ type: 'hidden' })
-      return () => window.clearTimeout(modalCloseTimer)
-    }
-
-    dispatchModalPresence({ type: 'closing' })
-    modalCloseTimer = window.setTimeout(() => {
-      dispatchModalPresence({ type: 'hidden' })
-    }, getModalCloseDurationMs())
-
-    return () => {
-      window.clearTimeout(modalCloseTimer)
-    }
-  }, [modalOpen, modalPresence.visible])
-
-  const modalBackdropClassName = cx(
-    modalBackdropBaseClass,
-    modalPresence.closing ? 'pointer-events-none opacity-0 duration-[var(--modal-close-dur)]' : ''
-  )
   const appShellClassName = cx(
     appShellBaseClass,
     smartActive ? appShellSmartClass : appShellDefaultClass
@@ -102,8 +81,8 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
       <main
         id="popup-app-shell"
         className={appShellClassName}
-        aria-hidden={modalOpen && !modalPresence.closing ? 'true' : 'false'}
-        inert={modalOpen && !modalPresence.closing}
+        aria-hidden={modalOpen ? 'true' : 'false'}
+        inert={modalOpen}
       >
         <PopupChromeHost smartActive={smartActive}>
           <PopupSmartClassifierHost />
@@ -118,43 +97,30 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
 
       <DialogOverlay
         id="modal-backdrop"
-        className={modalBackdropClassName}
-        hidden={!modalPresence.visible}
-        open={modalPresence.visible}
+        className={modalPortalClass}
+        open={modalOpen}
         onOpenChange={(open) => {
           if (!open && modalOpen) {
             dispatchPopupModalAction('close')
             return
           }
         }}
-        aria-hidden={modalPresence.visible && !modalPresence.closing ? 'false' : 'true'}
+        aria-hidden={modalOpen ? 'false' : 'true'}
         disablePointerDismissal
         portalContainer={portalContainer ?? undefined}
       >
-        <PopupModalsHost />
+        <DialogBackdrop className={modalBackdropClass} />
+        <DialogPanel
+          className={modalPanelClass}
+          aria-label="书签操作弹窗"
+          initialFocus={false}
+          finalFocus={false}
+        >
+          <PopupModalsHost />
+        </DialogPanel>
       </DialogOverlay>
 
       <PopupToasts />
     </>
   )
-}
-
-interface ModalPresenceState {
-  closing: boolean
-  visible: boolean
-}
-
-type ModalPresenceAction =
-  | { type: 'closing' }
-  | { type: 'hidden' }
-  | { type: 'open' }
-
-function reduceModalPresence(state: ModalPresenceState, action: ModalPresenceAction): ModalPresenceState {
-  if (action.type === 'open') {
-    return { closing: false, visible: true }
-  }
-  if (action.type === 'closing') {
-    return state.visible ? { closing: true, visible: true } : { closing: false, visible: false }
-  }
-  return { closing: false, visible: false }
 }

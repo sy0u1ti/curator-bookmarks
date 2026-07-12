@@ -1,9 +1,7 @@
 import type { ReactNode } from 'react'
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
-import { Card } from '../../ui/base/Card'
 import { cx } from '../../ui/base/utils'
-import { NumberPop } from '../../ui/motion/NumberPop'
 import { handleHistoryControlAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
@@ -26,13 +24,12 @@ const HISTORY_HEADER_SUBTITLE_CLASS =
 const HISTORY_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const HISTORY_METRIC_GRID_CLASS =
-  'mt-4 grid grid-cols-3 gap-3 max-[760px]:grid-cols-1'
-const HISTORY_METRIC_CARD_CLASS =
-  'min-w-0 rounded-ds-sm border-ds-border-subtle bg-ds-surface-1 p-[16px_16px_14px]'
+  'mt-4 grid grid-cols-3 gap-x-5 gap-y-2 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-2 max-[760px]:grid-cols-1'
+const HISTORY_METRIC_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-2 last:border-b-0'
 const HISTORY_METRIC_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase leading-normal tracking-[0] text-ds-text-disabled'
+  'block text-xs font-medium leading-4 text-ds-text-secondary'
 const HISTORY_METRIC_VALUE_CLASS =
-  'mt-2 block text-[22px] font-[650] leading-none tracking-[0] text-ds-text-primary'
+  'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
 const HISTORY_EMPTY_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary'
 const HISTORY_CARD_CLASS =
@@ -156,24 +153,18 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
         </div>
       </div>
       <div className={HISTORY_METRIC_GRID_CLASS}>
-        <Card className={HISTORY_METRIC_CARD_CLASS}>
+        <div className={HISTORY_METRIC_ITEM_CLASS}>
           <span className={HISTORY_METRIC_LABEL_CLASS}>新增异常</span>
-          <strong className={HISTORY_METRIC_VALUE_CLASS}>
-            <NumberPop text={state.metrics.newCount} />
-          </strong>
-        </Card>
-        <Card className={HISTORY_METRIC_CARD_CLASS}>
+          <strong className={HISTORY_METRIC_VALUE_CLASS}>{state.metrics.newCount}</strong>
+        </div>
+        <div className={HISTORY_METRIC_ITEM_CLASS}>
           <span className={HISTORY_METRIC_LABEL_CLASS}>持续异常</span>
-          <strong className={HISTORY_METRIC_VALUE_CLASS}>
-            <NumberPop text={state.metrics.persistentCount} />
-          </strong>
-        </Card>
-        <Card className={HISTORY_METRIC_CARD_CLASS}>
+          <strong className={HISTORY_METRIC_VALUE_CLASS}>{state.metrics.persistentCount}</strong>
+        </div>
+        <div className={HISTORY_METRIC_ITEM_CLASS}>
           <span className={HISTORY_METRIC_LABEL_CLASS}>已恢复</span>
-          <strong className={HISTORY_METRIC_VALUE_CLASS}>
-            <NumberPop text={state.metrics.recoveredCount} />
-          </strong>
-        </Card>
+          <strong className={HISTORY_METRIC_VALUE_CLASS}>{state.metrics.recoveredCount}</strong>
+        </div>
       </div>
       <div className={HISTORY_HEADER_SPACED_CLASS}>
         <div className={HISTORY_HEADER_COPY_CLASS}>

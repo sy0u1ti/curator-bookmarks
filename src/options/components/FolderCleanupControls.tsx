@@ -1,6 +1,4 @@
 import { Button } from '../../ui/base/Button'
-import { Card } from '../../ui/base/Card'
-import { NumberPop } from '../../ui/motion/NumberPop'
 import { handleFolderCleanupAction } from '../options-controller'
 import { useFolderCleanupControlsState } from './folder-cleanup-controls-store.js'
 import {
@@ -23,13 +21,15 @@ const FOLDER_CLEANUP_STATUS_TONE_CLASS = {
 const FOLDER_CLEANUP_ANALYZE_BUTTON_CLASS =
   'justify-center whitespace-nowrap max-[760px]:w-full'
 const FOLDER_CLEANUP_SUMMARY_GRID_CLASS =
-  'mt-5 grid grid-cols-5 gap-3 max-[1180px]:grid-cols-3 max-[920px]:grid-cols-2 max-[620px]:grid-cols-1'
-const FOLDER_CLEANUP_SUMMARY_CARD_CLASS =
-  'min-h-[96px] rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-4 shadow-none'
+  'mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
+const FOLDER_CLEANUP_SUMMARY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
+const FOLDER_CLEANUP_SUMMARY_LIST_CLASS = 'grid grid-cols-2 gap-x-5 gap-y-2 max-[520px]:grid-cols-1'
+const FOLDER_CLEANUP_SUMMARY_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'
 const FOLDER_CLEANUP_SUMMARY_LABEL_CLASS =
   'block text-xs font-semibold leading-[1.3] text-ds-text-muted'
 const FOLDER_CLEANUP_SUMMARY_VALUE_CLASS =
-  'mt-2 block text-[26px] font-bold leading-none tracking-[0] text-ds-text-primary'
+  'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
+const FOLDER_CLEANUP_SUMMARY_PRIMARY_VALUE_CLASS = 'text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const FOLDER_CLEANUP_HEADER_CLASS =
   'mt-5 flex min-w-0 flex-wrap items-center justify-between gap-3'
 const FOLDER_CLEANUP_HEADER_COPY_CLASS = 'min-w-0'
@@ -76,14 +76,18 @@ export function FolderCleanupControls() {
       </div>
 
       <div className={FOLDER_CLEANUP_SUMMARY_GRID_CLASS}>
-        {metrics.map((metric) => (
-          <Card className={FOLDER_CLEANUP_SUMMARY_CARD_CLASS} key={metric.key}>
-            <span className={FOLDER_CLEANUP_SUMMARY_LABEL_CLASS}>{metric.label}</span>
-            <strong className={FOLDER_CLEANUP_SUMMARY_VALUE_CLASS}>
-              <NumberPop text={metric.value} />
-            </strong>
-          </Card>
-        ))}
+        <div className={FOLDER_CLEANUP_SUMMARY_PRIMARY_CLASS}>
+          <span className={FOLDER_CLEANUP_SUMMARY_LABEL_CLASS}>{metrics[0].label}</span>
+          <strong className={FOLDER_CLEANUP_SUMMARY_PRIMARY_VALUE_CLASS}>{metrics[0].value}</strong>
+        </div>
+        <dl className={FOLDER_CLEANUP_SUMMARY_LIST_CLASS}>
+          {metrics.slice(1).map((metric) => (
+            <div className={FOLDER_CLEANUP_SUMMARY_ITEM_CLASS} key={metric.key}>
+              <dt className={FOLDER_CLEANUP_SUMMARY_LABEL_CLASS}>{metric.label}</dt>
+              <dd className={FOLDER_CLEANUP_SUMMARY_VALUE_CLASS}>{metric.value}</dd>
+            </div>
+          ))}
+        </dl>
       </div>
 
       <div className={FOLDER_CLEANUP_HEADER_CLASS}>

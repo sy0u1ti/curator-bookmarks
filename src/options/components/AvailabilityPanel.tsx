@@ -11,7 +11,6 @@ import {
   OPTION_RUN_CELL_CLASS,
   OPTION_RUN_CELL_TITLE_CLASS,
   OPTION_RUN_HEADER_CLASS,
-  OPTION_SECTION_LABEL_CLASS,
   OPTION_TOOL_PANEL_CLASS
 } from './option-layout-classes.js'
 import { ResultsPagination } from './ResultsPagination.js'
@@ -28,7 +27,6 @@ const AVAILABILITY_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="availability" className={OPTION_PANEL_CLASS} aria-labelledby="availability-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Availability</p>
       <h1 id="availability-title" className={OPTION_PANEL_TITLE_CLASS}>书签可用性检测</h1>
 
       <div className={OPTION_RUN_HEADER_CLASS}>

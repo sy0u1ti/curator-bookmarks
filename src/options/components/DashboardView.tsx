@@ -392,11 +392,8 @@ function FragmentWithSeparator({
 }
 
 function DashboardFolderSidebar({ state }: { state: { focusRequestId: string; items: DashboardFolderSidebarItemViewModel[] } }) {
-  const itemRefs = useRef<Map<string, HTMLButtonElement> | null>(null)
+  const itemRefs = useRef(new Map<string, HTMLButtonElement>())
   const items = state.items
-  if (!itemRefs.current) {
-    itemRefs.current = new Map()
-  }
 
   useEffect(() => {
     if (!state.focusRequestId) {
@@ -404,16 +401,16 @@ function DashboardFolderSidebar({ state }: { state: { focusRequestId: string; it
     }
 
     window.requestAnimationFrame(() => {
-      itemRefs.current?.get(state.focusRequestId)?.focus({ preventScroll: true })
+      itemRefs.current.get(state.focusRequestId)?.focus({ preventScroll: true })
     })
   }, [state.focusRequestId, items])
 
   const setItemRef = (id: string) => (node: HTMLButtonElement | null) => {
     if (node) {
-      itemRefs.current?.set(id, node)
+      itemRefs.current.set(id, node)
       return
     }
-    itemRefs.current?.delete(id)
+    itemRefs.current.delete(id)
   }
 
   const handleFolderKeyDown = (event: KeyboardEvent<HTMLButtonElement>, itemId: string) => {
@@ -576,6 +573,7 @@ function DashboardFolderDropGrid({ targets, moving }: { targets: DashboardFolder
             ].filter(Boolean).join(' ')}
             type="button"
             role="option"
+            data-dashboard-folder-drop-id={target.id}
             aria-selected={target.active ? 'true' : 'false'}
             title={target.path}
             key={target.id}

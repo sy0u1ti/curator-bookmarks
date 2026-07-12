@@ -26,6 +26,8 @@ const BOOKMARK_ADD_HISTORY_BADGE_TONE_CLASS = {
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-secondary',
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text'
 } as const
+const BOOKMARK_ADD_HISTORY_META_CLASS =
+  'inline-flex min-h-5 items-center text-xs font-medium text-ds-text-secondary tabular-nums'
 
 export function BookmarkAddHistoryCard({ entry }: { entry: BookmarkAddHistoryEntry }) {
   const confidencePercent = Math.round(entry.confidence * 100)
@@ -41,8 +43,8 @@ export function BookmarkAddHistoryCard({ entry }: { entry: BookmarkAddHistoryEnt
           <HistoryBadge tone={entry.moved ? 'success' : 'muted'}>
             {movementText}
           </HistoryBadge>
-          <HistoryBadge>{folderKindText}</HistoryBadge>
-          <HistoryBadge>{`${confidencePercent}%`}</HistoryBadge>
+          <span className={BOOKMARK_ADD_HISTORY_META_CLASS}>{folderKindText}</span>
+          <span className={BOOKMARK_ADD_HISTORY_META_CLASS}>置信度 {confidencePercent}%</span>
         </div>
         <span className={OPTION_VALUE_CLASS}>{formatDateTime(entry.createdAt)}</span>
       </div>

@@ -7,7 +7,6 @@ import { IgnoreRules } from './IgnoreRules.js'
 import {
   OPTION_PANEL_CLASS,
   OPTION_PANEL_TITLE_CLASS,
-  OPTION_SECTION_LABEL_CLASS,
   OPTION_TOOL_PANEL_CLASS
 } from './option-layout-classes.js'
 import { RedirectControls } from './RedirectControls.js'
@@ -36,7 +35,6 @@ const DUPLICATES_GROUP_CLASS =
 export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="history" className={OPTION_PANEL_CLASS} aria-labelledby="history-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>History</p>
       <h1 id="history-title" className={OPTION_PANEL_TITLE_CLASS}>检测历史</h1>
 
       <ScopePickerTrigger source="history" />
@@ -51,7 +49,6 @@ export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="backup" className={OPTION_PANEL_CLASS} aria-labelledby="backup-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Data & Backup</p>
       <h1 id="backup-title" className={OPTION_PANEL_TITLE_CLASS}>数据与备份</h1>
 
       <BackupControls />
@@ -62,7 +59,6 @@ export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function RedirectsPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="redirects" className={OPTION_PANEL_CLASS} aria-labelledby="redirects-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Redirects</p>
       <h1 id="redirects-title" className={OPTION_PANEL_TITLE_CLASS}>重定向更新</h1>
 
       <div className={REDIRECTS_GROUP_CLASS}>
@@ -77,7 +73,6 @@ export function RedirectsPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="duplicates" className={OPTION_PANEL_CLASS} aria-labelledby="duplicates-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Duplicates</p>
       <h1 id="duplicates-title" className={OPTION_PANEL_TITLE_CLASS}>重复书签检测</h1>
 
       <DuplicateControls />
@@ -93,7 +88,6 @@ export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function FolderCleanupPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="folder-cleanup" className={OPTION_PANEL_CLASS} aria-labelledby="folder-cleanup-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Folder Cleanup</p>
       <h1 id="folder-cleanup-title" className={OPTION_PANEL_TITLE_CLASS}>文件夹清理</h1>
 
       <div className={FOLDER_CLEANUP_GROUP_CLASS}>
@@ -107,7 +101,6 @@ export function FolderCleanupPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="ignore" className={OPTION_PANEL_CLASS} aria-labelledby="ignore-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Ignore Rules</p>
       <h1 id="ignore-title" className={OPTION_PANEL_TITLE_CLASS}>忽略规则</h1>
 
       <IgnoreRules />
@@ -118,7 +111,6 @@ export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function RecyclePanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="recycle" className={OPTION_PANEL_CLASS} aria-labelledby="recycle-title" hidden={hidden}>
-      <p className={OPTION_SECTION_LABEL_CLASS}>Recycle Bin</p>
       <h1 id="recycle-title" className={OPTION_PANEL_TITLE_CLASS}>回收站</h1>
 
       <div className={RECYCLE_GROUP_CLASS}>

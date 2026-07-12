@@ -96,8 +96,8 @@ export const AI_PROVIDER_MODEL_FETCH_STATUS_CLASS = AI_PROVIDER_CONNECTIVITY_CLA
 export const AI_PROVIDER_CONNECTIVITY_TONE_CLASS: Record<string, string> = {
   danger: 'text-ds-danger-text before:bg-ds-danger',
   muted: 'text-ds-text-muted before:bg-[rgba(245,245,247,0.28)]',
-  success: 'text-ds-success-text before:bg-ds-success before:shadow-[0_0_0_4px_var(--ds-success-soft)]',
-  warning: 'text-ds-warning before:bg-ds-warning before:shadow-[0_0_0_4px_var(--ds-warning-soft)]'
+  success: 'text-ds-success-text before:bg-ds-success',
+  warning: 'text-ds-warning before:bg-ds-warning'
 }
 
 export const AI_PROVIDER_ACTIONS_CLASS =
@@ -112,8 +112,8 @@ export const AI_PROVIDER_SAVE_STATE_CLASS =
 export const AI_PROVIDER_SAVE_TONE_CLASS: Record<string, string> = {
   danger: 'text-ds-danger-text before:bg-ds-danger',
   muted: 'text-ds-text-muted before:bg-[rgba(245,245,247,0.28)]',
-  success: 'text-ds-success-text before:bg-ds-success before:shadow-[0_0_0_4px_var(--ds-success-soft)]',
-  warning: 'text-ds-warning before:bg-ds-warning before:shadow-[0_0_0_4px_var(--ds-warning-soft)]'
+  success: 'text-ds-success-text before:bg-ds-success',
+  warning: 'text-ds-warning before:bg-ds-warning'
 }
 
 export const AI_PROVIDER_FIELD_TIP_CLASS =
@@ -140,7 +140,7 @@ export const AI_PROVIDER_DIALOG_CLASS =
   `fixed left-1/2 top-1/2 z-40 max-h-[calc(100vh-40px)] w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-ds-md border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none transition-[scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:max-w-[calc(100vw-32px)] max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_EYEBROW_CLASS =
-  'm-0 text-[11px] font-bold uppercase tracking-[0.18em] text-ds-text-disabled'
+  'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
 
 export const AI_PROVIDER_DIALOG_TITLE_CLASS =
   'm-0 mt-2.5 text-[26px] font-semibold leading-[1.1] tracking-[0] text-ds-text-primary'

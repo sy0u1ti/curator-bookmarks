@@ -1,9 +1,8 @@
 import { useEffect, useRef, type ReactNode, type RefObject } from 'react'
 import { Button } from '../../ui/base/Button'
-import { DialogOverlay, DialogPanel } from '../../ui/base/Dialog'
+import { DialogBackdrop, DialogOverlay, DialogPanel } from '../../ui/base/Dialog'
 import { Input } from '../../ui/base/Input'
 import { cx } from '../../ui/base/utils'
-import { useTimedPresence } from '../../ui/motion/useTimedPresence'
 import { handleFolderPickerAction, handleOptionsModalAction } from '../options-controller'
 import { FolderPickerResults } from './FolderPickerResults.js'
 import { getOptionsFocusTarget } from './options-focus-target-store.js'
@@ -47,7 +46,6 @@ function ModalBackdrop({
   children: ReactNode
 }) {
   const wasOpenRef = useRef(open)
-  const presence = useTimedPresence(open, '--modal-close-dur', 220)
 
   useEffect(() => {
     const wasOpen = wasOpenRef.current
@@ -75,40 +73,32 @@ function ModalBackdrop({
 
   return (
     <DialogOverlay
-      className={cx(
-        OPTIONS_MODAL_BACKDROP_CLASS,
-        't-modal-backdrop',
-        open ? 'is-open' : presence.closing ? 'is-closing' : ''
-      )}
-      hidden={!presence.mounted}
+      className="fixed inset-0 z-30 grid place-items-center p-5 pointer-events-none"
       open={open}
       onOpenChange={(nextOpen) => {
         if (!nextOpen && open) {
           handleOptionsModalAction({ action: 'dismiss', modal })
         }
       }}
-      modal={open}
-      aria-hidden={open ? 'false' : 'true'}
+      modal
       disablePointerDismissal
-      onClick={(event) => {
-        if (open && event.target === event.currentTarget) {
-          handleOptionsModalAction({ action: 'dismiss', modal })
-        }
-      }}
     >
+      <DialogBackdrop
+        className={OPTIONS_MODAL_BACKDROP_CLASS}
+        onClick={() => {
+          if (open) {
+          handleOptionsModalAction({ action: 'dismiss', modal })
+          }
+        }}
+      />
       <DialogPanel
-        className={cx(
-          className,
-          't-modal',
-          open ? 'is-open' : presence.closing ? 'is-closing' : ''
-        )}
+        className={className}
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
         initialFocus={() => initialFocusRef?.current || true}
         finalFocus={() => {
           return getOptionsFocusTarget(finalFocusId) || false
         }}
-        unanimated
       >
         {children}
       </DialogPanel>
@@ -222,7 +212,7 @@ export function OptionsModals() {
         open={modals.move.open}
       >
         <>
-          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>Move</p>
+          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>批量移动</p>
           <h2 id="move-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量移动书签</h2>
           <p id="move-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.move.copy}
@@ -288,7 +278,7 @@ export function OptionsModals() {
         open={modals.scope.open}
       >
         <>
-          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>Folder Filter</p>
+          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>文件夹筛选</p>
           <h2 id="scope-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>选择筛选文件夹</h2>
           <p id="scope-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.scope.copy}

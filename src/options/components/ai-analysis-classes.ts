@@ -1,5 +1,5 @@
 export const AI_ANALYSIS_RESULTS_GROUP_CLASS =
-  't-resize mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] max-[760px]:p-4'
+  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] max-[760px]:p-4'
 
 export const AI_ANALYSIS_SELECTION_GROUP_CLASS =
   't-panel-slide mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] [--panel-translate-y:12px] max-[760px]:mt-5 max-[760px]:p-4'
@@ -17,7 +17,7 @@ export const AI_ANALYSIS_CONFIRM_ICON_CLASS =
   'mr-1 inline-block font-extrabold tracking-[0] text-ds-success-text'
 
 export const AI_ANALYSIS_METRIC_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase tracking-[0] text-ds-text-disabled'
+  'block text-xs font-medium leading-4 text-ds-text-secondary'
 
 export const AI_ANALYSIS_STATUS_BADGE_CLASS =
   'inline-flex min-h-7 flex-none items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'

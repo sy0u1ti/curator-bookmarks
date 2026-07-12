@@ -1,6 +1,7 @@
 import {
   useEffect,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
@@ -17,6 +18,7 @@ import {
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { downloadBlobFile } from '../shared/download.js'
+import { getMotionDurationMs, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import {
   getSettingsGroupControlSyncActions,
@@ -383,6 +385,8 @@ import {
 const FAVICON_SIZE = 64
 const BOOKMARK_DRAG_LONG_PRESS_MS = 320
 const FOLDER_DRAG_LONG_PRESS_MS = BOOKMARK_DRAG_LONG_PRESS_MS
+const POINTER_DRAG_START_THRESHOLD_PX = 6
+const TOUCH_DRAG_CANCEL_THRESHOLD_PX = 10
 const SETTINGS_SAVE_DEBOUNCE_MS = 260
 const EAGER_FAVICON_LIMIT = 12
 const HIGH_PRIORITY_FAVICON_LIMIT = 6
@@ -715,6 +719,9 @@ const state = {
   dragLongPressTimer: 0,
   dragClientX: 0,
   dragClientY: 0,
+  dragStartX: 0,
+  dragStartY: 0,
+  dragPointerType: '',
   dragOffsetX: 0,
   dragOffsetY: 0,
   draggingBookmarkFolderId: '',
@@ -726,6 +733,9 @@ const state = {
   speedDialDragLongPressTimer: 0,
   speedDialDragClientX: 0,
   speedDialDragClientY: 0,
+  speedDialDragStartX: 0,
+  speedDialDragStartY: 0,
+  speedDialDragPointerType: '',
   speedDialDragOffsetX: 0,
   speedDialDragOffsetY: 0,
   speedDialDragOriginalOrderIds: [] as string[],
@@ -738,6 +748,9 @@ const state = {
   folderDragLongPressTimer: 0,
   folderDragClientX: 0,
   folderDragClientY: 0,
+  folderDragStartX: 0,
+  folderDragStartY: 0,
+  folderDragPointerType: '',
   folderDragOffsetX: 0,
   folderDragOffsetY: 0,
   folderDragOriginalOrderIds: [] as string[],
@@ -816,8 +829,6 @@ let searchSettingsSettleTimer = 0
 let iconSettingsSaveTimer = 0
 let timeSettingsSaveTimer = 0
 let settingsSaveStatusTimer = 0
-let bookmarkMenuCloseTimer = 0
-let addBookmarkMenuCloseTimer = 0
 let folderReorderStatusTimer = 0
 let bookmarkChangeRefreshTimer = 0
 let bookmarkChangeRefreshInFlight = false
@@ -2041,6 +2052,10 @@ function initializeSettingsDrawer(): void {
 }
 
 function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
+  if (settingsDrawerReady) {
+    runOpenSettingsDrawer(options)
+    return
+  }
   void ensureSettingsDrawerReady().then(() => {
     runOpenSettingsDrawer(options)
   })
@@ -2048,11 +2063,11 @@ function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: S
 
 function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
   measureNow('newtab.openSettingsDrawer', () => {
+    dispatchNewtabSettingsDrawerOpen(true)
     const focusFirstControl = options?.focusFirstControl !== false
     setActiveSettingsGroup(options?.section || state.activeSettingsGroup || 'source', { scrollToTop: false })
     syncSettingsSaveStatus()
     scheduleAdaptiveNewTabLayoutUpdate()
-    dispatchNewtabSettingsDrawerOpen(true)
     if (focusFirstControl) {
       window.requestAnimationFrame(() => {
         dispatchNewtabSettingsDrawerFocusFirstControl()
@@ -2106,7 +2121,6 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
     return
   }
 
-  window.clearTimeout(bookmarkMenuCloseTimer)
   state.activeMenuBookmarkId = bookmarkId
   state.menuX = clientX
   state.menuY = clientY
@@ -2123,7 +2137,6 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
 
 function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): void {
   closeBookmarkMenu({ animate: false })
-  window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = true
   state.addMenuExpanded = false
   state.addFolderId = folderId
@@ -2139,7 +2152,6 @@ function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): v
 function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): void {
   const rect = anchor.getBoundingClientRect()
   closeBookmarkMenu({ animate: false })
-  window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = true
   state.addMenuExpanded = true
   state.addFolderId = folderId
@@ -2153,7 +2165,6 @@ function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): v
 }
 
 function closeBookmarkMenu({ animate = true } = {}): void {
-  window.clearTimeout(bookmarkMenuCloseTimer)
   state.activeMenuBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
@@ -2162,17 +2173,18 @@ function closeBookmarkMenu({ animate = true } = {}): void {
   state.pendingDeleteBookmarkId = ''
   if (animate) {
     dispatchNewtabBookmarkEditMenuClosing()
-    bookmarkMenuCloseTimer = window.setTimeout(() => {
-      dispatchNewtabBookmarkEditMenuView(null)
-      bookmarkMenuCloseTimer = 0
-    }, 180)
   } else {
     dispatchNewtabBookmarkEditMenuView(null)
   }
 }
 
+function finalizeBookmarkMenuClose(): void {
+  if (!state.activeMenuBookmarkId) {
+    dispatchNewtabBookmarkEditMenuView(null)
+  }
+}
+
 function closeAddBookmarkMenu({ animate = true } = {}): void {
-  window.clearTimeout(addBookmarkMenuCloseTimer)
   state.addMenuOpen = false
   state.addMenuExpanded = false
   state.addFolderId = ''
@@ -2180,11 +2192,13 @@ function closeAddBookmarkMenu({ animate = true } = {}): void {
   state.addMenuError = ''
   if (animate) {
     dispatchNewtabBookmarkAddMenuClosing()
-    addBookmarkMenuCloseTimer = window.setTimeout(() => {
-      dispatchNewtabBookmarkAddMenuView(null)
-      addBookmarkMenuCloseTimer = 0
-    }, 180)
   } else {
+    dispatchNewtabBookmarkAddMenuView(null)
+  }
+}
+
+function finalizeAddBookmarkMenuClose(): void {
+  if (!state.addMenuOpen) {
     dispatchNewtabBookmarkAddMenuView(null)
   }
 }
@@ -2214,17 +2228,21 @@ function startSpeedDialDragFromReact(
 
   cancelSpeedDialDrag({ keepSuppressClick: true })
   state.speedDialDragPointerId = event.pointerId
+  state.speedDialDragPointerType = event.pointerType
   state.speedDialDraggingBookmarkId = normalizedBookmarkId
+  state.speedDialDragStartX = event.clientX
+  state.speedDialDragStartY = event.clientY
   state.speedDialDragClientX = event.clientX
   state.speedDialDragClientY = event.clientY
-  try {
-    card.setPointerCapture(event.pointerId)
-  } catch {
-    // Pointer capture can fail if the browser has already released this pointer.
+  const rect = card.getBoundingClientRect()
+  state.speedDialDragOffsetX = event.clientX - rect.left
+  state.speedDialDragOffsetY = event.clientY - rect.top
+  if (event.pointerType !== 'mouse') {
+    dispatchNewtabDragUiView({ speedDialPendingId: normalizedBookmarkId })
+    state.speedDialDragLongPressTimer = window.setTimeout(() => {
+      beginSpeedDialDrag()
+    }, BOOKMARK_DRAG_LONG_PRESS_MS)
   }
-  state.speedDialDragLongPressTimer = window.setTimeout(() => {
-    beginSpeedDialDrag()
-  }, BOOKMARK_DRAG_LONG_PRESS_MS)
 }
 
 function handleSpeedDialDragPointerDown(
@@ -2253,8 +2271,15 @@ function beginSpeedDialDrag(): void {
   state.speedDialDragLongPressTimer = 0
   state.speedDialDragOriginalOrderIds = originalOrderIds
   state.speedDialDragSuppressClick = true
-  dispatchNewtabDragUiView({ speedDialDragging: true })
   const sourceCard = getActiveSpeedDialDragCard()
+  if (sourceCard) {
+    try {
+      sourceCard.setPointerCapture(state.speedDialDragPointerId)
+    } catch {
+      // The pointer may already be released when a synthetic test begins drag.
+    }
+  }
+  dispatchNewtabDragUiView({ speedDialDragging: true, speedDialPendingId: '' })
   createSpeedDialDragGhost(sourceCard)
   captureSpeedDialDragLayout()
   patchSpeedDialDraggingState(state.speedDialDraggingBookmarkId, true)
@@ -2279,7 +2304,25 @@ function handleSpeedDialPointerMove(event: PointerEvent): void {
   state.speedDialDragClientX = event.clientX
   state.speedDialDragClientY = event.clientY
 
-  if (state.speedDialDragLongPressTimer) {
+  if (!state.speedDialDragOriginalOrderIds.length) {
+    const distance = Math.hypot(
+      event.clientX - state.speedDialDragStartX,
+      event.clientY - state.speedDialDragStartY
+    )
+    if (state.speedDialDragPointerType === 'mouse') {
+      if (distance < POINTER_DRAG_START_THRESHOLD_PX) {
+        return
+      }
+      beginSpeedDialDrag()
+    } else {
+      if (distance >= TOUCH_DRAG_CANCEL_THRESHOLD_PX) {
+        cancelSpeedDialDrag()
+      }
+      return
+    }
+  }
+
+  if (!state.speedDialDragOriginalOrderIds.length) {
     return
   }
 
@@ -2305,6 +2348,9 @@ async function finishSpeedDialDrag(event: PointerEvent): Promise<void> {
   const finalOrderIds = wasDragging && pendingInsertIndex >= 0
     ? applyDraggedSpeedDialInsertInState(pendingInsertIndex)
     : getActiveWorkspacePinnedIds()
+  if (wasDragging) {
+    await settleSpeedDialDragGhost(finalOrderIds)
+  }
   clearSpeedDialDragState({ keepSuppressClick: wasDragging })
 
   if (!wasDragging) {
@@ -2339,6 +2385,9 @@ function clearSpeedDialDragState({ keepSuppressClick = false } = {}): void {
   state.speedDialDragLongPressTimer = 0
   state.speedDialDragClientX = 0
   state.speedDialDragClientY = 0
+  state.speedDialDragStartX = 0
+  state.speedDialDragStartY = 0
+  state.speedDialDragPointerType = ''
   state.speedDialDragOffsetX = 0
   state.speedDialDragOffsetY = 0
   state.speedDialDragOriginalOrderIds = []
@@ -2347,6 +2396,7 @@ function clearSpeedDialDragState({ keepSuppressClick = false } = {}): void {
   clearSpeedDialDragVisualPreview()
   dispatchNewtabDragUiView({
     previewInitializing: false,
+    speedDialPendingId: '',
     speedDialDragging: false
   })
 
@@ -2424,7 +2474,6 @@ function createSpeedDialDragGhost(sourceCard = getActiveSpeedDialDragCard()): vo
     visible: false,
     width: rect.width
   })
-  syncSpeedDialDragOffsetFromSourceCard(sourceCard, rect)
   updateSpeedDialDragGhost({ immediate: true })
   patchSpeedDialDragGhostView((view) => ({
     ...view,
@@ -2453,20 +2502,6 @@ function getSpeedDialDragItemModel(
     title: getBookmarkDisplayTitle(bookmark),
     url: String(bookmark.url || '')
   }, bookmark)
-}
-
-function syncSpeedDialDragOffsetFromSourceCard(sourceCard: HTMLElement, sourceRect: DOMRect): void {
-  const iconRect = state.speedDialDraggingBookmarkId
-    ? getNewtabSpeedDialNodes().cardIcons.get(state.speedDialDraggingBookmarkId)?.getBoundingClientRect()
-    : null
-  if (iconRect && sourceRect.width && sourceRect.height) {
-    state.speedDialDragOffsetX = iconRect.left + iconRect.width / 2 - sourceRect.left
-    state.speedDialDragOffsetY = iconRect.top + iconRect.height / 2 - sourceRect.top
-    return
-  }
-
-  state.speedDialDragOffsetX = sourceRect.width / 2
-  state.speedDialDragOffsetY = sourceRect.height / 2
 }
 
 function getActiveSpeedDialDragCard(): HTMLElement | null {
@@ -2792,6 +2827,59 @@ function syncSpeedDialReorderBusyState(): void {
   })
 }
 
+async function settleSpeedDialDragGhost(finalOrderIds: string[]): Promise<void> {
+  const finalIndex = finalOrderIds.indexOf(state.speedDialDraggingBookmarkId)
+  const slotId = speedDialDragSlotOrderIds[finalIndex]
+  const targetRect = slotId ? speedDialDragSlotRects.get(slotId) : null
+  if (!targetRect) {
+    return
+  }
+  await settleNewtabDragGhost('.speed-dial-drag-ghost', targetRect.left, targetRect.top)
+}
+
+function handleSpeedDialReorderKeyDown(
+  bookmarkId: string,
+  event: ReactKeyboardEvent<HTMLElement>
+): void {
+  const direction = getKeyboardReorderDirection(event, 'horizontal')
+  if (!direction) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (state.reorderingSpeedDial) {
+    return
+  }
+  void reorderSpeedDialByKeyboard(bookmarkId, direction)
+}
+
+async function reorderSpeedDialByKeyboard(bookmarkId: string, direction: -1 | 1): Promise<void> {
+  const originalIds = getActiveWorkspacePinnedIds()
+  const currentIndex = originalIds.indexOf(bookmarkId)
+  const nextIndex = currentIndex + direction
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= originalIds.length) {
+    setFolderReorderStatus(direction < 0 ? '固定入口已在最前面。' : '固定入口已在最后面。', 'success')
+    return
+  }
+
+  const finalIds = swapArrayItems(originalIds, currentIndex, nextIndex)
+  const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
+  state.workspaceSettings = updateNewTabWorkspace(
+    state.workspaceSettings,
+    activeWorkspace.id,
+    { pinnedIds: finalIds },
+    { validBookmarkIds: state.allBookmarkMap.keys() }
+  )
+  render()
+  updateClockText()
+  focusSpeedDialCard(bookmarkId)
+  await persistSpeedDialOrder(originalIds, finalIds)
+  if (!state.speedDialReorderError) {
+    setFolderReorderStatus(`固定入口已移动到第 ${nextIndex + 1} 位。`, 'success')
+    focusSpeedDialCard(bookmarkId)
+  }
+}
+
 function startBookmarkDragFromReact(
   bookmarkId: string,
   folderId: string,
@@ -2822,18 +2910,22 @@ function startBookmarkDragFromReact(
 
   cancelBookmarkDrag({ keepSuppressClick: true })
   state.dragPointerId = event.pointerId
+  state.dragPointerType = event.pointerType
   state.draggingBookmarkId = normalizedBookmarkId
   state.draggingBookmarkFolderId = normalizedFolderId
+  state.dragStartX = event.clientX
+  state.dragStartY = event.clientY
   state.dragClientX = event.clientX
   state.dragClientY = event.clientY
-  try {
-    tile.setPointerCapture(event.pointerId)
-  } catch {
-    // Pointer capture can fail if the browser has already released this pointer.
+  const rect = tile.getBoundingClientRect()
+  state.dragOffsetX = event.clientX - rect.left
+  state.dragOffsetY = event.clientY - rect.top
+  if (event.pointerType !== 'mouse') {
+    dispatchNewtabDragUiView({ bookmarkPendingId: normalizedBookmarkId })
+    state.dragLongPressTimer = window.setTimeout(() => {
+      beginBookmarkDrag()
+    }, BOOKMARK_DRAG_LONG_PRESS_MS)
   }
-  state.dragLongPressTimer = window.setTimeout(() => {
-    beginBookmarkDrag()
-  }, BOOKMARK_DRAG_LONG_PRESS_MS)
 }
 
 function handleBookmarkDragPointerDown(
@@ -2856,8 +2948,15 @@ function beginBookmarkDrag(): void {
   state.dragLongPressTimer = 0
   state.dragOriginalOrderIds = getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
   state.dragSuppressClick = true
-  dispatchNewtabDragUiView({ bookmarkDragging: true })
   const sourceTile = getActiveDragTile()
+  if (sourceTile) {
+    try {
+      sourceTile.setPointerCapture(state.dragPointerId)
+    } catch {
+      // The pointer may already be released when a synthetic test begins drag.
+    }
+  }
+  dispatchNewtabDragUiView({ bookmarkDragging: true, bookmarkPendingId: '' })
   createBookmarkDragGhost(sourceTile)
   captureBookmarkDragLayout()
   patchBookmarkTileDraggingState(state.draggingBookmarkId, true)
@@ -2876,7 +2975,25 @@ function handleBookmarkPointerMove(event: PointerEvent): void {
   state.dragClientX = event.clientX
   state.dragClientY = event.clientY
 
-  if (state.dragLongPressTimer) {
+  if (!state.dragOriginalOrderIds.length) {
+    const distance = Math.hypot(
+      event.clientX - state.dragStartX,
+      event.clientY - state.dragStartY
+    )
+    if (state.dragPointerType === 'mouse') {
+      if (distance < POINTER_DRAG_START_THRESHOLD_PX) {
+        return
+      }
+      beginBookmarkDrag()
+    } else {
+      if (distance >= TOUCH_DRAG_CANCEL_THRESHOLD_PX) {
+        cancelBookmarkDrag()
+      }
+      return
+    }
+  }
+
+  if (!state.dragOriginalOrderIds.length) {
     return
   }
 
@@ -2903,6 +3020,9 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
   const finalOrderIds = wasDragging && pendingInsertIndex >= 0
     ? applyDraggedBookmarkInsertInState(pendingInsertIndex)
     : getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
+  if (wasDragging) {
+    await settleBookmarkDragGhost(finalOrderIds)
+  }
   clearBookmarkDragState({ keepSuppressClick: wasDragging })
 
   if (!wasDragging) {
@@ -2938,6 +3058,9 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   state.dragLongPressTimer = 0
   state.dragClientX = 0
   state.dragClientY = 0
+  state.dragStartX = 0
+  state.dragStartY = 0
+  state.dragPointerType = ''
   state.dragOffsetX = 0
   state.dragOffsetY = 0
   state.draggingBookmarkFolderId = ''
@@ -2946,6 +3069,7 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   removeBookmarkDragGhost()
   clearBookmarkDragVisualPreview()
   dispatchNewtabDragUiView({
+    bookmarkPendingId: '',
     bookmarkDragging: false,
     previewInitializing: false
   })
@@ -3037,7 +3161,6 @@ function createBookmarkDragGhost(sourceTile = getActiveDragTile()): void {
     visible: false,
     width: rect.width
   })
-  syncBookmarkDragOffsetFromSourceTile(sourceTile, rect)
   updateBookmarkDragGhost({ immediate: true })
   patchBookmarkDragGhostView((view) => ({
     ...view,
@@ -3070,20 +3193,6 @@ function getBookmarkDragGhostStyle(itemStyle: CSSProperties | undefined): CSSPro
   ;(style as Record<string, string>)['--bookmark-card-hover-alpha'] = '0.4'
 
   return Object.keys(style).length ? style : undefined
-}
-
-function syncBookmarkDragOffsetFromSourceTile(sourceTile: HTMLElement, sourceRect: DOMRect): void {
-  const iconRect = state.draggingBookmarkId
-    ? getNewtabBookmarkContentNodes().tileIcons.get(state.draggingBookmarkId)?.getBoundingClientRect()
-    : null
-  if (iconRect && sourceRect.width && sourceRect.height) {
-    state.dragOffsetX = iconRect.left + iconRect.width / 2 - sourceRect.left
-    state.dragOffsetY = iconRect.top + iconRect.height / 2 - sourceRect.top
-    return
-  }
-
-  state.dragOffsetX = sourceRect.width / 2
-  state.dragOffsetY = sourceRect.height / 2
 }
 
 function getActiveDragTile(): HTMLElement | null {
@@ -3553,6 +3662,196 @@ function syncBookmarkReorderBusyState(): void {
   })
 }
 
+async function settleBookmarkDragGhost(finalOrderIds: string[]): Promise<void> {
+  const finalIndex = finalOrderIds.indexOf(state.draggingBookmarkId)
+  const slotId = bookmarkDragSlotOrderIds[finalIndex]
+  const targetRect = slotId ? bookmarkDragSlotRects.get(slotId) : null
+  if (!targetRect) {
+    return
+  }
+  await settleNewtabDragGhost('.bookmark-drag-ghost', targetRect.left, targetRect.top)
+}
+
+function handleBookmarkReorderKeyDown(
+  bookmarkId: string,
+  folderId: string,
+  event: ReactKeyboardEvent<HTMLElement>
+): void {
+  if (!event.altKey || event.ctrlKey || event.metaKey) {
+    return
+  }
+
+  const direction = getKeyboardReorderDirection(event, 'horizontal')
+  if (!direction) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  if (state.reorderingBookmarks) {
+    return
+  }
+
+  if (event.shiftKey) {
+    void moveBookmarkToAdjacentFolderByKeyboard(bookmarkId, folderId, direction)
+    return
+  }
+  void reorderBookmarkByKeyboard(bookmarkId, folderId, direction)
+}
+
+async function reorderBookmarkByKeyboard(
+  bookmarkId: string,
+  folderId: string,
+  direction: -1 | 1
+): Promise<void> {
+  const section = state.folderSections.find((item) => item.id === folderId)
+  if (!section) {
+    return
+  }
+  const currentIndex = section.bookmarks.findIndex((bookmark) => String(bookmark.id) === bookmarkId)
+  const nextIndex = currentIndex + direction
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= section.bookmarks.length) {
+    setFolderReorderStatus(direction < 0 ? '书签已在当前文件夹最前面。' : '书签已在当前文件夹最后面。', 'success')
+    return
+  }
+
+  const originalIds = section.bookmarks.map((bookmark) => String(bookmark.id))
+  section.bookmarks = swapArrayItems(section.bookmarks, currentIndex, nextIndex)
+  const finalIds = section.bookmarks.map((bookmark) => String(bookmark.id))
+  refreshDerivedBookmarkState()
+  render()
+  updateClockText()
+  focusBookmarkTile(bookmarkId)
+  await persistBookmarkOrder(folderId, originalIds, finalIds)
+  if (!state.bookmarkReorderError) {
+    setFolderReorderStatus(`书签已移动到「${section.title || '未命名文件夹'}」第 ${nextIndex + 1} 位。`, 'success')
+    focusBookmarkTile(bookmarkId)
+  }
+}
+
+async function moveBookmarkToAdjacentFolderByKeyboard(
+  bookmarkId: string,
+  folderId: string,
+  direction: -1 | 1
+): Promise<void> {
+  const currentFolderIndex = state.folderSections.findIndex((section) => section.id === folderId)
+  const targetSection = state.folderSections[currentFolderIndex + direction]
+  if (currentFolderIndex < 0 || !targetSection) {
+    setFolderReorderStatus(direction < 0 ? '没有更前面的来源文件夹。' : '没有更后面的来源文件夹。', 'success')
+    return
+  }
+
+  state.reorderingBookmarks = true
+  syncBookmarkReorderBusyState()
+  try {
+    await moveBookmarkLazy(bookmarkId, targetSection.id, targetSection.bookmarks.length)
+    markSearchIndexDirty()
+    await refreshNewTab({ showLoading: false })
+    setFolderReorderStatus(`书签已移动到「${targetSection.title || '未命名文件夹'}」。`, 'success')
+    focusBookmarkTile(bookmarkId)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '移动失败，请稍后重试。'
+    setFolderReorderStatus(`书签移动失败。${message}`, 'error')
+  } finally {
+    state.reorderingBookmarks = false
+    syncBookmarkReorderBusyState()
+  }
+}
+
+function handleFolderReorderKeyDown(
+  folderId: string,
+  event: ReactKeyboardEvent<HTMLElement>
+): void {
+  const direction = getKeyboardReorderDirection(event, 'vertical')
+  if (!direction) {
+    return
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  void reorderFolderByKeyboard(folderId, direction)
+}
+
+async function reorderFolderByKeyboard(folderId: string, direction: -1 | 1): Promise<void> {
+  const currentIndex = state.folderSections.findIndex((section) => section.id === folderId)
+  const nextIndex = currentIndex + direction
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= state.folderSections.length) {
+    setFolderReorderStatus(direction < 0 ? '文件夹已在最前面。' : '文件夹已在最后面。', 'success')
+    return
+  }
+
+  const originalSections = [...state.folderSections]
+  const originalIds = originalSections.map((section) => section.id)
+  state.folderSections = swapArrayItems(state.folderSections, currentIndex, nextIndex)
+  const finalIds = state.folderSections.map((section) => section.id)
+  state.folderSettings = normalizeFolderSettings({
+    ...state.folderSettings,
+    selectedFolderIds: finalIds
+  })
+  refreshDerivedBookmarkState()
+  render()
+  updateClockText()
+  focusFolderHeader(folderId)
+
+  try {
+    await saveFolderSettings()
+    syncFolderSettingsControls()
+    setFolderReorderStatus(`文件夹已移动到第 ${nextIndex + 1} 位。`, 'success')
+    focusFolderHeader(folderId)
+  } catch (error) {
+    state.folderSections = originalSections
+    state.folderSettings = normalizeFolderSettings({
+      ...state.folderSettings,
+      selectedFolderIds: originalIds
+    })
+    refreshDerivedBookmarkState()
+    render()
+    updateClockText()
+    const message = error instanceof Error ? error.message : '保存失败，请稍后重试。'
+    setFolderReorderStatus(`文件夹顺序保存失败，已恢复。${message}`, 'error')
+    focusFolderHeader(folderId)
+  }
+}
+
+function getKeyboardReorderDirection(
+  event: ReactKeyboardEvent<HTMLElement>,
+  orientation: 'horizontal' | 'vertical'
+): -1 | 0 | 1 {
+  if (!event.altKey || event.ctrlKey || event.metaKey) {
+    return 0
+  }
+  if (orientation === 'horizontal') {
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') return -1
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') return 1
+    return 0
+  }
+  if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') return -1
+  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') return 1
+  return 0
+}
+
+function swapArrayItems<T>(items: readonly T[], leftIndex: number, rightIndex: number): T[] {
+  const next = [...items]
+  ;[next[leftIndex], next[rightIndex]] = [next[rightIndex], next[leftIndex]]
+  return next
+}
+
+function focusBookmarkTile(bookmarkId: string): void {
+  window.requestAnimationFrame(() => {
+    getNewtabBookmarkContentNodes().tiles.get(bookmarkId)?.focus({ preventScroll: true })
+  })
+}
+
+function focusSpeedDialCard(bookmarkId: string): void {
+  window.requestAnimationFrame(() => {
+    getNewtabSpeedDialNodes().cards.get(bookmarkId)?.focus({ preventScroll: true })
+  })
+}
+
+function focusFolderHeader(folderId: string): void {
+  window.requestAnimationFrame(() => {
+    getNewtabBookmarkContentNodes().folderHeaders.get(folderId)?.focus({ preventScroll: true })
+  })
+}
+
 function startFolderDragFromReact(
   folderId: string,
   header: HTMLElement,
@@ -3573,17 +3872,21 @@ function startFolderDragFromReact(
 
   cancelFolderDrag({ keepSuppressClick: true })
   state.folderDragPointerId = event.pointerId
+  state.folderDragPointerType = event.pointerType
   state.draggingFolderId = normalizedFolderId
+  state.folderDragStartX = event.clientX
+  state.folderDragStartY = event.clientY
   state.folderDragClientX = event.clientX
   state.folderDragClientY = event.clientY
-  try {
-    header.setPointerCapture(event.pointerId)
-  } catch {
-    // Pointer capture can fail if the browser has already released this pointer.
+  const rect = header.getBoundingClientRect()
+  state.folderDragOffsetX = event.clientX - rect.left
+  state.folderDragOffsetY = event.clientY - rect.top
+  if (event.pointerType !== 'mouse') {
+    dispatchNewtabDragUiView({ folderPendingId: normalizedFolderId })
+    state.folderDragLongPressTimer = window.setTimeout(() => {
+      beginFolderDrag()
+    }, FOLDER_DRAG_LONG_PRESS_MS)
   }
-  state.folderDragLongPressTimer = window.setTimeout(() => {
-    beginFolderDrag()
-  }, FOLDER_DRAG_LONG_PRESS_MS)
 }
 
 function handleFolderDragPointerDown(
@@ -3617,8 +3920,15 @@ function beginFolderDrag(): void {
   state.folderDragOriginalSections = [...state.folderSections]
   folderDragSectionRectSnapshot = getFolderSectionRects()
   state.folderDragSuppressClick = true
-  dispatchNewtabDragUiView({ folderOrderDragging: true })
   const sourceHeader = getActiveFolderDragHeader()
+  if (sourceHeader) {
+    try {
+      sourceHeader.setPointerCapture(state.folderDragPointerId)
+    } catch {
+      // The pointer may already be released when a synthetic test begins drag.
+    }
+  }
+  dispatchNewtabDragUiView({ folderOrderDragging: true, folderPendingId: '' })
   createFolderDragGhost(sourceHeader)
   patchFolderDraggingState(state.draggingFolderId, true)
 }
@@ -3631,7 +3941,25 @@ function handleFolderPointerMove(event: PointerEvent): void {
   state.folderDragClientX = event.clientX
   state.folderDragClientY = event.clientY
 
-  if (state.folderDragLongPressTimer) {
+  if (!state.folderDragOriginalOrderIds.length) {
+    const distance = Math.hypot(
+      event.clientX - state.folderDragStartX,
+      event.clientY - state.folderDragStartY
+    )
+    if (state.folderDragPointerType === 'mouse') {
+      if (distance < POINTER_DRAG_START_THRESHOLD_PX) {
+        return
+      }
+      beginFolderDrag()
+    } else {
+      if (distance >= TOUCH_DRAG_CANCEL_THRESHOLD_PX) {
+        cancelFolderDrag()
+      }
+      return
+    }
+  }
+
+  if (!state.folderDragOriginalOrderIds.length) {
     return
   }
 
@@ -3660,6 +3988,10 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
   const finalOrderIds = state.folderSections.map((section) => section.id)
   const originalOrderIds = [...state.folderDragOriginalOrderIds]
   const originalSections = [...state.folderDragOriginalSections]
+  const targetHeaderRect = getActiveFolderDragHeader()?.getBoundingClientRect() || null
+  if (wasDragging && targetHeaderRect) {
+    await settleNewtabDragGhost('.folder-drag-ghost', targetHeaderRect.left, targetHeaderRect.top)
+  }
   clearFolderDragState({ keepSuppressClick: wasDragging })
 
   if (!wasDragging) {
@@ -3716,13 +4048,16 @@ function clearFolderDragState({ keepSuppressClick = false } = {}): void {
   state.folderDragLongPressTimer = 0
   state.folderDragClientX = 0
   state.folderDragClientY = 0
+  state.folderDragStartX = 0
+  state.folderDragStartY = 0
+  state.folderDragPointerType = ''
   state.folderDragOffsetX = 0
   state.folderDragOffsetY = 0
   state.folderDragOriginalOrderIds = []
   state.folderDragOriginalSections = []
   folderDragSectionRectSnapshot = null
   removeFolderDragGhost()
-  dispatchNewtabDragUiView({ folderOrderDragging: false })
+  dispatchNewtabDragUiView({ folderOrderDragging: false, folderPendingId: '' })
 
   if (keepSuppressClick) {
     state.folderDragSuppressClick = true
@@ -3775,9 +4110,6 @@ function createFolderDragGhost(sourceHeader = getActiveFolderDragHeader()): void
   }
 
   const rect = sourceHeader.getBoundingClientRect()
-  state.folderDragOffsetX = rect.width / 2
-  state.folderDragOffsetY = rect.height / 2
-
   dispatchFolderDragGhostView({
     bookmarkCount: section.bookmarks.length,
     height: rect.height,
@@ -3825,6 +4157,37 @@ function removeFolderDragGhost(): void {
   window.cancelAnimationFrame(folderDragGhostFrame)
   folderDragGhostFrame = 0
   dispatchFolderDragGhostView(null)
+}
+
+async function settleNewtabDragGhost(
+  selector: string,
+  left: number,
+  top: number
+): Promise<void> {
+  if (prefersReducedMotion()) {
+    return
+  }
+  const ghost = document.querySelector<HTMLElement>(selector)
+  if (!ghost) {
+    return
+  }
+  const currentTransform = getComputedStyle(ghost).transform
+  const animation = ghost.animate(
+    [
+      { transform: currentTransform === 'none' ? ghost.style.transform : currentTransform },
+      { transform: `translate3d(${left}px, ${top}px, 0) scale(1)` }
+    ],
+    {
+      duration: getMotionDurationMs('--drag-settle-dur', 160),
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'forwards'
+    }
+  )
+  try {
+    await animation.finished
+  } catch {
+    // Cancellation means a new gesture retargeted the same preview.
+  }
 }
 
 function getFolderSectionRects(): FolderDragSectionRectSnapshot {
@@ -7221,6 +7584,9 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
       onDragPointerDown: (event) => {
         handleFolderDragPointerDown(section.id, event.currentTarget, event)
       },
+      onReorderKeyDown: (event) => {
+        handleFolderReorderKeyDown(section.id, event)
+      },
       onOpenFolderSettings: openFolderSourceSettings,
       path: section.path,
       title: section.title
@@ -7432,7 +7798,11 @@ function createSpeedDialCardViewModel(
       handleBookmarkContextMenu(item.id, event)
     },
     onDragPointerDown: (event) => {
-      handleSpeedDialDragPointerDown(item.id, event.currentTarget, event)
+      const card = getNewtabSpeedDialNodes().cards.get(String(item.id)) || event.currentTarget
+      handleSpeedDialDragPointerDown(item.id, card, event)
+    },
+    onReorderKeyDown: (event) => {
+      handleSpeedDialReorderKeyDown(String(item.id), event)
     },
     onNavigate: (event) => {
       handleBookmarkNavigation(event, bookmark, item.url)
@@ -7504,7 +7874,11 @@ function createBookmarkTileViewModel(
       handleBookmarkContextMenu(bookmarkId, event)
     },
     onDragPointerDown: (event) => {
-      handleBookmarkDragPointerDown(bookmarkId, folderId, event.currentTarget, event)
+      const tile = getNewtabBookmarkContentNodes().tiles.get(bookmarkId) || event.currentTarget
+      handleBookmarkDragPointerDown(bookmarkId, folderId, tile, event)
+    },
+    onReorderKeyDown: (event) => {
+      handleBookmarkReorderKeyDown(bookmarkId, folderId, event)
     },
     onNavigate: (event) => {
       handleBookmarkNavigation(event, bookmark, url)
@@ -8130,7 +8504,6 @@ function getActiveMenuBookmark(): chrome.bookmarks.BookmarkTreeNode | null {
 }
 
 function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void {
-  window.clearTimeout(bookmarkMenuCloseTimer)
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
     dispatchNewtabBookmarkEditMenuView(null)
@@ -8144,6 +8517,7 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
     closing: false,
     focusAction,
     focusFirst,
+    onExitComplete: finalizeBookmarkMenuClose,
     menu: {
       actions: [
         createMenuActionViewModel(
@@ -8194,7 +8568,6 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
 }
 
 function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
-  window.clearTimeout(addBookmarkMenuCloseTimer)
   if (!state.addMenuOpen) {
     dispatchNewtabBookmarkAddMenuView(null)
     return
@@ -8203,6 +8576,7 @@ function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
   dispatchNewtabBookmarkAddMenuView({
     closing: false,
     focusFirst,
+    onExitComplete: finalizeAddBookmarkMenuClose,
     menu: {
       actions: [
         createMenuActionViewModel('添加书签', 'plus', saveAddedBookmark, {

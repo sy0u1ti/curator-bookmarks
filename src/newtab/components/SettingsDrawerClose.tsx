@@ -15,7 +15,7 @@ export function SettingsDrawerClose({
       render={
         <CloseButton
           id="newtab-settings-close"
-          className={cx('absolute right-3.5 top-3.5 z-[2] size-10 min-h-10 min-w-10 rounded-ds-sm p-0', className)}
+          className={cx('fixed right-3.5 top-3.5 z-10 size-10 min-h-10 min-w-10 rounded-ds-sm p-0 pointer-events-auto', className)}
           type="button"
           label="关闭设置"
           iconSize={20}

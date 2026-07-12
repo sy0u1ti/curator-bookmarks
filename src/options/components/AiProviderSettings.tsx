@@ -481,7 +481,7 @@ function AiCustomModelsDialog({
         initialFocus={false}
         finalFocus={false}
       >
-        <p className={AI_PROVIDER_DIALOG_EYEBROW_CLASS}>AI Models</p>
+        <p className={AI_PROVIDER_DIALOG_EYEBROW_CLASS}>AI 模型</p>
         <DialogTitle className={AI_PROVIDER_DIALOG_TITLE_CLASS}>自定义模型列表</DialogTitle>
         <DialogDescription id="ai-model-modal-copy" className={AI_PROVIDER_DIALOG_COPY_CLASS}>
           每行一个模型 ID，保存后加入选择器。
