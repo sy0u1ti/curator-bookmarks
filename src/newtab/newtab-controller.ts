@@ -5904,6 +5904,9 @@ function runBatchedAdaptiveLayoutUpdate(): void {
     : null
   const primaryContentRect = primaryContent?.getBoundingClientRect()
   const collisionUtilityRect = collisionUtilityStack?.getBoundingClientRect()
+  const currentCollisionOffset = contentView?.type === 'page'
+    ? contentView.primaryCollisionOffsetY
+    : 0
   const currentOffsetY = getCurrentSearchOffsetY(slot)
 
   const viewportTop = shellRect?.top ?? 0
@@ -5930,7 +5933,10 @@ function runBatchedAdaptiveLayoutUpdate(): void {
     if (collisionUtilityRect && primaryContentRect) {
       collisionOffset = getVerticalCenterCollisionOffset({
         utilityBottom: collisionUtilityRect.bottom,
-        contentTop: primaryContentRect.top
+        // The rect already includes the slot's current translateY. Remove that
+        // rendered offset so repeated measurements solve against one stable
+        // baseline instead of alternating between the shifted and base tops.
+        contentTop: primaryContentRect.top - currentCollisionOffset
       })
     }
   }

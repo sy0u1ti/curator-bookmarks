@@ -48,15 +48,21 @@ try {
       }
     }
     const sample = (now) => {
+      const page = document.querySelector('.newtab-page')
+      const primarySlot = document.querySelector('.newtab-primary-slot')
       const preboot = readTitle(
         '.newtab-bookmark-preboot-tile',
         '.newtab-bookmark-preboot-title'
       )
       const live = readTitle('.bookmark-tile', '.bookmark-title')
       window.__curatorBookmarkHandoffFrames.push({
+        collisionOffset: page instanceof HTMLElement
+          ? getComputedStyle(page).getPropertyValue('--primary-collision-offset-y').trim()
+          : '',
         live,
         now,
         preboot,
+        primaryTransform: primarySlot instanceof HTMLElement ? getComputedStyle(primarySlot).transform : '',
         visible: preboot || live
       })
       if (now < 3000) requestAnimationFrame(sample)
@@ -91,7 +97,14 @@ try {
     const current = await page.evaluate((selector) => {
       const title = document.querySelector(selector)
       const primarySlot = document.querySelector('.newtab-primary-slot')
+      const frames = window.__curatorBookmarkHandoffFrames || []
+      const layoutSequence = []
+      for (const frame of frames) {
+        const entry = `${frame.collisionOffset}|${frame.primaryTransform}|${frame.live?.absoluteTop ?? 'none'}`
+        if (layoutSequence.at(-1) !== entry) layoutSequence.push(entry)
+      }
       return {
+        layoutSequence,
         primaryTransform: primarySlot instanceof HTMLElement ? getComputedStyle(primarySlot).transform : '',
         titleTop: title instanceof HTMLElement ? title.getBoundingClientRect().top : null
       }
@@ -173,7 +186,7 @@ async function seedBookmarks(worker) {
         verticalCenter: true
       },
       curatorBookmarkNewTabSearchSettings: {
-        enabled: false
+        enabled: true
       }
     })
     return { bookmarkId: bookmarks[0].id }
