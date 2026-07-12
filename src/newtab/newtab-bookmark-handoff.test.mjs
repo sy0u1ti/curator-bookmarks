@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
 
+const TITLE_SETTLE_DELAY_MS = 1_600
 const extensionPath = path.resolve('dist')
 const profilePath = await mkdtemp(path.join(tmpdir(), 'curator-bookmark-handoff-'))
 let context
@@ -24,6 +25,24 @@ try {
   const page = await context.newPage()
   const url = `chrome-extension://${extensionId}/src/newtab/newtab.html`
 
+  // Simulate a browser/font environment that changes the title baseline while
+  // leaving the card geometry untouched, then settles late on refresh.
+  await page.addInitScript(({ settleDelayMs }) => {
+    document.addEventListener('DOMContentLoaded', () => {
+      const hasSnapshot = Boolean(localStorage.getItem('curatorNewTabBookmarkPreboot'))
+      const freezeTitleProbe = localStorage.getItem('curatorNewTabFreezeTitleProbe') === 'true'
+      const style = document.createElement('style')
+      style.dataset.curatorTitleBaselineProbe = 'true'
+      style.textContent = `.bookmark-title { transform: translateY(${hasSnapshot ? 8 : 4}px) !important; }`
+      document.head.appendChild(style)
+      if (hasSnapshot && !freezeTitleProbe) {
+        window.setTimeout(() => {
+          style.textContent = '.bookmark-title { transform: translateY(4px) !important; }'
+        }, settleDelayMs)
+      }
+    }, { once: true })
+  }, { settleDelayMs: TITLE_SETTLE_DELAY_MS })
+
   await page.goto(url, { waitUntil: 'domcontentloaded' })
   await page.locator(bookmarkTileSelector(seeded.bookmarkIds[0])).waitFor({ state: 'visible', timeout: 20_000 })
   const bookmarkRows = await page.locator('.bookmark-tile[data-bookmark-id]').evaluateAll((tiles) =>
@@ -39,6 +58,20 @@ try {
   assert.ok(secondRowBookmark, `Expected a second bookmark row: ${JSON.stringify(bookmarkRows)}`)
   const bookmarkId = secondRowBookmark.bookmarkId
   await page.waitForFunction(() => Boolean(localStorage.getItem('curatorNewTabBookmarkPreboot')))
+  const cachedTitleRect = await page.evaluate((bookmarkId) => {
+    const rawSnapshot = localStorage.getItem('curatorNewTabBookmarkPreboot')
+    const snapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null
+    const item = snapshot?.sections
+      ?.flatMap((section) => section.items || [])
+      .find((candidate) => candidate.id === bookmarkId)
+    return {
+      titleRect: item?.titleRect ?? null,
+      updatedAt: snapshot?.updatedAt ?? null,
+      version: snapshot?.version ?? null
+    }
+  }, bookmarkId)
+  assert.equal(cachedTitleRect.version, 3)
+  assert.ok(cachedTitleRect.titleRect, `Expected cached title geometry: ${JSON.stringify(cachedTitleRect)}`)
   const initialPerformance = await page.evaluate(() => ({
     firstBookmarksMs: performance.getEntriesByName('newtab.firstBookmarksMs', 'measure').at(-1)?.duration ?? null,
     firstBookmarksRenderedAt: performance.getEntriesByName('newtab.firstBookmarksRendered', 'mark').at(-1)?.startTime ?? null
@@ -77,6 +110,7 @@ try {
     const sample = (now) => {
       const page = document.querySelector('.newtab-page')
       const primarySlot = document.querySelector('.newtab-primary-slot')
+      const prebootRoot = document.getElementById('newtab-bookmark-preboot')
       const preboot = readTitle(
         `.newtab-bookmark-preboot-tile[data-bookmark-id="${bookmarkId}"]`,
         `.newtab-bookmark-preboot-tile[data-bookmark-id="${bookmarkId}"] .newtab-bookmark-preboot-title`
@@ -93,6 +127,7 @@ try {
         now,
         preboot,
         primaryTransform: primarySlot instanceof HTMLElement ? getComputedStyle(primarySlot).transform : '',
+        titleGuard: prebootRoot?.dataset.titleGuard === 'true',
         visible: preboot || live
       })
       if (now < 3000) requestAnimationFrame(sample)
@@ -163,8 +198,10 @@ try {
     Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
   )
   const revealedLiveFrames = frames.filter((frame) => !frame.preboot && frame.live?.painted)
+  const titleGuardFrames = frames.filter((frame) => frame.titleGuard)
   const diagnostics = {
     bookmarkId,
+    cachedTitleRect,
     finalLiveTop,
     firstVisible: visibleFrames[0]?.visible ?? null,
     initialPerformance,
@@ -174,6 +211,7 @@ try {
     prebootTop,
     protectedLiveFrameCount: protectedLiveFrames.length,
     revealedLiveFrameCount: revealedLiveFrames.length,
+    titleGuardFrameCount: titleGuardFrames.length,
     visibleRelativeTopRange,
     visibleTopRange
   }
@@ -203,8 +241,224 @@ try {
     revealedLiveFrames.length > 0,
     `Live bookmark titles must become visible after the preboot handoff: ${JSON.stringify(diagnostics)}`
   )
+  assert.ok(
+    titleGuardFrames.length > 0,
+    `The regression fixture must cross the delayed-title guard: ${JSON.stringify(diagnostics)}`
+  )
 
-  console.log(`Newtab bookmark handoff probe: ${JSON.stringify(diagnostics)}`)
+  await page.waitForFunction(({ bookmarkId, previousUpdatedAt }) => {
+    const rawSnapshot = localStorage.getItem('curatorNewTabBookmarkPreboot')
+    const snapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null
+    const storedTitleRect = snapshot?.sections
+      ?.flatMap((section) => section.items || [])
+      .find((candidate) => candidate.id === bookmarkId)
+      ?.titleRect
+    const tile = document.querySelector(`.bookmark-tile[data-bookmark-id="${bookmarkId}"]`)
+    const title = tile?.querySelector('.bookmark-title')
+    if (!storedTitleRect || !(tile instanceof HTMLElement) || !(title instanceof HTMLElement)) {
+      return false
+    }
+    const tileRect = tile.getBoundingClientRect()
+    const titleRect = title.getBoundingClientRect()
+    return (
+      Number(snapshot.updatedAt) > Number(previousUpdatedAt) &&
+      Math.abs(storedTitleRect.left - (titleRect.left - tileRect.left - tile.clientLeft)) <= 0.5 &&
+      Math.abs(storedTitleRect.top - (titleRect.top - tileRect.top - tile.clientTop)) <= 0.5
+    )
+  }, {
+    bookmarkId,
+    previousUpdatedAt: cachedTitleRect.updatedAt
+  }, { timeout: 5_000 })
+
+  const storedSnapshot = await page.evaluate((bookmarkId) => {
+    const rawSnapshot = localStorage.getItem('curatorNewTabBookmarkPreboot')
+    const snapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null
+    const titleRect = snapshot?.sections
+      ?.flatMap((section) => section.items || [])
+      .find((candidate) => candidate.id === bookmarkId)
+      ?.titleRect ?? null
+    return {
+      titleRect,
+      updatedAt: snapshot?.updatedAt ?? null
+    }
+  }, bookmarkId)
+
+  await page.goto(url, { waitUntil: 'commit' })
+  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator(bookmarkTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 20_000 })
+  await page.waitForFunction(() => !document.getElementById('newtab-bookmark-preboot'))
+  await page.waitForFunction(
+    (minimumTime) => performance.now() >= minimumTime,
+    TITLE_SETTLE_DELAY_MS + 300
+  )
+
+  const secondFrames = await page.evaluate(() => window.__curatorBookmarkHandoffFrames || [])
+  const secondVisibleFrames = secondFrames.filter((frame) => frame.visible)
+  const secondVisibleTopValues = secondVisibleFrames.map((frame) => frame.visible.absoluteTop)
+  const secondVisibleTopRange = Math.max(...secondVisibleTopValues) - Math.min(...secondVisibleTopValues)
+  const secondVisibleRelativeTopValues = secondVisibleFrames.map((frame) => frame.visible.top)
+  const secondVisibleRelativeTopRange = (
+    Math.max(...secondVisibleRelativeTopValues) - Math.min(...secondVisibleRelativeTopValues)
+  )
+  const secondLeakingLiveFrames = secondFrames.filter((frame) =>
+    frame.preboot?.painted &&
+    frame.live?.painted &&
+    Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
+  )
+  const secondProtectedLiveFrames = secondFrames.filter((frame) =>
+    frame.preboot?.painted &&
+    frame.live &&
+    !frame.live.painted &&
+    Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
+  )
+  const secondRevealedLiveFrames = secondFrames.filter((frame) => !frame.preboot && frame.live?.painted)
+  const secondTitleGuardFrames = secondFrames.filter((frame) => frame.titleGuard)
+  const secondDiagnostics = {
+    firstVisible: secondVisibleFrames[0]?.visible ?? null,
+    lastVisible: secondVisibleFrames.at(-1)?.visible ?? null,
+    leakingLiveFrameCount: secondLeakingLiveFrames.length,
+    protectedLiveFrameCount: secondProtectedLiveFrames.length,
+    revealedLiveFrameCount: secondRevealedLiveFrames.length,
+    storedSnapshot,
+    titleGuardFrameCount: secondTitleGuardFrames.length,
+    visibleRelativeTopRange: secondVisibleRelativeTopRange,
+    visibleTopRange: secondVisibleTopRange
+  }
+
+  assert.ok(
+    secondVisibleTopRange <= 0.5,
+    `Bookmark title should remain fixed across consecutive refreshes: ${JSON.stringify(secondDiagnostics)}`
+  )
+  assert.ok(
+    secondVisibleRelativeTopRange <= 0.5,
+    `Bookmark title should remain fixed inside its tile across consecutive refreshes: ${JSON.stringify(secondDiagnostics)}`
+  )
+  assert.equal(
+    secondLeakingLiveFrames.length,
+    0,
+    `Misaligned live titles must stay hidden on consecutive refreshes: ${JSON.stringify(secondDiagnostics)}`
+  )
+  assert.ok(
+    secondProtectedLiveFrames.length > 0,
+    `The consecutive-refresh fixture must preserve the final title geometry: ${JSON.stringify(secondDiagnostics)}`
+  )
+  assert.ok(
+    secondRevealedLiveFrames.length > 0,
+    `Live titles must be revealed on the consecutive refresh: ${JSON.stringify(secondDiagnostics)}`
+  )
+  assert.ok(
+    secondTitleGuardFrames.length > 0,
+    `The consecutive refresh must cross the delayed-title guard: ${JSON.stringify(secondDiagnostics)}`
+  )
+
+  const renamedBookmarkTitle = 'Live renamed frozen-title probe'
+  await worker.evaluate(async ({ bookmarkId, title }) => {
+    await chrome.bookmarks.update(bookmarkId, { title })
+  }, { bookmarkId, title: renamedBookmarkTitle })
+  await page.waitForFunction(({ bookmarkId, title }) => {
+    return document
+      .querySelector(`.bookmark-tile[data-bookmark-id="${bookmarkId}"] .bookmark-title`)
+      ?.textContent === title
+  }, { bookmarkId, title: renamedBookmarkTitle })
+  await page.evaluate((bookmarkId) => {
+    const rawSnapshot = localStorage.getItem('curatorNewTabBookmarkPreboot')
+    const snapshot = rawSnapshot ? JSON.parse(rawSnapshot) : null
+    const item = snapshot?.sections
+      ?.flatMap((section) => section.items || [])
+      .find((candidate) => candidate.id === bookmarkId)
+    if (item) {
+      item.title = 'Cached stale frozen-title probe'
+      localStorage.setItem('curatorNewTabBookmarkPreboot', JSON.stringify(snapshot))
+    }
+    localStorage.setItem('curatorNewTabFreezeTitleProbe', 'true')
+  }, bookmarkId)
+  await page.goto(url, { waitUntil: 'commit' })
+  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator('.newtab-bookmark-frozen-title').first().waitFor({ state: 'visible', timeout: 10_000 })
+  await page.waitForFunction(() => !document.getElementById('newtab-bookmark-preboot'))
+
+  const frozenBeforeScroll = await page.evaluate((bookmarkId) => {
+    const scrollHost = document.querySelector('.newtab-shell')
+    const tile = document.querySelector(`.bookmark-tile[data-bookmark-id="${bookmarkId}"]`)
+    const sourceTitle = tile?.querySelector('.bookmark-title')
+    const frozenTitle = tile?.querySelector('.newtab-bookmark-frozen-title')
+    if (
+      !(scrollHost instanceof HTMLElement) ||
+      !(tile instanceof HTMLElement) ||
+      !(sourceTitle instanceof HTMLElement) ||
+      !(frozenTitle instanceof HTMLElement)
+    ) {
+      return null
+    }
+    const tileRect = tile.getBoundingClientRect()
+    const frozenRect = frozenTitle.getBoundingClientRect()
+    return {
+      frozenText: frozenTitle.textContent,
+      frozenTop: frozenRect.top,
+      maxScroll: scrollHost.scrollHeight - scrollHost.clientHeight,
+      relativeTop: frozenRect.top - tileRect.top,
+      scrollTop: scrollHost.scrollTop,
+      sourceVisibility: getComputedStyle(sourceTitle).visibility,
+      sourceText: sourceTitle.textContent,
+      tileTop: tileRect.top
+    }
+  }, bookmarkId)
+  assert.ok(frozenBeforeScroll, 'Expected the frozen title transfer to be installed')
+  assert.ok(
+    frozenBeforeScroll.maxScroll > 40,
+    `Expected a scrollable new tab shell: ${JSON.stringify(frozenBeforeScroll)}`
+  )
+  assert.equal(frozenBeforeScroll.sourceVisibility, 'hidden')
+  assert.equal(frozenBeforeScroll.sourceText, renamedBookmarkTitle)
+  assert.equal(frozenBeforeScroll.frozenText, renamedBookmarkTitle)
+
+  await page.evaluate(() => {
+    const scrollHost = document.querySelector('.newtab-shell')
+    if (scrollHost instanceof HTMLElement) {
+      scrollHost.scrollTop = Math.min(100, scrollHost.scrollHeight - scrollHost.clientHeight)
+    }
+  })
+  await page.evaluate(() => new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve))
+  }))
+
+  const frozenAfterScroll = await page.evaluate((bookmarkId) => {
+    const scrollHost = document.querySelector('.newtab-shell')
+    const tile = document.querySelector(`.bookmark-tile[data-bookmark-id="${bookmarkId}"]`)
+    const frozenTitle = tile?.querySelector('.newtab-bookmark-frozen-title')
+    if (!(scrollHost instanceof HTMLElement) || !(tile instanceof HTMLElement) || !(frozenTitle instanceof HTMLElement)) {
+      return null
+    }
+    const tileRect = tile.getBoundingClientRect()
+    const frozenRect = frozenTitle.getBoundingClientRect()
+    return {
+      frozenTop: frozenRect.top,
+      relativeTop: frozenRect.top - tileRect.top,
+      scrollTop: scrollHost.scrollTop,
+      tileTop: tileRect.top
+    }
+  }, bookmarkId)
+  assert.ok(frozenAfterScroll, 'Expected the transferred title to survive scrolling')
+  const frozenTitleDelta = frozenAfterScroll.frozenTop - frozenBeforeScroll.frozenTop
+  const frozenTileDelta = frozenAfterScroll.tileTop - frozenBeforeScroll.tileTop
+  assert.ok(
+    frozenAfterScroll.scrollTop > frozenBeforeScroll.scrollTop + 20,
+    `Expected the shell to scroll: ${JSON.stringify({ frozenAfterScroll, frozenBeforeScroll })}`
+  )
+  assert.ok(
+    Math.abs(frozenTitleDelta - frozenTileDelta) <= 0.5,
+    `Frozen title must move with its live tile: ${JSON.stringify({ frozenAfterScroll, frozenBeforeScroll })}`
+  )
+  assert.ok(
+    Math.abs(frozenAfterScroll.relativeTop - frozenBeforeScroll.relativeTop) <= 0.5,
+    `Frozen title must keep its position inside the live tile: ${JSON.stringify({ frozenAfterScroll, frozenBeforeScroll })}`
+  )
+
+  console.log(`Newtab bookmark handoff probe: ${JSON.stringify({
+    first: diagnostics,
+    frozenScroll: { after: frozenAfterScroll, before: frozenBeforeScroll },
+    second: secondDiagnostics
+  })}`)
   console.log('Newtab bookmark handoff test passed.')
 } finally {
   await context?.close()

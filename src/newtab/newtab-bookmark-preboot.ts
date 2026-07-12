@@ -7,7 +7,7 @@ export const NEWTAB_BOOKMARK_PREBOOT_ROOT_ID = 'newtab-bookmark-preboot'
 export const NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY = 'curatorNewTabBookmarkPreboot'
 
 const NEWTAB_BOOKMARK_PREBOOT_STYLE_ID = 'newtab-bookmark-preboot-style'
-const NEWTAB_BOOKMARK_PREBOOT_VERSION = 2
+const NEWTAB_BOOKMARK_PREBOOT_VERSION = 3
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
@@ -16,8 +16,9 @@ const NEWTAB_BOOKMARK_PREBOOT_HIGH_PRIORITY_FAVICON_LIMIT = 6
 const NEWTAB_BOOKMARK_PREBOOT_VIEWPORT_TOLERANCE_PX = 1
 const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX = 0.5
 const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES = 2
-const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FALLBACK_MS = 600
 const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_MAX_WAIT_MS = 1200
+const NEWTAB_BOOKMARK_PREBOOT_TITLE_GUARD_SAMPLE_MS = 100
+const NEWTAB_BOOKMARK_PREBOOT_TITLE_GUARD_MAX_WAIT_MS = 5000
 
 export interface NewtabBookmarkPrebootItemView {
   customIcon: boolean
@@ -71,8 +72,23 @@ interface NewtabBookmarkPrebootItem {
   left: number
   rgb: string
   title: string
+  titleRect: NewtabBookmarkPrebootElementRect | null
   top: number
   width: number
+}
+
+interface NewtabBookmarkPrebootElementRect {
+  height: number
+  left: number
+  top: number
+  width: number
+}
+
+type NewtabBookmarkPrebootMeasuredItem = Pick<
+  NewtabBookmarkPrebootItem,
+  'height' | 'left' | 'top' | 'width'
+> & {
+  titleRect: NewtabBookmarkPrebootElementRect | null
 }
 
 interface NewtabBookmarkPrebootSection {
@@ -102,6 +118,12 @@ export interface NewtabBookmarkPrebootSnapshotOptions {
   sectionsElement?: HTMLElement | null
   viewportHeight?: number
   viewportWidth?: number
+}
+
+export type NewtabBookmarkPrebootHandoffResult = 'aligned' | 'missing' | 'stale' | 'timeout'
+
+interface NewtabBookmarkPrebootHandoffOptions {
+  onFinish?: (result: NewtabBookmarkPrebootHandoffResult) => void
 }
 
 export interface NewtabBookmarkPrebootFaviconLoadAttributes {
@@ -201,69 +223,314 @@ export function hideNewtabBookmarkPreboot({ clearSnapshot = false } = {}): void 
   document.getElementById(NEWTAB_BOOKMARK_PREBOOT_STYLE_ID)?.remove()
 }
 
-export function scheduleNewtabBookmarkPrebootHandoff(): () => void {
+export function scheduleNewtabBookmarkPrebootHandoff(
+  options: NewtabBookmarkPrebootHandoffOptions = {}
+): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return () => undefined
   }
 
   const root = document.getElementById(NEWTAB_BOOKMARK_PREBOOT_ROOT_ID)
   if (!root) {
+    options.onFinish?.('missing')
     return () => undefined
   }
 
   let frame = 0
+  let timer = 0
   let alignedFrames = 0
-  let lastLiveGeometry = ''
-  let lastLiveGeometryChangeAt = performance.now()
-  const startedAt = lastLiveGeometryChangeAt
+  let finished = false
+  let frozenTitleCleanup: (() => void) | null = null
+  let guardObserver: MutationObserver | null = null
+  let titleGuardActive = false
+  let titleGuardFrozen = false
+  let titleGuardStartedAt = 0
+  const startedAt = performance.now()
 
-  const finish = () => {
+  const cancelScheduledSample = () => {
     if (frame) {
       window.cancelAnimationFrame(frame)
       frame = 0
     }
-    hideNewtabBookmarkPreboot()
+    if (timer) {
+      window.clearTimeout(timer)
+      timer = 0
+    }
+  }
+
+  const clearFrozenTitleTransfer = () => {
+    guardObserver?.disconnect()
+    guardObserver = null
+    window.removeEventListener('resize', clearFrozenTitleTransfer)
+    frozenTitleCleanup?.()
+    frozenTitleCleanup = null
+  }
+
+  const finish = (result: Exclude<NewtabBookmarkPrebootHandoffResult, 'missing'>) => {
+    if (finished) {
+      return
+    }
+    finished = true
+    cancelScheduledSample()
+    clearFrozenTitleTransfer()
+    clearNewtabBookmarkPrebootTitleGuard(root)
+    hideNewtabBookmarkPreboot({ clearSnapshot: result !== 'aligned' })
+    options.onFinish?.(result)
+  }
+
+  const freezeTitleGuard = () => {
+    const cleanup = transferNewtabBookmarkPrebootTitles(root)
+    if (!cleanup) {
+      finish('timeout')
+      return
+    }
+    titleGuardFrozen = true
+    finished = true
+    cancelScheduledSample()
+    frozenTitleCleanup = cleanup
+    clearNewtabBookmarkPrebootTitleGuard(root)
+    hideNewtabBookmarkPreboot({ clearSnapshot: true })
+    options.onFinish?.('timeout')
+
+    window.addEventListener('resize', clearFrozenTitleTransfer, { once: true })
+    const liveSections = document.querySelector<HTMLElement>('.bookmark-folder-sections')
+    if (liveSections) {
+      const liveLayoutRoot = liveSections.closest<HTMLElement>('.newtab-primary-slot') ?? liveSections
+      guardObserver = new MutationObserver(clearFrozenTitleTransfer)
+      guardObserver.observe(liveLayoutRoot, {
+        attributeFilter: [
+          'class',
+          'data-bookmark-id',
+          'data-icon-layout-mode',
+          'data-icon-show-titles',
+          'data-icon-vertical-center',
+          'hidden',
+          'style'
+        ],
+        attributes: true,
+        characterData: true,
+        childList: true,
+        subtree: true
+      })
+    }
+  }
+
+  const scheduleSample = () => {
+    if (finished || titleGuardFrozen) {
+      return
+    }
+    if (titleGuardActive) {
+      timer = window.setTimeout(() => {
+        timer = 0
+        frame = window.requestAnimationFrame(sample)
+      }, NEWTAB_BOOKMARK_PREBOOT_TITLE_GUARD_SAMPLE_MS)
+      return
+    }
+    frame = window.requestAnimationFrame(sample)
   }
 
   const sample = (now: number) => {
     frame = 0
     const handoff = measureNewtabBookmarkPrebootHandoff(root)
     if (handoff.state === 'stale') {
-      finish()
+      finish('stale')
+      return
+    }
+    if (titleGuardActive && !handoff.tilesAligned) {
+      finish('timeout')
       return
     }
 
-    if (handoff.liveGeometry && handoff.liveGeometry !== lastLiveGeometry) {
-      lastLiveGeometry = handoff.liveGeometry
-      lastLiveGeometryChangeAt = now
-    }
     alignedFrames = handoff.state === 'aligned' ? alignedFrames + 1 : 0
 
-    const liveLayoutSettled = Boolean(
-      handoff.liveGeometry &&
-      document.readyState === 'complete' &&
-      now - startedAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FALLBACK_MS &&
-      now - lastLiveGeometryChangeAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FALLBACK_MS
-    )
+    if (alignedFrames >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES) {
+      finish('aligned')
+      return
+    }
+    if (!titleGuardActive && now - startedAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_MAX_WAIT_MS) {
+      if (handoff.tilesAligned && enableNewtabBookmarkPrebootTitleGuard(root)) {
+        titleGuardActive = true
+        titleGuardStartedAt = now
+      } else {
+        finish('timeout')
+        return
+      }
+    }
     if (
-      alignedFrames >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES ||
-      liveLayoutSettled ||
-      now - startedAt >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_MAX_WAIT_MS
+      titleGuardActive &&
+      now - titleGuardStartedAt >= NEWTAB_BOOKMARK_PREBOOT_TITLE_GUARD_MAX_WAIT_MS
     ) {
-      finish()
+      freezeTitleGuard()
       return
     }
 
-    frame = window.requestAnimationFrame(sample)
+    scheduleSample()
   }
 
-  frame = window.requestAnimationFrame(sample)
+  scheduleSample()
   return () => {
-    if (frame) {
-      window.cancelAnimationFrame(frame)
-      frame = 0
-    }
+    finished = true
+    cancelScheduledSample()
+    clearFrozenTitleTransfer()
+    clearNewtabBookmarkPrebootTitleGuard(root)
     hideNewtabBookmarkPreboot()
+  }
+}
+
+function transferNewtabBookmarkPrebootTitles(root: HTMLElement): (() => void) | null {
+  const liveTilesById = new Map(
+    Array.from(
+      document.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]:not(.bookmark-drag-ghost)')
+    ).map((tile) => [String(tile.dataset.bookmarkId || ''), tile])
+  )
+  const pairs: Array<{
+    liveTile: HTMLElement
+    liveTitle: HTMLElement
+    prebootTitle: HTMLElement
+  }> = []
+
+  for (const prebootTile of root.querySelectorAll<HTMLElement>(
+    '.newtab-bookmark-preboot-tile[data-bookmark-id]'
+  )) {
+    const prebootTitle = prebootTile.querySelector<HTMLElement>('.newtab-bookmark-preboot-title')
+    if (!prebootTitle) {
+      continue
+    }
+    const liveTile = liveTilesById.get(String(prebootTile.dataset.bookmarkId || ''))
+    const liveTitle = liveTile?.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
+    if (!liveTile || !liveTitle) {
+      return null
+    }
+    pairs.push({ liveTile, liveTitle, prebootTitle })
+  }
+  if (!pairs.length) {
+    return null
+  }
+
+  const copiedProperties = [
+    '-webkit-box-orient',
+    '-webkit-line-clamp',
+    'color',
+    'display',
+    'font-family',
+    'font-feature-settings',
+    'font-kerning',
+    'font-size',
+    'font-stretch',
+    'font-style',
+    'font-variant',
+    'font-weight',
+    'hanging-punctuation',
+    'letter-spacing',
+    'line-break',
+    'line-height',
+    'overflow',
+    'overflow-wrap',
+    'text-align',
+    'text-autospace',
+    'text-decoration',
+    'text-shadow',
+    'text-spacing-trim',
+    'text-transform',
+    'white-space',
+    'word-break'
+  ]
+  const clones: HTMLElement[] = []
+  const guardedSources: Array<{
+    element: HTMLElement
+    priority: string
+    value: string
+  }> = []
+
+  for (const { liveTile, liveTitle, prebootTitle } of pairs) {
+    const frozenTitle = document.createElement('span')
+    const computedStyle = window.getComputedStyle(prebootTitle)
+    frozenTitle.className = 'newtab-bookmark-frozen-title'
+    frozenTitle.dataset.newtabBookmarkPrebootFrozenTitle = 'true'
+    frozenTitle.setAttribute('aria-hidden', 'true')
+    frozenTitle.textContent = liveTitle.textContent
+    for (const property of copiedProperties) {
+      frozenTitle.style.setProperty(property, computedStyle.getPropertyValue(property))
+    }
+    frozenTitle.style.boxSizing = 'border-box'
+    frozenTitle.style.height = prebootTitle.style.height
+    frozenTitle.style.left = prebootTitle.style.left
+    frozenTitle.style.margin = '0'
+    frozenTitle.style.minWidth = '0'
+    frozenTitle.style.pointerEvents = 'none'
+    frozenTitle.style.position = 'absolute'
+    frozenTitle.style.top = prebootTitle.style.top
+    frozenTitle.style.transition = 'none'
+    frozenTitle.style.width = prebootTitle.style.width
+    frozenTitle.style.zIndex = '2'
+
+    guardedSources.push({
+      element: liveTitle,
+      priority: liveTitle.style.getPropertyPriority('visibility'),
+      value: liveTitle.style.getPropertyValue('visibility')
+    })
+    liveTitle.dataset.newtabBookmarkPrebootFrozenSource = 'true'
+    liveTitle.style.setProperty('visibility', 'hidden', 'important')
+    liveTile.appendChild(frozenTitle)
+    clones.push(frozenTitle)
+  }
+
+  let active = true
+  return () => {
+    if (!active) {
+      return
+    }
+    active = false
+    for (const clone of clones) {
+      clone.remove()
+    }
+    for (const { element, priority, value } of guardedSources) {
+      delete element.dataset.newtabBookmarkPrebootFrozenSource
+      if (value) {
+        element.style.setProperty('visibility', value, priority)
+      } else {
+        element.style.removeProperty('visibility')
+      }
+    }
+  }
+}
+
+function enableNewtabBookmarkPrebootTitleGuard(root: HTMLElement): boolean {
+  const prebootTiles = Array.from(
+    root.querySelectorAll<HTMLElement>('.newtab-bookmark-preboot-tile[data-bookmark-id]')
+  )
+  const liveTilesById = new Map(
+    Array.from(
+      document.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]:not(.bookmark-drag-ghost)')
+    ).map((tile) => [String(tile.dataset.bookmarkId || ''), tile])
+  )
+  let guardedTitleCount = 0
+
+  for (const prebootTile of prebootTiles) {
+    const bookmarkId = String(prebootTile.dataset.bookmarkId || '')
+    const liveTitle = liveTilesById
+      .get(bookmarkId)
+      ?.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
+    if (!liveTitle) {
+      continue
+    }
+    liveTitle.dataset.newtabBookmarkPrebootTitleGuard = 'true'
+    guardedTitleCount += 1
+  }
+
+  if (!guardedTitleCount) {
+    return false
+  }
+  root.dataset.titleGuard = 'true'
+  return true
+}
+
+function clearNewtabBookmarkPrebootTitleGuard(root: HTMLElement): void {
+  delete root.dataset.titleGuard
+  for (const title of document.querySelectorAll<HTMLElement>(
+    '.bookmark-title[data-newtab-bookmark-preboot-title-guard="true"]'
+  )) {
+    delete title.dataset.newtabBookmarkPrebootTitleGuard
   }
 }
 
@@ -428,6 +695,13 @@ function createNewtabBookmarkPrebootTile(
     const title = documentRef.createElement('span')
     title.className = 'newtab-bookmark-preboot-title'
     title.textContent = item.title
+    if (item.titleRect) {
+      title.dataset.measuredRect = 'true'
+      title.style.height = `${item.titleRect.height}px`
+      title.style.left = `${item.titleRect.left}px`
+      title.style.top = `${item.titleRect.top}px`
+      title.style.width = `${item.titleRect.width}px`
+    }
     tile.appendChild(title)
   }
   return tile
@@ -439,60 +713,93 @@ function createNewtabBookmarkPrebootSections(
   sectionsRect: NewtabBookmarkPrebootRect
 ): NewtabBookmarkPrebootSection[] {
   const sections: NewtabBookmarkPrebootSection[] = []
-  const tileRects = collectNewtabBookmarkPrebootTileRects(sectionsElement, sectionsRect)
+  const itemRects = collectNewtabBookmarkPrebootItemRects(sectionsElement, sectionsRect)
   let remainingItems = NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS
+  let reachedMeasurementBoundary = false
 
   for (const section of view.sections) {
     if (sections.length >= NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS || remainingItems <= 0) {
       break
     }
-    const items = (section.grid?.items ?? [])
-      .slice(0, remainingItems)
-      .map((item) => createNewtabBookmarkPrebootItem(item, tileRects.get(String(item.id || ''))))
-      .filter((item): item is NewtabBookmarkPrebootItem => Boolean(item))
-    if (!items.length) {
+    const sourceItems = (section.grid?.items ?? []).slice(0, remainingItems)
+    if (!sourceItems.length) {
       continue
     }
-    remainingItems -= items.length
+    const measuredItems: NewtabBookmarkPrebootItem[] = []
+    for (const item of sourceItems) {
+      const measuredItem = createNewtabBookmarkPrebootItem(
+        item,
+        itemRects.get(String(item.id || '')),
+        view.content.showTitles
+      )
+      if (!measuredItem) {
+        reachedMeasurementBoundary = true
+        break
+      }
+      measuredItems.push(measuredItem)
+    }
+    if (!measuredItems.length) {
+      break
+    }
+    remainingItems -= measuredItems.length
     sections.push({
       folderId: String(section.folderId || ''),
-      items
+      items: measuredItems
     })
+    if (reachedMeasurementBoundary) {
+      break
+    }
   }
   return sections
 }
 
-function collectNewtabBookmarkPrebootTileRects(
+function collectNewtabBookmarkPrebootItemRects(
   sectionsElement: HTMLElement | null,
   sectionsRect: NewtabBookmarkPrebootRect
-): Map<string, Pick<NewtabBookmarkPrebootItem, 'height' | 'left' | 'top' | 'width'>> {
-  const tileRects = new Map<string, Pick<NewtabBookmarkPrebootItem, 'height' | 'left' | 'top' | 'width'>>()
+): Map<string, NewtabBookmarkPrebootMeasuredItem> {
+  const itemRects = new Map<string, NewtabBookmarkPrebootMeasuredItem>()
   if (!sectionsElement) {
-    return tileRects
+    return itemRects
   }
 
+  let measuredItemCount = 0
   for (const tileElement of sectionsElement.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]')) {
+    if (measuredItemCount >= NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS) {
+      break
+    }
     const bookmarkId = String(tileElement.dataset.bookmarkId || '')
     const rect = tileElement.getBoundingClientRect()
     if (!bookmarkId || rect.width <= 0 || rect.height <= 0) {
       continue
     }
-    tileRects.set(bookmarkId, {
+    const titleElement = tileElement.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
+    const titleRect = titleElement?.getBoundingClientRect()
+    itemRects.set(bookmarkId, {
       height: roundPrebootLength(rect.height),
       left: roundPrebootLength(rect.left - sectionsRect.left),
+      titleRect: titleRect && titleRect.width > 0 && titleRect.height > 0
+        ? {
+            height: roundPrebootLength(titleRect.height),
+            left: roundPrebootLength(titleRect.left - rect.left - tileElement.clientLeft),
+            top: roundPrebootLength(titleRect.top - rect.top - tileElement.clientTop),
+            width: roundPrebootLength(titleRect.width)
+          }
+        : null,
       top: roundPrebootLength(rect.top - sectionsRect.top),
       width: roundPrebootLength(rect.width)
     })
+    measuredItemCount += 1
   }
-  return tileRects
+  return itemRects
 }
 
 function createNewtabBookmarkPrebootItem(
   item: NewtabBookmarkPrebootItemView,
-  rect: Pick<NewtabBookmarkPrebootItem, 'height' | 'left' | 'top' | 'width'> | undefined
+  rect: NewtabBookmarkPrebootMeasuredItem | undefined,
+  showTitles: boolean
 ): NewtabBookmarkPrebootItem | null {
   const title = String(item.title || item.url || '').trim().slice(0, 512)
-  if (!title || !rect) {
+  if (!title || !rect || (showTitles && !rect.titleRect)) {
     return null
   }
 
@@ -564,7 +871,12 @@ function normalizeNewtabBookmarkPrebootSnapshot(rawSnapshot: unknown): NewtabBoo
   const content = normalizeNewtabBookmarkPrebootContent(snapshot.content)
   const rect = normalizeNewtabBookmarkPrebootRect(snapshot.rect)
   const sections = normalizeNewtabBookmarkPrebootSections(snapshot.sections)
-  if (!content || !rect || !sections.length) {
+  if (
+    !content ||
+    !rect ||
+    !sections.length ||
+    (content.showTitles && sections.some((section) => section.items.some((item) => !item.titleRect)))
+  ) {
     return null
   }
 
@@ -639,6 +951,7 @@ function normalizeNewtabBookmarkPrebootItem(rawItem: unknown): NewtabBookmarkPre
   if (!height || !width) {
     return null
   }
+  const titleRect = normalizeNewtabBookmarkPrebootElementRect(item.titleRect)
   return {
     fallbackLabel: String(item.fallbackLabel || Array.from(title)[0] || '*').slice(0, 2).toUpperCase(),
     faviconSrc: /^(?:chrome-extension|chrome|https?):/i.test(String(item.faviconSrc || ''))
@@ -649,7 +962,26 @@ function normalizeNewtabBookmarkPrebootItem(rawItem: unknown): NewtabBookmarkPre
     left: clampPrebootLength(item.left, -2400, 2400, 0),
     rgb: normalizeRgbString(item.rgb),
     title,
+    titleRect,
     top: clampPrebootLength(item.top, -2400, 5000, 0),
+    width
+  }
+}
+
+function normalizeNewtabBookmarkPrebootElementRect(rawRect: unknown): NewtabBookmarkPrebootElementRect | null {
+  if (!rawRect || typeof rawRect !== 'object' || Array.isArray(rawRect)) {
+    return null
+  }
+  const rect = rawRect as Record<string, unknown>
+  const height = clampPrebootLength(rect.height, 1, 600, 0)
+  const width = clampPrebootLength(rect.width, 1, 2400, 0)
+  if (!height || !width) {
+    return null
+  }
+  return {
+    height,
+    left: clampPrebootLength(rect.left, -2400, 2400, 0),
+    top: clampPrebootLength(rect.top, -600, 600, 0),
     width
   }
 }
@@ -694,8 +1026,8 @@ function applyNewtabBookmarkPrebootContentStyle(
 function measureNewtabBookmarkPrebootHandoff(
   root: HTMLElement
 ): {
-  liveGeometry: string
   state: 'aligned' | 'pending' | 'stale'
+  tilesAligned: boolean
 } {
   const prebootTiles = Array.from(
     root.querySelectorAll<HTMLElement>('.newtab-bookmark-preboot-tile[data-bookmark-id]')
@@ -704,21 +1036,21 @@ function measureNewtabBookmarkPrebootHandoff(
     document.querySelectorAll<HTMLElement>('.bookmark-tile[data-bookmark-id]:not(.bookmark-drag-ghost)')
   )
   if (!prebootTiles.length) {
-    return { liveGeometry: '', state: 'stale' }
+    return { state: 'stale', tilesAligned: false }
   }
   if (!liveTiles.length) {
-    return { liveGeometry: '', state: 'pending' }
+    return { state: 'pending', tilesAligned: false }
   }
 
   const prebootIds = prebootTiles.map((tile) => String(tile.dataset.bookmarkId || ''))
   const comparableCount = Math.min(prebootIds.length, liveTiles.length)
   for (let index = 0; index < comparableCount; index += 1) {
     if (String(liveTiles[index].dataset.bookmarkId || '') !== prebootIds[index]) {
-      return { liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles), state: 'stale' }
+      return { state: 'stale', tilesAligned: false }
     }
   }
   if (liveTiles.length < prebootIds.length) {
-    return { liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles), state: 'pending' }
+    return { state: 'pending', tilesAligned: false }
   }
 
   const liveTilesById = new Map(
@@ -726,54 +1058,43 @@ function measureNewtabBookmarkPrebootHandoff(
   )
   const visiblePrebootTiles = prebootTiles.filter((tile) => isNewtabBookmarkPrebootTileVisible(tile))
   if (!visiblePrebootTiles.length) {
-    return { liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles), state: 'stale' }
+    return { state: 'stale', tilesAligned: false }
   }
 
-  const aligned = visiblePrebootTiles.every((prebootTile) => {
+  let tilesAligned = true
+  let titlesAligned = true
+  for (const prebootTile of visiblePrebootTiles) {
     const liveTile = liveTilesById.get(String(prebootTile.dataset.bookmarkId || ''))
     if (!liveTile || !areNewtabBookmarkRectsAligned(
       prebootTile.getBoundingClientRect(),
       liveTile.getBoundingClientRect()
     )) {
-      return false
+      tilesAligned = false
+      titlesAligned = false
+      break
     }
 
     const prebootTitle = prebootTile.querySelector<HTMLElement>('.newtab-bookmark-preboot-title')
     const liveTitle = liveTile.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
     if (!prebootTitle && !liveTitle) {
-      return true
+      continue
     }
-    return Boolean(
+    if (!(
       prebootTitle &&
       liveTitle &&
       areNewtabBookmarkRectsAligned(
         prebootTitle.getBoundingClientRect(),
         liveTitle.getBoundingClientRect()
       )
-    )
-  })
+    )) {
+      titlesAligned = false
+    }
+  }
 
   return {
-    liveGeometry: createNewtabBookmarkLiveGeometry(liveTiles),
-    state: aligned ? 'aligned' : 'pending'
+    state: tilesAligned && titlesAligned ? 'aligned' : 'pending',
+    tilesAligned
   }
-}
-
-function createNewtabBookmarkLiveGeometry(liveTiles: HTMLElement[]): string {
-  return liveTiles
-    .filter((tile) => isNewtabBookmarkPrebootTileVisible(tile))
-    .slice(0, 12)
-    .map((tile) => {
-      const rect = tile.getBoundingClientRect()
-      return [
-        tile.dataset.bookmarkId || '',
-        roundPrebootLength(rect.left),
-        roundPrebootLength(rect.top),
-        roundPrebootLength(rect.width),
-        roundPrebootLength(rect.height)
-      ].join(':')
-    })
-    .join('|')
 }
 
 function isNewtabBookmarkPrebootTileVisible(tile: HTMLElement): boolean {
@@ -886,6 +1207,16 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   visibility: hidden !important;
 }
 
+/* If title metrics take unusually long to settle, reveal the interactive live
+   cards while keeping only their unstable titles covered by the cached titles. */
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID}[data-title-guard="true"] ~ #newtab-react-root .bookmark-folder-sections {
+  visibility: visible !important;
+}
+
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID}[data-title-guard="true"] ~ #newtab-react-root .bookmark-title[data-newtab-bookmark-preboot-title-guard="true"] {
+  visibility: hidden !important;
+}
+
 html.instant-wallpaper-startup-preview #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID},
 html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   --preboot-card-bg: rgba(16, 17, 19, 0.56);
@@ -928,6 +1259,16 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   border-radius: 6px;
   background: var(--preboot-card-bg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+}
+
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID}[data-title-guard="true"] .newtab-bookmark-preboot-tile {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID}[data-title-guard="true"] .newtab-bookmark-preboot-tile > :not(.newtab-bookmark-preboot-title) {
+  visibility: hidden;
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-tile[data-icon-only="true"] {
@@ -995,6 +1336,11 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--icon-title-lines);
+}
+
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-title[data-measured-rect="true"] {
+  box-sizing: border-box;
+  position: absolute;
 }
 
 @media (prefers-reduced-motion: reduce) {

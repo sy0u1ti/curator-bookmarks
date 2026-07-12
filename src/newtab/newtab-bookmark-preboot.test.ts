@@ -22,6 +22,8 @@ function run(): void {
   testSnapshotWritesToStorage()
   testSnapshotClearsStorageWhenWriteFails()
   testSnapshotClearsStorageWhenNoCardsRemain()
+  testSnapshotStopsBeforeMissingTitleGeometry()
+  testSnapshotAllowsMissingTitleGeometryWhenTitlesAreHidden()
   testSnapshotRejectsMismatchedViewport()
   testPrebootHandoffIsAtomic()
   testFaviconReadinessHandoff()
@@ -86,6 +88,10 @@ function testSnapshotKeepsVisibleCardsAndExactCardRect(): void {
   assert.deepEqual(
     pickItemRect(snapshot.sections[0].items[0]),
     { height: 50, left: 0, top: 30, width: 440 }
+  )
+  assert.deepEqual(
+    snapshot.sections[0].items[0].titleRect,
+    { height: 15, left: 52, top: 16.5, width: 376 }
   )
 }
 
@@ -176,7 +182,13 @@ function testSnapshotWritesToStorage(): void {
 
   assert(snapshot)
   assert(rawSnapshot)
-  assert.equal(JSON.parse(rawSnapshot).updatedAt, 789)
+  const storedSnapshot = JSON.parse(rawSnapshot)
+  assert.equal(storedSnapshot.updatedAt, 789)
+  assert.equal(storedSnapshot.version, 3)
+  assert.deepEqual(
+    storedSnapshot.sections[0].items[0].titleRect,
+    { height: 15, left: 52, top: 16.5, width: 376 }
+  )
 }
 
 function testSnapshotClearsStorageWhenWriteFails(): void {
@@ -214,6 +226,48 @@ function testSnapshotClearsStorageWhenNoCardsRemain(): void {
 
   assert.equal(snapshot, null)
   assert.equal(storage.getItem(NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY), null)
+}
+
+function testSnapshotStopsBeforeMissingTitleGeometry(): void {
+  const snapshot = createNewtabBookmarkPrebootSnapshot(createBookmarkContentView(), {
+    sectionsElement: createMeasuredElement({
+      height: 160,
+      left: 188,
+      tiles: [
+        { height: 50, id: '10', left: 188, top: 316, width: 440 },
+        { height: 50, id: '11', left: 652, titleRect: null, top: 316, width: 440 }
+      ],
+      top: 286,
+      width: 904
+    }),
+    viewportHeight: 900,
+    viewportWidth: 1280
+  })
+
+  assert(snapshot)
+  assert.deepEqual(snapshot.sections.map((section) => section.items.map((item) => item.id)), [['10']])
+}
+
+function testSnapshotAllowsMissingTitleGeometryWhenTitlesAreHidden(): void {
+  const view = createBookmarkContentView()
+  view.content.showTitles = false
+  const snapshot = createNewtabBookmarkPrebootSnapshot(view, {
+    sectionsElement: createMeasuredElement({
+      height: 160,
+      left: 188,
+      tiles: [
+        { height: 50, id: '10', left: 188, titleRect: null, top: 316, width: 440 },
+        { height: 50, id: '11', left: 652, titleRect: null, top: 316, width: 440 }
+      ],
+      top: 286,
+      width: 904
+    }),
+    viewportHeight: 900,
+    viewportWidth: 1280
+  })
+
+  assert(snapshot)
+  assert.equal(snapshot.sections[0].items[0].titleRect, null)
 }
 
 function testSnapshotRejectsMismatchedViewport(): void {
@@ -318,6 +372,12 @@ function createMeasuredElement({
     height: number
     id: string
     left: number
+    titleRect?: {
+      height: number
+      left: number
+      top: number
+      width: number
+    } | null
     top: number
     width: number
   }>
@@ -327,10 +387,25 @@ function createMeasuredElement({
   const tileElements = (tiles ?? [
     { height: 50, id: '10', left, top: top + 30, width: 440 },
     { height: 50, id: '11', left: left + 464, top: top + 30, width: 440 }
-  ]).map((tile) => ({
-    dataset: { bookmarkId: tile.id },
-    getBoundingClientRect: () => createDomRect(tile)
-  })) as unknown as NodeListOf<HTMLElement>
+  ]).map((tile) => {
+    const titleRect = tile.titleRect === undefined
+      ? {
+          height: 15,
+          left: tile.left + 53,
+          top: tile.top + 17.5,
+          width: tile.width - 64
+        }
+      : tile.titleRect
+    return {
+      clientLeft: 1,
+      clientTop: 1,
+      dataset: { bookmarkId: tile.id },
+      getBoundingClientRect: () => createDomRect(tile),
+      querySelector: (selector: string) => selector === '.bookmark-title:not([hidden])' && titleRect
+        ? { getBoundingClientRect: () => createDomRect(titleRect) }
+        : null
+    }
+  }) as unknown as NodeListOf<HTMLElement>
 
   return {
     getBoundingClientRect: () => createDomRect({ height, left, top, width }),

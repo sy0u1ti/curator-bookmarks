@@ -54,6 +54,7 @@ import {
 import { getNewtabButtonClass } from './newtabButtonClass'
 
 const EMPTY_FOLDER_STATE_CLASS = 'bookmark-folder-empty-state grid justify-items-start gap-2.5'
+const BOOKMARK_PREBOOT_SNAPSHOT_LOAD_WAIT_MS = 500
 const EMPTY_FOLDER_COPY_CLASS = 'bookmark-folder-empty justify-self-start mt-1 mb-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.72)]'
 const EMPTY_FOLDER_ACTIONS_CLASS = 'bookmark-folder-empty-actions flex flex-wrap gap-2'
 const EMPTY_FOLDER_BUTTON_CLASS = getNewtabButtonClass('secondary', '!min-h-[34px] !px-3 !text-xs')
@@ -102,6 +103,7 @@ function BookmarkContent({
 }) {
   const dragUi = useNewtabDragUiView()
   const folderSource = useNewtabFolderSourceView()
+  const [prebootHandoffStatus, setPrebootHandoffStatus] = useState<'checking' | 'ready' | 'timeout'>('checking')
   const sectionsRootRef = useRef<HTMLDivElement | null>(null)
   const sectionRefs = useRef(new Map<string, HTMLElement>())
   const setSectionElement = useCallback((anchorId: string, element: HTMLElement | null) => {
@@ -121,29 +123,69 @@ function BookmarkContent({
   }, [])
 
   useLayoutEffect(() => {
-    return scheduleNewtabBookmarkPrebootHandoff()
+    return scheduleNewtabBookmarkPrebootHandoff({
+      onFinish: (result) => {
+        setPrebootHandoffStatus(result === 'timeout' ? 'timeout' : 'ready')
+      }
+    })
   }, [])
 
   useEffect(() => {
+    if (prebootHandoffStatus !== 'ready') {
+      return
+    }
+
+    let cancelled = false
+    let loadWaitTimer = 0
+    let pageReadyHandled = false
     let revealFrame = 0
     let settleFrame = 0
-    revealFrame = window.requestAnimationFrame(() => {
-      settleFrame = window.requestAnimationFrame(() => {
-        const snapshot = writeNewtabBookmarkPrebootSnapshotFromView(state, {
-          sectionsElement: sectionsRootRef.current,
-          viewportHeight: window.innerHeight,
-          viewportWidth: window.innerWidth
+    const writeSnapshot = () => {
+      if (cancelled) {
+        return
+      }
+      revealFrame = window.requestAnimationFrame(() => {
+        settleFrame = window.requestAnimationFrame(() => {
+          const snapshot = writeNewtabBookmarkPrebootSnapshotFromView(state, {
+            sectionsElement: sectionsRootRef.current,
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth
+          })
+          if (!snapshot) {
+            hideNewtabBookmarkPreboot({ clearSnapshot: true })
+          }
         })
-        if (!snapshot) {
-          hideNewtabBookmarkPreboot({ clearSnapshot: true })
-        }
       })
-    })
+    }
+    const writeAfterFontsReady = () => {
+      if (pageReadyHandled) {
+        return
+      }
+      pageReadyHandled = true
+      window.clearTimeout(loadWaitTimer)
+      loadWaitTimer = 0
+      window.removeEventListener('load', writeAfterFontsReady)
+      void document.fonts.ready.then(writeSnapshot, writeSnapshot)
+    }
+
+    if (document.readyState === 'complete') {
+      writeAfterFontsReady()
+    } else {
+      window.addEventListener('load', writeAfterFontsReady, { once: true })
+      loadWaitTimer = window.setTimeout(
+        writeAfterFontsReady,
+        BOOKMARK_PREBOOT_SNAPSHOT_LOAD_WAIT_MS
+      )
+    }
+
     return () => {
+      cancelled = true
+      window.clearTimeout(loadWaitTimer)
+      window.removeEventListener('load', writeAfterFontsReady)
       window.cancelAnimationFrame(revealFrame)
       window.cancelAnimationFrame(settleFrame)
     }
-  }, [state])
+  }, [prebootHandoffStatus, state])
 
   return (
     <section

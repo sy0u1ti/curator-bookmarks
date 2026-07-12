@@ -170,8 +170,9 @@ assert.ok(
 
 assert.ok(
   /getLocalStorage\(\[[\s\S]+?backgroundPreloadPromise\s*\n\s*\]\)/.test(controller) &&
-    /useLayoutEffect\(\(\) => \{\s*return scheduleNewtabBookmarkPrebootHandoff\(\)/.test(bookmarkContent) &&
+    /useLayoutEffect\(\(\) => \{\s*return scheduleNewtabBookmarkPrebootHandoff\(\{[\s\S]+?onFinish:/.test(bookmarkContent) &&
     bookmarkPreboot.includes('measureNewtabBookmarkPrebootHandoff') &&
+    bookmarkContent.includes("prebootHandoffStatus !== 'ready'") &&
     /useEffect\(\(\) => \{[\s\S]+?writeNewtabBookmarkPrebootSnapshotFromView/.test(bookmarkContent),
   'The final newtab surface should wait for the saved background and keep bookmark preboot until live geometry is stable.'
 )
