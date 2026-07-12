@@ -60,7 +60,7 @@ export function BookmarkIconShell({
         draggable={false}
         hidden={missing}
         loading={favicon.loading}
-        decoding="async"
+        decoding={loaded ? 'sync' : 'async'}
         fetchPriority={favicon.fetchpriority}
         onLoad={() => {
           markNewtabFaviconReady(favicon.src)

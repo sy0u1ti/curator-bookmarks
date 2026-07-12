@@ -97,9 +97,8 @@ const DASHBOARD_TRIGGER_CLASS = 'dashboard-trigger right-[66px] w-10 min-w-10 p-
 const DASHBOARD_SHORTCUT_HINT_BASE_CLASS = 'dashboard-shortcut-hint absolute top-6 right-[116px] inline-flex min-h-7 max-w-[min(220px,calc(100vw-168px))] items-center overflow-hidden rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.09)] bg-[rgba(24,24,26,0.42)] px-[9px] text-[11px] font-[650] leading-[1.2] text-[rgba(245,245,247,0.54)] pointer-events-none text-ellipsis whitespace-nowrap [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)] max-[520px]:hidden'
 const DASHBOARD_SHORTCUT_HINT_VISIBLE_CLASS = 'opacity-100'
 const DASHBOARD_SHORTCUT_HINT_AUTO_HIDE_CLASS = 'opacity-0 transition-opacity duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] group-hover/settings-trigger-zone:opacity-100 group-focus-within/settings-trigger-zone:opacity-100 [@media(hover:none)]:opacity-100'
-const SETTINGS_BACKDROP_BASE_CLASS = 'settings-backdrop fixed inset-0 z-[10015] bg-[rgba(0,0,0,0.44)] opacity-0 pointer-events-none transition-opacity duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] motion-reduce:transition-none'
-const SETTINGS_BACKDROP_OPEN_CLASS = 'opacity-100 pointer-events-auto'
-const SETTINGS_BACKDROP_CLOSING_CLASS = 'opacity-0 pointer-events-none'
+const SETTINGS_BACKDROP_BASE_CLASS = 'settings-backdrop fixed inset-0 z-[10015] bg-transparent pointer-events-none'
+const SETTINGS_BACKDROP_OPEN_CLASS = 'pointer-events-auto'
 const WALLPAPER_LOADING_INDICATOR_CLASS = 'wallpaper-loading-indicator fixed inset-0 z-[2] grid place-items-center p-6 pointer-events-none'
 const WALLPAPER_LOADING_INDICATOR_HIDDEN_CLASS = 'opacity-0 invisible translate-y-1 scale-[0.98] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_var(--ui-motion-standard)]'
 const WALLPAPER_LOADING_INDICATOR_VISIBLE_CLASS = 'opacity-100 visible translate-y-0 scale-100 [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
@@ -130,6 +129,7 @@ function NewtabShell() {
   const shellRef = useRef<HTMLDivElement | null>(null)
   const settingsBackdropRef = useRef<HTMLButtonElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const pendingHandoffFrame = useRef(0)
   const settingsBackgroundProps = settingsDrawer.open
     ? {
         'aria-hidden': true,
@@ -170,7 +170,20 @@ function NewtabShell() {
 
   useLayoutEffect(() => {
     if (!backgroundSettings.ready) return
-    removeStartupBackgroundMask()
+    // Hand off without a bare frame: the React mask paints this frame at full
+    // opacity (no fade — see [data-mask-initial]); only after it has painted do
+    // we drop the identical startup mask on the next frame.
+    const firstFrame = window.requestAnimationFrame(() => {
+      const secondFrame = window.requestAnimationFrame(() => {
+        removeStartupBackgroundMask()
+        document.getElementById('newtab-background-mask')?.removeAttribute('data-mask-initial')
+      })
+      pendingHandoffFrame.current = secondFrame
+    })
+    pendingHandoffFrame.current = firstFrame
+    return () => {
+      window.cancelAnimationFrame(pendingHandoffFrame.current)
+    }
   }, [backgroundSettings.ready])
 
   useEffect(() => {
@@ -221,6 +234,7 @@ function NewtabShell() {
           id="newtab-background-mask"
           className={getBackgroundMaskClass(backgroundSettings)}
           style={getBackgroundMaskInlineStyle(backgroundSettings)}
+          data-mask-initial=""
           aria-hidden="true"
         ></div>
       ) : null}
@@ -276,9 +290,7 @@ function NewtabShell() {
         id="newtab-settings-backdrop"
         className={cx(
           SETTINGS_BACKDROP_BASE_CLASS,
-          settingsDrawer.open ? SETTINGS_BACKDROP_OPEN_CLASS : '',
-          settingsDrawer.phase === 'opening' ? 'open is-opening' : '',
-          settingsDrawer.phase === 'closing' ? `is-closing ${SETTINGS_BACKDROP_CLOSING_CLASS}` : ''
+          settingsDrawer.open ? SETTINGS_BACKDROP_OPEN_CLASS : ''
         )}
         ref={settingsBackdropRef}
         type="button"

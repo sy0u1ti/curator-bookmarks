@@ -9,6 +9,7 @@ const INSTANT_WALLPAPER_KEY = 'curatorNewTabInstantWallpaper'
 const INSTANT_WALLPAPER_DATA_URL_KEY = 'curatorNewTabInstantWallpaperDataUrl'
 const INSTANT_WALLPAPER_IMAGE_DATA_URL_KEY = 'curatorNewTabInstantWallpaperImageDataUrl'
 const INSTANT_WALLPAPER_TARGET_KEY = 'curatorNewTabInstantWallpaperTarget'
+const BACKGROUND_MASK_SNAPSHOT_KEY = 'curatorNewTabBackgroundMaskSnapshot'
 const INSTANT_WALLPAPER_MAX_DIMENSION = 960
 const INSTANT_WALLPAPER_QUALITY = 0.68
 const INSTANT_WALLPAPER_IMAGE_DATA_URL_MAX_LENGTH = 2_400_000
@@ -58,6 +59,13 @@ export interface InstantWallpaperTargetRecord {
   cacheRequired: boolean
   cacheReady: boolean
   updatedAt: number
+}
+
+export interface BackgroundMaskSnapshot {
+  maskEnabled: boolean
+  maskStyle: BackgroundMaskStyle
+  maskOverlay: number
+  maskBlur: number
 }
 
 export interface InstantWallpaperDataUrlOptions {
@@ -264,6 +272,44 @@ export function clearInstantWallpaperTarget(): void {
     localStorage.removeItem(INSTANT_WALLPAPER_TARGET_KEY)
   } catch {
     // Best-effort cleanup.
+  }
+}
+
+export function saveBackgroundMaskSnapshot(snapshot: BackgroundMaskSnapshot): void {
+  // Mirror the mask independently of any wallpaper cache so the synchronous boot
+  // script can paint the readability mask on the very first frame for every
+  // background type — including solid colors, which never write a wallpaper target.
+  const normalized: BackgroundMaskSnapshot = {
+    maskEnabled: snapshot.maskEnabled === true,
+    maskStyle: normalizeBackgroundMaskStyle(snapshot.maskStyle),
+    maskOverlay: normalizeBackgroundMaskPercentage(snapshot.maskOverlay),
+    maskBlur: normalizeBackgroundMaskBlur(snapshot.maskBlur)
+  }
+  try {
+    localStorage.setItem(BACKGROUND_MASK_SNAPSHOT_KEY, JSON.stringify(normalized))
+  } catch {
+    // Startup mask mirror is best-effort; chrome.storage remains the durable source.
+  }
+}
+
+export function readBackgroundMaskSnapshot(): BackgroundMaskSnapshot | null {
+  try {
+    const raw = localStorage.getItem(BACKGROUND_MASK_SNAPSHOT_KEY)
+    if (!raw) {
+      return null
+    }
+    const parsed = JSON.parse(raw) as Partial<BackgroundMaskSnapshot>
+    if (!parsed || typeof parsed !== 'object') {
+      return null
+    }
+    return {
+      maskEnabled: parsed.maskEnabled === true,
+      maskStyle: normalizeBackgroundMaskStyle(parsed.maskStyle),
+      maskOverlay: normalizeBackgroundMaskPercentage(parsed.maskOverlay),
+      maskBlur: normalizeBackgroundMaskBlur(parsed.maskBlur)
+    }
+  } catch {
+    return null
   }
 }
 

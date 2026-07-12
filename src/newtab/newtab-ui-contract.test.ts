@@ -33,7 +33,7 @@ assert.ok(
     instantWallpaper.includes('maskStyle: BackgroundMaskStyle') &&
     instantWallpaper.includes('maskOverlay: number') &&
     instantWallpaper.includes('maskBlur: number') &&
-    instantWallpaperBoot.includes('applyStartupMask(targetRecord)') &&
+    instantWallpaperBoot.includes('applyStartupMask(targetRecord, maskSnapshot)') &&
     instantWallpaperBoot.includes('Targets written before mask snapshots existed should fail dark') &&
     newtabHtml.includes('id="newtab-startup-background-mask-style"') &&
     instantWallpaperBoot.includes("--instant-wallpaper-mask-image") &&
@@ -52,16 +52,35 @@ assert.ok(
 )
 
 assert.ok(
+  instantWallpaper.includes('export function saveBackgroundMaskSnapshot') &&
+    instantWallpaper.includes('export function readBackgroundMaskSnapshot') &&
+    instantWallpaper.includes("BACKGROUND_MASK_SNAPSHOT_KEY = 'curatorNewTabBackgroundMaskSnapshot'") &&
+    controller.includes('saveBackgroundMaskSnapshot({') &&
+    instantWallpaperBoot.includes('readRecord<BackgroundMaskSnapshotRecord>(maskSnapshotKey)'),
+  'A dedicated mask snapshot must be persisted for every background type so the boot script paints the mask on the first frame, even for solid colors that write no wallpaper target.'
+)
+
+assert.ok(
+  newtabApp.includes("data-mask-initial=\"\"") &&
+    newtabApp.includes("removeAttribute('data-mask-initial')") &&
+    newtabApp.includes('requestAnimationFrame') &&
+    /#newtab-background-mask\[data-mask-initial\][\s\S]*?transition:\s*none/.test(newtabCss),
+  'The React mask must appear at its final state without a fade on first mount, and the startup mask must be removed only after it has painted.'
+)
+
+assert.ok(
   selectSource.includes("base-select-popup t-dropdown overflow-y-auto overscroll-contain") &&
     selectSource.includes('max-h-64 min-w-[var(--anchor-width)] overflow-y-auto overscroll-contain'),
   'Long select popups should keep their height constraint and expose a wheel-scrollable overflow container.'
 )
 
 assert.ok(
-  controller.includes("dispatchNewtabSettingsDrawerOpen(true, 'opening')") &&
-    controller.includes("getNewtabSettingsDrawerView().phase === 'opening'") &&
-    controller.includes('panel.getBoundingClientRect()'),
-  'The settings drawer should preserve a painted closed frame and an explicit opening phase on its first open.'
+  settingsDrawer.includes('data-starting-style:[transform:translateX(100%)]') &&
+    settingsDrawer.includes('data-ending-style:[transform:translateX(100%)]') &&
+    settingsDrawer.includes('[transform:translateX(var(--drawer-swipe-movement-x))]') &&
+    !controller.includes('primeSettingsDrawerOpenTransition') &&
+    !controller.includes('panel.getBoundingClientRect()'),
+  'The settings drawer should use Base UI starting and ending styles instead of measuring a hidden popup.'
 )
 
 assert.ok(
@@ -160,9 +179,9 @@ const autoCenteredLayoutReadyAssignments = [
   ...controller.matchAll(/layoutReady:\s*([^,\r\n]+)/g)
 ].map((match) => match[1]?.trim())
 assert.ok(
-  autoCenteredLayoutReadyAssignments.filter((value) => value === '!settings.autoVerticalCenter').length >= 2 &&
-    !controller.includes('layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null'),
-  'Auto-centered search should stay hidden until the current page layout is measured, even when a cached offset exists.'
+  autoCenteredLayoutReadyAssignments.includes('!settings.autoVerticalCenter || cachedAutoOffsetY !== null') &&
+    controller.includes('return `${AUTO_SEARCH_OFFSET_CACHE_KEY}:${window.innerWidth}x${window.innerHeight}`'),
+  'Auto-centered search should trust a viewport-keyed cached offset for first paint instead of hiding behind the measurement gate.'
 )
 assert.ok(
   controller.includes('const AUTO_SEARCH_LAYOUT_STABLE_FRAME_COUNT = 0'),
@@ -170,10 +189,52 @@ assert.ok(
 )
 assert.ok(
   controller.includes("const AUTO_SEARCH_LAYOUT_PENDING_ATTRIBUTE = 'data-newtab-search-layout-pending'") &&
-    controller.includes('setAutoSearchLayoutPending(true)') &&
+    controller.includes('getRevealedAutoSearchShell() === null && readCachedAutoSearchOffsetYValue() === null') &&
     controller.includes('scheduleAutoSearchLayoutReveal()') &&
     newtabCss.includes('html[data-newtab-search-layout-pending] .newtab-search-slot'),
-  'The document should keep auto-centered search hidden until the measured shell state has reached the DOM.'
+  'The document should keep only uncached auto-centered search hidden until the measured shell state has reached the DOM.'
+)
+const autoCenterSlotTransition = newtabCss.match(
+  /\.newtab-search-slot\[data-search-auto-vertical-center="true"\]\s*\{([^}]*)\}/
+)?.[1] || ''
+assert.ok(
+  autoCenterSlotTransition.includes('opacity') &&
+    !autoCenterSlotTransition.includes('margin'),
+  'Auto-centered search must not animate its offset: transitioning margin makes measurements read mid-animation values and the slot visibly wander.'
+)
+assert.ok(
+  controller.includes('nodes.slot === lastMeasuredSearchSlot') &&
+    controller.includes('settledVerticalCenterContent !== primaryContent'),
+  'Search layout must re-measure only for a new slot element and only after the vertically centered content block has painted once.'
+)
+
+const cssWallpaperFocusDuration = newtabCss.match(/--newtab-wallpaper-focus-duration:\s*(\d+)ms/)?.[1]
+const bootWallpaperFocusDuration = newtabHtml.match(/transition:\s*opacity\s+(\d+)ms\s+cubic-bezier/)?.[1]
+assert.ok(
+  cssWallpaperFocusDuration && cssWallpaperFocusDuration === bootWallpaperFocusDuration,
+  'The inline boot wallpaper reveal must run at the same speed as the app focus duration to avoid a two-speed color shift.'
+)
+
+assert.ok(
+  bookmarkPreboot.includes('line-break: strict;') &&
+    bookmarkPreboot.includes('text-spacing-trim: trim-start;') &&
+    bookmarkPreboot.includes('text-autospace: normal;') &&
+    bookmarkPreboot.includes('hanging-punctuation: allow-end;') &&
+    bookmarkPreboot.includes('roundPrebootLength'),
+  'The bookmark preboot snapshot must match live shell CJK typography and keep sub-pixel geometry so the handoff does not shift text.'
+)
+
+const cachedAutoOffsetWrites = [...controller.matchAll(/writeCachedAutoSearchOffsetY\(/g)].length
+assert.ok(
+  controller.includes('writeCachedAutoSearchOffsetY(view.shell.offsetY)') &&
+    cachedAutoOffsetWrites === 2,
+  'The first-paint offset cache should only record DOM-confirmed positions (single write in the reveal path plus its definition).'
+)
+
+assert.ok(
+  newtabCss.includes('newtab-utility-module-enter') &&
+    newtabCss.includes('.newtab-utility-stack > *'),
+  'Utility modules (clock/search/onboarding) should fade in on hydration instead of popping into the layout.'
 )
 
 assert.ok(

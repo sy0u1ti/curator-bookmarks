@@ -375,10 +375,10 @@ function collectNewtabBookmarkPrebootTileRects(
       continue
     }
     tileRects.set(bookmarkId, {
-      height: Math.round(rect.height),
-      left: Math.round(rect.left - sectionsRect.left),
-      top: Math.round(rect.top - sectionsRect.top),
-      width: Math.round(rect.width)
+      height: roundPrebootLength(rect.height),
+      left: roundPrebootLength(rect.left - sectionsRect.left),
+      top: roundPrebootLength(rect.top - sectionsRect.top),
+      width: roundPrebootLength(rect.width)
     })
   }
   return tileRects
@@ -444,12 +444,12 @@ function createNewtabBookmarkPrebootRect(
   }
 
   return {
-    height: Math.round(rect.height),
-    left: Math.round(rect.left),
-    top: Math.round(rect.top),
+    height: roundPrebootLength(rect.height),
+    left: roundPrebootLength(rect.left),
+    top: roundPrebootLength(rect.top),
     viewportHeight: Math.round(viewportHeight),
     viewportWidth: Math.round(viewportWidth),
-    width: Math.round(rect.width)
+    width: roundPrebootLength(rect.width)
   }
 }
 
@@ -531,8 +531,8 @@ function normalizeNewtabBookmarkPrebootItem(rawItem: unknown): NewtabBookmarkPre
   if (!title) {
     return null
   }
-  const height = clampInteger(item.height, 1, 600, 0)
-  const width = clampInteger(item.width, 1, 2400, 0)
+  const height = clampPrebootLength(item.height, 1, 600, 0)
+  const width = clampPrebootLength(item.width, 1, 2400, 0)
   if (!height || !width) {
     return null
   }
@@ -543,10 +543,10 @@ function normalizeNewtabBookmarkPrebootItem(rawItem: unknown): NewtabBookmarkPre
       : '',
     height,
     id: String(item.id || title).slice(0, 512),
-    left: clampInteger(item.left, -2400, 2400, 0),
+    left: clampPrebootLength(item.left, -2400, 2400, 0),
     rgb: normalizeRgbString(item.rgb),
     title,
-    top: clampInteger(item.top, -2400, 5000, 0),
+    top: clampPrebootLength(item.top, -2400, 5000, 0),
     width
   }
 }
@@ -556,8 +556,8 @@ function normalizeNewtabBookmarkPrebootRect(rawRect: unknown): NewtabBookmarkPre
     return null
   }
   const rect = rawRect as Record<string, unknown>
-  const width = clampInteger(rect.width, 1, 2400, 0)
-  const height = clampInteger(rect.height, 1, 2400, 0)
+  const width = clampPrebootLength(rect.width, 1, 2400, 0)
+  const height = clampPrebootLength(rect.height, 1, 2400, 0)
   const viewportWidth = clampInteger(rect.viewportWidth, 1, 5000, 0)
   const viewportHeight = clampInteger(rect.viewportHeight, 1, 5000, 0)
   if (!width || !height || !viewportWidth || !viewportHeight) {
@@ -565,8 +565,8 @@ function normalizeNewtabBookmarkPrebootRect(rawRect: unknown): NewtabBookmarkPre
   }
   return {
     height,
-    left: clampInteger(rect.left, -5000, 5000, 0),
-    top: clampInteger(rect.top, -5000, 5000, 0),
+    left: clampPrebootLength(rect.left, -5000, 5000, 0),
+    top: clampPrebootLength(rect.top, -5000, 5000, 0),
     viewportHeight,
     viewportWidth,
     width
@@ -638,6 +638,17 @@ function clampInteger(value: unknown, min: number, max: number, fallback: number
   return Number.isFinite(numeric) ? Math.max(min, Math.min(max, numeric)) : fallback
 }
 
+function roundPrebootLength(value: number): number {
+  // Keep sub-pixel geometry so the frozen snapshot lands exactly where the grid
+  // renders live tiles; integer rounding leaves a visible half-pixel jump on handoff.
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0
+}
+
+function clampPrebootLength(value: unknown, min: number, max: number, fallback: number): number {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? roundPrebootLength(Math.max(min, Math.min(max, numeric))) : fallback
+}
+
 const NEWTAB_BOOKMARK_PREBOOT_CSS = `
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   --preboot-card-bg: rgba(18, 19, 21, 0.44);
@@ -648,6 +659,12 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   contain: strict;
   color: rgba(245, 245, 247, 0.88);
   font-family: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  /* Match .newtab-shell CJK typography exactly; a differing text-autospace or
+     spacing-trim shifts mixed CJK/Latin glyph advances at the live handoff. */
+  line-break: strict;
+  hanging-punctuation: allow-end;
+  text-spacing-trim: trim-start;
+  text-autospace: normal;
   opacity: 1;
   pointer-events: none;
   transition: none;
@@ -692,7 +709,7 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   padding: 8px 10px;
   overflow: hidden;
   border: 1px solid rgba(245, 245, 247, 0.08);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--preboot-card-bg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
 }
@@ -712,7 +729,7 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   place-items: center;
   overflow: hidden;
   border: 1px solid rgba(var(--bookmark-card-rgb, 245 245 247) / 0.12);
-  border-radius: 8px;
+  border-radius: 6px;
   background: rgba(0, 0, 0, 0.34);
 }
 

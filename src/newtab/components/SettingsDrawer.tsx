@@ -68,8 +68,7 @@ import {
   getNewtabSettingsDrawerNodes,
   setNewtabSettingsDrawerNodes,
   useNewtabSettingsDrawerLayoutRequest,
-  useNewtabSettingsDrawerView,
-  type NewtabSettingsDrawerPhase
+  useNewtabSettingsDrawerView
 } from '../newtab-settings-drawer-store'
 import { setNewtabFeaturedBackgroundPickerNodes } from '../newtab-featured-background-picker-store'
 import {
@@ -119,9 +118,7 @@ function getSettingsSlideDirection(
 const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
 const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-lg border border-[rgba(245,245,247,0.13)] bg-transparent text-ds-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.065)] [filter:drop-shadow(0_28px_72px_rgba(0,0,0,0.34))] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
-const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden transition-transform duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] motion-reduce:transition-none max-[420px]:w-full max-[420px]:rounded-none max-[420px]:border-x-0'
-const SETTINGS_DRAWER_PANEL_OPEN_CLASS = 'translate-x-0'
-const SETTINGS_DRAWER_PANEL_CLOSED_CLASS = 'translate-x-full'
+const SETTINGS_DRAWER_PANEL_CLASS = 'fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden [transform:translateX(var(--drawer-swipe-movement-x))] transition-transform duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-none max-[420px]:w-full max-[420px]:rounded-none max-[420px]:border-x-0'
 const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 max-[700px]:px-4 max-[700px]:pb-5'
 const SETTINGS_ROOT_CLASS = 'grid gap-4'
 const SETTINGS_HEADER_CLASS = 'grid gap-1 pr-14'
@@ -426,7 +423,6 @@ function SettingsSelect({
 
 export interface SettingsDrawerProps {
   open: boolean
-  phase: NewtabSettingsDrawerPhase
   activeGroup: SettingsDrawerSection
   onActiveGroupChange: (group: SettingsDrawerSection) => void
   onOpenChange: (open: boolean, event?: Event) => void
@@ -1693,7 +1689,6 @@ export function SettingsDrawerHost() {
   return (
     <SettingsDrawer
       open={view.open}
-      phase={view.phase}
       activeGroup={view.activeGroup}
       onActiveGroupChange={dispatchNewtabSettingsDrawerActiveGroupChange}
       onOpenChange={dispatchNewtabSettingsDrawerOpenChange}
@@ -1701,7 +1696,7 @@ export function SettingsDrawerHost() {
   )
 }
 
-function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
+function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
   const [drawerElement, setDrawerElement] = useState<HTMLDivElement | null>(null)
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
   const [slideDirection, setSlideDirection] = useState<SettingsSlideDirection>('forward')
@@ -1802,9 +1797,7 @@ function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenC
       className={cx(
         SETTINGS_DRAWER_CLASS,
         open ? 'pointer-events-auto' : 'pointer-events-none',
-        open ? 'open' : '',
-        phase === 'opening' ? 'is-opening' : '',
-        phase === 'closing' ? 'is-closing' : ''
+        open ? 'open' : ''
       )}
       open={open}
       onOpenChange={onOpenChange}
@@ -1816,11 +1809,7 @@ function SettingsDrawer({ open, phase, activeGroup, onActiveGroupChange, onOpenC
       overlayRef={setDrawerElement}
     >
       <DrawerPanel
-        className={cx(
-          SETTINGS_DRAWER_PANEL_CLASS,
-          SETTINGS_DRAWER_SURFACE_CLASS,
-          open ? SETTINGS_DRAWER_PANEL_OPEN_CLASS : SETTINGS_DRAWER_PANEL_CLOSED_CLASS
-        )}
+        className={cx(SETTINGS_DRAWER_PANEL_CLASS, SETTINGS_DRAWER_SURFACE_CLASS)}
         ref={setPanelElement}
         aria-labelledby="newtab-settings-title"
         aria-describedby="newtab-settings-summary"

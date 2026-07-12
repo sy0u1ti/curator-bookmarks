@@ -188,6 +188,7 @@ import {
   readInstantWallpaperDataUrl,
   readInstantWallpaperImageDataUrl,
   readInstantWallpaperTarget,
+  saveBackgroundMaskSnapshot,
   saveInstantWallpaper,
   saveInstantWallpaperTarget,
   getInstantWallpaperFallbackColor,
@@ -796,6 +797,9 @@ let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
 let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
 let autoSearchLayoutRevealFrame = 0
+let lastMeasuredSearchSlot: HTMLElement | null = null
+let verticalCenterContentSettleFrame = 0
+let settledVerticalCenterContent: HTMLElement | null = null
 let deferredRenderFrame = 0
 let autoSearchLayoutStableFrames = 0
 let autoSearchLayoutStableKey = ''
@@ -1291,8 +1295,16 @@ function handleNewtabContentLayoutNodesChange(): void {
 
 function handleSearchWidgetNodesChange(nodes: NewtabSearchWidgetNodes): void {
   if (!nodes.slot) {
+    lastMeasuredSearchSlot = null
     return
   }
+  // The search widget re-publishes its nodes on every render (focus, typing,
+  // suggestion-panel updates). Measuring each time made the auto-centered slot
+  // visibly wander; only a genuinely new slot element warrants a re-measure.
+  if (nodes.slot === lastMeasuredSearchSlot) {
+    return
+  }
+  lastMeasuredSearchSlot = nodes.slot
 
   resetAutoSearchLayoutSettle()
   runBatchedAdaptiveLayoutUpdate()
@@ -1763,6 +1775,11 @@ function commitSearchSettings(
   }
 }
 
+function getRevealedAutoSearchShell(): SearchWidgetShellState | null {
+  const shell = getNewtabSearchWidgetView()?.shell
+  return shell?.autoVerticalCenter && shell.layoutReady ? shell : null
+}
+
 function applySearchSettingsLive(): void {
   const settings = state.searchSettings
   const widthBounds = state.searchWidthBounds || SEARCH_WIDTH_BOUNDS_FALLBACK
@@ -1771,12 +1788,20 @@ function applySearchSettingsLive(): void {
   const cachedAutoOffsetY = settings.autoVerticalCenter
     ? readCachedAutoSearchOffsetYValue()
     : null
+  // A visible auto-centered search keeps its current offset and slides to the next
+  // measurement instead of blinking back into the hidden measurement gate.
+  const revealedAutoOffsetY = settings.autoVerticalCenter
+    ? getRevealedAutoSearchShell()?.offsetY ?? null
+    : null
   const offsetY = settings.autoVerticalCenter
-    ? cachedAutoOffsetY ?? DEFAULT_SEARCH_SETTINGS.offsetY
+    ? revealedAutoOffsetY ?? cachedAutoOffsetY ?? DEFAULT_SEARCH_SETTINGS.offsetY
     : clampNumber(settings.offsetY, offsetBounds.min, offsetBounds.max, DEFAULT_SEARCH_SETTINGS.offsetY)
+  const layoutReady = !settings.autoVerticalCenter ||
+    revealedAutoOffsetY !== null ||
+    cachedAutoOffsetY !== null
 
   if (settings.autoVerticalCenter) {
-    setAutoSearchLayoutPending(true)
+    setAutoSearchLayoutPending(!layoutReady)
     resetAutoSearchLayoutSettle()
     scheduleAdaptiveNewTabLayoutUpdate()
   } else {
@@ -1786,7 +1811,7 @@ function applySearchSettingsLive(): void {
     autoVerticalCenter: settings.autoVerticalCenter,
     backgroundAlpha: String(settings.background / 100),
     height: settings.height,
-    layoutReady: !settings.autoVerticalCenter,
+    layoutReady,
     offsetY,
     width
   })
@@ -2017,32 +2042,8 @@ function initializeSettingsDrawer(): void {
 
 function openSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
   void ensureSettingsDrawerReady().then(() => {
-    const firstOpenAfterMount = !isSettingsDrawerOpen()
-    if (firstOpenAfterMount) {
-      primeSettingsDrawerOpenTransition()
-      window.requestAnimationFrame(() => {
-        window.requestAnimationFrame(() => {
-          runOpenSettingsDrawer(options)
-        })
-      })
-      return
-    }
     runOpenSettingsDrawer(options)
   })
-}
-
-function primeSettingsDrawerOpenTransition(): void {
-  const { backdrop, drawer, panel } = getNewtabSettingsDrawerNodes()
-  dispatchNewtabSettingsDrawerOpen(false, 'closed')
-  if (drawer) {
-    drawer.getBoundingClientRect()
-  }
-  if (panel) {
-    panel.getBoundingClientRect()
-  }
-  if (backdrop) {
-    backdrop.getBoundingClientRect()
-  }
 }
 
 function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?: SettingsDrawerSection }): void {
@@ -2051,12 +2052,7 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
     setActiveSettingsGroup(options?.section || state.activeSettingsGroup || 'source', { scrollToTop: false })
     syncSettingsSaveStatus()
     scheduleAdaptiveNewTabLayoutUpdate()
-    dispatchNewtabSettingsDrawerOpen(true, 'opening')
-    window.requestAnimationFrame(() => {
-      if (getNewtabSettingsDrawerView().phase === 'opening') {
-        dispatchNewtabSettingsDrawerOpen(true, 'open')
-      }
-    })
+    dispatchNewtabSettingsDrawerOpen(true)
     if (focusFirstControl) {
       window.requestAnimationFrame(() => {
         dispatchNewtabSettingsDrawerFocusFirstControl()
@@ -2097,12 +2093,7 @@ function closeSettingsDrawer(): void {
     return
   }
 
-  dispatchNewtabSettingsDrawerOpen(false, 'closing')
-  window.setTimeout(() => {
-    if (getNewtabSettingsDrawerView().phase === 'closing') {
-      dispatchNewtabSettingsDrawerOpen(false, 'closed')
-    }
-  }, 260)
+  dispatchNewtabSettingsDrawerOpen(false)
 }
 
 function isSettingsDrawerOpen(): boolean {
@@ -4794,7 +4785,9 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     }
     migrateStoredFeaturedBackgroundId()
     state.searchSettings = normalizeSearchSettings(stored[STORAGE_KEYS.newTabSearchSettings])
-    setAutoSearchLayoutPending(state.searchSettings.autoVerticalCenter)
+    setAutoSearchLayoutPending(
+      state.searchSettings.autoVerticalCenter && readCachedAutoSearchOffsetYValue() === null
+    )
     state.iconSettings = normalizeIconSettings(stored[STORAGE_KEYS.newTabIconSettings])
     state.generalSettings = normalizeGeneralSettings(stored[STORAGE_KEYS.newTabGeneralSettings])
     state.timeSettings = normalizeTimeSettingsLocal(stored[STORAGE_KEYS.newTabTimeSettings])
@@ -5491,6 +5484,7 @@ function scheduleAutoSearchLayoutReveal(): void {
       scheduleAutoSearchLayoutReveal()
       return
     }
+    writeCachedAutoSearchOffsetY(view.shell.offsetY)
     setAutoSearchLayoutPending(false)
   })
 }
@@ -5519,6 +5513,24 @@ function runBatchedAdaptiveLayoutUpdate(): void {
   const iconVerticalCenter = contentView?.type === 'page' && contentView.iconVerticalCenter === 'true'
   const primaryContent = iconVerticalCenter ? layoutNodes.primaryContent : null
   const collisionUtilityStack = iconVerticalCenter ? layoutNodes.utilityStack : null
+
+  if (primaryContent && settledVerticalCenterContent !== primaryContent) {
+    // Until one frame after this content block first paints, its
+    // content-visibility sections report contain-intrinsic-size placeholder
+    // heights (verified by probe), so the vertically centered anchor — and any
+    // offset centered against it — measures wrong and would visibly snap later.
+    // Keep the current (cache-trusted) position and re-run after first paint.
+    if (!verticalCenterContentSettleFrame) {
+      verticalCenterContentSettleFrame = window.requestAnimationFrame(() => {
+        verticalCenterContentSettleFrame = window.requestAnimationFrame(() => {
+          verticalCenterContentSettleFrame = 0
+          settledVerticalCenterContent = primaryContent
+          runBatchedAdaptiveLayoutUpdate()
+        })
+      })
+    }
+    return
+  }
 
   const viewportWidth = getNewtabViewportWidth()
   const shellRect = layoutNodes.shell?.getBoundingClientRect()
@@ -5585,7 +5597,6 @@ function runBatchedAdaptiveLayoutUpdate(): void {
       maxOffsetY: bounds.max,
       fallbackOffsetY: currentOffsetY
     })
-    writeCachedAutoSearchOffsetY(nextSearchOffsetY)
   }
   const nextSearchLayoutReady = getNextAutoSearchLayoutReadyState({
     autoVerticalCenter: state.searchSettings.autoVerticalCenter,
@@ -5650,6 +5661,12 @@ function resetAutoSearchLayoutSettle(): void {
 }
 
 function getCurrentSearchOffsetY(slot: HTMLElement): number {
+  // The centering math needs the offset the measured rect actually reflects; the
+  // shell state can run ahead of the DOM between a patch and its React commit.
+  const renderedOffsetY = Number.parseFloat(slot.style.getPropertyValue('--search-offset-y'))
+  if (Number.isFinite(renderedOffsetY)) {
+    return renderedOffsetY
+  }
   const registeredSlot = getNewtabSearchWidgetNodes().slot
   if (registeredSlot === slot) {
     const value = getNewtabSearchWidgetView()?.shell.offsetY
@@ -5771,7 +5788,11 @@ function initializeSearchWidget(): boolean {
     return false
   }
   if (settings.autoVerticalCenter) {
-    setAutoSearchLayoutPending(true)
+    // Only hide behind the measurement gate when no trusted first-paint offset exists;
+    // a shell that has already revealed keeps its position across full re-renders.
+    setAutoSearchLayoutPending(
+      getRevealedAutoSearchShell() === null && readCachedAutoSearchOffsetYValue() === null
+    )
   }
   let engineMenuExpanded = false
   let searchEngineMenuState: SearchWidgetEngineMenuState = {
@@ -6468,8 +6489,11 @@ function syncSearchInputActions(input: HTMLInputElement): void {
 
 function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS): SearchWidgetShellState {
   const webSearchEnabled = settings.webSearchEnabled !== false
+  // A shell that already revealed is the most trusted source for the current
+  // position; otherwise a cached offset was measured in this exact viewport on a
+  // settled layout. Either lets first paint skip the hidden measurement gate.
   const cachedAutoOffsetY = settings.autoVerticalCenter
-    ? readCachedAutoSearchOffsetYValue()
+    ? getRevealedAutoSearchShell()?.offsetY ?? readCachedAutoSearchOffsetYValue()
     : null
   const initialOffsetY = settings.autoVerticalCenter
     ? cachedAutoOffsetY ?? settings.offsetY
@@ -6483,11 +6507,16 @@ function createSearchWidgetShellState(settings: typeof DEFAULT_SEARCH_SETTINGS):
     inputAriaLabel: webSearchEnabled
       ? '输入关键词搜索书签，未选中书签时按 Enter 搜索网页'
       : '输入关键词搜索本地书签或命令',
-    layoutReady: !settings.autoVerticalCenter,
+    layoutReady: !settings.autoVerticalCenter || cachedAutoOffsetY !== null,
     offsetY: initialOffsetY,
     placeholder: getSearchPlaceholder(settings),
     width: settings.width
   }
+}
+
+function getAutoSearchOffsetCacheKey(): string {
+  // Keyed by viewport: a centered offset is only valid for the layout it was measured in.
+  return `${AUTO_SEARCH_OFFSET_CACHE_KEY}:${window.innerWidth}x${window.innerHeight}`
 }
 
 function readCachedAutoSearchOffsetYValue(): number | null {
@@ -6496,7 +6525,7 @@ function readCachedAutoSearchOffsetYValue(): number | null {
   }
 
   try {
-    const value = window.localStorage.getItem(AUTO_SEARCH_OFFSET_CACHE_KEY)
+    const value = window.localStorage.getItem(getAutoSearchOffsetCacheKey())
     if (value === null) {
       return null
     }
@@ -6521,7 +6550,8 @@ function writeCachedAutoSearchOffsetY(offsetY: number): void {
   }
 
   try {
-    window.localStorage.setItem(AUTO_SEARCH_OFFSET_CACHE_KEY, String(Math.round(offsetY)))
+    window.localStorage.removeItem(AUTO_SEARCH_OFFSET_CACHE_KEY)
+    window.localStorage.setItem(getAutoSearchOffsetCacheKey(), String(Math.round(offsetY)))
   } catch {
     // Ignore storage failures; this cache only improves first-paint positioning.
   }
@@ -7596,6 +7626,10 @@ function cleanupNewTabController(): void {
   verticalCenterCollisionFrame = 0
   window.cancelAnimationFrame(autoSearchLayoutRevealFrame)
   autoSearchLayoutRevealFrame = 0
+  lastMeasuredSearchSlot = null
+  window.cancelAnimationFrame(verticalCenterContentSettleFrame)
+  verticalCenterContentSettleFrame = 0
+  settledVerticalCenterContent = null
   window.cancelAnimationFrame(deferredRenderFrame)
   deferredRenderFrame = 0
   resetAutoSearchLayoutSettle()
@@ -9442,6 +9476,14 @@ function syncInstantWallpaperTargetForSettings(
   settings: typeof DEFAULT_BACKGROUND_SETTINGS,
   mediaSignature = getBackgroundMediaSignature(settings)
 ): void {
+  // Mirror the mask independently of the wallpaper target so the boot script can
+  // paint it on the first frame for every background type, solid colors included.
+  saveBackgroundMaskSnapshot({
+    maskEnabled: settings.maskEnabled,
+    maskStyle: settings.maskStyle,
+    maskOverlay: settings.maskOverlay,
+    maskBlur: settings.maskBlur
+  })
   const target = buildInstantWallpaperTargetForSettings(settings, mediaSignature)
   if (!target) {
     clearInstantWallpaperTarget()

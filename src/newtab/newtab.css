@@ -10,6 +10,47 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   visibility: hidden !important;
 }
 
+/* 蒙版首帧交接：React 蒙版初次挂载时禁用过渡，直接以最终态（maskEnabled 时 opacity:1）
+   出现，与启动蒙版像素一致；下一帧（启动蒙版撤除后）移除 data-mask-initial 恢复过渡，
+   供后续用户改设置时的平滑淡入用。消除 opacity-0→100 的可感知蒙版加载。 */
+#newtab-background-mask[data-mask-initial],
+#newtab-background-mask[data-mask-initial]::before {
+  transition: none !important;
+}
+
+/* 自动居中：首帧信任缓存直接落位；reveal（移除 pending 属性）时仅做 opacity 淡入。
+   绝不过渡 margin-top——位移动画会让 getBoundingClientRect 读到动画中间值，
+   污染下一次测量并形成可见的上下漂移。 */
+.newtab-search-slot[data-search-auto-vertical-center="true"] {
+  transition: opacity 180ms var(--ui-ease-standard);
+}
+
+/* 时钟/搜索/引导条在 storage 水合后一次性挂载：轻淡入替代瞬间弹现。
+   CSS animation 只在节点插入时播放，后续 re-render 不重播。 */
+@keyframes newtab-utility-module-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.newtab-utility-stack > * {
+  animation: newtab-utility-module-enter 180ms var(--ui-ease-standard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .newtab-search-slot[data-search-auto-vertical-center="true"] {
+    transition: none;
+  }
+
+  .newtab-utility-stack > * {
+    animation: none;
+  }
+}
+
 .newtab-app {
   --newtab-wallpaper-focus-duration: 280ms;
   --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -165,8 +206,9 @@ html.instant-wallpaper-startup-preview body {
   will-change: auto;
 }
 
-#newtab-settings-drawer.is-opening .settings-drawer-panel,
-#newtab-settings-drawer.is-closing .settings-drawer-panel {
+#newtab-settings-drawer .settings-drawer-panel[data-starting-style],
+#newtab-settings-drawer .settings-drawer-panel[data-ending-style],
+#newtab-settings-drawer .settings-drawer-panel[data-swiping] {
   will-change: transform;
 }
 
