@@ -34,7 +34,7 @@ export const DASHBOARD_CHROME_SKELETON_LAYER_CLASS =
 
 export const DASHBOARD_TOOLBAR_SKELETON_ROOT_CLASS = [
   't-skel grid w-full overflow-visible',
-  '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.58] [--reveal-dur:360ms]',
+  '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.64] [--reveal-dur:190ms] motion-reduce:[--reveal-dur:1ms]',
   '[.dashboard-fullscreen-active_&]:[grid-area:dashboard-chrome]'
 ].join(' ')
 
@@ -231,7 +231,7 @@ export const DASHBOARD_RESULTS_TITLE_CLASS = 'sr-only'
 
 export const DASHBOARD_RESULTS_SKELETON_ROOT_CLASS = [
   't-skel min-h-0 flex-[1_1_auto] overflow-hidden',
-  '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.58] [--reveal-dur:360ms]'
+  '[--pulse-dur:900ms] [--pulse-count:2] [--pulse-min:0.64] [--reveal-dur:190ms] motion-reduce:[--reveal-dur:1ms]'
 ].join(' ')
 
 export const DASHBOARD_RESULTS_SKELETON_LAYER_CLASS =

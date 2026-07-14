@@ -87,6 +87,8 @@ const aiProviderSteps = [
   { id: 'test-connection', index: '4', title: '测试连接', copy: '确认模型可用' },
   { id: 'save-settings', index: '5', title: '保存', copy: '同步到 AI 功能' }
 ] as const
+const AI_PROVIDER_TEST_LABELS = ['测试连接', '测试中'] as const
+const AI_PROVIDER_FETCH_LABELS = ['获取模型', '获取中'] as const
 
 export function AiProviderSettings({
   attentionRequestId = 0
@@ -321,11 +323,11 @@ export function AiProviderSettings({
               focusableWhenDisabled={state.testingConnection}
               onClick={() => handleAiProviderSettingsAction({ action: 'test-connection' })}
             >
-              {state.testingConnection ? (
-                <ButtonBusyLoadingLabel label={state.testLabel} />
-              ) : (
-                state.testLabel
-              )}
+              <ButtonBusyLoadingLabel
+                busy={state.testingConnection}
+                label={state.testLabel}
+                reserveLabels={AI_PROVIDER_TEST_LABELS}
+              />
             </Button>
             {state.showSaveSettingsButton ? (
               <Button
@@ -390,11 +392,11 @@ function AiProviderModelToolsContent({
               focusableWhenDisabled={modelTools.fetchingModels}
               onClick={() => handleAiProviderSettingsAction({ action: 'fetch-models' })}
             >
-              {modelTools.fetchingModels ? (
-                <ButtonBusyLoadingLabel label={modelTools.fetchLabel} />
-              ) : (
-                modelTools.fetchLabel
-              )}
+              <ButtonBusyLoadingLabel
+                busy={modelTools.fetchingModels}
+                label={modelTools.fetchLabel}
+                reserveLabels={AI_PROVIDER_FETCH_LABELS}
+              />
             </Button>
           </div>
         </div>

@@ -1,19 +1,20 @@
 export const OPTION_PANEL_ENTER_CLASS = [
-  '[&:not([hidden])]:transition-[opacity,translate]',
-  '[&:not([hidden])]:duration-ds-standard',
-  '[&:not([hidden])]:ease-ds-standard',
-  '[&:not([hidden])]:starting:opacity-0',
-  '[&:not([hidden])]:starting:translate-y-1.5',
-  'motion-reduce:[&:not([hidden])]:transition-none'
+  '[.options-motion-ready_&:not([hidden])]:transition-[opacity,translate]',
+  '[.options-motion-ready_&:not([hidden])]:duration-ds-standard',
+  '[.options-motion-ready_&:not([hidden])]:ease-ds-standard',
+  '[.options-motion-ready_&:not([hidden])]:starting:opacity-0',
+  '[.options-motion-ready_&:not([hidden])]:starting:translate-y-1',
+  'motion-reduce:[.options-motion-ready_&:not([hidden])]:transition-opacity',
+  'motion-reduce:[.options-motion-ready_&:not([hidden])]:duration-[80ms]',
+  'motion-reduce:[.options-motion-ready_&:not([hidden])]:starting:translate-y-0'
 ].join(' ')
 
 export const OPTION_REVEAL_ENTER_CLASS = [
-  'transition-[opacity,translate]',
-  'duration-ds-standard',
-  'ease-ds-standard',
-  'starting:opacity-0',
-  'starting:-translate-y-1',
-  'motion-reduce:transition-none'
+  '[.options-motion-ready_&]:transition-opacity',
+  '[.options-motion-ready_&]:duration-ds-standard',
+  '[.options-motion-ready_&]:ease-ds-standard',
+  '[.options-motion-ready_&]:starting:opacity-0',
+  'motion-reduce:[.options-motion-ready_&]:duration-[80ms]'
 ].join(' ')
 
 export const OPTION_PANEL_BASE_CLASS =
@@ -104,10 +105,19 @@ export const OPTION_VALUE_CLASS = [
 ].join(' ')
 
 export const OPTION_PAGINATION_CLASS =
-  'mt-3.5 flex flex-wrap items-center justify-end gap-2.5 text-[13px] text-ds-text-secondary'
+  'mt-3.5 flex min-h-8 flex-wrap items-center justify-end gap-2.5 text-[13px] text-ds-text-secondary transition-opacity duration-ds-fast ease-ds-standard motion-reduce:duration-[80ms]'
+
+export const OPTION_PAGINATION_HIDDEN_CLASS =
+  'pointer-events-none invisible opacity-0'
 
 export const OPTION_PAGINATION_LABEL_CLASS =
   'font-[var(--font-sans)] text-[13px] font-semibold leading-normal text-ds-text-muted'
+
+export const OPTION_PAGINATION_RANGE_VALUE_CLASS =
+  'options-stable-number inline-block min-w-[13ch] text-right'
+
+export const OPTION_PAGINATION_PAGE_VALUE_CLASS =
+  'options-stable-number inline-block min-w-[7ch] text-center'
 
 export const OPTION_RESULT_CHECKBOX_CLASS =
   'inline-grid size-[15px] cursor-pointer place-items-center rounded-ds-sm border border-ds-border-hover bg-ds-surface-2 text-ds-text-inverse outline-none data-[checked]:border-ds-text-primary data-[checked]:bg-ds-text-primary data-[disabled]:cursor-default data-[disabled]:opacity-55 focus-visible:shadow-ds-focus'

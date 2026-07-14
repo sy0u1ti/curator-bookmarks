@@ -6,17 +6,17 @@ import { Input } from '../base/Input'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
-  'inline-flex min-h-[50px] w-full items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-none text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus disabled:cursor-not-allowed disabled:opacity-60'
+  'inline-flex min-h-[50px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-none text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
 const MODEL_SELECTOR_BACKDROP_CLASS =
-  'fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:opacity-0 data-starting-style:opacity-0 supports-[-webkit-touch-callout:none]:absolute'
+  'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:opacity-0 data-starting-style:opacity-0 supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =
-  'fixed left-1/2 top-[46%] z-[1201] max-h-[min(520px,calc(100dvh-72px))] w-[min(520px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-2 p-0 text-ds-text-primary [filter:var(--ds-filter-dialog)] outline-none transition-[opacity,transform] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:translate-y-[calc(-50%+8px)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:translate-y-[calc(-50%+8px)] data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[760px]:top-1/2 max-[760px]:w-[min(520px,calc(100vw-24px))]'
+  'model-selector-content fixed left-1/2 top-[46%] z-[1201] max-h-[min(520px,calc(100dvh-72px))] w-[min(520px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-2 p-0 text-ds-text-primary [filter:var(--ds-filter-dialog)] outline-none transition-[opacity,transform] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:translate-y-[calc(-50%+8px)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:translate-y-[calc(-50%+8px)] data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[760px]:top-1/2 max-[760px]:w-[min(520px,calc(100vw-24px))]'
 const MODEL_SELECTOR_COMMAND_CLASS = 'flex min-h-0 max-h-[inherit] flex-col bg-ds-surface-2'
 const MODEL_SELECTOR_INPUT_WRAPPER_CLASS =
   'grid min-h-[50px] grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-2.5 border-b border-ds-border-subtle px-3.5 text-ds-text-muted'
 const MODEL_SELECTOR_INPUT_ICON_CLASS = 'size-[17px] text-ds-text-muted'
 const MODEL_SELECTOR_CLEAR_BUTTON_CLASS =
-  'm-0 inline-flex size-[22px] cursor-pointer items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none'
+  'm-0 inline-flex size-[22px] touch-manipulation cursor-pointer select-none items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted transition-[background-color,color,transform] duration-ds-fast ease-ds-standard hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
 const MODEL_SELECTOR_CLEAR_SPACER_CLASS = 'size-[18px]'
 const MODEL_SELECTOR_INPUT_CLASS =
   'h-[50px] min-h-[50px] w-full border-0 bg-transparent text-sm font-medium text-ds-text-primary shadow-none outline-none placeholder:text-ds-text-secondary'
@@ -27,7 +27,7 @@ const MODEL_SELECTOR_GROUP_CLASS = 'mt-1.5 first:mt-0'
 const MODEL_SELECTOR_GROUP_HEADING_CLASS = 'px-2 pb-1.5 pt-[5px] text-xs font-semibold leading-[1.2] text-ds-accent-text'
 const MODEL_SELECTOR_GROUP_ITEMS_CLASS = 'grid list-none gap-px p-0'
 const MODEL_SELECTOR_ITEM_CLASS =
-  'grid min-h-8 w-full grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none hover:bg-ds-hover focus-visible:bg-ds-hover'
+  'grid min-h-8 w-full touch-manipulation select-none grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none transition-[background-color,color,transform] duration-ds-fast ease-ds-standard hover:bg-ds-hover focus-visible:bg-ds-hover active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
 const MODEL_SELECTOR_ITEM_CURRENT_CLASS = 'bg-ds-selected text-ds-accent-text'
 const MODEL_SELECTOR_LOGO_CLASS = 'size-3 flex-none object-contain invert'
 const MODEL_SELECTOR_LOGO_GROUP_CLASS = 'ml-auto inline-flex flex-none items-center'

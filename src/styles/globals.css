@@ -6,8 +6,26 @@
   isolation: isolate;
 }
 
+html {
+  font-family: var(--font-sans);
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   position: relative;
+}
+
+@layer base {
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    letter-spacing: inherit;
+  }
 }
 
 @keyframes auto-analyze-pulse {
@@ -20,17 +38,6 @@ body {
   50% {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes popup-skeleton-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: var(--pulse-min);
   }
 }
 
@@ -66,6 +73,15 @@ body {
 .t-number,
 .t-number-value {
   display: inline-block;
+  line-height: inherit;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.t-number,
+.t-number-value {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 .t-text-swap--animate .t-text-swap-value,
@@ -525,6 +541,18 @@ body {
     transform: none !important;
     transition: opacity 80ms linear !important;
   }
+
+  .model-selector-backdrop {
+    transition: opacity 80ms linear !important;
+  }
+
+  .model-selector-content,
+  .model-selector-content[data-starting-style],
+  .model-selector-content[data-ending-style] {
+    translate: -50% -50% !important;
+    scale: 1 !important;
+    transition: opacity 80ms linear !important;
+  }
 }
 
 .t-icon-swap {
@@ -559,9 +587,7 @@ body {
 /* The wrap stacks two layers on the same coordinates. The
    skeleton owns the cold pulse + the fade-out side of the
    reveal; the content owns the fade-in side. They share the
-   same duration / ease so the swap reads as one motion.
-   opacity 交叉淡入即可：filter blur 是重绘属性，大列表揭示时
-   会随主线程繁忙而冻结在模糊态。 */
+   same duration / ease so the swap reads as one motion. */
 .t-skel { position: relative; }
 .t-skel-skeleton,
 .t-skel-content {
@@ -572,18 +598,26 @@ body {
 .t-skel-skeleton {
   z-index: 1;
   opacity: 1;
-  transition: opacity var(--reveal-dur) var(--reveal-ease);
+  filter: blur(0);
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter  var(--reveal-dur) var(--reveal-ease);
 }
 .t-skel-content {
   z-index: 2;
   opacity: 0;
-  transition: opacity var(--reveal-dur) var(--reveal-ease);
+  filter: blur(var(--reveal-blur));
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter  var(--reveal-dur) var(--reveal-ease);
 }
 .t-skel.is-revealed .t-skel-skeleton {
   opacity: 0;
+  filter: blur(var(--reveal-blur));
 }
 .t-skel.is-revealed .t-skel-content {
   opacity: 1;
+  filter: blur(0);
 }
 /* Snap-back when replaying: kill transitions so the reverse
    (revealed → skeleton) is instant. Drop `.is-resetting`
@@ -686,7 +720,7 @@ body {
 }
 
 @starting-style {
-  .curator-motion-surface {
+  .curator-motion-surface[data-motion-enter="true"] {
     opacity: 0;
     transform: translate3d(0, var(--curator-motion-enter-y, 6px), 0) scale(var(--curator-motion-enter-scale, 0.992));
   }
@@ -700,7 +734,7 @@ body {
     box-shadow var(--ds-motion-fast) var(--resize-ease),
     color var(--ds-motion-fast) var(--resize-ease),
     opacity var(--ds-motion-standard) var(--resize-ease),
-    transform 130ms var(--resize-ease);
+    transform var(--ds-motion-fast) var(--resize-ease);
 }
 
 .curator-motion-row,
@@ -711,7 +745,7 @@ body {
     background-color var(--ds-motion-fast) var(--resize-ease),
     color var(--ds-motion-fast) var(--resize-ease),
     opacity var(--ds-motion-fast) var(--resize-ease),
-    transform 120ms var(--resize-ease);
+    transform var(--ds-motion-fast) var(--resize-ease);
 }
 
 .curator-motion-popover {
@@ -734,12 +768,7 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):hover {
-    transform: translate3d(0, -1px, 0) scale(1.004);
-  }
-
-  .curator-motion-row:not([aria-current="page"]):not([aria-selected="true"]):hover,
-  .curator-motion-chip:not([aria-current="page"]):not([aria-selected="true"]):hover {
-    transform: translate3d(1px, 0, 0);
+    transform: translate3d(0, -1px, 0);
   }
 }
 
@@ -747,10 +776,14 @@ body {
 .curator-motion-row:active,
 .curator-motion-chip:active {
   transform: scale(var(--ds-press-scale, 0.985));
-  transition-duration: 80ms;
+  transition-duration: var(--ds-motion-feedback);
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto !important;
+  }
+
   .curator-motion-surface,
   .curator-motion-card,
   .curator-motion-row,

@@ -134,6 +134,7 @@ import {
 } from './popup-preboot-input.js'
 import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
 import { writeClipboardText } from '../shared/clipboard.js'
+import { runIdle } from '../shared/idle.js'
 import {
   SMART_LOADING_PROGRESS_COMPLETE_MS,
   SMART_LOADING_PROGRESS_TICK_MS,
@@ -150,6 +151,8 @@ const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
 const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
 const KEYBOARD_NAVIGATION_SETTLE_MS = 120
+const POPUP_PINYIN_BATCH_SIZE = 12
+const POPUP_PINYIN_IDLE_TIMEOUT_MS = 500
 const SMART_RECOMMENDATION_LIMIT = 3
 const POPUP_DEFAULT_WORKSPACE_STORAGE = {
   activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID,
@@ -700,7 +703,6 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     }
     state.isLoading = false
     render()
-    schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
   }
 }
 async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefreshBaseData> {
@@ -882,7 +884,6 @@ function applyPopupSearchEnhancementData(
     runSearch()
   }
   render()
-  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
 function schedulePinyinEnrichment(runId: number): void {
   if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
@@ -903,7 +904,9 @@ function schedulePinyinEnrichment(runId: number): void {
       return
     }
     enrichLightPopupSearchIndexWithPinyin(targets, {
-      isActive: () => runId === state.pinyinEnrichmentRunId
+      batchSize: POPUP_PINYIN_BATCH_SIZE,
+      isActive: () => runId === state.pinyinEnrichmentRunId,
+      yieldWork: yieldPopupPinyinWork
     })
       .then((result) => {
         if (runId !== state.pinyinEnrichmentRunId) {
@@ -934,7 +937,13 @@ function schedulePinyinEnrichment(runId: number): void {
         console.warn('[Curator] 拼音索引补齐失败', error)
       })
   }
-  setTimeout(startEnrichment, 0)
+  runIdle(startEnrichment, { timeout: POPUP_PINYIN_IDLE_TIMEOUT_MS })
+}
+
+function yieldPopupPinyinWork(): Promise<void> {
+  return new Promise((resolve) => {
+    runIdle(resolve, { timeout: 120 })
+  })
 }
 function ensurePinyinEnrichmentForQuery(query: string): void {
   if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
@@ -1115,7 +1124,6 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
     runSearch()
   }
   render()
-  schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
 }
 function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   return new Promise((resolve, reject) => {
@@ -1614,8 +1622,9 @@ function getNaturalSearchStatusLabelFallback(plan: NaturalSearchPlan | null): st
   return parts.join(' · ')
 }
 function getNaturalKeywordSummaryFallback(plan: NaturalSearchPlan): string {
+  const excludedTerms = new Set(plan.excludedTerms)
   const terms = getQueryTerms(plan.highlightQuery)
-    .filter((term) => !plan.excludedTerms.includes(term))
+    .filter((term) => !excludedTerms.has(term))
   return formatNaturalTermsFallback(terms, 3)
 }
 function formatNaturalTermsFallback(terms: string[], limit: number): string {

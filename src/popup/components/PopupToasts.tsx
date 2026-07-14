@@ -8,7 +8,7 @@ import {
 const TOAST_BUTTON_CLASS = [
   'inline-flex min-h-8 items-center justify-center rounded-ds-sm border px-2.5 text-xs font-semibold',
   'border-ds-border bg-ds-surface-2 text-ds-text-primary shadow-none',
-  'transition-[background,border-color,color,transform] duration-150 ease-ds-standard',
+  'transition-[background-color,border-color,color,transform] duration-150 ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary',
   'active:scale-[0.97]'

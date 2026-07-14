@@ -218,6 +218,7 @@ export function NewtabBackgroundLayer({ loadingWallpaper }: NewtabBackgroundLaye
           className={BACKGROUND_IMAGE_CLASS}
           style={incomingImageStyle}
           data-state={imageState.incomingVisible ? 'visible' : 'enter'}
+          data-transitioning="true"
           aria-hidden="true"
         ></div>
       ) : null}

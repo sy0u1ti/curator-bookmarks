@@ -1,10 +1,10 @@
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
 
 export const OPTIONS_MODAL_BACKDROP_CLASS =
-  `absolute inset-0 bg-black/70 backdrop-blur-[14px] ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-[14px] ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_PANEL_CLASS =
-  `pointer-events-auto relative z-10 w-full max-w-[420px] max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-panel pointer-events-auto relative z-10 w-full max-w-[420px] max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_WIDE_PANEL_CLASS = `${OPTIONS_MODAL_PANEL_CLASS} max-w-[620px]`
 
@@ -52,13 +52,13 @@ export const FOLDER_PICKER_TREE_ROW_CLASS =
   'relative grid min-h-[34px] grid-cols-[20px_minmax(0,1fr)] items-center gap-1'
 
 export const FOLDER_PICKER_TOGGLE_CLASS =
-  'inline-flex h-7 min-h-7 w-5 min-w-5 items-center justify-center rounded-md border border-transparent bg-transparent text-ds-text-muted outline-none transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-ds-border hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1 active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
+  'folder-picker-toggle inline-flex h-7 min-h-7 w-5 min-w-5 items-center justify-center rounded-md border border-transparent bg-transparent text-ds-text-muted outline-none transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-ds-border hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1 active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
 
 export const FOLDER_PICKER_TOGGLE_ICON_CLASS =
-  'transition-transform duration-ds-fast ease-ds-standard'
+  'folder-picker-toggle-icon transition-transform duration-ds-fast ease-ds-standard'
 
 export const FOLDER_PICKER_CARD_CLASS =
-  'grid min-h-[34px] w-full min-w-0 cursor-pointer grid-cols-[12px_minmax(0,1fr)] items-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1 text-left font-[inherit] leading-normal text-ds-text-primary shadow-none outline-none transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard hover:border-ds-text-primary/10 hover:bg-ds-text-primary/[0.055] focus-visible:border-ds-text-primary/10 focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1 active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'folder-picker-card grid min-h-[34px] w-full min-w-0 cursor-pointer grid-cols-[12px_minmax(0,1fr)] items-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1 text-left font-[inherit] leading-normal text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:border-ds-text-primary/10 hover:bg-ds-text-primary/[0.055] focus-visible:border-ds-text-primary/10 focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1 active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const FOLDER_PICKER_CARD_CURRENT_CLASS =
   'border-ds-border bg-ds-text-primary/[0.11]'

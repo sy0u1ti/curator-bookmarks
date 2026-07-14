@@ -23,7 +23,7 @@ const STATUS_INDICATOR_CLASS: Record<string, string> = {
 }
 
 const actionClass =
-  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-1 px-2 text-[11px] font-semibold leading-none text-ds-text-primary outline-none transition-colors hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
+  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-1 px-2 text-[11px] font-semibold leading-none text-ds-text-primary outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover active:scale-[0.98]'
 
 const ghostActionClass =
   'border-transparent bg-transparent text-ds-text-secondary hover:text-ds-text-primary focus-visible:text-ds-text-primary'

@@ -50,19 +50,36 @@ const SETTINGS_INPUT_CLASS =
   'w-full min-w-0 text-center font-semibold'
 const SETTINGS_NOTE_CLASS = 'mb-0 mt-3 text-xs leading-[1.6] text-ds-text-muted'
 const SETTINGS_ACTIONS_CLASS = 'mt-3.5 flex flex-wrap items-center justify-end gap-2.5'
+const AVAILABILITY_ACTION_LABELS = [
+  '开始检测全部书签',
+  '开始检测当前范围',
+  '重新检测全部书签',
+  '重新检测当前范围',
+  '正在准备检测…',
+  '正在请求站点授权…',
+  '正在重新测试…',
+  '正在检测…',
+  '检测已暂停',
+  '停止中…'
+] as const
+const AVAILABILITY_STOP_LABELS = ['停止本次检测', '停止中…'] as const
 
 function BusyLabel({
   busy,
-  label
+  label,
+  reserveLabels
 }: {
   busy: boolean
   label: string
+  reserveLabels: readonly string[]
 }) {
-  if (!busy) {
-    return <>{label}</>
-  }
-
-  return <ButtonBusyLoadingLabel label={label} />
+  return (
+    <ButtonBusyLoadingLabel
+      busy={busy}
+      label={label}
+      reserveLabels={reserveLabels}
+    />
+  )
 }
 
 export function AvailabilityControls() {
@@ -211,7 +228,11 @@ export function AvailabilityControls() {
           focusableWhenDisabled={state.actionDisabled}
           onClick={() => handleAvailabilityControlsAction({ action: 'start' })}
         >
-          <BusyLabel busy={state.actionBusy} label={state.actionLabel} />
+          <BusyLabel
+            busy={state.actionBusy}
+            label={state.actionLabel}
+            reserveLabels={AVAILABILITY_ACTION_LABELS}
+          />
         </Button>
         {state.pauseHidden ? null : (
           <Button
@@ -236,7 +257,11 @@ export function AvailabilityControls() {
             focusableWhenDisabled={state.stopDisabled}
             onClick={() => handleAvailabilityControlsAction({ action: 'stop' })}
           >
-            <BusyLabel busy={state.stopBusy} label={state.stopLabel} />
+            <BusyLabel
+              busy={state.stopBusy}
+              label={state.stopLabel}
+              reserveLabels={AVAILABILITY_STOP_LABELS}
+            />
           </Button>
         )}
       </div>

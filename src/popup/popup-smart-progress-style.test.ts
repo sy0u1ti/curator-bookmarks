@@ -26,7 +26,7 @@ assert(progressClassSource.includes('duration-[320ms] ease-linear'), 'smart prog
 assert(progressClassSource.includes('rgba(237,237,237,0.86)'), 'smart progress should use the Geist gray-white fill')
 assert(!progressClassSource.includes('--ds-accent'), 'smart progress should not use the blue accent token')
 assert(!progressClassSource.includes('--ds-focus'), 'smart progress should not use the blue focus token')
-assert(componentSource.includes('<NumberPop text={`${loadingPercent}%`} />'), 'smart progress should show its visible percentage')
+assert(componentSource.includes('<span className="tabular-nums">{loadingPercent}%</span>'), 'smart progress should show its latest percentage without animating replacement text')
 assert(
   /prefers-reduced-motion[\s\S]*?\.smart-progress-bar::after[\s\S]*?animation:\s*none\s*!important/.test(popupCssSource),
   'reduced motion should stop the progress sheen'

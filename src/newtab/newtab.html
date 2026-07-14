@@ -8,12 +8,18 @@
       :root {
         color-scheme: dark;
         --bg: #101013;
+        --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
         --wallpaper-placeholder-bg: #101013;
         --instant-wallpaper-preview-blur: 0px;
         --instant-wallpaper-preview-loading-blur: 0px;
         --instant-wallpaper-preview-loading-opacity: 1;
         --instant-wallpaper-preview-opacity: 1;
         background-color: #101013;
+        font-family: var(--newtab-font-sans);
+        font-optical-sizing: auto;
+        font-synthesis: none;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
       }
 
       html,
@@ -44,6 +50,10 @@
         opacity: var(--instant-wallpaper-preview-opacity, 1);
         pointer-events: none;
         transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);
+      }
+
+      html.loading-wallpaper body::before,
+      html:not([data-instant-wallpaper-preview-only="true"]).instant-wallpaper-ready:not(.instant-wallpaper-remote-ready) body::before {
         will-change: opacity;
       }
 
@@ -59,6 +69,7 @@
       @media (prefers-reduced-motion: reduce) {
         body::before {
           transition: none;
+          will-change: auto;
         }
       }
     </style>
@@ -76,6 +87,13 @@
 
       html[data-instant-wallpaper-mask="false"] #newtab-startup-background-mask {
         display: none;
+      }
+
+      @media (prefers-reduced-transparency: reduce) {
+        #newtab-startup-background-mask {
+          -webkit-backdrop-filter: none;
+          backdrop-filter: none;
+        }
       }
     </style>
   </head>

@@ -1,7 +1,4 @@
-import {
-  OPTIONS_REDUCED_MOTION_SHELL_TRANSFORM_CLASS,
-  OPTIONS_REDUCED_MOTION_SURFACE_CLASS
-} from './options-motion-classes.js'
+import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
 
 export const optionsHeaderClass =
   'sticky top-0 z-20 col-[1] row-[1] flex h-[86px] min-h-[86px] w-[244px] min-w-0 items-start justify-start m-0 bg-ds-page bg-none p-[14px_16px_0] shadow-none pointer-events-auto max-[1180px]:w-[220px] max-[920px]:static max-[920px]:mx-auto max-[920px]:h-auto max-[920px]:w-[min(100%,760px)] max-[920px]:p-[14px_0_0] max-[760px]:w-full max-[760px]:max-w-full max-[760px]:min-w-0'
@@ -95,10 +92,9 @@ export const optionsMainClass = [
 ].join(' ')
 
 export const optionsShellClassBase = [
-  'relative isolate grid h-screen min-h-screen grid-cols-[244px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden bg-ds-page [background-image:none] p-0 [font-family:var(--font-sans)] text-ds-text-primary [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[920px]:block max-[920px]:h-dvh max-[920px]:min-h-dvh max-[920px]:max-h-dvh max-[920px]:overflow-x-hidden max-[920px]:overflow-y-auto max-[920px]:overscroll-contain max-[920px]:[scrollbar-gutter:stable] max-[920px]:p-[0_24px_36px] max-[760px]:w-full max-[760px]:max-w-full max-[760px]:px-[14px] gap-x-0 justify-stretch',
+  'options-shell relative isolate grid h-screen min-h-screen grid-cols-[244px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] overflow-hidden bg-ds-page [background-image:none] p-0 [font-family:var(--font-sans)] text-ds-text-primary [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all] [&_:where(input,textarea,select,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] max-[1180px]:grid-cols-[220px_minmax(0,1fr)] max-[920px]:block max-[920px]:h-dvh max-[920px]:min-h-dvh max-[920px]:max-h-dvh max-[920px]:overflow-x-hidden max-[920px]:overflow-y-auto max-[920px]:overscroll-contain max-[920px]:[scrollbar-gutter:stable] max-[920px]:p-[0_24px_36px] max-[760px]:w-full max-[760px]:max-w-full max-[760px]:px-[14px] gap-x-0 justify-stretch',
   '[-webkit-font-smoothing:antialiased] [text-rendering:optimizeLegibility]',
   OPTIONS_REDUCED_MOTION_SURFACE_CLASS,
-  OPTIONS_REDUCED_MOTION_SHELL_TRANSFORM_CLASS,
   '[&.dashboard-fullscreen-active]:block [&.dashboard-fullscreen-active]:h-screen',
   '[&.dashboard-fullscreen-active]:min-h-screen [&.dashboard-fullscreen-active]:overflow-hidden',
   '[&.dashboard-fullscreen-active]:p-0',

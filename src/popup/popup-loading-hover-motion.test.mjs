@@ -1,0 +1,447 @@
+import assert from 'node:assert/strict'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { chromium } from 'playwright'
+
+const extensionPath = path.resolve('dist')
+const profilePath = await mkdtemp(path.join(tmpdir(), 'curator-popup-loading-hover-'))
+const capturePath = process.argv.includes('--capture')
+  ? path.resolve('output/playwright/popup-cold-open.png')
+  : null
+const seededFolderCount = 48
+const seededItemsPerFolder = 12
+
+async function seedBookmarks(worker) {
+  await worker.evaluate(async ({ folderCount, itemsPerFolder }) => {
+    const tree = await chrome.bookmarks.getTree()
+    const root = tree[0]
+    const bookmarksBar = root.children?.find((node) => node.id === '1') || root.children?.[0]
+    if (!bookmarksBar?.id) throw new Error('Bookmarks bar is unavailable')
+
+    const folder = await chrome.bookmarks.create({
+      parentId: bookmarksBar.id,
+      title: `Popup motion probe ${Date.now()}`
+    })
+    for (let folderIndex = 0; folderIndex < folderCount; folderIndex += 1) {
+      const childFolder = await chrome.bookmarks.create({
+        parentId: folder.id,
+        title: `Popup motion folder ${String(folderIndex + 1).padStart(2, '0')}`
+      })
+      for (let itemIndex = 0; itemIndex < itemsPerFolder; itemIndex += 1) {
+        await chrome.bookmarks.create({
+          parentId: childFolder.id,
+          title: `Popup motion item ${String(folderIndex + 1).padStart(2, '0')}-${String(itemIndex + 1).padStart(2, '0')}`,
+          url: `https://example.com/popup-motion/${folderIndex + 1}/${itemIndex + 1}`
+        })
+      }
+    }
+  }, { folderCount: seededFolderCount, itemsPerFolder: seededItemsPerFolder })
+}
+
+async function waitForFrames(page, count = 2) {
+  await page.evaluate((frameCount) => new Promise((resolve) => {
+    let remaining = frameCount
+    const tick = () => {
+      remaining -= 1
+      if (remaining <= 0) {
+        resolve()
+        return
+      }
+      requestAnimationFrame(tick)
+    }
+    requestAnimationFrame(tick)
+  }), count)
+}
+
+function maxTransitionMs(value) {
+  return Math.max(...value.split(',').map((entry) => {
+    const duration = Number.parseFloat(entry)
+    return duration * (entry.includes('ms') ? 1 : 1000)
+  }))
+}
+
+async function measureWheelScrollResponse(page, selector) {
+  const container = page.locator(selector).first()
+  const metrics = await container.evaluate((element) => {
+    element.scrollTop = 0
+    window.__popupScrollProbeWheelEvents = 0
+    element.addEventListener('wheel', () => {
+      window.__popupScrollProbeWheelEvents += 1
+    }, { capture: true, once: true })
+    return {
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }
+  })
+  if (metrics.scrollHeight <= metrics.clientHeight) return null
+
+  const box = await container.boundingBox()
+  if (!box) throw new Error(`Scrollable container is not visible: ${selector}`)
+  const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  await page.bringToFront()
+  await page.mouse.move(point.x, point.y)
+  await container.evaluate(() => {
+    window.__popupScrollProbeStartedAt = performance.now()
+  })
+  await page.mouse.wheel(0, 360)
+  await page.waitForFunction((targetSelector) => {
+    const element = document.querySelector(targetSelector)
+    return element instanceof HTMLElement && element.scrollTop > 0
+  }, selector, { timeout: 1_500 }).catch(() => undefined)
+  const response = await container.evaluate((element) => ({
+    durationMs: performance.now() - window.__popupScrollProbeStartedAt,
+    clientHeight: element.clientHeight,
+    scrollTop: element.scrollTop,
+    scrollHeight: element.scrollHeight,
+    wheelEvents: window.__popupScrollProbeWheelEvents
+  }))
+  return response
+}
+
+async function inspectBottomWindow(page, containerSelector, rowSelector) {
+  return page.locator(containerSelector).first().evaluate(async (element, targetRowSelector) => {
+    element.scrollTop = element.scrollHeight
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const rows = [...element.querySelectorAll(targetRowSelector)]
+    return {
+      lastText: rows.at(-1)?.textContent || '',
+      maxScrollTop: Math.max(0, element.scrollHeight - element.clientHeight),
+      renderedRows: rows.length,
+      scrollTop: element.scrollTop
+    }
+  }, rowSelector)
+}
+
+let context
+
+try {
+  context = await chromium.launchPersistentContext(profilePath, {
+    headless: false,
+    reducedMotion: 'no-preference',
+    viewport: { width: 800, height: 600 },
+    args: [
+      `--disable-extensions-except=${extensionPath}`,
+      `--load-extension=${extensionPath}`
+    ]
+  })
+  const worker = context.serviceWorkers()[0]
+    ?? await context.waitForEvent('serviceworker', { timeout: 15_000 })
+  await seedBookmarks(worker)
+  const extensionId = new URL(worker.url()).host
+  const page = await context.newPage()
+  await page.addInitScript(() => {
+    const probe = {
+      readyAt: 0,
+      firstFrameDelayMs: 0,
+      longAnimationFrames: [],
+      maxFrameGapMs: 0,
+      longTasks: []
+    }
+    Object.defineProperty(window, '__popupColdOpenProbe', {
+      configurable: false,
+      enumerable: false,
+      value: probe
+    })
+
+    try {
+      const longTaskObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          probe.longTasks.push({
+            duration: entry.duration,
+            startTime: entry.startTime
+          })
+        }
+      })
+      longTaskObserver.observe({ type: 'longtask', buffered: true })
+    } catch {
+      // Long Task timing is unavailable in some Chromium extension contexts.
+    }
+
+    try {
+      const longAnimationFrameObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          probe.longAnimationFrames.push({
+            blockingDuration: entry.blockingDuration,
+            duration: entry.duration,
+            startTime: entry.startTime
+          })
+        }
+      })
+      longAnimationFrameObserver.observe({ type: 'long-animation-frame', buffered: true })
+    } catch {
+      // Long Animation Frame attribution is unavailable in older Chromium builds.
+    }
+
+    const readyObserver = new MutationObserver(() => {
+      if (probe.readyAt > 0) return
+      const readyShell = [...document.querySelectorAll('[data-state="ready"][aria-busy="false"]')]
+        .find((element) => element.querySelector('.popup-main-row'))
+      if (!readyShell) return
+
+      probe.readyAt = performance.now()
+      let previousFrameAt = probe.readyAt
+      let frameCount = 0
+      const sampleFrame = () => {
+        const sampledAt = performance.now()
+        const frameGap = sampledAt - previousFrameAt
+        if (frameCount === 0) probe.firstFrameDelayMs = frameGap
+        probe.maxFrameGapMs = Math.max(probe.maxFrameGapMs, frameGap)
+        previousFrameAt = sampledAt
+        frameCount += 1
+        if (sampledAt - probe.readyAt < 1_000) requestAnimationFrame(sampleFrame)
+      }
+      requestAnimationFrame(sampleFrame)
+      readyObserver.disconnect()
+    })
+    readyObserver.observe(document, { childList: true, subtree: true, attributes: true })
+  })
+  await page.mouse.move(2, 2)
+  await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-state="ready"][aria-busy="false"]')]
+    .some((element) => element.querySelector('.popup-main-row')))
+  const readyToAutomationMs = await page.evaluate(() => {
+    const probe = window.__popupColdOpenProbe
+    if (!probe?.readyAt) throw new Error('Popup cold-open readiness was not observed')
+    return performance.now() - probe.readyAt
+  })
+  const initiallyMountedQuickActions = await page.locator(
+    '.t-skel-content .popup-row-actions-menu button'
+  ).count()
+  const mainScrollResponse = await measureWheelScrollResponse(page, '.t-skel-content .popup-main-list')
+  const folderScrollResponse = await measureWheelScrollResponse(page, '.t-skel-content .popup-folder-tree')
+  const mainBottomWindow = await inspectBottomWindow(
+    page,
+    '.t-skel-content .popup-main-list',
+    '.popup-main-row'
+  )
+  const folderBottomWindow = await inspectBottomWindow(
+    page,
+    '.t-skel-content .popup-folder-tree',
+    '[role="treeitem"]'
+  )
+  await page.waitForFunction(() => {
+    const probe = window.__popupColdOpenProbe
+    return probe?.readyAt > 0 && performance.now() - probe.readyAt >= 1_000
+  })
+  const coldOpenProbe = await page.evaluate(() => {
+    const probe = window.__popupColdOpenProbe
+    return {
+      domRows: {
+        bookmarks: document.querySelectorAll('.t-skel-content .popup-main-row').length,
+        folders: document.querySelectorAll('.t-skel-content [role="treeitem"]').length
+      },
+      firstFrameDelayMs: probe.firstFrameDelayMs,
+      maxFrameGapMs: probe.maxFrameGapMs,
+      readyToAutomationMs: performance.now() - probe.readyAt,
+      longTasksAfterReady: probe.longTasks.filter((entry) => entry.startTime >= probe.readyAt),
+      longAnimationFramesAfterReady: probe.longAnimationFrames.filter((entry) => entry.startTime >= probe.readyAt)
+    }
+  })
+  await waitForFrames(page)
+
+  const workspaceShell = page.locator('[data-state="ready"][aria-busy="false"]').filter({
+    has: page.locator('.popup-main-row')
+  }).first()
+  const revealStyles = await workspaceShell.evaluate((shell) => {
+    const skeleton = shell.children[0]
+    const content = shell.children[1]
+    if (!(skeleton instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+      throw new Error('Popup skeleton layers are unavailable')
+    }
+    const skeletonStyle = getComputedStyle(skeleton)
+    const contentStyle = getComputedStyle(content)
+    return {
+      contentFilter: contentStyle.filter,
+      contentTransitionDuration: contentStyle.transitionDuration,
+      contentTransitionProperty: contentStyle.transitionProperty,
+      skeletonFilter: skeletonStyle.filter,
+      skeletonTransitionDuration: skeletonStyle.transitionDuration,
+      skeletonTransitionProperty: skeletonStyle.transitionProperty
+    }
+  })
+  const liveReveal = await workspaceShell.evaluate((shell) => new Promise((resolve) => {
+    const skeleton = shell.children[0]
+    const content = shell.children[1]
+    if (!(skeleton instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+      throw new Error('Popup skeleton layers are unavailable')
+    }
+    shell.classList.add('is-resetting')
+    shell.classList.remove('is-revealed')
+    void shell.getBoundingClientRect()
+    shell.classList.remove('is-resetting')
+    const samples = []
+    requestAnimationFrame(() => {
+      shell.classList.add('is-revealed')
+      const startedAt = performance.now()
+      const sample = (now) => {
+        const skeletonStyle = getComputedStyle(skeleton)
+        const contentStyle = getComputedStyle(content)
+        samples.push({
+          contentFilter: contentStyle.filter,
+          contentOpacity: Number.parseFloat(contentStyle.opacity),
+          contentTransform: contentStyle.transform,
+          skeletonFilter: skeletonStyle.filter,
+          skeletonOpacity: Number.parseFloat(skeletonStyle.opacity),
+          skeletonTransform: skeletonStyle.transform
+        })
+        if (now - startedAt < 300) {
+          requestAnimationFrame(sample)
+          return
+        }
+        resolve({
+          final: samples.at(-1),
+          sawAnyBlur: samples.some((entry) =>
+            (entry.contentFilter !== 'none' && entry.contentFilter !== 'blur(0px)') ||
+            (entry.skeletonFilter !== 'none' && entry.skeletonFilter !== 'blur(0px)')
+          ),
+          sawCrossFade: samples.some((entry) =>
+            entry.contentOpacity > 0.02 && entry.contentOpacity < 0.98 &&
+            entry.skeletonOpacity > 0.02 && entry.skeletonOpacity < 0.98
+          ),
+          sawTranslateReveal: samples.some((entry) => {
+            if (entry.contentTransform === 'none') return false
+            const matrix = new DOMMatrixReadOnly(entry.contentTransform)
+            return matrix.m42 > 0.05
+          })
+        })
+      }
+      requestAnimationFrame(sample)
+    })
+  }))
+
+  await page.locator('.t-skel-content .popup-main-list').evaluate((element) => {
+    element.scrollTop = 0
+  })
+  await waitForFrames(page)
+  const targetRow = page.locator('.t-skel-content .popup-main-row:not([data-active="true"])').filter({
+    has: page.locator('.popup-row-actions')
+  }).nth(1)
+  const hoverPoint = await targetRow.evaluate((row) => {
+    const rect = row.getBoundingClientRect()
+    return { x: rect.left + rect.width * 0.56, y: rect.top + rect.height / 2 }
+  })
+  const beforeHover = await targetRow.evaluate((row) => {
+    const actions = row.querySelector('.popup-row-actions')
+    if (!(actions instanceof HTMLElement)) throw new Error('Popup row actions are unavailable')
+    const actionsRect = actions.getBoundingClientRect()
+    const rowRect = row.getBoundingClientRect()
+    return { actionsWidth: actionsRect.width, rowWidth: rowRect.width }
+  })
+  await page.mouse.move(hoverPoint.x, hoverPoint.y)
+  await waitForFrames(page)
+  const hoveredQuickActions = await targetRow.locator('.popup-row-actions-menu button').count()
+  const afterHover = await targetRow.evaluate((row) => {
+    const actions = row.querySelector('.popup-row-actions')
+    if (!(actions instanceof HTMLElement)) throw new Error('Popup row actions are unavailable')
+    const actionsRect = actions.getBoundingClientRect()
+    const rowRect = row.getBoundingClientRect()
+    return { actionsWidth: actionsRect.width, rowWidth: rowRect.width }
+  })
+
+  const result = {
+    coldOpenProbe: {
+      ...coldOpenProbe,
+      folderBottomWindow,
+      folderScrollResponse,
+      mainBottomWindow,
+      mainScrollResponse,
+      readyToAutomationMs
+    },
+    revealStyles,
+    liveReveal,
+    beforeHover,
+    hoveredQuickActions,
+    initiallyMountedQuickActions,
+    afterHover,
+    contentTransitionMs: maxTransitionMs(revealStyles.contentTransitionDuration),
+    skeletonTransitionMs: maxTransitionMs(revealStyles.skeletonTransitionDuration)
+  }
+  if (capturePath) {
+    await mkdir(path.dirname(capturePath), { recursive: true })
+    await page.screenshot({ path: capturePath })
+  }
+  console.log(`Popup loading and lower-hover probe: ${JSON.stringify(result)}`)
+
+  assert.ok(
+    readyToAutomationMs <= 160,
+    `Popup must accept automation/input immediately after loaded content appears: ${readyToAutomationMs.toFixed(1)}ms`
+  )
+  assert.ok(
+    coldOpenProbe.domRows.bookmarks <= 40,
+    `Cold open must window bookmark DOM rows instead of mounting the full catalog: ${coldOpenProbe.domRows.bookmarks}`
+  )
+  assert.ok(
+    coldOpenProbe.domRows.folders <= 40,
+    `Cold open must window folder DOM rows instead of mounting the full tree: ${coldOpenProbe.domRows.folders}`
+  )
+  assert.ok(
+    mainScrollResponse && mainScrollResponse.scrollTop > 0 && mainScrollResponse.durationMs <= 160,
+    `Bookmark list must scroll immediately after ready: ${JSON.stringify(mainScrollResponse)}`
+  )
+  assert.ok(
+    folderScrollResponse && folderScrollResponse.scrollTop > 0 && folderScrollResponse.durationMs <= 160,
+    `Folder tree must scroll immediately after ready: ${JSON.stringify(folderScrollResponse)}`
+  )
+  assert.ok(
+    mainScrollResponse.scrollHeight >= seededFolderCount * seededItemsPerFolder * 75,
+    `Bookmark virtualization must preserve the full scroll range: ${mainScrollResponse.scrollHeight}`
+  )
+  assert.ok(
+    folderScrollResponse.scrollHeight >= seededFolderCount * 30,
+    `Folder virtualization must preserve the full scroll range: ${folderScrollResponse.scrollHeight}`
+  )
+  assert.ok(
+    mainBottomWindow.maxScrollTop - mainBottomWindow.scrollTop <= 1 &&
+      mainBottomWindow.lastText.includes('Popup motion item 48-12'),
+    `Bookmark virtualization must render the final row at the bottom: ${JSON.stringify(mainBottomWindow)}`
+  )
+  assert.ok(
+    folderBottomWindow.maxScrollTop - folderBottomWindow.scrollTop <= 1 &&
+      folderBottomWindow.lastText.includes('Popup motion folder 48'),
+    `Folder virtualization must render the final row at the bottom: ${JSON.stringify(folderBottomWindow)}`
+  )
+  assert.equal(initiallyMountedQuickActions, 0, 'Collapsed rows must not mount hidden quick-action buttons during cold open')
+  assert.ok(hoveredQuickActions >= 5, 'Hovering a row must mount its complete quick-action rail on demand')
+  assert.ok(
+    coldOpenProbe.firstFrameDelayMs <= 160,
+    `Popup must paint an interactive frame immediately after becoming ready: ${coldOpenProbe.firstFrameDelayMs.toFixed(1)}ms`
+  )
+  assert.ok(
+    coldOpenProbe.maxFrameGapMs <= 160,
+    `Popup must not block scrolling with a long post-ready task: ${coldOpenProbe.maxFrameGapMs.toFixed(1)}ms`
+  )
+  assert.equal(
+    coldOpenProbe.longTasksAfterReady.filter((entry) => entry.duration > 160).length,
+    0,
+    `Popup must not run >160ms tasks after loaded content appears: ${JSON.stringify(coldOpenProbe.longTasksAfterReady)}`
+  )
+  assert.equal(
+    coldOpenProbe.longAnimationFramesAfterReady.filter((entry) => entry.blockingDuration > 160).length,
+    0,
+    `Popup must not produce a blocking post-ready animation frame: ${JSON.stringify(coldOpenProbe.longAnimationFramesAfterReady)}`
+  )
+  assert.doesNotMatch(revealStyles.skeletonTransitionProperty, /(?:^|,\s*)filter(?:,|$)/, 'Large skeleton layers must not animate filter')
+  assert.match(revealStyles.contentTransitionProperty, /(?:^|,\s*)transform(?:,|$)/, 'Loaded content must use a compositor-only translate reveal')
+  assert.doesNotMatch(revealStyles.contentTransitionProperty, /(?:^|,\s*)filter(?:,|$)/, 'Loaded text must never animate blur')
+  assert.equal(revealStyles.contentFilter, 'none', 'Loaded text must remain crisp before and after reveal')
+  assert.equal(revealStyles.skeletonFilter, 'none', 'Large skeleton surfaces must avoid blur rasterization')
+  assert.ok(result.contentTransitionMs >= 150 && result.contentTransitionMs <= 200, 'Popup reveal must be perceptible without lingering')
+  assert.equal(liveReveal.sawCrossFade, true, 'The popup skeleton and content must visibly cross-fade')
+  assert.equal(liveReveal.sawTranslateReveal, true, 'Loaded content must settle with a subtle translate reveal')
+  assert.equal(liveReveal.sawAnyBlur, false, 'No reveal frame may leave the loaded text blurred')
+  assert.ok(liveReveal.final.contentOpacity >= 0.99 && liveReveal.final.skeletonOpacity <= 0.01, 'The popup reveal must settle on crisp content')
+  assert.ok(
+    Math.abs(afterHover.actionsWidth - beforeHover.actionsWidth) <= 0.5,
+    `Lower-row hover must not resize its overlay hit box: ${JSON.stringify({ before: beforeHover.actionsWidth, after: afterHover.actionsWidth })}`
+  )
+  assert.ok(
+    Math.abs(afterHover.rowWidth - beforeHover.rowWidth) <= 0.5,
+    'Lower-row hover must not change bookmark row geometry'
+  )
+
+  console.log('Popup loading hover motion regression test passed.')
+} finally {
+  await context?.close()
+  await rm(profilePath, { recursive: true, force: true })
+}

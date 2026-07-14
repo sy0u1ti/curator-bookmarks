@@ -4,6 +4,22 @@ html {
   scrollbar-gutter: stable;
 }
 
+html,
+body,
+#options-root,
+#options-root > .curator-react-root {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--ds-bg-page);
+}
+
 :root,
 html,
 body,
@@ -37,4 +53,94 @@ body,
   --ui-accent-soft: var(--ds-accent-soft);
   --ui-accent-line: var(--ds-accent-line);
   --ui-focus-ring: var(--ds-focus);
+}
+
+.options-shell :where(
+  button,
+  a[href],
+  [role="button"],
+  [role="option"],
+  [role="treeitem"]
+) {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.options-shell :where(
+  button,
+  a[href],
+  [role="button"],
+  [role="option"],
+  [role="treeitem"]
+):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active,
+.options-modal-panel :where(button, a[href]):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
+  opacity: 0.84;
+  transition-duration: 80ms !important;
+}
+
+.options-stable-number,
+.options-stable-number :where(.t-number, .t-number-value) {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-shell,
+  .options-modal-panel,
+  .options-modal-backdrop {
+    scroll-behavior: auto !important;
+  }
+
+  .options-shell :where(.t-text-swap-value, .t-number-value) {
+    transform: none !important;
+  }
+
+  .ai-provider-dialog-panel,
+  .ai-provider-dialog-panel[data-starting-style],
+  .ai-provider-dialog-panel[data-ending-style] {
+    scale: 1 !important;
+    transition-property: opacity !important;
+    transition-duration: 80ms !important;
+    transition-timing-function: linear !important;
+  }
+
+  .ai-provider-advanced-trigger::after,
+  .folder-picker-toggle-icon {
+    transition: none !important;
+  }
+
+  .folder-picker-toggle,
+  .folder-picker-card {
+    transition-property: border-color, background-color, color, opacity !important;
+  }
+
+  .folder-picker-toggle:active,
+  .folder-picker-card:active {
+    scale: 1 !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .options-modal-backdrop {
+    background: rgba(0, 0, 0, 0.92) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  .options-modal-panel,
+  .options-shell :where(.curator-motion-popover, [role="dialog"], [role="menu"]) {
+    background-color: var(--ds-bg-page) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+@media (prefers-contrast: more) {
+  #options-root,
+  .options-modal-panel {
+    --ds-selected: rgba(245, 245, 247, 0.2);
+    --ds-accent-line: rgba(245, 245, 247, 0.72);
+    --ds-focus: #eaf6ff;
+    --ds-shadow-focus: 0 0 0 2px #000000, 0 0 0 4px #eaf6ff;
+  }
 }

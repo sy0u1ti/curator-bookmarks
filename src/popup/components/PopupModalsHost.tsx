@@ -15,7 +15,7 @@ import type { PopupFolderPickerState } from './PopupViewModels'
 
 const folderSearchShellClass = [
   'flex min-h-10 w-full items-center gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary',
-  'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover',
   'focus-within:border-ds-text-primary/45 focus-within:bg-ds-hover focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
 ].join(' ')
@@ -25,7 +25,7 @@ const folderSearchInputClass =
   'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const modalButtonBaseClass = [
   'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-ds-sm border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
-  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.985]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
@@ -52,7 +52,7 @@ const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
   'inline-flex min-h-[30px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-1.5 text-xs font-semibold leading-none text-ds-text-secondary shadow-none',
-  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.96]',
@@ -63,7 +63,7 @@ const modalFieldClass = 'flex flex-col gap-1.5'
 const modalLabelClass = 'text-xs font-medium leading-tight text-ds-text-secondary'
 const modalInputClass = [
   'min-h-[42px] w-full rounded-ds-sm border border-ds-border bg-ds-surface-2 px-[11px] text-[13px] leading-normal text-ds-text-primary outline-none',
-  'transition-[border-color,background,box-shadow] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,box-shadow] duration-ds-fast ease-ds-standard',
   'placeholder:text-ds-text-muted',
   'focus:border-ds-text-primary/45 focus:bg-ds-hover focus:[outline:3px_solid_rgba(245,245,247,0.14)] focus:outline-offset-0',
   'focus-visible:border-ds-text-primary/45 focus-visible:bg-ds-hover focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0',
@@ -97,7 +97,8 @@ const modalNoteClass = 'm-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const modalActionsClass = 'flex items-center justify-between gap-2.5'
 const modalStackClass =
   'relative grid h-full max-h-full min-h-0 w-full min-w-0 place-items-center overflow-hidden p-[18px] outline-none'
-const modalDismissLayerClass = 'absolute inset-0 z-0 block cursor-default border-0 bg-transparent'
+const modalDismissLayerClass =
+  'absolute inset-0 z-0 block cursor-default border-0 bg-transparent transition-colors duration-[var(--ds-motion-feedback)] ease-ds-standard active:bg-black/20'
 const modalSurfaceMotionClass = [
   'origin-center scale-100 opacity-100 pointer-events-auto',
   'transition-[transform,scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)]',

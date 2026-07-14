@@ -3,7 +3,58 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#000000">
     <title>Curator Bookmark 设置</title>
+    <style id="options-critical-startup-style">
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      :root {
+        color-scheme: dark;
+        background: #000000;
+        font-family:
+          "Geist",
+          "Geist Sans",
+          "SF Pro Text",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI Variable Text",
+          "Segoe UI",
+          system-ui,
+          "PingFang SC",
+          "Microsoft YaHei UI",
+          "Microsoft YaHei",
+          "Hiragino Sans GB",
+          "Helvetica Neue",
+          Arial,
+          sans-serif;
+        font-optical-sizing: auto;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+
+      html,
+      body,
+      #options-root {
+        width: 100%;
+        min-width: 0;
+        height: 100%;
+        min-height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #000000;
+        color: #ededed;
+      }
+
+      #options-root {
+        position: relative;
+        isolation: isolate;
+      }
+    </style>
   </head>
   <body>
     <div id="options-root"></div>

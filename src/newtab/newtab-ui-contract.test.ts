@@ -21,6 +21,60 @@ const instantWallpaper = readFileSync('src/newtab/instant-wallpaper.ts', 'utf8')
 const newtabHtml = readFileSync('src/newtab/newtab.html', 'utf8')
 const bookmarkTileClasses = readFileSync('src/newtab/components/bookmarkTileClasses.ts', 'utf8')
 const speedDialClasses = readFileSync('src/newtab/components/speedDialClasses.ts', 'utf8')
+const backgroundLayer = readFileSync('src/newtab/components/NewtabBackgroundLayer.tsx', 'utf8')
+const newtabButtonClasses = readFileSync('src/newtab/components/newtabButtonClass.ts', 'utf8')
+
+const stableNewtabFontStack = '"Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif'
+const reducedTransparencyMaskRule = newtabCss.match(
+  /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-background-mask\s*\{([^}]*)\}/
+)?.[1] || ''
+const startupReducedTransparencyMaskRule = newtabHtml.match(
+  /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-startup-background-mask\s*\{([^}]*)\}/
+)?.[1] || ''
+
+assert.ok(
+  newtabHtml.includes(`--newtab-font-sans: ${stableNewtabFontStack}`) &&
+    newtabCss.includes(`--newtab-font-sans: ${stableNewtabFontStack}`) &&
+    bookmarkPreboot.includes(`font-family: ${stableNewtabFontStack}`) &&
+    newtabHtml.includes('font-synthesis: none') &&
+    newtabCss.includes('font-synthesis: none') &&
+    bookmarkPreboot.includes('font-synthesis: none'),
+  'Critical HTML, React New Tab, and bookmark preboot must share one stable font stack and disable synthesized faces.'
+)
+
+assert.ok(
+  newtabHtml.includes('html:not([data-instant-wallpaper-preview-only="true"]).instant-wallpaper-ready:not(.instant-wallpaper-remote-ready) body::before') &&
+    newtabCss.includes('html:not([data-instant-wallpaper-preview-only="true"]) .newtab-app.instant-wallpaper-ready:not(.instant-wallpaper-remote-ready)::before') &&
+    newtabCss.includes('.newtab-background-image[data-transitioning="true"]') &&
+    backgroundLayer.includes('data-transitioning="true"') &&
+    !newtabHtml.includes('transition: opacity 280ms cubic-bezier(0.22, 1, 0.36, 1);\n        will-change: opacity;') &&
+    !/\.newtab-background-image\s*\{[^}]*will-change:\s*opacity/s.test(newtabCss),
+  'Wallpaper layers should reserve will-change for an active non-preview-only handoff and release it after the incoming layer commits.'
+)
+
+assert.ok(
+  newtabCss.includes('@media (prefers-reduced-motion: reduce)') &&
+    newtabCss.includes('@media (prefers-reduced-transparency: reduce)') &&
+    newtabCss.includes('@media (prefers-contrast: more)') &&
+    newtabCss.includes('#newtab-settings-drawer button') &&
+    newtabCss.includes(':not(:disabled):active') &&
+    /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#newtab-settings-drawer \.settings-drawer-panel\[data-starting-style\][\s\S]*?transform:\s*none !important/.test(newtabCss) &&
+    newtabButtonClasses.includes('transition-[background-color,border-color,color,opacity,transform]') &&
+    newtabButtonClasses.includes('active:duration-[var(--ds-motion-feedback)]') &&
+    newtabButtonClasses.includes('motion-reduce:active:scale-100'),
+  'New Tab controls should respond on pointer-down while honoring reduced motion, reduced transparency, and increased contrast.'
+)
+
+assert.ok(
+  reducedTransparencyMaskRule.includes('backdrop-filter: none !important') &&
+    startupReducedTransparencyMaskRule.includes('backdrop-filter: none') &&
+    !reducedTransparencyMaskRule.includes('background-color') &&
+    !reducedTransparencyMaskRule.includes('background-image') &&
+    !startupReducedTransparencyMaskRule.includes('background-color') &&
+    !startupReducedTransparencyMaskRule.includes('background-image') &&
+    !/@media \(prefers-contrast: more\)[\s\S]*?#newtab-startup-background-mask/.test(newtabHtml),
+  'Accessibility preferences may remove mask blur, but must never override the user-selected mask strength or startup gradient.'
+)
 
 assert.ok(
   newtabCss.includes('--newtab-glass-bg-hero') &&
@@ -90,16 +144,18 @@ assert.ok(
   ].every((style) =>
     backgroundMaskSettings.includes(`'${style}'`)
   ) &&
-    settingsDrawer.includes('颗粒滤镜') &&
-    settingsDrawer.includes('网点滤镜') &&
-    settingsDrawer.includes('ASCII 滤镜') &&
-    settingsDrawer.includes('Paper · 纸张纹理') &&
-    settingsDrawer.includes('Paper · 水面折射') &&
-    settingsDrawer.includes('Paper · 半色调 CMYK') &&
+    [
+      '深色渐变', '磨砂玻璃', '胶片噪点', '柔光渐变', '胶片颗粒', '单色网点',
+      'ASCII 字符', '纸张纹理', '条纹玻璃', '水面折射', '图像抖动', '彩色网点', 'CMYK 网点'
+    ].every((label) => settingsDrawer.includes(`label: '${label}'`)) &&
+    !settingsDrawer.includes("label: 'Paper ·") &&
+    !settingsDrawer.includes("label: '颗粒滤镜'") &&
+    !settingsDrawer.includes("label: '网点滤镜'") &&
+    !settingsDrawer.includes("label: 'ASCII 滤镜'") &&
     settingsDrawer.includes('遮罩效果') &&
     settingsDrawer.includes('悬停效果') &&
     settingsDrawer.includes("ticks={['透明', '默认', '覆盖']}"),
-  'The background mask selector should retain the original styles and expose the Paper image filters.'
+  'The background mask selector should retain every style with concise, consistently structured labels.'
 )
 
 assert.ok(
@@ -298,7 +354,9 @@ assert.ok(
   'Newtab should adapt density for short desktop viewports.'
 )
 
-const bookmarkHoverRule = newtabCss.match(/\.bookmark-tile:hover[^{]*\{([^}]*)\}/s)?.[1] || ''
+const bookmarkHoverRule = newtabCss.match(
+  /\.bookmark-tile:not\(\.curator-motion-disabled\):not\(\.dragging\):hover\s*\{([^}]*)\}/s
+)?.[1] || ''
 const bookmarkFocusRule = newtabCss.match(/\.bookmark-tile:focus-visible[^{]*\{([^}]*)\}/s)?.[1] || ''
 const bookmarkSectionVisibilityToggle = /\.bookmark-folder-section:(?:hover|focus-within)[^{]*\{[^}]*content-visibility\s*:/s
 
@@ -309,11 +367,30 @@ assert.ok(
 )
 
 assert.ok(
-  bookmarkHoverRule.includes('transform: none') &&
-    bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-inset)') &&
+  bookmarkHoverRule.includes('transform: translateY(var(--newtab-bookmark-hover-lift))') &&
+    bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-hover-shadow)') &&
     !bookmarkHoverRule.includes('filter:') &&
-    newtabCss.includes('.bookmark-tile:hover::before'),
-  'Bookmark hover should illuminate in place without moving or expanding its outer shadow.'
+    newtabCss.includes('.bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before'),
+  'Bookmark hover should use the Lumno-inspired lift, layered shadow, and glass-tinted overlay while drag staging stays excluded.'
+)
+
+assert.ok(
+  !bookmarkTileClasses.includes('--bookmark-card-rgb') &&
+    !speedDialClasses.includes('--bookmark-card-rgb') &&
+    !bookmarkIconShell.includes('--bookmark-card-rgb') &&
+    !bookmarkPreboot.includes('--bookmark-card-rgb') &&
+    !newtabCss.includes('--bookmark-card-rgb') &&
+    !controller.includes('newTabFaviconAccentCache') &&
+    !controller.includes('getHostnameAccentColor') &&
+    !controller.includes('getCachedFaviconAccentCssRgb'),
+  'New Tab bookmark and Speed Dial cards should use one neutral glass treatment without website-derived theme colors.'
+)
+
+assert.ok(
+  bookmarkPreboot.includes('image.complete') &&
+    bookmarkPreboot.includes('image.naturalWidth') &&
+    bookmarkPreboot.includes('queueMicrotask(revealImageIfDecoded)'),
+  'Cached preboot favicons should commit before the first painted refresh frame instead of cross-fading from fallback content.'
 )
 
 assert.ok(

@@ -5,7 +5,6 @@ import {
   useEffect,
   memo,
   startTransition,
-  useReducer,
   useRef,
   useState,
   type ComponentPropsWithRef,
@@ -181,13 +180,15 @@ const DASHBOARD_SKELETON_CARD_PATTERNS = [
   { detailWidth: '62%', metaWidth: '28%', titleWidth: '82%' },
   { detailWidth: '70%', metaWidth: '38%', titleWidth: '68%' }
 ] as const
-const DASHBOARD_SKELETON_CARD_COUNT = 120
+const DASHBOARD_SKELETON_CARD_COUNT = 24
 const DASHBOARD_SKELETON_CARDS = Array.from(
   { length: DASHBOARD_SKELETON_CARD_COUNT },
   (_, index) => DASHBOARD_SKELETON_CARD_PATTERNS[index % DASHBOARD_SKELETON_CARD_PATTERNS.length]
 )
 
-const DASHBOARD_SKELETON_MIN_VISIBLE_MS = 180
+// Keep this in sync with `--reveal-dur:190ms` in dashboard-classes.ts so the
+// exiting skeleton stays mounted for exactly the compositor cross-fade window.
+const DASHBOARD_SKELETON_EXIT_MS = 190
 const DASHBOARD_IMMEDIATE_SCROLL_SYNC_DELTA = (DASHBOARD_CARD_HEIGHT + DASHBOARD_GRID_GAP) * 3
 const DASHBOARD_SEARCH_HELP_EXAMPLES = [
   { query: 'site:github.com', label: '限定站点' },
@@ -197,96 +198,52 @@ const DASHBOARD_SEARCH_HELP_EXAMPLES = [
   { query: '-youtube', label: '排除结果' }
 ] as const
 
-interface DashboardSkeletonRevealState {
-  revealed: boolean
-  replayKey: number
-}
-
-type DashboardSkeletonRevealAction =
-  | { type: 'hide' }
-  | { type: 'replay' }
-  | { type: 'reveal' }
-
-function dashboardSkeletonRevealReducer(
-  state: DashboardSkeletonRevealState,
-  action: DashboardSkeletonRevealAction
-): DashboardSkeletonRevealState {
-  if (action.type === 'hide') {
-    return state.revealed ? { ...state, revealed: false } : state
-  }
-  if (action.type === 'replay') {
-    return {
-      revealed: false,
-      replayKey: state.replayKey + 1
-    }
-  }
-  return state.revealed ? state : { ...state, revealed: true }
-}
-
 function useDashboardSkeletonReveal(active: boolean, ready: boolean) {
-  const skeletonShownAtRef = useRef(0)
-  const wasActiveRef = useRef(false)
-  const previousReadyRef = useRef(ready)
-  const [state, dispatch] = useReducer(dashboardSkeletonRevealReducer, {
-    revealed: false,
-    replayKey: 0
-  })
+  const loading = active && !ready
+  const wasLoadingRef = useRef(loading)
+  const [mounted, setMounted] = useState(loading)
+  const [replayKey, setReplayKey] = useState(0)
 
   useLayoutEffect(() => {
     if (!active) {
-      wasActiveRef.current = false
-      previousReadyRef.current = ready
-      skeletonShownAtRef.current = 0
-      dispatch({ type: 'hide' })
+      wasLoadingRef.current = false
+      setMounted(false)
       return
     }
 
-    const entering = !wasActiveRef.current
-    const loadingRestarted = previousReadyRef.current && !ready
-    wasActiveRef.current = true
-    previousReadyRef.current = ready
-
-    if (entering || loadingRestarted) {
-      skeletonShownAtRef.current = performance.now()
-      dispatch({ type: 'replay' })
+    if (loading) {
+      setMounted(true)
+      if (!wasLoadingRef.current) {
+        setReplayKey((key) => key + 1)
+      }
     }
-  }, [active, ready])
+    wasLoadingRef.current = loading
+  }, [active, loading])
 
   useEffect(() => {
-    if (!active || !ready) {
+    if (!active || !ready || !mounted) {
       return
     }
 
     if (prefersReducedMotion()) {
-      skeletonShownAtRef.current = 0
-      dispatch({ type: 'reveal' })
-      return
-    }
-
-    const shownAt = skeletonShownAtRef.current
-    if (!shownAt) {
-      dispatch({ type: 'reveal' })
-      return
-    }
-
-    const remainingMs = Math.max(0, DASHBOARD_SKELETON_MIN_VISIBLE_MS - (performance.now() - shownAt))
-    if (remainingMs <= 0) {
-      skeletonShownAtRef.current = 0
-      dispatch({ type: 'reveal' })
+      setMounted(false)
       return
     }
 
     const timer = window.setTimeout(() => {
-      skeletonShownAtRef.current = 0
-      dispatch({ type: 'reveal' })
-    }, remainingMs)
+      setMounted(false)
+    }, DASHBOARD_SKELETON_EXIT_MS)
 
     return () => {
       window.clearTimeout(timer)
     }
-  }, [active, ready, state.replayKey])
+  }, [active, mounted, ready])
 
-  return state
+  return {
+    mounted,
+    replayKey,
+    revealed: active && ready
+  }
 }
 
 export function DashboardPanel({ hidden }: { hidden: boolean }) {
@@ -301,6 +258,7 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
   const searchControls = useDashboardViewSelector((state) => state.searchControls)
   const tagEditor = useDashboardViewSelector((state) => state.tagEditor)
   const tagEditorOpen = !hidden && tagEditor.visible
+  const skeleton = useDashboardSkeletonReveal(!hidden, panelChrome.ready)
 
   const registerDashboardCardElement = useCallback((bookmarkId: string, node: HTMLElement | null) => {
     const safeBookmarkId = String(bookmarkId || '').trim()
@@ -391,7 +349,7 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
         <DashboardTitleContent />
       </h1>
 
-      <DashboardChrome active={!hidden} ready={panelChrome.ready} searchControls={searchControls} />
+      <DashboardChrome skeleton={skeleton} searchControls={searchControls} />
 
       <DashboardResultsSection
         active={!hidden}
@@ -400,6 +358,7 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
         panelChrome={panelChrome}
         registerCardElement={tagEditorOpen ? registerDashboardCardElement : undefined}
         scrollRequest={resultsScrollRequest}
+        skeleton={skeleton}
       />
 
       <DashboardDragOverlay state={dragOverlay} />
@@ -414,17 +373,14 @@ export function DashboardPanel({ hidden }: { hidden: boolean }) {
   )
 }
 
-const DashboardChrome = memo(function DashboardChrome({
-  active,
-  ready,
+function DashboardChromeComponent({
+  skeleton,
   searchControls
 }: {
-  active: boolean
-  ready: boolean
+  skeleton: ReturnType<typeof useDashboardSkeletonReveal>
   searchControls: DashboardSearchControlsState
 }) {
   const searchInputRef = useRef<HTMLInputElement | null>(null)
-  const skeleton = useDashboardSkeletonReveal(active, ready)
 
   useEffect(() => {
     if (!searchControls.focusRequestId) {
@@ -444,7 +400,7 @@ const DashboardChrome = memo(function DashboardChrome({
       ].filter(Boolean).join(' ')}
       data-state={skeleton.revealed ? 'ready' : 'loading'}
     >
-      {!skeleton.revealed ? (
+      {skeleton.mounted ? (
         <div
           key={`dashboard-chrome-skeleton:${skeleton.replayKey}`}
           className={DASHBOARD_CHROME_SKELETON_LAYER_CLASS}
@@ -465,7 +421,9 @@ const DashboardChrome = memo(function DashboardChrome({
       </div>
     </div>
   )
-})
+}
+
+const DashboardChrome = memo(DashboardChromeComponent)
 
 function DashboardChromeContent({
   searchControls,
@@ -622,13 +580,14 @@ function DashboardSelectionSkeleton() {
   )
 }
 
-const DashboardResultsSection = memo(function DashboardResultsSection({
+function DashboardResultsSectionComponent({
   active,
   cardsDimmed,
   focusRequest,
   panelChrome,
   registerCardElement,
-  scrollRequest
+  scrollRequest,
+  skeleton
 }: {
   active: boolean
   cardsDimmed: boolean
@@ -636,9 +595,8 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
   panelChrome: DashboardPanelChromeState
   registerCardElement?: (bookmarkId: string, node: HTMLElement | null) => void
   scrollRequest: DashboardResultsScrollRequestState
+  skeleton: ReturnType<typeof useDashboardSkeletonReveal>
 }) {
-  const skeleton = useDashboardSkeletonReveal(active, panelChrome.ready)
-
   return (
     <section
       className={DASHBOARD_RESULTS_GROUP_CLASS}
@@ -655,7 +613,7 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
         ].filter(Boolean).join(' ')}
         data-state={skeleton.revealed ? 'ready' : 'loading'}
       >
-        {!skeleton.revealed ? (
+        {skeleton.mounted ? (
           <div
             key={`dashboard-results-skeleton:${skeleton.replayKey}`}
             className={[
@@ -702,7 +660,9 @@ const DashboardResultsSection = memo(function DashboardResultsSection({
       </div>
     </section>
   )
-})
+}
+
+const DashboardResultsSection = memo(DashboardResultsSectionComponent)
 
 const DashboardResultsGrid = memo(function DashboardResultsGrid({
   active,

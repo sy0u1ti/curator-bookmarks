@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark;
 
-  --font-sans: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  --font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
   --font-mono: "Geist Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
 
   --ds-bg-page: #000000;
@@ -64,9 +64,9 @@
   --ds-motion-fast: 130ms;
   --ds-motion-standard: 190ms;
   --ds-motion-surface: 300ms;
-  --ds-ease-standard: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --ds-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
   --ds-ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ds-ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.1);
+  --ds-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
   --ds-press-scale: 0.985;
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
@@ -134,13 +134,13 @@
   --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --text-swap-dur: 120ms;
-  --text-swap-translate-y: 2px;
+  --text-swap-translate-y: 0px;
   --text-swap-blur: 0px;
   --text-swap-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   --panel-open-dur: 280ms;
   --panel-close-dur: 220ms;
-  --panel-translate-y: 12px;
+  --panel-translate-y: 8px;
   --tabs-panel-translate-y: 6px;
   --panel-blur: 0px;
   --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);

@@ -25,7 +25,6 @@ export interface NewtabBookmarkPrebootItemView {
   fallbackLabel: string
   favicon: { src: string }
   id: string
-  style?: unknown
   title: string
   url: string
 }
@@ -70,7 +69,6 @@ interface NewtabBookmarkPrebootItem {
   height: number
   id: string
   left: number
-  rgb: string
   title: string
   titleRect: NewtabBookmarkPrebootElementRect | null
   top: number
@@ -656,10 +654,6 @@ function createNewtabBookmarkPrebootTile(
   if (!content.showTitles) {
     tile.dataset.iconOnly = 'true'
   }
-  if (item.rgb) {
-    tile.style.setProperty('--bookmark-card-rgb', item.rgb)
-  }
-
   const iconShell = documentRef.createElement('span')
   iconShell.className = 'newtab-bookmark-preboot-icon-shell'
   const fallback = documentRef.createElement('span')
@@ -676,11 +670,19 @@ function createNewtabBookmarkPrebootTile(
     image.draggable = false
     image.fetchPriority = loadAttributes.fetchPriority
     image.loading = loadAttributes.loading
-    image.addEventListener('load', () => {
+    const revealImage = () => {
       markNewtabFaviconReady(image.src)
       image.dataset.ready = 'true'
       fallback.dataset.hidden = 'true'
-    }, { once: true })
+    }
+    const revealImageIfDecoded = () => {
+      if (!image.complete || image.naturalWidth <= 0) {
+        return false
+      }
+      revealImage()
+      return true
+    }
+    image.addEventListener('load', revealImage, { once: true })
     image.addEventListener('error', () => {
       markNewtabFaviconNotReady(image.src)
       image.remove()
@@ -688,6 +690,9 @@ function createNewtabBookmarkPrebootTile(
     }, { once: true })
     image.src = item.faviconSrc
     iconShell.appendChild(image)
+    if (!revealImageIfDecoded()) {
+      queueMicrotask(revealImageIfDecoded)
+    }
   }
   tile.appendChild(iconShell)
 
@@ -808,7 +813,6 @@ function createNewtabBookmarkPrebootItem(
     faviconSrc: normalizeNewtabBookmarkPrebootFavicon(item),
     ...rect,
     id: String(item.id || item.url || title).slice(0, 512),
-    rgb: getBookmarkTileRgb(item),
     title
   }
 }
@@ -960,7 +964,6 @@ function normalizeNewtabBookmarkPrebootItem(rawItem: unknown): NewtabBookmarkPre
     height,
     id: String(item.id || title).slice(0, 512),
     left: clampPrebootLength(item.left, -2400, 2400, 0),
-    rgb: normalizeRgbString(item.rgb),
     title,
     titleRect,
     top: clampPrebootLength(item.top, -2400, 5000, 0),
@@ -1144,16 +1147,6 @@ function installNewtabBookmarkPrebootStyle(documentRef: Document): void {
   documentRef.head.appendChild(style)
 }
 
-function getBookmarkTileRgb(item: NewtabBookmarkPrebootItemView): string {
-  const style = item.style as Record<string, unknown> | undefined
-  return normalizeRgbString(style?.['--bookmark-card-rgb'])
-}
-
-function normalizeRgbString(value: unknown): string {
-  const rgb = String(value || '').trim()
-  return /^\d{1,3}\s+\d{1,3}\s+\d{1,3}$/.test(rgb) ? rgb : ''
-}
-
 function getWindowDimension(key: 'innerHeight' | 'innerWidth', fallback: number): number {
   return typeof window === 'undefined' ? fallback : window[key]
 }
@@ -1188,7 +1181,11 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   overflow: hidden;
   contain: strict;
   color: rgba(245, 245, 247, 0.88);
-  font-family: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  font-family: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   /* Match .newtab-shell CJK typography exactly; a differing text-autospace or
      spacing-trim shifts mixed CJK/Latin glyph advances at the live handoff. */
   line-break: strict;
@@ -1252,11 +1249,11 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   grid-template-columns: var(--icon-shell-size) minmax(0, 1fr);
   align-items: center;
   justify-self: stretch;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 10px;
   overflow: hidden;
-  border: 1px solid rgba(245, 245, 247, 0.08);
-  border-radius: 6px;
+  border: 1px solid rgba(245, 245, 247, 0.1);
+  border-radius: 8px;
   background: var(--preboot-card-bg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
 }
@@ -1285,16 +1282,17 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   height: var(--icon-shell-size);
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(var(--bookmark-card-rgb, 245 245 247) / 0.12);
+  border: 1px solid rgba(245, 245, 247, 0.14);
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.34);
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-favicon {
   position: relative;
   z-index: 1;
-  width: calc(var(--icon-shell-size) * 0.66);
-  height: calc(var(--icon-shell-size) * 0.66);
+  width: calc(var(--icon-shell-size) * 0.68);
+  height: calc(var(--icon-shell-size) * 0.68);
   border-radius: 5px;
   object-fit: contain;
   opacity: 0;
@@ -1308,12 +1306,12 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-fallback {
   position: absolute;
   display: grid;
-  width: calc(var(--icon-shell-size) * 0.78);
-  height: calc(var(--icon-shell-size) * 0.78);
+  width: calc(var(--icon-shell-size) * 0.76);
+  height: calc(var(--icon-shell-size) * 0.76);
   place-items: center;
   border-radius: 7px;
-  background: rgba(245, 245, 247, 0.08);
-  color: rgba(245, 245, 247, 0.86);
+  background: rgba(245, 245, 247, 0.09);
+  color: rgba(245, 245, 247, 0.88);
   font-size: 13px;
   font-weight: 800;
   line-height: 1;
@@ -1329,10 +1327,10 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   display: -webkit-box;
   min-width: 0;
   overflow: hidden;
-  color: rgba(245, 245, 247, 0.78);
-  font-size: 12px;
-  font-weight: 620;
-  line-height: 1.25;
+  color: rgba(245, 245, 247, 0.8);
+  font-size: 13px;
+  font-weight: 520;
+  line-height: 1.3;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--icon-title-lines);

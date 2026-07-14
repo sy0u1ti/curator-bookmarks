@@ -2,9 +2,7 @@ import type { CSSProperties } from 'react'
 import { Button } from '../../ui/base/Button'
 import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
 import { Input } from '../../ui/base/Input'
-import { NumberPop } from '../../ui/motion/NumberPop'
 import { Progress } from '../../ui/base/Progress'
-import { TextSwap } from '../../ui/motion/TextSwap'
 import { Toolbar } from '../../ui/base/Toolbar'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
@@ -14,16 +12,15 @@ import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './P
 const SMART_ERROR_BANNER_CLASS =
   'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
-const pageRevealShellClass = 'popup-page-reveal relative min-h-12 w-full'
+const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-12 w-full'
 const pageLayerClass = 'absolute inset-0 min-h-12'
 const pageSkeletonLayerClass = cx(
   pageLayerClass,
-  'popup-page-skeleton z-[1]',
-  '[&>*]:animate-[popup-skeleton-pulse_var(--pulse-dur)_ease-in-out_var(--pulse-count)] motion-reduce:[&>*]:animate-none'
+  't-skel-skeleton is-pulsing popup-page-skeleton pointer-events-none z-[1]'
 )
 const pageContentLayerClass = cx(
   pageLayerClass,
-  'popup-page-content z-[2]'
+  't-skel-content popup-page-content z-[2]'
 )
 const pageCardClass =
   'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-transparent px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
@@ -43,7 +40,7 @@ const currentPageActionsClass =
   'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end max-[520px]:w-full max-[520px]:grid-cols-2 max-[520px]:justify-self-stretch'
 const currentPageActionBaseClass = [
   'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-md border px-[7px] text-[11px] font-[750] leading-none outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98] disabled:cursor-default disabled:opacity-70'
 ].join(' ')
@@ -88,7 +85,7 @@ const panelHeaderLargeMarginClass = panelHeaderClass
 const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
   'inline-flex h-7 min-w-[42px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
-  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98]'
@@ -98,7 +95,7 @@ const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] ga
 const actionsThreeClass = cx(actionsClass, 'grid-cols-3 max-[430px]:grid-cols-1')
 const actionButtonBaseClass = [
   'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 text-[13px] font-[750] leading-none outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98] disabled:cursor-default'
 ].join(' ')
@@ -119,7 +116,7 @@ const savedActionButtonClass =
 
 const manualButtonClass = [
   'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
-  'transition-[color,background,transform] duration-ds-fast ease-ds-standard',
+  'transition-[color,background-color,transform] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.98]'
@@ -163,7 +160,7 @@ const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderOptionBaseClass = [
   'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none max-[430px]:grid-cols-[minmax(0,1fr)]',
-  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.993]'
 ].join(' ')
@@ -285,7 +282,7 @@ function PopupSmartPageRevealCard({
 }) {
   return (
     <div
-      className={pageRevealShellClass}
+      className={cx(pageRevealShellClass, loading ? '' : 'is-revealed')}
       data-state={loading ? 'loading' : 'ready'}
       aria-busy={loading ? 'true' : 'false'}
       role={loading ? 'status' : undefined}
@@ -294,7 +291,7 @@ function PopupSmartPageRevealCard({
       <div className={cx(pageCardClass, pageSkeletonLayerClass)} aria-hidden="true">
         <PopupSmartPageSkeletonContent />
       </div>
-      <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass)}>
+      <article className={cx(getPopupSmartPageCardClassName(page), pageContentLayerClass, loading ? 'pointer-events-none' : '')}>
         <PopupSmartPageCardContent handlers={handlers} page={page} />
       </article>
     </div>
@@ -545,7 +542,7 @@ function PopupSmartLoading({
             <p className={loadingCopyClass}>
               <span className="t-shimmer" data-text={state.loadingLabel}>{state.loadingLabel}</span>
               <small className={loadingStepClass}>
-                <NumberPop text={`${loadingPercent}%`} />
+                <span className="tabular-nums">{loadingPercent}%</span>
               </small>
             </p>
             <Progress
@@ -659,7 +656,7 @@ function PopupSmartResult({
                   <path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" />
                 </svg>
               ) : null}
-              <TextSwap animate text={state.saved ? '已保存' : '确认保存'} />
+              <span>{state.saved ? '已保存' : '确认保存'}</span>
             </span>
           )}
         </Button>

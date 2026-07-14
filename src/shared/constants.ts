@@ -35,7 +35,6 @@ export const STORAGE_KEYS = {
   newTabFeaturedBackgroundPreferences: 'curatorBookmarkNewTabFeaturedBackgroundPreferences',
   newTabSearchSettings: 'curatorBookmarkNewTabSearchSettings',
   newTabIconSettings: 'curatorBookmarkNewTabIconSettings',
-  newTabFaviconAccentCache: 'curatorBookmarkNewTabFaviconAccentCache',
   dashboardFaviconCache: 'curatorBookmarkDashboardFaviconCache',
   newTabTimeSettings: 'curatorBookmarkNewTabTimeSettings',
   newTabGeneralSettings: 'curatorBookmarkNewTabGeneralSettings',

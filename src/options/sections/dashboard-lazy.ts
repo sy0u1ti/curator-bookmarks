@@ -22,6 +22,10 @@ function loadedDashboardModule(): DashboardModule | null {
   return dashboardModule
 }
 
+export function preloadDashboardSection(): void {
+  void loadDashboardModule()
+}
+
 export function cancelDashboardDrag(): boolean {
   return loadedDashboardModule()?.cancelDashboardDrag() ?? false
 }

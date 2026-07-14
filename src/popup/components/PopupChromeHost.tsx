@@ -32,7 +32,7 @@ const searchHelpCodeClass =
 const searchHelpHintClass = 'text-[10px] text-ds-text-muted'
 const searchHelpToggleClass = [
   'relative inline-flex h-[18px] min-h-[18px] w-[18px] min-w-[18px] flex-none cursor-help items-center justify-center rounded-ds-sm border border-ds-border-hover bg-ds-surface-2 p-0 text-ds-text-secondary shadow-none',
-  'transition-[background,border-color,color,transform] duration-150 ease-ds-standard',
+  'transition-[background-color,border-color,color,transform] duration-150 ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.96]'
@@ -63,7 +63,7 @@ const heroActionsClass =
   'hero-actions inline-flex translate-y-[5px] items-center gap-3.5'
 const heroSettingsButtonClass = [
   'hero-settings-button inline-flex h-6 min-h-6 min-w-0 items-center justify-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-[720] text-ds-text-secondary shadow-none',
-  'transition-[color,background,transform] duration-150 ease-ds-standard',
+  'transition-[color,background-color,transform] duration-150 ease-ds-standard',
   'hover:bg-transparent hover:text-ds-text-primary',
   'focus-visible:bg-transparent focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.96]'
@@ -75,26 +75,29 @@ const commandPanelSmartClass =
   'min-h-0 flex-auto grid-rows-[minmax(0,1fr)] border-0 bg-transparent p-0'
 const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
-  'group/search flex min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border-0 bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
-  'transition-[background,box-shadow] duration-ds-fast ease-ds-standard',
+  'popup-search-shell group/search flex h-10 min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border-0 bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
+  'transition-[background-color,box-shadow] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover',
   'focus-within:bg-ds-hover focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
 ].join(' ')
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
 const searchInputClass =
-  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted max-[520px]:min-h-8 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+  'popup-search-input min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-[14px] font-normal leading-[1.4] tracking-normal text-ds-text-primary outline-none placeholder:text-ds-text-muted max-[520px]:min-h-8 [font-optical-sizing:auto] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const clearSearchButtonClass = [
   'inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border-0 bg-transparent p-0 text-ds-text-muted',
-  'transition-[background,color] duration-ds-fast ease-ds-standard',
+  'transition-[background-color,color,opacity,transform] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-active hover:text-ds-text-primary',
-  'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none'
+  'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none',
+  'active:scale-[0.96]',
+  'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0'
 ].join(' ')
 const semanticSearchBaseClass = [
-  'relative inline-flex h-7 min-w-14 flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:min-w-0 max-[520px]:px-2.5',
-  'transition-[background,color,box-shadow] duration-ds-fast ease-ds-standard',
+  'relative inline-flex h-7 w-[76px] min-w-[76px] flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:px-2.5',
+  'transition-[background-color,color,box-shadow,transform] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0'
+  'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0',
+  'active:scale-[0.98]'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
   'text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
@@ -261,9 +264,11 @@ export function PopupChromeHost({
               <Button
                 id="clear-search"
                 className={clearSearchButtonClass}
-                hidden={!state.search.clearVisible}
+                data-visible={state.search.clearVisible ? 'true' : 'false'}
                 type="button"
                 aria-label="清空搜索"
+                aria-hidden={!state.search.clearVisible}
+                tabIndex={state.search.clearVisible ? undefined : -1}
                 onClick={() => dispatchPopupChromeAction('clear-search')}
                 unstyled
               >

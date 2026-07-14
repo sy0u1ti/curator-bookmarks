@@ -518,7 +518,7 @@ export async function enrichPinyinTokensCooperatively(
 
   const isActive = options.isActive ?? (() => true)
   const yieldWork = options.yieldWork ?? defaultYieldWork
-  const batchSize = Math.max(50, options.batchSize ?? 250)
+  const batchSize = Math.max(8, options.batchSize ?? 250)
   const total = targets.length
 
   let processed = 0

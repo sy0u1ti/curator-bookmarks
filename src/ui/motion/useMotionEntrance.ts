@@ -35,7 +35,10 @@ export function useMotionEntrance(active = true) {
 function createMotionEntranceState(active: boolean): MotionEntranceState {
   return {
     active,
-    entered: false
+    // Initial content paints in its settled state. Only a later inactive ->
+    // active transition gets an entrance frame, so refreshing a page never
+    // makes headings or empty-state copy twitch after the first commit.
+    entered: active
   }
 }
 

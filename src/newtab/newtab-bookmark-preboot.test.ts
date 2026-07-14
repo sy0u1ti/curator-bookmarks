@@ -84,7 +84,6 @@ function testSnapshotKeepsVisibleCardsAndExactCardRect(): void {
   assert.equal(snapshot.sections[0].items.length, 2)
   assert.equal(snapshot.sections[0].items[0].title, 'GitHub')
   assert.equal(snapshot.sections[0].items[0].faviconSrc, 'chrome-extension://extension-id/_favicon/?pageUrl=https%3A%2F%2Fgithub.com%2F&size=32')
-  assert.equal(snapshot.sections[0].items[0].rgb, '245 245 247')
   assert.deepEqual(
     pickItemRect(snapshot.sections[0].items[0]),
     { height: 50, left: 0, top: 30, width: 440 }
@@ -105,7 +104,6 @@ function testSnapshotPreservesEachLiveCardOffset(): void {
         items: [createBookmarkTile({
           fallbackLabel: 'D',
           id: '12',
-          rgb: '',
           src: 'chrome-extension://extension-id/_favicon/?pageUrl=https%3A%2F%2Fdeveloper.mozilla.org%2F&size=32',
           title: 'MDN',
           url: 'https://developer.mozilla.org/'
@@ -311,7 +309,6 @@ function createBookmarkContentView(): NewtabBookmarkPrebootView {
             createBookmarkTile({
               fallbackLabel: 'G',
               id: '10',
-              rgb: '245 245 247',
               src: 'chrome-extension://extension-id/_favicon/?pageUrl=https%3A%2F%2Fgithub.com%2F&size=32',
               title: 'GitHub',
               url: 'https://github.com/'
@@ -319,7 +316,6 @@ function createBookmarkContentView(): NewtabBookmarkPrebootView {
             createBookmarkTile({
               fallbackLabel: 'Y',
               id: '11',
-              rgb: '',
               src: 'chrome-extension://extension-id/_favicon/?pageUrl=https%3A%2F%2Fyoutube.com%2F&size=32',
               title: 'YouTube',
               url: 'https://youtube.com/'
@@ -334,14 +330,12 @@ function createBookmarkContentView(): NewtabBookmarkPrebootView {
 function createBookmarkTile({
   fallbackLabel,
   id,
-  rgb,
   src,
   title,
   url
 }: {
   fallbackLabel: string
   id: string
-  rgb: string
   src: string
   title: string
   url: string
@@ -353,7 +347,6 @@ function createBookmarkTile({
       src
     },
     id,
-    style: rgb ? { '--bookmark-card-rgb': rgb } : undefined,
     title,
     url
   }

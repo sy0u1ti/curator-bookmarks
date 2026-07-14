@@ -1,7 +1,11 @@
 :root {
   color-scheme: dark;
-  --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
   font-family: var(--newtab-font-sans);
+  font-optical-sizing: auto;
+  font-synthesis: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html[data-newtab-search-layout-pending] .newtab-search-slot {
@@ -67,6 +71,17 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   --newtab-glass-shadow: 0 18px 46px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+  --newtab-bookmark-hover-lift: -2px;
+  --newtab-bookmark-hover-shadow:
+    0 18px 24px -22px rgba(0, 0, 0, 0.82),
+    0 8px 14px -12px rgba(0, 0, 0, 0.58),
+    0 2px 6px -4px rgba(0, 0, 0, 0.44),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(245, 245, 247, 0.1);
+  --newtab-bookmark-active-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.055),
+    inset 0 0 0 1px rgba(245, 245, 247, 0.08);
   /* squircle 引擎配套：外阴影拆为 drop-shadow 滤镜（跟随 clip-path 轮廓），
      inset 高光留在 box-shadow（clip 内侧，不受影响）。 */
   --newtab-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
@@ -509,6 +524,16 @@ html.instant-wallpaper-startup-preview .newtab-app {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  #newtab-settings-drawer .settings-drawer-panel,
+  #newtab-settings-drawer .settings-drawer-panel[data-starting-style],
+  #newtab-settings-drawer .settings-drawer-panel[data-ending-style],
+  #newtab-settings-drawer .settings-drawer-panel[data-swiping] {
+    transform: none !important;
+    transition-property: opacity !important;
+    transition-duration: 80ms !important;
+    will-change: auto !important;
+  }
+
   .newtab-app .t-tabs-pill,
   .newtab-app .t-tab,
   #newtab-settings-drawer .t-tabs-pill,
@@ -555,6 +580,11 @@ html.instant-wallpaper-startup-preview .newtab-app {
   opacity: 0;
   pointer-events: none;
   transition: opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease);
+}
+
+.newtab-app.loading-wallpaper::before,
+html:not([data-instant-wallpaper-preview-only="true"]) .newtab-app.instant-wallpaper-ready:not(.instant-wallpaper-remote-ready)::before,
+.newtab-background-image[data-transitioning="true"] {
   will-change: opacity;
 }
 
@@ -589,7 +619,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   opacity: 0;
   filter: none;
   transition: opacity var(--newtab-wallpaper-focus-duration) var(--newtab-wallpaper-focus-ease);
-  will-change: opacity;
 }
 
 .newtab-background-image[data-state="visible"] {
@@ -607,6 +636,85 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   .newtab-background-image {
     transform: none;
     filter: none;
+    will-change: auto;
+  }
+}
+
+/* Direct manipulation feedback begins on pointer-down. Keep it local to the
+   New Tab surfaces that are not already covered by shared motion primitives. */
+:where(
+  .settings-trigger,
+  .newtab-button,
+  .bookmark-menu-surface button,
+  .newtab-search-engine-menu button,
+  #newtab-settings-drawer button
+):not(:disabled):active {
+  transform: scale(var(--ui-press-scale, var(--ds-press-scale, 0.985)));
+  transition-duration: var(--ds-motion-feedback, 80ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    .settings-trigger,
+    .newtab-button,
+    .bookmark-menu-surface button,
+    .newtab-search-engine-menu button,
+    #newtab-settings-drawer button
+  ):active {
+    transform: none !important;
+    transition-duration: 80ms !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  #newtab-background-mask {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  :where(
+    .newtab-clock,
+    .newtab-onboarding-strip,
+    .newtab-delete-toast-panel,
+    .featured-wallpaper-panel,
+    .featured-wallpaper-action,
+    .featured-wallpaper-close,
+    .featured-wallpaper-card-action
+  ) {
+    background-color: #161616 !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  #newtab-settings-drawer .settings-drawer-panel::before {
+    background: #101012;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :where(
+    .newtab-button,
+    .bookmark-menu-surface,
+    .newtab-search-engine-menu,
+    .newtab-delete-toast-panel,
+    .featured-wallpaper-panel,
+    #newtab-settings-drawer .settings-drawer-panel
+  ) {
+    border-color: rgba(255, 255, 255, 0.72) !important;
+  }
+
+  :where(
+    .settings-trigger,
+    .newtab-button,
+    .bookmark-menu-surface button,
+    .newtab-search-engine-menu button,
+    #newtab-settings-drawer button
+  ):focus-visible {
+    outline: 3px solid #ffffff !important;
+    outline-offset: 2px !important;
   }
 }
 
@@ -987,9 +1095,16 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   backdrop-filter: var(--newtab-glass-filter);
 }
 
-/* Keep bookmark feedback inside the tile so section paint containment stays stable at the grid edges. */
+/* Lumno-inspired bookmark cards: a restrained physical lift and layered shadow,
+   recolored through Curator's neutral glass system instead of per-card saturated surfaces. */
 .bookmark-tile {
-  border-color: rgba(245, 245, 247, 0.08);
+  --bookmark-tile-transition:
+    border-color 170ms var(--ui-ease-standard),
+    background-color 170ms var(--ui-ease-standard),
+    box-shadow 170ms var(--ui-ease-standard),
+    transform 170ms var(--ui-ease-standard),
+    opacity var(--ui-motion-standard) var(--ui-ease-standard);
+  border-color: rgba(245, 245, 247, 0.1);
   background: var(--newtab-glass-bg-card);
   box-shadow: var(--newtab-bookmark-shadow);
   filter: none;
@@ -1014,12 +1129,22 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   box-shadow: var(--newtab-bookmark-hover-inset);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 120ms var(--ui-ease-standard);
+  transition: opacity 170ms var(--ui-ease-standard);
 }
 
 .bookmark-tile:not(.bookmark-drag-ghost) > * {
   position: relative;
   z-index: 1;
+}
+
+.bookmark-icon-shell {
+  border-color: rgba(245, 245, 247, 0.14);
+  background: rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.bookmark-title {
+  transition: color 170ms var(--ui-ease-standard);
 }
 
 .newtab-speed-dial-card,
@@ -1034,14 +1159,26 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .bookmark-tile:hover {
+  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover {
     border-color: var(--newtab-glass-border-hover);
-    box-shadow: var(--newtab-bookmark-inset);
-    transform: none;
+    box-shadow: var(--newtab-bookmark-hover-shadow);
+    transform: translateY(var(--newtab-bookmark-hover-lift));
   }
 
-  .bookmark-tile:hover::before {
+  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before {
     opacity: 1;
+  }
+
+  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover .bookmark-icon-shell {
+    border-color: rgba(245, 245, 247, 0.24);
+    background: rgba(0, 0, 0, 0.4);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.075),
+      0 5px 10px -8px rgba(0, 0, 0, 0.72);
+  }
+
+  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover .bookmark-title {
+    color: rgba(245, 245, 247, 0.94);
   }
 }
 
@@ -1072,6 +1209,16 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   transition: none;
 }
 
+.bookmark-tile:focus-visible .bookmark-icon-shell {
+  border-color: rgba(245, 245, 247, 0.24);
+  background: rgba(0, 0, 0, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075);
+}
+
+.bookmark-tile:focus-visible .bookmark-title {
+  color: rgba(245, 245, 247, 0.94);
+}
+
 .bookmark-tile.curator-motion-disabled::before,
 .bookmark-tile.dragging::before {
   opacity: 0;
@@ -1089,9 +1236,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   transform: none;
 }
 
-.bookmark-tile:active {
-  box-shadow: var(--newtab-bookmark-inset);
-  transform: scale(var(--ui-press-scale));
+.bookmark-tile:not(.curator-motion-disabled):not(.dragging):active {
+  box-shadow: var(--newtab-bookmark-active-shadow);
+  transform: translateY(0) scale(var(--ui-press-scale));
+  transition-duration: var(--ds-motion-feedback, 80ms);
 }
 
 .newtab-speed-dial-card:active,
@@ -1213,16 +1361,32 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 
 @media (prefers-reduced-motion: reduce) {
   .bookmark-tile::before {
-    transition: none;
+    transition-duration: 80ms;
+    transition-timing-function: linear;
   }
 
-  .bookmark-tile:hover,
+  .bookmark-icon-shell,
+  .bookmark-title {
+    transition-duration: 80ms;
+  }
+
+  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover,
   .bookmark-tile:focus-visible,
   .newtab-speed-dial-card:hover,
   .newtab-speed-dial-card:focus-visible,
   .newtab-quick-link:hover,
   .newtab-quick-link:focus-visible {
     transform: none;
+  }
+}
+
+@media (prefers-contrast: more) {
+  .bookmark-tile {
+    border-color: var(--newtab-glass-border);
+  }
+
+  .bookmark-tile:focus-visible {
+    border-color: var(--newtab-glass-border-hover);
   }
 }
 

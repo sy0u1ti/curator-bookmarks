@@ -1,6 +1,13 @@
-import { memo, useState, type CSSProperties, type KeyboardEvent, type RefObject } from 'react'
+import {
+  memo,
+  useCallback,
+  useLayoutEffect,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+  type RefObject
+} from 'react'
 import { Button } from '../../ui/base/Button'
-import { NumberPop } from '../../ui/motion/NumberPop'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import { HighlightedText } from './HighlightedText'
@@ -51,20 +58,17 @@ const POPUP_CONTENT_SKELETON_BOOKMARK_ROWS = [
 const POPUP_CONTENT_SKELETON_ACTION_COUNT = 5
 
 const workspaceShellClass =
-  'relative h-full min-h-0'
+  't-skel popup-t-skel relative h-full min-h-0'
 const workspaceLayerClass = 'absolute inset-0 min-h-0'
 const workspaceSkeletonLayerClass = cx(
   workspaceLayerClass,
-  'z-[1] opacity-100 [will-change:opacity] [contain:layout_paint] transition-opacity duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none',
-  '[&>*]:animate-[popup-skeleton-pulse_var(--pulse-dur)_ease-in-out_var(--pulse-count)] motion-reduce:[&>*]:animate-none'
+  't-skel-skeleton is-pulsing pointer-events-none z-[1] [contain:layout_paint]'
 )
-const workspaceSkeletonHiddenClass = 'pointer-events-none opacity-0'
 const workspaceContentLayerClass = cx(
   workspaceLayerClass,
-  'z-[2] opacity-0 [will-change:opacity] [contain:layout_paint] transition-opacity duration-[var(--reveal-dur)] ease-[var(--reveal-ease)] motion-reduce:transition-none'
+  't-skel-content z-[2] [contain:layout_paint]'
 )
 const workspaceContentLoadingClass = 'pointer-events-none'
-const workspaceContentReadyClass = 'opacity-100'
 const workspaceClass =
   'relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
@@ -75,16 +79,21 @@ const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const folderTreeClass =
-  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
-  'relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
+  'popup-main-list relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderRowClass = 'relative block min-h-[34px]'
 const mainRowClass =
-  'popup-main-row relative z-[1] grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:gap-1.5'
+  'popup-main-row relative z-[1] grid min-h-[74px] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0'
+const virtualSpacerClass = 'pointer-events-none block w-full'
+const POPUP_BOOKMARK_ROW_HEIGHT = 80
+const POPUP_FOLDER_ROW_HEIGHT = 34
+const POPUP_VIRTUAL_OVERSCAN = 8
+const POPUP_VIRTUALIZATION_THRESHOLD = 24
 const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardClass = [
   'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
-  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const folderCardActiveClass =
@@ -101,11 +110,11 @@ const folderCountClass =
 const folderCountActiveClass = 'text-ds-text-secondary'
 const listButtonClass = [
   'popup-list-button flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
-  'transition-[border-color,background,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
-  padding: '8px 13px'
+  padding: '8px 51px 8px 13px'
 }
 const rowMainClass = 'grid min-w-0 gap-0.5'
 const rowTitleClass =
@@ -122,7 +131,7 @@ const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
   'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
-  'transition-[border-color,background,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-95 disabled:cursor-default disabled:opacity-45'
 ].join(' ')
@@ -189,24 +198,50 @@ export function PopupContent({
   const title = state.title || (mode === 'search' ? '搜索结果' : '全部书签')
   const meta = state.meta || `${mainRows.length} 条`
   const isLoading = Boolean(state.loading)
+  const activeMainIndex = mainRows.findIndex((row) => row.active)
+  const activeFolderIndex = sidebarRows.findIndex((row) => row.keyboardActive)
+  const mainWindow = useFixedRowWindow({
+    activeIndex: activeMainIndex,
+    containerRef: mainListRef,
+    enabled: mode === 'tree' && !state.mainState && mainRows.length > POPUP_VIRTUALIZATION_THRESHOLD,
+    rowCount: mainRows.length,
+    rowHeight: POPUP_BOOKMARK_ROW_HEIGHT
+  })
+  const folderWindow = useFixedRowWindow({
+    activeIndex: activeFolderIndex,
+    containerRef: folderTreeRef,
+    enabled: sidebarRows.length > POPUP_VIRTUALIZATION_THRESHOLD,
+    rowCount: sidebarRows.length,
+    rowHeight: POPUP_FOLDER_ROW_HEIGHT
+  })
+  const visibleSidebarRows = sidebarRows.slice(folderWindow.start, folderWindow.end)
+  const visibleMainRows = mainRows.slice(mainWindow.start, mainWindow.end)
 
   return (
     <div
-      className={workspaceShellClass}
+      className={cx(workspaceShellClass, isLoading ? '' : 'is-revealed')}
       data-state={isLoading ? 'loading' : 'ready'}
       aria-busy={isLoading ? 'true' : 'false'}
     >
-      <div className={cx(workspaceSkeletonLayerClass, isLoading ? '' : workspaceSkeletonHiddenClass)} aria-hidden="true">
+      <div className={workspaceSkeletonLayerClass} aria-hidden="true">
         <PopupContentSkeleton mode={mode} title={title} />
       </div>
-      <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : workspaceContentReadyClass)}>
+      <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : '')}>
         <div className={workspaceClass} ref={workspaceRef}>
           <aside className={paneClass} aria-label="文件夹树">
             <header className={paneHeaderClass}>
               <span>全部文件夹</span>
             </header>
             <div className={folderTreeClass} role="tree" ref={folderTreeRef}>
-              {sidebarRows.map((row) => (
+              {folderWindow.before > 0 ? (
+                <div
+                  className={virtualSpacerClass}
+                  style={{ height: `${folderWindow.before}px` }}
+                  role="presentation"
+                  aria-hidden="true"
+                />
+              ) : null}
+              {visibleSidebarRows.map((row) => (
                 <PopupFolderRow
                   activeFolderRef={row.keyboardActive ? activeFolderRef : undefined}
                   handlers={handlers}
@@ -215,22 +250,48 @@ export function PopupContent({
                   key={`folder:${row.folderId}`}
                 />
               ))}
+              {folderWindow.after > 0 ? (
+                <div
+                  className={virtualSpacerClass}
+                  style={{ height: `${folderWindow.after}px` }}
+                  role="presentation"
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
           </aside>
           <section className={mainPaneClass} aria-label={title}>
             <header className={paneHeaderClass}>
-              <span>{title} <span className={paneTitleMetaClass}>· <NumberPop text={meta} /></span></span>
+              <span>{title} <span className={paneTitleMetaClass}>· <span className="t-number-value">{meta}</span></span></span>
             </header>
             <ul className={mainListClass} ref={mainListRef}>
               {state.mainState ? (
                 <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
               ) : mainRows.length ? (
-                mainRows.map((row) => {
-                  if (row.kind === 'bookmark') {
-                    return <MemoPopupBookmarkRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
-                  }
-                  return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
-                })
+                <>
+                  {mainWindow.before > 0 ? (
+                    <li
+                      className={virtualSpacerClass}
+                      style={{ height: `${mainWindow.before}px` }}
+                      role="presentation"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  {visibleMainRows.map((row) => {
+                    if (row.kind === 'bookmark') {
+                      return <MemoPopupBookmarkRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
+                    }
+                    return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
+                  })}
+                  {mainWindow.after > 0 ? (
+                    <li
+                      className={virtualSpacerClass}
+                      style={{ height: `${mainWindow.after}px` }}
+                      role="presentation"
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                </>
               ) : (
                 <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
               )}
@@ -248,6 +309,97 @@ export function PopupContent({
       </div>
     </div>
   )
+}
+
+interface FixedRowWindow {
+  after: number
+  before: number
+  end: number
+  start: number
+}
+
+function useFixedRowWindow({
+  activeIndex,
+  containerRef,
+  enabled,
+  rowCount,
+  rowHeight
+}: {
+  activeIndex: number
+  containerRef?: RefObject<HTMLElement | null>
+  enabled: boolean
+  rowCount: number
+  rowHeight: number
+}): FixedRowWindow {
+  const [viewport, setViewport] = useState({ height: 0, scrollTop: 0 })
+  const measureViewport = useCallback(() => {
+    const container = containerRef?.current
+    if (!container) return
+    const next = {
+      height: container.clientHeight,
+      scrollTop: container.scrollTop
+    }
+    setViewport((current) => (
+      current.height === next.height && current.scrollTop === next.scrollTop
+        ? current
+        : next
+    ))
+  }, [containerRef])
+
+  useLayoutEffect(() => {
+    if (!enabled) return
+    const container = containerRef?.current
+    if (!container) return
+
+    measureViewport()
+    container.addEventListener('scroll', measureViewport, { passive: true })
+    const observer = typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(measureViewport)
+    observer?.observe(container)
+    return () => {
+      container.removeEventListener('scroll', measureViewport)
+      observer?.disconnect()
+    }
+  }, [containerRef, enabled, measureViewport, rowCount])
+
+  useLayoutEffect(() => {
+    if (!enabled || activeIndex < 0) return
+    const container = containerRef?.current
+    if (!container) return
+    const itemStart = activeIndex * rowHeight
+    const itemEnd = itemStart + rowHeight
+    const viewportStart = container.scrollTop
+    const viewportEnd = viewportStart + container.clientHeight
+    let nextScrollTop = viewportStart
+    if (itemStart < viewportStart) {
+      nextScrollTop = itemStart
+    } else if (itemEnd > viewportEnd) {
+      nextScrollTop = Math.max(0, itemEnd - container.clientHeight)
+    }
+    if (nextScrollTop !== viewportStart) {
+      container.scrollTop = nextScrollTop
+      measureViewport()
+    }
+  }, [activeIndex, containerRef, enabled, measureViewport, rowHeight])
+
+  if (!enabled) {
+    return { after: 0, before: 0, end: rowCount, start: 0 }
+  }
+
+  const viewportHeight = viewport.height || rowHeight * 8
+  const start = Math.max(
+    0,
+    Math.floor(viewport.scrollTop / rowHeight) - POPUP_VIRTUAL_OVERSCAN
+  )
+  const visibleCount = Math.ceil(viewportHeight / rowHeight) + POPUP_VIRTUAL_OVERSCAN * 2
+  const end = Math.min(rowCount, start + visibleCount)
+  return {
+    after: Math.max(0, (rowCount - end) * rowHeight),
+    before: start * rowHeight,
+    end,
+    start
+  }
 }
 
 function PopupContentSkeleton({
@@ -414,7 +566,7 @@ function PopupFolderRow({
         <span className={folderMainClass}>
           <span className={folderTitleClass}>{row.title}</span>
           <span className={cx(folderCountClass, row.active ? folderCountActiveClass : '')} title={`${row.countLabel} 个书签`}>
-            <NumberPop text={row.countLabel} />
+            {row.countLabel}
           </span>
         </span>
       </Button>
@@ -431,12 +583,15 @@ function PopupBookmarkRow({
   handlers?: PopupContentActionHandlers
   row: PopupContentBookmarkRowViewModel
 }) {
-  const style = { '--depth': row.depth } as CSSProperties
+  const style = { '--depth': row.depth, height: `${POPUP_BOOKMARK_ROW_HEIGHT}px` } as CSSProperties
+  const [actionsMounted, setActionsMounted] = useState(false)
 
   return (
     <li
       className={mainRowClass}
       data-active={row.active ? 'true' : undefined}
+      onFocusCapture={() => setActionsMounted(true)}
+      onPointerEnter={() => setActionsMounted(true)}
       ref={row.active ? activeResultRef : undefined}
       style={style}
     >
@@ -462,6 +617,7 @@ function PopupBookmarkRow({
         active={row.active}
         bookmarkId={row.bookmarkId}
         label={row.menuLabel}
+        mountQuickActions={actionsMounted || row.active}
         menu={row.menu}
         onMenuAction={handlers?.onMenuAction}
       />
@@ -478,10 +634,14 @@ function PopupSearchResultRow({
   handlers?: PopupContentActionHandlers
   row: PopupContentSearchResultViewModel
 }) {
+  const [actionsMounted, setActionsMounted] = useState(false)
+
   return (
     <li
       className={mainRowClass}
       data-active={row.active ? 'true' : undefined}
+      onFocusCapture={() => setActionsMounted(true)}
+      onPointerEnter={() => setActionsMounted(true)}
       ref={row.active ? activeResultRef : undefined}
     >
       <Button
@@ -520,6 +680,7 @@ function PopupSearchResultRow({
         active={row.active}
         bookmarkId={row.bookmarkId}
         label={row.menuLabel}
+        mountQuickActions={actionsMounted || row.active}
         menu={row.menu}
         onMenuAction={handlers?.onMenuAction}
         title="操作菜单"
@@ -641,6 +802,7 @@ function PopupRowActions({
   active = false,
   bookmarkId,
   label,
+  mountQuickActions,
   menu,
   onMenuAction,
   title
@@ -648,6 +810,7 @@ function PopupRowActions({
   active?: boolean
   bookmarkId: string
   label: string
+  mountQuickActions: boolean
   menu: PopupActionMenuViewModel
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   title?: string
@@ -655,9 +818,11 @@ function PopupRowActions({
   const [focusExpanded, setFocusExpanded] = useState(false)
   const [pinnedExpanded, setPinnedExpanded] = useState(false)
   const [forcedCollapsed, setForcedCollapsed] = useState(false)
-  const quickActions = menu.items.filter((item) => {
-    return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)
-  })
+  const quickActions = mountQuickActions
+    ? menu.items.filter((item) => {
+        return ['edit', 'copy-url', 'open-current-tab', 'move', 'delete'].includes(item.action)
+      })
+    : []
   const expanded = (active || focusExpanded || pinnedExpanded) && !forcedCollapsed
   const triggerLabel = title || label || '显示书签快捷操作'
 
@@ -668,6 +833,7 @@ function PopupRowActions({
       data-active={active ? 'true' : undefined}
       data-collapsed={forcedCollapsed ? 'true' : undefined}
       data-open={expanded ? 'true' : 'false'}
+      data-pinned={pinnedExpanded && !forcedCollapsed ? 'true' : undefined}
       onBlur={(event) => {
         const nextTarget = event.relatedTarget
         if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) {

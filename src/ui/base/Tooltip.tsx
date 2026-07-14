@@ -17,7 +17,7 @@ export function Tooltip({
   children,
   closeDelay = 0,
   content,
-  delay = 200,
+  delay = 80,
   popupClassName = 'z-50 rounded-md border border-ds-border bg-ds-surface-2 px-2 py-1 text-xs text-ds-text-primary [filter:var(--ds-filter-popover)]',
   sideOffset = 6
 }: TooltipProps) {
@@ -38,7 +38,7 @@ function TooltipTriggerShell({
   children,
   closeDelay = 0,
   content,
-  delay = 200,
+  delay = 80,
   popupClassName = 'z-50 rounded-md border border-ds-border bg-ds-surface-2 px-2 py-1 text-xs text-ds-text-primary [filter:var(--ds-filter-popover)]',
   sideOffset = 6
 }: TooltipTriggerShellProps) {

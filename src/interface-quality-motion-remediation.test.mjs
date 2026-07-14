@@ -5,7 +5,10 @@ const read = (path) => readFileSync(path, 'utf8')
 
 const globals = read('src/styles/globals.css')
 const tokens = read('src/styles/tokens.css')
+const tailwind = read('src/styles/tailwind.css')
 const motionPanel = read('src/ui/motion/MotionPanel.tsx')
+const motionEntrance = read('src/ui/motion/useMotionEntrance.ts')
+const modelSelector = read('src/ui/ai/ModelSelector.tsx')
 const inlineMenu = read('src/ui/base/InlineMenu.tsx')
 const numberPop = read('src/ui/motion/NumberPop.tsx')
 const textSwap = read('src/ui/motion/TextSwap.tsx')
@@ -22,6 +25,9 @@ const dashboardController = read('src/options/sections/dashboard-controller.ts')
 const popupChips = read('src/popup/components/PopupSearchChips.tsx')
 const popupStatus = read('src/popup/components/PopupAutoAnalyzeStatus.tsx')
 const optionsChrome = read('src/options/components/options-chrome-classes.ts')
+const optionsCss = read('src/options/options.css')
+const aiProviderSettingsClasses = read('src/options/components/ai-provider-settings-classes.ts')
+const optionsModalClasses = read('src/options/components/options-modal-classes.ts')
 
 assert.ok(
   motionPanel.includes('curator-overlay-panel') &&
@@ -34,10 +40,28 @@ assert.ok(
 assert.ok(
   numberPop.includes('animate = false') &&
     textSwap.includes('animate = false') &&
+    globals.includes('font-variant-numeric: tabular-nums') &&
     !numberPop.includes('requestAnimationFrame') &&
     !numberPop.includes('setTimeout') &&
     !textSwap.includes('setTimeout'),
   'Live numbers and replacement text must expose the latest value immediately.'
+)
+
+assert.ok(
+  motionEntrance.includes('entered: active') &&
+    globals.includes('.curator-motion-surface[data-motion-enter="true"]') &&
+    !/@starting-style\s*{\s*\.curator-motion-surface\s*{/.test(globals),
+  'Initial page content must paint settled; entrance motion is opt-in after the first commit.'
+)
+
+assert.ok(
+  tokens.includes('"Segoe UI Variable Text"') &&
+    tokens.includes('system-ui') &&
+    tailwind.includes('"Segoe UI Variable Text"') &&
+    tailwind.includes('system-ui') &&
+    globals.includes('font-synthesis: none') &&
+    /@layer base\s*\{[\s\S]*?button,[\s\S]*?font: inherit;[\s\S]*?\}/.test(globals),
+  'The critical and utility font stacks must keep stable platform metrics when Geist is unavailable.'
 )
 
 assert.ok(
@@ -48,6 +72,29 @@ assert.ok(
     tokens.includes('--ds-motion-fast: 130ms') &&
     tokens.includes('--drag-settle-dur: 160ms'),
   'Central motion and accessibility preferences must provide bounded feedback and material fallbacks.'
+)
+
+assert.ok(
+  modelSelector.includes('model-selector-content') &&
+    modelSelector.includes('touch-manipulation') &&
+    globals.includes('.model-selector-content[data-starting-style]') &&
+    globals.includes('translate: -50% -50% !important') &&
+    globals.includes('scale: 1 !important'),
+  'The shared model selector must keep direct press feedback and use a non-spatial reduced-motion modal.'
+)
+
+assert.ok(
+  aiProviderSettingsClasses.includes('options-modal-backdrop ai-provider-dialog-backdrop') &&
+    aiProviderSettingsClasses.includes('options-modal-panel ai-provider-dialog-panel') &&
+    aiProviderSettingsClasses.includes('ai-provider-advanced-trigger') &&
+    optionsModalClasses.includes('folder-picker-toggle-icon') &&
+    optionsModalClasses.includes('folder-picker-card') &&
+    optionsCss.includes('.ai-provider-dialog-panel[data-starting-style]') &&
+    optionsCss.includes('scale: 1 !important') &&
+    optionsCss.includes('.ai-provider-advanced-trigger::after') &&
+    optionsCss.includes('.folder-picker-toggle:active') &&
+    optionsCss.includes('@media (prefers-reduced-transparency: reduce)'),
+  'The AI provider dialog must keep its centered geometry while honoring reduced motion and transparency.'
 )
 
 assert.ok(

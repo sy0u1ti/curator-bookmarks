@@ -1192,19 +1192,19 @@ function BackgroundSettingsSection({
               if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
             }}
             options={[
-              { value: 'dark', label: '暗色增强' },
-              { value: 'frosted', label: '磨砂柔化' },
+              { value: 'dark', label: '深色渐变' },
+              { value: 'frosted', label: '磨砂玻璃' },
               { value: 'noise', label: '胶片噪点' },
-              { value: 'light', label: '亮色柔化' },
-              { value: 'grain', label: '颗粒滤镜' },
-              { value: 'halftone', label: '网点滤镜' },
-              { value: 'ascii', label: 'ASCII 滤镜' },
-              { value: 'paper-texture', label: 'Paper · 纸张纹理' },
-              { value: 'fluted-glass', label: 'Paper · 条纹玻璃' },
-              { value: 'water', label: 'Paper · 水面折射' },
-              { value: 'image-dithering', label: 'Paper · 图像抖动' },
-              { value: 'halftone-dots', label: 'Paper · 半色调网点' },
-              { value: 'halftone-cmyk', label: 'Paper · 半色调 CMYK' }
+              { value: 'light', label: '柔光渐变' },
+              { value: 'grain', label: '胶片颗粒' },
+              { value: 'halftone', label: '单色网点' },
+              { value: 'ascii', label: 'ASCII 字符' },
+              { value: 'paper-texture', label: '纸张纹理' },
+              { value: 'fluted-glass', label: '条纹玻璃' },
+              { value: 'water', label: '水面折射' },
+              { value: 'image-dithering', label: '图像抖动' },
+              { value: 'halftone-dots', label: '彩色网点' },
+              { value: 'halftone-cmyk', label: 'CMYK 网点' }
             ]}
             popupClassName={SETTINGS_SELECT_POPUP_CLASS}
             popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}

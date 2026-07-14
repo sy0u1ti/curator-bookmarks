@@ -78,7 +78,7 @@ function ToggleGroupButton({
   return (
     <BaseToggle
       className={unstyled ? itemClassName : cx(
-        'base-toggle-group-item rounded-ds-sm px-3 py-1.5 text-sm text-ds-text-secondary outline-none transition-[background-color,color,transform] duration-ds-fast ease-ds-standard data-[pressed]:bg-ds-hover data-[pressed]:text-ds-text-primary focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] disabled:opacity-45 motion-reduce:transition-none motion-reduce:active:scale-100',
+        'base-toggle-group-item touch-manipulation select-none rounded-ds-sm px-3 py-1.5 text-sm text-ds-text-secondary outline-none transition-[background-color,color,transform] duration-ds-fast ease-ds-standard data-[pressed]:bg-ds-hover data-[pressed]:text-ds-text-primary focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] disabled:opacity-45 motion-reduce:transition-none motion-reduce:active:scale-100',
         itemClassName
       )}
       disabled={disabled}

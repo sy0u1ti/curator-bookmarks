@@ -26,6 +26,7 @@ import {
   handleOptionsWindowSectionChange,
   useOptionsController
 } from './options-controller'
+import { preloadDashboardSection } from './sections/dashboard-lazy'
 import {
   navClass,
   navCollapsibleClass,
@@ -144,6 +145,7 @@ function OptionsNavLink({
 }) {
   const active = activeSectionKey === section
   const className = variant === 'subitem' ? navSubitemClass : ''
+  const preloadOnIntent = section === 'dashboard' ? preloadDashboardSection : undefined
 
   return (
     <a
@@ -151,6 +153,9 @@ function OptionsNavLink({
       href={href}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
+      onFocus={preloadOnIntent}
+      onPointerDown={preloadOnIntent}
+      onPointerEnter={preloadOnIntent}
     >
       {label}
     </a>
@@ -269,6 +274,9 @@ function OptionsSidebar({
         href="#dashboard"
         aria-current={dashboardActive ? 'page' : undefined}
         onClick={onNavigate}
+        onFocus={preloadDashboardSection}
+        onPointerDown={preloadDashboardSection}
+        onPointerEnter={preloadDashboardSection}
       >
         <span className={optionsDashboardEntryEyebrowClass}>视觉化管理</span>
         <strong className={optionsDashboardEntryTitleClass}>书签仪表盘</strong>
@@ -348,6 +356,33 @@ export function OptionsApp() {
 
   useEffect(() => {
     return subscribeToOptionsBookmarkEvents()
+  }, [])
+
+  useLayoutEffect(() => {
+    const shell = optionsShellRef.current
+    const root = document.getElementById('options-root')
+    root?.setAttribute('data-options-ready', 'true')
+    if (!shell) {
+      return
+    }
+
+    let secondFrame = 0
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        if (optionsShellRef.current === shell) {
+          shell.classList.add('options-motion-ready')
+        }
+      })
+    })
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame)
+      if (secondFrame) {
+        window.cancelAnimationFrame(secondFrame)
+      }
+      shell.classList.remove('options-motion-ready')
+      root?.removeAttribute('data-options-ready')
+    }
   }, [])
 
   useEffect(() => {

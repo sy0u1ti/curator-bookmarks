@@ -98,15 +98,7 @@ import {
   normalizeFolderSettings,
   normalizeFolderSettingsWithDefault
 } from './folder-settings.js'
-import {
-  buildChromeFaviconUrl,
-  formatFaviconAccentCssRgb,
-  getFaviconAccentCacheEntry,
-  normalizeFaviconAccentCache,
-  removeFaviconAccentCacheEntry,
-  type FaviconAccentCache,
-  type FaviconAccentColor
-} from './favicon-cache.js'
+import { buildChromeFaviconUrl } from './favicon-cache.js'
 import {
   BACKGROUND_URL_FETCH_TIMEOUT_MS,
   BACKGROUND_URL_FULL_MAX_BYTES,
@@ -701,7 +693,6 @@ const state = {
   addMenuBusy: false,
   addMenuError: '',
   customIcons: {} as Record<string, string>,
-  faviconAccentCache: {} as FaviconAccentCache,
   backgroundUrlCacheBusy: false,
   backgroundUrlCacheStatus: '',
   backgroundUrlCachePendingUrls: new Set<string>(),
@@ -3188,9 +3179,6 @@ function getBookmarkDragGhostStyle(itemStyle: CSSProperties | undefined): CSSPro
   const style = { ...(itemStyle || {}) } as CSSProperties
   ;(style as Record<string, string>)['--icon-shell-size'] = `${state.iconSettings.iconShellSize}px`
   ;(style as Record<string, string>)['--icon-title-lines'] = String(state.iconSettings.titleLines)
-  ;(style as Record<string, string>)['--bookmark-card-bg-alpha'] = '0.3'
-  ;(style as Record<string, string>)['--bookmark-card-border-alpha'] = '0'
-  ;(style as Record<string, string>)['--bookmark-card-hover-alpha'] = '0.4'
 
   return Object.keys(style).length ? style : undefined
 }
@@ -4818,7 +4806,6 @@ async function saveBookmarkMenuChanges(): Promise<void> {
     await updateBookmarkLazy(bookmark.id, { title, url })
     await persistCustomIconChoice(bookmark.id)
     if (previousUrl !== url) {
-      await deleteFaviconAccentCacheEntry(bookmark.id)
       state.faviconRefreshTokens.set(bookmark.id, Date.now())
     }
     closeBookmarkMenu()
@@ -4893,9 +4880,6 @@ async function deleteActiveMenuBookmark(): Promise<void> {
         saveCustomIcons(nextIcons).catch((error) => {
           console.warn('新标签页自定义图标清理失败。', error)
         }),
-        deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
-          console.warn('新标签页网站图标色彩缓存清理失败。', error)
-        }),
         removeBookmarkFromActivity(bookmark.id).catch((error) => {
           console.warn('新标签页打开记录清理失败。', error)
         }),
@@ -4905,9 +4889,6 @@ async function deleteActiveMenuBookmark(): Promise<void> {
       ])
     } else {
       await Promise.all([
-        deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
-          console.warn('新标签页网站图标色彩缓存清理失败。', error)
-        }),
         removeBookmarkFromActivity(bookmark.id).catch((error) => {
           console.warn('新标签页打开记录清理失败。', error)
         }),
@@ -5029,9 +5010,6 @@ function refreshActiveMenuIcon(): void {
 
   state.pendingDeleteBookmarkId = ''
   state.faviconRefreshTokens.set(bookmark.id, Date.now())
-  void deleteFaviconAccentCacheEntry(bookmark.id).catch((error) => {
-    console.warn('新标签页网站图标色彩缓存刷新失败。', error)
-  })
   if (!renderBookmarkSections()) {
     render()
   }
@@ -5098,7 +5076,6 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
         STORAGE_KEYS.newTabFeaturedBackgroundPreferences,
         STORAGE_KEYS.newTabSearchSettings,
         STORAGE_KEYS.newTabIconSettings,
-        STORAGE_KEYS.newTabFaviconAccentCache,
         STORAGE_KEYS.newTabGeneralSettings,
         STORAGE_KEYS.newTabFolderSettings,
         STORAGE_KEYS.newTabTimeSettings,
@@ -5137,7 +5114,6 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     state.featuredBackgroundFavoriteIds = normalizeFeaturedBackgroundFavoriteIds(stored[STORAGE_KEYS.newTabFeaturedBackgroundFavorites])
     state.featuredBackgroundGalleryHydrated = true
     state.featuredBackgroundPreferences = featuredBackgroundPreferences
-    state.faviconAccentCache = normalizeFaviconAccentCache(stored[STORAGE_KEYS.newTabFaviconAccentCache])
     state.activity = normalizeNewTabActivity(null, state.allBookmarks)
     state.workspaceSettings = normalizeNewTabWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings], {
       validBookmarkIds: state.allBookmarkMap.keys()
@@ -7786,9 +7762,6 @@ function createSpeedDialCardViewModel(
 ): SpeedDialCardViewModel {
   const customIcon = state.customIcons[String(item.id)]
   const faviconLoadAttributes = getSpeedDialFaviconLoadAttributes(renderIndex)
-  const accentColor = !customIcon
-    ? getCachedFaviconAccentCssRgb(String(item.id), String(bookmark.url || item.url || ''))
-    : ''
   return {
     customIcon: Boolean(customIcon),
     detail: item.detail,
@@ -7813,9 +7786,6 @@ function createSpeedDialCardViewModel(
     onNavigate: (event) => {
       handleBookmarkNavigation(event, bookmark, item.url)
     },
-    style: accentColor
-      ? { '--bookmark-card-rgb': accentColor } as CSSProperties
-      : undefined,
     title: item.title,
     url: item.url
   }
@@ -7864,7 +7834,6 @@ function createBookmarkTileViewModel(
   const title = String(bookmark.title || '').trim() || url
   const bookmarkId = String(bookmark.id)
   const customIcon = state.customIcons[bookmarkId]
-  const accentColor = !customIcon ? getCachedFaviconAccentCssRgb(bookmarkId, url) : ''
   return {
     customIcon: Boolean(customIcon),
     dragging: bookmarkId === state.draggingBookmarkId && Boolean(state.dragOriginalOrderIds.length),
@@ -7889,65 +7858,9 @@ function createBookmarkTileViewModel(
     onNavigate: (event) => {
       handleBookmarkNavigation(event, bookmark, url)
     },
-    style: accentColor
-      ? { '--bookmark-card-rgb': accentColor } as CSSProperties
-      : undefined,
     title,
     url
   }
-}
-
-function getCachedFaviconAccentCssRgb(bookmarkId: string, url: string): string {
-  const entry = getFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId, url)
-  if (entry) {
-    return formatFaviconAccentCssRgb(entry.color)
-  }
-
-  const fallback = getHostnameAccentColor(url)
-  return fallback ? formatFaviconAccentCssRgb(fallback) : ''
-}
-
-const FAVICON_ACCENT_PALETTE: readonly FaviconAccentColor[] = [
-  { r: 234, g: 200, b: 168 },
-  { r: 200, g: 220, b: 255 },
-  { r: 168, g: 220, b: 180 },
-  { r: 255, g: 200, b: 200 },
-  { r: 220, g: 200, b: 240 },
-  { r: 240, g: 220, b: 160 },
-  { r: 200, g: 230, b: 230 },
-  { r: 240, g: 180, b: 200 },
-  { r: 180, g: 200, b: 230 },
-  { r: 230, g: 180, b: 180 },
-  { r: 200, g: 240, b: 200 },
-  { r: 220, g: 200, b: 180 }
-]
-
-function getHostnameAccentColor(url: string): FaviconAccentColor | null {
-  const trimmed = String(url || '').trim()
-  if (!trimmed) {
-    return null
-  }
-  let host = ''
-  try {
-    host = new URL(trimmed).hostname.toLowerCase()
-  } catch {
-    host = trimmed.toLowerCase()
-  }
-  if (!host) {
-    return null
-  }
-  let hash = 5381
-  for (let index = 0; index < host.length; index += 1) {
-    hash = ((hash << 5) + hash + host.charCodeAt(index)) >>> 0
-  }
-  return FAVICON_ACCENT_PALETTE[hash % FAVICON_ACCENT_PALETTE.length]
-}
-
-async function saveFaviconAccentCache(): Promise<void> {
-  state.faviconAccentCache = normalizeFaviconAccentCache(state.faviconAccentCache)
-  await setLocalStorage({
-    [STORAGE_KEYS.newTabFaviconAccentCache]: state.faviconAccentCache
-  })
 }
 
 function cleanupNewTabController(): void {
@@ -8769,16 +8682,6 @@ async function saveCustomIcons(nextIcons: Record<string, string>): Promise<void>
   await setLocalStorage({
     [STORAGE_KEYS.newTabCustomIcons]: nextIcons
   })
-}
-
-async function deleteFaviconAccentCacheEntry(bookmarkId: string): Promise<void> {
-  const nextCache = removeFaviconAccentCacheEntry(state.faviconAccentCache, bookmarkId)
-  if (nextCache === state.faviconAccentCache) {
-    return
-  }
-
-  state.faviconAccentCache = nextCache
-  await saveFaviconAccentCache()
 }
 
 function normalizeCustomIcons(rawIcons: unknown): Record<string, string> {
