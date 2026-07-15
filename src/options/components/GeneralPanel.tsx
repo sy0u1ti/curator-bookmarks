@@ -2,10 +2,8 @@ import type { Ref } from 'react'
 import { AiProviderSettings } from './AiProviderSettings.js'
 import { ContentSnapshotControls } from './ContentSnapshotControls.js'
 import { FeatureSettingsControls } from './FeatureSettingsControls.js'
-import {
-  OPTION_PANEL_CLASS,
-  OPTION_PANEL_TITLE_CLASS
-} from './option-layout-classes.js'
+import { OPTION_PANEL_CLASS } from './option-layout-classes.js'
+import { OptionPanelHeader } from './OptionPanelHeader.js'
 import { ShortcutControls } from './ShortcutControls.js'
 
 interface OptionsPanelVisibilityProps {
@@ -21,7 +19,11 @@ export function GeneralPanel({
 }: OptionsPanelVisibilityProps) {
   return (
     <section id="general" className={OPTION_PANEL_CLASS} aria-labelledby="general-title" hidden={hidden}>
-      <h1 id="general-title" className={OPTION_PANEL_TITLE_CLASS}>通用设置</h1>
+      <OptionPanelHeader
+        titleId="general-title"
+        title="通用设置"
+        description="调整核心功能、网页内容索引、快捷键与 AI 服务连接。"
+      />
 
       <FeatureSettingsControls />
 

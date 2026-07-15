@@ -49,6 +49,9 @@ import {
 import {
   dispatchNewtabSearchSettingFieldChange,
   dispatchNewtabSearchSettingToggle,
+  NEWTAB_SEARCH_BACKGROUND_DEFAULT,
+  NEWTAB_SEARCH_BACKGROUND_MAX,
+  NEWTAB_SEARCH_BACKGROUND_MIN,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
 import {
@@ -1699,9 +1702,9 @@ function SearchSettingsSection({
           label="背景"
           valueId="search-background-value"
           value={`${searchSettings.background}%`}
-          min="0"
-          max="92"
-          defaultValue="30"
+          min={String(NEWTAB_SEARCH_BACKGROUND_MIN)}
+          max={String(NEWTAB_SEARCH_BACKGROUND_MAX)}
+          defaultValue={String(NEWTAB_SEARCH_BACKGROUND_DEFAULT)}
           ariaLabel="搜索栏背景透明度"
           disabled={searchSettings.backgroundDisabled}
           onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('background', value)}

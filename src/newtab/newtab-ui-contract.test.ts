@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const newtabCss = readFileSync('src/newtab/newtab.css', 'utf8')
+const globalsCss = readFileSync('src/styles/globals.css', 'utf8')
 const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkContent.tsx', 'utf8')
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
+const searchWidgetClasses = readFileSync('src/newtab/components/searchWidgetClasses.ts', 'utf8')
+const clockClasses = readFileSync('src/newtab/components/clockClasses.ts', 'utf8')
+const searchSettingsStore = readFileSync('src/newtab/newtab-search-settings-store.ts', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
 const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.tsx', 'utf8')
 const bookmarkPreboot = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
@@ -31,6 +35,17 @@ const reducedTransparencyMaskRule = newtabCss.match(
 const startupReducedTransparencyMaskRule = newtabHtml.match(
   /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-startup-background-mask\s*\{([^}]*)\}/
 )?.[1] || ''
+const searchSurfaceRule = newtabCss.match(/\.newtab-search\s*\{([^}]*)\}/s)?.[1] || ''
+const reducedTransparencyOpaqueSelectors = [globalsCss, newtabCss]
+  .flatMap((source) => [...source.matchAll(/:where\(\s*([^)]*?)\s*\)\s*\{[^}]*background-color:\s*#161616\s*!important;/g)])
+  .map((match) => match[1])
+  .join('\n')
+const baseGlassTokens = newtabCss.match(/\.newtab-app\s*\{([^}]*)\}/s)?.[1] || ''
+const mediaGlassTokens = newtabCss.match(/\.newtab-app\[data-background-media="true"\]\s*\{([^}]*)\}/s)?.[1] || ''
+
+function readGlassAlpha(source: string, token: string): number {
+  return Number(source.match(new RegExp(`${token}:\\s*rgba\\([^)]*,\\s*([\\d.]+)\\)`))?.[1] || 0)
+}
 
 assert.ok(
   newtabHtml.includes(`--newtab-font-sans: ${stableNewtabFontStack}`) &&
@@ -196,10 +211,62 @@ assert.ok(
 
 assert.ok(
   searchWidget.includes('data-panel-open') &&
-    newtabCss.includes('.newtab-search-shell[data-panel-open="true"]') &&
+    searchWidget.includes('view.panel.panelVisible && SEARCH_FORM_PANEL_OPEN_CLASS') &&
+    searchWidgetClasses.includes("SEARCH_FORM_PANEL_OPEN_CLASS = 'is-panel-open'") &&
+    newtabCss.includes('.newtab-search.is-panel-open') &&
     newtabCss.includes('border-bottom-color: transparent') &&
     newtabCss.includes('border-top-color: transparent'),
-  'Search suggestions should visually connect to the search hero surface.'
+  'Search suggestions should update the form itself so the squircle outline reconnects to the panel.'
+)
+
+assert.ok(
+  searchWidgetClasses.includes("SEARCH_SHELL_CLASS = 'newtab-search-shell relative mx-auto w-[var(--search-effective-width)]'") &&
+    searchWidgetClasses.includes("SEARCH_FORM_CLASS = 'newtab-search group relative z-[1] flex h-[var(--search-height)] w-full") &&
+    searchWidgetClasses.includes("SEARCH_PANEL_CLASS = 'newtab-search-suggestions-panel absolute top-[calc(var(--search-height)+8px)] left-0") &&
+    searchWidgetClasses.includes('w-full gap-[3px]') &&
+    !searchWidgetClasses.includes('-translate-x-1/2') &&
+    !/\.newtab-search-suggestions-panel:not\(\[hidden\]\)\s*\{[^}]*translate:/s.test(newtabCss),
+  'Search and suggestions must share one positioned shell instead of centering through an animation-sensitive translate.'
+)
+
+assert.ok(
+  searchWidgetClasses.includes('bg-[rgba(8,8,9,var(--search-bg-alpha))]') &&
+    searchWidgetClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
+    clockClasses.includes('bg-[var(--newtab-glass-bg-hero)]') &&
+    clockClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
+    newtabCss.includes('background: var(--newtab-glass-bg-popup') &&
+    newtabCss.includes('backdrop-filter: var(--newtab-glass-filter-popup') &&
+    !searchSurfaceRule.includes('background:') &&
+    !reducedTransparencyOpaqueSelectors.includes('.newtab-search') &&
+    !reducedTransparencyOpaqueSelectors.includes('.newtab-search-suggestions-panel') &&
+    !reducedTransparencyOpaqueSelectors.includes('.newtab-search-engine-menu') &&
+    !reducedTransparencyOpaqueSelectors.includes('.newtab-clock'),
+  'The primary search and clock utilities must retain their configured glass material instead of being replaced by an opaque system fallback.'
+)
+
+assert.ok(
+  readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-hero') >= 0.7 &&
+    readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-faint') >= 0.6 &&
+    readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-card') >= 0.7 &&
+    readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-popup') >= 0.84 &&
+    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-hero') >= 0.74 &&
+    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-faint') >= 0.66 &&
+    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-card') >= 0.74 &&
+    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-popup') >= 0.88 &&
+    baseGlassTokens.includes('--newtab-glass-filter-hero: blur(18px) saturate(0.88) brightness(0.68)') &&
+    baseGlassTokens.includes('--newtab-glass-filter-popup: blur(20px) saturate(0.86) brightness(0.74)'),
+  'Unified New Tab glass should use a dark, low-saturation material that protects text over bright wallpaper.'
+)
+
+assert.ok(
+    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_MIN = 52') &&
+    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_DEFAULT = 56') &&
+    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_MAX = 92') &&
+    searchSettingsStore.includes('const background = clampNumber(') &&
+    searchWidget.includes('NEWTAB_SEARCH_BACKGROUND_MIN / 100') &&
+    settingsDrawer.includes('min={String(NEWTAB_SEARCH_BACKGROUND_MIN)}') &&
+    settingsDrawer.includes('defaultValue={String(NEWTAB_SEARCH_BACKGROUND_DEFAULT)}'),
+  'Search transparency controls must stay inside the readable range used by the unified glass material.'
 )
 
 assert.ok(

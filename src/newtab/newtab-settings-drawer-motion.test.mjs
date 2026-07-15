@@ -78,6 +78,26 @@ async function verifyNewtabAccessibilityMaterials(page, context) {
     `Reduced transparency should remove glass blur: ${JSON.stringify(reducedTransparency)}`
   )
   assert.match(reducedTransparency.backgroundColor, /^rgb\(/, 'Reduced transparency should use an opaque neutral surface')
+
+  await page.locator('.newtab-search').waitFor({ state: 'visible' })
+  await page.locator('.newtab-clock').waitFor({ state: 'visible' })
+  const utilityGlass = await page.locator('.newtab-search, .newtab-clock').evaluateAll((elements) => elements.map((element) => {
+    const style = getComputedStyle(element)
+    return {
+      backdropFilter: style.backdropFilter,
+      backgroundColor: style.backgroundColor,
+      className: element.className,
+      webkitBackdropFilter: style.webkitBackdropFilter
+    }
+  }))
+  assert.equal(utilityGlass.length, 2, `Search and clock glass surfaces should both be present: ${JSON.stringify(utilityGlass)}`)
+  for (const material of utilityGlass) {
+    assert.ok(
+      material.backdropFilter !== 'none' || (material.webkitBackdropFilter && material.webkitBackdropFilter !== 'none'),
+      `Primary utility glass should retain blur when Windows transparency effects are disabled: ${JSON.stringify(material)}`
+    )
+    assert.notEqual(material.backgroundColor, 'rgb(22, 22, 22)', `Primary utility glass should remain translucent: ${JSON.stringify(material)}`)
+  }
   await captureVisual(page, 'newtab-reduced-transparency')
 
   await client.send('Emulation.setEmulatedMedia', {
@@ -1062,8 +1082,42 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   }
 
   const newtabSearch = page.locator('.newtab-search-input')
+  const newtabSearchForm = page.locator('.newtab-search')
+  const closedSearchClipPath = await newtabSearchForm.evaluate((element) => getComputedStyle(element).clipPath)
   await newtabSearch.fill('Curator Smoke')
   await page.waitForFunction(() => document.querySelectorAll('#newtab-search-suggestions .newtab-search-suggestion').length >= 3)
+  await waitForFrames(page)
+  const openSearchShape = await newtabSearchForm.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      bottomLeftRadius: style.borderBottomLeftRadius,
+      bottomRightRadius: style.borderBottomRightRadius,
+      className: element.className,
+      clipPath: style.clipPath
+    }
+  })
+  assert.ok(openSearchShape.className.includes('is-panel-open'), 'The visible suggestions panel should mark the search form itself as open')
+  assert.equal(openSearchShape.bottomLeftRadius, '0px', 'The open search form should flatten its bottom-left corner')
+  assert.equal(openSearchShape.bottomRightRadius, '0px', 'The open search form should flatten its bottom-right corner')
+  assert.notEqual(openSearchShape.clipPath, closedSearchClipPath, 'The squircle engine should recompute the search outline when suggestions open')
+  const searchGeometry = await page.evaluate(() => {
+    const form = document.querySelector('.newtab-search')?.getBoundingClientRect()
+    const panel = document.querySelector('.newtab-search-suggestions-panel:not([hidden])')?.getBoundingClientRect()
+    return form && panel
+      ? {
+          formLeft: form.left,
+          formWidth: form.width,
+          panelLeft: panel.left,
+          panelWidth: panel.width
+        }
+      : null
+  })
+  assert.ok(searchGeometry, 'The visible search form and suggestions panel should expose measurable geometry')
+  assert.ok(
+    Math.abs(searchGeometry.formLeft - searchGeometry.panelLeft) <= 1 &&
+      Math.abs(searchGeometry.formWidth - searchGeometry.panelWidth) <= 1,
+    `Search suggestions should align with the search form: ${JSON.stringify(searchGeometry)}`
+  )
   const activeSuggestionBefore = await newtabSearch.getAttribute('aria-activedescendant')
   await recordAnimationFrames(page, 'New Tab search suggestion navigation', 500, async () => {
     for (let index = 0; index < 8; index += 1) {

@@ -14,13 +14,13 @@ import { useAiConfigLinkState } from './ai-config-link-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_PANEL_TITLE_CLASS,
   OPTION_RUN_ACTIONS_CLASS,
   OPTION_RUN_CELL_CLASS,
   OPTION_RUN_CELL_TEXT_CLASS,
   OPTION_RUN_CELL_TITLE_CLASS,
   OPTION_RUN_HEADER_CLASS
 } from './option-layout-classes.js'
+import { OptionPanelHeader } from './OptionPanelHeader.js'
 
 const AI_ANALYSIS_TOOLBAR_ACTIONS_CLASS = OPTION_RUN_ACTIONS_CLASS
 const AI_ANALYSIS_DECISION_HEADER_CLASS =
@@ -39,7 +39,11 @@ export function AiAnalysisPanel({ hidden }: OptionsPanelVisibilityProps) {
 
   return (
     <section id="ai" className={OPTION_PANEL_CLASS} aria-labelledby="ai-title" hidden={hidden}>
-      <h1 id="ai-title" className={OPTION_PANEL_TITLE_CLASS}>书签智能分析</h1>
+      <OptionPanelHeader
+        titleId="ai-title"
+        title="书签智能分析"
+        description="使用 AI 批量生成标题、标签和归档建议，再按置信度确认结果。"
+      />
 
       {configured ? (
         <>

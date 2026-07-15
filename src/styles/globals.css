@@ -826,20 +826,15 @@ body {
 
 @media (prefers-reduced-transparency: reduce) {
   .newtab-app {
-    --newtab-glass-bg-hero: rgba(12, 12, 13, 0.97);
     --newtab-glass-bg: rgba(18, 18, 19, 0.96);
     --newtab-glass-bg-faint: rgba(18, 18, 19, 0.94);
     --newtab-glass-bg-card: rgba(24, 24, 25, 0.96);
     --newtab-glass-bg-hover: rgba(34, 34, 35, 0.98);
-    --newtab-glass-bg-popup: rgba(12, 12, 13, 0.98);
     --newtab-glass-filter: none;
     --newtab-glass-filter-soft: none;
   }
 
   :where(
-    .newtab-search,
-    .newtab-search-suggestions-panel,
-    .newtab-search-engine-menu,
     .newtab-speed-dial,
     .newtab-portal,
     .settings-drawer-panel,

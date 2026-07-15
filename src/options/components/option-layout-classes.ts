@@ -96,7 +96,10 @@ export const OPTION_PANEL_TITLE_CLASS =
   'm-0 max-w-[780px] text-[clamp(27px,2.2vw,34px)] font-[720] leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
 
 export const OPTION_PANEL_DESCRIPTION_CLASS =
-  'mt-[10px] mb-0 max-w-[760px] text-[13px] leading-[1.7] tracking-[0] text-ds-text-secondary'
+  'mt-[10px] mb-0 max-w-[720px] text-[14px] leading-[1.7] tracking-[0] text-ds-text-secondary'
+
+export const OPTION_PANEL_HEADER_CLASS =
+  'mb-1 border-b border-ds-border-subtle pb-6 max-[760px]:pb-5'
 
 export const OPTION_VALUE_CLASS = [
   'inline-flex min-h-5 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap',

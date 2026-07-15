@@ -14,6 +14,7 @@ import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
 import { MotionPanel } from '../../ui/motion/MotionPanel'
+import { NEWTAB_SEARCH_BACKGROUND_MIN } from '../newtab-search-settings-store'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
@@ -34,6 +35,7 @@ import {
   SEARCH_ENGINE_MENU_ITEMS_CLASS,
   SEARCH_ENGINE_MENU_POSITIONER_CLASS,
   SEARCH_FORM_CLASS,
+  SEARCH_FORM_PANEL_OPEN_CLASS,
   SEARCH_HINT_CLASS,
   SEARCH_ICON_CLASS,
   SEARCH_INPUT_CLASS,
@@ -82,7 +84,10 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   const formStyle = useMemo(() => ({
     '--search-width': `${shell.width}vw`,
     '--search-height': `${shell.height}px`,
-    '--search-bg-alpha': shell.backgroundAlpha
+    '--search-bg-alpha': String(Math.max(
+      Number(shell.backgroundAlpha) || 0,
+      NEWTAB_SEARCH_BACKGROUND_MIN / 100
+    ))
   }) as CSSProperties, [shell.backgroundAlpha, shell.height, shell.width])
 
   useLayoutEffect(() => {
@@ -129,7 +134,10 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
         onContextMenu={handleSearchContextMenu}
       >
         <form
-          className={SEARCH_FORM_CLASS}
+          className={[
+            SEARCH_FORM_CLASS,
+            view.panel.panelVisible && SEARCH_FORM_PANEL_OPEN_CLASS
+          ].filter(Boolean).join(' ')}
           style={formStyle}
           role="search"
           aria-label={shell.ariaLabel}

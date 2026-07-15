@@ -1,5 +1,9 @@
 import { useSyncExternalStore } from 'react'
 
+export const NEWTAB_SEARCH_BACKGROUND_MIN = 52
+export const NEWTAB_SEARCH_BACKGROUND_DEFAULT = 56
+export const NEWTAB_SEARCH_BACKGROUND_MAX = 92
+
 export interface NewtabSearchSettingsView {
   autoVerticalCenter: boolean
   autoVerticalCenterDisabled: boolean
@@ -63,7 +67,7 @@ export interface NewtabSearchSettingsActions {
 const EMPTY_VIEW: NewtabSearchSettingsView = {
   autoVerticalCenter: false,
   autoVerticalCenterDisabled: false,
-  background: 30,
+  background: NEWTAB_SEARCH_BACKGROUND_DEFAULT,
   backgroundDisabled: false,
   enabled: true,
   enabledEngines: ['google', 'bing', 'baidu', 'duckduckgo'],
@@ -120,11 +124,16 @@ export function createNewtabSearchSettingsView(
   const engineControlsDisabled = !settings.enabled || !settings.webSearchEnabled
   const width = clampNumber(settings.width, bounds.width.min, bounds.width.max)
   const offsetY = clampNumber(settings.offsetY, bounds.offset.min, bounds.offset.max)
+  const background = clampNumber(
+    settings.background,
+    NEWTAB_SEARCH_BACKGROUND_MIN,
+    NEWTAB_SEARCH_BACKGROUND_MAX
+  )
 
   return {
     autoVerticalCenter: settings.autoVerticalCenter,
     autoVerticalCenterDisabled: !settings.enabled,
-    background: settings.background,
+    background,
     backgroundDisabled: !settings.enabled,
     enabled: settings.enabled,
     enabledEngines: settings.enabledEngines,

@@ -7,12 +7,12 @@ import { AvailabilityResultsHeader } from './AvailabilityResultsHeader.js'
 import { AvailabilitySelectionActions } from './AvailabilitySelectionActions.js'
 import {
   OPTION_PANEL_CLASS,
-  OPTION_PANEL_TITLE_CLASS,
   OPTION_RUN_CELL_CLASS,
   OPTION_RUN_CELL_TITLE_CLASS,
   OPTION_RUN_HEADER_CLASS,
   OPTION_TOOL_PANEL_CLASS
 } from './option-layout-classes.js'
+import { OptionPanelHeader } from './OptionPanelHeader.js'
 import { ResultsPagination } from './ResultsPagination.js'
 import { ScopePickerTriggerButton } from './ScopePickerTrigger.js'
 
@@ -27,7 +27,11 @@ const AVAILABILITY_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="availability" className={OPTION_PANEL_CLASS} aria-labelledby="availability-title" hidden={hidden}>
-      <h1 id="availability-title" className={OPTION_PANEL_TITLE_CLASS}>书签可用性检测</h1>
+      <OptionPanelHeader
+        titleId="availability-title"
+        title="书签可用性检测"
+        description="检查失效、超时或需要人工确认的链接，并集中处理检测结果。"
+      />
 
       <div className={OPTION_RUN_HEADER_CLASS}>
         <div className={OPTION_RUN_CELL_CLASS}>

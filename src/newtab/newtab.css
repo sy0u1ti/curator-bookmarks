@@ -60,14 +60,14 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --newtab-wallpaper-deblur-duration: 260ms;
   --newtab-wallpaper-reveal-blur: 0px;
-  --newtab-glass-bg-hero: rgba(10, 11, 13, 0.62);
-  --newtab-glass-bg: rgba(14, 15, 17, 0.38);
-  --newtab-glass-bg-faint: rgba(14, 15, 17, 0.24);
-  --newtab-glass-bg-card: rgba(18, 19, 21, 0.44);
-  --newtab-glass-bg-hover: rgba(28, 29, 32, 0.58);
-  --newtab-glass-bg-popup: rgba(10, 11, 13, 0.76);
-  --newtab-glass-border: rgba(245, 245, 247, 0.11);
-  --newtab-glass-border-hover: rgba(245, 245, 247, 0.2);
+  --newtab-glass-bg-hero: rgba(8, 9, 11, 0.7);
+  --newtab-glass-bg: rgba(10, 11, 13, 0.58);
+  --newtab-glass-bg-faint: rgba(10, 11, 13, 0.6);
+  --newtab-glass-bg-card: rgba(14, 15, 17, 0.7);
+  --newtab-glass-bg-hover: rgba(24, 25, 28, 0.78);
+  --newtab-glass-bg-popup: rgba(7, 8, 10, 0.84);
+  --newtab-glass-border: rgba(245, 245, 247, 0.14);
+  --newtab-glass-border-hover: rgba(245, 245, 247, 0.24);
   --newtab-glass-shadow: 0 18px 46px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
@@ -99,45 +99,21 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 0 0 2px rgba(245, 245, 247, 0.5),
     inset 0 0 0 3px rgba(0, 0, 0, 0.28);
-  --newtab-glass-filter: blur(12px) saturate(1.12);
-  --newtab-glass-filter-soft: blur(8px) saturate(1.06);
+  --newtab-glass-filter: blur(16px) saturate(0.9) brightness(0.82);
+  --newtab-glass-filter-soft: blur(10px) saturate(0.94) brightness(0.88);
+  --newtab-glass-filter-hero: blur(18px) saturate(0.88) brightness(0.68);
+  --newtab-glass-filter-popup: blur(20px) saturate(0.86) brightness(0.74);
   --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.68), 0 0 0 4px rgba(245, 245, 247, 0.42);
 }
 
-.newtab-search-suggestions-panel:not([hidden]) {
-  opacity: 1;
-  translate: 0 0;
-  scale: 1;
-  transition:
-    opacity var(--ds-motion-fast) var(--ds-ease-standard),
-    translate var(--ds-motion-fast) var(--ds-ease-standard),
-    scale var(--ds-motion-fast) var(--ds-ease-standard);
-}
-
-@starting-style {
-  .newtab-search-suggestions-panel:not([hidden]) {
-    opacity: 0;
-    translate: 0 -2px;
-    scale: 0.995;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .newtab-search-suggestions-panel:not([hidden]) {
-    translate: none;
-    scale: 1;
-    transition: opacity 80ms linear;
-  }
-}
-
 .newtab-app[data-background-media="true"] {
-  --newtab-glass-bg-hero: rgba(9, 10, 12, 0.72);
-  --newtab-glass-bg: rgba(12, 13, 15, 0.5);
-  --newtab-glass-bg-faint: rgba(12, 13, 15, 0.4);
-  --newtab-glass-bg-card: rgba(16, 17, 19, 0.56);
-  --newtab-glass-bg-hover: rgba(28, 29, 32, 0.7);
-  --newtab-glass-bg-popup: rgba(9, 10, 12, 0.84);
-  --newtab-glass-border: rgba(245, 245, 247, 0.14);
+  --newtab-glass-bg-hero: rgba(7, 8, 10, 0.76);
+  --newtab-glass-bg: rgba(9, 10, 12, 0.66);
+  --newtab-glass-bg-faint: rgba(9, 10, 12, 0.68);
+  --newtab-glass-bg-card: rgba(13, 14, 16, 0.74);
+  --newtab-glass-bg-hover: rgba(23, 24, 27, 0.82);
+  --newtab-glass-bg-popup: rgba(6, 7, 9, 0.88);
+  --newtab-glass-border: rgba(245, 245, 247, 0.17);
   --newtab-bookmark-hover-overlay: rgba(245, 245, 247, 0.065);
 }
 
@@ -673,7 +649,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   }
 
   :where(
-    .newtab-clock,
     .newtab-onboarding-strip,
     .newtab-delete-toast-panel,
     .featured-wallpaper-panel,
@@ -1047,14 +1022,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 
 .newtab-search {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-hero);
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
-  -webkit-backdrop-filter: blur(16px) saturate(1.14);
-  backdrop-filter: blur(16px) saturate(1.14);
 }
 
-.newtab-clock,
 .newtab-onboarding-strip,
 .settings-trigger,
 .newtab-delete-toast-panel {
@@ -1066,7 +1037,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   backdrop-filter: var(--newtab-glass-filter);
 }
 
-.newtab-search:hover,
 .settings-trigger:hover,
 .settings-trigger[aria-expanded="true"] {
   border-color: var(--newtab-glass-border-hover);
@@ -1075,7 +1045,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   filter: var(--newtab-glass-drop-hover);
 }
 
-.newtab-search:focus-within,
 .settings-trigger:focus-visible {
   border-color: var(--newtab-glass-border-hover);
   background: var(--newtab-glass-bg-hover);
@@ -1312,15 +1281,15 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .newtab-search-suggestions-panel,
 .newtab-search-engine-menu {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-popup);
+  background: var(--newtab-glass-bg-popup, rgba(7, 8, 10, 0.84));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
   filter: drop-shadow(0 22px 56px rgba(0, 0, 0, 0.28));
-  -webkit-backdrop-filter: blur(18px) saturate(1.14);
-  backdrop-filter: blur(18px) saturate(1.14);
+  -webkit-backdrop-filter: var(--newtab-glass-filter-popup, blur(20px) saturate(0.86) brightness(0.74));
+  backdrop-filter: var(--newtab-glass-filter-popup, blur(20px) saturate(0.86) brightness(0.74));
 }
 
-/* 建议面板由 hidden 属性切换 display，展开时重放一次合成器友好的淡入；
-   不动 transform（面板依赖 -translate-x-1/2 定位）。 */
+/* 建议面板由 hidden 属性切换 display，展开时只重放透明度淡入；
+   搜索框和面板共享 shell 的左边界与宽度，动效不参与定位。 */
 .newtab-search-suggestions-panel:not([hidden]) {
   animation: newtab-search-panel-fade-in var(--dropdown-open-dur, 190ms) var(--dropdown-ease, var(--ds-ease-standard)) both;
 }
@@ -1340,12 +1309,12 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   }
 }
 
-.newtab-search-shell[data-panel-open="true"] .newtab-search {
+.newtab-search.is-panel-open {
   border-color: rgba(245, 245, 247, 0.34);
   border-bottom-color: transparent;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
-  background: var(--newtab-glass-bg-popup);
+  background: var(--newtab-glass-bg-popup, rgba(7, 8, 10, 0.84));
   box-shadow: none;
   filter: none;
 }
@@ -1494,14 +1463,11 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   }
 
   .newtab-search-suggestions-panel {
-    --tw-translate-x: 0 !important;
     left: 0;
     max-width: 100%;
     box-sizing: border-box;
     width: calc(100vw - 40px);
     max-height: min(360px, calc(100vh - 220px));
-    transform: none !important;
-    translate: 0 0 !important;
   }
 }
 

@@ -3,7 +3,7 @@ import { cx } from '../../ui/base/utils'
 export const SPEED_DIAL_PANEL_CLASS = 'newtab-speed-dial mb-3.5 grid w-full min-w-0 gap-2.5 rounded-[var(--ui-radius-group)] border border-[var(--ui-divider)] bg-[rgba(15,15,15,0.56)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.075)] [filter:drop-shadow(0_14px_32px_rgba(0,0,0,0.14))] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)]'
 export const SPEED_DIAL_HEADING_CLASS = 'newtab-module-heading grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-end gap-2.5'
 export const SPEED_DIAL_TITLE_CLASS = 'm-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[780] leading-[1.2] text-[rgba(245,245,247,0.9)]'
-export const SPEED_DIAL_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] leading-[1.2] text-[rgba(245,245,247,0.72)] data-[tone=error]:text-[#ffb7b0]'
+export const SPEED_DIAL_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] leading-[1.2] text-[rgba(245,245,247,0.8)] data-[tone=error]:text-[#ffb7b0]'
 export const SPEED_DIAL_GRID_CLASS = 'newtab-speed-dial-grid grid min-w-0 grid-cols-[repeat(auto-fill,minmax(180px,1fr))] auto-rows-[minmax(58px,1fr)] gap-[7px]'
 
 const SPEED_DIAL_CARD_REDUCED_MOTION_CLASS =

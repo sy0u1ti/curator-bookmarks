@@ -8,6 +8,7 @@ import {
 } from 'react'
 import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../ui/base/Collapsible'
 import { Icon } from '../ui/icons/Icon'
+import type { IconName } from '../ui/icons/icon-map'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getMotionAwareScrollBehavior } from '../shared/motion'
 import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
@@ -27,6 +28,7 @@ import {
   navCollapsibleClass,
   navGroupClass,
   navGroupTriggerClass,
+  navLinkIconClass,
   navLinkClass,
   navSubitemClass,
   navSublistClass,
@@ -38,6 +40,7 @@ import {
   optionsLayoutClass,
   optionsMainClass,
   optionsShellClassBase,
+  optionsSkipLinkClass,
   optionsSidebarClass,
   optionsSidebarDividerClass,
   optionsSidebarLabelClass
@@ -56,6 +59,7 @@ import {
 interface NavLink {
   section: string
   href: string
+  icon: IconName
   label: string
   variant?: 'subitem'
 }
@@ -74,26 +78,26 @@ interface NavGroup {
 }
 
 const settingsLinks: NavLink[] = [
-  { section: 'general', href: '#general', label: '通用设置' },
-  { section: 'backup', href: '#backup', label: '数据与备份' }
+  { section: 'general', href: '#general', icon: 'Settings', label: '通用设置' },
+  { section: 'backup', href: '#backup', icon: 'Save', label: '数据与备份' }
 ]
 
 const availabilityLinks: NavLink[] = [
-  { section: 'availability', href: '#availability', label: '书签可用性检测', variant: 'subitem' },
-  { section: 'history', href: '#history', label: '检测历史', variant: 'subitem' },
-  { section: 'redirects', href: '#redirects', label: '重定向更新', variant: 'subitem' },
-  { section: 'ignore', href: '#ignore', label: '忽略规则', variant: 'subitem' }
+  { section: 'availability', href: '#availability', icon: 'Gauge', label: '书签可用性检测', variant: 'subitem' },
+  { section: 'history', href: '#history', icon: 'ArchiveRestore', label: '检测历史', variant: 'subitem' },
+  { section: 'redirects', href: '#redirects', icon: 'RefreshCw', label: '重定向更新', variant: 'subitem' },
+  { section: 'ignore', href: '#ignore', icon: 'CircleHelp', label: '忽略规则', variant: 'subitem' }
 ]
 
 const bookmarkLinks: NavLink[] = [
-  { section: 'duplicates', href: '#duplicates', label: '重复书签检测' },
-  { section: 'folder-cleanup', href: '#folder-cleanup', label: '文件夹清理' },
-  { section: 'recycle', href: '#recycle', label: '回收站' }
+  { section: 'duplicates', href: '#duplicates', icon: 'Copy', label: '重复书签检测' },
+  { section: 'folder-cleanup', href: '#folder-cleanup', icon: 'Folder', label: '文件夹清理' },
+  { section: 'recycle', href: '#recycle', icon: 'Trash2', label: '回收站' }
 ]
 
 const aiLinks: NavLink[] = [
-  { section: 'ai', href: '#ai', label: '书签智能分析' },
-  { section: 'bookmark-history', href: '#bookmark-history', label: 'AI 整理记录' }
+  { section: 'ai', href: '#ai', icon: 'Bot', label: '书签智能分析' },
+  { section: 'bookmark-history', href: '#bookmark-history', icon: 'Bookmark', label: 'AI 整理记录' }
 ]
 
 const availabilitySectionKeys = new Set(availabilityLinks.map((link) => link.section))
@@ -117,7 +121,7 @@ const navGroups: NavGroup[] = [
   },
   {
     labelId: 'options-ai-nav-label',
-    label: 'AI功能',
+    label: 'AI 功能',
     links: aiLinks
   }
 ]
@@ -126,6 +130,7 @@ type SectionLinkClickHandler = (event: MouseEvent<HTMLAnchorElement>) => void
 
 function OptionsNavLink({
   href,
+  icon,
   section,
   label,
   variant,
@@ -140,12 +145,15 @@ function OptionsNavLink({
 
   return (
     <a
-      className={[navLinkClass, className].filter(Boolean).join(' ')}
+      className={['group', navLinkClass, className].filter(Boolean).join(' ')}
       href={href}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
     >
-      {label}
+      <span className={navLinkIconClass} aria-hidden="true">
+        <Icon name={icon} size={15} />
+      </span>
+      <span className="min-w-0 truncate max-[920px]:whitespace-normal">{label}</span>
     </a>
   )
 }
@@ -428,11 +436,12 @@ export function OptionsApp() {
   return (
     <ThemeProvider>
       <div className={optionsShellClassBase} ref={optionsShellRef}>
+        <a className={optionsSkipLinkClass} href="#options-main">跳到主要内容</a>
         <div className={optionsSidebarDividerClass} aria-hidden="true"></div>
         <OptionsHeader activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />
         <div className={optionsLayoutClass}>
           <OptionsSidebar activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />
-          <main className={optionsMainClass} ref={optionsMainRef}>
+          <main id="options-main" className={optionsMainClass} ref={optionsMainRef} tabIndex={-1}>
             <GeneralPanel
               aiProviderAnchorRef={handleAiProviderAnchorRef}
               aiProviderAttentionRequestId={aiProviderAttentionRequestId}
