@@ -71,7 +71,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   --newtab-glass-shadow: 0 18px 46px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.055);
   --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
-  --newtab-bookmark-hover-lift: -2px;
+  --newtab-bookmark-hover-lift: -2.5px;
   --newtab-bookmark-hover-shadow:
     0 18px 24px -22px rgba(0, 0, 0, 0.82),
     0 8px 14px -12px rgba(0, 0, 0, 0.58),
@@ -1098,12 +1098,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 /* Lumno-inspired bookmark cards: a restrained physical lift and layered shadow,
    recolored through Curator's neutral glass system instead of per-card saturated surfaces. */
 .bookmark-tile {
-  --bookmark-tile-transition:
-    border-color 170ms var(--ui-ease-standard),
-    background-color 170ms var(--ui-ease-standard),
-    box-shadow 170ms var(--ui-ease-standard),
-    transform 170ms var(--ui-ease-standard),
-    opacity var(--ui-motion-standard) var(--ui-ease-standard);
   border-color: rgba(245, 245, 247, 0.1);
   background: var(--newtab-glass-bg-card);
   box-shadow: var(--newtab-bookmark-shadow);
@@ -1163,6 +1157,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
     border-color: var(--newtab-glass-border-hover);
     box-shadow: var(--newtab-bookmark-hover-shadow);
     transform: translateY(var(--newtab-bookmark-hover-lift));
+    /* 仅悬停单卡启用毛玻璃：静息 72 卡保持 backdrop-filter:none 护首屏性能，
+       悬停时用软化玻璃令牌加深景深，贴近 Lumno 卡片的 blur 加深手感。 */
+    -webkit-backdrop-filter: var(--newtab-glass-filter-soft);
+    backdrop-filter: var(--newtab-glass-filter-soft);
   }
 
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before {

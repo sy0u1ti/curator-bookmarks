@@ -30,6 +30,7 @@ export interface BookmarkDragGhostView {
 export interface FolderDragGhostView {
   bookmarkCount: number
   height: number
+  style?: CSSProperties
   title: string
   transform: string
   width: number

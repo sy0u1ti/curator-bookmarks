@@ -50,6 +50,19 @@ try {
   )
 
   const stableSample = visibleSamples.at(-1)
+  assert.notEqual(
+    stableSample.icon.clipPath,
+    'none',
+    `The settled bookmark icon shell must carry its squircle clip-path: ${JSON.stringify(stableSample)}`
+  )
+  const unstableClipSample = visibleSamples.find((sample) =>
+    sample.icon.clipPath !== stableSample.icon.clipPath
+  )
+  assert.equal(
+    unstableClipSample,
+    undefined,
+    `Bookmark icon squircle outline must be identical from the first visible refresh frame: ${JSON.stringify(unstableClipSample)}`
+  )
   const unstableGeometrySample = visibleSamples.find((sample) =>
     Math.abs(sample.icon.width - stableSample.icon.width) > 0.05 ||
     Math.abs(sample.icon.height - stableSample.icon.height) > 0.05 ||
@@ -62,6 +75,36 @@ try {
     unstableGeometrySample,
     undefined,
     `Bookmark icon and title geometry must stay identical throughout preboot handoff: ${JSON.stringify(unstableGeometrySample)}`
+  )
+
+  // 裸启动（无 preboot 快照：首次安装、快照过期、视口变化）没有快照层遮盖，
+  // live 图标的 squircle 轮廓必须在首个可见帧就是终态，不允许圆角→squircle 突变。
+  await page.evaluate(() => localStorage.removeItem('curatorNewTabBookmarkPreboot'))
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await page.waitForTimeout(1_200)
+
+  const bareSamples = await page.evaluate(() => window.__curatorCardStabilitySamples || [])
+  const bareVisibleSamples = bareSamples.filter((sample) =>
+    sample.kind === 'live' && sample.title && sample.icon
+  )
+  assert.ok(bareVisibleSamples.length > 0, 'Expected live bookmark-card samples on a snapshotless boot.')
+  const bareStableSample = bareVisibleSamples.at(-1)
+  assert.notEqual(
+    bareStableSample.icon.clipPath,
+    'none',
+    `The settled snapshotless icon shell must carry its squircle clip-path: ${JSON.stringify(bareStableSample)}`
+  )
+  const bareUnstableSample = bareVisibleSamples.find((sample) =>
+    sample.icon.clipPath !== bareStableSample.icon.clipPath ||
+    Math.abs(sample.icon.width - bareStableSample.icon.width) > 0.05 ||
+    Math.abs(sample.icon.height - bareStableSample.icon.height) > 0.05 ||
+    Math.abs(sample.title.glyphWidth - bareStableSample.title.glyphWidth) > 0.05 ||
+    sample.title.font !== bareStableSample.title.font
+  )
+  assert.equal(
+    bareUnstableSample,
+    undefined,
+    `Snapshotless first paint must already match the settled card (no squircle pop-in): ${JSON.stringify(bareUnstableSample)}`
   )
 
   const themeSamples = await page.locator('.bookmark-tile:not(.bookmark-drag-ghost)').evaluateAll((tiles) =>
@@ -209,13 +252,15 @@ function installCardStabilitySampler() {
       const imageRect = image?.getBoundingClientRect()
       const imageStyle = image ? getComputedStyle(image) : null
       const titleStyle = title ? getComputedStyle(title) : null
+      const iconStyle = icon ? getComputedStyle(icon) : null
 
       window.__curatorCardStabilitySamples.push({
         frame,
         kind: preboot ? 'preboot' : 'live',
         icon: iconRect ? {
           width: iconRect.width,
-          height: iconRect.height
+          height: iconRect.height,
+          clipPath: iconStyle ? iconStyle.clipPath : 'none'
         } : null,
         image: imageRect && imageStyle ? {
           width: imageRect.width,

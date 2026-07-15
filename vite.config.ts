@@ -154,15 +154,6 @@ export default defineConfig(({ mode }) => {
               return 'vendor-pinyin'
             }
             if (
-              id.includes('/src/options/sections/dashboard-virtual.ts') ||
-              id.includes('/src/options/sections/dashboard-favicons.ts')
-            ) {
-              return 'options-dashboard'
-            }
-            if (id.includes('/src/options/sections/dashboard-lazy.ts')) {
-              return 'options-dashboard-loader'
-            }
-            if (
               id.includes('/src/options/sections/availability-runner.ts') ||
               id.includes('/src/options/sections/classifier.ts')
             ) {

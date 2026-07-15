@@ -70,7 +70,7 @@ try {
       version: snapshot?.version ?? null
     }
   }, bookmarkId)
-  assert.equal(cachedTitleRect.version, 3)
+  assert.equal(cachedTitleRect.version, 4)
   assert.ok(cachedTitleRect.titleRect, `Expected cached title geometry: ${JSON.stringify(cachedTitleRect)}`)
   const initialPerformance = await page.evaluate(() => ({
     firstBookmarksMs: performance.getEntriesByName('newtab.firstBookmarksMs', 'measure').at(-1)?.duration ?? null,

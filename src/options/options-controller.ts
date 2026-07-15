@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import {
   BOOKMARKS_BAR_ID,
-  NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
   ROOT_ID,
   STORAGE_KEYS
 } from '../shared/constants.js'
@@ -112,16 +111,12 @@ import {
   normalizePageContentContext
 } from './sections/content-extraction.js'
 import {
-  buildContentSnapshotSearchMap,
-  buildContentSnapshotSearchText,
-  buildContentSnapshotSearchMapWithFullText,
   loadContentSnapshotIndex,
   normalizeContentSnapshotIndex,
   normalizeContentSnapshotSettings,
   saveContentSnapshotFromContext,
   saveContentSnapshotSettings
 } from '../shared/content-snapshots.js'
-import { parseSearchQuery } from '../shared/search-query.js'
 import {
   NAVIGATION_TIMEOUT_MS,
   NAVIGATION_RETRY_TIMEOUT_MS,
@@ -133,18 +128,13 @@ import {
   AI_NAMING_PRESET_MODELS,
   AI_NAMING_RESPONSE_SCHEMA
 } from './shared-options/constants.js'
-import {
-  isOptionsDashboardEmbedMode,
-  normalizeOptionsSectionKey,
-  type OptionsSectionKey
-} from './options-section-store.js'
+import { normalizeOptionsSectionKey, type OptionsSectionKey } from './options-section-store.js'
 import {
   availabilityState,
   managerState,
   folderCleanupState,
   aiNamingState,
   aiNamingManagerState,
-  dashboardState,
   contentSnapshotState,
   backupRestoreState
 } from './shared-options/state.js'
@@ -234,26 +224,6 @@ import {
   renderBookmarkAddHistory,
   clearBookmarkAddHistory
 } from './sections/bookmark-add-history.js'
-import {
-  cancelDashboardDrag,
-  closeDashboardTagEditor,
-  closeDashboardTagPopover,
-  getSelectedDashboardBookmarks,
-  handleDashboardKeydown,
-  handleDashboardViewAction as handleDashboardViewActionLazy,
-  applyNewTabSpeedDialStateMessage,
-  hydrateDashboardSpeedDialState,
-  isDashboardViewReady,
-  prepareDashboardSectionEntry,
-  teardownDashboardSectionExit,
-  getSingleDashboardMoveBookmark,
-  hydrateDashboardFaviconCache,
-  moveSingleDashboardBookmark,
-  moveSelectedDashboardBookmarks,
-  removeDashboardSelectionIds,
-  renderDashboardSection,
-  renderDashboardSectionWhenIdle
-} from './sections/dashboard-lazy.js'
 import { publishResultsPagination } from './components/results-pagination-store.js'
 import type { ResultsPaginationActionDetail } from './components/results-pagination-types.js'
 import { publishBackupControls } from './components/backup-controls-store.js'
@@ -266,7 +236,6 @@ import type {
   FolderPickerActionDetail,
   FolderPickerTreeOptionViewModel
 } from './components/folder-picker-results-types.js'
-import type { DashboardViewActionDetail } from './components/dashboard-view-types.js'
 import { publishAvailabilityResults } from './components/availability-results-store.js'
 import type { AvailabilityResultActionDetail } from './components/availability-results-types.js'
 import type {
@@ -334,9 +303,6 @@ import type { ScopePickerSource } from './components/scope-picker-types.js'
 import { publishOptionsModals } from './components/options-modals-store.js'
 import type { OptionsModalActionDetail } from './components/options-modals-types.js'
 
-const IS_OPTIONS_DASHBOARD_EMBED_MODE = isOptionsDashboardEmbedMode()
-
-let newTabDashboardReadyPosted = false
 let activeSectionKey = ''
 let availabilityRenderFrame = 0
 let availabilityDurationTimer = 0
@@ -393,9 +359,6 @@ const SHORTCUT_COMMAND_LABELS: Record<string, { title: string; detail: string }>
     detail: '通过快捷键开启或关闭新增书签自动分析。'
   }
 }
-const CONTENT_SNAPSHOT_FULL_TEXT_RETRY_LIMIT = 2
-const CONTENT_SNAPSHOT_FULL_TEXT_RETRY_DELAY_MS = 1200
-
 const recycleCallbacks = {
   renderAvailabilitySection,
   hydrateAvailabilityCatalog,
@@ -423,17 +386,6 @@ const historyCallbacks = {
   renderAvailabilitySection,
   getCurrentAvailabilityScopeMeta,
   confirm: requestConfirmation
-}
-
-const dashboardCallbacks = {
-  renderAvailabilitySection,
-  hydrateAvailabilityCatalog,
-  regenerateAiTags: regenerateDashboardAiTagsForBookmark,
-  openMoveModal,
-  closeMoveModal,
-  exitDashboard,
-  confirm: requestConfirmation,
-  recycleCallbacks
 }
 
 const folderCleanupCallbacks = {
@@ -477,11 +429,7 @@ async function startOptionsController(): Promise<void> {
   void hydrateShortcutCommands()
 
   await hydratePersistentState()
-  await hydrateAvailabilityCatalog({ analyzeFolderCleanup: !IS_OPTIONS_DASHBOARD_EMBED_MODE })
-  if (normalizeSectionKey(getCurrentSectionKey()) === 'dashboard') {
-    await hydrateDashboardSpeedDialState()
-    renderDashboardSectionIfVisible()
-  }
+  await hydrateAvailabilityCatalog()
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
   renderAvailabilitySection()
@@ -499,11 +447,8 @@ export function handleOptionsBookmarkTreeChanged(): void {
   bookmarkChangeRefreshHandle = window.setTimeout(() => {
     bookmarkChangeRefreshHandle = 0
     void hydrateAvailabilityCatalog({ preserveResults: true, analyzeFolderCleanup: false })
-      .then(() => {
-        renderDashboardSectionIfVisible()
-      })
       .catch((error) => {
-        console.warn('Curator: 书签变更后的 dashboard 重新加载失败。', error)
+        console.warn('Curator: 书签变更后的目录重新加载失败。', error)
       })
   }, 240)
 }
@@ -524,7 +469,6 @@ async function hydratePersistentState() {
       STORAGE_KEYS.folderCleanupState,
       STORAGE_KEYS.inboxSettings,
       STORAGE_KEYS.contentSnapshotSettings,
-      STORAGE_KEYS.dashboardFaviconCache,
       STORAGE_KEYS.aiRejectedSuggestions
     ])
     managerState.ignoreRules = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
@@ -538,11 +482,6 @@ async function hydratePersistentState() {
     hydrateAiRejectedSuggestions(stored[STORAGE_KEYS.aiRejectedSuggestions])
     contentSnapshotState.settings = normalizeContentSnapshotSettings(stored[STORAGE_KEYS.contentSnapshotSettings])
     contentSnapshotState.index = normalizeContentSnapshotIndex(null)
-    contentSnapshotState.searchTextMap = buildContentSnapshotSearchMap(contentSnapshotState.index, { includeFullText: false })
-    hydrateDashboardFaviconCache(stored[STORAGE_KEYS.dashboardFaviconCache])
-    contentSnapshotState.searchTextMapIncludesFullText = false
-    contentSnapshotState.searchTextMapLoadingFullText = false
-    resetContentSnapshotFullTextSearchMapRetry()
     hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
     managerState.inboxSettings = normalizeInboxSettings(stored[STORAGE_KEYS.inboxSettings])
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
@@ -578,7 +517,7 @@ function scheduleLargeRepositoryHydration(): void {
   window.setTimeout(hydrate, 0)
 }
 
-const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['dashboard', 'ai'])
+const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['ai'])
 
 function maybeHydrateLargeRepositoryForSection(key: string): void {
   if (SECTIONS_NEEDING_LARGE_REPOSITORY.has(key)) {
@@ -594,99 +533,18 @@ async function hydrateLargeRepositoryState(): Promise<void> {
 
   aiNamingState.tagIndex = tagIndex
   contentSnapshotState.index = snapshotIndex
-  contentSnapshotState.searchTextMap = buildContentSnapshotSearchMap(contentSnapshotState.index, {
-    includeFullText: false
-  })
-  contentSnapshotState.searchTextMapIncludesFullText = false
-  contentSnapshotState.searchTextMapLoadingFullText = false
-  resetContentSnapshotFullTextSearchMapRetry()
 
   renderLargeRepositoryDependentSections()
 }
 
 function renderLargeRepositoryDependentSections(): void {
   renderActiveOptionsSection()
-  renderDashboardSectionIfVisible()
 }
 
 async function clearPersistedAvailabilitySnapshot(): Promise<void> {
   try {
     await removeLocalStorage(STORAGE_KEYS.pendingAvailabilityResults)
   } catch {}
-}
-
-function scheduleContentSnapshotFullTextSearchMapHydration(): void {
-  if (
-    !contentSnapshotState.settings.fullTextSearchEnabled ||
-    contentSnapshotState.searchTextMapIncludesFullText ||
-    contentSnapshotState.searchTextMapLoadingFullText
-  ) {
-    return
-  }
-
-  const hydrate = () => {
-    void hydrateContentSnapshotFullTextSearchMap()
-  }
-
-  const requestIdleCallback = (window as Window & {
-    requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number
-  }).requestIdleCallback?.bind(window)
-
-  if (requestIdleCallback) {
-    requestIdleCallback(hydrate, { timeout: 3000 })
-    return
-  }
-
-  window.setTimeout(hydrate, 0)
-}
-
-function scheduleContentSnapshotFullTextSearchMapRetry(): void {
-  if (
-    contentSnapshotState.searchTextMapFullTextRetryCount >= CONTENT_SNAPSHOT_FULL_TEXT_RETRY_LIMIT ||
-    contentSnapshotState.searchTextMapFullTextRetryTimer
-  ) {
-    return
-  }
-
-  contentSnapshotState.searchTextMapFullTextRetryCount += 1
-  contentSnapshotState.searchTextMapFullTextRetryTimer = window.setTimeout(() => {
-    contentSnapshotState.searchTextMapFullTextRetryTimer = 0
-    void hydrateContentSnapshotFullTextSearchMap()
-  }, CONTENT_SNAPSHOT_FULL_TEXT_RETRY_DELAY_MS)
-}
-
-function resetContentSnapshotFullTextSearchMapRetry(): void {
-  if (contentSnapshotState.searchTextMapFullTextRetryTimer) {
-    window.clearTimeout(contentSnapshotState.searchTextMapFullTextRetryTimer)
-  }
-  contentSnapshotState.searchTextMapFullTextRetryTimer = 0
-  contentSnapshotState.searchTextMapFullTextRetryCount = 0
-}
-
-async function hydrateContentSnapshotFullTextSearchMap(): Promise<void> {
-  if (
-    !contentSnapshotState.settings.fullTextSearchEnabled ||
-    contentSnapshotState.searchTextMapIncludesFullText ||
-    contentSnapshotState.searchTextMapLoadingFullText
-  ) {
-    return
-  }
-
-  contentSnapshotState.searchTextMapLoadingFullText = true
-  try {
-    contentSnapshotState.searchTextMap = await buildContentSnapshotSearchMapWithFullText(contentSnapshotState.index, {
-      includeFullText: true,
-      maxRecords: 1000
-    })
-    contentSnapshotState.searchTextMapIncludesFullText = true
-    resetContentSnapshotFullTextSearchMapRetry()
-    renderDashboardSectionIfVisible()
-  } catch {
-    contentSnapshotState.searchTextMapIncludesFullText = false
-    scheduleContentSnapshotFullTextSearchMapRetry()
-  } finally {
-    contentSnapshotState.searchTextMapLoadingFullText = false
-  }
 }
 
 async function saveAiNamingSettings(settings = aiNamingManagerState.settings) {
@@ -699,21 +557,13 @@ async function saveAiNamingSettings(settings = aiNamingManagerState.settings) {
 function syncPageSection() {
   const rawKey = getCurrentSectionKey()
   const key = normalizeSectionKey(rawKey)
-  const previousSectionKey = activeSectionKey
 
   if (rawKey !== key) {
     window.history.replaceState(null, '', `#${key}`)
   }
 
-  if (previousSectionKey !== 'dashboard' && key === 'dashboard') {
-    prepareDashboardSectionEntry()
-  }
-  if (previousSectionKey === 'dashboard' && key !== 'dashboard') {
-    teardownDashboardSectionExit()
-  }
   activeSectionKey = key
   maybeHydrateLargeRepositoryForSection(key)
-  maybeHydrateContentSnapshotFullTextSearchMapForVisibleDashboard()
   syncAvailabilityDurationTimer()
   syncAiNamingDurationTimer()
 
@@ -722,63 +572,6 @@ function syncPageSection() {
   if (key === 'general') {
     renderAiNamingSection()
   }
-}
-
-function exitDashboard(): void {
-  if (IS_OPTIONS_DASHBOARD_EMBED_MODE) {
-    window.parent.postMessage(
-      { type: 'curator:newtab-dashboard-close' },
-      window.location.origin
-    )
-    return
-  }
-
-  window.location.hash = '#general'
-}
-
-export function handleOptionsDashboardViewReady(_event?: Event): void {
-  if (
-    !IS_OPTIONS_DASHBOARD_EMBED_MODE ||
-    newTabDashboardReadyPosted ||
-    normalizeSectionKey(getCurrentSectionKey()) !== 'dashboard' ||
-    availabilityState.catalogLoading ||
-    !isDashboardViewReady()
-  ) {
-    return
-  }
-
-  newTabDashboardReadyPosted = true
-  window.requestAnimationFrame(() => {
-    window.requestAnimationFrame(() => {
-      window.parent.postMessage(
-        { type: 'curator:newtab-dashboard-ready' },
-        window.location.origin
-      )
-    })
-  })
-}
-
-export function handleOptionsWindowMessage(event: MessageEvent): void {
-  if (!IS_OPTIONS_DASHBOARD_EMBED_MODE || event.origin !== window.location.origin) {
-    return
-  }
-
-  if (event.data?.type === NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE) {
-    newTabDashboardReadyPosted = false
-    prepareDashboardSectionEntry()
-    renderDashboardSection()
-    return
-  }
-
-  applyNewTabSpeedDialStateMessage(event.data)
-}
-
-export function handleDashboardViewAction(detail: DashboardViewActionDetail): void {
-  if (!detail) {
-    return
-  }
-
-  void handleDashboardViewActionLazy(detail, dashboardCallbacks)
 }
 
 export function handleOptionsModalAction(detail: OptionsModalActionDetail): void {
@@ -835,48 +628,11 @@ export function handleAiAnalysisScopePickerOpen(): void {
 }
 
 function getCurrentSectionKey() {
-  if (IS_OPTIONS_DASHBOARD_EMBED_MODE) {
-    return 'dashboard'
-  }
-
   return window.location.hash.replace(/^#/, '').split(':')[0] || 'general'
 }
 
 function normalizeSectionKey(key: string): OptionsSectionKey {
   return normalizeOptionsSectionKey(key)
-}
-
-export function handleDashboardPanelKeyDown(event: KeyboardEvent): void {
-  if (getCurrentSectionKey() === 'dashboard') {
-    handleDashboardKeydown(event)
-    if (event.defaultPrevented) {
-      return
-    }
-  }
-
-  if (event.key !== 'Escape') {
-    return
-  }
-
-  if (cancelDashboardDrag()) {
-    event.preventDefault()
-    return
-  }
-
-  if (closeDashboardTagEditor()) {
-    event.preventDefault()
-    return
-  }
-
-  if (closeDashboardTagPopover()) {
-    event.preventDefault()
-    return
-  }
-
-  if (getCurrentSectionKey() === 'dashboard') {
-    event.preventDefault()
-    exitDashboard()
-  }
 }
 
 function getPaginationStateKey(kind) {
@@ -1048,7 +804,7 @@ export function handleAvailabilityPanelAction(detail: AvailabilityPanelActionDet
   }
 
   if (detail.action === 'move-selection') {
-    openMoveModal('availability')
+    openMoveModal()
     return
   }
 
@@ -1180,9 +936,6 @@ async function hydrateAvailabilityCatalog({ preserveResults = false, analyzeFold
     availabilityState.bookmarkMap = extracted.bookmarkMap
     availabilityState.folderMap = extracted.folderMap
     syncOptionsFolderPickerExpandedState()
-    if (dashboardState.folderId && !availabilityState.folderMap.has(String(dashboardState.folderId))) {
-      dashboardState.folderId = ''
-    }
     managerState.duplicateGroups = buildDuplicateGroups(bookmarks, {
       excludedFolderIds: excludedDuplicateFolderIds
     })
@@ -2265,12 +2018,6 @@ function renderActiveOptionsSection() {
     return
   }
 
-  if (activeSection === 'dashboard') {
-    renderDashboardSectionWhenIdle()
-    handleOptionsDashboardViewReady()
-    return
-  }
-
   if (activeSection === 'history') {
     renderAvailabilityHistory(historyCallbacks)
     return
@@ -3029,13 +2776,6 @@ async function saveContentSnapshotSettingsFromChange(
 
   try {
     contentSnapshotState.settings = await saveContentSnapshotSettings(nextSettings)
-    contentSnapshotState.searchTextMap = await buildContentSnapshotSearchMapWithFullText(contentSnapshotState.index, {
-      includeFullText: contentSnapshotState.settings.fullTextSearchEnabled,
-      maxRecords: 1000
-    }).catch(() => new Map<string, string>())
-    contentSnapshotState.searchTextMapIncludesFullText = contentSnapshotState.settings.fullTextSearchEnabled
-    contentSnapshotState.searchTextMapLoadingFullText = false
-    resetContentSnapshotFullTextSearchMapRetry()
     contentSnapshotState.statusMessage = '网页内容索引设置已保存。'
   } catch (error) {
     contentSnapshotState.settings = previousSettings
@@ -3043,7 +2783,6 @@ async function saveContentSnapshotSettingsFromChange(
       error instanceof Error ? `网页内容索引设置保存失败：${error.message}` : '网页内容索引设置保存失败。'
   } finally {
     renderAiNamingSection()
-    renderDashboardSection()
   }
 }
 
@@ -6133,37 +5872,6 @@ async function generateAiNamingResultForBookmark(
   return { modelItem, preparedItem }
 }
 
-async function regenerateDashboardAiTagsForBookmark(bookmark, signal = null) {
-  if (aiNamingState.running || aiNamingState.applying) {
-    throw new Error('书签智能分析正在运行，请等待当前任务结束后再重新生成。')
-  }
-
-  if (!isCheckableUrl(bookmark?.url)) {
-    throw new Error('该书签不是可分析的 http/https 链接。')
-  }
-
-  const settings = normalizeAiNamingSettings(aiNamingManagerState.settings)
-  validateAiNamingSettings(settings)
-  aiNamingManagerState.settings = settings
-  throwIfAborted(signal)
-  const permissionGranted = await ensureAiNamingPermissionsForBookmarks([bookmark], { interactive: true })
-  if (!permissionGranted) {
-    throw new Error('未授予网页抓取或 AI 服务访问权限，无法重新生成标签。')
-  }
-
-  throwIfAborted(signal)
-  const { modelItem, preparedItem } = await generateAiNamingResultForBookmark(bookmark, settings, { signal })
-  throwIfAborted(signal)
-  const nextResult = buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem)
-  const record = await persistAiNamingTagRecord(bookmark, nextResult, settings, preparedItem, {
-    rethrow: true
-  })
-
-  if (!record) {
-    throw new Error('AI 未生成可保存的标签数据。')
-  }
-}
-
 async function commitAiNamingResult(bookmark, modelItem, settings = aiNamingManagerState.settings, preparedItem = null) {
   const nextResult = buildAiNamingResultFromModelItem(bookmark, modelItem, preparedItem)
   upsertAiNamingResult(nextResult)
@@ -6353,8 +6061,6 @@ async function saveContentSnapshotForAiPreparedItem(preparedItem): Promise<void>
         [record.bookmarkId]: record
       }
     })
-    updateContentSnapshotSearchTextForRecord(record)
-    resetContentSnapshotFullTextSearchMapRetry()
     contentSnapshotState.aiRunSavedCount += 1
     contentSnapshotState.statusMessage = ''
     renderContentSnapshotSettings()
@@ -6366,53 +6072,6 @@ async function saveContentSnapshotForAiPreparedItem(preparedItem): Promise<void>
     console.warn('[Curator] 书签智能分析保存网页内容索引失败', error)
     renderContentSnapshotSettings()
   }
-}
-
-function updateContentSnapshotSearchTextForRecord(record): void {
-  const searchText = buildContentSnapshotSearchText(record, {
-    includeFullText: contentSnapshotState.searchTextMapIncludesFullText
-  })
-  const bookmarkId = String(record?.bookmarkId || '').trim()
-  if (!bookmarkId) {
-    return
-  }
-
-  const nextSearchMap = new Map(contentSnapshotState.searchTextMap)
-  if (searchText) {
-    nextSearchMap.set(bookmarkId, searchText)
-  } else {
-    nextSearchMap.delete(bookmarkId)
-  }
-  contentSnapshotState.searchTextMap = nextSearchMap
-  if (shouldHydrateContentSnapshotFullTextSearchMapForDashboard()) {
-    scheduleContentSnapshotFullTextSearchMapHydration()
-  }
-}
-
-function renderDashboardSectionIfVisible(): void {
-  if (normalizeSectionKey(getCurrentSectionKey()) !== 'dashboard') {
-    return
-  }
-
-  renderDashboardSectionWhenIdle()
-}
-
-function shouldHydrateContentSnapshotFullTextSearchMapForDashboard(): boolean {
-  return (
-    normalizeSectionKey(getCurrentSectionKey()) === 'dashboard' &&
-    parseSearchQuery(dashboardState.query).textTerms.length > 0 &&
-    contentSnapshotState.settings.fullTextSearchEnabled &&
-    !contentSnapshotState.searchTextMapIncludesFullText &&
-    !contentSnapshotState.searchTextMapLoadingFullText
-  )
-}
-
-function maybeHydrateContentSnapshotFullTextSearchMapForVisibleDashboard(): void {
-  if (!shouldHydrateContentSnapshotFullTextSearchMapForDashboard()) {
-    return
-  }
-
-  scheduleContentSnapshotFullTextSearchMapHydration()
 }
 
 async function getAiMetadataForBookmark(bookmark, timeoutMs, options: { signal?: AbortSignal | null } = {}) {
@@ -7496,11 +7155,7 @@ function renderMoveModal() {
     return
   }
 
-  const selectedResults = managerState.moveSelectionSource === 'dashboard'
-    ? getSelectedDashboardBookmarks()
-    : managerState.moveSelectionSource === 'dashboard-single'
-      ? [getSingleDashboardMoveBookmark()].filter(Boolean)
-      : getSelectedAvailabilityResults()
+  const selectedResults = getSelectedAvailabilityResults()
   const normalizedQuery = normalizeText(managerState.moveSearchQuery)
   const treeOptions = buildFolderPickerTreeOptions({
     disabled: isInteractionLocked(),
@@ -7510,11 +7165,9 @@ function renderMoveModal() {
 
   publishOptionsModals({
     move: {
-      copy: managerState.moveSelectionSource === 'dashboard-single'
-        ? '请选择一个目标文件夹，这条书签会被移动到该位置。'
-        : selectedResults.length
-          ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
-          : '请选择一个目标文件夹，所选书签会被一起移动到该位置。',
+      copy: selectedResults.length
+        ? `请选择一个目标文件夹，已选 ${selectedResults.length} 条书签会被一起移动到该位置。`
+        : '请选择一个目标文件夹，所选书签会被一起移动到该位置。',
       finalFocusId: getMoveModalFinalFocusId(),
       open: true,
       query: managerState.moveSearchQuery
@@ -7546,10 +7199,6 @@ function renderMoveModal() {
 }
 
 function getMoveModalFinalFocusId(): string {
-  if (managerState.moveSelectionSource === 'dashboard' || managerState.moveSelectionSource === 'dashboard-single') {
-    return 'dashboard-move-selection'
-  }
-
   return 'availability-selection-move'
 }
 
@@ -8385,22 +8034,15 @@ async function deleteSelectedAvailabilityResults() {
   clearAvailabilitySelection()
 }
 
-function openMoveModal(source) {
+function openMoveModal() {
   if (isInteractionLocked()) {
     return
   }
 
-  if (source === 'availability' && !getSelectedAvailabilityResults().length) {
-    return
-  }
-  if (source === 'dashboard' && !getSelectedDashboardBookmarks().length) {
-    return
-  }
-  if (source === 'dashboard-single' && !getSingleDashboardMoveBookmark()) {
+  if (!getSelectedAvailabilityResults().length) {
     return
   }
 
-  managerState.moveSelectionSource = source
   managerState.moveSearchQuery = ''
   managerState.moveFolderActiveId = ''
   managerState.moveModalOpen = true
@@ -8431,7 +8073,6 @@ function closeMoveModal() {
   managerState.moveModalOpen = false
   managerState.moveSearchQuery = ''
   managerState.moveFolderActiveId = ''
-  managerState.moveDashboardBookmarkId = ''
   renderMoveModal()
 }
 
@@ -8504,15 +8145,6 @@ async function handleMoveFolderSelection(folderId: string): Promise<void> {
     return
   }
   managerState.moveFolderActiveId = folderId
-
-  if (managerState.moveSelectionSource === 'dashboard') {
-    await moveSelectedDashboardBookmarks(folderId, dashboardCallbacks)
-    return
-  }
-  if (managerState.moveSelectionSource === 'dashboard-single') {
-    await moveSingleDashboardBookmark(folderId, dashboardCallbacks)
-    return
-  }
 
   await moveSelectedAvailabilityToFolder(folderId)
 }
@@ -8791,8 +8423,6 @@ function removeDeletedResultsFromState(bookmarkIds) {
     managerState.selectedAvailabilityIds.delete(bookmarkId)
     managerState.selectedDuplicateIds.delete(bookmarkId)
   })
-  removeDashboardSelectionIds([...removedIdSet])
-
   availabilityState.reviewResults = availabilityState.reviewResults.filter((result) => {
     return !removedIdSet.has(String(result.id))
   })

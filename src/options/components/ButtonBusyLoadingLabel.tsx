@@ -1,4 +1,5 @@
 import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
+import { TextSwap } from '../../ui/motion/TextSwap'
 import {
   LOADING_LABEL_BUTTON_LAYER_CLASS,
   LOADING_LABEL_BUTTON_LOADER_CLASS,
@@ -41,7 +42,7 @@ export function ButtonBusyLoadingLabel({
             busy ? 'opacity-100' : 'opacity-0'
           ].join(' ')}
         />
-        <span>{label}</span>
+        <TextSwap animate={busy} text={label} />
         <span aria-hidden="true" />
       </span>
     </span>

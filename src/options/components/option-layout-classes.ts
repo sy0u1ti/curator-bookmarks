@@ -1,9 +1,9 @@
 export const OPTION_PANEL_ENTER_CLASS = [
   '[.options-motion-ready_&:not([hidden])]:transition-[opacity,translate]',
-  '[.options-motion-ready_&:not([hidden])]:duration-ds-standard',
-  '[.options-motion-ready_&:not([hidden])]:ease-ds-standard',
+  '[.options-motion-ready_&:not([hidden])]:duration-[var(--panel-open-dur)]',
+  '[.options-motion-ready_&:not([hidden])]:ease-[var(--panel-ease)]',
   '[.options-motion-ready_&:not([hidden])]:starting:opacity-0',
-  '[.options-motion-ready_&:not([hidden])]:starting:translate-y-1',
+  '[.options-motion-ready_&:not([hidden])]:starting:translate-y-[var(--panel-translate-y)]',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:transition-opacity',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:duration-[80ms]',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:starting:translate-y-0'

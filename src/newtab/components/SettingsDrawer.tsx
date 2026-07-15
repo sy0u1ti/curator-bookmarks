@@ -86,6 +86,7 @@ import {
   dispatchNewtabFolderCandidateSelect,
   dispatchNewtabFolderCandidatesToggle,
   dispatchNewtabFolderHideNamesToggle,
+  dispatchNewtabBrowseModeChange,
   dispatchNewtabGeneralSettingToggle,
   dispatchNewtabSelectedFolderRemove,
   useNewtabFolderCandidateFocusRequest,
@@ -831,6 +832,30 @@ function SourceSettingsSection({
               </div>
             </div>
           </div>
+        </div>
+        <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
+          <SettingLabelStack
+            title="浏览方式"
+            description="展开：所有来源文件夹的书签一屏铺开。导航：文件夹显示为卡片，点击进入。"
+          />
+          <ToggleGroup
+            id="folder-browse-mode-control"
+            aria-label="浏览方式"
+            className={SETTINGS_SEGMENTED_CLASS}
+            itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
+            onValueChange={(value) => {
+              const nextValue = value[0]
+              if (nextValue === 'expanded' || nextValue === 'navigation') {
+                dispatchNewtabBrowseModeChange(nextValue)
+              }
+            }}
+            items={[
+              { value: 'expanded', label: '展开', attributes: { 'data-browse-mode': 'expanded' } },
+              { value: 'navigation', label: '导航', attributes: { 'data-browse-mode': 'navigation' } }
+            ]}
+            unstyled
+            value={folderSource.browseMode}
+          />
         </div>
         <SwitchRow
           id="folder-hide-names"

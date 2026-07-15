@@ -22,7 +22,6 @@ export function getNewtabBlankPointerAction(searchFocused: boolean): NewtabBlank
 }
 
 export interface NewtabSearchFocusContext {
-  dashboardOpen: boolean
   draggingBookmark: boolean
   draggingFolder: boolean
   draggingSpeedDial: boolean
@@ -35,7 +34,6 @@ export interface NewtabSearchFocusContext {
 
 export function canUseNewtabSearchFocus(context: NewtabSearchFocusContext): boolean {
   return context.enabled &&
-    !context.dashboardOpen &&
     !context.draggingBookmark &&
     !context.draggingFolder &&
     !context.draggingSpeedDial &&

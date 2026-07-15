@@ -5,7 +5,6 @@ import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { runIdle } from '../shared/idle'
 import { useNewtabController } from './newtab-controller'
-import { DashboardOverlayHost } from './components/DashboardOverlay'
 import { BookmarkMenusHost } from './components/BookmarkMenusHost'
 import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModal'
 import { NewtabBackgroundLayer } from './components/NewtabBackgroundLayer'
@@ -33,18 +32,11 @@ import {
   dispatchNewtabVisibilityChange
 } from './newtab-lifecycle-store'
 import {
-  dispatchNewtabWindowHashChange,
-  dispatchNewtabWindowMessage,
   dispatchNewtabWindowPointerCancel,
   dispatchNewtabWindowPointerMove,
   dispatchNewtabWindowPointerUp,
   dispatchNewtabWindowResize
 } from './newtab-window-store'
-import {
-  dispatchNewtabDashboardOverlayOpenRequest,
-  setNewtabDashboardOverlayNodes,
-  useNewtabDashboardOverlayView
-} from './newtab-dashboard-overlay-store'
 import {
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerToggleRequest,
@@ -92,10 +84,6 @@ const SETTINGS_TRIGGER_ZONE_AUTO_HIDE_CLASS = 'pointer-events-auto'
 const SETTINGS_TRIGGER_BUTTON_BASE_CLASS = `settings-trigger absolute top-[18px] right-[18px] inline-flex h-10 min-h-[34px] w-10 min-w-10 cursor-pointer items-center justify-center rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[rgba(26,27,29,0.68)] p-0 text-center leading-none text-[var(--ui-text-secondary)] outline-none pointer-events-auto [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard),border-color_var(--ui-motion-standard)_var(--ui-ease-standard),color_var(--ui-motion-standard)_var(--ui-ease-standard),transform_160ms_ease] [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.34)] aria-expanded:border-[var(--ui-divider-strong)] aria-expanded:bg-[var(--ui-surface-hover)] aria-expanded:text-[var(--ui-text-primary)] active:[transform:scale(var(--ui-press-scale))] motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-5 [&_svg]:w-5 [&_svg]:flex-none [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-[1.8] [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
 const SETTINGS_TRIGGER_BUTTON_VISIBLE_CLASS = 'opacity-100'
 const SETTINGS_TRIGGER_BUTTON_AUTO_HIDE_CLASS = 'translate-x-2 -translate-y-2 scale-[0.98] opacity-0 group-hover/settings-trigger-zone:translate-x-0 group-hover/settings-trigger-zone:translate-y-0 group-hover/settings-trigger-zone:scale-100 group-hover/settings-trigger-zone:opacity-100 group-focus-within/settings-trigger-zone:translate-x-0 group-focus-within/settings-trigger-zone:translate-y-0 group-focus-within/settings-trigger-zone:scale-100 group-focus-within/settings-trigger-zone:opacity-100 aria-expanded:translate-x-0 aria-expanded:translate-y-0 aria-expanded:scale-100 aria-expanded:opacity-100 [@media(hover:none)]:translate-x-0 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100'
-const DASHBOARD_TRIGGER_CLASS = 'dashboard-trigger right-[66px] w-10 min-w-10 p-0 no-underline'
-const DASHBOARD_SHORTCUT_HINT_BASE_CLASS = 'dashboard-shortcut-hint absolute top-6 right-[116px] inline-flex min-h-7 max-w-[min(220px,calc(100vw-168px))] items-center overflow-hidden rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.09)] bg-[rgba(24,24,26,0.42)] px-[9px] text-[11px] font-[650] leading-[1.2] text-[rgba(245,245,247,0.54)] pointer-events-none text-ellipsis whitespace-nowrap [-webkit-backdrop-filter:blur(12px)_saturate(1.12)] [backdrop-filter:blur(12px)_saturate(1.12)] max-[520px]:hidden'
-const DASHBOARD_SHORTCUT_HINT_VISIBLE_CLASS = 'opacity-100'
-const DASHBOARD_SHORTCUT_HINT_AUTO_HIDE_CLASS = 'opacity-0 transition-opacity duration-[var(--ui-motion-standard)] ease-[var(--ui-ease-standard)] group-hover/settings-trigger-zone:opacity-100 group-focus-within/settings-trigger-zone:opacity-100 [@media(hover:none)]:opacity-100'
 const SETTINGS_BACKDROP_BASE_CLASS = 'settings-backdrop fixed inset-0 z-[10015] bg-transparent pointer-events-none'
 const WALLPAPER_LOADING_INDICATOR_CLASS = 'wallpaper-loading-indicator fixed inset-0 z-[2] grid place-items-center p-6 pointer-events-none'
 const WALLPAPER_LOADING_INDICATOR_HIDDEN_CLASS = 'opacity-0 invisible translate-y-1 scale-[0.98] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_var(--ui-motion-standard)]'
@@ -150,7 +138,6 @@ export function NewtabApp() {
 }
 
 function NewtabShell() {
-  const dashboardOverlay = useNewtabDashboardOverlayView()
   const backgroundSettings = useNewtabBackgroundSettingsView()
   const folderSource = useNewtabFolderSourceView()
   const instantWallpaper = useNewtabInstantWallpaperView()
@@ -158,7 +145,6 @@ function NewtabShell() {
   const settingsDrawerModal = useSettingsDrawerModalMode()
   const appChromeAttributes = useNewtabAppChromeAttributes()
   const autoHideSettingsTrigger = folderSource.general.hideSettingsTrigger
-  const dashboardTriggerRef = useRef<HTMLButtonElement | null>(null)
   const shellRef = useRef<HTMLDivElement | null>(null)
   const settingsBackdropRef = useRef<HTMLButtonElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
@@ -175,17 +161,6 @@ function NewtabShell() {
     setNewtabContentShellNode(shellRef.current)
     return () => {
       setNewtabContentShellNode(null)
-    }
-  }, [])
-
-  useLayoutEffect(() => {
-    setNewtabDashboardOverlayNodes({
-      trigger: dashboardTriggerRef.current
-    })
-    return () => {
-      setNewtabDashboardOverlayNodes({
-        trigger: null
-      })
     }
   }, [])
 
@@ -228,8 +203,6 @@ function NewtabShell() {
 
     document.addEventListener('keydown', dispatchNewtabDocumentKeyDown)
     document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('hashchange', dispatchNewtabWindowHashChange)
-    window.addEventListener('message', dispatchNewtabWindowMessage)
     window.addEventListener('pagehide', dispatchNewtabPageHide)
     window.addEventListener('pointercancel', dispatchNewtabWindowPointerCancel)
     window.addEventListener('pointermove', dispatchNewtabWindowPointerMove)
@@ -239,8 +212,6 @@ function NewtabShell() {
       unsubscribeBookmarkEvents()
       document.removeEventListener('keydown', dispatchNewtabDocumentKeyDown)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
-      window.removeEventListener('hashchange', dispatchNewtabWindowHashChange)
-      window.removeEventListener('message', dispatchNewtabWindowMessage)
       window.removeEventListener('pagehide', dispatchNewtabPageHide)
       window.removeEventListener('pointercancel', dispatchNewtabWindowPointerCancel)
       window.removeEventListener('pointermove', dispatchNewtabWindowPointerMove)
@@ -273,30 +244,6 @@ function NewtabShell() {
           autoHideSettingsTrigger ? SETTINGS_TRIGGER_ZONE_AUTO_HIDE_CLASS : SETTINGS_TRIGGER_ZONE_VISIBLE_CLASS
         )}
       >
-        <Button
-          id="newtab-dashboard-trigger"
-          className={getSettingsTriggerButtonClass(autoHideSettingsTrigger, DASHBOARD_TRIGGER_CLASS)}
-          ref={dashboardTriggerRef}
-          type="button"
-          aria-label="打开书签仪表盘"
-          aria-controls="newtab-dashboard-overlay"
-          aria-expanded={dashboardOverlay.open ? 'true' : 'false'}
-          {...settingsBackgroundProps}
-          onClick={(event) => dispatchNewtabDashboardOverlayOpenRequest(event.currentTarget)}
-          unstyled
-        >
-          <Icon name="Bookmark" size={18} aria-hidden="true" />
-          <span className="sr-only">打开书签仪表盘</span>
-        </Button>
-        <span
-          className={cx(
-            DASHBOARD_SHORTCUT_HINT_BASE_CLASS,
-            autoHideSettingsTrigger ? DASHBOARD_SHORTCUT_HINT_AUTO_HIDE_CLASS : DASHBOARD_SHORTCUT_HINT_VISIBLE_CLASS
-          )}
-          aria-hidden="true"
-        >
-          Ctrl/Cmd+K 快捷打开书签仪表盘
-        </span>
         <Button
           id="newtab-settings-trigger"
           className={getSettingsTriggerButtonClass(autoHideSettingsTrigger)}
@@ -338,7 +285,6 @@ function NewtabShell() {
         <NewtabContentHost shellRef={shellRef} />
       </div>
       <NewtabDragLayerHost />
-      <DashboardOverlayHost />
       <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawer.open} />
       <FeaturedBackgroundModalHost />
       <NewtabDeleteToastHost />

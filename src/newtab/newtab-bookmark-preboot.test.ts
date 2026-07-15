@@ -19,6 +19,8 @@ function run(): void {
   testSnapshotKeepsVisibleCardsAndExactCardRect()
   testSnapshotPreservesEachLiveCardOffset()
   testSnapshotSkipsInlineCustomIconPayloads()
+  testSnapshotCapturesSquircleClipPaths()
+  testSnapshotDropsUntrustedClipPaths()
   testSnapshotWritesToStorage()
   testSnapshotClearsStorageWhenWriteFails()
   testSnapshotClearsStorageWhenNoCardsRemain()
@@ -26,6 +28,7 @@ function run(): void {
   testSnapshotAllowsMissingTitleGeometryWhenTitlesAreHidden()
   testSnapshotRejectsMismatchedViewport()
   testPrebootHandoffIsAtomic()
+  testPrebootHandoffGuardsIconClip()
   testFaviconReadinessHandoff()
   testPrebootFaviconLoadingPriorities()
 }
@@ -63,6 +66,63 @@ function testPrebootHandoffIsAtomic(): void {
   assert(source.includes('root.remove()'))
   assert(!source.includes('window.setTimeout(() => {\n    root.remove()'))
   assert(source.includes('transition: none;'))
+}
+
+function testPrebootHandoffGuardsIconClip(): void {
+  const source = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
+  assert(
+    source.includes('areNewtabBookmarkIconClipsAligned(prebootTile, liveTile)'),
+    'Handoff alignment must compare icon shell clip-path so the squircle outline is settled before the snapshot is removed.'
+  )
+  assert(
+    source.includes('content.clipPaths.iconShell') &&
+      source.includes('content.clipPaths.favicon') &&
+      source.includes('content.clipPaths.fallback'),
+    'Preboot tiles must replay the captured squircle clip-paths synchronously on first paint.'
+  )
+}
+
+function testSnapshotCapturesSquircleClipPaths(): void {
+  const clipPaths = {
+    fallback: 'path("M 7.4 0 L 16.9 0 c 2 0 3 0 3.7 0.4 Z")',
+    favicon: 'path("M 6.5 0 L 15.2 0 c 1.9 0 2.9 0 3.6 0.38 Z")',
+    iconShell: 'path("M 9.6 0 L 22.4 0 c 3.36 0 5.04 0 6.32 0.65 a 6 6 0 0 1 2.62 2.62 Z")'
+  }
+  const snapshot = createNewtabBookmarkPrebootSnapshot(createBookmarkContentView(), {
+    sectionsElement: createMeasuredElement({
+      clipPaths,
+      height: 160,
+      left: 188,
+      top: 286,
+      width: 904
+    }),
+    viewportHeight: 900,
+    viewportWidth: 1280
+  })
+
+  assert(snapshot)
+  assert.deepEqual(snapshot.content.clipPaths, clipPaths)
+}
+
+function testSnapshotDropsUntrustedClipPaths(): void {
+  const snapshot = createNewtabBookmarkPrebootSnapshot(createBookmarkContentView(), {
+    sectionsElement: createMeasuredElement({
+      clipPaths: {
+        fallback: 'url(#leak)',
+        favicon: 'path("M 0 0") url(evil)',
+        iconShell: 'inset(50%)'
+      },
+      height: 160,
+      left: 188,
+      top: 286,
+      width: 904
+    }),
+    viewportHeight: 900,
+    viewportWidth: 1280
+  })
+
+  assert(snapshot)
+  assert.deepEqual(snapshot.content.clipPaths, { fallback: '', favicon: '', iconShell: '' })
 }
 
 function testSnapshotKeepsVisibleCardsAndExactCardRect(): void {
@@ -182,7 +242,7 @@ function testSnapshotWritesToStorage(): void {
   assert(rawSnapshot)
   const storedSnapshot = JSON.parse(rawSnapshot)
   assert.equal(storedSnapshot.updatedAt, 789)
-  assert.equal(storedSnapshot.version, 3)
+  assert.equal(storedSnapshot.version, 4)
   assert.deepEqual(
     storedSnapshot.sections[0].items[0].titleRect,
     { height: 15, left: 52, top: 16.5, width: 376 }
@@ -353,12 +413,18 @@ function createBookmarkTile({
 }
 
 function createMeasuredElement({
+  clipPaths,
   height,
   left,
   tiles,
   top,
   width
 }: {
+  clipPaths?: {
+    fallback: string
+    favicon: string
+    iconShell: string
+  }
   height: number
   left: number
   tiles?: Array<{
@@ -399,10 +465,23 @@ function createMeasuredElement({
         : null
     }
   }) as unknown as NodeListOf<HTMLElement>
+  const createClipElements = (clipPath: string | undefined) =>
+    clipPath === undefined ? [] : [{ style: { clipPath } }]
 
   return {
     getBoundingClientRect: () => createDomRect({ height, left, top, width }),
-    querySelectorAll: () => tileElements
+    querySelectorAll: (selector: string) => {
+      if (selector.endsWith('.bookmark-icon-shell')) {
+        return createClipElements(clipPaths?.iconShell)
+      }
+      if (selector.endsWith('.bookmark-favicon')) {
+        return createClipElements(clipPaths?.favicon)
+      }
+      if (selector.endsWith('.bookmark-fallback')) {
+        return createClipElements(clipPaths?.fallback)
+      }
+      return tileElements
+    }
   } as unknown as HTMLElement
 }
 

@@ -5,10 +5,6 @@ type OptionsSectionChangeListener = () => void
 
 const optionsSectionChangeListeners = new Set<OptionsSectionChangeListener>()
 
-export function isOptionsDashboardEmbedMode(): boolean {
-  return new URLSearchParams(window.location.search).get('embed') === 'newtab-dashboard'
-}
-
 export function normalizeOptionsSectionKey(key: string): OptionsSectionKey {
   if (key === 'ai-tag-data') {
     return 'backup'
@@ -23,18 +19,10 @@ function getOptionsSectionKeyFromHash(hash: string): OptionsSectionKey {
 }
 
 export function readOptionsSectionKey(): OptionsSectionKey {
-  if (isOptionsDashboardEmbedMode()) {
-    return 'dashboard'
-  }
-
   return getOptionsSectionKeyFromHash(window.location.hash)
 }
 
 export function readOptionsSectionAnchor(): string {
-  if (isOptionsDashboardEmbedMode()) {
-    return ''
-  }
-
   const [, anchor = ''] = window.location.hash.replace(/^#/, '').split(':')
   return anchor
 }
@@ -68,7 +56,6 @@ const OPTIONS_EMPTY_STATE_CTA_NAVIGATION: Record<string, string> = {
   'run-availability': '#availability',
   'open-auto-analyze': '#general',
   'configure-ai': '#general:ai-provider',
-  'open-dashboard': '#dashboard',
   'redirect-info': '#redirects',
   'availability-info': '#availability',
   'recycle-info': '#recycle'

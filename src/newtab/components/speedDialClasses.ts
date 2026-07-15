@@ -25,8 +25,6 @@ export const SPEED_DIAL_EMPTY_CLASS = 'newtab-speed-dial-empty grid min-w-0 grid
 export const SPEED_DIAL_EMPTY_COPY_CLASS = 'newtab-speed-dial-empty-copy grid min-w-0 gap-1'
 export const SPEED_DIAL_EMPTY_TITLE_CLASS = 'text-[12px] leading-[1.25] text-[rgba(245,245,247,0.84)]'
 export const SPEED_DIAL_EMPTY_DETAIL_CLASS = 'text-[11px] leading-[1.5] text-[rgba(245,245,247,0.7)]'
-export const SPEED_DIAL_EMPTY_ACTION_CLASS = 'inline-flex min-h-8 shrink-0 items-center justify-center gap-1.5 rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-border)] bg-[rgba(245,245,247,0.07)] px-3 text-[11px] font-[650] text-[rgba(245,245,247,0.82)] transition-[background-color,border-color,color,transform] duration-[var(--ui-motion-fast)] ease-[var(--ui-ease-standard)] hover:border-[var(--newtab-glass-border-hover)] hover:bg-[rgba(245,245,247,0.11)] hover:text-[var(--ui-text-primary)] focus-visible:outline-none active:scale-[var(--ui-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
-
 export function getSpeedDialCardClass({
   dragActive = false,
   dragging = false,

@@ -28,7 +28,7 @@ export function RecycleControls() {
           <div className={RECYCLE_HEADER_CLASS}>
             <div className={RECYCLE_HEADER_COPY_CLASS}>
               <strong className={RECYCLE_HEADER_TITLE_CLASS}>
-                <TextSwap text={`${state.selectedCount} 条已选择`} />
+                <TextSwap animate={selectionEntered} text={`${state.selectedCount} 条已选择`} />
               </strong>
               <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复或清除记录。</p>
             </div>

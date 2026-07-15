@@ -2,9 +2,14 @@ import { BOOKMARKS_BAR_ID } from '../shared/constants.js'
 
 export const DEFAULT_NEW_TAB_FOLDER_TITLE = '标签页'
 
+export type NewTabBookmarkBrowseMode = 'expanded' | 'navigation'
+
+export const BOOKMARK_BROWSE_MODES: readonly NewTabBookmarkBrowseMode[] = ['expanded', 'navigation']
+
 export interface NewTabFolderSettings {
   selectedFolderIds: string[]
   hideFolderNames: boolean
+  browseMode: NewTabBookmarkBrowseMode
 }
 
 export interface NewTabFolderBookmarkCounts {
@@ -14,7 +19,12 @@ export interface NewTabFolderBookmarkCounts {
 
 export const DEFAULT_FOLDER_SETTINGS: NewTabFolderSettings = {
   selectedFolderIds: [],
-  hideFolderNames: false
+  hideFolderNames: false,
+  browseMode: 'expanded'
+}
+
+export function normalizeBookmarkBrowseMode(value: unknown): NewTabBookmarkBrowseMode {
+  return value === 'navigation' ? 'navigation' : 'expanded'
 }
 
 export function normalizeFolderSettings(rawSettings: unknown): NewTabFolderSettings {
@@ -25,7 +35,8 @@ export function normalizeFolderSettings(rawSettings: unknown): NewTabFolderSetti
   const settings = rawSettings as Record<string, unknown>
   return {
     selectedFolderIds: normalizeFolderIds(settings.selectedFolderIds),
-    hideFolderNames: settings.hideFolderNames === true
+    hideFolderNames: settings.hideFolderNames === true,
+    browseMode: normalizeBookmarkBrowseMode(settings.browseMode)
   }
 }
 
@@ -254,6 +265,7 @@ function hasExplicitFolderSelection(rawSettings: unknown): boolean {
 function createDefaultFolderSettings(): NewTabFolderSettings {
   return {
     selectedFolderIds: [],
-    hideFolderNames: DEFAULT_FOLDER_SETTINGS.hideFolderNames
+    hideFolderNames: DEFAULT_FOLDER_SETTINGS.hideFolderNames,
+    browseMode: DEFAULT_FOLDER_SETTINGS.browseMode
   }
 }

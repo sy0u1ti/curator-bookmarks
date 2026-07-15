@@ -31,7 +31,7 @@ export function AvailabilitySelectionActions() {
       <div className={AVAILABILITY_SELECTION_HEADER_CLASS}>
         <div className={AVAILABILITY_SELECTION_HEADER_COPY_CLASS}>
           <strong className={AVAILABILITY_SELECTION_HEADER_TITLE_CLASS}>
-            <TextSwap text={state.countLabel} />
+            <TextSwap animate={entered} text={state.countLabel} />
           </strong>
           <p className={AVAILABILITY_SELECTION_SUBTITLE_CLASS}>对所选异常执行移动、忽略或删除。</p>
         </div>

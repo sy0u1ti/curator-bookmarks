@@ -21,7 +21,6 @@ const speedDialClasses = read('src/newtab/components/speedDialClasses.ts')
 const bookmarkContent = read('src/newtab/components/NewtabBookmarkContent.tsx')
 const speedDial = read('src/newtab/components/NewtabSpeedDialPanel.tsx')
 const newtabController = read('src/newtab/newtab-controller.ts')
-const dashboardController = read('src/options/sections/dashboard-controller.ts')
 const popupChips = read('src/popup/components/PopupSearchChips.tsx')
 const popupStatus = read('src/popup/components/PopupAutoAnalyzeStatus.tsx')
 const optionsChrome = read('src/options/components/options-chrome-classes.ts')
@@ -120,13 +119,10 @@ assert.ok(
 
 assert.ok(
   newtabController.includes('event.clientX - rect.left') &&
-    newtabController.includes('event.clientY - rect.top') &&
-    newtabController.includes('setPointerCapture') &&
-    newtabController.includes("getMotionDurationMs('--drag-settle-dur'") &&
-    dashboardController.includes('event.clientX - cardRect.left') &&
-    dashboardController.includes('event.clientY - cardRect.top') &&
-    dashboardController.includes("getMotionDurationMs('--drag-settle-dur'"),
-  'Bookmark and Dashboard drag previews must preserve grab offset and settle with the shared token.'
+  newtabController.includes('event.clientY - rect.top') &&
+  newtabController.includes('setPointerCapture') &&
+    newtabController.includes("getMotionDurationMs('--drag-settle-dur'"),
+  'Bookmark drag previews must preserve grab offset and settle with the shared token.'
 )
 
 assert.ok(

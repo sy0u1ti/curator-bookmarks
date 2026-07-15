@@ -59,7 +59,6 @@ assert.equal(
 )
 
 const availableContext = {
-  dashboardOpen: false,
   draggingBookmark: false,
   draggingFolder: false,
   draggingSpeedDial: false,
@@ -72,7 +71,6 @@ const availableContext = {
 
 assert.equal(canUseNewtabSearchFocus(availableContext), true)
 for (const blockedKey of [
-  'dashboardOpen',
   'draggingBookmark',
   'draggingFolder',
   'draggingSpeedDial',

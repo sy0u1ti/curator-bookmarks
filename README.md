@@ -43,7 +43,7 @@ https://github.com/user-attachments/assets/bf3dc67c-e283-412d-b568-bf0554e9d076
 - 在扩展弹窗中浏览书签栏、展开文件夹、打开、编辑、移动和删除书签。
 
 
-- 扩展弹窗和书签仪表盘都支持模糊查询、语义查询和高级查询语句
+- 扩展弹窗支持模糊查询、语义查询和高级查询语句
   例如：
   - site:github.com 或site: github.com 限定站点。
   - folder:"前端资料"限定文件夹路径。
@@ -75,23 +75,6 @@ https://github.com/user-attachments/assets/bf3dc67c-e283-412d-b568-bf0554e9d076
 - 快捷键直接收藏当前网页到 `Inbox / 待整理`。
 
 - 可选自动分析：启用 AI 服务并授权相关 origin 后，可为新增书签生成标签、摘要和推荐文件夹；也可设置为仅生成信息、不自动移动。
-
-
-
-### 🌟书签仪表盘
-
-- 在全屏仪表盘中用瀑布流与卡片方式查看、筛选和批量处理海量书签。
-
-- 支持批量选择、批量移动、批量删除到回收站，以及拖拽到目标文件夹。
-
-- 支持编辑手动标签、清除 AI 标签和单条重新生成 AI 标签。
-
-
-
-<p align="center">
-  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.8advgtzihj.webp" alt="仪表盘">
-  <img src="https://github.com/sy0u1ti/picx-images-hosting/raw/master/image.9o0ekvb207.webp" alt="仪表盘2">
-</p>
 
 
 

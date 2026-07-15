@@ -844,9 +844,7 @@ body {
     .newtab-portal,
     .settings-drawer-panel,
     .settings-drawer-panel .t-tabs,
-    .bookmark-menu-surface,
-    .dashboard-card-menu,
-    .dashboard-search-help-popover
+    .bookmark-menu-surface
   ) {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
@@ -856,7 +854,6 @@ body {
 
   :where(
     .settings-trigger,
-    .dashboard-shortcut-hint,
     .source-navigation-label,
     .source-navigation-link,
     .folder-section-header,

@@ -703,7 +703,7 @@ function getDuplicateTagRecommendationReason(item) {
     return {
       kind: 'ai-tags',
       label: '有标签',
-      reason: '该副本已有标签数据，保留后可继续用于 Dashboard 检索和筛选。'
+      reason: '该副本已有标签数据，保留后可继续用于智能检索和筛选。'
     }
   }
   if (String(tagRecord?.summary || '').trim() || snapshotRecord?.summary || snapshotRecord?.hasFullText) {

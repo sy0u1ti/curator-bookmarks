@@ -12,21 +12,16 @@ import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getMotionAwareScrollBehavior } from '../shared/motion'
 import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
 import { AiAnalysisPanel, AvailabilityPanel, GeneralPanel } from './components/CorePanels'
-import { DashboardPanel } from './components/DashboardPanel'
 import { OptionsModals } from './components/OptionsModals'
-import { subscribeToDashboardViewReady } from './components/dashboard-view-ready-store'
 import {
   getOptionsSectionNavigationFromLink,
   type OptionsSectionKey
 } from './options-section-store'
 import {
   handleOptionsBookmarkTreeChanged,
-  handleOptionsDashboardViewReady,
-  handleOptionsWindowMessage,
   handleOptionsWindowSectionChange,
   useOptionsController
 } from './options-controller'
-import { preloadDashboardSection } from './sections/dashboard-lazy'
 import {
   navClass,
   navCollapsibleClass,
@@ -39,9 +34,6 @@ import {
   optionsBrandCopyClass,
   optionsBrandMarkClass,
   optionsBrandMarkImageClass,
-  optionsDashboardEntryClass,
-  optionsDashboardEntryEyebrowClass,
-  optionsDashboardEntryTitleClass,
   optionsHeaderClass,
   optionsLayoutClass,
   optionsMainClass,
@@ -145,7 +137,6 @@ function OptionsNavLink({
 }) {
   const active = activeSectionKey === section
   const className = variant === 'subitem' ? navSubitemClass : ''
-  const preloadOnIntent = section === 'dashboard' ? preloadDashboardSection : undefined
 
   return (
     <a
@@ -153,9 +144,6 @@ function OptionsNavLink({
       href={href}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
-      onFocus={preloadOnIntent}
-      onPointerDown={preloadOnIntent}
-      onPointerEnter={preloadOnIntent}
     >
       {label}
     </a>
@@ -164,17 +152,15 @@ function OptionsNavLink({
 
 function OptionsHeader({
   activeSectionKey,
-  hidden,
   onNavigate
 }: {
   activeSectionKey: OptionsSectionKey
-  hidden: boolean
   onNavigate: SectionLinkClickHandler
 }) {
   const active = activeSectionKey === 'general'
 
   return (
-    <header className={optionsHeaderClass} hidden={hidden}>
+    <header className={optionsHeaderClass}>
       <a
         className={optionsBrandClassBase}
         href="#general"
@@ -197,19 +183,16 @@ function OptionsHeader({
 
 function OptionsSidebar({
   activeSectionKey,
-  hidden,
   onNavigate
 }: {
   activeSectionKey: OptionsSectionKey
-  hidden: boolean
   onNavigate: SectionLinkClickHandler
 }) {
   const [availabilityManuallyOpen, setAvailabilityManuallyOpen] = useState(false)
   const availabilityOpen = availabilitySectionKeys.has(activeSectionKey) || availabilityManuallyOpen
-  const dashboardActive = activeSectionKey === 'dashboard'
 
   return (
-    <aside className={optionsSidebarClass} aria-label="设置导航" hidden={hidden}>
+    <aside className={optionsSidebarClass} aria-label="设置导航">
       {navGroups.map((group, groupIndex) => (
         <div
           className={[navGroupClass, groupIndex > 0 ? 'mt-[18px]' : ''].filter(Boolean).join(' ')}
@@ -269,18 +252,6 @@ function OptionsSidebar({
           </nav>
         </div>
       ))}
-      <a
-        className={optionsDashboardEntryClass}
-        href="#dashboard"
-        aria-current={dashboardActive ? 'page' : undefined}
-        onClick={onNavigate}
-        onFocus={preloadDashboardSection}
-        onPointerDown={preloadDashboardSection}
-        onPointerEnter={preloadDashboardSection}
-      >
-        <span className={optionsDashboardEntryEyebrowClass}>视觉化管理</span>
-        <strong className={optionsDashboardEntryTitleClass}>书签仪表盘</strong>
-      </a>
     </aside>
   )
 }
@@ -313,20 +284,12 @@ export function OptionsApp() {
     sectionAnchor,
     sectionKey,
     sectionRevision,
-    isDashboardActive,
-    isDashboardEmbed,
     navigateToSectionHash
   } = useOptionsSectionChrome({ onSectionChange: handleOptionsWindowSectionChange })
   const optionsShellRef = useRef<HTMLDivElement | null>(null)
   const optionsMainRef = useRef<HTMLElement | null>(null)
   const aiProviderAnchorRef = useRef<HTMLDivElement | null>(null)
   const [aiProviderAttentionRequestId, setAiProviderAttentionRequestId] = useState(0)
-  const shellClassName = [
-    optionsShellClassBase,
-    isDashboardActive ? 'dashboard-fullscreen-active' : '',
-    isDashboardEmbed ? 'options-dashboard-embed' : ''
-  ].filter(Boolean).join(' ')
-
   useEffect(() => {
     if (!('scrollRestoration' in window.history)) {
       return
@@ -338,21 +301,6 @@ export function OptionsApp() {
       window.history.scrollRestoration = previousScrollRestoration
     }
   }, [])
-
-  useLayoutEffect(() => {
-    const root = document.documentElement
-    const body = document.body
-    const previousRootBackground = root.style.background
-    const previousBodyBackground = body.style.background
-    if (isDashboardEmbed) {
-      root.style.background = 'transparent'
-      body.style.background = 'transparent'
-    }
-    return () => {
-      root.style.background = previousRootBackground
-      body.style.background = previousBodyBackground
-    }
-  }, [isDashboardEmbed])
 
   useEffect(() => {
     return subscribeToOptionsBookmarkEvents()
@@ -382,15 +330,6 @@ export function OptionsApp() {
       }
       shell.classList.remove('options-motion-ready')
       root?.removeAttribute('data-options-ready')
-    }
-  }, [])
-
-  useEffect(() => {
-    window.addEventListener('message', handleOptionsWindowMessage)
-    const unsubscribeFromDashboardViewReady = subscribeToDashboardViewReady(handleOptionsDashboardViewReady)
-    return () => {
-      window.removeEventListener('message', handleOptionsWindowMessage)
-      unsubscribeFromDashboardViewReady()
     }
   }, [])
 
@@ -488,13 +427,12 @@ export function OptionsApp() {
 
   return (
     <ThemeProvider>
-      <div className={shellClassName} ref={optionsShellRef}>
-        <div className={optionsSidebarDividerClass} aria-hidden="true" hidden={isDashboardActive}></div>
-        <OptionsHeader activeSectionKey={sectionKey} hidden={isDashboardActive} onNavigate={handleSectionNavigationClick} />
+      <div className={optionsShellClassBase} ref={optionsShellRef}>
+        <div className={optionsSidebarDividerClass} aria-hidden="true"></div>
+        <OptionsHeader activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />
         <div className={optionsLayoutClass}>
-          <OptionsSidebar activeSectionKey={sectionKey} hidden={isDashboardActive} onNavigate={handleSectionNavigationClick} />
+          <OptionsSidebar activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />
           <main className={optionsMainClass} ref={optionsMainRef}>
-            <DashboardPanel hidden={sectionKey !== 'dashboard'} />
             <GeneralPanel
               aiProviderAnchorRef={handleAiProviderAnchorRef}
               aiProviderAttentionRequestId={aiProviderAttentionRequestId}

@@ -33,7 +33,7 @@ export function AiAnalysisSelectionActions() {
       <div className={AI_SELECTION_HEADER_CLASS}>
         <div className={AI_SELECTION_HEADER_COPY_CLASS}>
           <strong className={AI_SELECTION_HEADER_TITLE_CLASS}>
-            <TextSwap text={state.countLabel} />
+            <TextSwap animate={entered} text={state.countLabel} />
           </strong>
           <p className={AI_SELECTION_SUBTITLE_CLASS}>仅应用“建议改名”条目。</p>
         </div>
@@ -82,19 +82,22 @@ export function AiAnalysisSelectionActions() {
             size="sm"
             type="button"
             variant="secondary"
-            aria-label="将书签智能分析已选建议移动至推荐文件夹"
+            aria-label={state.moveConfirm
+              ? '确认将书签智能分析已选建议移动至推荐文件夹'
+              : '将书签智能分析已选建议移动至推荐文件夹'}
             title={state.moveTitle}
             disabled={state.moveDisabled}
             focusableWhenDisabled={state.moveDisabled}
             onClick={() => handleAiAnalysisAction('move-selection-to-suggested')}
           >
-            {state.moveConfirm ? (
-              <>
-                <span className={AI_ANALYSIS_CONFIRM_ICON_CLASS} aria-hidden="true">{'\u2713\u2713'}</span> 确认移动
-              </>
-            ) : (
-              state.moveLabel
-            )}
+            <span className="t-icon-swap" data-state={state.moveConfirm ? 'b' : 'a'} aria-hidden="true">
+              <span className="t-icon inline-flex items-center justify-center" data-icon="a">
+                {state.moveLabel}
+              </span>
+              <span className="t-icon inline-flex items-center justify-center" data-icon="b">
+                <span className={AI_ANALYSIS_CONFIRM_ICON_CLASS}>{'\u2713\u2713'}</span> 确认移动
+              </span>
+            </span>
           </Button>
           <Button
             className={AI_ANALYSIS_SMALL_BUTTON_CLASS}

@@ -5,8 +5,16 @@ import {
   type FolderDragGhostView,
   type SpeedDialDragGhostView
 } from '../newtab-drag-layer-store'
+import { Icon } from '../../ui/icons/Icon'
+import { NumberPop } from '../../ui/motion/NumberPop'
 import { BookmarkIconShell } from './BookmarkIconShell'
-import { getBookmarkTileClass, getBookmarkTitleClass } from './bookmarkTileClasses'
+import {
+  BOOKMARK_FOLDER_CARD_COUNT_CLASS,
+  BOOKMARK_FOLDER_CARD_GRID_CLASS,
+  BOOKMARK_FOLDER_CARD_ICON_CLASS,
+  getBookmarkTileClass,
+  getBookmarkTitleClass
+} from './bookmarkTileClasses'
 import {
   SPEED_DIAL_COPY_CLASS,
   SPEED_DIAL_COPY_DETAIL_CLASS,
@@ -14,11 +22,6 @@ import {
   SPEED_DIAL_MARK_CLASS,
   getSpeedDialCardClass
 } from './speedDialClasses'
-import {
-  FOLDER_SECTION_COUNT_CLASS,
-  FOLDER_SECTION_TITLE_CLASS,
-  getFolderSectionHeaderClass
-} from './folderSectionClasses'
 
 const DRAG_LAYER_CLASS = 'newtab-drag-layer fixed inset-0 z-[120] pointer-events-none'
 
@@ -80,17 +83,30 @@ function BookmarkDragGhost({ view }: { view: BookmarkDragGhostView }) {
   )
 }
 
+// 文件夹拖拽 ghost：与导航模式的文件夹卡片同款玻璃卡片（图标外壳 + 名称 + 计数），
+// 复用书签拖拽 ghost 的 fixed/drop-shadow 形态 —— 两种模式的拖拽观感由此统一。
+// 类名保留 folder-drag-ghost 供 settleNewtabDragGhost 落位动画选择器使用。
 function FolderDragGhost({ view }: { view: FolderDragGhostView }) {
   const style = {
+    ...view.style,
     width: `${view.width}px`,
     height: `${view.height}px`,
     transform: view.transform
   } as CSSProperties
 
   return (
-    <div className={getFolderSectionHeaderClass({ ghost: true })} style={style} aria-hidden="true">
-      <span className={FOLDER_SECTION_TITLE_CLASS}>{view.title || '未命名文件夹'}</span>
-      <span className={FOLDER_SECTION_COUNT_CLASS}>{view.bookmarkCount}</span>
+    <div
+      className={`${getBookmarkTileClass({ ghost: true, showTitles: true })} ${BOOKMARK_FOLDER_CARD_GRID_CLASS} folder-drag-ghost`}
+      style={style}
+      aria-hidden="true"
+    >
+      <span className={BOOKMARK_FOLDER_CARD_ICON_CLASS} aria-hidden="true">
+        <Icon name="Folder" size={20} />
+      </span>
+      <span className={getBookmarkTitleClass()}>{view.title || '未命名文件夹'}</span>
+      <span className={BOOKMARK_FOLDER_CARD_COUNT_CLASS} aria-hidden="true">
+        <NumberPop text={view.bookmarkCount} />
+      </span>
     </div>
   )
 }

@@ -10,6 +10,7 @@ const visualCaptureDir = process.env.CURATOR_VISUAL_CAPTURE_DIR
   ? path.resolve(process.env.CURATOR_VISUAL_CAPTURE_DIR)
   : ''
 const performanceRecords = []
+const bookmarkDropContinuityOnly = process.argv.includes('--bookmark-drop-continuity-only')
 
 async function captureVisual(page, name, options = {}) {
   if (!visualCaptureDir) {
@@ -412,7 +413,7 @@ async function verifyDesktopDrawer(page) {
   assert.equal(await backgroundSearch.evaluate((element) => document.activeElement === element), true, 'A desktop background control should remain interactive')
 
   const outsideFocus = await page.evaluate(async () => {
-    const trigger = document.querySelector('#newtab-dashboard-trigger')
+    const trigger = document.querySelector('#newtab-settings-trigger')
     trigger?.focus()
     await new Promise((resolve) => setTimeout(resolve, 40))
     return {
@@ -420,10 +421,10 @@ async function verifyDesktopDrawer(page) {
       insidePanel: Boolean(document.activeElement?.closest('.settings-drawer-panel'))
     }
   })
-  assert.equal(outsideFocus.activeId, 'newtab-dashboard-trigger', 'Desktop drawer must allow focus outside the inspector')
+  assert.equal(outsideFocus.activeId, 'newtab-settings-trigger', 'Desktop drawer must allow focus outside the inspector')
   assert.equal(outsideFocus.insidePanel, false, 'Desktop drawer must not trap focus')
   await closeDrawer(page, 'escape', false)
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'newtab-dashboard-trigger', 'Closing a non-modal inspector should preserve deliberate outside focus')
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'newtab-settings-trigger', 'Closing a non-modal inspector should preserve deliberate outside focus')
 
   await openDrawer(page)
   await waitForDrawerSettledOpen(page)
@@ -556,25 +557,6 @@ async function verifyNarrowAndReducedMotionDrawer(page) {
   assert.equal(reducedMotion.transform, 'none', 'Reduced motion must remove the drawer transform')
   await closeDrawer(page)
   await page.emulateMedia({ reducedMotion: 'no-preference' })
-}
-
-async function verifyDashboardOverlay(page) {
-  await page.setViewportSize({ width: 1280, height: 720 })
-  const trigger = page.locator('#newtab-dashboard-trigger')
-  await trigger.click()
-  const panel = page.locator('#newtab-dashboard-overlay .curator-overlay-panel')
-  await page.waitForFunction(() => !document.querySelector('#newtab-dashboard-overlay .curator-overlay-panel')?.hasAttribute('hidden'))
-  await page.waitForFunction(() => {
-    const overlay = document.querySelector('#newtab-dashboard-overlay')
-    return overlay?.getAttribute('data-dashboard-ready') === 'true' || overlay?.getAttribute('data-dashboard-error') === 'true'
-  }, { timeout: 30_000 })
-  assert.equal(await page.locator('#newtab-dashboard-overlay').getAttribute('data-dashboard-error'), 'false', 'Dashboard overlay should load its embedded dashboard')
-  assert.ok(await panel.isVisible(), 'Dashboard overlay panel should be visible')
-  await captureVisual(page, 'dashboard-overlay')
-  await page.frameLocator('#newtab-dashboard-frame').locator('#dashboard-query').focus()
-  await page.keyboard.press('Escape')
-  await page.waitForFunction(() => document.querySelector('#newtab-dashboard-overlay .curator-overlay-panel')?.hasAttribute('hidden'))
-  await page.waitForFunction(() => document.activeElement?.id === 'newtab-dashboard-trigger')
 }
 
 async function probePopoverOpening(page, triggerSelector, popupSelector) {
@@ -797,7 +779,7 @@ async function verifyPopup(page, extensionId, seeded) {
   await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.startsWith('编辑书签'))
 }
 
-async function verifyOptionsAndFullDashboard(page, extensionId) {
+async function verifyOptions(page, extensionId) {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html`, { waitUntil: 'domcontentloaded' })
   await page.locator('#general').waitFor({ state: 'attached' })
@@ -826,62 +808,6 @@ async function verifyOptionsAndFullDashboard(page, extensionId) {
     await page.mouse.up()
   })
   await page.waitForFunction((previous) => document.querySelector('[role="slider"][aria-label="推理强度"]')?.getAttribute('aria-valuenow') !== previous, reasoningBefore)
-  await page.keyboard.press('Escape')
-
-  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#dashboard`, { waitUntil: 'domcontentloaded' })
-  await page.locator('#dashboard-query').waitFor({ state: 'visible', timeout: 30_000 })
-  assert.ok(await page.locator('#dashboard').isVisible(), 'Full Dashboard should load as an Options route')
-  await page.waitForFunction(() => {
-    const cards = [...document.querySelectorAll('article[data-bookmark-id]')]
-    return cards.length > 0 && cards.every((card) => !card.querySelector('.t-skel'))
-  }, null, { timeout: 30_000 })
-  const dashboardCard = page.locator('article[data-bookmark-id]').first()
-  await dashboardCard.waitFor({ state: 'visible' })
-  const dashboardCardBox = await dashboardCard.boundingBox()
-  assert.ok(dashboardCardBox, 'Dashboard card geometry should be measurable')
-  const dashboardDragStart = await dashboardCard.evaluate((card) => {
-    const rect = card.getBoundingClientRect()
-    const candidates = [
-      [0.5, 0.5],
-      [0.78, 0.78],
-      [0.22, 0.78],
-      [0.78, 0.22]
-    ]
-    for (const [xRatio, yRatio] of candidates) {
-      const x = rect.left + rect.width * xRatio
-      const y = rect.top + rect.height * yRatio
-      const target = document.elementFromPoint(x, y)
-      if (!target?.closest('button,a,input,textarea,select,[contenteditable="true"]')) {
-        return { x, y }
-      }
-    }
-    return { x: rect.left + 12, y: rect.top + 12 }
-  })
-  const dashboardDragEnd = {
-    x: dashboardDragStart.x + 120,
-    y: dashboardDragStart.y + 46
-  }
-  await recordAnimationFrames(page, 'Dashboard drag', 700, async () => {
-    await page.mouse.move(dashboardDragStart.x, dashboardDragStart.y)
-    await page.mouse.down()
-    await page.mouse.move(dashboardDragEnd.x, dashboardDragEnd.y, { steps: 8 })
-    await page.waitForFunction(() => Boolean(document.querySelector('.dashboard-drag-preview')), null, { timeout: 2_000 })
-    const previewBox = await page.locator('.dashboard-drag-preview').boundingBox()
-    assert.ok(previewBox, 'Dashboard drag preview should be measurable')
-    const expectedPreview = {
-      x: dashboardDragEnd.x - (dashboardDragStart.x - dashboardCardBox.x),
-      y: dashboardDragEnd.y - (dashboardDragStart.y - dashboardCardBox.y)
-    }
-    assert.ok(Math.abs(previewBox.x - expectedPreview.x) <= 2, 'Dashboard preview should preserve the horizontal grab offset')
-    assert.ok(Math.abs(previewBox.y - expectedPreview.y) <= 2, 'Dashboard preview should preserve the vertical grab offset')
-    await page.mouse.up()
-    await page.locator('.dashboard-drag-preview').waitFor({ state: 'hidden', timeout: 2_000 })
-  })
-  await page.getByRole('button', { name: '查看高级搜索语法' }).click()
-  await page.waitForFunction(() => !document.querySelector('#dashboard-search-help-popover')?.hasAttribute('hidden'))
-  const dashboardPopoverSide = await page.locator('#dashboard-search-help-popover').getAttribute('data-side')
-  assert.equal(dashboardPopoverSide, 'bottom', 'Dashboard search help should resolve below its trigger')
-  await captureVisual(page, 'dashboard-full')
   await page.keyboard.press('Escape')
 }
 
@@ -923,11 +849,69 @@ async function observeGhostSettle(page, selector) {
   }), selector)
 }
 
+async function observeBookmarkDropContinuity(page) {
+  return page.evaluate(() => new Promise((resolve) => {
+    const getLiveTiles = () => [...document.querySelectorAll('.bookmark-tile[data-bookmark-id]:not(.bookmark-drag-ghost)')]
+    const baselineRects = new Map(getLiveTiles().map((element) => {
+      const rect = element.getBoundingClientRect()
+      return [element.getAttribute('data-bookmark-id'), {
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2
+      }]
+    }))
+    const startedAt = performance.now()
+    let maxDisplacement = 0
+    let maxDisplacementBookmarkId = ''
+    let maxDisplacementFrame = null
+
+    const sample = (now) => {
+      for (const element of getLiveTiles()) {
+        const bookmarkId = element.getAttribute('data-bookmark-id') || ''
+        if (!bookmarkId) {
+          continue
+        }
+        const baseline = baselineRects.get(bookmarkId)
+        if (!baseline) {
+          continue
+        }
+        const rect = element.getBoundingClientRect()
+        const centerX = rect.left + rect.width / 2
+        const centerY = rect.top + rect.height / 2
+        const displacement = Math.hypot(centerX - baseline.centerX, centerY - baseline.centerY)
+        if (displacement > maxDisplacement) {
+          maxDisplacement = displacement
+          maxDisplacementBookmarkId = bookmarkId
+          const style = getComputedStyle(element)
+          maxDisplacementFrame = {
+            baseline,
+            className: element.className,
+            computedTransform: style.transform,
+            centerX,
+            centerY,
+            inlineTransform: element.style.transform,
+            transition: style.transition,
+            elapsed: now - startedAt
+          }
+        }
+      }
+
+      if (now - startedAt < 480) {
+        requestAnimationFrame(sample)
+        return
+      }
+      resolve({ maxDisplacement, maxDisplacementBookmarkId, maxDisplacementFrame })
+    }
+
+    requestAnimationFrame(sample)
+  }))
+}
+
 async function verifyTouchDrag(page, client, {
   container,
   ghost,
   handle,
-  target
+  target,
+  verifyDropContinuity = false
 }) {
   await page.locator(container).first().scrollIntoViewIfNeeded()
   await waitForFrames(page)
@@ -970,10 +954,24 @@ async function verifyTouchDrag(page, client, {
     `Drag preview should preserve vertical grab offset for ${container}: ${JSON.stringify({ actual: ghostBox.y, expected: expectedGhost.y, grabOffset })}`
   )
 
+  if (verifyDropContinuity) {
+    await page.waitForTimeout(180)
+  }
+
   const settleProbe = observeGhostSettle(page, ghost)
+  const continuityProbe = verifyDropContinuity
+    ? observeBookmarkDropContinuity(page)
+    : null
   await dispatchTouch(client, 'touchEnd', [])
   const settle = await settleProbe
   assert.ok(settle.frames >= 3 && settle.elapsed >= 80 && settle.elapsed < 900, `Drop preview should visibly settle before removal for ${container}`)
+  if (continuityProbe) {
+    const continuity = await continuityProbe
+    assert.ok(
+      continuity.maxDisplacement <= 2,
+      `Bookmark drop should not replay preview offsets after DOM reorder: ${JSON.stringify(continuity)}`
+    )
+  }
   await page.waitForTimeout(100)
 }
 
@@ -983,7 +981,25 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   await page.locator('.bookmark-tile').first().waitFor({ state: 'visible', timeout: 20_000 })
   await page.locator('.newtab-speed-dial-card').first().waitFor({ state: 'visible' })
   await page.locator('[data-folder-drag-handle]').first().waitFor({ state: 'visible' })
+  assert.equal(
+    await page.locator('.newtab-content').getAttribute('data-browse-mode'),
+    'expanded',
+    'Bookmark drop continuity regression must run against expanded browse mode'
+  )
   const client = await context.newCDPSession(page)
+
+  await verifyTouchDrag(page, client, {
+    container: '.bookmark-tile',
+    ghost: '.bookmark-drag-ghost',
+    handle: '[data-bookmark-drag-handle]',
+    target: '.bookmark-tile',
+    verifyDropContinuity: true
+  })
+
+  if (bookmarkDropContinuityOnly) {
+    await client.detach()
+    return
+  }
 
   const shell = page.locator('#newtab-root')
   await shell.evaluate((element) => { element.scrollTop = 0 })
@@ -1021,12 +1037,6 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
     ghost: '.speed-dial-drag-ghost',
     handle: '[data-speed-dial-drag-handle]',
     target: '.newtab-speed-dial-card'
-  })
-  await verifyTouchDrag(page, client, {
-    container: '.bookmark-tile',
-    ghost: '.bookmark-drag-ghost',
-    handle: '[data-bookmark-drag-handle]',
-    target: '.bookmark-tile'
   })
   await verifyTouchDrag(page, client, {
     container: '[data-folder-drag-handle]',
@@ -1085,20 +1095,24 @@ try {
   const seeded = await seedExtension(worker)
   const page = await context.newPage()
 
-  await page.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`, { waitUntil: 'domcontentloaded' })
-  await page.locator('#newtab-settings-trigger').waitFor({ state: 'attached' })
-  await page.waitForTimeout(400)
-  await captureNewtabWallpaperVariants(page)
-  await verifyNewtabAccessibilityMaterials(page, context)
-  await verifyDesktopDrawer(page)
-  await verifyNarrowAndReducedMotionDrawer(page)
-  await verifyDashboardOverlay(page)
-  await verifyPopup(page, extensionId, seeded)
-  await verifyOptionsAndFullDashboard(page, extensionId)
-  await verifyTouchAndKeyboard(page, context, extensionId)
+  if (bookmarkDropContinuityOnly) {
+    await verifyTouchAndKeyboard(page, context, extensionId)
+    console.log('Expanded bookmark drop continuity test passed.')
+  } else {
+    await page.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`, { waitUntil: 'domcontentloaded' })
+    await page.locator('#newtab-settings-trigger').waitFor({ state: 'attached' })
+    await page.waitForTimeout(400)
+    await captureNewtabWallpaperVariants(page)
+    await verifyNewtabAccessibilityMaterials(page, context)
+    await verifyDesktopDrawer(page)
+    await verifyNarrowAndReducedMotionDrawer(page)
+    await verifyPopup(page, extensionId, seeded)
+    await verifyOptions(page, extensionId)
+    await verifyTouchAndKeyboard(page, context, extensionId)
 
-  console.log(`Interface performance frame probes: ${JSON.stringify(performanceRecords)}`)
-  console.log('Curator interface quality extension smoke tests passed.')
+    console.log(`Interface performance frame probes: ${JSON.stringify(performanceRecords)}`)
+    console.log('Curator interface quality extension smoke tests passed.')
+  }
 } finally {
   await context?.close()
   await rm(profilePath, { recursive: true, force: true })

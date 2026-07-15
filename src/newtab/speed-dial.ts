@@ -45,7 +45,7 @@ export function buildSpeedDialItems({
 export function createSpeedDialEmptyState(): SpeedDialEmptyState {
   return {
     title: '暂无固定入口',
-    detail: '从书签仪表盘选择常用书签，固定后可拖拽调整顺序。'
+    detail: '打开任意书签的菜单并选择“设为固定入口”，固定后可拖拽调整顺序。'
   }
 }
 

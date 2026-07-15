@@ -7,7 +7,7 @@ export const NEWTAB_BOOKMARK_PREBOOT_ROOT_ID = 'newtab-bookmark-preboot'
 export const NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY = 'curatorNewTabBookmarkPreboot'
 
 const NEWTAB_BOOKMARK_PREBOOT_STYLE_ID = 'newtab-bookmark-preboot-style'
-const NEWTAB_BOOKMARK_PREBOOT_VERSION = 3
+const NEWTAB_BOOKMARK_PREBOOT_VERSION = 4
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
@@ -19,6 +19,9 @@ const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES = 2
 const NEWTAB_BOOKMARK_PREBOOT_HANDOFF_MAX_WAIT_MS = 1200
 const NEWTAB_BOOKMARK_PREBOOT_TITLE_GUARD_SAMPLE_MS = 100
 const NEWTAB_BOOKMARK_PREBOOT_TITLE_GUARD_MAX_WAIT_MS = 5000
+// squircle 引擎写入的 inline clip-path 形如 path("M 9.6 0 L 22.4 0 c …")；
+// 快照只回放这一格式，其余（url()、多引号等）一律丢弃。
+const NEWTAB_BOOKMARK_PREBOOT_CLIP_PATH_PATTERN = /^path\("[MmLlHhVvCcSsQqTtAaZz0-9 ,.\-+eE]{1,4000}"\)$/
 
 export interface NewtabBookmarkPrebootItemView {
   customIcon: boolean
@@ -49,7 +52,14 @@ export interface NewtabBookmarkPrebootView {
   }>
 }
 
+export interface NewtabBookmarkPrebootClipPaths {
+  fallback: string
+  favicon: string
+  iconShell: string
+}
+
 interface NewtabBookmarkPrebootContentStyle {
+  clipPaths: NewtabBookmarkPrebootClipPaths
   columnGap: number
   columns: number
   fixedGridWidth: number
@@ -187,7 +197,10 @@ export function createNewtabBookmarkPrebootSnapshot(
   }
 
   return {
-    content: createNewtabBookmarkPrebootContentStyle(view.content),
+    content: createNewtabBookmarkPrebootContentStyle(
+      view.content,
+      collectNewtabBookmarkPrebootClipPaths(options.sectionsElement ?? null)
+    ),
     rect,
     sections,
     updatedAt: getFiniteNumber(options.now, Date.now()),
@@ -656,9 +669,15 @@ function createNewtabBookmarkPrebootTile(
   }
   const iconShell = documentRef.createElement('span')
   iconShell.className = 'newtab-bookmark-preboot-icon-shell'
+  if (content.clipPaths.iconShell) {
+    iconShell.style.clipPath = content.clipPaths.iconShell
+  }
   const fallback = documentRef.createElement('span')
   fallback.className = 'newtab-bookmark-preboot-fallback'
   fallback.textContent = item.fallbackLabel
+  if (content.clipPaths.fallback) {
+    fallback.style.clipPath = content.clipPaths.fallback
+  }
   iconShell.appendChild(fallback)
 
   if (item.faviconSrc) {
@@ -670,6 +689,9 @@ function createNewtabBookmarkPrebootTile(
     image.draggable = false
     image.fetchPriority = loadAttributes.fetchPriority
     image.loading = loadAttributes.loading
+    if (content.clipPaths.favicon) {
+      image.style.clipPath = content.clipPaths.favicon
+    }
     const revealImage = () => {
       markNewtabFaviconReady(image.src)
       image.dataset.ready = 'true'
@@ -826,9 +848,11 @@ function normalizeNewtabBookmarkPrebootFavicon(item: NewtabBookmarkPrebootItemVi
 }
 
 function createNewtabBookmarkPrebootContentStyle(
-  content: NewtabBookmarkPrebootView['content']
+  content: NewtabBookmarkPrebootView['content'],
+  clipPaths?: unknown
 ): NewtabBookmarkPrebootContentStyle {
   return {
+    clipPaths: normalizeNewtabBookmarkPrebootClipPaths(clipPaths),
     columnGap: clampInteger(content.columnGap, 0, 96, 24),
     columns: clampInteger(content.columns, 1, 12, 4),
     fixedGridWidth: clampInteger(content.fixedGridWidth, 120, 2400, 832),
@@ -841,6 +865,50 @@ function createNewtabBookmarkPrebootContentStyle(
     tileWidth: clampInteger(content.tileWidth, 80, 420, 184),
     titleLines: clampInteger(content.titleLines, 1, 3, 1)
   }
+}
+
+/**
+ * 图标外壳、favicon 与回退块的 squircle 轮廓由运行时引擎异步写入 inline
+ * clip-path。快照原样保存这些字符串，preboot 渲染时同步回放，保证刷新
+ * 首帧的图标形状与稳定态完全一致（引擎对已有 clip-path 的元素会自动跳过）。
+ */
+function collectNewtabBookmarkPrebootClipPaths(
+  sectionsElement: HTMLElement | null
+): NewtabBookmarkPrebootClipPaths {
+  const readClip = (selector: string): string => {
+    if (!sectionsElement) {
+      return ''
+    }
+    for (const element of sectionsElement.querySelectorAll<HTMLElement>(selector)) {
+      const clip = normalizeNewtabBookmarkPrebootClipPath(element.style?.clipPath)
+      if (clip) {
+        return clip
+      }
+    }
+    return ''
+  }
+
+  return {
+    fallback: readClip('.bookmark-tile[data-bookmark-id] .bookmark-fallback'),
+    favicon: readClip('.bookmark-tile[data-bookmark-id] .bookmark-favicon'),
+    iconShell: readClip('.bookmark-tile[data-bookmark-id] .bookmark-icon-shell')
+  }
+}
+
+function normalizeNewtabBookmarkPrebootClipPaths(rawClipPaths: unknown): NewtabBookmarkPrebootClipPaths {
+  const clipPaths = rawClipPaths && typeof rawClipPaths === 'object' && !Array.isArray(rawClipPaths)
+    ? rawClipPaths as Record<string, unknown>
+    : {}
+  return {
+    fallback: normalizeNewtabBookmarkPrebootClipPath(clipPaths.fallback),
+    favicon: normalizeNewtabBookmarkPrebootClipPath(clipPaths.favicon),
+    iconShell: normalizeNewtabBookmarkPrebootClipPath(clipPaths.iconShell)
+  }
+}
+
+function normalizeNewtabBookmarkPrebootClipPath(value: unknown): string {
+  const clip = String(value ?? '').trim()
+  return NEWTAB_BOOKMARK_PREBOOT_CLIP_PATH_PATTERN.test(clip) ? clip : ''
 }
 
 function createNewtabBookmarkPrebootRect(
@@ -899,7 +967,11 @@ function normalizeNewtabBookmarkPrebootContent(rawContent: unknown): NewtabBookm
   if (!rawContent || typeof rawContent !== 'object' || Array.isArray(rawContent)) {
     return null
   }
-  return createNewtabBookmarkPrebootContentStyle(rawContent as unknown as NewtabBookmarkPrebootView['content'])
+  const content = rawContent as Record<string, unknown>
+  return createNewtabBookmarkPrebootContentStyle(
+    content as unknown as NewtabBookmarkPrebootView['content'],
+    content.clipPaths
+  )
 }
 
 function normalizeNewtabBookmarkPrebootSections(rawSections: unknown): NewtabBookmarkPrebootSection[] {
@@ -1071,7 +1143,7 @@ function measureNewtabBookmarkPrebootHandoff(
     if (!liveTile || !areNewtabBookmarkRectsAligned(
       prebootTile.getBoundingClientRect(),
       liveTile.getBoundingClientRect()
-    )) {
+    ) || !areNewtabBookmarkIconClipsAligned(prebootTile, liveTile)) {
       tilesAligned = false
       titlesAligned = false
       break
@@ -1119,6 +1191,20 @@ function areNewtabBookmarkRectsAligned(left: DOMRect, right: DOMRect): boolean {
     Math.abs(left.width - right.width) <= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX &&
     Math.abs(left.height - right.height) <= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_TOLERANCE_PX
   )
+}
+
+/**
+ * clip-path 不影响布局盒，矩形比对察觉不到 squircle 轮廓是否就位。
+ * 交接必须等 live 图标外壳的 clip 与快照回放的一致，否则撤下快照的
+ * 瞬间图标会从 squircle 跳回普通圆角，再被引擎裁一次。
+ */
+function areNewtabBookmarkIconClipsAligned(prebootTile: HTMLElement, liveTile: HTMLElement): boolean {
+  const prebootShell = prebootTile.querySelector<HTMLElement>('.newtab-bookmark-preboot-icon-shell')
+  const liveShell = liveTile.querySelector<HTMLElement>('.bookmark-icon-shell')
+  if (!prebootShell || !liveShell) {
+    return true
+  }
+  return window.getComputedStyle(prebootShell).clipPath === window.getComputedStyle(liveShell).clipPath
 }
 
 function getOrCreateNewtabBookmarkPrebootRoot(documentRef: Document): HTMLElement | null {

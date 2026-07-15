@@ -14,6 +14,13 @@ const BOOKMARK_TILE_GHOST_CLASS = 'bookmark-drag-ghost fixed top-0 left-0 z-[120
 const BOOKMARK_TITLE_CLASS = 'bookmark-title w-full overflow-hidden text-[13px] font-[520] leading-[1.3] text-[rgba(245,245,247,0.8)] [display:-webkit-box] [overflow-wrap:anywhere] [-webkit-box-orient:vertical] [-webkit-line-clamp:var(--icon-title-lines)]'
 export const BOOKMARK_DRAG_HANDLE_CLASS = 'bookmark-drag-handle absolute top-1/2 right-0.5 z-[2] hidden h-10 w-10 -translate-y-1/2 touch-none items-center justify-center rounded-[var(--ui-radius-control)] text-[rgba(245,245,247,0.5)] transition-colors duration-[80ms] [@media(pointer:coarse)]:inline-flex active:bg-[rgba(245,245,247,0.1)] active:text-[var(--ui-text-primary)] data-[drag-pending=true]:bg-[rgba(245,245,247,0.12)] data-[drag-pending=true]:text-[var(--ui-text-primary)]'
 
+// 导航模式的文件夹卡片 = 书签卡片同款玻璃底 + 文件夹图标外壳 + 计数徽标。
+// 展开模式的文件夹拖拽 ghost 也复用这两个类，让两种模式的文件夹拖拽观感统一。
+// 卡片有三个子元素（图标/标题/计数），在 tile 的双列模板上覆盖为三列。
+export const BOOKMARK_FOLDER_CARD_GRID_CLASS = '!grid-cols-[var(--icon-shell-size)_minmax(0,1fr)_auto]'
+export const BOOKMARK_FOLDER_CARD_ICON_CLASS = 'bookmark-folder-card-icon relative grid h-[var(--icon-shell-size)] w-[var(--icon-shell-size)] place-items-center rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.14)] bg-[rgba(0,0,0,0.28)] text-[rgba(245,245,247,0.82)] shadow-[inset_0_1px_0_rgba(255,255,255,0.045)]'
+export const BOOKMARK_FOLDER_CARD_COUNT_CLASS = 'bookmark-folder-card-count ml-auto inline-grid h-[17px] min-w-5 place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] px-1 text-[10px] font-bold leading-none text-[var(--ui-accent-text)]'
+
 export function getBookmarkTileClass({
   dragActive = false,
   dragging = false,

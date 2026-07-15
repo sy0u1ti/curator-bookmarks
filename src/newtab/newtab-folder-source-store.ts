@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react'
+import type { NewTabBookmarkBrowseMode } from './folder-settings'
 
 export interface NewtabSelectedFolderSourceItemView {
   affectedCount: number
@@ -37,6 +38,7 @@ export interface NewtabFolderSourceView {
     showSourceNavigation: boolean
   }
   hideFolderNames: boolean
+  browseMode: NewTabBookmarkBrowseMode
   selected: NewtabSelectedFolderSourceState
   selectedCount: number
 }
@@ -55,6 +57,7 @@ export interface NewtabFolderSourceActions {
   onCandidateSelect: (folderId: string) => void
   onCandidateQueryChange: (query: string) => void
   onFolderHideNamesToggle: (enabled: boolean) => void
+  onBrowseModeChange: (mode: NewTabBookmarkBrowseMode) => void
   onGeneralToggle: (key: NewtabGeneralSettingToggleKey, enabled: boolean) => void
   onRemoveSelected: (folderId: string) => void
   onToggleCandidates: () => void
@@ -77,6 +80,7 @@ const EMPTY_VIEW: NewtabFolderSourceView = {
     showSourceNavigation: true
   },
   hideFolderNames: false,
+  browseMode: 'expanded',
   selected: {
     type: 'empty',
     message: '未选择来源文件夹。选择来源只会决定新标签页显示哪些书签，不会移动、删除或重排原有书签。'
@@ -91,6 +95,7 @@ const EMPTY_ACTIONS: NewtabFolderSourceActions = {
   onCandidateSelect: () => {},
   onCandidateQueryChange: () => {},
   onFolderHideNamesToggle: () => {},
+  onBrowseModeChange: () => {},
   onGeneralToggle: () => {},
   onRemoveSelected: () => {},
   onToggleCandidates: () => {}
@@ -203,6 +208,10 @@ export function dispatchNewtabFolderCandidateFocus(folderId: string): void {
 
 export function dispatchNewtabFolderHideNamesToggle(enabled: boolean): void {
   folderSourceActions.onFolderHideNamesToggle(enabled)
+}
+
+export function dispatchNewtabBrowseModeChange(mode: NewTabBookmarkBrowseMode): void {
+  folderSourceActions.onBrowseModeChange(mode)
 }
 
 export function dispatchNewtabGeneralSettingToggle(

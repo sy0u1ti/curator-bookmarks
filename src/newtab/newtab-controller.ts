@@ -7,9 +7,6 @@ import {
 } from 'react'
 import {
   BOOKMARKS_BAR_ID,
-  NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE,
-  NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
-  NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE,
   STORAGE_KEYS
 } from '../shared/constants.js'
 import {
@@ -90,6 +87,7 @@ import {
 import {
   DEFAULT_FOLDER_SETTINGS,
   DEFAULT_NEW_TAB_FOLDER_TITLE,
+  type NewTabBookmarkBrowseMode,
   type NewTabFolderSettings,
   findNewTabFolder,
   getDisplayableNewTabSourceFolders,
@@ -214,11 +212,14 @@ import {
   getNewtabBookmarkContentView,
   patchNewtabBookmarkContentView,
   type BookmarkContentViewModel,
+  type BookmarkFolderCardViewModel,
   type BookmarkFolderSectionViewModel,
+  type BookmarkNavigationViewModel,
   type BookmarkTileViewModel,
   type BookmarkContentStyleState,
   type SourceNavigationState
 } from './newtab-bookmark-content-store.js'
+import { clearNewtabBookmarkPrebootSnapshot } from './newtab-bookmark-preboot.js'
 import {
   createDefaultSearchWidgetInteractionState,
   dispatchNewtabSearchWidgetView,
@@ -277,12 +278,6 @@ import {
   dispatchNewtabFeaturedBackgroundHoverPreviewSrc,
   dispatchNewtabFeaturedBackgroundHoverPreviewView
 } from './newtab-featured-background-hover-preview-store.js'
-import {
-  dispatchNewtabDashboardOverlayControls,
-  getNewtabDashboardOverlayNodes,
-  registerNewtabDashboardOverlayActions,
-  subscribeNewtabDashboardOverlayNodes
-} from './newtab-dashboard-overlay-store.js'
 import {
   getNewtabContentLayoutNodes,
   getNewtabContentView,
@@ -590,9 +585,6 @@ const FEATURED_BACKGROUND_PROVIDER_EMPTY_TEXT: Record<FeaturedBackgroundItem['pr
 }
 const QUICK_ACCESS_ITEM_LIMIT = 6
 const ACTIVITY_RECORD_LIMIT = 160
-const DASHBOARD_FRAME_READY_TIMEOUT_MS = 12000
-const DASHBOARD_FRAME_OPAQUE_ORIGIN = 'null'
-const DASHBOARD_FRAME_MESSAGE_TARGET_ORIGIN = '*'
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false,
   showQuickAccess: true,
@@ -772,14 +764,11 @@ const state = {
   folderCandidatesExpanded: false,
   folderCandidateQuery: '',
   folderCandidateActiveId: '',
+  bookmarkNavigationPath: [] as string[],
   timeSettings: { ...DEFAULT_TIME_SETTINGS } as NewTabTimeSettings,
   settingsSaveState: 'idle' as SettingsSaveState,
   settingsSaveMessage: '',
   activeSettingsGroup: 'source' as SettingsDrawerSection,
-  dashboardOpen: false,
-  dashboardFrameLoaded: false,
-  dashboardFrameReady: false,
-  dashboardFrameError: '',
   searchOffsetBounds: { ...SEARCH_OFFSET_BOUNDS_FALLBACK } as AdaptiveSearchOffsetBounds,
   searchWidthBounds: { ...SEARCH_WIDTH_BOUNDS_FALLBACK },
   faviconRefreshTokens: new Map<string, number>()
@@ -795,6 +784,7 @@ let backgroundApplyToken = 0
 let activeBackgroundObjectUrl = ''
 let lastAppliedBackgroundMediaSignature = ''
 let bookmarkDragGhostFrame = 0
+let bookmarkDropCommitFrame = 0
 let speedDialDragGhostFrame = 0
 let folderDragGhostFrame = 0
 let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
@@ -824,8 +814,6 @@ let folderReorderStatusTimer = 0
 let bookmarkChangeRefreshTimer = 0
 let bookmarkChangeRefreshInFlight = false
 let bookmarkChangeRefreshQueued = false
-let dashboardFrameReadyTimeout = 0
-let dashboardFrameLoadNonce = 0
 let backgroundStartupCacheTimer = 0
 let backgroundStartupCacheRequestId = 0
 let backgroundUrlCacheTaskByUrl = new Map<string, BackgroundUrlCacheTask>()
@@ -841,7 +829,6 @@ let bookmarkDragSlotRects = new Map<string, DOMRect>()
 let bookmarkDragSlotOrderIds: string[] = []
 let speedDialDragSlotRects = new Map<string, DOMRect>()
 let speedDialDragSlotOrderIds: string[] = []
-let dashboardReturnFocusTarget: HTMLElement | null = null
 let newTabDomContentLoadedRecorded = false
 let newTabSkeletonRenderRecorded = false
 let newTabFirstRenderRecorded = false
@@ -855,7 +842,6 @@ let searchIndexReadyPromise: Promise<void> = createSearchIndexReadyPromise()
 let lastRenderedContentKey = ''
 let unregisterNewtabContentShellActions: () => void = () => {}
 let unregisterNewtabContentLayoutNodes: () => void = () => {}
-let unregisterNewtabDashboardOverlayNodes: () => void = () => {}
 let unregisterNewtabKeyboardActions: () => void = () => {}
 let unregisterNewtabLifecycleActions: () => void = () => {}
 let unregisterNewtabSettingsDrawerNodes: () => void = () => {}
@@ -1028,16 +1014,6 @@ function bindEvents(): void {
       void refreshFeaturedBackgroundGallery()
     }
   })
-  registerNewtabDashboardOverlayActions({
-    onCloseRequest: closeDashboardRoute,
-    onFallbackRetry: retryDashboardFrame,
-    onFallbackReturn: closeDashboardRoute,
-    onFrameError: () => {
-      setDashboardFrameError('书签仪表盘加载失败。你可以返回新标签页，或重试打开仪表盘。')
-    },
-    onOpenRequest: openDashboardRoute,
-    onReady: initializeDashboardOverlay
-  })
   registerNewtabDeleteToastActions({
     onOpenRecycle: openRecycleBin,
     onUndo: () => {
@@ -1054,6 +1030,7 @@ function bindEvents(): void {
     onCandidateSelect: handleFolderCandidateSelect,
     onCandidateQueryChange: handleFolderCandidateSearch,
     onFolderHideNamesToggle: handleFolderHideNamesToggle,
+    onBrowseModeChange: handleBookmarkBrowseModeChange,
     onGeneralToggle: handleGeneralSettingToggle,
     onRemoveSelected: handleSelectedFolderRemove,
     onToggleCandidates: toggleFolderCandidates
@@ -1102,8 +1079,6 @@ function bindEvents(): void {
   })
   unregisterNewtabWindowActions()
   unregisterNewtabWindowActions = registerNewtabWindowActions({
-    onHashChange: syncDashboardRoute,
-    onMessage: handleDashboardMessage,
     onPointerCancel: handleNewtabWindowPointerCancel,
     onPointerMove: handleNewTabPointerMove,
     onPointerUp: handleNewtabWindowPointerUp,
@@ -1111,8 +1086,6 @@ function bindEvents(): void {
   })
   unregisterNewtabSettingsDrawerNodes()
   unregisterNewtabSettingsDrawerNodes = subscribeNewtabSettingsDrawerNodes(handleSettingsDrawerNodesChange)
-  unregisterNewtabDashboardOverlayNodes()
-  unregisterNewtabDashboardOverlayNodes = subscribeNewtabDashboardOverlayNodes(handleDashboardOverlayNodesChange)
   unregisterNewtabBookmarkEventActions()
   unregisterNewtabBookmarkEventActions = registerNewtabBookmarkEventActions({
     onChanged: handleBookmarkChanged,
@@ -1122,9 +1095,6 @@ function bindEvents(): void {
   })
   initializeSettingsDrawer()
   initializeFeaturedBackgroundModal()
-  initializeDashboardOverlay()
-
-  syncDashboardRoute()
 
   window.clearTimeout(clockTimer)
   scheduleClockTick()
@@ -1257,11 +1227,6 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
       closeFeaturedBackgroundPicker()
       return
     }
-    if (state.dashboardOpen) {
-      event.preventDefault()
-      closeDashboardRoute()
-      return
-    }
     if (isSettingsDrawerOpen()) {
       event.preventDefault()
       closeSettingsDrawer()
@@ -1269,12 +1234,6 @@ function handleDocumentKeydown(event: KeyboardEvent): void {
     closeBookmarkMenu()
     closeAddBookmarkMenu()
     cancelFolderDrag()
-    return
-  }
-
-  if (shouldOpenDashboardFromKeydown(event)) {
-    event.preventDefault()
-    openDashboardRoute(event.target instanceof HTMLElement ? event.target : null)
     return
   }
 
@@ -1316,16 +1275,8 @@ function handleSettingsDrawerNodesChange(): void {
   initializeSettingsDrawer()
 }
 
-function handleDashboardOverlayNodesChange(): void {
-  initializeDashboardOverlay()
-  if (state.dashboardOpen) {
-    renderDashboard()
-  }
-}
-
 function getDocumentSearchFocusIntent(event: KeyboardEvent): NewtabSearchFocusIntent | null {
   if (!canUseNewtabSearchFocus({
-    dashboardOpen: state.dashboardOpen,
     draggingBookmark: Boolean(state.draggingBookmarkId),
     draggingFolder: Boolean(state.draggingFolderId),
     draggingSpeedDial: Boolean(state.speedDialDraggingBookmarkId),
@@ -1394,7 +1345,6 @@ function shouldToggleSearchFocusFromPointerDown(
     state.draggingBookmarkId ||
     state.draggingFolderId ||
     state.speedDialDraggingBookmarkId ||
-    state.dashboardOpen ||
     isFeaturedBackgroundPickerOpen() ||
     isSettingsDrawerOpen()
   ) {
@@ -1414,14 +1364,6 @@ function shouldToggleSearchFocusFromPointerDown(
     '[role="option"]',
     '[data-newtab-bookmark-menu-surface]'
   ].join(','))
-}
-
-function shouldOpenDashboardFromKeydown(event: KeyboardEvent): boolean {
-  if (event.defaultPrevented || event.altKey || event.shiftKey || isEditableEventTarget(event.target)) {
-    return false
-  }
-
-  return Boolean(event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k'
 }
 
 function isEditableEventTarget(target: EventTarget | null): boolean {
@@ -1480,6 +1422,38 @@ function handleFolderHideNamesToggle(enabled: boolean): void {
     scheduleAdaptiveNewTabLayoutUpdate()
   }
   updateClockText()
+}
+
+function handleBookmarkBrowseModeChange(mode: NewTabBookmarkBrowseMode): void {
+  const previousMode = state.folderSettings.browseMode
+  state.folderSettings = normalizeFolderSettings({
+    ...state.folderSettings,
+    browseMode: mode
+  })
+  void saveFolderSettings().catch((error) => {
+    console.warn('新标签页文件夹设置保存失败。', error)
+  })
+  syncFolderSettingsControls()
+  applyFolderSettings()
+  if (previousMode !== state.folderSettings.browseMode) {
+    // 切换浏览模式会改变整个视图结构（展开分组 ↔ 导航扁平网格），需整树重渲染。
+    // 同步清空 preboot 快照：否则切换后立即刷新会先回放旧模式的快照再被替换（=形变）。
+    clearNewtabBookmarkPrebootSnapshot()
+    resetBookmarkNavigation()
+    if (!renderBookmarkSections()) {
+      render()
+    }
+    scheduleAdaptiveNewTabLayoutUpdate()
+  }
+  updateClockText()
+}
+
+// 导航模式的当前浏览层级路径栈（folderId 序列，空 = 根来源层）。
+// 展开模式不使用它；切换模式或返回根时清空。阶段 4 会充实进入/返回逻辑。
+function resetBookmarkNavigation(): void {
+  if (state.bookmarkNavigationPath.length) {
+    state.bookmarkNavigationPath = []
+  }
 }
 
 function toggleFolderCandidates(): void {
@@ -2199,6 +2173,7 @@ function startSpeedDialDragFromReact(
   card: HTMLElement,
   event: DragStartPointerEvent
 ): void {
+  finishPendingBookmarkDropVisualCommit()
   if (
     state.draggingBookmarkId ||
     state.dragLongPressTimer ||
@@ -2777,7 +2752,6 @@ async function persistSpeedDialOrder(
   syncSpeedDialReorderBusyState()
   try {
     await saveNewTabWorkspaceSettings()
-    postDashboardSpeedDialState()
   } catch (error) {
     const message = error instanceof Error ? error.message : '固定入口排序保存失败，请刷新后重试。'
     const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
@@ -2877,6 +2851,7 @@ function startBookmarkDragFromReact(
   tile: HTMLElement,
   event: DragStartPointerEvent
 ): void {
+  finishPendingBookmarkDropVisualCommit()
   if (
     state.speedDialDraggingBookmarkId ||
     state.speedDialDragLongPressTimer ||
@@ -3014,14 +2989,22 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
   if (wasDragging) {
     await settleBookmarkDragGhost(finalOrderIds)
   }
-  clearBookmarkDragState({ keepSuppressClick: wasDragging })
+  clearBookmarkDragState({
+    deferVisualReset: wasDragging,
+    keepSuppressClick: wasDragging
+  })
 
   if (!wasDragging) {
     return
   }
 
+  // Keep the preview transforms in the previous view until the reordered view is
+  // committed. Clearing them in a separate store update lets the live cards
+  // transition back to their old slots, or replays the old offset from their new
+  // DOM slots. The transition-free commit makes the layout/order swap atomic.
   render()
   updateClockText()
+  finishBookmarkDropVisualCommit()
 
   if (areStringArraysEqual(originalOrderIds, finalOrderIds)) {
     return
@@ -3042,8 +3025,19 @@ function cancelBookmarkDrag({ keepSuppressClick = false } = {}): void {
   updateClockText()
 }
 
-function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
-  patchBookmarkTileDraggingState(state.draggingBookmarkId, false)
+function clearBookmarkDragState({
+  deferVisualReset = false,
+  keepSuppressClick = false
+} = {}): void {
+  if (deferVisualReset) {
+    dispatchNewtabDragUiView({
+      bookmarkPendingId: '',
+      bookmarkDragging: true,
+      previewInitializing: true
+    })
+  } else {
+    patchBookmarkTileDraggingState(state.draggingBookmarkId, false)
+  }
   state.draggingBookmarkId = ''
   state.dragPointerId = 0
   state.dragLongPressTimer = 0
@@ -3057,13 +3051,18 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   state.draggingBookmarkFolderId = ''
   state.dragOriginalOrderIds = []
   state.dragPendingInsertIndex = -1
-  removeBookmarkDragGhost()
-  clearBookmarkDragVisualPreview()
-  dispatchNewtabDragUiView({
-    bookmarkPendingId: '',
-    bookmarkDragging: false,
-    previewInitializing: false
-  })
+  if (deferVisualReset) {
+    bookmarkDragSlotRects = new Map()
+    bookmarkDragSlotOrderIds = []
+  } else {
+    removeBookmarkDragGhost()
+    clearBookmarkDragVisualPreview()
+    dispatchNewtabDragUiView({
+      bookmarkPendingId: '',
+      bookmarkDragging: false,
+      previewInitializing: false
+    })
+  }
 
   if (keepSuppressClick) {
     state.dragSuppressClick = true
@@ -3073,6 +3072,32 @@ function clearBookmarkDragState({ keepSuppressClick = false } = {}): void {
   } else {
     state.dragSuppressClick = false
   }
+}
+
+function finishBookmarkDropVisualCommit(): void {
+  removeBookmarkDragGhost()
+  window.cancelAnimationFrame(bookmarkDropCommitFrame)
+  bookmarkDropCommitFrame = window.requestAnimationFrame(() => {
+    bookmarkDropCommitFrame = 0
+    dispatchNewtabDragUiView({
+      bookmarkPendingId: '',
+      bookmarkDragging: false,
+      previewInitializing: false
+    })
+  })
+}
+
+function finishPendingBookmarkDropVisualCommit(): void {
+  if (!bookmarkDropCommitFrame) {
+    return
+  }
+  window.cancelAnimationFrame(bookmarkDropCommitFrame)
+  bookmarkDropCommitFrame = 0
+  dispatchNewtabDragUiView({
+    bookmarkPendingId: '',
+    bookmarkDragging: false,
+    previewInitializing: false
+  })
 }
 
 function patchBookmarkTileDraggingState(bookmarkId: string, dragging: boolean): void {
@@ -3845,6 +3870,7 @@ function startFolderDragFromReact(
   header: HTMLElement,
   event: DragStartPointerEvent
 ): void {
+  finishPendingBookmarkDropVisualCommit()
   if (state.draggingBookmarkId || state.dragLongPressTimer) {
     return
   }
@@ -4097,13 +4123,20 @@ function createFolderDragGhost(sourceHeader = getActiveFolderDragHeader()): void
     return
   }
 
-  const rect = sourceHeader.getBoundingClientRect()
+  // Ghost 用导航模式的文件夹卡片形态（玻璃卡片），尺寸取一张 live 书签卡片的
+  // 实际 rect（拖拽手感与书签卡片一致）；没有可参照的卡片时退回标题尺寸。
+  const referenceTile = getNewtabBookmarkContentNodes().tiles.values().next().value as HTMLElement | undefined
+  const referenceRect = referenceTile?.getBoundingClientRect()
+  const headerRect = sourceHeader.getBoundingClientRect()
+  const width = referenceRect && referenceRect.width > 0 ? referenceRect.width : Math.max(headerRect.width, 168)
+  const height = referenceRect && referenceRect.height > 0 ? referenceRect.height : Math.max(headerRect.height, 48)
   dispatchFolderDragGhostView({
     bookmarkCount: section.bookmarks.length,
-    height: rect.height,
+    height,
+    style: getBookmarkDragGhostStyle(undefined),
     title: section.title,
     transform: 'translate3d(0, 0, 0)',
-    width: rect.width
+    width
   })
   updateFolderDragGhost({ immediate: true })
 }
@@ -4220,7 +4253,9 @@ function renderWithFolderFlip(): void {
         { transform: 'translate3d(0, 0, 0)' }
       ],
       {
-        duration: 180,
+        // 与书签卡片让位（BOOKMARK_TILE_DRAG_RESTING_MOTION_CLASS）完全对齐：
+        // 150ms + 同一 cubic-bezier，两种模式的重排手感统一。
+        duration: 150,
         easing: 'cubic-bezier(0.22, 0.72, 0.18, 1)'
       }
     )
@@ -4480,7 +4515,6 @@ function removeBookmarkFromLocalState(bookmarkId: string): boolean {
     markSearchIndexDirty({ schedule: true })
     renderBookmarkSections()
     refreshSpeedDialPanel()
-    postDashboardSpeedDialState()
   }
   return removedAny
 }
@@ -4649,9 +4683,6 @@ function moveBookmarkInPlace(
   state.bookmarkCatalog = null
   markSearchIndexDirty({ schedule: true })
   renderBookmarkSections()
-  if (isBookmarkPinnedInSpeedDial(getActiveWorkspacePinnedIds(), normalizedBookmarkId)) {
-    postDashboardSpeedDialState()
-  }
   return sectionChanged
 }
 
@@ -5439,305 +5470,6 @@ function getNewTabShellSignature(): string {
     state.timeSettings.clockSize,
     state.timeSettings.density
   ].join('|')
-}
-
-let dashboardOverlayReady = false
-let dashboardOverlayReadyPromise: Promise<void> | null = null
-let resolveDashboardOverlayReady: (() => void) | null = null
-
-function getDashboardFrameSrc(): string {
-  return state.dashboardFrameLoaded
-    ? chrome.runtime.getURL(`src/options/options.html?embed=newtab-dashboard&load=${dashboardFrameLoadNonce}#dashboard`)
-    : ''
-}
-
-function ensureDashboardOverlayReady(): Promise<void> {
-  if (dashboardOverlayReady) return Promise.resolve()
-  if (!dashboardOverlayReadyPromise) {
-    dashboardOverlayReadyPromise = new Promise<void>((resolve) => {
-      resolveDashboardOverlayReady = resolve
-    })
-  }
-  return dashboardOverlayReadyPromise
-}
-
-function initializeDashboardOverlay(): void {
-  if (dashboardOverlayReady) return
-  const { frame, overlay } = getNewtabDashboardOverlayNodes()
-  if (!overlay || !frame) {
-    window.requestAnimationFrame(initializeDashboardOverlay)
-    return
-  }
-
-  dashboardOverlayReady = true
-  resolveDashboardOverlayReady?.()
-  renderDashboard()
-  if (state.dashboardOpen) {
-    ensureDashboardFrameLoaded()
-  }
-}
-
-function syncDashboardRoute(): void {
-  const shouldOpen = window.location.hash === '#dashboard'
-  if (shouldOpen) {
-    void ensureDashboardOverlayReady()
-  }
-  if (shouldOpen === state.dashboardOpen) {
-    if (shouldOpen) {
-      resetDashboardFrameReady()
-      ensureDashboardFrameLoaded()
-    }
-    return
-  }
-
-  if (shouldOpen) {
-    resetDashboardFrameReady()
-  }
-  state.dashboardOpen = shouldOpen
-  renderDashboard()
-  if (shouldOpen) {
-    closeSettingsDrawer()
-  }
-}
-
-function openDashboardRoute(returnFocusElement: HTMLElement | null = null): void {
-  void ensureDashboardOverlayReady()
-  const { trigger } = getNewtabDashboardOverlayNodes()
-  dashboardReturnFocusTarget = returnFocusElement instanceof HTMLElement
-    ? returnFocusElement
-    : trigger instanceof HTMLElement
-      ? trigger
-      : null
-
-  if (window.location.hash === '#dashboard') {
-    if (state.dashboardFrameError) {
-      retryDashboardFrame()
-    }
-    syncDashboardRoute()
-    return
-  }
-
-  window.location.hash = 'dashboard'
-}
-
-function closeDashboardRoute(): void {
-  window.clearTimeout(dashboardFrameReadyTimeout)
-  dashboardFrameReadyTimeout = 0
-  if (window.location.hash !== '#dashboard') {
-    state.dashboardOpen = false
-    renderDashboard()
-    restoreDashboardFocus()
-    return
-  }
-
-  history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
-  syncDashboardRoute()
-  restoreDashboardFocus()
-}
-
-function ensureDashboardFrameLoaded(): void {
-  const { frame } = getNewtabDashboardOverlayNodes()
-  if (!frame) {
-    return
-  }
-
-  if (state.dashboardFrameLoaded) {
-    if (
-      state.dashboardOpen &&
-      !state.dashboardFrameReady &&
-      !state.dashboardFrameError &&
-      !dashboardFrameReadyTimeout
-    ) {
-      scheduleDashboardFrameReadyTimeout()
-    }
-    if (state.dashboardOpen && !state.dashboardFrameReady && !state.dashboardFrameError) {
-      postDashboardOpenMessage()
-    }
-    return
-  }
-
-  state.dashboardFrameReady = false
-  state.dashboardFrameError = ''
-  dashboardFrameLoadNonce += 1
-  state.dashboardFrameLoaded = true
-  renderDashboard()
-  scheduleDashboardFrameReadyTimeout()
-}
-
-function resetDashboardFrameReady(): void {
-  window.clearTimeout(dashboardFrameReadyTimeout)
-  dashboardFrameReadyTimeout = 0
-  state.dashboardFrameReady = false
-  state.dashboardFrameError = ''
-}
-
-function retryDashboardFrame(): void {
-  if (!dashboardOverlayReady) {
-    setDashboardFrameError('书签仪表盘加载失败。请返回新标签页后再试。')
-    return
-  }
-
-  window.clearTimeout(dashboardFrameReadyTimeout)
-  dashboardFrameReadyTimeout = 0
-  state.dashboardFrameLoaded = false
-  state.dashboardFrameReady = false
-  state.dashboardFrameError = ''
-  renderDashboard()
-}
-
-function scheduleDashboardFrameReadyTimeout(): void {
-  window.clearTimeout(dashboardFrameReadyTimeout)
-  dashboardFrameReadyTimeout = window.setTimeout(() => {
-    if (!state.dashboardOpen || state.dashboardFrameReady) {
-      return
-    }
-
-    setDashboardFrameError('书签仪表盘加载耗时过长。你可以返回新标签页，或重试打开仪表盘。')
-  }, DASHBOARD_FRAME_READY_TIMEOUT_MS)
-}
-
-function setDashboardFrameError(message: string): void {
-  window.clearTimeout(dashboardFrameReadyTimeout)
-  dashboardFrameReadyTimeout = 0
-  state.dashboardFrameReady = false
-  state.dashboardFrameError = message
-  renderDashboard()
-}
-
-function renderDashboard({ loadFrame = true }: { loadFrame?: boolean } = {}): void {
-  const { overlay } = getNewtabDashboardOverlayNodes()
-  if (!overlay) {
-    dispatchNewtabDashboardOverlayControls({
-      errorMessage: state.dashboardFrameError,
-      frameSrc: getDashboardFrameSrc(),
-      open: state.dashboardOpen,
-      ready: state.dashboardFrameReady && !state.dashboardFrameError
-    })
-    return
-  }
-
-  const hasDashboardError = Boolean(state.dashboardFrameError)
-  dispatchNewtabDashboardOverlayControls({
-    errorMessage: state.dashboardFrameError,
-    frameSrc: getDashboardFrameSrc(),
-    open: state.dashboardOpen,
-    ready: state.dashboardFrameReady && !hasDashboardError
-  })
-
-  if (state.dashboardOpen && loadFrame) {
-    ensureDashboardFrameLoaded()
-    focusDashboardOverlay()
-  }
-}
-
-function postDashboardOpenMessage(): void {
-  const { frame } = getNewtabDashboardOverlayNodes()
-  if (!frame || !state.dashboardOpen || !state.dashboardFrameLoaded) {
-    return
-  }
-
-  frame.contentWindow?.postMessage(
-    { type: NEWTAB_DASHBOARD_OPEN_MESSAGE_TYPE },
-    DASHBOARD_FRAME_MESSAGE_TARGET_ORIGIN
-  )
-}
-
-function focusDashboardOverlay(): void {
-  window.setTimeout(() => {
-    if (!state.dashboardOpen) {
-      return
-    }
-
-    const { frame, overlay } = getNewtabDashboardOverlayNodes()
-    if (state.dashboardFrameReady && frame) {
-      frame.focus()
-      return
-    }
-
-    overlay?.focus()
-  }, 0)
-}
-
-function restoreDashboardFocus(): void {
-  const { trigger } = getNewtabDashboardOverlayNodes()
-  const focusTarget = dashboardReturnFocusTarget?.isConnected
-    ? dashboardReturnFocusTarget
-    : trigger instanceof HTMLElement
-      ? trigger
-      : null
-  dashboardReturnFocusTarget = null
-  focusTarget?.focus()
-}
-
-function handleDashboardMessage(event: MessageEvent): void {
-  const { frame } = getNewtabDashboardOverlayNodes()
-  if (!frame || event.source !== frame.contentWindow) {
-    return
-  }
-
-  if (
-    event.origin !== window.location.origin &&
-    event.origin !== DASHBOARD_FRAME_OPAQUE_ORIGIN
-  ) {
-    return
-  }
-
-  if (event.data?.type === 'curator:newtab-dashboard-close') {
-    closeDashboardRoute()
-    return
-  }
-
-  if (event.data?.type === 'curator:newtab-dashboard-ready') {
-    window.clearTimeout(dashboardFrameReadyTimeout)
-    dashboardFrameReadyTimeout = 0
-    state.dashboardFrameError = ''
-    state.dashboardFrameReady = true
-    postDashboardSpeedDialState()
-    renderDashboard()
-    return
-  }
-
-  if (event.data?.type === NEWTAB_TOGGLE_SPEED_DIAL_MESSAGE_TYPE) {
-    const bookmarkId = String(event.data?.bookmarkId || '').trim()
-    void toggleDashboardBookmarkSpeedDial(bookmarkId)
-  }
-}
-
-function postDashboardSpeedDialState(): void {
-  const { frame } = getNewtabDashboardOverlayNodes()
-  if (!frame || !state.dashboardFrameReady || !state.dashboardOpen) {
-    return
-  }
-
-  frame.contentWindow?.postMessage({
-    type: NEWTAB_SPEED_DIAL_STATE_MESSAGE_TYPE,
-    pinnedIds: getActiveWorkspacePinnedIds()
-  }, DASHBOARD_FRAME_MESSAGE_TARGET_ORIGIN)
-}
-
-async function toggleDashboardBookmarkSpeedDial(bookmarkId: string): Promise<void> {
-  const normalizedId = String(bookmarkId || '').trim()
-  const bookmark = normalizedId ? getBookmarkById(normalizedId) : null
-  if (!bookmark?.url) {
-    return
-  }
-
-  const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
-  state.workspaceSettings = toggleNewTabWorkspacePin(
-    state.workspaceSettings,
-    activeWorkspace.id,
-    normalizedId,
-    { validBookmarkIds: state.allBookmarkMap.keys() }
-  )
-
-  try {
-    await saveNewTabWorkspaceSettings()
-    render()
-    postDashboardSpeedDialState()
-    updateClockText()
-  } catch (error) {
-    console.warn('从书签仪表盘切换固定入口状态失败。', error)
-  }
 }
 
 function renderDeleteToast(): void {
@@ -7016,13 +6748,6 @@ const searchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
 const naturalSearchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
 const NEWTAB_COMMAND_SUGGESTIONS: NewTabCommandSuggestion[] = [
   {
-    id: 'open-dashboard',
-    title: '打开书签仪表盘',
-    subtitle: '管理、搜索和批量整理书签库',
-    keywords: ['dashboard', '仪表盘', '管理', '整理', '书签管理', 'dashboard 打开', 'open dashboard'],
-    run: () => openDashboardRoute(getNewtabSearchWidgetNodes().input)
-  },
-  {
     id: 'open-settings',
     title: '打开设置',
     subtitle: '调整来源、布局、背景、搜索栏和 AI 设置',
@@ -7551,6 +7276,10 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
     }
   }
 
+  if (state.folderSettings.browseMode === 'navigation') {
+    return createBookmarkNavigationModule(speedDial)
+  }
+
   const sourceNavigation = createSourceNavigation(sections)
   let renderedBookmarkIndex = 0
   const sectionModels: BookmarkFolderSectionViewModel[] = sections.map((section) => {
@@ -7599,6 +7328,8 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
   const reorderStatusMessage = state.bookmarkReorderError || state.folderReorderStatus
   const viewModel: BookmarkContentViewModel = {
     content: createBookmarkContentStyleState(),
+    browseMode: 'expanded',
+    navigation: null,
     portal: null,
     reorderStatus: reorderStatusMessage
       ? {
@@ -7618,6 +7349,190 @@ function createBookmarkSections(sections: NewTabFolderSection[]): NewTabBookmark
     kind: 'bookmarks',
     placement: 'primary'
   }
+}
+
+// 导航模式：把当前浏览层级渲染成单一扁平网格（子文件夹卡片在前、直属书签在后），
+// 顶部一条面包屑。根层（path 空）用选中的来源文件夹作为子文件夹卡片；进入后
+// 用该文件夹的直接子文件夹 + 直属书签。全程复用同一套书签卡片视觉，且不再有
+// 任何竖向分组 section（形变从结构上消失）。
+function createBookmarkNavigationModule(
+  speedDial: boolean
+): NewTabBookmarksModule {
+  const level = resolveBookmarkNavigationLevel()
+  const folderCards: BookmarkFolderCardViewModel[] = level.folders.map((folder) => ({
+    bookmarkCount: getFolderBookmarkCounts(folder).totalBookmarkCount,
+    folderId: String(folder.id),
+    onOpen: (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      enterBookmarkNavigationFolder(String(folder.id))
+    },
+    title: String(folder.title || '未命名文件夹').trim() || '未命名文件夹'
+  }))
+
+  const items = level.bookmarks.map((bookmark, index) =>
+    createBookmarkTileViewModel(bookmark, level.folderId, folderCards.length + index)
+  )
+  const initialVisibleCount = Math.min(items.length, Math.max(0, BOOKMARK_TILE_INITIAL_RENDER_LIMIT - folderCards.length))
+
+  const navigation: BookmarkNavigationViewModel = {
+    ariaLabel: `${level.title || '书签'}导航`,
+    breadcrumb: level.breadcrumb,
+    chunkSize: BOOKMARK_TILE_RENDER_CHUNK_SIZE,
+    folderCards,
+    initialVisibleCount,
+    items
+  }
+
+  const reorderStatusMessage = state.bookmarkReorderError || state.folderReorderStatus
+  const viewModel: BookmarkContentViewModel = {
+    content: createBookmarkContentStyleState(),
+    browseMode: 'navigation',
+    navigation,
+    portal: null,
+    reorderStatus: reorderStatusMessage
+      ? {
+          message: reorderStatusMessage,
+          tone: state.bookmarkReorderError ? 'error' : state.folderReorderStatusTone
+        }
+      : null,
+    sections: [],
+    sourceNavigation: null,
+    speedDial
+  }
+
+  dispatchNewtabBookmarkContentView(viewModel)
+  return {
+    id: 'bookmarks',
+    iconVerticalCenter: state.iconSettings.verticalCenter,
+    kind: 'bookmarks',
+    placement: 'primary'
+  }
+}
+
+interface BookmarkNavigationLevel {
+  breadcrumb: BookmarkNavigationViewModel['breadcrumb']
+  bookmarks: chrome.bookmarks.BookmarkTreeNode[]
+  folderId: string
+  folders: chrome.bookmarks.BookmarkTreeNode[]
+  title: string
+}
+
+// 依据 state.bookmarkNavigationPath 解析当前层级。路径里失效的 folderId 会被截断，
+// 保证始终落在一个有效层级（最坏回到根来源层）。根层直接用选中的来源文件夹作为
+// 文件夹卡片（不用展开模式那套 getDisplayableNewTabSourceFolders 扁平化结果，否则
+// 嵌套子文件夹会错误地平铺到根层）。
+function resolveBookmarkNavigationLevel(): BookmarkNavigationLevel {
+  const rootBreadcrumb = {
+    folderId: '',
+    onNavigate: (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      exitBookmarkNavigationToRoot()
+    },
+    title: '书签'
+  }
+
+  const rootSourceFolders = (): chrome.bookmarks.BookmarkTreeNode[] => {
+    const seen = new Set<string>()
+    const folders: chrome.bookmarks.BookmarkTreeNode[] = []
+    for (const folderId of normalizeFolderIds(state.folderSettings.selectedFolderIds)) {
+      const node = state.folderNodeMap.get(folderId) || null
+      if (!node || node.url || seen.has(String(node.id))) {
+        continue
+      }
+      seen.add(String(node.id))
+      folders.push(node)
+    }
+    return folders
+  }
+
+  const path = state.bookmarkNavigationPath
+  if (!path.length) {
+    return {
+      breadcrumb: [rootBreadcrumb],
+      bookmarks: [],
+      folderId: '',
+      folders: rootSourceFolders(),
+      title: '书签'
+    }
+  }
+
+  const breadcrumb: BookmarkNavigationViewModel['breadcrumb'] = [rootBreadcrumb]
+  let currentNode: chrome.bookmarks.BookmarkTreeNode | null = null
+  const validatedPath: string[] = []
+  for (const folderId of path) {
+    const node = state.folderNodeMap.get(folderId) || null
+    if (!node || node.url) {
+      break
+    }
+    validatedPath.push(folderId)
+    currentNode = node
+    breadcrumb.push({
+      folderId,
+      onNavigate: (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        navigateBookmarkNavigationTo(folderId)
+      },
+      title: String(node.title || '未命名文件夹').trim() || '未命名文件夹'
+    })
+  }
+  if (validatedPath.length !== path.length) {
+    state.bookmarkNavigationPath = validatedPath
+  }
+
+  if (!currentNode) {
+    return {
+      breadcrumb: [rootBreadcrumb],
+      bookmarks: [],
+      folderId: '',
+      folders: rootSourceFolders(),
+      title: '书签'
+    }
+  }
+
+  const children = currentNode.children || []
+  return {
+    breadcrumb,
+    bookmarks: children.filter((child) => Boolean(child.url)),
+    folderId: String(currentNode.id),
+    folders: children.filter((child) => !child.url),
+    title: String(currentNode.title || '未命名文件夹').trim() || '未命名文件夹'
+  }
+}
+
+function enterBookmarkNavigationFolder(folderId: string): void {
+  const id = String(folderId || '').trim()
+  if (!id || !state.folderNodeMap.has(id)) {
+    return
+  }
+  state.bookmarkNavigationPath = [...state.bookmarkNavigationPath, id]
+  rerenderBookmarkNavigation()
+}
+
+function navigateBookmarkNavigationTo(folderId: string): void {
+  const index = state.bookmarkNavigationPath.indexOf(String(folderId))
+  if (index < 0) {
+    return
+  }
+  state.bookmarkNavigationPath = state.bookmarkNavigationPath.slice(0, index + 1)
+  rerenderBookmarkNavigation()
+}
+
+function exitBookmarkNavigationToRoot(): void {
+  if (!state.bookmarkNavigationPath.length) {
+    return
+  }
+  state.bookmarkNavigationPath = []
+  rerenderBookmarkNavigation()
+}
+
+function rerenderBookmarkNavigation(): void {
+  if (!renderBookmarkSections()) {
+    render()
+  }
+  scheduleAdaptiveNewTabLayoutUpdate()
 }
 
 function createBookmarkContentStyleState(): BookmarkContentStyleState {
@@ -7724,8 +7639,7 @@ function renderSpeedDialPanel(
       ariaBusy: false,
       content: {
         type: 'empty',
-        state: createSpeedDialEmptyState(),
-        onOpenDashboard: () => openDashboardRoute(getNewtabDashboardOverlayNodes().trigger)
+        state: createSpeedDialEmptyState()
       },
       meta: state.speedDialReorderError || '尚未固定',
       metaTone: state.speedDialReorderError ? 'error' : ''
@@ -7869,8 +7783,6 @@ function cleanupNewTabController(): void {
   unregisterNewtabContentShellActions = () => {}
   unregisterNewtabContentLayoutNodes()
   unregisterNewtabContentLayoutNodes = () => {}
-  unregisterNewtabDashboardOverlayNodes()
-  unregisterNewtabDashboardOverlayNodes = () => {}
   unregisterNewtabKeyboardActions()
   unregisterNewtabKeyboardActions = () => {}
   unregisterNewtabLifecycleActions()
@@ -7905,8 +7817,6 @@ function cleanupNewTabController(): void {
   folderReorderStatusTimer = 0
   window.clearTimeout(bookmarkChangeRefreshTimer)
   bookmarkChangeRefreshTimer = 0
-  window.clearTimeout(dashboardFrameReadyTimeout)
-  dashboardFrameReadyTimeout = 0
   window.clearTimeout(state.dragLongPressTimer)
   state.dragLongPressTimer = 0
   window.clearTimeout(state.speedDialDragLongPressTimer)
@@ -7925,6 +7835,8 @@ function cleanupNewTabController(): void {
   settledVerticalCenterContent = null
   window.cancelAnimationFrame(deferredRenderFrame)
   deferredRenderFrame = 0
+  window.cancelAnimationFrame(bookmarkDropCommitFrame)
+  bookmarkDropCommitFrame = 0
   resetAutoSearchLayoutSettle()
   setAutoSearchLayoutPending(false)
   removeBookmarkDragGhost()
@@ -7936,9 +7848,6 @@ function cleanupNewTabController(): void {
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
   state.naturalSearchPlanCache.clear()
-  state.dashboardFrameLoaded = false
-  state.dashboardFrameReady = false
-  renderDashboard({ loadFrame: false })
 }
 
 function getFeaturedBackgroundPreviewCacheKey(imageUrl: string): string {
@@ -8303,7 +8212,6 @@ async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void
 
   state.workspaceSettings = nextSettings
   await saveNewTabWorkspaceSettings()
-  postDashboardSpeedDialState()
 }
 
 async function saveNewTabActivityRecord(record: NewTabActivityRecord): Promise<void> {
@@ -10730,6 +10638,7 @@ function createFolderSourceView() {
       showSourceNavigation: state.generalSettings.showSourceNavigation
     },
     hideFolderNames: state.folderSettings.hideFolderNames,
+    browseMode: state.folderSettings.browseMode,
     selected: createSelectedFolderControlsState(),
     selectedCount: state.folderSettings.selectedFolderIds.length
   }

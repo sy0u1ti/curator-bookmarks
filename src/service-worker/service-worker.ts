@@ -328,6 +328,10 @@ chrome.notifications?.onButtonClicked.addListener((notificationId, buttonIndex) 
   })
 })
 
+chrome.runtime.onInstalled.addListener(() => {
+  void removeLocalStorage('curatorBookmarkDashboardFaviconCache').catch(() => {})
+})
+
 restoreAutoAnalyzeStatusBadge().catch((error) => {
   console.warn('[Curator] 自动分析状态徽标恢复失败', error)
 })

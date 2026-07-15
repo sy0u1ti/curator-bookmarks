@@ -133,7 +133,10 @@ function DuplicateDockedSelection({
     <section className={DOCKED_SELECTION_CLASS} data-open={entered ? 'true' : 'false'} aria-label="已选重复书签操作">
       <div className={DOCKED_COPY_CLASS}>
         <strong className={DOCKED_TITLE_CLASS}>
-          <TextSwap text={`已选 ${selectionStats.deleteCount} 条待移入回收站`} />
+          <TextSwap
+            animate={entered}
+            text={`已选 ${selectionStats.deleteCount} 条待移入回收站`}
+          />
         </strong>
         <p className={DOCKED_TEXT_CLASS}>
           保留 {selectionStats.keepCount} 条，涉及 {selectionStats.groupCount} 组。

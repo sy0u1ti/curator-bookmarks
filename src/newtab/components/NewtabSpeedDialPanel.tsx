@@ -6,7 +6,6 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
-import { Button } from '../../ui/base/Button'
 import { Icon } from '../../ui/icons/Icon'
 import {
   setNewtabSpeedDialCardIconNode,
@@ -23,7 +22,6 @@ import {
   SPEED_DIAL_COPY_TITLE_CLASS,
   SPEED_DIAL_DRAG_HANDLE_CLASS,
   SPEED_DIAL_EMPTY_CLASS,
-  SPEED_DIAL_EMPTY_ACTION_CLASS,
   SPEED_DIAL_EMPTY_COPY_CLASS,
   SPEED_DIAL_EMPTY_DETAIL_CLASS,
   SPEED_DIAL_EMPTY_TITLE_CLASS,
@@ -54,7 +52,7 @@ export interface SpeedDialCardViewModel {
 
 export type SpeedDialContentState =
   | { type: 'loading'; label: string }
-  | { type: 'empty'; onOpenDashboard: () => void; state: SpeedDialEmptyState }
+  | { type: 'empty'; state: SpeedDialEmptyState }
   | { type: 'items'; busy: boolean; items: SpeedDialCardViewModel[] }
 
 export interface SpeedDialPanelState {
@@ -111,15 +109,6 @@ function SpeedDialContent({ dragUi, state }: { dragUi: NewtabDragUiView; state: 
           <strong className={SPEED_DIAL_EMPTY_TITLE_CLASS}>{state.state.title}</strong>
           <span className={SPEED_DIAL_EMPTY_DETAIL_CLASS}>{state.state.detail}</span>
         </div>
-        <Button
-          className={SPEED_DIAL_EMPTY_ACTION_CLASS}
-          type="button"
-          onClick={state.onOpenDashboard}
-          unstyled
-        >
-          添加固定入口
-          <Icon name="Plus" size={14} aria-hidden="true" />
-        </Button>
       </div>
     )
   }

@@ -209,10 +209,11 @@ assert.ok(
 )
 
 assert.ok(
-  speedDial.includes('固定入口') &&
-    speedDial.includes('添加固定入口') &&
+    speedDial.includes('固定入口') &&
+    speedDial.includes('state.state.detail') &&
+    !speedDial.includes('onOpen') &&
     speedDial.includes('data-content-type'),
-  'The empty fixed-entry module should provide a compact, actionable state.'
+  'The empty fixed-entry module should provide a compact guidance state.'
 )
 
 assert.ok(
@@ -289,6 +290,23 @@ assert.ok(
   'The bookmark preboot snapshot must match live shell CJK typography and keep sub-pixel geometry so the handoff does not shift text.'
 )
 
+assert.ok(
+  bookmarkPreboot.includes('collectNewtabBookmarkPrebootClipPaths') &&
+    bookmarkPreboot.includes('content.clipPaths.iconShell') &&
+    bookmarkPreboot.includes('content.clipPaths.favicon') &&
+    bookmarkPreboot.includes('content.clipPaths.fallback') &&
+    bookmarkPreboot.includes('areNewtabBookmarkIconClipsAligned(prebootTile, liveTile)'),
+  'The bookmark preboot snapshot must replay the squircle clip-paths on first paint and hold the handoff until the live icon outline matches.'
+)
+
+const squircleEngine = readFileSync('src/shared/squircle-engine.ts', 'utf8')
+assert.ok(
+  squircleEngine.includes('export function applySquircleClipBeforePaint') &&
+    squircleEngine.includes("el.dataset.sq !== 'on') return") &&
+    bookmarkIconShell.includes('applySquircleClipBeforePaint'),
+  'Live bookmark icons must receive their squircle clip-path before first paint (mount ref), not a frame later via the async engine scan.'
+)
+
 const cachedAutoOffsetWrites = [...controller.matchAll(/writeCachedAutoSearchOffsetY\(/g)].length
 assert.ok(
   controller.includes('writeCachedAutoSearchOffsetY(view.shell.offsetY)') &&
@@ -309,6 +327,12 @@ assert.ok(
     newtabCss.includes('-webkit-backdrop-filter: none;') &&
     newtabCss.includes('backdrop-filter: none;'),
   'Repeated small cards should avoid individual backdrop-filter layers during startup.'
+)
+
+assert.ok(
+  bookmarkTileClasses.includes("const BOOKMARK_TILE_PREVIEW_INITIALIZING_CLASS = '[--bookmark-tile-transition:none]'") &&
+    !/\.bookmark-tile\s*\{[^}]*--bookmark-tile-transition\s*:/s.test(newtabCss),
+  'Bookmark drag commits must be able to disable transform transitions without a later .bookmark-tile rule overriding the drag-state custom property.'
 )
 
 assert.ok(
@@ -361,17 +385,18 @@ const bookmarkFocusRule = newtabCss.match(/\.bookmark-tile:focus-visible[^{]*\{(
 const bookmarkSectionVisibilityToggle = /\.bookmark-folder-section:(?:hover|focus-within)[^{]*\{[^}]*content-visibility\s*:/s
 
 assert.ok(
-  bookmarkContent.includes('[content-visibility:auto]') &&
+  !bookmarkContent.includes('content-visibility:auto') &&
+    !bookmarkContent.includes('contain-intrinsic-size') &&
     !bookmarkSectionVisibilityToggle.test(newtabCss),
-  'Bookmark section paint containment should stay stable while a card is hovered or focused.'
+  'Bookmark sections must not use content-visibility/contain-intrinsic-size: the placeholder height collapses on the frame after paint and reflows the whole page, deforming cards. Incremental chunk rendering is the virtualization layer.'
 )
 
 assert.ok(
   bookmarkHoverRule.includes('transform: translateY(var(--newtab-bookmark-hover-lift))') &&
     bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-hover-shadow)') &&
-    !bookmarkHoverRule.includes('filter:') &&
+    !bookmarkHoverRule.replace(/-?\bbackdrop-filter:/g, '').includes('filter:') &&
     newtabCss.includes('.bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before'),
-  'Bookmark hover should use the Lumno-inspired lift, layered shadow, and glass-tinted overlay while drag staging stays excluded.'
+  'Bookmark hover should use the Lumno-inspired lift, layered shadow, and glass-tinted overlay; only backdrop-filter is allowed (a clip-path-clipped drop-shadow filter is not).'
 )
 
 assert.ok(
@@ -384,6 +409,33 @@ assert.ok(
     !controller.includes('getHostnameAccentColor') &&
     !controller.includes('getCachedFaviconAccentCssRgb'),
   'New Tab bookmark and Speed Dial cards should use one neutral glass treatment without website-derived theme colors.'
+)
+
+assert.ok(
+  bookmarkContent.includes("state.browseMode === 'navigation'") &&
+    bookmarkContent.includes('BookmarkNavigationView') &&
+    bookmarkContent.includes('BookmarkFolderCard') &&
+    controller.includes('createBookmarkNavigationModule') &&
+    controller.includes("browseMode === 'navigation'"),
+  'The bookmark surface must dispatch between the expanded (grouped) and navigation (flat + folder cards) browse modes.'
+)
+
+assert.ok(
+  /function BookmarkFolderCard[\s\S]+?getBookmarkTileClass\(/.test(bookmarkContent),
+  'Navigation-mode folder cards must reuse the shared glass bookmark tile treatment for a unified look.'
+)
+
+assert.ok(
+  bookmarkContent.includes("state.browseMode === 'navigation'") &&
+    bookmarkContent.includes('clearNewtabBookmarkPrebootSnapshot()') &&
+    controller.includes('clearNewtabBookmarkPrebootSnapshot()'),
+  'Navigation mode must not persist an expanded-grid preboot snapshot, and switching modes must clear it so a refresh does not replay a stale structure.'
+)
+
+assert.ok(
+  bookmarkIconShell.includes('blur(4px)') &&
+    bookmarkIconShell.includes('data-[favicon-ready=true]:[filter:blur(0)]'),
+  'Bookmark favicons should reveal with a Lumno-style blur-up (only on first load; cached favicons start settled).'
 )
 
 assert.ok(

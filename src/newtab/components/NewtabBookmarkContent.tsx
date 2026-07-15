@@ -15,8 +15,11 @@ import { NumberPop } from '../../ui/motion/NumberPop'
 import {
   type BookmarkContentStyleState,
   type BookmarkContentViewModel,
+  type BookmarkBreadcrumbItemViewModel,
+  type BookmarkFolderCardViewModel,
   type BookmarkFolderGridViewModel,
   type BookmarkFolderSectionViewModel,
+  type BookmarkNavigationViewModel,
   type BookmarkTileViewModel,
   type EmptyFolderState,
   type FolderSectionHeaderState,
@@ -33,13 +36,21 @@ import {
 import { useNewtabDragUiView, type NewtabDragUiView } from '../newtab-drag-ui-store'
 import { useNewtabFolderSourceView } from '../newtab-folder-source-store'
 import {
+  clearNewtabBookmarkPrebootSnapshot,
   hideNewtabBookmarkPreboot,
   scheduleNewtabBookmarkPrebootHandoff,
   writeNewtabBookmarkPrebootSnapshotFromView
 } from '../newtab-bookmark-preboot'
 import { BookmarkIconShell } from './BookmarkIconShell'
 import { SpeedDialPanelHost } from './NewtabSpeedDialPanel'
-import { BOOKMARK_DRAG_HANDLE_CLASS, getBookmarkTileClass, getBookmarkTitleClass } from './bookmarkTileClasses'
+import {
+  BOOKMARK_DRAG_HANDLE_CLASS,
+  BOOKMARK_FOLDER_CARD_COUNT_CLASS,
+  BOOKMARK_FOLDER_CARD_GRID_CLASS,
+  BOOKMARK_FOLDER_CARD_ICON_CLASS,
+  getBookmarkTileClass,
+  getBookmarkTitleClass
+} from './bookmarkTileClasses'
 import {
   FOLDER_SECTION_COUNT_CLASS,
   FOLDER_SECTION_TITLE_CLASS,
@@ -55,6 +66,13 @@ import { getNewtabButtonClass } from './newtabButtonClass'
 
 const EMPTY_FOLDER_STATE_CLASS = 'bookmark-folder-empty-state grid justify-items-start gap-2.5'
 const BOOKMARK_PREBOOT_SNAPSHOT_LOAD_WAIT_MS = 500
+const BOOKMARK_NAVIGATION_CLASS = 'bookmark-navigation grid w-full content-start gap-3'
+const BOOKMARK_NAVIGATION_EMPTY_CLASS = 'bookmark-navigation-empty justify-self-start m-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.62)]'
+const BOOKMARK_BREADCRUMB_CLASS = 'bookmark-breadcrumb inline-flex max-w-full flex-wrap items-center gap-1 justify-self-start'
+const BOOKMARK_BREADCRUMB_LABEL_CLASS = 'bookmark-breadcrumb-label min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[640] leading-none'
+const BOOKMARK_BREADCRUMB_SEP_CLASS = 'text-[rgba(245,245,247,0.34)]'
+const BOOKMARK_BREADCRUMB_BUTTON_BASE_CLASS = 'curator-motion-chip bookmark-breadcrumb-item inline-flex h-[26px] max-w-[min(200px,100%)] items-center gap-1 rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.1)] bg-[rgba(8,8,9,0.68)] px-2 leading-none text-[rgba(245,245,247,0.78)] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:[outline:2px_solid_rgba(245,245,247,0.12)] focus-visible:outline-offset-0'
+const BOOKMARK_BREADCRUMB_BUTTON_CURRENT_CLASS = 'border-[rgba(245,245,247,0.16)] bg-[rgba(245,245,247,0.09)] text-[var(--ui-text-primary)] cursor-default'
 const EMPTY_FOLDER_COPY_CLASS = 'bookmark-folder-empty justify-self-start mt-1 mb-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.72)]'
 const EMPTY_FOLDER_ACTIONS_CLASS = 'bookmark-folder-empty-actions flex flex-wrap gap-2'
 const EMPTY_FOLDER_BUTTON_CLASS = getNewtabButtonClass('secondary', '!min-h-[34px] !px-3 !text-xs')
@@ -66,7 +84,12 @@ const SOURCE_NAVIGATION_TITLE_CLASS = 'source-navigation-title min-w-0 overflow-
 const SOURCE_NAVIGATION_COUNT_CLASS = 'source-navigation-count inline-grid h-4 min-w-[18px] place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-[10px] font-[760] leading-none text-[var(--ui-accent-text)]'
 const FOLDER_SECTION_ADD_CLASS = 'curator-compact-hit-target curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-[rgba(245,245,247,0.1)] bg-[rgba(8,8,9,0.68)] p-0 leading-none text-[rgba(245,245,247,0.78)] cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.14)] [-webkit-backdrop-filter:blur(8px)_saturate(1.06)] [backdrop-filter:blur(8px)_saturate(1.06)] hover:border-[var(--ui-divider-strong)] hover:bg-[var(--ui-surface-hover)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--ui-divider-strong)] focus-visible:bg-[var(--ui-surface-hover)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
 const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.42)] px-2.5 py-2 text-[11px] font-[620] text-[rgba(245,245,247,0.46)]'
-const BOOKMARK_FOLDER_SECTION_CLASS = 'bookmark-folder-section group/bookmark-folder-section grid w-full content-start items-start justify-items-stretch gap-1.5 [scroll-margin-top:clamp(28px,5vh,48px)] [content-visibility:auto] [contain-intrinsic-size:0_320px] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard)] focus:bg-transparent focus:[box-shadow:none] focus:[outline:0] focus-visible:bg-transparent focus-visible:[box-shadow:none] focus-visible:[outline:0]'
+// 曾用 CSS paint containment（content_visibility 占位 + intrinsic-size 估高）做离屏分组
+// 优化，但它让离屏分组首帧按 320px 假高占位、下一帧塌缩到真实高度，整页竖向重排——
+// 书签卡片被往上拽即"形变"。增量分块渲染（initialVisibleCount/chunkSize/IntersectionObserver）
+// 已是真正的虚拟化，那层 containment 是冗余，移除后首帧即真实高度。transform 过渡也一并
+// 移除，避免分组位置被动画插值；仅保留 opacity 过渡。
+const BOOKMARK_FOLDER_SECTION_CLASS = 'bookmark-folder-section group/bookmark-folder-section grid w-full content-start items-start justify-items-stretch gap-1.5 [scroll-margin-top:clamp(28px,5vh,48px)] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)] focus:bg-transparent focus:[box-shadow:none] focus:[outline:0] focus-visible:bg-transparent focus-visible:[box-shadow:none] focus-visible:[outline:0]'
 const BOOKMARK_FOLDER_SECTION_DRAGGING_CLASS = 'dragging-folder opacity-[0.54]'
 const BOOKMARK_REORDER_STATUS_CLASS = 'bookmark-reorder-status mt-1.5 mb-0 text-xs font-[650] leading-[1.4]'
 const BOOKMARK_REORDER_STATUS_WARNING_CLASS = 'text-[rgba(255,214,179,0.88)]'
@@ -144,6 +167,14 @@ function BookmarkContent({
       if (cancelled) {
         return
       }
+      // 导航模式的根层是文件夹卡片、层级可变，与快照的「展开网格」结构不兼容。
+      // 此模式不写快照并清空旧快照，避免切换模式后刷新回放陈旧的展开结构（=形变）。
+      // 阶段1 已保证导航视图 React 首帧稳定，无需 preboot 遮盖。
+      if (state.browseMode === 'navigation') {
+        clearNewtabBookmarkPrebootSnapshot()
+        hideNewtabBookmarkPreboot({ clearSnapshot: true })
+        return
+      }
       revealFrame = window.requestAnimationFrame(() => {
         settleFrame = window.requestAnimationFrame(() => {
           const snapshot = writeNewtabBookmarkPrebootSnapshotFromView(state, {
@@ -194,41 +225,59 @@ function BookmarkContent({
       data-icon-layout-mode={state.content.layoutMode}
       data-icon-show-titles={String(state.content.showTitles)}
       data-icon-vertical-center={String(state.content.verticalCenter)}
+      data-browse-mode={state.browseMode}
       aria-busy={state.content.reordering ? 'true' : 'false'}
     >
       {state.speedDial ? <SpeedDialPanelHost /> : null}
       {state.portal ? <PortalPanel state={state.portal} /> : null}
-      {state.sourceNavigation ? (
-        <nav className={SOURCE_NAVIGATION_CLASS} aria-label="书签来源导航">
-          <SourceNavigation onFocusSource={focusSource} state={state.sourceNavigation} />
-        </nav>
-      ) : null}
-      <div className={BOOKMARK_FOLDER_SECTIONS_CLASS} ref={sectionsRootRef}>
-        {state.sections.map((section) => (
-          <BookmarkFolderSection
-            dragUi={dragUi}
-            fixedLayout={state.content.layoutMode === 'fixed'}
-            hideFolderNames={folderSource.hideFolderNames}
-            section={section}
-            showTitles={state.content.showTitles}
-            onSectionRef={setSectionElement}
-            key={section.folderId}
-          />
-        ))}
-        {state.reorderStatus ? (
-          <p
-            className={getBookmarkReorderStatusClass(state.reorderStatus.tone)}
-            data-tone={state.reorderStatus.tone}
-            role="status"
-            aria-live="polite"
-            aria-atomic="true"
-          >
-            {state.reorderStatus.message}
-          </p>
-        ) : null}
-      </div>
+      {state.browseMode === 'navigation' && state.navigation ? (
+        <BookmarkNavigationView
+          dragUi={dragUi}
+          fixedLayout={state.content.layoutMode === 'fixed'}
+          navigation={state.navigation}
+          showTitles={state.content.showTitles}
+        />
+      ) : (
+        <>
+          {state.sourceNavigation ? (
+            <nav className={SOURCE_NAVIGATION_CLASS} aria-label="书签来源导航">
+              <SourceNavigation onFocusSource={focusSource} state={state.sourceNavigation} />
+            </nav>
+          ) : null}
+          <div className={BOOKMARK_FOLDER_SECTIONS_CLASS} ref={sectionsRootRef}>
+            {state.sections.map((section) => (
+              <BookmarkFolderSection
+                dragUi={dragUi}
+                fixedLayout={state.content.layoutMode === 'fixed'}
+                hideFolderNames={folderSource.hideFolderNames}
+                section={section}
+                showTitles={state.content.showTitles}
+                onSectionRef={setSectionElement}
+                key={section.folderId}
+              />
+            ))}
+            {state.reorderStatus ? (
+              <p
+                className={getBookmarkReorderStatusClass(state.reorderStatus.tone)}
+                data-tone={state.reorderStatus.tone}
+                role="status"
+                aria-live="polite"
+                aria-atomic="true"
+              >
+                {state.reorderStatus.message}
+              </p>
+            ) : null}
+          </div>
+        </>
+      )}
     </section>
   )
+}
+
+function getBookmarkBreadcrumbButtonClass(isLast: boolean): string {
+  return isLast
+    ? `${BOOKMARK_BREADCRUMB_BUTTON_BASE_CLASS} ${BOOKMARK_BREADCRUMB_BUTTON_CURRENT_CLASS}`
+    : BOOKMARK_BREADCRUMB_BUTTON_BASE_CLASS
 }
 
 function getBookmarkReorderStatusClass(tone: string): string {
@@ -559,6 +608,191 @@ function BookmarkTile({
         <Icon name="Move" size={15} aria-hidden="true" />
       </span>
     </a>
+  )
+}
+
+function BookmarkNavigationView({
+  dragUi,
+  fixedLayout,
+  navigation,
+  showTitles
+}: {
+  dragUi: NewtabDragUiView
+  fixedLayout: boolean
+  navigation: BookmarkNavigationViewModel
+  showTitles: boolean
+}) {
+  const totalBookmarks = navigation.items.length
+  const initialVisibleCount = Math.min(totalBookmarks, Math.max(0, navigation.initialVisibleCount))
+  const [visibleCountState, setVisibleCountState] = useState(initialVisibleCount)
+  const visibleCount = normalizeVisibleCount(visibleCountState, initialVisibleCount, totalBookmarks)
+  const expandFrameRef = useRef(0)
+  const placeholderRef = useRef<HTMLOutputElement | null>(null)
+  const visibleCountRef = useRef(visibleCount)
+
+  useLayoutEffect(() => {
+    visibleCountRef.current = visibleCount
+  }, [visibleCount])
+
+  const cancelExpandFrame = useCallback(() => {
+    if (!expandFrameRef.current) {
+      return
+    }
+    window.cancelAnimationFrame(expandFrameRef.current)
+    expandFrameRef.current = 0
+  }, [])
+
+  const expandVisibleItems = useCallback(() => {
+    if (expandFrameRef.current || visibleCountRef.current >= navigation.items.length) {
+      return
+    }
+    const runFrame = () => {
+      expandFrameRef.current = window.requestAnimationFrame(() => {
+        expandFrameRef.current = 0
+        const nextVisibleCount = Math.min(
+          navigation.items.length,
+          Math.max(visibleCountRef.current, initialVisibleCount) + navigation.chunkSize
+        )
+        visibleCountRef.current = nextVisibleCount
+        setVisibleCountState((current) => Math.max(current, nextVisibleCount))
+        if (nextVisibleCount < navigation.items.length) {
+          runFrame()
+        }
+      })
+    }
+    runFrame()
+  }, [initialVisibleCount, navigation.chunkSize, navigation.items.length])
+
+  useEffect(() => {
+    return () => {
+      cancelExpandFrame()
+    }
+  }, [cancelExpandFrame])
+
+  useEffect(() => {
+    if (visibleCount >= navigation.items.length) {
+      cancelExpandFrame()
+      return
+    }
+    const placeholder = placeholderRef.current
+    if (!placeholder) {
+      return
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      window.queueMicrotask(() => {
+        expandVisibleItems()
+      })
+      return
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        expandVisibleItems()
+      }
+    }, { rootMargin: '360px 0px' })
+    observer.observe(placeholder)
+    return () => {
+      observer.disconnect()
+    }
+  }, [cancelExpandFrame, expandVisibleItems, navigation.items.length, visibleCount])
+
+  const visibleItems = useMemo(
+    () => navigation.items.slice(0, visibleCount),
+    [navigation.items, visibleCount]
+  )
+  const remainingCount = Math.max(0, totalBookmarks - visibleCount)
+  const isEmpty = navigation.folderCards.length === 0 && totalBookmarks === 0
+
+  return (
+    <div className={BOOKMARK_NAVIGATION_CLASS}>
+      {navigation.breadcrumb.length > 1 ? (
+        <nav className={BOOKMARK_BREADCRUMB_CLASS} aria-label="书签导航路径">
+          {navigation.breadcrumb.map((crumb, index) => (
+            <BookmarkBreadcrumbItem
+              crumb={crumb}
+              isLast={index === navigation.breadcrumb.length - 1}
+              key={crumb.folderId || 'root'}
+            />
+          ))}
+        </nav>
+      ) : null}
+      {isEmpty ? (
+        <p className={BOOKMARK_NAVIGATION_EMPTY_CLASS}>此文件夹为空。</p>
+      ) : (
+        <nav
+          className={getBookmarkGridClass({ fixedLayout })}
+          aria-label={navigation.ariaLabel}
+          aria-busy={remainingCount > 0 ? 'true' : 'false'}
+          data-incremental-render={remainingCount > 0 ? 'true' : undefined}
+        >
+          {navigation.folderCards.map((folder) => (
+            <BookmarkFolderCard folder={folder} showTitles={showTitles} key={`folder-${folder.folderId}`} />
+          ))}
+          {visibleItems.map((item) => (
+            <BookmarkTile dragUi={dragUi} state={item} showTitles={showTitles} key={item.id} />
+          ))}
+          {remainingCount > 0 ? (
+            <BookmarkGridPlaceholder
+              folderTitle={navigation.ariaLabel}
+              remainingCount={remainingCount}
+              refNode={placeholderRef}
+            />
+          ) : null}
+        </nav>
+      )}
+    </div>
+  )
+}
+
+function BookmarkBreadcrumbItem({
+  crumb,
+  isLast
+}: {
+  crumb: BookmarkBreadcrumbItemViewModel
+  isLast: boolean
+}) {
+  return (
+    <>
+      <Button
+        className={getBookmarkBreadcrumbButtonClass(isLast)}
+        type="button"
+        aria-current={isLast ? 'page' : undefined}
+        onClick={crumb.onNavigate}
+        unstyled
+      >
+        {crumb.folderId ? null : <Icon name="Bookmark" size={13} aria-hidden="true" />}
+        <span className={BOOKMARK_BREADCRUMB_LABEL_CLASS}>{crumb.title}</span>
+      </Button>
+      {isLast ? null : <span className={BOOKMARK_BREADCRUMB_SEP_CLASS} aria-hidden="true">/</span>}
+    </>
+  )
+}
+
+function BookmarkFolderCard({
+  folder,
+  showTitles
+}: {
+  folder: BookmarkFolderCardViewModel
+  showTitles: boolean
+}) {
+  return (
+    <button
+      className={showTitles
+        ? `${getBookmarkTileClass({ showTitles })} ${BOOKMARK_FOLDER_CARD_GRID_CLASS}`
+        : getBookmarkTileClass({ showTitles })}
+      type="button"
+      title={folder.title}
+      data-folder-card-id={folder.folderId}
+      aria-label={`进入文件夹「${folder.title}」，${folder.bookmarkCount} 个书签`}
+      onClick={folder.onOpen}
+    >
+      <span className={BOOKMARK_FOLDER_CARD_ICON_CLASS} aria-hidden="true">
+        <Icon name="Folder" size={20} />
+      </span>
+      <span className={getBookmarkTitleClass()} hidden={!showTitles}>{folder.title}</span>
+      <span className={BOOKMARK_FOLDER_CARD_COUNT_CLASS} aria-hidden="true">
+        <NumberPop text={folder.bookmarkCount} />
+      </span>
+    </button>
   )
 }
 

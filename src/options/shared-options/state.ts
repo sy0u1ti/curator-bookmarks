@@ -71,8 +71,6 @@ export function normalizeHistoryRunScope(scope = null) {
   }
 }
 
-export type DashboardSortKey = 'date-desc' | 'date-asc' | 'title-asc' | 'domain-asc'
-
 export const availabilityState = {
   catalogLoading: true,
   permissionPending: true,
@@ -159,8 +157,6 @@ export const managerState = {
   moveSearchQuery: '',
   moveFolderActiveId: '',
   moveExpandedFolderIds: new Set<string>(),
-  moveSelectionSource: 'availability',
-  moveDashboardBookmarkId: '',
   confirmModalOpen: false,
   confirmModalTone: 'danger',
   confirmModalLabel: '确认',
@@ -176,41 +172,9 @@ export const managerState = {
   inboxSettingsStatus: ''
 }
 
-export const dashboardState = {
-  query: '',
-  folderId: '',
-  domain: '',
-  month: '',
-  sortKey: 'date-desc' as DashboardSortKey,
-  naturalSearchEnabled: false,
-  naturalSearchAiConfigured: false,
-  naturalSearchAiConfigChecked: false,
-  naturalSearchPending: false,
-  naturalSearchError: '',
-  naturalSearchPlan: null as import('../../popup/natural-search.js').NaturalSearchPlan | null,
-  naturalSearchAbortController: null as AbortController | null,
-  selectedIds: new Set<string>(),
-  speedDialPinnedIds: new Set<string>(),
-  expandedTagIds: new Set<string>(),
-  activeCardMenuBookmarkId: '',
-  tagEditorBookmarkId: '',
-  tagEditorDraft: '',
-  tagEditorStatus: '',
-  tagEditorSaving: false,
-  tagEditorBusyAction: '',
-  tagEditorReturnFocusId: '',
-  copyFeedbackId: '',
-  statusMessage: ''
-}
-
 export const contentSnapshotState = {
   settings: { ...DEFAULT_CONTENT_SNAPSHOT_SETTINGS } as ContentSnapshotSettings,
   index: { version: 1, updatedAt: 0, records: {} } as ContentSnapshotIndex,
-  searchTextMap: new Map<string, string>(),
-  searchTextMapIncludesFullText: false,
-  searchTextMapLoadingFullText: false,
-  searchTextMapFullTextRetryCount: 0,
-  searchTextMapFullTextRetryTimer: 0,
   statusMessage: '',
   aiRunSavedCount: 0,
   aiRunFailedCount: 0

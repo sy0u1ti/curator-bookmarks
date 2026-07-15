@@ -635,7 +635,7 @@ function doesFilterStyleSupportHover(value: string): boolean {
 
 function isFilterHoverSafeTarget(target: EventTarget | null): boolean {
   return target instanceof Element && Boolean(target.closest(
-    '#newtab-settings-drawer, #newtab-dashboard-overlay, .newtab-search-shell, ' +
+    '#newtab-settings-drawer, .newtab-search-shell, ' +
     '.bookmark-folder-section, .newtab-speed-dial-panel, button, a, input, textarea, select, ' +
     '[role="button"], [contenteditable="true"]'
   ))

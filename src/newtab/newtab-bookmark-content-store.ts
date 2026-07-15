@@ -88,6 +88,8 @@ export interface BookmarkContentStyleState {
 
 export interface BookmarkContentViewModel {
   content: BookmarkContentStyleState
+  browseMode: 'expanded' | 'navigation'
+  navigation: BookmarkNavigationViewModel | null
   portal: PortalPanelState | null
   reorderStatus: BookmarkReorderStatusViewModel | null
   sections: BookmarkFolderSectionViewModel[]
@@ -115,6 +117,30 @@ export interface BookmarkFolderGridViewModel {
   busy: boolean
   chunkSize: number
   folderId: string
+  initialVisibleCount: number
+  items: BookmarkTileViewModel[]
+}
+
+// 导航模式：当前浏览层级的一张文件夹卡片（点击进入下一层）。
+export interface BookmarkFolderCardViewModel {
+  bookmarkCount: number
+  folderId: string
+  onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  title: string
+}
+
+export interface BookmarkBreadcrumbItemViewModel {
+  folderId: string
+  onNavigate: (event: ReactMouseEvent<HTMLButtonElement>) => void
+  title: string
+}
+
+// 导航模式的完整视图：面包屑 + 当前层级混排（文件夹卡片在前、直属书签在后）。
+export interface BookmarkNavigationViewModel {
+  ariaLabel: string
+  breadcrumb: BookmarkBreadcrumbItemViewModel[]
+  chunkSize: number
+  folderCards: BookmarkFolderCardViewModel[]
   initialVisibleCount: number
   items: BookmarkTileViewModel[]
 }

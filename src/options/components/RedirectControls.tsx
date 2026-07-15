@@ -28,7 +28,7 @@ export function RedirectControls() {
           <div className={REDIRECT_HEADER_CLASS}>
             <div className={REDIRECT_HEADER_COPY_CLASS}>
               <strong className={REDIRECT_HEADER_TITLE_CLASS}>
-                <TextSwap text={`${state.selectedCount} 条已选择`} />
+                <TextSwap animate={selectionEntered} text={`${state.selectedCount} 条已选择`} />
               </strong>
               <p className={REDIRECT_HEADER_SUBTITLE_CLASS}>可批量更新最终地址或移入回收站。</p>
             </div>

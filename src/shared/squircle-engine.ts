@@ -75,33 +75,63 @@ function cornerOptions(radii: [number, number, number, number]) {
 
 function applyClip(el: HTMLElement): void {
   if (!el.isConnected) return
+  const clipPath = measureSquircleClipPath(el)
+  if (clipPath === null) {
+    clearClip(el)
+    return
+  }
+  el.style.clipPath = clipPath
+  if (el.dataset.sq !== 'on') el.dataset.sq = 'on'
+}
+
+/** applyClip 的读段：只测量不写样式，返回 null 表示该元素不应持有 squircle clip。 */
+function measureSquircleClipPath(el: HTMLElement): string | null {
   const style = getComputedStyle(el)
   const radii = readCornerRadii(style)
-  if (!radii) {
-    clearClip(el)
-    return
-  }
+  if (!radii) return null
   const maxRadius = Math.max(...radii)
-  if (maxRadius < MIN_RADIUS_PX) {
-    clearClip(el)
-    return
-  }
-  if (hasOuterBoxShadow(style)) {
-    clearClip(el)
-    return
-  }
+  if (maxRadius < MIN_RADIUS_PX) return null
+  if (hasOuterBoxShadow(style)) return null
   const { width, height } = getLayoutSize(el)
-  if (width < 2 || height < 2) {
-    clearClip(el)
-    return
-  }
+  if (width < 2 || height < 2) return null
   // 胶囊 / 圆形：圆弧已占满短边，squircle 退化为圆，交给原生渲染。
-  if (maxRadius * 2 >= Math.min(width, height) - 0.5) {
-    clearClip(el)
+  if (maxRadius * 2 >= Math.min(width, height) - 0.5) return null
+  return generateClipPath(width, height, cornerOptions(radii))
+}
+
+let eagerBatch: HTMLElement[] | null = null
+
+/**
+ * 供首屏关键元素（书签图标外壳等）在挂载 ref 里调用：同一微任务内批量
+ * 测量并写入 squircle clip-path，在首次 paint 前完成——不等常规的
+ * MutationObserver → rAF → ResizeObserver 异步链（那条链要晚 1-2 帧，
+ * 首帧会以普通圆角示人，随后突变成 squircle，产生可见形变）。
+ * 先全量测量再全量写入，避免逐元素读写交错造成布局抖动。
+ * 引擎稍后扫描到这些元素时（data-sq="on"）仍会接管 resize 跟踪。
+ */
+export function applySquircleClipBeforePaint(el: HTMLElement): void {
+  if (typeof ResizeObserver === 'undefined') return
+  if (el.dataset.squircle === 'off') return
+  if (eagerBatch) {
+    eagerBatch.push(el)
     return
   }
-  el.style.clipPath = generateClipPath(width, height, cornerOptions(radii))
-  if (el.dataset.sq !== 'on') el.dataset.sq = 'on'
+  eagerBatch = [el]
+  queueMicrotask(() => {
+    const batch = eagerBatch ?? []
+    eagerBatch = null
+    const clips = batch.map((element) =>
+      element.isConnected && getComputedStyle(element).clipPath === 'none'
+        ? measureSquircleClipPath(element)
+        : null
+    )
+    for (const [index, element] of batch.entries()) {
+      const clipPath = clips[index]
+      if (!clipPath) continue
+      element.style.clipPath = clipPath
+      element.dataset.sq = 'on'
+    }
+  })
 }
 
 function clearClip(el: HTMLElement): void {
@@ -116,8 +146,9 @@ function consider(el: HTMLElement): void {
   if (el.dataset.squircle === 'off') return
   const className = el.getAttribute('class') ?? ''
   const style = getComputedStyle(el)
-  // 元素自带 clip-path（开关滑块、壁纸遮罩等）不参与，避免互相覆盖。
-  if (style.clipPath !== 'none') return
+  // 元素自带 clip-path（开关滑块、壁纸遮罩等）不参与，避免互相覆盖；
+  // 引擎自己写过的（data-sq="on"，含首帧 eager 路径）要接管 resize 跟踪。
+  if (style.clipPath !== 'none' && el.dataset.sq !== 'on') return
   const radii = readCornerRadii(style)
   if (!radii || Math.max(...radii) < MIN_RADIUS_PX) return
   if (declaresStatefulOuterShadow(className)) return

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { SECTION_META } from './shared-options/constants.js'
 import {
-  isOptionsDashboardEmbedMode,
   navigateToOptionsSectionHash,
   readOptionsSectionAnchor,
   readOptionsSectionKey,
@@ -17,8 +16,6 @@ export function useOptionsSectionChrome({
   sectionKey: OptionsSectionKey
   sectionAnchor: string
   sectionRevision: number
-  isDashboardActive: boolean
-  isDashboardEmbed: boolean
   navigateToSectionHash: (hash: string) => void
 } {
   const [sectionState, setSectionState] = useState(() => ({
@@ -26,8 +23,6 @@ export function useOptionsSectionChrome({
     sectionAnchor: readOptionsSectionAnchor(),
     sectionRevision: 0
   }))
-  const isDashboardEmbed = useMemo(() => isOptionsDashboardEmbedMode(), [])
-
   useEffect(() => {
     const syncSection = () => {
       setSectionState((current) => ({
@@ -60,8 +55,6 @@ export function useOptionsSectionChrome({
     sectionKey: sectionState.sectionKey,
     sectionAnchor: sectionState.sectionAnchor,
     sectionRevision: sectionState.sectionRevision,
-    isDashboardActive: sectionState.sectionKey === 'dashboard',
-    isDashboardEmbed,
     navigateToSectionHash
   }
 }
