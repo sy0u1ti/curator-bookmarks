@@ -13,6 +13,8 @@ const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.
 const bookmarkPreboot = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
 const newtabApp = readFileSync('src/newtab/NewtabApp.tsx', 'utf8')
 const newtabMain = readFileSync('src/newtab/main.tsx', 'utf8')
+const newtabStartupData = readFileSync('src/newtab/newtab-startup-data.ts', 'utf8')
+const bookmarkEventStore = readFileSync('src/newtab/newtab-bookmark-events-store.ts', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
 const settingsDrawer = readFileSync('src/newtab/components/SettingsDrawer.tsx', 'utf8')
 const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx', 'utf8')
@@ -230,6 +232,14 @@ assert.ok(
 )
 
 assert.ok(
+  searchWidgetClasses.includes('[&.active]:bg-[var(--ui-surface-selected)]') &&
+    searchWidgetClasses.includes('[&.active]:shadow-[inset_0_0_0_1px_rgba(245,245,247,0.16)]') &&
+    searchWidgetClasses.includes('[&.active:hover]:bg-[rgba(245,245,247,0.19)]') &&
+    searchWidgetClasses.includes('[&_.newtab-search-suggestion-meta]:text-[rgba(245,245,247,0.86)]'),
+  'The active search suggestion should use a high-specificity selected surface, full inset outline, and readable metadata instead of the shallow hover treatment.'
+)
+
+assert.ok(
   searchWidgetClasses.includes('bg-[rgba(8,8,9,var(--search-bg-alpha))]') &&
     searchWidgetClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
     clockClasses.includes('bg-[var(--newtab-glass-bg-hero)]') &&
@@ -284,16 +294,45 @@ assert.ok(
 )
 
 assert.ok(
-  newtabMain.includes('startNewTabController()') &&
+    newtabMain.includes("import('./newtab-controller')") &&
+    newtabMain.includes("from './newtab-startup-data'") &&
+    newtabMain.includes('prefetchNewtabStartupData()') &&
+    !newtabMain.includes("from './newtab-controller'") &&
     newtabMain.includes('createRoot(root).render') &&
-    newtabMain.indexOf('startNewTabController()') < newtabMain.indexOf('createRoot(root).render') &&
+    newtabMain.indexOf('createRoot(root).render') < newtabMain.indexOf("import('./newtab-controller')") &&
+    newtabMain.indexOf('markNewTabStartupBaseline()') < newtabMain.indexOf('createRoot(root).render') &&
+    newtabMain.includes("performance.mark('newtab.domContentLoaded')") &&
+    newtabMain.includes('window.requestAnimationFrame') &&
+    newtabMain.includes('window.setTimeout(loadController, 0)') &&
+    !newtabApp.includes('useNewtabController') &&
+    newtabApp.includes("void import('./newtab-controller')") &&
+    newtabApp.indexOf('startNewTabController()') < newtabApp.indexOf('dispatchNewtabSettingsDrawerToggleRequest()') &&
+    viteConfig.includes('onlyExplicitManualChunks: true') &&
+    viteConfig.includes("indexOf('<link rel=\"stylesheet\"')") &&
+    viteConfig.includes('stylesheetLineStart') &&
+    controller.includes("performance.getEntriesByName('newtab.domContentLoaded', 'mark')") &&
+    controller.includes('consumeNewtabStartupData()') &&
+    newtabStartupData.includes('STORAGE_KEYS.newTabBackgroundSettings') &&
+    newtabStartupData.includes('const prefetchedStartupData = settleStartupData(loadNewtabStartupData())') &&
     controller.includes("from './speed-dial.js'") &&
     !controller.includes("import('./speed-dial.js')"),
-  'Newtab data and fixed-entry state should begin hydrating before the first React render.'
+  'Newtab should paint its cached shell before loading the full controller, while explicit manual chunks keep options-only code out of the startup graph.'
 )
 
 assert.ok(
-  /getLocalStorage\(\[[\s\S]+?backgroundPreloadPromise\s*\n\s*\]\)/.test(controller) &&
+  controller.includes('void refreshNewTab().finally') &&
+    controller.includes('bindBookmarkEvents()') &&
+    controller.includes('const alreadyInTree = existingChildren.some') &&
+    controller.includes('if (alreadyInSection)') &&
+    controller.includes('alreadyInTree ? section.totalBookmarkCount : section.totalBookmarkCount + 1') &&
+    bookmarkEventStore.includes('pendingNewtabBookmarkEvents') &&
+    bookmarkEventStore.includes('dispatchPendingNewtabBookmarkEvent(actions, event)'),
+  'Bookmark events that arrive while startup data is prefetched should replay only after hydration and remain idempotent when the tree already contains the change.'
+)
+
+assert.ok(
+  controller.includes('const { tree, stored } = await consumeNewtabStartupData()') &&
+    controller.includes('preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])') &&
     /useLayoutEffect\(\(\) => \{\s*return scheduleNewtabBookmarkPrebootHandoff\(\{[\s\S]+?onFinish:/.test(bookmarkContent) &&
     bookmarkPreboot.includes('measureNewtabBookmarkPrebootHandoff') &&
     bookmarkContent.includes("prebootHandoffStatus !== 'ready'") &&
@@ -306,6 +345,16 @@ assert.ok(
     !newtabApp.includes("from './components/SettingsDrawer'") &&
     newtabApp.includes('SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS'),
   'The closed settings drawer should stay outside the bookmark first-paint bundle and warm after the critical path.'
+)
+
+assert.ok(
+  newtabApp.includes("import('./components/NewtabDeferredHosts')") &&
+    !newtabApp.includes("from './components/BookmarkMenusHost'") &&
+    !newtabApp.includes("from './components/FeaturedBackgroundModal'") &&
+    !newtabApp.includes("from './components/NewtabDeleteToastHost'") &&
+    !newtabApp.includes("from './components/NewtabDragLayerHost'") &&
+    newtabApp.includes('<DeferredNewtabHosts />'),
+  'Closed menus, drag ghosts, featured wallpaper modal, and delete toast should stay outside the first-paint bundle.'
 )
 
 const autoCenteredLayoutReadyAssignments = [
@@ -370,8 +419,10 @@ const squircleEngine = readFileSync('src/shared/squircle-engine.ts', 'utf8')
 assert.ok(
   squircleEngine.includes('export function applySquircleClipBeforePaint') &&
     squircleEngine.includes("el.dataset.sq !== 'on') return") &&
+    squircleEngine.includes("dataset.squircleSubtree === 'off'") &&
+    bookmarkPreboot.includes("root.dataset.squircleSubtree = 'off'") &&
     bookmarkIconShell.includes('applySquircleClipBeforePaint'),
-  'Live bookmark icons must receive their squircle clip-path before first paint (mount ref), not a frame later via the async engine scan.'
+  'Live bookmark icons must receive their squircle clip-path before first paint, while the disposable preboot tree stays outside the global measurement scan.'
 )
 
 const cachedAutoOffsetWrites = [...controller.matchAll(/writeCachedAutoSearchOffsetY\(/g)].length
@@ -405,8 +456,9 @@ assert.ok(
 assert.ok(
   viteConfig.includes('NEWTAB_BOOKMARK_PREBOOT_ROUTE') &&
     viteConfig.includes('NEWTAB_BOOKMARK_PREBOOT_ENTRY') &&
+    viteConfig.includes('`    <script src="${INSTANT_WALLPAPER_BOOT_ROUTE}"></script>\\n  </head>`') &&
     viteConfig.includes('`<body>\\n    <script src="${NEWTAB_BOOKMARK_PREBOOT_ROUTE}"></script>`'),
-  'Newtab should install its stable bookmark snapshot before the React root is parsed.'
+  'Newtab should expose Vite resource hints before synchronous wallpaper restore, then install its stable bookmark snapshot before the React root is parsed.'
 )
 
 assert.ok(

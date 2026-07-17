@@ -37,7 +37,7 @@ export const SEARCH_SUGGESTIONS_CLASS = 'newtab-search-suggestions grid gap-[3px
 export const SEARCH_HINT_CLASS = 'newtab-search-hint px-2 pt-[3px] pb-0.5 text-[10px] font-[560] leading-[1.4] text-[rgba(245,245,247,0.7)] empty:hidden'
 const SEARCH_CHIP_CLASS = 'newtab-search-chip inline-flex min-h-[22px] max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap rounded-[var(--ui-radius-pill)] border border-[var(--ui-divider)] bg-[rgba(245,245,247,0.055)] px-[7px] text-[10px] font-[680] leading-[1.2] text-[var(--ui-text-secondary)]'
 
-const SEARCH_SUGGESTION_ACTIVE_CLASS = 'bg-[var(--ui-surface-hover)] text-[var(--ui-text-primary)]'
+const SEARCH_SUGGESTION_ACTIVE_CLASS = '[&.active]:bg-[var(--ui-surface-selected)] [&.active]:text-[var(--ui-text-primary)] [&.active]:shadow-[inset_0_0_0_1px_rgba(245,245,247,0.16)] [&.active:hover]:bg-[rgba(245,245,247,0.19)] [&.active:focus-visible]:bg-[var(--ui-surface-selected)] [&_.newtab-search-suggestion-mark]:border-[rgba(245,245,247,0.24)] [&_.newtab-search-suggestion-mark]:bg-[rgba(245,245,247,0.14)] [&_.newtab-search-suggestion-mark]:text-[rgba(245,245,247,0.96)] [&_.newtab-search-suggestion-meta]:text-[rgba(245,245,247,0.86)]'
 const SEARCH_SUGGESTION_MARK_CLASS = 'newtab-search-suggestion-mark grid h-[30px] w-[30px] place-items-center rounded-lg border border-[rgba(245,245,247,0.1)] bg-[rgba(245,245,247,0.07)] text-xs font-extrabold leading-none text-[rgba(245,245,247,0.82)]'
 const SEARCH_SUGGESTION_COMMAND_MARK_CLASS = 'bg-[rgba(189,243,202,0.16)] text-[rgba(189,243,202,0.94)]'
 export const SEARCH_SUGGESTION_COPY_CLASS = 'newtab-search-suggestion-copy grid min-w-0 gap-[3px]'

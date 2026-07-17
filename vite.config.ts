@@ -24,10 +24,16 @@ function instantWallpaperBootPlugin(minify: boolean): Plugin {
         }
         let transformedHtml = html
         if (!transformedHtml.includes(INSTANT_WALLPAPER_BOOT_ROUTE)) {
-          transformedHtml = transformedHtml.replace(
-            '<head>',
-            `<head>\n    <script src="${INSTANT_WALLPAPER_BOOT_ROUTE}"></script>`
-          )
+          const stylesheetIndex = transformedHtml.indexOf('<link rel="stylesheet"')
+          if (stylesheetIndex >= 0) {
+            const stylesheetLineStart = transformedHtml.lastIndexOf('\n', stylesheetIndex) + 1
+            transformedHtml = `${transformedHtml.slice(0, stylesheetLineStart)}    <script src="${INSTANT_WALLPAPER_BOOT_ROUTE}"></script>\n${transformedHtml.slice(stylesheetLineStart)}`
+          } else {
+            transformedHtml = transformedHtml.replace(
+              '</head>',
+              `    <script src="${INSTANT_WALLPAPER_BOOT_ROUTE}"></script>\n  </head>`
+            )
+          }
         }
         if (!transformedHtml.includes(NEWTAB_BOOKMARK_PREBOOT_ROUTE)) {
           transformedHtml = transformedHtml.replace(
@@ -149,38 +155,10 @@ export default defineConfig(({ mode }) => {
       sourcemap: debugSourcemap,
       rollupOptions: {
         output: {
+          onlyExplicitManualChunks: true,
           manualChunks(id) {
             if (id.includes('pinyin-pro')) {
               return 'vendor-pinyin'
-            }
-            if (
-              id.includes('/src/options/sections/availability-runner.ts') ||
-              id.includes('/src/options/sections/classifier.ts')
-            ) {
-              return 'options-availability-engine'
-            }
-            if (
-              id.includes('/src/options/sections/content-extraction.ts') ||
-              id.includes('/src/options/sections/ai-settings.ts') ||
-              id.includes('/src/shared/ai-response.ts') ||
-              id.includes('/src/shared/ai-provider-url.ts') ||
-              id.includes('/src/shared/content-snapshots.ts') ||
-              id.includes('/src/shared/backup.ts') ||
-              id.includes('/src/shared/bookmark-tags.ts') ||
-              id.includes('/src/shared/recycle-bin.ts')
-            ) {
-              return 'options-data-ai-engine'
-            }
-            if (
-              id.includes('/src/options/sections/ignore.ts') ||
-              id.includes('/src/options/sections/recycle.ts') ||
-              id.includes('/src/options/sections/duplicates.ts') ||
-              id.includes('/src/options/sections/folder-cleanup.ts') ||
-              id.includes('/src/options/sections/redirects.ts') ||
-              id.includes('/src/options/sections/history.ts') ||
-              id.includes('/src/options/sections/bookmark-add-history.ts')
-            ) {
-              return 'options-task-sections'
             }
             if (id.includes('/src/newtab/content-state.ts')) {
               return 'newtab-content-state'

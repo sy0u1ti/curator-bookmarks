@@ -4,14 +4,9 @@ import { cx } from '../ui/base/utils'
 import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { runIdle } from '../shared/idle'
-import { useNewtabController } from './newtab-controller'
-import { BookmarkMenusHost } from './components/BookmarkMenusHost'
-import { FeaturedBackgroundModalHost } from './components/FeaturedBackgroundModal'
 import { NewtabBackgroundLayer } from './components/NewtabBackgroundLayer'
 import { useNewtabAppChromeAttributes } from './components/NewtabBodyClassesHost'
 import { NewtabContentHost } from './components/NewtabContentHost'
-import { NewtabDeleteToastHost } from './components/NewtabDeleteToastHost'
-import { NewtabDragLayerHost } from './components/NewtabDragLayerHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
 import { NewtabWallpaperFilterLayer } from './components/NewtabWallpaperFilterLayer'
 import { NewtabPaperShaderLayer } from './components/NewtabPaperShaderLayer'
@@ -94,9 +89,12 @@ const WALLPAPER_LOADING_DOT_CLASS = 'block h-1.5 w-1.5 rounded-full bg-current o
 const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh items-start justify-items-center overflow-x-hidden overflow-y-auto px-[clamp(14px,5vw,72px)] pt-[clamp(18px,5vh,46px)] pb-[clamp(24px,6vh,64px)] select-none [-webkit-user-select:none] [scrollbar-color:rgba(245,245,247,0.18)_transparent] [scrollbar-width:thin] [line-break:strict] [hanging-punctuation:allow-end] [text-spacing-trim:trim-start] [text-autospace:normal] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-spacing-trim:space-all] [&_:where(input,textarea,button,code,kbd,pre,samp,.bookmark-url,.newtab-search-input)]:[text-autospace:no-autospace] [&_a]:[-webkit-user-drag:none] [&_img]:[-webkit-user-drag:none] [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-2 [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-[rgba(245,245,247,0.18)] [&::-webkit-scrollbar-thumb]:bg-clip-padding ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS}`
 
 type SettingsDrawerHostComponent = (typeof import('./components/SettingsDrawer'))['SettingsDrawerHost']
+type NewtabDeferredHostsComponent = (typeof import('./components/NewtabDeferredHosts'))['NewtabDeferredHosts']
 
 let settingsDrawerHostComponent: SettingsDrawerHostComponent | null = null
 let settingsDrawerHostPromise: Promise<SettingsDrawerHostComponent> | null = null
+let newtabDeferredHostsComponent: NewtabDeferredHostsComponent | null = null
+let newtabDeferredHostsPromise: Promise<NewtabDeferredHostsComponent> | null = null
 
 function loadSettingsDrawerHost(): Promise<SettingsDrawerHostComponent> {
   if (settingsDrawerHostComponent) {
@@ -107,6 +105,17 @@ function loadSettingsDrawerHost(): Promise<SettingsDrawerHostComponent> {
     return module.SettingsDrawerHost
   })
   return settingsDrawerHostPromise
+}
+
+function loadNewtabDeferredHosts(): Promise<NewtabDeferredHostsComponent> {
+  if (newtabDeferredHostsComponent) {
+    return Promise.resolve(newtabDeferredHostsComponent)
+  }
+  newtabDeferredHostsPromise ||= import('./components/NewtabDeferredHosts').then((module) => {
+    newtabDeferredHostsComponent = module.NewtabDeferredHosts
+    return module.NewtabDeferredHosts
+  })
+  return newtabDeferredHostsPromise
 }
 
 function subscribeToNewtabBookmarkEvents(): () => void {
@@ -128,8 +137,6 @@ function subscribeToNewtabBookmarkEvents(): () => void {
 }
 
 export function NewtabApp() {
-  useNewtabController()
-
   return (
     <ThemeProvider>
       <NewtabShell />
@@ -255,7 +262,14 @@ function NewtabShell() {
           {...settingsBackgroundProps}
           onClick={() => {
             setSettingsDrawerHostRequested(true)
-            dispatchNewtabSettingsDrawerToggleRequest()
+            void import('./newtab-controller')
+              .then(({ startNewTabController }) => {
+                startNewTabController()
+                dispatchNewtabSettingsDrawerToggleRequest()
+              })
+              .catch((error) => {
+                console.error('新标签页控制器加载失败。', error)
+              })
           }}
           unstyled
         >
@@ -284,13 +298,32 @@ function NewtabShell() {
       >
         <NewtabContentHost shellRef={shellRef} />
       </div>
-      <NewtabDragLayerHost />
       <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawer.open} />
-      <FeaturedBackgroundModalHost />
-      <NewtabDeleteToastHost />
-      <BookmarkMenusHost />
+      <DeferredNewtabHosts />
     </div>
   )
+}
+
+function DeferredNewtabHosts() {
+  const [Host, setHost] = useState<NewtabDeferredHostsComponent | null>(newtabDeferredHostsComponent)
+
+  useEffect(() => {
+    if (Host) {
+      return
+    }
+
+    let active = true
+    void loadNewtabDeferredHosts().then((Component) => {
+      if (active) {
+        setHost(() => Component)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [Host])
+
+  return Host ? <Host /> : null
 }
 
 function DeferredSettingsDrawerHost({ requested }: { requested: boolean }) {
@@ -346,7 +379,15 @@ function SolidBackgroundNoiseLayer({ active }: { active: boolean }) {
             numOctaves="4"
             stitchTiles="stitch"
           />
-          <feColorMatrix type="saturate" values="0" />
+          <feColorMatrix
+            type="matrix"
+            values="
+              0 0 0 0 1
+              0 0 0 0 1
+              0 0 0 0 1
+              0.2126 0.7152 0.0722 0 0
+            "
+          />
         </filter>
         <rect width="100%" height="100%" filter="url(#newtab-solid-background-noise-filter)" />
       </svg>

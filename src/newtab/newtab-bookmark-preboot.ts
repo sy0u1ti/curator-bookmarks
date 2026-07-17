@@ -1217,6 +1217,7 @@ function getOrCreateNewtabBookmarkPrebootRoot(documentRef: Document): HTMLElemen
   }
   const root = documentRef.createElement('div')
   root.id = NEWTAB_BOOKMARK_PREBOOT_ROOT_ID
+  root.dataset.squircleSubtree = 'off'
   root.setAttribute('aria-hidden', 'true')
   const reactRoot = documentRef.getElementById('newtab-react-root')
   documentRef.body.insertBefore(root, reactRoot || documentRef.body.firstChild)

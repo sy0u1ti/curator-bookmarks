@@ -167,9 +167,21 @@ function untrack(el: HTMLElement): void {
 }
 
 function scanSubtree(root: Element): void {
-  if (root instanceof HTMLElement) consider(root)
+  if (root instanceof HTMLElement) {
+    if (root.dataset.squircleSubtree === 'off') return
+    consider(root)
+  }
   const descendants = root.querySelectorAll<HTMLElement>('*')
-  for (const el of descendants) consider(el)
+  let skippedSubtree: HTMLElement | null = null
+  for (const el of descendants) {
+    if (skippedSubtree?.contains(el)) continue
+    skippedSubtree = null
+    if (el.dataset.squircleSubtree === 'off') {
+      skippedSubtree = el
+      continue
+    }
+    consider(el)
+  }
 }
 
 function flushPendingScan(): void {
@@ -233,7 +245,7 @@ export function initSquircleEngine(): void {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class', 'data-squircle'],
+      attributeFilter: ['class', 'data-squircle', 'data-squircle-subtree'],
     })
   }
 

@@ -1,9 +1,8 @@
-import {
-  useEffect,
-  type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent
+import type {
+  CSSProperties,
+  KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
+  PointerEvent as ReactPointerEvent
 } from 'react'
 import {
   BOOKMARKS_BAR_ID,
@@ -14,6 +13,7 @@ import {
 } from '../shared/bookmark-tree.js'
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { consumeNewtabStartupData, getBookmarkTree } from './newtab-startup-data.js'
 import { downloadBlobFile } from '../shared/download.js'
 import { getMotionDurationMs, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
@@ -493,20 +493,6 @@ const SEARCH_SUGGESTION_DEBOUNCE_MS = 120
 const SEARCH_SUGGESTION_CACHE_LIMIT = 24
 const SEARCH_SUGGESTION_CACHE_TTL_MS = 2 * 60 * 1000
 
-function getBookmarkTree(): Promise<chrome.bookmarks.BookmarkTreeNode[]> {
-  return new Promise((resolve, reject) => {
-    chrome.bookmarks.getTree((tree) => {
-      const error = chrome.runtime.lastError
-      if (error) {
-        reject(new Error(error.message))
-        return
-      }
-
-      resolve(tree)
-    })
-  })
-}
-
 async function moveBookmarkLazy(
   ...args: Parameters<typeof import('../shared/bookmarks-api.js').moveBookmark>
 ): ReturnType<typeof import('../shared/bookmarks-api.js').moveBookmark> {
@@ -873,8 +859,6 @@ function getBookmarkCatalog(
   return refreshBookmarkCatalog(rootNode)
 }
 let lastRenderedShellKey = ''
-const backgroundPreloadPromise = preloadBackgroundSettings()
-
 state.searchIndexReadyPromise = searchIndexReadyPromise
 
 interface BackgroundUrlCacheTask {
@@ -883,24 +867,23 @@ interface BackgroundUrlCacheTask {
 }
 
 let newTabControllerStarted = false
-
-export function useNewtabController(): void {
-  useEffect(() => {
-    startNewTabController()
-  }, [])
-}
+let newTabControllerGeneration = 0
 
 export function startNewTabController(): void {
   if (newTabControllerStarted) {
     return
   }
   newTabControllerStarted = true
+  const generation = ++newTabControllerGeneration
 
   recordNewTabDomContentLoaded()
   bindEvents()
   hydrateFeaturedBackgroundOptions()
-  void backgroundPreloadPromise
-  void refreshNewTab()
+  void refreshNewTab().finally(() => {
+    if (newTabControllerStarted && generation === newTabControllerGeneration) {
+      bindBookmarkEvents()
+    }
+  })
 }
 
 function createSearchIndexReadyPromise(): Promise<void> {
@@ -952,7 +935,9 @@ function recordNewTabDomContentLoaded(): void {
   }
 
   newTabDomContentLoadedRecorded = true
-  perfMark('newtab.domContentLoaded')
+  if (!performance.getEntriesByName('newtab.domContentLoaded', 'mark').length) {
+    perfMark('newtab.domContentLoaded')
+  }
 }
 
 function recordNewTabSkeletonRendered(): void {
@@ -1086,6 +1071,14 @@ function bindEvents(): void {
   })
   unregisterNewtabSettingsDrawerNodes()
   unregisterNewtabSettingsDrawerNodes = subscribeNewtabSettingsDrawerNodes(handleSettingsDrawerNodesChange)
+  initializeSettingsDrawer()
+  initializeFeaturedBackgroundModal()
+
+  window.clearTimeout(clockTimer)
+  scheduleClockTick()
+}
+
+function bindBookmarkEvents(): void {
   unregisterNewtabBookmarkEventActions()
   unregisterNewtabBookmarkEventActions = registerNewtabBookmarkEventActions({
     onChanged: handleBookmarkChanged,
@@ -1093,11 +1086,6 @@ function bindEvents(): void {
     onMoved: handleBookmarkMoved,
     onRemoved: handleBookmarkRemoved
   })
-  initializeSettingsDrawer()
-  initializeFeaturedBackgroundModal()
-
-  window.clearTimeout(clockTimer)
-  scheduleClockTick()
 }
 
 function handleNewtabShellContextMenu(event: ReactMouseEvent<HTMLDivElement>): void {
@@ -4408,7 +4396,13 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
   }
 
   const existingChildren = Array.isArray(parentNode.children) ? parentNode.children : []
-  if (!existingChildren.some((child) => String(child.id) === bookmarkId)) {
+  const alreadyInTree = existingChildren.some((child) => String(child.id) === bookmarkId)
+  const alreadyInSection = targetSection.bookmarks.some((item) => String(item.id) === bookmarkId)
+  if (alreadyInSection) {
+    return true
+  }
+
+  if (!alreadyInTree) {
     const nextChildren = [...existingChildren]
     const insertIndex = typeof bookmark.index === 'number'
       ? Math.max(0, Math.min(bookmark.index, nextChildren.length))
@@ -4429,7 +4423,10 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
       ...section,
       bookmarks: nextBookmarks,
       directBookmarkCount: nextBookmarks.length,
-      totalBookmarkCount: Math.max(section.totalBookmarkCount + 1, nextBookmarks.length)
+      totalBookmarkCount: Math.max(
+        alreadyInTree ? section.totalBookmarkCount : section.totalBookmarkCount + 1,
+        nextBookmarks.length
+      )
     }
   })
   state.bookmarks = getAllSectionBookmarks()
@@ -5098,24 +5095,8 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
   }
 
   try {
-    const [tree, stored] = await Promise.all([
-      getBookmarkTree(),
-      getLocalStorage([
-        STORAGE_KEYS.newTabCustomIcons,
-        STORAGE_KEYS.newTabFeaturedBackgroundGallery,
-        STORAGE_KEYS.newTabFeaturedBackgroundFavorites,
-        STORAGE_KEYS.newTabFeaturedBackgroundPreferences,
-        STORAGE_KEYS.newTabSearchSettings,
-        STORAGE_KEYS.newTabIconSettings,
-        STORAGE_KEYS.newTabGeneralSettings,
-        STORAGE_KEYS.newTabFolderSettings,
-        STORAGE_KEYS.newTabTimeSettings,
-        STORAGE_KEYS.newTabWorkspaceSettings,
-        STORAGE_KEYS.newTabModuleSettings,
-        STORAGE_KEYS.onboardingState
-      ]),
-      backgroundPreloadPromise
-    ])
+    const { tree, stored } = await consumeNewtabStartupData()
+    preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
     perfMark('newtab.storageLoaded')
     const rootNode = tree[0] || null
     state.rootNode = rootNode
@@ -5266,11 +5247,10 @@ async function loadNewTabActivityLazy(): Promise<NewTabActivityState> {
   }
 }
 
-async function preloadBackgroundSettings(): Promise<typeof DEFAULT_BACKGROUND_SETTINGS | null> {
+function preloadBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKGROUND_SETTINGS | null {
   const backgroundMutationVersionAtStart = backgroundSettingsMutationVersion
   try {
-    const stored = await getLocalStorage([STORAGE_KEYS.newTabBackgroundSettings])
-    const nextSettings = normalizeBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
+    const nextSettings = normalizeBackgroundSettings(rawSettings)
     backgroundSettingsHydrated = true
     if (backgroundMutationVersionAtStart === backgroundSettingsMutationVersion) {
       state.backgroundSettings = nextSettings
@@ -7779,6 +7759,7 @@ function createBookmarkTileViewModel(
 
 function cleanupNewTabController(): void {
   newTabControllerStarted = false
+  newTabControllerGeneration += 1
   unregisterNewtabContentShellActions()
   unregisterNewtabContentShellActions = () => {}
   unregisterNewtabContentLayoutNodes()

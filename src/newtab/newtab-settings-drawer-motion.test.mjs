@@ -1127,6 +1127,39 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   })
   const activeSuggestionAfter = await newtabSearch.getAttribute('aria-activedescendant')
   assert.notEqual(activeSuggestionAfter, activeSuggestionBefore, 'New Tab suggestion navigation should update the active option immediately')
+  assert.ok(activeSuggestionAfter, 'New Tab suggestion navigation should expose an active option id')
+  const activeSuggestionStyle = await page.locator(`#${activeSuggestionAfter}`).evaluate((element) => {
+    const style = getComputedStyle(element)
+    const meta = element.querySelector('.newtab-search-suggestion-meta')
+    const mark = element.querySelector('.newtab-search-suggestion-mark')
+    return {
+      backgroundColor: style.backgroundColor,
+      boxShadow: style.boxShadow,
+      markBackgroundColor: mark ? getComputedStyle(mark).backgroundColor : '',
+      metaColor: meta ? getComputedStyle(meta).color : ''
+    }
+  })
+  assert.equal(
+    activeSuggestionStyle.backgroundColor,
+    'rgba(245, 245, 247, 0.16)',
+    `The active New Tab suggestion should use a clearly differentiated selected surface: ${JSON.stringify(activeSuggestionStyle)}`
+  )
+  assert.match(activeSuggestionStyle.boxShadow, /inset/, 'The active New Tab suggestion should have a full inset selection outline')
+  assert.equal(activeSuggestionStyle.markBackgroundColor, 'rgba(245, 245, 247, 0.14)', 'The active suggestion mark should be visibly elevated')
+  assert.equal(activeSuggestionStyle.metaColor, 'rgba(245, 245, 247, 0.86)', 'The active suggestion metadata should remain readable')
+  await page.locator(`#${activeSuggestionAfter}`).hover()
+  await page.waitForFunction(
+    (id) => {
+      const element = document.getElementById(id)
+      return element && getComputedStyle(element).backgroundColor === 'rgba(245, 245, 247, 0.19)'
+    },
+    activeSuggestionAfter
+  )
+  assert.equal(
+    await page.locator(`#${activeSuggestionAfter}`).evaluate((element) => getComputedStyle(element).backgroundColor),
+    'rgba(245, 245, 247, 0.19)',
+    'The active suggestion should stay more prominent when the pointer also hovers it'
+  )
   await page.keyboard.press('Escape')
 }
 
