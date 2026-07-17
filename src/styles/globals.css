@@ -584,6 +584,27 @@ body {
   }
 }
 
+@layer components {
+  .t-check {
+    transition:
+      background var(--check-box) var(--check-ease),
+      box-shadow var(--check-box) var(--check-ease);
+  }
+  .t-check svg path {
+    stroke-dasharray: var(--check-len, 15);
+    stroke-dashoffset: var(--check-len, 15);
+    transition: stroke-dashoffset var(--check-uncheck) var(--check-ease);
+  }
+  .t-check[aria-checked="true"] svg path {
+    stroke-dashoffset: 0;
+    transition: stroke-dashoffset var(--check-draw) var(--check-ease) var(--check-delay);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .t-check, .t-check svg path { transition: none !important; }
+  }
+}
+
 /* The wrap stacks two layers on the same coordinates. The
    skeleton owns the cold pulse + the fade-out side of the
    reveal; the content owns the fade-in side. They share the

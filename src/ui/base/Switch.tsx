@@ -221,7 +221,7 @@ export function SwitchControl({
       >
         <span
           className={unstyled ? thumbClassName : cx(
-            'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-[transform,background-color] duration-ds-fast ease-ds-standard will-change-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page motion-reduce:transition-none',
+            'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-[transform,background-color] duration-ds-fast ease-ds-standard data-[checked]:translate-x-5 data-[checked]:bg-ds-page motion-reduce:transition-none',
             thumbClassName
           )}
           data-checked={checked ? '' : undefined}
@@ -258,7 +258,7 @@ export function SwitchControl({
     >
       <BaseSwitch.Thumb
         className={unstyled ? thumbClassName : cx(
-          'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-[transform,background-color] duration-ds-fast ease-ds-standard will-change-transform data-[checked]:translate-x-5 data-[checked]:bg-ds-page motion-reduce:transition-none',
+          'absolute left-0.5 top-0.5 size-5 rounded-full bg-ds-accent-subtle transition-[transform,background-color] duration-ds-fast ease-ds-standard data-[checked]:translate-x-5 data-[checked]:bg-ds-page motion-reduce:transition-none',
           thumbClassName
         )}
       />

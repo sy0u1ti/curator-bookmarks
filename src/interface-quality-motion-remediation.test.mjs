@@ -10,6 +10,8 @@ const motionPanel = read('src/ui/motion/MotionPanel.tsx')
 const motionEntrance = read('src/ui/motion/useMotionEntrance.ts')
 const modelSelector = read('src/ui/ai/ModelSelector.tsx')
 const inlineMenu = read('src/ui/base/InlineMenu.tsx')
+const checkbox = read('src/ui/base/Checkbox.tsx')
+const switchControl = read('src/ui/base/Switch.tsx')
 const numberPop = read('src/ui/motion/NumberPop.tsx')
 const textSwap = read('src/ui/motion/TextSwap.tsx')
 const newtabApp = read('src/newtab/NewtabApp.tsx')
@@ -23,6 +25,8 @@ const speedDial = read('src/newtab/components/NewtabSpeedDialPanel.tsx')
 const newtabController = read('src/newtab/newtab-controller.ts')
 const popupChips = read('src/popup/components/PopupSearchChips.tsx')
 const popupStatus = read('src/popup/components/PopupAutoAnalyzeStatus.tsx')
+const popupToasts = read('src/popup/components/PopupToasts.tsx')
+const popupModals = read('src/popup/components/PopupModalsHost.tsx')
 const optionsChrome = read('src/options/components/options-chrome-classes.ts')
 const optionsCss = read('src/options/options.css')
 const aiProviderSettingsClasses = read('src/options/components/ai-provider-settings-classes.ts')
@@ -44,6 +48,27 @@ assert.ok(
     !numberPop.includes('setTimeout') &&
     !textSwap.includes('setTimeout'),
   'Live numbers and replacement text must expose the latest value immediately.'
+)
+
+assert.ok(
+  tokens.includes('--duration-quick: 150ms') &&
+    tokens.includes('--ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1)') &&
+    tokens.includes('--check-draw: var(--duration-medium)') &&
+    globals.includes('.t-check svg path') &&
+    checkbox.includes("'t-check flex") &&
+    checkbox.includes('keepMounted={!unstyled}'),
+  'Shared motion tokens and checkbox stroke drawing must stay centralized and replayable.'
+)
+
+assert.ok(
+  popupToasts.includes("'t-toast pointer-events-auto") &&
+    !popupToasts.includes('will-change-transform') &&
+    popupModals.includes('CollapsibleRoot') &&
+    popupModals.includes('CollapsiblePanel') &&
+    popupModals.includes('t-acc-chevron') &&
+    !popupModals.includes('hidden={!view.folderPickerOpen}') &&
+    !switchControl.includes('will-change-transform'),
+  'Transient feedback and disclosures must reuse shared presence motion without persistent layer promotion.'
 )
 
 assert.ok(

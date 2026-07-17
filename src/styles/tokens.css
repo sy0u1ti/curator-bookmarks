@@ -60,103 +60,139 @@
   --ds-filter-dialog: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.02)) drop-shadow(0 8px 12px rgba(0, 0, 0, 0.04))
     drop-shadow(0 24px 24px rgba(0, 0, 0, 0.06));
 
+  /* transitions.dev shared motion scale. Component-specific timings below
+     may stay denser for extension UI, but reuse this vocabulary whenever
+     the documented interaction matches. */
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: ease-in-out;
+  --ease-out: ease-out;
+  --ease-linear: linear;
+  --ease-bounce: cubic-bezier(0.34, 1.36, 0.64, 1);
+  --ease-bounce-strong: cubic-bezier(0.34, 3.85, 0.64, 1);
+  --distance-micro: 4px;
+  --distance-small: 6px;
+  --distance-base: 8px;
+  --distance-medium: 12px;
+  --distance-large: 30px;
+  --scale-large: 0.96;
+  --scale-medium: 0.97;
+  --scale-small: 0.98;
+  --scale-tiny: 0.99;
+  --blur-small: 2px;
+  --blur-medium: 3px;
+  --blur-large: 8px;
+
   --ds-motion-feedback: 100ms;
   --ds-motion-fast: 130ms;
   --ds-motion-standard: 190ms;
   --ds-motion-surface: 300ms;
-  --ds-ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  --ds-ease-standard: var(--ease-smooth-out);
   --ds-ease-in: cubic-bezier(0.4, 0, 1, 1);
-  --ds-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --ds-ease-spring: var(--ease-smooth-out);
   --ds-press-scale: 0.985;
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
   --tabs-dur: 190ms;
-  --tabs-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --tabs-ease: var(--ease-smooth-out);
   --tabs-text-muted: var(--ds-text-secondary);
   --tabs-text-active: var(--ds-text-primary);
   --tabs-bar-bg: var(--ds-surface-1);
   --tabs-pill-bg: var(--ds-selected);
 
-  --tt-in-dur: 180ms;
-  --tt-out-dur: 90ms;
-  --tt-scale: 0.98;
-  --tt-delay: 80ms;
-  --tt-in-ease: ease-out;
-  --tt-out-ease: ease-out;
+  --tt-in-dur: var(--duration-quick);
+  --tt-out-dur: var(--duration-micro);
+  --tt-scale: var(--scale-small);
+  --tt-delay: var(--duration-micro);
+  --tt-in-ease: var(--ease-out);
+  --tt-out-ease: var(--ease-out);
   --tt-bg: var(--ds-surface-2);
   --tt-fg: var(--ds-text-primary);
 
   --acc-expand: 320ms;
   --acc-collapse: 260ms;
   --acc-chevron: 300ms;
-  --acc-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --acc-ease: var(--ease-smooth-out);
 
   --resize-dur: 380ms;
-  --resize-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --resize-ease: var(--ease-smooth-out);
 
   --digit-dur: 130ms;
-  --digit-distance: 8px;
+  --digit-distance: var(--distance-base);
   --digit-stagger: 0ms;
   --digit-blur: 0px;
-  --digit-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --digit-ease: var(--ease-smooth-out);
   --digit-dir-x: 0;
   --digit-dir-y: 1;
 
-  --dropdown-open-dur: 200ms;
-  --dropdown-close-dur: 140ms;
-  --dropdown-pre-scale: 0.97;
-  --dropdown-closing-scale: 0.99;
-  --dropdown-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dropdown-open-dur: var(--duration-fast);
+  --dropdown-close-dur: var(--duration-quick);
+  --dropdown-pre-scale: var(--scale-medium);
+  --dropdown-closing-scale: var(--scale-tiny);
+  --dropdown-ease: var(--ease-smooth-out);
 
-  --toast-open-dur: 250ms;
-  --toast-close-dur: 150ms;
-  --toast-offset-y: 8px;
-  --toast-scale: 0.98;
-  --toast-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --toast-open-dur: var(--duration-fast);
+  --toast-close-dur: var(--duration-quick);
+  --toast-offset-y: var(--distance-base);
+  --toast-scale: var(--scale-small);
+  --toast-ease: var(--ease-smooth-out);
 
-  --modal-open-dur: 260ms;
-  --modal-close-dur: 180ms;
-  --modal-scale: 0.96;
-  --modal-scale-close: 0.96;
-  --modal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --modal-open-dur: var(--duration-fast);
+  --modal-close-dur: var(--duration-quick);
+  --modal-scale: var(--scale-large);
+  --modal-scale-close: var(--scale-large);
+  --modal-ease: var(--ease-smooth-out);
 
   --icon-swap-dur: 130ms;
   --icon-swap-blur: 0px;
   --icon-swap-start-scale: 0.9;
-  --icon-swap-ease: ease-in-out;
+  --icon-swap-ease: var(--ease-in-out);
 
   --pulse-dur: 1000ms;
   --pulse-count: 1;
   --pulse-min: 0.5;
   --reveal-dur: 180ms;
   --reveal-blur: 0px;
-  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --reveal-ease: var(--ease-in-out);
 
-  --text-swap-dur: 120ms;
+  --text-swap-dur: var(--duration-quick);
   --text-swap-translate-y: 0px;
   --text-swap-blur: 0px;
-  --text-swap-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --text-swap-ease: var(--ease-in-out);
 
   --panel-open-dur: 280ms;
   --panel-close-dur: 220ms;
-  --panel-translate-y: 8px;
-  --tabs-panel-translate-y: 6px;
+  --panel-translate-y: var(--distance-base);
+  --tabs-panel-translate-y: var(--distance-small);
   --panel-blur: 0px;
-  --panel-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --panel-ease: var(--ease-smooth-out);
   --drag-settle-dur: 160ms;
 
   --stagger-dur: 220ms;
-  --stagger-distance: 6px;
+  --stagger-distance: var(--distance-small);
   --stagger-stagger: 24ms;
   --stagger-blur: 0px;
-  --stagger-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --stagger-ease: var(--ease-smooth-out);
 
   --shimmer-dur: 2000ms;
   --shimmer-base: var(--ds-text-muted);
   --shimmer-highlight: var(--ds-text-primary);
   --shimmer-band: 400%;
-  --shimmer-ease: linear;
+  --shimmer-ease: var(--ease-linear);
+
+  --check-box: var(--duration-quick);
+  --check-draw: var(--duration-medium);
+  --check-delay: 0ms;
+  --check-uncheck: var(--duration-quick);
+  --check-ease: var(--ease-smooth-out);
+  --check-len: 23;
 
   --ds-row-height: 52px;
   --ds-row-height-compact: 40px;

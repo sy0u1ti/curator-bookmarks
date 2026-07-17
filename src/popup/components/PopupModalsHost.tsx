@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { AiSetupPrompt } from '../../ui/ai/AiSetupPrompt'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
+import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
 import { Input } from '../../ui/base/Input'
 import { cx } from '../../ui/base/utils'
 import {
@@ -372,41 +373,48 @@ function EditBookmarkModal({
           关闭
         </Button>
       </header>
-      <div className={modalBookmarkCardClass}>
-        <p className={modalCardLabelClass}>来源路径</p>
-        <div className={modalPathRowClass}>
-          <p id="edit-bookmark-path" className={cx(modalCardPathClass, 'flex-auto', view.pathChanged ? modalCardPathChangedClass : '')}>
-            {view.path}
-          </p>
-          <Button
-            id="edit-folder-picker-button"
-            className={modalCompactButtonClass}
-            type="button"
-            aria-expanded={view.folderPickerOpen}
-            aria-controls="edit-folder-picker"
-            disabled={view.closeDisabled}
-            onClick={() => dispatchPopupModalAction('edit-toggle-folder-picker')}
-            unstyled
-          >
-            {view.folderPickerOpen ? '收起' : '更改'}
-          </Button>
+      <CollapsibleRoot
+        open={view.folderPickerOpen}
+        onOpenChange={(open) => {
+          if (open !== view.folderPickerOpen) {
+            dispatchPopupModalAction('edit-toggle-folder-picker')
+          }
+        }}
+      >
+        <div className={modalBookmarkCardClass}>
+          <p className={modalCardLabelClass}>来源路径</p>
+          <div className={modalPathRowClass}>
+            <p id="edit-bookmark-path" className={cx(modalCardPathClass, 'flex-auto', view.pathChanged ? modalCardPathChangedClass : '')}>
+              {view.path}
+            </p>
+            <CollapsibleTrigger
+              id="edit-folder-picker-button"
+              className={modalCompactButtonClass}
+              type="button"
+              aria-controls="edit-folder-picker"
+              disabled={view.closeDisabled}
+            >
+              <span>{view.folderPickerOpen ? '收起' : '更改'}</span>
+              <Icon name="ChevronDown" className="t-acc-chevron size-3.5" aria-hidden="true" />
+            </CollapsibleTrigger>
+          </div>
         </div>
-      </div>
-      <section id="edit-folder-picker" className={editFolderPickerClass} aria-label="选择新的来源路径" hidden={!view.folderPickerOpen}>
-        <FolderSearch
-          inputRef={folderSearchRef}
-          htmlFor="edit-folder-search-input"
-          inputId="edit-folder-search-input"
-          placeholder="搜索目标文件夹"
-          label="搜索编辑目标文件夹"
-          mode="edit"
-          controls="edit-folder-list"
-          value={view.folderQuery}
-          action="edit-folder-query-change"
-          disabled={view.folderSearchDisabled}
-        />
-        <PopupFolderPickerHost id="edit-folder-list" className={modalCompactListClass} mode="edit" />
-      </section>
+        <CollapsiblePanel id="edit-folder-picker" className={editFolderPickerClass} aria-label="选择新的来源路径">
+          <FolderSearch
+            inputRef={folderSearchRef}
+            htmlFor="edit-folder-search-input"
+            inputId="edit-folder-search-input"
+            placeholder="搜索目标文件夹"
+            label="搜索编辑目标文件夹"
+            mode="edit"
+            controls="edit-folder-list"
+            value={view.folderQuery}
+            action="edit-folder-query-change"
+            disabled={view.folderSearchDisabled}
+          />
+          <PopupFolderPickerHost id="edit-folder-list" className={modalCompactListClass} mode="edit" />
+        </CollapsiblePanel>
+      </CollapsibleRoot>
       <div className={modalFormClass}>
         <label className={modalFieldClass} htmlFor="edit-title-input">
           <span className={modalLabelClass}>标题</span>
