@@ -66,6 +66,13 @@ body,
   touch-action: manipulation;
 }
 
+.folder-picker-search-input:focus,
+.folder-picker-search-input:focus-visible {
+  border-color: var(--ds-focus);
+  box-shadow: none;
+  outline: none;
+}
+
 .options-shell :where(
   button,
   a[href],
@@ -132,6 +139,10 @@ body,
     background-color: var(--ds-bg-page) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+  }
+
+  .options-modal-wide-panel {
+    background-color: var(--ds-surface-2) !important;
   }
 }
 

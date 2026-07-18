@@ -8,12 +8,14 @@ import { useFolderPickerResultsState } from './folder-picker-results-store.js'
 import {
   FOLDER_PICKER_BADGE_CLASS,
   FOLDER_PICKER_BADGE_MUTED_CLASS,
-  FOLDER_PICKER_BRANCH_CLASS,
   FOLDER_PICKER_CARD_CLASS,
   FOLDER_PICKER_CARD_CURRENT_CLASS,
+  FOLDER_PICKER_CHECK_CLASS,
   FOLDER_PICKER_DESCRIPTION_CLASS,
   FOLDER_PICKER_EMPTY_CLASS,
+  FOLDER_PICKER_ICON_CLASS,
   FOLDER_PICKER_MAIN_CLASS,
+  FOLDER_PICKER_META_CLASS,
   FOLDER_PICKER_TITLE_CLASS,
   FOLDER_PICKER_TOGGLE_CLASS,
   FOLDER_PICKER_TOGGLE_ICON_CLASS,
@@ -75,7 +77,7 @@ export function FolderPickerResults({
 
   return (
     <>
-      {options.map((option, index) => (
+      {options.map((option) => (
         <FolderPickerTreeOption
           active={String(option.id || '') === state.activeId}
           kind={kind}
@@ -83,7 +85,7 @@ export function FolderPickerResults({
           query={state.query || ''}
           searchInputRef={searchInputRef}
           setOptionRef={setOptionRef}
-          key={`${kind}:${option.id}:${index}`}
+          key={`${kind}:${option.id}`}
         />
       ))}
       {state.showEmpty ? (
@@ -182,7 +184,12 @@ function FolderPickerTreeOption({
         }}
         unstyled
       >
-        <span className={FOLDER_PICKER_BRANCH_CLASS} aria-hidden="true"></span>
+        <Icon
+          name={folderId ? 'Folder' : 'Bookmark'}
+          className={FOLDER_PICKER_ICON_CLASS}
+          size={16}
+          aria-hidden="true"
+        />
         <span className={FOLDER_PICKER_MAIN_CLASS}>
           <span className={FOLDER_PICKER_TITLE_CLASS}>
             <HighlightedText text={option.title} query={query} />
@@ -190,15 +197,20 @@ function FolderPickerTreeOption({
           <span className={FOLDER_PICKER_DESCRIPTION_CLASS}>
             <HighlightedText text={option.path} query={query} />
           </span>
-          {option.badges.map((badge) => (
-            <span
-              className={cx(FOLDER_PICKER_BADGE_CLASS, badge.muted ? FOLDER_PICKER_BADGE_MUTED_CLASS : '')}
-              key={badge.label}
-            >
-              {badge.label}
-            </span>
-          ))}
         </span>
+        {option.badges.length || option.selected ? (
+          <span className={FOLDER_PICKER_META_CLASS} aria-hidden="true">
+            {option.badges.map((badge) => (
+              <span
+                className={cx(FOLDER_PICKER_BADGE_CLASS, badge.muted ? FOLDER_PICKER_BADGE_MUTED_CLASS : '')}
+                key={badge.label}
+              >
+                {badge.label}
+              </span>
+            ))}
+            {option.selected ? <Icon name="Check" className={FOLDER_PICKER_CHECK_CLASS} size={14} /> : null}
+          </span>
+        ) : null}
       </Button>
     </div>
   )

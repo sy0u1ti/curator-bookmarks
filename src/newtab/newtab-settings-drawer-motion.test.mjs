@@ -11,6 +11,8 @@ const visualCaptureDir = process.env.CURATOR_VISUAL_CAPTURE_DIR
   : ''
 const performanceRecords = []
 const bookmarkDropContinuityOnly = process.argv.includes('--bookmark-drop-continuity-only')
+const optionsAvailabilityOnly = process.argv.includes('--options-availability-only')
+const optionsScopePickerOnly = process.argv.includes('--options-scope-picker-only')
 const popupReorderOnly = process.argv.includes('--popup-reorder-only')
 
 async function captureVisual(page, name, options = {}) {
@@ -954,6 +956,156 @@ async function verifyOptions(page, extensionId) {
   })
   await page.waitForFunction((previous) => document.querySelector('[role="slider"][aria-label="推理强度"]')?.getAttribute('aria-valuenow') !== previous, reasoningBefore)
   await page.keyboard.press('Escape')
+  await verifyAvailabilitySettingsPopover(page, extensionId)
+  await verifyOptionsScopePickers(page, extensionId)
+}
+
+async function verifyAvailabilitySettingsPopover(page, extensionId) {
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#availability`, { waitUntil: 'domcontentloaded' })
+  await page.locator('#availability').waitFor({ state: 'attached' })
+  await page.waitForFunction(() => !document.querySelector('#availability')?.hasAttribute('hidden'))
+
+  const settingsTrigger = page.getByRole('button', { name: '检测设置', exact: true })
+  await settingsTrigger.waitFor({ state: 'visible' })
+  await page.waitForFunction(() => {
+    const trigger = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === '检测设置')
+    return trigger instanceof HTMLButtonElement && !trigger.disabled
+  })
+  await settingsTrigger.click()
+
+  const settingsPopover = page.locator('#availability-settings-popover')
+  await settingsPopover.waitFor({ state: 'visible' })
+  await page.getByLabel('并发数').waitFor({ state: 'visible' })
+  await page.getByLabel('超时时长（秒）').waitFor({ state: 'visible' })
+  assert.equal(await settingsPopover.getByRole('button', { name: '恢复默认' }).isVisible(), true, 'Availability settings reset action should remain visible')
+  assert.equal(await settingsPopover.getByRole('button', { name: '保存设置' }).isVisible(), true, 'Availability settings save action should remain visible')
+
+  const placement = await settingsPopover.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    const samplePoints = [
+      [rect.left + rect.width / 2, rect.top + 16],
+      [rect.left + rect.width / 2, rect.top + rect.height / 2],
+      [rect.left + rect.width / 2, rect.bottom - 16]
+    ]
+    return {
+      bottom: rect.bottom,
+      height: rect.height,
+      insideAvailabilityPanel: Boolean(element.closest('#availability')),
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      topmostAtAllSamples: samplePoints.every(([x, y]) => {
+        const topmost = document.elementFromPoint(x, y)
+        return Boolean(topmost && element.contains(topmost))
+      }),
+      viewportHeight: window.innerHeight,
+      viewportWidth: window.innerWidth
+    }
+  })
+  assert.equal(placement.insideAvailabilityPanel, false, `Availability settings should render in the top-level portal: ${JSON.stringify(placement)}`)
+  assert.equal(placement.topmostAtAllSamples, true, `Availability settings should not be covered by following cards: ${JSON.stringify(placement)}`)
+  assert.ok(placement.height >= 220, `Availability settings should expose its complete content: ${JSON.stringify(placement)}`)
+  assert.ok(placement.left >= 12 && placement.right <= placement.viewportWidth - 12, `Availability settings should stay inside horizontal viewport bounds: ${JSON.stringify(placement)}`)
+  assert.ok(placement.top >= 12 && placement.bottom <= placement.viewportHeight - 12, `Availability settings should stay inside vertical viewport bounds: ${JSON.stringify(placement)}`)
+  await captureVisual(page, 'options-availability-settings')
+  await page.keyboard.press('Escape')
+  await settingsPopover.waitFor({ state: 'hidden' })
+}
+
+async function verifyOptionsScopePickers(page, extensionId) {
+  const entries = [
+    {
+      copy: '选择当前检测范围。',
+      hash: 'availability',
+      screenshot: 'options-availability-folder-scope',
+      trigger: '选择检测范围'
+    },
+    {
+      copy: '选择当前历史范围。',
+      hash: 'history',
+      screenshot: 'options-history-folder-scope',
+      trigger: '选择历史范围'
+    }
+  ]
+
+  for (const entry of entries) {
+    await page.setViewportSize({ width: 980, height: 760 })
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html#${entry.hash}`, { waitUntil: 'domcontentloaded' })
+    await page.locator(`#${entry.hash}`).waitFor({ state: 'attached' })
+    await page.waitForFunction((sectionId) => !document.getElementById(sectionId)?.hasAttribute('hidden'), entry.hash)
+
+    const trigger = page.getByRole('button', { name: entry.trigger, exact: true })
+    await trigger.waitFor({ state: 'visible' })
+    await page.waitForFunction((label) => {
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => candidate.getAttribute('aria-label') === label)
+      return button instanceof HTMLButtonElement && !button.disabled
+    }, entry.trigger)
+    await trigger.click()
+
+    const modal = page.getByRole('dialog', { name: '选择筛选文件夹' })
+    const searchSurface = page.locator('label[for="scope-search-input"]')
+    const results = page.locator('#scope-folder-results')
+    await modal.waitFor({ state: 'visible' })
+    await page.getByText(entry.copy, { exact: true }).waitFor({ state: 'visible' })
+    await results.getByRole('treeitem').first().waitFor({ state: 'visible' })
+
+    const visualHierarchy = await page.evaluate(() => {
+      const search = document.querySelector('label[for="scope-search-input"]')
+      const searchInput = document.getElementById('scope-search-input')
+      const tree = document.getElementById('scope-folder-results')
+      const modal = document.querySelector('.options-modal-wide-panel')
+      if (
+        !(search instanceof HTMLElement) ||
+        !(searchInput instanceof HTMLElement) ||
+        !(tree instanceof HTMLElement) ||
+        !(modal instanceof HTMLElement)
+      ) {
+        return null
+      }
+      const modalStyle = getComputedStyle(modal)
+      const searchStyle = getComputedStyle(search)
+      const searchInputStyle = getComputedStyle(searchInput)
+      const treeStyle = getComputedStyle(tree)
+      const rowBackgrounds = [...tree.querySelectorAll('[role="treeitem"]')]
+        .map((row) => getComputedStyle(row).backgroundColor)
+        .filter((color) => color !== 'rgba(0, 0, 0, 0)' && color !== 'transparent')
+      return {
+        folderIcons: tree.querySelectorAll('.folder-picker-card > svg').length,
+        modalBackground: modalStyle.backgroundColor,
+        raisedRows: rowBackgrounds.length,
+        resultsBackground: treeStyle.backgroundColor,
+        resultsBorderBottom: treeStyle.borderBottomWidth,
+        resultsBorderLeft: treeStyle.borderLeftWidth,
+        resultsBorderRight: treeStyle.borderRightWidth,
+        resultsBorderTop: treeStyle.borderTopWidth,
+        searchBackground: searchStyle.backgroundColor,
+        searchBorderTop: searchStyle.borderTopWidth,
+        searchInputBackground: searchInputStyle.backgroundColor,
+        searchInputBorderTop: searchInputStyle.borderTopWidth,
+        searchInputBoxShadow: searchInputStyle.boxShadow
+      }
+    })
+    assert.ok(visualHierarchy, 'Folder scope picker surfaces should be measurable')
+    assert.equal(visualHierarchy.searchBackground, 'rgba(0, 0, 0, 0)', `Folder search should not add a nested card surface: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.searchBorderTop, '0px', `Folder search wrapper should not add a card border: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.modalBackground, 'rgb(31, 31, 31)', `Folder modal should use the softer charcoal surface: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.searchInputBackground, 'rgb(41, 41, 41)', `Folder search should sit one tone above the modal: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.searchInputBoxShadow, 'none', `Folder search should use one focus indicator instead of a double ring: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.searchInputBorderTop, '1px', `Folder search should retain a single focus border: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.resultsBackground, 'rgba(0, 0, 0, 0)', `Folder tree should share the modal surface: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.resultsBorderLeft, '0px', `Folder tree should not look like an inset card: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.resultsBorderRight, '0px', `Folder tree should not look like an inset card: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.resultsBorderTop, '1px', `Folder tree should retain a top separator: ${JSON.stringify(visualHierarchy)}`)
+    assert.equal(visualHierarchy.resultsBorderBottom, '1px', `Folder tree should retain a bottom separator: ${JSON.stringify(visualHierarchy)}`)
+    assert.ok(visualHierarchy.folderIcons >= 1, `Folder rows should use familiar folder icons: ${JSON.stringify(visualHierarchy)}`)
+    assert.ok(visualHierarchy.raisedRows <= 1, `Only the current folder may use a selected surface: ${JSON.stringify(visualHierarchy)}`)
+    await captureVisual(page, entry.screenshot)
+    await page.keyboard.press('Escape')
+    await modal.waitFor({ state: 'hidden' })
+  }
 }
 
 async function dispatchTouch(client, type, points) {
@@ -1310,6 +1462,12 @@ try {
   if (bookmarkDropContinuityOnly) {
     await verifyTouchAndKeyboard(page, context, extensionId)
     console.log('Expanded bookmark drop continuity test passed.')
+  } else if (optionsAvailabilityOnly) {
+    await verifyAvailabilitySettingsPopover(page, extensionId)
+    console.log('Options availability settings popover test passed.')
+  } else if (optionsScopePickerOnly) {
+    await verifyOptionsScopePickers(page, extensionId)
+    console.log('Options folder scope picker tests passed.')
   } else if (popupReorderOnly) {
     await page.setViewportSize({ width: 800, height: 600 })
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'domcontentloaded' })

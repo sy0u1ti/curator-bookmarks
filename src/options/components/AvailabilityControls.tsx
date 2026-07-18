@@ -132,12 +132,13 @@ export function AvailabilityControls() {
       <div className={AVAILABILITY_CONTROLS_ACTIONS_CLASS}>
         <div className={SETTINGS_ANCHOR_CLASS}>
           <Popover
+            id="availability-settings-popover"
             align="end"
+            collisionPadding={16}
             open={state.settingsOpen}
             onOpenChange={(open) => {
               handleAvailabilityControlsAction({ action: 'settings-open-change', open })
             }}
-            portal={false}
             popupClassName={SETTINGS_POPOVER_CLASS}
             side="bottom"
             sideOffset={10}
