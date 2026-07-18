@@ -46,6 +46,7 @@ import {
   searchBookmarks,
   searchBookmarksCooperatively,
   searchBookmarksFirstBatch,
+  type PopupSearchBookmark,
   type PopupSearchResult
 } from './search.js'
 import { parseSearchQuery } from '../shared/search-query.js'
@@ -128,6 +129,10 @@ import {
   getPopupEditBookmarkDraftState,
   getPopupEditBookmarkSavePlan
 } from './edit-bookmark-draft.js'
+import {
+  getPopupBookmarkMoveDestinationIndex,
+  reorderPopupBookmarkIds
+} from './popup-bookmark-reorder.js'
 import {
   getPopupPrebootSearchAdoptionQuery,
   readPopupPrebootSearchSnapshot
@@ -738,6 +743,7 @@ function applyPopupBaseRefreshData(
     indexedBookmarks: baseData.indexedBookmarks,
   })
   syncPopupExpandedFolderState(baseData.catalog.extracted, initial)
+  reconcileBookmarkReorderModeAfterRefresh()
   resetSearchForPopupRefresh(preserveSearch)
 }
 function applyPopupIndexedBookmarkData({
@@ -1068,6 +1074,7 @@ function resetPopupSessionStateForNextOpen() {
   state.smartSaving = false
   state.smartSaved = false
   state.smartPermissionRequest = null
+  resetBookmarkReorderModeState()
   state.pendingActionIds.clear()
 }
 function maybeWarmPopupSnapshotFullTextForSearch() {
@@ -1138,6 +1145,9 @@ function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   })
 }
 function setSearchQuery(value, { immediate = false } = {}) {
+  if (String(value || '').trim() && state.bookmarkReorderMode) {
+    resetBookmarkReorderModeState()
+  }
   state.searchQuery = value
   state.naturalSearchSetupRequired = false
   clearViewNotice()
@@ -1932,6 +1942,7 @@ function getPopupContentViewModel({
   const sidebarRoot = getFolderPaneTreeRoot(currentRoot, state.bookmarksBarNode)
   const sidebarRows = sidebarRoot ? getSidebarFolderRows(sidebarRoot) : []
   const currentRootTitle = currentRoot?.title || '书签栏'
+  const reorder = getPopupBookmarkReorderViewModel(currentRoot)
 
   if (searchMode) {
     const mainRows = getSearchResultRows()
@@ -1949,18 +1960,44 @@ function getPopupContentViewModel({
     }
   }
 
-  const mainRows = getTreeBookmarkRows()
+  const mainRows = reorder.active ? getBookmarkReorderRows(currentRoot) : getTreeBookmarkRows()
   return {
     emptyLabel: '当前文件夹下暂无书签',
     keyboardPane: state.keyboardPane,
     loading,
     mainState,
     mainRows,
-    meta: `${mainRows.length} 个书签`,
+    meta: reorder.active
+      ? `${reorder.folderTitle} · ${mainRows.length} 个直属书签`
+      : `${mainRows.length} 个书签`,
     mode: 'tree',
+    reorder,
     rows: [...sidebarRows, ...mainRows],
     sidebarRows,
-    title: currentRootTitle
+    title: reorder.active ? '调整顺序' : currentRootTitle
+  }
+}
+
+function getPopupBookmarkReorderViewModel(
+  currentRoot: chrome.bookmarks.BookmarkTreeNode | null | undefined
+): NonNullable<PopupContentViewModel['reorder']> {
+  const directBookmarks = getDirectBookmarkRecords(currentRoot)
+  const folderId = String(currentRoot?.id || '')
+  const folderTitle = currentRoot?.title || '书签栏'
+  const active = Boolean(
+    state.bookmarkReorderMode &&
+    folderId &&
+    state.bookmarkReorderFolderId === folderId
+  )
+
+  return {
+    active,
+    announcement: active ? state.bookmarkReorderAnnouncement : '',
+    busy: active && state.bookmarkReorderBusy,
+    canEnter: directBookmarks.length > 1,
+    directCount: directBookmarks.length,
+    folderId,
+    folderTitle
   }
 }
 
@@ -2026,6 +2063,46 @@ function getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot): string {
   return String(count)
 }
 
+function getDirectBookmarkRecords(
+  folderNode: chrome.bookmarks.BookmarkTreeNode | null | undefined
+): PopupSearchBookmark[] {
+  const bookmarks: PopupSearchBookmark[] = []
+  for (const child of folderNode?.children || []) {
+    if (!child.url) continue
+    const bookmark = state.bookmarkMap.get(String(child.id || ''))
+    if (bookmark) bookmarks.push(bookmark)
+  }
+  return bookmarks
+}
+
+function getBookmarkReorderRows(
+  currentRoot = getCurrentTreeRoot()
+): PopupContentBookmarkRowViewModel[] {
+  const directBookmarks = getDirectBookmarkRecords(currentRoot)
+  const directBookmarkById = new Map(directBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
+  const orderedIds: string[] = []
+  const orderedIdSet = new Set<string>()
+  for (const bookmarkId of state.bookmarkReorderOrderIds) {
+    if (!directBookmarkById.has(bookmarkId)) continue
+    orderedIds.push(bookmarkId)
+    orderedIdSet.add(bookmarkId)
+  }
+  for (const bookmark of directBookmarks) {
+    const bookmarkId = String(bookmark.id)
+    if (orderedIdSet.has(bookmarkId)) continue
+    orderedIds.push(bookmarkId)
+    orderedIdSet.add(bookmarkId)
+  }
+  state.bookmarkReorderOrderIds = orderedIds
+
+  const rows: PopupContentBookmarkRowViewModel[] = []
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    const bookmark = directBookmarkById.get(orderedIds[index])
+    if (bookmark) rows.push(buildBookmarkRowViewModel(bookmark, 1, false, index))
+  }
+  return rows
+}
+
 function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
   const rootId = String(getCurrentTreeRoot()?.id || '')
   const bookmarks = getFilteredBookmarks()
@@ -2054,6 +2131,7 @@ function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1):
     kind: 'bookmark',
     menu: buildActionMenuViewModel(bookmark.id),
     menuLabel: getBookmarkActionMenuLabel(bookmark),
+    parentId: String(bookmark.parentId || ''),
     path: formatBookmarkPath(bookmark.path) || bookmark.path || '',
     title: bookmark.title || '未命名书签',
     url: bookmark.url || ''
@@ -2685,6 +2763,18 @@ function handleSmartClassifierTitleChange(detail: PopupSmartClassifierTitleChang
   state.smartSaved = false
 }
 function handleContentAction(detail: PopupContentActionDetail) {
+  if (detail.action === 'enter-bookmark-reorder') {
+    enterBookmarkReorderMode()
+    return
+  }
+  if (detail.action === 'exit-bookmark-reorder') {
+    exitBookmarkReorderMode()
+    return
+  }
+  if (detail.action === 'reorder-bookmark') {
+    void reorderBookmarkWithinCurrentFolder(detail.bookmarkId || '', Number(detail.index))
+    return
+  }
   if (detail.action === 'filter-folder') {
     const folderId = detail.folderId || ''
     applyFolderFilter(folderId === 'all' ? null : folderId, { focusSearch: false })
@@ -2937,6 +3027,10 @@ function handleEscapeAction() {
     closeDialogs()
     return true
   }
+  if (state.bookmarkReorderMode) {
+    exitBookmarkReorderMode()
+    return true
+  }
   if (['loading', 'results', 'error'].includes(state.smartStatus)) {
     resetSmartClassification()
     return true
@@ -3176,7 +3270,130 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   }
   restoreDialogReturnFocus()
 }
+
+function resetBookmarkReorderModeState() {
+  state.bookmarkReorderMode = false
+  state.bookmarkReorderFolderId = ''
+  state.bookmarkReorderOrderIds = []
+  state.bookmarkReorderBusy = false
+  state.bookmarkReorderAnnouncement = ''
+}
+
+function enterBookmarkReorderMode() {
+  if (state.debouncedQuery || state.searchQuery.trim()) {
+    showViewNotice('清空搜索后再调整书签顺序')
+    return
+  }
+
+  const currentRoot = getCurrentTreeRoot()
+  const directBookmarks = getDirectBookmarkRecords(currentRoot)
+  if (!currentRoot || directBookmarks.length < 2) {
+    showViewNotice('当前文件夹至少需要 2 个直属书签才能排序')
+    return
+  }
+
+  state.bookmarkReorderMode = true
+  state.bookmarkReorderFolderId = String(currentRoot.id || '')
+  state.bookmarkReorderOrderIds = directBookmarks.map((bookmark) => String(bookmark.id))
+  state.bookmarkReorderBusy = false
+  state.bookmarkReorderAnnouncement = `正在调整「${currentRoot.title || '书签栏'}」中的书签顺序`
+  state.activeResultIndex = -1
+  state.keyboardPane = 'bookmarks'
+  clearQueuedKeyboardNavigation()
+  renderMainContent({ preserveScroll: false })
+  showViewNotice('排序模式只调整当前文件夹的直属书签')
+}
+
+function exitBookmarkReorderMode() {
+  if (!state.bookmarkReorderMode) {
+    return
+  }
+  resetBookmarkReorderModeState()
+  renderMainContent({ preserveScroll: false })
+  showViewNotice('已退出排序模式')
+}
+
+function reconcileBookmarkReorderModeAfterRefresh() {
+  if (!state.bookmarkReorderMode || !state.bookmarkReorderFolderId) {
+    return
+  }
+
+  const folderNode = findNodeById(state.rawTreeRoot, state.bookmarkReorderFolderId)
+  if (!folderNode || folderNode.url) {
+    resetBookmarkReorderModeState()
+    return
+  }
+
+  state.bookmarkReorderOrderIds = getDirectBookmarkRecords(folderNode)
+    .map((bookmark) => String(bookmark.id))
+}
+
+async function reorderBookmarkWithinCurrentFolder(bookmarkId: string, requestedIndex: number) {
+  if (
+    !state.bookmarkReorderMode ||
+    state.bookmarkReorderBusy ||
+    !state.bookmarkReorderFolderId
+  ) {
+    return
+  }
+
+  const folderId = state.bookmarkReorderFolderId
+  const folderNode = findNodeById(state.rawTreeRoot, folderId)
+  const currentIds = [...state.bookmarkReorderOrderIds]
+  const sourceIndex = currentIds.indexOf(bookmarkId)
+  if (!folderNode || folderNode.url || sourceIndex < 0 || !Number.isFinite(requestedIndex)) {
+    return
+  }
+
+  const targetIndex = Math.max(0, Math.min(Math.trunc(requestedIndex), currentIds.length - 1))
+  const bookmark = state.bookmarkMap.get(bookmarkId)
+  const bookmarkTitle = bookmark?.title || '未命名书签'
+  if (sourceIndex === targetIndex) {
+    state.bookmarkReorderAnnouncement = requestedIndex < sourceIndex
+      ? `${bookmarkTitle} 已在当前文件夹最前面`
+      : `${bookmarkTitle} 已在当前文件夹最后面`
+    renderMainContent({ preserveScroll: true })
+    return
+  }
+
+  const destinationIndex = getPopupBookmarkMoveDestinationIndex(
+    folderNode.children,
+    bookmarkId,
+    targetIndex
+  )
+  if (destinationIndex === null) {
+    return
+  }
+
+  const nextIds = reorderPopupBookmarkIds(currentIds, bookmarkId, targetIndex)
+  state.bookmarkReorderOrderIds = nextIds
+  state.bookmarkReorderBusy = true
+  state.bookmarkReorderAnnouncement = `正在移动 ${bookmarkTitle}`
+  renderMainContent({ preserveScroll: true })
+
+  try {
+    await moveBookmark(bookmarkId, folderId, destinationIndex)
+    await refreshData({ preserveSearch: true })
+    if (state.bookmarkReorderMode && state.bookmarkReorderFolderId === folderId) {
+      state.bookmarkReorderAnnouncement = `${bookmarkTitle} 已移动到第 ${targetIndex + 1} 位，共 ${nextIds.length} 个`
+    }
+  } catch (error) {
+    if (state.bookmarkReorderMode && state.bookmarkReorderFolderId === folderId) {
+      state.bookmarkReorderOrderIds = currentIds
+      state.bookmarkReorderAnnouncement = `${bookmarkTitle} 顺序保存失败，已恢复原位置`
+    }
+    showToast({
+      type: 'error',
+      message: error instanceof Error ? `顺序保存失败：${error.message}` : '顺序保存失败，已恢复原位置'
+    })
+  } finally {
+    state.bookmarkReorderBusy = false
+    renderMainContent({ preserveScroll: true })
+  }
+}
+
 function applyFolderFilter(folderId, { focusSearch = true } = {}) {
+  resetBookmarkReorderModeState()
   const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
   runSearch()
@@ -4230,6 +4447,11 @@ function activateResultKeyboardIndex(nextIndex: number) {
 function getKeyboardNavigationBookmarks() {
   if (state.debouncedQuery) {
     return state.searchResults
+  }
+  if (state.bookmarkReorderMode) {
+    return state.bookmarkReorderOrderIds
+      .map((bookmarkId) => state.bookmarkMap.get(bookmarkId))
+      .filter((bookmark): bookmark is NonNullable<typeof bookmark> => Boolean(bookmark))
   }
   return getFilteredBookmarks()
 }

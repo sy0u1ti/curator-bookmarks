@@ -11,6 +11,7 @@ const visualCaptureDir = process.env.CURATOR_VISUAL_CAPTURE_DIR
   : ''
 const performanceRecords = []
 const bookmarkDropContinuityOnly = process.argv.includes('--bookmark-drop-continuity-only')
+const popupReorderOnly = process.argv.includes('--popup-reorder-only')
 
 async function captureVisual(page, name, options = {}) {
   if (!visualCaptureDir) {
@@ -799,6 +800,130 @@ async function verifyPopup(page, extensionId, seeded) {
   await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.startsWith('编辑书签'))
 }
 
+async function verifyPopupBookmarkReorder(page, seeded, context) {
+  const folderId = seeded.folderIds[0]
+  const folderTitle = seeded.folderTitles[0]
+  const folderRow = page.getByRole('treeitem').filter({ hasText: folderTitle }).first()
+  await folderRow.click()
+
+  const enterButton = page.getByRole('button', { name: '调整顺序' })
+  await enterButton.waitFor({ state: 'visible' })
+  assert.equal(await enterButton.isEnabled(), true, 'A folder with multiple direct bookmarks should allow reorder mode')
+
+  const initialOrder = await page.evaluate(async (id) => {
+    const children = await chrome.bookmarks.getChildren(id)
+    return children.filter((child) => child.url).map((child) => child.id)
+  }, folderId)
+  await enterButton.click()
+  await page.locator('.popup-main-pane[data-reorder-mode="true"]').waitFor({ state: 'visible' })
+  assert.equal(
+    await page.locator('.popup-bookmark-reorder-handle').count(),
+    initialOrder.length,
+    'Reorder mode should expose one dedicated handle per direct bookmark'
+  )
+  assert.equal(
+    await page.locator('.popup-main-pane[data-reorder-mode="true"] .popup-row-actions').count(),
+    0,
+    'Reorder mode should hide normal bookmark action rails'
+  )
+  await captureVisual(page, 'popup-bookmark-reorder')
+
+  const firstHandle = page.locator('.popup-bookmark-reorder-handle').first()
+  const keyboardMovedId = await firstHandle.locator('xpath=..').getAttribute('data-bookmark-id')
+  assert.ok(keyboardMovedId, 'The first reorder row should expose its bookmark id')
+  await firstHandle.focus()
+  await page.keyboard.press('Alt+ArrowDown')
+  await page.waitForFunction(async ({ id, bookmarkId }) => {
+    const children = await chrome.bookmarks.getChildren(id)
+    return children.filter((child) => child.url)[1]?.id === bookmarkId
+  }, { id: folderId, bookmarkId: keyboardMovedId })
+  await page.locator('.popup-bookmark-reorder-handle').first().waitFor({ state: 'visible' })
+  await page.waitForFunction(() => !document.querySelector('.popup-bookmark-reorder-handle')?.disabled)
+  assert.match(
+    await page.locator('.popup-main-pane [aria-live="polite"]').textContent(),
+    /已移动到第 2 位/,
+    'Keyboard reorder should announce the saved position'
+  )
+
+  const reorderRows = page.locator('.popup-main-pane[data-reorder-mode="true"] .popup-main-row')
+  const dragSourceRow = reorderRows.first()
+  const dragSourceHandle = dragSourceRow.locator('.popup-bookmark-reorder-handle')
+  const dragTargetRow = reorderRows.nth(2)
+  const draggedId = await dragSourceRow.getAttribute('data-bookmark-id')
+  const [handleBox, targetBox] = await Promise.all([
+    dragSourceHandle.boundingBox(),
+    dragTargetRow.boundingBox()
+  ])
+  assert.ok(handleBox && targetBox && draggedId, 'Popup reorder drag geometry should be available')
+  await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 5 })
+  await page.locator('.popup-bookmark-drag-ghost').waitFor({ state: 'attached' })
+  const dragSourceOpacity = await page
+    .locator('.popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-source="true"]')
+    .evaluate((element) => getComputedStyle(element).opacity)
+  assert.equal(dragSourceOpacity, '0', 'The source row should be fully hidden while its drag preview is visible')
+  assert.ok(
+    await page.locator('.popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-shift="true"]').count() >= 1,
+    'Dragging should shift intervening rows with transform-based preview motion'
+  )
+  await captureVisual(page, 'popup-bookmark-reorder-dragging')
+  await page.mouse.up()
+  await page.locator('.popup-bookmark-drag-ghost').waitFor({ state: 'detached', timeout: 2_000 })
+  await page.waitForFunction(async ({ id, bookmarkId }) => {
+    const children = await chrome.bookmarks.getChildren(id)
+    return children.filter((child) => child.url)[2]?.id === bookmarkId
+  }, { id: folderId, bookmarkId: draggedId })
+
+  await page.waitForFunction(() => !document.querySelector('.popup-bookmark-reorder-handle')?.disabled)
+  const touchClient = await context.newCDPSession(page)
+  const touchSourceRow = page.locator('.popup-main-pane[data-reorder-mode="true"] .popup-main-row').first()
+  const touchHandle = touchSourceRow.locator('.popup-bookmark-reorder-handle')
+  const touchTargetRow = page.locator('.popup-main-pane[data-reorder-mode="true"] .popup-main-row').nth(1)
+  const touchMovedId = await touchSourceRow.getAttribute('data-bookmark-id')
+  const [touchHandleBox, touchTargetBox] = await Promise.all([
+    touchHandle.boundingBox(),
+    touchTargetRow.boundingBox()
+  ])
+  assert.ok(touchHandleBox && touchTargetBox && touchMovedId, 'Popup touch reorder geometry should be available')
+  const touchStart = {
+    id: 7,
+    x: Math.round(touchHandleBox.x + touchHandleBox.width / 2),
+    y: Math.round(touchHandleBox.y + touchHandleBox.height / 2)
+  }
+  const touchDestination = {
+    id: 7,
+    x: Math.round(touchTargetBox.x + touchTargetBox.width / 2),
+    y: Math.round(touchTargetBox.y + touchTargetBox.height / 2)
+  }
+  await dispatchTouch(touchClient, 'touchStart', [touchStart])
+  await page.waitForTimeout(350)
+  await page.locator('.popup-bookmark-drag-ghost').waitFor({ state: 'attached' })
+  await dispatchTouch(touchClient, 'touchMove', [touchDestination])
+  await waitForFrames(page)
+  await dispatchTouch(touchClient, 'touchEnd', [])
+  await page.locator('.popup-bookmark-drag-ghost').waitFor({ state: 'detached', timeout: 2_000 })
+  await page.waitForFunction(async ({ id, bookmarkId }) => {
+    const children = await chrome.bookmarks.getChildren(id)
+    return children.filter((child) => child.url)[1]?.id === bookmarkId
+  }, { id: folderId, bookmarkId: touchMovedId })
+  await touchClient.detach()
+
+  await page.evaluate(async ({ id, order }) => {
+    for (let index = order.length - 1; index >= 0; index -= 1) {
+      await chrome.bookmarks.move(order[index], { parentId: id, index: 0 })
+    }
+  }, { id: folderId, order: initialOrder })
+
+  await page.getByRole('button', { name: '完成排序' }).click()
+  await page.waitForFunction(() => !document.querySelector('.popup-main-pane')?.hasAttribute('data-reorder-mode'))
+  assert.equal(
+    await page.locator('.popup-bookmark-reorder-handle').count(),
+    0,
+    'Leaving reorder mode should restore the normal bookmark list controls'
+  )
+}
+
 async function verifyOptions(page, extensionId) {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html`, { waitUntil: 'domcontentloaded' })
@@ -1185,6 +1310,13 @@ try {
   if (bookmarkDropContinuityOnly) {
     await verifyTouchAndKeyboard(page, context, extensionId)
     console.log('Expanded bookmark drop continuity test passed.')
+  } else if (popupReorderOnly) {
+    await page.setViewportSize({ width: 800, height: 600 })
+    await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'domcontentloaded' })
+    await page.locator('#search-help-toggle').waitFor({ state: 'attached' })
+    await page.waitForTimeout(350)
+    await verifyPopupBookmarkReorder(page, seeded, context)
+    console.log('Popup bookmark reorder browser test passed.')
   } else {
     await page.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`, { waitUntil: 'domcontentloaded' })
     await page.locator('#newtab-settings-trigger').waitFor({ state: 'attached' })

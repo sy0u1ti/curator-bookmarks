@@ -65,6 +65,7 @@ export interface PopupContentBookmarkRowViewModel {
   kind: 'bookmark'
   menu: PopupActionMenuViewModel
   menuLabel: string
+  parentId: string
   path?: string
   title: string
   url: string
@@ -112,6 +113,16 @@ export type PopupContentMainRowViewModel =
   | PopupContentBookmarkRowViewModel
   | PopupContentSearchResultViewModel
 
+export interface PopupBookmarkReorderViewModel {
+  active: boolean
+  announcement: string
+  busy: boolean
+  canEnter: boolean
+  directCount: number
+  folderId: string
+  folderTitle: string
+}
+
 export interface PopupContentViewModel {
   emptyLabel?: string
   keyboardPane?: 'bookmarks' | 'folders'
@@ -124,6 +135,7 @@ export interface PopupContentViewModel {
   mainRows?: PopupContentMainRowViewModel[]
   meta?: string
   mode?: 'search' | 'tree'
+  reorder?: PopupBookmarkReorderViewModel
   rows: PopupContentRowViewModel[]
   sidebarRows?: PopupContentFolderRowViewModel[]
   title?: string

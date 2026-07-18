@@ -298,6 +298,73 @@ button:focus-visible {
   z-index: 2;
 }
 
+.popup-main-pane[data-reorder-mode="true"] .popup-main-row {
+  transition:
+    opacity var(--duration-micro) var(--ease-smooth-out),
+    transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+.popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-shift="true"] {
+  will-change: transform;
+}
+
+.popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-source="true"] {
+  opacity: 0;
+  transition: transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+.popup-reorder-row-content:disabled,
+.popup-reorder-row-content[data-disabled] {
+  pointer-events: none;
+  cursor: default;
+  opacity: 1;
+}
+
+.popup-bookmark-reorder-handle[data-drag-pending="true"],
+.popup-bookmark-reorder-handle[data-dragging="true"] {
+  border-color: var(--ds-border-hover);
+  background: var(--ds-active);
+  color: var(--ds-text-primary);
+}
+
+.popup-bookmark-reorder-handle[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.popup-bookmark-drag-ghost {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 120;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 40px;
+  align-items: center;
+  overflow: hidden;
+  padding: 8px 7px 8px 13px;
+  pointer-events: none;
+  border: 1px solid var(--ds-border-hover);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface-3);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 12px 24px -12px rgba(0, 0, 0, 0.72);
+  color: var(--ds-text-primary);
+  opacity: 0.98;
+  transform-origin: 0 0;
+  transition: none;
+  will-change: transform;
+}
+
+.popup-bookmark-drag-ghost > svg {
+  justify-self: center;
+  color: var(--ds-text-secondary);
+}
+
+.popup-bookmark-drag-ghost[data-settling="true"] {
+  transition: transform var(--drag-settle-dur) var(--ease-smooth-out);
+  will-change: auto;
+}
+
 #popup-app-shell[data-keyboard-nav="true"] {
   --resize-dur: 1ms;
   --popup-keyboard-selection-dur: 80ms;
@@ -424,6 +491,16 @@ button:focus-visible {
   .popup-row-actions-trigger {
     transform: none !important;
     transition-property: border-color, background-color, color, opacity !important;
+  }
+
+  .popup-main-pane[data-reorder-mode="true"] .popup-main-row,
+  .popup-bookmark-drag-ghost,
+  .popup-bookmark-drag-ghost[data-settling="true"] {
+    transition: none !important;
+  }
+
+  .popup-main-pane[data-reorder-mode="true"] .popup-main-row[data-reorder-source="true"] {
+    opacity: 0;
   }
 
   #popup-root .smart-progress-bar {

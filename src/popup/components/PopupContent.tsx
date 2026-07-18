@@ -1,18 +1,24 @@
 import {
   memo,
   useCallback,
+  useEffect,
   useLayoutEffect,
+  useRef,
   useState,
   type CSSProperties,
   type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type RefObject
 } from 'react'
+import { createPortal } from 'react-dom'
 import { Button } from '../../ui/base/Button'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
+import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion'
 import { HighlightedText } from './HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
 import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
+import { getPopupBookmarkReorderTargetIndex } from '../popup-bookmark-reorder'
 import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import type {
   PopupActionMenuViewModel,
@@ -30,6 +36,8 @@ export interface PopupContentActionHandlers {
   onFolderFocus?: (index: number) => void
   onKeyboardNavigate?: (key: string) => boolean
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
+  onBookmarkReorder?: (bookmarkId: string, index: number) => void
+  onReorderModeChange?: (active: boolean) => void
   onRowFocus?: (index: number) => void
   onResultHover?: (index: number) => void
 }
@@ -76,10 +84,17 @@ const workspaceClass =
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
   'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
-const mainPaneClass = cx(paneClass, 'bg-ds-surface-1')
+const mainPaneClass = cx(paneClass, 'popup-main-pane bg-ds-surface-1')
 const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'
+const paneHeaderTitleClass = 'min-w-0 truncate'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
+const paneHeaderActionClass = [
+  'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-[11px] font-semibold text-ds-text-secondary outline-none',
+  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'active:scale-[0.98] disabled:cursor-default disabled:opacity-40'
+].join(' ')
 const folderTreeClass =
   'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
@@ -140,6 +155,12 @@ const rowActionButtonClass = [
 const rowActionTriggerClass = cx(rowActionButtonClass, 'popup-row-actions-trigger')
 const rowActionDangerClass =
   'hover:border-[rgba(255,138,130,0.42)] hover:text-ds-danger-text focus-visible:border-[rgba(255,138,130,0.42)] focus-visible:text-ds-danger-text'
+const rowReorderHandleClass = [
+  'popup-bookmark-reorder-handle absolute right-[7px] top-1/2 z-[3] inline-flex h-10 w-10 -translate-y-1/2 touch-none select-none items-center justify-center rounded-ds-sm border border-transparent bg-transparent text-ds-text-muted outline-none',
+  'transition-[border-color,background-color,color,opacity] duration-ds-fast ease-ds-standard',
+  'cursor-grab hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'active:cursor-grabbing disabled:cursor-default disabled:opacity-40'
+].join(' ')
 const compactStateClass =
   'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
@@ -165,6 +186,11 @@ const skeletonBookmarkPathLineClass = cx(rowPathClass, 'flex h-[15px] items-cent
 const skeletonActionButtonClass = skeletonDotClass
 const searchSkeletonClass = 'grid w-[min(100%,390px)] gap-3 self-stretch'
 const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-ds-text-primary/[0.018] px-[9px] py-2'
+const POPUP_REORDER_MOUSE_THRESHOLD_PX = 6
+const POPUP_REORDER_TOUCH_CANCEL_THRESHOLD_PX = 10
+const POPUP_REORDER_LONG_PRESS_MS = 320
+const POPUP_REORDER_AUTO_SCROLL_EDGE_PX = 36
+const POPUP_REORDER_AUTO_SCROLL_MAX_PX = 13
 
 function getFolderDepthStyle(depth: number): CSSProperties {
   const normalizedDepth = Math.max(0, Number(depth) || 0)
@@ -173,6 +199,414 @@ function getFolderDepthStyle(depth: number): CSSProperties {
 
 function getBookmarkButtonStyle(): CSSProperties {
   return listButtonBaseStyle
+}
+
+interface PopupBookmarkReorderRowProps {
+  busy: boolean
+  dragging: boolean
+  pending: boolean
+  shiftY: number
+  onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
+  onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
+}
+
+interface PopupBookmarkDragSession {
+  bookmarkId: string
+  clientX: number
+  clientY: number
+  displayUrl: string
+  handle: HTMLButtonElement
+  height: number
+  offsetX: number
+  offsetY: number
+  path: string
+  phase: 'pending' | 'dragging'
+  pointerId: number
+  pointerType: string
+  rowLeft: number
+  sourceIndex: number
+  startX: number
+  startY: number
+  targetIndex: number
+  title: string
+  width: number
+}
+
+interface PopupBookmarkDragView {
+  bookmarkId: string
+  displayUrl: string
+  height: number
+  left: number
+  path: string
+  phase: 'pending' | 'dragging' | 'settling'
+  sourceIndex: number
+  targetIndex: number
+  title: string
+  width: number
+  top: number
+}
+
+function usePopupBookmarkReorderDrag({
+  active,
+  busy,
+  mainListRef,
+  onCommit,
+  rowCount
+}: {
+  active: boolean
+  busy: boolean
+  mainListRef?: RefObject<HTMLUListElement | null>
+  onCommit?: (bookmarkId: string, index: number) => void
+  rowCount: number
+}) {
+  const sessionRef = useRef<PopupBookmarkDragSession | null>(null)
+  const longPressTimerRef = useRef(0)
+  const autoScrollFrameRef = useRef(0)
+  const settleTimerRef = useRef(0)
+  const [view, setView] = useState<PopupBookmarkDragView | null>(null)
+
+  const stopAutoScroll = useCallback(() => {
+    window.cancelAnimationFrame(autoScrollFrameRef.current)
+    autoScrollFrameRef.current = 0
+  }, [])
+
+  const releasePointer = useCallback((session: PopupBookmarkDragSession | null) => {
+    if (!session) return
+    try {
+      if (session.handle.hasPointerCapture(session.pointerId)) {
+        session.handle.releasePointerCapture(session.pointerId)
+      }
+    } catch {
+      // The pointer may already be released when the popup loses focus.
+    }
+  }, [])
+
+  const clearSession = useCallback((clearView = true) => {
+    window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = 0
+    window.clearTimeout(settleTimerRef.current)
+    settleTimerRef.current = 0
+    stopAutoScroll()
+    releasePointer(sessionRef.current)
+    sessionRef.current = null
+    if (clearView) {
+      setView(null)
+    }
+  }, [releasePointer, stopAutoScroll])
+
+  const resolveTargetIndex = useCallback((pointerY: number, sourceIndex: number): number => {
+    const list = mainListRef?.current
+    if (!list) return sourceIndex
+    const rect = list.getBoundingClientRect()
+    const paddingTop = Number.parseFloat(window.getComputedStyle(list).paddingTop) || 0
+    return getPopupBookmarkReorderTargetIndex({
+      containerTop: rect.top,
+      paddingTop,
+      pointerY,
+      rowCount,
+      rowHeight: POPUP_BOOKMARK_ROW_HEIGHT,
+      scrollTop: list.scrollTop,
+      sourceIndex
+    })
+  }, [mainListRef, rowCount])
+
+  const toDragView = useCallback((session: PopupBookmarkDragSession): PopupBookmarkDragView => ({
+    bookmarkId: session.bookmarkId,
+    displayUrl: session.displayUrl,
+    height: session.height,
+    left: session.clientX - session.offsetX,
+    path: session.path,
+    phase: session.phase,
+    sourceIndex: session.sourceIndex,
+    targetIndex: session.targetIndex,
+    title: session.title,
+    top: session.clientY - session.offsetY,
+    width: session.width
+  }), [])
+
+  const scheduleAutoScroll = useCallback(() => {
+    if (autoScrollFrameRef.current) return
+
+    const tick = () => {
+      const session = sessionRef.current
+      const list = mainListRef?.current
+      if (!session || session.phase !== 'dragging' || !list) {
+        autoScrollFrameRef.current = 0
+        return
+      }
+
+      const rect = list.getBoundingClientRect()
+      const distanceFromTop = session.clientY - rect.top
+      const distanceFromBottom = rect.bottom - session.clientY
+      let velocity = 0
+      if (distanceFromTop < POPUP_REORDER_AUTO_SCROLL_EDGE_PX) {
+        const intensity = 1 - Math.max(0, distanceFromTop) / POPUP_REORDER_AUTO_SCROLL_EDGE_PX
+        velocity = -Math.ceil(POPUP_REORDER_AUTO_SCROLL_MAX_PX * intensity)
+      } else if (distanceFromBottom < POPUP_REORDER_AUTO_SCROLL_EDGE_PX) {
+        const intensity = 1 - Math.max(0, distanceFromBottom) / POPUP_REORDER_AUTO_SCROLL_EDGE_PX
+        velocity = Math.ceil(POPUP_REORDER_AUTO_SCROLL_MAX_PX * intensity)
+      }
+
+      if (velocity) {
+        const previousScrollTop = list.scrollTop
+        list.scrollTop = Math.max(0, Math.min(
+          previousScrollTop + velocity,
+          Math.max(0, list.scrollHeight - list.clientHeight)
+        ))
+        if (list.scrollTop !== previousScrollTop) {
+          session.targetIndex = resolveTargetIndex(session.clientY, session.sourceIndex)
+          setView(toDragView(session))
+        }
+      }
+
+      autoScrollFrameRef.current = window.requestAnimationFrame(tick)
+    }
+
+    autoScrollFrameRef.current = window.requestAnimationFrame(tick)
+  }, [mainListRef, resolveTargetIndex, toDragView])
+
+  const beginDrag = useCallback(() => {
+    const session = sessionRef.current
+    if (!session || session.phase === 'dragging') return
+    window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = 0
+    session.phase = 'dragging'
+    session.targetIndex = resolveTargetIndex(session.clientY, session.sourceIndex)
+    try {
+      session.handle.setPointerCapture(session.pointerId)
+    } catch {
+      // Synthetic pointers and released touch contacts may not be capturable.
+    }
+    setView(toDragView(session))
+    scheduleAutoScroll()
+  }, [resolveTargetIndex, scheduleAutoScroll, toDragView])
+
+  const cancelDrag = useCallback(() => {
+    clearSession(true)
+  }, [clearSession])
+
+  const settleDrag = useCallback((session: PopupBookmarkDragSession) => {
+    const list = mainListRef?.current
+    const listRect = list?.getBoundingClientRect()
+    const listStyle = list ? window.getComputedStyle(list) : null
+    const paddingTop = Number.parseFloat(listStyle?.paddingTop || '') || 0
+    const paddingLeft = Number.parseFloat(listStyle?.paddingLeft || '') || 0
+    const targetLeft = listRect ? listRect.left + paddingLeft : session.rowLeft
+    const targetTop = listRect && list
+      ? listRect.top + paddingTop + session.targetIndex * POPUP_BOOKMARK_ROW_HEIGHT - list.scrollTop
+      : session.clientY - session.offsetY
+
+    releasePointer(session)
+    stopAutoScroll()
+    window.clearTimeout(longPressTimerRef.current)
+    longPressTimerRef.current = 0
+    sessionRef.current = null
+    setView({
+      ...toDragView(session),
+      left: targetLeft,
+      phase: 'settling',
+      top: targetTop
+    })
+
+    if (session.targetIndex !== session.sourceIndex) {
+      onCommit?.(session.bookmarkId, session.targetIndex)
+    }
+
+    const settleDuration = prefersReducedMotion()
+      ? 1
+      : getMotionDurationMs('--drag-settle-dur', 160)
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = 0
+      setView(null)
+    }, settleDuration)
+  }, [mainListRef, onCommit, releasePointer, stopAutoScroll, toDragView])
+
+  useEffect(() => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const session = sessionRef.current
+      if (!session || event.pointerId !== session.pointerId) return
+      session.clientX = event.clientX
+      session.clientY = event.clientY
+
+      if (session.phase === 'pending') {
+        const distance = Math.hypot(event.clientX - session.startX, event.clientY - session.startY)
+        if (session.pointerType === 'mouse') {
+          if (distance < POPUP_REORDER_MOUSE_THRESHOLD_PX) return
+          beginDrag()
+        } else {
+          if (distance >= POPUP_REORDER_TOUCH_CANCEL_THRESHOLD_PX) {
+            cancelDrag()
+          }
+          return
+        }
+      }
+
+      const activeSession = sessionRef.current
+      if (!activeSession || activeSession.phase !== 'dragging') return
+      event.preventDefault()
+      activeSession.targetIndex = resolveTargetIndex(event.clientY, activeSession.sourceIndex)
+      setView(toDragView(activeSession))
+    }
+
+    const handlePointerUp = (event: PointerEvent) => {
+      const session = sessionRef.current
+      if (!session || event.pointerId !== session.pointerId) return
+      if (session.phase === 'dragging') {
+        event.preventDefault()
+        session.clientX = event.clientX
+        session.clientY = event.clientY
+        session.targetIndex = resolveTargetIndex(event.clientY, session.sourceIndex)
+        settleDrag(session)
+        return
+      }
+      cancelDrag()
+    }
+
+    const handlePointerCancel = (event: PointerEvent) => {
+      if (sessionRef.current?.pointerId === event.pointerId) {
+        cancelDrag()
+      }
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape' && sessionRef.current) {
+        event.preventDefault()
+        event.stopPropagation()
+        cancelDrag()
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointerup', handlePointerUp, { passive: false })
+    window.addEventListener('pointercancel', handlePointerCancel)
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerCancel)
+      window.removeEventListener('keydown', handleKeyDown, true)
+    }
+  }, [beginDrag, cancelDrag, resolveTargetIndex, settleDrag, toDragView])
+
+  useEffect(() => {
+    if (!active || (busy && sessionRef.current)) {
+      cancelDrag()
+    }
+  }, [active, busy, cancelDrag])
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(longPressTimerRef.current)
+      window.clearTimeout(settleTimerRef.current)
+      window.cancelAnimationFrame(autoScrollFrameRef.current)
+      releasePointer(sessionRef.current)
+      sessionRef.current = null
+    }
+  }, [releasePointer])
+
+  const startDrag = useCallback((
+    row: PopupContentBookmarkRowViewModel,
+    event: ReactPointerEvent<HTMLButtonElement>
+  ) => {
+    if (!active || busy || rowCount < 2 || (event.pointerType === 'mouse' && event.button !== 0)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    clearSession(true)
+
+    const rowElement = event.currentTarget.closest<HTMLElement>('.popup-main-row')
+    if (!rowElement) return
+    const rect = rowElement.getBoundingClientRect()
+    event.currentTarget.focus({ preventScroll: true })
+    const session: PopupBookmarkDragSession = {
+      bookmarkId: row.bookmarkId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      displayUrl: row.displayUrl,
+      handle: event.currentTarget,
+      height: rect.height || POPUP_BOOKMARK_ROW_HEIGHT,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      path: row.path || '',
+      phase: 'pending',
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      rowLeft: rect.left,
+      sourceIndex: row.index,
+      startX: event.clientX,
+      startY: event.clientY,
+      targetIndex: row.index,
+      title: row.title,
+      width: rect.width
+    }
+    sessionRef.current = session
+    setView(toDragView(session))
+
+    if (event.pointerType !== 'mouse') {
+      longPressTimerRef.current = window.setTimeout(() => {
+        beginDrag()
+      }, POPUP_REORDER_LONG_PRESS_MS)
+    }
+  }, [active, beginDrag, busy, clearSession, rowCount, toDragView])
+
+  const getRowProps = useCallback((row: PopupContentBookmarkRowViewModel): PopupBookmarkReorderRowProps => {
+    let shiftY = 0
+    if (view?.phase === 'dragging') {
+      if (view.targetIndex < view.sourceIndex && row.index >= view.targetIndex && row.index < view.sourceIndex) {
+        shiftY = POPUP_BOOKMARK_ROW_HEIGHT
+      } else if (view.targetIndex > view.sourceIndex && row.index > view.sourceIndex && row.index <= view.targetIndex) {
+        shiftY = -POPUP_BOOKMARK_ROW_HEIGHT
+      }
+    }
+
+    return {
+      busy,
+      dragging: view?.phase === 'dragging' && view.bookmarkId === row.bookmarkId,
+      pending: view?.phase === 'pending' && view.bookmarkId === row.bookmarkId,
+      shiftY,
+      onKeyDown: (event) => {
+        if (!event.altKey || event.ctrlKey || event.metaKey || !['ArrowUp', 'ArrowDown'].includes(event.key)) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        if (!busy) {
+          onCommit?.(row.bookmarkId, row.index + (event.key === 'ArrowUp' ? -1 : 1))
+        }
+      },
+      onPointerDown: (event) => startDrag(row, event)
+    }
+  }, [busy, onCommit, startDrag, view])
+
+  const ghost = view && view.phase !== 'pending' && typeof document !== 'undefined'
+    ? createPortal(
+        <div
+          className="popup-bookmark-drag-ghost"
+          data-settling={view.phase === 'settling' ? 'true' : undefined}
+          aria-hidden="true"
+          style={{
+            height: `${view.height}px`,
+            transform: `translate3d(${view.left}px, ${view.top}px, 0)`,
+            width: `${view.width}px`
+          }}
+        >
+          <span className={rowMainClass}>
+            <span className={rowTitleClass}>{view.title}</span>
+            <span className={rowSubtitleClass}>{view.displayUrl}</span>
+            {view.path ? <span className={rowPathClass}>{view.path}</span> : null}
+          </span>
+          <Icon name="GripVertical" size={16} aria-hidden="true" />
+        </div>,
+        document.body
+      )
+    : null
+
+  return {
+    dragging: view?.phase === 'dragging',
+    getRowProps,
+    ghost
+  }
 }
 
 export function PopupContent({
@@ -200,6 +634,14 @@ export function PopupContent({
   const title = state.title || (mode === 'search' ? '搜索结果' : '全部书签')
   const meta = state.meta || `${mainRows.length} 条`
   const isLoading = Boolean(state.loading)
+  const reorderActive = Boolean(state.reorder?.active && mode === 'tree')
+  const reorderDrag = usePopupBookmarkReorderDrag({
+    active: reorderActive,
+    busy: Boolean(state.reorder?.busy),
+    mainListRef,
+    onCommit: handlers?.onBookmarkReorder,
+    rowCount: mainRows.length
+  })
   const activeMainIndex = mainRows.findIndex((row) => row.active)
   const activeFolderIndex = sidebarRows.findIndex((row) => row.keyboardActive)
   const mainWindow = useFixedRowWindow({
@@ -262,11 +704,40 @@ export function PopupContent({
               ) : null}
             </div>
           </aside>
-          <section className={mainPaneClass} aria-label={title}>
+          <section
+            className={mainPaneClass}
+            aria-label={title}
+            data-reorder-mode={reorderActive ? 'true' : undefined}
+            data-reorder-dragging={reorderDrag.dragging ? 'true' : undefined}
+          >
             <header className={paneHeaderClass}>
-              <span>{title} <span className={paneTitleMetaClass}>· <span className="t-number-value">{meta}</span></span></span>
+              <span className={paneHeaderTitleClass} title={`${title} · ${meta}`}>
+                {title} <span className={paneTitleMetaClass}>· <span className="t-number-value">{meta}</span></span>
+              </span>
+              {mode === 'tree' && state.reorder ? (
+                <Button
+                  className={paneHeaderActionClass}
+                  type="button"
+                  aria-pressed={state.reorder.active}
+                  disabled={state.reorder.busy || (!state.reorder.active && !state.reorder.canEnter)}
+                  title={state.reorder.active
+                    ? '完成书签排序'
+                    : state.reorder.canEnter
+                      ? `调整「${state.reorder.folderTitle}」中的直属书签顺序`
+                      : '当前文件夹至少需要 2 个直属书签'}
+                  onClick={() => handlers?.onReorderModeChange?.(!state.reorder?.active)}
+                  unstyled
+                >
+                  <Icon name={state.reorder.active ? 'Check' : 'GripVertical'} size={14} aria-hidden="true" />
+                  <span>{state.reorder.active ? '完成排序' : '调整顺序'}</span>
+                </Button>
+              ) : null}
             </header>
-            <ul className={mainListClass} ref={mainListRef}>
+            <ul
+              className={mainListClass}
+              ref={mainListRef}
+              aria-label={reorderActive ? `${state.reorder?.folderTitle || '当前文件夹'}直属书签排序` : undefined}
+            >
               {state.mainState ? (
                 <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
               ) : mainRows.length ? (
@@ -281,7 +752,15 @@ export function PopupContent({
                   ) : null}
                   {visibleMainRows.map((row) => {
                     if (row.kind === 'bookmark') {
-                      return <MemoPopupBookmarkRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`bookmark:${row.bookmarkId}`} />
+                      return (
+                        <MemoPopupBookmarkRow
+                          activeResultRef={activeResultRef}
+                          handlers={handlers}
+                          reorder={reorderActive ? reorderDrag.getRowProps(row) : undefined}
+                          row={row}
+                          key={`bookmark:${row.bookmarkId}`}
+                        />
+                      )
                     }
                     return <MemoPopupSearchResultRow activeResultRef={activeResultRef} handlers={handlers} row={row} key={`result:${row.bookmarkId}:${row.index}`} />
                   })}
@@ -298,6 +777,11 @@ export function PopupContent({
                 <li className={compactStateClass}>{state.emptyLabel || '暂无可展示书签'}</li>
               )}
             </ul>
+            {reorderActive ? (
+              <p className="sr-only" aria-live="polite" aria-atomic="true">
+                {state.reorder?.announcement}
+              </p>
+            ) : null}
           </section>
           {/* Workspace-level indicator — slides freely across both panes */}
           <div
@@ -307,6 +791,7 @@ export function PopupContent({
             role="presentation"
             style={activeResultIndicator?.style}
           ></div>
+          {reorderDrag.ghost}
         </div>
       </div>
     </div>
@@ -578,34 +1063,48 @@ function PopupFolderRow({
 function PopupBookmarkRow({
   activeResultRef,
   handlers,
+  reorder,
   row
 }: {
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
+  reorder?: PopupBookmarkReorderRowProps
   row: PopupContentBookmarkRowViewModel
 }) {
-  const style = { '--depth': row.depth, height: `${POPUP_BOOKMARK_ROW_HEIGHT}px` } as CSSProperties
+  const style = {
+    '--depth': row.depth,
+    height: `${POPUP_BOOKMARK_ROW_HEIGHT}px`,
+    transform: reorder?.shiftY ? `translate3d(0, ${reorder.shiftY}px, 0)` : undefined
+  } as CSSProperties
   const [actionsMounted, setActionsMounted] = useState(false)
 
   return (
     <li
       className={mainRowClass}
       data-active={row.active ? 'true' : undefined}
+      data-bookmark-id={row.bookmarkId}
+      data-reorder-source={reorder?.dragging ? 'true' : undefined}
+      data-reorder-shift={reorder?.shiftY ? 'true' : undefined}
       onFocusCapture={() => setActionsMounted(true)}
       onPointerEnter={() => setActionsMounted(true)}
       ref={row.active ? activeResultRef : undefined}
       style={style}
     >
       <Button
-        className={listButtonClass}
+        className={cx(listButtonClass, reorder ? 'popup-reorder-row-content' : '')}
         type="button"
         data-active={row.active ? 'true' : undefined}
+        disabled={Boolean(reorder)}
         style={getBookmarkButtonStyle()}
-        onFocus={() => handlers?.onRowFocus?.(row.index)}
-        onKeyDown={(event) => {
-          handleContentNavigationKeyDown(event, handlers)
+        onFocus={() => {
+          if (!reorder) handlers?.onRowFocus?.(row.index)
         }}
-        onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
+        onKeyDown={(event) => {
+          if (!reorder) handleContentNavigationKeyDown(event, handlers)
+        }}
+        onClick={() => {
+          if (!reorder) handlers?.onBookmarkOpen?.(row.bookmarkId)
+        }}
         unstyled
       >
         <span className={rowMainClass}>
@@ -614,14 +1113,36 @@ function PopupBookmarkRow({
           {row.path ? <span className={rowPathClass} title={row.path}>{row.path}</span> : null}
         </span>
       </Button>
-      <PopupRowActions
-        active={row.active}
-        bookmarkId={row.bookmarkId}
-        label={row.menuLabel}
-        mountQuickActions={actionsMounted || row.active}
-        menu={row.menu}
-        onMenuAction={handlers?.onMenuAction}
-      />
+      {reorder ? (
+        <Button
+          className={rowReorderHandleClass}
+          type="button"
+          aria-label={`调整 ${row.title} 的顺序，当前第 ${row.index + 1} 位`}
+          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+          data-drag-pending={reorder.pending ? 'true' : undefined}
+          data-dragging={reorder.dragging ? 'true' : undefined}
+          disabled={reorder.busy}
+          title="按住拖动；也可按 Alt 加上下方向键调整"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onKeyDown={reorder.onKeyDown}
+          onPointerDown={reorder.onPointerDown}
+          unstyled
+        >
+          <Icon name="GripVertical" size={16} aria-hidden="true" />
+        </Button>
+      ) : (
+        <PopupRowActions
+          active={row.active}
+          bookmarkId={row.bookmarkId}
+          label={row.menuLabel}
+          mountQuickActions={actionsMounted || row.active}
+          menu={row.menu}
+          onMenuAction={handlers?.onMenuAction}
+        />
+      )}
     </li>
   )
 }
@@ -697,16 +1218,19 @@ function arePopupBookmarkRowPropsEqual(
   previous: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    reorder?: PopupBookmarkReorderRowProps
     row: PopupContentBookmarkRowViewModel
   },
   next: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
+    reorder?: PopupBookmarkReorderRowProps
     row: PopupContentBookmarkRowViewModel
   }
 ) {
   return previous.activeResultRef === next.activeResultRef &&
     previous.handlers === next.handlers &&
+    previous.reorder === next.reorder &&
     areBookmarkRowsEqual(previous.row, next.row)
 }
 
@@ -737,6 +1261,7 @@ function areBookmarkRowsEqual(
     previous.displayUrl === next.displayUrl &&
     previous.index === next.index &&
     previous.menuLabel === next.menuLabel &&
+    previous.parentId === next.parentId &&
     previous.path === next.path &&
     previous.title === next.title &&
     previous.url === next.url &&

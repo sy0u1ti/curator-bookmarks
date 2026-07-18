@@ -68,6 +68,11 @@ export interface PopupState {
   searchQuery: string
   debouncedQuery: string
   selectedFolderFilterId: string | null
+  bookmarkReorderMode: boolean
+  bookmarkReorderFolderId: string
+  bookmarkReorderOrderIds: string[]
+  bookmarkReorderBusy: boolean
+  bookmarkReorderAnnouncement: string
   viewNoticeMessage: string
   viewNoticeTimer: number | null
   searchResults: PopupSearchResult[]
@@ -163,6 +168,11 @@ export const state: PopupState = {
   searchQuery: '',
   debouncedQuery: '',
   selectedFolderFilterId: null,
+  bookmarkReorderMode: false,
+  bookmarkReorderFolderId: '',
+  bookmarkReorderOrderIds: [],
+  bookmarkReorderBusy: false,
+  bookmarkReorderAnnouncement: '',
   viewNoticeMessage: '',
   viewNoticeTimer: null,
   searchResults: [],

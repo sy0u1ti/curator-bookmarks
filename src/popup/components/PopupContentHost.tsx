@@ -102,6 +102,12 @@ export function PopupContentHost() {
     onMenuAction: (bookmarkId, menuAction, returnFocusElement) => {
       dispatchPopupContentAction({ action: 'menu-action', bookmarkId, menuAction, returnFocusElement })
     },
+    onBookmarkReorder: (bookmarkId, index) => {
+      dispatchPopupContentAction({ action: 'reorder-bookmark', bookmarkId, index })
+    },
+    onReorderModeChange: (active) => {
+      dispatchPopupContentAction({ action: active ? 'enter-bookmark-reorder' : 'exit-bookmark-reorder' })
+    },
     onRowFocus: (index) => {
       dispatchPopupContentAction({ action: 'set-active-result', index })
     },
