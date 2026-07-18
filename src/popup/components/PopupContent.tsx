@@ -12,6 +12,8 @@ import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import { HighlightedText } from './HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
+import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
+import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import type {
   PopupActionMenuViewModel,
   PopupContentBookmarkRowViewModel,
@@ -114,15 +116,15 @@ const listButtonClass = [
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
-  padding: '8px 51px 8px 13px'
+  padding: '8px var(--popup-row-copy-rest-inset) 8px 13px'
 }
-const rowMainClass = 'grid min-w-0 gap-0.5'
+const rowMainClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
 const rowTitleClass =
   'min-w-0 truncate text-left text-[13px] font-[760] leading-tight text-ds-text-primary'
 const rowSubtitleClass =
   'min-w-0 truncate text-left text-xs font-medium leading-tight text-ds-text-muted'
 const rowPathClass = cx(rowSubtitleClass, 'text-ds-text-muted')
-const resultCopyClass = 'grid min-w-0 gap-0.5'
+const resultCopyClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
 const resultPathShellClass = 'block min-w-0'
 const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
 const resultMatchTokenClass =
@@ -367,17 +369,16 @@ function useFixedRowWindow({
     if (!enabled || activeIndex < 0) return
     const container = containerRef?.current
     if (!container) return
-    const itemStart = activeIndex * rowHeight
-    const itemEnd = itemStart + rowHeight
+    const paddingTop = Number.parseFloat(window.getComputedStyle(container).paddingTop) || 0
     const viewportStart = container.scrollTop
-    const viewportEnd = viewportStart + container.clientHeight
-    let nextScrollTop = viewportStart
-    if (itemStart < viewportStart) {
-      nextScrollTop = itemStart
-    } else if (itemEnd > viewportEnd) {
-      nextScrollTop = Math.max(0, itemEnd - container.clientHeight)
-    }
-    if (nextScrollTop !== viewportStart) {
+    const nextScrollTop = getActiveResultRevealScrollTop({
+      itemHeight: rowHeight,
+      itemTop: paddingTop + activeIndex * rowHeight,
+      maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
+      viewportHeight: container.clientHeight,
+      viewportTop: viewportStart
+    })
+    if (nextScrollTop !== null && nextScrollTop !== viewportStart) {
       container.scrollTop = nextScrollTop
       measureViewport()
     }
@@ -789,7 +790,7 @@ function handleContentNavigationKeyDown(
     return
   }
 
-  if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Escape'].includes(event.key)) {
+  if (!isPopupContentNavigationKey(event.key)) {
     return
   }
 

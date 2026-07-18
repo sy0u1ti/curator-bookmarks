@@ -10,6 +10,7 @@ import {
   type PopupContentActionHandlers
 } from './PopupContent'
 import {
+  getClippedActiveResultIndicatorGeometry,
   getActiveResultContentTop,
   getActiveResultRevealScrollBehavior,
   getActiveResultRevealScrollTop
@@ -54,6 +55,8 @@ export function PopupContentHost() {
   const workspaceRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const shouldRevealActiveResultRef = useRef(false)
+  const revealPendingRef = useRef(false)
+  const activeResultIndicatorRef = useRef<ActiveResultIndicatorGeometry>(HIDDEN_ACTIVE_RESULT_INDICATOR)
   const [state, setState] = useState<PopupContentViewModel>(INITIAL_CONTENT_STATE)
   const [activeResultIndicator, setActiveResultIndicator] = useState<ActiveResultIndicatorGeometry>(
     HIDDEN_ACTIVE_RESULT_INDICATOR
@@ -108,10 +111,20 @@ export function PopupContentHost() {
   }), [])
   const activeResultObserverKey = getActiveResultObserverKey(state)
   const activeFolderObserverKey = getActiveFolderObserverKey(state)
+  const commitActiveResultIndicator = useCallback((next: ActiveResultIndicatorGeometry) => {
+    const current = activeResultIndicatorRef.current
+    if (areActiveResultIndicatorsEqual(current, next)) return
 
-  // When going hidden to visible, this ref is set so the reveal useLayoutEffect
-  // can schedule the second phase (show) after the first phase (position) has painted.
-  const revealPendingRef = useRef(false)
+    // Stage a newly visible indicator at its destination while hidden. The next
+    // layout frame reveals it, so cross-pane moves never fly in diagonally.
+    const stageReveal = next.visible && !current.visible
+    const committed = stageReveal ? { ...next, visible: false } : next
+    if (stageReveal) {
+      revealPendingRef.current = true
+    }
+    activeResultIndicatorRef.current = committed
+    setActiveResultIndicator(committed)
+  }, [])
 
   const remeasureIndicator = useCallback(() => {
     const workspace = workspaceRef.current
@@ -119,17 +132,10 @@ export function PopupContentHost() {
     const target = inFolderPane
       ? (activeFolderRef.current?.querySelector<HTMLElement>('button') ?? activeFolderRef.current ?? null)
       : (activeResultRef.current?.querySelector<HTMLElement>('.popup-list-button') ?? activeResultRef.current ?? null)
-    const next = measureWorkspaceIndicator(workspace, target)
-    setActiveResultIndicator((current) => {
-      if (areActiveResultIndicatorsEqual(current, next)) return current
-      // Two-phase reveal: phase 1 snaps position while hidden, then reveals in next frame.
-      if (next.visible && !current.visible) {
-        revealPendingRef.current = true
-        return { ...next, visible: false }
-      }
-      return next
-    })
-  }, [state.keyboardPane])
+    const viewport = inFolderPane ? folderTreeRef.current : mainListRef.current
+    const next = measureWorkspaceIndicator(workspace, target, viewport)
+    commitActiveResultIndicator(next)
+  }, [commitActiveResultIndicator, state.keyboardPane])
 
   // Phase 2 of the two-phase reveal: after the browser paints the indicator at
   // its correct position but still invisible, set visible=true so only opacity
@@ -138,9 +144,11 @@ export function PopupContentHost() {
     if (!revealPendingRef.current) return
     revealPendingRef.current = false
     const frameId = requestAnimationFrame(() => {
-      setActiveResultIndicator((current) =>
-        current.visible ? current : { ...current, visible: true }
-      )
+      const current = activeResultIndicatorRef.current
+      if (current.visible || !current.width || !current.height) return
+      const next = { ...current, visible: true }
+      activeResultIndicatorRef.current = next
+      setActiveResultIndicator(next)
     })
     return () => cancelAnimationFrame(frameId)
   })
@@ -160,7 +168,7 @@ export function PopupContentHost() {
   useLayoutEffect(() => {
     const scrollContainer = mainListRef.current || contentRef.current
     if (!scrollContainer) {
-      updateActiveResultIndicator(setActiveResultIndicator, null, null)
+      commitActiveResultIndicator(HIDDEN_ACTIVE_RESULT_INDICATOR)
       return
     }
 
@@ -179,6 +187,10 @@ export function PopupContentHost() {
     }
 
     shouldRevealActiveResultRef.current = false
+    const revealScrollBehavior = getActiveResultRevealScrollBehavior(
+      prefersReducedMotion(),
+      isKeyboardNavigationActive()
+    )
 
     // Scroll-reveal only applies to the bookmark pane
     const activeResult = activeResultRef.current
@@ -199,7 +211,7 @@ export function PopupContentHost() {
       })
       if (nextScrollTop !== null) {
         scrollContainer.scrollTo({
-          behavior: getActiveResultRevealScrollBehavior(prefersReducedMotion()),
+          behavior: revealScrollBehavior,
           top: nextScrollTop
         })
       }
@@ -221,14 +233,14 @@ export function PopupContentHost() {
       })
       if (nextFolderScrollTop !== null) {
         tree.scrollTo({
-          behavior: getActiveResultRevealScrollBehavior(prefersReducedMotion()),
+          behavior: revealScrollBehavior,
           top: nextFolderScrollTop
         })
       }
     }
 
     remeasureIndicator()
-  }, [remeasureIndicator, state])
+  }, [commitActiveResultIndicator, remeasureIndicator, state])
 
   useEffect(() => {
     const list = mainListRef.current
@@ -236,24 +248,12 @@ export function PopupContentHost() {
     const folder = activeFolderRef.current
     const workspace = workspaceRef.current
     if (!workspace || typeof ResizeObserver === 'undefined') {
-      return
+      return undefined
     }
 
     const observer = new ResizeObserver(() => {
       remeasureIndicator()
     })
-
-    const observed = new Set<Element>()
-    const observeTarget = (target: Element | null) => {
-      if (!target || observed.has(target)) {
-        return
-      }
-      observer.observe(target)
-      observed.add(target)
-    }
-
-    observeTarget(workspace)
-    observeTarget(list)
     const target = state.keyboardPane === 'folders'
       ? (folder?.querySelector<HTMLElement>('button') ?? folder ?? null)
       : (activeResult?.querySelector<HTMLElement>('.popup-list-button') ?? activeResult ?? null)
@@ -261,9 +261,14 @@ export function PopupContentHost() {
     const rowActions = state.keyboardPane === 'folders'
       ? null
       : (activeResult?.querySelector<HTMLElement>('.popup-row-actions') ?? null)
-    observeTarget(activeRow)
-    observeTarget(target)
-    observeTarget(rowActions)
+    const observedTargets = new Set<Element>([
+      workspace,
+      ...(list ? [list] : []),
+      ...(activeRow ? [activeRow] : []),
+      ...(target ? [target] : []),
+      ...(rowActions ? [rowActions] : [])
+    ])
+    observedTargets.forEach((observedTarget) => observer.observe(observedTarget))
 
     return () => observer.disconnect()
   }, [activeFolderObserverKey, activeResultObserverKey, remeasureIndicator, state.keyboardPane])
@@ -301,39 +306,26 @@ export function PopupContentHost() {
   )
 }
 
-function updateActiveResultIndicator(
-  setActiveResultIndicator: (updater: (current: ActiveResultIndicatorGeometry) => ActiveResultIndicatorGeometry) => void,
-  workspace: HTMLElement | null,
-  target: HTMLElement | null
-): void {
-  const next = measureWorkspaceIndicator(workspace, target)
-  setActiveResultIndicator((current) => {
-    return areActiveResultIndicatorsEqual(current, next) ? current : next
-  })
-}
-
 function measureWorkspaceIndicator(
   workspace: HTMLElement | null,
-  target: HTMLElement | null
+  target: HTMLElement | null,
+  viewport: HTMLElement | null
 ): ActiveResultIndicatorGeometry {
-  if (!workspace || !target) {
+  if (!workspace || !target || !viewport) {
     return HIDDEN_ACTIVE_RESULT_INDICATOR
   }
 
   const workspaceRect = workspace.getBoundingClientRect()
   const targetRect = target.getBoundingClientRect()
-  const width = Math.max(0, targetRect.width)
-  const height = Math.max(0, targetRect.height)
-  if (!width || !height) {
+  const viewportRect = viewport.getBoundingClientRect()
+  const clippedGeometry = getClippedActiveResultIndicatorGeometry(workspaceRect, targetRect, viewportRect)
+  if (!clippedGeometry) {
     return HIDDEN_ACTIVE_RESULT_INDICATOR
   }
 
   return {
-    height,
-    left: targetRect.left - workspaceRect.left,
-    top: targetRect.top - workspaceRect.top,
+    ...clippedGeometry,
     visible: true,
-    width
   }
 }
 
@@ -372,4 +364,8 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+function isKeyboardNavigationActive(): boolean {
+  return document.getElementById('popup-app-shell')?.getAttribute('data-keyboard-nav') === 'true'
 }

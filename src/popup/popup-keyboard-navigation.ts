@@ -12,6 +12,19 @@ export interface PopupKeyboardTargetInfo {
   mainSearchInput: boolean
 }
 
+const POPUP_CONTENT_NAVIGATION_KEYS = new Set([
+  'ArrowDown',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowRight',
+  'Enter',
+  'Escape'
+])
+
+export function isPopupContentNavigationKey(key: string): boolean {
+  return POPUP_CONTENT_NAVIGATION_KEYS.has(key)
+}
+
 export function getFolderPaneTreeRoot<Node>(currentRoot: Node | null, bookmarksBarNode: Node | null): Node | null {
   return bookmarksBarNode || currentRoot
 }

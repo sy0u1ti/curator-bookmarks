@@ -32,7 +32,7 @@ async function seedBookmarks(worker) {
         await chrome.bookmarks.create({
           parentId: childFolder.id,
           title: `Popup motion item ${String(folderIndex + 1).padStart(2, '0')}-${String(itemIndex + 1).padStart(2, '0')}`,
-          url: `https://example.com/popup-motion/${folderIndex + 1}/${itemIndex + 1}`
+          url: `https://example.com/popup-motion/${folderIndex + 1}/${itemIndex + 1}/market/watchlist?symbol=BINANCE%3ABTCUSDT&interval=15m`
         })
       }
     }
@@ -52,6 +52,42 @@ async function waitForFrames(page, count = 2) {
     }
     requestAnimationFrame(tick)
   }), count)
+}
+
+async function readIndicatorBounds(page, viewportSelector) {
+  const indicatorSelector = '.t-skel-content .popup-active-result-indicator[data-visible="true"]'
+  return page.evaluate(({ indicatorSelector: targetIndicator, viewportSelector: targetViewport }) => {
+    const indicator = document.querySelector(targetIndicator)
+    const viewport = document.querySelector(targetViewport)
+    if (!(indicator instanceof HTMLElement) || !(viewport instanceof HTMLElement)) {
+      throw new Error('Active indicator or viewport is unavailable')
+    }
+    const indicatorRect = indicator.getBoundingClientRect()
+    const viewportRect = viewport.getBoundingClientRect()
+    return {
+      bottomGap: viewportRect.bottom - indicatorRect.bottom,
+      indicatorBottom: indicatorRect.bottom,
+      indicatorTop: indicatorRect.top,
+      topGap: indicatorRect.top - viewportRect.top,
+      viewportBottom: viewportRect.bottom,
+      viewportTop: viewportRect.top
+    }
+  }, { indicatorSelector, viewportSelector })
+}
+
+async function waitForIndicatorSafeArea(page, viewportSelector, minGap = 7) {
+  const selector = '.t-skel-content .popup-active-result-indicator[data-visible="true"]'
+  await page.waitForFunction(({ indicatorSelector, viewportSelector: targetViewport, minGap: targetGap }) => {
+    const indicator = document.querySelector(indicatorSelector)
+    const viewport = document.querySelector(targetViewport)
+    if (!(indicator instanceof HTMLElement) || !(viewport instanceof HTMLElement)) return false
+    const indicatorRect = indicator.getBoundingClientRect()
+    const viewportRect = viewport.getBoundingClientRect()
+    return indicatorRect.top >= viewportRect.top + targetGap - 0.75 &&
+      indicatorRect.bottom <= viewportRect.bottom - targetGap + 0.75
+  }, { indicatorSelector: selector, viewportSelector, minGap }, { timeout: 2_000 })
+
+  return readIndicatorBounds(page, viewportSelector)
 }
 
 function maxTransitionMs(value) {
@@ -323,20 +359,34 @@ try {
   })
   const beforeHover = await targetRow.evaluate((row) => {
     const actions = row.querySelector('.popup-row-actions')
+    const copy = row.querySelector('.popup-row-copy')
     if (!(actions instanceof HTMLElement)) throw new Error('Popup row actions are unavailable')
+    if (!(copy instanceof HTMLElement)) throw new Error('Popup row copy is unavailable')
     const actionsRect = actions.getBoundingClientRect()
     const rowRect = row.getBoundingClientRect()
-    return { actionsWidth: actionsRect.width, rowWidth: rowRect.width }
+    const copyStyle = getComputedStyle(copy)
+    return {
+      actionsWidth: actionsRect.width,
+      copyMaskImage: copyStyle.maskImage || copyStyle.webkitMaskImage || 'none',
+      rowWidth: rowRect.width
+    }
   })
   await page.mouse.move(hoverPoint.x, hoverPoint.y)
   await waitForFrames(page)
   const hoveredQuickActions = await targetRow.locator('.popup-row-actions-menu button').count()
   const afterHover = await targetRow.evaluate((row) => {
     const actions = row.querySelector('.popup-row-actions')
+    const copy = row.querySelector('.popup-row-copy')
     if (!(actions instanceof HTMLElement)) throw new Error('Popup row actions are unavailable')
+    if (!(copy instanceof HTMLElement)) throw new Error('Popup row copy is unavailable')
     const actionsRect = actions.getBoundingClientRect()
     const rowRect = row.getBoundingClientRect()
-    return { actionsWidth: actionsRect.width, rowWidth: rowRect.width }
+    const copyStyle = getComputedStyle(copy)
+    return {
+      actionsWidth: actionsRect.width,
+      copyMaskImage: copyStyle.maskImage || copyStyle.webkitMaskImage || 'none',
+      rowWidth: rowRect.width
+    }
   })
 
   const result = {
@@ -439,6 +489,105 @@ try {
     Math.abs(afterHover.rowWidth - beforeHover.rowWidth) <= 0.5,
     'Lower-row hover must not change bookmark row geometry'
   )
+  assert.equal(beforeHover.copyMaskImage, 'none', 'Collapsed rows must keep their bookmark copy fully visible')
+  assert.match(afterHover.copyMaskImage, /linear-gradient/i, 'Expanded row actions must mask long copy before it reaches the quick actions')
+
+  const firstBookmarkButton = page.locator('.t-skel-content .popup-list-button').first()
+  await firstBookmarkButton.focus()
+  await page.keyboard.press('ArrowLeft')
+  await waitForFrames(page)
+  for (let index = 0; index < 2; index += 1) {
+    await page.keyboard.press('ArrowDown')
+    await waitForFrames(page)
+  }
+  const highlightedFolderTitle = await page.locator(
+    '.t-skel-content [role="treeitem"][aria-selected="true"]'
+  ).getAttribute('title')
+  assert.ok(highlightedFolderTitle, 'Folder keyboard navigation must highlight a non-root folder before Enter')
+  await page.keyboard.press('Enter')
+  await page.waitForFunction((folderTitle) => {
+    return [...document.querySelectorAll('.t-skel-content [role="treeitem"][aria-current="page"]')]
+      .some((row) => row.getAttribute('title') === folderTitle)
+  }, highlightedFolderTitle)
+
+  const filteredFirstBookmark = page.locator('.t-skel-content .popup-list-button').first()
+  const filteredBookmarkCount = await page.locator('.t-skel-content .popup-main-row').count()
+  assert.ok(
+    filteredBookmarkCount > 8 && filteredBookmarkCount <= 24,
+    `Held-key regression must run in a non-virtualized folder, got ${filteredBookmarkCount} rows`
+  )
+  await filteredFirstBookmark.focus()
+  const repeatCount = Math.min(10, filteredBookmarkCount - 1)
+  const expectedHeldTitle = await page.locator(
+    '.t-skel-content .popup-main-row'
+  ).nth(repeatCount).locator('.popup-row-copy > span').first().textContent()
+  assert.ok(expectedHeldTitle, 'Held-key regression requires an expected destination bookmark')
+  await page.evaluate((targetRepeatCount) => {
+    const target = document.activeElement
+    if (!(target instanceof HTMLElement)) throw new Error('Focused bookmark row is unavailable')
+    for (let index = 0; index < targetRepeatCount; index += 1) {
+      target.dispatchEvent(new KeyboardEvent('keydown', {
+        bubbles: true,
+        cancelable: true,
+        code: 'ArrowDown',
+        key: 'ArrowDown',
+        repeat: index > 0
+      }))
+    }
+  }, repeatCount)
+  await page.waitForFunction((bookmarkTitle) => {
+    return document.querySelector(
+      '.t-skel-content .popup-main-row[data-active="true"] .popup-row-copy > span'
+    )?.textContent === bookmarkTitle
+  }, expectedHeldTitle)
+  await waitForFrames(page, 1)
+  const heldRepeatIndicatorBounds = await readIndicatorBounds(
+    page,
+    '.t-skel-content .popup-main-list'
+  )
+  assert.ok(
+    heldRepeatIndicatorBounds.topGap >= 6.25 && heldRepeatIndicatorBounds.bottomGap >= 6.25,
+    `Held ArrowDown must keep the highlight inside the filtered-folder viewport: ${JSON.stringify(heldRepeatIndicatorBounds)}`
+  )
+  if (capturePath) {
+    await page.screenshot({
+      path: path.join(path.dirname(capturePath), 'popup-held-key-repeat.png')
+    })
+  }
+  await page.evaluate(() => {
+    document.activeElement?.dispatchEvent(new KeyboardEvent('keyup', {
+      bubbles: true,
+      code: 'ArrowDown',
+      key: 'ArrowDown'
+    }))
+  })
+  const bookmarkIndicatorBounds = await waitForIndicatorSafeArea(
+    page,
+    '.t-skel-content .popup-main-list'
+  )
+
+  await page.keyboard.press('ArrowLeft')
+  await waitForFrames(page)
+  for (let index = 0; index < 10; index += 1) {
+    await page.keyboard.press('ArrowDown')
+    await waitForFrames(page, 1)
+  }
+  const folderIndicatorBounds = await waitForIndicatorSafeArea(
+    page,
+    '.t-skel-content .popup-folder-tree'
+  )
+  if (capturePath) {
+    await page.screenshot({
+      path: path.join(path.dirname(capturePath), 'popup-keyboard-edge.png')
+    })
+  }
+  console.log(`Popup keyboard edge probe: ${JSON.stringify({
+    bookmarkIndicatorBounds,
+    filteredBookmarkCount,
+    folderIndicatorBounds,
+    heldRepeatIndicatorBounds,
+    highlightedFolderTitle
+  })}`)
 
   console.log('Popup loading hover motion regression test passed.')
 } finally {

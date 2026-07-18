@@ -182,19 +182,55 @@ button:focus-visible {
   will-change: transform, opacity;
 }
 
-.popup-row-actions {
+.popup-main-row {
   --popup-row-actions-button-size: 28px;
   --popup-row-actions-gap: 6px;
   --popup-row-actions-menu-width: 164px;
-  --popup-row-actions-slide: 8px;
+  --popup-row-actions-slide: var(--distance-base);
   --popup-row-actions-width: calc(
     var(--popup-row-actions-menu-width) +
     var(--popup-row-actions-gap) +
     var(--popup-row-actions-button-size)
   );
+  --popup-row-actions-right: 13px;
+  --popup-row-copy-rest-inset: 51px;
+  --popup-row-copy-fade-width: 24px;
+  --popup-row-copy-action-overlap: calc(
+    var(--popup-row-actions-width) +
+    var(--popup-row-actions-right) -
+    var(--popup-row-copy-rest-inset)
+  );
+}
+
+.popup-row-copy {
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.popup-main-row:hover:has(.popup-row-actions:not([data-collapsed="true"])) .popup-row-copy,
+.popup-main-row:focus-within:has(.popup-row-actions:not([data-collapsed="true"])) .popup-row-copy,
+.popup-main-row:has(.popup-row-actions[data-active="true"]:not([data-collapsed="true"])) .popup-row-copy,
+.popup-main-row:has(.popup-row-actions[data-open="true"]:not([data-collapsed="true"])) .popup-row-copy {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--popup-row-copy-action-overlap) - var(--popup-row-copy-fade-width)),
+    transparent calc(100% - var(--popup-row-copy-action-overlap))
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--popup-row-copy-action-overlap) - var(--popup-row-copy-fade-width)),
+    transparent calc(100% - var(--popup-row-copy-action-overlap))
+  );
+}
+
+.popup-row-actions {
   position: absolute;
   top: 0;
-  right: 13px;
+  right: var(--popup-row-actions-right);
   bottom: 0;
   z-index: 2;
   display: inline-flex;
@@ -224,8 +260,7 @@ button:focus-visible {
   gap: var(--popup-row-actions-gap);
   opacity: 0;
   pointer-events: none;
-  transform: translateX(var(--popup-row-actions-slide)) scale(0.98);
-  transform-origin: right center;
+  transform: translate3d(var(--popup-row-actions-slide), 0, 0);
   transition:
     opacity var(--ds-motion-fast) var(--resize-ease),
     transform var(--ds-motion-fast) var(--resize-ease);
@@ -237,7 +272,7 @@ button:focus-visible {
 .popup-row-actions[data-open="true"]:not([data-collapsed="true"]) .popup-row-actions-menu {
   opacity: 1;
   pointer-events: auto;
-  transform: translateX(0) scale(1);
+  transform: translate3d(0, 0, 0);
 }
 
 .popup-row-actions-trigger {
@@ -269,6 +304,12 @@ button:focus-visible {
   --popup-keyboard-selection-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+#popup-app-shell[data-keyboard-nav="true"] .popup-active-result-indicator {
+  transition:
+    opacity var(--popup-keyboard-selection-dur) var(--popup-keyboard-selection-ease),
+    transform 1ms var(--popup-keyboard-selection-ease);
+}
+
 #popup-app-shell[data-keyboard-nav="true"] .popup-list-button {
   transition-duration: var(--popup-keyboard-selection-dur);
   transition-property: background-color, border-color, color;
@@ -278,8 +319,13 @@ button:focus-visible {
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not([data-pinned="true"]):not(:focus-within) .popup-row-actions-menu {
   opacity: 0;
   pointer-events: none;
-  transform: translateX(var(--popup-row-actions-slide)) scale(0.98);
+  transform: translate3d(var(--popup-row-actions-slide), 0, 0);
   transition-duration: 1ms !important;
+}
+
+#popup-app-shell[data-keyboard-nav="true"] .popup-main-row:has(.popup-row-actions:not([data-pinned="true"]):not(:focus-within)) .popup-row-copy {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not(:focus-within) .popup-row-actions-trigger {

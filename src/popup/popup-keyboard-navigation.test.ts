@@ -6,6 +6,7 @@ import {
   getFolderPaneKeyboardIndex,
   getFolderPaneTreeRoot,
   getNextFolderPickerFocusIndex,
+  isPopupContentNavigationKey,
   isBookmarkRowKeyboardActive,
   shouldBlurMainSearchForNavigation,
   shouldDelegatePopupDocumentNavigation
@@ -25,6 +26,7 @@ function run(): void {
   testFolderPickerSelectors()
   testControllerDelegatesFocusedInteractiveTargets()
   testMainFolderTreeHasTreeItemSemantics()
+  testContentRowsForwardEnterToKeyboardNavigation()
   testModalFolderPickerOwnsTreeNavigation()
   testContentHostReobservesActiveKeyboardRows()
 }
@@ -164,6 +166,18 @@ function testMainFolderTreeHasTreeItemSemantics(): void {
   assert(source.includes('role="treeitem"'), 'main popup folder rows should expose treeitem semantics')
   assert(source.includes('aria-level={row.depth + 1}'), 'main popup folder rows should expose their tree depth')
   assert(source.includes('aria-selected={row.keyboardActive ?'), 'main popup folder rows should expose keyboard selection state')
+}
+
+function testContentRowsForwardEnterToKeyboardNavigation(): void {
+  const source = readFileSync('src/popup/components/PopupContent.tsx', 'utf8')
+
+  assert(isPopupContentNavigationKey('Enter'), 'focused content rows should forward Enter to the highlighted item')
+  assert(isPopupContentNavigationKey('ArrowDown'), 'focused content rows should keep forwarding vertical navigation')
+  assert(!isPopupContentNavigationKey(' '), 'content row navigation should preserve native Space activation')
+  assert(
+    source.includes('isPopupContentNavigationKey(event.key)') && source.includes('handlers?.onKeyboardNavigate?.(event.key)'),
+    'PopupContent should route Enter through the controller instead of activating the stale focused row'
+  )
 }
 
 function testModalFolderPickerOwnsTreeNavigation(): void {

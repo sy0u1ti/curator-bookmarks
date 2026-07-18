@@ -1,5 +1,19 @@
-export const ACTIVE_RESULT_REVEAL_HIDDEN_RATIO = 0.5
+export const ACTIVE_RESULT_REVEAL_HIDDEN_RATIO = 0
 export const ACTIVE_RESULT_REVEAL_MARGIN = 8
+
+export interface ActiveResultRectLike {
+  bottom: number
+  left: number
+  right: number
+  top: number
+}
+
+export interface ClippedActiveResultIndicatorGeometry {
+  height: number
+  left: number
+  top: number
+  width: number
+}
 
 export interface ActiveResultContentTopMetrics {
   activeResultTop: number
@@ -37,16 +51,17 @@ export function getActiveResultRevealScrollTop(metrics: ActiveResultRevealScroll
   const viewportBottom = viewportTop + viewportHeight
   const itemTop = metrics.itemTop
   const itemBottom = itemTop + itemHeight
-  const hiddenTop = Math.max(0, viewportTop - itemTop)
-  const hiddenBottom = Math.max(0, itemBottom - viewportBottom)
+  const requestedRevealMargin = Math.max(0, metrics.revealMargin ?? ACTIVE_RESULT_REVEAL_MARGIN)
+  const revealMargin = Math.min(requestedRevealMargin, Math.max(0, (viewportHeight - itemHeight) / 2))
+  const hiddenTop = Math.max(0, viewportTop + revealMargin - itemTop)
+  const hiddenBottom = Math.max(0, itemBottom - (viewportBottom - revealMargin))
   const hiddenAmount = Math.max(hiddenTop, hiddenBottom)
   const hiddenThreshold = itemHeight * (metrics.hiddenRatio ?? ACTIVE_RESULT_REVEAL_HIDDEN_RATIO)
 
-  if (hiddenAmount < hiddenThreshold) {
+  if (hiddenAmount <= 0 || hiddenAmount < hiddenThreshold) {
     return null
   }
 
-  const revealMargin = Math.max(0, metrics.revealMargin ?? ACTIVE_RESULT_REVEAL_MARGIN)
   const nextScrollTop = hiddenTop >= hiddenBottom
     ? itemTop - revealMargin
     : itemBottom - viewportHeight + revealMargin
@@ -54,8 +69,39 @@ export function getActiveResultRevealScrollTop(metrics: ActiveResultRevealScroll
   return Math.round(clamp(nextScrollTop, 0, maxScrollTop))
 }
 
-export function getActiveResultRevealScrollBehavior(reducedMotion: boolean): ScrollBehavior {
-  return reducedMotion ? 'auto' : 'smooth'
+export function getActiveResultRevealScrollBehavior(
+  reducedMotion: boolean,
+  keyboardNavigationActive = false
+): ScrollBehavior {
+  return reducedMotion || keyboardNavigationActive ? 'auto' : 'smooth'
+}
+
+export function getClippedActiveResultIndicatorGeometry(
+  workspaceRect: ActiveResultRectLike,
+  targetRect: ActiveResultRectLike,
+  viewportRect: ActiveResultRectLike
+): ClippedActiveResultIndicatorGeometry | null {
+  const clipLeft = Math.max(workspaceRect.left, viewportRect.left)
+  const clipTop = Math.max(workspaceRect.top, viewportRect.top)
+  const clipRight = Math.min(workspaceRect.right, viewportRect.right)
+  const clipBottom = Math.min(workspaceRect.bottom, viewportRect.bottom)
+  const visibleLeft = Math.max(targetRect.left, clipLeft)
+  const visibleTop = Math.max(targetRect.top, clipTop)
+  const visibleRight = Math.min(targetRect.right, clipRight)
+  const visibleBottom = Math.min(targetRect.bottom, clipBottom)
+  const width = Math.max(0, visibleRight - visibleLeft)
+  const height = Math.max(0, visibleBottom - visibleTop)
+
+  if (!width || !height) {
+    return null
+  }
+
+  return {
+    height,
+    left: visibleLeft - workspaceRect.left,
+    top: visibleTop - workspaceRect.top,
+    width
+  }
 }
 
 function clamp(value: number, min: number, max: number): number {

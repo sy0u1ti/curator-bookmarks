@@ -29,9 +29,16 @@ assert(
   'Active row background should come from the moving indicator layer, not the row button.'
 )
 
+const keyboardIndicatorRule = getCssRule('#popup-app-shell[data-keyboard-nav="true"] .popup-active-result-indicator')
+assert(
+  /transform\s+1ms\s+var\(--popup-keyboard-selection-ease\)/.test(keyboardIndicatorRule),
+  'Repeated keyboard navigation should snap indicator position instead of easing behind the active row.'
+)
+
 assert(
   contentHostSource.includes('new ResizeObserver') &&
-    contentHostSource.includes('observer.observe(target)'),
+    contentHostSource.includes('observer.observe(observedTarget)') &&
+    contentHostSource.includes('observer.disconnect()'),
   'Active result indicator should remeasure when the active row target resizes.'
 )
 
