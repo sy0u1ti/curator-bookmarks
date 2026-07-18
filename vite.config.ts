@@ -155,7 +155,6 @@ export default defineConfig(({ mode }) => {
       sourcemap: debugSourcemap,
       rollupOptions: {
         output: {
-          onlyExplicitManualChunks: true,
           manualChunks(id) {
             if (id.includes('pinyin-pro')) {
               return 'vendor-pinyin'

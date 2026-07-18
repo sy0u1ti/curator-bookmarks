@@ -311,7 +311,12 @@ import {
   dispatchNewtabBookmarkEditMenuClosing,
   dispatchNewtabBookmarkEditMenuView
 } from './newtab-bookmark-menu-store.js'
-import { registerNewtabBookmarkEventActions } from './newtab-bookmark-events-store.js'
+import {
+  registerNewtabBookmarkEventActions,
+  type BookmarkChangeInfo,
+  type BookmarkMoveInfo,
+  type BookmarkRemoveInfo
+} from './newtab-bookmark-events-store.js'
 import {
   registerNewtabIconSettingsActions,
   type NewtabIconSettingsFieldKey
@@ -4366,7 +4371,7 @@ function handleBookmarkCreated(
   }
 }
 
-function handleBookmarkChanged(bookmarkId: string, changeInfo: chrome.bookmarks.BookmarkChangeInfo): void {
+function handleBookmarkChanged(bookmarkId: string, changeInfo: BookmarkChangeInfo): void {
   if (state.reorderingBookmarks) {
     return
   }
@@ -4452,7 +4457,7 @@ function insertBookmarkByIndex(
 
 function patchBookmarkInPlace(
   bookmarkId: string,
-  changeInfo: chrome.bookmarks.BookmarkChangeInfo
+  changeInfo: BookmarkChangeInfo
 ): boolean {
   const node = state.allBookmarkMap.get(bookmarkId) || state.bookmarkMap.get(bookmarkId)
   if (!node || !node.url) {
@@ -4481,7 +4486,7 @@ function patchBookmarkInPlace(
   return updatedBookmarkContent || updatedSpeedDial
 }
 
-function handleBookmarkRemoved(bookmarkId: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo): void {
+function handleBookmarkRemoved(bookmarkId: string, removeInfo: BookmarkRemoveInfo): void {
   if (state.reorderingBookmarks) {
     return
   }
@@ -4546,7 +4551,7 @@ function forgetBookmarkFromLocalMaps(bookmarkId: string): boolean {
 
 function handleBookmarkMoved(
   bookmarkId: string,
-  moveInfo?: chrome.bookmarks.BookmarkMoveInfo
+  moveInfo?: BookmarkMoveInfo
 ): void {
   if (isSelfBookmarkMoveEvent(bookmarkId)) {
     return
@@ -4581,7 +4586,7 @@ function handleBookmarkMoved(
 
 function moveBookmarkInPlace(
   bookmarkId: string,
-  moveInfo: chrome.bookmarks.BookmarkMoveInfo,
+  moveInfo: BookmarkMoveInfo,
   relevance: {
     oldParentRelevant: boolean
     newParentRelevant: boolean

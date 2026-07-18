@@ -18,7 +18,7 @@ export function moveBookmark(
   index?: number
 ): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
-    const destination: chrome.bookmarks.BookmarkDestinationArg = { parentId }
+    const destination: chrome.bookmarks.MoveDestination = { parentId }
     if (Number.isFinite(index)) {
       destination.index = index
     }
@@ -37,7 +37,7 @@ export function moveBookmark(
 
 export function updateBookmark(
   bookmarkId: string,
-  changes: chrome.bookmarks.BookmarkChangesArg
+  changes: chrome.bookmarks.UpdateChanges
 ): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.update(bookmarkId, changes, (node) => {
@@ -80,7 +80,7 @@ export function removeBookmarkTree(bookmarkId: string): Promise<void> {
   })
 }
 
-interface CreateBookmarkPayload extends chrome.bookmarks.BookmarkCreateArg {
+interface CreateBookmarkPayload extends chrome.bookmarks.CreateDetails {
   recycleId?: string
 }
 
@@ -89,7 +89,7 @@ export function createBookmark(
 ): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
     const { recycleId: _recycleId, ...rest } = payload || ({} as CreateBookmarkPayload)
-    const normalizedPayload: chrome.bookmarks.BookmarkCreateArg = { ...rest }
+    const normalizedPayload: chrome.bookmarks.CreateDetails = { ...rest }
 
     if (!Number.isFinite(normalizedPayload.index)) {
       delete normalizedPayload.index

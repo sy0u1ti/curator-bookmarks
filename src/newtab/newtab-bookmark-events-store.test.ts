@@ -13,6 +13,7 @@ dispatchNewtabBookmarkChanged('before-change', { title: 'Updated' })
 dispatchNewtabBookmarkCreated('before-create', {
   id: 'before-create',
   parentId: '1',
+  syncing: false,
   title: 'Created',
   url: 'https://example.com'
 })
@@ -40,6 +41,7 @@ dispatchNewtabBookmarkRemoved('between-registers', {
   node: {
     id: 'between-registers',
     parentId: '1',
+    syncing: false,
     title: 'Removed',
     url: 'https://example.com'
   },

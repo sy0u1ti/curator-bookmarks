@@ -102,11 +102,11 @@ export interface ServiceWorkerDebugSnapshot {
 }
 
 interface WebRequestListenerSet {
-  beforeRequest: (details: chrome.webRequest.WebRequestBodyDetails) => void
-  beforeRedirect: (details: chrome.webRequest.WebRedirectionResponseDetails) => void
-  headersReceived: (details: chrome.webRequest.WebResponseHeadersDetails) => void
-  completed: (details: chrome.webRequest.WebResponseCacheDetails) => void
-  errorOccurred: (details: chrome.webRequest.WebResponseErrorDetails) => void
+  beforeRequest: (details: chrome.webRequest.OnBeforeRequestDetails) => chrome.webRequest.BlockingResponse | undefined
+  beforeRedirect: (details: chrome.webRequest.OnBeforeRedirectDetails) => void
+  headersReceived: (details: chrome.webRequest.OnHeadersReceivedDetails) => chrome.webRequest.BlockingResponse | undefined
+  completed: (details: chrome.webRequest.OnCompletedDetails) => void
+  errorOccurred: (details: chrome.webRequest.OnErrorOccurredDetails) => void
 }
 
 interface AutoClassifySuggestion {
@@ -1383,7 +1383,7 @@ function showInboxNotification({
   notificationId: string
   title: string
   message: string
-  buttons?: chrome.notifications.ButtonOptions[]
+  buttons?: chrome.notifications.NotificationButton[]
 }): Promise<void> {
   return new Promise((resolve) => {
     if (!chrome.notifications?.create) {
@@ -2781,7 +2781,7 @@ function getBookmarkById(bookmarkId: string): Promise<chrome.bookmarks.BookmarkT
 }
 
 function createBookmarkNode(
-  payload: chrome.bookmarks.BookmarkCreateArg
+  payload: chrome.bookmarks.CreateDetails
 ): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.create(payload, (node) => {
@@ -2815,7 +2815,7 @@ function moveBookmarkNode(
 
 function updateBookmarkNode(
   bookmarkId: string,
-  changes: chrome.bookmarks.BookmarkChangesArg
+  changes: chrome.bookmarks.UpdateChanges
 ): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.update(bookmarkId, changes, (node) => {
@@ -2953,6 +2953,7 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       }
 
       getOrCreateNetworkEvidence(state, details)
+      return undefined
     },
     beforeRedirect(details) {
       if (state.settled) {
@@ -2992,6 +2993,7 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
         evidence.timing.responseStartMs = details.timeStamp
       }
       evidence.timing.responseLatencyMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.responseStartMs)
+      return undefined
     },
     completed(details) {
       if (state.settled) {

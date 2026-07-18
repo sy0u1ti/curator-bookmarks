@@ -5,7 +5,7 @@ import type {
 } from '../shared/content-snapshots.js'
 import type { BookmarkRecord } from '../shared/types.js'
 import type { NaturalSearchPlan, NaturalSearchResultSet } from '../popup/natural-search.js'
-import { searchBookmarksTopK } from '../popup/search-lookup.js'
+import { indexBookmarkForSearch, searchBookmarksTopK } from '../popup/search-lookup.js'
 import { extractDomain, normalizeSearchTextCompact } from '../shared/text.js'
 import type { PopupSearchBookmark } from '../popup/search.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
@@ -664,10 +664,6 @@ export async function getPopupSearchBookmarkSuggestionsFromIndex(
     return getSearchBookmarkSuggestionsFromIndex(query, preparedIndex, limit, options)
   }
 
-  const {
-    indexBookmarkForSearch,
-    searchBookmarksTopK
-  } = await import('../popup/search-lookup.js')
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
   await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
 
@@ -692,20 +688,11 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
     return getSearchBookmarkSuggestionsFromIndex(query, preparedIndex, limit, options)
   }
 
-  const [
-    {
-      indexBookmarkForSearch,
-      searchBookmarksTopK
-    },
-    {
-      buildLocalNaturalSearchPlan,
-      filterBookmarksByNaturalDateRange,
-      mergeNaturalSearchResultSets
-    }
-  ] = await Promise.all([
-    import('../popup/search-lookup.js'),
-    import('../popup/natural-search.js')
-  ])
+  const {
+    buildLocalNaturalSearchPlan,
+    filterBookmarksByNaturalDateRange,
+    mergeNaturalSearchResultSets
+  } = await import('../popup/natural-search.js')
 
   const plan = options.naturalSearchPlan || buildLocalNaturalSearchPlan(query, options.now)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)

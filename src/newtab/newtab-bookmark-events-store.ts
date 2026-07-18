@@ -1,8 +1,18 @@
+export type BookmarkChangeInfo = Parameters<
+  Parameters<typeof chrome.bookmarks.onChanged.addListener>[0]
+>[1]
+export type BookmarkMoveInfo = Parameters<
+  Parameters<typeof chrome.bookmarks.onMoved.addListener>[0]
+>[1]
+export type BookmarkRemoveInfo = Parameters<
+  Parameters<typeof chrome.bookmarks.onRemoved.addListener>[0]
+>[1]
+
 export interface NewtabBookmarkEventActions {
-  onChanged: (bookmarkId: string, changeInfo: chrome.bookmarks.BookmarkChangeInfo) => void
+  onChanged: (bookmarkId: string, changeInfo: BookmarkChangeInfo) => void
   onCreated: (bookmarkId: string, bookmark: chrome.bookmarks.BookmarkTreeNode) => void
-  onMoved: (bookmarkId: string, moveInfo: chrome.bookmarks.BookmarkMoveInfo) => void
-  onRemoved: (bookmarkId: string, removeInfo: chrome.bookmarks.BookmarkRemoveInfo) => void
+  onMoved: (bookmarkId: string, moveInfo: BookmarkMoveInfo) => void
+  onRemoved: (bookmarkId: string, removeInfo: BookmarkRemoveInfo) => void
 }
 
 const EMPTY_BOOKMARK_EVENT_ACTIONS: NewtabBookmarkEventActions = {
@@ -17,7 +27,7 @@ type PendingNewtabBookmarkEvent =
   | {
       type: 'changed'
       bookmarkId: string
-      changeInfo: chrome.bookmarks.BookmarkChangeInfo
+      changeInfo: BookmarkChangeInfo
     }
   | {
       type: 'created'
@@ -27,12 +37,12 @@ type PendingNewtabBookmarkEvent =
   | {
       type: 'moved'
       bookmarkId: string
-      moveInfo: chrome.bookmarks.BookmarkMoveInfo
+      moveInfo: BookmarkMoveInfo
     }
   | {
       type: 'removed'
       bookmarkId: string
-      removeInfo: chrome.bookmarks.BookmarkRemoveInfo
+      removeInfo: BookmarkRemoveInfo
     }
 
 let pendingNewtabBookmarkEvents: PendingNewtabBookmarkEvent[] = []
@@ -51,7 +61,7 @@ export function registerNewtabBookmarkEventActions(actions: NewtabBookmarkEventA
 
 export function dispatchNewtabBookmarkChanged(
   bookmarkId: string,
-  changeInfo: chrome.bookmarks.BookmarkChangeInfo
+  changeInfo: BookmarkChangeInfo
 ): void {
   if (newtabBookmarkEventActions === EMPTY_BOOKMARK_EVENT_ACTIONS) {
     pendingNewtabBookmarkEvents.push({ type: 'changed', bookmarkId, changeInfo })
@@ -73,7 +83,7 @@ export function dispatchNewtabBookmarkCreated(
 
 export function dispatchNewtabBookmarkMoved(
   bookmarkId: string,
-  moveInfo: chrome.bookmarks.BookmarkMoveInfo
+  moveInfo: BookmarkMoveInfo
 ): void {
   if (newtabBookmarkEventActions === EMPTY_BOOKMARK_EVENT_ACTIONS) {
     pendingNewtabBookmarkEvents.push({ type: 'moved', bookmarkId, moveInfo })
@@ -84,7 +94,7 @@ export function dispatchNewtabBookmarkMoved(
 
 export function dispatchNewtabBookmarkRemoved(
   bookmarkId: string,
-  removeInfo: chrome.bookmarks.BookmarkRemoveInfo
+  removeInfo: BookmarkRemoveInfo
 ): void {
   if (newtabBookmarkEventActions === EMPTY_BOOKMARK_EVENT_ACTIONS) {
     pendingNewtabBookmarkEvents.push({ type: 'removed', bookmarkId, removeInfo })

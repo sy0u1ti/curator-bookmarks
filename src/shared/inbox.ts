@@ -439,7 +439,7 @@ async function folderExists(folderId: string): Promise<boolean> {
   })
 }
 
-function createBookmarkFolder(payload: chrome.bookmarks.BookmarkCreateArg): Promise<chrome.bookmarks.BookmarkTreeNode> {
+function createBookmarkFolder(payload: chrome.bookmarks.CreateDetails): Promise<chrome.bookmarks.BookmarkTreeNode> {
   return new Promise((resolve, reject) => {
     chrome.bookmarks.create(payload, (node) => {
       const error = chrome.runtime.lastError

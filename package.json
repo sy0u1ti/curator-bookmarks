@@ -26,45 +26,43 @@
     "typecheck": "tsc --noEmit",
     "test": "npm run test:interface-quality && npm run test:popup-search-focus && npm run test:popup-session && npm run test:background-gallery-refresh && npm run test:newtab-ui && npm run test:content-extraction && npm run test:ai-runtime",
     "test:interface-quality": "node src/interface-quality-motion-remediation.test.mjs",
-    "test:ai-runtime": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/shared --outDir .tmp-test/ai-runtime --noEmit false src/shared/ai-runtime.ts src/shared/ai-response.ts src/shared/ai-provider-url.ts src/shared/ai-reasoning.ts src/shared/ai-runtime.test.ts && node .tmp-test/ai-runtime/ai-runtime.test.js",
-    "test:popup-search-focus": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/popup --outDir .tmp-test/popup-search-focus --noEmit false src/popup/popup-search-focus.ts src/popup/popup-search-focus.test.ts && node .tmp-test/popup-search-focus/popup-search-focus.test.js",
+    "test:ai-runtime": "tsc --ignoreConfig --strict false --types node,chrome --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/shared --outDir .tmp-test/ai-runtime --noEmit false src/shared/ai-runtime.ts src/shared/ai-response.ts src/shared/ai-provider-url.ts src/shared/ai-reasoning.ts src/shared/ai-runtime.test.ts && node .tmp-test/ai-runtime/ai-runtime.test.js",
+    "test:popup-search-focus": "tsc --ignoreConfig --strict false --types node,chrome --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/popup --outDir .tmp-test/popup-search-focus --noEmit false src/popup/popup-search-focus.ts src/popup/popup-search-focus.test.ts && node .tmp-test/popup-search-focus/popup-search-focus.test.js",
     "test:popup-reorder-browser": "npm run build && node src/newtab/newtab-settings-drawer-motion.test.mjs --popup-reorder-only",
-    "test:popup-session": "tsc --target ES2022 --module ESNext --moduleResolution bundler --jsx react-jsx --skipLibCheck --rootDir src --outDir .tmp-test/popup-session --noEmit false src/popup/popup-smart-classifier-status.test.ts src/popup/popup-controller-store.test.ts src/popup/popup-critical-shell.test.ts src/popup/popup-preboot-input.test.ts src/popup/popup-active-result-indicator-style.test.ts src/popup/popup-active-result-scroll.test.ts src/popup/popup-keyboard-navigation.test.ts src/popup/popup-bookmark-reorder.test.ts src/popup/smart-loading-progress.test.ts src/popup/popup-smart-progress-style.test.ts && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-smart-classifier-status.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-controller-store.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-critical-shell.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-preboot-input.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-active-result-indicator-style.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-active-result-scroll.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-keyboard-navigation.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-bookmark-reorder.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/smart-loading-progress.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-smart-progress-style.test.js",
-    "test:background-gallery-refresh": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/newtab --outDir .tmp-test/background-gallery-refresh --noEmit false src/newtab/background-gallery.ts src/newtab/featured-background-style.ts src/newtab/background-gallery-refresh.ts src/newtab/background-gallery-refresh.test.ts src/newtab/newtab-bookmark-preboot.ts src/newtab/newtab-bookmark-preboot.test.ts src/newtab/newtab-motion-classes.test.ts && node .tmp-test/background-gallery-refresh/background-gallery-refresh.test.js && node .tmp-test/background-gallery-refresh/newtab-bookmark-preboot.test.js && node .tmp-test/background-gallery-refresh/newtab-motion-classes.test.js",
+    "test:popup-session": "tsc --ignoreConfig --strict false --types node,chrome --target ES2022 --module ESNext --moduleResolution bundler --jsx react-jsx --skipLibCheck --rootDir src --outDir .tmp-test/popup-session --noEmit false src/popup/popup-smart-classifier-status.test.ts src/popup/popup-controller-store.test.ts src/popup/popup-critical-shell.test.ts src/popup/popup-preboot-input.test.ts src/popup/popup-active-result-indicator-style.test.ts src/popup/popup-active-result-scroll.test.ts src/popup/popup-keyboard-navigation.test.ts src/popup/popup-bookmark-reorder.test.ts src/popup/smart-loading-progress.test.ts src/popup/popup-smart-progress-style.test.ts && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-smart-classifier-status.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-controller-store.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-critical-shell.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-preboot-input.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-active-result-indicator-style.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-active-result-scroll.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-keyboard-navigation.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-bookmark-reorder.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/smart-loading-progress.test.js && node --experimental-specifier-resolution=node .tmp-test/popup-session/popup/popup-smart-progress-style.test.js",
+    "test:background-gallery-refresh": "tsc --ignoreConfig --strict false --types node,chrome --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/newtab --outDir .tmp-test/background-gallery-refresh --noEmit false src/newtab/background-gallery.ts src/newtab/featured-background-style.ts src/newtab/background-gallery-refresh.ts src/newtab/background-gallery-refresh.test.ts src/newtab/newtab-bookmark-preboot.ts src/newtab/newtab-bookmark-preboot.test.ts src/newtab/newtab-motion-classes.test.ts && node .tmp-test/background-gallery-refresh/background-gallery-refresh.test.js && node .tmp-test/background-gallery-refresh/newtab-bookmark-preboot.test.js && node .tmp-test/background-gallery-refresh/newtab-motion-classes.test.js",
     "test:newtab-handoff": "node src/newtab/newtab-bookmark-handoff.test.mjs",
-    "test:newtab-ui": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/newtab --outDir .tmp-test/newtab-ui --noEmit false src/newtab/newtab-search-focus.ts src/newtab/newtab-search-focus.test.ts src/newtab/background-mask-settings.ts src/newtab/newtab-background-settings-store.ts src/newtab/background-mask-settings.test.ts src/newtab/newtab-bookmark-events-store.ts src/newtab/newtab-bookmark-events-store.test.ts src/newtab/newtab-ui-contract.test.ts && node .tmp-test/newtab-ui/newtab-search-focus.test.js && node .tmp-test/newtab-ui/background-mask-settings.test.js && node .tmp-test/newtab-ui/newtab-bookmark-events-store.test.js && node .tmp-test/newtab-ui/newtab-ui-contract.test.js",
+    "test:newtab-ui": "tsc --ignoreConfig --strict false --types node,chrome --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src/newtab --outDir .tmp-test/newtab-ui --noEmit false src/newtab/newtab-search-focus.ts src/newtab/newtab-search-focus.test.ts src/newtab/background-mask-settings.ts src/newtab/newtab-background-settings-store.ts src/newtab/background-mask-settings.test.ts src/newtab/newtab-bookmark-events-store.ts src/newtab/newtab-bookmark-events-store.test.ts src/newtab/newtab-ui-contract.test.ts && node .tmp-test/newtab-ui/newtab-search-focus.test.js && node .tmp-test/newtab-ui/background-mask-settings.test.js && node .tmp-test/newtab-ui/newtab-bookmark-events-store.test.js && node .tmp-test/newtab-ui/newtab-ui-contract.test.js",
     "smoke:extension": "npm run build && node src/newtab/newtab-background-mask-zero.test.mjs && node src/newtab/newtab-bookmark-content-stability.test.mjs && node src/popup/popup-loading-hover-motion.test.mjs && npm run test:newtab-handoff && node src/newtab/newtab-settings-drawer-motion.test.mjs",
     "visual:interface-quality": "npm run build && node src/interface-quality-visual.mjs",
-    "test:content-extraction": "tsc --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src --outDir .tmp-test/content-extraction --noEmit false src/options/sections/content-extraction.ts src/options/sections/content-extraction.test.ts && node .tmp-test/content-extraction/options/sections/content-extraction.test.js"
+    "test:content-extraction": "tsc --ignoreConfig --strict false --types node,chrome --target ES2022 --module NodeNext --moduleResolution NodeNext --skipLibCheck --rootDir src --outDir .tmp-test/content-extraction --noEmit false src/options/sections/content-extraction.ts src/options/sections/content-extraction.test.ts && node .tmp-test/content-extraction/options/sections/content-extraction.test.js"
   },
   "devDependencies": {
-    "@crxjs/vite-plugin": "^2.4.0",
-    "@playwright/test": "^1.60.0",
-    "@tailwindcss/vite": "^4.3.0",
-    "@types/chrome": "^0.0.280",
-    "@types/node": "^25.6.0",
-    "@types/react": "^19.2.15",
+    "@crxjs/vite-plugin": "^2.7.1",
+    "@playwright/test": "^1.61.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/chrome": "^0.2.2",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^5.2.0",
-    "tailwindcss": "^4.3.0",
-    "typescript": "^5.6.3",
-    "vite": "6.4.2"
+    "@vitejs/plugin-react": "^6.0.3",
+    "esbuild": "^0.28.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^7.0.2",
+    "vite": "8.1.5"
   },
   "dependencies": {
-    "@base-ui/react": "^1.5.0",
+    "@base-ui/react": "^1.6.0",
     "@lisse/core": "^0.5.2",
     "@paper-design/shaders-react": "0.0.77",
-    "lucide-react": "^1.16.0",
+    "lucide-react": "^1.25.0",
     "pinyin-pro": "^3.28.1",
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "overrides": {
     "@crxjs/vite-plugin": {
       "rollup": "2.80.0"
-    },
-    "vite": {
-      "rollup": "^4.34.9"
     }
   }
 }

@@ -89,11 +89,11 @@ function testPointerTargetUsesVirtualScrollOffset(): void {
 }
 
 function bookmark(id: string, index: number): chrome.bookmarks.BookmarkTreeNode {
-  return { id, index, parentId: 'parent', title: id, url: `https://${id}.example` }
+  return { id, index, parentId: 'parent', syncing: false, title: id, url: `https://${id}.example` }
 }
 
 function folder(id: string, index: number): chrome.bookmarks.BookmarkTreeNode {
-  return { children: [], id, index, parentId: 'parent', title: id }
+  return { children: [], id, index, parentId: 'parent', syncing: false, title: id }
 }
 
 function assert(value: unknown, message: string): void {

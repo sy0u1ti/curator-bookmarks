@@ -307,7 +307,8 @@ assert.ok(
     !newtabApp.includes('useNewtabController') &&
     newtabApp.includes("void import('./newtab-controller')") &&
     newtabApp.indexOf('startNewTabController()') < newtabApp.indexOf('dispatchNewtabSettingsDrawerToggleRequest()') &&
-    viteConfig.includes('onlyExplicitManualChunks: true') &&
+    viteConfig.includes('manualChunks(id)') &&
+    viteConfig.includes("id.includes('/src/newtab/content-state.ts')") &&
     viteConfig.includes("indexOf('<link rel=\"stylesheet\"')") &&
     viteConfig.includes('stylesheetLineStart') &&
     controller.includes("performance.getEntriesByName('newtab.domContentLoaded', 'mark')") &&
@@ -316,7 +317,7 @@ assert.ok(
     newtabStartupData.includes('const prefetchedStartupData = settleStartupData(loadNewtabStartupData())') &&
     controller.includes("from './speed-dial.js'") &&
     !controller.includes("import('./speed-dial.js')"),
-  'Newtab should paint its cached shell before loading the full controller, while explicit manual chunks keep options-only code out of the startup graph.'
+  'Newtab should paint its cached shell before loading the full controller, while manual chunk routing preserves the startup boundaries.'
 )
 
 assert.ok(
