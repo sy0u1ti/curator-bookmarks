@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
 export const NEWTAB_SEARCH_BACKGROUND_MIN = 52
-export const NEWTAB_SEARCH_BACKGROUND_DEFAULT = 56
+export const NEWTAB_SEARCH_BACKGROUND_DEFAULT = 60
 export const NEWTAB_SEARCH_BACKGROUND_MAX = 92
 
 export interface NewtabSearchSettingsView {

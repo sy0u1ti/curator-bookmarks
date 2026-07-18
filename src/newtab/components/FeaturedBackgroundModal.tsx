@@ -23,11 +23,11 @@ import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClas
 const featuredWallpaperModalLayoutClass =
   'fixed inset-0 z-[10020] grid place-items-center p-6 pointer-events-none'
 const featuredWallpaperBackdropClass =
-  'fixed inset-0 bg-[rgba(0,0,0,0.46)] [-webkit-backdrop-filter:blur(10px)_saturate(1.05)] [backdrop-filter:blur(10px)_saturate(1.05)]'
+  'fixed inset-0 bg-[rgba(0,0,0,0.46)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
 const featuredWallpaperPanelLayoutClass =
   'pointer-events-auto relative z-[1] grid w-[min(1320px,calc(100vw_-_48px))] max-h-[min(820px,calc(100vh_-_48px))] grid-rows-[auto_minmax(0,1fr)] overflow-hidden'
 const featuredWallpaperPanelSurfaceClass =
-  'rounded-ds-lg border border-[rgba(245,245,247,0.13)] bg-[rgba(6,7,9,0.78)] text-ds-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.065)] [filter:drop-shadow(0_28px_80px_rgba(0,0,0,0.36))] [-webkit-backdrop-filter:blur(18px)_saturate(1.14)] [backdrop-filter:blur(18px)_saturate(1.14)]'
+  'rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] text-ds-text-primary shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
 const featuredWallpaperStatusClass =
   'featured-wallpaper-status border border-[rgba(245,245,247,0.12)] bg-[rgba(245,245,247,0.065)] text-ds-text-secondary shadow-none'
 const featuredWallpaperActionClass = `featured-wallpaper-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`

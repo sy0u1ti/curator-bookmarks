@@ -42,12 +42,7 @@ const reducedTransparencyOpaqueSelectors = [globalsCss, newtabCss]
   .flatMap((source) => [...source.matchAll(/:where\(\s*([^)]*?)\s*\)\s*\{[^}]*background-color:\s*#161616\s*!important;/g)])
   .map((match) => match[1])
   .join('\n')
-const baseGlassTokens = newtabCss.match(/\.newtab-app\s*\{([^}]*)\}/s)?.[1] || ''
-const mediaGlassTokens = newtabCss.match(/\.newtab-app\[data-background-media="true"\]\s*\{([^}]*)\}/s)?.[1] || ''
-
-function readGlassAlpha(source: string, token: string): number {
-  return Number(source.match(new RegExp(`${token}:\\s*rgba\\([^)]*,\\s*([\\d.]+)\\)`))?.[1] || 0)
-}
+const unifiedGlassTokens = newtabCss.match(/:root\s*\{([^}]*)\}/s)?.[1] || ''
 
 assert.ok(
   newtabHtml.includes(`--newtab-font-sans: ${stableNewtabFontStack}`) &&
@@ -79,7 +74,7 @@ assert.ok(
     newtabButtonClasses.includes('transition-[background-color,border-color,color,opacity,transform]') &&
     newtabButtonClasses.includes('active:duration-[var(--ds-motion-feedback)]') &&
     newtabButtonClasses.includes('motion-reduce:active:scale-100'),
-  'New Tab controls should respond on pointer-down while honoring reduced motion, reduced transparency, and increased contrast.'
+  'New Tab controls should respond on pointer-down while honoring reduced motion, mask transparency preferences, and increased contrast.'
 )
 
 assert.ok(
@@ -94,9 +89,9 @@ assert.ok(
 )
 
 assert.ok(
-  newtabCss.includes('--newtab-glass-bg-hero') &&
-    newtabCss.includes('[data-background-media="true"]'),
-  'Newtab glass surfaces should strengthen over image and video backgrounds.'
+  newtabCss.includes('--newtab-glass-bg-hero: var(--newtab-glass-bg-fill)') &&
+    !newtabCss.includes('.newtab-app[data-background-media="true"]'),
+  'Newtab glass surfaces should share one wallpaper-independent material instead of per-background variants.'
 )
 
 assert.ok(
@@ -232,15 +227,16 @@ assert.ok(
 )
 
 assert.ok(
-  searchWidgetClasses.includes('[&.active]:bg-[var(--ui-surface-selected)]') &&
-    searchWidgetClasses.includes('[&.active]:shadow-[inset_0_0_0_1px_rgba(245,245,247,0.16)]') &&
-    searchWidgetClasses.includes('[&.active:hover]:bg-[rgba(245,245,247,0.19)]') &&
+  searchWidgetClasses.includes('[&.active]:bg-[var(--newtab-glass-slider-fill)]') &&
+    searchWidgetClasses.includes('[&.active]:shadow-[inset_0_0_0_1px_var(--newtab-glass-slider-fill)]') &&
+    searchWidgetClasses.includes('[&.active:hover]:bg-[var(--newtab-glass-slider-fill)]') &&
     searchWidgetClasses.includes('[&_.newtab-search-suggestion-meta]:text-[rgba(245,245,247,0.86)]'),
-  'The active search suggestion should use a high-specificity selected surface, full inset outline, and readable metadata instead of the shallow hover treatment.'
+  'The active search suggestion should reuse the unified 16% slider-fill token for its selected surface and outline.'
 )
 
 assert.ok(
-  searchWidgetClasses.includes('bg-[rgba(8,8,9,var(--search-bg-alpha))]') &&
+  searchWidgetClasses.includes('bg-[rgba(0,0,0,var(--search-bg-alpha))]') &&
+    searchWidgetClasses.includes('[--search-bg-alpha:0.6]') &&
     searchWidgetClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
     clockClasses.includes('bg-[var(--newtab-glass-bg-hero)]') &&
     clockClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
@@ -250,27 +246,28 @@ assert.ok(
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search-suggestions-panel') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search-engine-menu') &&
-    !reducedTransparencyOpaqueSelectors.includes('.newtab-clock'),
-  'The primary search and clock utilities must retain their configured glass material instead of being replaced by an opaque system fallback.'
+    !reducedTransparencyOpaqueSelectors.includes('.newtab-clock') &&
+    !newtabCss.includes('--newtab-glass-bg-fill: #161616') &&
+    !globalsCss.includes('--newtab-glass-bg-fill: #161616'),
+  'The primary search and clock utilities should retain the explicitly selected glass material instead of being replaced by an OS-level opaque fallback.'
 )
 
 assert.ok(
-  readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-hero') >= 0.7 &&
-    readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-faint') >= 0.6 &&
-    readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-card') >= 0.7 &&
-    readGlassAlpha(baseGlassTokens, '--newtab-glass-bg-popup') >= 0.84 &&
-    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-hero') >= 0.74 &&
-    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-faint') >= 0.66 &&
-    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-card') >= 0.74 &&
-    readGlassAlpha(mediaGlassTokens, '--newtab-glass-bg-popup') >= 0.88 &&
-    baseGlassTokens.includes('--newtab-glass-filter-hero: blur(18px) saturate(0.88) brightness(0.68)') &&
-    baseGlassTokens.includes('--newtab-glass-filter-popup: blur(20px) saturate(0.86) brightness(0.74)'),
-  'Unified New Tab glass should use a dark, low-saturation material that protects text over bright wallpaper.'
+  unifiedGlassTokens.includes('--newtab-glass-bg-fill: rgba(0, 0, 0, 0.6)') &&
+    unifiedGlassTokens.includes('--newtab-glass-slider-fill: rgba(255, 255, 255, 0.16)') &&
+    unifiedGlassTokens.includes('--newtab-glass-stroke: rgba(255, 255, 255, 0.08)') &&
+    unifiedGlassTokens.includes('--newtab-glass-stroke-width: 1.5px') &&
+    unifiedGlassTokens.includes('--newtab-glass-background-blur: 8px') &&
+    unifiedGlassTokens.includes('--newtab-glass-backdrop-filter: blur(8px)') &&
+    unifiedGlassTokens.includes('--newtab-glass-drop-shadow: 0 8px 20px 8px rgba(0, 0, 0, 0.4)') &&
+    unifiedGlassTokens.includes('--newtab-glass-bg-popup: var(--newtab-glass-bg-fill)') &&
+    unifiedGlassTokens.includes('--newtab-glass-filter-popup: var(--newtab-glass-backdrop-filter)'),
+  'Unified New Tab glass must preserve the fill, slider, stroke, blur, and drop-shadow values from the reference material.'
 )
 
 assert.ok(
     searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_MIN = 52') &&
-    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_DEFAULT = 56') &&
+    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_DEFAULT = 60') &&
     searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_MAX = 92') &&
     searchSettingsStore.includes('const background = clampNumber(') &&
     searchWidget.includes('NEWTAB_SEARCH_BACKGROUND_MIN / 100') &&

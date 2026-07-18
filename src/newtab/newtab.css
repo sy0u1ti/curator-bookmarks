@@ -1,6 +1,38 @@
 :root {
   color-scheme: dark;
   --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
+  /* New Tab unified glass material (reference spec):
+     #000 60% fill, #fff 16% selected/slider fill, #fff 8% / 1.5px inside stroke,
+     uniform 8px background blur, and 0 8px 20px 8px #000/40% elevation. */
+  --newtab-glass-bg-fill: rgba(0, 0, 0, 0.6);
+  --newtab-glass-slider-fill: rgba(255, 255, 255, 0.16);
+  --newtab-glass-stroke: rgba(255, 255, 255, 0.08);
+  --newtab-glass-stroke-width: 1.5px;
+  --newtab-glass-background-blur: 8px;
+  --newtab-glass-backdrop-filter: blur(8px);
+  --newtab-glass-drop-shadow: 0 8px 20px 8px rgba(0, 0, 0, 0.4);
+  /* Semantic aliases keep existing consumers on one material instead of
+     creating hero/card/popup variants that drift from the reference token. */
+  --newtab-glass-bg-hero: var(--newtab-glass-bg-fill);
+  --newtab-glass-bg: var(--newtab-glass-bg-fill);
+  --newtab-glass-bg-faint: var(--newtab-glass-bg-fill);
+  --newtab-glass-bg-card: var(--newtab-glass-bg-fill);
+  --newtab-glass-bg-hover: var(--newtab-glass-bg-fill);
+  --newtab-glass-bg-popup: var(--newtab-glass-bg-fill);
+  --newtab-glass-border: var(--newtab-glass-stroke);
+  --newtab-glass-border-hover: var(--newtab-glass-slider-fill);
+  --newtab-glass-shadow: var(--newtab-glass-drop-shadow);
+  --newtab-glass-shadow-hover: var(--newtab-glass-drop-shadow);
+  /* clip-path clips box-shadow. Merge the 8px spread into the drop-shadow
+     blur so squircle surfaces preserve the reference elevation silhouette. */
+  --newtab-glass-inset: none;
+  --newtab-glass-drop: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.4));
+  --newtab-glass-inset-hover: none;
+  --newtab-glass-drop-hover: var(--newtab-glass-drop);
+  --newtab-glass-filter: var(--newtab-glass-backdrop-filter);
+  --newtab-glass-filter-soft: var(--newtab-glass-backdrop-filter);
+  --newtab-glass-filter-hero: var(--newtab-glass-backdrop-filter);
+  --newtab-glass-filter-popup: var(--newtab-glass-backdrop-filter);
   font-family: var(--newtab-font-sans);
   font-optical-sizing: auto;
   font-synthesis: none;
@@ -60,16 +92,6 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
   --newtab-wallpaper-deblur-duration: 260ms;
   --newtab-wallpaper-reveal-blur: 0px;
-  --newtab-glass-bg-hero: rgba(8, 9, 11, 0.7);
-  --newtab-glass-bg: rgba(10, 11, 13, 0.58);
-  --newtab-glass-bg-faint: rgba(10, 11, 13, 0.6);
-  --newtab-glass-bg-card: rgba(14, 15, 17, 0.7);
-  --newtab-glass-bg-hover: rgba(24, 25, 28, 0.78);
-  --newtab-glass-bg-popup: rgba(7, 8, 10, 0.84);
-  --newtab-glass-border: rgba(245, 245, 247, 0.14);
-  --newtab-glass-border-hover: rgba(245, 245, 247, 0.24);
-  --newtab-glass-shadow: 0 18px 46px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  --newtab-glass-shadow-hover: 0 20px 52px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
   --newtab-bookmark-hover-lift: -2.5px;
   --newtab-bookmark-hover-shadow:
@@ -82,12 +104,6 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
     0 1px 2px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.055),
     inset 0 0 0 1px rgba(245, 245, 247, 0.08);
-  /* squircle 引擎配套：外阴影拆为 drop-shadow 滤镜（跟随 clip-path 轮廓），
-     inset 高光留在 box-shadow（clip 内侧，不受影响）。 */
-  --newtab-glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  --newtab-glass-drop: drop-shadow(0 18px 46px rgba(0, 0, 0, 0.16));
-  --newtab-glass-inset-hover: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  --newtab-glass-drop-hover: drop-shadow(0 20px 52px rgba(0, 0, 0, 0.2));
   --newtab-bookmark-inset: inset 0 1px 0 rgba(255, 255, 255, 0.052);
   --newtab-bookmark-drop: drop-shadow(0 12px 34px rgba(0, 0, 0, 0.12));
   --newtab-focus-outline: 2px solid rgba(245, 245, 247, 0.42);
@@ -99,22 +115,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 0 0 2px rgba(245, 245, 247, 0.5),
     inset 0 0 0 3px rgba(0, 0, 0, 0.28);
-  --newtab-glass-filter: blur(16px) saturate(0.9) brightness(0.82);
-  --newtab-glass-filter-soft: blur(10px) saturate(0.94) brightness(0.88);
-  --newtab-glass-filter-hero: blur(18px) saturate(0.88) brightness(0.68);
-  --newtab-glass-filter-popup: blur(20px) saturate(0.86) brightness(0.74);
   --newtab-focus-ring: 0 0 0 2px rgba(0, 0, 0, 0.68), 0 0 0 4px rgba(245, 245, 247, 0.42);
-}
-
-.newtab-app[data-background-media="true"] {
-  --newtab-glass-bg-hero: rgba(7, 8, 10, 0.76);
-  --newtab-glass-bg: rgba(9, 10, 12, 0.66);
-  --newtab-glass-bg-faint: rgba(9, 10, 12, 0.68);
-  --newtab-glass-bg-card: rgba(13, 14, 16, 0.74);
-  --newtab-glass-bg-hover: rgba(23, 24, 27, 0.82);
-  --newtab-glass-bg-popup: rgba(6, 7, 9, 0.88);
-  --newtab-glass-border: rgba(245, 245, 247, 0.17);
-  --newtab-bookmark-hover-overlay: rgba(245, 245, 247, 0.065);
 }
 
 .newtab-wallpaper-filter {
@@ -181,7 +182,7 @@ html.instant-wallpaper-startup-preview body {
 
 .newtab-app,
 #newtab-settings-drawer {
-  --ds-selected: rgba(245, 245, 247, 0.16);
+  --ds-selected: var(--newtab-glass-slider-fill);
   --ds-accent: rgba(245, 245, 247, 0.22);
   --ds-accent-hover: rgba(245, 245, 247, 0.28);
   --ds-accent-text: rgba(245, 245, 247, 0.92);
@@ -220,6 +221,10 @@ html.instant-wallpaper-startup-preview body {
 
 #newtab-settings-drawer .settings-drawer-panel {
   background: transparent;
+  border-color: var(--newtab-glass-stroke);
+  border-width: var(--newtab-glass-stroke-width);
+  box-shadow: none;
+  filter: var(--newtab-glass-drop);
   will-change: auto;
 }
 
@@ -235,10 +240,10 @@ html.instant-wallpaper-startup-preview body {
   inset: 0;
   z-index: -1;
   border-radius: inherit;
-  background: rgba(7, 8, 10, 0.78);
+  background: var(--newtab-glass-bg-fill);
   pointer-events: none;
-  -webkit-backdrop-filter: blur(18px) saturate(1.14);
-  backdrop-filter: blur(18px) saturate(1.14);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 #newtab-settings-drawer .settings-drawer-scroll {
@@ -647,26 +652,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-
-  :where(
-    .newtab-onboarding-strip,
-    .newtab-delete-toast-panel,
-    .featured-wallpaper-panel,
-    .featured-wallpaper-action,
-    .featured-wallpaper-close,
-    .featured-wallpaper-card-action
-  ) {
-    background-color: #161616 !important;
-    background-image: none !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-
-  #newtab-settings-drawer .settings-drawer-panel::before {
-    background: #101012;
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-  }
 }
 
 @media (prefers-contrast: more) {
@@ -710,6 +695,25 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 :root {
   --bg: var(--ds-bg-page);
   --wallpaper-placeholder-bg: var(--ds-bg-page);
+}
+
+.bookmark-menu-surface,
+.newtab-search,
+.newtab-clock,
+.newtab-onboarding-strip,
+.settings-trigger,
+.newtab-delete-toast-panel,
+.newtab-speed-dial,
+.newtab-portal,
+.newtab-search-suggestions-panel,
+.newtab-search-engine-menu,
+.featured-wallpaper-panel,
+.folder-section-header,
+.bookmark-breadcrumb-item,
+.source-navigation-label,
+.source-navigation-link,
+.folder-section-add {
+  border-width: var(--newtab-glass-stroke-width);
 }
 
 .bookmark-menu-surface {
@@ -1026,6 +1030,15 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   filter: var(--newtab-glass-drop);
 }
 
+.newtab-clock {
+  border-color: var(--newtab-glass-border);
+  background: var(--newtab-glass-bg-hero);
+  box-shadow: var(--newtab-glass-inset);
+  filter: var(--newtab-glass-drop);
+  -webkit-backdrop-filter: var(--newtab-glass-filter-hero);
+  backdrop-filter: var(--newtab-glass-filter-hero);
+}
+
 .newtab-onboarding-strip,
 .settings-trigger,
 .newtab-delete-toast-panel {
@@ -1067,7 +1080,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 /* Lumno-inspired bookmark cards: a restrained physical lift and layered shadow,
    recolored through Curator's neutral glass system instead of per-card saturated surfaces. */
 .bookmark-tile {
-  border-color: rgba(245, 245, 247, 0.1);
+  border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-bg-card);
   box-shadow: var(--newtab-bookmark-shadow);
   filter: none;
@@ -1113,7 +1126,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .newtab-speed-dial-card,
 .newtab-quick-link,
 .bookmark-grid-placeholder {
-  border-color: rgba(245, 245, 247, 0.08);
+  border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-bg-card);
   box-shadow: var(--newtab-bookmark-shadow);
   filter: none;
@@ -1232,11 +1245,12 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 .source-navigation-link {
-  border-color: rgba(245, 245, 247, 0.08);
-  background: rgba(12, 13, 15, 0.2);
-  box-shadow: none;
-  -webkit-backdrop-filter: var(--newtab-glass-filter-soft);
-  backdrop-filter: var(--newtab-glass-filter-soft);
+  border-color: var(--newtab-glass-border);
+  background: var(--newtab-glass-bg-fill);
+  box-shadow: var(--newtab-glass-inset);
+  filter: var(--newtab-glass-drop);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .source-navigation-link:hover,
@@ -1281,11 +1295,11 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .newtab-search-suggestions-panel,
 .newtab-search-engine-menu {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-popup, rgba(7, 8, 10, 0.84));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  filter: drop-shadow(0 22px 56px rgba(0, 0, 0, 0.28));
-  -webkit-backdrop-filter: var(--newtab-glass-filter-popup, blur(20px) saturate(0.86) brightness(0.74));
-  backdrop-filter: var(--newtab-glass-filter-popup, blur(20px) saturate(0.86) brightness(0.74));
+  background: var(--newtab-glass-bg-popup);
+  box-shadow: var(--newtab-glass-inset);
+  filter: var(--newtab-glass-drop);
+  -webkit-backdrop-filter: var(--newtab-glass-filter-popup);
+  backdrop-filter: var(--newtab-glass-filter-popup);
 }
 
 /* 建议面板由 hidden 属性切换 display，展开时只重放透明度淡入；
@@ -1310,18 +1324,18 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 .newtab-search.is-panel-open {
-  border-color: rgba(245, 245, 247, 0.34);
+  border-color: var(--newtab-glass-border-hover);
   border-bottom-color: transparent;
   border-bottom-right-radius: 0;
   border-bottom-left-radius: 0;
-  background: var(--newtab-glass-bg-popup, rgba(7, 8, 10, 0.84));
+  background: var(--newtab-glass-bg-popup);
   box-shadow: none;
   filter: none;
 }
 
 .newtab-search-shell[data-panel-open="true"] .newtab-search-suggestions-panel {
-  top: calc(var(--search-height) - 1px);
-  border-color: rgba(245, 245, 247, 0.34);
+  top: calc(var(--search-height) - var(--newtab-glass-stroke-width));
+  border-color: var(--newtab-glass-border-hover);
   border-top-color: transparent;
   border-radius: 0 0 var(--ui-radius-group) var(--ui-radius-group);
 }
@@ -1520,6 +1534,12 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 .featured-wallpaper-panel {
   min-width: 0;
   width: min(1180px, calc(100vw - 48px));
+  border-color: var(--newtab-glass-border);
+  background: var(--newtab-glass-bg-fill);
+  box-shadow: var(--newtab-glass-inset);
+  filter: var(--newtab-glass-drop);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-head {
@@ -1582,8 +1602,8 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
-  -webkit-backdrop-filter: blur(10px) saturate(1.08);
-  backdrop-filter: blur(10px) saturate(1.08);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-action:hover,
@@ -1742,8 +1762,8 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   color: rgba(245, 245, 247, 0.9);
   font-size: 10px;
   font-weight: 760;
-  -webkit-backdrop-filter: blur(10px) saturate(1.1);
-  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-resolution[data-state="pending"] {
@@ -1780,8 +1800,8 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
-  -webkit-backdrop-filter: blur(10px) saturate(1.1);
-  backdrop-filter: blur(10px) saturate(1.1);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-card:hover .featured-wallpaper-card-action,
@@ -1801,20 +1821,20 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   position: fixed;
   z-index: 10030;
   display: block;
-  border: 1px solid rgba(245, 245, 247, 0.22);
+  border: var(--newtab-glass-stroke-width) solid var(--newtab-glass-border);
   border-radius: var(--ds-radius-sm);
-  background-color: rgba(8, 8, 10, 0.72);
+  background-color: var(--newtab-glass-bg-fill);
   object-fit: cover;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  filter: drop-shadow(0 20px 54px rgba(0, 0, 0, 0.36));
+  box-shadow: var(--newtab-glass-inset);
+  filter: var(--newtab-glass-drop);
   opacity: 0;
   pointer-events: none;
   transform: translateY(4px) scale(0.985);
   transition:
     opacity var(--dropdown-open-dur) var(--dropdown-ease),
     transform var(--dropdown-open-dur) var(--dropdown-ease);
-  -webkit-backdrop-filter: blur(12px) saturate(1.12);
-  backdrop-filter: blur(12px) saturate(1.12);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-hover-preview.is-visible {
@@ -1862,16 +1882,16 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   width: min(360px, calc(100vw - 36px));
   align-items: center;
   gap: 12px;
-  border: 1px solid var(--ds-border);
+  border: var(--newtab-glass-stroke-width) solid var(--newtab-glass-border);
   border-radius: var(--ds-radius-lg);
-  background: rgba(10, 10, 12, 0.82);
-  box-shadow: none;
-  filter: var(--ds-filter-popover);
+  background: var(--newtab-glass-bg-fill);
+  box-shadow: var(--newtab-glass-inset);
+  filter: var(--newtab-glass-drop);
   color: var(--ds-text-primary);
   padding: 12px;
   pointer-events: auto;
-  -webkit-backdrop-filter: blur(14px) saturate(1.12);
-  backdrop-filter: blur(14px) saturate(1.12);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .newtab-delete-toast-copy {

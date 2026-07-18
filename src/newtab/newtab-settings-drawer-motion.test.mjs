@@ -76,11 +76,15 @@ async function verifyNewtabAccessibilityMaterials(page, context) {
     }
   })
   assert.ok(
-    reducedTransparency.backdropFilter === 'none' &&
-      (!reducedTransparency.webkitBackdropFilter || reducedTransparency.webkitBackdropFilter === 'none'),
-    `Reduced transparency should remove glass blur: ${JSON.stringify(reducedTransparency)}`
+    reducedTransparency.backdropFilter === 'blur(8px)' ||
+      reducedTransparency.webkitBackdropFilter === 'blur(8px)',
+    `The user-selected New Tab glass should retain its 8px blur when the OS reduces transparency: ${JSON.stringify(reducedTransparency)}`
   )
-  assert.match(reducedTransparency.backgroundColor, /^rgb\(/, 'Reduced transparency should use an opaque neutral surface')
+  assert.equal(
+    reducedTransparency.backgroundColor,
+    'rgba(0, 0, 0, 0.6)',
+    'The user-selected New Tab glass should retain its 60% black fill when the OS reduces transparency'
+  )
 
   await page.locator('.newtab-search').waitFor({ state: 'visible' })
   await page.locator('.newtab-clock').waitFor({ state: 'visible' })
@@ -96,10 +100,10 @@ async function verifyNewtabAccessibilityMaterials(page, context) {
   assert.equal(utilityGlass.length, 2, `Search and clock glass surfaces should both be present: ${JSON.stringify(utilityGlass)}`)
   for (const material of utilityGlass) {
     assert.ok(
-      material.backdropFilter !== 'none' || (material.webkitBackdropFilter && material.webkitBackdropFilter !== 'none'),
-      `Primary utility glass should retain blur when Windows transparency effects are disabled: ${JSON.stringify(material)}`
+      material.backdropFilter === 'blur(8px)' || material.webkitBackdropFilter === 'blur(8px)',
+      `Primary utility glass should retain blur when the user selected the unified material: ${JSON.stringify(material)}`
     )
-    assert.notEqual(material.backgroundColor, 'rgb(22, 22, 22)', `Primary utility glass should remain translucent: ${JSON.stringify(material)}`)
+    assert.match(material.backgroundColor, /^rgba\(0, 0, 0, 0\.[0-9]+\)$/, `Primary utility glass should remain translucent: ${JSON.stringify(material)}`)
   }
   await captureVisual(page, 'newtab-reduced-transparency')
 

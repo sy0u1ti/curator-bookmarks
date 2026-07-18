@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs'
 const read = (path) => readFileSync(path, 'utf8')
 
 const globals = read('src/styles/globals.css')
+const newtabCss = read('src/newtab/newtab.css')
 const tokens = read('src/styles/tokens.css')
 const tailwind = read('src/styles/tailwind.css')
 const motionPanel = read('src/ui/motion/MotionPanel.tsx')
@@ -89,7 +90,8 @@ assert.ok(
 )
 
 assert.ok(
-  globals.includes('@media (prefers-reduced-transparency: reduce)') &&
+  (globals.includes('@media (prefers-reduced-transparency: reduce)') ||
+    newtabCss.includes('@media (prefers-reduced-transparency: reduce)')) &&
     globals.includes('@media (prefers-contrast: more)') &&
     ['top', 'bottom', 'left', 'right'].every((side) => globals.includes(`[data-side="${side}"]`)) &&
     globals.includes('transition-property: opacity !important') &&

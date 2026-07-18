@@ -845,42 +845,6 @@ body {
   }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .newtab-app {
-    --newtab-glass-bg: rgba(18, 18, 19, 0.96);
-    --newtab-glass-bg-faint: rgba(18, 18, 19, 0.94);
-    --newtab-glass-bg-card: rgba(24, 24, 25, 0.96);
-    --newtab-glass-bg-hover: rgba(34, 34, 35, 0.98);
-    --newtab-glass-filter: none;
-    --newtab-glass-filter-soft: none;
-  }
-
-  :where(
-    .newtab-speed-dial,
-    .newtab-portal,
-    .settings-drawer-panel,
-    .settings-drawer-panel .t-tabs,
-    .bookmark-menu-surface
-  ) {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    background-color: #161616 !important;
-    background-image: none !important;
-  }
-
-  :where(
-    .settings-trigger,
-    .source-navigation-label,
-    .source-navigation-link,
-    .folder-section-header,
-    .folder-section-add
-  ) {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    background-color: #1a1a1a !important;
-  }
-}
-
 @media (prefers-contrast: more) {
   .newtab-app {
     --newtab-glass-border: rgba(255, 255, 255, 0.72);
