@@ -8,8 +8,6 @@ import { NewtabBackgroundLayer } from './components/NewtabBackgroundLayer'
 import { useNewtabAppChromeAttributes } from './components/NewtabBodyClassesHost'
 import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
-import { NewtabWallpaperFilterLayer } from './components/NewtabWallpaperFilterLayer'
-import { NewtabPaperShaderLayer } from './components/NewtabPaperShaderLayer'
 import {
   dispatchNewtabBookmarkChanged,
   dispatchNewtabBookmarkCreated,
@@ -40,7 +38,9 @@ import {
 } from './newtab-settings-drawer-store'
 import { useSettingsDrawerModalMode } from './settings-drawer-mode'
 import {
+  useNewtabPaperShaderActive,
   useNewtabBackgroundSettingsView,
+  useNewtabWallpaperFilterActive,
   type NewtabBackgroundSettingsView
 } from './newtab-background-settings-store'
 import { useNewtabInstantWallpaperView } from './newtab-instant-wallpaper-store'
@@ -72,11 +72,12 @@ const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
 const NEWTAB_REDUCED_MOTION_SELF_CLASS =
   'motion-reduce:![animation:none] motion-reduce:![transform:none]'
 const SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS = 450
+const DEFERRED_HOSTS_IDLE_LOAD_DELAY_MS = 250
 const LOADING_VISIBILITY_CLASS = 'opacity-100 visible [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
 const SETTINGS_TRIGGER_ZONE_BASE_CLASS = `settings-trigger-zone group/settings-trigger-zone fixed top-0 right-0 z-30 h-24 w-[min(360px,calc(100vw-18px))] ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
 const SETTINGS_TRIGGER_ZONE_VISIBLE_CLASS = 'pointer-events-none'
 const SETTINGS_TRIGGER_ZONE_AUTO_HIDE_CLASS = 'pointer-events-auto'
-const SETTINGS_TRIGGER_BUTTON_BASE_CLASS = `settings-trigger absolute top-[18px] right-[18px] inline-flex h-10 min-h-[34px] w-10 min-w-10 cursor-pointer items-center justify-center rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] p-0 text-center leading-none text-[var(--ui-text-secondary)] shadow-none outline-none pointer-events-auto [filter:var(--newtab-glass-drop)] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard),border-color_var(--ui-motion-standard)_var(--ui-ease-standard),color_var(--ui-motion-standard)_var(--ui-ease-standard),transform_160ms_ease] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.34)] aria-expanded:border-[var(--newtab-glass-slider-fill)] aria-expanded:text-[var(--ui-text-primary)] active:[transform:scale(var(--ui-press-scale))] motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-5 [&_svg]:w-5 [&_svg]:flex-none [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-[1.8] [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
+const SETTINGS_TRIGGER_BUTTON_BASE_CLASS = `settings-trigger absolute top-[18px] right-[18px] inline-flex h-10 min-h-[34px] w-10 min-w-10 cursor-pointer items-center justify-center rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] p-0 text-center leading-none text-[var(--ui-text-secondary)] shadow-none outline-none pointer-events-auto [filter:var(--newtab-glass-drop)] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard),border-color_var(--ui-motion-standard)_var(--ui-ease-standard),color_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.34)] aria-expanded:border-[var(--newtab-glass-slider-fill)] aria-expanded:text-[var(--ui-text-primary)] active:[transform:scale(var(--ui-press-scale))] motion-reduce:transition-none motion-reduce:transform-none [&_svg]:h-5 [&_svg]:w-5 [&_svg]:flex-none [&_svg]:fill-none [&_svg]:stroke-current [&_svg]:stroke-[1.8] [&_svg]:[stroke-linecap:round] [&_svg]:[stroke-linejoin:round] ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
 const SETTINGS_TRIGGER_BUTTON_VISIBLE_CLASS = 'opacity-100'
 const SETTINGS_TRIGGER_BUTTON_AUTO_HIDE_CLASS = 'translate-x-2 -translate-y-2 scale-[0.98] opacity-0 group-hover/settings-trigger-zone:translate-x-0 group-hover/settings-trigger-zone:translate-y-0 group-hover/settings-trigger-zone:scale-100 group-hover/settings-trigger-zone:opacity-100 group-focus-within/settings-trigger-zone:translate-x-0 group-focus-within/settings-trigger-zone:translate-y-0 group-focus-within/settings-trigger-zone:scale-100 group-focus-within/settings-trigger-zone:opacity-100 aria-expanded:translate-x-0 aria-expanded:translate-y-0 aria-expanded:scale-100 aria-expanded:opacity-100 [@media(hover:none)]:translate-x-0 [@media(hover:none)]:translate-y-0 [@media(hover:none)]:scale-100 [@media(hover:none)]:opacity-100'
 const SETTINGS_BACKDROP_BASE_CLASS = 'settings-backdrop fixed inset-0 z-[10015] bg-transparent pointer-events-none'
@@ -90,11 +91,17 @@ const NEWTAB_SHELL_CLASS = `newtab-shell relative z-[1] grid h-screen h-dvh item
 
 type SettingsDrawerHostComponent = (typeof import('./components/SettingsDrawer'))['SettingsDrawerHost']
 type NewtabDeferredHostsComponent = (typeof import('./components/NewtabDeferredHosts'))['NewtabDeferredHosts']
+type NewtabWallpaperFilterLayerComponent = (typeof import('./components/NewtabWallpaperFilterLayer'))['NewtabWallpaperFilterLayer']
+type NewtabPaperShaderLayerComponent = (typeof import('./components/NewtabPaperShaderLayer'))['NewtabPaperShaderLayer']
 
 let settingsDrawerHostComponent: SettingsDrawerHostComponent | null = null
 let settingsDrawerHostPromise: Promise<SettingsDrawerHostComponent> | null = null
 let newtabDeferredHostsComponent: NewtabDeferredHostsComponent | null = null
 let newtabDeferredHostsPromise: Promise<NewtabDeferredHostsComponent> | null = null
+let newtabWallpaperFilterLayerComponent: NewtabWallpaperFilterLayerComponent | null = null
+let newtabWallpaperFilterLayerPromise: Promise<NewtabWallpaperFilterLayerComponent> | null = null
+let newtabPaperShaderLayerComponent: NewtabPaperShaderLayerComponent | null = null
+let newtabPaperShaderLayerPromise: Promise<NewtabPaperShaderLayerComponent> | null = null
 
 function loadSettingsDrawerHost(): Promise<SettingsDrawerHostComponent> {
   if (settingsDrawerHostComponent) {
@@ -116,6 +123,28 @@ function loadNewtabDeferredHosts(): Promise<NewtabDeferredHostsComponent> {
     return module.NewtabDeferredHosts
   })
   return newtabDeferredHostsPromise
+}
+
+function loadNewtabWallpaperFilterLayer(): Promise<NewtabWallpaperFilterLayerComponent> {
+  if (newtabWallpaperFilterLayerComponent) {
+    return Promise.resolve(newtabWallpaperFilterLayerComponent)
+  }
+  newtabWallpaperFilterLayerPromise ||= import('./components/NewtabWallpaperFilterLayer').then((module) => {
+    newtabWallpaperFilterLayerComponent = module.NewtabWallpaperFilterLayer
+    return module.NewtabWallpaperFilterLayer
+  })
+  return newtabWallpaperFilterLayerPromise
+}
+
+function loadNewtabPaperShaderLayer(): Promise<NewtabPaperShaderLayerComponent> {
+  if (newtabPaperShaderLayerComponent) {
+    return Promise.resolve(newtabPaperShaderLayerComponent)
+  }
+  newtabPaperShaderLayerPromise ||= import('./components/NewtabPaperShaderLayer').then((module) => {
+    newtabPaperShaderLayerComponent = module.NewtabPaperShaderLayer
+    return module.NewtabPaperShaderLayer
+  })
+  return newtabPaperShaderLayerPromise
 }
 
 function subscribeToNewtabBookmarkEvents(): () => void {
@@ -313,17 +342,70 @@ function DeferredNewtabHosts() {
     }
 
     let active = true
-    void loadNewtabDeferredHosts().then((Component) => {
-      if (active) {
-        setHost(() => Component)
-      }
-    })
+    const delayTimer = window.setTimeout(() => {
+      runIdle(() => {
+        void loadNewtabDeferredHosts().then((Component) => {
+          if (active) {
+            setHost(() => Component)
+          }
+        })
+      }, { timeout: 1200 })
+    }, DEFERRED_HOSTS_IDLE_LOAD_DELAY_MS)
     return () => {
       active = false
+      window.clearTimeout(delayTimer)
     }
   }, [Host])
 
   return Host ? <Host /> : null
+}
+
+function NewtabWallpaperFilterLayer() {
+  const active = useNewtabWallpaperFilterActive()
+  const [Layer, setLayer] = useState<NewtabWallpaperFilterLayerComponent | null>(
+    newtabWallpaperFilterLayerComponent
+  )
+
+  useEffect(() => {
+    if (!active || Layer) {
+      return
+    }
+    let mounted = true
+    void loadNewtabWallpaperFilterLayer().then((Component) => {
+      if (mounted) {
+        setLayer(() => Component)
+      }
+    })
+    return () => {
+      mounted = false
+    }
+  }, [active, Layer])
+
+  return active && Layer ? <Layer /> : null
+}
+
+function NewtabPaperShaderLayer() {
+  const active = useNewtabPaperShaderActive()
+  const [Layer, setLayer] = useState<NewtabPaperShaderLayerComponent | null>(
+    newtabPaperShaderLayerComponent
+  )
+
+  useEffect(() => {
+    if (!active || Layer) {
+      return
+    }
+    let mounted = true
+    void loadNewtabPaperShaderLayer().then((Component) => {
+      if (mounted) {
+        setLayer(() => Component)
+      }
+    })
+    return () => {
+      mounted = false
+    }
+  }, [active, Layer])
+
+  return active && Layer ? <Layer /> : null
 }
 
 function DeferredSettingsDrawerHost({ requested }: { requested: boolean }) {

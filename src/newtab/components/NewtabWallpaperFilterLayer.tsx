@@ -12,6 +12,13 @@ const FILTER_RENDER_MAX_WIDTH = 1920
 const FILTER_RENDER_MAX_HEIGHT = 1080
 const FILTER_BACKGROUND_COLOR = '#101013'
 const FILTER_HOVER_FADE_MS = 240
+const FILTER_SAFE_ZONE_CACHE_MS = 400
+const FILTER_SAFE_ZONE_PADDING_PX = 36
+const FILTER_SAFE_ZONE_SELECTORS = [
+  '.newtab-search-shell',
+  '.bookmark-folder-section',
+  '.newtab-speed-dial-panel'
+] as const
 
 interface FilterColor {
   red: number
@@ -48,6 +55,13 @@ interface AsciiGlyphMetrics {
   glyphWidth: number
 }
 
+interface FilterSafeZoneRect {
+  bottom: number
+  left: number
+  right: number
+  top: number
+}
+
 let asciiGlyphMetricsCache: AsciiGlyphMetrics | null = null
 
 export function NewtabWallpaperFilterLayer() {
@@ -71,6 +85,9 @@ export function NewtabWallpaperFilterLayer() {
     let currentSampler: FilterSampler | null = null
     let hoverState: HoverRenderState = { intensity: 0, x: 0, y: 0 }
     let hoverFading = false
+    let safeZoneRects: FilterSafeZoneRect[] = []
+    let safeZoneRectsUpdatedAt = Number.NEGATIVE_INFINITY
+    const sampleCanvas = document.createElement('canvas')
 
     const clear = () => {
       canvas.dataset.ready = 'false'
@@ -158,7 +175,7 @@ export function NewtabWallpaperFilterLayer() {
         const ready = await waitForFilterImage(image, media.src)
         if (ready && !cancelled) {
           renderSampler(
-            createFilterSampler(image, image.naturalWidth, image.naturalHeight) ||
+            createFilterSampler(image, image.naturalWidth, image.naturalHeight, sampleCanvas) ||
             createSolidColorSampler(background.color)
           )
         } else if (!cancelled) {
@@ -170,7 +187,7 @@ export function NewtabWallpaperFilterLayer() {
         const video = document.querySelector<HTMLVideoElement>('.newtab-background-video')
         if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
           renderSampler(
-            createFilterSampler(video, video.videoWidth, video.videoHeight) ||
+            createFilterSampler(video, video.videoWidth, video.videoHeight, sampleCanvas) ||
             createSolidColorSampler(background.color)
           )
         } else {
@@ -182,6 +199,7 @@ export function NewtabWallpaperFilterLayer() {
     }
 
     const scheduleResizeRender = () => {
+      safeZoneRectsUpdatedAt = Number.NEGATIVE_INFINITY
       window.clearTimeout(resizeTimer)
       resizeTimer = window.setTimeout(() => {
         void renderCurrentSource()
@@ -189,7 +207,7 @@ export function NewtabWallpaperFilterLayer() {
     }
 
     const renderHoverState = () => {
-      if (!currentSampler || hoverRenderFrame) return
+      if (!currentSampler || hoverRenderFrame || document.visibilityState === 'hidden') return
       hoverRenderFrame = window.requestAnimationFrame(() => {
         hoverRenderFrame = 0
         if (currentSampler && !cancelled) {
@@ -223,10 +241,17 @@ export function NewtabWallpaperFilterLayer() {
     }
 
     const handlePointerMove = (event: PointerEvent) => {
-      if (!background.maskFilterHover || !doesFilterStyleSupportHover(background.maskStyle)) {
+      if (
+        document.visibilityState === 'hidden' ||
+        !background.maskFilterHover ||
+        !doesFilterStyleSupportHover(background.maskStyle)
+      ) {
         return
       }
-      if (isFilterHoverSafeTarget(event.target) || isPointerInFilterSafeZone(event.clientX, event.clientY)) {
+      if (
+        isFilterHoverSafeTarget(event.target) ||
+        isPointerInFilterSafeZone(event.clientX, event.clientY, getSafeZoneRects())
+      ) {
         fadeHoverState()
         return
       }
@@ -253,18 +278,44 @@ export function NewtabWallpaperFilterLayer() {
       if (cancelled || media.kind !== 'video') {
         return
       }
-      if (document.visibilityState !== 'hidden') {
-        void renderCurrentSource()
+      if (document.visibilityState === 'hidden') {
+        videoTimer = 0
+        return
       }
+      void renderCurrentSource()
       videoTimer = window.setTimeout(renderVideoFrame, FILTER_VIDEO_FRAME_INTERVAL_MS)
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && media.kind === 'video') {
+      if (document.visibilityState === 'hidden') {
+        window.clearTimeout(videoTimer)
+        videoTimer = 0
+        window.cancelAnimationFrame(hoverFrame)
+        window.cancelAnimationFrame(hoverRenderFrame)
+        hoverFrame = 0
+        hoverRenderFrame = 0
+        hoverFading = false
+        return
+      }
+      if (media.kind === 'video') {
         window.clearTimeout(videoTimer)
         void renderCurrentSource()
         videoTimer = window.setTimeout(renderVideoFrame, FILTER_VIDEO_FRAME_INTERVAL_MS)
       }
+    }
+
+    const getSafeZoneRects = (): FilterSafeZoneRect[] => {
+      const now = performance.now()
+      if (now - safeZoneRectsUpdatedAt < FILTER_SAFE_ZONE_CACHE_MS) {
+        return safeZoneRects
+      }
+      safeZoneRects = readFilterSafeZoneRects()
+      safeZoneRectsUpdatedAt = now
+      return safeZoneRects
+    }
+
+    const invalidateSafeZoneRects = () => {
+      safeZoneRectsUpdatedAt = Number.NEGATIVE_INFINITY
     }
 
     void renderCurrentSource()
@@ -275,6 +326,7 @@ export function NewtabWallpaperFilterLayer() {
     window.addEventListener('pointermove', handlePointerMove, { passive: true })
     window.addEventListener('pointerleave', clearHoverState, { passive: true })
     window.addEventListener('blur', clearHoverState)
+    document.addEventListener('scroll', invalidateSafeZoneRects, { capture: true, passive: true })
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
@@ -290,6 +342,7 @@ export function NewtabWallpaperFilterLayer() {
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerleave', clearHoverState)
       window.removeEventListener('blur', clearHoverState)
+      document.removeEventListener('scroll', invalidateSafeZoneRects, true)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [
@@ -336,7 +389,8 @@ function resizeFilterCanvas(canvas: HTMLCanvasElement, context: CanvasRenderingC
 function createFilterSampler(
   source: CanvasImageSource,
   naturalWidth: number,
-  naturalHeight: number
+  naturalHeight: number,
+  canvas = document.createElement('canvas')
 ): FilterSampler | null {
   if (!naturalWidth || !naturalHeight) {
     return null
@@ -346,9 +400,10 @@ function createFilterSampler(
     FILTER_SAMPLE_MAX_WIDTH / naturalWidth,
     FILTER_SAMPLE_MAX_HEIGHT / naturalHeight
   )
-  const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(naturalWidth * sampleScale))
-  canvas.height = Math.max(1, Math.round(naturalHeight * sampleScale))
+  const sampleWidth = Math.max(1, Math.round(naturalWidth * sampleScale))
+  const sampleHeight = Math.max(1, Math.round(naturalHeight * sampleScale))
+  if (canvas.width !== sampleWidth) canvas.width = sampleWidth
+  if (canvas.height !== sampleHeight) canvas.height = sampleHeight
   const context = canvas.getContext('2d', { willReadFrequently: true })
   if (!context) {
     return null
@@ -641,21 +696,30 @@ function isFilterHoverSafeTarget(target: EventTarget | null): boolean {
   ))
 }
 
-function isPointerInFilterSafeZone(clientX: number, clientY: number): boolean {
-  const selectors = [
-    '.newtab-search-shell',
-    '.bookmark-folder-section',
-    '.newtab-speed-dial-panel'
-  ]
-  return selectors.some((selector) => {
-    return Array.from(document.querySelectorAll(selector)).some((element) => {
+function readFilterSafeZoneRects(): FilterSafeZoneRect[] {
+  return FILTER_SAFE_ZONE_SELECTORS.flatMap((selector) => {
+    return Array.from(document.querySelectorAll(selector), (element) => {
       const rect = element.getBoundingClientRect()
-      const padding = 36
-      return clientX >= rect.left - padding &&
-        clientX <= rect.right + padding &&
-        clientY >= rect.top - padding &&
-        clientY <= rect.bottom + padding
+      return {
+        bottom: rect.bottom + FILTER_SAFE_ZONE_PADDING_PX,
+        left: rect.left - FILTER_SAFE_ZONE_PADDING_PX,
+        right: rect.right + FILTER_SAFE_ZONE_PADDING_PX,
+        top: rect.top - FILTER_SAFE_ZONE_PADDING_PX
+      }
     })
+  })
+}
+
+function isPointerInFilterSafeZone(
+  clientX: number,
+  clientY: number,
+  rects: FilterSafeZoneRect[]
+): boolean {
+  return rects.some((rect) => {
+    return clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
   })
 }
 

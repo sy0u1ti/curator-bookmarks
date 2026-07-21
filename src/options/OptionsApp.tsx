@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -11,9 +13,8 @@ import { Icon } from '../ui/icons/Icon'
 import type { IconName } from '../ui/icons/icon-map'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getMotionAwareScrollBehavior } from '../shared/motion'
-import { BookmarkHistoryPanel } from './components/BookmarkHistoryPanel'
-import { AiAnalysisPanel, AvailabilityPanel, GeneralPanel } from './components/CorePanels'
-import { OptionsModals } from './components/OptionsModals'
+import { GeneralPanel } from './components/GeneralPanel'
+import { useOptionsModalsState } from './components/options-modals-store'
 import {
   getOptionsSectionNavigationFromLink,
   type OptionsSectionKey
@@ -46,15 +47,33 @@ import {
   optionsSidebarLabelClass
 } from './components/options-chrome-classes'
 import { useOptionsSectionChrome } from './useOptionsSectionChrome'
-import {
-  BackupPanel,
-  DuplicatesPanel,
-  FolderCleanupPanel,
-  HistoryPanel,
-  IgnoreRulesPanel,
-  RecyclePanel,
-  RedirectsPanel
-} from './components/TaskPanels'
+
+const AvailabilityPanel = lazy(() => import('./components/AvailabilityPanel').then((module) => ({ default: module.AvailabilityPanel })))
+const AiAnalysisPanel = lazy(() => import('./components/AiAnalysisPanel').then((module) => ({ default: module.AiAnalysisPanel })))
+const BookmarkHistoryPanel = lazy(() => import('./components/BookmarkHistoryPanel').then((module) => ({ default: module.BookmarkHistoryPanel })))
+const HistoryPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.HistoryPanel })))
+const BackupPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.BackupPanel })))
+const RedirectsPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.RedirectsPanel })))
+const DuplicatesPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.DuplicatesPanel })))
+const FolderCleanupPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.FolderCleanupPanel })))
+const IgnoreRulesPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.IgnoreRulesPanel })))
+const RecyclePanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.RecyclePanel })))
+
+type OptionsModalsComponent = (typeof import('./components/OptionsModals'))['OptionsModals']
+
+let optionsModalsComponent: OptionsModalsComponent | null = null
+let optionsModalsPromise: Promise<OptionsModalsComponent> | null = null
+
+function loadOptionsModals(): Promise<OptionsModalsComponent> {
+  if (optionsModalsComponent) {
+    return Promise.resolve(optionsModalsComponent)
+  }
+  optionsModalsPromise ||= import('./components/OptionsModals').then((module) => {
+    optionsModalsComponent = module.OptionsModals
+    return module.OptionsModals
+  })
+  return optionsModalsPromise
+}
 
 interface NavLink {
   section: string
@@ -442,25 +461,83 @@ export function OptionsApp() {
         <div className={optionsLayoutClass}>
           <OptionsSidebar activeSectionKey={sectionKey} onNavigate={handleSectionNavigationClick} />
           <main id="options-main" className={optionsMainClass} ref={optionsMainRef} tabIndex={-1}>
-            <GeneralPanel
-              aiProviderAnchorRef={handleAiProviderAnchorRef}
-              aiProviderAttentionRequestId={aiProviderAttentionRequestId}
-              hidden={sectionKey !== 'general'}
-            />
-            <AvailabilityPanel hidden={sectionKey !== 'availability'} />
-            <HistoryPanel hidden={sectionKey !== 'history'} />
-            <AiAnalysisPanel hidden={sectionKey !== 'ai'} />
-            <BookmarkHistoryPanel hidden={sectionKey !== 'bookmark-history'} />
-            <BackupPanel hidden={sectionKey !== 'backup'} />
-            <RedirectsPanel hidden={sectionKey !== 'redirects'} />
-            <DuplicatesPanel hidden={sectionKey !== 'duplicates'} />
-            <FolderCleanupPanel hidden={sectionKey !== 'folder-cleanup'} />
-            <IgnoreRulesPanel hidden={sectionKey !== 'ignore'} />
-            <RecyclePanel hidden={sectionKey !== 'recycle'} />
+            <Suspense fallback={<OptionsPanelLoading />}>
+              <ActiveOptionsPanel
+                aiProviderAnchorRef={handleAiProviderAnchorRef}
+                aiProviderAttentionRequestId={aiProviderAttentionRequestId}
+                sectionKey={sectionKey}
+              />
+            </Suspense>
           </main>
         </div>
       </div>
-      <OptionsModals />
+      <DeferredOptionsModals />
     </ThemeProvider>
   )
+}
+
+function ActiveOptionsPanel({
+  aiProviderAnchorRef,
+  aiProviderAttentionRequestId,
+  sectionKey
+}: {
+  aiProviderAnchorRef: (node: HTMLDivElement | null) => void
+  aiProviderAttentionRequestId: number
+  sectionKey: OptionsSectionKey
+}) {
+  if (sectionKey === 'general') {
+    return (
+      <GeneralPanel
+        aiProviderAnchorRef={aiProviderAnchorRef}
+        aiProviderAttentionRequestId={aiProviderAttentionRequestId}
+        hidden={false}
+      />
+    )
+  }
+  if (sectionKey === 'availability') return <AvailabilityPanel hidden={false} />
+  if (sectionKey === 'history') return <HistoryPanel hidden={false} />
+  if (sectionKey === 'ai') return <AiAnalysisPanel hidden={false} />
+  if (sectionKey === 'bookmark-history') return <BookmarkHistoryPanel hidden={false} />
+  if (sectionKey === 'backup') return <BackupPanel hidden={false} />
+  if (sectionKey === 'redirects') return <RedirectsPanel hidden={false} />
+  if (sectionKey === 'duplicates') return <DuplicatesPanel hidden={false} />
+  if (sectionKey === 'folder-cleanup') return <FolderCleanupPanel hidden={false} />
+  if (sectionKey === 'ignore') return <IgnoreRulesPanel hidden={false} />
+  return <RecyclePanel hidden={false} />
+}
+
+function OptionsPanelLoading() {
+  return (
+    <output
+      className="grid min-h-40 place-items-center text-sm text-ds-text-muted"
+      aria-live="polite"
+    >
+      正在载入…
+    </output>
+  )
+}
+
+function DeferredOptionsModals() {
+  const modals = useOptionsModalsState()
+  const open = modals.confirm.open || modals.delete.open || modals.move.open || modals.scope.open
+  const [Modals, setModals] = useState<OptionsModalsComponent | null>(optionsModalsComponent)
+
+  useEffect(() => {
+    if (Modals || !open) {
+      return
+    }
+
+    let active = true
+    void loadOptionsModals().then((Component) => {
+      if (active) {
+        setModals(() => Component)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [Modals, open])
+
+  return Modals ? <Modals /> : null
 }

@@ -1,25 +1,22 @@
-import { Menu as BaseMenu } from '@base-ui/react/menu'
 import {
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
-  type ReactElement,
   type Ref,
   type RefObject
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
-import { MotionPanel } from '../../ui/motion/MotionPanel'
 import { NEWTAB_SEARCH_BACKGROUND_MIN } from '../newtab-search-settings-store'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
   type SearchChipViewModel,
-  type SearchEngineMenuState,
   type SearchHintState,
   type SearchSuggestionViewModel
 } from '../newtab-search-widget-store'
@@ -28,12 +25,6 @@ import {
   SEARCH_CLEAR_BUTTON_CLASS,
   SEARCH_ENGINE_BUTTON_CLASS,
   SEARCH_ENGINE_CARET_CLASS,
-  SEARCH_ENGINE_ITEM_CLASS,
-  SEARCH_ENGINE_ITEM_INDICATOR_CLASS,
-  SEARCH_ENGINE_MENU_CLASS,
-  SEARCH_ENGINE_MENU_HINT_CLASS,
-  SEARCH_ENGINE_MENU_ITEMS_CLASS,
-  SEARCH_ENGINE_MENU_POSITIONER_CLASS,
   SEARCH_FORM_CLASS,
   SEARCH_FORM_PANEL_OPEN_CLASS,
   SEARCH_HINT_CLASS,
@@ -58,6 +49,22 @@ import {
   getSearchSuggestionClass,
   getSearchSuggestionMarkClass
 } from './searchWidgetClasses'
+
+type NewtabSearchEngineMenuComponent = (typeof import('./NewtabSearchEngineMenu'))['NewtabSearchEngineMenu']
+
+let newtabSearchEngineMenuComponent: NewtabSearchEngineMenuComponent | null = null
+let newtabSearchEngineMenuPromise: Promise<NewtabSearchEngineMenuComponent> | null = null
+
+function loadNewtabSearchEngineMenu(): Promise<NewtabSearchEngineMenuComponent> {
+  if (newtabSearchEngineMenuComponent) {
+    return Promise.resolve(newtabSearchEngineMenuComponent)
+  }
+  newtabSearchEngineMenuPromise ||= import('./NewtabSearchEngineMenu').then((module) => {
+    newtabSearchEngineMenuComponent = module.NewtabSearchEngineMenu
+    return module.NewtabSearchEngineMenu
+  })
+  return newtabSearchEngineMenuPromise
+}
 
 function handleSearchContextMenu(event: ReactMouseEvent<HTMLDivElement>): void {
   event.stopPropagation()
@@ -148,9 +155,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
           <SearchWidgetClearButton view={view} />
           <SearchWidgetSeparator view={view} />
           <SearchWidgetNaturalButton view={view} />
-          <SearchWidgetEngineMenuRoot view={view} buttonRef={engineButtonRef} menuRef={engineMenuRef}>
-            <SearchWidgetEngineButton view={view} buttonRef={engineButtonRef} />
-          </SearchWidgetEngineMenuRoot>
+          <DeferredSearchEngineMenu view={view} buttonRef={engineButtonRef} menuRef={engineMenuRef} />
           <SearchWidgetSubmitButton view={view} />
         </form>
         <SearchWidgetSuggestionsPanel view={view} />
@@ -257,17 +262,19 @@ function SearchWidgetNaturalButton({ view }: { view: NewtabSearchWidgetView }) {
   )
 }
 
-function SearchWidgetEngineButton({
+function SearchWidgetEngineButtonFallback({
   buttonRef,
+  onRequest,
   view
 }: {
   buttonRef: Ref<HTMLButtonElement>
+  onRequest: () => void
   view: NewtabSearchWidgetView
 }) {
   const { engine } = view.buttons
 
   return (
-    <BaseMenu.Trigger
+    <Button
       className={SEARCH_ENGINE_BUTTON_CLASS}
       type="button"
       aria-label={engine.ariaLabel}
@@ -276,57 +283,73 @@ function SearchWidgetEngineButton({
       onMouseDown={(event) => {
         if (!engine.disabled) {
           event.preventDefault()
+          onRequest()
+          view.interactions.onEngineOpenChange(true)
+        }
+      }}
+      onPointerEnter={() => {
+        void loadNewtabSearchEngineMenu()
+      }}
+      onFocus={() => {
+        void loadNewtabSearchEngineMenu()
+      }}
+      onClick={() => {
+        if (!engine.disabled) {
+          onRequest()
           view.interactions.onEngineOpenChange(true)
         }
       }}
       ref={buttonRef}
+      unstyled
     >
       {engine.label}
       <Icon name="ChevronDown" className={SEARCH_ENGINE_CARET_CLASS} size={12} aria-hidden="true" />
-    </BaseMenu.Trigger>
+    </Button>
   )
 }
 
-function SearchWidgetEngineMenuRoot({
+function DeferredSearchEngineMenu({
   buttonRef,
-  children,
   menuRef,
   view
 }: {
   buttonRef: RefObject<HTMLButtonElement | null>
-  children: ReactElement
   menuRef: Ref<HTMLDivElement>
   view: NewtabSearchWidgetView
 }) {
-  const { engineMenu } = view
+  const [Menu, setMenu] = useState<NewtabSearchEngineMenuComponent | null>(
+    newtabSearchEngineMenuComponent
+  )
 
-  return (
-    <BaseMenu.Root
-      open={engineMenu.open}
-      modal={false}
-      onOpenChange={(open) => {
-        view.interactions.onEngineOpenChange(open)
-      }}
-    >
-      {children}
-      <BaseMenu.Portal keepMounted>
-        <BaseMenu.Positioner
-          className={SEARCH_ENGINE_MENU_POSITIONER_CLASS}
-          positionMethod="absolute"
-          sideOffset={8}
-        >
-          <BaseMenu.Popup
-            render={<MotionPanel variant="menu" className={SEARCH_ENGINE_MENU_CLASS} />}
-            data-origin="top-right"
-            aria-label="搜索引擎"
-            finalFocus={buttonRef}
-            ref={menuRef}
-          >
-            <SearchEngineMenu state={engineMenu} />
-          </BaseMenu.Popup>
-        </BaseMenu.Positioner>
-      </BaseMenu.Portal>
-    </BaseMenu.Root>
+  const mountMenu = () => {
+    void loadNewtabSearchEngineMenu().then((Component) => {
+      setMenu(() => Component)
+    })
+  }
+
+  useEffect(() => {
+    if (Menu || !view.engineMenu.open) {
+      return
+    }
+    let active = true
+    void loadNewtabSearchEngineMenu().then((Component) => {
+      if (active) {
+        setMenu(() => Component)
+      }
+    })
+    return () => {
+      active = false
+    }
+  }, [Menu, view.engineMenu.open])
+
+  return Menu ? (
+    <Menu view={view} buttonRef={buttonRef} menuRef={menuRef} />
+  ) : (
+    <SearchWidgetEngineButtonFallback
+      view={view}
+      buttonRef={buttonRef}
+      onRequest={mountMenu}
+    />
   )
 }
 
@@ -357,36 +380,6 @@ function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }
         <SearchHint state={view.hint} />
       </output>
     </div>
-  )
-}
-
-function SearchEngineMenu({ state }: { state: SearchEngineMenuState }) {
-  return (
-    <>
-      <BaseMenu.RadioGroup
-        className={SEARCH_ENGINE_MENU_ITEMS_CLASS}
-        value={state.items.find((item) => item.active)?.id || ''}
-      >
-        {state.items.map((item) => (
-          <BaseMenu.RadioItem
-            className={SEARCH_ENGINE_ITEM_CLASS}
-            closeOnClick={false}
-            key={item.id}
-            label={item.label}
-            onClick={() => {
-              void item.onSelect()
-            }}
-            value={item.id}
-          >
-            <span>{item.label}</span>
-            <BaseMenu.RadioItemIndicator className={SEARCH_ENGINE_ITEM_INDICATOR_CLASS}>
-              <Icon name="Check" size={12} aria-hidden="true" />
-            </BaseMenu.RadioItemIndicator>
-          </BaseMenu.RadioItem>
-        ))}
-      </BaseMenu.RadioGroup>
-      <div className={SEARCH_ENGINE_MENU_HINT_CLASS}>{state.hint}</div>
-    </>
   )
 }
 

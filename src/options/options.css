@@ -85,6 +85,35 @@ body,
   transition-duration: 80ms !important;
 }
 
+.options-shell .curator-button:is(:disabled, [data-disabled]) {
+  border-color: var(--ds-border);
+  background: var(--ds-surface-2);
+  color: var(--ds-text-disabled);
+  opacity: 1;
+}
+
+.options-settings-ready-body {
+  animation: options-settings-content-reveal var(--duration-quick) var(--ds-ease-standard) both;
+}
+
+@keyframes options-settings-content-reveal {
+  from {
+    opacity: 0.72;
+    transform: translate3d(0, 2px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .options-settings-ready-body {
+    animation: none;
+  }
+}
+
 .options-stable-number,
 .options-stable-number :where(.t-number, .t-number-value) {
   font-variant-numeric: tabular-nums;

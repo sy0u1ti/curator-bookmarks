@@ -4,6 +4,7 @@ function run(): void {
   const html = readFileSync('src/popup/popup.html', 'utf8')
   const main = readFileSync('src/popup/main.tsx', 'utf8')
   const popupCss = readFileSync('src/popup/popup.css', 'utf8')
+  const motionTokens = readFileSync('src/styles/tokens.css', 'utf8')
   const popupChrome = readFileSync('src/popup/components/PopupChromeHost.tsx', 'utf8')
   const popupContent = readFileSync('src/popup/components/PopupContent.tsx', 'utf8')
   const popupController = readFileSync('src/popup/popup-controller.ts', 'utf8')
@@ -11,6 +12,10 @@ function run(): void {
   const popupSmartClassifier = readFileSync('src/popup/components/PopupSmartClassifier.tsx', 'utf8')
   const pinyinSearch = readFileSync('src/shared/search/pinyin.ts', 'utf8')
   const viteConfig = readFileSync('vite.config.ts', 'utf8')
+  const popupSearchRunner = popupController.slice(
+    popupController.indexOf('function runSearch()'),
+    popupController.indexOf('async function runNaturalSearch')
+  )
 
   assert(html.includes('background: transparent;'), 'critical shell must keep the provisional viewport transparent')
   assert(html.includes('id="popup-preboot-shell"'), 'critical shell must include a preboot search shell')
@@ -40,11 +45,23 @@ function run(): void {
   assert(popupContent.includes('mountQuickActions={actionsMounted || row.active}') && popupContent.includes('const quickActions = mountQuickActions'), 'collapsed bookmark rows must defer hidden quick-action controls until interaction')
   assert((popupController.match(/schedulePinyinEnrichment\(/g) || []).length === 2, 'pinyin enrichment must run only from the on-demand query path, not during cold open')
   assert(popupController.includes('batchSize: POPUP_PINYIN_BATCH_SIZE') && popupController.includes('runIdle(startEnrichment'), 'on-demand pinyin enrichment must remain idle-scheduled and cooperatively batched')
+  assert(
+    popupSearchRunner.indexOf('ensurePinyinEnrichmentForQuery(query)') > 0 &&
+      popupSearchRunner.indexOf('ensurePinyinEnrichmentForQuery(query)') < popupSearchRunner.indexOf('state.searchCache.get(cacheKey)'),
+    'every search rerun must restore invalidated pinyin enrichment before reading cached results'
+  )
+  assert(!/runId !== state\.pinyinEnrichmentRunId\) \{\s*state\.pinyinEnrichmentPending = false/.test(popupController), 'stale pinyin jobs must not clear the pending state owned by a newer run')
   assert(pinyinSearch.includes('Math.max(8, options.batchSize ?? 250)'), 'cooperative pinyin enrichment must honor popup-sized batches below 50 items')
   assert(!popupContent.includes('[will-change:opacity]'), 'initial content layers must not keep permanent compositor hints')
   assert(popupContent.includes("'t-skel popup-t-skel relative h-full min-h-0'") && popupContent.includes('t-skel-skeleton is-pulsing') && popupContent.includes("isLoading ? '' : 'is-revealed'"), 'popup workspace loading must use the shared skeleton reveal state hooks')
   assert(popupSmartClassifier.includes('t-skel popup-t-skel popup-page-reveal') && popupSmartClassifier.includes('t-skel-content popup-page-content'), 'current-page loading must use the shared skeleton reveal layers')
-  assert(popupCss.includes('--reveal-dur: 180ms') && popupCss.includes('--reveal-blur: 0px') && popupCss.includes('--reveal-translate-y: 4px'), 'popup skeleton reveal must remain crisp and compositor-only')
+  assert(
+    motionTokens.includes('--reveal-dur: 180ms') &&
+      motionTokens.includes('--reveal-blur: 0px') &&
+      popupCss.includes('--reveal-translate-y: var(--distance-micro)') &&
+      popupCss.includes('--reveal-ease: var(--ease-smooth-out)'),
+    'popup skeleton reveal must remain crisp, compositor-only, and token driven'
+  )
   assert(/\.t-skel\.popup-t-skel \.t-skel-content\s*\{[^}]*filter:\s*none;[^}]*transform:\s*translate3d/s.test(popupCss), 'popup loaded text must never enter through a large-area blur filter')
   assert(!popupEmptyState.includes('useMotionEntrance') && !popupEmptyState.includes('t-stagger'), 'empty-state meaning must appear immediately without delayed text motion')
   assert(!popupSmartClassifier.includes('<TextSwap animate') && !popupSmartClassifier.includes('<NumberPop'), 'live popup status text must update without replacement motion')

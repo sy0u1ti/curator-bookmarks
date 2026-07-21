@@ -7,6 +7,7 @@ export interface ContentSnapshotSettingsChangeDetail {
 export interface ContentSnapshotControlsState {
   enabled: boolean
   fullTextDisabled: boolean
+  loading: boolean
   saveFullText: boolean
   statusCopy: string
 }

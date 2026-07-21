@@ -54,8 +54,16 @@ export const AI_SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
 export const AI_SETTINGS_FIELD_TIP_CLASS =
   'm-0 px-4 py-3 text-[13px] leading-[1.65] text-ds-text-muted'
 
+export const AI_SETTINGS_LOADING_BADGE_CLASS =
+  'inline-flex h-2.5 w-14 flex-none rounded-full bg-ds-text-primary/[0.055]'
+
+export const AI_SETTINGS_LOADING_SWITCH_CLASS =
+  'absolute inset-0 rounded-full border border-ds-border-subtle bg-ds-surface-3/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.015)]'
+
+export const AI_SETTINGS_READY_BODY_CLASS = 'options-settings-ready-body'
+
 export const AI_SETTINGS_HELP_TOOLTIP_CLASS =
   'ml-1.5 inline-flex size-4 cursor-help items-center justify-center rounded-full border border-ds-hover bg-transparent p-0 text-[11px] leading-none text-ds-text-secondary align-[1px] shadow-none hover:border-ds-border hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
 
 export const AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS =
-  'z-[80] w-[min(300px,calc(100vw-48px))] rounded-ds-sm border border-ds-hover bg-ds-app p-[10px_12px] text-left text-xs font-medium leading-[1.6] text-ds-text-primary [filter:var(--ds-filter-popover)] transition-[opacity,transform] duration-ds-standard ease-ds-standard data-starting-style:translate-y-1 data-starting-style:opacity-0 data-ending-style:translate-y-1 data-ending-style:opacity-0 motion-reduce:transition-none'
+  'z-[80] w-[min(300px,calc(100vw-48px))] rounded-ds-sm border border-ds-hover bg-ds-app p-[10px_12px] text-left text-xs font-medium leading-[1.6] text-ds-text-primary [filter:var(--ds-filter-popover)]'

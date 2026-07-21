@@ -5,7 +5,9 @@ import {
   AI_SETTINGS_COPY_CLASS,
   AI_SETTINGS_FIELD_TIP_CLASS,
   AI_SETTINGS_HEADER_CLASS,
+  AI_SETTINGS_LOADING_SWITCH_CLASS,
   AI_SETTINGS_NARROW_CARD_CLASS,
+  AI_SETTINGS_READY_BODY_CLASS,
   AI_SETTINGS_ROW_CLASS,
   AI_SETTINGS_ROW_TITLE_CLASS,
   AI_SETTINGS_SECONDARY_CLASS,
@@ -37,7 +39,8 @@ export function ContentSnapshotControls() {
       status={contentSnapshotStatus}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
       iconName="ArchiveRestore"
-      bodyClassName={AI_SETTINGS_BODY_CLASS}
+      bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
+      aria-busy={state.loading ? 'true' : undefined}
     >
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
@@ -45,14 +48,18 @@ export function ContentSnapshotControls() {
           <span className={AI_SETTINGS_SECONDARY_CLASS}>保存标题、摘要和链接信息。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
-          <SwitchControl
-            aria-label="保存网页内容索引"
-            checked={state.enabled}
-            className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
-            thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
-            onCheckedChange={(enabled) => handleContentSnapshotSettingsChange({ enabled })}
-            unstyled
-          />
+          {state.loading ? (
+            <span className={AI_SETTINGS_LOADING_SWITCH_CLASS} aria-hidden="true" />
+          ) : (
+            <SwitchControl
+              aria-label="保存网页内容索引"
+              checked={state.enabled}
+              className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
+              thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
+              onCheckedChange={(enabled) => handleContentSnapshotSettingsChange({ enabled })}
+              unstyled
+            />
+          )}
         </span>
       </div>
       <div className={AI_SETTINGS_ROW_CLASS}>
@@ -61,22 +68,26 @@ export function ContentSnapshotControls() {
           <span className={AI_SETTINGS_SECONDARY_CLASS}>正文纳入本地搜索，仅保存在本机。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
-          <SwitchControl
-            aria-label="保存完整正文"
-            checked={state.saveFullText}
-            className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
-            disabled={state.fullTextDisabled}
-            thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
-            onCheckedChange={(saveFullText) => handleContentSnapshotSettingsChange({
-              saveFullText,
-              syncFullTextSearch: true
-            })}
-            unstyled
-          />
+          {state.loading ? (
+            <span className={AI_SETTINGS_LOADING_SWITCH_CLASS} aria-hidden="true" />
+          ) : (
+            <SwitchControl
+              aria-label="保存完整正文"
+              checked={state.saveFullText}
+              className={AI_SETTINGS_SWITCH_CONTROL_CLASS}
+              disabled={state.fullTextDisabled}
+              thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
+              onCheckedChange={(saveFullText) => handleContentSnapshotSettingsChange({
+                saveFullText,
+                syncFullTextSearch: true
+              })}
+              unstyled
+            />
+          )}
         </span>
       </div>
       <p className={AI_SETTINGS_FIELD_TIP_CLASS}>
-        {state.statusCopy}
+        {state.loading ? '正在读取本地设置…' : state.statusCopy}
       </p>
     </AiProviderCard>
   )

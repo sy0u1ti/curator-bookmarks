@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { FeatureSettingsControlsState } from './feature-settings-types.js'
 
 const defaultFeatureSettingsControlsState: FeatureSettingsControlsState = {
+  loading: true,
   switches: []
 }
 

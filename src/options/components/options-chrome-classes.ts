@@ -32,7 +32,7 @@ export const navCollapsibleClass =
 export const navLinkClass = [
   'curator-motion-row relative flex min-h-[36px] w-full items-center justify-start gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-0',
   '[font-family:var(--font-sans)] text-[13px] font-semibold text-left text-ds-text-secondary',
-  '[transition:background_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
+  '[transition:background-color_var(--ds-motion-standard)_var(--ds-ease-standard),color_var(--ds-motion-standard)_var(--ds-ease-standard),transform_var(--ds-motion-fast)_var(--ds-ease-standard)]',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary',
   'active:scale-[0.985]',

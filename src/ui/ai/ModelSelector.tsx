@@ -2,15 +2,16 @@ import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { SearchIcon, XIcon } from 'lucide-react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
 import { Button } from '../base/Button'
+import { DialogBackdrop, DialogPanel } from '../base/Dialog'
 import { Input } from '../base/Input'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
   'inline-flex min-h-[50px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-none text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
 const MODEL_SELECTOR_BACKDROP_CLASS =
-  'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:opacity-0 data-starting-style:opacity-0 supports-[-webkit-touch-callout:none]:absolute'
+  'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =
-  'model-selector-content fixed left-1/2 top-[46%] z-[1201] max-h-[min(520px,calc(100dvh-72px))] w-[min(520px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-2 p-0 text-ds-text-primary [filter:var(--ds-filter-dialog)] outline-none transition-[opacity,transform] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:translate-y-[calc(-50%+8px)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:translate-y-[calc(-50%+8px)] data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[760px]:top-1/2 max-[760px]:w-[min(520px,calc(100vw-24px))]'
+  'model-selector-content fixed left-1/2 top-[46%] z-[1201] max-h-[min(520px,calc(100dvh-72px))] w-[min(520px,calc(100vw-36px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-2 p-0 text-ds-text-primary [filter:var(--ds-filter-dialog)] outline-none max-[760px]:top-1/2 max-[760px]:w-[min(520px,calc(100vw-24px))]'
 const MODEL_SELECTOR_COMMAND_CLASS = 'flex min-h-0 max-h-[inherit] flex-col bg-ds-surface-2'
 const MODEL_SELECTOR_INPUT_WRAPPER_CLASS =
   'grid min-h-[50px] grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-2.5 border-b border-ds-border-subtle px-3.5 text-ds-text-muted'
@@ -69,15 +70,15 @@ export function ModelSelectorContent({
 }: ModelSelectorContentProps) {
   return (
     <BaseDialog.Portal keepMounted={false}>
-      <BaseDialog.Backdrop className={cx(MODEL_SELECTOR_BACKDROP_CLASS, backdropClassName)} />
-      <BaseDialog.Popup
+      <DialogBackdrop className={cx(MODEL_SELECTOR_BACKDROP_CLASS, backdropClassName)} />
+      <DialogPanel
         aria-describedby={undefined}
         className={cx(MODEL_SELECTOR_CONTENT_CLASS, className)}
         {...props}
       >
         <BaseDialog.Title className="sr-only">{title}</BaseDialog.Title>
         <div className={MODEL_SELECTOR_COMMAND_CLASS}>{children}</div>
-      </BaseDialog.Popup>
+      </DialogPanel>
     </BaseDialog.Portal>
   )
 }

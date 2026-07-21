@@ -67,8 +67,8 @@ export function ScopePickerTriggerButton({
       onClick={() => handleScopePickerTriggerOpen(source)}
       unstyled
     >
-      <Icon className="text-ds-accent-hover" name="ChevronDown" size={14} aria-hidden="true" />
       <span className={SCOPE_PICKER_LABEL_CLASS}>{state.label}</span>
+      <Icon className="ml-auto shrink-0 text-ds-text-secondary" name="ChevronDown" size={14} aria-hidden="true" />
     </Button>
   )
 }

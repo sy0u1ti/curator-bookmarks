@@ -10,5 +10,5 @@ export type CollapsibleRootProps = Omit<
 }
 
 export function CollapsibleRoot({ className, ...props }: CollapsibleRootProps) {
-  return <BaseCollapsible.Root className={cx('t-acc grid gap-2', className)} {...props} />
+  return <BaseCollapsible.Root className={cx('t-acc grid', className)} {...props} />
 }

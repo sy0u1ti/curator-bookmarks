@@ -38,6 +38,8 @@ const startupReducedTransparencyMaskRule = newtabHtml.match(
   /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-startup-background-mask\s*\{([^}]*)\}/
 )?.[1] || ''
 const searchSurfaceRule = newtabCss.match(/\.newtab-search\s*\{([^}]*)\}/s)?.[1] || ''
+const bookmarkTileRule = newtabCss.match(/\.bookmark-tile\s*\{([^}]*)\}/s)?.[1] || ''
+const utilityModuleEnterRule = newtabCss.match(/\.newtab-utility-stack > \*\s*\{([^}]*)\}/s)?.[1] || ''
 const reducedTransparencyOpaqueSelectors = [globalsCss, newtabCss]
   .flatMap((source) => [...source.matchAll(/:where\(\s*([^)]*?)\s*\)\s*\{[^}]*background-color:\s*#161616\s*!important;/g)])
   .map((match) => match[1])
@@ -432,17 +434,17 @@ assert.ok(
 
 assert.ok(
   newtabCss.includes('newtab-utility-module-enter') &&
-    newtabCss.includes('.newtab-utility-stack > *'),
-  'Utility modules (clock/search/onboarding) should fade in on hydration instead of popping into the layout.'
+    utilityModuleEnterRule.includes('animation: newtab-utility-module-enter var(--ui-motion-standard) var(--ui-ease-standard)') &&
+    !/\b(?:both|forwards)\b/.test(utilityModuleEnterRule),
+  'Utility modules should fade in on hydration, then release the animation stacking context so descendant glass can sample the wallpaper.'
 )
 
 assert.ok(
   !bookmarkTileClasses.includes('backdrop-filter:blur') &&
     !speedDialClasses.includes('speed-dial-card-filter') &&
-    newtabCss.includes('.bookmark-tile {') &&
-    newtabCss.includes('-webkit-backdrop-filter: none;') &&
-    newtabCss.includes('backdrop-filter: none;'),
-  'Repeated small cards should avoid individual backdrop-filter layers during startup.'
+    bookmarkTileRule.includes('-webkit-backdrop-filter: var(--newtab-glass-filter)') &&
+    bookmarkTileRule.includes('backdrop-filter: var(--newtab-glass-filter)'),
+  'Bookmark cards should use the unified glass blur in their resting state instead of appearing only translucent.'
 )
 
 assert.ok(
@@ -550,9 +552,10 @@ assert.ok(
 )
 
 assert.ok(
-  bookmarkIconShell.includes('blur(4px)') &&
-    bookmarkIconShell.includes('data-[favicon-ready=true]:[filter:blur(0)]'),
-  'Bookmark favicons should reveal with a Lumno-style blur-up (only on first load; cached favicons start settled).'
+  !bookmarkIconShell.includes('filter:blur') &&
+    bookmarkIconShell.includes('var(--icon-swap-dur)') &&
+    bookmarkIconShell.includes('data-[favicon-ready=true]:[transform:scale(1)]'),
+  'Bookmark favicons should cross-fade on compositor properties without a per-card blur rasterization.'
 )
 
 assert.ok(

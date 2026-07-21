@@ -1383,7 +1383,7 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   border-radius: 5px;
   object-fit: contain;
   opacity: 0;
-  transition: opacity 90ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity var(--icon-swap-dur, 130ms) var(--icon-swap-ease, ease-in-out);
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-favicon[data-ready="true"] {
@@ -1403,7 +1403,7 @@ html[data-instant-wallpaper-signature] #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   font-weight: 800;
   line-height: 1;
   opacity: 1;
-  transition: opacity 90ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity var(--icon-swap-dur, 130ms) var(--icon-swap-ease, ease-in-out);
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-fallback[data-hidden="true"] {

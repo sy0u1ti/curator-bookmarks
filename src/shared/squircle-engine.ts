@@ -21,6 +21,7 @@ import { generateClipPath, getLayoutSize, observeResize, parseBoxShadow } from '
 const SMOOTHING = 0.6
 const MIN_RADIUS_PX = 3
 const ENGINE_FLAG = '__curatorSquircleEngine'
+const SQUIRCLE_CLASS_HINT = /(?:^|\s)(?:t-tabs|t-tab|t-tabs-pill|popup-preboot-search|popup-active-result-indicator|popup-row-actions|popup-bookmark-drag-ghost|settings-drawer-scrollbar-track|settings-drawer-scrollbar-thumb|bookmark-add-menu-trigger-icon|featured-wallpaper-status|featured-wallpaper-state|featured-wallpaper-section-empty|featured-wallpaper-preview|featured-wallpaper-resolution|featured-wallpaper-card-action|featured-wallpaper-hover-preview|newtab-delete-toast-panel)(?:\s|$)/
 
 interface TrackedEntry {
   unobserve: () => void
@@ -145,6 +146,11 @@ function consider(el: HTMLElement): void {
   if (tracked.has(el) || !el.isConnected) return
   if (el.dataset.squircle === 'off') return
   const className = el.getAttribute('class') ?? ''
+  // Most descendants (text wrappers and SVG internals in particular) cannot
+  // have a rounded surface. Reject them before getComputedStyle(), which can
+  // otherwise force hundreds of style resolutions during a large bookmark
+  // mount. CSS-only rounded classes are covered by the explicit hint list.
+  if (!isPotentialSquircleCandidate(el, className)) return
   const style = getComputedStyle(el)
   // 元素自带 clip-path（开关滑块、壁纸遮罩等）不参与，避免互相覆盖；
   // 引擎自己写过的（data-sq="on"，含首帧 eager 路径）要接管 resize 跟踪。
@@ -156,6 +162,27 @@ function consider(el: HTMLElement): void {
   if (declaresFocusRingShadow(className)) el.dataset.sqFocus = 'ring'
   const unobserve = observeResize(el, () => applyClip(el))
   tracked.set(el, { unobserve })
+}
+
+function isPotentialSquircleCandidate(el: HTMLElement, className: string): boolean {
+  if (el.dataset.sq === 'on' || className.includes('rounded') || SQUIRCLE_CLASS_HINT.test(className)) {
+    return true
+  }
+
+  if (
+    el.style.borderRadius ||
+    el.style.borderTopLeftRadius ||
+    el.style.borderTopRightRadius ||
+    el.style.borderBottomRightRadius ||
+    el.style.borderBottomLeftRadius
+  ) {
+    return true
+  }
+
+  return el.localName === 'button' ||
+    el.localName === 'input' ||
+    el.localName === 'textarea' ||
+    el.localName === 'select'
 }
 
 function untrack(el: HTMLElement): void {
@@ -174,6 +201,7 @@ function scanSubtree(root: Element): void {
   const descendants = root.querySelectorAll<HTMLElement>('*')
   let skippedSubtree: HTMLElement | null = null
   for (const el of descendants) {
+    if (!(el instanceof HTMLElement)) continue
     if (skippedSubtree?.contains(el)) continue
     skippedSubtree = null
     if (el.dataset.squircleSubtree === 'off') {

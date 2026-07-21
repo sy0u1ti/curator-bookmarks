@@ -20,7 +20,7 @@ const EMPTY_ACTIONS_CLASS = 'mt-0.5 flex flex-wrap justify-center gap-[7px]'
 const EMPTY_ACTION_CLASS = [
   'inline-flex min-h-7 items-center justify-center rounded-[7px] border px-2.5 text-xs font-bold',
   'border-[rgba(245,245,247,0.28)] bg-ds-surface-2 [color:var(--ds-text-secondary)]',
-  'transition-[background-color,border-color,color,transform] duration-150 ease-ds-standard',
+  'transition-[background-color,border-color,color,transform] duration-[var(--duration-quick)] ease-ds-standard',
   'hover:border-[rgba(245,245,247,0.54)] hover:bg-ds-hover hover:[color:var(--ds-text-primary)]',
   'focus-visible:border-[rgba(245,245,247,0.54)] focus-visible:bg-ds-hover focus-visible:[color:var(--ds-text-primary)]',
   'active:scale-[0.98]'

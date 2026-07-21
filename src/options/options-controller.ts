@@ -427,8 +427,10 @@ async function startOptionsController(): Promise<void> {
   }
   syncPageSection()
   void hydrateShortcutCommands()
+  const remoteParserPermissionPromise = hydrateRemoteParserPermissionState()
 
   await hydratePersistentState()
+  await remoteParserPermissionPromise
   await hydrateAvailabilityCatalog()
   await hydrateProbePermission()
   await hydrateAiNamingPermissionState()
@@ -1332,7 +1334,19 @@ async function hydrateAiNamingPermissionState() {
     aiNamingState.permissionGranted = false
     aiNamingState.remoteParserPermissionGranted = false
   } finally {
+    aiNamingState.permissionStateHydrated = true
     aiNamingState.requestingPermission = false
+    renderAvailabilitySection()
+  }
+}
+
+async function hydrateRemoteParserPermissionState(): Promise<void> {
+  try {
+    aiNamingState.remoteParserPermissionGranted = await hasJinaReaderPermission()
+  } catch {
+    aiNamingState.remoteParserPermissionGranted = false
+  } finally {
+    aiNamingState.permissionStateHydrated = true
     renderAvailabilitySection()
   }
 }
@@ -2800,6 +2814,7 @@ function renderContentSnapshotSettings() {
   publishContentSnapshotControls({
     enabled: Boolean(settings.enabled),
     fullTextDisabled: !settings.enabled,
+    loading: availabilityState.storageLoading,
     saveFullText: Boolean(settings.saveFullText),
     statusCopy: contentSnapshotState.statusMessage || aiRunCopy || modeCopy
   })
@@ -3205,6 +3220,7 @@ function renderFeatureSettingsControls(
       : 'muted'
 
   publishFeatureSettingsControls({
+    loading: availabilityState.storageLoading || !aiNamingState.permissionStateHydrated,
     switches: [
       {
         checked: Boolean(settings.autoAnalyzeBookmarks),

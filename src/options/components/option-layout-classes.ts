@@ -129,7 +129,7 @@ export const SCOPE_PICKER_TRIGGER_CLASS = [
   'curator-motion-chip relative inline-flex min-h-9 min-w-[220px] max-w-full items-center justify-start gap-2 overflow-visible',
   'rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[0_12px]',
   'font-[var(--font-sans)] text-[13px] font-semibold leading-[1.25] text-ds-text-primary text-left',
-  'transition-[background,border-color,color,transform,opacity] duration-200 ease-ds-standard',
+  'transition-[background-color,border-color,color,transform,opacity] duration-ds-standard ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-focus focus-visible:bg-ds-surface-2 focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-ds-focus focus-visible:shadow-none',
   'active:scale-[0.985] disabled:cursor-default disabled:opacity-55 data-disabled:cursor-default data-disabled:opacity-55',
@@ -137,4 +137,4 @@ export const SCOPE_PICKER_TRIGGER_CLASS = [
 ].join(' ')
 
 export const SCOPE_PICKER_LABEL_CLASS =
-  'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap leading-[1.25]'
+  'min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap leading-[1.25]'

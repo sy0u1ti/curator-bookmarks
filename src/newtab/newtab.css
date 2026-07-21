@@ -58,7 +58,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
    绝不过渡 margin-top——位移动画会让 getBoundingClientRect 读到动画中间值，
    污染下一次测量并形成可见的上下漂移。 */
 .newtab-search-slot[data-search-auto-vertical-center="true"] {
-  transition: opacity 180ms var(--ui-ease-standard);
+  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
 /* 时钟/搜索/引导条在 storage 水合后一次性挂载：轻淡入替代瞬间弹现。
@@ -74,7 +74,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
 }
 
 .newtab-utility-stack > * {
-  animation: newtab-utility-module-enter 180ms var(--ui-ease-standard) both;
+  animation: newtab-utility-module-enter var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -89,9 +89,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
 
 .newtab-app {
   --newtab-wallpaper-focus-duration: 280ms;
-  --newtab-wallpaper-focus-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --newtab-wallpaper-deblur-duration: 260ms;
-  --newtab-wallpaper-reveal-blur: 0px;
+  --newtab-wallpaper-focus-ease: var(--panel-ease);
   --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
   --newtab-bookmark-hover-lift: -2.5px;
   --newtab-bookmark-hover-shadow:
@@ -122,7 +120,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   opacity: 0;
   contain: strict;
   transform: translateZ(0);
-  transition: opacity 180ms var(--ui-ease-standard);
+  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
 .newtab-wallpaper-filter[data-ready="false"] {
@@ -134,7 +132,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
   isolation: isolate;
   pointer-events: none;
   transform: translateZ(0);
-  transition: opacity 180ms var(--ui-ease-standard);
+  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
 .newtab-paper-shader > div,
@@ -144,6 +142,7 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .newtab-wallpaper-filter,
   .newtab-paper-shader {
     transition: none;
   }
@@ -428,13 +427,13 @@ html.instant-wallpaper-startup-preview .newtab-app {
   filter: none;
   transform: none;
   transition:
-    opacity var(--page-fade-dur, 250ms) var(--page-fade-ease, var(--panel-ease)),
-    transform var(--page-slide-dur, 250ms) var(--page-slide-ease, var(--panel-ease));
+    opacity var(--page-fade-dur) var(--page-fade-ease),
+    transform var(--page-slide-dur) var(--page-slide-ease);
   will-change: auto;
 }
 
 #newtab-settings-drawer .settings-tab-panels {
-  --settings-page-slide-distance: 52px;
+  --settings-page-slide-distance: var(--page-slide-distance);
   overflow: hidden;
 }
 
@@ -459,7 +458,7 @@ html.instant-wallpaper-startup-preview .newtab-app {
 
 #newtab-settings-drawer .settings-tab-panels > .t-tabs-panel[data-ending-style] {
   pointer-events: none;
-  transition-duration: var(--duration-quick, 150ms);
+  transition-duration: var(--duration-quick);
 }
 
 #newtab-settings-drawer .settings-tab-panels[data-slide-direction="forward"] > .t-tabs-panel[data-ending-style] {
@@ -771,16 +770,14 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   opacity: 1;
   transform: translateY(0) scale(1);
   transform-origin: top right;
-  animation: newtab-bookmark-add-content-enter var(--dropdown-open-dur) var(--dropdown-ease) both;
 }
 
 .bookmark-add-menu-content.is-collapsed {
   gap: 0;
 }
 
-.bookmark-add-menu-content.is-expanded,
-.bookmark-edit-menu-shell {
-  animation-duration: var(--resize-dur);
+.bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
+  animation: newtab-bookmark-add-content-enter var(--resize-dur) var(--resize-ease) both;
 }
 
 .bookmark-menu-surface .bookmark-menu-row {
@@ -819,8 +816,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   transition:
     border-color var(--ui-motion-fast) var(--ui-ease-standard),
     background-color var(--ui-motion-fast) var(--ui-ease-standard),
-    box-shadow var(--ui-motion-fast) var(--ui-ease-standard),
-    filter var(--ui-motion-fast) var(--ui-ease-standard);
+    box-shadow var(--ui-motion-fast) var(--ui-ease-standard);
 }
 
 .bookmark-menu-surface .base-input:hover,
@@ -915,7 +911,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   color: rgba(245, 245, 247, 0.7);
   line-height: 1.35;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
-  animation: newtab-bookmark-menu-feedback-enter 180ms var(--dropdown-ease) both;
+  animation: newtab-bookmark-menu-feedback-enter var(--ds-motion-standard) var(--dropdown-ease) both;
 }
 
 .bookmark-edit-menu .bookmark-menu-warning {
@@ -951,7 +947,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 
 .bookmark-add-menu .bookmark-menu-error {
   color: #ffb7b0;
-  animation: newtab-bookmark-add-error-enter 260ms var(--dropdown-ease) both;
+  animation: newtab-bookmark-add-error-enter var(--duration-fast) var(--dropdown-ease) both;
 }
 
 @keyframes newtab-bookmark-add-content-enter {
@@ -1084,8 +1080,8 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   background: var(--newtab-glass-bg-card);
   box-shadow: var(--newtab-bookmark-shadow);
   filter: none;
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  -webkit-backdrop-filter: var(--newtab-glass-filter);
+  backdrop-filter: var(--newtab-glass-filter);
   transform: none;
 }
 
@@ -1105,10 +1101,10 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
   box-shadow: var(--newtab-bookmark-hover-inset);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 170ms var(--ui-ease-standard);
+  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
-.bookmark-tile:not(.bookmark-drag-ghost) > * {
+.bookmark-tile:not(.bookmark-drag-ghost) > :not(.bookmark-drag-handle) {
   position: relative;
   z-index: 1;
 }
@@ -1120,7 +1116,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 }
 
 .bookmark-title {
-  transition: color 170ms var(--ui-ease-standard);
+  transition: color var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
 .newtab-speed-dial-card,
@@ -1139,10 +1135,6 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
     border-color: var(--newtab-glass-border-hover);
     box-shadow: var(--newtab-bookmark-hover-shadow);
     transform: translateY(var(--newtab-bookmark-hover-lift));
-    /* 仅悬停单卡启用毛玻璃：静息 72 卡保持 backdrop-filter:none 护首屏性能，
-       悬停时用软化玻璃令牌加深景深，贴近 Lumno 卡片的 blur 加深手感。 */
-    -webkit-backdrop-filter: var(--newtab-glass-filter-soft);
-    backdrop-filter: var(--newtab-glass-filter-soft);
   }
 
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before {
@@ -1305,7 +1297,7 @@ html.instant-wallpaper-startup-preview .newtab-app::before {
 /* 建议面板由 hidden 属性切换 display，展开时只重放透明度淡入；
    搜索框和面板共享 shell 的左边界与宽度，动效不参与定位。 */
 .newtab-search-suggestions-panel:not([hidden]) {
-  animation: newtab-search-panel-fade-in var(--dropdown-open-dur, 190ms) var(--dropdown-ease, var(--ds-ease-standard)) both;
+  animation: newtab-search-panel-fade-in var(--dropdown-open-dur) var(--dropdown-ease) both;
 }
 
 @keyframes newtab-search-panel-fade-in {

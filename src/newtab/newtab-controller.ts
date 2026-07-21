@@ -15,7 +15,7 @@ import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../s
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { consumeNewtabStartupData, getBookmarkTree } from './newtab-startup-data.js'
 import { downloadBlobFile } from '../shared/download.js'
-import { getMotionDurationMs, prefersReducedMotion } from '../shared/motion.js'
+import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import {
   getSettingsGroupControlSyncActions,
@@ -4193,7 +4193,7 @@ async function settleNewtabDragGhost(
     ],
     {
       duration: getMotionDurationMs('--drag-settle-dur', 160),
-      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      easing: getMotionEasing('--ease-smooth-out', 'cubic-bezier(0.22, 1, 0.36, 1)'),
       fill: 'forwards'
     }
   )
@@ -4246,10 +4246,10 @@ function renderWithFolderFlip(): void {
         { transform: 'translate3d(0, 0, 0)' }
       ],
       {
-        // 与书签卡片让位（BOOKMARK_TILE_DRAG_RESTING_MOTION_CLASS）完全对齐：
-        // 150ms + 同一 cubic-bezier，两种模式的重排手感统一。
-        duration: 150,
-        easing: 'cubic-bezier(0.22, 0.72, 0.18, 1)'
+        // 与书签卡片让位（BOOKMARK_TILE_DRAG_RESTING_MOTION_CLASS）共用
+        // drag settle 时长和 easing，避免不同拖拽模式在落位时变速。
+        duration: getMotionDurationMs('--drag-settle-dur', 160),
+        easing: getMotionEasing('--ease-smooth-out', 'cubic-bezier(0.22, 1, 0.36, 1)')
       }
     )
   }

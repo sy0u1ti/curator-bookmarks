@@ -17,8 +17,10 @@ export function CollapsiblePanel({
 }: CollapsiblePanelProps & { children?: ReactNode }) {
   return (
     <BaseCollapsible.Panel keepMounted={keepMounted} className="t-acc-panel" {...props}>
-      <div className={cx('t-acc-panel-inner', className)}>
-        {children}
+      <div className="t-acc-panel-inner">
+        <div className={cx('t-acc-panel-content pt-2', className)}>
+          {children}
+        </div>
       </div>
     </BaseCollapsible.Panel>
   )

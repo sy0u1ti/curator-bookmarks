@@ -176,6 +176,7 @@ let smartProgressTimer: number | null = null
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
+let popupFolderBookmarkCounts = new Map<string, number>()
 let unregisterPopupActionHandlers: (() => void) | null = null
 let unregisterPopupBrowserEventActions: (() => void) | null = null
 let queuedActiveResultIndex: number | null = null
@@ -757,6 +758,7 @@ function applyPopupIndexedBookmarkData({
   state.allFolders = catalog.extracted.folders
   state.bookmarkMap = new Map(indexedBookmarks.map((bookmark) => [bookmark.id, bookmark]))
   state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
+  popupFolderBookmarkCounts = buildPopupFolderBookmarkCounts(indexedBookmarks)
   state.folderMap = catalog.extracted.folderMap
   popupBookmarkCatalog = catalog
   state.searchTagIndex = catalog.tagIndex
@@ -906,7 +908,6 @@ function schedulePinyinEnrichment(runId: number): void {
   const targets = state.allBookmarks
   const startEnrichment = () => {
     if (runId !== state.pinyinEnrichmentRunId) {
-      state.pinyinEnrichmentPending = false
       return
     }
     enrichLightPopupSearchIndexWithPinyin(targets, {
@@ -1260,6 +1261,9 @@ function runSearch() {
     abortNaturalSearchRequest()
     return
   }
+  // Searches are also rerun after preboot adoption and deferred index patches,
+  // so the canonical search path must re-arm any invalidated pinyin enrichment.
+  ensurePinyinEnrichmentForQuery(query)
   maybeWarmPopupSnapshotFullTextForSearch()
   if (state.naturalSearchEnabled) {
     runNaturalSearch(query, normalizedQuery, runId)
@@ -2058,9 +2062,21 @@ function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
 function getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot): string {
   const folderId = String(node?.id || '')
   const count = isPinnedRoot
-    ? getFilteredBookmarksForFolder(null).length
-    : getFilteredBookmarksForFolder(folderId).length
+    ? state.allBookmarks.length
+    : (popupFolderBookmarkCounts.get(folderId) || 0)
   return String(count)
+}
+
+function buildPopupFolderBookmarkCounts(
+  bookmarks: PopupSearchBookmark[]
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const bookmark of bookmarks) {
+    for (const folderId of bookmark.ancestorIds) {
+      counts.set(folderId, (counts.get(folderId) || 0) + 1)
+    }
+  }
+  return counts
 }
 
 function getDirectBookmarkRecords(

@@ -218,6 +218,7 @@ export const aiNamingState = {
   requestingPermission: false,
   pendingFeatureSwitch: '',
   permissionGranted: false,
+  permissionStateHydrated: false,
   remoteParserPermissionGranted: false,
   runStartedAt: 0,
   checkedBookmarks: 0,

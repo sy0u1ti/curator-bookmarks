@@ -50,7 +50,7 @@ export function ShortcutControls() {
   ].join(' ')
 
   return (
-    <div className={SHORTCUT_CARD_CLASS}>
+    <div className={SHORTCUT_CARD_CLASS} aria-busy={state.loading ? 'true' : undefined}>
       <div className={SHORTCUT_HEAD_CLASS}>
         <div className={SHORTCUT_COPY_CLASS}>
           <div className={SHORTCUT_TITLE_ROW_CLASS}>
@@ -70,7 +70,7 @@ export function ShortcutControls() {
           {state.detail}
         </p>
       ) : null}
-      <div className={SHORTCUT_LIST_CLASS}>
+      <div className={`${SHORTCUT_LIST_CLASS} ${state.loading ? '' : 'options-settings-ready-body'}`}>
         <ShortcutList state={state.list} />
       </div>
       <div className={SHORTCUT_ACTIONS_CLASS}>

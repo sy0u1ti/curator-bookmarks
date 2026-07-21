@@ -134,10 +134,10 @@ export const AI_PROVIDER_GRID_CLASS =
   'grid grid-cols-2 items-start gap-3.5 max-[760px]:grid-cols-1'
 
 export const AI_PROVIDER_DIALOG_BACKDROP_CLASS =
-  `options-modal-backdrop ai-provider-dialog-backdrop fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 backdrop-blur-[14px] transition-opacity duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:opacity-0 data-starting-style:opacity-0 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-backdrop ai-provider-dialog-backdrop fixed inset-0 z-30 grid place-items-center bg-black/70 p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_CLASS =
-  `options-modal-panel ai-provider-dialog-panel fixed left-1/2 top-1/2 z-40 max-h-[calc(100vh-40px)] w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-ds-md border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none transition-[scale,opacity] duration-[var(--modal-open-dur)] ease-[var(--modal-ease)] data-ending-style:duration-[var(--modal-close-dur)] data-ending-style:scale-[0.98] data-ending-style:opacity-0 data-starting-style:scale-[0.98] data-starting-style:opacity-0 max-[640px]:max-w-[calc(100vw-32px)] max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-panel ai-provider-dialog-panel fixed left-1/2 top-1/2 z-40 max-h-[calc(100vh-40px)] w-full max-w-[520px] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-ds-md border border-ds-border-subtle bg-ds-app p-[24px_24px_22px] text-ds-text-primary shadow-none max-[640px]:max-w-[calc(100vw-32px)] max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const AI_PROVIDER_DIALOG_EYEBROW_CLASS =
   'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
@@ -163,7 +163,7 @@ export const AI_PROVIDER_DIALOG_CLOSE_CLASS =
   'inline-flex h-9 items-center justify-center gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-medium leading-none text-ds-text-primary outline-none transition-colors hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'
 
 export const AI_CONFIG_LINK_CLASS =
-  'inline-flex min-h-[38px] cursor-pointer appearance-none items-center justify-center rounded-ds-sm border px-4 text-xs font-medium leading-[1.2] no-underline transition-colors focus-visible:outline-none'
+  'inline-flex min-h-10 cursor-pointer appearance-none items-center justify-center rounded-ds-sm border px-4 text-xs font-medium leading-[1.2] no-underline transition-colors focus-visible:outline-none'
 
 export const AI_CONFIG_LINK_DEFAULT_CLASS =
   'border-ds-border bg-ds-surface-2 text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover'

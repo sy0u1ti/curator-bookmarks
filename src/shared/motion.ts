@@ -27,6 +27,13 @@ export function getMotionDurationMs(variableName: string, fallbackMs: number): n
   return raw.endsWith('s') && !raw.endsWith('ms') ? value * 1000 : value
 }
 
+export function getMotionEasing(variableName: string, fallback: string): string {
+  if (typeof document === 'undefined') {
+    return fallback
+  }
+  return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim() || fallback
+}
+
 export function getModalCloseDurationMs(fallbackMs = DEFAULT_MODAL_CLOSE_MS): number {
   if (prefersReducedMotion()) {
     return REDUCED_MOTION_DURATION_MS

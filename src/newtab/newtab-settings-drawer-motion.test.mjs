@@ -12,8 +12,12 @@ const visualCaptureDir = process.env.CURATOR_VISUAL_CAPTURE_DIR
 const performanceRecords = []
 const bookmarkDropContinuityOnly = process.argv.includes('--bookmark-drop-continuity-only')
 const optionsAvailabilityOnly = process.argv.includes('--options-availability-only')
+const optionsBordersOnly = process.argv.includes('--options-borders-only')
+const optionsRefreshOnly = process.argv.includes('--options-refresh-only')
 const optionsScopePickerOnly = process.argv.includes('--options-scope-picker-only')
+const overlayMotionOnly = process.argv.includes('--overlay-motion-only')
 const popupReorderOnly = process.argv.includes('--popup-reorder-only')
+const collapsibleMotionOnly = process.argv.includes('--collapsible-motion-only')
 
 async function captureVisual(page, name, options = {}) {
   if (!visualCaptureDir) {
@@ -648,7 +652,123 @@ async function verifyResolvedOverlayDirections(page) {
   assert.ok(bySide.right.x < 0 && bySide.right.originX <= 2, 'A right popover should enter from its left trigger edge')
 }
 
+async function readPopupModalViewportProbe(page, modalId, listId) {
+  return page.evaluate(({ modalId: targetModalId, listId: targetListId }) => {
+    const portal = document.getElementById('modal-backdrop')
+    const modal = document.getElementById(targetModalId)
+    const list = document.getElementById(targetListId)
+    if (!(portal instanceof HTMLElement) || !(modal instanceof HTMLElement) || !(list instanceof HTMLElement)) {
+      return null
+    }
+
+    const portalRect = portal.getBoundingClientRect()
+    const modalRect = modal.getBoundingClientRect()
+    return {
+      listClientHeight: list.clientHeight,
+      listOverflowY: getComputedStyle(list).overflowY,
+      modalBottom: modalRect.bottom,
+      modalTop: modalRect.top,
+      portalBottom: portalRect.bottom,
+      portalTop: portalRect.top,
+      viewportHeight: window.innerHeight
+    }
+  }, { modalId, listId })
+}
+
+function assertPopupModalWithinViewport(probe, label) {
+  assert.ok(probe, `${label} viewport probe should resolve all modal elements`)
+  assert.ok(
+    probe.portalTop >= -0.5 && probe.portalBottom <= probe.viewportHeight + 0.5,
+    `${label} portal must stay inside the visible popup viewport: ${JSON.stringify(probe)}`
+  )
+  assert.ok(
+    probe.modalTop >= 16 && probe.modalBottom <= probe.viewportHeight - 16,
+    `${label} card must keep a visible inset on every vertical edge: ${JSON.stringify(probe)}`
+  )
+  assert.ok(
+    probe.listClientHeight > 0 && /^(?:auto|scroll)$/.test(probe.listOverflowY),
+    `${label} folder list must scroll inside the bounded card: ${JSON.stringify(probe)}`
+  )
+}
+
+async function probeCollapsibleClosing(page, rootSelector, triggerSelector) {
+  return page.evaluate(({ rootSelector: targetRootSelector, triggerSelector: targetTriggerSelector }) => new Promise((resolve) => {
+    const root = document.querySelector(targetRootSelector)
+    const trigger = document.querySelector(targetTriggerSelector)
+    const panel = root?.querySelector('.t-acc-panel')
+    if (!(root instanceof HTMLElement) || !(trigger instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+      throw new Error('Collapsible close probe could not resolve its target elements')
+    }
+
+    const samples = []
+    const startedAt = performance.now()
+    const sample = (now) => {
+      samples.push({
+        at: now - startedAt,
+        hidden: panel.hidden || getComputedStyle(panel).display === 'none',
+        panelHeight: panel.getBoundingClientRect().height,
+        rootHeight: root.getBoundingClientRect().height
+      })
+      if (now - startedAt < 420) {
+        requestAnimationFrame(sample)
+        return
+      }
+
+      const hiddenIndex = samples.findIndex((entry) => entry.hidden)
+      const beforeHidden = hiddenIndex > 0 ? samples[hiddenIndex - 1] : null
+      const hidden = hiddenIndex >= 0 ? samples[hiddenIndex] : null
+      const grewWhileClosing = samples.some((entry, index) => (
+        index > 0 && entry.rootHeight - samples[index - 1].rootHeight > 0.5
+      ))
+      resolve({
+        beforeHidden,
+        finalRootSnap: beforeHidden && hidden ? beforeHidden.rootHeight - hidden.rootHeight : null,
+        frameCount: samples.length,
+        grewWhileClosing,
+        hidden,
+        remainingPanelHeight: beforeHidden?.panelHeight ?? null
+      })
+    }
+
+    trigger.click()
+    requestAnimationFrame(sample)
+  }), { rootSelector, triggerSelector })
+}
+
+function assertSmoothCollapsibleClose(probe, label) {
+  assert.ok(probe.frameCount >= 5 && probe.beforeHidden && probe.hidden, `${label} should expose a complete closing transition`)
+  assert.equal(probe.grewWhileClosing, false, `${label} height must decrease monotonically while closing`)
+  assert.ok(
+    probe.remainingPanelHeight <= 0.5,
+    `${label} panel must reach zero before Base UI hides it: ${JSON.stringify(probe)}`
+  )
+  assert.ok(
+    Math.abs(probe.finalRootSnap) <= 0.5,
+    `${label} must not jump when the closed panel becomes hidden: ${JSON.stringify(probe)}`
+  )
+}
+
 async function verifyPopup(page, extensionId, seeded) {
+  await page.addInitScript(() => {
+    const originalQuery = chrome.tabs.query.bind(chrome.tabs)
+    const fakeActiveTab = {
+      active: true,
+      favIconUrl: '',
+      id: 77,
+      title: 'Curator current-page probe',
+      url: 'https://example.com/current-page-probe'
+    }
+    chrome.tabs.query = (queryInfo, callback) => {
+      if (queryInfo?.active && queryInfo?.currentWindow) {
+        if (typeof callback === 'function') {
+          callback([fakeActiveTab])
+          return undefined
+        }
+        return Promise.resolve([fakeActiveTab])
+      }
+      return originalQuery(queryInfo, callback)
+    }
+  })
   await page.setViewportSize({ width: 800, height: 600 })
   await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'domcontentloaded' })
   await page.locator('#search-help-toggle').waitFor({ state: 'attached' })
@@ -779,6 +899,15 @@ async function verifyPopup(page, extensionId, seeded) {
       panel.getAnimations().length === 0 &&
       backdrop.getAnimations().length === 0
   })
+  await page.locator('#edit-folder-picker-button').click()
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('#edit-folder-picker')
+    return panel?.hasAttribute('data-open') && panel.getAnimations().length === 0
+  })
+  assertSmoothCollapsibleClose(
+    await probeCollapsibleClosing(page, '#edit-modal .t-acc', '#edit-folder-picker-button'),
+    'Edit-bookmark folder picker'
+  )
   await captureVisual(page, 'popup-modal')
   const exitProbe = page.evaluate(() => new Promise((resolve) => {
     const panel = document.querySelector('#modal-backdrop .curator-overlay-panel')
@@ -804,6 +933,44 @@ async function verifyPopup(page, extensionId, seeded) {
   assert.ok(exit.panelEnding && exit.backdropEnding && exit.together, `Modal card and backdrop should exit as one hierarchy: ${JSON.stringify(exit)}`)
   await page.waitForFunction(() => document.querySelector('#modal-backdrop .curator-overlay-panel')?.hasAttribute('hidden'))
   await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label')?.startsWith('编辑书签'))
+
+  // Reproduce the Chrome action-popup host-height glitch that used to center
+  // wide folder pickers below the visible 600px viewport.
+  await page.evaluate(() => {
+    const root = document.getElementById('popup-root')
+    if (root) {
+      root.style.height = '1200px'
+      root.style.maxHeight = 'none'
+    }
+  })
+
+  await page.locator('[data-current-page-action="save"]').click()
+  await page.locator('#smart-folder-modal').waitFor({ state: 'visible' })
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('#modal-backdrop .curator-overlay-panel')
+    return panel?.hasAttribute('data-open') && panel.getAnimations().length === 0
+  })
+  assertPopupModalWithinViewport(
+    await readPopupModalViewportProbe(page, 'smart-folder-modal', 'smart-folder-list'),
+    'Quick-save folder picker'
+  )
+  await page.locator('#close-smart-folder-modal').click()
+  await page.waitForFunction(() => document.querySelector('#modal-backdrop .curator-overlay-panel')?.hasAttribute('hidden'))
+
+  const moveRow = page.locator('.popup-main-row').filter({ has: page.locator('button[aria-expanded]') }).first()
+  await moveRow.locator('button[aria-expanded]').click()
+  await moveRow.locator('button[aria-label^="移动书签"]').click()
+  await page.locator('#move-modal').waitFor({ state: 'visible' })
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('#modal-backdrop .curator-overlay-panel')
+    return panel?.hasAttribute('data-open') && panel.getAnimations().length === 0
+  })
+  assertPopupModalWithinViewport(
+    await readPopupModalViewportProbe(page, 'move-modal', 'move-folder-list'),
+    'Move-bookmark folder picker'
+  )
+  await page.locator('#close-move-modal').click()
+  await page.waitForFunction(() => document.querySelector('#modal-backdrop .curator-overlay-panel')?.hasAttribute('hidden'))
 }
 
 async function verifyPopupBookmarkReorder(page, seeded, context) {
@@ -940,6 +1107,17 @@ async function verifyOptions(page, extensionId) {
   await captureVisual(page, 'options-general', { fullPage: true })
 
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
+  const advancedSettings = page.locator('#ai-advanced-settings')
+  await advancedSettings.waitFor({ state: 'visible', timeout: 20_000 })
+  await advancedSettings.locator('.t-acc-head').click()
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('#ai-advanced-settings .t-acc-panel')
+    return panel?.hasAttribute('data-open') && panel.getAnimations().length === 0
+  })
+  assertSmoothCollapsibleClose(
+    await probeCollapsibleClosing(page, '#ai-advanced-settings', '#ai-advanced-settings .t-acc-head'),
+    'AI provider advanced settings'
+  )
   const reasoningTrigger = page.getByRole('button', { name: /^推理强度：/ })
   await reasoningTrigger.waitFor({ state: 'visible', timeout: 20_000 })
   await reasoningTrigger.click()
@@ -962,6 +1140,279 @@ async function verifyOptions(page, extensionId) {
   await page.keyboard.press('Escape')
   await verifyAvailabilitySettingsPopover(page, extensionId)
   await verifyOptionsScopePickers(page, extensionId)
+}
+
+async function verifyOptionsRefreshStability(page, worker, extensionId) {
+  await worker.evaluate(async () => {
+    await chrome.storage.local.set({
+      curatorBookmarkAiNamingSettings: {
+        apiKey: 'curat...ey',
+        baseUrl: 'https://api.openai.com/v1',
+        model: 'gpt-5',
+        reasoningEffort: 'medium',
+        autoAnalyzeBookmarks: true,
+        allowRemoteParsing: false
+      },
+      curatorBookmarkInboxSettings: {
+        version: 1,
+        enabled: true,
+        folderTitle: 'Inbox / 待整理',
+        autoMoveToRecommendedFolder: false,
+        tagOnlyNoAutoMove: true,
+        minAutoMoveConfidence: 0.72,
+        notifyOnClassified: true
+      },
+      curatorBookmarkContentSnapshotSettings: {
+        enabled: true,
+        saveFullText: true,
+        fullTextSearchEnabled: true
+      }
+    })
+  })
+
+  await page.setViewportSize({ width: 1456, height: 1000 })
+  await page.addInitScript(() => {
+    const samples = []
+    window.__curatorOptionsRefreshSamples = samples
+    const findCard = (title) => {
+      const heading = [...document.querySelectorAll('h2')]
+        .find((element) => element.textContent?.trim() === title)
+      let current = heading?.parentElement || null
+      while (current && current.id !== 'general') {
+        const style = getComputedStyle(current)
+        const rect = current.getBoundingClientRect()
+        if (
+          rect.width > 500 &&
+          Number.parseFloat(style.borderTopWidth) > 0 &&
+          Number.parseFloat(style.borderRadius) >= 6
+        ) {
+          return current
+        }
+        current = current.parentElement
+      }
+      return null
+    }
+    const sample = (now) => {
+      const feature = findCard('功能设置')
+      const content = findCard('网页内容索引')
+      const shortcuts = findCard('快捷键')
+      const switches = (element) => element
+        ? [...element.querySelectorAll('[role="switch"]')].map((item) => item.getAttribute('aria-checked'))
+        : []
+      samples.push({
+        now,
+        feature: feature ? {
+          ariaBusy: feature.getAttribute('aria-busy'),
+          height: feature.getBoundingClientRect().height,
+          switches: switches(feature)
+        } : null,
+        content: content ? {
+          ariaBusy: content.getAttribute('aria-busy'),
+          height: content.getBoundingClientRect().height,
+          switches: switches(content)
+        } : null,
+        shortcuts: shortcuts ? {
+          ariaBusy: shortcuts.getAttribute('aria-busy'),
+          commandRows: shortcuts.querySelectorAll('strong').length,
+          height: shortcuts.getBoundingClientRect().height
+        } : null
+      })
+      if (now < 1800) {
+        requestAnimationFrame(sample)
+      }
+    }
+    requestAnimationFrame(sample)
+  })
+
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
+  await page.waitForFunction(() => {
+    const autoAnalyze = document.querySelector('[role="switch"][aria-label="自动分析"]')
+    const tagOnly = document.querySelector('[role="switch"][aria-label="只打标签，不自动移动"]')
+    const contentIndex = document.querySelector('[role="switch"][aria-label="保存网页内容索引"]')
+    const fullText = document.querySelector('[role="switch"][aria-label="保存完整正文"]')
+    const shortcutHeading = [...document.querySelectorAll('h2')]
+      .find((element) => element.textContent?.trim() === '快捷键')
+    let shortcutCard = shortcutHeading?.parentElement || null
+    while (shortcutCard && shortcutCard.id !== 'general') {
+      const style = getComputedStyle(shortcutCard)
+      if (
+        shortcutCard.getBoundingClientRect().width > 500 &&
+        Number.parseFloat(style.borderTopWidth) > 0 &&
+        Number.parseFloat(style.borderRadius) >= 6
+      ) {
+        break
+      }
+      shortcutCard = shortcutCard.parentElement
+    }
+    return autoAnalyze?.getAttribute('aria-checked') === 'true' &&
+      tagOnly?.getAttribute('aria-checked') === 'true' &&
+      contentIndex?.getAttribute('aria-checked') === 'true' &&
+      fullText?.getAttribute('aria-checked') === 'true' &&
+      (shortcutCard?.querySelectorAll('strong').length || 0) >= 4
+  }, undefined, { timeout: 20_000 })
+  await page.waitForTimeout(360)
+  await captureVisual(page, 'options-general-refresh-settled', { fullPage: true })
+
+  const samples = await page.evaluate(() => window.__curatorOptionsRefreshSamples || [])
+  const visibleSamples = samples.filter((sample) => sample.feature && sample.content && sample.shortcuts)
+  assert.ok(visibleSamples.length > 1, 'Options refresh stability probe should capture multiple visible frames')
+  const finalSample = visibleSamples.at(-1)
+  const heightRange = (key) => {
+    const heights = visibleSamples.map((sample) => sample[key]?.height || 0).filter((height) => height > 0)
+    return Math.max(...heights) - Math.min(...heights)
+  }
+  const prematureFeatureStates = visibleSamples
+    .map((sample) => sample.feature.switches)
+    .filter((switches) => switches.length > 0 && JSON.stringify(switches) !== JSON.stringify(finalSample.feature.switches))
+  const prematureContentStates = visibleSamples
+    .map((sample) => sample.content.switches)
+    .filter((switches) => switches.length > 0 && JSON.stringify(switches) !== JSON.stringify(finalSample.content.switches))
+
+  assert.ok(
+    heightRange('feature') <= 2,
+    `Feature settings must reserve their settled height during refresh: ${JSON.stringify(visibleSamples)}`
+  )
+  assert.ok(
+    heightRange('shortcuts') <= 2,
+    `Shortcut settings must reserve their settled height during refresh: ${JSON.stringify(visibleSamples)}`
+  )
+  assert.deepEqual(
+    prematureFeatureStates,
+    [],
+    'Feature switches must not expose temporary defaults before persisted settings are ready'
+  )
+  assert.deepEqual(
+    prematureContentStates,
+    [],
+    'Content-index switches must not expose temporary defaults before persisted settings are ready'
+  )
+}
+
+async function verifyOptionsBorderIntegrity(page, extensionId) {
+  const sectionHashes = [
+    'general',
+    'backup',
+    'availability',
+    'history',
+    'redirects',
+    'ignore',
+    'duplicates',
+    'folder-cleanup',
+    'recycle',
+    'ai',
+    'bookmark-history'
+  ]
+  const clippedBorderedSurfaces = []
+  let borderedSurfaceCount = 0
+
+  await page.setViewportSize({ width: 1456, height: 1188 })
+  for (const sectionHash of sectionHashes) {
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html#${sectionHash}`, { waitUntil: 'domcontentloaded' })
+    const section = page.locator(`#${sectionHash}`)
+    await section.waitFor({ state: 'attached' })
+    await page.waitForFunction((sectionId) => !document.getElementById(sectionId)?.hasAttribute('hidden'), sectionHash)
+    await waitForFrames(page)
+
+    const sectionProbe = await section.evaluate((element) => {
+      const bordered = [...element.querySelectorAll('[data-sq="on"]')]
+        .filter((candidate) => {
+          if (!(candidate instanceof HTMLElement)) return false
+          const rect = candidate.getBoundingClientRect()
+          const style = getComputedStyle(candidate)
+          const borderWidths = [
+            style.borderTopWidth,
+            style.borderRightWidth,
+            style.borderBottomWidth,
+            style.borderLeftWidth
+          ].map((value) => Number.parseFloat(value) || 0)
+          return rect.width > 2 && rect.height > 2 && borderWidths.some((width) => width > 0)
+        })
+        .map((candidate) => ({
+          className: candidate.getAttribute('class') || '',
+          tagName: candidate.tagName,
+          text: candidate.textContent?.trim().slice(0, 80) || candidate.getAttribute('aria-label') || ''
+        }))
+      const visibleBorderedSurfaceCount = [...element.querySelectorAll('*')]
+        .filter((candidate) => {
+          if (!(candidate instanceof HTMLElement)) return false
+          const rect = candidate.getBoundingClientRect()
+          const style = getComputedStyle(candidate)
+          const borderWidths = [
+            style.borderTopWidth,
+            style.borderRightWidth,
+            style.borderBottomWidth,
+            style.borderLeftWidth
+          ].map((value) => Number.parseFloat(value) || 0)
+          return rect.width > 2 && rect.height > 2 && borderWidths.some((width) => width > 0)
+        }).length
+      return { bordered, visibleBorderedSurfaceCount }
+    })
+
+    borderedSurfaceCount += sectionProbe.visibleBorderedSurfaceCount
+    clippedBorderedSurfaces.push(...sectionProbe.bordered.map((surface) => ({ sectionHash, ...surface })))
+  }
+
+  assert.ok(borderedSurfaceCount > 0, 'Options border integrity probe should inspect visible bordered surfaces')
+  assert.equal(
+    clippedBorderedSurfaces.length,
+    0,
+    `Options bordered surfaces must use native radii instead of a clip-path that attenuates 1px edges. Found ${clippedBorderedSurfaces.length}: ${JSON.stringify(clippedBorderedSurfaces.slice(0, 12))}`
+  )
+
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#ai`, { waitUntil: 'domcontentloaded' })
+  await page.locator('#ai').waitFor({ state: 'visible' })
+  const aiToolbarButtonHeights = await page.evaluate(() => {
+    const buttons = [...document.querySelectorAll('#ai button')]
+    const apiKeyButton = buttons.find((button) => button.textContent?.trim() === '已配置 API Key')
+    const startButton = buttons.find((button) => button.textContent?.trim() === '开始分析并生成建议')
+    return {
+      apiKey: apiKeyButton?.getBoundingClientRect().height ?? 0,
+      start: startButton?.getBoundingClientRect().height ?? 0
+    }
+  })
+  assert.ok(
+    aiToolbarButtonHeights.apiKey > 0 &&
+      Math.abs(aiToolbarButtonHeights.apiKey - aiToolbarButtonHeights.start) <= 0.1,
+    `AI configuration status and primary action should share one 40px control height: ${JSON.stringify(aiToolbarButtonHeights)}`
+  )
+
+  const scopeTriggerCases = [
+    { hash: 'availability', label: '选择检测范围' },
+    { hash: 'history', label: '选择历史范围' },
+    { hash: 'ai', label: '选择书签智能分析范围' }
+  ]
+  for (const scopeCase of scopeTriggerCases) {
+    await page.goto(`chrome-extension://${extensionId}/src/options/options.html#${scopeCase.hash}`, { waitUntil: 'domcontentloaded' })
+    const trigger = page.getByRole('button', { name: scopeCase.label, exact: true })
+    await trigger.waitFor({ state: 'visible' })
+    const affordance = await trigger.evaluate((element) => ({
+      iconCount: element.querySelectorAll('svg').length,
+      trailingElement: element.lastElementChild?.tagName || ''
+    }))
+    assert.deepEqual(
+      affordance,
+      { iconCount: 1, trailingElement: 'svg' },
+      `${scopeCase.label} should use one trailing chevron so every scope selector reads as an interactive picker`
+    )
+  }
+
+  const disabledFilterStyle = await page.getByRole('button', { name: '清空书签智能分析筛选条件' }).evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderWidths: [
+        style.borderTopWidth,
+        style.borderRightWidth,
+        style.borderBottomWidth,
+        style.borderLeftWidth
+      ],
+      opacity: style.opacity
+    }
+  })
+  assert.deepEqual(
+    disabledFilterStyle,
+    { borderWidths: ['1px', '1px', '1px', '1px'], opacity: '1' },
+    'Disabled options actions should keep a complete neutral outline instead of fading the whole control'
+  )
 }
 
 async function verifyAvailabilitySettingsPopover(page, extensionId) {
@@ -1110,6 +1561,93 @@ async function verifyOptionsScopePickers(page, extensionId) {
     await page.keyboard.press('Escape')
     await modal.waitFor({ state: 'hidden' })
   }
+}
+
+async function verifySharedOverlayMotion(page, extensionId) {
+  await page.setViewportSize({ width: 1180, height: 780 })
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
+  const trigger = page.getByRole('button', { name: '选择 AI 模型', exact: true })
+  await trigger.waitFor({ state: 'visible' })
+  await page.waitForFunction(() => {
+    const button = document.querySelector('button[aria-label="选择 AI 模型"]')
+    return button instanceof HTMLButtonElement && !button.disabled
+  })
+
+  const openRecording = await recordAnimationFrames(page, 'Shared model selector open', 320, async () => {
+    await trigger.click()
+    await page.locator('.model-selector-content').waitFor({ state: 'visible' })
+  })
+  assert.ok(openRecording.frames.frames >= 10, `Model selector open should span observable compositor frames: ${JSON.stringify(openRecording.frames)}`)
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('.model-selector-content')
+    const backdrop = document.querySelector('.model-selector-backdrop')
+    return panel?.hasAttribute('data-open') &&
+      backdrop?.hasAttribute('data-open') &&
+      panel.getAnimations().length === 0 &&
+      backdrop.getAnimations().length === 0
+  })
+
+  const openState = await page.evaluate(() => {
+    const panel = document.querySelector('.model-selector-content')
+    const backdrop = document.querySelector('.model-selector-backdrop')
+    if (!(panel instanceof HTMLElement) || !(backdrop instanceof HTMLElement)) return null
+    const panelStyle = getComputedStyle(panel)
+    return {
+      backdropShared: backdrop.classList.contains('t-modal-backdrop'),
+      panelShared: panel.classList.contains('curator-overlay-panel--dialog'),
+      transitionProperty: panelStyle.transitionProperty,
+      transform: panelStyle.transform
+    }
+  })
+  assert.ok(openState?.backdropShared && openState.panelShared, `Model selector should use shared dialog presence: ${JSON.stringify(openState)}`)
+  assert.match(openState.transitionProperty, /opacity/, 'Shared model selector should fade on the compositor')
+  assert.match(openState.transitionProperty, /transform/, 'Shared model selector should scale on the compositor')
+
+  const exitProbe = page.evaluate(() => new Promise((resolve) => {
+    const panel = document.querySelector('.model-selector-content')
+    const backdrop = document.querySelector('.model-selector-backdrop')
+    let panelEnding = false
+    let backdropEnding = false
+    let together = false
+    const startedAt = performance.now()
+    const sample = (now) => {
+      panelEnding ||= panel?.hasAttribute('data-ending-style') || false
+      backdropEnding ||= backdrop?.hasAttribute('data-ending-style') || false
+      together ||= Boolean(panel?.hasAttribute('data-ending-style') && backdrop?.hasAttribute('data-ending-style'))
+      if (now - startedAt < 240) {
+        requestAnimationFrame(sample)
+        return
+      }
+      resolve({ backdropEnding, panelEnding, together })
+    }
+    requestAnimationFrame(sample)
+  }))
+  await page.keyboard.press('Escape')
+  const exit = await exitProbe
+  assert.ok(exit.panelEnding && exit.backdropEnding && exit.together, `Shared model selector panel and backdrop should exit together: ${JSON.stringify(exit)}`)
+  await page.locator('.model-selector-content').waitFor({ state: 'detached' })
+
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await trigger.click()
+  const reducedPanel = page.locator('.model-selector-content')
+  await reducedPanel.waitFor({ state: 'visible' })
+  const reducedState = await reducedPanel.evaluate((element) => {
+    const style = getComputedStyle(element)
+    const durationMs = style.transitionDuration
+      .split(',')
+      .map((value) => value.trim())
+      .reduce((maximum, value) => {
+        const parsed = Number.parseFloat(value)
+        const milliseconds = value.endsWith('ms') ? parsed : parsed * 1000
+        return Math.max(maximum, milliseconds)
+      }, 0)
+    return { durationMs, transform: style.transform }
+  })
+  assert.equal(reducedState.transform, 'none', `Reduced motion should remove model selector scale: ${JSON.stringify(reducedState)}`)
+  assert.ok(reducedState.durationMs <= 80.5, `Reduced motion should cap model selector feedback at 80ms: ${JSON.stringify(reducedState)}`)
+  await page.keyboard.press('Escape')
+  await reducedPanel.waitFor({ state: 'detached' })
+  await page.emulateMedia({ reducedMotion: 'no-preference' })
 }
 
 async function dispatchTouch(client, type, points) {
@@ -1308,6 +1846,12 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   await card.scrollIntoViewIfNeeded()
   const cardBox = await card.boundingBox()
   assert.ok(cardBox, 'A bookmark card should be available for the touch scroll probe')
+  const dragHandleBox = await card.locator('[data-bookmark-drag-handle]').boundingBox()
+  assert.ok(dragHandleBox, 'The bookmark drag handle should be measurable for the touch scroll probe')
+  assert.ok(
+    dragHandleBox.x >= cardBox.x + cardBox.width - dragHandleBox.width - 4,
+    `The bookmark drag handle should stay on the card's trailing edge: ${JSON.stringify({ cardBox, dragHandleBox })}`
+  )
   const scrollStart = { x: cardBox.x + 18, y: cardBox.y + cardBox.height / 2, id: 1 }
   await dispatchTouch(client, 'touchStart', [scrollStart])
   for (let step = 1; step <= 5; step += 1) {
@@ -1422,7 +1966,7 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   })
   assert.equal(
     activeSuggestionStyle.backgroundColor,
-    'rgba(245, 245, 247, 0.16)',
+    'rgba(255, 255, 255, 0.16)',
     `The active New Tab suggestion should use a clearly differentiated selected surface: ${JSON.stringify(activeSuggestionStyle)}`
   )
   assert.match(activeSuggestionStyle.boxShadow, /inset/, 'The active New Tab suggestion should have a full inset selection outline')
@@ -1432,13 +1976,13 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   await page.waitForFunction(
     (id) => {
       const element = document.getElementById(id)
-      return element && getComputedStyle(element).backgroundColor === 'rgba(245, 245, 247, 0.19)'
+      return element && getComputedStyle(element).backgroundColor === 'rgba(255, 255, 255, 0.16)'
     },
     activeSuggestionAfter
   )
   assert.equal(
     await page.locator(`#${activeSuggestionAfter}`).evaluate((element) => getComputedStyle(element).backgroundColor),
-    'rgba(245, 245, 247, 0.19)',
+    'rgba(255, 255, 255, 0.16)',
     'The active suggestion should stay more prominent when the pointer also hovers it'
   )
   await page.keyboard.press('Escape')
@@ -1469,9 +2013,18 @@ try {
   } else if (optionsAvailabilityOnly) {
     await verifyAvailabilitySettingsPopover(page, extensionId)
     console.log('Options availability settings popover test passed.')
+  } else if (optionsBordersOnly) {
+    await verifyOptionsBorderIntegrity(page, extensionId)
+    console.log('Options border integrity tests passed.')
+  } else if (optionsRefreshOnly) {
+    await verifyOptionsRefreshStability(page, worker, extensionId)
+    console.log('Options refresh stability tests passed.')
   } else if (optionsScopePickerOnly) {
     await verifyOptionsScopePickers(page, extensionId)
     console.log('Options folder scope picker tests passed.')
+  } else if (overlayMotionOnly) {
+    await verifySharedOverlayMotion(page, extensionId)
+    console.log('Shared overlay motion tests passed.')
   } else if (popupReorderOnly) {
     await page.setViewportSize({ width: 800, height: 600 })
     await page.goto(`chrome-extension://${extensionId}/src/popup/popup.html`, { waitUntil: 'domcontentloaded' })
@@ -1479,6 +2032,10 @@ try {
     await page.waitForTimeout(350)
     await verifyPopupBookmarkReorder(page, seeded, context)
     console.log('Popup bookmark reorder browser test passed.')
+  } else if (collapsibleMotionOnly) {
+    await verifyPopup(page, extensionId, seeded)
+    await verifyOptions(page, extensionId)
+    console.log('Popup and Options collapsible motion tests passed.')
   } else {
     await page.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`, { waitUntil: 'domcontentloaded' })
     await page.locator('#newtab-settings-trigger').waitFor({ state: 'attached' })

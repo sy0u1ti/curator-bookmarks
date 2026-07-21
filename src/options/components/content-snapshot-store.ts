@@ -4,8 +4,9 @@ import type { ContentSnapshotControlsState } from './content-snapshot-types.js'
 const defaultContentSnapshotControlsState: ContentSnapshotControlsState = {
   enabled: false,
   fullTextDisabled: true,
+  loading: true,
   saveFullText: false,
-  statusCopy: '网页内容索引已关闭。'
+  statusCopy: '正在读取本地设置…'
 }
 
 let currentContentSnapshotControlsState = defaultContentSnapshotControlsState

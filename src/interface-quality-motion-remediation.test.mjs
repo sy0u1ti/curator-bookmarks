@@ -10,12 +10,15 @@ const tailwind = read('src/styles/tailwind.css')
 const motionPanel = read('src/ui/motion/MotionPanel.tsx')
 const motionEntrance = read('src/ui/motion/useMotionEntrance.ts')
 const modelSelector = read('src/ui/ai/ModelSelector.tsx')
+const sharedMotion = read('src/shared/motion.ts')
 const inlineMenu = read('src/ui/base/InlineMenu.tsx')
 const checkbox = read('src/ui/base/Checkbox.tsx')
 const switchControl = read('src/ui/base/Switch.tsx')
 const numberPop = read('src/ui/motion/NumberPop.tsx')
 const textSwap = read('src/ui/motion/TextSwap.tsx')
 const newtabApp = read('src/newtab/NewtabApp.tsx')
+const bookmarkIconShell = read('src/newtab/components/BookmarkIconShell.tsx')
+const searchWidgetClasses = read('src/newtab/components/searchWidgetClasses.ts')
 const settingsDrawer = read('src/newtab/components/SettingsDrawer.tsx')
 const settingsDrawerMode = read('src/newtab/settings-drawer-mode.ts')
 const bookmarkClasses = read('src/newtab/components/bookmarkTileClasses.ts')
@@ -28,10 +31,20 @@ const popupChips = read('src/popup/components/PopupSearchChips.tsx')
 const popupStatus = read('src/popup/components/PopupAutoAnalyzeStatus.tsx')
 const popupToasts = read('src/popup/components/PopupToasts.tsx')
 const popupModals = read('src/popup/components/PopupModalsHost.tsx')
+const popupCss = read('src/popup/popup.css')
 const optionsChrome = read('src/options/components/options-chrome-classes.ts')
 const optionsCss = read('src/options/options.css')
+const optionsMain = read('src/options/main.tsx')
 const aiProviderSettingsClasses = read('src/options/components/ai-provider-settings-classes.ts')
+const aiSettingsCardClasses = read('src/options/components/ai-settings-card-classes.ts')
 const optionsModalClasses = read('src/options/components/options-modal-classes.ts')
+const optionLayoutClasses = read('src/options/components/option-layout-classes.ts')
+const switchClasses = read('src/ui/switch-classes.ts')
+const featureSettingsControls = read('src/options/components/FeatureSettingsControls.tsx')
+const featureSettingsStore = read('src/options/components/feature-settings-store.ts')
+const contentSnapshotControls = read('src/options/components/ContentSnapshotControls.tsx')
+const shortcutList = read('src/options/components/ShortcutList.tsx')
+const optionsController = read('src/options/options-controller.ts')
 
 assert.ok(
   motionPanel.includes('curator-overlay-panel') &&
@@ -102,6 +115,9 @@ assert.ok(
 
 assert.ok(
   modelSelector.includes('model-selector-content') &&
+    modelSelector.includes('DialogBackdrop') &&
+    modelSelector.includes('DialogPanel') &&
+    !modelSelector.includes('data-starting-style:') &&
     modelSelector.includes('touch-manipulation') &&
     globals.includes('.model-selector-content[data-starting-style]') &&
     globals.includes('translate: -50% -50% !important') &&
@@ -112,6 +128,8 @@ assert.ok(
 assert.ok(
   aiProviderSettingsClasses.includes('options-modal-backdrop ai-provider-dialog-backdrop') &&
     aiProviderSettingsClasses.includes('options-modal-panel ai-provider-dialog-panel') &&
+    !aiProviderSettingsClasses.includes('backdrop-blur-') &&
+    !aiProviderSettingsClasses.includes('data-starting-style:') &&
     aiProviderSettingsClasses.includes('ai-provider-advanced-trigger') &&
     optionsModalClasses.includes('folder-picker-toggle-icon') &&
     optionsModalClasses.includes('folder-picker-card') &&
@@ -121,6 +139,49 @@ assert.ok(
     optionsCss.includes('.folder-picker-toggle:active') &&
     optionsCss.includes('@media (prefers-reduced-transparency: reduce)'),
   'The AI provider dialog must keep its centered geometry while honoring reduced motion and transparency.'
+)
+
+assert.ok(
+  !bookmarkIconShell.includes('filter:blur') &&
+    bookmarkIconShell.includes('var(--icon-swap-dur)') &&
+    !newtabCss.includes('filter var(--ui-motion-fast)') &&
+    /@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?\.newtab-wallpaper-filter,[\s\S]*?\.newtab-paper-shader/.test(newtabCss),
+  'Routine icon and wallpaper reveals must avoid filter animation and explicitly honor reduced motion.'
+)
+
+const explicitTransitionSources = [globals, searchWidgetClasses, optionLayoutClasses, optionsChrome].join('\n')
+assert.ok(
+  !/transition(?:-[^:\s]+|\s*:)\s*[^;\n\]]*\bbackground\b(?!-color)/i.test(explicitTransitionSources) &&
+    !popupModals.includes('modalSurfaceMotionClass') &&
+    !aiSettingsCardClasses.includes('data-ending-style:') &&
+    switchClasses.includes('duration-ds-standard ease-ds-standard') &&
+    switchClasses.includes('motion-reduce:transition-none'),
+  'Shared controls must transition explicit properties once, with one semantic clock and a reduced-motion path.'
+)
+
+assert.ok(
+  tokens.includes('--page-slide-distance: var(--distance-medium)') &&
+    newtabCss.includes('--settings-page-slide-distance: var(--page-slide-distance)') &&
+    sharedMotion.includes('getMotionEasing') &&
+    !popupCss.includes('will-change: transform, opacity'),
+  'Page changes, drag settling, and moving indicators must share bounded motion without persistent layer promotion.'
+)
+
+assert.ok(
+  !optionsMain.includes('initSquircleEngine') &&
+    optionsCss.includes('.options-shell .curator-button:is(:disabled, [data-disabled])'),
+  'Options controls must keep native rounded borders and a visible neutral disabled outline.'
+)
+
+assert.ok(
+  featureSettingsStore.includes('loading: true') &&
+    featureSettingsControls.includes('FEATURE_SETTINGS_LOADING_ROWS') &&
+    featureSettingsControls.includes('aria-busy={state.loading') &&
+    contentSnapshotControls.includes("state.loading ? '正在读取本地设置…'") &&
+    shortcutList.includes('SHORTCUT_LOADING_ROWS') &&
+    optionsController.includes('loading: availabilityState.storageLoading || !aiNamingState.permissionStateHydrated') &&
+    optionsCss.includes('.options-settings-ready-body'),
+  'General settings must reserve settled card geometry and hide temporary switch defaults during hydration.'
 )
 
 assert.ok(

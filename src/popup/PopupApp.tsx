@@ -1,6 +1,5 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { cx } from '../ui/base/utils'
-import { DialogBackdrop, DialogOverlay, DialogPanel } from '../ui/base/Dialog'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import {
   dispatchPopupModalAction,
@@ -16,7 +15,6 @@ import { usePopupController } from './popup-controller'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
-import { PopupModalsHost } from './components/PopupModalsHost'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
 import { PopupToasts } from './components/PopupToasts'
 
@@ -28,9 +26,22 @@ const appShellDefaultClass = 'gap-[14px]'
 const appShellSmartClass = 'gap-2'
 const contentShellClass =
   'relative z-[1] grid min-h-0 flex-[1_1_auto] overflow-hidden border-0 bg-transparent [height:auto]'
-const modalPortalClass = 'absolute inset-0 z-20 grid place-items-center pointer-events-none'
-const modalBackdropClass = 'absolute inset-0 bg-ds-overlay'
-const modalPanelClass = 'pointer-events-auto h-full w-full bg-transparent outline-none'
+
+type PopupModalLayerComponent = (typeof import('./components/PopupModalLayer'))['PopupModalLayer']
+
+let popupModalLayerComponent: PopupModalLayerComponent | null = null
+let popupModalLayerPromise: Promise<PopupModalLayerComponent> | null = null
+
+function loadPopupModalLayer(): Promise<PopupModalLayerComponent> {
+  if (popupModalLayerComponent) {
+    return Promise.resolve(popupModalLayerComponent)
+  }
+  popupModalLayerPromise ||= import('./components/PopupModalLayer').then((module) => {
+    popupModalLayerComponent = module.PopupModalLayer
+    return module.PopupModalLayer
+  })
+  return popupModalLayerPromise
+}
 
 export function PopupApp({ portalContainer }: { portalContainer?: HTMLElement | null }) {
   usePopupController()
@@ -95,32 +106,47 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
         <PopupAutoAnalyzeStatus smartActive={smartActive} />
       </main>
 
-      <DialogOverlay
-        id="modal-backdrop"
-        className={modalPortalClass}
+      <DeferredPopupModalLayer
         open={modalOpen}
-        onOpenChange={(open) => {
-          if (!open && modalOpen) {
-            dispatchPopupModalAction('close')
-            return
-          }
-        }}
-        aria-hidden={modalOpen ? 'false' : 'true'}
-        disablePointerDismissal
         portalContainer={portalContainer ?? undefined}
-      >
-        <DialogBackdrop className={modalBackdropClass} />
-        <DialogPanel
-          className={modalPanelClass}
-          aria-label="书签操作弹窗"
-          initialFocus={false}
-          finalFocus={false}
-        >
-          <PopupModalsHost />
-        </DialogPanel>
-      </DialogOverlay>
+      />
 
       <PopupToasts />
     </>
   )
+}
+
+function DeferredPopupModalLayer({
+  open,
+  portalContainer
+}: {
+  open: boolean
+  portalContainer?: HTMLElement
+}) {
+  const [Layer, setLayer] = useState<PopupModalLayerComponent | null>(popupModalLayerComponent)
+
+  useEffect(() => {
+    if (Layer || !open) {
+      return
+    }
+
+    let active = true
+    void loadPopupModalLayer().then((Component) => {
+      if (active) {
+        setLayer(() => Component)
+      }
+    })
+
+    return () => {
+      active = false
+    }
+  }, [Layer, open])
+
+  return Layer ? (
+    <Layer
+      open={open}
+      portalContainer={portalContainer}
+      onDismiss={() => dispatchPopupModalAction('close')}
+    />
+  ) : null
 }

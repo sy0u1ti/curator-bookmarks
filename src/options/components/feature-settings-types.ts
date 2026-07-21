@@ -22,5 +22,6 @@ export interface FeatureSwitchItemState {
 }
 
 export interface FeatureSettingsControlsState {
+  loading: boolean
   switches: FeatureSwitchItemState[]
 }

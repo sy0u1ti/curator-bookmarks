@@ -175,6 +175,12 @@
   --panel-ease: var(--ease-smooth-out);
   --drag-settle-dur: 160ms;
 
+  --page-slide-dur: var(--duration-fast);
+  --page-fade-dur: var(--duration-fast);
+  --page-slide-distance: var(--distance-medium);
+  --page-slide-ease: var(--ease-smooth-out);
+  --page-fade-ease: var(--ease-smooth-out);
+
   --stagger-dur: 220ms;
   --stagger-distance: var(--distance-small);
   --stagger-stagger: 24ms;
@@ -253,6 +259,9 @@
     --text-swap-dur: 80ms;
     --panel-open-dur: 80ms;
     --panel-close-dur: 80ms;
+    --page-slide-dur: 80ms;
+    --page-fade-dur: 80ms;
+    --page-slide-distance: 0px;
     --drag-settle-dur: 1ms;
     --stagger-dur: 1ms;
     --shimmer-dur: 1ms;

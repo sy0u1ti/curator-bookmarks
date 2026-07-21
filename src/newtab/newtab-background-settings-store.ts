@@ -4,7 +4,9 @@ import {
   doesBackgroundMaskFilterSupportGeometry,
   doesBackgroundMaskFilterSupportHover,
   isBackgroundMaskFilterStyle,
+  isPaperShaderMaskStyle,
   isLegacyBackgroundMaskStyle,
+  isWallpaperFilterMaskStyle,
   type BackgroundMaskStyle
 } from './background-mask-settings.js'
 
@@ -265,6 +267,22 @@ export function useNewtabBackgroundSettingsView(): NewtabBackgroundSettingsView 
     subscribeBackgroundSettings,
     () => backgroundSettingsView,
     () => EMPTY_VIEW
+  )
+}
+
+export function useNewtabWallpaperFilterActive(): boolean {
+  return useSyncExternalStore(
+    subscribeBackgroundSettings,
+    () => backgroundSettingsView.maskEnabled && isWallpaperFilterMaskStyle(backgroundSettingsView.maskStyle),
+    () => false
+  )
+}
+
+export function useNewtabPaperShaderActive(): boolean {
+  return useSyncExternalStore(
+    subscribeBackgroundSettings,
+    () => backgroundSettingsView.maskEnabled && isPaperShaderMaskStyle(backgroundSettingsView.maskStyle),
+    () => false
   )
 }
 

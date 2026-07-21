@@ -1,13 +1,8 @@
 :root {
   color-scheme: dark;
 
-  --pulse-dur: 1000ms;
-  --pulse-count: 1;
-  --pulse-min: 0.5;
-  --reveal-dur: 180ms;
-  --reveal-blur: 0px;
-  --reveal-translate-y: 4px;
-  --reveal-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --reveal-translate-y: var(--distance-micro);
+  --reveal-ease: var(--ease-smooth-out);
 }
 
 * {
@@ -166,20 +161,19 @@ button:focus-visible {
   opacity: 0;
   transform: translate3d(0, 0, 0);
   transition:
-    opacity 80ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 105ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity var(--duration-micro) var(--ease-smooth-out),
+    transform var(--ds-motion-feedback) var(--ease-smooth-out);
 }
 
 /* While hidden, suppress transform transition so position updates snap
    instantly. When data-visible is added the indicator is already at the
    correct position and only fades in, with no diagonal fly-in. */
 .popup-active-result-indicator:not([data-visible="true"]) {
-  transition: opacity 80ms cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity var(--duration-micro) var(--ease-smooth-out);
 }
 
 .popup-active-result-indicator[data-visible="true"] {
   opacity: 1;
-  will-change: transform, opacity;
 }
 
 .popup-main-row {
@@ -367,8 +361,8 @@ button:focus-visible {
 
 #popup-app-shell[data-keyboard-nav="true"] {
   --resize-dur: 1ms;
-  --popup-keyboard-selection-dur: 80ms;
-  --popup-keyboard-selection-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --popup-keyboard-selection-dur: var(--duration-micro);
+  --popup-keyboard-selection-ease: var(--ease-smooth-out);
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-active-result-indicator {
@@ -453,7 +447,7 @@ button:focus-visible {
   /* path 总长 ≈ 13.5px，dasharray 取整加 1 余量避免预露/过描 */
   stroke-dasharray: 14;
   stroke-dashoffset: 0;
-  animation: popup-saved-check-draw 320ms var(--ds-ease-standard) 60ms backwards;
+  animation: popup-saved-check-draw var(--check-draw) var(--check-ease) var(--duration-micro) backwards;
 }
 
 @keyframes popup-saved-check-draw {
