@@ -6,7 +6,7 @@ import { DialogBackdrop, DialogPanel } from '../base/Dialog'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
-  'inline-flex min-h-[50px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-none text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
+  'inline-flex min-h-[50px] w-full touch-manipulation select-none items-center justify-start gap-2 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-3 text-sm font-semibold leading-5 text-ds-text-primary shadow-none outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:not-disabled:border-ds-border-hover hover:not-disabled:bg-ds-surface-3 focus-visible:border-ds-focus focus-visible:bg-ds-surface-3 focus-visible:shadow-ds-focus active:not-disabled:scale-[var(--ds-press-scale)] disabled:cursor-not-allowed disabled:opacity-60 motion-reduce:transition-none motion-reduce:active:not-disabled:scale-100'
 const MODEL_SELECTOR_BACKDROP_CLASS =
   'model-selector-backdrop fixed inset-0 z-[1200] min-h-dvh bg-ds-overlay supports-[-webkit-touch-callout:none]:absolute'
 const MODEL_SELECTOR_CONTENT_CLASS =
@@ -20,9 +20,10 @@ const MODEL_SELECTOR_CLEAR_BUTTON_CLASS =
 const MODEL_SELECTOR_INPUT_CLASS =
   'h-[50px] min-h-[50px] w-full border-0 bg-transparent text-sm font-medium text-ds-text-primary shadow-none outline-none placeholder:text-ds-text-secondary'
 const MODEL_SELECTOR_LIST_CLASS =
-  'm-0 max-h-[min(400px,calc(100dvh-140px))] list-none overflow-y-auto p-1.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
-const MODEL_SELECTOR_EMPTY_CLASS = 'px-3 py-7 text-center text-[13px] text-ds-text-muted'
-const MODEL_SELECTOR_GROUP_CLASS = 'mt-1.5 first:mt-0'
+  'model-selector-list m-0 max-h-[min(400px,calc(100dvh-140px))] list-none overflow-y-auto p-1.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-width:thin]'
+const MODEL_SELECTOR_EMPTY_CLASS =
+  'model-selector-empty px-3 py-7 text-center text-[13px] text-ds-text-muted empty:p-0'
+const MODEL_SELECTOR_GROUP_CLASS = 'model-selector-group'
 const MODEL_SELECTOR_GROUP_HEADING_CLASS = 'px-2 pb-1.5 pt-[5px] text-xs font-semibold leading-[1.2] text-ds-accent-text'
 const MODEL_SELECTOR_GROUP_ITEMS_CLASS = 'grid list-none gap-px p-0'
 const MODEL_SELECTOR_ITEM_CLASS =
@@ -33,7 +34,8 @@ const MODEL_SELECTOR_LOGO_CLASS = 'size-3 flex-none object-contain invert'
 const MODEL_SELECTOR_LOGO_GROUP_CLASS = 'ml-auto inline-flex flex-none items-center'
 const MODEL_SELECTOR_TAG_CLASS =
   '-ml-1 inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full border border-ds-border bg-ds-surface-1 px-[5px] text-[9px] font-bold leading-none text-ds-text-secondary'
-const MODEL_SELECTOR_NAME_CLASS = 'min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap'
+const MODEL_SELECTOR_NAME_CLASS =
+  'model-selector-name min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap leading-5'
 
 export type ModelSelectorProps = ComponentPropsWithoutRef<typeof BaseDialog.Root>
 

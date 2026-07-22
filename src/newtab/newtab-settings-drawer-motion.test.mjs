@@ -15,6 +15,7 @@ const optionsAvailabilityOnly = process.argv.includes('--options-availability-on
 const optionsBordersOnly = process.argv.includes('--options-borders-only')
 const optionsRefreshOnly = process.argv.includes('--options-refresh-only')
 const optionsScopePickerOnly = process.argv.includes('--options-scope-picker-only')
+const optionsReasoningOnly = process.argv.includes('--options-reasoning-only')
 const overlayMotionOnly = process.argv.includes('--overlay-motion-only')
 const popupReorderOnly = process.argv.includes('--popup-reorder-only')
 const collapsibleMotionOnly = process.argv.includes('--collapsible-motion-only')
@@ -1120,12 +1121,85 @@ async function verifyOptions(page, extensionId) {
   )
   const reasoningTrigger = page.getByRole('button', { name: /^推理强度：/ })
   await reasoningTrigger.waitFor({ state: 'visible', timeout: 20_000 })
+  const modelRow = page.locator('.ai-provider-model-row')
+  const modelLayoutBefore = await modelRow.evaluate((row) => {
+    const controls = [...row.children].map((child) => {
+      const rect = child.getBoundingClientRect()
+      return { left: rect.left, width: rect.width }
+    })
+    return { height: row.getBoundingClientRect().height, controls }
+  })
+  const modelGroupBox = await page.locator('.ai-provider-model-group').boundingBox()
+  const modelSelectorBox = await page.locator('.ai-provider-model-select-host').boundingBox()
+  const effortHostBox = await page.locator('.ai-provider-effort-host').boundingBox()
+  assert.ok(modelGroupBox && modelSelectorBox && effortHostBox, 'Model and reasoning controls should be measurable')
+  assert.ok(
+    modelLayoutBefore.controls[0].width > modelLayoutBefore.controls[1].width,
+    `Model field should have more row space than reasoning effort: ${JSON.stringify(modelLayoutBefore.controls)}`
+  )
+  assert.ok(
+    Math.abs(modelGroupBox.x - modelLayoutBefore.controls[0].left) <= 1 &&
+      Math.abs(modelGroupBox.width - modelLayoutBefore.controls[0].width) <= 1,
+    `Model controls should fill the complete model field without a trailing gap: ${JSON.stringify({ modelGroupBox, modelField: modelLayoutBefore.controls[0] })}`
+  )
+  assert.ok(
+    modelSelectorBox.width >= 310,
+    `Model selector should absorb the model field's remaining width: ${modelSelectorBox.width}`
+  )
+  assert.ok(
+    effortHostBox.width < 560,
+    `Reasoning effort should not consume the full remaining settings row: ${effortHostBox.width}`
+  )
+  const modelNameMetrics = await page.locator('.model-selector-name').first().evaluate((name) => {
+    const style = getComputedStyle(name)
+    const rect = name.getBoundingClientRect()
+    return { height: rect.height, lineHeight: Number.parseFloat(style.lineHeight) }
+  })
+  assert.ok(
+    modelNameMetrics.height >= 20 && modelNameMetrics.lineHeight >= 20,
+    `Model name line box should preserve letter descenders: ${JSON.stringify(modelNameMetrics)}`
+  )
+  const reasoningTriggerBox = await reasoningTrigger.boundingBox()
+  assert.ok(reasoningTriggerBox, 'Reasoning effort trigger should be measurable')
   await reasoningTrigger.click()
+  const advancedReasoningButton = page.getByRole('button', { name: '高级设置' })
+  await advancedReasoningButton.waitFor({ state: 'visible' })
+  const reasoningPopover = page.locator('.reasoning-effort-popover')
+  await page.waitForFunction(() => document.querySelector('.reasoning-effort-popover')?.getAnimations().length === 0)
+  const reasoningPopoverBox = await reasoningPopover.boundingBox()
+  assert.ok(reasoningPopoverBox, 'Reasoning effort popover should be measurable')
+  assert.ok(
+    Math.abs(reasoningPopoverBox.x - reasoningTriggerBox.x) <= 1 &&
+      Math.abs(reasoningPopoverBox.width - reasoningTriggerBox.width) <= 1,
+    `Reasoning effort popover should align to and match its trigger: ${JSON.stringify({ reasoningPopoverBox, reasoningTriggerBox })}`
+  )
+  await captureVisual(page, 'options-reasoning-menu')
+  await advancedReasoningButton.click()
   const reasoningSlider = page.getByRole('slider', { name: '推理强度' })
   await reasoningSlider.waitFor({ state: 'visible' })
-  const reasoningTrack = reasoningSlider.locator('..')
-  const reasoningTrackBox = await reasoningTrack.boundingBox()
+  await page.waitForFunction(() => [...document.querySelectorAll('.reasoning-selector-view-track')]
+    .every((track) => track.getAnimations().length === 0))
+  const reasoningTrackGeometry = await page.locator('.reasoning-effort-track').boundingBox()
+  const reasoningKnobGeometry = await page.locator('.reasoning-effort-knob').boundingBox()
+  assert.ok(reasoningTrackGeometry && reasoningKnobGeometry, 'Reasoning effort track and knob should be measurable')
+  const trackCenterY = reasoningTrackGeometry.y + reasoningTrackGeometry.height / 2
+  const knobCenterY = reasoningKnobGeometry.y + reasoningKnobGeometry.height / 2
+  assert.ok(
+    Math.abs(trackCenterY - knobCenterY) <= 1,
+    `Reasoning effort knob should be vertically centered on its track: ${JSON.stringify({ knobCenterY, trackCenterY })}`
+  )
+  await captureVisual(page, 'options-reasoning-advanced')
+  const reasoningTrackBox = await reasoningSlider.boundingBox()
   assert.ok(reasoningTrackBox, 'Reasoning effort track should be measurable')
+  const sparkleCanvas = reasoningSlider.locator('canvas').first()
+  await page.waitForFunction((canvas) => canvas instanceof HTMLCanvasElement && canvas.width > 0, await sparkleCanvas.elementHandle())
+  const sparkleAnimated = await sparkleCanvas.evaluate(async (canvas) => {
+    const firstFrame = canvas.toDataURL()
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    return canvas.toDataURL() !== firstFrame
+  })
+  assert.ok(sparkleAnimated, 'Reasoning effort fill should render a moving particle stream')
+  const celebrationCanvas = reasoningSlider.locator('canvas').nth(1)
   const reasoningBefore = await reasoningSlider.getAttribute('aria-valuenow')
   await recordAnimationFrames(page, 'reasoning effort drag and spring settle', 800, async () => {
     const startX = reasoningTrackBox.x + 28
@@ -1135,8 +1209,21 @@ async function verifyOptions(page, extensionId) {
     await page.mouse.down()
     await page.mouse.move(endX, y, { steps: 8 })
     await page.mouse.up()
+    await page.waitForFunction(
+      (canvas) => canvas instanceof HTMLCanvasElement && canvas.width > 0,
+      await celebrationCanvas.elementHandle()
+    )
   })
   await page.waitForFunction((previous) => document.querySelector('[role="slider"][aria-label="推理强度"]')?.getAttribute('aria-valuenow') !== previous, reasoningBefore)
+  await captureVisual(page, 'options-reasoning-highest')
+  const modelLayoutAfter = await modelRow.evaluate((row) => {
+    const controls = [...row.children].map((child) => {
+      const rect = child.getBoundingClientRect()
+      return { left: rect.left, width: rect.width }
+    })
+    return { height: row.getBoundingClientRect().height, controls }
+  })
+  assert.deepEqual(modelLayoutAfter, modelLayoutBefore, 'Changing reasoning effort should not reflow the model controls')
   await page.keyboard.press('Escape')
   await verifyAvailabilitySettingsPopover(page, extensionId)
   await verifyOptionsScopePickers(page, extensionId)
@@ -1603,6 +1690,43 @@ async function verifySharedOverlayMotion(page, extensionId) {
   assert.match(openState.transitionProperty, /opacity/, 'Shared model selector should fade on the compositor')
   assert.match(openState.transitionProperty, /transform/, 'Shared model selector should scale on the compositor')
 
+  const listStartGeometry = await page.evaluate(() => {
+    const list = document.querySelector('.model-selector-list')
+    const empty = document.querySelector('.model-selector-empty')
+    const firstGroup = document.querySelector('.model-selector-group')
+    if (!(list instanceof HTMLElement) || !(empty instanceof HTMLElement) || !(firstGroup instanceof HTMLElement)) {
+      return null
+    }
+    const listRect = list.getBoundingClientRect()
+    const emptyRect = empty.getBoundingClientRect()
+    const firstGroupRect = firstGroup.getBoundingClientRect()
+    return {
+      emptyHeight: emptyRect.height,
+      firstGroupOffset: firstGroupRect.top - listRect.top,
+      listPaddingTop: Number.parseFloat(getComputedStyle(list).paddingTop)
+    }
+  })
+  assert.ok(listStartGeometry, 'Model selector list start should be measurable')
+  assert.ok(
+    listStartGeometry.emptyHeight <= 0.5,
+    `Populated model selector should collapse its empty-state live region: ${JSON.stringify(listStartGeometry)}`
+  )
+  assert.ok(
+    Math.abs(listStartGeometry.firstGroupOffset - listStartGeometry.listPaddingTop) <= 1,
+    `First model group should start directly after the list padding: ${JSON.stringify(listStartGeometry)}`
+  )
+  await captureVisual(page, 'options-model-selector')
+
+  const modelSearchInput = page.getByPlaceholder('Search models…')
+  await modelSearchInput.fill('__curator_missing_model__')
+  await page.getByText('没有匹配的模型。', { exact: true }).waitFor({ state: 'visible' })
+  const visibleEmptyHeight = await page.locator('.model-selector-empty').evaluate((element) =>
+    element.getBoundingClientRect().height
+  )
+  assert.ok(visibleEmptyHeight >= 56, `Model selector empty result should retain readable padding: ${visibleEmptyHeight}`)
+  await modelSearchInput.fill('')
+  await page.locator('.model-selector-group').first().waitFor({ state: 'visible' })
+
   const exitProbe = page.evaluate(() => new Promise((resolve) => {
     const panel = document.querySelector('.model-selector-content')
     const backdrop = document.querySelector('.model-selector-backdrop')
@@ -1648,6 +1772,67 @@ async function verifySharedOverlayMotion(page, extensionId) {
   await page.keyboard.press('Escape')
   await reducedPanel.waitFor({ state: 'detached' })
   await page.emulateMedia({ reducedMotion: 'no-preference' })
+
+  const aiSettingsStorageKey = 'curatorBookmarkAiNamingSettings'
+  const originalAiSettings = await page.evaluate(async (storageKey) => {
+    const stored = await chrome.storage.local.get(storageKey)
+    return stored[storageKey]
+  }, aiSettingsStorageKey)
+  const openModelCatalog = async (fetchedModels) => {
+    await page.evaluate(async ({ fetchedModels: nextFetchedModels, storageKey }) => {
+      const stored = await chrome.storage.local.get(storageKey)
+      await chrome.storage.local.set({
+        [storageKey]: {
+          ...(stored[storageKey] || {}),
+          customModels: ['custom-only-model'],
+          fetchedModels: nextFetchedModels,
+          model: 'gpt-5'
+        }
+      })
+    }, { fetchedModels, storageKey: aiSettingsStorageKey })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const catalogTrigger = page.getByRole('button', { name: '选择 AI 模型', exact: true })
+    await catalogTrigger.waitFor({ state: 'visible' })
+    await page.waitForFunction(() => {
+      const button = document.querySelector('button[aria-label="选择 AI 模型"]')
+      return button instanceof HTMLButtonElement && !button.disabled
+    })
+    await catalogTrigger.click()
+    await page.locator('.model-selector-content').waitFor({ state: 'visible' })
+    return page.locator('.model-selector-content [data-ai-model-id]').allTextContents()
+  }
+
+  try {
+    const fetchedCatalogLabels = await openModelCatalog(['remote-model-alpha', 'remote-model-beta'])
+    assert.deepEqual(
+      fetchedCatalogLabels.map((label) => label.replace('已拉取', '').trim()),
+      ['remote-model-alpha', 'remote-model-beta'],
+      `Successful model fetch should replace presets and custom fallbacks: ${JSON.stringify(fetchedCatalogLabels)}`
+    )
+    assert.ok(
+      fetchedCatalogLabels.every((label) => label.includes('已拉取') && !label.includes('预设')),
+      `Fetched catalog items should only use fetched-source metadata: ${JSON.stringify(fetchedCatalogLabels)}`
+    )
+    await captureVisual(page, 'options-model-selector-fetched-only')
+
+    const fallbackCatalogLabels = await openModelCatalog([])
+    assert.ok(
+      fallbackCatalogLabels.some((label) => label.includes('gpt-5.6-sol') && label.includes('预设')),
+      `Empty model fetch should retain preset fallbacks: ${JSON.stringify(fallbackCatalogLabels)}`
+    )
+    assert.ok(
+      fallbackCatalogLabels.every((label) => !label.includes('remote-model-')),
+      `Empty model fetch should not retain stale fetched candidates: ${JSON.stringify(fallbackCatalogLabels)}`
+    )
+  } finally {
+    await page.evaluate(async ({ originalSettings, storageKey }) => {
+      if (originalSettings === undefined) {
+        await chrome.storage.local.remove(storageKey)
+        return
+      }
+      await chrome.storage.local.set({ [storageKey]: originalSettings })
+    }, { originalSettings: originalAiSettings, storageKey: aiSettingsStorageKey })
+  }
 }
 
 async function dispatchTouch(client, type, points) {
@@ -2022,6 +2207,9 @@ try {
   } else if (optionsScopePickerOnly) {
     await verifyOptionsScopePickers(page, extensionId)
     console.log('Options folder scope picker tests passed.')
+  } else if (optionsReasoningOnly) {
+    await verifyOptions(page, extensionId)
+    console.log('Options reasoning selector test passed.')
   } else if (overlayMotionOnly) {
     await verifySharedOverlayMotion(page, extensionId)
     console.log('Shared overlay motion tests passed.')

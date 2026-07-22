@@ -406,6 +406,7 @@ function AiProviderModelToolsContent({
             <ReasoningEffortSelector
               ariaLabel="推理强度"
               levels={state.reasoningEffortOptions}
+              modelName={modelTools.selector.currentModel}
               value={state.reasoningEffort}
               disabled={state.modelToolsDisabled || !state.reasoningEffortSupported}
               direction="down"

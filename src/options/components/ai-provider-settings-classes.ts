@@ -60,13 +60,16 @@ export const AI_PROVIDER_INPUT_CLASS =
 export const AI_PROVIDER_MODEL_FIELD_CLASS = 'flex min-w-0 flex-col gap-3'
 
 export const AI_PROVIDER_MODEL_ROW_CLASS =
-  'grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-6 gap-y-3 max-[760px]:grid-cols-1'
+  'ai-provider-model-row grid grid-cols-[minmax(480px,1.25fr)_minmax(360px,1fr)] items-start gap-x-6 gap-y-3 max-[960px]:grid-cols-1'
 
-export const AI_PROVIDER_MODEL_GROUP_CLASS = 'flex items-stretch gap-2 max-[520px]:flex-col'
+export const AI_PROVIDER_MODEL_GROUP_CLASS =
+  'ai-provider-model-group grid w-full grid-cols-[minmax(0,1fr)_152px] items-stretch gap-2 max-[520px]:grid-cols-1'
 
-export const AI_PROVIDER_MODEL_SELECT_HOST_CLASS = 'min-w-0 flex-1'
+export const AI_PROVIDER_MODEL_SELECT_HOST_CLASS =
+  'ai-provider-model-select-host min-w-0 w-full'
 
-export const AI_PROVIDER_EFFORT_HOST_CLASS = 'flex min-h-[50px] items-center'
+export const AI_PROVIDER_EFFORT_HOST_CLASS =
+  'ai-provider-effort-host flex min-h-[50px] min-w-0 w-full items-center [&>*]:w-full'
 
 export const AI_PROVIDER_HINTS_CLASS = 'flex min-w-0 flex-col gap-1.5'
 
@@ -83,7 +86,7 @@ export const AI_PROVIDER_SELECT_TRIGGER_CLASS =
   'min-h-[50px] w-full rounded-ds-sm border-ds-border bg-ds-surface-2 text-ds-text-primary focus-visible:shadow-ds-focus'
 
 export const AI_PROVIDER_FETCH_BUTTON_CLASS =
-  'min-h-[50px] flex-none whitespace-nowrap px-4'
+  'min-h-[50px] min-w-[140px] flex-none whitespace-nowrap px-5'
 
 export const AI_PROVIDER_CHECK_CLASS =
   'inline-flex w-fit cursor-pointer items-center gap-2 text-xs text-ds-text-secondary'

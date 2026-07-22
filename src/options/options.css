@@ -184,3 +184,46 @@ body,
     --ds-shadow-focus: 0 0 0 2px #000000, 0 0 0 4px #eaf6ff;
   }
 }
+
+/* zanwei/chatgpt-model-selector interaction port: menu rows enter in place,
+   while the menu/advanced swap keeps the provider form itself layout-stable. */
+@keyframes reasoning-selector-row-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 5px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row,
+.reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
+  animation: reasoning-selector-row-in 260ms var(--ease-smooth-out) backwards;
+}
+
+.reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
+  animation-delay: 90ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reasoning-selector-view-track {
+    transform: none !important;
+    transition-duration: 1ms !important;
+  }
+
+  .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row,
+  .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
+    animation: none !important;
+  }
+}

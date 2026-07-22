@@ -33,16 +33,17 @@ export function AiModelSelector({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const selectedModel = state.currentModel || state.models[0] || ''
+  const catalogModels = state.fetchedModels.length ? state.fetchedModels : state.models
+  const selectedModel = state.currentModel || catalogModels[0] || ''
   const selectedMeta = getModelMeta(selectedModel, state)
   const filteredModels = useMemo(() => {
     const normalizedQuery = normalizeModelSearchText(query)
     if (!normalizedQuery) {
-      return state.models
+      return catalogModels
     }
 
-    return state.models.filter((model) => normalizeModelSearchText(model).includes(normalizedQuery))
-  }, [query, state.models])
+    return catalogModels.filter((model) => normalizeModelSearchText(model).includes(normalizedQuery))
+  }, [catalogModels, query])
   const groupedModels = useMemo(() => groupModels(filteredModels, state), [filteredModels, state])
 
   function handleSelect(model: string) {
@@ -82,7 +83,7 @@ export function AiModelSelector({
         <ModelSelectorCombobox
           filteredItems={filteredModels}
           inputValue={query}
-          items={state.models}
+          items={catalogModels}
           onInputValueChange={setQuery}
           onOpenChange={handleOpenChange}
           onValueChange={(model) => {
@@ -96,14 +97,18 @@ export function AiModelSelector({
           <ModelSelectorInput
             autoFocus
             onClear={() => setQuery('')}
-            placeholder="Search models..."
+            placeholder="Search models…"
           />
           <ModelSelectorList aria-label="AI 模型候选列表">
             <ModelSelectorEmpty>
               {query ? '没有匹配的模型。' : '尚未加载模型。'}
             </ModelSelectorEmpty>
-            {groupedModels.map((group) => (
-              <ModelSelectorGroup heading={group.heading} key={group.heading}>
+            {groupedModels.map((group, groupIndex) => (
+              <ModelSelectorGroup
+                className={groupIndex === 0 ? undefined : 'mt-1.5'}
+                heading={group.heading}
+                key={group.heading}
+              >
                 {group.models.map((model) => {
                   const meta = getModelMeta(model, state)
                   return (
@@ -153,14 +158,15 @@ function groupModels(models: string[], state: AiModelSelectorState) {
 function getModelMeta(model: string, state: AiModelSelectorState) {
   const provider = inferModelProvider(model)
   const tags: string[] = []
-  if (state.presetModels.includes(model)) {
-    tags.push('预设')
-  }
-  if (state.customModels.includes(model)) {
-    tags.push('自定义')
-  }
-  if (state.fetchedModels.includes(model)) {
+  if (state.fetchedModels.length && state.fetchedModels.includes(model)) {
     tags.push('已拉取')
+  } else {
+    if (state.presetModels.includes(model)) {
+      tags.push('预设')
+    }
+    if (state.customModels.includes(model)) {
+      tags.push('自定义')
+    }
   }
 
   return {
