@@ -103,6 +103,31 @@ export function extractChatCompletionsJsonText(
   throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
 }
 
+export function extractAnthropicMessagesJsonText(
+  payload: unknown,
+  formatRefusal: AiRefusalFormatter = buildAiStructuredOutputRefusalError
+): string {
+  const messagePayload = payload as {
+    content?: Array<{ type?: unknown; text?: unknown; refusal?: unknown }>
+  } | null
+  const content = Array.isArray(messagePayload?.content) ? messagePayload.content : []
+  const refusal = content.find((item) => {
+    return typeof item?.refusal === 'string' && item.refusal.trim()
+  })?.refusal
+  if (typeof refusal === 'string' && refusal.trim()) {
+    throw new Error(formatRefusal(refusal))
+  }
+  const text = content
+    .filter((item) => item?.type === 'text' || typeof item?.text === 'string')
+    .map((item) => typeof item?.text === 'string' ? item.text : '')
+    .filter((item) => item.trim())
+    .join('')
+  if (text.trim()) {
+    return extractJsonPayloadText(text)
+  }
+  throw new Error('Claude Messages API 返回中未找到可解析的 JSON 文本。')
+}
+
 /**
  * 从任意模型的自由文本输出中萃取 JSON 载荷：
  * 1. 剥离推理模型的 <think>…</think> 思考段（含只有闭合标签的变体）
@@ -205,6 +230,11 @@ function findJsonStart(text: string): number {
 export function getAiTruncationIssue(payload: unknown, apiStyle: unknown): string {
   if (!payload || typeof payload !== 'object') {
     return ''
+  }
+
+  const anthropicStopReason = (payload as { stop_reason?: unknown }).stop_reason
+  if (anthropicStopReason === 'max_tokens') {
+    return 'AI 输出因达到模型输出上限被截断（stop_reason=max_tokens）。请减小批量大小或缩短提示后重试。'
   }
 
   if (apiStyle === 'chat_completions') {

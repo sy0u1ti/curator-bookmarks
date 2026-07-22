@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { FeaturedBackgroundPickerState } from './components/FeaturedBackgroundPicker'
 
 export type FeaturedBackgroundPickerView = FeaturedBackgroundPickerState
@@ -10,52 +10,34 @@ export interface NewtabFeaturedBackgroundPickerNodes {
   trigger: HTMLElement | null
 }
 
-let featuredBackgroundPickerView: FeaturedBackgroundPickerView | null = null
-let featuredBackgroundPickerFocusRequest: FeaturedBackgroundPickerFocusRequest = { requestId: 0 }
 let featuredBackgroundPickerNodes: NewtabFeaturedBackgroundPickerNodes = {
   trigger: null
 }
-const listeners = new Set<() => void>()
-const focusListeners = new Set<() => void>()
-
-function subscribeFeaturedBackgroundPicker(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitFeaturedBackgroundPickerChange(): void {
-  listeners.forEach((listener) => listener())
-}
-
-function subscribeFeaturedBackgroundPickerFocusRequest(listener: () => void): () => void {
-  focusListeners.add(listener)
-  return () => {
-    focusListeners.delete(listener)
-  }
-}
-
-function emitFeaturedBackgroundPickerFocusRequestChange(): void {
-  focusListeners.forEach((listener) => listener())
-}
+const featuredBackgroundPickerStore = createUiViewStoreSlice<FeaturedBackgroundPickerView | null>(
+  'newtab',
+  'featured-background-picker',
+  null
+)
+const featuredBackgroundPickerFocusStore = createUiViewStoreSlice<FeaturedBackgroundPickerFocusRequest>(
+  'newtab',
+  'featured-background-picker-focus',
+  { requestId: 0 }
+)
 
 export function dispatchNewtabFeaturedBackgroundPickerView(
   view: FeaturedBackgroundPickerView | null
 ): void {
-  featuredBackgroundPickerView = view
-  emitFeaturedBackgroundPickerChange()
+  featuredBackgroundPickerStore.setState(view)
 }
 
 export function dispatchNewtabFeaturedBackgroundPickerInitialFocusRequest(): void {
-  featuredBackgroundPickerFocusRequest = {
-    requestId: featuredBackgroundPickerFocusRequest.requestId + 1
-  }
-  emitFeaturedBackgroundPickerFocusRequestChange()
+  featuredBackgroundPickerFocusStore.setState((request) => ({
+    requestId: request.requestId + 1
+  }))
 }
 
 export function getNewtabFeaturedBackgroundPickerView(): FeaturedBackgroundPickerView | null {
-  return featuredBackgroundPickerView
+  return featuredBackgroundPickerStore.getState()
 }
 
 export function setNewtabFeaturedBackgroundPickerNodes(nodes: NewtabFeaturedBackgroundPickerNodes): void {
@@ -67,17 +49,9 @@ export function getNewtabFeaturedBackgroundPickerNodes(): NewtabFeaturedBackgrou
 }
 
 export function useNewtabFeaturedBackgroundPickerView(): FeaturedBackgroundPickerView | null {
-  return useSyncExternalStore(
-    subscribeFeaturedBackgroundPicker,
-    () => featuredBackgroundPickerView,
-    () => null
-  )
+  return useUiViewStoreSlice(featuredBackgroundPickerStore)
 }
 
 export function useNewtabFeaturedBackgroundPickerFocusRequest(): FeaturedBackgroundPickerFocusRequest {
-  return useSyncExternalStore(
-    subscribeFeaturedBackgroundPickerFocusRequest,
-    () => featuredBackgroundPickerFocusRequest,
-    () => ({ requestId: 0 })
-  )
+  return useUiViewStoreSlice(featuredBackgroundPickerFocusStore)
 }

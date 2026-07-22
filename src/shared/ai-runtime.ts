@@ -1,11 +1,22 @@
 import {
   extractAiErrorMessage,
+  extractAnthropicMessagesJsonText,
   extractChatCompletionsJsonText,
   extractResponsesJsonText,
   getAiEndpoint,
   getAiTruncationIssue
 } from './ai-response.js'
-import { getAiProviderBaseUrlIssue } from './ai-provider-url.js'
+import {
+  getAiProviderAuthHeaders,
+  getAiProviderBaseUrlIssue,
+  getAnthropicMessagesEndpoint,
+  isDirectAnthropicProvider
+} from './ai-provider-url.js'
+import {
+  getModelReasoningCapability,
+  getModelReasoningProfile,
+  resolveReasoningEffortForModel
+} from './ai-reasoning.js'
 
 export type AiErrorKind =
   | 'configuration'
@@ -23,10 +34,12 @@ export interface AiProviderSettings {
   model: string
   apiStyle: 'responses' | 'chat_completions'
   timeoutMs?: number
+  /** 从渠道模型列表缓存的逐模型推理能力。 */
+  reasoningCapabilities?: unknown
   /**
    * 推理强度：'default' 或空值 = 不发送任何推理参数（最大兼容）。
-   * 其余取值（none/minimal/low/medium/high）按 apiStyle 映射为
-   * reasoning_effort（chat）或 reasoning.effort（responses），
+   * 其余取值（none/minimal/low/medium/high/xhigh/max）按 apiStyle 映射为
+   * reasoning_effort（chat）、reasoning.effort（Responses / OpenRouter），
    * 端点不支持时自动降级移除后重试。
    */
   reasoningEffort?: string
@@ -36,6 +49,7 @@ export interface AiRuntimeMetadata {
   endpoint: string
   apiStyle: AiProviderSettings['apiStyle']
   schemaName?: string
+  structuredOutputMode: AiStructuredOutputMode
   status?: number
   attempts: number
   repaired: boolean
@@ -62,12 +76,18 @@ export interface AiStructuredRequest<T> {
 }
 
 export interface AiPromptEnvelope {
-  settings: Pick<AiProviderSettings, 'model' | 'apiStyle' | 'reasoningEffort'>
+  settings: Pick<
+    AiProviderSettings,
+    'baseUrl' | 'model' | 'apiStyle' | 'reasoningEffort' | 'reasoningCapabilities'
+  >
   schema: JsonSchema
+  strictSchema: JsonSchema
   schemaName: string
   systemPrompt: string
   userPrompt: string
 }
+
+export type AiStructuredOutputMode = 'json_schema' | 'json_object' | 'prompt'
 
 export type JsonSchemaType = 'object' | 'array' | 'string' | 'number' | 'integer' | 'boolean' | 'null'
 
@@ -141,25 +161,185 @@ export function normalizeReasoningEffortValue(value: unknown): string | null {
   if (!normalized || normalized === 'default') {
     return null
   }
-  return ['none', 'minimal', 'low', 'medium', 'high'].includes(normalized) ? normalized : null
+  return ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(normalized)
+    ? normalized
+    : null
+}
+
+function resolveRequestReasoningEffort(
+  settings: Pick<
+    AiProviderSettings,
+    'baseUrl' | 'model' | 'reasoningEffort' | 'reasoningCapabilities'
+  >
+): string | null {
+  const requested = normalizeReasoningEffortValue(settings.reasoningEffort)
+  if (!requested) {
+    return requested
+  }
+  if (requested === 'none') {
+    return isDirectAnthropicProvider(settings.baseUrl) ? null : requested
+  }
+  const capability = getModelReasoningCapability(settings.reasoningCapabilities, settings.model)
+  const profile = getModelReasoningProfile(settings.model, capability)
+  if (profile.levels.some((level) => level === requested)) {
+    return requested
+  }
+  return normalizeReasoningEffortValue(
+    resolveReasoningEffortForModel(settings.model, requested, capability)
+  )
+}
+
+/** OpenRouter Chat Completions 使用统一的 reasoning.effort，而非 reasoning_effort。 */
+function usesNestedChatReasoning(baseUrl: unknown): boolean {
+  const value = String(baseUrl ?? '').trim()
+  if (!value) {
+    return false
+  }
+  try {
+    const hostname = new URL(value).hostname.toLowerCase()
+    return hostname === 'openrouter.ai' || hostname.endsWith('.openrouter.ai')
+  } catch {
+    return /(?:^|\.)openrouter\.ai(?:[/:]|$)/i.test(value)
+  }
+}
+
+/**
+ * 把业务 JSON Schema 编译为 OpenAI strict Structured Outputs 可接受的形式。
+ * strict 模式要求每个 object 的 required 覆盖全部 properties；原本的可选字段
+ * 通过联合 null 保留可选语义，响应解析后再移除这些 null 占位。
+ */
+export function compileStrictJsonSchema(schema: JsonSchema): JsonSchema {
+  return compileStrictSchemaNode(schema)
+}
+
+function compileStrictSchemaNode(schema: JsonSchema): JsonSchema {
+  const compiled: JsonSchema = {
+    ...schema,
+    type: cloneSchemaType(schema.type),
+    required: schema.required ? [...schema.required] : undefined,
+    enum: schema.enum ? [...schema.enum] : undefined
+  }
+
+  if (schema.items) {
+    compiled.items = compileStrictSchemaNode(schema.items)
+  }
+  if (schema.additionalProperties && typeof schema.additionalProperties === 'object') {
+    compiled.additionalProperties = compileStrictSchemaNode(schema.additionalProperties)
+  }
+
+  const properties = schema.properties
+  if (properties) {
+    const originalRequired = new Set(schema.required || [])
+    const compiledProperties: Record<string, JsonSchema> = {}
+    for (const [key, propertySchema] of Object.entries(properties)) {
+      const compiledProperty = compileStrictSchemaNode(propertySchema)
+      compiledProperties[key] = originalRequired.has(key)
+        ? compiledProperty
+        : makeSchemaNullable(compiledProperty)
+    }
+    const propertyNames = Object.keys(compiledProperties)
+    compiled.properties = compiledProperties
+    compiled.required = propertyNames
+    compiled.additionalProperties = false
+  } else if (schemaIncludesType(schema.type, 'object')) {
+    compiled.required = []
+    compiled.additionalProperties = false
+  }
+
+  return removeUndefinedSchemaFields(compiled)
+}
+
+function makeSchemaNullable(schema: JsonSchema): JsonSchema {
+  const existingTypes = normalizeSchemaTypes(schema.type)
+  // 未声明 type 的 schema 本来就允许 null，无需把它错误收窄成仅 null。
+  if (!existingTypes.length) {
+    return schema
+  }
+  const nullableTypes: JsonSchemaType[] = existingTypes.includes('null')
+    ? existingTypes
+    : [...existingTypes, 'null' as const]
+  const nullableEnum = schema.enum && !schema.enum.some((item) => item === null)
+    ? [...schema.enum, null]
+    : schema.enum
+  return removeUndefinedSchemaFields({
+    ...schema,
+    type: nullableTypes.length === 1 ? nullableTypes[0] : nullableTypes,
+    enum: nullableEnum
+  })
+}
+
+function cloneSchemaType(type: JsonSchema['type']): JsonSchema['type'] {
+  return type && typeof type !== 'string' ? [...type] : type
+}
+
+function normalizeSchemaTypes(type: JsonSchema['type']): JsonSchemaType[] {
+  if (!type) {
+    return []
+  }
+  if (typeof type === 'string') {
+    return [type]
+  }
+  return [...type]
+}
+
+function schemaIncludesType(type: JsonSchema['type'], expected: JsonSchemaType): boolean {
+  return normalizeSchemaTypes(type).includes(expected)
+}
+
+function removeUndefinedSchemaFields(schema: JsonSchema): JsonSchema {
+  return Object.fromEntries(
+    Object.entries(schema).filter(([, value]) => value !== undefined)
+  ) as JsonSchema
 }
 
 function buildAiPromptRequestBody({
   settings,
   schema,
+  strictSchema,
   schemaName,
   systemPrompt,
   userPrompt
-}: AiPromptEnvelope, options: { useStructuredFormat?: boolean; useReasoningEffort?: boolean } = {}): Record<string, unknown> {
-  const useStructuredFormat = options.useStructuredFormat !== false
+}: AiPromptEnvelope, options: {
+  structuredOutputMode?: AiStructuredOutputMode
+  useReasoningEffort?: boolean
+} = {}): Record<string, unknown> {
+  const structuredOutputMode = options.structuredOutputMode || 'json_schema'
   const reasoningEffort = options.useReasoningEffort === false
     ? null
-    : normalizeReasoningEffortValue(settings.reasoningEffort)
+    : resolveRequestReasoningEffort(settings)
+  // 无论兼容端点是否真正执行 response_format，提示词里都保留原始业务 schema；
+  // 严格 API schema 只负责传输约束，不改变调用方的可选字段语义。
+  const schemaHint =
+    '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
+    JSON.stringify(schema)
+  if (isDirectAnthropicProvider(settings.baseUrl)) {
+    const outputConfig: Record<string, unknown> = {}
+    if (reasoningEffort && reasoningEffort !== 'none') {
+      outputConfig.effort = reasoningEffort
+    }
+    if (structuredOutputMode === 'json_schema') {
+      outputConfig.format = {
+        type: 'json_schema',
+        schema: strictSchema
+      }
+    }
+    const body: Record<string, unknown> = {
+      model: settings.model,
+      max_tokens: 8192,
+      system: structuredOutputMode === 'json_schema' ? systemPrompt : systemPrompt + schemaHint,
+      messages: [{
+        role: 'user',
+        content: structuredOutputMode === 'json_schema'
+          ? userPrompt
+          : `${userPrompt}\n\n请只返回符合 schema 的 json 对象。`
+      }]
+    }
+    if (Object.keys(outputConfig).length) {
+      body.output_config = outputConfig
+    }
+    return body
+  }
   if (settings.apiStyle === 'chat_completions') {
-    // 紧凑序列化 schema：提示语义不变，显著减少每次请求的输入 token。
-    const schemaHint =
-      '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
-      JSON.stringify(schema)
     const body: Record<string, unknown> = {
       model: settings.model,
       messages: [
@@ -167,38 +347,26 @@ function buildAiPromptRequestBody({
         { role: 'user', content: `${userPrompt}\n\n请只返回符合 schema 的 json 对象。` }
       ]
     }
-    // 部分 OpenAI 兼容端点不认识 response_format，会直接 400；
-    // 降级模式下移除该参数，仅靠提示词 + 本地 JSON 萃取兜底。
-    if (useStructuredFormat) {
+    if (structuredOutputMode === 'json_schema') {
+      body.response_format = {
+        type: 'json_schema',
+        json_schema: {
+          name: schemaName,
+          strict: true,
+          schema: strictSchema
+        }
+      }
+    } else if (structuredOutputMode === 'json_object') {
       body.response_format = { type: 'json_object' }
     }
     if (reasoningEffort) {
-      body.reasoning_effort = reasoningEffort
+      if (usesNestedChatReasoning(settings.baseUrl)) {
+        body.reasoning = { effort: reasoningEffort }
+      } else {
+        body.reasoning_effort = reasoningEffort
+      }
     }
     return body
-  }
-
-  if (!useStructuredFormat) {
-    const fallbackBody: Record<string, unknown> = {
-      model: settings.model,
-      input: [
-        {
-          role: 'system',
-          content:
-            systemPrompt +
-            '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
-            JSON.stringify(schema)
-        },
-        {
-          role: 'user',
-          content: `${userPrompt}\n\n请只返回符合 schema 的 json 对象。`
-        }
-      ]
-    }
-    if (reasoningEffort) {
-      fallbackBody.reasoning = { effort: reasoningEffort }
-    }
-    return fallbackBody
   }
 
   const responsesBody: Record<string, unknown> = {
@@ -206,20 +374,28 @@ function buildAiPromptRequestBody({
     input: [
       {
         role: 'system',
-        content: systemPrompt
+        content: structuredOutputMode === 'json_schema' ? systemPrompt : systemPrompt + schemaHint
       },
       {
         role: 'user',
-        content: userPrompt
+        content: structuredOutputMode === 'json_schema'
+          ? userPrompt
+          : `${userPrompt}\n\n请只返回符合 schema 的 json 对象。`
       }
-    ],
-    text: {
+    ]
+  }
+  if (structuredOutputMode === 'json_schema') {
+    responsesBody.text = {
       format: {
         type: 'json_schema',
         name: schemaName,
         strict: true,
-        schema
+        schema: strictSchema
       }
+    }
+  } else if (structuredOutputMode === 'json_object') {
+    responsesBody.text = {
+      format: { type: 'json_object' }
     }
   }
   if (reasoningEffort) {
@@ -241,12 +417,20 @@ export async function requestStructuredAiOutput<T>({
   validate
 }: AiStructuredRequest<T>): Promise<AiRuntimeResult<T>> {
   ensureAiProviderConfigured(settings)
-  const endpoint = getAiEndpoint(settings)
-  const maxAttempts = retry ? 3 : 1
+  const directAnthropic = isDirectAnthropicProvider(settings.baseUrl)
+  const endpoint = directAnthropic
+    ? getAnthropicMessagesEndpoint(settings.baseUrl)
+    : getAiEndpoint(settings)
+  const strictSchema = compileStrictJsonSchema(schema)
+  // 最坏兼容链：移除 reasoning → json_schema 降为 json_object → 移除格式参数
+  // → 一次输出修复。给兼容降级留足次数，同时仍保持硬上限。
+  const maxAttempts = retry ? 6 : 1
   // 修复重试（parse/schema）最多一次：连续两轮结构仍不合法时，再重试收益极低。
   let repairAttemptsLeft = retry ? 1 : 0
-  // 结构化输出参数（response_format / text.format）兼容性降级最多一次。
-  let useStructuredFormat = true
+  // 网络/限流/服务端抖动仍维持原来的最多三次请求，不因兼容链上限增大而放大等待。
+  let transientRetryAttemptsLeft = retry ? 2 : 0
+  // 各家 OpenAI 兼容层能力不同：优先严格 schema，其次 JSON mode，最后纯提示词。
+  let structuredOutputMode: AiStructuredOutputMode = 'json_schema'
   // 推理强度参数（reasoning_effort / reasoning.effort）兼容性降级最多一次。
   let useReasoningEffort = true
 
@@ -267,10 +451,11 @@ export async function requestStructuredAiOutput<T>({
       const requestBody = buildAiPromptRequestBody({
         settings,
         schema,
+        strictSchema,
         schemaName,
         systemPrompt,
         userPrompt: effectiveUserPrompt
-      }, { useStructuredFormat, useReasoningEffort })
+      }, { structuredOutputMode, useReasoningEffort })
       const payload = await requestAiProviderPayload({
         endpoint,
         settings,
@@ -282,9 +467,11 @@ export async function requestStructuredAiOutput<T>({
       attemptPayload = payload
       let rawText = ''
       try {
-        rawText = settings.apiStyle === 'responses'
-          ? extractResponsesJsonText(payload)
-          : extractChatCompletionsJsonText(payload)
+        rawText = directAnthropic
+          ? extractAnthropicMessagesJsonText(payload)
+          : settings.apiStyle === 'responses'
+            ? extractResponsesJsonText(payload)
+            : extractChatCompletionsJsonText(payload)
       } catch (error) {
         throw new AiRuntimeError(
           'parse',
@@ -294,17 +481,19 @@ export async function requestStructuredAiOutput<T>({
       }
       attemptRawText = rawText
       const parsed = parseAiJson(rawText, schemaName)
-      validateJsonSchema(parsed, schema, schemaName)
-      validate?.(parsed as T)
+      const normalizedData = restoreOptionalSchemaFields(parsed, schema)
+      validateJsonSchema(normalizedData, schema, schemaName)
+      validate?.(normalizedData as T)
 
       return {
-        data: parsed as T,
+        data: normalizedData as T,
         rawText,
         payload,
         metadata: {
           endpoint,
           apiStyle: settings.apiStyle,
           schemaName,
+          structuredOutputMode,
           attempts: attempt,
           repaired
         }
@@ -325,7 +514,7 @@ export async function requestStructuredAiOutput<T>({
 
       // 端点不支持推理强度参数：先移除它降级重试（它是我们额外附加的可选参数，
       // 泛式 unknown-parameter 类 400 优先归因于它）。
-      const reasoningWasSent = useReasoningEffort && Boolean(normalizeReasoningEffortValue(settings.reasoningEffort))
+      const reasoningWasSent = useReasoningEffort && Boolean(resolveRequestReasoningEffort(settings))
       if (
         reasoningWasSent &&
         attempt < maxAttempts &&
@@ -335,13 +524,14 @@ export async function requestStructuredAiOutput<T>({
         return runAttempt(attempt + 1, normalizedError, attemptRawText)
       }
 
-      // 端点不支持结构化输出参数：移除参数降级重试一次（不计入修复预算）。
+      // 端点不支持当前结构化输出档位：json_schema → json_object → prompt。
+      // 兼容降级不占输出修复预算。
       if (
-        useStructuredFormat &&
+        structuredOutputMode !== 'prompt' &&
         attempt < maxAttempts &&
         isStructuredFormatCompatibilityError(normalizedError)
       ) {
-        useStructuredFormat = false
+        structuredOutputMode = getLessStrictOutputMode(structuredOutputMode)
         return runAttempt(attempt + 1, normalizedError, attemptRawText)
       }
 
@@ -354,6 +544,10 @@ export async function requestStructuredAiOutput<T>({
         }
         repairAttemptsLeft -= 1
       } else {
+        if (transientRetryAttemptsLeft <= 0) {
+          throw normalizedError
+        }
+        transientRetryAttemptsLeft -= 1
         // 限流/服务端错误/网络抖动：退避后重试，优先尊重 Retry-After。
         await waitForAiRetryDelay(normalizedError, attempt, signal)
       }
@@ -386,6 +580,46 @@ function parseAiJson(rawText: unknown, schemaName = 'structured_output'): unknow
       { cause: error }
     )
   }
+}
+
+/** 移除 strict schema 为原可选字段生成的 null 占位，并递归保留业务 schema 的数据形状。 */
+function restoreOptionalSchemaFields(value: unknown, schema: JsonSchema): unknown {
+  if (Array.isArray(value)) {
+    return schema.items
+      ? value.map((item) => restoreOptionalSchemaFields(item, schema.items!))
+      : value
+  }
+
+  if (!value || typeof value !== 'object' || !schema.properties) {
+    return value
+  }
+
+  const required = new Set(schema.required || [])
+  const source = value as Record<string, unknown>
+  const restored: Record<string, unknown> = {}
+  for (const [key, propertyValue] of Object.entries(source)) {
+    const propertySchema = schema.properties[key]
+    if (!propertySchema) {
+      restored[key] = propertyValue
+      continue
+    }
+    if (
+      propertyValue === null &&
+      !required.has(key) &&
+      !schemaIncludesType(propertySchema.type, 'null')
+    ) {
+      continue
+    }
+    restored[key] = restoreOptionalSchemaFields(propertyValue, propertySchema)
+  }
+  return restored
+}
+
+function getLessStrictOutputMode(mode: AiStructuredOutputMode): AiStructuredOutputMode {
+  if (mode === 'json_schema') {
+    return 'json_object'
+  }
+  return 'prompt'
 }
 
 export function buildAiFolderCandidates(
@@ -542,7 +776,7 @@ async function requestAiProviderPayload({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.apiKey}`
+        ...getAiProviderAuthHeaders(settings.baseUrl, settings.apiKey)
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal
@@ -845,7 +1079,7 @@ function isReasoningEffortCompatibilityError(error: AiRuntimeError): boolean {
     return false
   }
   const message = String(error.message || '')
-  if (/reasoning[\s_.-]*effort|['"“]?reasoning['"”]?|thinking/i.test(message)) {
+  if (/reasoning[\s_.-]*effort|['"“]?reasoning['"”]?|output_config[^\n]*effort|effort level|thinking/i.test(message)) {
     return true
   }
   const mentionsStructuredOutput = /response_format|json_object|json_schema|text\.format/i.test(message)
@@ -866,7 +1100,7 @@ function isStructuredFormatCompatibilityError(error: AiRuntimeError): boolean {
     return false
   }
   const message = String(error.message || '')
-  return /response_format|json_object|json_schema|text\.format|structured[\s_-]*output|(?:unknown|unsupported|unexpected|invalid|unrecognized)[\s_-]*(?:parameter|param|field|argument|keyword)|does not support/i.test(message)
+  return /response_format|json_object|json_schema|text\.format|output_config[^\n]*format|structured[\s_-]*output|(?:unknown|unsupported|unexpected|invalid|unrecognized)[\s_-]*(?:parameter|param|field|argument|keyword)|does not support/i.test(message)
 }
 
 function throwIfAiAborted(signal?: AbortSignal | null): void {

@@ -69,7 +69,12 @@ import {
   type AiFolderCandidate,
   type AiProviderSettings
 } from '../shared/ai-runtime.js'
-import { getAiProviderBaseUrlIssue } from '../shared/ai-provider-url.js'
+import {
+  getAiProviderAuthHeaders,
+  getAiProviderBaseUrlIssue,
+  getAnthropicMessagesEndpoint,
+  isDirectAnthropicProvider
+} from '../shared/ai-provider-url.js'
 import {
   normalizeAiNamingSettings,
   normalizeAiNamingCustomModels,
@@ -259,6 +264,8 @@ import type { FeatureSettingsChangeDetail } from './components/feature-settings-
 import type { AiProviderSettingsActionDetail } from './components/ai-provider-settings-types.js'
 import { publishAiProviderSettings } from './components/ai-provider-settings-store.js'
 import {
+  extractModelReasoningCapabilities,
+  getModelReasoningCapability,
   getModelReasoningProfile,
   getReasoningEffortOptions,
   resolveReasoningEffortForModel
@@ -2739,9 +2746,13 @@ export function handleAiProviderSettingsAction(detail: AiProviderSettingsActionD
   }
 
   const previousSettings = syncAiNamingSettingsDraftFromState()
+  const clearReasoningCapabilities = detail.field === 'baseUrl'
   aiNamingManagerState.settings = normalizeAiNamingSettings({
     ...previousSettings,
-    [detail.field]: String(detail.value ?? '')
+    [detail.field]: String(detail.value ?? ''),
+    reasoningCapabilities: clearReasoningCapabilities
+      ? {}
+      : previousSettings.reasoningCapabilities
   })
   aiNamingState.settingsDirty = true
   resetAiNamingConnectivityState()
@@ -4006,6 +4017,11 @@ function renderAiProviderSettings(
     showSaveSettingsButton: boolean
   }
 ): void {
+  const reasoningCapability = getModelReasoningCapability(
+    settings.reasoningCapabilities,
+    settings.model
+  )
+  const reasoningProfile = getModelReasoningProfile(settings.model, reasoningCapability)
   publishAiProviderSettings({
     apiKey: settings.apiKey,
     apiKeyPlaceholder: settings.apiKey ? maskAiApiKey(settings.apiKey) : '未保存 API Key',
@@ -4028,10 +4044,14 @@ function renderAiProviderSettings(
       : hasRequiredConfig
         ? '配置已保存，可继续获取模型或测试连接。'
         : '填写 API Key 后即可获取模型并测试连接。',
-    reasoningEffort: resolveReasoningEffortForModel(settings.model, settings.reasoningEffort),
-    reasoningEffortNote: getModelReasoningProfile(settings.model).note,
-    reasoningEffortOptions: getReasoningEffortOptions(settings.model),
-    reasoningEffortSupported: getModelReasoningProfile(settings.model).supported,
+    reasoningEffort: resolveReasoningEffortForModel(
+      settings.model,
+      settings.reasoningEffort,
+      reasoningCapability
+    ),
+    reasoningEffortNote: reasoningProfile.note,
+    reasoningEffortOptions: getReasoningEffortOptions(settings.model, reasoningCapability),
+    reasoningEffortSupported: reasoningProfile.supported,
     revealApiKey: managerState.aiRevealApiKey,
     saveDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
     saveStatusText: aiNamingState.settingsDirty
@@ -4119,6 +4139,16 @@ function getAiFetchModelsStatus(): { copy: string; tone: string } {
 function getAiModelsEndpoint(settings) {
   const baseUrl = String(settings.baseUrl || '').replace(/\/+$/, '')
   const suffix = AI_NAMING_MODELS_ENDPOINT_SUFFIX
+  if (isDirectAnthropicProvider(baseUrl)) {
+    try {
+      const parsedUrl = new URL(baseUrl)
+      if (!parsedUrl.pathname || parsedUrl.pathname === '/') {
+        return `${baseUrl}/v1/${suffix}`
+      }
+    } catch {
+      // Base URL 校验会在请求前处理；这里继续使用通用拼接。
+    }
+  }
   return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
 }
 
@@ -4189,7 +4219,7 @@ async function handleFetchAiModels() {
       {
         method: 'GET',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          ...getAiProviderAuthHeaders(baseUrl, apiKey),
           Accept: 'application/json'
         }
       },
@@ -4209,9 +4239,11 @@ async function handleFetchAiModels() {
     }
 
     const normalizedIds = normalizeAiNamingFetchedModels(ids)
+    const reasoningCapabilities = extractModelReasoningCapabilities(payload)
     aiNamingManagerState.settings = normalizeAiNamingSettings({
       ...aiNamingManagerState.settings,
-      fetchedModels: normalizedIds
+      fetchedModels: normalizedIds,
+      reasoningCapabilities
     })
     await saveAiNamingSettings(aiNamingManagerState.settings)
     aiNamingState.lastFetchModelsAt = Date.now()
@@ -4225,7 +4257,7 @@ async function handleFetchAiModels() {
       fields: ['API Key', '模型列表'],
       includesBody: false,
       status: 'success',
-      reason: `已读取 ${normalizedIds.length} 个模型 ID。`
+      reason: `已读取 ${normalizedIds.length} 个模型 ID，并识别 ${Object.keys(reasoningCapabilities).length} 个推理能力配置。`
     })
   } catch (error) {
     aiNamingState.lastFetchModelsError =
@@ -6270,7 +6302,7 @@ async function fetchRemoteBookmarkContentForAi(
 }
 
 async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.settings) {
-  const endpoint = getAiEndpoint(settings)
+  const endpoint = getResolvedAiProviderEndpoint(settings)
   try {
     const response = await fetchWithRequestTimeout(endpoint, {
       method: 'POST',
@@ -6279,7 +6311,7 @@ async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.s
       referrerPolicy: 'no-referrer',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.apiKey}`
+        ...getAiProviderAuthHeaders(settings.baseUrl, settings.apiKey)
       },
       body: JSON.stringify(buildAiNamingConnectivityRequestBody(settings))
     }, settings.timeoutMs)
@@ -6316,7 +6348,18 @@ async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.s
 }
 
 function buildAiNamingConnectivityRequestBody(settings = aiNamingManagerState.settings) {
-    if (settings.apiStyle === 'chat_completions') {
+  if (isDirectAnthropicProvider(settings.baseUrl)) {
+    return {
+      model: settings.model,
+      max_tokens: 16,
+      messages: [{
+        role: 'user',
+        content: 'Reply with OK.'
+      }]
+    }
+  }
+
+  if (settings.apiStyle === 'chat_completions') {
     return {
       model: settings.model,
       messages: [
@@ -6344,7 +6387,7 @@ function normalizeAiNamingConnectivityError(error, timeoutMs = aiNamingManagerSt
 
 async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSignal | null } = {}) {
   const settings = aiNamingManagerState.settings
-  const endpoint = getAiEndpoint(settings)
+  const endpoint = getResolvedAiProviderEndpoint(settings)
   const prompt = buildAiNamingPrompt(preparedItems, settings)
   throwIfAborted(options.signal)
   try {
@@ -6382,6 +6425,12 @@ async function requestAiNamingBatch(preparedItems, options: { signal?: AbortSign
     })
     throw error
   }
+}
+
+function getResolvedAiProviderEndpoint(settings) {
+  return isDirectAnthropicProvider(settings?.baseUrl)
+    ? getAnthropicMessagesEndpoint(settings.baseUrl)
+    : getAiEndpoint(settings)
 }
 
 function buildAiNamingPrompt(preparedItems, settings) {

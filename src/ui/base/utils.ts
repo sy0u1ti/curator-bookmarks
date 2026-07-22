@@ -1,5 +1,7 @@
-export function cx(...values: Array<string | false | null | undefined>): string {
-  return values.filter(Boolean).join(' ')
+import { clsx, type ClassValue } from 'clsx'
+
+export function cx(...values: ClassValue[]): string {
+  return clsx(...values)
 }
 
 export function cxState<State>(

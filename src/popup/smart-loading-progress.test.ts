@@ -5,6 +5,7 @@ import {
   getNextSmartProgress,
   getSmartCheckpointProgress,
   getSmartDisplayProgress,
+  getSmartLoadingOrbState,
   getSmartProgressTarget,
   normalizeSmartLoadingStep
 } from './smart-loading-progress.js'
@@ -15,6 +16,7 @@ function run(): void {
   testCheckpointsMapWithinTheActiveStage()
   testLoadingProgressKeepsCreepingWithinTheStage()
   testAiStageKeepsMovingForTheMaximumRequestTimeout()
+  testLoadingStagesUseDistinctAiVisuals()
 }
 
 function testDisplayProgressHonorsStageStart(): void {
@@ -66,6 +68,12 @@ function testAiStageKeepsMovingForTheMaximumRequestTimeout(): void {
   const nextProgress = getNextSmartProgress(progress, 2)
   assert(nextProgress > progress, 'AI progress should still be moving after a two-minute request')
   assert(nextProgress < SMART_LOADING_PROGRESS_TARGETS[1], 'AI progress should not cross into the next stage')
+}
+
+function testLoadingStagesUseDistinctAiVisuals(): void {
+  assert(getSmartLoadingOrbState(1) === 'searching', 'content reading should use the searching orb')
+  assert(getSmartLoadingOrbState(2) === 'solving', 'AI analysis should use the solving orb')
+  assert(getSmartLoadingOrbState(3) === 'shaping', 'folder matching should use the shaping orb')
 }
 
 function assert(value: unknown, message: string): void {

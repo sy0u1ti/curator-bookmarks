@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { FeatureSettingsControlsState } from './feature-settings-types.js'
 
 const defaultFeatureSettingsControlsState: FeatureSettingsControlsState = {
@@ -6,23 +6,16 @@ const defaultFeatureSettingsControlsState: FeatureSettingsControlsState = {
   switches: []
 }
 
-let currentFeatureSettingsControlsState = defaultFeatureSettingsControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): FeatureSettingsControlsState {
-  return currentFeatureSettingsControlsState
-}
+const featureSettingsControlsStore = createUiViewStoreSlice(
+  'options',
+  'feature-settings-controls',
+  defaultFeatureSettingsControlsState
+)
 
 export function publishFeatureSettingsControls(state: FeatureSettingsControlsState): void {
-  currentFeatureSettingsControlsState = state
-  listeners.forEach((listener) => listener())
+  featureSettingsControlsStore.setState(state)
 }
 
 export function useFeatureSettingsControlsState(): FeatureSettingsControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(featureSettingsControlsStore)
 }

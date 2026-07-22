@@ -4,6 +4,10 @@ import {
   AI_NAMING_MAX_BATCH_SIZE
 } from '../shared-options/constants.js'
 import { createDefaultAiNamingSettings } from '../shared-options/state.js'
+import {
+  normalizeModelReasoningCapabilityMap,
+  type ModelReasoningCapabilityMap
+} from '../../shared/ai-reasoning.js'
 
 export interface AiNamingSettings {
   baseUrl: string
@@ -11,6 +15,7 @@ export interface AiNamingSettings {
   model: string
   customModels: string[]
   fetchedModels: string[]
+  reasoningCapabilities: ModelReasoningCapabilityMap
   apiStyle: 'responses' | 'chat_completions'
   timeoutMs: number
   batchSize: number
@@ -27,6 +32,7 @@ interface AiNamingSettingsSource {
   model?: unknown
   customModels?: unknown
   fetchedModels?: unknown
+  reasoningCapabilities?: unknown
   apiStyle?: unknown
   timeoutMs?: unknown
   batchSize?: unknown
@@ -37,7 +43,16 @@ interface AiNamingSettingsSource {
   systemPrompt?: unknown
 }
 
-const REASONING_EFFORT_VALUES = ['default', 'minimal', 'low', 'medium', 'high']
+const REASONING_EFFORT_VALUES = [
+  'default',
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max'
+]
 
 export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSettings {
   const defaults = createDefaultAiNamingSettings() as AiNamingSettings
@@ -55,6 +70,7 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
     model: String(source.model || defaults.model).trim() || defaults.model,
     customModels: normalizeAiNamingCustomModels(source.customModels),
     fetchedModels: normalizeAiNamingFetchedModels(source.fetchedModels),
+    reasoningCapabilities: normalizeModelReasoningCapabilityMap(source.reasoningCapabilities),
     apiStyle: apiStyle === 'chat_completions' ? 'chat_completions' : 'responses',
     timeoutMs: Number.isFinite(timeoutMs)
       ? Math.max(5000, Math.min(timeoutMs, 120000))
@@ -115,6 +131,7 @@ export function serializeAiNamingSettings(settings: unknown): AiNamingSettings {
     model: normalized.model,
     customModels: normalized.customModels.slice(),
     fetchedModels: normalized.fetchedModels.slice(),
+    reasoningCapabilities: normalizeModelReasoningCapabilityMap(normalized.reasoningCapabilities),
     apiStyle: normalized.apiStyle,
     timeoutMs: normalized.timeoutMs,
     batchSize: normalized.batchSize,

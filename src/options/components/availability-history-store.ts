@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { AvailabilityHistoryState } from './availability-history-types.js'
 
 const defaultAvailabilityHistoryState: AvailabilityHistoryState = {
@@ -27,23 +27,16 @@ const defaultAvailabilityHistoryState: AvailabilityHistoryState = {
   }
 }
 
-let currentAvailabilityHistoryState = defaultAvailabilityHistoryState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): AvailabilityHistoryState {
-  return currentAvailabilityHistoryState
-}
+const availabilityHistoryStore = createUiViewStoreSlice(
+  'options',
+  'availability-history',
+  defaultAvailabilityHistoryState
+)
 
 export function publishAvailabilityHistory(state: AvailabilityHistoryState): void {
-  currentAvailabilityHistoryState = state
-  listeners.forEach((listener) => listener())
+  availabilityHistoryStore.setState(state)
 }
 
 export function useAvailabilityHistoryState(): AvailabilityHistoryState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(availabilityHistoryStore)
 }

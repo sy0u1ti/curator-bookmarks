@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 export type FeaturedBackgroundStatusTone = 'info' | 'success' | 'warning' | 'error'
 
@@ -28,30 +28,22 @@ const EMPTY_ACTIONS: NewtabFeaturedBackgroundModalActions = {
   onRefreshClick: () => {}
 }
 
-let featuredBackgroundModalView: NewtabFeaturedBackgroundModalView = {
+const EMPTY_VIEW: NewtabFeaturedBackgroundModalView = {
   open: false,
   refreshing: false,
   status: '',
   statusTone: 'info'
 }
+const featuredBackgroundModalStore = createUiViewStoreSlice(
+  'newtab',
+  'featured-background-modal',
+  EMPTY_VIEW
+)
 let featuredBackgroundModalActions: NewtabFeaturedBackgroundModalActions = EMPTY_ACTIONS
 let featuredBackgroundModalNodes: NewtabFeaturedBackgroundModalNodes = {
   grid: null,
   modal: null
 }
-const listeners = new Set<() => void>()
-
-function subscribeFeaturedBackgroundModal(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitFeaturedBackgroundModalChange(): void {
-  listeners.forEach((listener) => listener())
-}
-
 export function registerNewtabFeaturedBackgroundModalActions(
   actions: NewtabFeaturedBackgroundModalActions
 ): () => void {
@@ -64,31 +56,22 @@ export function registerNewtabFeaturedBackgroundModalActions(
 }
 
 export function useNewtabFeaturedBackgroundModalView(): NewtabFeaturedBackgroundModalView {
-  return useSyncExternalStore(
-    subscribeFeaturedBackgroundModal,
-    () => featuredBackgroundModalView,
-    () => ({
-      open: false,
-      refreshing: false,
-      status: '',
-      statusTone: 'info'
-    })
-  )
+  return useUiViewStoreSlice(featuredBackgroundModalStore)
 }
 
 export function dispatchNewtabFeaturedBackgroundModalOpen(open: boolean): void {
+  const featuredBackgroundModalView = featuredBackgroundModalStore.getState()
   if (featuredBackgroundModalView.open === open) {
     return
   }
-  featuredBackgroundModalView = {
+  featuredBackgroundModalStore.setState({
     ...featuredBackgroundModalView,
     open
-  }
-  emitFeaturedBackgroundModalChange()
+  })
 }
 
 export function getNewtabFeaturedBackgroundModalOpen(): boolean {
-  return featuredBackgroundModalView.open
+  return featuredBackgroundModalStore.getState().open
 }
 
 export function setNewtabFeaturedBackgroundModalNodes(nodes: NewtabFeaturedBackgroundModalNodes): void {
@@ -108,6 +91,7 @@ export function dispatchNewtabFeaturedBackgroundModalControls({
   status: string
   statusTone: FeaturedBackgroundStatusTone
 }): void {
+  const featuredBackgroundModalView = featuredBackgroundModalStore.getState()
   if (
     featuredBackgroundModalView.refreshing === refreshing &&
     featuredBackgroundModalView.status === status &&
@@ -116,13 +100,12 @@ export function dispatchNewtabFeaturedBackgroundModalControls({
     return
   }
 
-  featuredBackgroundModalView = {
+  featuredBackgroundModalStore.setState({
     ...featuredBackgroundModalView,
     refreshing,
     status,
     statusTone
-  }
-  emitFeaturedBackgroundModalChange()
+  })
 }
 
 export function dispatchNewtabFeaturedBackgroundModalReady(): void {

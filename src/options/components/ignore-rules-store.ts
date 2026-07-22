@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { IgnoreRulesState } from './ignore-rules-types.js'
 
 const defaultIgnoreRulesState: IgnoreRulesState = {
@@ -7,23 +7,16 @@ const defaultIgnoreRulesState: IgnoreRulesState = {
   folders: []
 }
 
-let currentIgnoreRulesState = defaultIgnoreRulesState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): IgnoreRulesState {
-  return currentIgnoreRulesState
-}
+const ignoreRulesStore = createUiViewStoreSlice(
+  'options',
+  'ignore-rules',
+  defaultIgnoreRulesState
+)
 
 export function publishIgnoreRules(state: IgnoreRulesState): void {
-  currentIgnoreRulesState = state
-  listeners.forEach((listener) => listener())
+  ignoreRulesStore.setState(state)
 }
 
 export function useIgnoreRulesState(): IgnoreRulesState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(ignoreRulesStore)
 }

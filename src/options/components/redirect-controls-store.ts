@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { RedirectControlsState } from './redirect-controls-types.js'
 
 const defaultRedirectControlsState: RedirectControlsState = {
@@ -8,23 +8,16 @@ const defaultRedirectControlsState: RedirectControlsState = {
   subtitle: ''
 }
 
-let currentRedirectControlsState = defaultRedirectControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): RedirectControlsState {
-  return currentRedirectControlsState
-}
+const redirectControlsStore = createUiViewStoreSlice(
+  'options',
+  'redirect-controls',
+  defaultRedirectControlsState
+)
 
 export function publishRedirectControls(state: RedirectControlsState): void {
-  currentRedirectControlsState = state
-  listeners.forEach((listener) => listener())
+  redirectControlsStore.setState(state)
 }
 
 export function useRedirectControlsState(): RedirectControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(redirectControlsStore)
 }

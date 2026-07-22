@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type {
   FolderPickerKind,
   FolderPickerResultsState
@@ -19,48 +19,42 @@ const defaultStates: Record<FolderPickerKind, FolderPickerResultsState> = {
   }
 }
 
-let currentFolderPickerResultsStates: Record<FolderPickerKind, FolderPickerResultsState> = defaultStates
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): Record<FolderPickerKind, FolderPickerResultsState> {
-  return currentFolderPickerResultsStates
-}
+const folderPickerResultsStore = createUiViewStoreSlice(
+  'options',
+  'folder-picker-results',
+  defaultStates
+)
 
 export function getFolderPickerResultsSnapshot(kind: FolderPickerKind): FolderPickerResultsState {
-  return currentFolderPickerResultsStates[kind] || defaultStates[kind]
+  return folderPickerResultsStore.getState()[kind] || defaultStates[kind]
 }
 
 export function publishFolderPickerResults(
   kind: FolderPickerKind,
   state: FolderPickerResultsState
 ): void {
-  currentFolderPickerResultsStates = {
-    ...currentFolderPickerResultsStates,
+  folderPickerResultsStore.setState((states) => ({
+    ...states,
     [kind]: state
-  }
-  listeners.forEach((listener) => listener())
+  }))
 }
 
 export function patchFolderPickerResults(
   kind: FolderPickerKind,
   patch: Partial<FolderPickerResultsState>
 ): void {
-  currentFolderPickerResultsStates = {
-    ...currentFolderPickerResultsStates,
+  folderPickerResultsStore.setState((states) => ({
+    ...states,
     [kind]: {
-      ...currentFolderPickerResultsStates[kind],
+      ...states[kind],
       ...patch
     }
-  }
-  listeners.forEach((listener) => listener())
+  }))
 }
 
 export function useFolderPickerResultsState(kind: FolderPickerKind): FolderPickerResultsState {
-  const states = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  return states[kind] || defaultStates[kind]
+  return useUiViewStoreSlice(
+    folderPickerResultsStore,
+    (states) => states[kind] || defaultStates[kind]
+  )
 }

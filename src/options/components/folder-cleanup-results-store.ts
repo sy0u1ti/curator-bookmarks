@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { FolderCleanupResultsState } from './folder-cleanup-results-types.js'
 
 const defaultFolderCleanupResultsState: FolderCleanupResultsState = {
@@ -9,23 +9,16 @@ const defaultFolderCleanupResultsState: FolderCleanupResultsState = {
   suggestions: []
 }
 
-let currentFolderCleanupResultsState = defaultFolderCleanupResultsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): FolderCleanupResultsState {
-  return currentFolderCleanupResultsState
-}
+const folderCleanupResultsStore = createUiViewStoreSlice(
+  'options',
+  'folder-cleanup-results',
+  defaultFolderCleanupResultsState
+)
 
 export function publishFolderCleanupResults(state: FolderCleanupResultsState): void {
-  currentFolderCleanupResultsState = state
-  listeners.forEach((listener) => listener())
+  folderCleanupResultsStore.setState(state)
 }
 
 export function useFolderCleanupResultsState(): FolderCleanupResultsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(folderCleanupResultsStore)
 }

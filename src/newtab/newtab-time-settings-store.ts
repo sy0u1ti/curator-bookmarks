@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { NewTabTimeSettings } from './time-settings'
 
 export interface NewtabTimeSettingsView {
@@ -49,21 +49,8 @@ const EMPTY_ACTIONS: NewtabTimeSettingsActions = {
   onToggle: () => {}
 }
 
-let timeSettingsView: NewtabTimeSettingsView = EMPTY_VIEW
 let timeSettingsActions: NewtabTimeSettingsActions = EMPTY_ACTIONS
-
-const listeners = new Set<() => void>()
-
-function subscribeTimeSettings(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitTimeSettingsChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const timeSettingsStore = createUiViewStoreSlice('newtab', 'time-settings', EMPTY_VIEW)
 
 export function createNewtabTimeSettingsView(settings: NewTabTimeSettings): NewtabTimeSettingsView {
   return {
@@ -92,16 +79,11 @@ export function registerNewtabTimeSettingsActions(
 }
 
 export function dispatchNewtabTimeSettingsView(view: NewtabTimeSettingsView): void {
-  timeSettingsView = view
-  emitTimeSettingsChange()
+  timeSettingsStore.setState(view)
 }
 
 export function useNewtabTimeSettingsView(): NewtabTimeSettingsView {
-  return useSyncExternalStore(
-    subscribeTimeSettings,
-    () => timeSettingsView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(timeSettingsStore)
 }
 
 export function dispatchNewtabTimeSettingToggle(

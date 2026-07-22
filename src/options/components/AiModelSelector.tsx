@@ -1,6 +1,21 @@
 import { CheckIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { ModelSelector, ModelSelectorContent, ModelSelectorEmpty, ModelSelectorGroup, ModelSelectorInput, ModelSelectorItem, ModelSelectorList, ModelSelectorLogo, ModelSelectorLogoGroup, ModelSelectorName, ModelSelectorTag, ModelSelectorTrigger } from '../../ui/ai/ModelSelector'
+import {
+  ModelSelector,
+  ModelSelectorCombobox,
+  ModelSelectorContent,
+  ModelSelectorEmpty,
+  ModelSelectorGroup,
+  ModelSelectorInput,
+  ModelSelectorItem,
+  ModelSelectorItemIndicator,
+  ModelSelectorList,
+  ModelSelectorLogo,
+  ModelSelectorLogoGroup,
+  ModelSelectorName,
+  ModelSelectorTag,
+  ModelSelectorTrigger
+} from '../../ui/ai/ModelSelector'
 import {
   type AiModelSelectorState
 } from './ai-model-selector-types.js'
@@ -36,18 +51,20 @@ export function AiModelSelector({
     setQuery('')
   }
 
+  function handleOpenChange(nextOpen: boolean) {
+    if (state.disabled && nextOpen) {
+      return
+    }
+    setOpen(nextOpen)
+    if (!nextOpen) {
+      setQuery('')
+    }
+  }
+
   return (
     <ModelSelector
       open={open}
-      onOpenChange={(nextOpen) => {
-        if (state.disabled && nextOpen) {
-          return
-        }
-        setOpen(nextOpen)
-        if (!nextOpen) {
-          setQuery('')
-        }
-      }}
+      onOpenChange={handleOpenChange}
     >
       <ModelSelectorTrigger
         type="button"
@@ -62,24 +79,36 @@ export function AiModelSelector({
         className={MODEL_SELECTOR_REDUCED_MOTION_CLASS}
         title="选择 AI 模型"
       >
-        <ModelSelectorInput
-          autoFocus
-          onChange={(event) => setQuery(event.currentTarget.value)}
-          onClear={() => setQuery('')}
-          placeholder="Search models..."
-          value={query}
-        />
-        <ModelSelectorList aria-label="AI 模型候选列表">
-          {groupedModels.length ? (
-            groupedModels.map((group) => (
+        <ModelSelectorCombobox
+          filteredItems={filteredModels}
+          inputValue={query}
+          items={state.models}
+          onInputValueChange={setQuery}
+          onOpenChange={handleOpenChange}
+          onValueChange={(model) => {
+            if (model) {
+              handleSelect(model)
+            }
+          }}
+          open={open}
+          value={selectedModel || null}
+        >
+          <ModelSelectorInput
+            autoFocus
+            onClear={() => setQuery('')}
+            placeholder="Search models..."
+          />
+          <ModelSelectorList aria-label="AI 模型候选列表">
+            <ModelSelectorEmpty>
+              {query ? '没有匹配的模型。' : '尚未加载模型。'}
+            </ModelSelectorEmpty>
+            {groupedModels.map((group) => (
               <ModelSelectorGroup heading={group.heading} key={group.heading}>
                 {group.models.map((model) => {
                   const meta = getModelMeta(model, state)
                   return (
                     <ModelSelectorItem
-                      current={model === selectedModel}
                       key={model}
-                      onSelect={() => handleSelect(model)}
                       value={model}
                     >
                       <ModelSelectorLogo provider={meta.provider} />
@@ -91,18 +120,16 @@ export function AiModelSelector({
                           </ModelSelectorTag>
                         ))}
                       </ModelSelectorLogoGroup>
-                      {model === selectedModel ? <CheckIcon className={MODEL_SELECTOR_CHECK_CLASS} /> : null}
+                      <ModelSelectorItemIndicator>
+                        <CheckIcon className={MODEL_SELECTOR_CHECK_CLASS} />
+                      </ModelSelectorItemIndicator>
                     </ModelSelectorItem>
                   )
                 })}
               </ModelSelectorGroup>
-            ))
-          ) : (
-            <ModelSelectorEmpty>
-              {query ? '没有匹配的模型。' : '尚未加载模型。'}
-            </ModelSelectorEmpty>
-          )}
-        </ModelSelectorList>
+            ))}
+          </ModelSelectorList>
+        </ModelSelectorCombobox>
       </ModelSelectorContent>
     </ModelSelector>
   )

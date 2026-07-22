@@ -1,8 +1,8 @@
 import {
-  useSyncExternalStore,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { NewTabContentView } from './content-state'
 
 export interface NewtabContentLayoutNodes {
@@ -23,45 +23,36 @@ const EMPTY_SHELL_ACTIONS: NewtabContentShellActions = {
   onPointerDownCapture: () => {}
 }
 
-let newtabContentView: NewTabContentView | null = null
+const newtabContentStore = createUiViewStoreSlice<NewTabContentView | null>(
+  'newtab',
+  'content',
+  null
+)
 let newtabContentLayoutNodes: NewtabContentLayoutNodes = createEmptyNewtabContentLayoutNodes()
 let newtabContentShellActions: NewtabContentShellActions = EMPTY_SHELL_ACTIONS
 
-const listeners = new Set<() => void>()
 const layoutNodeListeners = new Set<() => void>()
-
-function subscribeNewtabContent(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitNewtabContentChange(): void {
-  listeners.forEach((listener) => listener())
-}
 
 function emitNewtabContentLayoutNodesChange(): void {
   layoutNodeListeners.forEach((listener) => listener())
 }
 
 export function dispatchNewtabContentView(view: NewTabContentView): void {
-  newtabContentView = view
-  emitNewtabContentChange()
+  newtabContentStore.setState(view)
 }
 
 export function patchNewtabContentView(
   patcher: (view: NewTabContentView) => NewTabContentView
 ): void {
+  const newtabContentView = newtabContentStore.getState()
   if (!newtabContentView) {
     return
   }
-  newtabContentView = patcher(newtabContentView)
-  emitNewtabContentChange()
+  newtabContentStore.setState(patcher(newtabContentView))
 }
 
 export function getNewtabContentView(): NewTabContentView | null {
-  return newtabContentView
+  return newtabContentStore.getState()
 }
 
 export function registerNewtabContentShellActions(actions: NewtabContentShellActions): () => void {
@@ -129,9 +120,5 @@ export function subscribeNewtabContentLayoutNodes(listener: () => void): () => v
 }
 
 export function useNewtabContentView(): NewTabContentView | null {
-  return useSyncExternalStore(
-    subscribeNewtabContent,
-    () => newtabContentView,
-    () => null
-  )
+  return useUiViewStoreSlice(newtabContentStore)
 }

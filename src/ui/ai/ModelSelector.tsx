@@ -1,9 +1,8 @@
+import { Combobox as BaseCombobox } from '@base-ui/react/combobox'
 import { Dialog as BaseDialog } from '@base-ui/react/dialog'
 import { SearchIcon, XIcon } from 'lucide-react'
 import type { ComponentPropsWithoutRef, ReactNode } from 'react'
-import { Button } from '../base/Button'
 import { DialogBackdrop, DialogPanel } from '../base/Dialog'
-import { Input } from '../base/Input'
 import { cx } from '../base/utils'
 
 const MODEL_SELECTOR_TRIGGER_CLASS =
@@ -17,8 +16,7 @@ const MODEL_SELECTOR_INPUT_WRAPPER_CLASS =
   'grid min-h-[50px] grid-cols-[18px_minmax(0,1fr)_18px] items-center gap-2.5 border-b border-ds-border-subtle px-3.5 text-ds-text-muted'
 const MODEL_SELECTOR_INPUT_ICON_CLASS = 'size-[17px] text-ds-text-muted'
 const MODEL_SELECTOR_CLEAR_BUTTON_CLASS =
-  'm-0 inline-flex size-[22px] touch-manipulation cursor-pointer select-none items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted transition-[background-color,color,transform] duration-ds-fast ease-ds-standard hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
-const MODEL_SELECTOR_CLEAR_SPACER_CLASS = 'size-[18px]'
+  'm-0 inline-flex size-[22px] touch-manipulation cursor-pointer select-none items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-muted opacity-0 pointer-events-none transition-[background-color,color,opacity,transform] duration-ds-fast ease-ds-standard data-[visible]:pointer-events-auto data-[visible]:opacity-100 hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
 const MODEL_SELECTOR_INPUT_CLASS =
   'h-[50px] min-h-[50px] w-full border-0 bg-transparent text-sm font-medium text-ds-text-primary shadow-none outline-none placeholder:text-ds-text-secondary'
 const MODEL_SELECTOR_LIST_CLASS =
@@ -28,8 +26,9 @@ const MODEL_SELECTOR_GROUP_CLASS = 'mt-1.5 first:mt-0'
 const MODEL_SELECTOR_GROUP_HEADING_CLASS = 'px-2 pb-1.5 pt-[5px] text-xs font-semibold leading-[1.2] text-ds-accent-text'
 const MODEL_SELECTOR_GROUP_ITEMS_CLASS = 'grid list-none gap-px p-0'
 const MODEL_SELECTOR_ITEM_CLASS =
-  'grid min-h-8 w-full touch-manipulation select-none grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none transition-[background-color,color,transform] duration-ds-fast ease-ds-standard hover:bg-ds-hover focus-visible:bg-ds-hover active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
-const MODEL_SELECTOR_ITEM_CURRENT_CLASS = 'bg-ds-selected text-ds-accent-text'
+  'grid min-h-8 w-full touch-manipulation select-none grid-cols-[16px_minmax(0,1fr)_auto_16px] items-center gap-2 rounded-ds-sm border-0 bg-transparent px-2 text-left text-sm font-semibold text-ds-text-primary outline-none transition-[background-color,color,transform] duration-ds-fast ease-ds-standard hover:bg-ds-hover data-[highlighted]:bg-ds-hover data-[selected]:bg-ds-selected data-[selected]:text-ds-accent-text active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100'
+const MODEL_SELECTOR_ITEM_INDICATOR_CLASS =
+  'inline-grid size-4 place-items-center opacity-0 data-[selected]:opacity-100'
 const MODEL_SELECTOR_LOGO_CLASS = 'size-3 flex-none object-contain invert'
 const MODEL_SELECTOR_LOGO_GROUP_CLASS = 'ml-auto inline-flex flex-none items-center'
 const MODEL_SELECTOR_TAG_CLASS =
@@ -51,6 +50,48 @@ export function ModelSelectorTrigger({ className, ...props }: ModelSelectorTrigg
       : cx(MODEL_SELECTOR_TRIGGER_CLASS, className)
 
   return <BaseDialog.Trigger className={resolvedClassName} {...props} />
+}
+
+export interface ModelSelectorComboboxProps {
+  children: ReactNode
+  filteredItems: readonly string[]
+  inputValue: string
+  items: readonly string[]
+  onInputValueChange: (value: string) => void
+  onOpenChange: (open: boolean) => void
+  onValueChange: (value: string | null) => void
+  open: boolean
+  value: string | null
+}
+
+export function ModelSelectorCombobox({
+  children,
+  filteredItems,
+  inputValue,
+  items,
+  onInputValueChange,
+  onOpenChange,
+  onValueChange,
+  open,
+  value
+}: ModelSelectorComboboxProps) {
+  return (
+    <BaseCombobox.Root<string>
+      autoHighlight
+      filter={null}
+      filteredItems={filteredItems}
+      inline
+      inputValue={inputValue}
+      items={items}
+      onInputValueChange={(nextValue) => onInputValueChange(nextValue)}
+      onOpenChange={(nextOpen) => onOpenChange(nextOpen)}
+      onValueChange={(nextValue) => onValueChange(nextValue)}
+      open={open}
+      value={value}
+    >
+      {children}
+    </BaseCombobox.Root>
+  )
 }
 
 export interface ModelSelectorContentProps
@@ -83,90 +124,118 @@ export function ModelSelectorContent({
   )
 }
 
-export type ModelSelectorInputProps = ComponentPropsWithoutRef<typeof Input> & {
+export type ModelSelectorInputProps = Omit<
+  ComponentPropsWithoutRef<typeof BaseCombobox.Input>,
+  'className'
+> & {
+  className?: string
   onClear?: () => void
 }
 
-export function ModelSelectorInput({ className, onClear, value, ...props }: ModelSelectorInputProps) {
+export function ModelSelectorInput({ className, onClear, ...props }: ModelSelectorInputProps) {
   return (
     <div className={MODEL_SELECTOR_INPUT_WRAPPER_CLASS}>
       <SearchIcon className={MODEL_SELECTOR_INPUT_ICON_CLASS} aria-hidden="true" />
-      <Input className={cx(MODEL_SELECTOR_INPUT_CLASS, className)} unstyled value={value} {...props} />
-      {onClear && value ? (
-        <button
+      <BaseCombobox.Input className={cx(MODEL_SELECTOR_INPUT_CLASS, className)} {...props} />
+      {onClear ? (
+        <BaseCombobox.Clear
           type="button"
           className={MODEL_SELECTOR_CLEAR_BUTTON_CLASS}
           aria-label="清空模型搜索"
+          keepMounted
           onClick={onClear}
         >
           <XIcon className={MODEL_SELECTOR_INPUT_ICON_CLASS} aria-hidden="true" />
-        </button>
-      ) : (
-        <span className={MODEL_SELECTOR_CLEAR_SPACER_CLASS} aria-hidden="true" />
-      )}
+        </BaseCombobox.Clear>
+      ) : null}
     </div>
   )
 }
 
-export type ModelSelectorListProps = ComponentPropsWithoutRef<'ul'>
+export type ModelSelectorListProps = Omit<
+  ComponentPropsWithoutRef<typeof BaseCombobox.List>,
+  'className'
+> & {
+  className?: string
+}
 
 export function ModelSelectorList({ className, ...props }: ModelSelectorListProps) {
-  return <ul className={cx(MODEL_SELECTOR_LIST_CLASS, className)} {...props} />
+  return <BaseCombobox.List className={cx(MODEL_SELECTOR_LIST_CLASS, className)} {...props} />
 }
 
-export type ModelSelectorEmptyProps = ComponentPropsWithoutRef<'li'>
+export type ModelSelectorEmptyProps = Omit<
+  ComponentPropsWithoutRef<typeof BaseCombobox.Empty>,
+  'className'
+> & {
+  className?: string
+}
 
 export function ModelSelectorEmpty({ className, ...props }: ModelSelectorEmptyProps) {
-  return <li className={cx(MODEL_SELECTOR_EMPTY_CLASS, className)} {...props} />
+  return <BaseCombobox.Empty className={cx(MODEL_SELECTOR_EMPTY_CLASS, className)} {...props} />
 }
 
-export interface ModelSelectorGroupProps extends ComponentPropsWithoutRef<'li'> {
+export interface ModelSelectorGroupProps extends Omit<
+  ComponentPropsWithoutRef<typeof BaseCombobox.Group>,
+  'className'
+> {
+  className?: string
   heading: ReactNode
 }
 
 export function ModelSelectorGroup({ children, className, heading, ...props }: ModelSelectorGroupProps) {
   return (
-    <li className={cx(MODEL_SELECTOR_GROUP_CLASS, className)} {...props}>
-      <div className={MODEL_SELECTOR_GROUP_HEADING_CLASS}>{heading}</div>
-      <ul className={MODEL_SELECTOR_GROUP_ITEMS_CLASS}>{children}</ul>
-    </li>
+    <BaseCombobox.Group className={cx(MODEL_SELECTOR_GROUP_CLASS, className)} {...props}>
+      <BaseCombobox.GroupLabel className={MODEL_SELECTOR_GROUP_HEADING_CLASS}>
+        {heading}
+      </BaseCombobox.GroupLabel>
+      <div className={MODEL_SELECTOR_GROUP_ITEMS_CLASS}>{children}</div>
+    </BaseCombobox.Group>
   )
 }
 
-export interface ModelSelectorItemProps extends Omit<ComponentPropsWithoutRef<typeof Button>, 'onSelect' | 'render'> {
-  current?: boolean
-  onSelect?: () => void
+export interface ModelSelectorItemProps extends Omit<
+  ComponentPropsWithoutRef<typeof BaseCombobox.Item>,
+  'className' | 'value'
+> {
+  className?: string
   value: string
 }
 
 export function ModelSelectorItem({
   children,
   className,
-  current = false,
-  onClick,
-  onSelect,
   value,
   ...props
 }: ModelSelectorItemProps) {
   return (
-    <li>
-      <Button
-        className={cx(MODEL_SELECTOR_ITEM_CLASS, current ? MODEL_SELECTOR_ITEM_CURRENT_CLASS : '', className)}
-        type="button"
-        aria-current={current ? 'true' : undefined}
-        data-ai-model-id={value}
-        unstyled
-        onClick={(event) => {
-          onClick?.(event)
-          if (!event.defaultPrevented) {
-            onSelect?.()
-          }
-        }}
-        {...props}
-      >
-        {children}
-      </Button>
-    </li>
+    <BaseCombobox.Item
+      className={cx(MODEL_SELECTOR_ITEM_CLASS, className)}
+      data-ai-model-id={value}
+      value={value}
+      {...props}
+    >
+      {children}
+    </BaseCombobox.Item>
+  )
+}
+
+export type ModelSelectorItemIndicatorProps = Omit<
+  ComponentPropsWithoutRef<typeof BaseCombobox.ItemIndicator>,
+  'className'
+> & {
+  className?: string
+}
+
+export function ModelSelectorItemIndicator({
+  className,
+  ...props
+}: ModelSelectorItemIndicatorProps) {
+  return (
+    <BaseCombobox.ItemIndicator
+      className={cx(MODEL_SELECTOR_ITEM_INDICATOR_CLASS, className)}
+      keepMounted
+      {...props}
+    />
   )
 }
 

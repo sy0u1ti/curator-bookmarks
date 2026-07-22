@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
+import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { AiTaskStatus } from '../../ui/ai/AiTaskStatus'
-import { StatusBusyLoadingLabel } from './LoadingLabel.js'
 import {
   useAiAnalysisDuration,
   useAiAnalysisProgress
@@ -14,6 +14,8 @@ const AI_ANALYSIS_DECISION_PANEL_CLASS =
   'mt-[18px] border-ds-border-subtle bg-ds-surface-1'
 const AI_ANALYSIS_PROGRESS_COPY_CLASS =
   'mt-0 mb-0 text-[13px] leading-[1.55] text-ds-text-muted'
+const AI_ANALYSIS_BUSY_LABEL_CLASS =
+  'inline-flex min-h-5 min-w-0 max-w-full items-center gap-2 align-middle'
 
 export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
   const state = useAiAnalysisProgress()
@@ -21,7 +23,10 @@ export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
   const title = useMemo(() => (
     <strong>
       {state.busy ? (
-        <StatusBusyLoadingLabel label={state.progressLabel} />
+        <span className={AI_ANALYSIS_BUSY_LABEL_CLASS}>
+          <AiThinkingOrb state="composing" size={20} />
+          <span>{state.progressLabel}</span>
+        </span>
       ) : (
         state.progressLabel
       )}

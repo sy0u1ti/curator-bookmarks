@@ -1,4 +1,7 @@
-import { useSyncExternalStore } from 'react'
+import {
+  createUiViewStoreSlice,
+  useUiViewStoreSlice
+} from '../shared/ui-view-store.js'
 import type { PopupToast } from './state'
 import type {
   PopupContentViewModel,
@@ -272,11 +275,8 @@ interface PopupActionHandlers {
   toast?: (detail: PopupToastActionDetail) => void
 }
 
-const popupViewStoreListeners = new Set<() => void>()
 const popupContentChangeListeners = new Set<(detail: PopupContentChangeDetail) => void>()
 let popupActionHandlers: PopupActionHandlers = {}
-
-let popupViewStoreSnapshot: PopupViewStoreSnapshot = createInitialPopupViewStoreSnapshot()
 
 function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
   return {
@@ -313,36 +313,32 @@ function createInitialPopupViewStoreSnapshot(): PopupViewStoreSnapshot {
   }
 }
 
-function subscribePopupViewStore(listener: () => void): () => void {
-  popupViewStoreListeners.add(listener)
-  return () => popupViewStoreListeners.delete(listener)
-}
-
-function emitPopupViewStoreChange(): void {
-  popupViewStoreListeners.forEach((listener) => listener())
-}
+const popupViewStore = createUiViewStoreSlice(
+  'popup',
+  'root',
+  createInitialPopupViewStoreSnapshot()
+)
 
 function updatePopupViewStore(nextSnapshot: Partial<PopupViewStoreSnapshot>): void {
-  popupViewStoreSnapshot = {
-    ...popupViewStoreSnapshot,
+  popupViewStore.setState((snapshot) => ({
+    ...snapshot,
     ...nextSnapshot
-  }
-  emitPopupViewStoreChange()
+  }))
 }
 
 export function resetPopupViewStore(): void {
-  popupViewStoreSnapshot = createInitialPopupViewStoreSnapshot()
-  emitPopupViewStoreChange()
-  popupContentChangeListeners.forEach((listener) => listener(popupViewStoreSnapshot.content))
+  const snapshot = createInitialPopupViewStoreSnapshot()
+  popupViewStore.setState(snapshot)
+  popupContentChangeListeners.forEach((listener) => listener(snapshot.content))
 }
 
 export function getPopupSmartClassifierSnapshot(): PopupSmartClassifierViewModel {
-  return popupViewStoreSnapshot.smartClassifier
+  return popupViewStore.getState().smartClassifier
 }
 
 export function subscribePopupContentChange(listener: (detail: PopupContentChangeDetail) => void): () => void {
   popupContentChangeListeners.add(listener)
-  listener(popupViewStoreSnapshot.content)
+  listener(popupViewStore.getState().content)
   return () => popupContentChangeListeners.delete(listener)
 }
 
@@ -358,67 +354,35 @@ export function registerPopupActionHandlers(handlers: PopupActionHandlers): () =
 }
 
 export function usePopupAutoAnalyzeStatusView(): PopupAutoAnalyzeStatusView {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.autoAnalyzeStatus,
-    () => EMPTY_POPUP_AUTO_ANALYZE_STATUS
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.autoAnalyzeStatus)
 }
 
 export function usePopupChromeView(): PopupChromeView {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.chrome,
-    () => EMPTY_POPUP_CHROME_VIEW
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.chrome)
 }
 
 export function usePopupFolderPickerState(mode: PopupFolderPickerState['mode']): PopupFolderPickerState {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.folderPickers[mode],
-    () => getEmptyPopupFolderPickerState(mode)
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.folderPickers[mode])
 }
 
 export function usePopupModalsView(): PopupModalsView {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.modals,
-    () => EMPTY_POPUP_MODALS_VIEW
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.modals)
 }
 
 export function usePopupSearchChips(): PopupSearchChipView[] {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.searchChips,
-    () => []
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.searchChips)
 }
 
 export function usePopupSearchFocusRequest(): PopupSearchFocusRequestState {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.searchFocusRequest,
-    () => ({ id: 0, select: false })
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.searchFocusRequest)
 }
 
 export function usePopupSmartClassifierView(): PopupSmartClassifierViewModel {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.smartClassifier,
-    () => EMPTY_POPUP_SMART_CLASSIFIER
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.smartClassifier)
 }
 
 export function usePopupToasts(): PopupToast[] {
-  return useSyncExternalStore(
-    subscribePopupViewStore,
-    () => popupViewStoreSnapshot.toasts,
-    () => EMPTY_POPUP_TOASTS
-  )
+  return useUiViewStoreSlice(popupViewStore, (snapshot) => snapshot.toasts)
 }
 
 export function dispatchPopupAutoAnalyzeStatusChange(state: PopupAutoAnalyzeStatusView): void {
@@ -441,11 +405,7 @@ export function dispatchPopupContentChange(
     preserveScroll: Boolean(options.preserveScroll),
     state: { ...state }
   }
-  popupViewStoreSnapshot = {
-    ...popupViewStoreSnapshot,
-    content: detail
-  }
-  emitPopupViewStoreChange()
+  updatePopupViewStore({ content: detail })
   popupContentChangeListeners.forEach((listener) => listener(detail))
 }
 
@@ -475,7 +435,7 @@ export function dispatchPopupFolderPickerChange(
 ): void {
   updatePopupViewStore({
     folderPickers: {
-      ...popupViewStoreSnapshot.folderPickers,
+      ...popupViewStore.getState().folderPickers,
       [mode]: { ...state }
     }
   })
@@ -498,9 +458,10 @@ export function dispatchPopupChromeAction(
 }
 
 export function dispatchPopupSearchFocusRequest(select = false): void {
+  const currentRequest = popupViewStore.getState().searchFocusRequest
   updatePopupViewStore({
     searchFocusRequest: {
-      id: popupViewStoreSnapshot.searchFocusRequest.id + 1,
+      id: currentRequest.id + 1,
       select
     }
   })

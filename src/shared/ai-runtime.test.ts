@@ -1,6 +1,7 @@
 import {
   AiRuntimeError,
   buildAiFolderCandidates,
+  compileStrictJsonSchema,
   normalizeAiFolderDecision,
   requestStructuredAiOutput,
   validateJsonSchema,
@@ -8,6 +9,7 @@ import {
   type JsonSchema
 } from './ai-runtime.js'
 import {
+  extractModelReasoningCapabilities,
   getModelReasoningProfile,
   getReasoningEffortOptions,
   resolveReasoningEffortForModel
@@ -35,10 +37,43 @@ const SAMPLE_SCHEMA: JsonSchema = {
   }
 }
 
+const OPTIONAL_FOLDER_SCHEMA: JsonSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['items'],
+  properties: {
+    items: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['bookmark_id'],
+        properties: {
+          bookmark_id: { type: 'string' },
+          folder_decision: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['kind', 'reason', 'confidence'],
+            properties: {
+              kind: { type: 'string', enum: ['existing', 'new', 'manual_review'] },
+              folder_id: { type: 'string' },
+              folder_path: { type: 'string' },
+              reason: { type: 'string' },
+              confidence: { type: 'number' }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 async function run(): Promise<void> {
   testSchemaValidation()
+  testStrictSchemaCompilation()
   testFolderCandidatesAndDecision()
   await testResponsesProviderEnvelope()
+  await testStrictOptionalNullRestoration()
   await testChatCompletionsEnvelope()
   await testParseRepairRetry()
   await testResponsesProviderErrorDoesNotFallback()
@@ -48,17 +83,53 @@ async function run(): Promise<void> {
   await testThinkTagAndProseExtraction()
   await testReasoningContentSalvage()
   await testTruncationDetection()
+  await testResponsesInvalidSchemaFallback()
   await testResponseFormatFallback()
+  await testResponseFormatFullFallback()
   await testRetryAfterBackoff()
   await testBodyReadTimeout()
   await testReasoningEffortInjection()
+  await testDirectAnthropicAdapter()
   await testReasoningEffortFallback()
   testModelReasoningProfiles()
+}
+
+function testStrictSchemaCompilation(): void {
+  const strictSchema = compileStrictJsonSchema(OPTIONAL_FOLDER_SCHEMA)
+  const itemSchema = strictSchema.properties?.items?.items
+  const decisionSchema = itemSchema?.properties?.folder_decision
+  const decisionTypes = Array.isArray(decisionSchema?.type)
+    ? decisionSchema.type
+    : [decisionSchema?.type]
+  const folderIdTypes = Array.isArray(decisionSchema?.properties?.folder_id?.type)
+    ? decisionSchema.properties.folder_id.type
+    : [decisionSchema?.properties?.folder_id?.type]
+
+  assert(itemSchema?.required?.includes('folder_decision'), 'strict item schema should require folder_decision')
+  assert(decisionTypes.includes('object') && decisionTypes.includes('null'), 'optional object should become nullable')
+  assert(
+    ['kind', 'folder_id', 'folder_path', 'reason', 'confidence']
+      .every((key) => decisionSchema?.required?.includes(key)),
+    'strict nested object should require every property, including folder_id and folder_path'
+  )
+  assert(folderIdTypes.includes('string') && folderIdTypes.includes('null'), 'optional folder_id should become nullable')
+  assert(
+    !OPTIONAL_FOLDER_SCHEMA.properties?.items?.items?.required?.includes('folder_decision'),
+    'strict compilation must not mutate the business schema'
+  )
 }
 
 function testModelReasoningProfiles(): void {
   assert(getModelReasoningProfile('gpt-5').levels.includes('minimal'), 'gpt-5 should offer minimal')
   assert(!getModelReasoningProfile('gpt-5.5').levels.includes('minimal'), 'gpt-5.1+ should drop minimal')
+  assert(
+    getModelReasoningProfile('gpt-5.6-sol').levels.join(',') === 'low,medium,high,xhigh,max',
+    'gpt-5.6 should expose the five current strength levels'
+  )
+  assert(
+    getModelReasoningProfile('gpt-5.5').levels.join(',') === 'low,medium,high,xhigh',
+    'gpt-5.5 should expose xhigh but not max'
+  )
   assert(getModelReasoningProfile('o4-mini').supported, 'o-series should support effort')
   assert(!getModelReasoningProfile('gpt-4o').supported, 'gpt-4o is not a reasoning model')
   assert(getModelReasoningProfile('deepseek-v4-flash').supported, 'deepseek v4 should support effort')
@@ -66,10 +137,59 @@ function testModelReasoningProfiles(): void {
   assert(getModelReasoningProfile('grok-4.3').supported, 'grok 4.3 should support effort')
   assert(!getModelReasoningProfile('grok-4').supported, 'legacy grok-4 rejects reasoning_effort')
   assert(getModelReasoningProfile('claude-sonnet-5').supported, 'claude via openrouter maps effort')
+  assert(
+    getModelReasoningProfile('claude-sonnet-5').levels.includes('max'),
+    'claude sonnet 5 should expose max'
+  )
+  assert(
+    !getModelReasoningProfile('claude-sonnet-4-6').levels.includes('xhigh') &&
+      getModelReasoningProfile('claude-sonnet-4-6').levels.includes('max'),
+    'claude sonnet 4.6 should expose max without xhigh'
+  )
   assert(getModelReasoningProfile('my-house-model').supported, 'unknown models fall back to standard levels')
-  assert(getReasoningEffortOptions('gpt-5').length === 5, 'gpt-5 options should include default + 4 levels')
+  assert(getReasoningEffortOptions('gpt-5').length === 4, 'gpt-5 should expose four actual strength levels')
+  assert(getReasoningEffortOptions('gpt-5.6-sol').length === 5, 'gpt-5.6 should expose five levels')
   assert(resolveReasoningEffortForModel('gpt-4o', 'high') === 'default', 'unsupported model resolves to default')
+  assert(resolveReasoningEffortForModel('gpt-5.6-sol', 'default') === 'medium', 'default should point at model default in the UI')
   assert(resolveReasoningEffortForModel('gpt-5', 'minimal') === 'minimal', 'supported level passes through')
+
+  const openRouterCapabilities = extractModelReasoningCapabilities({
+    data: [{
+      id: 'vendor/custom-reasoner',
+      reasoning: {
+        supported_efforts: ['max', 'high', 'medium', 'low'],
+        default_effort: 'medium',
+        mandatory: true
+      }
+    }]
+  })
+  const openRouterProfile = getModelReasoningProfile(
+    'vendor/custom-reasoner',
+    openRouterCapabilities['vendor/custom-reasoner']
+  )
+  assert(openRouterProfile.source === 'metadata', 'channel metadata should override model-id fallback')
+  assert(openRouterProfile.levels.join(',') === 'low,medium,high,max', 'metadata levels should be normalized low-to-high')
+  assert(openRouterProfile.mandatory, 'metadata mandatory flag should be retained')
+
+  const anthropicCapabilities = extractModelReasoningCapabilities({
+    data: [{
+      id: 'claude-opus-4-8',
+      capabilities: {
+        effort: {
+          supported: true,
+          low: { supported: true },
+          medium: { supported: true },
+          high: { supported: true },
+          xhigh: { supported: true },
+          max: { supported: true }
+        }
+      }
+    }]
+  })
+  assert(
+    anthropicCapabilities['claude-opus-4-8']?.levels.length === 5,
+    'Anthropic Models API capability flags should be detected'
+  )
 }
 
 function testSchemaValidation(): void {
@@ -150,6 +270,35 @@ async function testResponsesProviderEnvelope(): Promise<void> {
   assert(typeof responsesInput[1]?.content === 'string', 'Responses user content should use plain string input')
 }
 
+async function testStrictOptionalNullRestoration(): Promise<void> {
+  const calls: Array<Record<string, any>> = []
+  const result = await requestStructuredAiOutput<{ items: Array<Record<string, unknown>> }>({
+    settings: getSettings('responses'),
+    schema: OPTIONAL_FOLDER_SCHEMA,
+    schemaName: 'bookmark_naming_batch',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub(calls, {
+      output_text: JSON.stringify({
+        items: [{ bookmark_id: 'bookmark-1', folder_decision: null }]
+      })
+    })
+  })
+
+  const sentSchema = calls[0]?.text?.format?.schema as JsonSchema | undefined
+  const sentDecisionSchema = sentSchema?.properties?.items?.items?.properties?.folder_decision
+  assert(
+    sentDecisionSchema?.required?.includes('folder_id') && sentDecisionSchema.required.includes('folder_path'),
+    'request schema should satisfy OpenAI required-property rules at the failing folder_decision path'
+  )
+  assert(
+    !('folder_decision' in (result.data.items[0] || {})),
+    'nullable strict placeholder should be restored to the original optional-field shape'
+  )
+  assert(result.metadata.structuredOutputMode === 'json_schema', 'successful strict request should report json_schema mode')
+}
+
 async function testChatCompletionsEnvelope(): Promise<void> {
   const calls: unknown[] = []
   const result = await requestStructuredAiOutput<Record<string, unknown>>({
@@ -169,7 +318,9 @@ async function testChatCompletionsEnvelope(): Promise<void> {
   })
 
   assert(result.data.action === 'keep', 'Chat Completions payload should parse fenced JSON')
-  assert(JSON.stringify(calls[0]).includes('"json_object"'), 'Chat body should request json_object')
+  assert(JSON.stringify(calls[0]).includes('"json_schema"'), 'Chat body should prefer strict json_schema')
+  const responseFormat = (calls[0] as { response_format?: Record<string, any> })?.response_format
+  assert(responseFormat?.json_schema?.strict === true, 'Chat json_schema should enable strict mode')
   const chatMessages = (calls[0] as { messages?: Array<{ content?: unknown }> })?.messages || []
   assert(
     String(chatMessages[0]?.content || '').includes('json') &&
@@ -391,10 +542,77 @@ async function testResponseFormatFallback(): Promise<void> {
     }) as typeof fetch
   })
 
-  assert(calls.length === 2, 'response_format rejection should trigger a compatibility retry')
-  assert('response_format' in calls[0], 'first attempt should request structured output')
-  assert(!('response_format' in calls[1]), 'fallback attempt should drop response_format')
+  assert(calls.length === 2, 'json_schema rejection should trigger a compatibility retry')
+  assert((calls[0]?.response_format as any)?.type === 'json_schema', 'first attempt should request json_schema')
+  assert((calls[1]?.response_format as any)?.type === 'json_object', 'first fallback should retain JSON mode')
   assert(result.data.action === 'keep', 'fallback attempt should succeed')
+  assert(result.metadata.structuredOutputMode === 'json_object', 'metadata should expose the successful fallback mode')
+}
+
+async function testResponsesInvalidSchemaFallback(): Promise<void> {
+  const calls: Array<Record<string, any>> = []
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: getSettings('responses'),
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'bookmark_naming_batch',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.body ? JSON.parse(String(init.body)) : {})
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({
+          error: {
+            message: "Invalid schema for response_format 'bookmark_naming_batch': In context=('properties', 'items', 'items', 'properties', 'folder_decision'), 'required' is required to be supplied and to be an array including every key in properties. Missing 'folder_id'.",
+            type: 'invalid_request_error',
+            param: 'text.format.schema',
+            code: 'invalid_json_schema'
+          }
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        output_text: '{"action":"keep","confidence":0.4,"items":[{"id":"responses-fallback"}]}'
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+  })
+
+  assert(calls[0]?.text?.format?.type === 'json_schema', 'Responses should begin with strict json_schema')
+  assert(calls[1]?.text?.format?.type === 'json_object', 'invalid strict schema errors should downgrade to JSON mode')
+  assert(result.metadata.structuredOutputMode === 'json_object', 'Responses fallback should report JSON mode')
+}
+
+async function testResponseFormatFullFallback(): Promise<void> {
+  const calls: Array<Record<string, unknown>> = []
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: getSettings('chat_completions'),
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    fetchImpl: (async (_url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.body ? JSON.parse(String(init.body)) : {})
+      if (calls.length === 1) {
+        return new Response(JSON.stringify({
+          error: { message: "Invalid value 'json_schema' for response_format.type" }
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (calls.length === 2) {
+        return new Response(JSON.stringify({
+          error: { message: "Unknown parameter: 'response_format'" }
+        }), { status: 400, headers: { 'Content-Type': 'application/json' } })
+      }
+      return new Response(JSON.stringify({
+        choices: [{
+          message: { content: '{"action":"keep","confidence":0.4,"items":[{"id":"fallback"}]}' }
+        }]
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+  })
+
+  assert(calls.length === 3, 'unsupported formats should downgrade through both compatibility levels')
+  assert((calls[0]?.response_format as any)?.type === 'json_schema', 'full fallback should begin with json_schema')
+  assert((calls[1]?.response_format as any)?.type === 'json_object', 'full fallback should next try json_object')
+  assert(!('response_format' in calls[2]), 'full fallback should finally use prompt-only JSON')
+  assert(result.metadata.structuredOutputMode === 'prompt', 'metadata should report prompt-only fallback')
 }
 
 async function testRetryAfterBackoff(): Promise<void> {
@@ -488,6 +706,26 @@ async function testReasoningEffortInjection(): Promise<void> {
   })
   assert(responsesCalls[0]?.reasoning?.effort === 'high', 'responses body should carry reasoning.effort')
 
+  const openRouterCalls: Array<Record<string, any>> = []
+  await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: {
+      ...getSettings('chat_completions'),
+      baseUrl: 'https://openrouter.ai/api/v1',
+      model: 'gpt-5.6-sol',
+      reasoningEffort: 'max'
+    },
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: createFetchStub(openRouterCalls, {
+      choices: [{ message: { content: '{"action":"keep","confidence":0.4,"items":[{"id":"or"}]}' } }]
+    })
+  })
+  assert(openRouterCalls[0]?.reasoning?.effort === 'max', 'OpenRouter chat should carry reasoning.effort')
+  assert(!('reasoning_effort' in (openRouterCalls[0] ?? {})), 'OpenRouter should not receive reasoning_effort')
+
   const defaultCalls: Array<Record<string, any>> = []
   await requestStructuredAiOutput<Record<string, unknown>>({
     settings: { ...getSettings('chat_completions'), reasoningEffort: 'default' },
@@ -529,6 +767,46 @@ async function testReasoningEffortFallback(): Promise<void> {
   assert(!('reasoning_effort' in calls[1]), 'fallback attempt should drop reasoning_effort')
   assert('response_format' in calls[1], 'fallback should keep response_format untouched')
   assert(result.data.action === 'rename', 'fallback attempt should succeed')
+}
+
+async function testDirectAnthropicAdapter(): Promise<void> {
+  let calledUrl = ''
+  let calledHeaders = new Headers()
+  let calledBody: Record<string, any> = {}
+  const result = await requestStructuredAiOutput<Record<string, unknown>>({
+    settings: {
+      ...getSettings('chat_completions'),
+      baseUrl: 'https://api.anthropic.com/v1',
+      apiKey: 'anthropic-test-key',
+      model: 'claude-opus-4-8',
+      reasoningEffort: 'xhigh'
+    },
+    schema: SAMPLE_SCHEMA,
+    schemaName: 'sample',
+    systemPrompt: 'system',
+    userPrompt: 'user',
+    retry: false,
+    fetchImpl: (async (url: RequestInfo | URL, init?: RequestInit) => {
+      calledUrl = String(url)
+      calledHeaders = new Headers(init?.headers)
+      calledBody = init?.body ? JSON.parse(String(init.body)) : {}
+      return new Response(JSON.stringify({
+        content: [{
+          type: 'text',
+          text: '{"action":"keep","confidence":0.9,"items":[{"id":"claude"}]}'
+        }],
+        stop_reason: 'end_turn'
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as typeof fetch
+  })
+
+  assert(calledUrl === 'https://api.anthropic.com/v1/messages', 'direct Anthropic should use Messages API')
+  assert(calledHeaders.get('x-api-key') === 'anthropic-test-key', 'direct Anthropic should use x-api-key')
+  assert(calledHeaders.get('anthropic-version') === '2023-06-01', 'direct Anthropic should send API version')
+  assert(!calledHeaders.has('authorization'), 'direct Anthropic should not send Bearer authorization')
+  assert(calledBody.output_config?.effort === 'xhigh', 'direct Anthropic should use output_config.effort')
+  assert(calledBody.output_config?.format?.type === 'json_schema', 'direct Anthropic should use native structured output')
+  assert(result.data.action === 'keep', 'direct Anthropic response should be parsed')
 }
 
 function getSettings(apiStyle: 'responses' | 'chat_completions') {

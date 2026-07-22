@@ -1,4 +1,5 @@
-import { useSyncExternalStore, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { BookmarkIconShellFavicon } from './components/BookmarkIconShell'
 
 export interface SpeedDialDragGhostView {
@@ -48,25 +49,12 @@ const EMPTY_VIEW: NewtabDragLayerView = {
   speedDialGhost: null
 }
 
-let dragLayerView: NewtabDragLayerView = EMPTY_VIEW
-const listeners = new Set<() => void>()
-
-function subscribeNewtabDragLayer(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitNewtabDragLayerChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const dragLayerStore = createUiViewStoreSlice('newtab', 'drag-layer', EMPTY_VIEW)
 
 function patchNewtabDragLayerView(
   patcher: (view: NewtabDragLayerView) => NewtabDragLayerView
 ): void {
-  dragLayerView = patcher(dragLayerView)
-  emitNewtabDragLayerChange()
+  dragLayerStore.setState(patcher)
 }
 
 export function dispatchSpeedDialDragGhostView(view: SpeedDialDragGhostView | null): void {
@@ -133,9 +121,5 @@ export function patchFolderDragGhostView(
 }
 
 export function useNewtabDragLayerView(): NewtabDragLayerView {
-  return useSyncExternalStore(
-    subscribeNewtabDragLayer,
-    () => dragLayerView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(dragLayerStore)
 }

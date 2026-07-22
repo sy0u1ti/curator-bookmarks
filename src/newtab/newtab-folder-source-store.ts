@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { NewTabBookmarkBrowseMode } from './folder-settings'
 
 export interface NewtabSelectedFolderSourceItemView {
@@ -101,39 +101,18 @@ const EMPTY_ACTIONS: NewtabFolderSourceActions = {
   onToggleCandidates: () => {}
 }
 
-let folderSourceView: NewtabFolderSourceView = EMPTY_VIEW
 let folderSourceActions: NewtabFolderSourceActions = EMPTY_ACTIONS
-let folderCandidateFocusRequest: NewtabFolderCandidateFocusRequest = {
-  folderId: '',
-  preventScroll: true,
-  requestId: 0,
-  target: 'candidate'
-}
-
-const listeners = new Set<() => void>()
-const focusRequestListeners = new Set<() => void>()
-
-function subscribeFolderSource(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
+const folderSourceStore = createUiViewStoreSlice('newtab', 'folder-source', EMPTY_VIEW)
+const folderCandidateFocusStore = createUiViewStoreSlice<NewtabFolderCandidateFocusRequest>(
+  'newtab',
+  'folder-candidate-focus',
+  {
+    folderId: '',
+    preventScroll: true,
+    requestId: 0,
+    target: 'candidate'
   }
-}
-
-function emitFolderSourceChange(): void {
-  listeners.forEach((listener) => listener())
-}
-
-function subscribeFolderCandidateFocusRequest(listener: () => void): () => void {
-  focusRequestListeners.add(listener)
-  return () => {
-    focusRequestListeners.delete(listener)
-  }
-}
-
-function emitFolderCandidateFocusRequestChange(): void {
-  focusRequestListeners.forEach((listener) => listener())
-}
+)
 
 export function registerNewtabFolderSourceActions(
   actions: NewtabFolderSourceActions
@@ -147,39 +126,24 @@ export function registerNewtabFolderSourceActions(
 }
 
 export function dispatchNewtabFolderSourceView(view: NewtabFolderSourceView): void {
-  folderSourceView = view
-  emitFolderSourceChange()
+  folderSourceStore.setState(view)
 }
 
 export function dispatchNewtabFolderCandidateFocusRequest(
   request: Omit<NewtabFolderCandidateFocusRequest, 'requestId'>
 ): void {
-  folderCandidateFocusRequest = {
+  folderCandidateFocusStore.setState((current) => ({
     ...request,
-    requestId: folderCandidateFocusRequest.requestId + 1
-  }
-  emitFolderCandidateFocusRequestChange()
+    requestId: current.requestId + 1
+  }))
 }
 
 export function useNewtabFolderSourceView(): NewtabFolderSourceView {
-  return useSyncExternalStore(
-    subscribeFolderSource,
-    () => folderSourceView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(folderSourceStore)
 }
 
 export function useNewtabFolderCandidateFocusRequest(): NewtabFolderCandidateFocusRequest {
-  return useSyncExternalStore(
-    subscribeFolderCandidateFocusRequest,
-    () => folderCandidateFocusRequest,
-    () => ({
-      folderId: '',
-      preventScroll: true,
-      requestId: 0,
-      target: 'candidate'
-    })
-  )
+  return useUiViewStoreSlice(folderCandidateFocusStore)
 }
 
 export function dispatchNewtabFolderCandidatesToggle(): void {

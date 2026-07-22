@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { RecycleControlsState } from './recycle-controls-types.js'
 
 const defaultRecycleControlsState: RecycleControlsState = {
@@ -7,23 +7,16 @@ const defaultRecycleControlsState: RecycleControlsState = {
   selectedCount: 0
 }
 
-let currentRecycleControlsState = defaultRecycleControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): RecycleControlsState {
-  return currentRecycleControlsState
-}
+const recycleControlsStore = createUiViewStoreSlice(
+  'options',
+  'recycle-controls',
+  defaultRecycleControlsState
+)
 
 export function publishRecycleControls(state: RecycleControlsState): void {
-  currentRecycleControlsState = state
-  listeners.forEach((listener) => listener())
+  recycleControlsStore.setState(state)
 }
 
 export function useRecycleControlsState(): RecycleControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(recycleControlsStore)
 }

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 export type NewtabBackgroundMediaKind = 'image' | 'none' | 'video'
 
@@ -18,23 +18,16 @@ const EMPTY_VIEW: NewtabBackgroundMediaView = {
   src: ''
 }
 
-let backgroundMediaView: NewtabBackgroundMediaView = EMPTY_VIEW
-const listeners = new Set<() => void>()
-
-function subscribeBackgroundMedia(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitBackgroundMediaChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const backgroundMediaStore = createUiViewStoreSlice(
+  'newtab',
+  'background-media',
+  EMPTY_VIEW
+)
 
 export function dispatchNewtabBackgroundMediaView(
   nextView: Partial<NewtabBackgroundMediaView>
 ): void {
+  const backgroundMediaView = backgroundMediaStore.getState()
   const mergedView = {
     ...backgroundMediaView,
     ...nextView
@@ -49,18 +42,13 @@ export function dispatchNewtabBackgroundMediaView(
     return
   }
 
-  backgroundMediaView = mergedView
-  emitBackgroundMediaChange()
+  backgroundMediaStore.setState(mergedView)
 }
 
 export function getNewtabBackgroundMediaView(): NewtabBackgroundMediaView {
-  return backgroundMediaView
+  return backgroundMediaStore.getState()
 }
 
 export function useNewtabBackgroundMediaView(): NewtabBackgroundMediaView {
-  return useSyncExternalStore(
-    subscribeBackgroundMedia,
-    () => backgroundMediaView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(backgroundMediaStore)
 }

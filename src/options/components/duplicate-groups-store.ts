@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { DuplicateGroupsState } from './duplicate-groups-types.js'
 
 const defaultDuplicateGroupsState: DuplicateGroupsState = {
@@ -16,23 +16,16 @@ const defaultDuplicateGroupsState: DuplicateGroupsState = {
   tagBadgeLabels: {}
 }
 
-let currentDuplicateGroupsState = defaultDuplicateGroupsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): DuplicateGroupsState {
-  return currentDuplicateGroupsState
-}
+const duplicateGroupsStore = createUiViewStoreSlice(
+  'options',
+  'duplicate-groups',
+  defaultDuplicateGroupsState
+)
 
 export function publishDuplicateGroups(state: DuplicateGroupsState): void {
-  currentDuplicateGroupsState = state
-  listeners.forEach((listener) => listener())
+  duplicateGroupsStore.setState(state)
 }
 
 export function useDuplicateGroupsState(): DuplicateGroupsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(duplicateGroupsStore)
 }

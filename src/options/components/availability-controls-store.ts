@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { AvailabilityControlsState } from './availability-controls-types.js'
 
 const defaultState: AvailabilityControlsState = {
@@ -25,23 +25,16 @@ const defaultState: AvailabilityControlsState = {
   stopLabel: '停止本次检测'
 }
 
-let currentState = defaultState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): AvailabilityControlsState {
-  return currentState
-}
+const availabilityControlsStore = createUiViewStoreSlice(
+  'options',
+  'availability-controls',
+  defaultState
+)
 
 export function publishAvailabilityControls(state: AvailabilityControlsState): void {
-  currentState = state
-  listeners.forEach((listener) => listener())
+  availabilityControlsStore.setState(state)
 }
 
 export function useAvailabilityControls(): AvailabilityControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(availabilityControlsStore)
 }

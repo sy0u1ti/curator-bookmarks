@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type {
   BookmarkAddMenuViewModel,
   BookmarkEditMenuViewModel
@@ -29,43 +29,33 @@ const EMPTY_VIEW: NewtabBookmarkMenusView = {
   edit: null
 }
 
-let bookmarkMenusView: NewtabBookmarkMenusView = EMPTY_VIEW
-
-const listeners = new Set<() => void>()
-
-function subscribeBookmarkMenus(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitBookmarkMenusChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const bookmarkMenusStore = createUiViewStoreSlice(
+  'newtab',
+  'bookmark-menus',
+  EMPTY_VIEW
+)
 
 export function dispatchNewtabBookmarkEditMenuView(view: NewtabBookmarkEditMenuView | null): void {
-  bookmarkMenusView = {
-    ...bookmarkMenusView,
+  bookmarkMenusStore.setState((current) => ({
+    ...current,
     edit: view
-  }
-  emitBookmarkMenusChange()
+  }))
 }
 
 export function dispatchNewtabBookmarkAddMenuView(view: NewtabBookmarkAddMenuView | null): void {
-  bookmarkMenusView = {
-    ...bookmarkMenusView,
+  bookmarkMenusStore.setState((current) => ({
+    ...current,
     add: view
-  }
-  emitBookmarkMenusChange()
+  }))
 }
 
 export function dispatchNewtabBookmarkEditMenuClosing(): void {
+  const bookmarkMenusView = bookmarkMenusStore.getState()
   if (!bookmarkMenusView.edit || bookmarkMenusView.edit.closing) {
     return
   }
 
-  bookmarkMenusView = {
+  bookmarkMenusStore.setState({
     ...bookmarkMenusView,
     edit: {
       ...bookmarkMenusView.edit,
@@ -73,30 +63,25 @@ export function dispatchNewtabBookmarkEditMenuClosing(): void {
       focusAction: '',
       focusFirst: false
     }
-  }
-  emitBookmarkMenusChange()
+  })
 }
 
 export function dispatchNewtabBookmarkAddMenuClosing(): void {
+  const bookmarkMenusView = bookmarkMenusStore.getState()
   if (!bookmarkMenusView.add || bookmarkMenusView.add.closing) {
     return
   }
 
-  bookmarkMenusView = {
+  bookmarkMenusStore.setState({
     ...bookmarkMenusView,
     add: {
       ...bookmarkMenusView.add,
       closing: true,
       focusFirst: false
     }
-  }
-  emitBookmarkMenusChange()
+  })
 }
 
 export function useNewtabBookmarkMenusView(): NewtabBookmarkMenusView {
-  return useSyncExternalStore(
-    subscribeBookmarkMenus,
-    () => bookmarkMenusView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(bookmarkMenusStore)
 }

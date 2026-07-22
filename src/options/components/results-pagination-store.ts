@@ -1,18 +1,12 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { ResultsPaginationState } from './results-pagination-types.js'
 
 const hiddenStates = new Map<string, ResultsPaginationState>()
-let currentResultsPaginationStates: Record<string, ResultsPaginationState> = {}
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): Record<string, ResultsPaginationState> {
-  return currentResultsPaginationStates
-}
+const resultsPaginationStore = createUiViewStoreSlice<Record<string, ResultsPaginationState>>(
+  'options',
+  'results-pagination',
+  {}
+)
 
 function getHiddenState(kind: string): ResultsPaginationState {
   const existing = hiddenStates.get(kind)
@@ -34,14 +28,15 @@ function getHiddenState(kind: string): ResultsPaginationState {
 }
 
 export function publishResultsPagination(kind: string, state: ResultsPaginationState): void {
-  currentResultsPaginationStates = {
-    ...currentResultsPaginationStates,
+  resultsPaginationStore.setState((states) => ({
+    ...states,
     [kind]: state
-  }
-  listeners.forEach((listener) => listener())
+  }))
 }
 
 export function useResultsPaginationState(kind: string): ResultsPaginationState {
-  const states = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  return states[kind] || getHiddenState(kind)
+  return useUiViewStoreSlice(
+    resultsPaginationStore,
+    (states) => states[kind] || getHiddenState(kind)
+  )
 }

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { RecycleBinState } from './recycle-bin-types.js'
 
 const defaultRecycleBinState: RecycleBinState = {
@@ -7,23 +7,16 @@ const defaultRecycleBinState: RecycleBinState = {
   selectedIds: new Set()
 }
 
-let currentRecycleBinState = defaultRecycleBinState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): RecycleBinState {
-  return currentRecycleBinState
-}
+const recycleBinStore = createUiViewStoreSlice(
+  'options',
+  'recycle-bin',
+  defaultRecycleBinState
+)
 
 export function publishRecycleBin(state: RecycleBinState): void {
-  currentRecycleBinState = state
-  listeners.forEach((listener) => listener())
+  recycleBinStore.setState(state)
 }
 
 export function useRecycleBinState(): RecycleBinState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(recycleBinStore)
 }

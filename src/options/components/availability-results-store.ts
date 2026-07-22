@@ -1,21 +1,13 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type {
   AvailabilityResultPanelKind,
   AvailabilityResultsState
 } from './availability-results-types.js'
 
 const emptyStates = new Map<AvailabilityResultPanelKind, AvailabilityResultsState>()
-let currentAvailabilityResultsStates: Partial<Record<AvailabilityResultPanelKind, AvailabilityResultsState>> = {}
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): Partial<Record<AvailabilityResultPanelKind, AvailabilityResultsState>> {
-  return currentAvailabilityResultsStates
-}
+const availabilityResultsStore = createUiViewStoreSlice<
+  Partial<Record<AvailabilityResultPanelKind, AvailabilityResultsState>>
+>('options', 'availability-results', {})
 
 function getEmptyState(kind: AvailabilityResultPanelKind): AvailabilityResultsState {
   const existing = emptyStates.get(kind)
@@ -36,14 +28,15 @@ export function publishAvailabilityResults(
   kind: AvailabilityResultPanelKind,
   state: AvailabilityResultsState
 ): void {
-  currentAvailabilityResultsStates = {
-    ...currentAvailabilityResultsStates,
+  availabilityResultsStore.setState((states) => ({
+    ...states,
     [kind]: state
-  }
-  listeners.forEach((listener) => listener())
+  }))
 }
 
 export function useAvailabilityResultsState(kind: AvailabilityResultPanelKind): AvailabilityResultsState {
-  const states = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
-  return states[kind] || getEmptyState(kind)
+  return useUiViewStoreSlice(
+    availabilityResultsStore,
+    (states) => states[kind] || getEmptyState(kind)
+  )
 }

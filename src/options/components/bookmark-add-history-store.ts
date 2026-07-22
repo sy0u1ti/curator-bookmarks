@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { BookmarkAddHistoryEntry } from '../sections/bookmark-add-history.js'
 import type {
   BookmarkAddHistoryHeaderState,
@@ -26,23 +26,16 @@ const defaultBookmarkAddHistoryState: BookmarkAddHistoryState = {
   }
 }
 
-let currentBookmarkAddHistoryState = defaultBookmarkAddHistoryState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): BookmarkAddHistoryState {
-  return currentBookmarkAddHistoryState
-}
+const bookmarkAddHistoryStore = createUiViewStoreSlice(
+  'options',
+  'bookmark-add-history',
+  defaultBookmarkAddHistoryState
+)
 
 export function publishBookmarkAddHistory(state: BookmarkAddHistoryState): void {
-  currentBookmarkAddHistoryState = state
-  listeners.forEach((listener) => listener())
+  bookmarkAddHistoryStore.setState(state)
 }
 
 export function useBookmarkAddHistoryState(): BookmarkAddHistoryState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(bookmarkAddHistoryStore)
 }

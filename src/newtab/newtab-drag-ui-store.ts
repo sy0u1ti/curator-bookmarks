@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 export interface NewtabDragUiView {
   bookmarkPendingId: string
@@ -20,21 +20,10 @@ const EMPTY_VIEW: NewtabDragUiView = {
   speedDialDragging: false
 }
 
-let dragUiView: NewtabDragUiView = EMPTY_VIEW
-const listeners = new Set<() => void>()
-
-function subscribeDragUi(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitDragUiChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const dragUiStore = createUiViewStoreSlice('newtab', 'drag-ui', EMPTY_VIEW)
 
 export function dispatchNewtabDragUiView(nextView: Partial<NewtabDragUiView>): void {
+  const dragUiView = dragUiStore.getState()
   const mergedView = {
     ...dragUiView,
     ...nextView
@@ -50,14 +39,9 @@ export function dispatchNewtabDragUiView(nextView: Partial<NewtabDragUiView>): v
   ) {
     return
   }
-  dragUiView = mergedView
-  emitDragUiChange()
+  dragUiStore.setState(mergedView)
 }
 
 export function useNewtabDragUiView(): NewtabDragUiView {
-  return useSyncExternalStore(
-    subscribeDragUi,
-    () => dragUiView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(dragUiStore)
 }

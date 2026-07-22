@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { AiNamingResultsState } from './AiAnalysisResultsTypes.js'
 
 export interface AiAnalysisStatusState {
@@ -166,223 +166,122 @@ const defaultResultsPaginationState: AiAnalysisResultsPaginationState = {
   visible: false
 }
 
-let currentState = defaultState
-let currentProgressState = defaultProgressState
-let currentActionsState = defaultActionsState
-let currentDurationState = defaultDurationState
-let currentDecisionMetricsState = defaultDecisionMetricsState
-let currentSelectionActionsState = defaultSelectionActionsState
-let currentResultsHeaderState = defaultResultsHeaderState
-let currentResultsFilterState = defaultResultsFilterState
-let currentResultsState = defaultResultsState
-let currentScopePickerState = defaultScopePickerState
-let currentResultsPaginationState = defaultResultsPaginationState
-const listeners = new Set<() => void>()
-const progressListeners = new Set<() => void>()
-const actionsListeners = new Set<() => void>()
-const durationListeners = new Set<() => void>()
-const decisionMetricsListeners = new Set<() => void>()
-const selectionActionsListeners = new Set<() => void>()
-const resultsHeaderListeners = new Set<() => void>()
-const resultsFilterListeners = new Set<() => void>()
-const resultsListeners = new Set<() => void>()
-const scopePickerListeners = new Set<() => void>()
-const resultsPaginationListeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+interface AiAnalysisStoreState {
+  actions: AiAnalysisActionsState
+  decisionMetrics: AiAnalysisDecisionMetricsState
+  duration: AiAnalysisDurationState
+  progress: AiAnalysisProgressState
+  results: AiNamingResultsState
+  resultsFilter: AiAnalysisResultsFilterState
+  resultsHeader: AiAnalysisResultsHeaderState
+  resultsPagination: AiAnalysisResultsPaginationState
+  scopePicker: AiAnalysisScopePickerState
+  selectionActions: AiAnalysisSelectionActionsState
+  status: AiAnalysisStatusState
 }
 
-function subscribeProgress(listener: () => void): () => void {
-  progressListeners.add(listener)
-  return () => progressListeners.delete(listener)
-}
-
-function subscribeActions(listener: () => void): () => void {
-  actionsListeners.add(listener)
-  return () => actionsListeners.delete(listener)
-}
-
-function subscribeDuration(listener: () => void): () => void {
-  durationListeners.add(listener)
-  return () => durationListeners.delete(listener)
-}
-
-function subscribeDecisionMetrics(listener: () => void): () => void {
-  decisionMetricsListeners.add(listener)
-  return () => decisionMetricsListeners.delete(listener)
-}
-
-function subscribeSelectionActions(listener: () => void): () => void {
-  selectionActionsListeners.add(listener)
-  return () => selectionActionsListeners.delete(listener)
-}
-
-function subscribeResultsHeader(listener: () => void): () => void {
-  resultsHeaderListeners.add(listener)
-  return () => resultsHeaderListeners.delete(listener)
-}
-
-function subscribeResultsFilter(listener: () => void): () => void {
-  resultsFilterListeners.add(listener)
-  return () => resultsFilterListeners.delete(listener)
-}
-
-function subscribeResults(listener: () => void): () => void {
-  resultsListeners.add(listener)
-  return () => resultsListeners.delete(listener)
-}
-
-function subscribeScopePicker(listener: () => void): () => void {
-  scopePickerListeners.add(listener)
-  return () => scopePickerListeners.delete(listener)
-}
-
-function subscribeResultsPagination(listener: () => void): () => void {
-  resultsPaginationListeners.add(listener)
-  return () => resultsPaginationListeners.delete(listener)
-}
-
-function getSnapshot(): AiAnalysisStatusState {
-  return currentState
-}
-
-function getProgressSnapshot(): AiAnalysisProgressState {
-  return currentProgressState
-}
-
-function getActionsSnapshot(): AiAnalysisActionsState {
-  return currentActionsState
-}
-
-function getDurationSnapshot(): AiAnalysisDurationState {
-  return currentDurationState
-}
-
-function getDecisionMetricsSnapshot(): AiAnalysisDecisionMetricsState {
-  return currentDecisionMetricsState
-}
-
-function getSelectionActionsSnapshot(): AiAnalysisSelectionActionsState {
-  return currentSelectionActionsState
-}
-
-function getResultsHeaderSnapshot(): AiAnalysisResultsHeaderState {
-  return currentResultsHeaderState
-}
-
-function getResultsFilterSnapshot(): AiAnalysisResultsFilterState {
-  return currentResultsFilterState
-}
-
-function getResultsSnapshot(): AiNamingResultsState {
-  return currentResultsState
-}
-
-function getScopePickerSnapshot(): AiAnalysisScopePickerState {
-  return currentScopePickerState
-}
-
-function getResultsPaginationSnapshot(): AiAnalysisResultsPaginationState {
-  return currentResultsPaginationState
-}
+const aiAnalysisStore = createUiViewStoreSlice<AiAnalysisStoreState>(
+  'options',
+  'ai-analysis',
+  {
+    actions: defaultActionsState,
+    decisionMetrics: defaultDecisionMetricsState,
+    duration: defaultDurationState,
+    progress: defaultProgressState,
+    results: defaultResultsState,
+    resultsFilter: defaultResultsFilterState,
+    resultsHeader: defaultResultsHeaderState,
+    resultsPagination: defaultResultsPaginationState,
+    scopePicker: defaultScopePickerState,
+    selectionActions: defaultSelectionActionsState,
+    status: defaultState
+  }
+)
 
 export function publishAiAnalysisStatus(state: AiAnalysisStatusState): void {
-  currentState = state
-  listeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, status: state }))
 }
 
 export function publishAiAnalysisProgress(state: AiAnalysisProgressState): void {
-  currentProgressState = state
-  progressListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, progress: state }))
 }
 
 export function publishAiAnalysisActions(state: AiAnalysisActionsState): void {
-  currentActionsState = state
-  actionsListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, actions: state }))
 }
 
 export function publishAiAnalysisDuration(state: AiAnalysisDurationState): void {
-  currentDurationState = state
-  durationListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, duration: state }))
 }
 
 export function publishAiAnalysisDecisionMetrics(state: AiAnalysisDecisionMetricsState): void {
-  currentDecisionMetricsState = state
-  decisionMetricsListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, decisionMetrics: state }))
 }
 
 export function publishAiAnalysisSelectionActions(state: AiAnalysisSelectionActionsState): void {
-  currentSelectionActionsState = state
-  selectionActionsListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, selectionActions: state }))
 }
 
 export function publishAiAnalysisResultsHeader(state: AiAnalysisResultsHeaderState): void {
-  currentResultsHeaderState = state
-  resultsHeaderListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, resultsHeader: state }))
 }
 
 export function publishAiAnalysisResultsFilter(state: AiAnalysisResultsFilterState): void {
-  currentResultsFilterState = state
-  resultsFilterListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, resultsFilter: state }))
 }
 
 export function publishAiAnalysisResults(state: AiNamingResultsState): void {
-  currentResultsState = state
-  resultsListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, results: state }))
 }
 
 export function publishAiAnalysisScopePicker(state: AiAnalysisScopePickerState): void {
-  currentScopePickerState = state
-  scopePickerListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, scopePicker: state }))
 }
 
 export function publishAiAnalysisResultsPagination(state: AiAnalysisResultsPaginationState): void {
-  currentResultsPaginationState = state
-  resultsPaginationListeners.forEach((listener) => listener())
+  aiAnalysisStore.setState((current) => ({ ...current, resultsPagination: state }))
 }
 
 export function useAiAnalysisStatus(): AiAnalysisStatusState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.status)
 }
 
 export function useAiAnalysisProgress(): AiAnalysisProgressState {
-  return useSyncExternalStore(subscribeProgress, getProgressSnapshot, getProgressSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.progress)
 }
 
 export function useAiAnalysisActions(): AiAnalysisActionsState {
-  return useSyncExternalStore(subscribeActions, getActionsSnapshot, getActionsSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.actions)
 }
 
 export function useAiAnalysisDuration(): AiAnalysisDurationState {
-  return useSyncExternalStore(subscribeDuration, getDurationSnapshot, getDurationSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.duration)
 }
 
 export function useAiAnalysisDecisionMetrics(): AiAnalysisDecisionMetricsState {
-  return useSyncExternalStore(subscribeDecisionMetrics, getDecisionMetricsSnapshot, getDecisionMetricsSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.decisionMetrics)
 }
 
 export function useAiAnalysisSelectionActions(): AiAnalysisSelectionActionsState {
-  return useSyncExternalStore(subscribeSelectionActions, getSelectionActionsSnapshot, getSelectionActionsSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.selectionActions)
 }
 
 export function useAiAnalysisResultsHeader(): AiAnalysisResultsHeaderState {
-  return useSyncExternalStore(subscribeResultsHeader, getResultsHeaderSnapshot, getResultsHeaderSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.resultsHeader)
 }
 
 export function useAiAnalysisResultsFilter(): AiAnalysisResultsFilterState {
-  return useSyncExternalStore(subscribeResultsFilter, getResultsFilterSnapshot, getResultsFilterSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.resultsFilter)
 }
 
 export function useAiAnalysisResults(): AiNamingResultsState {
-  return useSyncExternalStore(subscribeResults, getResultsSnapshot, getResultsSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.results)
 }
 
 export function useAiAnalysisScopePicker(): AiAnalysisScopePickerState {
-  return useSyncExternalStore(subscribeScopePicker, getScopePickerSnapshot, getScopePickerSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.scopePicker)
 }
 
 export function useAiAnalysisResultsPagination(): AiAnalysisResultsPaginationState {
-  return useSyncExternalStore(subscribeResultsPagination, getResultsPaginationSnapshot, getResultsPaginationSnapshot)
+  return useUiViewStoreSlice(aiAnalysisStore, (state) => state.resultsPagination)
 }

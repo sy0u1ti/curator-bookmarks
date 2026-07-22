@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
 import { Button } from '../../ui/base/Button'
 import { DotMatrixLoader } from '../../ui/base/DotMatrixLoader'
 import { Input } from '../../ui/base/Input'
@@ -6,7 +7,7 @@ import { Progress } from '../../ui/base/Progress'
 import { Toolbar } from '../../ui/base/Toolbar'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
-import { getSmartDisplayProgress } from '../smart-loading-progress.js'
+import { getSmartDisplayProgress, getSmartLoadingOrbState } from '../smart-loading-progress.js'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
 
 const SMART_ERROR_BANNER_CLASS =
@@ -136,8 +137,8 @@ const buttonLoadingLabelClass = 'inline-flex min-w-0 items-center justify-center
 const buttonDotLoaderClass = 'h-3.5 w-3.5'
 const loadingCardClass = cx(panelCardClass, 'flex h-full min-h-0 flex-col overflow-hidden px-[18px] py-4')
 const loadingStageClass = 'flex min-h-0 flex-1 items-center justify-center pb-8'
-const loadingBodyClass = 'grid w-full max-w-[590px] grid-cols-[46px_minmax(0,1fr)] items-center gap-3.5 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:justify-items-center max-[430px]:text-center'
-const loadingLoaderClass = 'h-[46px] w-[46px] text-ds-text-primary'
+const loadingBodyClass = 'grid w-full max-w-[590px] grid-cols-[64px_minmax(0,1fr)] items-center gap-4 max-[430px]:grid-cols-[minmax(0,1fr)] max-[430px]:justify-items-center max-[430px]:text-center'
+const loadingLoaderClass = 'opacity-90'
 const loadingContentClass = 'min-w-0'
 const loadingCopyClass =
   'mb-2.5 mt-0 flex items-center justify-between gap-3 text-[13px] font-[650] text-ds-text-primary'
@@ -537,7 +538,11 @@ function PopupSmartLoading({
       </div>
       <div className={loadingStageClass}>
         <div className={loadingBodyClass}>
-          <DotMatrixLoader variant="spiral" className={loadingLoaderClass} />
+          <AiThinkingOrb
+            state={getSmartLoadingOrbState(state.loadingStep)}
+            size={64}
+            className={loadingLoaderClass}
+          />
           <div className={loadingContentClass}>
             <p className={loadingCopyClass}>
               <span className="t-shimmer" data-text={state.loadingLabel}>{state.loadingLabel}</span>

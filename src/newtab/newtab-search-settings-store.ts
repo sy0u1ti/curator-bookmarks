@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 export const NEWTAB_SEARCH_BACKGROUND_MIN = 52
 export const NEWTAB_SEARCH_BACKGROUND_DEFAULT = 60
@@ -95,21 +95,8 @@ const EMPTY_ACTIONS: NewtabSearchSettingsActions = {
   onToggle: () => {}
 }
 
-let searchSettingsView: NewtabSearchSettingsView = EMPTY_VIEW
 let searchSettingsActions: NewtabSearchSettingsActions = EMPTY_ACTIONS
-
-const listeners = new Set<() => void>()
-
-function subscribeSearchSettings(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitSearchSettingsChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const searchSettingsStore = createUiViewStoreSlice('newtab', 'search-settings', EMPTY_VIEW)
 
 export function createNewtabSearchSettingsView(
   settings: NewtabSearchSettingsSource,
@@ -176,16 +163,11 @@ export function registerNewtabSearchSettingsActions(
 }
 
 export function dispatchNewtabSearchSettingsView(view: NewtabSearchSettingsView): void {
-  searchSettingsView = view
-  emitSearchSettingsChange()
+  searchSettingsStore.setState(view)
 }
 
 export function useNewtabSearchSettingsView(): NewtabSearchSettingsView {
-  return useSyncExternalStore(
-    subscribeSearchSettings,
-    () => searchSettingsView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(searchSettingsStore)
 }
 
 export function dispatchNewtabSearchSettingToggle(

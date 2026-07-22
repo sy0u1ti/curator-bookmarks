@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { FeaturedBackgroundPreferences } from './featured-gallery-preferences.js'
 import {
   doesBackgroundMaskFilterSupportGeometry,
@@ -154,21 +154,12 @@ const EMPTY_ACTIONS: NewtabBackgroundSettingsActions = {
   onUrlCommit: () => {}
 }
 
-let backgroundSettingsView: NewtabBackgroundSettingsView = EMPTY_VIEW
 let backgroundSettingsActions: NewtabBackgroundSettingsActions = EMPTY_ACTIONS
-
-const listeners = new Set<() => void>()
-
-function subscribeBackgroundSettings(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitBackgroundSettingsChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const backgroundSettingsStore = createUiViewStoreSlice(
+  'newtab',
+  'background-settings',
+  EMPTY_VIEW
+)
 
 export function createNewtabBackgroundSettingsView(
   settings: NewtabBackgroundSettingsSource,
@@ -258,31 +249,24 @@ export function registerNewtabBackgroundSettingsActions(
 }
 
 export function dispatchNewtabBackgroundSettingsView(view: NewtabBackgroundSettingsView): void {
-  backgroundSettingsView = view
-  emitBackgroundSettingsChange()
+  backgroundSettingsStore.setState(view)
 }
 
 export function useNewtabBackgroundSettingsView(): NewtabBackgroundSettingsView {
-  return useSyncExternalStore(
-    subscribeBackgroundSettings,
-    () => backgroundSettingsView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(backgroundSettingsStore)
 }
 
 export function useNewtabWallpaperFilterActive(): boolean {
-  return useSyncExternalStore(
-    subscribeBackgroundSettings,
-    () => backgroundSettingsView.maskEnabled && isWallpaperFilterMaskStyle(backgroundSettingsView.maskStyle),
-    () => false
+  return useUiViewStoreSlice(
+    backgroundSettingsStore,
+    (view) => view.maskEnabled && isWallpaperFilterMaskStyle(view.maskStyle)
   )
 }
 
 export function useNewtabPaperShaderActive(): boolean {
-  return useSyncExternalStore(
-    subscribeBackgroundSettings,
-    () => backgroundSettingsView.maskEnabled && isPaperShaderMaskStyle(backgroundSettingsView.maskStyle),
-    () => false
+  return useUiViewStoreSlice(
+    backgroundSettingsStore,
+    (view) => view.maskEnabled && isPaperShaderMaskStyle(view.maskStyle)
   )
 }
 

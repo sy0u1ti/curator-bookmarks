@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { DuplicateControlsState } from './duplicate-controls-types.js'
 
 const defaultDuplicateControlsState: DuplicateControlsState = {
@@ -23,23 +23,16 @@ const defaultDuplicateControlsState: DuplicateControlsState = {
   }
 }
 
-let currentDuplicateControlsState = defaultDuplicateControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): DuplicateControlsState {
-  return currentDuplicateControlsState
-}
+const duplicateControlsStore = createUiViewStoreSlice(
+  'options',
+  'duplicate-controls',
+  defaultDuplicateControlsState
+)
 
 export function publishDuplicateControls(state: DuplicateControlsState): void {
-  currentDuplicateControlsState = state
-  listeners.forEach((listener) => listener())
+  duplicateControlsStore.setState(state)
 }
 
 export function useDuplicateControlsState(): DuplicateControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(duplicateControlsStore)
 }

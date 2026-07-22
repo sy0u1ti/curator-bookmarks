@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { NewTabModuleSettingKey } from './module-settings'
 
 export interface NewtabModuleSettingRowView {
@@ -24,21 +24,8 @@ const EMPTY_ACTIONS: NewtabModuleSettingsActions = {
   onToggle: () => {}
 }
 
-let moduleSettingsView: NewtabModuleSettingsView = EMPTY_VIEW
 let moduleSettingsActions: NewtabModuleSettingsActions = EMPTY_ACTIONS
-
-const listeners = new Set<() => void>()
-
-function subscribeModuleSettings(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitModuleSettingsChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const moduleSettingsStore = createUiViewStoreSlice('newtab', 'module-settings', EMPTY_VIEW)
 
 export function registerNewtabModuleSettingsActions(
   actions: NewtabModuleSettingsActions
@@ -52,16 +39,11 @@ export function registerNewtabModuleSettingsActions(
 }
 
 export function dispatchNewtabModuleSettingsView(view: NewtabModuleSettingsView): void {
-  moduleSettingsView = view
-  emitModuleSettingsChange()
+  moduleSettingsStore.setState(view)
 }
 
 export function useNewtabModuleSettingsView(): NewtabModuleSettingsView {
-  return useSyncExternalStore(
-    subscribeModuleSettings,
-    () => moduleSettingsView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(moduleSettingsStore)
 }
 
 export function dispatchNewtabModuleSettingToggle(

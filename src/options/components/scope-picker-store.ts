@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type {
   ScopePickerSource,
   ScopePickerTriggerState,
@@ -20,30 +20,19 @@ const defaultState: ScopePickerTriggersState = {
   }
 }
 
-let currentState = defaultState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): ScopePickerTriggersState {
-  return currentState
-}
+const scopePickerStore = createUiViewStoreSlice(
+  'options',
+  'scope-picker-triggers',
+  defaultState
+)
 
 export function publishScopePickerTrigger(source: ScopePickerSource, state: ScopePickerTriggerState): void {
-  currentState = {
-    ...currentState,
+  scopePickerStore.setState((stateBySource) => ({
+    ...stateBySource,
     [source]: state
-  }
-  listeners.forEach((listener) => listener())
+  }))
 }
 
 export function useScopePickerTrigger(source: ScopePickerSource): ScopePickerTriggerState {
-  return useSyncExternalStore(
-    subscribe,
-    () => getSnapshot()[source],
-    () => getSnapshot()[source]
-  )
+  return useUiViewStoreSlice(scopePickerStore, (state) => state[source])
 }

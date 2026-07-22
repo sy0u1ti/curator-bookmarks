@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { SpeedDialPanelState } from './components/NewtabSpeedDialPanel'
 
 export interface NewtabSpeedDialNodes {
@@ -7,42 +7,32 @@ export interface NewtabSpeedDialNodes {
   grid: HTMLElement | null
 }
 
-let speedDialView: SpeedDialPanelState | null = null
+const speedDialStore = createUiViewStoreSlice<SpeedDialPanelState | null>(
+  'newtab',
+  'speed-dial',
+  null
+)
 let speedDialNodes: NewtabSpeedDialNodes = {
   cards: new Map(),
   cardIcons: new Map(),
   grid: null
 }
-const listeners = new Set<() => void>()
-
-function subscribeNewtabSpeedDial(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitNewtabSpeedDialChange(): void {
-  listeners.forEach((listener) => listener())
-}
-
 export function dispatchNewtabSpeedDialView(view: SpeedDialPanelState | null): void {
-  speedDialView = view ? { ...view } : null
-  emitNewtabSpeedDialChange()
+  speedDialStore.setState(view ? { ...view } : null)
 }
 
 export function patchNewtabSpeedDialView(
   patcher: (view: SpeedDialPanelState) => SpeedDialPanelState
 ): void {
+  const speedDialView = speedDialStore.getState()
   if (!speedDialView) {
     return
   }
-  speedDialView = patcher(speedDialView)
-  emitNewtabSpeedDialChange()
+  speedDialStore.setState(patcher(speedDialView))
 }
 
 export function getNewtabSpeedDialView(): SpeedDialPanelState | null {
-  return speedDialView
+  return speedDialStore.getState()
 }
 
 export function setNewtabSpeedDialGridNode(grid: HTMLElement | null): void {
@@ -96,9 +86,5 @@ export function getNewtabSpeedDialNodes(): NewtabSpeedDialNodes {
 }
 
 export function useNewtabSpeedDialView(): SpeedDialPanelState | null {
-  return useSyncExternalStore(
-    subscribeNewtabSpeedDial,
-    () => speedDialView,
-    () => null
-  )
+  return useUiViewStoreSlice(speedDialStore)
 }

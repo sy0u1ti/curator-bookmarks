@@ -1,4 +1,5 @@
-import { useSyncExternalStore, type FocusEvent, type FormEvent, type KeyboardEvent } from 'react'
+import type { FocusEvent, FormEvent, KeyboardEvent } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 const noop = () => undefined
 
@@ -122,20 +123,12 @@ export interface NewtabSearchWidgetView {
   suggestions: SearchSuggestionViewModel[]
 }
 
-let searchWidgetView: NewtabSearchWidgetView | null = null
+const searchWidgetStore = createUiViewStoreSlice<NewtabSearchWidgetView | null>(
+  'newtab',
+  'search-widget',
+  null
+)
 let searchWidgetNodes: NewtabSearchWidgetNodes = createEmptySearchWidgetNodes()
-const listeners = new Set<() => void>()
-
-function subscribeNewtabSearchWidget(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitNewtabSearchWidgetChange(): void {
-  listeners.forEach((listener) => listener())
-}
 
 export function createDefaultSearchWidgetInteractionState(): SearchWidgetInteractionState {
   return {
@@ -162,27 +155,26 @@ export function createEmptySearchWidgetNodes(): NewtabSearchWidgetNodes {
 }
 
 export function dispatchNewtabSearchWidgetView(view: NewtabSearchWidgetView | null): void {
-  searchWidgetView = view
+  searchWidgetStore.setState(view)
   if (!view) {
     setNewtabSearchWidgetNodes(createEmptySearchWidgetNodes())
   }
-  emitNewtabSearchWidgetChange()
 }
 
 export function patchNewtabSearchWidgetView(patch: Partial<NewtabSearchWidgetView>): void {
+  const searchWidgetView = searchWidgetStore.getState()
   if (!searchWidgetView) {
     return
   }
 
-  searchWidgetView = {
+  searchWidgetStore.setState({
     ...searchWidgetView,
     ...patch
-  }
-  emitNewtabSearchWidgetChange()
+  })
 }
 
 export function getNewtabSearchWidgetView(): NewtabSearchWidgetView | null {
-  return searchWidgetView
+  return searchWidgetStore.getState()
 }
 
 export function setNewtabSearchWidgetNodes(nodes: NewtabSearchWidgetNodes): void {
@@ -194,9 +186,5 @@ export function getNewtabSearchWidgetNodes(): NewtabSearchWidgetNodes {
 }
 
 export function useNewtabSearchWidgetView(): NewtabSearchWidgetView | null {
-  return useSyncExternalStore(
-    subscribeNewtabSearchWidget,
-    () => searchWidgetView,
-    () => null
-  )
+  return useUiViewStoreSlice(searchWidgetStore)
 }

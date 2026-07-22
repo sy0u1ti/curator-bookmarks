@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { SettingsDrawerSection } from './settings-group-sync'
 
 export type NewtabSettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -45,19 +45,25 @@ const EMPTY_ACTIONS: NewtabSettingsDrawerActions = {
   onToggleRequest: () => {}
 }
 
-let settingsDrawerView: NewtabSettingsDrawerView = {
+const EMPTY_VIEW: NewtabSettingsDrawerView = {
   activeGroup: 'source',
   open: false,
   saveMessage: '',
   saveState: 'idle'
 }
-let settingsDrawerActions: NewtabSettingsDrawerActions = EMPTY_ACTIONS
-let settingsDrawerLayoutRequest: NewtabSettingsDrawerLayoutRequest = {
+const EMPTY_LAYOUT_REQUEST: NewtabSettingsDrawerLayoutRequest = {
   action: 'none',
   behavior: 'auto',
   requestId: 0,
   section: 'source'
 }
+const settingsDrawerStore = createUiViewStoreSlice('newtab', 'settings-drawer', EMPTY_VIEW)
+const settingsDrawerLayoutStore = createUiViewStoreSlice(
+  'newtab',
+  'settings-drawer-layout',
+  EMPTY_LAYOUT_REQUEST
+)
+let settingsDrawerActions: NewtabSettingsDrawerActions = EMPTY_ACTIONS
 let settingsDrawerNodes: NewtabSettingsDrawerNodes = {
   backdrop: null,
   drawer: null,
@@ -65,31 +71,7 @@ let settingsDrawerNodes: NewtabSettingsDrawerNodes = {
   trigger: null
 }
 
-const listeners = new Set<() => void>()
-const layoutRequestListeners = new Set<() => void>()
 const nodesListeners = new Set<() => void>()
-
-function subscribeSettingsDrawer(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitSettingsDrawerChange(): void {
-  listeners.forEach((listener) => listener())
-}
-
-function subscribeSettingsDrawerLayoutRequest(listener: () => void): () => void {
-  layoutRequestListeners.add(listener)
-  return () => {
-    layoutRequestListeners.delete(listener)
-  }
-}
-
-function emitSettingsDrawerLayoutRequestChange(): void {
-  layoutRequestListeners.forEach((listener) => listener())
-}
 
 function emitSettingsDrawerNodesChange(): void {
   nodesListeners.forEach((listener) => listener())
@@ -107,23 +89,15 @@ export function registerNewtabSettingsDrawerActions(
 }
 
 export function useNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
-  return useSyncExternalStore(
-    subscribeSettingsDrawer,
-    () => settingsDrawerView,
-    () => ({ activeGroup: 'source', open: false, saveMessage: '', saveState: 'idle' })
-  )
+  return useUiViewStoreSlice(settingsDrawerStore)
 }
 
 export function useNewtabSettingsDrawerLayoutRequest(): NewtabSettingsDrawerLayoutRequest {
-  return useSyncExternalStore(
-    subscribeSettingsDrawerLayoutRequest,
-    () => settingsDrawerLayoutRequest,
-    () => ({ action: 'none', behavior: 'auto', requestId: 0, section: 'source' })
-  )
+  return useUiViewStoreSlice(settingsDrawerLayoutStore)
 }
 
 export function getNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
-  return settingsDrawerView
+  return settingsDrawerStore.getState()
 }
 
 export function setNewtabSettingsDrawerNodes(nodes: Partial<NewtabSettingsDrawerNodes>): void {
@@ -163,59 +137,58 @@ export function subscribeNewtabSettingsDrawerNodes(listener: () => void): () => 
 }
 
 export function dispatchNewtabSettingsDrawerOpen(open: boolean): void {
+  const settingsDrawerView = settingsDrawerStore.getState()
   if (settingsDrawerView.open === open) {
     return
   }
-  settingsDrawerView = {
+  settingsDrawerStore.setState({
     ...settingsDrawerView,
     open
-  }
-  emitSettingsDrawerChange()
+  })
 }
 
 export function dispatchNewtabSettingsDrawerActiveGroup(group: SettingsDrawerSection): void {
+  const settingsDrawerView = settingsDrawerStore.getState()
   if (settingsDrawerView.activeGroup === group) {
     return
   }
-  settingsDrawerView = {
+  settingsDrawerStore.setState({
     ...settingsDrawerView,
     activeGroup: group
-  }
-  emitSettingsDrawerChange()
+  })
 }
 
 export function dispatchNewtabSettingsDrawerSaveStatus(
   saveState: NewtabSettingsSaveState,
   saveMessage: string
 ): void {
+  const settingsDrawerView = settingsDrawerStore.getState()
   if (settingsDrawerView.saveState === saveState && settingsDrawerView.saveMessage === saveMessage) {
     return
   }
-  settingsDrawerView = {
+  settingsDrawerStore.setState({
     ...settingsDrawerView,
     saveMessage,
     saveState
-  }
-  emitSettingsDrawerChange()
+  })
 }
 
 function dispatchNewtabSettingsDrawerLayoutRequest(
   action: NewtabSettingsDrawerLayoutAction,
   {
     behavior = 'smooth',
-    section = settingsDrawerView.activeGroup
+    section = settingsDrawerStore.getState().activeGroup
   }: {
     behavior?: ScrollBehavior
     section?: SettingsDrawerSection
   } = {}
 ): void {
-  settingsDrawerLayoutRequest = {
+  settingsDrawerLayoutStore.setState((request) => ({
     action,
     behavior,
-    requestId: settingsDrawerLayoutRequest.requestId + 1,
+    requestId: request.requestId + 1,
     section
-  }
-  emitSettingsDrawerLayoutRequestChange()
+  }))
 }
 
 export function dispatchNewtabSettingsDrawerFocusFirstControl(): void {

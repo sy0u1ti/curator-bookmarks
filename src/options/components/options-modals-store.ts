@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { OptionsModalsState } from './options-modals-types.js'
 
 const defaultOptionsModalsState: OptionsModalsState = {
@@ -31,26 +31,19 @@ const defaultOptionsModalsState: OptionsModalsState = {
   }
 }
 
-let currentOptionsModalsState = defaultOptionsModalsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): OptionsModalsState {
-  return currentOptionsModalsState
-}
+const optionsModalsStore = createUiViewStoreSlice(
+  'options',
+  'modals',
+  defaultOptionsModalsState
+)
 
 export function publishOptionsModals(patch: Partial<OptionsModalsState>): void {
-  currentOptionsModalsState = {
-    ...currentOptionsModalsState,
+  optionsModalsStore.setState((state) => ({
+    ...state,
     ...patch
-  }
-  listeners.forEach((listener) => listener())
+  }))
 }
 
 export function useOptionsModalsState(): OptionsModalsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(optionsModalsStore)
 }

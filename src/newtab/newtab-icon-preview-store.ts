@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { IconLayoutPresetKey, IconSettings } from './icon-settings'
 
 export interface NewtabIconPreviewTile {
@@ -92,25 +92,11 @@ const EMPTY_ACTIONS: NewtabIconSettingsActions = {
   onVerticalCenterToggle: () => {}
 }
 
-let iconPreviewView: NewtabIconPreviewView = DEFAULT_VIEW
 let iconSettingsActions: NewtabIconSettingsActions = EMPTY_ACTIONS
-
-const listeners = new Set<() => void>()
-
-function subscribeIconPreview(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitIconPreviewChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const iconPreviewStore = createUiViewStoreSlice('newtab', 'icon-preview', DEFAULT_VIEW)
 
 export function dispatchNewtabIconPreviewView(view: NewtabIconPreviewView): void {
-  iconPreviewView = view
-  emitIconPreviewChange()
+  iconPreviewStore.setState(view)
 }
 
 export function registerNewtabIconSettingsActions(
@@ -148,11 +134,7 @@ export function dispatchNewtabIconResetDefaults(): void {
 }
 
 export function useNewtabIconPreviewView(): NewtabIconPreviewView {
-  return useSyncExternalStore(
-    subscribeIconPreview,
-    () => iconPreviewView,
-    () => DEFAULT_VIEW
-  )
+  return useUiViewStoreSlice(iconPreviewStore)
 }
 
 export function createNewtabIconPreviewView(

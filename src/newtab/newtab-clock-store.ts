@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { NewTabTimeSettings } from './time-settings'
 
 export interface NewtabClockView {
@@ -11,29 +11,12 @@ export interface NewtabClockView {
   timeText: string
 }
 
-let clockView: NewtabClockView | null = null
-const listeners = new Set<() => void>()
-
-function subscribeNewtabClock(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitNewtabClockChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const clockStore = createUiViewStoreSlice<NewtabClockView | null>('newtab', 'clock', null)
 
 export function dispatchNewtabClockView(view: NewtabClockView | null): void {
-  clockView = view ? { ...view } : null
-  emitNewtabClockChange()
+  clockStore.setState(view ? { ...view } : null)
 }
 
 export function useNewtabClockView(): NewtabClockView | null {
-  return useSyncExternalStore(
-    subscribeNewtabClock,
-    () => clockView,
-    () => null
-  )
+  return useUiViewStoreSlice(clockStore)
 }

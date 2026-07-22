@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { AiProviderSettingsState } from './ai-provider-settings-types.js'
 
 const defaultAiProviderSettingsState: AiProviderSettingsState = {
@@ -50,23 +50,16 @@ const defaultAiProviderSettingsState: AiProviderSettingsState = {
   timeoutMs: '30000'
 }
 
-let currentAiProviderSettingsState = defaultAiProviderSettingsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): AiProviderSettingsState {
-  return currentAiProviderSettingsState
-}
+const aiProviderSettingsStore = createUiViewStoreSlice(
+  'options',
+  'ai-provider-settings',
+  defaultAiProviderSettingsState
+)
 
 export function publishAiProviderSettings(state: AiProviderSettingsState): void {
-  currentAiProviderSettingsState = state
-  listeners.forEach((listener) => listener())
+  aiProviderSettingsStore.setState(state)
 }
 
 export function useAiProviderSettingsState(): AiProviderSettingsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(aiProviderSettingsStore)
 }

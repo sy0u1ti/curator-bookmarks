@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { FolderCleanupControlsState } from './folder-cleanup-controls-types.js'
 
 const defaultFolderCleanupControlsState: FolderCleanupControlsState = {
@@ -19,23 +19,16 @@ const defaultFolderCleanupControlsState: FolderCleanupControlsState = {
   }
 }
 
-let currentFolderCleanupControlsState = defaultFolderCleanupControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): FolderCleanupControlsState {
-  return currentFolderCleanupControlsState
-}
+const folderCleanupControlsStore = createUiViewStoreSlice(
+  'options',
+  'folder-cleanup-controls',
+  defaultFolderCleanupControlsState
+)
 
 export function publishFolderCleanupControls(state: FolderCleanupControlsState): void {
-  currentFolderCleanupControlsState = state
-  listeners.forEach((listener) => listener())
+  folderCleanupControlsStore.setState(state)
 }
 
 export function useFolderCleanupControlsState(): FolderCleanupControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(folderCleanupControlsStore)
 }

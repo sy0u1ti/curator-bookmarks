@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { ContentSnapshotControlsState } from './content-snapshot-types.js'
 
 const defaultContentSnapshotControlsState: ContentSnapshotControlsState = {
@@ -9,23 +9,16 @@ const defaultContentSnapshotControlsState: ContentSnapshotControlsState = {
   statusCopy: '正在读取本地设置…'
 }
 
-let currentContentSnapshotControlsState = defaultContentSnapshotControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): ContentSnapshotControlsState {
-  return currentContentSnapshotControlsState
-}
+const contentSnapshotControlsStore = createUiViewStoreSlice(
+  'options',
+  'content-snapshot-controls',
+  defaultContentSnapshotControlsState
+)
 
 export function publishContentSnapshotControls(state: ContentSnapshotControlsState): void {
-  currentContentSnapshotControlsState = state
-  listeners.forEach((listener) => listener())
+  contentSnapshotControlsStore.setState(state)
 }
 
 export function useContentSnapshotControlsState(): ContentSnapshotControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(contentSnapshotControlsStore)
 }

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 const DEFAULT_PLACEHOLDER_COLOR = '#101013'
 
@@ -39,20 +39,6 @@ const EMPTY_VIEW: NewtabInstantWallpaperView = {
   remoteReady: false,
   signature: '',
   size: 'cover'
-}
-
-let instantWallpaperView: NewtabInstantWallpaperView = getInitialInstantWallpaperView()
-const listeners = new Set<() => void>()
-
-function subscribeInstantWallpaper(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitInstantWallpaperChange(): void {
-  listeners.forEach((listener) => listener())
 }
 
 function getInitialInstantWallpaperView(): NewtabInstantWallpaperView {
@@ -112,9 +98,16 @@ function consumeInstantWallpaperBootView(): unknown | undefined {
   return view
 }
 
+const instantWallpaperStore = createUiViewStoreSlice(
+  'newtab',
+  'instant-wallpaper',
+  getInitialInstantWallpaperView()
+)
+
 export function dispatchNewtabInstantWallpaperView(
   nextView: Partial<NewtabInstantWallpaperView>
 ): void {
+  const instantWallpaperView = instantWallpaperStore.getState()
   const mergedView = {
     ...instantWallpaperView,
     ...nextView
@@ -140,18 +133,13 @@ export function dispatchNewtabInstantWallpaperView(
     return
   }
 
-  instantWallpaperView = mergedView
-  emitInstantWallpaperChange()
+  instantWallpaperStore.setState(mergedView)
 }
 
 export function getNewtabInstantWallpaperView(): NewtabInstantWallpaperView {
-  return instantWallpaperView
+  return instantWallpaperStore.getState()
 }
 
 export function useNewtabInstantWallpaperView(): NewtabInstantWallpaperView {
-  return useSyncExternalStore(
-    subscribeInstantWallpaper,
-    () => instantWallpaperView,
-    () => EMPTY_VIEW
-  )
+  return useUiViewStoreSlice(instantWallpaperStore)
 }

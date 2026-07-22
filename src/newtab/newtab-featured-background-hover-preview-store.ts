@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 export interface NewtabFeaturedBackgroundHoverPreviewView {
   ariaLabel: string
@@ -20,58 +20,44 @@ const EMPTY_PREVIEW_VIEW: NewtabFeaturedBackgroundHoverPreviewView = {
   width: 0
 }
 
-let hoverPreviewView: NewtabFeaturedBackgroundHoverPreviewView = EMPTY_PREVIEW_VIEW
-
-const listeners = new Set<() => void>()
-
-function subscribeHoverPreview(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitHoverPreviewChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const hoverPreviewStore = createUiViewStoreSlice(
+  'newtab',
+  'featured-background-hover-preview',
+  EMPTY_PREVIEW_VIEW
+)
 
 export function dispatchNewtabFeaturedBackgroundHoverPreviewView(
   view: NewtabFeaturedBackgroundHoverPreviewView
 ): void {
-  hoverPreviewView = view
-  emitHoverPreviewChange()
+  hoverPreviewStore.setState(view)
 }
 
 export function dispatchNewtabFeaturedBackgroundHoverPreviewSrc(src: string): void {
+  const hoverPreviewView = hoverPreviewStore.getState()
   if (hoverPreviewView.src === src) {
     return
   }
 
-  hoverPreviewView = {
+  hoverPreviewStore.setState({
     ...hoverPreviewView,
     src
-  }
-  emitHoverPreviewChange()
+  })
 }
 
 export function dispatchNewtabFeaturedBackgroundHoverPreviewHidden(): void {
+  const hoverPreviewView = hoverPreviewStore.getState()
   if (!hoverPreviewView.visible && !hoverPreviewView.src && !hoverPreviewView.ariaLabel) {
     return
   }
 
-  hoverPreviewView = {
+  hoverPreviewStore.setState({
     ...hoverPreviewView,
     ariaLabel: '',
     src: '',
     visible: false
-  }
-  emitHoverPreviewChange()
+  })
 }
 
 export function useNewtabFeaturedBackgroundHoverPreviewView(): NewtabFeaturedBackgroundHoverPreviewView {
-  return useSyncExternalStore(
-    subscribeHoverPreview,
-    () => hoverPreviewView,
-    () => EMPTY_PREVIEW_VIEW
-  )
+  return useUiViewStoreSlice(hoverPreviewStore)
 }

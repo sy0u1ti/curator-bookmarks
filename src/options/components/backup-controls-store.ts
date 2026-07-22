@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { BackupControlsState } from './backup-controls-types.js'
 
 const defaultBackupControlsState: BackupControlsState = {
@@ -17,23 +17,16 @@ const defaultBackupControlsState: BackupControlsState = {
   }
 }
 
-let currentBackupControlsState = defaultBackupControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): BackupControlsState {
-  return currentBackupControlsState
-}
+const backupControlsStore = createUiViewStoreSlice(
+  'options',
+  'backup-controls',
+  defaultBackupControlsState
+)
 
 export function publishBackupControls(state: BackupControlsState): void {
-  currentBackupControlsState = state
-  listeners.forEach((listener) => listener())
+  backupControlsStore.setState(state)
 }
 
 export function useBackupControlsState(): BackupControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(backupControlsStore)
 }

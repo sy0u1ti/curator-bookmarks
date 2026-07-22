@@ -1,10 +1,10 @@
 import {
-  useSyncExternalStore,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent
 } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 import type { NewTabSourceNavigationItem } from './content-state'
 import type { BookmarkIconShellFavicon } from './components/BookmarkIconShell'
 
@@ -158,38 +158,29 @@ export interface NewtabBookmarkContentNodes {
   tiles: Map<string, HTMLElement>
 }
 
-let bookmarkContentView: BookmarkContentViewModel | null = null
+const bookmarkContentStore = createUiViewStoreSlice<BookmarkContentViewModel | null>(
+  'newtab',
+  'bookmark-content',
+  null
+)
 let bookmarkContentNodes: NewtabBookmarkContentNodes = createEmptyNewtabBookmarkContentNodes()
-const listeners = new Set<() => void>()
-
-function subscribeNewtabBookmarkContent(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitNewtabBookmarkContentChange(): void {
-  listeners.forEach((listener) => listener())
-}
 
 export function dispatchNewtabBookmarkContentView(view: BookmarkContentViewModel | null): void {
-  bookmarkContentView = view
-  emitNewtabBookmarkContentChange()
+  bookmarkContentStore.setState(view)
 }
 
 export function patchNewtabBookmarkContentView(
   patcher: (view: BookmarkContentViewModel) => BookmarkContentViewModel
 ): void {
+  const bookmarkContentView = bookmarkContentStore.getState()
   if (!bookmarkContentView) {
     return
   }
-  bookmarkContentView = patcher(bookmarkContentView)
-  emitNewtabBookmarkContentChange()
+  bookmarkContentStore.setState(patcher(bookmarkContentView))
 }
 
 export function getNewtabBookmarkContentView(): BookmarkContentViewModel | null {
-  return bookmarkContentView
+  return bookmarkContentStore.getState()
 }
 
 export function createEmptyNewtabBookmarkContentNodes(): NewtabBookmarkContentNodes {
@@ -256,9 +247,5 @@ function setNodeMapEntry(
 }
 
 export function useNewtabBookmarkContentView(): BookmarkContentViewModel | null {
-  return useSyncExternalStore(
-    subscribeNewtabBookmarkContent,
-    () => bookmarkContentView,
-    () => null
-  )
+  return useUiViewStoreSlice(bookmarkContentStore)
 }

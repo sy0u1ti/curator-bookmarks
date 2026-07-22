@@ -9,6 +9,19 @@ const SMART_LOADING_PROGRESS_SETTLE_MS = 120
 export const SMART_LOADING_PROGRESS_COMPLETE_MS =
   SMART_LOADING_PROGRESS_TRANSITION_MS + SMART_LOADING_PROGRESS_SETTLE_MS
 
+export type SmartLoadingOrbState = 'searching' | 'solving' | 'shaping'
+
+export function getSmartLoadingOrbState(rawStep: number): SmartLoadingOrbState {
+  const step = normalizeSmartLoadingStep(rawStep)
+  if (step === 1) {
+    return 'searching'
+  }
+  if (step === 2) {
+    return 'solving'
+  }
+  return 'shaping'
+}
+
 export function normalizeSmartLoadingStep(rawStep: number): number {
   const numericStep = Number(rawStep)
   const step = Number.isFinite(numericStep) ? Math.trunc(numericStep) : 1

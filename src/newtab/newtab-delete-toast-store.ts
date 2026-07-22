@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../shared/ui-view-store.js'
 
 export interface NewtabDeleteToastView {
   bookmarkLabel: string
@@ -16,21 +16,12 @@ const EMPTY_ACTIONS: NewtabDeleteToastActions = {
   onUndo: () => {}
 }
 
-let deleteToastView: NewtabDeleteToastView | null = null
 let deleteToastActions: NewtabDeleteToastActions = EMPTY_ACTIONS
-
-const listeners = new Set<() => void>()
-
-function subscribeDeleteToast(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
-}
-
-function emitDeleteToastChange(): void {
-  listeners.forEach((listener) => listener())
-}
+const deleteToastStore = createUiViewStoreSlice<NewtabDeleteToastView | null>(
+  'newtab',
+  'delete-toast',
+  null
+)
 
 export function registerNewtabDeleteToastActions(actions: NewtabDeleteToastActions): () => void {
   deleteToastActions = actions
@@ -42,16 +33,11 @@ export function registerNewtabDeleteToastActions(actions: NewtabDeleteToastActio
 }
 
 export function dispatchNewtabDeleteToastView(view: NewtabDeleteToastView | null): void {
-  deleteToastView = view
-  emitDeleteToastChange()
+  deleteToastStore.setState(view)
 }
 
 export function useNewtabDeleteToastView(): NewtabDeleteToastView | null {
-  return useSyncExternalStore(
-    subscribeDeleteToast,
-    () => deleteToastView,
-    () => null
-  )
+  return useUiViewStoreSlice(deleteToastStore)
 }
 
 export function dispatchNewtabDeleteToastUndo(): void {

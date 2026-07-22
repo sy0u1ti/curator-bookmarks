@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { ShortcutControlsState } from './shortcut-types.js'
 
 const defaultShortcutControlsState: ShortcutControlsState = {
@@ -9,23 +9,16 @@ const defaultShortcutControlsState: ShortcutControlsState = {
   statusTone: 'muted'
 }
 
-let currentShortcutControlsState = defaultShortcutControlsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): ShortcutControlsState {
-  return currentShortcutControlsState
-}
+const shortcutControlsStore = createUiViewStoreSlice(
+  'options',
+  'shortcut-controls',
+  defaultShortcutControlsState
+)
 
 export function publishShortcutControls(state: ShortcutControlsState): void {
-  currentShortcutControlsState = state
-  listeners.forEach((listener) => listener())
+  shortcutControlsStore.setState(state)
 }
 
 export function useShortcutControlsState(): ShortcutControlsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(shortcutControlsStore)
 }

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-view-store.js'
 import type { RedirectResultsState } from './redirect-results-types.js'
 
 const defaultRedirectResultsState: RedirectResultsState = {
@@ -8,23 +8,16 @@ const defaultRedirectResultsState: RedirectResultsState = {
   selectedIds: new Set()
 }
 
-let currentRedirectResultsState = defaultRedirectResultsState
-const listeners = new Set<() => void>()
-
-function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-function getSnapshot(): RedirectResultsState {
-  return currentRedirectResultsState
-}
+const redirectResultsStore = createUiViewStoreSlice(
+  'options',
+  'redirect-results',
+  defaultRedirectResultsState
+)
 
 export function publishRedirectResults(state: RedirectResultsState): void {
-  currentRedirectResultsState = state
-  listeners.forEach((listener) => listener())
+  redirectResultsStore.setState(state)
 }
 
 export function useRedirectResultsState(): RedirectResultsState {
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+  return useUiViewStoreSlice(redirectResultsStore)
 }

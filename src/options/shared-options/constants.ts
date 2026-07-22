@@ -59,6 +59,9 @@ export const AI_NAMING_MODELS_ENDPOINT_SUFFIX = 'models'
 export const AI_NAMING_FETCHED_MODELS_LIMIT = 200
 export const AI_NAMING_JINA_READER_ORIGIN = 'https://r.jina.ai/*'
 export const AI_NAMING_PRESET_MODELS = [
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
   'gpt-5.5',
   'gpt-5.2',
   'gpt-5.2-pro',
