@@ -62,6 +62,7 @@ import {
 import {
   AiRuntimeError,
   buildAiFolderCandidates as buildRuntimeAiFolderCandidates,
+  buildAiProviderConnectivityRequestBody,
   normalizeAiFolderDecision,
   requestStructuredAiOutput,
   toAiFolderCandidatePayload,
@@ -4021,7 +4022,15 @@ function renderAiProviderSettings(
     settings.reasoningCapabilities,
     settings.model
   )
-  const reasoningProfile = getModelReasoningProfile(settings.model, reasoningCapability)
+  const reasoningContext = {
+    baseUrl: settings.baseUrl,
+    apiStyle: settings.apiStyle
+  }
+  const reasoningProfile = getModelReasoningProfile(
+    settings.model,
+    reasoningCapability,
+    reasoningContext
+  )
   publishAiProviderSettings({
     apiKey: settings.apiKey,
     apiKeyPlaceholder: settings.apiKey ? maskAiApiKey(settings.apiKey) : '未保存 API Key',
@@ -4047,10 +4056,15 @@ function renderAiProviderSettings(
     reasoningEffort: resolveReasoningEffortForModel(
       settings.model,
       settings.reasoningEffort,
-      reasoningCapability
+      reasoningCapability,
+      reasoningContext
     ),
     reasoningEffortNote: reasoningProfile.note,
-    reasoningEffortOptions: getReasoningEffortOptions(settings.model, reasoningCapability),
+    reasoningEffortOptions: getReasoningEffortOptions(
+      settings.model,
+      reasoningCapability,
+      reasoningContext
+    ),
     reasoningEffortSupported: reasoningProfile.supported,
     revealApiKey: managerState.aiRevealApiKey,
     saveDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
@@ -6313,7 +6327,7 @@ async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.s
         'Content-Type': 'application/json',
         ...getAiProviderAuthHeaders(settings.baseUrl, settings.apiKey)
       },
-      body: JSON.stringify(buildAiNamingConnectivityRequestBody(settings))
+      body: JSON.stringify(buildAiProviderConnectivityRequestBody(settings as AiProviderSettings))
     }, settings.timeoutMs)
 
     const payload = await response.json().catch(() => null)
@@ -6344,36 +6358,6 @@ async function requestAiNamingConnectivityTest(settings = aiNamingManagerState.s
       reason: normalizeAiNamingConnectivityError(error, settings.timeoutMs)
     })
     throw error
-  }
-}
-
-function buildAiNamingConnectivityRequestBody(settings = aiNamingManagerState.settings) {
-  if (isDirectAnthropicProvider(settings.baseUrl)) {
-    return {
-      model: settings.model,
-      max_tokens: 16,
-      messages: [{
-        role: 'user',
-        content: 'Reply with OK.'
-      }]
-    }
-  }
-
-  if (settings.apiStyle === 'chat_completions') {
-    return {
-      model: settings.model,
-      messages: [
-        {
-          role: 'user',
-          content: 'Reply with OK.'
-        }
-      ]
-    }
-  }
-
-  return {
-    model: settings.model,
-    input: 'Reply with OK.'
   }
 }
 

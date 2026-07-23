@@ -19,9 +19,17 @@ export function extractResponsesJsonText(
     output?: Array<{ content?: unknown[] }>
     output_text?: unknown
   } | null
-  const contentItems = Array.isArray(responsePayload?.output)
-    ? responsePayload.output.flatMap((entry) => Array.isArray(entry?.content) ? entry.content : [])
-    : []
+  const outputItems = Array.isArray(responsePayload?.output) ? responsePayload.output : []
+  const contentItems = outputItems
+    .filter((entry: any) => {
+      const type = String(entry?.type ?? '').trim().toLowerCase()
+      return !type || type === 'message' || type === 'output_text'
+    })
+    .flatMap((entry) => Array.isArray(entry?.content) ? entry.content : [])
+  const finalTextItems = contentItems.filter((item: any) => {
+    const type = String(item?.type ?? '').trim().toLowerCase()
+    return !type || type === 'text' || type === 'output_text'
+  })
   const refusalNode = contentItems.find((item: any) => {
     return typeof item?.refusal === 'string' && item.refusal.trim()
   }) as { refusal?: string } | undefined
@@ -34,7 +42,7 @@ export function extractResponsesJsonText(
     return extractJsonPayloadText(responsePayload.output_text)
   }
 
-  const joinedText = contentItems
+  const joinedText = finalTextItems
     .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
     .filter((text) => text.trim())
     .join('')
@@ -79,7 +87,13 @@ export function extractChatCompletionsJsonText(
       throw new Error(formatRefusal(refusalNode.refusal))
     }
 
-    const joinedText = content
+    // Mistral 等推理端点会把 thinking/text 都放进 content 数组。优先只拼接
+    // 最终文本块，避免思考块里的花括号被误判为业务 JSON。
+    const finalTextItems = content.filter((item: any) => {
+      const type = String(item?.type ?? '').trim().toLowerCase()
+      return !type || type === 'text' || type === 'output_text'
+    })
+    const joinedText = (finalTextItems.length ? finalTextItems : content)
       .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
       .filter((text) => text.trim())
       .join('')

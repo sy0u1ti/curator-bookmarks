@@ -463,7 +463,6 @@ export function ReasoningEffortSelector({
     const settle = () => {
       updateVisualProgress(targetProgress)
       springFrameRef.current = 0
-      commitLevel(targetIndex)
       if (celebrate && targetIndex === maxIndex) {
         fireConfetti()
       }
@@ -490,7 +489,7 @@ export function ReasoningEffortSelector({
       springFrameRef.current = window.requestAnimationFrame(step)
     }
     springFrameRef.current = window.requestAnimationFrame(step)
-  }, [cancelSpring, commitLevel, fireConfetti, maxIndex, updateVisualProgress])
+  }, [cancelSpring, fireConfetti, maxIndex, updateVisualProgress])
 
   const progressFromPointer = useCallback((clientX: number) => {
     const metrics = trackMetricsRef.current ?? readTrackMetrics()
@@ -554,8 +553,11 @@ export function ReasoningEffortSelector({
       }
     }
     const targetIndex = maxIndex > 0 ? Math.round(positionRef.current * maxIndex) : 0
+    // 语义状态在指针释放时立即提交；弹簧只负责随后跟手的视觉收尾。
+    // 这样用户马上点击“保存/测试连接”时，请求不会仍读取上一个强度。
+    commitLevel(targetIndex)
     startSpring(targetIndex, velocity, targetIndex === maxIndex && maxIndex > 0)
-  }, [maxIndex, startSpring])
+  }, [commitLevel, maxIndex, startSpring])
 
   const handleSliderKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled) {

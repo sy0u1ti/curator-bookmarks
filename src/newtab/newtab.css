@@ -222,8 +222,10 @@ html.instant-wallpaper-startup-preview body {
   background: transparent;
   border-color: var(--newtab-glass-stroke);
   border-width: var(--newtab-glass-stroke-width);
-  box-shadow: none;
-  filter: var(--newtab-glass-drop);
+  box-shadow: var(--newtab-glass-drop-shadow);
+  filter: none;
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
   will-change: auto;
 }
 
@@ -241,8 +243,6 @@ html.instant-wallpaper-startup-preview body {
   border-radius: inherit;
   background: var(--newtab-glass-bg-fill);
   pointer-events: none;
-  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
-  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 #newtab-settings-drawer .settings-drawer-scroll {
@@ -426,14 +426,11 @@ html.instant-wallpaper-startup-preview .newtab-app {
   z-index: 1;
   filter: none;
   transform: none;
-  transition:
-    opacity var(--page-fade-dur) var(--page-fade-ease),
-    transform var(--page-slide-dur) var(--page-slide-ease);
+  transition: none;
   will-change: auto;
 }
 
 #newtab-settings-drawer .settings-tab-panels {
-  --settings-page-slide-distance: var(--page-slide-distance);
   overflow: hidden;
 }
 
@@ -441,66 +438,24 @@ html.instant-wallpaper-startup-preview .newtab-app {
   z-index: 2;
 }
 
-#newtab-settings-drawer .settings-tab-panels > .t-tabs-panel[data-starting-style],
-#newtab-settings-drawer .settings-tab-panels > .t-tabs-panel[data-ending-style] {
-  opacity: 0;
+#newtab-settings-drawer .settings-tab-panels > .t-tabs-panel[data-starting-style] {
+  opacity: 1;
   filter: none;
   transform: none;
-}
-
-#newtab-settings-drawer .settings-tab-panels[data-slide-direction="forward"] > .t-tabs-panel[data-starting-style] {
-  transform: translateX(var(--settings-page-slide-distance));
-}
-
-#newtab-settings-drawer .settings-tab-panels[data-slide-direction="backward"] > .t-tabs-panel[data-starting-style] {
-  transform: translateX(calc(var(--settings-page-slide-distance) * -1));
+  transition: none;
 }
 
 #newtab-settings-drawer .settings-tab-panels > .t-tabs-panel[data-ending-style] {
-  pointer-events: none;
-  transition-duration: var(--duration-quick);
-}
-
-#newtab-settings-drawer .settings-tab-panels[data-slide-direction="forward"] > .t-tabs-panel[data-ending-style] {
-  transform: translateX(calc(var(--settings-page-slide-distance) * -1));
-}
-
-#newtab-settings-drawer .settings-tab-panels[data-slide-direction="backward"] > .t-tabs-panel[data-ending-style] {
-  transform: translateX(var(--settings-page-slide-distance));
-}
-
-#newtab-settings-drawer .folder-candidates-motion {
-  display: grid;
-  grid-template-rows: 0fr;
-  overflow: hidden;
-  transition: grid-template-rows var(--acc-collapse) var(--acc-ease);
-}
-
-#newtab-settings-drawer .folder-candidates-motion[data-open="true"] {
-  grid-template-rows: 1fr;
-  transition: grid-template-rows var(--acc-expand) var(--acc-ease);
-}
-
-#newtab-settings-drawer .folder-candidates-motion[data-open="false"] {
-  pointer-events: none;
-}
-
-#newtab-settings-drawer .folder-candidates-motion-inner {
-  min-height: 0;
-  overflow: hidden;
+  display: none;
   opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--acc-collapse) var(--acc-ease),
-    transform var(--acc-collapse) var(--acc-ease);
+  pointer-events: none;
+  transform: none;
+  transition: none;
 }
 
-#newtab-settings-drawer .folder-candidates-motion[data-open="true"] .folder-candidates-motion-inner {
-  opacity: 1;
-  transform: translateY(0);
-  transition:
-    opacity var(--acc-expand) var(--acc-ease),
-    transform var(--acc-expand) var(--acc-ease);
+#newtab-settings-drawer .folder-candidate-card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -517,15 +472,8 @@ html.instant-wallpaper-startup-preview .newtab-app {
   .newtab-app .t-tabs-pill,
   .newtab-app .t-tab,
   #newtab-settings-drawer .t-tabs-pill,
-  #newtab-settings-drawer .t-tab,
-  #newtab-settings-drawer .folder-candidates-motion,
-  #newtab-settings-drawer .folder-candidates-motion-inner {
+  #newtab-settings-drawer .t-tab {
     transition: none !important;
-  }
-
-  #newtab-settings-drawer .folder-candidates-motion-inner {
-    filter: none;
-    transform: none;
   }
 
   #newtab-settings-drawer .settings-tab-panels > .t-tabs-panel,

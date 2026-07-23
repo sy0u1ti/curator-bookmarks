@@ -6,7 +6,8 @@ import {
 import { createDefaultAiNamingSettings } from '../shared-options/state.js'
 import {
   normalizeModelReasoningCapabilityMap,
-  type ModelReasoningCapabilityMap
+  type ModelReasoningCapabilityMap,
+  type ReasoningEffortId
 } from '../../shared/ai-reasoning.js'
 
 export interface AiNamingSettings {
@@ -19,7 +20,7 @@ export interface AiNamingSettings {
   apiStyle: 'responses' | 'chat_completions'
   timeoutMs: number
   batchSize: number
-  reasoningEffort: string
+  reasoningEffort: ReasoningEffortId
   autoSelectHighConfidence: boolean
   allowRemoteParsing: boolean
   autoAnalyzeBookmarks: boolean
@@ -43,7 +44,7 @@ interface AiNamingSettingsSource {
   systemPrompt?: unknown
 }
 
-const REASONING_EFFORT_VALUES = [
+const REASONING_EFFORT_VALUES: readonly ReasoningEffortId[] = [
   'default',
   'none',
   'minimal',
@@ -78,7 +79,9 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
     batchSize: Number.isFinite(batchSize)
       ? Math.max(1, Math.min(Math.round(batchSize), AI_NAMING_MAX_BATCH_SIZE))
       : defaults.batchSize,
-    reasoningEffort: REASONING_EFFORT_VALUES.includes(reasoningEffort) ? reasoningEffort : 'default',
+    reasoningEffort: REASONING_EFFORT_VALUES.includes(reasoningEffort as ReasoningEffortId)
+      ? reasoningEffort as ReasoningEffortId
+      : 'default',
     autoSelectHighConfidence:
       typeof source.autoSelectHighConfidence === 'boolean'
         ? source.autoSelectHighConfidence

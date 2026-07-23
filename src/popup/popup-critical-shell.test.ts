@@ -8,6 +8,8 @@ function run(): void {
   const popupChrome = readFileSync('src/popup/components/PopupChromeHost.tsx', 'utf8')
   const popupContent = readFileSync('src/popup/components/PopupContent.tsx', 'utf8')
   const popupController = readFileSync('src/popup/popup-controller.ts', 'utf8')
+  const naturalSearchAi = readFileSync('src/popup/natural-search-ai.ts', 'utf8')
+  const serviceWorker = readFileSync('src/service-worker/service-worker.ts', 'utf8')
   const popupEmptyState = readFileSync('src/popup/components/PopupEmptyState.tsx', 'utf8')
   const popupSmartClassifier = readFileSync('src/popup/components/PopupSmartClassifier.tsx', 'utf8')
   const pinyinSearch = readFileSync('src/shared/search/pinyin.ts', 'utf8')
@@ -15,6 +17,14 @@ function run(): void {
   const popupSearchRunner = popupController.slice(
     popupController.indexOf('function runSearch()'),
     popupController.indexOf('async function runNaturalSearch')
+  )
+  const popupNaturalSearchRunner = popupController.slice(
+    popupController.indexOf('async function runNaturalSearch'),
+    popupController.indexOf('async function resolveCachedNaturalSearchPlan')
+  )
+  const popupNaturalSearchPlanResolver = popupController.slice(
+    popupController.indexOf('async function resolveNaturalSearchPlan'),
+    popupController.indexOf('async function searchNaturalQuery')
   )
 
   assert(html.includes('background: transparent;'), 'critical shell must keep the provisional viewport transparent')
@@ -51,6 +61,47 @@ function run(): void {
     'every search rerun must restore invalidated pinyin enrichment before reading cached results'
   )
   assert(!/runId !== state\.pinyinEnrichmentRunId\) \{\s*state\.pinyinEnrichmentPending = false/.test(popupController), 'stale pinyin jobs must not clear the pending state owned by a newer run')
+  assert(
+    /changes\[STORAGE_KEYS\.aiProviderSettings\][\s\S]*?state\.searchRunId \+= 1[\s\S]*?abortNaturalSearchRequest\(\)[\s\S]*?clearSearchCaches\(\)[\s\S]*?resetSmartClassification\(\)[\s\S]*?runSearch\(\)/.test(popupController),
+    'changing the AI provider or effort must invalidate and rerun popup search and smart-classification state'
+  )
+  assert(
+    /changes\[STORAGE_KEYS\.aiProviderSettings\][\s\S]*?aiProviderSettingsGeneration \+= 1/.test(serviceWorker) &&
+      /const requestSettings = await loadCurrentAutoAnalyzeRequestSettings\([\s\S]*?requestAutoClassification\(\{[\s\S]*?settings: requestSettings/.test(serviceWorker),
+    'background auto-classification must re-read a stable AI settings generation immediately before its model request'
+  )
+  const popupPlanRequestIndex = popupNaturalSearchPlanResolver.indexOf('const plan = await naturalSearchAi.requestNaturalSearchAiPlan')
+  const popupPlanPostRequestGuardIndex = popupNaturalSearchPlanResolver.indexOf(
+    'if (state.searchRunId !== options.runId || options.signal?.aborted)',
+    popupPlanRequestIndex
+  )
+  const popupPlanCacheWriteIndex = popupNaturalSearchPlanResolver.indexOf(
+    'state.naturalSearchPlanCache.set(cacheKey, plan)',
+    popupPlanRequestIndex
+  )
+  const popupPlanErrorWriteIndex = popupNaturalSearchPlanResolver.indexOf(
+    'state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)',
+    popupPlanRequestIndex
+  )
+  assert(
+    popupPlanRequestIndex >= 0 &&
+      popupPlanPostRequestGuardIndex > popupPlanRequestIndex &&
+      popupPlanPostRequestGuardIndex < popupPlanCacheWriteIndex &&
+      popupNaturalSearchPlanResolver.lastIndexOf('isAbortError(error)', popupPlanErrorWriteIndex) > popupPlanRequestIndex,
+    'stale popup AI plans must be rejected before cache or error state can be committed'
+  )
+  assert(
+    popupNaturalSearchRunner.indexOf('const searchRunStillCurrent = state.searchRunId === runId') >
+      popupNaturalSearchRunner.indexOf('const resultSets = await Promise.all') &&
+      popupNaturalSearchRunner.indexOf('if (!searchRunStillCurrent)') <
+        popupNaturalSearchRunner.indexOf('cacheSearchResults(cacheKey, results)'),
+    'popup results from a superseded reasoning-settings request must not be cached or rendered'
+  )
+  assert(
+    /function isAbortError\(error\)[\s\S]*?error\.name === 'AbortError'[\s\S]*?error\.kind === 'abort'/.test(popupController) &&
+      /function isNaturalSearchAbortError\(error: unknown\)[\s\S]*?\.name === 'AbortError'[\s\S]*?\.kind === 'abort'/.test(naturalSearchAi),
+    'natural-search cancellation must recognize both DOM AbortError and AiRuntimeError(kind=abort)'
+  )
   assert(pinyinSearch.includes('Math.max(8, options.batchSize ?? 250)'), 'cooperative pinyin enrichment must honor popup-sized batches below 50 items')
   assert(!popupContent.includes('[will-change:opacity]'), 'initial content layers must not keep permanent compositor hints')
   assert(popupContent.includes("'t-skel popup-t-skel relative h-full min-h-0'") && popupContent.includes('t-skel-skeleton is-pulsing') && popupContent.includes("isLoading ? '' : 'is-revealed'"), 'popup workspace loading must use the shared skeleton reveal state hooks')

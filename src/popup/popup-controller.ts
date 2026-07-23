@@ -270,7 +270,7 @@ function bindEvents() {
   unregisterPopupBrowserEventActions = registerPopupBrowserEventActions({
     onDocumentKeyDown: handleDocumentKeydown,
     onPageHide: cleanupPopupController,
-    onStorageChanged: handleAutoAnalyzeStorageChanged
+    onStorageChanged: handlePopupStorageChanged
   })
 }
 
@@ -410,12 +410,31 @@ function clearActionBadge(): Promise<void> {
     })
   })
 }
-function handleAutoAnalyzeStorageChanged(
+function handlePopupStorageChanged(
   changes: Record<string, chrome.storage.StorageChange>,
   areaName: string
 ) {
   if (areaName !== 'local') {
     return
+  }
+  if (changes[STORAGE_KEYS.aiProviderSettings]) {
+    // Invalidate the logical search run as well as the fetch.  Some paths can
+    // still be awaiting storage/module work (or a cached plan) when settings
+    // change, so aborting the current fetch alone is not enough to stop an old
+    // reasoning configuration from committing results afterwards.
+    state.searchRunId += 1
+    abortNaturalSearchRequest()
+    clearSearchCaches()
+    state.naturalSearchPlan = null
+    state.naturalSearchAiConfigChecked = false
+    state.naturalSearchError = ''
+    state.naturalSearchPending = false
+    state.searchPending = false
+    // 智能分类会先抓取页面再调用模型；设置在抓取期间变化时也必须让旧 run
+    // 失效，避免“保存之后才发出”的请求仍携带旧推理强度。
+    resetSmartClassification()
+    runSearch()
+    render()
   }
   const statusChange = changes[STORAGE_KEYS.autoAnalyzeStatus]
   if (statusChange) {
@@ -1356,7 +1375,15 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
       if (state.searchRunId !== runId) {
         return
       }
-      const cachedPlanResult = await resolveCachedNaturalSearchPlan(query, planCacheKey, naturalSearch)
+      const cachedPlanResult = await resolveCachedNaturalSearchPlan(
+        query,
+        planCacheKey,
+        naturalSearch,
+        runId
+      )
+      if (state.searchRunId !== runId) {
+        return
+      }
       if (cachedPlanResult.canReuseResults) {
         state.naturalSearchPlan = cachedPlanResult.plan
         state.searchHighlightQuery = cachedPlanResult.plan.highlightQuery || normalizedQuery
@@ -1377,8 +1404,12 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
       return
     }
     const plan = await resolveNaturalSearchPlan(query, normalizedQuery, naturalSearch, {
-      signal: controller.signal
+      signal: controller.signal,
+      runId
     })
+    if (state.searchRunId !== runId) {
+      return
+    }
     state.naturalSearchPlan = plan
     state.searchHighlightQuery = plan.highlightQuery || normalizedQuery
     const bookmarks = naturalSearch.filterBookmarksByNaturalDateRange(getFilteredBookmarks(), plan)
@@ -1432,7 +1463,8 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
 async function resolveCachedNaturalSearchPlan(
   query,
   planCacheKey,
-  naturalSearch: typeof import('./natural-search.js')
+  naturalSearch: typeof import('./natural-search.js'),
+  runId: number
 ): Promise<{ plan: NaturalSearchPlan; canReuseResults: boolean }> {
   const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
   const cachedPlan = state.naturalSearchPlanCache.get(planCacheKey)
@@ -1442,11 +1474,17 @@ async function resolveCachedNaturalSearchPlan(
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (state.searchRunId !== runId) {
+      return { plan: localPlan, canReuseResults: false }
+    }
     if (naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
       return { plan: cachedPlan, canReuseResults: true }
     }
   } catch {
     // Fall through to local parsing when provider settings cannot be read.
+  }
+  if (state.searchRunId !== runId) {
+    return { plan: localPlan, canReuseResults: false }
   }
   state.naturalSearchPlanCache.delete(planCacheKey)
   state.naturalSearchAiConfigured = false
@@ -1461,7 +1499,7 @@ async function resolveNaturalSearchPlan(
   query,
   normalizedQuery,
   naturalSearch: typeof import('./natural-search.js'),
-  options: { signal?: AbortSignal | null } = {}
+  options: { signal?: AbortSignal | null; runId: number }
 ): Promise<NaturalSearchPlan> {
   const cacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
   const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
@@ -1469,12 +1507,28 @@ async function resolveNaturalSearchPlan(
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
     settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (state.searchRunId !== options.runId || options.signal?.aborted) {
+      return localPlan
+    }
   } catch (error) {
+    if (
+      state.searchRunId !== options.runId ||
+      options.signal?.aborted ||
+      isAbortError(error)
+    ) {
+      throw error
+    }
     const naturalSearchAi = await loadNaturalSearchAiModule()
+    if (state.searchRunId !== options.runId || options.signal?.aborted) {
+      throw error
+    }
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
     throw error
   }
   const naturalSearchAi = await loadNaturalSearchAiModule()
+  if (state.searchRunId !== options.runId || options.signal?.aborted) {
+    return localPlan
+  }
   if (!naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
     state.naturalSearchAiConfigured = false
     state.naturalSearchAiConfigChecked = true
@@ -1497,10 +1551,20 @@ async function resolveNaturalSearchPlan(
       settings,
       signal: options.signal
     })
+    if (state.searchRunId !== options.runId || options.signal?.aborted) {
+      return localPlan
+    }
     state.naturalSearchError = ''
     state.naturalSearchPlanCache.set(cacheKey, plan)
     return plan
   } catch (error) {
+    if (
+      state.searchRunId !== options.runId ||
+      options.signal?.aborted ||
+      isAbortError(error)
+    ) {
+      throw error
+    }
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
     throw error
   }
@@ -4297,7 +4361,11 @@ function formatPermissionOrigin(origin) {
   return String(origin || '').replace(/\/\*$/, '')
 }
 function isAbortError(error) {
-  return error instanceof DOMException && error.name === 'AbortError'
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    (error.name === 'AbortError' || error.kind === 'abort')
+  )
 }
 function queueActiveResultDelta(delta: number) {
   const keyboardBookmarks = getKeyboardNavigationBookmarks()

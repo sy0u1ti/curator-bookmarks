@@ -4,7 +4,8 @@ import {
   requestStructuredAiOutput,
   toAiFolderCandidatePayload,
   validateKnownFolderId,
-  type AiFolderCandidate
+  type AiFolderCandidate,
+  type AiProviderSettings
 } from '../shared/ai-runtime.js'
 import { normalizeBookmarkTags } from '../shared/bookmark-tags.js'
 import { extractDomain, normalizeText } from '../shared/text.js'
@@ -19,11 +20,7 @@ export interface PopupSmartFolderLike {
   depth?: number
 }
 
-export interface PopupSmartSettings {
-  baseUrl: string
-  apiKey: string
-  model: string
-  apiStyle: 'responses' | 'chat_completions'
+export interface PopupSmartSettings extends AiProviderSettings {
   timeoutMs: number
   allowRemoteParsing?: boolean
 }

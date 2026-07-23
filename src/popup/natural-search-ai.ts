@@ -148,7 +148,14 @@ export function normalizeNaturalSearchAiError(error: unknown): string {
 }
 
 export function isNaturalSearchAbortError(error: unknown): boolean {
-  return error instanceof DOMException && error.name === 'AbortError'
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    (
+      (error as { name?: unknown }).name === 'AbortError' ||
+      (error as { kind?: unknown }).kind === 'abort'
+    )
+  )
 }
 
 function buildNaturalSearchPrompt({

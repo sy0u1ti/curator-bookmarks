@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -107,23 +108,10 @@ const settingsTabs = [
   ['search', '搜索', false],
   ['advanced', '高级设置', false]
 ] as const
-type SettingsSlideDirection = 'forward' | 'backward'
-
-function getSettingsTabIndex(group: SettingsDrawerSection): number {
-  const index = settingsTabs.findIndex(([value]) => value === group)
-  return index >= 0 ? index : 0
-}
-
-function getSettingsSlideDirection(
-  previousGroup: SettingsDrawerSection,
-  nextGroup: SettingsDrawerSection
-): SettingsSlideDirection {
-  return getSettingsTabIndex(nextGroup) >= getSettingsTabIndex(previousGroup) ? 'forward' : 'backward'
-}
 
 const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
-const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary shadow-none [filter:var(--newtab-glass-drop)] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
+const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary [box-shadow:var(--newtab-glass-drop-shadow)] [filter:none] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
 const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] transition-[transform,opacity] duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
 const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 max-[700px]:px-4 max-[700px]:pb-5'
 const SETTINGS_ROOT_CLASS = 'grid gap-4'
@@ -176,10 +164,8 @@ const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-se
 const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.58)] outline-none transition-[background-color,border-color,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
 const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 px-2.5 py-2', SETTINGS_NESTED_SURFACE_CLASS)
-const FOLDER_CANDIDATES_MOTION_CLASS = 'folder-candidates-motion'
-const FOLDER_CANDIDATES_MOTION_INNER_CLASS = 'folder-candidates-motion-inner min-h-0 overflow-hidden'
 const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto'
-const FOLDER_CANDIDATE_CARD_CLASS = 'grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
+const FOLDER_CANDIDATE_CARD_CLASS = 'folder-candidate-card grid min-h-14 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-ds-sm border border-transparent bg-transparent px-2.5 py-2 text-left text-ds-text-primary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover aria-pressed:border-ds-border-hover aria-pressed:bg-ds-selected aria-pressed:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:shadow-ds-focus'
 const FOLDER_CANDIDATE_COPY_CLASS = 'grid min-w-0 gap-0.5'
 const FOLDER_CANDIDATE_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-snug text-ds-text-primary'
 const FOLDER_CANDIDATE_META_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-snug text-ds-text-secondary'
@@ -705,7 +691,7 @@ function SettingsDrawerScrollBar({
   )
 }
 
-function AdvancedSettingsSection({
+const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
   firstControlRef,
   sectionRef
 }: {
@@ -744,9 +730,9 @@ function AdvancedSettingsSection({
       </Surface>
     </section>
   )
-}
+})
 
-function SourceSettingsSection({
+const SourceSettingsSection = memo(function SourceSettingsSection({
   folderCandidateSearchRef,
   sectionRef
 }: {
@@ -777,64 +763,65 @@ function SourceSettingsSection({
           <div id="folder-selected-list" className={FOLDER_STACK_CLASS}>
             <SelectedFolderSourceList state={folderSource.selected} />
           </div>
-          <Button
-            unstyled
-            id="folder-candidates-toggle"
-            className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS)}
-            type="button"
-            aria-expanded={candidatesExpanded}
-            aria-controls="folder-candidates-panel"
-            onClick={dispatchNewtabFolderCandidatesToggle}
+          <CollapsibleRoot
+            open={candidatesExpanded}
+            onOpenChange={(nextOpen) => {
+              if (nextOpen !== candidatesExpanded) {
+                dispatchNewtabFolderCandidatesToggle()
+              }
+            }}
           >
-            <span data-folder-toggle-label>
-              {candidatesExpanded ? '收起候选文件夹' : '展开候选文件夹'}
-            </span>
-          </Button>
-          <div
-            id="folder-candidates-panel"
-            className={FOLDER_CANDIDATES_MOTION_CLASS}
-            data-open={candidatesExpanded ? 'true' : 'false'}
-            aria-hidden={!candidatesExpanded}
-            inert={!candidatesExpanded}
-          >
-            <div className={FOLDER_CANDIDATES_MOTION_INNER_CLASS}>
-              <div className={FOLDER_CANDIDATES_PANEL_CLASS}>
-                <div className={FOLDER_STACK_CLASS}>
-                  <label className={SETTINGS_FIELD_CLASS} htmlFor="folder-candidate-search">
-                    <Input
-                      id="folder-candidate-search"
-                      className={SETTINGS_TEXT_INPUT_CLASS}
-                      type="search"
-                      ref={folderCandidateSearchRef}
-                      placeholder="搜索文件夹"
-                      aria-label="搜索候选文件夹"
-                      aria-controls="folder-candidate-list"
-                      spellCheck={false}
-                      value={folderSource.candidateQuery}
-                      onValueChange={dispatchNewtabFolderCandidateQueryChange}
-                      onKeyDown={(event) => {
-                        if (dispatchNewtabFolderCandidateSearchKeyDown(event.key)) {
-                          event.preventDefault()
-                          event.stopPropagation()
-                        }
-                      }}
-                      unstyled
-                    />
-                  </label>
-                  <div
-                    id="folder-candidate-list"
-                    className={FOLDER_CANDIDATE_LIST_CLASS}
-                    aria-label="候选文件夹列表"
-                  >
-                    <FolderCandidateList
-                      focusRequest={folderCandidateFocusRequest}
-                      state={folderSource.candidates}
-                    />
-                  </div>
+            <CollapsibleTrigger
+              id="folder-candidates-toggle"
+              className={settingsControlClassName(SETTINGS_WIDE_BUTTON_CLASS)}
+              type="button"
+              aria-controls="folder-candidates-panel"
+            >
+              <span data-folder-toggle-label>
+                {candidatesExpanded ? '收起候选文件夹' : '展开候选文件夹'}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsiblePanel
+              id="folder-candidates-panel"
+              className={FOLDER_CANDIDATES_PANEL_CLASS}
+              keepMounted={false}
+            >
+              <div className={FOLDER_STACK_CLASS}>
+                <label className={SETTINGS_FIELD_CLASS} htmlFor="folder-candidate-search">
+                  <Input
+                    id="folder-candidate-search"
+                    className={SETTINGS_TEXT_INPUT_CLASS}
+                    type="search"
+                    ref={folderCandidateSearchRef}
+                    placeholder="搜索文件夹"
+                    aria-label="搜索候选文件夹"
+                    aria-controls="folder-candidate-list"
+                    spellCheck={false}
+                    value={folderSource.candidateQuery}
+                    onValueChange={dispatchNewtabFolderCandidateQueryChange}
+                    onKeyDown={(event) => {
+                      if (dispatchNewtabFolderCandidateSearchKeyDown(event.key)) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                      }
+                    }}
+                    unstyled
+                  />
+                </label>
+                <div
+                  id="folder-candidate-list"
+                  className={FOLDER_CANDIDATE_LIST_CLASS}
+                  aria-label="候选文件夹列表"
+                  data-squircle-subtree="off"
+                >
+                  <FolderCandidateList
+                    focusRequest={folderCandidateFocusRequest}
+                    state={folderSource.candidates}
+                  />
                 </div>
               </div>
-            </div>
-          </div>
+            </CollapsiblePanel>
+          </CollapsibleRoot>
         </div>
         <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
           <SettingLabelStack
@@ -879,7 +866,7 @@ function SourceSettingsSection({
       </Surface>
     </section>
   )
-}
+})
 
 function SelectedFolderSourceList({ state }: { state: NewtabSelectedFolderSourceState }) {
   if (state.type === 'empty') {
@@ -1037,7 +1024,7 @@ function handleBackgroundFileChange(mediaType: 'image' | 'video', file: File | n
   dispatchNewtabBackgroundFileSelect(mediaType, file)
 }
 
-function BackgroundSettingsSection({
+const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
   firstControlRef,
   panelElement,
   sectionRef
@@ -1260,9 +1247,9 @@ function BackgroundSettingsSection({
       </Surface>
     </section>
   )
-}
+})
 
-function IconSettingsSection() {
+const IconSettingsSection = memo(function IconSettingsSection() {
   const iconPreview = useNewtabIconPreviewView()
   const previewStyle = {
     '--preview-page-width': `${iconPreview.pageWidth}%`,
@@ -1421,7 +1408,7 @@ function IconSettingsSection() {
       </Surface>
     </section>
   )
-}
+})
 
 const iconPresetCards = (Object.entries(ICON_PRESET_META) as Array<[
   IconLayoutPresetKey,
@@ -1438,7 +1425,7 @@ const iconPresetCards = (Object.entries(ICON_PRESET_META) as Array<[
   previewRowCount: meta.rows
 }))
 
-function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
+const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | null }) {
   const timeSettings = useNewtabTimeSettingsView()
 
   return (
@@ -1537,9 +1524,9 @@ function TimeSettingsSection({ panelElement }: { panelElement: HTMLElement | nul
       </Surface>
     </section>
   )
-}
+})
 
-function SearchSettingsSection({
+const SearchSettingsSection = memo(function SearchSettingsSection({
   firstControlRef,
   panelElement,
   sectionRef
@@ -1713,7 +1700,7 @@ function SearchSettingsSection({
       </Surface>
     </section>
   )
-}
+})
 
 export function SettingsDrawerHost() {
   const view = useNewtabSettingsDrawerView()
@@ -1736,9 +1723,7 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
   const modal = useSettingsDrawerModalMode()
   const [drawerElement, setDrawerElement] = useState<HTMLDivElement | null>(null)
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
-  const [slideDirection, setSlideDirection] = useState<SettingsSlideDirection>('forward')
   const layoutRequest = useNewtabSettingsDrawerLayoutRequest()
-  const activeGroupRef = useRef<SettingsDrawerSection>(activeGroup)
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
   const firstControlRefs = useRef<Record<SettingsDrawerSection, HTMLElement | null>>({
     advanced: null,
@@ -1770,17 +1755,6 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
   }, [drawerElement, panelElement])
 
   useLayoutEffect(() => {
-    const previousGroup = activeGroupRef.current
-
-    if (previousGroup === activeGroup) {
-      return
-    }
-
-    setSlideDirection(getSettingsSlideDirection(previousGroup, activeGroup))
-    activeGroupRef.current = activeGroup
-  }, [activeGroup])
-
-  useEffect(() => {
     if (!open || layoutRequest.requestId === 0) {
       return
     }
@@ -1814,25 +1788,31 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
     }
   }, [layoutRequest, open, panelElement])
 
-  const setSectionRef = (section: SettingsDrawerSection): SettingsSectionRef => (element) => {
-    sectionRefs.current[section] = element
-  }
+  const setAdvancedSectionRef = useCallback<SettingsSectionRef>((element) => {
+    sectionRefs.current.advanced = element
+  }, [])
+  const setAppearanceSectionRef = useCallback<SettingsSectionRef>((element) => {
+    sectionRefs.current.appearance = element
+  }, [])
+  const setSearchSectionRef = useCallback<SettingsSectionRef>((element) => {
+    sectionRefs.current.search = element
+  }, [])
+  const setSourceSectionRef = useCallback<SettingsSectionRef>((element) => {
+    sectionRefs.current.source = element
+  }, [])
+  const setAdvancedFirstControlRef = useCallback((element: HTMLElement | null) => {
+    firstControlRefs.current.advanced = element
+  }, [])
+  const setAppearanceFirstControlRef = useCallback((element: HTMLElement | null) => {
+    firstControlRefs.current.appearance = element
+  }, [])
+  const setSearchFirstControlRef = useCallback((element: HTMLElement | null) => {
+    firstControlRefs.current.search = element
+  }, [])
 
-  const setFirstControlRef = (section: SettingsDrawerSection) => (element: HTMLElement | null) => {
-    firstControlRefs.current[section] = element
-  }
-
-  const handleActiveGroupChange = (value: string) => {
-    const nextGroup = value as SettingsDrawerSection
-    const previousGroup = activeGroupRef.current
-
-    if (previousGroup !== nextGroup) {
-      setSlideDirection(getSettingsSlideDirection(previousGroup, nextGroup))
-      activeGroupRef.current = nextGroup
-    }
-
-    onActiveGroupChange(nextGroup)
-  }
+  const handleActiveGroupChange = useCallback((value: string) => {
+    onActiveGroupChange(value as SettingsDrawerSection)
+  }, [onActiveGroupChange])
 
   return (
     <DrawerOverlay
@@ -1870,33 +1850,33 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
           >
             <SettingsDrawerHeader />
             <SettingsDrawerTabs />
-            <div className={SETTINGS_TAB_PANELS_CLASS} data-slide-direction={slideDirection}>
+            <div className={SETTINGS_TAB_PANELS_CLASS}>
               <SettingsTabPanel value="advanced">
                 <AdvancedSettingsSection
-                  firstControlRef={setFirstControlRef('advanced')}
-                  sectionRef={setSectionRef('advanced')}
+                  firstControlRef={setAdvancedFirstControlRef}
+                  sectionRef={setAdvancedSectionRef}
                 />
               </SettingsTabPanel>
               <SettingsTabPanel value="source">
                 <SourceSettingsSection
                   folderCandidateSearchRef={folderCandidateSearchRef}
-                  sectionRef={setSectionRef('source')}
+                  sectionRef={setSourceSectionRef}
                 />
               </SettingsTabPanel>
               <SettingsTabPanel value="appearance">
                 <BackgroundSettingsSection
-                  firstControlRef={setFirstControlRef('appearance')}
+                  firstControlRef={setAppearanceFirstControlRef}
                   panelElement={panelElement}
-                  sectionRef={setSectionRef('appearance')}
+                  sectionRef={setAppearanceSectionRef}
                 />
                 <IconSettingsSection />
                 <TimeSettingsSection panelElement={panelElement} />
               </SettingsTabPanel>
               <SettingsTabPanel value="search">
                 <SearchSettingsSection
-                  firstControlRef={setFirstControlRef('search')}
+                  firstControlRef={setSearchFirstControlRef}
                   panelElement={panelElement}
-                  sectionRef={setSectionRef('search')}
+                  sectionRef={setSearchSectionRef}
                 />
               </SettingsTabPanel>
             </div>

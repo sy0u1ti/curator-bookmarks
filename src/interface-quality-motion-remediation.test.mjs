@@ -161,10 +161,13 @@ assert.ok(
 
 assert.ok(
   tokens.includes('--page-slide-distance: var(--distance-medium)') &&
-    newtabCss.includes('--settings-page-slide-distance: var(--page-slide-distance)') &&
+    /#newtab-settings-drawer \.settings-tab-panels > \.t-tabs-panel\s*\{[^}]*transform:\s*none;[^}]*transition:\s*none;/s.test(newtabCss) &&
+    /#newtab-settings-drawer \.settings-tab-panels > \.t-tabs-panel\[data-ending-style\]\s*\{[^}]*display:\s*none;/s.test(newtabCss) &&
+    newtabCss.includes('transition: transform var(--tabs-dur) var(--tabs-ease)') &&
+    !newtabCss.includes('--settings-page-slide-distance') &&
     sharedMotion.includes('getMotionEasing') &&
     !popupCss.includes('will-change: transform, opacity'),
-  'Page changes, drag settling, and moving indicators must share bounded motion without persistent layer promotion.'
+  'Heavy settings pages must switch immediately while small indicators and other bounded motion avoid persistent layer promotion.'
 )
 
 assert.ok(
@@ -187,7 +190,7 @@ assert.ok(
 assert.ok(
   settingsDrawerMode.includes("'(max-width: 600px)'") &&
     settingsDrawer.includes("modal={modal ? 'trap-focus' : false}") &&
-    newtabApp.includes('settingsDrawer.open && settingsDrawerModal') &&
+    newtabApp.includes('settingsDrawerOpen && settingsDrawerModal') &&
     newtabApp.includes('id="newtab-settings-backdrop"') &&
     newtabApp.includes('aria-hidden="true"') &&
     newtabApp.includes('tabIndex={-1}'),

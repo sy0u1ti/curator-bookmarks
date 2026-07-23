@@ -18,7 +18,6 @@ import { downloadBlobFile } from '../shared/download.js'
 import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
 import {
-  getSettingsGroupControlSyncActions,
   normalizeSettingsDrawerSection,
   type SettingsDrawerSection
 } from './settings-group-sync.js'
@@ -873,6 +872,9 @@ interface BackgroundUrlCacheTask {
 
 let newTabControllerStarted = false
 let newTabControllerGeneration = 0
+let newTabStorageEventsBound = false
+let newTabNaturalSearchSettingsGeneration = 0
+let refreshNewTabSearchSuggestionsAfterAiSettingsChange: (() => void) | null = null
 
 export function startNewTabController(): void {
   if (newTabControllerStarted) {
@@ -883,12 +885,37 @@ export function startNewTabController(): void {
 
   recordNewTabDomContentLoaded()
   bindEvents()
+  bindNewTabStorageEvents()
   hydrateFeaturedBackgroundOptions()
   void refreshNewTab().finally(() => {
     if (newTabControllerStarted && generation === newTabControllerGeneration) {
       bindBookmarkEvents()
     }
   })
+}
+
+function bindNewTabStorageEvents(): void {
+  if (newTabStorageEventsBound || !chrome.storage?.onChanged) {
+    return
+  }
+  chrome.storage.onChanged.addListener(handleNewTabStorageChanged)
+  newTabStorageEventsBound = true
+}
+
+function handleNewTabStorageChanged(
+  changes: Record<string, chrome.storage.StorageChange>,
+  areaName: string
+): void {
+  if (areaName !== 'local' || !changes[STORAGE_KEYS.aiProviderSettings]) {
+    return
+  }
+  newTabNaturalSearchSettingsGeneration += 1
+  abortNewTabNaturalSearchRequest()
+  naturalSearchSuggestionCache.clear()
+  state.naturalSearchPlanCache.clear()
+  state.naturalSearchPlan = null
+  state.naturalSearchError = ''
+  refreshNewTabSearchSuggestionsAfterAiSettingsChange?.()
 }
 
 function createSearchIndexReadyPromise(): Promise<void> {
@@ -1944,37 +1971,6 @@ function commitTimeSettings(nextSettings: NewTabTimeSettings): void {
   scheduleClockTick()
 }
 
-function syncActiveSettingsGroupControls(group: SettingsDrawerSection = state.activeSettingsGroup): void {
-  for (const action of getSettingsGroupControlSyncActions(group)) {
-    switch (action) {
-      case 'folder':
-        syncFolderSettingsControls()
-        break
-      case 'background':
-        syncBackgroundSettingsControls()
-        break
-      case 'featuredBackgroundDisplay':
-        syncFeaturedBackgroundDisplayPreferenceControls()
-        break
-      case 'search':
-        syncSearchSettingsControls()
-        break
-      case 'modules':
-        syncNewTabModernSettingsControls()
-        break
-      case 'general':
-        syncGeneralSettingsControls()
-        break
-      case 'icon':
-        syncIconSettingsControls()
-        break
-      case 'time':
-        syncTimeSettingsControls()
-        break
-    }
-  }
-}
-
 let settingsDrawerReady = false
 let settingsDrawerReadyPromise: Promise<void> | null = null
 let resolveSettingsDrawerReady: (() => void) | null = null
@@ -2042,6 +2038,7 @@ function runOpenSettingsDrawer(options?: { focusFirstControl?: boolean; section?
 function openFolderSourceSettings(): void {
   state.folderCandidatesExpanded = true
   state.folderCandidateQuery = ''
+  syncFolderSettingsControls()
   openSettingsDrawer({ focusFirstControl: false, section: 'source' })
 }
 
@@ -2055,9 +2052,8 @@ function setActiveSettingsGroup(
     dispatchNewtabSettingsDrawerActiveGroup(nextSection)
 
     if (scrollToTop) {
-      dispatchNewtabSettingsDrawerScrollTop()
+      dispatchNewtabSettingsDrawerScrollTop('auto')
     }
-    syncActiveSettingsGroupControls(nextSection)
   })
 }
 
@@ -5845,6 +5841,7 @@ async function completeNewTabOnboarding(): Promise<void> {
 function initializeSearchWidget(): boolean {
   const settings = state.searchSettings
   if (!settings.enabled) {
+    refreshNewTabSearchSuggestionsAfterAiSettingsChange = null
     setAutoSearchLayoutPending(false)
     dispatchNewtabSearchWidgetView(null)
     return false
@@ -6329,6 +6326,11 @@ function initializeSearchWidget(): boolean {
     setActiveSearchDescendant('')
   }
 
+  refreshNewTabSearchSuggestionsAfterAiSettingsChange = () => {
+    updateNaturalButton()
+    scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+  }
+
   const moveActiveSuggestion = (direction: 1 | -1) => {
     if (!searchSuggestions.length) {
       scheduleSuggestionsRender({ preserveActive: true, immediate: true })
@@ -6754,6 +6756,29 @@ function abortNewTabNaturalSearchRequest(): void {
   state.naturalSearchPending = false
 }
 
+function isNewTabNaturalSearchAbortError(error: unknown): boolean {
+  return Boolean(
+    error &&
+    typeof error === 'object' &&
+    (
+      (error as { name?: unknown }).name === 'AbortError' ||
+      (error as { kind?: unknown }).kind === 'abort'
+    )
+  )
+}
+
+function throwIfNewTabNaturalSearchRequestStale(
+  settingsGeneration: number,
+  signal?: AbortSignal | null
+): void {
+  if (
+    settingsGeneration !== newTabNaturalSearchSettingsGeneration ||
+    signal?.aborted
+  ) {
+    throw new DOMException('AI 搜索请求已失效。', 'AbortError')
+  }
+}
+
 async function refreshNewTabNaturalSearchAiConfiguredState(): Promise<boolean> {
   try {
     const naturalSearchAi = await import('../popup/natural-search-ai.js')
@@ -6814,24 +6839,33 @@ function getNaturalSearchBookmarkSuggestions(
     return cached.promise
   }
 
-  const suggestionsPromise = resolveNewTabNaturalSearchPlan(query, options)
-    .then((plan) => getNaturalSearchBookmarkSuggestionsFromIndex(
-      query,
-      state.preparedSearchIndex,
-      SEARCH_SUGGESTION_LIMIT,
-      { naturalSearchPlan: plan }
-    ))
+  const settingsGeneration = newTabNaturalSearchSettingsGeneration
+  const suggestionsPromise = resolveNewTabNaturalSearchPlan(query, options, settingsGeneration)
+    .then(async (plan) => {
+      throwIfNewTabNaturalSearchRequestStale(settingsGeneration)
+      const suggestions = await getNaturalSearchBookmarkSuggestionsFromIndex(
+        query,
+        state.preparedSearchIndex,
+        SEARCH_SUGGESTION_LIMIT,
+        { naturalSearchPlan: plan }
+      )
+      throwIfNewTabNaturalSearchRequestStale(settingsGeneration)
+      return suggestions
+    })
   setSearchSuggestionCacheEntry(naturalSearchSuggestionCache, cacheKey, suggestionsPromise)
   return suggestionsPromise
 }
 
 async function resolveNewTabNaturalSearchPlan(
   query: string,
-  options: NaturalSearchSuggestionOptions = {}
+  options: NaturalSearchSuggestionOptions = {},
+  settingsGeneration = newTabNaturalSearchSettingsGeneration
 ): Promise<NaturalSearchPlan> {
   const naturalSearch = await import('../popup/natural-search.js')
   const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
   const normalizedQuery = normalizeNewTabSearchText(query)
+
+  throwIfNewTabNaturalSearchRequestStale(settingsGeneration)
 
   if (!state.searchSettings.naturalSearchEnabled) {
     state.naturalSearchPlan = null
@@ -6856,6 +6890,7 @@ async function resolveNewTabNaturalSearchPlan(
   try {
     const naturalSearchAi = await import('../popup/natural-search-ai.js')
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    throwIfNewTabNaturalSearchRequestStale(settingsGeneration, controller.signal)
     if (!naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
       state.searchSettings = normalizeSearchSettings({
         ...state.searchSettings,
@@ -6880,6 +6915,7 @@ async function resolveNewTabNaturalSearchPlan(
       settings,
       signal: controller.signal
     })
+    throwIfNewTabNaturalSearchRequestStale(settingsGeneration, controller.signal)
     state.naturalSearchPlan = plan
     state.naturalSearchError = ''
     if (plan.source === 'ai') {
@@ -6887,10 +6923,15 @@ async function resolveNewTabNaturalSearchPlan(
     }
     return plan
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
+    if (
+      settingsGeneration !== newTabNaturalSearchSettingsGeneration ||
+      controller.signal.aborted ||
+      isNewTabNaturalSearchAbortError(error)
+    ) {
       throw error
     }
     const naturalSearchAi = await import('../popup/natural-search-ai.js')
+    throwIfNewTabNaturalSearchRequestStale(settingsGeneration, controller.signal)
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
     state.naturalSearchPlan = null
     return localPlan
@@ -7765,6 +7806,11 @@ function createBookmarkTileViewModel(
 function cleanupNewTabController(): void {
   newTabControllerStarted = false
   newTabControllerGeneration += 1
+  refreshNewTabSearchSuggestionsAfterAiSettingsChange = null
+  if (newTabStorageEventsBound) {
+    chrome.storage.onChanged.removeListener(handleNewTabStorageChanged)
+    newTabStorageEventsBound = false
+  }
   unregisterNewtabContentShellActions()
   unregisterNewtabContentShellActions = () => {}
   unregisterNewtabContentLayoutNodes()

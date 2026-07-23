@@ -15,7 +15,9 @@ import {
 import {
   getModelReasoningCapability,
   getModelReasoningProfile,
-  resolveReasoningEffortForModel
+  getReasoningTransport,
+  resolveReasoningEffortForModel,
+  type ReasoningEffortId
 } from './ai-reasoning.js'
 
 export type AiErrorKind =
@@ -37,13 +39,18 @@ export interface AiProviderSettings {
   /** 从渠道模型列表缓存的逐模型推理能力。 */
   reasoningCapabilities?: unknown
   /**
-   * 推理强度：'default' 或空值 = 不发送任何推理参数（最大兼容）。
-   * 其余取值（none/minimal/low/medium/high/xhigh/max）按 apiStyle 映射为
-   * reasoning_effort（chat）、reasoning.effort（Responses / OpenRouter），
-   * 端点不支持时自动降级移除后重试。
+   * 推理强度：已知模型的 'default' 会物化为界面显示的模型默认档；未知模型或
+   * 空值不发送参数。其余取值会按 Base URL + apiStyle + model 映射为厂商真实字段，
+   * 包括 reasoning_effort、reasoning.effort、output_config.effort、thinking、
+   * enable_thinking 与 thinking_budget；端点拒绝时显式失败，绝不静默退回默认强度。
    */
-  reasoningEffort?: string
+  reasoningEffort?: ReasoningEffortId
 }
+
+type AiReasoningRequestSettings = Pick<
+  AiProviderSettings,
+  'baseUrl' | 'model' | 'apiStyle' | 'reasoningEffort' | 'reasoningCapabilities'
+>
 
 export interface AiRuntimeMetadata {
   endpoint: string
@@ -166,41 +173,204 @@ export function normalizeReasoningEffortValue(value: unknown): string | null {
     : null
 }
 
-function resolveRequestReasoningEffort(
-  settings: Pick<
-    AiProviderSettings,
-    'baseUrl' | 'model' | 'reasoningEffort' | 'reasoningCapabilities'
-  >
-): string | null {
+function resolveRequestReasoningEffort(settings: AiReasoningRequestSettings): string | null {
+  const storedValue = String(settings.reasoningEffort ?? '').trim().toLowerCase()
+  const context = { baseUrl: settings.baseUrl, apiStyle: settings.apiStyle }
+  // 设置页会把已知模型的 default 定位到模型的具体默认档位。请求侧必须使用同一
+  // 解析结果，否则界面显示“中/高”时，线上请求却会因为省略参数而记录为 auto。
+  if (storedValue === 'default') {
+    const capability = getModelReasoningCapability(settings.reasoningCapabilities, settings.model)
+    return normalizeReasoningEffortValue(
+      resolveReasoningEffortForModel(settings.model, storedValue, capability, context)
+    )
+  }
   const requested = normalizeReasoningEffortValue(settings.reasoningEffort)
   if (!requested) {
     return requested
   }
-  if (requested === 'none') {
-    return isDirectAnthropicProvider(settings.baseUrl) ? null : requested
-  }
   const capability = getModelReasoningCapability(settings.reasoningCapabilities, settings.model)
-  const profile = getModelReasoningProfile(settings.model, capability)
+  const profile = getModelReasoningProfile(settings.model, capability, context)
   if (profile.levels.some((level) => level === requested)) {
     return requested
   }
   return normalizeReasoningEffortValue(
-    resolveReasoningEffortForModel(settings.model, requested, capability)
+    resolveReasoningEffortForModel(settings.model, requested, capability, context)
   )
 }
 
-/** OpenRouter Chat Completions 使用统一的 reasoning.effort，而非 reasoning_effort。 */
-function usesNestedChatReasoning(baseUrl: unknown): boolean {
-  const value = String(baseUrl ?? '').trim()
-  if (!value) {
-    return false
+function requiresExplicitAnthropicAdaptiveThinking(model: unknown): boolean {
+  const normalized = String(model ?? '').trim().toLowerCase()
+  return /claude-(?:opus-4[-.]?(?:6|7|8)|sonnet-4[-.]?6)(?:[-._/]|$)/.test(normalized)
+}
+
+function mergeRequestObjectField(
+  body: Record<string, unknown>,
+  field: string,
+  value: Record<string, unknown>
+): void {
+  const current = body[field]
+  const currentObject = current && typeof current === 'object' && !Array.isArray(current)
+    ? current as Record<string, unknown>
+    : {}
+  body[field] = { ...currentObject, ...value }
+}
+
+function resolveReasoningRequest(settings: AiReasoningRequestSettings) {
+  const effort = resolveRequestReasoningEffort(settings)
+  const capability = getModelReasoningCapability(
+    settings.reasoningCapabilities,
+    settings.model
+  )
+  const transport = getReasoningTransport(settings.model, {
+    baseUrl: settings.baseUrl,
+    apiStyle: settings.apiStyle
+  }, capability)
+  return {
+    effort: transport.kind === 'fixed' || transport.kind === 'unsupported' ? null : effort,
+    transport
   }
-  try {
-    const hostname = new URL(value).hostname.toLowerCase()
-    return hostname === 'openrouter.ai' || hostname.endsWith('.openrouter.ai')
-  } catch {
-    return /(?:^|\.)openrouter\.ai(?:[/:]|$)/i.test(value)
+}
+
+/**
+ * 将最终解析出的推理强度写入供应商真正接收的请求字段。
+ * 所有调用路径（正式 AI 功能和连接测试）必须复用这里，避免协议分支漂移。
+ */
+function applyAiReasoningEffort(
+  body: Record<string, unknown>,
+  settings: AiReasoningRequestSettings
+): Record<string, unknown> {
+  const { effort: reasoningEffort, transport } = resolveReasoningRequest(settings)
+  if (!reasoningEffort) {
+    return body
   }
+
+  if (transport.kind === 'anthropic_effort') {
+    mergeRequestObjectField(body, 'output_config', { effort: reasoningEffort })
+    if (requiresExplicitAnthropicAdaptiveThinking(settings.model)) {
+      mergeRequestObjectField(body, 'thinking', { type: 'adaptive' })
+    }
+    return body
+  }
+
+  if (transport.kind === 'thinking_toggle') {
+    const enabled = reasoningEffort !== 'none'
+    mergeRequestObjectField(body, 'thinking', {
+      type: enabled ? 'enabled' : 'disabled'
+    })
+    const thinkingBudget = enabled
+      ? transport.budgetByEffort?.[reasoningEffort as ReasoningEffortId]
+      : undefined
+    if (thinkingBudget !== undefined) {
+      body.thinking_budget = thinkingBudget
+    }
+    return body
+  }
+
+  if (transport.kind === 'minimax_adaptive') {
+    mergeRequestObjectField(body, 'thinking', {
+      type: reasoningEffort === 'none' ? 'disabled' : 'adaptive'
+    })
+    return body
+  }
+
+  if (transport.kind === 'enable_thinking') {
+    const enabled = reasoningEffort !== 'none'
+    body.enable_thinking = enabled
+    const thinkingBudget = enabled
+      ? transport.budgetByEffort?.[reasoningEffort as ReasoningEffortId]
+      : undefined
+    if (thinkingBudget !== undefined) {
+      body.thinking_budget = thinkingBudget
+    }
+    return body
+  }
+
+  if (transport.kind === 'fixed_with_budget') {
+    const thinkingBudget = transport.budgetByEffort?.[reasoningEffort as ReasoningEffortId]
+    if (thinkingBudget !== undefined) {
+      body.thinking_budget = thinkingBudget
+    }
+    return body
+  }
+
+  if (transport.kind === 'effort_with_enable_thinking') {
+    const enabled = reasoningEffort !== 'none'
+    body.enable_thinking = enabled
+    if (!enabled) {
+      return body
+    }
+    if (transport.effortField === 'nested') {
+      mergeRequestObjectField(body, 'reasoning', { effort: reasoningEffort })
+    } else {
+      body.reasoning_effort = reasoningEffort
+    }
+    return body
+  }
+
+  if (transport.kind === 'effort_inside_thinking') {
+    if (reasoningEffort === 'none') {
+      mergeRequestObjectField(body, 'thinking', { type: 'disabled' })
+    } else {
+      mergeRequestObjectField(body, 'thinking', {
+        type: 'enabled',
+        reasoning_effort: reasoningEffort
+      })
+    }
+    return body
+  }
+
+  if (transport.kind === 'effort_with_thinking') {
+    const enabled = reasoningEffort !== 'none'
+    mergeRequestObjectField(body, 'thinking', { type: enabled ? 'enabled' : 'disabled' })
+    if (!enabled) {
+      return body
+    }
+    if (transport.effortField === 'nested') {
+      mergeRequestObjectField(body, 'reasoning', { effort: reasoningEffort })
+    } else {
+      body.reasoning_effort = reasoningEffort
+    }
+    return body
+  }
+
+  if (transport.kind === 'flat_effort') {
+    body.reasoning_effort = reasoningEffort
+    return body
+  }
+
+  mergeRequestObjectField(body, 'reasoning', { effort: reasoningEffort })
+  return body
+}
+
+/** 构造设置页连接测试请求，并与正式 AI 请求使用完全相同的推理参数映射。 */
+export function buildAiProviderConnectivityRequestBody(
+  settings: AiReasoningRequestSettings
+): Record<string, unknown> {
+  if (isDirectAnthropicProvider(settings.baseUrl)) {
+    return applyAiReasoningEffort({
+      model: settings.model,
+      max_tokens: 16,
+      messages: [{
+        role: 'user',
+        content: 'Reply with OK.'
+      }]
+    }, settings)
+  }
+
+  if (settings.apiStyle === 'chat_completions') {
+    return applyAiReasoningEffort({
+      model: settings.model,
+      messages: [{
+        role: 'user',
+        content: 'Reply with OK.'
+      }]
+    }, settings)
+  }
+
+  return applyAiReasoningEffort({
+    model: settings.model,
+    input: 'Reply with OK.'
+  }, settings)
 }
 
 /**
@@ -301,12 +471,8 @@ function buildAiPromptRequestBody({
   userPrompt
 }: AiPromptEnvelope, options: {
   structuredOutputMode?: AiStructuredOutputMode
-  useReasoningEffort?: boolean
 } = {}): Record<string, unknown> {
   const structuredOutputMode = options.structuredOutputMode || 'json_schema'
-  const reasoningEffort = options.useReasoningEffort === false
-    ? null
-    : resolveRequestReasoningEffort(settings)
   // 无论兼容端点是否真正执行 response_format，提示词里都保留原始业务 schema；
   // 严格 API schema 只负责传输约束，不改变调用方的可选字段语义。
   const schemaHint =
@@ -314,9 +480,6 @@ function buildAiPromptRequestBody({
     JSON.stringify(schema)
   if (isDirectAnthropicProvider(settings.baseUrl)) {
     const outputConfig: Record<string, unknown> = {}
-    if (reasoningEffort && reasoningEffort !== 'none') {
-      outputConfig.effort = reasoningEffort
-    }
     if (structuredOutputMode === 'json_schema') {
       outputConfig.format = {
         type: 'json_schema',
@@ -337,7 +500,7 @@ function buildAiPromptRequestBody({
     if (Object.keys(outputConfig).length) {
       body.output_config = outputConfig
     }
-    return body
+    return applyAiReasoningEffort(body, settings)
   }
   if (settings.apiStyle === 'chat_completions') {
     const body: Record<string, unknown> = {
@@ -359,14 +522,7 @@ function buildAiPromptRequestBody({
     } else if (structuredOutputMode === 'json_object') {
       body.response_format = { type: 'json_object' }
     }
-    if (reasoningEffort) {
-      if (usesNestedChatReasoning(settings.baseUrl)) {
-        body.reasoning = { effort: reasoningEffort }
-      } else {
-        body.reasoning_effort = reasoningEffort
-      }
-    }
-    return body
+    return applyAiReasoningEffort(body, settings)
   }
 
   const responsesBody: Record<string, unknown> = {
@@ -398,10 +554,7 @@ function buildAiPromptRequestBody({
       format: { type: 'json_object' }
     }
   }
-  if (reasoningEffort) {
-    responsesBody.reasoning = { effort: reasoningEffort }
-  }
-  return responsesBody
+  return applyAiReasoningEffort(responsesBody, settings)
 }
 
 export async function requestStructuredAiOutput<T>({
@@ -422,8 +575,8 @@ export async function requestStructuredAiOutput<T>({
     ? getAnthropicMessagesEndpoint(settings.baseUrl)
     : getAiEndpoint(settings)
   const strictSchema = compileStrictJsonSchema(schema)
-  // 最坏兼容链：移除 reasoning → json_schema 降为 json_object → 移除格式参数
-  // → 一次输出修复。给兼容降级留足次数，同时仍保持硬上限。
+  // 最坏兼容链：json_schema 降为 json_object → 移除格式参数 → 一次输出修复。
+  // 推理强度不会参与兼容降级：用户选择的档位必须真实发送，否则直接失败。
   const maxAttempts = retry ? 6 : 1
   // 修复重试（parse/schema）最多一次：连续两轮结构仍不合法时，再重试收益极低。
   let repairAttemptsLeft = retry ? 1 : 0
@@ -431,8 +584,6 @@ export async function requestStructuredAiOutput<T>({
   let transientRetryAttemptsLeft = retry ? 2 : 0
   // 各家 OpenAI 兼容层能力不同：优先严格 schema，其次 JSON mode，最后纯提示词。
   let structuredOutputMode: AiStructuredOutputMode = 'json_schema'
-  // 推理强度参数（reasoning_effort / reasoning.effort）兼容性降级最多一次。
-  let useReasoningEffort = true
 
   const runAttempt = async (
     attempt: number,
@@ -455,7 +606,7 @@ export async function requestStructuredAiOutput<T>({
         schemaName,
         systemPrompt,
         userPrompt: effectiveUserPrompt
-      }, { structuredOutputMode, useReasoningEffort })
+      }, { structuredOutputMode })
       const payload = await requestAiProviderPayload({
         endpoint,
         settings,
@@ -512,16 +663,23 @@ export async function requestStructuredAiOutput<T>({
         }
       }
 
-      // 端点不支持推理强度参数：先移除它降级重试（它是我们额外附加的可选参数，
-      // 泛式 unknown-parameter 类 400 优先归因于它）。
-      const reasoningWasSent = useReasoningEffort && Boolean(resolveRequestReasoningEffort(settings))
+      // 用户选择的推理强度是请求契约，渠道拒绝时必须显式失败，不能删掉参数后
+      // 以 auto/default 偷偷成功。
+      const reasoningEffort = resolveReasoningRequest(settings).effort
       if (
-        reasoningWasSent &&
-        attempt < maxAttempts &&
+        reasoningEffort &&
         isReasoningEffortCompatibilityError(normalizedError)
       ) {
-        useReasoningEffort = false
-        return runAttempt(attempt + 1, normalizedError, attemptRawText)
+        throw new AiRuntimeError(
+          'provider',
+          `AI 渠道拒绝推理强度“${reasoningEffort}”：${normalizedError.message}`,
+          {
+            status: normalizedError.status,
+            retryable: false,
+            details: normalizedError.details,
+            cause: normalizedError
+          }
+        )
       }
 
       // 端点不支持当前结构化输出档位：json_schema → json_object → prompt。
@@ -1066,9 +1224,8 @@ function parseRetryAfterMs(rawValue: unknown): number | undefined {
 }
 
 /**
- * 识别「端点不支持推理强度参数」类错误。除明确提到 reasoning/thinking 外，
- * 未指名参数的泛式 unknown-parameter 错误也优先归因于此（它是请求里唯一的
- * 额外可选参数；若移除后仍失败，再由结构化输出降级接手）。
+ * 识别「端点明确拒绝推理强度参数」类错误。只接受指名 reasoning / effort /
+ * thinking 的错误，避免把结构化输出等其他兼容问题错误归因到推理强度。
  */
 function isReasoningEffortCompatibilityError(error: AiRuntimeError): boolean {
   if (error.kind !== 'provider') {
@@ -1079,12 +1236,14 @@ function isReasoningEffortCompatibilityError(error: AiRuntimeError): boolean {
     return false
   }
   const message = String(error.message || '')
-  if (/reasoning[\s_.-]*effort|['"“]?reasoning['"”]?|output_config[^\n]*effort|effort level|thinking/i.test(message)) {
-    return true
-  }
-  const mentionsStructuredOutput = /response_format|json_object|json_schema|text\.format/i.test(message)
-  const genericParameterError = /(?:unknown|unsupported|unexpected|invalid|unrecognized)[\s_-]*(?:parameter|param|field|argument|keyword)|does not support/i.test(message)
-  return genericParameterError && !mentionsStructuredOutput
+  return (
+    /reasoning[\s_.-]*effort|enable[\s_.-]*thinking|thinking[\s_.-]*(?:budget|strategy|type)|output_config[^\n]*effort|effort level/i.test(message) ||
+    /(?:parameter|param|field|argument|property)\s*[:=]?\s*['"“”]?(?:reasoning|thinking)['"“”]?/i.test(message) ||
+    /(?:reasoning|thinking)\s+(?:parameter|param|field|argument|property)/i.test(message) ||
+    /['"“”](?:reasoning|thinking)['"“”]\s+(?:is|was|isn't|wasn't|not|unsupported|invalid|unknown)/i.test(message) ||
+    /\b(?:reasoning|thinking)\b[^\n]{0,48}\b(?:unsupported|not supported|invalid|unknown|unrecognized)\b/i.test(message) ||
+    /\b(?:unsupported|not supported|invalid|unknown|unrecognized)\b[^\n]{0,48}\b(?:reasoning|thinking)\b/i.test(message)
+  )
 }
 
 /**

@@ -34,7 +34,7 @@ import {
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerToggleRequest,
   setNewtabSettingsDrawerNodes,
-  useNewtabSettingsDrawerView
+  useNewtabSettingsDrawerOpen
 } from './newtab-settings-drawer-store'
 import { useSettingsDrawerModalMode } from './settings-drawer-mode'
 import {
@@ -177,7 +177,7 @@ function NewtabShell() {
   const backgroundSettings = useNewtabBackgroundSettingsView()
   const folderSource = useNewtabFolderSourceView()
   const instantWallpaper = useNewtabInstantWallpaperView()
-  const settingsDrawer = useNewtabSettingsDrawerView()
+  const settingsDrawerOpen = useNewtabSettingsDrawerOpen()
   const settingsDrawerModal = useSettingsDrawerModalMode()
   const appChromeAttributes = useNewtabAppChromeAttributes()
   const autoHideSettingsTrigger = folderSource.general.hideSettingsTrigger
@@ -186,7 +186,7 @@ function NewtabShell() {
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
   const pendingHandoffFrame = useRef(0)
   const [settingsDrawerHostRequested, setSettingsDrawerHostRequested] = useState(false)
-  const settingsBackgroundProps = settingsDrawer.open && settingsDrawerModal
+  const settingsBackgroundProps = settingsDrawerOpen && settingsDrawerModal
     ? {
         'aria-hidden': true,
         inert: true
@@ -287,7 +287,7 @@ function NewtabShell() {
           type="button"
           aria-label="打开设置"
           aria-controls="newtab-settings-drawer"
-          aria-expanded={settingsDrawer.open ? 'true' : 'false'}
+          aria-expanded={settingsDrawerOpen ? 'true' : 'false'}
           {...settingsBackgroundProps}
           onClick={() => {
             setSettingsDrawerHostRequested(true)
@@ -327,7 +327,7 @@ function NewtabShell() {
       >
         <NewtabContentHost shellRef={shellRef} />
       </div>
-      <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawer.open} />
+      <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawerOpen} />
       <DeferredNewtabHosts />
     </div>
   )

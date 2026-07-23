@@ -92,6 +92,10 @@ export function useNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
   return useUiViewStoreSlice(settingsDrawerStore)
 }
 
+export function useNewtabSettingsDrawerOpen(): boolean {
+  return useUiViewStoreSlice(settingsDrawerStore, (view) => view.open)
+}
+
 export function useNewtabSettingsDrawerLayoutRequest(): NewtabSettingsDrawerLayoutRequest {
   return useUiViewStoreSlice(settingsDrawerLayoutStore)
 }

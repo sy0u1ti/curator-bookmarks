@@ -3,7 +3,7 @@ import { useNewtabBackgroundSettingsView } from '../newtab-background-settings-s
 import { useNewtabDragUiView } from '../newtab-drag-ui-store'
 import { useNewtabFolderSourceView } from '../newtab-folder-source-store'
 import { useNewtabInstantWallpaperView } from '../newtab-instant-wallpaper-store'
-import { useNewtabSettingsDrawerView } from '../newtab-settings-drawer-store'
+import { useNewtabSettingsDrawerOpen } from '../newtab-settings-drawer-store'
 
 const DRAG_ACTIVE_CLASS = 'cursor-default select-none'
 
@@ -12,7 +12,7 @@ export function useNewtabAppChromeAttributes() {
   const dragUi = useNewtabDragUiView()
   const folderSource = useNewtabFolderSourceView()
   const instantWallpaper = useNewtabInstantWallpaperView()
-  const settingsDrawer = useNewtabSettingsDrawerView()
+  const settingsDrawerOpen = useNewtabSettingsDrawerOpen()
   const dragActive = dragUi.bookmarkDragging || dragUi.folderOrderDragging || dragUi.speedDialDragging
 
   const className = [
@@ -21,7 +21,7 @@ export function useNewtabAppChromeAttributes() {
     instantWallpaper.booting ? 'newtab-booting' : '',
     instantWallpaper.ready ? 'instant-wallpaper-ready' : '',
     instantWallpaper.remoteReady ? 'instant-wallpaper-remote-ready' : '',
-    settingsDrawer.open ? 'settings-open' : '',
+    settingsDrawerOpen ? 'settings-open' : '',
     background.maskEnabled ? 'background-mask-enabled' : '',
     folderSource.hideFolderNames ? 'folder-names-hidden' : '',
     folderSource.general.hideSettingsTrigger ? 'settings-trigger-auto-hide' : '',

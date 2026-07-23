@@ -419,6 +419,112 @@ async function probeDrawerOpening(page) {
   )
 }
 
+async function verifySettingsTabSwitching(page) {
+  await page.getByRole('tab', { name: '来源' }).click()
+  await waitForFrames(page)
+
+  const candidatePanel = page.locator('#folder-candidates-panel')
+  assert.equal(
+    await candidatePanel.count(),
+    0,
+    'Collapsed folder candidates must stay out of the DOM so hidden folders cannot block tab layout'
+  )
+
+  const candidateToggle = page.locator('#folder-candidates-toggle')
+  await candidateToggle.click()
+  await candidatePanel.waitFor({ state: 'visible' })
+  await page.waitForFunction(() => document.activeElement?.id === 'folder-candidate-search')
+  const candidateRendering = await page.locator('#folder-candidate-list').evaluate((list) => {
+    const card = list.querySelector('.folder-candidate-card')
+    return {
+      contentVisibility: card ? getComputedStyle(card).contentVisibility : '',
+      squircleSubtree: list.getAttribute('data-squircle-subtree')
+    }
+  })
+  assert.equal(candidateRendering.squircleSubtree, 'off', 'Large candidate lists must not register a squircle ResizeObserver per row')
+  assert.equal(candidateRendering.contentVisibility, 'auto', 'Offscreen candidate cards should skip layout and paint work')
+  const candidateSearch = page.locator('#folder-candidate-search')
+  await candidateSearch.fill('Smoke')
+  await candidateToggle.click()
+  await candidatePanel.waitFor({ state: 'detached' })
+  await candidateToggle.click()
+  await candidatePanel.waitFor({ state: 'visible' })
+  assert.equal(
+    await candidateSearch.inputValue(),
+    'Smoke',
+    'Unmounting hidden candidates must preserve the controlled search query'
+  )
+  await candidateSearch.fill('')
+  await candidateToggle.click()
+  await candidatePanel.waitFor({ state: 'detached' })
+
+  await page.getByRole('tab', { name: '外观' }).click()
+  await waitForFrames(page)
+  const immediateScrollReset = await page.evaluate(async () => {
+    const host = document.querySelector('.settings-drawer-scroll')
+    const searchTab = document.querySelector('#settings-tab-search')
+    if (!(host instanceof HTMLElement) || !(searchTab instanceof HTMLElement)) {
+      throw new Error('Settings scroll host or search tab is unavailable')
+    }
+    host.scrollTop = host.scrollHeight
+    const before = host.scrollTop
+    searchTab.click()
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    return { after: host.scrollTop, before }
+  })
+  assert.ok(immediateScrollReset.before > 100, 'The appearance page should provide a meaningful scroll-reset test')
+  assert.equal(
+    immediateScrollReset.after,
+    0,
+    'Switching settings tabs must reset scroll before the next painted frame instead of animating the whole drawer'
+  )
+
+  const rapidSwitch = await page.evaluate(async () => {
+    const order = ['appearance', 'search', 'advanced', 'source']
+    const samples = []
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+    const readSample = () => {
+      const panels = [...document.querySelectorAll('.settings-tab-panels > .t-tabs-panel')]
+      const rendered = panels.filter((panel) => {
+        const style = getComputedStyle(panel)
+        return !panel.hidden && style.display !== 'none' && Number.parseFloat(style.opacity) > 0
+      })
+      samples.push({
+        animatedPanels: panels.filter((panel) => panel.getAnimations().length > 0).length,
+        endingPanels: panels.filter((panel) => panel.hasAttribute('data-ending-style')).length,
+        renderedPanels: rendered.length
+      })
+    }
+
+    for (let cycle = 0; cycle < 4; cycle += 1) {
+      for (const group of order) {
+        document.querySelector(`#settings-tab-${group}`)?.click()
+        await nextFrame()
+        readSample()
+      }
+    }
+    await nextFrame()
+    await nextFrame()
+    readSample()
+
+    const selectedTab = document.querySelector('[role="tab"][aria-selected="true"]')
+    const activePanel = [...document.querySelectorAll('.settings-tab-panels > .t-tabs-panel')]
+      .find((panel) => !panel.hidden && getComputedStyle(panel).display !== 'none')
+    return {
+      activePanelId: activePanel?.id || '',
+      maxAnimatedPanels: Math.max(...samples.map((sample) => sample.animatedPanels)),
+      maxEndingPanels: Math.max(...samples.map((sample) => sample.endingPanels)),
+      maxRenderedPanels: Math.max(...samples.map((sample) => sample.renderedPanels)),
+      selectedTabId: selectedTab?.id || ''
+    }
+  })
+  assert.equal(rapidSwitch.maxRenderedPanels, 1, `Rapid switching must paint only one full settings page: ${JSON.stringify(rapidSwitch)}`)
+  assert.equal(rapidSwitch.maxAnimatedPanels, 0, `Full settings pages must not create transition layers: ${JSON.stringify(rapidSwitch)}`)
+  assert.ok(rapidSwitch.maxEndingPanels <= 1, `Rapid switching must not accumulate outgoing pages: ${JSON.stringify(rapidSwitch)}`)
+  assert.equal(rapidSwitch.selectedTabId, 'settings-tab-source', 'Rapid switching should settle on the final selected tab')
+  assert.equal(rapidSwitch.activePanelId, 'settings-panel-source', 'Rapid switching should settle on the matching panel')
+}
+
 async function verifyDesktopDrawer(page) {
   await page.setViewportSize({ width: 1280, height: 720 })
   await waitForDrawerClosed(page)
@@ -438,6 +544,28 @@ async function verifyDesktopDrawer(page) {
   assert.equal(desktopState.backdropPointerEvents, 'none', 'Desktop drawer must not install a pointer-catching backdrop')
   assert.equal(desktopState.rootInert, false, 'Desktop content must remain interactive while settings are open')
   await waitForDrawerSettledOpen(page)
+  const drawerGlass = await page.locator('.settings-drawer-panel').evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      backdropFilter: style.backdropFilter,
+      expectedBackdropFilter: style.getPropertyValue('--newtab-glass-backdrop-filter').trim(),
+      filter: style.filter,
+      boxShadow: style.boxShadow,
+      webkitBackdropFilter: style.webkitBackdropFilter
+    }
+  })
+  assert.ok(
+    drawerGlass.expectedBackdropFilter &&
+      drawerGlass.expectedBackdropFilter !== 'none' &&
+      (
+        drawerGlass.backdropFilter === drawerGlass.expectedBackdropFilter ||
+        drawerGlass.webkitBackdropFilter === drawerGlass.expectedBackdropFilter
+      ),
+    `Settings drawer should apply the unified New Tab backdrop blur directly to its visible panel: ${JSON.stringify(drawerGlass)}`
+  )
+  assert.equal(drawerGlass.filter, 'none', 'The full-height glass drawer must avoid an offscreen CSS filter layer')
+  assert.notEqual(drawerGlass.boxShadow, 'none', 'Replacing drop-shadow filter must preserve drawer depth with a native shadow')
+  await verifySettingsTabSwitching(page)
   await captureVisual(page, 'settings-drawer-desktop')
 
   const backgroundSearch = page.locator('.newtab-search-input')

@@ -17,6 +17,8 @@ const newtabStartupData = readFileSync('src/newtab/newtab-startup-data.ts', 'utf
 const bookmarkEventStore = readFileSync('src/newtab/newtab-bookmark-events-store.ts', 'utf8')
 const controller = readFileSync('src/newtab/newtab-controller.ts', 'utf8')
 const settingsDrawer = readFileSync('src/newtab/components/SettingsDrawer.tsx', 'utf8')
+const settingsDrawerStore = readFileSync('src/newtab/newtab-settings-drawer-store.ts', 'utf8')
+const newtabBodyClasses = readFileSync('src/newtab/components/NewtabBodyClassesHost.tsx', 'utf8')
 const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx', 'utf8')
 const paperShaderFilter = readFileSync('src/newtab/components/NewtabPaperShaderLayer.tsx', 'utf8')
 const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
@@ -45,6 +47,10 @@ const reducedTransparencyOpaqueSelectors = [globalsCss, newtabCss]
   .map((match) => match[1])
   .join('\n')
 const unifiedGlassTokens = newtabCss.match(/:root\s*\{([^}]*)\}/s)?.[1] || ''
+const activeSettingsGroupSwitch = controller.slice(
+  controller.indexOf('function setActiveSettingsGroup'),
+  controller.indexOf('function closeSettingsDrawer')
+)
 
 assert.ok(
   newtabHtml.includes(`--newtab-font-sans: ${stableNewtabFontStack}`) &&
@@ -149,6 +155,21 @@ assert.ok(
     !controller.includes('primeSettingsDrawerOpenTransition') &&
     !controller.includes('panel.getBoundingClientRect()'),
   'The settings drawer should use Base UI starting and ending styles instead of measuring a hidden popup.'
+)
+
+assert.ok(
+  settingsDrawerStore.includes('useNewtabSettingsDrawerOpen(): boolean') &&
+    settingsDrawerStore.includes('useUiViewStoreSlice(settingsDrawerStore, (view) => view.open)') &&
+    newtabApp.includes('useNewtabSettingsDrawerOpen') &&
+    !newtabApp.includes('useNewtabSettingsDrawerView') &&
+    newtabBodyClasses.includes('useNewtabSettingsDrawerOpen') &&
+    !newtabBodyClasses.includes('useNewtabSettingsDrawerView') &&
+    activeSettingsGroupSwitch.includes("dispatchNewtabSettingsDrawerScrollTop('auto')") &&
+    !activeSettingsGroupSwitch.includes('syncActiveSettingsGroupControls') &&
+    /id="folder-candidates-panel"[\s\S]*?keepMounted=\{false\}/.test(settingsDrawer) &&
+    settingsDrawer.includes('data-squircle-subtree="off"') &&
+    /\.folder-candidate-card\s*\{[^}]*content-visibility:\s*auto;[^}]*contain-intrinsic-size:\s*auto 56px;/s.test(newtabCss),
+  'Settings tab changes must avoid app-wide subscriptions, repeated control reconstruction, smooth scrolling, and mounted hidden candidates.'
 )
 
 assert.ok(
@@ -282,6 +303,54 @@ assert.ok(
   controller.includes('getNewtabSearchFocusIntent') &&
     controller.includes('shouldToggleSearchFocusFromPointerDown'),
   'Typing and blank-surface pointer input should focus newtab search.'
+)
+
+assert.ok(
+  controller.includes('chrome.storage.onChanged.addListener(handleNewTabStorageChanged)') &&
+    /changes\[STORAGE_KEYS\.aiProviderSettings\][\s\S]*?newTabNaturalSearchSettingsGeneration \+= 1[\s\S]*?abortNewTabNaturalSearchRequest\(\)[\s\S]*?naturalSearchSuggestionCache\.clear\(\)[\s\S]*?naturalSearchPlanCache\.clear\(\)[\s\S]*?refreshNewTabSearchSuggestionsAfterAiSettingsChange\?\.\(\)/.test(controller),
+  'Changing the AI provider or reasoning effort should invalidate New Tab requests/caches and immediately rerun visible suggestions.'
+)
+
+const newtabNaturalSearchSuggestions = controller.slice(
+  controller.indexOf('function getNaturalSearchBookmarkSuggestions'),
+  controller.indexOf('async function resolveNewTabNaturalSearchPlan')
+)
+const newtabNaturalSearchPlanResolver = controller.slice(
+  controller.indexOf('async function resolveNewTabNaturalSearchPlan'),
+  controller.indexOf('function getSearchSuggestionCacheEntry')
+)
+const newtabPlanRequestIndex = newtabNaturalSearchPlanResolver.indexOf(
+  'const plan = await naturalSearchAi.requestNaturalSearchAiPlan'
+)
+const newtabPlanPostRequestGuardIndex = newtabNaturalSearchPlanResolver.indexOf(
+  'throwIfNewTabNaturalSearchRequestStale(settingsGeneration, controller.signal)',
+  newtabPlanRequestIndex
+)
+const newtabPlanCacheWriteIndex = newtabNaturalSearchPlanResolver.indexOf(
+  'state.naturalSearchPlanCache.set(planCacheKey, plan)',
+  newtabPlanRequestIndex
+)
+const newtabPlanErrorWriteIndex = newtabNaturalSearchPlanResolver.indexOf(
+  'state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)',
+  newtabPlanRequestIndex
+)
+assert.ok(
+  newtabPlanRequestIndex >= 0 &&
+    newtabPlanPostRequestGuardIndex > newtabPlanRequestIndex &&
+    newtabPlanPostRequestGuardIndex < newtabPlanCacheWriteIndex &&
+    newtabNaturalSearchPlanResolver.lastIndexOf(
+      'throwIfNewTabNaturalSearchRequestStale(settingsGeneration, controller.signal)',
+      newtabPlanErrorWriteIndex
+    ) > newtabPlanCacheWriteIndex,
+  'A superseded New Tab reasoning-settings request must not commit its plan cache or error state.'
+)
+assert.ok(
+  (newtabNaturalSearchSuggestions.match(/throwIfNewTabNaturalSearchRequestStale\(settingsGeneration\)/g) || []).length >= 2,
+  'New Tab natural-search suggestions must verify the reasoning-settings generation before and after result computation.'
+)
+assert.ok(
+  /function isNewTabNaturalSearchAbortError\(error: unknown\)[\s\S]*?name\?: unknown \}\)\.name === 'AbortError'[\s\S]*?kind\?: unknown \}\)\.kind === 'abort'/.test(controller),
+  'New Tab cancellation must recognize both DOM AbortError and AiRuntimeError(kind=abort).'
 )
 
 assert.ok(

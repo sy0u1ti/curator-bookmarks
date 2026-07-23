@@ -210,6 +210,7 @@ let bookmarkAddHistoryWriteQueue = Promise.resolve()
 let autoAnalyzeQueueWriteQueue: Promise<unknown> = Promise.resolve()
 let autoAnalyzeQueueProcessing = false
 let autoAnalyzeQueueTimer = 0
+let aiProviderSettingsGeneration = 0
 const MAX_PENDING_NAVIGATION_CHECKS = 4
 const AUTO_CLASSIFY_SUPPRESS_MS = 10000
 const SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT = 80
@@ -286,6 +287,12 @@ type RuntimeMessage =
   | NavigationCheckMessage
   | NavigationCancelMessage
   | RuntimeNotificationMessage
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes[STORAGE_KEYS.aiProviderSettings]) {
+    aiProviderSettingsGeneration += 1
+  }
+})
 
 chrome.alarms?.onAlarm.addListener((alarm) => {
   if (alarm.name === AUTO_ANALYZE_QUEUE_ALARM) {
@@ -1013,8 +1020,17 @@ async function runAutoAnalysisForBookmark(
     return
   }
 
+  const requestSettings = await loadCurrentAutoAnalyzeRequestSettings({
+    hasInboxItem: Boolean(inboxItem),
+    localOnlyNoAiUpload: Boolean(snapshotSettings?.localOnlyNoAiUpload)
+  })
+  if (!requestSettings) {
+    await clearAutoAnalyzeStatusForBookmark(bookmarkId)
+    return
+  }
+
   const aiResult = await requestAutoClassification({
-    settings,
+    settings: requestSettings,
     pageContext,
     bookmark: bookmarkRecord,
     folders: extracted.folders
@@ -1028,7 +1044,7 @@ async function runAutoAnalysisForBookmark(
       path: bookmarkRecord.path || extracted.folderMap.get(String(bookmark.parentId || ''))?.path || '',
       aiResult,
       pageContext,
-      settings
+      settings: requestSettings
     })
     if (inboxItem) {
       await updateInboxItem(bookmarkId, {
@@ -1117,7 +1133,7 @@ async function runAutoAnalysisForBookmark(
     path: recommendation.path || recommendation.title,
     aiResult,
     pageContext,
-    settings
+    settings: requestSettings
   }).catch((error) => {
     console.warn('[Curator] 自动分析标签写入失败', error)
   })
@@ -1618,6 +1634,37 @@ function pruneAutoAnalyzeQueue(entries: AutoAnalyzeQueueEntry[], now = Date.now(
 async function loadAutoAnalyzeSettings(): Promise<AiNamingSettings> {
   const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
   return normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
+}
+
+async function loadCurrentAutoAnalyzeRequestSettings({
+  hasInboxItem,
+  localOnlyNoAiUpload
+}: {
+  hasInboxItem: boolean
+  localOnlyNoAiUpload: boolean
+}): Promise<AiNamingSettings | null> {
+  // 权限检查本身是异步的。若用户恰好在检查期间保存设置，就重读并重验；
+  // 返回后到 fetch 发起前没有 await，因此“保存后才发出”的请求不会使用旧强度。
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const generation = aiProviderSettingsGeneration
+    const settings = await loadAutoAnalyzeSettings()
+    const shouldUploadToAi = (settings.autoAnalyzeBookmarks || hasInboxItem) &&
+      hasUsableAiSettings(settings) &&
+      !localOnlyNoAiUpload
+    if (!shouldUploadToAi) {
+      return null
+    }
+
+    const providerOrigin = getOriginPermissionPattern(settings.baseUrl)
+    if (!providerOrigin || !(await containsHostPermission(providerOrigin))) {
+      throw new Error('缺少 AI 服务地址访问权限，请在设置页重新测试连接或保存自动分析设置。')
+    }
+    if (generation === aiProviderSettingsGeneration) {
+      return settings
+    }
+  }
+
+  throw new Error('AI 设置刚刚发生变化，本次自动分析已延后重试。')
 }
 
 function hasUsableAiSettings(settings: AiNamingSettings): boolean {
