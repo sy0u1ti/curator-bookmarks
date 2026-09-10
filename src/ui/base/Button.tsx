@@ -3,7 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import type { ComponentPropsWithRef } from 'react'
 
 const buttonVariants = cva(
-  'curator-button inline-flex touch-manipulation select-none items-center justify-center gap-2 rounded-ds-sm border font-medium leading-none outline-none transition-[background-color,border-color,color,transform,opacity] duration-ds-fast ease-ds-standard focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] disabled:pointer-events-none disabled:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100',
+  'curator-button inline-flex touch-manipulation select-none items-center justify-center gap-2 rounded-ds-sm border font-medium leading-none outline-none transition-[background-color,border-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] disabled:pointer-events-none disabled:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 motion-reduce:transition-none motion-reduce:active:scale-100',
   {
     variants: {
       variant: {

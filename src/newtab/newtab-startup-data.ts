@@ -1,5 +1,10 @@
 import { STORAGE_KEYS } from '../shared/constants.js'
 import { getLocalStorage } from '../shared/storage.js'
+import {
+  consumeStartupData,
+  prefetchStartupData,
+  subscribeStartupBookmarkChanges
+} from '../shared/startup-data.js'
 
 const NEWTAB_STARTUP_STORAGE_KEYS = [
   STORAGE_KEYS.newTabBackgroundSettings,
@@ -22,28 +27,24 @@ export interface NewtabStartupData {
   tree: chrome.bookmarks.BookmarkTreeNode[]
 }
 
-type StartupDataResult =
-  | { ok: true; value: NewtabStartupData }
-  | { ok: false; error: unknown }
-
-let startupDataConsumed = false
-const prefetchedStartupData = settleStartupData(loadNewtabStartupData())
+const STARTUP_DATA_KEY = 'newtab'
 
 export function prefetchNewtabStartupData(): void {
-  void prefetchedStartupData
+  prefetchStartupData(STARTUP_DATA_KEY, loadNewtabStartupData, invalidate => {
+    const unsubscribeBookmarks = subscribeStartupBookmarkChanges(invalidate)
+    const handleStorageChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && NEWTAB_STARTUP_STORAGE_KEYS.some(key => key in changes)) invalidate()
+    }
+    chrome.storage.onChanged.addListener(handleStorageChanged)
+    return () => {
+      unsubscribeBookmarks()
+      chrome.storage.onChanged.removeListener(handleStorageChanged)
+    }
+  })
 }
 
-export async function consumeNewtabStartupData(): Promise<NewtabStartupData> {
-  const task = startupDataConsumed
-    ? settleStartupData(loadNewtabStartupData())
-    : prefetchedStartupData
-  startupDataConsumed = true
-
-  const result = await task
-  if (result.ok === false) {
-    throw result.error
-  }
-  return result.value
+export function consumeNewtabStartupData(): Promise<NewtabStartupData> {
+  return consumeStartupData(STARTUP_DATA_KEY, loadNewtabStartupData)
 }
 
 export function getBookmarkTree(): Promise<chrome.bookmarks.BookmarkTreeNode[]> {
@@ -65,11 +66,4 @@ async function loadNewtabStartupData(): Promise<NewtabStartupData> {
     getLocalStorage<Record<string, unknown>>(NEWTAB_STARTUP_STORAGE_KEYS)
   ])
   return { stored, tree }
-}
-
-function settleStartupData(task: Promise<NewtabStartupData>): Promise<StartupDataResult> {
-  return task.then(
-    (value) => ({ ok: true, value }),
-    (error) => ({ ok: false, error })
-  )
 }

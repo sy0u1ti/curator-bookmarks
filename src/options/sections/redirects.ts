@@ -355,10 +355,10 @@ export async function updateSelectedRedirects(callbacks) {
     return
   }
 
-  const selectedIds = [...managerState.selectedRedirectIds]
+  const selectedIds = new Set(managerState.selectedRedirectIds)
   const redirectSection = getRedirectSectionState(callbacks)
   const targetResults = redirectSection.results.filter((result) => {
-    return selectedIds.includes(String(result.id))
+    return selectedIds.has(String(result.id))
   })
   if (!targetResults.length) {
     return
@@ -377,7 +377,7 @@ export async function updateSelectedRedirects(callbacks) {
     return
   }
 
-  await updateRedirectEntries(selectedIds, callbacks)
+  await updateRedirectEntries([...selectedIds], callbacks)
   clearRedirectSelection(callbacks)
 }
 
@@ -386,9 +386,9 @@ export async function deleteSelectedRedirects(callbacks) {
     return
   }
 
-  const selectedIds = [...managerState.selectedRedirectIds]
+  const selectedIds = new Set(managerState.selectedRedirectIds)
   const targetResults = getRedirectSectionState(callbacks).results.filter((result) => {
-    return selectedIds.includes(String(result.id))
+    return selectedIds.has(String(result.id))
   })
   const deleteCandidates = targetResults.map((result) => ({
     id: String(result.id),
@@ -447,8 +447,9 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
     return
   }
   const redirectSection = getRedirectSectionState(callbacks)
+  const selectedIds = new Set(bookmarkIds)
   const targetResults = redirectSection.results.filter((result) => {
-    return bookmarkIds.includes(String(result.id))
+    return selectedIds.has(String(result.id))
   })
 
   if (!targetResults.length) {

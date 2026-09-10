@@ -42,11 +42,6 @@ export interface PopupContentActionHandlers {
   onResultHover?: (index: number) => void
 }
 
-export interface PopupActiveResultIndicatorState {
-  style: CSSProperties
-  visible: boolean
-}
-
 const POPUP_CONTENT_SKELETON_FOLDER_ROWS = [
   { depth: 0, width: 0.72, count: 0.34 },
   { depth: 1, width: 0.64, count: 0.26 },
@@ -86,14 +81,14 @@ const paneClass =
   'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
 const mainPaneClass = cx(paneClass, 'popup-main-pane bg-ds-surface-1')
 const paneHeaderClass =
-  'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-[760] text-ds-text-primary'
+  'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-semibold text-ds-text-primary'
 const paneHeaderTitleClass = 'min-w-0 truncate'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
 const paneHeaderActionClass = [
-  'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-[11px] font-semibold text-ds-text-secondary outline-none',
-  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none',
+  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
-  'active:scale-[0.98] disabled:cursor-default disabled:opacity-40'
+  'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-40'
 ].join(' ')
 const folderTreeClass =
   'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
@@ -110,7 +105,7 @@ const POPUP_VIRTUALIZATION_THRESHOLD = 24
 const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardClass = [
   'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const folderCardActiveClass =
@@ -123,11 +118,11 @@ const folderMainClass =
 const folderTitleClass =
   'min-w-0 truncate text-left text-xs font-bold leading-tight text-ds-text-primary'
 const folderCountClass =
-  'min-w-0 justify-self-end bg-transparent p-0 text-right text-[11px] font-semibold leading-tight text-ds-text-disabled [font-variant-numeric:tabular-nums]'
+  'min-w-0 justify-self-end bg-transparent p-0 text-right text-xs font-semibold leading-tight text-ds-text-disabled [font-variant-numeric:tabular-nums]'
 const folderCountActiveClass = 'text-ds-text-secondary'
 const listButtonClass = [
   'popup-list-button flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
@@ -135,7 +130,7 @@ const listButtonBaseStyle: CSSProperties = {
 }
 const rowMainClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
 const rowTitleClass =
-  'min-w-0 truncate text-left text-[13px] font-[760] leading-tight text-ds-text-primary'
+  'min-w-0 truncate text-left text-[13px] font-semibold leading-tight text-ds-text-primary'
 const rowSubtitleClass =
   'min-w-0 truncate text-left text-xs font-medium leading-tight text-ds-text-muted'
 const rowPathClass = cx(rowSubtitleClass, 'text-ds-text-muted')
@@ -143,14 +138,14 @@ const resultCopyClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
 const resultPathShellClass = 'block min-w-0'
 const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
 const resultMatchTokenClass =
-  'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-semibold text-ds-text-secondary'
+  'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-xs font-semibold text-ds-text-secondary'
 const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
   'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
-  'active:scale-95 disabled:cursor-default disabled:opacity-45'
+  'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-45'
 ].join(' ')
 const rowActionTriggerClass = cx(rowActionButtonClass, 'popup-row-actions-trigger')
 const rowActionDangerClass =
@@ -610,22 +605,24 @@ function usePopupBookmarkReorderDrag({
 }
 
 export function PopupContent({
-  activeResultIndicator,
+  activeResultIndicatorRef,
   activeResultRef,
   activeFolderRef,
   folderTreeRef,
   workspaceRef,
   handlers,
   mainListRef,
+  onRowsLayout,
   state
 }: {
-  activeResultIndicator?: PopupActiveResultIndicatorState
+  activeResultIndicatorRef?: RefObject<HTMLDivElement | null>
   activeResultRef?: RefObject<HTMLLIElement | null>
   activeFolderRef?: RefObject<HTMLDivElement | null>
   folderTreeRef?: RefObject<HTMLDivElement | null>
   workspaceRef?: RefObject<HTMLDivElement | null>
   handlers?: PopupContentActionHandlers
   mainListRef?: RefObject<HTMLUListElement | null>
+  onRowsLayout?: () => void
   state: PopupContentViewModel
 }) {
   const sidebarRows = state.sidebarRows || state.rows.filter((row): row is PopupContentFolderRowViewModel => row.kind === 'folder')
@@ -634,6 +631,7 @@ export function PopupContent({
   const title = state.title || (mode === 'search' ? '搜索结果' : '全部书签')
   const meta = state.meta || `${mainRows.length} 条`
   const isLoading = Boolean(state.loading)
+  const scrollLayerRef = usePopupScrollLayer(isLoading)
   const reorderActive = Boolean(state.reorder?.active && mode === 'tree')
   const reorderDrag = usePopupBookmarkReorderDrag({
     active: reorderActive,
@@ -661,14 +659,22 @@ export function PopupContent({
   const visibleSidebarRows = sidebarRows.slice(folderWindow.start, folderWindow.end)
   const visibleMainRows = mainRows.slice(mainWindow.start, mainWindow.end)
 
+  useLayoutEffect(() => {
+    // Scroll listeners run before a virtual window commits. Reconnect the
+    // indicator to a selected row that has just returned to the mounted window.
+    onRowsLayout?.()
+  }, [folderWindow.end, folderWindow.start, mainWindow.end, mainWindow.start, onRowsLayout])
+
   return (
     <div
       className={cx(workspaceShellClass, isLoading ? '' : 'is-revealed')}
       data-state={isLoading ? 'loading' : 'ready'}
+      ref={scrollLayerRef}
       aria-busy={isLoading ? 'true' : 'false'}
+      data-squircle-subtree="off"
     >
       <div className={workspaceSkeletonLayerClass} aria-hidden="true">
-        <PopupContentSkeleton mode={mode} title={title} />
+        <MemoPopupContentSkeleton mode={mode} title={title} />
       </div>
       <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : '')}>
         <div className={workspaceClass} ref={workspaceRef}>
@@ -686,7 +692,7 @@ export function PopupContent({
                 />
               ) : null}
               {visibleSidebarRows.map((row) => (
-                <PopupFolderRow
+                <MemoPopupFolderRow
                   activeFolderRef={row.keyboardActive ? activeFolderRef : undefined}
                   handlers={handlers}
                   onFolderFilter={handlers?.onFolderFilter}
@@ -787,15 +793,47 @@ export function PopupContent({
           <div
             className={activeResultIndicatorClass}
             aria-hidden="true"
-            data-visible={activeResultIndicator?.visible ? 'true' : undefined}
+            ref={activeResultIndicatorRef}
             role="presentation"
-            style={activeResultIndicator?.style}
           ></div>
           {reorderDrag.ghost}
         </div>
       </div>
     </div>
   )
+}
+
+function usePopupScrollLayer(loading: boolean): RefObject<HTMLDivElement | null> {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const promotedRef = useRef(false)
+  useEffect(() => {
+    if (loading || promotedRef.current) return
+    // Allocate scrolling surfaces once the initial dissolve and input settle.
+    // This GPU work must yield to the first wheel/keystroke, even when JS is idle.
+    const quietDelay = getMotionDurationMs('--reveal-dur', 240)
+    const warmupUntil = performance.now() + 1000
+    let timer = 0
+    const events = ['pointerdown', 'pointermove', 'keydown', 'wheel', 'scroll'] as const
+    const cleanup = () => {
+      window.clearTimeout(timer)
+      for (const event of events) window.removeEventListener(event, schedule, { capture: true })
+    }
+    const schedule = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        const root = rootRef.current
+        if (root) {
+          root.dataset.scrollReady = 'true'
+          promotedRef.current = true
+        }
+        cleanup()
+      }, Math.max(quietDelay, warmupUntil - performance.now()))
+    }
+    for (const event of events) window.addEventListener(event, schedule, { capture: true, passive: true })
+    schedule()
+    return cleanup
+  }, [loading])
+  return rootRef
 }
 
 interface FixedRowWindow {
@@ -818,20 +856,27 @@ function useFixedRowWindow({
   rowCount: number
   rowHeight: number
 }): FixedRowWindow {
-  const [viewport, setViewport] = useState({ height: 0, scrollTop: 0 })
+  // Scroll pixels are not render state. Only publish a new window when rows
+  // enter or leave the overscan; both panes share this component.
+  const [rowWindow, setRowWindow] = useState({ start: 0, count: 8 + POPUP_VIRTUAL_OVERSCAN * 2 })
+  const windowRef = useRef(rowWindow)
   const measureViewport = useCallback(() => {
     const container = containerRef?.current
     if (!container) return
+    const height = container.clientHeight || rowHeight * 8
+    const count = Math.ceil(height / rowHeight) + POPUP_VIRTUAL_OVERSCAN * 2
     const next = {
-      height: container.clientHeight,
-      scrollTop: container.scrollTop
+      count,
+      start: Math.min(
+        Math.max(0, rowCount - count + POPUP_VIRTUAL_OVERSCAN),
+        Math.max(0, Math.floor(container.scrollTop / rowHeight) - POPUP_VIRTUAL_OVERSCAN)
+      )
     }
-    setViewport((current) => (
-      current.height === next.height && current.scrollTop === next.scrollTop
-        ? current
-        : next
-    ))
-  }, [containerRef])
+    const current = windowRef.current
+    if (current.start === next.start && current.count === next.count) return
+    windowRef.current = next
+    setRowWindow(next)
+  }, [containerRef, rowCount, rowHeight])
 
   useLayoutEffect(() => {
     if (!enabled) return
@@ -854,7 +899,7 @@ function useFixedRowWindow({
     if (!enabled || activeIndex < 0) return
     const container = containerRef?.current
     if (!container) return
-    const paddingTop = Number.parseFloat(window.getComputedStyle(container).paddingTop) || 0
+    const paddingTop = Number.parseFloat(getComputedStyle(container).paddingTop) || 0
     const viewportStart = container.scrollTop
     const nextScrollTop = getActiveResultRevealScrollTop({
       itemHeight: rowHeight,
@@ -873,13 +918,10 @@ function useFixedRowWindow({
     return { after: 0, before: 0, end: rowCount, start: 0 }
   }
 
-  const viewportHeight = viewport.height || rowHeight * 8
-  const start = Math.max(
-    0,
-    Math.floor(viewport.scrollTop / rowHeight) - POPUP_VIRTUAL_OVERSCAN
-  )
-  const visibleCount = Math.ceil(viewportHeight / rowHeight) + POPUP_VIRTUAL_OVERSCAN * 2
-  const end = Math.min(rowCount, start + visibleCount)
+  // Data may shrink before the resize/scroll event arrives. Clamp immediately
+  // so removing a folder's tail never leaves an empty, oversized spacer.
+  const start = Math.min(rowWindow.start, Math.max(0, rowCount - rowWindow.count + POPUP_VIRTUAL_OVERSCAN))
+  const end = Math.min(rowCount, start + rowWindow.count)
   return {
     after: Math.max(0, (rowCount - end) * rowHeight),
     before: start * rowHeight,
@@ -1211,6 +1253,8 @@ function PopupSearchResultRow({
   )
 }
 
+const MemoPopupContentSkeleton = memo(PopupContentSkeleton)
+const MemoPopupFolderRow = memo(PopupFolderRow)
 const MemoPopupBookmarkRow = memo(PopupBookmarkRow, arePopupBookmarkRowPropsEqual)
 const MemoPopupSearchResultRow = memo(PopupSearchResultRow, arePopupSearchResultRowPropsEqual)
 
@@ -1255,6 +1299,7 @@ function areBookmarkRowsEqual(
   previous: PopupContentBookmarkRowViewModel,
   next: PopupContentBookmarkRowViewModel
 ) {
+  if (previous === next) return true
   return Boolean(previous.active) === Boolean(next.active) &&
     previous.bookmarkId === next.bookmarkId &&
     previous.depth === next.depth &&
@@ -1272,6 +1317,7 @@ function areSearchResultRowsEqual(
   previous: PopupContentSearchResultViewModel,
   next: PopupContentSearchResultViewModel
 ) {
+  if (previous === next) return true
   return previous.active === next.active &&
     previous.bookmarkId === next.bookmarkId &&
     previous.depth === next.depth &&

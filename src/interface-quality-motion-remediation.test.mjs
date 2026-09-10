@@ -151,7 +151,8 @@ assert.ok(
     aiProviderSettings.includes('<StatusBusyLoadingLabel label={modelTools.fetchModelsStatus}') &&
     availabilityControls.includes('showLoader={false}') &&
     availabilityDecisionPanel.includes('<StatusBusyLoadingLabel label={state.progressLabel}') &&
-    aiProviderSettingsClasses.includes('ai-provider-advanced-trigger flex min-h-8 w-fit max-w-full') &&
+    aiProviderSettingsClasses.includes('ai-provider-advanced-trigger w-fit max-w-full') &&
+    aiProviderSettings.includes('className={AI_PROVIDER_ADVANCED_TRIGGER_CLASS} render={<Button size="sm" variant="secondary" />}') &&
     !aiProviderSettingsClasses.includes('ai-provider-advanced-trigger flex w-full') &&
     !optionLayoutClasses.includes("'curator-motion-row grid min-h-[66px]") &&
     optionLayoutClasses.includes("'curator-motion-chip relative inline-flex") &&
@@ -186,7 +187,7 @@ assert.ok(
 )
 
 assert.ok(
-  tokens.includes('--page-slide-distance: var(--distance-medium)') &&
+  tokens.includes('--page-slide-distance: var(--distance-base)') &&
     /#newtab-settings-drawer \.settings-tab-panels > \.t-tabs-panel\s*\{[^}]*transform:\s*none;[^}]*transition:\s*none;/s.test(newtabCss) &&
     /#newtab-settings-drawer \.settings-tab-panels > \.t-tabs-panel\[data-ending-style\]\s*\{[^}]*display:\s*none;/s.test(newtabCss) &&
     newtabCss.includes('transition: transform var(--tabs-dur) var(--tabs-ease)') &&

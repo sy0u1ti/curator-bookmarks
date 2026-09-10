@@ -118,7 +118,8 @@ function testSearchResultsReclaimBookmarkKeyboardSelection(): void {
     'raw search input must reclaim the bookmark pane before the debounced results arrive'
   )
   assert(
-    searchResultRows.includes('isBookmarkRowKeyboardActive(state.keyboardPane, index, state.activeResultIndex)'),
+    searchResultRows.includes('searchResultRowsCache.getRows(') &&
+      searchResultRows.includes("state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1"),
     'search result highlight state must follow the active keyboard pane'
   )
   assert(

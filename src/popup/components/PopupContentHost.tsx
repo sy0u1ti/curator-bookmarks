@@ -2,11 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   dispatchPopupContentAction,
   dispatchPopupContentResultHover,
+  getPopupContentSnapshot,
   subscribePopupContentChange
 } from '../popup-controller-store'
 import {
   PopupContent,
-  type PopupActiveResultIndicatorState,
   type PopupContentActionHandlers
 } from './PopupContent'
 import {
@@ -55,33 +55,11 @@ export function PopupContentHost() {
   const workspaceRef = useRef<HTMLDivElement | null>(null)
   const pendingScrollTopRef = useRef<number | null>(null)
   const shouldRevealActiveResultRef = useRef(false)
-  const revealPendingRef = useRef(false)
+  const indicatorElementRef = useRef<HTMLDivElement | null>(null)
+  const indicatorRevealFrameRef = useRef(0)
+  const indicatorScrollFrameRef = useRef(0)
   const activeResultIndicatorRef = useRef<ActiveResultIndicatorGeometry>(HIDDEN_ACTIVE_RESULT_INDICATOR)
-  const [state, setState] = useState<PopupContentViewModel>(INITIAL_CONTENT_STATE)
-  const [activeResultIndicator, setActiveResultIndicator] = useState<ActiveResultIndicatorGeometry>(
-    HIDDEN_ACTIVE_RESULT_INDICATOR
-  )
-  const activeResultIndicatorView = useMemo<PopupActiveResultIndicatorState>(() => {
-    const height = Math.round(activeResultIndicator.height)
-    const left = Math.round(activeResultIndicator.left)
-    const top = Math.round(activeResultIndicator.top)
-    const width = Math.round(activeResultIndicator.width)
-
-    return {
-      style: {
-        height: `${height}px`,
-        transform: `translate3d(${left}px, ${top}px, 0)`,
-        width: `${width}px`
-      },
-      visible: activeResultIndicator.visible
-    }
-  }, [
-    activeResultIndicator.height,
-    activeResultIndicator.left,
-    activeResultIndicator.top,
-    activeResultIndicator.visible,
-    activeResultIndicator.width
-  ])
+  const [state, setState] = useState<PopupContentViewModel>(() => getPopupContentSnapshot().state)
   const handlers = useMemo<PopupContentActionHandlers>(() => ({
     onBookmarkOpen: (bookmarkId) => {
       dispatchPopupContentAction({ action: 'open-bookmark', bookmarkId })
@@ -118,6 +96,8 @@ export function PopupContentHost() {
   const activeResultObserverKey = getActiveResultObserverKey(state)
   const activeFolderObserverKey = getActiveFolderObserverKey(state)
   const commitActiveResultIndicator = useCallback((next: ActiveResultIndicatorGeometry) => {
+    const indicator = indicatorElementRef.current
+    if (!indicator) return
     const current = activeResultIndicatorRef.current
     if (areActiveResultIndicatorsEqual(current, next)) return
 
@@ -125,11 +105,32 @@ export function PopupContentHost() {
     // layout frame reveals it, so cross-pane moves never fly in diagonally.
     const stageReveal = next.visible && !current.visible
     const committed = stageReveal ? { ...next, visible: false } : next
-    if (stageReveal) {
-      revealPendingRef.current = true
-    }
     activeResultIndicatorRef.current = committed
-    setActiveResultIndicator(committed)
+
+    // This is scroll geometry, not content state. Keep the existing CSS motion
+    // while updating only the indicator, without reconciling either list.
+    indicator.style.height = `${Math.round(committed.height)}px`
+    indicator.style.width = `${Math.round(committed.width)}px`
+    indicator.style.transform = `translate3d(${Math.round(committed.left)}px, ${Math.round(committed.top)}px, 0)`
+    if (committed.visible) indicator.dataset.visible = 'true'
+    else delete indicator.dataset.visible
+
+    if (!next.visible) {
+      cancelAnimationFrame(indicatorRevealFrameRef.current)
+      indicatorRevealFrameRef.current = 0
+    } else if (stageReveal && !indicatorRevealFrameRef.current) {
+      // Commit the hidden destination before enabling its CSS transition.
+      // This read happens only on reveal, never while an indicator is moving.
+      void indicator.getBoundingClientRect()
+      indicatorRevealFrameRef.current = requestAnimationFrame(() => {
+        indicatorRevealFrameRef.current = 0
+        const latest = activeResultIndicatorRef.current
+        const element = indicatorElementRef.current
+        if (!element || latest.visible || !latest.width || !latest.height) return
+        activeResultIndicatorRef.current = { ...latest, visible: true }
+        element.dataset.visible = 'true'
+      })
+    }
   }, [])
 
   const remeasureIndicator = useCallback(() => {
@@ -143,21 +144,10 @@ export function PopupContentHost() {
     commitActiveResultIndicator(next)
   }, [commitActiveResultIndicator, state.keyboardPane])
 
-  // Phase 2 of the two-phase reveal: after the browser paints the indicator at
-  // its correct position but still invisible, set visible=true so only opacity
-  // fades in.
-  useLayoutEffect(() => {
-    if (!revealPendingRef.current) return
-    revealPendingRef.current = false
-    const frameId = requestAnimationFrame(() => {
-      const current = activeResultIndicatorRef.current
-      if (current.visible || !current.width || !current.height) return
-      const next = { ...current, visible: true }
-      activeResultIndicatorRef.current = next
-      setActiveResultIndicator(next)
-    })
-    return () => cancelAnimationFrame(frameId)
-  })
+  useEffect(() => () => {
+    cancelAnimationFrame(indicatorRevealFrameRef.current)
+    cancelAnimationFrame(indicatorScrollFrameRef.current)
+  }, [])
 
   useEffect(() => {
     return subscribePopupContentChange((detail) => {
@@ -279,18 +269,30 @@ export function PopupContentHost() {
     return () => observer.disconnect()
   }, [activeFolderObserverKey, activeResultObserverKey, remeasureIndicator, state.keyboardPane])
 
-  // Remeasure when either scroll container scrolls
+  // Only scrolling the selected pane can move the indicator. Reading the other
+  // pane's geometry here would unnecessarily flush its hover styles as well.
   useEffect(() => {
-    const list = mainListRef.current
-    const tree = folderTreeRef.current
-    const handler = () => remeasureIndicator()
-    list?.addEventListener('scroll', handler, { passive: true })
-    tree?.addEventListener('scroll', handler, { passive: true })
-    return () => {
-      list?.removeEventListener('scroll', handler)
-      tree?.removeEventListener('scroll', handler)
+    const viewport = state.keyboardPane === 'folders' ? folderTreeRef.current : mainListRef.current
+    if (!viewport) return undefined
+
+    // Do not synchronously read layout from the native scroll event. The main
+    // pane can contain a large virtualized catalog, and forcing geometry reads
+    // here delays the compositor's first scroll response. The indicator is
+    // purely decorative, so one rAF-latched measurement is sufficient.
+    const scheduleRemeasure = () => {
+      if (indicatorScrollFrameRef.current) return
+      indicatorScrollFrameRef.current = requestAnimationFrame(() => {
+        indicatorScrollFrameRef.current = 0
+        remeasureIndicator()
+      })
     }
-  }, [remeasureIndicator])
+    viewport.addEventListener('scroll', scheduleRemeasure, { passive: true })
+    return () => {
+      viewport.removeEventListener('scroll', scheduleRemeasure)
+      cancelAnimationFrame(indicatorScrollFrameRef.current)
+      indicatorScrollFrameRef.current = 0
+    }
+  }, [remeasureIndicator, state.keyboardPane])
 
   return (
     <div
@@ -299,13 +301,14 @@ export function PopupContentHost() {
       ref={contentRef}
     >
       <PopupContent
-        activeResultIndicator={activeResultIndicatorView}
+        activeResultIndicatorRef={indicatorElementRef}
         activeResultRef={activeResultRef}
         activeFolderRef={activeFolderRef}
         folderTreeRef={folderTreeRef}
         workspaceRef={workspaceRef}
         handlers={handlers}
         mainListRef={mainListRef}
+        onRowsLayout={remeasureIndicator}
         state={state}
       />
     </div>

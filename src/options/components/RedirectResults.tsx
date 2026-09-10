@@ -17,10 +17,7 @@ const REDIRECT_CARD_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2
 const REDIRECT_CHECK_CLASS =
   'inline-flex items-center gap-2 text-xs font-semibold text-ds-text-secondary'
 const REDIRECT_CARD_ACTIONS_CLASS = 'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
-const REDIRECT_CARD_ACTION_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary disabled:cursor-default disabled:opacity-50 disabled:hover:text-ds-text-disabled disabled:focus-visible:text-ds-text-disabled data-[disabled]:cursor-default data-[disabled]:opacity-50 data-[disabled]:hover:text-ds-text-disabled data-[disabled]:focus-visible:text-ds-text-disabled'
-const REDIRECT_CARD_LINK_CLASS =
-  'border-0 bg-transparent p-0 text-xs font-semibold text-ds-text-disabled no-underline [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary'
+const REDIRECT_CARD_ACTION_CLASS = 'shrink-0'
 const REDIRECT_CARD_COPY_CLASS = 'mt-3 min-w-0'
 const REDIRECT_CARD_TITLE_CLASS =
   'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
@@ -100,7 +97,7 @@ function RedirectResultCard({
           <span className={REDIRECT_STATUS_BADGE_CLASS}>已跳转</span>
         </div>
         <div className={REDIRECT_CARD_ACTIONS_CLASS}>
-          <Button
+          <Button variant="secondary" size="sm"
             className={REDIRECT_CARD_ACTION_CLASS}
             type="button"
             aria-label={updateLabel}
@@ -109,19 +106,13 @@ function RedirectResultCard({
               action: 'update-result',
               bookmarkId: result.id
             })}
-            unstyled
           >
             更新为最终地址
           </Button>
-          <a
-            className={REDIRECT_CARD_LINK_CLASS}
-            href={finalUrl}
-            target="_blank"
-            rel="noreferrer noopener"
-            aria-label={openFinalLabel}
-          >
+          <Button size="sm" variant="secondary" aria-label={openFinalLabel}
+            render={<a aria-label={openFinalLabel} href={finalUrl} target="_blank" rel="noreferrer noopener" />}>
             打开最终链接
-          </a>
+          </Button>
         </div>
       </div>
       <div className={REDIRECT_CARD_COPY_CLASS}>

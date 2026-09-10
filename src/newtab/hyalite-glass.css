@@ -1,0 +1,186 @@
+/* Hyalite owns the backdrop only. Text and existing gesture transforms stay untouched. */
+:root {
+  --newtab-glass-background-blur: 12px;
+  --newtab-glass-backdrop-filter: blur(var(--newtab-glass-background-blur));
+  --newtab-glass-rim-opacity: 0.075;
+  --newtab-glass-light-x: -0.63px;
+  --newtab-glass-light-y: -1.36px;
+  --newtab-glass-stroke: rgba(255, 255, 255, 0.18);
+  --newtab-glass-border-hover: rgba(255, 255, 255, 0.38);
+  /* A continuous inner rim keeps the vertical sides readable at rest.
+     Directional light adds depth without replacing that complete perimeter. */
+  --newtab-glass-edge-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.20),
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -0.5px 0 rgba(255, 255, 255, 0.10);
+}
+
+[data-hyalite-surface] {
+  /* Registered on every surface so an unbound child never inherits a parent's SVG. */
+  --hyalite: var(--newtab-glass-backdrop-filter);
+  background-color: var(--newtab-glass-bg-fill);
+  border-color: var(--newtab-glass-stroke);
+  -webkit-backdrop-filter: var(--hyalite) !important;
+  backdrop-filter: var(--hyalite) !important;
+  clip-path: none !important;
+  filter: none !important;
+  box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow),
+    inset var(--newtab-glass-light-x) var(--newtab-glass-light-y) 0 rgba(255, 255, 255, var(--newtab-glass-rim-opacity));
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+/* Native blur keeps the centre live. Only the refracting edge is a cached PNG,
+   avoiding Chromium's expensive per-frame SVG backdrop displacement. */
+[data-hyalite-surface][data-glass-renderer="raster"][data-glass-mode="refraction"] {
+  background-color: var(--newtab-glass-raster-tint, var(--newtab-glass-bg-fill));
+  background-image: var(--newtab-glass-texture) !important;
+  background-blend-mode: multiply;
+  background-size: 100% 100%;
+  background-position: center;
+  background-origin: border-box;
+  background-repeat: no-repeat;
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter) !important;
+  backdrop-filter: var(--newtab-glass-backdrop-filter) !important;
+}
+
+.bookmark-tile[data-hyalite-surface] {
+  /* Interaction changes elevation only; every state retains the same rim. */
+  box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
+}
+
+.settings-drawer-panel,
+.settings-drawer-panel [data-drawer-content],
+[data-drawer-content] {
+  --ds-surface-1: rgba(255, 255, 255, 0.035);
+  --ds-surface-2: rgba(255, 255, 255, 0.055);
+  --ds-surface-3: rgba(255, 255, 255, 0.085);
+  --ds-bg-app: rgba(0, 0, 0, 0.12);
+  --ds-hover: rgba(255, 255, 255, 0.10);
+  --ds-border: rgba(255, 255, 255, 0.15);
+  --ds-border-hover: rgba(255, 255, 255, 0.32);
+  --ds-text-secondary: rgba(245, 245, 247, 0.82);
+  --ds-text-muted: rgba(245, 245, 247, 0.72);
+  /* Tailwind's theme aliases resolve where they are declared. Rebind them here
+     so local material overrides reach inputs, previews, and portaled controls. */
+  --color-ds-app: var(--ds-bg-app);
+  --color-ds-surface-1: var(--ds-surface-1);
+  --color-ds-surface-2: var(--ds-surface-2);
+  --color-ds-surface-3: var(--ds-surface-3);
+  --color-ds-hover: var(--ds-hover);
+  --color-ds-border: var(--ds-border);
+  --color-ds-border-hover: var(--ds-border-hover);
+  --color-ds-text-secondary: var(--ds-text-secondary);
+  --color-ds-text-muted: var(--ds-text-muted);
+  --tabs-bar-bg: rgba(255, 255, 255, 0.035);
+  --tabs-pill-bg: rgba(255, 255, 255, 0.16);
+}
+
+.settings-trigger[aria-expanded="true"] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .settings-trigger {
+  /* Remain focusable for Base UI's return-focus handoff during the exit. */
+  opacity: 0;
+  pointer-events: none;
+}
+#newtab-settings-drawer .settings-drawer-panel[data-hyalite-surface] {
+  background: var(--newtab-glass-bg-fill);
+  box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow);
+}
+#newtab-settings-drawer .settings-drawer-panel::before {
+  background: none;
+}
+#newtab-settings-drawer .t-tabs {
+  background: rgba(255, 255, 255, 0.045);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.newtab-speed-dial .newtab-speed-dial-card {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.newtab-speed-dial .newtab-speed-dial-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.newtab-search-surface[data-hyalite-surface] {
+  background-color: var(--newtab-glass-bg-fill);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2), var(--newtab-glass-edge-shadow);
+  transition: border-color var(--ds-motion-fast) var(--ds-ease-standard),
+    box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
+}
+.newtab-search-shell:focus-within .newtab-search-surface[data-hyalite-surface],
+.newtab-search-shell[data-engine-open="true"] .newtab-search-surface[data-hyalite-surface] {
+  border-color: rgba(255, 255, 255, 0.46);
+}
+.newtab-search-input {
+  caret-color: #ffffff;
+}
+.newtab-search-input::selection {
+  background: rgba(180, 208, 255, 0.42);
+  color: #ffffff;
+}
+
+.newtab-glass-preview-scene {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--ds-radius-md);
+  padding: 20px;
+  background-color: rgba(255, 255, 255, 0.025);
+  background-image: repeating-linear-gradient(135deg, transparent 0 18px, rgba(255, 255, 255, 0.28) 18px 20px, transparent 20px 38px);
+}
+.newtab-glass-preview-scene::before {
+  content: "GLASS";
+  position: absolute;
+  inset: 2px 0 auto;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 80px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -4px;
+  text-align: center;
+  pointer-events: none;
+}
+.newtab-glass-preview {
+  position: relative;
+  min-height: 144px;
+  border: 1px solid var(--newtab-glass-stroke);
+  border-radius: 30px;
+  padding: 18px;
+  color: #f5f5f7;
+  background: var(--newtab-glass-bg-fill);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
+}
+
+.bookmark-drag-ghost,
+.speed-dial-drag-ghost,
+.folder-drag-ghost {
+  --hyalite: var(--newtab-glass-backdrop-filter) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .newtab-search-surface[data-hyalite-surface] {
+    transition-duration: 80ms;
+  }
+}
+@media (forced-colors: active) {
+  :root [data-hyalite-surface][data-glass-mode] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    background: Canvas !important;
+    background-image: none !important;
+    color: CanvasText;
+    border-color: CanvasText;
+    text-shadow: none;
+  }
+}
+@media (prefers-contrast: more) and (forced-colors: none) {
+  [data-hyalite-surface] {
+    --newtab-glass-raster-tint: rgba(0, 0, 0, 0.88);
+    background-color: rgba(0, 0, 0, 0.88) !important;
+    border-color: rgba(255, 255, 255, 0.72);
+  }
+}

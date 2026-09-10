@@ -1,3 +1,4 @@
+import { flushSync } from 'react-dom'
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
@@ -258,6 +259,7 @@ import {
   dispatchNewtabSettingsDrawerFocusFirstControl,
   dispatchNewtabSettingsDrawerFocusSection,
   getNewtabSettingsDrawerNodes,
+  requestNewtabSettingsDrawer,
   getNewtabSettingsDrawerView,
   dispatchNewtabSettingsDrawerOpen,
   dispatchNewtabSettingsDrawerScrollTop,
@@ -1977,6 +1979,7 @@ let resolveSettingsDrawerReady: (() => void) | null = null
 
 function ensureSettingsDrawerReady(): Promise<void> {
   if (settingsDrawerReady) return Promise.resolve()
+  requestNewtabSettingsDrawer()
   if (!settingsDrawerReadyPromise) {
     settingsDrawerReadyPromise = new Promise<void>((resolve) => {
       resolveSettingsDrawerReady = resolve
@@ -2978,20 +2981,19 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
   if (wasDragging) {
     await settleBookmarkDragGhost(finalOrderIds)
   }
-  clearBookmarkDragState({
-    deferVisualReset: wasDragging,
-    keepSuppressClick: wasDragging
-  })
-
   if (!wasDragging) {
+    clearBookmarkDragState()
     return
   }
 
-  // Keep the preview transforms in the previous view until the reordered view is
-  // committed. Clearing them in a separate store update lets the live cards
-  // transition back to their old slots, or replays the old offset from their new
-  // DOM slots. The transition-free commit makes the layout/order swap atomic.
-  render()
+  // Apply the transition-free state and reordered DOM in one commit. A style
+  // flush keeps the following frame from coalescing away that intermediate state.
+  flushSync(() => {
+    clearBookmarkDragState({ deferVisualReset: true, keepSuppressClick: true })
+    render()
+  })
+  const committedGrid = getNewtabBookmarkContentNodes().grids.get(folderId)
+  if (committedGrid) void committedGrid.offsetWidth
   updateClockText()
   finishBookmarkDropVisualCommit()
 
@@ -5924,6 +5926,7 @@ function initializeSearchWidget(): boolean {
           scheduleSuggestionsRender()
         },
         onInputKeyDown: (event) => {
+          if (event.defaultPrevented) return
           const input = getSearchInput()
           if (!input) {
             return
@@ -5958,6 +5961,12 @@ function initializeSearchWidget(): boolean {
           }
 
           if (event.key !== 'Escape') {
+            return
+          }
+
+          // The open inspector owns Escape. Let its dismissal run without
+          // also clearing or blurring the non-modal background search field.
+          if (isSettingsDrawerOpen()) {
             return
           }
 
@@ -7779,6 +7788,7 @@ function createBookmarkTileViewModel(
   const title = String(bookmark.title || '').trim() || url
   const bookmarkId = String(bookmark.id)
   const customIcon = state.customIcons[bookmarkId]
+  let faviconSrc: string | undefined
   return {
     customIcon: Boolean(customIcon),
     dragging: bookmarkId === state.draggingBookmarkId && Boolean(state.dragOriginalOrderIds.length),
@@ -7786,7 +7796,8 @@ function createBookmarkTileViewModel(
     favicon: {
       fetchpriority: renderIndex < HIGH_PRIORITY_FAVICON_LIMIT ? 'high' : 'low',
       loading: renderIndex < EAGER_FAVICON_LIMIT ? 'eager' : 'lazy',
-      src: customIcon || getFaviconUrl(url, bookmarkId)
+      // Offscreen tiles need no Chrome favicon URL until the grid mounts them.
+      get src() { return faviconSrc ??= customIcon || getFaviconUrl(url, bookmarkId) }
     },
     folderId,
     id: bookmarkId,
@@ -10854,7 +10865,8 @@ function applyIconSettingsLive(): void {
   const contentStyle = createBookmarkContentStyleState()
   const bookmarkView = getNewtabBookmarkContentView()
   if (!bookmarkView) {
-    scheduleRender({ updateClock: true })
+    // The empty/loading page has no bookmark geometry to update. Rebuilding
+    // its clock and search modules here makes every layout click repaint the shell.
     return
   }
 
@@ -10863,7 +10875,7 @@ function applyIconSettingsLive(): void {
     content: contentStyle
   }))
   patchNewtabContentView((view) => {
-    if (view.type !== 'page') {
+    if (view.type !== 'page' || view.iconVerticalCenter === String(state.iconSettings.verticalCenter)) {
       return view
     }
     return {

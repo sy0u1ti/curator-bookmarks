@@ -21,6 +21,18 @@ interface OptionsPanelVisibilityProps {
   hidden: boolean
 }
 
+type TaskPanelKey = 'history' | 'backup' | 'redirects' | 'duplicates' | 'folder-cleanup' | 'ignore' | 'recycle'
+
+export function TaskPanel({ hidden, sectionKey }: OptionsPanelVisibilityProps & { sectionKey: TaskPanelKey }) {
+  if (sectionKey === 'history') return <HistoryPanel hidden={hidden} />
+  if (sectionKey === 'backup') return <BackupPanel hidden={hidden} />
+  if (sectionKey === 'redirects') return <RedirectsPanel hidden={hidden} />
+  if (sectionKey === 'duplicates') return <DuplicatesPanel hidden={hidden} />
+  if (sectionKey === 'folder-cleanup') return <FolderCleanupPanel hidden={hidden} />
+  if (sectionKey === 'ignore') return <IgnoreRulesPanel hidden={hidden} />
+  return <RecyclePanel hidden={hidden} />
+}
+
 const AVAILABILITY_HISTORY_GROUP_CLASS =
   OPTION_TOOL_PANEL_CLASS
 const REDIRECTS_GROUP_CLASS =

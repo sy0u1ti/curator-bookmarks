@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { OptionDetails } from './OptionDetails.js'
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { cx } from '../../ui/base/utils'
@@ -66,7 +67,7 @@ const HISTORY_RUN_SECTION_CLASS = 'mt-3'
 const HISTORY_RUN_SECTION_TITLE_CLASS =
   'block text-[13px] font-semibold leading-normal text-ds-text-primary'
 const HISTORY_RUN_LIST_CLASS =
-  'mt-2 mb-0 pl-[18px] text-[13px] leading-[1.65] text-ds-text-secondary [&_li+li]:mt-1'
+  'mt-2 mb-0 pl-[18px] text-[13px] leading-[1.65] text-ds-text-secondary [overflow-wrap:anywhere] [&_li+li]:mt-1'
 const HISTORY_BADGE_BASE_CLASS =
   'inline-flex min-h-6 max-w-full items-center justify-center rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0] [overflow-wrap:anywhere]'
 const HISTORY_BADGE_TONE_CLASSES: Record<'muted' | 'success' | 'warning', string> = {
@@ -138,7 +139,6 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
           </p>
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
-          <span className={OPTION_VALUE_CLASS}>{state.timestamp}</span>
           {!state.clearDisabled ? (
             <Button
               size="sm"
@@ -172,7 +172,6 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
           <p className={HISTORY_HEADER_SUBTITLE_CLASS}>查看异常变化、恢复结果和连续次数。</p>
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
-          <span className={OPTION_VALUE_CLASS}>{state.logCount} 次记录</span>
           {!state.logToggleDisabled ? (
             <Button
               size="sm"
@@ -273,15 +272,6 @@ function HistoryRunCard({
   maxAbnormalCount: number
   run: AvailabilityHistoryRunViewModel
 }) {
-  const newResults = Array.isArray(run.newResults) ? run.newResults : []
-  const recoveredResults = Array.isArray(run.recoveredResults) ? run.recoveredResults : []
-  const newResultIds = new Set(newResults.map((result) => String(result?.id || '')))
-  const persistentResults = (Array.isArray(run.results) ? run.results : []).filter((result) => {
-    return !newResultIds.has(String(result?.id || ''))
-  })
-  const topStreak = (run.results || []).length === 0
-    ? 0
-    : Math.max(...run.results.map((result) => Number(result.streak) || 1), 1)
   const runLabel = index === 0 ? '最近一次' : `第 ${index + 1} 次记录`
   const abnormalCount = Number(run.summary?.totalAbnormal) || 0
   const width = abnormalCount <= 0 ? 0 : Math.max(8, Math.round((abnormalCount / maxAbnormalCount) * 100))
@@ -297,10 +287,7 @@ function HistoryRunCard({
       <div className={HISTORY_CARD_HEAD_CLASS}>
         <div className={HISTORY_CARD_HEAD_LEFT_CLASS}>
           <HistoryBadge>{runLabel}</HistoryBadge>
-          <HistoryBadge>{scopeLabel}</HistoryBadge>
-          <HistoryBadge tone="warning">新增 {newCount}</HistoryBadge>
-          <HistoryBadge>持续 {persistentCount}</HistoryBadge>
-          <HistoryBadge tone="success">恢复 {recoveredCount}</HistoryBadge>
+          <span className="text-xs text-ds-text-secondary">{scopeLabel}</span>
         </div>
         <span className={OPTION_VALUE_CLASS}>{formatDateTime(run.completedAt)}</span>
       </div>
@@ -317,55 +304,42 @@ function HistoryRunCard({
             新增 {newCount} · 持续 {persistentCount} · 恢复 {recoveredCount}
           </div>
         </div>
-        <div className={HISTORY_RUN_COPY_CLASS}>
-          {topStreak > 0
-            ? `最高连续 ${topStreak} 次 · ${scopeLabel}`
-            : `本次无异常 · ${scopeLabel}`}
-        </div>
-        <HistoryRunResultSection
-          emptyCopy="本次没有新增异常。"
-          limit={6}
-          moreCopy="条新增异常未展开。"
-          results={newResults}
-          showStreak
-          title="本次新增异常"
-        />
-        <HistoryRunResultSection
-          emptyCopy="本次没有持续异常。"
-          limit={6}
-          moreCopy="条持续异常未展开。"
-          results={persistentResults}
-          showStreak
-          title="本次持续异常"
-        />
-        <HistoryRunResultSection
-          emptyCopy="本次没有已恢复结果。"
-          limit={4}
-          moreCopy="条已恢复结果未展开。"
-          results={recoveredResults}
-          title="本次已恢复"
-        />
+        <OptionDetails className="mt-3" label="查看本轮明细" ariaLabel={'查看本轮明细：' + formatDateTime(run.completedAt)}>
+          <HistoryRunDetails run={run} />
+        </OptionDetails>
       </div>
     </article>
   )
 }
 
+function HistoryRunDetails({ run }: { run: AvailabilityHistoryRunViewModel }) {
+  const newResults = Array.isArray(run.newResults) ? run.newResults : []
+  const recoveredResults = Array.isArray(run.recoveredResults) ? run.recoveredResults : []
+  const newIds = new Set(newResults.map(result => String(result.id)))
+  const persistentResults = (run.results || []).filter(result => !newIds.has(String(result.id)))
+  const topStreak = (run.results || []).reduce((max, result) => Math.max(max, Number(result.streak) || 1), 0)
+  return <div className="grid gap-3">
+    {topStreak > 1 ? <p className={HISTORY_RUN_COPY_CLASS}>最长连续异常 {topStreak} 次</p> : null}
+    {newResults.length ? <HistoryRunResultSection results={newResults} limit={6} showStreak title="新增异常" /> : null}
+    {persistentResults.length ? <HistoryRunResultSection results={persistentResults} limit={6} showStreak title="持续异常" /> : null}
+    {recoveredResults.length ? <HistoryRunResultSection results={recoveredResults} limit={4} title="已恢复" /> : null}
+    {!newResults.length && !persistentResults.length && !recoveredResults.length ? <p className={HISTORY_RUN_COPY_CLASS}>本轮没有异常或恢复记录。</p> : null}
+  </div>
+}
+
 function HistoryRunResultSection({
-  emptyCopy,
   limit,
-  moreCopy,
   results,
   showStreak = false,
   title
 }: {
-  emptyCopy: string
   limit: number
-  moreCopy: string
   results: AvailabilityHistoryResultViewModel[]
   showStreak?: boolean
   title: string
 }) {
-  const visibleResults = results.slice(0, limit)
+  const [additionalVisibleCount, setAdditionalVisibleCount] = useState(0)
+  const visibleResults = results.slice(0, limit + additionalVisibleCount)
   const hiddenCount = Math.max(0, results.length - visibleResults.length)
 
   return (
@@ -381,10 +355,10 @@ function HistoryRunResultSection({
               </li>
             ))}
           </ul>
-          {hiddenCount ? <p className={HISTORY_RUN_COPY_CLASS}>还有 {hiddenCount} {moreCopy}</p> : null}
+          {hiddenCount ? <Button className="mt-2" size="sm" variant="secondary" onClick={() => setAdditionalVisibleCount(count => count + 50)}>显示更多（剩余 {hiddenCount} 条）</Button> : null}
         </>
       ) : (
-        <p className={HISTORY_RUN_COPY_CLASS}>{emptyCopy}</p>
+        <p className={HISTORY_RUN_COPY_CLASS}>没有相关记录。</p>
       )}
     </div>
   )

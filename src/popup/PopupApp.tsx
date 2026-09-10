@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { cx } from '../ui/base/utils'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import {
   dispatchPopupModalAction,
   usePopupModalsView,
-  usePopupSmartClassifierView
+  usePopupSmartClassifierView,
+  usePopupToasts
 } from './popup-controller-store'
 import {
   dispatchPopupDocumentKeyDown,
@@ -16,7 +17,8 @@ import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
 import { PopupSmartClassifierHost } from './components/PopupSmartClassifierHost'
-import { PopupToasts } from './components/PopupToasts'
+
+const PopupToasts = lazy(() => import('./components/PopupToasts').then(module => ({ default: module.PopupToasts })))
 
 const appShellBaseClass = [
   'group relative flex h-full flex-col overflow-hidden border border-ds-border bg-ds-app text-ds-text-primary',
@@ -111,9 +113,23 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
         portalContainer={portalContainer ?? undefined}
       />
 
-      <PopupToasts />
+      <DeferredPopupToasts />
     </>
   )
+}
+
+function DeferredPopupToasts() {
+  const toasts = usePopupToasts()
+  const [requested, setRequested] = useState(false)
+
+  useEffect(() => {
+    if (toasts.length) setRequested(true)
+  }, [toasts.length])
+
+  // Keep the host after its first use so toast exit motion can finish.
+  return requested || toasts.length ? (
+    <Suspense fallback={null}><PopupToasts /></Suspense>
+  ) : null
 }
 
 function DeferredPopupModalLayer({

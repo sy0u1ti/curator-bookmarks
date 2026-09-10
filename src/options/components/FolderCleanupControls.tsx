@@ -12,7 +12,7 @@ const FOLDER_CLEANUP_RUN_HEADER_CLASS =
 const FOLDER_CLEANUP_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:w-full max-[760px]:justify-start'
 const FOLDER_CLEANUP_STATUS_BASE_CLASS =
-  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border px-[10px] text-[11px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border px-[10px] text-xs font-semibold leading-none tracking-[0]'
 const FOLDER_CLEANUP_STATUS_TONE_CLASS = {
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
   success: 'border-ds-success/35 bg-ds-success-soft text-ds-success-text',

@@ -76,6 +76,9 @@ export interface NavigationNetworkEvidence {
   finalResponseObserved?: boolean
   errorCode?: string
   fromCache?: boolean
+  contentType?: string
+  attachment?: boolean
+  retryAfterMs?: number
   redirects: NavigationNetworkRedirect[]
   timing: NavigationNetworkTiming
 }
@@ -95,6 +98,8 @@ export interface ProbeResult {
   detail: string
   finalUrl?: string
   redirected?: boolean
+  statusCode?: number
+  retryAfterMs?: number
   errorCode?: string
 }
 

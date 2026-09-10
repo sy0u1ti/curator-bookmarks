@@ -4,6 +4,9 @@ import {
   getBackgroundMaskOverlayGradient,
   normalizeBackgroundMaskStyle
 } from './background-mask-settings.js'
+import { prefetchNewtabStartupData } from './newtab-startup-data.js'
+
+prefetchNewtabStartupData()
 
 interface InstantWallpaperTargetRecord {
   signature?: string

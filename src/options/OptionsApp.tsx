@@ -70,13 +70,9 @@ import { useOptionsSectionChrome } from './useOptionsSectionChrome'
 const AvailabilityPanel = lazy(() => import('./components/AvailabilityPanel').then((module) => ({ default: module.AvailabilityPanel })))
 const AiAnalysisPanel = lazy(() => import('./components/AiAnalysisPanel').then((module) => ({ default: module.AiAnalysisPanel })))
 const BookmarkHistoryPanel = lazy(() => import('./components/BookmarkHistoryPanel').then((module) => ({ default: module.BookmarkHistoryPanel })))
-const HistoryPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.HistoryPanel })))
-const BackupPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.BackupPanel })))
-const RedirectsPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.RedirectsPanel })))
-const DuplicatesPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.DuplicatesPanel })))
-const FolderCleanupPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.FolderCleanupPanel })))
-const IgnoreRulesPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.IgnoreRulesPanel })))
-const RecyclePanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.RecyclePanel })))
+// These panels share one chunk. Reuse its resolved lazy boundary so moving to
+// another task panel does not suspend again after that chunk has loaded.
+const TaskPanel = lazy(() => import('./components/TaskPanels').then((module) => ({ default: module.TaskPanel })))
 
 type OptionsModalsComponent = (typeof import('./components/OptionsModals'))['OptionsModals']
 
@@ -695,15 +691,9 @@ function ActiveOptionsPanel({
     )
   }
   if (sectionKey === 'availability') return <AvailabilityPanel hidden={false} />
-  if (sectionKey === 'history') return <HistoryPanel hidden={false} />
   if (sectionKey === 'ai') return <AiAnalysisPanel hidden={false} />
   if (sectionKey === 'bookmark-history') return <BookmarkHistoryPanel hidden={false} />
-  if (sectionKey === 'backup') return <BackupPanel hidden={false} />
-  if (sectionKey === 'redirects') return <RedirectsPanel hidden={false} />
-  if (sectionKey === 'duplicates') return <DuplicatesPanel hidden={false} />
-  if (sectionKey === 'folder-cleanup') return <FolderCleanupPanel hidden={false} />
-  if (sectionKey === 'ignore') return <IgnoreRulesPanel hidden={false} />
-  return <RecyclePanel hidden={false} />
+  return <TaskPanel hidden={false} sectionKey={sectionKey} />
 }
 
 function OptionsPanelLoading() {

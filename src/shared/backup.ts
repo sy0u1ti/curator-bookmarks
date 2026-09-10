@@ -289,6 +289,7 @@ export async function createCuratorBackupFile(
         searchSettings: stored[STORAGE_KEYS.newTabSearchSettings] ?? null,
         iconSettings: stored[STORAGE_KEYS.newTabIconSettings] ?? null,
         timeSettings: stored[STORAGE_KEYS.newTabTimeSettings] ?? null,
+        glassSettings: stored[STORAGE_KEYS.newTabGlassSettings] ?? null,
         generalSettings: stored[STORAGE_KEYS.newTabGeneralSettings] ?? null,
         folderSettings: stored[STORAGE_KEYS.newTabFolderSettings] ?? null,
         activity: newTabActivity
@@ -848,6 +849,7 @@ async function getBackupStorageSnapshot(): Promise<Record<string, unknown>> {
     STORAGE_KEYS.newTabSearchSettings,
     STORAGE_KEYS.newTabIconSettings,
     STORAGE_KEYS.newTabTimeSettings,
+    STORAGE_KEYS.newTabGlassSettings,
     STORAGE_KEYS.newTabGeneralSettings,
     STORAGE_KEYS.newTabFolderSettings,
     STORAGE_KEYS.newTabActivity,
@@ -890,6 +892,7 @@ function buildNewTabStoragePayload(newTab: Record<string, unknown>): Record<stri
     ['searchSettings', STORAGE_KEYS.newTabSearchSettings],
     ['iconSettings', STORAGE_KEYS.newTabIconSettings],
     ['timeSettings', STORAGE_KEYS.newTabTimeSettings],
+    ['glassSettings', STORAGE_KEYS.newTabGlassSettings],
     ['generalSettings', STORAGE_KEYS.newTabGeneralSettings],
     ['folderSettings', STORAGE_KEYS.newTabFolderSettings],
     ['activity', STORAGE_KEYS.newTabActivity]

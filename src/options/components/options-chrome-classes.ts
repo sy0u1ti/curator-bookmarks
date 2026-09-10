@@ -22,7 +22,7 @@ export const optionsBrandCopyClass =
   'min-w-0 flex flex-col gap-[5px] [font-family:var(--font-sans)]'
 
 export const optionsSidebarLabelClass =
-  'm-0 px-2.5 [font-family:var(--font-sans)] text-[11px] font-semibold uppercase leading-4 tracking-[0.08em] text-ds-text-muted max-[920px]:px-0 max-[920px]:[overflow-wrap:anywhere]'
+  'm-0 px-2.5 [font-family:var(--font-sans)] text-xs font-semibold uppercase leading-4 tracking-[0.08em] text-ds-text-muted max-[920px]:px-0 max-[920px]:[overflow-wrap:anywhere]'
 
 export const navGroupClass = 'relative z-[1] grid min-w-0 gap-2'
 
@@ -64,7 +64,7 @@ export const navSubitemClass = [
 ].join(' ')
 
 export const navLinkIconClass =
-  'relative z-[1] inline-grid size-4 shrink-0 place-items-center text-ds-text-disabled transition-[color,transform] duration-ds-fast ease-ds-standard group-hover:text-ds-text-secondary group-focus-visible:text-ds-text-secondary group-aria-[current=page]:text-ds-text-primary'
+  'relative z-[1] inline-grid size-4 shrink-0 place-items-center text-ds-text-disabled transition-[color,transform,scale] duration-ds-fast ease-ds-standard group-hover:text-ds-text-secondary group-focus-visible:text-ds-text-secondary group-aria-[current=page]:text-ds-text-primary'
 
 export const optionsMobileNavTriggerClass =
   'options-mobile-nav-trigger !hidden size-10 min-h-10 min-w-10 flex-none p-0 max-[920px]:!inline-flex'

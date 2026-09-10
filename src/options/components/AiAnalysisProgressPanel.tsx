@@ -60,7 +60,7 @@ export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
       progressDivisions={state.progressMax}
       progressValueText={state.progressLabel}
       progressClassName={OPTIONS_PROGRESS_TRACK_CLASS}
-      progressStyle={getSheenProgressTrackStyle(progressPercent)}
+      progressStyle={getSheenProgressTrackStyle(progressPercent, state.busy)}
       progressIndicatorClassName={SHEEN_PROGRESS_BAR_CLASS}
       progressIndicatorStyle={getSheenProgressBarStyle(progressPercent)}
       progressUnstyled

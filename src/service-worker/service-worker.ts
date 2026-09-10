@@ -1,3 +1,5 @@
+import { BOOKMARK_CLASSIFICATION_SCHEMA as AUTO_CLASSIFY_SCHEMA, validateAiClassificationResult, meetsAiConfidenceThreshold } from '../shared/ai-task-contracts.js'
+import { getNavigationHeaderOutcome, isHttpRedirectStatus, parseAvailabilityRetryAfter, readAvailabilityResponseHeaders } from '../shared/availability-evidence.js'
 import type {
   AvailabilityProbeMessage,
   AvailabilityProbeResult,
@@ -41,18 +43,18 @@ import {
 import {
   normalizeBookmarkTagConfidence,
   normalizeBookmarkTags,
-  removeBookmarkTagRecord,
+  removeBookmarkTagRecords,
   upsertBookmarkTagFromAnalysis
 } from '../shared/bookmark-tags.js'
 import {
   AiRuntimeError,
   buildAiFolderCandidates,
   requestStructuredAiOutput,
+  clearAiProviderCompatibilityCache,
   toAiFolderCandidatePayload,
-  validateKnownFolderId,
   type AiFolderCandidate
 } from '../shared/ai-runtime.js'
-import { isAllowedAiProviderBaseUrl } from '../shared/ai-provider-url.js'
+import { isAiProviderConfigured } from '../shared/ai-provider-url.js'
 import {
   normalizeAiNamingSettings,
   serializeAiNamingSettings,
@@ -89,7 +91,7 @@ import {
 } from '../options/sections/content-extraction.js'
 import {
   loadContentSnapshotSettings,
-  removeContentSnapshotForBookmark,
+  removeContentSnapshotsForBookmarks,
   saveContentSnapshotFromContext
 } from '../shared/content-snapshots.js'
 import {
@@ -99,6 +101,7 @@ import {
   recoverInterruptedCuratorBackupRestore
 } from '../shared/backup.js'
 import { shouldReuseBookmarkForSave } from './save-guards.js'
+import { createBookmarkRemovalQueue } from './bookmark-removal-queue.js'
 
 interface PendingCheckState {
   tabId: number
@@ -262,6 +265,7 @@ let autoAnalyzeQueueWriteQueue: Promise<unknown> = Promise.resolve()
 let autoAnalyzeQueueProcessing = false
 let autoAnalyzeQueueTimer = 0
 let aiProviderSettingsGeneration = 0
+const activeAutoAiRequests = new Set<AbortController>()
 const AUTO_CLASSIFY_SUPPRESS_MS = 10000
 const SUPPRESSED_AUTO_BOOKMARK_URL_LIMIT = 80
 const AUTO_CLASSIFY_DELAY_MS = 900
@@ -285,56 +289,7 @@ const COMMAND_CAPTURE_INBOX = 'curator-capture-inbox'
 const INBOX_CAPTURE_NOTIFICATION_PREFIX = 'curator-inbox-capture-'
 const INBOX_CLASSIFIED_NOTIFICATION_PREFIX = 'curator-inbox-classified-'
 
-const AUTO_CLASSIFY_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['title', 'summary', 'content_type', 'topics', 'tags', 'aliases', 'confidence', 'existing_folders', 'new_folder'],
-  properties: {
-    title: { type: 'string', maxLength: 80 },
-    summary: { type: 'string', maxLength: 500 },
-    content_type: { type: 'string', maxLength: 40 },
-    topics: {
-      type: 'array',
-      maxItems: 8,
-      items: { type: 'string', maxLength: 40 }
-    },
-    tags: {
-      type: 'array',
-      maxItems: 12,
-      items: { type: 'string', maxLength: 24 }
-    },
-    aliases: {
-      type: 'array',
-      maxItems: 20,
-      items: { type: 'string', maxLength: 40 }
-    },
-    confidence: { type: 'number', minimum: 0, maximum: 1 },
-    existing_folders: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['folder_id', 'folder_path', 'reason', 'confidence'],
-        properties: {
-          folder_id: { type: 'string' },
-          folder_path: { type: 'string' },
-          reason: { type: 'string' },
-          confidence: { type: 'number', minimum: 0, maximum: 1 }
-        }
-      }
-    },
-    new_folder: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['folder_path', 'reason', 'confidence'],
-      properties: {
-        folder_path: { type: 'string' },
-        reason: { type: 'string' },
-        confidence: { type: 'number', minimum: 0, maximum: 1 }
-      }
-    }
-  }
-} as const
+
 
 type RuntimeMessage =
   | AvailabilityProbeMessage
@@ -348,6 +303,8 @@ type RuntimeMessage =
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local' && changes[STORAGE_KEYS.aiProviderSettings]) {
     aiProviderSettingsGeneration += 1
+    clearAiProviderCompatibilityCache()
+    for (const controller of activeAutoAiRequests) controller.abort()
   }
 })
 
@@ -1024,14 +981,20 @@ chrome.bookmarks.onCreated.addListener((bookmarkId, node) => {
   void handleBookmarkCreatedForAutoAnalysis(String(bookmarkId), node)
 })
 
+const enqueueBookmarkRemoval = createBookmarkRemovalQueue(async (bookmarkIds) => {
+  await Promise.all([
+    removeBookmarkTagRecords(bookmarkIds).catch((error) => {
+      console.warn('[Curator] 标签记录清理失败', error)
+    }),
+    removeContentSnapshotsForBookmarks(bookmarkIds).catch((error) => {
+      console.warn('[Curator] 网页快照清理失败', error)
+    })
+  ])
+})
+
 chrome.bookmarks.onRemoved.addListener((bookmarkId) => {
   invalidateAutoAnalyzeTreeContext()
-  removeBookmarkTagRecord(bookmarkId).catch((error) => {
-    console.warn('[Curator] 标签记录清理失败', error)
-  })
-  removeContentSnapshotForBookmark(bookmarkId).catch((error) => {
-    console.warn('[Curator] 网页快照清理失败', error)
-  })
+  void enqueueBookmarkRemoval(bookmarkId)
 })
 
 chrome.bookmarks.onChanged.addListener(() => {
@@ -1432,6 +1395,7 @@ async function runAutoAnalysisForBookmark(
     return
   }
 
+  const requestSettingsGeneration = aiProviderSettingsGeneration
   const aiResult = await requestAutoClassification({
     settings: requestSettings,
     pageContext,
@@ -1440,7 +1404,9 @@ async function runAutoAnalysisForBookmark(
   })
   const recommendation = chooseAutoFolderRecommendation(aiResult, extracted.folders, bookmarkRecord)
   return withAvailabilityAutoAnalysisMutationLock(async () => {
+    throwIfAutoAiSettingsChanged(requestSettingsGeneration)
     let latestBookmark = await getBookmarkById(bookmarkId)
+    throwIfAutoAiSettingsChanged(requestSettingsGeneration)
     if (!latestBookmark?.url) {
       await persistAutoAnalyzeStatus({
         status: 'failed',
@@ -1536,6 +1502,7 @@ async function runAutoAnalysisForBookmark(
   }
 
   const inboxSettings = inboxItem ? await loadInboxSettings() : null
+  throwIfAutoAiSettingsChanged(requestSettingsGeneration)
   const inboxMinConfidence = inboxSettings?.minAutoMoveConfidence ?? INBOX_AUTO_MOVE_MIN_CONFIDENCE
   const nonInboxMutationBlockReason = inboxItem
     ? ''
@@ -1545,10 +1512,12 @@ async function runAutoAnalysisForBookmark(
     ? (
       Boolean(inboxSettings?.autoMoveToRecommendedFolder) &&
       !inboxSettings?.tagOnlyNoAutoMove &&
-      recommendation.confidence >= inboxMinConfidence
+      meetsAiConfidenceThreshold(aiResult.confidence, inboxMinConfidence) &&
+      meetsAiConfidenceThreshold(recommendation.confidence, inboxMinConfidence)
     )
     : canMutateNonInboxBookmark
-  const shouldAutoRename = Boolean(inboxItem) || canMutateNonInboxBookmark
+  const shouldAutoRename = (Boolean(inboxItem) || canMutateNonInboxBookmark) &&
+    meetsAiConfidenceThreshold(aiResult.confidence, AUTO_CLASSIFY_MUTATION_MIN_CONFIDENCE)
   const preMutationFolderPath = await getBookmarkFolderPath(
     String(latestBookmark.parentId || '')
   )
@@ -1589,6 +1558,7 @@ async function runAutoAnalysisForBookmark(
   }
   latestBookmark = mutationReadyBookmark
 
+  throwIfAutoAiSettingsChanged(requestSettingsGeneration)
   const folderId = shouldAutoMoveRecommendation
     ? recommendation.kind === 'new'
       ? await ensureBookmarkFolderPath(recommendation.path)
@@ -1631,6 +1601,7 @@ async function runAutoAnalysisForBookmark(
   const moved = shouldAutoMoveRecommendation && originalParentId !== folderId
   let currentBookmark = latestBookmark
   if (moved) {
+    throwIfAutoAiSettingsChanged(requestSettingsGeneration)
     currentBookmark = await moveBookmarkNode(bookmarkId, folderId)
     invalidateAutoAnalyzeTreeContext()
   }
@@ -1664,6 +1635,7 @@ async function runAutoAnalysisForBookmark(
       mutationWarning = `${renameConflict} 已跳过自动改名。`
     } else {
       try {
+        throwIfAutoAiSettingsChanged(requestSettingsGeneration)
         const updatedBookmark = await updateBookmarkNode(bookmarkId, { title: suggestedTitle })
         currentBookmark = updatedBookmark
         finalBookmarkTitle = updatedBookmark.title || suggestedTitle
@@ -2377,7 +2349,7 @@ async function loadCurrentAutoAnalyzeRequestSettings({
 }
 
 function hasUsableAiSettings(settings: AiNamingSettings): boolean {
-  return Boolean(settings.baseUrl && settings.apiKey && settings.model && isAllowedAiProviderBaseUrl(settings.baseUrl))
+  return isAiProviderConfigured(settings)
 }
 
 function buildAutoBookmarkRecord(node: chrome.bookmarks.BookmarkTreeNode): BookmarkRecord {
@@ -2613,16 +2585,23 @@ async function requestAutoClassification({
 }): Promise<AutoClassifyResult> {
   const folderCandidates = buildAiFolderCandidates(folders, { limit: AUTO_CLASSIFY_FOLDER_LIMIT })
   const prompt = buildAutoClassifyPrompt({ pageContext, bookmark, folderCandidates })
-  const result = await requestStructuredAiOutput<Record<string, any>>({
-    settings,
-    schema: AUTO_CLASSIFY_SCHEMA,
-    schemaName: 'auto_bookmark_classification',
-    systemPrompt: prompt.systemPrompt,
-    userPrompt: prompt.userPrompt,
-    timeoutMs: settings.timeoutMs,
-    validate: (payload) => validateAutoFolderIds(payload, folderCandidates)
-  })
-  return normalizeAutoAiResult(result.data)
+  const controller = new AbortController()
+  activeAutoAiRequests.add(controller)
+  try {
+    const result = await requestStructuredAiOutput<Record<string, any>>({
+      settings,
+      schema: AUTO_CLASSIFY_SCHEMA,
+      schemaName: 'auto_bookmark_classification',
+      systemPrompt: prompt.systemPrompt,
+      userPrompt: prompt.userPrompt,
+      timeoutMs: settings.timeoutMs,
+      signal: controller.signal,
+      validate: (payload) => validateAutoFolderIds(payload, folderCandidates)
+    })
+    return normalizeAutoAiResult(result.data)
+  } finally {
+    activeAutoAiRequests.delete(controller)
+  }
 }
 
 function buildAutoClassifyPrompt({
@@ -2670,12 +2649,7 @@ function buildAutoClassifyPrompt({
 }
 
 function validateAutoFolderIds(payload: Record<string, any>, folderCandidates: AiFolderCandidate[]): void {
-  const existingFolders = Array.isArray(payload?.existing_folders)
-    ? payload.existing_folders
-    : []
-  existingFolders.forEach((item) => {
-    validateKnownFolderId(item?.folder_id, folderCandidates)
-  })
+  validateAiClassificationResult(payload, folderCandidates)
 }
 
 function chooseAutoFolderRecommendation(
@@ -2731,6 +2705,12 @@ function chooseAutoFolderRecommendation(
   }
 
   return null
+}
+
+function throwIfAutoAiSettingsChanged(generation: number): void {
+  if (generation !== aiProviderSettingsGeneration) {
+    throw new AiRuntimeError('abort', 'AI 设置已变更，已停止使用旧配置继续处理书签。')
+  }
 }
 
 function getAutoBookmarkMutationConflict(
@@ -3900,7 +3880,8 @@ async function performAvailabilityProbeRedirectChain({
         detail: captured.status
           ? `网络探测(${method})返回 HTTP ${captured.status}。${captured.viaVerifiedLoopbackProxy ? ' 已通过 HTTPS 响应确认本机代理传输。' : ''}`
           : `网络探测(${method})未返回可读取的 HTTP 状态。`,
-        errorCode: captured.status ? '' : 'opaque-response'
+        errorCode: captured.status ? '' : 'opaque-response',
+        ...(captured.retryAfterMs === undefined ? {} : { retryAfterMs: captured.retryAfterMs })
       }
     }
 
@@ -4000,6 +3981,7 @@ async function fetchAvailabilityProbeHop(
   status: number
   redirectUrl: string
   viaVerifiedLoopbackProxy: boolean
+  retryAfterMs?: number
 }> {
   const originPattern = getOriginPermissionPattern(url)
   if (!originPattern) {
@@ -4216,7 +4198,8 @@ async function fetchAvailabilityProbeHop(
       ok: response.ok,
       status: redirectStatus || Number(response.status) || 0,
       redirectUrl,
-      viaVerifiedLoopbackProxy
+      viaVerifiedLoopbackProxy,
+      retryAfterMs: parseAvailabilityRetryAfter(response.headers.get('retry-after'))
     }
     try {
       const cancelResult = response.body?.cancel()
@@ -4495,7 +4478,7 @@ async function attachWebRequestListeners(state: PendingCheckState): Promise<bool
   try {
     chrome.webRequest.onBeforeRequest.addListener(listeners.beforeRequest, filter)
     chrome.webRequest.onBeforeRedirect.addListener(listeners.beforeRedirect, filter)
-    chrome.webRequest.onHeadersReceived.addListener(listeners.headersReceived, filter)
+    chrome.webRequest.onHeadersReceived.addListener(listeners.headersReceived, filter, ['responseHeaders'])
     chrome.webRequest.onCompleted.addListener(listeners.completed, filter)
     chrome.webRequest.onErrorOccurred.addListener(listeners.errorOccurred, filter)
     state.webRequestListeners = listeners
@@ -4525,12 +4508,12 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       return undefined
     },
     beforeRedirect(details) {
-      if (state.settled) {
+      if (state.settled || state.networkEvidence?.requestId && state.networkEvidence.requestId !== details.requestId) {
         return
       }
 
       state.lastAttemptedUrl = details.url
-      if (finalizeSensitiveNavigationTarget(state, details.url)) {
+      if (finalizeSensitiveNavigationTarget(state, details.url) || finalizeUnauthorizedNavigationTarget(state, details.url)) {
         return
       }
 
@@ -4558,12 +4541,12 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       }
     },
     headersReceived(details) {
-      if (state.settled) {
+      if (state.settled || state.networkEvidence?.requestId && state.networkEvidence.requestId !== details.requestId) {
         return
       }
 
       state.lastAttemptedUrl = details.url
-      if (finalizeSensitiveNavigationTarget(state, details.url)) {
+      if (finalizeSensitiveNavigationTarget(state, details.url) || finalizeUnauthorizedNavigationTarget(state, details.url)) {
         return
       }
 
@@ -4580,15 +4563,18 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
         evidence.timing.responseStartMs = details.timeStamp
       }
       evidence.timing.responseLatencyMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.responseStartMs)
+      Object.assign(evidence, readAvailabilityResponseHeaders(details.responseHeaders))
+      const outcome = getNavigationHeaderOutcome(statusCode, evidence)
+      if (outcome) finalizeNavigationCheck(state.tabId, { ...outcome, finalUrl: details.url })
       return undefined
     },
     completed(details) {
-      if (state.settled) {
+      if (state.settled || state.networkEvidence?.requestId && state.networkEvidence.requestId !== details.requestId) {
         return
       }
 
       state.lastAttemptedUrl = details.url
-      if (finalizeSensitiveNavigationTarget(state, details.url)) {
+      if (finalizeSensitiveNavigationTarget(state, details.url) || finalizeUnauthorizedNavigationTarget(state, details.url)) {
         return
       }
 
@@ -4600,9 +4586,12 @@ function createWebRequestListeners(state: PendingCheckState): WebRequestListener
       evidence.fromCache = Boolean(details.fromCache)
       evidence.timing.completedMs = details.timeStamp
       evidence.timing.totalMs = getElapsedMs(evidence.timing.requestStartMs, evidence.timing.completedMs)
+      if (!evidence.errorCode && ((Number(evidence.statusCode) >= 200 && Number(evidence.statusCode) < 300) || evidence.statusCode === 304)) {
+        finalizeNavigationCheck(state.tabId, { status: 'available', finalUrl: details.url, errorCode: '', detail: '主文档已完整返回，已停止继续等待页面资源。' })
+      }
     },
     errorOccurred(details) {
-      if (state.settled) {
+      if (state.settled || state.networkEvidence?.requestId && state.networkEvidence.requestId !== details.requestId) {
         return
       }
 
@@ -5149,7 +5138,7 @@ function getOrCreateNetworkEvidence(
     timeStamp?: number
   }
 ): NavigationNetworkEvidence {
-  if (!state.networkEvidence) {
+  if (!state.networkEvidence || details.requestId && state.networkEvidence.requestId && details.requestId !== state.networkEvidence.requestId) {
     state.networkEvidence = {
       requestSent: true,
       requestId: details.requestId,
@@ -5258,7 +5247,7 @@ function getUrlOrigin(url: string | undefined): string {
 }
 
 function isRedirectStatusCode(statusCode: number): boolean {
-  return statusCode >= 300 && statusCode < 400
+  return isHttpRedirectStatus(statusCode)
 }
 
 function cloneNetworkEvidence(

@@ -1339,9 +1339,9 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} {
   /* This script paints before the app stylesheet is available, so mirror the
      resting bookmark material here instead of letting hydration add the blur. */
-  --preboot-card-bg: rgba(0, 0, 0, 0.6);
-  --preboot-card-border: rgba(255, 255, 255, 0.08);
-  --preboot-card-filter: blur(8px);
+  --preboot-card-bg: var(--newtab-glass-bg-fill, rgba(0, 0, 0, 0.13));
+  --preboot-card-border: rgba(255, 255, 255, 0.10);
+  --preboot-card-filter: blur(var(--newtab-glass-background-blur, 12px));
   position: fixed;
   inset: 0;
   z-index: 2;

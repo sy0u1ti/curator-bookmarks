@@ -341,16 +341,7 @@ export async function deleteSelectedDuplicates(callbacks) {
     return
   }
 
-  const targetIds = getSelectedDuplicateIds()
-  const deleteCandidates = targetIds.flatMap((bookmarkId) => {
-    const item = getDuplicateItemById(bookmarkId)
-    return item?.url
-      ? [{
-          id: String(item.id),
-          expectedUrl: String(item.url)
-        }]
-      : []
-  })
+  const deleteCandidates = getSelectedDuplicateCandidates()
   if (!deleteCandidates.length) {
     return
   }
@@ -444,7 +435,10 @@ function selectDuplicateGroupsByStrategy(strategy, groups) {
   }
 
   for (const group of groups) {
-    const groupResult = selectDuplicateGroupByStrategy(group.id, strategy)
+    if (group.items.length <= 1) {
+      continue
+    }
+    const groupResult = selectDuplicateGroupKeepItem(group, getDuplicateKeepItem(group, strategy))
     if (!groupResult.groupCount) {
       continue
     }
@@ -563,8 +557,8 @@ function setDuplicateStrategyStatus(result, strategyLabel) {
     `${strategyLabel}：已选择 ${result.deleteCount} 条待移入回收站，保留 ${result.keepCount} 条。`
 }
 
-function getSelectedDuplicateIds() {
-  const ids = []
+function getSelectedDuplicateCandidates() {
+  const candidates: Array<{ id: string; expectedUrl: string }> = []
   const seen = new Set()
 
   for (const group of managerState.duplicateGroups) {
@@ -574,23 +568,14 @@ function getSelectedDuplicateIds() {
         continue
       }
 
-      ids.push(itemId)
       seen.add(itemId)
+      if (item.url) {
+        candidates.push({ id: itemId, expectedUrl: String(item.url) })
+      }
     }
   }
 
-  return ids
-}
-
-function getDuplicateItemById(bookmarkId) {
-  const normalizedId = String(bookmarkId || '')
-  for (const group of managerState.duplicateGroups) {
-    const item = group.items.find((candidate) => String(candidate.id) === normalizedId)
-    if (item) {
-      return item
-    }
-  }
-  return null
+  return candidates
 }
 
 function normalizeDuplicateStrategy(strategy) {

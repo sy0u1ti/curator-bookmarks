@@ -18,9 +18,7 @@ const RECYCLE_CARD_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.
 const RECYCLE_CHECK_CLASS =
   'inline-flex items-center gap-2 text-xs font-semibold text-ds-text-secondary'
 const RECYCLE_CARD_ACTIONS_CLASS = 'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
-const RECYCLE_CARD_ACTION_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary disabled:cursor-default disabled:opacity-50 disabled:hover:text-ds-text-disabled disabled:focus-visible:text-ds-text-disabled data-[disabled]:cursor-default data-[disabled]:opacity-50 data-[disabled]:hover:text-ds-text-disabled data-[disabled]:focus-visible:text-ds-text-disabled'
-const RECYCLE_CARD_DANGER_ACTION_CLASS = 'text-ds-danger-text hover:text-ds-danger-text focus-visible:text-ds-danger-text'
+const RECYCLE_CARD_ACTION_CLASS = 'shrink-0'
 const RECYCLE_CARD_COPY_CLASS = 'mt-3 min-w-0'
 const RECYCLE_CARD_TITLE_CLASS =
   'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'
@@ -66,7 +64,7 @@ function RecycleEntryCard({
 }) {
   const selectionLabel = getRecycleEntryActionLabel('选择回收站书签', entry)
   const restoreLabel = getRecycleEntryActionLabel('恢复书签', entry)
-  const clearLabel = getRecycleEntryActionLabel('清除回收站记录', entry)
+  const clearLabel = getRecycleEntryActionLabel('清除记录', entry)
 
   return (
     <article
@@ -95,7 +93,7 @@ function RecycleEntryCard({
           </label>
         </div>
         <div className={RECYCLE_CARD_ACTIONS_CLASS}>
-          <Button
+          <Button variant="secondary" size="sm"
             className={RECYCLE_CARD_ACTION_CLASS}
             type="button"
             aria-label={restoreLabel}
@@ -104,12 +102,11 @@ function RecycleEntryCard({
               action: 'restore-entry',
               recycleId: entry.recycleId
             })}
-            unstyled
           >
             恢复书签
           </Button>
-          <Button
-            className={[RECYCLE_CARD_ACTION_CLASS, RECYCLE_CARD_DANGER_ACTION_CLASS].join(' ')}
+          <Button variant="danger" size="sm"
+            className={RECYCLE_CARD_ACTION_CLASS}
             type="button"
             aria-label={clearLabel}
             disabled={disabled}
@@ -117,9 +114,8 @@ function RecycleEntryCard({
               action: 'clear-entry',
               recycleId: entry.recycleId
             })}
-            unstyled
           >
-            清除
+            清除记录
           </Button>
         </div>
       </div>

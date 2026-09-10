@@ -8,6 +8,7 @@ import { Select, type SelectOption } from '../../ui/base/Select'
 import { SwitchControl } from '../../ui/base/Switch'
 import { Textarea } from '../../ui/base/Textarea'
 import { AiModelSelector } from './AiModelSelector.js'
+import { OptionDetails } from './OptionDetails.js'
 import { ReasoningEffortSelector } from './ReasoningEffortSelector.js'
 import {
   ButtonBusyLoadingLabel,
@@ -81,7 +82,7 @@ import {
 } from './ai-settings-card-classes.js'
 
 const aiProviderSteps = [
-  { id: 'api-key', index: '1', title: '填写密钥', copy: '先填 API Key；Base URL 在高级选项' },
+  { id: 'api-key', index: '1', title: '填写密钥', copy: '填写渠道密钥；本机服务可留空' },
   { id: 'fetch-models', index: '2', title: '获取模型', copy: '读取可用列表' },
   { id: 'select-model', index: '3', title: '选择模型', copy: '可按模型调推理强度' },
   { id: 'test-connection', index: '4', title: '测试连接', copy: '确认模型可用' },
@@ -105,7 +106,7 @@ export function AiProviderSettings({
   const description = useMemo(() => (
     <>
       <p className={AI_PROVIDER_NOTICE_CLASS}>{state.noticeText}</p>
-      <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地。</p>
+      <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地；本机服务可留空。</p>
     </>
   ), [state.noticeText])
   const status = useMemo(() => (
@@ -157,7 +158,8 @@ export function AiProviderSettings({
         iconName="Bot"
         bodyClassName={AI_PROVIDER_BODY_CLASS}
       >
-        <ol className={AI_PROVIDER_FLOW_CLASS} aria-label="AI 渠道配置流程">
+        <OptionDetails label="配置步骤" ariaLabel="查看 AI 渠道配置步骤">
+          <ol className={AI_PROVIDER_FLOW_CLASS} aria-label="AI 渠道配置流程">
           {aiProviderSteps.map((step) => (
             <li className={AI_PROVIDER_FLOW_STEP_CLASS} key={step.id}>
               <span className={AI_PROVIDER_FLOW_INDEX_CLASS}>{step.index}</span>
@@ -165,7 +167,8 @@ export function AiProviderSettings({
               <p className={AI_PROVIDER_FLOW_COPY_CLASS}>{step.copy}</p>
             </li>
           ))}
-        </ol>
+          </ol>
+        </OptionDetails>
 
         <div className={AI_PROVIDER_FIELD_CLASS}>
           <div className={AI_PROVIDER_FIELD_HEAD_CLASS}>
@@ -225,7 +228,7 @@ export function AiProviderSettings({
         ) : null}
 
         <CollapsibleRoot id="ai-advanced-settings" className={AI_PROVIDER_ADVANCED_CLASS}>
-          <CollapsibleTrigger className={AI_PROVIDER_ADVANCED_TRIGGER_CLASS}>Base URL 与接口选项</CollapsibleTrigger>
+          <CollapsibleTrigger className={AI_PROVIDER_ADVANCED_TRIGGER_CLASS} render={<Button size="sm" variant="secondary" />}>Base URL 与接口选项</CollapsibleTrigger>
           <CollapsiblePanel className={AI_PROVIDER_ADVANCED_PANEL_CLASS}>
             <div className={AI_PROVIDER_GRID_CLASS}>
               <label className={AI_PROVIDER_FIELD_CLASS} htmlFor="ai-base-url">

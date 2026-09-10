@@ -39,7 +39,7 @@ export function createDefaultAiNamingSettings() {
     customModels: [],
     fetchedModels: [],
     reasoningCapabilities: {},
-    apiStyle: 'responses',
+    apiStyle: 'auto',
     timeoutMs: AI_NAMING_DEFAULT_TIMEOUT_MS,
     batchSize: AI_NAMING_DEFAULT_BATCH_SIZE,
     reasoningEffort: 'default',

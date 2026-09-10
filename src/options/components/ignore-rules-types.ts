@@ -35,6 +35,7 @@ export type IgnoreRuleViewModel =
   | FolderIgnoreRuleViewModel
 
 export interface IgnoreRulesState {
+  locked: boolean
   bookmarks: BookmarkIgnoreRuleViewModel[]
   domains: DomainIgnoreRuleViewModel[]
   folders: FolderIgnoreRuleViewModel[]

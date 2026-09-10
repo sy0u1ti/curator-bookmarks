@@ -1,6 +1,8 @@
 import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { SwitchControl } from '../../ui/base/Switch'
-import { Tooltip } from '../../ui/base/Tooltip'
+import { Popover } from '../../ui/base/Popover'
+import { Button } from '../../ui/base/Button'
+import { Icon } from '../../ui/icons/Icon'
 import {
   AI_SETTINGS_BODY_CLASS,
   AI_SETTINGS_CARD_CLASS,
@@ -64,7 +66,7 @@ function FeatureSwitchLoadingRow({
     <div className={AI_SETTINGS_ROW_CLASS} aria-hidden="true">
       <div className={AI_SETTINGS_COPY_CLASS}>
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
-          <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}</strong>
+          <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}<span className="ml-1 inline-block size-8 align-middle" aria-hidden="true" /></strong>
           {item.status ? <span className={AI_SETTINGS_LOADING_BADGE_CLASS} /> : null}
         </div>
       </div>
@@ -81,7 +83,7 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
       <div className={AI_SETTINGS_COPY_CLASS}>
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>
-            {item.label} <HelpTooltip copy={item.help} />
+            {item.label} <FeatureHelp copy={item.help} label={item.label} />
           </strong>
           {item.status ? (
             <span
@@ -110,17 +112,19 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
   )
 }
 
-function HelpTooltip({ copy }: { copy: string }) {
+function FeatureHelp({ copy, label }: { copy: string; label: string }) {
   return (
-    <Tooltip
-      content={copy}
-      delay={180}
-      popupClassName={AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS}
-      sideOffset={10}
+    <Popover
+      title={label}
+      className={AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS}
+      align="start"
+      trigger={
+        <Button className={AI_SETTINGS_HELP_TOOLTIP_CLASS} size="sm" variant="ghost" aria-label={label + '说明'}>
+          <Icon name="CircleHelp" size={16} aria-hidden="true" />
+        </Button>
+      }
     >
-      <button className={AI_SETTINGS_HELP_TOOLTIP_CLASS} type="button" aria-label={copy}>
-        ?
-      </button>
-    </Tooltip>
+      <p className="m-0">{copy}</p>
+    </Popover>
   )
 }

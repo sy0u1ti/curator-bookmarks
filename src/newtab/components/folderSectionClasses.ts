@@ -9,7 +9,7 @@ const FOLDER_SECTION_HEADER_PENDING_CLASS = 'border-[var(--newtab-glass-slider-f
 const FOLDER_SECTION_HEADER_GHOST_CLASS = 'folder-drag-ghost fixed top-0 left-0 z-[120] pointer-events-none opacity-[0.96] [filter:drop-shadow(0_14px_24px_rgba(0,0,0,0.4))] [transform-origin:0_0] [transition:none] will-change-transform'
 
 export const FOLDER_SECTION_TITLE_CLASS = 'folder-section-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[650] leading-[1.2]'
-export const FOLDER_SECTION_COUNT_CLASS = 'folder-section-count inline-grid h-[17px] min-w-5 place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-[10px] font-bold leading-none text-[var(--ui-accent-text)]'
+export const FOLDER_SECTION_COUNT_CLASS = 'folder-section-count inline-grid h-[17px] min-w-5 place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-xs font-bold leading-none text-[var(--ui-accent-text)]'
 
 export function getFolderSectionHeaderRowClass({
   forceVisible = false,

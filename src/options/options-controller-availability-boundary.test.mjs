@@ -5,6 +5,7 @@ const source = await readFile(
   new URL('./options-controller.ts', import.meta.url),
   'utf8'
 )
+const pipelineSource = await readFile(new URL('./sections/availability-pipeline.ts', import.meta.url), 'utf8')
 const redirectsSource = await readFile(
   new URL('./sections/redirects.ts', import.meta.url),
   'utf8'
@@ -127,7 +128,7 @@ const inspectBookmark = getFunctionSource(
 )
 assert.match(
   inspectBookmark,
-  /runNavigationAttempt[\s\S]*shouldAcceptNavigationSuccess[\s\S]*buildNavigationSuccess/,
+  /inspectAvailabilityWithEvidence[\s\S]*navigate:[\s\S]*runNavigationAttempt/,
   'availability checks must use a real background navigation as their primary evidence'
 )
 assert.ok(
@@ -136,25 +137,24 @@ assert.ok(
   'header probes must supplement failed navigation rather than replace real page opening'
 )
 assert.match(
-  inspectBookmark,
-  /buildFailureClassification\(bookmark, attempts, probe, probeEnabled\)/,
+  pipelineSource,
+  /buildFailureClassification\(bookmark, attempts, probeResult, Boolean\(shouldProbe\)\)/,
   'failed navigation attempts must remain part of the final evidence'
 )
 assert.match(
-  inspectBookmark,
-  /AUTHORIZED_SAME_ORIGIN_REDIRECT_HOP_LIMIT[\s\S]*getAuthorizedSameOriginRedirectUrl[\s\S]*visitedNavigationUrls\.has[\s\S]*runRecordedNavigationAttempt/,
+  pipelineSource,
+  /hop < 4[\s\S]*resolveRedirect[\s\S]*visited\.has[\s\S]*runNavigation/,
   'same-origin redirects must use a bounded, loop-safe, exact follow-up navigation'
 )
 assert.ok(
-  inspectBookmark.indexOf('getAuthorizedSameOriginRedirectUrl') <
-    inspectBookmark.indexOf('shouldRetryNavigation(navigation)') &&
-    inspectBookmark.indexOf('getAuthorizedSameOriginRedirectUrl') <
-      inspectBookmark.indexOf('probeBookmarkUrl'),
+  pipelineSource.indexOf('await resolveRedirect') <
+    pipelineSource.indexOf('if (shouldRetryNavigation(navigation))') &&
+    pipelineSource.indexOf('await resolveRedirect') < pipelineSource.indexOf('probeResult = await'),
   'authorized same-origin redirects must be followed before generic retry and header probing'
 )
 const authorizedSameOriginRedirect = getFunctionSource(
   'async function getAuthorizedSameOriginRedirectUrl',
-  'function normalizeAvailabilityNavigationUrl'
+  'async function notifyAvailabilityRunFinished'
 )
 assert.match(
   authorizedSameOriginRedirect,

@@ -15,7 +15,7 @@ export type AvailabilityResultActionDetail =
       panel: AvailabilityResultPanelKind
     }
   | {
-      action: 'promote-failed' | 'demote-review'
+      action: 'promote-failed' | 'demote-review' | 'retest'
       bookmarkId: string
       panel: AvailabilityResultPanelKind
     }
@@ -41,6 +41,8 @@ export interface AvailabilityResultCardViewModel {
   path: string
   quickActions: AvailabilityQuickActionViewModel[]
   recommendation: string
+  summary: string
+  retestDisabled: boolean
   selectable: boolean
   selected: boolean
   selectionDisabled: boolean

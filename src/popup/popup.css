@@ -140,56 +140,74 @@ body::after {
   pointer-events: none;
 }
 
-:where(
-  input,
-  textarea,
+@layer base {
+  :where(
+    input,
+    textarea,
+    button,
+    code,
+    kbd,
+    pre,
+    samp
+  ) {
+    line-break: auto;
+    hanging-punctuation: none;
+    text-spacing-trim: space-all;
+    text-autospace: no-autospace;
+  }
+
   button,
-  code,
-  kbd,
-  pre,
-  samp
-) {
-  line-break: auto;
-  hanging-punctuation: none;
-  text-spacing-trim: space-all;
-  text-autospace: no-autospace;
-}
+  input,
+  textarea {
+    font: inherit;
+  }
 
-button,
-input,
-textarea {
-  font: inherit;
-}
+  button {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-button {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
+  input,
+  textarea {
+    color: inherit;
+  }
 
-input,
-textarea {
-  color: inherit;
-}
+  button:focus-visible,
+  input:focus-visible {
+    outline: none;
+  }
 
-button:focus-visible,
-input:focus-visible {
-  outline: none;
-}
-
-button:focus-visible {
-  outline: 2px solid var(--ds-focus);
-  outline-offset: 2px;
+  button:focus-visible {
+    outline: 2px solid var(--ds-focus);
+    outline-offset: 2px;
+  }
 }
 
 .popup-list-button[data-active="true"] {
   background: transparent;
   box-shadow: none;
+}
+
+/* Keep row actions inside each pane's stacking context during first paint. */
+.t-skel-content .popup-main-list,
+.t-skel-content .popup-folder-tree {
+  position: relative;
+  z-index: 1;
+  isolation: isolate;
+}
+
+/* Promote native scrolling after the initial dissolve. Allocating these GPU
+   surfaces alongside the reveal layers stalls the first cold-start wheel. */
+.popup-workspace-reveal[data-scroll-ready="true"] .t-skel-content .popup-main-list,
+.popup-workspace-reveal[data-scroll-ready="true"] .t-skel-content .popup-folder-tree {
+  transform: translateZ(0);
+  will-change: scroll-position;
 }
 
 .popup-active-result-indicator {
@@ -301,7 +319,9 @@ button:focus-visible {
   gap: var(--popup-row-actions-gap);
   opacity: 0;
   pointer-events: none;
-  transform: translate3d(var(--popup-row-actions-slide), 0, 0);
+  /* Keep resting rails in the scroll layer; the transition can promote only
+     the rail that is moving, instead of retaining a 3D layer for every row. */
+  transform: translateX(var(--popup-row-actions-slide));
   transition:
     opacity var(--ds-motion-fast) var(--resize-ease),
     transform var(--ds-motion-fast) var(--resize-ease);
@@ -313,7 +333,7 @@ button:focus-visible {
 .popup-row-actions[data-open="true"]:not([data-collapsed="true"]) .popup-row-actions-menu {
   opacity: 1;
   pointer-events: auto;
-  transform: translate3d(0, 0, 0);
+  transform: translateX(0);
 }
 
 .popup-row-actions-trigger {
@@ -421,7 +441,7 @@ button:focus-visible {
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not([data-pinned="true"]):not(:focus-within) .popup-row-actions-menu {
   opacity: 0;
   pointer-events: none;
-  transform: translate3d(var(--popup-row-actions-slide), 0, 0);
+  transform: translateX(var(--popup-row-actions-slide));
   transition-duration: 1ms !important;
 }
 

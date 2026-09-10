@@ -729,14 +729,29 @@ export async function clearAiBookmarkTags(bookmarkId: unknown): Promise<Bookmark
 }
 
 export async function removeBookmarkTagRecord(bookmarkId: unknown): Promise<BookmarkTagIndex> {
-  const id = cleanText(bookmarkId)
+  return removeBookmarkTagRecords([bookmarkId])
+}
+
+export async function removeBookmarkTagRecords(bookmarkIds: unknown[]): Promise<BookmarkTagIndex> {
+  const ids = new Set<string>()
+  for (const bookmarkId of bookmarkIds) {
+    const id = cleanText(bookmarkId)
+    if (id) ids.add(id)
+  }
   return updateBookmarkTagIndex((current) => {
-    if (!id || !current.records[id]) {
+    let nextRecords = current.records
+    for (const id of ids) {
+      if (!current.records[id]) {
+        continue
+      }
+      if (nextRecords === current.records) {
+        nextRecords = { ...current.records }
+      }
+      delete nextRecords[id]
+    }
+    if (nextRecords === current.records) {
       return current
     }
-
-    const nextRecords = { ...current.records }
-    delete nextRecords[id]
 
     return {
       version: BOOKMARK_TAG_INDEX_VERSION,

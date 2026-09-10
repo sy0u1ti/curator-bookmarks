@@ -11,8 +11,8 @@ export const CLOCK_TIME_GROUP_CLASS = 'newtab-clock-time-group inline-flex min-w
 const CLOCK_TIME_BASE_CLASS = 'newtab-clock-time whitespace-nowrap text-[calc(22px*var(--clock-scale))] font-[720] leading-none tracking-[0] text-[rgba(245,245,247,0.92)] tabular-nums'
 const CLOCK_TIME_MINUTES_CLASS = 'min-w-[5ch]'
 const CLOCK_TIME_SECONDS_CLASS = 'min-w-[8ch]'
-export const CLOCK_PERIOD_CLASS = 'newtab-clock-period whitespace-nowrap text-[calc(10px*var(--clock-scale))] font-[720] leading-none tracking-[0] text-[rgba(245,245,247,0.72)]'
-const CLOCK_DATE_BASE_CLASS = 'newtab-clock-date whitespace-nowrap text-[calc(12px*var(--clock-scale))] font-[650] leading-[1.05] tracking-[0] text-[rgba(245,245,247,0.72)]'
+export const CLOCK_PERIOD_CLASS = 'newtab-clock-period whitespace-nowrap text-[max(12px,calc(12px*var(--clock-scale)))] font-[720] leading-none tracking-[0] text-[rgba(245,245,247,0.9)]'
+const CLOCK_DATE_BASE_CLASS = 'newtab-clock-date whitespace-nowrap text-[max(12px,calc(12px*var(--clock-scale)))] font-[650] leading-[1.05] tracking-[0] text-[rgba(245,245,247,0.9)]'
 const CLOCK_DATE_ONLY_CLASS = 'text-[calc(16px*var(--clock-scale))] font-bold text-[rgba(245,245,247,0.82)]'
 const CLOCK_DATE_COMFORTABLE_CLASS = 'text-[rgba(245,245,247,0.8)]'
 

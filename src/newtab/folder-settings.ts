@@ -246,11 +246,11 @@ function findFirstNonEmptyTopLevelFolder(
 }
 
 function hasDirectBookmarks(node: chrome.bookmarks.BookmarkTreeNode): boolean {
-  return getFolderBookmarkCounts(node).directBookmarkCount > 0
+  return (node.children || []).some((child) => Boolean(child.url))
 }
 
 function hasDescendantBookmarks(node: chrome.bookmarks.BookmarkTreeNode): boolean {
-  return getFolderBookmarkCounts(node).totalBookmarkCount > 0
+  return (node.children || []).some((child) => Boolean(child.url) || hasDescendantBookmarks(child))
 }
 
 function hasExplicitFolderSelection(rawSettings: unknown): boolean {

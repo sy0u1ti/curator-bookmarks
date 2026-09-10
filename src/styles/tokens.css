@@ -18,9 +18,9 @@
   --ds-overlay: rgba(0, 0, 0, 0.68);
 
   --ds-text-primary: #ededed;
-  --ds-text-secondary: #a0a0a0;
-  --ds-text-muted: #8f8f8f;
-  --ds-text-disabled: #7d7d7d;
+  --ds-text-secondary: #b0b0b0;
+  --ds-text-muted: #a0a0a0;
+  --ds-text-disabled: #8f8f8f;
   --ds-text-inverse: #000000;
 
   --ds-accent: #006efe;
@@ -100,7 +100,7 @@
   --ds-hover-lift: -1px;
   --ds-sheet-offset: 12px;
 
-  --tabs-dur: 190ms;
+  --tabs-dur: var(--duration-fast);
   --tabs-ease: var(--ease-smooth-out);
   --tabs-text-muted: var(--ds-text-secondary);
   --tabs-text-active: var(--ds-text-primary);
@@ -116,12 +116,10 @@
   --tt-bg: var(--ds-surface-2);
   --tt-fg: var(--ds-text-primary);
 
-  /* accordion 开合共用一条时长：它读起来是一次可逆的高度位移，不是一对
-     开/关。拆成 320/260 会让同一个面板来回时变速。280ms 取自原先两值之间，
-     保住项目既有的节奏，只把对称补回来。 */
-  --acc-expand: 280ms;
-  --acc-collapse: 280ms;
-  --acc-chevron: 300ms;
+  /* Disclosure and chevron share one reversible clock. */
+  --acc-expand: var(--duration-fast);
+  --acc-collapse: var(--duration-fast);
+  --acc-chevron: var(--duration-fast);
   --acc-ease: var(--ease-smooth-out);
 
   --resize-dur: 380ms;
@@ -134,19 +132,15 @@
   --list-exit-shift: var(--distance-base);
   --list-exit-gap: 0px;
 
-  /* Switch 拨动：thumb 走双段过冲（越过终点 → 荡回 → 落定），
-     轨道颜色走自己的时钟，不跟 thumb 抢节奏。 */
-  --toggle-dur: var(--duration-medium);
+  /* A transition can reverse from the current thumb position. */
+  --toggle-dur: var(--duration-fast);
   --toggle-travel: 20px;
-  --toggle-ov1: 1px;
-  --toggle-ov2: 0px;
-  --toggle-ease: var(--ease-bounce);
+  --toggle-ease: var(--ease-smooth-out);
 
-  /* 行内状态徽标出现：scale + fade + 去模糊，只在挂载/换值时演一次。 */
+  /* Inline status feedback stays on opacity and transform. */
   --badge-pop-dur: var(--duration-fast);
   --badge-pop-scale: var(--scale-large);
-  --badge-pop-blur: var(--blur-small);
-  --badge-pop-ease: var(--ease-bounce);
+  --badge-pop-ease: var(--ease-smooth-out);
 
   --digit-dur: 130ms;
   --digit-distance: var(--distance-base);
@@ -162,8 +156,8 @@
   --dropdown-closing-scale: var(--scale-tiny);
   --dropdown-ease: var(--ease-smooth-out);
 
-  --toast-open-dur: var(--duration-fast);
-  --toast-close-dur: var(--duration-quick);
+  --toast-open-dur: var(--duration-slow);
+  --toast-close-dur: var(--duration-medium);
   --toast-offset-y: var(--distance-base);
   --toast-scale: var(--scale-small);
   --toast-ease: var(--ease-smooth-out);
@@ -174,7 +168,7 @@
   --modal-scale-close: var(--scale-large);
   --modal-ease: var(--ease-smooth-out);
 
-  --icon-swap-dur: 130ms;
+  --icon-swap-dur: var(--duration-fast);
   --icon-swap-blur: 0px;
   --icon-swap-start-scale: 0.9;
   --icon-swap-ease: var(--ease-in-out);
@@ -182,6 +176,7 @@
   --pulse-dur: 1000ms;
   --pulse-count: 1;
   --pulse-min: 0.5;
+  /* Cold popup content becomes interactive immediately; its handoff stays brief. */
   --reveal-dur: 180ms;
   --reveal-blur: 0px;
   --reveal-ease: var(--ease-in-out);
@@ -191,23 +186,23 @@
   --text-swap-blur: 0px;
   --text-swap-ease: var(--ease-in-out);
 
-  --panel-open-dur: 280ms;
-  --panel-close-dur: 220ms;
+  --panel-open-dur: var(--duration-slow);
+  --panel-close-dur: var(--duration-medium);
   --panel-translate-y: var(--distance-base);
-  --tabs-panel-translate-y: var(--distance-small);
+  --tabs-panel-translate-y: var(--distance-base);
   --panel-blur: 0px;
   --panel-ease: var(--ease-smooth-out);
   --drag-settle-dur: 160ms;
 
   --page-slide-dur: var(--duration-fast);
   --page-fade-dur: var(--duration-fast);
-  --page-slide-distance: var(--distance-medium);
+  --page-slide-distance: var(--distance-base);
   --page-slide-ease: var(--ease-smooth-out);
   --page-fade-ease: var(--ease-smooth-out);
 
   --stagger-dur: 220ms;
   --stagger-distance: var(--distance-small);
-  --stagger-stagger: 24ms;
+  --stagger-stagger: var(--duration-stagger);
   --stagger-blur: 0px;
   --stagger-ease: var(--ease-smooth-out);
 
@@ -216,6 +211,11 @@
   --shimmer-highlight: var(--ds-text-primary);
   --shimmer-band: 400%;
   --shimmer-ease: var(--ease-linear);
+
+  /* Determinate progress retains its continuous crawl; the sheen only
+     travels inside the fill and never animates paint or layout properties. */
+  --progress-fill-dur: 320ms;
+  --progress-sheen-dur: 1750ms;
 
   --check-box: var(--duration-quick);
   --check-draw: var(--duration-medium);
@@ -271,11 +271,8 @@
     --list-exit-dur: 1ms;
     --list-exit-shift: 0px;
     --toggle-dur: 1ms;
-    --toggle-ov1: 0px;
-    --toggle-ov2: 0px;
     --badge-pop-dur: 1ms;
     --badge-pop-scale: 1;
-    --badge-pop-blur: 0px;
     --digit-dur: 80ms;
     --dropdown-open-dur: 80ms;
     --dropdown-close-dur: 80ms;

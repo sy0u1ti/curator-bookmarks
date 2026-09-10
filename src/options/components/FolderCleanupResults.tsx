@@ -21,21 +21,20 @@ const FOLDER_CLEANUP_EMPTY_CLASS =
 const FOLDER_CLEANUP_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
 const SPLIT_UNDO_CARD_CLASS =
-  'rounded-ds-sm border border-ds-warning/35 bg-ds-warning-soft p-[14px_16px]'
+  'rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[14px_16px]'
 const FOLDER_CLEANUP_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const FOLDER_CLEANUP_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
 const FOLDER_CLEANUP_BADGE_BASE_CLASS =
-  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border px-[10px] text-[11px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-[26px] items-center whitespace-nowrap rounded-full border px-[10px] text-xs font-semibold leading-none tracking-[0]'
 const FOLDER_CLEANUP_BADGE_TONE_CLASS = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   info: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 } as const
-const FOLDER_CLEANUP_ACTION_BUTTON_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors hover:text-ds-text-secondary focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus disabled:cursor-default disabled:opacity-50 data-disabled:cursor-default data-disabled:opacity-50'
+const FOLDER_CLEANUP_ACTION_BUTTON_CLASS = 'shrink-0'
 const FOLDER_CLEANUP_REVIEW_BUTTON_CLASS = 'justify-center whitespace-nowrap'
 const FOLDER_CLEANUP_CONFIRM_BUTTON_CLASS = 'justify-center whitespace-nowrap'
 const FOLDER_CLEANUP_COPY_CLASS = 'mt-3 min-w-0'
@@ -92,13 +91,12 @@ function SplitUndoNotice({
       <div className={FOLDER_CLEANUP_CARD_HEAD_CLASS}>
         <span className={`${FOLDER_CLEANUP_BADGE_BASE_CLASS} ${FOLDER_CLEANUP_BADGE_TONE_CLASS.warning}`}>可撤销拆分</span>
         <div className={FOLDER_CLEANUP_ACTIONS_CLASS}>
-          <Button
+          <Button variant="secondary" size="sm"
             className={FOLDER_CLEANUP_ACTION_BUTTON_CLASS}
             type="button"
             aria-label={undoLabel}
             disabled={locked}
             onClick={() => handleFolderCleanupAction({ action: 'undo-split' })}
-            unstyled
           >
             撤销本次拆分
           </Button>

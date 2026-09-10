@@ -11,7 +11,7 @@ import {
   type ModelReasoningCapabilityMap,
   type ReasoningEffortId
 } from '../../shared/ai-reasoning.js'
-import { getOriginPermissionPattern } from '../shared-options/permissions.js'
+import { normalizeAiApiStyle, type AiApiStyle } from '../../shared/ai-provider-url.js'
 
 export type AiNamingSettingsField = 'apiKey' | 'baseUrl' | 'batchSize' | 'timeoutMs'
 
@@ -22,7 +22,7 @@ export interface AiNamingSettings {
   customModels: string[]
   fetchedModels: string[]
   reasoningCapabilities: ModelReasoningCapabilityMap
-  apiStyle: 'responses' | 'chat_completions'
+  apiStyle: AiApiStyle
   timeoutMs: number
   batchSize: number
   reasoningEffort: ReasoningEffortId
@@ -65,7 +65,7 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
   const source = rawSettings && typeof rawSettings === 'object'
     ? (rawSettings as AiNamingSettingsSource)
     : {}
-  const apiStyle = String(source.apiStyle || defaults.apiStyle).trim()
+  const apiStyle = normalizeAiApiStyle(source.apiStyle, 'auto')
   const timeoutMs = Number(source.timeoutMs)
   const hasLegacyDefaultTimeout = timeoutMs === AI_NAMING_LEGACY_DEFAULT_TIMEOUT_MS
   const batchSize = Number(source.batchSize)
@@ -78,7 +78,7 @@ export function normalizeAiNamingSettings(rawSettings: unknown): AiNamingSetting
     customModels: normalizeAiNamingCustomModels(source.customModels),
     fetchedModels: normalizeAiNamingFetchedModels(source.fetchedModels),
     reasoningCapabilities: normalizeModelReasoningCapabilityMap(source.reasoningCapabilities),
-    apiStyle: apiStyle === 'chat_completions' ? 'chat_completions' : 'responses',
+    apiStyle,
     timeoutMs: Number.isFinite(timeoutMs) && !hasLegacyDefaultTimeout
       ? Math.max(5000, Math.min(timeoutMs, AI_NAMING_MAX_TIMEOUT_MS))
       : defaults.timeoutMs,
@@ -120,12 +120,13 @@ export function updateAiNamingSettingsField(
   }
 
   const providerOriginChanged =
-    getOriginPermissionPattern(current.baseUrl) !== getOriginPermissionPattern(value)
+    getProviderOrigin(current.baseUrl) !== getProviderOrigin(value)
 
   return normalizeAiNamingSettings({
     ...current,
     baseUrl: value,
     apiKey: providerOriginChanged ? '' : current.apiKey,
+    fetchedModels: value.trim() !== current.baseUrl ? [] : current.fetchedModels,
     reasoningCapabilities: {}
   })
 }
@@ -176,4 +177,8 @@ export function serializeAiNamingSettings(settings: unknown): AiNamingSettings {
     autoAnalyzeBookmarks: normalized.autoAnalyzeBookmarks,
     systemPrompt: normalized.systemPrompt
   }
+}
+
+function getProviderOrigin(value: string): string {
+  try { return new URL(value).origin } catch { return '' }
 }

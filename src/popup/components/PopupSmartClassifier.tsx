@@ -19,8 +19,8 @@ import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './P
 const SMART_ERROR_BANNER_CLASS =
   'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
-const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-12 w-full'
-const pageLayerClass = 'absolute inset-0 min-h-12'
+const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-[52px] w-full'
+const pageLayerClass = 'absolute inset-0 min-h-[52px]'
 const pageSkeletonLayerClass = cx(
   pageLayerClass,
   't-skel-skeleton is-pulsing popup-page-skeleton pointer-events-none z-[1]'
@@ -30,14 +30,14 @@ const pageContentLayerClass = cx(
   't-skel-content popup-page-content z-[2]'
 )
 const pageCardClass =
-  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-transparent px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
+  'grid min-h-[52px] w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-[7px]'
 const pageIconClass =
   'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
 const pageFaviconClass = 'block h-full w-full object-cover'
 const pageCopyClass = 'min-w-0'
-const pageTitleClass = 'm-0 min-w-0 truncate text-[13px] font-[760] leading-tight text-ds-text-primary'
-const pageStatusClass = 'mt-[3px] mb-0 min-w-0 truncate text-[11px] leading-tight text-ds-text-muted'
+const pageTitleClass = 'm-0 min-w-0 truncate text-[13px] font-semibold leading-tight text-ds-text-primary'
+const pageStatusClass = 'mt-0.5 mb-0 min-w-0 truncate text-xs leading-4 text-ds-text-secondary'
 const placeholderPageCardClass = 'text-ds-text-secondary'
 const placeholderIconClass = 'border-ds-border bg-ds-surface-2 text-ds-text-secondary'
 const placeholderTitleClass = 'text-ds-text-primary'
@@ -46,10 +46,10 @@ const placeholderStatusClass = 'text-ds-text-muted'
 const currentPageActionsClass =
   'grid w-[156px] grid-cols-[minmax(0,1fr)_auto] gap-1 justify-self-end max-[520px]:w-full max-[520px]:grid-cols-2 max-[520px]:justify-self-stretch'
 const currentPageActionBaseClass = [
-  'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-md border px-[7px] text-[11px] font-[750] leading-none outline-none',
-  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'inline-flex min-h-6 min-w-0 items-center justify-center overflow-hidden truncate whitespace-nowrap rounded-md border px-[7px] text-xs font-semibold leading-none outline-none',
+  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
-  'active:scale-[0.98] disabled:cursor-default disabled:opacity-70'
+  'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-70'
 ].join(' ')
 const currentPageSecondaryActionClass = cx(
   currentPageActionBaseClass,
@@ -92,19 +92,19 @@ const panelHeaderLargeMarginClass = panelHeaderClass
 const panelHeaderStandaloneClass = panelHeaderClass
 const exitButtonClass = [
   'inline-flex h-7 min-w-[42px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-2 px-2 text-xs font-[650] text-ds-text-secondary outline-none',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
-  'active:scale-[0.98]'
+  'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
 
 const actionsClass = 'mt-3 grid grid-cols-[repeat(auto-fit,minmax(86px,1fr))] gap-2'
 const actionsThreeClass = cx(actionsClass, 'grid-cols-3 max-[430px]:grid-cols-1')
 const actionButtonBaseClass = [
-  'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 text-[13px] font-[750] leading-none outline-none',
-  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'inline-flex min-h-[38px] w-full items-center justify-center gap-2 rounded-lg border px-3 text-[13px] font-semibold leading-none outline-none',
+  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
-  'active:scale-[0.98] disabled:cursor-default'
+  'active:scale-[var(--ds-press-scale)] disabled:cursor-default'
 ].join(' ')
 const secondaryActionButtonClass = cx(
   actionButtonBaseClass,
@@ -123,10 +123,10 @@ const savedActionButtonClass =
 
 const manualButtonClass = [
   'mx-auto inline-flex w-fit items-center justify-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xs font-semibold text-ds-text-secondary outline-none',
-  'transition-[color,background-color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[color,background-color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
-  'active:scale-[0.98]'
+  'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
 const manualButtonSlotClass = 'mt-auto flex justify-center pt-4'
 const folderIconClass = 'h-3.5 w-3.5 flex-none text-ds-text-secondary'
@@ -137,7 +137,7 @@ const permissionCopyClass = 'm-0 text-xs leading-[1.55] text-ds-text-secondary'
 const permissionErrorClass = 'm-0 text-xs leading-[1.55] text-ds-danger-text'
 const permissionOriginsClass = 'flex flex-wrap gap-1.5'
 const permissionOriginClass =
-  'max-w-full overflow-hidden truncate whitespace-nowrap rounded-md border border-ds-border bg-ds-surface-2 px-2 py-1.5 text-[11px] leading-tight text-ds-text-primary'
+  'max-w-full overflow-hidden truncate whitespace-nowrap rounded-md border border-ds-border bg-ds-surface-2 px-2 py-1.5 text-xs leading-tight text-ds-text-primary'
 
 const buttonLoadingLabelClass = 'inline-flex min-w-0 items-center justify-center gap-[7px]'
 const buttonDotLoaderClass = 'h-3.5 w-3.5'
@@ -148,7 +148,7 @@ const loadingLoaderClass = 'opacity-90'
 const loadingContentClass = 'min-w-0'
 const loadingCopyClass =
   'mb-2.5 mt-0 flex items-center justify-between gap-3 text-[13px] font-[650] text-ds-text-primary'
-const loadingStepClass = 'text-[11px] font-medium text-ds-text-secondary'
+const loadingStepClass = 'text-xs font-medium text-ds-text-secondary'
 const progressTrackClass = cx('smart-progress-track', SHEEN_PROGRESS_TRACK_CLASS)
 const progressBarClass = SHEEN_PROGRESS_BAR_CLASS
 
@@ -161,7 +161,7 @@ const recommendationsClass =
   'flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pr-0.5 [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderOptionBaseClass = [
   'grid min-h-[50px] w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2.5 rounded-lg border border-ds-border bg-ds-surface-2 px-3 py-2.5 text-left outline-none max-[430px]:grid-cols-[minmax(0,1fr)]',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[0.993]'
 ].join(' ')
@@ -170,12 +170,12 @@ const folderOptionSelectedClass =
 const folderMainClass = 'grid min-w-0 gap-1'
 const folderHeadClass = 'flex min-w-0 items-center gap-2'
 const folderNameClass = 'min-w-0 truncate text-[13px] font-bold leading-tight text-ds-text-primary'
-const folderPathClass = 'ml-[22px] min-w-0 break-all text-[11px] leading-snug text-ds-text-secondary'
+const folderPathClass = 'ml-[22px] min-w-0 break-all text-xs leading-snug text-ds-text-secondary'
 const folderMetaClass =
-  'flex items-start gap-2 text-[11px] font-[650] text-ds-text-secondary'
+  'flex items-start gap-2 text-xs font-[650] text-ds-text-secondary'
 const checkIconClass = 'h-3.5 w-3.5 text-ds-text-primary'
 const newBadgeClass =
-  'inline-flex min-h-[18px] items-center rounded-full border border-ds-border bg-ds-surface-2 px-1.5 text-[10px] font-extrabold text-ds-text-secondary'
+  'inline-flex min-h-[18px] items-center rounded-full border border-ds-border bg-ds-surface-2 px-1.5 text-xs font-extrabold text-ds-text-secondary'
 const compactStateClass =
   'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 

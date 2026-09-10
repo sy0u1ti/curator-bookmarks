@@ -32,9 +32,9 @@ import {
 } from './newtab-window-store'
 import {
   dispatchNewtabSettingsDrawerOpenChange,
-  dispatchNewtabSettingsDrawerToggleRequest,
   setNewtabSettingsDrawerNodes,
-  useNewtabSettingsDrawerOpen
+  useNewtabSettingsDrawerOpen,
+  useNewtabSettingsDrawerRequested
 } from './newtab-settings-drawer-store'
 import { useSettingsDrawerModalMode } from './settings-drawer-mode'
 import {
@@ -72,7 +72,6 @@ const NEWTAB_REDUCED_MOTION_DESCENDANTS_CLASS = [
 ].join(' ')
 const NEWTAB_REDUCED_MOTION_SELF_CLASS =
   'motion-reduce:![animation:none] motion-reduce:![transform:none]'
-const SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS = 450
 const DEFERRED_HOSTS_IDLE_LOAD_DELAY_MS = 250
 const LOADING_VISIBILITY_CLASS = 'opacity-100 visible [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard),visibility_0s_linear_0s]'
 const SETTINGS_TRIGGER_ZONE_BASE_CLASS = `settings-trigger-zone group/settings-trigger-zone fixed top-0 right-0 z-30 h-24 w-[min(360px,calc(100vw-18px))] ${LOADING_VISIBILITY_CLASS} ${NEWTAB_REDUCED_MOTION_SELF_CLASS}`
@@ -166,19 +165,20 @@ function subscribeToNewtabBookmarkEvents(): () => void {
   }
 }
 
-export function NewtabApp() {
+export function NewtabApp({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <ThemeProvider>
-      <NewtabShell />
+      <NewtabShell onOpenSettings={onOpenSettings} />
     </ThemeProvider>
   )
 }
 
-function NewtabShell() {
+function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
   const backgroundSettings = useNewtabBackgroundSettingsView()
   const folderSource = useNewtabFolderSourceView()
   const instantWallpaper = useNewtabInstantWallpaperView()
   const settingsDrawerOpen = useNewtabSettingsDrawerOpen()
+  const settingsDrawerRequested = useNewtabSettingsDrawerRequested()
   const settingsDrawerModal = useSettingsDrawerModalMode()
   const appChromeAttributes = useNewtabAppChromeAttributes()
   const autoHideSettingsTrigger = folderSource.general.hideSettingsTrigger
@@ -294,17 +294,12 @@ function NewtabShell() {
           aria-label="打开设置"
           aria-controls="newtab-settings-drawer"
           aria-expanded={settingsDrawerOpen ? 'true' : 'false'}
+          aria-hidden={settingsDrawerOpen || undefined}
+          tabIndex={settingsDrawerOpen ? -1 : 0}
           {...settingsBackgroundProps}
           onClick={() => {
             setSettingsDrawerHostRequested(true)
-            void import('./newtab-controller')
-              .then(({ startNewTabController }) => {
-                startNewTabController()
-                dispatchNewtabSettingsDrawerToggleRequest()
-              })
-              .catch((error) => {
-                console.error('新标签页控制器加载失败。', error)
-              })
+            onOpenSettings()
           }}
           unstyled
         >
@@ -333,7 +328,7 @@ function NewtabShell() {
       >
         <NewtabContentHost shellRef={shellRef} />
       </div>
-      <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawerOpen} />
+      <DeferredSettingsDrawerHost requested={settingsDrawerHostRequested || settingsDrawerRequested || settingsDrawerOpen} />
       <DeferredNewtabHosts />
     </div>
   )
@@ -418,33 +413,19 @@ function DeferredSettingsDrawerHost({ requested }: { requested: boolean }) {
   const [Host, setHost] = useState<SettingsDrawerHostComponent | null>(settingsDrawerHostComponent)
 
   useEffect(() => {
-    if (Host) {
+    if (Host || !requested) {
       return
     }
 
     let active = true
-    let delayTimer = 0
-    const mountHost = () => {
-      void loadSettingsDrawerHost().then((Component) => {
-        if (active) {
-          setHost(() => Component)
-        }
-      })
-    }
-
-    if (requested) {
-      mountHost()
-    } else {
-      // The closed settings inspector is not part of the bookmark first paint.
-      // Warm it after the critical card path, or immediately on explicit intent.
-      delayTimer = window.setTimeout(() => {
-        runIdle(mountHost, { timeout: 1200 })
-      }, SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS)
-    }
+    void loadSettingsDrawerHost().then((Component) => {
+      if (active) {
+        setHost(() => Component)
+      }
+    })
 
     return () => {
       active = false
-      window.clearTimeout(delayTimer)
     }
   }, [Host, requested])
 
@@ -458,28 +439,7 @@ function SolidBackgroundNoiseLayer({ active }: { active: boolean }) {
       className={SOLID_BACKGROUND_NOISE_CLASS}
       data-active={active ? 'true' : 'false'}
       aria-hidden="true"
-    >
-      <svg width="100%" height="100%" preserveAspectRatio="none" focusable="false">
-        <filter id="newtab-solid-background-noise-filter">
-          <feTurbulence
-            type="fractalNoise"
-            baseFrequency="0.8"
-            numOctaves="4"
-            stitchTiles="stitch"
-          />
-          <feColorMatrix
-            type="matrix"
-            values="
-              0 0 0 0 1
-              0 0 0 0 1
-              0 0 0 0 1
-              0.2126 0.7152 0.0722 0 0
-            "
-          />
-        </filter>
-        <rect width="100%" height="100%" filter="url(#newtab-solid-background-noise-filter)" />
-      </svg>
-    </div>
+    />
   )
 }
 

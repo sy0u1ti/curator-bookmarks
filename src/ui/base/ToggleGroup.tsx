@@ -1,6 +1,6 @@
 import { Toggle as BaseToggle } from '@base-ui/react/toggle'
 import { ToggleGroup as BaseToggleGroup } from '@base-ui/react/toggle-group'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { useMemo, useState, type ComponentPropsWithoutRef, type CSSProperties, type ReactNode } from 'react'
 import { cx } from './utils'
 
 type BaseToggleGroupProps = ComponentPropsWithoutRef<typeof BaseToggleGroup<string>>
@@ -18,6 +18,7 @@ export interface ToggleGroupProps extends Omit<BaseToggleGroupProps, 'children' 
   defaultValue?: string
   itemClassName?: string
   items: ToggleGroupItem[]
+  slidingIndicator?: boolean
   unstyled?: boolean
   value?: string
 }
@@ -28,20 +29,39 @@ export function ToggleGroup({
   itemClassName,
   items,
   onValueChange,
+  slidingIndicator = false,
+  style,
   unstyled = false,
   value,
   ...props
 }: ToggleGroupProps) {
+  const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue)
+  const controlledSelection = useMemo(() => value ? [value] : undefined, [value])
+  const defaultSelection = useMemo(() => defaultValue ? [defaultValue] : undefined, [defaultValue])
+  const selectedIndex = items.findIndex((item) => item.value === (value ?? uncontrolledValue))
+  const motionStyle = {
+    '--segment-count': Math.max(1, items.length),
+    '--segment-index': Math.max(0, selectedIndex),
+    '--segment-visible': selectedIndex < 0 ? 0 : 1
+  } as CSSProperties
+  const indicatorStyle: BaseToggleGroupProps['style'] = !slidingIndicator ? style
+    : typeof style === 'function' ? (state) => ({ ...motionStyle, ...style(state) })
+    : { ...motionStyle, ...style }
+
   return (
     <BaseToggleGroup
-      className={unstyled ? className : cx(
+      className={cx(slidingIndicator && 't-segmented', unstyled ? className : cx(
         'base-toggle-group inline-flex items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1',
         className
-      )}
-      defaultValue={defaultValue ? [defaultValue] : undefined}
+      ))}
+      defaultValue={defaultSelection}
       multiple={false}
-      onValueChange={onValueChange}
-      value={value ? [value] : undefined}
+      onValueChange={(nextValue, eventDetails) => {
+        if (value === undefined) setUncontrolledValue(nextValue[0])
+        onValueChange?.(nextValue, eventDetails)
+      }}
+      style={indicatorStyle}
+      value={controlledSelection}
       {...props}
     >
       {items.map((item) => (

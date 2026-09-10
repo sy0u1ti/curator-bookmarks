@@ -41,6 +41,7 @@ export interface BackupRestoreMessage {
 }
 
 export interface AvailabilityProbeResult {
+  retryAfterMs?: number
   ok: boolean
   status: number
   finalUrl: string
@@ -285,12 +286,12 @@ export function requestNavigationCheck(
   checkId?: string
 ): Promise<NavigationCheckResult> {
   const message: NavigationCheckMessage = { type: 'availability:navigate', url, timeoutMs, checkId }
-  return sendRuntimeMessage<NavigationCheckResult>(message)
+  return sendAvailabilityRuntimeMessage<NavigationCheckResult>(message, availabilityMessageTimeout(timeoutMs))
 }
 
 export function cancelNavigationCheck(checkId: string): Promise<void> {
   const message: NavigationCancelMessage = { type: 'availability:cancel', checkId }
-  return sendRuntimeMessage<void>(message)
+  return sendAvailabilityRuntimeMessage<void>(message, 2000, false)
 }
 
 export function requestBookmarkSave(payload: Omit<BookmarkSaveMessage, 'type'>): Promise<BookmarkSaveResult> {
@@ -344,7 +345,7 @@ export function requestAvailabilityProbe(
     checkId,
     deadlineAtMs
   }
-  return sendRuntimeMessage<AvailabilityProbeResult>(message)
+  return sendAvailabilityRuntimeMessage<AvailabilityProbeResult>(message, availabilityMessageTimeout(timeoutMs, deadlineAtMs))
 }
 
 export function requestBackupRestore(
@@ -418,4 +419,29 @@ function normalizeNavigationCheckId(value: unknown): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function availabilityMessageTimeout(timeoutMs: unknown, deadlineAtMs?: unknown): number {
+  const configured = Number(timeoutMs)
+  let timeout = Number.isFinite(configured) && configured > 0 ? Math.min(configured, AVAILABILITY_NAVIGATION_TIMEOUT_MAX_MS) : 30000
+  const deadline = Number(deadlineAtMs)
+  if (Number.isFinite(deadline) && deadline > 0) timeout = Math.min(timeout, Math.max(0, deadline - Date.now()))
+  return Math.max(1, timeout) + 5000
+}
+
+function sendAvailabilityRuntimeMessage<TResult>(
+  message: NavigationCheckMessage | AvailabilityProbeMessage | NavigationCancelMessage,
+  timeoutMs: number,
+  cancelOnTimeout = true
+): Promise<TResult> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      if (cancelOnTimeout && message.checkId) void cancelNavigationCheck(message.checkId).catch(() => {})
+      reject(Object.assign(new Error('Curator 后台检测服务未按时响应，已停止本次等待。'), { code: 'availability-runtime-timeout' }))
+    }, timeoutMs)
+    sendRuntimeMessage<TResult>(message).then(
+      (value) => { clearTimeout(timeout); resolve(value) },
+      (error) => { clearTimeout(timeout); reject(error) }
+    )
+  })
 }

@@ -73,7 +73,7 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
             <div>
               <div
                 className={AVAILABILITY_PROGRESS_TRACK_CLASS}
-                style={getSheenProgressTrackStyle(state.progressValue)}
+                style={getSheenProgressTrackStyle(state.progressValue, state.busy)}
                 aria-label="可用性检测进度"
                 aria-valuemax={100}
                 aria-valuemin={0}

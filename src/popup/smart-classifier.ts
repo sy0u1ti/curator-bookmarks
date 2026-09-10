@@ -1,9 +1,9 @@
-import { getAiProviderBaseUrlIssue } from '../shared/ai-provider-url.js'
+import { BOOKMARK_CLASSIFICATION_SCHEMA as SMART_CLASSIFY_SCHEMA, validateAiClassificationResult } from '../shared/ai-task-contracts.js'
+import { getAiProviderBaseUrlIssue, isAiProviderConfigured } from '../shared/ai-provider-url.js'
 import {
   buildAiFolderCandidates,
   requestStructuredAiOutput,
   toAiFolderCandidatePayload,
-  validateKnownFolderId,
   type AiFolderCandidate,
   type AiProviderSettings
 } from '../shared/ai-runtime.js'
@@ -51,56 +51,7 @@ export interface PopupSmartPermissionError extends Error {
   smartPermissionRequest?: { origins: string[] }
 }
 
-const SMART_CLASSIFY_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['title', 'summary', 'content_type', 'topics', 'tags', 'aliases', 'confidence', 'existing_folders', 'new_folder'],
-  properties: {
-    title: { type: 'string', maxLength: 80 },
-    summary: { type: 'string', maxLength: 500 },
-    content_type: { type: 'string', maxLength: 40 },
-    topics: {
-      type: 'array',
-      maxItems: 8,
-      items: { type: 'string', maxLength: 40 }
-    },
-    tags: {
-      type: 'array',
-      maxItems: 12,
-      items: { type: 'string', maxLength: 24 }
-    },
-    aliases: {
-      type: 'array',
-      maxItems: 20,
-      items: { type: 'string', maxLength: 40 }
-    },
-    confidence: { type: 'number', minimum: 0, maximum: 1 },
-    existing_folders: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        required: ['folder_id', 'folder_path', 'reason', 'confidence'],
-        properties: {
-          folder_id: { type: 'string', maxLength: 80 },
-          folder_path: { type: 'string', maxLength: 240 },
-          reason: { type: 'string', maxLength: 180 },
-          confidence: { type: 'number', minimum: 0, maximum: 1 }
-        }
-      }
-    },
-    new_folder: {
-      type: 'object',
-      additionalProperties: false,
-      required: ['folder_path', 'reason', 'confidence'],
-      properties: {
-        folder_path: { type: 'string', maxLength: 240 },
-        reason: { type: 'string', maxLength: 180 },
-        confidence: { type: 'number', minimum: 0, maximum: 1 }
-      }
-    }
-  }
-} as const
+
 
 let contentExtractionModulePromise: Promise<typeof import('../options/sections/content-extraction.js')> | null = null
 
@@ -110,13 +61,14 @@ function loadContentExtractionModule(): Promise<typeof import('../options/sectio
 }
 
 export function validateSmartAiSettings(settings: PopupSmartSettings): void {
-  if (!settings.baseUrl || !settings.apiKey || !settings.model) {
-    throw new Error('请先到通用设置配置“自定义AI渠道”。')
-  }
   const baseUrlIssue = getAiProviderBaseUrlIssue(settings.baseUrl)
   if (baseUrlIssue) {
     throw new Error(baseUrlIssue)
   }
+  if (!isAiProviderConfigured(settings)) {
+    throw new Error('请先到通用设置配置“自定义AI渠道”。')
+  }
+
 }
 
 export async function ensureSmartClassifyPermissions(
@@ -422,12 +374,7 @@ function buildSmartAiPrompt({
 }
 
 function validateSmartFolderIds(payload: Record<string, any>, folderCandidates: AiFolderCandidate[]): void {
-  const existingFolders = Array.isArray(payload?.existing_folders)
-    ? payload.existing_folders
-    : []
-  existingFolders.forEach((item) => {
-    validateKnownFolderId(item?.folder_id, folderCandidates)
-  })
+  validateAiClassificationResult(payload, folderCandidates)
 }
 
 function normalizeSmartAiResult(payload: unknown, currentTitle: string): PopupSmartAiResult {

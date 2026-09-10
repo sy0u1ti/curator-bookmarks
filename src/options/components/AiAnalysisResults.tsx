@@ -3,7 +3,7 @@ import { displayUrl } from '../../shared/text.js'
 import { AiClassificationResult } from '../../ui/ai/AiClassificationResult'
 import { Button } from '../../ui/base/Button'
 import { CheckboxControl } from '../../ui/base/Checkbox'
-import { CollapsiblePanel, CollapsibleRoot, CollapsibleTrigger } from '../../ui/base/Collapsible'
+import { OptionDetails } from './OptionDetails.js'
 import {
   AI_ANALYSIS_CHECKBOX_CLASS,
   AI_ANALYSIS_CONFIRM_ICON_CLASS,
@@ -24,10 +24,7 @@ const AI_RESULT_HEAD_LEFT_CLASS = 'flex min-w-0 flex-wrap items-center gap-2.5'
 const AI_RESULT_CHECK_CLASS =
   'inline-flex items-center gap-2 text-xs font-semibold text-ds-text-secondary'
 const AI_RESULT_ACTIONS_CLASS = 'flex min-w-0 flex-wrap items-center justify-end gap-2.5'
-const AI_RESULT_ACTION_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary disabled:cursor-default disabled:opacity-50 disabled:hover:text-ds-text-disabled disabled:focus-visible:text-ds-text-disabled data-[disabled]:cursor-default data-[disabled]:opacity-50 data-[disabled]:hover:text-ds-text-disabled data-[disabled]:focus-visible:text-ds-text-disabled'
-const AI_RESULT_LINK_CLASS =
-  'border-0 bg-transparent p-0 text-xs font-semibold text-ds-text-disabled no-underline [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary'
+const AI_RESULT_ACTION_CLASS = 'shrink-0'
 const AI_RESULT_CONFIRM_ACTION_CLASS =
   'text-ds-success-text hover:text-ds-success-text focus-visible:text-ds-success-text'
 const AI_RESULT_COPY_CLASS = 'mt-3 min-w-0'
@@ -54,12 +51,8 @@ const AI_RESULT_TAG_LIST_CLASS =
 const AI_RESULT_TAG_LIST_EXPANDED_CLASS = 'max-h-none'
 const AI_RESULT_TAG_CLASS =
   'max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap rounded-full border border-ds-border bg-ds-surface-2 px-2 py-[3px] text-xs font-semibold leading-[1.35] text-ds-text-secondary'
-const AI_RESULT_TAG_TOGGLE_CLASS =
-  'mt-2 border-0 bg-transparent p-0 text-xs font-semibold text-ds-text-disabled [transition:color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary'
-const AI_RESULT_DETAILS_CLASS = 'mt-3 border-t border-white/10 pt-2.5'
-const AI_RESULT_SUMMARY_CLASS =
-  'inline-flex cursor-pointer list-none items-center gap-2 text-xs font-semibold text-ds-text-disabled after:block after:size-[7px] after:translate-y-[-1px] after:rotate-45 after:border-r-[1.5px] after:border-b-[1.5px] after:border-current after:content-[""] after:[transition:transform_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:text-ds-text-primary focus-visible:text-ds-text-primary data-[panel-open]:after:translate-y-0.5 data-[panel-open]:after:rotate-[225deg]'
-const AI_RESULT_DETAIL_LIST_CLASS = 'mt-2'
+const AI_RESULT_TAG_TOGGLE_CLASS = 'mt-2'
+const AI_RESULT_DETAILS_CLASS = 'mt-3'
 const AI_RESULT_DETAIL_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.6] text-ds-text-secondary [overflow-wrap:anywhere] [word-break:break-word]'
 
@@ -123,34 +116,27 @@ function AiNamingResultCard({ result }: { result: AiNamingResultCardViewModel })
   ), [result.confidenceLabel, result.confidenceScorePercent])
   const actions = useMemo(() => (
     <div className={AI_RESULT_ACTIONS_CLASS}>
-      <a
-        className={AI_RESULT_LINK_CLASS}
-        href={result.url}
-        target="_blank"
-        rel="noreferrer noopener"
-        aria-label={result.openLabel}
-      >
+      <Button size="sm" variant="secondary" aria-label={result.openLabel}
+        render={<a aria-label={result.openLabel} href={result.url} target="_blank" rel="noreferrer noopener" />}>
         打开页面
-      </a>
+      </Button>
       {result.selectable ? (
         <>
-          <Button
+          <Button variant="secondary" size="sm"
             className={AI_RESULT_ACTION_CLASS}
             type="button"
             aria-label={result.applyLabel}
             disabled={result.interactionLocked}
             onClick={() => handleAiAnalysisResultAction({ action: 'apply', id: result.id })}
-            unstyled
           >
             应用建议
           </Button>
-          <Button
+          <Button variant="secondary" size="sm"
             className={AI_RESULT_ACTION_CLASS}
             type="button"
             aria-label={result.rejectLabel}
             disabled={result.interactionLocked}
             onClick={() => handleAiAnalysisResultAction({ action: 'reject', id: result.id })}
-            unstyled
           >
             拒绝建议
           </Button>
@@ -208,7 +194,7 @@ function SuggestedFolder({ result }: { result: AiNamingResultCardViewModel }) {
         <strong className={AI_RESULT_FOLDER_VALUE_CLASS}>{result.suggestedFolder}</strong>
       </div>
       {result.canMoveToSuggestedFolder ? (
-        <Button
+        <Button variant="secondary" size="sm"
           className={[
             AI_RESULT_ACTION_CLASS,
             AI_RESULT_MOVE_ACTION_CLASS,
@@ -221,7 +207,6 @@ function SuggestedFolder({ result }: { result: AiNamingResultCardViewModel }) {
           aria-label={result.moveLabel}
           disabled={result.interactionLocked}
           onClick={() => handleAiAnalysisResultAction({ action: 'move-recommended', id: result.id })}
-          unstyled
         >
           {result.pendingMove ? (
             <>
@@ -284,12 +269,11 @@ function TagPreview({ result }: { result: AiNamingResultCardViewModel }) {
         ))}
       </div>
       {showToggle ? (
-        <Button
+        <Button variant="secondary" size="sm"
           className={AI_RESULT_TAG_TOGGLE_CLASS}
           type="button"
           aria-expanded={result.expandedTags ? 'true' : 'false'}
           onClick={() => handleAiAnalysisResultAction({ action: 'toggle-tags', id: result.id })}
-          unstyled
         >
           {result.expandedTags ? '收起标签' : '展开标签'}
         </Button>
@@ -304,15 +288,14 @@ function ResultDetails({ result }: { result: AiNamingResultCardViewModel }) {
   }
 
   return (
-    <CollapsibleRoot className={AI_RESULT_DETAILS_CLASS}>
-      <CollapsibleTrigger className={AI_RESULT_SUMMARY_CLASS}>分析细节</CollapsibleTrigger>
-      <CollapsiblePanel className={AI_RESULT_DETAIL_LIST_CLASS}>
+    <OptionDetails className={AI_RESULT_DETAILS_CLASS} label="分析详情" ariaLabel={'分析详情：' + result.currentTitle}>
+      <div className="grid gap-2">
         {result.detailRows.map((detail) => (
           <p className={AI_RESULT_DETAIL_CLASS} key={`${result.id}:${detail}`}>
             {detail}
           </p>
         ))}
-      </CollapsiblePanel>
-    </CollapsibleRoot>
+      </div>
+    </OptionDetails>
   )
 }

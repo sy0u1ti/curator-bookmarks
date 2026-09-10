@@ -212,25 +212,40 @@ export async function saveContentSnapshotsFromContexts(
 }
 
 export async function removeContentSnapshotForBookmark(bookmarkId: string, now = Date.now()): Promise<boolean> {
-  const normalizedBookmarkId = String(bookmarkId || '').trim()
-  if (!normalizedBookmarkId) {
-    return false
+  return (await removeContentSnapshotsForBookmarks([bookmarkId], now)) > 0
+}
+
+export async function removeContentSnapshotsForBookmarks(bookmarkIds: string[], now = Date.now()): Promise<number> {
+  const ids = new Set<string>()
+  for (const bookmarkId of bookmarkIds) {
+    const id = String(bookmarkId || '').trim()
+    if (id) ids.add(id)
+  }
+  if (!ids.size) {
+    return 0
   }
 
-  let deletedFullTextRef = ''
-  let removed = false
+  const deletedFullTextRefs = new Set<string>()
+  let removed = 0
   await updateContentSnapshotIndex((index) => {
-    const existing = index.records[normalizedBookmarkId] || null
-    if (!existing) {
+    let records = index.records
+    for (const id of ids) {
+      const existing = index.records[id] || null
+      if (!existing) {
+        continue
+      }
+      if (existing.fullTextStorage === 'idb' && existing.fullTextRef) {
+        deletedFullTextRefs.add(existing.fullTextRef)
+      }
+      if (records === index.records) {
+        records = { ...index.records }
+      }
+      delete records[id]
+      removed += 1
+    }
+    if (records === index.records) {
       return index
     }
-
-    if (existing.fullTextStorage === 'idb' && existing.fullTextRef) {
-      deletedFullTextRef = existing.fullTextRef
-    }
-    const records = { ...index.records }
-    delete records[normalizedBookmarkId]
-    removed = true
     return {
       version: 1,
       updatedAt: now,
@@ -238,8 +253,8 @@ export async function removeContentSnapshotForBookmark(bookmarkId: string, now =
     }
   })
 
-  if (deletedFullTextRef) {
-    await contentFullTextOperations.delete(deletedFullTextRef).catch(() => {})
+  if (deletedFullTextRefs.size) {
+    await contentFullTextOperations.deleteMany(Array.from(deletedFullTextRefs)).catch(() => {})
   }
   return removed
 }

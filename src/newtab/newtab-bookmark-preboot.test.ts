@@ -67,8 +67,8 @@ function testPrebootHandoffIsAtomic(): void {
   assert(!source.includes('window.setTimeout(() => {\n    root.remove()'))
   assert(source.includes('transition: none;'))
   assert(
-    source.includes('--preboot-card-bg: rgba(0, 0, 0, 0.6);') &&
-      source.includes('--preboot-card-filter: blur(8px);') &&
+    source.includes('--preboot-card-bg: var(--newtab-glass-bg-fill, rgba(0, 0, 0, 0.13));') &&
+      source.includes('--preboot-card-filter: blur(var(--newtab-glass-background-blur, 12px));') &&
       source.includes('-webkit-backdrop-filter: var(--preboot-card-filter);') &&
       source.includes('backdrop-filter: var(--preboot-card-filter);'),
     'The synchronous snapshot must paint the final bookmark glass material on its first frame.'

@@ -1,7 +1,6 @@
 import { Button } from '../../ui/base/Button'
 import { handleBookmarkAddHistoryClear } from '../options-controller'
 import type { BookmarkAddHistoryHeaderState } from './BookmarkAddHistoryTypes.js'
-import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 
 const BOOKMARK_ADD_HISTORY_HEADER_CLASS =
   'flex flex-wrap items-center justify-between gap-3'
@@ -23,9 +22,6 @@ export function BookmarkAddHistoryHeader({ state }: { state: BookmarkAddHistoryH
         </p>
       </div>
       <div className={BOOKMARK_ADD_HISTORY_ACTIONS_CLASS}>
-        <span className={OPTION_VALUE_CLASS}>
-          {state.timestamp}
-        </span>
         {!state.clearDisabled ? (
           <Button
             size="sm"

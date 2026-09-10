@@ -50,8 +50,7 @@ const IGNORE_RULE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const IGNORE_RULE_ACTIONS_CLASS =
   'flex min-w-0 flex-none flex-wrap items-center justify-end gap-2.5'
-const IGNORE_RULE_DELETE_BUTTON_CLASS =
-  'border-0 bg-transparent p-0 font-[inherit] text-xs font-semibold text-ds-text-disabled transition-colors hover:text-ds-text-secondary focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
+const IGNORE_RULE_DELETE_BUTTON_CLASS = 'shrink-0'
 const IGNORE_RULE_COPY_CLASS = 'min-w-0'
 const IGNORE_RULE_COPY_TITLE_CLASS =
   'block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold leading-[1.35] text-ds-text-primary max-[760px]:whitespace-normal'
@@ -69,21 +68,21 @@ export function IgnoreRules() {
   const groups = [
     {
       clearLabel: '清空按书签忽略规则',
-      detail: '仅压制指定书签本身的异常提示。',
+      detail: '跳过所选书签。',
       kind: 'bookmark',
       rules: state.bookmarks,
       title: '按书签忽略'
     },
     {
       clearLabel: '清空按域名忽略规则',
-      detail: '同一域名下的异常提示会被压制。',
+      detail: '跳过同一域名下的书签。',
       kind: 'domain',
       rules: state.domains,
       title: '按域名忽略'
     },
     {
       clearLabel: '清空按文件夹忽略规则',
-      detail: '命中该文件夹及其子层级的异常提示会被压制。',
+      detail: '跳过此文件夹及子文件夹中的书签。',
       kind: 'folder',
       rules: state.folders,
       title: '按文件夹忽略'
@@ -103,7 +102,7 @@ export function IgnoreRules() {
         <div className="mt-5">
           <OptionEmptyState
             title="当前没有忽略规则"
-            description="忽略规则只能从可用性检测结果里添加。完成检测后，可在异常结果中按书签、域名或文件夹压制误报。"
+            description="在检测结果的「更多操作」中，可按书签、域名或文件夹添加规则。"
             actions={[{ action: 'run-availability', label: '去做可用性检测', variant: 'primary' }]}
           />
         </div>
@@ -121,13 +120,14 @@ export function IgnoreRules() {
               type="button"
               variant="secondary"
               aria-label={group.clearLabel}
+              disabled={state.locked}
               onClick={() => handleIgnoreRuleAction({ action: 'clear', kind: group.kind })}
             >
-              清空本类
+              清空此类规则
             </Button>
           </div>
           <div className={IGNORE_RULE_LIST_CLASS}>
-            <IgnoreRuleList kind={group.kind} rules={group.rules} />
+            <IgnoreRuleList kind={group.kind} rules={group.rules} locked={state.locked} />
           </div>
         </div>
       ))(combineValue); return [combinedResult] })}
@@ -157,10 +157,12 @@ function IgnoreRulesSummary({ state }: { state: IgnoreRulesSummaryState }) {
 
 function IgnoreRuleList({
   kind,
-  rules
+  rules,
+  locked
 }: {
   kind: IgnoreRuleKind
   rules: IgnoreRuleViewModel[]
+  locked: boolean
 }) {
   const sortedRules = rules
     .slice()
@@ -176,7 +178,7 @@ function IgnoreRuleList({
       {entries.map((entry) => (
         <div className="t-list-exit" data-exiting={entry.exiting ? 'true' : 'false'} key={entry.key}>
           <div className="t-list-exit-inner">
-            <IgnoreRuleCard kind={kind} rule={entry.item} />
+            <IgnoreRuleCard kind={kind} rule={entry.item} locked={locked} />
           </div>
         </div>
       ))}
@@ -186,15 +188,17 @@ function IgnoreRuleList({
 
 function IgnoreRuleCard({
   kind,
-  rule
+  rule,
+  locked
 }: {
   kind: IgnoreRuleKind
   rule: IgnoreRuleViewModel
+  locked: boolean
 }) {
   const title = getIgnoreRuleTitle(rule, kind)
   const detail = getIgnoreRuleDetail(rule, kind)
   const ruleId = getIgnoreRuleId(rule, kind)
-  const deleteLabel = getIgnoreRuleActionLabel('删除忽略规则', rule, kind)
+  const deleteLabel = getIgnoreRuleActionLabel('取消忽略', rule, kind)
 
   return (
     <article className={IGNORE_RULE_CARD_CLASS}>
@@ -204,14 +208,14 @@ function IgnoreRuleCard({
           {detail ? <div className={IGNORE_RULE_DETAIL_CLASS}>{detail}</div> : null}
         </div>
         <div className={IGNORE_RULE_ACTIONS_CLASS}>
-          <Button
+          <Button variant="secondary" size="sm"
             className={IGNORE_RULE_DELETE_BUTTON_CLASS}
             type="button"
             aria-label={deleteLabel}
+            disabled={locked}
             onClick={() => handleIgnoreRuleAction({ action: 'remove', kind, ruleId })}
-            unstyled
           >
-            删除规则
+            取消忽略
           </Button>
         </div>
       </div>

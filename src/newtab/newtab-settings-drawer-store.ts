@@ -58,6 +58,7 @@ const EMPTY_LAYOUT_REQUEST: NewtabSettingsDrawerLayoutRequest = {
   section: 'source'
 }
 const settingsDrawerStore = createUiViewStoreSlice('newtab', 'settings-drawer', EMPTY_VIEW)
+const settingsDrawerRequestedStore = createUiViewStoreSlice('newtab', 'settings-drawer-requested', false)
 const settingsDrawerLayoutStore = createUiViewStoreSlice(
   'newtab',
   'settings-drawer-layout',
@@ -94,6 +95,14 @@ export function useNewtabSettingsDrawerView(): NewtabSettingsDrawerView {
 
 export function useNewtabSettingsDrawerOpen(): boolean {
   return useUiViewStoreSlice(settingsDrawerStore, (view) => view.open)
+}
+
+export function useNewtabSettingsDrawerRequested(): boolean {
+  return useUiViewStoreSlice(settingsDrawerRequestedStore)
+}
+
+export function requestNewtabSettingsDrawer(): void {
+  settingsDrawerRequestedStore.setState(true)
 }
 
 export function useNewtabSettingsDrawerLayoutRequest(): NewtabSettingsDrawerLayoutRequest {

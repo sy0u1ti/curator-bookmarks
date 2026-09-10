@@ -10,6 +10,7 @@ import type {
   ProbeResult
 } from '../../shared/types.js'
 import type { AvailabilityProbeResult } from '../../shared/messages.js'
+import { hasVerifiedHttpFailure, isHttpRedirectStatus } from '../../shared/availability-evidence.js'
 
 export const FETCH_TIMEOUT_MS = 20000
 
@@ -59,7 +60,9 @@ const UNVERIFIED_AVAILABILITY_ERROR_CODES = new Set([
   'ungranted-redirect',
   'unsupported-address-space',
   'unsupported-dns-boundary',
-  'unverified-network-endpoint'
+  'unverified-network-endpoint',
+  'site-cooldown',
+  'detection-budget-exhausted'
 ])
 
 const TIMEOUT_NAVIGATION_ERRORS = new Set([
@@ -118,10 +121,9 @@ export function buildFailureClassification(
   const requestProbe = classifyNavigationNetworkEvidenceFromAttempts(attempts)
   const effectiveProbe = chooseEffectiveProbe(probe, requestProbe)
   const effectiveProbeEnabled = probeEnabled || Boolean(effectiveProbe)
-  const unverifiedAttempt = attempts.find((attempt) => {
-    return isUnverifiedAvailabilityErrorCode(attempt.errorCode)
-  })
-  const unverifiedProbe = isUnverifiedAvailabilityErrorCode(probe?.errorCode)
+  const lastAttempt = attempts.at(-1)
+  const unverifiedAttempt = isUnverifiedAvailabilityErrorCode(lastAttempt?.errorCode) ? lastAttempt : undefined
+  const unverifiedProbe = isUnverifiedAvailabilityErrorCode(probe?.errorCode) && !hasVerifiedHttpFailure(lastAttempt)
 
   if (
     probe?.kind === 'ok' &&
@@ -142,6 +144,16 @@ export function buildFailureClassification(
         '后台标签页受本地扩展或浏览器规则拦截；独立网络校验已确认目标可达'
       )
     }
+  }
+
+  const environmentError = String(lastAttempt?.errorCode || '')
+  if (/ERR_(?:INTERNET_DISCONNECTED|NETWORK_CHANGED|PROXY_CONNECTION_FAILED|TUNNEL_CONNECTION_FAILED|MANDATORY_PROXY_CONFIGURATION_FAILED|BLOCKED_BY_ADMINISTRATOR)/.test(environmentError)) {
+    return { ...baseResult, status: 'review', badgeText: '网络环境异常', errorCode: environmentError,
+      detail: joinEvidenceDetail(navigationSummary, '本机网络、代理或管理策略阻止了检测；这不是书签失效证据。') }
+  }
+  if (/ERR_(?:CERT_|SSL_)/.test(environmentError)) {
+    return { ...baseResult, status: 'review', badgeText: '证书或 TLS 异常', errorCode: environmentError,
+      detail: joinEvidenceDetail(navigationSummary, '证书验证或 TLS 连接失败，需要检查网站证书与本机网络，不自动认定链接已失效。') }
   }
 
   if (unverifiedAttempt || unverifiedProbe) {
@@ -335,7 +347,7 @@ function chooseEffectiveProbe(
 }
 
 export function shouldRetryNavigation(result: NavigationAttempt | null | undefined): boolean {
-  if (!result || result.status === 'available') {
+  if (!result || result.status === 'available' || hasVerifiedHttpFailure(result)) {
     return false
   }
 
@@ -489,7 +501,7 @@ export function classifyProbeResponse(
     }
   }
 
-  if (TEMPORARY_STATUS_CODES.has(statusCode)) {
+  if (TEMPORARY_STATUS_CODES.has(statusCode) || statusCode >= 500 && statusCode <= 599) {
     return {
       kind: 'temporary',
       method,
@@ -518,7 +530,8 @@ export function classifyAvailabilityProbeResult(
       detail: result.detail,
       finalUrl: result.finalUrl,
       redirected: result.redirected,
-      errorCode: result.errorCode
+      errorCode: result.errorCode,
+      ...(result.retryAfterMs === undefined ? {} : { retryAfterMs: result.retryAfterMs })
     }
   }
 
@@ -530,7 +543,8 @@ export function classifyAvailabilityProbeResult(
       url: result.finalUrl
     }, method),
     finalUrl: result.finalUrl,
-    redirected: result.redirected
+    redirected: result.redirected,
+    ...(result.retryAfterMs === undefined ? {} : { retryAfterMs: result.retryAfterMs })
   }
 }
 
@@ -629,6 +643,10 @@ function classifyNavigationNetworkEvidence(
     }
   }
 
+  if (statusCode >= 400 && evidence.finalResponseObserved === true) {
+    return classifyHttpStatusProbe(statusCode, method, formatNavigationNetworkEvidence(evidence))
+  }
+
   if (failedBeforeCompletion) {
     return {
       kind: 'network',
@@ -665,7 +683,7 @@ function classifyNavigationNetworkEvidence(
 
 function isUnverifiedRedirectEvidence(evidence: NavigationNetworkEvidence): boolean {
   const statusCode = Number(evidence.statusCode) || 0
-  return statusCode >= 300 && statusCode < 400 && evidence.finalResponseObserved === false
+  return isHttpRedirectStatus(statusCode) && evidence.finalResponseObserved === false
 }
 
 function classifyNavigationNetworkEvidenceFromAttempts(
@@ -711,7 +729,7 @@ function classifyHttpStatusProbe(statusCode: number, method: string, detail: str
     }
   }
 
-  if (TEMPORARY_STATUS_CODES.has(statusCode)) {
+  if (TEMPORARY_STATUS_CODES.has(statusCode) || statusCode >= 500 && statusCode <= 599) {
     return {
       kind: 'temporary',
       method,
@@ -853,32 +871,14 @@ function getEffectiveNavigationPort(protocol: string, explicitPort: string): str
 }
 
 function normalizeNavigationPathname(pathname: unknown): string {
-  const normalizedPath = String(pathname || '/')
-    .replace(/\/{2,}/g, '/')
-    .replace(/\/+$/, '')
-
-  return normalizedPath || '/'
+  // Double slashes and trailing slashes can select different resources.
+  return String(pathname || '/')
 }
 
 function normalizeNavigationSearch(search: string): string {
-  if (!search) {
-    return ''
-  }
-
+  if (!search) return ''
   const params = new URLSearchParams(search)
-  const normalizedPairs = [...params.entries()]
-    .map(([key, value]) => [key, value])
-    .sort((left, right) => {
-      return left[0].localeCompare(right[0], 'en') || left[1].localeCompare(right[1], 'en')
-    })
-
-  if (!normalizedPairs.length) {
-    return ''
-  }
-
-  const normalizedParams = new URLSearchParams()
-  normalizedPairs.forEach(([key, value]) => {
-    normalizedParams.append(key, value)
-  })
-  return `?${normalizedParams.toString()}`
+  // Stable key sorting preserves the order of repeated values (e.g. route/filter lists).
+  params.sort()
+  return params.size ? '?' + params.toString() : ''
 }

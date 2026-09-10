@@ -30,13 +30,13 @@ const progressClassSource = sheenProgressSource.match(
 )?.[0] || ''
 
 assert(progressClassSource.includes('transition-transform'), 'smart progress should animate with transform')
-assert(progressClassSource.includes('duration-[320ms] ease-linear'), 'smart progress should use a continuous linear crawl')
+assert(progressClassSource.includes('duration-[var(--progress-fill-dur)] ease-linear'), 'smart progress should use the shared continuous linear crawl')
 assert(progressClassSource.includes('rgba(237,237,237,0.86)'), 'smart progress should use the Geist gray-white fill')
 assert(!progressClassSource.includes('--ds-accent'), 'smart progress should not use the blue accent token')
 assert(!progressClassSource.includes('--ds-focus'), 'smart progress should not use the blue focus token')
 assert(componentSource.includes('<span className="tabular-nums">{loadingPercent}%</span>'), 'smart progress should show its latest percentage without animating replacement text')
 assert(
-  /prefers-reduced-motion[\s\S]*?\.sheen-progress-track::after[\s\S]*?animation:\s*none\s*!important/.test(globalCssSource),
+  /prefers-reduced-motion[\s\S]*?\.sheen-progress-bar::after[\s\S]*?animation:\s*none\s*!important/.test(globalCssSource),
   'reduced motion should stop the progress sheen'
 )
 assert(
@@ -44,8 +44,8 @@ assert(
   'the filled track should carry a sheen so a slow AI stage never looks frozen'
 )
 assert(
-  /\.sheen-progress-track::after[\s\S]*?clip-path:\s*inset\(0 calc\(100% - var\(--sheen-progress-fill/.test(globalCssSource),
-  'the sheen must be clipped to the completed portion so it never overstates progress'
+  /\.sheen-progress-bar::after\s*\{/.test(globalCssSource) && progressClassSource.includes('overflow-hidden'),
+  'the sheen must live inside the clipped fill so it never overstates progress'
 )
 // 三处进度条共用一份样式源：popup 智能分类、可用性检测、批量智能分析。
 for (const [label, path] of [

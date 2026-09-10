@@ -3,7 +3,7 @@ import { usePopupSearchChips } from '../popup-controller-store'
 
 const CHIPS_CLASS = 'flex flex-wrap gap-1.5'
 const searchChipVariants = cva(
-  'inline-flex min-h-6 items-center rounded-full border border-ds-border bg-ds-surface-1 px-2 text-[11px] font-semibold text-ds-text-secondary',
+  'inline-flex min-h-6 items-center rounded-full border border-ds-border bg-ds-surface-1 px-2 text-xs font-semibold text-ds-text-secondary',
   {
     variants: {
       excluded: {

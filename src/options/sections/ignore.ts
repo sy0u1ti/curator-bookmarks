@@ -5,6 +5,7 @@ import {
   createEmptyIgnoreRules
 } from '../shared-options/state.js'
 import { publishIgnoreRules } from '../components/ignore-rules-store.js'
+import { isInteractionLocked } from '../shared-options/utils.js'
 
 export function normalizeIgnoreRules(rawRules) {
   const normalized = createEmptyIgnoreRules()
@@ -112,6 +113,7 @@ export function matchesIgnoreRules(result) {
 
 export function renderIgnoreSection() {
   publishIgnoreRules({
+    locked: isInteractionLocked(),
     bookmarks: managerState.ignoreRules.bookmarks,
     domains: managerState.ignoreRules.domains,
     folders: managerState.ignoreRules.folders

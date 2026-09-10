@@ -253,7 +253,7 @@ assert.match(
 
 assert.match(
   runAnalysis,
-  /getNonInboxAutoMutationBlockReason\(aiResult, recommendation, pageContext\)[\s\S]*shouldAutoMoveRecommendation = inboxItem[\s\S]*: canMutateNonInboxBookmark[\s\S]*shouldAutoRename = Boolean\(inboxItem\) \|\| canMutateNonInboxBookmark/,
+  /getNonInboxAutoMutationBlockReason\(aiResult, recommendation, pageContext\)[\s\S]*shouldAutoMoveRecommendation = inboxItem[\s\S]*: canMutateNonInboxBookmark[\s\S]*shouldAutoRename = \(Boolean\(inboxItem\) \|\| canMutateNonInboxBookmark\) &&[\s\S]*meetsAiConfidenceThreshold\(aiResult\.confidence, AUTO_CLASSIFY_MUTATION_MIN_CONFIDENCE\)/,
   'non-Inbox move and rename must share the local mutation safety gate'
 )
 const mutationGate = readFunction(

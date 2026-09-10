@@ -20,7 +20,7 @@ export const SHEEN_PROGRESS_BAR_CLASS = [
   'sheen-progress-bar relative block h-full overflow-hidden rounded-[inherit]',
   'origin-left bg-[rgba(237,237,237,0.86)]',
   'shadow-[inset_0_1px_0_rgba(255,255,255,0.34)]',
-  'transition-transform duration-[320ms] ease-linear will-change-transform motion-reduce:transition-none'
+  'transition-transform duration-[var(--progress-fill-dur)] ease-linear motion-reduce:transition-none'
 ].join(' ')
 
 export function normalizeSheenProgressPercent(value: number): number {
@@ -29,10 +29,13 @@ export function normalizeSheenProgressPercent(value: number): number {
   return Math.max(0, Math.min(percent, 100))
 }
 
-/** 轨道侧变量：流光的 clip-path 用它裁出「已完成」区间。 */
-export function getSheenProgressTrackStyle(percent: number): CSSProperties {
+/** Only an active, incomplete task needs a moving highlight. */
+export function getSheenProgressTrackStyle(percent: number, active = true): CSSProperties {
+  const normalized = normalizeSheenProgressPercent(percent)
   return {
-    '--sheen-progress-fill': `${normalizeSheenProgressPercent(percent)}%`
+    '--sheen-progress-animation': active && normalized > 0 && normalized < 100
+      ? 'sheen-progress-sweep'
+      : 'none'
   } as CSSProperties
 }
 

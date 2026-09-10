@@ -9,16 +9,16 @@ const pickerRowClass =
   'relative grid min-h-[31px] grid-cols-[18px_minmax(0,1fr)] items-center gap-1'
 const toggleButtonClass = [
   'inline-flex h-[26px] min-h-[26px] w-[18px] min-w-[18px] items-center justify-center rounded-md border border-transparent bg-transparent text-ds-text-muted outline-none',
-  'transition-[border-color,background-color,color,transform,opacity] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1',
-  'active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
+  'active:scale-[var(--ds-press-scale)] data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
 ].join(' ')
 const toggleIconClass =
   'transition-transform duration-ds-fast ease-ds-standard motion-reduce:transition-none'
 const pickerCardClass = [
   'grid min-h-[31px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-md border border-transparent bg-transparent px-2 py-0 text-left text-ds-text-primary shadow-none outline-none',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-text-primary/10 hover:bg-ds-text-primary/[0.055] focus-visible:border-ds-text-primary/10 focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1',
   'active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
@@ -28,9 +28,9 @@ const pickerMainClass = 'grid min-w-0 max-w-full gap-px text-left leading-normal
 const pickerTitleClass =
   'block min-w-0 truncate text-left text-xs font-semibold leading-[1.28] text-ds-text-primary'
 const pickerPathClass =
-  'm-0 block min-w-0 truncate text-left text-[11px] leading-tight text-ds-text-muted'
+  'm-0 block min-w-0 truncate text-left text-xs leading-tight text-ds-text-muted'
 const pickerBadgeClass =
-  'inline-flex min-h-[18px] w-fit items-center justify-self-start rounded-full bg-ds-text-primary/[0.07] px-[7px] py-0.5 text-[10px] font-bold leading-tight text-ds-text-primary'
+  'inline-flex min-h-[18px] w-fit items-center justify-self-start rounded-full bg-ds-text-primary/[0.07] px-[7px] py-0.5 text-xs font-bold leading-tight text-ds-text-primary'
 const pickerBadgeMutedClass = 'text-ds-text-disabled'
 const pickerEmptyStateClass =
   'grid h-full place-items-center rounded-ds-sm px-5 py-5 text-center text-xs leading-[1.55] tracking-[0.01em] text-ds-text-muted'

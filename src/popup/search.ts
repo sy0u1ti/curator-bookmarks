@@ -56,6 +56,95 @@ interface ParsedPopupSearchQuery extends ParsedSearchQuery {
   queryTerms: string[]
   recencyHint: boolean
   hasStructuredFilters: boolean
+  compactQuery: string
+  phraseTerms: string[]
+  looseSubsequenceAllowed: boolean
+}
+
+interface CompactSearchField {
+  value: string
+  label: string
+  weight: number
+}
+
+// Per-bookmark derived text that only depends on the indexed fields. Scoring
+// used to rebuild it for every bookmark on every keystroke; with 10k bookmarks
+// that regex work dominated each search pass. Entries are validated against the
+// source fields they were built from, so in-place patches (catalog refresh,
+// pinyin enrichment) naturally invalidate them.
+interface PopupSearchBookmarkDerived {
+  normalizedTitle: string
+  normalizedUrl: string
+  domain: string | undefined
+  normalizedPath: string
+  tagSummary: string
+  tagContentType: string
+  tagAliases: string[]
+  tagTags: string[]
+  tagTopics: string[]
+  tagPinyinFull: string[]
+  tagPinyinInitials: string[]
+  normalizedDomain: string
+  compactUrl: string
+  compactFields: CompactSearchField[]
+  approximateTokens: string[] | null
+}
+
+const derivedCache = new WeakMap<PopupSearchBookmark, PopupSearchBookmarkDerived>()
+const compactTermCache = new Map<string, string>()
+const COMPACT_TERM_CACHE_LIMIT = 512
+
+function getCompactTerm(term: string): string {
+  const cached = compactTermCache.get(term)
+  if (cached !== undefined) {
+    return cached
+  }
+  if (compactTermCache.size >= COMPACT_TERM_CACHE_LIMIT) {
+    compactTermCache.clear()
+  }
+  const compact = normalizeSearchTextCompact(term)
+  compactTermCache.set(term, compact)
+  return compact
+}
+
+function getBookmarkDerived(bookmark: PopupSearchBookmark): PopupSearchBookmarkDerived {
+  const cached = derivedCache.get(bookmark)
+  if (
+    cached &&
+    cached.normalizedTitle === bookmark.normalizedTitle &&
+    cached.normalizedUrl === bookmark.normalizedUrl &&
+    cached.domain === bookmark.domain &&
+    cached.normalizedPath === bookmark.normalizedPath &&
+    cached.tagSummary === bookmark.tagSummary &&
+    cached.tagContentType === bookmark.tagContentType &&
+    cached.tagAliases === bookmark.tagAliases &&
+    cached.tagTags === bookmark.tagTags &&
+    cached.tagTopics === bookmark.tagTopics &&
+    cached.tagPinyinFull === bookmark.tagPinyinFull &&
+    cached.tagPinyinInitials === bookmark.tagPinyinInitials
+  ) {
+    return cached
+  }
+
+  const derived: PopupSearchBookmarkDerived = {
+    normalizedTitle: bookmark.normalizedTitle,
+    normalizedUrl: bookmark.normalizedUrl,
+    domain: bookmark.domain,
+    normalizedPath: bookmark.normalizedPath,
+    tagSummary: bookmark.tagSummary,
+    tagContentType: bookmark.tagContentType,
+    tagAliases: bookmark.tagAliases,
+    tagTags: bookmark.tagTags,
+    tagTopics: bookmark.tagTopics,
+    tagPinyinFull: bookmark.tagPinyinFull,
+    tagPinyinInitials: bookmark.tagPinyinInitials,
+    normalizedDomain: normalizeText(bookmark.domain || ''),
+    compactUrl: normalizeSearchTextCompact(bookmark.normalizedUrl),
+    compactFields: buildCompactSearchFields(bookmark),
+    approximateTokens: null
+  }
+  derivedCache.set(bookmark, derived)
+  return derived
 }
 
 export function indexBookmarkForSearch(
@@ -279,20 +368,32 @@ function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
   const recencyHint = parsed.textTerms.some(isRecencyHintTerm)
   const textTerms = parsed.textTerms.filter((term) => !isRecencyHintTerm(term))
   const normalizedQuery = buildSearchTextQuery({ ...parsed, textTerms, excludedTerms })
+  const queryTerms = getQueryTerms(normalizedQuery)
+  const hasStructuredFilters = Boolean(
+    parsed.siteFilters.length ||
+    parsed.folderFilters.length ||
+    parsed.typeFilters.length ||
+    excludedTerms.length ||
+    parsed.dateRange
+  )
+  const compactQuery = normalizeSearchTextCompact(normalizedQuery)
+  const looseSubsequenceAllowed =
+    !hasStructuredFilters &&
+    !recencyHint &&
+    queryTerms.length === 1 &&
+    compactQuery.length >= LOOSE_SUBSEQUENCE_MIN_COMPACT_LENGTH &&
+    !requiresPinyinTokens(normalizedQuery)
   return {
     ...parsed,
     textTerms,
     excludedTerms,
     normalizedQuery,
-    queryTerms: getQueryTerms(normalizedQuery),
+    queryTerms,
     recencyHint,
-    hasStructuredFilters: Boolean(
-      parsed.siteFilters.length ||
-      parsed.folderFilters.length ||
-      parsed.typeFilters.length ||
-      excludedTerms.length ||
-      parsed.dateRange
-    )
+    hasStructuredFilters,
+    compactQuery,
+    phraseTerms: textTerms.filter((term) => /\s/.test(term)),
+    looseSubsequenceAllowed
   }
 }
 
@@ -305,13 +406,13 @@ function scoreBookmarkWithReasons(
   bookmark: PopupSearchBookmark,
   parsedQuery: ParsedPopupSearchQuery
 ): { score: number; reasons: string[] } {
-  const { normalizedQuery, queryTerms } = parsedQuery
+  const { normalizedQuery, queryTerms, compactQuery } = parsedQuery
+  const derived = getBookmarkDerived(bookmark)
   const title = bookmark.normalizedTitle
   const url = bookmark.normalizedUrl
-  const domain = normalizeText(bookmark.domain || '')
+  const domain = derived.normalizedDomain
   const searchText = getBookmarkSearchText(bookmark)
   const compactSearchText = getCompactSearchText(bookmark)
-  const compactQuery = normalizeSearchTextCompact(normalizedQuery)
   let score = 0
   let matched = false
   const reasons: string[] = []
@@ -356,7 +457,7 @@ function scoreBookmarkWithReasons(
     addReason(reasons, `命中：标题 ${normalizedQuery}`)
   }
 
-  const compactFieldMatch = scoreCompactFieldMatch(bookmark, compactQuery, normalizedQuery, reasons)
+  const compactFieldMatch = scoreCompactFieldMatch(derived.compactFields, compactQuery, normalizedQuery, reasons)
   if (compactFieldMatch.score > 0) {
     score += compactFieldMatch.score
     matched = true
@@ -473,7 +574,7 @@ function scoreBookmarkWithReasons(
     insertReason(reasons, buildQueryCoverageReason(queryTerms), 1)
   }
 
-  if (!matched && canUseLooseSubsequenceMatch(parsedQuery)) {
+  if (!matched && parsedQuery.looseSubsequenceAllowed) {
     const titleFuzzy = subsequenceScore(title, normalizedQuery)
     const urlFuzzy = subsequenceScore(url, normalizedQuery)
     const fuzzyScore = Math.max(titleFuzzy * 2, urlFuzzy)
@@ -485,10 +586,10 @@ function scoreBookmarkWithReasons(
     }
   }
 
-  if (!strongMatch && compactQuery && canUseLooseSubsequenceMatch(parsedQuery)) {
+  if (!strongMatch && compactQuery && parsedQuery.looseSubsequenceAllowed) {
     const compactFuzzyScore = Math.max(
       subsequenceScore(compactSearchText, compactQuery) * 2,
-      subsequenceScore(normalizeSearchTextCompact(url), compactQuery)
+      subsequenceScore(derived.compactUrl, compactQuery)
     )
     if (compactFuzzyScore > 0) {
       score += Math.round(compactFuzzyScore * 0.8)
@@ -548,12 +649,13 @@ function scoreFastFirstBatchBookmark(
   terms: string[]
 ): { score: number; reasons: string[] } {
   const normalizedQuery = parsedQuery.normalizedQuery
+  const derived = getBookmarkDerived(bookmark)
   const title = bookmark.normalizedTitle
   const url = bookmark.normalizedUrl
-  const domain = normalizeText(bookmark.domain || '')
+  const domain = derived.normalizedDomain
   const path = bookmark.normalizedPath
   const searchText = getBookmarkSearchText(bookmark)
-  const compactQuery = normalizeSearchTextCompact(normalizedQuery)
+  const compactQuery = parsedQuery.compactQuery
   const reasons: string[] = []
   let score = 0
 
@@ -571,7 +673,7 @@ function scoreFastFirstBatchBookmark(
     }
   }
 
-  score += scoreCompactFieldMatch(bookmark, compactQuery, normalizedQuery, reasons).score
+  score += scoreCompactFieldMatch(derived.compactFields, compactQuery, normalizedQuery, reasons).score
 
   if (url.startsWith(normalizedQuery) || domain.startsWith(normalizedQuery)) {
     score += 250
@@ -653,7 +755,7 @@ function scoreSemanticFields(
 }
 
 function scoreCompactFieldMatch(
-  bookmark: PopupSearchBookmark,
+  fields: CompactSearchField[],
   compactQuery: string,
   normalizedQuery: string,
   reasons: string[]
@@ -663,7 +765,6 @@ function scoreCompactFieldMatch(
   }
 
   let bestMatch: { score: number; reason: string } | null = null
-  const fields = getCompactSearchFields(bookmark)
   for (const field of fields) {
     if (!field.value) {
       continue
@@ -688,7 +789,7 @@ function scoreCompactFieldMatch(
   return { score: bestMatch.score }
 }
 
-function getCompactSearchFields(bookmark: PopupSearchBookmark): Array<{ value: string; label: string; weight: number }> {
+function buildCompactSearchFields(bookmark: PopupSearchBookmark): CompactSearchField[] {
   return [
     { value: normalizeSearchTextCompact(bookmark.normalizedTitle), label: '紧凑标题', weight: 240 },
     { value: normalizeSearchTextCompact(bookmark.normalizedUrl), label: '紧凑网址', weight: 170 },
@@ -838,7 +939,7 @@ function matchesStructuredFilters(
   }
 
   if (parsedQuery.siteFilters.length) {
-    const domain = normalizeText(bookmark.domain || '')
+    const domain = getBookmarkDerived(bookmark).normalizedDomain
     const url = bookmark.normalizedUrl || ''
     const matchedSite = parsedQuery.siteFilters.find((filter) =>
       domain.includes(filter) || url.includes(filter)
@@ -884,7 +985,7 @@ function matchesRequiredPhraseTerms(
   bookmark: PopupSearchBookmark,
   parsedQuery: ParsedPopupSearchQuery
 ): boolean {
-  const phraseTerms = parsedQuery.textTerms.filter((term) => /\s/.test(term))
+  const phraseTerms = parsedQuery.phraseTerms
   if (!phraseTerms.length) {
     return true
   }
@@ -948,10 +1049,15 @@ function isApproximateLatinTerm(term: string): boolean {
 }
 
 function collectApproximateSearchTokens(bookmark: PopupSearchBookmark): string[] {
+  const derived = getBookmarkDerived(bookmark)
+  if (derived.approximateTokens) {
+    return derived.approximateTokens
+  }
+
   const values = [
     bookmark.normalizedTitle,
     bookmark.normalizedUrl,
-    normalizeText(bookmark.domain || ''),
+    derived.normalizedDomain,
     bookmark.normalizedPath,
     bookmark.tagSummary,
     bookmark.tagContentType,
@@ -971,7 +1077,8 @@ function collectApproximateSearchTokens(bookmark: PopupSearchBookmark): string[]
     }
   }
 
-  return [...tokens]
+  derived.approximateTokens = [...tokens]
+  return derived.approximateTokens
 }
 
 function findClosestLatinToken(
@@ -1010,8 +1117,8 @@ function getApproximateDistanceLimit(term: string): number {
 }
 
 function damerauLevenshteinDistance(left: string, right: string, limit: number): number {
-  const previousPreviousRow = new Array(right.length + 1).fill(0)
-  let previousRow = Array.from({ length: right.length + 1 }, (_value, index) => index)
+  let previousPreviousRow: number[] = new Array(right.length + 1).fill(0)
+  let previousRow: number[] = Array.from({ length: right.length + 1 }, (_value, index) => index)
 
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
     const currentRow = [leftIndex]
@@ -1042,7 +1149,7 @@ function damerauLevenshteinDistance(left: string, right: string, limit: number):
       return limit + 1
     }
 
-    previousPreviousRow.splice(0, previousPreviousRow.length, ...previousRow)
+    previousPreviousRow = previousRow
     previousRow = currentRow
   }
 
@@ -1282,17 +1389,30 @@ function matchesSearchCandidateText(bookmark: PopupSearchBookmark, term: string)
     return true
   }
 
-  const compactTerm = normalizeSearchTextCompact(term)
+  const compactTerm = getCompactTerm(term)
   if (!compactTerm) {
     return false
   }
 
-  return getCompactSearchFields(bookmark).some((field) => field.value.includes(compactTerm))
+  const fields = getBookmarkDerived(bookmark).compactFields
+  for (let index = 0; index < fields.length; index += 1) {
+    if (fields[index].value.includes(compactTerm)) {
+      return true
+    }
+  }
+  return false
 }
 
 function getBestSearchIndex(left: string, right: string, term: string): number {
-  const indices = [left.indexOf(term), right.indexOf(term)].filter((index) => index >= 0)
-  return indices.length ? Math.min(...indices) : -1
+  const leftIndex = left.indexOf(term)
+  const rightIndex = right.indexOf(term)
+  if (leftIndex === -1) {
+    return rightIndex
+  }
+  if (rightIndex === -1) {
+    return leftIndex
+  }
+  return Math.min(leftIndex, rightIndex)
 }
 
 function getTextSearchIndex(text: string, term: string): number {
@@ -1402,25 +1522,21 @@ function scoreOrderedTermProximity(text: string, terms: string[]): number {
 }
 
 function canUseLooseSubsequenceMatch(parsedQuery: ParsedPopupSearchQuery): boolean {
-  if (
-    parsedQuery.hasStructuredFilters ||
-    parsedQuery.recencyHint ||
-    parsedQuery.queryTerms.length !== 1
-  ) {
-    return false
-  }
-
-  const compactQuery = normalizeSearchTextCompact(parsedQuery.normalizedQuery)
-  if (compactQuery.length < LOOSE_SUBSEQUENCE_MIN_COMPACT_LENGTH) {
-    return false
-  }
-
-  return !requiresPinyinTokens(parsedQuery.normalizedQuery)
+  return parsedQuery.looseSubsequenceAllowed
 }
 
 function appendTopSearchResult(results: PopupSearchResult[], result: PopupSearchResult, limit = MAX_POPUP_SEARCH_RESULTS): void {
-  results.push(result)
-  results.sort(compareSearchResults)
+  // Equivalent to push + stable sort + truncate: the new result lands after
+  // every existing entry that does not compare strictly worse than it.
+  if (results.length >= limit && compareSearchResults(result, results[results.length - 1]) >= 0) {
+    return
+  }
+
+  let insertIndex = results.length
+  while (insertIndex > 0 && compareSearchResults(result, results[insertIndex - 1]) < 0) {
+    insertIndex -= 1
+  }
+  results.splice(insertIndex, 0, result)
   if (results.length > limit) {
     results.length = limit
   }

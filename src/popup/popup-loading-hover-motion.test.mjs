@@ -483,6 +483,12 @@ try {
   console.log(`Popup loading and lower-hover probe: ${JSON.stringify(result)}`)
 
   assert.equal(
+    await page.locator('.popup-workspace-reveal [data-sq="on"]').count(),
+    0,
+    'Recycling and hovering virtual rows must retain native radii without reattaching clip-path work'
+  )
+
+  assert.equal(
     coldOpenProbe.autoAnalyzeStatusWasVisible,
     false,
     'Popup motion fixture must not leak unrelated auto-capture status into layout measurements'

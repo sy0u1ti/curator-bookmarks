@@ -4,6 +4,7 @@ import {
   buildAiProviderConnectivityRequestBody,
   buildAiFolderCandidates,
   compileStrictJsonSchema,
+  clearAiProviderCompatibilityCache,
   normalizeAiFolderDecision,
   requestStructuredAiOutput,
   validateJsonSchema,
@@ -74,33 +75,59 @@ async function run(): Promise<void> {
   testSchemaValidation()
   testStrictSchemaCompilation()
   testFolderCandidatesAndDecision()
+  clearAiProviderCompatibilityCache()
   await testResponsesProviderEnvelope()
+  clearAiProviderCompatibilityCache()
   await testResponsesReasoningBlocksIgnored()
+  clearAiProviderCompatibilityCache()
   await testStrictOptionalNullRestoration()
+  clearAiProviderCompatibilityCache()
   await testChatCompletionsEnvelope()
+  clearAiProviderCompatibilityCache()
   await testParseRepairRetry()
+  clearAiProviderCompatibilityCache()
   await testResponsesProviderErrorDoesNotFallback()
+  clearAiProviderCompatibilityCache()
   await testProviderTextErrorBody()
+  clearAiProviderCompatibilityCache()
   await testTimeoutErrorMessage()
+  clearAiProviderCompatibilityCache()
   await testNoRetryForAbort()
+  clearAiProviderCompatibilityCache()
   await testThinkTagAndProseExtraction()
+  clearAiProviderCompatibilityCache()
   await testReasoningContentSalvage()
+  clearAiProviderCompatibilityCache()
   await testChunkedReasoningResponseExtraction()
+  clearAiProviderCompatibilityCache()
   await testTruncationDetection()
+  clearAiProviderCompatibilityCache()
   await testResponsesInvalidSchemaFallback()
+  clearAiProviderCompatibilityCache()
   await testResponseFormatFallback()
+  clearAiProviderCompatibilityCache()
   await testResponseFormatFullFallback()
+  clearAiProviderCompatibilityCache()
   await testRetryAfterBackoff()
+  clearAiProviderCompatibilityCache()
   await testBodyReadTimeout()
+  clearAiProviderCompatibilityCache()
   await testExternalAbortDuringBodyRead()
+  clearAiProviderCompatibilityCache()
   await testOversizedResponseContentLength()
+  clearAiProviderCompatibilityCache()
   await testOversizedStreamingResponse()
+  clearAiProviderCompatibilityCache()
   await testProviderErrorRedaction()
+  clearAiProviderCompatibilityCache()
   await testSharedRequestDeadline()
   testProviderConnectivityReasoningEffort()
   testOfficialProviderReasoningAdapters()
+  clearAiProviderCompatibilityCache()
   await testReasoningEffortInjection()
+  clearAiProviderCompatibilityCache()
   await testDirectAnthropicAdapter()
+  clearAiProviderCompatibilityCache()
   await testReasoningEffortRejection()
   testModelReasoningProfiles()
 }
@@ -120,7 +147,7 @@ function testProviderConnectivityReasoningEffort(): void {
     model: 'gpt-5.6-sol',
     reasoningEffort: 'max'
   }) as Record<string, any>
-  assert(responsesBody.input === 'Reply with OK.', 'connectivity Responses body should preserve its base prompt')
+  assert(JSON.stringify(responsesBody.input).includes('status'), 'connectivity Responses body should validate the same structured test contract')
   assert(responsesBody.reasoning?.effort === 'max', 'connectivity Responses should carry reasoning.effort')
 
   const genericChatOffBody = buildAiProviderConnectivityRequestBody({
@@ -153,7 +180,7 @@ function testProviderConnectivityReasoningEffort(): void {
     reasoningEffort: 'max'
   }) as Record<string, any>
   assert(anthropicBody.model === 'claude-opus-4-6', 'Anthropic connectivity body should preserve the selected model')
-  assert(anthropicBody.max_tokens === 16, 'Anthropic connectivity body should preserve max_tokens')
+  assert(anthropicBody.max_tokens === 8192, 'Anthropic connectivity test must leave enough tokens for reasoning and final output')
   assert(Array.isArray(anthropicBody.messages), 'Anthropic connectivity body should preserve its base prompt')
   assert(anthropicBody.output_config?.effort === 'max', 'direct Anthropic connectivity should carry output_config.effort')
   assert(anthropicBody.thinking?.type === 'adaptive', 'Claude 4.6 connectivity should enable adaptive thinking')

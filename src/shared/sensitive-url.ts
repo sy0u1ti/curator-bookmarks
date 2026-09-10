@@ -39,6 +39,9 @@ const PRIVATE_DNS_ALIAS_HOSTS = [
   'xip.io'
 ]
 
+const HOST_NETWORK_CACHE_LIMIT = 512
+const hostNetworkCache = new Map<string, boolean>()
+
 const EMAIL_HOSTS = [
   'mail.google.com',
   'outlook.live.com',
@@ -246,6 +249,22 @@ function isLocalOrPrivateHostname(hostname: string): boolean {
     return false
   }
 
+  const cached = hostNetworkCache.get(hostname)
+  if (cached !== undefined) {
+    return cached
+  }
+
+  // This classification only uses static hostname/IP rules, never DNS or URL
+  // paths. Keep per-URL capability and sensitive-page checks outside the cache.
+  const result = classifyLocalOrPrivateHostname(hostname)
+  if (hostNetworkCache.size >= HOST_NETWORK_CACHE_LIMIT) {
+    hostNetworkCache.delete(hostNetworkCache.keys().next().value!)
+  }
+  hostNetworkCache.set(hostname, result)
+  return result
+}
+
+function classifyLocalOrPrivateHostname(hostname: string): boolean {
   if (
     hostname === 'localhost' ||
     hostname.endsWith('.localhost') ||

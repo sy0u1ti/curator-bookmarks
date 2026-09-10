@@ -84,6 +84,7 @@ try {
       && !mask.hasAttribute('data-mask-initial')
   })
   await page.locator('#newtab-settings-trigger').click()
+  await page.getByRole('tab', { name: '外观', exact: true }).click()
   await page.locator('#background-mask-overlay-value').waitFor({ state: 'attached' })
 
   const normal = await readMaskSymptom(page)

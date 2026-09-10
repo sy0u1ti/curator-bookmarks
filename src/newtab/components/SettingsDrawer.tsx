@@ -20,6 +20,8 @@ import { Icon } from '../../ui/icons/Icon'
 import { Input } from '../../ui/base/Input'
 import { Select } from '../../ui/base/Select'
 import { SliderControl } from '../../ui/base/Slider'
+import { DEFAULT_GLASS_SETTINGS, GLASS_SETTING_LIMITS, type NewtabGlassSettingKey } from '../glass-settings'
+import { changeNewtabGlassSetting, resetNewtabGlassSettings, useNewtabGlassSettings } from '../newtab-glass-settings-store'
 import { Surface } from '../../ui/base/Surface'
 import { SwitchControl } from '../../ui/base/Switch'
 import { TabsIndicator, TabsList, TabsPanel, TabsRoot, TabsTab } from '../../ui/base/Tabs'
@@ -40,7 +42,8 @@ import {
   dispatchNewtabIconSettingFieldChange,
   dispatchNewtabIconShowTitlesToggle,
   dispatchNewtabIconVerticalCenterToggle,
-  useNewtabIconPreviewView
+  useNewtabIconPreviewView,
+  type NewtabIconSettingsFieldKey
 } from '../newtab-icon-preview-store'
 import {
   dispatchNewtabTimeSettingFieldChange,
@@ -50,9 +53,6 @@ import {
 import {
   dispatchNewtabSearchSettingFieldChange,
   dispatchNewtabSearchSettingToggle,
-  NEWTAB_SEARCH_BACKGROUND_DEFAULT,
-  NEWTAB_SEARCH_BACKGROUND_MAX,
-  NEWTAB_SEARCH_BACKGROUND_MIN,
   useNewtabSearchSettingsView
 } from '../newtab-search-settings-store'
 import {
@@ -72,6 +72,7 @@ import {
   dispatchNewtabSettingsDrawerOpenChange,
   dispatchNewtabSettingsDrawerReady,
   getNewtabSettingsDrawerNodes,
+  getNewtabSettingsDrawerView,
   setNewtabSettingsDrawerNodes,
   useNewtabSettingsDrawerLayoutRequest,
   useNewtabSettingsDrawerView
@@ -105,6 +106,7 @@ import {
 const settingsTabs = [
   ['source', '来源', true],
   ['appearance', '外观', false],
+  ['glass', '玻璃', false],
   ['search', '搜索', false],
   ['advanced', '高级设置', false]
 ] as const
@@ -112,15 +114,15 @@ const settingsTabs = [
 const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
 const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary [box-shadow:var(--newtab-glass-drop-shadow)] [filter:none] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
-const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] transition-[transform,opacity] duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
-const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-14 max-[700px]:px-4 max-[700px]:pb-5'
+const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] transition-[transform,scale,opacity] duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
+const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6 max-[700px]:px-4 max-[700px]:pb-5'
 const SETTINGS_ROOT_CLASS = 'grid gap-4'
 const SETTINGS_HEADER_CLASS = 'grid gap-1 pr-14'
 const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
 const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
 const SETTINGS_SUMMARY_CLASS = 'm-0 text-sm leading-relaxed text-ds-text-secondary'
 const SETTINGS_SAVE_STATUS_CLASS = 'mt-1 justify-self-start text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
-const SETTINGS_TABS_LIST_CLASS = 't-tabs sticky top-0 z-[1] grid grid-cols-4 gap-1 rounded-ds-sm border border-[var(--newtab-glass-stroke)] bg-[rgba(245,245,247,0.06)] p-1 [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] max-[380px]:grid-cols-2'
+const SETTINGS_TABS_LIST_CLASS = 't-tabs sticky top-0 z-[1] grid grid-cols-5 gap-1 rounded-ds-sm border border-[var(--newtab-glass-stroke)] bg-[rgba(245,245,247,0.06)] p-1 max-[380px]:grid-cols-3'
 const SETTINGS_TAB_CLASS = 't-tab min-h-8 min-w-0 rounded-ds-sm bg-transparent px-2 text-xs font-semibold outline-none hover:text-ds-text-primary data-[active]:text-ds-text-primary data-[selected]:text-ds-text-primary data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus'
 const SETTINGS_TABS_INDICATOR_CLASS = 't-tabs-pill'
 const SETTINGS_TAB_PANELS_CLASS = 'settings-tab-panels grid min-w-0 items-start'
@@ -161,7 +163,7 @@ const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-bord
 const FOLDER_STACK_CLASS = 'grid min-w-0 gap-2'
 const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2'
 const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-secondary'
-const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.58)] outline-none transition-[background-color,border-color,color,transform,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
+const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.9)] outline-none transition-[background-color,border-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
 const FOLDER_CANDIDATES_PANEL_CLASS = cx('grid gap-2 px-2.5 py-2', SETTINGS_NESTED_SURFACE_CLASS)
 const FOLDER_CANDIDATE_LIST_CLASS = 'grid max-h-56 gap-1 overflow-y-auto'
@@ -312,7 +314,8 @@ function SliderRow({
   onValueChange,
   onValueCommitted,
   sliderValue,
-  ticks
+  ticks,
+  step = 1
 }: {
   id: string
   label: string
@@ -330,6 +333,7 @@ function SliderRow({
   onValueCommitted?: (value: number) => void
   sliderValue?: number
   ticks?: readonly [string, string, string]
+  step?: number
 }) {
   return (
     <label id={rowId} className={settingRowClassName(SETTINGS_ROW_SLIDER_CLASS, disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
@@ -348,13 +352,14 @@ function SliderRow({
           disabled={disabled}
           max={max}
           min={min}
+          step={step}
           onValueChange={onValueChange}
           onValueCommitted={onValueCommitted}
           syncInputState
           value={sliderValue}
         />
         {ticks ? (
-          <span className="flex justify-between px-0.5 text-[11px] leading-4 text-ds-text-tertiary" aria-hidden="true">
+          <span className="flex justify-between px-0.5 text-xs leading-4 text-ds-text-tertiary" aria-hidden="true">
             {ticks.map((tick) => <span key={tick}>{tick}</span>)}
           </span>
         ) : null}
@@ -427,7 +432,7 @@ function SettingsDrawerHeader() {
     <header className={SETTINGS_HEADER_CLASS}>
       <p className={SETTINGS_KICKER_CLASS}>新标签页</p>
       <h1 id="newtab-settings-title" className={SETTINGS_TITLE_CLASS}>新标签页设置</h1>
-      <p id="newtab-settings-summary" className={SETTINGS_SUMMARY_CLASS}>书签来源、背景、卡片布局、时间与搜索栏。</p>
+      <p id="newtab-settings-summary" className={SETTINGS_SUMMARY_CLASS}>按需调整，效果实时呈现。</p>
       <output
         id="settings-save-status"
         className={SETTINGS_SAVE_STATUS_CLASS}
@@ -460,20 +465,25 @@ function SettingsDrawerTabs() {
 }
 
 function SettingsTabPanel({
+  active,
+  visited,
   value,
   children
 }: {
+  active: boolean
+  visited: boolean
   value: SettingsDrawerSection
   children: ReactNode
 }) {
+  const mounted = active || visited
   return (
     <TabsPanel
       className={SETTINGS_TAB_PANEL_CLASS}
       id={`settings-panel-${value}`}
       value={value}
-      keepMounted
+      keepMounted={mounted}
     >
-      {children}
+      {mounted ? children : null}
     </TabsPanel>
   )
 }
@@ -830,6 +840,7 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
           />
           <ToggleGroup
             id="folder-browse-mode-control"
+            slidingIndicator
             aria-label="浏览方式"
             className={SETTINGS_SEGMENTED_CLASS}
             itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
@@ -1240,13 +1251,88 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
           hidden={backgroundSettings.maskFilterHoverHidden}
           onCheckedChange={dispatchNewtabBackgroundFilterHoverToggle}
         />
-        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="模糊程度" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
+        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="背景蒙版模糊" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
         <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="采样强度" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterStrength} ticks={['0', '默认', '100%']} />
         <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label="大小" valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素大小" hidden={backgroundSettings.maskFilterSizeHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterSize} ticks={['0', '默认', '100%']} />
         <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label="间距" valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterSpacing} ticks={['0', '默认', '100%']} />
       </Surface>
     </section>
   )
+})
+
+// Changing a layout segment must not re-render every unrelated slider.
+// Stable scalar props let React retain the Base UI controls and their observers.
+const IconSettingSwitchRow = memo(SwitchRow)
+
+const GLASS_CONTROLS: Array<{ key: NewtabGlassSettingKey; label: string; description: string; unit?: string }> = [
+  { key: 'blur', label: '玻璃模糊', description: '降低数值更清透，提高数值更柔和。', unit: 'px' },
+  { key: 'tint', label: '底色深浅', description: '降低数值透出壁纸，亮色壁纸可适当加深。', unit: '%' },
+  { key: 'bevel', label: '边缘范围', description: '随模块尺寸适配，拉高可扩大折射区域。' },
+  { key: 'thickness', label: '折射强度', description: '拉高让玻璃后的背景弯曲更明显。' },
+  { key: 'dispersion', label: '色散', description: '在边缘加入细微的彩色折射。' },
+  { key: 'rim', label: '边缘高光', description: '调整玻璃边缘的亮度。' },
+  { key: 'light', label: '光照方向', description: '改变高光照入的方向。', unit: '°' },
+  { key: 'smooth', label: '边缘柔化', description: '平滑折射边缘的细节。', unit: 'px' }
+]
+
+const GlassSettingsSection = memo(function GlassSettingsSection({
+  firstControlRef,
+  sectionRef
+}: {
+  firstControlRef?: Ref<HTMLButtonElement>
+  sectionRef?: SettingsSectionRef
+}) {
+  const view = useNewtabGlassSettings()
+  const settings = view.settings
+  return (
+    <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="glass" aria-labelledby="settings-glass-title">
+      <h2 id="settings-glass-title" className={SETTINGS_SECTION_TITLE_CLASS}>液态玻璃</h2>
+      <p className={SETTINGS_NOTE_CLASS}>统一调整书签卡片、时间、搜索栏与设置面板。</p>
+      <CollapsibleRoot defaultOpen className="newtab-glass-controls">
+        <CollapsibleTrigger
+          render={<Button unstyled ref={firstControlRef} />}
+          aria-label="玻璃材质参数"
+          className={settingsControlClassName('flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm')}
+        >
+          <span className="grid gap-1">
+            <span>材质参数</span>
+            <span className={SETTINGS_DESCRIPTION_CLASS}>模糊 {settings.blur}px · 底色 {settings.tint}%</span>
+          </span>
+          <span className="t-acc-chevron"><Icon name="ChevronDown" size={14} aria-hidden="true" /></span>
+        </CollapsibleTrigger>
+        <CollapsiblePanel className="grid gap-2.5">
+          <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
+            <div className="newtab-glass-preview">
+              <strong className="block text-sm font-semibold">实时预览</strong>
+              <p className="mb-0 mt-2 text-xs leading-relaxed">透过玻璃看纹理，沿边缘看折射。</p>
+            </div>
+          </div>
+          {GLASS_CONTROLS.map(control => {
+            const [min, max, step] = GLASS_SETTING_LIMITS[control.key]
+            return <SliderRow key={control.key} id={'glass-' + control.key} label={control.label}
+              description={control.description} valueId={'glass-' + control.key + '-value'}
+              value={settings[control.key] + (control.unit || '')} min={String(min)} max={String(max)}
+              step={step} defaultValue={String(DEFAULT_GLASS_SETTINGS[control.key])}
+              ariaLabel={control.label} sliderValue={settings[control.key]} disabled={!view.ready}
+              onValueChange={value => changeNewtabGlassSetting(control.key, value)} />
+          })}
+          <div className="flex items-center justify-between gap-3">
+            <output className={SETTINGS_NOTE_CLASS} aria-live="polite">
+              {view.saveState === 'error' ? '设置保存失败，请重试。' : view.saveState === 'saving' ? '正在保存…' : view.saveState === 'saved' ? '已保存' : ''}
+            </output>
+            <Button size="sm" variant="secondary" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复玻璃默认值</Button>
+          </div>
+        </CollapsiblePanel>
+      </CollapsibleRoot>
+    </section>
+  )
+})
+
+const IconSettingSliderRow = memo(function IconSettingSliderRow({
+  field,
+  ...props
+}: Omit<Parameters<typeof SliderRow>[0], 'onValueChange'> & { field: NewtabIconSettingsFieldKey }) {
+  return <SliderRow {...props} onValueChange={(value) => dispatchNewtabIconSettingFieldChange(field, value)} />
 })
 
 const IconSettingsSection = memo(function IconSettingsSection() {
@@ -1336,6 +1422,7 @@ const IconSettingsSection = memo(function IconSettingsSection() {
           <SettingLabelStack title="布局方式" description="自动适配屏幕宽度；固定列数会在窄屏收缩。" />
           <ToggleGroup
             id="icon-layout-control"
+            slidingIndicator
             aria-label="布局方式"
             className={SETTINGS_SEGMENTED_CLASS}
             itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
@@ -1351,14 +1438,14 @@ const IconSettingsSection = memo(function IconSettingsSection() {
             value={iconPreview.layoutMode}
           />
         </div>
-        <SwitchRow
+        <IconSettingSwitchRow
           id="icon-vertical-center"
           title="垂直居中"
           description="书签较少时让主内容贴近屏幕中部。"
           checked={iconPreview.verticalCenter}
           onCheckedChange={dispatchNewtabIconVerticalCenterToggle}
         />
-        <SwitchRow
+        <IconSettingSwitchRow
           id="icon-show-titles"
           title="显示标题"
           description="关闭后卡片收缩为只显示网站图标。"
@@ -1369,6 +1456,7 @@ const IconSettingsSection = memo(function IconSettingsSection() {
           <span className={SETTINGS_LABEL_CLASS}>标题行数</span>
           <ToggleGroup
             id="icon-title-lines-control"
+            slidingIndicator
             aria-label="标题行数"
             className={SETTINGS_SEGMENTED_CLASS}
             itemClassName={settingsControlClassName(SETTINGS_SEGMENTED_BUTTON_CLASS)}
@@ -1392,16 +1480,16 @@ const IconSettingsSection = memo(function IconSettingsSection() {
           >
             <span>卡片细节</span>
           </CollapsibleTrigger>
-          <CollapsiblePanel id="icon-advanced-panel" className={ICON_ADVANCED_PANEL_CLASS}>
+          <CollapsiblePanel id="icon-advanced-panel" className={ICON_ADVANCED_PANEL_CLASS} keepMounted={false}>
             <div className={FOLDER_STACK_CLASS}>
               <Button unstyled id="icon-reset-defaults" className={settingsControlClassName(ICON_RESET_DEFAULTS_CLASS)} type="button" onClick={dispatchNewtabIconResetDefaults}>恢复默认布局</Button>
-              <SliderRow id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value={`${iconPreview.pageWidth}%`} min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('pageWidth', value)} sliderValue={iconPreview.pageWidth} />
-              <SliderRow rowId="icon-tile-width-row" id="icon-tile-width" label="卡片宽度" valueId="icon-tile-width-value" value={`${iconPreview.tileWidth}px`} min="132" max="260" defaultValue="184" ariaLabel="书签卡片宽度" disabled={iconPreview.tileWidthDisabled} onValueChange={(value) => dispatchNewtabIconSettingFieldChange('tileWidth', value)} sliderValue={iconPreview.tileWidth} />
-              <SliderRow id="icon-shell-size" label="图标区域" valueId="icon-shell-size-value" value={`${iconPreview.iconShellSize}px`} min="24" max="48" defaultValue="32" ariaLabel="书签图标区域尺寸" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('iconShellSize', value)} sliderValue={iconPreview.iconShellSize} />
-              <SliderRow id="icon-column-gap" label="横向间距" valueId="icon-column-gap-value" value={`${iconPreview.effectiveColumnGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片横向间距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('columnGap', value)} sliderValue={iconPreview.columnGap} />
-              <SliderRow id="icon-row-gap" label="行距" valueId="icon-row-gap-value" value={`${iconPreview.effectiveRowGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片行距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('rowGap', value)} sliderValue={iconPreview.rowGap} />
-              <SliderRow id="icon-folder-gap" label="文件夹间距" valueId="icon-folder-gap-value" value={`${iconPreview.effectiveFolderGap}px`} min="0" max="120" defaultValue="20" ariaLabel="书签文件夹间距" onValueChange={(value) => dispatchNewtabIconSettingFieldChange('folderGap', value)} sliderValue={iconPreview.folderGap} />
-              <SliderRow rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value={String(iconPreview.fixedColumns)} min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" disabled={iconPreview.fixedColumnsDisabled} onValueChange={(value) => dispatchNewtabIconSettingFieldChange('columns', value)} sliderValue={iconPreview.fixedColumns} />
+              <IconSettingSliderRow field="pageWidth" id="icon-page-width" label="页面宽度" valueId="icon-page-width-value" value={`${iconPreview.pageWidth}%`} min="16" max="100" defaultValue="78" ariaLabel="书签卡片页面宽度" sliderValue={iconPreview.pageWidth} />
+              <IconSettingSliderRow field="tileWidth" rowId="icon-tile-width-row" id="icon-tile-width" label="卡片宽度" valueId="icon-tile-width-value" value={`${iconPreview.tileWidth}px`} min="132" max="260" defaultValue="184" ariaLabel="书签卡片宽度" disabled={iconPreview.tileWidthDisabled} sliderValue={iconPreview.tileWidth} />
+              <IconSettingSliderRow field="iconShellSize" id="icon-shell-size" label="图标区域" valueId="icon-shell-size-value" value={`${iconPreview.iconShellSize}px`} min="24" max="48" defaultValue="32" ariaLabel="书签图标区域尺寸" sliderValue={iconPreview.iconShellSize} />
+              <IconSettingSliderRow field="columnGap" id="icon-column-gap" label="横向间距" valueId="icon-column-gap-value" value={`${iconPreview.effectiveColumnGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片横向间距" sliderValue={iconPreview.columnGap} />
+              <IconSettingSliderRow field="rowGap" id="icon-row-gap" label="行距" valueId="icon-row-gap-value" value={`${iconPreview.effectiveRowGap}px`} min="0" max="100" defaultValue="10" ariaLabel="书签卡片行距" sliderValue={iconPreview.rowGap} />
+              <IconSettingSliderRow field="folderGap" id="icon-folder-gap" label="文件夹间距" valueId="icon-folder-gap-value" value={`${iconPreview.effectiveFolderGap}px`} min="0" max="120" defaultValue="20" ariaLabel="书签文件夹间距" sliderValue={iconPreview.folderGap} />
+              <IconSettingSliderRow field="columns" rowId="icon-columns-row" id="icon-columns" label="固定列数" valueId="icon-columns-value" value={String(iconPreview.fixedColumns)} min="2" max="8" defaultValue="4" ariaLabel="书签卡片固定列数" disabled={iconPreview.fixedColumnsDisabled} sliderValue={iconPreview.fixedColumns} />
             </div>
           </CollapsiblePanel>
         </CollapsibleRoot>
@@ -1684,19 +1772,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
           disabled={searchSettings.autoVerticalCenterDisabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('autoVerticalCenter', checked)}
         />
-        <SliderRow
-          id="search-background"
-          label="背景"
-          valueId="search-background-value"
-          value={`${searchSettings.background}%`}
-          min={String(NEWTAB_SEARCH_BACKGROUND_MIN)}
-          max={String(NEWTAB_SEARCH_BACKGROUND_MAX)}
-          defaultValue={String(NEWTAB_SEARCH_BACKGROUND_DEFAULT)}
-          ariaLabel="搜索栏背景透明度"
-          disabled={searchSettings.backgroundDisabled}
-          onValueChange={(value) => dispatchNewtabSearchSettingFieldChange('background', value)}
-          sliderValue={searchSettings.background}
-        />
+        <p className={SETTINGS_NOTE_CLASS}>搜索栏的底色、模糊与折射在「玻璃」中统一调整。</p>
       </Surface>
     </section>
   )
@@ -1721,13 +1797,16 @@ export function SettingsDrawerHost() {
 
 function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }: SettingsDrawerProps) {
   const modal = useSettingsDrawerModalMode()
+  const [visitedGroups, setVisitedGroups] = useState<Set<SettingsDrawerSection>>(() => new Set([activeGroup]))
   const [drawerElement, setDrawerElement] = useState<HTMLDivElement | null>(null)
   const [panelElement, setPanelElement] = useState<HTMLDivElement | null>(null)
   const layoutRequest = useNewtabSettingsDrawerLayoutRequest()
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
+  const outsideFocusRef = useRef<HTMLElement | null>(null)
   const firstControlRefs = useRef<Record<SettingsDrawerSection, HTMLElement | null>>({
     advanced: null,
     appearance: null,
+    glass: null,
     search: null,
     source: null
   })
@@ -1736,9 +1815,28 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
   const sectionRefs = useRef<Record<SettingsDrawerSection, HTMLElement | null>>({
     advanced: null,
     appearance: null,
+    glass: null,
     search: null,
     source: null
   })
+
+  useEffect(() => {
+    if (!open || modal) return
+    outsideFocusRef.current = null
+    const rememberFocus = (event: FocusEvent) => {
+      if (!getNewtabSettingsDrawerView().open) return
+      const target = event.target
+      outsideFocusRef.current = target instanceof HTMLElement && target !== document.body &&
+        !panelElement?.contains(target) && !target.closest('[data-drawer-content]') ? target : null
+    }
+    document.addEventListener('focusin', rememberFocus, true)
+    return () => document.removeEventListener('focusin', rememberFocus, true)
+  }, [modal, open, panelElement])
+
+  const resolveFinalFocus = useCallback(() => {
+    if (!modal && outsideFocusRef.current?.isConnected) return outsideFocusRef.current
+    return getNewtabSettingsDrawerNodes().trigger
+  }, [modal])
 
   useLayoutEffect(() => {
     setNewtabSettingsDrawerNodes({
@@ -1797,6 +1895,12 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
   const setSearchSectionRef = useCallback<SettingsSectionRef>((element) => {
     sectionRefs.current.search = element
   }, [])
+  const setGlassSectionRef = useCallback<SettingsSectionRef>((element) => {
+    sectionRefs.current.glass = element
+  }, [])
+  const setGlassFirstControlRef = useCallback((element: HTMLButtonElement | null) => {
+    firstControlRefs.current.glass = element
+  }, [])
   const setSourceSectionRef = useCallback<SettingsSectionRef>((element) => {
     sectionRefs.current.source = element
   }, [])
@@ -1811,7 +1915,9 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
   }, [])
 
   const handleActiveGroupChange = useCallback((value: string) => {
-    onActiveGroupChange(value as SettingsDrawerSection)
+    const group = value as SettingsDrawerSection
+    setVisitedGroups(previous => previous.has(group) ? previous : new Set(previous).add(group))
+    onActiveGroupChange(group)
   }, [onActiveGroupChange])
 
   return (
@@ -1826,6 +1932,7 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
       onOpenChange={onOpenChange}
       triggerId="newtab-settings-trigger"
       modal={modal ? 'trap-focus' : false}
+      disablePointerDismissal={!modal}
       aria-hidden={open ? 'false' : 'true'}
       inert={!open}
       tabIndex={-1}
@@ -1837,7 +1944,7 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
         aria-labelledby="newtab-settings-title"
         aria-describedby="newtab-settings-summary"
         initialFocus={false}
-        finalFocus={() => getNewtabSettingsDrawerNodes().trigger}
+        finalFocus={resolveFinalFocus}
         unanimated
       >
         <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
@@ -1851,19 +1958,19 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
             <SettingsDrawerHeader />
             <SettingsDrawerTabs />
             <div className={SETTINGS_TAB_PANELS_CLASS}>
-              <SettingsTabPanel value="advanced">
+              <SettingsTabPanel value="advanced" active={activeGroup === 'advanced'} visited={visitedGroups.has('advanced')}>
                 <AdvancedSettingsSection
                   firstControlRef={setAdvancedFirstControlRef}
                   sectionRef={setAdvancedSectionRef}
                 />
               </SettingsTabPanel>
-              <SettingsTabPanel value="source">
+              <SettingsTabPanel value="source" active={activeGroup === 'source'} visited={visitedGroups.has('source')}>
                 <SourceSettingsSection
                   folderCandidateSearchRef={folderCandidateSearchRef}
                   sectionRef={setSourceSectionRef}
                 />
               </SettingsTabPanel>
-              <SettingsTabPanel value="appearance">
+              <SettingsTabPanel value="appearance" active={activeGroup === 'appearance'} visited={visitedGroups.has('appearance')}>
                 <BackgroundSettingsSection
                   firstControlRef={setAppearanceFirstControlRef}
                   panelElement={panelElement}
@@ -1872,7 +1979,13 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
                 <IconSettingsSection />
                 <TimeSettingsSection panelElement={panelElement} />
               </SettingsTabPanel>
-              <SettingsTabPanel value="search">
+              <SettingsTabPanel value="glass" active={activeGroup === 'glass'} visited={visitedGroups.has('glass')}>
+                <GlassSettingsSection
+                  firstControlRef={setGlassFirstControlRef}
+                  sectionRef={setGlassSectionRef}
+                />
+              </SettingsTabPanel>
+              <SettingsTabPanel value="search" active={activeGroup === 'search'} visited={visitedGroups.has('search')}>
                 <SearchSettingsSection
                   firstControlRef={setSearchFirstControlRef}
                   panelElement={panelElement}

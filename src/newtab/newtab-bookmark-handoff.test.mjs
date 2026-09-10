@@ -5,8 +5,8 @@ import path from 'node:path'
 import { chromium } from 'playwright'
 
 const TITLE_SETTLE_DELAY_MS = 1_600
-const EXPECTED_GLASS_BACKGROUND = 'rgba(0, 0, 0, 0.6)'
-const EXPECTED_GLASS_FILTER = 'blur(8px)'
+const EXPECTED_GLASS_BACKGROUND = 'rgba(0, 0, 0, 0.13)'
+const EXPECTED_GLASS_FILTER = 'blur(12px)'
 const visualCaptureDir = process.env.CURATOR_NEWTAB_HANDOFF_CAPTURE_DIR
 const CAPTURE_WALLPAPER_DATA_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiBmaWxsPSIjZmZmIi8+PHBhdGggZD0iTTAgMGgxNnYxNkgwek0xNiAxNmgxNnYxNkgxNnoiIGZpbGw9IiMwMDAiLz48L3N2Zz4='
 const CAPTURE_WALLPAPER_URL = 'https://example.com/curator-handoff-checker.svg'
@@ -18,7 +18,7 @@ const GLASS_PIXEL_SAMPLE_END_MS = 2_600
 const STARTUP_GLASS_SELECTORS = {
   clock: '.newtab-clock',
   onboarding: '.newtab-onboarding-strip',
-  search: '.newtab-search',
+  search: '.newtab-search-surface',
   settingsTrigger: '.settings-trigger',
   sourceNavigationLabel: '.source-navigation-label',
   sourceNavigationLink: '.source-navigation-link'
@@ -224,12 +224,16 @@ try {
       const tile = document.querySelector(tileSelector)
       if (!(tile instanceof HTMLElement)) return null
       const style = getComputedStyle(tile)
+      const appliedBackdropFilter = style.backdropFilter || style.webkitBackdropFilter
+      const filterId = appliedBackdropFilter.match(/#([^\s)"']+)/)?.[1]
+      const lensBlur = filterId && document.getElementById(filterId)?.querySelector('feGaussianBlur[in="SourceGraphic"]')?.getAttribute('stdDeviation')
       let effectiveOpacity = 1
       for (let current = tile; current instanceof HTMLElement; current = current.parentElement) {
         effectiveOpacity *= Number.parseFloat(getComputedStyle(current).opacity) || 0
       }
       return {
-        backdropFilter: style.backdropFilter || style.webkitBackdropFilter,
+        appliedBackdropFilter,
+        backdropFilter: lensBlur != null ? `blur(${Number(lensBlur)}px)` : appliedBackdropFilter,
         backgroundColor: style.backgroundColor,
         effectiveOpacity,
         painted: isPainted(tile),

@@ -1,3 +1,24 @@
+let shellPaint: Promise<void> | undefined
+
+export function preparePopupShellPaint(root: HTMLElement): void {
+  shellPaint ??= new Promise<void>(resolve => {
+    const afterCommit = () => {
+      if (!root.firstElementChild) return false
+      requestAnimationFrame(() => { window.setTimeout(resolve, 0) })
+      return true
+    }
+    if (afterCommit()) return
+    const observer = new MutationObserver(() => {
+      if (afterCommit()) observer.disconnect()
+    })
+    observer.observe(root, { childList: true })
+  })
+}
+
+export function waitForPopupShellPaint(): Promise<void> {
+  return shellPaint ?? Promise.resolve()
+}
+
 export interface PopupBaseHydrationOptions<TBaseData> {
   loadBaseData: () => Promise<TBaseData>
   applyBaseData: (baseData: TBaseData) => void

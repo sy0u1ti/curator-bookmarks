@@ -163,7 +163,7 @@ const bookmarkContentStore = createUiViewStoreSlice<BookmarkContentViewModel | n
   'bookmark-content',
   null
 )
-let bookmarkContentNodes: NewtabBookmarkContentNodes = createEmptyNewtabBookmarkContentNodes()
+const bookmarkContentNodes: NewtabBookmarkContentNodes = createEmptyNewtabBookmarkContentNodes()
 
 export function dispatchNewtabBookmarkContentView(view: BookmarkContentViewModel | null): void {
   bookmarkContentStore.setState(view)
@@ -194,23 +194,23 @@ export function createEmptyNewtabBookmarkContentNodes(): NewtabBookmarkContentNo
 }
 
 export function setNewtabBookmarkGridNode(folderId: string, element: HTMLElement | null): void {
-  bookmarkContentNodes = setNodeMapEntry(bookmarkContentNodes, 'grids', folderId, element)
+  setNodeMapEntry(bookmarkContentNodes, 'grids', folderId, element)
 }
 
 export function setNewtabBookmarkTileNode(bookmarkId: string, element: HTMLElement | null): void {
-  bookmarkContentNodes = setNodeMapEntry(bookmarkContentNodes, 'tiles', bookmarkId, element)
+  setNodeMapEntry(bookmarkContentNodes, 'tiles', bookmarkId, element)
 }
 
 export function setNewtabBookmarkTileIconNode(bookmarkId: string, element: HTMLElement | null): void {
-  bookmarkContentNodes = setNodeMapEntry(bookmarkContentNodes, 'tileIcons', bookmarkId, element)
+  setNodeMapEntry(bookmarkContentNodes, 'tileIcons', bookmarkId, element)
 }
 
 export function setNewtabBookmarkFolderSectionNode(folderId: string, element: HTMLElement | null): void {
-  bookmarkContentNodes = setNodeMapEntry(bookmarkContentNodes, 'folderSections', folderId, element)
+  setNodeMapEntry(bookmarkContentNodes, 'folderSections', folderId, element)
 }
 
 export function setNewtabBookmarkFolderHeaderNode(folderId: string, element: HTMLElement | null): void {
-  bookmarkContentNodes = setNodeMapEntry(bookmarkContentNodes, 'folderHeaders', folderId, element)
+  setNodeMapEntry(bookmarkContentNodes, 'folderHeaders', folderId, element)
 }
 
 export function getNewtabBookmarkContentNodes(): NewtabBookmarkContentNodes {
@@ -222,27 +222,24 @@ function setNodeMapEntry(
   key: keyof NewtabBookmarkContentNodes,
   id: string,
   element: HTMLElement | null
-): NewtabBookmarkContentNodes {
+): void {
   const normalizedId = String(id || '').trim()
   if (!normalizedId) {
-    return nodes
+    return
   }
 
   const currentElement = nodes[key].get(normalizedId) || null
   if (currentElement === element) {
-    return nodes
+    return
   }
 
-  const nextMap = new Map(nodes[key])
+  // These refs are an imperative DOM registry, not a React state snapshot.
+  // Copying a growing map for every ref makes mounting/unmounting N tiles O(N²).
+  const nodeMap = nodes[key]
   if (element) {
-    nextMap.set(normalizedId, element)
+    nodeMap.set(normalizedId, element)
   } else {
-    nextMap.delete(normalizedId)
-  }
-
-  return {
-    ...nodes,
-    [key]: nextMap
+    nodeMap.delete(normalizedId)
   }
 }
 

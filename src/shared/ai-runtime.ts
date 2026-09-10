@@ -3,6 +3,9 @@ import {
   extractAnthropicMessagesJsonText,
   extractChatCompletionsJsonText,
   extractResponsesJsonText,
+  extractGeminiJsonText,
+  extractGeminiInteractionsJsonText,
+  AiResponseRefusalError,
   getAiEndpoint,
   getAiTruncationIssue,
   sanitizeAiErrorText
@@ -10,8 +13,10 @@ import {
 import {
   getAiProviderAuthHeaders,
   getAiProviderBaseUrlIssue,
-  getAnthropicMessagesEndpoint,
-  isDirectAnthropicProvider
+  isAiProviderConfigured,
+  resolveAiApiStyle,
+  type AiApiStyle,
+  type ResolvedAiApiStyle
 } from './ai-provider-url.js'
 import {
   getModelReasoningCapability,
@@ -20,6 +25,9 @@ import {
   resolveReasoningEffortForModel,
   type ReasoningEffortId
 } from './ai-reasoning.js'
+import { normalizeAiOutput } from './ai-output-normalization.js'
+import { AiEventStreamError, parseAiEventStream } from './ai-event-stream.js'
+import { isTextGenerationModelId } from './ai-model-catalog.js'
 
 export type AiErrorKind =
   | 'configuration'
@@ -35,7 +43,7 @@ export interface AiProviderSettings {
   baseUrl: string
   apiKey: string
   model: string
-  apiStyle: 'responses' | 'chat_completions'
+  apiStyle: AiApiStyle
   timeoutMs?: number
   /** 从渠道模型列表缓存的逐模型推理能力。 */
   reasoningCapabilities?: unknown
@@ -61,6 +69,8 @@ export interface AiRuntimeMetadata {
   status?: number
   attempts: number
   repaired: boolean
+  normalizationWarnings?: string[]
+  compatibilityWarnings?: string[]
 }
 
 export interface AiRuntimeResult<T> {
@@ -162,14 +172,10 @@ export class AiRuntimeError extends Error {
 }
 
 function ensureAiProviderConfigured(settings: AiProviderSettings): void {
-  if (!settings.baseUrl || !settings.apiKey || !settings.model) {
-    throw new AiRuntimeError('configuration', '请先到通用设置配置“自定义AI渠道”。')
-  }
-
   const baseUrlIssue = getAiProviderBaseUrlIssue(settings.baseUrl)
-  if (baseUrlIssue) {
-    throw new AiRuntimeError('configuration', baseUrlIssue)
-  }
+  if (baseUrlIssue) throw new AiRuntimeError('configuration', baseUrlIssue)
+  if (!isAiProviderConfigured(settings)) throw new AiRuntimeError('configuration', '请先到通用设置配置“自定义AI渠道”。')
+  if (!isTextGenerationModelId(settings.model)) throw new AiRuntimeError('configuration', '此功能需要可生成文本或 JSON 的模型，请改选对话模型。')
 }
 
 /** 归一推理强度：'default'/空/未知值 → null（不发送任何推理参数）。 */
@@ -249,12 +255,26 @@ function applyAiReasoningEffort(
   body: Record<string, unknown>,
   settings: AiReasoningRequestSettings
 ): Record<string, unknown> {
+  settings = { ...settings, apiStyle: resolveAiApiStyle(settings) }
   const { effort: reasoningEffort, transport } = resolveReasoningRequest(settings)
   if (!reasoningEffort) {
     return body
   }
 
-  if (transport.kind === 'anthropic_effort') {
+  if (settings.apiStyle === 'gemini' || settings.apiStyle === 'gemini_interactions') {
+    if (settings.apiStyle === 'gemini_interactions') {
+      mergeRequestObjectField(body, 'generation_config', { thinking_level: reasoningEffort })
+    } else {
+      const model = String(settings.model).toLowerCase()
+      const thinkingConfig = /gemini-2[._-]5/.test(model)
+        ? { thinkingBudget: reasoningEffort === 'none' ? 0 : ({ low: 1024, medium: 8192, high: /pro/.test(model) ? 32768 : 24576 } as Record<string, number>)[reasoningEffort] }
+        : { thinkingLevel: reasoningEffort.toUpperCase() }
+      mergeRequestObjectField(body, 'generationConfig', { thinkingConfig })
+    }
+    return body
+  }
+
+  if (settings.apiStyle === 'anthropic_messages' || transport.kind === 'anthropic_effort') {
     mergeRequestObjectField(body, 'output_config', { effort: reasoningEffort })
     if (requiresExplicitAnthropicAdaptiveThinking(settings.model)) {
       mergeRequestObjectField(body, 'thinking', { type: 'adaptive' })
@@ -352,35 +372,29 @@ function applyAiReasoningEffort(
   return body
 }
 
-/** 构造设置页连接测试请求，并与正式 AI 请求使用完全相同的推理参数映射。 */
-export function buildAiProviderConnectivityRequestBody(
-  settings: AiReasoningRequestSettings
-): Record<string, unknown> {
-  if (isDirectAnthropicProvider(settings.baseUrl)) {
-    return applyAiReasoningEffort({
-      model: settings.model,
-      max_tokens: 16,
-      messages: [{
-        role: 'user',
-        content: 'Reply with OK.'
-      }]
-    }, settings)
-  }
+const AI_CONNECTIVITY_SCHEMA: JsonSchema = {
+  type: 'object', additionalProperties: false, required: ['status'],
+  properties: { status: { type: 'string', enum: ['ok'] } }
+}
+const AI_CONNECTIVITY_SYSTEM_PROMPT = '这是连接测试。只返回 {"status":"ok"}。'
+const AI_CONNECTIVITY_USER_PROMPT = '返回测试结果。'
 
-  if (settings.apiStyle === 'chat_completions') {
-    return applyAiReasoningEffort({
-      model: settings.model,
-      messages: [{
-        role: 'user',
-        content: 'Reply with OK.'
-      }]
-    }, settings)
-  }
+/** Connection tests exercise the same structured contract, protocol and retry path as real features. */
+export function buildAiProviderConnectivityRequestBody(settings: AiReasoningRequestSettings): Record<string, unknown> {
+  return buildAiPromptRequestBody({
+    settings, schema: AI_CONNECTIVITY_SCHEMA, strictSchema: compileStrictJsonSchema(AI_CONNECTIVITY_SCHEMA),
+    schemaName: 'ai_connectivity', systemPrompt: AI_CONNECTIVITY_SYSTEM_PROMPT, userPrompt: AI_CONNECTIVITY_USER_PROMPT
+  })
+}
 
-  return applyAiReasoningEffort({
-    model: settings.model,
-    input: 'Reply with OK.'
-  }, settings)
+export function requestAiProviderConnectivityTest(
+  settings: AiProviderSettings,
+  options: Pick<AiStructuredRequest<{ status: 'ok' }>, 'signal' | 'fetchImpl' | 'timeoutMs'> = {}
+): Promise<AiRuntimeResult<{ status: 'ok' }>> {
+  return requestStructuredAiOutput({
+    ...options, settings, schema: AI_CONNECTIVITY_SCHEMA, schemaName: 'ai_connectivity',
+    systemPrompt: AI_CONNECTIVITY_SYSTEM_PROMPT, userPrompt: AI_CONNECTIVITY_USER_PROMPT
+  })
 }
 
 /**
@@ -481,90 +495,100 @@ function buildAiPromptRequestBody({
   userPrompt
 }: AiPromptEnvelope, options: {
   structuredOutputMode?: AiStructuredOutputMode
+  mergeSystemPrompt?: boolean
 } = {}): Record<string, unknown> {
-  const structuredOutputMode = options.structuredOutputMode || 'json_schema'
-  // 无论兼容端点是否真正执行 response_format，提示词里都保留原始业务 schema；
-  // 严格 API schema 只负责传输约束，不改变调用方的可选字段语义。
-  const schemaHint =
-    '\n\n请严格返回一个 json 对象，并按以下 JSON Schema 组织结果，不要添加任何额外文本或 markdown 标记：\n' +
-    JSON.stringify(schema)
-  if (isDirectAnthropicProvider(settings.baseUrl)) {
-    const outputConfig: Record<string, unknown> = {}
-    if (structuredOutputMode === 'json_schema') {
-      outputConfig.format = {
-        type: 'json_schema',
-        schema: strictSchema
-      }
-    }
-    const body: Record<string, unknown> = {
+  settings = { ...settings, apiStyle: resolveAiApiStyle(settings) }
+  const mode = options.structuredOutputMode || 'json_schema'
+  // Always include the business contract, including when a gateway ignores format parameters.
+  const instructions = systemPrompt + '\n\n请严格返回符合以下 JSON Schema 的 json，不要添加说明或 markdown：\n' + JSON.stringify(schema)
+  userPrompt += '\n\n请只返回符合 schema 的 json。'
+  const messages = options.mergeSystemPrompt
+    ? [{ role: 'user', content: instructions + '\n\n' + userPrompt }]
+    : [{ role: 'system', content: instructions }, { role: 'user', content: userPrompt }]
+  let body: Record<string, unknown>
+  if (settings.apiStyle === 'anthropic_messages') {
+    body = {
       model: settings.model,
       max_tokens: 8192,
-      system: structuredOutputMode === 'json_schema' ? systemPrompt : systemPrompt + schemaHint,
-      messages: [{
-        role: 'user',
-        content: structuredOutputMode === 'json_schema'
-          ? userPrompt
-          : `${userPrompt}\n\n请只返回符合 schema 的 json 对象。`
-      }]
+      ...(options.mergeSystemPrompt ? {} : { system: instructions }),
+      messages: [{ role: 'user', content: options.mergeSystemPrompt ? instructions + '\n\n' + userPrompt : userPrompt }]
     }
-    if (Object.keys(outputConfig).length) {
-      body.output_config = outputConfig
+    if (mode === 'json_schema') body.output_config = { format: { type: 'json_schema', schema: strictSchema } }
+  } else if (settings.apiStyle === 'gemini') {
+    const generationConfig: Record<string, unknown> = {}
+    if (mode !== 'prompt') generationConfig.responseMimeType = 'application/json'
+    if (mode === 'json_schema') generationConfig.responseJsonSchema = schema
+    body = {
+      systemInstruction: { parts: [{ text: instructions }] },
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      generationConfig
     }
-    return applyAiReasoningEffort(body, settings)
-  }
-  if (settings.apiStyle === 'chat_completions') {
-    const body: Record<string, unknown> = {
-      model: settings.model,
-      messages: [
-        { role: 'system', content: systemPrompt + schemaHint },
-        { role: 'user', content: `${userPrompt}\n\n请只返回符合 schema 的 json 对象。` }
-      ]
+    if (options.mergeSystemPrompt) {
+      delete body.systemInstruction
+      body.contents = [{ role: 'user', parts: [{ text: instructions + '\n\n' + userPrompt }] }]
     }
-    if (structuredOutputMode === 'json_schema') {
-      body.response_format = {
-        type: 'json_schema',
-        json_schema: {
-          name: schemaName,
-          strict: true,
-          schema: strictSchema
-        }
-      }
-    } else if (structuredOutputMode === 'json_object') {
+  } else if (settings.apiStyle === 'gemini_interactions') {
+    body = {
+      model: settings.model.replace(/^models\//, ''),
+      system_instruction: instructions,
+      input: userPrompt,
+      store: false
+    }
+    if (mode !== 'prompt') body.response_format = {
+      type: 'text', mime_type: 'application/json', ...(mode === 'json_schema' ? { schema } : {})
+    }
+    if (options.mergeSystemPrompt) {
+      delete body.system_instruction
+      body.input = instructions + '\n\n' + userPrompt
+    }
+  } else if (settings.apiStyle === 'chat_completions') {
+    body = { model: settings.model, messages }
+    if (mode === 'json_schema') {
+      body.response_format = { type: 'json_schema', json_schema: { name: schemaName, strict: true, schema: strictSchema } }
+    } else if (mode === 'json_object') {
       body.response_format = { type: 'json_object' }
     }
-    return applyAiReasoningEffort(body, settings)
+  } else {
+    body = { model: settings.model, input: messages }
+    if (new URL(String(settings.baseUrl)).hostname === 'api.openai.com') body.store = false
+    if (mode === 'json_schema') {
+      body.text = { format: { type: 'json_schema', name: schemaName, strict: true, schema: strictSchema } }
+    } else if (mode === 'json_object') {
+      body.text = { format: { type: 'json_object' } }
+    }
   }
+  return applyAiReasoningEffort(body, settings)
+}
 
-  const responsesBody: Record<string, unknown> = {
-    model: settings.model,
-    input: [
-      {
-        role: 'system',
-        content: structuredOutputMode === 'json_schema' ? systemPrompt : systemPrompt + schemaHint
-      },
-      {
-        role: 'user',
-        content: structuredOutputMode === 'json_schema'
-          ? userPrompt
-          : `${userPrompt}\n\n请只返回符合 schema 的 json 对象。`
-      }
-    ]
+interface AiCompatibilityState {
+  apiStyle: ResolvedAiApiStyle
+  mode: AiStructuredOutputMode
+  omitDefaultReasoning: boolean
+  mergeSystemPrompt: boolean
+  warnings: string[]
+  expiresAt: number
+}
+const AI_COMPATIBILITY_CACHE_LIMIT = 128
+const AI_COMPATIBILITY_CACHE_TTL_MS = 10 * 60 * 1000
+const aiCompatibilityCache = new Map<string, AiCompatibilityState>()
+
+/** In-memory only: no credentials or provider output are persisted. */
+export function clearAiProviderCompatibilityCache(): void {
+  aiCompatibilityCache.clear()
+}
+
+function getCompatibilityCacheKey(settings: AiProviderSettings, schema: JsonSchema, schemaName: string): string {
+  let hash = 2166136261
+  for (const char of JSON.stringify([schema, settings.apiKey, settings.reasoningCapabilities])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619)
+  return JSON.stringify([settings.baseUrl, settings.apiStyle, settings.model, settings.reasoningEffort, schemaName, hash >>> 0])
+}
+
+function rememberAiCompatibility(key: string, state: AiCompatibilityState): void {
+  aiCompatibilityCache.delete(key)
+  while (aiCompatibilityCache.size >= AI_COMPATIBILITY_CACHE_LIMIT) {
+    aiCompatibilityCache.delete(aiCompatibilityCache.keys().next().value!)
   }
-  if (structuredOutputMode === 'json_schema') {
-    responsesBody.text = {
-      format: {
-        type: 'json_schema',
-        name: schemaName,
-        strict: true,
-        schema: strictSchema
-      }
-    }
-  } else if (structuredOutputMode === 'json_object') {
-    responsesBody.text = {
-      format: { type: 'json_object' }
-    }
-  }
-  return applyAiReasoningEffort(responsesBody, settings)
+  aiCompatibilityCache.set(key, { ...state, warnings: state.warnings.slice(), expiresAt: Date.now() + AI_COMPATIBILITY_CACHE_TTL_MS })
 }
 
 export async function requestStructuredAiOutput<T>({
@@ -583,166 +607,121 @@ export async function requestStructuredAiOutput<T>({
 }: AiStructuredRequest<T>): Promise<AiRuntimeResult<T>> {
   ensureAiProviderConfigured(settings)
   const startedAtMs = Date.now()
-  const effectiveRequestTimeoutMs = normalizeAiRequestTimeoutMs(timeoutMs || settings.timeoutMs)
-  const effectiveDeadlineAtMs = resolveAiRequestDeadlineAtMs({
-    startedAtMs,
-    requestTimeoutMs: effectiveRequestTimeoutMs,
-    totalBudgetMs,
-    deadlineAtMs
-  })
-  const effectiveTotalBudgetMs = Math.max(1, effectiveDeadlineAtMs - startedAtMs)
-  const directAnthropic = isDirectAnthropicProvider(settings.baseUrl)
-  const endpoint = directAnthropic
-    ? getAnthropicMessagesEndpoint(settings.baseUrl)
-    : getAiEndpoint(settings)
+  const requestTimeoutMs = normalizeAiRequestTimeoutMs(timeoutMs || settings.timeoutMs)
+  const deadline = resolveAiRequestDeadlineAtMs({ startedAtMs, requestTimeoutMs, totalBudgetMs, deadlineAtMs })
+  const budgetMs = Math.max(1, deadline - startedAtMs)
+  const cacheKey = getCompatibilityCacheKey(settings, schema, schemaName)
+  const cached = aiCompatibilityCache.get(cacheKey)
+  const compatibility: AiCompatibilityState = cached && cached.expiresAt > startedAtMs
+    ? { ...cached, warnings: cached.warnings.slice() }
+    : { apiStyle: resolveAiApiStyle(settings), mode: 'json_schema', omitDefaultReasoning: false, mergeSystemPrompt: false, warnings: [], expiresAt: 0 }
   const strictSchema = compileStrictJsonSchema(schema)
-  // 最坏兼容链：json_schema 降为 json_object → 移除格式参数 → 一次输出修复。
-  // 推理强度不会参与兼容降级：用户选择的档位必须真实发送，否则直接失败。
-  const maxAttempts = retry ? 6 : 1
-  // 修复重试（parse/schema）最多一次：连续两轮结构仍不合法时，再重试收益极低。
+  const maxAttempts = retry ? 8 : 1
   let repairAttemptsLeft = retry ? 1 : 0
-  // 网络/限流/服务端抖动仍维持原来的最多三次请求，不因兼容链上限增大而放大等待。
-  let transientRetryAttemptsLeft = retry ? 2 : 0
-  // 各家 OpenAI 兼容层能力不同：优先严格 schema，其次 JSON mode，最后纯提示词。
-  let structuredOutputMode: AiStructuredOutputMode = 'json_schema'
+  let transientRetriesLeft = retry ? 2 : 0
+  let protocolRetriesLeft = settings.apiStyle === 'auto' && retry ? 1 : 0
+  let effectiveUserPrompt = userPrompt
+  let repaired = false
 
-  const runAttempt = async (
-    attempt: number,
-    lastError: unknown = null,
-    lastRawText = ''
-  ): Promise<AiRuntimeResult<T>> => {
-    throwIfAiRequestUnavailable(signal, effectiveDeadlineAtMs, effectiveTotalBudgetMs)
-    const repaired = attempt > 1 && shouldUseRepairRetry(lastError)
-    const effectiveUserPrompt = repaired
-      ? buildRepairUserPrompt(userPrompt, schemaName, lastRawText, lastError)
-      : userPrompt
-    let attemptRawText = lastRawText
-    let attemptPayload: unknown = null
-
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    throwIfAiRequestUnavailable(signal, deadline, budgetMs)
+    const effectiveSettings: AiProviderSettings = {
+      ...settings,
+      apiStyle: compatibility.apiStyle,
+      ...(compatibility.omitDefaultReasoning ? { reasoningEffort: undefined } : {})
+    }
+    const endpoint = getAiEndpoint(effectiveSettings)
+    let rawText = ''
     try {
       const requestBody = buildAiPromptRequestBody({
-        settings,
-        schema,
-        strictSchema,
-        schemaName,
-        systemPrompt,
-        userPrompt: effectiveUserPrompt
-      }, { structuredOutputMode })
+        settings: effectiveSettings, schema, strictSchema, schemaName, systemPrompt, userPrompt: effectiveUserPrompt
+      }, { structuredOutputMode: compatibility.mode, mergeSystemPrompt: compatibility.mergeSystemPrompt })
       const payload = await requestAiProviderPayload({
-        endpoint,
-        settings,
-        requestBody,
-        signal,
-        timeoutMs: effectiveRequestTimeoutMs,
-        deadlineAtMs: effectiveDeadlineAtMs,
-        totalBudgetMs: effectiveTotalBudgetMs,
-        fetchImpl
+        endpoint, settings: effectiveSettings, requestBody, signal, timeoutMs: requestTimeoutMs,
+        deadlineAtMs: deadline, totalBudgetMs: budgetMs, fetchImpl
       })
-      attemptPayload = payload
-      let rawText = ''
+      // Even valid-looking partial JSON must never authorize a bookmark mutation.
+      const truncationIssue = getAiTruncationIssue(payload, compatibility.apiStyle)
+      if (truncationIssue) throw new AiRuntimeError('provider', truncationIssue)
       try {
-        rawText = directAnthropic
-          ? extractAnthropicMessagesJsonText(payload)
-          : settings.apiStyle === 'responses'
-            ? extractResponsesJsonText(payload)
-            : extractChatCompletionsJsonText(payload)
+        switch (compatibility.apiStyle) {
+          case 'anthropic_messages': rawText = extractAnthropicMessagesJsonText(payload); break
+          case 'gemini': rawText = extractGeminiJsonText(payload); break
+          case 'gemini_interactions': rawText = extractGeminiInteractionsJsonText(payload); break
+          case 'responses': rawText = extractResponsesJsonText(payload); break
+          default: rawText = extractChatCompletionsJsonText(payload)
+        }
       } catch (error) {
-        throw new AiRuntimeError(
-          'parse',
-          error instanceof Error ? error.message : 'AI 返回中未找到可解析的 JSON 文本。',
-          { cause: error }
-        )
+        throw new AiRuntimeError(error instanceof AiResponseRefusalError ? 'provider' : 'parse',
+          error instanceof Error ? error.message : 'AI 返回中没有可解析的最终文本。', { cause: error })
       }
-      attemptRawText = rawText
       const parsed = parseAiJson(rawText, schemaName)
-      const normalizedData = restoreOptionalSchemaFields(parsed, schema)
-      validateJsonSchema(normalizedData, schema, schemaName)
-      validate?.(normalizedData as T)
-
+      let normalized: ReturnType<typeof normalizeAiOutput>
+      try { normalized = normalizeAiOutput(parsed, schema) } catch (error) {
+        throw new AiRuntimeError('schema', error instanceof Error ? error.message : 'AI 输出结构无法规范。')
+      }
+      validateJsonSchema(normalized.data, schema, schemaName)
+      validate?.(normalized.data as T)
+      throwIfAiRequestUnavailable(signal, deadline, budgetMs)
+      rememberAiCompatibility(cacheKey, compatibility)
       return {
-        data: normalizedData as T,
-        rawText,
-        payload,
+        data: normalized.data as T, rawText, payload,
         metadata: {
-          endpoint,
-          apiStyle: settings.apiStyle,
-          schemaName,
-          structuredOutputMode,
-          attempts: attempt,
-          repaired
+          endpoint, apiStyle: compatibility.apiStyle, schemaName, structuredOutputMode: compatibility.mode,
+          attempts: attempt, repaired, normalizationWarnings: normalized.warnings,
+          compatibilityWarnings: compatibility.warnings
         }
       }
     } catch (error) {
-      let normalizedError = normalizeAiRuntimeError(error)
-
-      // 输出被模型上限截断时，重试同一提示几乎必然复现，直接给出可操作的错误。
-      if (normalizedError.kind === 'parse' || normalizedError.kind === 'schema') {
-        const truncationIssue = getAiTruncationIssue(attemptPayload, settings.apiStyle)
-        if (truncationIssue) {
-          throw new AiRuntimeError('provider', truncationIssue, {
-            retryable: false,
-            cause: normalizedError
+      const failure = normalizeAiRuntimeError(error)
+      const effort = resolveReasoningRequest(effectiveSettings).effort
+      if (effort && isReasoningEffortCompatibilityError(failure)) {
+        const explicitEffort = normalizeReasoningEffortValue(settings.reasoningEffort)
+        if (explicitEffort || attempt >= maxAttempts) {
+          throw new AiRuntimeError('provider', 'AI 渠道拒绝推理强度“' + effort + '”：' + failure.message, {
+            status: failure.status, details: failure.details, cause: failure
           })
         }
+        compatibility.omitDefaultReasoning = true
+        compatibility.warnings.push('渠道不支持默认推理参数，已使用模型原生默认值。')
+        continue
       }
-
-      // 用户选择的推理强度是请求契约，渠道拒绝时必须显式失败，不能删掉参数后
-      // 以 auto/default 偷偷成功。
-      const reasoningEffort = resolveReasoningRequest(settings).effort
-      if (
-        reasoningEffort &&
-        isReasoningEffortCompatibilityError(normalizedError)
-      ) {
-        throw new AiRuntimeError(
-          'provider',
-          `AI 渠道拒绝推理强度“${reasoningEffort}”：${normalizedError.message}`,
-          {
-            status: normalizedError.status,
-            retryable: false,
-            details: normalizedError.details,
-            cause: normalizedError
-          }
-        )
+      if (attempt < maxAttempts && compatibility.mode !== 'prompt' && isStructuredFormatCompatibilityError(failure)) {
+        compatibility.mode = compatibility.apiStyle === 'anthropic_messages'
+          ? 'prompt' : getLessStrictOutputMode(compatibility.mode)
+        compatibility.warnings.push(compatibility.mode === 'prompt' ? '渠道不支持输出格式约束，已使用提示词与本地结构校验。' : '渠道不支持严格 Schema，已使用 JSON 模式与本地结构校验。')
+        continue
       }
-
-      // 端点不支持当前结构化输出档位：json_schema → json_object → prompt。
-      // 兼容降级不占输出修复预算。
-      if (
-        structuredOutputMode !== 'prompt' &&
-        attempt < maxAttempts &&
-        isStructuredFormatCompatibilityError(normalizedError)
-      ) {
-        structuredOutputMode = getLessStrictOutputMode(structuredOutputMode)
-        return runAttempt(attempt + 1, normalizedError, attemptRawText)
+      if (attempt < maxAttempts && !compatibility.mergeSystemPrompt && isSystemRoleCompatibilityError(failure)) {
+        compatibility.mergeSystemPrompt = true
+        compatibility.warnings.push('模型不支持系统消息，已将相同指令并入请求正文。')
+        continue
       }
-
-      if (attempt >= maxAttempts || !shouldRetryAiRuntimeError(normalizedError)) {
-        throw normalizedError
+      if (attempt < maxAttempts && protocolRetriesLeft > 0 &&
+        (compatibility.apiStyle === 'responses' || compatibility.apiStyle === 'chat_completions') &&
+        isEndpointCompatibilityError(failure)) {
+        protocolRetriesLeft -= 1
+        compatibility.apiStyle = compatibility.apiStyle === 'responses' ? 'chat_completions' : 'responses'
+        compatibility.mode = 'json_schema'
+        compatibility.omitDefaultReasoning = false
+        compatibility.mergeSystemPrompt = false
+        compatibility.warnings.push('自动模式已切换至渠道支持的 ' + compatibility.apiStyle + ' 接口。')
+        continue
       }
-      if (shouldUseRepairRetry(normalizedError)) {
-        if (repairAttemptsLeft <= 0) {
-          throw normalizedError
-        }
+      if (attempt >= maxAttempts || !shouldRetryAiRuntimeError(failure)) throw failure
+      if (shouldUseRepairRetry(failure)) {
+        if (repairAttemptsLeft <= 0) throw failure
         repairAttemptsLeft -= 1
+        repaired = true
+        effectiveUserPrompt = buildRepairUserPrompt(userPrompt, schemaName, rawText, failure)
       } else {
-        if (transientRetryAttemptsLeft <= 0) {
-          throw normalizedError
-        }
-        transientRetryAttemptsLeft -= 1
-        // 限流/服务端错误/网络抖动：退避后重试，优先尊重 Retry-After。
-        await waitForAiRetryDelay(
-          normalizedError,
-          attempt,
-          signal,
-          effectiveDeadlineAtMs,
-          effectiveTotalBudgetMs
-        )
+        if (transientRetriesLeft <= 0) throw failure
+        transientRetriesLeft -= 1
+        await waitForAiRetryDelay(failure, 2 - transientRetriesLeft, signal, deadline, budgetMs)
       }
-      return runAttempt(attempt + 1, normalizedError, attemptRawText)
     }
   }
-
-  return runAttempt(1)
+  throw new AiRuntimeError('provider', 'AI 请求已达到兼容重试上限。请检查模型和接口设置。')
 }
 
 export function validateJsonSchema(value: unknown, schema: JsonSchema, schemaName = 'structured_output'): void {
@@ -767,39 +746,6 @@ function parseAiJson(rawText: unknown, schemaName = 'structured_output'): unknow
       { cause: error }
     )
   }
-}
-
-/** 移除 strict schema 为原可选字段生成的 null 占位，并递归保留业务 schema 的数据形状。 */
-function restoreOptionalSchemaFields(value: unknown, schema: JsonSchema): unknown {
-  if (Array.isArray(value)) {
-    return schema.items
-      ? value.map((item) => restoreOptionalSchemaFields(item, schema.items!))
-      : value
-  }
-
-  if (!value || typeof value !== 'object' || !schema.properties) {
-    return value
-  }
-
-  const required = new Set(schema.required || [])
-  const source = value as Record<string, unknown>
-  const restored: Record<string, unknown> = {}
-  for (const [key, propertyValue] of Object.entries(source)) {
-    const propertySchema = schema.properties[key]
-    if (!propertySchema) {
-      restored[key] = propertyValue
-      continue
-    }
-    if (
-      propertyValue === null &&
-      !required.has(key) &&
-      !schemaIncludesType(propertySchema.type, 'null')
-    ) {
-      continue
-    }
-    restored[key] = restoreOptionalSchemaFields(propertyValue, propertySchema)
-  }
-  return restored
 }
 
 function getLessStrictOutputMode(mode: AiStructuredOutputMode): AiStructuredOutputMode {
@@ -969,9 +915,13 @@ async function requestAiProviderPayload({
   try {
     const response = await fetchImpl(endpoint, {
       method: 'POST',
+      cache: 'no-store',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
-        ...getAiProviderAuthHeaders(settings.baseUrl, settings.apiKey)
+        ...getAiProviderAuthHeaders(settings.baseUrl, settings.apiKey, settings.apiStyle)
       },
       body: JSON.stringify(requestBody),
       signal: controller.signal
@@ -980,17 +930,29 @@ async function requestAiProviderPayload({
       response,
       controller.signal
     )
-    if (!response.ok) {
-      const providerMessage = extractAiErrorMessage(payload, response.status, rawBody)
+    const errorEnvelope = payload && typeof payload === 'object' ? payload as Record<string, any> : null
+    const providerError = errorEnvelope?.error
+    if (!response.ok || providerError || errorEnvelope?.type === 'error' || errorEnvelope?.status === 'failed') {
+      const embeddedStatus = Number(providerError?.code ?? providerError?.status)
+      const errorCode = String(providerError?.code ?? providerError?.type ?? providerError?.status ?? '')
+      const inferredStatus = /authentication|invalid_api_key|unauthorized/i.test(errorCode) ? 401
+        : /permission|forbidden/i.test(errorCode) ? 403
+        : /rate_limit|resource_exhausted/i.test(errorCode) ? 429
+        : /overloaded|internal_error|server_error/i.test(errorCode) ? 503 : 400
+      const status = !response.ok ? response.status : embeddedStatus >= 400 && embeddedStatus <= 599 ? embeddedStatus : inferredStatus
+      const message = extractAiErrorMessage(payload, status, rawBody)
+      const providerMessage = settings.apiKey?.length >= 4 ? message.replaceAll(settings.apiKey, '[REDACTED]') : message
       throw new AiRuntimeError(
         'provider',
         providerMessage,
         {
-          status: response.status,
-          retryable: isRetryableProviderStatus(response.status),
+          status,
+          retryable: isRetryableProviderStatus(status) && !/insufficient_quota|billing|invalid_api_key|authentication_error/i.test(String(providerError?.code ?? providerError?.type)),
           details: {
             retryAfterMs: parseRetryAfterMs(response.headers?.get?.('retry-after')),
-            responseBytes: bytesRead
+            responseBytes: bytesRead,
+            parameter: sanitizeAiErrorText(providerError?.param ?? providerError?.parameter, 160),
+            code: sanitizeAiErrorText(providerError?.code ?? providerError?.type, 120)
           }
         }
       )
@@ -1007,6 +969,7 @@ async function requestAiProviderPayload({
     }
     return payload
   } catch (error) {
+    controller.abort()
     if (timedOut) {
       throw new AiRuntimeError(
         'abort',
@@ -1038,7 +1001,7 @@ async function readAiProviderResponseBody(
 ): Promise<{ payload: unknown | null; rawBody: string; bytesRead: number }> {
   const contentLength = parseAiContentLength(response.headers?.get?.('content-length'))
   if (contentLength !== undefined && contentLength > AI_PROVIDER_RESPONSE_MAX_BYTES) {
-    await cancelAiResponseBody(response)
+    void cancelAiResponseBody(response)
     throw buildAiResponseTooLargeError(response.status, contentLength)
   }
 
@@ -1061,13 +1024,17 @@ async function readAiProviderResponseBody(
         const chunk = normalizeAiResponseChunk(result.value)
         bytesRead += chunk.byteLength
         if (bytesRead > AI_PROVIDER_RESPONSE_MAX_BYTES) {
-          await cancelAiReader(reader)
+          void cancelAiReader(reader)
           throw buildAiResponseTooLargeError(response.status, bytesRead)
         }
         textChunks.push(decoder.decode(chunk, { stream: true }))
       }
       textChunks.push(decoder.decode())
       rawBody = textChunks.join('')
+    } catch (error) {
+      // Cancellation must release the network reader even when a gateway stalls mid-body.
+      void reader.cancel().catch(() => {})
+      throw error
     } finally {
       try {
         reader.releaseLock()
@@ -1079,7 +1046,7 @@ async function readAiProviderResponseBody(
     rawBody = await waitForAiBodyOperation(response.text(), signal)
     bytesRead = new TextEncoder().encode(rawBody).byteLength
     if (bytesRead > AI_PROVIDER_RESPONSE_MAX_BYTES) {
-      await cancelAiResponseBody(response)
+      void cancelAiResponseBody(response)
       throw buildAiResponseTooLargeError(response.status, bytesRead)
     }
   }
@@ -1092,7 +1059,10 @@ async function readAiProviderResponseBody(
   try {
     return { payload: JSON.parse(trimmedBody), rawBody, bytesRead }
   } catch {
-    return { payload: null, rawBody, bytesRead }
+    try { return { payload: parseAiEventStream(rawBody), rawBody, bytesRead } } catch (error) {
+      if (error instanceof AiEventStreamError) throw new AiRuntimeError('network', error.message, { retryable: true, cause: error })
+      throw error
+    }
   }
 }
 
@@ -1193,7 +1163,8 @@ function buildAiResponseTooLargeError(status: unknown, bytes: number): AiRuntime
 }
 
 function normalizeAiRequestTimeoutMs(timeoutMs: unknown): number {
-  return Math.max(1000, Number(timeoutMs) || 30000)
+  const value = Number(timeoutMs)
+  return Number.isFinite(value) && value > 0 ? Math.max(1000, Math.min(value, 600000)) : 30000
 }
 
 function buildAiTimeoutMessage(timeoutMs: number): string {
@@ -1253,6 +1224,7 @@ function throwIfAiRequestUnavailable(
 }
 
 function validateSchemaNode(value: unknown, schema: JsonSchema, path: string, issues: string[]): void {
+  if (issues.length >= 24) return
   if (!schema || typeof schema !== 'object') {
     return
   }
@@ -1290,6 +1262,7 @@ function validateSchemaNode(value: unknown, schema: JsonSchema, path: string, is
   if (Array.isArray(value)) {
     if (Number.isFinite(schema.maxItems) && value.length > Number(schema.maxItems)) {
       issues.push(`${path} 数组长度超过 ${schema.maxItems}`)
+      return
     }
     if (Number.isFinite(schema.minItems) && value.length < Number(schema.minItems)) {
       issues.push(`${path} 数组长度小于 ${schema.minItems}`)
@@ -1303,14 +1276,14 @@ function validateSchemaNode(value: unknown, schema: JsonSchema, path: string, is
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>
     for (const requiredKey of schema.required || []) {
-      if (!(requiredKey in record)) {
+      if (!Object.hasOwn(record, requiredKey)) {
         issues.push(`${path}.${requiredKey} 缺少必填字段`)
       }
     }
 
     const properties = schema.properties || {}
     for (const [key, propertyValue] of Object.entries(record)) {
-      const propertySchema = properties[key]
+      const propertySchema = Object.hasOwn(properties, key) ? properties[key] : undefined
       if (!propertySchema) {
         if (schema.additionalProperties === false) {
           issues.push(`${path}.${key} 不允许额外字段`)
@@ -1431,7 +1404,7 @@ async function waitForAiRetryDelay(
     AI_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attempt - 1)
   ) + Math.floor(Math.random() * 250)
   const delayMs = Number.isFinite(retryAfterMs) && retryAfterMs >= 0
-    ? Math.min(retryAfterMs, AI_RETRY_MAX_DELAY_MS)
+    ? retryAfterMs
     : backoffMs
   if (delayMs <= 0) {
     return
@@ -1490,9 +1463,9 @@ function isReasoningEffortCompatibilityError(error: AiRuntimeError): boolean {
   if (status !== 400 && status !== 404 && status !== 415 && status !== 422) {
     return false
   }
-  const message = String(error.message || '')
+  const message = getAiCompatibilityErrorText(error)
   return (
-    /reasoning[\s_.-]*effort|enable[\s_.-]*thinking|thinking[\s_.-]*(?:budget|strategy|type)|output_config[^\n]*effort|effort level/i.test(message) ||
+    /reasoning[\s_.-]*effort|enable[\s_.-]*thinking|thinking[\s_.-]*(?:budget|level|config|strategy|type)|output_config[^\n]*effort|effort level/i.test(message) ||
     /(?:parameter|param|field|argument|property)\s*[:=]?\s*['"“”]?(?:reasoning|thinking)['"“”]?/i.test(message) ||
     /(?:reasoning|thinking)\s+(?:parameter|param|field|argument|property)/i.test(message) ||
     /['"“”](?:reasoning|thinking)['"“”]\s+(?:is|was|isn't|wasn't|not|unsupported|invalid|unknown)/i.test(message) ||
@@ -1501,20 +1474,37 @@ function isReasoningEffortCompatibilityError(error: AiRuntimeError): boolean {
   )
 }
 
-/**
- * 识别「端点不支持结构化输出参数」类错误（response_format / text.format），
- * 命中后移除该参数降级重试，让任意 OpenAI 兼容模型都能继续工作。
- */
+function getAiCompatibilityErrorText(error: AiRuntimeError): string {
+  const details = error.details as { parameter?: unknown; code?: unknown } | undefined
+  return [error.message, details?.parameter, details?.code].filter(Boolean).join(' ')
+}
+
+function isParameterRejection(error: AiRuntimeError): boolean {
+  if (error.kind !== 'provider' || ![400, 404, 415, 422].includes(Number(error.status))) return false
+  const details = error.details as { parameter?: unknown; code?: unknown } | undefined
+  return !/api.?key|auth|credential|quota|billing|model_not_found|deployment_not_found/i.test(String(details?.parameter || '') + ' ' + String(details?.code || ''))
+}
+
 function isStructuredFormatCompatibilityError(error: AiRuntimeError): boolean {
-  if (error.kind !== 'provider') {
-    return false
-  }
-  const status = Number(error.status)
-  if (status !== 400 && status !== 404 && status !== 415 && status !== 422) {
-    return false
-  }
-  const message = String(error.message || '')
-  return /response_format|json_object|json_schema|text\.format|output_config[^\n]*format|structured[\s_-]*output|(?:unknown|unsupported|unexpected|invalid|unrecognized)[\s_-]*(?:parameter|param|field|argument|keyword)|does not support/i.test(message)
+  if (!isParameterRejection(error)) return false
+  const text = getAiCompatibilityErrorText(error)
+  return /response_format|json_object|json_schema|text[.\s_-]*format|output_config[^\n]*format|response_?json_?schema|response_?mime_?type|structured[\s_-]*output|json mode/i.test(text) &&
+    /unsupported|not supported|does not support|invalid|unknown|unrecognized|unexpected|not permitted|not allowed|not available|not implemented|must|required|不支持|无效/i.test(text)
+}
+
+function isSystemRoleCompatibilityError(error: AiRuntimeError): boolean {
+  if (!isParameterRejection(error)) return false
+  const text = getAiCompatibilityErrorText(error)
+  return /\bsystem\b|system_?instruction/i.test(text) && /role|message|instruction/i.test(text) &&
+    /unsupported|not supported|does not support|not allowed|invalid|only|unknown|unrecognized/i.test(text)
+}
+
+function isEndpointCompatibilityError(error: AiRuntimeError): boolean {
+  if (error.kind !== 'provider' || ![400, 404, 405, 501].includes(Number(error.status))) return false
+  const text = getAiCompatibilityErrorText(error)
+  if (/model_not_found|deployment_not_found|(?:model|deployment)[^\n]{0,100}(?:not found|does not exist|access|permission)|api.?key|unauthorized|authentication/i.test(text)) return false
+  return /responses|chat[\s/._-]*completions|endpoint|route|cannot post|not found|404|method not allowed/i.test(text) &&
+    /unsupported|not supported|does not support|not found|not implemented|cannot post|404|method not allowed/i.test(text)
 }
 
 function throwIfAiAborted(signal?: AbortSignal | null): void {

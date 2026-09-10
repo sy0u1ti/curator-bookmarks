@@ -352,19 +352,19 @@ body,
 
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row,
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
-  animation: reasoning-selector-row-in 260ms var(--ease-smooth-out) backwards;
+  animation: reasoning-selector-row-in var(--duration-fast) var(--ease-smooth-out) backwards;
 }
 
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row:nth-child(2) {
-  animation-delay: 30ms;
+  animation-delay: var(--duration-stagger);
 }
 
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row:nth-child(3) {
-  animation-delay: 60ms;
+  animation-delay: calc(var(--duration-stagger) * 2);
 }
 
 .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
-  animation-delay: 90ms;
+  animation-delay: calc(var(--duration-stagger) * 3);
 }
 
 @media (prefers-reduced-motion: reduce) {

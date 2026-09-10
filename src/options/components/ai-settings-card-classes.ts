@@ -21,10 +21,10 @@ export const AI_SETTINGS_SUBTITLE_CLASS =
   'mt-1.5 mb-0 text-[13px] leading-[1.7] text-ds-text-disabled'
 
 export const AI_SETTINGS_STATUS_BADGE_CLASS =
-  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border border-ds-hover bg-ds-surface-2 px-2.5 text-[11px] font-semibold leading-none tracking-[0] text-ds-text-muted'
+  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border border-ds-hover bg-ds-surface-2 px-2.5 text-xs font-semibold leading-none tracking-[0] text-ds-text-muted'
 
 export const AI_SETTINGS_INLINE_STATUS_CLASS =
-  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border px-[9px] text-[10px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border px-[9px] text-xs font-semibold leading-none tracking-[0]'
 
 export const AI_SETTINGS_STATUS_TONE_CLASS = {
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
@@ -63,7 +63,7 @@ export const AI_SETTINGS_LOADING_SWITCH_CLASS =
 export const AI_SETTINGS_READY_BODY_CLASS = 'options-settings-ready-body'
 
 export const AI_SETTINGS_HELP_TOOLTIP_CLASS =
-  'ml-1.5 inline-flex size-4 cursor-help items-center justify-center rounded-full border border-ds-hover bg-transparent p-0 text-[11px] leading-none text-ds-text-secondary align-[1px] shadow-none hover:border-ds-border hover:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ds-focus'
+  'ml-1 inline-flex w-8 min-w-8 align-middle !p-0'
 
 export const AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS =
   'z-[80] w-[min(300px,calc(100vw-48px))] rounded-ds-sm border border-ds-hover bg-ds-app p-[10px_12px] text-left text-xs font-medium leading-[1.6] text-ds-text-primary [filter:var(--ds-filter-popover)]'

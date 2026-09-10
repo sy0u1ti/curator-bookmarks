@@ -1,4 +1,5 @@
 import {
+  memo,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,9 +11,9 @@ import {
   type RefObject
 } from 'react'
 import { Icon } from '../../ui/icons/Icon'
+import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
 import { Button } from '../../ui/base/Button'
 import { Input } from '../../ui/base/Input'
-import { NEWTAB_SEARCH_BACKGROUND_MIN } from '../newtab-search-settings-store'
 import {
   setNewtabSearchWidgetNodes,
   type NewtabSearchWidgetView,
@@ -90,12 +91,8 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   }) as CSSProperties, [shell.autoVerticalCenter, shell.height, shell.layoutReady, shell.offsetY, shell.width])
   const formStyle = useMemo(() => ({
     '--search-width': `${shell.width}vw`,
-    '--search-height': `${shell.height}px`,
-    '--search-bg-alpha': String(Math.max(
-      Number(shell.backgroundAlpha) || 0,
-      NEWTAB_SEARCH_BACKGROUND_MIN / 100
-    ))
-  }) as CSSProperties, [shell.backgroundAlpha, shell.height, shell.width])
+    '--search-height': `${shell.height}px`
+  }) as CSSProperties, [shell.height, shell.width])
 
   useLayoutEffect(() => {
     const nodes = {
@@ -134,12 +131,16 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
       aria-label={shell.ariaLabel}
       ref={slotRef}
     >
-      <div
+      <BaseCollapsible.Root
         className={SEARCH_SHELL_CLASS}
+        open={view.panel.panelVisible}
+        data-squircle-subtree="off"
         data-panel-open={view.panel.panelVisible ? 'true' : 'false'}
+        data-engine-open={view.engineMenu.open ? 'true' : undefined}
         onBlur={view.interactions.onRootBlur}
         onContextMenu={handleSearchContextMenu}
       >
+        <div className="newtab-search-surface" aria-hidden="true" />
         <form
           className={[
             SEARCH_FORM_CLASS,
@@ -159,7 +160,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
           <SearchWidgetSubmitButton view={view} />
         </form>
         <SearchWidgetSuggestionsPanel view={view} />
-      </div>
+      </BaseCollapsible.Root>
     </section>
   )
 }
@@ -357,11 +358,24 @@ function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }
   const { panel } = view
 
   return (
-    <div
+    <BaseCollapsible.Panel
       id="newtab-search-suggestions-panel"
       className={SEARCH_PANEL_CLASS}
-      hidden={!panel.panelVisible}
+      inert={!panel.panelVisible}
+      aria-hidden={!panel.panelVisible}
     >
+      <div className="newtab-search-presence-clip">
+        <SearchWidgetSuggestionContent view={view} />
+      </div>
+    </BaseCollapsible.Panel>
+  )
+}
+
+// Keep the outgoing rows intact during the presence exit. The panel itself is
+// already inert/aria-hidden, so query and keyboard semantics still update now.
+const SearchWidgetSuggestionContent = memo(function SearchWidgetSuggestionContent({ view }: { view: NewtabSearchWidgetView }) {
+  return (
+    <div className="newtab-search-panel-content">
       <div className={SEARCH_CHIPS_CLASS} aria-label="当前搜索条件">
         <SearchChips chips={view.chips} />
       </div>
@@ -372,7 +386,7 @@ function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }
         id="newtab-search-suggestions"
         className={SEARCH_SUGGESTIONS_CLASS}
         aria-label="匹配的书签"
-        hidden={!panel.suggestionsVisible}
+        hidden={!view.panel.suggestionsVisible}
       >
         <SearchSuggestions suggestions={view.suggestions} />
       </div>
@@ -381,7 +395,7 @@ function SearchWidgetSuggestionsPanel({ view }: { view: NewtabSearchWidgetView }
       </output>
     </div>
   )
-}
+}, (previous, next) => !next.view.panel.panelVisible || previous.view === next.view)
 
 function SearchChips({ chips }: { chips: SearchChipViewModel[] }) {
   if (!chips.length) {

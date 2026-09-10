@@ -1,4 +1,5 @@
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -67,23 +68,23 @@ import { getNewtabButtonClass } from './newtabButtonClass'
 const EMPTY_FOLDER_STATE_CLASS = 'bookmark-folder-empty-state grid justify-items-start gap-2.5'
 const BOOKMARK_PREBOOT_SNAPSHOT_LOAD_WAIT_MS = 500
 const BOOKMARK_NAVIGATION_CLASS = 'bookmark-navigation grid w-full content-start gap-3'
-const BOOKMARK_NAVIGATION_EMPTY_CLASS = 'bookmark-navigation-empty justify-self-start m-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.62)]'
+const BOOKMARK_NAVIGATION_EMPTY_CLASS = 'bookmark-navigation-empty justify-self-start m-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.9)]'
 const BOOKMARK_BREADCRUMB_CLASS = 'bookmark-breadcrumb inline-flex max-w-full flex-wrap items-center gap-1 justify-self-start'
-const BOOKMARK_BREADCRUMB_LABEL_CLASS = 'bookmark-breadcrumb-label min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[640] leading-none'
-const BOOKMARK_BREADCRUMB_SEP_CLASS = 'text-[rgba(245,245,247,0.34)]'
-const BOOKMARK_BREADCRUMB_BUTTON_BASE_CLASS = 'curator-motion-chip bookmark-breadcrumb-item inline-flex h-[26px] max-w-[min(200px,100%)] items-center gap-1 rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-2 leading-none text-[rgba(245,245,247,0.78)] shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:[outline:2px_solid_rgba(245,245,247,0.12)] focus-visible:outline-offset-0'
+const BOOKMARK_BREADCRUMB_LABEL_CLASS = 'bookmark-breadcrumb-label min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[640] leading-none'
+const BOOKMARK_BREADCRUMB_SEP_CLASS = 'text-[rgba(245,245,247,0.9)]'
+const BOOKMARK_BREADCRUMB_BUTTON_BASE_CLASS = 'curator-motion-chip bookmark-breadcrumb-item inline-flex h-[26px] max-w-[min(200px,100%)] items-center gap-1 rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-2 leading-none text-[rgba(245,245,247,0.9)] shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:[outline:2px_solid_rgba(245,245,247,0.12)] focus-visible:outline-offset-0'
 const BOOKMARK_BREADCRUMB_BUTTON_CURRENT_CLASS = 'border-[var(--newtab-glass-slider-fill)] bg-[var(--newtab-glass-slider-fill)] text-[var(--ui-text-primary)] cursor-default'
-const EMPTY_FOLDER_COPY_CLASS = 'bookmark-folder-empty justify-self-start mt-1 mb-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.72)]'
+const EMPTY_FOLDER_COPY_CLASS = 'bookmark-folder-empty justify-self-start mt-1 mb-0 text-xs leading-[1.5] text-[rgba(245,245,247,0.9)]'
 const EMPTY_FOLDER_ACTIONS_CLASS = 'bookmark-folder-empty-actions flex flex-wrap gap-2'
 const EMPTY_FOLDER_BUTTON_CLASS = getNewtabButtonClass('secondary', '!min-h-[34px] !px-3 !text-xs')
 const SOURCE_NAVIGATION_CLASS = 'source-navigation mb-3.5 inline-grid max-w-full grid-cols-[auto_minmax(0,1fr)] items-center justify-self-start gap-2'
-const SOURCE_NAVIGATION_LABEL_CLASS = 'source-navigation-label inline-flex h-[26px] items-center whitespace-nowrap rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-2 text-[11px] font-[680] leading-none text-[rgba(245,245,247,0.88)] shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
+const SOURCE_NAVIGATION_LABEL_CLASS = 'source-navigation-label inline-flex h-[26px] items-center whitespace-nowrap rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-2 text-xs font-[680] leading-none text-[rgba(245,245,247,0.88)] shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
 const SOURCE_NAVIGATION_LIST_CLASS = 'source-navigation-list flex min-w-0 max-w-full flex-wrap gap-1.5'
-const SOURCE_NAVIGATION_LINK_CLASS = 'curator-motion-chip source-navigation-link inline-flex h-[26px] max-w-[min(180px,100%)] items-center justify-start gap-1.5 rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-2 text-left leading-normal text-[rgba(245,245,247,0.72)] no-underline shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:[outline:2px_solid_rgba(245,245,247,0.12)] focus-visible:outline-offset-0'
-const SOURCE_NAVIGATION_TITLE_CLASS = 'source-navigation-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[650] leading-none'
-const SOURCE_NAVIGATION_COUNT_CLASS = 'source-navigation-count inline-grid h-4 min-w-[18px] place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-[10px] font-[760] leading-none text-[var(--ui-accent-text)]'
-const FOLDER_SECTION_ADD_CLASS = 'curator-compact-hit-target curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] p-0 leading-none text-[rgba(245,245,247,0.78)] cursor-pointer shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
-const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.42)] px-2.5 py-2 text-[11px] font-[620] text-[rgba(245,245,247,0.46)]'
+const SOURCE_NAVIGATION_LINK_CLASS = 'curator-motion-chip source-navigation-link inline-flex h-[26px] max-w-[min(180px,100%)] items-center justify-start gap-1.5 rounded-[var(--ui-radius-control)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-2 text-left leading-normal text-[rgba(245,245,247,0.9)] no-underline shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:[outline:2px_solid_rgba(245,245,247,0.12)] focus-visible:outline-offset-0'
+const SOURCE_NAVIGATION_TITLE_CLASS = 'source-navigation-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[650] leading-none'
+const SOURCE_NAVIGATION_COUNT_CLASS = 'source-navigation-count inline-grid h-4 min-w-[18px] place-items-center rounded-[var(--ui-radius-pill)] bg-[var(--ui-surface-selected)] text-xs font-[760] leading-none text-[var(--ui-accent-text)]'
+const FOLDER_SECTION_ADD_CLASS = 'curator-compact-hit-target curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] p-0 leading-none text-[rgba(245,245,247,0.9)] cursor-pointer shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
+const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.42)] px-2.5 py-2 text-xs font-[620] text-[rgba(245,245,247,0.9)]'
 // 曾用 CSS paint containment（content_visibility 占位 + intrinsic-size 估高）做离屏分组
 // 优化，但它让离屏分组首帧按 320px 假高占位、下一帧塌缩到真实高度，整页竖向重排——
 // 书签卡片被往上拽即"形变"。增量分块渲染（initialVisibleCount/chunkSize/IntersectionObserver）
@@ -98,15 +99,15 @@ const BOOKMARK_REORDER_STATUS_ERROR_CLASS = 'text-[rgba(255,183,176,0.94)]'
 const PORTAL_PANEL_CLASS = 'newtab-portal quick-only [--portal-card-min-height:42px] [--portal-card-gap:6px] mb-[18px] grid w-full grid-cols-1 items-stretch gap-3.5 rounded-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] p-2.5 shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
 const QUICK_ACCESS_CLASS = 'newtab-quick-access grid w-full content-stretch gap-[var(--portal-card-gap)]'
 const QUICK_GROUP_CLASS = 'newtab-quick-group grid min-w-0 grid-cols-[minmax(0,1fr)] items-start gap-2.5'
-const QUICK_HEADING_CLASS = 'newtab-quick-heading flex [min-height:auto] items-center whitespace-nowrap px-0.5 text-[11px] font-[700] leading-[1.2] text-[rgba(245,245,247,0.8)]'
+const QUICK_HEADING_CLASS = 'newtab-quick-heading flex [min-height:auto] items-center whitespace-nowrap px-0.5 text-xs font-[700] leading-[1.2] text-[rgba(245,245,247,0.9)]'
 const QUICK_LIST_CLASS = 'newtab-quick-list grid min-w-0 grid-cols-[repeat(auto-fill,minmax(136px,1fr))] auto-rows-[minmax(var(--portal-card-min-height),1fr)] gap-[var(--portal-card-gap)]'
-const QUICK_LINK_CLASS = 'curator-motion-card newtab-quick-link grid min-h-[var(--portal-card-min-height)] min-w-0 grid-cols-[24px_minmax(0,1fr)] items-center gap-[7px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[rgba(21,21,22,0.64)] py-1 pr-2 pl-[5px] text-[rgba(245,245,247,0.84)] no-underline shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] [transform:none] hover:border-[rgba(245,245,247,0.16)] hover:bg-[rgba(31,32,35,0.72)] hover:text-[var(--ui-text-primary)] hover:no-underline focus-visible:border-[rgba(245,245,247,0.16)] focus-visible:bg-[rgba(31,32,35,0.72)] focus-visible:text-[var(--ui-text-primary)] focus-visible:no-underline focus-visible:outline-none'
-const QUICK_MARK_CLASS = 'newtab-quick-mark grid h-6 w-6 place-items-center rounded-md text-[11px] font-extrabold leading-none'
-const QUICK_MARK_DEFAULT_CLASS = 'bg-[rgba(245,245,247,0.08)] text-[rgba(245,245,247,0.72)]'
+const QUICK_LINK_CLASS = 'curator-motion-card newtab-quick-link grid min-h-[var(--portal-card-min-height)] min-w-0 grid-cols-[24px_minmax(0,1fr)] items-center gap-[7px] rounded-[var(--ui-radius-control)] border border-[var(--ui-divider)] bg-[rgba(21,21,22,0.64)] py-1 pr-2 pl-[5px] text-[rgba(245,245,247,0.9)] no-underline shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] [transform:none] hover:border-[rgba(245,245,247,0.16)] hover:bg-[rgba(31,32,35,0.72)] hover:text-[var(--ui-text-primary)] hover:no-underline focus-visible:border-[rgba(245,245,247,0.16)] focus-visible:bg-[rgba(31,32,35,0.72)] focus-visible:text-[var(--ui-text-primary)] focus-visible:no-underline focus-visible:outline-none'
+const QUICK_MARK_CLASS = 'newtab-quick-mark grid h-6 w-6 place-items-center rounded-md text-xs font-extrabold leading-none'
+const QUICK_MARK_DEFAULT_CLASS = 'bg-[rgba(245,245,247,0.08)] text-[rgba(245,245,247,0.9)]'
 const QUICK_MARK_PINNED_CLASS = 'bg-[rgba(245,245,247,0.16)] text-[rgba(245,245,247,0.9)]'
 const QUICK_COPY_CLASS = 'newtab-quick-copy grid min-w-0 gap-0.5'
-const QUICK_COPY_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[720] leading-[1.15]'
-const QUICK_COPY_DETAIL_CLASS = 'newtab-quick-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[10px] font-[560] leading-[1.25] text-[rgba(245,245,247,0.7)]'
+const QUICK_COPY_TITLE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[720] leading-[1.15]'
+const QUICK_COPY_DETAIL_CLASS = 'newtab-quick-copy-detail min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[560] leading-[1.25] text-[rgba(245,245,247,0.9)]'
 
 export function NewtabBookmarkContent({ hasSearch = false }: { hasSearch?: boolean }) {
   const state = useNewtabBookmarkContentView()
@@ -485,7 +486,14 @@ function BookmarkFolderGrid({
       ref={setGridRef}
     >
       {visibleItems.map((item) => (
-        <BookmarkTile dragUi={dragUi} state={item} showTitles={showTitles} key={item.id} />
+        <BookmarkTile
+          dragActive={dragUi.bookmarkDragging}
+          pending={dragUi.bookmarkPendingId === item.id}
+          previewInitializing={dragUi.previewInitializing}
+          state={item}
+          showTitles={showTitles}
+          key={item.id}
+        />
       ))}
       {remainingCount > 0 ? (
         <BookmarkGridPlaceholder
@@ -533,12 +541,16 @@ function BookmarkGridPlaceholder({
   )
 }
 
-function BookmarkTile({
-  dragUi,
+const BookmarkTile = memo(function BookmarkTile({
+  dragActive,
+  pending,
+  previewInitializing,
   state,
   showTitles
 }: {
-  dragUi: NewtabDragUiView
+  dragActive: boolean
+  pending: boolean
+  previewInitializing: boolean
   state: BookmarkTileViewModel
   showTitles: boolean
 }) {
@@ -564,9 +576,9 @@ function BookmarkTile({
   return (
     <a
       className={getBookmarkTileClass({
-        dragActive: dragUi.bookmarkDragging,
+        dragActive,
         dragging: state.dragging,
-        previewInitializing: dragUi.previewInitializing,
+        previewInitializing,
         showTitles
       })}
       href={state.url}
@@ -593,7 +605,7 @@ function BookmarkTile({
       <span
         className={BOOKMARK_DRAG_HANDLE_CLASS}
         data-bookmark-drag-handle=""
-        data-drag-pending={dragUi.bookmarkPendingId === state.id ? 'true' : undefined}
+        data-drag-pending={pending ? 'true' : undefined}
         aria-hidden="true"
         onClick={(event) => {
           event.preventDefault()
@@ -609,7 +621,7 @@ function BookmarkTile({
       </span>
     </a>
   )
-}
+})
 
 function BookmarkNavigationView({
   dragUi,
@@ -728,7 +740,14 @@ function BookmarkNavigationView({
             <BookmarkFolderCard folder={folder} showTitles={showTitles} key={`folder-${folder.folderId}`} />
           ))}
           {visibleItems.map((item) => (
-            <BookmarkTile dragUi={dragUi} state={item} showTitles={showTitles} key={item.id} />
+            <BookmarkTile
+              dragActive={dragUi.bookmarkDragging}
+              pending={dragUi.bookmarkPendingId === item.id}
+              previewInitializing={dragUi.previewInitializing}
+              state={item}
+              showTitles={showTitles}
+              key={item.id}
+            />
           ))}
           {remainingCount > 0 ? (
             <BookmarkGridPlaceholder

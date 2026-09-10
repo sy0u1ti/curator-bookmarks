@@ -3,6 +3,8 @@ import '../styles/globals.css'
 import './popup.css'
 import { initSquircleEngine } from '../shared/squircle-engine'
 import { PopupApp } from './PopupApp'
+import { startPopupController } from './popup-controller'
+import { preparePopupShellPaint } from './popup-hydration'
 
 const root = document.getElementById('popup-root')
 
@@ -10,6 +12,10 @@ if (!root) {
   throw new Error('Missing popup React root')
 }
 
+// Bind actions before React subscribes, and let the search shell paint before
+// processing the prefetched catalog and search index.
+preparePopupShellPaint(root)
+startPopupController()
 initSquircleEngine()
 createRoot(root).render(<PopupApp portalContainer={root} />)
 
@@ -43,24 +49,12 @@ function waitForInitialPopupCommit(rootElement: HTMLElement): Promise<void> {
   }
 
   return new Promise((resolve) => {
-    let remainingFrames = 8
-
-    const checkNextFrame = () => {
-      if (rootElement.firstElementChild) {
-        resolve()
-        return
-      }
-
-      if (remainingFrames <= 0) {
-        resolve()
-        return
-      }
-
-      remainingFrames -= 1
-      window.requestAnimationFrame(checkNextFrame)
-    }
-
-    window.requestAnimationFrame(checkNextFrame)
+    const observer = new MutationObserver(() => {
+      if (!rootElement.firstElementChild) return
+      observer.disconnect()
+      resolve()
+    })
+    observer.observe(rootElement, { childList: true })
   })
 }
 

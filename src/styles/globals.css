@@ -28,19 +28,6 @@ body {
   }
 }
 
-@keyframes auto-analyze-pulse {
-  0%,
-  100% {
-    opacity: 0.58;
-    transform: scale(0.86);
-  }
-
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
 @keyframes cb-search-pulse {
   0%,
   100% {
@@ -107,65 +94,38 @@ body {
   }
 }
 
-/* Switch 拨动的双段过冲。
-   位移只走 translate 属性，不碰 transform——根元素的按压 scale 用的是
-   transform，两者分开才不会互相覆盖。thumb 静态位置由 [data-checked]
-   决定，首帧因此不会播放归位动画；只有 .is-init（首次真正切换后由
-   Switch.tsx 挂上）才允许 keyframes 接管。 */
+/* Keep the resting position in state, not keyframes. Reversing a switch
+   continues from its current position and mounting a page stays still. */
 .t-toggle-thumb {
   translate: 0 0;
-  will-change: translate;
+  transition:
+    translate var(--toggle-dur) var(--toggle-ease),
+    background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
 .t-toggle[data-checked] .t-toggle-thumb {
   translate: var(--toggle-travel) 0;
 }
 
-.t-toggle.is-init[data-checked] .t-toggle-thumb {
-  animation: t-toggle-on var(--toggle-dur) var(--toggle-ease) both;
-}
-
-.t-toggle.is-init:not([data-checked]) .t-toggle-thumb {
-  animation: t-toggle-off var(--toggle-dur) var(--toggle-ease) both;
-}
-
-@keyframes t-toggle-on {
-  0%   { translate: 0 0; }
-  55%  { translate: calc(var(--toggle-travel) + var(--toggle-ov1)) 0; }
-  80%  { translate: calc(var(--toggle-travel) - var(--toggle-ov2)) 0; }
-  100% { translate: var(--toggle-travel) 0; }
-}
-
-@keyframes t-toggle-off {
-  0%   { translate: var(--toggle-travel) 0; }
-  55%  { translate: calc(0px - var(--toggle-ov1)) 0; }
-  80%  { translate: var(--toggle-ov2) 0; }
-  100% { translate: 0 0; }
-}
-
-/* 行内状态徽标的出现。这里刻意不是 transitions.dev 的 notification-badge：
-   Badge 是随文排的状态标签，不是挂在触发器上的未读点，没有斜向滑入的锚点
-   可言。它需要的只是「换了一个值」被看见，所以走 scale + fade + 去模糊。 */
+/* Inline status changes get a quiet compositor-only arrival. */
 .t-badge-pop {
-  animation: t-badge-pop var(--badge-pop-dur) var(--badge-pop-ease) both;
+  animation: t-badge-pop var(--badge-pop-dur) var(--badge-pop-ease) backwards;
 }
 
 @keyframes t-badge-pop {
   from {
     opacity: 0;
     transform: scale(var(--badge-pop-scale));
-    filter: blur(var(--badge-pop-blur));
   }
   to {
     opacity: 1;
     transform: scale(1);
-    filter: blur(0);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .t-toggle-thumb {
-    animation: none !important;
+    transition: none !important;
   }
 
   .t-badge-pop {
@@ -264,27 +224,27 @@ body {
 .curator-overlay-panel--menu[data-side="top"],
 .curator-overlay-panel--popover[data-side="top"] {
   --curator-overlay-enter-y: 4px;
-  transform-origin: bottom center;
+  transform-origin: var(--transform-origin, bottom center);
 }
 
 .curator-overlay-panel--menu[data-side="bottom"],
 .curator-overlay-panel--popover[data-side="bottom"] {
   --curator-overlay-enter-y: -4px;
-  transform-origin: top center;
+  transform-origin: var(--transform-origin, top center);
 }
 
 .curator-overlay-panel--menu[data-side="left"],
 .curator-overlay-panel--popover[data-side="left"] {
   --curator-overlay-enter-x: 4px;
   --curator-overlay-enter-y: 0px;
-  transform-origin: right center;
+  transform-origin: var(--transform-origin, right center);
 }
 
 .curator-overlay-panel--menu[data-side="right"],
 .curator-overlay-panel--popover[data-side="right"] {
   --curator-overlay-enter-x: -4px;
   --curator-overlay-enter-y: 0px;
-  transform-origin: left center;
+  transform-origin: var(--transform-origin, left center);
 }
 
 .curator-overlay-panel[data-starting-style],
@@ -304,6 +264,13 @@ body {
 
 .curator-overlay-panel[data-ending-style] {
   transition-duration: var(--curator-overlay-close-duration);
+}
+
+.curator-overlay-panel--menu[data-ending-style],
+.curator-overlay-panel--popover[data-ending-style] {
+  --curator-overlay-enter-x: 0px;
+  --curator-overlay-enter-y: 0px;
+  --curator-overlay-enter-scale: var(--dropdown-closing-scale);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -369,6 +336,53 @@ body {
   .t-tabs-pill, .t-tab { transition: none !important; }
 }
 
+/* Equal-width settings segments need no layout reads or animation frames.
+   Percent travel also stays aligned when the inspector changes width. */
+.t-segmented {
+  --segment-inset: 4px;
+  position: relative;
+  isolation: isolate;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 0;
+  padding: var(--segment-inset);
+}
+
+.t-segmented::before {
+  content: "";
+  position: absolute;
+  inset-block: var(--segment-inset);
+  left: var(--segment-inset);
+  width: calc((100% - var(--segment-inset) * 2) / var(--segment-count));
+  box-sizing: border-box;
+  border: 1px solid var(--ds-border-hover);
+  border-radius: var(--ds-radius-sm);
+  background-color: var(--ds-selected);
+  opacity: var(--segment-visible, 1);
+  transform: translateX(calc(var(--segment-index) * 100%));
+  pointer-events: none;
+  transition:
+    transform var(--tabs-dur) var(--tabs-ease),
+    opacity var(--ds-motion-fast) var(--ds-ease-standard);
+}
+
+.t-segmented > button {
+  position: relative;
+  z-index: 1;
+  border-color: transparent;
+  background-color: transparent;
+}
+
+.t-segmented > button:focus-visible {
+  outline: 2px solid var(--ds-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-segmented::before { transition: none; }
+}
+
 .t-tt {
   background: var(--tt-bg);
   color: var(--tt-fg);
@@ -432,8 +446,8 @@ body {
   opacity: 1;
   transform: translateY(0);
   transition:
-    transform var(--panel-open-dur) var(--panel-ease),
-    opacity   var(--panel-open-dur) var(--panel-ease);
+    transform var(--page-slide-dur) var(--page-slide-ease),
+    opacity   var(--page-fade-dur) var(--page-fade-ease);
 }
 .t-tabs-panel[data-starting-style],
 .t-tabs-panel[data-ending-style] {
@@ -442,8 +456,8 @@ body {
 }
 .t-tabs-panel[data-ending-style] {
   transition:
-    transform var(--panel-close-dur) var(--panel-ease),
-    opacity   var(--panel-close-dur) var(--panel-ease);
+    transform var(--page-slide-dur) var(--page-slide-ease),
+    opacity   var(--page-fade-dur) var(--page-fade-ease);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -584,7 +598,7 @@ body {
 .t-toast[data-ending-style] {
   opacity: 0;
   pointer-events: none;
-  transform: translateY(var(--toast-offset-y)) scale(var(--toast-scale));
+  transform: scale(var(--toast-scale));
   transition:
     transform var(--toast-close-dur) var(--toast-ease),
     opacity   var(--toast-close-dur) var(--toast-ease);
@@ -788,7 +802,7 @@ body {
     transparent         60%,
     transparent        100%
   );
-  background-size: var(--shimmer-band) 100%;
+  background-size: 100% 100%;
   background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
@@ -797,24 +811,22 @@ body {
   animation: t-shimmer var(--shimmer-dur) var(--shimmer-ease) infinite;
 }
 @keyframes t-shimmer {
-  0%   { background-position: 100% 0; }
-  100% { background-position: 0% 0; }
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.75; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-shimmer::before { animation: none !important; }
+  .t-shimmer::before { animation: none !important; opacity: 0; }
 }
 
-/*
- * 流光进度条。宽度说清真实进度，流光证明任务还在跑——两者分工，互不冒充。
- * 流光被 clip-path 裁在已完成的那一截里（--sheen-progress-fill 由组件写入），
- * 并与填充条共用同一条 320ms 线性过渡，两条前沿边不会错开。
- */
-.sheen-progress-track::after {
+/* The fill clips its own sheen. Both layers move using transform, so the
+   sweep needs neither a background repaint nor an animated clipping edge. */
+.sheen-progress-bar::after {
   position: absolute;
   inset: 0;
-  z-index: 3;
-  animation: sheen-progress-sweep 1750ms cubic-bezier(0.42, 0, 0.28, 1) infinite;
+  width: 38%;
+  transform: translateX(-100%);
+  animation: var(--sheen-progress-animation, none) var(--progress-sheen-dur) var(--ease-linear) infinite;
   background-image: linear-gradient(
     90deg,
     rgba(255, 255, 255, 0) 0%,
@@ -822,22 +834,18 @@ body {
     rgba(255, 255, 255, 0) 100%
   );
   background-repeat: no-repeat;
-  background-size: 38% 100%;
-  clip-path: inset(0 calc(100% - var(--sheen-progress-fill, 0%)) 0 0);
   content: "";
   pointer-events: none;
-  transition: clip-path 320ms linear;
-  will-change: background-position;
 }
 
 @keyframes sheen-progress-sweep {
-  from { background-position-x: -60%; }
-  to   { background-position-x: 160%; }
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(365%); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sheen-progress-bar,
-  .sheen-progress-track::after {
+  .sheen-progress-bar::after {
     animation: none !important;
     transition: none !important;
   }
@@ -846,7 +854,33 @@ body {
     transform: scaleX(var(--sheen-progress-scale)) !important;
   }
 
-  .sheen-progress-track::after { opacity: 0; }
+  .sheen-progress-bar::after { opacity: 0; }
+}
+
+/* Visibility changes do not re-render the application or pause exits. */
+:root[data-motion-paused] .t-shimmer::before,
+:root[data-motion-paused] .sheen-progress-bar::after,
+:root[data-motion-paused] .animate-spin,
+:root[data-motion-paused] .dot-matrix-loader circle {
+  animation-play-state: paused !important;
+}
+
+.t-status-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  animation: t-status-icon-arrive var(--icon-swap-dur) var(--icon-swap-ease) backwards;
+}
+
+@keyframes t-status-icon-arrive {
+  from { opacity: 0.5; transform: scale(var(--scale-large)); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-status-icon { animation: none; }
 }
 
 .t-stagger-line {
@@ -944,6 +978,8 @@ body {
 .curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):active,
 .curator-motion-row:active,
 .curator-motion-chip:active {
+  /* Use one press transform even when a button also has a scale utility. */
+  scale: 1;
   transform: scale(var(--ds-press-scale, 0.985));
   transition-duration: var(--ds-motion-feedback);
 }

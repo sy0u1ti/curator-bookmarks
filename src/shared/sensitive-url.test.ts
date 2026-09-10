@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import ipaddr from 'ipaddr.js'
 import {
   assessSensitiveExternalUrl,
   isPublicNetworkAddress,
@@ -114,4 +115,35 @@ assert.equal(
   'non-loopback private endpoints must not be inferred to be local proxies'
 )
 
-console.log('Sensitive URL boundary tests passed.')
+const originalIsValid = ipaddr.isValid
+let hostParseCount = 0
+try {
+  ipaddr.isValid = (address: string) => {
+    hostParseCount += 1
+    return originalIsValid(address)
+  }
+  for (let index = 0; index < 2000; index++) {
+    assert.equal(assessSensitiveExternalUrl(`https://performance-fixture.example.test/article/${index}`).sensitive, false)
+  }
+  assert.ok(hostParseCount <= 1, `Repeated bookmarks on one hostname should reuse its static network classification; parsed ${hostParseCount} times`)
+  assert.equal(assessSensitiveExternalUrl('https://performance-fixture.example.test/login').reason, 'account-login-page')
+  assert.equal(assessSensitiveExternalUrl('https://performance-fixture.example.test/articles?token=secret').reason, 'capability-action')
+  assert.equal(assessSensitiveExternalUrl('https://performance-fixture.example.test/#action=delete').reason, 'capability-action')
+  assert.equal(assessSensitiveExternalUrl('https://user:password@performance-fixture.example.test/articles').reason, 'capability-action')
+  assert.equal(assessSensitiveExternalUrl('https://performance-fixture.example.test/payment').reason, 'financial-page')
+  assert.equal(assessSensitiveExternalUrl('https://performance-fixture.example.test/articles').sensitive, false)
+
+  for (let index = 0; index < 2000; index++) {
+    assert.equal(assessSensitiveExternalUrl(`https://cache-churn-${index}.example.test/articles`).sensitive, false)
+  }
+  const beforeReload = hostParseCount
+  assert.equal(assessSensitiveExternalUrl('https://performance-fixture.example.test/articles').sensitive, false)
+  assert.ok(hostParseCount > beforeReload, 'The hostname cache must evict old entries instead of growing with the entire catalog')
+  assert.equal(assessSensitiveExternalUrl('http://127.0.0.1/articles').reason, 'local-network')
+  assert.equal(assessSensitiveExternalUrl('https://8.8.8.8/articles').sensitive, false)
+  assert.equal(assessSensitiveExternalUrl('https://8.8.8.8/logout').reason, 'capability-action')
+} finally {
+  ipaddr.isValid = originalIsValid
+}
+
+console.log('Sensitive URL boundary and repeated-host performance tests passed.')

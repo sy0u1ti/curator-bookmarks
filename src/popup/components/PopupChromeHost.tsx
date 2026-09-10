@@ -16,13 +16,7 @@ import {
 } from '../popup-preboot-input'
 import { PopupSearchChips } from './PopupSearchChips'
 
-const searchHelpToggleClass = [
-  'relative inline-flex h-[18px] min-h-[18px] w-[18px] min-w-[18px] flex-none cursor-help items-center justify-center rounded-ds-sm border border-ds-border-hover bg-ds-surface-2 p-0 text-ds-text-secondary shadow-none',
-  'transition-[background-color,border-color,color,transform] duration-[var(--duration-quick)] ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
-  'active:scale-[0.96]'
-].join(' ')
+const searchHelpToggleClass = 'w-8 min-w-8 !p-0'
 
 type PopupSearchHelpPopoverComponent = (typeof import('./PopupSearchHelpPopover'))['PopupSearchHelpPopover']
 
@@ -42,11 +36,11 @@ function loadPopupSearchHelpPopover(): Promise<PopupSearchHelpPopoverComponent> 
 const errorBannerClass =
   'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 const toolbarClass =
-  'relative z-[1] flex min-h-[18px] items-center justify-between gap-2.5 px-px'
+  'relative z-[1] flex min-h-5 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-px'
 const viewCaptionClass =
-  'm-0 min-w-0 text-[11px] font-semibold leading-normal tracking-[0.01em] text-ds-text-secondary'
+  'm-0 min-w-0 text-xs font-semibold leading-normal tracking-[0.01em] text-ds-text-secondary'
 const keyHintClass =
-  'm-0 max-w-[210px] truncate text-right text-[10px] leading-normal tracking-[0.01em] text-ds-text-disabled opacity-60 transition-opacity duration-150 ease-ds-standard group-focus-within:opacity-100 max-[520px]:hidden'
+  'popup-keyboard-hint m-0 shrink-0 text-right text-xs leading-4 tracking-normal text-ds-text-secondary'
 const heroBaseClass =
   'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-visible border-0 bg-transparent px-3.5 max-[520px]:-mx-2.5 max-[520px]:px-2.5'
 const heroBrandClass =
@@ -63,13 +57,7 @@ const heroTitleRowClass =
   'hero-title-row flex min-w-0 items-center gap-[5px]'
 const heroActionsClass =
   'hero-actions inline-flex translate-y-[5px] items-center gap-3.5'
-const heroSettingsButtonClass = [
-  'hero-settings-button inline-flex h-6 min-h-6 min-w-0 items-center justify-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-[720] text-ds-text-secondary shadow-none',
-  'transition-[color,background-color,transform] duration-[var(--duration-quick)] ease-ds-standard',
-  'hover:bg-transparent hover:text-ds-text-primary',
-  'focus-visible:bg-transparent focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
-  'active:scale-[0.96]'
-].join(' ')
+const heroSettingsButtonClass = 'hero-settings-button shrink-0'
 const commandPanelBaseClass = 'grid gap-2'
 const commandPanelDefaultClass =
   'flex-none'
@@ -88,18 +76,18 @@ const searchInputClass =
   'popup-search-input min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-[14px] font-normal leading-[1.4] tracking-normal text-ds-text-primary outline-none placeholder:text-ds-text-muted max-[520px]:min-h-8 [font-optical-sizing:auto] [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const clearSearchButtonClass = [
   'inline-flex h-[26px] w-[26px] flex-none items-center justify-center rounded-lg border-0 bg-transparent p-0 text-ds-text-muted',
-  'transition-[background-color,color,opacity,transform] duration-ds-fast ease-ds-standard',
+  'transition-[background-color,color,opacity,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-active hover:text-ds-text-primary',
   'focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none',
-  'active:scale-[0.96]',
+  'active:scale-[var(--ds-press-scale)]',
   'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0'
 ].join(' ')
 const semanticSearchBaseClass = [
   'relative inline-flex h-7 w-[76px] min-w-[76px] flex-none items-center justify-center gap-[5px] whitespace-nowrap rounded-lg border-0 bg-transparent px-3.5 text-xs font-medium tracking-[0.01em] text-ds-text-secondary max-[520px]:h-8 max-[520px]:px-2.5',
-  'transition-[background-color,color,box-shadow,transform] duration-ds-fast ease-ds-standard',
+  'transition-[background-color,color,box-shadow,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:[outline:3px_solid_rgba(245,245,247,0.14)] focus-visible:outline-offset-0',
-  'active:scale-[0.98]'
+  'active:scale-[var(--ds-press-scale)]'
 ].join(' ')
 const semanticSearchNotConfiguredClass =
   'text-ds-text-disabled hover:text-ds-text-secondary focus-visible:text-ds-text-secondary'
@@ -175,15 +163,12 @@ export function PopupChromeHost({
     prebootAdoptedRef.current = true
   }, [smartActive])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (smartActive || prebootAdoptedRef.current || !hasPopupPrebootSearchShell()) {
       return
     }
 
-    const adoptFrame = window.requestAnimationFrame(() => {
-      adoptPrebootSearchInput()
-    })
-    return () => window.cancelAnimationFrame(adoptFrame)
+    adoptPrebootSearchInput()
   }, [adoptPrebootSearchInput, smartActive])
 
   useEffect(() => {
@@ -231,11 +216,12 @@ export function PopupChromeHost({
             <Button
               id="open-settings"
               className={heroSettingsButtonClass}
+              size="sm"
+              variant="ghost"
               type="button"
               aria-label="打开设置页"
               title="打开设置页"
               onClick={() => dispatchPopupChromeAction('open-settings')}
-              unstyled
             >
               <Icon name="Settings" size={15} aria-hidden="true" />
               <span>设置</span>
@@ -354,12 +340,17 @@ function SearchHelpControl() {
     <Button
       id="search-help-toggle"
       className={searchHelpToggleClass}
+      size="sm"
+      variant="ghost"
       type="button"
       aria-label="查看高级搜索语法"
       title="查看高级搜索语法（site / folder / type / -排除）"
       aria-controls="search-help-popover"
+      aria-haspopup="dialog"
+      aria-expanded={false}
       onPointerEnter={() => {
-        mountPopover()
+        // Warm the module without replacing the button under a pressed pointer.
+        void loadPopupSearchHelpPopover()
       }}
       onFocus={() => {
         void loadPopupSearchHelpPopover()
@@ -373,9 +364,8 @@ function SearchHelpControl() {
       onClick={() => {
         requestOpen()
       }}
-      unstyled
     >
-      <Icon name="CircleHelp" size={13} aria-hidden="true" />
+      <Icon name="CircleHelp" size={16} aria-hidden="true" />
     </Button>
   )
 }

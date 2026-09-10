@@ -82,22 +82,11 @@ export const AI_NAMING_RESPONSE_SCHEMA = {
   properties: {
     items: {
       type: 'array',
+      maxItems: AI_NAMING_MAX_BATCH_SIZE,
       items: {
         type: 'object',
         additionalProperties: false,
-        required: [
-          'bookmark_id',
-          'summary',
-          'content_type',
-          'topics',
-          'suggested_title',
-          'suggested_folder',
-          'tags',
-          'aliases',
-          'action',
-          'confidence',
-          'reason'
-        ],
+        required: ['bookmark_id', 'action', 'confidence'],
         properties: {
           bookmark_id: {
             type: 'string'
@@ -133,7 +122,7 @@ export const AI_NAMING_RESPONSE_SCHEMA = {
           folder_decision: {
             type: 'object',
             additionalProperties: false,
-            required: ['kind', 'reason', 'confidence'],
+            required: ['kind', 'confidence'],
             properties: {
               kind: {
                 type: 'string',

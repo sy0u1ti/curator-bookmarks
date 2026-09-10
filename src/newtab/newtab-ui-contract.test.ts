@@ -7,7 +7,8 @@ const bookmarkContent = readFileSync('src/newtab/components/NewtabBookmarkConten
 const searchWidget = readFileSync('src/newtab/components/NewtabSearchWidget.tsx', 'utf8')
 const searchWidgetClasses = readFileSync('src/newtab/components/searchWidgetClasses.ts', 'utf8')
 const clockClasses = readFileSync('src/newtab/components/clockClasses.ts', 'utf8')
-const searchSettingsStore = readFileSync('src/newtab/newtab-search-settings-store.ts', 'utf8')
+const glassCss = readFileSync('src/newtab/hyalite-glass.css', 'utf8')
+const glassSettings = readFileSync('src/newtab/glass-settings.ts', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
 const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.tsx', 'utf8')
 const bookmarkPreboot = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
@@ -236,17 +237,18 @@ assert.ok(
   searchWidget.includes('data-panel-open') &&
     searchWidget.includes('view.panel.panelVisible && SEARCH_FORM_PANEL_OPEN_CLASS') &&
     searchWidgetClasses.includes("SEARCH_FORM_PANEL_OPEN_CLASS = 'is-panel-open'") &&
-    newtabCss.includes('.newtab-search.is-panel-open') &&
-    newtabCss.includes('border-bottom-color: transparent') &&
-    newtabCss.includes('border-top-color: transparent'),
-  'Search suggestions should update the form itself so the squircle outline reconnects to the panel.'
+    searchWidget.includes('<BaseCollapsible.Root') &&
+    searchWidget.includes('className="newtab-search-surface"') &&
+    searchWidget.includes('data-squircle-subtree="off"') &&
+    !searchWidgetClasses.includes('focus-within:[outline:'),
+  'Search and recommendations must share one native glass surface without an extra focus frame.'
 )
 
 assert.ok(
   searchWidgetClasses.includes("SEARCH_SHELL_CLASS = 'newtab-search-shell relative mx-auto w-[var(--search-effective-width)]'") &&
     searchWidgetClasses.includes("SEARCH_FORM_CLASS = 'newtab-search group relative z-[1] flex h-[var(--search-height)] w-full") &&
-    searchWidgetClasses.includes("SEARCH_PANEL_CLASS = 'newtab-search-suggestions-panel absolute top-[calc(var(--search-height)+8px)] left-0") &&
-    searchWidgetClasses.includes('w-full gap-[3px]') &&
+    searchWidgetClasses.includes("SEARCH_PANEL_CLASS = 'newtab-search-suggestions-panel relative z-[1] grid min-w-0 w-full'") &&
+    newtabCss.includes('grid-template-rows: 0fr') &&
     !searchWidgetClasses.includes('-translate-x-1/2') &&
     !/\.newtab-search-suggestions-panel:not\(\[hidden\]\)\s*\{[^}]*translate:/s.test(newtabCss),
   'Search and suggestions must share one positioned shell instead of centering through an animation-sensitive translate.'
@@ -261,14 +263,14 @@ assert.ok(
 )
 
 assert.ok(
-  searchWidgetClasses.includes('bg-[rgba(0,0,0,var(--search-bg-alpha))]') &&
-    searchWidgetClasses.includes('[--search-bg-alpha:0.6]') &&
-    searchWidgetClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
+  newtabCss.includes('background: var(--newtab-glass-bg-hero)') &&
+    !searchWidget.includes('--search-bg-alpha') &&
+    newtabCss.includes('.newtab-search-surface {') &&
     clockClasses.includes('bg-[var(--newtab-glass-bg-hero)]') &&
     clockClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
     newtabCss.includes('background: var(--newtab-glass-bg-popup') &&
     newtabCss.includes('backdrop-filter: var(--newtab-glass-filter-popup') &&
-    !searchSurfaceRule.includes('background:') &&
+    searchSurfaceRule.includes('background: transparent') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search-suggestions-panel') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search-engine-menu') &&
@@ -279,27 +281,25 @@ assert.ok(
 )
 
 assert.ok(
-  unifiedGlassTokens.includes('--newtab-glass-bg-fill: rgba(0, 0, 0, 0.6)') &&
+  unifiedGlassTokens.includes('--newtab-glass-bg-fill: rgba(0, 0, 0, 0.13)') &&
     unifiedGlassTokens.includes('--newtab-glass-slider-fill: rgba(255, 255, 255, 0.16)') &&
-    unifiedGlassTokens.includes('--newtab-glass-stroke: rgba(255, 255, 255, 0.08)') &&
+    unifiedGlassTokens.includes('--newtab-glass-stroke: rgba(255, 255, 255, 0.18)') &&
     unifiedGlassTokens.includes('--newtab-glass-stroke-width: 1.5px') &&
-    unifiedGlassTokens.includes('--newtab-glass-background-blur: 8px') &&
-    unifiedGlassTokens.includes('--newtab-glass-backdrop-filter: blur(8px)') &&
-    unifiedGlassTokens.includes('--newtab-glass-drop-shadow: 0 8px 20px 8px rgba(0, 0, 0, 0.4)') &&
+    unifiedGlassTokens.includes('--newtab-glass-background-blur: 12px') &&
+    unifiedGlassTokens.includes('--newtab-glass-backdrop-filter: blur(var(--newtab-glass-background-blur))') &&
+    unifiedGlassTokens.includes('--newtab-glass-drop-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.24)') &&
     unifiedGlassTokens.includes('--newtab-glass-bg-popup: var(--newtab-glass-bg-fill)') &&
     unifiedGlassTokens.includes('--newtab-glass-filter-popup: var(--newtab-glass-backdrop-filter)'),
-  'Unified New Tab glass must preserve the fill, slider, stroke, blur, and drop-shadow values from the reference material.'
+  'New Tab modules must share the light tint, adjustable 12px frost, and restrained elevation.'
 )
 
 assert.ok(
-    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_MIN = 52') &&
-    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_DEFAULT = 60') &&
-    searchSettingsStore.includes('NEWTAB_SEARCH_BACKGROUND_MAX = 92') &&
-    searchSettingsStore.includes('const background = clampNumber(') &&
-    searchWidget.includes('NEWTAB_SEARCH_BACKGROUND_MIN / 100') &&
-    settingsDrawer.includes('min={String(NEWTAB_SEARCH_BACKGROUND_MIN)}') &&
-    settingsDrawer.includes('defaultValue={String(NEWTAB_SEARCH_BACKGROUND_DEFAULT)}'),
-  'Search transparency controls must stay inside the readable range used by the unified glass material.'
+  glassSettings.includes('tint: [0, 60, 1]') &&
+    !searchWidget.includes('NEWTAB_SEARCH_BACKGROUND_MIN / 100') &&
+    settingsDrawer.includes('data-settings-group="glass"') &&
+    settingsDrawer.includes('newtab-glass-controls') &&
+    glassCss.includes('--color-ds-surface-1: var(--ds-surface-1)'),
+  'Glass controls must be grouped independently, with no hidden search tint floor or opaque nested theme aliases.'
 )
 
 assert.ok(
@@ -371,24 +371,21 @@ assert.ok(
 )
 
 assert.ok(
-    newtabMain.includes("import('./newtab-controller')") &&
+    newtabMain.includes("from './newtab-controller'") &&
     newtabMain.includes("from './newtab-startup-data'") &&
     newtabMain.includes('prefetchNewtabStartupData()') &&
-    !newtabMain.includes("from './newtab-controller'") &&
+    !newtabMain.includes("import('./newtab-controller')") &&
     newtabMain.includes('createRoot(root).render') &&
-    // The controller chunk is requested ahead of the React mount so its download
-    // and off-thread parse overlap with it, but it is only *started* from a task
-    // queued after render(), so the cached shell still paints first.
-    newtabMain.indexOf("const newTabControllerModule = import('./newtab-controller')") <
-      newtabMain.indexOf('createRoot(root).render') &&
+    // Data and the cached surface start in a classic script. The interactive
+    // entry loads its controller without another dynamic-import waterfall.
     newtabMain.indexOf('markNewTabStartupBaseline()') < newtabMain.indexOf('createRoot(root).render') &&
     newtabMain.includes("performance.mark('newtab.domContentLoaded')") &&
     newtabMain.indexOf('createRoot(root).render') <
       newtabMain.indexOf('scheduleNewTabControllerStart()') &&
-    newtabMain.includes('window.setTimeout(startNewTabController, 0)') &&
+    /window\.setTimeout\(\(\) => \{\s*startNewTabController\(\)/.test(newtabMain) &&
     !newtabApp.includes('useNewtabController') &&
-    newtabApp.includes("void import('./newtab-controller')") &&
-    newtabApp.indexOf('startNewTabController()') < newtabApp.indexOf('dispatchNewtabSettingsDrawerToggleRequest()') &&
+    newtabApp.includes('onOpenSettings()') &&
+    newtabMain.indexOf('startNewTabController()') < newtabMain.indexOf('dispatchNewtabSettingsDrawerToggleRequest()') &&
     viteConfig.includes('manualChunks(id)') &&
     viteConfig.includes("id.includes('/src/newtab/content-state.ts')") &&
     viteConfig.includes("indexOf('<link rel=\"stylesheet\"')") &&
@@ -396,10 +393,11 @@ assert.ok(
     controller.includes("performance.getEntriesByName('newtab.domContentLoaded', 'mark')") &&
     controller.includes('consumeNewtabStartupData()') &&
     newtabStartupData.includes('STORAGE_KEYS.newTabBackgroundSettings') &&
-    newtabStartupData.includes('const prefetchedStartupData = settleStartupData(loadNewtabStartupData())') &&
+    instantWallpaperBoot.includes('prefetchNewtabStartupData()') &&
+    newtabStartupData.includes('prefetchStartupData(STARTUP_DATA_KEY, loadNewtabStartupData') &&
     controller.includes("from './speed-dial.js'") &&
     !controller.includes("import('./speed-dial.js')"),
-  'Newtab should paint its cached shell before loading the full controller, while manual chunk routing preserves the startup boundaries.'
+  'Newtab should prefetch data before React and load its essential controller with the interactive entry.'
 )
 
 assert.ok(
@@ -426,8 +424,10 @@ assert.ok(
 assert.ok(
   newtabApp.includes("import('./components/SettingsDrawer')") &&
     !newtabApp.includes("from './components/SettingsDrawer'") &&
-    newtabApp.includes('SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS'),
-  'The closed settings drawer should stay outside the bookmark first-paint bundle and warm after the critical path.'
+    newtabApp.includes('if (Host || !requested)') &&
+    !newtabApp.includes('SETTINGS_DRAWER_IDLE_LOAD_DELAY_MS') &&
+    controller.includes('requestNewtabSettingsDrawer()'),
+  'The settings drawer should load on request, including requests from keyboard commands and folder actions.'
 )
 
 assert.ok(
@@ -601,7 +601,7 @@ assert.ok(
 
 assert.ok(
   bookmarkHoverRule.includes('transform: translateY(var(--newtab-bookmark-hover-lift))') &&
-    bookmarkHoverRule.includes('box-shadow: var(--newtab-bookmark-hover-shadow)') &&
+    bookmarkHoverRule.includes('--newtab-bookmark-current-shadow: var(--newtab-bookmark-hover-shadow)') &&
     !bookmarkHoverRule.replace(/-?\bbackdrop-filter:/g, '').includes('filter:') &&
     newtabCss.includes('.bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before'),
   'Bookmark hover should use the Lumno-inspired lift, layered shadow, and glass-tinted overlay; only backdrop-filter is allowed (a clip-path-clipped drop-shadow filter is not).'

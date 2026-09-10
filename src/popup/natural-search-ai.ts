@@ -2,7 +2,7 @@ import { STORAGE_KEYS } from '../shared/constants.js'
 import {
   requestStructuredAiOutput
 } from '../shared/ai-runtime.js'
-import { getAiProviderBaseUrlIssue } from '../shared/ai-provider-url.js'
+import { getAiProviderBaseUrlIssue, isAiProviderConfigured } from '../shared/ai-provider-url.js'
 import { getLocalStorage } from '../shared/storage.js'
 import {
   normalizeNaturalSearchAiPlan,
@@ -14,7 +14,7 @@ let aiSettingsModulePromise: Promise<typeof import('../options/sections/ai-setti
 export const NATURAL_SEARCH_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['queries', 'keywords', 'excluded_terms', 'date_range', 'explanation'],
+  required: ['queries', 'keywords', 'excluded_terms', 'date_range'],
   properties: {
     queries: {
       type: 'array',
@@ -32,9 +32,9 @@ export const NATURAL_SEARCH_SCHEMA = {
       items: { type: 'string', maxLength: 40 }
     },
     date_range: {
-      type: 'object',
+      type: ['object', 'null'],
       additionalProperties: false,
-      required: ['from', 'to', 'label'],
+      required: ['from', 'to'],
       properties: {
         from: { type: 'string', maxLength: 10 },
         to: { type: 'string', maxLength: 10 },
@@ -68,17 +68,18 @@ export async function loadNaturalSearchAiProviderSettings(): Promise<AiNamingSet
 }
 
 export function hasConfiguredNaturalSearchAiProvider(settings: AiNamingSettings): boolean {
-  return Boolean(settings.baseUrl && settings.apiKey && settings.model)
+  return isAiProviderConfigured(settings)
 }
 
 export function validateNaturalSearchAiProvider(settings: AiNamingSettings): void {
-  if (!hasConfiguredNaturalSearchAiProvider(settings)) {
-    throw new Error('请先到通用设置配置“自定义AI渠道”。')
-  }
   const baseUrlIssue = getAiProviderBaseUrlIssue(settings.baseUrl)
   if (baseUrlIssue) {
     throw new Error(baseUrlIssue)
   }
+  if (!hasConfiguredNaturalSearchAiProvider(settings)) {
+    throw new Error('请先到通用设置配置“自定义AI渠道”。')
+  }
+
 }
 
 export async function ensureNaturalSearchAiPermissions(

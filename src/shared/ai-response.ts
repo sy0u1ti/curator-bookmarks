@@ -1,56 +1,56 @@
-export interface AiEndpointSettings {
-  baseUrl?: unknown
-  apiStyle?: unknown
-}
+import { getAiProviderEndpoint, type AiEndpointSettings } from './ai-provider-url.js'
+export type { AiEndpointSettings } from './ai-provider-url.js'
 
 type AiRefusalFormatter = (refusal: unknown) => string
 
+export class AiResponseRefusalError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'AiResponseRefusalError'
+  }
+}
+
 export function getAiEndpoint(settings: AiEndpointSettings): string {
-  const baseUrl = String(settings?.baseUrl || '').replace(/\/+$/, '')
-  const suffix = settings?.apiStyle === 'chat_completions' ? 'chat/completions' : 'responses'
-  return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
+  return getAiProviderEndpoint(settings)
+}
+
+/** Read each content block once, retaining whitespace between text fragments. */
+function readFinalContentText(content: unknown, formatRefusal: AiRefusalFormatter): string {
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  const fragments: string[] = []
+  for (const item of content) {
+    if (!item || typeof item !== 'object') continue
+    const type = String(item.type || '').toLowerCase()
+    if (type === 'refusal' || (typeof item.refusal === 'string' && item.refusal.trim())) {
+      throw new AiResponseRefusalError(formatRefusal(item.refusal || item.text))
+    }
+    if ((!type || type === 'text' || type === 'output_text') && typeof item.text === 'string') fragments.push(item.text)
+  }
+  return fragments.join('')
 }
 
 export function extractResponsesJsonText(
   payload: unknown,
   formatRefusal: AiRefusalFormatter = buildAiStructuredOutputRefusalError
 ): string {
-  const responsePayload = payload as {
-    output?: Array<{ content?: unknown[] }>
-    output_text?: unknown
-  } | null
-  const outputItems = Array.isArray(responsePayload?.output) ? responsePayload.output : []
-  const contentItems = outputItems
-    .filter((entry: any) => {
-      const type = String(entry?.type ?? '').trim().toLowerCase()
-      return !type || type === 'message' || type === 'output_text'
-    })
-    .flatMap((entry) => Array.isArray(entry?.content) ? entry.content : [])
-  const finalTextItems = contentItems.filter((item: any) => {
-    const type = String(item?.type ?? '').trim().toLowerCase()
-    return !type || type === 'text' || type === 'output_text'
-  })
-  const refusalNode = contentItems.find((item: any) => {
-    return typeof item?.refusal === 'string' && item.refusal.trim()
-  }) as { refusal?: string } | undefined
-
-  if (refusalNode?.refusal) {
-    throw new Error(formatRefusal(refusalNode.refusal))
+  const response = payload as any
+  const fragments: string[] = []
+  const calls: unknown[] = []
+  for (const item of Array.isArray(response?.output) ? response.output : []) {
+    if (!item || typeof item !== 'object') continue
+    const type = String(item.type || '').toLowerCase()
+    if (type === 'function_call') calls.push(item)
+    else if (!type || type === 'message') fragments.push(readFinalContentText(item.content, formatRefusal))
+    else if (type === 'output_text' || type === 'refusal') fragments.push(readFinalContentText([item], formatRefusal))
   }
-
-  if (typeof responsePayload?.output_text === 'string' && responsePayload.output_text.trim()) {
-    return extractJsonPayloadText(responsePayload.output_text)
-  }
-
-  const joinedText = finalTextItems
-    .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
-    .filter((text) => text.trim())
-    .join('')
-
-  if (joinedText.trim()) {
-    return extractJsonPayloadText(joinedText)
-  }
-
+  if (typeof response?.refusal === 'string' && response.refusal.trim()) throw new AiResponseRefusalError(formatRefusal(response.refusal))
+  if (typeof response?.output_text === 'string' && response.output_text.trim()) return extractJsonPayloadText(response.output_text)
+  const text = fragments.join('')
+  if (text.trim()) return extractJsonPayloadText(text)
+  if (response?.output_parsed && typeof response.output_parsed === 'object') return JSON.stringify(response.output_parsed)
+  const argumentsText = extractSingleToolArguments(calls)
+  if (argumentsText) return extractJsonPayloadText(argumentsText)
   throw new Error('Responses API 返回中未找到可解析的 JSON 文本。')
 }
 
@@ -58,62 +58,24 @@ export function extractChatCompletionsJsonText(
   payload: unknown,
   formatRefusal: AiRefusalFormatter = buildAiStructuredOutputRefusalError
 ): string {
-  const chatPayload = payload as {
-    choices?: Array<{
-      message?: {
-        refusal?: unknown
-        content?: unknown
-        reasoning_content?: unknown
-        reasoning?: unknown
-      }
-    }>
-  } | null
-  const message = chatPayload?.choices?.[0]?.message
-
-  if (typeof message?.refusal === 'string' && message.refusal.trim()) {
-    throw new Error(formatRefusal(message.refusal))
-  }
-
-  const content = message?.content
-  if (typeof content === 'string' && content.trim()) {
-    return extractJsonPayloadText(content)
-  }
-
-  if (Array.isArray(content)) {
-    const refusalNode = content.find((item: any) => {
-      return typeof item?.refusal === 'string' && item.refusal.trim()
-    }) as { refusal?: string } | undefined
-    if (refusalNode?.refusal) {
-      throw new Error(formatRefusal(refusalNode.refusal))
-    }
-
-    // Mistral 等推理端点会把 thinking/text 都放进 content 数组。优先只拼接
-    // 最终文本块，避免思考块里的花括号被误判为业务 JSON。
-    const finalTextItems = content.filter((item: any) => {
-      const type = String(item?.type ?? '').trim().toLowerCase()
-      return !type || type === 'text' || type === 'output_text'
-    })
-    const joinedText = (finalTextItems.length ? finalTextItems : content)
-      .map((item: any) => (typeof item?.text === 'string' ? item.text : ''))
-      .filter((text) => text.trim())
-      .join('')
-    if (joinedText.trim()) {
-      return extractJsonPayloadText(joinedText)
-    }
-  }
-
-  // 部分推理模型的兼容层会把全部输出塞进思考通道，正文为空；尽力从中打捞 JSON。
-  const reasoningText = [message?.reasoning_content, message?.reasoning]
-    .map((item) => (typeof item === 'string' ? item : ''))
-    .find((item) => item.trim())
-  if (reasoningText) {
+  const choice = (payload as any)?.choices?.[0]
+  const message = choice?.message
+  if (choice?.finish_reason === 'content_filter') throw new AiResponseRefusalError('模型拒绝返回此内容（content_filter）。')
+  if (typeof message?.refusal === 'string' && message.refusal.trim()) throw new AiResponseRefusalError(formatRefusal(message.refusal))
+  const text = readFinalContentText(message?.content, formatRefusal)
+  if (text.trim()) return extractJsonPayloadText(text)
+  if (typeof choice?.text === 'string' && choice.text.trim()) return extractJsonPayloadText(choice.text)
+  if (message?.parsed && typeof message.parsed === 'object') return JSON.stringify(message.parsed)
+  const argumentsText = extractSingleToolArguments(message?.tool_calls || (message?.function_call ? [message.function_call] : []))
+  if (argumentsText) return extractJsonPayloadText(argumentsText)
+  // A few compatible reasoning endpoints place their final JSON in this field.
+  const reasoningText = typeof message?.reasoning_content === 'string' && message.reasoning_content.trim()
+    ? message.reasoning_content : typeof message?.reasoning === 'string' ? message.reasoning : ''
+  if (reasoningText.trim()) {
     const salvaged = extractJsonPayloadText(reasoningText)
-    if (looksLikeJsonPayload(salvaged)) {
-      return salvaged
-    }
+    if (isJsonText(salvaged)) return salvaged
     throw new Error('模型把输出写入了思考通道（reasoning）且未包含 JSON 正文，请关闭思考模式或换用支持结构化输出的模型。')
   }
-
   throw new Error('Chat Completions 返回中未找到可解析的 JSON 文本。')
 }
 
@@ -121,25 +83,55 @@ export function extractAnthropicMessagesJsonText(
   payload: unknown,
   formatRefusal: AiRefusalFormatter = buildAiStructuredOutputRefusalError
 ): string {
-  const messagePayload = payload as {
-    content?: Array<{ type?: unknown; text?: unknown; refusal?: unknown }>
-  } | null
-  const content = Array.isArray(messagePayload?.content) ? messagePayload.content : []
-  const refusal = content.find((item) => {
-    return typeof item?.refusal === 'string' && item.refusal.trim()
-  })?.refusal
-  if (typeof refusal === 'string' && refusal.trim()) {
-    throw new Error(formatRefusal(refusal))
+  const response = payload as any
+  if (response?.stop_reason === 'refusal') throw new AiResponseRefusalError('模型拒绝返回此内容。')
+  const content: any[] = Array.isArray(response?.content) ? response.content : []
+  const text = readFinalContentText(content, formatRefusal)
+  if (text.trim()) return extractJsonPayloadText(text)
+  let toolInput: unknown
+  let toolCount = 0
+  for (const block of content) {
+    if (block?.type !== 'tool_use') continue
+    toolInput = block.input
+    toolCount += 1
   }
-  const text = content
-    .filter((item) => item?.type === 'text' || typeof item?.text === 'string')
-    .map((item) => typeof item?.text === 'string' ? item.text : '')
-    .filter((item) => item.trim())
-    .join('')
-  if (text.trim()) {
-    return extractJsonPayloadText(text)
-  }
+  if (toolCount === 1 && toolInput && typeof toolInput === 'object') return JSON.stringify(toolInput)
   throw new Error('Claude Messages API 返回中未找到可解析的 JSON 文本。')
+}
+
+export function extractGeminiJsonText(payload: unknown): string {
+  const response = payload as any
+  const candidate = response?.candidates?.[0]
+  const blocked = response?.promptFeedback?.blockReason || (/SAFETY|BLOCKLIST|PROHIBITED_CONTENT|SPII|RECITATION/.test(String(candidate?.finishReason)) ? candidate.finishReason : '')
+  if (blocked) throw new AiResponseRefusalError('模型未返回此内容（' + sanitizeAiErrorText(blocked, 80) + '）。')
+  const fragments: string[] = []
+  let toolInput: unknown
+  let toolCount = 0
+  for (const part of Array.isArray(candidate?.content?.parts) ? candidate.content.parts : []) {
+    if (!part || part.thought) continue
+    if (typeof part.text === 'string') fragments.push(part.text)
+    const argumentsValue = part.functionCall?.args
+    if (argumentsValue && typeof argumentsValue === 'object') {
+      toolInput = argumentsValue
+      toolCount += 1
+    }
+  }
+  const text = fragments.join('')
+  if (text.trim()) return extractJsonPayloadText(text)
+  if (toolCount === 1) return JSON.stringify(toolInput)
+  throw new Error('Gemini 返回中没有可解析的最终文本。')
+}
+
+export function extractGeminiInteractionsJsonText(payload: unknown): string {
+  const text = readFinalContentText((payload as any)?.outputs, buildAiStructuredOutputRefusalError)
+  if (text.trim()) return extractJsonPayloadText(text)
+  throw new Error('Gemini Interactions 返回中没有可解析的最终文本。')
+}
+
+function extractSingleToolArguments(calls: unknown): string {
+  if (!Array.isArray(calls) || calls.length !== 1) return ''
+  const value = calls[0]?.function?.arguments ?? calls[0]?.arguments
+  return typeof value === 'string' ? value : value && typeof value === 'object' ? JSON.stringify(value) : ''
 }
 
 /**
@@ -150,30 +142,35 @@ export function extractAnthropicMessagesJsonText(
  * 提取失败时原样返回修剪后的文本，让上层 JSON.parse 给出错误。
  */
 export function extractJsonPayloadText(text: unknown): string {
-  let value = String(text ?? '')
+  let value = String(text ?? '').replace(/^\uFEFF/, '')
   if (!value.trim()) {
     return value.trim()
   }
 
-  const closeThinkIndex = value.lastIndexOf('</think>')
+  const closeThinkIndex = value.toLowerCase().lastIndexOf('</think>')
   if (closeThinkIndex !== -1) {
     value = value.slice(closeThinkIndex + '</think>'.length)
   } else {
     value = value.replace(/<think>[\s\S]*?<\/think>/g, '')
   }
 
-  const fencedMatch = value.match(/```(?:json[c5]?|javascript)?\s*\n?([\s\S]*?)```/i)
-  if (fencedMatch && fencedMatch[1].trim()) {
-    value = fencedMatch[1]
+  const fencedMatches = [...value.matchAll(/```(?:json[c5]?|javascript)?\s*\n?([\s\S]*?)```/gi)]
+  for (const match of fencedMatches.reverse()) {
+    if (isJsonText(match[1].trim())) return match[1].trim()
   }
 
   const trimmed = value.trim()
-  if (looksLikeJsonPayload(trimmed)) {
+  if (isJsonText(trimmed)) {
     return trimmed
   }
 
   const balanced = extractBalancedJsonSlice(trimmed)
   return balanced ?? trimmed
+}
+
+function isJsonText(text: string): boolean {
+  if (!looksLikeJsonPayload(text)) return false
+  try { JSON.parse(text); return true } catch { return false }
 }
 
 function looksLikeJsonPayload(text: string): boolean {
@@ -186,55 +183,32 @@ function looksLikeJsonPayload(text: string): boolean {
 }
 
 function extractBalancedJsonSlice(text: string): string | null {
-  const start = findJsonStart(text)
-  if (start === -1) {
-    return null
-  }
-
-  const openChar = text[start]
-  const closeChar = openChar === '{' ? '}' : ']'
-  let depth = 0
+  let start = -1
+  const stack: string[] = []
   let inString = false
   let escaped = false
-
-  for (let index = start; index < text.length; index += 1) {
+  for (let index = 0; index < text.length; index += 1) {
     const char = text[index]
     if (inString) {
-      if (escaped) {
-        escaped = false
-      } else if (char === '\\') {
-        escaped = true
-      } else if (char === '"') {
-        inString = false
-      }
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
       continue
     }
-    if (char === '"') {
-      inString = true
-      continue
-    }
-    if (char === openChar) {
-      depth += 1
-    } else if (char === closeChar) {
-      depth -= 1
-      if (depth === 0) {
-        return text.slice(start, index + 1)
+    if (char === '"' && stack.length) { inString = true; continue }
+    if (char === '{' || char === '[') {
+      if (!stack.length) start = index
+      stack.push(char === '{' ? '}' : ']')
+    } else if (char === '}' || char === ']') {
+      if (stack.pop() !== char) { stack.length = 0; start = -1; continue }
+      if (!stack.length && start >= 0) {
+        const candidate = text.slice(start, index + 1)
+        if (isJsonText(candidate)) return candidate
+        start = -1
       }
     }
   }
   return null
-}
-
-function findJsonStart(text: string): number {
-  const objectIndex = text.indexOf('{')
-  const arrayIndex = text.indexOf('[')
-  if (objectIndex === -1) {
-    return arrayIndex
-  }
-  if (arrayIndex === -1) {
-    return objectIndex
-  }
-  return Math.min(objectIndex, arrayIndex)
 }
 
 /**
@@ -247,6 +221,9 @@ export function getAiTruncationIssue(payload: unknown, apiStyle: unknown): strin
   }
 
   const anthropicStopReason = (payload as { stop_reason?: unknown }).stop_reason
+  if ((payload as any)?.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+    return 'Gemini 输出达到上限而被截断。请减小批量大小或降低推理强度后重试。'
+  }
   if (anthropicStopReason === 'max_tokens') {
     return 'AI 输出因达到模型输出上限被截断（stop_reason=max_tokens）。请减小批量大小或缩短提示后重试。'
   }
@@ -261,7 +238,7 @@ export function getAiTruncationIssue(payload: unknown, apiStyle: unknown): strin
 
   const responsePayload = payload as { status?: unknown; incomplete_details?: { reason?: unknown } }
   if (responsePayload.status === 'incomplete') {
-    const reason = String(responsePayload.incomplete_details?.reason || 'incomplete')
+    const reason = sanitizeAiErrorText(responsePayload.incomplete_details?.reason || 'incomplete', 100)
     return `AI 输出未完成（${reason}）。请减小批量大小、缩短提示或调大模型输出上限后重试。`
   }
   return ''
@@ -287,7 +264,7 @@ export function sanitizeAiErrorText(
       '$1[REDACTED]'
     )
     .replace(
-      /(["']?(?:api[_-]?key|apikey|authorization|x-api-key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)["']?\s*[:=]\s*["']?)([^"',;\s}&]+)/gi,
+      /(["']?(?:api[_-]?key|apikey|authorization|x-api-key|x-goog-api-key|access[_-]?token|refresh[_-]?token|client[_-]?secret|password)["']?\s*[:=]\s*["']?)([^"',;\s}&]+)/gi,
       '$1[REDACTED]'
     )
     .replace(
@@ -331,10 +308,7 @@ export function extractAiErrorMessage(payload: unknown, statusCode: unknown, raw
 }
 
 function buildAiStructuredOutputRefusalError(refusal: unknown): string {
-  const normalizedRefusal = truncateText(
-    String(refusal || '').replace(/\s+/g, ' ').trim(),
-    120
-  )
+  const normalizedRefusal = sanitizeAiErrorText(refusal, 120)
 
   return normalizedRefusal
     ? `模型拒绝生成结构化结果：${normalizedRefusal}`

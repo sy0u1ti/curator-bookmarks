@@ -24,7 +24,7 @@ const SHORTCUT_TITLE_ICON_CLASS =
 const SHORTCUT_SUBTITLE_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.7] text-ds-text-disabled'
 const SHORTCUT_STATUS_BASE_CLASS =
-  'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-xs font-semibold leading-none tracking-[0]'
 const SHORTCUT_STATUS_TONE_CLASSES: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',

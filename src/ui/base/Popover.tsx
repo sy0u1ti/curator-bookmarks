@@ -53,6 +53,7 @@ export function Popover({
 }: PopoverProps) {
   const popup = (
     <BasePopover.Positioner
+      className="z-[10040]"
       align={align}
       collisionAvoidance={collisionAvoidance}
       collisionPadding={collisionPadding}

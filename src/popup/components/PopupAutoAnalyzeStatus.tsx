@@ -1,4 +1,6 @@
 import { Button } from '../../ui/base/Button'
+import { AiThinkingOrb } from '../../ui/ai/AiThinkingOrb'
+import { Icon } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import {
   dispatchPopupAutoAnalyzeStatusAction,
@@ -6,7 +8,7 @@ import {
 } from '../popup-controller-store'
 
 const STATUS_BASE_CLASS =
-  'relative z-[1] grid min-h-[38px] flex-none grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-[7px] border border-ds-border bg-ds-surface-1 px-2 py-[7px] pl-2.5 shadow-none'
+  'relative z-[1] grid min-h-[38px] flex-none grid-cols-[20px_minmax(0,1fr)_auto] items-center gap-2.5 overflow-hidden rounded-[7px] border border-ds-border bg-ds-surface-1 px-2 py-[7px] pl-2.5 shadow-none'
 
 const STATUS_STATE_CLASS: Record<string, string> = {
   queued: '',
@@ -16,17 +18,23 @@ const STATUS_STATE_CLASS: Record<string, string> = {
 }
 
 const STATUS_INDICATOR_CLASS: Record<string, string> = {
-  queued: 'bg-ds-text-secondary shadow-none',
-  processing: 'animate-[auto-analyze-pulse_1400ms_ease-in-out_infinite] bg-ds-text-primary shadow-none motion-reduce:animate-none',
-  completed: 'bg-ds-success-text shadow-none',
-  failed: 'bg-ds-danger-text shadow-none'
+  queued: 'text-ds-text-secondary',
+  processing: 'text-ds-text-primary',
+  completed: 'text-ds-success-text',
+  failed: 'text-ds-danger-text'
 }
 
 const actionClass =
-  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-1 px-2 text-[11px] font-semibold leading-none text-ds-text-primary outline-none transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover active:scale-[0.98]'
+  'inline-flex min-h-[26px] min-w-[34px] items-center justify-center rounded-md border border-ds-border bg-ds-surface-1 px-2 text-xs font-semibold leading-none text-ds-text-primary outline-none transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover active:scale-[var(--ds-press-scale)]'
 
 const ghostActionClass =
   'border-transparent bg-transparent text-ds-text-secondary hover:text-ds-text-primary focus-visible:text-ds-text-primary'
+
+function AutoAnalyzeIndicator({ status, collapsed }: { status: string | null; collapsed: boolean }) {
+  return status === 'processing'
+    ? <AiThinkingOrb state="working" paused={collapsed} />
+    : <Icon name={status === 'queued' ? 'Clock' : status === 'completed' ? 'Check' : 'AlertTriangle'} size={16} />
+}
 
 export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: boolean }) {
   const state = usePopupAutoAnalyzeStatusView()
@@ -44,7 +52,7 @@ export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: 
       className={cx(
         STATUS_BASE_CLASS,
         !state.collapsed && 'max-h-24',
-        state.collapsed && 'grid-cols-[8px_minmax(0,1fr)_auto] py-[5px]',
+        state.collapsed && 'py-[5px]',
         !hidden && STATUS_STATE_CLASS[state.status]
       )}
       hidden={hidden}
@@ -54,19 +62,19 @@ export function PopupAutoAnalyzeStatus({ smartActive = false }: { smartActive?: 
     >
       {hidden ? null : (
         <>
-          <div
-            className={cx(
-                'h-2 w-2 rounded-full bg-ds-text-primary shadow-none',
-              STATUS_INDICATOR_CLASS[state.status]
-            )}
+          <span
+            className={cx('t-status-icon', STATUS_INDICATOR_CLASS[state.status])}
+            key={state.status}
             aria-hidden="true"
-          ></div>
+          >
+            <AutoAnalyzeIndicator status={state.status} collapsed={state.collapsed} />
+          </span>
           <output className="min-w-0">
             <p className="m-0 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-semibold leading-tight text-ds-text-primary">
               {state.title}
             </p>
             <p className={cx(
-              'mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-tight text-ds-text-secondary'
+              'mt-0.5 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-tight text-ds-text-secondary'
             )} hidden={state.collapsed}>
               {state.detail}
             </p>

@@ -34,7 +34,7 @@ const toneByStatus = {
 } as const
 
 const AI_TASK_STATUS_LABEL_CLASS =
-  'block text-[11px] font-semibold uppercase tracking-[0] text-ds-text-disabled'
+  'block text-xs font-semibold uppercase tracking-[0] text-ds-text-disabled'
 
 export function AiTaskStatus({
   children,

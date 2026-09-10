@@ -255,6 +255,9 @@ function untrack(el: HTMLElement): void {
 }
 
 function scanSubtree(root: Element): void {
+  // Recycled rows are observed as newly added subtrees. Their parent opt-out
+  // still applies; do not attach resize/clip work again on every scroll or hover.
+  if (root.closest('[data-squircle-subtree="off"]')) return
   if (root instanceof HTMLElement) {
     if (root.dataset.squircleSubtree === 'off') return
     consider(root)

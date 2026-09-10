@@ -32,6 +32,7 @@ export interface AvailabilityRunOutcome {
   errorCode?: string
   detail?: string
   timedOut?: boolean
+  retryAfterMs?: number
 }
 
 export interface AvailabilityTimeoutPolicy {
@@ -79,6 +80,7 @@ export interface AvailabilityRunScheduler {
   getConcurrency: () => number
   getTimeoutPolicy: (_url?: unknown) => AvailabilityTimeoutPolicy
   getCooldownDelay: (url: unknown) => number
+  getDeferralDelay: (url: unknown) => number
   getAcquireDelay: (url: unknown) => number
   tryAcquire: (url: unknown) => AvailabilityRunLease | null
   recordOutcome: (url: unknown, outcome?: AvailabilityRunOutcome | null) => void
@@ -104,7 +106,10 @@ export interface AvailabilityQueueOptions<TItem> {
   ) => Promise<void> | void
   shouldContinue?: () => boolean | Promise<boolean>
   shouldSkip?: (item: TItem) => boolean
-  wait?: (ms: number) => Promise<void>
+  wait?: AvailabilityRunnerWait
+  signal?: AbortSignal | null
+  onFatalError?: (error: unknown) => void
+  onDeferred?: (item: TItem, context: { index: number; retryAfterMs: number }) => Promise<void> | void
   onWait?: (snapshot: AvailabilityRunnerSnapshot) => void
   onItemSettled?: (item: TItem, index: number) => void
 }
@@ -216,6 +221,7 @@ export function createAvailabilityRunScheduler(
   const profile = normalizeAvailabilitySpeedProfile(options.profile)
   const now = typeof options.now === 'function' ? options.now : () => Date.now()
   const domainStates = new Map<string, DomainRunState>()
+  const slowedStates = new Set<DomainRunState>()
   let activeCount = 0
   let lastSlowdownReason = ''
 
@@ -253,7 +259,7 @@ export function createAvailabilityRunScheduler(
 
   function tryAcquire(url: unknown): AvailabilityRunLease | null {
     const state = getOrCreateDomainState(url)
-    if (getAcquireDelay(url) > 0) {
+    if (activeCount >= profile.concurrency || state.activeCount >= profile.domainConcurrency || state.cooldownUntil > now()) {
       return null
     }
 
@@ -281,12 +287,13 @@ export function createAvailabilityRunScheduler(
     if (normalized.kind === 'throttle') {
       state.throttleSignals += 1
       state.timeoutSignals = Math.max(0, state.timeoutSignals - 1)
-      state.lastSlowdownReason = 'HTTP 429'
-      lastSlowdownReason = 'HTTP 429'
-      state.cooldownUntil = Math.max(
-        state.cooldownUntil,
-        now() + getCooldownMs(profile.throttleCooldownMs, state.throttleSignals, profile.maxCooldownMs)
-      )
+      state.lastSlowdownReason = 'HTTP ' + (normalized.statusCode || 429)
+      lastSlowdownReason = state.lastSlowdownReason
+      const retryAfterMs = Number(normalized.retryAfterMs)
+      const cooldown = Number.isFinite(retryAfterMs) && retryAfterMs >= 0 ? Math.min(retryAfterMs, 86400000)
+        : getCooldownMs(profile.throttleCooldownMs, state.throttleSignals, profile.maxCooldownMs)
+      state.cooldownUntil = Math.max(state.cooldownUntil, now() + cooldown)
+      slowedStates.add(state)
       return
     }
 
@@ -295,6 +302,7 @@ export function createAvailabilityRunScheduler(
       state.throttleSignals = Math.max(0, state.throttleSignals - 1)
       state.lastSlowdownReason = '超时'
       lastSlowdownReason = '超时'
+      slowedStates.add(state)
       state.cooldownUntil = Math.max(
         state.cooldownUntil,
         now() + getCooldownMs(profile.timeoutCooldownMs, state.timeoutSignals, profile.maxCooldownMs)
@@ -304,7 +312,7 @@ export function createAvailabilityRunScheduler(
 
     if (normalized.kind === 'success') {
       state.timeoutSignals = Math.max(0, state.timeoutSignals - 1)
-      state.throttleSignals = Math.max(0, state.throttleSignals - 1)
+      state.throttleSignals = 0
       if (!state.timeoutSignals && !state.throttleSignals && state.cooldownUntil <= now()) {
         state.lastSlowdownReason = ''
       }
@@ -313,26 +321,26 @@ export function createAvailabilityRunScheduler(
 
   function getSnapshot(): AvailabilityRunnerSnapshot {
     const timestamp = now()
-    const slowedStates = [...domainStates.values()].filter((state) => {
-      return state.cooldownUntil > timestamp || state.timeoutSignals > 0 || state.throttleSignals > 0
-    })
-    const latestSlowdownReason = [...slowedStates]
-      .reverse()
-      .map((state) => state.lastSlowdownReason)
-      .find(Boolean)
-
-    return {
-      profileName: profile.name,
-      profileLabel: profile.label,
-      concurrency: profile.concurrency,
-      domainConcurrency: profile.domainConcurrency,
-      navigationTimeoutMs: profile.navigationTimeoutMs,
-      retryNavigationTimeoutMs: profile.retryNavigationTimeoutMs,
-      probeTimeoutMs: profile.probeTimeoutMs,
-      activeCount,
-      slowedDomainCount: slowedStates.length,
-      lastSlowdownReason: latestSlowdownReason || lastSlowdownReason
+    let latestReason = ''
+    for (const state of slowedStates) {
+      if (state.cooldownUntil <= timestamp && state.throttleSignals < 2) slowedStates.delete(state)
+      else latestReason = state.lastSlowdownReason || latestReason
     }
+    return {
+      profileName: profile.name, profileLabel: profile.label,
+      concurrency: profile.concurrency, domainConcurrency: profile.domainConcurrency,
+      navigationTimeoutMs: profile.navigationTimeoutMs, retryNavigationTimeoutMs: profile.retryNavigationTimeoutMs,
+      probeTimeoutMs: profile.probeTimeoutMs, activeCount, slowedDomainCount: slowedStates.size,
+      lastSlowdownReason: latestReason || lastSlowdownReason
+    }
+  }
+
+  function getDeferralDelay(url: unknown): number {
+    const state = getOrCreateDomainState(url)
+    const delay = Math.max(0, state.cooldownUntil - now())
+    // Long server waits or repeated throttling are deferred, never called dead links.
+    return delay > profile.maxCooldownMs || state.throttleSignals >= 2
+      ? Math.max(delay, profile.throttleCooldownMs) : 0
   }
 
   async function waitForCooldown(
@@ -378,6 +386,7 @@ export function createAvailabilityRunScheduler(
       probeTimeoutMs: profile.probeTimeoutMs
     }),
     getCooldownDelay,
+    getDeferralDelay,
     getAcquireDelay,
     tryAcquire,
     recordOutcome,
@@ -387,46 +396,127 @@ export function createAvailabilityRunScheduler(
 }
 
 export async function runAvailabilityQueue<TItem>({
-  items,
-  scheduler,
-  getUrl,
-  processItem,
-  shouldContinue,
-  shouldSkip,
-  wait = waitForAvailabilityRunnerDelay,
-  onWait,
-  onItemSettled
+  items, scheduler, getUrl, processItem, shouldContinue, shouldSkip,
+  wait = waitForAvailabilityRunnerDelay, signal = null, onFatalError, onDeferred, onWait, onItemSettled
 }: AvailabilityQueueOptions<TItem>): Promise<void> {
-  const pendingEntries = items.map((item, index) => ({ item, index }))
-  const workerCount = Math.min(scheduler.getConcurrency(), pendingEntries.length)
-
-  async function worker(): Promise<void> {
-    while (pendingEntries.length) {
-      if (shouldContinue && !(await shouldContinue())) {
-        return
+  type Entry = { item: TItem; index: number; url: unknown }
+  type Bucket = { entries: Entry[]; next: number }
+  const domains = new Map<string, Bucket>()
+  items.forEach((item, index) => {
+    const url = getUrl(item)
+    const key = getAvailabilityDomainKey(url)
+    let bucket = domains.get(key)
+    if (!bucket) { bucket = { entries: [], next: 0 }; domains.set(key, bucket) }
+    bucket.entries.push({ item, index, url })
+  })
+  let buckets = Array.from(domains.values())
+  let head = 0
+  let pending = items.length
+  let failed = false
+  let failure: unknown
+  const wakeListeners = new Set<() => void>()
+  const stopListeners = new Set<() => void>()
+  const wake = () => { for (const listener of wakeListeners) listener() }
+  const compact = () => {
+    if (head >= 1024 && head * 2 >= buckets.length) { buckets = buckets.slice(head); head = 0 }
+  }
+  const take = (): { entry: Entry; lease?: AvailabilityRunLease; deferredMs?: number } | null => {
+    const count = buckets.length - head
+    for (let scanned = 0; scanned < count; scanned += 1) {
+      const bucket = buckets[head++]
+      while (bucket.next < bucket.entries.length && shouldSkip?.(bucket.entries[bucket.next].item)) {
+        bucket.next += 1
+        pending -= 1
       }
-
-      const nextEntry = takeNextQueueEntry(pendingEntries, scheduler, getUrl, shouldSkip)
-      if (!nextEntry) {
-        if (!pendingEntries.length) {
-          return
-        }
-        onWait?.(scheduler.getSnapshot())
-        await wait(getNextQueueDelay(pendingEntries, scheduler, getUrl))
-        continue
+      if (bucket.next >= bucket.entries.length) continue
+      const entry = bucket.entries[bucket.next]
+      const deferredMs = onDeferred ? scheduler.getDeferralDelay(entry.url) : 0
+      const lease = deferredMs > 0 ? undefined : scheduler.tryAcquire(entry.url) || undefined
+      if (lease || deferredMs > 0) {
+        bucket.next += 1
+        pending -= 1
+        if (bucket.next < bucket.entries.length) buckets.push(bucket)
+        compact()
+        return { entry, lease, deferredMs }
       }
-
-      const { item, index, lease } = nextEntry
-      try {
-        await processItem(item, { index, scheduler })
-      } finally {
-        lease.release()
-        onItemSettled?.(item, index)
-      }
+      buckets.push(bucket)
+    }
+    compact()
+    return null
+  }
+  const waitForWork = async () => {
+    const controller = new AbortController()
+    let notify: () => void = () => {}
+    const changed = new Promise<void>((resolve) => { notify = resolve })
+    const onChange = () => { notify(); controller.abort() }
+    wakeListeners.add(onChange)
+    signal?.addEventListener('abort', onChange, { once: true })
+    try {
+      if (signal?.aborted || failed || !pending) return
+      onWait?.(scheduler.getSnapshot())
+      // A released lease wakes idle workers immediately; no polling delay is
+      // added to a healthy domain. Polling still observes pause/resume callbacks.
+      await Promise.race([
+        changed,
+        wait(scheduler.getProfile().pollIntervalMs, controller.signal).catch((error) => {
+          if (!controller.signal.aborted || !isAbortError(error)) throw error
+        })
+      ])
+    } finally {
+      wakeListeners.delete(onChange)
+      signal?.removeEventListener('abort', onChange)
+      controller.abort()
     }
   }
-
-  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  const canContinue = async (): Promise<boolean> => {
+    if (failed || signal?.aborted) return false
+    if (!shouldContinue) return true
+    let stop: () => void = () => {}
+    const stopped = new Promise<boolean>((resolve) => { stop = () => resolve(false) })
+    stopListeners.add(stop)
+    signal?.addEventListener('abort', stop, { once: true })
+    try { return await Promise.race([Promise.resolve().then(shouldContinue), stopped]) }
+    finally { stopListeners.delete(stop); signal?.removeEventListener('abort', stop) }
+  }
+  const worker = async () => {
+    let completedSinceYield = 0
+    try {
+      while (pending > 0 && !failed && !signal?.aborted) {
+        if (!(await canContinue())) return
+        if (failed || signal?.aborted) return
+        const next = take()
+        if (!next) { if (pending) await waitForWork(); continue }
+        if (!pending) wake()
+        const { entry, lease, deferredMs } = next
+        try {
+          if (deferredMs) await onDeferred!(entry.item, { index: entry.index, retryAfterMs: deferredMs })
+          else await processItem(entry.item, { index: entry.index, scheduler })
+        } finally {
+          lease?.release()
+          wake()
+          onItemSettled?.(entry.item, entry.index)
+        }
+        // Cached results may complete in one microtask; yield so large runs
+        // remain interruptible and can paint progress.
+        if (++completedSinceYield >= 64) {
+          completedSinceYield = 0
+          await wait(1, signal)
+        }
+      }
+    } catch (error) {
+      if (signal?.aborted && isAbortError(error)) return
+      if (!failed) {
+        failed = true
+        failure = error
+        try { onFatalError?.(error) } catch { /* Keep the original failure and drain the workers. */ }
+      }
+      for (const stop of stopListeners) stop()
+      wake()
+    }
+  }
+  // Every worker is drained before the caller releases its run/mutation lock.
+  await Promise.all(Array.from({ length: Math.min(scheduler.getConcurrency(), items.length) }, () => worker()))
+  if (failed) throw failure
 }
 
 export function formatAvailabilityRunnerStatus(snapshot: AvailabilityRunnerSnapshot): string {
@@ -448,49 +538,12 @@ function getAvailabilityDomainKey(url: unknown): string {
   }
 }
 
-function takeNextQueueEntry<TItem>(
-  pendingEntries: Array<{ item: TItem; index: number }>,
-  scheduler: AvailabilityRunScheduler,
-  getUrl: (item: TItem) => unknown,
-  shouldSkip?: (item: TItem) => boolean
-): { item: TItem; index: number; lease: AvailabilityRunLease } | null {
-  for (let index = 0; index < pendingEntries.length; index += 1) {
-    const entry = pendingEntries[index]
-    if (shouldSkip?.(entry.item)) {
-      pendingEntries.splice(index, 1)
-      index -= 1
-      continue
-    }
-
-    const lease = scheduler.tryAcquire(getUrl(entry.item))
-    if (!lease) {
-      continue
-    }
-
-    pendingEntries.splice(index, 1)
-    return { ...entry, lease }
-  }
-
-  return null
-}
-
-function getNextQueueDelay<TItem>(
-  pendingEntries: Array<{ item: TItem; index: number }>,
-  scheduler: AvailabilityRunScheduler,
-  getUrl: (item: TItem) => unknown
-): number {
-  const delays = pendingEntries.flatMap((combineValue, combineIndex, combineArray) => { const combinedResult = ((entry) => scheduler.getAcquireDelay(getUrl(entry.item)))(combineValue); return ((delay) => Number.isFinite(delay) && delay > 0)(combinedResult) ? [combinedResult] : [] })
-
-  const nextDelay = delays.length ? Math.min(...delays) : scheduler.getProfile().pollIntervalMs
-  return Math.max(1, Math.min(nextDelay, scheduler.getProfile().pollIntervalMs))
-}
-
 function normalizeAvailabilityRunOutcome(outcome: AvailabilityRunOutcome | null = {}): AvailabilityRunOutcome {
   const statusCode = Number(outcome?.statusCode) || 0
   const errorCode = String(outcome?.errorCode || '').trim()
   const detail = String(outcome?.detail || '').trim()
 
-  if (outcome?.kind === 'throttle' || statusCode === 429) {
+  if (outcome?.kind === 'throttle' || statusCode === 429 || statusCode === 503 && Number.isFinite(outcome?.retryAfterMs)) {
     return { ...outcome, kind: 'throttle' }
   }
 

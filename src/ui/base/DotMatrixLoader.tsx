@@ -53,7 +53,7 @@ export type DotMatrixLoaderProps = SVGAttributes<SVGSVGElement> & {
   variant?: DotMatrixLoaderVariant
 }
 
-const dotMatrixLoaderClass = 'block size-6 flex-none text-current'
+const dotMatrixLoaderClass = 'dot-matrix-loader block size-6 flex-none text-current'
 const dotMatrixBgClass = 'fill-current opacity-[0.075]'
 const dotMatrixLitBaseClass =
   'fill-current opacity-0 motion-reduce:animate-none motion-reduce:opacity-45'

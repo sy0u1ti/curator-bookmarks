@@ -6,6 +6,8 @@ import {
 } from '../shared/constants.js'
 import type {
   AvailabilityResult,
+  BookmarkRecord,
+  ProbeResult,
   NavigationAttempt
 } from '../shared/types.js'
 import {
@@ -69,11 +71,10 @@ import {
 import {
   AiRuntimeError,
   buildAiFolderCandidates as buildRuntimeAiFolderCandidates,
-  buildAiProviderConnectivityRequestBody,
+  requestAiProviderConnectivityTest,
   normalizeAiFolderDecision,
   requestStructuredAiOutput,
   toAiFolderCandidatePayload,
-  validateKnownFolderId,
   type AiFolderCandidate,
   type AiProviderSettings
 } from '../shared/ai-runtime.js'
@@ -85,12 +86,18 @@ import {
   type AiFailureCircuitDecision
 } from '../shared/ai-failure-circuit.js'
 import { createAiAnalysisRunSessionCoordinator } from './sections/ai-analysis-run-session.js'
+import { buildDeferredAvailabilityResult, createAvailabilityEvidenceCache, inspectAvailabilityWithEvidence } from './sections/availability-pipeline.js'
+import { extractAvailabilityHttpStatus } from '../shared/availability-evidence.js'
+import { getAvailabilityResultSummary } from './sections/availability-presentation.js'
 import {
   getAiProviderAuthHeaders,
   getAiProviderBaseUrlIssue,
-  getAnthropicMessagesEndpoint,
-  isDirectAnthropicProvider
+  getAiProviderModelsEndpoint,
+  isAiProviderConfigured,
+  isAiProviderKeyConfigured
 } from '../shared/ai-provider-url.js'
+import { parseAiModelCatalogPage } from '../shared/ai-model-catalog.js'
+import { validateAiBatchResults } from '../shared/ai-task-contracts.js'
 import {
   normalizeAiNamingSettings,
   normalizeAiNamingCustomModels,
@@ -112,12 +119,8 @@ import { createAvailabilityRunSessionCoordinator } from './sections/availability
 import { createAvailabilityGlobalRunLockCoordinator } from './sections/availability-global-run-lock.js'
 import {
   FETCH_TIMEOUT_MS,
-  buildNavigationSuccess,
-  buildFailureClassification,
   getSafeSameOriginRedirectUrl,
-  shouldAcceptNavigationSuccess,
   shouldFallbackToGet,
-  shouldRetryNavigation,
   classifyAvailabilityProbeResult,
   classifyProbeError,
   isUnverifiedAvailabilityErrorCode,
@@ -152,8 +155,8 @@ import {
   AI_NAMING_DEFAULT_TIMEOUT_MS,
   AI_NAMING_MAX_TEXT_LENGTH,
   AI_NAMING_JINA_READER_ORIGIN,
-  AI_NAMING_MODELS_ENDPOINT_SUFFIX,
   AI_NAMING_PRESET_MODELS,
+  AI_NAMING_FETCHED_MODELS_LIMIT,
   AI_NAMING_RESPONSE_SCHEMA
 } from './shared-options/constants.js'
 import { normalizeOptionsSectionKey, type OptionsSectionKey } from './options-section-store.js'
@@ -373,11 +376,14 @@ const AVAILABILITY_FILTERS = new Set([
   'recovered',
   'ignored'
 ])
-const AUTHORIZED_SAME_ORIGIN_REDIRECT_HOP_LIMIT = 4
 const AI_REJECTED_SUGGESTIONS_LIMIT = 500
 const AI_API_STYLE_OPTIONS = [
-  { value: 'responses', label: 'Responses API' },
-  { value: 'chat_completions', label: 'Chat Completions' }
+  { value: 'auto', label: '自动识别（推荐）' },
+  { value: 'responses', label: 'OpenAI Responses' },
+  { value: 'chat_completions', label: 'OpenAI Chat Completions' },
+  { value: 'anthropic_messages', label: 'Anthropic Messages' },
+  { value: 'gemini', label: 'Gemini GenerateContent' },
+  { value: 'gemini_interactions', label: 'Gemini Interactions' }
 ]
 let confirmModalResolve: ((confirmed: boolean) => void) | null = null
 
@@ -986,6 +992,10 @@ export function handleAvailabilityResultAction(detail: AvailabilityResultActionD
   }
 
   const action = detail.action
+  if (action === 'retest') {
+    void retestSelectedAvailabilityResults(bookmarkId)
+    return
+  }
   if (action === 'hide-run') {
     hideAvailabilityResultForCurrentRun(bookmarkId)
     return
@@ -1932,6 +1942,7 @@ async function runAvailabilityDetection({
 
   const redirectCacheScope = getCurrentAvailabilityScopeMeta()
   const scheduler = createAvailabilityScheduler()
+  const evidenceCache = createAvailabilityEvidenceCache()
   const runStartedAt = Date.now()
   availabilityState.running = true
   availabilityState.paused = false
@@ -1953,6 +1964,12 @@ async function runAvailabilityDetection({
     await runAvailabilityQueue({
       items: availabilityState.runQueue,
       scheduler,
+      signal: availabilityState.abortController?.signal,
+      onFatalError: () => abortAvailabilityRequestsForFailure(sessionId),
+      onDeferred: async (bookmark, { retryAfterMs }) => {
+        const result = await evidenceCache.inspect(bookmark, async () => buildDeferredAvailabilityResult(bookmark, retryAfterMs))
+        if (result && isAvailabilityRunSessionOwner(sessionId) && !availabilityState.stopRequested && !availabilityState.abortController?.signal.aborted && !isBookmarkRemovedDuringRun(bookmark.id)) applyAvailabilityResult(result)
+      },
       getUrl: (bookmark) => bookmark?.url,
       shouldContinue: () => waitForAvailabilityRun(sessionId),
       shouldSkip: (bookmark) => !bookmark || isBookmarkRemovedDuringRun(bookmark.id),
@@ -1963,11 +1980,11 @@ async function runAvailabilityDetection({
         }
       },
       processItem: async (bookmark) => {
-        const result = await inspectBookmarkAvailability(bookmark, {
+        const result = await evidenceCache.inspect(bookmark, () => inspectBookmarkAvailability(bookmark, {
           probeEnabled,
           scheduler,
           sessionId
-        })
+        }))
         if (!result) {
           return
         }
@@ -1975,6 +1992,7 @@ async function runAvailabilityDetection({
         if (
           !isAvailabilityRunSessionOwner(sessionId) ||
           availabilityState.stopRequested ||
+          availabilityState.abortController?.signal.aborted ||
           isBookmarkRemovedDuringRun(result.id)
         ) {
           return
@@ -2083,128 +2101,30 @@ async function runAvailabilityDetection({
 }
 
 async function inspectBookmarkAvailability(
-  bookmark,
-  {
-    probeEnabled,
-    scheduler = null,
-    sessionId
-  }: {
-    probeEnabled: boolean
-    scheduler?: AvailabilityRunScheduler | null
-    sessionId: string
-  }
+  bookmark: BookmarkRecord,
+  { probeEnabled, scheduler = null, sessionId }: { probeEnabled: boolean; scheduler?: AvailabilityRunScheduler | null; sessionId: string }
 ) {
-  if (!(await waitForAvailabilityRun(sessionId))) {
-    return null
-  }
-
-  const timeoutPolicy = scheduler?.getTimeoutPolicy(bookmark?.url) || {
+  const timeouts = scheduler?.getTimeoutPolicy(bookmark.url) || {
     navigationTimeoutMs: NAVIGATION_TIMEOUT_MS,
     retryNavigationTimeoutMs: NAVIGATION_RETRY_TIMEOUT_MS,
     probeTimeoutMs: FETCH_TIMEOUT_MS
   }
-
-  const attempts: NavigationAttempt[] = []
-  const runRecordedNavigationAttempt = async (
-    targetUrl: string,
-    timeoutMs: number
-  ): Promise<NavigationAttempt | null> => {
-    if (
-      !(await waitForAvailabilityRun(sessionId)) ||
-      !(await waitForAvailabilityCooldown(scheduler, targetUrl, sessionId))
-    ) {
-      return null
-    }
-
-    const attempt = await runNavigationAttempt(targetUrl, timeoutMs)
-    scheduler?.recordOutcome(
-      targetUrl,
-      getNavigationAttemptRunOutcome(attempt)
-    )
-    if (!isAvailabilityRunSessionOwner(sessionId) || availabilityState.stopRequested) {
-      return null
-    }
-    attempts.push(attempt)
-    return attempt
-  }
-
-  let activeNavigationUrl = bookmark.url
-  let navigation = await runRecordedNavigationAttempt(
-    activeNavigationUrl,
-    timeoutPolicy.navigationTimeoutMs
-  )
-  if (!navigation) {
-    return null
-  }
-  if (shouldAcceptNavigationSuccess(navigation)) {
-    return buildNavigationSuccess(bookmark, navigation, '首轮后台导航成功')
-  }
-
-  const visitedNavigationUrls = new Set([
-    normalizeAvailabilityNavigationUrl(activeNavigationUrl)
-  ])
-  for (
-    let redirectHop = 0;
-    redirectHop < AUTHORIZED_SAME_ORIGIN_REDIRECT_HOP_LIMIT;
-    redirectHop += 1
-  ) {
-    const redirectUrl = await getAuthorizedSameOriginRedirectUrl(
-      activeNavigationUrl,
-      navigation
-    )
-    const normalizedRedirectUrl = normalizeAvailabilityNavigationUrl(redirectUrl)
-    if (!redirectUrl || !normalizedRedirectUrl || visitedNavigationUrls.has(normalizedRedirectUrl)) {
-      break
-    }
-
-    visitedNavigationUrls.add(normalizedRedirectUrl)
-    activeNavigationUrl = redirectUrl
-    navigation = await runRecordedNavigationAttempt(
-      activeNavigationUrl,
-      timeoutPolicy.retryNavigationTimeoutMs
-    )
-    if (!navigation) {
-      return null
-    }
-    if (shouldAcceptNavigationSuccess(navigation)) {
-      return buildNavigationSuccess(
-        bookmark,
-        navigation,
-        `站内重定向第 ${redirectHop + 1} 跳成功`
-      )
-    }
-  }
-
-  if (shouldRetryNavigation(navigation)) {
-    navigation = await runRecordedNavigationAttempt(
-      activeNavigationUrl,
-      timeoutPolicy.retryNavigationTimeoutMs
-    )
-    if (!navigation) {
-      return null
-    }
-    if (shouldAcceptNavigationSuccess(navigation)) {
-      return buildNavigationSuccess(bookmark, navigation, '重试后台导航成功')
-    }
-  }
-
-  let probe = null
-  if (probeEnabled) {
-    if (!(await waitForAvailabilityRun(sessionId))) {
-      return null
-    }
-    if (!(await waitForAvailabilityCooldown(scheduler, bookmark.url, sessionId))) {
-      return null
-    }
-
-    probe = await probeBookmarkUrl(bookmark.url, { timeoutMs: timeoutPolicy.probeTimeoutMs })
-    scheduler?.recordOutcome(bookmark.url, getProbeRunOutcome(probe))
-    if (!isAvailabilityRunSessionOwner(sessionId) || availabilityState.stopRequested) {
-      return null
-    }
-  }
-
-  return buildFailureClassification(bookmark, attempts, probe, probeEnabled)
+  return inspectAvailabilityWithEvidence(bookmark, {
+    timeouts,
+    isActive: () => isAvailabilityRunSessionOwner(sessionId) && !availabilityState.stopRequested && !availabilityState.abortController?.signal.aborted,
+    ready: async (url) => await waitForAvailabilityRun(sessionId) && await waitForAvailabilityCooldown(scheduler, url, sessionId),
+    navigate: async (url, timeoutMs) => {
+      const attempt = await runNavigationAttempt(url, timeoutMs)
+      scheduler?.recordOutcome(url, getNavigationAttemptRunOutcome(attempt))
+      return attempt
+    },
+    resolveRedirect: getAuthorizedSameOriginRedirectUrl,
+    ...(probeEnabled ? { probe: async (url, timeoutMs) => {
+      const result = await probeBookmarkUrl(url, { timeoutMs })
+      scheduler?.recordOutcome(url, getProbeRunOutcome(result))
+      return result
+    } } : {})
+  })
 }
 
 async function getAuthorizedSameOriginRedirectUrl(
@@ -2226,19 +2146,6 @@ async function getAuthorizedSameOriginRedirectUrl(
     }
 
     return redirectUrl
-  } catch {
-    return ''
-  }
-}
-
-function normalizeAvailabilityNavigationUrl(url: unknown): string {
-  try {
-    const parsedUrl = new URL(String(url || '').trim())
-    if (!/^https?:$/i.test(parsedUrl.protocol)) {
-      return ''
-    }
-    parsedUrl.hash = ''
-    return parsedUrl.href
   } catch {
     return ''
   }
@@ -2272,14 +2179,15 @@ async function waitForAvailabilityRun(sessionId: string): Promise<boolean> {
   while (
     isAvailabilityRunSessionOwner(sessionId) &&
     availabilityState.paused &&
-    !availabilityState.stopRequested
+    !availabilityState.stopRequested &&
+    !availabilityState.abortController?.signal.aborted
   ) {
     await new Promise((resolve) => {
       availabilityPauseResolvers.push(() => resolve(undefined))
     })
   }
 
-  return isAvailabilityRunSessionOwner(sessionId) && !availabilityState.stopRequested
+  return isAvailabilityRunSessionOwner(sessionId) && !availabilityState.stopRequested && !availabilityState.abortController?.signal.aborted
 }
 
 async function waitForAvailabilityCooldown(
@@ -2320,6 +2228,13 @@ function releaseAvailabilityPauseResolvers() {
 
 function isBookmarkRemovedDuringRun(bookmarkId) {
   return availabilityState.deletedBookmarkIds.has(String(bookmarkId || '').trim())
+}
+
+function abortAvailabilityRequestsForFailure(sessionId: string): void {
+  if (!isAvailabilityRunSessionOwner(sessionId)) return
+  availabilityState.abortController?.abort()
+  releaseAvailabilityPauseResolvers()
+  void cancelActiveNavigationChecks()
 }
 
 async function cancelActiveNavigationChecks(): Promise<void> {
@@ -2379,11 +2294,11 @@ function createNavigationCheckId(): string {
 
 function isRuntimeMessagePortUnavailable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error || '')
-  return /message port closed|receiving end does not exist|could not establish connection/i
-    .test(message)
+  return (error as { code?: unknown } | null)?.code === 'availability-runtime-timeout' ||
+    /message port closed|receiving end does not exist|could not establish connection/i.test(message)
 }
 
-async function probeBookmarkUrl(url, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
+async function probeBookmarkUrl(url, { timeoutMs = FETCH_TIMEOUT_MS } = {}): Promise<ProbeResult> {
   const deadlineAtMs = Date.now() + timeoutMs
   const allowGetFallback = isGetFallbackSafeForUrl(url)
   const runProbeWithinDeadline = async (
@@ -2417,6 +2332,7 @@ async function probeBookmarkUrl(url, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
       return classifyAvailabilityProbeResult(headResponse, 'HEAD')
     }
   } catch (error) {
+    if (isRuntimeMessagePortUnavailable(error)) throw error
     if (error?.name === 'AbortError') {
       return {
         kind: 'unknown',
@@ -2438,6 +2354,7 @@ async function probeBookmarkUrl(url, { timeoutMs = FETCH_TIMEOUT_MS } = {}) {
     const getResponse = await runProbeWithinDeadline('GET')
     return classifyAvailabilityProbeResult(getResponse, 'GET')
   } catch (error) {
+    if (isRuntimeMessagePortUnavailable(error)) throw error
     if (error?.name === 'AbortError') {
       return {
         kind: 'unknown',
@@ -2510,8 +2427,8 @@ function getNavigationAttemptRunOutcome(
   ).trim()
   const detail = String(attempt?.detail || '').trim()
 
-  if (statusCode === 429) {
-    return { kind: 'throttle', statusCode, errorCode, detail }
+  if (statusCode === 429 || statusCode === 503 && Number.isFinite(attempt?.networkEvidence?.retryAfterMs)) {
+    return { kind: 'throttle', statusCode, errorCode, detail, retryAfterMs: attempt?.networkEvidence?.retryAfterMs }
   }
 
   if (
@@ -2544,8 +2461,8 @@ function getProbeRunOutcome(probe): AvailabilityRunOutcome {
   const statusCode = extractStatusCodeFromText(probe?.label) || extractStatusCodeFromText(probe?.detail)
   const detail = String(probe?.detail || '').trim()
 
-  if (statusCode === 429) {
-    return { kind: 'throttle', statusCode, detail }
+  if (statusCode === 429 || statusCode === 503 && Number.isFinite(probe?.retryAfterMs)) {
+    return { kind: 'throttle', statusCode, detail, retryAfterMs: probe?.retryAfterMs }
   }
 
   if (/timeout|超时/i.test(detail) || String(probe?.label || '').includes('超时')) {
@@ -2564,14 +2481,15 @@ function getProbeRunOutcome(probe): AvailabilityRunOutcome {
 }
 
 function extractStatusCodeFromText(value): number {
-  const match = String(value || '').match(/\b(?:HTTP|http-|status\s*)?([1-5][0-9]{2})\b/)
-  return match ? Number(match[1]) || 0 : 0
+  return extractAvailabilityHttpStatus(value)
 }
 
-async function waitForAvailabilityQueueDelay(ms: number): Promise<void> {
-  const delayMs = Math.max(1, Math.round(Number(ms) || 1))
-  await new Promise((resolve) => {
-    window.setTimeout(resolve, delayMs)
+async function waitForAvailabilityQueueDelay(ms: number, signal?: AbortSignal | null): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    if (signal?.aborted) { reject(new DOMException('检测已取消。', 'AbortError')); return }
+    const abort = () => { clearTimeout(timer); reject(new DOMException('检测已取消。', 'AbortError')) }
+    const timer = window.setTimeout(() => { signal?.removeEventListener('abort', abort); resolve() }, Math.max(1, Math.round(ms)))
+    signal?.addEventListener('abort', abort, { once: true })
   })
 }
 
@@ -3520,9 +3438,7 @@ function getAvailabilityReviewSubtitle() {
     return '证据不足，建议人工确认。'
   }
 
-  return availabilityState.currentRunProbeEnabled
-    ? '证据不足，归为低置信。'
-    : '未获站点授权，未继续访问。'
+  return '登录限制、临时故障或暂未完成验证的链接。'
 }
 
 function syncAiNamingSettingsDraftFromState({ markDirty = false } = {}) {
@@ -4216,7 +4132,7 @@ async function handleAiConnectivityTest() {
 
 function renderAiProviderConfiguration() {
   const settings = aiNamingManagerState.settings
-  const hasRequiredConfig = Boolean(settings.baseUrl && settings.apiKey && settings.model)
+  const hasRequiredConfig = isAiProviderConfigured(settings)
   const configTone = aiNamingState.settingsDirty
     ? 'warning'
     : hasRequiredConfig
@@ -4238,7 +4154,7 @@ function renderAiProviderConfiguration() {
     showSaveSettingsButton
   })
 
-  publishAiConfigLinkState({ configured: Boolean(settings.apiKey) })
+  publishAiConfigLinkState({ configured: hasRequiredConfig })
 
   publishAiAnalysisStatus({
     badgeText: getAiNamingBadgeText(),
@@ -5076,7 +4992,7 @@ function buildAiProviderModelToolsState(settings = aiNamingManagerState.settings
   const status = getAiFetchModelsStatus()
   return {
     fetchDisabled:
-      !String(settings.apiKey || '').trim() ||
+      !isAiProviderKeyConfigured(settings) ||
       aiNamingState.running ||
       aiNamingState.applying ||
       aiNamingState.testingConnection ||
@@ -5125,43 +5041,7 @@ function getAiFetchModelsStatus(): { copy: string; tone: string } {
 }
 
 function getAiModelsEndpoint(settings) {
-  const baseUrl = String(settings.baseUrl || '').replace(/\/+$/, '')
-  const suffix = AI_NAMING_MODELS_ENDPOINT_SUFFIX
-  if (isDirectAnthropicProvider(baseUrl)) {
-    try {
-      const parsedUrl = new URL(baseUrl)
-      if (!parsedUrl.pathname || parsedUrl.pathname === '/') {
-        return `${baseUrl}/v1/${suffix}`
-      }
-    } catch {
-      // Base URL 校验会在请求前处理；这里继续使用通用拼接。
-    }
-  }
-  return baseUrl.endsWith(`/${suffix}`) ? baseUrl : `${baseUrl}/${suffix}`
-}
-
-function extractFetchedModelIds(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return []
-  }
-
-  const candidates = Array.isArray(payload.data)
-    ? payload.data
-    : Array.isArray(payload.models)
-      ? payload.models
-      : Array.isArray(payload)
-        ? payload
-        : []
-
-  return candidates.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = ((entry) => {
-      if (!entry) {
-        return ''
-      }
-      if (typeof entry === 'string') {
-        return entry
-      }
-      return String(entry.id || entry.name || '').trim()
-    })(flatMapValue); return mappedResult ? [mappedResult] : [] })
+  return getAiProviderModelsEndpoint(settings)
 }
 
 async function handleFetchAiModels() {
@@ -5174,10 +5054,9 @@ async function handleFetchAiModels() {
   const baseUrl = String(settings.baseUrl || '').trim()
   const apiKey = String(settings.apiKey || '').trim()
 
-  if (!baseUrl || !apiKey) {
-    aiNamingState.lastFetchModelsError = !baseUrl
-      ? '请先填写 Base URL。'
-      : '请先填写 API Key。'
+  const baseUrlIssue = getAiProviderBaseUrlIssue(baseUrl)
+  if (baseUrlIssue || !isAiProviderKeyConfigured(settings)) {
+    aiNamingState.lastFetchModelsError = baseUrlIssue || '请先填写 API Key。'
     aiNamingState.lastFetchModelsAt = 0
     aiNamingState.lastFetchModelsCount = 0
     renderAiFetchModelsStatus()
@@ -5202,29 +5081,38 @@ async function handleFetchAiModels() {
 
   try {
     const url = getAiModelsEndpoint(settings)
-    const { response, text } = await fetchTextWithRequestTimeout(
-      url,
-      {
-        method: 'GET',
-        headers: {
-          ...getAiProviderAuthHeaders(baseUrl, apiKey),
-          Accept: 'application/json'
-        }
-      },
-      settings.timeoutMs,
-      AI_AUXILIARY_RESPONSE_MAX_BYTES
-    )
-
-    if (!response.ok) {
-      throw new Error(
-        extractAiErrorMessage(parseJsonResponseText(text), response.status, text)
-      )
+    const modelEntries: Record<string, unknown>[] = []
+    const modelIds = new Set<string>()
+    const visitedPages = new Set<string>()
+    const deadline = Date.now() + settings.timeoutMs
+    let pageUrl: string | null = url
+    for (let page = 0; page < 5 && pageUrl && modelIds.size < AI_NAMING_FETCHED_MODELS_LIMIT; page += 1) {
+      if (visitedPages.has(pageUrl)) break
+      visitedPages.add(pageUrl)
+      const remainingMs = deadline - Date.now()
+      if (remainingMs < 1000) {
+        if (modelIds.size) break
+        throw new Error('获取模型列表超时，请检查渠道后重试。')
+      }
+      const { response, text } = await fetchTextWithRequestTimeout(pageUrl, {
+        method: 'GET', cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer', redirect: 'error',
+        headers: { ...getAiProviderAuthHeaders(baseUrl, apiKey, settings.apiStyle), Accept: 'application/json' }
+      }, remainingMs, AI_AUXILIARY_RESPONSE_MAX_BYTES)
+      const responsePayload = parseJsonResponseText(text)
+      if (!response.ok || (responsePayload as { error?: unknown } | null)?.error) throw new Error(extractAiErrorMessage(responsePayload, response.ok ? 400 : response.status, text))
+      const catalog = parseAiModelCatalogPage(responsePayload, settings, pageUrl)
+      for (const model of catalog.models) {
+        const id = String(model.id)
+        if (!modelIds.has(id)) { modelIds.add(id); modelEntries.push(model) }
+      }
+      pageUrl = catalog.nextPageUrl
     }
-
-    const payload = parseJsonResponseText(text)
-    const ids = extractFetchedModelIds(payload)
-    if (!ids.length) {
-      throw new Error('接口未返回任何模型 ID。')
+    const payload = { data: modelEntries }
+    const ids = Array.from(modelIds)
+    if (!ids.length) throw new Error('接口未返回可生成文本的模型。可手动填写模型 ID 后测试连接。')
+    const current = aiNamingManagerState.settings
+    if (current.baseUrl !== settings.baseUrl || current.apiStyle !== settings.apiStyle || current.apiKey !== apiKey) {
+      throw new Error('渠道设置已变化，请重新获取模型列表。')
     }
 
     const normalizedIds = normalizeAiNamingFetchedModels(ids)
@@ -5404,7 +5292,7 @@ function getAiNamingResultActionLabel(action, result) {
 
 function buildAiNamingResultCardViewModel(result) {
   const selectable = result.status === 'suggested'
-  const interactionLocked = aiNamingState.running || aiNamingState.applying
+  const interactionLocked = aiNamingState.running || aiNamingState.applying || isInteractionLocked()
   const isSelected = aiNamingState.selectedResultIds.has(String(result.id))
   const canMoveToSuggestedFolder = canMoveAiNamingResultToSuggestedFolder(result)
   const pendingMove = aiNamingState.pendingMoveResultIds.has(String(result.id))
@@ -6579,7 +6467,7 @@ function validateAiNamingSettings(settings) {
     throw new Error(baseUrlIssue)
   }
 
-  if (!normalized.apiKey) {
+  if (!isAiProviderKeyConfigured(normalized)) {
     throw new Error('请填写 API Key。')
   }
 
@@ -6605,7 +6493,7 @@ function getAiNamingBadgeTone() {
     return 'danger'
   }
 
-  if (!aiNamingManagerState.settings.apiKey || !aiNamingManagerState.settings.model) {
+  if (!isAiProviderConfigured(aiNamingManagerState.settings)) {
     return 'muted'
   }
 
@@ -6679,7 +6567,7 @@ function getAiNamingStatusCopy() {
 function getAiNamingReadinessMeta() {
   const settings = aiNamingManagerState.settings
   const missing: string[] = []
-  if (!String(settings.apiKey || '').trim()) {
+  if (!isAiProviderKeyConfigured(settings)) {
     missing.push('API Key')
   }
   if (!String(settings.model || '').trim()) {
@@ -7861,28 +7749,10 @@ async function requestAiNamingConnectivityTest(
 ) {
   const endpoint = getResolvedAiProviderEndpoint(settings)
   try {
-    const { response, text } = await fetchTextWithRequestTimeout(
-      endpoint,
-      {
-        method: 'POST',
-        cache: 'no-store',
-        credentials: 'omit',
-        referrerPolicy: 'no-referrer',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAiProviderAuthHeaders(settings.baseUrl, settings.apiKey)
-        },
-        body: JSON.stringify(buildAiProviderConnectivityRequestBody(settings as AiProviderSettings)),
-        signal: options.signal
-      },
-      settings.timeoutMs,
-      AI_AUXILIARY_RESPONSE_MAX_BYTES
-    )
-
-    const payload = parseJsonResponseText(text)
-    if (!response.ok) {
-      throw new Error(extractAiErrorMessage(payload, response.status, text))
-    }
+    const result = await requestAiProviderConnectivityTest(settings as AiProviderSettings, { signal: options.signal })
+    const compatibilityNote = result.metadata.compatibilityWarnings?.length
+      ? ' 已启用渠道兼容模式，结果通过本地结构校验。'
+      : ''
 
     recordPrivacyAudit({
       feature: 'ai-connectivity-test',
@@ -7894,7 +7764,7 @@ async function requestAiNamingConnectivityTest(
       status: 'success',
       reason: `模型 ${settings.model} 可用。`
     })
-    return `连接成功，当前模型 ${settings.model} 可用。`
+    return `连接成功，当前模型 ${settings.model} 已通过结构化输出测试。${compatibilityNote}`
   } catch (error) {
     recordPrivacyAudit({
       feature: 'ai-connectivity-test',
@@ -7970,9 +7840,7 @@ async function requestAiNamingBatch(
 }
 
 function getResolvedAiProviderEndpoint(settings) {
-  return isDirectAnthropicProvider(settings?.baseUrl)
-    ? getAnthropicMessagesEndpoint(settings.baseUrl)
-    : getAiEndpoint(settings)
+  return getAiEndpoint(settings)
 }
 
 function buildAiNamingPrompt(preparedItems, settings) {
@@ -8027,27 +7895,7 @@ function buildAiNamingUserPrompt(preparedItems) {
 }
 
 function validateAiNamingFolderDecisions(payload, preparedItems) {
-  const items = Array.isArray(payload?.items) ? payload.items : []
-  const preparedItemMap = new Map<string, any>(
-    preparedItems.map((item) => [String(item.bookmark.id), item])
-  )
-
-  for (const item of items) {
-    const preparedItem = preparedItemMap.get(String(item?.bookmark_id || '').trim())
-    if (!preparedItem || !item?.folder_decision) {
-      continue
-    }
-
-    const decision = item.folder_decision
-    if (decision.kind === 'existing') {
-      validateKnownFolderId(decision.folder_id, preparedItem.folderCandidates || [])
-      continue
-    }
-
-    if (decision.kind === 'new' && !normalizeAiSuggestedFolderPath(decision.folder_path)) {
-      throw new AiRuntimeError('schema', 'AI 返回了 new folder_decision，但缺少 folder_path。')
-    }
-  }
+  validateAiBatchResults(payload, preparedItems)
 }
 
 function normalizeAiNamingResponseItems(payload, preparedItems) {
@@ -8844,6 +8692,8 @@ function buildAvailabilityResultCardViewModel(result, panel) {
     path: result.path || '未归档路径',
     quickActions,
     recommendation,
+    summary: getAvailabilityResultSummary(result),
+    retestDisabled: actionLocked,
     selectable: isSelectable,
     selected,
     selectionDisabled: interactionLocked,
@@ -8961,7 +8811,7 @@ function getAvailabilityQuickActionViewModels(result, interactionLocked) {
       {
         action: 'hide-run',
         label: '本次隐藏',
-        impact: '只从当前结果移除',
+        impact: '仅隐藏本轮结果，保留书签',
         disabled: interactionLocked
       },
       {
@@ -8973,13 +8823,13 @@ function getAvailabilityQuickActionViewModels(result, interactionLocked) {
       {
         action: 'ignore-domain',
         label: domainIgnored ? '已忽略域名' : '忽略此域名',
-        impact: result.domain ? `影响 ${result.domain}` : '无可用域名',
+        impact: result.domain ? `跳过同域名书签：${result.domain}` : '无可用域名',
         disabled: interactionLocked || domainDisabled || Boolean(domainIgnored)
       },
       {
         action: 'ignore-folder',
         label: folderIgnored ? '已忽略文件夹' : '忽略此文件夹',
-        impact: result.path || '无可用文件夹',
+        impact: result.path ? `此文件夹及其子文件夹：${result.path}` : '无可用文件夹',
         disabled: interactionLocked || folderDisabled || Boolean(folderIgnored)
       }
     ]
@@ -8991,7 +8841,13 @@ function getAvailabilityResultMetadata(result) {
   metadata.push(`置信度：${getAvailabilityConfidenceLabel(result)}`)
 
   if (isUnverifiedAvailabilityResult(result)) {
-    metadata.push('验证状态：等待目标授权')
+    const code = String(result.errorCode || '')
+    const validationState = code === 'site-cooldown' ? '等待站点限流恢复'
+      : code === 'detection-budget-exhausted' ? '等待单独复测'
+      : /permission|ungranted/.test(code) ? '等待目标授权'
+      : /sensitive|private-network/.test(code) ? '已按地址保护跳过'
+      : '尚未完成独立验证'
+    metadata.push('验证状态：' + validationState)
   } else if (result.status === 'review' || result.status === 'failed') {
     metadata.push(`连续异常：${Math.max(1, Number(result.abnormalStreak) || 1)} 次`)
     metadata.push(`历史：${result.historyStatus === 'persistent' ? '持续异常' : result.historyStatus === 'new' ? '新增异常' : '无上次记录'}`)
@@ -9024,7 +8880,7 @@ function getAvailabilityConfidenceLabel(result) {
 function getAvailabilityEvidenceSummary(result) {
   const detail = String(result?.detail || '').replace(/\s+/g, ' ').trim()
   if (detail) {
-    return truncateText(detail, 180)
+    return truncateText(detail, 1200)
   }
 
   if (result.status === 'redirected' && result.finalUrl) {
@@ -9217,7 +9073,7 @@ function moveSelectedAvailabilityResults(targetStatus) {
   })
 }
 
-async function retestSelectedAvailabilityResults() {
+async function retestSelectedAvailabilityResults(onlyBookmarkId?: string) {
   if (
     isInteractionLocked() ||
     backupRestoreState.restoring ||
@@ -9228,7 +9084,9 @@ async function retestSelectedAvailabilityResults() {
     return
   }
 
-  const selectedResults = getSelectedAvailabilityResults()
+  const selectedResults = onlyBookmarkId
+    ? [getAvailabilityResultById(onlyBookmarkId)].filter(Boolean)
+    : getSelectedAvailabilityResults()
   if (!selectedResults.length) {
     return
   }
@@ -9255,6 +9113,7 @@ async function retestSelectedAvailabilityResults() {
   let networkRunStarted = false
   let processedCount = 0
   const retestedResults: AvailabilityResult[] = []
+  const evidenceCache = createAvailabilityEvidenceCache()
   let auditStatus: 'success' | 'cancelled' | 'error' = 'success'
   let auditReason = ''
 
@@ -9292,6 +9151,16 @@ async function retestSelectedAvailabilityResults() {
     await runAvailabilityQueue({
       items: targetBookmarks,
       scheduler,
+      signal: availabilityState.abortController?.signal,
+      onFatalError: () => abortAvailabilityRequestsForFailure(sessionId),
+      onDeferred: async (bookmark, { retryAfterMs }) => {
+        const result = await evidenceCache.inspect(bookmark, async () => buildDeferredAvailabilityResult(bookmark, retryAfterMs))
+        if (result && isAvailabilityRunSessionOwner(sessionId) && !availabilityState.stopRequested && !availabilityState.abortController?.signal.aborted && !isBookmarkRemovedDuringRun(bookmark.id)) {
+          applyRetestedAvailabilityResult(result)
+          retestedResults.push(result)
+          processedCount += 1
+        }
+      },
       getUrl: (bookmark) => bookmark?.url,
       shouldContinue: () => waitForAvailabilityRun(sessionId),
       shouldSkip: (bookmark) => !bookmark,
@@ -9314,15 +9183,16 @@ async function retestSelectedAvailabilityResults() {
           return
         }
 
-        const result = await inspectBookmarkAvailability(bookmark, {
+        const result = await evidenceCache.inspect(bookmark, () => inspectBookmarkAvailability(bookmark, {
           probeEnabled,
           scheduler,
           sessionId
-        })
+        }))
         if (
           result &&
           isAvailabilityRunSessionOwner(sessionId) &&
           !availabilityState.stopRequested &&
+          !availabilityState.abortController?.signal.aborted &&
           !isBookmarkRemovedDuringRun(result.id)
         ) {
           applyRetestedAvailabilityResult(result)
@@ -9349,7 +9219,7 @@ async function retestSelectedAvailabilityResults() {
       availabilityState.lastError = `已停止重新测试，保留 ${processedCount} 条已完成结果。`
     } else {
       auditReason = `完成重新测试 ${processedCount} 条。`
-      availabilityState.lastError = `已重新测试 ${processedCount} 条已选书签。`
+      availabilityState.lastError = `已重新测试 ${processedCount} 条${onlyBookmarkId ? '' : '已选'}书签。`
       if (catalogChangedDuringRun) {
         availabilityState.lastError += ' 检测期间书签发生变化，本次重测未写入重定向缓存。'
       } else {

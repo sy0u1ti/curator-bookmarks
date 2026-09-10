@@ -22,7 +22,7 @@ export const AI_PROVIDER_SUBTITLE_CLASS =
   'm-0 mt-2 text-[13px] leading-[1.7] text-ds-text-disabled'
 
 export const AI_PROVIDER_STATUS_BADGE_CLASS =
-  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border px-2.5 text-[11px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 w-fit flex-none items-center justify-center rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0]'
 
 export const AI_PROVIDER_STATUS_TONE_CLASS: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
@@ -38,13 +38,13 @@ export const AI_PROVIDER_FLOW_STEP_CLASS =
   'min-w-0 rounded-ds-md bg-ds-surface-2 p-3 text-ds-text-muted'
 
 export const AI_PROVIDER_FLOW_INDEX_CLASS =
-  'mb-2.5 inline-grid size-[22px] place-items-center rounded-full bg-ds-hover text-[11px] font-bold text-ds-text-secondary'
+  'mb-2.5 inline-grid size-[22px] place-items-center rounded-full bg-ds-hover text-xs font-bold text-ds-text-secondary'
 
 export const AI_PROVIDER_FLOW_TITLE_CLASS =
   'block overflow-hidden text-ellipsis whitespace-nowrap text-xs font-bold text-ds-text-primary'
 
 export const AI_PROVIDER_FLOW_COPY_CLASS =
-  'm-0 mt-[5px] overflow-hidden text-ellipsis whitespace-nowrap text-[11px] leading-[1.35] text-ds-text-disabled'
+  'm-0 mt-[5px] overflow-hidden text-ellipsis whitespace-nowrap text-xs leading-[1.35] text-ds-text-disabled'
 
 export const AI_PROVIDER_FIELD_CLASS = 'm-0 flex min-w-0 flex-col gap-2.5 border-0 p-0'
 
@@ -60,7 +60,7 @@ export const AI_PROVIDER_INPUT_CLASS =
 export const AI_PROVIDER_MODEL_FIELD_CLASS = 'flex min-w-0 flex-col gap-3'
 
 export const AI_PROVIDER_MODEL_ROW_CLASS =
-  'ai-provider-model-row grid grid-cols-[minmax(480px,1.25fr)_minmax(360px,1fr)] items-start gap-x-6 gap-y-3 max-[960px]:grid-cols-1'
+  'ai-provider-model-row grid grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] items-start gap-x-6 gap-y-3 max-[1280px]:grid-cols-1'
 
 export const AI_PROVIDER_MODEL_GROUP_CLASS =
   'ai-provider-model-group grid w-full grid-cols-[minmax(0,1fr)_152px] items-stretch gap-2 max-[520px]:grid-cols-1'
@@ -129,7 +129,7 @@ export const AI_PROVIDER_ADVANCED_CLASS =
   'mt-1 border-t border-ds-border-subtle pt-4'
 
 export const AI_PROVIDER_ADVANCED_TRIGGER_CLASS =
-  'ai-provider-advanced-trigger flex min-h-8 w-fit max-w-full cursor-pointer items-center justify-start gap-3 rounded-ds-sm px-2 py-1 text-[13px] font-semibold text-ds-text-muted transition-colors after:size-2 after:rotate-45 after:border-b after:border-r after:border-ds-text-secondary after:transition-transform data-[panel-open]:after:rotate-[225deg] hover:bg-ds-hover hover:text-ds-text-primary focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline-none'
+  'ai-provider-advanced-trigger w-fit max-w-full gap-3 after:size-2 after:rotate-45 after:border-b after:border-r after:border-current after:transition-transform after:duration-ds-fast data-[panel-open]:after:rotate-[225deg] motion-reduce:after:transition-none'
 
 export const AI_PROVIDER_ADVANCED_PANEL_CLASS = 'mt-4 overflow-hidden'
 

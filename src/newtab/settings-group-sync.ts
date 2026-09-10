@@ -1,4 +1,4 @@
-export type SettingsDrawerSection = 'source' | 'appearance' | 'search' | 'advanced'
+export type SettingsDrawerSection = 'source' | 'appearance' | 'glass' | 'search' | 'advanced'
 
 export type SettingsGroupControlSyncAction =
   | 'folder'
@@ -17,6 +17,7 @@ export function normalizeSettingsDrawerSection(value: unknown): SettingsDrawerSe
   }
 
   return section === 'appearance' ||
+    section === 'glass' ||
     section === 'search' ||
     section === 'advanced'
     ? section
@@ -27,6 +28,8 @@ export function getSettingsGroupControlSyncActions(
   group: unknown
 ): SettingsGroupControlSyncAction[] {
   switch (normalizeSettingsDrawerSection(group)) {
+    case 'glass':
+      return [] // Glass owns its immediate preview and persistence store.
     case 'appearance':
       return ['background', 'featuredBackgroundDisplay', 'icon', 'time']
     case 'search':

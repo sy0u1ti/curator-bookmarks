@@ -336,6 +336,10 @@ export function getPopupSmartClassifierSnapshot(): PopupSmartClassifierViewModel
   return popupViewStore.getState().smartClassifier
 }
 
+export function getPopupContentSnapshot(): PopupContentChangeDetail {
+  return popupViewStore.getState().content
+}
+
 export function subscribePopupContentChange(listener: (detail: PopupContentChangeDetail) => void): () => void {
   popupContentChangeListeners.add(listener)
   listener(popupViewStore.getState().content)

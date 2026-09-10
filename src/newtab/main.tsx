@@ -2,8 +2,12 @@ import { prefetchNewtabStartupData } from './newtab-startup-data'
 import { createRoot } from 'react-dom/client'
 import '../styles/globals.css'
 import './newtab.css'
+import './hyalite-glass.css'
+import { initializeNewtabGlassSettings } from './newtab-glass-settings-store'
 import { initSquircleEngine } from '../shared/squircle-engine'
 import { NewtabApp } from './NewtabApp'
+import { startNewTabController } from './newtab-controller'
+import { dispatchNewtabSettingsDrawerToggleRequest } from './newtab-settings-drawer-store'
 
 const root = document.getElementById('newtab-react-root')
 
@@ -11,18 +15,17 @@ if (!root) {
   throw new Error('Missing newtab React root')
 }
 
-// Request the controller chunk before anything else on this module runs. It is
-// the module that renders the live bookmark grid, and its download plus its
-// off-thread parse are the longest single hop left in startup. Kicking it off
-// here overlaps that hop with the React mount below instead of queueing it
-// after — the chunk is typically compiled by the time React has committed.
-const newTabControllerModule = import('./newtab-controller')
-
 prefetchNewtabStartupData()
+initializeNewtabGlassSettings()
 markNewTabStartupBaseline()
 initSquircleEngine()
-createRoot(root).render(<NewtabApp />)
+createRoot(root).render(<NewtabApp onOpenSettings={openSettings} />)
 scheduleNewTabControllerStart()
+
+function openSettings(): void {
+  startNewTabController()
+  dispatchNewtabSettingsDrawerToggleRequest()
+}
 
 function markNewTabStartupBaseline(): void {
   try {
@@ -33,15 +36,12 @@ function markNewTabStartupBaseline(): void {
 }
 
 function scheduleNewTabControllerStart(): void {
-  void newTabControllerModule
-    .then(({ startNewTabController }) => {
-      // React's first commit is already queued by the render() call above, and
-      // this timer is only queued once the chunk resolves, so the shell still
-      // paints before the controller takes the main thread. A frame-aligned
-      // wait would instead idle until the next vsync for no benefit.
-      window.setTimeout(startNewTabController, 0)
-    })
-    .catch((error) => {
-      console.error('新标签页控制器加载失败。', error)
-    })
+  // Search and bookmark actions need this controller on every open. Loading
+  // it with the entry removes a second module-graph waterfall; the classic
+  // wallpaper/bookmark preboot still runs independently of React.
+  window.setTimeout(() => {
+    startNewTabController()
+    void import('./newtab-glass-runtime').then(({ startNewtabGlassRuntime }) => startNewtabGlassRuntime())
+      .catch(error => console.warn('液态玻璃使用兼容材质。', error))
+  }, 0)
 }

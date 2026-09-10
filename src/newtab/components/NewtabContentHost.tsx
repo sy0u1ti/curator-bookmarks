@@ -43,10 +43,10 @@ const STATE_COPY_CLASS = 'm-0 max-w-[440px] text-sm leading-[1.7] text-[var(--ui
 const ONBOARDING_STRIP_CLASS = 'newtab-onboarding-strip grid w-[min(100%,980px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[var(--ui-radius-group)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-3 py-2.5 text-[rgba(245,245,247,0.9)] shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] max-[640px]:grid-cols-[minmax(0,1fr)]'
 const ONBOARDING_COPY_CLASS = 'newtab-onboarding-copy t-stagger is-shown grid min-w-0 gap-[3px]'
 const ONBOARDING_TITLE_CLASS = 't-stagger-line t-stagger-line--1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] leading-[1.2] max-[640px]:whitespace-normal'
-const ONBOARDING_TEXT_CLASS = 't-stagger-line t-stagger-line--2 overflow-hidden text-ellipsis whitespace-nowrap text-[11px] font-[580] text-[rgba(245,245,247,0.55)] max-[640px]:whitespace-normal'
+const ONBOARDING_TEXT_CLASS = 't-stagger-line t-stagger-line--2 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[580] text-[rgba(245,245,247,0.9)] max-[640px]:whitespace-normal'
 const ONBOARDING_ACTIONS_CLASS = 'newtab-onboarding-actions flex flex-wrap justify-end gap-2 max-[640px]:justify-start'
 const ONBOARDING_BUTTON_CLASS = 'min-h-[30px] rounded-[7px] border border-[rgba(245,245,247,0.12)] bg-[rgba(245,245,247,0.08)] px-2.5 text-xs font-[680] text-[rgba(245,245,247,0.9)] hover:border-[rgba(245,245,247,0.22)] hover:bg-[rgba(245,245,247,0.12)] focus-visible:border-[rgba(245,245,247,0.22)] focus-visible:bg-[rgba(245,245,247,0.12)]'
-const ONBOARDING_SECONDARY_BUTTON_CLASS = 'text-[rgba(245,245,247,0.62)]'
+const ONBOARDING_SECONDARY_BUTTON_CLASS = 'text-[rgba(245,245,247,0.9)]'
 
 export function NewtabContentHost({
   shellRef

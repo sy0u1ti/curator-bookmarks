@@ -5,6 +5,8 @@ import {
   __resetBookmarkTagRepositoryForTest,
   buildBookmarkTagRecord,
   loadBookmarkTagIndex,
+  removeBookmarkTagRecord,
+  removeBookmarkTagRecords,
   restoreBookmarkTagIndexSnapshot,
   upsertBookmarkTagsFromAnalysis,
   type BookmarkTagRecord,
@@ -14,6 +16,8 @@ import { STORAGE_KEYS } from './constants.js'
 import {
   __resetContentSnapshotRepositoryForTest,
   loadContentSnapshotIndex,
+  removeContentSnapshotForBookmark,
+  removeContentSnapshotsForBookmarks,
   saveContentSnapshotFromContext,
   saveContentSnapshotsFromContexts,
   setContentFullTextOperationsForTest,
@@ -24,6 +28,7 @@ import {
   setCuratorDataDbFailureForTest
 } from './repositories/curator-data-db.js'
 import { applyBookmarkTagRecordsDeltaInRepository } from './repositories/tag-repository.js'
+import { createBookmarkRemovalQueue } from '../service-worker/bookmark-removal-queue.js'
 
 class NonReentrantTestLockManager {
   requestCount = 0
@@ -367,6 +372,128 @@ test('failed snapshot index commit removes the new blob and preserves the previo
     setCuratorDataDbFailureForTest(null)
     restoreOperations()
   }
+})
+
+test('a bookmark removal burst shares two index transactions and keeps surviving records and blobs', async () => {
+  resetTestStorage({ snapshots: true })
+  const blobs = new Map<string, ContentFullTextRecord>()
+  const deletedBatches: string[][] = []
+  const restoreOperations = setContentFullTextOperationsForTest({
+    putMany: async (records) => {
+      for (const record of records) blobs.set(record.snapshotId, record)
+    },
+    deleteMany: async (snapshotIds) => {
+      deletedBatches.push(snapshotIds)
+      for (const snapshotId of snapshotIds) blobs.delete(snapshotId)
+    }
+  })
+
+  try {
+    const bookmarkIds = ['cleanup-a', 'cleanup-b', 'cleanup-c', 'cleanup-keep']
+    await upsertBookmarkTagsFromAnalysis(bookmarkIds.map((id) => createTagAnalysisInput(id, ['tag'])))
+    await saveContentSnapshotsFromContexts(bookmarkIds.map((id, index) => createSnapshotInput(id, 500 + index)))
+    const beforeTags = await loadBookmarkTagIndex()
+    const beforeSnapshots = await loadContentSnapshotIndex()
+    const batches: string[][] = []
+    const enqueue = createBookmarkRemovalQueue(async (ids) => {
+      batches.push(ids)
+      await Promise.all([
+        removeBookmarkTagRecords(ids),
+        removeContentSnapshotsForBookmarks(ids, 600)
+      ])
+    })
+
+    lockManager.requestCount = 0
+    await Promise.all(['cleanup-a', 'cleanup-b', 'cleanup-c', 'cleanup-b', 'missing'].map(enqueue))
+    assert.equal(lockManager.requestCount, 2, 'a burst should acquire each index write lock once')
+    assert.deepEqual(batches, [['cleanup-a', 'cleanup-b', 'cleanup-c', 'missing']])
+    assert.equal(deletedBatches.length, 1)
+    assert.equal(deletedBatches[0]?.length, 3)
+    const afterTags = await loadBookmarkTagIndex()
+    const afterSnapshots = await loadContentSnapshotIndex()
+    assert.deepEqual(Object.keys(afterTags.records), ['cleanup-keep'])
+    assert.deepEqual(Object.keys(afterSnapshots.records), ['cleanup-keep'])
+    assert.deepEqual(afterTags.records['cleanup-keep'], beforeTags.records['cleanup-keep'])
+    assert.deepEqual(afterSnapshots.records['cleanup-keep'], beforeSnapshots.records['cleanup-keep'])
+    assert.deepEqual([...blobs.keys()], [beforeSnapshots.records['cleanup-keep'].fullTextRef])
+    assert.equal((await readCuratorDataStoreMeta('bookmarkTags'))?.recordCount, 1)
+    assert.equal((await readCuratorDataStoreMeta('contentSnapshots'))?.recordCount, 1)
+
+    assert.equal(await removeContentSnapshotForBookmark('missing'), false)
+    assert.equal(await removeContentSnapshotForBookmark('cleanup-keep'), true)
+    const emptyTags = await removeBookmarkTagRecord('cleanup-keep')
+    assert.deepEqual(emptyTags.records, {})
+  } finally {
+    restoreOperations()
+  }
+})
+
+test('removal events arriving during a failed batch are drained and later batches remain usable', async () => {
+  const batches: string[][] = []
+  let finishFirst: (() => void) | undefined
+  const firstBatchWait = new Promise<void>((resolve) => { finishFirst = resolve })
+  const enqueue = createBookmarkRemovalQueue(async (ids) => {
+    batches.push(ids)
+    if (batches.length === 1) {
+      await firstBatchWait
+      throw new Error('failed first cleanup')
+    }
+  })
+  const first = enqueue('first')
+  await Promise.resolve()
+  const second = enqueue('second')
+  enqueue('second')
+  const third = enqueue('third')
+  const rejected = assert.rejects(Promise.all([first, second, third]), /failed first cleanup/)
+  finishFirst?.()
+  await rejected
+  assert.deepEqual(batches, [['first'], ['second', 'third']])
+  await enqueue('later')
+  assert.deepEqual(batches, [['first'], ['second', 'third'], ['later']])
+})
+
+test('a failed bulk snapshot removal leaves its full text available until a successful retry', async () => {
+  resetTestStorage({ snapshots: true })
+  const deletedIds: string[] = []
+  const restoreOperations = setContentFullTextOperationsForTest({
+    putMany: async () => {},
+    deleteMany: async (ids) => { deletedIds.push(...ids) }
+  })
+  try {
+    const saved = await saveContentSnapshotsFromContexts([
+      createSnapshotInput('retry-a', 700),
+      createSnapshotInput('retry-b', 701)
+    ])
+    failStorageSet = true
+    setCuratorDataDbFailureForTest((operation) => operation === 'apply-delta-with-meta'
+      ? new Error('simulated cleanup index failure')
+      : null)
+    await assert.rejects(removeContentSnapshotsForBookmarks(['retry-a', 'retry-b']), /simulated tag compaction failure/)
+    assert.deepEqual(deletedIds, [], 'the index must commit before its full text is discarded')
+    failStorageSet = false
+    setCuratorDataDbFailureForTest(null)
+    const afterFailure = await loadContentSnapshotIndex()
+    assert.equal(Object.keys(afterFailure.records).length, 2)
+    assert.equal(await removeContentSnapshotsForBookmarks(['retry-a', 'retry-b']), 2)
+    assert.deepEqual(deletedIds.sort(), saved.map((record) => record.fullTextRef).sort())
+  } finally {
+    failStorageSet = false
+    setCuratorDataDbFailureForTest(null)
+    restoreOperations()
+  }
+})
+
+test('bulk tag removal remains ordered with queued upserts', async () => {
+  resetTestStorage()
+  await upsertBookmarkTagsFromAnalysis([
+    createTagAnalysisInput('ordered-remove', ['old']),
+    createTagAnalysisInput('ordered-keep', ['keep'])
+  ])
+  await Promise.all([
+    removeBookmarkTagRecords(['ordered-remove']),
+    upsertBookmarkTagsFromAnalysis([createTagAnalysisInput('ordered-new', ['new'])])
+  ])
+  assert.deepEqual(Object.keys((await loadBookmarkTagIndex()).records).sort(), ['ordered-keep', 'ordered-new'])
 })
 
 function resetTestStorage({ snapshots = false }: { snapshots?: boolean } = {}): void {

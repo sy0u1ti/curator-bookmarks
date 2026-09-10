@@ -1,16 +1,15 @@
 :root {
   color-scheme: dark;
   --newtab-font-sans: "Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif;
-  /* New Tab unified glass material (reference spec):
-     #000 60% fill, #fff 16% selected/slider fill, #fff 8% / 1.5px inside stroke,
-     uniform 8px background blur, and 0 8px 20px 8px #000/40% elevation. */
-  --newtab-glass-bg-fill: rgba(0, 0, 0, 0.6);
+  /* A light neutral tint lets Hyalite refract the wallpaper through the surface.
+     Tint and blur are shared by every module and restored before first paint. */
+  --newtab-glass-bg-fill: rgba(0, 0, 0, 0.13);
   --newtab-glass-slider-fill: rgba(255, 255, 255, 0.16);
-  --newtab-glass-stroke: rgba(255, 255, 255, 0.08);
+  --newtab-glass-stroke: rgba(255, 255, 255, 0.18);
   --newtab-glass-stroke-width: 1.5px;
-  --newtab-glass-background-blur: 8px;
-  --newtab-glass-backdrop-filter: blur(8px);
-  --newtab-glass-drop-shadow: 0 8px 20px 8px rgba(0, 0, 0, 0.4);
+  --newtab-glass-background-blur: 12px;
+  --newtab-glass-backdrop-filter: blur(var(--newtab-glass-background-blur));
+  --newtab-glass-drop-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.24);
   /* Semantic aliases keep existing consumers on one material instead of
      creating hero/card/popup variants that drift from the reference token. */
   --newtab-glass-bg-hero: var(--newtab-glass-bg-fill);
@@ -23,10 +22,9 @@
   --newtab-glass-border-hover: var(--newtab-glass-slider-fill);
   --newtab-glass-shadow: var(--newtab-glass-drop-shadow);
   --newtab-glass-shadow-hover: var(--newtab-glass-drop-shadow);
-  /* clip-path clips box-shadow. Merge the 8px spread into the drop-shadow
-     blur so squircle surfaces preserve the reference elevation silhouette. */
+  /* The fallback uses the same light elevation as the refracting surface. */
   --newtab-glass-inset: none;
-  --newtab-glass-drop: drop-shadow(0 8px 28px rgba(0, 0, 0, 0.4));
+  --newtab-glass-drop: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.18));
   --newtab-glass-inset-hover: none;
   --newtab-glass-drop-hover: var(--newtab-glass-drop);
   --newtab-glass-filter: var(--newtab-glass-backdrop-filter);
@@ -47,25 +45,17 @@ html[data-newtab-search-layout-pending] .newtab-search-slot {
 }
 
 .newtab-app {
-  --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+  --newtab-bookmark-shadow: 0 1px 2px rgba(0, 0, 0, 0.16);
   --newtab-bookmark-hover-lift: -2.5px;
   --newtab-bookmark-hover-shadow:
     0 18px 24px -22px rgba(0, 0, 0, 0.82),
     0 8px 14px -12px rgba(0, 0, 0, 0.58),
-    0 2px 6px -4px rgba(0, 0, 0, 0.44),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 0 1px rgba(245, 245, 247, 0.1);
-  --newtab-bookmark-active-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.055),
-    inset 0 0 0 1px rgba(245, 245, 247, 0.08);
-  --newtab-bookmark-inset: inset 0 1px 0 rgba(255, 255, 255, 0.052);
+    0 2px 6px -4px rgba(0, 0, 0, 0.44);
+  --newtab-bookmark-active-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
   --newtab-bookmark-drop: drop-shadow(0 12px 34px rgba(0, 0, 0, 0.12));
   --newtab-focus-outline: 2px solid rgba(245, 245, 247, 0.42);
   --newtab-bookmark-hover-overlay: rgba(245, 245, 247, 0.05);
-  --newtab-bookmark-hover-inset:
-    inset 0 1px 0 rgba(255, 255, 255, 0.11),
-    inset 0 0 0 1px rgba(245, 245, 247, 0.13);
+  --newtab-bookmark-hover-inset: none;
   --newtab-bookmark-focus-inset:
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset 0 0 0 2px rgba(245, 245, 247, 0.5),
@@ -294,6 +284,10 @@ body {
 }
 
 .newtab-solid-background-noise {
+  /* Raster-cache a small repeating texture instead of filtering the full
+     viewport again behind each SVG glass surface. */
+  background-image: url('/newtab-grain.svg');
+  background-repeat: repeat;
   visibility: hidden;
   opacity: 0;
   mix-blend-mode: screen;
@@ -308,12 +302,6 @@ body {
   transition:
     opacity var(--ui-motion-standard) var(--ui-ease-standard),
     visibility 0s linear 0s;
-}
-
-.newtab-solid-background-noise svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 .newtab-app .t-tabs,
@@ -521,14 +509,13 @@ body {
 }
 
 .bookmark-menu-surface,
-.newtab-search,
+.newtab-search-surface,
 .newtab-clock,
 .newtab-onboarding-strip,
 .settings-trigger,
 .newtab-delete-toast-panel,
 .newtab-speed-dial,
 .newtab-portal,
-.newtab-search-suggestions-panel,
 .newtab-search-engine-menu,
 .featured-wallpaper-panel,
 .folder-section-header,
@@ -845,9 +832,11 @@ body {
 }
 
 .newtab-search {
-  border-color: var(--newtab-glass-border);
-  box-shadow: var(--newtab-glass-inset);
-  filter: var(--newtab-glass-drop);
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  filter: none;
+  outline: none;
 }
 
 .newtab-clock {
@@ -900,9 +889,10 @@ body {
 /* Lumno-inspired bookmark cards: a restrained physical lift and layered shadow,
    recolored through Curator's neutral glass system instead of per-card saturated surfaces. */
 .bookmark-tile {
+  --newtab-bookmark-current-shadow: var(--newtab-bookmark-shadow);
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-bg-card);
-  box-shadow: var(--newtab-bookmark-shadow);
+  box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
   filter: none;
   -webkit-backdrop-filter: var(--newtab-glass-filter);
   backdrop-filter: var(--newtab-glass-filter);
@@ -957,7 +947,7 @@ body {
 @media (hover: hover) and (pointer: fine) {
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover {
     border-color: var(--newtab-glass-border-hover);
-    box-shadow: var(--newtab-bookmark-hover-shadow);
+    --newtab-bookmark-current-shadow: var(--newtab-bookmark-hover-shadow);
     transform: translateY(var(--newtab-bookmark-hover-lift));
   }
 
@@ -995,7 +985,7 @@ body {
 
 .bookmark-tile:focus-visible {
   border-color: var(--newtab-glass-border-hover);
-  box-shadow: var(--newtab-bookmark-inset);
+  --newtab-bookmark-current-shadow: var(--newtab-bookmark-shadow);
   transform: none;
 }
 
@@ -1033,7 +1023,7 @@ body {
 }
 
 .bookmark-tile:not(.curator-motion-disabled):not(.dragging):active {
-  box-shadow: var(--newtab-bookmark-active-shadow);
+  --newtab-bookmark-current-shadow: var(--newtab-bookmark-active-shadow);
   transform: translateY(0) scale(var(--ui-press-scale));
   transition-duration: var(--ds-motion-feedback, 80ms);
 }
@@ -1108,7 +1098,6 @@ body {
   opacity: 0.96;
 }
 
-.newtab-search-suggestions-panel,
 .newtab-search-engine-menu {
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-bg-popup);
@@ -1118,42 +1107,85 @@ body {
   backdrop-filter: var(--newtab-glass-filter-popup);
 }
 
-/* 建议面板由 hidden 属性切换 display，展开时只重放透明度淡入；
-   搜索框和面板共享 shell 的左边界与宽度，动效不参与定位。 */
-.newtab-search-suggestions-panel:not([hidden]) {
-  animation: newtab-search-panel-fade-in var(--dropdown-open-dur) var(--dropdown-ease) both;
+/* One floating material carries both the field and its recommendations. The
+   fixed-height slot keeps this local grid reveal from moving any bookmarks. */
+.newtab-search-shell {
+  pointer-events: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  border-radius: var(--ui-radius-group);
+  transform-origin: 50% 0;
+  transform: translateY(0) scale(1);
+  transition: transform 280ms var(--ease-bounce);
 }
-
-@keyframes newtab-search-panel-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
+.newtab-search-shell:focus-within,
+.newtab-search-shell[data-engine-open="true"] {
+  transform: translateY(-2px) scale(1.015);
+}
+.newtab-search-surface {
+  position: absolute;
+  inset: 0;
+  border: var(--newtab-glass-stroke-width) solid var(--newtab-glass-stroke);
+  border-radius: inherit;
+  background: var(--newtab-glass-bg-hero);
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
+  pointer-events: none;
+}
+.newtab-search-suggestions-panel {
+  pointer-events: auto;
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  transform-origin: 50% 0;
+  transition: grid-template-rows 240ms var(--ease-bounce),
+    transform 240ms var(--ease-bounce), opacity 180ms var(--ease-smooth-out);
+}
+.newtab-search-suggestions-panel[data-starting-style],
+.newtab-search-suggestions-panel[data-ending-style] {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-8px);
+}
+.newtab-search-suggestions-panel[data-ending-style] {
+  pointer-events: none;
+  transition-duration: 180ms;
+  transition-timing-function: var(--ease-smooth-out);
+}
+.newtab-search-presence-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.newtab-search,
+.newtab-search-engine-menu-positioner {
+  pointer-events: auto;
+}
+.newtab-search-panel-content {
+  display: grid;
+  gap: 3px;
+  max-height: min(312px, calc(100vh - 180px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px 6px 8px;
+  scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
+  scrollbar-width: thin;
+}
+@media (hover: hover) and (pointer: fine) {
+  .newtab-search-shell:hover:not(:focus-within):not([data-engine-open="true"]) {
+    transform: translateY(-1px) scale(1.005);
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  .newtab-search-suggestions-panel:not([hidden]) {
-    animation: none;
+  .newtab-search-shell,
+  .newtab-search-shell:focus-within,
+  .newtab-search-shell[data-engine-open="true"],
+  .newtab-search-shell:hover:not(:focus-within):not([data-engine-open="true"]) {
+    transform: none;
+    transition: none;
   }
-}
-
-.newtab-search.is-panel-open {
-  border-color: var(--newtab-glass-border-hover);
-  border-bottom-color: transparent;
-  border-bottom-right-radius: 0;
-  border-bottom-left-radius: 0;
-  background: var(--newtab-glass-bg-popup);
-  box-shadow: none;
-  filter: none;
-}
-
-.newtab-search-shell[data-panel-open="true"] .newtab-search-suggestions-panel {
-  top: calc(var(--search-height) - var(--newtab-glass-stroke-width));
-  border-color: var(--newtab-glass-border-hover);
-  border-top-color: transparent;
-  border-radius: 0 0 var(--ui-radius-group) var(--ui-radius-group);
+  .newtab-search-suggestions-panel {
+    transform: none;
+    transition: opacity 80ms linear;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1292,11 +1324,7 @@ body {
     display: none;
   }
 
-  .newtab-search-suggestions-panel {
-    left: 0;
-    max-width: 100%;
-    box-sizing: border-box;
-    width: calc(100vw - 40px);
+  .newtab-search-panel-content {
     max-height: min(360px, calc(100vh - 220px));
   }
 }

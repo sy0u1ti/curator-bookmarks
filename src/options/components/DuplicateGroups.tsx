@@ -25,7 +25,7 @@ const RESULTS_CLASS = 'mt-4 flex flex-col gap-2'
 const EMPTY_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary shadow-none transition-colors hover:border-ds-border hover:bg-ds-hover'
 const DOCKED_SELECTION_CLASS =
-  't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-warning/35 bg-ds-surface-2 p-[12px_14px] [filter:var(--ds-filter-card)] [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
+  't-panel-slide sticky top-3 z-[5] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-[12px_14px] [filter:var(--ds-filter-card)] [--panel-translate-y:12px] max-[760px]:static max-[760px]:grid-cols-1'
 const DOCKED_COPY_CLASS = 'min-w-0'
 const DOCKED_TITLE_CLASS = 'block text-sm font-bold text-ds-text-primary'
 const DOCKED_TEXT_CLASS = 'mt-[5px] text-xs leading-[1.55] text-[rgba(245,245,247,0.58)]'
@@ -74,7 +74,7 @@ const ITEM_DETAIL_CLASS =
 const ITEM_PATH_CLASS =
   'mt-[7px] text-[13px] leading-[1.6] text-ds-text-disabled [overflow-wrap:anywhere] [word-break:break-word]'
 const BADGE_CLASS =
-  'inline-flex min-h-6 flex-none items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-6 flex-none items-center justify-center whitespace-nowrap rounded-full border px-2.5 text-xs font-semibold leading-none tracking-[0]'
 const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',

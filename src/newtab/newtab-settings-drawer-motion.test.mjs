@@ -20,6 +20,7 @@ const optionsShellOnly = process.argv.includes('--options-shell-only')
 const overlayMotionOnly = process.argv.includes('--overlay-motion-only')
 const popupReorderOnly = process.argv.includes('--popup-reorder-only')
 const collapsibleMotionOnly = process.argv.includes('--collapsible-motion-only')
+const newtabOnly = process.argv.includes('--newtab-only')
 
 async function captureVisual(page, name, options = {}) {
   if (!visualCaptureDir) {
@@ -67,48 +68,35 @@ async function captureNewtabWallpaperVariants(page) {
   })
 }
 
+function readGlassMaterial(element) {
+  const style = getComputedStyle(element)
+  const filterId = style.backdropFilter.match(/#([^\s)"']+)/)?.[1]
+  const blur = filterId
+    ? Number(document.getElementById(filterId)?.querySelector('feGaussianBlur[in="SourceGraphic"]')?.getAttribute('stdDeviation'))
+    : Number(style.backdropFilter.match(/blur\(([\d.]+)px\)/)?.[1])
+  return { blur, backdropFilter: style.backdropFilter, backgroundColor: style.backgroundColor, filter: style.filter, boxShadow: style.boxShadow }
+}
+
 async function verifyNewtabAccessibilityMaterials(page, context) {
   const client = await context.newCDPSession(page)
   await client.send('Emulation.setEmulatedMedia', {
     features: [{ name: 'prefers-reduced-transparency', value: 'reduce' }]
   })
   await page.waitForFunction(() => matchMedia('(prefers-reduced-transparency: reduce)').matches)
-  const reducedTransparency = await page.locator('.newtab-speed-dial').evaluate((element) => {
-    const style = getComputedStyle(element)
-    return {
-      backdropFilter: style.backdropFilter,
-      backgroundColor: style.backgroundColor,
-      webkitBackdropFilter: style.webkitBackdropFilter
-    }
-  })
-  assert.ok(
-    reducedTransparency.backdropFilter === 'blur(8px)' ||
-      reducedTransparency.webkitBackdropFilter === 'blur(8px)',
-    `The user-selected New Tab glass should retain its 8px blur when the OS reduces transparency: ${JSON.stringify(reducedTransparency)}`
-  )
+  const reducedTransparency = await page.locator('.newtab-speed-dial').evaluate(readGlassMaterial)
+  assert.equal(reducedTransparency.blur, 12, 'The selected glass should keep its 12px frost, including inside an SVG filter')
   assert.equal(
     reducedTransparency.backgroundColor,
-    'rgba(0, 0, 0, 0.6)',
-    'The user-selected New Tab glass should retain its 60% black fill when the OS reduces transparency'
+    'rgba(0, 0, 0, 0.13)',
+    'The explicit glass preference must keep the translucent Hyalite tint when the OS reduces transparency'
   )
 
   await page.locator('.newtab-search').waitFor({ state: 'visible' })
   await page.locator('.newtab-clock').waitFor({ state: 'visible' })
-  const utilityGlass = await page.locator('.newtab-search, .newtab-clock').evaluateAll((elements) => elements.map((element) => {
-    const style = getComputedStyle(element)
-    return {
-      backdropFilter: style.backdropFilter,
-      backgroundColor: style.backgroundColor,
-      className: element.className,
-      webkitBackdropFilter: style.webkitBackdropFilter
-    }
-  }))
+  const utilityGlass = await Promise.all((await page.locator('.newtab-search-surface, .newtab-clock').all()).map(element => element.evaluate(readGlassMaterial)))
   assert.equal(utilityGlass.length, 2, `Search and clock glass surfaces should both be present: ${JSON.stringify(utilityGlass)}`)
   for (const material of utilityGlass) {
-    assert.ok(
-      material.backdropFilter === 'blur(8px)' || material.webkitBackdropFilter === 'blur(8px)',
-      `Primary utility glass should retain blur when the user selected the unified material: ${JSON.stringify(material)}`
-    )
+    assert.equal(material.blur, 12, `Primary utility glass should retain its configured blur: ${JSON.stringify(material)}`)
     assert.match(material.backgroundColor, /^rgba\(0, 0, 0, 0\.[0-9]+\)$/, `Primary utility glass should remain translucent: ${JSON.stringify(material)}`)
   }
   await captureVisual(page, 'newtab-reduced-transparency')
@@ -245,12 +233,18 @@ async function seedExtension(worker) {
 }
 
 async function waitForDrawerClosed(page) {
-  await page.waitForFunction(() => document.querySelector('.settings-drawer-panel')?.hasAttribute('hidden'))
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('.settings-drawer-panel')
+    return !panel || panel.hasAttribute('hidden')
+  })
 }
 
 async function openDrawer(page) {
   await page.locator('#newtab-settings-trigger').evaluate((element) => element.click())
-  await page.waitForFunction(() => !document.querySelector('.settings-drawer-panel')?.hasAttribute('hidden'))
+  await page.waitForFunction(() => {
+    const panel = document.querySelector('.settings-drawer-panel')
+    return panel && !panel.hasAttribute('hidden')
+  })
 }
 
 async function waitForDrawerSettledOpen(page) {
@@ -276,32 +270,17 @@ async function closeDrawer(page, method = 'escape', expectFocusReturn = true) {
 
 async function verifyDrawerCloseDuringEntrance(page) {
   await waitForDrawerClosed(page)
-  await openDrawer(page)
-  await page.waitForTimeout(45)
-
-  const beforeClose = await page.locator('.settings-drawer-panel').evaluate((element) => {
-    const rect = element.getBoundingClientRect()
-    return {
-      left: rect.left,
-      openLeft: innerWidth - rect.width,
-      viewportWidth: innerWidth
-    }
-  })
-  assert.ok(
-    beforeClose.left > beforeClose.openLeft + 8 && beforeClose.left < beforeClose.viewportWidth - 2,
-    `Close-during-entrance probe must catch an intermediate frame: ${JSON.stringify(beforeClose)}`
-  )
-
-  await page.evaluate(() => {
+  // Observe and interrupt within one browser frame. A protocol round-trip can
+  // outlast the entrance on a busy machine and accidentally test a settled panel.
+  const { beforeClose, ...result } = await page.evaluate(() => new Promise(resolve => {
     const panel = document.querySelector('.settings-drawer-panel')
     const probe = {
-      done: false,
+      beforeClose: null,
       endingLeft: null,
       frames: [],
       hidden: false,
       sawEndingStyle: false
     }
-    window.__curatorDrawerEntranceCloseProbe = probe
     const startedAt = performance.now()
     const observer = new MutationObserver(() => {
       if (panel?.hasAttribute('data-ending-style')) {
@@ -311,27 +290,28 @@ async function verifyDrawerCloseDuringEntrance(page) {
     })
     observer.observe(panel, { attributes: true, attributeFilter: ['data-ending-style', 'hidden'] })
     const sample = (now) => {
+      if (!probe.beforeClose && panel && !panel.hasAttribute('hidden')) {
+        const rect = panel.getBoundingClientRect()
+        if (rect.left < innerWidth - 12 && rect.left > innerWidth - rect.width + 8) {
+          probe.beforeClose = { left: rect.left, openLeft: innerWidth - rect.width, viewportWidth: innerWidth }
+          document.querySelector('#newtab-settings-close')?.click()
+        }
+      }
       if (probe.sawEndingStyle && panel && !panel.hasAttribute('hidden')) {
         probe.frames.push(panel.getBoundingClientRect().left)
       }
-      if (panel?.hasAttribute('hidden') || now - startedAt > 720) {
+      if ((probe.beforeClose && panel?.hasAttribute('hidden')) || now - startedAt > 2000) {
         probe.hidden = panel?.hasAttribute('hidden') || false
-        probe.done = true
         observer.disconnect()
+        resolve(probe)
         return
       }
       requestAnimationFrame(sample)
     }
+    document.querySelector('#newtab-settings-trigger')?.click()
     requestAnimationFrame(sample)
-  })
-
-  await page.keyboard.press('Escape')
-  await page.waitForFunction(() => window.__curatorDrawerEntranceCloseProbe?.done)
-  const result = await page.evaluate(() => {
-    const probe = window.__curatorDrawerEntranceCloseProbe
-    delete window.__curatorDrawerEntranceCloseProbe
-    return probe
-  })
+  }))
+  assert.ok(beforeClose, 'The interruption must catch an actual entrance frame')
   assert.ok(result.sawEndingStyle, 'Closing during entrance should enter the Base UI ending state')
   assert.ok(result.hidden, 'Closing during entrance should finish hidden')
   assert.ok(result.frames.length >= 2, 'Closing during entrance should preserve visible exit frames')
@@ -350,34 +330,37 @@ async function verifyDrawerCloseDuringEntrance(page) {
 
 async function probeDrawerOpening(page) {
   const panel = page.locator('.settings-drawer-panel')
-  await panel.waitFor({ state: 'attached' })
   await waitForDrawerClosed(page)
 
   const probePromise = page.evaluate(() => {
-    const target = document.querySelector('.settings-drawer-panel')
-    if (!(target instanceof HTMLElement)) {
-      throw new Error('Settings drawer panel is missing')
-    }
-
     return new Promise((resolve) => {
       const frames = []
       const transitionProperties = []
       let sawStartingStyle = false
+      let firstVisibleAt = null
       const startedAt = performance.now()
-      const handleTransitionRun = (event) => transitionProperties.push(event.propertyName)
-      target.addEventListener('transitionrun', handleTransitionRun)
+      const handleTransitionRun = (event) => {
+        if (event.target instanceof HTMLElement && event.target.matches('.settings-drawer-panel')) {
+          transitionProperties.push(event.propertyName)
+        }
+      }
+      document.addEventListener('transitionrun', handleTransitionRun)
 
       const sample = (now) => {
-        sawStartingStyle ||= target.hasAttribute('data-starting-style')
-        if (!target.hasAttribute('hidden')) {
+        // On the first request the lazy drawer does not exist yet. Start the
+        // animation window when it appears, and still inspect that cold open.
+        const target = document.querySelector('.settings-drawer-panel')
+        sawStartingStyle ||= Boolean(target?.hasAttribute('data-starting-style'))
+        if (target && !target.hasAttribute('hidden')) {
+          firstVisibleAt ??= now
           const rect = target.getBoundingClientRect()
-          frames.push({ left: rect.left, width: rect.width })
+          frames.push({ left: rect.left, width: rect.width, time: now - startedAt })
         }
-        if (now - startedAt < 520) {
+        if (firstVisibleAt === null ? now - startedAt < 3000 : now - firstVisibleAt < 520) {
           requestAnimationFrame(sample)
           return
         }
-        target.removeEventListener('transitionrun', handleTransitionRun)
+        document.removeEventListener('transitionrun', handleTransitionRun)
         resolve({ frames, sawStartingStyle, transitionProperties })
       }
       requestAnimationFrame(sample)
@@ -412,7 +395,7 @@ async function probeDrawerOpening(page) {
   assert.ok(finalFrame && finalFrame.width > 0, 'The open drawer should have measurable geometry')
   assert.ok(
     probe.frames.some((frame) => frame.left > finalFrame.left + 8),
-    'Opening should include an intermediate horizontal frame'
+    `Opening should include an intermediate horizontal frame: ${JSON.stringify(probe)}`
   )
   assert.ok(
     viewport && Math.abs(settledFrame.left + settledFrame.width - viewport.width) <= 2,
@@ -545,25 +528,8 @@ async function verifyDesktopDrawer(page) {
   assert.equal(desktopState.backdropPointerEvents, 'none', 'Desktop drawer must not install a pointer-catching backdrop')
   assert.equal(desktopState.rootInert, false, 'Desktop content must remain interactive while settings are open')
   await waitForDrawerSettledOpen(page)
-  const drawerGlass = await page.locator('.settings-drawer-panel').evaluate((element) => {
-    const style = getComputedStyle(element)
-    return {
-      backdropFilter: style.backdropFilter,
-      expectedBackdropFilter: style.getPropertyValue('--newtab-glass-backdrop-filter').trim(),
-      filter: style.filter,
-      boxShadow: style.boxShadow,
-      webkitBackdropFilter: style.webkitBackdropFilter
-    }
-  })
-  assert.ok(
-    drawerGlass.expectedBackdropFilter &&
-      drawerGlass.expectedBackdropFilter !== 'none' &&
-      (
-        drawerGlass.backdropFilter === drawerGlass.expectedBackdropFilter ||
-        drawerGlass.webkitBackdropFilter === drawerGlass.expectedBackdropFilter
-      ),
-    `Settings drawer should apply the unified New Tab backdrop blur directly to its visible panel: ${JSON.stringify(drawerGlass)}`
-  )
+  const drawerGlass = await page.locator('.settings-drawer-panel').evaluate(readGlassMaterial)
+  assert.equal(drawerGlass.blur, 12, 'Settings must render the shared frost through Hyalite or its compatible blur')
   assert.equal(drawerGlass.filter, 'none', 'The full-height glass drawer must avoid an offscreen CSS filter layer')
   assert.notEqual(drawerGlass.boxShadow, 'none', 'Replacing drop-shadow filter must preserve drawer depth with a native shadow')
   await verifySettingsTabSwitching(page)
@@ -574,18 +540,18 @@ async function verifyDesktopDrawer(page) {
   assert.equal(await backgroundSearch.evaluate((element) => document.activeElement === element), true, 'A desktop background control should remain interactive')
 
   const outsideFocus = await page.evaluate(async () => {
-    const trigger = document.querySelector('#newtab-settings-trigger')
-    trigger?.focus()
+    const search = document.querySelector('.newtab-search-input')
+    search?.focus()
     await new Promise((resolve) => setTimeout(resolve, 40))
     return {
-      activeId: document.activeElement?.id,
+      activeIsSearch: document.activeElement === search,
       insidePanel: Boolean(document.activeElement?.closest('.settings-drawer-panel'))
     }
   })
-  assert.equal(outsideFocus.activeId, 'newtab-settings-trigger', 'Desktop drawer must allow focus outside the inspector')
+  assert.equal(outsideFocus.activeIsSearch, true, 'Desktop drawer must allow focus outside the inspector')
   assert.equal(outsideFocus.insidePanel, false, 'Desktop drawer must not trap focus')
   await closeDrawer(page, 'escape', false)
-  assert.equal(await page.evaluate(() => document.activeElement?.id), 'newtab-settings-trigger', 'Closing a non-modal inspector should preserve deliberate outside focus')
+  assert.equal(await page.evaluate(() => document.activeElement?.matches('.newtab-search-input')), true, 'Closing a non-modal inspector should preserve deliberate outside focus')
 
   await openDrawer(page)
   await waitForDrawerSettledOpen(page)
@@ -1315,7 +1281,9 @@ async function verifyOptionsChrome(page, extensionId) {
   await page.waitForFunction(() => document.getElementById('options-mobile-navigation')?.getAttribute('aria-hidden') === 'false')
   await page.keyboard.press('Escape')
   await page.waitForFunction(() => document.getElementById('options-mobile-navigation')?.getAttribute('aria-hidden') === 'true')
-  await waitForFrames(page, 12)
+  // Base UI restores focus when the exit completes. A fixed frame count can
+  // finish before that transition on high-refresh-rate displays.
+  await page.locator('.options-mobile-nav-panel').waitFor({ state: 'hidden', timeout: 2_000 })
   assert.equal(
     await mobileTrigger.evaluate((element) => document.activeElement === element),
     true,
@@ -1729,7 +1697,7 @@ async function verifyOptionsBorderIntegrity(page, extensionId) {
   await page.locator('#ai').waitFor({ state: 'visible' })
   const aiToolbarButtonHeights = await page.evaluate(() => {
     const buttons = [...document.querySelectorAll('#ai button')]
-    const apiKeyButton = buttons.find((button) => button.textContent?.trim() === '已配置 API Key')
+    const apiKeyButton = buttons.find((button) => button.textContent?.trim() === 'AI 渠道设置')
     const startButton = buttons.find((button) => button.textContent?.trim() === '开始分析并生成建议')
     return {
       apiKey: apiKeyButton?.getBoundingClientRect().height ?? 0,
@@ -2309,7 +2277,7 @@ async function verifyTouchDrag(page, client, {
     sourceHandle.boundingBox(),
     targetItem.boundingBox()
   ])
-  assert.ok(sourceBox && handleBox && targetBox, `Touch drag geometry should exist for ${container}`)
+  assert.ok(sourceBox && handleBox && targetBox, `Touch drag geometry should exist for ${container}: ${JSON.stringify({ sourceBox, handleBox, targetBox, pointer: await page.evaluate(() => ({ coarse: matchMedia('(pointer: coarse)').matches, anyCoarse: matchMedia('(any-pointer: coarse)').matches, touchPoints: navigator.maxTouchPoints })) })}`)
   const start = { x: Math.round(handleBox.x + Math.min(8, handleBox.width / 2)), y: Math.round(handleBox.y + handleBox.height / 2), id: 1 }
   const destination = { x: Math.round(targetBox.x + targetBox.width / 2), y: Math.round(targetBox.y + targetBox.height / 2), id: 1 }
   const grabOffset = { x: start.x - sourceBox.x, y: start.y - sourceBox.y }
@@ -2364,6 +2332,10 @@ async function verifyTouchDrag(page, client, {
 async function verifyTouchAndKeyboard(page, context, extensionId) {
   await page.setViewportSize({ width: 1000, height: 720 })
   await page.goto(`chrome-extension://${extensionId}/src/newtab/newtab.html`, { waitUntil: 'domcontentloaded' })
+  const client = await context.newCDPSession(page)
+  // Extension pages do not retain the context's touch emulation across navigation.
+  await client.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+  await page.waitForFunction(() => matchMedia('(pointer: coarse)').matches && navigator.maxTouchPoints > 0)
   await page.locator('.bookmark-tile').first().waitFor({ state: 'visible', timeout: 20_000 })
   await page.locator('.newtab-speed-dial-card').first().waitFor({ state: 'visible' })
   await page.locator('[data-folder-drag-handle]').first().waitFor({ state: 'visible' })
@@ -2372,8 +2344,6 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
     'expanded',
     'Bookmark drop continuity regression must run against expanded browse mode'
   )
-  const client = await context.newCDPSession(page)
-
   await verifyTouchDrag(page, client, {
     container: '.bookmark-tile',
     ghost: '.bookmark-drag-ghost',
@@ -2438,24 +2408,30 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   })
 
   const keyboardCases = [
-    { selector: '.newtab-speed-dial-card', key: 'Alt+ArrowRight' },
-    { selector: '.bookmark-tile', key: 'Alt+ArrowRight' },
-    { selector: '[data-folder-drag-handle]', key: 'Alt+ArrowDown' }
+    { selector: '.newtab-speed-dial-card', key: 'Alt+ArrowRight', status: '固定入口已移动到' },
+    { selector: '.bookmark-tile', key: 'Alt+ArrowRight', status: '书签已移动到' },
+    { selector: '[data-folder-drag-handle]', key: 'Alt+ArrowDown', status: '文件夹已移动到' }
   ]
   for (const keyboardCase of keyboardCases) {
     const item = page.locator(keyboardCase.selector).first()
     await item.scrollIntoViewIfNeeded()
+    await waitForFrames(page)
     const identity = await item.evaluate((element) => element.getAttribute('data-bookmark-id') || element.getAttribute('data-folder-drag-handle'))
-    await item.focus()
-    await page.keyboard.press(keyboardCase.key)
-    await page.waitForFunction(() => [...document.querySelectorAll('[role="status"]')].some((element) => element.textContent?.includes('移动')))
-    const focusedIdentity = await page.evaluate(() => document.activeElement?.getAttribute('data-bookmark-id') || document.activeElement?.getAttribute('data-folder-drag-handle'))
-    assert.equal(focusedIdentity, identity, `Keyboard reorder should keep focus on ${keyboardCase.selector}`)
+    await item.press(keyboardCase.key)
+    // Each reorder restores focus after its asynchronous save. Wait for this
+    // operation's order and focus, not the previous operation's announcement.
+    await page.waitForFunction(({ selector, status, identity }) => {
+      const getIdentity = (element) => element?.getAttribute('data-bookmark-id') || element?.getAttribute('data-folder-drag-handle')
+      const items = document.querySelectorAll(selector)
+      const focused = document.activeElement
+      return getIdentity(items[1]) === identity &&
+        focused?.matches(selector) && getIdentity(focused) === identity &&
+        [...document.querySelectorAll('[role="status"]')].some((element) => element.textContent?.includes(status))
+    }, { ...keyboardCase, identity })
   }
 
   const newtabSearch = page.locator('.newtab-search-input')
   const newtabSearchForm = page.locator('.newtab-search')
-  const closedSearchClipPath = await newtabSearchForm.evaluate((element) => getComputedStyle(element).clipPath)
   await newtabSearch.fill('Curator Smoke')
   await page.waitForFunction(() => document.querySelectorAll('#newtab-search-suggestions .newtab-search-suggestion').length >= 3)
   await waitForFrames(page)
@@ -2471,7 +2447,8 @@ async function verifyTouchAndKeyboard(page, context, extensionId) {
   assert.ok(openSearchShape.className.includes('is-panel-open'), 'The visible suggestions panel should mark the search form itself as open')
   assert.equal(openSearchShape.bottomLeftRadius, '0px', 'The open search form should flatten its bottom-left corner')
   assert.equal(openSearchShape.bottomRightRadius, '0px', 'The open search form should flatten its bottom-right corner')
-  assert.notEqual(openSearchShape.clipPath, closedSearchClipPath, 'The squircle engine should recompute the search outline when suggestions open')
+  assert.equal(openSearchShape.clipPath, 'none', 'The form should stay unclipped inside its shared glass surface')
+  assert.equal(await page.locator('.newtab-search-surface').count(), 1, 'One glass surface must carry the input and recommendations')
   const searchGeometry = await page.evaluate(() => {
     const form = document.querySelector('.newtab-search')?.getBoundingClientRect()
     const panel = document.querySelector('.newtab-search-suggestions-panel:not([hidden])')?.getBoundingClientRect()
@@ -2539,7 +2516,8 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    headless: false,
+    channel: 'chromium',
+    headless: true,
     hasTouch: true,
     reducedMotion: 'no-preference',
     viewport: { width: 1280, height: 720 },
@@ -2597,8 +2575,10 @@ try {
     await verifyNewtabAccessibilityMaterials(page, context)
     await verifyDesktopDrawer(page)
     await verifyNarrowAndReducedMotionDrawer(page)
-    await verifyPopup(page, extensionId, seeded)
-    await verifyOptions(page, extensionId)
+    if (!newtabOnly) {
+      await verifyPopup(page, extensionId, seeded)
+      await verifyOptions(page, extensionId)
+    }
     await verifyTouchAndKeyboard(page, context, extensionId)
 
     console.log(`Interface performance frame probes: ${JSON.stringify(performanceRecords)}`)

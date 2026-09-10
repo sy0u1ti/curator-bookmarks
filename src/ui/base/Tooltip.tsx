@@ -51,7 +51,7 @@ function TooltipTriggerShell({
           render={children}
         />
         <BaseTooltip.Portal>
-          <BaseTooltip.Positioner sideOffset={sideOffset}>
+          <BaseTooltip.Positioner sideOffset={sideOffset} className="z-[10060]">
             <BaseTooltip.Popup className={cx('t-tt', popupClassName)}>
               {content}
             </BaseTooltip.Popup>

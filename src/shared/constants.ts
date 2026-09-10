@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   newTabSearchSettings: 'curatorBookmarkNewTabSearchSettings',
   newTabIconSettings: 'curatorBookmarkNewTabIconSettings',
   newTabTimeSettings: 'curatorBookmarkNewTabTimeSettings',
+  newTabGlassSettings: 'curatorBookmarkNewTabGlassSettings',
   newTabGeneralSettings: 'curatorBookmarkNewTabGeneralSettings',
   newTabFolderSettings: 'curatorBookmarkNewTabFolderSettings',
   newTabWorkspaceSettings: 'curatorBookmarkNewTabWorkspaceSettings',

@@ -112,7 +112,8 @@ import {
 import { getPopupSmartClassifierRenderStatus } from './popup-smart-classifier-status.js'
 import {
   hydratePopupBaseData,
-  hydratePopupDeferredEnhancements
+  hydratePopupDeferredEnhancements,
+  waitForPopupShellPaint
 } from './popup-hydration.js'
 import { registerPopupBrowserEventActions } from './popup-browser-events-store.js'
 import { getPopupSearchFocusPlan } from './popup-search-focus.js'
@@ -120,7 +121,6 @@ import {
   getBookmarkPaneKeyboardIndex,
   getFolderPaneKeyboardIndex,
   getFolderPaneTreeRoot,
-  isBookmarkRowKeyboardActive,
   shouldBlurMainSearchForNavigation,
   shouldDelegatePopupDocumentNavigation,
   type PopupKeyboardTargetInfo
@@ -140,6 +140,8 @@ import {
 import { mark as perfMark, measure as perfMeasure } from '../shared/perf.js'
 import { writeClipboardText } from '../shared/clipboard.js'
 import { runIdle } from '../shared/idle.js'
+import { createPopupContentRowCache } from './popup-content-row-cache.js'
+import { consumePopupBookmarkTree } from './popup-startup-data.js'
 import {
   SMART_LOADING_PROGRESS_COMPLETE_MS,
   SMART_LOADING_PROGRESS_FINISH_MS,
@@ -192,6 +194,10 @@ let queuedActiveFolderIndex: number | null = null
 let activeResultFrame = 0
 let activeFolderFrame = 0
 let keyboardNavigationSettleTimer = 0
+let popupActionStateVersion = 0
+const treeBookmarkRowsCache = createPopupContentRowCache<PopupContentBookmarkRowViewModel>('active')
+const searchResultRowsCache = createPopupContentRowCache<PopupContentSearchResultViewModel>('active')
+const sidebarFolderRowsCache = createPopupContentRowCache<PopupContentFolderRowViewModel>('keyboardActive')
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -237,7 +243,7 @@ export function usePopupController(): void {
   useEffect(() => startPopupController(), [])
 }
 
-function startPopupController(): () => void {
+export function startPopupController(): () => void {
   if (popupControllerStarted) {
     return cleanupPopupController
   }
@@ -254,8 +260,13 @@ function startPopupController(): () => void {
   // 书签列表不读它们。但它里的 AI 配置检查要动态 import natural-search-ai
   // 及其依赖的 ai-settings，整条 chunk 的拉取与求值一旦串在前面，
   // 首屏数据就要白等一百多毫秒。
+  const initialNaturalSearchEnabled = state.naturalSearchEnabled
+  const initialNaturalSearchAiConfigured = state.naturalSearchAiConfigured
   void hydratePopupPreferences().finally(() => {
-    render()
+    if (
+      state.naturalSearchEnabled !== initialNaturalSearchEnabled ||
+      state.naturalSearchAiConfigured !== initialNaturalSearchAiConfigured
+    ) render()
   })
   void refreshData({ initial: true, preserveSearch: true }).finally(() => {
     perfMark('popup.interactive')
@@ -334,6 +345,13 @@ async function savePopupPreferences() {
 }
 async function refreshNaturalSearchAiConfiguredState(): Promise<boolean> {
   try {
+    // An unconfigured popup can answer this without loading the AI runtime
+    // and provider editor while its first interactive frame is being painted.
+    const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
+    if (!stored[STORAGE_KEYS.aiProviderSettings]) {
+      state.naturalSearchAiConfigured = false
+      return false
+    }
     const naturalSearchAi = await loadNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
     const naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
@@ -748,7 +766,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   }
 }
 async function loadPopupBaseRefreshData(refreshRunId: number): Promise<PopupRefreshBaseData> {
-  const tree = await getBookmarkTree()
+  const [tree] = await Promise.all([consumePopupBookmarkTree(), waitForPopupShellPaint()])
   perfMark('popup.bookmarkTreeLoaded')
   const rootNode = Array.isArray(tree) ? tree[0] : tree
   const bookmarksBarNode = findBookmarksBar(rootNode)
@@ -806,6 +824,7 @@ function applyPopupIndexedBookmarkData({
 
 function applyPopupIndexedBookmarkEnhancements(catalog: BookmarkCatalogSnapshot): void {
   patchLightPopupSearchIndexFromCatalog(state.allBookmarks, catalog)
+  clearPopupContentRowCaches()
   popupBookmarkCatalog = catalog
   state.searchTagIndex = catalog.tagIndex
   state.searchSnapshotState = catalog.snapshotState
@@ -1080,6 +1099,7 @@ function cleanupPopupController() {
   state.toastTimers.clear()
   state.toasts = []
   state.contentRenderedViewModel = null
+  clearPopupContentRowCaches()
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
   resetPopupSessionStateForNextOpen()
@@ -1786,11 +1806,13 @@ function isPopupActionPending(action, targetId = '') {
 }
 function setPopupActionPending(action, targetId, pending) {
   const key = getPopupActionKey(action, targetId)
+  if (state.pendingActionIds.has(key) === Boolean(pending)) return
   if (pending) {
     state.pendingActionIds.add(key)
   } else {
     state.pendingActionIds.delete(key)
   }
+  popupActionStateVersion += 1
 }
 function hasBlockingPopupActionPending() {
   return [...state.pendingActionIds].some((key) => {
@@ -1948,7 +1970,10 @@ function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}
     }
   }
 
-  const shouldPreserveScroll = preserveScroll ?? (!hasQuery || Boolean(state.isLoading))
+  // There is no scroll position to preserve until real content has appeared.
+  // Reading scrollTop on the empty shell forces layout during controller boot.
+  const shouldPreserveScroll = state.hasPresentedContent &&
+    (preserveScroll ?? (!hasQuery || Boolean(state.isLoading)))
   replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
     preserveScroll: shouldPreserveScroll
   })
@@ -2121,6 +2146,11 @@ function getPopupContentViewModel({
   }
 
   const mainRows = reorder.active ? getBookmarkReorderRows(currentRoot) : getTreeBookmarkRows()
+  const previousView = state.contentRenderedViewModel
+  const rows = previousView?.mode === 'tree' &&
+    previousView.mainRows === mainRows && previousView.sidebarRows === sidebarRows
+    ? previousView.rows
+    : [...sidebarRows, ...mainRows]
   return {
     emptyLabel: '当前文件夹下暂无书签',
     keyboardPane: state.keyboardPane,
@@ -2132,7 +2162,7 @@ function getPopupContentViewModel({
       : `${mainRows.length} 个书签`,
     mode: 'tree',
     reorder,
-    rows: [...sidebarRows, ...mainRows],
+    rows,
     sidebarRows,
     title: reorder.active ? '调整顺序' : currentRootTitle
   }
@@ -2168,13 +2198,11 @@ function getSidebarFolderRows(
     return []
   }
 
-  const rows = buildSidebarFolderRows(currentRoot, 0)
-    .map((row, index) => ({ ...row, index }))
-  const ki = state.activeFolderKeyboardIndex
-  if (state.keyboardPane === 'folders' && ki >= 0 && ki < rows.length) {
-    rows[ki] = { ...rows[ki], keyboardActive: true }
-  }
-  return rows
+  return sidebarFolderRowsCache.getRows(
+    [currentRoot, state.folderMap, popupFolderBookmarkCounts, state.allBookmarks.length, state.selectedFolderFilterId],
+    () => buildSidebarFolderRows(currentRoot, 0).map((row, index) => ({ ...row, index })),
+    state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1
+  )
 }
 
 function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
@@ -2282,15 +2310,20 @@ function getTreeBookmarkRows(): PopupContentBookmarkRowViewModel[] {
     return []
   }
   const baseDepth = state.folderMap.get(rootId)?.depth || 1
-  return bookmarks.map((bookmark, index) => {
-    const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
-    return buildBookmarkRowViewModel(
-      bookmark,
-      depth,
-      isBookmarkRowKeyboardActive(state.keyboardPane, index, state.activeResultIndex),
-      index
-    )
-  })
+  return treeBookmarkRowsCache.getRows(
+    [bookmarks, rootId, baseDepth, state.bookmarkMap, popupActionStateVersion],
+    () => bookmarks.map((bookmark, index) => {
+      const depth = Math.max(1, Number(bookmark.ancestorIds?.length || baseDepth) - baseDepth + 1)
+      return buildBookmarkRowViewModel(bookmark, depth, false, index)
+    }),
+    state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1
+  )
+}
+
+function clearPopupContentRowCaches(): void {
+  treeBookmarkRowsCache.clear()
+  searchResultRowsCache.clear()
+  sidebarFolderRowsCache.clear()
 }
 
 function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1): PopupContentBookmarkRowViewModel {
@@ -2311,20 +2344,21 @@ function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1):
 }
 
 function getSearchResultRows(): PopupContentSearchResultViewModel[] {
-  return state.searchResults
-    .map((bookmark, index) => {
-      const isActive = isBookmarkRowKeyboardActive(state.keyboardPane, index, state.activeResultIndex)
+  const highlightQuery = state.searchHighlightQuery || state.debouncedQuery
+  return searchResultRowsCache.getRows(
+    [state.searchResults, highlightQuery, state.bookmarkMap, popupActionStateVersion],
+    () => state.searchResults.map((bookmark, index) => {
       const reasonTokens = summarizeMatchReasonTokens(bookmark.matchReasons)
       const reasonTitle = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
         ? bookmark.matchReasons.join(' · ')
         : ''
 
       return {
-        active: isActive,
+        active: false,
         bookmarkId: String(bookmark.id || ''),
         depth: 0,
         displayUrl: bookmark.displayUrl || '',
-        highlightQuery: state.searchHighlightQuery || state.debouncedQuery,
+        highlightQuery,
         index,
         kind: 'result',
         menu: buildActionMenuViewModel(bookmark.id),
@@ -2336,7 +2370,9 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
         title: bookmark.title || '未命名书签',
         url: bookmark.url || ''
       }
-    })
+    }),
+    state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1
+  )
 }
 const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
   { test: /^命中：标题/, label: '标题命中' },

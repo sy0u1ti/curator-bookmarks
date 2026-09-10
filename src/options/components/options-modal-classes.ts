@@ -56,13 +56,13 @@ export const FOLDER_PICKER_TREE_ROW_CLASS =
   'relative grid min-h-10 grid-cols-[24px_minmax(0,1fr)] items-center gap-1'
 
 export const FOLDER_PICKER_TOGGLE_CLASS =
-  'folder-picker-toggle inline-flex h-8 min-h-8 w-6 min-w-6 items-center justify-center rounded-ds-sm border border-transparent bg-transparent text-ds-text-muted outline-none transition-[background-color,color,transform,opacity] duration-ds-fast ease-ds-standard hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1 active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
+  'folder-picker-toggle inline-flex h-8 min-h-8 w-6 min-w-6 items-center justify-center rounded-ds-sm border border-transparent bg-transparent text-ds-text-muted outline-none transition-[background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard hover:bg-ds-text-primary/[0.055] hover:text-ds-text-primary focus-visible:bg-ds-text-primary/[0.055] focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.36)] focus-visible:outline-offset-1 active:scale-95 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-20'
 
 export const FOLDER_PICKER_TOGGLE_ICON_CLASS =
   'folder-picker-toggle-icon transition-transform duration-ds-fast ease-ds-standard'
 
 export const FOLDER_PICKER_CARD_CLASS =
-  'folder-picker-card grid min-h-10 w-full min-w-0 cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-ds-sm border border-transparent bg-transparent px-2 py-1.5 text-left font-[inherit] leading-normal text-ds-text-primary shadow-none outline-none transition-[background-color,color,transform] duration-ds-fast ease-ds-standard hover:bg-ds-text-primary/[0.055] focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1 active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
+  'folder-picker-card grid min-h-10 w-full min-w-0 cursor-pointer grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-2 rounded-ds-sm border border-transparent bg-transparent px-2 py-1.5 text-left font-[inherit] leading-normal text-ds-text-primary shadow-none outline-none transition-[background-color,color,transform,scale] duration-ds-fast ease-ds-standard hover:bg-ds-text-primary/[0.055] focus-visible:bg-ds-text-primary/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.34)] focus-visible:outline-offset-1 active:scale-[0.993] disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 
 export const FOLDER_PICKER_CARD_CURRENT_CLASS =
   'bg-ds-selected'
@@ -83,7 +83,7 @@ export const FOLDER_PICKER_META_CLASS =
   'flex shrink-0 items-center gap-1.5 pl-2'
 
 export const FOLDER_PICKER_BADGE_CLASS =
-  'whitespace-nowrap text-[10px] font-semibold leading-tight text-ds-text-secondary'
+  'whitespace-nowrap text-xs font-semibold leading-tight text-ds-text-secondary'
 
 export const FOLDER_PICKER_BADGE_MUTED_CLASS =
   'text-ds-text-disabled'

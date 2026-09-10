@@ -26,7 +26,7 @@ const folderSearchInputClass =
   'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-sm leading-[1.4] text-ds-text-primary outline-none placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
 const modalButtonBaseClass = [
   'inline-flex min-h-[34px] min-w-[88px] items-center justify-center gap-2 rounded-ds-sm border px-3 py-2 text-center text-xs font-semibold leading-none shadow-none',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[0.985]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
@@ -53,10 +53,10 @@ const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
   'inline-flex min-h-[30px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-1.5 text-xs font-semibold leading-none text-ds-text-secondary shadow-none',
-  'transition-[border-color,background-color,color,transform] duration-ds-fast ease-ds-standard',
+  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
-  'active:scale-[0.96]',
+  'active:scale-[var(--ds-press-scale)]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
 const modalFormClass = 'flex flex-col gap-[9px]'
@@ -81,11 +81,11 @@ const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-ds-danger-text')
 const modalBookmarkCardClass =
   'relative flex flex-col gap-[5px] rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 py-2.5 shadow-none'
 const modalCardLabelClass =
-  'm-0 text-[11px] leading-[1.35] tracking-[0.01em] text-ds-text-muted'
+  'm-0 text-xs leading-[1.35] tracking-[0.01em] text-ds-text-muted'
 const modalCardTitleClass =
   'm-0 min-w-0 break-words text-xs font-semibold leading-[1.35] text-ds-text-primary'
 const modalCardPathClass =
-  'm-0 min-w-0 [overflow-wrap:anywhere] text-[11px] leading-[1.35] tracking-[0.01em] text-ds-text-muted'
+  'm-0 min-w-0 [overflow-wrap:anywhere] text-xs leading-[1.35] tracking-[0.01em] text-ds-text-muted'
 const modalCardPathChangedClass = 'text-ds-text-secondary'
 const modalPathRowClass = 'flex items-center gap-2'
 const modalAiSetupPromptClass = [

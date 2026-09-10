@@ -2,6 +2,7 @@ import { createUiViewStoreSlice, useUiViewStoreSlice } from '../../shared/ui-vie
 import type { IgnoreRulesState } from './ignore-rules-types.js'
 
 const defaultIgnoreRulesState: IgnoreRulesState = {
+  locked: false,
   bookmarks: [],
   domains: [],
   folders: []

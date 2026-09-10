@@ -1,3 +1,4 @@
+import { resolveAiApiStyle } from './ai-provider-url.js'
 /**
  * 推理强度能力解析。
  *
@@ -550,7 +551,9 @@ function getProviderReasoningMatch(
 ): ProviderReasoningMatch | null {
   const model = getReasoningCapabilityKey(modelValue)
   const provider = getKnownReasoningProvider(context.baseUrl)
-  const apiStyle = String(context.apiStyle) === 'responses' ? 'responses' : 'chat_completions'
+  const resolvedStyle = resolveAiApiStyle({ baseUrl: context.baseUrl, apiStyle: context.apiStyle ?? 'chat_completions' })
+  const apiStyle = resolvedStyle === 'responses' ? 'responses' : 'chat_completions'
+  if (resolvedStyle === 'anthropic_messages') return { transport: { kind: 'anthropic_effort' } }
 
   if (provider === 'openai') {
     if (/gpt-5(?:\.\d+)?-pro(?:[-._/]|$)/.test(model) && apiStyle !== 'responses') {

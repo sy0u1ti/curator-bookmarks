@@ -24,7 +24,7 @@ const AVAILABILITY_PERMISSION_COPY_CLASS =
 const AVAILABILITY_CONTROLS_ACTIONS_CLASS =
   OPTION_RUN_ACTIONS_CLASS
 const AVAILABILITY_BADGE_BASE_CLASS =
-  'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-[11px] font-semibold leading-none tracking-[0]'
+  'inline-flex min-h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-[11px] text-xs font-semibold leading-none tracking-[0]'
 const AVAILABILITY_BADGE_TONE_CLASSES: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',
   muted: 'border-ds-hover bg-ds-surface-2 text-ds-text-muted',
