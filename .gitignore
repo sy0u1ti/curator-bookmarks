@@ -36,7 +36,7 @@ playwright-visual.config.mjs
 DESIGN.md
 hyperframes/
 output/
-
+WORKFLOW.md
 # Local debugging and generated notice artifacts
 .debug-tree-analyze.mjs
 .debug-tree-repro.mjs

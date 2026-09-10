@@ -184,7 +184,7 @@ https://github.com/user-attachments/assets/bf3dc67c-e283-412d-b568-bf0554e9d076
 
 
 
-需要 Node.js 18+。
+推荐 Node.js 24；当前 Vite 8 要求 Node.js 20.19+（20.x）或 22.12+。
 
 
 
@@ -194,7 +194,7 @@ https://github.com/user-attachments/assets/bf3dc67c-e283-412d-b568-bf0554e9d076
 
 
 
-npm install
+npm ci
 
 
 
@@ -237,11 +237,14 @@ npm run build        # 构建 Chrome 扩展到 dist
 
 
 
-npm run validate     # 类型检查 + 构建
+npm test             # 逻辑与静态回归测试
+
+npm run smoke:extension # 构建 + 扩展浏览器回归测试
 
 
 
 ```
+
 
 
 
