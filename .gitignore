@@ -20,6 +20,7 @@ release/
 .vscode/
 Agent.md
 # Local assistant/tooling artifacts
+.react-doctor/
 .agents/
 .claude/
 AGENTS.md
