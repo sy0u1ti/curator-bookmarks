@@ -1,44 +1,21 @@
+# Dependencies and build output
 node_modules/
 dist/
+release/
+
+# Temporary files and test output
 .tmp/
 .tmp-test/
-tmp/playwright-extension-smoke*/
-.perf-fixtures/
-.perf-results/
-.e2e-results/
-e2e/
-fixtures/ai-eval/
-playwright.config.ts
-playwright-report/
-test-results/
-release/
+output/
+
+# Local environment and logs
 *.log
 .DS_Store
 .env
 .env.local
-.codex
-.vscode/
-Agent.md
-# Local assistant/tooling artifacts
-.react-doctor/
-.agents/
-.claude/
+
+# Local project documentation
 AGENTS.md
-CLAUDE.md
-AGENT_OVERNIGHT_REPORT.md
-REPOSITORY_REVIEW_SUGGESTIONS.md
-.superpowers/
-docs/*
-!docs/ai-runtime-stability-refactor-notes.md
-test/
-scripts/
-tools/
-playwright-visual.config.mjs
 DESIGN.md
-hyperframes/
-output/
 WORKFLOW.md
-# Local debugging and generated notice artifacts
-.debug-tree-analyze.mjs
-.debug-tree-repro.mjs
-THIRD_PARTY_NOTICES.md
+docs/*
