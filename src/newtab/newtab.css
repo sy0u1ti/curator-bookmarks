@@ -286,7 +286,7 @@ body {
 .newtab-solid-background-noise {
   /* Raster-cache a small repeating texture instead of filtering the full
      viewport again behind each SVG glass surface. */
-  background-image: url('/newtab-grain.svg');
+  background-image: url('../assets/newtab-grain.svg');
   background-repeat: repeat;
   visibility: hidden;
   opacity: 0;
