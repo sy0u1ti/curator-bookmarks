@@ -10,6 +10,7 @@ import { NewtabContentHost } from './components/NewtabContentHost'
 import { NewtabInstantWallpaperHost } from './components/NewtabInstantWallpaperHost'
 import {
   dispatchNewtabBookmarkChanged,
+  dispatchNewtabBookmarkChildrenReordered,
   dispatchNewtabBookmarkCreated,
   dispatchNewtabBookmarkMoved,
   dispatchNewtabBookmarkRemoved
@@ -157,11 +158,13 @@ function subscribeToNewtabBookmarkEvents(): () => void {
   bookmarks.onRemoved.addListener(dispatchNewtabBookmarkRemoved)
   bookmarks.onChanged.addListener(dispatchNewtabBookmarkChanged)
   bookmarks.onMoved.addListener(dispatchNewtabBookmarkMoved)
+  bookmarks.onChildrenReordered.addListener(dispatchNewtabBookmarkChildrenReordered)
   return () => {
     bookmarks.onCreated.removeListener(dispatchNewtabBookmarkCreated)
     bookmarks.onRemoved.removeListener(dispatchNewtabBookmarkRemoved)
     bookmarks.onChanged.removeListener(dispatchNewtabBookmarkChanged)
     bookmarks.onMoved.removeListener(dispatchNewtabBookmarkMoved)
+    bookmarks.onChildrenReordered.removeListener(dispatchNewtabBookmarkChildrenReordered)
   }
 }
 

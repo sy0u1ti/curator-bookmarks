@@ -164,6 +164,7 @@ export default defineConfig(({ mode }) => {
       modulePreload: false,
       sourcemap: debugSourcemap,
       rollupOptions: {
+        input: { archive: 'src/archive/archive.html' },
         output: {
           manualChunks(id) {
             if (id.includes('/src/shared/search/pinyin.ts')) {

@@ -15,6 +15,8 @@ import {
   readPopupPrebootSearchSnapshot
 } from '../popup-preboot-input'
 import { PopupSearchChips } from './PopupSearchChips'
+import { PopupWorkspaceTools } from './PopupWorkspaceTools'
+import { usePopupSearchInputAria } from '../popup-workspace-state'
 
 const searchHelpToggleClass = 'w-8 min-w-8 !p-0'
 
@@ -106,6 +108,7 @@ export function PopupChromeHost({
   smartActive?: boolean
 }) {
   const state = usePopupChromeView()
+  const searchAria = usePopupSearchInputAria(state.search.query)
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initialSearchFocusAppliedRef = useRef(false)
@@ -213,6 +216,7 @@ export function PopupChromeHost({
         </div>
         {smartActive ? null : (
           <div className={heroActionsClass}>
+            <PopupWorkspaceTools />
             <Button
               id="open-settings"
               className={heroSettingsButtonClass}
@@ -240,7 +244,7 @@ export function PopupChromeHost({
                 id="search-input"
                 className={searchInputClass}
                 type="text"
-                role="searchbox"
+                {...searchAria}
                 spellCheck={false}
                 autoComplete="off"
                 placeholder={state.search.placeholder}

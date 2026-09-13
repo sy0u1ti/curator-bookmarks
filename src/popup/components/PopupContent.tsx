@@ -20,6 +20,9 @@ import { PopupEmptyState } from './PopupEmptyState'
 import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
 import { getPopupBookmarkReorderTargetIndex } from '../popup-bookmark-reorder'
 import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
+import { getPopupSearchGridAria, getPopupSearchResultId } from '../popup-workspace-state'
+import { isSidePanelSurface } from '../../shared/extension-surfaces'
+import { SidePanelBookmarkActions } from '../../sidepanel/SidePanelBookmarkActions'
 import type {
   PopupActionMenuViewModel,
   PopupContentBookmarkRowViewModel,
@@ -75,7 +78,7 @@ const workspaceContentLayerClass = cx(
 )
 const workspaceContentLoadingClass = 'pointer-events-none'
 const workspaceClass =
-  'relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
+  'popup-workspace relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
   'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
@@ -740,9 +743,11 @@ export function PopupContent({
               ) : null}
             </header>
             <ul
+              id="popup-search-results"
+              {...getPopupSearchGridAria(mode, mainRows.length, Boolean(state.mainState))}
               className={mainListClass}
               ref={mainListRef}
-              aria-label={reorderActive ? `${state.reorder?.folderTitle || '当前文件夹'}直属书签排序` : undefined}
+              aria-label={mode === 'search' ? '书签搜索结果' : reorderActive ? `${state.reorder?.folderTitle || '当前文件夹'}直属书签排序` : undefined}
             >
               {state.mainState ? (
                 <PopupMainStatePanel onEmptyAction={handlers?.onEmptyAction} state={state.mainState} />
@@ -1142,6 +1147,7 @@ function PopupBookmarkRow({
           if (!reorder) handlers?.onRowFocus?.(row.index)
         }}
         onKeyDown={(event) => {
+          if (activateModifiedBookmark(event, row.bookmarkId, handlers)) return
           if (!reorder) handleContentNavigationKeyDown(event, handlers)
         }}
         onClick={() => {
@@ -1203,11 +1209,17 @@ function PopupSearchResultRow({
   return (
     <li
       className={mainRowClass}
+      id={getPopupSearchResultId(row.bookmarkId)}
+      role="row"
+      aria-rowindex={row.index + 1}
+      aria-selected={row.active}
+      aria-label={`${row.title}，${row.displayUrl}，${row.path || ''}`}
       data-active={row.active ? 'true' : undefined}
       onFocusCapture={() => setActionsMounted(true)}
       onPointerEnter={() => setActionsMounted(true)}
       ref={row.active ? activeResultRef : undefined}
     >
+      <div role="gridcell" className="min-w-0">
       <Button
         className={listButtonClass}
         type="button"
@@ -1215,6 +1227,7 @@ function PopupSearchResultRow({
         style={getBookmarkButtonStyle()}
         onFocus={() => handlers?.onRowFocus?.(row.index)}
         onKeyDown={(event) => {
+          if (activateModifiedBookmark(event, row.bookmarkId, handlers)) return
           handleContentNavigationKeyDown(event, handlers)
         }}
         onClick={() => handlers?.onBookmarkOpen?.(row.bookmarkId)}
@@ -1240,6 +1253,8 @@ function PopupSearchResultRow({
           ) : null}
         </span>
       </Button>
+      </div>
+      <div role="gridcell" className="popup-result-actions-cell">
       <PopupRowActions
         active={row.active}
         bookmarkId={row.bookmarkId}
@@ -1249,6 +1264,7 @@ function PopupSearchResultRow({
         onMenuAction={handlers?.onMenuAction}
         title="操作菜单"
       />
+      </div>
     </li>
   )
 }
@@ -1353,6 +1369,14 @@ function areStringArraysEqual(previous: string[], next: string[]) {
   return previous.length === next.length && previous.every((item, index) => item === next[index])
 }
 
+function activateModifiedBookmark(event: KeyboardEvent<HTMLButtonElement>, bookmarkId: string, handlers?: PopupContentActionHandlers): boolean {
+  if (event.nativeEvent.isComposing || event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey && !event.altKey)) return false
+  event.preventDefault()
+  event.stopPropagation()
+  handlers?.onMenuAction?.(bookmarkId, event.altKey ? 'open-current-tab' : 'open-background', event.currentTarget)
+  return true
+}
+
 function handleContentNavigationKeyDown(
   event: KeyboardEvent<HTMLElement>,
   handlers?: PopupContentActionHandlers
@@ -1370,15 +1394,13 @@ function handleContentNavigationKeyDown(
   }
 }
 
-function PopupRowActions({
-  active = false,
-  bookmarkId,
-  label,
-  mountQuickActions,
-  menu,
-  onMenuAction,
-  title
-}: {
+function PopupRowActions(props: PopupRowActionsProps) {
+  return isSidePanelSurface()
+    ? <SidePanelBookmarkActions menu={props.menu} onMenuAction={props.onMenuAction} />
+    : <PopupRowActionRail {...props} />
+}
+
+interface PopupRowActionsProps {
   active?: boolean
   bookmarkId: string
   label: string
@@ -1386,7 +1408,17 @@ function PopupRowActions({
   menu: PopupActionMenuViewModel
   onMenuAction?: (bookmarkId: string, action: string, returnFocusElement?: HTMLElement | null) => void
   title?: string
-}) {
+}
+
+function PopupRowActionRail({
+  active = false,
+  bookmarkId,
+  label,
+  mountQuickActions,
+  menu,
+  onMenuAction,
+  title
+}: PopupRowActionsProps) {
   const [focusExpanded, setFocusExpanded] = useState(false)
   const [pinnedExpanded, setPinnedExpanded] = useState(false)
   const [forcedCollapsed, setForcedCollapsed] = useState(false)

@@ -36,12 +36,15 @@ export function extractDomain(url: unknown): string {
 }
 
 export function buildDuplicateKey(url: unknown): string {
+  const rawUrl = String(url ?? '').trim()
   try {
-    const parsedUrl = new URL(String(url || ''))
-    const pathname = parsedUrl.pathname.replace(/\/+$/, '') || '/'
-    return `${parsedUrl.hostname.replace(/^www\./i, '').toLowerCase()}${pathname}${parsedUrl.search}`.toLowerCase()
+    // Cleanup and quick-save reuse need URL identity, not search normalization.
+    // Paths, ports, query values, trailing slashes and fragment routes can all
+    // identify different resources. URL only normalizes protocol/host casing,
+    // default ports and other equivalences defined by the URL standard.
+    return new URL(rawUrl).href
   } catch {
-    return normalizeText(String(url || '').replace(/#.*$/, '').replace(/\/+$/, ''))
+    return rawUrl
   }
 }
 

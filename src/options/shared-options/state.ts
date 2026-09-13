@@ -258,10 +258,12 @@ export const aiNamingManagerState = {
 }
 
 export const backupRestoreState = {
+  reading: false,
   fileName: '',
   backup: null,
   preview: null,
   restoring: false,
+  exporting: false,
   status: '',
   operationKey: '',
   operationId: ''

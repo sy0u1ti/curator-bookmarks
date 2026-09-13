@@ -50,6 +50,7 @@ import {
   createCuratorBackupFile,
   getBackupFileName,
   parseCuratorBackupFile,
+  readAutoBackupPoint,
   type BackupRestoreMode
 } from '../shared/backup.js'
 import {
@@ -184,7 +185,8 @@ import {
 } from './shared-options/permissions.js'
 import { truncateText } from './shared-options/text.js'
 import { writeClipboardText as copyTextToClipboard } from '../shared/clipboard.js'
-import { downloadJsonFile } from '../shared/download.js'
+import { downloadBlobFile, downloadJsonFile } from '../shared/download.js'
+import { buildBookmarkHtmlExport } from '../shared/bookmark-html.js'
 import {
   normalizeIgnoreRules,
   saveIgnoreRules,
@@ -4393,7 +4395,7 @@ function renderBackupControls() {
     : 0
   const tagBusy = aiNamingState.running || aiNamingState.applying
   const hasBackup = Boolean(backupRestoreState.backup && backupRestoreState.preview)
-  const backupBusy = Boolean(backupRestoreState.restoring)
+  const backupBusy = Boolean(backupRestoreState.restoring || backupRestoreState.exporting || backupRestoreState.reading)
 
   publishBackupControls({
     backup: {
@@ -4510,6 +4512,10 @@ async function handleBookmarkTagClear() {
 }
 
 export function handleBackupAction(detail: BackupActionDetail): void {
+  if (detail?.action === 'preview-auto-backup' && detail.backupId) {
+    void handleAutoBackupPreview(detail.backupId)
+    return
+  }
   if (detail?.action === 'export-tags') {
     void handleBookmarkTagExport()
     return
@@ -4524,6 +4530,10 @@ export function handleBackupAction(detail: BackupActionDetail): void {
   }
   if (detail?.action === 'export-backup') {
     void handleFullBackupExport()
+    return
+  }
+  if (detail?.action === 'export-html') {
+    void handleBookmarkHtmlExport()
     return
   }
   if (detail?.action === 'import-backup') {
@@ -4691,6 +4701,8 @@ function renderBackupRestoreSection() {
 }
 
 async function handleFullBackupExport() {
+  if (backupRestoreState.restoring || backupRestoreState.exporting) return
+  backupRestoreState.exporting = true
   backupRestoreState.status = '正在生成完整备份...'
   renderBackupRestoreSection()
 
@@ -4702,15 +4714,37 @@ async function handleFullBackupExport() {
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '完整备份导出失败。'
   } finally {
+    backupRestoreState.exporting = false
+    renderBackupRestoreSection()
+  }
+}
+
+async function handleBookmarkHtmlExport() {
+  if (backupRestoreState.restoring || backupRestoreState.exporting) return
+  backupRestoreState.exporting = true
+  backupRestoreState.status = '正在生成通用书签文件...'
+  renderBackupRestoreSection()
+  try {
+    const tree = await getBookmarkTree()
+    const html = buildBookmarkHtmlExport(tree)
+    downloadBlobFile(`curator-bookmarks-${new Date().toISOString().slice(0, 10)}.html`, new Blob([html], {
+      type: 'text/html;charset=utf-8'
+    }))
+    backupRestoreState.status = 'HTML 书签已导出，可在其他浏览器的书签管理器中导入。'
+  } catch (error) {
+    backupRestoreState.status = error instanceof Error ? error.message : 'HTML 书签导出失败，请重试。'
+  } finally {
+    backupRestoreState.exporting = false
     renderBackupRestoreSection()
   }
 }
 
 async function handleFullBackupImport(file?: File) {
-  if (!file) {
+  if (!file || backupRestoreState.reading || backupRestoreState.restoring || backupRestoreState.exporting) {
     return
   }
 
+  backupRestoreState.reading = true
   backupRestoreState.status = '正在读取备份文件...'
   backupRestoreState.backup = null
   backupRestoreState.preview = null
@@ -4729,7 +4763,34 @@ async function handleFullBackupImport(file?: File) {
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '备份文件导入失败。'
   } finally {
+    backupRestoreState.reading = false
     renderBackupRestoreSection()
+  }
+}
+
+async function handleAutoBackupPreview(backupId: string) {
+  if (backupRestoreState.reading || backupRestoreState.restoring || backupRestoreState.exporting) return
+  backupRestoreState.reading = true
+  backupRestoreState.backup = null
+  backupRestoreState.preview = null
+  backupRestoreState.operationKey = ''
+  backupRestoreState.operationId = ''
+  backupRestoreState.status = '正在读取恢复点并比较当前书签...'
+  renderBackupRestoreSection()
+  try {
+    const { point, backup } = await readAutoBackupPoint(backupId)
+    const name = `${formatDateTime(point.createdAt)} · ${point.operationReason || '自动恢复点'}`
+    const preview = await buildBackupRestorePreview(backup, name)
+    backupRestoreState.fileName = name
+    backupRestoreState.backup = backup
+    backupRestoreState.preview = preview
+    backupRestoreState.status = '恢复点已载入下方预览，请选择恢复范围。'
+  } catch (error) {
+    backupRestoreState.status = error instanceof Error ? error.message : '恢复点读取失败，请重试。'
+  } finally {
+    backupRestoreState.reading = false
+    renderBackupRestoreSection()
+    document.getElementById('backup-restore-preview')?.scrollIntoView({ block: 'nearest' })
   }
 }
 
@@ -4739,14 +4800,16 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
   }
   const backup = backupRestoreState.backup
 
-  const modeLabel = mode === 'tagsOnly'
+  const modeLabel = mode === 'bookmarksOnly' ? '恢复书签与标签' : mode === 'tagsOnly'
     ? '只恢复标签数据'
     : mode === 'newTabOnly'
       ? '只恢复新标签页设置'
       : '恢复全部可安全恢复的数据'
   const confirmed = await requestConfirmation({
     title: `${modeLabel}？`,
-    copy: mode === 'safeFull'
+    copy: mode === 'bookmarksOnly'
+      ? '恢复前会创建本地备份。缺失书签将补到新的恢复文件夹并关联标签；保留当前设置和清理记录。'
+      : mode === 'safeFull'
       ? '恢复前会自动创建本地备份；缺失书签只会复制到新的恢复文件夹，不会替换整个 Chrome 书签树，也不会恢复 API Key。'
       : mode === 'newTabOnly'
         ? '恢复会写入书签来源、布局、搜索、时间和背景设置；不会恢复背景媒体缓存，也不会恢复 API Key。'
@@ -4773,7 +4836,7 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
       `恢复完成：标签 ${result.restored.tags} 条，新标签页配置 ${result.restored.newTabSections} 项，本地数据 ${result.restored.storageSections} 项，复制缺失书签 ${result.restored.copiedBookmarks} 条；无法匹配标签 ${result.unmatchedTags} 条。`
     let releaseRefreshLock: (() => void) | null = null
     try {
-      if (mode === 'safeFull') {
+      if (mode === 'safeFull' || mode === 'bookmarksOnly') {
         releaseRefreshLock = await claimAvailabilityMutationLock()
         if (!releaseRefreshLock) {
           throw new Error(

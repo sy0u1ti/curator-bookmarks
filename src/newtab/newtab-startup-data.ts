@@ -1,5 +1,6 @@
 import { STORAGE_KEYS } from '../shared/constants.js'
 import { getLocalStorage } from '../shared/storage.js'
+import { reconcilePendingNewtabSettings } from './newtab-settings-persistence.js'
 import {
   consumeStartupData,
   prefetchStartupData,
@@ -25,6 +26,7 @@ const NEWTAB_STARTUP_STORAGE_KEYS = [
 export interface NewtabStartupData {
   stored: Record<string, unknown>
   tree: chrome.bookmarks.BookmarkTreeNode[]
+  settingsRecoveryError?: string
 }
 
 const STARTUP_DATA_KEY = 'newtab'
@@ -61,9 +63,15 @@ export function getBookmarkTree(): Promise<chrome.bookmarks.BookmarkTreeNode[]> 
 }
 
 async function loadNewtabStartupData(): Promise<NewtabStartupData> {
+  let settingsRecoveryError = ''
   const [tree, stored] = await Promise.all([
     getBookmarkTree(),
-    getLocalStorage<Record<string, unknown>>(NEWTAB_STARTUP_STORAGE_KEYS)
+    reconcilePendingNewtabSettings()
+      .catch((error) => {
+        settingsRecoveryError = '上次的设置尚未写入，已保留待恢复记录；再次保存或打开新标签页时会重试。'
+        console.warn(settingsRecoveryError, error)
+      })
+      .then(() => getLocalStorage<Record<string, unknown>>(NEWTAB_STARTUP_STORAGE_KEYS))
   ])
-  return { stored, tree }
+  return { stored, tree, settingsRecoveryError }
 }

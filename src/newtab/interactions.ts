@@ -43,7 +43,8 @@ export function resolveRestorableBookmarkParentId(
 export function buildMinimalBookmarkMoveOperations(
   originalIds: string[],
   finalIds: string[],
-  parentId: string
+  parentId: string,
+  siblings?: ReadonlyArray<Pick<chrome.bookmarks.BookmarkTreeNode, 'id'>>
 ): BookmarkMoveOperation[] {
   const normalizedParentId = String(parentId || '').trim()
   if (!normalizedParentId || originalIds.length !== finalIds.length) {
@@ -61,34 +62,37 @@ export function buildMinimalBookmarkMoveOperations(
     return []
   }
 
-  const finalIndexById = new Map(final.map((id, index) => [id, index]))
-  const originalFinalIndexes = original.map((id) => Number(finalIndexById.get(id)))
-  const stableIndexes = getLongestIncreasingSubsequenceIndexes(originalFinalIndexes)
-  const stableIds = new Set(stableIndexes.map((index) => original[index]))
-
-  const current = [...original]
+  // Chrome indices count every child, including folders that this grid does
+  // not render. Keep those children in their existing slots when reordering.
+  const movableIds = new Set(original)
+  const current = siblings ? siblings.map((child) => String(child.id)) : [...original]
+  const currentIds = new Set(current)
+  if (currentIds.size !== current.length || original.some((id) => !currentIds.has(id))) {
+    return []
+  }
+  let bookmarkIndex = 0
+  const target = current.map((id) => movableIds.has(id) ? final[bookmarkIndex++] : id)
+  const finalIndexById = new Map(target.map((id, index) => [id, index]))
+  const stableIds = getStableBookmarkIds(current, target, movableIds, finalIndexById)
   const currentIndexById = new Map(current.map((id, index) => [id, index]))
   const operations: BookmarkMoveOperation[] = []
-  for (let index = 0; index < final.length; index += 1) {
-    const targetId = final[index]
-    if (current[index] === targetId) {
+  // Insert before the next final sibling, working backwards. Forward numeric
+  // inserts can invalidate a previously skipped stable item in a permutation.
+  for (let index = target.length - 1; index >= 0; index -= 1) {
+    const targetId = target[index]
+    if (!movableIds.has(targetId) || stableIds.has(targetId)) {
       continue
     }
-    if (stableIds.has(targetId)) {
-      continue
-    }
-
     const currentIndex = currentIndexById.get(targetId) ?? -1
-    if (currentIndex < 0) {
-      return []
-    }
-
+    const nextId = target[index + 1]
+    const chromeMoveIndex = nextId ? currentIndexById.get(nextId)! : current.length
+    const insertIndex = currentIndex < chromeMoveIndex ? chromeMoveIndex - 1 : chromeMoveIndex
+    if (currentIndex === insertIndex) continue
     const [movedId] = current.splice(currentIndex, 1)
-    current.splice(index, 0, movedId)
-    for (let cursor = Math.min(currentIndex, index); cursor <= Math.max(currentIndex, index); cursor += 1) {
+    current.splice(insertIndex, 0, movedId)
+    for (let cursor = Math.min(currentIndex, insertIndex); cursor <= Math.max(currentIndex, insertIndex); cursor += 1) {
       currentIndexById.set(current[cursor], cursor)
     }
-    const chromeMoveIndex = currentIndex < index ? index + 1 : index
     operations.push({
       id: movedId,
       parentId: normalizedParentId,
@@ -97,6 +101,38 @@ export function buildMinimalBookmarkMoveOperations(
   }
 
   return operations
+}
+
+function getStableBookmarkIds(
+  current: string[],
+  target: string[],
+  movableIds: Set<string>,
+  finalIndexById: Map<string, number>
+): Set<string> {
+  const targetGapById = new Map<string, number>()
+  let gap = 0
+  for (const id of target) {
+    if (movableIds.has(id)) targetGapById.set(id, gap)
+    else gap += 1
+  }
+  const stableIds = new Set<string>()
+  let candidates: string[] = []
+  const finishGap = () => {
+    const positions = candidates.map((id) => finalIndexById.get(id)!)
+    for (const index of getLongestIncreasingSubsequenceIndexes(positions)) stableIds.add(candidates[index])
+    candidates = []
+  }
+  gap = 0
+  for (const id of current) {
+    if (!movableIds.has(id)) {
+      finishGap()
+      gap += 1
+    } else if (targetGapById.get(id) === gap) {
+      candidates.push(id)
+    }
+  }
+  finishGap()
+  return stableIds
 }
 
 export function buildBookmarkOrderAfterInsert(

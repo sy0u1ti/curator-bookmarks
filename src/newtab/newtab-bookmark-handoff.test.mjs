@@ -29,7 +29,8 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    headless: false,
+    channel: 'chromium',
+    headless: process.env.CURATOR_HEADLESS === '1',
     viewport: { width: 1558, height: 463 },
     recordVideo: visualCaptureDir
       ? { dir: path.resolve(visualCaptureDir), size: { width: 1558, height: 463 } }
@@ -797,32 +798,45 @@ async function assertGlassPixelsStable(page, label) {
     GLASS_PIXEL_SAMPLE_START_MS
   )
 
-  const samples = []
-  while (await page.evaluate((endTime) => performance.now() < endTime, GLASS_PIXEL_SAMPLE_END_MS)) {
-    const regions = await page.evaluate((selectors) => Object.fromEntries(
-      Object.entries(selectors).map(([name, selector]) => {
+  const captured = []
+  while (true) {
+    const frame = await page.evaluate(({ selectors, endTime }) => {
+      const now = performance.now()
+      if (now >= endTime) return null
+      const regions = Object.fromEntries(Object.entries(selectors).map(([name, selector]) => {
         const rect = document.querySelector(selector)?.getBoundingClientRect()
         return [name, rect
           ? { height: rect.height, left: rect.left, top: rect.top, width: rect.width }
           : null]
-      })
-    ), STARTUP_GLASS_SELECTORS)
+      }))
+      return { now, regions }
+    }, { selectors: STARTUP_GLASS_SELECTORS, endTime: GLASS_PIXEL_SAMPLE_END_MS })
+    if (!frame) break
     const screenshot = await page.screenshot({ type: 'png' })
-    const stats = await page.evaluate(async ({ encodedPng, regions }) => {
+    captured.push({ ...frame, encodedPng: screenshot.toString('base64') })
+    await page.waitForTimeout(24)
+  }
+
+  // PNG decoding and statistics do not belong in the timed capture window.
+  // Collect the same startup pixels first, then analyze them in one browser
+  // call so machine/IPC throughput does not silently reduce the sample count.
+  const samples = await page.evaluate(async (frames) => {
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) throw new Error('Pixel probe could not create a 2D canvas context')
+    const samples = []
+    for (const { encodedPng, regions, now } of frames) {
       const image = await createImageBitmap(
         await (await fetch(`data:image/png;base64,${encodedPng}`)).blob()
       )
-      const canvas = document.createElement('canvas')
       canvas.width = image.width
       canvas.height = image.height
-      const context = canvas.getContext('2d', { willReadFrequently: true })
-      if (!context) throw new Error('Pixel probe could not create a 2D canvas context')
       context.drawImage(image, 0, 0)
       image.close()
       const scaleX = canvas.width / window.innerWidth
       const scaleY = canvas.height / window.innerHeight
 
-      return Object.fromEntries(Object.entries(regions).map(([name, rect]) => {
+      const stats = Object.fromEntries(Object.entries(regions).map(([name, rect]) => {
         if (!rect) return [name, null]
         const inset = Math.max(2, Math.min(6, rect.width / 5, rect.height / 5))
         const left = Math.max(0, Math.floor((rect.left + inset) * scaleX))
@@ -863,16 +877,10 @@ async function assertGlassPixelsStable(page, label) {
           standardDeviation: Math.sqrt(Math.max(0, luminanceSquared / count - meanLuminance ** 2))
         }]
       }))
-    }, {
-      encodedPng: screenshot.toString('base64'),
-      regions
-    })
-    samples.push({
-      now: await page.evaluate(() => performance.now()),
-      stats
-    })
-    await page.waitForTimeout(24)
-  }
+      samples.push({ now, stats })
+    }
+    return samples
+  }, captured)
 
   const diagnostics = {}
   for (const name of Object.keys(STARTUP_GLASS_SELECTORS)) {

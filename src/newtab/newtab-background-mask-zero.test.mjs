@@ -34,7 +34,8 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    headless: false,
+    channel: 'chromium',
+    headless: process.env.CURATOR_HEADLESS === '1',
     viewport: { width: 1280, height: 720 },
     args: [
       `--disable-extensions-except=${extensionPath}`,

@@ -31,7 +31,7 @@ let context
 let page
 try {
   context = await chromium.launchPersistentContext(path.join(temporary, 'profile'), {
-    channel: 'chromium', headless: true, reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 },
+    channel: 'chromium', headless: true, acceptDownloads: true, reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 },
     args: ['--disable-extensions-except=' + extensionPath, '--load-extension=' + extensionPath,
       '--host-resolver-rules=MAP options-ui.example.net 127.0.0.1', '--no-proxy-server']
   })
@@ -131,6 +131,20 @@ try {
     }
   }
   if (!before) {
+    await page.goto(base + '#backup')
+    const bookmarksBeforeExport = await worker.evaluate(() => chrome.bookmarks.getTree())
+    const downloadPromise = page.waitForEvent('download')
+    await page.getByRole('button', { name: '导出通用 HTML 书签文件', exact: true }).click()
+    const download = await downloadPromise
+    assert.match(download.suggestedFilename(), /^curator-bookmarks-\d{4}-\d{2}-\d{2}\.html$/)
+    assert.equal(await download.failure(), null)
+    const exportedHtml = await readFile(await download.path(), 'utf8')
+    assert.match(exportedHtml, /^<!DOCTYPE NETSCAPE-Bookmark-file-1>/)
+    assert.ok(exportedHtml.includes(seeded.guide.url.replace(/&/g, '&amp;')))
+    assert.ok(exportedHtml.includes('UI 检查资料'))
+    assert.deepEqual(await worker.evaluate(() => chrome.bookmarks.getTree()), bookmarksBeforeExport)
+    await page.getByRole('status').filter({ hasText: 'HTML 书签已导出' }).waitFor({ state: 'visible' })
+
     await page.setViewportSize({ width: 1440, height: 1000 })
     await page.emulateMedia({ reducedMotion: 'no-preference' })
     await page.goto(base + '#availability')

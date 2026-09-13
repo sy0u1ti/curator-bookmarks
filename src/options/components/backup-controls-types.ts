@@ -5,6 +5,8 @@ import type {
 
 export type BackupAction =
   | 'export-backup'
+  | 'export-html'
+  | 'preview-auto-backup'
   | 'export-tags'
   | 'clear-tags'
   | 'import-backup'
@@ -14,6 +16,7 @@ export type BackupAction =
 export interface BackupActionDetail {
   action: BackupAction
   file?: File
+  backupId?: string
   mode?: BackupRestoreMode
 }
 

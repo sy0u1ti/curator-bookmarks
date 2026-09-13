@@ -80,7 +80,7 @@ assert.ok(
     newtabCss.includes('@media (prefers-reduced-transparency: reduce)') &&
     newtabCss.includes('@media (prefers-contrast: more)') &&
     newtabCss.includes('#newtab-settings-drawer button') &&
-    newtabCss.includes(':not(:disabled):active') &&
+    newtabCss.includes(':not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active') &&
     /@media \(prefers-reduced-motion: reduce\)[\s\S]*?#newtab-settings-drawer \.settings-drawer-panel\[data-starting-style\][\s\S]*?transform:\s*none !important/.test(newtabCss) &&
     newtabButtonClasses.includes('transition-[background-color,border-color,color,opacity,transform]') &&
     newtabButtonClasses.includes('active:duration-[var(--ds-motion-feedback)]') &&
@@ -412,7 +412,9 @@ assert.ok(
 )
 
 assert.ok(
-  controller.includes('const { tree, stored } = await consumeNewtabStartupData()') &&
+  controller.includes('const startup = await consumeNewtabStartupData()') &&
+    controller.includes('const stored = settingsPersistence.hydrate(startup.stored)') &&
+    newtabStartupData.indexOf('reconcilePendingNewtabSettings()') < newtabStartupData.indexOf('.then(() => getLocalStorage') &&
     controller.includes('preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])') &&
     /useLayoutEffect\(\(\) => \{\s*return scheduleNewtabBookmarkPrebootHandoff\(\{[\s\S]+?onFinish:/.test(bookmarkContent) &&
     bookmarkPreboot.includes('measureNewtabBookmarkPrebootHandoff') &&

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { build } from 'esbuild'
 import { chromium } from 'playwright'
@@ -70,9 +70,13 @@ const compiled = await build({
   bundle: true, write: false, jsx: 'automatic', format: 'iife', platform: 'browser',
   target: 'chrome140', define: { 'process.env.NODE_ENV': '"production"' }, logLevel: 'silent'
 })
-const cssFiles = (await readdir('dist/assets')).filter(name => /^(?:ThemeProvider|popup)-.*\.css$/.test(name))
-assert.equal(cssFiles.length, 2, 'Build the extension before running the popup browser regression.')
-const css = (await Promise.all(cssFiles.map(name => readFile(path.join('dist/assets', name), 'utf8')))).join('\n')
+// Popup and Side Panel now share a CSS chunk. Read the actual entry's styles
+// instead of depending on Vite's names or number of generated chunks.
+const popupHtml = await readFile('dist/src/popup/popup.html', 'utf8')
+const cssFiles = [...popupHtml.matchAll(/<link\b(?=[^>]*\brel="stylesheet")[^>]*\bhref="([^"]+)"/g)].map(match => match[1])
+assert.ok(cssFiles.length, 'Build the extension before running the popup browser regression.')
+const css = (await Promise.all(cssFiles.map(name => readFile(path.join('dist', name.replace(/^\/+/, '')), 'utf8')))).join('\n')
+assert.ok(css.includes('.popup-main-row') && css.includes('--ds-text-primary'), 'Load both the actual popup styles and shared theme tokens.')
 const browser = await chromium.launch({ channel: 'chromium', headless: true })
 
 try {

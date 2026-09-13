@@ -14,6 +14,7 @@ import { Toolbar } from '../../ui/base/Toolbar'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
 import { getSmartDisplayProgress, getSmartLoadingOrbState, SMART_LOADING_STAGE_STARTS } from '../smart-loading-progress.js'
+import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './PopupViewModels'
 
 const SMART_ERROR_BANNER_CLASS =
@@ -399,6 +400,8 @@ function PopupSmartPageSkeletonContent() {
 }
 
 function PopupSmartPagePlaceholderContent() {
+  const hint = isSidePanelSurface() ? '点击工具栏图标，启用当前页操作' : '打开网页后可快速保存或智能分类'
+  const hintTitle = isSidePanelSurface() ? '切换普通网页后，点击浏览器工具栏中的 Curator 图标，启用该网页的保存与分类操作。' : hint
   return (
     <>
       <div className={pageMainClass}>
@@ -407,8 +410,8 @@ function PopupSmartPagePlaceholderContent() {
         </span>
         <div className={pageCopyClass}>
           <p className={cx(pageTitleClass, placeholderTitleClass)}>当前标签页</p>
-          <p className={cx(pageStatusClass, placeholderStatusClass)} title="打开网页后可快速保存或智能分类">
-            打开网页后可快速保存或智能分类
+          <p className={cx(pageStatusClass, placeholderStatusClass)} title={hintTitle}>
+            {hint}
           </p>
         </div>
       </div>

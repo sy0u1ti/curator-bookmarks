@@ -13,6 +13,7 @@ export interface NewtabBookmarkEventActions {
   onCreated: (bookmarkId: string, bookmark: chrome.bookmarks.BookmarkTreeNode) => void
   onMoved: (bookmarkId: string, moveInfo: BookmarkMoveInfo) => void
   onRemoved: (bookmarkId: string, removeInfo: BookmarkRemoveInfo) => void
+  onChildrenReordered?: (folderId: string) => void
 }
 
 const EMPTY_BOOKMARK_EVENT_ACTIONS: NewtabBookmarkEventActions = {
@@ -24,6 +25,7 @@ const EMPTY_BOOKMARK_EVENT_ACTIONS: NewtabBookmarkEventActions = {
 
 let newtabBookmarkEventActions: NewtabBookmarkEventActions = EMPTY_BOOKMARK_EVENT_ACTIONS
 type PendingNewtabBookmarkEvent =
+  | { type: 'reordered'; folderId: string }
   | {
       type: 'changed'
       bookmarkId: string
@@ -103,11 +105,22 @@ export function dispatchNewtabBookmarkRemoved(
   newtabBookmarkEventActions.onRemoved(bookmarkId, removeInfo)
 }
 
+export function dispatchNewtabBookmarkChildrenReordered(folderId: string): void {
+  if (newtabBookmarkEventActions === EMPTY_BOOKMARK_EVENT_ACTIONS) {
+    pendingNewtabBookmarkEvents.push({ type: 'reordered', folderId })
+    return
+  }
+  newtabBookmarkEventActions.onChildrenReordered?.(folderId)
+}
+
 function dispatchPendingNewtabBookmarkEvent(
   actions: NewtabBookmarkEventActions,
   event: PendingNewtabBookmarkEvent
 ): void {
   switch (event.type) {
+    case 'reordered':
+      actions.onChildrenReordered?.(event.folderId)
+      return
     case 'changed':
       actions.onChanged(event.bookmarkId, event.changeInfo)
       return

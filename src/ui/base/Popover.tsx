@@ -17,6 +17,7 @@ export interface PopoverProps {
   open?: boolean
   popupClassName?: string
   portal?: boolean
+  keepMounted?: BasePopoverPortalProps['keepMounted']
   positionMethod?: BasePopoverPositionerProps['positionMethod']
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
@@ -39,6 +40,7 @@ export function Popover({
   open,
   popupClassName,
   portal = true,
+  keepMounted = true,
   positionMethod,
   side = 'bottom',
   sideOffset = 8,
@@ -84,7 +86,7 @@ export function Popover({
   return (
     <BasePopover.Root open={open} onOpenChange={onOpenChange} triggerId={triggerId} modal={modal}>
       <BasePopover.Trigger id={triggerId} render={trigger} nativeButton={triggerNativeButton} />
-      <PopoverPortal container={portal ? undefined : null} keepMounted>
+      <PopoverPortal container={portal ? undefined : null} keepMounted={keepMounted}>
         {popup}
       </PopoverPortal>
     </BasePopover.Root>

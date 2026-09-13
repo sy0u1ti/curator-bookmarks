@@ -280,7 +280,11 @@ try {
   assert.equal(await page.locator('.newtab-search-surface').evaluate(element => getComputedStyle(element).outlineStyle), 'none')
   assert.equal(await page.locator('.newtab-search').evaluate(element => getComputedStyle(element).borderTopWidth), '0px')
   assert.equal(await page.locator('.newtab-search-surface').evaluate(element => getComputedStyle(element).borderTopColor), 'rgba(255, 255, 255, 0.46)')
-  assert.ok(await page.locator('.newtab-search-shell').evaluate(element => new DOMMatrixReadOnly(getComputedStyle(element).transform).a > 1.01), 'Focus should give the joined search surface a gentle spring expansion')
+  const focusedTransform = await page.locator('.newtab-search-shell').evaluate(element => {
+    const matrix = new DOMMatrixReadOnly(getComputedStyle(element).transform)
+    return { x: matrix.a, y: matrix.d, lift: matrix.f }
+  })
+  assert.deepEqual(focusedTransform, { x: 1, y: 1, lift: -2 }, 'Focus should lift the joined search field without resizing its text or controls')
   const joinedSearch = await page.evaluate(() => {
     const surface = document.querySelector('.newtab-search-surface')
     const panel = document.querySelector('.newtab-search-suggestions-panel')

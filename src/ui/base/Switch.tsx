@@ -11,6 +11,7 @@ import {
   type Ref
 } from 'react'
 import { cx } from './utils'
+import { InputStateCommit } from './InputStateCommit'
 
 type BaseSwitchRootProps = ComponentPropsWithoutRef<typeof BaseSwitch.Root>
 type InputStyle = ComponentPropsWithoutRef<'input'>['style']
@@ -72,10 +73,12 @@ export function SwitchControl({
   const checked = checkedProp ?? checkedState
   const disabled = disabledProp ?? disabledState
 
-  checkedRef.current = Boolean(checked)
-  disabledRef.current = Boolean(disabled)
-  checkedControlledRef.current = checkedProp !== undefined
-  disabledControlledRef.current = disabledProp !== undefined
+  const commitInputState = () => {
+    checkedRef.current = Boolean(checked)
+    disabledRef.current = Boolean(disabled)
+    checkedControlledRef.current = checkedProp !== undefined
+    disabledControlledRef.current = disabledProp !== undefined
+  }
 
   const handleInputRef = useCallback((node: HTMLInputElement | null) => {
     inputElementRef.current = node
@@ -193,7 +196,8 @@ export function SwitchControl({
       } as unknown as Parameters<NonNullable<BaseSwitchRootProps['onCheckedChange']>>[1])
     }
 
-    return (
+    return <>
+      <InputStateCommit onCommit={commitInputState} />
       <span
         {...rootProps}
         aria-checked={Boolean(checked)}
@@ -245,10 +249,11 @@ export function SwitchControl({
           style={VISUALLY_HIDDEN_INPUT_STYLE}
         />
       </span>
-    )
+    </>
   }
 
-  return (
+  return <>
+    <InputStateCommit onCommit={commitInputState} />
     <BaseSwitch.Root
       checked={checked}
       className={unstyled ? className : cx(
@@ -268,7 +273,7 @@ export function SwitchControl({
         )}
       />
     </BaseSwitch.Root>
-  )
+  </>
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {

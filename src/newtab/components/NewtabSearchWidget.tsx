@@ -1,5 +1,6 @@
 import {
   memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -76,6 +77,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const engineButtonRef = useRef<HTMLButtonElement | null>(null)
   const engineMenuRef = useRef<HTMLDivElement | null>(null)
+  const [focusWithin, setFocusWithin] = useState(false)
   const shell = view.shell
   const slotStyle = useMemo(() => ({
     '--search-width': `${shell.width}vw`,
@@ -94,7 +96,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
     '--search-height': `${shell.height}px`
   }) as CSSProperties, [shell.height, shell.width])
 
-  useLayoutEffect(() => {
+  const publishNodes = useCallback(() => {
     const nodes = {
       engineButton: engineButtonRef.current,
       engineMenu: engineMenuRef.current,
@@ -103,7 +105,14 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
     }
     setNewtabSearchWidgetNodes(nodes)
     view.onNodesChange?.(nodes)
-  })
+  }, [view.onNodesChange])
+  const setEngineMenuNode = useCallback((element: HTMLDivElement | null) => {
+    engineMenuRef.current = element
+    // The menu mounts lazily without rerendering this parent. Publish its node
+    // immediately so portal focus is still recognized as part of the search.
+    publishNodes()
+  }, [publishNodes])
+  useLayoutEffect(publishNodes)
 
   useEffect(() => {
     const onNodesChange = view.onNodesChange
@@ -137,7 +146,18 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
         data-squircle-subtree="off"
         data-panel-open={view.panel.panelVisible ? 'true' : 'false'}
         data-engine-open={view.engineMenu.open ? 'true' : undefined}
-        onBlur={view.interactions.onRootBlur}
+        data-focus-within={focusWithin ? 'true' : undefined}
+        onFocusCapture={() => setFocusWithin(true)}
+        onBlur={(event) => {
+          // React focus events cross the menu portal; CSS :focus-within does
+          // not. Hold the lift while focus returns from a closing menu.
+          queueMicrotask(() => {
+            if (!slotRef.current) return
+            const active = document.activeElement
+            setFocusWithin(Boolean(slotRef.current.contains(active) || engineMenuRef.current?.contains(active)))
+          })
+          view.interactions.onRootBlur(event)
+        }}
         onContextMenu={handleSearchContextMenu}
       >
         <div className="newtab-search-surface" aria-hidden="true" />
@@ -156,7 +176,7 @@ export function NewtabSearchWidget({ view }: { view: NewtabSearchWidgetView }) {
           <SearchWidgetClearButton view={view} />
           <SearchWidgetSeparator view={view} />
           <SearchWidgetNaturalButton view={view} />
-          <DeferredSearchEngineMenu view={view} buttonRef={engineButtonRef} menuRef={engineMenuRef} />
+          <DeferredSearchEngineMenu view={view} buttonRef={engineButtonRef} menuRef={setEngineMenuNode} />
           <SearchWidgetSubmitButton view={view} />
         </form>
         <SearchWidgetSuggestionsPanel view={view} />
@@ -279,15 +299,10 @@ function SearchWidgetEngineButtonFallback({
       className={SEARCH_ENGINE_BUTTON_CLASS}
       type="button"
       aria-label={engine.ariaLabel}
+      aria-haspopup="menu"
+      aria-expanded={view.engineMenu.open}
       disabled={engine.disabled}
       title={engine.title}
-      onMouseDown={(event) => {
-        if (!engine.disabled) {
-          event.preventDefault()
-          onRequest()
-          view.interactions.onEngineOpenChange(true)
-        }
-      }}
       onPointerEnter={() => {
         void loadNewtabSearchEngineMenu()
       }}
@@ -384,6 +399,7 @@ const SearchWidgetSuggestionContent = memo(function SearchWidgetSuggestionConten
       </div>
       <div
         id="newtab-search-suggestions"
+        role="listbox"
         className={SEARCH_SUGGESTIONS_CLASS}
         aria-label="匹配的书签"
         hidden={!view.panel.suggestionsVisible}
@@ -424,7 +440,9 @@ function SearchSuggestions({ suggestions }: { suggestions: SearchSuggestionViewM
             command: Boolean(suggestion.command)
           })}
           type="button"
-          aria-current={suggestion.active ? 'true' : undefined}
+          role="option"
+          tabIndex={-1}
+          aria-selected={suggestion.active}
           aria-label={suggestion.ariaLabel}
           onPointerDown={(event) => {
             event.preventDefault()

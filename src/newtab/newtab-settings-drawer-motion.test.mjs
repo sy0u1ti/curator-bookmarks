@@ -272,11 +272,15 @@ async function verifyDrawerCloseDuringEntrance(page) {
   await waitForDrawerClosed(page)
   // Observe and interrupt within one browser frame. A protocol round-trip can
   // outlast the entrance on a busy machine and accidentally test a settled panel.
+  // CSS reversals shorten their duration by the current entrance progress.
+  // Interrupt in the middle so the return trip can span multiple painted frames;
+  // the first few visible pixels can legitimately reverse in less than 24 ms.
   const { beforeClose, ...result } = await page.evaluate(() => new Promise(resolve => {
     const panel = document.querySelector('.settings-drawer-panel')
     const probe = {
       beforeClose: null,
       endingLeft: null,
+      endingDurationMs: null,
       frames: [],
       hidden: false,
       sawEndingStyle: false
@@ -286,14 +290,17 @@ async function verifyDrawerCloseDuringEntrance(page) {
       if (panel?.hasAttribute('data-ending-style')) {
         probe.sawEndingStyle = true
         probe.endingLeft ??= panel.getBoundingClientRect().left
+        probe.endingDurationMs ??= panel.getAnimations()
+          .find(animation => animation.transitionProperty === 'transform')?.effect?.getComputedTiming().duration ?? null
       }
     })
     observer.observe(panel, { attributes: true, attributeFilter: ['data-ending-style', 'hidden'] })
     const sample = (now) => {
       if (!probe.beforeClose && panel && !panel.hasAttribute('hidden')) {
         const rect = panel.getBoundingClientRect()
-        if (rect.left < innerWidth - 12 && rect.left > innerWidth - rect.width + 8) {
-          probe.beforeClose = { left: rect.left, openLeft: innerWidth - rect.width, viewportWidth: innerWidth }
+        const visualProgress = (innerWidth - rect.left) / rect.width
+        if (visualProgress >= 0.35 && visualProgress <= 0.75) {
+          probe.beforeClose = { left: rect.left, openLeft: innerWidth - rect.width, viewportWidth: innerWidth, visualProgress }
           document.querySelector('#newtab-settings-close')?.click()
         }
       }
@@ -311,10 +318,10 @@ async function verifyDrawerCloseDuringEntrance(page) {
     document.querySelector('#newtab-settings-trigger')?.click()
     requestAnimationFrame(sample)
   }))
-  assert.ok(beforeClose, 'The interruption must catch an actual entrance frame')
+  assert.ok(beforeClose, 'The interruption must catch a mid-entrance frame')
   assert.ok(result.sawEndingStyle, 'Closing during entrance should enter the Base UI ending state')
   assert.ok(result.hidden, 'Closing during entrance should finish hidden')
-  assert.ok(result.frames.length >= 2, 'Closing during entrance should preserve visible exit frames')
+  assert.ok(result.frames.length >= 2, `Closing during entrance should preserve visible exit frames: ${JSON.stringify({ beforeClose, result })}`)
   assert.ok(
     result.endingLeft > beforeClose.openLeft + 8 &&
       result.endingLeft < beforeClose.viewportWidth - 8 &&

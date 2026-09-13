@@ -496,6 +496,59 @@ test('bulk tag removal remains ordered with queued upserts', async () => {
   assert.deepEqual(Object.keys((await loadBookmarkTagIndex()).records).sort(), ['ordered-keep', 'ordered-new'])
 })
 
+test('an empty tag fallback remains authoritative after the last record is deleted', async (t) => {
+  resetTestStorage()
+  await upsertBookmarkTagsFromAnalysis([createTagAnalysisInput('last-tag', ['private'])])
+  const before = await loadBookmarkTagIndex()
+  t.mock.method(Date, 'now', () => before.updatedAt)
+  setCuratorDataDbFailureForTest(operation => operation === 'apply-delta-with-meta'
+    ? new Error('simulated IndexedDB write failure') : null)
+  try {
+    await removeBookmarkTagRecord('last-tag')
+    assert.deepEqual((storageState[STORAGE_KEYS.bookmarkTagIndex] as BookmarkTagIndex).records, {})
+    setCuratorDataDbFailureForTest(null)
+    __resetBookmarkTagRepositoryForTest()
+    assert.deepEqual((await loadBookmarkTagIndex()).records, {}, 'deleted tags must not reappear from the older IndexedDB copy')
+    assert.equal((await readCuratorDataStoreMeta('bookmarkTags'))?.recordCount, 0)
+  } finally {
+    setCuratorDataDbFailureForTest(null)
+  }
+})
+
+test('an empty snapshot fallback does not resurrect a record after its full text was removed', async () => {
+  resetTestStorage({ snapshots: true })
+  const blobs = new Map<string, ContentFullTextRecord>()
+  const restoreOperations = setContentFullTextOperationsForTest({
+    putMany: async records => { for (const record of records) blobs.set(record.snapshotId, record) },
+    deleteMany: async ids => { for (const id of ids) blobs.delete(id) }
+  })
+  try {
+    await saveContentSnapshotFromContext(createSnapshotInput('last-snapshot', 800))
+    const before = await loadContentSnapshotIndex()
+    setCuratorDataDbFailureForTest(operation => operation === 'apply-delta-with-meta'
+      ? new Error('simulated IndexedDB write failure') : null)
+    assert.equal(await removeContentSnapshotForBookmark('last-snapshot', before.updatedAt), true)
+    assert.equal(blobs.size, 0)
+    setCuratorDataDbFailureForTest(null)
+    __resetContentSnapshotRepositoryForTest()
+    assert.deepEqual((await loadContentSnapshotIndex()).records, {}, 'deleted snapshots must stay deleted on reload')
+    assert.equal((await readCuratorDataStoreMeta('contentSnapshots'))?.recordCount, 0)
+  } finally {
+    setCuratorDataDbFailureForTest(null)
+    restoreOperations()
+  }
+})
+
+test('compacted local metadata is never mistaken for an intentional empty tag index', async () => {
+  resetTestStorage()
+  await upsertBookmarkTagsFromAnalysis([createTagAnalysisInput('keep-tag', ['keep'])])
+  const before = await loadBookmarkTagIndex()
+  storageState[STORAGE_KEYS.bookmarkTagIndex] = {
+    ...(storageState[STORAGE_KEYS.bookmarkTagIndex] as object), updatedAt: before.updatedAt + 1
+  }
+  assert.deepEqual((await loadBookmarkTagIndex()).records, before.records)
+})
+
 function resetTestStorage({ snapshots = false }: { snapshots?: boolean } = {}): void {
   __resetBookmarkTagRepositoryForTest()
   if (snapshots) {

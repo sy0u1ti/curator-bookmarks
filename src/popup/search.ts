@@ -9,6 +9,7 @@ import { getEffectiveBookmarkTags, type BookmarkTagRecord } from '../shared/book
 import {
   buildSearchTextQuery,
   matchesParsedSearchQuery,
+  matchesSearchSiteFilter,
   parseSearchQuery,
   type ParsedSearchQuery
 } from '../shared/search-query.js'
@@ -365,12 +366,14 @@ export function normalizeQuery(value: unknown): string {
 function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
   const parsed = parseSearchQuery(query)
   const excludedTerms = parsed.excludedTerms
-  const recencyHint = parsed.textTerms.some(isRecencyHintTerm)
-  const textTerms = parsed.textTerms.filter((term) => !isRecencyHintTerm(term))
+  const isUnquotedRecencyTerm = (term: string) => !parsed.literalTerms.includes(term) && isRecencyHintTerm(term)
+  const recencyHint = parsed.textTerms.some(isUnquotedRecencyTerm)
+  const textTerms = parsed.textTerms.filter((term) => !isUnquotedRecencyTerm(term))
   const normalizedQuery = buildSearchTextQuery({ ...parsed, textTerms, excludedTerms })
   const queryTerms = getQueryTerms(normalizedQuery)
   const hasStructuredFilters = Boolean(
     parsed.siteFilters.length ||
+    parsed.urlFilters.length ||
     parsed.folderFilters.length ||
     parsed.typeFilters.length ||
     excludedTerms.length ||
@@ -392,7 +395,7 @@ function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
     recencyHint,
     hasStructuredFilters,
     compactQuery,
-    phraseTerms: textTerms.filter((term) => /\s/.test(term)),
+    phraseTerms: parsed.literalTerms,
     looseSubsequenceAllowed
   }
 }
@@ -432,7 +435,7 @@ function scoreBookmarkWithReasons(
 
   if (parsedQuery.hasStructuredFilters) {
     score += 90
-    matched = true
+    matched = !normalizedQuery
   }
 
   if (normalizedQuery && title === normalizedQuery) {
@@ -602,7 +605,7 @@ function scoreBookmarkWithReasons(
     score += 38
   }
 
-  if (parsedQuery.recencyHint) {
+  if (parsedQuery.recencyHint && (!normalizedQuery || matched)) {
     const recencyBoost = getBookmarkRecencyBoost(bookmark)
     if (recencyBoost > 0) {
       score += recencyBoost
@@ -636,7 +639,7 @@ function matchesFastFirstBatchCandidate(
   parsedQuery: ParsedPopupSearchQuery,
   terms: string[]
 ): boolean {
-  if (!terms.length) {
+  if (!terms.length || !matchesRequiredPhraseTerms(bookmark, parsedQuery)) {
     return false
   }
 
@@ -942,12 +945,19 @@ function matchesStructuredFilters(
     const domain = getBookmarkDerived(bookmark).normalizedDomain
     const url = bookmark.normalizedUrl || ''
     const matchedSite = parsedQuery.siteFilters.find((filter) =>
-      domain.includes(filter) || url.includes(filter)
+      matchesSearchSiteFilter(filter, domain, url)
     )
     if (!matchedSite) {
       return false
     }
     addReason(reasons, `筛选：站点 ${matchedSite}`)
+  }
+
+  if (parsedQuery.urlFilters.length) {
+    const matchedUrl = parsedQuery.urlFilters.find((filter) => bookmark.normalizedUrl.includes(filter))
+    if (matchedUrl) {
+      addReason(reasons, `筛选：网址 ${matchedUrl}`)
+    }
   }
 
   if (parsedQuery.folderFilters.length) {

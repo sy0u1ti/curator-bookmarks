@@ -261,6 +261,7 @@ export function parseBackupRestoreMessage(
   if (
     value.mode !== 'tagsOnly' &&
     value.mode !== 'newTabOnly' &&
+    value.mode !== 'bookmarksOnly' &&
     value.mode !== 'safeFull'
   ) {
     return { ok: false, error: '备份恢复范围无效。' }

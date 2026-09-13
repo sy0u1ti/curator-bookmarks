@@ -45,7 +45,7 @@ export function PopupSearchHelpPopover({
           variant="ghost"
           type="button"
           aria-label="查看高级搜索语法"
-          title="查看高级搜索语法（site / folder / type / -排除）"
+          title="查看高级搜索语法"
           aria-controls="search-help-popover"
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
@@ -60,8 +60,16 @@ export function PopupSearchHelpPopover({
     >
       <ul className={searchHelpListClass}>
         <li className={searchHelpItemClass}>
+          <span className={searchHelpTagClass}>原文</span>
+          <span className={searchHelpExampleClass}><code className={searchHelpCodeClass}>"not found"</code></span>
+        </li>
+        <li className={searchHelpItemClass}>
           <span className={searchHelpTagClass}>站点</span>
           <span className={searchHelpExampleClass}><code className={searchHelpCodeClass}>site:github.com</code></span>
+        </li>
+        <li className={searchHelpItemClass}>
+          <span className={searchHelpTagClass}>网址</span>
+          <span className={searchHelpExampleClass}><code className={searchHelpCodeClass}>url:/issues</code></span>
         </li>
         <li className={searchHelpItemClass}>
           <span className={searchHelpTagClass}>文件夹</span>
@@ -72,6 +80,10 @@ export function PopupSearchHelpPopover({
           <span className={searchHelpExampleClass}><code className={searchHelpCodeClass}>type:文档</code></span>
         </li>
         <li className={searchHelpItemClass}>
+          <span className={searchHelpTagClass}>时间</span>
+          <span className={searchHelpExampleClass}><code className={searchHelpCodeClass}>最近2周</code></span>
+        </li>
+        <li className={searchHelpItemClass}>
           <span className={searchHelpTagClass}>排除</span>
           <span className={searchHelpExampleClass}>
             <code className={searchHelpCodeClass}>-youtube</code>
@@ -80,6 +92,7 @@ export function PopupSearchHelpPopover({
           </span>
         </li>
       </ul>
+      <span className={searchHelpHintClass}>条件可组合；引号内按原文查找。</span>
       <span className={searchHelpHintClass}>Esc 关闭 · 点击外部收起</span>
     </Popover>
   )

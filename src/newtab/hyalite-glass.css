@@ -113,6 +113,7 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
     background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
 .newtab-search-shell:focus-within .newtab-search-surface[data-hyalite-surface],
+.newtab-search-shell[data-focus-within="true"] .newtab-search-surface[data-hyalite-surface],
 .newtab-search-shell[data-engine-open="true"] .newtab-search-surface[data-hyalite-surface] {
   border-color: rgba(255, 255, 255, 0.46);
 }

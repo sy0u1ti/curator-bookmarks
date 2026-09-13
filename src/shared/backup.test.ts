@@ -3,10 +3,14 @@ import { beforeEach, test } from 'node:test'
 import { IDBFactory } from 'fake-indexeddb'
 import {
   BACKUP_RESTORE_ROLLED_BACK_CODE,
+  buildBackupRestorePreview,
   executeJournaledCuratorBackupRestore,
+  listAutoBackupPoints,
+  readAutoBackupPoint,
   recoverInterruptedCuratorBackupRestore,
   restoreCuratorBackup,
   type BackupRestoreMutationLock,
+  type BackupRestoreMode,
   type CuratorBackupFileV1
 } from './backup.js'
 import {
@@ -293,6 +297,8 @@ beforeEach(() => {
 })
 
 test('rolls back storage, tags, and the restore folder after a copy failure', async () => {
+  const previousTagIndex = await loadBookmarkTagIndex()
+  const previousStorage = structuredClone(storageState)
   failBookmarkCopy = true
 
   await assert.rejects(
@@ -300,8 +306,142 @@ test('rolls back storage, tags, and the restore folder after a copy failure', as
     /simulated bookmark copy failure.*已自动回滚本次恢复写入/
   )
 
-  assert.deepEqual(storageState, initialStorage)
+  assert.deepEqual(storageState, previousStorage)
+  assert.deepEqual(await loadBookmarkTagIndex(), previousTagIndex)
   assert.deepEqual(removedBookmarkTrees, ['restore-root'])
+})
+
+test('restore preview excludes unrelated bookmarks with colliding profile IDs', async () => {
+  bookmarkNodes.set('10', {
+    id: '10', parentId: '1', title: 'Unrelated bookmark', url: 'https://unrelated.example/', syncing: false
+  })
+  const backup = buildBackup({ includeMissingBookmark: false })
+  backup.storage.bookmarkTagIndex = buildTagIndex({
+    10: buildTagRecord('10', 'https://saved.example/guide')
+  })
+
+  const preview = await buildBackupRestorePreview(backup)
+  assert.equal(preview.counts.tagMatched, 0)
+  assert.equal(preview.counts.tagUnmatched, 1)
+})
+
+test('safeFull restores missing bookmarks with their tags and replays the receipt without duplicates', async () => {
+  const backup = buildBackup()
+  backup.storage.bookmarkTagIndex = buildTagIndex({
+    'backup-bookmark': buildTagRecord('backup-bookmark', 'https://missing.example/', {
+      manualTags: ['my-choice'],
+      manualUpdatedAt: 20
+    })
+  })
+
+  const result = await executeJournaledCuratorBackupRestore(backup, 'safeFull', {
+    operationId: 'op-tag-remap',
+    now: 0
+  })
+
+  const restoredBookmark = [...bookmarkNodes.values()].find((node) => node.url === 'https://missing.example/')
+  assert.ok(restoredBookmark)
+  assert.notEqual(restoredBookmark.id, 'backup-bookmark')
+  const index = await loadBookmarkTagIndex()
+  assert.deepEqual(Object.keys(index.records), [restoredBookmark.id])
+  assert.deepEqual(index.records[restoredBookmark.id].tags, ['test'])
+  assert.deepEqual(index.records[restoredBookmark.id].manualTags, ['my-choice'])
+  assert.equal(
+    index.records[restoredBookmark.id].path,
+    'Bookmarks bar / Curator Restore 1970-01-01 [op-tag-remap] / Bookmarks bar'
+  )
+  assert.equal(result.restored.copiedBookmarks, 1)
+  assert.equal(result.restored.tags, 1)
+  assert.equal(result.unmatchedTags, 0)
+
+  const createCount = createdBookmarkPayloads.length
+  const duplicateResult = await executeJournaledCuratorBackupRestore(backup, 'safeFull', {
+    operationId: 'op-tag-remap',
+    now: 0
+  })
+  assert.deepEqual(duplicateResult, result)
+  assert.equal(createdBookmarkPayloads.length, createCount)
+  assert.deepEqual(await loadBookmarkTagIndex(), index)
+})
+
+test('safeFull restores two distinct fragment routes in the same folder with their own tags', async () => {
+  const backup = buildBackup({ includeMissingBookmark: false })
+  backup.chromeBookmarks.tree[0].children![0].children = [
+    { id: 'route-a', title: 'Route A', url: 'https://app.example/#/A', syncing: false },
+    { id: 'route-b', title: 'Route B', url: 'https://app.example/#/B', syncing: false }
+  ]
+  backup.storage.bookmarkTagIndex = buildTagIndex({
+    'route-a': buildTagRecord('route-a', 'https://app.example/#/A', { tags: ['route-a'] }),
+    'route-b': buildTagRecord('route-b', 'https://app.example/#/B', { tags: ['route-b'] })
+  })
+
+  const result = await executeJournaledCuratorBackupRestore(backup, 'safeFull', {
+    operationId: 'op-fragment-routes', now: 0
+  })
+
+  const copiedBookmarks = [...bookmarkNodes.values()].filter((node) => node.url)
+  assert.equal(result.restored.copiedBookmarks, 2)
+  assert.equal(result.restored.tags, 2)
+  assert.equal(result.unmatchedTags, 0)
+  assert.deepEqual(copiedBookmarks.map((node) => node.url).sort(), [
+    'https://app.example/#/A', 'https://app.example/#/B'
+  ])
+  const index = await loadBookmarkTagIndex()
+  for (const node of copiedBookmarks) {
+    assert.deepEqual(index.records[node.id].tags, [node.url!.endsWith('/A') ? 'route-a' : 'route-b'])
+    assert.equal(index.records[node.id].url, node.url)
+  }
+})
+
+test('safeFull separates case-distinct folders for the same URL and preserves newer manual records', async () => {
+  const url = 'https://shared.example/guide'
+  bookmarkNodes.set('current-work', {
+    id: 'current-work', parentId: '1', title: 'Work', syncing: false
+  })
+  bookmarkNodes.set('10', {
+    id: '10', parentId: 'current-work', title: 'Work guide', url, syncing: false
+  })
+  const currentRecord = buildTagRecord('10', url, {
+    path: 'Bookmarks bar / Work',
+    manualTags: ['keep-work'],
+    manualUpdatedAt: 50,
+    updatedAt: 50
+  })
+  await saveBookmarkTagIndex(buildTagIndex({ 10: currentRecord }))
+  const previousRecords = (await loadBookmarkTagIndex()).records
+  const backup = buildBackup({ includeMissingBookmark: false })
+  backup.chromeBookmarks.tree[0].children![0].children = [
+    {
+      id: 'backup-work', title: 'Work', syncing: false,
+      children: [{ id: 'source-work', title: 'Work guide', url, syncing: false }]
+    },
+    {
+      id: 'backup-lower-work', title: 'work', syncing: false,
+      children: [{ id: '10', title: 'Lowercase work guide', url, syncing: false }]
+    }
+  ]
+  backup.storage.bookmarkTagIndex = buildTagIndex({
+    'source-work': buildTagRecord('source-work', url, { path: 'Bookmarks bar / Work', tags: ['old-work'] }),
+    10: buildTagRecord('10', url, {
+      path: 'Bookmarks bar / work', tags: ['lower-work'], manualTags: ['my-lower-work'], manualUpdatedAt: 20
+    })
+  })
+
+  const result = await executeJournaledCuratorBackupRestore(backup, 'safeFull', {
+    operationId: 'op-duplicate-url-tags', now: 0
+  })
+
+  const copiedBookmark = [...bookmarkNodes.values()].find((node) => node.url === url && node.id !== '10')
+  assert.ok(copiedBookmark)
+  const index = await loadBookmarkTagIndex()
+  assert.deepEqual(index.records['10'], previousRecords['10'])
+  assert.deepEqual(index.records[copiedBookmark.id].tags, ['lower-work'])
+  assert.deepEqual(index.records[copiedBookmark.id].manualTags, ['my-lower-work'])
+  assert.match(index.records[copiedBookmark.id].path, /op-duplicate-url-tags.*\/ work$/)
+  assert.equal(Object.keys(index.records).length, 2)
+  assert.equal(result.restored.copiedBookmarks, 1)
+  assert.equal(result.restored.tags, 1)
+  assert.equal(result.unmatchedTags, 0)
 })
 
 test('journals before mutation and returns a committed receipt for duplicate operations', async () => {
@@ -511,19 +651,37 @@ test('journaled rollback restores tags written with the recorded target timestam
     'existing-tag': buildTagRecord(
       'existing-tag',
       'https://existing-tag.example/'
-    )
+    ),
+    'backup-bookmark': buildTagRecord('backup-bookmark', 'https://missing.example/', {
+      manualTags: ['restored-choice'], manualUpdatedAt: 20
+    })
   })
-  failBookmarkCopy = true
+  let journalAtFailure: Record<string, any> | null = null
+  let failureInjected = false
+  beforeStorageSet = async (payload) => {
+    if (!failureInjected && Object.prototype.hasOwnProperty.call(payload, STORAGE_KEYS.newTabGeneralSettings)) {
+      failureInjected = true
+      journalAtFailure = await getAutoBackupRecord(ACTIVE_RESTORE_JOURNAL_KEY)
+      throw new Error('simulated post-tag storage failure')
+    }
+  }
 
   await assert.rejects(
     executeJournaledCuratorBackupRestore(backup, 'safeFull', {
       operationId: 'op-tag-target-time',
       now: 0
     }),
-    /simulated bookmark copy failure/
+    /simulated post-tag storage failure/
   )
 
+  const copiedTagRecords = Object.values(journalAtFailure?.expectedTagIndex?.records || {}) as BookmarkTagRecord[]
+  assert.equal(copiedTagRecords.length, 2)
+  assert.ok(copiedTagRecords.some((record) => record.manualTags?.includes('restored-choice')))
   assert.deepEqual((await loadBookmarkTagIndex()).records, {})
+  assert.deepEqual(removedBookmarkTrees, ['restore-root'])
+  assert.equal(bookmarkNodes.has('restore-root'), false)
+  assert.equal(bookmarkNodes.has('existing-tag'), true)
+  assert.deepEqual(storageState[STORAGE_KEYS.newTabGeneralSettings], initialStorage[STORAGE_KEYS.newTabGeneralSettings])
   assert.equal(
     (await getAutoBackupRecord(
       `${RESTORE_RECEIPT_PREFIX}op-tag-target-time`
@@ -791,6 +949,100 @@ test('retains a failed recovery journal and succeeds on the next attempt', async
   )
 })
 
+test('recovery points list only indexed snapshots, with valid dates and newest first', async () => {
+  const point = { backupId: 'auto-100-first', createdAt: 100, kind: 'batch-delete', source: 'options', operationReason: '清理重复书签', skipped: false, sizeBytes: 250 }
+  storageState[STORAGE_KEYS.autoBackupIndex] = [
+    point,
+    { ...point, backupId: 'auto-200-newer', createdAt: 200, operationReason: null, sizeBytes: -1 },
+    point,
+    { ...point, backupId: ACTIVE_RESTORE_JOURNAL_KEY },
+    { ...point, backupId: `${RESTORE_RECEIPT_PREFIX}op-private` },
+    { ...point, backupId: 'auto-500-outofrange', createdAt: 1e30 },
+    { ...point, backupId: 'auto-300-failed', skipped: true },
+    null
+  ]
+
+  const points = await listAutoBackupPoints()
+  assert.deepEqual(points.map(entry => entry.backupId), ['auto-200-newer', 'auto-100-first'])
+  assert.equal(points[0].operationReason, '自动恢复点')
+  assert.equal(points[0].sizeBytes, 0)
+  assert.match(points[0].fileName, /^curator-backup-1970-01-01\.json$/)
+})
+
+test('recovery preview cannot read journals, receipts, expired snapshots or inconsistent records', async () => {
+  const backup = { ...buildBackup(), source: 'auto' }
+  const point = { backupId: 'auto-100-read', createdAt: 100, kind: 'batch-delete', source: 'options', operationReason: '整理前', skipped: false }
+  storageState[STORAGE_KEYS.autoBackupIndex] = [point]
+  await putAutoBackupRecord({ ...point, payload: backup })
+  assert.equal((await readAutoBackupPoint(point.backupId)).backup.source, 'auto')
+  await putAutoBackupRecord({ backupId: ACTIVE_RESTORE_JOURNAL_KEY, payload: backup, kind: 'batch-delete' })
+  await putAutoBackupRecord({ backupId: `${RESTORE_RECEIPT_PREFIX}private`, payload: backup, kind: 'batch-delete' })
+  for (const id of [ACTIVE_RESTORE_JOURNAL_KEY, `${RESTORE_RECEIPT_PREFIX}private`, 'auto-999-pruned']) {
+    await assert.rejects(readAutoBackupPoint(id), /已过期或不存在/)
+  }
+  await putAutoBackupRecord({ ...point, kind: 'restore-journal', payload: backup })
+  await assert.rejects(readAutoBackupPoint(point.backupId), /内容不可用/)
+  await putAutoBackupRecord({ ...point, payload: buildBackup() })
+  await assert.rejects(readAutoBackupPoint(point.backupId), /格式无效/)
+  storageState[STORAGE_KEYS.autoBackupIndex] = [{ ...point, backupId: 'auto-200-missing' }]
+  await assert.rejects(readAutoBackupPoint('auto-200-missing'), /内容不可用/)
+})
+
+test('preview exposes original titles and paths, and distinguishes present from missing bookmarks', async () => {
+  bookmarkNodes.set('existing', {
+    id: 'existing', parentId: '1', title: 'Current title', url: 'https://existing.example/', syncing: false
+  })
+  const backup = buildBackup()
+  backup.chromeBookmarks.tree[0].children![0].children!.push({
+    id: 'backup-existing', title: 'Saved title', url: 'https://existing.example/', syncing: false
+  })
+  const preview = await buildBackupRestorePreview(backup)
+  assert.deepEqual(preview.bookmarks, [
+    { id: 'backup-bookmark', title: 'Missing bookmark', url: 'https://missing.example/', path: 'Bookmarks bar', missing: true },
+    { id: 'backup-existing', title: 'Saved title', url: 'https://existing.example/', path: 'Bookmarks bar', missing: false }
+  ])
+  assert.equal(preview.counts.missingBookmarkUrls, 1)
+  assert.ok(preview.modes.some(mode => mode.mode === 'bookmarksOnly'))
+})
+
+test('bookmarksOnly restores missing bookmarks and tags while preserving settings, cleanup data and API keys', async () => {
+  storageState[STORAGE_KEYS.aiProviderSettings] = { provider: 'custom', apiKey: 'local-secret' }
+  storageState[STORAGE_KEYS.popupPreferences] = { compact: false }
+  const previousStorage = structuredClone(storageState)
+  const backup = buildBackup()
+  backup.storage.bookmarkTagIndex = buildTagIndex({
+    'backup-bookmark': buildTagRecord('backup-bookmark', 'https://missing.example/', { manualTags: ['saved-tag'] })
+  })
+  let locks = 0
+  const result = await executeJournaledCuratorBackupRestore(backup, 'bookmarksOnly', {
+    operationId: 'op-bookmarks-only', now: 0,
+    withMutationLock: async task => { locks++; return task() }
+  })
+  assert.equal(locks, 1)
+  assert.deepEqual(result.restored, { copiedBookmarks: 1, tags: 1, newTabSections: 0, storageSections: 0 })
+  for (const [key, value] of Object.entries(previousStorage)) {
+    if (key !== STORAGE_KEYS.bookmarkTagIndex) assert.deepEqual(storageState[key], value, key)
+  }
+  const restored = [...bookmarkNodes.values()].find(node => node.url === 'https://missing.example/')!
+  assert.deepEqual((await loadBookmarkTagIndex()).records[restored.id].manualTags, ['saved-tag'])
+  const created = createdBookmarkPayloads.length
+  await executeJournaledCuratorBackupRestore(backup, 'bookmarksOnly', { operationId: 'op-bookmarks-only', now: 0 })
+  assert.equal(createdBookmarkPayloads.length, created, 'replaying an acknowledged restore must not copy again')
+})
+
+test('bookmarksOnly rolls back its restore folder and records a recoverable failure', async () => {
+  await loadBookmarkTagIndex()
+  const previousStorage = structuredClone(storageState)
+  failBookmarkCopy = true
+  await assert.rejects(executeJournaledCuratorBackupRestore(buildBackup(), 'bookmarksOnly', {
+    operationId: 'op-bookmarks-failed', now: 0
+  }), /simulated bookmark copy failure/)
+  assert.deepEqual(storageState, previousStorage)
+  assert.deepEqual(removedBookmarkTrees, ['restore-root'])
+  assert.equal(await getAutoBackupRecord(ACTIVE_RESTORE_JOURNAL_KEY), null)
+  assert.equal((await getAutoBackupRecord(`${RESTORE_RECEIPT_PREFIX}op-bookmarks-failed`))?.status, 'rolled-back')
+})
+
 function buildBackup({
   includeMissingBookmark = true,
   density = 'comfortable'
@@ -873,7 +1125,11 @@ function buildTagIndex(records: Record<string, BookmarkTagRecord>): BookmarkTagI
   }
 }
 
-function buildTagRecord(bookmarkId: string, url: string): BookmarkTagRecord {
+function buildTagRecord(
+  bookmarkId: string,
+  url: string,
+  overrides: Partial<BookmarkTagRecord> = {}
+): BookmarkTagRecord {
   return {
     schemaVersion: 1,
     bookmarkId,
@@ -896,7 +1152,8 @@ function buildTagRecord(bookmarkId: string, url: string): BookmarkTagRecord {
       warnings: []
     },
     generatedAt: 20,
-    updatedAt: 20
+    updatedAt: 20,
+    ...overrides
   }
 }
 
@@ -917,7 +1174,7 @@ function buildRestoreJournal({
 }: {
   schemaVersion?: 1 | 2
   operationId: string
-  mode: 'tagsOnly' | 'newTabOnly' | 'safeFull'
+  mode: BackupRestoreMode
   restoreStorageKeys: string[]
   previousStorage: Record<string, unknown>
   previousTagIndex?: BookmarkTagIndex | null

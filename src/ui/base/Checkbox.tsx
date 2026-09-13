@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { Icon } from '../icons/Icon'
 import { cx } from './utils'
+import { InputStateCommit } from './InputStateCommit'
 
 type BaseCheckboxRootProps = ComponentPropsWithoutRef<typeof BaseCheckbox.Root>
 
@@ -52,10 +53,12 @@ export function CheckboxControl({
   const checked = checkedProp ?? checkedState
   const disabled = disabledProp ?? disabledState
 
-  checkedRef.current = Boolean(checked)
-  disabledRef.current = Boolean(disabled)
-  checkedControlledRef.current = checkedProp !== undefined
-  disabledControlledRef.current = disabledProp !== undefined
+  const commitInputState = () => {
+    checkedRef.current = Boolean(checked)
+    disabledRef.current = Boolean(disabled)
+    checkedControlledRef.current = checkedProp !== undefined
+    disabledControlledRef.current = disabledProp !== undefined
+  }
 
   const handleInputRef = useCallback((node: HTMLInputElement | null) => {
     inputElementRef.current = node
@@ -124,7 +127,8 @@ export function CheckboxControl({
     }
   }, [syncInputState])
 
-  return (
+  return <>
+    <InputStateCommit onCommit={commitInputState} />
     <BaseCheckbox.Root
       checked={checked}
       className={unstyled ? className : cx(
@@ -143,7 +147,7 @@ export function CheckboxControl({
         <Icon name="Check" size={13} aria-hidden="true" />
       </BaseCheckbox.Indicator>
     </BaseCheckbox.Root>
-  )
+  </>
 }
 
 export function Checkbox({

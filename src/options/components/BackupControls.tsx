@@ -6,6 +6,8 @@ import { useBackupControlsState } from './backup-controls-store.js'
 import type { BackupControlsState, BackupPreviewState } from './backup-controls-types.js'
 import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
+import { AutoBackupPoints } from './AutoBackupPoints.js'
+import { BackupBookmarkPreview } from './BackupBookmarkPreview.js'
 
 const BACKUP_CARD_CLASS =
   'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
@@ -162,11 +164,35 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
           />
         </div>
         {state.backup.status ? (
-          <p className={BACKUP_STATUS_CLASS}>{state.backup.status}</p>
+          <p className={BACKUP_STATUS_CLASS} role="status">{state.backup.status}</p>
         ) : null}
+        <div className={BACKUP_ROW_CLASS}>
+          <div className={BACKUP_COPY_COLUMN_CLASS}>
+            <strong className={BACKUP_TITLE_CLASS}>跨浏览器导出</strong>
+            <p className={BACKUP_COPY_CLASS}>
+              将书签、文件夹和添加时间保存为通用 HTML 文件，可导入 Chrome、Edge 或 Firefox。
+              标签与设置请使用上方的完整备份。
+            </p>
+          </div>
+          <div className={BACKUP_ROW_ACTIONS_CLASS}>
+            <Button
+              size="sm"
+              type="button"
+              variant="secondary"
+              aria-label="导出通用 HTML 书签文件"
+              disabled={state.backup.busy}
+              focusableWhenDisabled={state.backup.busy}
+              onClick={() => handleBackupAction({ action: 'export-html' })}
+            >
+              导出 HTML 书签
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div className={BACKUP_CARD_CLASS}>
+      <AutoBackupPoints busy={state.backup.busy} />
+
+      <div className={BACKUP_CARD_CLASS} id="backup-restore-preview">
         <div className={BACKUP_ROW_CLASS}>
           <div className={BACKUP_COPY_COLUMN_CLASS}>
             <strong className={BACKUP_TITLE_CLASS}>恢复预览</strong>
@@ -176,6 +202,11 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
           </div>
           {state.backup.hasBackup ? (
             <div className={BACKUP_ROW_ACTIONS_CLASS}>
+              <Button size="sm" type="button" variant="secondary" disabled={state.backup.busy}
+                aria-label="从备份预览恢复书签与标签，保留当前设置"
+                onClick={() => handleBackupAction({ action: 'restore', mode: 'bookmarksOnly' })}>
+                恢复书签与标签
+              </Button>
               <Button
                 size="sm"
                 type="button"
@@ -233,8 +264,8 @@ function BackupPreview({
   if (!state.preview) {
     return (
       <OptionEmptyState
-        title="先导入备份文件"
-        description="导入后先显示差异与风险，确认后才提供恢复操作。"
+        title="先选择恢复点或导入备份"
+        description="预览保存时的书签与当前差异，再选择需要恢复的数据。"
         actions={[{ label: '导入并预览', onClick: onImportPreview, variant: 'primary' }]}
         className={BACKUP_EMPTY_CLASS}
       />
@@ -268,6 +299,7 @@ function BackupPreview({
           <p className={BACKUP_PREVIEW_DETAIL_CLASS}>未发现阻塞恢复的问题。</p>
         )}
       </div>
+      <BackupBookmarkPreview key={`${state.preview.fileName}:${state.preview.exportedAt}`} bookmarks={state.preview.bookmarks} />
     </article>
   )
 }

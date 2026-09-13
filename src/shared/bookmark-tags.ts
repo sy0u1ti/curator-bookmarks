@@ -13,6 +13,7 @@ import {
   withLocalStorageTransaction,
   type LocalStorageTransaction
 } from './storage.js'
+import { buildDuplicateKey } from './text.js'
 import type { BookmarkRecord } from './types.js'
 
 export const BOOKMARK_TAG_SCHEMA_VERSION = 1
@@ -129,6 +130,13 @@ export interface BookmarkTagImportResult {
   overwritten: number
   skipped: number
   unmatched: number
+}
+
+type BookmarkTagImportBookmark = Partial<BookmarkRecord> & {
+  id?: unknown
+  url?: unknown
+  title?: unknown
+  path?: unknown
 }
 
 export function createEmptyBookmarkTagIndex(updatedAt = 0): BookmarkTagIndex {
@@ -779,7 +787,7 @@ export function buildBookmarkTagExport(
 export function mergeBookmarkTagImport(
   currentIndex: BookmarkTagIndex,
   payload: unknown,
-  bookmarks: Array<Partial<BookmarkRecord> & { id?: unknown; url?: unknown; title?: unknown; path?: unknown }>
+  bookmarks: BookmarkTagImportBookmark[]
 ): BookmarkTagImportResult {
   const current = normalizeBookmarkTagIndex(currentIndex)
   const bookmarkMatch = buildBookmarkMatchMaps(bookmarks)
@@ -817,8 +825,16 @@ export function mergeBookmarkTagImport(
       continue
     }
 
+    const preserveManualTags = existing?.manualTags?.length && (
+      !importedRecord.manualTags?.length ||
+      Number(existing.manualUpdatedAt) >= Number(importedRecord.manualUpdatedAt)
+    )
     const normalizedRecord = normalizeBookmarkTagRecord({
       ...importedRecord,
+      ...(preserveManualTags ? {
+        manualTags: existing.manualTags,
+        manualUpdatedAt: existing.manualUpdatedAt
+      } : {}),
       bookmarkId,
       url: cleanText(matchedBookmark.url) || importedRecord.url,
       normalizedUrl: normalizeBookmarkTagUrl(cleanText(matchedBookmark.url) || importedRecord.url),
@@ -858,15 +874,15 @@ function normalizeBookmarkTagImportRecords(payload: unknown): unknown[] {
 }
 
 function buildBookmarkMatchMaps(
-  bookmarks: Array<Partial<BookmarkRecord> & { id?: unknown; url?: unknown }>
+  bookmarks: BookmarkTagImportBookmark[]
 ): {
-  byId: Map<string, Partial<BookmarkRecord> & { id?: unknown; url?: unknown }>
-  byNormalizedUrl: Map<string, Partial<BookmarkRecord> & { id?: unknown; url?: unknown }>
-  byDuplicateKey: Map<string, Partial<BookmarkRecord> & { id?: unknown; url?: unknown }>
+  byId: Map<string, BookmarkTagImportBookmark>
+  byUrl: Map<string, BookmarkTagImportBookmark[]>
+  byUrlAndPath: Map<string, BookmarkTagImportBookmark[]>
 } {
-  const byId = new Map()
-  const byNormalizedUrl = new Map()
-  const byDuplicateKey = new Map()
+  const byId = new Map<string, BookmarkTagImportBookmark>()
+  const byUrl = new Map<string, BookmarkTagImportBookmark[]>()
+  const byUrlAndPath = new Map<string, BookmarkTagImportBookmark[]>()
 
   for (const bookmark of bookmarks) {
     const id = cleanText(bookmark.id)
@@ -875,21 +891,46 @@ function buildBookmarkMatchMaps(
       continue
     }
     byId.set(id, bookmark)
-    byNormalizedUrl.set(normalizeBookmarkTagUrl(url), bookmark)
-    byDuplicateKey.set(buildBookmarkTagDuplicateKey(url), bookmark)
+    const urlKey = buildDuplicateKey(url)
+    const urlMatches = byUrl.get(urlKey) || []
+    urlMatches.push(bookmark)
+    byUrl.set(urlKey, urlMatches)
+    const pathKey = buildImportBookmarkPathKey(urlKey, bookmark.path)
+    const pathMatches = byUrlAndPath.get(pathKey) || []
+    pathMatches.push(bookmark)
+    byUrlAndPath.set(pathKey, pathMatches)
   }
 
-  return { byId, byNormalizedUrl, byDuplicateKey }
+  return { byId, byUrl, byUrlAndPath }
 }
 
 function findImportMatchedBookmark(
   record: BookmarkTagRecord,
   maps: ReturnType<typeof buildBookmarkMatchMaps>
-): (Partial<BookmarkRecord> & { id?: unknown; url?: unknown }) | null {
-  return maps.byId.get(record.bookmarkId) ||
-    maps.byNormalizedUrl.get(record.normalizedUrl) ||
-    maps.byDuplicateKey.get(record.duplicateKey) ||
-    null
+): BookmarkTagImportBookmark | null {
+  // Bookmark IDs are local to a Chrome profile; exported lookup fields can also be stale.
+  const urlKey = buildDuplicateKey(record.url)
+  const idCandidate = maps.byId.get(record.bookmarkId)
+  const idMatch = idCandidate && buildDuplicateKey(idCandidate.url) === urlKey
+    ? idCandidate
+    : null
+  if (record.path) {
+    const pathMatches = maps.byUrlAndPath.get(buildImportBookmarkPathKey(urlKey, record.path)) || []
+    if (pathMatches.length) {
+      return pathMatches.length === 1
+        ? pathMatches[0]
+        : idMatch && pathMatches.includes(idMatch) ? idMatch : null
+    }
+  }
+
+  const urlMatches = maps.byUrl.get(urlKey) || []
+  return idMatch || (urlMatches.length === 1 ? urlMatches[0] : null)
+}
+
+function buildImportBookmarkPathKey(urlKey: string, path: unknown): string {
+  const normalizedPath = cleanText(path, 240)
+    .replace(/\s*\/\s*/g, ' / ')
+  return `${urlKey}\n${normalizedPath}`
 }
 
 function normalizeBookmarkTagSource(value: unknown): BookmarkTagSource {

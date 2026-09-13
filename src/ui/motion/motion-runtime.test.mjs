@@ -42,7 +42,8 @@ const samplePaints = async (page) => {
 let context
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    headless: false,
+    channel: 'chromium',
+    headless: process.env.CURATOR_HEADLESS === '1',
     viewport: { width: 1280, height: 800 },
     reducedMotion: 'no-preference',
     args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`]

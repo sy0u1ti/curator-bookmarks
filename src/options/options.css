@@ -178,6 +178,7 @@ body,
   }
 
   .options-shell .curator-button:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
+    scale: 1;
     transform: scale(var(--ds-press-scale));
   }
 

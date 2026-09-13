@@ -40,14 +40,8 @@ export async function loadContentSnapshotIndexFromRepository(
   const { normalizeIndex } = requireContentSnapshotRepositoryNormalizers()
   const idbIndex = await loadContentSnapshotIndexFromIndexedDb().catch(() => null)
   if (idbIndex) {
-    const localIndex = await loadContentSnapshotIndexFromLocalStorage().catch(() => normalizeIndex(null))
-    if (
-      Object.keys(localIndex.records).length &&
-      (
-        Object.keys(idbIndex.records).length === 0 ||
-        Number(localIndex.updatedAt) > Number(idbIndex.updatedAt)
-      )
-    ) {
+    const localIndex = await loadContentSnapshotIndexFromLocalStorage().catch(() => null)
+    if (localIndex && Number(localIndex.updatedAt) > Number(idbIndex.updatedAt)) {
       await migrateContentSnapshotIndexToIndexedDb(localIndex, transaction).catch(() => {})
       return localIndex
     }
@@ -55,7 +49,7 @@ export async function loadContentSnapshotIndexFromRepository(
   }
 
   const localIndex = await loadContentSnapshotIndexFromLocalStorage()
-  if (Object.keys(localIndex.records).length && isCuratorDataDbAvailable()) {
+  if (localIndex && isCuratorDataDbAvailable()) {
     await migrateContentSnapshotIndexToIndexedDb(localIndex, transaction).catch(() => {})
   }
   return normalizeIndex(localIndex)
@@ -68,6 +62,10 @@ export async function updateContentSnapshotIndexInRepository(
   const { normalizeIndex } = requireContentSnapshotRepositoryNormalizers()
   const current = await loadContentSnapshotIndexFromRepository(transaction)
   const nextIndex = normalizeIndex(updater(current))
+  const delta = diffContentSnapshotIndexes(current, nextIndex)
+  if (delta.upserts.length || delta.deletedIds.length) {
+    nextIndex.updatedAt = Math.max(Number(nextIndex.updatedAt) || 0, (Number(current.updatedAt) || 0) + 1)
+  }
 
   if (!isCuratorDataDbAvailable()) {
     await writeContentSnapshotIndexToLocalStorage(nextIndex, transaction)
@@ -75,7 +73,6 @@ export async function updateContentSnapshotIndexInRepository(
   }
 
   try {
-    const delta = diffContentSnapshotIndexes(current, nextIndex)
     if (delta.replaceAll) {
       await replaceContentSnapshotIndexInIndexedDb(nextIndex)
       await compactContentSnapshotIndexLocalStorage(nextIndex, transaction).catch(() => {})
@@ -192,10 +189,18 @@ async function loadContentSnapshotIndexFromIndexedDb(): Promise<ContentSnapshotI
   })
 }
 
-async function loadContentSnapshotIndexFromLocalStorage(): Promise<ContentSnapshotIndex> {
+async function loadContentSnapshotIndexFromLocalStorage(): Promise<ContentSnapshotIndex | null> {
   const { normalizeIndex } = requireContentSnapshotRepositoryNormalizers()
   const stored = await getLocalStorage([STORAGE_KEYS.contentSnapshotIndex])
-  return normalizeIndex(stored[STORAGE_KEYS.contentSnapshotIndex])
+  const rawIndex = stored[STORAGE_KEYS.contentSnapshotIndex]
+  if (!rawIndex || typeof rawIndex !== 'object') return null
+  const index = normalizeIndex(rawIndex)
+  // Only a compacted metadata marker delegates to IndexedDB. An explicit empty
+  // fallback must win over older records whose full-text blobs may be gone.
+  if ((rawIndex as { migratedTo?: string }).migratedTo === 'indexedDB' && !Object.keys(index.records).length) {
+    return null
+  }
+  return index
 }
 
 async function migrateContentSnapshotIndexToIndexedDb(

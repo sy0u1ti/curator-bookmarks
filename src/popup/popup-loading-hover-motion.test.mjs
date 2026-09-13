@@ -192,7 +192,8 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    headless: false,
+    channel: 'chromium',
+    headless: process.env.CURATOR_HEADLESS === '1',
     reducedMotion: 'no-preference',
     viewport: { width: 800, height: 600 },
     args: [

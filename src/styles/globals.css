@@ -19,6 +19,12 @@ body {
 }
 
 @layer base {
+  /* Custom controls own their pressed/focus treatment; native button painting
+     can offset the contents even when the CSS layout box has not moved. */
+  button {
+    appearance: none;
+  }
+
   button,
   input,
   select,
@@ -975,9 +981,9 @@ body {
   }
 }
 
-.curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):active,
-.curator-motion-row:active,
-.curator-motion-chip:active {
+.curator-motion-card:not(.curator-motion-disabled):not(.dragging):not(.bookmark-drag-ghost):not(.speed-dial-drag-ghost):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active,
+.curator-motion-row:not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active,
+.curator-motion-chip:not(.folder-section-header):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
   /* Use one press transform even when a button also has a scale utility. */
   scale: 1;
   transform: scale(var(--ds-press-scale, 0.985));

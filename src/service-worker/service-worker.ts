@@ -101,7 +101,8 @@ import {
   recoverInterruptedCuratorBackupRestore
 } from '../shared/backup.js'
 import { shouldReuseBookmarkForSave } from './save-guards.js'
-import { createBookmarkRemovalQueue } from './bookmark-removal-queue.js'
+import { collectRemovedBookmarkIds, createBookmarkRemovalQueue } from './bookmark-removal-queue.js'
+import { undoInboxAutoMove } from './inbox-undo.js'
 
 interface PendingCheckState {
   tabId: number
@@ -346,7 +347,7 @@ chrome.notifications?.onButtonClicked.addListener((notificationId, buttonIndex) 
     return
   }
 
-  undoLastInboxAutoMove().catch((error) => {
+  undoLastInboxAutoMove(notificationId.slice(INBOX_CLASSIFIED_NOTIFICATION_PREFIX.length)).catch((error) => {
     console.warn('[Curator] Inbox 自动移动撤销失败', error)
     showInboxNotification({
       notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-failed-${Date.now()}`,
@@ -647,6 +648,7 @@ function clearBackupRestoreRecoveryAlarm(): Promise<void> {
 }
 
 function formatBackupRestoreMode(mode: BackupRestoreMessage['mode']): string {
+  if (mode === 'bookmarksOnly') return '恢复书签与标签'
   if (mode === 'tagsOnly') {
     return '只恢复标签数据'
   }
@@ -992,9 +994,9 @@ const enqueueBookmarkRemoval = createBookmarkRemovalQueue(async (bookmarkIds) =>
   ])
 })
 
-chrome.bookmarks.onRemoved.addListener((bookmarkId) => {
+chrome.bookmarks.onRemoved.addListener((bookmarkId, removeInfo) => {
   invalidateAutoAnalyzeTreeContext()
-  void enqueueBookmarkRemoval(bookmarkId)
+  void enqueueBookmarkRemoval(collectRemovedBookmarkIds(bookmarkId, removeInfo?.node))
 })
 
 chrome.bookmarks.onChanged.addListener(() => {
@@ -2091,41 +2093,28 @@ function showRuntimeNotification(message: RuntimeNotificationMessage): Promise<v
   })
 }
 
-async function undoLastInboxAutoMove(): Promise<InboxUndoLastMoveResult> {
-  const state = await loadInboxState()
-  const undoMove = state.lastUndoMove
-  if (!undoMove || undoMove.expiresAt <= Date.now()) {
-    await clearInboxUndoMove()
-    throw new Error('没有可撤销的 Inbox 自动移动。')
-  }
-
-  const bookmark = await getBookmarkById(undoMove.bookmarkId)
-  if (!bookmark?.url) {
-    await clearInboxUndoMove(undoMove.bookmarkId)
-    throw new Error('原书签已不存在，无法撤销。')
-  }
-
-  const movedNode = await moveBookmarkNode(undoMove.bookmarkId, undoMove.fromFolderId)
-  await Promise.all([
-    updateInboxItem(undoMove.bookmarkId, {
-      status: 'undone',
-      lastError: ''
-    }).catch((error) => {
-      console.warn('[Curator] Inbox 撤销状态更新失败', error)
-    }),
-    clearInboxUndoMove(undoMove.bookmarkId),
-    showInboxNotification({
-      notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-${undoMove.bookmarkId}`,
-      title: '已撤销 Inbox 自动移动',
-      message: '书签已移回 Inbox / 待整理。'
-    })
-  ])
-
-  return {
-    bookmarkId: String(movedNode.id),
-    parentId: String(movedNode.parentId || undoMove.fromFolderId),
-    title: String(movedNode.title || bookmark.title || '未命名网页')
-  }
+async function undoLastInboxAutoMove(expectedBookmarkId?: string): Promise<InboxUndoLastMoveResult> {
+  return withAvailabilityMutationLock(() => undoInboxAutoMove({
+    loadState: loadInboxState,
+    clearUndo: clearInboxUndoMove,
+    getBookmark: getBookmarkById,
+    moveBookmark: moveBookmarkNode,
+    afterMove: async (undoMove) => {
+      await Promise.all([
+        updateInboxItem(undoMove.bookmarkId, { status: 'undone', lastError: '' }).catch((error) => {
+          console.warn('[Curator] Inbox 撤销状态更新失败', error)
+        }),
+        showInboxNotification({
+          notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}undo-${undoMove.bookmarkId}`,
+          title: '已撤销 Inbox 自动移动',
+          message: '书签已移回 Inbox / 待整理。'
+        })
+      ])
+    }
+  }, expectedBookmarkId), {
+    unavailableMessage: '当前浏览器无法锁定书签数据，已取消撤销。',
+    busyMessage: '另一个 Curator 页面正在修改书签，请稍后重试撤销。'
+  })
 }
 
 function isRetryableAutoAnalyzeError(error: unknown): boolean {

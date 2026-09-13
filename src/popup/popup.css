@@ -202,6 +202,13 @@ body::after {
   isolation: isolate;
 }
 
+.popup-result-actions-cell {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.popup-result-actions-cell > * { pointer-events: auto; }
+
 /* Promote native scrolling after the initial dissolve. Allocating these GPU
    surfaces alongside the reveal layers stalls the first cold-start wheel. */
 .popup-workspace-reveal[data-scroll-ready="true"] .t-skel-content .popup-main-list,

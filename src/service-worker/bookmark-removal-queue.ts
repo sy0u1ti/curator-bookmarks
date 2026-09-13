@@ -1,6 +1,22 @@
+interface RemovedBookmarkNode {
+  id?: string
+  children?: RemovedBookmarkNode[]
+}
+
+export function collectRemovedBookmarkIds(bookmarkId: string, node?: RemovedBookmarkNode): string[] {
+  const ids = new Set<string>([String(bookmarkId)])
+  const pending = node ? [node] : []
+  while (pending.length) {
+    const current = pending.pop()!
+    if (current.id) ids.add(String(current.id))
+    for (const child of current.children || []) pending.push(child)
+  }
+  return Array.from(ids).filter(Boolean)
+}
+
 export function createBookmarkRemovalQueue(
   cleanup: (bookmarkIds: string[]) => Promise<void>
-): (bookmarkId: string) => Promise<void> {
+): (bookmarkIds: string | string[]) => Promise<void> {
   const pendingIds = new Set<string>()
   let cleanupPromise: Promise<void> | null = null
 
@@ -29,12 +45,14 @@ export function createBookmarkRemovalQueue(
     }
   }
 
-  return (bookmarkId) => {
-    const id = String(bookmarkId || '').trim()
-    if (!id) {
+  return (bookmarkIds) => {
+    for (const bookmarkId of Array.isArray(bookmarkIds) ? bookmarkIds : [bookmarkIds]) {
+      const id = String(bookmarkId || '').trim()
+      if (id) pendingIds.add(id)
+    }
+    if (!pendingIds.size) {
       return Promise.resolve()
     }
-    pendingIds.add(id)
     // Start in the next microtask; ongoing storage work collects the next batch.
     // No debounce timer is left pending when the service worker becomes idle.
     cleanupPromise ??= Promise.resolve().then(drain)

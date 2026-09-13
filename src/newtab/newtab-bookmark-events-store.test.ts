@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   dispatchNewtabBookmarkChanged,
+  dispatchNewtabBookmarkChildrenReordered,
   dispatchNewtabBookmarkCreated,
   dispatchNewtabBookmarkMoved,
   dispatchNewtabBookmarkRemoved,
@@ -10,6 +11,7 @@ import {
 const received: string[] = []
 
 dispatchNewtabBookmarkChanged('before-change', { title: 'Updated' })
+dispatchNewtabBookmarkChildrenReordered('before-sort')
 dispatchNewtabBookmarkCreated('before-create', {
   id: 'before-create',
   parentId: '1',
@@ -20,12 +22,13 @@ dispatchNewtabBookmarkCreated('before-create', {
 
 const unregister = registerNewtabBookmarkEventActions({
   onChanged: (bookmarkId) => received.push(`changed:${bookmarkId}`),
+  onChildrenReordered: (folderId) => received.push(`sorted:${folderId}`),
   onCreated: (bookmarkId) => received.push(`created:${bookmarkId}`),
   onMoved: (bookmarkId) => received.push(`moved:${bookmarkId}`),
   onRemoved: (bookmarkId) => received.push(`removed:${bookmarkId}`)
 })
 
-assert.deepEqual(received, ['changed:before-change', 'created:before-create'])
+assert.deepEqual(received, ['changed:before-change', 'sorted:before-sort', 'created:before-create'])
 
 dispatchNewtabBookmarkMoved('after-move', {
   index: 0,

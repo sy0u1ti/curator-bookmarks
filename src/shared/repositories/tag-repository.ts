@@ -41,14 +41,8 @@ export async function loadBookmarkTagIndexFromRepository(
   const { normalizeIndex } = requireBookmarkTagRepositoryNormalizers()
   const idbIndex = await loadBookmarkTagIndexFromIndexedDb().catch(() => null)
   if (idbIndex) {
-    const localIndex = await loadBookmarkTagIndexFromLocalStorage().catch(() => normalizeIndex(null))
-    if (
-      Object.keys(localIndex.records).length &&
-      (
-        Object.keys(idbIndex.records).length === 0 ||
-        Number(localIndex.updatedAt) > Number(idbIndex.updatedAt)
-      )
-    ) {
+    const localIndex = await loadBookmarkTagIndexFromLocalStorage().catch(() => null)
+    if (localIndex && Number(localIndex.updatedAt) > Number(idbIndex.updatedAt)) {
       await migrateBookmarkTagIndexToIndexedDb(localIndex, transaction).catch(() => {})
       return localIndex
     }
@@ -56,7 +50,7 @@ export async function loadBookmarkTagIndexFromRepository(
   }
 
   const localIndex = await loadBookmarkTagIndexFromLocalStorage()
-  if (Object.keys(localIndex.records).length && isCuratorDataDbAvailable()) {
+  if (localIndex && isCuratorDataDbAvailable()) {
     await migrateBookmarkTagIndexToIndexedDb(localIndex, transaction).catch(() => {})
   }
   return normalizeIndex(localIndex)
@@ -105,6 +99,10 @@ export async function updateBookmarkTagIndexInRepository(
   const { normalizeIndex } = requireBookmarkTagRepositoryNormalizers()
   const current = await loadBookmarkTagIndexFromRepository(transaction)
   const nextIndex = normalizeIndex(updater(current))
+  const delta = diffBookmarkTagIndexes(current, nextIndex)
+  if (delta.upserts.length || delta.deletedIds.length) {
+    nextIndex.updatedAt = Math.max(Number(nextIndex.updatedAt) || 0, (Number(current.updatedAt) || 0) + 1)
+  }
 
   if (!isCuratorDataDbAvailable()) {
     await writeBookmarkTagIndexToLocalStorage(nextIndex, transaction)
@@ -112,7 +110,6 @@ export async function updateBookmarkTagIndexInRepository(
   }
 
   try {
-    const delta = diffBookmarkTagIndexes(current, nextIndex)
     if (delta.replaceAll) {
       await replaceBookmarkTagIndexInIndexedDb(nextIndex)
       await compactBookmarkTagIndexLocalStorage(nextIndex, transaction).catch(() => {})
@@ -243,10 +240,18 @@ async function loadBookmarkTagIndexFromIndexedDb(): Promise<BookmarkTagIndex | n
   })
 }
 
-async function loadBookmarkTagIndexFromLocalStorage(): Promise<BookmarkTagIndex> {
+async function loadBookmarkTagIndexFromLocalStorage(): Promise<BookmarkTagIndex | null> {
   const { normalizeIndex } = requireBookmarkTagRepositoryNormalizers()
   const stored = await getLocalStorage([STORAGE_KEYS.bookmarkTagIndex])
-  return normalizeIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
+  const rawIndex = stored[STORAGE_KEYS.bookmarkTagIndex]
+  if (!rawIndex || typeof rawIndex !== 'object') return null
+  const index = normalizeIndex(rawIndex)
+  // Compaction writes metadata with empty records. A real empty fallback is
+  // different: it records a successful deletion while IndexedDB was unavailable.
+  if ((rawIndex as { migratedTo?: string }).migratedTo === 'indexedDB' && !Object.keys(index.records).length) {
+    return null
+  }
+  return index
 }
 
 async function migrateBookmarkTagIndexToIndexedDb(

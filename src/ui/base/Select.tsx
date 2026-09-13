@@ -12,6 +12,7 @@ import {
 } from 'react'
 import { Icon } from '../icons/Icon'
 import { cx } from './utils'
+import { InputStateCommit } from './InputStateCommit'
 
 export interface SelectOption {
   value: string
@@ -85,10 +86,12 @@ export function Select({
   const currentValue = value !== undefined ? value : valueState
   const disabled = disabledProp ?? disabledState
 
-  valueRef.current = currentValue
-  disabledRef.current = Boolean(disabled)
-  valueControlledRef.current = value !== undefined
-  disabledControlledRef.current = disabledProp !== undefined
+  const commitInputState = () => {
+    valueRef.current = currentValue
+    disabledRef.current = Boolean(disabled)
+    valueControlledRef.current = value !== undefined
+    disabledControlledRef.current = disabledProp !== undefined
+  }
 
   const itemClassNameResolver = useMemo(() => {
     if (!unstyled) {
@@ -173,7 +176,8 @@ export function Select({
     }
   }, [syncInputState])
 
-  return (
+  return <>
+    <InputStateCommit onCommit={commitInputState} />
     <BaseSelect.Root
       id={rootId}
       value={currentValue}
@@ -239,7 +243,7 @@ export function Select({
         </BaseSelect.Positioner>
       </BaseSelect.Portal>
     </BaseSelect.Root>
-  )
+  </>
 }
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {

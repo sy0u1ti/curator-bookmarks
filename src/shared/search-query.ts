@@ -1,6 +1,6 @@
 import { normalizeText, stripCommonUrlPrefix } from './text.js'
 
-export type SearchChipKind = 'site' | 'folder' | 'type' | 'time' | 'exclude'
+export type SearchChipKind = 'site' | 'url' | 'folder' | 'type' | 'time' | 'exclude'
 
 type RelativeTimeUnit = 'day' | 'week' | 'month'
 type FixedTimeUnit = 'current-month' | 'current-week' | 'last-month' | 'last-week' | 'half-year' | 'today' | 'yesterday' | 'before-yesterday'
@@ -14,12 +14,19 @@ export interface SearchDateRange {
 export interface ParsedSearchQuery {
   rawQuery: string
   textTerms: string[]
+  literalTerms: string[]
   siteFilters: string[]
+  urlFilters: string[]
   folderFilters: string[]
   typeFilters: string[]
   excludedTerms: string[]
   dateRange: SearchDateRange | null
   chips: Array<{ kind: SearchChipKind; label: string; value: string }>
+}
+
+interface SearchQueryToken {
+  value: string
+  literal: boolean
 }
 
 const RELATIVE_TIME_PATTERN = /^(?:最近|近|过去)(\d+|一|两|二|三|四|五|六|七|八|九|十)(天|日|周|星期|礼拜|个月|月)$/
@@ -85,7 +92,7 @@ const SAFE_LOCAL_RULE_FILLER_PATTERNS = [
 const CHINESE_SEARCH_EXCLUSION_PATTERN = /(?:不要|不看|排除|过滤掉|过滤|不是|别给我|剔除|去掉)\s*([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
 const ENGLISH_SEARCH_EXCLUSION_PATTERN = /\b(?:without|exclude|excluding|not|no)\s+([a-z0-9][a-z0-9+.#/_-]*)/gi
 const DASH_SEARCH_EXCLUSION_PATTERN = /(^|\s)-([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
-const SAFE_LOCAL_STRUCTURED_OPERATOR_PATTERN = /(^|\s)((?:site|domain|url|folder|path|type|kind|站点|域名|文件夹|目录|路径|类型|类别)[:：]\s*(?:"[^"]*"|'[^']*'|“[^”]*”|‘[^’]*’|[^\s，。！？；、,!?;()[\]{}"'“”‘’]+))/gi
+const SAFE_LOCAL_PROTECTED_SEARCH_PATTERN = /(^|\s)((?:site|domain|url|folder|path|type|kind|站点|域名|文件夹|目录|路径|类型|类别)[:：]\s*(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|“[^”]*(?:”|$)|‘[^’]*(?:’|$)|[^\s，。！？；、,!?;()[\]{}"'“”‘’]+))|("[^"]*(?:"|$)|'[^']*(?:'|$)|“[^”]*(?:”|$)|‘[^’]*(?:’|$))/gi
 const SAFE_LOCAL_PLACEHOLDER_START = 0xe000
 const SAFE_LOCAL_PLACEHOLDER_PATTERN = /[\ue000-\uf8ff]/g
 
@@ -94,7 +101,9 @@ export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearch
   const safeRules = applySafeLocalSearchRules(rawQuery)
   const tokens = tokenizeSearchQuery(safeRules.query)
   const textTerms: string[] = []
+  const literalTerms: string[] = []
   const siteFilters: string[] = []
+  const urlFilters: string[] = []
   const folderFilters: string[] = []
   const typeFilters: string[] = []
   const excludedTerms: string[] = []
@@ -102,7 +111,12 @@ export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearch
   let dateRange: SearchDateRange | null = null
 
   for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index]
+    const { value: token, literal } = tokens[index]
+    if (literal) {
+      textTerms.push(token)
+      literalTerms.push(token)
+      continue
+    }
     const mergedTime = parseTimeExpression(tokens, index, now)
     if (mergedTime) {
       dateRange = mergedTime.range
@@ -116,6 +130,9 @@ export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearch
       if (operator.kind === 'site') {
         siteFilters.push(operator.value)
         chips.push({ kind: 'site', label: `站点：${operator.value}`, value: operator.value })
+      } else if (operator.kind === 'url') {
+        urlFilters.push(operator.value)
+        chips.push({ kind: 'url', label: `网址：${operator.value}`, value: operator.value })
       } else if (operator.kind === 'folder') {
         folderFilters.push(operator.value)
         chips.push({ kind: 'folder', label: `文件夹：${operator.value}`, value: operator.value })
@@ -142,7 +159,9 @@ export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearch
   return {
     rawQuery,
     textTerms: uniqueTerms(textTerms),
+    literalTerms: uniqueTerms(literalTerms),
     siteFilters: uniqueTerms(siteFilters),
+    urlFilters: uniqueTerms(urlFilters),
     folderFilters: uniqueTerms(folderFilters),
     typeFilters: uniqueTerms(typeFilters),
     excludedTerms: uniqueTerms([...excludedTerms, ...safeRules.excludedTerms]),
@@ -190,7 +209,11 @@ export function matchesParsedSearchQuery(
   const path = normalizeSearchValue(target.path)
   const type = normalizeSearchValue(target.type)
 
-  if (parsed.siteFilters.length && !parsed.siteFilters.some((filter) => domain.includes(filter) || url.includes(filter))) {
+  if (parsed.siteFilters.length && !parsed.siteFilters.some((filter) => matchesSearchSiteFilter(filter, domain, url))) {
+    return false
+  }
+
+  if (parsed.urlFilters.length && !parsed.urlFilters.some((filter) => url.includes(filter))) {
     return false
   }
 
@@ -216,7 +239,30 @@ export function matchesParsedSearchQuery(
   return true
 }
 
-function parseSearchOperatorTerm(term: string): { kind: 'site' | 'folder' | 'type'; value: string } | null {
+export function matchesSearchSiteFilter(filter: string, domain: string, url = ''): boolean {
+  const hostname = normalizeSearchHostname(domain || url)
+  const requestedHostname = normalizeSearchHostname(filter)
+  return Boolean(hostname && requestedHostname && (
+    hostname === requestedHostname || hostname.endsWith(`.${requestedHostname}`)
+  ))
+}
+
+function normalizeSearchHostname(value: string): string {
+  const normalized = normalizeSearchValue(value).replace(/\.$/, '')
+  // Bookmark records already carry an ASCII hostname. Reuse it without
+  // constructing URL objects for every candidate in a large search.
+  if (/^(?:[a-z0-9_-]+\.)*[a-z0-9_-]+$/.test(normalized)) {
+    return normalized
+  }
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) ? normalized : `https://${normalized}`)
+    return url.hostname.replace(/^www\./, '').replace(/\.$/, '')
+  } catch {
+    return ''
+  }
+}
+
+function parseSearchOperatorTerm(term: string): { kind: 'site' | 'url' | 'folder' | 'type'; value: string } | null {
   const match = String(term || '').match(/^([^:：]+)[:：](.+)$/)
   if (!match) {
     return null
@@ -228,8 +274,11 @@ function parseSearchOperatorTerm(term: string): { kind: 'site' | 'folder' | 'typ
     return null
   }
 
-  if (key === 'site' || key === 'domain' || key === 'url' || key === '站点' || key === '域名') {
+  if (key === 'site' || key === 'domain' || key === '站点' || key === '域名') {
     return { kind: 'site', value }
+  }
+  if (key === 'url') {
+    return { kind: 'url', value }
   }
   if (key === 'folder' || key === 'path' || key === '文件夹' || key === '目录' || key === '路径') {
     return { kind: 'folder', value }
@@ -242,10 +291,10 @@ function parseSearchOperatorTerm(term: string): { kind: 'site' | 'folder' | 'typ
 }
 
 function parseSearchOperatorTokens(
-  tokens: string[],
+  tokens: SearchQueryToken[],
   index: number
-): { kind: 'site' | 'folder' | 'type'; value: string; consumed: number } | null {
-  const current = String(tokens[index] || '')
+): { kind: 'site' | 'url' | 'folder' | 'type'; value: string; consumed: number } | null {
+  const current = tokens[index]?.value || ''
   const direct = parseSearchOperatorTerm(current)
   if (direct) {
     return { ...direct, consumed: 1 }
@@ -261,7 +310,7 @@ function parseSearchOperatorTokens(
     return null
   }
 
-  const nextValue = normalizeFilterValue(tokens[index + 1])
+  const nextValue = normalizeFilterValue(tokens[index + 1].value)
   if (!nextValue) {
     return null
   }
@@ -270,15 +319,15 @@ function parseSearchOperatorTokens(
   return merged ? { ...merged, consumed: 2 } : null
 }
 
-function parseTimeExpression(tokens: string[], index: number, now: number): { range: SearchDateRange; consumed: number } | null {
+function parseTimeExpression(tokens: SearchQueryToken[], index: number, now: number): { range: SearchDateRange; consumed: number } | null {
   const candidates = [
-    index + 2 < tokens.length
-      ? { value: `${tokens[index] || ''}${tokens[index + 1] || ''}${tokens[index + 2] || ''}`, consumed: 3 }
+    index + 2 < tokens.length && !tokens[index + 1].literal && !tokens[index + 2].literal
+      ? { value: `${tokens[index].value}${tokens[index + 1].value}${tokens[index + 2].value}`, consumed: 3 }
       : null,
-    index + 1 < tokens.length
-      ? { value: `${tokens[index] || ''}${tokens[index + 1] || ''}`, consumed: 2 }
+    index + 1 < tokens.length && !tokens[index + 1].literal
+      ? { value: `${tokens[index].value}${tokens[index + 1].value}`, consumed: 2 }
       : null,
-    { value: tokens[index], consumed: 1 }
+    { value: tokens[index].value, consumed: 1 }
   ].filter(Boolean) as Array<{ value: string; consumed: number }>
 
   for (const candidate of candidates) {
@@ -453,8 +502,10 @@ function cleanSafeLocalSearchQuery(query: string): string {
 }
 
 function protectSafeLocalStructuredSearch(query: string, protectedParts: string[]): string {
-  return String(query || '').replace(SAFE_LOCAL_STRUCTURED_OPERATOR_PATTERN, (_match, prefix, operatorTerm) => {
-    const index = protectedParts.push(String(operatorTerm || '')) - 1
+  // Protect both operator values and literal phrases before natural-language
+  // cleanup. A quoted "not found" must never become an exclusion of "found".
+  return String(query || '').replace(SAFE_LOCAL_PROTECTED_SEARCH_PATTERN, (_match, prefix, operatorTerm, quotedTerm) => {
+    const index = protectedParts.push(String(operatorTerm || quotedTerm || '')) - 1
     return `${prefix || ''}${String.fromCharCode(SAFE_LOCAL_PLACEHOLDER_START + index)}`
   })
 }
@@ -514,18 +565,20 @@ function uniqueTerms(values: string[]): string[] {
   return [...new Set(values.flatMap(value => { const mappedResult = normalizeFilterValue(value); return mappedResult ? [mappedResult] : [] }))]
 }
 
-function tokenizeSearchQuery(query: string): string[] {
-  const tokens: string[] = []
+function tokenizeSearchQuery(query: string): SearchQueryToken[] {
+  const tokens: SearchQueryToken[] = []
   const source = String(query || '')
   let current = ''
   let quote = ''
+  let literal = false
 
   const pushCurrent = () => {
     const value = current.trim()
     if (value) {
-      tokens.push(value)
+      tokens.push({ value, literal })
     }
     current = ''
+    literal = false
   }
 
   for (const char of source) {
@@ -539,6 +592,7 @@ function tokenizeSearchQuery(query: string): string[] {
     }
 
     if (isSearchQuote(char)) {
+      literal ||= !current
       quote = char
       continue
     }

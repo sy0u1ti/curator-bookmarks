@@ -15,6 +15,8 @@ import {
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
 import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
 import { consumeNewtabStartupData, getBookmarkTree } from './newtab-startup-data.js'
+import { createNewtabSettingsPersistence } from './newtab-settings-persistence.js'
+import { collectRemovedBookmarkNodeIds, persistNewtabWorkspaceMutation } from './newtab-workspace-persistence.js'
 import { downloadBlobFile } from '../shared/download.js'
 import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../shared/motion.js'
 import { isBookmarkMenuInteractionTarget } from './bookmark-menu-interactions.js'
@@ -191,7 +193,6 @@ import { createBackgroundObjectUrlCache } from './background-media-cache.js'
 import {
   getActiveNewTabWorkspace,
   normalizeNewTabWorkspaceSettings,
-  toggleNewTabWorkspacePin,
   updateNewTabWorkspace,
   type NewTabWorkspaceSettings
 } from '../shared/newtab-workspace-settings.js'
@@ -766,6 +767,15 @@ const state = {
   faviconRefreshTokens: new Map<string, number>()
 }
 
+const settingsPersistence = createNewtabSettingsPersistence({
+  normalize: normalizePersistedNewtabSetting,
+  onChange: applySyncedNewtabSetting,
+  onError: (error) => {
+    console.warn('新标签页待保存设置恢复失败，将在下次打开时重试。', error)
+    setSettingsSaveStatus('error', '上次的设置尚未写入，已保留待恢复记录；再次保存或打开新标签页时会重试。')
+  }
+})
+
 let onboardingCompleted = false
 
 let clockTimer = 0
@@ -779,6 +789,9 @@ let bookmarkDragGhostFrame = 0
 let bookmarkDropCommitFrame = 0
 let speedDialDragGhostFrame = 0
 let folderDragGhostFrame = 0
+let bookmarkDragGeneration = 0
+let speedDialDragGeneration = 0
+let folderDragGeneration = 0
 let folderDragSectionRectSnapshot: FolderDragSectionRectSnapshot | null = null
 let resizeLayoutFrame = 0
 let verticalCenterCollisionFrame = 0
@@ -806,6 +819,7 @@ let folderReorderStatusTimer = 0
 let bookmarkChangeRefreshTimer = 0
 let bookmarkChangeRefreshInFlight = false
 let bookmarkChangeRefreshQueued = false
+let bookmarkTreeEventVersion = 0
 let backgroundStartupCacheTimer = 0
 let backgroundStartupCacheRequestId = 0
 let backgroundUrlCacheTaskByUrl = new Map<string, BackgroundUrlCacheTask>()
@@ -883,6 +897,7 @@ export function startNewTabController(): void {
     return
   }
   newTabControllerStarted = true
+  settingsPersistence.resume()
   const generation = ++newTabControllerGeneration
 
   recordNewTabDomContentLoaded()
@@ -908,6 +923,11 @@ function handleNewTabStorageChanged(
   changes: Record<string, chrome.storage.StorageChange>,
   areaName: string
 ): void {
+  settingsPersistence.handleStorageChanges(changes, areaName)
+  if (areaName === 'local' && changes[STORAGE_KEYS.newTabWorkspaceSettings]) {
+    state.workspaceSettings = normalizeNewTabWorkspaceSettings(changes[STORAGE_KEYS.newTabWorkspaceSettings].newValue)
+    if (!state.speedDialDraggingBookmarkId && !state.reorderingSpeedDial) refreshSpeedDialPanel()
+  }
   if (areaName !== 'local' || !changes[STORAGE_KEYS.aiProviderSettings]) {
     return
   }
@@ -918,6 +938,72 @@ function handleNewTabStorageChanged(
   state.naturalSearchPlan = null
   state.naturalSearchError = ''
   refreshNewTabSearchSuggestionsAfterAiSettingsChange?.()
+}
+
+function normalizePersistedNewtabSetting(key: string, value: unknown): Record<string, unknown> {
+  switch (key) {
+    case STORAGE_KEYS.newTabSearchSettings: {
+      const { naturalSearchAiConfigured: _configured, ...settings } = normalizeSearchSettings(value)
+      return settings
+    }
+    case STORAGE_KEYS.newTabIconSettings: return { ...normalizeIconSettings(value) }
+    case STORAGE_KEYS.newTabTimeSettings: return { ...normalizeTimeSettingsLocal(value) }
+    case STORAGE_KEYS.newTabGeneralSettings: return { ...normalizeGeneralSettings(value) }
+    case STORAGE_KEYS.newTabFolderSettings: return { ...normalizeFolderSettingsWithDefault(value, state.rootNode) }
+    case STORAGE_KEYS.newTabBackgroundSettings: return { ...normalizeBackgroundSettings(value) }
+    case STORAGE_KEYS.newTabModuleSettings: return { ...normalizeNewTabModuleSettings(value) }
+    default: return {}
+  }
+}
+
+function applySyncedNewtabSetting(key: string, value: Record<string, unknown>): void {
+  switch (key) {
+    case STORAGE_KEYS.newTabSearchSettings:
+      state.searchSettings = normalizeSearchSettings({
+        ...value,
+        naturalSearchAiConfigured: state.searchSettings.naturalSearchAiConfigured
+      })
+      applySearchSettingsLive()
+      syncSearchSettingsControls()
+      scheduleRender({ updateClock: true })
+      break
+    case STORAGE_KEYS.newTabIconSettings:
+      state.iconSettings = normalizeIconSettings(value)
+      applyIconSettingsLive()
+      syncIconSettingsControls()
+      break
+    case STORAGE_KEYS.newTabTimeSettings:
+      state.timeSettings = normalizeTimeSettingsLocal(value)
+      syncTimeSettingsControls()
+      scheduleClockTick()
+      scheduleRender({ updateClock: true })
+      break
+    case STORAGE_KEYS.newTabGeneralSettings:
+      state.generalSettings = normalizeGeneralSettings(value)
+      syncGeneralSettingsControls()
+      scheduleRender({ updateClock: true })
+      break
+    case STORAGE_KEYS.newTabFolderSettings:
+      state.folderSettings = normalizeFolderSettingsWithDefault(value, state.rootNode)
+      state.folderSections = buildNewTabFolderSections(state.rootNode, state.folderSettings)
+      refreshDerivedBookmarkState()
+      syncFolderSettingsControls()
+      scheduleRender({ updateClock: true })
+      break
+    case STORAGE_KEYS.newTabBackgroundSettings:
+      backgroundSettingsMutationVersion += 1
+      state.backgroundSettings = normalizeBackgroundSettings(value)
+      preloadedBackgroundSettings = state.backgroundSettings
+      syncInstantWallpaperTargetForSettings(state.backgroundSettings)
+      syncBackgroundSettingsControls()
+      scheduleFeaturedBackgroundDailyRefresh()
+      void applyBackgroundSettings()
+      break
+    case STORAGE_KEYS.newTabModuleSettings:
+      state.moduleSettings = normalizeNewTabModuleSettings(value)
+      syncModuleSettingsControls()
+      scheduleRender({ updateClock: true })
+  }
 }
 
 function createSearchIndexReadyPromise(): Promise<void> {
@@ -935,8 +1021,9 @@ function resetSearchIndexReadyState(): void {
   state.searchIndexReadyPromise = searchIndexReadyPromise
 }
 
-function markSearchIndexDirty({ schedule = true } = {}): void {
+function markSearchIndexDirty({ schedule = true, force = false } = {}): void {
   state.bookmarkCatalog = null
+  if (force) lastBuiltSearchIndexCatalogVersion = ''
   resetSearchIndexReadyState()
   if (schedule) {
     scheduleNewTabSearchIndexRebuild()
@@ -1118,7 +1205,11 @@ function bindBookmarkEvents(): void {
     onChanged: handleBookmarkChanged,
     onCreated: handleBookmarkCreated,
     onMoved: handleBookmarkMoved,
-    onRemoved: handleBookmarkRemoved
+    onRemoved: handleBookmarkRemoved,
+    onChildrenReordered: () => {
+      bookmarkTreeEventVersion += 1
+      scheduleBookmarkChangeRefresh()
+    }
   })
 }
 
@@ -1682,6 +1773,7 @@ async function updateSelectedFolders(
     await saveFolderSettings()
   } catch (error) {
     state.folderSettings = previousSettings
+    settingsPersistence.discard(STORAGE_KEYS.newTabFolderSettings, previousSettings)
     state.folderSections = previousSections
     refreshDerivedBookmarkState()
     markSearchIndexDirty()
@@ -2299,24 +2391,34 @@ async function finishSpeedDialDrag(event: PointerEvent): Promise<void> {
   state.speedDialDragLongPressTimer = 0
 
   const wasDragging = Boolean(state.speedDialDragOriginalOrderIds.length)
+  const generation = speedDialDragGeneration
+  const bookmarkId = state.speedDialDraggingBookmarkId
   const originalOrderIds = [...state.speedDialDragOriginalOrderIds]
   const pendingInsertIndex = state.speedDialDragPendingInsertIndex >= 0
     ? state.speedDialDragPendingInsertIndex
     : getSpeedDialInsertIndex(event.clientX, event.clientY)
   const finalOrderIds = wasDragging && pendingInsertIndex >= 0
-    ? applyDraggedSpeedDialInsertInState(pendingInsertIndex)
+    ? buildBookmarkOrderAfterInsert(getActiveWorkspacePinnedIds(), bookmarkId, pendingInsertIndex)
     : getActiveWorkspacePinnedIds()
   if (wasDragging) {
     await settleSpeedDialDragGhost(finalOrderIds)
   }
-  clearSpeedDialDragState({ keepSuppressClick: wasDragging })
+  if (generation !== speedDialDragGeneration) return
 
   if (!wasDragging) {
+    clearSpeedDialDragState()
     return
   }
 
-  render()
+  flushSync(() => {
+    if (pendingInsertIndex >= 0) applyDraggedSpeedDialInsertInState(pendingInsertIndex)
+    clearSpeedDialDragState({ deferVisualReset: true, keepSuppressClick: true })
+    render()
+  })
+  const committedCard = getNewtabSpeedDialNodes().cards.get(bookmarkId)
+  if (committedCard) void committedCard.offsetWidth
   updateClockText()
+  finishBookmarkDropVisualCommit()
 
   if (areStringArraysEqual(originalOrderIds, finalOrderIds)) {
     return
@@ -2336,8 +2438,13 @@ function cancelSpeedDialDrag({ keepSuppressClick = false } = {}): void {
   updateClockText()
 }
 
-function clearSpeedDialDragState({ keepSuppressClick = false } = {}): void {
-  patchSpeedDialDraggingState(state.speedDialDraggingBookmarkId, false)
+function clearSpeedDialDragState({ deferVisualReset = false, keepSuppressClick = false } = {}): void {
+  speedDialDragGeneration += 1
+  if (deferVisualReset) {
+    dispatchNewtabDragUiView({ speedDialPendingId: '', speedDialDragging: true, previewInitializing: true })
+  } else {
+    patchSpeedDialDraggingState(state.speedDialDraggingBookmarkId, false)
+  }
   state.speedDialDraggingBookmarkId = ''
   state.speedDialDragPointerId = 0
   state.speedDialDragLongPressTimer = 0
@@ -2350,13 +2457,18 @@ function clearSpeedDialDragState({ keepSuppressClick = false } = {}): void {
   state.speedDialDragOffsetY = 0
   state.speedDialDragOriginalOrderIds = []
   state.speedDialDragPendingInsertIndex = -1
-  removeSpeedDialDragGhost()
-  clearSpeedDialDragVisualPreview()
-  dispatchNewtabDragUiView({
-    previewInitializing: false,
-    speedDialPendingId: '',
-    speedDialDragging: false
-  })
+  if (deferVisualReset) {
+    speedDialDragSlotRects = new Map()
+    speedDialDragSlotOrderIds = []
+  } else {
+    removeSpeedDialDragGhost()
+    clearSpeedDialDragVisualPreview()
+    dispatchNewtabDragUiView({
+      previewInitializing: false,
+      speedDialPendingId: '',
+      speedDialDragging: false
+    })
+  }
 
   if (keepSuppressClick) {
     state.speedDialDragSuppressClick = true
@@ -2743,7 +2855,10 @@ async function persistSpeedDialOrder(
   state.speedDialReorderError = ''
   syncSpeedDialReorderBusyState()
   try {
-    await saveNewTabWorkspaceSettings()
+    state.workspaceSettings = await persistNewtabWorkspaceMutation({
+      type: 'reorder', originalIds: originalBookmarkIds, finalIds: finalBookmarkIds
+    })
+    refreshSpeedDialPanel()
   } catch (error) {
     const message = error instanceof Error ? error.message : '固定入口排序保存失败，请刷新后重试。'
     const activeWorkspace = getActiveNewTabWorkspace(state.workspaceSettings)
@@ -2970,25 +3085,32 @@ async function finishBookmarkDrag(event: PointerEvent): Promise<void> {
   state.dragLongPressTimer = 0
 
   const wasDragging = Boolean(state.dragOriginalOrderIds.length)
+  const generation = bookmarkDragGeneration
   const folderId = state.draggingBookmarkFolderId
   const originalOrderIds = [...state.dragOriginalOrderIds]
   const pendingInsertIndex = state.dragPendingInsertIndex >= 0
     ? state.dragPendingInsertIndex
     : getBookmarkInsertIndex(event.clientX, event.clientY)
   const finalOrderIds = wasDragging && pendingInsertIndex >= 0
-    ? applyDraggedBookmarkInsertInState(pendingInsertIndex)
+    ? buildBookmarkOrderAfterInsert(
+        getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id)),
+        state.draggingBookmarkId,
+        pendingInsertIndex
+      )
     : getActiveBookmarkFolderBookmarks().map((bookmark) => String(bookmark.id))
   if (wasDragging) {
     await settleBookmarkDragGhost(finalOrderIds)
   }
+  if (generation !== bookmarkDragGeneration) return
   if (!wasDragging) {
     clearBookmarkDragState()
     return
   }
 
-  // Apply the transition-free state and reordered DOM in one commit. A style
-  // flush keeps the following frame from coalescing away that intermediate state.
+  // Publish the order only after the preview settles. An intervening render
+  // must not combine the new DOM order with the old preview offsets.
   flushSync(() => {
+    if (pendingInsertIndex >= 0) applyDraggedBookmarkInsertInState(pendingInsertIndex)
     clearBookmarkDragState({ deferVisualReset: true, keepSuppressClick: true })
     render()
   })
@@ -3020,6 +3142,7 @@ function clearBookmarkDragState({
   deferVisualReset = false,
   keepSuppressClick = false
 } = {}): void {
+  bookmarkDragGeneration += 1
   if (deferVisualReset) {
     dispatchNewtabDragUiView({
       bookmarkPendingId: '',
@@ -3067,12 +3190,15 @@ function clearBookmarkDragState({
 
 function finishBookmarkDropVisualCommit(): void {
   removeBookmarkDragGhost()
+  removeSpeedDialDragGhost()
   window.cancelAnimationFrame(bookmarkDropCommitFrame)
   bookmarkDropCommitFrame = window.requestAnimationFrame(() => {
     bookmarkDropCommitFrame = 0
     dispatchNewtabDragUiView({
       bookmarkPendingId: '',
       bookmarkDragging: false,
+      speedDialPendingId: '',
+      speedDialDragging: false,
       previewInitializing: false
     })
   })
@@ -3087,6 +3213,8 @@ function finishPendingBookmarkDropVisualCommit(): void {
   dispatchNewtabDragUiView({
     bookmarkPendingId: '',
     bookmarkDragging: false,
+    speedDialPendingId: '',
+    speedDialDragging: false,
     previewInitializing: false
   })
 }
@@ -3576,7 +3704,8 @@ async function persistBookmarkOrder(
   const operations = buildMinimalBookmarkMoveOperations(
     originalBookmarkIds,
     finalBookmarkIds,
-    folderId
+    folderId,
+    state.folderNodeMap.get(folderId)?.children
   )
   if (!operations.length) {
     return
@@ -3806,6 +3935,7 @@ async function reorderFolderByKeyboard(folderId: string, direction: -1 | 1): Pro
       ...state.folderSettings,
       selectedFolderIds: originalIds
     })
+    settingsPersistence.discard(STORAGE_KEYS.newTabFolderSettings, state.folderSettings)
     refreshDerivedBookmarkState()
     render()
     updateClockText()
@@ -3990,6 +4120,7 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
   state.folderDragLongPressTimer = 0
 
   const wasDragging = Boolean(state.folderDragOriginalOrderIds.length)
+  const generation = folderDragGeneration
   const finalOrderIds = state.folderSections.map((section) => section.id)
   const originalOrderIds = [...state.folderDragOriginalOrderIds]
   const originalSections = [...state.folderDragOriginalSections]
@@ -3997,6 +4128,7 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
   if (wasDragging && targetHeaderRect) {
     await settleNewtabDragGhost('.folder-drag-ghost', targetHeaderRect.left, targetHeaderRect.top)
   }
+  if (generation !== folderDragGeneration) return
   clearFolderDragState({ keepSuppressClick: wasDragging })
 
   if (!wasDragging) {
@@ -4024,6 +4156,7 @@ async function finishFolderDrag(event: PointerEvent): Promise<void> {
       ...state.folderSettings,
       selectedFolderIds: originalOrderIds
     })
+    settingsPersistence.discard(STORAGE_KEYS.newTabFolderSettings, state.folderSettings)
     restoreFolderDragOrder(originalOrderIds, originalSections)
     markSearchIndexDirty()
     syncFolderSettingsControls()
@@ -4047,6 +4180,7 @@ function cancelFolderDrag({ keepSuppressClick = false } = {}): void {
 }
 
 function clearFolderDragState({ keepSuppressClick = false } = {}): void {
+  folderDragGeneration += 1
   patchFolderDraggingState(state.draggingFolderId, false)
   state.draggingFolderId = ''
   state.folderDragPointerId = 0
@@ -4314,54 +4448,21 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index])
 }
 
-function isFolderRelevantToNewTab(folderId: string | null | undefined): boolean {
-  const id = String(folderId || '').trim()
-  if (!id) {
-    return true
-  }
-  const selectedIds = state.folderSettings?.selectedFolderIds
-  if (!selectedIds || !selectedIds.length) {
-    return true
-  }
-  if (!state.folderNodeMap || state.folderNodeMap.size === 0) {
-    return true
-  }
-  const selectedSet = new Set(selectedIds.map((value) => String(value)))
-  let current = state.folderNodeMap.get(id) || null
-  let guard = 0
-  while (current && guard < 256) {
-    if (selectedSet.has(String(current.id))) {
-      return true
-    }
-    const parentId = current.parentId ? String(current.parentId) : ''
-    if (!parentId) {
-      break
-    }
-    current = state.folderNodeMap.get(parentId) || null
-    guard += 1
-  }
-  return false
-}
-
 function handleBookmarkCreated(
   _bookmarkId: string,
   bookmark: chrome.bookmarks.BookmarkTreeNode
 ): void {
+  bookmarkTreeEventVersion += 1
   if (state.reorderingBookmarks) {
+    scheduleBookmarkChangeRefresh()
     return
   }
 
-  const parentId = bookmark && bookmark.parentId ? String(bookmark.parentId) : ''
   const createdBookmark = Boolean(bookmark?.url)
-  const parentRelevant = !parentId || isFolderRelevantToNewTab(parentId)
-  if (!parentRelevant) {
-    return
-  }
-
   const insertedLocally = createdBookmark ? insertBookmarkInPlace(bookmark) : false
   const result = getBookmarkCreationIncrementalResult({
     createdBookmark,
-    parentRelevant,
+    parentRelevant: true,
     insertedLocally
   })
   if (result.shouldRefresh) {
@@ -4370,7 +4471,9 @@ function handleBookmarkCreated(
 }
 
 function handleBookmarkChanged(bookmarkId: string, changeInfo: BookmarkChangeInfo): void {
+  bookmarkTreeEventVersion += 1
   if (state.reorderingBookmarks) {
+    scheduleBookmarkChangeRefresh()
     return
   }
 
@@ -4394,13 +4497,13 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
 
   const targetSection = state.folderSections.find((section) => section.id === parentId)
   const parentNode = state.folderNodeMap.get(parentId) || targetSection?.node || null
-  if (!targetSection || !parentNode) {
+  if (!parentNode) {
     return false
   }
 
   const existingChildren = Array.isArray(parentNode.children) ? parentNode.children : []
   const alreadyInTree = existingChildren.some((child) => String(child.id) === bookmarkId)
-  const alreadyInSection = targetSection.bookmarks.some((item) => String(item.id) === bookmarkId)
+  const alreadyInSection = targetSection?.bookmarks.some((item) => String(item.id) === bookmarkId)
   if (alreadyInSection) {
     return true
   }
@@ -4411,7 +4514,7 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
       ? Math.max(0, Math.min(bookmark.index, nextChildren.length))
       : nextChildren.length
     nextChildren.splice(insertIndex, 0, bookmark)
-    parentNode.children = nextChildren
+    parentNode.children = reindexBookmarkChildren(nextChildren)
   }
 
   state.folderSections = state.folderSections.map((section) => {
@@ -4419,9 +4522,7 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
       return section
     }
 
-    const nextBookmarks = section.bookmarks.some((item) => String(item.id) === bookmarkId)
-      ? section.bookmarks
-      : insertBookmarkByIndex(section.bookmarks, bookmark)
+    const nextBookmarks = (parentNode.children || []).filter((child) => Boolean(child.url))
     return {
       ...section,
       bookmarks: nextBookmarks,
@@ -4434,23 +4535,13 @@ function insertBookmarkInPlace(bookmark: chrome.bookmarks.BookmarkTreeNode): boo
   })
   state.bookmarks = getAllSectionBookmarks()
   state.bookmarkMap = new Map(state.bookmarks.map((item) => [String(item.id), item]))
-  state.allBookmarks = buildAllBookmarks(state.rootNode)
-  state.allBookmarkMap = new Map(state.allBookmarks.map((item) => [String(item.id), item]))
-  markSearchIndexDirty({ schedule: true })
-  renderBookmarkSections()
+  if (!state.allBookmarkMap.has(bookmarkId)) {
+    state.allBookmarks.push(bookmark)
+    state.allBookmarkMap.set(bookmarkId, bookmark)
+  }
+  markSearchIndexDirty({ force: true })
+  scheduleRender({ updateClock: false })
   return true
-}
-
-function insertBookmarkByIndex(
-  bookmarks: chrome.bookmarks.BookmarkTreeNode[],
-  bookmark: chrome.bookmarks.BookmarkTreeNode
-): chrome.bookmarks.BookmarkTreeNode[] {
-  const nextBookmarks = bookmarks.filter((item) => String(item.id) !== String(bookmark.id))
-  const insertIndex = typeof bookmark.index === 'number'
-    ? Math.max(0, Math.min(bookmark.index, nextBookmarks.length))
-    : nextBookmarks.length
-  nextBookmarks.splice(insertIndex, 0, bookmark)
-  return nextBookmarks
 }
 
 function patchBookmarkInPlace(
@@ -4468,6 +4559,7 @@ function patchBookmarkInPlace(
   if (changeInfo.url !== undefined) {
     node.url = changeInfo.url
   }
+  markSearchIndexDirty({ force: true })
 
   const updatedBookmarkContent = state.bookmarkMap.has(bookmarkId)
   if (updatedBookmarkContent) {
@@ -4481,11 +4573,18 @@ function patchBookmarkInPlace(
     refreshSpeedDialPanel()
   }
 
-  return updatedBookmarkContent || updatedSpeedDial
+  return true
 }
 
 function handleBookmarkRemoved(bookmarkId: string, removeInfo: BookmarkRemoveInfo): void {
+  bookmarkTreeEventVersion += 1
+  // Folder removal emits one event for its whole subtree. Resolve removals
+  // against current persisted pins, which can be newer than this page's view.
+  void persistNewtabWorkspaceMutation({
+    type: 'remove', bookmarkIds: collectRemovedBookmarkNodeIds(bookmarkId, removeInfo.node)
+  }).catch((error) => console.warn('已删除书签的固定入口清理失败。', error))
   if (state.reorderingBookmarks) {
+    scheduleBookmarkChangeRefresh()
     return
   }
 
@@ -4512,7 +4611,7 @@ function removeBookmarkFromLocalState(bookmarkId: string): boolean {
 
   const removedAny = forgetBookmarkFromLocalMaps(bookmarkId)
   if (removedAny) {
-    markSearchIndexDirty({ schedule: true })
+    markSearchIndexDirty({ force: true })
     renderBookmarkSections()
     refreshSpeedDialPanel()
   }
@@ -4520,6 +4619,9 @@ function removeBookmarkFromLocalState(bookmarkId: string): boolean {
 }
 
 function forgetBookmarkFromLocalMaps(bookmarkId: string): boolean {
+  const bookmark = state.allBookmarkMap.get(bookmarkId) || state.bookmarkMap.get(bookmarkId)
+  const parent = bookmark?.parentId ? state.folderNodeMap.get(String(bookmark.parentId)) : null
+  if (parent) removeBookmarkFromParentNode(parent, bookmarkId)
   const removedVisible = state.bookmarkMap.delete(bookmarkId)
   const removedAny = state.allBookmarkMap.delete(bookmarkId) || removedVisible
   if (removedAny) {
@@ -4551,30 +4653,20 @@ function handleBookmarkMoved(
   bookmarkId: string,
   moveInfo?: BookmarkMoveInfo
 ): void {
+  bookmarkTreeEventVersion += 1
+  const ownMove = state.selfBookmarkMoveIds.has(String(bookmarkId)) && Date.now() <= state.selfBookmarkMoveSuppressUntil
   if (isSelfBookmarkMoveEvent(bookmarkId)) {
-    return
-  }
-
-  const newParentRelevant = moveInfo
-    ? isFolderRelevantToNewTab(moveInfo.parentId)
-    : true
-  const oldParentRelevant = moveInfo
-    ? isFolderRelevantToNewTab(moveInfo.oldParentId)
-    : true
-  if (moveInfo && !newParentRelevant && !oldParentRelevant) {
+    if (!ownMove) scheduleBookmarkChangeRefresh()
     return
   }
 
   const movedLocally = moveInfo
-    ? moveBookmarkInPlace(String(bookmarkId || ''), moveInfo, {
-        oldParentRelevant,
-        newParentRelevant
-      })
+    ? moveBookmarkInPlace(String(bookmarkId || ''), moveInfo)
     : false
   const result = getBookmarkMoveIncrementalResult({
     movedBookmark: Boolean(getBookmarkById(bookmarkId)?.url),
-    oldParentRelevant,
-    newParentRelevant,
+    oldParentRelevant: true,
+    newParentRelevant: true,
     movedLocally
   })
   if (result.shouldRefresh) {
@@ -4584,11 +4676,7 @@ function handleBookmarkMoved(
 
 function moveBookmarkInPlace(
   bookmarkId: string,
-  moveInfo: BookmarkMoveInfo,
-  relevance: {
-    oldParentRelevant: boolean
-    newParentRelevant: boolean
-  }
+  moveInfo: BookmarkMoveInfo
 ): boolean {
   const normalizedBookmarkId = String(bookmarkId || '').trim()
   const oldParentId = String(moveInfo.oldParentId || '').trim()
@@ -4611,12 +4699,6 @@ function moveBookmarkInPlace(
   const oldSection = state.folderSections.find((section) => section.id === oldParentId) || null
   const newSection = state.folderSections.find((section) => section.id === newParentId) || null
   if (
-    (relevance.oldParentRelevant && !oldSection) ||
-    (relevance.newParentRelevant && !newSection)
-  ) {
-    return false
-  }
-  if (
     oldSection &&
     !oldSection.bookmarks.some((bookmark) => String(bookmark.id) === normalizedBookmarkId)
   ) {
@@ -4634,17 +4716,14 @@ function moveBookmarkInPlace(
     return false
   }
 
-  const nextBookmark: chrome.bookmarks.BookmarkTreeNode = {
-    ...movedNode,
-    parentId: newParentId
-  }
+  const nextBookmark = movedNode
+  nextBookmark.parentId = newParentId
   if (typeof moveInfo.index === 'number') {
     nextBookmark.index = moveInfo.index
   }
 
   insertBookmarkIntoParentNode(newParentNode, nextBookmark, moveInfo.index)
 
-  let sectionChanged = false
   state.folderSections = state.folderSections.map((section) => {
     if (section.id !== oldParentId && section.id !== newParentId) {
       return section
@@ -4655,14 +4734,13 @@ function moveBookmarkInPlace(
       nextBookmarks = nextBookmarks.filter((bookmark) => String(bookmark.id) !== normalizedBookmarkId)
     }
     if (section.id === newParentId) {
-      nextBookmarks = insertBookmarkByIndex(nextBookmarks, nextBookmark)
+      nextBookmarks = (newParentNode.children || []).filter((child) => Boolean(child.url))
     }
 
     if (nextBookmarks === section.bookmarks) {
       return section
     }
 
-    sectionChanged = true
     const counts = getFolderBookmarkCounts(section.node)
     return {
       ...section,
@@ -4681,9 +4759,9 @@ function moveBookmarkInPlace(
   state.bookmarkMap = new Map(nextBookmarks.map((bookmark) => [String(bookmark.id), bookmark]))
   state.folderNode = state.folderSections[0]?.node || null
   state.bookmarkCatalog = null
-  markSearchIndexDirty({ schedule: true })
+  markSearchIndexDirty({ force: true })
   renderBookmarkSections()
-  return sectionChanged
+  return true
 }
 
 function removeBookmarkFromParentNode(
@@ -4752,7 +4830,25 @@ async function flushBookmarkChangeRefresh(): Promise<void> {
   bookmarkChangeRefreshQueued = false
   bookmarkChangeRefreshInFlight = true
   try {
-    await refreshNewTab({ showLoading: false })
+    // Native bookmark events must not rehydrate settings or clear an in-progress
+    // search/settings draft. Refresh only the tree and its derived views.
+    const eventVersion = bookmarkTreeEventVersion
+    const tree = await getBookmarkTree()
+    if (eventVersion !== bookmarkTreeEventVersion || state.reorderingBookmarks || state.draggingBookmarkId) {
+      bookmarkChangeRefreshQueued = true
+      return
+    }
+    state.rootNode = tree[0] || null
+    state.folderNodeMap = buildFolderNodeMap(state.rootNode)
+    state.bookmarkCatalog = null
+    state.folderData = refreshBookmarkCatalog().extracted
+    state.folderSections = buildNewTabFolderSections(state.rootNode, state.folderSettings)
+    refreshDerivedBookmarkState()
+    markSearchIndexDirty({ force: true })
+    syncFolderSettingsControls()
+    render()
+  } catch (error) {
+    console.warn('新标签页书签更新失败。', error)
   } finally {
     bookmarkChangeRefreshInFlight = false
     if (bookmarkChangeRefreshQueued) {
@@ -4785,6 +4881,7 @@ function isActiveMenuBookmarkPinned(): boolean {
 }
 
 async function toggleActiveMenuBookmarkPin(): Promise<void> {
+  if (state.menuBusy) return
   const bookmark = getActiveMenuBookmark()
   if (!bookmark?.url) {
     closeBookmarkMenu()
@@ -4794,16 +4891,12 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
   const bookmarkId = String(bookmark.id)
   const workspace = getActiveNewTabWorkspace(state.workspaceSettings)
   const pinned = isBookmarkPinnedInSpeedDial(workspace.pinnedIds, bookmarkId)
-  state.workspaceSettings = toggleNewTabWorkspacePin(
-    state.workspaceSettings,
-    workspace.id,
-    bookmarkId,
-    { validBookmarkIds: state.allBookmarkMap.keys() }
-  )
-
   try {
+    state.menuBusy = true
     state.pendingDeleteBookmarkId = ''
-    await saveNewTabWorkspaceSettings()
+    renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
+    state.workspaceSettings = await persistNewtabWorkspaceMutation({ type: 'pin', bookmarkId, pinned: !pinned })
+    state.menuBusy = false
     const copy = getSpeedDialPinActionCopyLocal(pinned)
     state.menuError = ''
     state.menuStatus = copy.status
@@ -4811,6 +4904,7 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
     updateClockText()
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
   } catch (error) {
+    state.menuBusy = false
     state.menuStatus = ''
     state.menuError = error instanceof Error ? error.message : '固定状态保存失败，请稍后重试。'
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
@@ -5090,6 +5184,8 @@ interface RefreshNewTabOptions {
 
 async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}): Promise<void> {
   const refreshVersion = ++newTabRefreshVersion
+  const bookmarkEventVersionAtStart = bookmarkTreeEventVersion
+  let settingsRecoveryError = ''
   const backgroundMutationVersionAtStart = backgroundSettingsMutationVersion
   state.error = ''
   state.utilitySettingsHydrated = false
@@ -5103,7 +5199,12 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
   }
 
   try {
-    const { tree, stored } = await consumeNewtabStartupData()
+    const startup = await consumeNewtabStartupData()
+    if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
+    settingsRecoveryError = startup.settingsRecoveryError || ''
+    const tree = startup.tree
+    state.rootNode = tree[0] || null
+    const stored = settingsPersistence.hydrate(startup.stored)
     preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
     perfMark('newtab.storageLoaded')
     const rootNode = tree[0] || null
@@ -5156,6 +5257,8 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     state.error = error instanceof Error ? error.message : '新标签页加载失败，请刷新后重试。'
     resolveSearchIndexReady()
   } finally {
+    if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
+    if (bookmarkTreeEventVersion !== bookmarkEventVersionAtStart) scheduleBookmarkChangeRefresh()
     state.loading = false
     render()
     renderDeleteToast()
@@ -5178,6 +5281,7 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     syncFolderSettingsControls()
     syncNewTabModernSettingsControls()
     syncTimeSettingsControls()
+    if (settingsRecoveryError) setSettingsSaveStatus('error', settingsRecoveryError)
     updateClockText()
     scheduleClockTick()
     runIdle(() => {
@@ -5211,6 +5315,8 @@ async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion)
       loadNewTabActivityLazy()
     ])
 
+    if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
+
     state.bookmarkTagIndex = normalizeNewTabBookmarkTagIndex(tagIndex)
     state.searchSnapshotIndex = normalizeNewTabContentSnapshotIndex(snapshotIndex)
     state.activity = activity
@@ -5218,7 +5324,7 @@ async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion)
       validBookmarkIds: state.allBookmarkMap.keys(),
       legacyPinnedIds: state.activity.pinnedIds
     })
-    scheduleNewTabSearchIndexRebuild()
+    markSearchIndexDirty({ force: true })
     render()
   } catch (error) {
     console.warn('新标签页 idle 数据加载失败。', error)
@@ -5984,11 +6090,11 @@ function initializeSearchWidget(): boolean {
 
           input.blur()
         },
-        onRootBlur: (event) => {
-          const nextFocusTarget = event.relatedTarget instanceof Node
-            ? event.relatedTarget
-            : null
+        onRootBlur: () => {
           window.setTimeout(() => {
+            // Portal mounting can move focus through an intermediate element.
+            // Check the settled destination, not the earlier blur event.
+            const nextFocusTarget = document.activeElement
             const slot = getSearchSlot()
             const engineMenu = getSearchNodes().engineMenu
             if (
@@ -7282,12 +7388,11 @@ function openSearchSuggestion(suggestion: NewTabSearchSuggestion): void {
 function openBookmarkSuggestion(suggestion: SearchBookmarkSuggestion): void {
   const bookmark = state.allBookmarkMap.get(String(suggestion.id)) || getBookmarkById(suggestion.id)
   if (!bookmark) {
-    openSearchTarget(suggestion.url)
     return
   }
 
   void recordBookmarkOpen(bookmark)
-  openSearchTarget(suggestion.url)
+  openSearchTarget(String(bookmark.url || suggestion.url))
 }
 
 function createClockModule(): NewTabPageModule | null {
@@ -7820,6 +7925,13 @@ function createBookmarkTileViewModel(
 }
 
 function cleanupNewTabController(): void {
+  if (settingsPersistence.hasPending()) {
+    // A just-edited layout may not have reached the measured preboot snapshot.
+    // Do not replay its previous geometry while recovering the final settings.
+    clearNewtabBookmarkPrebootSnapshot()
+    try { window.localStorage.removeItem(getAutoSearchOffsetCacheKey()) } catch { /* Startup caches are optional. */ }
+  }
+  settingsPersistence.flushOnExit()
   newTabControllerStarted = false
   newTabControllerGeneration += 1
   refreshNewTabSearchSuggestionsAfterAiSettingsChange = null
@@ -8184,6 +8296,9 @@ function rebuildNewTabSearchIndex(): void {
   state.searchIndexReady = true
   state.searchIndexReadyPromise = searchIndexReadyPromise
   resolveSearchIndexReady()
+  if (getNewtabSearchWidgetNodes().input === document.activeElement) {
+    refreshNewTabSearchSuggestionsAfterAiSettingsChange?.()
+  }
   perfMark('newtab.searchReady')
   perfMeasure('newtab.searchReadyMs', 'newtab.domContentLoaded', 'newtab.searchReady')
 }
@@ -8244,22 +8359,7 @@ async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void
     return
   }
 
-  let nextSettings = state.workspaceSettings
-  for (const workspace of state.workspaceSettings.workspaces) {
-    const nextPinnedIds = workspace.pinnedIds.filter((id) => id !== normalizedId)
-    if (nextPinnedIds.length === workspace.pinnedIds.length) {
-      continue
-    }
-    nextSettings = updateNewTabWorkspace(
-      nextSettings,
-      workspace.id,
-      { pinnedIds: nextPinnedIds },
-      { validBookmarkIds: state.allBookmarkMap.keys() }
-    )
-  }
-
-  state.workspaceSettings = nextSettings
-  await saveNewTabWorkspaceSettings()
+  state.workspaceSettings = await persistNewtabWorkspaceMutation({ type: 'pin', bookmarkId: normalizedId, pinned: false })
 }
 
 async function saveNewTabActivityRecord(record: NewTabActivityRecord): Promise<void> {
@@ -8286,15 +8386,6 @@ async function loadNewTabActivityRepositoryLazy(): Promise<NewTabActivityReposit
 
 function normalizeNewTabActivityForCurrentBookmarks(rawActivity: unknown): NewTabActivityState {
   return normalizeNewTabActivity(rawActivity, state.allBookmarks)
-}
-
-async function saveNewTabWorkspaceSettings(): Promise<void> {
-  state.workspaceSettings = normalizeNewTabWorkspaceSettings(state.workspaceSettings, {
-    validBookmarkIds: state.allBookmarkMap.keys()
-  })
-  await setLocalStorage({
-    [STORAGE_KEYS.newTabWorkspaceSettings]: state.workspaceSettings
-  })
 }
 
 async function saveNewTabModuleSettings(): Promise<void> {
@@ -10590,6 +10681,7 @@ async function saveSearchSettings(): Promise<void> {
 }
 
 function scheduleSearchSettingsSave(): void {
+  settingsPersistence.stage({ [STORAGE_KEYS.newTabSearchSettings]: state.searchSettings })
   window.clearTimeout(searchSettingsSaveTimer)
   searchSettingsSaveTimer = window.setTimeout(() => {
     searchSettingsSaveTimer = 0
@@ -10845,6 +10937,7 @@ async function saveIconSettings(): Promise<void> {
 }
 
 function scheduleIconSettingsSave(): void {
+  settingsPersistence.stage({ [STORAGE_KEYS.newTabIconSettings]: state.iconSettings })
   window.clearTimeout(iconSettingsSaveTimer)
   iconSettingsSaveTimer = window.setTimeout(() => {
     iconSettingsSaveTimer = 0
@@ -10927,10 +11020,10 @@ function resetIconSettingsToDefaults(): void {
 async function saveSettingsWithFeedback(values: Record<string, unknown>): Promise<void> {
   clearSettingsSaveStatus()
   try {
-    await setLocalStorage(values)
+    await settingsPersistence.save(values)
     clearSettingsSaveStatus()
   } catch (error) {
-    setSettingsSaveStatus('error', '保存失败，本次调整仅临时生效；刷新后会恢复到上次已保存状态')
+    setSettingsSaveStatus('error', '保存失败，已保留本次调整；再次修改或打开新标签页时会重试。')
     throw error
   }
 }
@@ -12076,6 +12169,7 @@ async function saveTimeSettings(): Promise<void> {
 }
 
 function scheduleTimeSettingsSave(): void {
+  settingsPersistence.stage({ [STORAGE_KEYS.newTabTimeSettings]: state.timeSettings })
   window.clearTimeout(timeSettingsSaveTimer)
   timeSettingsSaveTimer = window.setTimeout(() => {
     timeSettingsSaveTimer = 0

@@ -440,7 +440,8 @@ body {
   .bookmark-menu-surface button,
   .newtab-search-engine-menu button,
   #newtab-settings-drawer button
-):not(:disabled):active {
+):not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active {
+  scale: 1;
   transform: scale(var(--ui-press-scale, var(--ds-press-scale, 0.985)));
   transition-duration: var(--ds-motion-feedback, 80ms);
 }
@@ -1076,12 +1077,40 @@ body {
 
 .source-navigation-count,
 .folder-section-count {
-  background: rgba(245, 245, 247, 0.14);
+  /* Also clear pill dimensions on cached preboot markup from older builds. */
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   color: rgba(245, 245, 247, 0.88);
+  line-height: 1.2;
+}
+
+/* A block line box avoids the extra inline baseline space from nested number
+   spans, so the digits share the heading's vertical center. */
+:is(.source-navigation-count, .folder-section-count) :is(.t-number, .t-number-value) {
+  display: block;
 }
 
 .folder-section-header {
+  appearance: none;
   color: rgba(245, 245, 247, 0.58);
+  transition:
+    background-color var(--ds-motion-fast) var(--ease-smooth-out),
+    border-color var(--ds-motion-fast) var(--ease-smooth-out),
+    color var(--ds-motion-fast) var(--ease-smooth-out);
+}
+
+/* A folder heading is a drag handle. Scaling this small native button changes
+   glyph rasterization and its grab geometry. Cover cached preboot chips too. */
+.folder-section-header:not(.folder-drag-ghost) {
+  transform: none;
+  scale: 1;
+}
+
+.folder-section-header.dragging {
+  cursor: grabbing;
 }
 
 .folder-section-header:hover,
@@ -1107,6 +1136,90 @@ body {
   backdrop-filter: var(--newtab-glass-filter-popup);
 }
 
+/* Animate the button surface independently so the field, label, and hit target
+   remain steady. CSS transitions reverse cleanly on rapid presses. */
+.newtab-search-chip-button {
+  position: relative;
+  isolation: isolate;
+  appearance: none;
+  border-color: transparent;
+  background: transparent;
+}
+
+.newtab-search-chip-button::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border: 1px solid var(--ui-divider);
+  border-radius: inherit;
+  background: transparent;
+  pointer-events: none;
+  transform: translateY(0) scale(1);
+  transition:
+    transform var(--ds-motion-fast) var(--ease-smooth-out),
+    background-color var(--ds-motion-fast) var(--ease-smooth-out),
+    border-color var(--ds-motion-fast) var(--ease-smooth-out);
+}
+
+.newtab-search-chip-button:focus-visible::before,
+.newtab-search-chip-button[aria-expanded="true"]::before {
+  border-color: var(--ui-divider-strong);
+  background: rgba(245, 245, 247, 0.08);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .newtab-search-chip-button:enabled:hover::before {
+    border-color: var(--ui-divider-strong);
+    background: rgba(245, 245, 247, 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+.newtab-search-chip-button:enabled:active::before,
+.newtab-search-chip-button:enabled[aria-expanded="true"]::before {
+  transform: translateY(0) scale(var(--scale-medium));
+  transition-duration: var(--ds-motion-feedback);
+}
+
+.newtab-search-natural.active:not(.fallback)::before {
+  border-color: var(--ui-accent);
+  background: var(--ui-accent);
+}
+
+.newtab-search-natural.fallback::before {
+  border-color: var(--ui-warning);
+  background: rgba(248, 214, 109, 0.14);
+}
+
+.newtab-search-engine-caret {
+  transform: rotate(0deg);
+  transition: transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+.newtab-search-engine[aria-expanded="true"] .newtab-search-engine-caret {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folder-section-header {
+    transition-duration: var(--duration-micro);
+  }
+
+  .newtab-search-chip-button::before,
+  .newtab-search-chip-button:enabled:hover::before,
+  .newtab-search-chip-button:enabled:active::before,
+  .newtab-search-chip-button:enabled[aria-expanded="true"]::before {
+    transform: none;
+    transition-property: background-color, border-color;
+    transition-duration: var(--duration-micro);
+  }
+
+  .newtab-search-engine-caret {
+    transition: none;
+  }
+}
+
 /* One floating material carries both the field and its recommendations. The
    fixed-height slot keeps this local grid reveal from moving any bookmarks. */
 .newtab-search-shell {
@@ -1114,12 +1227,15 @@ body {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   border-radius: var(--ui-radius-group);
   transform-origin: 50% 0;
-  transform: translateY(0) scale(1);
-  transition: transform 280ms var(--ease-bounce);
+  /* Lift the field as one unit. Scaling its live text and native controls
+     changes glyph rasterization and makes them snap as the layer settles. */
+  transform: translateY(0);
+  transition: transform var(--duration-fast) var(--ease-smooth-out);
 }
 .newtab-search-shell:focus-within,
+.newtab-search-shell[data-focus-within="true"],
 .newtab-search-shell[data-engine-open="true"] {
-  transform: translateY(-2px) scale(1.015);
+  transform: translateY(-2px);
 }
 .newtab-search-surface {
   position: absolute;
@@ -1170,15 +1286,16 @@ body {
   scrollbar-width: thin;
 }
 @media (hover: hover) and (pointer: fine) {
-  .newtab-search-shell:hover:not(:focus-within):not([data-engine-open="true"]) {
-    transform: translateY(-1px) scale(1.005);
+  .newtab-search-shell:hover:not(:focus-within):not([data-focus-within="true"]):not([data-engine-open="true"]) {
+    transform: translateY(-1px);
   }
 }
 @media (prefers-reduced-motion: reduce) {
   .newtab-search-shell,
   .newtab-search-shell:focus-within,
+  .newtab-search-shell[data-focus-within="true"],
   .newtab-search-shell[data-engine-open="true"],
-  .newtab-search-shell:hover:not(:focus-within):not([data-engine-open="true"]) {
+  .newtab-search-shell:hover:not(:focus-within):not([data-focus-within="true"]):not([data-engine-open="true"]) {
     transform: none;
     transition: none;
   }
@@ -1260,6 +1377,13 @@ body {
   .newtab-speed-dial-copy-detail,
   .newtab-quick-copy-detail {
     display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .newtab-onboarding-strip {
+    /* The fixed settings control ends at 58px; keep the first-run copy below it. */
+    margin-top: 48px;
   }
 }
 

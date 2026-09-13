@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { closeTransientPopup, isSidePanelSurface } from '../shared/extension-surfaces.js'
+import { getPopupSearchResultId, isPopupKeyboardHelpOpen, publishPopupSearchAccessibility, setPopupKeyboardHelpOpen } from './popup-workspace-state.js'
 import {
   AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS,
   AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS,
@@ -185,12 +187,15 @@ let smartProgressBaseAtMs = 0
 let smartProgressFinishFrame: number | null = null
 let popupRefreshRunId = 0
 let currentTabHydrationPromise: Promise<void> | null = null
+let currentTabHydrationRunId = 0
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
 let popupFolderBookmarkCounts = new Map<string, number>()
 let unregisterPopupActionHandlers: (() => void) | null = null
 let unregisterPopupBrowserEventActions: (() => void) | null = null
 let queuedActiveResultIndex: number | null = null
 let queuedActiveFolderIndex: number | null = null
+type BookmarkOpenDisposition = 'new-tab' | 'background' | 'current-tab'
+let pendingSearchActivation: { query: string; folderId: string | null; bookmarkId: string | null; disposition: BookmarkOpenDisposition } | null = null
 let activeResultFrame = 0
 let activeFolderFrame = 0
 let keyboardNavigationSettleTimer = 0
@@ -370,7 +375,7 @@ async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'gen
     await chrome.tabs.create({
       url: chrome.runtime.getURL(`src/options/options.html#${hash}`)
     })
-    window.close()
+    closeTransientPopup()
   } catch (error) {
     showToast({
       type: 'error',
@@ -383,7 +388,7 @@ async function openBookmarkHistoryPage() {
     await chrome.tabs.create({
       url: chrome.runtime.getURL('src/options/options.html#bookmark-history')
     })
-    window.close()
+    closeTransientPopup()
   } catch (error) {
     showToast({
       type: 'error',
@@ -1023,16 +1028,40 @@ async function hydrateCurrentTabState(refreshRunId = popupRefreshRunId) {
   if (refreshRunId !== popupRefreshRunId) {
     return
   }
+  const contextRun = ++currentTabHydrationRunId
   const currentTab = await getActiveTab().catch(() => null)
+  if (contextRun !== currentTabHydrationRunId || refreshRunId !== popupRefreshRunId) return
+  if (isSidePanelSurface() && (currentTab?.id !== state.currentTab?.id || currentTab?.url !== state.currentTab?.url)) {
+    if (state.smartFolderPickerOpen) {
+      state.smartFolderPickerOpen = false
+      state.smartFolderSearchQuery = ''
+      showViewNotice('当前网页已切换，请重新选择保存位置')
+    }
+    resetSmartClassification()
+  }
   state.currentTab = currentTab
   applyCurrentTabBookmarkMatch()
 }
+export function refreshPopupCurrentTabContext(): void {
+  if (!popupControllerStarted) return
+  const task = hydrateCurrentTabState()
+  currentTabHydrationPromise = task
+  void task.then(() => { if (popupControllerStarted) render() }).finally(() => {
+    if (currentTabHydrationPromise === task) currentTabHydrationPromise = null
+  })
+}
+export function refreshPopupBookmarks(): void {
+  if (popupControllerStarted) void refreshData({ preserveSearch: true })
+}
 async function ensureCurrentTabStateHydrated(): Promise<void> {
-  if (currentTabHydrationPromise) {
-    await currentTabHydrationPromise
-    return
+  await (currentTabHydrationPromise || hydrateCurrentTabState())
+  // A persistent side panel can switch tabs during a metadata read.
+  // Wait for the newest read before using that page's classification state.
+  while (currentTabHydrationPromise) {
+    const task = currentTabHydrationPromise
+    await task
+    if (task === currentTabHydrationPromise) break
   }
-  await hydrateCurrentTabState()
 }
 function applyCurrentTabBookmarkMatch() {
   const currentUrl = String(state.currentTab?.url || '').trim()
@@ -1080,11 +1109,17 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
   return map
 }
 function cleanupPopupController() {
+  cancelPendingSearchActivation()
+  currentTabHydrationRunId++
+  setPopupKeyboardHelpOpen(false)
+  publishPopupSearchAccessibility({ query: '', count: 0, activeId: '', pending: false })
   unregisterPopupActionHandlers?.()
   unregisterPopupActionHandlers = null
   unregisterPopupBrowserEventActions?.()
   unregisterPopupBrowserEventActions = null
   popupControllerStarted = false
+  state.searchRunId += 1
+  resetPopupSearchEnhancementReadiness()
   abortNaturalSearchRequest()
   abortSmartClassificationRequest()
   stopSmartProgressTicker()
@@ -1177,6 +1212,10 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
     isActive: () => state.searchSnapshotFullTextRunId === warmupRunId
   })
 
+  if (state.searchSnapshotFullTextRunId !== warmupRunId) {
+    return
+  }
+
   popupBookmarkCatalog = catalog
   state.searchCache.setVersion(catalog.version)
   state.searchSnapshotFullTextReady = true
@@ -1203,6 +1242,7 @@ function getActiveTab(): Promise<chrome.tabs.Tab | null> {
   })
 }
 function setSearchQuery(value, { immediate = false } = {}) {
+  cancelPendingSearchActivation()
   if (String(value || '').trim() && state.bookmarkReorderMode) {
     resetBookmarkReorderModeState()
   }
@@ -1261,6 +1301,7 @@ function syncActiveSearchResultIndex(): void {
   state.activeResultIndex = Math.min(state.activeResultIndex, state.searchResults.length - 1)
 }
 async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | null = null) {
+  cancelPendingSearchActivation()
   const enabled = !state.naturalSearchEnabled
   if (enabled) {
     const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
@@ -1415,12 +1456,12 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
   const cacheKey = getSearchCacheKey(`natural:${getNaturalSearchDateBucket()}:${normalizedQuery}`)
   const planCacheKey = getNaturalSearchPlanCacheKey(normalizedQuery)
   const cachedResults = state.searchCache.get(cacheKey)
-  if (!cachedResults) {
-    state.searchPending = true
-    state.naturalSearchPending = true
-    state.searchResults = []
-    syncActiveSearchResultIndex()
-  }
+  // Even cached results need asynchronous provider/plan validation. Publish
+  // only this query's provisional rows and keep activation pending until then.
+  state.searchPending = true
+  state.naturalSearchPending = true
+  state.searchResults = cachedResults ? cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS) : []
+  syncActiveSearchResultIndex()
   try {
     if (state.searchRunId !== runId) {
       return
@@ -1641,6 +1682,29 @@ function render() {
   renderMainContent()
   renderModals()
   renderToasts()
+  flushPendingSearchActivation()
+}
+
+export function cancelPendingSearchActivation(): void {
+  pendingSearchActivation = null
+}
+
+function flushPendingSearchActivation(): void {
+  const intent = pendingSearchActivation
+  if (!intent) return
+  if (
+    intent.query !== state.searchQuery.trim() || intent.query !== state.debouncedQuery ||
+    intent.folderId !== state.selectedFolderFilterId || hasOpenModal() || isPopupKeyboardHelpOpen() || hasBlockingPopupActionPending()
+  ) {
+    cancelPendingSearchActivation()
+    return
+  }
+  if (state.isLoading || state.searchPending || state.naturalSearchPending) return
+  cancelPendingSearchActivation()
+  const result = intent.bookmarkId
+    ? state.searchResults.find((bookmark) => bookmark.id === intent.bookmarkId)
+    : state.searchResults[0]
+  if (result) activateBookmark(result.id, intent.disposition)
 }
 function renderChrome() {
   dispatchPopupChromeChange(getPopupChromeViewModel())
@@ -1974,6 +2038,14 @@ function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}
   // Reading scrollTop on the empty shell forces layout during controller boot.
   const shouldPreserveScroll = state.hasPresentedContent &&
     (preserveScroll ?? (!hasQuery || Boolean(state.isLoading)))
+  const hasSearchRows = hasQuery && !state.isLoading && !mainState
+  const activeSearchResult = hasSearchRows ? state.searchResults[state.activeResultIndex] : null
+  publishPopupSearchAccessibility({
+    query: state.debouncedQuery,
+    count: hasSearchRows ? state.searchResults.length : 0,
+    activeId: activeSearchResult ? getPopupSearchResultId(activeSearchResult.id) : '',
+    pending: state.searchPending || state.naturalSearchPending
+  })
   replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
     preserveScroll: shouldPreserveScroll
   })
@@ -3007,6 +3079,10 @@ function handleContentAction(detail: PopupContentActionDetail) {
   if (detail.action === 'menu-action') {
     const bookmarkId = detail.bookmarkId || ''
     const action = detail.menuAction || ''
+    if (action === 'open-background') {
+      void openBookmark(bookmarkId, true)
+      return
+    }
     if (action === 'edit') {
       openEditDialog(bookmarkId, detail.returnFocusElement)
       return
@@ -3199,10 +3275,24 @@ function selectEditDraftFolder(folderId) {
   renderModals()
 }
 function handleDocumentKeydown(event) {
+  if (event.key !== 'Enter' || event.isComposing) cancelPendingSearchActivation()
   if (event.isComposing) {
     return
   }
   if (event.defaultPrevented) {
+    return
+  }
+  if (isPopupKeyboardHelpOpen()) {
+    if (event.key === 'Escape') { event.preventDefault(); setPopupKeyboardHelpOpen(false) }
+    return
+  }
+  if (event.target instanceof HTMLElement && event.target.closest('#popup-keyboard-help-dialog, [data-popup-row-menu]')) return
+  if (!hasOpenModal() && !isSmartOverlayActive() && (
+    ((event.ctrlKey || event.metaKey) && event.key === '/') ||
+    (event.key === '?' && !event.ctrlKey && !event.metaKey && !isEditableTarget(event.target))
+  )) {
+    event.preventDefault()
+    setPopupKeyboardHelpOpen(true)
     return
   }
   if (event.key === 'Escape') {
@@ -3217,20 +3307,26 @@ function handleDocumentKeydown(event) {
   if (handleSearchFocusShortcut(event)) {
     return
   }
+  if (event.key === 'F2' && !isSmartOverlayActive() && !state.searchPending && !state.naturalSearchPending) {
+    const bookmark = getKeyboardNavigationBookmarks()[queuedActiveResultIndex ?? state.activeResultIndex]
+    if (bookmark) { event.preventDefault(); openEditDialog(bookmark.id, event.target) }
+    return
+  }
 
   const targetInfo = getPopupKeyboardTargetInfo(event.target)
   if (shouldDelegatePopupDocumentNavigation(event.key, targetInfo)) {
     return
   }
-  if (shouldBlurMainSearchForNavigation(event.key, targetInfo)) {
+  if (shouldBlurMainSearchForNavigation(event.key, targetInfo) && !(targetInfo.mainSearchInput && state.searchQuery.trim())) {
     blurKeyboardEventTarget(event.target)
   }
 
-  if (handlePopupNavigationKey(event.key)) {
+  if (handlePopupNavigationKey(event.key, event)) {
     event.preventDefault()
   }
 }
 function handleEscapeAction() {
+  cancelPendingSearchActivation()
   if (hasOpenModal()) {
     closeDialogs()
     return true
@@ -3263,7 +3359,7 @@ function handleSearchFocusShortcut(event) {
   const key = String(event.key || '')
   const isCommandSearch = (event.ctrlKey || event.metaKey) && key.toLowerCase() === 'k'
   const isSlashSearch = key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey
-  if ((!isCommandSearch && !isSlashSearch) || isEditableTarget(event.target)) {
+  if ((!isCommandSearch && !isSlashSearch) || (!isCommandSearch && isEditableTarget(event.target))) {
     return false
   }
   if (isSmartOverlayActive()) {
@@ -3307,7 +3403,27 @@ function blurKeyboardEventTarget(target): void {
     target.blur()
   }
 }
-function handlePopupNavigationKey(key: string): boolean {
+function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ctrlKey?: boolean; metaKey?: boolean } = {}): boolean {
+  const disposition: BookmarkOpenDisposition = modifiers.altKey ? 'current-tab' : modifiers.ctrlKey || modifiers.metaKey ? 'background' : 'new-tab'
+  if (key === 'Enter') {
+    // A fast Enter can arrive before the debounce applies the latest input.
+    // Refresh that query first, and never activate a provisional async result.
+    const queryChanged = state.searchQuery.trim() !== state.debouncedQuery
+    if (queryChanged) {
+      setSearchQuery(state.searchQuery, { immediate: true })
+    }
+    if (state.searchPending || state.naturalSearchPending) {
+      const activeIndex = queuedActiveResultIndex ?? state.activeResultIndex
+      pendingSearchActivation = {
+        query: state.debouncedQuery,
+        folderId: state.selectedFolderFilterId,
+        disposition,
+        bookmarkId: queryChanged ? null : state.searchResults[activeIndex]?.id || null
+      }
+      return true
+    }
+  }
+
   if ((key === 'ArrowLeft' || key === 'ArrowRight') && !state.debouncedQuery) {
     const sidebarRows = getSidebarFolderRows()
     if (!sidebarRows.length) {
@@ -3362,7 +3478,7 @@ function handlePopupNavigationKey(key: string): boolean {
       return false
     }
 
-    openBookmark(activeBookmark.id)
+    activateBookmark(activeBookmark.id, disposition)
     return true
   }
   if (key === 'Escape') {
@@ -3601,6 +3717,7 @@ async function reorderBookmarkWithinCurrentFolder(bookmarkId: string, requestedI
 }
 
 function applyFolderFilter(folderId, { focusSearch = true } = {}) {
+  cancelPendingSearchActivation()
   resetBookmarkReorderModeState()
   const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
@@ -3894,6 +4011,8 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
     return
   }
   let savedWithoutRefresh = false
+  const sourceTab = state.currentTab
+  const isSourceCurrent = () => state.currentTab?.id === sourceTab?.id && state.currentTab?.url === sourceTab?.url
   try {
     setPopupActionPending('save-current-page', actionTargetId, true)
     state.smartSaving = true
@@ -3927,6 +4046,12 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
         extraction: state.smartExtraction
       }
     })
+    if (isSidePanelSurface() && !isSourceCurrent()) {
+      showToast({ type: 'success', message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }) })
+      await refreshData({ preserveSearch: true })
+      savedWithoutRefresh = true
+      return
+    }
     state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
     await finishSmartSave({
       message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
@@ -3934,8 +4059,10 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
     })
     savedWithoutRefresh = true
   } catch (error) {
-    state.smartSaving = false
-    state.smartSaved = false
+    if (isSourceCurrent()) {
+      state.smartSaving = false
+      state.smartSaved = false
+    }
     showToast({
       type: 'error',
       message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
@@ -4245,14 +4372,20 @@ async function getRestorableParentId(parentId) {
     return BOOKMARKS_BAR_ID
   }
 }
-async function openBookmark(bookmarkId) {
+function activateBookmark(bookmarkId: string, disposition: BookmarkOpenDisposition): void {
+  if (disposition === 'current-tab') void openBookmarkInCurrentTab(bookmarkId)
+  else void openBookmark(bookmarkId, disposition === 'background')
+}
+async function openBookmark(bookmarkId, background = false) {
+  cancelPendingSearchActivation()
   const bookmark = state.bookmarkMap.get(bookmarkId)
   if (!bookmark?.url || hasBlockingPopupActionPending()) {
     return
   }
   try {
-    await createTab({ url: bookmark.url })
-    window.close()
+    await createTab({ url: bookmark.url, active: !background })
+    if (background) showToast({ type: 'success', message: '已在后台打开' })
+    else closeTransientPopup()
   } catch (error) {
     showToast({
       type: 'error',
@@ -4261,6 +4394,7 @@ async function openBookmark(bookmarkId) {
   }
 }
 async function openBookmarkInCurrentTab(bookmarkId) {
+  cancelPendingSearchActivation()
   const bookmark = state.bookmarkMap.get(bookmarkId)
   if (!bookmark?.url || hasBlockingPopupActionPending() || isPopupActionPending('open-current-tab', bookmarkId)) {
     return
@@ -4268,7 +4402,7 @@ async function openBookmarkInCurrentTab(bookmarkId) {
   setPopupActionPending('open-current-tab', bookmarkId, true)
   try {
     await updateCurrentTabUrl(bookmark.url)
-    window.close()
+    closeTransientPopup()
   } catch (error) {
     showToast({
       type: 'error',
@@ -4278,9 +4412,12 @@ async function openBookmarkInCurrentTab(bookmarkId) {
     setPopupActionPending('open-current-tab', bookmarkId, false)
   }
 }
-function updateCurrentTabUrl(url) {
+async function updateCurrentTabUrl(url) {
+  // Resolve the active tab at the action boundary: the side panel may have
+  // stayed open while the user switched tabs since the last hydration.
+  const currentTab = await getActiveTab()
+  if (!Number.isInteger(currentTab?.id)) throw new Error('当前标签页不可用，请切换网页后重试。')
   return new Promise((resolve, reject) => {
-    const tabId = Number(state.currentTab?.id)
     const updateProperties = { url }
     const callback = (tab) => {
       const error = chrome.runtime.lastError
@@ -4290,11 +4427,7 @@ function updateCurrentTabUrl(url) {
       }
       resolve(tab)
     }
-    if (Number.isFinite(tabId)) {
-      chrome.tabs.update(tabId, updateProperties, callback)
-      return
-    }
-    chrome.tabs.update(updateProperties, callback)
+    chrome.tabs.update(currentTab.id!, updateProperties, callback)
   })
 }
 async function copyBookmarkUrl(bookmarkId) {

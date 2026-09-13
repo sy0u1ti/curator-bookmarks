@@ -65,6 +65,8 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
   const actionRefs = useBookmarkActionRefs(view.menu.actions)
   const position = useBookmarkMenuPosition(ref, view.menu.x, view.menu.y)
 
+  useBookmarkMenuExit(ref, view.closing, view.onExitComplete)
+
   useBookmarkMenuLayout(ref, {
     actionRefs,
     closing: view.closing,
@@ -90,11 +92,6 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
           view.menu.onCloseRequest()
         }
       }}
-      onTransitionEnd={(event) => {
-        if (view.closing && event.target === event.currentTarget && event.propertyName === 'opacity') {
-          view.onExitComplete()
-        }
-      }}
       ref={ref}
     >
       <BookmarkEditMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
@@ -113,6 +110,8 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
     view.menu.expanded ? cx('expanded', MENU_ADD_EXPANDED_CLASS) : MENU_ADD_COLLAPSED_CLASS,
     view.closing ? cx('is-closing', MENU_CLOSING_CLASS) : ''
   ].filter(Boolean).join(' ')
+
+  useBookmarkMenuExit(ref, view.closing, view.onExitComplete)
 
   useBookmarkMenuLayout(ref, {
     actionRefs,
@@ -134,11 +133,6 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
           view.menu.onCloseRequest()
         }
       }}
-      onTransitionEnd={(event) => {
-        if (view.closing && event.target === event.currentTarget && event.propertyName === 'opacity') {
-          view.onExitComplete()
-        }
-      }}
       ref={ref}
     >
       <BookmarkAddMenu actionRefs={actionRefs} firstInputRef={firstInputRef} menu={view.menu} />
@@ -147,6 +141,25 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
 }
 
 type BookmarkActionRefMap = Map<string, RefObject<HTMLElement | null>>
+
+function useBookmarkMenuExit(
+  ref: RefObject<HTMLElement | null>,
+  closing: boolean,
+  onExitComplete: () => void
+) {
+  useLayoutEffect(() => {
+    if (!closing) return
+
+    let cancelled = false
+    // Disabled or interrupted transitions do not emit transitionend. Waiting
+    // for the current animations also completes when there is no exit motion.
+    const animations = ref.current?.getAnimations() ?? []
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (!cancelled) onExitComplete()
+    })
+    return () => { cancelled = true }
+  }, [closing, onExitComplete, ref])
+}
 
 function useBookmarkActionRefs(actions: BookmarkMenuActionViewModel[]): BookmarkActionRefMap {
   return useMemo(() => {

@@ -182,7 +182,7 @@ npm run test:workspace-browser # 已构建后的恢复点、原生侧栏、键�
 
 需要不弹出浏览器窗口的自动验证时，设置 `CURATOR_HEADLESS=1` 后运行烟测；PowerShell 示例：`$env:CURATOR_HEADLESS='1'; npm run smoke:extension`。
 
-GitHub Actions 配置在 Linux 和 Windows 上执行安装、类型检查、逻辑测试和构建。界面、权限和生命周期变化仍需运行扩展浏览器回归。
+建议在 Linux 和 Windows 上执行安装、类型检查、逻辑测试和构建。界面、权限和生命周期变化仍需运行扩展浏览器回归。
 
 ## 反馈与许可
 

@@ -12,7 +12,8 @@ import {
   dispatchPopupPageHide,
   dispatchPopupStorageChanged
 } from './popup-browser-events-store'
-import { usePopupController } from './popup-controller'
+import { cancelPendingSearchActivation, usePopupController } from './popup-controller'
+import { subscribeToSidePanelContext } from '../sidepanel/sidepanel-context'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
 import { PopupContentHost } from './components/PopupContentHost'
@@ -74,12 +75,16 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
   const smartActive = ['loading', 'results', 'error', 'permission'].includes(smartClassifierView.status)
   useEffect(() => {
     const unsubscribeStorageChanges = subscribeToPopupStorageChanges()
+    const unsubscribeSidePanel = subscribeToSidePanelContext()
 
     document.addEventListener('keydown', dispatchPopupDocumentKeyDown)
+    document.addEventListener('pointerdown', cancelPendingSearchActivation, true)
     window.addEventListener('pagehide', dispatchPopupPageHide)
     return () => {
+      unsubscribeSidePanel()
       unsubscribeStorageChanges()
       document.removeEventListener('keydown', dispatchPopupDocumentKeyDown)
+      document.removeEventListener('pointerdown', cancelPendingSearchActivation, true)
       window.removeEventListener('pagehide', dispatchPopupPageHide)
     }
   }, [])

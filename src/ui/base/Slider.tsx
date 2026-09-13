@@ -8,6 +8,7 @@ import {
   type Ref
 } from 'react'
 import { cx } from './utils'
+import { InputStateCommit } from './InputStateCommit'
 
 type BaseSliderRootProps = ComponentPropsWithoutRef<typeof BaseSlider.Root<number>>
 
@@ -101,16 +102,18 @@ export function SliderControl({
   const resolvedMax = currentMax === currentMin ? currentMax + currentStep : currentMax
   const disabled = disabledProp ?? internalState.disabled
 
-  valueRef.current = currentValue
-  minRef.current = currentMin
-  maxRef.current = resolvedMax
-  stepRef.current = currentStep
-  disabledRef.current = Boolean(disabled)
-  valueControlledRef.current = valueProp !== undefined
-  minControlledRef.current = minControlled
-  maxControlledRef.current = maxControlled
-  stepControlledRef.current = stepControlled
-  disabledControlledRef.current = disabledProp !== undefined
+  const commitInputState = () => {
+    valueRef.current = currentValue
+    minRef.current = currentMin
+    maxRef.current = resolvedMax
+    stepRef.current = currentStep
+    disabledRef.current = Boolean(disabled)
+    valueControlledRef.current = valueProp !== undefined
+    minControlledRef.current = minControlled
+    maxControlledRef.current = maxControlled
+    stepControlledRef.current = stepControlled
+    disabledControlledRef.current = disabledProp !== undefined
+  }
 
   const handleInputRef = useCallback((node: HTMLInputElement | null) => {
     inputElementRef.current = node
@@ -287,7 +290,8 @@ export function SliderControl({
     }
   }, [syncInputState])
 
-  return (
+  return <>
+    <InputStateCommit onCommit={commitInputState} />
     <BaseSlider.Root
       id={rootId ?? (id ? `${id}-root` : undefined)}
       value={currentValue}
@@ -332,7 +336,7 @@ export function SliderControl({
         />
       </BaseSlider.Control>
     </BaseSlider.Root>
-  )
+  </>
 }
 
 function sliderInternalStateReducer(

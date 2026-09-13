@@ -28,8 +28,8 @@ assert.ok(
   'Newtab portal should mount steadily while quick access, source chips, and folder controls retain interaction motion.'
 )
 assert.ok(
-  folderSectionClasses.includes('curator-motion-chip'),
-  'Newtab folder section controls should use chip motion.'
+  !folderSectionClasses.includes('curator-motion-chip'),
+  'Folder headings must not inherit the chip press transform that scales their text and drag geometry.'
 )
 assert.ok(
   bookmarkMenusHost.includes('curator-motion-popover'),

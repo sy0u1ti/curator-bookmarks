@@ -231,14 +231,12 @@ function FeaturedBackgroundPickerCard({
   )
   const cardRef = useRef<HTMLElement | null>(null)
   const resolvedPreviewUrlRef = useRef(card.initialPreviewUrl)
-  const fallbackUrlsRef = useRef<string[]>([])
-  const fallbackUrlsInitializedRef = useRef(false)
+  const fallbackUrlsRef = useRef<string[] | null>(null)
+  if (fallbackUrlsRef.current === null) {
+    fallbackUrlsRef.current = getFeaturedBackgroundPreviewFallbackQueue(card.previewFallbackUrls)
+  }
   const handledFocusRequestIdRef = useRef(0)
   const hydrationRequestKeyRef = useRef('')
-  if (!fallbackUrlsInitializedRef.current) {
-    fallbackUrlsRef.current = getFeaturedBackgroundPreviewFallbackQueue(card.previewFallbackUrls)
-    fallbackUrlsInitializedRef.current = true
-  }
 
   const hydratePreview = useCallback(() => {
     const remotePreviewUrl = card.remotePreviewUrl || card.imageUrl

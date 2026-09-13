@@ -10,11 +10,9 @@ import {
 } from './bookmarks-api.js'
 import { extractBookmarkData } from './bookmark-tree.js'
 import {
-  buildBookmarkTagDuplicateKey,
   loadBookmarkTagIndex,
   mergeBookmarkTagImport,
   normalizeBookmarkTagIndex,
-  normalizeBookmarkTagUrl,
   restoreBookmarkTagIndexSnapshot,
   saveBookmarkTagIndex,
   type BookmarkTagIndex
@@ -30,6 +28,7 @@ import {
   withLocalStorageTransaction,
   type LocalStorageTransaction
 } from './storage.js'
+import { buildDuplicateKey } from './text.js'
 
 const BACKUP_SCHEMA_VERSION = 1
 const BACKUP_APP = 'curator-bookmarks'
@@ -60,7 +59,7 @@ export type DangerousOperationKind =
   | 'tag-import'
   | 'restore'
 
-export type BackupRestoreMode = 'tagsOnly' | 'newTabOnly' | 'safeFull'
+export type BackupRestoreMode = 'bookmarksOnly' | 'tagsOnly' | 'newTabOnly' | 'safeFull'
 
 export interface AutoBackupBeforeDangerousOperationOptions {
   kind: DangerousOperationKind
@@ -129,6 +128,13 @@ export interface BackupRestorePreview {
   fileName?: string
   exportedAt: string
   extensionVersion: string
+  bookmarks: Array<{
+    id: string
+    title: string
+    url: string
+    path: string
+    missing: boolean
+  }>
   counts: {
     bookmarkNodes: number
     bookmarkUrls: number
@@ -222,7 +228,7 @@ interface BackupRestoreReceipt {
 }
 
 interface BackupRestoreSnapshot {
-  currentBookmarks: Array<{ url: string; path?: string }>
+  currentBookmarks: Array<{ id: string; url: string; title?: string; path?: string }>
   previousTagIndex: BookmarkTagIndex | null
   previousStorage: Record<string, unknown>
   restoreStorageKeys: string[]
@@ -372,24 +378,23 @@ export async function buildBackupRestorePreview(
   const currentInstances = new Set(
     currentData.bookmarks.map((bookmark) => buildBookmarkInstanceKey(bookmark.url, bookmark.path || ''))
   )
-  const missingBookmarkUrls = extractBackupBookmarkInstances(backup.chromeBookmarks.tree).filter((instance) => {
-    return !currentInstances.has(buildBookmarkInstanceKey(instance.url, instance.path))
-  }).length
+  const bookmarks = extractBackupBookmarkInstances(backup.chromeBookmarks.tree).map((instance) => ({
+    ...instance,
+    missing: !currentInstances.has(buildBookmarkInstanceKey(instance.url, instance.path))
+  }))
+  const missingBookmarkUrls = bookmarks.filter((bookmark) => bookmark.missing).length
   const tagRecords = Object.values(backup.storage.bookmarkTagIndex.records)
-  const matchedTags = tagRecords.filter((record) => {
-    return currentData.bookmarkMap.has(record.bookmarkId) ||
-      currentData.bookmarks.some((bookmark) => {
-        return normalizeBookmarkTagUrl(bookmark.url) === record.normalizedUrl ||
-          buildBookmarkTagDuplicateKey(bookmark.url) === record.duplicateKey
-      })
-  }).length
+  const tagPreview = mergeBookmarkTagImport(normalizeBookmarkTagIndex(null), {
+    records: tagRecords
+  }, currentData.bookmarks)
+  const matchedTags = tagRecords.length - tagPreview.unmatched
 
   const warnings: string[] = []
   if (hasApiKeyLikeField(backup)) {
     warnings.push('备份文件中出现疑似 API Key 字段，恢复会忽略这些字段。')
   }
   if (missingBookmarkUrls) {
-    warnings.push(`有 ${missingBookmarkUrls} 条备份书签实例当前不存在；完整恢复会复制到新的恢复文件夹。`)
+    warnings.push(`有 ${missingBookmarkUrls} 条备份书签实例当前不存在；恢复书签时会复制到新的恢复文件夹。`)
   }
   warnings.push('完整恢复会覆盖回收站、忽略规则、重定向缓存和弹窗偏好等集合类本地数据；不会覆盖 Chrome 现有书签树。')
 
@@ -398,6 +403,7 @@ export async function buildBackupRestorePreview(
     fileName,
     exportedAt: backup.exportedAt,
     extensionVersion: backup.extensionVersion,
+    bookmarks,
     counts: {
       bookmarkNodes: countBookmarkNodes(backup.chromeBookmarks.tree),
       bookmarkUrls: backupBookmarks.filter((node) => Boolean(node.url)).length,
@@ -412,6 +418,11 @@ export async function buildBackupRestorePreview(
     },
     warnings,
     modes: [
+      {
+        mode: 'bookmarksOnly',
+        label: '恢复书签与标签',
+        description: '将缺失书签补到恢复文件夹并关联标签，保留当前设置和清理记录。'
+      },
       {
         mode: 'tagsOnly',
         label: '只恢复标签数据',
@@ -656,7 +667,7 @@ async function captureBackupRestoreSnapshot(
   const restoreStorageKeys = getBackupRestoreStorageKeys(backup, mode)
   const [currentTree, previousTagIndex, previousStorage] = await Promise.all([
     getBookmarkTree(),
-    mode === 'tagsOnly' || mode === 'safeFull'
+    mode === 'tagsOnly' || mode === 'safeFull' || mode === 'bookmarksOnly'
       ? loadBookmarkTagIndex({ transaction })
       : Promise.resolve(null),
     restoreStorageKeys.length
@@ -691,10 +702,42 @@ async function applyCuratorBackupRestore(
     skippedBookmarks: 0
   }
 
-  if (mode === 'tagsOnly' || mode === 'safeFull') {
+  let tagImportBookmarks = snapshot.currentBookmarks
+  let tagImportRecords = Object.values(backup.storage.bookmarkTagIndex.records)
+  if (mode === 'safeFull' || mode === 'bookmarksOnly') {
+    const copyResult = await copyMissingBookmarksToRestoreFolder(
+      backup,
+      snapshot.currentBookmarks,
+      {
+        restoreFolderTitle: hooks.restoreFolderTitle,
+        beforeCreate: hooks.beforeBookmarkCopy,
+        onCreated: hooks.restoreFolderCreated
+      }
+    )
+    result.restored.copiedBookmarks = copyResult.copied
+    result.skippedBookmarks = copyResult.skipped
+    if (copyResult.copied) {
+      const restoredData = extractBookmarkData((await getBookmarkTree())[0])
+      tagImportBookmarks = restoredData.bookmarks
+      tagImportRecords = tagImportRecords.map((record) => {
+        const restoredId = copyResult.bookmarkIds.get(record.bookmarkId)
+        const restoredBookmark = restoredId ? restoredData.bookmarkMap.get(restoredId) : null
+        if (!restoredBookmark || buildDuplicateKey(restoredBookmark.url) !== buildDuplicateKey(record.url)) {
+          return record
+        }
+        return {
+          ...record,
+          bookmarkId: restoredBookmark.id,
+          path: restoredBookmark.path || ''
+        }
+      })
+    }
+  }
+
+  if (mode === 'tagsOnly' || mode === 'safeFull' || mode === 'bookmarksOnly') {
     const tagImport = mergeBookmarkTagImport(snapshot.previousTagIndex, {
-      records: Object.values(backup.storage.bookmarkTagIndex.records)
-    }, snapshot.currentBookmarks)
+      records: tagImportRecords
+    }, tagImportBookmarks)
     const tagUpdatedAt = Date.now()
     const tagTargetIndex = normalizeBookmarkTagIndex({
       ...tagImport.index,
@@ -733,18 +776,6 @@ async function applyCuratorBackupRestore(
     await hooks.beforeStorageChange?.(localPayload)
     await setLocalStorage(localPayload, { transaction })
     result.restored.storageSections = Object.keys(localPayload).length
-
-    const copyResult = await copyMissingBookmarksToRestoreFolder(
-      backup,
-      snapshot.currentBookmarks,
-      {
-        restoreFolderTitle: hooks.restoreFolderTitle,
-        beforeCreate: hooks.beforeBookmarkCopy,
-        onCreated: hooks.restoreFolderCreated
-      }
-    )
-    result.restored.copiedBookmarks = copyResult.copied
-    result.skippedBookmarks = copyResult.skipped
   }
 
   return result
@@ -913,7 +944,7 @@ function getBackupRestoreStorageKeys(
   const keys = mode === 'newTabOnly' || mode === 'safeFull'
     ? Object.keys(buildNewTabStoragePayload(backup.storage.newTab))
     : []
-  if (mode === 'tagsOnly' || mode === 'safeFull') {
+  if (mode === 'tagsOnly' || mode === 'safeFull' || mode === 'bookmarksOnly') {
     keys.push(STORAGE_KEYS.bookmarkTagIndex)
   }
   if (mode === 'safeFull') {
@@ -1236,7 +1267,7 @@ function normalizeBackupRestoreOperationId(value: unknown): string {
 }
 
 function assertBackupRestoreMode(mode: unknown): asserts mode is BackupRestoreMode {
-  if (mode !== 'tagsOnly' && mode !== 'newTabOnly' && mode !== 'safeFull') {
+  if (mode !== 'tagsOnly' && mode !== 'newTabOnly' && mode !== 'safeFull' && mode !== 'bookmarksOnly') {
     throw new Error('备份恢复模式无效。')
   }
 }
@@ -1285,7 +1316,7 @@ function runWithOptionalBackupRestoreMutationLock<T>(
   withMutationLock: BackupRestoreMutationLock | undefined,
   task: () => Promise<T>
 ): Promise<T> {
-  return mode === 'safeFull' && withMutationLock
+  return (mode === 'safeFull' || mode === 'bookmarksOnly') && withMutationLock
     ? withMutationLock(task)
     : task()
 }
@@ -1302,7 +1333,8 @@ async function copyMissingBookmarksToRestoreFolder(
     beforeCreate?: () => Promise<void> | void
     onCreated?: (folderId: string) => Promise<void> | void
   } = {}
-): Promise<{ copied: number; skipped: number }> {
+): Promise<{ copied: number; skipped: number; bookmarkIds: Map<string, string> }> {
+  const bookmarkIds = new Map<string, string>()
   const knownInstances = new Set(
     currentBookmarks.map((bookmark) => buildBookmarkInstanceKey(bookmark.url, bookmark.path || ''))
   )
@@ -1312,7 +1344,7 @@ async function copyMissingBookmarksToRestoreFolder(
     .length
 
   if (!missingCount) {
-    return { copied: 0, skipped: 0 }
+    return { copied: 0, skipped: 0, bookmarkIds }
   }
 
   await beforeCreate?.()
@@ -1321,23 +1353,26 @@ async function copyMissingBookmarksToRestoreFolder(
     title: restoreFolderTitle || `Curator Restore ${new Date().toISOString().slice(0, 10)}`
   })
   await onCreated?.(String(restoreFolder.id))
-  return copyMissingNodesSequentially(
+  const totals = await copyMissingNodesSequentially(
     rootChildren,
     String(restoreFolder.id),
     knownInstances,
-    ''
+    '',
+    bookmarkIds
   )
+  return { ...totals, bookmarkIds }
 }
 
 function copyMissingNodesSequentially(
   nodes: chrome.bookmarks.BookmarkTreeNode[],
   parentId: string,
   knownInstances: Set<string>,
-  folderPath: string
+  folderPath: string,
+  bookmarkIds: Map<string, string>
 ): Promise<{ copied: number; skipped: number }> {
   return nodes.reduce<Promise<{ copied: number; skipped: number }>>((chain, node) => {
     return chain.then(async (totals) => {
-      const result = await copyMissingNode(node, parentId, knownInstances, folderPath)
+      const result = await copyMissingNode(node, parentId, knownInstances, folderPath, bookmarkIds)
       return {
         copied: totals.copied + result.copied,
         skipped: totals.skipped + result.skipped
@@ -1350,18 +1385,20 @@ async function copyMissingNode(
   node: chrome.bookmarks.BookmarkTreeNode,
   parentId: string,
   knownInstances: Set<string>,
-  folderPath: string
+  folderPath: string,
+  bookmarkIds: Map<string, string>
 ): Promise<{ copied: number; skipped: number }> {
   if (node.url) {
     const instanceKey = buildBookmarkInstanceKey(node.url, folderPath)
     if (knownInstances.has(instanceKey)) {
       return { copied: 0, skipped: 1 }
     }
-    await createBookmark({
+    const bookmark = await createBookmark({
       parentId,
       title: node.title || node.url,
       url: node.url
     })
+    bookmarkIds.set(String(node.id), String(bookmark.id))
     knownInstances.add(instanceKey)
     return { copied: 1, skipped: 0 }
   }
@@ -1377,7 +1414,7 @@ async function copyMissingNode(
     parentId,
     title: node.title || '未命名文件夹'
   })
-  return copyMissingNodesSequentially(children, String(folder.id), knownInstances, nextFolderPath)
+  return copyMissingNodesSequentially(children, String(folder.id), knownInstances, nextFolderPath, bookmarkIds)
 }
 
 function nodeHasMissingBookmark(
@@ -1404,11 +1441,13 @@ function extractBackupBookmarkNodes(tree: chrome.bookmarks.BookmarkTreeNode[]): 
   return output
 }
 
-function extractBackupBookmarkInstances(tree: chrome.bookmarks.BookmarkTreeNode[]): Array<{ url: string; path: string }> {
-  const output: Array<{ url: string; path: string }> = []
+function extractBackupBookmarkInstances(tree: chrome.bookmarks.BookmarkTreeNode[]): Array<{ id: string; title: string; url: string; path: string }> {
+  const output: Array<{ id: string; title: string; url: string; path: string }> = []
   const visit = (node: chrome.bookmarks.BookmarkTreeNode, folderPath = '') => {
     if (node.url) {
       output.push({
+        id: String(node.id),
+        title: node.title || node.url,
         url: node.url,
         path: folderPath
       })
@@ -1500,11 +1539,11 @@ function buildChildFolderPath(parentPath: string, title: unknown): string {
 }
 
 function buildBookmarkInstanceKey(url: string, path: string): string {
-  return `${normalizeBookmarkTagUrl(url)}\n${normalizePathKey(path)}`
+  return `${buildDuplicateKey(url)}\n${normalizePathKey(path)}`
 }
 
 function normalizePathKey(path: string): string {
-  return String(path || '').replace(/\s*\/\s*/g, ' / ').replace(/\s+/g, ' ').trim().toLowerCase()
+  return String(path || '').replace(/\s*\/\s*/g, ' / ').replace(/\s+/g, ' ').trim()
 }
 
 function openAutoBackupDb(): Promise<IDBDatabase> {
@@ -1540,6 +1579,37 @@ async function deleteAutoBackup(backupId: string): Promise<void> {
   } finally {
     db.close()
   }
+}
+
+export async function listAutoBackupPoints(): Promise<AutoBackupIndexEntry[]> {
+  const stored = await getLocalStorage([STORAGE_KEYS.autoBackupIndex])
+  const entries = stored[STORAGE_KEYS.autoBackupIndex]
+  if (!Array.isArray(entries)) return []
+  const seen = new Set<string>()
+  return entries.filter((entry): entry is AutoBackupIndexEntry => {
+    if (!entry || typeof entry !== 'object' || !/^auto-\d+-[a-z0-9]+$/i.test(String(entry.backupId || '')) ||
+      !Number.isFinite(entry.createdAt) || !Number.isFinite(new Date(entry.createdAt).getTime()) ||
+      entry.skipped || seen.has(entry.backupId)) return false
+    seen.add(entry.backupId)
+    return true
+  }).map((entry) => ({
+    ...entry,
+    operationReason: typeof entry.operationReason === 'string' ? entry.operationReason.slice(0, 500) : '自动恢复点',
+    fileName: getBackupFileName(entry.createdAt),
+    sizeBytes: Number.isFinite(entry.sizeBytes) ? Math.max(0, entry.sizeBytes) : 0
+  })).sort((left, right) => right.createdAt - left.createdAt)
+}
+
+export async function readAutoBackupPoint(backupId: string): Promise<{ point: AutoBackupIndexEntry; backup: CuratorBackupFileV1 }> {
+  // This store also contains recovery journals with private pre-restore state.
+  // Only indexed automatic snapshots may be exposed to the preview/export UI.
+  const point = (await listAutoBackupPoints()).find((entry) => entry.backupId === backupId)
+  if (!point) throw new Error('这个恢复点已过期或不存在，请刷新列表。')
+  const record = await getAutoBackupRecord<{ kind?: string; payload?: unknown }>(backupId)
+  if (!record?.payload || record.kind !== point.kind) throw new Error('恢复点内容不可用，请选择其他恢复点。')
+  const backup = parseCuratorBackupFile(record.payload)
+  if (backup.source !== 'auto') throw new Error('恢复点格式无效。')
+  return { point, backup }
 }
 
 async function getAutoBackupRecord<T>(backupId: string): Promise<T | null> {

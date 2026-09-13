@@ -1,0 +1,35 @@
+html[data-curator-surface="sidepanel"],
+html[data-curator-surface="sidepanel"] body,
+html[data-curator-surface="sidepanel"] #popup-root {
+  width: 100%; min-width: 0; max-width: none;
+  height: 100dvh; min-height: 0; max-height: none;
+  background: var(--ds-bg-app);
+}
+html[data-curator-surface="sidepanel"] #popup-root { visibility: visible; }
+html[data-curator-surface="sidepanel"] #popup-root > .curator-react-root { height: 100%; }
+html[data-curator-surface="sidepanel"] .popup-workspace {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(74px, 28%) minmax(0, 1fr);
+}
+html[data-curator-surface="sidepanel"] .popup-workspace > aside { min-height: 0; }
+html[data-curator-surface="sidepanel"] .popup-main-pane { min-height: 0; }
+html[data-curator-surface="sidepanel"] .popup-list-button { min-width: 0; }
+html[data-curator-surface="sidepanel"] .popup-row-actions { max-width: calc(100% - 16px); }
+html[data-curator-surface="sidepanel"] .popup-search-shell {
+  flex-wrap: nowrap;
+  align-items: center;
+  padding-block: 0;
+}
+html[data-curator-surface="sidepanel"] .popup-search-input {
+  width: 0;
+  min-height: 0;
+  flex: 1 1 0;
+}
+html[data-curator-surface="sidepanel"] .popup-page-content {
+  position: relative;
+  inset: auto;
+}
+@media (max-height: 600px) {
+  html[data-curator-surface="sidepanel"] .popup-keyboard-hint { display: none; }
+  html[data-curator-surface="sidepanel"] #popup-app-shell { gap: 10px; }
+}

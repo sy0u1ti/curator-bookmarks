@@ -71,12 +71,6 @@ function SearchWidgetEngineButton({
       aria-label={engine.ariaLabel}
       disabled={engine.disabled}
       title={engine.title}
-      onMouseDown={(event) => {
-        if (!engine.disabled) {
-          event.preventDefault()
-          view.interactions.onEngineOpenChange(true)
-        }
-      }}
       ref={buttonRef}
     >
       {engine.label}
