@@ -16,9 +16,9 @@
   <img src="https://img.shields.io/github/v/release/sy0u1ti/curator-bookmarks" alt="GitHub Release">
 </p>
 
-[![Curator 功能演示：搜索、常驻侧栏、新标签页、整理恢复与离线存档](src/assets/curator-product-demo.gif)](src/assets/curator-product-demo.mp4)
+https://github.com/user-attachments/assets/54babc20-983f-42e3-bfc9-89510a9194aa
 
-[观看 60 秒完整介绍视频](src/assets/curator-product-demo.mp4) · 1080p / 30fps · 画面来自当前版本，使用演示书签与示例数据。
+60 秒完整介绍 · 1080p / 30fps · 画面来自当前版本，使用演示书签与示例数据。
 
 ## 功能一览
 
