@@ -110,12 +110,15 @@ try {
   await input.waitFor({ state: 'visible' })
   assert.equal(await input.inputValue(), 'Bookmark 100', 'React must adopt text entered in the classic preboot input.')
   assert.deepEqual(await input.evaluate(element => [element.selectionStart, element.selectionEnd]), [4, 4], 'Adoption must preserve the text cursor.')
+  assert.equal(await popup.page.evaluate(() => document.activeElement?.id), 'search-input', 'The visible popup must retain keyboard focus while bookmark data is still loading.')
   assert.equal(await popup.page.evaluate(() => window.__startup.treeReads), 1)
   assert.ok(await popup.page.evaluate(() => window.__startup.firstTreeRead < performance.getEntriesByName('popup.domContentLoaded')[0].startTime), 'Popup must start its browser read before controller initialization.')
 
   // Actual input and caret edits work while the bookmark RPC is still pending.
-  await input.press('End')
-  await input.press('0')
+  await popup.page.keyboard.press('End')
+  await popup.page.keyboard.type('01234')
+  assert.equal(await input.inputValue(), 'Bookmark 10001234', 'A burst of typing must not lose characters while the popup is opening.')
+  for (let index = 0; index < 4; index++) await popup.page.keyboard.press('Backspace')
   assert.equal(await input.inputValue(), 'Bookmark 1000')
   await popup.page.evaluate(() => window.__releaseStartupTree())
   await popup.page.locator('#content .t-skel[data-state="ready"]').waitFor()

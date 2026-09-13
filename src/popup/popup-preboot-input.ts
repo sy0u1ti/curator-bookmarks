@@ -139,6 +139,16 @@ export function hidePopupPrebootSearchShell(documentRef: Document = document): v
   shell.setAttribute('hidden', '')
 }
 
+export function completePopupPrebootSearchAdoption(input: HTMLInputElement): boolean {
+  input.focus({ preventScroll: true })
+  if (input.ownerDocument.activeElement !== input) {
+    return false
+  }
+
+  hidePopupPrebootSearchShell(input.ownerDocument)
+  return true
+}
+
 export function hasPopupPrebootSearchShell(documentRef: Document = document): boolean {
   const shell = documentRef.getElementById(POPUP_PREBOOT_SHELL_ID)
   return Boolean(shell && !shell.hasAttribute('hidden'))

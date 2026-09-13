@@ -9,6 +9,7 @@ import {
 } from '../popup-controller-store'
 import {
   applyPopupPrebootSnapshotToInput,
+  completePopupPrebootSearchAdoption,
   getPopupPrebootSearchAdoptionQuery,
   hasPopupPrebootSearchShell,
   hidePopupPrebootSearchShell,
@@ -100,15 +101,27 @@ const semanticSearchFallbackClass =
 const semanticSearchPendingDotClass =
   'h-1.5 w-1.5 rounded-full bg-current animate-[cb-search-pulse_1s_var(--ds-ease-standard)_infinite] motion-reduce:animate-none'
 
-export function PopupChromeHost({
-  children,
-  smartActive = false
-}: {
-  children?: ReactNode
-  smartActive?: boolean
-}) {
-  const state = usePopupChromeView()
-  const searchAria = usePopupSearchInputAria(state.search.query)
+function adoptPrebootSearchWhenReady(input: HTMLInputElement | null, adopt: () => boolean) {
+  if (adopt()) {
+    return
+  }
+
+  // The React root starts hidden, so it cannot take keyboard focus yet.
+  // Keep the preboot input live until revealing the root makes handoff possible.
+  const root = input?.closest('#popup-root')
+  if (!root) {
+    return
+  }
+  const observer = new MutationObserver(() => {
+    if (adopt()) {
+      observer.disconnect()
+    }
+  })
+  observer.observe(root, { attributes: true, attributeFilter: ['data-popup-ready'] })
+  return () => observer.disconnect()
+}
+
+function usePopupSearchInput(query: string, smartActive: boolean) {
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const initialSearchFocusAppliedRef = useRef(false)
@@ -133,20 +146,18 @@ export function PopupChromeHost({
     }
 
     const snapshot = readPopupPrebootSearchSnapshot()
-    const nextQuery = getPopupPrebootSearchAdoptionQuery(snapshot, state.search.query)
+    const nextQuery = getPopupPrebootSearchAdoptionQuery(snapshot, query)
     const nextSnapshot = { ...snapshot, value: nextQuery }
     applyPopupPrebootSnapshotToInput(input, nextSnapshot)
 
-    if (nextQuery !== state.search.query) {
+    if (nextQuery !== query) {
       dispatchPopupChromeAction('search-change', nextQuery)
       return false
     }
 
-    input.focus({ preventScroll: true })
-    hidePopupPrebootSearchShell()
-    prebootAdoptedRef.current = true
-    return true
-  }, [state.search.query])
+    prebootAdoptedRef.current = completePopupPrebootSearchAdoption(input)
+    return prebootAdoptedRef.current
+  }, [query])
 
   useLayoutEffect(() => {
     if (smartActive || initialSearchFocusAppliedRef.current || hasPopupPrebootSearchShell()) {
@@ -171,7 +182,7 @@ export function PopupChromeHost({
       return
     }
 
-    adoptPrebootSearchInput()
+    return adoptPrebootSearchWhenReady(searchInputRef.current, adoptPrebootSearchInput)
   }, [adoptPrebootSearchInput, smartActive])
 
   useEffect(() => {
@@ -188,6 +199,20 @@ export function PopupChromeHost({
     })
     return () => window.cancelAnimationFrame(focusFrame)
   }, [adoptPrebootSearchInput, focusSearchInputElement, searchFocusRequest])
+
+  return searchInputRef
+}
+
+export function PopupChromeHost({
+  children,
+  smartActive = false
+}: {
+  children?: ReactNode
+  smartActive?: boolean
+}) {
+  const state = usePopupChromeView()
+  const searchAria = usePopupSearchInputAria(state.search.query)
+  const searchInputRef = usePopupSearchInput(state.search.query, smartActive)
 
   const commandPanelClassName = [
     commandPanelBaseClass,
