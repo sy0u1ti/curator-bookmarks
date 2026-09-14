@@ -135,7 +135,20 @@ Curator 会替换 Chrome 新标签页。若需恢复浏览器默认新标签页�
 
 ## 可选 AI
 
-配置自己的服务后，可以在当前页或所选书签范围内使用智能分析：生成标签、摘要、别名、重命名建议与文件夹推荐，辅助分类和检索。支持 OpenAI 兼容的 **Responses API** 与 **Chat Completions API**，也可使用兼容的本地服务。
+配置自己的服务后，可以在当前页或所选书签范围内使用智能分析：生成标签、摘要、别名、重命名建议与文件夹推荐，辅助分类和检索。
+
+Curator 支持多种模型端点协议，可在设置中手动选择，也可以使用自动识别：
+
+| API 协议 | 适用服务 |
+| --- | --- |
+| 自动识别（推荐） | 根据官方域名与 URL 路径选择下方协议 |
+| OpenAI Responses | OpenAI 官方 API 与兼容 Responses 的网关 |
+| OpenAI Chat Completions | OpenAI-compatible 网关、Azure OpenAI 与本地服务 |
+| Anthropic Messages | Anthropic 官方 Messages API 与兼容网关 |
+| Gemini GenerateContent | Google Gemini 原生生成接口 |
+| Gemini Interactions | Google Gemini 原生 Interactions 接口 |
+
+连接测试、模型列表获取、结构化输出和推理强度参数会按所选协议转换为对应请求格式。自动模式可在 Responses 与 Chat Completions 之间处理兼容性；手动选择的协议不会被自动覆盖。
 
 自动分析、自动移动与远程内容解析均可单独控制，也可以选择只打标签、不自动移动。手动整理默认优先，批量重命名或移动提供预览和确认，并可查看 AI 整理记录。网页内容索引单独控制，用于检索已经保存的内容；需要完整页面副本时使用 MHTML 存档。
 
