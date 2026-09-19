@@ -143,6 +143,9 @@ export interface PopupState {
   smartSelectedRecommendationId: string
   smartFolderPickerOpen: boolean
   smartFolderSearchQuery: string
+  smartFolderDraftTitle: string
+  smartFolderParentId: string
+  smartFolderError: string
   smartSaving: boolean
   smartSaved: boolean
   smartRunId: number
@@ -251,6 +254,9 @@ export const state: PopupState = {
   smartSelectedRecommendationId: '',
   smartFolderPickerOpen: false,
   smartFolderSearchQuery: '',
+  smartFolderDraftTitle: '',
+  smartFolderParentId: '',
+  smartFolderError: '',
   smartSaving: false,
   smartSaved: false,
   smartRunId: 0,

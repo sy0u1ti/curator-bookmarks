@@ -1033,8 +1033,7 @@ async function hydrateCurrentTabState(refreshRunId = popupRefreshRunId) {
   if (contextRun !== currentTabHydrationRunId || refreshRunId !== popupRefreshRunId) return
   if (isSidePanelSurface() && (currentTab?.id !== state.currentTab?.id || currentTab?.url !== state.currentTab?.url)) {
     if (state.smartFolderPickerOpen) {
-      state.smartFolderPickerOpen = false
-      state.smartFolderSearchQuery = ''
+      clearSmartFolderDraft()
       showViewNotice('当前网页已切换，请重新选择保存位置')
     }
     resetSmartClassification()
@@ -1162,8 +1161,7 @@ function resetPopupSessionStateForNextOpen() {
   state.smartExtraction = { status: '', source: '', warnings: [] }
   state.smartRecommendations = []
   state.smartSelectedRecommendationId = ''
-  state.smartFolderPickerOpen = false
-  state.smartFolderSearchQuery = ''
+  clearSmartFolderDraft()
   state.smartSaving = false
   state.smartSaved = false
   state.smartPermissionRequest = null
@@ -2618,11 +2616,17 @@ function getSmartFolderModalView(): PopupModalsView['smartFolder'] {
   if (state.smartFolderPickerOpen) {
     dispatchPopupFolderPickerChange('smart', getSmartFolderPickerState())
   }
+  const folder = state.folderMap.get(state.smartFolderParentId)
   return {
     open: state.smartFolderPickerOpen,
     query: state.smartFolderSearchQuery,
-    title: state.smartSuggestedTitle || getCurrentPageTitle(),
-    urlLabel: getSmartFolderTargetPathLabel()
+    title: state.smartFolderDraftTitle,
+    urlLabel: displayUrl(state.currentTab?.url || ''),
+    selectedPath: folder ? formatFolderPath(folder, state.folderMap) || folder.title : '',
+    error: state.smartFolderError || (!state.smartFolderDraftTitle.trim() ? '请输入书签名称' : ''),
+    saving: state.smartSaving,
+    saveDisabled: state.smartSaving || hasBlockingPopupActionPending() || !folder || !state.smartFolderDraftTitle.trim(),
+    saveLabel: state.smartSaving ? '保存中…' : state.currentPageBookmarkId ? '保存更改' : '保存书签'
   }
 }
 
@@ -2853,12 +2857,13 @@ function buildSmartFolderNodeViewModels(node, depth, query): PopupFolderTreeOpti
 
   const isExpanded = isFilterMode || state.moveExpandedFolders.has(node.id)
   const saving = state.smartSaving || isPopupActionPending('save-current-page', node.id)
+  const selected = state.smartFolderParentId === node.id
   const folderPath = formatFolderPath(folder, state.folderMap) || folder.title || '未命名文件夹'
   const toggleLabel = getPopupFolderToggleLabel(isExpanded ? '折叠文件夹' : '展开文件夹', folderPath)
 
   return [
     {
-      badges: [],
+      badges: selected ? [{ label: '已选择' }] : [],
       depth,
       disabled: saving,
       expanded: isExpanded,
@@ -2866,8 +2871,8 @@ function buildSmartFolderNodeViewModels(node, depth, query): PopupFolderTreeOpti
       id: String(node.id || ''),
       mode: 'smart',
       path: folderPath,
-      rowCurrent: false,
-      selected: false,
+      rowCurrent: selected,
+      selected,
       title: folder.title || '未命名文件夹',
       toggleLabel
     },
@@ -3190,8 +3195,24 @@ function handleModalAction(detail: PopupModalActionDetail) {
     return
   }
   if (action === 'smart-folder-query-change') {
+    if (!state.smartFolderPickerOpen || state.smartSaving) return
     state.smartFolderSearchQuery = value
     renderModals()
+    return
+  }
+  if (action === 'smart-folder-title-change') {
+    if (!state.smartFolderPickerOpen || state.smartSaving) return
+    state.smartFolderDraftTitle = value
+    state.smartFolderError = ''
+    renderModals()
+    return
+  }
+  if (action === 'save-smart-folder') {
+    if (!state.smartFolderPickerOpen || getSmartFolderModalView().saveDisabled) return
+    void saveCurrentPageViaWorker(
+      { parentId: state.smartFolderParentId },
+      { title: state.smartFolderDraftTitle }
+    )
     return
   }
   if (action === 'edit-folder-query-change') {
@@ -3231,12 +3252,16 @@ function handleMoveFolderPickerAction(detail: PopupFolderPickerActionDetail) {
 }
 
 function handleSmartFolderPickerAction(detail: PopupFolderPickerActionDetail) {
+  if (!state.smartFolderPickerOpen || state.smartSaving || hasBlockingPopupActionPending()) return
   if (detail.action === 'toggle' && !state.smartFolderSearchQuery.trim()) {
     toggleMoveFolder(detail.folderId)
     return
   }
   if (detail.action === 'select') {
-    void saveCurrentPageToFolder(detail.folderId)
+    if (!state.folderMap.has(detail.folderId) || detail.folderId === ROOT_ID) return
+    state.smartFolderParentId = detail.folderId
+    state.smartFolderError = ''
+    renderModals()
   }
 }
 
@@ -3582,8 +3607,7 @@ function closeDialogs(options: { force?: boolean } | Event = {}) {
   }
   state.moveTargetBookmarkId = null
   state.moveSearchQuery = ''
-  state.smartFolderPickerOpen = false
-  state.smartFolderSearchQuery = ''
+  clearSmartFolderDraft()
   state.aiProviderPromptOpen = false
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
@@ -3751,7 +3775,31 @@ function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
   state.confirmDeleteBookmarkId = null
   state.smartFolderPickerOpen = true
   state.smartFolderSearchQuery = ''
+  state.smartFolderError = ''
+  const bookmark = state.currentPageBookmarkId ? state.bookmarkMap.get(state.currentPageBookmarkId) : null
+  const recommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
+  state.smartFolderDraftTitle = state.smartSuggestedTitle || bookmark?.title || getCurrentPageTitle()
+  state.smartFolderParentId = [
+    bookmark?.parentId,
+    recommendation?.folderId,
+    state.selectedFolderFilterId,
+    state.bookmarksBarNode?.id,
+    ...state.allFolders.map((folder) => folder.id)
+  ].find((id) => id && id !== ROOT_ID && state.folderMap.has(id)) || ''
+  // Keep the default destination visible even when its ancestors were collapsed.
+  let selectedNode = findNodeById(state.rawTreeRoot, state.smartFolderParentId)
+  while (selectedNode?.parentId && selectedNode.parentId !== ROOT_ID) {
+    state.moveExpandedFolders.add(selectedNode.parentId)
+    selectedNode = findNodeById(state.rawTreeRoot, selectedNode.parentId)
+  }
   render()
+}
+function clearSmartFolderDraft() {
+  state.smartFolderPickerOpen = false
+  state.smartFolderSearchQuery = ''
+  state.smartFolderDraftTitle = ''
+  state.smartFolderParentId = ''
+  state.smartFolderError = ''
 }
 function openAiProviderPromptDialog(returnFocusElement: HTMLElement | null = null) {
   if (hasBlockingPopupActionPending()) {
@@ -3762,7 +3810,7 @@ function openAiProviderPromptDialog(returnFocusElement: HTMLElement | null = nul
   }
   rememberDialogReturnFocus(returnFocusElement)
   state.moveTargetBookmarkId = null
-  state.smartFolderPickerOpen = false
+  clearSmartFolderDraft()
   state.editTargetBookmarkId = null
   state.confirmDeleteBookmarkId = null
   state.aiProviderPromptOpen = true
@@ -4005,7 +4053,10 @@ async function saveCurrentPageToSmartRecommendation(recommendation) {
 async function saveCurrentPageToFolder(folderId, { closeModal = true } = {}) {
   await saveCurrentPageViaWorker({ parentId: folderId }, { closeModal })
 }
-async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {}, { closeModal = true } = {}) {
+async function saveCurrentPageViaWorker(
+  { parentId = '', folderPath = '' } = {},
+  { closeModal = true, title }: { closeModal?: boolean; title?: string } = {}
+) {
   const actionTargetId = parentId || folderPath || 'current-page'
   if (state.smartSaving || isPopupActionPending('save-current-page', actionTargetId)) {
     return
@@ -4017,6 +4068,7 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
     setPopupActionPending('save-current-page', actionTargetId, true)
     state.smartSaving = true
     state.smartSaved = false
+    state.smartFolderError = ''
     renderSmartSaveSurfaces()
     const currentUrl = String(state.currentTab?.url || '').trim()
     if (!isSmartClassifiableUrl(currentUrl)) {
@@ -4025,7 +4077,9 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
     if (!parentId && !folderPath) {
       throw new Error('未找到可保存的目标文件夹。')
     }
-    const nextTitle = cleanSmartTitle(state.smartSuggestedTitle || getCurrentPageTitle())
+    // Manual names must reach Chrome intact; the AI display-title limit is not
+    // a bookmark-title limit.
+    const nextTitle = String(title ?? state.smartSuggestedTitle).trim() || getCurrentPageTitle()
     const existingBookmark = state.currentPageBookmarkId
       ? state.bookmarkMap.get(state.currentPageBookmarkId)
       : null
@@ -4062,6 +4116,9 @@ async function saveCurrentPageViaWorker({ parentId = '', folderPath = '' } = {},
     if (isSourceCurrent()) {
       state.smartSaving = false
       state.smartSaved = false
+      if (state.smartFolderPickerOpen) {
+        state.smartFolderError = error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
+      }
     }
     showToast({
       type: 'error',
@@ -4141,8 +4198,7 @@ async function finishSmartSave({ message, closeModal = true }) {
   state.smartSelectedRecommendationId = ''
   state.smartPermissionRequest = null
   if (closeModal || state.smartFolderPickerOpen) {
-    state.smartFolderPickerOpen = false
-    state.smartFolderSearchQuery = ''
+    clearSmartFolderDraft()
   }
   renderSmartSaveSurfaces()
   showToast({ type: 'success', message })
@@ -5017,13 +5073,6 @@ function splitSmartFolderPath(value) {
 function getLastPathSegment(value) {
   const segments = splitSmartFolderPath(value)
   return segments.at(-1) || cleanSmartText(value, 60) || '推荐文件夹'
-}
-function getSmartFolderTargetPathLabel() {
-  const selectedRecommendation = state.smartRecommendations.find((item) => item.id === state.smartSelectedRecommendationId)
-  if (selectedRecommendation) {
-    return `当前推荐：${formatBookmarkPath(selectedRecommendation.path) || selectedRecommendation.title || '未命名文件夹'}`
-  }
-  return `当前页面：${displayUrl(state.currentTab?.url || '')}`
 }
 function normalizeSmartError(error) {
   if (error?.name === 'AbortError') {

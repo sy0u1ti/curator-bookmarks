@@ -131,6 +131,7 @@ export function PopupModalsHost() {
   const previousActiveRef = useRef<PopupModalsView['active']>(null)
   const previousEditPickerOpenRef = useRef(false)
   const moveSearchRef = useRef<HTMLInputElement | null>(null)
+  const smartFolderTitleRef = useRef<HTMLInputElement | null>(null)
   const smartFolderSearchRef = useRef<HTMLInputElement | null>(null)
   const aiProviderSettingsRef = useRef<HTMLButtonElement | null>(null)
   const editTitleRef = useRef<HTMLInputElement | null>(null)
@@ -144,14 +145,20 @@ export function PopupModalsHost() {
   }, [liveState])
 
   useEffect(() => {
-    if (state.active !== previousActiveRef.current) {
-      previousActiveRef.current = state.active
-      focusInitialModalControl(state.active, {
+    if (!liveState.open) {
+      previousActiveRef.current = null
+      previousEditPickerOpenRef.current = false
+      return
+    }
+
+    if (liveState.active !== previousActiveRef.current) {
+      previousActiveRef.current = liveState.active
+      focusInitialModalControl(liveState.active, {
         aiProviderSettingsRef,
         cancelDeleteRef,
         editTitleRef,
         moveSearchRef,
-        smartFolderSearchRef
+        smartFolderTitleRef
       })
     }
 
@@ -159,7 +166,7 @@ export function PopupModalsHost() {
       focusElement(editFolderSearchRef)
     }
     previousEditPickerOpenRef.current = state.edit.folderPickerOpen
-  }, [state.active, state.edit.folderPickerOpen])
+  }, [liveState.open, liveState.active, state.edit.folderPickerOpen])
 
   return (
     <div
@@ -169,11 +176,12 @@ export function PopupModalsHost() {
         className={modalDismissLayerClass}
         type="button"
         aria-label="关闭弹窗"
+        disabled={state.smartFolder.open && state.smartFolder.saving}
         onClick={() => dispatchPopupModalAction('close')}
         unstyled
       />
       {state.move.open ? <MoveBookmarkModal searchRef={moveSearchRef} view={state.move} /> : null}
-      {state.smartFolder.open ? <SmartFolderModal searchRef={smartFolderSearchRef} view={state.smartFolder} /> : null}
+      {state.smartFolder.open ? <SmartFolderModal titleRef={smartFolderTitleRef} searchRef={smartFolderSearchRef} view={state.smartFolder} /> : null}
       {state.aiProvider.open ? <AiProviderPromptModal settingsButtonRef={aiProviderSettingsRef} /> : null}
       {state.edit.open ? <EditBookmarkModal folderSearchRef={editFolderSearchRef} titleRef={editTitleRef} view={state.edit} /> : null}
       {state.delete.open ? <DeleteBookmarkModal cancelButtonRef={cancelDeleteRef} view={state.delete} /> : null}
@@ -222,6 +230,9 @@ function FolderSearch({
         disabled={disabled}
         onValueChange={(nextValue) => dispatchPopupModalAction(action, nextValue)}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+            return
+          }
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
             return
           }
@@ -278,27 +289,51 @@ function MoveBookmarkModal({
 }
 
 function SmartFolderModal({
+  titleRef,
   searchRef,
   view
 }: {
+  titleRef: RefObject<HTMLInputElement | null>
   searchRef: RefObject<HTMLInputElement | null>
   view: PopupModalsView['smartFolder']
 }) {
   return (
     <section id="smart-folder-modal" className={modalWideCardClass} aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
-      <header className={modalHeaderClass}>
+      <header className={cx(modalHeaderClass, 'shrink-0')}>
         <div className={modalHeaderCopyClass}>
-          <p className={modalEyebrowClass}>当前网页</p>
-          <h2 id="smart-folder-modal-title" className={modalTitleClass}>选择保存文件夹</h2>
+          <p className={modalEyebrowClass}>设置名称与保存位置</p>
+          <h2 id="smart-folder-modal-title" className={modalTitleClass}>保存书签</h2>
         </div>
-        <Button id="close-smart-folder-modal" className={modalCloseButtonClass} type="button" aria-label="关闭文件夹选择" onClick={() => dispatchPopupModalAction('close')} unstyled>
+        <Button id="close-smart-folder-modal" className={modalCloseButtonClass} type="button" aria-label="关闭书签保存面板" disabled={view.saving} onClick={() => dispatchPopupModalAction('close')} unstyled>
           关闭
         </Button>
       </header>
-      <div className={modalBookmarkCardClass}>
-        <p className={modalCardLabelClass}>即将保存</p>
-        <p id="smart-folder-page-title" className={modalCardTitleClass}>{view.title}</p>
-        <p id="smart-folder-page-url" className={modalCardPathClass}>{view.urlLabel}</p>
+      <div className={cx(modalFieldClass, 'shrink-0')}>
+        <label className={modalLabelClass} htmlFor="smart-folder-title-input">书签名称</label>
+        <Input
+          ref={titleRef}
+          id="smart-folder-title-input"
+          className={modalInputClass}
+          type="text"
+          value={view.title}
+          maxLength={512}
+          autoComplete="off"
+          disabled={view.saving}
+          aria-invalid={!view.title.trim()}
+          aria-describedby={view.error ? 'smart-folder-page-url smart-folder-error' : 'smart-folder-page-url'}
+          onValueChange={(value) => dispatchPopupModalAction('smart-folder-title-change', value)}
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter' || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+              return
+            }
+            event.preventDefault()
+            if (!view.saveDisabled && !event.repeat) {
+              dispatchPopupModalAction('save-smart-folder')
+            }
+          }}
+          unstyled
+        />
+        <p id="smart-folder-page-url" className={cx(modalCardPathClass, 'truncate')} title={view.urlLabel}>{view.urlLabel}</p>
       </div>
       <FolderSearch
         inputRef={searchRef}
@@ -310,8 +345,29 @@ function SmartFolderModal({
         controls="smart-folder-list"
         value={view.query}
         action="smart-folder-query-change"
+        disabled={view.saving}
       />
       <PopupFolderPickerHost id="smart-folder-list" className={modalListClass} mode="smart" />
+      {view.error ? <p id="smart-folder-error" className="m-0 shrink-0 text-xs leading-normal text-ds-danger-text" role="alert">{view.error}</p> : null}
+      <footer className={cx(modalActionsClass, 'shrink-0')}>
+        <div className="min-w-0 flex-1">
+          <p className={modalCardLabelClass}>保存到</p>
+          <p id="smart-folder-selected-path" className={cx(modalCardTitleClass, 'truncate')} title={view.selectedPath}>
+            {view.selectedPath || '请选择文件夹'}
+          </p>
+        </div>
+        <Button
+          id="save-smart-folder-button"
+          className={cx(modalPrimaryButtonClass, 'shrink-0')}
+          type="button"
+          disabled={view.saveDisabled}
+          aria-busy={view.saving}
+          onClick={() => dispatchPopupModalAction('save-smart-folder')}
+          unstyled
+        >
+          {view.saveLabel}
+        </Button>
+      </footer>
     </section>
   )
 }
@@ -490,7 +546,7 @@ interface ModalFocusRefs {
   cancelDeleteRef: RefObject<HTMLElement | null>
   editTitleRef: RefObject<HTMLInputElement | null>
   moveSearchRef: RefObject<HTMLElement | null>
-  smartFolderSearchRef: RefObject<HTMLElement | null>
+  smartFolderTitleRef: RefObject<HTMLInputElement | null>
 }
 
 function focusInitialModalControl(active: PopupModalsView['active'], refs: ModalFocusRefs) {
@@ -499,7 +555,7 @@ function focusInitialModalControl(active: PopupModalsView['active'], refs: Modal
     return
   }
   if (active === 'smart-folder') {
-    focusElement(refs.smartFolderSearchRef)
+    focusElement(refs.smartFolderTitleRef, true)
     return
   }
   if (active === 'ai-provider') {

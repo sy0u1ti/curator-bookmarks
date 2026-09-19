@@ -131,6 +131,11 @@ export interface PopupModalsView {
     query: string
     title: string
     urlLabel: string
+    selectedPath: string
+    error: string
+    saving: boolean
+    saveDisabled: boolean
+    saveLabel: string
   }
 }
 
@@ -217,7 +222,12 @@ export const EMPTY_POPUP_MODALS_VIEW: PopupModalsView = {
     open: false,
     query: '',
     title: '',
-    urlLabel: ''
+    urlLabel: '',
+    selectedPath: '',
+    error: '',
+    saving: false,
+    saveDisabled: true,
+    saveLabel: '保存书签'
   }
 }
 
