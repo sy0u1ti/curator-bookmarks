@@ -157,6 +157,37 @@ export const EMPTY_POPUP_AUTO_ANALYZE_STATUS: PopupAutoAnalyzeStatusView = {
   title: ''
 }
 
+// Chrome localizes the bookmarks bar title, and the first frame renders before
+// the tree loads. Start from the last loaded title so the caption, and the
+// toolbar wrapping it decides in a narrow side panel, does not change on load.
+const BOOKMARKS_BAR_TITLE_STORAGE_KEY = 'curatorPopupBookmarksBarTitle'
+const storedBookmarksBarTitle = readStoredBookmarksBarTitle()
+
+function readStoredBookmarksBarTitle(): string {
+  try {
+    return globalThis.localStorage?.getItem(BOOKMARKS_BAR_TITLE_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function getInitialBookmarksBarTitle(): string {
+  return storedBookmarksBarTitle || '书签栏'
+}
+
+export function rememberBookmarksBarTitle(title: string): void {
+  if (!title) {
+    return
+  }
+  try {
+    if (globalThis.localStorage?.getItem(BOOKMARKS_BAR_TITLE_STORAGE_KEY) !== title) {
+      globalThis.localStorage?.setItem(BOOKMARKS_BAR_TITLE_STORAGE_KEY, title)
+    }
+  } catch {
+    // Storage can be unavailable; the caption then starts from the default.
+  }
+}
+
 export const EMPTY_POPUP_CHROME_VIEW: PopupChromeView = {
   loadError: '',
   search: {
@@ -171,7 +202,7 @@ export const EMPTY_POPUP_CHROME_VIEW: PopupChromeView = {
     query: '',
     title: 'AI 语义搜索：需要先配置 AI 渠道'
   },
-  viewCaption: '书签栏'
+  viewCaption: getInitialBookmarksBarTitle()
 }
 
 export const EMPTY_POPUP_CONTENT_CHANGE_DETAIL: PopupContentChangeDetail = {

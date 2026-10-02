@@ -515,7 +515,15 @@ export function handleOptionsWindowSectionChange(_event?: Event): void {
 }
 
 let bookmarkChangeRefreshHandle = 0
+let bookmarkChangeRefreshWaitsForVisibility = false
 export function handleOptionsBookmarkTreeChanged(): void {
+  if (document.visibilityState === 'hidden') {
+    // A background options tab reloads the catalog once when it is shown
+    // again, instead of after every bookmark event while nobody sees it.
+    deferBookmarkChangeRefreshUntilVisible()
+    return
+  }
+
   if (
     hasActiveAvailabilityRunSession() ||
     hasActiveAiAnalysisRunSession() ||
@@ -539,6 +547,23 @@ export function handleOptionsBookmarkTreeChanged(): void {
         console.warn('Curator: 书签变更后的目录重新加载失败。', error)
       })
   }, 240)
+}
+
+function deferBookmarkChangeRefreshUntilVisible(): void {
+  if (bookmarkChangeRefreshWaitsForVisibility) {
+    return
+  }
+
+  bookmarkChangeRefreshWaitsForVisibility = true
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      return
+    }
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    bookmarkChangeRefreshWaitsForVisibility = false
+    handleOptionsBookmarkTreeChanged()
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 }
 
 async function hydratePersistentState() {

@@ -1,7 +1,6 @@
 import {
-  buildDuplicateKey,
   displayUrl,
-  extractDomain,
+  extractUrlIdentity,
   normalizeText,
   normalizeUrl
 } from './text.js'
@@ -18,9 +17,16 @@ const BOOKMARK_CATALOG_HASH_ALT_SEED = 0x9e3779b9
 const BOOKMARK_CATALOG_HASH_MULTIPLIER = 0x01000193
 const BOOKMARK_CATALOG_HASH_ALT_MULTIPLIER = 0x85ebca6b
 
+// Open pages re-extract the whole tree after every bookmark event. A record
+// whose source fields are unchanged is reused from the previous extraction,
+// which skips URL parsing and keeps record identity stable for later caches.
+// Records are never mutated after extraction, so sharing them is safe.
+let previousExtraction: WeakRef<ExtractedBookmarkData> | null = null
+
 export function extractBookmarkData(
   rootNode: chrome.bookmarks.BookmarkTreeNode | null | undefined
 ): ExtractedBookmarkData {
+  const previousBookmarkMap = previousExtraction?.deref()?.bookmarkMap || null
   const bookmarks: BookmarkRecord[] = []
   const folders: FolderRecord[] = []
   const bookmarkMap = new Map<string, BookmarkRecord>()
@@ -83,20 +89,43 @@ export function extractBookmarkData(
 
     for (const child of node.children || []) {
       if (child.url) {
-        const bookmark: BookmarkRecord = {
-          id: String(child.id),
-          title: child.title || '未命名书签',
-          url: child.url,
-          displayUrl: displayUrl(child.url),
-          normalizedTitle: normalizeText(child.title || ''),
-          normalizedUrl: normalizeUrl(child.url),
-          duplicateKey: buildDuplicateKey(child.url),
-          domain: extractDomain(child.url),
-          path: currentPath,
-          ancestorIds: currentAncestorIds.slice(),
-          parentId: String(child.parentId || currentAncestorIds.at(-1) || ''),
-          index: typeof child.index === 'number' ? child.index : 0,
-          dateAdded: Number(child.dateAdded) || 0
+        const bookmarkId = String(child.id)
+        const title = child.title || '未命名书签'
+        const normalizedTitle = normalizeText(child.title || '')
+        const parentId = String(child.parentId || currentAncestorIds.at(-1) || '')
+        const index = typeof child.index === 'number' ? child.index : 0
+        const dateAdded = Number(child.dateAdded) || 0
+        const previous = previousBookmarkMap?.get(bookmarkId)
+        const sameUrl = previous?.url === child.url
+        let bookmark: BookmarkRecord
+        if (
+          sameUrl &&
+          previous.title === title &&
+          previous.normalizedTitle === normalizedTitle &&
+          previous.path === currentPath &&
+          previous.parentId === parentId &&
+          previous.index === index &&
+          previous.dateAdded === dateAdded &&
+          areSameIds(previous.ancestorIds, currentAncestorIds)
+        ) {
+          bookmark = previous
+        } else {
+          const { duplicateKey, domain } = sameUrl ? previous : extractUrlIdentity(child.url)
+          bookmark = {
+            id: bookmarkId,
+            title,
+            url: child.url,
+            displayUrl: sameUrl ? previous.displayUrl : displayUrl(child.url),
+            normalizedTitle,
+            normalizedUrl: sameUrl ? previous.normalizedUrl : normalizeUrl(child.url),
+            duplicateKey,
+            domain,
+            path: currentPath,
+            ancestorIds: currentAncestorIds.slice(),
+            parentId,
+            index,
+            dateAdded
+          }
         }
 
         bookmarks.push(bookmark)
@@ -121,13 +150,27 @@ export function extractBookmarkData(
     walk(rootNode)
   }
 
-  return {
+  const extracted: ExtractedBookmarkData = {
     bookmarks,
     folders,
     bookmarkMap,
     folderMap,
     catalogVersionFingerprint: createCatalogVersionFingerprint(bookmarkHash, folderHash)
   }
+  previousExtraction = typeof WeakRef === 'function' ? new WeakRef(extracted) : null
+  return extracted
+}
+
+function areSameIds(left: string[] | undefined, right: string[]): boolean {
+  if (!left || left.length !== right.length) {
+    return false
+  }
+  for (let index = 0; index < right.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false
+    }
+  }
+  return true
 }
 
 function createCatalogVersionFingerprint(

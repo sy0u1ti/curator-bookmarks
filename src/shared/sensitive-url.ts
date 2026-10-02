@@ -41,6 +41,15 @@ const PRIVATE_DNS_ALIAS_HOSTS = [
 
 const HOST_NETWORK_CACHE_LIMIT = 512
 const hostNetworkCache = new Map<string, boolean>()
+// Every IPv4 notation ipaddr.js accepts is made of these parts, and IPv6 needs
+// a colon. Other hostnames cannot be IP literals, so they skip ipaddr's
+// exception-driven validation, which dominated large catalog scans.
+const IPV4_LITERAL_CANDIDATE_RE = /^(?:0?\d+|0x[a-f0-9]+)(?:\.(?:0?\d+|0x[a-f0-9]+)){0,3}$/i
+
+// A decision depends only on the URL text. Options assesses one catalog for
+// several scopes and permission checks, so each URL is classified once.
+const URL_REASON_CACHE_LIMIT = 50000
+const urlReasonCache = new Map<string, SensitiveExternalUrlReason | ''>()
 
 const EMAIL_HOSTS = [
   'mail.google.com',
@@ -98,55 +107,18 @@ const WARNING_BY_REASON: Record<SensitiveExternalUrlReason, string> = {
 }
 
 export function assessSensitiveExternalUrl(url: unknown): SensitiveExternalUrlDecision {
-  const parsedUrl = parseUrl(url)
-  if (!parsedUrl) {
-    return buildSensitiveDecision('invalid-url')
+  const input = String(url || '').trim()
+  let reason = urlReasonCache.get(input)
+  if (reason === undefined) {
+    reason = classifySensitiveExternalUrl(input)
+    if (urlReasonCache.size >= URL_REASON_CACHE_LIMIT) {
+      urlReasonCache.clear()
+    }
+    urlReasonCache.set(input, reason)
   }
 
-  if (!/^https?:$/i.test(parsedUrl.protocol)) {
-    return buildSensitiveDecision('unsupported-scheme')
-  }
-
-  if (parsedUrl.username || parsedUrl.password) {
-    return buildSensitiveDecision('capability-action')
-  }
-
-  const hostname = normalizeHostname(parsedUrl.hostname)
-  const pathname = decodePathname(parsedUrl.pathname)
-
-  if (isLocalOrPrivateHostname(hostname)) {
-    return buildSensitiveDecision('local-network')
-  }
-
-  if (
-    CAPABILITY_ACTION_PATH_RE.test(pathname) ||
-    hasCapabilityParameter(parsedUrl)
-  ) {
-    return buildSensitiveDecision('capability-action')
-  }
-
-  if (matchesHost(hostname, EMAIL_HOSTS)) {
-    return buildSensitiveDecision('email-page')
-  }
-
-  if (matchesHost(hostname, DOCUMENT_COLLAB_HOSTS)) {
-    return buildSensitiveDecision('document-collaboration-page')
-  }
-
-  if (hostIncludesAny(hostname, FINANCIAL_HOST_PARTS) || FINANCIAL_PATH_RE.test(pathname)) {
-    return buildSensitiveDecision('financial-page')
-  }
-
-  if (hostIncludesAny(hostname, MEDICAL_HOST_PARTS) || MEDICAL_PATH_RE.test(pathname)) {
-    return buildSensitiveDecision('medical-page')
-  }
-
-  if (ACCOUNT_PATH_RE.test(pathname)) {
-    return buildSensitiveDecision('account-login-page')
-  }
-
-  if (DOCUMENT_PATH_RE.test(pathname) && isLikelyPrivateWorkspaceHost(hostname)) {
-    return buildSensitiveDecision('document-collaboration-page')
+  if (reason) {
+    return buildSensitiveDecision(reason)
   }
 
   return {
@@ -154,6 +126,61 @@ export function assessSensitiveExternalUrl(url: unknown): SensitiveExternalUrlDe
     reason: '',
     warning: ''
   }
+}
+
+function classifySensitiveExternalUrl(url: string): SensitiveExternalUrlReason | '' {
+  const parsedUrl = parseUrl(url)
+  if (!parsedUrl) {
+    return 'invalid-url'
+  }
+
+  if (!/^https?:$/i.test(parsedUrl.protocol)) {
+    return 'unsupported-scheme'
+  }
+
+  if (parsedUrl.username || parsedUrl.password) {
+    return 'capability-action'
+  }
+
+  const hostname = normalizeHostname(parsedUrl.hostname)
+  const pathname = decodePathname(parsedUrl.pathname)
+
+  if (isLocalOrPrivateHostname(hostname)) {
+    return 'local-network'
+  }
+
+  if (
+    CAPABILITY_ACTION_PATH_RE.test(pathname) ||
+    hasCapabilityParameter(parsedUrl)
+  ) {
+    return 'capability-action'
+  }
+
+  if (matchesHost(hostname, EMAIL_HOSTS)) {
+    return 'email-page'
+  }
+
+  if (matchesHost(hostname, DOCUMENT_COLLAB_HOSTS)) {
+    return 'document-collaboration-page'
+  }
+
+  if (hostIncludesAny(hostname, FINANCIAL_HOST_PARTS) || FINANCIAL_PATH_RE.test(pathname)) {
+    return 'financial-page'
+  }
+
+  if (hostIncludesAny(hostname, MEDICAL_HOST_PARTS) || MEDICAL_PATH_RE.test(pathname)) {
+    return 'medical-page'
+  }
+
+  if (ACCOUNT_PATH_RE.test(pathname)) {
+    return 'account-login-page'
+  }
+
+  if (DOCUMENT_PATH_RE.test(pathname) && isLikelyPrivateWorkspaceHost(hostname)) {
+    return 'document-collaboration-page'
+  }
+
+  return ''
 }
 
 export function isExternallyCheckableUrl(url: unknown): boolean {
@@ -185,41 +212,48 @@ function normalizeHostname(hostname: string): string {
 }
 
 function decodePathname(pathname: string): string {
+  const value = String(pathname || '')
+  // Without an escape sequence decodeURIComponent returns its input unchanged.
+  if (!value.includes('%')) {
+    return value
+  }
   try {
-    return decodeURIComponent(String(pathname || ''))
+    return decodeURIComponent(value)
   } catch {
-    return String(pathname || '')
+    return value
   }
 }
 
 function hasCapabilityParameter(url: URL): boolean {
-  if (
-    [...url.searchParams].some(([key, value]) => {
-      return (
-        CAPABILITY_QUERY_KEY_RE.test(key) ||
-        (
-          CAPABILITY_ACTION_QUERY_KEY_RE.test(key) &&
-          CAPABILITY_ACTION_QUERY_VALUE_RE.test(String(value || '').trim())
-        )
-      )
-    })
-  ) {
+  // An empty search or hash has no parameters; skip building their parsers.
+  if (url.search && hasCapabilityQueryEntry(url.searchParams)) {
     return true
+  }
+
+  if (!url.hash) {
+    return false
   }
 
   const rawHash = decodePathname(url.hash.replace(/^#/, ''))
   const fragmentQuery = rawHash.includes('?')
     ? rawHash.slice(rawHash.indexOf('?') + 1)
     : rawHash
-  return [...new URLSearchParams(fragmentQuery)].some(([key, value]) => {
-    return (
+  return hasCapabilityQueryEntry(new URLSearchParams(fragmentQuery))
+}
+
+function hasCapabilityQueryEntry(params: URLSearchParams): boolean {
+  for (const [key, value] of params) {
+    if (
       CAPABILITY_QUERY_KEY_RE.test(key) ||
       (
         CAPABILITY_ACTION_QUERY_KEY_RE.test(key) &&
         CAPABILITY_ACTION_QUERY_VALUE_RE.test(String(value || '').trim())
       )
-    )
-  })
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 function matchesHost(hostname: string, hosts: string[]): boolean {
@@ -277,11 +311,15 @@ function classifyLocalOrPrivateHostname(hostname: string): boolean {
   }
 
   const address = hostname.replace(/^\[|\]$/g, '')
-  if (!ipaddr.isValid(address)) {
+  if (!isIpLiteralCandidate(address) || !ipaddr.isValid(address)) {
     return false
   }
 
   return !isPublicNetworkAddress(address)
+}
+
+function isIpLiteralCandidate(address: string): boolean {
+  return address.includes(':') || IPV4_LITERAL_CANDIDATE_RE.test(address)
 }
 
 export function isPublicNetworkAddress(value: unknown): boolean {

@@ -505,6 +505,15 @@ export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[]): NewTa
   }
 }
 
+// Entries are pure projections of an extracted record and its tag and snapshot
+// records, and extraction reuses unchanged records. After a bookmark event only
+// changed bookmarks are re-indexed; the rest keep their entry.
+const bookmarkSearchEntries = new WeakMap<BookmarkRecord, {
+  tagRecord: BookmarkTagRecord | null
+  snapshotRecord: ContentSnapshotRecord | null
+  entry: NewTabSearchIndexEntry
+}>()
+
 function buildNewTabSearchIndexFromBookmarks({
   bookmarks,
   tagIndex = null,
@@ -512,6 +521,19 @@ function buildNewTabSearchIndexFromBookmarks({
 }: NewTabSearchIndexSource): NewTabSearchIndexEntry[] {
   const tagRecords = tagIndex?.records || {}
   const snapshotRecords = snapshotIndex?.records || {}
+  // Bookmarks share folder paths and domains, and each entry normalizes its
+  // title and URL for a field and again for its search text. Normalize every
+  // distinct string once per build.
+  const normalizedText = new Map<string, string>()
+  const normalize = (value: string): string => {
+    let normalized = normalizedText.get(value)
+    if (normalized === undefined) {
+      normalized = normalizeNewTabSearchText(value)
+      normalizedText.set(value, normalized)
+    }
+    return normalized
+  }
+  const folderTitles = new Map<string, string>()
 
   return bookmarks
     .map((bookmark, order): NewTabSearchIndexEntry | null => {
@@ -520,20 +542,29 @@ function buildNewTabSearchIndexFromBookmarks({
         return null
       }
 
-      const title = String(bookmark.title || '').trim() || url
-      const folderPath = String(bookmark.path || '').trim()
-      const folderTitle = getNewTabSearchFolderTitle(folderPath)
       const tagRecord = tagRecords[bookmark.id] || null
       const snapshotRecord = snapshotRecords[bookmark.id] || null
-      return {
+      const cached = bookmarkSearchEntries.get(bookmark)
+      if (cached && cached.tagRecord === tagRecord && cached.snapshotRecord === snapshotRecord) {
+        return cached.entry.order === order ? cached.entry : { ...cached.entry, order }
+      }
+
+      const title = String(bookmark.title || '').trim() || url
+      const folderPath = String(bookmark.path || '').trim()
+      let folderTitle = folderTitles.get(folderPath)
+      if (folderTitle === undefined) {
+        folderTitle = getNewTabSearchFolderTitle(folderPath)
+        folderTitles.set(folderPath, folderTitle)
+      }
+      const entry: NewTabSearchIndexEntry = {
         id: String(bookmark.id),
         title,
         url,
         folderTitle,
         folderPath,
-        normalizedTitle: normalizeNewTabSearchText(bookmark.normalizedTitle || title),
-        normalizedUrl: normalizeNewTabSearchText(bookmark.normalizedUrl || url),
-        normalizedFolderTitle: normalizeNewTabSearchText(folderTitle),
+        normalizedTitle: normalize(bookmark.normalizedTitle || title),
+        normalizedUrl: normalize(bookmark.normalizedUrl || url),
+        normalizedFolderTitle: normalize(folderTitle),
         normalizedSearchText: buildNewTabEntrySearchText({
           bookmark,
           title,
@@ -541,7 +572,8 @@ function buildNewTabSearchIndexFromBookmarks({
           folderTitle,
           folderPath,
           tagRecord,
-          snapshotRecord
+          snapshotRecord,
+          normalize
         }),
         order,
         sourceDateAdded: Number(bookmark.dateAdded) || 0,
@@ -549,6 +581,8 @@ function buildNewTabSearchIndexFromBookmarks({
         sourceTagRecord: tagRecord,
         sourceSnapshotRecord: snapshotRecord
       }
+      bookmarkSearchEntries.set(bookmark, { tagRecord, snapshotRecord, entry })
+      return entry
     })
     .filter((entry): entry is NewTabSearchIndexEntry => Boolean(entry))
 }
@@ -560,7 +594,8 @@ function buildNewTabEntrySearchText({
   folderTitle,
   folderPath,
   tagRecord = null,
-  snapshotRecord = null
+  snapshotRecord = null,
+  normalize = normalizeNewTabSearchText
 }: {
   bookmark?: BookmarkRecord
   title: string
@@ -569,6 +604,7 @@ function buildNewTabEntrySearchText({
   folderPath: string
   tagRecord?: BookmarkTagRecord | null
   snapshotRecord?: ContentSnapshotRecord | null
+  normalize?: (value: string) => string
 }): string {
   return [
     title,
@@ -590,7 +626,7 @@ function buildNewTabEntrySearchText({
     snapshotRecord?.finalUrl,
     snapshotRecord?.contentType,
     ...(snapshotRecord?.headings || [])
-  ].flatMap(value => { const mappedResult = normalizeNewTabSearchText(String(value || '')); return mappedResult ? [mappedResult] : [] })
+  ].flatMap(value => { const mappedResult = normalize(String(value || '')); return mappedResult ? [mappedResult] : [] })
     .join(' ')
 }
 
@@ -738,6 +774,14 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
     .slice(0, limit)
 }
 
+// Search entries for an unchanged record, tag and snapshot are carried over to
+// the next prepared index, keeping their pinyin tokens and derived search data.
+const popupSearchBookmarksByRecord = new WeakMap<BookmarkRecord, {
+  tagRecord: BookmarkTagRecord | null
+  snapshotRecord: ContentSnapshotRecord | null
+  bookmark: PopupSearchBookmark
+}>()
+
 function getPreparedPopupSearchBookmarks(
   index: NewTabPreparedSearchIndex,
   indexBookmarkForSearch: typeof import('../popup/search-lookup.js').indexBookmarkForSearch
@@ -747,11 +791,26 @@ function getPreparedPopupSearchBookmarks(
   }
 
   index.popupSearchBookmarks = index.popupSearchEntries.map((entry) =>
-    indexBookmarkForSearch(entry.bookmark, entry.tagRecord, entry.snapshotRecord, {
-      includeFullText: false
-    })
+    getPopupSearchBookmark(entry, indexBookmarkForSearch)
   )
   return index.popupSearchBookmarks
+}
+
+function getPopupSearchBookmark(
+  entry: NewTabPopupSearchSourceEntry,
+  indexBookmarkForSearch: typeof import('../popup/search-lookup.js').indexBookmarkForSearch
+): PopupSearchBookmark {
+  const tagRecord = entry.tagRecord || null
+  const snapshotRecord = entry.snapshotRecord || null
+  const cached = popupSearchBookmarksByRecord.get(entry.bookmark)
+  if (cached && cached.tagRecord === tagRecord && cached.snapshotRecord === snapshotRecord) {
+    return cached.bookmark
+  }
+  const bookmark = indexBookmarkForSearch(entry.bookmark, tagRecord, snapshotRecord, {
+    includeFullText: false
+  })
+  popupSearchBookmarksByRecord.set(entry.bookmark, { tagRecord, snapshotRecord, bookmark })
+  return bookmark
 }
 
 async function ensurePopupBookmarksHavePinyinIfNeeded(
@@ -890,9 +949,12 @@ export function collectPortalBookmarkSourceItems(
   return bookmarks
 }
 
+// NFKC leaves ASCII text unchanged, and most URLs and many titles are ASCII.
+const NON_ASCII_TEXT_RE = /[^\x00-\x7f]/
+
 export function normalizeNewTabSearchText(value: string): string {
-  return String(value || '')
-    .normalize('NFKC')
+  const text = String(value || '')
+  return (NON_ASCII_TEXT_RE.test(text) ? text.normalize('NFKC') : text)
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()

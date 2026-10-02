@@ -1,6 +1,7 @@
-import type { BookmarkTagIndex } from '../shared/bookmark-tags.js'
+import type { BookmarkTagIndex, BookmarkTagRecord } from '../shared/bookmark-tags.js'
 import type {
   ContentSnapshotIndex,
+  ContentSnapshotRecord,
   ContentSnapshotSettings
 } from '../shared/content-snapshot-search.js'
 import {
@@ -26,6 +27,21 @@ function loadPinyinModule(): Promise<typeof import('../shared/search/pinyin.js')
 
 const POPUP_SNAPSHOT_FULL_TEXT_LIMIT = 600
 
+interface PopupSearchEntryInputs {
+  bookmark: BookmarkRecord
+  tagRecord: BookmarkTagRecord | null
+  snapshotRecord: ContentSnapshotRecord | null
+  includeFullText: boolean
+}
+
+// indexBookmarkForSearch is a pure projection of these inputs. Remember them
+// so a deferred patch only re-indexes entries whose tag or snapshot changed.
+const entryInputs = new WeakMap<PopupSearchBookmark, PopupSearchEntryInputs>()
+// The side panel rebuilds its index after every bookmark event, and extraction
+// reuses unchanged records. An entry still projecting the same record, tag and
+// snapshot (light, no full text) is reused with its pinyin tokens intact.
+const lightEntriesByRecord = new WeakMap<BookmarkRecord, PopupSearchBookmark>()
+
 export interface PopupSearchIndexSource {
   bookmarks: BookmarkRecord[]
   tagIndex: BookmarkTagIndex | null
@@ -46,14 +62,30 @@ export function buildLightPopupSearchIndex({
   const tagRecords = tagIndex?.records || {}
   const snapshotRecords = snapshotIndex?.records || {}
 
-  return bookmarks.map((bookmark) =>
-    indexBookmarkForSearch(
+  return bookmarks.map((bookmark) => {
+    const tagRecord = tagRecords[bookmark.id] || null
+    const snapshotRecord = snapshotRecords[bookmark.id] || null
+    const previous = lightEntriesByRecord.get(bookmark)
+    const previousInputs = previous ? entryInputs.get(previous) : null
+    if (
+      previousInputs?.bookmark === bookmark &&
+      previousInputs.tagRecord === tagRecord &&
+      previousInputs.snapshotRecord === snapshotRecord &&
+      !previousInputs.includeFullText
+    ) {
+      return previous
+    }
+
+    const entry = indexBookmarkForSearch(
       bookmark,
-      tagRecords[bookmark.id] || null,
-      snapshotRecords[bookmark.id] || null,
+      tagRecord,
+      snapshotRecord,
       { includeFullText: false }
     )
-  )
+    entryInputs.set(entry, { bookmark, tagRecord, snapshotRecord, includeFullText: false })
+    lightEntriesByRecord.set(bookmark, entry)
+    return entry
+  })
 }
 
 export async function loadPopupSearchIndexSnapshotState(): Promise<PopupSearchIndexSnapshotState> {
@@ -164,16 +196,33 @@ function patchPopupSearchIndexFromCatalog(
     const sourceBookmark = sourceBookmarks[index]?.id === target.id
       ? sourceBookmarks[index]
       : catalog.extracted.bookmarkMap.get(target.id) || target
+    const tagRecord = tagRecords[target.id] || null
+    const snapshotRecord = snapshotRecords[target.id] || null
+    const snapshotSearchText = snapshotSearchMap?.get(target.id)
+    const previousInputs = entryInputs.get(target)
+    if (
+      !snapshotSearchText &&
+      previousInputs?.bookmark === sourceBookmark &&
+      previousInputs.tagRecord === tagRecord &&
+      previousInputs.snapshotRecord === snapshotRecord &&
+      previousInputs.includeFullText === includeFullText
+    ) {
+      // The same inputs project to the same entry. Keep it, including any
+      // pinyin tokens that were derived from its unchanged search text.
+      continue
+    }
 
     const next = indexBookmarkForSearch(
       sourceBookmark,
-      tagRecords[target.id] || null,
-      snapshotRecords[target.id] || null,
+      tagRecord,
+      snapshotRecord,
       { includeFullText }
     )
-    const snapshotSearchText = snapshotSearchMap?.get(target.id)
     if (snapshotSearchText) {
       next.searchText = `${next.searchText} ${snapshotSearchText}`.trim()
+      entryInputs.delete(target)
+    } else {
+      entryInputs.set(target, { bookmark: sourceBookmark, tagRecord, snapshotRecord, includeFullText })
     }
 
     patchPopupSearchBookmark(target, next)

@@ -855,10 +855,12 @@ let unregisterNewtabWindowActions: () => void = () => {}
 let unregisterNewtabBookmarkEventActions: () => void = () => {}
 
 function refreshBookmarkCatalog(
-  rootNode: chrome.bookmarks.BookmarkTreeNode | null = state.rootNode
+  rootNode: chrome.bookmarks.BookmarkTreeNode | null = state.rootNode,
+  extracted: ExtractedBookmarkData | null = null
 ): BookmarkCatalogSnapshot {
   const snapshot = buildBookmarkCatalogSnapshot({
     rootNode,
+    extracted,
     tagIndex: state.bookmarkTagIndex,
     snapshotState: {
       settings: null,
@@ -5324,7 +5326,13 @@ async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion)
       validBookmarkIds: state.allBookmarkMap.keys(),
       legacyPinnedIds: state.activity.pinnedIds
     })
+    // Tree changes clear the catalog, so a remaining catalog still matches the
+    // tree. Only the tag and snapshot indexes changed; keep its extraction.
+    const currentExtraction = state.bookmarkCatalog?.extracted || null
     markSearchIndexDirty({ force: true })
+    if (currentExtraction) {
+      refreshBookmarkCatalog(state.rootNode, currentExtraction)
+    }
     render()
   } catch (error) {
     console.warn('新标签页 idle 数据加载失败。', error)

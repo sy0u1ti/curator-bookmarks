@@ -1,3 +1,5 @@
+import { memo, startTransition, useEffect, useState } from 'react'
+import { runIdle } from '../../shared/idle.js'
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { Checkbox } from '../../ui/base/Checkbox'
@@ -9,11 +11,16 @@ import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   DuplicateBookmarkViewModel,
   DuplicateGroupViewModel,
-  DuplicateGroupsState,
   DuplicateSelectionStatsViewModel
 } from './duplicate-groups-types.js'
 
 type BadgeTone = 'danger' | 'muted' | 'success' | 'warning'
+
+// Large catalogs can have hundreds of groups. Rendering them all at once froze
+// the section switch, so the first groups render immediately and the rest are
+// appended in small idle-time chunks below them.
+const DUPLICATE_GROUP_INITIAL_RENDER_COUNT = 24
+const DUPLICATE_GROUP_RENDER_CHUNK_SIZE = 24
 
 const DUPLICATE_DATE_FORMATTER = new Intl.DateTimeFormat('zh-CN', {
   year: 'numeric',
@@ -84,6 +91,7 @@ const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
 
 export function DuplicateGroups() {
   const state = useDuplicateGroupsState()
+  const renderCount = useProgressiveRenderCount(state.groups.length)
 
   if (!state.catalogLoading && !state.groups.length) {
     return (
@@ -107,11 +115,41 @@ export function DuplicateGroups() {
   return (
     <div className={RESULTS_CLASS}>
       <DuplicateDockedSelection locked={state.locked} selectionStats={state.selectionStats} />
-      {state.groups.map((group) => (
-        <DuplicateGroupCard group={group} key={group.id} state={state} />
+      {state.groups.slice(0, renderCount).map((group) => (
+        <DuplicateGroupCard
+          currentScopeFolderId={state.currentScopeFolderId}
+          group={group}
+          key={group.id}
+          locked={state.locked}
+          selectedIds={state.selectedIds}
+          selectionKey={getDuplicateGroupSelectionKey(group, state.selectedIds)}
+          taggedLabel={state.tagBadgeLabels[String(group.taggedItemId)] || ''}
+        />
       ))}
     </div>
   )
+}
+
+function useProgressiveRenderCount(total: number): number {
+  const [count, setCount] = useState(DUPLICATE_GROUP_INITIAL_RENDER_COUNT)
+
+  useEffect(() => {
+    if (count >= total) {
+      return undefined
+    }
+
+    let cancelled = false
+    runIdle(() => {
+      if (!cancelled) {
+        startTransition(() => setCount((current) => current + DUPLICATE_GROUP_RENDER_CHUNK_SIZE))
+      }
+    }, { timeout: 200 })
+    return () => {
+      cancelled = true
+    }
+  }, [count, total])
+
+  return Math.min(count, total)
 }
 
 function DuplicateDockedSelection({
@@ -173,14 +211,29 @@ function DuplicateDockedSelection({
   )
 }
 
-function DuplicateGroupCard({
-  group,
-  state
-}: {
+interface DuplicateGroupCardProps extends DuplicateItemContext {
   group: DuplicateGroupViewModel
-  state: DuplicateGroupsState
-}) {
-  const selectedCount = getDuplicateGroupSelectedCount(group, state.selectedIds)
+  // The selected set is mutated in place; this key changes when this group's
+  // selection does, so unchanged cards skip re-rendering on every toggle.
+  selectionKey: string
+}
+
+interface DuplicateItemContext {
+  currentScopeFolderId: string
+  locked: boolean
+  selectedIds: Set<unknown>
+  taggedLabel: string
+}
+
+const DuplicateGroupCard = memo(function DuplicateGroupCard({
+  currentScopeFolderId,
+  group,
+  locked,
+  selectedIds,
+  taggedLabel
+}: DuplicateGroupCardProps) {
+  const context: DuplicateItemContext = { currentScopeFolderId, locked, selectedIds, taggedLabel }
+  const selectedCount = getDuplicateGroupSelectedCount(group, selectedIds)
   const keepCount = Math.max(0, group.items.length - selectedCount)
   const recommendedItem = getDuplicateGroupItem(group, group.recommendedKeepId) || group.items[0]
   const recommendedDeleteCount = Math.max(0, group.items.length - 1)
@@ -219,20 +272,20 @@ function DuplicateGroupCard({
         </div>
         <div className={GROUP_ACTIONS_CLASS}>
           <DuplicateStrategyButton
-            disabled={state.locked}
+            disabled={locked}
             groupId={group.id}
             label="按推荐选择"
             strategy="recommended"
             className={ACCEPT_ACTION_CLASS}
           />
           <DuplicateStrategyButton
-            disabled={state.locked}
+            disabled={locked}
             groupId={group.id}
             label="保留最新"
             strategy="newest"
           />
           <DuplicateStrategyButton
-            disabled={state.locked}
+            disabled={locked}
             groupId={group.id}
             label="保留路径最短"
             strategy="shorter-path"
@@ -241,12 +294,12 @@ function DuplicateGroupCard({
       </div>
       <div className={ITEM_LIST_CLASS}>
         {group.items.map((item) => (
-          <DuplicateItemRow group={group} item={item} key={item.id} state={state} />
+          <DuplicateItemRow context={context} group={group} item={item} key={item.id} />
         ))}
       </div>
     </article>
   )
-}
+})
 
 function DuplicateStrategyButton({
   className = '',
@@ -318,16 +371,16 @@ function DuplicateRecommendationSignals({ group }: { group: DuplicateGroupViewMo
 }
 
 function DuplicateItemRow({
+  context,
   group,
-  item,
-  state
+  item
 }: {
+  context: DuplicateItemContext
   group: DuplicateGroupViewModel
   item: DuplicateBookmarkViewModel
-  state: DuplicateGroupsState
 }) {
   const itemId = String(item.id)
-  const selected = state.selectedIds.has(itemId)
+  const selected = context.selectedIds.has(itemId)
   const recommended = itemId === String(group.recommendedKeepId)
   const selectionLabel = getDuplicateItemSelectionLabel(item)
 
@@ -342,7 +395,7 @@ function DuplicateItemRow({
       <Checkbox
         aria-label={selectionLabel}
         checked={selected}
-        disabled={state.locked}
+        disabled={context.locked}
         label="移入回收站"
         labelClassName={ITEM_CHECK_LABEL_CLASS}
         onCheckedChange={(checked) => handleDuplicateAction({
@@ -355,7 +408,7 @@ function DuplicateItemRow({
         <div className={ITEM_META_CLASS}>
           <strong className={ITEM_TITLE_CLASS} title={item.title || '未命名书签'}>{item.title || '未命名书签'}</strong>
           <div className={ITEM_BADGES_CLASS}>
-            <DuplicateItemBadges group={group} item={item} state={state} />
+            <DuplicateItemBadges context={context} group={group} item={item} />
           </div>
         </div>
         <div className={ITEM_URL_CLASS}>{displayUrl(item.url)}</div>
@@ -369,18 +422,18 @@ function DuplicateItemRow({
 }
 
 function DuplicateItemBadges({
+  context,
   group,
-  item,
-  state
+  item
 }: {
+  context: DuplicateItemContext
   group: DuplicateGroupViewModel
   item: DuplicateBookmarkViewModel
-  state: DuplicateGroupsState
 }) {
   const itemId = String(item.id)
   const badges: Array<[BadgeTone, string]> = []
 
-  if (state.selectedIds.has(itemId)) {
+  if (context.selectedIds.has(itemId)) {
     badges.push(['danger', '待移入回收站'])
   } else if (itemId === String(group.recommendedKeepId)) {
     badges.push(['success', '推荐保留'])
@@ -399,7 +452,7 @@ function DuplicateItemBadges({
     badges.push(['muted', '标题更完整'])
   }
   if (itemId === String(group.taggedItemId)) {
-    badges.push(['muted', state.tagBadgeLabels[itemId] || '有整理信息'])
+    badges.push(['muted', context.taggedLabel || '有整理信息'])
   }
   if (itemId === String(group.newTabSourceItemId)) {
     badges.push(['muted', '新标签页来源'])
@@ -407,7 +460,7 @@ function DuplicateItemBadges({
   if (itemId === String(group.recentItemId)) {
     badges.push(['muted', '最近访问'])
   }
-  if (isBookmarkInCurrentDuplicateScope(item, state.currentScopeFolderId)) {
+  if (isBookmarkInCurrentDuplicateScope(item, context.currentScopeFolderId)) {
     badges.push(['muted', '当前范围'])
   }
 
@@ -437,6 +490,16 @@ function DuplicateBadge({ label, tone }: { label: string; tone: BadgeTone }) {
 
 function getDuplicateGroupSelectedCount(group: DuplicateGroupViewModel, selectedIds: Set<unknown>): number {
   return group.items.filter((item) => selectedIds.has(String(item.id))).length
+}
+
+function getDuplicateGroupSelectionKey(group: DuplicateGroupViewModel, selectedIds: Set<unknown>): string {
+  let key = ''
+  for (const item of group.items) {
+    if (selectedIds.has(String(item.id))) {
+      key += `${String(item.id)},`
+    }
+  }
+  return key
 }
 
 function getDuplicateGroupItem(group: DuplicateGroupViewModel, bookmarkId: unknown): DuplicateBookmarkViewModel | null {

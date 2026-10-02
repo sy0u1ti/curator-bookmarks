@@ -95,7 +95,9 @@ import {
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
+  getInitialBookmarksBarTitle,
   registerPopupActionHandlers,
+  rememberBookmarksBarTitle,
   resetPopupViewStore,
   type PopupAutoAnalyzeStatusActionDetail,
   type PopupAutoAnalyzeStatusView,
@@ -201,6 +203,27 @@ let activeFolderFrame = 0
 let keyboardNavigationSettleTimer = 0
 let popupActionStateVersion = 0
 const treeBookmarkRowsCache = createPopupContentRowCache<PopupContentBookmarkRowViewModel>('active')
+interface BookmarkRowMemo {
+  row: PopupContentBookmarkRowViewModel
+  depth: number
+  active: boolean
+  index: number
+  actionStateVersion: number
+  id: unknown
+  title: unknown
+  url: unknown
+  displayUrl: unknown
+  path: unknown
+  parentId: unknown
+  labelTitle: unknown
+  labelDisplayUrl: unknown
+}
+// Tree rows are rebuilt after catalog enhancements and folder switches. A
+// bookmark keeps its row object while everything the row shows is unchanged,
+// so large folders skip rebuilding menus and view-model comparisons stay shallow.
+const bookmarkRowMemos = new WeakMap<object, BookmarkRowMemo>()
+const FORMATTED_BOOKMARK_PATH_CACHE_LIMIT = 2048
+const formattedBookmarkPathCache = new Map<string, string>()
 const searchResultRowsCache = createPopupContentRowCache<PopupContentSearchResultViewModel>('active')
 const sidebarFolderRowsCache = createPopupContentRowCache<PopupContentFolderRowViewModel>('keyboardActive')
 interface PopupRefreshBaseData {
@@ -798,6 +821,7 @@ function applyPopupBaseRefreshData(
 ): void {
   state.rawTreeRoot = baseData.rootNode
   state.bookmarksBarNode = baseData.bookmarksBarNode
+  rememberBookmarksBarTitle(String(baseData.bookmarksBarNode?.title || ''))
   applyPopupIndexedBookmarkData({
     catalog: baseData.catalog,
     indexedBookmarks: baseData.indexedBookmarks,
@@ -1166,7 +1190,10 @@ function resetPopupSessionStateForNextOpen() {
   state.smartSaved = false
   state.smartPermissionRequest = null
   resetBookmarkReorderModeState()
-  state.pendingActionIds.clear()
+  if (state.pendingActionIds.size) {
+    state.pendingActionIds.clear()
+    popupActionStateVersion += 1
+  }
 }
 function maybeWarmPopupSnapshotFullTextForSearch() {
   if (
@@ -1784,7 +1811,7 @@ function getViewCaptionText(): string {
       : `本地匹配 · ${state.searchResults.length} 条`
   }
   const currentRoot = getCurrentTreeRoot()
-  return currentRoot?.title || '书签栏'
+  return currentRoot?.title || getInitialBookmarksBarTitle()
 }
 function getNaturalSearchPendingCaption() {
   return 'AI 语义搜索解析中…'
@@ -1864,6 +1891,8 @@ function getPopupActionKey(action, targetId = '') {
   return `${String(action || 'action')}:${String(targetId || 'global')}`
 }
 function isPopupActionPending(action, targetId = '') {
+  // Rows ask for every action of every bookmark; skip building keys when idle.
+  if (!state.pendingActionIds.size) return false
   return state.pendingActionIds.has(getPopupActionKey(action, targetId))
 }
 function setPopupActionPending(action, targetId, pending) {
@@ -1877,15 +1906,18 @@ function setPopupActionPending(action, targetId, pending) {
   popupActionStateVersion += 1
 }
 function hasBlockingPopupActionPending() {
-  return [...state.pendingActionIds].some((key) => {
-    return (
+  for (const key of state.pendingActionIds) {
+    if (
       key.startsWith('move:') ||
       key.startsWith('edit:') ||
       key.startsWith('delete:') ||
       key.startsWith('undo-delete:') ||
       key.startsWith('save-current-page:')
-    )
-  })
+    ) {
+      return true
+    }
+  }
+  return false
 }
 function renderSmartClassifier() {
   const currentUrl = String(state.currentTab?.url || '').trim()
@@ -2397,7 +2429,28 @@ function clearPopupContentRowCaches(): void {
 }
 
 function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1): PopupContentBookmarkRowViewModel {
-  return {
+  const labelSource = state.bookmarkMap.get(String(bookmark.id || ''))
+  const memo = bookmarkRowMemos.get(bookmark)
+  // Compared field by field: this runs for every row of large folders.
+  if (
+    memo &&
+    memo.depth === depth &&
+    memo.active === active &&
+    memo.index === index &&
+    memo.actionStateVersion === popupActionStateVersion &&
+    memo.id === bookmark.id &&
+    memo.title === bookmark.title &&
+    memo.url === bookmark.url &&
+    memo.displayUrl === bookmark.displayUrl &&
+    memo.path === bookmark.path &&
+    memo.parentId === bookmark.parentId &&
+    memo.labelTitle === labelSource?.title &&
+    memo.labelDisplayUrl === labelSource?.displayUrl
+  ) {
+    return memo.row
+  }
+
+  const row: PopupContentBookmarkRowViewModel = {
     active,
     bookmarkId: String(bookmark.id || ''),
     depth,
@@ -2407,10 +2460,39 @@ function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1):
     menu: buildActionMenuViewModel(bookmark.id),
     menuLabel: getBookmarkActionMenuLabel(bookmark),
     parentId: String(bookmark.parentId || ''),
-    path: formatBookmarkPath(bookmark.path) || bookmark.path || '',
+    path: getFormattedBookmarkPath(bookmark.path) || bookmark.path || '',
     title: bookmark.title || '未命名书签',
     url: bookmark.url || ''
   }
+  bookmarkRowMemos.set(bookmark, {
+    row,
+    depth,
+    active,
+    index,
+    actionStateVersion: popupActionStateVersion,
+    id: bookmark.id,
+    title: bookmark.title,
+    url: bookmark.url,
+    displayUrl: bookmark.displayUrl,
+    path: bookmark.path,
+    parentId: bookmark.parentId,
+    labelTitle: labelSource?.title,
+    labelDisplayUrl: labelSource?.displayUrl
+  })
+  return row
+}
+
+function getFormattedBookmarkPath(path): string {
+  const key = String(path || '')
+  let formatted = formattedBookmarkPathCache.get(key)
+  if (formatted === undefined) {
+    formatted = formatBookmarkPath(key)
+    if (formattedBookmarkPathCache.size >= FORMATTED_BOOKMARK_PATH_CACHE_LIMIT) {
+      formattedBookmarkPathCache.clear()
+    }
+    formattedBookmarkPathCache.set(key, formatted)
+  }
+  return formatted
 }
 
 function getSearchResultRows(): PopupContentSearchResultViewModel[] {
@@ -2494,9 +2576,11 @@ function getBookmarkActionMenuLabel(bookmark) {
   const title = cleanSmartText(bookmark?.title || '未命名书签', 48)
   return `打开 ${title} 的操作菜单`
 }
-function getBookmarkActionLabel(action, bookmarkId) {
+function getBookmarkActionTitle(bookmarkId) {
   const bookmark = state.bookmarkMap.get(String(bookmarkId || ''))
-  const title = cleanSmartText(bookmark?.title || bookmark?.displayUrl || bookmarkId || '未命名书签', 48)
+  return cleanSmartText(bookmark?.title || bookmark?.displayUrl || bookmarkId || '未命名书签', 48)
+}
+function formatBookmarkActionLabel(action, title) {
   return `${action}：${title || '未命名书签'}`
 }
 function getPopupFolderToggleLabel(action, folderPath) {
@@ -2510,11 +2594,12 @@ function buildActionMenuViewModel(bookmarkId): PopupActionMenuViewModel {
   const moveBusy = isPopupActionPending('move', bookmarkId)
   const editBusy = isPopupActionPending('edit', bookmarkId)
   const deleteBusy = isPopupActionPending('delete', bookmarkId)
-  const editLabel = getBookmarkActionLabel('编辑书签', bookmarkId)
-  const copyLabel = getBookmarkActionLabel('复制书签链接', bookmarkId)
-  const openLabel = getBookmarkActionLabel('当前页打开书签', bookmarkId)
-  const moveLabel = getBookmarkActionLabel('移动书签', bookmarkId)
-  const deleteLabel = getBookmarkActionLabel('删除书签', bookmarkId)
+  const actionTitle = getBookmarkActionTitle(bookmarkId)
+  const editLabel = formatBookmarkActionLabel('编辑书签', actionTitle)
+  const copyLabel = formatBookmarkActionLabel('复制书签链接', actionTitle)
+  const openLabel = formatBookmarkActionLabel('当前页打开书签', actionTitle)
+  const moveLabel = formatBookmarkActionLabel('移动书签', actionTitle)
+  const deleteLabel = formatBookmarkActionLabel('删除书签', actionTitle)
 
   return {
     items: [

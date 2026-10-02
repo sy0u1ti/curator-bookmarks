@@ -48,3 +48,22 @@ export function buildDuplicateKey(url: unknown): string {
   }
 }
 
+// Same results as buildDuplicateKey and extractDomain, parsing the URL once.
+export function extractUrlIdentity(url: unknown): { duplicateKey: string; domain: string } {
+  const text = String(url ?? '')
+  const rawUrl = text.trim()
+  if (rawUrl !== text || text !== String(url || '')) {
+    return { duplicateKey: buildDuplicateKey(url), domain: extractDomain(url) }
+  }
+
+  try {
+    const parsedUrl = new URL(rawUrl)
+    return {
+      duplicateKey: parsedUrl.href,
+      domain: parsedUrl.hostname.replace(/^www\./i, '').toLowerCase()
+    }
+  } catch {
+    return { duplicateKey: rawUrl, domain: '' }
+  }
+}
+

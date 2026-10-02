@@ -535,6 +535,16 @@ export async function enrichPinyinTokensCooperatively(
     const end = Math.min(index + batchSize, targets.length)
     for (let cursor = index; cursor < end; cursor += 1) {
       const target = targets[cursor]
+      // Entries reset this flag whenever their text changes. Re-applying the
+      // same tokens would only replace equal arrays and invalidate caches
+      // derived from them, so reused entries keep their tokens.
+      if (target.pinyinEnriched) {
+        if (target.tagPinyinFull?.length || target.tagPinyinInitials?.length) {
+          enriched += 1
+        }
+        processed += 1
+        continue
+      }
       const tokens = buildPinyinTokensSync(getPinyinSourceValues(target))
       if (applyPinyinTokens(target, tokens)) {
         enriched += 1
