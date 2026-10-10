@@ -23,6 +23,7 @@ const newtabBodyClasses = readFileSync('src/newtab/components/NewtabBodyClassesH
 const wallpaperFilter = readFileSync('src/newtab/components/NewtabWallpaperFilterLayer.tsx', 'utf8')
 const paperShaderFilter = readFileSync('src/newtab/components/NewtabPaperShaderLayer.tsx', 'utf8')
 const backgroundMaskSettings = readFileSync('src/newtab/background-mask-settings.ts', 'utf8')
+const backgroundFilterRuntime = readFileSync('src/newtab/background-filter-runtime.ts', 'utf8')
 const viteConfig = readFileSync('vite.config.ts', 'utf8')
 const selectSource = readFileSync('src/ui/base/Select.tsx', 'utf8')
 const instantWallpaperBoot = readFileSync('src/newtab/instant-wallpaper-boot.ts', 'utf8')
@@ -77,7 +78,6 @@ assert.ok(
 
 assert.ok(
   newtabCss.includes('@media (prefers-reduced-motion: reduce)') &&
-    newtabCss.includes('@media (prefers-reduced-transparency: reduce)') &&
     newtabCss.includes('@media (prefers-contrast: more)') &&
     newtabCss.includes('#newtab-settings-drawer button') &&
     newtabCss.includes(':not(:disabled):not([aria-disabled="true"]):not([data-disabled]):active') &&
@@ -89,14 +89,14 @@ assert.ok(
 )
 
 assert.ok(
-  reducedTransparencyMaskRule.includes('backdrop-filter: none !important') &&
-    startupReducedTransparencyMaskRule.includes('backdrop-filter: none') &&
+  !reducedTransparencyMaskRule.includes('backdrop-filter: none') &&
+    !startupReducedTransparencyMaskRule.includes('backdrop-filter: none') &&
     !reducedTransparencyMaskRule.includes('background-color') &&
     !reducedTransparencyMaskRule.includes('background-image') &&
     !startupReducedTransparencyMaskRule.includes('background-color') &&
     !startupReducedTransparencyMaskRule.includes('background-image') &&
     !/@media \(prefers-contrast: more\)[\s\S]*?#newtab-startup-background-mask/.test(newtabHtml),
-  'Accessibility preferences may remove mask blur, but must never override the user-selected mask strength or startup gradient.'
+  'Explicit wallpaper blur and overlay strength must survive OS transparency preferences from startup through hydration.'
 )
 
 assert.ok(
@@ -185,14 +185,14 @@ assert.ok(
     [
       '深色渐变', '磨砂玻璃', '胶片噪点', '柔光渐变', '胶片颗粒', '单色网点',
       'ASCII 字符', '纸张纹理', '条纹玻璃', '水面折射', '图像抖动', '彩色网点', 'CMYK 网点'
-    ].every((label) => settingsDrawer.includes(`label: '${label}'`)) &&
+    ].every((label) => backgroundMaskSettings.includes(`label: '${label}'`)) &&
     !settingsDrawer.includes("label: 'Paper ·") &&
     !settingsDrawer.includes("label: '颗粒滤镜'") &&
     !settingsDrawer.includes("label: '网点滤镜'") &&
     !settingsDrawer.includes("label: 'ASCII 滤镜'") &&
     settingsDrawer.includes('遮罩效果') &&
     settingsDrawer.includes('悬停效果') &&
-    settingsDrawer.includes("ticks={['透明', '默认', '覆盖']}"),
+    settingsDrawer.includes("ticks={['透明', '50%', '覆盖']}"),
   'The background mask selector should retain every style with concise, consistently structured labels.'
 )
 
@@ -204,7 +204,7 @@ assert.ok(
     paperShaderFilter.includes('<ImageDithering') &&
     paperShaderFilter.includes('<HalftoneDots') &&
     paperShaderFilter.includes('<HalftoneCmyk') &&
-    paperShaderFilter.includes("getContext('webgl2')") &&
+    backgroundFilterRuntime.includes("getContext('webgl2')") &&
     paperShaderFilter.includes('useShaderImageSource') &&
     paperShaderFilter.includes("media.kind === 'video'") &&
     paperShaderFilter.includes('originX:') &&
@@ -263,12 +263,12 @@ assert.ok(
 )
 
 assert.ok(
-  newtabCss.includes('background: var(--newtab-glass-bg-hero)') &&
+  newtabCss.includes('background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hero))') &&
     !searchWidget.includes('--search-bg-alpha') &&
     newtabCss.includes('.newtab-search-surface {') &&
     clockClasses.includes('bg-[var(--newtab-glass-bg-hero)]') &&
     clockClasses.includes('[-webkit-backdrop-filter:var(--newtab-glass-filter-hero)]') &&
-    newtabCss.includes('background: var(--newtab-glass-bg-popup') &&
+    newtabCss.includes('background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-popup') &&
     newtabCss.includes('backdrop-filter: var(--newtab-glass-filter-popup') &&
     searchSurfaceRule.includes('background: transparent') &&
     !reducedTransparencyOpaqueSelectors.includes('.newtab-search') &&
@@ -401,19 +401,20 @@ assert.ok(
 )
 
 assert.ok(
-  controller.includes('void refreshNewTab().finally') &&
-    controller.includes('bindBookmarkEvents()') &&
+  /bindBookmarkEvents\(\)\s+hydrateFeaturedBackgroundOptions\(\)\s+void refreshNewTab\(\)/.test(controller) &&
+    controller.includes('const bookmarkEventVersionAtStart = bookmarkTreeEventVersion') &&
+    controller.includes('bookmarkTreeEventVersion !== bookmarkEventVersionAtStart) scheduleBookmarkChangeRefresh()') &&
     controller.includes('const alreadyInTree = existingChildren.some') &&
     controller.includes('if (alreadyInSection)') &&
     controller.includes('alreadyInTree ? section.totalBookmarkCount : section.totalBookmarkCount + 1') &&
     bookmarkEventStore.includes('pendingNewtabBookmarkEvents') &&
     bookmarkEventStore.includes('dispatchPendingNewtabBookmarkEvent(actions, event)'),
-  'Bookmark events that arrive while startup data is prefetched should replay only after hydration and remain idempotent when the tree already contains the change.'
+  'Bookmark events must bind before hydration, trigger a reconciled refresh when startup overlaps an event, and remain idempotent when the tree already contains the change.'
 )
 
 assert.ok(
-  controller.includes('const startup = await consumeNewtabStartupData()') &&
-    controller.includes('const stored = settingsPersistence.hydrate(startup.stored)') &&
+  /const \[startup, customIcons\] = await Promise\.all\(\[\s*consumeNewtabStartupData\(\)/.test(controller) &&
+    controller.includes('const stored = settingsPersistence.hydrate({ ...startup.stored, ...newTabRefreshStorageChanges })') &&
     newtabStartupData.indexOf('reconcilePendingNewtabSettings()') < newtabStartupData.indexOf('.then(() => getLocalStorage') &&
     controller.includes('preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])') &&
     /useLayoutEffect\(\(\) => \{\s*return scheduleNewtabBookmarkPrebootHandoff\(\{[\s\S]+?onFinish:/.test(bookmarkContent) &&

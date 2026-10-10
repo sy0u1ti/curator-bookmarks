@@ -51,6 +51,7 @@ export interface BookmarkTileViewModel {
   id: string
   onContextMenu: (event: ReactMouseEvent<HTMLAnchorElement>) => void
   onDragPointerDown: (event: ReactPointerEvent<HTMLElement>) => void
+  onOpenMenu: (event: ReactMouseEvent<HTMLElement>) => void
   onReorderKeyDown: (event: ReactKeyboardEvent<HTMLElement>) => void
   onNavigate: (event: ReactMouseEvent<HTMLAnchorElement>) => void
   style?: CSSProperties

@@ -1,4 +1,4 @@
-import type { FeaturedBackgroundItem } from './background-gallery.js'
+import { hashFeaturedBackgroundSeed, type FeaturedBackgroundItem } from './background-gallery.js'
 import {
   FEATURED_BACKGROUND_PROVIDER_DISPLAY_LIMIT,
   isFeaturedBackgroundProvider
@@ -84,15 +84,6 @@ export const FEATURED_BACKGROUND_REFRESH_ORIGINS = [
   'https://openaccess-api.clevelandart.org/*',
   'https://openaccess-cdn.clevelandart.org/*'
 ]
-
-export function getFeaturedBackgroundResolutionLabel(item: Pick<FeaturedBackgroundItem, 'width' | 'height'>): string {
-  const width = Number(item.width)
-  const height = Number(item.height)
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return ''
-  }
-  return `${Math.round(width)} x ${Math.round(height)}`
-}
 
 export async function fetchFreshFeaturedBackgroundItems(
   client: FeaturedGalleryFetchClient,
@@ -706,15 +697,6 @@ function dedupeNumbers(items: number[]): number[] {
     deduped.push(value)
   }
   return deduped
-}
-
-function hashFeaturedBackgroundSeed(seed: string): number {
-  let hash = 2166136261
-  for (let index = 0; index < seed.length; index += 1) {
-    hash ^= seed.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash | 0
 }
 
 function getObject(value: unknown): Record<string, unknown> {

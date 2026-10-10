@@ -34,10 +34,3 @@ export function getMotionEasing(variableName: string, fallback: string): string 
   return getComputedStyle(document.documentElement).getPropertyValue(variableName).trim() || fallback
 }
 
-export function getModalCloseDurationMs(fallbackMs = DEFAULT_MODAL_CLOSE_MS): number {
-  if (prefersReducedMotion()) {
-    return REDUCED_MOTION_DURATION_MS
-  }
-
-  return getMotionDurationMs('--modal-close-dur', fallbackMs)
-}

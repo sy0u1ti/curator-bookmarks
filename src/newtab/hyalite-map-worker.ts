@@ -3,7 +3,8 @@ import { renderGlassRaster, type GlassRasterInput } from './hyalite-raster.js'
 
 export interface GlassMapRequest { id: number; input: HyaliteMapInput; raster?: GlassRasterInput }
 export type GlassMapResponse =
-  | { id: number; map: HyaliteMapRecord; info: HyaliteInfo; texture?: Blob }
+  | { id: number; map: HyaliteMapRecord; info: HyaliteInfo }
+  | { id: number; texture: Blob; luminance: number | null }
   | { id: number; error: string }
 
 const scope = self as unknown as {
@@ -11,6 +12,7 @@ const scope = self as unknown as {
   postMessage(message: GlassMapResponse): void
 }
 const cache = new Map<string, { map: HyaliteMapRecord; info: HyaliteInfo; pixels: HyaliteMapPixels }>()
+const pixelCache = new Map<string, HyaliteMapPixels>()
 let queue: Promise<void> = Promise.resolve()
 
 function asDataUrl(blob: Blob): Promise<string> {
@@ -21,10 +23,18 @@ function asDataUrl(blob: Blob): Promise<string> {
     reader.readAsDataURL(blob)
   })
 }
+function buildPixels(input: HyaliteMapInput): HyaliteMapPixels {
+  const hit = pixelCache.get(input.key)
+  if (hit) return hit
+  const pixels = Hyalite.buildMapPixels(input.width, input.height, input.radii, input.options)
+  pixelCache.set(input.key, pixels)
+  if (pixelCache.size > 24) pixelCache.delete(pixelCache.keys().next().value!)
+  return pixels
+}
 async function build(input: HyaliteMapInput) {
   const hit = cache.get(input.key)
   if (hit) { cache.delete(input.key); cache.set(input.key, hit); return hit }
-  const pixels = Hyalite.buildMapPixels(input.width, input.height, input.radii, input.options)
+  const pixels = buildPixels(input)
   const canvas = new OffscreenCanvas(pixels.width, pixels.height)
   const context = canvas.getContext('2d')
   if (!context) throw new Error('Offscreen canvas unavailable')
@@ -45,9 +55,15 @@ async function build(input: HyaliteMapInput) {
 scope.onmessage = ({ data }) => {
   queue = queue.catch(() => {}).then(async () => {
     try {
+      // Raster surfaces need only displacement pixels. Encoding two additional
+      // SVG map PNGs per shape wastes startup time and cross-thread bandwidth.
+      if (data.raster) {
+        const { blob, luminance } = await renderGlassRaster(data.input, buildPixels(data.input), data.raster)
+        scope.postMessage({ id: data.id, texture: blob, luminance })
+        return
+      }
       const result = await build(data.input)
-      const texture = data.raster ? await renderGlassRaster(data.input, result.pixels, data.raster) : undefined
-      scope.postMessage({ id: data.id, map: result.map, info: result.info, texture })
+      scope.postMessage({ id: data.id, map: result.map, info: result.info })
     }
     catch (error) { scope.postMessage({ id: data.id, error: error instanceof Error ? error.message : 'Glass map unavailable' }) }
   })

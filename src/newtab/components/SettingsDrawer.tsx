@@ -20,8 +20,8 @@ import { Icon } from '../../ui/icons/Icon'
 import { Input } from '../../ui/base/Input'
 import { Select } from '../../ui/base/Select'
 import { SliderControl } from '../../ui/base/Slider'
-import { DEFAULT_GLASS_SETTINGS, GLASS_SETTING_LIMITS, type NewtabGlassSettingKey } from '../glass-settings'
-import { changeNewtabGlassSetting, resetNewtabGlassSettings, useNewtabGlassSettings } from '../newtab-glass-settings-store'
+import { DEFAULT_GLASS_SETTINGS, GLASS_PRESETS, getGlassPresetId, GLASS_SETTING_LIMITS, type NewtabGlassSettingKey } from '../glass-settings'
+import { applyNewtabGlassPreset, beginNewtabGlassEditSession, undoNewtabGlassEditSession, changeNewtabGlassSetting, resetNewtabGlassSettings, useNewtabGlassSettings } from '../newtab-glass-settings-store'
 import { Surface } from '../../ui/base/Surface'
 import { SwitchControl } from '../../ui/base/Switch'
 import { TabsIndicator, TabsList, TabsPanel, TabsRoot, TabsTab } from '../../ui/base/Tabs'
@@ -65,7 +65,8 @@ import {
 } from '../newtab-background-settings-store'
 import type { SettingsDrawerSection } from '../settings-group-sync'
 import { useSettingsDrawerModalMode } from '../settings-drawer-mode'
-import { snapBackgroundMaskPercentage } from '../background-mask-settings'
+import { BACKGROUND_MASK_META, BACKGROUND_MASK_STYLES, isPaperShaderMaskStyle } from '../background-mask-settings'
+import { getBackgroundFilterUnavailableReason, useBackgroundFilterStatus } from '../background-filter-runtime'
 import {
   dispatchNewtabSettingsDrawerActiveGroupChange,
   dispatchNewtabSettingsDrawerFeaturedPickerClick,
@@ -182,14 +183,14 @@ const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1f
 const SETTING_COLOR_VALUE_CLASS = 'text-xs font-semibold text-ds-text-primary'
 const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden rounded-ds-sm border-0 bg-transparent p-0'
 const ICON_PREVIEW_PANEL_CLASS = 'grid gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3'
-const ICON_PREVIEW_HEADER_CLASS = 'flex items-baseline justify-between gap-3 text-xs font-semibold text-ds-text-primary'
-const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-right text-xs font-medium text-ds-text-secondary'
+const ICON_PREVIEW_HEADER_CLASS = 'grid gap-1 text-xs font-semibold text-ds-text-primary'
+const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 text-xs font-medium leading-relaxed text-ds-text-secondary'
 const ICON_LIVE_PREVIEW_CLASS = 'm-0 grid min-h-36 justify-items-center overflow-hidden rounded-ds-sm border border-ds-border bg-ds-app px-2.5 py-4'
-const ICON_LIVE_PREVIEW_GRID_CLASS = 'grid w-[min(var(--preview-page-width),var(--preview-grid-max-width))] content-center justify-center'
-const ICON_LIVE_PREVIEW_TILE_CLASS = 'grid min-w-0 justify-items-center gap-1.5 [width:var(--preview-tile-width)]'
-const ICON_LIVE_PREVIEW_SHELL_CLASS = 'grid place-items-center rounded-ds-sm border border-ds-border bg-ds-surface-1 [height:var(--preview-shell-size)] [width:var(--preview-shell-size)]'
+const ICON_LIVE_PREVIEW_GRID_CLASS = 'grid max-w-full w-[min(var(--preview-page-width),var(--preview-grid-max-width))] content-center justify-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
+const ICON_LIVE_PREVIEW_TILE_CLASS = 'flex min-w-0 items-center gap-1.5 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 px-1.5 py-2'
+const ICON_LIVE_PREVIEW_SHELL_CLASS = 'grid shrink-0 place-items-center rounded-ds-sm border border-ds-border bg-ds-surface-2 [height:var(--preview-shell-size)] [width:var(--preview-shell-size)]'
 const ICON_LIVE_PREVIEW_MARK_CLASS = 'text-xs font-semibold text-ds-text-primary'
-const ICON_LIVE_PREVIEW_TITLE_CLASS = 'max-w-full overflow-hidden text-center text-xs leading-tight text-ds-text-secondary [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:var(--preview-title-lines)]'
+const ICON_LIVE_PREVIEW_TITLE_CLASS = 'min-w-0 overflow-hidden break-all text-left text-xs leading-tight text-ds-text-secondary [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:var(--preview-title-lines)]'
 const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2 max-[700px]:grid-cols-1'
 const ICON_PRESET_CARD_CLASS = 'grid min-h-32 min-w-0 content-start gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2.5 text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
 const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
@@ -202,7 +203,7 @@ const ICON_ADVANCED_PANEL_CLASS = 'grid'
 const ICON_RESET_DEFAULTS_CLASS = 'min-h-9 w-full justify-center px-3 text-xs font-semibold'
 const SEARCH_ENGINE_ROW_CLASS = 'items-start'
 const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-52 grid-cols-3 gap-1.5 max-[700px]:grid-cols-1'
-const SEARCH_ENGINE_TOGGLE_CLASS = 'relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
+const SEARCH_ENGINE_TOGGLE_CLASS = 'search-engine-toggle relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
 const SEARCH_ENGINE_HIDDEN_SWITCH_CLASS = 'pointer-events-none absolute h-px w-px opacity-0'
 const SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT = 40
 
@@ -276,7 +277,7 @@ function SwitchRow({
   const descriptionId = `${id}-description`
 
   return (
-    <div className={settingRowClassName(disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
+    <div className={settingRowClassName('settings-switch-row', disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
       <SettingLabelStack title={title} titleId={labelId} description={description} descriptionId={descriptionId} />
       <span className={SETTINGS_SWITCH_WRAP_CLASS}>
         <SwitchControl
@@ -1201,62 +1202,68 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
         >
           {backgroundSettings.backgroundStatus}
         </output>
-        <SwitchRow
-          id="background-mask-enabled"
-          title="背景蒙版"
-          description="提升复杂背景上的图标和文字可读性。"
-          checked={backgroundSettings.maskEnabled}
-          onCheckedChange={dispatchNewtabBackgroundMaskToggle}
-        />
-        <SliderRow rowId="background-mask-overlay-row" id="background-mask-overlay" label="遮罩效果" valueId="background-mask-overlay-value" value={`${backgroundSettings.maskOverlay}%`} min="0" max="100" defaultValue="50" ariaLabel="背景遮罩效果" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskOverlay', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskOverlay} ticks={['透明', '默认', '覆盖']} />
-        <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
-          <span className={SETTINGS_LABEL_CLASS}>蒙版样式</span>
-          <Select
-            id="background-mask-style"
-            ariaLabel="背景蒙版样式"
-            onValueChange={(value) => {
-              if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
-            }}
-            options={[
-              { value: 'dark', label: '深色渐变' },
-              { value: 'frosted', label: '磨砂玻璃' },
-              { value: 'noise', label: '胶片噪点' },
-              { value: 'light', label: '柔光渐变' },
-              { value: 'grain', label: '胶片颗粒' },
-              { value: 'halftone', label: '单色网点' },
-              { value: 'ascii', label: 'ASCII 字符' },
-              { value: 'paper-texture', label: '纸张纹理' },
-              { value: 'fluted-glass', label: '条纹玻璃' },
-              { value: 'water', label: '水面折射' },
-              { value: 'image-dithering', label: '图像抖动' },
-              { value: 'halftone-dots', label: '彩色网点' },
-              { value: 'halftone-cmyk', label: 'CMYK 网点' }
-            ]}
-            popupClassName={SETTINGS_SELECT_POPUP_CLASS}
-            popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
-            modal={false}
-            portalContainer={panelElement}
-            positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}
-            syncInputState
-            triggerClassName={SETTINGS_SELECT_TRIGGER_CLASS}
-            value={backgroundSettings.maskStyle}
-            valueClassName={SETTINGS_SELECT_VALUE_CLASS}
-          />
-        </div>
-        <SwitchRow
-          id="background-mask-filter-hover"
-          title="悬停效果"
-          description="在空白背景区域移动指针时增强附近的滤镜纹理。"
-          checked={backgroundSettings.maskFilterHover}
-          hidden={backgroundSettings.maskFilterHoverHidden}
-          onCheckedChange={dispatchNewtabBackgroundFilterHoverToggle}
-        />
-        <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="背景蒙版模糊" valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} />
-        <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="采样强度" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterStrength} ticks={['0', '默认', '100%']} />
-        <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label="大小" valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素大小" hidden={backgroundSettings.maskFilterSizeHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterSize} ticks={['0', '默认', '100%']} />
-        <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label="间距" valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', snapBackgroundMaskPercentage(value))} sliderValue={backgroundSettings.maskFilterSpacing} ticks={['0', '默认', '100%']} />
+        <BackgroundMaskSettings panelElement={panelElement} />
       </Surface>
     </section>
+  )
+})
+
+const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelElement }: { panelElement: HTMLElement | null }) {
+  const backgroundSettings = useNewtabBackgroundSettingsView()
+  const filterStatus = useBackgroundFilterStatus()
+  const maskMeta = BACKGROUND_MASK_META[backgroundSettings.maskStyle]
+  const unavailableReason = getBackgroundFilterUnavailableReason(backgroundSettings.maskStyle, backgroundSettings.type)
+  const filterMessage = unavailableReason || (filterStatus.style === backgroundSettings.maskStyle ? filterStatus.message : '')
+  const filterControlsHidden = Boolean(unavailableReason)
+
+  return (
+    <>
+      <SwitchRow
+        id="background-mask-enabled"
+        title="背景蒙版"
+        description="提升复杂背景上的图标和文字可读性。"
+        checked={backgroundSettings.maskEnabled}
+        onCheckedChange={dispatchNewtabBackgroundMaskToggle}
+      />
+      <SliderRow rowId="background-mask-overlay-row" id="background-mask-overlay" label="遮罩浓度" description="独立控制明暗遮罩，0% 保留原图亮度。" valueId="background-mask-overlay-value" value={`${backgroundSettings.maskOverlay}%`} min="0" max="100" defaultValue="50" ariaLabel="背景遮罩效果" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskOverlay', value)} sliderValue={backgroundSettings.maskOverlay} ticks={['透明', '50%', '覆盖']} />
+      <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
+        <SettingLabelStack title="蒙版样式" description={maskMeta.description} />
+        <Select
+          id="background-mask-style"
+          ariaLabel="背景蒙版样式"
+          onValueChange={(value) => {
+            if (value) dispatchNewtabBackgroundSettingFieldChange('maskStyle', value)
+          }}
+          options={BACKGROUND_MASK_STYLES.map(value => ({
+            value,
+            label: BACKGROUND_MASK_META[value].label,
+            disabled: isPaperShaderMaskStyle(value) && Boolean(getBackgroundFilterUnavailableReason(value, backgroundSettings.type))
+          }))}
+          popupClassName={SETTINGS_SELECT_POPUP_CLASS}
+          popupAttributes={DRAWER_PORTALED_CONTENT_ATTRIBUTES}
+          modal={false}
+          portalContainer={panelElement}
+          positionerClassName={SETTINGS_SELECT_POSITIONER_CLASS}
+          syncInputState
+          triggerClassName={SETTINGS_SELECT_TRIGGER_CLASS}
+          value={backgroundSettings.maskStyle}
+          valueClassName={SETTINGS_SELECT_VALUE_CLASS}
+        />
+      </div>
+      {backgroundSettings.maskEnabled && filterMessage ? <p id="background-filter-status" className={SETTINGS_STATUS_CLASS} role="status">{filterMessage}</p> : null}
+      <SwitchRow
+        id="background-mask-filter-hover"
+        title="悬停效果"
+        description="在空白背景区域移动指针时增强附近的滤镜纹理。"
+        checked={backgroundSettings.maskFilterHover}
+        hidden={backgroundSettings.maskFilterHoverHidden}
+        onCheckedChange={dispatchNewtabBackgroundFilterHoverToggle}
+      />
+      <SliderRow rowId="background-mask-blur-row" id="background-mask-blur" label="背景模糊" description={backgroundSettings.type === 'color' ? '纯色没有可模糊的细节，切换到图片或视频后可见。' : '只柔化壁纸，文字和书签保持清晰。'} valueId="background-mask-blur-value" value={`${backgroundSettings.maskBlur}px`} min="0" max="32" defaultValue="12" ariaLabel="背景蒙版模糊程度" hidden={backgroundSettings.maskBlurHidden} disabled={backgroundSettings.type === 'color'} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskBlur', value)} sliderValue={backgroundSettings.maskBlur} ticks={['清晰', '16px', '柔和']} />
+      <SliderRow rowId="background-mask-filter-strength-row" id="background-mask-filter-strength" label="滤镜强度" description="0% 显示原图，向右增强纹理。" valueId="background-mask-filter-strength-value" value={`${backgroundSettings.maskFilterStrength}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜采样强度" hidden={backgroundSettings.maskFilterStrengthHidden || filterControlsHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterStrength', value)} sliderValue={backgroundSettings.maskFilterStrength} ticks={['原图', '50%', '完整效果']} />
+      <SliderRow rowId="background-mask-filter-size-row" id="background-mask-filter-size" label={maskMeta.sizeLabel || '大小'} valueId="background-mask-filter-size-value" value={`${backgroundSettings.maskFilterSize}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素大小" hidden={backgroundSettings.maskFilterSizeHidden || filterControlsHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSize', value)} sliderValue={backgroundSettings.maskFilterSize} ticks={['小', '50%', '大']} />
+      <SliderRow rowId="background-mask-filter-spacing-row" id="background-mask-filter-spacing" label={maskMeta.spacingLabel || '间距'} valueId="background-mask-filter-spacing-value" value={`${backgroundSettings.maskFilterSpacing}%`} min="0" max="100" defaultValue="50" ariaLabel="壁纸滤镜元素间距" hidden={backgroundSettings.maskFilterSpacingHidden || filterControlsHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskFilterSpacing', value)} sliderValue={backgroundSettings.maskFilterSpacing} ticks={['低', '50%', '高']} />
+    </>
   )
 })
 
@@ -1284,18 +1291,36 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
 }) {
   const view = useNewtabGlassSettings()
   const settings = view.settings
+  const drawer = useNewtabSettingsDrawerView()
+  useEffect(() => {
+    if (view.ready && drawer.open) beginNewtabGlassEditSession()
+  }, [view.ready, drawer.open])
+  const presetId = getGlassPresetId(settings)
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="glass" aria-labelledby="settings-glass-title">
       <h2 id="settings-glass-title" className={SETTINGS_SECTION_TITLE_CLASS}>液态玻璃</h2>
       <p className={SETTINGS_NOTE_CLASS}>统一调整书签卡片、时间、搜索栏与设置面板。</p>
-      <CollapsibleRoot defaultOpen className="newtab-glass-controls">
+      <div className="mb-3 grid grid-cols-3 gap-2" role="group" aria-label="玻璃材质预设">
+        {GLASS_PRESETS.map(preset => <Button key={preset.id} size="sm" variant={presetId === preset.id ? 'primary' : 'secondary'}
+          disabled={!view.ready} aria-pressed={presetId === preset.id} title={preset.description}
+          onClick={() => applyNewtabGlassPreset({ ...preset.settings })}>{preset.label}</Button>)}
+      </div>
+      <p className={SETTINGS_NOTE_CLASS}>{presetId === 'custom' ? '当前使用自定义材质。' : '选择预设后立即预览并保存。'} 可在下方精细调整。</p>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="secondary" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
+        <Button size="sm" variant="secondary" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复玻璃默认值</Button>
+      </div>
+      <output className={SETTINGS_NOTE_CLASS} aria-live="polite">
+        {view.saveState === 'error' ? '设置保存失败，请重试。' : view.saveState === 'saving' ? '正在保存…' : view.saveState === 'saved' ? '已保存' : ''}
+      </output>
+      <CollapsibleRoot className="newtab-glass-controls">
         <CollapsibleTrigger
           render={<Button unstyled ref={firstControlRef} />}
-          aria-label="玻璃材质参数"
+          aria-label="精细调整玻璃材质"
           className={settingsControlClassName('flex min-h-12 w-full items-center justify-between gap-3 px-3 text-left text-sm')}
         >
           <span className="grid gap-1">
-            <span>材质参数</span>
+            <span>精细调整</span>
             <span className={SETTINGS_DESCRIPTION_CLASS}>模糊 {settings.blur}px · 底色 {settings.tint}%</span>
           </span>
           <span className="t-acc-chevron"><Icon name="ChevronDown" size={14} aria-hidden="true" /></span>
@@ -1316,12 +1341,6 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
               ariaLabel={control.label} sliderValue={settings[control.key]} disabled={!view.ready}
               onValueChange={value => changeNewtabGlassSetting(control.key, value)} />
           })}
-          <div className="flex items-center justify-between gap-3">
-            <output className={SETTINGS_NOTE_CLASS} aria-live="polite">
-              {view.saveState === 'error' ? '设置保存失败，请重试。' : view.saveState === 'saving' ? '正在保存…' : view.saveState === 'saved' ? '已保存' : ''}
-            </output>
-            <Button size="sm" variant="secondary" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复玻璃默认值</Button>
-          </div>
         </CollapsiblePanel>
       </CollapsibleRoot>
     </section>
@@ -1370,7 +1389,7 @@ const IconSettingsSection = memo(function IconSettingsSection() {
               style={{ gridTemplateColumns: `repeat(${iconPreview.columns}, minmax(0, 1fr))` }}
             >
               {iconPreview.tiles.map((item) => (
-                <span className={ICON_LIVE_PREVIEW_TILE_CLASS} key={item.id}>
+                <span className={cx(ICON_LIVE_PREVIEW_TILE_CLASS, !iconPreview.showTitles && 'justify-center !px-1')} key={item.id}>
                   <span className={ICON_LIVE_PREVIEW_SHELL_CLASS}>
                     <span className={ICON_LIVE_PREVIEW_MARK_CLASS}>{item.mark}</span>
                   </span>

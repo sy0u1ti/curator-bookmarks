@@ -23,7 +23,7 @@ import { useContentSnapshotControlsState } from './content-snapshot-store.js'
 
 const contentSnapshotTitle = <h2 className={AI_SETTINGS_TITLE_CLASS}>网页内容索引</h2>
 const contentSnapshotDescription = (
-  <p className={AI_SETTINGS_SUBTITLE_CLASS}>为本地搜索和 AI 分类保存网页摘要。</p>
+  <p className={AI_SETTINGS_SUBTITLE_CLASS}>在本地保存网页摘要，用于全文快速搜索与 AI 精准分类。</p>
 )
 
 const contentSnapshotStatus = <span className={AI_SETTINGS_STATUS_BADGE_CLASS}>本地内容记忆</span>
@@ -45,7 +45,7 @@ export function ContentSnapshotControls() {
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存网页内容索引</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>保存标题、摘要和链接信息。</span>
+          <span className={AI_SETTINGS_SECONDARY_CLASS}>提取标题、页面摘要及链接关键信息。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           {state.loading ? (
@@ -65,7 +65,7 @@ export function ContentSnapshotControls() {
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存完整正文</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>正文纳入本地搜索，仅保存在本机。</span>
+          <span className={AI_SETTINGS_SECONDARY_CLASS}>将网页正文纳入本地离线检索，数据严格保留在本地。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           {state.loading ? (

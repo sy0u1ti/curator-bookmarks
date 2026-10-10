@@ -33,11 +33,25 @@ const DARK_BACKGROUND_MASK_OVERLAY_STOPS = {
   bottom: 50
 } as const
 
-const LEGACY_BACKGROUND_MASK_BASE_COLOR_BY_STYLE: Record<LegacyBackgroundMaskStyle, string> = {
-  dark: 'rgba(0, 0, 0, 0.18)',
-  frosted: 'rgba(18, 18, 20, 0.1)',
-  light: 'rgba(255, 255, 255, 0.075)',
-  noise: 'rgba(0, 0, 0, 0.14)'
+export const BACKGROUND_MASK_META: Record<BackgroundMaskStyle, {
+  label: string
+  description: string
+  sizeLabel?: string
+  spacingLabel?: string
+}> = {
+  dark: { label: '深色渐变', description: '压暗上下边缘，保留画面中心的细节。' },
+  frosted: { label: '磨砂玻璃', description: '降低背景饱和度，配合模糊获得柔和的磨砂质感。' },
+  noise: { label: '胶片噪点', description: '细腻的胶片噪点与暗色遮罩，可独立调整背景模糊。' },
+  light: { label: '柔光渐变', description: '为背景叠加柔和白光；浅色壁纸建议改用深色渐变。' },
+  grain: { label: '胶片颗粒', description: '保留原图细节，叠加细密颗粒。' },
+  halftone: { label: '单色网点', description: '用明暗网点重绘背景，形成单色印刷效果。', sizeLabel: '网点大小', spacingLabel: '网点间距' },
+  ascii: { label: 'ASCII 字符', description: '用彩色字符重绘背景；加大间距可让字符更清晰。', sizeLabel: '字符大小', spacingLabel: '字符间距' },
+  'paper-texture': { label: '纸张纹理', description: '在原图上添加纸纤维与轻微褶皱。', sizeLabel: '纤维大小', spacingLabel: '褶皱大小' },
+  'fluted-glass': { label: '条纹玻璃', description: '沿竖向条纹折射背景，保留原图色彩。', sizeLabel: '条纹宽度', spacingLabel: '条纹拉伸' },
+  water: { label: '水面折射', description: '以缓慢流动的水纹折射背景。', sizeLabel: '水纹大小', spacingLabel: '水纹层次' },
+  'image-dithering': { label: '图像抖动', description: '将颜色转成像素色阶，呈现复古点阵质感。', sizeLabel: '像素大小', spacingLabel: '颜色层次' },
+  'halftone-dots': { label: '彩色网点', description: '保留原图颜色的规则印刷网点。', sizeLabel: '网格大小', spacingLabel: '网点半径' },
+  'halftone-cmyk': { label: 'CMYK 网点', description: '青、品红、黄、黑四色套印效果。', sizeLabel: '网格大小', spacingLabel: '油墨柔化' }
 }
 
 const BACKGROUND_MASK_STYLE_SET = new Set<string>(BACKGROUND_MASK_STYLES)
@@ -53,6 +67,7 @@ export function normalizeBackgroundMaskStyle(value: unknown): BackgroundMaskStyl
 }
 
 export function normalizeBackgroundMaskPercentage(value: unknown, fallback = 50): number {
+  if (value == null || typeof value === 'boolean' || String(value).trim() === '') return fallback
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue)) {
     return fallback
@@ -61,6 +76,7 @@ export function normalizeBackgroundMaskPercentage(value: unknown, fallback = 50)
 }
 
 export function normalizeBackgroundMaskBlur(value: unknown, fallback = DEFAULT_BACKGROUND_MASK_BLUR): number {
+  if (value == null || typeof value === 'boolean' || String(value).trim() === '') return fallback
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue)) {
     return fallback
@@ -119,23 +135,27 @@ export function getBackgroundMaskOverlayStops(value: unknown): {
   }
 }
 
-export function getBackgroundMaskOverlayGradient(value: unknown): string {
+export function getBackgroundMaskOverlayGradient(value: unknown, style: unknown = 'dark'): string {
   const stops = getBackgroundMaskOverlayStops(value)
+  if (style === 'light') {
+    return `linear-gradient(180deg, rgb(255 255 255 / ${stops.top}%) 0%, rgb(255 255 255 / ${stops.mid}%) 42%, rgb(255 255 255 / ${stops.bottom}%) 100%)`
+  }
   return `linear-gradient(180deg, rgb(0 0 0 / ${stops.top}%) 0%, rgb(0 0 0 / ${stops.mid}%) 42%, rgb(0 0 0 / ${stops.bottom}%) 100%)`
 }
 
-export function getBackgroundMaskBaseColor(value: unknown): string {
-  return isLegacyBackgroundMaskStyle(value)
-    ? LEGACY_BACKGROUND_MASK_BASE_COLOR_BY_STYLE[value]
-    : 'transparent'
+export function getBackgroundMaskBaseColor(value: unknown, overlay: unknown = DEFAULT_BACKGROUND_MASK_OVERLAY): string {
+  if (value !== 'frosted') return 'transparent'
+  return `rgb(30 34 40 / ${normalizeBackgroundMaskPercentage(overlay) * 0.16}%)`
 }
 
 export function getBackgroundMaskBackdropFilter(style: unknown, blur: unknown): string {
   if (!isLegacyBackgroundMaskStyle(style)) {
     return 'none'
   }
-  const effectiveBlur = Math.min(8, normalizeBackgroundMaskBlur(blur) / 3)
-  return `blur(${Number(effectiveBlur.toFixed(4))}px) saturate(1.02) brightness(0.98)`
+  const effectiveBlur = normalizeBackgroundMaskBlur(blur)
+  const filter = effectiveBlur > 0 ? `blur(${effectiveBlur}px)` : ''
+  if (style === 'frosted') return `${filter} saturate(0.65)`.trim()
+  return filter || 'none'
 }
 
 function getBackgroundMaskOverlayStop(base: number, strength: number): number {

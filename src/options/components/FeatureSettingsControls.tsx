@@ -2,6 +2,8 @@ import { AiProviderCard } from '../../ui/ai/AiProviderCard'
 import { SwitchControl } from '../../ui/base/Switch'
 import { Popover } from '../../ui/base/Popover'
 import { Button } from '../../ui/base/Button'
+import { Select } from '../../ui/base/Select'
+import type { InboxWorkflowMode } from '../../shared/inbox-workflow'
 import { Icon } from '../../ui/icons/Icon'
 import {
   AI_SETTINGS_BODY_CLASS,
@@ -25,13 +27,11 @@ import {
 } from './ai-settings-card-classes.js'
 import { handleFeatureSettingsChange } from '../options-controller'
 import { useFeatureSettingsControlsState } from './feature-settings-store.js'
-import type { FeatureSettingKey, FeatureSwitchItemState } from './feature-settings-types.js'
+import type { FeatureSwitchItemState, FeatureSettingsControlsState } from './feature-settings-types.js'
 
 const FEATURE_SETTINGS_LOADING_ROWS = [
-  { key: 'autoAnalyzeBookmarks', label: '自动分析', status: true },
-  { key: 'allowRemoteParsing', label: '开启 Jina Reader 远程解析 URL', status: true },
-  { key: 'autoMoveToRecommendedFolder', label: '自动移动到推荐文件夹', status: true },
-  { key: 'tagOnlyNoAutoMove', label: '只打标签，不自动移动', status: false }
+  { key: 'autoAnalyzeBookmarks', label: '自动分析', status: true, description: '对普通新增书签自动分析，高置信时可能改名、移动；Inbox 使用下方独立设置。' },
+  { key: 'allowRemoteParsing', label: '网页内容辅助解析', status: true, description: 'AI 分析时使用 Jina Reader 获取网页内容。' }
 ] as const
 
 export function FeatureSettingsControls() {
@@ -53,7 +53,38 @@ export function FeatureSettingsControls() {
         : state.switches.map((item) => (
             <FeatureSwitchRow item={item} key={item.key} />
           ))}
+      <InboxWorkflowControl state={state.loading ? undefined : state.inboxWorkflow} />
     </AiProviderCard>
+  )
+}
+
+function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['inboxWorkflow'] }) {
+  return (
+    <div className="grid gap-3 px-4 py-4" aria-hidden={!state || undefined}>
+      <div>
+        <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>待整理 · 快捷键收藏后</h3>
+        <p className="mt-1 text-xs leading-relaxed text-ds-text-secondary">适用于快捷键一键收藏，书签存入待整理箱后执行所选整理策略。</p>
+      </div>
+      {state ? (
+        <Select
+          ariaLabel="Inbox 收藏后的整理方式"
+          value={state.value}
+          disabled={state.disabled}
+          options={[
+            { value: 'capture', label: '只收藏，暂不分析' },
+            { value: 'move', label: '生成标签，高置信时自动移动' },
+            { value: 'tags', label: '只生成标签和摘要，保留在 Inbox' },
+            { value: 'keep', label: '生成整理建议，由我决定是否移动' }
+          ]}
+          onValueChange={value => {
+            if (value) handleFeatureSettingsChange({ key: 'inboxWorkflow', value: value as InboxWorkflowMode })
+          }}
+        />
+      ) : <span className="block h-9 rounded-md bg-ds-surface-2" />}
+      <p role={state ? 'status' : undefined} className="m-0 text-xs leading-relaxed text-ds-text-secondary">
+        {state?.status || 'AI 配置可用时执行；分析失败或置信度不足时保留在 Inbox。'}
+      </p>
+    </div>
   )
 }
 
@@ -69,6 +100,7 @@ function FeatureSwitchLoadingRow({
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}<span className="ml-1 inline-block size-8 align-middle" aria-hidden="true" /></strong>
           {item.status ? <span className={AI_SETTINGS_LOADING_BADGE_CLASS} /> : null}
         </div>
+        <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>
       </div>
       <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
         <span className={AI_SETTINGS_LOADING_SWITCH_CLASS} />
@@ -93,6 +125,7 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
             </span>
           ) : null}
         </div>
+        {item.description && <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>}
       </div>
       <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
         <SwitchControl
@@ -103,7 +136,7 @@ function FeatureSwitchRow({ item }: { item: FeatureSwitchItemState }) {
           thumbClassName={AI_SETTINGS_SWITCH_THUMB_CLASS}
           onCheckedChange={(checked) => handleFeatureSettingsChange({
             checked,
-            key: item.key as FeatureSettingKey
+            key: item.key
           })}
           unstyled
         />

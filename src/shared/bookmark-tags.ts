@@ -499,10 +499,6 @@ export async function clearBookmarkTagIndex(): Promise<void> {
   })
 }
 
-export async function upsertBookmarkTagRecord(record: BookmarkTagRecord): Promise<BookmarkTagIndex> {
-  return upsertBookmarkTagRecords([record])
-}
-
 export async function upsertBookmarkTagRecords(
   records: BookmarkTagRecord[]
 ): Promise<BookmarkTagIndex> {
@@ -691,34 +687,6 @@ export async function clearManualBookmarkTags(bookmarkId: unknown): Promise<Book
     } = existingRecord
     const nextRecord = normalizeBookmarkTagRecord({
       ...recordWithoutManualTags,
-      updatedAt: Date.now()
-    })
-    const nextRecords = { ...current.records }
-    if (hasUsefulBookmarkTagData(nextRecord)) {
-      nextRecords[id] = nextRecord
-    } else {
-      delete nextRecords[id]
-    }
-
-    return {
-      version: BOOKMARK_TAG_INDEX_VERSION,
-      updatedAt: Date.now(),
-      records: nextRecords
-    }
-  })
-}
-
-export async function clearAiBookmarkTags(bookmarkId: unknown): Promise<BookmarkTagIndex> {
-  const id = cleanText(bookmarkId)
-  return updateBookmarkTagIndex((current) => {
-    const existingRecord = id ? current.records[id] : null
-    if (!id || !existingRecord) {
-      return current
-    }
-
-    const nextRecord = normalizeBookmarkTagRecord({
-      ...existingRecord,
-      tags: [],
       updatedAt: Date.now()
     })
     const nextRecords = { ...current.records }

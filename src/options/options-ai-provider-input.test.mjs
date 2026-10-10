@@ -24,7 +24,7 @@ try {
   })
   const extensionId = new URL(worker.url()).host
   const page = await context.newPage()
-  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, {
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#ai-settings`, {
     waitUntil: 'domcontentloaded'
   })
 

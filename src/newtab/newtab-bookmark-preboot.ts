@@ -324,7 +324,7 @@ export function scheduleNewtabBookmarkPrebootHandoff(
     removePrebootAfterSurfaceHandoff(result)
   }
 
-  const freezeTitleGuard = () => {
+  const freezeTitleGuard = (result: 'aligned' | 'timeout' = 'timeout') => {
     const cleanup = transferNewtabBookmarkPrebootTitles(root)
     if (!cleanup) {
       finish('timeout')
@@ -334,7 +334,7 @@ export function scheduleNewtabBookmarkPrebootHandoff(
     finished = true
     cancelScheduledSample()
     frozenTitleCleanup = cleanup
-    removePrebootAfterSurfaceHandoff('timeout', () => {
+    removePrebootAfterSurfaceHandoff(result, () => {
       window.addEventListener('resize', clearFrozenTitleTransfer, { once: true })
       const liveSections = document.querySelector<HTMLElement>('.bookmark-folder-sections')
       if (liveSections) {
@@ -406,6 +406,16 @@ export function scheduleNewtabBookmarkPrebootHandoff(
 
     if (alignedFrames >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES) {
       finish('aligned')
+      return
+    }
+
+    // Nothing has painted yet while glass is prepared. Transfer the cached
+    // title baseline as soon as card geometry matches, rather than holding the
+    // entire page for the font guard's multi-second timeout.
+    if (document.documentElement.dataset.newtabGlassStartup === 'pending' &&
+      tileAlignedFrames >= NEWTAB_BOOKMARK_PREBOOT_HANDOFF_STABLE_FRAMES) {
+      if (!titleGuardActive) startTitleGuard(now)
+      freezeTitleGuard('aligned')
       return
     }
 
@@ -875,7 +885,10 @@ function collectNewtabBookmarkPrebootItemRects(
     if (!bookmarkId || rect.width <= 0 || rect.height <= 0) {
       continue
     }
-    const titleElement = tileElement.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
+    // A fast startup may already be painting the transferred baseline while
+    // the source title waits for its font. Cache what is actually on screen.
+    const titleElement = tileElement.querySelector<HTMLElement>('.newtab-bookmark-frozen-title') ??
+      tileElement.querySelector<HTMLElement>('.bookmark-title:not([hidden])')
     const titleRect = titleElement?.getBoundingClientRect()
     itemRects.set(bookmarkId, {
       height: roundPrebootLength(rect.height),
@@ -1340,7 +1353,7 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   /* This script paints before the app stylesheet is available, so mirror the
      resting bookmark material here instead of letting hydration add the blur. */
   --preboot-card-bg: var(--newtab-glass-bg-fill, rgba(0, 0, 0, 0.13));
-  --preboot-card-border: rgba(255, 255, 255, 0.10);
+  --preboot-card-border: var(--newtab-glass-stroke, rgba(255, 255, 255, 0.18));
   --preboot-card-filter: blur(var(--newtab-glass-background-blur, 12px));
   position: fixed;
   inset: 0;
@@ -1440,7 +1453,8 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   border: 1px solid var(--preboot-card-border);
   border-radius: 8px;
   background: var(--preboot-card-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.052);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16),
+    var(--newtab-glass-edge-shadow, inset 0 0 0 0.5px rgba(255, 255, 255, 0.20), inset 0 0.5px 0 rgba(255, 255, 255, 0.26), inset 0 -0.5px 0 rgba(255, 255, 255, 0.10));
   -webkit-backdrop-filter: var(--preboot-card-filter);
   backdrop-filter: var(--preboot-card-filter);
   transition: none;

@@ -668,6 +668,11 @@ async function verifyNarrowAndReducedMotionDrawer(page) {
     focusables.at(-1)?.focus()
   })
   await page.keyboard.press('Tab')
+  // Tab can land on the focus manager's guard span first; it redirects focus
+  // back into the modal on a later task, so wait for the settled state.
+  await page
+    .waitForFunction(() => Boolean(document.activeElement?.closest('.settings-drawer-panel')), undefined, { timeout: 2000 })
+    .catch(() => {})
   assert.equal(
     await page.evaluate(() => Boolean(document.activeElement?.closest('.settings-drawer-panel'))),
     true,
@@ -1200,6 +1205,114 @@ async function verifyPopupBookmarkReorder(page, seeded, context) {
   )
 }
 
+async function verifyOptionsDisclosureIndicator(page, extensionId) {
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#inbox`, { waitUntil: 'domcontentloaded' })
+  const sidebar = page.locator('aside[aria-label="设置导航"]')
+  const trigger = sidebar.getByRole('button', { name: '可用性管理', exact: true })
+  const waitForSelection = () => page.waitForFunction(() => {
+    const sidebar = document.querySelector('aside[aria-label="设置导航"]')
+    const indicator = sidebar?.querySelector(':scope > .options-nav-active-indicator')
+    const active = sidebar?.querySelector('.options-nav-link[aria-current="page"]')
+    return indicator?.dataset.ready === 'true' && active &&
+      Math.abs(indicator.getBoundingClientRect().y - active.getBoundingClientRect().y) < 0.5 &&
+      !indicator.getAnimations().some((animation) => animation.playState === 'running')
+  })
+  await waitForSelection()
+  await trigger.focus()
+
+  const recordDisclosure = (toggleTimes) => sidebar.evaluate((element, times) => new Promise((resolve) => {
+    const trigger = element.querySelector('.t-acc-head')
+    const panel = element.querySelector('.t-acc-panel')
+    const inner = panel.querySelector('.t-acc-panel-inner')
+    const active = element.querySelector('.options-nav-link[aria-current="page"]')
+    const indicator = element.querySelector(':scope > .options-nav-active-indicator')
+    const samples = []
+    const sample = () => {
+      const row = active.getBoundingClientRect()
+      const highlight = indicator.getBoundingClientRect()
+      const clip = inner.getBoundingClientRect()
+      const style = getComputedStyle(indicator)
+      const inset = style.clipPath.match(/^inset\(([^)]+)\)$/)?.[1].split(/\s+/) || ['0px']
+      const pixels = (value) => Number.parseFloat(value) * (value.endsWith('%') ? highlight.height / 100 : 1)
+      const top = pixels(inset[0])
+      const bottom = pixels(inset[2] || inset[0])
+      const painted = style.visibility !== 'hidden' && Number(style.opacity) > 0.01 &&
+        highlight.height - top - bottom > 0.5
+      samples.push({
+        error: row.height > 0 ? Math.abs(row.y - highlight.y) : 0,
+        overflow: panel.contains(active) && painted ? Math.max(0, highlight.bottom - bottom - clip.bottom) : 0,
+        panelHeight: clip.height
+      })
+    }
+    // ResizeObserver runs after layout and before paint, so this records the
+    // geometry actually presented during the disclosure rather than its endpoint.
+    const observer = new ResizeObserver(sample)
+    observer.observe(panel)
+    const startedAt = performance.now()
+    let nextToggle = 0
+    const tick = (now) => {
+      while (nextToggle < times.length && now - startedAt >= times[nextToggle]) {
+        trigger.click()
+        nextToggle += 1
+      }
+      if (now - startedAt < times.at(-1) + 650) {
+        requestAnimationFrame(tick)
+        return
+      }
+      sample()
+      observer.disconnect()
+      resolve({
+        samples: samples.length,
+        maxError: Math.max(...samples.map((value) => value.error)),
+        maxOverflow: Math.max(...samples.map((value) => value.overflow)),
+        last: samples.at(-1),
+        open: trigger.getAttribute('aria-expanded')
+      })
+    }
+    requestAnimationFrame(tick)
+  }), toggleTimes)
+
+  for (const [label, times, open] of [
+    ['expand', [0], 'true'],
+    ['collapse', [0], 'false'],
+    ['rapid reversal', [0, 70, 120], 'true']
+  ]) {
+    const result = await recordDisclosure(times)
+    assert.ok(result.samples >= 3, `${label} should capture intermediate layout frames`)
+    assert.ok(result.maxError <= 1, `The selected row and highlight must move together during ${label}: ${JSON.stringify(result)}`)
+    assert.equal(result.open, open)
+  }
+
+  await sidebar.locator('a[data-options-section="availability"]').click()
+  await waitForSelection()
+  await trigger.focus()
+  const collapsedChild = await recordDisclosure([0])
+  assert.ok(collapsedChild.maxOverflow <= 1, `A collapsing child highlight must not spill onto the following rows: ${JSON.stringify(collapsedChild)}`)
+  await captureVisual(page, 'options-collapsed-active-child')
+  const reopenedChild = await recordDisclosure([0])
+  assert.ok(reopenedChild.maxOverflow <= 1, `The child highlight must reveal within the opening list: ${JSON.stringify(reopenedChild)}`)
+  await waitForSelection()
+  assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, 'Disclosure motion must preserve keyboard focus')
+
+  await sidebar.locator('a[data-options-section="inbox"]').click()
+  const overlappingMotion = await sidebar.evaluate(async (element) => {
+    const indicator = element.querySelector(':scope > .options-nav-active-indicator')
+    const animation = indicator.getAnimations().find((animation) => animation.transitionProperty === 'transform')
+    if (!animation) throw new Error('Selecting another section should start a highlight slide')
+    const duration = animation.effect.getTiming().duration
+    element.querySelector('.t-acc-head').click()
+    try {
+      await animation.finished
+      return { duration, interrupted: false }
+    } catch {
+      return { duration, interrupted: true }
+    }
+  })
+  assert.equal(overlappingMotion.duration, 500, 'Section selection should use the requested slow slide')
+  assert.equal(overlappingMotion.interrupted, false, 'Disclosure layout must not restart an in-flight selection slide')
+  await waitForSelection()
+}
+
 async function verifyOptionsChrome(page, extensionId) {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
@@ -1239,6 +1352,8 @@ async function verifyOptionsChrome(page, extensionId) {
     const indicator = sidebar?.querySelector(':scope > .options-nav-active-indicator')?.getBoundingClientRect()
     return active && indicator && Math.abs(active.y - indicator.y) <= 1
   })
+
+  await verifyOptionsDisclosureIndicator(page, extensionId)
 
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
@@ -1300,7 +1415,7 @@ async function verifyOptionsChrome(page, extensionId) {
   await page.setViewportSize({ width: 1280, height: 800 })
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
-  const checkedSwitch = page.getByRole('switch', { name: '自动移动到推荐文件夹' })
+  const checkedSwitch = page.getByRole('switch', { name: '保存完整正文' })
   await checkedSwitch.waitFor({ state: 'visible' })
   const reducedSwitchGeometry = await checkedSwitch.evaluate((control) => {
     const thumb = control.querySelector(':scope > span')?.getBoundingClientRect()
@@ -1334,7 +1449,7 @@ async function verifyOptions(page, extensionId) {
   assert.ok(navLabels.every((label) => !label.trim().startsWith('-')), 'Options navigation should not use decorative terminal prefixes')
   await captureVisual(page, 'options-general', { fullPage: true })
 
-  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#ai-settings`, { waitUntil: 'domcontentloaded' })
   const advancedSettings = page.locator('#ai-advanced-settings')
   await advancedSettings.waitFor({ state: 'visible', timeout: 20_000 })
   const advancedTrigger = advancedSettings.locator('.t-acc-head')
@@ -1568,7 +1683,7 @@ async function verifyOptionsRefreshStability(page, worker, extensionId) {
   await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
   await page.waitForFunction(() => {
     const autoAnalyze = document.querySelector('[role="switch"][aria-label="自动分析"]')
-    const tagOnly = document.querySelector('[role="switch"][aria-label="只打标签，不自动移动"]')
+    const tagOnly = document.querySelector('[role="combobox"][aria-label="Inbox 收藏后的整理方式"]')
     const contentIndex = document.querySelector('[role="switch"][aria-label="保存网页内容索引"]')
     const fullText = document.querySelector('[role="switch"][aria-label="保存完整正文"]')
     const shortcutHeading = [...document.querySelectorAll('h2')]
@@ -1586,7 +1701,7 @@ async function verifyOptionsRefreshStability(page, worker, extensionId) {
       shortcutCard = shortcutCard.parentElement
     }
     return autoAnalyze?.getAttribute('aria-checked') === 'true' &&
-      tagOnly?.getAttribute('aria-checked') === 'true' &&
+      tagOnly?.textContent.includes('只生成标签和摘要') &&
       contentIndex?.getAttribute('aria-checked') === 'true' &&
       fullText?.getAttribute('aria-checked') === 'true' &&
       (shortcutCard?.querySelectorAll('strong').length || 0) >= 4
@@ -1989,7 +2104,7 @@ async function verifyOptionsScopePickers(page, extensionId) {
 
 async function verifySharedOverlayMotion(page, extensionId) {
   await page.setViewportSize({ width: 1180, height: 780 })
-  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#general`, { waitUntil: 'domcontentloaded' })
+  await page.goto(`chrome-extension://${extensionId}/src/options/options.html#ai-settings`, { waitUntil: 'domcontentloaded' })
   const trigger = page.getByRole('button', { name: '选择 AI 模型', exact: true })
   await trigger.waitFor({ state: 'visible' })
   await page.waitForFunction(() => {

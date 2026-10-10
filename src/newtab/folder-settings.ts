@@ -4,8 +4,6 @@ export const DEFAULT_NEW_TAB_FOLDER_TITLE = '标签页'
 
 export type NewTabBookmarkBrowseMode = 'expanded' | 'navigation'
 
-export const BOOKMARK_BROWSE_MODES: readonly NewTabBookmarkBrowseMode[] = ['expanded', 'navigation']
-
 export interface NewTabFolderSettings {
   selectedFolderIds: string[]
   hideFolderNames: boolean

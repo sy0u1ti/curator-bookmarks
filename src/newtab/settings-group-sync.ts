@@ -24,20 +24,3 @@ export function normalizeSettingsDrawerSection(value: unknown): SettingsDrawerSe
     : 'source'
 }
 
-export function getSettingsGroupControlSyncActions(
-  group: unknown
-): SettingsGroupControlSyncAction[] {
-  switch (normalizeSettingsDrawerSection(group)) {
-    case 'glass':
-      return [] // Glass owns its immediate preview and persistence store.
-    case 'appearance':
-      return ['background', 'featuredBackgroundDisplay', 'icon', 'time']
-    case 'search':
-      return ['search']
-    case 'advanced':
-      return ['general', 'modules']
-    case 'source':
-    default:
-      return ['folder']
-  }
-}

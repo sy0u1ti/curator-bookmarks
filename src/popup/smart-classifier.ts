@@ -10,6 +10,7 @@ import {
 import { normalizeBookmarkTags } from '../shared/bookmark-tags.js'
 import { extractDomain, normalizeText } from '../shared/text.js'
 import { AI_NAMING_CONTENT_FETCH_TIMEOUT_MS } from '../options/shared-options/constants.js'
+import { cleanSmartText, cleanSmartTitle, normalizeSmartConfidence, normalizeSmartError, normalizeSmartTextList } from './smart-text.js'
 
 export const POPUP_SMART_DEFAULT_TIMEOUT_MS = AI_NAMING_CONTENT_FETCH_TIMEOUT_MS
 export const POPUP_JINA_READER_ORIGIN = 'https://r.jina.ai/*'
@@ -551,57 +552,3 @@ function getOriginPermissionPattern(url: string): string {
   }
 }
 
-function cleanSmartTitle(value: unknown, fallbackTitle: string): string {
-  const title = cleanSmartText(value, 90)
-  return title || fallbackTitle
-}
-
-function cleanSmartText(value: unknown, limit = 180): string {
-  const text = String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (text.length <= limit) {
-    return text
-  }
-  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
-}
-
-function normalizeSmartConfidence(value: unknown): number {
-  const numeric = Number(value)
-  if (Number.isFinite(numeric)) {
-    return Math.max(0, Math.min(numeric, 1))
-  }
-  return 0
-}
-
-function normalizeSmartTextList(value: unknown, limit: number, itemLimit: number): string[] {
-  const values = Array.isArray(value)
-    ? value
-    : typeof value === 'string'
-      ? value.split(/[,，、\n]/)
-      : []
-  const seen = new Set()
-  const output = []
-
-  for (const item of values) {
-    const text = cleanSmartText(item, itemLimit)
-    const key = normalizeText(text)
-    if (!text || seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    output.push(text)
-    if (output.length >= limit) {
-      break
-    }
-  }
-
-  return output
-}
-
-function normalizeSmartError(error: unknown): string {
-  if (error instanceof DOMException && error.name === 'AbortError') {
-    return '请求超时，请稍后重试或调大通用设置中的请求超时。'
-  }
-  return error instanceof Error ? error.message : '智能分类失败，请稍后重试。'
-}

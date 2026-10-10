@@ -1,6 +1,7 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
 import { createAutoBackupBeforeDangerousOperation } from '../../shared/backup.js'
-import { createBookmark, getBookmarkTree, moveBookmark, removeBookmarkTree } from '../../shared/bookmarks-api.js'
+import { createBookmark, getBookmarkById, getBookmarkTree, moveBookmark, removeBookmark } from '../../shared/bookmarks-api.js'
+import { createFolderCleanupMutations, type FolderCleanupMutations } from '../../shared/folder-cleanup-mutations.js'
 import type { BookmarkTagIndex } from '../../shared/bookmark-tags.js'
 import { setLocalStorage } from '../../shared/storage.js'
 import {
@@ -29,7 +30,9 @@ interface FolderCleanupCallbacks {
   hydrateAvailabilityCatalog: (options?: {
     preserveResults?: boolean
     analyzeFolderCleanup?: boolean
+    throwOnError?: boolean
   }) => Promise<void>
+  claimAvailabilityMutationLock: () => Promise<(() => void) | null>
   renderAvailabilitySection: () => void
 }
 
@@ -85,7 +88,8 @@ async function runFolderCleanupAnalysis(
     if (options.refreshCatalog) {
       await callbacks.hydrateAvailabilityCatalog({
         preserveResults: true,
-        analyzeFolderCleanup: false
+        analyzeFolderCleanup: false,
+        throwOnError: true
       })
       folderCleanupState.executedSuggestionIds.clear()
     }
@@ -184,31 +188,47 @@ export async function executeFolderCleanupAction(suggestionId, callbacks: Folder
     return
   }
 
-  const confirmed = await callbacks.confirm({
-    title: getConfirmTitle(suggestion),
-    copy: getConfirmCopy(suggestion),
-    confirmLabel: getConfirmLabel(suggestion.operation),
-    tone: suggestion.severity === 'danger' ? 'danger' : 'warning',
-    label: '文件夹清理'
-  })
-  if (!confirmed) {
-    return
+  const mutations = createFolderCleanupMutations(folderCleanupState.rootNode, suggestion)
+  folderCleanupState.executing = true
+  renderFolderCleanupSection(callbacks)
+  try {
+    const confirmed = await callbacks.confirm({
+      title: getConfirmTitle(suggestion),
+      copy: getConfirmCopy(suggestion),
+      confirmLabel: getConfirmLabel(suggestion.operation),
+      tone: suggestion.severity === 'danger' ? 'danger' : 'warning',
+      label: '文件夹清理'
+    })
+    if (!confirmed) return
+    const release = await callbacks.claimAvailabilityMutationLock()
+    if (!release) {
+      folderCleanupState.statusMessage = availabilityState.lastError || '书签正在被其他页面使用，请稍后重试。'
+      return
+    }
+    try { await executeFolderCleanupSuggestion(suggestion, callbacks, mutations) }
+    finally { release() }
+  } catch (error) {
+    folderCleanupState.statusMessage = error instanceof Error ? error.message : '清理失败，请重试。'
+  } finally {
+    folderCleanupState.executing = false
+    renderFolderCleanupSection(callbacks)
   }
-
-  await executeFolderCleanupSuggestion(suggestion, callbacks)
 }
 
 async function executeFolderCleanupSuggestion(
   suggestion: FolderCleanupSuggestion,
-  callbacks: FolderCleanupCallbacks
+  callbacks: FolderCleanupCallbacks,
+  mutations: FolderCleanupMutations
 ) {
   folderCleanupState.executing = true
   folderCleanupState.statusMessage = '正在执行清理操作…'
   renderFolderCleanupSection(callbacks)
 
   let splitUndo: FolderCleanupSplitUndo | null = null
+  let completed = false
 
   try {
+    await mutations.validate()
     await createAutoBackupBeforeDangerousOperation({
       kind: OPERATION_BACKUP_KIND[suggestion.operation],
       source: 'options',
@@ -218,14 +238,15 @@ async function executeFolderCleanupSuggestion(
       estimatedChangeCount: Math.max(suggestion.bookmarkIds.length, suggestion.folderIds.length)
     })
 
+    await mutations.validate()
     if (suggestion.operation === 'delete') {
-      await deleteFolders(suggestion.folderIds)
+      await mutations.removeFolders(suggestion.folderIds)
     } else if (suggestion.operation === 'move') {
-      await moveBookmarksAndRemoveFolders(suggestion)
+      await moveBookmarksAndRemoveFolders(suggestion, mutations)
     } else if (suggestion.operation === 'merge') {
-      await mergeFolders(suggestion)
+      await mergeFolders(suggestion, mutations)
     } else if (suggestion.operation === 'split') {
-      splitUndo = await splitLargeFolder(suggestion)
+      splitUndo = await splitLargeFolder(suggestion, mutations)
     }
 
     if (splitUndo) {
@@ -235,7 +256,9 @@ async function executeFolderCleanupSuggestion(
     folderCleanupState.statusMessage = splitUndo
       ? '拆分已完成，已记录本次移动；可在建议区撤销本次拆分。'
       : '清理操作已完成。'
-    await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+    completed = true
+    await persistFolderCleanupState()
+    await callbacks.hydrateAvailabilityCatalog({ preserveResults: true, throwOnError: true })
     if (folderCleanupState.rootNode) {
       folderCleanupState.suggestions = analyzeFolderCleanup(folderCleanupState.rootNode, {
         tagIndex: aiNamingState.tagIndex as BookmarkTagIndex,
@@ -245,9 +268,11 @@ async function executeFolderCleanupSuggestion(
       await persistFolderCleanupState()
     }
   } catch (error) {
-    folderCleanupState.statusMessage = error instanceof Error
-      ? `清理失败：${error.message}`
-      : '清理失败，请刷新页面后重试。'
+    if (!completed) await callbacks.hydrateAvailabilityCatalog({ preserveResults: true }).catch(() => undefined)
+    const detail = error instanceof Error ? error.message : '请重新读取目录。'
+    folderCleanupState.statusMessage = completed
+      ? `清理已完成，但记录保存或目录刷新失败：${detail}`
+      : `清理中断：${detail} 已完成的移动或删除会保留，请重新扫描后核对。`
   } finally {
     folderCleanupState.executing = false
     callbacks.renderAvailabilitySection()
@@ -255,37 +280,37 @@ async function executeFolderCleanupSuggestion(
 }
 
 async function deleteFolders(folderIds: string[]) {
-  await runFolderCleanupSequentially(sortFolderIdsDeepFirst(folderIds), async (folderId) => {
-    await removeBookmarkTree(folderId)
+  await runFolderCleanupSequentially(folderIds, async (folderId) => {
+    await removeBookmark(folderId)
   })
 }
 
-async function moveBookmarksAndRemoveFolders(suggestion: FolderCleanupSuggestion) {
+async function moveBookmarksAndRemoveFolders(suggestion: FolderCleanupSuggestion, mutations: FolderCleanupMutations) {
   const targetFolderId = String(suggestion.targetFolderId || '').trim()
   if (!targetFolderId) {
     throw new Error('缺少移动目标文件夹。')
   }
 
-  await runFolderCleanupSequentially(suggestion.bookmarkIds, async (bookmarkId) => {
-    await moveBookmark(bookmarkId, targetFolderId)
+  await runFolderCleanupSequentially([...new Set(suggestion.bookmarkIds)], async (bookmarkId) => {
+    await mutations.move(bookmarkId, targetFolderId)
   })
-  await deleteFolders(suggestion.folderIds)
+  await mutations.removeFolders(suggestion.folderIds)
 }
 
-async function mergeFolders(suggestion: FolderCleanupSuggestion) {
+async function mergeFolders(suggestion: FolderCleanupSuggestion, mutations: FolderCleanupMutations) {
   const targetFolderId = String(suggestion.targetFolderId || '').trim()
   if (!targetFolderId) {
     throw new Error('缺少合并目标文件夹。')
   }
 
   const sourceFolderIds = suggestion.folderIds.filter((folderId) => folderId !== targetFolderId)
-  await runFolderCleanupSequentially(suggestion.bookmarkIds, async (bookmarkId) => {
-    await moveBookmark(bookmarkId, targetFolderId)
+  await runFolderCleanupSequentially([...new Set(suggestion.bookmarkIds)], async (bookmarkId) => {
+    await mutations.move(bookmarkId, targetFolderId)
   })
-  await deleteFolders(sourceFolderIds)
+  await mutations.removeFolders(sourceFolderIds)
 }
 
-async function splitLargeFolder(suggestion: FolderCleanupSuggestion) {
+async function splitLargeFolder(suggestion: FolderCleanupSuggestion, mutations: FolderCleanupMutations) {
   const targetFolderId = String(suggestion.targetFolderId || suggestion.primaryFolderId || '').trim()
   if (!targetFolderId || !suggestion.splitGroups?.length) {
     throw new Error('缺少拆分目标。')
@@ -319,7 +344,7 @@ async function splitLargeFolder(suggestion: FolderCleanupSuggestion) {
     return group.bookmarkIds.map((bookmarkId) => ({ bookmarkId, folderId }))
   })
   await runFolderCleanupSequentially(splitMoves, async ({ bookmarkId, folderId }) => {
-    await moveBookmark(bookmarkId, folderId)
+    await mutations.move(bookmarkId, folderId)
   })
 
   return splitUndo
@@ -335,21 +360,33 @@ async function handleSplitUndoClick(callbacks: FolderCleanupCallbacks) {
     return
   }
 
-  const confirmed = await callbacks.confirm({
-    title: '撤销本次拆分？',
-    copy: [
-      `将把 ${splitUndo.moves.length} 个书签移回拆分前的位置，并删除本次新建的 ${splitUndo.createdFolderIds.length} 个拆分文件夹。`,
-      '撤销前会先调用自动备份 hook；如果新建文件夹里已有额外内容，会保留该文件夹避免误删。'
-    ].join('\n'),
-    confirmLabel: '撤销本次拆分',
-    tone: 'warning',
-    label: '文件夹清理'
-  })
-  if (!confirmed) {
-    return
+  folderCleanupState.executing = true
+  renderFolderCleanupSection(callbacks)
+  try {
+    const confirmed = await callbacks.confirm({
+      title: '撤销本次拆分？',
+      copy: [
+        `将把仍在拆分目录中的书签移回原位置，并清理本次新建的 ${splitUndo.createdFolderIds.length} 个空文件夹。`,
+        '已删除或手动移走的书签会跳过。撤销前会自动备份；新建文件夹里的额外内容会保留。'
+      ].join('\n'),
+      confirmLabel: '撤销本次拆分',
+      tone: 'warning',
+      label: '文件夹清理'
+    })
+    if (!confirmed) return
+    const release = await callbacks.claimAvailabilityMutationLock()
+    if (!release) {
+      folderCleanupState.statusMessage = availabilityState.lastError || '书签正在被其他页面使用，请稍后重试。'
+      return
+    }
+    try { await undoFolderCleanupSplit(splitUndo, callbacks) }
+    finally { release() }
+  } catch (error) {
+    folderCleanupState.statusMessage = error instanceof Error ? error.message : '撤销拆分失败，请重试。'
+  } finally {
+    folderCleanupState.executing = false
+    renderFolderCleanupSection(callbacks)
   }
-
-  await undoFolderCleanupSplit(splitUndo, callbacks)
 }
 
 async function undoFolderCleanupSplit(
@@ -359,9 +396,9 @@ async function undoFolderCleanupSplit(
   folderCleanupState.executing = true
   folderCleanupState.statusMessage = '正在撤销本次拆分…'
   renderFolderCleanupSection(callbacks)
-
+  let completed = false
   try {
-    const retainedFolderCount = await createAutoBackupBeforeDangerousOperation({
+    await createAutoBackupBeforeDangerousOperation({
       kind: 'folder-cleanup-move',
       source: 'options',
       reason: `撤销拆分：${splitUndo.title}`,
@@ -369,17 +406,22 @@ async function undoFolderCleanupSplit(
       targetFolderIds: [splitUndo.targetFolderId, ...splitUndo.createdFolderIds].filter(Boolean),
       estimatedChangeCount: splitUndo.moves.length + splitUndo.createdFolderIds.length
     })
-      .then(() => runFolderCleanupSequentially(sortSplitUndoMoves(splitUndo.moves), async (move) => {
-        await restoreSplitUndoMove(move)
-      }))
-      .then(() => removeEmptySplitFolders(splitUndo.createdFolderIds))
+    let skipped = 0
+    await runFolderCleanupSequentially(sortSplitUndoMoves(splitUndo.moves), async (move) => {
+      if (!await restoreSplitUndoMove(move)) skipped++
+    })
+    const retainedFolderCount = await removeEmptySplitFolders(splitUndo.createdFolderIds)
     folderCleanupState.lastSplitUndo = null
     folderCleanupState.executedSuggestionIds.delete(splitUndo.suggestionId)
-    folderCleanupState.statusMessage = retainedFolderCount
-      ? `已撤销本次拆分；${retainedFolderCount} 个新建文件夹仍有额外内容，已保留。`
-      : '已撤销本次拆分，书签已移回拆分前位置。'
+    folderCleanupState.statusMessage = [
+      `已撤销本次拆分，恢复 ${splitUndo.moves.length - skipped} 个书签。`,
+      skipped ? `已跳过 ${skipped} 个已删除或手动移走的书签。` : '',
+      retainedFolderCount ? `${retainedFolderCount} 个新建文件夹仍有额外内容，已保留。` : ''
+    ].filter(Boolean).join(' ')
 
-    await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+    completed = true
+    await persistFolderCleanupState()
+    await callbacks.hydrateAvailabilityCatalog({ preserveResults: true, throwOnError: true })
     if (folderCleanupState.rootNode) {
       folderCleanupState.suggestions = analyzeFolderCleanup(folderCleanupState.rootNode, {
         tagIndex: aiNamingState.tagIndex as BookmarkTagIndex,
@@ -389,9 +431,10 @@ async function undoFolderCleanupSplit(
     }
     await persistFolderCleanupState()
   } catch (error) {
-    folderCleanupState.statusMessage = error instanceof Error
-      ? `撤销拆分失败：${error.message}`
-      : '撤销拆分失败，请稍后重试。'
+    const detail = error instanceof Error ? error.message : '请重新读取目录。'
+    folderCleanupState.statusMessage = completed
+      ? `已撤销拆分，但记录保存或目录刷新失败：${detail}`
+      : `撤销拆分中断：${detail} 已移回的书签会保留。`
   } finally {
     folderCleanupState.executing = false
     callbacks.renderAvailabilitySection()
@@ -400,6 +443,8 @@ async function undoFolderCleanupSplit(
 }
 
 async function restoreSplitUndoMove(move: FolderCleanupSplitUndoMove) {
+  const current = await getBookmarkById(move.bookmarkId)
+  if (!current || current.parentId !== move.toFolderId) return false
   if (!move.fromParentId) {
     throw new Error(`书签 ${move.bookmarkId} 缺少原父级，无法撤销。`)
   }
@@ -407,14 +452,15 @@ async function restoreSplitUndoMove(move: FolderCleanupSplitUndoMove) {
   if (Number.isFinite(move.fromIndex)) {
     try {
       await moveBookmark(move.bookmarkId, move.fromParentId, move.fromIndex)
-      return
+      return true
     } catch {
       await moveBookmark(move.bookmarkId, move.fromParentId)
-      return
+      return true
     }
   }
 
   await moveBookmark(move.bookmarkId, move.fromParentId)
+  return true
 }
 
 function sortSplitUndoMoves(moves: FolderCleanupSplitUndoMove[]): FolderCleanupSplitUndoMove[] {
@@ -437,7 +483,7 @@ async function removeEmptySplitFolders(folderIds: string[]): Promise<number> {
       retainedFolderCount += 1
       return
     }
-    await removeBookmarkTree(folderId)
+    await removeBookmark(folderId)
   })
 
   return retainedFolderCount
@@ -545,14 +591,6 @@ function getConfirmCopy(suggestion: FolderCleanupSuggestion): string {
     `涉及 ${suggestion.folderIds.length} 个文件夹、${suggestion.bookmarkIds.length} 个书签。执行前会调用自动备份 hook。`,
     splitUndoCopy
   ].filter(Boolean).join('\n')
-}
-
-function sortFolderIdsDeepFirst(folderIds: string[]): string[] {
-  const depthById = new Map(folderCleanupState.suggestions.flatMap((combineValue, combineIndex, combineArray) => { const combinedFlatValue = ((suggestion) => suggestion.folders)(combineValue); const combinedFlatItems = Array.isArray(combinedFlatValue) ? combinedFlatValue : [combinedFlatValue]; return combinedFlatItems.map((combinedFlatItem) => ((folder) => [folder.id, folder.depth])(combinedFlatItem)) }))
-
-  return folderIds.slice().sort((left, right) => (
-    (depthById.get(right) || 0) - (depthById.get(left) || 0)
-  ))
 }
 
 async function persistFolderCleanupState() {

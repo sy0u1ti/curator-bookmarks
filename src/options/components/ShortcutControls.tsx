@@ -59,7 +59,7 @@ export function ShortcutControls() {
             </span>
             <h2 className={AI_SETTINGS_TITLE_CLASS}>快捷键</h2>
           </div>
-          <p className={SHORTCUT_SUBTITLE_CLASS}>绑定需在 Chrome 扩展快捷键页修改，改完回来点「刷新状态」。</p>
+          <p className={SHORTCUT_SUBTITLE_CLASS}>快捷键绑定须在 Chrome 扩展设置页修改；完成调整后点击「刷新状态」即可同步。</p>
         </div>
         <span className={statusClassName}>
           {state.statusLabel}

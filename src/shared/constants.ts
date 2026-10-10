@@ -1,5 +1,4 @@
 export const BOOKMARKS_BAR_ID = '1'
-export const OTHER_BOOKMARKS_ID = '2'
 export const ROOT_ID = '0'
 
 export const STORAGE_KEYS = {
@@ -25,6 +24,7 @@ export const STORAGE_KEYS = {
   newTabWorkspaceSettings: 'curatorBookmarkNewTabWorkspaceSettings',
   newTabModuleSettings: 'curatorBookmarkNewTabModuleSettings',
   newTabActivity: 'curatorBookmarkNewTabActivity',
+  storageIssue: 'curatorBookmarkStorageIssue',
   popupCommandIntent: 'curatorBookmarkPopupCommandIntent',
   popupPreferences: 'curatorBookmarkPopupPreferences',
   redirectCache: 'curatorBookmarkRedirectCache',
@@ -46,7 +46,6 @@ export const STORAGE_KEYS = {
 } as const
 
 export const BOOKMARK_ADD_HISTORY_LIMIT = 200
-export const RECYCLE_BIN_LIMIT = 200
 export const UNDO_WINDOW_MS = 5000
 export const AUTO_ANALYZE_STATUS_ACTIVE_EXPIRE_MS = 10 * 60 * 1000
 export const AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS = 5 * 60 * 1000

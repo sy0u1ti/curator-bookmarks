@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" class="loading-wallpaper newtab-booting">
+<html lang="zh-CN" class="loading-wallpaper newtab-booting" data-newtab-glass-startup="pending">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -48,6 +48,18 @@
         pointer-events: none;
         transform: translateZ(0);
       }
+
+      /* Keep the interactive layout measurable, then present its
+         decoded glass and content together. Wallpaper remains independently live.
+         This also covers the classic bookmark snapshot before app CSS loads. */
+      html[data-newtab-glass-startup="pending"] :is(.newtab-shell, .settings-trigger-zone, #newtab-bookmark-preboot) {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transition: none !important;
+      }
+      html[data-newtab-glass-startup="pending"] :is(.newtab-shell, .settings-trigger-zone, #newtab-bookmark-preboot) * {
+        visibility: hidden !important;
+      }
     </style>
     <style id="newtab-startup-background-mask-style">
       #newtab-background-mask {
@@ -70,12 +82,8 @@
         opacity: 0;
       }
 
-      @media (prefers-reduced-transparency: reduce) {
-        #newtab-background-mask {
-          -webkit-backdrop-filter: none;
-          backdrop-filter: none;
-        }
-      }
+      /* Wallpaper blur is an explicit readability setting, independent of
+         the operating system's preference for opaque interface surfaces. */
     </style>
   </head>
   <body>

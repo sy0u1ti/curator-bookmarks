@@ -33,7 +33,7 @@ export function ToastList({
   actionClassName,
   className,
   closeClassName,
-  closeLabel = 'Close',
+  closeLabel = '关闭',
   contentClassName,
   descriptionClassName,
   items,
@@ -75,7 +75,7 @@ function ToastListViewport({
   timeout,
   unstyled
 }: Omit<ToastListProps, 'limit'>) {
-  const manager = BaseToast.useToastManager()
+  const manager = BaseToast.useToastManager<ToastItem>()
   const syncedSignaturesRef = useRef<Map<string, string> | null>(null)
   if (syncedSignaturesRef.current === null) {
     syncedSignaturesRef.current = new Map()
@@ -87,6 +87,9 @@ function ToastListViewport({
 
   useLayoutEffect(() => {
     const nextIds = new Set(items.map((item) => item.id))
+    for (const id of syncedSignatures.keys()) {
+      if (!nextIds.has(id)) syncedSignatures.delete(id)
+    }
     for (const toast of manager.toasts) {
       if (!nextIds.has(toast.id) && toast.transitionStatus !== 'ending') {
         manager.close(toast.id)
@@ -94,21 +97,20 @@ function ToastListViewport({
       }
     }
 
-    const toastById = new Map(manager.toasts.map((toast) => [toast.id, toast]))
     for (const item of items) {
       const signature = getToastItemSignature(item)
-      const existingToast = toastById.get(item.id)
-      if (existingToast && syncedSignatures.get(item.id) === signature) {
+      if (syncedSignatures.get(item.id) === signature) {
         continue
       }
 
       manager.add({
         actionProps: item.action
           ? {
-              children: item.actionLabel || 'Action'
+              children: item.actionLabel || '操作'
             }
           : undefined,
         description: item.description,
+        data: item,
         id: item.id,
         priority: item.priority,
         title: item.title,
@@ -120,9 +122,9 @@ function ToastListViewport({
   }, [items, manager, syncedSignatures, timeout])
 
   return (
-    <BaseToast.Viewport className={className}>
+    <BaseToast.Viewport className={className} aria-label="通知">
       {manager.toasts.map((toast) => {
-        const item = itemById.get(toast.id)
+        const item = itemById.get(toast.id) ?? toast.data
 
         return (
           <BaseToast.Root
@@ -133,6 +135,7 @@ function ToastListViewport({
               rootClassName
             )}
             data-toast-id={toast.id}
+            inert={!itemById.has(toast.id) || undefined}
             swipeDirection={[]}
           >
             <BaseToast.Content className={contentClassName}>
@@ -150,6 +153,7 @@ function ToastListViewport({
                   data-toast-id={toast.id}
                 />
                 <BaseToast.Close
+                  aria-label={typeof closeLabel === 'string' ? closeLabel : '关闭通知'}
                   className={unstyled ? closeClassName : cx(
                     'inline-flex h-8 items-center rounded border border-ds-border px-2.5 text-xs',
                     closeClassName

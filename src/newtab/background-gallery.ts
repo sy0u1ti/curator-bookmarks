@@ -353,26 +353,6 @@ export function selectFeaturedBackgroundItem(seed: unknown = Date.now()): Featur
   return items[index] || getDefaultFeaturedBackgroundItem()
 }
 
-export function getFeaturedBackgroundItemsForDate(
-  seed: unknown = Date.now(),
-  count = DAILY_FEATURED_BACKGROUND_OPTION_COUNT
-): FeaturedBackgroundItem[] {
-  const items = getSuitableFeaturedBackgroundItems()
-  const total = items.length
-  if (total <= 0) {
-    return []
-  }
-
-  const normalizedSeed = String(seed || '')
-  const dailyIndex = getDailyFeaturedBackgroundIndex(normalizedSeed, total)
-  const startIndex = dailyIndex ?? Math.abs(hashFeaturedBackgroundSeed(normalizedSeed)) % total
-  const optionCount = Math.min(Math.max(1, Math.floor(count)), total)
-  return Array.from({ length: optionCount }, (_, offset) => {
-    const index = (startIndex + offset) % total
-    return items[index] || getDefaultFeaturedBackgroundItem()
-  })
-}
-
 function getSuitableFeaturedBackgroundItems(): FeaturedBackgroundItem[] {
   return FEATURED_BACKGROUND_ITEMS.filter((item) => isFeaturedBackgroundStyleSuitable({
     title: item.title,
@@ -399,7 +379,7 @@ function getDailyFeaturedBackgroundIndex(seed: string, count: number): number | 
   return Math.floor(timestamp / 86400000) % count
 }
 
-function hashFeaturedBackgroundSeed(seed: string): number {
+export function hashFeaturedBackgroundSeed(seed: string): number {
   let hash = 2166136261
   for (let index = 0; index < seed.length; index += 1) {
     hash ^= seed.charCodeAt(index)

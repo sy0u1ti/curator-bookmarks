@@ -436,18 +436,6 @@ export function combinePageContentContexts(
   }
 }
 
-export function shouldUseRemoteContent(context: PageContentContext | null | undefined): boolean {
-  if (!context) {
-    return true
-  }
-
-  const normalized = normalizePageContentContext(context)
-  return (
-    normalized.extractionStatus === 'failed' ||
-    normalized.mainText.length < MIN_USEFUL_MAIN_TEXT_LENGTH
-  )
-}
-
 export function getDirectPageFetchOriginPattern(url: unknown): string {
   const parsedUrl = parseUrlSafely(url)
   if (!parsedUrl) {

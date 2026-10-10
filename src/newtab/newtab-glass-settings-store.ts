@@ -7,9 +7,10 @@ interface GlassSettingsView {
   settings: NewtabGlassSettings
   ready: boolean
   saveState: 'idle' | 'saving' | 'saved' | 'error'
+  canUndo: boolean
 }
 const store = createUiViewStoreSlice<GlassSettingsView>('newtab', 'glass-settings', {
-  settings: { ...DEFAULT_GLASS_SETTINGS }, ready: false, saveState: 'idle'
+  settings: { ...DEFAULT_GLASS_SETTINGS }, ready: false, saveState: 'idle', canUndo: false
 })
 const listeners = new Set<(settings: NewtabGlassSettings) => void>()
 let started = false
@@ -17,6 +18,7 @@ let generation = 0
 let saveTimer: ReturnType<typeof setTimeout> | undefined
 let writeQueue: Promise<void> = Promise.resolve()
 let closing = false
+let editBaseline: NewtabGlassSettings | null = null
 
 function writeSettings(settings: NewtabGlassSettings): Promise<void> {
   // This is one complete, atomic storage value. Do not wait for the shared
@@ -31,7 +33,7 @@ function writeSettings(settings: NewtabGlassSettings): Promise<void> {
 }
 
 function publish(settings: NewtabGlassSettings, saveState: GlassSettingsView['saveState'], ready = true): void {
-  store.setState({ settings, ready, saveState })
+  store.setState({ settings, ready, saveState, canUndo: Boolean(editBaseline && JSON.stringify(editBaseline) !== JSON.stringify(settings)) })
   applyGlassSettingsCss(settings)
   try { localStorage.setItem(GLASS_SETTINGS_CACHE_KEY, JSON.stringify(settings)) } catch { /* Chrome storage remains authoritative. */ }
   listeners.forEach(listener => listener(settings))
@@ -93,3 +95,16 @@ export function changeNewtabGlassSetting(key: NewtabGlassSettingKey, value: numb
   if (next[key] !== current[key]) update(next)
 }
 export function resetNewtabGlassSettings(): void { update({ ...DEFAULT_GLASS_SETTINGS }) }
+
+export function beginNewtabGlassEditSession(): void {
+  editBaseline = { ...store.getState().settings }
+  store.setState({ ...store.getState(), canUndo: false })
+}
+
+export function applyNewtabGlassPreset(settings: NewtabGlassSettings): void {
+  if (store.getState().ready) update(normalizeGlassSettings(settings))
+}
+
+export function undoNewtabGlassEditSession(): void {
+  if (editBaseline && store.getState().ready) update({ ...editBaseline })
+}

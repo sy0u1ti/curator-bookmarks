@@ -1,4 +1,8 @@
 /* Hyalite owns the backdrop only. Text and existing gesture transforms stay untouched. */
+html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
+  transition: none !important;
+}
+
 :root {
   --newtab-glass-background-blur: 12px;
   --newtab-glass-backdrop-filter: blur(var(--newtab-glass-background-blur));
@@ -14,10 +18,22 @@
     inset 0 -0.5px 0 rgba(255, 255, 255, 0.10);
 }
 
+/* Match the runtime's surface list before its lazy module registers anything.
+   The first painted frame must already have the final stroke, rim and blur.
+   The runtime may replace --newtab-glass-surface-fill per element with a
+   luminance-adapted tint; without one the user's base tint applies. */
+:is(
+  .newtab-search-surface, .newtab-clock, .newtab-onboarding-strip, .settings-trigger,
+  .newtab-delete-toast-panel, .newtab-speed-dial, .newtab-portal, .bookmark-tile,
+  .newtab-search-engine-menu, .featured-wallpaper-panel,
+  .folder-section-header, .bookmark-breadcrumb-item, .source-navigation-label,
+  .source-navigation-link, .folder-section-add, .bookmark-menu-surface,
+  .settings-drawer-panel, [data-drawer-content], .newtab-glass-preview, .newtab-state
+),
 [data-hyalite-surface] {
   /* Registered on every surface so an unbound child never inherits a parent's SVG. */
   --hyalite: var(--newtab-glass-backdrop-filter);
-  background-color: var(--newtab-glass-bg-fill);
+  background-color: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   border-color: var(--newtab-glass-stroke);
   -webkit-backdrop-filter: var(--hyalite) !important;
   backdrop-filter: var(--hyalite) !important;
@@ -29,9 +45,10 @@
 }
 
 /* Native blur keeps the centre live. Only the refracting edge is a cached PNG,
-   avoiding Chromium's expensive per-frame SVG backdrop displacement. */
+   avoiding Chromium's expensive per-frame SVG backdrop displacement. The PNG
+   is decoded before the startup surface is revealed, at full strength. */
 [data-hyalite-surface][data-glass-renderer="raster"][data-glass-mode="refraction"] {
-  background-color: var(--newtab-glass-raster-tint, var(--newtab-glass-bg-fill));
+  background-color: var(--newtab-glass-raster-tint, var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill)));
   background-image: var(--newtab-glass-texture) !important;
   background-blend-mode: multiply;
   background-size: 100% 100%;
@@ -42,6 +59,14 @@
   backdrop-filter: var(--newtab-glass-backdrop-filter) !important;
 }
 
+/* A failed/slow startup settles once on the compatible material. Do not add
+   late refraction to an already-visible surface; explicit settings changes can
+   opt back into the renderer. */
+html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-zone) [data-glass-renderer="raster"] {
+  background-image: none !important;
+}
+
+.bookmark-tile,
 .bookmark-tile[data-hyalite-surface] {
   /* Interaction changes elevation only; every state retains the same rim. */
   box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
@@ -85,7 +110,7 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   pointer-events: none;
 }
 #newtab-settings-drawer .settings-drawer-panel[data-hyalite-surface] {
-  background: var(--newtab-glass-bg-fill);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow);
 }
 #newtab-settings-drawer .settings-drawer-panel::before {
@@ -104,17 +129,18 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   background: rgba(255, 255, 255, 0.08);
 }
 
+.newtab-search-surface,
 .newtab-search-surface[data-hyalite-surface] {
-  background-color: var(--newtab-glass-bg-fill);
+  background-color: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   border-color: rgba(255, 255, 255, 0.18);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2), var(--newtab-glass-edge-shadow);
   transition: border-color var(--ds-motion-fast) var(--ds-ease-standard),
     box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard);
 }
-.newtab-search-shell:focus-within .newtab-search-surface[data-hyalite-surface],
-.newtab-search-shell[data-focus-within="true"] .newtab-search-surface[data-hyalite-surface],
-.newtab-search-shell[data-engine-open="true"] .newtab-search-surface[data-hyalite-surface] {
+.newtab-search-shell:focus-within .newtab-search-surface,
+.newtab-search-shell[data-focus-within="true"] .newtab-search-surface,
+.newtab-search-shell[data-engine-open="true"] .newtab-search-surface {
   border-color: rgba(255, 255, 255, 0.46);
 }
 .newtab-search-input {

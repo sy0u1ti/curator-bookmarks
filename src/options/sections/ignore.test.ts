@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { STORAGE_KEYS } from '../../shared/constants.js'
 import { managerState } from '../shared-options/state.js'
 import {
   normalizeIgnoreRules,
@@ -8,19 +9,24 @@ import {
 } from './ignore.js'
 
 let storageError = ''
+let activeStorageError = ''
 
 Object.defineProperty(globalThis, 'chrome', {
   configurable: true,
   value: {
     runtime: {
       get lastError() {
-        return storageError ? { message: storageError } : undefined
+        return activeStorageError ? { message: activeStorageError } : undefined
       }
     },
     storage: {
       local: {
+        get(_keys: unknown, callback: (items: Record<string, unknown>) => void) {
+          callback({ [STORAGE_KEYS.ignoreRules]: managerState.ignoreRules })
+        },
         set(_payload: Record<string, unknown>, callback: () => void) {
-          callback()
+          activeStorageError = storageError
+          try { callback() } finally { activeStorageError = '' }
         }
       }
     }

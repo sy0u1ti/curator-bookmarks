@@ -1,9 +1,11 @@
 import Hyalite, { type HyaliteMapInput } from '../vendor/hyalite/hyalite.js'
 import { getNewtabGlassSettings, subscribeNewtabGlassSettings } from './newtab-glass-settings-store.js'
-import { getGlassRefractionOptions, type NewtabGlassSettings } from './glass-settings.js'
+import { applyGlassSurfaceTint, getGlassRefractionOptions, type NewtabGlassSettings } from './glass-settings.js'
 import type { GlassMapRequest, GlassMapResponse } from './hyalite-map-worker.js'
 import type { GlassRasterInput, GlassRasterScene } from './hyalite-raster.js'
 import { getNewtabBackgroundMediaView } from './newtab-background-media-store.js'
+import { finishNewtabGlassStartup, isNewtabGlassStartupPending } from './newtab-glass-startup.js'
+import { glassTextureCacheKey, readGlassTexture, writeGlassTexture, type CachedGlassTexture } from './newtab-glass-cache.js'
 
 export const GLASS_SURFACE_SELECTOR = [
   '.newtab-search-surface', '.newtab-clock', '.newtab-onboarding-strip', '.settings-trigger',
@@ -11,7 +13,7 @@ export const GLASS_SURFACE_SELECTOR = [
   '.newtab-search-engine-menu', '.featured-wallpaper-panel',
   '.folder-section-header', '.bookmark-breadcrumb-item', '.source-navigation-label',
   '.source-navigation-link', '.folder-section-add', '.bookmark-menu-surface',
-  '.settings-drawer-panel', '[data-drawer-content]', '.newtab-glass-preview'
+  '.settings-drawer-panel', '[data-drawer-content]', '.newtab-glass-preview', '.newtab-state'
 ].join(',')
 const GHOST_SELECTOR = '.bookmark-drag-ghost,.speed-dial-drag-ghost,.folder-drag-ghost'
 const PRIORITY_SELECTOR = '.newtab-search-surface,.newtab-clock,.settings-drawer-panel,[data-drawer-content],.bookmark-menu-surface,.newtab-search-engine-menu,.featured-wallpaper-panel,.newtab-glass-preview'
@@ -30,17 +32,28 @@ class MapWorker {
   private failed = false
   private running = false
   private requests = new Map<string, {
-    id: number; input: HyaliteMapInput; raster?: GlassRasterInput; sent: boolean; promise: Promise<Blob | undefined>;
-    resolve: (texture?: Blob) => void; reject: (error: Error) => void
+    id: number; input: HyaliteMapInput; raster?: GlassRasterInput; sent: boolean; promise: Promise<CachedGlassTexture | undefined>;
+    resolve: (texture?: CachedGlassTexture) => void; reject: (error: Error) => void
   }>()
-  prepare(input: HyaliteMapInput, raster?: GlassRasterInput): Promise<Blob | undefined> {
+  async prepare(input: HyaliteMapInput, raster?: GlassRasterInput): Promise<CachedGlassTexture | undefined> {
+    const key = raster ? await glassTextureCacheKey(input, raster) : null
+    const cached = await readGlassTexture(key)
+    if (cached) {
+      performance.mark('newtab.glassCacheHit')
+      return cached
+    }
+    const texture = await this.render(input, raster)
+    if (texture) writeGlassTexture(key, texture.blob, texture.luminance)
+    return texture
+  }
+  private render(input: HyaliteMapInput, raster?: GlassRasterInput): Promise<CachedGlassTexture | undefined> {
     if (!raster && Hyalite.hasMap(input.key)) return Promise.resolve(undefined)
     const key = input.key + (raster ? '|' + JSON.stringify(raster) + '|' + JSON.stringify(input.options) : '')
     const existing = this.requests.get(key)
     if (existing) return existing.promise
     if (this.failed) return Promise.reject(new Error('Glass worker unavailable'))
-    let resolve!: (texture?: Blob) => void, reject!: (error: Error) => void
-    const promise = new Promise<Blob | undefined>((yes, no) => { resolve = yes; reject = no })
+    let resolve!: (texture?: CachedGlassTexture) => void, reject!: (error: Error) => void
+    const promise = new Promise<CachedGlassTexture | undefined>((yes, no) => { resolve = yes; reject = no })
     this.requests.set(key, { id: ++this.seq, input, raster, sent: false, promise, resolve, reject })
     this.pump()
     return promise
@@ -66,8 +79,12 @@ class MapWorker {
           this.running = false
           if ('error' in data) item.reject(new Error(data.error))
           else {
-            Hyalite.cacheMap(item.input, data.map, data.info)
-            item.resolve(data.texture)
+            if ('map' in data) {
+              Hyalite.cacheMap(item.input, data.map, data.info)
+              item.resolve(undefined)
+            } else {
+              item.resolve({ blob: data.texture, luminance: data.luminance })
+            }
           }
           this.pump()
         }
@@ -102,7 +119,10 @@ interface Surface {
   height: number
   key: string
   textureUrl: string
+  luminance: number | null
   motion: Set<string>
+  failed: boolean
+  preparing: boolean
 }
 let disposeRuntime: (() => void) | null = null
 
@@ -113,10 +133,19 @@ export function startNewtabGlassRuntime(): () => void {
   let lastInput = 0
   let scrollTimer: ReturnType<typeof setTimeout> | null = null
   let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
+  let startupFrame = 0
+  let startupStableFrames = 0
+  let startupHadContent = false
   let worker = new MapWorker()
   const surfaces = new Map<HTMLElement, Surface>()
   const app = document.querySelector<HTMLElement>('.newtab-app')
   let scene: GlassRasterScene | null = null
+  // Video wallpapers cannot feed the static refraction scene, so their tint is
+  // driven by a sampled frame instead. It applies to every surface as a
+  // fallback until (or unless) a per-surface luminance exists.
+  let fallbackLuminance: number | null = null
+  let videoSampleTimer: ReturnType<typeof setInterval> | null = null
+  let videoSampleCanvas: OffscreenCanvas | null = null
   const forcedColors = matchMedia('(forced-colors: active)')
   // Preserve the explicitly selected New Tab glass, including on systems that
   // reduce transparency by default. Forced colours still use native solids.
@@ -142,11 +171,87 @@ export function startNewtabGlassRuntime(): () => void {
   function updateScene(): void {
     if (document.hidden) return
     const next = readScene()
+    syncVideoLuminance()
     if (JSON.stringify(scene) === JSON.stringify(next)) return
     scene = next
     worker.cancelQueued()
-    surfaces.forEach(surface => { fallback(surface); schedule(surface, 80) })
+    surfaces.forEach(surface => {
+      // Switching from a URL to its local Blob is common during hydration.
+      // Keep the decoded lens until its replacement is ready, instead of
+      // stripping the rim for another cache lookup of the same wallpaper.
+      if (!scene || !surface.textureUrl) fallback(surface)
+      schedule(surface, 80)
+    })
     queueRebalance()
+  }
+
+  function applySurfaceTints(): void {
+    surfaces.forEach(surface => applyGlassSurfaceTint(surface.element, settings.tint, surface.luminance ?? fallbackLuminance))
+  }
+
+  /** Average luminance of the current video frame, or null when it cannot be
+   * read (cross-origin source, decoder not ready). */
+  function sampleVideoLuminance(): number | null {
+    const video = document.querySelector<HTMLVideoElement>('video.newtab-background-video')
+    if (!video || video.readyState < 2 || !video.videoWidth) return null
+    try {
+      const canvas = videoSampleCanvas ??= new OffscreenCanvas(32, 18)
+      const context = canvas.getContext('2d', { willReadFrequently: true })
+      if (!context) return null
+      context.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const { data } = context.getImageData(0, 0, canvas.width, canvas.height)
+      let total = 0
+      for (let index = 0; index < data.length; index += 4) {
+        total += data[index] * 0.2126 + data[index + 1] * 0.7152 + data[index + 2] * 0.0722
+      }
+      return total / (data.length / 4) / 255
+    } catch { return null }
+  }
+
+  function syncVideoLuminance(): void {
+    const videoActive = getNewtabBackgroundMediaView().kind === 'video'
+    if (!videoActive) {
+      if (videoSampleTimer) { clearInterval(videoSampleTimer); videoSampleTimer = null }
+      if (fallbackLuminance !== null) {
+        fallbackLuminance = null
+        applySurfaceTints()
+      }
+      return
+    }
+    const luminance = sampleVideoLuminance()
+    if (luminance !== null && Math.abs(luminance - (fallbackLuminance ?? -1)) > 0.01) {
+      fallbackLuminance = luminance
+      applySurfaceTints()
+    }
+    if (!videoSampleTimer) {
+      videoSampleTimer = setInterval(() => { if (!stopped && !document.hidden) syncVideoLuminance() }, 3000)
+    }
+  }
+
+  function checkStartup(): void {
+    startupFrame = 0
+    if (stopped || !isNewtabGlassStartupPending()) return
+    updateScene()
+    const waitingForMedia = app?.dataset.backgroundMedia === 'true' && getNewtabBackgroundMediaView().kind === 'none'
+    const contentReady = Boolean(document.querySelector('.newtab-page, .newtab-state')) &&
+      !waitingForMedia && !app?.classList.contains('newtab-booting') && !app?.classList.contains('loading-wallpaper')
+    const pending = [...surfaces.values()].some(surface => surface.selected &&
+      (surface.timer || surface.preparing || (!surface.failed && surface.element.dataset.glassMode !== 'refraction')))
+    // Titles may continue settling for seconds. Their own guard transfers the
+    // cached baseline; that must never hold the clock/search/settings hostage.
+    const preboot = document.getElementById('newtab-bookmark-preboot')
+    const handoffReady = !preboot || preboot.dataset.surfaceHandoff === 'true'
+    if (contentReady && !startupHadContent) {
+      startupHadContent = true
+      performance.mark('newtab.glassContentReady')
+    }
+    if (contentReady && surfaces.size && !rebalanceTimer && !pending && handoffReady) startupStableFrames++
+    else startupStableFrames = 0
+    if (startupStableFrames >= 2) {
+      finishNewtabGlassStartup([...surfaces.values()].some(surface => surface.selected && surface.failed) ? 'fallback' : 'ready')
+      return
+    }
+    startupFrame = requestAnimationFrame(checkStartup)
   }
 
   function fallback(surface: Surface): void {
@@ -157,18 +262,22 @@ export function startNewtabGlassRuntime(): () => void {
     surface.version++
     if (surface.timer) clearTimeout(surface.timer)
     surface.timer = null
+    surface.preparing = false
     if (surface.selected) resize.unobserve(surface.element)
     surface.selected = false
     surface.key = ''
+    surface.luminance = null
     surface.motion.clear()
     if (surface.textureUrl) URL.revokeObjectURL(surface.textureUrl)
     surface.textureUrl = ''
     surface.element.style.removeProperty('--newtab-glass-texture')
+    surface.element.style.removeProperty('--newtab-glass-surface-fill')
     delete surface.element.dataset.glassRenderer
     Hyalite.detach(surface.element)
     fallback(surface)
   }
   function prepare(surface: Surface): void {
+    surface.timer = null
     if (stopped || !surface.selected || !surface.visible || surface.motion.size || !enabled() || !surface.element.isConnected) return
     // The preview remains live while a slider is dragged; background lenses
     // are prepared during the next pause instead of competing with the input.
@@ -206,7 +315,8 @@ export function startNewtabGlassRuntime(): () => void {
     if (surface.key === renderKey && element.dataset.glassMode === 'refraction') return
     if (element.dataset.glassRenderer !== 'raster' || element.dataset.glassMode !== 'refraction') fallback(surface)
     const version = surface.version
-    void worker.prepare(input, raster).then(async texture => {
+    surface.preparing = true
+    void worker.prepare(input, raster).then(async prepared => {
       if (stopped || version !== surface.version || !surface.selected || !enabled() || !element.isConnected) return
       if (!element.matches('.newtab-glass-preview') && performance.now() - lastInput < 100) { schedule(surface, 100); return }
       // Layout may have changed while the Worker was encoding a map.
@@ -214,6 +324,7 @@ export function startNewtabGlassRuntime(): () => void {
       const currentRadii = Hyalite.radiiOf(element, ...currentSize)
       const current = Hyalite.mapInput(...currentSize, currentRadii, getGlassRefractionOptions(settings, ...currentSize, currentRadii))
       if (current.key !== input.key || currentSize[0] !== width || currentSize[1] !== height) { schedule(surface, 120); return }
+      const texture = prepared?.blob
       if (raster && texture) {
         const url = URL.createObjectURL(texture)
         const decoded = new Image()
@@ -222,12 +333,15 @@ export function startNewtabGlassRuntime(): () => void {
         if (stopped || version !== surface.version || !surface.selected || !element.isConnected) { URL.revokeObjectURL(url); return }
         const previous = surface.textureUrl
         surface.textureUrl = url
+        surface.luminance = prepared?.luminance ?? null
+        applyGlassSurfaceTint(element, settings.tint, surface.luminance ?? fallbackLuminance)
         element.style.setProperty('--newtab-glass-texture', 'url(' + url + ')')
         element.dataset.glassRenderer = 'raster'
         element.dataset.glassBlur = String(options.blur)
         element.dataset.glassOptics = opticsSignature
         element.dataset.glassMode = 'refraction'
         surface.key = renderKey
+        surface.failed = false
         if (previous) URL.revokeObjectURL(previous)
         return
       }
@@ -239,16 +353,23 @@ export function startNewtabGlassRuntime(): () => void {
         element.dataset.glassMode = 'refraction'
       }
     }).catch(() => {
-      if (!stopped && version === surface.version) fallback(surface)
+      if (!stopped && version === surface.version) {
+        surface.failed = true
+        if (!surface.textureUrl) fallback(surface)
+      }
+    }).finally(() => {
+      if (version === surface.version) surface.preparing = false
     })
   }
   function schedule(surface: Surface, delay = 40): void {
     surface.version++
+    surface.failed = false
+    surface.preparing = false
     if (surface.timer) clearTimeout(surface.timer)
     if (surface.selected) {
       // Hover, focus and search state classes usually leave geometry unchanged.
       // Keep the current lens until prepare confirms that it actually changed.
-      surface.timer = setTimeout(() => prepare(surface), delay)
+      surface.timer = setTimeout(() => prepare(surface), isNewtabGlassStartupPending() ? 0 : delay)
     }
   }
   function rebalance(): void {
@@ -274,7 +395,7 @@ export function startNewtabGlassRuntime(): () => void {
     document.documentElement.dataset.hyaliteSurfaces = String(count)
   }
   function queueRebalance(): void {
-    if (!rebalanceTimer) rebalanceTimer = setTimeout(rebalance, 32)
+    if (!rebalanceTimer) rebalanceTimer = setTimeout(rebalance, isNewtabGlassStartupPending() ? 0 : 32)
   }
   const resize = new ResizeObserver(entries => {
     if (document.hidden) return
@@ -308,7 +429,7 @@ export function startNewtabGlassRuntime(): () => void {
 
   function register(element: HTMLElement): void {
     if (surfaces.has(element) || element.matches(GHOST_SELECTOR)) return
-    const surface: Surface = { element, visible: false, selected: false, version: 0, timer: null, area: 0, width: 0, height: 0, key: '', textureUrl: '', motion: new Set() }
+    const surface: Surface = { element, visible: false, selected: false, version: 0, timer: null, area: 0, width: 0, height: 0, key: '', textureUrl: '', luminance: null, motion: new Set(), failed: false, preparing: false }
     surfaces.set(element, surface)
     element.dataset.hyaliteSurface = ''
     // Hyalite models native corner radii. Do not crop its edge with a second lens shape.
@@ -359,12 +480,18 @@ export function startNewtabGlassRuntime(): () => void {
   if (maskElement) sceneChanges.observe(maskElement, { attributes: true, attributeFilter: ['style', 'class'] })
   window.addEventListener('resize', updateScene)
   updateScene()
+  startupFrame = requestAnimationFrame(checkStartup)
 
   const settingsChanged = (next: NewtabGlassSettings) => {
     const opticsChanged = JSON.stringify(refractionOptions(settings)) !== JSON.stringify(refractionOptions(next))
     settings = next
+    // The adaptive fill follows the tint slider without rebuilding any lens.
+    applySurfaceTints()
     // Tint is a CSS-only change; moving that slider must never rebuild a lens.
     if (!opticsChanged) return
+    if (document.documentElement.dataset.newtabGlassStartup === 'fallback') {
+      document.documentElement.dataset.newtabGlassStartup = 'ready'
+    }
     worker.cancelQueued()
     if (document.hidden) return
     surfaces.forEach(surface => {
@@ -436,7 +563,9 @@ export function startNewtabGlassRuntime(): () => void {
     intersection.disconnect()
     resize.disconnect()
     if (rebalanceTimer) clearTimeout(rebalanceTimer)
+    if (startupFrame) cancelAnimationFrame(startupFrame)
     if (scrollTimer) clearTimeout(scrollTimer)
+    if (videoSampleTimer) { clearInterval(videoSampleTimer); videoSampleTimer = null }
     surfaces.forEach(surface => {
       deactivate(surface)
     })

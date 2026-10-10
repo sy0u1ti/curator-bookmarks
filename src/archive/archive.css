@@ -1,0 +1,58 @@
+/* The archive workspace follows the Options shell: the primary action is a
+   neutral near-white button. Without this, the raw blue --ds-accent from
+   tokens.css made this page the only surface with a large blue CTA. */
+:root,
+html,
+body,
+#archive-root,
+#archive-root .curator-react-root {
+  --ds-selected: rgba(245, 245, 247, 0.12);
+  --ds-accent: #ededed;
+  --ds-accent-hover: #ffffff;
+  --ds-accent-text: #ededed;
+  --ds-accent-soft: rgba(245, 245, 247, 0.16);
+  --ds-accent-line: rgba(245, 245, 247, 0.42);
+  --ds-accent-contrast: #000000;
+  --ds-focus: rgba(245, 245, 247, 0.78);
+  --ds-shadow-focus: 0 0 0 2px var(--ds-bg-page), 0 0 0 4px rgba(245, 245, 247, 0.38);
+
+  --color-ds-selected: var(--ds-selected);
+  --color-ds-accent: var(--ds-accent);
+  --color-ds-accent-hover: var(--ds-accent-hover);
+  --color-ds-accent-text: var(--ds-accent-text);
+  --color-ds-accent-soft: var(--ds-accent-soft);
+  --color-ds-accent-line: var(--ds-accent-line);
+  --color-ds-accent-contrast: var(--ds-accent-contrast);
+  --color-ds-focus: var(--ds-focus);
+  --shadow-ds-focus: var(--ds-shadow-focus);
+
+  --ui-surface-selected: var(--ds-selected);
+  --ui-accent: var(--ds-accent);
+  --ui-accent-strong: var(--ds-accent-hover);
+  --ui-accent-text: var(--ds-accent-text);
+  --ui-accent-soft: var(--ds-accent-soft);
+  --ui-accent-line: var(--ds-accent-line);
+  --ui-focus-ring: var(--ds-focus);
+}
+
+html,
+body,
+#archive-root,
+#archive-root > .curator-react-root {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--ds-bg-page);
+}
+
+/* Focus rings here are box-shadow based; forced colours suppress shadows. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
+  }
+}

@@ -101,27 +101,6 @@ export interface PopoverRootProps {
   children: ReactNode
 }
 
-export function PopoverRoot({
-  open,
-  onOpenChange,
-  triggerId,
-  modal = false,
-  children
-}: PopoverRootProps) {
-  return (
-    <BasePopover.Root
-      open={open}
-      onOpenChange={(nextOpen, eventDetails) => {
-        onOpenChange?.(nextOpen, eventDetails.event)
-      }}
-      triggerId={triggerId}
-      modal={modal}
-    >
-      {children}
-    </BasePopover.Root>
-  )
-}
-
 export interface PopoverPortalProps extends BasePopoverPortalProps {}
 
 export function PopoverPortal({
@@ -156,23 +135,7 @@ export function PopoverPortal({
 
 export interface PopoverPositionerProps extends BasePopoverPositionerProps {}
 
-export function PopoverPositioner(props: PopoverPositionerProps) {
-  return <BasePopover.Positioner {...props} />
-}
-
 export interface PopoverPopupProps extends BasePopoverPopupProps {
   unanimated?: boolean
 }
 
-export function PopoverPopup({ unanimated = false, ...props }: PopoverPopupProps) {
-  if (unanimated) {
-    return <BasePopover.Popup {...props} />
-  }
-
-  return (
-    <BasePopover.Popup
-      render={<MotionPanel variant="popover" />}
-      {...props}
-    />
-  )
-}

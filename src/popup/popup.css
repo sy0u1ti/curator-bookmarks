@@ -82,11 +82,7 @@ html,
 body {
   margin: 0;
   width: 800px;
-  min-width: 800px;
-  max-width: 800px;
   height: 600px;
-  min-height: 600px;
-  max-height: 600px;
   overflow: hidden;
   overscroll-behavior: none;
   background: transparent;
@@ -97,6 +93,26 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   text-rendering: optimizeLegibility;
+}
+
+/* Browser zoom shrinks the CSS viewport below the popup's design size; allow
+   the document to scroll so the clipped half stays reachable. Only `overflow`
+   may depend on the viewport: sizing the document from a media query feeds
+   back into Chrome's popup sizing and collapses the window. The side panel
+   sizes itself (sidepanel.css), so it is excluded here. */
+@media (max-width: 799px), (max-height: 599px) {
+  html:not([data-curator-surface="sidepanel"]),
+  html:not([data-curator-surface="sidepanel"]) body {
+    overflow: auto;
+  }
+
+  /* The inner shell may follow the viewport so the reflowed layout fits the
+     window; the document itself must stay fixed, because Chrome derives the
+     popup size from it. */
+  html:not([data-curator-surface="sidepanel"]) #popup-root,
+  html:not([data-curator-surface="sidepanel"]) #popup-preboot-shell {
+    width: min(800px, 100vw);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -609,6 +625,12 @@ body::after {
   #popup-root,
   #popup-root * {
     forced-color-adjust: auto;
+  }
+
+  /* Focus rings elsewhere are box-shadow based, which forced colours drop. */
+  #popup-root :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
   }
 
   .popup-active-result-indicator {

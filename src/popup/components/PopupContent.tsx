@@ -8,14 +8,16 @@ import {
   type CSSProperties,
   type KeyboardEvent,
   type PointerEvent as ReactPointerEvent,
-  type RefObject
+  type RefObject,
+  type ReactNode
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../../ui/base/Button'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion'
-import { HighlightedText } from './HighlightedText'
+import { getHighlightTerms, HighlightedText } from '../../ui/base/HighlightedText'
+import { normalizeQuery } from '../search'
 import { PopupEmptyState } from './PopupEmptyState'
 import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
 import { getPopupBookmarkReorderTargetIndex } from '../popup-bookmark-reorder'
@@ -607,6 +609,35 @@ function usePopupBookmarkReorderDrag({
   }
 }
 
+function PopupFolderPane({ activeIndex, folderTreeRef, children }: {
+  activeIndex: number
+  folderTreeRef?: RefObject<HTMLDivElement | null>
+  children: ReactNode
+}) {
+  const sidePanel = isSidePanelSurface()
+  const [collapsed, setCollapsed] = useState(false)
+  useLayoutEffect(() => {
+    if (activeIndex >= 0) setCollapsed(false)
+  }, [activeIndex])
+  return (
+    <aside className={paneClass} aria-label="文件夹树">
+      <header className={paneHeaderClass}>
+        <span>全部文件夹</span>
+        {sidePanel && (
+          <Button size="sm" variant="ghost" aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
+            aria-expanded={!collapsed} aria-controls="sidepanel-folder-tree" onClick={() => setCollapsed(value => !value)}>
+            <Icon name="ChevronDown" className={collapsed ? '' : 'rotate-180'} size={14} />
+          </Button>
+        )}
+      </header>
+      <div className={folderTreeClass} role="tree" ref={folderTreeRef}
+        id={sidePanel ? 'sidepanel-folder-tree' : undefined} hidden={sidePanel && collapsed}>
+        {children}
+      </div>
+    </aside>
+  )
+}
+
 export function PopupContent({
   activeResultIndicatorRef,
   activeResultRef,
@@ -680,12 +711,9 @@ export function PopupContent({
         <MemoPopupContentSkeleton mode={mode} title={title} />
       </div>
       <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : '')}>
-        <div className={workspaceClass} ref={workspaceRef}>
-          <aside className={paneClass} aria-label="文件夹树">
-            <header className={paneHeaderClass}>
-              <span>全部文件夹</span>
-            </header>
-            <div className={folderTreeClass} role="tree" ref={folderTreeRef}>
+        <div className={workspaceClass} ref={workspaceRef}
+          style={{ '--sidepanel-folder-height': `${54 + sidebarRows.length * POPUP_FOLDER_ROW_HEIGHT}px` } as CSSProperties}>
+          <PopupFolderPane activeIndex={activeFolderIndex} folderTreeRef={folderTreeRef}>
               {folderWindow.before > 0 ? (
                 <div
                   className={virtualSpacerClass}
@@ -711,8 +739,7 @@ export function PopupContent({
                   aria-hidden="true"
                 />
               ) : null}
-            </div>
-          </aside>
+          </PopupFolderPane>
           <section
             className={mainPaneClass}
             aria-label={title}
@@ -865,29 +892,47 @@ function useFixedRowWindow({
   // enter or leave the overscan; both panes share this component.
   const [rowWindow, setRowWindow] = useState({ start: 0, count: 8 + POPUP_VIRTUAL_OVERSCAN * 2 })
   const windowRef = useRef(rowWindow)
+  // Rows are adjacent (no gap), so the first painted row's height is the true
+  // pitch. Measuring it keeps the spacers exact when a larger browser font
+  // size or a wrapped title makes rows taller than the design constant.
+  const [measuredPitch, setMeasuredPitch] = useState(0)
+  const pitch = measuredPitch > 0 ? measuredPitch : rowHeight
+  const measureRowPitch = useCallback(() => {
+    const container = containerRef?.current
+    if (!container) return null
+    let row: HTMLElement | null = null
+    for (const child of container.children) {
+      if (child instanceof HTMLElement && child.getAttribute('aria-hidden') !== 'true') { row = child; break }
+    }
+    if (!row) return null
+    const height = Math.round(row.getBoundingClientRect().height)
+    if (height > 0) setMeasuredPitch(current => (current === height ? current : height))
+    return row
+  }, [containerRef])
   const measureViewport = useCallback(() => {
     const container = containerRef?.current
     if (!container) return
-    const height = container.clientHeight || rowHeight * 8
-    const count = Math.ceil(height / rowHeight) + POPUP_VIRTUAL_OVERSCAN * 2
+    const height = container.clientHeight || pitch * 8
+    const count = Math.ceil(height / pitch) + POPUP_VIRTUAL_OVERSCAN * 2
     const next = {
       count,
       start: Math.min(
         Math.max(0, rowCount - count + POPUP_VIRTUAL_OVERSCAN),
-        Math.max(0, Math.floor(container.scrollTop / rowHeight) - POPUP_VIRTUAL_OVERSCAN)
+        Math.max(0, Math.floor(container.scrollTop / pitch) - POPUP_VIRTUAL_OVERSCAN)
       )
     }
     const current = windowRef.current
     if (current.start === next.start && current.count === next.count) return
     windowRef.current = next
     setRowWindow(next)
-  }, [containerRef, rowCount, rowHeight])
+  }, [containerRef, pitch, rowCount])
 
   useLayoutEffect(() => {
     if (!enabled) return
     const container = containerRef?.current
     if (!container) return
 
+    measureRowPitch()
     measureViewport()
     container.addEventListener('scroll', measureViewport, { passive: true })
     const observer = typeof ResizeObserver === 'undefined'
@@ -898,7 +943,14 @@ function useFixedRowWindow({
       container.removeEventListener('scroll', measureViewport)
       observer?.disconnect()
     }
-  }, [containerRef, enabled, measureViewport, rowCount])
+  }, [containerRef, enabled, measureRowPitch, measureViewport, rowCount])
+
+  // The window changes swap which row is first; re-measure from the new one so
+  // a font-size change is picked up even without a container resize.
+  useLayoutEffect(() => {
+    if (!enabled) return
+    measureRowPitch()
+  }, [enabled, measureRowPitch, rowWindow.count, rowWindow.start])
 
   useLayoutEffect(() => {
     if (!enabled || activeIndex < 0) return
@@ -907,8 +959,8 @@ function useFixedRowWindow({
     const paddingTop = Number.parseFloat(getComputedStyle(container).paddingTop) || 0
     const viewportStart = container.scrollTop
     const nextScrollTop = getActiveResultRevealScrollTop({
-      itemHeight: rowHeight,
-      itemTop: paddingTop + activeIndex * rowHeight,
+      itemHeight: pitch,
+      itemTop: paddingTop + activeIndex * pitch,
       maxScrollTop: Math.max(0, container.scrollHeight - container.clientHeight),
       viewportHeight: container.clientHeight,
       viewportTop: viewportStart
@@ -917,7 +969,7 @@ function useFixedRowWindow({
       container.scrollTop = nextScrollTop
       measureViewport()
     }
-  }, [activeIndex, containerRef, enabled, measureViewport, rowHeight])
+  }, [activeIndex, containerRef, enabled, measureViewport, pitch])
 
   if (!enabled) {
     return { after: 0, before: 0, end: rowCount, start: 0 }
@@ -1236,10 +1288,10 @@ function PopupSearchResultRow({
       >
         <span className={resultCopyClass}>
           <span className={rowTitleClass}>
-            <HighlightedText text={row.title} query={row.highlightQuery} />
+            <HighlightedText terms={getHighlightTerms(normalizeQuery(row.highlightQuery))} text={row.title} />
           </span>
           <span className={rowSubtitleClass} title={row.url}>
-            <HighlightedText text={row.displayUrl} query={row.highlightQuery} />
+            <HighlightedText terms={getHighlightTerms(normalizeQuery(row.highlightQuery))} text={row.displayUrl} />
           </span>
           <span className={resultPathShellClass}>
             <span className={rowPathClass} title={row.path}>{row.path}</span>

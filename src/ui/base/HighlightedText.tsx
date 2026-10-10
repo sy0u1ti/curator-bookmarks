@@ -1,30 +1,44 @@
-import { getQueryTerms, normalizeQuery } from '../search.js'
+const HIGHLIGHT_MARK_CLASS = 'rounded-md bg-ds-text-primary/[0.12] px-[0.02em] text-ds-text-primary shadow-none'
 
-const markClass = 'rounded-md bg-ds-text-primary/[0.12] px-[0.02em] text-ds-text-primary shadow-none'
-
-export function HighlightedText({ text, query }: { text: string; query: string }) {
+/** Renders `text` with every occurrence of the search terms wrapped in a mark.
+ * The popup and the options folder picker share this so their highlight rules
+ * cannot drift apart. */
+export function HighlightedText({ terms, text }: { terms: string[]; text: string }) {
   return (
     <>
-      {splitHighlightText(text, query).map((part, index) => {
+      {splitHighlightText(text, terms).map((part, index) => {
         const key = `${index}:${part.text}`
-        return part.highlight ? <mark className={markClass} key={key}>{part.text}</mark> : <span key={key}>{part.text}</span>
+        return part.highlight
+          ? <mark className={HIGHLIGHT_MARK_CLASS} key={key}>{part.text}</mark>
+          : <span key={key}>{part.text}</span>
       })}
     </>
   )
 }
 
-function splitHighlightText(text: string, query: string): Array<{ highlight: boolean; text: string }> {
-  const safeText = String(text || '')
-  const terms = getQueryTerms(normalizeQuery(query))
+/** Whitespace-separated, de-duplicated highlight terms. Callers normalize the
+ * query first (popup search and options use different normalizers). */
+export function getHighlightTerms(query: string): string[] {
+  return [...new Set(String(query || '').split(/\s+/).filter(Boolean))]
+}
 
-  if (!terms.length || !safeText) {
+/** Splits `text` into plain and highlighted parts for the given terms. Terms
+ * are matched case-insensitively; overlapping ranges merge into one mark. */
+export function splitHighlightText(text: string, terms: string[]): Array<{ highlight: boolean; text: string }> {
+  const safeText = String(text || '')
+  const normalizedTerms = terms.flatMap((term) => {
+    const normalized = String(term || '').trim()
+    return normalized ? [normalized] : []
+  })
+
+  if (!normalizedTerms.length || !safeText) {
     return [{ highlight: false, text: safeText }]
   }
 
   const lowerText = safeText.toLowerCase()
   const ranges: Array<[number, number]> = []
 
-  for (const term of terms.sort((left, right) => right.length - left.length)) {
+  for (const term of normalizedTerms.sort((left, right) => right.length - left.length)) {
     let fromIndex = 0
     while (fromIndex < lowerText.length) {
       const matchIndex = lowerText.indexOf(term, fromIndex)

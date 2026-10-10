@@ -33,13 +33,15 @@ import {
 } from './newtabLayoutClasses'
 import { getNewtabButtonClass } from './newtabButtonClass'
 
-const STATE_BASE_CLASS = 'newtab-state grid justify-items-center gap-4 text-center'
+// The empty/missing states sit on their own glass panel (see the surface list
+// in hyalite-glass.css): bare white text on a bright wallpaper was unreadable.
+const STATE_BASE_CLASS = 'newtab-state grid justify-items-center gap-4 rounded-[var(--ui-radius-group)] px-6 py-7 text-center'
 const STATE_HAS_SEARCH_CLASS = 'mt-2.5'
 const STATE_DEFAULT_WIDTH_CLASS = 'w-[min(520px,100%)]'
-const STATE_MISSING_CLASS = 'folder-missing w-[min(560px,100%)] py-[22px]'
+const STATE_MISSING_CLASS = 'folder-missing w-[min(560px,100%)]'
 const STATE_ACTIONS_CLASS = 'newtab-state-actions flex flex-wrap justify-center gap-2.5'
 const STATE_TITLE_CLASS = 'm-0 text-xl font-bold leading-[1.25] text-[var(--ui-text-primary)]'
-const STATE_COPY_CLASS = 'm-0 max-w-[440px] text-sm leading-[1.7] text-[var(--ui-text-secondary)]'
+const STATE_COPY_CLASS = 'm-0 max-w-[440px] text-sm leading-[1.7] text-[rgba(245,245,247,0.86)]'
 const ONBOARDING_STRIP_CLASS = 'newtab-onboarding-strip grid w-[min(100%,980px)] grid-cols-[minmax(0,1fr)_auto] items-center gap-3.5 rounded-[var(--ui-radius-group)] border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] px-3 py-2.5 text-[rgba(245,245,247,0.9)] shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] max-[640px]:grid-cols-[minmax(0,1fr)]'
 const ONBOARDING_COPY_CLASS = 'newtab-onboarding-copy t-stagger is-shown grid min-w-0 gap-[3px]'
 const ONBOARDING_TITLE_CLASS = 't-stagger-line t-stagger-line--1 overflow-hidden text-ellipsis whitespace-nowrap text-[13px] font-[760] leading-[1.2] max-[640px]:whitespace-normal'

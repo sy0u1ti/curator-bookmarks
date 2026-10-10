@@ -7,16 +7,16 @@ import type {
   ShaderComponentProps,
   WaterProps
 } from '@paper-design/shaders-react'
-import { lazy, Suspense, useEffect, useState, type CSSProperties, type FC, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type FC, type ReactNode } from 'react'
 import { prefersReducedMotion } from '../../shared/motion'
 import { isPaperShaderMaskStyle, type PaperShaderMaskStyle } from '../background-mask-settings'
 import { useNewtabBackgroundMediaView } from '../newtab-background-media-store'
 import { useNewtabBackgroundSettingsView } from '../newtab-background-settings-store'
+import { getBackgroundMediaRect, setBackgroundFilterStatus, supportsBackgroundShaders } from '../background-filter-runtime'
 
 const SHADER_BACKGROUND = '#101013'
 const SHADER_HIGHLIGHT = '#ededed'
 const SHADER_MAX_PIXEL_COUNT = 1920 * 1080
-let webGl2Support: boolean | null = null
 
 const PaperTexture = lazy(() => import('@paper-design/shaders-react').then((module) => ({ default: module.PaperTexture }))) as FC<PaperTextureProps>
 const FlutedGlass = lazy(() => import('@paper-design/shaders-react').then((module) => ({ default: module.FlutedGlass }))) as FC<FlutedGlassProps>
@@ -43,24 +43,28 @@ export function NewtabPaperShaderLayer() {
 
   if (
     !background.maskEnabled ||
+    background.maskFilterStrength === 0 ||
     !isPaperShaderMaskStyle(maskStyle) ||
     media.kind === 'video' ||
-    !supportsWebGl2()
+    (media.kind === 'none' && background.type !== 'color') ||
+    !supportsBackgroundShaders()
   ) {
     return null
   }
 
   return (
-    <ActivePaperShaderLayer
-      backgroundColor={background.color}
-      backgroundPosition={media.backgroundPosition}
-      backgroundSize={media.backgroundSize}
-      imageSource={media.kind === 'image' ? media.src : ''}
-      size={background.maskFilterSize}
-      spacing={background.maskFilterSpacing}
-      strength={background.maskFilterStrength}
-      style={maskStyle}
-    />
+    <ShaderErrorBoundary key={`${maskStyle}:${media.src}`} maskStyle={maskStyle}>
+      <ActivePaperShaderLayer
+        backgroundColor={background.color}
+        backgroundPosition={media.backgroundPosition}
+        backgroundSize={media.backgroundSize}
+        imageSource={media.kind === 'image' ? media.src : ''}
+        size={background.maskFilterSize}
+        spacing={background.maskFilterSpacing}
+        strength={background.maskFilterStrength}
+        style={maskStyle}
+      />
+    </ShaderErrorBoundary>
   )
 }
 
@@ -83,12 +87,24 @@ function ActivePaperShaderLayer({
   strength: number
   style: PaperShaderMaskStyle
 }) {
-  const image = useShaderImageSource(imageSource, backgroundColor)
+  const image = useShaderImageSource(imageSource, backgroundColor, backgroundSize, backgroundPosition, maskStyle)
+  const motionPaused = useSyncExternalStore(subscribeMotionPreference, isMotionPaused, () => true)
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const lost = () => {
+      host.style.visibility = 'hidden'
+      setBackgroundFilterStatus(maskStyle, '图形加速上下文已中断。请切换样式重试，原背景和遮罩仍然保留。')
+    }
+    host.addEventListener('webglcontextlost', lost, true)
+    return () => host.removeEventListener('webglcontextlost', lost, true)
+  }, [image, maskStyle])
 
   const strength = strengthValue / 100
   const size = sizeValue / 100
   const spacing = spacingValue / 100
-  const sizing = getShaderSizing(backgroundSize, backgroundPosition)
+  const sizing: ShaderSizing = { fit: 'cover', originX: 0.5, originY: 0.5, scale: 1 }
   const shared: ShaderComponentProps = {
     className: 'absolute inset-0 size-full',
     height: '100%',
@@ -102,15 +118,17 @@ function ActivePaperShaderLayer({
     opacity: 'var(--paper-shader-opacity)'
   }
 
+  if (!image) return null
   return (
     <div
+      ref={hostRef}
       aria-hidden="true"
       className="newtab-paper-shader pointer-events-none fixed inset-0 z-0 overflow-hidden"
       data-effect={maskStyle}
       style={style}
     >
       <Suspense fallback={null}>
-        {renderPaperShader(maskStyle, image, strength, size, spacing, sizing, shared)}
+        {renderPaperShader(maskStyle, image, strength, size, spacing, sizing, shared, motionPaused)}
       </Suspense>
     </div>
   )
@@ -123,7 +141,8 @@ function renderPaperShader(
   size: number,
   spacing: number,
   sizing: ShaderSizing,
-  shared: ShaderComponentProps
+  shared: ShaderComponentProps,
+  motionPaused: boolean
 ): ReactNode {
   if (style === 'paper-texture') {
     return (
@@ -188,7 +207,7 @@ function renderPaperShader(
         caustic={0.05 + strength * 0.22}
         waves={0.04 + strength * 0.18}
         size={0.8 + size * 2.4}
-        speed={prefersReducedMotion() ? 0 : 0.06 + strength * 0.08}
+        speed={motionPaused ? 0 : 0.06 + strength * 0.08}
       />
     )
   }
@@ -257,72 +276,84 @@ function renderPaperShader(
 }
 
 function getShaderOpacity(style: PaperShaderMaskStyle, strength: number): number {
-  if (strength <= 0) return 0
-  if (style === 'paper-texture') return 0.16 + strength * 0.34
-  if (style === 'fluted-glass' || style === 'water') return 0.2 + strength * 0.48
-  return 0.32 + strength * 0.6
+  return style === 'paper-texture' ? strength * 0.65 : strength
 }
 
-function getShaderSizing(backgroundSize: string, backgroundPosition: string): ShaderSizing {
-  const sizeMatch = backgroundSize.match(/([\d.]+)(?:%|vw)/i)
-  const size = sizeMatch ? Number.parseFloat(sizeMatch[1]) : Number.NaN
-  const [rawX = '50', rawY = '50'] = backgroundPosition.split(/\s+/)
-  const x = Number.parseFloat(rawX)
-  const y = Number.parseFloat(rawY)
-  return {
-    fit: 'cover',
-    scale: Number.isFinite(size) ? Math.max(1, size / 100) : 1,
-    originX: Number.isFinite(x) ? Math.min(1, Math.max(0, x / 100)) : 0.5,
-    originY: Number.isFinite(y) ? Math.min(1, Math.max(0, y / 100)) : 0.5
+function isMotionPaused(): boolean {
+  return document.hidden || prefersReducedMotion()
+}
+
+function subscribeMotionPreference(notify: () => void): () => void {
+  const preference = matchMedia('(prefers-reduced-motion: reduce)')
+  preference.addEventListener('change', notify)
+  document.addEventListener('visibilitychange', notify)
+  return () => {
+    preference.removeEventListener('change', notify)
+    document.removeEventListener('visibilitychange', notify)
   }
 }
 
-function supportsWebGl2(): boolean {
-  if (webGl2Support !== null) return webGl2Support
-  if (typeof document === 'undefined') return false
-  try {
-    const context = document.createElement('canvas').getContext('webgl2')
-    webGl2Support = Boolean(context)
-    context?.getExtension('WEBGL_lose_context')?.loseContext()
-  } catch {
-    webGl2Support = false
+class ShaderErrorBoundary extends Component<{ children: ReactNode; maskStyle: string }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  componentDidCatch() {
+    setBackgroundFilterStatus(this.props.maskStyle, '滤镜加载失败。请切换样式重试；原背景和遮罩仍然保留。')
   }
-  return webGl2Support
+  render() { return this.state.failed ? null : this.props.children }
 }
 
-function useShaderImageSource(source: string, fallbackColor: string): string {
-  const fallback = createShaderFallbackImage(fallbackColor)
-  const directSource = source && !/^https?:/i.test(source) ? source : ''
-  const [resolvedSource, setResolvedSource] = useState(directSource || fallback)
+function useShaderImageSource(source: string, fallbackColor: string, backgroundSize: string, backgroundPosition: string, maskStyle: string): string {
+  const key = JSON.stringify([source, fallbackColor, backgroundSize, backgroundPosition])
+  const [resolved, setResolved] = useState({ key: '', source: '' })
 
   useEffect(() => {
-    if (!source || !/^https?:/i.test(source)) {
-      setResolvedSource(source || fallback)
-      return
-    }
-
     let cancelled = false
+    let resizeTimer = 0
     const image = new Image()
-    image.crossOrigin = 'anonymous'
-    image.onload = () => {
-      if (!cancelled) setResolvedSource(source)
+    if (/^https?:/i.test(source)) image.crossOrigin = 'anonymous'
+    const fail = () => {
+      if (cancelled) return
+      setResolved({ key, source: '' })
+      setBackgroundFilterStatus(maskStyle, '滤镜无法读取这张图片。请下载后使用本地图片，原背景和遮罩仍然保留。')
     }
-    image.onerror = () => {
-      if (!cancelled) setResolvedSource(fallback)
+    const render = () => {
+      if (cancelled || (source && !image.naturalWidth)) return
+      const width = window.innerWidth
+      const height = window.innerHeight
+      const scale = Math.min(1, Math.sqrt(SHADER_MAX_PIXEL_COUNT / (width * height)))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(width * scale))
+      canvas.height = Math.max(1, Math.round(height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) { fail(); return }
+      context.fillStyle = fallbackColor
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      if (source) {
+        const rect = getBackgroundMediaRect(image.naturalWidth, image.naturalHeight, canvas, backgroundSize, backgroundPosition)
+        context.drawImage(image, rect.offsetX, rect.offsetY, image.naturalWidth * rect.scale, image.naturalHeight * rect.scale)
+      }
+      try {
+        setResolved({ key, source: canvas.toDataURL('image/png') })
+        setBackgroundFilterStatus(maskStyle, '')
+      } catch { fail() }
     }
-    image.src = source
+    const resize = () => {
+      window.clearTimeout(resizeTimer)
+      resizeTimer = window.setTimeout(render, 120)
+    }
+    image.onload = render
+    image.onerror = fail
+    if (source) image.src = source
+    else render()
+    window.addEventListener('resize', resize, { passive: true })
     return () => {
       cancelled = true
       image.onload = null
       image.onerror = null
+      window.clearTimeout(resizeTimer)
+      window.removeEventListener('resize', resize)
     }
-  }, [fallback, source])
+  }, [key, source, fallbackColor, backgroundSize, backgroundPosition, maskStyle])
 
-  return resolvedSource
-}
-
-function createShaderFallbackImage(fallbackColor: string): string {
-  const color = /^#[0-9a-f]{6}$/i.test(fallbackColor) ? fallbackColor : SHADER_BACKGROUND
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><path fill="${color}" d="M0 0h2v2H0z"/></svg>`
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+  return resolved.key === key ? resolved.source : ''
 }

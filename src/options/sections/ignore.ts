@@ -1,5 +1,5 @@
 import { STORAGE_KEYS } from '../../shared/constants.js'
-import { setLocalStorage } from '../../shared/storage.js'
+import { getLocalStorage, setLocalStorage, withLocalStorageTransaction } from '../../shared/storage.js'
 import {
   managerState,
   createEmptyIgnoreRules
@@ -86,11 +86,33 @@ function serializeIgnoreRules(ignoreRules) {
 }
 
 export async function saveIgnoreRules(nextIgnoreRules = managerState.ignoreRules) {
+  const previous = normalizeIgnoreRules(managerState.ignoreRules)
   const normalized = normalizeIgnoreRules(nextIgnoreRules)
-  await setLocalStorage({
-    [STORAGE_KEYS.ignoreRules]: serializeIgnoreRules(normalized)
+  const saved = await withLocalStorageTransaction(async transaction => {
+    const stored = await getLocalStorage(STORAGE_KEYS.ignoreRules)
+    const current = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
+    const merged = normalizeIgnoreRules({
+      bookmarks: mergeIgnoreRuleChanges(current.bookmarks, previous.bookmarks, normalized.bookmarks, rule => rule.bookmarkId),
+      domains: mergeIgnoreRuleChanges(current.domains, previous.domains, normalized.domains, rule => rule.domain),
+      folders: mergeIgnoreRuleChanges(current.folders, previous.folders, normalized.folders, rule => rule.folderId)
+    })
+    await setLocalStorage({ [STORAGE_KEYS.ignoreRules]: serializeIgnoreRules(merged) }, { transaction })
+    return merged
   })
-  managerState.ignoreRules = normalized
+  managerState.ignoreRules = saved
+}
+
+function mergeIgnoreRuleChanges<T>(current: T[], previous: T[], next: T[], key: (rule: T) => string): T[] {
+  const before = new Map(previous.map(rule => [key(rule), rule]))
+  const after = new Map(next.map(rule => [key(rule), rule]))
+  const merged = new Map(current.map(rule => [key(rule), rule]))
+  for (const id of before.keys()) {
+    if (!after.has(id)) merged.delete(id)
+  }
+  for (const [id, rule] of after) {
+    if (!before.has(id) || JSON.stringify(before.get(id)) !== JSON.stringify(rule)) merged.set(id, rule)
+  }
+  return [...merged.values()]
 }
 
 export function matchesIgnoreRules(result) {
@@ -159,6 +181,7 @@ export async function removeIgnoreRule(kind, ruleId, callbacks) {
 }
 
 export async function clearIgnoreRules(kind, callbacks) {
+  const confirmedRules = normalizeIgnoreRules(managerState.ignoreRules)
   const meta = {
     bookmark: {
       label: '书签',
@@ -199,18 +222,18 @@ export async function clearIgnoreRules(kind, callbacks) {
   try {
     const nextIgnoreRules = normalizeIgnoreRules(managerState.ignoreRules)
     if (kind === 'bookmark') {
-      nextIgnoreRules.bookmarks = []
-      nextIgnoreRules.bookmarkIds = new Set()
+      nextIgnoreRules.bookmarks = nextIgnoreRules.bookmarks.filter(rule => !confirmedRules.bookmarkIds.has(rule.bookmarkId))
+      nextIgnoreRules.bookmarkIds = new Set(nextIgnoreRules.bookmarks.map(rule => rule.bookmarkId))
     }
 
     if (kind === 'domain') {
-      nextIgnoreRules.domains = []
-      nextIgnoreRules.domainValues = new Set()
+      nextIgnoreRules.domains = nextIgnoreRules.domains.filter(rule => !confirmedRules.domainValues.has(rule.domain))
+      nextIgnoreRules.domainValues = new Set(nextIgnoreRules.domains.map(rule => rule.domain))
     }
 
     if (kind === 'folder') {
-      nextIgnoreRules.folders = []
-      nextIgnoreRules.folderIds = new Set()
+      nextIgnoreRules.folders = nextIgnoreRules.folders.filter(rule => !confirmedRules.folderIds.has(rule.folderId))
+      nextIgnoreRules.folderIds = new Set(nextIgnoreRules.folders.map(rule => rule.folderId))
     }
 
     await saveIgnoreRules(nextIgnoreRules)

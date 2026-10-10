@@ -30,7 +30,7 @@ export function RecycleControls() {
               <strong className={RECYCLE_HEADER_TITLE_CLASS}>
                 <TextSwap animate={selectionEntered} text={`${state.selectedCount} 条已选择`} />
               </strong>
-              <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复或清除记录。</p>
+              <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>可批量恢复或清除记录，包含其他页及筛选外的已选项。</p>
             </div>
             <div className={RECYCLE_HEADER_ACTIONS_CLASS}>
               <Button
@@ -74,7 +74,7 @@ export function RecycleControls() {
         <div className={RECYCLE_HEADER_COPY_CLASS}>
           <strong className={RECYCLE_HEADER_TITLE_CLASS}>回收站条目</strong>
           <p className={RECYCLE_HEADER_SUBTITLE_CLASS}>
-            恢复时优先放回原文件夹。
+            共 {state.entryCount} 条，恢复时优先放回原文件夹。
           </p>
         </div>
         {hasEntries ? (
@@ -88,7 +88,7 @@ export function RecycleControls() {
               focusableWhenDisabled={state.locked}
               onClick={() => handleRecycleAction('select-all')}
             >
-              全选本区
+              全选全部记录
             </Button>
             <Button
               size="sm"

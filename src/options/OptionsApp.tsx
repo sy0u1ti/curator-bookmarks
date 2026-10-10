@@ -24,6 +24,9 @@ import type { IconName } from '../ui/icons/icon-map'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { getMotionAwareScrollBehavior } from '../shared/motion'
 import { GeneralPanel } from './components/GeneralPanel'
+import { AiSettingsPanel } from './components/AiSettingsPanel'
+import { InboxPanel } from './components/InboxPanel'
+import { useInboxReviewData } from './components/inbox-review-store'
 import { useOptionsModalsState } from './components/options-modals-store'
 import {
   getOptionsSectionNavigationFromLink,
@@ -32,6 +35,7 @@ import {
 import {
   handleOptionsBookmarkTreeChanged,
   handleOptionsWindowSectionChange,
+  subscribeToOptionsStorageEvents,
   useOptionsController
 } from './options-controller'
 import {
@@ -124,12 +128,14 @@ const availabilityLinks: NavLink[] = [
 ]
 
 const bookmarkLinks: NavLink[] = [
+  { section: 'inbox', href: '#inbox', icon: 'Bookmark', label: '待整理' },
   { section: 'duplicates', href: '#duplicates', icon: 'Copy', label: '重复书签检测' },
   { section: 'folder-cleanup', href: '#folder-cleanup', icon: 'Folder', label: '文件夹清理' },
   { section: 'recycle', href: '#recycle', icon: 'Trash2', label: '回收站' }
 ]
 
 const aiLinks: NavLink[] = [
+  { section: 'ai-settings', href: '#ai-settings', icon: 'Settings', label: 'AI 服务配置' },
   { section: 'ai', href: '#ai', icon: 'Bot', label: '书签智能分析' },
   { section: 'bookmark-history', href: '#bookmark-history', icon: 'Bookmark', label: 'AI 整理记录' }
 ]
@@ -189,8 +195,14 @@ function OptionsNavLink({
         <Icon name={icon} size={15} />
       </span>
       <span className="relative z-[1] min-w-0 truncate max-[920px]:whitespace-normal">{label}</span>
+      {section === 'inbox' ? <InboxPendingCount /> : null}
     </a>
   )
+}
+
+function InboxPendingCount() {
+  const { data } = useInboxReviewData()
+  return data ? <span className="ml-auto text-xs tabular-nums text-ds-text-secondary" aria-label={`${data.pending.length} 条待整理`}>{data.pending.length}</span> : null
 }
 
 function OptionsHeader({
@@ -219,7 +231,7 @@ function OptionsHeader({
           <img className={optionsBrandMarkImageClass} src="../assets/icon128.png" alt="" />
         </span>
         <span className={optionsBrandCopyClass}>
-          <strong className="block truncate whitespace-nowrap text-[17px] font-[650] leading-none tracking-[0] text-ds-text-primary max-[760px]:text-[20px]">
+          <strong className="block truncate whitespace-nowrap text-[15px] font-[650] leading-none tracking-[-0.01em] text-ds-text-primary max-[1180px]:text-[13px] max-[1180px]:tracking-[-0.02em] max-[760px]:text-[20px] max-[760px]:tracking-[0]">
             Curator Bookmark
           </strong>
         </span>
@@ -252,11 +264,20 @@ function OptionsSidebar({
   variant?: 'desktop' | 'mobile'
   visible?: boolean
 }) {
-  const [availabilityManuallyOpen, setAvailabilityManuallyOpen] = useState(false)
-  const availabilityOpen = availabilitySectionKeys.has(activeSectionKey) || availabilityManuallyOpen
+  const [availabilityOpen, setAvailabilityOpen] = useState(() => availabilitySectionKeys.has(activeSectionKey))
+  useLayoutEffect(() => {
+    if (availabilitySectionKeys.has(activeSectionKey)) setAvailabilityOpen(true)
+  }, [activeSectionKey])
   const idPrefix = variant === 'mobile' ? 'mobile-' : ''
   const sidebarRef = useRef<HTMLElement | null>(null)
   const activeIndicatorRef = useRef<HTMLSpanElement | null>(null)
+  const indicatorPositionRef = useRef<{
+    section: OptionsSectionKey
+    x: number
+    y: number
+    layoutX: number
+    layoutY: number
+  } | null>(null)
 
   useLayoutEffect(() => {
     const sidebar = sidebarRef.current
@@ -266,18 +287,18 @@ function OptionsSidebar({
         indicator.style.opacity = '0'
         delete indicator.dataset.ready
       }
+      indicatorPositionRef.current = null
       return
     }
 
-    let settleFrame = 0
     let readyFrame = 0
-    const startedAt = performance.now()
     const positionIndicator = () => {
       const activeLink = sidebar.querySelector<HTMLElement>(
         '.options-nav-link[aria-current="page"]'
       )
       if (!activeLink) {
         indicator.style.opacity = '0'
+        indicator.style.clipPath = 'inset(50%)'
         return
       }
 
@@ -285,12 +306,37 @@ function OptionsSidebar({
       const linkRect = activeLink.getBoundingClientRect()
       if (!linkRect.width || !linkRect.height) {
         indicator.style.opacity = '0'
+        indicator.style.clipPath = 'inset(50%)'
         return
       }
 
+      const clipRect = activeLink.closest('.t-acc-panel-inner')?.getBoundingClientRect()
+      const x = linkRect.left - sidebarRect.left + sidebar.scrollLeft
+      const y = linkRect.top - sidebarRect.top + sidebar.scrollTop
+      let position = indicatorPositionRef.current
+      if (!position || position.section !== activeSectionKey) {
+        position = {
+          section: activeSectionKey,
+          x: x - (position?.layoutX ?? 0),
+          y: y - (position?.layoutY ?? 0),
+          layoutX: position?.layoutX ?? 0,
+          layoutY: position?.layoutY ?? 0
+        }
+        indicatorPositionRef.current = position
+        indicator.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`
+      } else {
+        position.layoutX = x - position.x
+        position.layoutY = y - position.y
+      }
+
+      // Selection changes ease through transform; layout movement is added
+      // immediately so a resizing disclosure never restarts that transition.
+      indicator.style.translate = `${position.layoutX}px ${position.layoutY}px`
       indicator.style.width = `${linkRect.width}px`
       indicator.style.height = `${linkRect.height}px`
-      indicator.style.transform = `translate3d(${linkRect.left - sidebarRect.left + sidebar.scrollLeft}px, ${linkRect.top - sidebarRect.top + sidebar.scrollTop}px, 0)`
+      indicator.style.clipPath = clipRect
+        ? `inset(${Math.max(0, clipRect.top - linkRect.top)}px 0px ${Math.max(0, linkRect.bottom - clipRect.bottom)}px 0px)`
+        : ''
       indicator.style.opacity = '1'
       if (!indicator.dataset.ready && !readyFrame) {
         readyFrame = window.requestAnimationFrame(() => {
@@ -298,24 +344,20 @@ function OptionsSidebar({
         })
       }
     }
-    const trackSettlingLayout = (now: number) => {
-      positionIndicator()
-      if (now - startedAt < 360) {
-        settleFrame = window.requestAnimationFrame(trackSettlingLayout)
-      }
-    }
 
-    settleFrame = window.requestAnimationFrame(trackSettlingLayout)
+    positionIndicator()
     const resizeObserver = new ResizeObserver(positionIndicator)
     resizeObserver.observe(sidebar)
+    sidebar.querySelectorAll('.t-acc-panel, .options-nav-link[aria-current="page"]').forEach((element) => {
+      resizeObserver.observe(element)
+    })
     window.addEventListener('resize', positionIndicator)
     return () => {
-      window.cancelAnimationFrame(settleFrame)
       window.cancelAnimationFrame(readyFrame)
       resizeObserver.disconnect()
       window.removeEventListener('resize', positionIndicator)
     }
-  }, [activeSectionKey, availabilityOpen, variant, visible])
+  }, [activeSectionKey, variant, visible])
 
   return (
     <aside
@@ -345,7 +387,7 @@ function OptionsSidebar({
               <CollapsibleRoot
                 className={navCollapsibleClass}
                 open={availabilityOpen}
-                onOpenChange={setAvailabilityManuallyOpen}
+                onOpenChange={setAvailabilityOpen}
               >
                 <CollapsibleTrigger
                   className={navGroupTriggerClass}
@@ -506,6 +548,8 @@ export function OptionsApp() {
     return subscribeToOptionsBookmarkEvents()
   }, [])
 
+  useEffect(subscribeToOptionsStorageEvents, [])
+
   useEffect(() => {
     const desktopQuery = window.matchMedia('(min-width: 921px)')
     const closeMobileNavigation = () => {
@@ -546,7 +590,7 @@ export function OptionsApp() {
   }, [])
 
   const requestAiProviderAnchorAttention = useCallback(() => {
-    if (sectionKey !== 'general' || sectionAnchor !== 'ai-provider') {
+    if (sectionKey !== 'ai-settings') {
       return
     }
 
@@ -577,7 +621,7 @@ export function OptionsApp() {
       }
       setAiProviderAttentionRequestId((requestId) => requestId + 1)
     })
-  }, [sectionAnchor, sectionKey])
+  }, [sectionKey])
 
   const handleAiProviderAnchorRef = useCallback((node: HTMLDivElement | null) => {
     aiProviderAnchorRef.current = node
@@ -682,14 +726,10 @@ function ActiveOptionsPanel({
   sectionKey: OptionsSectionKey
 }) {
   if (sectionKey === 'general') {
-    return (
-      <GeneralPanel
-        aiProviderAnchorRef={aiProviderAnchorRef}
-        aiProviderAttentionRequestId={aiProviderAttentionRequestId}
-        hidden={false}
-      />
-    )
+    return <GeneralPanel hidden={false} />
   }
+  if (sectionKey === 'ai-settings') return <AiSettingsPanel anchorRef={aiProviderAnchorRef} attentionRequestId={aiProviderAttentionRequestId} />
+  if (sectionKey === 'inbox') return <InboxPanel />
   if (sectionKey === 'availability') return <AvailabilityPanel hidden={false} />
   if (sectionKey === 'ai') return <AiAnalysisPanel hidden={false} />
   if (sectionKey === 'bookmark-history') return <BookmarkHistoryPanel hidden={false} />

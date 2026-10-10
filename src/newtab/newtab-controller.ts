@@ -13,9 +13,9 @@ import {
   findBookmarksBar
 } from '../shared/bookmark-tree.js'
 import { buildBookmarkCatalogSnapshot, type BookmarkCatalogSnapshot } from '../shared/bookmark-catalog.js'
-import { getLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { getLocalStorage, setLocalStorage, withLocalStorageTransaction, type LocalStorageTransaction } from '../shared/storage.js'
 import { consumeNewtabStartupData, getBookmarkTree } from './newtab-startup-data.js'
-import { createNewtabSettingsPersistence } from './newtab-settings-persistence.js'
+import { createNewtabSettingsPersistence, NEWTAB_SYNCED_SETTING_KEYS } from './newtab-settings-persistence.js'
 import { collectRemovedBookmarkNodeIds, persistNewtabWorkspaceMutation } from './newtab-workspace-persistence.js'
 import { downloadBlobFile } from '../shared/download.js'
 import { getMotionDurationMs, getMotionEasing, prefersReducedMotion } from '../shared/motion.js'
@@ -40,6 +40,7 @@ import type {
   BookmarkTagSource
 } from '../shared/bookmark-tags.js'
 import type { ContentSnapshotIndex } from '../shared/content-snapshots.js'
+import { loadContentSnapshotSettings, type ContentSnapshotSettings } from '../shared/content-snapshot-search.js'
 import {
   DEFAULT_ICON_SETTINGS,
   ICON_LAYOUT_PRESETS,
@@ -106,7 +107,6 @@ import {
   applyBookmarkMoveOperationsToChildren,
   buildBookmarkOrderAfterInsert,
   buildMinimalBookmarkMoveOperations,
-  resolveRestorableBookmarkParentId,
   resolveBookmarkDragInsertIndex,
   type BookmarkMoveOperation,
   type BookmarkDragSlotRectLike,
@@ -200,6 +200,7 @@ import { mark as perfMark, measure as perfMeasure, measureNow } from '../shared/
 import { runIdle } from '../shared/idle.js'
 import { writeClipboardText } from '../shared/clipboard.js'
 import { readCustomIconFile } from './custom-icon-picker.js'
+import { loadCustomIcons, resolveCustomIcons, setBookmarkCustomIcon } from '../shared/repositories/custom-icon-repository.js'
 import type {
   FeaturedBackgroundHoverPreviewRequest,
   FeaturedBackgroundPickerCardViewModel,
@@ -638,6 +639,7 @@ const state = {
   bookmarkCatalog: null as BookmarkCatalogSnapshot | null,
   bookmarkTagIndex: null as BookmarkTagIndex | null,
   searchSnapshotIndex: null as ContentSnapshotIndex | null,
+  searchSnapshotSettings: null as ContentSnapshotSettings | null,
   folderNodeMap: new Map<string, chrome.bookmarks.BookmarkTreeNode>(),
   folderNode: null as chrome.bookmarks.BookmarkTreeNode | null,
   folderSections: [] as NewTabFolderSection[],
@@ -783,6 +785,8 @@ let featuredBackgroundRefreshTimer = 0
 let featuredBackgroundPreferencesSaveTimer = 0
 let featuredBackgroundPreviewTimer = 0
 let backgroundApplyToken = 0
+let backgroundUploadVersion = 0
+let backgroundUploadQueue = Promise.resolve()
 let activeBackgroundObjectUrl = ''
 let lastAppliedBackgroundMediaSignature = ''
 let bookmarkDragGhostFrame = 0
@@ -890,8 +894,24 @@ interface BackgroundUrlCacheTask {
 
 let newTabControllerStarted = false
 let newTabControllerGeneration = 0
+let bookmarkMenuSession = 0
+let addBookmarkMenuSession = 0
 let newTabStorageEventsBound = false
 let newTabNaturalSearchSettingsGeneration = 0
+let newTabNaturalSearchToggleVersion = 0
+let newTabMetadataRefreshTimer: ReturnType<typeof setTimeout> | undefined
+let newTabActivityWriteQueue = Promise.resolve()
+let featuredBackgroundDownloadInFlight = false
+const featuredBackgroundFavoriteWrites = new Set<string>()
+let newTabRefreshStorageChanges: Record<string, unknown> | null = null
+const newTabHydrationStorageKeys = new Set<string>([
+  ...NEWTAB_SYNCED_SETTING_KEYS,
+  STORAGE_KEYS.newTabWorkspaceSettings,
+  STORAGE_KEYS.newTabFeaturedBackgroundPreferences,
+  STORAGE_KEYS.newTabFeaturedBackgroundGallery,
+  STORAGE_KEYS.newTabFeaturedBackgroundFavorites,
+  STORAGE_KEYS.onboardingState
+])
 let refreshNewTabSearchSuggestionsAfterAiSettingsChange: (() => void) | null = null
 
 export function startNewTabController(): void {
@@ -900,17 +920,14 @@ export function startNewTabController(): void {
   }
   newTabControllerStarted = true
   settingsPersistence.resume()
-  const generation = ++newTabControllerGeneration
+  newTabControllerGeneration += 1
 
   recordNewTabDomContentLoaded()
   bindEvents()
   bindNewTabStorageEvents()
+  bindBookmarkEvents()
   hydrateFeaturedBackgroundOptions()
-  void refreshNewTab().finally(() => {
-    if (newTabControllerStarted && generation === newTabControllerGeneration) {
-      bindBookmarkEvents()
-    }
-  })
+  void refreshNewTab()
 }
 
 function bindNewTabStorageEvents(): void {
@@ -921,11 +938,45 @@ function bindNewTabStorageEvents(): void {
   newTabStorageEventsBound = true
 }
 
+let customIconLoadVersion = 0
+let newTabSearchHydrationVersion = 0
 function handleNewTabStorageChanged(
   changes: Record<string, chrome.storage.StorageChange>,
   areaName: string
 ): void {
+  if (areaName === 'local' && newTabRefreshStorageChanges) {
+    for (const [key, change] of Object.entries(changes)) {
+      if (newTabHydrationStorageKeys.has(key)) newTabRefreshStorageChanges[key] = change.newValue
+    }
+  }
   settingsPersistence.handleStorageChanges(changes, areaName)
+  if (areaName === 'local' && (changes[STORAGE_KEYS.newTabFeaturedBackgroundFavorites] || changes[STORAGE_KEYS.newTabFeaturedBackgroundGallery])) {
+    if (changes[STORAGE_KEYS.newTabFeaturedBackgroundFavorites]) {
+      state.featuredBackgroundFavoriteIds = normalizeFeaturedBackgroundFavoriteIds(changes[STORAGE_KEYS.newTabFeaturedBackgroundFavorites].newValue)
+    }
+    if (changes[STORAGE_KEYS.newTabFeaturedBackgroundGallery]) {
+      state.featuredBackgroundGallery = normalizeFeaturedBackgroundGallery(changes[STORAGE_KEYS.newTabFeaturedBackgroundGallery].newValue)
+    }
+    featuredBackgroundPickerRenderKey = ''
+    if (isFeaturedBackgroundPickerOpen()) void renderFeaturedBackgroundPickerAfterRefresh()
+  }
+  if (areaName === 'local' && [STORAGE_KEYS.bookmarkTagIndex, STORAGE_KEYS.newTabActivity,
+    STORAGE_KEYS.contentSnapshotSettings, STORAGE_KEYS.contentSnapshotIndex].some(key => changes[key])) {
+    newTabSearchHydrationVersion += 1
+    clearTimeout(newTabMetadataRefreshTimer)
+    newTabMetadataRefreshTimer = setTimeout(() => {
+      newTabMetadataRefreshTimer = undefined
+      if (newTabControllerStarted) void hydrateNewTabSearchAndTags()
+    }, 100)
+  }
+  if (areaName === 'local' && changes[STORAGE_KEYS.newTabCustomIcons]) {
+    const version = ++customIconLoadVersion
+    void resolveCustomIcons(changes[STORAGE_KEYS.newTabCustomIcons].newValue).then(icons => {
+      if (version !== customIconLoadVersion || !newTabControllerStarted) return
+      state.customIcons = icons
+      if (!state.loading) render()
+    }).catch(error => console.warn('新标签页自定义图标同步失败。', error))
+  }
   if (areaName === 'local' && changes[STORAGE_KEYS.newTabWorkspaceSettings]) {
     state.workspaceSettings = normalizeNewTabWorkspaceSettings(changes[STORAGE_KEYS.newTabWorkspaceSettings].newValue)
     if (!state.speedDialDraggingBookmarkId && !state.reorderingSpeedDial) refreshSpeedDialPanel()
@@ -961,6 +1012,7 @@ function normalizePersistedNewtabSetting(key: string, value: unknown): Record<st
 function applySyncedNewtabSetting(key: string, value: Record<string, unknown>): void {
   switch (key) {
     case STORAGE_KEYS.newTabSearchSettings:
+      newTabNaturalSearchToggleVersion += 1
       state.searchSettings = normalizeSearchSettings({
         ...value,
         naturalSearchAiConfigured: state.searchSettings.naturalSearchAiConfigured
@@ -999,7 +1051,7 @@ function applySyncedNewtabSetting(key: string, value: Record<string, unknown>): 
       syncInstantWallpaperTargetForSettings(state.backgroundSettings)
       syncBackgroundSettingsControls()
       scheduleFeaturedBackgroundDailyRefresh()
-      void applyBackgroundSettings()
+      runBackgroundTask(applyBackgroundSettings(), '背景应用失败')
       break
     case STORAGE_KEYS.newTabModuleSettings:
       state.moduleSettings = normalizeNewTabModuleSettings(value)
@@ -1043,10 +1095,10 @@ function scheduleNewTabSearchIndexRebuild(): void {
   searchIndexRebuildScheduled = true
   const version = searchIndexBuildVersion
   runIdle(() => {
-    searchIndexRebuildScheduled = false
-    if (version !== searchIndexBuildVersion) {
+    if (version !== searchIndexBuildVersion || !newTabControllerStarted) {
       return
     }
+    searchIndexRebuildScheduled = false
 
     rebuildNewTabSearchIndex()
   })
@@ -1100,7 +1152,7 @@ function bindEvents(): void {
       setActiveSettingsGroup(group)
     },
     onFeaturedPickerClick: () => {
-      void openFeaturedBackgroundPicker()
+      runBackgroundTask(openFeaturedBackgroundPicker(), '精选壁纸打开失败')
     },
     onOpenChange: (open) => {
       if (!open && isSettingsDrawerOpen()) {
@@ -1119,7 +1171,7 @@ function bindEvents(): void {
     },
     onReady: initializeFeaturedBackgroundModal,
     onRefreshClick: () => {
-      void refreshFeaturedBackgroundGallery()
+      runBackgroundTask(refreshFeaturedBackgroundGallery(), '精选壁纸刷新失败')
     }
   })
   registerNewtabDeleteToastActions({
@@ -1311,7 +1363,7 @@ function handleNewtabWindowPointerCancel(): void {
 
 function handleBookmarkContextMenu(
   bookmarkId: string,
-  event: ReactMouseEvent<HTMLAnchorElement>
+  event: ReactMouseEvent<HTMLElement>
 ): void {
   event.preventDefault()
   event.stopPropagation()
@@ -2012,11 +2064,21 @@ async function handleBackgroundFileChange(
     return
   }
 
+  const uploadVersion = ++backgroundUploadVersion
+  const session = newTabControllerGeneration
+  const previousSettings = state.backgroundSettings
+  let expectedSignature = getBackgroundMediaSignature(previousSettings)
+  const isCurrent = () => uploadVersion === backgroundUploadVersion && session === newTabControllerGeneration &&
+    newTabControllerStarted && expectedSignature === getBackgroundMediaSignature(state.backgroundSettings)
   try {
-    const previousSettings = state.backgroundSettings
     setBackgroundStatus('正在保存背景文件...', 'info')
     syncBackgroundSettingsControls()
-    await saveBackgroundMedia(mediaType, file)
+    const save = backgroundUploadQueue.then(async () => {
+      if (isCurrent()) await saveBackgroundMedia(mediaType, file)
+    })
+    backgroundUploadQueue = save.catch(() => {})
+    await save
+    if (!isCurrent()) return
     state.backgroundSettings = normalizeBackgroundSettings({
       ...state.backgroundSettings,
       type: mediaType,
@@ -2026,20 +2088,29 @@ async function handleBackgroundFileChange(
     backgroundSettingsHydrated = true
     backgroundSettingsMutationVersion += 1
     preloadedBackgroundSettings = state.backgroundSettings
+    expectedSignature = getBackgroundMediaSignature(state.backgroundSettings)
+    // Replacing a file with the same name still requires reloading its bytes.
+    lastAppliedBackgroundMediaSignature = ''
     await saveBackgroundSettings()
-    await ensureCurrentBackgroundStartupCache(state.backgroundSettings)
+    if (!isCurrent()) return
+    await updateInstantWallpaperFromBlob(file, expectedSignature, state.backgroundSettings)
+    if (!isCurrent()) return
     if (shouldClearBackgroundUrlCache(previousSettings, state.backgroundSettings)) {
       await clearBackgroundUrlCache()
     }
+    if (!isCurrent()) return
     syncBackgroundSettingsControls()
     scheduleFeaturedBackgroundDailyRefresh()
     await applyBackgroundSettings()
+    if (!isCurrent()) return
+    if (lastAppliedBackgroundMediaSignature !== expectedSignature) return
     setBackgroundStatus(
       mediaType === 'image' ? '背景图片已保存。' : '背景视频已保存。',
       'success'
     )
     syncBackgroundSettingsControls()
   } catch (error) {
+    if (!isCurrent()) return
     setBackgroundStatus(getBackgroundMediaSaveErrorMessage(error), 'error')
     syncBackgroundSettingsControls()
   }
@@ -2172,6 +2243,7 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
     return
   }
 
+  bookmarkMenuSession += 1
   state.activeMenuBookmarkId = bookmarkId
   state.menuX = clientX
   state.menuY = clientY
@@ -2188,6 +2260,7 @@ function openBookmarkMenu(bookmarkId: string, clientX: number, clientY: number):
 
 function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): void {
   closeBookmarkMenu({ animate: false })
+  addBookmarkMenuSession += 1
   state.addMenuOpen = true
   state.addMenuExpanded = false
   state.addFolderId = folderId
@@ -2203,6 +2276,7 @@ function openAddBookmarkMenu(clientX: number, clientY: number, folderId = ''): v
 function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): void {
   const rect = anchor.getBoundingClientRect()
   closeBookmarkMenu({ animate: false })
+  addBookmarkMenuSession += 1
   state.addMenuOpen = true
   state.addMenuExpanded = true
   state.addFolderId = folderId
@@ -2216,6 +2290,7 @@ function openAddBookmarkMenuForElement(anchor: HTMLElement, folderId: string): v
 }
 
 function closeBookmarkMenu({ animate = true } = {}): void {
+  bookmarkMenuSession += 1
   state.activeMenuBookmarkId = ''
   state.menuBusy = false
   state.menuError = ''
@@ -2236,6 +2311,7 @@ function finalizeBookmarkMenuClose(): void {
 }
 
 function closeAddBookmarkMenu({ animate = true } = {}): void {
+  addBookmarkMenuSession += 1
   state.addMenuOpen = false
   state.addMenuExpanded = false
   state.addFolderId = ''
@@ -3726,6 +3802,10 @@ async function persistBookmarkOrder(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : '书签排序保存失败，请刷新后重试。'
+    // Moves are applied one by one, so a failure leaves the folder half
+    // reordered. Put every bookmark back where it was before surfacing the
+    // error; the refresh below then re-reads the real tree either way.
+    await restoreBookmarkOrderAfterFailure(folderId, originalBookmarkIds)
     await refreshNewTab({ showLoading: false })
     state.bookmarkReorderError = message
     render()
@@ -3733,6 +3813,25 @@ async function persistBookmarkOrder(
   } finally {
     state.reorderingBookmarks = false
     syncBookmarkReorderBusyState()
+  }
+}
+
+/** Best-effort rollback after a partially applied reorder: move each bookmark
+ * of the folder back to its original index. Individual failures are ignored
+ * because the caller refreshes from the real tree afterwards. */
+async function restoreBookmarkOrderAfterFailure(folderId: string, originalBookmarkIds: string[]): Promise<void> {
+  const children = state.folderNodeMap.get(folderId)?.children
+  if (!children?.length || !originalBookmarkIds.length) {
+    return
+  }
+  const knownIds = new Set(children.map((child) => String(child.id)))
+  if (originalBookmarkIds.some((bookmarkId) => !knownIds.has(bookmarkId))) {
+    return
+  }
+  for (const [index, bookmarkId] of originalBookmarkIds.entries()) {
+    try {
+      await moveBookmarkLazy(bookmarkId, folderId, index)
+    } catch { /* The refresh below re-reads the real tree. */ }
   }
 }
 
@@ -4813,8 +4912,9 @@ function normalizeBookmarkInsertIndex(rawIndex: number | undefined, length: numb
 }
 
 function scheduleBookmarkChangeRefresh(): void {
+  if (!newTabControllerStarted) return
   bookmarkChangeRefreshQueued = true
-  if (bookmarkChangeRefreshTimer || bookmarkChangeRefreshInFlight) {
+  if (state.loading || newTabRefreshStorageChanges || bookmarkChangeRefreshTimer || bookmarkChangeRefreshInFlight) {
     return
   }
 
@@ -4825,18 +4925,21 @@ function scheduleBookmarkChangeRefresh(): void {
 }
 
 async function flushBookmarkChangeRefresh(): Promise<void> {
-  if (bookmarkChangeRefreshInFlight || !bookmarkChangeRefreshQueued) {
+  if (!newTabControllerStarted || state.loading || newTabRefreshStorageChanges || bookmarkChangeRefreshInFlight || !bookmarkChangeRefreshQueued) {
     return
   }
 
   bookmarkChangeRefreshQueued = false
   bookmarkChangeRefreshInFlight = true
+  const session = newTabControllerGeneration
+  const refreshVersion = newTabRefreshVersion
   try {
     // Native bookmark events must not rehydrate settings or clear an in-progress
     // search/settings draft. Refresh only the tree and its derived views.
     const eventVersion = bookmarkTreeEventVersion
     const tree = await getBookmarkTree()
-    if (eventVersion !== bookmarkTreeEventVersion || state.reorderingBookmarks || state.draggingBookmarkId) {
+    if (session !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (refreshVersion !== newTabRefreshVersion || newTabRefreshStorageChanges || eventVersion !== bookmarkTreeEventVersion || state.reorderingBookmarks || state.draggingBookmarkId) {
       bookmarkChangeRefreshQueued = true
       return
     }
@@ -4852,9 +4955,11 @@ async function flushBookmarkChangeRefresh(): Promise<void> {
   } catch (error) {
     console.warn('新标签页书签更新失败。', error)
   } finally {
-    bookmarkChangeRefreshInFlight = false
-    if (bookmarkChangeRefreshQueued) {
-      scheduleBookmarkChangeRefresh()
+    if (session === newTabControllerGeneration) {
+      bookmarkChangeRefreshInFlight = false
+      if (bookmarkChangeRefreshQueued) {
+        scheduleBookmarkChangeRefresh()
+      }
     }
   }
 }
@@ -4891,21 +4996,27 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
   }
 
   const bookmarkId = String(bookmark.id)
+  const session = bookmarkMenuSession
+  const controllerSession = newTabControllerGeneration
   const workspace = getActiveNewTabWorkspace(state.workspaceSettings)
   const pinned = isBookmarkPinnedInSpeedDial(workspace.pinnedIds, bookmarkId)
   try {
     state.menuBusy = true
     state.pendingDeleteBookmarkId = ''
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
-    state.workspaceSettings = await persistNewtabWorkspaceMutation({ type: 'pin', bookmarkId, pinned: !pinned })
+    const workspaceSettings = await persistNewtabWorkspaceMutation({ type: 'pin', bookmarkId, pinned: !pinned })
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    state.workspaceSettings = workspaceSettings
+    scheduleRender({ updateClock: true })
+    updateClockText()
+    if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     const copy = getSpeedDialPinActionCopyLocal(pinned)
     state.menuError = ''
     state.menuStatus = copy.status
-    scheduleRender({ updateClock: true })
-    updateClockText()
     renderBookmarkMenu({ focusFirst: false, focusAction: 'toggle-pin' })
   } catch (error) {
+    if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     state.menuStatus = ''
     state.menuError = error instanceof Error ? error.message : '固定状态保存失败，请稍后重试。'
@@ -4914,16 +5025,21 @@ async function toggleActiveMenuBookmarkPin(): Promise<void> {
 }
 
 async function saveBookmarkMenuChanges(): Promise<void> {
+  if (state.menuBusy) return
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
     closeBookmarkMenu()
     return
   }
 
+  const session = bookmarkMenuSession
+  const controllerSession = newTabControllerGeneration
+  let bookmarkSaved = false
   try {
     const previousUrl = String(bookmark.url || '').trim()
     const title = state.editTitle.trim() || state.editUrl.trim()
     const url = normalizeBookmarkInputUrl(state.editUrl)
+    const customIcon = getCustomIconChoice(bookmark.id)
     state.pendingDeleteBookmarkId = ''
     state.menuBusy = true
     state.menuError = ''
@@ -4931,34 +5047,48 @@ async function saveBookmarkMenuChanges(): Promise<void> {
     renderBookmarkMenu()
 
     await updateBookmarkLazy(bookmark.id, { title, url })
-    await persistCustomIconChoice(bookmark.id)
+    bookmarkSaved = true
+    await persistCustomIconChoice(bookmark.id, customIcon)
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
     if (previousUrl !== url) {
       state.faviconRefreshTokens.set(bookmark.id, Date.now())
     }
-    closeBookmarkMenu()
+    if (isCurrentBookmarkMenuSession(session)) closeBookmarkMenu()
     await refreshNewTab({ showLoading: false })
   } catch (error) {
+    if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     state.menuStatus = ''
-    state.menuError = error instanceof Error ? error.message : '保存失败，请稍后重试。'
+    const detail = error instanceof Error ? error.message : '请稍后重试。'
+    state.menuError = bookmarkSaved ? `名称和网址已保存，但图标保存失败：${detail}` : `保存失败：${detail}`
     renderBookmarkMenu()
   }
 }
 
 async function copyActiveMenuBookmarkUrl(): Promise<void> {
+  if (state.menuBusy) return
   const bookmark = getActiveMenuBookmark()
   if (!bookmark?.url) {
     closeBookmarkMenu()
     return
   }
 
+  const session = bookmarkMenuSession
   try {
+    state.menuBusy = true
     state.pendingDeleteBookmarkId = ''
+    state.menuError = ''
+    state.menuStatus = ''
+    renderBookmarkMenu({ focusFirst: false })
     await writeClipboardText(bookmark.url)
+    if (!isCurrentBookmarkMenuSession(session)) return
+    state.menuBusy = false
     state.menuError = ''
     state.menuStatus = '链接已复制'
     renderBookmarkMenu({ focusFirst: false, focusAction: 'copy-url' })
   } catch (error) {
+    if (!isCurrentBookmarkMenuSession(session)) return
+    state.menuBusy = false
     state.menuStatus = ''
     state.menuError = error instanceof Error ? `复制失败：${error.message}` : '复制失败，请手动复制链接。'
     renderBookmarkMenu({ focusFirst: false, focusAction: 'copy-url' })
@@ -4966,12 +5096,15 @@ async function copyActiveMenuBookmarkUrl(): Promise<void> {
 }
 
 async function deleteActiveMenuBookmark(): Promise<void> {
+  if (state.menuBusy) return
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
     closeBookmarkMenu()
     return
   }
 
+  const session = bookmarkMenuSession
+  const controllerSession = newTabControllerGeneration
   const bookmarkId = String(bookmark.id || '')
   if (state.pendingDeleteBookmarkId !== bookmarkId) {
     state.pendingDeleteBookmarkId = bookmarkId
@@ -5006,10 +5139,8 @@ async function deleteActiveMenuBookmark(): Promise<void> {
     }
     const deletedCustomIcon = state.customIcons[bookmark.id]
     if (deletedCustomIcon) {
-      const nextIcons = { ...state.customIcons }
-      delete nextIcons[bookmark.id]
       await Promise.all([
-        saveCustomIcons(nextIcons).catch((error) => {
+        setBookmarkCustomIcon(bookmark.id, null).catch((error) => {
           console.warn('新标签页自定义图标清理失败。', error)
         }),
         removeBookmarkFromActivity(bookmark.id).catch((error) => {
@@ -5030,7 +5161,7 @@ async function deleteActiveMenuBookmark(): Promise<void> {
       ])
     }
 
-    state.pendingDeleteBookmarkId = ''
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
     state.lastDeletedBookmark = {
       bookmark,
       recycleId,
@@ -5038,9 +5169,10 @@ async function deleteActiveMenuBookmark(): Promise<void> {
       customIcon: deletedCustomIcon
     }
     state.deleteToastStatus = ''
-    closeBookmarkMenu()
+    if (isCurrentBookmarkMenuSession(session)) closeBookmarkMenu()
     await refreshNewTab({ showLoading: false })
   } catch (error) {
+    if (!isCurrentBookmarkMenuSession(session)) return
     state.pendingDeleteBookmarkId = ''
     state.menuBusy = false
     state.menuStatus = ''
@@ -5059,56 +5191,42 @@ async function undoLastDeletedBookmark(): Promise<void> {
     return
   }
 
+  const session = newTabControllerGeneration
   state.deleteToastBusy = true
   state.deleteToastStatus = '正在恢复...'
   renderDeleteToast()
 
   try {
-    const bookmark = deleted.bookmark
-    const parentId = await getRestorableParentId(bookmark.parentId)
-    const createdBookmark = await restoreBookmarkFromRecycleEntryLazy(
-      deleted.recycleId,
-      () => createBookmarkLazy({
-        parentId,
-        index: Number.isFinite(Number(bookmark.index)) ? Number(bookmark.index) : undefined,
-        title: bookmark.title || '未命名书签',
-        url: bookmark.url
-      })
-    )
-    if (deleted.customIcon) {
-      await saveCustomIcons({
-        ...state.customIcons,
-        [String(createdBookmark.id)]: deleted.customIcon
-      }).catch((error) => {
-        console.warn('新标签页撤销删除时恢复自定义图标失败。', error)
-      })
-    }
-
-    state.lastDeletedBookmark = null
+    const restored = await restoreBookmarkFromRecycleEntryLazy(deleted.recycleId)
+    if (session !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (state.lastDeletedBookmark === deleted) state.lastDeletedBookmark = null
     state.deleteToastBusy = false
     state.deleteToastStatus = ''
-    await refreshNewTab({ showLoading: false })
+    // The bookmark already exists in Chrome; insert it now instead of leaving
+    // the grid stale until the background refresh lands, so the restore never
+    // reads as a stalled toast.
+    if (restored) {
+      insertBookmarkInPlace(restored)
+      render()
+    }
     renderDeleteToast()
+    void refreshNewTab({ showLoading: false }).catch(() => {})
   } catch (error) {
+    if (session !== newTabControllerGeneration || !newTabControllerStarted) return
     state.deleteToastBusy = false
-    state.deleteToastStatus = error instanceof Error ? error.message : '恢复失败，请打开回收站处理。'
+    if (state.lastDeletedBookmark === deleted) {
+      state.deleteToastStatus = error instanceof Error ? error.message : '恢复失败，请打开回收站处理。'
+    }
     renderDeleteToast()
-  }
-}
-
-async function getRestorableParentId(parentId: string | undefined): Promise<string> {
-  try {
-    const rootNode = (await getBookmarkTree())[0] || null
-    const bookmarksBar = findBookmarksBar(rootNode)
-    return resolveRestorableBookmarkParentId(parentId, rootNode, bookmarksBar?.id || BOOKMARKS_BAR_ID)
-  } catch {
-    return BOOKMARKS_BAR_ID
   }
 }
 
 function openRecycleBin(): void {
   const url = chrome.runtime.getURL('src/options/options.html#recycle')
-  void chrome.tabs?.create?.({ url })
+  void chrome.tabs?.create?.({ url })?.catch?.(() => {
+    state.deleteToastStatus = '回收站打开失败，请在扩展设置中手动打开。'
+    renderDeleteToast()
+  })
   state.lastDeletedBookmark = null
   state.deleteToastStatus = ''
   renderDeleteToast()
@@ -5117,7 +5235,10 @@ function openRecycleBin(): void {
 function openOptionsHash(hash: string): void {
   const normalizedHash = String(hash || '').startsWith('#') ? String(hash) : `#${String(hash || '').trim()}`
   const url = chrome.runtime.getURL(`src/options/options.html${normalizedHash}`)
-  void chrome.tabs?.create?.({ url })
+  void chrome.tabs?.create?.({ url })?.catch?.(() => {
+    setBackgroundStatus('设置页打开失败，请手动打开扩展设置。', 'error')
+    render()
+  })
 }
 
 function openAiProviderSettings(): void {
@@ -5157,6 +5278,9 @@ function expandAddBookmarkMenu(): void {
 }
 
 async function saveAddedBookmark(): Promise<void> {
+  if (!state.addMenuOpen || state.addMenuBusy) return
+  const session = addBookmarkMenuSession
+  const controllerSession = newTabControllerGeneration
   try {
     const url = normalizeBookmarkInputUrl(state.addUrl)
     const title = state.addTitle.trim() || url
@@ -5170,9 +5294,11 @@ async function saveAddedBookmark(): Promise<void> {
       title,
       url
     })
-    closeAddBookmarkMenu()
+    if (controllerSession !== newTabControllerGeneration || !newTabControllerStarted) return
+    if (session === addBookmarkMenuSession) closeAddBookmarkMenu()
     await refreshNewTab({ showLoading: false })
   } catch (error) {
+    if (session !== addBookmarkMenuSession) return
     state.addMenuBusy = false
     state.addMenuError =
       error instanceof Error ? error.message : '添加失败，请稍后重试。'
@@ -5186,6 +5312,8 @@ interface RefreshNewTabOptions {
 
 async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}): Promise<void> {
   const refreshVersion = ++newTabRefreshVersion
+  const iconVersion = customIconLoadVersion
+  newTabRefreshStorageChanges = {}
   const bookmarkEventVersionAtStart = bookmarkTreeEventVersion
   let settingsRecoveryError = ''
   const backgroundMutationVersionAtStart = backgroundSettingsMutationVersion
@@ -5201,19 +5329,22 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
   }
 
   try {
-    const startup = await consumeNewtabStartupData()
+    const [startup, customIcons] = await Promise.all([
+      consumeNewtabStartupData(),
+      loadCustomIcons().catch(error => { console.warn('新标签页图标读取失败，保留已有图标。', error); return null })
+    ])
     if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
     settingsRecoveryError = startup.settingsRecoveryError || ''
     const tree = startup.tree
     state.rootNode = tree[0] || null
-    const stored = settingsPersistence.hydrate(startup.stored)
-    preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
+    const stored = settingsPersistence.hydrate({ ...startup.stored, ...newTabRefreshStorageChanges })
+    if (backgroundMutationVersionAtStart === backgroundSettingsMutationVersion) {
+      preloadBackgroundSettings(stored[STORAGE_KEYS.newTabBackgroundSettings])
+    }
     perfMark('newtab.storageLoaded')
     const rootNode = tree[0] || null
     state.rootNode = rootNode
     state.bookmarkCatalog = null
-    state.bookmarkTagIndex = null
-    state.searchSnapshotIndex = null
     const folderData = refreshBookmarkCatalog(rootNode).extracted
     const folderNodeMap = buildFolderNodeMap(rootNode)
     const folderSettings = normalizeFolderSettingsWithDefault(
@@ -5229,7 +5360,7 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     state.folderSettings = folderSettings
     state.folderSections = folderSections
     refreshDerivedBookmarkState()
-    state.customIcons = normalizeCustomIcons(stored[STORAGE_KEYS.newTabCustomIcons])
+    if (customIcons && iconVersion === customIconLoadVersion) state.customIcons = customIcons
     const featuredBackgroundPreferences = normalizeFeaturedBackgroundPreferences(
       stored[STORAGE_KEYS.newTabFeaturedBackgroundPreferences]
     )
@@ -5237,7 +5368,7 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     state.featuredBackgroundFavoriteIds = normalizeFeaturedBackgroundFavoriteIds(stored[STORAGE_KEYS.newTabFeaturedBackgroundFavorites])
     state.featuredBackgroundGalleryHydrated = true
     state.featuredBackgroundPreferences = featuredBackgroundPreferences
-    state.activity = normalizeNewTabActivity(null, state.allBookmarks)
+    state.activity = normalizeNewTabActivity(state.activity, state.allBookmarks)
     state.workspaceSettings = normalizeNewTabWorkspaceSettings(stored[STORAGE_KEYS.newTabWorkspaceSettings], {
       validBookmarkIds: state.allBookmarkMap.keys()
     })
@@ -5256,12 +5387,14 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     state.utilitySettingsHydrated = true
     onboardingCompleted = normalizeNewTabOnboardingCompleted(stored[STORAGE_KEYS.onboardingState])
   } catch (error) {
+    if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
     state.error = error instanceof Error ? error.message : '新标签页加载失败，请刷新后重试。'
-    resolveSearchIndexReady()
+    scheduleNewTabSearchIndexRebuild()
   } finally {
     if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
-    if (bookmarkTreeEventVersion !== bookmarkEventVersionAtStart) scheduleBookmarkChangeRefresh()
+    newTabRefreshStorageChanges = null
     state.loading = false
+    if (bookmarkChangeRefreshQueued || bookmarkTreeEventVersion !== bookmarkEventVersionAtStart) scheduleBookmarkChangeRefresh()
     render()
     renderDeleteToast()
     const backgroundUiAlreadyApplied = backgroundUiAppliedFromPreload
@@ -5269,7 +5402,7 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
     const shouldSyncBackgroundUi = backgroundSettingsHydrated && !backgroundUiAlreadyApplied
     if (shouldSyncBackgroundUi) {
       scheduleFeaturedBackgroundDailyRefresh()
-      void applyBackgroundSettings()
+      runBackgroundTask(applyBackgroundSettings(), '背景应用失败')
     }
     applyGeneralSettings()
     applyFolderSettings()
@@ -5290,8 +5423,11 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
       void hydrateNewTabSearchAndTags(refreshVersion)
     })
     runIdle(() => {
-      void refreshNewTabNaturalSearchAiConfiguredState().then(() => {
-        if (!state.searchSettings.naturalSearchAiConfigured && state.searchSettings.naturalSearchEnabled) {
+      if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
+      const toggleVersion = newTabNaturalSearchToggleVersion
+      void refreshNewTabNaturalSearchAiConfiguredState().then((configured) => {
+        if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted || toggleVersion !== newTabNaturalSearchToggleVersion) return
+        if (configured === false && state.searchSettings.naturalSearchEnabled) {
           state.searchSettings = normalizeSearchSettings({
             ...state.searchSettings,
             naturalSearchEnabled: false
@@ -5307,20 +5443,24 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
 }
 
 async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion): Promise<void> {
+  if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
+  const hydrationVersion = ++newTabSearchHydrationVersion
   try {
-    if (refreshVersion !== newTabRefreshVersion) {
+    if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) {
       return
     }
-    const [tagIndex, snapshotIndex, activity] = await Promise.all([
+    const [tagIndex, snapshotIndex, activity, snapshotSettings] = await Promise.all([
       loadNewTabBookmarkTagIndexLazy(),
       loadNewTabContentSnapshotIndexLazy(),
-      loadNewTabActivityLazy()
+      loadNewTabActivityLazy(),
+      loadContentSnapshotSettings()
     ])
 
-    if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
+    if (hydrationVersion !== newTabSearchHydrationVersion || refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
 
     state.bookmarkTagIndex = normalizeNewTabBookmarkTagIndex(tagIndex)
     state.searchSnapshotIndex = normalizeNewTabContentSnapshotIndex(snapshotIndex)
+    state.searchSnapshotSettings = snapshotSettings
     state.activity = activity
     state.workspaceSettings = normalizeNewTabWorkspaceSettings(state.workspaceSettings, {
       validBookmarkIds: state.allBookmarkMap.keys(),
@@ -5335,38 +5475,25 @@ async function hydrateNewTabSearchAndTags(refreshVersion = newTabRefreshVersion)
     }
     render()
   } catch (error) {
+    if (hydrationVersion !== newTabSearchHydrationVersion || refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
     console.warn('新标签页 idle 数据加载失败。', error)
     scheduleNewTabSearchIndexRebuild()
-    resolveSearchIndexReady()
   }
 }
 
 async function loadNewTabBookmarkTagIndexLazy(): Promise<BookmarkTagIndex | null> {
-  try {
-    const { loadBookmarkTagIndex } = await import('../shared/bookmark-tags.js')
-    return await loadBookmarkTagIndex()
-  } catch {
-    return null
-  }
+  const { loadBookmarkTagIndex } = await import('../shared/bookmark-tags.js')
+  return loadBookmarkTagIndex()
 }
 
 async function loadNewTabContentSnapshotIndexLazy(): Promise<ContentSnapshotIndex | null> {
-  try {
-    const { loadContentSnapshotIndex } = await import('../shared/content-snapshots.js')
-    return await loadContentSnapshotIndex()
-  } catch {
-    return null
-  }
+  const { loadContentSnapshotIndex } = await import('../shared/content-snapshots.js')
+  return loadContentSnapshotIndex()
 }
 
 async function loadNewTabActivityLazy(): Promise<NewTabActivityState> {
-  try {
-    const activityRepository = await loadNewTabActivityRepositoryLazy()
-    return activityRepository.loadNewTabActivityFromRepository(normalizeNewTabActivityForCurrentBookmarks)
-  } catch {
-    const stored = await getLocalStorage([STORAGE_KEYS.newTabActivity]).catch(() => ({}))
-    return normalizeNewTabActivity(stored[STORAGE_KEYS.newTabActivity], state.allBookmarks)
-  }
+  const activityRepository = await loadNewTabActivityRepositoryLazy()
+  return activityRepository.loadNewTabActivityFromRepository(normalizeNewTabActivityForCurrentBookmarks)
 }
 
 function preloadBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKGROUND_SETTINGS | null {
@@ -5383,7 +5510,7 @@ function preloadBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKGRO
       syncBackgroundSettingsControls()
       syncFeaturedBackgroundDisplayPreferenceControls()
       scheduleFeaturedBackgroundDailyRefresh()
-      void applyBackgroundSettings()
+      runBackgroundTask(applyBackgroundSettings(), '背景应用失败')
       backgroundUiAppliedFromPreload = true
     } else {
       syncBackgroundSettingsControls()
@@ -5986,6 +6113,7 @@ function initializeSearchWidget(): boolean {
   let searchSuggestionListVisible = true
   let searchSuggestions: NewTabSearchSuggestion[] = []
   let activeSuggestionIndex = -1
+  let searchInputComposing = false
   let suggestionDebounceTimer = 0
   let suggestionRequestId = 0
 
@@ -6039,8 +6167,13 @@ function initializeSearchWidget(): boolean {
           syncSearchInputActions(input)
           scheduleSuggestionsRender()
         },
+        onInputCompositionChange: (composing) => {
+          searchInputComposing = composing
+          if (!composing) scheduleSuggestionsRender({ immediate: true })
+        },
         onInputKeyDown: (event) => {
           if (event.defaultPrevented) return
+          if (searchInputComposing || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
           const input = getSearchInput()
           if (!input) {
             return
@@ -6118,6 +6251,7 @@ function initializeSearchWidget(): boolean {
         onSubmit: (event) => {
           const input = getSearchInput()
           event.preventDefault()
+          if (searchInputComposing) return
           closeEngineMenu()
           hideSuggestions()
           if (!input || state.searchSettings.webSearchEnabled === false) {
@@ -6378,6 +6512,13 @@ function initializeSearchWidget(): boolean {
         return
       }
 
+      if (query.trim() && state.preparedSearchIndex.fullTextEnabled && !state.preparedSearchIndex.fullTextReady) {
+        searchSuggestions = []
+        activeSuggestionIndex = -1
+        setActiveSearchDescendant('')
+        patchNewtabSearchWidgetView({ suggestions: [], hint: { type: 'text', text: '正在检索本地书签与正文…' } })
+        showSearchPanel()
+      }
       void getSearchBookmarkSuggestions(query).then((directSuggestions) => {
         if (requestId !== suggestionRequestId) {
           return
@@ -6406,8 +6547,8 @@ function initializeSearchWidget(): boolean {
         if (requestId !== suggestionRequestId) {
           return
         }
-
-        renderSuggestions(mergeNewTabCommandSuggestions(query, []), { preserveActive, query })
+        patchNewtabSearchWidgetView({ hint: { type: 'text', text: '本地索引暂时无法读取，请重新输入以重试。' } })
+        showSearchPanel()
       })
     }
 
@@ -6565,7 +6706,7 @@ function initializeSearchWidget(): boolean {
   function getSearchSuggestionHintText(): string {
     const mode = state.searchSettings.naturalSearchEnabled
       ? 'AI 改写'
-      : 'popup 匹配'
+      : '关键词匹配'
     const fallback = state.naturalSearchError ? `；${state.naturalSearchError}` : ''
     return `按 ↓ 选择书签，选中后 Enter 打开；Cmd/Ctrl+Enter 用 ${getSearchEngineDisplayName()} 搜索网页；${mode}${fallback}`
   }
@@ -6602,10 +6743,16 @@ async function toggleNewTabNaturalSearch({
   updateNaturalButton: () => void
   scheduleSuggestionsRender: (options?: { preserveActive?: boolean; immediate?: boolean }) => void
 }): Promise<void> {
+  const version = ++newTabNaturalSearchToggleVersion
   const enabled = !state.searchSettings.naturalSearchEnabled
 
   if (enabled) {
     const naturalSearchAiConfigured = await refreshNewTabNaturalSearchAiConfiguredState()
+    if (version !== newTabNaturalSearchToggleVersion || !newTabControllerStarted) return
+    if (naturalSearchAiConfigured === null) {
+      setSettingsSaveStatus('error', 'AI 配置暂时无法读取，请重试。')
+      return
+    }
     if (!naturalSearchAiConfigured) {
       state.searchSettings = normalizeSearchSettings({
         ...state.searchSettings,
@@ -6907,10 +7054,13 @@ function throwIfNewTabNaturalSearchRequestStale(
   }
 }
 
-async function refreshNewTabNaturalSearchAiConfiguredState(): Promise<boolean> {
+async function refreshNewTabNaturalSearchAiConfiguredState(): Promise<boolean | null> {
+  const generation = newTabNaturalSearchSettingsGeneration
+  const session = newTabControllerGeneration
   try {
     const naturalSearchAi = await import('../popup/natural-search-ai.js')
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (generation !== newTabNaturalSearchSettingsGeneration || session !== newTabControllerGeneration || !newTabControllerStarted) return null
     const naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
     state.searchSettings = normalizeSearchSettings({
       ...state.searchSettings,
@@ -6918,15 +7068,12 @@ async function refreshNewTabNaturalSearchAiConfiguredState(): Promise<boolean> {
     })
     return naturalSearchAiConfigured
   } catch {
-    state.searchSettings = normalizeSearchSettings({
-      ...state.searchSettings,
-      naturalSearchAiConfigured: false
-    })
-    return false
+    return null
   }
 }
 
 function getSearchBookmarkSuggestions(query: string): Promise<SearchBookmarkSuggestion[]> {
+  if (!newTabControllerStarted) return Promise.resolve([])
   if (!state.searchIndexReady) {
     return state.searchIndexReadyPromise.then(() => getSearchBookmarkSuggestions(query))
   }
@@ -6950,6 +7097,7 @@ function getNaturalSearchBookmarkSuggestions(
   query: string,
   options: NaturalSearchSuggestionOptions = {}
 ): Promise<SearchBookmarkSuggestion[]> {
+  if (!newTabControllerStarted) return Promise.resolve([])
   if (!state.searchSettings.naturalSearchEnabled) {
     return Promise.resolve([])
   }
@@ -7332,7 +7480,7 @@ function normalizeNewTabContentSnapshotRecord(raw: unknown, fallbackBookmarkId: 
     hasFullText: source.hasFullText === true,
     fullTextBytes: Number(source.fullTextBytes) || 0,
     fullTextStorage,
-    fullText: undefined,
+    fullText: fullTextStorage === 'local' ? String(source.fullText || '') : undefined,
     fullTextRef: fullTextStorage === 'idb' ? String(source.fullTextRef || snapshotId || '').trim() : undefined,
     warnings: normalizeNewTabSnapshotTextList(source.warnings, 8)
   }
@@ -7921,6 +8069,11 @@ function createBookmarkTileViewModel(
       const tile = getNewtabBookmarkContentNodes().tiles.get(bookmarkId) || event.currentTarget
       handleBookmarkDragPointerDown(bookmarkId, folderId, tile, event)
     },
+    // The visible "…" trigger opens the same menu as a right-click, anchored
+    // at the pointer position.
+    onOpenMenu: (event) => {
+      handleBookmarkContextMenu(bookmarkId, event)
+    },
     onReorderKeyDown: (event) => {
       handleBookmarkReorderKeyDown(bookmarkId, folderId, event)
     },
@@ -7933,6 +8086,10 @@ function createBookmarkTileViewModel(
 }
 
 function cleanupNewTabController(): void {
+  state.deleteToastBusy = false
+  state.featuredBackgroundRefreshing = false
+  featuredBackgroundDownloadInFlight = false
+  featuredBackgroundFavoriteWrites.clear()
   if (settingsPersistence.hasPending()) {
     // A just-edited layout may not have reached the measured preboot snapshot.
     // Do not replay its previous geometry while recovering the final settings.
@@ -7942,6 +8099,22 @@ function cleanupNewTabController(): void {
   settingsPersistence.flushOnExit()
   newTabControllerStarted = false
   newTabControllerGeneration += 1
+  searchIndexBuildVersion += 1
+  searchIndexRebuildScheduled = false
+  resolveSearchIndexReady()
+  backgroundApplyToken += 1
+  backgroundUploadVersion += 1
+  newTabRefreshVersion += 1
+  newTabSearchHydrationVersion += 1
+  customIconLoadVersion += 1
+  newTabNaturalSearchSettingsGeneration += 1
+  newTabNaturalSearchToggleVersion += 1
+  clockHydrationVersion += 1
+  newTabRefreshStorageChanges = null
+  clearTimeout(newTabMetadataRefreshTimer)
+  newTabMetadataRefreshTimer = undefined
+  closeBookmarkMenu({ animate: false })
+  closeAddBookmarkMenu({ animate: false })
   refreshNewTabSearchSuggestionsAfterAiSettingsChange = null
   if (newTabStorageEventsBound) {
     chrome.storage.onChanged.removeListener(handleNewTabStorageChanged)
@@ -7965,6 +8138,9 @@ function cleanupNewTabController(): void {
   clockTimer = 0
   window.clearTimeout(featuredBackgroundRefreshTimer)
   featuredBackgroundRefreshTimer = 0
+  window.clearTimeout(backgroundStartupCacheTimer)
+  backgroundStartupCacheTimer = 0
+  backgroundStartupCacheRequestId += 1
   window.clearTimeout(featuredBackgroundPreferencesSaveTimer)
   featuredBackgroundPreferencesSaveTimer = 0
   clearFeaturedBackgroundPreviewWarmTimers()
@@ -8297,7 +8473,7 @@ function rebuildNewTabSearchIndex(): void {
     snapshotIndex: state.searchSnapshotIndex
   })
   lastBuiltSearchIndexCatalogVersion = catalog.version
-  state.preparedSearchIndex = prepareNewTabSearchIndex(state.searchIndex)
+  state.preparedSearchIndex = prepareNewTabSearchIndex(state.searchIndex, state.searchSnapshotSettings?.fullTextSearchEnabled === true)
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
   state.naturalSearchPlanCache.clear()
@@ -8358,7 +8534,9 @@ async function removeBookmarkFromActivity(bookmarkId: string): Promise<void> {
     return
   }
 
-  state.activity = await saveNewTabActivityRemoval(normalizedId)
+  const session = newTabControllerGeneration
+  const activity = await saveNewTabActivityRemoval(normalizedId)
+  if (session === newTabControllerGeneration && newTabControllerStarted) state.activity = activity
 }
 
 async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void> {
@@ -8371,21 +8549,34 @@ async function removeBookmarkFromWorkspacePins(bookmarkId: string): Promise<void
 }
 
 async function saveNewTabActivityRecord(record: NewTabActivityRecord): Promise<void> {
-  const activityRepository = await loadNewTabActivityRepositoryLazy()
-  state.activity = await activityRepository.upsertNewTabActivityRecordInRepository(
-    state.activity,
-    record,
-    normalizeNewTabActivityForCurrentBookmarks
-  )
+  const session = newTabControllerGeneration
+  const activity = await withNewTabActivityMutation(async transaction => {
+    const repository = await loadNewTabActivityRepositoryLazy()
+    const latest = await repository.loadNewTabActivityFromRepository(repository.normalizeNewTabActivityRepositoryState, transaction)
+    const previous = latest.records[record.bookmarkId]
+    return repository.upsertNewTabActivityRecordInRepository(latest, {
+      ...record,
+      openCount: Math.min((previous?.openCount || 0) + 1, 9999),
+      firstOpenedAt: previous?.firstOpenedAt || record.firstOpenedAt,
+      lastOpenedAt: Math.max(previous?.lastOpenedAt || 0, record.lastOpenedAt)
+    }, repository.normalizeNewTabActivityRepositoryState, transaction)
+  })
+  if (session === newTabControllerGeneration && newTabControllerStarted) state.activity = normalizeNewTabActivityForCurrentBookmarks(activity)
 }
 
 async function saveNewTabActivityRemoval(bookmarkId: string): Promise<NewTabActivityState> {
-  const activityRepository = await loadNewTabActivityRepositoryLazy()
-  return activityRepository.removeNewTabActivityRecordInRepository(
-    state.activity,
-    bookmarkId,
-    normalizeNewTabActivityForCurrentBookmarks
-  )
+  return withNewTabActivityMutation(async transaction => {
+    const repository = await loadNewTabActivityRepositoryLazy()
+    const latest = await repository.loadNewTabActivityFromRepository(repository.normalizeNewTabActivityRepositoryState, transaction)
+    const activity = await repository.removeNewTabActivityRecordInRepository(latest, bookmarkId, repository.normalizeNewTabActivityRepositoryState, transaction)
+    return normalizeNewTabActivityForCurrentBookmarks(activity)
+  })
+}
+
+function withNewTabActivityMutation<T>(task: (transaction: LocalStorageTransaction) => Promise<T>): Promise<T> {
+  const queued = newTabActivityWriteQueue.then(() => withLocalStorageTransaction(task))
+  newTabActivityWriteQueue = queued.then(() => {}, () => {})
+  return queued
 }
 
 async function loadNewTabActivityRepositoryLazy(): Promise<NewTabActivityRepositoryModule> {
@@ -8477,6 +8668,10 @@ function getActiveMenuBookmark(): chrome.bookmarks.BookmarkTreeNode | null {
   return state.activeMenuBookmarkId ? getBookmarkById(state.activeMenuBookmarkId) : null
 }
 
+function isCurrentBookmarkMenuSession(session: number): boolean {
+  return session === bookmarkMenuSession && Boolean(state.activeMenuBookmarkId)
+}
+
 function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void {
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
@@ -8487,7 +8682,9 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
   const bookmarkLabel = getBookmarkActionLabelContext(bookmark)
   const pinCopy = getSpeedDialPinActionCopyLocal(isActiveMenuBookmarkPinned())
   const deleteLabel = state.pendingDeleteBookmarkId === String(bookmark.id) ? '确认删除书签' : '删除书签'
+  const session = bookmarkMenuSession
   dispatchNewtabBookmarkEditMenuView({
+    sessionId: session,
     closing: false,
     focusAction,
     focusFirst,
@@ -8530,7 +8727,9 @@ function renderBookmarkMenu({ focusFirst = true, focusAction = '' } = {}): void 
       ],
       iconMode: state.editIconMode === 'custom' ? 'custom' : 'website',
       iconModeDisabled: state.menuBusy,
-      onCustomIconFileSelect: handleCustomIconFileSelect,
+      onCustomIconFileSelect: (file) => {
+        if (isCurrentBookmarkMenuSession(session)) return handleCustomIconFileSelect(file)
+      },
       onCloseRequest: closeBookmarkMenu,
       onIconModeChange: handleIconModeChange,
       status: state.menuStatus,
@@ -8548,6 +8747,7 @@ function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
   }
 
   dispatchNewtabBookmarkAddMenuView({
+    sessionId: addBookmarkMenuSession,
     closing: false,
     focusFirst,
     onExitComplete: finalizeAddBookmarkMenuClose,
@@ -8582,6 +8782,7 @@ function renderAddBookmarkMenu({ focusFirst = true } = {}): void {
 }
 
 function handleIconModeChange(nextMode: 'website' | 'custom'): void {
+  if (state.menuBusy) return
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
     closeBookmarkMenu()
@@ -8602,23 +8803,14 @@ function handleIconModeChange(nextMode: 'website' | 'custom'): void {
 }
 
 async function handleCustomIconFileSelect(file: File | null): Promise<void> {
+  if (state.menuBusy || !file) return
   const bookmark = getActiveMenuBookmark()
   if (!bookmark) {
     closeBookmarkMenu()
     return
   }
 
-  if (!file) {
-    state.editIconMode = state.customIcons[bookmark.id] ? 'custom' : 'website'
-    state.pendingCustomIconDataUrl = ''
-    state.menuBusy = false
-    state.pendingDeleteBookmarkId = ''
-    state.menuError = ''
-    state.menuStatus = ''
-    renderBookmarkMenu({ focusFirst: false })
-    return
-  }
-
+  const session = bookmarkMenuSession
   state.menuBusy = true
   state.pendingDeleteBookmarkId = ''
   state.menuError = ''
@@ -8627,16 +8819,17 @@ async function handleCustomIconFileSelect(file: File | null): Promise<void> {
 
   try {
     const dataUrl = await readCustomIconFile(file)
+    if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     state.editIconMode = 'custom'
     state.pendingCustomIconDataUrl = dataUrl
     renderBookmarkMenu({ focusFirst: false })
   } catch (error) {
+    if (!isCurrentBookmarkMenuSession(session)) return
     state.menuBusy = false
     state.menuStatus = ''
     state.menuError =
       error instanceof Error ? error.message : '自定义图片读取失败，请重试。'
-    state.editIconMode = state.customIcons[bookmark.id] ? 'custom' : 'website'
     renderBookmarkMenu({ focusFirst: false })
   }
 }
@@ -8716,43 +8909,27 @@ function normalizeBookmarkInputUrl(value: string): string {
   }
 }
 
-async function persistCustomIconChoice(bookmarkId: string): Promise<void> {
-  const nextIcons = { ...state.customIcons }
-
+function getCustomIconChoice(bookmarkId: string): string | null {
+  let iconData: string | null = null
   if (state.editIconMode === 'custom') {
-    const iconData = state.pendingCustomIconDataUrl || nextIcons[bookmarkId]
+    iconData = state.pendingCustomIconDataUrl || state.customIcons[bookmarkId]
     if (!iconData) {
       throw new Error('请选择自定义图片，或切回网站图标。')
     }
-    nextIcons[bookmarkId] = iconData
-  } else {
-    delete nextIcons[bookmarkId]
   }
-
-  await saveCustomIcons(nextIcons)
+  return iconData
 }
 
-async function saveCustomIcons(nextIcons: Record<string, string>): Promise<void> {
-  state.customIcons = nextIcons
-  await setLocalStorage({
-    [STORAGE_KEYS.newTabCustomIcons]: nextIcons
-  })
-}
-
-function normalizeCustomIcons(rawIcons: unknown): Record<string, string> {
-  if (!rawIcons || typeof rawIcons !== 'object' || Array.isArray(rawIcons)) {
-    return {}
+async function persistCustomIconChoice(bookmarkId: string, iconData: string | null): Promise<void> {
+  const session = newTabControllerGeneration
+  await setBookmarkCustomIcon(bookmarkId, iconData)
+  if (session !== newTabControllerGeneration || !newTabControllerStarted) return
+  if (iconData) state.customIcons = { ...state.customIcons, [bookmarkId]: iconData }
+  else {
+    const next = { ...state.customIcons }
+    delete next[bookmarkId]
+    state.customIcons = next
   }
-
-  const normalized: Record<string, string> = {}
-  for (const [bookmarkId, value] of Object.entries(rawIcons as Record<string, unknown>)) {
-    const key = String(bookmarkId || '').trim()
-    const dataUrl = String(value || '').trim()
-    if (key && dataUrl.startsWith('data:image/')) {
-      normalized[key] = dataUrl
-    }
-  }
-  return normalized
 }
 
 function normalizeBackgroundSettings(rawSettings: unknown): typeof DEFAULT_BACKGROUND_SETTINGS {
@@ -9061,6 +9238,18 @@ function setBackgroundStatus(
   state.backgroundStatusTone = tone
 }
 
+/** Fire-and-forget with a visible failure path: background work must never
+ * fail silently, or the UI keeps showing the previous state with no reason. */
+function runBackgroundTask(task: Promise<unknown>, failureMessage: string): void {
+  void task.catch((error) => {
+    console.warn(failureMessage, error)
+    if (!newTabControllerStarted) return
+    const detail = error instanceof Error && error.message ? `：${error.message}` : ''
+    setBackgroundStatus(`${failureMessage}${detail}`, 'error')
+    render()
+  })
+}
+
 function getBackgroundMediaSaveErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : ''
   if (/quota|storage|空间|容量/i.test(message)) {
@@ -9242,7 +9431,7 @@ async function applyBackgroundSettings(): Promise<void> {
     void loadBackgroundGalleryModule()
       .then(() => {
         if (applyToken === backgroundApplyToken && state.backgroundSettings.type === 'featured') {
-          void applyBackgroundSettings()
+          runBackgroundTask(applyBackgroundSettings(), '背景应用失败')
         }
       })
       .catch(() => {})
@@ -9337,12 +9526,16 @@ async function applyBackgroundSettings(): Promise<void> {
     mediaRecord = await getBackgroundMedia(mediaType)
   } catch {
     if (applyToken === backgroundApplyToken) {
+      setBackgroundStatus('背景文件读取失败，请重新选择文件或稍后重试。', 'error')
+      syncBackgroundSettingsControls()
       markWallpaperReady()
     }
     return
   }
   if (applyToken !== backgroundApplyToken || !mediaRecord) {
     if (applyToken === backgroundApplyToken) {
+      setBackgroundStatus('本地背景文件不存在，请重新选择文件。', 'warning')
+      syncBackgroundSettingsControls()
       markWallpaperReady()
     }
     return
@@ -9355,13 +9548,16 @@ async function applyBackgroundSettings(): Promise<void> {
       return
     }
     const readyImage = await waitForBackgroundImageReady(objectUrl, applyToken)
+    if (applyToken !== backgroundApplyToken) return
     if (readyImage) {
       setBackgroundImageMedia(objectUrl)
       markRuntimeWallpaperApplied()
       lastAppliedBackgroundMediaSignature = mediaKey
-      void updateInstantWallpaperFromBlob(mediaRecord.blob, mediaKey)
+      runBackgroundTask(updateInstantWallpaperFromBlob(mediaRecord.blob, mediaKey), '壁纸更新失败')
     } else {
       setActiveBackgroundObjectUrl('')
+      setBackgroundStatus('无法解码这张背景图片，请选择其他图片。', 'error')
+      syncBackgroundSettingsControls()
     }
     markWallpaperReady()
     return
@@ -9371,13 +9567,16 @@ async function applyBackgroundSettings(): Promise<void> {
   }
 
   const ready = await waitForBackgroundVideoSourceReady(objectUrl)
+  if (applyToken !== backgroundApplyToken) return
   if (ready) {
     setBackgroundVideoMedia(objectUrl, mediaKey)
     markRuntimeWallpaperApplied()
     lastAppliedBackgroundMediaSignature = mediaKey
-    void updateInstantWallpaperFromBlob(mediaRecord.blob, mediaKey)
+    runBackgroundTask(updateInstantWallpaperFromBlob(mediaRecord.blob, mediaKey), '壁纸更新失败')
   } else {
     setActiveBackgroundObjectUrl('')
+    setBackgroundStatus('无法播放这个背景视频，请选择受支持的视频文件。', 'error')
+    syncBackgroundSettingsControls()
   }
   markWallpaperReady()
 }
@@ -9435,11 +9634,12 @@ async function applyUrlBackgroundImage(
       const ready = await setBackgroundImageFromBlob(cachedRecord.blob, applyToken, {
         preserveCurrentUntilReady: true
       }, mediaSignature)
+      if (applyToken !== backgroundApplyToken) return
       if (ready) {
         lastAppliedBackgroundMediaSignature = mediaSignature
         await updateInstantWallpaperFromBlob(cachedRecord.blob, mediaSignature, settings)
       }
-      markWallpaperReady()
+      if (applyToken === backgroundApplyToken) markWallpaperReady()
       return
     }
 
@@ -9765,18 +9965,12 @@ async function updateInstantWallpaperFromBlob(
   mediaSignature: string,
   settings = state.backgroundSettings
 ): Promise<void> {
-  if (!mediaSignature) {
+  const session = newTabControllerGeneration
+  const uploadVersion = backgroundUploadVersion
+  const isCurrent = () => newTabControllerStarted && session === newTabControllerGeneration &&
+    uploadVersion === backgroundUploadVersion && mediaSignature === getBackgroundMediaSignature(state.backgroundSettings)
+  if (!mediaSignature || !isCurrent()) {
     return
-  }
-
-  const displayCss = getBackgroundDisplayCssForSettings(settings)
-  const recordBase = {
-    signature: mediaSignature,
-    backgroundSize: displayCss.backgroundSize,
-    backgroundPosition: displayCss.backgroundPosition,
-    placeholderColor: getBackgroundPlaceholderColor(settings),
-    updatedAt: Date.now(),
-    ready: true
   }
 
   const isVideoWallpaper = settings.type === 'video' || String(blob.type || '').toLowerCase().startsWith('video/')
@@ -9786,6 +9980,17 @@ async function updateInstantWallpaperFromBlob(
         createFirstInstantWallpaperDataUrl(blob),
         createInstantWallpaperImageDataUrl(blob)
       ])
+  if (!isCurrent()) return
+  settings = state.backgroundSettings
+  const displayCss = getBackgroundDisplayCssForSettings(settings)
+  const recordBase = {
+    signature: mediaSignature,
+    backgroundSize: displayCss.backgroundSize,
+    backgroundPosition: displayCss.backgroundPosition,
+    placeholderColor: getBackgroundPlaceholderColor(settings),
+    updatedAt: Date.now(),
+    ready: true
+  }
   const previewDataUrl = dataUrl || imageDataUrl
   if ((previewDataUrl || imageDataUrl) && saveInstantWallpaper({
     ...recordBase,
@@ -10119,7 +10324,7 @@ function getRemoteBackgroundImageUrl(settings: typeof DEFAULT_BACKGROUND_SETTING
     }
     void loadBackgroundGalleryModule().then(() => {
       if (settings === state.backgroundSettings) {
-        void applyBackgroundSettings()
+        runBackgroundTask(applyBackgroundSettings(), '背景应用失败')
       }
     }).catch(() => {})
     return ''
@@ -10188,9 +10393,13 @@ function scheduleFeaturedBackgroundDailyRefresh(): void {
 
 function handleNewTabVisibilityChange(visibilityState: DocumentVisibilityState): void {
   if (visibilityState !== 'visible') {
+    window.clearTimeout(clockTimer)
+    clockTimer = 0
     return
   }
 
+  updateClockText()
+  scheduleClockTick()
   void hydrateFeaturedBackgroundOptions()
   applyFeaturedBackgroundDailyRefreshIfNeeded()
 }
@@ -11077,13 +11286,20 @@ function renderIconPreview(): void {
 }
 
 async function hydrateFeaturedBackgroundOptions(force = false): Promise<void> {
+  const session = newTabControllerGeneration
   const dateSeed = getFeaturedBackgroundDateSeed()
   if (state.backgroundSettings.type !== 'featured' ||
     (!force && featuredBackgroundOptionsHydratedDateSeed === dateSeed)) {
     return
   }
 
-  await loadBackgroundGalleryModule()
+  try {
+    await loadBackgroundGalleryModule()
+  } catch (error) {
+    console.warn('精选图库选项载入失败。', error)
+    return
+  }
+  if (session !== newTabControllerGeneration || !newTabControllerStarted) return
   const currentDateSeed = getFeaturedBackgroundDateSeed()
   if (!force && featuredBackgroundOptionsHydratedDateSeed === currentDateSeed) {
     return
@@ -11116,7 +11332,9 @@ function initializeFeaturedBackgroundModal(): void {
 }
 
 async function openFeaturedBackgroundPicker(): Promise<void> {
+  const session = newTabControllerGeneration
   await ensureFeaturedBackgroundModalReady()
+  if (session !== newTabControllerGeneration || !newTabControllerStarted) return
 
   dispatchNewtabFeaturedBackgroundModalOpen(true)
   dispatchNewtabBackgroundSettingsView(createBackgroundSettingsView())
@@ -11795,32 +12013,43 @@ async function saveFeaturedBackgroundPreferences(): Promise<void> {
 
 async function toggleFeaturedBackgroundFavorite(featuredId: string): Promise<void> {
   const id = String(featuredId || '').trim()
-  if (!id) {
-    return
-  }
-
-  const favoriteSet = new Set(state.featuredBackgroundFavoriteIds)
-  if (favoriteSet.has(id)) {
-    favoriteSet.delete(id)
-  } else {
-    favoriteSet.add(id)
-  }
-  state.featuredBackgroundFavoriteIds = [...favoriteSet]
-  await saveFeaturedBackgroundFavorites()
-  const gallery = await loadBackgroundGalleryModule()
-  if (isFeaturedBackgroundPickerOpen()) {
-    renderFeaturedBackgroundPicker(gallery)
+  if (!id || featuredBackgroundFavoriteWrites.has(id)) return
+  const session = newTabControllerGeneration
+  const favorite = !state.featuredBackgroundFavoriteIds.includes(id)
+  featuredBackgroundFavoriteWrites.add(id)
+  try {
+    const favorites = await withLocalStorageTransaction(async transaction => {
+      const stored = await getLocalStorage(STORAGE_KEYS.newTabFeaturedBackgroundFavorites)
+      const next = new Set(normalizeFeaturedBackgroundFavoriteIds(stored[STORAGE_KEYS.newTabFeaturedBackgroundFavorites]))
+      if (favorite) next.add(id)
+      else next.delete(id)
+      const favorites = [...next]
+      await setLocalStorage({ [STORAGE_KEYS.newTabFeaturedBackgroundFavorites]: favorites }, { transaction })
+      return favorites
+    })
+    if (session !== newTabControllerGeneration || !newTabControllerStarted) return
+    state.featuredBackgroundFavoriteIds = favorites
+    const gallery = await loadBackgroundGalleryModule()
+    if (session === newTabControllerGeneration && isFeaturedBackgroundPickerOpen()) renderFeaturedBackgroundPicker(gallery)
+  } catch (error) {
+    if (session === newTabControllerGeneration && newTabControllerStarted) {
+      setFeaturedBackgroundStatus(error instanceof Error ? `收藏保存失败：${error.message}` : '收藏保存失败，请重试。', 'error')
+      syncFeaturedBackgroundModalControls()
+    }
+  } finally {
+    if (session === newTabControllerGeneration) featuredBackgroundFavoriteWrites.delete(id)
   }
 }
 
 async function downloadFeaturedBackgroundFromPicker(featuredId: string): Promise<void> {
   const id = String(featuredId || '').trim()
-  if (!id) {
-    return
-  }
-
+  if (!id || featuredBackgroundDownloadInFlight) return
+  const session = newTabControllerGeneration
+  const isCurrent = () => session === newTabControllerGeneration && newTabControllerStarted
+  featuredBackgroundDownloadInFlight = true
   try {
     const item = await getFeaturedBackgroundDownloadItem(id)
+    if (!isCurrent()) return
     const imageUrl = normalizeBackgroundImageUrl(String(item?.imageUrl || ''))
     if (!item || !imageUrl) {
       setFeaturedBackgroundStatus('没有找到可下载的精选图。', 'warning')
@@ -11829,6 +12058,7 @@ async function downloadFeaturedBackgroundFromPicker(featuredId: string): Promise
     }
 
     const permissionGranted = await ensureBackgroundImageFetchPermission(imageUrl, { request: true })
+    if (!isCurrent()) return
     if (!permissionGranted) {
       setFeaturedBackgroundStatus('未完成图片访问授权，暂时无法下载。', 'warning')
       syncFeaturedBackgroundModalControls()
@@ -11838,12 +12068,16 @@ async function downloadFeaturedBackgroundFromPicker(featuredId: string): Promise
     setFeaturedBackgroundStatus(`正在下载 ${item.title}...`, 'info')
     syncFeaturedBackgroundModalControls()
     const blob = await fetchFeaturedBackgroundDownloadBlob(imageUrl)
+    if (!isCurrent()) return
     downloadBlobFile(getFeaturedBackgroundDownloadFilename(item, blob), blob)
     setFeaturedBackgroundStatus(`已开始下载 ${item.title}。`, 'success')
   } catch (error) {
-    setFeaturedBackgroundStatus(getFeaturedBackgroundDownloadErrorMessage(error), 'error')
+    if (isCurrent()) setFeaturedBackgroundStatus(getFeaturedBackgroundDownloadErrorMessage(error), 'error')
   } finally {
-    syncFeaturedBackgroundModalControls()
+    if (isCurrent()) {
+      featuredBackgroundDownloadInFlight = false
+      syncFeaturedBackgroundModalControls()
+    }
   }
 }
 
@@ -11857,28 +12091,19 @@ async function getFeaturedBackgroundDownloadItem(featuredId: string): Promise<Fe
   return gallery.getFeaturedBackgroundItemById(featuredId)
 }
 
-async function saveFeaturedBackgroundFavorites(): Promise<void> {
-  await setLocalStorage({
-    [STORAGE_KEYS.newTabFeaturedBackgroundFavorites]: state.featuredBackgroundFavoriteIds
-  })
-}
-
-async function saveFeaturedBackgroundGallery(): Promise<void> {
-  await setLocalStorage({
-    [STORAGE_KEYS.newTabFeaturedBackgroundGallery]: state.featuredBackgroundGallery
-  })
-}
-
 async function refreshFeaturedBackgroundGallery(): Promise<void> {
   if (state.featuredBackgroundRefreshing) {
     return
   }
 
+  const session = newTabControllerGeneration
+  const isCurrent = () => session === newTabControllerGeneration && newTabControllerStarted
   state.featuredBackgroundRefreshing = true
   setFeaturedBackgroundStatus('正在从开放图库拉取高清图...', 'info')
   syncFeaturedBackgroundModalControls()
   try {
     const permissionGranted = await ensureFeaturedBackgroundPermissions()
+    if (!isCurrent()) return
     if (!permissionGranted) {
       setFeaturedBackgroundStatus('未完成图库访问授权，暂时无法刷新。', 'warning')
       return
@@ -11890,17 +12115,24 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
     }, {
       refreshSeed: `${getFeaturedBackgroundDateSeed()}:${Date.now()}`
     })
+    if (!isCurrent()) return
     if (!fetchedItems.length) {
       setFeaturedBackgroundStatus('没有拉取到满足高清要求的新图片。', 'warning')
       return
     }
 
-    state.featuredBackgroundGallery = refreshModule.mergeFeaturedGalleryRefresh({
-      existingItems: state.featuredBackgroundGallery,
-      favoriteIds: state.featuredBackgroundFavoriteIds,
-      fetchedItems
+    const gallery = await withLocalStorageTransaction(async transaction => {
+      const stored = await getLocalStorage([STORAGE_KEYS.newTabFeaturedBackgroundGallery, STORAGE_KEYS.newTabFeaturedBackgroundFavorites])
+      const gallery = refreshModule.mergeFeaturedGalleryRefresh({
+        existingItems: normalizeFeaturedBackgroundGallery(stored[STORAGE_KEYS.newTabFeaturedBackgroundGallery]),
+        favoriteIds: normalizeFeaturedBackgroundFavoriteIds(stored[STORAGE_KEYS.newTabFeaturedBackgroundFavorites]),
+        fetchedItems
+      })
+      await setLocalStorage({ [STORAGE_KEYS.newTabFeaturedBackgroundGallery]: gallery }, { transaction })
+      return gallery
     })
-    await saveFeaturedBackgroundGallery()
+    if (!isCurrent()) return
+    state.featuredBackgroundGallery = gallery
     const fetchedProviderCount = refreshModule.getFeaturedBackgroundRefreshProviderCount(fetchedItems)
     const providerText = fetchedProviderCount ? `，来自 ${fetchedProviderCount} 个渠道` : ''
     setFeaturedBackgroundStatus(
@@ -11913,17 +12145,20 @@ async function refreshFeaturedBackgroundGallery(): Promise<void> {
       console.warn('精选图库预览缓存清除失败。', cacheError)
     })
   } catch (error) {
-    setFeaturedBackgroundStatus(getFeaturedBackgroundRefreshErrorMessage(error), 'error')
+    if (isCurrent()) setFeaturedBackgroundStatus(getFeaturedBackgroundRefreshErrorMessage(error), 'error')
   } finally {
-    state.featuredBackgroundRefreshing = false
-    syncFeaturedBackgroundModalControls()
+    if (isCurrent()) {
+      state.featuredBackgroundRefreshing = false
+      syncFeaturedBackgroundModalControls()
+    }
   }
 }
 
 async function renderFeaturedBackgroundPickerAfterRefresh(): Promise<void> {
+  const session = newTabControllerGeneration
   try {
     const gallery = await loadBackgroundGalleryModule()
-    renderFeaturedBackgroundPicker(gallery)
+    if (session === newTabControllerGeneration && newTabControllerStarted && isFeaturedBackgroundPickerOpen()) renderFeaturedBackgroundPicker(gallery)
   } catch (error) {
     console.warn('精选图库已刷新，但弹窗列表更新失败。', error)
   }
@@ -12189,6 +12424,8 @@ function scheduleTimeSettingsSave(): void {
 
 function scheduleClockTick(): void {
   window.clearTimeout(clockTimer)
+  clockTimer = 0
+  if (!newTabControllerStarted || document.visibilityState === 'hidden') return
   const delay = getClockUpdateDelayLocal(new Date(), state.timeSettings)
   if (delay <= 0) {
     clockTimer = 0
@@ -12254,7 +12491,7 @@ function hydrateClockText(): void {
       scheduleClockTick()
     })
     .catch(() => {
-      scheduleClockTick()
+      if (hydrateVersion === clockHydrationVersion && newTabControllerStarted) scheduleClockTick()
     })
 }
 

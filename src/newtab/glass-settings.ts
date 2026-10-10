@@ -17,6 +17,17 @@ export const GLASS_SETTINGS_CACHE_KEY = 'curator-newtab-glass-v1'
 export const DEFAULT_GLASS_SETTINGS: Readonly<NewtabGlassSettings> = {
   tint: 13, bevel: 44, thickness: 28, blur: 12, dispersion: 0.11, rim: 0.3, light: -25, smooth: 0.75
 }
+
+export const GLASS_PRESETS = [
+  { id: 'balanced', label: '均衡', description: '保留当前默认材质', settings: DEFAULT_GLASS_SETTINGS },
+  { id: 'clear', label: '清透', description: '更清晰地透出背景', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 6, blur: 3, thickness: 16, dispersion: 0.04 } },
+  { id: 'soft', label: '柔和', description: '弱化背景与边缘折射', settings: { ...DEFAULT_GLASS_SETTINGS, tint: 24, blur: 12, thickness: 8, dispersion: 0, rim: 0.15 } }
+] as const
+
+export function getGlassPresetId(settings: NewtabGlassSettings): string {
+  return GLASS_PRESETS.find(preset => (Object.keys(DEFAULT_GLASS_SETTINGS) as NewtabGlassSettingKey[])
+    .every(key => preset.settings[key] === settings[key]))?.id || 'custom'
+}
 export const GLASS_SETTING_LIMITS: Record<NewtabGlassSettingKey, readonly [number, number, number]> = {
   tint: [0, 60, 1],
   bevel: [4, 48, 1], thickness: [2, 40, 1], blur: [0, 12, 0.5],
@@ -68,4 +79,27 @@ export function applyGlassSettingsCss(settings: NewtabGlassSettings, root: HTMLE
   const light = settings.light * Math.PI / 180
   root.style.setProperty('--newtab-glass-light-x', (Math.sin(light) * 1.5).toFixed(2) + 'px')
   root.style.setProperty('--newtab-glass-light-y', (-Math.cos(light) * 1.5).toFixed(2) + 'px')
+}
+
+/* Light text on a fixed 13% tint vanishes over bright wallpapers. Above the
+   luminance where the tint stops carrying the text, the backdrop itself
+   deepens the fill up to a bounded maximum, so dark wallpapers keep the exact
+   material the user chose while bright ones stay readable. */
+export const GLASS_ADAPTIVE_TINT = { start: 0.42, end: 0.95, max: 0.58 } as const
+
+export function getAdaptiveGlassTint(baseAlpha: number, luminance: number | null | undefined): number {
+  const base = Math.min(1, Math.max(0, baseAlpha))
+  if (typeof luminance !== 'number' || !Number.isFinite(luminance)) return base
+  const span = GLASS_ADAPTIVE_TINT.end - GLASS_ADAPTIVE_TINT.start
+  const progress = Math.min(1, Math.max(0, (luminance - GLASS_ADAPTIVE_TINT.start) / span))
+  const ceiling = Math.max(base, GLASS_ADAPTIVE_TINT.max)
+  return Math.round((base + (ceiling - base) * progress) * 1000) / 1000
+}
+
+export function applyGlassSurfaceTint(element: HTMLElement, tint: number, luminance: number | null): void {
+  if (luminance === null) {
+    element.style.removeProperty('--newtab-glass-surface-fill')
+    return
+  }
+  element.style.setProperty('--newtab-glass-surface-fill', `rgba(0, 0, 0, ${getAdaptiveGlassTint(tint / 100, luminance)})`)
 }

@@ -187,6 +187,7 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
   const autoHideSettingsTrigger = folderSource.general.hideSettingsTrigger
   const shellRef = useRef<HTMLDivElement | null>(null)
   const backgroundMaskHostRef = useRef<HTMLDivElement | null>(null)
+  const backgroundStageRef = useRef<HTMLDivElement | null>(null)
   const settingsBackdropRef = useRef<HTMLButtonElement | null>(null)
   const settingsTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [settingsDrawerHostRequested, setSettingsDrawerHostRequested] = useState(false)
@@ -205,6 +206,13 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
   }, [])
 
   useLayoutEffect(() => {
+    // Grain blending and backdrop blur must share the wallpaper's compositing
+    // group. Reuse the prepainted node so hydration never flashes a blank frame.
+    const wallpaper = document.getElementById('newtab-wallpaper-stage')
+    const stage = backgroundStageRef.current
+    if (wallpaper && stage && wallpaper.parentElement !== stage) {
+      stage.prepend(wallpaper)
+    }
     const mask = document.getElementById('newtab-background-mask')
     const host = backgroundMaskHostRef.current
     if (mask && host && mask.parentElement !== host) {
@@ -269,7 +277,7 @@ function NewtabShell({ onOpenSettings }: { onOpenSettings: () => void }) {
   return (
     <div {...appChromeAttributes} onPointerDownCapture={dispatchNewtabContentShellPointerDownCapture}>
       <NewtabInstantWallpaperHost />
-      <div id="newtab-dynamic-background-stage" className={DYNAMIC_BACKGROUND_STAGE_CLASS} aria-hidden="true">
+      <div id="newtab-dynamic-background-stage" ref={backgroundStageRef} className={DYNAMIC_BACKGROUND_STAGE_CLASS} aria-hidden="true">
         <NewtabBackgroundLayer loadingWallpaper={instantWallpaper.loading} />
         <SolidBackgroundNoiseLayer active={backgroundSettings.type === 'color'} />
         <NewtabWallpaperFilterLayer />
@@ -467,8 +475,8 @@ function getBackgroundMaskInlineStyle(background: NewtabBackgroundSettingsView):
   }
   const backdropFilter = getBackgroundMaskBackdropFilter(background.maskStyle, background.maskBlur)
   return {
-    backgroundColor: getBackgroundMaskBaseColor(background.maskStyle),
-    backgroundImage: getBackgroundMaskOverlayGradient(background.maskOverlay),
+    backgroundColor: getBackgroundMaskBaseColor(background.maskStyle, background.maskOverlay),
+    backgroundImage: getBackgroundMaskOverlayGradient(background.maskOverlay, background.maskStyle),
     WebkitBackdropFilter: backdropFilter,
     backdropFilter
   }

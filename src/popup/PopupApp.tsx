@@ -12,7 +12,7 @@ import {
   dispatchPopupPageHide,
   dispatchPopupStorageChanged
 } from './popup-browser-events-store'
-import { cancelPendingSearchActivation, usePopupController } from './popup-controller'
+import { cancelPendingSearchActivation, refreshPopupBookmarks, usePopupController } from './popup-controller'
 import { subscribeToSidePanelContext } from '../sidepanel/sidepanel-context'
 import { PopupAutoAnalyzeStatus } from './components/PopupAutoAnalyzeStatus'
 import { PopupChromeHost } from './components/PopupChromeHost'
@@ -68,6 +68,29 @@ function subscribeToPopupStorageChanges(): () => void {
   }
 }
 
+// The side panel is long-lived and refreshes from bookmark events; a popup
+// normally closes on blur, but it can stay open across a change made in another
+// window or the bookmark manager, so it listens to the same events.
+function subscribeToPopupBookmarkChanges(): () => void {
+  const bookmarks = typeof chrome === 'undefined' ? null : chrome.bookmarks
+  if (!bookmarks) {
+    return () => undefined
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const schedule = () => {
+    clearTimeout(timer)
+    timer = setTimeout(refreshPopupBookmarks, 100)
+  }
+  const events = [bookmarks.onCreated, bookmarks.onRemoved, bookmarks.onChanged,
+    bookmarks.onMoved, bookmarks.onChildrenReordered, bookmarks.onImportEnded]
+  for (const event of events) event.addListener(schedule)
+  return () => {
+    clearTimeout(timer)
+    for (const event of events) event.removeListener(schedule)
+  }
+}
+
 function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null }) {
   const modalsView = usePopupModalsView()
   const smartClassifierView = usePopupSmartClassifierView()
@@ -75,6 +98,7 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
   const smartActive = ['loading', 'results', 'error', 'permission'].includes(smartClassifierView.status)
   useEffect(() => {
     const unsubscribeStorageChanges = subscribeToPopupStorageChanges()
+    const unsubscribeBookmarkChanges = subscribeToPopupBookmarkChanges()
     const unsubscribeSidePanel = subscribeToSidePanelContext()
 
     document.addEventListener('keydown', dispatchPopupDocumentKeyDown)
@@ -82,6 +106,7 @@ function PopupShell({ portalContainer }: { portalContainer?: HTMLElement | null 
     window.addEventListener('pagehide', dispatchPopupPageHide)
     return () => {
       unsubscribeSidePanel()
+      unsubscribeBookmarkChanges()
       unsubscribeStorageChanges()
       document.removeEventListener('keydown', dispatchPopupDocumentKeyDown)
       document.removeEventListener('pointerdown', cancelPendingSearchActivation, true)

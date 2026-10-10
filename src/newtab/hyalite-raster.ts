@@ -18,6 +18,11 @@ export interface GlassRasterInput {
   rect: { left: number; top: number; width: number; height: number }
 }
 
+export interface GlassRasterResult {
+  blob: Blob
+  luminance: number | null
+}
+
 interface Frame {
   pixels: Uint8ClampedArray
   width: number
@@ -102,15 +107,47 @@ async function backgroundFrame(scene: GlassRasterScene, blur: number): Promise<F
   return frame
 }
 
+/** Average backdrop luminance (0..1) over one surface's crop. A coarse grid is
+ * enough: the value only selects a tint, it never reaches the pixels.
+ */
+function backdropLuminance(frame: Frame, rect: GlassRasterInput['rect']): number | null {
+  const x0 = Math.max(0, Math.round(rect.left * frame.density))
+  const y0 = Math.max(0, Math.round(rect.top * frame.density))
+  const x1 = Math.min(frame.width, Math.round((rect.left + rect.width) * frame.density))
+  const y1 = Math.min(frame.height, Math.round((rect.top + rect.height) * frame.density))
+  if (x1 - x0 < 1 || y1 - y0 < 1) return null
+  const stepX = Math.max(1, Math.floor((x1 - x0) / 24))
+  const stepY = Math.max(1, Math.floor((y1 - y0) / 24))
+  let total = 0, count = 0
+  for (let y = y0; y < y1; y += stepY) {
+    for (let x = x0; x < x1; x += stepX) {
+      const at = (y * frame.width + x) * 4
+      total += frame.pixels[at] * 0.2126 + frame.pixels[at + 1] * 0.7152 + frame.pixels[at + 2] * 0.0722
+      count++
+    }
+  }
+  return count ? total / count / 255 : null
+}
+
 /** Cache the upstream lens field over the wallpaper, outside the UI thread.
  * Foreground text remains ordinary DOM; these pixels contain only the backdrop.
+ * Returns the rim texture plus the average backdrop luminance of the surface,
+ * which the runtime turns into an adaptive tint for light wallpapers.
  */
-export async function renderGlassRaster(input: HyaliteMapInput, map: HyaliteMapPixels, raster: GlassRasterInput): Promise<Blob> {
+export async function renderGlassRaster(input: HyaliteMapInput, map: HyaliteMapPixels, raster: GlassRasterInput): Promise<GlassRasterResult> {
   const options = input.options
   const key = input.key + '|' + JSON.stringify(options) + '|' + JSON.stringify(raster)
+  let frame: Frame | undefined
+  let frameError: unknown
+  try { frame = await backgroundFrame(raster.scene, Number(options.blur) || 0) }
+  catch (error) { frameError = error }
   const hit = textures.get(key)
-  if (hit) { textures.delete(key); textures.set(key, hit); return hit }
-  const frame = await backgroundFrame(raster.scene, Number(options.blur) || 0)
+  if (hit) {
+    textures.delete(key)
+    textures.set(key, hit)
+    return { blob: hit, luminance: frame ? backdropLuminance(frame, raster.rect) : null }
+  }
+  if (!frame) throw frameError
   const logicalWidth = raster.rect.width, logicalHeight = raster.rect.height
   const width = Math.max(1, Math.round(logicalWidth * frame.density))
   const height = Math.max(1, Math.round(logicalHeight * frame.density))
@@ -164,5 +201,5 @@ export async function renderGlassRaster(input: HyaliteMapInput, map: HyaliteMapP
   const blob = await canvas.convertToBlob({ type: 'image/png' })
   textures.set(key, blob)
   if (textures.size > 64) textures.delete(textures.keys().next().value!)
-  return blob
+  return { blob, luminance: backdropLuminance(frame, raster.rect) }
 }

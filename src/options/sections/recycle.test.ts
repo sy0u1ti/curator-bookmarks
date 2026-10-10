@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { beforeEach, test } from 'node:test'
-import { RECYCLE_BIN_LIMIT } from '../../shared/constants.js'
+const PREVIOUS_RECYCLE_BIN_LIMIT = 200
 
 const RECYCLE_STORAGE_KEY = 'curatorBookmarkRecycleBin'
 let storedEntries: unknown[] = []
@@ -266,7 +266,9 @@ test('rolls back restored bookmarks when recycle persistence fails', async () =>
   availabilityState.stopRequested = false
   createdBookmarks = []
   removedBookmarkIds = []
-  failWrites = true
+  // The restore first claims the entry (write 1); fail the persistence that
+  // follows the bookmark creation so the rollback path is exercised.
+  failStorageWriteNumbers = new Set([2])
 
   await restoreSelectedRecycleEntries({
     claimAvailabilityMutationLock: async () => () => {},
@@ -280,7 +282,7 @@ test('rolls back restored bookmarks when recycle persistence fails', async () =>
   assert.deepEqual(managerState.recycleBin, [entry])
   assert.equal(availabilityState.deleting, false)
   assert.match(availabilityState.lastError, /已撤销本次恢复/)
-  failWrites = false
+  failStorageWriteNumbers = new Set()
 })
 
 test('revalidates the bookmark URL after recycle persistence and before deletion', async () => {
@@ -304,8 +306,8 @@ test('revalidates the bookmark URL after recycle persistence and before deletion
 })
 
 test('restores the full recycle snapshot when bookmark deletion fails at capacity', async () => {
-  const baseDeletedAt = Date.now() + RECYCLE_BIN_LIMIT
-  const originalEntries = Array.from({ length: RECYCLE_BIN_LIMIT }, (_value, index) => ({
+  const baseDeletedAt = Date.now() + PREVIOUS_RECYCLE_BIN_LIMIT
+  const originalEntries = Array.from({ length: PREVIOUS_RECYCLE_BIN_LIMIT }, (_value, index) => ({
     ...recycleEntry(`existing-${index}`),
     deletedAt: baseDeletedAt - index
   }))
@@ -368,7 +370,9 @@ test('rolls back a newly restored bookmark when consuming its recycle record fai
   storedEntries = [entry]
   createdBookmarks = []
   removedBookmarkIds = []
-  failWrites = true
+  // Write 1 is the restore claim; fail the recycle-record consumption that
+  // follows the bookmark creation.
+  failStorageWriteNumbers = new Set([2])
 
   await assert.rejects(
     restoreBookmarkFromRecycleEntry(entry.recycleId, async () => {
@@ -387,7 +391,7 @@ test('rolls back a newly restored bookmark when consuming its recycle record fai
 
   assert.deepEqual(removedBookmarkIds, ['restored-undo'])
   assert.deepEqual(storedEntries, [entry])
-  failWrites = false
+  failStorageWriteNumbers = new Set()
 })
 
 test('warns about a possible duplicate when recycle consumption and bookmark rollback both fail', async () => {
@@ -402,7 +406,9 @@ test('warns about a possible duplicate when recycle consumption and bookmark rol
   availabilityState.stopRequested = false
   createdBookmarks = []
   removedBookmarkIds = []
-  failWrites = true
+  // Fail the persistence after the claim (write 2) and the bookmark rollback:
+  // the entry must stay claimed so a retry cannot create a second copy.
+  failStorageWriteNumbers = new Set([2])
   bookmarkRemoveError = 'bookmark rollback denied'
 
   await restoreSelectedRecycleEntries({
@@ -412,12 +418,21 @@ test('warns about a possible duplicate when recycle consumption and bookmark rol
   })
 
   assert.equal(createdBookmarks.length, 1)
-  assert.deepEqual(storedEntries, [entry])
+  assert.equal((storedEntries as Array<{ recycleId?: string }>).length, 1)
+  assert.equal(
+    (storedEntries as Array<{ recycleId?: string }>)[0]?.recycleId,
+    entry.recycleId,
+    'A failed rollback must keep the recycle entry'
+  )
+  assert.ok(
+    Number((storedEntries as Array<{ restoringAt?: number }>)[0]?.restoringAt) > 0,
+    'A failed rollback must keep the restore claim so a retry cannot duplicate the copy'
+  )
   assert.match(availabilityState.lastError, /自动回滚也失败/)
   assert.match(availabilityState.lastError, /不要立即重试/)
   assert.doesNotMatch(availabilityState.lastError, /未创建重复书签/)
 
-  failWrites = false
+  failStorageWriteNumbers = new Set()
   bookmarkRemoveError = ''
 })
 

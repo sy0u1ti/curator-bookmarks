@@ -29,6 +29,3 @@ export function getPopupSmartClassifierRenderStatus({
   return 'idle'
 }
 
-export function isPopupSmartClassifierActiveStatus(status: string): boolean {
-  return SMART_CLASSIFIER_ACTIVE_STATUSES.has(status as PopupSmartClassifierViewModel['status'])
-}

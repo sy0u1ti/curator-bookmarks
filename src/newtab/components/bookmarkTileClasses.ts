@@ -14,6 +14,11 @@ const BOOKMARK_TILE_GHOST_CLASS = 'bookmark-drag-ghost fixed top-0 left-0 z-[120
 const BOOKMARK_TITLE_CLASS = 'bookmark-title w-full overflow-hidden text-[13px] font-[520] leading-[1.3] text-[rgba(245,245,247,0.9)] [display:-webkit-box] [overflow-wrap:anywhere] [-webkit-box-orient:vertical] [-webkit-line-clamp:var(--icon-title-lines)]'
 export const BOOKMARK_DRAG_HANDLE_CLASS = 'bookmark-drag-handle absolute top-1/2 right-0.5 z-[2] hidden h-10 w-10 -translate-y-1/2 touch-none items-center justify-center rounded-[var(--ui-radius-control)] text-[rgba(245,245,247,0.9)] transition-colors duration-[var(--ds-motion-feedback)] [@media(pointer:coarse)]:inline-flex active:bg-[rgba(245,245,247,0.1)] active:text-[var(--ui-text-primary)] data-[drag-pending=true]:bg-[rgba(245,245,247,0.12)] data-[drag-pending=true]:text-[var(--ui-text-primary)]'
 
+// 卡片菜单的可见入口：悬停或键盘聚焦时出现，等价于右键。与拖拽把手一样
+// 保持 pointer-only（aria-hidden，不占 Tab 位），键盘用户继续用 Shift+F10 /
+// 菜单键打开同一个菜单。
+export const BOOKMARK_MENU_TRIGGER_CLASS = 'bookmark-menu-trigger absolute top-1/2 right-1.5 z-[2] hidden h-7 w-7 -translate-y-1/2 items-center justify-center rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.14)] bg-[rgba(20,20,22,0.72)] text-[rgba(245,245,247,0.92)] opacity-0 shadow-[0_1px_2px_rgba(0,0,0,0.3)] transition-opacity duration-[var(--ds-motion-feedback)] [@media(pointer:fine)]:flex group-hover/bookmark-tile:opacity-100 group-focus-within/bookmark-tile:opacity-100 active:bg-[rgba(245,245,247,0.16)]'
+
 // 导航模式的文件夹卡片 = 书签卡片同款玻璃底 + 文件夹图标外壳 + 计数徽标。
 // 展开模式的文件夹拖拽 ghost 也复用这两个类，让两种模式的文件夹拖拽观感统一。
 // 卡片有三个子元素（图标/标题/计数），在 tile 的双列模板上覆盖为三列。

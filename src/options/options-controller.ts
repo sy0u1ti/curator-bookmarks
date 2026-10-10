@@ -1,4 +1,6 @@
 import { useEffect } from 'react'
+import { saveInboxWorkflowMode } from './sections/inbox-settings.js'
+import { buildFeatureSettingsView } from './sections/feature-settings-view.js'
 import {
   BOOKMARKS_BAR_ID,
   ROOT_ID,
@@ -13,7 +15,8 @@ import type {
 import {
   getLocalStorage,
   removeLocalStorage,
-  setLocalStorage
+  setLocalStorage,
+  withLocalStorageTransaction
 } from '../shared/storage.js'
 import {
   getBookmarkById,
@@ -40,8 +43,7 @@ import {
   upsertBookmarkTagsFromAnalysis
 } from '../shared/bookmark-tags.js'
 import {
-  normalizeInboxSettings,
-  saveInboxSettings
+  normalizeInboxSettings
 } from '../shared/inbox.js'
 import {
   BACKUP_RESTORE_ROLLED_BACK_CODE,
@@ -351,6 +353,7 @@ let availabilityPauseResolvers: Array<() => void> = []
 let availabilitySettingsDraft: AvailabilitySettingsDraft | null = null
 let availabilitySettingsDraftRevision = 0
 let availabilityCatalogRefreshPending = false
+let availabilityCatalogReadVersion = 0
 let availabilityDeleteModalSnapshot: Array<{ id: string; expectedUrl: string }> = []
 const availabilityRunSessions = createAvailabilityRunSessionCoordinator()
 const aiAnalysisRunSessions = createAiAnalysisRunSessionCoordinator()
@@ -368,6 +371,12 @@ const aiAnalysisGlobalRunLocks = createAvailabilityGlobalRunLockCoordinator({
   lockName: 'curator:ai-analysis-run'
 })
 let largeRepositoryHydrationStarted = false
+let largeRepositoryHydrationVersion = 0
+let largeRepositoryRefreshTimer: ReturnType<typeof setTimeout> | undefined
+let optionsHydrationStorageChanges: Record<string, unknown> | null = null
+let tagDataOperationPending = false
+let aiSettingsSaving = false
+let pendingExternalAiSettings: { value: unknown } | null = null
 const AVAILABILITY_FILTERS = new Set([
   'all',
   'failed',
@@ -456,6 +465,7 @@ const historyCallbacks = {
 const folderCleanupCallbacks = {
   renderAvailabilitySection,
   hydrateAvailabilityCatalog,
+  claimAvailabilityMutationLock,
   confirm: requestConfirmation
 }
 
@@ -567,11 +577,12 @@ function deferBookmarkChangeRefreshUntilVisible(): void {
 }
 
 async function hydratePersistentState() {
+  optionsHydrationStorageChanges = {}
   availabilityState.storageLoading = true
   scheduleAvailabilityRender()
 
   try {
-    const stored = await getLocalStorage([
+    const snapshot = await getLocalStorage([
       STORAGE_KEYS.ignoreRules,
       STORAGE_KEYS.detectionHistory,
       STORAGE_KEYS.bookmarkAddHistory,
@@ -585,11 +596,12 @@ async function hydratePersistentState() {
       STORAGE_KEYS.contentSnapshotSettings,
       STORAGE_KEYS.aiRejectedSuggestions
     ])
+    const stored = { ...snapshot, ...optionsHydrationStorageChanges }
     managerState.ignoreRules = normalizeIgnoreRules(stored[STORAGE_KEYS.ignoreRules])
     hydrateDetectionHistory(stored[STORAGE_KEYS.detectionHistory], historyCallbacks)
     hydrateBookmarkAddHistory(stored[STORAGE_KEYS.bookmarkAddHistory])
     managerState.redirectCache = normalizeRedirectCache(stored[STORAGE_KEYS.redirectCache])
-    await clearPersistedAvailabilitySnapshot()
+    void clearPersistedAvailabilitySnapshot()
     availabilityState.settings = normalizeAvailabilityRunnerUserSettings(stored[STORAGE_KEYS.availabilitySettings])
     managerState.recycleBin = normalizeRecycleBin(stored[STORAGE_KEYS.recycleBin])
     aiNamingManagerState.settings = normalizeAiNamingSettings(stored[STORAGE_KEYS.aiProviderSettings])
@@ -607,6 +619,7 @@ async function hydratePersistentState() {
     availabilityState.lastError =
       error instanceof Error ? error.message : '本地规则读取失败，请刷新页面后重试。'
   } finally {
+    optionsHydrationStorageChanges = null
     availabilityState.storageLoading = false
     renderAvailabilitySection()
   }
@@ -634,7 +647,7 @@ function scheduleLargeRepositoryHydration(): void {
   window.setTimeout(hydrate, 0)
 }
 
-const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['ai'])
+const SECTIONS_NEEDING_LARGE_REPOSITORY = new Set(['ai', 'backup', 'duplicates'])
 
 function maybeHydrateLargeRepositoryForSection(key: string): void {
   if (SECTIONS_NEEDING_LARGE_REPOSITORY.has(key)) {
@@ -643,15 +656,73 @@ function maybeHydrateLargeRepositoryForSection(key: string): void {
 }
 
 async function hydrateLargeRepositoryState(): Promise<void> {
-  const [tagIndex, snapshotIndex] = await Promise.all([
-    loadBookmarkTagIndex().catch(() => normalizeBookmarkTagIndex(null)),
-    loadContentSnapshotIndex().catch(() => normalizeContentSnapshotIndex(null))
-  ])
-
-  aiNamingState.tagIndex = tagIndex
-  contentSnapshotState.index = snapshotIndex
-
+  const version = ++largeRepositoryHydrationVersion
+  try {
+    const [tagIndex, snapshotIndex] = await Promise.all([loadBookmarkTagIndex(), loadContentSnapshotIndex()])
+    if (version !== largeRepositoryHydrationVersion) return
+    aiNamingState.tagIndex = tagIndex
+    contentSnapshotState.index = snapshotIndex
+  } catch (error) {
+    if (version !== largeRepositoryHydrationVersion) return
+    largeRepositoryHydrationStarted = false
+    aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签和正文索引读取失败，请重新进入此页面重试。'
+  }
   renderLargeRepositoryDependentSections()
+}
+
+export function subscribeToOptionsStorageEvents(): () => void {
+  const changed = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+    if (area !== 'local') return
+    if (optionsHydrationStorageChanges) {
+      for (const [key, change] of Object.entries(changes)) optionsHydrationStorageChanges[key] = change.newValue
+    }
+    let renderNeeded = false
+    if (changes[STORAGE_KEYS.aiProviderSettings]) {
+      pendingExternalAiSettings = { value: changes[STORAGE_KEYS.aiProviderSettings].newValue }
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.inboxSettings]) {
+      managerState.inboxSettings = normalizeInboxSettings(changes[STORAGE_KEYS.inboxSettings].newValue)
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.contentSnapshotSettings]) {
+      contentSnapshotState.settings = normalizeContentSnapshotSettings(changes[STORAGE_KEYS.contentSnapshotSettings].newValue)
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.aiRejectedSuggestions]) {
+      hydrateAiRejectedSuggestions(changes[STORAGE_KEYS.aiRejectedSuggestions].newValue)
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.ignoreRules]) {
+      managerState.ignoreRules = normalizeIgnoreRules(changes[STORAGE_KEYS.ignoreRules].newValue)
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.recycleBin]) {
+      managerState.recycleBin = normalizeRecycleBin(changes[STORAGE_KEYS.recycleBin].newValue)
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.bookmarkAddHistory]) {
+      hydrateBookmarkAddHistory(changes[STORAGE_KEYS.bookmarkAddHistory].newValue)
+      renderNeeded = true
+    }
+    if (changes[STORAGE_KEYS.bookmarkTagIndex] || changes[STORAGE_KEYS.contentSnapshotIndex]) {
+      largeRepositoryHydrationVersion++
+      largeRepositoryHydrationStarted = false
+      clearTimeout(largeRepositoryRefreshTimer)
+      largeRepositoryRefreshTimer = setTimeout(() => {
+        largeRepositoryRefreshTimer = undefined
+        maybeHydrateLargeRepositoryForSection(normalizeSectionKey(getCurrentSectionKey()))
+      }, 100)
+    }
+    if (renderNeeded) renderActiveOptionsSection()
+  }
+  chrome.storage.onChanged.addListener(changed)
+  return () => {
+    chrome.storage.onChanged.removeListener(changed)
+    clearTimeout(largeRepositoryRefreshTimer)
+    largeRepositoryHydrationVersion++
+    largeRepositoryHydrationStarted = false
+  }
 }
 
 function renderLargeRepositoryDependentSections(): void {
@@ -666,8 +737,12 @@ async function clearPersistedAvailabilitySnapshot(): Promise<void> {
 
 async function saveAiNamingSettings(settings = aiNamingManagerState.settings) {
   aiNamingManagerState.settings = normalizeAiNamingSettings(settings)
-  await setLocalStorage({
-    [STORAGE_KEYS.aiProviderSettings]: serializeAiNamingSettings(aiNamingManagerState.settings)
+  const payload = serializeAiNamingSettings(aiNamingManagerState.settings)
+  await withLocalStorageTransaction(async transaction => {
+    await setLocalStorage({ [STORAGE_KEYS.aiProviderSettings]: payload }, { transaction })
+    // This explicit save supersedes any external value buffered before it.
+    // Later writes notify us after this transaction releases the shared lock.
+    pendingExternalAiSettings = null
   })
 }
 
@@ -825,7 +900,7 @@ function syncPageSection() {
 
   renderAvailabilitySection()
 
-  if (key === 'general') {
+  if (key === 'general' || key === 'ai-settings') {
     renderAiNamingSection()
   }
 }
@@ -884,6 +959,7 @@ export function handleAiAnalysisScopePickerOpen(): void {
 }
 
 function getCurrentSectionKey() {
+  if (window.location.hash === '#general:ai-provider') return 'ai-settings'
   return window.location.hash.replace(/^#/, '').split(':')[0] || 'general'
 }
 
@@ -1176,7 +1252,8 @@ async function hydrateAvailabilityCatalog({
   preserveResults = false,
   analyzeFolderCleanup = true,
   preserveLastError = false,
-  allowDuringAiApply = false
+  allowDuringAiApply = false,
+  throwOnError = false
 } = {}) {
   if (
     hasActiveAvailabilityRunSession() ||
@@ -1187,7 +1264,9 @@ async function hydrateAvailabilityCatalog({
     return
   }
 
+  const readVersion = ++availabilityCatalogReadVersion
   availabilityState.catalogLoading = true
+  let catalogLoaded = false
   if (!preserveLastError) {
     availabilityState.lastError = ''
   }
@@ -1198,6 +1277,11 @@ async function hydrateAvailabilityCatalog({
       getBookmarkTree(),
       getLocalStorage([STORAGE_KEYS.newTabFolderSettings])
     ])
+    if (readVersion !== availabilityCatalogReadVersion) return
+    if (hasActiveAvailabilityRunSession() || hasActiveAiAnalysisRunSession() || (aiNamingState.applying && !allowDuringAiApply)) {
+      availabilityCatalogRefreshPending = true
+      return
+    }
     const rootNode = Array.isArray(tree) ? tree[0] : tree
     const extracted = buildBookmarkCatalogSnapshot({ rootNode }).extracted
     const bookmarks = extracted.bookmarks
@@ -1218,31 +1302,38 @@ async function hydrateAvailabilityCatalog({
     applyAvailabilityScope({ preserveResults })
     syncAiNamingCatalog({ preserveResults })
     restoreAiAnalysisCheckpointIfNeeded()
+    catalogLoaded = true
   } catch (error) {
-    availabilityState.allBookmarks = []
-    availabilityState.allFolders = []
-    availabilityState.bookmarkMap = new Map()
-    availabilityState.folderMap = new Map()
-    managerState.scopeExpandedFolderIds = new Set()
-    managerState.moveExpandedFolderIds = new Set()
-    availabilityState.bookmarks = []
-    availabilityState.requestOrigins = []
-    availabilityState.totalBookmarks = 0
-    availabilityState.eligibleBookmarks = 0
-    availabilityState.skippedCount = 0
-    resetDetectionResults()
-    managerState.duplicateGroups = []
-    folderCleanupState.rootNode = null
-    folderCleanupState.suggestions = []
-    syncAiNamingCatalog({ preserveResults: false })
+    if (readVersion !== availabilityCatalogReadVersion) return
+    if (!preserveResults) {
+      availabilityState.allBookmarks = []
+      availabilityState.allFolders = []
+      availabilityState.bookmarkMap = new Map()
+      availabilityState.folderMap = new Map()
+      managerState.scopeExpandedFolderIds = new Set()
+      managerState.moveExpandedFolderIds = new Set()
+      availabilityState.bookmarks = []
+      availabilityState.requestOrigins = []
+      availabilityState.totalBookmarks = 0
+      availabilityState.eligibleBookmarks = 0
+      availabilityState.skippedCount = 0
+      resetDetectionResults()
+      managerState.duplicateGroups = []
+      folderCleanupState.rootNode = null
+      folderCleanupState.suggestions = []
+      syncAiNamingCatalog({ preserveResults: false })
+    }
     availabilityState.lastError =
       error instanceof Error ? error.message : '书签列表读取失败，请刷新页面后重试。'
+    if (throwOnError) throw error
   } finally {
-    availabilityState.catalogLoading = false
-    if (analyzeFolderCleanup && folderCleanupState.rootNode) {
-      await analyzeFolderCleanupSuggestions(folderCleanupCallbacks)
+    if (readVersion === availabilityCatalogReadVersion) {
+      availabilityState.catalogLoading = false
+      if (catalogLoaded && analyzeFolderCleanup && folderCleanupState.rootNode) {
+        await analyzeFolderCleanupSuggestions(folderCleanupCallbacks)
+      }
+      renderAvailabilitySection()
     }
-    renderAvailabilitySection()
   }
 }
 
@@ -1398,6 +1489,7 @@ function resetAiNamingRunState() {
   aiNamingState.runStartedAt = 0
   aiNamingState.lastCompletedAt = 0
   aiNamingState.lastRunOutcome = ''
+  aiNamingState.statusMessage = ''
   aiNamingState.lastError = ''
   contentSnapshotState.aiRunSavedCount = 0
   contentSnapshotState.aiRunFailedCount = 0
@@ -1586,9 +1678,19 @@ function countCurrentAiRejectedSuggestions(): number {
   }).length
 }
 
-async function saveAiRejectedSuggestions(): Promise<void> {
-  await setLocalStorage({
-    [STORAGE_KEYS.aiRejectedSuggestions]: aiNamingState.rejectedSuggestions
+async function saveAiRejectedSuggestion(
+  entry: NonNullable<ReturnType<typeof buildAiRejectedSuggestionEntry>>
+): Promise<ReturnType<typeof normalizeAiRejectedSuggestions>> {
+  return withLocalStorageTransaction(async (transaction) => {
+    const stored = await getLocalStorage([STORAGE_KEYS.aiRejectedSuggestions])
+    const suggestions = normalizeAiRejectedSuggestions([
+      entry,
+      ...normalizeAiRejectedSuggestions(stored[STORAGE_KEYS.aiRejectedSuggestions])
+    ])
+    await setLocalStorage({
+      [STORAGE_KEYS.aiRejectedSuggestions]: suggestions
+    }, { transaction })
+    return suggestions
   })
 }
 
@@ -2773,7 +2875,7 @@ function renderActiveOptionsSection() {
     return
   }
 
-  if (activeSection === 'general') {
+  if (activeSection === 'general' || activeSection === 'ai-settings') {
     renderAiNamingSection()
     renderShortcutSettingsSection()
     return
@@ -3489,15 +3591,21 @@ function syncAiNamingSettingsDraftFromState({ markDirty = false } = {}) {
   return aiNamingManagerState.settings
 }
 
+function areAiProviderSettingsLocked(): boolean {
+  return availabilityState.storageLoading || hasActiveAiAnalysisRunSession() || aiNamingState.applying || aiNamingState.testingConnection ||
+    aiNamingState.fetchingModels || aiNamingState.requestingPermission || Boolean(aiNamingState.pendingFeatureSwitch) || aiSettingsSaving
+}
+
+function areAiResultActionsLocked(): boolean {
+  return areAiProviderSettingsLocked() || availabilityState.catalogLoading || isInteractionLocked()
+}
+
 export function handleAiProviderSettingsAction(detail: AiProviderSettingsActionDetail): void {
   if (!detail) {
     return
   }
 
-  const settingsLocked =
-    hasActiveAiAnalysisRunSession() ||
-    aiNamingState.applying ||
-    aiNamingState.testingConnection
+  const settingsLocked = areAiProviderSettingsLocked()
   if (
     settingsLocked &&
     detail.action !== 'toggle-api-key' &&
@@ -3600,8 +3708,8 @@ export function handleFeatureSettingsChange(detail: FeatureSettingsChangeDetail)
     void handleAiRemoteParserChange(detail.checked)
     return
   }
-  if (detail.key === 'autoMoveToRecommendedFolder' || detail.key === 'tagOnlyNoAutoMove') {
-    void handleInboxWorkflowSettingChange(detail.key, detail.checked)
+  if (detail.key === 'inboxWorkflow') {
+    void saveInboxWorkflowMode(detail.value, renderAiNamingSection)
   }
 }
 
@@ -3865,6 +3973,9 @@ function isAiProgressBusy() {
 }
 
 async function saveAiNamingSettingsFromState({ validateRequired = true } = {}) {
+  if (aiSettingsSaving || aiNamingState.fetchingModels || aiNamingState.testingConnection) return false
+  aiSettingsSaving = true
+  renderAvailabilitySection()
   try {
     const settings = syncAiNamingSettingsDraftFromState()
     if (validateRequired || settings.autoAnalyzeBookmarks) {
@@ -3893,6 +4004,7 @@ async function saveAiNamingSettingsFromState({ validateRequired = true } = {}) {
     }
     await saveAiNamingSettings(settings)
     aiNamingState.settingsDirty = false
+    aiNamingState.statusMessage = ''
     aiNamingState.lastError = ''
     await hydrateAiNamingPermissionState()
     return true
@@ -3901,12 +4013,13 @@ async function saveAiNamingSettingsFromState({ validateRequired = true } = {}) {
       error instanceof Error ? error.message : 'AI 渠道保存失败，请稍后重试。'
     return false
   } finally {
+    aiSettingsSaving = false
     renderAvailabilitySection()
   }
 }
 
 async function handleAutoAnalyzeBookmarksChange(checked: boolean) {
-  if (aiNamingState.pendingFeatureSwitch) {
+  if (areAiProviderSettingsLocked()) {
     renderAiNamingSection()
     return
   }
@@ -3935,58 +4048,20 @@ async function handleAutoAnalyzeBookmarksChange(checked: boolean) {
   }
 }
 
-async function handleInboxWorkflowSettingChange(
-  source: 'autoMoveToRecommendedFolder' | 'tagOnlyNoAutoMove',
-  checked: boolean
-) {
-  if (aiNamingState.pendingFeatureSwitch) {
-    renderAiNamingSection()
-    return
-  }
-
-  const previousSettings = normalizeInboxSettings(managerState.inboxSettings)
-  const tagOnlyNoAutoMove = source === 'tagOnlyNoAutoMove'
-    ? checked
-    : previousSettings.tagOnlyNoAutoMove
-  const autoMoveToRecommendedFolder = source === 'tagOnlyNoAutoMove' && tagOnlyNoAutoMove
-    ? false
-    : source === 'autoMoveToRecommendedFolder'
-      ? checked
-      : previousSettings.autoMoveToRecommendedFolder
-
-  try {
-    aiNamingState.pendingFeatureSwitch = source
-    managerState.inboxSettingsStatus = '正在保存 Inbox 设置…'
-    renderAiNamingSection()
-    managerState.inboxSettings = await saveInboxSettings({
-      ...previousSettings,
-      autoMoveToRecommendedFolder,
-      tagOnlyNoAutoMove
-    })
-    managerState.inboxSettingsStatus = 'Inbox 设置已保存。'
-  } catch (error) {
-    managerState.inboxSettings = previousSettings
-    managerState.inboxSettingsStatus = error instanceof Error
-      ? error.message
-      : 'Inbox 设置保存失败，请稍后重试。'
-  } finally {
-    if (aiNamingState.pendingFeatureSwitch === source) {
-      aiNamingState.pendingFeatureSwitch = ''
-    }
-    renderAiNamingSection()
-  }
-}
 
 async function handleAiRemoteParserChange(nextEnabled: boolean) {
-  if (aiNamingState.pendingFeatureSwitch) {
+  if (areAiProviderSettingsLocked()) {
     renderAiNamingSection()
     return
   }
 
   const previousSettings = normalizeAiNamingSettings(aiNamingManagerState.settings)
+  const wasDirty = aiNamingState.settingsDirty
+  let saved = false
 
   try {
     aiNamingState.pendingFeatureSwitch = 'allowRemoteParsing'
+    aiNamingState.statusMessage = ''
     aiNamingState.lastError = ''
     const settings = normalizeAiNamingSettings({
       ...syncAiNamingSettingsDraftFromState(),
@@ -4009,17 +4084,15 @@ async function handleAiRemoteParserChange(nextEnabled: boolean) {
     }
 
     await saveAiNamingSettings(settings)
+    saved = true
     aiNamingManagerState.settings = settings
     aiNamingState.settingsDirty = false
     await hydrateAiNamingPermissionState()
   } catch (error) {
-    const settings = normalizeAiNamingSettings({
-      ...previousSettings,
-      allowRemoteParsing: false
-    })
-    await saveAiNamingSettings(settings).catch(() => {})
-    aiNamingManagerState.settings = settings
-    aiNamingState.settingsDirty = false
+    if (!saved) {
+      aiNamingManagerState.settings = previousSettings
+      aiNamingState.settingsDirty = wasDirty
+    }
     aiNamingState.remoteParserPermissionGranted = await hasJinaReaderPermission()
     aiNamingState.lastError =
       error instanceof Error ? error.message : 'Jina Reader 远程解析开启失败，请稍后重试。'
@@ -4043,90 +4116,27 @@ function renderFeatureSettingsControls(
   }
 ): void {
   const inboxSettings = normalizeInboxSettings(managerState.inboxSettings)
-  const remoteParserEnabled = Boolean(settings.allowRemoteParsing)
-  const remoteParserGranted = Boolean(aiNamingState.remoteParserPermissionGranted)
-  const remoteParserStatusTone = remoteParserEnabled
-    ? remoteParserGranted
-      ? 'success'
-      : 'warning'
-    : 'muted'
-  const inboxStatusText = managerState.inboxSettingsStatus ||
-    (inboxSettings.tagOnlyNoAutoMove
-      ? '只生成标签'
-      : inboxSettings.autoMoveToRecommendedFolder
-        ? '自动移动开启'
-        : '保留在 Inbox')
-  const inboxStatusTone = managerState.inboxSettingsStatus
-    ? managerState.inboxSettingsStatus.includes('失败') || managerState.inboxSettingsStatus.includes('Error')
-      ? 'warning'
-      : 'success'
-    : inboxSettings.autoMoveToRecommendedFolder && !inboxSettings.tagOnlyNoAutoMove
-      ? 'success'
-      : 'muted'
-
-  publishFeatureSettingsControls({
+  publishFeatureSettingsControls(buildFeatureSettingsView({
+    settings,
+    inboxSettings,
+    inboxStatus: managerState.inboxSettingsStatus,
     loading: availabilityState.storageLoading || !aiNamingState.permissionStateHydrated,
-    switches: [
-      {
-        checked: Boolean(settings.autoAnalyzeBookmarks),
-        disabled:
-          featureSwitchesLocked ||
-          aiNamingState.testingConnection ||
-          featureSwitchInFlight === 'autoAnalyzeBookmarks',
-        help: '新增网页书签后自动分析并归类。',
-        key: 'autoAnalyzeBookmarks',
-        label: '自动分析',
-        status: Boolean(settings.autoAnalyzeBookmarks) ? '自动分析开启' : '未开启',
-        statusTone: Boolean(settings.autoAnalyzeBookmarks) ? 'success' : 'muted'
-      },
-      {
-        checked: remoteParserEnabled,
-        disabled:
-          featureSwitchesLocked ||
-          featureSwitchInFlight === 'allowRemoteParsing',
-        help: '结合 Jina Reader 内容；第三方服务会收到目标 URL。',
-        key: 'allowRemoteParsing',
-        label: '开启 Jina Reader 远程解析 URL',
-        status: remoteParserEnabled
-          ? remoteParserGranted
-            ? '已授权'
-            : '待授权'
-          : '未开启',
-        statusTone: remoteParserStatusTone
-      },
-      {
-        checked: Boolean(inboxSettings.autoMoveToRecommendedFolder),
-        disabled:
-          Boolean(inboxSettings.tagOnlyNoAutoMove) ||
-          featureSwitchesLocked ||
-          featureSwitchInFlight === 'autoMoveToRecommendedFolder',
-        help: '快捷键收藏先进入 Inbox，高置信时自动移动。',
-        key: 'autoMoveToRecommendedFolder',
-        label: '自动移动到推荐文件夹',
-        status: inboxStatusText,
-        statusTone: inboxStatusTone
-      },
-      {
-        checked: Boolean(inboxSettings.tagOnlyNoAutoMove),
-        disabled:
-          featureSwitchesLocked ||
-          featureSwitchInFlight === 'tagOnlyNoAutoMove',
-        help: '快捷键收藏仍进 Inbox，只生成标签和摘要。',
-        key: 'tagOnlyNoAutoMove',
-        label: '只打标签，不自动移动'
-      }
-    ]
-  })
+    remoteParserGranted: Boolean(aiNamingState.remoteParserPermissionGranted),
+    locked: featureSwitchesLocked,
+    pending: featureSwitchInFlight,
+    testingConnection: aiNamingState.testingConnection
+  }))
 }
 
 async function handleAiConnectivityTest() {
-  if (aiNamingState.testingConnection || aiNamingState.running || aiNamingState.applying) {
+  if (areAiProviderSettingsLocked()) {
     return
   }
 
   try {
     const settings = syncAiNamingSettingsDraftFromState()
     validateAiNamingSettings(settings)
+    aiNamingState.statusMessage = ''
     aiNamingState.lastError = ''
     resetAiNamingConnectivityState()
     aiNamingState.testingConnection = true
@@ -4158,6 +4168,17 @@ async function handleAiConnectivityTest() {
 }
 
 function renderAiProviderConfiguration() {
+  if (pendingExternalAiSettings && !aiNamingState.settingsDirty && !areAiProviderSettingsLocked()) {
+    const incoming = normalizeAiNamingSettings(pendingExternalAiSettings.value)
+    pendingExternalAiSettings = null
+    if (JSON.stringify(incoming) !== JSON.stringify(aiNamingManagerState.settings)) {
+      aiNamingManagerState.settings = incoming
+      resetAiNamingConnectivityState()
+      aiNamingState.permissionGranted = false
+      aiNamingState.permissionStateHydrated = false
+      void hydrateAiNamingPermissionState()
+    }
+  }
   const settings = aiNamingManagerState.settings
   const hasRequiredConfig = isAiProviderConfigured(settings)
   const configTone = aiNamingState.settingsDirty
@@ -4193,10 +4214,7 @@ function renderAiProviderConfiguration() {
     actionDisabled:
       availabilityState.catalogLoading ||
       !hasRequiredConfig ||
-      aiNamingState.testingConnection ||
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.requestingPermission,
+      areAiProviderSettingsLocked(),
     actionLabel: aiNamingState.lastCompletedAt ? '重新分析并生成建议' : '开始分析并生成建议',
     pauseDisabled: !aiNamingState.running || aiNamingState.stopRequested,
     pauseHidden: !aiNamingState.running,
@@ -4212,7 +4230,7 @@ function renderAiProviderConfiguration() {
 function renderAiNamingSection() {
   const { hasRequiredConfig, settings } = renderAiProviderConfiguration()
   const featureSwitchInFlight = aiNamingState.pendingFeatureSwitch
-  const featureSwitchesLocked = aiNamingState.running || aiNamingState.applying
+  const featureSwitchesLocked = areAiProviderSettingsLocked()
 
   renderFeatureSettingsControls(settings, {
     featureSwitchesLocked,
@@ -4270,14 +4288,13 @@ function renderAiNamingSection() {
   const selectedMovableResults = selectedResults.filter((result) => canMoveAiNamingResultToSuggestedFolder(result))
   const pendingSelectionMove = aiNamingState.pendingMoveSelection && selectedMovableResults.length > 0
   publishAiAnalysisSelectionActions({
-    applyDisabled: aiNamingState.running || aiNamingState.applying || selectedResults.length === 0,
-    clearDisabled: selectedResults.length === 0,
+    applyDisabled: areAiResultActionsLocked() || selectedResults.length === 0,
+    clearDisabled: areAiResultActionsLocked() || selectedResults.length === 0,
     countLabel: `${selectedResults.length} 条已选择`,
     hidden: selectableResults.length === 0,
     moveConfirm: pendingSelectionMove,
     moveDisabled:
-      aiNamingState.running ||
-      aiNamingState.applying ||
+      areAiResultActionsLocked() ||
       selectedMovableResults.length === 0,
     moveLabel: '移动至推荐文件夹',
     moveTitle: selectedMovableResults.length
@@ -4286,12 +4303,10 @@ function renderAiNamingSection() {
         : `移动 ${selectedMovableResults.length} 条`
       : '所选结果没有可用的推荐文件夹',
     selectAllDisabled:
-      aiNamingState.running ||
-      aiNamingState.applying ||
+      areAiResultActionsLocked() ||
       selectableResults.length === 0,
     selectHighConfidenceDisabled:
-      aiNamingState.running ||
-      aiNamingState.applying ||
+      areAiResultActionsLocked() ||
       highConfidenceResults.length === 0
   })
 
@@ -4418,7 +4433,7 @@ function renderBackupControls() {
         return Math.max(latest, Number(record.updatedAt) || 0)
       }, 0)
     : 0
-  const tagBusy = aiNamingState.running || aiNamingState.applying
+  const tagBusy = aiNamingState.running || aiNamingState.applying || tagDataOperationPending
   const hasBackup = Boolean(backupRestoreState.backup && backupRestoreState.preview)
   const backupBusy = Boolean(backupRestoreState.restoring || backupRestoreState.exporting || backupRestoreState.reading)
 
@@ -4500,10 +4515,18 @@ async function handleBookmarkTagImport(file?: File) {
       reason: `导入标签数据：新增 ${result.added}，覆盖 ${result.overwritten}`,
       estimatedChangeCount: changedCount
     })
-    const savedIndex = await saveBookmarkTagIndex(result.index)
-    aiNamingState.tagIndex = savedIndex
+    const committed = await withLocalStorageTransaction(async transaction => {
+      const [latestIndex, tree] = await Promise.all([loadBookmarkTagIndex({ transaction }), getBookmarkTree()])
+      const latestBookmarks = buildBookmarkCatalogSnapshot({ rootNode: tree[0] || null }).extracted.bookmarks
+      const merged = mergeBookmarkTagImport(latestIndex, payload, latestBookmarks)
+      if (merged.added + merged.overwritten) {
+        merged.index = await saveBookmarkTagIndex(merged.index, { transaction })
+      }
+      return merged
+    })
+    aiNamingState.tagIndex = committed.index
     aiNamingState.tagDataStatus =
-      `导入完成：新增 ${result.added}，覆盖 ${result.overwritten}，跳过 ${result.skipped}，无法匹配 ${result.unmatched}。`
+      `导入完成：新增 ${committed.added}，覆盖 ${committed.overwritten}，跳过 ${committed.skipped}，无法匹配 ${committed.unmatched}。`
   } catch (error) {
     aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签数据导入失败。'
   } finally {
@@ -4537,20 +4560,19 @@ async function handleBookmarkTagClear() {
 }
 
 export function handleBackupAction(detail: BackupActionDetail): void {
+  if (detail && ['export-tags', 'import-tags', 'clear-tags'].includes(detail.action)) {
+    if (tagDataOperationPending || isInteractionLocked() || backupRestoreState.restoring) return
+    tagDataOperationPending = true
+    renderBackupControls()
+    const operation = detail.action === 'export-tags' ? handleBookmarkTagExport()
+      : detail.action === 'import-tags' ? handleBookmarkTagImport(detail.file) : handleBookmarkTagClear()
+    void operation.catch(error => {
+      aiNamingState.tagDataStatus = error instanceof Error ? error.message : '标签操作失败，请重试。'
+    }).finally(() => { tagDataOperationPending = false; renderBackupControls() })
+    return
+  }
   if (detail?.action === 'preview-auto-backup' && detail.backupId) {
     void handleAutoBackupPreview(detail.backupId)
-    return
-  }
-  if (detail?.action === 'export-tags') {
-    void handleBookmarkTagExport()
-    return
-  }
-  if (detail?.action === 'import-tags') {
-    void handleBookmarkTagImport(detail.file)
-    return
-  }
-  if (detail?.action === 'clear-tags') {
-    void handleBookmarkTagClear()
     return
   }
   if (detail?.action === 'export-backup') {
@@ -4735,7 +4757,8 @@ async function handleFullBackupExport() {
     const now = Date.now()
     const payload = await createCuratorBackupFile('manual', now)
     downloadJsonFile(getBackupFileName(now), payload)
-    backupRestoreState.status = '完整备份已导出，文件不包含 API Key。'
+    const iconWarnings = (payload.notes || []).filter(note => note.includes('图标无法读取'))
+    backupRestoreState.status = ['完整备份已导出，文件不包含 API Key。', ...iconWarnings].join(' ')
   } catch (error) {
     backupRestoreState.status = error instanceof Error ? error.message : '完整备份导出失败。'
   } finally {
@@ -4820,7 +4843,7 @@ async function handleAutoBackupPreview(backupId: string) {
 }
 
 async function handleFullBackupRestore(mode: BackupRestoreMode) {
-  if (!backupRestoreState.backup || backupRestoreState.restoring) {
+  if (!backupRestoreState.backup || backupRestoreState.restoring || backupRestoreState.reading || backupRestoreState.exporting || tagDataOperationPending) {
     return
   }
   const backup = backupRestoreState.backup
@@ -4844,7 +4867,7 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
     tone: mode === 'safeFull' ? 'warning' : 'danger',
     label: 'Restore'
   })
-  if (!confirmed) {
+  if (!confirmed || backupRestoreState.restoring || backupRestoreState.backup !== backup || tagDataOperationPending) {
     return
   }
 
@@ -4870,7 +4893,7 @@ async function handleFullBackupRestore(mode: BackupRestoreMode) {
         }
       }
       const [, tagIndex] = await Promise.all([
-        hydrateAvailabilityCatalog({ preserveResults: true }),
+        hydrateAvailabilityCatalog({ preserveResults: true, throwOnError: true }),
         loadBookmarkTagIndex()
       ])
       aiNamingState.tagIndex = tagIndex
@@ -5002,10 +5025,7 @@ function renderAiProviderSettings(
     reasoningCapability,
     reasoningContext
   )
-  const fieldsDisabled =
-    hasActiveAiAnalysisRunSession() ||
-    aiNamingState.applying ||
-    aiNamingState.testingConnection
+  const fieldsDisabled = areAiProviderSettingsLocked()
   publishAiProviderSettings({
     apiKey: settings.apiKey,
     apiKeyPlaceholder: settings.apiKey ? maskAiApiKey(settings.apiKey) : '未保存 API Key',
@@ -5023,9 +5043,9 @@ function renderAiProviderSettings(
     fieldsDisabled,
     hasRequiredConfig,
     modelTools: buildAiProviderModelToolsState(settings),
-    modelToolsDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    modelToolsDisabled: fieldsDisabled,
     noticeText: fieldsDisabled
-      ? '智能分析运行期间设置已锁定，结束后可继续修改。'
+      ? '正在处理 AI 操作，完成后可继续修改设置。'
       : aiNamingState.settingsDirty
       ? '有未保存改动，保存后会用于所有 AI 功能。'
       : hasRequiredConfig
@@ -5045,20 +5065,15 @@ function renderAiProviderSettings(
     ),
     reasoningEffortSupported: reasoningProfile.supported,
     revealApiKey: managerState.aiRevealApiKey,
-    saveDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
-    saveStatusText: aiNamingState.settingsDirty
+    saveDisabled: fieldsDisabled,
+    saveStatusText: aiSettingsSaving ? '正在保存' : aiNamingState.settingsDirty
       ? '有未保存改动'
       : hasRequiredConfig
         ? '已保存'
         : '待配置',
     showSaveSettingsButton,
     testButtonSecondary: showSaveSettingsButton,
-    testDisabled:
-      !hasRequiredConfig ||
-      aiNamingState.testingConnection ||
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.requestingPermission,
+    testDisabled: !hasRequiredConfig || fieldsDisabled,
     testLabel: aiNamingState.testingConnection ? '测试中' : '测试连接',
     testingConnection: aiNamingState.testingConnection,
     timeoutMs: String(settings.timeoutMs)
@@ -5069,7 +5084,7 @@ function buildAiModelSelectorState(settings = aiNamingManagerState.settings) {
   return {
     currentModel: settings.model || AI_NAMING_DEFAULT_MODEL,
     customModels: settings.customModels,
-    disabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    disabled: areAiProviderSettingsLocked(),
     fetchedModels: settings.fetchedModels,
     models: getAiNamingModelOptions(settings),
     presetModels: AI_NAMING_PRESET_MODELS
@@ -5079,19 +5094,13 @@ function buildAiModelSelectorState(settings = aiNamingManagerState.settings) {
 function buildAiProviderModelToolsState(settings = aiNamingManagerState.settings) {
   const status = getAiFetchModelsStatus()
   return {
-    fetchDisabled:
-      !isAiProviderKeyConfigured(settings) ||
-      aiNamingState.running ||
-      aiNamingState.applying ||
-      aiNamingState.testingConnection ||
-      aiNamingState.fetchingModels ||
-      aiNamingState.requestingPermission,
+    fetchDisabled: !isAiProviderKeyConfigured(settings) || areAiProviderSettingsLocked(),
     fetchLabel: aiNamingState.fetchingModels ? '获取中' : '获取模型',
     fetchModelsStatus: status.copy,
     fetchModelsStatusBusy: aiNamingState.fetchingModels,
     fetchModelsStatusTone: status.tone,
     fetchingModels: aiNamingState.fetchingModels,
-    manageDisabled: aiNamingState.running || aiNamingState.applying || aiNamingState.testingConnection,
+    manageDisabled: areAiProviderSettingsLocked(),
     selector: buildAiModelSelectorState(settings)
   }
 }
@@ -5133,7 +5142,7 @@ function getAiModelsEndpoint(settings) {
 }
 
 async function handleFetchAiModels() {
-  if (aiNamingState.fetchingModels || aiNamingState.running || aiNamingState.applying) {
+  if (areAiProviderSettingsLocked()) {
     return
   }
 
@@ -5151,23 +5160,13 @@ async function handleFetchAiModels() {
     return
   }
 
-  const permissionGranted = await ensureAiNamingProviderPermission({
-    interactive: true,
-    baseUrl
-  })
-  if (!permissionGranted) {
-    aiNamingState.lastFetchModelsError = '未授权该 Origin，无法访问该 API。'
-    aiNamingState.lastFetchModelsAt = 0
-    aiNamingState.lastFetchModelsCount = 0
-    renderAiFetchModelsStatus()
-    return
-  }
-
   aiNamingState.fetchingModels = true
   aiNamingState.lastFetchModelsError = ''
-  renderAiFetchModelsStatus()
+  renderAiNamingSection()
 
   try {
+    const permissionGranted = await ensureAiNamingProviderPermission({ interactive: true, baseUrl })
+    if (!permissionGranted) throw new Error('未授权该 Origin，无法访问该 API。')
     const url = getAiModelsEndpoint(settings)
     const modelEntries: Record<string, unknown>[] = []
     const modelIds = new Set<string>()
@@ -5211,6 +5210,7 @@ async function handleFetchAiModels() {
       reasoningCapabilities
     })
     await saveAiNamingSettings(aiNamingManagerState.settings)
+    aiNamingState.settingsDirty = false
     aiNamingState.lastFetchModelsAt = Date.now()
     aiNamingState.lastFetchModelsCount = normalizedIds.length
     aiNamingState.lastFetchModelsError = ''
@@ -5306,11 +5306,9 @@ function renderAiNamingResults() {
   }
 
   if (!aiNamingState.results.length) {
-    const emptyMessage = aiNamingState.lastError
-      ? aiNamingState.lastError
-      : aiNamingState.lastCompletedAt
-        ? '最近一次生成已完成，当前没有待处理的书签智能分析结果。'
-        : '保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。'
+    const emptyMessage = aiNamingState.lastError || aiNamingState.statusMessage || (aiNamingState.lastCompletedAt
+        ? '最近一次生成已完成，当前没有待确认的书签智能分析结果。'
+        : '保存 AI 渠道并开始分析后，这里会展示书签智能分析结果。')
     publishAiAnalysisResults({
       emptyMessage,
       results: []
@@ -5380,7 +5378,7 @@ function getAiNamingResultActionLabel(action, result) {
 
 function buildAiNamingResultCardViewModel(result) {
   const selectable = result.status === 'suggested'
-  const interactionLocked = aiNamingState.running || aiNamingState.applying || isInteractionLocked()
+  const interactionLocked = areAiResultActionsLocked()
   const isSelected = aiNamingState.selectedResultIds.has(String(result.id))
   const canMoveToSuggestedFolder = canMoveAiNamingResultToSuggestedFolder(result)
   const pendingMove = aiNamingState.pendingMoveResultIds.has(String(result.id))
@@ -5758,7 +5756,7 @@ export function handleAiAnalysisResultAction(detail: AiAnalysisResultActionDetai
     return
   }
 
-  if (hasActiveAiAnalysisRunSession() || aiNamingState.applying) {
+  if (areAiResultActionsLocked()) {
     return
   }
 
@@ -5817,33 +5815,36 @@ export function handleAiAnalysisResultAction(detail: AiAnalysisResultActionDetai
 }
 
 async function rejectAiNamingResult(bookmarkId: string): Promise<void> {
+  if (areAiResultActionsLocked()) return
   const targetResult = aiNamingState.results.find((result) => String(result.id) === String(bookmarkId))
   const entry = buildAiRejectedSuggestionEntry(targetResult)
   if (!targetResult || targetResult.status !== 'suggested' || !entry) {
     return
   }
 
-  aiNamingState.rejectedSuggestionKeys.add(entry.key)
-  aiNamingState.rejectedSuggestions = normalizeAiRejectedSuggestions([
-    entry,
-    ...aiNamingState.rejectedSuggestions
-  ])
-  aiNamingState.rejectedSuggestionKeys = new Set(
-    aiNamingState.rejectedSuggestions.map((item) => item.key)
-  )
-  aiNamingState.results = aiNamingState.results.filter((result) => String(result.id) !== String(bookmarkId))
-  aiNamingState.selectedResultIds.delete(String(bookmarkId))
-  aiNamingState.pendingMoveResultIds.delete(String(bookmarkId))
-  aiNamingState.pendingMoveSelection = false
-  aiNamingState.lastError = `已拒绝“${targetResult.suggestedTitle || targetResult.currentTitle || '未命名书签'}”的建议，后续不会重复展示同一建议。`
-  recalculateAiNamingSummary()
+  aiNamingState.applying = true
+  aiNamingState.lastError = ''
+  aiNamingState.statusMessage = ''
   renderAvailabilitySection()
-  void persistAiAnalysisCheckpoint().catch(() => {})
 
   try {
-    await saveAiRejectedSuggestions()
+    const suggestions = await saveAiRejectedSuggestion(entry)
+    hydrateAiRejectedSuggestions(suggestions)
+    aiNamingState.results = aiNamingState.results.filter((result) => !isAiNamingSuggestionRejected(result))
+    const remainingIds = new Set(aiNamingState.results.map((result) => String(result.id)))
+    syncSelectionSet(aiNamingState.selectedResultIds, remainingIds)
+    syncSelectionSet(aiNamingState.pendingMoveResultIds, remainingIds)
+    aiNamingState.pendingMoveSelection = false
+    aiNamingState.statusMessage = `已拒绝“${targetResult.suggestedTitle || targetResult.currentTitle || '未命名书签'}”的建议，后续不会重复展示同一建议。`
+    recalculateAiNamingSummary()
+    await persistAiAnalysisCheckpoint().catch(() => {})
   } catch (error) {
-    aiNamingState.lastError = error instanceof Error ? error.message : '拒绝偏好保存失败。'
+    aiNamingState.lastError = error instanceof Error
+      ? `拒绝偏好保存失败：${error.message}。建议已保留，请重试。`
+      : '拒绝偏好保存失败，建议已保留，请重试。'
+  } finally {
+    aiNamingState.applying = false
+    await flushPendingAvailabilityCatalogRefreshAfterAiApply([])
     renderAvailabilitySection()
   }
 }
@@ -5852,8 +5853,7 @@ async function handleAiNamingAction() {
   if (
     availabilityState.catalogLoading ||
     hasActiveAvailabilityRunSession() ||
-    hasActiveAiAnalysisRunSession() ||
-    aiNamingState.applying
+    areAiProviderSettingsLocked()
   ) {
     return
   }
@@ -5909,6 +5909,8 @@ function beginAiAnalysisRunSession(_totalBookmarks: number): string {
   aiNamingState.stopRequested = false
   aiNamingState.paused = false
   aiNamingState.abortController = controller
+  aiNamingState.statusMessage = ''
+  aiNamingState.lastError = ''
   renderAvailabilitySection()
   return session.id
 }
@@ -6203,7 +6205,9 @@ function getAiNamingProviderPermissionOrigin(baseUrl = aiNamingManagerState.sett
 }
 
 async function handleAiScopeChange(nextScopeFolderId) {
+  if (areAiResultActionsLocked()) return
   aiNamingState.scopeFolderId = String(nextScopeFolderId || '').trim()
+  aiNamingState.statusMessage = ''
   aiNamingState.lastError = ''
   syncAiNamingCatalog({ preserveResults: false })
   await hydrateAiNamingPermissionState()
@@ -6211,7 +6215,7 @@ async function handleAiScopeChange(nextScopeFolderId) {
 }
 
 async function applySelectedAiNamingResults() {
-  if (hasActiveAiAnalysisRunSession() || aiNamingState.applying) {
+  if (areAiResultActionsLocked()) {
     return
   }
   const selectedResults = getSelectedAiNamingResults()
@@ -6229,7 +6233,7 @@ async function applySelectedAiNamingResults() {
   if (!confirmed) {
     return
   }
-  if (hasActiveAiAnalysisRunSession() || aiNamingState.applying) {
+  if (areAiResultActionsLocked()) {
     aiNamingState.lastError = '分析结果已发生变化，请在本轮分析结束后重新选择。'
     renderAvailabilitySection()
     return
@@ -6246,7 +6250,7 @@ async function applySelectedAiNamingResults() {
 }
 
 async function handleMoveSelectedAiNamingResults() {
-  if (hasActiveAiAnalysisRunSession() || aiNamingState.applying) {
+  if (areAiResultActionsLocked()) {
     return
   }
 
@@ -6277,7 +6281,7 @@ async function handleMoveSelectedAiNamingResults() {
     renderAvailabilitySection()
     return
   }
-  if (!areAiNamingResultSnapshotsCurrent(selectedMovableResults)) {
+  if (areAiResultActionsLocked() || !areAiNamingResultSnapshotsCurrent(selectedMovableResults)) {
     aiNamingState.pendingMoveSelection = false
     aiNamingState.lastError = '确认期间推荐文件夹已更新，请重新检查并选择。'
     renderAvailabilitySection()
@@ -6310,6 +6314,7 @@ function getAiNamingResultRevision(result): string {
 }
 
 async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
+  if (areAiResultActionsLocked()) return
   const targetIds = new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   const targetResults = aiNamingState.results.filter((result) => {
     return targetIds.has(String(result.id)) && canMoveAiNamingResultToSuggestedFolder(result)
@@ -6323,11 +6328,13 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
   }
 
   aiNamingState.applying = true
+  aiNamingState.statusMessage = ''
   aiNamingState.lastError = ''
   renderAvailabilitySection()
 
   const movedIds = []
   const moveErrors = []
+  let catalogRefreshError = ''
   const folderCache = new Map()
   const releaseMutationLock = await claimAvailabilityMutationLock()
   if (!releaseMutationLock) {
@@ -6368,6 +6375,8 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
         moveErrors.push(`${title}：${message}`)
       }
     })
+  } catch (error) {
+    moveErrors.push(error instanceof Error ? error.message : '移动至推荐文件夹失败。')
   } finally {
     releaseMutationLock()
     aiNamingState.pendingMoveSelection = false
@@ -6377,11 +6386,10 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
       availabilityCatalogRefreshPending = false
       await hydrateAvailabilityCatalog({
         preserveResults: true,
-        allowDuringAiApply: true
+        allowDuringAiApply: true,
+        throwOnError: true
       }).catch((error) => {
-        moveErrors.push(
-          `目录刷新：${error instanceof Error ? error.message : '未知错误'}`
-        )
+        catalogRefreshError = `目录刷新失败：${error instanceof Error ? error.message : '未知错误'}`
       })
     }
 
@@ -6391,9 +6399,13 @@ async function moveAiNamingResultsToSuggestedFolders(bookmarkIds) {
         ? `推荐文件夹移动完成 ${movedIds.length} 条，${moveErrors.length} 条失败：${firstError}`
         : `移动至推荐文件夹失败：${firstError}`
     } else if (movedIds.length) {
-      aiNamingState.lastError = `已将 ${movedIds.length} 条书签移动至推荐文件夹。`
+      aiNamingState.statusMessage = `已将 ${movedIds.length} 条书签移动至推荐文件夹。`
     } else {
-      aiNamingState.lastError = '所选书签已位于推荐文件夹。'
+      aiNamingState.statusMessage = '所选书签已位于推荐文件夹。'
+    }
+
+    if (catalogRefreshError) {
+      aiNamingState.lastError = [aiNamingState.lastError || aiNamingState.statusMessage, catalogRefreshError].filter(Boolean).join('；')
     }
 
     await persistAiAnalysisCheckpoint().catch(() => {})
@@ -6425,6 +6437,7 @@ function formatAiNamingImpactList(results, formatter) {
 }
 
 async function applyAiNamingResultsByIds(bookmarkIds) {
+  if (areAiResultActionsLocked()) return
   const targetIds = new Set(bookmarkIds.flatMap(id => { const mappedResult = String(id); return mappedResult ? [mappedResult] : [] }))
   const targetResults = aiNamingState.results.filter((result) => {
     return targetIds.has(String(result.id)) && result.status === 'suggested'
@@ -6435,11 +6448,13 @@ async function applyAiNamingResultsByIds(bookmarkIds) {
   }
 
   aiNamingState.applying = true
+  aiNamingState.statusMessage = ''
   aiNamingState.lastError = ''
   renderAvailabilitySection()
 
   const appliedIds = []
   const applyErrors = []
+  let catalogRefreshError = ''
   const releaseMutationLock = await claimAvailabilityMutationLock()
   if (!releaseMutationLock) {
     aiNamingState.applying = false
@@ -6490,11 +6505,10 @@ async function applyAiNamingResultsByIds(bookmarkIds) {
       availabilityCatalogRefreshPending = false
       await hydrateAvailabilityCatalog({
         preserveResults: true,
-        allowDuringAiApply: true
+        allowDuringAiApply: true,
+        throwOnError: true
       }).catch((error) => {
-        applyErrors.push(
-          `目录刷新：${error instanceof Error ? error.message : '未知错误'}`
-        )
+        catalogRefreshError = `目录刷新失败：${error instanceof Error ? error.message : '未知错误'}`
       })
     }
 
@@ -6503,7 +6517,11 @@ async function applyAiNamingResultsByIds(bookmarkIds) {
         ? `已应用 ${appliedIds.length} 条，${applyErrors.length} 条未应用：${applyErrors[0]}`
         : `应用命名建议失败：${applyErrors[0]}`
     } else if (appliedIds.length) {
-      aiNamingState.lastError = `已应用 ${appliedIds.length} 条书签命名建议。`
+      aiNamingState.statusMessage = `已应用 ${appliedIds.length} 条书签命名建议。`
+    }
+
+    if (catalogRefreshError) {
+      aiNamingState.lastError = [aiNamingState.lastError || aiNamingState.statusMessage, catalogRefreshError].filter(Boolean).join('；')
     }
 
     await persistAiAnalysisCheckpoint().catch(() => {})
@@ -6524,9 +6542,12 @@ async function flushPendingAvailabilityCatalogRefreshAfterAiApply(
   await hydrateAvailabilityCatalog({
     preserveResults: true,
     analyzeFolderCleanup: false,
-    preserveLastError: true
+    preserveLastError: true,
+    throwOnError: true
   }).catch((error) => {
-    errors.push(`目录刷新：${error instanceof Error ? error.message : '未知错误'}`)
+    const message = `目录刷新失败：${error instanceof Error ? error.message : '未知错误'}`
+    errors.push(message)
+    aiNamingState.lastError = [aiNamingState.lastError || aiNamingState.statusMessage, message].filter(Boolean).join('；')
   })
 }
 
@@ -6565,20 +6586,23 @@ function validateAiNamingSettings(settings) {
 }
 
 function getAiNamingBadgeTone() {
-  if (aiNamingState.requestingPermission || availabilityState.catalogLoading) {
-    return 'warning'
-  }
-
-  if (aiNamingState.lastRunOutcome === 'failed') {
-    return 'danger'
-  }
-
-  if (aiNamingState.lastRunOutcome === 'stopped') {
+  if (
+    aiNamingState.requestingPermission || availabilityState.catalogLoading ||
+    aiNamingState.running || aiNamingState.applying
+  ) {
     return 'warning'
   }
 
   if (aiNamingState.lastError) {
     return 'danger'
+  }
+
+  if (aiNamingState.lastRunOutcome === 'failed' && !aiNamingState.statusMessage) {
+    return 'danger'
+  }
+
+  if (aiNamingState.lastRunOutcome === 'stopped' && !aiNamingState.statusMessage) {
+    return 'warning'
   }
 
   if (!isAiProviderConfigured(aiNamingManagerState.settings)) {
@@ -6597,21 +6621,29 @@ function getAiNamingBadgeText() {
     return '授权中'
   }
 
-  const readiness = getAiNamingReadinessMeta()
-  if (!readiness.ready) {
-    return readiness.badge
-  }
-
   if (aiNamingState.running) {
     return '生成中'
   }
 
-  if (aiNamingState.lastRunOutcome === 'failed') {
+  if (aiNamingState.applying) {
+    return '处理中'
+  }
+
+  if (aiNamingState.lastError) {
+    return '操作失败'
+  }
+
+  if (aiNamingState.lastRunOutcome === 'failed' && !aiNamingState.statusMessage) {
     return '运行失败'
   }
 
-  if (aiNamingState.lastRunOutcome === 'stopped') {
+  if (aiNamingState.lastRunOutcome === 'stopped' && !aiNamingState.statusMessage) {
     return '已停止'
+  }
+
+  const readiness = getAiNamingReadinessMeta()
+  if (!readiness.ready) {
+    return readiness.badge
   }
 
   return aiNamingState.permissionGranted ? '已就绪' : '待授权'
@@ -6622,8 +6654,16 @@ function getAiNamingStatusCopy() {
     return aiNamingState.lastError
   }
 
+  if (aiNamingState.statusMessage) {
+    return aiNamingState.statusMessage
+  }
+
   if (aiNamingState.testingConnection) {
     return '正在测试模型。'
+  }
+
+  if (aiNamingState.applying) {
+    return '正在保存建议处理结果。'
   }
 
   const readiness = getAiNamingReadinessMeta()
@@ -6872,7 +6912,8 @@ async function runAiNamingSuggestions({
     }
 
     if (!runInitialized) {
-      aiNamingState.lastError = '已取消本次书签智能分析，上一轮结果保持不变。'
+      aiNamingState.lastError = ''
+      aiNamingState.statusMessage = '已取消本次书签智能分析，上一轮结果保持不变。'
       return
     }
     aiNamingState.lastCompletedAt = Date.now()
@@ -6895,11 +6936,14 @@ async function runAiNamingSuggestions({
       return
     }
     if (!runInitialized) {
-      aiNamingState.lastError = aiNamingState.stopRequested || isAbortError(error)
-        ? '已取消本次书签智能分析，上一轮结果保持不变。'
-        : error instanceof Error
+      if (aiNamingState.stopRequested || isAbortError(error)) {
+        aiNamingState.lastError = ''
+        aiNamingState.statusMessage = '已取消本次书签智能分析，上一轮结果保持不变。'
+      } else {
+        aiNamingState.lastError = error instanceof Error
           ? error.message
           : '书签智能分析预检失败，请稍后重试。'
+      }
       renderAvailabilitySection()
       return
     }
@@ -9494,9 +9538,8 @@ async function ignoreSelectedAvailabilityResults(kind) {
     renderAvailabilitySection()
     return
   }
-  if (hasActiveAiAnalysisRunSession() || aiNamingState.applying) {
-    aiNamingState.pendingMoveSelection = false
-    aiNamingState.lastError = '分析结果已发生变化，请在本轮分析结束后重新选择。'
+  if (isAvailabilityResultActionLocked()) {
+    availabilityState.lastError = '检测状态已变化，请等待当前操作结束后重试。'
     renderAvailabilitySection()
     return
   }

@@ -126,12 +126,23 @@ try {
   ))
 
   await page.evaluate(() => window.startRender())
-  await page.waitForFunction(() => document.querySelectorAll('.bookmark-tile').length === 960 && !document.querySelector('[data-incremental-render]'))
+  // Row-level windowing keeps only the rows around the viewport mounted, so the
+  // grid settles on a bounded tile count instead of all 960 items.
+  await page.waitForFunction(() => document.querySelectorAll('.bookmark-tile').length > 0)
   await settle()
-  const mount = await page.evaluate(() => window.readRenderMetrics())
-  assert.equal(mount.registrySize, 960)
+  const mount = await page.evaluate(() => ({
+    metrics: window.readRenderMetrics(),
+    mounted: document.querySelectorAll('.bookmark-tile').length,
+    domNodes: document.querySelectorAll('*').length
+  }))
+  assert.ok(mount.mounted > 0 && mount.mounted < 960, `Only the visible window may mount: ${mount.mounted} tiles.`)
+  assert.equal(mount.metrics.registrySize, mount.mounted, 'The tile registry must track mounted tiles exactly.')
+  assert.ok(mount.domNodes < 6000, `Windowed rendering must keep the DOM small: ${mount.domNodes} nodes.`)
   assert.equal(await page.evaluate(() => window.bookmarkRefMatches('b0')), true)
-  assert.ok(mount.titleReads <= 960 * 6, `Appending chunks must use linear tile rendering; observed ${mount.titleReads} title reads.`)
+  assert.ok(
+    mount.metrics.titleReads <= mount.mounted * 6,
+    `Mounting the window must use linear tile rendering; observed ${mount.metrics.titleReads} title reads for ${mount.mounted} tiles.`
+  )
 
   await page.evaluate(() => { window.resetTitleReads(); window.changeDrag({ folderPendingId: 'unrelated' }) })
   await settle()
@@ -172,10 +183,18 @@ try {
   assert.equal((await page.evaluate(() => window.readRenderMetrics())).titleReads, 0, 'Keyed reordering must retain tile render output.')
   assert.equal(await page.evaluate(() => window.bookmarkRefMatches('b1')), true)
   await page.evaluate(() => window.removeBookmark())
-  await page.waitForFunction(() => document.querySelectorAll('.bookmark-tile').length === 959)
-  assert.equal((await page.evaluate(() => window.readRenderMetrics())).registrySize, 959, 'Deleted tiles must release their DOM refs.')
+  // The window keeps its size after a removal (it slides to the next item),
+  // so the contract is that the removed tile leaves the DOM and the registry.
+  await page.waitForFunction(() => document.querySelector('[data-bookmark-id="b1"]') === null)
+  assert.equal(await page.locator('[data-bookmark-id="b1"]').count(), 0, 'The removed bookmark must leave the window.')
+  assert.equal(await page.evaluate(() => window.bookmarkRefMatches('b1')), false, 'The removed bookmark must leave the tile registry.')
+  const afterRemove = await page.evaluate(() => ({
+    mounted: document.querySelectorAll('.bookmark-tile').length,
+    registrySize: window.readRenderMetrics().registrySize
+  }))
+  assert.equal(afterRemove.registrySize, afterRemove.mounted, 'Deleted tiles must release their DOM refs.')
   assert.deepEqual(errors, [])
-  console.log('Newtab incremental rendering and live bookmark-prop regression tests passed.')
+  console.log('Newtab windowed rendering and live bookmark-prop regression tests passed.')
 } finally {
   await browser.close()
 }

@@ -64,6 +64,15 @@ export interface InboxUndoLastMoveMessage {
   type: 'inbox:undo-last-move'
 }
 
+export interface InboxReviewMessage {
+  type: 'inbox:review'
+  bookmarkId: string
+  captureId: string
+  action: 'accept' | 'move' | 'keep' | 'retry'
+  folderId?: string
+  folderPath?: string
+}
+
 export interface RuntimeNotificationMessage {
   type: 'notification:create'
   notificationId: string
@@ -89,6 +98,7 @@ export interface BookmarkSaveResult {
   title: string
   url: string
   created: boolean
+  metadataWarning?: string
 }
 
 export interface InboxUndoLastMoveResult {

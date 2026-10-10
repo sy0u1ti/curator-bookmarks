@@ -60,7 +60,7 @@ try {
       curatorBookmarkAddHistory: { version: 1, entries: [{ id: 'organize-ui-example', bookmarkId: copies[2].id, title: copies[2].title, url: copies[2].url, originalFolderPath: '书签栏 / 收件箱', targetFolderPath: '书签栏 / UI 检查资料 / 开发文档', targetFolderId: second.id, recommendationKind: 'existing', moved: true, confidence: 0.93, reason: '与开发文档主题一致，放在此目录便于查找。', summary: '安装、配置和常见问题的完整参考。'.repeat(5), suggestedTitle: '开发参考手册', createdAt: now }] },
       curatorBookmarkAiAnalysisCheckpoint: { version: 1, scopeFolderId: folder.id, outcome: 'completed', startedAt: now - 20000, updatedAt: now, totalBookmarks: 1, completedBookmarkIds: [guide.id], results: [{ id: guide.id, currentTitle: guide.title, title: guide.title, url: guide.url, parentId: folder.id, path: '书签栏 / UI 检查资料', ancestorIds: ['1', folder.id], status: 'suggested', action: 'rename', suggestedTitle: 'iOS 自签名安装指南', summary: '介绍安装、签名与常见问题。', contentType: '文档', confidence: 'high', confidenceScore: 0.93, reason: '去除重复后缀，让标题更便于检索。', tags: ['iOS', '安装', '签名'], topics: ['移动开发'], aliases: ['安装说明'], suggestedFolder: 'UI 检查资料 / 开发文档', folderDecision: { kind: 'existing', folderId: second.id, folderPath: '书签栏 / UI 检查资料 / 开发文档', confidence: 0.9, reason: '开发文档' } }] }
     })
-    return { guide, restricted, folder, second, empty }
+    return { guide, restricted, redirect, copies, folder, second, empty }
   }, origin)
   page = await context.newPage()
   const errors = []
@@ -72,7 +72,7 @@ try {
   const guideCard = () => page.locator('#availability article').filter({ hasText: seeded.guide.title }).first()
   const baselineCard = await guideCard().boundingBox()
   const baselineCopy = await guideCard().innerText()
-  const sections = ['general','backup','availability','history','redirects','ignore','duplicates','folder-cleanup','recycle','ai','bookmark-history']
+  const sections = ['general','inbox','backup','availability','history','redirects','ignore','duplicates','folder-cleanup','recycle','ai-settings','ai','bookmark-history']
   const pages = []
   for (const width of [1440, 1100, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
@@ -89,7 +89,7 @@ try {
         await panel.getByText('iOS 自签名安装指南', { exact: true }).waitFor({ state: 'visible' })
         assert.equal(await panel.getByText('先配置 AI 渠道', { exact: true }).count(), 0, 'configured local providers do not require an API key')
       }
-      if (!before && section === 'general') {
+      if (!before && section === 'ai-settings') {
         const setupSteps = panel.getByRole('list', { name: 'AI 渠道配置流程' })
         const setupHelp = panel.getByRole('button', { name: '查看 AI 渠道配置步骤', exact: true })
         assert.equal(await setupSteps.count(), 0, 'setup steps remain collapsed until requested')
@@ -282,11 +282,96 @@ try {
     await organizeCard.getByText('与开发文档主题一致，放在此目录便于查找。', { exact: true }).waitFor({ state: 'visible' })
     await page.screenshot({ path: path.join(output, 'bookmark-history-details-390.png'), animations: 'disabled' })
 
+    await page.setViewportSize({ width: 1440, height: 1000 })
+    const confirmMutation = async () => {
+      const dialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: '确认当前操作', exact: true }) })
+      await dialog.getByRole('button', { name: '确认当前操作', exact: true }).click()
+      await dialog.waitFor({ state: 'hidden' })
+    }
+    await page.goto(base + '#folder-cleanup')
+    const emptyCard = page.locator('#folder-cleanup article').filter({ hasText: '删除空文件夹：待清理空目录' })
+    await emptyCard.getByRole('button', { name: /^查看文件夹清理预览/ }).click()
+    await emptyCard.getByRole('button', { name: /^确认删除/ }).click()
+    // Cancel through the dialog's own button: a bare Escape can be consumed by
+    // whatever else is open, leaving the cleanup action stuck in its busy state.
+    const cleanupConfirmDialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: '确认当前操作', exact: true }) })
+    await cleanupConfirmDialog.getByRole('button', { name: '取消当前确认操作', exact: true }).click()
+    await cleanupConfirmDialog.waitFor({ state: 'hidden' })
+    assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), seeded.empty.id)).length, 1)
+    await emptyCard.getByRole('button', { name: /^确认删除/ }).click()
+    await confirmMutation()
+    await emptyCard.waitFor({ state: 'hidden' })
+    assert.equal((await worker.evaluate(title => chrome.bookmarks.search({ title }), seeded.empty.title)).length, 0)
+
+    await page.goto(base + '#duplicates')
+    const duplicates = page.locator('#duplicates')
+    for (const strategy of ['最新', '最早', '路径最短', '有标签', '新标签页来源', '最近访问']) {
+      await duplicates.getByRole('button', { name: `保留${strategy}重复书签`, exact: true }).click()
+      await duplicates.getByText('已选 2 条待移入回收站', { exact: true }).waitFor()
+    }
+    await duplicates.getByRole('button', { name: '按推荐选择重复书签当前结果', exact: true }).click()
+    const group = duplicates.locator('article').first()
+    for (const checkbox of await group.getByRole('checkbox').all()) await checkbox.check()
+    assert.equal(await duplicates.getByRole('button', { name: '移入回收站', exact: true }).isDisabled(), true)
+    await duplicates.getByRole('button', { name: '保留最早重复书签', exact: true }).click()
+    await duplicates.getByRole('button', { name: '移入回收站', exact: true }).click()
+    await confirmMutation()
+    await page.waitForFunction(async url => (await chrome.bookmarks.search({ url })).length === 1, origin + '/article')
+    const recycled = await worker.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkRecycleBin')).curatorBookmarkRecycleBin)
+    assert.equal(recycled.filter(item => seeded.copies.some(copy => copy.id === item.bookmarkId)).length, 2)
+
+    // Complete the held detection so the redirect update uses real new evidence.
+    await worker.evaluate(async () => {
+      for (const item of await chrome.bookmarks.search({ title: 'Pending UI check' })) await chrome.bookmarks.remove(item.id)
+    })
+    await page.goto(base + '#availability')
+    await page.reload()
+    await page.getByRole('button', { name: /^(?:开始|重新)检测全部书签$/ }).click()
+    await page.getByRole('button', { name: '重新检测全部书签', exact: true }).waitFor()
+    await page.goto(base + '#redirects')
+    const redirectCard = page.locator('#redirects article').filter({ hasText: seeded.redirect.title })
+    await redirectCard.getByRole('checkbox').check()
+    await page.getByRole('button', { name: '批量更新重定向已选书签为最终地址', exact: true }).click()
+    await confirmMutation()
+    await page.waitForFunction(async id => (await chrome.bookmarks.get(id))[0].url.endsWith('/article'), seeded.redirect.id)
+    await page.screenshot({ path: path.join(output, 'cleanup-workflows.png'), animations: 'disabled' })
+
+    await page.goto(base + '#ai')
+    const apply = page.locator('#ai').getByRole('button', { name: `应用书签智能分析建议：${seeded.guide.title}`, exact: true })
+    await page.evaluate(() => {
+      const update = chrome.bookmarks.update.bind(chrome.bookmarks)
+      chrome.bookmarks.update = (...args) => {
+        chrome.bookmarks.update = update
+        throw new Error('测试改名失败')
+      }
+    })
+    await apply.click()
+    const failedStatus = page.locator('#ai [role="alert"]').filter({ hasText: '执行方式' })
+    await failedStatus.getByText('操作失败', { exact: true }).waitFor()
+    assert.ok((await failedStatus.innerText()).includes('测试改名失败'))
+    assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), seeded.guide.id))[0].title, seeded.guide.title)
+    await worker.evaluate(async () => {
+      const key = 'curatorBookmarkAiAnalysisCheckpoint'
+      const saved = (await chrome.storage.local.get(key))[key]
+      await chrome.storage.local.set({ [key]: { ...saved, outcome: 'failed' } })
+    })
+    await page.reload()
+    await page.locator('#ai [role="alert"]').getByText('运行失败', { exact: true }).waitFor()
+    await apply.click()
+    await page.waitForFunction(async id => (await chrome.bookmarks.get(id))[0].title === 'iOS 自签名安装指南', seeded.guide.id)
+    const renamed = await worker.evaluate(id => chrome.bookmarks.get(id), seeded.guide.id)
+    assert.equal(renamed[0].url, seeded.guide.url)
+    assert.equal(renamed[0].parentId, seeded.guide.parentId)
+    const aiStatus = page.locator('#ai [role="status"]').filter({ hasText: '执行方式' })
+    await aiStatus.getByText('已应用 1 条书签命名建议。', { exact: true }).waitFor()
+    assert.equal(await page.locator('#ai [role="alert"]').filter({ hasText: '执行方式' }).count(), 0, 'A successful rename must not be announced as an error')
+    await page.screenshot({ path: path.join(output, 'ai-applied.png'), animations: 'disabled' })
+
   }
   assert.deepEqual(errors, [])
   await rm(path.join(output, 'failure.png'), { force: true })
   await rm(path.join(output, 'failure.txt'), { force: true })
-  await writeFile(path.join(output, 'audit.json'), JSON.stringify({ before, pages, card: { height: baselineCard.height, visibleCharacters: baselineCopy.length }, errors, tested: before ? [] : ['compact summary', 'lazy details', 'menu scope descriptions', 'responsive menu', 'normal and reduced motion', 'keyboard focus', 'single retest', 'hide without deleting', 'local AI without key', 'bookmark ignore scope', 'cancel ignore', 'task lock and unlock', 'incremental history details', 'AI history disclosure'] }, null, 2))
+  await writeFile(path.join(output, 'audit.json'), JSON.stringify({ before, pages, card: { height: baselineCard.height, visibleCharacters: baselineCopy.length }, errors, tested: before ? [] : ['compact summary', 'lazy details', 'menu scope descriptions', 'responsive menu', 'normal and reduced motion', 'keyboard focus', 'single retest', 'hide without deleting', 'local AI without key', 'bookmark ignore scope', 'cancel ignore', 'task lock and unlock', 'incremental history details', 'AI history disclosure', 'folder preview cancel and delete', 'six duplicate strategies and keep-one guard', 'duplicate recycle persistence', 'redirect URL update'] }, null, 2))
   console.log(JSON.stringify({ before, pages: pages.length, cardHeight: baselineCard.height, visibleCharacters: baselineCopy.length, errors }))
 } catch (error) {
   if (page) { await page.screenshot({ path: path.join(output, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(output, 'failure.txt'), await page.locator('body').ariaSnapshot()).catch(() => {}) }

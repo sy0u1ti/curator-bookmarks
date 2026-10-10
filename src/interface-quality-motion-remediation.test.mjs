@@ -108,14 +108,12 @@ assert.ok(
 )
 
 assert.ok(
-  (globals.includes('@media (prefers-reduced-transparency: reduce)') ||
-    newtabCss.includes('@media (prefers-reduced-transparency: reduce)')) &&
-    globals.includes('@media (prefers-contrast: more)') &&
+  globals.includes('@media (prefers-contrast: more)') &&
     ['top', 'bottom', 'left', 'right'].every((side) => globals.includes(`[data-side="${side}"]`)) &&
     globals.includes('transition-property: opacity !important') &&
     tokens.includes('--ds-motion-fast: 130ms') &&
     tokens.includes('--drag-settle-dur: 160ms'),
-  'Central motion and accessibility preferences must provide bounded feedback and material fallbacks.'
+  'Central motion and contrast preferences must provide bounded feedback and material fallbacks.'
 )
 
 assert.ok(
@@ -209,7 +207,7 @@ assert.ok(
     optionsApp.includes("variant=\"mobile\"") &&
     optionsChrome.includes('options-mobile-nav-trigger !hidden') &&
     optionsCss.includes('.options-nav-active-indicator[data-ready="true"]') &&
-    optionsCss.includes('transform 260ms var(--ease-smooth-out)') &&
+    optionsCss.includes('transform var(--duration-very-slow) var(--ease-smooth-out)') &&
     !optionsCss.includes('view-transition-name: options-nav-active') &&
     !switchClasses.includes('motion-reduce:transform-none'),
   'Options navigation should use a stable moving indicator, a narrow-screen drawer, and truthful reduced-motion switch state.'

@@ -42,22 +42,6 @@ export async function readCuratorDataStore<T extends object>(
   return runCuratorDataValueRequest<T[]>(db, storeName, 'readonly', (store) => store.getAll())
 }
 
-export async function replaceCuratorDataStore<T extends object>(
-  storeName: CuratorDataStoreName,
-  records: T[]
-): Promise<void> {
-  const keyPath = STORE_KEY_PATHS[storeName]
-  await runCuratorDataTransaction(storeName, 'readwrite', (store) => {
-    store.clear()
-    for (const record of records) {
-      const source = record as Record<string, unknown>
-      if (record && String(source[keyPath] || '').trim()) {
-        store.put(record)
-      }
-    }
-  })
-}
-
 export async function replaceCuratorDataStoreWithMeta<T extends object>(
   storeName: CuratorDataStoreName,
   records: T[],
@@ -78,28 +62,6 @@ export async function replaceCuratorDataStoreWithMeta<T extends object>(
       stores[CURATOR_DATA_STORES.metadata].put(meta)
     }
   )
-}
-
-export async function applyCuratorDataStoreDelta<T extends object>(
-  storeName: CuratorDataStoreName,
-  upserts: T[],
-  deletedKeys: string[]
-): Promise<void> {
-  const keyPath = STORE_KEY_PATHS[storeName]
-  await runCuratorDataTransaction(storeName, 'readwrite', (store) => {
-    for (const record of upserts) {
-      const source = record as Record<string, unknown>
-      if (record && String(source[keyPath] || '').trim()) {
-        store.put(record)
-      }
-    }
-    for (const key of deletedKeys) {
-      const normalizedKey = String(key || '').trim()
-      if (normalizedKey) {
-        store.delete(normalizedKey)
-      }
-    }
-  })
 }
 
 export async function applyCuratorDataStoreDeltaWithMeta<T extends object>(
@@ -192,12 +154,6 @@ export async function applyCuratorDataStoreDeltaWithMeta<T extends object>(
   })
 }
 
-export async function clearCuratorDataStore(storeName: CuratorDataStoreName): Promise<void> {
-  await runCuratorDataTransaction(storeName, 'readwrite', (store) => {
-    store.clear()
-  })
-}
-
 export async function readCuratorDataStoreMeta(key: string): Promise<CuratorDataStoreMeta | null> {
   const db = await openCuratorDataDb()
   const meta = await runCuratorDataValueRequest<CuratorDataStoreMeta | undefined>(
@@ -207,12 +163,6 @@ export async function readCuratorDataStoreMeta(key: string): Promise<CuratorData
     (store) => store.get(key)
   )
   return meta && typeof meta === 'object' ? meta : null
-}
-
-export async function writeCuratorDataStoreMeta(meta: CuratorDataStoreMeta): Promise<void> {
-  await runCuratorDataTransaction(CURATOR_DATA_STORES.metadata, 'readwrite', (store) => {
-    store.put(meta)
-  })
 }
 
 export function resetCuratorDataDbForTest(): void {

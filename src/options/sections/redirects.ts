@@ -481,7 +481,7 @@ async function updateRedirectEntries(bookmarkIds, callbacks) {
     if (updatedIds.length) {
       removeRedirectIdsFromState(updatedIds)
       try {
-        await callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+        await callbacks.hydrateAvailabilityCatalog({ preserveResults: true, throwOnError: true })
       } catch (error) {
         reconciliationWarnings.push(
           error instanceof Error ? `目录刷新失败：${error.message}` : '目录刷新失败'

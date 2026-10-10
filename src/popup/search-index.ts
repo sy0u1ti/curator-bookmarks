@@ -25,8 +25,6 @@ function loadPinyinModule(): Promise<typeof import('../shared/search/pinyin.js')
   return pinyinModulePromise
 }
 
-const POPUP_SNAPSHOT_FULL_TEXT_LIMIT = 600
-
 interface PopupSearchEntryInputs {
   bookmark: BookmarkRecord
   tagRecord: BookmarkTagRecord | null
@@ -157,8 +155,8 @@ export async function enrichExistingPopupSearchIndexWithSnapshotFullTextFromCata
   const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
   const snapshotSearchMap = await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
     includeFullText: true,
-    maxRecords: POPUP_SNAPSHOT_FULL_TEXT_LIMIT
-  }).catch(() => new Map<string, string>())
+    isActive: options.isActive
+  })
   const searchIndexStillActive = !(options.isActive && !options.isActive())
   if (!searchIndexStillActive) {
     return 0

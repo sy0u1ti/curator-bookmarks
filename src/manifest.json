@@ -20,7 +20,8 @@
     "sidePanel",
     "storage",
     "webNavigation",
-    "webRequest"
+    "webRequest",
+    "unlimitedStorage"
   ],
   "optional_host_permissions": [
     "http://*/*",
@@ -56,7 +57,7 @@
       "suggested_key": {
         "default": "Alt+Shift+I"
       },
-      "description": "直接收藏当前网页到 Inbox / 待整理"
+      "description": "一键收藏当前网页到待整理 (Inbox)"
     },
     "curator-open-search": {
       "suggested_key": {
@@ -68,10 +69,10 @@
       "suggested_key": {
         "default": "Alt+Shift+F"
       },
-      "description": "打开 Curator 并立即智能分类"
+      "description": "打开 Curator 并启动智能分类"
     },
     "curator-toggle-auto-analyze": {
-      "description": "切换 Curator 自动分析"
+      "description": "启用或停用书签自动分析"
     }
   },
   "chrome_url_overrides": {

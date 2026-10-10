@@ -60,7 +60,7 @@ try {
     chrome.permissions.contains = (query, callback) => localOnly(query) ? granted(callback) : contains(query, callback)
     chrome.permissions.request = (query, callback) => localOnly(query) ? granted(callback) : request(query, callback)
   }, origin)
-  await page.goto('chrome-extension://' + extensionId + '/src/options/options.html#general', { waitUntil: 'domcontentloaded' })
+  await page.goto('chrome-extension://' + extensionId + '/src/options/options.html#ai-settings', { waitUntil: 'domcontentloaded' })
   await page.locator('#ai-api-key').waitFor({ state: 'visible', timeout: 20000 })
   assert.equal(await page.locator('#ai-api-key').inputValue(), '')
   await page.getByRole('button', { name: 'Base URL 与接口选项', exact: true }).click()

@@ -3,6 +3,7 @@ import {
   getLocalStorage,
   removeLocalStorage,
   setLocalStorage,
+  withLocalStorageTransaction,
   type LocalStorageTransaction
 } from '../storage.js'
 import type {
@@ -96,6 +97,14 @@ export async function updateBookmarkTagIndexInRepository(
   updater: (index: BookmarkTagIndex) => BookmarkTagIndex,
   transaction?: LocalStorageTransaction
 ): Promise<BookmarkTagIndex> {
+  // Read-modify-write must not interleave with another writer: without a
+  // transaction (callers that already hold the lock pass one) the whole cycle
+  // is serialized here, so a concurrent upsert cannot be lost.
+  if (!transaction) {
+    return withLocalStorageTransaction((activeTransaction) => {
+      return updateBookmarkTagIndexInRepository(updater, activeTransaction)
+    })
+  }
   const { normalizeIndex } = requireBookmarkTagRepositoryNormalizers()
   const current = await loadBookmarkTagIndexFromRepository(transaction)
   const nextIndex = normalizeIndex(updater(current))

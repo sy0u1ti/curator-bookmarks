@@ -200,13 +200,6 @@ export function searchBookmarks(
   return searchBookmarksWithLimit(query, bookmarks, MAX_POPUP_SEARCH_RESULTS)
 }
 
-export function searchBookmarksUnbounded(
-  query: string,
-  bookmarks: PopupSearchBookmark[]
-): PopupSearchResult[] {
-  return searchBookmarksWithLimit(query, bookmarks, 0)
-}
-
 export function searchBookmarksTopK(
   query: string,
   bookmarks: PopupSearchBookmark[],

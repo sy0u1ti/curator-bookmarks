@@ -4,7 +4,7 @@ import {
   INBOX_AUTO_MOVE_MIN_CONFIDENCE,
   STORAGE_KEYS
 } from './constants.js'
-import { getLocalStorage, setLocalStorage } from './storage.js'
+import { getLocalStorage, setLocalStorage, withLocalStorageTransaction, type LocalStorageTransaction } from './storage.js'
 
 const INBOX_UNDO_MOVE_WINDOW_MS = 10 * 60 * 1000
 export { DEFAULT_INBOX_FOLDER_TITLE } from './constants.js'
@@ -12,6 +12,7 @@ export { DEFAULT_INBOX_FOLDER_TITLE } from './constants.js'
 export interface InboxSettings {
   version: 1
   enabled: boolean
+  autoAnalyzeEnabled: boolean
   folderTitle: string
   autoMoveToRecommendedFolder: boolean
   tagOnlyNoAutoMove: boolean
@@ -27,6 +28,7 @@ export type InboxItemStatus =
   | 'needs-review'
   | 'failed'
   | 'undone'
+  | 'kept'
 
 export interface InboxItem {
   captureId: string
@@ -37,6 +39,7 @@ export interface InboxItem {
   originalParentId: string
   recommendedFolderId?: string
   recommendedFolderPath?: string
+  recommendationReason?: string
   confidence?: number
   status: InboxItemStatus
   createdAt: number
@@ -59,12 +62,12 @@ export interface InboxState {
   lastUndoMove?: InboxUndoMove
 }
 
-let inboxStateWriteQueue: Promise<unknown> = Promise.resolve()
 
 export function getDefaultInboxSettings(): InboxSettings {
   return {
     version: 1,
     enabled: true,
+    autoAnalyzeEnabled: true,
     folderTitle: DEFAULT_INBOX_FOLDER_TITLE,
     autoMoveToRecommendedFolder: true,
     tagOnlyNoAutoMove: false,
@@ -84,6 +87,7 @@ export function normalizeInboxSettings(rawSettings: unknown): InboxSettings {
   return {
     version: 1,
     enabled: typeof source.enabled === 'boolean' ? source.enabled : defaults.enabled,
+    autoAnalyzeEnabled: source.autoAnalyzeEnabled !== false,
     folderTitle,
     autoMoveToRecommendedFolder: tagOnlyNoAutoMove
       ? false
@@ -104,15 +108,12 @@ export async function loadInboxSettings(): Promise<InboxSettings> {
 }
 
 export async function saveInboxSettings(settings: Partial<InboxSettings>): Promise<InboxSettings> {
-  const current = await loadInboxSettings()
-  const nextSettings = normalizeInboxSettings({
-    ...current,
-    ...settings
+  return withLocalStorageTransaction(async transaction => {
+    const current = await loadInboxSettings()
+    const nextSettings = normalizeInboxSettings({ ...current, ...settings })
+    await setLocalStorage({ [STORAGE_KEYS.inboxSettings]: nextSettings }, { transaction })
+    return nextSettings
   })
-  await setLocalStorage({
-    [STORAGE_KEYS.inboxSettings]: nextSettings
-  })
-  return nextSettings
 }
 
 export function normalizeInboxState(rawState: unknown): InboxState {
@@ -125,11 +126,34 @@ export function normalizeInboxState(rawState: unknown): InboxState {
   return {
     version: 1,
     folderId: String(source.folderId || '').trim(),
-    items: items.flatMap((flatMapValue, flatMapIndex, flatMapArray) => { const mappedResult = (normalizeInboxItem)(flatMapValue); return mappedResult ? [mappedResult] : [] })
-      .sort((left, right) => Number(right?.createdAt || 0) - Number(left?.createdAt || 0))
-      .slice(0, 200) as InboxItem[],
+    items: retainInboxItems(items),
     ...(lastUndoMove ? { lastUndoMove } : {})
   }
+}
+
+export function isInboxItemPending(item: InboxItem): boolean {
+  return !['moved', 'kept', 'tagged'].includes(item.status)
+}
+
+function retainInboxItems(items: unknown[]): InboxItem[] {
+  let completedCount = 0
+  return items.map(normalizeInboxItem)
+    .filter((item): item is InboxItem => item !== null)
+    .sort((left, right) => right.createdAt - left.createdAt)
+    .filter(item => isInboxItemPending(item) || ++completedCount <= 200)
+}
+
+export function settleRemovedInboxItems(bookmarkIds: string[]): Promise<InboxState> {
+  const removed = new Set(bookmarkIds)
+  return updateInboxState(state => {
+    let changed = false
+    const items = state.items.map(item => {
+      if (!removed.has(item.bookmarkId) || !isInboxItemPending(item)) return item
+      changed = true
+      return { ...item, status: 'kept' as const, updatedAt: Date.now(), lastError: '原书签已删除，待整理事项已结清。' }
+    })
+    return changed ? { ...state, items } : null
+  })
 }
 
 export async function loadInboxState(): Promise<InboxState> {
@@ -137,15 +161,26 @@ export async function loadInboxState(): Promise<InboxState> {
   return normalizeInboxState(stored[STORAGE_KEYS.inboxState])
 }
 
-export async function saveInboxState(state: InboxState): Promise<InboxState> {
+export async function saveInboxState(state: InboxState, transaction?: LocalStorageTransaction): Promise<InboxState> {
   const normalized = normalizeInboxState(state)
   await setLocalStorage({
     [STORAGE_KEYS.inboxState]: normalized
-  })
+  }, { transaction })
   return normalized
 }
 
+let ensureInboxFolderInFlight: Promise<string> | null = null
+
 export async function ensureInboxFolder(settings = getDefaultInboxSettings()): Promise<string> {
+  // Two concurrent callers used to both see "no folder yet" and create two
+  // Inbox folders; sharing one in-flight promise keeps it to a single create.
+  ensureInboxFolderInFlight ||= resolveInboxFolder(settings).finally(() => {
+    ensureInboxFolderInFlight = null
+  })
+  return ensureInboxFolderInFlight
+}
+
+async function resolveInboxFolder(settings: InboxSettings): Promise<string> {
   const title = cleanInboxText(settings.folderTitle) || DEFAULT_INBOX_FOLDER_TITLE
   const storedState = await loadInboxState()
 
@@ -165,7 +200,7 @@ export async function ensureInboxFolder(settings = getDefaultInboxSettings()): P
     ...state,
     folderId
   })
-  await updateInboxState(updateFolderId, updateFolderId)
+  await updateInboxState(updateFolderId)
   return folderId
 }
 
@@ -184,7 +219,7 @@ export async function upsertInboxItem(item: InboxItem): Promise<InboxState> {
       ]
     }
   }
-  return updateInboxState(upsertItem, upsertItem)
+  return updateInboxState(upsertItem)
 }
 
 export async function updateInboxItem(
@@ -199,7 +234,7 @@ export async function updateInboxItem(
     updatedItem = result.updatedItem || updatedItem
     return result.state
   }
-  await updateInboxState(patchItem, patchItem)
+  await updateInboxState(patchItem)
   return updatedItem
 }
 
@@ -222,7 +257,7 @@ export async function recordInboxUndoMove(move: Omit<InboxUndoMove, 'expiresAt'>
       }
     }
   }
-  return updateInboxState(recordUndoMove, recordUndoMove)
+  return updateInboxState(recordUndoMove)
 }
 
 export async function clearInboxUndoMove(bookmarkId?: string): Promise<void> {
@@ -236,35 +271,17 @@ export async function clearInboxUndoMove(bookmarkId?: string): Promise<void> {
     const { lastUndoMove: _lastUndoMove, ...nextState } = state
     return nextState
   }
-  await updateInboxState(clearUndoMove, clearUndoMove)
+  await updateInboxState(clearUndoMove)
 }
 
 function updateInboxState(
-  updater: (state: InboxState) => InboxState | null,
-  reconcileAfterWrite: (state: InboxState) => InboxState | null = (state) => state
+  updater: (state: InboxState) => InboxState | null
 ): Promise<InboxState> {
-  const task = inboxStateWriteQueue.then(async () => {
+  return withLocalStorageTransaction(async transaction => {
     const currentState = await loadInboxState()
     const nextState = updater(currentState)
-    if (!nextState) {
-      return currentState
-    }
-    await saveInboxState(nextState)
-
-    const latestState = await loadInboxState()
-    const reconciledState = reconcileAfterWrite(latestState)
-    if (!reconciledState) {
-      return latestState
-    }
-    const normalizedReconciledState = normalizeInboxState(reconciledState)
-    if (!haveSameInboxStates(latestState, normalizedReconciledState)) {
-      return saveInboxState(normalizedReconciledState)
-    }
-    return latestState
+    return nextState ? saveInboxState(nextState, transaction) : currentState
   })
-
-  inboxStateWriteQueue = task.catch(() => {})
-  return task
 }
 
 function patchInboxItemState(
@@ -278,6 +295,8 @@ function patchInboxItemState(
     if (item.bookmarkId !== bookmarkId) {
       return item
     }
+    // An in-flight request must not resurrect a task the user already settled.
+    if (['kept', 'moved'].includes(item.status) && patch.status && !['kept', 'moved', 'undone'].includes(patch.status)) return item
     updatedItem = normalizeInboxItem({
       ...item,
       ...patch,
@@ -304,10 +323,6 @@ function patchInboxItemState(
   }
 }
 
-function haveSameInboxStates(leftState: InboxState, rightState: InboxState): boolean {
-  return JSON.stringify(leftState) === JSON.stringify(rightState)
-}
-
 function normalizeInboxItem(rawItem: unknown): InboxItem | null {
   if (!rawItem || typeof rawItem !== 'object') {
     return null
@@ -330,6 +345,7 @@ function normalizeInboxItem(rawItem: unknown): InboxItem | null {
     originalParentId: String(source.originalParentId || source.inboxFolderId || '').trim(),
     recommendedFolderId: String(source.recommendedFolderId || '').trim() || undefined,
     recommendedFolderPath: cleanInboxText(source.recommendedFolderPath) || undefined,
+    recommendationReason: cleanInboxText(source.recommendationReason) || undefined,
     confidence: clampInboxConfidence(source.confidence, 0),
     status: normalizeInboxItemStatus(source.status),
     createdAt,
@@ -364,7 +380,7 @@ function normalizeInboxUndoMove(rawMove: unknown): InboxUndoMove | undefined {
 
 function normalizeInboxItemStatus(status: unknown): InboxItemStatus {
   const value = String(status || '').trim()
-  if (['captured', 'analyzing', 'tagged', 'moved', 'needs-review', 'failed', 'undone'].includes(value)) {
+  if (['captured', 'analyzing', 'tagged', 'moved', 'needs-review', 'failed', 'undone', 'kept'].includes(value)) {
     return value as InboxItemStatus
   }
   return 'captured'

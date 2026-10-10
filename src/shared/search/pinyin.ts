@@ -432,14 +432,6 @@ const COMPACT_PINYIN_GROUPS: Array<[string, string]> = [
 let pinyinCharMap: Map<string, string> | null = null
 const pinyinTextCache = new Map<string, PinyinTokens>()
 
-export async function ensurePinyinModuleLoaded(): Promise<void> {
-  ensureCompactPinyinMap()
-}
-
-export function isPinyinModuleLoaded(): boolean {
-  return pinyinCharMap !== null
-}
-
 export function buildPinyinTokensSync(values: unknown[]): PinyinTokens {
   const full = new Set<string>()
   const initials = new Set<string>()
@@ -495,11 +487,6 @@ function applyPinyinTokens(target: PinyinEnrichTarget, tokens: PinyinTokens): bo
   target.searchText = enrichedSegment ? `${baseSearchText} ${enrichedSegment}`.trim() : baseSearchText
   target.searchTextCompact = normalizeSearchTextCompact(target.searchText)
   return true
-}
-
-export async function enrichBookmarkPinyinTokens(target: PinyinEnrichTarget): Promise<boolean> {
-  const tokens = buildPinyinTokensSync(getPinyinSourceValues(target))
-  return applyPinyinTokens(target, tokens)
 }
 
 function defaultYieldWork(): Promise<void> {

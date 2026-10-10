@@ -5,6 +5,7 @@ import type {
 } from './bookmark-menu-view-models'
 
 export interface NewtabBookmarkEditMenuView {
+  sessionId: number
   closing: boolean
   focusAction: string
   focusFirst: boolean
@@ -13,6 +14,7 @@ export interface NewtabBookmarkEditMenuView {
 }
 
 export interface NewtabBookmarkAddMenuView {
+  sessionId: number
   closing: boolean
   focusFirst: boolean
   menu: BookmarkAddMenuViewModel

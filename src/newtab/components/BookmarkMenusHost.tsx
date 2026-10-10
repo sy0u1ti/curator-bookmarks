@@ -53,8 +53,8 @@ export function BookmarkMenusHost() {
 
   return (
     <>
-      {menus.edit ? <BookmarkEditMenuHost view={menus.edit} /> : null}
-      {menus.add ? <BookmarkAddMenuHost view={menus.add} /> : null}
+      {menus.edit ? <BookmarkEditMenuHost key={`edit:${menus.edit.sessionId}`} view={menus.edit} /> : null}
+      {menus.add ? <BookmarkAddMenuHost key={`add:${menus.add.sessionId}`} view={menus.add} /> : null}
     </>
   )
 }
@@ -84,6 +84,7 @@ function BookmarkEditMenuHost({ view }: { view: NewtabBookmarkEditMenuView }) {
         view.closing && cx('is-closing', MENU_CLOSING_CLASS)
       )}
       data-newtab-bookmark-menu-surface=""
+      inert={view.closing}
       style={{ left: position.left, top: position.top }}
       onKeyDownCapture={(event) => {
         if (event.key === 'Escape') {
@@ -125,6 +126,7 @@ function BookmarkAddMenuHost({ view }: { view: NewtabBookmarkAddMenuView }) {
       className={className}
       data-expanded={view.menu.expanded ? 'true' : 'false'}
       data-newtab-bookmark-menu-surface=""
+      inert={view.closing}
       style={{ left: position.left, top: position.top }}
       onKeyDownCapture={(event) => {
         if (event.key === 'Escape') {
@@ -436,6 +438,7 @@ function BookmarkMenuTextField({
           field.onChange(event.currentTarget.value)
         }}
         onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
           if (event.key === 'Enter') {
             event.preventDefault()
             void field.onEnter()

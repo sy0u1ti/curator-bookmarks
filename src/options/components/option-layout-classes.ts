@@ -32,9 +32,6 @@ export const OPTION_PANEL_WIDE_LAYOUT_CLASS =
 export const OPTION_PANEL_CLASS =
   `${OPTION_PANEL_STANDARD_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
 
-export const OPTION_WIDE_PANEL_CLASS =
-  `${OPTION_PANEL_WIDE_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
-
 export const OPTION_GROUP_CLASS =
   'options-interactive-surface curator-motion-surface mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 py-2 max-[760px]:mt-5'
 
@@ -50,7 +47,6 @@ export const OPTION_RUN_HEADER_CLASS = [
 export const OPTION_RUN_CELL_CLASS =
   'options-interactive-surface curator-motion-surface min-w-0 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[16px_18px] shadow-none max-[760px]:p-4'
 
-export const OPTION_RUN_CELL_COMPACT_CLASS =
   'options-interactive-surface curator-motion-surface min-w-0 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] shadow-none'
 
 export const OPTION_RUN_CELL_TITLE_CLASS =

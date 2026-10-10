@@ -69,6 +69,16 @@ try {
   // Simulate a browser/font environment that changes the title baseline while
   // leaving the card geometry untouched, then settles late on refresh.
   await page.addInitScript(({ captureVisual, settleDelayMs, wallpaperFixture }) => {
+    // Freeze only no-argument Date construction while comparing glass pixels.
+    // Keep Date.now(), native timers and Performance marks intact: this test
+    // also measures real startup latency and persisted snapshot timestamps.
+    globalThis.Date = new Proxy(Date, {
+      construct(target, args, newTarget) {
+        return Reflect.construct(target,
+          args.length || window.__curatorGlassPixelTime === undefined
+            ? args : [window.__curatorGlassPixelTime], newTarget)
+      }
+    })
     if (wallpaperFixture) {
       localStorage.setItem('curatorNewTabInstantWallpaper', JSON.stringify({
         signature: wallpaperFixture.signature,
@@ -268,10 +278,17 @@ try {
         `.newtab-bookmark-preboot-tile[data-bookmark-id="${bookmarkId}"]`,
         `.newtab-bookmark-preboot-tile[data-bookmark-id="${bookmarkId}"] .newtab-bookmark-preboot-title`
       )
-      const live = readTitle(
+      const liveSource = readTitle(
         `.bookmark-tile[data-bookmark-id="${bookmarkId}"]`,
         `.bookmark-tile[data-bookmark-id="${bookmarkId}"] .bookmark-title`
       )
+      const frozen = readTitle(
+        `.bookmark-tile[data-bookmark-id="${bookmarkId}"]`,
+        `.bookmark-tile[data-bookmark-id="${bookmarkId}"] .newtab-bookmark-frozen-title`
+      )
+      // The fast handoff can transfer the cached baseline to a frozen title
+      // inside the live card, before the webfont finishes settling.
+      const live = frozen || liveSource
       window.__curatorBookmarkHandoffFrames.push({
         collisionOffset: page instanceof HTMLElement
           ? getComputedStyle(page).getPropertyValue('--primary-collision-offset-y').trim()
@@ -280,6 +297,8 @@ try {
           Object.entries(startupGlassSelectors).map(([name, selector]) => [name, readSurface(selector)])
         ),
         live,
+        liveSource,
+        frozen,
         liveInteractive: isLiveTileHitTarget(),
         liveSurface,
         lifecycle: {
@@ -312,7 +331,7 @@ try {
         surface: surfaceHandoff ? liveSurface : (prebootSurface || liveSurface),
         surfaceHandoff,
         titleGuard,
-        visible: preboot || live
+        visible: preboot?.painted ? preboot : live?.painted ? live : null
       })
       if (now < lifecycleSampleMs) requestAnimationFrame(sample)
     }
@@ -341,7 +360,8 @@ try {
   })
 
   await page.goto(url, { waitUntil: 'commit' })
-  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'attached', timeout: 5_000 })
+  assert.equal(await page.locator(prebootTileSelector(bookmarkId)).isVisible(), false, 'The cached frosted shell must not paint before complete glass is ready')
   const prebootTop = await page.locator(`${prebootTileSelector(bookmarkId)} .newtab-bookmark-preboot-title`).evaluate(
     (element) => element.getBoundingClientRect().top
   )
@@ -383,12 +403,12 @@ try {
   const frames = await page.evaluate(() => window.__curatorBookmarkHandoffFrames || [])
   const backgroundLifecycleDiagnostics = assertPersistentBackgroundLifecycle(frames, 'first refresh')
   const startupGlassDiagnostics = assertStableStartupGlass(frames, 'first refresh')
-  const refreshFirstBookmarksRenderedAt = await page.evaluate(() =>
-    performance.getEntriesByName('newtab.firstBookmarksRendered', 'mark').at(-1)?.startTime ?? null
+  const glassPresentedAt = await page.evaluate(() =>
+    performance.getEntriesByName('newtab.glassPresented', 'mark').at(-1)?.startTime ?? null
   )
   const firstInteractiveFrame = frames.find((frame) => frame.liveInteractive)
-  const interactionHandoffMs = firstInteractiveFrame && refreshFirstBookmarksRenderedAt !== null
-    ? firstInteractiveFrame.now - refreshFirstBookmarksRenderedAt
+  const interactionHandoffMs = firstInteractiveFrame && glassPresentedAt !== null
+    ? firstInteractiveFrame.now - glassPresentedAt
     : null
   const visibleFrames = frames.filter((frame) => frame.visible)
   const visibleTopValues = visibleFrames.map((frame) => frame.visible.absoluteTop)
@@ -406,12 +426,13 @@ try {
     Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
   )
   const protectedLiveFrames = frames.filter((frame) =>
-    frame.preboot?.painted &&
+    frame.preboot &&
     frame.live &&
     !frame.live.painted &&
     Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
   )
   const revealedLiveFrames = frames.filter((frame) => !frame.preboot && frame.live?.painted)
+  assert.ok(frames.every(frame => !frame.frozen?.painted || !frame.liveSource?.painted), 'Transferred title and its hidden source must never paint twice')
   const titleGuardFrames = frames.filter((frame) => frame.titleGuard)
   const diagnostics = {
     bookmarkId,
@@ -443,8 +464,8 @@ try {
     `Cached and final bookmark titles should share one position: ${JSON.stringify(diagnostics)}`
   )
   assert.ok(
-    interactionHandoffMs !== null && interactionHandoffMs <= 400,
-    `Live bookmark cards should take over pointer interaction within 400ms of rendering: ${JSON.stringify(diagnostics)}`
+    interactionHandoffMs !== null && interactionHandoffMs >= 0 && interactionHandoffMs <= 100,
+    `Complete glass must accept pointer interaction immediately upon presentation: ${JSON.stringify(diagnostics)}`
   )
   assert.equal(
     visibleGlassFrames.length,
@@ -520,7 +541,7 @@ try {
   }, bookmarkId)
 
   await page.goto(url, { waitUntil: 'commit' })
-  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'attached', timeout: 5_000 })
   const secondGlassPixelDiagnostics = await assertGlassPixelsStable(page, 'consecutive refresh')
   await page.locator(bookmarkTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 20_000 })
   await page.waitForFunction(() => !document.getElementById('newtab-bookmark-preboot'))
@@ -550,7 +571,7 @@ try {
     Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
   )
   const secondProtectedLiveFrames = secondFrames.filter((frame) =>
-    frame.preboot?.painted &&
+    frame.preboot &&
     frame.live &&
     !frame.live.painted &&
     Math.abs(frame.preboot.absoluteTop - frame.live.absoluteTop) > 0.5
@@ -634,7 +655,7 @@ try {
     localStorage.setItem('curatorNewTabFreezeTitleProbe', 'true')
   }, bookmarkId)
   await page.goto(url, { waitUntil: 'commit' })
-  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 5_000 })
+  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'attached', timeout: 5_000 })
   await page.locator('.newtab-bookmark-frozen-title').first().waitFor({ state: 'visible', timeout: 10_000 })
   await page.waitForFunction(() => !document.getElementById('newtab-bookmark-preboot'))
 
@@ -789,14 +810,18 @@ function bookmarkTileSelector(bookmarkId) {
 }
 
 async function assertGlassPixelsStable(page, label) {
+  // The crop includes clock digits. Keep wall time fixed during sampling so a
+  // minute rollover is not mistaken for a glass-material change.
+  await page.evaluate(() => { window.__curatorGlassPixelTime = Date.now() })
   await page.waitForFunction((selectors) => Object.values(selectors).every((selector) => {
     const element = document.querySelector(selector)
     return element instanceof HTMLElement && element.getClientRects().length > 0
   }), STARTUP_GLASS_SELECTORS)
   await page.waitForFunction(
-    (minimumTime) => performance.now() >= minimumTime,
-    GLASS_PIXEL_SAMPLE_START_MS
+    () => document.documentElement.dataset.newtabGlassStartup !== 'pending'
   )
+  const endTime = await page.evaluate(duration => performance.now() + duration,
+    GLASS_PIXEL_SAMPLE_END_MS - GLASS_PIXEL_SAMPLE_START_MS)
 
   const captured = []
   while (true) {
@@ -810,12 +835,14 @@ async function assertGlassPixelsStable(page, label) {
           : null]
       }))
       return { now, regions }
-    }, { selectors: STARTUP_GLASS_SELECTORS, endTime: GLASS_PIXEL_SAMPLE_END_MS })
+    }, { selectors: STARTUP_GLASS_SELECTORS, endTime })
     if (!frame) break
     const screenshot = await page.screenshot({ type: 'png' })
     captured.push({ ...frame, encodedPng: screenshot.toString('base64') })
     await page.waitForTimeout(24)
   }
+
+  await page.evaluate(() => { delete window.__curatorGlassPixelTime })
 
   // PNG decoding and statistics do not belong in the timed capture window.
   // Collect the same startup pixels first, then analyze them in one browser

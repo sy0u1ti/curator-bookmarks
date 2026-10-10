@@ -155,6 +155,9 @@ body {
   font-family: var(--newtab-font-sans);
   -webkit-font-smoothing: auto;
   text-rendering: auto;
+  /* The drawer is portaled to <body>, outside .newtab-app, so the focus token
+     has to be redeclared here for drawer-scoped focus rings. */
+  --newtab-focus-outline: 2px solid rgba(245, 245, 247, 0.42);
 }
 
 #newtab-settings-drawer .settings-drawer-panel {
@@ -459,12 +462,8 @@ body {
   }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  #newtab-background-mask {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-}
+/* Explicit wallpaper blur remains active with reduced transparency. It does
+   not make UI surfaces transparent and helps keep foreground text readable. */
 
 @media (prefers-contrast: more) {
   :where(
@@ -523,7 +522,8 @@ body {
 .bookmark-breadcrumb-item,
 .source-navigation-label,
 .source-navigation-link,
-.folder-section-add {
+.folder-section-add,
+.newtab-state {
   border-width: var(--newtab-glass-stroke-width);
 }
 
@@ -535,7 +535,7 @@ body {
   min-height: 46px;
   padding: 8px;
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   transform-origin: top right;
@@ -551,7 +551,7 @@ body {
 .bookmark-add-menu.expanded {
   padding: 10px;
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
 }
@@ -842,7 +842,7 @@ body {
 
 .newtab-clock {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-hero);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hero));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   -webkit-backdrop-filter: var(--newtab-glass-filter-hero);
@@ -853,7 +853,7 @@ body {
 .settings-trigger,
 .newtab-delete-toast-panel {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   -webkit-backdrop-filter: var(--newtab-glass-filter);
@@ -863,14 +863,14 @@ body {
 .settings-trigger:hover,
 .settings-trigger[aria-expanded="true"] {
   border-color: var(--newtab-glass-border-hover);
-  background: var(--newtab-glass-bg-hover);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
   box-shadow: var(--newtab-glass-inset-hover);
   filter: var(--newtab-glass-drop-hover);
 }
 
 .settings-trigger:focus-visible {
   border-color: var(--newtab-glass-border-hover);
-  background: var(--newtab-glass-bg-hover);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
   box-shadow: var(--newtab-glass-inset-hover);
   filter: var(--newtab-glass-drop-hover);
   outline: var(--newtab-focus-outline);
@@ -880,7 +880,7 @@ body {
 .newtab-speed-dial,
 .newtab-portal {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-faint);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-faint));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   -webkit-backdrop-filter: var(--newtab-glass-filter);
@@ -892,7 +892,7 @@ body {
 .bookmark-tile {
   --newtab-bookmark-current-shadow: var(--newtab-bookmark-shadow);
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-card);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-card));
   box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
   filter: none;
   -webkit-backdrop-filter: var(--newtab-glass-filter);
@@ -919,7 +919,7 @@ body {
   transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
 }
 
-.bookmark-tile:not(.bookmark-drag-ghost) > :not(.bookmark-drag-handle) {
+.bookmark-tile:not(.bookmark-drag-ghost) > :not(.bookmark-drag-handle):not(.bookmark-menu-trigger) {
   position: relative;
   z-index: 1;
 }
@@ -938,7 +938,9 @@ body {
 .newtab-quick-link,
 .bookmark-grid-placeholder {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-card);
+  /* Cards are painted glass without their own lens; they follow the adapted
+     fill of the speed-dial surface they sit on. */
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-card));
   box-shadow: var(--newtab-bookmark-shadow);
   filter: none;
   -webkit-backdrop-filter: none;
@@ -972,7 +974,7 @@ body {
 .newtab-speed-dial-card:hover,
 .newtab-quick-link:hover {
   border-color: var(--newtab-glass-border-hover);
-  background: var(--newtab-glass-bg-hover);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
   box-shadow: var(--newtab-glass-inset-hover);
   filter: none;
 }
@@ -1015,7 +1017,7 @@ body {
 .newtab-quick-link:focus-visible,
 .newtab-speed-dial-empty button:focus-visible {
   border-color: var(--newtab-glass-border-hover);
-  background: var(--newtab-glass-bg-hover);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hover));
   box-shadow: var(--newtab-glass-inset-hover);
   filter: none;
   outline: var(--newtab-focus-outline);
@@ -1053,7 +1055,7 @@ body {
 
 .source-navigation-link {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-fill);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
@@ -1085,6 +1087,28 @@ body {
   background: transparent;
   color: rgba(245, 245, 247, 0.88);
   line-height: 1.2;
+}
+
+.settings-switch-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+/* The drawer's light accent left the switch's checked and unchecked states
+   nearly identical (two white thumbs on two faint tracks). Restore the
+   product's switch language inside the drawer only: a bright track with a dark
+   thumb when on, a quiet track with a dimmed thumb when off. */
+#newtab-settings-drawer .options-switch-control {
+  --color-ds-surface-3: rgba(255, 255, 255, 0.16);
+  --color-ds-text-secondary: rgba(245, 245, 247, 0.6);
+  --color-ds-accent: rgba(245, 245, 247, 0.92);
+  --color-ds-accent-contrast: rgba(16, 16, 19, 0.9);
+}
+
+/* The engine toggles are visually hidden switches (1px, opacity 0); the row is
+   the only painted control, so keyboard focus has to be drawn there. */
+#newtab-settings-drawer .search-engine-toggle:has(:focus-visible) {
+  outline: var(--newtab-focus-outline);
+  outline-offset: 2px;
 }
 
 /* A block line box avoids the extra inline baseline space from nested number
@@ -1129,7 +1153,7 @@ body {
 
 .newtab-search-engine-menu {
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-popup);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-popup));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   -webkit-backdrop-filter: var(--newtab-glass-filter-popup);
@@ -1242,7 +1266,7 @@ body {
   inset: 0;
   border: var(--newtab-glass-stroke-width) solid var(--newtab-glass-stroke);
   border-radius: inherit;
-  background: var(--newtab-glass-bg-hero);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-hero));
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
   backdrop-filter: var(--newtab-glass-backdrop-filter);
   pointer-events: none;
@@ -1503,7 +1527,7 @@ body {
   min-width: 0;
   width: min(1180px, calc(100vw - 48px));
   border-color: var(--newtab-glass-border);
-  background: var(--newtab-glass-bg-fill);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
@@ -1852,7 +1876,7 @@ body {
   gap: 12px;
   border: var(--newtab-glass-stroke-width) solid var(--newtab-glass-border);
   border-radius: var(--ds-radius-lg);
-  background: var(--newtab-glass-bg-fill);
+  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
   color: var(--ds-text-primary);

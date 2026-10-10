@@ -1,46 +1,37 @@
 export const SECTION_META = {
+  inbox: { title: '待整理' },
+  'ai-settings': { title: 'AI 服务配置' },
   general: {
-    label: 'General',
     title: '通用设置'
   },
   availability: {
-    label: 'Availability',
     title: '书签可用性检测'
   },
   history: {
-    label: 'History',
     title: '检测历史'
   },
   'bookmark-history': {
-    label: 'AI Organizing History',
     title: 'AI 整理记录'
   },
   ai: {
-    label: 'Smart Bookmark Analysis',
     title: '书签智能分析'
   },
   backup: {
-    label: 'Data & Backup',
     title: '数据与备份'
   },
   redirects: {
-    label: 'Redirects',
     title: '重定向更新'
   },
   duplicates: {
-    label: 'Duplicates',
     title: '重复书签'
   },
   'folder-cleanup': {
-    label: '文件夹清理',
     title: '文件夹清理'
   },
   ignore: {
-    label: 'Ignore Rules',
     title: '忽略规则 / 白名单'
   },
   recycle: {
-    label: 'Recycle Bin',
     title: '回收站'
   }
 } as const
@@ -58,7 +49,6 @@ export const AI_NAMING_CONTENT_FETCH_TIMEOUT_MS = 30000
 export const AI_NAMING_DEFAULT_BATCH_SIZE = 6
 export const AI_NAMING_MAX_BATCH_SIZE = 20
 export const AI_NAMING_MAX_TEXT_LENGTH = 80
-export const AI_NAMING_MODELS_ENDPOINT_SUFFIX = 'models'
 export const AI_NAMING_FETCHED_MODELS_LIMIT = 200
 export const AI_NAMING_JINA_READER_ORIGIN = 'https://r.jina.ai/*'
 export const AI_NAMING_PRESET_MODELS = [

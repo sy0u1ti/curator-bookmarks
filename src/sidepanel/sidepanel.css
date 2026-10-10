@@ -9,7 +9,11 @@ html[data-curator-surface="sidepanel"] #popup-root { visibility: visible; }
 html[data-curator-surface="sidepanel"] #popup-root > .curator-react-root { height: 100%; }
 html[data-curator-surface="sidepanel"] .popup-workspace {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(74px, 28%) minmax(0, 1fr);
+  grid-template-rows: minmax(42px, min(28%, var(--sidepanel-folder-height, 140px))) minmax(0, 1fr);
+}
+
+html[data-curator-surface="sidepanel"] .popup-workspace:has([aria-controls="sidepanel-folder-tree"][aria-expanded="false"]) {
+  grid-template-rows: 42px minmax(0, 1fr);
 }
 html[data-curator-surface="sidepanel"] .popup-workspace > aside { min-height: 0; }
 html[data-curator-surface="sidepanel"] .popup-main-pane { min-height: 0; }

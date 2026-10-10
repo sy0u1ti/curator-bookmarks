@@ -49,29 +49,6 @@ export function createSpeedDialEmptyState(): SpeedDialEmptyState {
   }
 }
 
-export function getSpeedDialPinActionCopy(isPinned: boolean): {
-  label: string
-  status: string
-  ariaLabel: string
-} {
-  return isPinned
-    ? {
-        label: '取消固定',
-        status: '已取消固定入口',
-        ariaLabel: '取消固定入口'
-      }
-    : {
-        label: '设为固定入口',
-        status: '已添加固定入口',
-        ariaLabel: '将书签设为固定入口'
-      }
-}
-
-export function isSpeedDialBookmarkPinned(pinnedIds: string[], bookmarkId: string): boolean {
-  const id = String(bookmarkId || '').trim()
-  return Boolean(id && pinnedIds.includes(id))
-}
-
 function createSpeedDialItem(bookmark: SpeedDialBookmarkLike, pinnedOrder: number): SpeedDialItem | null {
   const id = String(bookmark.id || '').trim()
   const url = String(bookmark.url || '').trim()

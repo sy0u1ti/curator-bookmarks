@@ -7,6 +7,7 @@ import type {
   BookmarkSaveMessage,
   BookmarkSaveResult,
   InboxUndoLastMoveMessage,
+  InboxReviewMessage,
   InboxUndoLastMoveResult,
   NavigationCancelMessage,
   NavigationCheckMessage,
@@ -33,7 +34,7 @@ import {
   POPUP_COMMAND_INTENT_TTL_MS,
   STORAGE_KEYS
 } from '../shared/constants.js'
-import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { getLocalStorage, removeLocalStorage, setLocalStorage, withLocalStorageTransaction } from '../shared/storage.js'
 import { extractDomain } from '../shared/text.js'
 import {
   assessSensitiveExternalUrl,
@@ -103,6 +104,9 @@ import {
 import { shouldReuseBookmarkForSave } from './save-guards.js'
 import { collectRemovedBookmarkIds, createBookmarkRemovalQueue } from './bookmark-removal-queue.js'
 import { undoInboxAutoMove } from './inbox-undo.js'
+import { reviewInboxItem } from './inbox-review.js'
+import { isInboxItemPending, settleRemovedInboxItems } from '../shared/inbox.js'
+import { shouldAnalyzeInbox } from '../shared/inbox-workflow.js'
 
 interface PendingCheckState {
   tabId: number
@@ -259,6 +263,9 @@ let nextNavigationRuleId = NAVIGATION_RULE_ID_MIN
 const navigationFirewallReady = clearStaleNavigationOriginFirewalls().catch((error) => {
   console.warn('[Curator] 遗留可用性检测导航规则清理失败', error)
 })
+const navigationProbeSweepReady = sweepOrphanNavigationProbeTabs().catch((error) => {
+  console.warn('[Curator] 遗留检测标签页清理失败', error)
+})
 const autoClassifyInFlight = new Set<string>()
 const suppressedAutoBookmarkUrls = new Map<string, number>()
 let bookmarkAddHistoryWriteQueue = Promise.resolve()
@@ -278,6 +285,26 @@ const AUTO_ANALYZE_QUEUE_ALARM = 'curator-auto-analyze-queue'
 const AUTO_ANALYZE_STATUS_CLEAR_ALARM = 'curator-auto-analyze-status-clear'
 const COMMAND_FEEDBACK_BADGE_CLEAR_ALARM = 'curator-command-feedback-badge-clear'
 const BACKUP_RESTORE_RECOVERY_ALARM = 'curator-backup-restore-recovery'
+const NAVIGATION_PROBE_CLEANUP_ALARM = 'curator-navigation-probe-cleanup'
+const NAVIGATION_PROBE_TAB_STORAGE_KEY = 'curatorNavigationProbeTabs'
+const NAVIGATION_PROBE_ORPHAN_AGE_MS = 2 * 60 * 1000
+
+/** Background persistence failures used to end at console.warn, so the user
+ * only noticed a feature quietly not working. The last issue is kept in local
+ * storage and surfaced in the options storage panel. */
+async function recordStorageIssue(message: string): Promise<void> {
+  try {
+    await chrome.storage.local.set({
+      [STORAGE_KEYS.storageIssue]: { message, at: Date.now() }
+    })
+  } catch { /* the issue record itself is best effort */ }
+}
+
+async function clearStorageIssue(): Promise<void> {
+  try {
+    await chrome.storage.local.remove(STORAGE_KEYS.storageIssue)
+  } catch { /* best effort */ }
+}
 const AUTO_ANALYZE_QUEUE_LIMIT = 50
 const AUTO_ANALYZE_QUEUE_MAX_ATTEMPTS = 3
 const AUTO_ANALYZE_QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -297,12 +324,13 @@ type RuntimeMessage =
   | BackupRestoreMessage
   | BookmarkSaveMessage
   | InboxUndoLastMoveMessage
+  | InboxReviewMessage
   | NavigationCheckMessage
   | NavigationCancelMessage
   | RuntimeNotificationMessage
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes[STORAGE_KEYS.aiProviderSettings]) {
+  if (areaName === 'local' && (changes[STORAGE_KEYS.aiProviderSettings] || changes[STORAGE_KEYS.inboxSettings] || changes[STORAGE_KEYS.contentSnapshotSettings])) {
     aiProviderSettingsGeneration += 1
     clearAiProviderCompatibilityCache()
     for (const controller of activeAutoAiRequests) controller.abort()
@@ -329,6 +357,13 @@ chrome.alarms?.onAlarm.addListener((alarm) => {
     return
   }
 
+  if (alarm.name === NAVIGATION_PROBE_CLEANUP_ALARM) {
+    sweepOrphanNavigationProbeTabs({ maxAgeMs: NAVIGATION_PROBE_ORPHAN_AGE_MS }).catch((error) => {
+      console.warn('[Curator] 检测标签页清理失败', error)
+    })
+    return
+  }
+
   if (alarm.name === COMMAND_FEEDBACK_BADGE_CLEAR_ALARM) {
     restoreAutoAnalyzeStatusBadge().catch((error) => {
       console.warn('[Curator] 快捷键反馈徽标恢复失败', error)
@@ -336,10 +371,21 @@ chrome.alarms?.onAlarm.addListener((alarm) => {
   }
 })
 
+// A held-down shortcut fires repeatedly; without a guard each press would run
+// the same command again (two Inbox captures for one page, two popup intents).
+const commandsInFlight = new Set<string>()
 chrome.commands?.onCommand.addListener((command) => {
-  handleCommand(command).catch((error) => {
-    console.warn('[Curator] 快捷键命令处理失败', command, error)
-  })
+  if (commandsInFlight.has(command)) {
+    return
+  }
+  commandsInFlight.add(command)
+  handleCommand(command)
+    .catch((error) => {
+      console.warn('[Curator] 快捷键命令处理失败', command, error)
+    })
+    .finally(() => {
+      commandsInFlight.delete(command)
+    })
 })
 
 chrome.notifications?.onButtonClicked.addListener((notificationId, buttonIndex) => {
@@ -375,8 +421,36 @@ let backupRestoreRecoveryError: Error | null = null
 const backupRestoreRecoveryReady = runBackupRestoreRecovery().catch(() => {})
 
 chrome.runtime.onMessage.addListener((message: RuntimeMessage, sender, sendResponse) => {
+  if (message?.type === 'inbox:review') {
+    void backupRestoreRecoveryReady.then(() => {
+      if (backupRestoreRecoveryError) throw backupRestoreRecoveryError
+      return withAvailabilityMutationLock(() => reviewInboxItem(message, {
+        ensureFolder: ensureBookmarkFolderPath,
+        retry: async item => {
+          const [settings, snapshots] = await Promise.all([loadAutoAnalyzeSettings(), loadContentSnapshotSettings()])
+          if (!hasUsableAiSettings(settings)) throw new Error('请先在 AI 设置中配置可用渠道。')
+          if (snapshots.localOnlyNoAiUpload) throw new Error('仅本地保存已开启，请先调整网页内容设置。')
+          const inboxSettings = await loadInboxSettings()
+          if (!inboxSettings.enabled) throw new Error('请先启用 Inbox 捕获。')
+          if (!shouldAnalyzeInbox(inboxSettings)) throw new Error('Inbox 当前为“只收藏”；请先在通用设置中选择分析方式。')
+          const result = await enqueueAutoAnalyzeBookmark(item)
+          if (result.accepted === false) throw new Error(result.error)
+          await updateInboxItem(item.bookmarkId, { status: 'analyzing', lastError: '' })
+          scheduleAutoAnalyzeQueueProcessing(AUTO_CLASSIFY_DELAY_MS)
+          scheduleAutoAnalyzeQueueAlarm(AUTO_CLASSIFY_DELAY_MS)
+        }
+      }), { unavailableMessage: '无法锁定书签数据，请重试。', busyMessage: '其他页面正在修改书签，请稍后重试。' })
+    }).then(result => sendResponse({ ok: true, result }), error => sendResponse({ ok: false, error: getErrorMessage(error) }))
+    return true
+  }
   if (message?.type === 'bookmark:save') {
-    saveBookmarkFromMessage(message)
+    backupRestoreRecoveryReady.then(() => {
+      if (backupRestoreRecoveryError) throw backupRestoreRecoveryError
+      return withAvailabilityMutationLock(() => saveBookmarkFromMessage(message), {
+        unavailableMessage: '无法锁定书签数据，请重试。',
+        busyMessage: '其他页面正在整理或恢复书签，请稍后重试保存。'
+      })
+    })
       .then((result) => {
         sendResponse({ ok: true, result })
       })
@@ -710,6 +784,9 @@ async function persistPopupCommandIntent(
   })
 }
 
+const recentInboxCaptures = new Map<string, number>()
+const INBOX_CAPTURE_DEDUPE_MS = 5000
+
 async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
   const settings = await loadInboxSettings()
   if (!settings.enabled) {
@@ -736,6 +813,22 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
     return
   }
 
+  // Guard against a repeated shortcut press on the same page.
+  const lastCapturedAt = recentInboxCaptures.get(url) || 0
+  if (Date.now() - lastCapturedAt < INBOX_CAPTURE_DEDUPE_MS) {
+    await persistPopupCommandIntent({
+      action: 'feedback',
+      sourceCommand,
+      message: '这一页刚刚已收藏到待整理。',
+      tone: 'info'
+    })
+    return
+  }
+  recentInboxCaptures.set(url, Date.now())
+  if (recentInboxCaptures.size > 20) {
+    recentInboxCaptures.delete(recentInboxCaptures.keys().next().value!)
+  }
+
   const inboxFolderId = await ensureInboxFolder(settings)
   const title = cleanText(tab?.title || '') || '未命名网页'
   const createdNode = await createBookmarkNode({
@@ -760,7 +853,7 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
     }),
     loadAutoAnalyzeSettings()
   ])
-  if (hasUsableAiSettings(autoSettings)) {
+  if (shouldAnalyzeInbox(settings) && hasUsableAiSettings(autoSettings) && !(await loadContentSnapshotSettings()).localOnlyNoAiUpload) {
     const enqueueResult = await enqueueAutoAnalyzeBookmark({
       bookmarkId,
       url,
@@ -821,19 +914,19 @@ async function captureCurrentTabToInbox(sourceCommand: string): Promise<void> {
   await Promise.all([
     updateInboxItem(bookmarkId, {
       status: 'needs-review',
-      lastError: '未配置 AI 渠道，已保留在 Inbox。'
+      lastError: '已保存到 Inbox，等待手动整理。'
     }).catch(() => {}),
     persistPopupCommandIntent({
       action: 'feedback',
       sourceCommand,
-      message: '已保存到 Inbox / 待整理。配置 AI 后可自动分析。',
+      message: '已保存到 Inbox / 待整理，未启动 AI 分析。',
       tone: 'success'
     }),
     showTransientCommandBadge('IN', '#365f45'),
     showInboxNotification({
       notificationId: `${INBOX_CAPTURE_NOTIFICATION_PREFIX}${bookmarkId}`,
       title: '已保存到 Inbox / 待整理',
-      message: '未配置 AI 渠道，书签会留在 Inbox 等待整理。'
+      message: '未启动 AI 分析；可在设置的“待整理”中处理。'
     })
   ])
 }
@@ -980,11 +1073,26 @@ chrome.bookmarks.onCreated.addListener((bookmarkId, node) => {
     return
   }
 
-  void handleBookmarkCreatedForAutoAnalysis(String(bookmarkId), node)
+  void handleBookmarkCreatedForAutoAnalysis(String(bookmarkId), node).catch((error) => {
+    // Without this the bookmark would silently never be analysed: the queue
+    // write fails before any status of its own is persisted.
+    console.warn('[Curator] 自动分析入队失败', error)
+    void persistAutoAnalyzeStatus({
+      status: 'failed',
+      bookmarkId: String(bookmarkId),
+      url: String(node.url || ''),
+      title: String(node.title || '新增书签'),
+      createdAt: Date.now(),
+      detail: error instanceof Error ? error.message : '自动分析启动失败'
+    }).catch(() => {})
+  })
 })
 
 const enqueueBookmarkRemoval = createBookmarkRemovalQueue(async (bookmarkIds) => {
   await Promise.all([
+    settleRemovedInboxItems(bookmarkIds).catch(error => {
+      console.warn('[Curator] Inbox 删除记录结清失败', error)
+    }),
     removeBookmarkTagRecords(bookmarkIds).catch((error) => {
       console.warn('[Curator] 标签记录清理失败', error)
     }),
@@ -1323,14 +1431,17 @@ async function runAutoAnalysisForBookmark(
   const [inboxItem, settings, snapshotSettings] = await Promise.all([
     findInboxItemByBookmarkId(bookmarkId),
     loadAutoAnalyzeSettings(),
-    loadContentSnapshotSettings().catch(() => null)
+    loadContentSnapshotSettings()
   ])
   const shouldSnapshot = Boolean(snapshotSettings?.enabled && snapshotSettings.autoCaptureOnBookmarkCreate)
-  const shouldUploadToAi = (settings.autoAnalyzeBookmarks || Boolean(inboxItem)) &&
+  const inboxPolicy = inboxItem ? await loadInboxSettings() : null
+  if (inboxItem && !isInboxItemPending(inboxItem)) return
+  const shouldUploadToAi = (inboxPolicy ? shouldAnalyzeInbox(inboxPolicy) : settings.autoAnalyzeBookmarks) &&
     hasUsableAiSettings(settings) &&
     !snapshotSettings?.localOnlyNoAiUpload
 
   if (!shouldSnapshot && !shouldUploadToAi) {
+    if (inboxItem && inboxItem.status === 'analyzing') await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '当前设置不允许自动分析，已保留待办。' })
     return
   }
 
@@ -1346,6 +1457,10 @@ async function runAutoAnalysisForBookmark(
 
   const bookmark = await getBookmarkById(bookmarkId)
   const bookmarkUrlDecision = assessSensitiveExternalUrl(bookmark?.url)
+  if (inboxItem && bookmark?.url && inboxItem.url !== bookmark.url) {
+    await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '书签地址已变化，旧任务已停止；可结清待办后重新收藏。' })
+    return
+  }
   if (!bookmark?.url || bookmarkUrlDecision.sensitive) {
     await persistAutoAnalyzeStatus({
       status: 'failed',
@@ -1380,12 +1495,14 @@ async function runAutoAnalysisForBookmark(
       bookmark: bookmarkRecord,
       context: pageContext,
       settings: snapshotSettings
-    }).catch((error) => {
+    }).then(() => clearStorageIssue()).catch((error) => {
       console.warn('[Curator] 网页快照保存失败', error)
+      void recordStorageIssue('网页快照保存失败：浏览器本地存储可能已满，搜索将缺少该页正文。可在「数据与备份」中清理。')
     })
   }
 
   if (!shouldUploadToAi) {
+    if (inboxItem && inboxItem.status === 'analyzing') await updateInboxItem(bookmarkId, { status: 'needs-review', lastError: '已按设置保留在 Inbox，未调用 AI。' })
     return
   }
 
@@ -1407,6 +1524,10 @@ async function runAutoAnalysisForBookmark(
   const recommendation = chooseAutoFolderRecommendation(aiResult, extracted.folders, bookmarkRecord)
   return withAvailabilityAutoAnalysisMutationLock(async () => {
     throwIfAutoAiSettingsChanged(requestSettingsGeneration)
+    if (inboxItem) {
+      const latestItem = await findInboxItemByBookmarkId(bookmarkId)
+      if (!latestItem || latestItem.captureId !== inboxItem.captureId || ['kept', 'moved'].includes(latestItem.status)) return
+    }
     let latestBookmark = await getBookmarkById(bookmarkId)
     throwIfAutoAiSettingsChanged(requestSettingsGeneration)
     if (!latestBookmark?.url) {
@@ -1438,6 +1559,7 @@ async function runAutoAnalysisForBookmark(
     return
   }
 
+  const inboxSettings = inboxItem ? await loadInboxSettings() : null
   if (!recommendation) {
     await persistAutoBookmarkTagAnalysis({
       bookmarkId,
@@ -1450,9 +1572,9 @@ async function runAutoAnalysisForBookmark(
     })
     if (inboxItem) {
       await updateInboxItem(bookmarkId, {
-        status: 'needs-review',
+        status: inboxSettings?.tagOnlyNoAutoMove ? 'tagged' : 'needs-review',
         confidence: aiResult.confidence,
-        lastError: 'AI 未找到合适的目标文件夹。'
+        lastError: inboxSettings?.tagOnlyNoAutoMove ? '已按设置只生成标签和摘要。' : 'AI 未找到合适的目标文件夹。'
       }).catch((error) => {
         console.warn('[Curator] Inbox 状态更新失败', error)
       })
@@ -1461,7 +1583,7 @@ async function runAutoAnalysisForBookmark(
         title: latestBookmark.title || bookmarkRecord.title || entry.title || '新增书签',
         folderPath: DEFAULT_INBOX_FOLDER_TITLE,
         moved: false,
-        message: 'AI 已生成标签，未找到合适文件夹，已保留在 Inbox。'
+        message: inboxSettings?.tagOnlyNoAutoMove ? '已按设置生成标签和摘要，保留在 Inbox。' : 'AI 已生成标签，未找到合适文件夹，已保留在 Inbox。'
       })
     }
     await persistAutoAnalyzeStatus({
@@ -1503,7 +1625,6 @@ async function runAutoAnalysisForBookmark(
     }
   }
 
-  const inboxSettings = inboxItem ? await loadInboxSettings() : null
   throwIfAutoAiSettingsChanged(requestSettingsGeneration)
   const inboxMinConfidence = inboxSettings?.minAutoMoveConfidence ?? INBOX_AUTO_MOVE_MIN_CONFIDENCE
   const nonInboxMutationBlockReason = inboxItem
@@ -1518,7 +1639,7 @@ async function runAutoAnalysisForBookmark(
       meetsAiConfidenceThreshold(recommendation.confidence, inboxMinConfidence)
     )
     : canMutateNonInboxBookmark
-  const shouldAutoRename = (Boolean(inboxItem) || canMutateNonInboxBookmark) &&
+  const shouldAutoRename = (inboxItem ? shouldAutoMoveRecommendation : canMutateNonInboxBookmark) &&
     meetsAiConfidenceThreshold(aiResult.confidence, AUTO_CLASSIFY_MUTATION_MIN_CONFIDENCE)
   const preMutationFolderPath = await getBookmarkFolderPath(
     String(latestBookmark.parentId || '')
@@ -1686,9 +1807,10 @@ async function runAutoAnalysisForBookmark(
         ? 'moved'
         : shouldAutoMoveRecommendation
           ? 'tagged'
-          : 'needs-review',
+          : inboxSettings?.tagOnlyNoAutoMove ? 'tagged' : 'needs-review',
       recommendedFolderId: folderId || recommendation.folderId,
       recommendedFolderPath: recommendation.path || recommendation.title,
+      recommendationReason: recommendation.reason,
       confidence: recommendation.confidence,
       lastError: completionWarning ||
         (
@@ -1696,7 +1818,9 @@ async function runAutoAnalysisForBookmark(
             ? ''
             : inboxSettings?.tagOnlyNoAutoMove
               ? '已按设置只生成标签，未自动移动。'
-              : 'AI 置信度较低，已保留在 Inbox。'
+              : !inboxSettings?.autoMoveToRecommendedFolder
+                ? '已生成建议，等待你决定是否移动。'
+                : 'AI 置信度较低，已保留在 Inbox。'
         )
     }).catch((error) => {
       console.warn('[Curator] Inbox 状态更新失败', error)
@@ -1725,7 +1849,9 @@ async function runAutoAnalysisForBookmark(
           ? `已归类到 ${recommendation.path || recommendation.title}`
           : inboxSettings?.tagOnlyNoAutoMove
             ? '已生成标签和摘要，按设置保留在 Inbox。'
-            : '置信度较低，已生成标签并保留在 Inbox。',
+            : !inboxSettings?.autoMoveToRecommendedFolder
+              ? '已生成整理建议，等待你决定是否移动。'
+              : '置信度较低，已生成标签并保留在 Inbox。',
         completionWarning
       ].filter(Boolean).join(' ')
     })
@@ -1763,6 +1889,12 @@ async function runAutoAnalysisForBookmark(
       ? '自动分析结果已保存，书签已移动到推荐文件夹。'
       : nonInboxMutationBlockReason
         ? `自动分析结果已保存；${nonInboxMutationBlockReason}，未自动移动或改名。`
+        : inboxItem && !shouldAutoMoveRecommendation
+          ? inboxSettings?.tagOnlyNoAutoMove
+            ? '已按设置生成标签和摘要，未移动或改名。'
+            : !inboxSettings?.autoMoveToRecommendedFolder
+              ? '整理建议已保存，请在待整理中决定是否移动。'
+              : '整理建议已保存，置信度不足，等待你确认。'
         : '自动分析结果已保存，书签已保留在合适位置。',
       completionWarning
     ].filter(Boolean).join(' ')
@@ -2315,9 +2447,11 @@ async function loadCurrentAutoAnalyzeRequestSettings({
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const generation = aiProviderSettingsGeneration
     const settings = await loadAutoAnalyzeSettings()
-    const shouldUploadToAi = (settings.autoAnalyzeBookmarks || hasInboxItem) &&
+    const inboxPolicy = hasInboxItem ? await loadInboxSettings() : null
+    const snapshotPolicy = await loadContentSnapshotSettings()
+    const shouldUploadToAi = (inboxPolicy ? shouldAnalyzeInbox(inboxPolicy) : settings.autoAnalyzeBookmarks) &&
       hasUsableAiSettings(settings) &&
-      !localOnlyNoAiUpload
+      !localOnlyNoAiUpload && !snapshotPolicy.localOnlyNoAiUpload
     if (!shouldUploadToAi) {
       return null
     }
@@ -2985,31 +3119,31 @@ async function persistAutoAnalyzeStatus(
   }
 
   const statusKey = getAutoAnalyzeStatusKey(status)
-  if (statusKey === lastPersistedAutoAnalyzeStatusKey) {
+  await withLocalStorageTransaction(async transaction => {
+    const current = await loadAutoAnalyzeStatus()
+    if (statusKey === lastPersistedAutoAnalyzeStatusKey && current &&
+      getAutoAnalyzeStatusKey(current) === statusKey && current.expiresAt > now) {
+      scheduleAutoAnalyzeStatusClear(current.expiresAt)
+      return
+    }
+    await setLocalStorage({ [STORAGE_KEYS.autoAnalyzeStatus]: status }, { transaction })
+    lastPersistedAutoAnalyzeStatusKey = statusKey
+    await applyAutoAnalyzeStatusBadge(status).catch((error) => {
+      console.warn('[Curator] 自动分析徽标更新失败', error)
+    })
     scheduleAutoAnalyzeStatusClear(status.expiresAt)
-    return
-  }
-  lastPersistedAutoAnalyzeStatusKey = statusKey
-
-  await setLocalStorage({
-    [STORAGE_KEYS.autoAnalyzeStatus]: status
   })
-  await applyAutoAnalyzeStatusBadge(status).catch((error) => {
-    console.warn('[Curator] 自动分析徽标更新失败', error)
-  })
-  scheduleAutoAnalyzeStatusClear(status.expiresAt)
 }
 
 async function clearAutoAnalyzeStatusForBookmark(bookmarkId: string): Promise<void> {
-  const currentStatus = await loadAutoAnalyzeStatus()
-  if (!currentStatus || currentStatus.bookmarkId !== bookmarkId) {
-    return
-  }
-
-  lastPersistedAutoAnalyzeStatusKey = ''
-  await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
-  await clearActionBadge().catch(() => {})
-  clearAutoAnalyzeStatusAlarm()
+  await withLocalStorageTransaction(async transaction => {
+    const currentStatus = await loadAutoAnalyzeStatus()
+    if (!currentStatus || currentStatus.bookmarkId !== bookmarkId) return
+    await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus, { transaction })
+    lastPersistedAutoAnalyzeStatusKey = ''
+    await clearActionBadge().catch(() => {})
+    clearAutoAnalyzeStatusAlarm()
+  })
 }
 
 async function settleAutoAnalyzeQueueStatus(): Promise<void> {
@@ -3034,7 +3168,7 @@ async function settleAutoAnalyzeQueueStatus(): Promise<void> {
       url: nextEntry.url,
       title: nextEntry.title || '新增书签',
       createdAt: nextEntry.createdAt,
-      detail: '队列中还有待处理书签，正在继续处理。'
+      detail: '队列中还有待分析书签，正在继续处理。'
     })
     return
   }
@@ -3094,46 +3228,23 @@ function getAutoAnalyzeStatusTtl(status: AutoAnalyzeStatusKind): number {
 }
 
 async function restoreAutoAnalyzeStatusBadge(): Promise<void> {
-  const status = await loadAutoAnalyzeStatus()
-  if (!status) {
-    await clearActionBadge().catch(() => {})
-    clearAutoAnalyzeStatusAlarm()
-    return
-  }
-
-  if (status.expiresAt <= Date.now()) {
-    await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice])
-    await clearActionBadge().catch(() => {})
-    clearAutoAnalyzeStatusAlarm()
-    return
-  }
-
-  if (status.badgeVisible) {
-    await applyAutoAnalyzeStatusBadge(status).catch((error) => {
-      console.warn('[Curator] 自动分析徽标恢复失败', error)
-    })
-  } else {
-    await clearActionBadge().catch(() => {})
-  }
-  scheduleAutoAnalyzeStatusClear(status.expiresAt)
+  await clearExpiredAutoAnalyzeStatus()
 }
 
 async function clearExpiredAutoAnalyzeStatus(): Promise<void> {
-  const status = await loadAutoAnalyzeStatus()
-  if (!status || status.expiresAt <= Date.now()) {
-    lastPersistedAutoAnalyzeStatusKey = ''
-    await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice])
-    await clearActionBadge().catch(() => {})
-    clearAutoAnalyzeStatusAlarm()
-    return
-  }
-
-  if (status.badgeVisible) {
-    await applyAutoAnalyzeStatusBadge(status).catch(() => {})
-  } else {
-    await clearActionBadge().catch(() => {})
-  }
-  scheduleAutoAnalyzeStatusClear(status.expiresAt)
+  await withLocalStorageTransaction(async transaction => {
+    const status = await loadAutoAnalyzeStatus()
+    if (!status || status.expiresAt <= Date.now()) {
+      await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice], { transaction })
+      lastPersistedAutoAnalyzeStatusKey = ''
+      await clearActionBadge().catch(() => {})
+      clearAutoAnalyzeStatusAlarm()
+      return
+    }
+    if (status.badgeVisible) await applyAutoAnalyzeStatusBadge(status).catch(() => {})
+    else await clearActionBadge().catch(() => {})
+    scheduleAutoAnalyzeStatusClear(status.expiresAt)
+  })
 }
 
 async function applyAutoAnalyzeStatusBadge(status: AutoAnalyzeStatusSnapshot): Promise<void> {
@@ -3504,16 +3615,14 @@ async function saveBookmarkFromMessage(message: BookmarkSaveMessage): Promise<Bo
         node = await updateBookmarkNode(bookmarkId, { title })
       }
 
-      const result = {
+      const result: BookmarkSaveResult = {
         bookmarkId: String(node.id),
         parentId: String(node.parentId || parentId),
         title: String(node.title || title),
         url: String(node.url || url),
         created: false
       }
-      persistPopupSmartTagAnalysis(message, result).catch((error) => {
-        console.warn('[Curator] Popup 智能分类标签写入失败', error)
-      })
+      await finishPopupSmartTagAnalysis(message, result)
       return result
     }
   }
@@ -3525,17 +3634,24 @@ async function saveBookmarkFromMessage(message: BookmarkSaveMessage): Promise<Bo
     url
   })
 
-  const result = {
+  const result: BookmarkSaveResult = {
     bookmarkId: String(createdNode.id),
     parentId: String(createdNode.parentId || parentId),
     title: String(createdNode.title || title),
     url: String(createdNode.url || url),
     created: true
   }
-  persistPopupSmartTagAnalysis(message, result).catch((error) => {
-    console.warn('[Curator] Popup 智能分类标签写入失败', error)
-  })
+  await finishPopupSmartTagAnalysis(message, result)
   return result
+}
+
+async function finishPopupSmartTagAnalysis(message: BookmarkSaveMessage, result: BookmarkSaveResult): Promise<void> {
+  try {
+    await persistPopupSmartTagAnalysis(message, result)
+  } catch (error) {
+    console.warn('[Curator] Popup 智能分类标签写入失败', error)
+    result.metadataWarning = '书签已保存，但标签和摘要写入失败，可重新分析后保存。'
+  }
 }
 
 async function persistPopupSmartTagAnalysis(
@@ -4370,6 +4486,7 @@ async function performNavigationCheck({
 
     createdTabId = tab.id!
     reservation.tabId = createdTabId
+    await registerNavigationProbeTab(checkId, createdTabId)
     if (reservation.cancelled) {
       return buildCancelledNavigationResult(url)
     }
@@ -4734,6 +4851,80 @@ function updateNavigationSessionRules(
   })
 }
 
+interface NavigationProbeTabRecord {
+  tabId: number
+  startedAt: number
+}
+
+async function readNavigationProbeTabs(): Promise<Record<string, NavigationProbeTabRecord>> {
+  try {
+    const stored = await chrome.storage.session.get(NAVIGATION_PROBE_TAB_STORAGE_KEY)
+    const raw = stored?.[NAVIGATION_PROBE_TAB_STORAGE_KEY]
+    return raw && typeof raw === 'object' ? raw as Record<string, NavigationProbeTabRecord> : {}
+  } catch { return {} }
+}
+
+async function writeNavigationProbeTabs(records: Record<string, NavigationProbeTabRecord>): Promise<void> {
+  try {
+    await chrome.storage.session.set({ [NAVIGATION_PROBE_TAB_STORAGE_KEY]: records })
+  } catch (error) {
+    console.warn('[Curator] 检测标签页登记失败', error)
+  }
+}
+
+async function syncNavigationProbeCleanupAlarm(activeCount: number): Promise<void> {
+  try {
+    if (activeCount > 0) {
+      await chrome.alarms.create(NAVIGATION_PROBE_CLEANUP_ALARM, { delayInMinutes: 1 })
+    } else {
+      await chrome.alarms.clear(NAVIGATION_PROBE_CLEANUP_ALARM)
+    }
+  } catch { /* alarms are best effort */ }
+}
+
+/** Probe tabs live in worker memory only, so a recycled worker used to leave
+ * the hidden about:blank tab behind forever. Session storage carries the
+ * registry across worker restarts; this sweep closes anything no longer backed
+ * by a live check (and, when asked, anything older than the check timeout). */
+async function sweepOrphanNavigationProbeTabs({ maxAgeMs = 0 }: { maxAgeMs?: number } = {}): Promise<void> {
+  const records = await readNavigationProbeTabs()
+  const now = Date.now()
+  const kept: Record<string, NavigationProbeTabRecord> = {}
+  let closed = 0
+  for (const [checkId, record] of Object.entries(records)) {
+    const tabId = Number(record?.tabId)
+    const startedAt = Number(record?.startedAt) || 0
+    if (!Number.isInteger(tabId)) continue
+    const live = [...pendingChecks.values()].some((state) => state.checkId === checkId)
+    const stale = maxAgeMs > 0 ? now - startedAt > maxAgeMs : true
+    if (live || !stale) {
+      kept[checkId] = { tabId, startedAt }
+      continue
+    }
+    await closeTab(tabId).catch(() => {})
+    await removeNavigationOriginFirewall(tabId).catch(() => {})
+    closed += 1
+  }
+  if (closed) console.warn(`[Curator] 已清理 ${closed} 个中断检测遗留的标签页。`)
+  await writeNavigationProbeTabs(kept)
+  await syncNavigationProbeCleanupAlarm(Object.keys(kept).length)
+}
+
+async function registerNavigationProbeTab(checkId: string, tabId: number): Promise<void> {
+  const records = await readNavigationProbeTabs()
+  records[checkId] = { tabId, startedAt: Date.now() }
+  await writeNavigationProbeTabs(records)
+  await syncNavigationProbeCleanupAlarm(Object.keys(records).length)
+}
+
+async function unregisterNavigationProbeTab(checkId: string): Promise<void> {
+  const records = await readNavigationProbeTabs()
+  if (!(checkId in records)) return
+  delete records[checkId]
+  await writeNavigationProbeTabs(records)
+  await syncNavigationProbeCleanupAlarm(Object.keys(records).length)
+}
+
 async function clearStaleNavigationOriginFirewalls(): Promise<void> {
   const staleRules = (await getNavigationSessionRules()).filter((rule) => {
     const ruleId = Number(rule.id)
@@ -4989,6 +5180,7 @@ function finalizeNavigationCheck(
   detachWebRequestListeners(state)
   pendingChecks.delete(tabId)
   releaseNavigationCheckReservation(state.checkId)
+  void unregisterNavigationProbeTab(state.checkId)
 
   if (state.timeoutId) {
     clearTimeout(state.timeoutId)

@@ -60,7 +60,7 @@ body,
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
     opacity var(--ds-motion-fast) var(--ds-ease-standard),
-    transform 260ms var(--ease-smooth-out);
+    transform var(--duration-very-slow) var(--ease-smooth-out);
 }
 
 .options-nav-active-indicator::before {
@@ -377,5 +377,14 @@ body,
   .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-row,
   .reasoning-selector-menu[data-stagger="true"] .reasoning-selector-menu-action-wrap {
     animation: none !important;
+  }
+}
+
+/* Focus rings here are box-shadow based; forced colours drop shadows, so the
+   keyboard focus indicator has to come from an outline in that mode. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight !important;
+    outline-offset: 2px;
   }
 }

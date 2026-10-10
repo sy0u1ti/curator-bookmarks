@@ -24,22 +24,6 @@ export interface BackgroundFetchSizeCheck {
   message?: string
 }
 
-export function resolveRestorableBookmarkParentId(
-  requestedParentId: string | null | undefined,
-  rootNode: chrome.bookmarks.BookmarkTreeNode | null | undefined,
-  defaultParentId: string
-): string {
-  const normalizedDefaultParentId = String(defaultParentId || '').trim()
-  const normalizedRequestedParentId = String(requestedParentId || '').trim()
-
-  if (!normalizedRequestedParentId) {
-    return normalizedDefaultParentId
-  }
-
-  const target = findBookmarkNodeById(rootNode, normalizedRequestedParentId)
-  return target && !target.url ? normalizedRequestedParentId : normalizedDefaultParentId
-}
-
 export function buildMinimalBookmarkMoveOperations(
   originalIds: string[],
   finalIds: string[],

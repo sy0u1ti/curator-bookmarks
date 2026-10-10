@@ -28,10 +28,6 @@ export function getAiProviderBaseUrlIssue(baseUrl: unknown): string {
   return '仅支持 https Base URL；localhost 高级开发例外可使用 http。'
 }
 
-export function isAllowedAiProviderBaseUrl(baseUrl: unknown): boolean {
-  return !getAiProviderBaseUrlIssue(baseUrl)
-}
-
 /** 仅识别 Anthropic 官方 API；第三方 Claude 网关仍按其 OpenAI-compatible 协议调用。 */
 export function isDirectAnthropicProvider(baseUrl: unknown): boolean {
   try {

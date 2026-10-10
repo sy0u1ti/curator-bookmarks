@@ -15,6 +15,7 @@ export function getIconPreviewSignature(settings: IconSettings): string {
     settings.pageWidth,
     settings.columnGap,
     settings.rowGap,
+    settings.folderGap,
     settings.tileWidth,
     settings.iconShellSize,
     settings.layoutMode,
@@ -26,19 +27,19 @@ export function getIconPreviewSignature(settings: IconSettings): string {
 }
 
 export function dispatchIconPreviewViewForSettings(settings: IconSettings): void {
-  const previewColumnGap = Math.max(4, Math.round(getIconGapPx(settings.columnGap) * 0.34))
-  const previewRowGap = Math.max(4, Math.round(getIconRowGapPx(settings.rowGap) * 0.34))
+  const previewColumnGap = Math.round(getIconGapPx(settings.columnGap) * 0.34)
+  const previewRowGap = Math.round(getIconRowGapPx(settings.rowGap) * 0.34)
   const effectiveTileWidth = getEffectiveIconTileWidthPx(settings)
   const previewTileWidth = Math.max(48, Math.round(effectiveTileWidth * 0.42))
   const previewShellSize = Math.max(18, Math.round(settings.iconShellSize * 0.62))
   const previewColumns = settings.layoutMode === 'fixed'
-    ? Math.max(2, Math.min(6, settings.columns))
+    ? settings.columns
     : Math.max(2, Math.min(4, Math.round(settings.pageWidth / 24)))
   const previewGridMaxWidth = previewColumns * previewTileWidth + (previewColumns - 1) * previewColumnGap
-  const sampleCount = Math.max(4, Math.min(8, previewColumns * 2))
+  const sampleCount = previewColumns * 2
   const summary = [
     settings.layoutMode === 'fixed' ? `${settings.columns} 列固定` : '自动适配',
-    `${settings.tileWidth}px 卡片`,
+    `${effectiveTileWidth}px 卡片`,
     `${settings.iconShellSize}px 图标区`,
     settings.showTitles ? `${settings.titleLines} 行标题` : '图标模式'
   ].join(' · ')
@@ -55,9 +56,9 @@ export function dispatchIconPreviewViewForSettings(settings: IconSettings): void
       previewTileWidth,
       summary,
       tiles: Array.from({ length: sampleCount }, (_, index) => ({
-        id: `${index}:${names[index] || ''}`,
-        mark: names[index]?.slice(0, 1) || '*',
-        title: names[index] || ''
+        id: String(index),
+        mark: names[index % names.length].slice(0, 1),
+        title: names[index % names.length]
       }))
     },
     {

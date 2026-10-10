@@ -10,10 +10,10 @@ export const optionsMobileSidebarClass =
   'options-sidebar options-mobile-sidebar relative isolate h-full w-full min-w-0 overflow-y-auto overscroll-contain bg-ds-page px-3 pb-8 pt-3 [scrollbar-gutter:stable]'
 
 export const optionsBrandClassBase =
-  'options-brand curator-motion-chip inline-flex min-h-[58px] min-w-0 items-center gap-3 p-[6px_0] outline-none max-[920px]:min-h-0 max-[920px]:py-0'
+  'options-brand curator-motion-chip inline-flex min-h-[58px] min-w-0 items-center gap-2 p-[6px_0] outline-none max-[920px]:min-h-0 max-[920px]:py-0'
 
 export const optionsBrandMarkClass =
-  'options-brand-mark h-[46px] w-[46px] flex-none overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none max-[920px]:h-10 max-[920px]:w-10'
+  'options-brand-mark h-[42px] w-[42px] flex-none overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none max-[920px]:h-10 max-[920px]:w-10'
 
 export const optionsBrandMarkImageClass =
   'block h-full w-full object-cover [filter:grayscale(1)_contrast(1.08)_brightness(0.9)] transition-[filter,opacity] duration-ds-standard ease-ds-standard'

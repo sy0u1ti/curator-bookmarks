@@ -181,7 +181,7 @@ try {
 
   // Audit all settings sections and each new-tab settings group.
   await page.setViewportSize({ width: 1440, height: 1000 })
-  for (const section of ['general','backup','availability','history','redirects','ignore','duplicates','folder-cleanup','recycle','ai','bookmark-history']) {
+  for (const section of ['general','inbox','backup','availability','history','redirects','ignore','duplicates','folder-cleanup','recycle','ai-settings','ai','bookmark-history']) {
     await page.goto(base + '/src/options/options.html#' + section)
     const panel = page.locator('section#' + section)
     await panel.waitFor({ state: 'visible' })

@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true
+  },
+  "include": [
+    "src/shared/backup-newtab.ts",
+    "src/shared/backup-preferences.ts",
+    "src/shared/inbox-workflow.ts",
+    "src/shared/repositories/custom-icon-repository.ts",
+    "src/newtab/custom-icon-picker.ts",
+    "src/options/sections/feature-settings-view.ts"
+  ]
+}

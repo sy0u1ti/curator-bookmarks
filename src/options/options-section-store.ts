@@ -14,6 +14,7 @@ export function normalizeOptionsSectionKey(key: string): OptionsSectionKey {
 }
 
 function getOptionsSectionKeyFromHash(hash: string): OptionsSectionKey {
+  if (hash === '#general:ai-provider') return 'ai-settings'
   const rawKey = hash.replace(/^#/, '').split(':')[0] || 'general'
   return normalizeOptionsSectionKey(rawKey)
 }

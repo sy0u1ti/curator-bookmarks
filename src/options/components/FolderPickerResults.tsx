@@ -3,6 +3,7 @@ import { Button } from '../../ui/base/Button'
 import { cx } from '../../ui/base/utils'
 import { Icon } from '../../ui/icons/Icon'
 import { normalizeText } from '../../shared/text.js'
+import { getHighlightTerms, HighlightedText } from '../../ui/base/HighlightedText'
 import { handleFolderPickerAction } from '../options-controller'
 import { useFolderPickerResultsState } from './folder-picker-results-store.js'
 import {
@@ -192,10 +193,10 @@ function FolderPickerTreeOption({
         />
         <span className={FOLDER_PICKER_MAIN_CLASS}>
           <span className={FOLDER_PICKER_TITLE_CLASS}>
-            <HighlightedText text={option.title} query={query} />
+            <HighlightedText terms={getHighlightTerms(normalizeText(query))} text={option.title} />
           </span>
           <span className={FOLDER_PICKER_DESCRIPTION_CLASS}>
-            <HighlightedText text={option.path} query={query} />
+            <HighlightedText terms={getHighlightTerms(normalizeText(query))} text={option.path} />
           </span>
         </span>
         {option.badges.length || option.selected ? (
@@ -216,78 +217,3 @@ function FolderPickerTreeOption({
   )
 }
 
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  return (
-    <>
-      {splitHighlightText(text, query).map((part, index) => {
-        const key = `${index}:${part.text}`
-        return part.highlight ? (
-          <mark className="rounded-md bg-ds-text-primary/[0.12] px-[0.02em] text-ds-text-primary shadow-none" key={key}>
-            {part.text}
-          </mark>
-        ) : (
-          <span key={key}>{part.text}</span>
-        )
-      })}
-    </>
-  )
-}
-
-function splitHighlightText(text: string, query: string): Array<{ highlight: boolean; text: string }> {
-  const safeText = String(text || '')
-  const terms = normalizeText(query)
-    .split(/\s+/g).flatMap(term => { const mappedResult = term.trim(); return mappedResult ? [mappedResult] : [] })
-
-  if (!terms.length || !safeText) {
-    return [{ highlight: false, text: safeText }]
-  }
-
-  const lowerText = safeText.toLowerCase()
-  const ranges: Array<[number, number]> = []
-
-  for (const term of terms.sort((left, right) => right.length - left.length)) {
-    let fromIndex = 0
-    while (fromIndex < lowerText.length) {
-      const matchIndex = lowerText.indexOf(term, fromIndex)
-      if (matchIndex === -1) {
-        break
-      }
-      ranges.push([matchIndex, matchIndex + term.length])
-      fromIndex = matchIndex + term.length
-    }
-  }
-
-  if (!ranges.length) {
-    return [{ highlight: false, text: safeText }]
-  }
-
-  ranges.sort((left, right) => left[0] - right[0])
-  const mergedRanges: Array<[number, number]> = []
-
-  for (const currentRange of ranges) {
-    const previousRange = mergedRanges.at(-1)
-    if (!previousRange || currentRange[0] > previousRange[1]) {
-      mergedRanges.push([...currentRange])
-      continue
-    }
-
-    previousRange[1] = Math.max(previousRange[1], currentRange[1])
-  }
-
-  const parts: Array<{ highlight: boolean; text: string }> = []
-  let cursor = 0
-
-  for (const [start, end] of mergedRanges) {
-    if (start > cursor) {
-      parts.push({ highlight: false, text: safeText.slice(cursor, start) })
-    }
-    parts.push({ highlight: true, text: safeText.slice(start, end) })
-    cursor = end
-  }
-
-  if (cursor < safeText.length) {
-    parts.push({ highlight: false, text: safeText.slice(cursor) })
-  }
-
-  return parts.length ? parts : [{ highlight: false, text: safeText }]
-}

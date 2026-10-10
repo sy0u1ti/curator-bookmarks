@@ -8,6 +8,7 @@ import { initSquircleEngine } from '../shared/squircle-engine'
 import { NewtabApp } from './NewtabApp'
 import { startNewTabController } from './newtab-controller'
 import { dispatchNewtabSettingsDrawerToggleRequest } from './newtab-settings-drawer-store'
+import { finishNewtabGlassStartup, guardNewtabGlassStartup } from './newtab-glass-startup'
 
 const root = document.getElementById('newtab-react-root')
 
@@ -16,6 +17,7 @@ if (!root) {
 }
 
 prefetchNewtabStartupData()
+guardNewtabGlassStartup()
 initializeNewtabGlassSettings()
 markNewTabStartupBaseline()
 initSquircleEngine()
@@ -42,6 +44,9 @@ function scheduleNewTabControllerStart(): void {
   window.setTimeout(() => {
     startNewTabController()
     void import('./newtab-glass-runtime').then(({ startNewtabGlassRuntime }) => startNewtabGlassRuntime())
-      .catch(error => console.warn('液态玻璃使用兼容材质。', error))
+      .catch(error => {
+        finishNewtabGlassStartup('fallback')
+        console.warn('液态玻璃使用兼容材质。', error)
+      })
   }, 0)
 }

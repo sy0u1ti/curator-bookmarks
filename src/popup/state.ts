@@ -20,20 +20,13 @@ export interface PopupSmartRecommendation {
   [key: string]: unknown
 }
 
-export interface PopupDeletedBookmark {
-  title: string
-  url: string
-  parentId: string
-  index: number
-  recycleId: string
-}
-
 export interface PopupToast {
   id?: string
   type: string
   message: string
   action?: string
   actionLabel?: string
+  recycleId?: string
   [key: string]: unknown
 }
 
@@ -152,7 +145,6 @@ export interface PopupState {
   smartPermissionRequest: { origins?: string[] } | null
   autoAnalyzeStatus: PopupAutoAnalyzeStatus | null
   autoAnalyzeCollapsed: boolean
-  lastDeletedBookmark: PopupDeletedBookmark | null
   toasts: PopupToast[]
   toastTimers: Map<string, number>
 }
@@ -263,7 +255,6 @@ export const state: PopupState = {
   smartPermissionRequest: null,
   autoAnalyzeStatus: null,
   autoAnalyzeCollapsed: true,
-  lastDeletedBookmark: null,
   toasts: [],
   toastTimers: new Map()
 }

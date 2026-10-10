@@ -49,6 +49,7 @@ import {
   BOOKMARK_FOLDER_CARD_COUNT_CLASS,
   BOOKMARK_FOLDER_CARD_GRID_CLASS,
   BOOKMARK_FOLDER_CARD_ICON_CLASS,
+  BOOKMARK_MENU_TRIGGER_CLASS,
   getBookmarkTileClass,
   getBookmarkTitleClass
 } from './bookmarkTileClasses'
@@ -84,12 +85,13 @@ const SOURCE_NAVIGATION_LINK_CLASS = 'curator-motion-chip source-navigation-link
 const SOURCE_NAVIGATION_TITLE_CLASS = 'source-navigation-title min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-xs font-[650] leading-none'
 const SOURCE_NAVIGATION_COUNT_CLASS = 'source-navigation-count inline-flex shrink-0 items-center justify-center self-center text-xs font-[760] leading-[1.2] tabular-nums text-[var(--ui-accent-text)]'
 const FOLDER_SECTION_ADD_CLASS = 'curator-compact-hit-target curator-motion-chip folder-section-add inline-flex h-[22px] min-h-[22px] w-[22px] min-w-[22px] flex-none items-center justify-center gap-0 rounded-md border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] p-0 leading-none text-[rgba(245,245,247,0.9)] cursor-pointer shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)] hover:border-[var(--newtab-glass-slider-fill)] hover:text-[var(--ui-text-primary)] focus-visible:border-[var(--newtab-glass-slider-fill)] focus-visible:text-[var(--ui-text-primary)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[3px] focus-visible:outline-[rgba(245,245,247,0.26)]'
-const BOOKMARK_GRID_PLACEHOLDER_CLASS = 'bookmark-grid-placeholder grid min-h-[calc(var(--icon-shell-size)+18px)] items-center rounded-[var(--ui-radius-control)] border border-dashed border-[rgba(245,245,247,0.14)] bg-[rgba(10,10,12,0.42)] px-2.5 py-2 text-xs font-[620] text-[rgba(245,245,247,0.9)]'
+const BOOKMARK_GRID_WINDOW_OVERSCAN_ROWS = 3
+const BOOKMARK_GRID_WINDOW_MARGIN_PX = 240
 // 曾用 CSS paint containment（content_visibility 占位 + intrinsic-size 估高）做离屏分组
 // 优化，但它让离屏分组首帧按 320px 假高占位、下一帧塌缩到真实高度，整页竖向重排——
-// 书签卡片被往上拽即"形变"。增量分块渲染（initialVisibleCount/chunkSize/IntersectionObserver）
-// 已是真正的虚拟化，那层 containment 是冗余，移除后首帧即真实高度。transform 过渡也一并
-// 移除，避免分组位置被动画插值；仅保留 opacity 过渡。
+// 书签卡片被往上拽即"形变"。现在由 useBookmarkGridWindow 做行级窗口化（可见行 +
+// overscan 挂载、padding 撑高、远端卸载），那层 containment 是冗余，移除后首帧即真实
+// 高度。transform 过渡也一并移除，避免分组位置被动画插值；仅保留 opacity 过渡。
 const BOOKMARK_FOLDER_SECTION_CLASS = 'bookmark-folder-section group/bookmark-folder-section grid w-full content-start items-start justify-items-stretch gap-1.5 [scroll-margin-top:clamp(28px,5vh,48px)] [transition:opacity_var(--ui-motion-standard)_var(--ui-ease-standard)] focus:bg-transparent focus:[box-shadow:none] focus:[outline:0] focus-visible:bg-transparent focus-visible:[box-shadow:none] focus-visible:[outline:0]'
 const BOOKMARK_FOLDER_SECTION_DRAGGING_CLASS = 'dragging-folder opacity-[0.54]'
 const BOOKMARK_REORDER_STATUS_CLASS = 'bookmark-reorder-status mt-1.5 mb-0 text-xs font-[650] leading-[1.4]'
@@ -380,110 +382,39 @@ function BookmarkFolderGrid({
   showTitles: boolean
   title: string
 }) {
-  const setGridRef = useCallback((element: HTMLElement | null) => {
-    setNewtabBookmarkGridNode(grid.folderId, element)
-  }, [grid.folderId])
   const totalCount = grid.items.length
   const initialVisibleCount = getInitialVisibleCount(grid)
-  const [visibleCountState, setVisibleCountState] = useState(initialVisibleCount)
-  const visibleCount = normalizeVisibleCount(visibleCountState, initialVisibleCount, totalCount)
-  const expandFrameRef = useRef(0)
-  const placeholderRef = useRef<HTMLOutputElement | null>(null)
-  const visibleCountRef = useRef(visibleCount)
-
-  useLayoutEffect(() => {
-    visibleCountRef.current = visibleCount
-  }, [visibleCount])
-
-  const cancelExpandFrame = useCallback(() => {
-    if (!expandFrameRef.current) {
-      return
-    }
-    window.cancelAnimationFrame(expandFrameRef.current)
-    expandFrameRef.current = 0
-  }, [])
-
-  const expandVisibleItems = useCallback(() => {
-    if (expandFrameRef.current || visibleCountRef.current >= grid.items.length) {
-      return
-    }
-
-    const runFrame = () => {
-      expandFrameRef.current = window.requestAnimationFrame(() => {
-        expandFrameRef.current = 0
-        const nextVisibleCount = Math.min(
-          grid.items.length,
-          Math.max(visibleCountRef.current, initialVisibleCount) + grid.chunkSize
-        )
-        visibleCountRef.current = nextVisibleCount
-        setVisibleCountState((current) => {
-          const visibleCount = Math.max(current, nextVisibleCount)
-          if (current === visibleCount) {
-            return current
-          }
-          return visibleCount
-        })
-
-        if (nextVisibleCount < grid.items.length) {
-          runFrame()
-        }
-      })
-    }
-
-    runFrame()
-  }, [grid.chunkSize, grid.items.length, initialVisibleCount])
+  const registerGridNode = useCallback((element: HTMLElement | null) => {
+    setNewtabBookmarkGridNode(grid.folderId, element)
+  }, [grid.folderId])
+  const { gridWindow, setGridElement } = useBookmarkGridWindow({
+    dragging: dragUi.bookmarkDragging || dragUi.folderOrderDragging || dragUi.speedDialDragging,
+    fixedLayout,
+    initialWindowSize: initialVisibleCount,
+    onGridElement: registerGridNode,
+    showTitles,
+    totalSlots: totalCount
+  })
 
   useEffect(() => {
     return () => {
       setNewtabBookmarkGridNode(grid.folderId, null)
-      cancelExpandFrame()
     }
-  }, [cancelExpandFrame, grid.folderId])
-
-  useEffect(() => {
-    if (visibleCount >= grid.items.length) {
-      cancelExpandFrame()
-      return
-    }
-
-    const placeholder = placeholderRef.current
-    if (!placeholder) {
-      return
-    }
-
-    if (typeof IntersectionObserver === 'undefined') {
-      window.queueMicrotask(() => {
-        expandVisibleItems()
-      })
-      return
-    }
-
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        expandVisibleItems()
-      }
-    }, { rootMargin: '360px 0px' })
-    observer.observe(placeholder)
-    return () => {
-      observer.disconnect()
-    }
-  }, [cancelExpandFrame, expandVisibleItems, grid.items.length, visibleCount])
+  }, [grid.folderId])
 
   const visibleItems = useMemo(
-    () => grid.items.slice(0, visibleCount),
-    [grid.items, visibleCount]
+    () => grid.items.slice(gridWindow.start, gridWindow.end),
+    [grid.items, gridWindow.end, gridWindow.start]
   )
-  const remainingCount = Math.max(0, totalCount - visibleCount)
-  const busy = grid.busy || remainingCount > 0
 
   return (
     <nav
       className={getBookmarkGridClass({ fixedLayout })}
       data-bookmark-grid-folder-id={grid.folderId}
-      data-incremental-render={remainingCount > 0 ? 'true' : undefined}
       aria-label={grid.ariaLabel}
-      aria-busy={busy ? 'true' : 'false'}
-      ref={setGridRef}
+      aria-busy={grid.busy ? 'true' : 'false'}
+      ref={setGridElement}
+      style={getGridWindowPadding(gridWindow, totalCount)}
     >
       {visibleItems.map((item) => (
         <BookmarkTile
@@ -495,50 +426,192 @@ function BookmarkFolderGrid({
           key={item.id}
         />
       ))}
-      {remainingCount > 0 ? (
-        <BookmarkGridPlaceholder
-          folderTitle={title}
-          remainingCount={remainingCount}
-          refNode={placeholderRef}
-        />
-      ) : null}
     </nav>
   )
 }
 
+interface BookmarkGridWindow {
+  columns: number
+  end: number
+  pitch: number
+  rowGap: number
+  start: number
+}
+
+/** Row-level windowing for a bookmark grid: only the rows around the viewport
+ * stay mounted, and spacer padding keeps the page height exact so scrolling
+ * never jumps. Replaces the old grow-only incremental renderer, which kept
+ * every tile it had ever shown (thousands of nodes at large catalogs).
+ */
+function useBookmarkGridWindow({
+  dragging,
+  fixedLayout,
+  initialWindowSize,
+  onGridElement,
+  showTitles,
+  totalSlots
+}: {
+  dragging: boolean
+  fixedLayout: boolean
+  initialWindowSize: number
+  onGridElement?: (element: HTMLElement | null) => void
+  showTitles: boolean
+  totalSlots: number
+}): { gridWindow: BookmarkGridWindow; setGridElement: (element: HTMLElement | null) => void } {
+  const elementRef = useRef<HTMLElement | null>(null)
+  const [gridWindow, setGridWindow] = useState<BookmarkGridWindow>(() => ({
+    columns: 1,
+    end: Math.max(0, initialWindowSize),
+    pitch: 0,
+    rowGap: 0,
+    start: 0
+  }))
+  const draggingRef = useRef(dragging)
+
+  useLayoutEffect(() => {
+    draggingRef.current = dragging
+  }, [dragging])
+
+  const setGridElement = useCallback((element: HTMLElement | null) => {
+    elementRef.current = element
+    onGridElement?.(element)
+  }, [onGridElement])
+
+  const measureWindow = useCallback(() => {
+    const element = elementRef.current
+    if (!element || document.hidden) {
+      return
+    }
+    const shell = element.closest<HTMLElement>('.newtab-shell')
+    const styles = getComputedStyle(element)
+    const configuredColumns = Math.max(1, Math.round(Number(styles.getPropertyValue('--icon-columns')) || 1))
+    const rowGap = Number.parseFloat(styles.rowGap) || 0
+    const shellSize = Number.parseFloat(styles.getPropertyValue('--icon-shell-size')) || 48
+    // Tile height is deterministic: the icon shell plus its fixed vertical
+    // padding (titles add two more pixels than the icon-only variant).
+    // offsetHeight ignores the hover lift transform.
+    const firstTile = element.querySelector<HTMLElement>(':scope > .bookmark-tile:not(.bookmark-drag-ghost)')
+    const measuredTileHeight = firstTile?.offsetHeight || 0
+    const pitch = (measuredTileHeight || shellSize + (showTitles ? 18 : 16)) + rowGap
+    // The fluid layout lets CSS auto-fill pick the column count, so the
+    // configured --icon-columns would over-count rows (and the spacer height).
+    const columnGap = Number.parseFloat(styles.getPropertyValue('--icon-column-gap')) || 0
+    const tileWidth = Number.parseFloat(styles.getPropertyValue('--icon-tile-width')) || 0
+    const gridWidth = element.getBoundingClientRect().width
+    const columns = fixedLayout
+      ? configuredColumns
+      : Math.max(1, tileWidth > 0 && gridWidth > 0
+        ? Math.floor((gridWidth + columnGap) / (tileWidth + columnGap))
+        : configuredColumns)
+    const totalRows = Math.max(1, Math.ceil(totalSlots / columns))
+    const viewportHeight = shell?.clientHeight || window.innerHeight || 800
+    let viewTop = 0
+    let gridHeight = totalRows * pitch
+    if (shell) {
+      const shellRect = shell.getBoundingClientRect()
+      const gridRect = element.getBoundingClientRect()
+      viewTop = shell.scrollTop - (gridRect.top - shellRect.top + shell.scrollTop)
+      gridHeight = gridRect.height || gridHeight
+    }
+    const viewBottom = viewTop + viewportHeight
+    // A small margin mounts the next grid just before it scrolls into view
+    // without rendering whole screens of off-screen tiles at startup.
+    const margin = BOOKMARK_GRID_WINDOW_MARGIN_PX
+    let startRow: number
+    let endRow: number
+    if (viewBottom < -margin || viewTop > gridHeight + margin) {
+      // Far outside the viewport: keep the layout height, mount no tiles.
+      startRow = 0
+      endRow = 0
+    } else {
+      startRow = Math.max(0, Math.floor(Math.max(0, viewTop) / pitch) - BOOKMARK_GRID_WINDOW_OVERSCAN_ROWS)
+      endRow = Math.min(
+        totalRows,
+        Math.ceil(Math.max(0, viewBottom) / pitch) + BOOKMARK_GRID_WINDOW_OVERSCAN_ROWS
+      )
+    }
+    let start = Math.max(0, Math.min(startRow * columns, totalSlots))
+    let end = Math.min(totalSlots, Math.max(start, endRow * columns))
+    if (initialWindowSize > 0) {
+      // The preboot snapshot covers the first rendered grid; keep its window
+      // pinned to the top so the handoff always finds matching tiles.
+      start = 0
+      end = Math.max(end, Math.min(totalSlots, initialWindowSize))
+    }
+    setGridWindow((previous) => {
+      const next: BookmarkGridWindow = draggingRef.current
+        // A drag keeps every tile it has mounted: insertion-index math walks
+        // the rendered tiles, so the window may only grow until the drop.
+        ? { columns, end: Math.max(previous.end, end), pitch, rowGap, start: Math.min(previous.start, start) }
+        : { columns, end, pitch, rowGap, start }
+      if (
+        previous.start === next.start &&
+        previous.end === next.end &&
+        previous.pitch === next.pitch &&
+        previous.rowGap === next.rowGap &&
+        previous.columns === next.columns
+      ) {
+        return previous
+      }
+      return next
+    })
+  }, [fixedLayout, initialWindowSize, showTitles, totalSlots])
+
+  useLayoutEffect(() => {
+    const element = elementRef.current
+    if (!element) {
+      return
+    }
+    const shell = element.closest<HTMLElement>('.newtab-shell')
+    let frame = 0
+    const schedule = () => {
+      if (frame) {
+        return
+      }
+      frame = window.requestAnimationFrame(() => {
+        frame = 0
+        measureWindow()
+      })
+    }
+    measureWindow()
+    shell?.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(schedule)
+    observer?.observe(element)
+    if (shell) {
+      observer?.observe(shell)
+    }
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame)
+      }
+      shell?.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      observer?.disconnect()
+    }
+  }, [measureWindow])
+
+  return { gridWindow, setGridElement }
+}
+
+function getGridWindowPadding(gridWindow: BookmarkGridWindow, totalSlots: number): CSSProperties | undefined {
+  const columns = Math.max(1, gridWindow.columns)
+  const pitch = gridWindow.pitch
+  const totalRows = Math.ceil(totalSlots / columns)
+  const startRow = Math.floor(gridWindow.start / columns)
+  const mountedRows = Math.max(0, Math.ceil(gridWindow.end / columns) - startRow)
+  // The last grid row carries no trailing gap, so the exact content height is
+  // one gap short of totalRows * pitch; keeping that exact avoids a few pixels
+  // of page-height drift as grids mount and unmount.
+  const contentHeight = Math.max(0, totalRows * pitch - gridWindow.rowGap)
+  const paddingTop = startRow * pitch
+  const mountedHeight = mountedRows > 0 ? mountedRows * pitch - gridWindow.rowGap : 0
+  const paddingBottom = Math.max(0, contentHeight - paddingTop - mountedHeight)
+  return paddingTop || paddingBottom ? { paddingBottom, paddingTop } : undefined
+}
+
 function getInitialVisibleCount(grid: BookmarkFolderGridViewModel): number {
   return Math.min(grid.items.length, Math.max(0, grid.initialVisibleCount))
-}
-
-function normalizeVisibleCount(
-  visibleCount: number,
-  initialVisibleCount: number,
-  totalCount: number
-): number {
-  return Math.min(totalCount, Math.max(visibleCount, initialVisibleCount))
-}
-
-function BookmarkGridPlaceholder({
-  folderTitle,
-  refNode,
-  remainingCount
-}: {
-  folderTitle: string
-  refNode: React.RefObject<HTMLOutputElement | null>
-  remainingCount: number
-}) {
-  const title = `${folderTitle || '文件夹'}还有 ${remainingCount} 个书签将在滚动到此处时载入`
-  return (
-    <output
-      className={BOOKMARK_GRID_PLACEHOLDER_CLASS}
-      data-pending-bookmarks={String(remainingCount)}
-      aria-live="polite"
-      title={title}
-      ref={refNode}
-    >
-      继续载入 <NumberPop text={remainingCount} /> 个书签
-    </output>
-  )
 }
 
 const BookmarkTile = memo(function BookmarkTile({
@@ -603,6 +676,22 @@ const BookmarkTile = memo(function BookmarkTile({
       />
       <span className={getBookmarkTitleClass()} hidden={!showTitles}>{state.title}</span>
       <span
+        className={BOOKMARK_MENU_TRIGGER_CLASS}
+        data-bookmark-menu-trigger=""
+        aria-hidden="true"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          state.onOpenMenu(event)
+        }}
+        onPointerDown={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+        }}
+      >
+        <Icon name="MoreHorizontal" size={15} aria-hidden="true" />
+      </span>
+      <span
         className={BOOKMARK_DRAG_HANDLE_CLASS}
         data-bookmark-drag-handle=""
         data-drag-pending={pending ? 'true' : undefined}
@@ -634,85 +723,30 @@ function BookmarkNavigationView({
   navigation: BookmarkNavigationViewModel
   showTitles: boolean
 }) {
+  const folderCardCount = navigation.folderCards.length
   const totalBookmarks = navigation.items.length
+  // Cards and tiles share one uniform grid: the window indexes the combined
+  // slot list (folder cards first), so both are windowed together.
+  const totalSlots = folderCardCount + totalBookmarks
   const initialVisibleCount = Math.min(totalBookmarks, Math.max(0, navigation.initialVisibleCount))
-  const [visibleCountState, setVisibleCountState] = useState(initialVisibleCount)
-  const visibleCount = normalizeVisibleCount(visibleCountState, initialVisibleCount, totalBookmarks)
-  const expandFrameRef = useRef(0)
-  const placeholderRef = useRef<HTMLOutputElement | null>(null)
-  const visibleCountRef = useRef(visibleCount)
+  const { gridWindow, setGridElement } = useBookmarkGridWindow({
+    dragging: dragUi.bookmarkDragging || dragUi.folderOrderDragging || dragUi.speedDialDragging,
+    fixedLayout,
+    initialWindowSize: folderCardCount + initialVisibleCount,
+    showTitles,
+    totalSlots
+  })
 
-  useLayoutEffect(() => {
-    visibleCountRef.current = visibleCount
-  }, [visibleCount])
-
-  const cancelExpandFrame = useCallback(() => {
-    if (!expandFrameRef.current) {
-      return
-    }
-    window.cancelAnimationFrame(expandFrameRef.current)
-    expandFrameRef.current = 0
-  }, [])
-
-  const expandVisibleItems = useCallback(() => {
-    if (expandFrameRef.current || visibleCountRef.current >= navigation.items.length) {
-      return
-    }
-    const runFrame = () => {
-      expandFrameRef.current = window.requestAnimationFrame(() => {
-        expandFrameRef.current = 0
-        const nextVisibleCount = Math.min(
-          navigation.items.length,
-          Math.max(visibleCountRef.current, initialVisibleCount) + navigation.chunkSize
-        )
-        visibleCountRef.current = nextVisibleCount
-        setVisibleCountState((current) => Math.max(current, nextVisibleCount))
-        if (nextVisibleCount < navigation.items.length) {
-          runFrame()
-        }
-      })
-    }
-    runFrame()
-  }, [initialVisibleCount, navigation.chunkSize, navigation.items.length])
-
-  useEffect(() => {
-    return () => {
-      cancelExpandFrame()
-    }
-  }, [cancelExpandFrame])
-
-  useEffect(() => {
-    if (visibleCount >= navigation.items.length) {
-      cancelExpandFrame()
-      return
-    }
-    const placeholder = placeholderRef.current
-    if (!placeholder) {
-      return
-    }
-    if (typeof IntersectionObserver === 'undefined') {
-      window.queueMicrotask(() => {
-        expandVisibleItems()
-      })
-      return
-    }
-    const observer = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
-        expandVisibleItems()
-      }
-    }, { rootMargin: '360px 0px' })
-    observer.observe(placeholder)
-    return () => {
-      observer.disconnect()
-    }
-  }, [cancelExpandFrame, expandVisibleItems, navigation.items.length, visibleCount])
-
-  const visibleItems = useMemo(
-    () => navigation.items.slice(0, visibleCount),
-    [navigation.items, visibleCount]
+  const visibleFolderCards = useMemo(
+    () => navigation.folderCards.slice(gridWindow.start, Math.min(gridWindow.end, folderCardCount)),
+    [folderCardCount, gridWindow.end, gridWindow.start, navigation.folderCards]
   )
-  const remainingCount = Math.max(0, totalBookmarks - visibleCount)
-  const isEmpty = navigation.folderCards.length === 0 && totalBookmarks === 0
+  const visibleItems = useMemo(() => {
+    const start = Math.max(0, gridWindow.start - folderCardCount)
+    const end = Math.max(0, gridWindow.end - folderCardCount)
+    return navigation.items.slice(start, end)
+  }, [folderCardCount, gridWindow.end, gridWindow.start, navigation.items])
+  const isEmpty = folderCardCount === 0 && totalBookmarks === 0
 
   return (
     <div className={BOOKMARK_NAVIGATION_CLASS}>
@@ -733,10 +767,10 @@ function BookmarkNavigationView({
         <nav
           className={getBookmarkGridClass({ fixedLayout })}
           aria-label={navigation.ariaLabel}
-          aria-busy={remainingCount > 0 ? 'true' : 'false'}
-          data-incremental-render={remainingCount > 0 ? 'true' : undefined}
+          ref={setGridElement}
+          style={getGridWindowPadding(gridWindow, totalSlots)}
         >
-          {navigation.folderCards.map((folder) => (
+          {visibleFolderCards.map((folder) => (
             <BookmarkFolderCard folder={folder} showTitles={showTitles} key={`folder-${folder.folderId}`} />
           ))}
           {visibleItems.map((item) => (
@@ -749,13 +783,6 @@ function BookmarkNavigationView({
               key={item.id}
             />
           ))}
-          {remainingCount > 0 ? (
-            <BookmarkGridPlaceholder
-              folderTitle={navigation.ariaLabel}
-              remainingCount={remainingCount}
-              refNode={placeholderRef}
-            />
-          ) : null}
         </nav>
       )}
     </div>

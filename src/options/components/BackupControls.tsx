@@ -8,6 +8,7 @@ import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { AutoBackupPoints } from './AutoBackupPoints.js'
 import { BackupBookmarkPreview } from './BackupBookmarkPreview.js'
+import { StorageManagement } from './StorageManagement.js'
 
 const BACKUP_CARD_CLASS =
   'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
@@ -126,6 +127,9 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
             <p className={BACKUP_COPY_CLASS}>
               导出书签、标签、规则和设置；不包含 API Key、密码或 Cookie。
             </p>
+            <p className={BACKUP_COPY_CLASS}>
+              包含自定义书签图标。正文索引内容、本地壁纸图片和视频、已下载的 MHTML 存档不在备份内；迁移时请另行保留这些文件，正文索引需重新采集。
+            </p>
           </div>
           <div className={BACKUP_ROW_ACTIONS_CLASS}>
             <Button
@@ -191,6 +195,7 @@ function BackupControlsContent({ state }: { state: BackupControlsState }) {
       </div>
 
       <AutoBackupPoints busy={state.backup.busy} />
+      <StorageManagement />
 
       <div className={BACKUP_CARD_CLASS} id="backup-restore-preview">
         <div className={BACKUP_ROW_CLASS}>

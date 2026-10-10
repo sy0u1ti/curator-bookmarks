@@ -4,6 +4,7 @@ import { IDBFactory } from 'fake-indexeddb'
 import {
   BACKUP_RESTORE_ROLLED_BACK_CODE,
   buildBackupRestorePreview,
+  createCuratorBackupFile,
   executeJournaledCuratorBackupRestore,
   listAutoBackupPoints,
   readAutoBackupPoint,
@@ -21,6 +22,7 @@ import {
   type BookmarkTagRecord
 } from './bookmark-tags.js'
 import { STORAGE_KEYS } from './constants.js'
+import { resolveCustomIcons } from './repositories/custom-icon-repository.js'
 
 const AUTO_BACKUP_DB_NAME = 'curatorBookmarkHeavyUserData'
 const AUTO_BACKUP_DB_VERSION = 2
@@ -1041,6 +1043,101 @@ test('bookmarksOnly rolls back its restore folder and records a recoverable fail
   assert.deepEqual(removedBookmarkTrees, ['restore-root'])
   assert.equal(await getAutoBackupRecord(ACTIVE_RESTORE_JOURNAL_KEY), null)
   assert.equal((await getAutoBackupRecord(`${RESTORE_RECEIPT_PREFIX}op-bookmarks-failed`))?.status, 'rolled-back')
+})
+
+test('newTabOnly rebinds matching bookmarks and drops foreign profile ID collisions', async () => {
+  bookmarkNodes.set('backup-bookmark', { id: 'backup-bookmark', parentId: '1', title: 'Unrelated', url: 'https://unrelated.example/', syncing: false })
+  bookmarkNodes.set('matching-bookmark', { id: 'matching-bookmark', parentId: '1', title: 'Missing bookmark', url: 'https://missing.example/', syncing: false })
+  const backup = buildBackup()
+  backup.storage.newTab = {
+    customIcons: { 'backup-bookmark': 'data:image/png;base64,aW1hZ2U=' },
+    workspaceSettings: { activeWorkspaceId: 'work', workspaces: [{ id: 'work', pinnedIds: ['backup-bookmark', 'absent'] }] },
+    folderSettings: { selectedFolderIds: ['backup-bar', 'absent'] },
+    moduleSettings: { speedDial: false },
+    activity: { records: { 'backup-bookmark': { bookmarkId: 'backup-bookmark', openCount: 8 } }, pinnedIds: ['backup-bookmark'] }
+  }
+  await restoreCuratorBackup(backup, 'newTabOnly')
+  assert.deepEqual(await resolveCustomIcons(storageState[STORAGE_KEYS.newTabCustomIcons]), { 'matching-bookmark': 'data:image/png;base64,aW1hZ2U=' })
+  assert.deepEqual(storageState[STORAGE_KEYS.newTabWorkspaceSettings], { activeWorkspaceId: 'work', workspaces: [{ id: 'work', pinnedIds: ['matching-bookmark'] }] })
+  assert.deepEqual(storageState[STORAGE_KEYS.newTabFolderSettings], { selectedFolderIds: ['1'] })
+  assert.deepEqual(storageState[STORAGE_KEYS.newTabActivity], { records: { 'matching-bookmark': { bookmarkId: 'matching-bookmark', openCount: 8 } }, pinnedIds: ['matching-bookmark'] })
+  assert.deepEqual(storageState[STORAGE_KEYS.newTabModuleSettings], { speedDial: false })
+  assert.equal(createdBookmarkPayloads.length, 0)
+})
+
+test('failed full restore rolls back newly covered workspace, modules and icon references', async () => {
+  const backup = buildBackup()
+  storageState[STORAGE_KEYS.newTabWorkspaceSettings] = { workspaces: [{ id: 'original', pinnedIds: [] }] }
+  const previous = structuredClone(storageState)
+  backup.storage.newTab = {
+    customIcons: { 'backup-bookmark': 'data:image/png;base64,aW1hZ2U=' },
+    workspaceSettings: { workspaces: [{ id: 'imported', pinnedIds: ['backup-bookmark'] }] },
+    moduleSettings: { speedDial: false },
+    featuredBackgroundFavorites: ['favorite']
+  }
+  let sawNewTabWrite = false
+  beforeStorageSet = payload => {
+    if (payload[STORAGE_KEYS.newTabCustomIcons]) sawNewTabWrite = true
+    if (sawNewTabWrite && payload[STORAGE_KEYS.recycleBin]) {
+      beforeStorageSet = null
+      throw new Error('fail after new tab commit')
+    }
+  }
+  await assert.rejects(restoreCuratorBackup(backup, 'safeFull'), /fail after new tab commit/)
+  assert.equal(sawNewTabWrite, true)
+  assert.deepEqual(storageState, previous)
+  assert.deepEqual(removedBookmarkTrees, ['restore-root'])
+})
+
+test('backup exports all feature preferences and omits only unreadable icon attachments', async () => {
+  storageState[STORAGE_KEYS.inboxSettings] = { autoMoveToRecommendedFolder: false }
+  storageState[STORAGE_KEYS.contentSnapshotSettings] = { fullTextSearchEnabled: false }
+  storageState[STORAGE_KEYS.availabilitySettings] = { concurrency: 3 }
+  storageState[STORAGE_KEYS.newTabCustomIcons] = { missing: 'curator-icon:v1:absent', valid: 'data:image/png;base64,aW1hZ2U=' }
+  storageState[STORAGE_KEYS.recycleBin] = [{ recycleId: 'deleted', url: 'https://deleted.example/', customIcon: 'curator-icon:v1:absent' }]
+  const backup = await createCuratorBackupFile()
+  assert.deepEqual(backup.storage.preferences, {
+    inboxSettings: { autoMoveToRecommendedFolder: false }, contentSnapshotSettings: { fullTextSearchEnabled: false }, availabilitySettings: { concurrency: 3 }
+  })
+  assert.deepEqual(backup.storage.newTab.customIcons, { valid: 'data:image/png;base64,aW1hZ2U=' })
+  assert.deepEqual(backup.storage.recycleBin, [{ recycleId: 'deleted', url: 'https://deleted.example/' }])
+  assert.equal(backup.notes?.filter(note => note.includes('图标无法读取')).length, 2)
+})
+
+test('old backups preserve omitted preferences; full restore journals newly included preferences', async () => {
+  storageState[STORAGE_KEYS.inboxSettings] = { enabled: false }
+  await restoreCuratorBackup(buildBackup(), 'safeFull')
+  assert.deepEqual(storageState[STORAGE_KEYS.inboxSettings], { enabled: false })
+  const backup = buildBackup()
+  backup.storage.preferences = { inboxSettings: { enabled: true }, contentSnapshotSettings: { fullTextSearchEnabled: false } }
+  let journalCaptured = false
+  beforeStorageSet = async payload => {
+    if (!payload[STORAGE_KEYS.inboxSettings]) return
+    const journal = await getAutoBackupRecord(ACTIVE_RESTORE_JOURNAL_KEY)
+    assert.ok(journal?.restoreStorageKeys.includes(STORAGE_KEYS.inboxSettings))
+    assert.ok(journal?.restoreStorageKeys.includes(STORAGE_KEYS.contentSnapshotSettings))
+    assert.deepEqual(journal?.previousStorage[STORAGE_KEYS.inboxSettings], { enabled: false })
+    journalCaptured = true
+  }
+  await executeJournaledCuratorBackupRestore(backup, 'safeFull', { operationId: 'preferences-journal' })
+  assert.equal(journalCaptured, true)
+  assert.deepEqual(storageState[STORAGE_KEYS.inboxSettings], { enabled: true })
+  assert.deepEqual(storageState[STORAGE_KEYS.contentSnapshotSettings], { fullTextSearchEnabled: false })
+})
+
+test('recovery collections map identities instead of colliding profile-local IDs', async () => {
+  bookmarkNodes.set('backup-bookmark', { id: 'backup-bookmark', parentId: '1', title: 'Unrelated', url: 'https://unrelated.example/', syncing: false })
+  const backup = buildBackup()
+  backup.storage.ignoreRules.bookmarks = [{ bookmarkId: 'backup-bookmark', url: 'https://missing.example/', createdAt: 1 }]
+  backup.storage.ignoreRules.folders = [{ folderId: 'backup-bar', path: 'Bookmarks bar', createdAt: 1 }, { folderId: 'unknown', path: 'Missing folder', createdAt: 1 }]
+  backup.storage.recycleBin = [{ recycleId: 'deleted', bookmarkId: 'deleted-id', parentId: 'backup-bar', path: 'Bookmarks bar', url: 'https://deleted.example/' }]
+  await restoreCuratorBackup(backup, 'safeFull')
+  const restored = [...bookmarkNodes.values()].find(node => node.url === 'https://missing.example/')!
+  const rules = storageState[STORAGE_KEYS.ignoreRules] as { bookmarks: { bookmarkId: string }[]; folders: { folderId: string }[] }
+  assert.equal(rules.bookmarks[0].bookmarkId, restored.id)
+  assert.notEqual(rules.bookmarks[0].bookmarkId, 'backup-bookmark')
+  assert.ok(rules.folders.length > 0 && rules.folders.every(rule => rule.folderId !== 'unknown'))
+  assert.equal((storageState[STORAGE_KEYS.recycleBin] as { parentId: string }[])[0].parentId, '1')
 })
 
 function buildBackup({

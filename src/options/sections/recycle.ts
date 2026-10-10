@@ -1,6 +1,5 @@
 import {
   BOOKMARKS_BAR_ID,
-  RECYCLE_BIN_LIMIT
 } from '../../shared/constants.js'
 import {
   createBookmark,
@@ -8,6 +7,7 @@ import {
   getBookmarkTree
 } from '../../shared/bookmarks-api.js'
 import { buildBookmarkCatalogSnapshot } from '../../shared/bookmark-catalog.js'
+import { resolveRecoveryFolder } from '../../shared/recovery-references.js'
 import {
   deleteBookmarkToRecycle,
   loadRecycleBinEntries,
@@ -38,6 +38,8 @@ export function normalizeRecycleBin(rawEntries) {
         parentId: String(entry?.parentId || '').trim(),
         index: Number.isFinite(Number(entry?.index)) ? Number(entry.index) : 0,
         path: String(entry?.path || '').trim(),
+        ...(entry?.tagRecord ? { tagRecord: entry.tagRecord } : {}),
+        ...(typeof entry?.customIcon === 'string' ? { customIcon: entry.customIcon } : {}),
         source: String(entry?.source || '删除').trim() || '删除',
         deletedAt: Number(entry?.deletedAt) || Date.now()
       }
@@ -208,7 +210,6 @@ export async function restoreSelectedRecycleEntries(callbacks) {
   }
 
   await restoreRecycleEntriesByIds([...managerState.selectedRecycleIds], callbacks)
-  clearRecycleSelection(callbacks)
 }
 
 export async function clearSelectedRecycleEntries(callbacks) {
@@ -247,17 +248,23 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
   const committedRecycleIds = new Set<string>()
 
   try {
-    const currentFolderIds = await loadCurrentFolderIds()
     await runRecycleEntriesSequentially(targetEntries, async (entry) => {
-      const fallbackParentId = currentFolderIds.has(String(entry.parentId))
-        ? entry.parentId
-        : BOOKMARKS_BAR_ID
+      const currentTree = await getBookmarkTree()
+      const currentFolders = buildBookmarkCatalogSnapshot({ rootNode: currentTree[0] }).extracted.folderMap
+      const fallbackParentId = resolveRecoveryFolder(String(entry.parentId || ''), String(entry.path || ''), currentFolders) || BOOKMARKS_BAR_ID
+      const nodes = [...currentTree]
+      let childCount = 0
+      while (nodes.length) {
+        const node = nodes.pop()!
+        if (node.id === fallbackParentId) { childCount = node.children?.length || 0; break }
+        nodes.push(...node.children || [])
+      }
 
       await restoreBookmarkFromRecycleEntry(
         String(entry.recycleId),
         () => createBookmark({
           parentId: fallbackParentId,
-          index: Number.isFinite(entry.index) ? entry.index : undefined,
+          index: Number.isFinite(entry.index) ? Math.max(0, Math.min(entry.index, childCount)) : undefined,
           title: entry.title,
           url: entry.url
         })
@@ -280,7 +287,7 @@ async function restoreRecycleEntriesByIds(recycleIds, callbacks) {
     try {
       await Promise.all([
         refreshRecycleBinState(),
-        callbacks.hydrateAvailabilityCatalog({ preserveResults: true })
+        callbacks.hydrateAvailabilityCatalog({ preserveResults: true, throwOnError: true })
       ])
     } catch (error) {
       reconciliationWarnings.push(
@@ -333,17 +340,11 @@ function runRecycleEntriesSequentially<T>(items: T[], task: (item: T, index: num
   }, Promise.resolve())
 }
 
-async function loadCurrentFolderIds(): Promise<Set<string>> {
-  const tree = await getBookmarkTree()
-  const folders = buildBookmarkCatalogSnapshot({ rootNode: tree[0] }).extracted.folderMap
-  return new Set([...folders.keys(), BOOKMARKS_BAR_ID])
-}
-
 export async function clearRecycleBin(callbacks) {
   if (!managerState.recycleBin.length || isInteractionLocked()) {
     return
   }
-
+  const recycleIds = managerState.recycleBin.map((entry) => String(entry.recycleId))
   const confirmed = callbacks.confirm
     ? await callbacks.confirm({
         title: `清空 ${managerState.recycleBin.length} 条回收站记录？`,
@@ -364,7 +365,6 @@ export async function clearRecycleBin(callbacks) {
   if (!releaseMutationLock) {
     return
   }
-  const recycleIds = managerState.recycleBin.map((entry) => String(entry.recycleId))
   if (!recycleIds.length) {
     releaseMutationLock()
     return
@@ -375,11 +375,12 @@ export async function clearRecycleBin(callbacks) {
 
   try {
     await removeRecycleEntries(recycleIds)
-    managerState.recycleBin = []
-    managerState.selectedRecycleIds.clear()
+    const removedIds = new Set(recycleIds)
+    managerState.recycleBin = managerState.recycleBin.filter(entry => !removedIds.has(String(entry.recycleId)))
+    recycleIds.forEach(id => managerState.selectedRecycleIds.delete(id))
     try {
       await refreshRecycleBinState()
-      availabilityState.lastError = '已清空回收站记录。'
+      availabilityState.lastError = managerState.recycleBin.length ? '已清除确认时的回收站记录，新加入的记录已保留。' : '已清空回收站记录。'
     } catch (error) {
       const detail = error instanceof Error ? `：${error.message}` : ''
       availabilityState.lastError = `已清空回收站记录，但刷新本地状态失败${detail}。`
@@ -518,7 +519,6 @@ export async function deleteBookmarksToRecycle(bookmarkCandidates: unknown[], so
 
 export async function refreshRecycleBinState(): Promise<void> {
   managerState.recycleBin = normalizeRecycleBin(await loadRecycleBinEntries())
-  managerState.recycleBin = managerState.recycleBin.slice(0, RECYCLE_BIN_LIMIT)
 }
 
 function inferDeleteBackupKind(source: string): DangerousOperationKind {

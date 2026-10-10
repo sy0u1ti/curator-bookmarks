@@ -224,9 +224,9 @@ function applyStartupMask(
   root.dataset.instantWallpaperMask = enabled ? 'true' : 'false'
   if (enabled) {
     const maskStyle = normalizeBackgroundMaskStyle(maskSource?.maskStyle)
-    root.style.setProperty('--instant-wallpaper-mask-color', getBackgroundMaskBaseColor(maskStyle))
+    root.style.setProperty('--instant-wallpaper-mask-color', getBackgroundMaskBaseColor(maskStyle, maskSource?.maskOverlay))
     root.style.setProperty('--instant-wallpaper-mask-filter', getBackgroundMaskBackdropFilter(maskStyle, maskSource?.maskBlur))
-    root.style.setProperty('--instant-wallpaper-mask-image', getBackgroundMaskOverlayGradient(maskSource?.maskOverlay))
+    root.style.setProperty('--instant-wallpaper-mask-image', getBackgroundMaskOverlayGradient(maskSource?.maskOverlay, maskStyle))
   } else {
     root.style.removeProperty('--instant-wallpaper-mask-color')
     root.style.removeProperty('--instant-wallpaper-mask-filter')
@@ -367,6 +367,8 @@ function getMatchingImageDataUrl(
   return readDataUrl(dataUrlRef)
 }
 
+// The boot script ships standalone (no module graph), so this tiny helper is
+// duplicated in newtab-controller.ts by design; keep both in sync.
 function escapeCssUrl(value: string): string {
   return value.replace(/["\\]/g, '\\$&')
 }

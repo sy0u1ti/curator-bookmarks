@@ -17,12 +17,20 @@
       #popup-preboot-shell,
       #popup-root {
         width: 800px;
-        min-width: 800px;
-        max-width: 800px;
         height: 600px;
-        min-height: 600px;
-        max-height: 600px;
         overflow: hidden;
+      }
+
+      /* Browser zoom shrinks the CSS viewport below the popup's design size;
+         allow the document to scroll so the clipped half stays reachable.
+         Only `overflow` may depend on the viewport here — sizing it from a
+         media query feeds back into Chrome's popup sizing and collapses the
+         window to the preboot logo. */
+      @media (max-width: 799px), (max-height: 599px) {
+        html,
+        body {
+          overflow: auto;
+        }
       }
 
       html,

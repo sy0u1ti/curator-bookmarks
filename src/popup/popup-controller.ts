@@ -27,13 +27,12 @@ import {
 import { isExternallyCheckableUrl } from '../shared/sensitive-url.js'
 import { normalizeBookmarkSaveUrl } from '../shared/bookmark-save-url.js'
 import {
-  createBookmark,
   createTab,
   getBookmarkTree,
   moveBookmark,
   updateBookmark
 } from '../shared/bookmarks-api.js'
-import { getLocalStorage, removeLocalStorage, setLocalStorage } from '../shared/storage.js'
+import { getLocalStorage, removeLocalStorage, setLocalStorage, withLocalStorageTransaction } from '../shared/storage.js'
 import { requestBookmarkSave } from '../shared/messages.js'
 import { loadBookmarkTagIndex, normalizeBookmarkTags } from '../shared/bookmark-tags.js'
 import {
@@ -159,6 +158,7 @@ import {
   getSmartProgressTarget,
   normalizeSmartLoadingStep
 } from './smart-loading-progress.js'
+import { cleanSmartText, cleanSmartTitle, getLastPathSegment, normalizeSmartConfidence, normalizeSmartError, normalizeSmartFolderPath, normalizeSmartTextList } from './smart-text.js'
 const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
@@ -188,8 +188,15 @@ let smartProgressBase = 0
 let smartProgressBaseAtMs = 0
 let smartProgressFinishFrame: number | null = null
 let popupRefreshRunId = 0
+let popupSessionId = 0
+let popupPreferencesVersion = 0
+let popupAiConfigVersion = 0
+let popupPinnedVersion = 0
+let popupAutoAnalyzeStatusVersion = 0
+let smartSaveVersion = 0
 let currentTabHydrationPromise: Promise<void> | null = null
 let currentTabHydrationRunId = 0
+let popupMetadataRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let popupBookmarkCatalog: BookmarkCatalogSnapshot | null = null
 let popupFolderBookmarkCounts = new Map<string, number>()
 let unregisterPopupActionHandlers: (() => void) | null = null
@@ -276,6 +283,7 @@ export function startPopupController(): () => void {
     return cleanupPopupController
   }
   popupControllerStarted = true
+  const session = ++popupSessionId
 
   perfMark('popup.domContentLoaded')
   bindEvents()
@@ -291,15 +299,18 @@ export function startPopupController(): () => void {
   const initialNaturalSearchEnabled = state.naturalSearchEnabled
   const initialNaturalSearchAiConfigured = state.naturalSearchAiConfigured
   void hydratePopupPreferences().finally(() => {
+    if (session !== popupSessionId || !popupControllerStarted) return
     if (
       state.naturalSearchEnabled !== initialNaturalSearchEnabled ||
       state.naturalSearchAiConfigured !== initialNaturalSearchAiConfigured
     ) render()
   })
   void refreshData({ initial: true, preserveSearch: true }).finally(() => {
+    if (session !== popupSessionId || !popupControllerStarted) return
     perfMark('popup.interactive')
     perfMeasure('popup.totalInteractive', 'popup.domContentLoaded', 'popup.interactive')
     void consumePopupCommandIntent().then((handled) => {
+      if (session !== popupSessionId || !popupControllerStarted) return
       if (!handled && !isSmartOverlayActive()) {
         focusSearchInput()
       }
@@ -343,15 +354,18 @@ function adoptInitialPopupPrebootSearchQuery(): void {
 }
 
 async function hydratePopupPreferences() {
+  const version = ++popupPreferencesVersion
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.popupPreferences])
+    if (version !== popupPreferencesVersion) return
     const preferences = normalizePopupPreferences(stored[STORAGE_KEYS.popupPreferences])
     state.naturalSearchEnabled = preferences.naturalSearchEnabled
   } catch {
-    state.naturalSearchEnabled = DEFAULT_POPUP_PREFERENCES.naturalSearchEnabled
+    return
   }
   const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
-  if (!naturalSearchAiConfigured && state.naturalSearchEnabled) {
+  if (version !== popupPreferencesVersion) return
+  if (state.naturalSearchAiConfigChecked && !naturalSearchAiConfigured && state.naturalSearchEnabled) {
     state.naturalSearchEnabled = false
     void savePopupPreferences().catch(() => {})
   }
@@ -372,24 +386,27 @@ async function savePopupPreferences() {
   })
 }
 async function refreshNaturalSearchAiConfiguredState(): Promise<boolean> {
+  const version = ++popupAiConfigVersion
   try {
     // An unconfigured popup can answer this without loading the AI runtime
     // and provider editor while its first interactive frame is being painted.
     const stored = await getLocalStorage([STORAGE_KEYS.aiProviderSettings])
+    if (version !== popupAiConfigVersion) return state.naturalSearchAiConfigured
     if (!stored[STORAGE_KEYS.aiProviderSettings]) {
       state.naturalSearchAiConfigured = false
+      state.naturalSearchAiConfigChecked = true
       return false
     }
     const naturalSearchAi = await loadNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (version !== popupAiConfigVersion) return state.naturalSearchAiConfigured
     const naturalSearchAiConfigured = naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)
     state.naturalSearchAiConfigured = naturalSearchAiConfigured
+    state.naturalSearchAiConfigChecked = true
     return naturalSearchAiConfigured
   } catch {
-    state.naturalSearchAiConfigured = false
-    return false
-  } finally {
-    state.naturalSearchAiConfigChecked = true
+    if (version === popupAiConfigVersion) state.naturalSearchAiConfigChecked = false
+    return state.naturalSearchAiConfigured
   }
 }
 async function openSettingsPage(target: Event | 'general' | 'ai-provider' = 'general') {
@@ -420,47 +437,61 @@ async function openBookmarkHistoryPage() {
   }
 }
 async function hydrateAutoAnalyzeStatus() {
+  const version = ++popupAutoAnalyzeStatusVersion
   try {
     const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+    if (version !== popupAutoAnalyzeStatusVersion || !popupControllerStarted) return
     const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
     state.autoAnalyzeStatus = currentStatus
     renderAutoAnalyzeStatus()
     if (stored[STORAGE_KEYS.autoAnalyzeStatus] && !currentStatus) {
-      await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
+      await clearExpiredPopupAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
     }
     await acknowledgeAutoAnalyzeBadge(currentStatus)
-    await removeLocalStorage(STORAGE_KEYS.pendingAutoAnalyzeNotice)
   } catch (error) {
   }
 }
 async function dismissAutoAnalyzeStatus() {
-  state.autoAnalyzeStatus = null
-  renderAutoAnalyzeStatus()
-  await removeLocalStorage([
-    STORAGE_KEYS.autoAnalyzeStatus,
-    STORAGE_KEYS.pendingAutoAnalyzeNotice
-  ])
-  await clearActionBadge()
+  const status = state.autoAnalyzeStatus
+  popupAutoAnalyzeStatusVersion++
+  try {
+    await withLocalStorageTransaction(async transaction => {
+      const stored = await getLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
+      const current = stored[STORAGE_KEYS.autoAnalyzeStatus] as typeof status
+      if (!status || !current || current.bookmarkId !== status.bookmarkId || current.updatedAt !== status.updatedAt || current.status !== status.status) return
+      await removeLocalStorage([STORAGE_KEYS.autoAnalyzeStatus, STORAGE_KEYS.pendingAutoAnalyzeNotice], { transaction })
+      await clearActionBadge()
+    })
+  } catch (error) {
+    showToast({ type: 'error', message: error instanceof Error ? error.message : '提示关闭失败，请重试。' })
+  }
 }
 async function acknowledgeAutoAnalyzeBadge(status = state.autoAnalyzeStatus) {
   if (!status) {
     return
   }
-  await clearActionBadge()
   try {
-    const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
-    const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
-    if (!currentStatus || currentStatus.bookmarkId !== status.bookmarkId) {
-      return
-    }
-    await setLocalStorage({
-      [STORAGE_KEYS.autoAnalyzeStatus]: {
-        ...currentStatus,
-        badgeVisible: false
+    await withLocalStorageTransaction(async transaction => {
+      const stored = await getLocalStorage([STORAGE_KEYS.autoAnalyzeStatus])
+      const currentStatus = normalizeAutoAnalyzeStatus(stored[STORAGE_KEYS.autoAnalyzeStatus])
+      if (!currentStatus || currentStatus.bookmarkId !== status.bookmarkId || currentStatus.updatedAt !== status.updatedAt || currentStatus.status !== status.status) return
+      if (currentStatus.badgeVisible) {
+        await setLocalStorage({
+          [STORAGE_KEYS.autoAnalyzeStatus]: { ...(stored[STORAGE_KEYS.autoAnalyzeStatus] as Record<string, unknown>), badgeVisible: false }
+        }, { transaction })
       }
+      await clearActionBadge()
     })
   } catch {
   }
+}
+async function clearExpiredPopupAutoAnalyzeStatus(expected: unknown): Promise<void> {
+  await withLocalStorageTransaction(async transaction => {
+    const stored = await getLocalStorage(STORAGE_KEYS.autoAnalyzeStatus)
+    if (JSON.stringify(stored[STORAGE_KEYS.autoAnalyzeStatus]) !== JSON.stringify(expected)) return
+    await removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus, { transaction })
+    await clearActionBadge()
+  }).catch(() => {})
 }
 function clearActionBadge(): Promise<void> {
   return new Promise<void>((resolve) => {
@@ -480,7 +511,35 @@ function handlePopupStorageChanged(
   if (areaName !== 'local') {
     return
   }
+  if ([STORAGE_KEYS.bookmarkTagIndex, STORAGE_KEYS.contentSnapshotIndex, STORAGE_KEYS.contentSnapshotSettings]
+    .some(key => changes[key])) {
+    clearTimeout(popupMetadataRefreshTimer)
+    popupMetadataRefreshTimer = setTimeout(() => {
+      popupMetadataRefreshTimer = undefined
+      refreshPopupBookmarks()
+    }, 100)
+  }
+  if (changes[STORAGE_KEYS.newTabWorkspaceSettings]) {
+    popupPinnedVersion += 1
+    const settings = normalizeNewTabWorkspaceSettings(changes[STORAGE_KEYS.newTabWorkspaceSettings].newValue, {
+      validBookmarkIds: state.bookmarkMap.keys()
+    })
+    state.newTabPinnedIds = new Set(getActiveNewTabWorkspace(settings).pinnedIds)
+    renderSmartClassifier()
+  }
+  if (changes[STORAGE_KEYS.popupPreferences]) {
+    const next = normalizePopupPreferences(changes[STORAGE_KEYS.popupPreferences].newValue)
+    if (next.naturalSearchEnabled !== state.naturalSearchEnabled) {
+      popupPreferencesVersion += 1
+      state.naturalSearchEnabled = next.naturalSearchEnabled
+      abortNaturalSearchRequest()
+      runSearch()
+      render()
+    }
+  }
   if (changes[STORAGE_KEYS.aiProviderSettings]) {
+    popupAiConfigVersion += 1
+    popupPreferencesVersion += 1
     // Invalidate the logical search run as well as the fetch.  Some paths can
     // still be awaiting storage/module work (or a cached plan) when settings
     // change, so aborting the current fetch alone is not enough to stop an old
@@ -501,6 +560,7 @@ function handlePopupStorageChanged(
   }
   const statusChange = changes[STORAGE_KEYS.autoAnalyzeStatus]
   if (statusChange) {
+    popupAutoAnalyzeStatusVersion++
     const nextStatus = normalizeAutoAnalyzeStatus(statusChange.newValue)
     state.autoAnalyzeStatus = nextStatus
     renderAutoAnalyzeStatus()
@@ -508,9 +568,7 @@ function handlePopupStorageChanged(
       void acknowledgeAutoAnalyzeBadge(nextStatus)
     }
     if (statusChange.newValue && !nextStatus) {
-      void removeLocalStorage(STORAGE_KEYS.autoAnalyzeStatus).finally(() => {
-        void clearActionBadge()
-      })
+      void clearExpiredPopupAutoAnalyzeStatus(statusChange.newValue)
     }
   }
   const popupIntentChange = changes[STORAGE_KEYS.popupCommandIntent]
@@ -659,30 +717,24 @@ function getAutoAnalyzeStatusTtl(status) {
     : AUTO_ANALYZE_STATUS_FINAL_EXPIRE_MS
 }
 async function consumePopupCommandIntent(rawIntent = undefined): Promise<boolean> {
-  let intentSource = rawIntent
-  if (typeof rawIntent === 'undefined') {
-    const stored = await getLocalStorage([STORAGE_KEYS.popupCommandIntent])
-    intentSource = stored[STORAGE_KEYS.popupCommandIntent]
-  }
-  const intent = normalizePopupCommandIntent(intentSource)
-  if (!intent) {
-    if (intentSource) {
-      await removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
-    }
-    return false
-  }
-  const clearCommandIntent = removeLocalStorage(STORAGE_KEYS.popupCommandIntent).catch(() => {})
+  const session = popupSessionId
+  const intent = await withLocalStorageTransaction(async transaction => {
+    const stored = await getLocalStorage(STORAGE_KEYS.popupCommandIntent)
+    const source = stored[STORAGE_KEYS.popupCommandIntent]
+    if (session !== popupSessionId || !popupControllerStarted || !source) return null
+    if (rawIntent !== undefined && JSON.stringify(source) !== JSON.stringify(rawIntent)) return null
+    await removeLocalStorage(STORAGE_KEYS.popupCommandIntent, { transaction })
+    return normalizePopupCommandIntent(source)
+  }).catch(() => null)
+  if (!intent || session !== popupSessionId || !popupControllerStarted) return false
   if (intent.action === 'feedback') {
-    await clearCommandIntent
     showCommandFeedbackIntent(intent)
     return false
   }
   if (intent.action === 'smart-classifier') {
-    await clearCommandIntent
     await runSmartClassifierFromCommand(intent)
     return true
   }
-  await clearCommandIntent
   focusSearchFromCommand(intent)
   return true
 }
@@ -880,25 +932,19 @@ function syncPopupExpandedFolderState(
   if (state.selectedFolderFilterId && !folderIds.has(state.selectedFolderFilterId)) {
     state.selectedFolderFilterId = null
   }
-  if (initial || state.expandedFolders.size === 0) {
+  if (initial) {
     state.expandedFolders = defaultExpanded
   } else {
     state.expandedFolders = new Set(
       [...state.expandedFolders].filter((folderId) => folderIds.has(folderId))
     )
-    if (!state.expandedFolders.size) {
-      state.expandedFolders = defaultExpanded
-    }
   }
-  if (initial || state.moveExpandedFolders.size === 0) {
+  if (initial) {
     state.moveExpandedFolders = allExpanded
   } else {
     state.moveExpandedFolders = new Set(
       [...state.moveExpandedFolders].filter((folderId) => folderIds.has(folderId))
     )
-    if (!state.moveExpandedFolders.size) {
-      state.moveExpandedFolders = allExpanded
-    }
   }
 }
 function resetSearchForPopupRefresh(preserveSearch: boolean): void {
@@ -1104,21 +1150,24 @@ function applyCurrentTabBookmarkMatch() {
   }
 }
 async function hydrateNewTabPinnedState(refreshRunId = popupRefreshRunId) {
+  if (refreshRunId !== popupRefreshRunId) return
+  const version = ++popupPinnedVersion
   try {
     if (refreshRunId !== popupRefreshRunId) {
       return
     }
     const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+    if (refreshRunId !== popupRefreshRunId || version !== popupPinnedVersion) return
     const settings = normalizeNewTabWorkspaceSettings(
       stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
       { validBookmarkIds: state.bookmarkMap.keys() }
     )
     state.newTabPinnedIds = new Set(getActiveNewTabWorkspace(settings).pinnedIds)
   } catch {
-    if (refreshRunId !== popupRefreshRunId) {
+    if (refreshRunId !== popupRefreshRunId || version !== popupPinnedVersion) {
       return
     }
-    state.newTabPinnedIds = new Set()
+    // A transient read failure must not erase a previously synchronized pin set.
   }
 }
 function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
@@ -1132,7 +1181,16 @@ function buildPopupBookmarkDuplicateKeyMap(bookmarks) {
   return map
 }
 function cleanupPopupController() {
+  popupAutoAnalyzeStatusVersion++
+  popupSessionId += 1
+  popupPreferencesVersion += 1
+  popupAiConfigVersion += 1
+  popupPinnedVersion += 1
+  smartSaveVersion += 1
   cancelPendingSearchActivation()
+  clearTimeout(popupMetadataRefreshTimer)
+  popupMetadataRefreshTimer = undefined
+  popupRefreshRunId++
   currentTabHydrationRunId++
   setPopupKeyboardHelpOpen(false)
   publishPopupSearchAccessibility({ query: '', count: 0, activeId: '', pending: false })
@@ -1166,6 +1224,10 @@ function cleanupPopupController() {
 }
 
 function resetPopupSessionStateForNextOpen() {
+  state.editSaving = false
+  state.editTargetBookmarkId = null
+  state.moveTargetBookmarkId = null
+  state.confirmDeleteBookmarkId = null
   state.isLoading = true
   state.loadError = ''
   state.currentTab = null
@@ -1214,7 +1276,12 @@ function maybeWarmPopupSnapshotFullTextForSearch() {
   state.searchSnapshotFullTextPending = true
   window.setTimeout(() => {
     window.requestAnimationFrame(() => {
-      void warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId)
+      void warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId).catch(error => {
+        if (state.searchSnapshotFullTextRunId !== warmupRunId) return
+        state.searchSnapshotFullTextPending = false
+        state.loadError = `正文索引读取失败，当前仅显示基础匹配：${error instanceof Error ? error.message : '请重试'}`
+        render()
+      })
     })
   }, SEARCH_SNAPSHOT_WARM_DELAY_MS)
 }
@@ -1326,10 +1393,16 @@ function syncActiveSearchResultIndex(): void {
   state.activeResultIndex = Math.min(state.activeResultIndex, state.searchResults.length - 1)
 }
 async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | null = null) {
+  const version = ++popupPreferencesVersion
   cancelPendingSearchActivation()
   const enabled = !state.naturalSearchEnabled
   if (enabled) {
     const naturalSearchAiConfigured = await refreshNaturalSearchAiConfiguredState()
+    if (version !== popupPreferencesVersion) return
+    if (!state.naturalSearchAiConfigChecked) {
+      showToast({ type: 'error', message: 'AI 配置读取失败，请重试。' })
+      return
+    }
     if (!naturalSearchAiConfigured) {
       state.naturalSearchEnabled = false
       state.naturalSearchSetupRequired = false
@@ -1354,8 +1427,9 @@ async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | nul
   render()
   void savePopupPreferences().catch(() => {})
   if (enabled) {
-    await prepareNaturalLanguageSearchAi()
+    await prepareNaturalLanguageSearchAi(version)
   }
+  if (version !== popupPreferencesVersion) return
   if (state.naturalSearchEnabled !== enabled) {
     void savePopupPreferences().catch(() => {})
     return
@@ -1363,10 +1437,12 @@ async function toggleNaturalLanguageSearch(returnFocusElement: HTMLElement | nul
   setSearchQuery(state.searchQuery, { immediate: true })
   focusSearchInput()
 }
-async function prepareNaturalLanguageSearchAi() {
+async function prepareNaturalLanguageSearchAi(version = popupPreferencesVersion) {
+  const configVersion = popupAiConfigVersion
   try {
     const naturalSearchAi = await loadNaturalSearchAiModule()
     const settings = await naturalSearchAi.loadNaturalSearchAiProviderSettings()
+    if (version !== popupPreferencesVersion || configVersion !== popupAiConfigVersion) return
     if (!naturalSearchAi.hasConfiguredNaturalSearchAiProvider(settings)) {
       state.naturalSearchAiConfigured = false
       state.naturalSearchEnabled = false
@@ -1379,6 +1455,7 @@ async function prepareNaturalLanguageSearchAi() {
     naturalSearchAi.validateNaturalSearchAiProvider(settings)
     await naturalSearchAi.ensureNaturalSearchAiPermissions(settings, { interactive: true })
   } catch {
+    if (version !== popupPreferencesVersion || configVersion !== popupAiConfigVersion) return
     state.naturalSearchError = 'AI 未就绪，请检查 AI 渠道配置或授权。'
   }
 }
@@ -1801,6 +1878,7 @@ function getViewCaptionText(): string {
     return state.viewNoticeMessage
   }
   if (state.debouncedQuery) {
+    if (state.searchSnapshotFullTextPending) return `本地匹配 · ${state.searchResults.length} 条 · 正文检索中…`
     if (state.naturalSearchEnabled) {
       return state.searchPending
         ? getNaturalSearchPendingCaption()
@@ -3600,9 +3678,10 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
 function handleToastAction(detail: PopupToastActionDetail) {
   const toastId = String(detail?.toastId || '')
   const action = String(detail?.action || '')
+  const toast = state.toasts.find(item => item.id === toastId)
   dismissToast(toastId)
-  if (action === 'undo-delete') {
-    undoDelete()
+  if (action === 'undo-delete' && toast?.recycleId) {
+    void undoDelete(toast.recycleId)
     return
   }
   if (action === 'open-bookmark-history') {
@@ -3923,6 +4002,7 @@ function isSmartOverlayActive(): boolean {
     ['loading', 'results', 'error', 'permission'].includes(state.smartStatus)
 }
 function resetSmartClassification() {
+  smartSaveVersion += 1
   abortSmartClassificationRequest()
   state.smartRunId += 1
   stopSmartProgressTicker()
@@ -4019,7 +4099,7 @@ async function classifyCurrentPage({ requestMissingPermissions = false } = {}) {
     updateSmartProgressCheckpoint(runId, 3, 0.18)
     const recommendations = buildSmartRecommendations(aiResult)
     updateSmartProgressCheckpoint(runId, 3, 0.58)
-    state.smartSuggestedTitle = cleanSmartTitle(aiResult.title || getCurrentPageTitle())
+    state.smartSuggestedTitle = cleanSmartTitle(aiResult.title || getCurrentPageTitle(), getCurrentPageTitle())
     state.smartSummary = cleanSmartText(aiResult.summary, 360)
     state.smartContentType = cleanSmartText(aiResult.contentType, 80)
     state.smartTopics = normalizeSmartTextList(aiResult.topics, 8, 40)
@@ -4147,8 +4227,11 @@ async function saveCurrentPageViaWorker(
     return
   }
   let savedWithoutRefresh = false
+  const session = popupSessionId
+  const saveVersion = ++smartSaveVersion
   const sourceTab = state.currentTab
-  const isSourceCurrent = () => state.currentTab?.id === sourceTab?.id && state.currentTab?.url === sourceTab?.url
+  const isSourceCurrent = () => session === popupSessionId && saveVersion === smartSaveVersion &&
+    state.currentTab?.id === sourceTab?.id && state.currentTab?.url === sourceTab?.url
   try {
     setPopupActionPending('save-current-page', actionTargetId, true)
     state.smartSaving = true
@@ -4185,7 +4268,8 @@ async function saveCurrentPageViaWorker(
         extraction: state.smartExtraction
       }
     })
-    if (isSidePanelSurface() && !isSourceCurrent()) {
+    if (session !== popupSessionId) return
+    if (!isSourceCurrent()) {
       showToast({ type: 'success', message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }) })
       await refreshData({ preserveSearch: true })
       savedWithoutRefresh = true
@@ -4194,10 +4278,12 @@ async function saveCurrentPageViaWorker(
     state.currentPageBookmarkId = savedBookmark.bookmarkId || state.currentPageBookmarkId
     await finishSmartSave({
       message: getSmartSaveSuccessMessage(savedBookmark, { parentId, folderPath }),
-      closeModal
+      closeModal,
+      isCurrent: isSourceCurrent
     })
     savedWithoutRefresh = true
   } catch (error) {
+    if (session !== popupSessionId) return
     if (isSourceCurrent()) {
       state.smartSaving = false
       state.smartSaved = false
@@ -4210,10 +4296,10 @@ async function saveCurrentPageViaWorker(
       message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
     })
   } finally {
-    setPopupActionPending('save-current-page', actionTargetId, false)
-    state.smartSaving = false
-    if (!savedWithoutRefresh) {
-      renderSmartSaveSurfaces()
+    if (session === popupSessionId) {
+      setPopupActionPending('save-current-page', actionTargetId, false)
+      if (isSourceCurrent()) state.smartSaving = false
+      if (!savedWithoutRefresh) renderSmartSaveSurfaces()
     }
   }
 }
@@ -4226,25 +4312,22 @@ async function pinCurrentPageToNewTab(bookmarkId) {
   if (!bookmark?.url || isPopupActionPending('pin-newtab', bookmark.id)) {
     return
   }
+  const session = popupSessionId
   try {
     setPopupActionPending('pin-newtab', bookmark.id, true)
     renderSmartClassifier()
-    const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
-    const currentSettings = normalizeNewTabWorkspaceSettings(
-      stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE,
-      { validBookmarkIds: state.bookmarkMap.keys() }
-    )
-    const workspace = getActiveNewTabWorkspace(currentSettings)
-    const nextSettings = toggleNewTabWorkspacePin(
-      currentSettings,
-      workspace.id,
-      bookmark.id,
-      { validBookmarkIds: state.bookmarkMap.keys() }
-    )
-    await setLocalStorage({ [STORAGE_KEYS.newTabWorkspaceSettings]: nextSettings })
-    const pinned = nextSettings.workspaces
-      .find((item) => item.id === workspace.id)
-      ?.pinnedIds.includes(bookmark.id)
+    const nextSettings = await withLocalStorageTransaction(async transaction => {
+      const stored = await getLocalStorage([STORAGE_KEYS.newTabWorkspaceSettings])
+      const currentSettings = normalizeNewTabWorkspaceSettings(
+        stored[STORAGE_KEYS.newTabWorkspaceSettings] || POPUP_DEFAULT_WORKSPACE_STORAGE
+      )
+      const workspace = getActiveNewTabWorkspace(currentSettings)
+      const next = toggleNewTabWorkspacePin(currentSettings, workspace.id, bookmark.id)
+      await setLocalStorage({ [STORAGE_KEYS.newTabWorkspaceSettings]: next }, { transaction })
+      return next
+    })
+    if (session !== popupSessionId) return
+    const pinned = getActiveNewTabWorkspace(nextSettings).pinnedIds.includes(bookmark.id)
     state.newTabPinnedIds = new Set(getActiveNewTabWorkspace(nextSettings).pinnedIds)
     void chrome.runtime?.sendMessage?.({
       type: 'curator:newtab-speed-dial-state',
@@ -4252,16 +4335,19 @@ async function pinCurrentPageToNewTab(bookmarkId) {
       pinned: Boolean(pinned)
     }).catch(() => {})
   } catch (error) {
+    if (session !== popupSessionId) return
     showToast({
       type: 'error',
       message: error instanceof Error ? `固定失败：${error.message}` : '固定到 newtab 失败，请稍后重试。'
     })
   } finally {
-    setPopupActionPending('pin-newtab', bookmark.id, false)
-    renderSmartClassifier()
+    if (session === popupSessionId) {
+      setPopupActionPending('pin-newtab', bookmark.id, false)
+      renderSmartClassifier()
+    }
   }
 }
-async function finishSmartSave({ message, closeModal = true }) {
+async function finishSmartSave({ message, closeModal = true, isCurrent = () => true }) {
   state.smartRunId += 1
   stopSmartProgressTicker()
   state.smartSaving = false
@@ -4289,14 +4375,16 @@ async function finishSmartSave({ message, closeModal = true }) {
   showToast({ type: 'success', message })
   showViewNotice('已保存，正在刷新书签列表')
   await refreshData({ preserveSearch: true })
-  showViewNotice('已保存，书签列表已更新')
+  if (!isCurrent()) return
+  showViewNotice(state.loadError ? '已保存，书签列表刷新失败，请重新读取' : '已保存，书签列表已更新')
   window.requestAnimationFrame(() => {
-    if (!hasOpenModal()) {
+    if (isCurrent() && !hasOpenModal()) {
       focusSearchInput()
     }
   })
 }
 function getSmartSaveSuccessMessage(savedBookmark, { parentId = '', folderPath = '' } = {}) {
+  if (savedBookmark?.metadataWarning) return savedBookmark.metadataWarning
   const folderLabel = cleanSmartText(
     folderPath ||
       state.folderMap.get(savedBookmark?.parentId || parentId)?.path ||
@@ -4322,25 +4410,30 @@ async function moveBookmarkToFolder(folderId) {
     return
   }
   const movedTitle = bookmark.title
+  const session = popupSessionId
   setPopupActionPending('move', bookmark.id, true)
   renderModals()
   try {
     await moveBookmark(bookmark.id, folderId)
+    if (session !== popupSessionId) return
     showToast({
       type: 'success',
       message: '移动成功'
     })
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    showViewNotice(`已移动：${movedTitle}`)
+    if (session === popupSessionId) showViewNotice(`已移动：${movedTitle}`)
   } catch (error) {
+    if (session !== popupSessionId) return
     showToast({
       type: 'error',
       message: error instanceof Error ? `移动失败：${error.message}` : '移动失败，请稍后重试。'
     })
   } finally {
-    setPopupActionPending('move', bookmark.id, false)
-    renderModals()
+    if (session === popupSessionId) {
+      setPopupActionPending('move', bookmark.id, false)
+      renderModals()
+    }
   }
 }
 async function saveEditedBookmark() {
@@ -4380,15 +4473,19 @@ async function saveEditedBookmark() {
     return
   }
   state.editSaving = true
+  const session = popupSessionId
   setPopupActionPending('edit', bookmark.id, true)
   renderModals()
+  let detailsSaved = false
   try {
     if (savePlan.updateChanges) {
       await updateBookmark(bookmark.id, savePlan.updateChanges)
+      detailsSaved = true
     }
     if (savePlan.parentChanged && savePlan.parentId) {
       await moveBookmark(bookmark.id, savePlan.parentId)
     }
+    if (session !== popupSessionId) return
     showToast({
       type: 'success',
       message: '保存成功'
@@ -4397,16 +4494,21 @@ async function saveEditedBookmark() {
     setPopupActionPending('edit', bookmark.id, false)
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    showViewNotice(`已更新：${nextTitle}`)
+    if (session === popupSessionId) showViewNotice(`已更新：${nextTitle}`)
   } catch (error) {
+    if (session !== popupSessionId) return
     showToast({
       type: 'error',
-      message: error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
+      message: detailsSaved
+        ? `名称和网址已保存，但移动失败：${error instanceof Error ? error.message : '请重新选择目录后保存。'}`
+        : error instanceof Error ? `保存失败：${error.message}` : '保存失败，请稍后重试。'
     })
   } finally {
-    state.editSaving = false
-    setPopupActionPending('edit', bookmark.id, false)
-    renderModals()
+    if (session === popupSessionId) {
+      state.editSaving = false
+      setPopupActionPending('edit', bookmark.id, false)
+      renderModals()
+    }
   }
 }
 async function confirmDeleteBookmark() {
@@ -4416,19 +4518,14 @@ async function confirmDeleteBookmark() {
   if (!bookmark || isPopupActionPending('delete', bookmark?.id || '')) {
     return
   }
+  const session = popupSessionId
   setPopupActionPending('delete', bookmark.id, true)
   renderModals()
   try {
     const recycleBin = await loadRecycleBinModule()
-    state.lastDeletedBookmark = {
-      title: bookmark.title,
-      url: bookmark.url,
-      parentId: bookmark.parentId,
-      index: bookmark.index,
-      recycleId: `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
-    }
+    const recycleId = `recycle-${bookmark.id}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`
     const deleted = await recycleBin.deleteBookmarkToRecycle(bookmark.id, {
-      recycleId: state.lastDeletedBookmark.recycleId,
+      recycleId,
       bookmarkId: String(bookmark.id),
       title: bookmark.title,
       url: bookmark.url,
@@ -4443,74 +4540,57 @@ async function confirmDeleteBookmark() {
     if (!deleted) {
       throw new Error('书签地址已变化，已取消删除。')
     }
+    if (session !== popupSessionId) return
     showToast({
       type: 'success',
       message: '删除成功',
       action: 'undo-delete',
-      actionLabel: '撤销'
+      actionLabel: '撤销',
+      recycleId
     })
     closeDialogs({ force: true })
     await refreshData({ preserveSearch: true })
-    showViewNotice(`已删除：${bookmark.title}`)
+    if (session === popupSessionId) showViewNotice(`已删除：${bookmark.title}`)
   } catch (error) {
+    if (session !== popupSessionId) return
     showToast({
       type: 'error',
       message: error instanceof Error ? `删除失败：${error.message}` : '删除失败，请稍后重试。'
     })
   } finally {
-    setPopupActionPending('delete', bookmark.id, false)
-    renderModals()
+    if (session === popupSessionId) {
+      setPopupActionPending('delete', bookmark.id, false)
+      renderModals()
+    }
   }
 }
-async function undoDelete() {
-  if (!state.lastDeletedBookmark) {
+async function undoDelete(recycleId: string) {
+  if (isPopupActionPending('undo-delete', recycleId)) {
     return
   }
-  const payload = state.lastDeletedBookmark
-  const actionTargetId = payload.recycleId || payload.url || payload.title
-  if (isPopupActionPending('undo-delete', actionTargetId)) {
-    return
-  }
-  setPopupActionPending('undo-delete', actionTargetId, true)
-  state.lastDeletedBookmark = null
+  const session = popupSessionId
+  setPopupActionPending('undo-delete', recycleId, true)
   try {
-    const parentId = await getRestorableParentId(payload.parentId)
     const recycleBin = await loadRecycleBinModule()
-    await recycleBin.restoreBookmarkFromRecycleEntry(
-      payload.recycleId,
-      () => createBookmark({
-        ...payload,
-        parentId
-      })
-    )
+    const restored = await recycleBin.restoreBookmarkFromRecycleEntry(recycleId)
+    if (session !== popupSessionId) return
     showToast({
       type: 'success',
       message: '已撤销删除'
     })
     await refreshData({ preserveSearch: true })
-    showViewNotice(`已恢复：${payload.title}`)
+    if (session === popupSessionId) showViewNotice(`已恢复：${restored.title}`)
   } catch (error) {
-    state.lastDeletedBookmark = payload
+    if (session !== popupSessionId) return
     showToast({
       type: 'error',
-      message: error instanceof Error ? `撤销失败：${error.message}` : '撤销失败，请稍后重试。'
+      message: error instanceof Error ? `撤销失败：${error.message}` : '撤销失败，请稍后重试。',
+      action: 'undo-delete',
+      actionLabel: '重试',
+      recycleId
     })
   } finally {
-    setPopupActionPending('undo-delete', actionTargetId, false)
-  }
-}
-async function getRestorableParentId(parentId) {
-  const requestedParentId = String(parentId || '').trim()
-  if (!requestedParentId) {
-    return BOOKMARKS_BAR_ID
-  }
-  try {
-    const tree = await getBookmarkTree()
-    const rootNode = Array.isArray(tree) ? tree[0] : tree
-    const target = findNodeById(rootNode, requestedParentId)
-    return target && !target.url ? requestedParentId : BOOKMARKS_BAR_ID
-  } catch {
-    return BOOKMARKS_BAR_ID
+    if (session === popupSessionId) setPopupActionPending('undo-delete', recycleId, false)
   }
 }
 function activateBookmark(bookmarkId: string, disposition: BookmarkOpenDisposition): void {
@@ -4702,28 +4782,6 @@ function buildLocalSmartFolderMatches() {
         String(left.path).localeCompare(String(right.path), 'zh-Hans-CN')
       )
     })
-}
-function normalizeSmartTextList(value, limit, itemLimit) {
-  const values = Array.isArray(value)
-    ? value
-    : typeof value === 'string'
-      ? value.split(/[,，、\n]/)
-      : []
-  const seen = new Set()
-  const output = []
-  for (const item of values) {
-    const text = cleanSmartText(item, itemLimit)
-    const key = normalizeText(text)
-    if (!text || seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    output.push(text)
-    if (output.length >= limit) {
-      break
-    }
-  }
-  return output
 }
 function findBestExistingFolder(suggestion) {
   const folderId = typeof suggestion === 'string'
@@ -5126,45 +5184,6 @@ function waitForSmartProgressCompletion() {
     })
   })
 }
-function cleanSmartTitle(value) {
-  const title = cleanSmartText(value, 90)
-  return title || getCurrentPageTitle()
-}
-function cleanSmartText(value, limit = 180) {
-  const text = String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (text.length <= limit) {
-    return text
-  }
-  return `${text.slice(0, Math.max(0, limit - 1)).trim()}…`
-}
-function normalizeSmartConfidence(value) {
-  const numeric = Number(value)
-  if (Number.isFinite(numeric)) {
-    return Math.max(0, Math.min(numeric, 1))
-  }
-  return 0
-}
-function normalizeSmartFolderPath(value) {
-  const segments = splitSmartFolderPath(value)
-  return segments.join(' / ')
-}
-function splitSmartFolderPath(value) {
-  return String(value || '')
-    .split(/\s*(?:\/|>|›|»|\\)\s*/g).flatMap(segment => { const mappedResult = segment.trim(); return mappedResult ? [mappedResult] : [] })
-    .slice(0, 5)
-}
-function getLastPathSegment(value) {
-  const segments = splitSmartFolderPath(value)
-  return segments.at(-1) || cleanSmartText(value, 60) || '推荐文件夹'
-}
-function normalizeSmartError(error) {
-  if (error?.name === 'AbortError') {
-    return '请求超时，请稍后重试或调大通用设置中的请求超时。'
-  }
-  return error instanceof Error ? error.message : '智能分类失败，请稍后重试。'
-}
 function hasOpenModal() {
   return Boolean(
     state.moveTargetBookmarkId ||
@@ -5193,14 +5212,15 @@ function describeFolder(folder) {
   }
   return parts.join(' · ') || '空文件夹'
 }
-function showToast({ type = 'success', message, action = '', actionLabel = '' }) {
+function showToast({ type = 'success', message, action = '', actionLabel = '', recycleId = '' }) {
   const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`
   const toast = {
     id,
     type,
     message,
     action,
-    actionLabel
+    actionLabel,
+    recycleId
   }
   const nextToasts = [...state.toasts, toast]
   const overflowCount = Math.max(0, nextToasts.length - MAX_VISIBLE_TOASTS)

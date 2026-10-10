@@ -210,6 +210,8 @@ function SearchWidgetInput({
       aria-activedescendant={combobox.activeDescendantId || undefined}
       onFocus={interactions.onInputFocus}
       onInput={interactions.onInputInput}
+      onCompositionStart={() => interactions.onInputCompositionChange?.(true)}
+      onCompositionEnd={() => interactions.onInputCompositionChange?.(false)}
       onKeyDown={interactions.onInputKeyDown}
       ref={inputRef}
       unstyled

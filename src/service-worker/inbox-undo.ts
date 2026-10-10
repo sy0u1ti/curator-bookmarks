@@ -38,8 +38,12 @@ export async function undoInboxAutoMove(
   }
 
   const movedNode = await dependencies.moveBookmark(undoMove.bookmarkId, undoMove.fromFolderId)
-  await dependencies.clearUndo(undoMove.bookmarkId)
-  await dependencies.afterMove(undoMove)
+  try {
+    await dependencies.clearUndo(undoMove.bookmarkId)
+    await dependencies.afterMove(undoMove)
+  } catch (error) {
+    throw new Error(`书签已移回原目录，但撤销记录更新失败：${error instanceof Error ? error.message : '请刷新列表核对。'}`)
+  }
   return {
     bookmarkId: String(movedNode.id),
     parentId: String(movedNode.parentId || undoMove.fromFolderId),

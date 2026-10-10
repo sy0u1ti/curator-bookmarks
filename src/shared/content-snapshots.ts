@@ -331,37 +331,23 @@ export function buildContentSnapshotRecord({
 
 export async function buildContentSnapshotSearchMapWithFullText(
   index: ContentSnapshotIndex,
-  options: { includeFullText?: boolean; maxRecords?: number } = {}
+  options: { includeFullText?: boolean; isActive?: () => boolean } = {}
 ): Promise<Map<string, string>> {
-  const searchMap = buildContentSnapshotSearchMap(index, {
-    includeFullText: options.includeFullText
-  })
-  if (!options.includeFullText) {
-    return searchMap
-  }
-
-  const maxRecords = Math.max(0, options.maxRecords ?? 600)
-  const idbRecords = Object.values(index.records)
-    .filter((record) => record.fullTextStorage === 'idb' && record.fullTextRef)
-    .slice(0, maxRecords)
-
-  if (!idbRecords.length) {
-    return searchMap
-  }
-
-  const fullTexts = await contentFullTextOperations.getMany(
-    idbRecords.map((record) => record.fullTextRef || '')
-  )
-
-  for (const record of idbRecords) {
-    const fullText = fullTexts.get(record.fullTextRef || '')
-    if (!fullText) {
-      continue
+  const searchMap = new Map<string, string>()
+  const records = Object.values(index.records)
+  for (let offset = 0; offset < records.length; offset += 128) {
+    if (options.isActive && !options.isActive()) return searchMap
+    const batch = records.slice(offset, offset + 128)
+    const light = buildContentSnapshotSearchMap({ ...index, records: Object.fromEntries(batch.map(record => [record.bookmarkId, record])) }, options)
+    const refs = options.includeFullText
+      ? batch.filter(record => record.fullTextStorage === 'idb' && record.fullTextRef).map(record => record.fullTextRef!) : []
+    const fullTexts = refs.length ? await contentFullTextOperations.getMany(refs) : new Map<string, string>()
+    for (const record of batch) {
+      const text = normalizeText(`${light.get(record.bookmarkId) || ''} ${fullTexts.get(record.fullTextRef || '') || ''}`)
+      if (text) searchMap.set(record.bookmarkId, text)
     }
-    const existing = searchMap.get(record.bookmarkId) || ''
-    searchMap.set(record.bookmarkId, normalizeText(`${existing} ${fullText}`))
+    if (offset + 128 < records.length) await new Promise<void>(resolve => setTimeout(resolve, 0))
   }
-
   return searchMap
 }
 
@@ -436,6 +422,43 @@ export async function getContentFullTexts(snapshotIds: string[]): Promise<Map<st
 
 export async function deleteContentFullText(snapshotId: string): Promise<void> {
   await deleteContentFullTexts([snapshotId])
+}
+
+export async function getContentFullTextStorageUsage(): Promise<{ count: number; bytes: number }> {
+  const db = await openHeavyUserDb()
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(CONTENT_FULL_TEXT_STORE, 'readonly')
+      const cursor = tx.objectStore(CONTENT_FULL_TEXT_STORE).openCursor()
+      const usage = { count: 0, bytes: 0 }
+      cursor.onsuccess = () => {
+        if (!cursor.result) return
+        usage.count++
+        usage.bytes += estimateTextBytes(cursor.result.value.text)
+        cursor.result.continue()
+      }
+      tx.oncomplete = () => resolve(usage)
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('正文用量读取失败。'))
+    })
+  } finally { db.close() }
+}
+
+export async function clearContentSnapshotFullTexts(): Promise<void> {
+  await withLocalStorageTransaction(async transaction => {
+    // Commit metadata first: a failed body deletion leaves only reclaimable bytes.
+    // Writers use this same lock, so newly captured text cannot be deleted here.
+    await updateContentSnapshotIndexInRepository(index => ({
+      ...index,
+      updatedAt: Date.now(),
+      records: Object.fromEntries(Object.entries(index.records).map(([id, record]) => [id, {
+        ...record, hasFullText: false, fullTextBytes: 0, fullTextStorage: 'none' as const,
+        fullText: undefined, fullTextRef: undefined
+      }]))
+    }), transaction)
+    const db = await openHeavyUserDb()
+    try { await runStoreMutation(db, CONTENT_FULL_TEXT_STORE, store => { store.clear() }) }
+    finally { db.close() }
+  })
 }
 
 export async function deleteContentFullTexts(snapshotIds: string[]): Promise<void> {

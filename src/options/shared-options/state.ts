@@ -250,6 +250,7 @@ export const aiNamingState = {
   lastConnectivityTestMessage: '',
   lastCompletedAt: 0,
   lastRunOutcome: '',
+  statusMessage: '',
   lastError: ''
 }
 

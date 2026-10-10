@@ -2,7 +2,8 @@ import type { CSSProperties } from 'react'
 import { Button } from '../../ui/base/Button'
 import { Icon } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
-import { HighlightedText } from './HighlightedText'
+import { getHighlightTerms, HighlightedText } from '../../ui/base/HighlightedText'
+import { normalizeQuery } from '../search'
 import type { PopupFolderPickerState, PopupFolderTreeOptionViewModel } from './PopupViewModels'
 
 const pickerRowClass =
@@ -139,10 +140,10 @@ function PopupTreeFolderOption({
         <span className={pickerBranchClass} aria-hidden="true"></span>
         <span className={pickerMainClass}>
           <span className={pickerTitleClass}>
-            <HighlightedText text={option.title} query={query} />
+            <HighlightedText terms={getHighlightTerms(normalizeQuery(query))} text={option.title} />
           </span>
           <span className={pickerPathClass} title={option.path}>
-            <HighlightedText text={option.path} query={query} />
+            <HighlightedText terms={getHighlightTerms(normalizeQuery(query))} text={option.path} />
           </span>
           {option.badges.map((badge) => (
             <span

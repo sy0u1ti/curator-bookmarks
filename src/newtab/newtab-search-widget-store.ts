@@ -61,6 +61,7 @@ export interface SearchWidgetInteractionState {
   onEngineOpenChange: (open: boolean) => void
   onInputFocus: () => void
   onInputInput: () => void
+  onInputCompositionChange?: (composing: boolean) => void
   onInputKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void
   onRootBlur: (event: FocusEvent<HTMLDivElement>) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void

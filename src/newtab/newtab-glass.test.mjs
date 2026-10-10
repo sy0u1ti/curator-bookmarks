@@ -185,14 +185,15 @@ try {
 
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '玻璃', exact: true }).click()
+  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await waitForLens(page)
   assert.equal(await page.locator('#newtab-settings-trigger').evaluate(element => getComputedStyle(element).visibility), 'hidden')
   const panel = page.locator('#settings-panel-glass')
   assert.equal(await panel.getByRole('slider').count(), 8)
-  await page.getByRole('button', { name: '玻璃材质参数', exact: true }).click()
+  await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await panel.getByRole('slider').first().waitFor({ state: 'hidden' })
   assert.equal(await panel.getByRole('slider').count(), 0, 'Every glass control must collapse together')
-  await page.getByRole('button', { name: '玻璃材质参数', exact: true }).click()
+  await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await waitForLens(page)
 
   for (const [key, name, low, high] of [
@@ -239,8 +240,8 @@ try {
   const blur = page.getByRole('slider', { name: '玻璃模糊', exact: true })
   await blur.press('Home')
   for (let step = 0; step < 8; step++) await blur.press('ArrowRight')
-  await page.waitForFunction(() => [...document.querySelectorAll('.newtab-glass-controls output')].some(element => element.textContent === '已保存'), undefined, { timeout: 5000 }).catch(async error => {
-    console.log(await page.evaluate(async () => ({ outputs: [...document.querySelectorAll('.newtab-glass-controls output')].map(element => element.textContent), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), locks: await navigator.locks.query() })))
+  await page.waitForFunction(() => [...document.querySelectorAll('#settings-panel-glass output')].some(element => element.textContent === '已保存'), undefined, { timeout: 5000 }).catch(async error => {
+    console.log(await page.evaluate(async () => ({ outputs: [...document.querySelectorAll('#settings-panel-glass output')].map(element => element.textContent), stored: await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings'), locks: await navigator.locks.query() })))
     throw error
   })
   assert.equal(await page.evaluate(async () => (await chrome.storage.local.get('curatorBookmarkNewTabGlassSettings')).curatorBookmarkNewTabGlassSettings?.blur), 4)
@@ -252,6 +253,7 @@ try {
   assert.equal((await readLens(page, '.newtab-search-surface')).blur, 4)
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '玻璃', exact: true }).click()
+  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   const quickBlur = page.getByRole('slider', { name: '玻璃模糊', exact: true })
   await quickBlur.press('Home')
   for (let step = 0; step < 4; step++) await quickBlur.press('ArrowRight')
@@ -262,6 +264,7 @@ try {
   await installWallpaper(page)
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '玻璃', exact: true }).click()
+  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await resetGlass(page)
   await page.getByRole('button', { name: '关闭设置', exact: true }).click()
   await page.locator('.settings-drawer-panel').waitFor({ state: 'hidden' })
@@ -306,6 +309,7 @@ try {
 
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '玻璃', exact: true }).click()
+  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await resetGlass(page)
   await page.screenshot({ path: path.join(output, 'glass-settings-verified.png') })
   await page.getByRole('button', { name: '关闭设置', exact: true }).click()
@@ -322,6 +326,7 @@ try {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '玻璃', exact: true }).click()
+  if (await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).getAttribute('aria-expanded') === 'false') await page.getByRole('button', { name: '精细调整玻璃材质', exact: true }).click()
   await page.getByRole('slider', { name: '玻璃模糊', exact: true }).waitFor()
   await page.screenshot({ path: path.join(output, 'glass-settings-narrow.png') })
   assert.equal(await page.locator('.settings-drawer-panel').evaluate(element => element.scrollWidth <= element.clientWidth), true)

@@ -29,6 +29,10 @@ import {
   type LocalStorageTransaction
 } from './storage.js'
 import { buildDuplicateKey } from './text.js'
+import { buildBackupReferences, buildNewTabStoragePayload, NEWTAB_BACKUP_FIELDS, remapNewTabBackup } from './backup-newtab.js'
+import { collectCustomIconReferences, prepareCustomIconReferences, resolveCustomIconState } from './repositories/custom-icon-repository.js'
+import { BACKUP_PREFERENCE_FIELDS, buildBackupPreferencesPayload, normalizeBackupPreferences } from './backup-preferences.js'
+import { remapRecoveryCollections } from './recovery-references.js'
 
 const BACKUP_SCHEMA_VERSION = 1
 const BACKUP_APP = 'curator-bookmarks'
@@ -114,6 +118,7 @@ export interface CuratorBackupFileV1 {
     }
     redirectCache: unknown
     newTab: Record<string, unknown>
+    preferences?: Record<string, unknown>
     popupPreferences?: unknown
     aiRejectedSuggestions?: unknown[]
     aiProviderSettings: Record<string, unknown> & {
@@ -228,6 +233,7 @@ interface BackupRestoreReceipt {
 }
 
 interface BackupRestoreSnapshot {
+  currentTree: chrome.bookmarks.BookmarkTreeNode[]
   currentBookmarks: Array<{ id: string; url: string; title?: string; path?: string }>
   previousTagIndex: BookmarkTagIndex | null
   previousStorage: Record<string, unknown>
@@ -252,12 +258,25 @@ export async function createCuratorBackupFile(
     getBackupStorageSnapshot()
   ])
   const [bookmarkTagIndex, newTabActivity] = await Promise.all([
-    loadBookmarkTagIndex().catch(() =>
-      normalizeBookmarkTagIndex(stored[STORAGE_KEYS.bookmarkTagIndex])
-    ),
-    loadNewTabActivityFromRepository(normalizeNewTabActivityForBackup).catch(() =>
-      normalizeNewTabActivityForBackup(stored[STORAGE_KEYS.newTabActivity])
-    )
+    loadBookmarkTagIndex(),
+    loadNewTabActivityFromRepository(normalizeNewTabActivityForBackup)
+  ])
+
+  const iconWarnings: string[] = []
+  const portableIcons = async (value: unknown, label: string) => {
+    const result = await resolveCustomIconState(value)
+    if (result.missingIds.length) iconWarnings.push(`${label}：${result.missingIds.length} 张图标无法读取，已保留其余数据。`)
+    return result.icons
+  }
+  const [recycleBin, customIcons] = await Promise.all([
+    Promise.all(normalizeUnknownArray(stored[STORAGE_KEYS.recycleBin]).map(async value => {
+    const entry = normalizeObject(value)
+    if (!entry.customIcon) return value
+    const { customIcon: _icon, ...rest } = entry
+    const icons = await portableIcons({ icon: entry.customIcon }, `回收站 ${entry.title || entry.recycleId || ''}`)
+    return { ...rest, ...(icons.icon ? { customIcon: icons.icon } : {}) }
+    })),
+    portableIcons(stored[STORAGE_KEYS.newTabCustomIcons], '新标签页')
   ])
 
   return {
@@ -286,28 +305,24 @@ export async function createCuratorBackupFile(
     },
     storage: {
       bookmarkTagIndex,
-      recycleBin: normalizeUnknownArray(stored[STORAGE_KEYS.recycleBin]),
+      recycleBin,
       ignoreRules: normalizeIgnoreRulesForBackup(stored[STORAGE_KEYS.ignoreRules]),
       redirectCache: stored[STORAGE_KEYS.redirectCache] ?? null,
       newTab: {
-        customIcons: stored[STORAGE_KEYS.newTabCustomIcons] ?? null,
-        backgroundSettings: stored[STORAGE_KEYS.newTabBackgroundSettings] ?? null,
-        searchSettings: stored[STORAGE_KEYS.newTabSearchSettings] ?? null,
-        iconSettings: stored[STORAGE_KEYS.newTabIconSettings] ?? null,
-        timeSettings: stored[STORAGE_KEYS.newTabTimeSettings] ?? null,
-        glassSettings: stored[STORAGE_KEYS.newTabGlassSettings] ?? null,
-        generalSettings: stored[STORAGE_KEYS.newTabGeneralSettings] ?? null,
-        folderSettings: stored[STORAGE_KEYS.newTabFolderSettings] ?? null,
+        ...Object.fromEntries(Object.entries(NEWTAB_BACKUP_FIELDS).map(([field, key]) => [field, stored[key] ?? null])),
+        customIcons,
         activity: newTabActivity
       },
       popupPreferences: stored[STORAGE_KEYS.popupPreferences] ?? null,
+      preferences: normalizeBackupPreferences(Object.fromEntries(Object.entries(BACKUP_PREFERENCE_FIELDS).map(([field, key]) => [field, stored[key]]))),
       aiRejectedSuggestions: normalizeUnknownArray(stored[STORAGE_KEYS.aiRejectedSuggestions]),
       aiProviderSettings: redactAiProviderSettings(stored[STORAGE_KEYS.aiProviderSettings])
     },
     notes: [
       'AI Provider API Key is intentionally omitted.',
       'Authorization headers, privacy audit logs, AI usage counters, content full text/cache and diagnostic logs are intentionally omitted.',
-      'New tab background media blobs and user media caches in IndexedDB are not included.'
+      'New tab background media blobs and user media caches in IndexedDB are not included.',
+      ...iconWarnings
     ]
   }
 }
@@ -360,6 +375,7 @@ export function parseCuratorBackupFile(payload: unknown): CuratorBackupFileV1 {
       ignoreRules: normalizeIgnoreRulesForBackup(source.storage.ignoreRules),
       redirectCache: source.storage.redirectCache ?? null,
       newTab: normalizeObject(source.storage.newTab),
+      preferences: normalizeBackupPreferences(source.storage.preferences),
       popupPreferences: source.storage.popupPreferences ?? null,
       aiRejectedSuggestions: normalizeUnknownArray(source.storage.aiRejectedSuggestions),
       aiProviderSettings: redactAiProviderSettings(source.storage.aiProviderSettings)
@@ -390,6 +406,9 @@ export async function buildBackupRestorePreview(
   const matchedTags = tagRecords.length - tagPreview.unmatched
 
   const warnings: string[] = []
+  warnings.push(...(backup.notes || []).filter(note => note.includes('图标无法读取')))
+  const preferenceCount = Object.keys(buildBackupPreferencesPayload(backup.storage.preferences)).length
+  warnings.push(`本次备份包含 ${preferenceCount} 类功能偏好；旧备份未包含的偏好会保留当前值。`)
   if (hasApiKeyLikeField(backup)) {
     warnings.push('备份文件中出现疑似 API Key 字段，恢复会忽略这些字段。')
   }
@@ -397,6 +416,7 @@ export async function buildBackupRestorePreview(
     warnings.push(`有 ${missingBookmarkUrls} 条备份书签实例当前不存在；恢复书签时会复制到新的恢复文件夹。`)
   }
   warnings.push('完整恢复会覆盖回收站、忽略规则、重定向缓存和弹窗偏好等集合类本地数据；不会覆盖 Chrome 现有书签树。')
+  warnings.push('忽略规则只关联身份可确认的书签与目录；无法匹配的规则会跳过。回收站原目录无法确认时，恢复到书签栏。')
 
   return {
     valid: true,
@@ -676,6 +696,7 @@ async function captureBackupRestoreSnapshot(
   ])
   const currentData = extractBookmarkData(currentTree[0])
   return {
+    currentTree,
     currentBookmarks: currentData.bookmarks,
     previousTagIndex,
     previousStorage,
@@ -703,6 +724,7 @@ async function applyCuratorBackupRestore(
   }
 
   let tagImportBookmarks = snapshot.currentBookmarks
+  let copiedIds = new Map<string, string>()
   let tagImportRecords = Object.values(backup.storage.bookmarkTagIndex.records)
   if (mode === 'safeFull' || mode === 'bookmarksOnly') {
     const copyResult = await copyMissingBookmarksToRestoreFolder(
@@ -715,6 +737,7 @@ async function applyCuratorBackupRestore(
       }
     )
     result.restored.copiedBookmarks = copyResult.copied
+    copiedIds = copyResult.bookmarkIds
     result.skippedBookmarks = copyResult.skipped
     if (copyResult.copied) {
       const restoredData = extractBookmarkData((await getBookmarkTree())[0])
@@ -753,7 +776,11 @@ async function applyCuratorBackupRestore(
   }
 
   if (mode === 'newTabOnly' || mode === 'safeFull') {
-    const newTabPayload = buildNewTabStoragePayload(backup.storage.newTab)
+    const references = buildBackupReferences(backup.chromeBookmarks.tree, snapshot.currentTree, copiedIds, buildDuplicateKey)
+    const newTabPayload = buildNewTabStoragePayload(remapNewTabBackup(backup.storage.newTab, references))
+    if (newTabPayload[STORAGE_KEYS.newTabCustomIcons]) {
+      newTabPayload[STORAGE_KEYS.newTabCustomIcons] = await prepareCustomIconReferences(newTabPayload[STORAGE_KEYS.newTabCustomIcons])
+    }
     if (Object.keys(newTabPayload).length) {
       await hooks.beforeStorageChange?.(newTabPayload)
       await setLocalStorage(newTabPayload, { transaction })
@@ -762,9 +789,19 @@ async function applyCuratorBackupRestore(
   }
 
   if (mode === 'safeFull') {
+    const currentTree = await getBookmarkTree()
+    const references = buildBackupReferences(backup.chromeBookmarks.tree, snapshot.currentTree, copiedIds, buildDuplicateKey)
+    const collections = remapRecoveryCollections(backup.storage.recycleBin, backup.storage.ignoreRules, references, currentTree)
+    const recycleBin = await Promise.all(collections.recycleBin.map(async value => {
+      const entry = normalizeObject(value)
+      if (!entry.customIcon) return value
+      const icons = await prepareCustomIconReferences({ icon: entry.customIcon })
+      return { ...entry, customIcon: icons.icon }
+    }))
     const localPayload: Record<string, unknown> = {
-      [STORAGE_KEYS.recycleBin]: backup.storage.recycleBin,
-      [STORAGE_KEYS.ignoreRules]: backup.storage.ignoreRules,
+      ...buildBackupPreferencesPayload(backup.storage.preferences),
+      [STORAGE_KEYS.recycleBin]: recycleBin,
+      [STORAGE_KEYS.ignoreRules]: collections.ignoreRules,
       [STORAGE_KEYS.redirectCache]: backup.storage.redirectCache,
       [STORAGE_KEYS.popupPreferences]: backup.storage.popupPreferences,
       [STORAGE_KEYS.aiRejectedSuggestions]: backup.storage.aiRejectedSuggestions
@@ -875,15 +912,8 @@ async function getBackupStorageSnapshot(): Promise<Record<string, unknown>> {
     STORAGE_KEYS.recycleBin,
     STORAGE_KEYS.ignoreRules,
     STORAGE_KEYS.redirectCache,
-    STORAGE_KEYS.newTabCustomIcons,
-    STORAGE_KEYS.newTabBackgroundSettings,
-    STORAGE_KEYS.newTabSearchSettings,
-    STORAGE_KEYS.newTabIconSettings,
-    STORAGE_KEYS.newTabTimeSettings,
-    STORAGE_KEYS.newTabGlassSettings,
-    STORAGE_KEYS.newTabGeneralSettings,
-    STORAGE_KEYS.newTabFolderSettings,
-    STORAGE_KEYS.newTabActivity,
+    ...Object.values(NEWTAB_BACKUP_FIELDS),
+    ...Object.values(BACKUP_PREFERENCE_FIELDS),
     STORAGE_KEYS.popupPreferences,
     STORAGE_KEYS.aiRejectedSuggestions,
     STORAGE_KEYS.aiProviderSettings
@@ -916,27 +946,6 @@ function normalizeIgnoreRulesForBackup(rawRules: unknown): CuratorBackupFileV1['
   }
 }
 
-function buildNewTabStoragePayload(newTab: Record<string, unknown>): Record<string, unknown> {
-  const mapping: Array<[string, string]> = [
-    ['customIcons', STORAGE_KEYS.newTabCustomIcons],
-    ['backgroundSettings', STORAGE_KEYS.newTabBackgroundSettings],
-    ['searchSettings', STORAGE_KEYS.newTabSearchSettings],
-    ['iconSettings', STORAGE_KEYS.newTabIconSettings],
-    ['timeSettings', STORAGE_KEYS.newTabTimeSettings],
-    ['glassSettings', STORAGE_KEYS.newTabGlassSettings],
-    ['generalSettings', STORAGE_KEYS.newTabGeneralSettings],
-    ['folderSettings', STORAGE_KEYS.newTabFolderSettings],
-    ['activity', STORAGE_KEYS.newTabActivity]
-  ]
-  const payload: Record<string, unknown> = {}
-  for (const [field, storageKey] of mapping) {
-    if (newTab[field] !== undefined && newTab[field] !== null) {
-      payload[storageKey] = newTab[field]
-    }
-  }
-  return payload
-}
-
 function getBackupRestoreStorageKeys(
   backup: CuratorBackupFileV1,
   mode: BackupRestoreMode
@@ -949,6 +958,7 @@ function getBackupRestoreStorageKeys(
   }
   if (mode === 'safeFull') {
     keys.push(
+      ...Object.keys(buildBackupPreferencesPayload(backup.storage.preferences)),
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.ignoreRules,
       STORAGE_KEYS.redirectCache,
@@ -1414,6 +1424,7 @@ async function copyMissingNode(
     parentId,
     title: node.title || '未命名文件夹'
   })
+  bookmarkIds.set(String(node.id), String(folder.id))
   return copyMissingNodesSequentially(children, String(folder.id), knownInstances, nextFolderPath, bookmarkIds)
 }
 
@@ -1598,6 +1609,25 @@ export async function listAutoBackupPoints(): Promise<AutoBackupIndexEntry[]> {
     fileName: getBackupFileName(entry.createdAt),
     sizeBytes: Number.isFinite(entry.sizeBytes) ? Math.max(0, entry.sizeBytes) : 0
   })).sort((left, right) => right.createdAt - left.createdAt)
+}
+
+// Expose only image references, never journal payloads or private settings.
+export async function loadBackupProtectedIconReferences(): Promise<Set<string>> {
+  const db = await openAutoBackupDb()
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(AUTO_BACKUP_STORE, 'readonly')
+      const cursor = tx.objectStore(AUTO_BACKUP_STORE).openCursor()
+      const references = new Set<string>()
+      cursor.onsuccess = () => {
+        if (!cursor.result) return
+        collectCustomIconReferences(cursor.result.value, references)
+        cursor.result.continue()
+      }
+      tx.oncomplete = () => resolve(references)
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('恢复数据读取失败，未清理图片。'))
+    })
+  } finally { db.close() }
 }
 
 export async function readAutoBackupPoint(backupId: string): Promise<{ point: AutoBackupIndexEntry; backup: CuratorBackupFileV1 }> {

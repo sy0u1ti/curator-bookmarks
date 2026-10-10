@@ -160,6 +160,9 @@ export interface NewTabPopupSearchSourceEntry {
 }
 
 export interface NewTabPreparedSearchIndex {
+  fullTextEnabled?: boolean
+  fullTextReady?: boolean
+  fullTextPromise?: Promise<void>
   entries: NewTabSearchIndexEntry[]
   entriesById: Map<string, NewTabSearchIndexEntry>
   popupSearchEntries: NewTabPopupSearchSourceEntry[]
@@ -478,7 +481,7 @@ export function buildNewTabSearchIndex(
   return entries
 }
 
-export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[]): NewTabPreparedSearchIndex {
+export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[], fullTextEnabled = false): NewTabPreparedSearchIndex {
   const entriesById = new Map<string, NewTabSearchIndexEntry>()
   const popupSearchEntries: NewTabPopupSearchSourceEntry[] = []
   let supportsPopupSearch = true
@@ -499,6 +502,8 @@ export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[]): NewTa
 
   return {
     entries: index,
+    fullTextEnabled,
+    fullTextReady: !fullTextEnabled || !popupSearchEntries.some(entry => entry.snapshotRecord?.hasFullText),
     entriesById,
     popupSearchEntries,
     supportsPopupSearch
@@ -700,6 +705,7 @@ export async function getPopupSearchBookmarkSuggestionsFromIndex(
     return getSearchBookmarkSuggestionsFromIndex(query, preparedIndex, limit, options)
   }
 
+  await ensureNewTabSnapshotFullText(preparedIndex)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
   await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
 
@@ -731,6 +737,7 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
   } = await import('../popup/natural-search.js')
 
   const plan = options.naturalSearchPlan || buildLocalNaturalSearchPlan(query, options.now)
+  await ensureNewTabSnapshotFullText(preparedIndex)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
   const pinyinQuery = [query, ...plan.queries].find((value) => {
     return Boolean(value && requiresPinyinTokens(value))
@@ -772,6 +779,28 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
     .map((result) => getSuggestionFromPopupResult(preparedIndex, result.id, result.score))
     .filter((suggestion): suggestion is SearchBookmarkSuggestion => Boolean(suggestion))
     .slice(0, limit)
+}
+
+async function ensureNewTabSnapshotFullText(index: NewTabPreparedSearchIndex): Promise<void> {
+  if (!index.fullTextEnabled || index.fullTextReady) return
+  if (!index.fullTextPromise) {
+    index.fullTextPromise = (async () => {
+      const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
+      const records = Object.fromEntries(index.popupSearchEntries.flatMap(entry => entry.snapshotRecord ? [[entry.bookmark.id, entry.snapshotRecord]] : []))
+      const text = await buildContentSnapshotSearchMapWithFullText({ version: 1, updatedAt: 0, records }, { includeFullText: true })
+      index.popupSearchBookmarks = getPreparedPopupSearchBookmarks(index, indexBookmarkForSearch).map(bookmark => {
+        const next = { ...bookmark, searchText: `${bookmark.searchText} ${text.get(bookmark.id) || ''}`.trim() }
+        next.tagPinyinFull = []
+        next.tagPinyinInitials = []
+        delete next.pinyinBaseSearchText
+        delete next.pinyinEnriched
+        return next
+      })
+      index.popupSearchPinyinReady = false
+      index.fullTextReady = true
+    })().catch(error => { index.fullTextPromise = undefined; throw error })
+  }
+  await index.fullTextPromise
 }
 
 // Search entries for an unchanged record, tag and snapshot are carried over to

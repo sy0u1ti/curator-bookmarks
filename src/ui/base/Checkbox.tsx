@@ -11,6 +11,7 @@ import {
 } from 'react'
 import { Icon } from '../icons/Icon'
 import { cx } from './utils'
+import { assignRef, findPropertyDescriptor, restorePropertyDescriptor } from './input-sync'
 import { InputStateCommit } from './InputStateCommit'
 
 type BaseCheckboxRootProps = ComponentPropsWithoutRef<typeof BaseCheckbox.Root>
@@ -170,37 +171,3 @@ export function Checkbox({
   )
 }
 
-function assignRef<T>(ref: Ref<T> | undefined, value: T | null): void {
-  if (!ref) {
-    return
-  }
-  if (typeof ref === 'function') {
-    ref(value)
-    return
-  }
-  ref.current = value
-}
-
-function findPropertyDescriptor(element: object, property: string): PropertyDescriptor | undefined {
-  let prototype: object | null = Object.getPrototypeOf(element)
-  while (prototype) {
-    const descriptor = Object.getOwnPropertyDescriptor(prototype, property)
-    if (descriptor) {
-      return descriptor
-    }
-    prototype = Object.getPrototypeOf(prototype)
-  }
-  return undefined
-}
-
-function restorePropertyDescriptor(
-  element: object,
-  property: string,
-  descriptor: PropertyDescriptor | undefined
-): void {
-  if (descriptor) {
-    Object.defineProperty(element, property, descriptor)
-    return
-  }
-  delete (element as Record<string, unknown>)[property]
-}

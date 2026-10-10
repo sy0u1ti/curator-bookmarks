@@ -233,26 +233,6 @@ export function mergeNaturalSearchResultSets(
   return [...merged.values()].sort(compareNaturalSearchResults)
 }
 
-export function getNaturalSearchStatusLabel(plan: NaturalSearchPlan | null): string {
-  if (!plan) {
-    return '自然语言搜索'
-  }
-
-  const parts = [plan.source === 'ai' ? 'AI 解析' : '本地解析']
-  if (plan.dateRange?.label) {
-    parts.push(plan.dateRange.label)
-  }
-  const keywordSummary = getNaturalKeywordSummary(plan)
-  if (keywordSummary) {
-    parts.push(`关键词 ${keywordSummary}`)
-  }
-  const exclusionSummary = formatNaturalTerms(plan.excludedTerms, 2)
-  if (exclusionSummary) {
-    parts.push(`排除 ${exclusionSummary}`)
-  }
-  return parts.join(' · ')
-}
-
 function parseNaturalDateRange(query: string, now: number): NaturalSearchDateRange | null {
   const text = String(query || '').toLowerCase()
   const current = new Date(now)

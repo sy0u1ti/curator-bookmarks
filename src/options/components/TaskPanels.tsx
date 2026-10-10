@@ -123,7 +123,7 @@ export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function RecyclePanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="recycle" className={OPTION_PANEL_CLASS} aria-labelledby="recycle-title" hidden={hidden}>
-      <OptionPanelHeader titleId="recycle-title" title="回收站" description="恢复暂时移除的书签，或永久清理不再需要的内容。" />
+      <OptionPanelHeader titleId="recycle-title" title="回收站" description="记录保留至你主动清空。可恢复暂时移除的书签，或永久清理不再需要的内容。" />
 
       <div className={RECYCLE_GROUP_CLASS}>
         <RecycleControls />

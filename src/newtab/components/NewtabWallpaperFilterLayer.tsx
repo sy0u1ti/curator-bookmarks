@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { isWallpaperFilterMaskStyle } from '../background-mask-settings'
+import { getBackgroundMediaRect, setBackgroundFilterStatus } from '../background-filter-runtime'
 import { useNewtabBackgroundMediaView } from '../newtab-background-media-store'
 import { useNewtabBackgroundSettingsView } from '../newtab-background-settings-store'
 
@@ -68,7 +69,7 @@ export function NewtabWallpaperFilterLayer() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const media = useNewtabBackgroundMediaView()
   const background = useNewtabBackgroundSettingsView()
-  const active = background.maskEnabled && isWallpaperFilterMaskStyle(background.maskStyle)
+  const active = background.maskEnabled && background.maskFilterStrength > 0 && isWallpaperFilterMaskStyle(background.maskStyle)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -111,6 +112,7 @@ export function NewtabWallpaperFilterLayer() {
       const context = canvas.getContext('2d', { alpha: true })
       if (!context) {
         clear()
+        setBackgroundFilterStatus(background.maskStyle, '浏览器无法创建滤镜画布，原背景和遮罩仍然保留。')
         return
       }
       const viewport = resizeFilterCanvas(canvas, context)
@@ -119,7 +121,7 @@ export function NewtabWallpaperFilterLayer() {
       if (background.maskStyle === 'grain') {
         drawGrain(context, viewport)
         canvas.style.mixBlendMode = 'overlay'
-        canvas.style.opacity = String(0.08 + (0.22 * background.maskFilterStrength / 100))
+        canvas.style.opacity = String(0.3 * background.maskFilterStrength / 100)
       } else if (sampler) {
         currentSampler = sampler
         context.fillStyle = FILTER_BACKGROUND_COLOR
@@ -150,7 +152,7 @@ export function NewtabWallpaperFilterLayer() {
           )
         }
         canvas.style.mixBlendMode = 'normal'
-        canvas.style.opacity = '1'
+        canvas.style.opacity = String(background.maskFilterStrength / 100)
       } else {
         clear()
         return
@@ -158,6 +160,7 @@ export function NewtabWallpaperFilterLayer() {
 
       canvas.dataset.effect = background.maskStyle
       canvas.dataset.ready = 'true'
+      setBackgroundFilterStatus(background.maskStyle, '')
     }
 
     const renderCurrentSource = async () => {
@@ -174,12 +177,12 @@ export function NewtabWallpaperFilterLayer() {
         image.crossOrigin = media.src.startsWith('http') ? 'anonymous' : ''
         const ready = await waitForFilterImage(image, media.src)
         if (ready && !cancelled) {
-          renderSampler(
-            createFilterSampler(image, image.naturalWidth, image.naturalHeight, sampleCanvas) ||
-            createSolidColorSampler(background.color)
-          )
+          const sampler = createFilterSampler(image, image.naturalWidth, image.naturalHeight, sampleCanvas)
+          renderSampler(sampler)
+          if (!sampler) setBackgroundFilterStatus(background.maskStyle, '无法读取图片像素。请下载图片后使用本地图片，原背景和遮罩仍然保留。')
         } else if (!cancelled) {
-          renderSampler(createSolidColorSampler(background.color))
+          clear()
+          setBackgroundFilterStatus(background.maskStyle, '滤镜无法读取这张图片。请使用本地图片，原背景和遮罩仍然保留。')
         }
         return
       }
@@ -187,15 +190,15 @@ export function NewtabWallpaperFilterLayer() {
         const video = document.querySelector<HTMLVideoElement>('.newtab-background-video')
         if (video && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
           renderSampler(
-            createFilterSampler(video, video.videoWidth, video.videoHeight, sampleCanvas) ||
-            createSolidColorSampler(background.color)
+            createFilterSampler(video, video.videoWidth, video.videoHeight, sampleCanvas)
           )
         } else {
           clear()
         }
         return
       }
-      renderSampler(createSolidColorSampler(background.color))
+      if (background.type === 'color') renderSampler(createSolidColorSampler(background.color))
+      else clear()
     }
 
     const scheduleResizeRender = () => {
@@ -353,6 +356,7 @@ export function NewtabWallpaperFilterLayer() {
     background.maskFilterSpacing,
     background.maskFilterStrength,
     background.maskStyle,
+    background.type,
     media.backgroundPosition,
     media.backgroundSize,
     media.kind,
@@ -467,8 +471,10 @@ function drawGrain(
   const tileContext = tile.getContext('2d')
   if (!tileContext) return
   const imageData = tileContext.createImageData(tile.width, tile.height)
+  let seed = 17
   for (let index = 0; index < imageData.data.length; index += 4) {
-    const value = Math.floor(Math.random() * 255)
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+    const value = seed >>> 24
     imageData.data[index] = value
     imageData.data[index + 1] = value
     imageData.data[index + 2] = value
@@ -504,7 +510,8 @@ function drawHalftone(
       const nextTone = clampNumber(tone + (hover * 0.24), 0, 1)
       if (nextTone <= 0.01) continue
       const radius = clampNumber(nextTone * maxRadius * (1 + (hover * 0.26)), 0.7, maxRadius * 1.24)
-      const ink = getCurvedEffectColor(color, nextTone, 0.2 + (hover * 0.24))
+      const gray = Math.round(getLuminance(color) * 255)
+      const ink = getCurvedEffectColor({ red: gray, green: gray, blue: gray }, nextTone, 0)
       context.globalAlpha = clampNumber(0.28 + (nextTone * 0.72) + (hover * 0.14), 0.12, 1)
       context.fillStyle = `rgb(${ink.red} ${ink.green} ${ink.blue})`
       context.beginPath()
@@ -532,15 +539,8 @@ function drawAscii(
   context.textBaseline = 'middle'
   context.textAlign = 'center'
   const glyphMetrics = getAsciiGlyphMetrics(context, fontSize)
-  const xStep = Math.max(
-    getControlRange(spacing, viewport.width < 720 ? 8 : 9, viewport.width < 720 ? 24 : 27),
-    glyphMetrics.glyphWidth * 1.12
-  )
-  const lineHeight = Math.max(
-    getControlRange(spacing, 10, viewport.width < 720 ? 26 : 28),
-    glyphMetrics.glyphHeight * 1.16,
-    fontSize * 1.08
-  )
+  const xStep = glyphMetrics.glyphWidth * 1.12 + getControlRange(spacing, 0, 18)
+  const lineHeight = Math.max(glyphMetrics.glyphHeight * 1.16, fontSize * 1.08) + getControlRange(spacing, 0, 16)
   for (let y = lineHeight / 2; y < viewport.height + lineHeight; y += lineHeight) {
     for (let x = xStep / 2; x < viewport.width + xStep; x += xStep) {
       const color = sampleColor(sampler, metrics, x, y)
@@ -565,36 +565,7 @@ function getRenderedMediaMetrics(
   backgroundSize: string,
   backgroundPosition: string
 ): RenderedMediaMetrics {
-  const coverScale = Math.max(
-    viewport.width / sampler.naturalWidth,
-    viewport.height / sampler.naturalHeight
-  )
-  const customWidth = parseBackgroundWidth(backgroundSize, viewport)
-  const scale = customWidth > 0 ? customWidth / sampler.naturalWidth : coverScale
-  const renderedWidth = sampler.naturalWidth * scale
-  const renderedHeight = sampler.naturalHeight * scale
-  const [positionX, positionY] = parseBackgroundPosition(backgroundPosition)
-  return {
-    scale,
-    offsetX: (viewport.width - renderedWidth) * positionX,
-    offsetY: (viewport.height - renderedHeight) * positionY
-  }
-}
-
-function parseBackgroundWidth(value: string, viewport: { width: number; height: number }): number {
-  const normalized = String(value || '').trim()
-  const maxMatch = /^max\(([\d.]+)vw,\s*([\d.]+)vh\)\s+auto$/i.exec(normalized)
-  if (maxMatch) {
-    return Math.max((Number(maxMatch[1]) / 100) * viewport.width, (Number(maxMatch[2]) / 100) * viewport.height)
-  }
-  const percentMatch = /^([\d.]+)%\s+auto$/i.exec(normalized)
-  return percentMatch ? (Number(percentMatch[1]) / 100) * viewport.width : 0
-}
-
-function parseBackgroundPosition(value: string): [number, number] {
-  if (String(value).trim() === 'center') return [0.5, 0.5]
-  const match = /^([\d.]+)%\s+([\d.]+)%$/i.exec(String(value || '').trim())
-  return match ? [Number(match[1]) / 100, Number(match[2]) / 100] : [0.5, 0.5]
+  return getBackgroundMediaRect(sampler.naturalWidth, sampler.naturalHeight, viewport, backgroundSize, backgroundPosition)
 }
 
 function sampleColor(

@@ -216,10 +216,6 @@ body {
   --curator-overlay-close-duration: var(--panel-close-dur);
 }
 
-.curator-overlay-panel--list {
-  --curator-overlay-enter-y: 4px;
-}
-
 .curator-overlay-panel--menu,
 .curator-overlay-panel--popover {
   --curator-overlay-enter-y: 4px;
@@ -387,40 +383,6 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .t-segmented::before { transition: none; }
-}
-
-.t-tt {
-  background: var(--tt-bg);
-  color: var(--tt-fg);
-  opacity: 1;
-  transform: scale(1);
-  transform-origin: center;
-  transition:
-    opacity   var(--tt-in-dur) var(--tt-in-ease),
-    transform var(--tt-in-dur) var(--tt-in-ease);
-}
-.t-tt[data-side="top"] { transform-origin: 50% 100%; }
-.t-tt[data-side="bottom"] { transform-origin: 50% 0; }
-.t-tt[data-side="left"] { transform-origin: 100% 50%; }
-.t-tt[data-side="right"] { transform-origin: 0 50%; }
-.t-tt[data-starting-style],
-.t-tt[data-ending-style] {
-  opacity: 0;
-  transform: scale(var(--tt-scale));
-}
-.t-tt[data-ending-style] {
-  transition-duration: var(--tt-out-dur);
-  transition-timing-function: var(--tt-out-ease);
-}
-.t-tt[data-instant] {
-  transition-duration: 0ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .t-tt {
-    transform: none !important;
-    transition: opacity 80ms linear !important;
-  }
 }
 
 .t-panel-slide {
@@ -617,36 +579,6 @@ body {
   }
 }
 
-.t-modal {
-  transform-origin: center;
-  transform: scale(var(--modal-scale));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--modal-open-dur) var(--modal-ease),
-    opacity   var(--modal-open-dur) var(--modal-ease);
-}
-.t-modal.is-open,
-.t-modal[data-open="true"],
-.t-modal[data-open]:not([data-open="false"]) {
-  transform: scale(1);
-  opacity: 1;
-  pointer-events: auto;
-}
-.t-modal[data-starting-style] {
-  transform: scale(var(--modal-scale));
-  opacity: 0;
-  pointer-events: none;
-}
-.t-modal.is-closing,
-.t-modal[data-ending-style] {
-  transform: scale(var(--modal-scale-close));
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform var(--modal-close-dur) var(--modal-ease),
-    opacity   var(--modal-close-dur) var(--modal-ease);
-}
 .t-modal-backdrop {
   opacity: 0;
   pointer-events: none;
@@ -669,9 +601,7 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-modal,
   .t-modal-backdrop {
-    transform: none !important;
     transition: opacity 80ms linear !important;
   }
 

@@ -535,6 +535,7 @@ function DeleteBookmarkModal({
 }
 
 function handleEditInputKeydown(event: React.KeyboardEvent<HTMLInputElement>) {
+  if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return
   if (event.key === 'Enter') {
     event.preventDefault()
     dispatchPopupModalAction('save-edit')
