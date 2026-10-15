@@ -719,7 +719,7 @@ const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
         <SwitchRow
           id="general-hide-settings-trigger"
           title="隐藏设置图标"
-          description="桌面端移到右上角时显示，触屏设备始终显示。"
+          description="开启后默认隐藏入口，鼠标悬停于右上角时渐显；触屏设备始终可见。"
           controlRef={firstControlRef}
           checked={folderSource.general.hideSettingsTrigger}
           onCheckedChange={(checked) => {
@@ -729,7 +729,7 @@ const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
         <SwitchRow
           id="general-open-bookmarks-new-tab"
           title="新标签页打开"
-          description="点击书签图标时在新标签页打开，当前新标签页保持不变。"
+          description="点击书签图标在新标签页打开目标链接，保留当前 Curator 页面。"
           checked={folderSource.general.openBookmarksInNewTab}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('openBookmarksInNewTab', checked)
@@ -837,7 +837,7 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
         <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
           <SettingLabelStack
             title="浏览方式"
-            description="展开：所有来源文件夹的书签一屏铺开。导航：文件夹显示为卡片，点击进入。"
+            description="「展开」平铺显示所有书签；「导航」将文件夹呈现为卡片，点击下钻浏览。"
           />
           <ToggleGroup
             id="folder-browse-mode-control"
@@ -862,14 +862,14 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
         <SwitchRow
           id="folder-hide-names"
           title="隐藏文件夹名"
-          description="只保留图标网格，适合单一来源或极简布局。"
+          description="不显示文件夹小标题，直接呈现图标网格，适合极简或单目录场景。"
           checked={folderSource.hideFolderNames}
           onCheckedChange={dispatchNewtabFolderHideNamesToggle}
         />
         <SwitchRow
           id="folder-show-source-navigation"
           title="显示来源导航"
-          description="在多个来源之间快速跳转，不影响文件夹和书签拖拽排序。"
+          description="在顶部显示目录快速跳转条，多目录切换更便捷，不影响拖拽排序。"
           checked={folderSource.general.showSourceNavigation}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('showSourceNavigation', checked)
@@ -1221,11 +1221,11 @@ const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelEleme
       <SwitchRow
         id="background-mask-enabled"
         title="背景蒙版"
-        description="提升复杂背景上的图标和文字可读性。"
+        description="在壁纸与卡片之间叠加视觉蒙版，提升文字和图标的可读性。"
         checked={backgroundSettings.maskEnabled}
         onCheckedChange={dispatchNewtabBackgroundMaskToggle}
       />
-      <SliderRow rowId="background-mask-overlay-row" id="background-mask-overlay" label="遮罩浓度" description="独立控制明暗遮罩，0% 保留原图亮度。" valueId="background-mask-overlay-value" value={`${backgroundSettings.maskOverlay}%`} min="0" max="100" defaultValue="50" ariaLabel="背景遮罩效果" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskOverlay', value)} sliderValue={backgroundSettings.maskOverlay} ticks={['透明', '50%', '覆盖']} />
+      <SliderRow rowId="background-mask-overlay-row" id="background-mask-overlay" label="遮罩浓度" description="控制背景明暗遮罩强度；0% 保持原图明度，提高后压暗以突出文字。" valueId="background-mask-overlay-value" value={`${backgroundSettings.maskOverlay}%`} min="0" max="100" defaultValue="50" ariaLabel="背景遮罩效果" hidden={backgroundSettings.maskStyleHidden} onValueChange={(value) => dispatchNewtabBackgroundSettingFieldChange('maskOverlay', value)} sliderValue={backgroundSettings.maskOverlay} ticks={['透明', '50%', '覆盖']} />
       <div id="background-mask-style-row" className={settingRowClassName()} hidden={backgroundSettings.maskStyleHidden}>
         <SettingLabelStack title="蒙版样式" description={maskMeta.description} />
         <Select
@@ -1254,7 +1254,7 @@ const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelEleme
       <SwitchRow
         id="background-mask-filter-hover"
         title="悬停效果"
-        description="在空白背景区域移动指针时增强附近的滤镜纹理。"
+        description="鼠标在壁纸空白处移动时，动态增强指针周围的滤镜纹理交互。"
         checked={backgroundSettings.maskFilterHover}
         hidden={backgroundSettings.maskFilterHoverHidden}
         onCheckedChange={dispatchNewtabBackgroundFilterHoverToggle}
@@ -1272,14 +1272,14 @@ const BackgroundMaskSettings = memo(function BackgroundMaskSettings({ panelEleme
 const IconSettingSwitchRow = memo(SwitchRow)
 
 const GLASS_CONTROLS: Array<{ key: NewtabGlassSettingKey; label: string; description: string; unit?: string }> = [
-  { key: 'blur', label: '玻璃模糊', description: '降低数值更清透，提高数值更柔和。', unit: 'px' },
-  { key: 'tint', label: '底色深浅', description: '降低数值透出壁纸，亮色壁纸可适当加深。', unit: '%' },
-  { key: 'bevel', label: '边缘范围', description: '随模块尺寸适配，拉高可扩大折射区域。' },
-  { key: 'thickness', label: '折射强度', description: '拉高让玻璃后的背景弯曲更明显。' },
-  { key: 'dispersion', label: '色散', description: '在边缘加入细微的彩色折射。' },
-  { key: 'rim', label: '边缘高光', description: '调整玻璃边缘的亮度。' },
-  { key: 'light', label: '光照方向', description: '改变高光照入的方向。', unit: '°' },
-  { key: 'smooth', label: '边缘柔化', description: '平滑折射边缘的细节。', unit: 'px' }
+  { key: 'blur', label: '玻璃模糊', description: '背景模糊半径；数值越小越透光，数值越大磨砂感越强。', unit: 'px' },
+  { key: 'tint', label: '底色深浅', description: '卡片底色浓度；浅色壁纸调高可提升对比度，深色壁纸调低透出背景。', unit: '%' },
+  { key: 'bevel', label: '边缘范围', description: '玻璃斜切边宽度；拉高后边缘折射更宽阔厚实。' },
+  { key: 'thickness', label: '折射强度', description: '背景透视扭曲度；数值越大，穿透玻璃的壁纸弯曲形变越明显。' },
+  { key: 'dispersion', label: '色散', description: '棱镜分光强度；在卡片高光边缘产生微妙的彩虹色色散。' },
+  { key: 'rim', label: '边缘高光', description: '卡片边缘轮廓光的亮度，突出悬浮晶莹感。' },
+  { key: 'light', label: '光照方向', description: '模拟光源照射的角度（0°~360°），改变亮边与阴影方位。', unit: '°' },
+  { key: 'smooth', label: '边缘柔化', description: '倒角过渡平滑度；让高光边缘与镜面衔接更细腻自然。', unit: 'px' }
 ]
 
 const GlassSettingsSection = memo(function GlassSettingsSection({
@@ -1438,7 +1438,7 @@ const IconSettingsSection = memo(function IconSettingsSection() {
           ))}
         </div>
         <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
-          <SettingLabelStack title="布局方式" description="自动适配屏幕宽度；固定列数会在窄屏收缩。" />
+          <SettingLabelStack title="布局方式" description="「自动适配」随屏幕自动排列；「固定列数」始终保持指定网格列宽。" />
           <ToggleGroup
             id="icon-layout-control"
             slidingIndicator
@@ -1460,14 +1460,14 @@ const IconSettingsSection = memo(function IconSettingsSection() {
         <IconSettingSwitchRow
           id="icon-vertical-center"
           title="垂直居中"
-          description="书签较少时让主内容贴近屏幕中部。"
+          description="书签较少时自动将内容在屏幕垂直方向居中对齐，避免顶部偏坠。"
           checked={iconPreview.verticalCenter}
           onCheckedChange={dispatchNewtabIconVerticalCenterToggle}
         />
         <IconSettingSwitchRow
           id="icon-show-titles"
           title="显示标题"
-          description="关闭后卡片收缩为只显示网站图标。"
+          description="关闭后卡片仅展示网站图标，文字隐藏，布局更紧凑克制。"
           checked={iconPreview.showTitles}
           onCheckedChange={dispatchNewtabIconShowTitlesToggle}
         />
@@ -1542,14 +1542,14 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SwitchRow
           id="time-enabled"
           title="显示时间模块"
-          description="放在搜索栏上方，关闭后保留原布局间距。"
+          description="在搜索栏上方展示时钟与日期卡片；关闭后收起时钟并自适应间距。"
           checked={timeSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('enabled', checked)}
         />
         <SettingsSelect
           id="time-display-mode"
           label="显示内容"
-          description="保留时间+日期、仅时间、仅日期三种模式。"
+          description="可自由切换「时间和日期」、「仅时间」或「仅日期」。"
           ariaLabel="时间显示内容"
           disabled={timeSettings.settingsDisabled}
           onValueChange={(value) => {
@@ -1588,7 +1588,7 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SwitchRow
           id="time-show-seconds"
           title="显示秒数"
-          description="开启后每秒更新；关闭时按分钟更新以减少渲染。"
+          description="开启后每秒刷新动态时间；关闭后按分钟跳变以节省系统能耗。"
           checked={timeSettings.showSeconds}
           disabled={timeSettings.switchesDisabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('showSeconds', checked)}
@@ -1596,7 +1596,7 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SwitchRow
           id="time-hour12"
           title="12 小时制"
-          description="显示 AM/PM，24 小时制会隐藏该标记。"
+          description="开启后显示 12 小时制与 AM/PM 标记，关闭则使用 24 小时制。"
           checked={timeSettings.hour12}
           disabled={timeSettings.switchesDisabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
@@ -1663,7 +1663,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
         <SwitchRow
           id="search-enabled"
           title="启用"
-          description="在新标签页顶部搜索本地书签、命令和可选网页搜索。"
+          description="在新标签页居中呈现搜索栏，支持快速检索书签及发起网页搜索。"
           controlRef={firstControlRef}
           checked={searchSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('enabled', checked)}
@@ -1671,7 +1671,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
         <SwitchRow
           id="search-web-enabled"
           title="启用网页搜索"
-          description="提交网页搜索时，关键词会发送给所选搜索引擎；关闭后仅保留本地书签搜索。"
+          description="允许按下回车跳转至搜索引擎；关闭后搜索栏仅用于快速过滤本地书签。"
           checked={searchSettings.webSearchEnabled}
           disabled={searchSettings.webSearchDisabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('webSearchEnabled', checked)}
@@ -1679,7 +1679,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
         <SwitchRow
           id="search-open-new-tab"
           title="在新标签页打开链接"
-          description="保留当前 Curator 新标签页。"
+          description="搜索结果在新的浏览器标签页中开启，保留当前新标签页原位。"
           checked={searchSettings.openInNewTab}
           disabled={searchSettings.openInNewTabDisabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
@@ -1687,7 +1687,7 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
         <SettingsSelect
           id="search-engine"
           label="搜索引擎"
-          description="输入内容不是网址时使用此引擎。"
+          description="在搜索栏输入普通文字或关键词时默认使用的搜索引擎。"
           ariaLabel="默认搜索引擎"
           disabled={searchSettings.engineControlsDisabled}
           onValueChange={(value) => {
