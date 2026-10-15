@@ -3,7 +3,10 @@ import type { GlassRasterInput } from './hyalite-raster.js'
 
 const CACHE_NAME = 'curator-glass-textures-v1'
 const LUMA_HEADER = 'x-curator-luma'
-const MAX_ENTRIES = 96
+// A reload transiently stages the remote URL and then the cached local Blob as
+// two scenes. Keep both variants plus recent edits so the second scene still
+// hits instead of evicting the entries it is about to read.
+const MAX_ENTRIES = 192
 const MAX_TEXTURE_BYTES = 512 * 1024
 const MAX_AGE_MS = 24 * 60 * 60 * 1000
 let cache: Promise<Cache | null> | undefined

@@ -49,17 +49,9 @@
         transform: translateZ(0);
       }
 
-      /* Keep the interactive layout measurable, then present its
-         decoded glass and content together. Wallpaper remains independently live.
-         This also covers the classic bookmark snapshot before app CSS loads. */
-      html[data-newtab-glass-startup="pending"] :is(.newtab-shell, .settings-trigger-zone, #newtab-bookmark-preboot) {
-        opacity: 0 !important;
-        visibility: hidden !important;
-        transition: none !important;
-      }
-      html[data-newtab-glass-startup="pending"] :is(.newtab-shell, .settings-trigger-zone, #newtab-bookmark-preboot) * {
-        visibility: hidden !important;
-      }
+      /* Content is never hidden while glass refraction is prepared. The cached
+         bookmark snapshot and the live shell paint with the compatible material
+         from the first frame; refraction settles inside the startup window. */
     </style>
     <style id="newtab-startup-background-mask-style">
       #newtab-background-mask {

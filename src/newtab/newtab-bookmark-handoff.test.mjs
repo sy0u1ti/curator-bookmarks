@@ -361,7 +361,9 @@ try {
 
   await page.goto(url, { waitUntil: 'commit' })
   await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'attached', timeout: 5_000 })
-  assert.equal(await page.locator(prebootTileSelector(bookmarkId)).isVisible(), false, 'The cached frosted shell must not paint before complete glass is ready')
+  // The snapshot paints immediately with the compatible material; the point of
+  // this check is that it never appears late or moves when glass swaps in.
+  await page.locator(prebootTileSelector(bookmarkId)).waitFor({ state: 'visible', timeout: 5_000 })
   const prebootTop = await page.locator(`${prebootTileSelector(bookmarkId)} .newtab-bookmark-preboot-title`).evaluate(
     (element) => element.getBoundingClientRect().top
   )
@@ -464,8 +466,11 @@ try {
     `Cached and final bookmark titles should share one position: ${JSON.stringify(diagnostics)}`
   )
   assert.ok(
-    interactionHandoffMs !== null && interactionHandoffMs >= 0 && interactionHandoffMs <= 100,
-    `Complete glass must accept pointer interaction immediately upon presentation: ${JSON.stringify(diagnostics)}`
+    // The shell is interactive from the first painted frame now, so the live
+    // grid may take pointer ownership before refraction finishes. It must never
+    // lag the presented material by more than a frame budget.
+    interactionHandoffMs !== null && interactionHandoffMs <= 100,
+    `The live grid must accept pointer interaction no later than complete glass: ${JSON.stringify(diagnostics)}`
   )
   assert.equal(
     visibleGlassFrames.length,

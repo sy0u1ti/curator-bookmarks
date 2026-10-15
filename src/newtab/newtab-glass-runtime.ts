@@ -4,7 +4,11 @@ import { applyGlassSurfaceTint, getGlassRefractionOptions, type NewtabGlassSetti
 import type { GlassMapRequest, GlassMapResponse } from './hyalite-map-worker.js'
 import type { GlassRasterInput, GlassRasterScene } from './hyalite-raster.js'
 import { getNewtabBackgroundMediaView } from './newtab-background-media-store.js'
-import { finishNewtabGlassStartup, isNewtabGlassStartupPending } from './newtab-glass-startup.js'
+import {
+  finishNewtabGlassStartup,
+  isNewtabGlassStartupPending,
+  NEWTAB_GLASS_STARTUP_READY_EVENT
+} from './newtab-glass-startup.js'
 import { glassTextureCacheKey, readGlassTexture, writeGlassTexture, type CachedGlassTexture } from './newtab-glass-cache.js'
 
 export const GLASS_SURFACE_SELECTOR = [
@@ -123,6 +127,16 @@ interface Surface {
   motion: Set<string>
   failed: boolean
   preparing: boolean
+  /** Decoded lens held until the startup pass can present every surface at once. */
+  prepared: PreparedRefraction | null
+}
+
+interface PreparedRefraction {
+  blur: number
+  luminance: number | null
+  opticsSignature: string
+  renderKey: string
+  url: string
 }
 let disposeRuntime: (() => void) | null = null
 
@@ -136,6 +150,11 @@ export function startNewtabGlassRuntime(): () => void {
   let startupFrame = 0
   let startupStableFrames = 0
   let startupHadContent = false
+  // pending: hold decoded lenses for an atomic first commit.
+  // committed: refraction is live and later lenses may apply directly.
+  // settled: the guard chose the compatible material; late lenses are dropped
+  // until the user explicitly changes an optical setting.
+  let startupPhase: 'pending' | 'committed' | 'settled' = 'pending'
   let worker = new MapWorker()
   const surfaces = new Map<HTMLElement, Surface>()
   const app = document.querySelector<HTMLElement>('.newtab-app')
@@ -235,23 +254,60 @@ export function startNewtabGlassRuntime(): () => void {
     const waitingForMedia = app?.dataset.backgroundMedia === 'true' && getNewtabBackgroundMediaView().kind === 'none'
     const contentReady = Boolean(document.querySelector('.newtab-page, .newtab-state')) &&
       !waitingForMedia && !app?.classList.contains('newtab-booting') && !app?.classList.contains('loading-wallpaper')
-    const pending = [...surfaces.values()].some(surface => surface.selected &&
-      (surface.timer || surface.preparing || (!surface.failed && surface.element.dataset.glassMode !== 'refraction')))
-    // Titles may continue settling for seconds. Their own guard transfers the
-    // cached baseline; that must never hold the clock/search/settings hostage.
-    const preboot = document.getElementById('newtab-bookmark-preboot')
-    const handoffReady = !preboot || preboot.dataset.surfaceHandoff === 'true'
+    // Content is already painted with the compatible material, so the startup
+    // pass only waits for the first viewport's decoded lenses to land together.
+    // The bookmark snapshot may still own the grid pixels while font metrics
+    // settle; that handoff never gates the lens commit or the page reveal.
+    const startupSurfaces = [...surfaces.values()].filter(surface => surface.selected)
+    const pending = startupSurfaces.some(surface =>
+      surface.timer || surface.preparing || (!surface.failed && !surface.prepared && surface.element.dataset.glassMode !== 'refraction'))
     if (contentReady && !startupHadContent) {
       startupHadContent = true
       performance.mark('newtab.glassContentReady')
     }
-    if (contentReady && surfaces.size && !rebalanceTimer && !pending && handoffReady) startupStableFrames++
+    if (contentReady && startupSurfaces.length && !pending && !rebalanceTimer) startupStableFrames++
     else startupStableFrames = 0
     if (startupStableFrames >= 2) {
-      finishNewtabGlassStartup([...surfaces.values()].some(surface => surface.selected && surface.failed) ? 'fallback' : 'ready')
+      commitStartupRefraction()
       return
     }
     startupFrame = requestAnimationFrame(checkStartup)
+  }
+
+  function commitStartupRefraction(): void {
+    if (startupPhase !== 'pending') return
+    // All or nothing: one failed lens keeps the whole first viewport on the
+    // compatible material instead of showing a partly refracting shell.
+    if ([...surfaces.values()].some(surface => surface.selected && surface.failed)) {
+      startupPhase = 'settled'
+      surfaces.forEach(releasePreparedRefraction)
+      finishNewtabGlassStartup('fallback')
+      return
+    }
+    startupPhase = 'committed'
+    surfaces.forEach(surface => {
+      const prepared = surface.prepared
+      if (!prepared) return
+      surface.prepared = null
+      applyPreparedLens(surface, prepared)
+    })
+    finishNewtabGlassStartup('ready')
+  }
+
+  function applyPreparedLens(surface: Surface, prepared: PreparedRefraction): void {
+    const element = surface.element
+    const previous = surface.textureUrl
+    surface.textureUrl = prepared.url
+    surface.luminance = prepared.luminance
+    applyGlassSurfaceTint(element, settings.tint, prepared.luminance ?? fallbackLuminance)
+    element.style.setProperty('--newtab-glass-texture', 'url(' + prepared.url + ')')
+    element.dataset.glassRenderer = 'raster'
+    element.dataset.glassBlur = String(prepared.blur)
+    element.dataset.glassOptics = prepared.opticsSignature
+    element.dataset.glassMode = 'refraction'
+    surface.key = prepared.renderKey
+    surface.failed = false
+    if (previous) URL.revokeObjectURL(previous)
   }
 
   function fallback(surface: Surface): void {
@@ -263,6 +319,7 @@ export function startNewtabGlassRuntime(): () => void {
     if (surface.timer) clearTimeout(surface.timer)
     surface.timer = null
     surface.preparing = false
+    releasePreparedRefraction(surface)
     if (surface.selected) resize.unobserve(surface.element)
     surface.selected = false
     surface.key = ''
@@ -275,6 +332,11 @@ export function startNewtabGlassRuntime(): () => void {
     delete surface.element.dataset.glassRenderer
     Hyalite.detach(surface.element)
     fallback(surface)
+  }
+  function releasePreparedRefraction(surface: Surface): void {
+    if (!surface.prepared) return
+    URL.revokeObjectURL(surface.prepared.url)
+    surface.prepared = null
   }
   function prepare(surface: Surface): void {
     surface.timer = null
@@ -313,6 +375,7 @@ export function startNewtabGlassRuntime(): () => void {
       : raster
     const renderKey = input.key + '|' + width + 'x' + height + '|' + JSON.stringify(options) + '|' + opticsSignature + '|' + JSON.stringify(rasterKey)
     if (surface.key === renderKey && element.dataset.glassMode === 'refraction') return
+    if (isNewtabGlassStartupPending() && surface.prepared?.renderKey === renderKey) return
     if (element.dataset.glassRenderer !== 'raster' || element.dataset.glassMode !== 'refraction') fallback(surface)
     const version = surface.version
     surface.preparing = true
@@ -331,6 +394,27 @@ export function startNewtabGlassRuntime(): () => void {
         decoded.src = url
         try { await decoded.decode() } catch { URL.revokeObjectURL(url); throw new Error('Glass texture decode failed') }
         if (stopped || version !== surface.version || !surface.selected || !element.isConnected) { URL.revokeObjectURL(url); return }
+        if (startupPhase === 'pending') {
+          // Present the whole first viewport at once: hold decoded lenses until
+          // every selected surface is ready, then commit in one frame.
+          if (surface.prepared && surface.prepared.url !== url) URL.revokeObjectURL(surface.prepared.url)
+          surface.prepared = {
+            blur: options.blur,
+            luminance: prepared?.luminance ?? null,
+            opticsSignature,
+            renderKey,
+            url
+          }
+          return
+        }
+        // A later lens after the atomic commit, after the guard settled on the
+        // compatible material, or after an explicit settings change: apply
+        // directly. The fallback stylesheet keeps late rims visually off until
+        // the user opts back in, so this only prepares the next explicit change.
+        if (surface.prepared) {
+          URL.revokeObjectURL(surface.prepared.url)
+          surface.prepared = null
+        }
         const previous = surface.textureUrl
         surface.textureUrl = url
         surface.luminance = prepared?.luminance ?? null
@@ -429,7 +513,7 @@ export function startNewtabGlassRuntime(): () => void {
 
   function register(element: HTMLElement): void {
     if (surfaces.has(element) || element.matches(GHOST_SELECTOR)) return
-    const surface: Surface = { element, visible: false, selected: false, version: 0, timer: null, area: 0, width: 0, height: 0, key: '', textureUrl: '', luminance: null, motion: new Set(), failed: false, preparing: false }
+    const surface: Surface = { element, visible: false, selected: false, version: 0, timer: null, area: 0, width: 0, height: 0, key: '', textureUrl: '', luminance: null, motion: new Set(), failed: false, preparing: false, prepared: null }
     surfaces.set(element, surface)
     element.dataset.hyaliteSurface = ''
     // Hyalite models native corner radii. Do not crop its edge with a second lens shape.
@@ -480,6 +564,20 @@ export function startNewtabGlassRuntime(): () => void {
   if (maskElement) sceneChanges.observe(maskElement, { attributes: true, attributeFilter: ['style', 'class'] })
   window.addEventListener('resize', updateScene)
   updateScene()
+  const releaseUncommittedLenses = () => {
+    // The guard settled on the compatible material. Its stylesheet keeps every
+    // late rim hidden, so applying the decoded lenses now warms the next
+    // explicit optical change instead of throwing the work away.
+    if (startupPhase !== 'pending') return
+    startupPhase = 'settled'
+    surfaces.forEach(surface => {
+      const prepared = surface.prepared
+      if (!prepared) return
+      surface.prepared = null
+      applyPreparedLens(surface, prepared)
+    })
+  }
+  window.addEventListener(NEWTAB_GLASS_STARTUP_READY_EVENT, releaseUncommittedLenses)
   startupFrame = requestAnimationFrame(checkStartup)
 
   const settingsChanged = (next: NewtabGlassSettings) => {
@@ -492,6 +590,9 @@ export function startNewtabGlassRuntime(): () => void {
     if (document.documentElement.dataset.newtabGlassStartup === 'fallback') {
       document.documentElement.dataset.newtabGlassStartup = 'ready'
     }
+    // An explicit optical change is the documented way out of the startup
+    // fallback; from here lenses apply as they finish instead of being dropped.
+    startupPhase = 'committed'
     worker.cancelQueued()
     if (document.hidden) return
     surfaces.forEach(surface => {
@@ -577,6 +678,7 @@ export function startNewtabGlassRuntime(): () => void {
     document.removeEventListener('scroll', scrolled, true)
     forcedColors.removeEventListener('change', activity)
     window.removeEventListener('resize', updateScene)
+    window.removeEventListener(NEWTAB_GLASS_STARTUP_READY_EVENT, releaseUncommittedLenses)
     window.removeEventListener('pagehide', dispose)
     disposeRuntime = null
   }
