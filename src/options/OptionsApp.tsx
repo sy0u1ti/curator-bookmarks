@@ -44,6 +44,7 @@ import {
   navGroupClass,
   navGroupTriggerClass,
   navActiveIndicatorClass,
+  navActiveIndicatorExitClass,
   navLinkIconClass,
   navLinkClass,
   navSubitemClass,
@@ -271,73 +272,138 @@ function OptionsSidebar({
   const idPrefix = variant === 'mobile' ? 'mobile-' : ''
   const sidebarRef = useRef<HTMLElement | null>(null)
   const activeIndicatorRef = useRef<HTMLSpanElement | null>(null)
-  const indicatorPositionRef = useRef<{
-    section: OptionsSectionKey
-    x: number
-    y: number
-    layoutX: number
-    layoutY: number
-  } | null>(null)
+  const exitIndicatorRef = useRef<HTMLSpanElement | null>(null)
+  const activeLinkRef = useRef<HTMLElement | null>(null)
+  const exitLinkRef = useRef<HTMLElement | null>(null)
 
   useLayoutEffect(() => {
     const sidebar = sidebarRef.current
     const indicator = activeIndicatorRef.current
-    if (!sidebar || !indicator || !visible) {
+    const exitIndicator = exitIndicatorRef.current
+    if (!sidebar || !indicator || !exitIndicator || !visible) {
       if (indicator) {
         indicator.style.opacity = '0'
         delete indicator.dataset.ready
       }
-      indicatorPositionRef.current = null
+      if (exitIndicator) {
+        exitIndicator.style.opacity = '0'
+      }
+      activeLinkRef.current = null
+      exitLinkRef.current = null
       return
     }
 
     let readyFrame = 0
+
+    type IndicatorGeometry = {
+      clipPath: string
+      height: string
+      transform: string
+      width: string
+    }
+
+    const readGeometry = (link: HTMLElement): IndicatorGeometry | null => {
+      const sidebarRect = sidebar.getBoundingClientRect()
+      const linkRect = link.getBoundingClientRect()
+      if (!linkRect.width || !linkRect.height) {
+        return null
+      }
+      const clipRect = link.closest('.t-acc-panel-inner')?.getBoundingClientRect()
+      return {
+        clipPath: clipRect
+          ? `inset(${Math.max(0, clipRect.top - linkRect.top)}px 0px ${Math.max(0, linkRect.bottom - clipRect.bottom)}px 0px)`
+          : '',
+        height: `${linkRect.height}px`,
+        transform: `translate3d(${linkRect.left - sidebarRect.left + sidebar.scrollLeft}px, ${linkRect.top - sidebarRect.top + sidebar.scrollTop}px, 0)`,
+        width: `${linkRect.width}px`
+      }
+    }
+
+    const paintGeometry = (element: HTMLSpanElement, geometry: IndicatorGeometry) => {
+      element.style.transform = geometry.transform
+      element.style.width = geometry.width
+      element.style.height = geometry.height
+      element.style.clipPath = geometry.clipPath
+    }
+
+    // Replaying an opacity change from a known start value is what guarantees
+    // the browser commits that value before the transition runs.
+    const replayOpacity = (element: HTMLSpanElement, from: string, to: string) => {
+      element.style.transition = 'none'
+      element.style.opacity = from
+      void element.offsetWidth
+      element.style.removeProperty('transition')
+      element.style.opacity = to
+    }
+
+    const isDissolving = (element: HTMLSpanElement) =>
+      element
+        .getAnimations()
+        .some(
+          (animation) =>
+            (animation as CSSTransition).transitionProperty === 'opacity' &&
+            animation.playState !== 'finished'
+        )
+
     const positionIndicator = () => {
       const activeLink = sidebar.querySelector<HTMLElement>(
         '.options-nav-link[aria-current="page"]'
       )
-      if (!activeLink) {
+      const geometry = activeLink ? readGeometry(activeLink) : null
+      if (!activeLink || !geometry) {
         indicator.style.opacity = '0'
-        indicator.style.clipPath = 'inset(50%)'
+        exitIndicator.style.opacity = '0'
         return
       }
 
-      const sidebarRect = sidebar.getBoundingClientRect()
-      const linkRect = activeLink.getBoundingClientRect()
-      if (!linkRect.width || !linkRect.height) {
-        indicator.style.opacity = '0'
-        indicator.style.clipPath = 'inset(50%)'
-        return
+      // The highlight never travels across the sidebar. It is placed on the
+      // active row at once, while a twin parked on the row that was selected
+      // dissolves there, so changing sections reads as one highlight handing
+      // over in place instead of a shape drifting between rows.
+      const outgoing = activeLinkRef.current
+      const selectionChanged = outgoing !== activeLink
+      // A second selection can arrive while the twin is still fading.
+      // Re-parking it then would snap a half-faded copy back to full opacity
+      // on the row in between, so that copy is left to finish where it is.
+      const outgoingGeometry =
+        selectionChanged && outgoing && !isDissolving(exitIndicator)
+          ? readGeometry(outgoing)
+          : null
+      if (outgoingGeometry) {
+        paintGeometry(exitIndicator, outgoingGeometry)
+        exitLinkRef.current = outgoing
       }
+      activeLinkRef.current = activeLink
+      paintGeometry(indicator, geometry)
 
-      const clipRect = activeLink.closest('.t-acc-panel-inner')?.getBoundingClientRect()
-      const x = linkRect.left - sidebarRect.left + sidebar.scrollLeft
-      const y = linkRect.top - sidebarRect.top + sidebar.scrollTop
-      let position = indicatorPositionRef.current
-      if (!position || position.section !== activeSectionKey) {
-        position = {
-          section: activeSectionKey,
-          x: x - (position?.layoutX ?? 0),
-          y: y - (position?.layoutY ?? 0),
-          layoutX: position?.layoutX ?? 0,
-          layoutY: position?.layoutY ?? 0
+      if (selectionChanged) {
+        if (outgoingGeometry) {
+          replayOpacity(exitIndicator, '1', '0')
         }
-        indicatorPositionRef.current = position
-        indicator.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`
+        // The first placement paints settled: there is nothing to hand over
+        // from, so it must not spend a frame fading in. A quick second
+        // selection also keeps the fade already running rather than
+        // restarting it from nothing.
+        if (!outgoing || isDissolving(indicator)) {
+          indicator.style.opacity = '1'
+        } else {
+          replayOpacity(indicator, '0', '1')
+        }
       } else {
-        position.layoutX = x - position.x
-        position.layoutY = y - position.y
+        // Layout movement only keeps the highlight glued to its row, with no
+        // transition to ride; replaying the fade here would flicker on every
+        // resize and scroll.
+        indicator.style.opacity = '1'
       }
 
-      // Selection changes ease through transform; layout movement is added
-      // immediately so a resizing disclosure never restarts that transition.
-      indicator.style.translate = `${position.layoutX}px ${position.layoutY}px`
-      indicator.style.width = `${linkRect.width}px`
-      indicator.style.height = `${linkRect.height}px`
-      indicator.style.clipPath = clipRect
-        ? `inset(${Math.max(0, clipRect.top - linkRect.top)}px 0px ${Math.max(0, linkRect.bottom - clipRect.bottom)}px 0px)`
-        : ''
-      indicator.style.opacity = '1'
+      // Keep an in-flight hand-off glued to the row it is dissolving on, so a
+      // resizing disclosure or a scroll never strands it somewhere else.
+      const exitLink = exitLinkRef.current
+      const exitGeometry = exitLink && isDissolving(exitIndicator) ? readGeometry(exitLink) : null
+      if (exitGeometry) {
+        paintGeometry(exitIndicator, exitGeometry)
+      }
+
       if (!indicator.dataset.ready && !readyFrame) {
         readyFrame = window.requestAnimationFrame(() => {
           indicator.dataset.ready = 'true'
@@ -366,6 +432,7 @@ function OptionsSidebar({
       ref={sidebarRef}
     >
       <span className={navActiveIndicatorClass} ref={activeIndicatorRef} aria-hidden="true" />
+      <span className={navActiveIndicatorExitClass} ref={exitIndicatorRef} aria-hidden="true" />
       {navGroups.map((group, groupIndex) => (
         <div
           className={[navGroupClass, groupIndex > 0 ? 'mt-[18px]' : ''].filter(Boolean).join(' ')}

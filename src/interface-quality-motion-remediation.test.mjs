@@ -207,10 +207,14 @@ assert.ok(
     optionsApp.includes("variant=\"mobile\"") &&
     optionsChrome.includes('options-mobile-nav-trigger !hidden') &&
     optionsCss.includes('.options-nav-active-indicator[data-ready="true"]') &&
-    optionsCss.includes('transform var(--duration-very-slow) var(--ease-smooth-out)') &&
+    optionsChrome.includes('options-nav-active-indicator-exit') &&
+    optionsApp.includes('replayOpacity') &&
+    optionsCss.includes('opacity var(--nav-select-dur) var(--nav-select-ease)') &&
+    tokens.includes('--nav-select-dur: var(--duration-quick)') &&
+    !optionsCss.includes('transform var(--duration-very-slow) var(--ease-smooth-out)') &&
     !optionsCss.includes('view-transition-name: options-nav-active') &&
     !switchClasses.includes('motion-reduce:transform-none'),
-  'Options navigation should use a stable moving indicator, a narrow-screen drawer, and truthful reduced-motion switch state.'
+  'Options navigation should hand its selection highlight over in place, keep a narrow-screen drawer, and preserve truthful reduced-motion switch state.'
 )
 
 assert.ok(

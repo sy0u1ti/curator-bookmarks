@@ -107,6 +107,10 @@
   --tabs-bar-bg: var(--ds-surface-1);
   --tabs-pill-bg: var(--ds-selected);
 
+  /* Options 侧栏选中高光：切换选中项不做位移，旧高光在原位溶解，新高光在原位成形。 */
+  --nav-select-dur: var(--duration-quick);
+  --nav-select-ease: var(--ease-in-out);
+
   --tt-in-dur: var(--duration-quick);
   --tt-out-dur: var(--duration-micro);
   --tt-scale: var(--scale-small);
@@ -262,6 +266,7 @@
     --ds-hover-lift: 0px;
     --ds-sheet-offset: 0px;
     --tabs-dur: 80ms;
+    --nav-select-dur: 80ms;
     --tt-in-dur: 80ms;
     --tt-out-dur: 80ms;
     --acc-expand: 1ms;

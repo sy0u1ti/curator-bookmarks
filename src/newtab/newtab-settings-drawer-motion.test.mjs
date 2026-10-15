@@ -1294,22 +1294,72 @@ async function verifyOptionsDisclosureIndicator(page, extensionId) {
   await waitForSelection()
   assert.equal(await trigger.evaluate((element) => document.activeElement === element), true, 'Disclosure motion must preserve keyboard focus')
 
-  await sidebar.locator('a[data-options-section="inbox"]').click()
-  const overlappingMotion = await sidebar.evaluate(async (element) => {
+  const handoff = await sidebar.evaluate(async (element) => {
     const indicator = element.querySelector(':scope > .options-nav-active-indicator')
-    const animation = indicator.getAnimations().find((animation) => animation.transitionProperty === 'transform')
-    if (!animation) throw new Error('Selecting another section should start a highlight slide')
-    const duration = animation.effect.getTiming().duration
+    const exitIndicator = element.querySelector(':scope > .options-nav-active-indicator-exit')
+    const geometryProperties = ['transform', 'translate', 'top', 'left', 'width', 'height', 'clip-path']
+    const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve))
+    const collect = () => [...indicator.getAnimations(), ...exitIndicator.getAnimations()]
+    const placementError = () => Math.abs(
+      indicator.getBoundingClientRect().y -
+        element.querySelector('.options-nav-link[aria-current="page"]').getBoundingClientRect().y
+    )
+
+    // The section click commits on a later tick, so wait for the hand-off to
+    // start rather than assuming it is already running.
+    element.querySelector('a[data-options-section="inbox"]').click()
+    let started = []
+    for (let frame = 0; frame < 60 && !started.length; frame += 1) {
+      await nextFrame()
+      started = collect()
+    }
+    if (!started.length) throw new Error('Selecting another section should hand the highlight over in place')
+    // The highlight has to land on the selected row at once, with no travel.
+    const placed = placementError()
+    // Its outgoing twin dissolves on the row it was on, not somewhere between.
+    const exitPlaced = Math.abs(
+      exitIndicator.getBoundingClientRect().y -
+        element.querySelector('a[data-options-section="availability"]').getBoundingClientRect().y
+    )
+
+    // Toggling the disclosure mid-hand-off relayouts the list, so the dissolve
+    // must survive it and then settle back onto the selected row.
+    const panel = element.querySelector('.t-acc-head').closest('.t-acc').querySelector('.t-acc-panel')
+    const heightBefore = panel.getBoundingClientRect().height
     element.querySelector('.t-acc-head').click()
-    try {
-      await animation.finished
-      return { duration, interrupted: false }
-    } catch {
-      return { duration, interrupted: true }
+    for (let frame = 0; frame < 3; frame += 1) await nextFrame()
+    const dissolveSurvived = collect().some((animation) => animation.playState !== 'finished')
+    for (let frame = 0; frame < 60 && collect().some((animation) => animation.playState === 'running'); frame += 1) {
+      await nextFrame()
+    }
+    await nextFrame()
+    const collapsed = Math.abs(panel.getBoundingClientRect().height - heightBefore)
+    const settled = placementError()
+
+    return {
+      placed,
+      exitPlaced,
+      settled,
+      dissolveSurvived,
+      collapsed,
+      geometry: started
+        .filter((animation) => geometryProperties.includes(animation.transitionProperty)).length,
+      durations: started
+        .filter((animation) => animation.transitionProperty === 'opacity')
+        .map((animation) => animation.effect.getTiming().duration)
     }
   })
-  assert.equal(overlappingMotion.duration, 500, 'Section selection should use the requested slow slide')
-  assert.equal(overlappingMotion.interrupted, false, 'Disclosure layout must not restart an in-flight selection slide')
+  assert.equal(handoff.geometry, 0, `Section selection must not animate the highlight geometry: ${JSON.stringify(handoff)}`)
+  assert.deepEqual(
+    handoff.durations.sort((a, b) => a - b),
+    [150, 150],
+    `Section selection should cross-dissolve the outgoing and incoming highlight together over the quick token: ${JSON.stringify(handoff)}`
+  )
+  assert.ok(handoff.placed <= 1, `The highlight must land on the selected row at once: ${JSON.stringify(handoff)}`)
+  assert.ok(handoff.exitPlaced <= 1, `The outgoing highlight must dissolve on the row it was on: ${JSON.stringify(handoff)}`)
+  assert.ok(handoff.collapsed > 1, `The disclosure must actually relayout under the hand-off: ${JSON.stringify(handoff)}`)
+  assert.ok(handoff.settled <= 1, `The highlight must settle back onto the selected row: ${JSON.stringify(handoff)}`)
+  assert.equal(handoff.dissolveSurvived, true, `Disclosure layout must not cut an in-flight highlight hand-off short: ${JSON.stringify(handoff)}`)
   await waitForSelection()
 }
 

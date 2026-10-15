@@ -48,6 +48,12 @@ export const navLinkClass = [
 export const navActiveIndicatorClass =
   'options-nav-active-indicator pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm bg-ds-selected opacity-0 shadow-[inset_0_0_0_1px_var(--ds-border)]'
 
+/* Twin of the selection highlight. It stays parked on the row that was
+   selected and dissolves there, so a selection change hands the highlight over
+   in place instead of travelling across the sidebar. */
+export const navActiveIndicatorExitClass =
+  'options-nav-active-indicator-exit pointer-events-none absolute left-0 top-0 z-[0] rounded-ds-sm bg-ds-selected opacity-0 shadow-[inset_0_0_0_1px_var(--ds-border)]'
+
 export const navSublistClass = [
   'grid gap-1 ml-2.5 pl-2.5 border-l border-ds-border-subtle',
   'max-[920px]:ml-0 max-[920px]:mt-1.5 max-[920px]:border-l-0'

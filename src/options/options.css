@@ -55,15 +55,24 @@ body,
   --ui-focus-ring: var(--ds-focus);
 }
 
+/* Selection does not travel: the highlight is placed on the active row at once
+   and the copy on the previous row dissolves where it stood, so the handoff
+   reads as one highlight re-forming rather than a shape drifting across the
+   sidebar. Geometry is written without a transition; only the surface tone and
+   the handoff opacity ride the tokens. */
 .options-nav-active-indicator[data-ready="true"] {
   transition:
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     box-shadow var(--ds-motion-fast) var(--ds-ease-standard),
-    opacity var(--ds-motion-fast) var(--ds-ease-standard),
-    transform var(--duration-very-slow) var(--ease-smooth-out);
+    opacity var(--nav-select-dur) var(--nav-select-ease);
 }
 
-.options-nav-active-indicator::before {
+.options-nav-active-indicator-exit {
+  transition: opacity var(--nav-select-dur) var(--nav-select-ease);
+}
+
+.options-nav-active-indicator::before,
+.options-nav-active-indicator-exit::before {
   position: absolute;
   top: 50%;
   left: 4px;
@@ -299,7 +308,8 @@ body,
     transition: opacity 80ms linear !important;
   }
 
-  .options-nav-active-indicator[data-ready="true"] {
+  .options-nav-active-indicator[data-ready="true"],
+  .options-nav-active-indicator-exit {
     transition-property: background-color, box-shadow, opacity !important;
     transition-duration: 80ms !important;
     transition-timing-function: linear !important;
