@@ -73,6 +73,8 @@ export interface PopupContentBookmarkRowViewModel {
 
 export interface PopupContentFolderRowViewModel {
   active?: boolean
+  /** Kept only as an ancestor of a match; the row itself does not match. */
+  dimmed?: boolean
   keyboardActive?: boolean
   countLabel: string
   depth: number
@@ -125,6 +127,15 @@ export interface PopupBookmarkReorderViewModel {
 
 export interface PopupContentViewModel {
   emptyLabel?: string
+  folderFilter?: {
+    ariaLabel: string
+    clearVisible: boolean
+    focusRequestId: number
+    focusSelect: boolean
+    placeholder: string
+    query: string
+    resultCount: number
+  }
   keyboardPane?: 'bookmarks' | 'folders'
   loading?: boolean
   mainState?: {

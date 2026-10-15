@@ -73,6 +73,9 @@ export interface PopupState {
   activeResultIndex: number
   keyboardPane: 'bookmarks' | 'folders'
   activeFolderKeyboardIndex: number
+  folderFilterQuery: string
+  folderFilterFocusRequestId: number
+  folderFilterFocusSelect: boolean
   searchTimer: number | null
   searchRunId: number
   searchPending: boolean
@@ -175,6 +178,9 @@ export const state: PopupState = {
   activeResultIndex: -1,
   keyboardPane: 'bookmarks',
   activeFolderKeyboardIndex: -1,
+  folderFilterQuery: '',
+  folderFilterFocusRequestId: 0,
+  folderFilterFocusSelect: false,
   searchTimer: null,
   searchRunId: 0,
   searchPending: false,

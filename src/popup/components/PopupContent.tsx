@@ -13,6 +13,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { Button } from '../../ui/base/Button'
+import { Input } from '../../ui/base/Input'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion'
@@ -21,6 +22,7 @@ import { normalizeQuery } from '../search'
 import { PopupEmptyState } from './PopupEmptyState'
 import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
 import { getPopupBookmarkReorderTargetIndex } from '../popup-bookmark-reorder'
+import { POPUP_FOLDER_FILTER_INPUT_ID } from '../popup-folder-filter'
 import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import { getPopupSearchGridAria, getPopupSearchResultId } from '../popup-workspace-state'
 import { isSidePanelSurface } from '../../shared/extension-surfaces'
@@ -37,6 +39,11 @@ import type {
 export interface PopupContentActionHandlers {
   onBookmarkOpen?: (bookmarkId: string) => void
   onEmptyAction?: (action: string) => void
+  onFolderFilterApply?: () => void
+  onFolderFilterChange?: (value: string) => void
+  onFolderFilterClear?: () => void
+  onFolderFilterEscape?: () => void
+  onFolderFilterMove?: (delta: number) => void
   onFolderFilter?: (folderId: string) => void
   onFolderFocus?: (index: number) => void
   onKeyboardNavigate?: (key: string) => boolean
@@ -100,6 +107,28 @@ const folderTreeClass =
 const mainListClass =
   'popup-main-list relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const folderRowClass = 'relative block min-h-[34px]'
+// The filter lives in the existing 42px pane header, so it adds no height and
+// no new pane. Geometry matches the folder rows' 34px rhythm, not the 40px
+// main search shell, which would make the header grow.
+const folderFilterShellClass = [
+  'popup-folder-filter group/filter relative flex h-[26px] min-h-[26px] w-full min-w-0 items-center gap-1 rounded-ds-sm border border-transparent bg-ds-text-primary/[0.055] pl-2 pr-1 text-ds-text-primary',
+  'transition-[background-color,border-color,box-shadow] duration-ds-fast ease-ds-standard',
+  'hover:border-ds-border hover:bg-ds-text-primary/[0.085]',
+  'focus-within:border-ds-border-hover focus-within:bg-ds-text-primary/[0.085] focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
+].join(' ')
+const folderFilterIconClass =
+  'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/filter:text-ds-text-secondary'
+const folderFilterInputClass =
+  'min-w-0 flex-auto self-stretch border-0 bg-transparent px-0.5 py-0 text-xs font-medium leading-[1.3] text-ds-text-primary outline-none placeholder:font-normal placeholder:text-ds-text-muted [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:hidden [&::-webkit-search-decoration]:appearance-none'
+const folderFilterClearClass = [
+  'inline-flex h-[18px] w-[18px] flex-none items-center justify-center rounded-md border-0 bg-transparent p-0 text-ds-text-muted',
+  'transition-[background-color,color,opacity,transform,scale] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-active hover:text-ds-text-primary focus-visible:bg-ds-active focus-visible:text-ds-text-primary focus-visible:outline-none',
+  'active:scale-[var(--ds-press-scale)]',
+  'data-[visible=false]:invisible data-[visible=false]:pointer-events-none data-[visible=false]:opacity-0'
+].join(' ')
+const folderFilterEmptyClass =
+  'grid place-items-center rounded-ds-sm px-3 py-6 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainRowClass =
   'popup-main-row relative z-[1] grid min-h-[74px] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0'
 const virtualSpacerClass = 'pointer-events-none block w-full'
@@ -115,6 +144,7 @@ const folderCardClass = [
 ].join(' ')
 const folderCardActiveClass =
   'border-ds-border-hover bg-ds-text-primary/[0.055] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[2px] before:rounded-full before:bg-ds-text-primary/70 before:content-[""]'
+const folderCardDimmedClass = 'opacity-55 hover:opacity-100 focus-visible:opacity-100'
 const folderBranchClass =
   'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
 const rootFolderBranchClass = 'rounded-full border border-white/30'
@@ -609,9 +639,17 @@ function usePopupBookmarkReorderDrag({
   }
 }
 
-function PopupFolderPane({ activeIndex, folderTreeRef, children }: {
+function PopupFolderPane({
+  activeIndex,
+  filter,
+  folderTreeRef,
+  handlers,
+  children
+}: {
   activeIndex: number
+  filter?: PopupContentViewModel['folderFilter']
   folderTreeRef?: RefObject<HTMLDivElement | null>
+  handlers?: PopupContentActionHandlers
   children: ReactNode
 }) {
   const sidePanel = isSidePanelSurface()
@@ -622,7 +660,13 @@ function PopupFolderPane({ activeIndex, folderTreeRef, children }: {
   return (
     <aside className={paneClass} aria-label="文件夹树">
       <header className={paneHeaderClass}>
-        <span>全部文件夹</span>
+        <span className="shrink-0">全部文件夹</span>
+        <PopupFolderFilterField filter={filter} handlers={handlers} />
+        {/* The tree may only contain treeitems, so the result count is
+            announced from the header instead of from inside the list. */}
+        <span className="sr-only" aria-live="polite" aria-atomic="true">
+          {filter?.query ? `${filter.resultCount} 个匹配文件夹` : ''}
+        </span>
         {sidePanel && (
           <Button size="sm" variant="ghost" aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
             aria-expanded={!collapsed} aria-controls="sidepanel-folder-tree" onClick={() => setCollapsed(value => !value)}>
@@ -635,6 +679,96 @@ function PopupFolderPane({ activeIndex, folderTreeRef, children }: {
         {children}
       </div>
     </aside>
+  )
+}
+
+function PopupFolderFilterField({
+  filter,
+  handlers
+}: {
+  filter?: PopupContentViewModel['folderFilter']
+  handlers?: PopupContentActionHandlers
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const query = filter?.query || ''
+  const focusRequestId = filter?.focusRequestId || 0
+
+  useEffect(() => {
+    if (!focusRequestId) {
+      return
+    }
+    const frame = window.requestAnimationFrame(() => {
+      const input = inputRef.current
+      if (!input) {
+        return
+      }
+      input.focus({ preventScroll: true })
+      if (filter?.focusSelect) {
+        input.select()
+      }
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [filter?.focusSelect, focusRequestId])
+
+  if (!filter) {
+    return null
+  }
+
+  return (
+    <label className={folderFilterShellClass} htmlFor={POPUP_FOLDER_FILTER_INPUT_ID}>
+      <Icon name="Search" className={folderFilterIconClass} size={13} aria-hidden="true" />
+      <Input
+        ref={inputRef}
+        id={POPUP_FOLDER_FILTER_INPUT_ID}
+        className={folderFilterInputClass}
+        type="text"
+        role="searchbox"
+        spellCheck={false}
+        autoComplete="off"
+        placeholder={filter.placeholder}
+        aria-label={filter.ariaLabel}
+        aria-keyshortcuts="Control+F Meta+F"
+        value={query}
+        onValueChange={(nextValue) => handlers?.onFolderFilterChange?.(nextValue)}
+        onKeyDown={(event) => {
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) {
+            return
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            event.stopPropagation()
+            handlers?.onFolderFilterEscape?.()
+            return
+          }
+          // The field keeps focus while the tree highlight moves, so a query can
+          // be corrected without leaving the input. Enter applies the highlight.
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            event.stopPropagation()
+            handlers?.onFolderFilterMove?.(event.key === 'ArrowDown' ? 1 : -1)
+            return
+          }
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            event.stopPropagation()
+            handlers?.onFolderFilterApply?.()
+          }
+        }}
+        unstyled
+      />
+      <Button
+        className={folderFilterClearClass}
+        data-visible={filter.clearVisible ? 'true' : 'false'}
+        type="button"
+        aria-label="清空文件夹筛选"
+        aria-hidden={!filter.clearVisible}
+        tabIndex={filter.clearVisible ? undefined : -1}
+        onClick={() => handlers?.onFolderFilterClear?.()}
+        unstyled
+      >
+        <Icon name="X" size={12} aria-hidden="true" />
+      </Button>
+    </label>
   )
 }
 
@@ -713,7 +847,12 @@ export function PopupContent({
       <div className={cx(workspaceContentLayerClass, isLoading ? workspaceContentLoadingClass : '')}>
         <div className={workspaceClass} ref={workspaceRef}
           style={{ '--sidepanel-folder-height': `${54 + sidebarRows.length * POPUP_FOLDER_ROW_HEIGHT}px` } as CSSProperties}>
-          <PopupFolderPane activeIndex={activeFolderIndex} folderTreeRef={folderTreeRef}>
+          <PopupFolderPane
+            activeIndex={activeFolderIndex}
+            filter={state.folderFilter}
+            folderTreeRef={folderTreeRef}
+            handlers={handlers}
+          >
               {folderWindow.before > 0 ? (
                 <div
                   className={virtualSpacerClass}
@@ -738,6 +877,12 @@ export function PopupContent({
                   role="presentation"
                   aria-hidden="true"
                 />
+              ) : null}
+              {/* role=tree may only contain treeitems, so the visual empty
+                  message is hidden from the accessibility tree; the header's
+                  live region announces the same result to screen readers. */}
+              {state.folderFilter?.query && state.folderFilter.resultCount === 0 ? (
+                <div className={folderFilterEmptyClass} data-folder-filter-empty="" role="presentation" aria-hidden="true">未找到文件夹</div>
               ) : null}
           </PopupFolderPane>
           <section
@@ -1129,9 +1274,15 @@ function PopupFolderRow({
   const style = { '--depth': row.depth } as CSSProperties
 
   return (
-    <div className={folderRowClass} style={style} ref={activeFolderRef}>
+    <div className={folderRowClass} data-folder-row-id={row.folderId} style={style} ref={activeFolderRef}>
       <Button
-        className={cx(folderCardClass, row.active ? folderCardActiveClass : '')}
+        className={cx(
+          folderCardClass,
+          row.active ? folderCardActiveClass : '',
+          // Ancestors of a match stay clickable but recede, so the tree keeps
+          // its shape without competing with the actual hits.
+          row.dimmed ? folderCardDimmedClass : ''
+        )}
         type="button"
         role="treeitem"
         aria-expanded={row.expanded}

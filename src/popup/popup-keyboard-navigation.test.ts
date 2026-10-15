@@ -30,6 +30,8 @@ function run(): void {
   testContentRowsForwardEnterToKeyboardNavigation()
   testModalFolderPickerOwnsTreeNavigation()
   testContentHostReobservesActiveKeyboardRows()
+  testFolderFilterOwnsItsKeyboardModel()
+  testStartupFocusHandoffRespectsEarlierUserFocus()
 }
 
 function testReturningFromFoldersRestoresFirstBookmarkWhenSelectionWasCleared(): void {
@@ -247,6 +249,56 @@ function testContentHostReobservesActiveKeyboardRows(): void {
   assert(
     source.includes('[activeFolderObserverKey, activeResultObserverKey, remeasureIndicator, state.keyboardPane]'),
     'active result indicator ResizeObserver should reattach when keyboard highlight moves to another row'
+  )
+}
+
+function testFolderFilterOwnsItsKeyboardModel(): void {
+  const controller = readFileSync('src/popup/popup-controller.ts', 'utf8')
+  const content = readFileSync('src/popup/components/PopupContent.tsx', 'utf8')
+  const filter = readFileSync('src/popup/popup-folder-filter.ts', 'utf8')
+  const keyboardShortcut = controller.slice(
+    controller.indexOf('function handleFolderFilterFocusShortcut('),
+    controller.indexOf('function isEditableTarget(')
+  )
+
+  assert(
+    keyboardShortcut.includes("toLowerCase() !== 'f'") && keyboardShortcut.includes('focusFolderFilter'),
+    'Ctrl/⌘+F must focus the folder filter without competing with Ctrl/⌘+K'
+  )
+  assert(
+    controller.includes('function getFolderFilterSelectableIndexes(') &&
+      controller.includes('row.dimmed') &&
+      controller.includes('function moveFolderFilterHighlight('),
+    'arrow keys inside the filter must walk matched folders and skip dimmed ancestors'
+  )
+  assert(
+    controller.includes('function resetFolderFilterQuery(') &&
+      controller.includes('folderFilterRestorePane'),
+    'clearing the filter must restore the folder highlight it replaced'
+  )
+  assert(
+    content.includes('POPUP_FOLDER_FILTER_INPUT_ID') &&
+      content.includes('handlers?.onFolderFilterMove?.') &&
+      content.includes('handlers?.onFolderFilterEscape?.'),
+    'the filter field must forward its own arrow and Escape handling to the controller'
+  )
+  assert(
+    filter.includes('POPUP_FOLDER_FILTER_INPUT_ID'),
+    'the filter input id must be shared so the controller can leave the field without a DOM query by class'
+  )
+}
+
+function testStartupFocusHandoffRespectsEarlierUserFocus(): void {
+  const chrome = readFileSync('src/popup/components/PopupChromeHost.tsx', 'utf8')
+
+  assert(
+    chrome.includes('hasUserFocusedPopupControl(input)') &&
+      chrome.includes('if (hasUserFocusedPopupControl(searchInputRef.current))'),
+    'neither the preboot adoption nor the initial autofocus may pull focus out of a control the user already reached'
+  )
+  assert(
+    chrome.includes('POPUP_PREBOOT_SHELL_ID') && chrome.includes('active.closest('),
+    'the focus guard must ignore the preboot shell and the document body'
   )
 }
 

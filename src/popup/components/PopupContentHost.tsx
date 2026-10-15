@@ -70,6 +70,21 @@ export function PopupContentHost() {
     onFolderFilter: (folderId) => {
       dispatchPopupContentAction({ action: 'filter-folder', folderId })
     },
+    onFolderFilterChange: (value) => {
+      dispatchPopupContentAction({ action: 'folder-filter-change', value })
+    },
+    onFolderFilterApply: () => {
+      dispatchPopupContentAction({ action: 'folder-filter-apply' })
+    },
+    onFolderFilterClear: () => {
+      dispatchPopupContentAction({ action: 'clear-folder-filter' })
+    },
+    onFolderFilterEscape: () => {
+      dispatchPopupContentAction({ action: 'folder-filter-escape' })
+    },
+    onFolderFilterMove: (delta) => {
+      dispatchPopupContentAction({ action: 'folder-filter-move', index: delta })
+    },
     onFolderFocus: (index) => {
       dispatchPopupContentAction({ action: 'set-active-folder', index })
     },

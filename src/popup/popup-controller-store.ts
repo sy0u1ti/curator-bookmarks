@@ -39,6 +39,7 @@ export interface PopupContentActionDetail {
   index?: number
   menuAction?: string
   returnFocusElement?: HTMLElement | null
+  value?: string
 }
 
 export interface PopupContentResultHoverDetail {

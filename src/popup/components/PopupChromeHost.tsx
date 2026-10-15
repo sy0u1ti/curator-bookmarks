@@ -13,6 +13,7 @@ import {
   getPopupPrebootSearchAdoptionQuery,
   hasPopupPrebootSearchShell,
   hidePopupPrebootSearchShell,
+  POPUP_PREBOOT_SHELL_ID,
   readPopupPrebootSearchSnapshot
 } from '../popup-preboot-input'
 import { PopupSearchChips } from './PopupSearchChips'
@@ -121,6 +122,21 @@ function adoptPrebootSearchWhenReady(input: HTMLInputElement | null, adopt: () =
   return () => observer.disconnect()
 }
 
+/**
+ * True when focus is on a real popup control rather than the document body or
+ * the preboot search shell. The startup focus handoff must respect it.
+ */
+function hasUserFocusedPopupControl(searchInput: HTMLInputElement | null): boolean {
+  const active = document.activeElement
+  if (!(active instanceof HTMLElement) || active === document.body) {
+    return false
+  }
+  if (active === searchInput) {
+    return false
+  }
+  return !active.closest(`#${POPUP_PREBOOT_SHELL_ID}`)
+}
+
 function usePopupSearchInput(query: string, smartActive: boolean) {
   const searchFocusRequest = usePopupSearchFocusRequest()
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -155,12 +171,27 @@ function usePopupSearchInput(query: string, smartActive: boolean) {
       return false
     }
 
+    // The user may already have reached another control (for example the folder
+    // filter) in the frame between the popup becoming visible and this handoff.
+    // Adopting the shell must never pull focus back out of it.
+    if (hasUserFocusedPopupControl(input)) {
+      hidePopupPrebootSearchShell()
+      prebootAdoptedRef.current = true
+      return true
+    }
+
     prebootAdoptedRef.current = completePopupPrebootSearchAdoption(input)
     return prebootAdoptedRef.current
   }, [query])
 
   useLayoutEffect(() => {
     if (smartActive || initialSearchFocusAppliedRef.current || hasPopupPrebootSearchShell()) {
+      return
+    }
+    // The folder filter lives inside the pane the user may already have
+    // reached; autofocus must never pull them back out of it.
+    if (hasUserFocusedPopupControl(searchInputRef.current)) {
+      initialSearchFocusAppliedRef.current = true
       return
     }
 

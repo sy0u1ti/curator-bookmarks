@@ -7,9 +7,12 @@ import { setPopupKeyboardHelpOpen, usePopupKeyboardHelpOpen } from '../popup-wor
 
 const shortcuts = [
   ['Ctrl / ⌘ K', '聚焦搜索，保留当前查询'],
+  ['Ctrl / ⌘ F', '聚焦文件夹筛选，输入即筛选'],
   ['/', '未输入文字时聚焦搜索'],
   ['↑ / ↓', '选择上一条或下一条结果'],
   ['← / →', '无查询时切换文件夹与书签分栏'],
+  ['←（文件夹分栏内）', '聚焦文件夹筛选'],
+  ['Esc（筛选框内）', '先清空筛选，再返回书签列表'],
   ['Enter', '在新标签页打开选中书签'],
   ['Ctrl / ⌘ Enter', '后台打开，保留当前界面'],
   ['Alt Enter', '在当前网页标签页打开'],

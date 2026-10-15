@@ -121,6 +121,15 @@ import {
 import { registerPopupBrowserEventActions } from './popup-browser-events-store.js'
 import { getPopupSearchFocusPlan } from './popup-search-focus.js'
 import {
+  collectFolderFilterVisibility,
+  folderFilterMatchesTarget,
+  folderFilterUsesPinyin,
+  normalizeFolderFilterQuery,
+  POPUP_FOLDER_FILTER_INPUT_ID,
+  type PopupFolderFilterVisibility,
+  type PopupFolderFilterTokens
+} from './popup-folder-filter.js'
+import {
   getBookmarkPaneKeyboardIndex,
   getFolderPaneKeyboardIndex,
   getFolderPaneTreeRoot,
@@ -233,6 +242,19 @@ const FORMATTED_BOOKMARK_PATH_CACHE_LIMIT = 2048
 const formattedBookmarkPathCache = new Map<string, string>()
 const searchResultRowsCache = createPopupContentRowCache<PopupContentSearchResultViewModel>('active')
 const sidebarFolderRowsCache = createPopupContentRowCache<PopupContentFolderRowViewModel>('keyboardActive')
+// Folder names change rarely; tokenizing each one once keeps every keystroke in
+// the small filter input free of pinyin work.
+const folderFilterPinyinCache = new Map<string, PopupFolderFilterTokens | null>()
+const FOLDER_FILTER_PINYIN_CACHE_LIMIT = 4000
+let folderFilterPinyinGeneration = 0
+let folderFilterPinyinPromise: Promise<void> | null = null
+let folderFilterPinyinModule: typeof import('../shared/search/pinyin.js') | null = null
+let folderFilterVisibilityDependencies: readonly unknown[] | null = null
+let folderFilterVisibility: (PopupFolderFilterVisibility & { query: string }) | null = null
+// Where the folder highlight lived before filtering started, so clearing the
+// query does not strand the user in the folder pane.
+let folderFilterRestorePane: 'bookmarks' | 'folders' | null = null
+let folderFilterRestoreIndex = -1
 interface PopupRefreshBaseData {
   refreshRunId: number
   rootNode: chrome.bookmarks.BookmarkTreeNode | null
@@ -895,6 +917,8 @@ function applyPopupIndexedBookmarkData({
   state.bookmarkDuplicateKeyMap = buildPopupBookmarkDuplicateKeyMap(indexedBookmarks)
   popupFolderBookmarkCounts = buildPopupFolderBookmarkCounts(indexedBookmarks)
   state.folderMap = catalog.extracted.folderMap
+  // Folder titles and paths may have changed; cached pinyin tokens would be stale.
+  folderFilterPinyinCache.clear()
   popupBookmarkCatalog = catalog
   state.searchTagIndex = catalog.tagIndex
   state.searchSnapshotState = catalog.snapshotState
@@ -1216,6 +1240,11 @@ function cleanupPopupController() {
   state.toasts = []
   state.contentRenderedViewModel = null
   clearPopupContentRowCaches()
+  folderFilterPinyinCache.clear()
+  folderFilterVisibility = null
+  folderFilterVisibilityDependencies = null
+  folderFilterRestorePane = null
+  folderFilterRestoreIndex = -1
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
   resetPopupSessionStateForNextOpen()
@@ -1251,6 +1280,9 @@ function resetPopupSessionStateForNextOpen() {
   state.smartSaving = false
   state.smartSaved = false
   state.smartPermissionRequest = null
+  state.folderFilterQuery = ''
+  state.folderFilterFocusRequestId = 0
+  state.folderFilterFocusSelect = false
   resetBookmarkReorderModeState()
   if (state.pendingActionIds.size) {
     state.pendingActionIds.clear()
@@ -2308,11 +2340,13 @@ function getPopupContentViewModel({
   const sidebarRows = sidebarRoot ? getSidebarFolderRows(sidebarRoot) : []
   const currentRootTitle = currentRoot?.title || '书签栏'
   const reorder = getPopupBookmarkReorderViewModel(currentRoot)
+  const folderFilter = getPopupFolderFilterViewModel(sidebarRows)
 
   if (searchMode) {
     const mainRows = getSearchResultRows()
     return {
       emptyLabel: '未找到相关书签',
+      folderFilter,
       keyboardPane: state.keyboardPane,
       loading,
       mainState,
@@ -2333,6 +2367,7 @@ function getPopupContentViewModel({
     : [...sidebarRows, ...mainRows]
   return {
     emptyLabel: '当前文件夹下暂无书签',
+    folderFilter,
     keyboardPane: state.keyboardPane,
     loading,
     mainState,
@@ -2345,6 +2380,25 @@ function getPopupContentViewModel({
     rows,
     sidebarRows,
     title: reorder.active ? '调整顺序' : currentRootTitle
+  }
+}
+
+function getPopupFolderFilterViewModel(
+  sidebarRows: PopupContentFolderRowViewModel[]
+): NonNullable<PopupContentViewModel['folderFilter']> {
+  const query = state.folderFilterQuery
+  return {
+    ariaLabel: '筛选文件夹',
+    clearVisible: Boolean(query),
+    focusRequestId: state.folderFilterFocusRequestId,
+    focusSelect: state.folderFilterFocusSelect,
+    placeholder: '筛选文件夹',
+    query,
+    // Only direct matches count: dimmed ancestors and the pinned root are tree
+    // scaffolding, not results, so "N 个匹配文件夹" stays truthful.
+    resultCount: query
+      ? sidebarRows.filter((row) => !row.root && !row.dimmed).length
+      : sidebarRows.length
   }
 }
 
@@ -2379,17 +2433,110 @@ function getSidebarFolderRows(
   }
 
   return sidebarFolderRowsCache.getRows(
-    [currentRoot, state.folderMap, popupFolderBookmarkCounts, state.allBookmarks.length, state.selectedFolderFilterId],
-    () => buildSidebarFolderRows(currentRoot, 0).map((row, index) => ({ ...row, index })),
+    [
+      currentRoot,
+      state.folderMap,
+      popupFolderBookmarkCounts,
+      state.allBookmarks.length,
+      state.selectedFolderFilterId,
+      getFolderFilterVisibility(currentRoot)
+    ],
+    () => buildFilteredSidebarFolderRows(currentRoot),
     state.keyboardPane === 'folders' ? state.activeFolderKeyboardIndex : -1
   )
 }
 
-function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
+function buildFilteredSidebarFolderRows(currentRoot): PopupContentFolderRowViewModel[] {
+  const visibility = getFolderFilterVisibility(currentRoot)
+  // buildSidebarFolderRows always emits the root first; the filter only trims
+  // descendants, so "全部文件夹" stays as the way back to the full tree.
+  return buildSidebarFolderRows(currentRoot, 0, visibility).map((row, index) => ({ ...row, index }))
+}
+
+/**
+ * Which folder rows survive the filter. A folder stays visible when it matches
+ * or when a descendant matches, so the tree keeps its hierarchy; only the
+ * direct matches are undimmed. Returns null while the query is empty.
+ */
+function getFolderFilterVisibility(currentRoot): (PopupFolderFilterVisibility & { query: string }) | null {
+  const query = normalizeFolderFilterQuery(state.folderFilterQuery)
+  if (!query || !currentRoot) {
+    return null
+  }
+
+  const usesPinyin = folderFilterUsesPinyin(query)
+  if (usesPinyin && !folderFilterPinyinModule) {
+    void loadFolderFilterPinyin()
+  }
+  const dependencies = [
+    currentRoot,
+    state.folderMap,
+    query,
+    usesPinyin ? folderFilterPinyinGeneration : 0
+  ]
+  if (
+    folderFilterVisibility &&
+    folderFilterVisibilityDependencies &&
+    folderFilterVisibilityDependencies.length === dependencies.length &&
+    dependencies.every((value, index) => Object.is(value, folderFilterVisibilityDependencies?.[index]))
+  ) {
+    return folderFilterVisibility
+  }
+
+  const { matched, visible } = collectFolderFilterVisibility(currentRoot, (node) => {
+    const folder = state.folderMap.get(String(node?.id || ''))
+    return folderFilterMatchesTarget(
+      {
+        normalizedPath: folder?.normalizedPath || normalizeText(node?.title || ''),
+        normalizedTitle: folder?.normalizedTitle || normalizeText(node?.title || '')
+      },
+      query,
+      usesPinyin ? getFolderFilterPinyinTokens(folder) : null
+    )
+  })
+  folderFilterVisibilityDependencies = dependencies
+  folderFilterVisibility = { matched, query, visible }
+  return folderFilterVisibility
+}
+
+function getFolderFilterPinyinTokens(folder): PopupFolderFilterTokens | null {
+  if (!folder || !folderFilterPinyinModule) {
+    return null
+  }
+  const cached = folderFilterPinyinCache.get(folder.id)
+  if (cached !== undefined) {
+    return cached
+  }
+  const tokens = folderFilterPinyinModule.buildPinyinTokensSync([folder.title, folder.path])
+  const normalized = tokens.full.length || tokens.initials.length ? tokens : null
+  if (folderFilterPinyinCache.size >= FOLDER_FILTER_PINYIN_CACHE_LIMIT) {
+    folderFilterPinyinCache.clear()
+  }
+  folderFilterPinyinCache.set(folder.id, normalized)
+  return normalized
+}
+
+function loadFolderFilterPinyin(): Promise<void> {
+  folderFilterPinyinPromise ||= import('../shared/search/pinyin.js')
+    .then((module) => {
+      folderFilterPinyinModule = module
+      folderFilterPinyinGeneration += 1
+      folderFilterPinyinCache.clear()
+      renderMainContent({ preserveScroll: true })
+    })
+    .catch((error) => {
+      folderFilterPinyinPromise = null
+      console.warn('[Curator] 文件夹拼音匹配加载失败', error)
+    })
+  return folderFilterPinyinPromise
+}
+
+function buildSidebarFolderRows(node, depth, visibility: (PopupFolderFilterVisibility & { query: string }) | null): PopupContentFolderRowViewModel[] {
   const isPinnedRoot = depth === 0
   const isExpanded = true
   const children = Array.isArray(node.children) ? node.children : []
   const folderInfo = state.folderMap.get(node.id)
+  const folderId = String(node.id || '')
   const toggleLabel = getPopupFolderToggleLabel(
     isExpanded ? '折叠文件夹' : '展开文件夹',
     folderInfo ? formatFolderPath(folderInfo, state.folderMap) || folderInfo.title : node.title
@@ -2397,11 +2544,12 @@ function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
 
   const currentRow: PopupContentRowViewModel = {
     active: (!state.selectedFolderFilterId && isPinnedRoot) || state.selectedFolderFilterId === String(node.id || ''),
+    dimmed: Boolean(visibility && !visibility.matched.has(folderId)),
     keyboardActive: false,
     countLabel: getSidebarFolderCountLabel(node, folderInfo, isPinnedRoot),
     depth,
     expanded: isExpanded,
-    folderId: String(node.id || ''),
+    folderId,
     index: -1,
     kind: 'folder',
     root: isPinnedRoot,
@@ -2416,7 +2564,11 @@ function buildSidebarFolderRows(node, depth): PopupContentFolderRowViewModel[] {
           return []
         }
 
-        return buildSidebarFolderRows(child, depth + 1)
+        if (visibility && !visibility.visible.has(String(child.id || ''))) {
+          return []
+        }
+
+        return buildSidebarFolderRows(child, depth + 1, visibility)
       })
     : []
 
@@ -3215,6 +3367,36 @@ function handleContentAction(detail: PopupContentActionDetail) {
     enterBookmarkReorderMode()
     return
   }
+  if (detail.action === 'folder-filter-change') {
+    setFolderFilterQuery(String(detail.value || ''))
+    return
+  }
+  if (detail.action === 'clear-folder-filter') {
+    clearFolderFilterQuery({ focus: true })
+    return
+  }
+  if (detail.action === 'focus-folder-filter') {
+    focusFolderFilter({ select: Boolean(detail.value) })
+    return
+  }
+  if (detail.action === 'folder-filter-escape') {
+    if (state.folderFilterQuery) {
+      clearFolderFilterQuery()
+      return
+    }
+    // Empty field: leave the filter and return to the bookmark list.
+    exitFolderFilterToBookmarks()
+    switchKeyboardToBookmarks()
+    return
+  }
+  if (detail.action === 'folder-filter-apply') {
+    applyFolderFilterKeyboardHighlight()
+    return
+  }
+  if (detail.action === 'folder-filter-move') {
+    moveFolderFilterHighlight(Number(detail.index))
+    return
+  }
   if (detail.action === 'exit-bookmark-reorder') {
     exitBookmarkReorderMode()
     return
@@ -3492,6 +3674,9 @@ function handleDocumentKeydown(event) {
   if (hasOpenModal()) {
     return
   }
+  if (handleFolderFilterFocusShortcut(event)) {
+    return
+  }
   if (handleSearchFocusShortcut(event)) {
     return
   }
@@ -3527,6 +3712,11 @@ function handleEscapeAction() {
     resetSmartClassification()
     return true
   }
+  if (state.folderFilterQuery) {
+    clearFolderFilterQuery()
+    showViewNotice('已清空文件夹筛选')
+    return true
+  }
   if (state.keyboardPane === 'folders') {
     switchKeyboardToBookmarks()
     showViewNotice('已返回书签列表')
@@ -3557,6 +3747,23 @@ function handleSearchFocusShortcut(event) {
   renderMainContent()
   focusSearchInput(getPopupSearchFocusPlan('in-page-shortcut'))
   showViewNotice(state.searchQuery ? '已聚焦搜索框，可继续编辑查询' : '已聚焦搜索框，可直接输入')
+  return true
+}
+
+/**
+ * Ctrl/⌘+F focuses the folder filter, mirroring the browser's find shortcut.
+ * The main search owns Ctrl/⌘+K, so the two never compete.
+ */
+function handleFolderFilterFocusShortcut(event): boolean {
+  if (!(event.ctrlKey || event.metaKey) || String(event.key || '').toLowerCase() !== 'f') {
+    return false
+  }
+  if (isSmartOverlayActive()) {
+    return false
+  }
+  event.preventDefault()
+  focusFolderFilter({ select: true })
+  showViewNotice('已聚焦文件夹筛选，可直接输入')
   return true
 }
 function isEditableTarget(target) {
@@ -3618,7 +3825,13 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
       return false
     }
     if (key === 'ArrowLeft') {
-      switchKeyboardToFolders(sidebarRows)
+      // One step further left than the folder pane is the filter that narrows
+      // it, so ← walks bookmarks → folders → filter.
+      if (state.keyboardPane === 'folders') {
+        focusFolderFilter()
+      } else {
+        switchKeyboardToFolders(sidebarRows)
+      }
     } else {
       switchKeyboardToBookmarks()
     }
@@ -3909,6 +4122,7 @@ function applyFolderFilter(folderId, { focusSearch = true } = {}) {
   resetBookmarkReorderModeState()
   const selectedFolder = folderId ? state.folderMap.get(folderId) : null
   state.selectedFolderFilterId = folderId
+  resetFolderFilterQuery()
   runSearch()
   render()
   showViewNotice(selectedFolder ? `已筛选：${selectedFolder.path || selectedFolder.title}` : '已显示全部文件夹')
@@ -3921,6 +4135,123 @@ function clearFolderFilter() {
     return
   }
   applyFolderFilter(null)
+}
+
+function setFolderFilterQuery(value: string): void {
+  const nextQuery = String(value || '')
+  if (nextQuery === state.folderFilterQuery) {
+    return
+  }
+  if (!nextQuery) {
+    // Backspacing to empty is the same gesture as the clear button.
+    if (resetFolderFilterQuery()) {
+      renderMainContent({ preserveScroll: true })
+    }
+    return
+  }
+  if (nextQuery && folderFilterRestorePane === null) {
+    // Remember where the highlight was so clearing the filter puts it back.
+    folderFilterRestorePane = state.keyboardPane
+    folderFilterRestoreIndex = state.activeFolderKeyboardIndex
+  }
+  state.folderFilterQuery = nextQuery
+  syncFolderFilterHighlight()
+  renderMainContent({ preserveScroll: true })
+}
+
+function clearFolderFilterQuery({ focus = false } = {}): void {
+  if (resetFolderFilterQuery()) {
+    renderMainContent({ preserveScroll: true })
+  }
+  if (focus) {
+    focusFolderFilter()
+  }
+}
+
+/** Drop the query and hand the folder highlight back to where it came from. */
+function resetFolderFilterQuery(): boolean {
+  if (!state.folderFilterQuery && folderFilterRestorePane === null) {
+    return false
+  }
+  state.folderFilterQuery = ''
+  if (folderFilterRestorePane !== null) {
+    state.keyboardPane = folderFilterRestorePane
+    state.activeFolderKeyboardIndex = folderFilterRestorePane === 'folders'
+      ? folderFilterRestoreIndex
+      : -1
+    folderFilterRestorePane = null
+    folderFilterRestoreIndex = -1
+  }
+  return true
+}
+
+function focusFolderFilter({ select = false } = {}): void {
+  state.folderFilterFocusSelect = select
+  state.folderFilterFocusRequestId += 1
+  renderMainContent({ preserveScroll: true })
+}
+
+/**
+ * While filtering, the folder pane owns the highlight so ↑↓ walks the matches.
+ */
+function syncFolderFilterHighlight(): void {
+  const sidebarRows = getSidebarFolderRows()
+  if (!state.folderFilterQuery) {
+    return
+  }
+
+  state.keyboardPane = 'folders'
+  state.activeFolderKeyboardIndex = getFolderFilterSelectableIndexes(sidebarRows)[0] ?? -1
+}
+
+/** Indices of rows the filter actually matched; dimmed ancestors are skipped. */
+function getFolderFilterSelectableIndexes(sidebarRows: PopupContentFolderRowViewModel[]): number[] {
+  const indexes: number[] = []
+  sidebarRows.forEach((row, index) => {
+    if (!row.dimmed) {
+      indexes.push(index)
+    }
+  })
+  return indexes
+}
+
+function moveFolderFilterHighlight(delta: number): void {
+  if (!state.folderFilterQuery || !Number.isFinite(delta)) {
+    return
+  }
+  const sidebarRows = getSidebarFolderRows()
+  const selectable = getFolderFilterSelectableIndexes(sidebarRows)
+  if (!selectable.length) {
+    return
+  }
+  const current = selectable.indexOf(state.activeFolderKeyboardIndex)
+  const next = current < 0
+    ? (delta < 0 ? selectable.length - 1 : 0)
+    : Math.max(0, Math.min(current + delta, selectable.length - 1))
+  if (selectable[next] === state.activeFolderKeyboardIndex) {
+    return
+  }
+  state.activeFolderKeyboardIndex = selectable[next]
+  renderMainContent({ preserveScroll: false })
+}
+
+function applyFolderFilterKeyboardHighlight(): void {
+  const sidebarRows = getSidebarFolderRows()
+  const row = sidebarRows[state.activeFolderKeyboardIndex]
+  if (!row || row.dimmed) {
+    return
+  }
+  applyFolderFilter(row.root ? null : row.folderId, { focusSearch: false })
+  // The query is gone; leave the field so ↑↓/Enter drive the narrowed list.
+  exitFolderFilterToBookmarks()
+  switchKeyboardToBookmarks()
+}
+
+function exitFolderFilterToBookmarks(): void {
+  const input = document.getElementById(POPUP_FOLDER_FILTER_INPUT_ID)
+  if (input instanceof HTMLElement) {
+    input.blur()
+  }
 }
 function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
   if (hasBlockingPopupActionPending()) {
