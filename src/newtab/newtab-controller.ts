@@ -99,6 +99,13 @@ import {
   normalizeFolderSettings,
   normalizeFolderSettingsWithDefault
 } from './folder-settings.js'
+import {
+  clearActiveFaviconSource,
+  getActiveFaviconOrigin,
+  getActiveFaviconSource,
+  loadActiveFaviconStore,
+  subscribeActiveFaviconResolution
+} from './active-favicon.js'
 import { buildChromeFaviconUrl } from './favicon-cache.js'
 import {
   BACKGROUND_URL_FETCH_TIMEOUT_MS,
@@ -925,6 +932,10 @@ export function startNewTabController(): void {
   recordNewTabDomContentLoaded()
   bindEvents()
   bindNewTabStorageEvents()
+  activeFaviconResolutionUnsubscribe = subscribeActiveFaviconResolution((origin, src) => {
+    if (!newTabControllerStarted) return
+    applyResolvedActiveFavicon(origin, src)
+  })
   bindBookmarkEvents()
   hydrateFeaturedBackgroundOptions()
   void refreshNewTab()
@@ -939,6 +950,7 @@ function bindNewTabStorageEvents(): void {
 }
 
 let customIconLoadVersion = 0
+let activeFaviconResolutionUnsubscribe: (() => void) | null = null
 let newTabSearchHydrationVersion = 0
 function handleNewTabStorageChanged(
   changes: Record<string, chrome.storage.StorageChange>,
@@ -3718,6 +3730,77 @@ function patchBookmarkTilePreviewStyles(previewStyleByBookmarkId: Map<string, CS
   })
 }
 
+// 主动解析出的网站图标回填到当前视图模型：刷新或重排后仍直接使用真实图标，
+// 也让下一次 preboot 快照直接携带它。
+function applyResolvedActiveFavicon(origin: string, src: string): void {
+  patchNewtabBookmarkContentView((view) => {
+    let changed = false
+    const sections = view.sections.map((section) => {
+      if (!section.grid) {
+        return section
+      }
+      const patched = patchResolvedActiveFaviconItems(section.grid.items, origin, src)
+      if (!patched.changed) {
+        return section
+      }
+      changed = true
+      return {
+        ...section,
+        grid: {
+          ...section.grid,
+          items: patched.items
+        }
+      }
+    })
+    let navigation = view.navigation
+    if (navigation) {
+      const patched = patchResolvedActiveFaviconItems(navigation.items, origin, src)
+      if (patched.changed) {
+        changed = true
+        navigation = {
+          ...navigation,
+          items: patched.items
+        }
+      }
+    }
+    return changed
+      ? {
+          ...view,
+          navigation,
+          sections
+        }
+      : view
+  })
+}
+
+function patchResolvedActiveFaviconItems<T extends {
+  customIcon: boolean
+  favicon: BookmarkTileViewModel['favicon']
+  url: string
+}>(
+  items: T[],
+  origin: string,
+  src: string
+): { changed: boolean; items: T[] } {
+  let changed = false
+  const nextItems = items.map((item) => {
+    if (item.customIcon || getActiveFaviconOrigin(item.url) !== origin) {
+      return item
+    }
+    changed = true
+    return {
+      ...item,
+      favicon: {
+        fetchpriority: item.favicon.fetchpriority,
+        loading: item.favicon.loading,
+        pageUrl: item.favicon.pageUrl,
+        src
+      }
+    }
+  })
+  return changed ? { changed: true, items: nextItems } : { changed: false, items }
+}
+
 function mergeDragPreviewStyle(
   baseStyle: CSSProperties | undefined,
   previewStyle: CSSProperties | undefined
@@ -5263,6 +5346,7 @@ function refreshActiveMenuIcon(): void {
 
   state.pendingDeleteBookmarkId = ''
   state.faviconRefreshTokens.set(bookmark.id, Date.now())
+  clearActiveFaviconSource(String(bookmark.url || ''))
   if (!renderBookmarkSections()) {
     render()
   }
@@ -5331,7 +5415,8 @@ async function refreshNewTab({ showLoading = true }: RefreshNewTabOptions = {}):
   try {
     const [startup, customIcons] = await Promise.all([
       consumeNewtabStartupData(),
-      loadCustomIcons().catch(error => { console.warn('新标签页图标读取失败，保留已有图标。', error); return null })
+      loadCustomIcons().catch(error => { console.warn('新标签页图标读取失败，保留已有图标。', error); return null }),
+      loadActiveFaviconStore().catch(error => { console.warn('新标签页网站图标缓存读取失败。', error) })
     ])
     if (refreshVersion !== newTabRefreshVersion || !newTabControllerStarted) return
     settingsRecoveryError = startup.settingsRecoveryError || ''
@@ -7985,6 +8070,7 @@ function createSpeedDialCardViewModel(
     favicon: {
       fetchpriority: faviconLoadAttributes.fetchpriority,
       loading: faviconLoadAttributes.loading,
+      pageUrl: item.url,
       src: customIcon || getFaviconUrl(item.url, item.id)
     },
     id: item.id,
@@ -8057,6 +8143,7 @@ function createBookmarkTileViewModel(
     favicon: {
       fetchpriority: renderIndex < HIGH_PRIORITY_FAVICON_LIMIT ? 'high' : 'low',
       loading: renderIndex < EAGER_FAVICON_LIMIT ? 'eager' : 'lazy',
+      pageUrl: url,
       // Offscreen tiles need no Chrome favicon URL until the grid mounts them.
       get src() { return faviconSrc ??= customIcon || getFaviconUrl(url, bookmarkId) }
     },
@@ -8120,6 +8207,8 @@ function cleanupNewTabController(): void {
     chrome.storage.onChanged.removeListener(handleNewTabStorageChanged)
     newTabStorageEventsBound = false
   }
+  activeFaviconResolutionUnsubscribe?.()
+  activeFaviconResolutionUnsubscribe = null
   unregisterNewtabContentShellActions()
   unregisterNewtabContentShellActions = () => {}
   unregisterNewtabContentLayoutNodes()
@@ -9377,6 +9466,17 @@ function hasCurrentInstantWallpaperStartupImage(
   return isRemoteBackgroundType(settings.type) && Boolean(getRemoteBackgroundImageUrl(settings))
 }
 
+function getStoredInstantWallpaperDataUrl(mediaKey: string): string {
+  const instantWallpaper = getCurrentInstantWallpaper(mediaKey)
+  if (!instantWallpaper) {
+    return ''
+  }
+  // The full-size stored image is preferred; the smaller startup preview is a
+  // paint-first fallback for profiles that never produced the larger copy.
+  return readInstantWallpaperImageDataUrl(instantWallpaper) ||
+    readInstantWallpaperDataUrl(instantWallpaper)
+}
+
 function ensureInstantWallpaperFallbackStyles(mediaKey: string): boolean {
   const instantWallpaperView = getNewtabInstantWallpaperView()
   const wallpaperKey = instantWallpaperView.signature
@@ -9478,13 +9578,17 @@ async function applyBackgroundSettings(): Promise<void> {
       activeBackgroundImageNaturalSize = getStoredBackgroundNaturalSizeForSettings(settings)
       activeBackgroundImageNaturalSizeSignature = activeBackgroundImageNaturalSize ? mediaKey : ''
       const hasInstantWallpaperFallback = ensureInstantWallpaperFallbackStyles(mediaKey)
+      const instantPreviewDataUrl = getStoredInstantWallpaperDataUrl(mediaKey)
       if (!hasInstantWallpaperFallback) {
         markWallpaperPending()
       }
       applyDirectRemoteBackgroundImage(imageUrl, mediaKey, {
+        previewDataUrl: instantPreviewDataUrl,
         revealWhenReady: !hasInstantWallpaperFallback
       })
-      if (hasInstantWallpaperFallback) {
+      // A stored preview already matches the saved wallpaper, so the shell does
+      // not wait for the network copy; the cached copy still replaces it later.
+      if (hasInstantWallpaperFallback || instantPreviewDataUrl) {
         markWallpaperReady()
       }
       void applyUrlBackgroundImage(imageUrl, applyToken, mediaKey, settings)
@@ -9658,9 +9762,11 @@ function applyDirectRemoteBackgroundImage(
   mediaKey: string,
   {
     markApplied = true,
+    previewDataUrl = '',
     revealWhenReady = false
   }: {
     markApplied?: boolean
+    previewDataUrl?: string
     revealWhenReady?: boolean
   } = {}
 ): void {
@@ -9670,6 +9776,11 @@ function applyDirectRemoteBackgroundImage(
   applyFeaturedBackgroundDisplayPreferences()
   syncInstantWallpaperTargetForSettings(state.backgroundSettings, mediaKey)
   setBackgroundImageMedia(imageUrl)
+  if (previewDataUrl) {
+    // Paint the cached wallpaper immediately while the network copy decodes;
+    // the full-resolution image replaces it in the same layer once ready.
+    applyInstantWallpaperPreviewStyles(mediaKey, previewDataUrl)
+  }
   markRuntimeWallpaperApplied()
   if (markApplied) {
     lastAppliedBackgroundMediaSignature = mediaKey
@@ -9687,6 +9798,23 @@ function applyDirectRemoteBackgroundImage(
       }
     })
   }
+}
+
+function applyInstantWallpaperPreviewStyles(mediaKey: string, previewDataUrl: string): void {
+  const instantWallpaper = getCurrentInstantWallpaper(mediaKey)
+  const imageDataUrl = instantWallpaper ? readInstantWallpaperImageDataUrl(instantWallpaper) : ''
+  const placeholderColor = normalizeInstantWallpaperColor(
+    instantWallpaper?.placeholderColor || getBackgroundPlaceholderColor(state.backgroundSettings)
+  )
+  dispatchNewtabInstantWallpaperView({
+    backgroundColor: placeholderColor,
+    image: imageDataUrl ? `url("${escapeCssUrl(imageDataUrl)}")` : '',
+    placeholderColor,
+    position: instantWallpaper?.backgroundPosition || 'center',
+    previewImage: `url("${escapeCssUrl(previewDataUrl)}")`,
+    ready: true,
+    size: normalizeStoredBackgroundSizeCss(instantWallpaper?.backgroundSize)
+  })
 }
 
 async function cacheBackgroundUrlImage(
@@ -9991,10 +10119,10 @@ async function updateInstantWallpaperFromBlob(
     updatedAt: Date.now(),
     ready: true
   }
-  const previewDataUrl = dataUrl || imageDataUrl
-  if ((previewDataUrl || imageDataUrl) && saveInstantWallpaper({
+  const previewImageDataUrl = dataUrl || imageDataUrl
+  if ((previewImageDataUrl || imageDataUrl) && saveInstantWallpaper({
     ...recordBase,
-    dataUrl: previewDataUrl || undefined,
+    dataUrl: previewImageDataUrl || undefined,
     imageDataUrl: imageDataUrl || undefined
   })) {
     syncInstantWallpaperTargetForSettings(settings, mediaSignature)
@@ -12598,6 +12726,10 @@ function normalizeHexColor(value: unknown, fallback: string): string {
 }
 
 function getFaviconUrl(url: string, bookmarkId = ''): string {
+  const activeSource = getActiveFaviconSource(url)
+  if (activeSource) {
+    return activeSource
+  }
   const refreshToken = bookmarkId ? state.faviconRefreshTokens.get(bookmarkId) : 0
   return buildChromeFaviconUrl(
     chrome.runtime.getURL('/_favicon/'),
@@ -12625,4 +12757,5 @@ function formatNewTabLocalDate(value: unknown): string {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
+
 

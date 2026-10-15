@@ -10,6 +10,7 @@ export const STORAGE_KEYS = {
   pendingAutoAnalyzeNotice: 'curatorBookmarkPendingAutoAnalyzeNotice',
   pendingAvailabilityResults: 'curatorBookmarkPendingAvailabilityResults',
   newTabCustomIcons: 'curatorBookmarkNewTabCustomIcons',
+  newTabActiveFavicons: 'curatorBookmarkNewTabActiveFavicons',
   newTabBackgroundSettings: 'curatorBookmarkNewTabBackgroundSettings',
   newTabFeaturedBackgroundGallery: 'curatorBookmarkNewTabFeaturedBackgroundGallery',
   newTabFeaturedBackgroundPreviewCache: 'curatorBookmarkNewTabFeaturedBackgroundPreviewCache',

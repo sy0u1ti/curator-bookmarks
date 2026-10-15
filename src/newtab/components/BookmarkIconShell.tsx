@@ -2,6 +2,11 @@ import { useCallback, useState, type Ref } from 'react'
 import { cx } from '../../ui/base/utils'
 import { applySquircleClipBeforePaint } from '../../shared/squircle-engine'
 import {
+  clearActiveFaviconSource,
+  isChromeFaviconSource,
+  resolveActiveFaviconForChromeSource
+} from '../active-favicon'
+import {
   isNewtabFaviconReady,
   markNewtabFaviconNotReady,
   markNewtabFaviconReady
@@ -10,6 +15,7 @@ import {
 export interface BookmarkIconShellFavicon {
   fetchpriority: 'high' | 'low' | 'auto'
   loading: 'eager' | 'lazy'
+  pageUrl: string
   src: string
 }
 
@@ -26,6 +32,15 @@ const BOOKMARK_FAVICON_CLASS = 'bookmark-favicon relative z-[1] block h-[calc(va
 const BOOKMARK_CUSTOM_FAVICON_CLASS = 'custom-icon h-[calc(var(--icon-shell-size)*0.8)] w-[calc(var(--icon-shell-size)*0.8)] rounded-[7px] object-cover'
 const BOOKMARK_FALLBACK_CLASS = 'bookmark-fallback absolute grid h-[calc(var(--icon-shell-size)*0.76)] w-[calc(var(--icon-shell-size)*0.76)] place-items-center rounded-[7px] bg-[rgba(245,245,247,0.09)] text-[13px] font-extrabold leading-none text-[rgba(245,245,247,0.88)] opacity-100 [transform:scale(1)] [transition:opacity_var(--icon-swap-dur)_var(--icon-swap-ease),transform_var(--icon-swap-dur)_var(--icon-swap-ease)] data-[favicon-ready=true]:opacity-0 data-[favicon-ready=true]:[transform:scale(0.96)] motion-reduce:transition-none motion-reduce:[transform:none]'
 
+function addSourceToSet(current: Set<string>, source: string): Set<string> {
+  if (current.has(source)) {
+    return current
+  }
+  const next = new Set(current)
+  next.add(source)
+  return next
+}
+
 export function BookmarkIconShell({
   className,
   customIcon,
@@ -41,8 +56,12 @@ export function BookmarkIconShell({
     }
     return sources
   })
-  const missing = failedSources.has(favicon.src)
-  const loaded = loadedSources.has(favicon.src) || isNewtabFaviconReady(favicon.src)
+  // 主动获取的站点图标作为本地覆盖层叠加在视图模型之上：视图模型保留浏览器
+  // 图标来源，覆盖层只替换当前展示，避免为一次图标解析重建整棵书签树。
+  const [activeSource, setActiveSource] = useState<{ forSource: string; src: string } | null>(null)
+  const source = activeSource && activeSource.forSource === favicon.src ? activeSource.src : favicon.src
+  const missing = failedSources.has(source)
+  const loaded = loadedSources.has(source) || isNewtabFaviconReady(source)
   // squircle 轮廓必须在首次 paint 前就位：引擎的异步链要晚 1-2 帧，
   // 裸启动（无 preboot 快照遮盖）时首帧会以普通圆角示人再突变成 squircle。
   const setShellRef = useCallback((element: HTMLSpanElement | null) => {
@@ -60,6 +79,23 @@ export function BookmarkIconShell({
       applySquircleClipBeforePaint(element)
     }
   }, [])
+  const markSourceReady = useCallback((nextSource: string) => {
+    markNewtabFaviconReady(nextSource)
+    setLoadedSources((current) => addSourceToSet(current, nextSource))
+  }, [])
+  const resolveChromeSource = useCallback((chromeSource: string, image: HTMLImageElement | null) => {
+    if (customIcon || !favicon.pageUrl) {
+      return
+    }
+    void resolveActiveFaviconForChromeSource(chromeSource, image).then((activeSrc) => {
+      if (!activeSrc || activeSrc === favicon.src) {
+        return
+      }
+      // 探测阶段已经确认图标可加载，先标记就绪再替换来源，避免回退字母闪现。
+      markSourceReady(activeSrc)
+      setActiveSource({ forSource: favicon.src, src: activeSrc })
+    })
+  }, [customIcon, favicon.pageUrl, favicon.src, markSourceReady])
 
   return (
     <span
@@ -73,35 +109,39 @@ export function BookmarkIconShell({
           customIcon && BOOKMARK_CUSTOM_FAVICON_CLASS
         )}
         data-favicon-ready={loaded && !missing ? 'true' : undefined}
-        src={favicon.src}
+        src={source}
         alt=""
         draggable={false}
         hidden={missing}
         loading={favicon.loading}
         decoding={loaded ? 'sync' : 'async'}
         fetchPriority={favicon.fetchpriority}
+        referrerPolicy="no-referrer"
         ref={setInnerRef}
-        onLoad={() => {
-          markNewtabFaviconReady(favicon.src)
-          setLoadedSources((current) => {
-            if (current.has(favicon.src)) {
-              return current
-            }
-            const next = new Set(current)
-            next.add(favicon.src)
-            return next
-          })
+        onLoad={(event) => {
+          if (source === favicon.src) {
+            markNewtabFaviconReady(favicon.src)
+          } else {
+            markNewtabFaviconReady(source)
+          }
+          setLoadedSources((current) => addSourceToSet(current, source))
+          if (source === favicon.src && isChromeFaviconSource(source)) {
+            resolveChromeSource(source, event.currentTarget)
+          }
         }}
         onError={() => {
-          markNewtabFaviconNotReady(favicon.src)
-          setFailedSources((current) => {
-            if (current.has(favicon.src)) {
-              return current
-            }
-            const next = new Set(current)
-            next.add(favicon.src)
-            return next
-          })
+          markNewtabFaviconNotReady(source)
+          setFailedSources((current) => addSourceToSet(current, source))
+          if (customIcon || !favicon.pageUrl) {
+            return
+          }
+          if (isChromeFaviconSource(source)) {
+            resolveChromeSource(source, null)
+            return
+          }
+          if (source === favicon.src) {
+            clearActiveFaviconSource(favicon.pageUrl)
+          }
         }}
       />
       <span

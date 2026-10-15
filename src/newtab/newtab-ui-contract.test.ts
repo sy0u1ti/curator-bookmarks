@@ -11,6 +11,7 @@ const glassCss = readFileSync('src/newtab/hyalite-glass.css', 'utf8')
 const glassSettings = readFileSync('src/newtab/glass-settings.ts', 'utf8')
 const speedDial = readFileSync('src/newtab/components/NewtabSpeedDialPanel.tsx', 'utf8')
 const bookmarkIconShell = readFileSync('src/newtab/components/BookmarkIconShell.tsx', 'utf8')
+const activeFavicon = readFileSync('src/newtab/active-favicon.ts', 'utf8')
 const bookmarkPreboot = readFileSync('src/newtab/newtab-bookmark-preboot.ts', 'utf8')
 const newtabApp = readFileSync('src/newtab/NewtabApp.tsx', 'utf8')
 const newtabMain = readFileSync('src/newtab/main.tsx', 'utf8')
@@ -573,6 +574,24 @@ assert.ok(
     bookmarkIconShell.includes('isNewtabFaviconReady(favicon.src)') &&
     bookmarkIconShell.includes('markNewtabFaviconReady(favicon.src)'),
   'The preboot snapshot should transfer favicon readiness to the live bookmark icon without showing the fallback again.'
+)
+
+assert.ok(
+  activeFavicon.includes("'/favicon.ico'") &&
+    activeFavicon.includes("'/apple-touch-icon.png'") &&
+    activeFavicon.includes('matchesChromeDefaultFavicon') &&
+    bookmarkIconShell.includes('resolveActiveFaviconForChromeSource') &&
+    bookmarkIconShell.includes('clearActiveFaviconSource'),
+  'When the browser favicon database has no icon, the bookmark icon must actively read the site icon instead of staying on the default placeholder.'
+)
+
+assert.ok(
+  controller.includes('getActiveFaviconSource(url)') &&
+    controller.includes('loadActiveFaviconStore()') &&
+    controller.includes('clearActiveFaviconSource(String(bookmark.url') &&
+    controller.includes('pageUrl: item.url') &&
+    controller.includes('pageUrl: url'),
+  'The bookmark controller must prefer cached active site icons and refresh them with the icon refresh action.'
 )
 
 const backgroundMaskTransition = newtabApp.match(/const BACKGROUND_MASK_BASE_CLASS = '([^']+)'/)?.[1] || ''
