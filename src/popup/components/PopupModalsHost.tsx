@@ -122,7 +122,7 @@ const modalListClass = [
   '[&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-ds-text-primary/20 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:bg-transparent'
 ].join(' ')
 const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
-const editFolderPickerClass = 'flex min-h-0 flex-col gap-2'
+const editFolderPickerClass = 'edit-folder-picker flex min-h-0 flex-col gap-2'
 
 export function PopupModalsHost() {
   const liveState = usePopupModalsView()
@@ -238,6 +238,8 @@ function FolderSearch({
           }
 
           const list = document.getElementById(controls)
+          // In a modal, ↑/↓ always enter the list from the nearest edge, so
+          // the key does not depend on the current query contents.
           const edge = event.key === 'ArrowUp' ? 'last' : 'first'
           if (focusFolderPickerEdge(list, mode, edge)) {
             event.preventDefault()
@@ -424,6 +426,7 @@ function EditBookmarkModal({
         </Button>
       </header>
       <CollapsibleRoot
+        className="edit-folder-accordion"
         open={view.folderPickerOpen}
         onOpenChange={(open) => {
           if (open !== view.folderPickerOpen) {
@@ -449,7 +452,12 @@ function EditBookmarkModal({
             </CollapsibleTrigger>
           </div>
         </div>
-        <CollapsiblePanel id="edit-folder-picker" className={editFolderPickerClass} aria-label="选择新的来源路径">
+        <CollapsiblePanel
+          id="edit-folder-picker"
+          className={editFolderPickerClass}
+          aria-label="选择新的来源路径"
+          hiddenUntilFound
+        >
           <FolderSearch
             inputRef={folderSearchRef}
             htmlFor="edit-folder-search-input"
@@ -462,7 +470,12 @@ function EditBookmarkModal({
             action="edit-folder-query-change"
             disabled={view.folderSearchDisabled}
           />
-          <PopupFolderPickerHost id="edit-folder-list" className={modalCompactListClass} mode="edit" />
+          <PopupFolderPickerHost
+            id="edit-folder-list"
+            className={modalCompactListClass}
+            mode="edit"
+            data-squircle-subtree="off"
+          />
         </CollapsiblePanel>
       </CollapsibleRoot>
       <div className={modalFormClass}>

@@ -16,11 +16,13 @@ type PopupFolderPickerMode = PopupFolderPickerState['mode']
 export function PopupFolderPickerHost({
   className,
   id,
-  mode
+  mode,
+  ...props
 }: {
   className: string
   id: string
   mode: PopupFolderPickerMode
+  'data-squircle-subtree'?: 'off'
 }) {
   const state = usePopupFolderPickerState(mode)
 
@@ -31,6 +33,7 @@ export function PopupFolderPickerHost({
       role="tree"
       tabIndex={-1}
       aria-label={getAriaLabel(mode)}
+      {...props}
       onKeyDown={(event) => handleFolderPickerTreeKeyDown(event, mode)}
     >
       <PopupFolderPicker

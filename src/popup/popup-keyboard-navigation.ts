@@ -74,6 +74,14 @@ export function shouldDelegatePopupDocumentNavigation(
   return target.editable || target.interactive
 }
 
+export function shouldFocusFolderFilterFromMainSearch(
+  key: string,
+  target: PopupKeyboardTargetInfo,
+  query: string
+): boolean {
+  return key === 'ArrowLeft' && target.mainSearchInput && query.trim().length === 0
+}
+
 export function shouldBlurMainSearchForNavigation(
   key: string,
   target: PopupKeyboardTargetInfo

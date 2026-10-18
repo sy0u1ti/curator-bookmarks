@@ -634,8 +634,20 @@ try {
   )
   await page.keyboard.press('ArrowUp')
   await waitForFrames(page, 8)
+  // Return the caret to the main search before testing the new one-step
+  // shortcut; ArrowLeft from a result row still means "go to folders".
+  await page.keyboard.press('/')
+  await page.waitForFunction(() => document.activeElement?.id === 'search-input')
+  assert.equal(await page.locator('#search-input').inputValue(), '', 'The shortcut probe requires an empty main search')
   await page.keyboard.press('ArrowLeft')
   await waitForFrames(page)
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.id || ''),
+    'popup-folder-filter-input',
+    'ArrowLeft from an empty main search must focus the folder filter directly'
+  )
+  await page.keyboard.press('ArrowDown')
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'treeitem')
   for (let index = 0; index < 2; index += 1) {
     await page.keyboard.press('ArrowDown')
     await waitForFrames(page)

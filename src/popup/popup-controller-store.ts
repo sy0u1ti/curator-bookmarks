@@ -35,6 +35,7 @@ export interface PopupContentActionDetail {
   action: string
   bookmarkId?: string
   emptyAction?: string
+  exitOnEmpty?: boolean
   folderId?: string
   index?: number
   menuAction?: string

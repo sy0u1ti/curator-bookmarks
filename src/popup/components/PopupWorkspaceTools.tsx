@@ -5,20 +5,43 @@ import { Icon } from '../../ui/icons/Icon'
 import { closeTransientPopup, isSidePanelSurface, openBookmarkSidePanel, openExtensionManagement, openPageArchiveWorkspace } from '../../shared/extension-surfaces'
 import { setPopupKeyboardHelpOpen, usePopupKeyboardHelpOpen } from '../popup-workspace-state'
 
-const shortcuts = [
-  ['Ctrl / ⌘ K', '聚焦搜索，保留当前查询'],
-  ['Ctrl / ⌘ F', '聚焦文件夹筛选，输入即筛选'],
-  ['/', '未输入文字时聚焦搜索'],
-  ['↑ / ↓', '选择上一条或下一条结果'],
-  ['← / →', '无查询时切换文件夹与书签分栏'],
-  ['←（文件夹分栏内）', '聚焦文件夹筛选'],
-  ['Esc（筛选框内）', '先清空筛选，再返回书签列表'],
-  ['Enter', '在新标签页打开选中书签'],
-  ['Ctrl / ⌘ Enter', '后台打开，保留当前界面'],
-  ['Alt Enter', '在当前网页标签页打开'],
-  ['F2', '编辑当前选中的书签'],
-  ['Esc', '关闭对话框、返回或清空搜索'],
-  ['? / Ctrl / ⌘ /', '显示键盘帮助（? 用于输入框外）']
+const shortcutGroups = [
+  {
+    title: '主搜索',
+    rows: [
+      ['↓', '进入书签结果'],
+      ['←（空输入）', '进入文件夹筛选'],
+      ['Ctrl / ⌘ K', '聚焦主搜索']
+    ]
+  },
+  {
+    title: '文件夹筛选',
+    rows: [
+      ['↑（空输入）', '回到主搜索'],
+      ['↓（空输入）', '进入文件夹树'],
+      ['↑ / ↓（有输入）', '移动匹配高亮，保留输入焦点'],
+      ['Enter', '应用高亮文件夹'],
+      ['Ctrl / ⌘ F', '聚焦文件夹筛选']
+    ]
+  },
+  {
+    title: '文件夹树与书签',
+    rows: [
+      ['↑ / ↓', '在当前列表中移动'],
+      ['← / →', '返回文件夹 / 进入书签列表'],
+      ['Enter', '打开选中的书签'],
+      ['Ctrl / ⌘ Enter', '后台打开'],
+      ['Alt Enter', '在当前标签页打开'],
+      ['F2', '编辑选中的书签']
+    ]
+  },
+  {
+    title: '随时可用',
+    rows: [
+      ['Esc', '逐层返回；输入框内先清空'],
+      ['? / Ctrl / ⌘ /', '显示键盘帮助（? 用于输入框外）']
+    ]
+  }
 ]
 
 export function PopupWorkspaceTools() {
@@ -60,10 +83,17 @@ export function PopupWorkspaceTools() {
       <DialogBackdrop className="absolute inset-0 bg-black/70" />
       <DialogPanel id="popup-keyboard-help-dialog" className="relative max-h-[calc(100dvh-24px)] w-full max-w-lg overflow-y-auto rounded-ds-md border border-ds-border bg-ds-surface-2 p-5 text-ds-text-primary" initialFocus={() => document.getElementById('popup-keyboard-help-title')}>
         <DialogTitle id="popup-keyboard-help-title" tabIndex={-1} className="text-lg font-semibold outline-none">键盘操作</DialogTitle>
-        <p className="mt-2 text-xs leading-relaxed text-ds-text-secondary">弹窗与侧栏使用同一套操作。输入框内的普通文字和输入法确认保持原有行为。</p>
-        <dl className="my-4 grid gap-2 text-sm">
-          {shortcuts.map(([key, label]) => <div key={key} className="grid grid-cols-[minmax(110px,0.7fr)_minmax(0,1fr)] gap-3 border-b border-ds-border-subtle py-2"><dt><kbd className="font-mono text-xs">{key}</kbd></dt><dd className="text-ds-text-secondary">{label}</dd></div>)}
-        </dl>
+        <p className="mt-2 text-xs leading-relaxed text-ds-text-secondary">按界面位置理解方向键：左侧是文件夹筛选，中间是文件夹树，右侧是书签列表。输入框内的普通文字和输入法确认保持原有行为。</p>
+        <div className="my-4 grid gap-4">
+          {shortcutGroups.map((group) => (
+            <section className="grid gap-2" key={group.title} aria-label={group.title}>
+              <h3 className="m-0 text-xs font-semibold uppercase tracking-[0.08em] text-ds-text-muted">{group.title}</h3>
+              <dl className="m-0 grid gap-2 text-sm">
+                {group.rows.map(([key, label]) => <div key={key} className="grid grid-cols-[minmax(110px,0.7fr)_minmax(0,1fr)] gap-3 border-b border-ds-border-subtle py-2"><dt><kbd className="font-mono text-xs">{key}</kbd></dt><dd className="text-ds-text-secondary">{label}</dd></div>)}
+              </dl>
+            </section>
+          ))}
+        </div>
         <p className="mb-4 text-xs text-ds-text-secondary">浏览器全局快捷键可在设置页的“快捷键”中查看和调整。</p>
         <Button variant="secondary" onClick={() => setPopupKeyboardHelpOpen(false)}>关闭帮助</Button>
       </DialogPanel>

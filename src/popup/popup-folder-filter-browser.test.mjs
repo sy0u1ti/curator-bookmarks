@@ -145,6 +145,56 @@ try {
   await filter.press('Escape')
   await page.waitForFunction(() => document.activeElement?.id !== 'popup-folder-filter-input')
 
+  // From an empty main search, ← directly reaches the folder filter.
+  await page.evaluate(() => (document.activeElement instanceof HTMLElement) && document.activeElement.blur())
+  await page.keyboard.press('/')
+  await page.waitForFunction(() => document.activeElement?.id === 'search-input')
+  await page.keyboard.press('ArrowLeft')
+  await page.waitForFunction(() => document.activeElement?.id === 'popup-folder-filter-input')
+
+  // An empty filter must not trap ↑/↓ in the input.
+  await page.keyboard.press('Control+f')
+  await page.waitForFunction(() => document.activeElement?.id === 'popup-folder-filter-input')
+  await filter.press('ArrowDown')
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'treeitem')
+  const keyboardFolderStyle = await page.evaluate(() => {
+    const active = document.activeElement
+    if (!(active instanceof HTMLElement)) throw new Error('Folder row is unavailable')
+    const style = getComputedStyle(active)
+    return {
+      borderColor: style.borderColor,
+      outlineStyle: style.outlineStyle
+    }
+  })
+  assert.equal(keyboardFolderStyle.borderColor, 'rgba(0, 0, 0, 0)', 'keyboard folder focus must not draw a border')
+  assert.equal(keyboardFolderStyle.outlineStyle, 'none', 'keyboard folder focus must not draw an outline')
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.getAttribute('aria-selected')),
+    'true',
+    'ArrowDown from an empty filter must select the first tree row'
+  )
+  await filter.focus()
+  await filter.press('ArrowUp')
+  assert.equal(
+    await page.evaluate(() => document.activeElement?.id || ''),
+    'search-input',
+    'ArrowUp from an empty filter must return focus to the main search'
+  )
+  const hoveredFolder = tree.locator('[role="treeitem"]').nth(1)
+  await page.mouse.move(2, 2)
+  await page.waitForFunction(() => !document.getElementById('popup-app-shell')?.hasAttribute('data-keyboard-nav'))
+  await page.waitForTimeout(250)
+  await hoveredFolder.hover()
+  await page.waitForTimeout(250)
+  const hoveredFolderStyle = await hoveredFolder.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return {
+      borderColor: style.borderColor,
+      backgroundColor: style.backgroundColor
+    }
+  })
+  assert.notEqual(hoveredFolderStyle.borderColor, 'rgba(0, 0, 0, 0)', 'real pointer hover must retain the folder border')
+
   // ← walks bookmarks → folders → filter, and ↑↓ keep focus in the field while
   // the tree highlight moves across the matches.
   // Leave any editable field first: inside one, ← correctly stays a caret key.

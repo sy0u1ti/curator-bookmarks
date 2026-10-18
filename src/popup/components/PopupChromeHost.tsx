@@ -346,7 +346,7 @@ export function PopupChromeHost({
       {smartActive ? null : (
         <section className={toolbarClass} aria-label="当前视图状态">
           <p className={viewCaptionClass} id="view-caption">{state.viewCaption}</p>
-          <p className={keyHintClass}>↑ ↓ 导航 · ← → 分栏 · Enter 打开 · Esc 返回/清除</p>
+          <p className={keyHintClass}>方向键导航 · Enter 打开 · Esc 返回 · ? 查看快捷键</p>
         </section>
       )}
 

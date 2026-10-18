@@ -135,6 +135,7 @@ import {
   getFolderPaneTreeRoot,
   shouldBlurMainSearchForNavigation,
   shouldDelegatePopupDocumentNavigation,
+  shouldFocusFolderFilterFromMainSearch,
   type PopupKeyboardTargetInfo
 } from './popup-keyboard-navigation.js'
 import {
@@ -2533,8 +2534,8 @@ function loadFolderFilterPinyin(): Promise<void> {
 
 function buildSidebarFolderRows(node, depth, visibility: (PopupFolderFilterVisibility & { query: string }) | null): PopupContentFolderRowViewModel[] {
   const isPinnedRoot = depth === 0
-  const isExpanded = true
   const children = Array.isArray(node.children) ? node.children : []
+  const isExpanded = true
   const folderInfo = state.folderMap.get(node.id)
   const folderId = String(node.id || '')
   const toggleLabel = getPopupFolderToggleLabel(
@@ -3394,6 +3395,14 @@ function handleContentAction(detail: PopupContentActionDetail) {
     return
   }
   if (detail.action === 'folder-filter-move') {
+    if (detail.exitOnEmpty && !state.folderFilterQuery) {
+      if (Number(detail.index) < 0) {
+        focusSearchInput()
+        return
+      }
+      exitEmptyFolderFilterToTree(Number(detail.index))
+      return
+    }
     moveFolderFilterHighlight(Number(detail.index))
     return
   }
@@ -3687,6 +3696,12 @@ function handleDocumentKeydown(event) {
   }
 
   const targetInfo = getPopupKeyboardTargetInfo(event.target)
+  if (shouldFocusFolderFilterFromMainSearch(event.key, targetInfo, state.searchQuery)) {
+    event.preventDefault()
+    focusFolderFilter()
+    showViewNotice('已聚焦文件夹筛选，可直接输入')
+    return
+  }
   if (shouldDelegatePopupDocumentNavigation(event.key, targetInfo)) {
     return
   }
@@ -4224,15 +4239,44 @@ function moveFolderFilterHighlight(delta: number): void {
   if (!selectable.length) {
     return
   }
+
   const current = selectable.indexOf(state.activeFolderKeyboardIndex)
-  const next = current < 0
+  const nextIndex = current < 0
     ? (delta < 0 ? selectable.length - 1 : 0)
-    : Math.max(0, Math.min(current + delta, selectable.length - 1))
-  if (selectable[next] === state.activeFolderKeyboardIndex) {
+    : Math.max(0, Math.min(current + (delta < 0 ? -1 : 1), selectable.length - 1))
+  if (selectable[nextIndex] === state.activeFolderKeyboardIndex) {
     return
   }
-  state.activeFolderKeyboardIndex = selectable[next]
+  state.keyboardPane = 'folders'
+  state.activeFolderKeyboardIndex = selectable[nextIndex]
   renderMainContent({ preserveScroll: false })
+}
+
+/**
+ * An empty filter's ↓ enters the tree at its first row. ↑ is handled earlier
+ * by returning focus to the main search.
+ */
+function exitEmptyFolderFilterToTree(delta: number): void {
+  if (!Number.isFinite(delta)) {
+    return
+  }
+
+  const sidebarRows = getSidebarFolderRows()
+  if (!sidebarRows.length) {
+    return
+  }
+
+  state.keyboardPane = 'folders'
+  state.activeFolderKeyboardIndex = delta < 0 ? sidebarRows.length - 1 : 0
+  renderMainContent({ preserveScroll: false })
+  window.requestAnimationFrame(() => {
+    const tree = document.querySelector<HTMLElement>('.t-skel-content .popup-folder-tree')
+    const row = tree?.querySelector<HTMLElement>(
+      `[data-folder-row-id="${CSS.escape(sidebarRows[state.activeFolderKeyboardIndex]?.folderId || '')}"] button`
+    )
+    row?.focus({ preventScroll: true })
+    row?.scrollIntoView({ block: 'nearest' })
+  })
 }
 
 function applyFolderFilterKeyboardHighlight(): void {

@@ -82,8 +82,8 @@ export function PopupContentHost() {
     onFolderFilterEscape: () => {
       dispatchPopupContentAction({ action: 'folder-filter-escape' })
     },
-    onFolderFilterMove: (delta) => {
-      dispatchPopupContentAction({ action: 'folder-filter-move', index: delta })
+    onFolderFilterMove: (delta, exitOnEmpty) => {
+      dispatchPopupContentAction({ action: 'folder-filter-move', index: delta, exitOnEmpty })
     },
     onFolderFocus: (index) => {
       dispatchPopupContentAction({ action: 'set-active-folder', index })

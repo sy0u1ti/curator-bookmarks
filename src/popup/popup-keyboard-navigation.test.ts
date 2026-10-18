@@ -9,7 +9,8 @@ import {
   isPopupContentNavigationKey,
   isBookmarkRowKeyboardActive,
   shouldBlurMainSearchForNavigation,
-  shouldDelegatePopupDocumentNavigation
+  shouldDelegatePopupDocumentNavigation,
+  shouldFocusFolderFilterFromMainSearch
 } from './popup-keyboard-navigation.js'
 
 function run(): void {
@@ -23,6 +24,7 @@ function run(): void {
   testSearchResultsReclaimBookmarkKeyboardSelection()
   testDocumentNavigationDelegatesFocusedControls()
   testMainSearchKeepsCaretHorizontalKeysButAllowsResultNavigation()
+  testEmptyMainSearchFocusesFolderFilterWithArrowLeft()
   testFolderPickerKeyboardIndexes()
   testFolderPickerSelectors()
   testControllerDelegatesFocusedInteractiveTargets()
@@ -168,6 +170,31 @@ function testMainSearchKeepsCaretHorizontalKeysButAllowsResultNavigation(): void
   assert(
     shouldBlurMainSearchForNavigation('ArrowDown', mainSearchTarget),
     'vertical navigation from main search should leave text-editing mode'
+  )
+}
+
+function testEmptyMainSearchFocusesFolderFilterWithArrowLeft(): void {
+  const mainSearchTarget = {
+    editable: true,
+    interactive: true,
+    mainSearchInput: true
+  }
+
+  assert(
+    shouldFocusFolderFilterFromMainSearch('ArrowLeft', mainSearchTarget, ''),
+    'an empty main search should move left into the folder filter'
+  )
+  assert(
+    !shouldFocusFolderFilterFromMainSearch('ArrowLeft', mainSearchTarget, 'market'),
+    'a populated main search must keep ArrowLeft for caret movement'
+  )
+  assert(
+    !shouldFocusFolderFilterFromMainSearch('ArrowRight', mainSearchTarget, ''),
+    'ArrowRight must keep its normal meaning in the main search'
+  )
+  assert(
+    shouldFocusFolderFilterFromMainSearch('ArrowLeft', mainSearchTarget, '   '),
+    'whitespace-only main search should still move left into the folder filter'
   )
 }
 

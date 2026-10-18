@@ -34,7 +34,7 @@ const pageCardClass =
   'grid min-h-[52px] w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
 const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-[7px]'
 const pageIconClass =
-  'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border border-ds-border bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
+  'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border-0 bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
 const pageFaviconClass = 'block h-full w-full object-cover'
 const pageCopyClass = 'min-w-0'
 const pageTitleClass = 'm-0 min-w-0 truncate text-[13px] font-semibold leading-tight text-ds-text-primary'

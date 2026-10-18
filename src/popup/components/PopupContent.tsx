@@ -43,7 +43,7 @@ export interface PopupContentActionHandlers {
   onFolderFilterChange?: (value: string) => void
   onFolderFilterClear?: () => void
   onFolderFilterEscape?: () => void
-  onFolderFilterMove?: (delta: number) => void
+  onFolderFilterMove?: (delta: number, exitOnEmpty?: boolean) => void
   onFolderFilter?: (folderId: string) => void
   onFolderFocus?: (index: number) => void
   onKeyboardNavigate?: (key: string) => boolean
@@ -140,10 +140,10 @@ const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardClass = [
   'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
+  'popup-folder-card active:scale-[0.993]'
 ].join(' ')
 const folderCardActiveClass =
-  'border-ds-border-hover bg-ds-text-primary/[0.055] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[2px] before:rounded-full before:bg-ds-text-primary/70 before:content-[""]'
+  'bg-ds-text-primary/[0.055] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[2px] before:rounded-full before:bg-ds-text-primary/70 before:content-[""]'
 const folderCardDimmedClass = 'opacity-55 hover:opacity-100 focus-visible:opacity-100'
 const folderBranchClass =
   'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
@@ -177,14 +177,14 @@ const resultMatchTokenClass =
 const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
-  'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border border-ds-border-hover bg-ds-surface-3 text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
-  'hover:border-ds-border-hover hover:bg-ds-surface-3 focus-visible:border-ds-border-hover focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
+  'inline-flex h-7 w-7 flex-none items-center justify-center rounded-md border-0 bg-ds-surface-3 text-ds-text-primary outline-none',
+  'transition-[background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
+  'hover:bg-ds-surface-3 focus-visible:bg-ds-surface-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1',
   'active:scale-[var(--ds-press-scale)] disabled:cursor-default disabled:opacity-45'
 ].join(' ')
 const rowActionTriggerClass = cx(rowActionButtonClass, 'popup-row-actions-trigger')
 const rowActionDangerClass =
-  'hover:border-[rgba(255,138,130,0.42)] hover:text-ds-danger-text focus-visible:border-[rgba(255,138,130,0.42)] focus-visible:text-ds-danger-text'
+  'hover:text-ds-danger-text focus-visible:text-ds-danger-text'
 const rowReorderHandleClass = [
   'popup-bookmark-reorder-handle absolute right-[7px] top-1/2 z-[3] inline-flex h-10 w-10 -translate-y-1/2 touch-none select-none items-center justify-center rounded-ds-sm border border-transparent bg-transparent text-ds-text-muted outline-none',
   'transition-[border-color,background-color,color,opacity] duration-ds-fast ease-ds-standard',
@@ -742,10 +742,12 @@ function PopupFolderFilterField({
           }
           // The field keeps focus while the tree highlight moves, so a query can
           // be corrected without leaving the input. Enter applies the highlight.
+          // With no query, the field hands the key back to the tree so focus can
+          // leave an empty search box immediately.
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault()
             event.stopPropagation()
-            handlers?.onFolderFilterMove?.(event.key === 'ArrowDown' ? 1 : -1)
+            handlers?.onFolderFilterMove?.(event.key === 'ArrowDown' ? 1 : -1, !query)
             return
           }
           if (event.key === 'Enter') {

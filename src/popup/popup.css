@@ -377,6 +377,18 @@ body::after {
   color: var(--ds-text-secondary);
 }
 
+/* The edit picker keeps its full tree mounted, so only the panel track needs
+   to resize during disclosure. Isolate that subtree and use a shorter clock
+   than the generic accordion to keep the modal card from relayout jitter. */
+.edit-folder-accordion {
+  --acc-expand: 180ms;
+  --acc-collapse: 160ms;
+}
+
+.edit-folder-accordion .t-acc-panel-inner {
+  contain: layout paint;
+}
+
 .popup-main-row:hover,
 .popup-main-row:focus-within {
   z-index: 2;
@@ -459,6 +471,16 @@ body::after {
   transition-duration: var(--popup-keyboard-selection-dur);
   transition-property: background-color, border-color, color;
   transition-timing-function: var(--popup-keyboard-selection-ease);
+}
+
+#popup-app-shell[data-keyboard-nav="true"] .popup-folder-tree button[role="treeitem"] {
+  border-color: transparent;
+  outline: none;
+}
+
+.popup-folder-card:hover {
+  border-color: var(--ds-border-hover);
+  background: var(--ds-hover);
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not([data-pinned="true"]):not(:focus-within) .popup-row-actions-menu {
