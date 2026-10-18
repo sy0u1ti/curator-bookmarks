@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import {
+  DEFAULT_NEW_TAB_MODULE_SETTINGS,
+  normalizeNewTabModuleSettings
+} from './module-settings.js'
 
 const newtabCss = readFileSync('src/newtab/newtab.css', 'utf8')
 const globalsCss = readFileSync('src/styles/globals.css', 'utf8')
@@ -34,6 +38,32 @@ const bookmarkTileClasses = readFileSync('src/newtab/components/bookmarkTileClas
 const speedDialClasses = readFileSync('src/newtab/components/speedDialClasses.ts', 'utf8')
 const backgroundLayer = readFileSync('src/newtab/components/NewtabBackgroundLayer.tsx', 'utf8')
 const newtabButtonClasses = readFileSync('src/newtab/components/newtabButtonClass.ts', 'utf8')
+
+assert.equal(
+  DEFAULT_NEW_TAB_MODULE_SETTINGS.speedDial,
+  false,
+  'A fresh profile should start with the fixed-entry module hidden.'
+)
+assert.equal(
+  normalizeNewTabModuleSettings(undefined).speedDial,
+  false,
+  'Missing module settings should use the new-user default.'
+)
+assert.equal(
+  normalizeNewTabModuleSettings({ speedDial: true }).speedDial,
+  true,
+  'An existing explicit preference must stay enabled.'
+)
+assert.equal(
+  normalizeNewTabModuleSettings({ workspaces: true }).speedDial,
+  true,
+  'A legacy stored workspace preference must stay enabled.'
+)
+assert.equal(
+  normalizeNewTabModuleSettings({ speedDial: false }).speedDial,
+  false,
+  'An existing explicit off preference must stay off.'
+)
 
 const stableNewtabFontStack = '"Geist", "Geist Sans", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Hiragino Sans GB", "Helvetica Neue", Arial, sans-serif'
 const reducedTransparencyMaskRule = newtabCss.match(

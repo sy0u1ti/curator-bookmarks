@@ -1,8 +1,6 @@
 import { BackupControls } from './BackupControls.js'
 import { DuplicateControls, DuplicateResultsControls } from './DuplicateControls.js'
 import { DuplicateGroups } from './DuplicateGroups.js'
-import { FolderCleanupControls } from './FolderCleanupControls.js'
-import { FolderCleanupResults } from './FolderCleanupResults.js'
 import { IgnoreRules } from './IgnoreRules.js'
 import {
   OPTION_PANEL_CLASS,
@@ -21,14 +19,13 @@ interface OptionsPanelVisibilityProps {
   hidden: boolean
 }
 
-type TaskPanelKey = 'history' | 'backup' | 'redirects' | 'duplicates' | 'folder-cleanup' | 'ignore' | 'recycle'
+type TaskPanelKey = 'history' | 'backup' | 'redirects' | 'duplicates' | 'ignore' | 'recycle'
 
 export function TaskPanel({ hidden, sectionKey }: OptionsPanelVisibilityProps & { sectionKey: TaskPanelKey }) {
   if (sectionKey === 'history') return <HistoryPanel hidden={hidden} />
   if (sectionKey === 'backup') return <BackupPanel hidden={hidden} />
   if (sectionKey === 'redirects') return <RedirectsPanel hidden={hidden} />
   if (sectionKey === 'duplicates') return <DuplicatesPanel hidden={hidden} />
-  if (sectionKey === 'folder-cleanup') return <FolderCleanupPanel hidden={hidden} />
   if (sectionKey === 'ignore') return <IgnoreRulesPanel hidden={hidden} />
   return <RecyclePanel hidden={hidden} />
 }
@@ -38,8 +35,6 @@ const AVAILABILITY_HISTORY_GROUP_CLASS =
 const REDIRECTS_GROUP_CLASS =
   OPTION_TOOL_PANEL_CLASS
 const RECYCLE_GROUP_CLASS =
-  OPTION_TOOL_PANEL_CLASS
-const FOLDER_CLEANUP_GROUP_CLASS =
   OPTION_TOOL_PANEL_CLASS
 const DUPLICATES_GROUP_CLASS =
   OPTION_TOOL_PANEL_CLASS
@@ -92,19 +87,6 @@ export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
       <div className={DUPLICATES_GROUP_CLASS}>
         <DuplicateResultsControls />
         <DuplicateGroups />
-      </div>
-    </section>
-  )
-}
-
-export function FolderCleanupPanel({ hidden }: OptionsPanelVisibilityProps) {
-  return (
-    <section id="folder-cleanup" className={OPTION_PANEL_CLASS} aria-labelledby="folder-cleanup-title" hidden={hidden}>
-      <OptionPanelHeader titleId="folder-cleanup-title" title="文件夹清理" description="发现空文件夹和可简化的层级，让书签结构保持清晰。" />
-
-      <div className={FOLDER_CLEANUP_GROUP_CLASS}>
-        <FolderCleanupControls />
-        <FolderCleanupResults />
       </div>
     </section>
   )

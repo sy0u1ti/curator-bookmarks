@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+
+
+
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 
 const output = path.resolve('output/playwright/apple-ui')
 await mkdir(output, { recursive: true })
@@ -74,7 +79,7 @@ async function frames(count = 2) {
 
 try {
   context = await chromium.launchPersistentContext(profile, {
-    channel: 'chromium', headless: true, viewport: { width: 800, height: 600 },
+    channel: browserChannel, headless: true, viewport: { width: 800, height: 600 },
     args: ['--disable-extensions-except=' + extension, '--load-extension=' + extension]
   })
   // Fixtures remain local to this profile, with no model calls or remote content capture.
@@ -181,7 +186,7 @@ try {
 
   // Audit all settings sections and each new-tab settings group.
   await page.setViewportSize({ width: 1440, height: 1000 })
-  for (const section of ['general','inbox','backup','availability','history','redirects','ignore','duplicates','folder-cleanup','recycle','ai-settings','ai','bookmark-history']) {
+  for (const section of ['general','inbox','backup','availability','history','redirects','ignore','duplicates','recycle','ai-settings','ai','bookmark-history']) {
     await page.goto(base + '/src/options/options.html#' + section)
     const panel = page.locator('section#' + section)
     await panel.waitFor({ state: 'visible' })
@@ -247,3 +252,4 @@ try {
   assert.ok(resolved.startsWith(path.resolve(tmpdir()) + path.sep) && path.basename(resolved).startsWith('curator-readability-'))
   await rm(resolved, { recursive: true, force: true })
 }
+

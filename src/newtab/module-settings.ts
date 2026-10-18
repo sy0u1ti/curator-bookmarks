@@ -16,7 +16,7 @@ export interface NewTabModuleSettingRow {
 
 export const DEFAULT_NEW_TAB_MODULE_SETTINGS: NewTabModuleSettings = {
   version: 1,
-  speedDial: true,
+  speedDial: false,
   order: ['speedDial']
 }
 
@@ -35,13 +35,16 @@ const MODULE_SETTING_KEYS: NewTabModuleSettingKey[] = [
 ]
 
 export function normalizeNewTabModuleSettings(rawSettings: unknown): NewTabModuleSettings {
-  const source = rawSettings && typeof rawSettings === 'object' && !Array.isArray(rawSettings)
+  const hasStoredSettings = Boolean(
+    rawSettings && typeof rawSettings === 'object' && !Array.isArray(rawSettings)
+  )
+  const source = hasStoredSettings
     ? rawSettings as Record<string, unknown>
     : {}
 
   return {
     version: 1,
-    speedDial: readCombinedSpeedDialSetting(source),
+    speedDial: readCombinedSpeedDialSetting(source, hasStoredSettings),
     order: normalizeModuleOrder(source.order)
   }
 }
@@ -64,9 +67,15 @@ function readBooleanSetting(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback
 }
 
-function readCombinedSpeedDialSetting(source: Record<string, unknown>): boolean {
-  const speedDial = readBooleanSetting(source.speedDial, DEFAULT_NEW_TAB_MODULE_SETTINGS.speedDial)
-  const workspaces = readBooleanSetting(source.workspaces, DEFAULT_NEW_TAB_MODULE_SETTINGS.speedDial)
+function readCombinedSpeedDialSetting(
+  source: Record<string, unknown>,
+  hasStoredSettings: boolean
+): boolean {
+  // Existing records predate the new-user default. Keep their previous on
+  // state when the legacy fields are absent, while explicit off values win.
+  const legacyDefault = hasStoredSettings
+  const speedDial = readBooleanSetting(source.speedDial, legacyDefault)
+  const workspaces = readBooleanSetting(source.workspaces, legacyDefault)
   return speedDial && workspaces
 }
 

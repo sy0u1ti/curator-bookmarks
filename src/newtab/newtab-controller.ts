@@ -589,7 +589,7 @@ const ACTIVITY_RECORD_LIMIT = 160
 const DEFAULT_GENERAL_SETTINGS = {
   hideSettingsTrigger: false,
   showQuickAccess: true,
-  showSourceNavigation: true,
+  showSourceNavigation: false,
   openBookmarksInNewTab: false
 }
 
@@ -11048,6 +11048,8 @@ function normalizeGeneralSettings(rawSettings: unknown): typeof DEFAULT_GENERAL_
     showQuickAccess: typeof settings.showQuickAccess === 'boolean'
       ? settings.showQuickAccess
       : legacyQuickAccess,
+    // Off for new users. A stored record predates that default, so a missing
+    // field keeps the earlier on state; an explicit choice always wins.
     showSourceNavigation: settings.showSourceNavigation !== false,
     openBookmarksInNewTab: settings.openBookmarksInNewTab === true
   }

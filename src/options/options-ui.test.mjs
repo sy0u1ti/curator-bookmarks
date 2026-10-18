@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
+
+
+
 import { createServer } from 'node:http'
 import { mkdtemp, mkdir, cp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 // Exercises real controls with synthetic bookmarks in an isolated extension profile.
 const before = process.argv.includes('--before')
 const output = path.resolve('output/playwright/options-ui/' + (before ? 'before' : 'after'))
@@ -31,7 +36,7 @@ let context
 let page
 try {
   context = await chromium.launchPersistentContext(path.join(temporary, 'profile'), {
-    channel: 'chromium', headless: true, acceptDownloads: true, reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 },
+    channel: browserChannel, headless: true, acceptDownloads: true, reducedMotion: 'reduce', viewport: { width: 1440, height: 1000 },
     args: ['--disable-extensions-except=' + extensionPath, '--load-extension=' + extensionPath,
       '--host-resolver-rules=MAP options-ui.example.net 127.0.0.1', '--no-proxy-server']
   })
@@ -46,7 +51,6 @@ try {
     })
     const folder = await chrome.bookmarks.create({ parentId: '1', title: 'UI 检查资料' })
     const second = await chrome.bookmarks.create({ parentId: folder.id, title: '开发文档' })
-    const empty = await chrome.bookmarks.create({ parentId: folder.id, title: '待清理空目录' })
     const ignoredFolder = await chrome.bookmarks.create({ parentId: folder.id, title: '暂不检测' })
     const guide = await chrome.bookmarks.create({ parentId: folder.id, title: 'iOS 安装指南（自签名）', url: origin + '/guide/%E5%AE%89%E8%A3%85?lang=zh-CN' })
     const restricted = await chrome.bookmarks.create({ parentId: folder.id, title: '项目参考资料', url: origin + '/restricted' })
@@ -60,7 +64,7 @@ try {
       curatorBookmarkAddHistory: { version: 1, entries: [{ id: 'organize-ui-example', bookmarkId: copies[2].id, title: copies[2].title, url: copies[2].url, originalFolderPath: '书签栏 / 收件箱', targetFolderPath: '书签栏 / UI 检查资料 / 开发文档', targetFolderId: second.id, recommendationKind: 'existing', moved: true, confidence: 0.93, reason: '与开发文档主题一致，放在此目录便于查找。', summary: '安装、配置和常见问题的完整参考。'.repeat(5), suggestedTitle: '开发参考手册', createdAt: now }] },
       curatorBookmarkAiAnalysisCheckpoint: { version: 1, scopeFolderId: folder.id, outcome: 'completed', startedAt: now - 20000, updatedAt: now, totalBookmarks: 1, completedBookmarkIds: [guide.id], results: [{ id: guide.id, currentTitle: guide.title, title: guide.title, url: guide.url, parentId: folder.id, path: '书签栏 / UI 检查资料', ancestorIds: ['1', folder.id], status: 'suggested', action: 'rename', suggestedTitle: 'iOS 自签名安装指南', summary: '介绍安装、签名与常见问题。', contentType: '文档', confidence: 'high', confidenceScore: 0.93, reason: '去除重复后缀，让标题更便于检索。', tags: ['iOS', '安装', '签名'], topics: ['移动开发'], aliases: ['安装说明'], suggestedFolder: 'UI 检查资料 / 开发文档', folderDecision: { kind: 'existing', folderId: second.id, folderPath: '书签栏 / UI 检查资料 / 开发文档', confidence: 0.9, reason: '开发文档' } }] }
     })
-    return { guide, restricted, redirect, copies, folder, second, empty }
+    return { guide, restricted, redirect, copies, folder, second }
   }, origin)
   page = await context.newPage()
   const errors = []
@@ -72,7 +76,7 @@ try {
   const guideCard = () => page.locator('#availability article').filter({ hasText: seeded.guide.title }).first()
   const baselineCard = await guideCard().boundingBox()
   const baselineCopy = await guideCard().innerText()
-  const sections = ['general','inbox','backup','availability','history','redirects','ignore','duplicates','folder-cleanup','recycle','ai-settings','ai','bookmark-history']
+  const sections = ['general','inbox','backup','availability','history','redirects','ignore','duplicates','recycle','ai-settings','ai','bookmark-history']
   const pages = []
   for (const width of [1440, 1100, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
@@ -288,21 +292,6 @@ try {
       await dialog.getByRole('button', { name: '确认当前操作', exact: true }).click()
       await dialog.waitFor({ state: 'hidden' })
     }
-    await page.goto(base + '#folder-cleanup')
-    const emptyCard = page.locator('#folder-cleanup article').filter({ hasText: '删除空文件夹：待清理空目录' })
-    await emptyCard.getByRole('button', { name: /^查看文件夹清理预览/ }).click()
-    await emptyCard.getByRole('button', { name: /^确认删除/ }).click()
-    // Cancel through the dialog's own button: a bare Escape can be consumed by
-    // whatever else is open, leaving the cleanup action stuck in its busy state.
-    const cleanupConfirmDialog = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: '确认当前操作', exact: true }) })
-    await cleanupConfirmDialog.getByRole('button', { name: '取消当前确认操作', exact: true }).click()
-    await cleanupConfirmDialog.waitFor({ state: 'hidden' })
-    assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), seeded.empty.id)).length, 1)
-    await emptyCard.getByRole('button', { name: /^确认删除/ }).click()
-    await confirmMutation()
-    await emptyCard.waitFor({ state: 'hidden' })
-    assert.equal((await worker.evaluate(title => chrome.bookmarks.search({ title }), seeded.empty.title)).length, 0)
-
     await page.goto(base + '#duplicates')
     const duplicates = page.locator('#duplicates')
     for (const strategy of ['最新', '最早', '路径最短', '有标签', '新标签页来源', '最近访问']) {
@@ -382,3 +371,4 @@ try {
   assert.ok(resolved.startsWith(path.resolve(tmpdir()) + path.sep) && path.basename(resolved).startsWith('curator-options-ui-'))
   await rm(resolved, { recursive: true, force: true })
 }
+

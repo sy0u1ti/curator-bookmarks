@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict'
+
+
+
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { build } from 'esbuild'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 import '../vendor/hyalite/hyalite.js'
 import { installGlassWallpaperFixture } from './glass-test-fixture.mjs'
 
@@ -95,7 +100,7 @@ async function readCardEdge(tile) {
 
 try {
   context = await chromium.launchPersistentContext(profile, {
-    channel: 'chromium', headless: true, reducedMotion: 'no-preference', viewport: { width: 1440, height: 1280 },
+    channel: browserChannel, headless: true, reducedMotion: 'no-preference', viewport: { width: 1440, height: 1280 },
     args: [`--disable-extensions-except=${path.resolve('dist')}`, `--load-extension=${path.resolve('dist')}`]
   })
   const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker')
@@ -132,7 +137,9 @@ try {
   assert.equal((await readLens(page, '.newtab-search-surface')).blur, 12)
   assert.equal((await readLens(page, '.newtab-search-surface')).background, 'rgba(0, 0, 0, 0.13)')
   assert.ok(await page.evaluate(() => Number(document.documentElement.dataset.hyaliteSurfaces) <= 48))
-  await page.waitForFunction(() => [...document.querySelectorAll('.bookmark-tile')].every(element => element.dataset.glassMode === 'refraction'))
+  // Bookmark cards are frost-tier: native blur only, never a swapped lens.
+  assert.ok(await page.evaluate(() => [...document.querySelectorAll('.bookmark-tile, .bookmark-menu-surface, .settings-drawer-panel, .folder-section-header')].every(element => !element.dataset.glassMode)))
+  assert.ok(await page.evaluate(() => Number(document.documentElement.dataset.hyaliteSurfaces) <= 8))
   const stableMaterials = await page.locator('.bookmark-tile, .newtab-clock').evaluateAll(elements => elements.map(element => {
     const style = getComputedStyle(element)
     return [element.style.getPropertyValue('--hyalite'), element.style.getPropertyValue('--newtab-glass-texture'), style.backdropFilter, style.borderColor, style.boxShadow]
@@ -342,3 +349,4 @@ try {
   assert.ok(path.basename(profile).startsWith('glass-regression-'))
   await rm(profile, { recursive: true, force: true })
 }
+

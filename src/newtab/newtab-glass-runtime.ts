@@ -11,17 +11,16 @@ import {
 } from './newtab-glass-startup.js'
 import { glassTextureCacheKey, readGlassTexture, writeGlassTexture, type CachedGlassTexture } from './newtab-glass-cache.js'
 
-export const GLASS_SURFACE_SELECTOR = [
-  '.newtab-search-surface', '.newtab-clock', '.newtab-onboarding-strip', '.settings-trigger',
-  '.newtab-delete-toast-panel', '.newtab-speed-dial', '.newtab-portal', '.bookmark-tile',
-  '.newtab-search-engine-menu', '.featured-wallpaper-panel',
-  '.folder-section-header', '.bookmark-breadcrumb-item', '.source-navigation-label',
-  '.source-navigation-link', '.folder-section-add', '.bookmark-menu-surface',
-  '.settings-drawer-panel', '[data-drawer-content]', '.newtab-glass-preview', '.newtab-state'
-].join(',')
+// Only static surfaces that sit directly on the wallpaper get a refraction rim.
+// The texture is cut from the wallpaper alone, so floating panels (menus, the
+// settings drawer, dropdowns, toasts) would show a rim that does not match the
+// UI behind them, and the swap from blur to rim was visible on every open.
+// Bookmark cards and modules mount, scroll and resize too often to swap
+// material without flashing; they use the frost tier in hyalite-glass.css.
+export const GLASS_SURFACE_SELECTOR = '.newtab-search-surface,.newtab-clock,.newtab-glass-preview'
 const GHOST_SELECTOR = '.bookmark-drag-ghost,.speed-dial-drag-ghost,.folder-drag-ghost'
-const PRIORITY_SELECTOR = '.newtab-search-surface,.newtab-clock,.settings-drawer-panel,[data-drawer-content],.bookmark-menu-surface,.newtab-search-engine-menu,.featured-wallpaper-panel,.newtab-glass-preview'
-const MAX_REFRACTING_SURFACES = 48
+const PRIORITY_SELECTOR = '.newtab-search-surface,.newtab-clock,.newtab-glass-preview'
+const MAX_REFRACTING_SURFACES = 8
 
 function refractionOptions(settings: NewtabGlassSettings) {
   return {
@@ -294,6 +293,14 @@ export function startNewtabGlassRuntime(): () => void {
     finishNewtabGlassStartup('ready')
   }
 
+  // Enable rim cross-fades only after the first committed frame, so startup
+  // still lands atomically while every later lens change eases in and out.
+  function enableFade(element: HTMLElement): void {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!stopped && element.isConnected) element.dataset.glassFade = ''
+    }))
+  }
+
   function applyPreparedLens(surface: Surface, prepared: PreparedRefraction): void {
     const element = surface.element
     const previous = surface.textureUrl
@@ -516,6 +523,7 @@ export function startNewtabGlassRuntime(): () => void {
     const surface: Surface = { element, visible: false, selected: false, version: 0, timer: null, area: 0, width: 0, height: 0, key: '', textureUrl: '', luminance: null, motion: new Set(), failed: false, preparing: false, prepared: null }
     surfaces.set(element, surface)
     element.dataset.hyaliteSurface = ''
+    if (!isNewtabGlassStartupPending()) enableFade(element)
     // Hyalite models native corner radii. Do not crop its edge with a second lens shape.
     element.dataset.squircle = 'off'
     if (element.dataset.sq === 'on') { element.style.removeProperty('clip-path'); delete element.dataset.sq }
@@ -577,7 +585,11 @@ export function startNewtabGlassRuntime(): () => void {
       applyPreparedLens(surface, prepared)
     })
   }
-  window.addEventListener(NEWTAB_GLASS_STARTUP_READY_EVENT, releaseUncommittedLenses)
+  const startupFinished = () => {
+    releaseUncommittedLenses()
+    surfaces.forEach(surface => enableFade(surface.element))
+  }
+  window.addEventListener(NEWTAB_GLASS_STARTUP_READY_EVENT, startupFinished)
   startupFrame = requestAnimationFrame(checkStartup)
 
   const settingsChanged = (next: NewtabGlassSettings) => {
@@ -678,7 +690,7 @@ export function startNewtabGlassRuntime(): () => void {
     document.removeEventListener('scroll', scrolled, true)
     forcedColors.removeEventListener('change', activity)
     window.removeEventListener('resize', updateScene)
-    window.removeEventListener(NEWTAB_GLASS_STARTUP_READY_EVENT, releaseUncommittedLenses)
+    window.removeEventListener(NEWTAB_GLASS_STARTUP_READY_EVENT, startupFinished)
     window.removeEventListener('pagehide', dispose)
     disposeRuntime = null
   }

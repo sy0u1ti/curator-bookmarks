@@ -5,6 +5,7 @@ import { type InboxItem } from '../../shared/inbox.js'
 import type { InboxReviewMessage } from '../../shared/messages.js'
 import type { FolderRecord } from '../../shared/types.js'
 import { Input } from '../../ui/base/Input.js'
+import { useListExit } from '../../ui/motion/useListExit.js'
 import { refreshInboxReview, useInboxReviewData } from './inbox-review-store.js'
 
 export function InboxReview() {
@@ -56,8 +57,11 @@ export function InboxReview() {
     {actionError || error ? <p role="alert" className="text-[13px] text-ds-text-secondary">{[actionError, error].filter(Boolean).join('；')}</p> : null}
     <Input aria-label="搜索待整理书签" placeholder="搜索标题或网址" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
     {error ? <Button size="sm" disabled={busy} onClick={() => void refreshInboxReview()}>重新读取</Button> : null}
-    {!data ? (!error ? <p>正在读取待整理…</p> : null) : !pending.length ? <p className="text-[13px] text-ds-text-secondary">当前没有待整理书签。</p> : visible.map(item =>
-      <InboxReviewRow key={item.captureId} item={item} stale={data.bookmarks.get(item.bookmarkId)?.url !== item.url} folderMap={folderMap} folderOptions={folderOptions} busy={busy} run={run} />)}
+    {!data ? (!error ? <p>正在读取待整理…</p> : null) : !pending.length ? <p className="text-[13px] text-ds-text-secondary">当前没有待整理书签。</p> : (
+      // Remount per query/page so filtering and paging swap rows instantly;
+      // only rows resolved by a review action play the exit collapse.
+      <InboxReviewList key={`${normalizedQuery}\u0000${currentPage}`} items={visible} bookmarks={data.bookmarks} folderMap={folderMap} folderOptions={folderOptions} busy={busy} run={run} />
+    )}
     {data && filtered.length === 0 && pending.length > 0 ? <p>没有匹配的待办。</p> : null}
     {filtered.length > 20 ? <div className="mt-4 flex items-center justify-between gap-3">
       <Button size="sm" variant="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</Button>
@@ -67,7 +71,21 @@ export function InboxReview() {
   </section>
 }
 
-function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { item: InboxItem; stale: boolean; folderMap: Map<string, FolderRecord>; folderOptions: { value: string; label: string }[]; busy: boolean; run: (message: InboxReviewMessage) => Promise<void> }) {
+type InboxReviewRunner = (message: InboxReviewMessage) => Promise<void>
+
+function InboxReviewList({ items, bookmarks, folderMap, folderOptions, busy, run }: { items: InboxItem[]; bookmarks: Map<string, { url?: string }>; folderMap: Map<string, FolderRecord>; folderOptions: { value: string; label: string }[]; busy: boolean; run: InboxReviewRunner }) {
+  const entries = useListExit(items, item => item.captureId)
+  return <div className="flex flex-col">
+    {entries.map(entry =>
+      <div className="t-list-exit" data-exiting={entry.exiting ? 'true' : 'false'} inert={entry.exiting || undefined} key={entry.key}>
+        <div className="t-list-exit-inner">
+          <InboxReviewRow item={entry.item} stale={bookmarks.get(entry.item.bookmarkId)?.url !== entry.item.url} folderMap={folderMap} folderOptions={folderOptions} busy={busy || entry.exiting} run={run} />
+        </div>
+      </div>)}
+  </div>
+}
+
+function InboxReviewRow({ item, stale, folderMap, folderOptions, busy, run }: { item: InboxItem; stale: boolean; folderMap: Map<string, FolderRecord>; folderOptions: { value: string; label: string }[]; busy: boolean; run: InboxReviewRunner }) {
   const [folderId, setFolderId] = useState<string | null>(null)
   const selectedFolder = folderId ? folderMap.get(folderId) : undefined
   const analyzing = !stale && item.status === 'analyzing'

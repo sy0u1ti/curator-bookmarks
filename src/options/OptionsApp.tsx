@@ -131,7 +131,6 @@ const availabilityLinks: NavLink[] = [
 const bookmarkLinks: NavLink[] = [
   { section: 'inbox', href: '#inbox', icon: 'Bookmark', label: '待整理' },
   { section: 'duplicates', href: '#duplicates', icon: 'Copy', label: '重复书签检测' },
-  { section: 'folder-cleanup', href: '#folder-cleanup', icon: 'Folder', label: '文件夹清理' },
   { section: 'recycle', href: '#recycle', icon: 'Trash2', label: '回收站' }
 ]
 

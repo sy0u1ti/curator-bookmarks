@@ -49,6 +49,58 @@ body {
   background: var(--ds-bg-page);
 }
 
+/* Status lines mount as the save flow advances; a short rise keeps them from
+   popping in. The success check reuses the popup "saved" draw timing. */
+.archive-status {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity var(--duration-quick) var(--ease-smooth-out),
+    transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+@starting-style {
+  .archive-status {
+    opacity: 0;
+    transform: translate3d(0, var(--distance-micro), 0);
+  }
+}
+
+.archive-saved-check {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  margin-top: 2px;
+  color: var(--ds-text-primary);
+}
+
+.archive-saved-check path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 14;
+  stroke-dashoffset: 0;
+  animation: archive-saved-check-draw var(--check-draw) var(--check-ease) var(--duration-micro) backwards;
+}
+
+@keyframes archive-saved-check-draw {
+  from { stroke-dashoffset: 14; }
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .archive-status {
+    transform: none !important;
+    transition: opacity 80ms linear !important;
+  }
+
+  .archive-saved-check path {
+    animation: none !important;
+  }
+}
+
 /* Focus rings here are box-shadow based; forced colours suppress shadows. */
 @media (forced-colors: active) {
   :focus-visible {

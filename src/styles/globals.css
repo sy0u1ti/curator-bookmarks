@@ -807,7 +807,8 @@ body {
   justify-content: center;
   width: 20px;
   height: 20px;
-  animation: t-status-icon-arrive var(--icon-swap-dur) var(--icon-swap-ease) backwards;
+  /* An arrival, not an in-place swap: enter curve, not --icon-swap-ease. */
+  animation: t-status-icon-arrive var(--duration-quick) var(--ease-smooth-out) backwards;
 }
 
 @keyframes t-status-icon-arrive {
@@ -838,7 +839,7 @@ body {
   opacity: 0;
   transform: translateY(0);
   transition:
-    opacity var(--ds-motion-standard) var(--ease-out),
+    opacity var(--ds-motion-standard) var(--stagger-ease),
     transform 0s linear;
   transition-delay: 0s;
 }

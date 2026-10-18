@@ -77,7 +77,7 @@ const EMPTY_VIEW: NewtabFolderSourceView = {
     hideSettingsTrigger: false,
     openBookmarksInNewTab: false,
     showQuickAccess: true,
-    showSourceNavigation: true
+    showSourceNavigation: false
   },
   hideFolderNames: false,
   browseMode: 'expanded',

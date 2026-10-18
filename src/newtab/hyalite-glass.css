@@ -1,4 +1,16 @@
-/* Hyalite owns the backdrop only. Text and existing gesture transforms stay untouched. */
+/* New Tab material system. Four tiers, chosen by what sits behind a surface:
+
+   1. Lens   - search field, clock, settings preview. Few, static, directly on
+               the wallpaper: native blur plus a cached refraction rim.
+   2. Frost  - bookmark cards and wallpaper modules. Native blur only, so a
+               newly mounted, scrolled or resized card never swaps material.
+   3. Panel  - menus, drawer, dropdowns, toasts, dialogs. They float above other
+               UI, so a wallpaper-only rim can never match what is behind them.
+               A dense, lightly blurred fill keeps text readable everywhere.
+   4. Chip   - small folder headings and navigation pills. Tint only; a
+               backdrop blur per 22px chip costs far more than it shows.
+
+   Text and gesture transforms are never touched here. */
 html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
   transition: none !important;
 }
@@ -16,20 +28,23 @@ html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
   --newtab-glass-edge-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.20),
     inset 0 0.5px 0 rgba(255, 255, 255, 0.26),
     inset 0 -0.5px 0 rgba(255, 255, 255, 0.10);
+  --newtab-glass-rim-fade: 200ms;
+
+  --newtab-panel-bg: rgba(22, 24, 29, 0.9);
+  --newtab-panel-bg-raised: rgba(30, 32, 38, 0.98);
+  --newtab-panel-border: rgba(255, 255, 255, 0.13);
+  --newtab-panel-filter: blur(16px) saturate(1.15);
+  --newtab-panel-shadow: 0 22px 48px -18px rgba(0, 0, 0, 0.62),
+    0 4px 14px -6px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+
+  --newtab-chip-bg: rgba(12, 13, 16, 0.5);
+  --newtab-chip-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.22);
 }
 
-/* Match the runtime's surface list before its lazy module registers anything.
-   The first painted frame must already have the final stroke, rim and blur.
-   The runtime may replace --newtab-glass-surface-fill per element with a
-   luminance-adapted tint; without one the user's base tint applies. */
-:is(
-  .newtab-search-surface, .newtab-clock, .newtab-onboarding-strip, .settings-trigger,
-  .newtab-delete-toast-panel, .newtab-speed-dial, .newtab-portal, .bookmark-tile,
-  .newtab-search-engine-menu, .featured-wallpaper-panel,
-  .folder-section-header, .bookmark-breadcrumb-item, .source-navigation-label,
-  .source-navigation-link, .folder-section-add, .bookmark-menu-surface,
-  .settings-drawer-panel, [data-drawer-content], .newtab-glass-preview, .newtab-state
-),
+/* 1. Lens. The runtime may replace --newtab-glass-surface-fill per element with
+   a luminance-adapted tint; without one the user's base tint applies. */
+:is(.newtab-search-surface, .newtab-clock, .newtab-glass-preview),
 [data-hyalite-surface] {
   /* Registered on every surface so an unbound child never inherits a parent's SVG. */
   --hyalite: var(--newtab-glass-backdrop-filter);
@@ -44,46 +59,120 @@ html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
-/* Native blur keeps the centre live. Only the refracting edge is a cached PNG,
-   avoiding Chromium's expensive per-frame SVG backdrop displacement. The PNG
-   is decoded before the startup surface is revealed, at full strength. */
-[data-hyalite-surface][data-glass-renderer="raster"][data-glass-mode="refraction"] {
-  background-color: var(--newtab-glass-raster-tint, var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill)));
-  background-image: var(--newtab-glass-texture) !important;
-  background-blend-mode: multiply;
+.newtab-clock {
+  position: relative;
+}
+
+/* The refraction rim lives on its own layer so it can fade instead of snapping.
+   The cached PNG is opaque only on the bent edge, so it doubles as the layer's
+   mask and the native blur stays live in the centre. The tint gradient on top
+   darkens the rim exactly like the surface tint darkens the centre. */
+:is(.newtab-search-surface, .newtab-clock, .newtab-glass-preview)::before {
+  content: "";
+  position: absolute;
+  inset: calc(-1 * var(--newtab-glass-stroke-width, 1.5px));
+  z-index: -1;
+  border-radius: inherit;
+  background-image:
+    linear-gradient(var(--newtab-glass-raster-tint, var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill))), var(--newtab-glass-raster-tint, var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill)))),
+    var(--newtab-glass-texture, none);
   background-size: 100% 100%;
   background-position: center;
-  background-origin: border-box;
   background-repeat: no-repeat;
-  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter) !important;
-  backdrop-filter: var(--newtab-glass-backdrop-filter) !important;
+  /* Without a texture the mask is fully transparent, never a bare tint. */
+  -webkit-mask-image: var(--newtab-glass-texture, linear-gradient(transparent, transparent));
+  mask-image: var(--newtab-glass-texture, linear-gradient(transparent, transparent));
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-hyalite-surface][data-glass-renderer="raster"][data-glass-mode="refraction"]::before {
+  opacity: 1;
+}
+
+/* Lens changes after startup (resize, wallpaper, settings) cross-fade. The
+   atomic startup commit has no fade flag and lands in a single frame. */
+[data-hyalite-surface][data-glass-fade]::before {
+  transition: opacity var(--newtab-glass-rim-fade) var(--ds-ease-standard, ease);
 }
 
 /* A failed/slow startup settles once on the compatible material. Do not add
    late refraction to an already-visible surface; explicit settings changes can
    opt back into the renderer. */
-html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-zone) [data-glass-renderer="raster"] {
-  background-image: none !important;
+html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-zone) [data-glass-renderer="raster"]::before {
+  opacity: 0 !important;
 }
 
-.bookmark-tile,
-.bookmark-tile[data-hyalite-surface] {
+/* 2. Frost. */
+:is(.bookmark-tile, .newtab-speed-dial, .newtab-portal, .settings-trigger, .newtab-onboarding-strip, .newtab-state) {
+  border-color: var(--newtab-glass-stroke);
+  background-color: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
+  box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow);
+  clip-path: none;
+  filter: none;
+  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
+  backdrop-filter: var(--newtab-glass-backdrop-filter);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.bookmark-tile {
   /* Interaction changes elevation only; every state retains the same rim. */
   box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
+}
+
+/* 3. Panel. */
+:is(
+  .bookmark-menu-surface,
+  .bookmark-edit-menu,
+  .bookmark-add-menu.expanded,
+  .newtab-search-engine-menu,
+  .featured-wallpaper-panel,
+  .newtab-delete-toast-panel
+),
+#newtab-settings-drawer .settings-drawer-panel {
+  border-color: var(--newtab-panel-border);
+  background: var(--newtab-panel-bg);
+  box-shadow: var(--newtab-panel-shadow);
+  filter: none;
+  -webkit-backdrop-filter: var(--newtab-panel-filter);
+  backdrop-filter: var(--newtab-panel-filter);
+  text-shadow: none;
+}
+
+/* The drawer used to paint a second translucent tint through ::before. */
+#newtab-settings-drawer .settings-drawer-panel::before {
+  background: none;
+}
+
+/* Dropdowns open on top of a panel, so they read as the nearest, solid layer.
+   No backdrop blur: blurring an already blurred panel only costs GPU time. */
+[data-drawer-content],
+.custom-select-list {
+  border-color: rgba(255, 255, 255, 0.14);
+  background-color: var(--newtab-panel-bg-raised);
+  box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  filter: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  text-shadow: none;
 }
 
 .settings-drawer-panel,
 .settings-drawer-panel [data-drawer-content],
 [data-drawer-content] {
-  --ds-surface-1: rgba(255, 255, 255, 0.035);
-  --ds-surface-2: rgba(255, 255, 255, 0.055);
-  --ds-surface-3: rgba(255, 255, 255, 0.085);
-  --ds-bg-app: rgba(0, 0, 0, 0.12);
-  --ds-hover: rgba(255, 255, 255, 0.10);
-  --ds-border: rgba(255, 255, 255, 0.15);
-  --ds-border-hover: rgba(255, 255, 255, 0.32);
-  --ds-text-secondary: rgba(245, 245, 247, 0.82);
-  --ds-text-muted: rgba(245, 245, 247, 0.72);
+  --ds-surface-1: rgba(255, 255, 255, 0.04);
+  --ds-surface-2: rgba(255, 255, 255, 0.065);
+  --ds-surface-3: rgba(255, 255, 255, 0.1);
+  --ds-bg-app: rgba(0, 0, 0, 0.2);
+  --ds-hover: rgba(255, 255, 255, 0.09);
+  --ds-border: rgba(255, 255, 255, 0.12);
+  --ds-border-hover: rgba(255, 255, 255, 0.28);
+  --ds-text-secondary: rgba(245, 245, 247, 0.84);
+  --ds-text-muted: rgba(245, 245, 247, 0.7);
   /* Tailwind's theme aliases resolve where they are declared. Rebind them here
      so local material overrides reach inputs, previews, and portaled controls. */
   --color-ds-app: var(--ds-bg-app);
@@ -95,8 +184,19 @@ html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-
   --color-ds-border-hover: var(--ds-border-hover);
   --color-ds-text-secondary: var(--ds-text-secondary);
   --color-ds-text-muted: var(--ds-text-muted);
-  --tabs-bar-bg: rgba(255, 255, 255, 0.035);
-  --tabs-pill-bg: rgba(255, 255, 255, 0.16);
+  --tabs-bar-bg: rgba(255, 255, 255, 0.04);
+  --tabs-pill-bg: rgba(255, 255, 255, 0.14);
+}
+
+[data-drawer-content] [data-highlighted] {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+}
+
+#newtab-settings-drawer .t-tabs {
+  background: rgba(255, 255, 255, 0.045);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 .settings-trigger[aria-expanded="true"] {
@@ -109,18 +209,30 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   opacity: 0;
   pointer-events: none;
 }
-#newtab-settings-drawer .settings-drawer-panel[data-hyalite-surface] {
-  background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
-  box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow);
+
+/* Field labels sit on the dense panel now; give them body-text contrast. */
+.bookmark-menu-surface .bookmark-menu-row {
+  color: rgba(245, 245, 247, 0.74);
 }
-#newtab-settings-drawer .settings-drawer-panel::before {
-  background: none;
+.bookmark-menu-surface .bookmark-menu-row:hover,
+.bookmark-menu-surface .bookmark-menu-row:focus-within {
+  color: rgba(245, 245, 247, 0.9);
 }
-#newtab-settings-drawer .t-tabs {
-  background: rgba(255, 255, 255, 0.045);
+.bookmark-menu-surface .base-input::placeholder {
+  color: rgba(245, 245, 247, 0.42);
+}
+
+/* 4. Chip. */
+:is(.folder-section-header, .bookmark-breadcrumb-item, .source-navigation-label, .source-navigation-link, .folder-section-add) {
+  border-color: rgba(255, 255, 255, 0.14);
+  background-color: var(--newtab-chip-bg);
+  box-shadow: var(--newtab-chip-shadow);
+  filter: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
+
 .newtab-speed-dial .newtab-speed-dial-card {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.12);
@@ -159,7 +271,7 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   background-color: rgba(255, 255, 255, 0.025);
   background-image: repeating-linear-gradient(135deg, transparent 0 18px, rgba(255, 255, 255, 0.28) 18px 20px, transparent 20px 38px);
 }
-.newtab-glass-preview-scene::before {
+.newtab-glass-preview-scene::after {
   content: "GLASS";
   position: absolute;
   inset: 2px 0 auto;
@@ -173,6 +285,7 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
 }
 .newtab-glass-preview {
   position: relative;
+  z-index: 1;
   min-height: 144px;
   border: 1px solid var(--newtab-glass-stroke);
   border-radius: 30px;
@@ -189,23 +302,33 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
   --hyalite: var(--newtab-glass-backdrop-filter) !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  .newtab-search-surface[data-hyalite-surface] {
+  .newtab-search-surface[data-hyalite-surface],
+  [data-hyalite-surface][data-glass-fade]::before {
     transition-duration: 80ms;
   }
 }
 @media (forced-colors: active) {
-  :root [data-hyalite-surface][data-glass-mode] {
+  :root [data-hyalite-surface][data-glass-mode],
+  :is(.bookmark-tile, .newtab-speed-dial, .newtab-portal, .settings-trigger, .bookmark-menu-surface, .newtab-search-engine-menu, .settings-drawer-panel, [data-drawer-content]) {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     background: Canvas !important;
-    background-image: none !important;
     color: CanvasText;
     border-color: CanvasText;
     text-shadow: none;
   }
+  [data-hyalite-surface]::before {
+    display: none;
+  }
 }
 @media (prefers-contrast: more) and (forced-colors: none) {
-  [data-hyalite-surface] {
+  :root {
+    --newtab-panel-bg: rgba(8, 8, 10, 0.98);
+    --newtab-panel-bg-raised: rgb(14, 14, 16);
+    --newtab-chip-bg: rgba(0, 0, 0, 0.85);
+  }
+  [data-hyalite-surface],
+  :is(.bookmark-tile, .newtab-speed-dial, .newtab-portal, .settings-trigger) {
     --newtab-glass-raster-tint: rgba(0, 0, 0, 0.88);
     background-color: rgba(0, 0, 0, 0.88) !important;
     border-color: rgba(255, 255, 255, 0.72);

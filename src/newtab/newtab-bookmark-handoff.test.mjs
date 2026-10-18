@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+
+
+
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 
 const TITLE_SETTLE_DELAY_MS = 1_600
 const EXPECTED_GLASS_BACKGROUND = 'rgba(0, 0, 0, 0.13)'
@@ -29,7 +34,7 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    channel: 'chromium',
+    channel: browserChannel,
     headless: process.env.CURATOR_HEADLESS === '1',
     viewport: { width: 1558, height: 463 },
     recordVideo: visualCaptureDir
@@ -784,6 +789,7 @@ async function seedBookmarks(worker) {
     }
 
     await chrome.storage.local.set({
+      curatorBookmarkNewTabGeneralSettings: { showSourceNavigation: true },
       curatorBookmarkNewTabFolderSettings: {
         selectedFolderIds: [primaryFolder.id, secondaryFolder.id],
         hideFolderNames: true
@@ -951,7 +957,8 @@ function assertStableStartupGlass(frames, label) {
     const mismatched = visible.filter((surface) =>
       surface.backgroundColor !== finalBackground ||
       getColorAlpha(surface.backgroundColor) <= 0.001 ||
-      surface.backdropFilter !== EXPECTED_GLASS_FILTER ||
+      // Chips are tint-only by design; they must still never change material.
+      surface.backdropFilter !== (name.startsWith('sourceNavigation') || name.startsWith('folder') || name.startsWith('breadcrumb') ? 'none' : EXPECTED_GLASS_FILTER) ||
       Math.abs(surface.effectiveOpacity - 1) > 0.001
     )
     diagnostics[name] = {
@@ -1032,3 +1039,4 @@ function getColorAlpha(color) {
 function prebootTileSelector(bookmarkId) {
   return `.newtab-bookmark-preboot-tile[data-bookmark-id="${bookmarkId}"]`
 }
+

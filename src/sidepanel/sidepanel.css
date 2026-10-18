@@ -15,6 +15,14 @@ html[data-curator-surface="sidepanel"] .popup-workspace {
 html[data-curator-surface="sidepanel"] .popup-workspace:has([aria-controls="sidepanel-folder-tree"][aria-expanded="false"]) {
   grid-template-rows: 42px minmax(0, 1fr);
 }
+/* Only the chevron turns; the tree itself toggles instantly so the results
+   pane below never slides around. Shares the disclosure clock. */
+html[data-curator-surface="sidepanel"] .sidepanel-folder-chevron {
+  transition: transform var(--acc-chevron) var(--acc-ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-curator-surface="sidepanel"] .sidepanel-folder-chevron { transition: none; }
+}
 html[data-curator-surface="sidepanel"] .popup-workspace > aside { min-height: 0; }
 html[data-curator-surface="sidepanel"] .popup-main-pane { min-height: 0; }
 html[data-curator-surface="sidepanel"] .popup-list-button { min-width: 0; }

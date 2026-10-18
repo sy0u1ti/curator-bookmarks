@@ -119,13 +119,9 @@ export function updateAiNamingSettingsField(
     })
   }
 
-  const providerOriginChanged =
-    getProviderOrigin(current.baseUrl) !== getProviderOrigin(value)
-
   return normalizeAiNamingSettings({
     ...current,
     baseUrl: value,
-    apiKey: providerOriginChanged ? '' : current.apiKey,
     fetchedModels: value.trim() !== current.baseUrl ? [] : current.fetchedModels,
     reasoningCapabilities: {}
   })
@@ -177,8 +173,4 @@ export function serializeAiNamingSettings(settings: unknown): AiNamingSettings {
     autoAnalyzeBookmarks: normalized.autoAnalyzeBookmarks,
     systemPrompt: normalized.systemPrompt
   }
-}
-
-function getProviderOrigin(value: string): string {
-  try { return new URL(value).origin } catch { return '' }
 }

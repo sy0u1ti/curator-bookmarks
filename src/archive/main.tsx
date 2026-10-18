@@ -90,10 +90,13 @@ function ArchivePage() {
         {source && <Button variant="secondary" onClick={() => void returnToSource()}>回到来源网页</Button>}
         {result && <Button variant="secondary" onClick={() => downloadBlobFile(result.filename, result.blob)}>再次下载</Button>}
       </div>
-      {error && <p role="alert" className="rounded-ds-sm border border-ds-border p-3 text-sm">{error}</p>}
-      {loading && <p role="status" className="text-sm text-ds-text-secondary">正在读取来源网页…</p>}
-      {busy && <p role="status" className="text-sm text-ds-text-secondary">正在保存已加载的页面内容…</p>}
-      {result && <p role="status" className="text-sm text-ds-text-secondary">离线文件已生成：{result.filename}（{result.blob.size >= 1024 * 1024 ? `${(result.blob.size / 1024 / 1024).toFixed(2)} MB` : `${Math.max(1, Math.ceil(result.blob.size / 1024))} KB`}）。</p>}
+      {error && <p role="alert" className="archive-status rounded-ds-sm border border-ds-border p-3 text-sm">{error}</p>}
+      {loading && <p role="status" className="archive-status text-sm text-ds-text-secondary">正在读取来源网页…</p>}
+      {busy && <p role="status" className="archive-status text-sm text-ds-text-secondary">正在保存已加载的页面内容…</p>}
+      {result && <p role="status" className="archive-status flex items-start gap-2 text-sm text-ds-text-secondary">
+        <svg className="archive-saved-check" viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5 L6.5 11.5 L12.5 4.5" /></svg>
+        <span>离线文件已生成：{result.filename}（{result.blob.size >= 1024 * 1024 ? `${(result.blob.size / 1024 / 1024).toFixed(2)} MB` : `${Math.max(1, Math.ceil(result.blob.size / 1024))} KB`}）。</span>
+      </p>}
       <p className="text-xs leading-relaxed text-ds-text-secondary">存档内容保存在下载文件中。该操作不使用 AI，也不上传到 Curator 服务。</p>
     </main>
   </ThemeProvider>

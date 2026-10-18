@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+
+
+
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 
 const extensionPath = path.resolve('dist')
 const profilePath = await mkdtemp(path.join(tmpdir(), 'curator-interface-quality-'))
@@ -66,6 +71,12 @@ async function captureNewtabWallpaperVariants(page) {
     document.querySelector('#interface-quality-wallpaper-probe')?.remove()
     document.querySelector('.newtab-app')?.removeAttribute('data-background-media')
   })
+}
+
+function getColorAlphaFromCss(color) {
+  const match = color.match(/rgba?\(([^)]+)\)/)
+  const parts = match ? match[1].split(/[,\s/]+/).filter(Boolean) : []
+  return parts.length > 3 ? Number(parts[3]) : 1
 }
 
 function readGlassMaterial(element) {
@@ -208,6 +219,8 @@ async function seedExtension(worker) {
         model: 'gpt-5',
         reasoningEffort: 'medium'
       },
+      curatorBookmarkNewTabModuleSettings: { version: 1, speedDial: true, order: ['speedDial'] },
+      curatorBookmarkNewTabGeneralSettings: { showSourceNavigation: true },
       curatorBookmarkNewTabFolderSettings: {
         selectedFolderIds: folders.map((folder) => folder.id),
         hideFolderNames: false
@@ -536,7 +549,8 @@ async function verifyDesktopDrawer(page) {
   assert.equal(desktopState.rootInert, false, 'Desktop content must remain interactive while settings are open')
   await waitForDrawerSettledOpen(page)
   const drawerGlass = await page.locator('.settings-drawer-panel').evaluate(readGlassMaterial)
-  assert.equal(drawerGlass.blur, 12, 'Settings must render the shared frost through Hyalite or its compatible blur')
+  assert.equal(drawerGlass.blur, 16, 'Settings must use the dense panel material, not a wallpaper refraction lens')
+  assert.ok(getColorAlphaFromCss(drawerGlass.backgroundColor) >= 0.85, `Settings text needs a dense panel fill: ${drawerGlass.backgroundColor}`)
   assert.equal(drawerGlass.filter, 'none', 'The full-height glass drawer must avoid an offscreen CSS filter layer')
   assert.notEqual(drawerGlass.boxShadow, 'none', 'Replacing drop-shadow filter must preserve drawer depth with a native shadow')
   await verifySettingsTabSwitching(page)
@@ -1803,7 +1817,6 @@ async function verifyOptionsBorderIntegrity(page, extensionId) {
     'redirects',
     'ignore',
     'duplicates',
-    'folder-cleanup',
     'recycle',
     'ai',
     'bookmark-history'
@@ -2688,7 +2701,7 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    channel: 'chromium',
+    channel: browserChannel,
     headless: true,
     hasTouch: true,
     reducedMotion: 'no-preference',
@@ -2760,3 +2773,4 @@ try {
   await context?.close()
   await rm(profilePath, { recursive: true, force: true })
 }
+

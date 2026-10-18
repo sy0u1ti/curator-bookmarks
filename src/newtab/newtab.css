@@ -239,10 +239,16 @@ body {
     transform var(--ds-motion-fast) var(--ds-ease-standard);
 }
 
-#newtab-settings-drawer .settings-drawer-scrollbar-track:hover,
 #newtab-settings-drawer .settings-drawer-scrollbar[data-dragging="true"] .settings-drawer-scrollbar-track {
   transform: scaleX(1.2);
   background: rgba(245, 245, 247, 0.07);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  #newtab-settings-drawer .settings-drawer-scrollbar-track:hover {
+    transform: scaleX(1.2);
+    background: rgba(245, 245, 247, 0.07);
+  }
 }
 
 #newtab-settings-drawer .settings-drawer-scrollbar-thumb {
@@ -589,7 +595,17 @@ body {
 }
 
 .bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
-  animation: newtab-bookmark-add-content-enter var(--resize-dur) var(--resize-ease) both;
+  /* A transition (not keyframes) so a quick re-expand retargets mid-flight. */
+  transition:
+    opacity var(--dropdown-open-dur) var(--dropdown-ease),
+    transform var(--dropdown-open-dur) var(--dropdown-ease);
+}
+
+@starting-style {
+  .bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
+    opacity: 0;
+    transform: translateY(var(--distance-small)) scale(var(--dropdown-pre-scale));
+  }
 }
 
 .bookmark-menu-surface .bookmark-menu-row {
@@ -679,10 +695,16 @@ body {
     transform var(--dropdown-open-dur) var(--dropdown-ease);
 }
 
-.bookmark-add-menu-trigger:hover .bookmark-add-menu-trigger-icon,
 .bookmark-add-menu-trigger:focus-visible .bookmark-add-menu-trigger-icon {
   background: rgba(245, 245, 247, 0.16);
-  transform: rotate(90deg) scale(1.04);
+}
+
+/* The rotate is a pointer affordance; touch taps would leave it stuck turned. */
+@media (hover: hover) and (pointer: fine) {
+  .bookmark-add-menu-trigger:hover .bookmark-add-menu-trigger-icon {
+    background: rgba(245, 245, 247, 0.16);
+    transform: rotate(90deg) scale(1.04);
+  }
 }
 
 .bookmark-menu-actions {
@@ -762,18 +784,6 @@ body {
   animation: newtab-bookmark-add-error-enter var(--duration-fast) var(--dropdown-ease) both;
 }
 
-@keyframes newtab-bookmark-add-content-enter {
-  from {
-    opacity: 0;
-    transform: translateY(6px) scale(var(--dropdown-pre-scale));
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
 @keyframes newtab-bookmark-menu-feedback-enter {
   from {
     opacity: 0;
@@ -823,12 +833,16 @@ body {
     animation: none !important;
   }
 
+  .bookmark-add-menu[data-expanded="true"] .bookmark-add-menu-content.is-expanded {
+    transform: none !important;
+    transition: opacity 80ms linear;
+  }
+
   .bookmark-add-menu-content,
-  .bookmark-add-menu-trigger:hover .bookmark-add-menu-trigger-icon,
-  .bookmark-add-menu-trigger:focus-visible .bookmark-add-menu-trigger-icon,
+  .bookmark-add-menu-trigger .bookmark-add-menu-trigger-icon,
   .bookmark-add-menu.expanded .bookmark-menu-action:hover,
   .bookmark-add-menu.expanded .bookmark-menu-action:focus-visible {
-    transform: none;
+    transform: none !important;
   }
 }
 
@@ -1126,6 +1140,30 @@ body {
     color var(--ds-motion-fast) var(--ease-smooth-out);
 }
 
+/* Reorder result lines mount after a drop; a short rise keeps them from
+   popping into the grid. */
+.bookmark-reorder-status {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+  transition:
+    opacity var(--duration-quick) var(--ease-smooth-out),
+    transform var(--duration-quick) var(--ease-smooth-out);
+}
+
+@starting-style {
+  .bookmark-reorder-status {
+    opacity: 0;
+    transform: translate3d(0, var(--distance-micro), 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bookmark-reorder-status {
+    transform: none;
+    transition: opacity 80ms linear;
+  }
+}
+
 /* A folder heading is a drag handle. Scaling this small native button changes
    glyph rasterization and its grab geometry. Cover cached preboot chips too. */
 .folder-section-header:not(.folder-drag-ghost) {
@@ -1277,19 +1315,23 @@ body {
   opacity: 1;
   transform: translateY(0);
   transform-origin: 50% 0;
-  transition: grid-template-rows 240ms var(--ease-bounce),
-    transform 240ms var(--ease-bounce), opacity 180ms var(--ease-smooth-out);
+  /* The panel grows the shared glass surface, so its height has to travel with
+     it. Keep that travel short and without overshoot: this opens on most
+     searches, and a bounce here reads as the field wobbling. */
+  transition:
+    grid-template-rows var(--duration-quick) var(--ease-smooth-out),
+    transform var(--duration-quick) var(--ease-smooth-out),
+    opacity var(--duration-quick) var(--ease-smooth-out);
 }
 .newtab-search-suggestions-panel[data-starting-style],
 .newtab-search-suggestions-panel[data-ending-style] {
   grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(-8px);
+  transform: translateY(calc(0px - var(--distance-micro)));
 }
 .newtab-search-suggestions-panel[data-ending-style] {
   pointer-events: none;
-  transition-duration: 180ms;
-  transition-timing-function: var(--ease-smooth-out);
+  transition-duration: var(--duration-micro);
 }
 .newtab-search-presence-clip {
   min-height: 0;
@@ -1708,7 +1750,16 @@ body {
   background: rgba(245, 245, 247, 0.075);
   box-shadow: var(--newtab-glass-inset);
   filter: var(--newtab-glass-drop);
-  transform: translateY(-2px);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .featured-wallpaper-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .featured-wallpaper-card:hover .featured-wallpaper-preview-image {
+    transform: scale(1.025);
+  }
 }
 
 .featured-wallpaper-card:active {
@@ -1732,12 +1783,6 @@ body {
   height: 100%;
   object-fit: cover;
   transition: transform var(--ui-motion-standard) var(--dropdown-ease);
-}
-
-.featured-wallpaper-card:hover .featured-wallpaper-preview-image,
-.featured-wallpaper-card:focus-visible .featured-wallpaper-preview-image,
-.featured-wallpaper-card[aria-pressed="true"] .featured-wallpaper-preview-image {
-  transform: scale(1.025);
 }
 
 .featured-wallpaper-resolution {

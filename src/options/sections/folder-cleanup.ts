@@ -14,9 +14,7 @@ import {
   type FolderCleanupSuggestion
 } from '../../shared/folder-cleanup.js'
 import { availabilityState, aiNamingState, folderCleanupState, managerState } from '../shared-options/state.js'
-import { formatDateTime, isInteractionLocked } from '../shared-options/utils.js'
-import { publishFolderCleanupControls } from '../components/folder-cleanup-controls-store.js'
-import { publishFolderCleanupResults } from '../components/folder-cleanup-results-store.js'
+import { isInteractionLocked } from '../shared-options/utils.js'
 
 interface FolderCleanupCallbacks {
   confirm: (options?: {
@@ -122,59 +120,7 @@ async function runFolderCleanupAnalysis(
 }
 
 export function renderFolderCleanupSection(callbacks: FolderCleanupCallbacks) {
-  const suggestions = folderCleanupState.suggestions.filter((suggestion) => (
-    !folderCleanupState.executedSuggestionIds.has(suggestion.id)
-  ))
-  const summary = summarizeSuggestions(suggestions)
-  const locked = isInteractionLocked() || folderCleanupState.running || folderCleanupState.executing
-
-  publishFolderCleanupControls({
-    analyzeDisabled: locked || availabilityState.catalogLoading,
-    analyzeLabel: folderCleanupState.running ? '扫描中...' : '重新扫描',
-    countLabel: `${suggestions.length} 条建议`,
-    resultsSubtitle: getResultsSubtitle(),
-    status: {
-      label: getStatusText(suggestions.length),
-      tone: folderCleanupState.running ? 'warning' : suggestions.length ? 'success' : 'muted'
-    },
-    summary: {
-      deep: summary.deep,
-      empty: summary.empty,
-      large: summary.large,
-      sameName: summary.sameName,
-      total: suggestions.length
-    }
-  })
-
-  if (availabilityState.catalogLoading) {
-    publishFolderCleanupResults({
-      emptyMessage: '正在读取书签树，请稍候…',
-      locked,
-      selectedSuggestionId: folderCleanupState.selectedSuggestionId,
-      splitUndo: null,
-      suggestions: []
-    })
-    return
-  }
-
-  if (!folderCleanupState.rootNode) {
-    publishFolderCleanupResults({
-      emptyMessage: '暂未读取到书签树，请刷新页面后重试。',
-      locked,
-      selectedSuggestionId: folderCleanupState.selectedSuggestionId,
-      splitUndo: null,
-      suggestions: []
-    })
-    return
-  }
-
-  publishFolderCleanupResults({
-    emptyMessage: folderCleanupState.statusMessage || '当前未发现需要清理的文件夹。',
-    locked,
-    selectedSuggestionId: folderCleanupState.selectedSuggestionId,
-    splitUndo: folderCleanupState.lastSplitUndo,
-    suggestions
-  })
+  callbacks.renderAvailabilitySection()
 }
 
 export async function executeFolderCleanupAction(suggestionId, callbacks: FolderCleanupCallbacks) {
@@ -526,34 +472,6 @@ export function toggleFolderCleanupPreview(suggestionId, callbacks: FolderCleanu
 
 export async function undoFolderCleanupSplitAction(callbacks: FolderCleanupCallbacks) {
   await handleSplitUndoClick(callbacks)
-}
-
-function summarizeSuggestions(suggestions: FolderCleanupSuggestion[]) {
-  return {
-    empty: suggestions.filter((suggestion) => suggestion.kind === 'empty-folder').length,
-    deep: suggestions.filter((suggestion) => suggestion.kind === 'deep-single-bookmark' || suggestion.kind === 'single-path-chain').length,
-    sameName: suggestions.filter((suggestion) => suggestion.kind === 'same-name-folders').length,
-    large: suggestions.filter((suggestion) => suggestion.kind === 'large-folder-split').length
-  }
-}
-
-function getStatusText(visibleSuggestionCount: number): string {
-  if (folderCleanupState.running) {
-    return '扫描中'
-  }
-  if (folderCleanupState.executing) {
-    return '执行中'
-  }
-  if (folderCleanupState.lastAnalyzedAt) {
-    return visibleSuggestionCount ? '有建议' : '已扫描'
-  }
-  return visibleSuggestionCount ? '有建议' : '未扫描'
-}
-
-function getResultsSubtitle(): string {
-  return folderCleanupState.lastAnalyzedAt
-    ? `上次扫描：${formatDateTime(folderCleanupState.lastAnalyzedAt)}。执行前会确认并备份。`
-    : '默认只预览，不会自动修改书签。'
 }
 
 function getReservedFolderCleanupTitles(): string[] {

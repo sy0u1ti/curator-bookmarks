@@ -25,9 +25,6 @@ export const SECTION_META = {
   duplicates: {
     title: '重复书签'
   },
-  'folder-cleanup': {
-    title: '文件夹清理'
-  },
   ignore: {
     title: '忽略规则 / 白名单'
   },

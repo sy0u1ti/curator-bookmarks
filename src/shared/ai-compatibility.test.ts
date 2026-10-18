@@ -370,7 +370,7 @@ test('natural search preserves local date/exclusions when AI returns null date a
   } finally { globalThis.fetch = originalFetch; (globalThis as any).chrome = originalChrome }
 })
 
-test('configuration round trips every protocol and clears credentials on port changes', () => {
+test('configuration round trips every protocol and keeps credentials independent from URL edits', () => {
   assert.equal(normalizeAiNamingSettings({}).apiStyle, 'auto')
   for (const apiStyle of ['auto', 'responses', 'chat_completions', 'anthropic_messages', 'gemini', 'gemini_interactions'] as const) {
     assert.equal(serializeAiNamingSettings({ ...settings, apiStyle }).apiStyle, apiStyle)
@@ -380,7 +380,10 @@ test('configuration round trips every protocol and clears credentials on port ch
   assert.equal(hasConfiguredNaturalSearchAiProvider(local), true)
   validateSmartAiSettings(local)
   assert.equal(isAiProviderConfigured({ ...settings, apiKey: '' }), false)
-  assert.equal(updateAiNamingSettingsField({ ...local, apiKey: 'fixture' }, 'baseUrl', 'http://localhost:1234').apiKey, '')
+  assert.equal(
+    updateAiNamingSettingsField({ ...local, apiKey: 'fixture' }, 'baseUrl', 'http://localhost:1234').apiKey,
+    'fixture'
+  )
   assert.equal(updateAiNamingSettingsField({ ...settings, fetchedModels: ['cached-model'] }, 'baseUrl', settings.baseUrl + '/new').fetchedModels.length, 0)
 })
 

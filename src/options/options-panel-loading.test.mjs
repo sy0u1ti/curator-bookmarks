@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+
+
+
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 
 const extensionPath = path.resolve(process.env.CURATOR_TEST_EXTENSION_PATH || 'dist')
 const profileParent = path.resolve(tmpdir())
@@ -12,7 +17,7 @@ let context
 try {
   context = await chromium.launchPersistentContext(profilePath, {
     headless: true,
-    channel: 'chromium',
+    channel: browserChannel,
     viewport: { width: 1280, height: 900 },
     args: [`--disable-extensions-except=${extensionPath}`, `--load-extension=${extensionPath}`]
   })
@@ -36,7 +41,7 @@ try {
     })
     window.__taskPanelObserver.observe(document.querySelector('#options-main'), { childList: true })
   })
-  for (const section of ['backup', 'redirects', 'duplicates', 'folder-cleanup', 'ignore', 'recycle', 'history']) {
+  for (const section of ['backup', 'redirects', 'duplicates', 'ignore', 'recycle', 'history']) {
     await page.locator(`a[data-options-section="${section}"]`).first().evaluate((link) => link.click())
     await page.locator(`section#${section}`).waitFor({ state: 'visible' })
     assert.equal(await page.locator('#options-main > section:visible').count(), 1)
@@ -54,3 +59,4 @@ try {
   assert.ok(profilePath.startsWith(profileParent + path.sep))
   await rm(profilePath, { recursive: true, force: true })
 }
+

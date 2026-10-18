@@ -70,7 +70,11 @@ function run(): void {
     'baseUrl',
     'https://openrouter.ai/api/v1'
   )
-  assert.equal(withDifferentOrigin.apiKey, '', 'changing provider origin must clear the previous provider key')
+  assert.equal(
+    withDifferentOrigin.apiKey,
+    'sk-current',
+    'changing the provider URL must retain the API Key so the two inputs stay independent'
+  )
 }
 
 run()

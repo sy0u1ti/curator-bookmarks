@@ -166,7 +166,6 @@ import { normalizeOptionsSectionKey, type OptionsSectionKey } from './options-se
 import {
   availabilityState,
   managerState,
-  folderCleanupState,
   aiNamingState,
   aiNamingManagerState,
   contentSnapshotState,
@@ -220,15 +219,6 @@ import {
   deleteSelectedDuplicates
 } from './sections/duplicates.js'
 import {
-  hydrateFolderCleanupState,
-  analyzeFolderCleanupSuggestions,
-  rescanFolderCleanupSuggestions,
-  renderFolderCleanupSection,
-  executeFolderCleanupAction,
-  toggleFolderCleanupPreview,
-  undoFolderCleanupSplitAction
-} from './sections/folder-cleanup.js'
-import {
   normalizeRedirectCache,
   saveRedirectCache,
   synchronizeRedirectResults,
@@ -244,6 +234,12 @@ import {
   deleteSelectedRedirects,
   deleteAllRedirects
 } from './sections/redirects.js'
+import {
+  rescanFolderCleanupSuggestions,
+  executeFolderCleanupAction,
+  toggleFolderCleanupPreview,
+  undoFolderCleanupSplitAction
+} from './sections/folder-cleanup.js'
 import {
   hydrateDetectionHistory,
   getHistoricalAbnormalStreak,
@@ -354,6 +350,7 @@ let availabilitySettingsDraft: AvailabilitySettingsDraft | null = null
 let availabilitySettingsDraftRevision = 0
 let availabilityCatalogRefreshPending = false
 let availabilityCatalogReadVersion = 0
+let availabilityBookmarkRootNode: chrome.bookmarks.BookmarkTreeNode | null = null
 let availabilityDeleteModalSnapshot: Array<{ id: string; expectedUrl: string }> = []
 const availabilityRunSessions = createAvailabilityRunSessionCoordinator()
 const aiAnalysisRunSessions = createAiAnalysisRunSessionCoordinator()
@@ -552,7 +549,7 @@ export function handleOptionsBookmarkTreeChanged(): void {
   }
   bookmarkChangeRefreshHandle = window.setTimeout(() => {
     bookmarkChangeRefreshHandle = 0
-    void hydrateAvailabilityCatalog({ preserveResults: true, analyzeFolderCleanup: false })
+    void hydrateAvailabilityCatalog({ preserveResults: true })
       .catch((error) => {
         console.warn('Curator: 书签变更后的目录重新加载失败。', error)
       })
@@ -591,7 +588,6 @@ async function hydratePersistentState() {
       STORAGE_KEYS.recycleBin,
       STORAGE_KEYS.aiProviderSettings,
       STORAGE_KEYS.aiAnalysisCheckpoint,
-      STORAGE_KEYS.folderCleanupState,
       STORAGE_KEYS.inboxSettings,
       STORAGE_KEYS.contentSnapshotSettings,
       STORAGE_KEYS.aiRejectedSuggestions
@@ -611,7 +607,6 @@ async function hydratePersistentState() {
     hydrateAiRejectedSuggestions(stored[STORAGE_KEYS.aiRejectedSuggestions])
     contentSnapshotState.settings = normalizeContentSnapshotSettings(stored[STORAGE_KEYS.contentSnapshotSettings])
     contentSnapshotState.index = normalizeContentSnapshotIndex(null)
-    hydrateFolderCleanupState(stored[STORAGE_KEYS.folderCleanupState])
     managerState.inboxSettings = normalizeInboxSettings(stored[STORAGE_KEYS.inboxSettings])
     void removeLocalStorage(LEGACY_AI_NAMING_CACHE_STORAGE_KEYS).catch(() => {})
     maybeHydrateLargeRepositoryForSection(normalizeSectionKey(getCurrentSectionKey()))
@@ -1250,7 +1245,6 @@ function getSelectedNewTabFolderIds(rawFolderSettings?: unknown): string[] {
 
 async function hydrateAvailabilityCatalog({
   preserveResults = false,
-  analyzeFolderCleanup = true,
   preserveLastError = false,
   allowDuringAiApply = false,
   throwOnError = false
@@ -1266,7 +1260,6 @@ async function hydrateAvailabilityCatalog({
 
   const readVersion = ++availabilityCatalogReadVersion
   availabilityState.catalogLoading = true
-  let catalogLoaded = false
   if (!preserveLastError) {
     availabilityState.lastError = ''
   }
@@ -1283,6 +1276,7 @@ async function hydrateAvailabilityCatalog({
       return
     }
     const rootNode = Array.isArray(tree) ? tree[0] : tree
+    availabilityBookmarkRootNode = rootNode
     const extracted = buildBookmarkCatalogSnapshot({ rootNode }).extracted
     const bookmarks = extracted.bookmarks
     const excludedDuplicateFolderIds = collectNewTabShortcutFolderIds(
@@ -1290,7 +1284,6 @@ async function hydrateAvailabilityCatalog({
       newTabStorage[STORAGE_KEYS.newTabFolderSettings]
     )
 
-    folderCleanupState.rootNode = rootNode
     availabilityState.allBookmarks = bookmarks
     availabilityState.allFolders = extracted.folders
     availabilityState.bookmarkMap = extracted.bookmarkMap
@@ -1302,9 +1295,9 @@ async function hydrateAvailabilityCatalog({
     applyAvailabilityScope({ preserveResults })
     syncAiNamingCatalog({ preserveResults })
     restoreAiAnalysisCheckpointIfNeeded()
-    catalogLoaded = true
   } catch (error) {
     if (readVersion !== availabilityCatalogReadVersion) return
+    availabilityBookmarkRootNode = null
     if (!preserveResults) {
       availabilityState.allBookmarks = []
       availabilityState.allFolders = []
@@ -1319,8 +1312,6 @@ async function hydrateAvailabilityCatalog({
       availabilityState.skippedCount = 0
       resetDetectionResults()
       managerState.duplicateGroups = []
-      folderCleanupState.rootNode = null
-      folderCleanupState.suggestions = []
       syncAiNamingCatalog({ preserveResults: false })
     }
     availabilityState.lastError =
@@ -1329,9 +1320,6 @@ async function hydrateAvailabilityCatalog({
   } finally {
     if (readVersion === availabilityCatalogReadVersion) {
       availabilityState.catalogLoading = false
-      if (catalogLoaded && analyzeFolderCleanup && folderCleanupState.rootNode) {
-        await analyzeFolderCleanupSuggestions(folderCleanupCallbacks)
-      }
       renderAvailabilitySection()
     }
   }
@@ -1867,7 +1855,6 @@ async function finishAvailabilityRunSession(sessionId: string): Promise<void> {
     availabilityCatalogRefreshPending = false
     void hydrateAvailabilityCatalog({
       preserveResults: true,
-      analyzeFolderCleanup: false,
       preserveLastError: true
     })
       .catch((error) => {
@@ -2899,11 +2886,6 @@ function renderActiveOptionsSection() {
 
   if (activeSection === 'duplicates') {
     renderDuplicateSection()
-    return
-  }
-
-  if (activeSection === 'folder-cleanup') {
-    renderFolderCleanupSection(folderCleanupCallbacks)
     return
   }
 
@@ -5993,7 +5975,6 @@ async function finishAiAnalysisRunSession(
     availabilityCatalogRefreshPending = false
     await hydrateAvailabilityCatalog({
       preserveResults: true,
-      analyzeFolderCleanup: false,
       preserveLastError: true
     }).catch((error) => {
       console.warn('Curator: 智能分析结束后的书签目录重新加载失败。', error)
@@ -6541,7 +6522,6 @@ async function flushPendingAvailabilityCatalogRefreshAfterAiApply(
   availabilityCatalogRefreshPending = false
   await hydrateAvailabilityCatalog({
     preserveResults: true,
-    analyzeFolderCleanup: false,
     preserveLastError: true,
     throwOnError: true
   }).catch((error) => {
@@ -8389,13 +8369,15 @@ function buildFolderPickerTreeOptions({
 }): FolderPickerTreeOptionViewModel[] {
   const normalizedQuery = String(query || '').trim()
   const selectedId = String(selectedFolderId || '').trim()
-  const rootOptions = (folderCleanupState.rootNode?.children || []).flatMap((combineValue, combineIndex, combineArray) => ((node) => !node.url)(combineValue) ? ((node) => buildFolderPickerTreeNodeOptions(node, 0, {
+  const rootOptions = (availabilityBookmarkRootNode?.children || []).flatMap((node: chrome.bookmarks.BookmarkTreeNode) => {
+    return node.url ? [] : buildFolderPickerTreeNodeOptions(node, 0, {
       disabled,
       expandedFolderIds: getFolderPickerExpandedFolderIds(kind),
       kind,
       query: normalizedQuery,
       selectedFolderId: selectedId
-    }))(combineValue) : [])
+    })
+  })
   const folderOptions = rootOptions.length || !availabilityState.allFolders.length
     ? rootOptions
     : buildFallbackFolderPickerTreeOptions({

@@ -1,9 +1,10 @@
 export const OPTION_PANEL_ENTER_CLASS = [
+  // Section switches happen tens of times a day: a short settle, not a slide-in.
   '[.options-motion-ready_&:not([hidden])]:transition-[opacity,translate]',
-  '[.options-motion-ready_&:not([hidden])]:duration-[var(--panel-open-dur)]',
+  '[.options-motion-ready_&:not([hidden])]:duration-[var(--ds-motion-standard)]',
   '[.options-motion-ready_&:not([hidden])]:ease-[var(--panel-ease)]',
   '[.options-motion-ready_&:not([hidden])]:starting:opacity-0',
-  '[.options-motion-ready_&:not([hidden])]:starting:translate-y-[var(--panel-translate-y)]',
+  '[.options-motion-ready_&:not([hidden])]:starting:translate-y-[var(--distance-micro)]',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:transition-opacity',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:duration-[80ms]',
   'motion-reduce:[.options-motion-ready_&:not([hidden])]:starting:translate-y-0'

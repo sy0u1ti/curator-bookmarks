@@ -1,17 +1,25 @@
 import assert from 'node:assert/strict'
+
+
+
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 import { installGlassWallpaperFixture } from './glass-test-fixture.mjs'
 
 const selectors = ['.newtab-clock', '.newtab-search-surface', '.bookmark-tile', '.settings-trigger', '.folder-section-header', '.newtab-speed-dial']
+// Only these sit directly on the wallpaper and carry a refraction rim; the rest
+// use the frost/chip tiers and must keep one material from their first frame.
+const lensSelectors = new Set(['.newtab-clock', '.newtab-search-surface'])
 
 const output = path.resolve('output/playwright/glass-refresh')
 await mkdir(output, { recursive: true })
 await mkdir(path.resolve('.tmp-test'), { recursive: true })
 const profile = await mkdtemp(path.resolve('.tmp-test/glass-refresh-'))
 const context = await chromium.launchPersistentContext(profile, {
-  channel: 'chromium', headless: true, viewport: { width: 1440, height: 1000 },
+  channel: browserChannel, headless: true, viewport: { width: 1440, height: 1000 },
   args: [`--disable-extensions-except=${path.resolve('dist')}`, `--load-extension=${path.resolve('dist')}`]
 })
 try {
@@ -23,6 +31,7 @@ try {
     for (let i = 0; i < 6; i++) await chrome.bookmarks.create({ parentId: folder.id, title: `Bookmark ${i}`, url: `https://example.com/${i}` })
     await chrome.storage.local.set({
       curatorBookmarkOnboardingState: { completed: true },
+      curatorBookmarkNewTabModuleSettings: { version: 1, speedDial: true, order: ['speedDial'] },
       curatorBookmarkNewTabFolderSettings: { selectedFolderIds: [folder.id], hideFolderNames: false },
       curatorBookmarkNewTabBackgroundSettings: { type: 'urls', color: '#101013', url: wallpaperUrl, maskEnabled: false }
     })
@@ -62,7 +71,7 @@ try {
         }
         return [{ selector, visible, opacity, border: css.border, shadow: css.boxShadow, backdrop: css.backdropFilter,
           background: css.backgroundColor, clip: css.clipPath, filter: css.filter,
-          image: css.backgroundImage === 'none' ? 'none' : css.backgroundImage.startsWith('-webkit-cross-fade(') ? 'blended-texture' : 'texture',
+          image: Number(getComputedStyle(element, '::before').opacity) > 0 && element.style.getPropertyValue('--newtab-glass-texture') ? 'texture' : 'none',
           animation: css.animationName,
           mode: element.dataset.glassMode, renderer: element.dataset.glassRenderer, surface: element.dataset.hyaliteSurface }]
       })
@@ -150,7 +159,10 @@ try {
       assert.ok(samples.every(sample => sample.animation === 'none'), `${message}: the rim must never animate in`)
       const refractionSamples = samples.filter(sample => sample.mode === 'refraction')
       const compatibleSamples = samples.filter(sample => sample.mode !== 'refraction')
-      if (fallback) {
+      if (!lensSelectors.has(selector)) {
+        assert.ok(samples.every(sample => sample.image === 'none' && !sample.mode), `${message}: non-lens tiers must never receive a refraction rim`)
+        assert.equal(new Set(samples.map(material)).size, 1, `${message}: non-lens tiers must keep one material`)
+      } else if (fallback) {
         // A cold cache may finish lenses after the guard. The fallback is final:
         // no texture may paint once the compatible material was presented.
         assert.ok(samples.every(sample => sample.image === 'none'), `${message}: the fallback must never paint a late texture`)
@@ -162,7 +174,7 @@ try {
         assert.ok(refractionSamples.every(sample => sample.image === 'texture'), `${message}: refraction must carry a finished texture`)
         assert.equal(new Set(refractionSamples.map(material)).size, 1, `${message}: refraction must not be patched after it is shown`)
       }
-      if (!fallback) {
+      if (!fallback && lensSelectors.has(selector)) {
         refractionCommits.push(frames.find(frame => frame.surfaces.some(surface => surface.selector === selector && surface.mode === 'refraction')).time)
       }
     }
@@ -198,10 +210,11 @@ try {
     assert.ok(pixelDifference.sameSize && pixelDifference.maxDelta <= 2, `${name}: decoded texture pixels must remain stable (maximum channel delta ${pixelDifference.maxDelta})`)
     assert.ok(firstPaints[0] < (fallback ? 800 : 350), `${name}: startup must stay bounded (${firstPaints[0]}ms)`)
     const cacheHits = await target.evaluate(() => performance.getEntriesByName('newtab.glassCacheHit').length)
-    if (name.startsWith('cached-')) assert.ok(cacheHits >= selectors.length, `${name}: use cached textures even without a working renderer`)
+    if (name.startsWith('cached-')) assert.ok(cacheHits >= lensSelectors.size, `${name}: use cached textures even without a working renderer`)
     console.log(`${name}: ${selectors.length} ${fallback ? 'compatible' : 'full-refraction'} surfaces together at ${firstPaints[0]}ms; ${cacheHits} cache hits; first/settled pixels match.`)
   }
 } finally {
   await context.close()
   await rm(profile, { recursive: true, force: true })
 }
+

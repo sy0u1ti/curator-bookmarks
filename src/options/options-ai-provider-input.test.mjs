@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict'
+
+
+
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { chromium } from 'playwright'
+
+const browserChannel = process.env.CURATOR_BROWSER_CHANNEL || 'msedge'
 
 const extensionPath = path.resolve('dist')
 const profilePath = await mkdtemp(path.join(tmpdir(), 'curator-ai-provider-input-'))
@@ -10,7 +15,7 @@ let context
 
 try {
   context = await chromium.launchPersistentContext(profilePath, {
-    channel: 'chromium',
+    channel: browserChannel,
     headless: process.env.CURATOR_HEADLESS === '1',
     viewport: { width: 1280, height: 900 },
     args: [
@@ -58,8 +63,18 @@ try {
     'replacing an API Key must update the controlled input immediately'
   )
 
+  await page.getByRole('button', { name: 'Base URL 与接口选项', exact: true }).click()
+  const baseUrlInput = page.locator('#ai-base-url')
+  await baseUrlInput.fill('https://openrouter.ai/api/v1')
+  assert.equal(
+    await apiKeyInput.inputValue(),
+    'sk-replaced',
+    'editing the provider URL must not clear an API Key entered first'
+  )
+
   console.log('Options AI provider API Key input test passed.')
 } finally {
   await context?.close()
   await rm(profilePath, { recursive: true, force: true })
 }
+

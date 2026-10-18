@@ -670,7 +670,7 @@ function PopupFolderPane({
         {sidePanel && (
           <Button size="sm" variant="ghost" aria-label={collapsed ? '展开文件夹列表' : '收起文件夹列表'}
             aria-expanded={!collapsed} aria-controls="sidepanel-folder-tree" onClick={() => setCollapsed(value => !value)}>
-            <Icon name="ChevronDown" className={collapsed ? '' : 'rotate-180'} size={14} />
+            <Icon name="ChevronDown" className={collapsed ? 'sidepanel-folder-chevron' : 'sidepanel-folder-chevron rotate-180'} size={14} />
           </Button>
         )}
       </header>

@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Input } from '../../ui/base/Input'
 import { Button } from '../../ui/base/Button'
 import { CheckboxControl } from '../../ui/base/Checkbox'
+import { useListExit } from '../../ui/motion/useListExit'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
 import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
@@ -11,6 +12,8 @@ import { useRecycleBinState } from './recycle-bin-store.js'
 import type { RecycleEntryViewModel } from './recycle-bin-types.js'
 
 const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
+// Row spacing lives on .t-list-exit-inner so a removed card collapses its gap too.
+const RECYCLE_ENTRY_LIST_CLASS = 'flex flex-col [--list-exit-gap:0.75rem]'
 const RECYCLE_PAGE_SIZE = 30
 const RECYCLE_CARD_CLASS =
   'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover'
@@ -53,14 +56,14 @@ export function RecycleBin() {
         </p>
       ) : null}
       {state.entries.length ? (
-        visible.map((entry) => (
-          <RecycleEntryCard
-            disabled={state.disabled}
-            entry={entry}
-            key={entry.recycleId}
-            selected={state.selectedIds.has(String(entry.recycleId))}
-          />
-        ))
+        // Remount per query/page: filtering and paging swap instantly, only
+        // restored or cleared records collapse in place.
+        <RecycleEntryList
+          disabled={state.disabled}
+          entries={visible}
+          key={`${normalizedQuery}\u0000${currentPage}`}
+          selectedIds={state.selectedIds}
+        />
       ) : (
         <OptionEmptyState
           title="回收站为空"
@@ -73,6 +76,35 @@ export function RecycleBin() {
         <span className="text-xs tabular-nums text-ds-text-secondary">第 {currentPage + 1} / {pageCount} 页 · {filtered.length} 条</span>
         <Button size="sm" variant="secondary" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>下一页</Button>
       </div> : null}
+    </div>
+  )
+}
+
+function RecycleEntryList({
+  disabled,
+  entries,
+  selectedIds
+}: {
+  disabled: boolean
+  entries: RecycleEntryViewModel[]
+  selectedIds: Set<unknown>
+}) {
+  const rows = useListExit(entries, (entry) => String(entry.recycleId))
+  if (!rows.length) return null
+
+  return (
+    <div className={RECYCLE_ENTRY_LIST_CLASS}>
+      {rows.map((row) => (
+        <div className="t-list-exit" data-exiting={row.exiting ? 'true' : 'false'} inert={row.exiting || undefined} key={row.key}>
+          <div className="t-list-exit-inner">
+            <RecycleEntryCard
+              disabled={disabled || row.exiting}
+              entry={row.item}
+              selected={selectedIds.has(String(row.item.recycleId))}
+            />
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
