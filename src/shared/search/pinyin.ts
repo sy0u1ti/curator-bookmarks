@@ -8,6 +8,12 @@ export interface PinyinTokens {
   initials: string[]
 }
 
+export interface PinyinSearchFields {
+  title: PinyinTokens
+  path: PinyinTokens
+  metadata: PinyinTokens
+}
+
 export interface PinyinEnrichTarget {
   tagPinyinFull: string[]
   tagPinyinInitials: string[]
@@ -20,6 +26,7 @@ export interface PinyinEnrichTarget {
   tagAliases?: string[]
   pinyinEnriched?: boolean
   pinyinBaseSearchText?: string
+  pinyinFields?: PinyinSearchFields
 }
 
 export interface CooperativeEnrichOptions {
@@ -456,23 +463,27 @@ export function buildPinyinTokensSync(values: unknown[]): PinyinTokens {
   }
 }
 
-function getPinyinSourceValues(target: PinyinEnrichTarget): unknown[] {
-  return [
-    target.title,
-    target.path || '',
-    ...(target.tagTopics || []),
-    ...(target.tagTags || []),
-    ...(target.tagAliases || [])
-  ]
+function buildPinyinSearchFields(target: PinyinEnrichTarget): PinyinSearchFields {
+  return {
+    title: buildPinyinTokensSync([target.title]),
+    path: buildPinyinTokensSync([target.path || '']),
+    metadata: buildPinyinTokensSync([
+      ...(target.tagTopics || []),
+      ...(target.tagTags || []),
+      ...(target.tagAliases || [])
+    ])
+  }
 }
 
-function applyPinyinTokens(target: PinyinEnrichTarget, tokens: PinyinTokens): boolean {
+function applyPinyinTokens(target: PinyinEnrichTarget, fields: PinyinSearchFields): boolean {
   const baseSearchText = target.pinyinBaseSearchText ?? target.searchText
   target.pinyinBaseSearchText = baseSearchText
   target.pinyinEnriched = true
+  target.pinyinFields = fields
 
-  const newFull = tokens.full
-  const newInitials = tokens.initials
+  // Keep the aggregate text for recall, but retain provenance for ranking.
+  const newFull = [...new Set([...fields.title.full, ...fields.path.full, ...fields.metadata.full])]
+  const newInitials = [...new Set([...fields.title.initials, ...fields.path.initials, ...fields.metadata.initials])]
   if (!newFull.length && !newInitials.length) {
     target.tagPinyinFull = []
     target.tagPinyinInitials = []
@@ -525,15 +536,15 @@ export async function enrichPinyinTokensCooperatively(
       // Entries reset this flag whenever their text changes. Re-applying the
       // same tokens would only replace equal arrays and invalidate caches
       // derived from them, so reused entries keep their tokens.
-      if (target.pinyinEnriched) {
+      if (target.pinyinEnriched && target.pinyinFields) {
         if (target.tagPinyinFull?.length || target.tagPinyinInitials?.length) {
           enriched += 1
         }
         processed += 1
         continue
       }
-      const tokens = buildPinyinTokensSync(getPinyinSourceValues(target))
-      if (applyPinyinTokens(target, tokens)) {
+      const fields = buildPinyinSearchFields(target)
+      if (applyPinyinTokens(target, fields)) {
         enriched += 1
       }
       processed += 1

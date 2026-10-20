@@ -169,7 +169,6 @@ import {
   normalizeSmartLoadingStep
 } from './smart-loading-progress.js'
 import { cleanSmartText, cleanSmartTitle, getLastPathSegment, normalizeSmartConfidence, normalizeSmartError, normalizeSmartFolderPath, normalizeSmartTextList } from './smart-text.js'
-const SEARCH_DEBOUNCE_MS = 140
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
@@ -212,6 +211,7 @@ let popupFolderBookmarkCounts = new Map<string, number>()
 let unregisterPopupActionHandlers: (() => void) | null = null
 let unregisterPopupBrowserEventActions: (() => void) | null = null
 let queuedActiveResultIndex: number | null = null
+let selectedSearchBookmarkId: string | null = null
 let queuedActiveFolderIndex: number | null = null
 type BookmarkOpenDisposition = 'new-tab' | 'background' | 'current-tab'
 let pendingSearchActivation: { query: string; folderId: string | null; bookmarkId: string | null; disposition: BookmarkOpenDisposition } | null = null
@@ -1381,17 +1381,18 @@ function setSearchQuery(value, { immediate = false } = {}) {
   state.naturalSearchSetupRequired = false
   clearViewNotice()
   clearTimeout(state.searchTimer)
+  state.searchTimer = null
   ensurePinyinEnrichmentForQuery(value)
-  if (immediate) {
+  if (immediate || !state.naturalSearchEnabled) {
     applyDebouncedSearchQuery(value)
     render()
     return
   }
-  const debounceMs = state.naturalSearchEnabled ? NATURAL_SEARCH_DEBOUNCE_MS : SEARCH_DEBOUNCE_MS
   state.searchTimer = window.setTimeout(() => {
+    state.searchTimer = null
     applyDebouncedSearchQuery(value)
     render()
-  }, debounceMs)
+  }, NATURAL_SEARCH_DEBOUNCE_MS)
   render()
 }
 function applyDebouncedSearchQuery(value: string): void {
@@ -1548,6 +1549,13 @@ function runSearch() {
       bookmarks,
       MAX_POPUP_SEARCH_RESULTS
     )
+    if (firstBatch.complete) {
+      cacheSearchResults(cacheKey, firstBatch.results)
+      state.searchPending = false
+      state.searchResults = firstBatch.results
+      syncActiveSearchResultIndex()
+      return
+    }
     if (firstBatch.results.length) {
       state.searchResults = firstBatch.results.slice(0, MAX_POPUP_SEARCH_RESULTS)
       syncActiveSearchResultIndex()
@@ -2758,6 +2766,15 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
   )
 }
 const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
+  { test: /^命中：标题近似/, label: '标题近似' },
+  { test: /^命中：标题片段/, label: '标题片段' },
+  { test: /^命中：标题缩写/, label: '标题缩写' },
+  { test: /^命中：标题拼音/, label: '标题拼音' },
+  { test: /^命中：标题首字母/, label: '标题首字母' },
+  { test: /^命中：文件夹拼音/, label: '文件夹拼音' },
+  { test: /^命中：文件夹首字母/, label: '文件夹首字母' },
+  { test: /^命中：标签拼音/, label: '标签拼音' },
+  { test: /^命中：标签首字母/, label: '标签首字母' },
   { test: /^命中：标题/, label: '标题命中' },
   { test: /^命中：网址/, label: 'URL 命中' },
   { test: /^命中：文件夹/, label: '路径命中' },
@@ -3823,12 +3840,13 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
       setSearchQuery(state.searchQuery, { immediate: true })
     }
     if (state.searchPending || state.naturalSearchPending) {
-      const activeIndex = queuedActiveResultIndex ?? state.activeResultIndex
       pendingSearchActivation = {
         query: state.debouncedQuery,
         folderId: state.selectedFolderFilterId,
         disposition,
-        bookmarkId: queryChanged ? null : state.searchResults[activeIndex]?.id || null
+        // Automatic preview highlighting is not a selection. Only preserve a
+        // bookmark the user chose; otherwise Enter follows the final ranking.
+        bookmarkId: queryChanged ? null : selectedSearchBookmarkId
       }
       return true
     }
@@ -5219,6 +5237,7 @@ function queueActiveResultDelta(delta: number) {
   const nextIndex = baseIndex < 0
     ? (delta < 0 ? keyboardBookmarks.length - 1 : 0)
     : Math.max(0, Math.min(baseIndex + delta, keyboardBookmarks.length - 1))
+  selectedSearchBookmarkId = state.debouncedQuery ? keyboardBookmarks[nextIndex]?.id || null : null
   const shouldActivateBookmarkPane = state.keyboardPane !== 'bookmarks' || state.activeFolderKeyboardIndex >= 0
   if (nextIndex === baseIndex && !shouldActivateBookmarkPane) {
     return
@@ -5254,6 +5273,7 @@ function markKeyboardNavigationActive() {
   }, KEYBOARD_NAVIGATION_SETTLE_MS)
 }
 function clearQueuedKeyboardNavigation() {
+  selectedSearchBookmarkId = null
   if (activeResultFrame) {
     window.cancelAnimationFrame(activeResultFrame)
     activeResultFrame = 0
@@ -5345,6 +5365,7 @@ function setActiveResultIndex(nextIndex) {
     return
   }
   const clampedIndex = Math.max(0, Math.min(nextIndex, keyboardBookmarks.length - 1))
+  selectedSearchBookmarkId = state.debouncedQuery ? keyboardBookmarks[clampedIndex]?.id || null : null
   const shouldActivateBookmarkPane = state.keyboardPane !== 'bookmarks' || state.activeFolderKeyboardIndex >= 0
   if (clampedIndex === state.activeResultIndex && !shouldActivateBookmarkPane) {
     return
@@ -5363,6 +5384,7 @@ function activateResultKeyboardIndex(nextIndex: number) {
   }
 
   const clampedIndex = Math.max(0, Math.min(Math.trunc(nextIndex), keyboardBookmarks.length - 1))
+  selectedSearchBookmarkId = state.debouncedQuery ? keyboardBookmarks[clampedIndex]?.id || null : null
   const shouldActivateBookmarkPane = state.keyboardPane !== 'bookmarks' || state.activeFolderKeyboardIndex >= 0
   if (!shouldActivateBookmarkPane && clampedIndex === state.activeResultIndex) {
     return

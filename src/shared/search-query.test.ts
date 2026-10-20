@@ -30,6 +30,10 @@ const naturalQuery = parseSearchQuery('帮我找一下 最近3天 react 不要 v
 assert.deepEqual(naturalQuery.textTerms, ['react'])
 assert.deepEqual(naturalQuery.excludedTerms, ['vue'])
 assert.ok(naturalQuery.dateRange, 'unquoted local natural-language rules must still work')
+for (const title of ['我爱我家', '我的世界', '搜索引擎', '书签管理', '收藏夹', '资料库', '请柬设计']) {
+  assert.deepEqual(parseSearchQuery(title).textTerms, [title], 'keyword search must not delete characters inside a title')
+  assert.deepEqual(parseSearchQuery(`帮我找一下 ${title}`).textTerms, [title], 'request prefix cleanup must preserve the requested title')
+}
 
 const siteQuery = parseSearchQuery('site:github.com')
 const matchesSite = (url: string, domain = new URL(url).hostname) => matchesParsedSearchQuery(siteQuery, {

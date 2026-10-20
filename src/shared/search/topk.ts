@@ -5,6 +5,7 @@ export interface TopKCollector<T> {
   values: () => T[]
   sortedValues: () => T[]
   readonly size: number
+  readonly worst: T | undefined
 }
 
 export function createTopKCollector<T>(
@@ -85,6 +86,9 @@ export function createTopKCollector<T>(
     },
     get size(): number {
       return heap.length
+    },
+    get worst(): T | undefined {
+      return heap[0]
     }
   }
 }

@@ -73,6 +73,7 @@ import {
   getAutoCenteredSearchOffsetY,
   getPopupSearchBookmarkSuggestionsFromIndex,
   prepareNewTabSearchIndex,
+  schedulePreparedNewTabSearchWarmup,
   getAdaptiveSearchOffsetBounds,
   getAdaptiveSearchWidthBounds,
   getVerticalCenterCollisionOffset,
@@ -504,7 +505,6 @@ let featuredBackgroundPickerRenderKey = ''
 let clockHydrationVersion = 0
 
 const SEARCH_SUGGESTION_LIMIT = 6
-const SEARCH_SUGGESTION_DEBOUNCE_MS = 120
 const SEARCH_SUGGESTION_CACHE_LIMIT = 24
 const SEARCH_SUGGESTION_CACHE_TTL_MS = 2 * 60 * 1000
 
@@ -6637,19 +6637,8 @@ function initializeSearchWidget(): boolean {
       })
     }
 
-    if (!query.trim() || immediate) {
-      suggestionDebounceTimer = 0
-      renderCurrentSuggestions()
-      return
-    }
-
-    suggestionDebounceTimer = window.setTimeout(() => {
-      suggestionDebounceTimer = 0
-      if (requestId !== suggestionRequestId) {
-        return
-      }
-      renderCurrentSuggestions()
-    }, SEARCH_SUGGESTION_DEBOUNCE_MS)
+    suggestionDebounceTimer = 0
+    renderCurrentSuggestions()
   }
 
   const renderSearchIndexPreparingState = (query: string) => {
@@ -8563,6 +8552,7 @@ function rebuildNewTabSearchIndex(): void {
   })
   lastBuiltSearchIndexCatalogVersion = catalog.version
   state.preparedSearchIndex = prepareNewTabSearchIndex(state.searchIndex, state.searchSnapshotSettings?.fullTextSearchEnabled === true)
+  schedulePreparedNewTabSearchWarmup(state.preparedSearchIndex)
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
   state.naturalSearchPlanCache.clear()

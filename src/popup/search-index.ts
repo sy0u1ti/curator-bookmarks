@@ -9,6 +9,7 @@ import {
   loadContentSnapshotSettings
 } from '../shared/content-snapshot-search.js'
 import type { BookmarkRecord } from '../shared/types.js'
+import { normalizeSearchTextCompact } from '../shared/text.js'
 import type {
   BookmarkCatalogSnapshot
 } from '../shared/bookmark-catalog.js'
@@ -16,6 +17,10 @@ import type { CooperativeEnrichOptions } from '../shared/search/pinyin.js'
 import {
   indexBookmarkForSearch,
   type PopupSearchBookmark
+} from './search.js'
+import {
+  invalidateSearchAccelerationForBookmarks,
+  scheduleSearchAccelerationWarmup
 } from './search.js'
 
 let pinyinModulePromise: Promise<typeof import('../shared/search/pinyin.js')> | null = null
@@ -60,7 +65,7 @@ export function buildLightPopupSearchIndex({
   const tagRecords = tagIndex?.records || {}
   const snapshotRecords = snapshotIndex?.records || {}
 
-  return bookmarks.map((bookmark) => {
+  const indexed = bookmarks.map((bookmark) => {
     const tagRecord = tagRecords[bookmark.id] || null
     const snapshotRecord = snapshotRecords[bookmark.id] || null
     const previous = lightEntriesByRecord.get(bookmark)
@@ -84,6 +89,9 @@ export function buildLightPopupSearchIndex({
     lightEntriesByRecord.set(bookmark, entry)
     return entry
   })
+  invalidateSearchAccelerationForBookmarks(indexed)
+  scheduleSearchAccelerationWarmup(indexed)
+  return indexed
 }
 
 export async function loadPopupSearchIndexSnapshotState(): Promise<PopupSearchIndexSnapshotState> {
@@ -99,7 +107,19 @@ export async function enrichLightPopupSearchIndexWithPinyin(
   options: CooperativeEnrichOptions = {}
 ): Promise<{ processed: number; enriched: number; aborted: boolean }> {
   const { enrichPinyinTokensCooperatively } = await loadPinyinModule()
-  return enrichPinyinTokensCooperatively(indexed, options)
+  invalidateSearchAccelerationForBookmarks(indexed)
+  const result = await enrichPinyinTokensCooperatively(indexed, {
+    ...options,
+    onProgress: (processed, total) => {
+      invalidateSearchAccelerationForBookmarks(indexed)
+      options.onProgress?.(processed, total)
+    }
+  })
+  if (result.processed) {
+    invalidateSearchAccelerationForBookmarks(indexed)
+    scheduleSearchAccelerationWarmup(indexed)
+  }
+  return result
 }
 
 export function shouldWarmPopupSnapshotFullText(
@@ -218,6 +238,7 @@ function patchPopupSearchIndexFromCatalog(
     )
     if (snapshotSearchText) {
       next.searchText = `${next.searchText} ${snapshotSearchText}`.trim()
+      next.searchTextCompact = normalizeSearchTextCompact(next.searchText)
       entryInputs.delete(target)
     } else {
       entryInputs.set(target, { bookmark: sourceBookmark, tagRecord, snapshotRecord, includeFullText })
@@ -227,6 +248,10 @@ function patchPopupSearchIndexFromCatalog(
     patched += 1
   }
 
+  if (patched) {
+    invalidateSearchAccelerationForBookmarks(indexed)
+    scheduleSearchAccelerationWarmup(indexed)
+  }
   return patched
 }
 
@@ -237,6 +262,7 @@ function patchPopupSearchBookmark(
   Object.assign(target, next)
   target.tagPinyinFull = []
   target.tagPinyinInitials = []
+  delete target.pinyinFields
   delete target.pinyinBaseSearchText
   delete target.pinyinEnriched
 }

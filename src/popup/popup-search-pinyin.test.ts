@@ -41,13 +41,20 @@ async function run(): Promise<void> {
   assert.equal(searchBookmarks('kaw', indexedBookmarks).length, 0, 'light indexes should not accidentally match pinyin before enrichment')
 
   await enrichLightPopupSearchIndexWithPinyin(indexedBookmarks)
+  assert.deepEqual(indexedBookmarks[0].pinyinFields?.title.full, ['kawangdaquan'], 'title pinyin must retain its source')
+  assert.ok(indexedBookmarks[0].pinyinFields?.path.full.includes('kawang'), 'folder pinyin must retain its source')
   assert.equal(searchBookmarks('kaw', indexedBookmarks)[0]?.id, bookmark.id, 'pinyin enrichment should make 卡网 discoverable through kaw')
 
   patchLightPopupSearchIndexFromCatalog(indexedBookmarks, catalog)
+  assert.equal(indexedBookmarks[0].pinyinFields, undefined, 'catalog patches must remove stale pinyin provenance')
   assert.equal(searchBookmarks('kaw', indexedBookmarks).length, 0, 'deferred catalog patches should invalidate the old pinyin projection')
 
   await enrichLightPopupSearchIndexWithPinyin(indexedBookmarks)
   assert.equal(searchBookmarks('kaw', indexedBookmarks)[0]?.id, bookmark.id, 're-enrichment should restore the same pinyin result after a deferred patch')
+  assert.deepEqual(indexedBookmarks[0].pinyinFields?.title.full, ['kawangdaquan'])
+  delete indexedBookmarks[0].pinyinFields
+  await enrichLightPopupSearchIndexWithPinyin(indexedBookmarks)
+  assert.deepEqual(indexedBookmarks[0].pinyinFields?.title.full, ['kawangdaquan'], 'legacy aggregate-only entries must be enriched with source fields')
 }
 
 await run()

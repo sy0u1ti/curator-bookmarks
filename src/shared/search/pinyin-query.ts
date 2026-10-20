@@ -1,9 +1,9 @@
 
-const PINYIN_LIKE_REGEX = /^[a-z][a-z0-9]*$/i
+const PINYIN_LIKE_REGEX = /(?:^|[\s:"'“”‘’])([a-z]{2,})(?=$|[\s"'“”‘’])/i
 
 export function queryLooksLikePinyin(query: string): boolean {
   const trimmed = String(query || '').trim()
-  if (trimmed.length < 3) {
+  if (trimmed.length < 2) {
     return false
   }
   return PINYIN_LIKE_REGEX.test(trimmed)

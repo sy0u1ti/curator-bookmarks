@@ -9,6 +9,10 @@ import { indexBookmarkForSearch, searchBookmarksTopK } from '../popup/search-loo
 import { extractDomain, normalizeSearchTextCompact } from '../shared/text.js'
 import type { PopupSearchBookmark } from '../popup/search.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
+import {
+  invalidateSearchAccelerationForBookmarks,
+  scheduleSearchAccelerationWarmup
+} from '../popup/search.js'
 
 export type NewTabContentState =
   | { type: 'loading' }
@@ -168,6 +172,7 @@ export interface NewTabPreparedSearchIndex {
   popupSearchEntries: NewTabPopupSearchSourceEntry[]
   popupSearchBookmarks?: PopupSearchBookmark[]
   popupSearchPinyinReady?: boolean
+  popupSearchPinyinPromise?: Promise<void>
   supportsPopupSearch: boolean
 }
 
@@ -500,7 +505,7 @@ export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[], fullTe
     })
   }
 
-  return {
+  const prepared: NewTabPreparedSearchIndex = {
     entries: index,
     fullTextEnabled,
     fullTextReady: !fullTextEnabled || !popupSearchEntries.some(entry => entry.snapshotRecord?.hasFullText),
@@ -508,6 +513,7 @@ export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[], fullTe
     popupSearchEntries,
     supportsPopupSearch
   }
+  return prepared
 }
 
 // Entries are pure projections of an extracted record and its tag and snapshot
@@ -689,6 +695,28 @@ function getSearchBookmarkSuggestionsFromIndex(
     .filter((suggestion): suggestion is SearchBookmarkSuggestion => Boolean(suggestion))
 }
 
+const scheduledPreparedSearchWarmups = new WeakSet<NewTabPreparedSearchIndex>()
+
+export function schedulePreparedNewTabSearchWarmup(index: NewTabPreparedSearchIndex): void {
+  if (!index.supportsPopupSearch || !index.popupSearchEntries.length || scheduledPreparedSearchWarmups.has(index)) {
+    return
+  }
+  scheduledPreparedSearchWarmups.add(index)
+  const warm = () => {
+    scheduledPreparedSearchWarmups.delete(index)
+    const bookmarks = getPreparedPopupSearchBookmarks(index, indexBookmarkForSearch)
+    scheduleSearchAccelerationWarmup(bookmarks)
+    void ensureNewTabSnapshotFullText(index).then(() => {
+      return ensurePopupBookmarksHavePinyinIfNeeded('pinyin', index, getPreparedPopupSearchBookmarks(index, indexBookmarkForSearch))
+    }).catch(() => {
+      // A foreground query retries optional full-text/pinyin preparation.
+    })
+  }
+  const requestIdle = (globalThis as { requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number }).requestIdleCallback
+  if (typeof requestIdle === 'function') requestIdle(warm, { timeout: 800 })
+  else setTimeout(warm, 0)
+}
+
 export async function getPopupSearchBookmarkSuggestionsFromIndex(
   query: string,
   index: NewTabSearchIndexEntry[] | NewTabPreparedSearchIndex,
@@ -790,14 +818,18 @@ async function ensureNewTabSnapshotFullText(index: NewTabPreparedSearchIndex): P
       const text = await buildContentSnapshotSearchMapWithFullText({ version: 1, updatedAt: 0, records }, { includeFullText: true })
       index.popupSearchBookmarks = getPreparedPopupSearchBookmarks(index, indexBookmarkForSearch).map(bookmark => {
         const next = { ...bookmark, searchText: `${bookmark.searchText} ${text.get(bookmark.id) || ''}`.trim() }
+        next.searchTextCompact = normalizeSearchTextCompact(next.searchText)
         next.tagPinyinFull = []
         next.tagPinyinInitials = []
+        delete next.pinyinFields
         delete next.pinyinBaseSearchText
         delete next.pinyinEnriched
         return next
       })
       index.popupSearchPinyinReady = false
       index.fullTextReady = true
+      invalidateSearchAccelerationForBookmarks(index.popupSearchBookmarks)
+      scheduleSearchAccelerationWarmup(index.popupSearchBookmarks)
     })().catch(error => { index.fullTextPromise = undefined; throw error })
   }
   await index.fullTextPromise
@@ -822,6 +854,7 @@ function getPreparedPopupSearchBookmarks(
   index.popupSearchBookmarks = index.popupSearchEntries.map((entry) =>
     getPopupSearchBookmark(entry, indexBookmarkForSearch)
   )
+  scheduleSearchAccelerationWarmup(index.popupSearchBookmarks)
   return index.popupSearchBookmarks
 }
 
@@ -856,9 +889,18 @@ async function ensurePopupBookmarksHavePinyinIfNeeded(
   if (!requiresPinyinTokens(query)) {
     return
   }
-  const { enrichPinyinTokensCooperatively } = await import('../shared/search/pinyin.js')
-  await enrichPinyinTokensCooperatively(popupBookmarks)
-  index.popupSearchPinyinReady = true
+  if (!index.popupSearchPinyinPromise) {
+    index.popupSearchPinyinPromise = (async () => {
+      const { enrichPinyinTokensCooperatively } = await import('../shared/search/pinyin.js')
+      invalidateSearchAccelerationForBookmarks(popupBookmarks)
+      await enrichPinyinTokensCooperatively(popupBookmarks, {
+        onProgress: () => invalidateSearchAccelerationForBookmarks(popupBookmarks)
+      })
+      scheduleSearchAccelerationWarmup(popupBookmarks)
+      if (index.popupSearchBookmarks === popupBookmarks) index.popupSearchPinyinReady = true
+    })().finally(() => { index.popupSearchPinyinPromise = undefined })
+  }
+  await index.popupSearchPinyinPromise
 }
 
 function getSuggestionFromPopupResult(

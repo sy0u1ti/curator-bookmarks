@@ -166,6 +166,52 @@ try {
   assert.deepEqual(controller.searchBookmarksFirstBatch('"react.js"', state.allBookmarks).results.map((row) => row.id), ['dotted-title'],
     'the provisional first batch must also respect literal punctuation')
 
+  const fuzzyTarget = bookmark('fuzzy-editor', 'Visual Studio Code', 'https://code.visualstudio.com/')
+  installBookmarks([
+    bookmark('weak-url', 'Unrelated collection', 'https://example.test/vscode'),
+    fuzzyTarget,
+    ...Array.from({ length: 1300 }, (_, index) => bookmark(`fuzzy-${index}`, 'Neutral'))
+  ])
+  controller.setSearchQuery('vscode')
+  pressEnter()
+  await finishCooperativeSearch()
+  assert.deepEqual(openedUrls, [fuzzyTarget.url], 'fast Enter must use the final fuzzy ranking, not a weak provisional URL match')
+
+  const lateExact = bookmark('late-exact', 'Reference Manual')
+  const earlyPrefixes = Array.from({ length: 9000 }, (_, index) =>
+    bookmark(`early-prefix-${index}`, `Reference Manual supplemental ${index}`))
+  installBookmarks([...earlyPrefixes, lateExact])
+  controller.setSearchQuery('reference manual')
+  assert.equal(state.searchPending, true, 'a cold first batch must leave the unscanned tail pending')
+  assert.notEqual(state.searchResults[0]?.id, lateExact.id, 'the first batch has not reached the exact title')
+  pressEnter()
+  assert.deepEqual(openedUrls, [], 'a provisional prefix must not open before ranking finishes')
+  await finishCooperativeSearch()
+  assert.equal(state.searchResults[0]?.id, lateExact.id, 'the completed ranking finds the late exact title')
+  assert.deepEqual(openedUrls, [lateExact.url], 'automatic preview selection must not override the final top result')
+
+  for (const flushSelection of [false, true]) {
+    installBookmarks([...earlyPrefixes, lateExact])
+    controller.setSearchQuery('reference manual')
+    const selectedPreview = state.searchResults[1]
+    controller.handleDocumentKeydown({ key: 'ArrowDown', target: null, defaultPrevented: false, preventDefault() {} })
+    if (flushSelection) {
+      for (const [id, callback] of [...frames]) {
+        frames.delete(id)
+        callback(0)
+      }
+      assert.equal(state.activeResultIndex, 1, 'the selected preview has reached the rendered state')
+    }
+    pressEnter()
+    await finishCooperativeSearch()
+    assert.deepEqual(openedUrls, [selectedPreview.url], `explicit selection survives final reordering (flushed=${flushSelection})`)
+  }
+  installBookmarks([...earlyPrefixes, lateExact])
+  controller.setSearchQuery('reference manual')
+  pressEnter()
+  await finishCooperativeSearch()
+  assert.deepEqual(openedUrls, [lateExact.url], 'a new search must not reuse a previous explicit selection')
+
   const siteBookmarks = [
     bookmark('site', 'GitHub', 'https://github.com/openai'),
     bookmark('subdomain', 'GitHub Docs', 'https://docs.github.com/en'),
@@ -195,10 +241,10 @@ try {
   installBookmarks([oldBookmark, newBookmark])
   controller.setSearchQuery('alpha document', { immediate: true })
   controller.setSearchQuery('beta manual')
-  assert.equal(state.debouncedQuery, 'alpha document', 'reproduction must still be inside the input debounce')
+  assert.equal(state.debouncedQuery, 'beta manual', 'local search must apply input without a timer')
   assert.equal(pressEnter().defaultPrevented, true)
   assert.deepEqual(openedUrls, [newBookmark.url], 'fast Enter must open the latest query result')
-  assert.equal(timers.size, 0, 'flushing Enter should cancel the delayed duplicate search')
+  assert.equal(state.searchTimer, null, 'flushing Enter should cancel the delayed duplicate search independently of pinyin warmup')
 
   openedUrls.length = 0
   controller.setSearchQuery('')
@@ -209,16 +255,17 @@ try {
   controller.setSearchQuery('beta manual')
   pressEnter(true)
   assert.deepEqual(openedUrls, [], 'IME confirmation must not trigger bookmark activation')
-  assert.equal(state.debouncedQuery, 'alpha document', 'IME confirmation must not flush composition input')
+  assert.equal(state.debouncedQuery, 'beta manual', 'IME confirmation must not activate the applied query')
 
-  installBookmarks([oldBookmark, newBookmark, ...Array.from({ length: 1200 }, (_, index) => bookmark(`entry-${index}`, 'Neutral'))])
+  const broadMatches = Array.from({ length: 25 }, (_, index) => bookmark(`broad-${index}`, `Beta manual extra ${index}`))
+  installBookmarks([oldBookmark, newBookmark, ...broadMatches, ...Array.from({ length: 9000 }, (_, index) => bookmark(`entry-${index}`, 'Neutral'))])
   controller.setSearchQuery('beta manual')
   pressEnter()
   assert.equal(state.searchPending, true)
   assert.deepEqual(openedUrls, [], 'Enter must wait for the latest cooperative ranking to settle')
   await finishCooperativeSearch()
   assert.deepEqual(openedUrls, [newBookmark.url], 'the queued Enter must open the completed query without requiring a second keypress')
-  installBookmarks([oldBookmark, newBookmark, ...Array.from({ length: 1200 }, (_, index) => bookmark(`cancel-${index}`, 'Neutral'))])
+  installBookmarks([oldBookmark, newBookmark, ...broadMatches, ...Array.from({ length: 9000 }, (_, index) => bookmark(`cancel-${index}`, 'Neutral'))])
   controller.setSearchQuery('beta manual')
   pressEnter()
   controller.setSearchQuery('alpha document', { immediate: true })
@@ -268,7 +315,9 @@ try {
   for (let step = 0; step < 10; step++) await Promise.resolve()
   assert.deepEqual(updatedTabs, [{ id: 77, url: newBookmark.url }], 'Alt Enter resolves and updates the current tab')
 
-  installBookmarks([oldBookmark, newBookmark, ...Array.from({ length: 1200 }, (_, index) => bookmark(`keyboard-${index}`, 'Neutral'))])
+  installBookmarks([oldBookmark, newBookmark, ...broadMatches,
+    ...Array.from({ length: 25 }, (_, index) => bookmark(`alpha-${index}`, `Alpha document extra ${index}`)),
+    ...Array.from({ length: 9000 }, (_, index) => bookmark(`keyboard-${index}`, 'Neutral'))])
   controller.setSearchQuery('beta manual')
   pressEnter(false, { ctrlKey: true })
   await finishCooperativeSearch()

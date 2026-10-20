@@ -58,36 +58,7 @@ const SEARCH_OPERATOR_KEYS = new Set([
   '类别'
 ])
 
-const SAFE_LOCAL_RULE_FILLER_PATTERNS = [
-  /帮我/g,
-  /帮忙/g,
-  /麻烦/g,
-  /请/g,
-  /找一下/g,
-  /找找/g,
-  /搜索/g,
-  /查找/g,
-  /查一下/g,
-  /看看/g,
-  /收藏的/g,
-  /收藏/g,
-  /书签/g,
-  /链接/g,
-  /网址/g,
-  /页面/g,
-  /那个/g,
-  /这个/g,
-  /一些/g,
-  /一个/g,
-  /之前/g,
-  /以前/g,
-  /我的/g,
-  /我/g,
-  /关于/g,
-  /有关/g,
-  /一下/g,
-  /资料/g
-]
+const LOCAL_SEARCH_REQUEST_PREFIX = /^(?:(?:(?:请|麻烦)\s*(?:帮我|帮忙)?|帮我|帮忙)\s*(?:找一下|找找|查一下|查找|搜索|看看|找)\s*|(?:找一下|找找|查一下)\s*|(?:搜索|查找)\s+)/
 
 const CHINESE_SEARCH_EXCLUSION_PATTERN = /(?:不要|不看|排除|过滤掉|过滤|不是|别给我|剔除|去掉)\s*([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
 const ENGLISH_SEARCH_EXCLUSION_PATTERN = /\b(?:without|exclude|excluding|not|no)\s+([a-z0-9][a-z0-9+.#/_-]*)/gi
@@ -492,9 +463,9 @@ function cleanSafeLocalSearchQuery(query: string): string {
     .replace(/([a-z0-9])([\u3400-\u9fff])/gi, '$1 $2')
     .replace(/([\u3400-\u9fff])([a-z0-9])/gi, '$1 $2')
 
-  for (const pattern of SAFE_LOCAL_RULE_FILLER_PATTERNS) {
-    text = text.replace(pattern, ' ')
-  }
+  // Only remove an explicit request prefix. Words such as 我, 收藏 and 资料
+  // can be part of the actual bookmark name and must survive unchanged.
+  text = text.replace(LOCAL_SEARCH_REQUEST_PREFIX, '')
 
   return text
     .replace(/\s+/g, ' ')

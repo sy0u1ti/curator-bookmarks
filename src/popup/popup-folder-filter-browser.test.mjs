@@ -175,6 +175,8 @@ try {
   )
   await filter.focus()
   await filter.press('ArrowUp')
+  // The search input applies explicit focus requests on the next frame.
+  await page.waitForFunction(() => document.activeElement?.id === 'search-input')
   assert.equal(
     await page.evaluate(() => document.activeElement?.id || ''),
     'search-input',

@@ -14,8 +14,8 @@ export function normalizeUrl(url: unknown): string {
 }
 
 export function normalizeSearchTextCompact(value: unknown): string {
-  return normalizeText(stripCommonUrlPrefix(value))
-    .replace(/[^a-z0-9\u3400-\u9fff+#]+/gi, '')
+  return normalizeText(stripCommonUrlPrefix(String(value || '').normalize('NFKC')))
+    .replace(/[^\p{L}\p{N}+#]+/gu, '')
     .trim()
 }
 
