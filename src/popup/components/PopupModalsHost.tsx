@@ -117,9 +117,8 @@ const modalWideCardClass = cx(
   'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
 )
 const modalListClass = [
-  'min-h-0 flex-1 overflow-y-auto overscroll-contain rounded-ds-sm border border-ds-border bg-ds-surface-1 p-1 pr-1.5',
-  '[scrollbar-color:rgba(255,255,255,0.18)_transparent] [scrollbar-width:thin]',
-  '[&::-webkit-scrollbar]:w-2.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:border-[3px] [&::-webkit-scrollbar-thumb]:border-transparent [&::-webkit-scrollbar-thumb]:bg-ds-text-primary/20 [&::-webkit-scrollbar-thumb]:bg-clip-padding [&::-webkit-scrollbar-track]:bg-transparent'
+  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[6px_5px]',
+  '[scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 ].join(' ')
 const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
 const editFolderPickerClass = 'edit-folder-picker flex min-h-0 flex-col gap-2'
@@ -414,8 +413,33 @@ function EditBookmarkModal({
   titleRef: RefObject<HTMLInputElement | null>
   view: PopupModalsView['edit']
 }) {
+  const modalRef = useRef<HTMLElement | null>(null)
+
+  useLayoutEffect(() => {
+    const modal = modalRef.current
+    if (!modal) return
+    const fixedBlocks = Array.from(modal.children).map(element =>
+      element.classList.contains('edit-folder-accordion') ? element.firstElementChild : element
+    ).filter((element): element is HTMLElement => element instanceof HTMLElement)
+    const measure = () => {
+      const style = getComputedStyle(modal)
+      const height = fixedBlocks.reduce((total, element) => total + element.offsetHeight, 0) +
+        (modal.children.length - 1) * Number.parseFloat(style.rowGap) +
+        Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom) +
+        Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth)
+      const value = `${height}px`
+      if (modal.style.getPropertyValue('--popup-edit-rest-height') !== value) {
+        modal.style.setProperty('--popup-edit-rest-height', value)
+      }
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    fixedBlocks.forEach(element => observer.observe(element))
+    return () => observer.disconnect()
+  }, [])
+
   return (
-    <section id="edit-modal" className={modalStandardCardClass} aria-labelledby="edit-modal-title" tabIndex={-1}>
+    <section ref={modalRef} id="edit-modal" className={cx(modalStandardCardClass, 'popup-edit-modal')} data-squircle="off" aria-labelledby="edit-modal-title" tabIndex={-1}>
       <header className={modalHeaderClass}>
         <div className={modalHeaderCopyClass}>
           <p className={modalEyebrowClass}>编辑书签</p>
@@ -591,7 +615,7 @@ function focusElement(ref: RefObject<HTMLElement | null>, select = false) {
     if (!(element instanceof HTMLElement)) {
       return
     }
-    element.focus()
+    element.focus({ preventScroll: true })
     if (select && 'select' in element && typeof element.select === 'function') {
       element.select()
     }

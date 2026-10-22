@@ -27,6 +27,17 @@ import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import { getPopupSearchGridAria, getPopupSearchResultId } from '../popup-workspace-state'
 import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import { SidePanelBookmarkActions } from '../../sidepanel/SidePanelBookmarkActions'
+import {
+  folderBranchClass,
+  folderCardActiveClass,
+  folderCardClass,
+  folderCountActiveClass,
+  folderCountClass,
+  folderMainClass,
+  folderRowClass,
+  folderTitleClass,
+  getFolderDepthStyle
+} from './popup-folder-tree-styles'
 import type {
   PopupActionMenuViewModel,
   PopupContentBookmarkRowViewModel,
@@ -106,7 +117,6 @@ const folderTreeClass =
   'popup-folder-tree min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-[6px_5px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 const mainListClass =
   'popup-main-list relative m-0 min-h-0 flex-1 list-none overflow-x-hidden overflow-y-auto p-[8px_9px] [scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
-const folderRowClass = 'relative block min-h-[34px]'
 // The filter lives in the existing 42px pane header, so it adds no height and
 // no new pane. Geometry matches the folder rows' 34px rhythm, not the 40px
 // main search shell, which would make the header grow.
@@ -137,24 +147,8 @@ const POPUP_FOLDER_ROW_HEIGHT = 34
 const POPUP_VIRTUAL_OVERSCAN = 8
 const POPUP_VIRTUALIZATION_THRESHOLD = 24
 const activeResultIndicatorClass = 'popup-active-result-indicator'
-const folderCardClass = [
-  'relative grid min-h-[34px] w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_max-content] items-center gap-[7px] rounded-ds-sm border border-transparent bg-transparent py-1.5 pr-2 pl-2 text-left text-ds-text-primary outline-none',
-  'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
-  'popup-folder-card active:scale-[0.993]'
-].join(' ')
-const folderCardActiveClass =
-  'bg-ds-text-primary/[0.055] before:absolute before:bottom-1.5 before:left-0 before:top-1.5 before:w-[2px] before:rounded-full before:bg-ds-text-primary/70 before:content-[""]'
 const folderCardDimmedClass = 'opacity-55 hover:opacity-100 focus-visible:opacity-100'
-const folderBranchClass =
-  'relative inline-grid h-2.5 w-2.5 flex-none place-items-center justify-self-center rounded-bl-[4px] border-b border-l border-b-white/20 border-l-white/20 bg-transparent text-ds-text-secondary'
 const rootFolderBranchClass = 'rounded-full border border-white/30'
-const folderMainClass =
-  'grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-[7px]'
-const folderTitleClass =
-  'min-w-0 truncate text-left text-xs font-bold leading-tight text-ds-text-primary'
-const folderCountClass =
-  'min-w-0 justify-self-end bg-transparent p-0 text-right text-xs font-semibold leading-tight text-ds-text-disabled [font-variant-numeric:tabular-nums]'
-const folderCountActiveClass = 'text-ds-text-secondary'
 const listButtonClass = [
   'popup-list-button flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
@@ -221,11 +215,6 @@ const POPUP_REORDER_TOUCH_CANCEL_THRESHOLD_PX = 10
 const POPUP_REORDER_LONG_PRESS_MS = 320
 const POPUP_REORDER_AUTO_SCROLL_EDGE_PX = 36
 const POPUP_REORDER_AUTO_SCROLL_MAX_PX = 13
-
-function getFolderDepthStyle(depth: number): CSSProperties {
-  const normalizedDepth = Math.max(0, Number(depth) || 0)
-  return { paddingLeft: `${8 + normalizedDepth * 16}px` }
-}
 
 function getBookmarkButtonStyle(): CSSProperties {
   return listButtonBaseStyle

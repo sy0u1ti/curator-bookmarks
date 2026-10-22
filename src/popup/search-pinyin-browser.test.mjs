@@ -41,6 +41,17 @@ try {
     await chrome.bookmarks.create({ parentId: '1', title: 'React Documentation', url: 'https://react.dev/learn' })
     return target.id
   }, targetTitle)
+  const anyTargetId = await worker.evaluate(async () => {
+    const target = await chrome.bookmarks.create({ parentId: '1', title: 'Any Router', url: 'https://anyrouter.top/' })
+    await chrome.bookmarks.create({ parentId: '1', title: 'Any牌路由器使用指南!', url: 'https://linux.do/t/topic/1779614' })
+    for (let position = 0; position < 25; position++) {
+      await chrome.bookmarks.create({ parentId: '1', title: `Any Router guide ${position}`, url: `https://discussion.invalid/${position}` })
+    }
+    await chrome.bookmarks.create({ parentId: '1', title: '爱你呀', url: 'https://initials.invalid/' })
+    await chrome.bookmarks.create({ parentId: '1', title: 'New York', url: 'https://names.invalid/new-york' })
+    await chrome.bookmarks.create({ parentId: '1', title: 'York', url: 'https://names.invalid/york' })
+    return target.id
+  })
   for (const surface of ['popup', 'sidepanel', 'newtab']) {
     const page = await context.newPage()
     await page.setViewportSize(surface === 'newtab' ? { width: 1280, height: 900 } : { width: 800, height: 640 })
@@ -86,9 +97,47 @@ try {
         await page.screenshot({ path: path.join(output, 'popup-title-fragments.png') })
       }
     }
+    for (const query of ['any', 'ANY', 'ａｎｙ', 'any router', 'router any', '"any"', 'site:anyrouter.top "any"']) {
+      await input.fill(query)
+      await page.waitForFunction(({ selector }) => document.querySelector(selector)?.textContent.includes('Any Router'),
+        { selector: resultSelector })
+      const first = page.locator(resultSelector).first()
+      if (popup) {
+        assert.equal(await first.getAttribute('id'), `popup-search-result-${anyTargetId}`, `${surface}: ${query} prefers the actual site`)
+        assert.ok((await first.textContent()).includes('标题命中'), `${surface}: show title evidence`)
+        assert.ok((await first.textContent()).includes('域名命中'), `${surface}: show hostname evidence`)
+        if (query.includes('"')) {
+          await first.locator('mark').filter({ hasText: /^any$/i }).first().waitFor()
+        }
+      } else {
+        assert.ok((await first.textContent()).includes('anyrouter.top'), 'New Tab shares the same relevance ranking')
+      }
+      report.push({ surface, query, first: await first.textContent() })
+      if (query === 'any') {
+        await page.screenshot({ path: path.join(output, `${surface}-any.png`) })
+      }
+    }
+    await input.fill('new york')
+    await page.waitForFunction(({ selector }) => document.querySelector(selector)?.textContent.includes('New York'),
+      { selector: resultSelector })
+    report.push({ surface, query: 'new york', first: await page.locator(resultSelector).first().textContent() })
+    await input.fill('"kawang"')
+    await page.waitForFunction(({ selector, popup }) =>
+      !document.querySelector(selector) && document.body.textContent.includes(popup ? '未找到相关书签' : '未找到书签'),
+    { selector: resultSelector, popup })
+    report.push({ surface, query: '"kawang"', count: await page.locator(resultSelector).count() })
     // Rename through the real browser API, then verify the old title pinyin
     // disappears while its unchanged folder remains a lower-priority match.
     if (surface === 'sidepanel') {
+      await input.fill('any')
+      await page.waitForFunction(id => document.querySelector('#popup-search-results [role="row"]')?.id === `popup-search-result-${id}`, anyTargetId)
+      await worker.evaluate(id => chrome.bookmarks.update(id, { url: 'https://neutral.invalid/' }), anyTargetId)
+      await page.waitForFunction(id => {
+        const first = document.querySelector('#popup-search-results [role="row"]')
+        return first && first.id !== `popup-search-result-${id}`
+      }, anyTargetId)
+      await worker.evaluate(id => chrome.bookmarks.update(id, { url: 'https://anyrouter.top/' }), anyTargetId)
+      await page.waitForFunction(id => document.querySelector('#popup-search-results [role="row"]')?.id === `popup-search-result-${id}`, anyTargetId)
       await worker.evaluate(id => chrome.bookmarks.update(id, { title: '星河比价 | PriceAI' }), targetId)
       await input.fill('xinghebijia')
       await page.waitForFunction(() => document.querySelector('#popup-search-results [role="row"]')?.textContent.includes('星河比价'))
@@ -104,7 +153,7 @@ try {
     await page.close()
   }
   await writeFile(path.join(output, 'results.json'), `${JSON.stringify(report, null, 2)}\n`)
-  console.log('Pinyin, title fragments, abbreviations and typo ranking passed in Popup, Side Panel and New Tab, including a live rename.')
+  console.log('Title/host relevance, literal highlighting, pinyin, title fragments, abbreviations and typo ranking passed in Popup, Side Panel and New Tab, including a live rename.')
 } finally {
   await context?.close()
   const resolved = path.resolve(profile)

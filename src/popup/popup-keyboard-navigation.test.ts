@@ -253,7 +253,7 @@ function testModalFolderPickerOwnsTreeNavigation(): void {
   const modalSource = readFileSync('src/popup/components/PopupModalsHost.tsx', 'utf8')
 
   assert(
-    hostSource.includes('onKeyDown={(event) => handleFolderPickerTreeKeyDown(event, mode)}'),
+    hostSource.includes('onKeyDown={(event) => handleFolderPickerTreeKeyDown(event, mode,'),
     'modal folder picker lists should own arrow-key tree navigation'
   )
   assert(

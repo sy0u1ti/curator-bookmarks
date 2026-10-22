@@ -86,22 +86,27 @@ try {
     assert.deepEqual(errors, [])
     await page.close()
   }
-  for (const surface of ['popup', 'sidepanel']) {
+  const coldCases = [
+    { kind: 'exact-title', query: 'reference manual', title: 'Reference Manual', url: 'https://example.invalid/late-exact' },
+    { kind: 'title-host', query: 'any', title: 'Any Router', url: 'https://anyrouter.top/' }
+  ]
+  for (const { surface, ...activation } of coldCases.flatMap(scenario =>
+    ['popup', 'sidepanel'].map(surface => ({ surface, ...scenario })))) {
     const page = await context.newPage()
     const errors = []
     page.on('pageerror', error => errors.push(error.message))
-    await page.addInitScript(() => {
+    await page.addInitScript(({ title, url }) => {
       // Keep the acceleration index cold so Enter arrives during the first
       // batch, rather than accidentally testing an already warmed fast path.
       window.requestIdleCallback = () => 1
       window.cancelIdleCallback = () => {}
       const children = Array.from({ length: 9000 }, (_, index) => ({
-        id: String(index + 10), parentId: '1', index, dateAdded: 1,
-        title: `Reference Manual supplemental ${index}`, url: `https://example.invalid/early-${index}`
+        id: String(index + 10), parentId: '1', index, dateAdded: 2 + index,
+        title: `${title} supplemental ${index}`, url: `https://example.invalid/early-${index}`
       }))
       children.push({
         id: '9010', parentId: '1', index: 9000, dateAdded: 1,
-        title: 'Reference Manual', url: 'https://example.invalid/late-exact'
+        title, url
       })
       const tree = [{ id: '0', title: '', children: [
         { id: '1', parentId: '0', title: 'Bookmarks bar', children },
@@ -116,28 +121,28 @@ try {
         return Promise.resolve(tab)
       }
       window.close = () => {}
-    })
+    }, activation)
     await page.goto(`chrome-extension://${extensionId}/src/${surface}/${surface}.html`)
     const input = page.locator('#search-input')
     await input.waitFor()
     await page.waitForFunction(() => performance.getEntriesByName('popup.searchIndexReady.end').length > 0)
-    await input.evaluate(element => {
+    await input.evaluate((element, query) => {
       element.focus()
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, 'reference manual')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(element, query)
       element.dispatchEvent(new Event('input', { bubbles: true }))
       element.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
-    })
+    }, activation.query)
     await page.waitForFunction(() => window.__openedSearchUrls.length > 0)
     const opened = await page.evaluate(() => window.__openedSearchUrls)
-    assert.deepEqual(opened, ['https://example.invalid/late-exact'], `${surface}: fast Enter waits for the tail's exact title`)
+    assert.deepEqual(opened, [activation.url], `${surface}: fast Enter waits for the tail's ${activation.kind} evidence`)
     assert.deepEqual(errors, [], `${surface}: cold activation has no runtime errors`)
-    report.coldActivation.push({ surface, count: 9001, opened })
+    report.coldActivation.push({ surface, kind: activation.kind, count: 9001, opened })
     await page.close()
   }
   await mkdir('output/search-benchmark', { recursive: true })
   await writeFile('output/search-benchmark/interaction.json', `${JSON.stringify(report, null, 2)}\n`)
   console.log(JSON.stringify(report.surfaces.map(({ surface, cold, warm }) => ({ surface, cold, warm })), null, 2))
-  console.log('Cold first-batch Enter opens the final exact title in Popup and Side Panel.')
+  console.log('Cold first-batch Enter opens the final exact title or corroborated hostname in Popup and Side Panel.')
 } finally {
   await context?.close()
   const resolved = path.resolve(profile)

@@ -6,6 +6,16 @@ export interface PopupKeyboardFolderRowLike {
 export type PopupKeyboardPane = 'bookmarks' | 'folders'
 export type PopupFolderPickerMode = 'edit' | 'move' | 'smart'
 
+const folderPickerFocusHandlers = new WeakMap<HTMLElement, (edge: 'first' | 'last') => boolean>()
+
+export function registerFolderPickerFocusHandler(
+  container: HTMLElement,
+  handler: (edge: 'first' | 'last') => boolean
+): () => void {
+  folderPickerFocusHandlers.set(container, handler)
+  return () => { folderPickerFocusHandlers.delete(container) }
+}
+
 export interface PopupKeyboardTargetInfo {
   editable: boolean
   interactive: boolean
@@ -116,6 +126,8 @@ export function focusFolderPickerEdge(
   mode: PopupFolderPickerMode,
   edge: 'first' | 'last'
 ): boolean {
+  const focus = container ? folderPickerFocusHandlers.get(container) : undefined
+  if (focus) return focus(edge)
   const options = getEnabledFolderPickerOptions(container, mode)
   const target = edge === 'last' ? options.at(-1) : options[0]
   if (!target) {

@@ -92,10 +92,139 @@ equal(ids(engine.searchBookmarks('typescript zqxvnonexistent', cases)), [], 'all
 equal(ids(engine.searchBookmarks('site:github.com typscript', cases)), [], 'typo recovery cannot escape filters')
 assert.ok(!ids(engine.searchBookmarks('typscript -handbook', cases)).includes('typo'), 'typo recovery preserves exclusions')
 
+// A real navigation query: corroborating title + hostname evidence must count,
+// even when a title-only discussion was saved more recently.
+const relevanceRecords = [
+  { ...record('any-discussion', 'Any牌路由器使用指南!', 'https://linux.do/t/topic/1779614'), dateAdded: 1800000000000 },
+  record('any-home', 'Any Router', 'https://anyrouter.top/'),
+  { ...record('any-url-path', 'Any Router', 'https://reference.invalid/any/any'), dateAdded: 1800000000001 },
+  { ...record('any-host-infix', 'Any Router', 'https://manytools.invalid/'), dateAdded: 1800000000002 },
+  record('any-host-label', 'Any Router', 'https://docs.anyrouter.top/'),
+  record('any-word', 'Any handbook'),
+  { ...record('any-word-prefix', 'Anything handbook'), dateAdded: 1800000000003 },
+  record('identity-split', 'Router dashboard', 'https://anyrouter.top/'),
+  { ...record('context-split', 'Router dashboard', 'https://dashboard.invalid/', 'Library / Any'), dateAdded: 1800000000004 },
+  ...createSearchBenchmarkRecords(1300).map(item => ({ ...item, id: `relevance-filler-${item.id}` }))
+]
+const relevanceCorpus = index(relevanceRecords)
+for (const warm of [false, true]) {
+  if (warm) engine.warmSearchAcceleration(relevanceCorpus)
+  for (const query of ['any', 'ANY', 'ａｎｙ', 'any router', 'router any', 'any any', 'site:anyrouter.top any', '"any"']) {
+    const results = engine.searchBookmarks(query, relevanceCorpus)
+    equal(results[0]?.id, 'any-home', `title + hostname corroboration: ${query}, warm=${warm}`)
+    equal(rows(results), rows(engine.exhaustiveSearch(query, relevanceCorpus)), `corroboration exhaustive: ${query}`)
+    equal(rows(await engine.searchBookmarksCooperatively(query, relevanceCorpus, {
+      isActive: () => true, yieldWork: () => Promise.resolve()
+    })), rows(results), `corroboration cooperative: ${query}`)
+    const batch = engine.searchBookmarksFirstBatch(query, relevanceCorpus)
+    if (batch.complete) equal(rows(batch.results), rows(results), `corroboration complete first batch: ${query}`)
+  }
+  const resultIds = ids(engine.searchBookmarks('any', relevanceCorpus))
+  assert.ok(resultIds.indexOf('any-host-label') < resultIds.indexOf('any-host-infix'), 'hostname labels beat accidental infixes')
+  assert.ok(resultIds.indexOf('any-word') < resultIds.indexOf('any-word-prefix'), 'whole-word prefixes beat partial words, independent of recency')
+  const splitIds = ids(engine.searchBookmarks('any router dashboard', relevanceCorpus))
+  assert.ok(splitIds.indexOf('identity-split') >= 0 && splitIds.indexOf('identity-split') < splitIds.indexOf('context-split'),
+    'all terms covered by title and host beat title + incidental folder coverage')
+  equal(ids(engine.searchBookmarks('any router qzxvnonexistent', relevanceCorpus)), [], 'corroboration cannot waive a missing term')
+}
+equal(rows(engine.searchBookmarks('any any', relevanceCorpus)), rows(engine.searchBookmarks('any', relevanceCorpus)),
+  'repeating a query term must not multiply its evidence')
+const brandReasons = engine.searchBookmarks('any', relevanceCorpus)[0].matchReasons
+assert.equal(brandReasons.filter(reason => reason.startsWith('命中：标题 ')).length, 1, 'title explanations must not repeat')
+assert.ok(brandReasons.some(reason => reason.startsWith('命中：站点 ')), 'the corroborating hostname must be explained')
+const pathReasons = engine.searchBookmarks('any', relevanceCorpus).find(result => result.id === 'any-url-path').matchReasons
+assert.ok(!pathReasons.some(reason => reason.startsWith('命中：站点 ')), 'a URL path is not hostname evidence')
+
+const exactAndRepeated = [
+  engine.indexBookmarkForSearch(record('any-exact', 'Any')),
+  engine.indexBookmarkForSearch(record('any-dual', 'Any Router', 'https://anyrouter.top/')),
+  engine.indexBookmarkForSearch(record('any-tags', 'Any Router'), {
+    aliases: ['any', 'any', 'Any'], tags: Array(80).fill('any'), topics: Array(80).fill('any')
+  }),
+  engine.indexBookmarkForSearch(record('any-plain', 'Any Router')),
+  engine.indexBookmarkForSearch(record('any-copy', 'Any Router', 'https://anyrouter.top/', 'Second folder'))
+]
+equal(engine.searchBookmarks('any', exactAndRepeated)[0]?.id, 'any-exact', 'corroboration is bounded below an exact title')
+const repeatedResults = engine.searchBookmarks('any', exactAndRepeated)
+equal(repeatedResults.find(result => result.id === 'any-tags').score, repeatedResults.find(result => result.id === 'any-plain').score,
+  'repeated tags do not manufacture independent evidence')
+equal(new Set(ids(repeatedResults)).size, repeatedResults.length, 'one result per bookmark, not per matching field')
+assert.ok(ids(repeatedResults).includes('any-dual') && ids(repeatedResults).includes('any-copy'),
+  'separately saved bookmarks retain their folder identities, even at the same URL')
+
+const corroboratedTail = index([
+  ...Array.from({ length: 9000 }, (_, position) => ({
+    ...record(`any-early-${position}`, `Any Router guide ${position}`, `https://discussion.invalid/${position}`),
+    dateAdded: 1800000000000 + position
+  })),
+  record('any-late-host', 'Any Router', 'https://anyrouter.top/')
+])
+equal(engine.searchBookmarks('any', corroboratedTail)[0]?.id, 'any-late-host', 'cold ranking finds older corroborated tail candidates')
+engine.warmSearchAcceleration(corroboratedTail)
+for (const query of ['any', 'any r', 'router any', '"any"', 'any -impossible']) {
+  const expected = engine.exhaustiveSearch(query, corroboratedTail, 45)
+  equal(engine.searchBookmarks(query, corroboratedTail)[0]?.id, 'any-late-host', `prefix cache retains corroboration: ${query}`)
+  equal(rows(engine.searchBookmarksTopK(query, corroboratedTail, 25, 20)), rows(expected).slice(20, 45),
+    `corroboration pagination: ${query}`)
+  equal(rows(engine.searchBookmarks(query, corroboratedTail)), rows(expected).slice(0, 20), `corroboration tail pruning: ${query}`)
+}
+
+const ordinaryNames = index([
+  record('new-title', 'New'), record('new-york', 'New York'), record('york-only', 'York'),
+  record('new-tab', 'New Tab'), record('tab-only', 'Tab')
+])
+for (const [query, expected] of [['new', 'new-title'], ['new york', 'new-york'], ['new tab', 'new-tab']]) {
+  equal(engine.searchBookmarks(query, ordinaryNames)[0]?.id, expected, `ordinary name is not a sort directive: ${query}`)
+}
+
+const occurrenceQuality = index([
+  record('best-occurrence', 'Company any reference'),
+  { ...record('later-occurrence', 'Resource any reference'), dateAdded: 1800000000000 }
+])
+equal(engine.searchBookmarks('any', occurrenceQuality)[0]?.id, 'best-occurrence',
+  'a weak earlier substring cannot hide a better whole-word occurrence')
+const literalFieldQuality = index([
+  record('literal-title', 'React.js reference'),
+  { ...record('literal-url-compact-title', 'ReactJS', 'https://reference.invalid/react.js'), dateAdded: 1800000000000 }
+])
+equal(engine.searchBookmarks('"react.js"', literalFieldQuality)[0]?.id, 'literal-title',
+  'a literal URL match cannot manufacture an exact compact-title match')
+const urlQuality = index([
+  record('url-home', 'Portal', 'https://anyrouter.top/'),
+  { ...record('url-child', 'Guide', 'https://anyrouter.top/guide'), dateAdded: 1800000000000 },
+  record('url-compact', 'Example resource', 'https://reference.invalid/react.js')
+])
+for (const query of ['https://anyrouter.top/', 'anyrouter.top/']) {
+  equal(engine.searchBookmarks(query, urlQuality)[0]?.id, 'url-home', 'a pasted URL prefers that page, not newer pages on the host')
+}
+const compactUrlResult = engine.searchBookmarks('reactjs', urlQuality)[0]
+equal(compactUrlResult?.id, 'url-compact', 'compact URL recall is retained')
+assert.ok(compactUrlResult.matchReasons.some(reason => reason.startsWith('命中：网址 ')), 'compact URL matches are not mislabeled as page content')
+assert.ok(!engine.searchBookmarks('/any', urlQuality).some(result =>
+  result.matchReasons.some(reason => reason.startsWith('命中：站点 '))), 'a URL path fragment cannot masquerade as hostname evidence')
+
 await engine.enrichLightPopupSearchIndexWithPinyin(cases, { yieldWork: () => Promise.resolve() })
 engine.warmSearchAcceleration(cases)
 equal(engine.searchBookmarks('qianduankaifagongju', cases)[0]?.id, 'cjk', 'full pinyin')
 assert.ok(ids(engine.searchBookmarks('qdkf', cases)).includes('cjk'), 'pinyin initials')
+
+const literalPinyin = index([
+  record('literal-card', '卡网'), record('literal-letters', 'kawang manual'),
+  record('literal-any', 'Any Router', 'https://anyrouter.top/', 'Library / 卡网'),
+  record('incidental-initials', '爱你呀'),
+  ...createSearchBenchmarkRecords(100).map(item => ({ ...item, id: `literal-filler-${item.id}` }))
+])
+const literalBefore = rows(engine.searchBookmarks('"kawang"', literalPinyin))
+const exclusionBefore = rows(engine.searchBookmarks('"any" -kw', literalPinyin))
+await engine.enrichLightPopupSearchIndexWithPinyin(literalPinyin, { yieldWork: () => Promise.resolve() })
+for (const warm of [false, true]) {
+  if (warm) engine.warmSearchAcceleration(literalPinyin)
+  equal(rows(engine.searchBookmarks('"kawang"', literalPinyin)), literalBefore, 'quoted original text never expands to generated pinyin')
+  equal(ids(engine.searchBookmarks('"kw"', literalPinyin)), [], 'quoted text never matches generated initials')
+  equal(rows(engine.searchBookmarks('"any" -kw', literalPinyin)), exclusionBefore, 'hidden pinyin cannot make literal exclusions remove bookmarks')
+  equal(engine.searchBookmarks('any', literalPinyin)[0]?.id, 'literal-any', 'literal title + host beats incidental exact initials')
+  equal(engine.searchBookmarks('ainiya', literalPinyin)[0]?.id, 'incidental-initials', 'full pinyin remains a strong title match')
+}
 
 const replacement = engine.indexBookmarkForSearch(record('cjk', 'Changed nebula title'))
 Object.assign(cases.find(bookmark => bookmark.id === 'cjk'), replacement)
@@ -247,6 +376,38 @@ engine.warmSearchAcceleration(varied)
 for (const query of ['qianduan', 'sheji', 'qd', 'sj', 'qianduan api', 'react sheji', 'folder:3 qianduan']) {
   equal(rows(engine.searchBookmarks(query, varied)), rows(engine.exhaustiveSearch(query, varied)), `varied pinyin source exhaustive: ${query}`)
 }
+
+// Vary independent fields rather than only title text, to exercise the score
+// ceilings and ranked prefix caches when stronger evidence is not the newest.
+const identityWords = ['any', 'react', 'router', 'api', 'kawang']
+const mixedFields = Array.from({ length: 2400 }, (_, position) => {
+  const word = identityWords[Math.floor(random() * identityWords.length)]
+  const other = identityWords[Math.floor(random() * identityWords.length)]
+  const title = [
+    `${word} ${other}`, `${word}tools ${other}`, `Reference ${word} ${other}`,
+    `${word}.${other}`, `${word} ${other} 卡网`, '爱你呀'
+  ][position % 6]
+  const hostname = [
+    `${word}.example.org`, `docs.${word}tools.example.org`,
+    `not${word}.example.org`, `${other}.example.org`, 'unrelated.invalid'
+  ][position % 5]
+  const bookmark = record(`identity-${position}`, title, `https://${hostname}/${other}/${position}`, `Library / ${word}`)
+  bookmark.dateAdded += position * 1000
+  return engine.indexBookmarkForSearch(bookmark, { tags: [other], aliases: [word, word] })
+})
+await engine.enrichLightPopupSearchIndexWithPinyin(mixedFields, { yieldWork: () => Promise.resolve() })
+engine.warmSearchAcceleration(mixedFields)
+for (const word of [...identityWords, 'a', 'r', 'ａｎｙ', '卡网', 'kw']) {
+  for (const query of [
+    word, `"${word}"`, `${word} api`, `api ${word}`, `${word} router api`,
+    `"${word}" api`, `${word} -unrelated`, `recent ${word}`, `site:any.example.org ${word}`
+  ]) {
+    const expected = engine.exhaustiveSearch(query, mixedFields, 27)
+    equal(rows(engine.searchBookmarks(query, mixedFields)), rows(expected).slice(0, 20), `mixed-field pruning: ${query}`)
+    equal(rows(engine.searchBookmarksTopK(query, mixedFields, 15, 12)), rows(expected).slice(12, 27), `mixed-field pagination: ${query}`)
+  }
+}
+
 let active = true
 await assert.rejects(engine.searchBookmarksCooperatively('react', index(createSearchBenchmarkRecords(1300)), {
   isActive: () => active,

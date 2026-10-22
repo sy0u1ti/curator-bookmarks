@@ -480,6 +480,10 @@ export function dispatchPopupFolderPickerChange(
   mode: PopupFolderPickerState['mode'],
   state: PopupFolderPickerState
 ): void {
+  const current = popupViewStore.getState().folderPickers[mode]
+  if (current.treeOptions === state.treeOptions && current.query === state.query && current.empty === state.empty) {
+    return
+  }
   updatePopupViewStore({
     folderPickers: {
       ...popupViewStore.getState().folderPickers,

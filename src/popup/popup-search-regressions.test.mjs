@@ -13,6 +13,7 @@ export {
   state, setSearchQuery, handleDocumentKeydown, applyPopupIndexedBookmarkData,
   warmPopupSnapshotFullTextIndex, cleanupPopupController,
   getSearchCacheKey, getNaturalSearchDateBucket,
+  getSearchResultRows,
   buildBookmarkCatalogSnapshot, buildLightPopupSearchIndexFromCatalog,
   searchBookmarks, searchBookmarksCooperatively, searchBookmarksFirstBatch,
   setPopupKeyboardHelpOpen, isPopupKeyboardHelpOpen
@@ -165,6 +166,31 @@ try {
   installBookmarks([bookmark('dotted-title', 'React.js'), bookmark('compact-title', 'ReactJS')])
   assert.deepEqual(controller.searchBookmarksFirstBatch('"react.js"', state.allBookmarks).results.map((row) => row.id), ['dotted-title'],
     'the provisional first batch must also respect literal punctuation')
+
+  installBookmarks([
+    { ...bookmark('any-discussion', 'Any牌路由器使用指南!', 'https://linux.do/t/topic/1779614'), dateAdded: 2 },
+    bookmark('any-home', 'Any Router', 'https://anyrouter.top/')
+  ])
+  controller.setSearchQuery('site:anyrouter.top "any" -unwanted', { immediate: true })
+  const corroboratedRows = controller.getSearchResultRows()
+  assert.equal(corroboratedRows[0].bookmarkId, 'any-home')
+  assert.ok(corroboratedRows[0].reasonTokens.includes('标题命中'), 'show title evidence once')
+  assert.ok(corroboratedRows[0].reasonTokens.includes('域名命中'), 'show hostname evidence alongside title evidence')
+  assert.equal(corroboratedRows[0].highlightQuery, 'any', 'quotes, operators and exclusions are not highlight terms')
+  pressEnter()
+  assert.deepEqual(openedUrls, ['https://anyrouter.top/'])
+
+  installBookmarks([
+    ...Array.from({ length: 9000 }, (_, index) => ({
+      ...bookmark(`any-early-${index}`, `Any Router guide ${index}`, `https://discussion.invalid/${index}`), dateAdded: 2 + index
+    })),
+    bookmark('any-tail', 'Any Router', 'https://anyrouter.top/')
+  ])
+  controller.setSearchQuery('any')
+  pressEnter()
+  assert.deepEqual(openedUrls, [], 'cold Enter waits for title + hostname ranking beyond the preview')
+  await finishCooperativeSearch()
+  assert.deepEqual(openedUrls, ['https://anyrouter.top/'], 'cold Enter opens the older corroborated site, not a newer title-only result')
 
   const fuzzyTarget = bookmark('fuzzy-editor', 'Visual Studio Code', 'https://code.visualstudio.com/')
   installBookmarks([

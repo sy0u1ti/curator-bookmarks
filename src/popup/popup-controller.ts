@@ -243,6 +243,7 @@ const FORMATTED_BOOKMARK_PATH_CACHE_LIMIT = 2048
 const formattedBookmarkPathCache = new Map<string, string>()
 const searchResultRowsCache = createPopupContentRowCache<PopupContentSearchResultViewModel>('active')
 const sidebarFolderRowsCache = createPopupContentRowCache<PopupContentFolderRowViewModel>('keyboardActive')
+let editFolderPickerCache: { dependencies: unknown[]; value: PopupFolderPickerState } | null = null
 // Folder names change rarely; tokenizing each one once keeps every keystroke in
 // the small filter input free of pinyin work.
 const folderFilterPinyinCache = new Map<string, PopupFolderFilterTokens | null>()
@@ -2665,6 +2666,7 @@ function clearPopupContentRowCaches(): void {
   treeBookmarkRowsCache.clear()
   searchResultRowsCache.clear()
   sidebarFolderRowsCache.clear()
+  editFolderPickerCache = null
 }
 
 function buildBookmarkRowViewModel(bookmark, depth, active = false, index = -1): PopupContentBookmarkRowViewModel {
@@ -2735,7 +2737,7 @@ function getFormattedBookmarkPath(path): string {
 }
 
 function getSearchResultRows(): PopupContentSearchResultViewModel[] {
-  const highlightQuery = state.searchHighlightQuery || state.debouncedQuery
+  const highlightQuery = parseSearchQuery(state.searchHighlightQuery || state.debouncedQuery).textTerms.join(' ')
   return searchResultRowsCache.getRows(
     [state.searchResults, highlightQuery, state.bookmarkMap, popupActionStateVersion],
     () => state.searchResults.map((bookmark, index) => {
@@ -2776,12 +2778,14 @@ const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
   { test: /^命中：标签拼音/, label: '标签拼音' },
   { test: /^命中：标签首字母/, label: '标签首字母' },
   { test: /^命中：标题/, label: '标题命中' },
+  { test: /^命中：站点/, label: '域名命中' },
   { test: /^命中：网址/, label: 'URL 命中' },
   { test: /^命中：文件夹/, label: '路径命中' },
   { test: /^命中：标签|^标签：/, label: '标签命中' },
   { test: /^命中：主题|^主题：/, label: '标签命中' },
   { test: /^命中：别名/, label: '别名命中' },
   { test: /^命中：摘要/, label: '摘要命中' },
+  { test: /^命中：网页内容/, label: '正文命中' },
   { test: /^命中：类型/, label: '类型命中' },
   { test: /^命中：拼音/, label: '拼音命中' },
   { test: /^命中：首字母/, label: '首字母命中' },
@@ -3000,18 +3004,10 @@ function getEditModalView(): PopupModalsView['edit'] {
   const draftPath = draftFolder
     ? formatFolderPath(draftFolder, state.folderMap) || draftFolder.title
     : bookmark.path || '未归档路径'
-  if (open) {
-    dispatchPopupFolderPickerChange(
-      'edit',
-      state.editFolderPickerOpen
-        ? getEditFolderPickerState(bookmark)
-        : {
-            empty: null,
-            mode: 'edit',
-            query: '',
-            treeOptions: []
-          }
-    )
+  // Keep the current tree intact while the disclosure closes. Clearing it
+  // changes the intrinsic height midway through the accordion transition.
+  if (state.editFolderPickerOpen) {
+    dispatchPopupFolderPickerChange('edit', getEditFolderPickerState(bookmark))
   }
   const bookmarkId = state.editTargetBookmarkId || state.editDraftBookmarkId
   const saving = state.editSaving || isPopupActionPending('edit', bookmarkId || '')
@@ -3141,16 +3137,26 @@ function getMoveFolderPickerState(bookmark): PopupFolderPickerState {
 }
 
 function getEditFolderPickerState(bookmark): PopupFolderPickerState {
+  const dependencies = [
+    state.rawTreeRoot, state.folderMap, state.moveExpandedFolders,
+    state.editFolderSearchQuery, state.editDraftParentId, state.editSaving,
+    bookmark.id, bookmark.parentId, popupActionStateVersion
+  ]
+  if (editFolderPickerCache?.dependencies.every((value, index) => Object.is(value, dependencies[index]))) {
+    return editFolderPickerCache.value
+  }
   const roots = (state.rawTreeRoot?.children || []).filter((node) => !node.url)
   const query = normalizeText(state.editFolderSearchQuery)
   const treeOptions = roots.flatMap((node) => buildEditFolderNodeViewModels(node, 0, query, bookmark))
 
-  return {
+  const value: PopupFolderPickerState = {
     empty: treeOptions.length ? null : { message: '未找到相关文件夹' },
     mode: 'edit',
     query: state.editFolderSearchQuery,
     treeOptions
   }
+  editFolderPickerCache = { dependencies, value }
+  return value
 }
 
 function getSmartFolderPickerState(): PopupFolderPickerState {
@@ -3955,11 +3961,13 @@ function toggleMoveFolder(folderId) {
   if (!folderId) {
     return
   }
-  if (state.moveExpandedFolders.has(folderId)) {
-    state.moveExpandedFolders.delete(folderId)
+  const expanded = new Set(state.moveExpandedFolders)
+  if (expanded.has(folderId)) {
+    expanded.delete(folderId)
   } else {
-    state.moveExpandedFolders.add(folderId)
+    expanded.add(folderId)
   }
+  state.moveExpandedFolders = expanded
   renderModals()
 }
 function openMoveDialog(bookmarkId, returnFocusElement = null) {
@@ -3992,6 +4000,9 @@ function openEditDialog(bookmarkId, returnFocusElement = null) {
   state.confirmDeleteBookmarkId = null
   state.editTargetBookmarkId = bookmarkId
   resetEditDraft(bookmark)
+  // Prepare only the bounded visible window during the dialog's entrance,
+  // so the first disclosure click does not have to mount the folder controls.
+  dispatchPopupFolderPickerChange('edit', getEditFolderPickerState(bookmark))
   render()
 }
 function openDeleteDialog(bookmarkId, returnFocusElement = null) {
@@ -4344,6 +4355,7 @@ function openSmartFolderDialog(returnFocusElement: HTMLElement | null = null) {
     ...state.allFolders.map((folder) => folder.id)
   ].find((id) => id && id !== ROOT_ID && state.folderMap.has(id)) || ''
   // Keep the default destination visible even when its ancestors were collapsed.
+  state.moveExpandedFolders = new Set(state.moveExpandedFolders)
   let selectedNode = findNodeById(state.rawTreeRoot, state.smartFolderParentId)
   while (selectedNode?.parentId && selectedNode.parentId !== ROOT_ID) {
     state.moveExpandedFolders.add(selectedNode.parentId)

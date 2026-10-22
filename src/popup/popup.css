@@ -233,6 +233,15 @@ body::after {
   will-change: scroll-position;
 }
 
+.popup-active-result-indicator,
+.popup-folder-picker-card::after {
+  border-radius: var(--ds-radius-md);
+  background: rgba(245, 245, 247, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(245, 245, 247, 0.045),
+    0 0 18px rgba(245, 245, 247, 0.10);
+}
+
 .popup-active-result-indicator {
   position: absolute;
   top: 0;
@@ -241,11 +250,6 @@ body::after {
   width: 0;
   height: 0;
   pointer-events: none;
-  border-radius: var(--ds-radius-md);
-  background: rgba(245, 245, 247, 0.08);
-  box-shadow:
-    0 0 0 1px rgba(245, 245, 247, 0.045),
-    0 0 18px rgba(245, 245, 247, 0.10);
   opacity: 0;
   transform: translate3d(0, 0, 0);
   transition:
@@ -377,16 +381,39 @@ body::after {
   color: var(--ds-text-secondary);
 }
 
-/* The edit picker keeps its full tree mounted, so only the panel track needs
-   to resize during disclosure. Isolate that subtree and use a shorter clock
-   than the generic accordion to keep the modal card from relayout jitter. */
+/* Keep the tree viewport bounded while the surrounding card stretches. The
+   card uses its native radius, avoiding per-frame JS clip-path regeneration. */
+.popup-edit-modal > :not(.edit-folder-accordion) {
+  flex-shrink: 0;
+}
+
 .edit-folder-accordion {
-  --acc-expand: 180ms;
-  --acc-collapse: 160ms;
+  --acc-expand: var(--duration-fast);
+  --acc-collapse: var(--duration-fast);
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.edit-folder-accordion .t-acc-panel {
+  min-height: 0;
 }
 
 .edit-folder-accordion .t-acc-panel-inner {
+  display: flex;
+  flex-direction: column;
   contain: layout paint;
+}
+
+.edit-folder-picker {
+  /* 64px is the modal stack's two 18px insets plus the card's 28px reserve.
+     Keep this viewport fixed while the outer grid clips it; the native
+     scrollbar and every tree row no longer relayout on every motion frame. */
+  flex: none;
+  height: clamp(0px, calc(100dvh - var(--popup-edit-rest-height, 343px) - 64px), 226px);
+}
+
+.edit-folder-picker > label {
+  flex-shrink: 0;
 }
 
 .popup-main-row:hover,
@@ -481,6 +508,50 @@ body::after {
 .popup-folder-card:hover {
   border-color: var(--ds-border-hover);
   background: var(--ds-hover);
+}
+
+.popup-folder-picker-card {
+  isolation: isolate;
+}
+
+.popup-folder-picker-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-micro) var(--ease-smooth-out);
+}
+
+.popup-folder-picker-card:hover,
+.popup-folder-picker-card:focus-visible,
+.popup-folder-picker-card[aria-selected="true"] {
+  border-color: transparent;
+  background: transparent;
+  outline: none;
+}
+
+.popup-folder-picker-card[aria-selected="true"]::after,
+.popup-folder-picker-row:focus-within .popup-folder-picker-card::after,
+.popup-folder-picker-row:hover .popup-folder-picker-card:not(:disabled)::after {
+  opacity: 1;
+}
+
+.popup-folder-picker-chevron {
+  opacity: 0;
+}
+
+.popup-folder-picker-row:hover .popup-folder-picker-chevron,
+.popup-folder-picker-row:focus-within .popup-folder-picker-chevron,
+.popup-folder-picker-toggle[aria-expanded="false"] .popup-folder-picker-chevron {
+  opacity: 1;
+}
+
+.popup-folder-picker-row:hover:has(.popup-folder-picker-toggle) .popup-folder-picker-branch,
+.popup-folder-picker-row:focus-within:has(.popup-folder-picker-toggle) .popup-folder-picker-branch,
+.popup-folder-picker-row:has(.popup-folder-picker-toggle[aria-expanded="false"]) .popup-folder-picker-branch {
+  opacity: 0;
 }
 
 #popup-app-shell[data-keyboard-nav="true"] .popup-row-actions:not([data-pinned="true"]):not(:focus-within) .popup-row-actions-menu {
@@ -579,7 +650,8 @@ body::after {
     transform: none !important;
   }
 
-  .popup-active-result-indicator {
+  .popup-active-result-indicator,
+  .popup-folder-picker-card::after {
     transition: none !important;
   }
 
@@ -637,7 +709,8 @@ body::after {
     outline-offset: 2px !important;
   }
 
-  .popup-active-result-indicator {
+  .popup-active-result-indicator,
+  .popup-folder-picker-card::after {
     background: rgba(255, 255, 255, 0.14);
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.52);
   }
@@ -655,7 +728,8 @@ body::after {
     outline-offset: 2px;
   }
 
-  .popup-active-result-indicator {
+  .popup-active-result-indicator,
+  .popup-folder-picker-card::after {
     border: 2px solid Highlight;
     background: transparent;
     box-shadow: none;

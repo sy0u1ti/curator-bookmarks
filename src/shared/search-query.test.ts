@@ -55,6 +55,16 @@ for (const url of [
 }
 assert.equal(matchesSite('https://github.com/openai', ''), true, 'URL-only callers should still resolve the hostname')
 
+for (const filter of ['www.github.com', 'https://www.github.com/', 'github.com.', 'github.com:443']) {
+  const parsed = parseSearchQuery(`site:${filter}`)
+  assert.equal(matchesParsedSearchQuery(parsed, {
+    searchText: '', domain: 'github.com', url: 'https://github.com/'
+  }), true, 'equivalent hostname spellings must use the same filtering semantics')
+  assert.equal(matchesParsedSearchQuery(parsed, {
+    searchText: '', domain: 'notgithub.com', url: 'https://notgithub.com/'
+  }), false, 'hostname normalization must retain label boundaries')
+}
+
 for (const operator of ['domain', '站点', '域名']) {
   const parsed = parseSearchQuery(`${operator}:github.com`)
   assert.equal(matchesParsedSearchQuery(parsed, {
