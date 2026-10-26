@@ -7,6 +7,7 @@ function run(): void {
   const motionTokens = readFileSync('src/styles/tokens.css', 'utf8')
   const popupChrome = readFileSync('src/popup/components/PopupChromeHost.tsx', 'utf8')
   const popupContent = readFileSync('src/popup/components/PopupContent.tsx', 'utf8')
+  const popupRowPresentation = readFileSync('src/popup/popup-row-presentation.ts', 'utf8')
   const popupController = readFileSync('src/popup/popup-controller.ts', 'utf8')
   const naturalSearchAi = readFileSync('src/popup/natural-search-ai.ts', 'utf8')
   const serviceWorker = readFileSync('src/service-worker/service-worker.ts', 'utf8')
@@ -24,7 +25,7 @@ function run(): void {
   )
   const popupNaturalSearchPlanResolver = popupController.slice(
     popupController.indexOf('async function resolveNaturalSearchPlan'),
-    popupController.indexOf('async function searchNaturalQuery')
+    popupController.indexOf('function render()', popupController.indexOf('async function resolveNaturalSearchPlan'))
   )
 
   assert(html.includes('background: transparent;'), 'critical shell must keep the provisional viewport transparent')
@@ -37,7 +38,7 @@ function run(): void {
   assert(html.includes('visibility: hidden;'), 'critical shell must hide root before popup styles are ready')
   assert(html.includes('contain: size layout paint;'), 'critical shell must isolate the fixed 800x600 root')
   assert(html.includes('padding: 45px 14px 0;'), 'preboot search must share the React search origin')
-  assert(html.includes('height: 40px;') && html.includes('border-radius: 6px;'), 'preboot search must share the React control geometry')
+  assert(html.includes('height: 40px;') && html.includes('border-radius: 8px;'), 'preboot search must share the React control geometry')
   assert(html.includes('"SF Pro Text"') && html.includes('"Segoe UI Variable Text"') && html.includes('"PingFang SC"'), 'preboot and React must use the same stable platform font fallbacks')
   assert(html.includes('font-family: inherit;') && html.includes('font-weight: 400;') && html.includes('line-height: 1.4;'), 'preboot input must preserve the React font family and text metrics during adoption')
   assert(html.includes('class="popup-preboot-clear-slot"') && html.includes('class="popup-preboot-semantic"'), 'preboot search must reserve the same trailing controls as React')
@@ -47,22 +48,22 @@ function run(): void {
   assert(popupChrome.includes('w-[76px] min-w-[76px]'), 'semantic-search status labels must not resize the search field')
   assert(!popupCss.includes('--popup-row-actions-open-width') && !popupCss.includes('overflow: hidden;\n  border-radius: var(--ds-radius-sm);'), 'row actions must overlay rather than reflow bookmark titles')
   assert(/\.popup-row-actions\s*\{[^}]*width:\s*var\(--popup-row-actions-width\);/s.test(popupCss) && !/#popup-app-shell\[data-keyboard-nav="true"\] \.popup-row-actions:not\(:focus-within\)\s*\{/.test(popupCss), 'row action hit boxes must keep a fixed overlay width during hover')
-  assert(popupContent.includes("'popup-row-copy grid w-full min-w-0 gap-0.5'") && popupContent.includes("padding: '8px var(--popup-row-copy-rest-inset) 8px 13px'"), 'bookmark copy and the collapsed trigger inset must share row-action geometry')
+  assert(popupContent.includes("'popup-row-copy grid w-full min-w-0 gap-0.5'") && popupContent.includes("padding: '6px var(--popup-row-copy-rest-inset) 6px 13px'"), 'bookmark copy and the collapsed trigger inset must share row-action geometry')
   assert(popupCss.includes('--popup-row-copy-action-overlap: calc(') && /\.popup-main-row:hover:has\([^}]+-webkit-mask-image:\s*linear-gradient\(/s.test(popupCss), 'expanded row actions must fade long bookmark copy before the first quick action')
   assert(popupCss.includes('transform: translateX(var(--popup-row-actions-slide));') && popupCss.includes('transform: translateX(0);'), 'row actions must retain their right-to-left translation without permanent 3D layers on resting rails')
   assert(/#popup-app-shell\[data-keyboard-nav="true"\][^{]+\.popup-row-copy\s*\{[^}]*mask-image:\s*none;/s.test(popupCss), 'hidden keyboard action rails must not leave bookmark copy masked')
-  assert(popupContent.includes('useFixedRowWindow') && popupContent.includes('POPUP_BOOKMARK_ROW_HEIGHT = 80') && popupContent.includes('POPUP_FOLDER_ROW_HEIGHT = 34'), 'large popup trees must window fixed-height rows instead of mounting the full catalog')
+  assert(popupContent.includes('useFixedRowWindow') && popupRowPresentation.includes('POPUP_BOOKMARK_ROW_HEIGHT = 60') && popupContent.includes('POPUP_FOLDER_ROW_HEIGHT = 34'), 'large popup trees must window compact fixed-height rows instead of mounting the full catalog')
   assert(popupContent.includes('mountQuickActions={actionsMounted || row.active}') && popupContent.includes('const quickActions = mountQuickActions'), 'collapsed bookmark rows must defer hidden quick-action controls until interaction')
   assert((popupController.match(/schedulePinyinEnrichment\(/g) || []).length === 2, 'pinyin enrichment must run only from the on-demand query path, not during cold open')
-  assert(popupController.includes('batchSize: POPUP_PINYIN_BATCH_SIZE') && popupController.includes('runIdle(startEnrichment'), 'on-demand pinyin enrichment must remain idle-scheduled and cooperatively batched')
+  assert(popupController.includes('batchSize: POPUP_PINYIN_BATCH_SIZE') && popupController.includes('yieldSearchTask().then(startEnrichment)'), 'foreground pinyin must be cooperatively scheduled without one idle wait per tiny batch')
   assert(
-    popupSearchRunner.indexOf('ensurePinyinEnrichmentForQuery(query)') > 0 &&
-      popupSearchRunner.indexOf('ensurePinyinEnrichmentForQuery(query)') < popupSearchRunner.indexOf('state.searchCache.get(cacheKey)'),
+    popupSearchRunner.indexOf('ensurePinyinEnrichmentForQuery(parsed)') > 0 &&
+      popupSearchRunner.indexOf('ensurePinyinEnrichmentForQuery(parsed)') < popupSearchRunner.indexOf('state.searchCache.get(cacheKey)'),
     'every search rerun must restore invalidated pinyin enrichment before reading cached results'
   )
   assert(!/runId !== state\.pinyinEnrichmentRunId\) \{\s*state\.pinyinEnrichmentPending = false/.test(popupController), 'stale pinyin jobs must not clear the pending state owned by a newer run')
   assert(
-    /changes\[STORAGE_KEYS\.aiProviderSettings\][\s\S]*?state\.searchRunId \+= 1[\s\S]*?abortNaturalSearchRequest\(\)[\s\S]*?clearSearchCaches\(\)[\s\S]*?resetSmartClassification\(\)[\s\S]*?runSearch\(\)/.test(popupController),
+    /changes\[STORAGE_KEYS\.aiProviderSettings\][\s\S]*?state\.searchRunId \+= 1[\s\S]*?abortNaturalSearchRequest\(\)[\s\S]*?clearSearchCaches\(true\)[\s\S]*?resetSmartClassification\(\)[\s\S]*?runSearch\(\)/.test(popupController),
     'changing the AI provider or effort must invalidate and rerun popup search and smart-classification state'
   )
   assert(
@@ -92,7 +93,7 @@ function run(): void {
   )
   assert(
     popupNaturalSearchRunner.indexOf('const searchRunStillCurrent = state.searchRunId === runId') >
-      popupNaturalSearchRunner.indexOf('const resultSets = await Promise.all') &&
+      popupNaturalSearchRunner.indexOf('const results = await naturalSearch.searchNaturalBookmarksCooperatively') &&
       popupNaturalSearchRunner.indexOf('if (!searchRunStillCurrent)') <
         popupNaturalSearchRunner.indexOf('cacheSearchResults(cacheKey, results)'),
     'popup results from a superseded reasoning-settings request must not be cached or rendered'

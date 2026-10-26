@@ -10,9 +10,7 @@ export interface AvailabilityDecisionMetricsState {
   ignored: string
   newCount: string
   persistent: string
-  progress: string
   recovered: string
-  scope: string
 }
 
 export interface AvailabilityFilterButtonViewModel {

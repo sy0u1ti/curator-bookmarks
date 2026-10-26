@@ -35,7 +35,7 @@ const runNaturalSearch = getSection(
 const resolveNaturalSearch = getSection(
   controllerSource,
   'async function resolveNaturalSearchPlan(',
-  'async function searchNaturalQuery('
+  'function render()'
 )
 const buildPageContext = getSection(
   classifierSource,

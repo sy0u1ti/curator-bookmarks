@@ -6,6 +6,8 @@ import { chromium } from 'playwright'
 import { createSearchBenchmarkRecords } from './search-benchmark-fixture.mjs'
 
 const profile = await mkdtemp(path.join(tmpdir(), 'curator-search-interaction-'))
+const outputArgument = process.argv.find(argument => argument.startsWith('--output='))
+const outputPath = path.resolve(outputArgument?.slice(9) || 'output/search-benchmark/interaction.json')
 const records = createSearchBenchmarkRecords(10000)
 const report = { count: records.length, surfaces: [], coldActivation: [] }
 let context
@@ -139,8 +141,8 @@ try {
     report.coldActivation.push({ surface, kind: activation.kind, count: 9001, opened })
     await page.close()
   }
-  await mkdir('output/search-benchmark', { recursive: true })
-  await writeFile('output/search-benchmark/interaction.json', `${JSON.stringify(report, null, 2)}\n`)
+  await mkdir(path.dirname(outputPath), { recursive: true })
+  await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`)
   console.log(JSON.stringify(report.surfaces.map(({ surface, cold, warm }) => ({ surface, cold, warm })), null, 2))
   console.log('Cold first-batch Enter opens the final exact title or corroborated hostname in Popup and Side Panel.')
 } finally {

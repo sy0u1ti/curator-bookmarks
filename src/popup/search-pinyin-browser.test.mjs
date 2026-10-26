@@ -52,6 +52,17 @@ try {
     await chrome.bookmarks.create({ parentId: '1', title: 'York', url: 'https://names.invalid/york' })
     return target.id
   })
+  const syllableSeed = await worker.evaluate(async () => {
+    const folder = await chrome.bookmarks.create({ parentId: '1', title: '素材' })
+    const sdk = await chrome.bookmarks.create({ parentId: folder.id, title: 'AI SDK', url: 'https://ai-sdk.dev/' })
+    const falsePositive = await chrome.bookmarks.create({ parentId: folder.id, title: '素材下载', url: 'https://assets.invalid/' })
+    const love = await chrome.bookmarks.create({ parentId: '1', title: '爱好', url: 'https://hobby.invalid/' })
+    const titleFolder = await chrome.bookmarks.create({ parentId: '1', title: 'AI API' })
+    const quoted = await chrome.bookmarks.create({ parentId: titleFolder.id, title: 'AI 爱好笔记', url: 'https://notes.invalid/' })
+    const hobbyFolder = await chrome.bookmarks.create({ parentId: '1', title: '爱好' })
+    const multi = await chrome.bookmarks.create({ parentId: hobbyFolder.id, title: 'AI 示例', url: 'https://examples.invalid/' })
+    return { sdk: sdk.id, falsePositive: falsePositive.id, love: love.id, quoted: quoted.id, multi: multi.id }
+  })
   for (const surface of ['popup', 'sidepanel', 'newtab']) {
     const page = await context.newPage()
     await page.setViewportSize(surface === 'newtab' ? { width: 1280, height: 900 } : { width: 800, height: 640 })
@@ -70,14 +81,51 @@ try {
       const results = page.locator(resultSelector)
       if (popup) {
         assert.equal(await results.first().getAttribute('id'), `popup-search-result-${targetId}`)
-        assert.ok((await results.first().textContent()).includes(query === 'kw' ? '标题首字母' : '标题拼音'))
-        assert.ok((await results.nth(1).textContent()).includes(query === 'kw' ? '文件夹首字母' : '文件夹拼音'))
-        assert.ok(!(await results.nth(1).textContent()).includes('标题拼音'))
+        for (const row of [results.first(), results.nth(1)]) {
+          assert.doesNotMatch(await row.textContent(), /标题拼音|文件夹拼音|标题首字母|文件夹首字母/)
+          assert.ok(await row.locator('mark').count() > 0, `${surface}: ${query} highlights the matching text`)
+          assert.ok(Math.abs((await row.boundingBox()).height - 60) <= 1)
+        }
       }
       report.push({ surface, query, first: await results.first().textContent() })
       if (query === 'kawang') {
         await page.screenshot({ path: path.join(output, `${surface}-kawang.png`) })
       }
+    }
+    // Literal title/domain hits remain, while generated syllable tails must
+    // neither create results nor introduce highlights in incidental folders.
+    for (const query of ['ai', '"ai"', 'cai', 'ai hao']) {
+      await input.fill(query)
+      await page.waitForFunction(({ selector, query }) => {
+        const rows = [...document.querySelectorAll(selector)]
+        return query === 'ai hao'
+          ? rows.some(row => row.textContent.includes('AI 示例')) && !rows.some(row => row.textContent.includes('AI SDK'))
+          : query === 'cai'
+            ? rows.some(row => row.textContent.includes('素材下载'))
+            : query === 'ai'
+              ? rows.some(row => row.textContent.includes('AI SDK')) && rows.some(row => row.textContent.includes('hobby.invalid'))
+              : rows.some(row => row.textContent.includes('AI SDK')) && !rows.some(row => row.textContent.includes('hobby.invalid'))
+      }, { selector: resultSelector, query })
+      const results = page.locator(resultSelector)
+      if (query === 'ai hao') {
+        if (popup) assert.deepEqual(await page.locator(`#popup-search-result-${syllableSeed.multi} mark`).allTextContents(), ['AI', '好'], 'highlight each term only in its actual matching field')
+      } else if (query !== 'cai') {
+        assert.equal(await results.filter({ hasText: '素材下载' }).count(), 0, `${surface}: ${query} cannot match cai's tail`)
+        if (popup) {
+          const sdk = page.locator(`#popup-search-result-${syllableSeed.sdk}`)
+          assert.deepEqual((await sdk.locator('mark').allTextContents()).map(text => text.toLowerCase()), ['ai', 'ai'], 'highlight only the actual title and domain matches')
+          assert.ok((await sdk.innerText()).includes('素材'), 'the non-matching folder remains visible as metadata')
+          const quoted = page.locator(`#popup-search-result-${syllableSeed.quoted}`)
+          assert.ok(!(await quoted.locator('mark').allTextContents()).some(text => text.includes('爱')), 'a literal title hit does not invent pinyin highlights')
+          if (query === 'ai') {
+            assert.deepEqual(await page.locator(`#popup-search-result-${syllableSeed.love} mark`).allTextContents(), ['爱'])
+          }
+        }
+      } else if (popup) {
+        assert.ok((await results.filter({ hasText: '素材下载' }).locator('mark').allTextContents()).includes('材'), 'cai highlights its actual syllable')
+      }
+      report.push({ surface, query, titles: await results.allTextContents() })
+      if (surface === 'popup' && query === 'ai') await page.screenshot({ path: path.join(output, 'popup-ai-syllable-boundary.png') })
     }
     for (const [query, title, label] of [
       ['kw 订阅', targetTitle, '标题首字母'],
@@ -91,7 +139,11 @@ try {
       await page.waitForFunction(({ selector, title }) => document.querySelector(selector)?.textContent.includes(title),
         { selector: resultSelector, title })
       const first = page.locator(resultSelector).first()
-      if (popup) assert.ok((await first.textContent()).includes(label), `${surface}: ${query} explains its match`)
+      if (popup) {
+        assert.match(await first.getAttribute('aria-description'), new RegExp(label), `${surface}: retain detailed match evidence`)
+        assert.ok(!(await first.textContent()).includes(label), `${surface}: ${query} must not repeat a visible title match`)
+        assert.ok(await first.locator('mark').count() > 0, `${surface}: ${query} highlights the recovered title`)
+      }
       report.push({ surface, query, first: await first.textContent() })
       if (surface === 'popup' && query === '卡网比价') {
         await page.screenshot({ path: path.join(output, 'popup-title-fragments.png') })
@@ -104,8 +156,10 @@ try {
       const first = page.locator(resultSelector).first()
       if (popup) {
         assert.equal(await first.getAttribute('id'), `popup-search-result-${anyTargetId}`, `${surface}: ${query} prefers the actual site`)
-        assert.ok((await first.textContent()).includes('标题命中'), `${surface}: show title evidence`)
-        assert.ok((await first.textContent()).includes('域名命中'), `${surface}: show hostname evidence`)
+        assert.match(await first.getAttribute('aria-description'), /命中：标题/, `${surface}: retain title evidence without a duplicate badge`)
+        assert.match(await first.getAttribute('aria-description'), /命中：站点/, `${surface}: retain hostname evidence without a duplicate badge`)
+        assert.ok(!(await first.textContent()).includes('标题命中'), `${surface}: highlighted title needs no extra badge`)
+        assert.ok(!(await first.textContent()).includes('域名命中'), `${surface}: highlighted hostname needs no extra badge`)
         if (query.includes('"')) {
           await first.locator('mark').filter({ hasText: /^any$/i }).first().waitFor()
         }
@@ -141,11 +195,11 @@ try {
       await worker.evaluate(id => chrome.bookmarks.update(id, { title: '星河比价 | PriceAI' }), targetId)
       await input.fill('xinghebijia')
       await page.waitForFunction(() => document.querySelector('#popup-search-results [role="row"]')?.textContent.includes('星河比价'))
-      assert.ok((await page.locator(resultSelector).first().textContent()).includes('标题拼音'))
+      assert.ok((await page.locator(resultSelector).first().locator('mark').allTextContents()).join('').includes('星河比价'))
       await input.fill('kawang')
       await page.waitForFunction(({ id }) => {
         const row = document.getElementById(`popup-search-result-${id}`)
-        return !row || !row.textContent.includes('标题拼音')
+        return !row || !row.getAttribute('aria-description')?.includes('标题拼音')
       }, { id: targetId })
       await worker.evaluate(({ id, title }) => chrome.bookmarks.update(id, { title }), { id: targetId, title: targetTitle })
     }

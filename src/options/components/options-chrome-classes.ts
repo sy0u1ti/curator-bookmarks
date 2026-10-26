@@ -22,7 +22,7 @@ export const optionsBrandCopyClass =
   'min-w-0 flex flex-col gap-[5px] [font-family:var(--font-sans)]'
 
 export const optionsSidebarLabelClass =
-  'm-0 px-2.5 [font-family:var(--font-sans)] text-xs font-semibold uppercase leading-4 tracking-[0.08em] text-ds-text-muted max-[920px]:px-0 max-[920px]:[overflow-wrap:anywhere]'
+  'm-0 px-2.5 [font-family:var(--font-sans)] text-xs font-semibold leading-4 tracking-normal text-ds-text-muted max-[920px]:px-0 max-[920px]:[overflow-wrap:anywhere]'
 
 export const navGroupClass = 'relative z-[1] grid min-w-0 gap-2'
 

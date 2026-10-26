@@ -42,7 +42,7 @@ const defaultAiProviderSettingsState: AiProviderSettingsState = {
   reasoningEffortSupported: false,
   revealApiKey: false,
   saveDisabled: true,
-  saveStatusText: '待配置',
+  saveStatusText: '',
   showSaveSettingsButton: true,
   testButtonSecondary: true,
   testDisabled: true,

@@ -10,6 +10,16 @@ import {
   dispatchNewtabIconPreviewView
 } from './newtab-icon-preview-store.js'
 
+const PREVIEW_BOOKMARKS = [
+  { title: 'React · useTransition 与并发更新', mark: 'R', ink: '#161618' },
+  { title: 'React · useDeferredValue 与搜索性能', mark: 'R', ink: '#f5f5f7' },
+  { title: 'MDN Web Docs — CSS container queries', mark: 'M', ink: '#161618' },
+  { title: '设计系统：颜色、对比度与可访问性', mark: '设', ink: '#80bca8' }
+].map(item => ({
+  ...item,
+  iconSource: `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><text x="16" y="25" text-anchor="middle" font-family="sans-serif" font-size="26" font-weight="700" fill="${item.ink}">${item.mark}</text></svg>`)}`
+}))
+
 export function getIconPreviewSignature(settings: IconSettings): string {
   return [
     settings.pageWidth,
@@ -27,38 +37,24 @@ export function getIconPreviewSignature(settings: IconSettings): string {
 }
 
 export function dispatchIconPreviewViewForSettings(settings: IconSettings): void {
-  const previewColumnGap = Math.round(getIconGapPx(settings.columnGap) * 0.34)
-  const previewRowGap = Math.round(getIconRowGapPx(settings.rowGap) * 0.34)
+  const previewColumnGap = getIconGapPx(settings.columnGap)
+  const previewRowGap = getIconRowGapPx(settings.rowGap)
   const effectiveTileWidth = getEffectiveIconTileWidthPx(settings)
-  const previewTileWidth = Math.max(48, Math.round(effectiveTileWidth * 0.42))
-  const previewShellSize = Math.max(18, Math.round(settings.iconShellSize * 0.62))
+  const previewTileWidth = effectiveTileWidth
   const previewColumns = settings.layoutMode === 'fixed'
     ? settings.columns
-    : Math.max(2, Math.min(4, Math.round(settings.pageWidth / 24)))
-  const previewGridMaxWidth = previewColumns * previewTileWidth + (previewColumns - 1) * previewColumnGap
-  const sampleCount = previewColumns * 2
-  const summary = [
-    settings.layoutMode === 'fixed' ? `${settings.columns} 列固定` : '自动适配',
-    `${effectiveTileWidth}px 卡片`,
-    `${settings.iconShellSize}px 图标区`,
-    settings.showTitles ? `${settings.titleLines} 行标题` : '图标模式'
-  ].join(' · ')
+    : settings.showTitles ? 2 : 4
 
-  const names = ['阅读', '工作台', '邮箱', '文档', '设计', '数据', '日程', '收藏']
   dispatchNewtabIconPreviewView(createNewtabIconPreviewView(
     settings,
     {
       columns: previewColumns,
       previewColumnGap,
-      previewGridMaxWidth,
       previewRowGap,
-      previewShellSize,
       previewTileWidth,
-      summary,
-      tiles: Array.from({ length: sampleCount }, (_, index) => ({
+      tiles: PREVIEW_BOOKMARKS.map((item, index) => ({
         id: String(index),
-        mark: names[index % names.length].slice(0, 1),
-        title: names[index % names.length]
+        ...item
       }))
     },
     {

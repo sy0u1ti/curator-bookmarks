@@ -15,7 +15,7 @@ import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
 
 const OPTIONS_PROGRESS_TRACK_CLASS = `mt-[14px] ${SHEEN_PROGRESS_TRACK_CLASS}`
 const AI_ANALYSIS_DECISION_PANEL_CLASS =
-  'mt-[18px] border-ds-border-subtle bg-ds-surface-1'
+  'mt-[18px] p-5 max-[760px]:p-4'
 const AI_ANALYSIS_PROGRESS_COPY_CLASS =
   'mt-0 mb-0 text-[13px] leading-[1.55] text-ds-text-muted'
 const AI_ANALYSIS_BUSY_LABEL_CLASS =
@@ -51,7 +51,6 @@ export function AiAnalysisProgressPanel({ children }: { children: ReactNode }) {
     <AiTaskStatus
       status="idle"
       className={AI_ANALYSIS_DECISION_PANEL_CLASS}
-      label="执行进度"
       title={title}
       description={description}
       progress={state.progressValue}

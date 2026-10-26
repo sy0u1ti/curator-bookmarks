@@ -13,7 +13,7 @@ export {
   state, setSearchQuery, handleDocumentKeydown, applyPopupIndexedBookmarkData,
   warmPopupSnapshotFullTextIndex, cleanupPopupController,
   getSearchCacheKey, getNaturalSearchDateBucket,
-  getSearchResultRows,
+  getSearchResultRows, isPopupSearchPending, runSearch, render,
   buildBookmarkCatalogSnapshot, buildLightPopupSearchIndexFromCatalog,
   searchBookmarks, searchBookmarksCooperatively, searchBookmarksFirstBatch,
   setPopupKeyboardHelpOpen, isPopupKeyboardHelpOpen
@@ -102,6 +102,7 @@ function installBookmarks(bookmarks, snapshotState = null) {
   state.selectedFolderFilterId = null
   state.keyboardPane = 'bookmarks'
   state.loadError = ''
+  state.searchMetadataPending = false
   timers.clear()
   frames.clear()
   openedUrls.length = 0
@@ -121,14 +122,18 @@ function pressEnter(isComposing = false, modifiers = {}) {
 }
 
 async function finishCooperativeSearch() {
-  for (let step = 0; step < 100 && state.searchPending; step += 1) {
+  for (let step = 0; step < 300 && controller.isPopupSearchPending(); step += 1) {
+    for (const [id, callback] of [...timers]) {
+      timers.delete(id)
+      callback()
+    }
     for (const [id, callback] of [...frames]) {
       frames.delete(id)
       callback(step)
     }
     await Promise.resolve()
   }
-  assert.equal(state.searchPending, false, 'cooperative search should complete in the controlled scheduler')
+  assert.equal(controller.isPopupSearchPending(), false, 'all search dependencies should complete in the controlled scheduler')
 }
 
 function deferred() {
@@ -174,8 +179,11 @@ try {
   controller.setSearchQuery('site:anyrouter.top "any" -unwanted', { immediate: true })
   const corroboratedRows = controller.getSearchResultRows()
   assert.equal(corroboratedRows[0].bookmarkId, 'any-home')
-  assert.ok(corroboratedRows[0].reasonTokens.includes('标题命中'), 'show title evidence once')
-  assert.ok(corroboratedRows[0].reasonTokens.includes('域名命中'), 'show hostname evidence alongside title evidence')
+  assert.deepEqual(corroboratedRows[0].reasonTokens, [], 'visible title and domain matches need no duplicate explanation')
+  assert.match(corroboratedRows[0].reasonTitle, /命中：标题/)
+  assert.match(corroboratedRows[0].reasonTitle, /命中：站点/)
+  assert.deepEqual(corroboratedRows[0].presentation.titleTerms, ['any'])
+  assert.deepEqual(corroboratedRows[0].presentation.domainTerms, ['any'])
   assert.equal(corroboratedRows[0].highlightQuery, 'any', 'quotes, operators and exclusions are not highlight terms')
   pressEnter()
   assert.deepEqual(openedUrls, ['https://anyrouter.top/'])
@@ -396,7 +404,66 @@ try {
     restoreCurrentReads()
   }
 
-  console.log('Popup search, Enter, IME, and full-text lifecycle regressions passed.')
+  // A completed light scan is still provisional while pinyin is being prepared.
+  installBookmarks([
+    bookmark('cold-weak-url', 'Unrelated', 'https://neutral.invalid/kaw'),
+    bookmark('cold-card-target', '卡网订阅', 'https://cards.invalid/')
+  ])
+  controller.setSearchQuery('kaw')
+  pressEnter()
+  assert.deepEqual(openedUrls, [], 'Enter waits for requested pinyin, even after the light scan finishes')
+  await finishCooperativeSearch()
+  assert.deepEqual(openedUrls, ['https://cards.invalid/'])
+
+  installBookmarks([bookmark('empty-cold-card', '卡网订阅', 'https://cards.invalid/empty')])
+  controller.setSearchQuery('kw订阅')
+  pressEnter()
+  await finishCooperativeSearch()
+  assert.deepEqual(openedUrls, ['https://cards.invalid/empty'], 'Enter on an empty provisional set is retained through pinyin preparation')
+
+  installBookmarks([bookmark('cancel-cold-card', '卡网订阅', 'https://cards.invalid/cancel')])
+  controller.setSearchQuery('ｋａｗ')
+  pressEnter()
+  controller.handleDocumentKeydown({ key: 'Escape', target: null, defaultPrevented: false, preventDefault() {} })
+  for (let n = 0; n < 30; n++) {
+    for (const [id, callback] of [...timers]) { timers.delete(id); callback() }
+    await Promise.resolve()
+  }
+  assert.deepEqual(openedUrls, [], 'Escape cancels a pending pinyin activation')
+
+  installBookmarks([bookmark('metadata-page', 'React')])
+  state.searchMetadataPending = true
+  controller.setSearchQuery('react')
+  pressEnter()
+  assert.deepEqual(openedUrls, [], 'the initial metadata projection also belongs to search readiness')
+  state.searchMetadataPending = false
+  controller.runSearch()
+  controller.render()
+  assert.deepEqual(openedUrls, ['https://example.test/metadata-page'])
+
+  const excludedSnapshot = snapshotFor('body-excluded')
+  installBookmarks([
+    bookmark('body-excluded', 'React', 'https://blocked.invalid/'),
+    bookmark('body-allowed', 'React guide', 'https://allowed.invalid/')
+  ], excludedSnapshot)
+  const bodyRead = deferred()
+  const bodyStarted = deferred()
+  const restoreBodyRead = controller.setContentFullTextOperationsForTest({ getMany: () => { bodyStarted.resolve(); return bodyRead.promise } })
+  try {
+    controller.setSearchQuery('react -advertisement')
+    pressEnter()
+    for (let n = 0; n < 10; n++) {
+      for (const [id, callback] of [...timers]) { timers.delete(id); callback() }
+      await Promise.resolve()
+    }
+    await bodyStarted.promise
+    assert.deepEqual(openedUrls, [], 'negative conditions must wait for their body field')
+    bodyRead.resolve(new Map([['text-body-excluded', 'advertisement']]))
+    await finishCooperativeSearch()
+    assert.deepEqual(openedUrls, ['https://allowed.invalid/'])
+  } finally { restoreBodyRead() }
+
+  console.log('Popup search, Enter, IME, pinyin readiness and full-text lifecycle regressions passed.')
 } finally {
   controller.cleanupPopupController()
   for (const [name, descriptor] of originalGlobals) {

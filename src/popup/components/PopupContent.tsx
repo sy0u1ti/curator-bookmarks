@@ -17,14 +17,19 @@ import { Input } from '../../ui/base/Input'
 import { Icon, type IconName } from '../../ui/icons/Icon'
 import { cx } from '../../ui/base/utils'
 import { getMotionDurationMs, prefersReducedMotion } from '../../shared/motion'
-import { getHighlightTerms, HighlightedText } from '../../ui/base/HighlightedText'
-import { normalizeQuery } from '../search'
+import { HighlightedText } from '../../ui/base/HighlightedText'
 import { PopupEmptyState } from './PopupEmptyState'
 import { getActiveResultRevealScrollTop } from '../popup-active-result-scroll'
 import { getPopupBookmarkReorderTargetIndex } from '../popup-bookmark-reorder'
+import {
+  getPopupBookmarkDomain,
+  getPopupFolderLabel,
+  POPUP_BOOKMARK_ROW_HEIGHT
+} from '../popup-row-presentation'
 import { POPUP_FOLDER_FILTER_INPUT_ID } from '../popup-folder-filter'
 import { isPopupContentNavigationKey } from '../popup-keyboard-navigation'
 import { getPopupSearchGridAria, getPopupSearchResultId } from '../popup-workspace-state'
+import { usePopupChromeView } from '../popup-controller-store'
 import { isSidePanelSurface } from '../../shared/extension-surfaces'
 import { SidePanelBookmarkActions } from '../../sidepanel/SidePanelBookmarkActions'
 import {
@@ -98,7 +103,7 @@ const workspaceContentLayerClass = cx(
 )
 const workspaceContentLoadingClass = 'pointer-events-none'
 const workspaceClass =
-  'popup-workspace relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2.5 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
+  'popup-workspace relative grid h-full min-h-0 grid-cols-[221px_minmax(0,1fr)] gap-2 max-[620px]:grid-cols-[minmax(0,1fr)] max-[620px]:grid-rows-[minmax(108px,36%)_minmax(0,1fr)]'
 const workspacePlaceholderClass = 'pointer-events-none'
 const paneClass =
   'flex min-h-0 min-w-0 flex-col overflow-hidden rounded-ds-md border-0 bg-ds-surface-1'
@@ -107,6 +112,7 @@ const paneHeaderClass =
   'flex min-h-[42px] flex-none items-center justify-between gap-2.5 border-b border-ds-border px-[13px] text-xs font-semibold text-ds-text-primary'
 const paneHeaderTitleClass = 'min-w-0 truncate'
 const paneTitleMetaClass = 'font-medium text-ds-text-muted'
+const paneCaptionClass = 'ml-auto min-w-0 truncate text-right font-medium text-ds-text-secondary'
 const paneHeaderActionClass = [
   'inline-flex h-7 flex-none items-center gap-1.5 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary outline-none',
   'transition-[border-color,background-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard',
@@ -140,9 +146,8 @@ const folderFilterClearClass = [
 const folderFilterEmptyClass =
   'grid place-items-center rounded-ds-sm px-3 py-6 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainRowClass =
-  'popup-main-row relative z-[1] grid min-h-[74px] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1.5 first:border-t-0'
+  'popup-main-row relative z-[1] grid min-h-[var(--popup-bookmark-row-height)] grid-cols-[minmax(0,1fr)] items-center border-t border-[rgba(38,40,46,0.72)] py-1 first:border-t-0'
 const virtualSpacerClass = 'pointer-events-none block w-full'
-const POPUP_BOOKMARK_ROW_HEIGHT = 80
 const POPUP_FOLDER_ROW_HEIGHT = 34
 const POPUP_VIRTUAL_OVERSCAN = 8
 const POPUP_VIRTUALIZATION_THRESHOLD = 24
@@ -150,24 +155,23 @@ const activeResultIndicatorClass = 'popup-active-result-indicator'
 const folderCardDimmedClass = 'opacity-55 hover:opacity-100 focus-visible:opacity-100'
 const rootFolderBranchClass = 'rounded-full border border-white/30'
 const listButtonClass = [
-  'popup-list-button flex min-h-[58px] w-full min-w-0 items-start gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
+  'popup-list-button flex min-h-12 w-full min-w-0 items-center gap-2.5 rounded-md border border-transparent bg-transparent text-left text-ds-text-primary outline-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.32)] focus-visible:outline-offset-1 active:scale-[0.993]'
 ].join(' ')
 const listButtonBaseStyle: CSSProperties = {
-  padding: '8px var(--popup-row-copy-rest-inset) 8px 13px'
+  padding: '6px var(--popup-row-copy-rest-inset) 6px 13px'
 }
 const rowMainClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
 const rowTitleClass =
   'min-w-0 truncate text-left text-[13px] font-semibold leading-tight text-ds-text-primary'
 const rowSubtitleClass =
   'min-w-0 truncate text-left text-xs font-medium leading-tight text-ds-text-muted'
-const rowPathClass = cx(rowSubtitleClass, 'text-ds-text-muted')
+const rowMetadataClass = 'flex min-w-0 items-center gap-1.5 text-xs font-medium leading-tight text-ds-text-muted'
+const rowDomainClass = 'min-w-0 truncate'
+const rowFolderClass = 'min-w-0 max-w-[50%] truncate'
 const resultCopyClass = 'popup-row-copy grid w-full min-w-0 gap-0.5'
-const resultPathShellClass = 'block min-w-0'
-const resultMatchReasonsClass = 'mt-0.5 flex flex-wrap gap-1'
-const resultMatchTokenClass =
-  'inline-flex min-h-[18px] items-center rounded-[5px] border border-ds-border bg-ds-surface-2 px-1.5 text-xs font-semibold text-ds-text-secondary'
+const resultMatchReasonsClass = 'min-w-0 truncate text-xs font-medium leading-[14px] text-ds-text-secondary'
 const rowActionsClass = 'popup-row-actions'
 const rowActionRailClass = 'popup-row-actions-menu'
 const rowActionButtonClass = [
@@ -189,24 +193,22 @@ const compactStateClass =
   'grid min-h-[90px] place-items-center px-4 py-3 text-center text-xs leading-[1.55] text-ds-text-muted'
 const mainStateClass = cx(compactStateClass, 'min-h-full p-[18px]')
 const skeletonBarBaseClass =
-  'popup-skeleton-pulse rounded-full bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
+  'popup-skeleton-pulse rounded-full bg-[rgba(255,255,255,0.065)]'
 const skeletonBarClass = cx(
   skeletonBarBaseClass,
   'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)]'
 )
 const skeletonTextBarClass = cx(skeletonBarBaseClass, 'block max-w-full')
 const skeletonDotClass =
-  'popup-skeleton-pulse block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
+  'popup-skeleton-pulse block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)]'
 const skeletonFolderTitleClass = cx(skeletonBarClass, 'min-w-[54px]')
 const skeletonFolderCountClass =
   cx(skeletonBarClass, 'max-w-[30px] min-w-4 justify-self-end')
 const skeletonHeaderMetaClass = cx(skeletonBarBaseClass, 'inline-block h-[7px] w-[68px] align-[1px]')
 const skeletonBookmarkTitleClass = cx(skeletonTextBarClass, 'h-2')
 const skeletonBookmarkUrlClass = cx(skeletonTextBarClass, 'h-[6px] opacity-75')
-const skeletonBookmarkPathClass = cx(skeletonTextBarClass, 'h-[6px] opacity-60')
 const skeletonBookmarkTitleLineClass = cx(rowTitleClass, 'flex h-4 items-center')
 const skeletonBookmarkSubtitleLineClass = cx(rowSubtitleClass, 'flex h-[15px] items-center')
-const skeletonBookmarkPathLineClass = cx(rowPathClass, 'flex h-[15px] items-center')
 const skeletonActionButtonClass = skeletonDotClass
 const searchSkeletonClass = 'grid w-[min(100%,390px)] gap-3 self-stretch'
 const searchSkeletonRowClass = 'grid gap-2 rounded-md bg-ds-text-primary/[0.018] px-[9px] py-2'
@@ -542,7 +544,7 @@ function usePopupBookmarkReorderDrag({
       bookmarkId: row.bookmarkId,
       clientX: event.clientX,
       clientY: event.clientY,
-      displayUrl: row.displayUrl,
+      displayUrl: getPopupBookmarkDomain(row.url, row.displayUrl),
       handle: event.currentTarget,
       height: rect.height || POPUP_BOOKMARK_ROW_HEIGHT,
       offsetX: event.clientX - rect.left,
@@ -613,7 +615,6 @@ function usePopupBookmarkReorderDrag({
           <span className={rowMainClass}>
             <span className={rowTitleClass}>{view.title}</span>
             <span className={rowSubtitleClass}>{view.displayUrl}</span>
-            {view.path ? <span className={rowPathClass}>{view.path}</span> : null}
           </span>
           <Icon name="GripVertical" size={16} aria-hidden="true" />
         </div>,
@@ -763,6 +764,17 @@ function PopupFolderFilterField({
   )
 }
 
+// Transient notices and in-flight search state share the pane header with the
+// title instead of reserving a separate row that is empty most of the time.
+function PaneCaption() {
+  const { viewCaption } = usePopupChromeView()
+  return (
+    <span id="view-caption" className={paneCaptionClass} role="status" aria-live="polite" title={viewCaption || undefined}>
+      {viewCaption}
+    </span>
+  )
+}
+
 export function PopupContent({
   activeResultIndicatorRef,
   activeResultRef,
@@ -828,6 +840,7 @@ export function PopupContent({
     <div
       className={cx(workspaceShellClass, isLoading ? '' : 'is-revealed')}
       data-state={isLoading ? 'loading' : 'ready'}
+      style={{ '--popup-bookmark-row-height': `${POPUP_BOOKMARK_ROW_HEIGHT}px` } as CSSProperties}
       ref={scrollLayerRef}
       aria-busy={isLoading ? 'true' : 'false'}
       data-squircle-subtree="off"
@@ -886,6 +899,7 @@ export function PopupContent({
               <span className={paneHeaderTitleClass} title={`${title} · ${meta}`}>
                 {title} <span className={paneTitleMetaClass}>· <span className="t-number-value">{meta}</span></span>
               </span>
+              <PaneCaption />
               {mode === 'tree' && state.reorder ? (
                 <Button
                   className={paneHeaderActionClass}
@@ -931,6 +945,7 @@ export function PopupContent({
                           activeResultRef={activeResultRef}
                           handlers={handlers}
                           reorder={reorderActive ? reorderDrag.getRowProps(row) : undefined}
+                          scopeFolderId={state.reorder?.folderId}
                           row={row}
                           key={`bookmark:${row.bookmarkId}`}
                         />
@@ -1168,6 +1183,7 @@ function PopupContentSkeleton({
             <li
               className={mainRowClass}
               key={`bookmark-skeleton:${row.title}:${row.url}:${row.path}`}
+              style={{ height: POPUP_BOOKMARK_ROW_HEIGHT }}
             >
               <div className={cx(listButtonClass, 'cursor-default')} style={getBookmarkButtonStyle()}>
                 <span className={rowMainClass}>
@@ -1176,9 +1192,6 @@ function PopupContentSkeleton({
                   </span>
                   <span className={skeletonBookmarkSubtitleLineClass}>
                     <span className={skeletonBookmarkUrlClass} style={{ width: row.url }}></span>
-                  </span>
-                  <span className={skeletonBookmarkPathLineClass}>
-                    <span className={skeletonBookmarkPathClass} style={{ width: row.path }}></span>
                   </span>
                 </span>
               </div>
@@ -1305,11 +1318,13 @@ function PopupBookmarkRow({
   activeResultRef,
   handlers,
   reorder,
+  scopeFolderId,
   row
 }: {
   activeResultRef?: RefObject<HTMLLIElement | null>
   handlers?: PopupContentActionHandlers
   reorder?: PopupBookmarkReorderRowProps
+  scopeFolderId?: string
   row: PopupContentBookmarkRowViewModel
 }) {
   const style = {
@@ -1350,9 +1365,13 @@ function PopupBookmarkRow({
         unstyled
       >
         <span className={rowMainClass}>
-          <span className={rowTitleClass}>{row.title}</span>
-          <span className={rowSubtitleClass} title={row.url}>{row.displayUrl}</span>
-          {row.path ? <span className={rowPathClass} title={row.path}>{row.path}</span> : null}
+          <span className={rowTitleClass} title={row.title}>{row.title}</span>
+          <PopupRowMetadata
+            domain={getPopupBookmarkDomain(row.url, row.displayUrl)}
+            folder={row.parentId === scopeFolderId ? '' : getPopupFolderLabel(row.path)}
+            path={row.path}
+            url={row.url}
+          />
         </span>
       </Button>
       {reorder ? (
@@ -1399,15 +1418,19 @@ function PopupSearchResultRow({
   row: PopupContentSearchResultViewModel
 }) {
   const [actionsMounted, setActionsMounted] = useState(false)
+  const { presentation } = row
+  const reasons = presentation.reasonTokens
 
   return (
     <li
       className={mainRowClass}
+      style={{ height: presentation.rowHeight }}
       id={getPopupSearchResultId(row.bookmarkId)}
       role="row"
       aria-rowindex={row.index + 1}
       aria-selected={row.active}
       aria-label={`${row.title}，${row.displayUrl}，${row.path || ''}`}
+      aria-description={row.reasonTitle || undefined}
       data-active={row.active ? 'true' : undefined}
       onFocusCapture={() => setActionsMounted(true)}
       onPointerEnter={() => setActionsMounted(true)}
@@ -1418,7 +1441,7 @@ function PopupSearchResultRow({
         className={listButtonClass}
         type="button"
         data-active={row.active ? 'true' : undefined}
-        style={getBookmarkButtonStyle()}
+        style={{ ...getBookmarkButtonStyle(), ...(reasons.length ? { paddingBlock: 4 } : {}) }}
         onFocus={() => handlers?.onRowFocus?.(row.index)}
         onKeyDown={(event) => {
           if (activateModifiedBookmark(event, row.bookmarkId, handlers)) return
@@ -1429,20 +1452,18 @@ function PopupSearchResultRow({
         unstyled
       >
         <span className={resultCopyClass}>
-          <span className={rowTitleClass}>
-            <HighlightedText terms={getHighlightTerms(normalizeQuery(row.highlightQuery))} text={row.title} />
+          <span className={rowTitleClass} title={row.title}>
+            <HighlightedText terms={presentation.titleTerms} text={row.title} />
           </span>
-          <span className={rowSubtitleClass} title={row.url}>
-            <HighlightedText terms={getHighlightTerms(normalizeQuery(row.highlightQuery))} text={row.displayUrl} />
-          </span>
-          <span className={resultPathShellClass}>
-            <span className={rowPathClass} title={row.path}>{row.path}</span>
-          </span>
-          {row.reasonTokens.length ? (
+          <PopupRowMetadata
+            domain={<HighlightedText terms={presentation.domainTerms} text={presentation.domain} />}
+            folder={presentation.folder ? <HighlightedText terms={presentation.folderTerms} text={presentation.folder} /> : null}
+            path={row.path}
+            url={row.url}
+          />
+          {reasons.length ? (
             <span className={resultMatchReasonsClass} title={row.reasonTitle} aria-label={row.reasonLabel}>
-              {row.reasonTokens.map((token) => (
-                <span className={resultMatchTokenClass} key={token}>{token}</span>
-              ))}
+              {reasons.join(' · ')}
             </span>
           ) : null}
         </span>
@@ -1463,6 +1484,30 @@ function PopupSearchResultRow({
   )
 }
 
+function PopupRowMetadata({
+  domain,
+  folder,
+  path,
+  url
+}: {
+  domain: ReactNode
+  folder: ReactNode
+  path?: string
+  url: string
+}) {
+  return (
+    <span className={rowMetadataClass} title={[url, path].filter(Boolean).join('\n')}>
+      <span className={rowDomainClass} title={url}>{domain}</span>
+      {folder ? (
+        <>
+          <span className="shrink-0" aria-hidden="true">·</span>
+          <span className={rowFolderClass} title={path}>{folder}</span>
+        </>
+      ) : null}
+    </span>
+  )
+}
+
 const MemoPopupContentSkeleton = memo(PopupContentSkeleton)
 const MemoPopupFolderRow = memo(PopupFolderRow)
 const MemoPopupBookmarkRow = memo(PopupBookmarkRow, arePopupBookmarkRowPropsEqual)
@@ -1473,18 +1518,21 @@ function arePopupBookmarkRowPropsEqual(
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
     reorder?: PopupBookmarkReorderRowProps
+    scopeFolderId?: string
     row: PopupContentBookmarkRowViewModel
   },
   next: {
     activeResultRef?: RefObject<HTMLLIElement | null>
     handlers?: PopupContentActionHandlers
     reorder?: PopupBookmarkReorderRowProps
+    scopeFolderId?: string
     row: PopupContentBookmarkRowViewModel
   }
 ) {
   return previous.activeResultRef === next.activeResultRef &&
     previous.handlers === next.handlers &&
     previous.reorder === next.reorder &&
+    previous.scopeFolderId === next.scopeFolderId &&
     areBookmarkRowsEqual(previous.row, next.row)
 }
 
@@ -1538,6 +1586,7 @@ function areSearchResultRowsEqual(
     previous.path === next.path &&
     previous.reasonLabel === next.reasonLabel &&
     previous.reasonTitle === next.reasonTitle &&
+    previous.presentation === next.presentation &&
     previous.title === next.title &&
     previous.url === next.url &&
     areStringArraysEqual(previous.reasonTokens, next.reasonTokens) &&

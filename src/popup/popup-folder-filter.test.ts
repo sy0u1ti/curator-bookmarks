@@ -4,6 +4,7 @@ import {
   folderFilterUsesPinyin,
   normalizeFolderFilterQuery
 } from './popup-folder-filter.js'
+import { buildPinyinTokensSync } from '../shared/search/pinyin.js'
 
 interface TestNode {
   children?: TestNode[]
@@ -34,7 +35,7 @@ function testPinyinDetection(): void {
   assert(folderFilterUsesPinyin('shichang'), 'ASCII syllables should be treated as pinyin')
   assert(!folderFilterUsesPinyin('市场'), 'Chinese queries must not wait for the pinyin module')
   assert(!folderFilterUsesPinyin('a'), 'a single letter is too short to be pinyin')
-  assert(!folderFilterUsesPinyin('ai api'), 'queries with spaces must not be treated as pinyin')
+  assert(folderFilterUsesPinyin('ai api'), 'space-separated query terms can require pinyin')
 }
 
 function testTitleAndPathMatching(): void {
@@ -57,6 +58,11 @@ function testPinyinMatching(): void {
   assert(folderFilterMatchesTarget(target, 'shichang', tokens), 'full syllables must match')
   assert(folderFilterMatchesTarget(target, 'shic', tokens), 'full syllables must allow prefixes')
   assert(!folderFilterMatchesTarget(target, 'cs', tokens), 'initials must match from the start only')
+  const material = { normalizedPath: '书签栏 > 素材', normalizedTitle: '素材' }
+  const materialTokens = buildPinyinTokensSync(['素材'])
+  assert(!folderFilterMatchesTarget(material, 'ai', materialTokens), 'folder filtering must not match ai inside cai')
+  assert(folderFilterMatchesTarget(material, 'cai', materialTokens), 'folder filtering can begin at a later syllable')
+  assert(folderFilterMatchesTarget(material, 'suc', materialTokens), 'an unfinished final syllable remains searchable')
 }
 
 function testVisibilityKeepsAncestors(): void {

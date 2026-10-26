@@ -4,7 +4,7 @@ export const OPTIONS_MODAL_BACKDROP_CLASS =
   `options-modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-[14px] ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 const OPTIONS_MODAL_PANEL_BASE_CLASS =
-  `options-modal-panel pointer-events-auto relative z-10 w-full max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border-subtle p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
+  `options-modal-panel pointer-events-auto relative z-10 w-full max-h-[calc(100vh-40px)] min-w-0 overflow-auto rounded-ds-lg border border-ds-border p-[24px_24px_22px] text-ds-text-primary shadow-none outline-none max-[640px]:p-5 ${OPTIONS_REDUCED_MOTION_SURFACE_CLASS}`
 
 export const OPTIONS_MODAL_PANEL_CLASS =
   `${OPTIONS_MODAL_PANEL_BASE_CLASS} max-w-[420px] bg-ds-app`
@@ -12,16 +12,8 @@ export const OPTIONS_MODAL_PANEL_CLASS =
 export const OPTIONS_MODAL_WIDE_PANEL_CLASS =
   `${OPTIONS_MODAL_PANEL_BASE_CLASS} options-modal-wide-panel max-w-[620px] bg-ds-surface-2`
 
-export const OPTIONS_MODAL_EYEBROW_CLASS =
-  'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
-
-export const OPTIONS_MODAL_EYEBROW_TONE_CLASS: Record<string, string> = {
-  danger: 'text-ds-danger-text',
-  warning: 'text-ds-warning'
-}
-
 export const OPTIONS_MODAL_TITLE_CLASS =
-  'm-0 mt-2 text-[26px] font-[650] leading-[1.1] tracking-[-0.025em] text-ds-text-primary [overflow-wrap:anywhere] max-[640px]:text-[23px]'
+  'm-0 text-[26px] font-[650] leading-[1.1] tracking-[-0.025em] text-ds-text-primary [overflow-wrap:anywhere] max-[640px]:text-[23px]'
 
 export const OPTIONS_MODAL_COPY_CLASS =
   'm-0 mt-3.5 text-sm leading-[1.75] text-ds-text-secondary [overflow-wrap:anywhere]'

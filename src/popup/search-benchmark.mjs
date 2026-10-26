@@ -8,6 +8,8 @@ import { fileURLToPath } from 'node:url'
 const moduleArgument = process.argv.find(argument => argument.startsWith('--module='))
 const modulePath = moduleArgument ? path.resolve(moduleArgument.slice(9)).replaceAll('\\', '/') : './search.ts'
 const label = moduleArgument ? 'baseline' : 'current'
+const outputArgument = process.argv.find(argument => argument.startsWith('--output='))
+const outputPath = path.resolve(outputArgument?.slice(9) || `output/search-benchmark/${label}.json`)
 const bundle = await build({
   stdin: {
     contents: `export * from ${JSON.stringify(modulePath)}; export * from './search-benchmark-fixture.mjs'; export { enrichPinyinTokensCooperatively } from '../shared/search/pinyin.ts';`,
@@ -73,5 +75,5 @@ try {
 } finally {
   await browser.close()
 }
-await mkdir('output/search-benchmark', { recursive: true })
-await writeFile(`output/search-benchmark/${label}.json`, `${JSON.stringify(report, null, 2)}\n`)
+await mkdir(path.dirname(outputPath), { recursive: true })
+await writeFile(outputPath, `${JSON.stringify(report, null, 2)}\n`)

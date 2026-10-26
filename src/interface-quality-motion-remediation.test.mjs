@@ -85,9 +85,15 @@ assert.ok(
     popupModals.includes('CollapsibleRoot') &&
     popupModals.includes('CollapsiblePanel') &&
     popupModals.includes('t-acc-chevron') &&
-    !popupModals.includes('hidden={!view.folderPickerOpen}') &&
+    !popupModals.includes('hiddenUntilFound') &&
+    popupModals.includes("hidden={false}") &&
+    popupModals.includes('panel.inert = true') &&
+    popupModals.includes('panel.inert = !open') &&
+    popupCss.includes('.edit-folder-accordion .t-acc-panel-inner') &&
+    popupCss.includes('opacity: 0.001') &&
+    popupCss.includes('will-change: opacity, transform') &&
     !switchControl.includes('will-change-transform'),
-  'Transient feedback and disclosures must reuse shared presence motion without persistent layer promotion.'
+  'Transient feedback must stay unpromoted; the folder disclosure must prewarm its raster layers while remaining inert when closed.'
 )
 
 assert.ok(

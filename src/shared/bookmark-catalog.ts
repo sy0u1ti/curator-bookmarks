@@ -112,6 +112,7 @@ function getCatalogVersionFingerprint(
       BOOKMARK_CATALOG_HASH_MULTIPLIER,
       (bookmark) => [
         bookmark.id,
+        bookmark.title,
         bookmark.parentId,
         bookmark.duplicateKey,
         String(bookmark.dateAdded || 0)

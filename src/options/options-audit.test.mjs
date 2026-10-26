@@ -71,7 +71,7 @@ try {
   await page.evaluate(() => { window.audit.failTree = false })
   await inbox.getByRole('button', { name: '重新读取', exact: true }).click()
   await inbox.getByText('当前没有待整理书签。', { exact: true }).waitFor()
-  await page.getByRole('heading', { name: '待整理 · 0', exact: true }).waitFor()
+  await page.getByRole('heading', { name: '待整理 0 条', exact: true }).waitFor()
   await page.evaluate(() => { window.audit.treeReads = 0 })
   await worker.evaluate(async () => {
     const folder = await chrome.bookmarks.create({ parentId: '1', title: '批量审核' })
@@ -81,7 +81,7 @@ try {
       inboxFolderId: folder.id, originalParentId: folder.id, status: 'needs-review', createdAt: 1, updatedAt: 1
     })) } })
   })
-  await page.getByRole('heading', { name: '待整理 · 80', exact: true }).waitFor()
+  await page.getByRole('heading', { name: '待整理 80 条', exact: true }).waitFor()
   const treeReads = await page.evaluate(() => window.audit.treeReads)
   assert.ok(treeReads <= 8, `80 bookmark changes must be coalesced; got ${treeReads} full-tree reads`)
   report.inbox = { errorState: true, retry: true, pending: 80, treeReads }

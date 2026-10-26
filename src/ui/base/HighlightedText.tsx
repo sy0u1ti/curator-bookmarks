@@ -1,4 +1,5 @@
-const HIGHLIGHT_MARK_CLASS = 'rounded-md bg-ds-text-primary/[0.12] px-[0.02em] text-ds-text-primary shadow-none'
+// Highlights decorate text without changing its font metrics or spacing.
+const HIGHLIGHT_MARK_CLASS = 'inline box-decoration-clone rounded-[0.12em] bg-ds-text-primary/[0.12] p-0 align-baseline text-ds-text-primary shadow-none [font:inherit]'
 
 /** Renders `text` with every occurrence of the search terms wrapped in a mark.
  * The popup and the options folder picker share this so their highlight rules
@@ -27,7 +28,7 @@ export function getHighlightTerms(query: string): string[] {
 export function splitHighlightText(text: string, terms: string[]): Array<{ highlight: boolean; text: string }> {
   const safeText = String(text || '')
   const normalizedTerms = terms.flatMap((term) => {
-    const normalized = String(term || '').trim()
+    const normalized = String(term || '').trim().toLowerCase()
     return normalized ? [normalized] : []
   })
 

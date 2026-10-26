@@ -50,17 +50,17 @@ import {
   type PopupSearchBookmark,
   type PopupSearchResult
 } from './search.js'
-import { parseSearchQuery } from '../shared/search-query.js'
+import { parseSearchQuery, type ParsedSearchQuery } from '../shared/search-query.js'
+import { searchDateBucket } from '../shared/search/date.js'
+import { yieldSearchTask } from '../shared/search/scheduler.js'
+import { buildPopupSearchRowPresentation } from './popup-row-presentation.js'
 import {
   DEFAULT_NEW_TAB_WORKSPACE_ID,
   getActiveNewTabWorkspace,
   normalizeNewTabWorkspaceSettings,
   toggleNewTabWorkspacePin
 } from '../shared/newtab-workspace-settings.js'
-import type {
-  NaturalSearchPlan,
-  NaturalSearchResultSet
-} from './natural-search.js'
+import type { NaturalSearchPlan } from './natural-search.js'
 import {
   buildLightPopupSearchIndex,
   buildLightPopupSearchIndexFromCatalog,
@@ -94,7 +94,6 @@ import {
   dispatchPopupSearchChipsChange,
   dispatchPopupSmartClassifierChange,
   dispatchPopupToastsChange,
-  getInitialBookmarksBarTitle,
   registerPopupActionHandlers,
   rememberBookmarksBarTitle,
   resetPopupViewStore,
@@ -172,10 +171,8 @@ import { cleanSmartText, cleanSmartTitle, getLastPathSegment, normalizeSmartConf
 const NATURAL_SEARCH_DEBOUNCE_MS = 520
 const VIEW_NOTICE_MS = 1800
 const MAX_VISIBLE_TOASTS = 2
-const SEARCH_SNAPSHOT_WARM_DELAY_MS = 220
 const KEYBOARD_NAVIGATION_SETTLE_MS = 120
-const POPUP_PINYIN_BATCH_SIZE = 12
-const POPUP_PINYIN_IDLE_TIMEOUT_MS = 500
+const POPUP_PINYIN_BATCH_SIZE = 250
 const SMART_RECOMMENDATION_LIMIT = 3
 const POPUP_DEFAULT_WORKSPACE_STORAGE = {
   activeWorkspaceId: DEFAULT_NEW_TAB_WORKSPACE_ID,
@@ -570,7 +567,7 @@ function handlePopupStorageChanged(
     // reasoning configuration from committing results afterwards.
     state.searchRunId += 1
     abortNaturalSearchRequest()
-    clearSearchCaches()
+    clearSearchCaches(true)
     state.naturalSearchPlan = null
     state.naturalSearchAiConfigChecked = false
     state.naturalSearchError = ''
@@ -835,6 +832,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
   // 不再把可见内容拉回骨架 + 渐隐态，数据就绪后直接原地替换。
   state.isLoading = !state.hasPresentedContent
   state.loadError = ''
+  state.searchMetadataPending = true
   render()
   try {
     const { deferredHydration } = await hydratePopupBaseData({
@@ -850,6 +848,12 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
       startDeferredHydration: (baseData) => hydratePopupDeferredRefreshData(baseData)
     })
     void deferredHydration.catch((error) => {
+      if (refreshRunId === popupRefreshRunId) {
+        state.searchMetadataPending = false
+        state.searchPreparationError = '搜索资料载入失败，请重新打开以重试。'
+        cancelPendingSearchActivation()
+        render()
+      }
       console.warn('[Curator] popup 延后数据补齐失败', error)
     })
   } catch (error) {
@@ -859,6 +863,7 @@ async function refreshData({ initial = false, preserveSearch = true } = {}) {
     state.searchRunId += 1
     state.searchPending = false
     state.naturalSearchPending = false
+    state.searchMetadataPending = false
     state.loadError = error instanceof Error ? error.message : '书签加载失败，请稍后重试。'
     state.searchResults = []
   } finally {
@@ -947,6 +952,7 @@ function resetPopupSearchEnhancementReadiness(): void {
   state.pinyinEnrichmentReady = false
   state.pinyinEnrichmentPending = false
   state.pinyinEnrichmentRunId += 1
+  state.searchPreparationError = ''
 }
 function syncPopupExpandedFolderState(
   extracted: ReturnType<typeof extractBookmarkData>,
@@ -1039,6 +1045,7 @@ function applyPopupSearchEnhancementData(
     extracted: baseData.catalog.extracted
   })
   applyPopupIndexedBookmarkEnhancements(catalog)
+  state.searchMetadataPending = false
   perfMark('popup.searchIndexReady.end')
   perfMeasure('popup.searchIndexReady', 'popup.bookmarkTreeLoaded', 'popup.searchIndexReady.end')
   if (state.currentTab) {
@@ -1097,18 +1104,20 @@ function schedulePinyinEnrichment(runId: number): void {
           return
         }
         state.pinyinEnrichmentPending = false
+        state.searchPreparationError = '拼音索引读取失败，请重新输入以重试。'
+        cancelPendingSearchActivation()
+        render()
         console.warn('[Curator] 拼音索引补齐失败', error)
       })
   }
-  runIdle(startEnrichment, { timeout: POPUP_PINYIN_IDLE_TIMEOUT_MS })
+  // This work is requested by a foreground query, not speculative idle work.
+  void yieldSearchTask().then(startEnrichment)
 }
 
 function yieldPopupPinyinWork(): Promise<void> {
-  return new Promise((resolve) => {
-    runIdle(resolve, { timeout: 120 })
-  })
+  return yieldSearchTask()
 }
-function ensurePinyinEnrichmentForQuery(query: string): void {
+function ensurePinyinEnrichmentForQuery(query: string | ParsedSearchQuery): void {
   if (state.pinyinEnrichmentReady || state.pinyinEnrichmentPending) {
     return
   }
@@ -1116,6 +1125,10 @@ function ensurePinyinEnrichmentForQuery(query: string): void {
     return
   }
   if (!requiresPinyinTokens(query)) {
+    return
+  }
+  if (state.allBookmarks.every(bookmark => bookmark.pinyinEnriched)) {
+    state.pinyinEnrichmentReady = true
     return
   }
   schedulePinyinEnrichment(state.pinyinEnrichmentRunId)
@@ -1251,7 +1264,8 @@ function cleanupPopupController() {
   state.filteredBookmarksCache = []
   resetPopupSessionStateForNextOpen()
   resetPopupViewStore()
-  clearSearchCaches()
+  state.searchMetadataPending = false
+  clearSearchCaches(true)
 }
 
 function resetPopupSessionStateForNextOpen() {
@@ -1308,16 +1322,13 @@ function maybeWarmPopupSnapshotFullTextForSearch() {
     return
   }
   state.searchSnapshotFullTextPending = true
-  window.setTimeout(() => {
-    window.requestAnimationFrame(() => {
-      void warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId).catch(error => {
+  void yieldSearchTask().then(() => warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId)).catch(error => {
         if (state.searchSnapshotFullTextRunId !== warmupRunId) return
         state.searchSnapshotFullTextPending = false
-        state.loadError = `正文索引读取失败，当前仅显示基础匹配：${error instanceof Error ? error.message : '请重试'}`
+        state.searchPreparationError = `正文索引读取失败，请重新输入以重试：${error instanceof Error ? error.message : '请重试'}`
+        cancelPendingSearchActivation()
         render()
-      })
-    })
-  }, SEARCH_SNAPSHOT_WARM_DELAY_MS)
+  })
 }
 async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   if (state.searchSnapshotFullTextRunId !== warmupRunId || !snapshotState?.index) {
@@ -1346,9 +1357,6 @@ async function warmPopupSnapshotFullTextIndex(snapshotState, warmupRunId) {
   state.searchCache.setVersion(catalog.version)
   state.searchSnapshotFullTextReady = true
   state.searchSnapshotFullTextPending = false
-  state.pinyinEnrichmentReady = false
-  state.pinyinEnrichmentPending = false
-  state.pinyinEnrichmentRunId += 1
   clearSearchCaches()
   if (state.debouncedQuery) {
     runSearch()
@@ -1369,6 +1377,14 @@ function getActiveTab(): Promise<chrome.tabs.Tab | null> {
 }
 function setSearchQuery(value, { immediate = false } = {}) {
   cancelPendingSearchActivation()
+  if (String(value || '').trim() !== state.debouncedQuery) {
+    state.searchRunId += 1
+    abortNaturalSearchRequest()
+    state.naturalSearchPlan = null
+    state.searchResults = []
+    clearQueuedKeyboardNavigation()
+    state.activeResultIndex = -1
+  }
   if (String(value || '').trim() && state.bookmarkReorderMode) {
     resetBookmarkReorderModeState()
   }
@@ -1379,12 +1395,13 @@ function setSearchQuery(value, { immediate = false } = {}) {
     state.activeResultIndex = -1
   }
   state.searchQuery = value
+  state.searchPreparationError = ''
   state.naturalSearchSetupRequired = false
   clearViewNotice()
   clearTimeout(state.searchTimer)
   state.searchTimer = null
   ensurePinyinEnrichmentForQuery(value)
-  if (immediate || !state.naturalSearchEnabled) {
+  if (immediate || !state.naturalSearchEnabled || !String(value || '').trim()) {
     applyDebouncedSearchQuery(value)
     render()
     return
@@ -1418,6 +1435,19 @@ function syncActiveSearchResultIndex(): void {
 
   if (!state.searchResults.length) {
     state.activeResultIndex = -1
+    return
+  }
+
+  if (selectedSearchBookmarkId) {
+    const selectedIndex = state.searchResults.findIndex(bookmark => bookmark.id === selectedSearchBookmarkId)
+    if (selectedIndex >= 0) {
+      state.activeResultIndex = selectedIndex
+      if (queuedActiveResultIndex !== null) queuedActiveResultIndex = selectedIndex
+      return
+    }
+    selectedSearchBookmarkId = null
+    queuedActiveResultIndex = null
+    state.activeResultIndex = 0
     return
   }
 
@@ -1496,6 +1526,7 @@ async function prepareNaturalLanguageSearchAi(version = popupPreferencesVersion)
 }
 function runSearch() {
   const query = state.debouncedQuery
+  const parsed = parseSearchQuery(query)
   const normalizedQuery = normalizeQuery(query)
   const runId = state.searchRunId + 1
   state.searchRunId = runId
@@ -1515,7 +1546,7 @@ function runSearch() {
   }
   // Searches are also rerun after preboot adoption and deferred index patches,
   // so the canonical search path must re-arm any invalidated pinyin enrichment.
-  ensurePinyinEnrichmentForQuery(query)
+  ensurePinyinEnrichmentForQuery(parsed)
   maybeWarmPopupSnapshotFullTextForSearch()
   if (state.naturalSearchEnabled) {
     runNaturalSearch(query, normalizedQuery, runId)
@@ -1535,7 +1566,7 @@ function runSearch() {
       return
     }
     if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
-      const results = searchBookmarks(normalizedQuery, bookmarks)
+      const results = searchBookmarks(parsed, bookmarks)
       cacheSearchResults(cacheKey, results)
       state.searchPending = false
       state.searchResults = results.slice(0, MAX_POPUP_SEARCH_RESULTS)
@@ -1546,7 +1577,7 @@ function runSearch() {
     state.searchResults = []
     syncActiveSearchResultIndex()
     const firstBatch = searchBookmarksFirstBatch(
-      normalizedQuery,
+      parsed,
       bookmarks,
       MAX_POPUP_SEARCH_RESULTS
     )
@@ -1562,7 +1593,7 @@ function runSearch() {
       syncActiveSearchResultIndex()
       render()
     }
-    searchBookmarksCooperatively(normalizedQuery, bookmarks, {
+    searchBookmarksCooperatively(parsed, bookmarks, {
       isActive: () => state.searchRunId === runId,
       yieldWork
     })
@@ -1602,6 +1633,7 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
   const cachedResults = state.searchCache.get(cacheKey)
   // Even cached results need asynchronous provider/plan validation. Publish
   // only this query's provisional rows and keep activation pending until then.
+  state.naturalSearchPlan = null
   state.searchPending = true
   state.naturalSearchPending = true
   state.searchResults = cachedResults ? cachedResults.slice(0, MAX_POPUP_SEARCH_RESULTS) : []
@@ -1652,19 +1684,14 @@ async function runNaturalSearch(query, normalizedQuery, runId) {
     }
     state.naturalSearchPlan = plan
     state.searchHighlightQuery = plan.highlightQuery || normalizedQuery
-    const bookmarks = naturalSearch.filterBookmarksByNaturalDateRange(getFilteredBookmarks(), plan)
-    const resultSets = await Promise.all(plan.queries.map(async (naturalQuery): Promise<NaturalSearchResultSet> => {
-      if (state.searchRunId !== runId) {
-        throw new Error('search-cancelled')
-      }
-      const results = await searchNaturalQuery(naturalQuery, bookmarks, runId)
-      return { query: naturalQuery, results }
-    }))
+    ensurePinyinEnrichmentForQuery(plan.query)
+    const results = await naturalSearch.searchNaturalBookmarksCooperatively(plan, getFilteredBookmarks(), {
+      isActive: () => state.searchRunId === runId, yieldWork
+    })
     const searchRunStillCurrent = state.searchRunId === runId
     if (!searchRunStillCurrent) {
       return
     }
-    const results = naturalSearch.mergeNaturalSearchResultSets(plan, resultSets)
     cacheSearchResults(cacheKey, results)
     state.searchPending = false
     state.naturalSearchPending = false
@@ -1762,7 +1789,7 @@ async function resolveNaturalSearchPlan(
       throw error
     }
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
-    throw error
+    return localPlan
   }
   const naturalSearchAi = await loadNaturalSearchAiModule()
   if (state.searchRunId !== options.runId || options.signal?.aborted) {
@@ -1804,20 +1831,8 @@ async function resolveNaturalSearchPlan(
       throw error
     }
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
-    throw error
+    return localPlan
   }
-}
-async function searchNaturalQuery(query, bookmarks, runId): Promise<PopupSearchResult[]> {
-  if (!query || !bookmarks.length) {
-    return []
-  }
-  if (bookmarks.length < POPUP_SEARCH_ASYNC_THRESHOLD) {
-    return searchBookmarks(query, bookmarks)
-  }
-  return searchBookmarksCooperatively(query, bookmarks, {
-    isActive: () => state.searchRunId === runId,
-    yieldWork
-  })
 }
 function render() {
   renderChrome()
@@ -1833,6 +1848,14 @@ export function cancelPendingSearchActivation(): void {
   pendingSearchActivation = null
 }
 
+function isPopupSearchPending(): boolean {
+  if (!state.searchQuery.trim() && !state.debouncedQuery) return false
+  const query = state.naturalSearchPlan?.query || parseSearchQuery(state.debouncedQuery)
+  return state.searchQuery.trim() !== state.debouncedQuery || state.searchMetadataPending ||
+    state.searchPending || state.naturalSearchPending || state.searchSnapshotFullTextPending ||
+    (state.pinyinEnrichmentPending && requiresPinyinTokens(query))
+}
+
 function flushPendingSearchActivation(): void {
   const intent = pendingSearchActivation
   if (!intent) return
@@ -1843,7 +1866,8 @@ function flushPendingSearchActivation(): void {
     cancelPendingSearchActivation()
     return
   }
-  if (state.isLoading || state.searchPending || state.naturalSearchPending) return
+  if (state.isLoading || isPopupSearchPending()) return
+  if (state.searchPreparationError) { cancelPendingSearchActivation(); return }
   cancelPendingSearchActivation()
   const result = intent.bookmarkId
     ? state.searchResults.find((bookmark) => bookmark.id === intent.bookmarkId)
@@ -1858,7 +1882,7 @@ function renderChrome() {
 function getPopupChromeViewModel(): PopupChromeView {
   const naturalSearchPending = state.naturalSearchPending
   return {
-    loadError: state.loadError,
+    loadError: state.searchPreparationError || state.loadError,
     search: {
       ariaLabel: getSearchInputAriaLabel(),
       clearVisible: Boolean(state.searchQuery),
@@ -1875,7 +1899,8 @@ function getPopupChromeViewModel(): PopupChromeView {
   }
 }
 function renderSearchTools() {
-  const parsed = parseSearchQuery(state.searchQuery)
+  const parsed = state.naturalSearchPlan?.rawQuery === normalizeQuery(state.searchQuery)
+    ? state.naturalSearchPlan.query : parseSearchQuery(state.searchQuery)
   const chips = parsed.chips
   dispatchPopupSearchChipsChange(
     chips.map((chip): PopupSearchChipView => ({
@@ -1915,30 +1940,28 @@ function getNaturalSearchToggleTitle(isPending: boolean) {
   }
   return state.naturalSearchError || 'AI 已改写查询；点击关闭语义搜索'
 }
+// The pane header owns the current folder/result title and count. The caption
+// only carries what the header cannot: transient notices, in-flight search
+// state, and how a semantic query was interpreted.
 function getViewCaptionText(): string {
   if (state.viewNoticeMessage && !state.isLoading && !state.searchPending && !state.naturalSearchPending) {
     return state.viewNoticeMessage
   }
-  if (state.debouncedQuery) {
-    if (state.searchSnapshotFullTextPending) return `本地匹配 · ${state.searchResults.length} 条 · 正文检索中…`
-    if (state.naturalSearchEnabled) {
-      return state.searchPending
-        ? getNaturalSearchPendingCaption()
-        : `${getNaturalSearchResultCaption()} · ${state.searchResults.length} 条`
-    }
-    return state.searchPending
-      ? '本地搜索中…'
-      : `本地匹配 · ${state.searchResults.length} 条`
+  if (!state.debouncedQuery) return ''
+  if (state.searchSnapshotFullTextPending) return '正文检索中…'
+  if (state.naturalSearchEnabled) {
+    return isPopupSearchPending()
+      ? getNaturalSearchPendingCaption()
+      : getNaturalSearchResultCaption()
   }
-  const currentRoot = getCurrentTreeRoot()
-  return currentRoot?.title || getInitialBookmarksBarTitle()
+  return isPopupSearchPending() ? '本地搜索中…' : ''
 }
 function getNaturalSearchPendingCaption() {
   return 'AI 语义搜索解析中…'
 }
 function getNaturalSearchResultCaption() {
   const plan = state.naturalSearchPlan
-  const modeLabel = 'AI 改写后匹配'
+  const modeLabel = plan?.source === 'ai' ? 'AI 改写后匹配' : '本地匹配'
   const statusLabel = getNaturalSearchStatusLabelFallback(plan)
   const detail = statusLabel.replace(/^(AI 解析|本地解析)( · )?/, '').trim()
   return detail ? `${modeLabel} · ${detail}` : modeLabel
@@ -2133,19 +2156,20 @@ function getPopupSmartRecommendationViewModels() {
 }
 function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}) {
   const hasQuery = Boolean(state.debouncedQuery)
+  const pending = isPopupSearchPending()
   const showNaturalSearchSetup =
     state.naturalSearchSetupRequired &&
     !state.isLoading &&
-    !state.searchPending &&
+    !pending &&
     !state.naturalSearchPending
   const showSearchLoading =
     hasQuery &&
-    state.searchPending &&
+    pending &&
     !state.searchResults.length &&
     !state.isLoading
   const showEmptySearch =
     hasQuery &&
-    !state.searchPending &&
+    !pending &&
     !state.searchResults.length &&
     !state.isLoading
   const currentRoot = getCurrentTreeRoot()
@@ -2160,7 +2184,9 @@ function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}
   })
   let mainState: PopupContentViewModel['mainState'] | undefined
 
-  if (!state.isLoading && showSearchLoading) {
+  if (hasQuery && state.searchPreparationError) {
+    mainState = { kind: 'empty', label: state.searchPreparationError }
+  } else if (!state.isLoading && showSearchLoading) {
     mainState = {
       kind: 'loading',
       label: state.naturalSearchEnabled ? '正在用 AI 理解搜索意图…' : '正在搜索书签…'
@@ -2194,7 +2220,7 @@ function renderMainContent({ preserveScroll }: { preserveScroll?: boolean } = {}
     query: state.debouncedQuery,
     count: hasSearchRows ? state.searchResults.length : 0,
     activeId: activeSearchResult ? getPopupSearchResultId(activeSearchResult.id) : '',
-    pending: state.searchPending || state.naturalSearchPending
+    pending
   })
   replaceContentViewModel(getPopupContentViewModel({ loading: state.isLoading, mainState, searchMode: hasQuery }), {
     preserveScroll: shouldPreserveScroll
@@ -2737,11 +2763,26 @@ function getFormattedBookmarkPath(path): string {
 }
 
 function getSearchResultRows(): PopupContentSearchResultViewModel[] {
-  const highlightQuery = parseSearchQuery(state.searchHighlightQuery || state.debouncedQuery).textTerms.join(' ')
+  const parsedHighlight = state.naturalSearchPlan?.query || parseSearchQuery(state.debouncedQuery)
+  const highlightQuery = parsedHighlight.textTerms.join(' ')
+  const literalKey = parsedHighlight.literalTerms.join('\u0000')
+  const scopeFolderId = state.selectedFolderFilterId || ''
   return searchResultRowsCache.getRows(
-    [state.searchResults, highlightQuery, state.bookmarkMap, popupActionStateVersion],
+    [state.searchResults, highlightQuery, literalKey, scopeFolderId, state.bookmarkMap, popupActionStateVersion],
     () => state.searchResults.map((bookmark, index) => {
-      const reasonTokens = summarizeMatchReasonTokens(bookmark.matchReasons)
+      const presentation = buildPopupSearchRowPresentation({
+        title: bookmark.title || '未命名书签',
+        url: bookmark.url || '',
+        displayUrl: bookmark.displayUrl,
+        path: bookmark.path,
+        parentId: String(bookmark.parentId || ''),
+        scopeFolderId,
+        query: highlightQuery,
+        literalTerms: parsedHighlight.literalTerms,
+        matchEvidence: bookmark.matchEvidence,
+        matchReasons: bookmark.matchReasons || []
+      })
+      const reasonTokens = presentation.reasonTokens
       const reasonTitle = Array.isArray(bookmark.matchReasons) && bookmark.matchReasons.length
         ? bookmark.matchReasons.join(' · ')
         : ''
@@ -2760,69 +2801,13 @@ function getSearchResultRows(): PopupContentSearchResultViewModel[] {
         reasonLabel: reasonTokens.length ? `命中原因：${reasonTokens.join('、')}` : '',
         reasonTitle,
         reasonTokens,
+        presentation,
         title: bookmark.title || '未命名书签',
         url: bookmark.url || ''
       }
     }),
     state.keyboardPane === 'bookmarks' ? state.activeResultIndex : -1
   )
-}
-const MATCH_REASON_TOKEN_PATTERNS: Array<{ test: RegExp; label: string }> = [
-  { test: /^命中：标题近似/, label: '标题近似' },
-  { test: /^命中：标题片段/, label: '标题片段' },
-  { test: /^命中：标题缩写/, label: '标题缩写' },
-  { test: /^命中：标题拼音/, label: '标题拼音' },
-  { test: /^命中：标题首字母/, label: '标题首字母' },
-  { test: /^命中：文件夹拼音/, label: '文件夹拼音' },
-  { test: /^命中：文件夹首字母/, label: '文件夹首字母' },
-  { test: /^命中：标签拼音/, label: '标签拼音' },
-  { test: /^命中：标签首字母/, label: '标签首字母' },
-  { test: /^命中：标题/, label: '标题命中' },
-  { test: /^命中：站点/, label: '域名命中' },
-  { test: /^命中：网址/, label: 'URL 命中' },
-  { test: /^命中：文件夹/, label: '路径命中' },
-  { test: /^命中：标签|^标签：/, label: '标签命中' },
-  { test: /^命中：主题|^主题：/, label: '标签命中' },
-  { test: /^命中：别名/, label: '别名命中' },
-  { test: /^命中：摘要/, label: '摘要命中' },
-  { test: /^命中：网页内容/, label: '正文命中' },
-  { test: /^命中：类型/, label: '类型命中' },
-  { test: /^命中：拼音/, label: '拼音命中' },
-  { test: /^命中：首字母/, label: '首字母命中' },
-  { test: /^命中：模糊匹配|^命中：近似/, label: '模糊命中' },
-  { test: /^筛选：站点/, label: '站点筛选' },
-  { test: /^筛选：文件夹/, label: '文件夹筛选' },
-  { test: /^筛选：类型/, label: '类型筛选' },
-  { test: /^筛选：/, label: '时间筛选' },
-  { test: /^排除：/, label: '已排除' }
-]
-
-function findMatchReasonTokenPattern(text: string): { test: RegExp; label: string } | null {
-  for (const entry of MATCH_REASON_TOKEN_PATTERNS) {
-    if (entry.test.test(text)) {
-      return entry
-    }
-  }
-  return null
-}
-
-function summarizeMatchReasonTokens(reasons: unknown): string[] {
-  if (!Array.isArray(reasons) || reasons.length === 0) {
-    return []
-  }
-  const tokens: string[] = []
-  const seen = new Set<string>()
-  for (const value of reasons) {
-    const text = String(value || '').trim()
-    if (!text) continue
-    const matched = findMatchReasonTokenPattern(text)
-    if (!matched) continue
-    if (seen.has(matched.label)) continue
-    seen.add(matched.label)
-    tokens.push(matched.label)
-    if (tokens.length >= 3) break
-  }
-  return tokens
 }
 function getBookmarkActionMenuLabel(bookmark) {
   const title = cleanSmartText(bookmark?.title || '未命名书签', 48)
@@ -3023,7 +3008,7 @@ function getEditModalView(): PopupModalsView['edit'] {
     path: draftPath || '未归档路径',
     pathChanged: state.editDraftParentId !== String(bookmark.parentId || ''),
     saveDisabled: saving || !dirty,
-    saveLabel: saving ? '保存中…' : dirty ? '保存' : '未修改',
+    saveLabel: saving ? '保存中…' : '保存',
     title: state.editDraftTitle,
     titleDisabled: saving,
     url: state.editDraftUrl,
@@ -3202,7 +3187,7 @@ function buildSmartFolderNodeViewModels(node, depth, query): PopupFolderTreeOpti
 
   return [
     {
-      badges: selected ? [{ label: '已选择' }] : [],
+      badges: [],
       depth,
       disabled: saving,
       expanded: isExpanded,
@@ -3300,7 +3285,6 @@ function buildEditFolderNodeViewModels(node, depth, query, bookmark): PopupFolde
   return [
     {
       badges: [
-        isSelectedFolder ? { label: '已选择' } : null,
         !isSelectedFolder && isOriginalFolder ? { label: '原位置', muted: true } : null
       ].filter(Boolean),
       depth,
@@ -3605,8 +3589,12 @@ function handleModalAction(detail: PopupModalActionDetail) {
     updateEditDraftField('url', value)
     return
   }
+  if (action === 'edit-folder-picker-change') {
+    setEditFolderPickerOpen(value === 'true')
+    return
+  }
   if (action === 'edit-toggle-folder-picker') {
-    toggleEditFolderPicker()
+    setEditFolderPickerOpen(!state.editFolderPickerOpen)
     return
   }
   if (action === 'save-edit') {
@@ -3644,22 +3632,23 @@ function handleSmartFolderPickerAction(detail: PopupFolderPickerActionDetail) {
 
 function handleEditFolderPickerAction(detail: PopupFolderPickerActionDetail) {
   if (detail.action === 'toggle' && !state.editFolderSearchQuery.trim()) {
-    toggleMoveFolder(detail.folderId)
+    toggleEditFolder(detail.folderId)
     return
   }
   if (detail.action === 'select') {
     selectEditDraftFolder(detail.folderId)
   }
 }
-function toggleEditFolderPicker() {
+function setEditFolderPickerOpen(open: boolean) {
   if (!state.editTargetBookmarkId || state.editSaving || hasBlockingPopupActionPending()) {
     return
   }
-  state.editFolderPickerOpen = !state.editFolderPickerOpen
-  if (!state.editFolderPickerOpen) {
-    state.editFolderSearchQuery = ''
+  state.editFolderPickerOpen = open
+  if (!open) return
+  const bookmark = state.bookmarkMap.get(state.editTargetBookmarkId)
+  if (bookmark) {
+    dispatchPopupFolderPickerChange('edit', getEditFolderPickerState(bookmark))
   }
-  renderModals()
 }
 function selectEditDraftFolder(folderId) {
   const bookmark = state.editTargetBookmarkId
@@ -3845,7 +3834,8 @@ function handlePopupNavigationKey(key: string, modifiers: { altKey?: boolean; ct
     if (queryChanged) {
       setSearchQuery(state.searchQuery, { immediate: true })
     }
-    if (state.searchPending || state.naturalSearchPending) {
+    if (state.searchPreparationError) return true
+    if (isPopupSearchPending()) {
       pendingSearchActivation = {
         query: state.debouncedQuery,
         folderId: state.selectedFolderFilterId,
@@ -3969,6 +3959,24 @@ function toggleMoveFolder(folderId) {
   }
   state.moveExpandedFolders = expanded
   renderModals()
+}
+function toggleEditFolder(folderId) {
+  if (!folderId) {
+    return
+  }
+  const expanded = new Set(state.moveExpandedFolders)
+  if (expanded.has(folderId)) {
+    expanded.delete(folderId)
+  } else {
+    expanded.add(folderId)
+  }
+  state.moveExpandedFolders = expanded
+  const bookmark = state.editTargetBookmarkId
+    ? state.bookmarkMap.get(state.editTargetBookmarkId)
+    : null
+  if (bookmark) {
+    dispatchPopupFolderPickerChange('edit', getEditFolderPickerState(bookmark))
+  }
 }
 function openMoveDialog(bookmarkId, returnFocusElement = null) {
   if (hasBlockingPopupActionPending()) {
@@ -5446,7 +5454,7 @@ function getFilteredBookmarksForFolder(folderId) {
     : state.allBookmarks
 }
 function getSearchCacheKey(normalizedQuery) {
-  return `${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
+  return `${searchDateBucket()}\u0000${state.selectedFolderFilterId || 'all'}\u0000${normalizedQuery}`
 }
 function getNaturalSearchDateBucket() {
   return formatLocalDate(Date.now())
@@ -5455,18 +5463,17 @@ function getNaturalSearchPlanCacheKey(normalizedQuery) {
   return `${getNaturalSearchDateBucket()}\u0000${normalizedQuery}`
 }
 function cacheSearchResults(cacheKey, results) {
+  if (state.searchMetadataPending || state.searchSnapshotFullTextPending || state.pinyinEnrichmentPending || state.searchPreparationError || state.naturalSearchError) return
   state.searchCache.set(cacheKey, results)
 }
-function clearSearchCaches() {
+function clearSearchCaches(clearPlans = false) {
   state.searchCache.clear()
-  state.naturalSearchPlanCache.clear()
+  if (clearPlans) state.naturalSearchPlanCache.clear()
   state.filteredBookmarksCacheKey = ''
   state.filteredBookmarksCache = []
 }
 function yieldWork() {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(resolve)
-  })
+  return yieldSearchTask()
 }
 function formatLocalDate(value) {
   const date = new Date(value)

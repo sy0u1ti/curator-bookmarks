@@ -63,6 +63,14 @@ export function buildDuplicateGroups(bookmarks, options: BuildDuplicateGroupsOpt
     })
 }
 
+export function refreshDuplicateRecommendations(): void {
+  // The repository is hydrated after the catalog. Re-rank the existing groups
+  // so their original scope/exclusions and the user's deletion selection survive.
+  managerState.duplicateGroups = managerState.duplicateGroups.map(group =>
+    buildDuplicateGroupModel(group.key, group.items)
+  )
+}
+
 function isBookmarkInExcludedFolder(bookmark, excludedFolderIds: Set<string>): boolean {
   if (!excludedFolderIds.size) {
     return false
@@ -203,7 +211,7 @@ function buildDuplicateRecommendation({
       kind: 'newtab-source',
       label: '新标签页来源',
       item: newTabSourceItem,
-      reason: '该副本位于新标签页展示来源中，优先保留可避免破坏新标签页入口。'
+      reason: '用于新标签页，保留可维持现有入口。'
     }
   }
 
@@ -212,7 +220,7 @@ function buildDuplicateRecommendation({
       kind: 'recent',
       label: '最近访问',
       item: recentItem,
-      reason: '该副本最近在新标签页打开过，优先保留仍在使用的副本。'
+      reason: '最近在新标签页打开过，仍在使用。'
     }
   }
 
@@ -221,7 +229,7 @@ function buildDuplicateRecommendation({
       kind: 'fuller-title',
       label: '标题更完整',
       item: fullerTitleItem,
-      reason: '同一 URL 存在不同标题，优先保留标题信息更完整的副本。'
+      reason: '标题信息更完整。'
     }
   }
 
@@ -230,7 +238,7 @@ function buildDuplicateRecommendation({
       kind: 'shorter-path',
       label: '路径更短',
       item: shorterPathItem,
-      reason: '跨文件夹重复，优先保留路径更短、层级更清晰的副本。'
+      reason: '路径更短，层级更清晰。'
     }
   }
 
@@ -238,7 +246,7 @@ function buildDuplicateRecommendation({
     kind: 'latest',
     label: '最新',
     item: latestItem || oldestItem,
-    reason: '没有更强的使用信号时，默认保留最近添加的副本。'
+    reason: '最近添加，暂无其他整理或使用记录。'
   }
 }
 
@@ -704,28 +712,28 @@ function getDuplicateTagRecommendationReason(item) {
     return {
       kind: 'manual-tags',
       label: '有手动标签',
-      reason: '该副本带有手动标签，包含人工整理信息，优先保留。'
+      reason: '带有手动标签，保留人工整理信息。'
     }
   }
   if (getEffectiveBookmarkTags(tagRecord).length) {
     return {
       kind: 'ai-tags',
       label: '有标签',
-      reason: '该副本已有标签数据，保留后可继续用于智能检索和筛选。'
+      reason: '已有标签，可继续用于检索和筛选。'
     }
   }
   if (String(tagRecord?.summary || '').trim() || snapshotRecord?.summary || snapshotRecord?.hasFullText) {
     return {
       kind: 'summary',
       label: '有摘要',
-      reason: '该副本已有 AI 摘要或网页内容快照，保留后不会丢失分析上下文。'
+      reason: '已有摘要或网页快照，保留分析上下文。'
     }
   }
 
   return {
     kind: 'tagged',
     label: '有整理信息',
-    reason: '该副本已有整理数据，优先保留。'
+    reason: '已有整理数据。'
   }
 }
 

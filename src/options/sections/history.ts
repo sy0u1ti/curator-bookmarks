@@ -497,11 +497,12 @@ export function renderAvailabilityHistory(callbacks) {
 }
 
 function getAvailabilityHistorySubtitle(scopeMeta, scopeRuns, latestRun): string {
+  // The scope picker already names the current scope.
   if (scopeRuns.length) {
-    return `${scopeMeta.label} · ${scopeRuns.length} 次记录 · ${formatDateTime(latestRun?.completedAt || 0)}`
+    return `${scopeRuns.length} 次记录 · ${formatDateTime(latestRun?.completedAt || 0)}`
   }
   if (managerState.historyRuns.length) {
-    return `${scopeMeta.label} 暂无历史；全部范围 ${managerState.historyRuns.length} 次。`
+    return `当前范围暂无历史；全部范围 ${managerState.historyRuns.length} 次。`
   }
   return '完成检测后保留日志和趋势。'
 }

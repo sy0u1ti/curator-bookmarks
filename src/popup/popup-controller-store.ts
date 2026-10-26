@@ -204,7 +204,7 @@ export const EMPTY_POPUP_CHROME_VIEW: PopupChromeView = {
     query: '',
     title: 'AI 语义搜索：需要先配置 AI 渠道'
   },
-  viewCaption: getInitialBookmarksBarTitle()
+  viewCaption: ''
 }
 
 export const EMPTY_POPUP_CONTENT_CHANGE_DETAIL: PopupContentChangeDetail = {

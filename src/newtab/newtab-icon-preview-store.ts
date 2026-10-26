@@ -3,6 +3,7 @@ import type { IconLayoutPresetKey, IconSettings } from './icon-settings'
 
 export interface NewtabIconPreviewTile {
   id: string
+  iconSource: string
   mark: string
   title: string
 }
@@ -20,14 +21,11 @@ export interface NewtabIconPreviewView {
   layoutMode: string
   pageWidth: number
   previewColumnGap: number
-  previewGridMaxWidth: number
   previewRowGap: number
-  previewShellSize: number
   previewTileWidth: number
   preset: string
   rowGap: number
   showTitles: boolean
-  summary: string
   tileWidth: number
   tileWidthDisabled: boolean
   titleLines: number
@@ -49,14 +47,11 @@ const DEFAULT_VIEW: NewtabIconPreviewView = {
   layoutMode: 'auto',
   pageWidth: 78,
   previewColumnGap: 8,
-  previewGridMaxWidth: 240,
   previewRowGap: 8,
-  previewShellSize: 20,
   previewTileWidth: 72,
   preset: '',
   rowGap: 10,
   showTitles: true,
-  summary: '',
   tileWidth: 184,
   tileWidthDisabled: false,
   titleLines: 1,
@@ -143,11 +138,8 @@ export function createNewtabIconPreviewView(
     NewtabIconPreviewView,
     | 'columns'
     | 'previewColumnGap'
-    | 'previewGridMaxWidth'
     | 'previewRowGap'
-    | 'previewShellSize'
     | 'previewTileWidth'
-    | 'summary'
     | 'tiles'
   >,
   effectiveValues: Pick<

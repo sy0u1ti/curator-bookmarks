@@ -13,7 +13,6 @@ import {
   AI_SETTINGS_HELP_TOOLTIP_CLASS,
   AI_SETTINGS_HELP_TOOLTIP_POPUP_CLASS,
   AI_SETTINGS_INLINE_STATUS_CLASS,
-  AI_SETTINGS_LOADING_BADGE_CLASS,
   AI_SETTINGS_LOADING_SWITCH_CLASS,
   AI_SETTINGS_READY_BODY_CLASS,
   AI_SETTINGS_ROW_CLASS,
@@ -30,8 +29,8 @@ import { useFeatureSettingsControlsState } from './feature-settings-store.js'
 import type { FeatureSwitchItemState, FeatureSettingsControlsState } from './feature-settings-types.js'
 
 const FEATURE_SETTINGS_LOADING_ROWS = [
-  { key: 'autoAnalyzeBookmarks', label: '自动分析', status: true, description: '对普通新增书签自动分析，高置信时可能改名、移动；Inbox 使用下方独立设置。' },
-  { key: 'allowRemoteParsing', label: '网页内容辅助解析', status: true, description: 'AI 分析时使用 Jina Reader 获取网页内容。' }
+  { key: 'autoAnalyzeBookmarks', label: '自动分析', description: '对普通新增书签自动分析，高置信时可能改名、移动；Inbox 使用下方独立设置。' },
+  { key: 'allowRemoteParsing', label: '网页内容辅助解析', description: 'AI 分析时通过 Jina Reader 获取网页内容，第三方服务会收到目标网址。' }
 ] as const
 
 export function FeatureSettingsControls() {
@@ -63,7 +62,6 @@ function InboxWorkflowControl({ state }: { state: FeatureSettingsControlsState['
     <div className="grid gap-3 px-4 py-4" aria-hidden={!state || undefined}>
       <div>
         <h3 className={AI_SETTINGS_ROW_TITLE_CLASS}>待整理 · 快捷键收藏后</h3>
-        <p className="mt-1 text-xs leading-relaxed text-ds-text-secondary">适用于快捷键一键收藏，书签存入待整理箱后执行所选整理策略。</p>
       </div>
       {state ? (
         <Select
@@ -98,7 +96,6 @@ function FeatureSwitchLoadingRow({
       <div className={AI_SETTINGS_COPY_CLASS}>
         <div className={AI_SETTINGS_TITLE_ROW_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>{item.label}<span className="ml-1 inline-block size-8 align-middle" aria-hidden="true" /></strong>
-          {item.status ? <span className={AI_SETTINGS_LOADING_BADGE_CLASS} /> : null}
         </div>
         <p className="mb-0 mt-1 text-xs leading-relaxed text-ds-text-secondary">{item.description}</p>
       </div>

@@ -1,3 +1,4 @@
+import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { TextSwap } from '../../ui/motion/TextSwap'
 import { useMotionEntrance } from '../../ui/motion/useMotionEntrance'
@@ -13,7 +14,7 @@ const RECYCLE_HEADER_SUBTITLE_CLASS =
 const RECYCLE_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const RECYCLE_SELECTION_GROUP_CLASS =
-  't-panel-slide mb-[18px] rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px] [--panel-translate-y:12px]'
+  `t-panel-slide mb-[18px] ${OPTION_INSET_CLASS} p-[16px] [--panel-translate-y:12px]`
 
 export function RecycleControls() {
   const state = useRecycleControlsState()

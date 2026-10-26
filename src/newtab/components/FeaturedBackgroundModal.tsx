@@ -29,7 +29,7 @@ const featuredWallpaperPanelLayoutClass =
 const featuredWallpaperPanelSurfaceClass =
   'rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-[var(--newtab-glass-bg-fill)] text-ds-text-primary shadow-none [filter:var(--newtab-glass-drop)] [-webkit-backdrop-filter:var(--newtab-glass-backdrop-filter)] [backdrop-filter:var(--newtab-glass-backdrop-filter)]'
 const featuredWallpaperStatusClass =
-  'featured-wallpaper-status border border-[rgba(245,245,247,0.12)] bg-[rgba(245,245,247,0.065)] text-ds-text-secondary shadow-none'
+  'featured-wallpaper-status text-ds-text-secondary'
 const featuredWallpaperActionClass = `featured-wallpaper-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`
 
 export interface FeaturedBackgroundModalProps {
@@ -106,8 +106,7 @@ function FeaturedBackgroundModal({
       >
         <header className="featured-wallpaper-head">
           <div>
-            <p className="featured-wallpaper-kicker">精选图库</p>
-            <DialogTitle as="h3" id="background-featured-modal-title">选择精选图库壁纸</DialogTitle>
+            <DialogTitle as="h3" id="background-featured-modal-title">精选图库</DialogTitle>
           </div>
           <div className="featured-wallpaper-actions">
             <output

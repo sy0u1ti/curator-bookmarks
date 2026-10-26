@@ -104,16 +104,15 @@ export function buildContentSnapshotSearchText(
     return ''
   }
 
-  return normalizeText([
+  return [
+    record.title,
     record.summary,
     record.contentType,
-    record.source,
-    record.extractionStatus,
     record.finalUrl,
     record.canonicalUrl,
     ...(record.headings || []),
     options.includeFullText && record.fullTextStorage === 'local' ? record.fullText : ''
-  ].join(' '))
+  ].map(normalizeText).filter(Boolean).join('\u0000')
 }
 
 export function buildContentSnapshotSearchMap(

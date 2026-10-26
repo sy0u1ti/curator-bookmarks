@@ -135,6 +135,7 @@ export function extractBookmarkData(
           BOOKMARK_CATALOG_HASH_MULTIPLIER,
           [
             bookmark.id,
+            bookmark.title,
             bookmark.parentId,
             bookmark.duplicateKey,
             String(bookmark.dateAdded || 0)

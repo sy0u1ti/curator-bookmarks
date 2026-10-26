@@ -133,7 +133,7 @@ export function CheckboxControl({
     <BaseCheckbox.Root
       checked={checked}
       className={unstyled ? className : cx(
-        't-check flex size-4 items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-1 text-ds-text-primary outline-none transition-[background-color,border-color,color,transform] duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent data-[checked]:text-ds-accent-contrast focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100',
+        't-check flex size-4 items-center justify-center rounded-[4px] border border-ds-border bg-ds-surface-1 text-ds-text-primary outline-none transition-[background-color,border-color,color,transform] duration-ds-fast ease-ds-standard data-[checked]:border-ds-border-hover data-[checked]:bg-ds-accent data-[checked]:text-ds-accent-contrast focus-visible:border-ds-focus focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-none motion-reduce:active:scale-100',
         className
       )}
       disabled={disabled}

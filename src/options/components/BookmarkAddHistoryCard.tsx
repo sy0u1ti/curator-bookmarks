@@ -1,6 +1,6 @@
 import { displayUrl } from '../../shared/text.js'
 import { formatDateTime } from '../shared-options/utils.js'
-import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { OPTION_VALUE_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { OptionDetails } from './OptionDetails.js'
 import type { BookmarkAddHistoryEntry } from '../sections/bookmark-add-history.js'
 
@@ -8,7 +8,7 @@ export function BookmarkAddHistoryCard({ entry }: { entry: BookmarkAddHistoryEnt
   const originalFolder = entry.originalFolderPath || '未归档'
   const targetFolder = entry.targetFolderPath || '未归档'
   return (
-    <article className="min-w-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4">
+    <article className={`min-w-0 ${OPTION_INSET_CLASS} p-4`}>
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
         <span className="inline-flex min-h-6 items-center rounded-full border border-ds-border bg-ds-surface-2 px-2.5 text-xs font-medium text-ds-text-secondary">{entry.moved ? '已移动' : '位置未变'}</span>
         <span className={OPTION_VALUE_CLASS}>{formatDateTime(entry.createdAt)}</span>

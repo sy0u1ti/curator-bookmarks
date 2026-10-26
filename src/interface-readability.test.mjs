@@ -116,17 +116,18 @@ try {
     list: getComputedStyle(document.querySelector('.popup-main-pane')).backgroundColor
   }))
   assert.equal(surfaces.currentPage, surfaces.list, 'current-page toolbar uses the same gray as bookmark panels')
-  const hint = page.locator('.popup-keyboard-hint')
-  const initialHint = await hint.evaluate(e => ({ color: getComputedStyle(e).color, opacity: getComputedStyle(e).opacity, width: e.clientWidth, contentWidth: e.scrollWidth, font: parseFloat(getComputedStyle(e).fontSize) }))
+  assert.equal(await page.locator('.popup-keyboard-hint').count(), 0, 'keyboard instructions belong in help, not a permanent secondary label')
+  const caption = page.locator('#view-caption')
+  const initialCaption = await caption.evaluate(e => ({ color: getComputedStyle(e).color, opacity: getComputedStyle(e).opacity, width: e.clientWidth, contentWidth: e.scrollWidth, font: parseFloat(getComputedStyle(e).fontSize) }))
   await page.locator('#search-input').focus()
   await frames()
   await page.locator('.t-skel-content .popup-main-pane').click({ position: { x: 8, y: 8 } })
   await frames()
-  const blurredHint = await hint.evaluate(e => ({ color: getComputedStyle(e).color, opacity: getComputedStyle(e).opacity }))
-  assert.equal(initialHint.opacity, '1')
-  assert.equal(blurredHint.opacity, '1')
-  assert.equal(initialHint.color, blurredHint.color)
-  assert.ok(initialHint.width >= initialHint.contentWidth && initialHint.font >= 12, 'keyboard help must fit without fading or truncation')
+  const blurredCaption = await caption.evaluate(e => ({ color: getComputedStyle(e).color, opacity: getComputedStyle(e).opacity }))
+  assert.equal(initialCaption.opacity, '1')
+  assert.equal(blurredCaption.opacity, '1')
+  assert.equal(initialCaption.color, blurredCaption.color)
+  assert.ok(initialCaption.width >= initialCaption.contentWidth && initialCaption.font >= 12, 'the current-view caption must fit without fading or truncation')
 
   // Hold the FIRST physical click across module loading; it used to replace
   // the pressed trigger during hover, losing pointer-up/click.
@@ -146,10 +147,13 @@ try {
   await page.screenshot({ path: path.join(output, 'popup-help-after.png') })
   await page.keyboard.press('Escape')
   await help.waitFor({ state: 'hidden' })
-  assert.equal(await trigger.evaluate(e => e === document.activeElement), true)
+  // Focus returns after the close transition; wait for it rather than sampling once.
+  await page.waitForFunction(() => document.activeElement?.id === 'search-help-toggle', undefined, { timeout: 2000 })
   await trigger.press('ArrowDown')
   await help.waitFor({ state: 'visible' })
-  await page.locator('.popup-keyboard-hint').click()
+  // Dismiss by clicking popup content below the panel.
+  const paneBox = await page.locator('.popup-main-pane').first().boundingBox()
+  await page.mouse.click(paneBox.x + 8, paneBox.y + paneBox.height - 8)
   await help.waitFor({ state: 'hidden' })
 
   const settings = page.locator('#open-settings')
@@ -234,7 +238,7 @@ try {
     await page.screenshot({ path: path.join(output, 'newtab-settings-' + name + '.png') })
   }
   const violations = audits.filter(a => a.small.length || a.lowContrast.length)
-  await writeFile(path.join(output, 'readability.json'), JSON.stringify({ surfaces, initialHint, press, audits, errors, violations }, null, 2))
+  await writeFile(path.join(output, 'readability.json'), JSON.stringify({ surfaces, initialCaption, press, audits, errors, violations }, null, 2))
   assert.deepEqual(errors, [])
   if (!reportOnly) assert.deepEqual(violations, [], 'visible enabled copy must be at least 12px with sufficient contrast on solid surfaces')
   await rm(path.join(output, 'failure.png'), { force: true })

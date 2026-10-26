@@ -73,7 +73,7 @@ const startupReducedTransparencyMaskRule = newtabHtml.match(
   /@media \(prefers-reduced-transparency: reduce\)[\s\S]*?#newtab-background-mask\s*\{([^}]*)\}/
 )?.[1] || ''
 const searchSurfaceRule = newtabCss.match(/\.newtab-search\s*\{([^}]*)\}/s)?.[1] || ''
-const bookmarkTileRule = newtabCss.match(/\.bookmark-tile\s*\{([^}]*)\}/s)?.[1] || ''
+const bookmarkTileRule = newtabCss.match(/\.bookmark-tile(?:,\s*\.bookmark-tile-preview)?\s*\{([^}]*)\}/s)?.[1] || ''
 const reducedTransparencyOpaqueSelectors = [globalsCss, newtabCss]
   .flatMap((source) => [...source.matchAll(/:where\(\s*([^)]*?)\s*\)\s*\{[^}]*background-color:\s*#161616\s*!important;/g)])
   .map((match) => match[1])
@@ -315,7 +315,7 @@ assert.ok(
   unifiedGlassTokens.includes('--newtab-glass-bg-fill: rgba(0, 0, 0, 0.13)') &&
     unifiedGlassTokens.includes('--newtab-glass-slider-fill: rgba(255, 255, 255, 0.16)') &&
     unifiedGlassTokens.includes('--newtab-glass-stroke: rgba(255, 255, 255, 0.18)') &&
-    unifiedGlassTokens.includes('--newtab-glass-stroke-width: 1.5px') &&
+    unifiedGlassTokens.includes('--newtab-glass-stroke-width: 1px') &&
     unifiedGlassTokens.includes('--newtab-glass-background-blur: 12px') &&
     unifiedGlassTokens.includes('--newtab-glass-backdrop-filter: blur(var(--newtab-glass-background-blur))') &&
     unifiedGlassTokens.includes('--newtab-glass-drop-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.24)') &&
@@ -652,11 +652,18 @@ assert.ok(
 )
 
 assert.ok(
-  bookmarkHoverRule.includes('transform: translateY(var(--newtab-bookmark-hover-lift))') &&
+  bookmarkHoverRule.includes('top: var(--newtab-bookmark-hover-lift)') &&
     bookmarkHoverRule.includes('--newtab-bookmark-current-shadow: var(--newtab-bookmark-hover-shadow)') &&
     !bookmarkHoverRule.replace(/-?\bbackdrop-filter:/g, '').includes('filter:') &&
     newtabCss.includes('.bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before'),
   'Bookmark hover should use the Lumno-inspired lift, layered shadow, and glass-tinted overlay; only backdrop-filter is allowed (a clip-path-clipped drop-shadow filter is not).'
+)
+
+assert.ok(
+  !bookmarkHoverRule.includes('transform:') &&
+    bookmarkTileClasses.includes('top_var(--bookmark-hover-duration,var(--ds-motion-feedback))') &&
+    !/\.bookmark-tile[^{}]* \.bookmark-title\s*\{[^}]*will-change:/s.test(newtabCss),
+  'The small bookmark hover lift must use relative positioning, not a transform or a separate glyph layer that re-snaps text at fractional DPI.'
 )
 
 assert.ok(

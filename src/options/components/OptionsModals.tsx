@@ -12,8 +12,6 @@ import {
   OPTIONS_MODAL_BUTTON_CLASS,
   OPTIONS_MODAL_COPY_CLASS,
   OPTIONS_MODAL_DANGER_BUTTON_CLASS,
-  OPTIONS_MODAL_EYEBROW_CLASS,
-  OPTIONS_MODAL_EYEBROW_TONE_CLASS,
   OPTIONS_MODAL_PANEL_CLASS,
   OPTIONS_MODAL_PRIMARY_BUTTON_CLASS,
   OPTIONS_MODAL_RESULTS_CLASS,
@@ -106,10 +104,6 @@ function ModalBackdrop({
   )
 }
 
-function modalEyebrowClass(tone?: string) {
-  return cx(OPTIONS_MODAL_EYEBROW_CLASS, tone ? OPTIONS_MODAL_EYEBROW_TONE_CLASS[tone] : undefined)
-}
-
 function confirmButtonClass(tone: 'danger' | 'warning') {
   return cx(
     OPTIONS_MODAL_BUTTON_CLASS,
@@ -134,7 +128,6 @@ export function OptionsModals() {
         open={modals.delete.open}
       >
         <>
-          <p className={modalEyebrowClass('danger')}>删除</p>
           <h2 id="delete-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量删除高置信异常书签？</h2>
           <p id="delete-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.delete.copy}
@@ -173,9 +166,6 @@ export function OptionsModals() {
         open={modals.confirm.open}
       >
         <>
-          <p className={modalEyebrowClass(modals.confirm.tone)}>
-            {modals.confirm.label}
-          </p>
           <h2 id="confirm-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>{modals.confirm.title}</h2>
           <p id="confirm-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>{modals.confirm.copy}</p>
           <div className={OPTIONS_MODAL_ACTIONS_CLASS}>
@@ -212,7 +202,6 @@ export function OptionsModals() {
         open={modals.move.open}
       >
         <>
-          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>批量移动</p>
           <h2 id="move-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>批量移动书签</h2>
           <p id="move-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.move.copy}
@@ -278,7 +267,6 @@ export function OptionsModals() {
         open={modals.scope.open}
       >
         <>
-          <p className={OPTIONS_MODAL_EYEBROW_CLASS}>文件夹筛选</p>
           <h2 id="scope-modal-title" className={OPTIONS_MODAL_TITLE_CLASS}>选择筛选文件夹</h2>
           <p id="scope-modal-copy" className={OPTIONS_MODAL_COPY_CLASS}>
             {modals.scope.copy}

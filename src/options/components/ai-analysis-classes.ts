@@ -1,8 +1,10 @@
+import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_SURFACE_CLASS } from './option-layout-classes.js'
+
 export const AI_ANALYSIS_RESULTS_GROUP_CLASS =
-  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] max-[760px]:p-4'
+  `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] max-[760px]:p-4`
 
 export const AI_ANALYSIS_SELECTION_GROUP_CLASS =
-  't-panel-slide mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] [--panel-translate-y:12px] max-[760px]:mt-5 max-[760px]:p-4'
+  `t-panel-slide mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] [--panel-translate-y:12px] max-[760px]:mt-5 max-[760px]:p-4`
 
 export const AI_ANALYSIS_PRIMARY_BUTTON_CLASS =
   'font-bold active:scale-[0.985]'
@@ -30,8 +32,7 @@ const AI_ANALYSIS_STATUS_TONE_CLASS: Record<string, string> = {
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 
-export const AI_ANALYSIS_CHECKBOX_CLASS =
-  'inline-grid size-[15px] cursor-pointer place-items-center rounded-ds-sm border border-ds-border-hover bg-ds-surface-2 text-ds-text-inverse outline-none data-[checked]:border-ds-text-primary data-[checked]:bg-ds-text-primary data-[disabled]:cursor-default data-[disabled]:opacity-55 focus-visible:shadow-ds-focus'
+export const AI_ANALYSIS_CHECKBOX_CLASS = OPTION_RESULT_CHECKBOX_CLASS
 
 export function aiAnalysisToneClass(tone: string | undefined) {
   return AI_ANALYSIS_STATUS_TONE_CLASS[tone || 'muted'] || AI_ANALYSIS_STATUS_TONE_CLASS.muted

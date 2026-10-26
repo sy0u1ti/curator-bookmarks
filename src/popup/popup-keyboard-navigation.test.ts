@@ -103,7 +103,7 @@ function testSearchResultsReclaimBookmarkKeyboardSelection(): void {
   )
   const searchResultRows = source.slice(
     source.indexOf('function getSearchResultRows()'),
-    source.indexOf('const MATCH_REASON_TOKEN_PATTERNS')
+    source.indexOf('function getBookmarkActionMenuLabel')
   )
   const setActiveResult = source.slice(
     source.indexOf('function setActiveResultIndex('),

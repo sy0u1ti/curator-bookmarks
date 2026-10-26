@@ -151,8 +151,7 @@ try {
   })), stableMaterials, 'Clicking blank space must never switch unrelated glass filters or highlights')
   report.stableMaterialsOnClick = true
 
-  // Check actual painted states: the previous hover selector replaced the rim,
-  // leaving the two vertical edges nearly invisible until a pointer arrived.
+  // A single native stroke must remain complete in every interaction state.
   const tile = page.locator('.bookmark-tile').first()
   const settleCard = () => tile.evaluate(element => Promise.all(element.getAnimations({ subtree: true }).map(animation => animation.finished.catch(() => {}))))
   const restingEdge = await readCardEdge(tile)
@@ -181,14 +180,14 @@ try {
     assert.equal(edge.clip, 'none')
     assert.equal(edge.mask, 'none')
     assert.deepEqual(edge.clippedBy, [], `${state}: no ancestor may cut off the side edges`)
-    assert.ok(edge.rim.length > 0)
-    assert.deepEqual(edge.rim, restingEdge.rim, `${state}: interaction must retain the complete glass rim`)
+    assert.match(edge.borders[0], /^1px solid /, `${state}: use one native pixel for the edge`)
+    assert.deepEqual(edge.rim, [], `${state}: no inset rim may double the native border`)
     assert.equal(edge.texture, restingEdge.texture, `${state}: interaction must preserve the cached edge`)
   }
   await page.mouse.click(20, 1100)
   await settleCard()
   assert.deepEqual(await readCardEdge(tile), restingEdge, 'Returning to rest must restore the same complete edge')
-  report.cardEdges = { states: Object.keys(edges), continuousStroke: true, stableRim: true, noClipping: true }
+  report.cardEdges = { states: Object.keys(edges), continuousStroke: true, singleBorder: true, noClipping: true }
 
   await page.getByRole('button', { name: '打开设置', exact: true }).click()
   await page.getByRole('tab', { name: '玻璃', exact: true }).click()

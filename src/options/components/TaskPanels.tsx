@@ -42,7 +42,7 @@ const DUPLICATES_GROUP_CLASS =
 export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="history" className={OPTION_PANEL_CLASS} aria-labelledby="history-title" hidden={hidden}>
-      <OptionPanelHeader titleId="history-title" title="检测历史" description="查看最近的书签可用性检测记录与处理状态。" />
+      <OptionPanelHeader titleId="history-title" title="检测历史" />
 
       <ScopePickerTrigger source="history" />
 
@@ -56,7 +56,7 @@ export function HistoryPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="backup" className={OPTION_PANEL_CLASS} aria-labelledby="backup-title" hidden={hidden}>
-      <OptionPanelHeader titleId="backup-title" title="数据与备份" description="导入、导出和恢复 Curator 的本地设置与书签辅助数据。" />
+      <OptionPanelHeader titleId="backup-title" title="数据与备份" />
 
       <BackupControls />
     </section>
@@ -66,7 +66,7 @@ export function BackupPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function RedirectsPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="redirects" className={OPTION_PANEL_CLASS} aria-labelledby="redirects-title" hidden={hidden}>
-      <OptionPanelHeader titleId="redirects-title" title="重定向更新" description="识别发生跳转的链接，并在确认后更新书签地址。" />
+      <OptionPanelHeader titleId="redirects-title" title="重定向更新" />
 
       <div className={REDIRECTS_GROUP_CLASS}>
         <RedirectControls />
@@ -80,7 +80,7 @@ export function RedirectsPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="duplicates" className={OPTION_PANEL_CLASS} aria-labelledby="duplicates-title" hidden={hidden}>
-      <OptionPanelHeader titleId="duplicates-title" title="重复书签检测" description="找出指向相同内容的书签，比较后保留更合适的版本。" />
+      <OptionPanelHeader titleId="duplicates-title" title="重复书签检测" />
 
       <DuplicateControls />
 
@@ -95,7 +95,7 @@ export function DuplicatesPanel({ hidden }: OptionsPanelVisibilityProps) {
 export function IgnoreRulesPanel({ hidden }: OptionsPanelVisibilityProps) {
   return (
     <section id="ignore" className={OPTION_PANEL_CLASS} aria-labelledby="ignore-title" hidden={hidden}>
-      <OptionPanelHeader titleId="ignore-title" title="忽略规则" description="管理检测与整理时需要跳过的域名、链接或书签范围。" />
+      <OptionPanelHeader titleId="ignore-title" title="忽略规则" />
 
       <IgnoreRules />
     </section>

@@ -1,10 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties, HTMLAttributes, ReactNode } from 'react'
 import { Badge } from '../base/Badge'
 import { Progress } from '../base/Progress'
 import { Spinner } from '../base/Spinner'
 import { cx } from '../base/utils'
 
-export interface AiTaskStatusProps {
+export interface AiTaskStatusProps extends Omit<HTMLAttributes<HTMLElement>, 'title'> {
   children?: ReactNode
   className?: string
   descriptionClassName?: string
@@ -54,10 +54,11 @@ export function AiTaskStatus({
   progressValueText,
   status,
   statusNode,
-  title
+  title,
+  ...props
 }: AiTaskStatusProps) {
   return (
-    <section className={cx('grid gap-2 rounded-ds-md border border-ds-border bg-ds-surface-1 p-3 text-ds-text-primary', className)}>
+    <section className={cx('grid gap-2 rounded-ds-md border-0 bg-ds-surface-1 p-3 text-ds-text-primary', className)} {...props}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
           {label ? <span className={AI_TASK_STATUS_LABEL_CLASS}>{label}</span> : null}

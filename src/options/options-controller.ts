@@ -211,6 +211,7 @@ import {
 } from './sections/recycle.js'
 import {
   buildDuplicateGroups,
+  refreshDuplicateRecommendations,
   renderDuplicateSection,
   applyDuplicateStrategy,
   applyDuplicateGroupStrategy,
@@ -657,6 +658,7 @@ async function hydrateLargeRepositoryState(): Promise<void> {
     if (version !== largeRepositoryHydrationVersion) return
     aiNamingState.tagIndex = tagIndex
     contentSnapshotState.index = snapshotIndex
+    refreshDuplicateRecommendations()
   } catch (error) {
     if (version !== largeRepositoryHydrationVersion) return
     largeRepositoryHydrationStarted = false
@@ -2830,7 +2832,7 @@ function renderAvailabilitySection() {
     ? availabilityState.retestSelectionCompleted
     : availabilityState.checkedBookmarks
   publishAvailabilityProgress(getAvailabilityProgressState(progressCompleted, progressTotal))
-  publishAvailabilityDecisionMetrics(getAvailabilityDecisionMetricsState(scopeMeta, progressCompleted, progressTotal))
+  publishAvailabilityDecisionMetrics(getAvailabilityDecisionMetricsState())
   publishAvailabilityFilters(getAvailabilityFiltersState())
   publishAvailabilityResultsHeader(getAvailabilityResultsHeaderState())
   publishAvailabilitySelectionActions(getAvailabilitySelectionActionsState())
@@ -3011,16 +3013,14 @@ function getAvailabilityProgressState(progressCompleted: number, progressTotal: 
   }
 }
 
-function getAvailabilityDecisionMetricsState(scopeMeta, progressCompleted: number, progressTotal: number) {
+function getAvailabilityDecisionMetricsState() {
   const decisionStats = getAvailabilityDecisionStats()
 
   return {
     ignored: String(availabilityState.ignoredCount),
     newCount: String(decisionStats.newCount),
     persistent: String(decisionStats.persistentCount),
-    progress: `${progressCompleted} / ${progressTotal || availabilityState.eligibleBookmarks}`,
-    recovered: String(decisionStats.recoveredCount),
-    scope: scopeMeta.label
+    recovered: String(decisionStats.recoveredCount)
   }
 }
 
@@ -3729,9 +3729,9 @@ function renderContentSnapshotSettings() {
   const snapshotCount = snapshotRecords.length
   const fullTextCount = snapshotRecords.filter((record) => record.hasFullText).length
 
-  const modeCopy = settings.enabled
-    ? buildContentSnapshotStatusCopy(settings.saveFullText, snapshotCount, fullTextCount)
-    : '网页内容索引已关闭。'
+  const indexCopy = snapshotCount > 0
+    ? buildContentSnapshotStatusCopy(snapshotCount, fullTextCount)
+    : ''
   const aiRunCopy = buildContentSnapshotAiRunStatusCopy()
 
   publishContentSnapshotControls({
@@ -3739,15 +3739,15 @@ function renderContentSnapshotSettings() {
     fullTextDisabled: !settings.enabled,
     loading: availabilityState.storageLoading,
     saveFullText: Boolean(settings.saveFullText),
-    statusCopy: contentSnapshotState.statusMessage || aiRunCopy || modeCopy
+    statusCopy: contentSnapshotState.statusMessage || aiRunCopy || indexCopy
   })
 }
 
-function buildContentSnapshotStatusCopy(saveFullText: boolean, snapshotCount: number, fullTextCount: number): string {
-  if (saveFullText) {
+function buildContentSnapshotStatusCopy(snapshotCount: number, fullTextCount: number): string {
+  if (fullTextCount > 0) {
     return `已保存 ${snapshotCount} 条索引，${fullTextCount} 条含正文。`
   }
-  return `已保存 ${snapshotCount} 条索引，仅摘要模式。`
+  return `已保存 ${snapshotCount} 条摘要索引。`
 }
 
 function buildContentSnapshotAiRunStatusCopy(): string {
@@ -5031,7 +5031,7 @@ function renderAiProviderSettings(
       : aiNamingState.settingsDirty
       ? '有未保存改动，保存后会用于所有 AI 功能。'
       : hasRequiredConfig
-        ? '配置已保存，可继续获取模型或测试连接。'
+        ? ''
         : '填写 API Key 后即可获取模型并测试连接。',
     reasoningEffort: resolveReasoningEffortForModel(
       settings.model,
@@ -5048,11 +5048,8 @@ function renderAiProviderSettings(
     reasoningEffortSupported: reasoningProfile.supported,
     revealApiKey: managerState.aiRevealApiKey,
     saveDisabled: fieldsDisabled,
-    saveStatusText: aiSettingsSaving ? '正在保存' : aiNamingState.settingsDirty
-      ? '有未保存改动'
-      : hasRequiredConfig
-        ? '已保存'
-        : '待配置',
+    // Steady config state lives in the header badge; the footer only reports an in-flight save.
+    saveStatusText: aiSettingsSaving ? '正在保存' : '',
     showSaveSettingsButton,
     testButtonSecondary: showSaveSettingsButton,
     testDisabled: !hasRequiredConfig || fieldsDisabled,
@@ -10557,11 +10554,12 @@ function getAvailabilityStatusCopy() {
 
   if (availabilityState.lastCompletedAt) {
     const abnormalCount = availabilityState.reviewCount + availabilityState.failedCount
+    // The progress label already states the outcome and checked count.
     if (availabilityState.lastRunOutcome === 'stopped') {
-      return `已停止 · 完成 ${availabilityState.checkedBookmarks} · 可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount}`
+      return `可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount}`
     }
 
-    return `已完成 ${availabilityState.checkedBookmarks} 条 · 可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount} · 忽略 ${availabilityState.ignoredCount} · 保护跳过 ${availabilityState.skippedCount}`
+    return `可访问 ${availabilityState.availableCount} · 重定向 ${availabilityState.redirectedCount} · 异常 ${abnormalCount} · 保护跳过 ${availabilityState.skippedCount}`
   }
 
   return '仅检测适合外部访问的 http/https 书签；敏感地址会自动跳过。'

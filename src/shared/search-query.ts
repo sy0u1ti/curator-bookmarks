@@ -1,14 +1,13 @@
 import { normalizeText, stripCommonUrlPrefix } from './text.js'
+import { parseSearchDateExpression, type SearchDateRange } from './search/date.js'
 
-export type SearchChipKind = 'site' | 'url' | 'folder' | 'type' | 'time' | 'exclude'
-
-type RelativeTimeUnit = 'day' | 'week' | 'month'
-type FixedTimeUnit = 'current-month' | 'current-week' | 'last-month' | 'last-week' | 'half-year' | 'today' | 'yesterday' | 'before-yesterday'
-
-export interface SearchDateRange {
-  from: number
-  to: number
-  label: string
+export type { SearchDateRange } from './search/date.js'
+export type SearchChipKind = 'site' | 'url' | 'folder' | 'type' | 'time' | 'exclude' | 'sort'
+export interface SearchTermGroup {
+  /** The original concept; alternatives never replace another required group. */
+  term: string
+  alternatives: string[]
+  literal: boolean
 }
 
 export interface ParsedSearchQuery {
@@ -21,587 +20,193 @@ export interface ParsedSearchQuery {
   typeFilters: string[]
   excludedTerms: string[]
   dateRange: SearchDateRange | null
+  sort: 'relevance' | 'recent'
+  recencyHint: boolean
+  termGroups?: SearchTermGroup[]
   chips: Array<{ kind: SearchChipKind; label: string; value: string }>
 }
 
-interface SearchQueryToken {
-  value: string
-  literal: boolean
+interface SearchQueryToken { value: string; literal: boolean }
+const OPERATORS: Record<string, 'site' | 'url' | 'folder' | 'type' | 'exclude' | 'sort'> = {
+  site: 'site', domain: 'site', 站点: 'site', 域名: 'site', url: 'url',
+  folder: 'folder', path: 'folder', 文件夹: 'folder', 目录: 'folder', 路径: 'folder',
+  type: 'type', kind: 'type', 类型: 'type', 类别: 'type',
+  exclude: 'exclude', 排除: 'exclude', sort: 'sort', 排序: 'sort'
 }
+const EXCLUDE_COMMANDS = new Set(['排除', '不要', '过滤掉', '剔除', '去掉', 'exclude', 'excluding'])
+const RECENT_TERMS = new Set(['recent', 'newest', 'latest', '最近', '新近', '最近优先'])
+const REQUEST_PREFIX = /^(?:(?:(?:请|麻烦)\s*(?:帮我|帮忙)?|帮我|帮忙)\s*(?:找一下|找找|查一下|查找|搜索|看看|找)\s*|(?:找一下|找找|查一下)\s*|(?:搜索|查找)\s+|please\s+(?:find|search|show)\s+(?:me\s+)?|(?:find|show)\s+me\s+)/i
 
-const RELATIVE_TIME_PATTERN = /^(?:最近|近|过去)(\d+|一|两|二|三|四|五|六|七|八|九|十)(天|日|周|星期|礼拜|个月|月)$/
-const FIXED_TIME_PATTERNS: Array<{ pattern: RegExp; unit: FixedTimeUnit; label: string }> = [
-  { pattern: /^(今天|今日)$/, unit: 'today', label: '今天' },
-  { pattern: /^(昨天|昨日)$/, unit: 'yesterday', label: '昨天' },
-  { pattern: /^(前天)$/, unit: 'before-yesterday', label: '前天' },
-  { pattern: /^(本周|这周|这个星期)$/, unit: 'current-week', label: '本周' },
-  { pattern: /^(上周|上一周|上星期|上个星期)$/, unit: 'last-week', label: '上周' },
-  { pattern: /^(本月|这个月)$/, unit: 'current-month', label: '本月' },
-  { pattern: /^(上月|上个月)$/, unit: 'last-month', label: '上个月' },
-  { pattern: /^(最近半年|近半年|过去半年)$/, unit: 'half-year', label: '最近 6 个月' }
-]
-
-const SEARCH_OPERATOR_KEYS = new Set([
-  'site',
-  'domain',
-  'url',
-  '站点',
-  '域名',
-  'folder',
-  'path',
-  '文件夹',
-  '目录',
-  '路径',
-  'type',
-  'kind',
-  '类型',
-  '类别'
-])
-
-const LOCAL_SEARCH_REQUEST_PREFIX = /^(?:(?:(?:请|麻烦)\s*(?:帮我|帮忙)?|帮我|帮忙)\s*(?:找一下|找找|查一下|查找|搜索|看看|找)\s*|(?:找一下|找找|查一下)\s*|(?:搜索|查找)\s+)/
-
-const CHINESE_SEARCH_EXCLUSION_PATTERN = /(?:不要|不看|排除|过滤掉|过滤|不是|别给我|剔除|去掉)\s*([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
-const ENGLISH_SEARCH_EXCLUSION_PATTERN = /\b(?:without|exclude|excluding|not|no)\s+([a-z0-9][a-z0-9+.#/_-]*)/gi
-const DASH_SEARCH_EXCLUSION_PATTERN = /(^|\s)-([a-z0-9][a-z0-9+.#/_-]*|[\u3400-\u9fff]{1,12})/gi
-const SAFE_LOCAL_PROTECTED_SEARCH_PATTERN = /(^|\s)((?:site|domain|url|folder|path|type|kind|站点|域名|文件夹|目录|路径|类型|类别)[:：]\s*(?:"[^"]*(?:"|$)|'[^']*(?:'|$)|“[^”]*(?:”|$)|‘[^’]*(?:’|$)|[^\s，。！？；、,!?;()[\]{}"'“”‘’]+))|("[^"]*(?:"|$)|'[^']*(?:'|$)|“[^”]*(?:”|$)|‘[^’]*(?:’|$))/gi
-const SAFE_LOCAL_PLACEHOLDER_START = 0xe000
-const SAFE_LOCAL_PLACEHOLDER_PATTERN = /[\ue000-\uf8ff]/g
-
+/** One grammar is shared by local search, semantic plans, chips and pinyin readiness. */
 export function parseSearchQuery(query: unknown, now = Date.now()): ParsedSearchQuery {
-  const rawQuery = normalizeRawSearchQuery(query)
-  const safeRules = applySafeLocalSearchRules(rawQuery)
-  const tokens = tokenizeSearchQuery(safeRules.query)
-  const textTerms: string[] = []
-  const literalTerms: string[] = []
-  const siteFilters: string[] = []
-  const urlFilters: string[] = []
-  const folderFilters: string[] = []
-  const typeFilters: string[] = []
-  const excludedTerms: string[] = []
-  const chips: ParsedSearchQuery['chips'] = []
-  let dateRange: SearchDateRange | null = null
-
-  for (let index = 0; index < tokens.length; index += 1) {
-    const { value: token, literal } = tokens[index]
-    if (literal) {
-      textTerms.push(token)
-      literalTerms.push(token)
-      continue
-    }
-    const mergedTime = parseTimeExpression(tokens, index, now)
-    if (mergedTime) {
-      dateRange = mergedTime.range
-      chips.push({ kind: 'time', label: `时间：${mergedTime.range.label}`, value: mergedTime.range.label })
-      index += mergedTime.consumed - 1
-      continue
-    }
-
-    const operator = parseSearchOperatorTokens(tokens, index)
-    if (operator) {
-      if (operator.kind === 'site') {
-        siteFilters.push(operator.value)
-        chips.push({ kind: 'site', label: `站点：${operator.value}`, value: operator.value })
-      } else if (operator.kind === 'url') {
-        urlFilters.push(operator.value)
-        chips.push({ kind: 'url', label: `网址：${operator.value}`, value: operator.value })
-      } else if (operator.kind === 'folder') {
-        folderFilters.push(operator.value)
-        chips.push({ kind: 'folder', label: `文件夹：${operator.value}`, value: operator.value })
-      } else {
-        typeFilters.push(operator.value)
-        chips.push({ kind: 'type', label: `类型：${operator.value}`, value: operator.value })
-      }
-      index += operator.consumed - 1
-      continue
-    }
-
-    if (token.startsWith('-') && token.length > 1) {
-      const value = normalizeFilterValue(token.slice(1))
-      if (value) {
-        excludedTerms.push(value)
-        chips.push({ kind: 'exclude', label: `排除：${value}`, value })
-      }
-      continue
-    }
-
-    textTerms.push(token)
+  const rawQuery = normalizeText(stripCommonUrlPrefix(query))
+  let input = rawQuery.replace(REQUEST_PREFIX, '')
+  const request = input !== rawQuery || /^找(?=上周|本周|昨天|今天|去年)/.test(input)
+  if (request) input = input.replace(/^找/, '')
+  const tokens = tokenizeSearchQuery(input)
+  const parsed: ParsedSearchQuery = {
+    rawQuery, textTerms: [], literalTerms: [], siteFilters: [], urlFilters: [], folderFilters: [],
+    typeFilters: [], excludedTerms: [], dateRange: null, sort: 'relevance', recencyHint: false, chips: []
   }
-
-  return {
-    rawQuery,
-    textTerms: uniqueTerms(textTerms),
-    literalTerms: uniqueTerms(literalTerms),
-    siteFilters: uniqueTerms(siteFilters),
-    urlFilters: uniqueTerms(urlFilters),
-    folderFilters: uniqueTerms(folderFilters),
-    typeFilters: uniqueTerms(typeFilters),
-    excludedTerms: uniqueTerms([...excludedTerms, ...safeRules.excludedTerms]),
-    dateRange,
-    chips: dedupeChips(chips)
+  const dates: SearchDateRange[] = []
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]
+    if (token.literal) {
+      parsed.textTerms.push(token.value)
+      parsed.literalTerms.push(token.value)
+      continue
+    }
+    const operator = /^([^:：]+)[:：](.*)$/.exec(token.value)
+    const kind = operator && Object.hasOwn(OPERATORS, operator[1]) ? OPERATORS[operator[1]] : undefined
+    if (kind) {
+      let value = operator![2]
+      if (!value && tokens[index + 1] && !/^\w+[:：]/.test(tokens[index + 1].value)) value = tokens[++index].value
+      value = normalizeFilterValue(value)
+      if (value && applyOperator(parsed, kind, value)) continue
+    }
+    if (token.value.startsWith('-') && token.value.length > 1) {
+      parsed.excludedTerms.push(normalizeFilterValue(token.value.slice(1)))
+      continue
+    }
+    // Standalone commands are explicit. Never infer negation from no-code,
+    // not found, 过滤器 or 排除法, nor from a substring inside a product name.
+    if (EXCLUDE_COMMANDS.has(token.value) && tokens[index + 1]) {
+      parsed.excludedTerms.push(normalizeFilterValue(tokens[++index].value))
+      continue
+    }
+    if (request && /^(?:不要|过滤掉)(.+)$/.test(token.value)) {
+      parsed.excludedTerms.push(normalizeFilterValue(token.value.replace(/^(?:不要|过滤掉)/, '')))
+      continue
+    }
+    let matchedTime = false
+    for (let count = Math.min(3, tokens.length - index); count >= 1; count--) {
+      const parts = tokens.slice(index, index + count)
+      if (parts.some(part => part.literal || /[:：]/.test(part.value))) continue
+      let value = parts.map(part => part.value).join(' ')
+      // Request scaffolding is only stripped beside a complete time expression.
+      if (request) value = value.replace(/(?:收藏|保存|添加)?的?(?:那个|这个)?$/, '')
+      const range = parseSearchDateExpression(value, now)
+      if (!range) continue
+      dates.push(range)
+      index += count - 1
+      matchedTime = true
+      break
+    }
+    if (matchedTime) continue
+    if (RECENT_TERMS.has(token.value)) {
+      parsed.recencyHint = true
+      continue
+    }
+    if (request && /^(?:收藏的|保存的|添加的|那个|这个|一些|一个|书签|链接|saved|bookmarks?)$/.test(token.value)) continue
+    parsed.textTerms.push(...token.value.normalize('NFKC')
+      .replace(/([a-z0-9])([\u3400-\u9fff])/gi, '$1 $2')
+      .replace(/([\u3400-\u9fff])([a-z0-9])/gi, '$1 $2')
+      .split(/\s+/).filter(Boolean))
   }
+  for (const key of ['textTerms', 'literalTerms', 'siteFilters', 'urlFilters', 'folderFilters', 'typeFilters', 'excludedTerms'] as const) {
+    parsed[key] = [...new Set(parsed[key].filter(Boolean))]
+  }
+  if (dates.length) {
+    parsed.dateRange = {
+      from: Math.max(...dates.map(date => date.from)), to: Math.min(...dates.map(date => date.to)),
+      label: [...new Set(dates.map(date => date.label))].join(' ∩ ')
+    }
+  }
+  parsed.chips = buildSearchQueryChips(parsed)
+  return parsed
 }
 
-function applySafeLocalSearchRules(query: unknown): { query: string; excludedTerms: string[] } {
-  const rawQuery = normalizeRawSearchQuery(query)
-  const protectedParts: string[] = []
-  const protectedQuery = protectSafeLocalStructuredSearch(rawQuery, protectedParts)
-  const exclusion = extractSafeLocalSearchExclusions(protectedQuery)
-  const cleanedQuery = restoreSafeLocalStructuredSearch(
-    cleanSafeLocalSearchQuery(exclusion.query),
-    protectedParts
-  )
-  const excludedTerms = uniqueTerms(exclusion.terms)
-  const negativeTerms = excludedTerms.flatMap(term => { const mappedResult = `-${formatSafeLocalRuleTerm(term)}`; return mappedResult ? [mappedResult] : [] })
-
-  return {
-    query: [cleanedQuery, ...negativeTerms].filter(Boolean).join(' ') || rawQuery,
-    excludedTerms
+function applyOperator(parsed: ParsedSearchQuery, kind: typeof OPERATORS[string], value: string): boolean {
+  if (kind === 'sort') {
+    if (/^(new|recent|latest|newest|最近|最新)$/.test(value)) parsed.sort = 'recent'
+    else if (/^(relevance|相关性)$/.test(value)) parsed.sort = 'relevance'
+    else return false
+  } else {
+    const key = kind === 'exclude' ? 'excludedTerms' : `${kind}Filters` as const
+    parsed[key].push(value)
   }
+  return true
+}
+
+export function buildSearchQueryChips(parsed: ParsedSearchQuery): ParsedSearchQuery['chips'] {
+  const chips: ParsedSearchQuery['chips'] = []
+  for (const [kind, label, values] of [
+    ['site', '站点', parsed.siteFilters], ['url', '网址', parsed.urlFilters],
+    ['folder', '文件夹', parsed.folderFilters], ['type', '类型', parsed.typeFilters],
+    ['exclude', '排除', parsed.excludedTerms]
+  ] as const) {
+    for (const value of values) chips.push({ kind, label: `${label}：${value}`, value })
+  }
+  if (parsed.dateRange) chips.push({ kind: 'time', label: `时间：${parsed.dateRange.label}`, value: parsed.dateRange.label })
+  if (parsed.sort === 'recent') chips.push({ kind: 'sort', label: '排序：最近添加', value: 'recent' })
+  else if (parsed.recencyHint) chips.push({ kind: 'sort', label: '排序：相关性 · 最近偏好', value: 'recent-preference' })
+  return chips
 }
 
 export function buildSearchTextQuery(parsed: ParsedSearchQuery): string {
   return parsed.textTerms.join(' ')
 }
 
-export function matchesParsedSearchQuery(
-  parsed: ParsedSearchQuery,
-  target: {
-    searchText: string
-    domain?: string
-    url?: string
-    path?: string
-    type?: string
-    dateAdded?: number
-  }
-): boolean {
-  const searchText = normalizeSearchValue(target.searchText)
-  const domain = normalizeSearchValue(target.domain)
-  const url = normalizeSearchValue(target.url)
-  const path = normalizeSearchValue(target.path)
-  const type = normalizeSearchValue(target.type)
-
-  if (parsed.siteFilters.length && !parsed.siteFilters.some((filter) => matchesSearchSiteFilter(filter, domain, url))) {
-    return false
-  }
-
-  if (parsed.urlFilters.length && !parsed.urlFilters.some((filter) => url.includes(filter))) {
-    return false
-  }
-
-  if (parsed.folderFilters.length && !parsed.folderFilters.some((filter) => path.includes(filter))) {
-    return false
-  }
-
-  if (parsed.typeFilters.length && !parsed.typeFilters.some((filter) => type.includes(filter))) {
-    return false
-  }
-
-  if (parsed.excludedTerms.length && parsed.excludedTerms.some((term) => searchText.includes(term))) {
-    return false
-  }
-
+export function matchesParsedSearchQuery(parsed: ParsedSearchQuery, target: {
+  searchText: string; domain?: string; url?: string; path?: string; type?: string; dateAdded?: number
+}): boolean {
+  const url = normalizeText(stripCommonUrlPrefix(target.url))
+  if (parsed.siteFilters.length && !parsed.siteFilters.some(filter => matchesSearchSiteFilter(filter, target.domain || '', url))) return false
+  if (parsed.urlFilters.length && !parsed.urlFilters.some(filter => url.includes(filter))) return false
+  if (parsed.folderFilters.length && !parsed.folderFilters.some(filter => normalizeText(target.path).includes(filter))) return false
+  if (parsed.typeFilters.length && !parsed.typeFilters.some(filter => normalizeText(target.type).includes(filter))) return false
+  if (parsed.excludedTerms.some(term => normalizeText(target.searchText).includes(term))) return false
   if (parsed.dateRange) {
-    const dateAdded = Number(target.dateAdded)
-    if (!Number.isFinite(dateAdded) || dateAdded < parsed.dateRange.from || dateAdded > parsed.dateRange.to) {
-      return false
-    }
+    const date = Number(target.dateAdded)
+    if (!Number.isFinite(date) || date < parsed.dateRange.from || date >= parsed.dateRange.to) return false
   }
-
   return true
 }
 
 export function matchesSearchSiteFilter(filter: string, domain: string, url = ''): boolean {
   const hostname = normalizeSearchHostname(domain || url)
-  const requestedHostname = normalizeSearchHostname(filter)
-  return Boolean(hostname && requestedHostname && (
-    hostname === requestedHostname || hostname.endsWith(`.${requestedHostname}`)
-  ))
+  const requested = normalizeSearchHostname(filter)
+  return Boolean(hostname && requested && (hostname === requested || hostname.endsWith(`.${requested}`)))
 }
 
 function normalizeSearchHostname(value: string): string {
-  const normalized = normalizeSearchValue(value).replace(/\.$/, '')
-  // Bookmark records already carry an ASCII hostname. Reuse it without
-  // constructing URL objects for every candidate in a large search.
-  if (/^(?:[a-z0-9_-]+\.)*[a-z0-9_-]+$/.test(normalized)) {
-    return normalized
-  }
+  const normalized = normalizeFilterValue(value).replace(/\.$/, '')
+  if (/^(?:[a-z0-9_-]+\.)*[a-z0-9_-]+$/.test(normalized)) return normalized
   try {
-    const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) ? normalized : `https://${normalized}`)
-    return url.hostname.replace(/^www\./, '').replace(/\.$/, '')
-  } catch {
-    return ''
-  }
-}
-
-function parseSearchOperatorTerm(term: string): { kind: 'site' | 'url' | 'folder' | 'type'; value: string } | null {
-  const match = String(term || '').match(/^([^:：]+)[:：](.+)$/)
-  if (!match) {
-    return null
-  }
-
-  const key = normalizeSearchValue(match[1])
-  const value = normalizeFilterValue(match[2])
-  if (!value) {
-    return null
-  }
-
-  if (key === 'site' || key === 'domain' || key === '站点' || key === '域名') {
-    return { kind: 'site', value }
-  }
-  if (key === 'url') {
-    return { kind: 'url', value }
-  }
-  if (key === 'folder' || key === 'path' || key === '文件夹' || key === '目录' || key === '路径') {
-    return { kind: 'folder', value }
-  }
-  if (key === 'type' || key === 'kind' || key === '类型' || key === '类别') {
-    return { kind: 'type', value }
-  }
-
-  return null
-}
-
-function parseSearchOperatorTokens(
-  tokens: SearchQueryToken[],
-  index: number
-): { kind: 'site' | 'url' | 'folder' | 'type'; value: string; consumed: number } | null {
-  const current = tokens[index]?.value || ''
-  const direct = parseSearchOperatorTerm(current)
-  if (direct) {
-    return { ...direct, consumed: 1 }
-  }
-
-  const keyOnly = current.match(/^([^:：]+)[:：]$/)
-  if (!keyOnly || index + 1 >= tokens.length) {
-    return null
-  }
-
-  const key = normalizeSearchValue(keyOnly[1])
-  if (!SEARCH_OPERATOR_KEYS.has(key)) {
-    return null
-  }
-
-  const nextValue = normalizeFilterValue(tokens[index + 1].value)
-  if (!nextValue) {
-    return null
-  }
-
-  const merged = parseSearchOperatorTerm(`${key}:${nextValue}`)
-  return merged ? { ...merged, consumed: 2 } : null
-}
-
-function parseTimeExpression(tokens: SearchQueryToken[], index: number, now: number): { range: SearchDateRange; consumed: number } | null {
-  const candidates = [
-    index + 2 < tokens.length && !tokens[index + 1].literal && !tokens[index + 2].literal
-      ? { value: `${tokens[index].value}${tokens[index + 1].value}${tokens[index + 2].value}`, consumed: 3 }
-      : null,
-    index + 1 < tokens.length && !tokens[index + 1].literal
-      ? { value: `${tokens[index].value}${tokens[index + 1].value}`, consumed: 2 }
-      : null,
-    { value: tokens[index].value, consumed: 1 }
-  ].filter(Boolean) as Array<{ value: string; consumed: number }>
-
-  for (const candidate of candidates) {
-    const range = parseTimeToken(candidate.value, now)
-    if (range) {
-      return { range, consumed: candidate.consumed }
-    }
-  }
-
-  return null
-}
-
-function parseTimeToken(token: string, now: number): SearchDateRange | null {
-  const value = normalizeSearchValue(token)
-  const relative = parseRelativeTimeToken(value)
-  if (relative) {
-    return buildRelativeDateRange(relative.amount, relative.unit, relative.label, now)
-  }
-
-  for (const item of FIXED_TIME_PATTERNS) {
-    if (item.pattern.test(value)) {
-      return buildFixedDateRange(item.unit, item.label, now)
-    }
-  }
-  return null
-}
-
-function parseRelativeTimeToken(value: string): { amount: number; unit: RelativeTimeUnit; label: string } | null {
-  const match = value.match(RELATIVE_TIME_PATTERN)
-  if (!match) {
-    return null
-  }
-
-  const amount = parseTimeAmount(match[1])
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return null
-  }
-
-  const unit = normalizeTimeUnit(match[2])
-  const label = `最近 ${amount} ${getTimeUnitLabel(unit)}`
-  return { amount, unit, label }
-}
-
-function buildRelativeDateRange(amount: number, unit: RelativeTimeUnit, label: string, now: number): SearchDateRange {
-  const end = endOfDay(now)
-  if (unit === 'week') {
-    return { from: startOfDay(now - (amount * 7 - 1) * 24 * 60 * 60 * 1000), to: end, label }
-  }
-  if (unit === 'month') {
-    const date = new Date(now)
-    date.setMonth(date.getMonth() - amount)
-    return { from: startOfDay(date.getTime()), to: end, label }
-  }
-  return { from: startOfDay(now - (amount - 1) * 24 * 60 * 60 * 1000), to: end, label }
-}
-
-function buildFixedDateRange(unit: FixedTimeUnit, label: string, now: number): SearchDateRange {
-  const end = endOfDay(now)
-  if (unit === 'current-month') {
-    const date = new Date(now)
-    return { from: new Date(date.getFullYear(), date.getMonth(), 1).getTime(), to: end, label }
-  }
-  if (unit === 'last-month') {
-    const date = new Date(now)
-    return {
-      from: new Date(date.getFullYear(), date.getMonth() - 1, 1).getTime(),
-      to: new Date(date.getFullYear(), date.getMonth(), 1).getTime() - 1,
-      label
-    }
-  }
-  if (unit === 'half-year') {
-    const date = new Date(now)
-    date.setMonth(date.getMonth() - 6)
-    return { from: startOfDay(date.getTime()), to: end, label }
-  }
-  if (unit === 'current-week') {
-    const date = new Date(now)
-    const day = date.getDay() || 7
-    return { from: startOfDay(now - (day - 1) * 24 * 60 * 60 * 1000), to: end, label }
-  }
-  if (unit === 'last-week') {
-    const date = new Date(now)
-    const day = date.getDay() || 7
-    const currentWeekStart = startOfDay(now - (day - 1) * 24 * 60 * 60 * 1000)
-    return {
-      from: currentWeekStart - 7 * 24 * 60 * 60 * 1000,
-      to: currentWeekStart - 1,
-      label
-    }
-  }
-  if (unit === 'yesterday') {
-    const todayStart = startOfDay(now)
-    return { from: todayStart - 24 * 60 * 60 * 1000, to: todayStart - 1, label }
-  }
-  if (unit === 'before-yesterday') {
-    const todayStart = startOfDay(now)
-    return { from: todayStart - 2 * 24 * 60 * 60 * 1000, to: todayStart - 24 * 60 * 60 * 1000 - 1, label }
-  }
-  return { from: startOfDay(now), to: end, label }
-}
-
-function parseTimeAmount(value: string): number {
-  if (/^\d+$/.test(value)) {
-    return Number(value)
-  }
-
-  const digits: Record<string, number> = {
-    一: 1,
-    两: 2,
-    二: 2,
-    三: 3,
-    四: 4,
-    五: 5,
-    六: 6,
-    七: 7,
-    八: 8,
-    九: 9,
-    十: 10
-  }
-  return digits[value] || 0
-}
-
-function normalizeTimeUnit(value: string): RelativeTimeUnit {
-  if (value === '周' || value === '星期' || value === '礼拜') {
-    return 'week'
-  }
-  if (value === '个月' || value === '月') {
-    return 'month'
-  }
-  return 'day'
-}
-
-function getTimeUnitLabel(unit: RelativeTimeUnit): string {
-  if (unit === 'week') {
-    return '周'
-  }
-  if (unit === 'month') {
-    return '个月'
-  }
-  return '天'
-}
-
-function startOfDay(timestamp: number): number {
-  const date = new Date(timestamp)
-  date.setHours(0, 0, 0, 0)
-  return date.getTime()
-}
-
-function endOfDay(timestamp: number): number {
-  const date = new Date(timestamp)
-  date.setHours(23, 59, 59, 999)
-  return date.getTime()
-}
-
-function normalizeRawSearchQuery(value: unknown): string {
-  return normalizeText(stripCommonUrlPrefix(value)).trim()
-}
-
-function cleanSafeLocalSearchQuery(query: string): string {
-  let text = String(query || '')
-    .replace(/[，。！？；、]/g, ' ')
-    .replace(/([a-z0-9])([\u3400-\u9fff])/gi, '$1 $2')
-    .replace(/([\u3400-\u9fff])([a-z0-9])/gi, '$1 $2')
-
-  // Only remove an explicit request prefix. Words such as 我, 收藏 and 资料
-  // can be part of the actual bookmark name and must survive unchanged.
-  text = text.replace(LOCAL_SEARCH_REQUEST_PREFIX, '')
-
-  return text
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
-function protectSafeLocalStructuredSearch(query: string, protectedParts: string[]): string {
-  // Protect both operator values and literal phrases before natural-language
-  // cleanup. A quoted "not found" must never become an exclusion of "found".
-  return String(query || '').replace(SAFE_LOCAL_PROTECTED_SEARCH_PATTERN, (_match, prefix, operatorTerm, quotedTerm) => {
-    const index = protectedParts.push(String(operatorTerm || quotedTerm || '')) - 1
-    return `${prefix || ''}${String.fromCharCode(SAFE_LOCAL_PLACEHOLDER_START + index)}`
-  })
-}
-
-function restoreSafeLocalStructuredSearch(query: string, protectedParts: string[]): string {
-  return String(query || '').replace(SAFE_LOCAL_PLACEHOLDER_PATTERN, (placeholder) => {
-    const index = placeholder.charCodeAt(0) - SAFE_LOCAL_PLACEHOLDER_START
-    return protectedParts[index] || placeholder
-  })
-}
-
-function extractSafeLocalSearchExclusions(query: string): { query: string; terms: string[] } {
-  const terms: string[] = []
-  let cleanedQuery = String(query || '')
-
-  cleanedQuery = cleanedQuery.replace(CHINESE_SEARCH_EXCLUSION_PATTERN, (_match, value) => {
-    terms.push(String(value || ''))
-    return ' '
-  })
-
-  cleanedQuery = cleanedQuery.replace(ENGLISH_SEARCH_EXCLUSION_PATTERN, (_match, value) => {
-    terms.push(String(value || ''))
-    return ' '
-  })
-
-  cleanedQuery = cleanedQuery.replace(DASH_SEARCH_EXCLUSION_PATTERN, (_match, prefix, value) => {
-    terms.push(String(value || ''))
-    return prefix || ' '
-  })
-
-  return {
-    query: cleanedQuery,
-    terms: uniqueTerms(terms)
-  }
-}
-
-function formatSafeLocalRuleTerm(term: string): string {
-  const normalized = normalizeSearchValue(term)
-  if (!normalized) {
-    return ''
-  }
-
-  return /\s/.test(normalized) ? `"${normalized.replace(/"/g, '')}"` : normalized
-}
-
-function normalizeSearchValue(value: unknown): string {
-  return normalizeText(stripCommonUrlPrefix(value))
-    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, '')
-    .trim()
+    return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(normalized) ? normalized : `https://${normalized}`)
+      .hostname.replace(/^www\./, '').replace(/\.$/, '')
+  } catch { return '' }
 }
 
 function normalizeFilterValue(value: unknown): string {
-  return normalizeSearchValue(value)
+  return normalizeText(stripCommonUrlPrefix(value))
 }
 
-function uniqueTerms(values: string[]): string[] {
-  return [...new Set(values.flatMap(value => { const mappedResult = normalizeFilterValue(value); return mappedResult ? [mappedResult] : [] }))]
-}
-
-function tokenizeSearchQuery(query: string): SearchQueryToken[] {
+function tokenizeSearchQuery(source: string): SearchQueryToken[] {
   const tokens: SearchQueryToken[] = []
-  const source = String(query || '')
   let current = ''
   let quote = ''
   let literal = false
-
-  const pushCurrent = () => {
-    const value = current.trim()
-    if (value) {
-      tokens.push({ value, literal })
-    }
-    current = ''
-    literal = false
+  const push = () => {
+    if (current.trim()) tokens.push({ value: current.trim(), literal })
+    current = ''; literal = false
   }
-
   for (const char of source) {
     if (quote) {
-      if (isMatchingSearchQuote(char, quote)) {
-        quote = ''
-        continue
-      }
-      current += char
+      if (char === quote) quote = ''
+      else current += char
       continue
     }
-
-    if (isSearchQuote(char)) {
-      literal ||= !current
-      quote = char
+    // A quote starts a phrase, an excluded phrase or an operator value. The
+    // apostrophe in O'Reilly is ordinary text, not an unterminated phrase.
+    if (/["'“‘]/.test(char) && (!current || current === '-' || /^[^:：]+[:：]$/.test(current))) {
+      literal = !current
+      quote = char === '“' ? '”' : char === '‘' ? '’' : char
       continue
     }
-
-    if (/\s/.test(char)) {
-      pushCurrent()
-      continue
-    }
-
-    current += char
+    if (/[\s，。！？；、]/.test(char)) push()
+    else current += char
   }
-
-  pushCurrent()
+  push()
   return tokens
-}
-
-function isSearchQuote(char: string): boolean {
-  return char === '"' || char === "'" || char === '“' || char === '‘'
-}
-
-function isMatchingSearchQuote(char: string, quote: string): boolean {
-  if (quote === '“') {
-    return char === '”'
-  }
-  if (quote === '‘') {
-    return char === '’'
-  }
-  return char === quote
-}
-
-function dedupeChips(chips: ParsedSearchQuery['chips']): ParsedSearchQuery['chips'] {
-  const seen = new Set<string>()
-  return chips.filter((chip) => {
-    const key = `${chip.kind}:${chip.value}`
-    if (seen.has(key)) {
-      return false
-    }
-    seen.add(key)
-    return true
-  })
 }

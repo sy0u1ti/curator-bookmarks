@@ -155,6 +155,8 @@ async function measureWheelScrollResponse(page, selector) {
     clientHeight: element.clientHeight,
     scrollTop: element.scrollTop,
     scrollHeight: element.scrollHeight,
+    rowHeight: element.querySelector('.popup-main-row')?.getBoundingClientRect().height || 0,
+    paddingY: parseFloat(getComputedStyle(element).paddingTop) + parseFloat(getComputedStyle(element).paddingBottom),
     wheelEvents: window.__popupScrollProbeWheelEvents
   }))
   return response
@@ -511,7 +513,7 @@ try {
     `Folder tree must scroll immediately after ready: ${JSON.stringify(folderScrollResponse)}`
   )
   assert.ok(
-    mainScrollResponse.scrollHeight >= seededFolderCount * seededItemsPerFolder * 75,
+    Math.abs(mainScrollResponse.scrollHeight - mainScrollResponse.paddingY - seededFolderCount * seededItemsPerFolder * mainScrollResponse.rowHeight) <= 1,
     `Bookmark virtualization must preserve the full scroll range: ${mainScrollResponse.scrollHeight}`
   )
   assert.ok(

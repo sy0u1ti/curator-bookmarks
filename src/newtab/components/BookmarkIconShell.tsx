@@ -11,6 +11,7 @@ import {
   markNewtabFaviconNotReady,
   markNewtabFaviconReady
 } from '../newtab-favicon-readiness'
+import { getCachedFaviconContrast, readFaviconContrast, type FaviconContrast } from '../favicon-contrast'
 
 export interface BookmarkIconShellFavicon {
   fetchpriority: 'high' | 'low' | 'auto'
@@ -27,7 +28,7 @@ export interface BookmarkIconShellProps {
   ref?: Ref<HTMLSpanElement>
 }
 
-const BOOKMARK_ICON_SHELL_CLASS = 'bookmark-icon-shell relative grid h-[var(--icon-shell-size)] w-[var(--icon-shell-size)] place-items-center overflow-hidden rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.14)] bg-[rgba(0,0,0,0.32)] shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] [transition:var(--bookmark-icon-transition,border-color_var(--ds-motion-standard)_var(--ui-ease-standard),background-color_var(--ds-motion-standard)_var(--ui-ease-standard),box-shadow_var(--ds-motion-standard)_var(--ui-ease-standard))] group-active/bookmark-tile:border-[var(--bookmark-icon-active-border,rgba(245,245,247,0.24))] group-active/bookmark-tile:bg-[var(--bookmark-icon-active-bg,rgba(0,0,0,0.48))] group-active/bookmark-tile:duration-[var(--ds-motion-feedback)]'
+const BOOKMARK_ICON_SHELL_CLASS = 'bookmark-icon-shell relative grid h-[var(--icon-shell-size)] w-[var(--icon-shell-size)] place-items-center overflow-hidden rounded-[var(--ui-radius-control)] border border-[rgba(245,245,247,0.14)] bg-[rgba(0,0,0,0.32)] shadow-[inset_0_1px_0_rgba(255,255,255,0.045)] [transition:var(--bookmark-icon-transition,border-color_var(--bookmark-hover-duration,0ms)_var(--ui-ease-standard),background-color_var(--bookmark-hover-duration,0ms)_var(--ui-ease-standard),box-shadow_var(--bookmark-hover-duration,0ms)_var(--ui-ease-standard))] group-active/bookmark-tile:border-[var(--bookmark-icon-active-border,rgba(245,245,247,0.24))] group-active/bookmark-tile:bg-[var(--bookmark-icon-active-bg,rgba(0,0,0,0.48))] group-active/bookmark-tile:duration-[var(--ds-motion-feedback)]'
 const BOOKMARK_FAVICON_CLASS = 'bookmark-favicon relative z-[1] block h-[calc(var(--icon-shell-size)*0.68)] w-[calc(var(--icon-shell-size)*0.68)] rounded-[5px] object-contain opacity-0 [transform:scale(0.92)] [transition:opacity_var(--icon-swap-dur)_var(--icon-swap-ease),transform_var(--icon-swap-dur)_var(--icon-swap-ease)] data-[favicon-ready=true]:opacity-100 data-[favicon-ready=true]:[transform:scale(1)] [-webkit-user-drag:none] motion-reduce:transition-none motion-reduce:[transform:none]'
 const BOOKMARK_CUSTOM_FAVICON_CLASS = 'custom-icon h-[calc(var(--icon-shell-size)*0.8)] w-[calc(var(--icon-shell-size)*0.8)] rounded-[7px] object-cover'
 const BOOKMARK_FALLBACK_CLASS = 'bookmark-fallback absolute grid h-[calc(var(--icon-shell-size)*0.76)] w-[calc(var(--icon-shell-size)*0.76)] place-items-center rounded-[7px] bg-[rgba(245,245,247,0.09)] text-[13px] font-extrabold leading-none text-[rgba(245,245,247,0.88)] opacity-100 [transform:scale(1)] [transition:opacity_var(--icon-swap-dur)_var(--icon-swap-ease),transform_var(--icon-swap-dur)_var(--icon-swap-ease)] data-[favicon-ready=true]:opacity-0 data-[favicon-ready=true]:[transform:scale(0.96)] motion-reduce:transition-none motion-reduce:[transform:none]'
@@ -62,6 +63,14 @@ export function BookmarkIconShell({
   const source = activeSource && activeSource.forSource === favicon.src ? activeSource.src : favicon.src
   const missing = failedSources.has(source)
   const loaded = loadedSources.has(source) || isNewtabFaviconReady(source)
+  const [contrast, setContrast] = useState<{ source: string; value: FaviconContrast } | null>(null)
+  const iconContrast = customIcon || missing ? 'original'
+    : contrast?.source === source ? contrast.value : getCachedFaviconContrast(source)
+  const updateContrast = useCallback((image: HTMLImageElement) => {
+    if (customIcon) return
+    const value = readFaviconContrast(image, source)
+    setContrast(current => current?.source === source && current.value === value ? current : { source, value })
+  }, [customIcon, source])
   // squircle 轮廓必须在首次 paint 前就位：引擎的异步链要晚 1-2 帧，
   // 裸启动（无 preboot 快照遮盖）时首帧会以普通圆角示人再突变成 squircle。
   const setShellRef = useCallback((element: HTMLSpanElement | null) => {
@@ -79,6 +88,10 @@ export function BookmarkIconShell({
       applySquircleClipBeforePaint(element)
     }
   }, [])
+  const setFaviconRef = useCallback((image: HTMLImageElement | null) => {
+    setInnerRef(image)
+    if (image?.complete && image.naturalWidth) updateContrast(image)
+  }, [setInnerRef, updateContrast])
   const markSourceReady = useCallback((nextSource: string) => {
     markNewtabFaviconReady(nextSource)
     setLoadedSources((current) => addSourceToSet(current, nextSource))
@@ -100,6 +113,7 @@ export function BookmarkIconShell({
   return (
     <span
       className={cx(BOOKMARK_ICON_SHELL_CLASS, className, missing && 'favicon-missing')}
+      data-icon-contrast={iconContrast}
       aria-hidden="true"
       ref={setShellRef}
     >
@@ -117,8 +131,9 @@ export function BookmarkIconShell({
         decoding={loaded ? 'sync' : 'async'}
         fetchPriority={favicon.fetchpriority}
         referrerPolicy="no-referrer"
-        ref={setInnerRef}
+        ref={setFaviconRef}
         onLoad={(event) => {
+          updateContrast(event.currentTarget)
           if (source === favicon.src) {
             markNewtabFaviconReady(favicon.src)
           } else {

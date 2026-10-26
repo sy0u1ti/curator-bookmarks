@@ -829,7 +829,9 @@ async function probeCollapsibleClosing(page, rootSelector, triggerSelector) {
         at: now - startedAt,
         hidden: panel.hidden || getComputedStyle(panel).display === 'none',
         panelHeight: panel.getBoundingClientRect().height,
-        rootHeight: root.getBoundingClientRect().height
+        rootHeight: root.getBoundingClientRect().height,
+        ariaHidden: panel.getAttribute('aria-hidden'),
+        inert: panel.inert
       })
       if (now - startedAt < 420) {
         requestAnimationFrame(sample)
@@ -848,6 +850,7 @@ async function probeCollapsibleClosing(page, rootSelector, triggerSelector) {
         frameCount: samples.length,
         grewWhileClosing,
         hidden,
+        last: samples.at(-1),
         remainingPanelHeight: beforeHidden?.panelHeight ?? null
       })
     }
@@ -857,7 +860,19 @@ async function probeCollapsibleClosing(page, rootSelector, triggerSelector) {
   }), { rootSelector, triggerSelector })
 }
 
-function assertSmoothCollapsibleClose(probe, label) {
+function assertSmoothCollapsibleClose(probe, label, { keepMounted = false } = {}) {
+  if (keepMounted) {
+    assert.ok(probe.frameCount >= 5 && probe.last, `${label} should expose a complete closing transition`)
+    assert.equal(probe.grewWhileClosing, false, `${label} height must decrease monotonically while closing`)
+    assert.ok(
+      probe.last.panelHeight <= 0.5,
+      `${label} panel must reach zero: ${JSON.stringify(probe)}`
+    )
+    assert.equal(probe.last.hidden, false, `${label} must retain its layout tree while closed`)
+    assert.equal(probe.last.ariaHidden, 'true')
+    assert.equal(probe.last.inert, true)
+    return
+  }
   assert.ok(probe.frameCount >= 5 && probe.beforeHidden && probe.hidden, `${label} should expose a complete closing transition`)
   assert.equal(probe.grewWhileClosing, false, `${label} height must decrease monotonically while closing`)
   assert.ok(
@@ -1028,7 +1043,8 @@ async function verifyPopup(page, extensionId, seeded) {
   })
   assertSmoothCollapsibleClose(
     await probeCollapsibleClosing(page, '#edit-modal .t-acc', '#edit-folder-picker-button'),
-    'Edit-bookmark folder picker'
+    'Edit-bookmark folder picker',
+    { keepMounted: true }
   )
   await captureVisual(page, 'popup-modal')
   const exitProbe = page.evaluate(() => new Promise((resolve) => {

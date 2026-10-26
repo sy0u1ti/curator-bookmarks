@@ -13,7 +13,7 @@ const SHORTCUT_DETAIL_TONE_CLASSES: Record<string, string> = {
   warning: 'border-ds-warning/35 bg-ds-warning-soft text-ds-warning'
 }
 const SHORTCUT_CARD_CLASS =
-  'options-interactive-surface mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[26px_24px_24px] max-[760px]:mt-5 max-[760px]:p-[18px_16px]'
+  'options-interactive-surface mt-7 rounded-ds-md border-0 bg-ds-surface-1 p-[26px_24px_24px] max-[760px]:mt-5 max-[760px]:p-[18px_16px]'
 const SHORTCUT_HEAD_CLASS =
   'flex items-start justify-between gap-[18px] max-[760px]:flex-col max-[760px]:items-stretch'
 const SHORTCUT_COPY_CLASS = 'min-w-0'

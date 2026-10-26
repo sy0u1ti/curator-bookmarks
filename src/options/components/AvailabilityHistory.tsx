@@ -5,7 +5,7 @@ import { Button } from '../../ui/base/Button'
 import { cx } from '../../ui/base/utils'
 import { handleHistoryControlAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
-import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { OPTION_VALUE_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { useAvailabilityHistoryState } from './availability-history-store.js'
 import type {
@@ -20,23 +20,22 @@ const HISTORY_HEADER_SPACED_CLASS = `${HISTORY_HEADER_CLASS} mt-[18px]`
 const HISTORY_HEADER_COPY_CLASS = 'min-w-0'
 const HISTORY_HEADER_TITLE_CLASS =
   'block text-[15px] font-semibold leading-normal tracking-[0] text-ds-text-primary'
-const HISTORY_HEADER_SUBTITLE_CLASS =
-  'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
+const HISTORY_SUMMARY_CLASS = 'm-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 const HISTORY_HEADER_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:items-start max-[760px]:justify-start'
 const HISTORY_METRIC_GRID_CLASS =
-  'mt-4 grid grid-cols-3 gap-x-5 gap-y-2 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-2 max-[760px]:grid-cols-1'
+  'mt-4 grid grid-cols-3 gap-x-5 gap-y-2 py-2 max-[760px]:grid-cols-1'
 const HISTORY_METRIC_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-2 last:border-b-0'
 const HISTORY_METRIC_LABEL_CLASS =
   'block text-xs font-medium leading-4 text-ds-text-secondary'
 const HISTORY_METRIC_VALUE_CLASS =
   'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
 const HISTORY_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary'
+  `${OPTION_INSET_CLASS} p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary`
 const HISTORY_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[13px_15px]'
+  `${OPTION_INSET_CLASS} p-[13px_15px]`
 const HISTORY_RUN_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[16px_16px_15px]'
+  `${OPTION_INSET_CLASS} p-[16px_16px_15px]`
 const HISTORY_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'
 const HISTORY_CARD_HEAD_LEFT_CLASS =
@@ -113,7 +112,6 @@ export function AvailabilityHistory() {
           <div className={HISTORY_HEADER_SPACED_CLASS}>
             <div className={HISTORY_HEADER_COPY_CLASS}>
               <strong className={HISTORY_HEADER_TITLE_CLASS}>最近一次已恢复</strong>
-              <p className={HISTORY_HEADER_SUBTITLE_CLASS}>展示上一轮后恢复的书签。</p>
             </div>
           </div>
           <div className={HISTORY_RESULTS_LIST_CLASS}>
@@ -133,10 +131,7 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
     <>
       <div className={HISTORY_HEADER_CLASS}>
         <div className={HISTORY_HEADER_COPY_CLASS}>
-          <strong className={HISTORY_HEADER_TITLE_CLASS}>检测历史</strong>
-          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>
-            {state.subtitle}
-          </p>
+          <p className={HISTORY_SUMMARY_CLASS}>{state.subtitle}</p>
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
           {!state.clearDisabled ? (
@@ -169,7 +164,6 @@ function AvailabilityHistoryControls({ state }: { state: AvailabilityHistoryCont
       <div className={HISTORY_HEADER_SPACED_CLASS}>
         <div className={HISTORY_HEADER_COPY_CLASS}>
           <strong className={HISTORY_HEADER_TITLE_CLASS}>检测日志</strong>
-          <p className={HISTORY_HEADER_SUBTITLE_CLASS}>查看异常变化、恢复结果和连续次数。</p>
         </div>
         <div className={HISTORY_HEADER_ACTIONS_CLASS}>
           {!state.logToggleDisabled ? (

@@ -23,16 +23,16 @@ export function buildFeatureSettingsView(input: FeatureSettingsViewInput): Featu
       help: '新增网页书签后自动生成分析与标签，高置信时会调整名称和文件夹。快捷键收藏到待整理箱后的处理方式可在下方单独选择。',
       checked: Boolean(settings.autoAnalyzeBookmarks),
       disabled: locked || input.testingConnection || pending === 'autoAnalyzeBookmarks',
-      status: settings.autoAnalyzeBookmarks ? '自动分析开启' : '未开启',
-      statusTone: settings.autoAnalyzeBookmarks ? 'success' : 'muted'
+      status: pending === 'autoAnalyzeBookmarks' ? '保存中…' : undefined,
+      statusTone: 'muted'
     }, {
       key: 'allowRemoteParsing', label: '网页内容辅助解析',
-      description: 'AI 分析时使用 Jina Reader 获取网页内容。',
+      description: 'AI 分析时通过 Jina Reader 获取网页内容，第三方服务会收到目标网址。',
       help: '结合 Jina Reader 内容；第三方服务会收到目标 URL。',
       checked: remoteEnabled,
       disabled: locked || pending === 'allowRemoteParsing',
-      status: remoteEnabled ? input.remoteParserGranted ? '已授权' : '待授权' : '未开启',
-      statusTone: remoteEnabled ? input.remoteParserGranted ? 'success' : 'warning' : 'muted'
+      status: pending === 'allowRemoteParsing' ? '保存中…' : remoteEnabled && !input.remoteParserGranted ? '待授权' : undefined,
+      statusTone: remoteEnabled && !input.remoteParserGranted ? 'warning' : 'muted'
     }],
     inboxWorkflow: {
       value: getInboxWorkflowMode(input.inboxSettings),

@@ -1,11 +1,18 @@
-import {
-  normalizeSearchTextCompact,
-  normalizeText
-} from '../text.js'
+import { normalizeSearchTextCompact } from '../text.js'
+import { findPinyinMatchIndex } from './pinyin-match.js'
+import { yieldSearchTask } from './scheduler.js'
+
+export interface PinyinRun {
+  text: string
+  full: string
+  initials: string
+  syllableStarts: number[]
+}
 
 export interface PinyinTokens {
   full: string[]
   initials: string[]
+  runs?: PinyinRun[]
 }
 
 export interface PinyinSearchFields {
@@ -18,7 +25,6 @@ export interface PinyinEnrichTarget {
   tagPinyinFull: string[]
   tagPinyinInitials: string[]
   searchText: string
-  searchTextCompact?: string
   title: string
   path?: string
   tagTopics?: string[]
@@ -33,6 +39,7 @@ export interface CooperativeEnrichOptions {
   isActive?: () => boolean
   yieldWork?: () => Promise<unknown>
   batchSize?: number
+  timeBudgetMs?: number
   onProgress?: (processed: number, total: number) => void
 }
 
@@ -437,30 +444,73 @@ const COMPACT_PINYIN_GROUPS: Array<[string, string]> = [
 ]
 
 let pinyinCharMap: Map<string, string> | null = null
-const pinyinTextCache = new Map<string, PinyinTokens>()
+const pinyinTextCache = new Map<string, PinyinRun[]>()
+// Phrase readings take precedence over the compact single-character fallback.
+// Keep one contextual reading rather than an exponential polyphonic expansion.
+const PINYIN_PHRASES: Record<string, string> = {
+  音乐: 'yin yue', 乐器: 'yue qi', 乐谱: 'yue pu', 乐曲: 'yue qu', 乐队: 'yue dui',
+  快乐: 'kuai le', 娱乐: 'yu le',
+  银行: 'yin hang', 行业: 'hang ye', 行情: 'hang qing', 行列: 'hang lie',
+  行为: 'xing wei', 行动: 'xing dong', 行程: 'xing cheng', 行走: 'xing zou',
+  运行: 'yun xing', 执行: 'zhi xing', 进行: 'jin xing', 可行: 'ke xing', 旅行: 'lv xing',
+  重庆: 'chong qing', 重复: 'chong fu', 重新: 'chong xin', 重构: 'chong gou', 重启: 'chong qi',
+  重要: 'zhong yao', 重点: 'zhong dian', 重量: 'zhong liang', 权重: 'quan zhong',
+  成长: 'cheng zhang', 增长: 'zeng zhang', 长大: 'zhang da', 长度: 'chang du',
+  调用: 'diao yong', 调度: 'diao du', 调整: 'tiao zheng', 调试: 'tiao shi',
+  处理: 'chu li', 数据: 'shu ju', 数学: 'shu xue', 参数: 'can shu',
+  了解: 'liao jie', 浏览: 'liu lan', 下载: 'xia zai', 加载: 'jia zai',
+  角色: 'jue se', 角度: 'jiao du', 着色: 'zhuo se', 着手: 'zhuo shou'
+}
+const phraseReadings = Object.entries(PINYIN_PHRASES).map(([text, reading]) => ({ text, syllables: reading.split(' ') })).sort((a, b) => b.text.length - a.text.length)
+const phrasesByFirstChar = new Map<string, typeof phraseReadings>()
+for (const phrase of phraseReadings) {
+  const entries = phrasesByFirstChar.get(phrase.text[0]) || []
+  entries.push(phrase)
+  phrasesByFirstChar.set(phrase.text[0], entries)
+}
 
 export function buildPinyinTokensSync(values: unknown[]): PinyinTokens {
   const full = new Set<string>()
   const initials = new Set<string>()
+  const runs = new Set<PinyinRun>()
 
   for (const value of values) {
     const text = String(value || '')
     const matches = text.match(/[㐀-鿿]+/gu) || []
     for (const match of matches) {
-      const tokens = getCompactPinyinTokens(match)
-      for (const token of tokens.full) {
-        full.add(token)
-      }
-      for (const token of tokens.initials) {
-        initials.add(token)
+      for (const run of getPinyinRuns(match)) {
+        full.add(run.full)
+        initials.add(run.initials)
+        runs.add(run)
       }
     }
   }
 
   return {
     full: [...full],
-    initials: [...initials]
+    initials: [...initials],
+    runs: [...runs]
   }
+}
+
+// Use the same character map as indexing, retaining offsets into the original
+// text so a partial syllable (kaw -> ka + w) can highlight both matching Hanzi.
+export function getPinyinHighlightTerms(text: string, query: string): string[] {
+  const term = normalizeSearchTextCompact(query)
+  if (!/^[a-z]{2,}$/.test(term)) return []
+  const matches = new Set<string>()
+  for (const run of buildPinyinTokensSync([text]).runs || []) {
+    for (const initials of [false, true]) {
+      const value = initials ? run.initials : run.full
+      const starts = initials ? null : run.syllableStarts
+      for (let start = findPinyinMatchIndex(value, term, starts); start >= 0; start = findPinyinMatchIndex(value, term, starts, start + 1)) {
+        const first = initials ? start : run.syllableStarts.indexOf(start)
+        const end = initials ? start + term.length : run.syllableStarts.findIndex(offset => offset >= start + term.length)
+        matches.add(run.text.slice(first, end < 0 ? undefined : end))
+      }
+    }
+  }
+  return [...matches]
 }
 
 function buildPinyinSearchFields(target: PinyinEnrichTarget): PinyinSearchFields {
@@ -481,29 +531,25 @@ function applyPinyinTokens(target: PinyinEnrichTarget, fields: PinyinSearchField
   target.pinyinEnriched = true
   target.pinyinFields = fields
 
-  // Keep the aggregate text for recall, but retain provenance for ranking.
+  // Keep generated pinyin separate from literal text. Flattening it into this
+  // string lets ordinary substring checks bypass the syllable boundaries.
   const newFull = [...new Set([...fields.title.full, ...fields.path.full, ...fields.metadata.full])]
   const newInitials = [...new Set([...fields.title.initials, ...fields.path.initials, ...fields.metadata.initials])]
   if (!newFull.length && !newInitials.length) {
     target.tagPinyinFull = []
     target.tagPinyinInitials = []
     target.searchText = baseSearchText
-    target.searchTextCompact = normalizeSearchTextCompact(baseSearchText)
     return false
   }
 
   target.tagPinyinFull = newFull
   target.tagPinyinInitials = newInitials
-  const enrichedSegment = [...newFull, ...newInitials].join(' ')
-  target.searchText = enrichedSegment ? `${baseSearchText} ${enrichedSegment}`.trim() : baseSearchText
-  target.searchTextCompact = normalizeSearchTextCompact(target.searchText)
+  target.searchText = baseSearchText
   return true
 }
 
 function defaultYieldWork(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0)
-  })
+  return yieldSearchTask()
 }
 
 export async function enrichPinyinTokensCooperatively(
@@ -517,6 +563,7 @@ export async function enrichPinyinTokensCooperatively(
   const isActive = options.isActive ?? (() => true)
   const yieldWork = options.yieldWork ?? defaultYieldWork
   const batchSize = Math.max(8, options.batchSize ?? 250)
+  const timeBudget = Math.max(1, options.timeBudgetMs ?? 4)
   const total = targets.length
 
   let processed = 0
@@ -530,24 +577,25 @@ export async function enrichPinyinTokensCooperatively(
       return { processed, enriched, aborted: true }
     }
 
-    const end = Math.min(index + batchSize, targets.length)
-    for (let cursor = index; cursor < end; cursor += 1) {
+    let end = index
+    const deadline = performance.now() + timeBudget
+    for (let cursor = index; cursor < targets.length; cursor += 1) {
+      end = cursor + 1
       const target = targets[cursor]
       // Entries reset this flag whenever their text changes. Re-applying the
       // same tokens would only replace equal arrays and invalidate caches
       // derived from them, so reused entries keep their tokens.
-      if (target.pinyinEnriched && target.pinyinFields) {
+      if (target.pinyinEnriched && target.pinyinFields?.title.runs && target.pinyinFields.path.runs && target.pinyinFields.metadata.runs) {
         if (target.tagPinyinFull?.length || target.tagPinyinInitials?.length) {
           enriched += 1
         }
         processed += 1
-        continue
+      } else {
+        const fields = buildPinyinSearchFields(target)
+        if (applyPinyinTokens(target, fields)) enriched += 1
+        processed += 1
       }
-      const fields = buildPinyinSearchFields(target)
-      if (applyPinyinTokens(target, fields)) {
-        enriched += 1
-      }
-      processed += 1
+      if ((end - index) % Math.min(batchSize, 32) === 0 && performance.now() >= deadline) break
     }
 
     if (options.onProgress) {
@@ -565,7 +613,7 @@ export async function enrichPinyinTokensCooperatively(
   return processBatch()
 }
 
-function getCompactPinyinTokens(text: string): PinyinTokens {
+function getPinyinRuns(text: string): PinyinRun[] {
   const normalized = String(text || '')
   const cached = pinyinTextCache.get(normalized)
   if (cached) {
@@ -573,26 +621,38 @@ function getCompactPinyinTokens(text: string): PinyinTokens {
   }
 
   const map = ensureCompactPinyinMap()
-  const fullParts: string[] = []
-  const initialParts: string[] = []
-  for (const char of normalized) {
-    const syllable = map.get(char)
+  const runs: PinyinRun[] = []
+  let run: PinyinRun | null = null
+  const characters = [...normalized]
+  const syllables: Array<string | undefined> = []
+  for (let index = 0; index < characters.length;) {
+    const phrase = phrasesByFirstChar.get(characters[index])?.find(phrase => normalized.startsWith(phrase.text, index))
+    if (phrase) { syllables.push(...phrase.syllables); index += phrase.text.length }
+    else { syllables.push(map.get(characters[index])); index++ }
+  }
+  for (let index = 0; index < characters.length; index++) {
+    const char = characters[index]
+    const syllable = syllables[index]
     if (!syllable) {
+      // Unknown characters are boundaries, never silently skipped and joined.
+      run = null
       continue
     }
-    fullParts.push(syllable)
-    initialParts.push(syllable[0] || '')
+    if (!run) {
+      run = { text: '', full: '', initials: '', syllableStarts: [] }
+      runs.push(run)
+    }
+    run.syllableStarts.push(run.full.length)
+    run.text += char
+    run.full += syllable
+    run.initials += syllable[0]
   }
 
-  const result = {
-    full: fullParts.length ? [normalizeText(fullParts.join(''))] : [],
-    initials: initialParts.length ? [normalizeText(initialParts.join(''))] : []
-  }
-  pinyinTextCache.set(normalized, result)
+  pinyinTextCache.set(normalized, runs)
   if (pinyinTextCache.size > 2048) {
     pinyinTextCache.delete(pinyinTextCache.keys().next().value || '')
   }
-  return result
+  return runs
 }
 
 function ensureCompactPinyinMap(): Map<string, string> {

@@ -79,6 +79,8 @@ export interface PopupState {
   searchTimer: number | null
   searchRunId: number
   searchPending: boolean
+  searchPreparationError: string
+  searchMetadataPending: boolean
   searchCache: MemoryCache<string, PopupSearchResult[]>
   searchTagIndex: BookmarkTagIndex | null
   searchSnapshotState: PopupSearchIndexSnapshotState | null
@@ -184,6 +186,8 @@ export const state: PopupState = {
   searchTimer: null,
   searchRunId: 0,
   searchPending: false,
+  searchPreparationError: '',
+  searchMetadataPending: false,
   searchCache: createMemoryCache<string, PopupSearchResult[]>({
     maxEntries: SEARCH_CACHE_LIMIT,
     ttlMs: SEARCH_CACHE_TTL_MS,

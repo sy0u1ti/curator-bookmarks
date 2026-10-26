@@ -1,3 +1,4 @@
+import { OPTION_SURFACE_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listAutoBackupPoints, type AutoBackupIndexEntry } from '../../shared/backup'
 import { STORAGE_KEYS } from '../../shared/constants'
@@ -39,7 +40,7 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
   }, [refresh])
 
   return (
-    <section className="mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-5" aria-labelledby="recovery-points-title" aria-busy={loading}>
+    <section className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`} aria-labelledby="recovery-points-title" aria-busy={loading}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id="recovery-points-title" className="text-[15px] font-semibold text-ds-text-primary">自动恢复点</h2>
@@ -53,7 +54,7 @@ export function AutoBackupPoints({ busy }: { busy: boolean }) {
       {!points.length ? <p className="mt-4 text-sm text-ds-text-secondary" role="status">{loading ? '正在读取恢复点…' : '暂无自动恢复点。批量清理、整理或恢复数据前会自动创建。'}</p> : (
         <ul className="mt-4 grid list-none gap-3 p-0" aria-label="可用的自动恢复点">
           {points.map(point => (
-            <li key={point.backupId} className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-ds-sm border border-ds-border-subtle p-3">
+            <li key={point.backupId} className={`flex min-w-0 flex-wrap items-center justify-between gap-3 ${OPTION_INSET_CLASS} p-3`}>
               <div className="min-w-0 flex-1 basis-52">
                 <strong className="block break-words text-sm text-ds-text-primary">{point.operationReason || '自动恢复点'}</strong>
                 <p className="mt-1 text-xs text-ds-text-secondary"><time dateTime={new Date(point.createdAt).toISOString()}>{new Date(point.createdAt).toLocaleString('zh-CN')}</time> · {formatBackupSize(point.sizeBytes || 0)}</p>

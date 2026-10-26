@@ -11,7 +11,6 @@ import {
   AI_SETTINGS_ROW_CLASS,
   AI_SETTINGS_ROW_TITLE_CLASS,
   AI_SETTINGS_SECONDARY_CLASS,
-  AI_SETTINGS_STATUS_BADGE_CLASS,
   AI_SETTINGS_SUBTITLE_CLASS,
   AI_SETTINGS_TITLE_CLASS,
   AI_SETTINGS_SWITCH_CONTROL_CLASS,
@@ -26,8 +25,6 @@ const contentSnapshotDescription = (
   <p className={AI_SETTINGS_SUBTITLE_CLASS}>在本地保存网页摘要，用于全文快速搜索与 AI 精准分类。</p>
 )
 
-const contentSnapshotStatus = <span className={AI_SETTINGS_STATUS_BADGE_CLASS}>本地内容记忆</span>
-
 export function ContentSnapshotControls() {
   const state = useContentSnapshotControlsState()
 
@@ -36,7 +33,6 @@ export function ContentSnapshotControls() {
       className={AI_SETTINGS_NARROW_CARD_CLASS}
       title={contentSnapshotTitle}
       description={contentSnapshotDescription}
-      status={contentSnapshotStatus}
       headerClassName={AI_SETTINGS_HEADER_CLASS}
       iconName="ArchiveRestore"
       bodyClassName={`${AI_SETTINGS_BODY_CLASS} ${state.loading ? '' : AI_SETTINGS_READY_BODY_CLASS}`}
@@ -45,7 +41,6 @@ export function ContentSnapshotControls() {
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存网页内容索引</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>提取标题、页面摘要及链接关键信息。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           {state.loading ? (
@@ -65,7 +60,7 @@ export function ContentSnapshotControls() {
       <div className={AI_SETTINGS_ROW_CLASS}>
         <span className={AI_SETTINGS_COPY_CLASS}>
           <strong className={AI_SETTINGS_ROW_TITLE_CLASS}>保存完整正文</strong>
-          <span className={AI_SETTINGS_SECONDARY_CLASS}>将网页正文纳入本地离线检索，数据严格保留在本地。</span>
+          <span className={AI_SETTINGS_SECONDARY_CLASS}>正文保存在本地，可离线检索。</span>
         </span>
         <span className={AI_SETTINGS_SWITCH_WRAP_CLASS}>
           {state.loading ? (
@@ -86,9 +81,11 @@ export function ContentSnapshotControls() {
           )}
         </span>
       </div>
-      <p className={AI_SETTINGS_FIELD_TIP_CLASS}>
-        {state.loading ? '正在读取本地设置…' : state.statusCopy}
-      </p>
+      {state.loading || state.statusCopy ? (
+        <p className={AI_SETTINGS_FIELD_TIP_CLASS} role="status">
+          {state.loading ? '正在读取本地设置…' : state.statusCopy}
+        </p>
+      ) : null}
     </AiProviderCard>
   )
 }

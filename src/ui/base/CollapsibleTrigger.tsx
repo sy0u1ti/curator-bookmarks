@@ -1,5 +1,5 @@
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
-import type { ComponentPropsWithoutRef } from 'react'
+import { forwardRef, type ComponentPropsWithoutRef } from 'react'
 import { cx } from './utils'
 
 export type CollapsibleTriggerProps = Omit<
@@ -9,11 +9,14 @@ export type CollapsibleTriggerProps = Omit<
   className?: string
 }
 
-export function CollapsibleTrigger({ className, ...props }: CollapsibleTriggerProps) {
-  return (
-    <BaseCollapsible.Trigger
-      className={cx('t-acc-head outline-none focus-visible:shadow-ds-focus', className)}
-      {...props}
-    />
-  )
-}
+export const CollapsibleTrigger = forwardRef<HTMLButtonElement, CollapsibleTriggerProps>(
+  function CollapsibleTrigger({ className, ...props }, ref) {
+    return (
+      <BaseCollapsible.Trigger
+        ref={ref}
+        className={cx('t-acc-head outline-none focus-visible:shadow-ds-focus', className)}
+        {...props}
+      />
+    )
+  }
+)

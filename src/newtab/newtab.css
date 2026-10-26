@@ -6,7 +6,7 @@
   --newtab-glass-bg-fill: rgba(0, 0, 0, 0.13);
   --newtab-glass-slider-fill: rgba(255, 255, 255, 0.16);
   --newtab-glass-stroke: rgba(255, 255, 255, 0.18);
-  --newtab-glass-stroke-width: 1.5px;
+  --newtab-glass-stroke-width: 1px;
   --newtab-glass-background-blur: 12px;
   --newtab-glass-backdrop-filter: blur(var(--newtab-glass-background-blur));
   --newtab-glass-drop-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.24);
@@ -199,7 +199,7 @@ body {
 
 #newtab-settings-drawer .settings-drawer-scrollbar {
   position: absolute;
-  top: 58px;
+  top: 8px;
   right: 7px;
   bottom: 16px;
   z-index: 3;
@@ -536,8 +536,8 @@ body {
 .bookmark-menu-surface {
   --bookmark-control-bg: rgba(245, 245, 247, 0.065);
   --bookmark-control-bg-hover: rgba(245, 245, 247, 0.09);
-  --bookmark-control-border: rgba(245, 245, 247, 0.14);
-  --bookmark-control-border-focus: rgba(245, 245, 247, 0.34);
+  --bookmark-control-border: var(--ds-border);
+  --bookmark-control-border-focus: var(--ds-focus);
   min-height: 46px;
   padding: 8px;
   border-color: var(--newtab-glass-border);
@@ -613,7 +613,7 @@ body {
   grid-template-columns: 44px minmax(0, 1fr);
   gap: 8px;
   padding: 0;
-  border-color: transparent;
+  border: 0;
   background: transparent;
   color: rgba(245, 245, 247, 0.58);
   box-shadow: none;
@@ -639,8 +639,8 @@ body {
   min-height: 34px;
   border-color: var(--bookmark-control-border);
   background: var(--bookmark-control-bg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+  box-shadow: none;
+  filter: none;
   transition:
     border-color var(--ui-motion-fast) var(--ui-ease-standard),
     background-color var(--ui-motion-fast) var(--ui-ease-standard),
@@ -659,9 +659,9 @@ body {
 .bookmark-menu-surface .base-select-trigger[data-popup-open] {
   border-color: var(--bookmark-control-border-focus);
   background: rgba(245, 245, 247, 0.1);
-  outline: 3px solid rgba(245, 245, 247, 0.095);
-  outline-offset: 0;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  outline: 1px solid var(--bookmark-control-border-focus);
+  outline-offset: 2px;
+  box-shadow: none;
 }
 
 .bookmark-add-menu-trigger {
@@ -678,7 +678,7 @@ body {
 .bookmark-add-menu-trigger:hover,
 .bookmark-add-menu-trigger:focus-visible {
   background: rgba(245, 245, 247, 0.065);
-  box-shadow: inset 0 0 0 1px rgba(245, 245, 247, 0.1);
+  box-shadow: none;
 }
 
 .bookmark-add-menu-trigger-icon {
@@ -903,7 +903,8 @@ body {
 
 /* Lumno-inspired bookmark cards: a restrained physical lift and layered shadow,
    recolored through Curator's neutral glass system instead of per-card saturated surfaces. */
-.bookmark-tile {
+.bookmark-tile,
+.bookmark-tile-preview {
   --newtab-bookmark-current-shadow: var(--newtab-bookmark-shadow);
   border-color: var(--newtab-glass-border);
   background: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-card));
@@ -916,6 +917,9 @@ body {
 
 .bookmark-tile:not(.bookmark-drag-ghost) {
   position: relative;
+  /* This small relative offset keeps text on the same raster grid through hover.
+     A transform lift re-snaps glyphs when it ends, especially at fractional DPI. */
+  top: 0;
   isolation: isolate;
   overflow: hidden;
 }
@@ -930,7 +934,7 @@ body {
   box-shadow: var(--newtab-bookmark-hover-inset);
   opacity: 0;
   pointer-events: none;
-  transition: opacity var(--ui-motion-standard) var(--ui-ease-standard);
+  transition: opacity var(--bookmark-hover-duration, 0ms) var(--ui-ease-standard);
 }
 
 .bookmark-tile:not(.bookmark-drag-ghost) > :not(.bookmark-drag-handle):not(.bookmark-menu-trigger) {
@@ -939,13 +943,27 @@ body {
 }
 
 .bookmark-icon-shell {
-  border-color: rgba(245, 245, 247, 0.14);
-  background: rgba(0, 0, 0, 0.32);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  border-color: rgba(245, 245, 247, 0.07);
+  background: var(--bookmark-icon-rest-bg, rgba(0, 0, 0, 0.24));
+  box-shadow: none;
+}
+
+.bookmark-icon-shell[data-icon-contrast="light-backdrop"] {
+  --bookmark-icon-rest-bg: rgba(245, 245, 247, 0.88);
+  --bookmark-icon-hover-bg: rgba(245, 245, 247, 0.96);
+  --bookmark-icon-active-bg: rgba(245, 245, 247, 0.8);
+  --bookmark-icon-active-border: rgba(245, 245, 247, 0.12);
+}
+
+.bookmark-icon-shell[data-icon-contrast="neutral-backdrop"] {
+  --bookmark-icon-rest-bg: rgb(128, 128, 131);
+  --bookmark-icon-hover-bg: rgb(136, 136, 139);
+  --bookmark-icon-active-bg: rgb(120, 120, 123);
+  --bookmark-icon-active-border: rgba(245, 245, 247, 0.12);
 }
 
 .bookmark-title {
-  transition: color var(--ui-motion-standard) var(--ui-ease-standard);
+  transition: color var(--bookmark-hover-duration, 0ms) var(--ui-ease-standard);
 }
 
 .newtab-speed-dial-card,
@@ -963,9 +981,11 @@ body {
 
 @media (hover: hover) and (pointer: fine) {
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover {
+    /* Entry eases in; exit clears highlights immediately while the tile settles. */
+    --bookmark-hover-duration: var(--ui-motion-standard);
     border-color: var(--newtab-glass-border-hover);
     --newtab-bookmark-current-shadow: var(--newtab-bookmark-hover-shadow);
-    transform: translateY(var(--newtab-bookmark-hover-lift));
+    top: var(--newtab-bookmark-hover-lift);
   }
 
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover::before {
@@ -974,7 +994,7 @@ body {
 
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover .bookmark-icon-shell {
     border-color: rgba(245, 245, 247, 0.24);
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--bookmark-icon-hover-bg, rgba(0, 0, 0, 0.32));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.075),
       0 5px 10px -8px rgba(0, 0, 0, 0.72);
@@ -1003,6 +1023,7 @@ body {
 .bookmark-tile:focus-visible {
   border-color: var(--newtab-glass-border-hover);
   --newtab-bookmark-current-shadow: var(--newtab-bookmark-shadow);
+  top: 0;
   transform: none;
 }
 
@@ -1014,7 +1035,7 @@ body {
 
 .bookmark-tile:focus-visible .bookmark-icon-shell {
   border-color: rgba(245, 245, 247, 0.24);
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bookmark-icon-hover-bg, rgba(0, 0, 0, 0.32));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.075);
 }
 
@@ -1041,6 +1062,7 @@ body {
 
 .bookmark-tile:not(.curator-motion-disabled):not(.dragging):active {
   --newtab-bookmark-current-shadow: var(--newtab-bookmark-active-shadow);
+  top: 0;
   transform: translateY(0) scale(var(--ui-press-scale));
   transition-duration: var(--ds-motion-feedback, 80ms);
 }
@@ -1373,13 +1395,12 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .bookmark-tile::before {
-    transition-duration: 80ms;
     transition-timing-function: linear;
   }
 
-  .bookmark-icon-shell,
-  .bookmark-title {
-    transition-duration: 80ms;
+  .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover,
+  .bookmark-tile:focus-visible {
+    top: 0;
   }
 
   .bookmark-tile:not(.curator-motion-disabled):not(.dragging):hover,
@@ -1583,16 +1604,7 @@ body {
   gap: 18px;
   padding: 18px 18px 14px;
   border-bottom: 1px solid rgba(245, 245, 247, 0.11);
-  background: linear-gradient(180deg, rgba(245, 245, 247, 0.055), rgba(245, 245, 247, 0.018));
-}
-
-.featured-wallpaper-kicker {
-  margin: 0 0 4px;
-  color: var(--ds-text-secondary);
-  font-size: 11px;
-  font-weight: 760;
-  letter-spacing: 0;
-  text-transform: uppercase;
+  background: transparent;
 }
 
 .featured-wallpaper-head h3 {
@@ -1615,10 +1627,7 @@ body {
   max-width: 320px;
   align-items: center;
   overflow: hidden;
-  border-color: rgba(245, 245, 247, 0.12);
-  border-radius: var(--ds-radius-sm);
-  background: rgba(245, 245, 247, 0.065);
-  padding: 0 10px;
+  padding: 0;
   font-size: 12px;
   font-weight: 650;
   text-overflow: ellipsis;
@@ -1628,25 +1637,20 @@ body {
 .featured-wallpaper-action,
 .featured-wallpaper-close {
   min-height: 36px;
-  border-color: rgba(245, 245, 247, 0.12);
-  background: rgba(245, 245, 247, 0.065);
-  color: rgba(245, 245, 247, 0.88);
+  background: var(--ds-surface-3);
+  color: var(--ds-text-primary);
   transition:
     transform var(--ds-motion-fast) var(--ds-ease-standard),
-    border-color var(--ds-motion-fast) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
-  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
-  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-action:hover,
 .featured-wallpaper-action:focus-visible,
 .featured-wallpaper-close:hover,
 .featured-wallpaper-close:focus-visible {
-  border-color: rgba(245, 245, 247, 0.22);
-  background: rgba(245, 245, 247, 0.12);
-  color: rgba(245, 245, 247, 0.96);
+  background: var(--ds-active);
+  color: var(--ds-text-primary);
 }
 
 .featured-wallpaper-action:active,
@@ -1663,9 +1667,6 @@ body {
 .featured-wallpaper-grid {
   min-height: 0;
   overflow-y: auto;
-  background:
-    linear-gradient(180deg, rgba(245, 245, 247, 0.026), transparent 180px),
-    rgba(245, 245, 247, 0.012);
   padding: 18px;
   scrollbar-color: rgba(245, 245, 247, 0.22) transparent;
   scrollbar-width: thin;
@@ -1674,12 +1675,10 @@ body {
 .featured-wallpaper-state,
 .featured-wallpaper-section-empty {
   display: grid;
-  min-height: 96px;
-  place-items: center;
-  border: 1px dashed rgba(245, 245, 247, 0.14);
-  border-radius: var(--ds-radius-sm);
-  background: rgba(245, 245, 247, 0.03);
-  color: rgba(245, 245, 247, 0.58);
+  grid-column: 1 / -1;
+  min-height: 32px;
+  align-items: center;
+  color: var(--ds-text-secondary);
   font-size: 12px;
 }
 
@@ -1705,7 +1704,7 @@ body {
 }
 
 .featured-wallpaper-provider-title {
-  color: rgba(245, 245, 247, 0.56);
+  color: var(--ds-text-secondary);
   font-size: 12px;
 }
 
@@ -1733,8 +1732,8 @@ body {
   overflow: hidden;
   padding: 0;
   outline: none;
-  border-color: rgba(245, 245, 247, 0.1);
-  background: rgba(245, 245, 247, 0.035);
+  border: 0;
+  background: var(--newtab-panel-bg-raised);
   box-shadow: none;
   transition:
     transform var(--dropdown-open-dur) var(--dropdown-ease),
@@ -1746,10 +1745,13 @@ body {
 .featured-wallpaper-card:hover,
 .featured-wallpaper-card:focus-visible,
 .featured-wallpaper-card[aria-pressed="true"] {
-  border-color: rgba(245, 245, 247, 0.22);
-  background: rgba(245, 245, 247, 0.075);
-  box-shadow: var(--newtab-glass-inset);
-  filter: var(--newtab-glass-drop);
+  background: var(--ds-hover);
+}
+
+.featured-wallpaper-card:focus-visible,
+.featured-wallpaper-card[aria-pressed="true"] {
+  outline: 2px solid var(--ds-text-primary);
+  outline-offset: 2px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -1772,7 +1774,7 @@ body {
   height: 140px;
   min-height: 0;
   overflow: hidden;
-  border-radius: calc(var(--ds-radius-sm) - 1px);
+  border-radius: inherit;
   background: var(--featured-wallpaper-preview-placeholder, rgba(245, 245, 247, 0.08));
 }
 
@@ -1785,6 +1787,31 @@ body {
   transition: transform var(--ui-motion-standard) var(--dropdown-ease);
 }
 
+.featured-wallpaper-preview:not([data-state="ready"]) .featured-wallpaper-preview-image {
+  visibility: hidden;
+}
+
+.featured-wallpaper-preview-error {
+  display: grid;
+  height: 100%;
+  align-content: center;
+  gap: 6px;
+  padding: 44px 12px 16px;
+  background: var(--newtab-panel-bg-raised);
+  color: var(--ds-text-secondary);
+  font-size: 12px;
+}
+
+.featured-wallpaper-preview-error strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--ds-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .featured-wallpaper-resolution {
   position: absolute;
   left: 8px;
@@ -1793,18 +1820,12 @@ body {
   min-height: 22px;
   align-items: center;
   border-radius: var(--ds-radius-full);
-  border: 1px solid rgba(245, 245, 247, 0.12);
-  background: rgba(0, 0, 0, 0.34);
+  border: 0;
+  background: rgba(12, 13, 16, 0.8);
   padding: 0 8px;
-  color: rgba(245, 245, 247, 0.9);
-  font-size: 10px;
-  font-weight: 760;
-  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
-  backdrop-filter: var(--newtab-glass-backdrop-filter);
-}
-
-.featured-wallpaper-resolution[data-state="pending"] {
-  color: rgba(245, 245, 247, 0.62);
+  color: var(--ds-text-primary);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .featured-wallpaper-card-actions {
@@ -1827,18 +1848,14 @@ body {
   min-height: 32px !important;
   padding: 0 !important;
   border-radius: var(--ds-radius-full);
-  border-color: rgba(245, 245, 247, 0.14);
-  background: rgba(0, 0, 0, 0.3);
-  color: rgba(245, 245, 247, 0.82);
-  opacity: 0.72;
+  background: rgba(12, 13, 16, 0.8);
+  color: var(--ds-text-primary);
   transition:
     opacity var(--ds-motion-fast) var(--ds-ease-standard),
     transform var(--ds-motion-fast) var(--ds-ease-standard),
     background-color var(--ds-motion-fast) var(--ds-ease-standard),
     border-color var(--ds-motion-fast) var(--ds-ease-standard),
     color var(--ds-motion-fast) var(--ds-ease-standard);
-  -webkit-backdrop-filter: var(--newtab-glass-backdrop-filter);
-  backdrop-filter: var(--newtab-glass-backdrop-filter);
 }
 
 .featured-wallpaper-card:hover .featured-wallpaper-card-action,
@@ -1849,9 +1866,8 @@ body {
 }
 
 .featured-wallpaper-favorite[aria-pressed="true"] {
-  border-color: rgba(245, 245, 247, 0.26);
-  background: rgba(245, 245, 247, 0.16);
-  color: var(--ds-accent-text);
+  background: var(--ds-text-primary);
+  color: var(--ds-bg-page);
 }
 
 .featured-wallpaper-hover-preview {
@@ -2029,17 +2045,19 @@ body {
   }
 
   .featured-wallpaper-head {
-    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     padding: 14px;
   }
 
   .featured-wallpaper-actions {
-    width: 100%;
-    justify-content: start;
+    flex-wrap: wrap;
+    max-width: 190px;
+    justify-content: end;
   }
 
   .featured-wallpaper-status {
+    order: 1;
+    flex-basis: 100%;
     max-width: 100%;
   }
 

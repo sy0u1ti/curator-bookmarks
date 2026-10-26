@@ -6,13 +6,13 @@ import type { IconName } from '../../ui/icons/icon-map'
 import { cx } from '../../ui/base/utils'
 import { handleAvailabilityResultAction } from '../options-controller'
 import { useAvailabilityResultsState } from './availability-results-store.js'
-import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
+import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { OptionDetails } from './OptionDetails.js'
 import { OptionActionsMenu, type OptionMenuAction } from './OptionActionsMenu.js'
 import type { AvailabilityResultCardViewModel, AvailabilityResultPanelKind } from './availability-results-types.js'
 
-const CARD_CLASS = 'min-w-0 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4'
+const CARD_CLASS = `min-w-0 ${OPTION_INSET_CLASS} p-4`
 const BADGE_CLASS = 'inline-flex min-h-6 max-w-full items-center rounded-full border px-2.5 py-1 text-xs font-medium leading-4'
 const TONES: Record<string, string> = {
   danger: 'border-ds-danger/35 bg-ds-danger-soft text-ds-danger-text',

@@ -3,7 +3,6 @@ import { Icon } from '../../ui/icons/Icon'
 import {
   OPTION_GROUP_CLASS,
   OPTION_COPY_CLASS,
-  OPTION_COPY_TEXT_CLASS,
   OPTION_COPY_TITLE_CLASS,
   OPTION_ROW_CLASS,
   SCOPE_PICKER_LABEL_CLASS,
@@ -36,7 +35,6 @@ export function ScopePickerTrigger({
       <div className={OPTION_ROW_CLASS}>
         <div className={OPTION_COPY_CLASS}>
           <strong className={OPTION_COPY_TITLE_CLASS}>{sourceLabels[source]}</strong>
-          <p className={OPTION_COPY_TEXT_CLASS}>{state.copy}</p>
         </div>
         <ScopePickerTriggerButton source={source} />
       </div>

@@ -351,6 +351,28 @@ export async function buildContentSnapshotSearchMapWithFullText(
   return searchMap
 }
 
+/** Body-only data: light metadata is already indexed and must not be appended twice. */
+export async function buildContentSnapshotFullTextMap(
+  index: ContentSnapshotIndex,
+  options: { isActive?: () => boolean } = {}
+): Promise<Map<string, string>> {
+  const output = new Map<string, string>()
+  const records = Object.values(index.records)
+  for (let offset = 0; offset < records.length; offset += 128) {
+    if (options.isActive && !options.isActive()) return output
+    const batch = records.slice(offset, offset + 128)
+    const refs = batch.flatMap(record => record.fullTextStorage === 'idb' && record.fullTextRef ? [record.fullTextRef] : [])
+    const texts = refs.length ? await contentFullTextOperations.getMany(refs) : new Map<string, string>()
+    if (options.isActive && !options.isActive()) return output
+    for (const record of batch) {
+      const text = normalizeText(record.fullTextStorage === 'local' ? record.fullText : texts.get(record.fullTextRef || ''))
+      if (text) output.set(record.bookmarkId, text)
+    }
+    if (offset + 128 < records.length) await new Promise<void>(resolve => setTimeout(resolve, 0))
+  }
+  return output
+}
+
 export async function putContentFullText(record: ContentFullTextRecord): Promise<void> {
   await putContentFullTexts([record])
 }

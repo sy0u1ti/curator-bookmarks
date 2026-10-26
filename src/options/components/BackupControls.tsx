@@ -4,14 +4,14 @@ import { Input } from '../../ui/base/Input'
 import { handleBackupAction } from '../options-controller'
 import { useBackupControlsState } from './backup-controls-store.js'
 import type { BackupControlsState, BackupPreviewState } from './backup-controls-types.js'
-import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { OPTION_VALUE_CLASS, OPTION_SURFACE_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { AutoBackupPoints } from './AutoBackupPoints.js'
 import { BackupBookmarkPreview } from './BackupBookmarkPreview.js'
 import { StorageManagement } from './StorageManagement.js'
 
 const BACKUP_CARD_CLASS =
-  'mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_16px]'
+  `mt-7 ${OPTION_SURFACE_CLASS} p-[18px_20px_16px]`
 const BACKUP_HEADER_CLASS =
   'flex flex-wrap items-start justify-between gap-4'
 const BACKUP_HEAD_CLASS = `${BACKUP_HEADER_CLASS} border-b border-ds-border-subtle pb-[14px]`
@@ -27,9 +27,9 @@ const BACKUP_ROW_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 self-end max-[760px]:justify-start'
 const BACKUP_PREVIEW_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const BACKUP_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary'
+  `${OPTION_INSET_CLASS} p-[14px_16px] text-[13px] leading-[1.55] text-ds-text-secondary`
 const BACKUP_PREVIEW_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
+  `${OPTION_INSET_CLASS} p-[14px_16px]`
 const BACKUP_PREVIEW_COPY_CLASS = 'mt-0 min-w-0'
 const BACKUP_PREVIEW_TITLE_CLASS =
   'block min-w-0 text-[15px] font-semibold leading-[1.4] text-ds-text-primary [overflow-wrap:anywhere]'

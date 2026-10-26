@@ -938,14 +938,6 @@ body {
   }
 }
 
-/* Squircle 引擎（@lisse/core）配套：clip-path 会裁掉 box-shadow 焦点环，
-   对声明了 focus-visible 阴影环的被裁剪元素改用 outline 兜底。
-   !important 用于压过工具类里的 focus-visible:outline-none。 */
-[data-sq-focus='ring']:focus-visible {
-  outline: 2px solid var(--ds-focus, #47a8ff) !important;
-  outline-offset: 2px;
-}
-
 @starting-style {
   .curator-motion-popover {
     opacity: 0;

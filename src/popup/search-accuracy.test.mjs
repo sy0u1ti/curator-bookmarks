@@ -11,7 +11,8 @@ const bundle = await build({
 export function exhaustiveSearch(query, bookmarks, limit = 20) {
   return searchCandidatesWithLimit(bookmarks, parsePopupSearchQuery(query), limit);
 }
-export { enrichPinyinTokensCooperatively } from '../shared/search/pinyin.js';
+export { buildPinyinTokensSync, enrichPinyinTokensCooperatively, getPinyinHighlightTerms } from '../shared/search/pinyin.js';
+export { buildPopupSearchRowPresentation } from './popup-row-presentation.js';
 export { enrichLightPopupSearchIndexWithPinyin } from './search-index.js';
 export function recoveredCacheStats(bookmarks) {
   const index = accelerationIndexes.get(bookmarks);
@@ -231,7 +232,70 @@ Object.assign(cases.find(bookmark => bookmark.id === 'cjk'), replacement)
 engine.invalidateSearchAccelerationForBookmarks(cases)
 engine.warmSearchAcceleration(cases)
 equal(ids(engine.searchBookmarks('"前端开发工具"', cases)), [], 'mutated title removes old postings')
+equal(ids(engine.exhaustiveSearch('"前端开发工具"', cases)), [], 'renaming also discards the pre-pinyin literal text in a cold scan')
 equal(engine.searchBookmarks('nebula', cases)[0]?.id, 'cjk', 'mutated title gains new postings')
+
+// Pinyin is syllable-aware evidence, not an arbitrary substring of Latin text.
+// Check recall and presentation: hiding a bad mark alone would still let 素材
+// occupy the limited result slots for "ai".
+const pinyinBoundaries = [
+  engine.indexBookmarkForSearch(record('ai-sdk', 'AI SDK', 'https://ai-sdk.dev/', '书签栏 / 素材')),
+  engine.indexBookmarkForSearch(record('ai-love', '爱', 'https://love.invalid/', '书签栏 / 阅读')),
+  engine.indexBookmarkForSearch(record('ai-folder', '文档', 'https://docs.invalid/', '书签栏 / 爱好')),
+  engine.indexBookmarkForSearch(record('ai-meta', '工具', 'https://tools.invalid/'), { manualTags: ['爱好'] }),
+  engine.indexBookmarkForSearch(record('bad-title', '素材', 'https://assets.invalid/', '书签栏 / 图片')),
+  engine.indexBookmarkForSearch(record('bad-folder', '文档', 'https://docs.invalid/2', '书签栏 / 素材')),
+  engine.indexBookmarkForSearch(record('bad-tag', '文档', 'https://docs.invalid/3'), { manualTags: ['素材'] }),
+  engine.indexBookmarkForSearch(record('bad-alias', '文档', 'https://docs.invalid/4'), { aliases: ['开源'] }),
+  engine.indexBookmarkForSearch(record('valid-infix', '常用卡网收藏', 'https://cards.invalid/')),
+  ...index(Array.from({ length: 1300 }, (_, n) => record(`boundary-fill-${n}`, `参考 ${n}`, `https://neutral.invalid/${n}`, '资料')))
+]
+await engine.enrichLightPopupSearchIndexWithPinyin(pinyinBoundaries, { yieldWork: () => Promise.resolve() })
+for (const warm of [false, true]) {
+  if (warm) engine.warmSearchAcceleration(pinyinBoundaries)
+  for (const query of ['ai', 'AI', 'ai sdk', 'folder:素材 ai', '"ai"', 'ai -sdk', 'cai', 'sucai', 'kaw', 'kw', 'wang', 'sc']) {
+    const results = engine.searchBookmarks(query, pinyinBoundaries)
+    equal(rows(results), rows(engine.exhaustiveSearch(query, pinyinBoundaries)), `syllable boundary index/scan: ${query}, warm=${warm}`)
+    equal(rows(await engine.searchBookmarksCooperatively(query, pinyinBoundaries, { isActive: () => true })), rows(results), `syllable boundary cooperative: ${query}`)
+    const batch = engine.searchBookmarksFirstBatch(query, pinyinBoundaries)
+    assert.ok(!batch.results.some(result => query.toLowerCase() === 'ai' && result.id.startsWith('bad-')), 'provisional batches also reject syllable tails')
+    if (batch.complete) equal(rows(batch.results), rows(results), `syllable boundary first batch: ${query}`)
+  }
+  equal(ids(engine.searchBookmarks('ai', pinyinBoundaries)).sort(), ['ai-sdk', 'ai-love', 'ai-folder', 'ai-meta'].sort(), 'ai matches AI or 爱, not the suffix of cai/kai')
+  equal(ids(engine.searchBookmarks('"ai"', pinyinBoundaries)), ['ai-sdk'], 'quoted ai remains literal')
+  for (const query of ['kaw', 'kw', 'wang']) assert.ok(ids(engine.searchBookmarks(query, pinyinBoundaries)).includes('valid-infix'), `${query}: a later complete syllable boundary is searchable`)
+  assert.ok(ids(engine.searchBookmarks('cai', pinyinBoundaries)).includes('bad-title'), 'cai still finds 材 at the second syllable')
+}
+for (const [text, query, expected] of [
+  ['素材', 'ai', []], ['开源', 'ai', []], ['素材', 'cai', ['材']], ['素材', 'sc', ['素材']],
+  ['爱好', 'ai', ['爱']], ['常用卡网', 'kaw', ['卡网']], ['卡网', 'wang', ['网']],
+  ['卡㐀网', 'kaw', []], ['卡㐀网', 'kw', []], ['素材', 'a', []]
+]) equal(engine.getPinyinHighlightTerms(text, query), expected, `${query}: highlights obey the same boundaries in ${text}`)
+
+const sdkMatch = engine.searchBookmarks('ai', pinyinBoundaries).find(result => result.id === 'ai-sdk')
+const sdkPresentation = engine.buildPopupSearchRowPresentation({ ...sdkMatch, query: 'ai' })
+equal(sdkPresentation.titleTerms, ['ai'], 'highlight the literal AI title')
+equal(sdkPresentation.folderTerms, [], 'the 素材 folder is not matching evidence for AI SDK')
+equal(sdkPresentation.reasonTokens, [], 'no replacement badge for a non-matching folder')
+const explicitTitle = engine.buildPopupSearchRowPresentation({
+  ...sdkMatch, path: '书签栏 / 爱好', query: 'ai', matchReasons: ['命中：标题 ai', '命中：站点 ai-sdk.dev'], matchEvidence: undefined
+})
+equal(explicitTitle.folderTerms, [], 'do not invent pinyin evidence for a field the scorer did not use')
+const quotedTitle = engine.buildPopupSearchRowPresentation({
+  ...sdkMatch, title: 'AI 爱好', path: '书签栏 / 爱好', query: 'ai', literalTerms: ['ai'], matchReasons: ['命中：标题 ai'], matchEvidence: undefined
+})
+equal(quotedTitle.titleTerms, ['ai'], 'quoted queries do not add pinyin highlights alongside literal title text')
+const multiTerm = engine.indexBookmarkForSearch(record('multi-term', 'AI SDK', 'https://ai-sdk.dev/', '素材 / 爱好'))
+await engine.enrichPinyinTokensCooperatively([multiTerm])
+const multiTermResult = engine.searchBookmarks('ai hao', [multiTerm])[0]
+assert.ok(multiTermResult.matchEvidence.some(item => item.field === '文件夹拼音' && item.term === 'hao'))
+const multiTermView = engine.buildPopupSearchRowPresentation({ ...multiTermResult, query: 'ai hao' })
+equal(multiTermView.folderTerms, ['好'], 'a folder-pinyin match for hao must not turn literal ai into an extra 爱 highlight')
+const twoPinyinTerms = engine.indexBookmarkForSearch(record('two-pinyin', '卡网素材', 'https://cards.invalid/'))
+await engine.enrichPinyinTokensCooperatively([twoPinyinTerms])
+const twoPinyinResult = engine.searchBookmarks('kaw cai', [twoPinyinTerms])[0]
+equal(twoPinyinResult.matchEvidence.filter(item => item.field === '标题拼音').map(item => item.term), ['kaw', 'cai'], 'keep all field/term evidence before human-readable reason deduplication')
+equal(engine.buildPopupSearchRowPresentation({ ...twoPinyinResult, query: 'kaw cai' }).titleTerms, ['卡网', '材'], 'each real pinyin term is highlighted even if explanations share a label')
 
 // The title match must beat newer siblings whose only match is the folder.
 const cardBookmarks = index([

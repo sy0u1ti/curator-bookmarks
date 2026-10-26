@@ -3,12 +3,12 @@ import {
   OPTION_SWITCH_THUMB_CLASS,
   OPTION_SWITCH_WRAP_CLASS
 } from '../../ui/switch-classes'
+import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 
 export const AI_SETTINGS_CARD_CLASS =
-  'options-interactive-surface mt-5 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-0 text-ds-text-primary shadow-none'
+  `options-interactive-surface mt-5 overflow-hidden ${OPTION_SURFACE_CLASS} p-0 text-ds-text-primary`
 
-export const AI_SETTINGS_NARROW_CARD_CLASS =
-  'options-interactive-surface mt-5 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-0 text-ds-text-primary shadow-none'
+export const AI_SETTINGS_NARROW_CARD_CLASS = AI_SETTINGS_CARD_CLASS
 
 export const AI_SETTINGS_HEADER_CLASS =
   'mb-0 flex min-w-0 items-start justify-between gap-3 border-b border-ds-border-subtle p-[14px_16px] max-[760px]:flex-col'
@@ -58,7 +58,7 @@ export const AI_SETTINGS_LOADING_BADGE_CLASS =
   'inline-flex h-2.5 w-14 flex-none rounded-full bg-ds-text-primary/[0.055]'
 
 export const AI_SETTINGS_LOADING_SWITCH_CLASS =
-  'absolute inset-0 rounded-full border border-ds-border-subtle bg-ds-surface-3/80 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.015)]'
+  'absolute inset-0 rounded-full border-0 bg-ds-surface-3/80'
 
 export const AI_SETTINGS_READY_BODY_CLASS = 'options-settings-ready-body'
 

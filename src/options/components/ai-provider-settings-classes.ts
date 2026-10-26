@@ -1,9 +1,10 @@
 import { OPTIONS_REDUCED_MOTION_SURFACE_CLASS } from './options-motion-classes.js'
+import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 
 export const AI_PROVIDER_CARD_CLASS =
-  'mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[26px_24px_24px] text-ds-text-primary shadow-none max-[760px]:p-4'
+  `mt-5 ${OPTION_SURFACE_CLASS} p-[26px_24px_24px] text-ds-text-primary max-[760px]:p-4`
 
-export const AI_PROVIDER_CARD_ATTENTION_CLASS = 'border-ds-border-hover'
+export const AI_PROVIDER_CARD_ATTENTION_CLASS = 'outline outline-1 outline-ds-border-hover outline-offset-2'
 
 export const AI_PROVIDER_HEADER_CLASS =
   'flex items-start justify-between gap-[18px] max-[760px]:flex-col'
@@ -107,7 +108,7 @@ export const AI_PROVIDER_ACTIONS_CLASS =
   'mt-0.5 flex flex-wrap items-center justify-between gap-3.5 border-t border-ds-border-subtle pt-[18px]'
 
 export const AI_PROVIDER_ACTION_BUTTONS_CLASS =
-  'flex flex-wrap items-center justify-end gap-2.5'
+  'ml-auto flex flex-wrap items-center justify-end gap-2.5'
 
 export const AI_PROVIDER_SAVE_STATE_CLASS =
   'relative inline-flex min-h-[34px] items-center rounded-full pl-[18px] text-[13px] font-semibold before:absolute before:left-0 before:size-2 before:rounded-full'

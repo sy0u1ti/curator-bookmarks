@@ -16,9 +16,9 @@ import { FEATURED_WALLPAPER_CONTROL_CLASS } from './featuredWallpaperControlClas
 const FEATURED_BACKGROUND_INITIAL_PREVIEW_HYDRATION_LIMIT = 16
 const FEATURED_BACKGROUND_PREVIEW_OBSERVER_ROOT_MARGIN = '280px 0px'
 const FEATURED_BACKGROUND_PICKER_CARD_CLASS =
-  'featured-wallpaper-card rounded-ds-sm border border-ds-border bg-ds-surface-1 shadow-none [&::before]:shadow-none [&::after]:shadow-none'
+  'featured-wallpaper-card rounded-ds-sm border-0 bg-ds-surface-1 shadow-none'
 const FEATURED_BACKGROUND_PICKER_CARD_SELECTED_CLASS =
-  'border-ds-border-hover bg-ds-selected text-ds-text-primary shadow-none'
+  'bg-ds-selected text-ds-text-primary'
 const FEATURED_BACKGROUND_CARD_ACTION_CLASS = `featured-wallpaper-card-action ${FEATURED_WALLPAPER_CONTROL_CLASS}`
 const FEATURED_BACKGROUND_DOWNLOAD_CLASS = `featured-wallpaper-download ${FEATURED_BACKGROUND_CARD_ACTION_CLASS}`
 const FEATURED_BACKGROUND_FAVORITE_CLASS = `featured-wallpaper-favorite ${FEATURED_BACKGROUND_CARD_ACTION_CLASS}`
@@ -73,16 +73,16 @@ export type FeaturedBackgroundPickerState =
   | { type: 'state'; label: string }
   | { type: 'sections'; sections: FeaturedBackgroundPickerSectionViewModel[] }
 
-type FeaturedBackgroundPreviewState = 'ready' | 'loading'
+type FeaturedBackgroundPreviewState = 'ready' | 'loading' | 'error'
 interface FeaturedBackgroundPreviewViewState {
   src: string
   state: FeaturedBackgroundPreviewState
 }
 
 type FeaturedBackgroundPreviewViewAction =
-  | { type: 'loading' }
+  | { type: 'error' }
   | { type: 'ready' }
-  | { type: 'src'; src: string; state: FeaturedBackgroundPreviewState }
+  | { type: 'src'; src: string }
 
 export function FeaturedBackgroundPicker({
   previewRootRef,
@@ -137,11 +137,10 @@ function FeaturedBackgroundPickerProviderSection({
 }) {
   return (
     <section className="featured-wallpaper-section" aria-label={section.title}>
-      <h4 className="featured-wallpaper-section-title">{section.title}</h4>
       <div className="featured-wallpaper-provider-stack">
         {section.groups.map((group) => (
           <section className="featured-wallpaper-provider-section" aria-label={group.title} key={group.title}>
-            <h5 className="featured-wallpaper-provider-title">{group.title}</h5>
+            <h4 className="featured-wallpaper-provider-title">{group.title}</h4>
             <FeaturedBackgroundPickerCardGrid
               cards={group.cards}
               emptyText={group.emptyText}
@@ -231,6 +230,7 @@ function FeaturedBackgroundPickerCard({
   )
   const cardRef = useRef<HTMLElement | null>(null)
   const resolvedPreviewUrlRef = useRef(card.initialPreviewUrl)
+  const failedPreviewUrlsRef = useRef(new Set<string>())
   const fallbackUrlsRef = useRef<string[] | null>(null)
   if (fallbackUrlsRef.current === null) {
     fallbackUrlsRef.current = getFeaturedBackgroundPreviewFallbackQueue(card.previewFallbackUrls)
@@ -253,11 +253,15 @@ function FeaturedBackgroundPickerCard({
     const fallbackUrl = resolvedPreviewUrlRef.current || card.initialPreviewUrl || remotePreviewUrl
     void card.onResolvePreviewObjectUrl(remotePreviewUrl, fallbackUrl)
       .then((objectUrl) => {
-        if (!objectUrl || hydrationRequestKeyRef.current !== requestKey || !cardRef.current?.isConnected) {
+        if (!objectUrl || hydrationRequestKeyRef.current !== requestKey ||
+          !cardRef.current?.isConnected || failedPreviewUrlsRef.current.has(objectUrl)) {
           return
         }
         resolvedPreviewUrlRef.current = objectUrl
-        dispatchPreviewView({ type: 'src', src: objectUrl, state: 'ready' })
+        dispatchPreviewView({ type: 'src', src: objectUrl })
+      })
+      .catch(() => {
+        // Cache lookup failure must not replace the image request or its fallback.
       })
   }, [
     card.id,
@@ -339,7 +343,7 @@ function FeaturedBackgroundPickerCard({
         card.onSelect(event.currentTarget, card.id)
       }}
       onPointerEnter={(event) => {
-        if (event.pointerType !== 'mouse') {
+        if (event.pointerType !== 'mouse' || previewView.state !== 'ready') {
           return
         }
         card.onScheduleHoverPreview(createFeaturedBackgroundHoverPreviewRequest({
@@ -352,9 +356,14 @@ function FeaturedBackgroundPickerCard({
         card.onClearHoverPreview(event.currentTarget)
       }}
     >
-      <span className="featured-wallpaper-preview">
-        <img
+      <span
+        className="featured-wallpaper-preview"
+        data-state={previewView.state}
+        aria-busy={previewView.state === 'loading'}
+      >
+        {previewView.state !== 'error' ? <img
           className="featured-wallpaper-preview-image"
+          key={previewView.src}
           src={previewView.src}
           alt=""
           decoding="async"
@@ -365,6 +374,7 @@ function FeaturedBackgroundPickerCard({
             handleFeaturedBackgroundPreviewError({
               event,
               fallbackUrlsRef,
+              failedPreviewUrlsRef,
               previewSrc: previewView.src,
               resolvedPreviewUrlRef,
               dispatchPreviewView
@@ -377,10 +387,16 @@ function FeaturedBackgroundPickerCard({
               dispatchPreviewView
             })
           }}
-        />
-        <span className="featured-wallpaper-resolution" data-state={card.resolutionState}>
-          {card.resolutionText}
-        </span>
+        /> : null}
+        {previewView.state === 'error' ? (
+          <span className="featured-wallpaper-preview-error">
+            <strong>{card.title}</strong>
+            <span>预览暂不可用</span>
+          </span>
+        ) : null}
+        {card.resolutionState === 'ready' && previewView.state === 'ready' ? (
+          <span className="featured-wallpaper-resolution">{card.resolutionText}</span>
+        ) : null}
         <span className="featured-wallpaper-card-actions">
           <Button
             className={FEATURED_BACKGROUND_DOWNLOAD_CLASS}
@@ -447,7 +463,7 @@ function createFeaturedBackgroundHoverPreviewRequest({
 function createFeaturedBackgroundPreviewViewState(src: string): FeaturedBackgroundPreviewViewState {
   return {
     src,
-    state: src ? 'ready' : 'loading'
+    state: 'loading'
   }
 }
 
@@ -456,44 +472,47 @@ function reduceFeaturedBackgroundPreviewView(
   action: FeaturedBackgroundPreviewViewAction
 ): FeaturedBackgroundPreviewViewState {
   switch (action.type) {
-    case 'loading':
-      return state.state === 'loading'
+    case 'error':
+      return state.state === 'error'
         ? state
-        : { ...state, state: 'loading' }
+        : { ...state, state: 'error' }
     case 'ready':
       return state.state === 'ready'
         ? state
         : { ...state, state: 'ready' }
     case 'src':
-      return state.src === action.src && state.state === action.state
+      return state.src === action.src
         ? state
-        : { src: action.src, state: action.state }
+        : { src: action.src, state: 'loading' }
   }
 }
 
 function handleFeaturedBackgroundPreviewError({
   event,
   fallbackUrlsRef,
+  failedPreviewUrlsRef,
   previewSrc,
   resolvedPreviewUrlRef,
   dispatchPreviewView
 }: {
   event: SyntheticEvent<HTMLImageElement>
   fallbackUrlsRef: MutableRefObject<string[]>
+  failedPreviewUrlsRef: MutableRefObject<Set<string>>
   previewSrc: string
   resolvedPreviewUrlRef: MutableRefObject<string>
   dispatchPreviewView: (action: FeaturedBackgroundPreviewViewAction) => void
 }) {
   const image = event.currentTarget
   const failedUrl = image.currentSrc || image.src || previewSrc
-  const fallbackUrl = takeNextFeaturedBackgroundPreviewFallbackUrl(fallbackUrlsRef, failedUrl)
+  failedPreviewUrlsRef.current.add(failedUrl)
+  const fallbackUrl = takeNextFeaturedBackgroundPreviewFallbackUrl(fallbackUrlsRef, failedPreviewUrlsRef.current)
   if (!fallbackUrl) {
-    dispatchPreviewView({ type: 'loading' })
+    dispatchPreviewView({ type: 'error' })
     return
   }
 
   resolvedPreviewUrlRef.current = fallbackUrl
-  dispatchPreviewView({ type: 'src', src: fallbackUrl, state: 'ready' })
+  dispatchPreviewView({ type: 'src', src: fallbackUrl })
 }
 
 function handleFeaturedBackgroundPreviewLoad({
@@ -526,11 +545,10 @@ function getFeaturedBackgroundPreviewFallbackQueue(urls: string[]): string[] {
 
 function takeNextFeaturedBackgroundPreviewFallbackUrl(
   fallbackUrlsRef: MutableRefObject<string[]>,
-  failedUrl: string
+  failedUrls: Set<string>
 ): string {
-  const normalizedFailedUrl = String(failedUrl || '').trim()
-  const fallbackUrl = fallbackUrlsRef.current.find((url) => url && url !== normalizedFailedUrl) || ''
-  fallbackUrlsRef.current = fallbackUrlsRef.current.filter((url) => url && url !== fallbackUrl)
+  const fallbackUrl = fallbackUrlsRef.current.find((url) => url && !failedUrls.has(url)) || ''
+  fallbackUrlsRef.current = fallbackUrlsRef.current.filter((url) => url && url !== fallbackUrl && !failedUrls.has(url))
   return fallbackUrl
 }
 

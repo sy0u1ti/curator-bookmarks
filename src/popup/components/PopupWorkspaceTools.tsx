@@ -83,11 +83,10 @@ export function PopupWorkspaceTools() {
       <DialogBackdrop className="absolute inset-0 bg-black/70" />
       <DialogPanel id="popup-keyboard-help-dialog" className="relative max-h-[calc(100dvh-24px)] w-full max-w-lg overflow-y-auto rounded-ds-md border border-ds-border bg-ds-surface-2 p-5 text-ds-text-primary" initialFocus={() => document.getElementById('popup-keyboard-help-title')}>
         <DialogTitle id="popup-keyboard-help-title" tabIndex={-1} className="text-lg font-semibold outline-none">键盘操作</DialogTitle>
-        <p className="mt-2 text-xs leading-relaxed text-ds-text-secondary">按界面位置理解方向键：左侧是文件夹筛选，中间是文件夹树，右侧是书签列表。输入框内的普通文字和输入法确认保持原有行为。</p>
         <div className="my-4 grid gap-4">
           {shortcutGroups.map((group) => (
             <section className="grid gap-2" key={group.title} aria-label={group.title}>
-              <h3 className="m-0 text-xs font-semibold uppercase tracking-[0.08em] text-ds-text-muted">{group.title}</h3>
+              <h3 className="m-0 text-sm font-semibold text-ds-text-secondary">{group.title}</h3>
               <dl className="m-0 grid gap-2 text-sm">
                 {group.rows.map(([key, label]) => <div key={key} className="grid grid-cols-[minmax(110px,0.7fr)_minmax(0,1fr)] gap-3 border-b border-ds-border-subtle py-2"><dt><kbd className="font-mono text-xs">{key}</kbd></dt><dd className="text-ds-text-secondary">{label}</dd></div>)}
               </dl>

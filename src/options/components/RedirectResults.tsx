@@ -1,7 +1,7 @@
 import { displayUrl } from '../../shared/text.js'
 import { Button } from '../../ui/base/Button'
 import { CheckboxControl } from '../../ui/base/Checkbox'
-import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
+import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { handleRedirectAction } from '../options-controller'
 import { useRedirectResultsState } from './redirect-results-store.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
@@ -9,7 +9,7 @@ import type { RedirectResultViewModel } from './redirect-results-types.js'
 
 const REDIRECT_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const REDIRECT_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover'
+  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover`
 const REDIRECT_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
 const REDIRECT_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'

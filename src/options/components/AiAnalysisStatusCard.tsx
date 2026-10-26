@@ -1,7 +1,6 @@
 import { useAiAnalysisStatus } from './ai-analysis-status-store.js'
+import { OPTION_RUN_CELL_CLASS } from './option-layout-classes.js'
 
-const AI_ANALYSIS_STATUS_CARD_CLASS =
-  'rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px] max-[760px]:px-4'
 const AI_ANALYSIS_STATUS_META_CLASS =
   'flex flex-wrap items-center justify-between gap-3 max-[760px]:flex-col max-[760px]:items-start'
 const AI_ANALYSIS_STATUS_TITLE_CLASS =
@@ -27,12 +26,12 @@ export function AiAnalysisStatusCard() {
 
   return (
     <div
-      className={AI_ANALYSIS_STATUS_CARD_CLASS}
+      className={OPTION_RUN_CELL_CLASS}
       role={isError ? 'alert' : 'status'}
       aria-live={isError ? 'assertive' : 'polite'}
     >
       <div className={AI_ANALYSIS_STATUS_META_CLASS}>
-        <strong className={AI_ANALYSIS_STATUS_TITLE_CLASS}>执行方式</strong>
+        <strong className={AI_ANALYSIS_STATUS_TITLE_CLASS}>分析状态</strong>
         <span className={badgeClassName}>
           {state.badgeText}
         </span>

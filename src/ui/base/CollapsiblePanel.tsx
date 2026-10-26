@@ -1,5 +1,5 @@
 import { Collapsible as BaseCollapsible } from '@base-ui/react/collapsible'
-import type { ComponentPropsWithoutRef, ReactNode } from 'react'
+import { forwardRef, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { cx } from './utils'
 
 export type CollapsiblePanelProps = Omit<
@@ -9,19 +9,16 @@ export type CollapsiblePanelProps = Omit<
   className?: string
 }
 
-export function CollapsiblePanel({
-  children,
-  className,
-  keepMounted = true,
-  ...props
-}: CollapsiblePanelProps & { children?: ReactNode }) {
-  return (
-    <BaseCollapsible.Panel keepMounted={keepMounted} className="t-acc-panel" {...props}>
-      <div className="t-acc-panel-inner">
-        <div className={cx('t-acc-panel-content pt-2', className)}>
-          {children}
+export const CollapsiblePanel = forwardRef<HTMLDivElement, CollapsiblePanelProps & { children?: ReactNode }>(
+  function CollapsiblePanel({ children, className, keepMounted = true, ...props }, ref) {
+    return (
+      <BaseCollapsible.Panel ref={ref} keepMounted={keepMounted} className="t-acc-panel" {...props}>
+        <div className="t-acc-panel-inner">
+          <div className={cx('t-acc-panel-content pt-2', className)}>
+            {children}
+          </div>
         </div>
-      </div>
-    </BaseCollapsible.Panel>
-  )
-}
+      </BaseCollapsible.Panel>
+    )
+  }
+)

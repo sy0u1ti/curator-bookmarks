@@ -56,44 +56,65 @@ try {
   const list = page.locator('#edit-folder-list')
   const search = page.locator('#edit-folder-search-input')
   const option = id => page.locator(`[data-select-edit-folder="${id}"]`)
+  // Let startup indexing and background paint work finish so this test measures
+  // the disclosure rather than unrelated popup initialization.
+  await page.waitForTimeout(2500)
   const mountedRows = await list.locator('[role="treeitem"]').count()
   assert.ok(mountedRows > 0 && mountedRows <= 40, `prepare a bounded window, not all ${folderCount} folders`)
+  assert.equal(await page.locator('#edit-folder-picker').evaluate(element => element.inert), true,
+    'closed disclosure content must be non-interactive without being removed from layout')
   assert.equal(await page.locator('#edit-modal').evaluate(element => getComputedStyle(element).clipPath), 'none',
     'the resizing card must not wait for a JS-generated clip-path on every frame')
 
-  const cdp = await context.newCDPSession(page)
   const report = { folderCount, transitions: [] }
-  // Measure both a normal CPU and a slower one. DOM work and continuous
-  // geometry are deterministic guards; timings are retained for comparison.
-  for (const rate of [1, 4]) {
-    await cdp.send('Emulation.setCPUThrottlingRate', { rate })
-    for (let pass = 0; pass < 4; pass++) {
-      const probe = await probeDisclosure(page)
-      report.transitions.push({ rate, ...probe })
-      assert.equal(probe.added, 0, 'disclosure must reuse mounted rows')
-      assert.equal(probe.removed, 0, 'closing must retain rows until the height reaches zero')
-      assert.ok(probe.rows <= 40, 'folder count must not determine DOM size')
-      assert.ok(probe.firstFrame < (rate === 1 ? 50 : 100),
-        `disclosure must respond without a long mount stall: ${probe.firstFrame.toFixed(1)}ms at ${rate}x CPU`)
-      assert.ok(probe.samples.filter(sample => sample.height > 1 && sample.height < probe.expandedHeight - 1).length >= 3,
-        'the accordion must actually stretch, not snap or substitute a fade')
-      for (let index = 1; index < probe.samples.length; index++) {
-        const delta = probe.samples[index].height - probe.samples[index - 1].height
-        assert.ok(probe.opening ? delta >= -0.75 : delta <= 0.75,
-          'uninterrupted disclosure height must move monotonically')
-      }
-      assert.ok(probe.footerBottom <= probe.modalBottom && probe.footerBottom <= 600,
-        'the footer must stay inside the expanded card')
-      if (!probe.opening) {
-        assert.ok(probe.samples.at(-1).height <= 0.5)
-        const hidden = probe.samples.findIndex(sample => sample.hidden)
-        assert.ok(hidden > 0 && probe.samples[hidden - 1].height <= 0.5,
-          'Base UI must hide the panel only after it reaches zero')
-      }
-    }
-  }
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
+  for (const opening of [true, false, true, false]) {
+    const probe = await probeDisclosure(page)
+    report.transitions.push(probe)
+    assert.equal(probe.opening, opening)
+    assert.equal(probe.added, 0, 'disclosure must reuse mounted rows')
+    assert.equal(probe.removed, 0, 'closing must retain rows until the transition completes')
+    assert.ok(probe.rows <= 40, 'folder count must not determine DOM size')
+    assert.ok(probe.maxFrame <= 20,
+      `the stretch must not miss a display frame: max frame ${probe.maxFrame.toFixed(1)}ms while ${opening ? 'opening' : 'closing'}`)
+    assert.deepEqual(probe.longFrames, [], 'the stretch must not schedule a long animation frame')
+    assert.ok(probe.modalHeightSpread <= 0.5,
+      'the editor card layout box must stay fixed while the visual surface expands')
+    assert.ok(probe.surfaceHeightSpread <= 0.5,
+      'the prewarmed visual surface must not resize during the transition')
 
+    const settled = probe.samples.at(-1)
+    assert.ok(Math.abs(settled.surfaceLeft - settled.modalLeft) <= 0.1 &&
+      Math.abs(settled.surfaceRight - settled.modalRight) <= 0.1,
+    'expanded and closed outlines must share the same border box, never leave a second vertical edge')
+    assert.equal(settled.hidden, false, 'closed content must stay mounted for reopening')
+    assert.equal(settled.panelHeight, 0, 'the disclosure panel must not animate layout height')
+    assert.ok(settled.footerBottom <= settled.surfaceBottom + 0.5 && settled.footerBottom <= 600,
+      'the footer must stay inside the expanded visual surface')
+    if (opening) {
+      assert.ok(settled.surfaceOpacity > 0.99 && settled.pickerOpacity > 0.99)
+      assert.equal(settled.ariaHidden, 'false')
+      assert.equal(settled.inert, false)
+    } else {
+      assert.ok(settled.surfaceOpacity <= 0.01 && settled.pickerOpacity <= 0.01)
+      assert.equal(settled.ariaHidden, 'true')
+      assert.equal(settled.inert, true)
+    }
+
+    const movingSamples = probe.samples.filter(sample => sample.at > 20 && sample.at < 260)
+    assert.ok(movingSamples.length >= 8, 'the transition must be sampled across multiple frames')
+    const upperMin = Math.min(...movingSamples.map(sample => sample.upperTop))
+    const upperMax = Math.max(...movingSamples.map(sample => sample.upperTop))
+    const lowerMin = Math.min(...movingSamples.map(sample => sample.lowerTop))
+    const lowerMax = Math.max(...movingSamples.map(sample => sample.lowerTop))
+    assert.ok(upperMax - upperMin > 20, 'the upper content must visibly move with the surface')
+    assert.ok(lowerMax - lowerMin > 20, 'the lower content must leave room for the picker')
+    assert.ok(movingSamples.filter(sample => sample.upperTop > upperMin + 0.5 && sample.upperTop < upperMax - 0.5).length >= 3,
+      'the stretch must include intermediate positions rather than snap or fade')
+    assert.ok(movingSamples.filter(sample => sample.lowerTop > lowerMin + 0.5 && sample.lowerTop < lowerMax - 0.5).length >= 3,
+      'both content groups must move continuously through the stretch')
+    assert.ok(probe.samples.some(sample => sample.surfaceOpacity > 0.05 && sample.surfaceOpacity < 0.95),
+      'the prewarmed surface must cross-fade without a first-paint stall')
+  }
   // Interrupt both directions before the prior transition completes.
   const rapid = await page.evaluate(() => new Promise(resolve => {
     const trigger = document.querySelector('#edit-folder-picker-button')
@@ -106,7 +127,11 @@ try {
     trigger.click()
     const sample = () => {
       const at = performance.now() - start
-      samples.push({ at, height: panel.getBoundingClientRect().height })
+      samples.push({
+        at,
+        upperTop: document.querySelector('#edit-modal header').getBoundingClientRect().top,
+        lowerTop: document.querySelector('#edit-modal .popup-edit-lower')?.getBoundingClientRect().top || 0
+      })
       if (reversals.length === 0 && at >= 65) { trigger.click(); reversals.push(at) }
       else if (reversals.length === 1 && at >= 125) { trigger.click(); reversals.push(at) }
       if (at < 550) return requestAnimationFrame(sample)
@@ -119,9 +144,8 @@ try {
   }))
   assert.equal(rapid.expanded, 'true')
   assert.equal(rapid.sameRow, true)
-  assert.ok(rapid.samples.at(-1).height > 120)
-  assert.ok(rapid.samples.every((sample, index) => !index || Math.abs(sample.height - rapid.samples[index - 1].height) < 90),
-    'rapid reversals must continue from the displayed height')
+  assert.ok(rapid.samples.every((sample, index) => !index || Math.abs(sample.upperTop - rapid.samples[index - 1].upperTop) < 90),
+    'rapid reversals must continue from the displayed transform')
   report.rapid = rapid
   await page.screenshot({ path: path.join(output, 'expanded.png') })
 
@@ -164,7 +188,8 @@ try {
   const narrow = await page.locator('#edit-modal').evaluate(element => {
     const card = element.getBoundingClientRect()
     const footer = element.querySelector('footer').getBoundingClientRect()
-    return { bottom: card.bottom, footer: footer.bottom, width: card.width }
+    const surface = element.querySelector('.popup-edit-surface').getBoundingClientRect()
+    return { bottom: surface.bottom, footer: footer.bottom, width: card.width }
   })
   assert.ok(narrow.width <= 390 && narrow.footer <= narrow.bottom && narrow.bottom <= 600)
   await page.screenshot({ path: path.join(output, 'expanded-narrow.png') })
@@ -174,7 +199,13 @@ try {
   await settleDisclosure(page, false)
   await trigger.click()
   await settleDisclosure(page, true)
-  assert.equal(await page.locator('#edit-folder-picker').evaluate(element => getComputedStyle(element).transitionProperty), 'none')
+  assert.deepEqual(
+    await page.locator('#edit-modal').evaluate(element => {
+      const selectors = ['.popup-edit-surface', '.popup-edit-upper', '.popup-edit-lower', '.t-acc-panel-inner']
+      return selectors.map(selector => getComputedStyle(element.querySelector(selector)).transitionProperty)
+    }),
+    ['none', 'none', 'none', 'none']
+  )
   await page.setViewportSize({ width: 800, height: 600 })
   await page.locator('#save-edit').click()
   await page.locator('#edit-modal').waitFor({ state: 'hidden' })
@@ -215,9 +246,14 @@ async function settleDisclosure(page, open) {
   await page.waitForFunction(open => {
     const panel = document.querySelector('#edit-folder-picker')
     const trigger = document.querySelector('#edit-folder-picker-button')
+    const surface = document.querySelector('#edit-modal .popup-edit-surface')
+    const inner = panel.querySelector('.t-acc-panel-inner')
+    const opacity = Number(getComputedStyle(inner).opacity)
+    const surfaceOpacity = Number(getComputedStyle(surface).opacity)
     return trigger?.getAttribute('aria-expanded') === String(open) &&
       panel.getAnimations({ subtree: true }).length === 0 &&
-      (open ? panel.offsetHeight > 0 : panel.offsetHeight === 0)
+      panel.inert === !open && panel.getAttribute('aria-hidden') === String(!open) &&
+      (open ? opacity > 0.99 && surfaceOpacity > 0.99 : opacity <= 0.01 && surfaceOpacity <= 0.01)
   }, open)
 }
 
@@ -227,28 +263,61 @@ async function probeDisclosure(page) {
     const modal = document.querySelector('#edit-modal')
     const panel = document.querySelector('#edit-folder-picker')
     const list = document.querySelector('#edit-folder-list')
+    const surface = modal.querySelector('.popup-edit-surface')
+    const upper = modal.querySelector('header')
+    const lower = modal.querySelector('.popup-edit-lower')
+    const pickerInner = panel.querySelector('.t-acc-panel-inner')
+    const footer = modal.querySelector('footer')
     const opening = trigger.getAttribute('aria-expanded') !== 'true'
     const samples = []
+    const longFrames = []
     let added = 0, removed = 0
     const observer = new MutationObserver(records => {
       for (const record of records) { added += record.addedNodes.length; removed += record.removedNodes.length }
     })
     observer.observe(list, { childList: true, subtree: true })
-    const startHeight = panel.getBoundingClientRect().height
+    const performanceObserver = new PerformanceObserver(entries => {
+      for (const entry of entries.getEntries()) {
+        longFrames.push({ duration: entry.duration, blockingDuration: entry.blockingDuration })
+      }
+    })
+    performanceObserver.observe({ type: 'long-animation-frame' })
     trigger.focus({ preventScroll: true })
     const started = performance.now()
     const sample = () => {
       const at = performance.now() - started
-      samples.push({ at, height: panel.getBoundingClientRect().height, hidden: Boolean(panel.hidden) })
+      const modalRect = modal.getBoundingClientRect()
+      const surfaceRect = surface.getBoundingClientRect()
+      samples.push({
+        at,
+        ariaHidden: panel.getAttribute('aria-hidden'),
+        footerBottom: footer.getBoundingClientRect().bottom,
+        hidden: Boolean(panel.hidden),
+        inert: panel.inert,
+        lowerTop: lower.getBoundingClientRect().top,
+        modalHeight: modalRect.height,
+        modalLeft: modalRect.left,
+        modalRight: modalRect.right,
+        panelHeight: panel.getBoundingClientRect().height,
+        pickerOpacity: Number(getComputedStyle(pickerInner).opacity),
+        surfaceBottom: surfaceRect.bottom,
+        surfaceHeight: surfaceRect.height,
+        surfaceLeft: surfaceRect.left,
+        surfaceRight: surfaceRect.right,
+        surfaceOpacity: Number(getComputedStyle(surface).opacity),
+        upperTop: upper.getBoundingClientRect().top
+      })
       if (at < 500) return requestAnimationFrame(sample)
       observer.disconnect()
+      performanceObserver.disconnect()
       const gaps = samples.map((entry, index) => index ? entry.at - samples[index - 1].at : entry.at)
+      const settled = samples.at(-1)
       resolve({
         opening, added, removed, rows: list.querySelectorAll('[role="treeitem"]').length,
-        expandedHeight: Math.max(startHeight, ...samples.map(entry => entry.height)),
-        firstFrame: gaps[0], maxFrame: Math.max(...gaps),
-        footerBottom: modal.querySelector('footer').getBoundingClientRect().bottom,
-        modalBottom: modal.getBoundingClientRect().bottom, samples
+        firstFrame: gaps[0], maxFrame: Math.max(...gaps), longFrames,
+        modalHeightSpread: Math.max(...samples.map(entry => entry.modalHeight)) - Math.min(...samples.map(entry => entry.modalHeight)),
+        surfaceHeightSpread: Math.max(...samples.map(entry => entry.surfaceHeight)) - Math.min(...samples.map(entry => entry.surfaceHeight)),
+        footerBottom: settled.footerBottom, surfaceBottom: settled.surfaceBottom, samples
       })
     }
     trigger.click()

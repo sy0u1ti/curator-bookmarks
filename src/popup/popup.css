@@ -386,23 +386,132 @@ body::after {
 .popup-edit-modal > :not(.edit-folder-accordion) {
   flex-shrink: 0;
 }
+/* The card keeps its closed layout box while the visual surface and content
+   groups animate with compositor properties. This avoids per-frame relayout. */
+.popup-edit-modal {
+  --popup-edit-open-shift: 0px;
+  --popup-edit-surface-scale: 1;
+  --popup-edit-surface-inverse-scale: 1;
+  isolation: isolate;
+  overflow: visible;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+}
+
+.popup-edit-surface {
+  position: absolute;
+  /* Absolute insets start at the padding box; cover the parent's border too
+     so the expanded surface cannot leave the closed outline beside it. */
+  top: calc(var(--popup-edit-open-shift) * -1 - 1px);
+  right: -1px;
+  left: -1px;
+  z-index: 0;
+  height: calc(100% + var(--popup-edit-open-shift) * 2 + 2px);
+  pointer-events: none;
+  border: 1px solid var(--ds-border);
+  border-radius: inherit;
+  background: var(--ds-surface-1);
+  /* Keep the expanded surface in the raster cache before it is revealed.
+     Transitioning from fully transparent can defer its first raster until the
+     opening frame, which shows up as a 50-90ms GPU hitch. */
+  opacity: 0.001;
+  transform: translateZ(0);
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+  transition: opacity var(--acc-expand) var(--acc-ease);
+}
+
+.popup-edit-modal:has(.edit-folder-accordion[data-open]) .popup-edit-surface {
+  opacity: 1;
+}
+
+.popup-edit-upper,
+.popup-edit-lower {
+  transform: translate3d(0, 0, 0);
+  will-change: transform;
+  backface-visibility: hidden;
+  transition: transform var(--acc-expand) var(--acc-ease);
+}
+.popup-edit-upper {
+  position: relative;
+  z-index: 2;
+}
+
+.popup-edit-lower {
+  position: relative;
+  z-index: 1;
+}
+
+.popup-edit-toggle-open {
+  display: none;
+}
+
+.t-acc-head[data-panel-open] .popup-edit-toggle-open {
+  display: inline;
+}
+
+.t-acc-head[data-panel-open] .popup-edit-toggle-closed {
+  display: none;
+}
+
+
+.popup-edit-modal:has(.edit-folder-accordion[data-open]) .popup-edit-upper {
+  transform: translate3d(0, calc(var(--popup-edit-open-shift) * -1), 0);
+}
+
+.popup-edit-modal:has(.edit-folder-accordion[data-open]) .popup-edit-lower {
+  transform: translate3d(0, var(--popup-edit-open-shift), 0);
+}
+
 
 .edit-folder-accordion {
   --acc-expand: var(--duration-fast);
   --acc-collapse: var(--duration-fast);
+  display: block;
   min-height: 0;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: none;
 }
 
 .edit-folder-accordion .t-acc-panel {
+  display: block;
+  height: 0;
   min-height: 0;
+  overflow: hidden;
+  transition: none;
+}
+
+.edit-folder-accordion .t-acc-panel[data-open] {
+  height: 0;
+  overflow: visible;
 }
 
 .edit-folder-accordion .t-acc-panel-inner {
+  position: relative;
+  top: calc(var(--popup-edit-open-shift) * -1);
+  z-index: 1;
   display: flex;
   flex-direction: column;
+  height: var(--popup-edit-panel-height);
   contain: layout paint;
+  /* The tree is kept mounted, painted at sub-pixel opacity, and clipped by
+     its zero-height panel. Opening therefore only composites existing
+     textures instead of rasterizing the whole picker on the first frame. */
+  opacity: 0.001;
+  transform: translateZ(0);
+  visibility: visible;
+  pointer-events: none;
+  will-change: opacity, transform;
+  backface-visibility: hidden;
+  transition: none;
 }
+
+.edit-folder-accordion .t-acc-panel[data-open] .t-acc-panel-inner {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: none;
+}
+
 
 .edit-folder-picker {
   /* 64px is the modal stack's two 18px insets plus the card's 28px reserve.
@@ -414,6 +523,16 @@ body::after {
 
 .edit-folder-picker > label {
   flex-shrink: 0;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .popup-edit-surface,
+  .popup-edit-upper,
+  .popup-edit-lower,
+  .edit-folder-accordion .t-acc-panel-inner {
+    transition: none;
+  }
 }
 
 .popup-main-row:hover,
@@ -703,10 +822,14 @@ body::after {
   }
 
   #popup-root button:focus-visible,
-  #popup-root input:focus-visible,
-  #popup-root .popup-search-shell:focus-within {
+  #popup-root input:focus-visible {
     outline: 2px solid #ffffff !important;
     outline-offset: 2px !important;
+  }
+
+  #popup-root .popup-search-shell:focus-within {
+    outline: 2px solid #ffffff !important;
+    outline-offset: -2px !important;
   }
 
   .popup-active-result-indicator,

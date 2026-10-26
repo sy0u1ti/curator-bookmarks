@@ -9,7 +9,7 @@ import {
   loadContentSnapshotSettings
 } from '../shared/content-snapshot-search.js'
 import type { BookmarkRecord } from '../shared/types.js'
-import { normalizeSearchTextCompact } from '../shared/text.js'
+import { isSearchContentForBookmark } from '../shared/search/content-identity.js'
 import type {
   BookmarkCatalogSnapshot
 } from '../shared/bookmark-catalog.js'
@@ -172,9 +172,12 @@ export async function enrichExistingPopupSearchIndexWithSnapshotFullTextFromCata
   if (options.isActive && !options.isActive()) {
     return 0
   }
-  const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
-  const snapshotSearchMap = await buildContentSnapshotSearchMapWithFullText(snapshotIndex, {
-    includeFullText: true,
+  const { buildContentSnapshotFullTextMap } = await import('../shared/content-snapshots.js')
+  const records = Object.fromEntries(indexed.flatMap(bookmark => {
+    const record = snapshotIndex.records[bookmark.id]
+    return isSearchContentForBookmark(bookmark, record) ? [[bookmark.id, record]] : []
+  }))
+  const snapshotSearchMap = await buildContentSnapshotFullTextMap({ ...snapshotIndex, records }, {
     isActive: options.isActive
   })
   const searchIndexStillActive = !(options.isActive && !options.isActive())
@@ -216,14 +219,13 @@ function patchPopupSearchIndexFromCatalog(
       : catalog.extracted.bookmarkMap.get(target.id) || target
     const tagRecord = tagRecords[target.id] || null
     const snapshotRecord = snapshotRecords[target.id] || null
-    const snapshotSearchText = snapshotSearchMap?.get(target.id)
+    const fullText = snapshotSearchMap?.get(target.id) || ''
     const previousInputs = entryInputs.get(target)
     if (
-      !snapshotSearchText &&
       previousInputs?.bookmark === sourceBookmark &&
       previousInputs.tagRecord === tagRecord &&
       previousInputs.snapshotRecord === snapshotRecord &&
-      previousInputs.includeFullText === includeFullText
+      previousInputs.includeFullText === includeFullText && (!snapshotSearchMap || target.fullText === fullText)
     ) {
       // The same inputs project to the same entry. Keep it, including any
       // pinyin tokens that were derived from its unchanged search text.
@@ -236,13 +238,8 @@ function patchPopupSearchIndexFromCatalog(
       snapshotRecord,
       { includeFullText }
     )
-    if (snapshotSearchText) {
-      next.searchText = `${next.searchText} ${snapshotSearchText}`.trim()
-      next.searchTextCompact = normalizeSearchTextCompact(next.searchText)
-      entryInputs.delete(target)
-    } else {
-      entryInputs.set(target, { bookmark: sourceBookmark, tagRecord, snapshotRecord, includeFullText })
-    }
+    if (snapshotSearchMap) next.fullText = isSearchContentForBookmark(sourceBookmark, snapshotRecord) ? fullText : ''
+    entryInputs.set(target, { bookmark: sourceBookmark, tagRecord, snapshotRecord, includeFullText })
 
     patchPopupSearchBookmark(target, next)
     patched += 1
@@ -259,10 +256,18 @@ function patchPopupSearchBookmark(
   target: PopupSearchBookmark,
   next: PopupSearchBookmark
 ): void {
+  const samePinyinSources = target.title === next.title && target.path === next.path &&
+    JSON.stringify([target.tagTopics, target.tagTags, target.tagAliases]) === JSON.stringify([next.tagTopics, next.tagTags, next.tagAliases])
+  const fields = samePinyinSources ? target.pinyinFields : undefined
+  const full = target.tagPinyinFull
+  const initials = target.tagPinyinInitials
+  const enriched = target.pinyinEnriched
   Object.assign(target, next)
-  target.tagPinyinFull = []
-  target.tagPinyinInitials = []
-  delete target.pinyinFields
-  delete target.pinyinBaseSearchText
-  delete target.pinyinEnriched
+  if (fields && enriched) {
+    target.pinyinFields = fields
+    target.pinyinEnriched = true
+    target.tagPinyinFull = full
+    target.tagPinyinInitials = initials
+    target.pinyinBaseSearchText = next.searchText
+  }
 }

@@ -6,7 +6,7 @@ import { CheckboxControl } from '../../ui/base/Checkbox'
 import { useListExit } from '../../ui/motion/useListExit'
 import { handleRecycleAction } from '../options-controller'
 import { formatDateTime } from '../shared-options/utils.js'
-import { OPTION_RESULT_CHECKBOX_CLASS } from './option-layout-classes.js'
+import { OPTION_RESULT_CHECKBOX_CLASS, OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import { useRecycleBinState } from './recycle-bin-store.js'
 import type { RecycleEntryViewModel } from './recycle-bin-types.js'
@@ -16,7 +16,7 @@ const RECYCLE_RESULTS_LIST_CLASS = 'mt-4 flex flex-col gap-3'
 const RECYCLE_ENTRY_LIST_CLASS = 'flex flex-col [--list-exit-gap:0.75rem]'
 const RECYCLE_PAGE_SIZE = 30
 const RECYCLE_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover'
+  `${OPTION_INSET_CLASS} p-[14px_16px] [transition:border-color_var(--ds-motion-standard)_var(--ds-ease-standard),background-color_var(--ds-motion-standard)_var(--ds-ease-standard)] hover:border-ds-border-hover hover:bg-ds-hover`
 const RECYCLE_CARD_SELECTED_CLASS = 'border-ds-border-hover bg-ds-selected'
 const RECYCLE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3 max-[760px]:flex-col'

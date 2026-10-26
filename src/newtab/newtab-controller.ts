@@ -32,6 +32,7 @@ import {
   type NewTabFolderCandidate
 } from './folder-candidate-cache.js'
 import { parseSearchQuery } from '../shared/search-query.js'
+import { searchDateBucket } from '../shared/search/date.js'
 import type { NaturalSearchPlan } from '../popup/natural-search.js'
 import type {
   BookmarkTagExtraction,
@@ -852,6 +853,8 @@ let newTabFirstRenderRecorded = false
 let newTabBackgroundReadyRecorded = false
 let newTabRefreshVersion = 0
 let searchIndexBuildVersion = 0
+let searchWidgetGeneration = 0
+let dismissedSearchQuery: string | null = null
 let searchIndexRebuildScheduled = false
 let lastBuiltSearchIndexCatalogVersion = ''
 let resolveSearchIndexReady: () => void = () => {}
@@ -6172,6 +6175,7 @@ async function completeNewTabOnboarding(): Promise<void> {
 }
 
 function initializeSearchWidget(): boolean {
+  const widgetGeneration = ++searchWidgetGeneration
   const settings = state.searchSettings
   if (!settings.enabled) {
     refreshNewTabSearchSuggestionsAfterAiSettingsChange = null
@@ -6201,6 +6205,10 @@ function initializeSearchWidget(): boolean {
   let searchInputComposing = false
   let suggestionDebounceTimer = 0
   let suggestionRequestId = 0
+  let visibleSuggestionQuery = ''
+  let visibleSuggestionIndex = state.preparedSearchIndex
+  const suggestionIdentity = (item: NewTabSearchSuggestion) => `${item.suggestionType}:${item.id}`
+  const ownsWidget = () => widgetGeneration === searchWidgetGeneration && newTabControllerStarted
 
   const getSearchNodes = (): NewtabSearchWidgetNodes => getNewtabSearchWidgetNodes()
   const getSearchInput = (): HTMLInputElement | null => getSearchNodes().input
@@ -6269,7 +6277,8 @@ function initializeSearchWidget(): boolean {
             return
           }
 
-          if (event.key === 'Enter' && activeSuggestionIndex >= 0 && !event.metaKey && !event.ctrlKey) {
+          if (event.key === 'Enter' && activeSuggestionIndex >= 0 && !event.metaKey && !event.ctrlKey &&
+            visibleSuggestionQuery === input.value && visibleSuggestionIndex === state.preparedSearchIndex && state.searchIndexReady) {
             const suggestion = searchSuggestions[activeSuggestionIndex]
             if (suggestion) {
               event.preventDefault()
@@ -6303,12 +6312,13 @@ function initializeSearchWidget(): boolean {
           }
 
           event.preventDefault()
-          if (searchSuggestions.length || searchPanelVisible) {
+          if (searchSuggestions.length || searchPanelVisible || suggestionDebounceTimer) {
             hideSuggestions()
             return
           }
 
           if (input.value) {
+            hideSuggestions()
             input.value = ''
             syncSearchInputActions(input)
             return
@@ -6456,9 +6466,13 @@ function initializeSearchWidget(): boolean {
   }
 
   const hideSuggestions = () => {
+    dismissedSearchQuery = getSearchInput()?.value ?? ''
+    suggestionRequestId += 1
+    abortNewTabNaturalSearchRequest()
     window.clearTimeout(suggestionDebounceTimer)
     suggestionDebounceTimer = 0
     searchSuggestions = []
+    visibleSuggestionQuery = ''
     activeSuggestionIndex = -1
     patchNewtabSearchWidgetView({
       chips: [],
@@ -6483,10 +6497,13 @@ function initializeSearchWidget(): boolean {
       return
     }
     const trimmedQuery = String(query || '').trim()
-    const previousActiveIndex = activeSuggestionIndex
+    if (!ownsWidget() || input.value !== query) return
+    const previousActive = preserveActive && activeSuggestionIndex >= 0 ? searchSuggestions[activeSuggestionIndex] : null
     const advancedSearch = isNewTabAdvancedSearchQuery(trimmedQuery)
     const chips = createNewTabSearchChips(trimmedQuery)
     searchSuggestions = suggestionList
+    visibleSuggestionQuery = query
+    visibleSuggestionIndex = state.preparedSearchIndex
     if (!searchSuggestions.length) {
       activeSuggestionIndex = -1
       patchNewtabSearchWidgetView({
@@ -6528,13 +6545,14 @@ function initializeSearchWidget(): boolean {
       : advancedSearch
         ? '语法搜索匹配'
         : '关键词书签匹配'
-    activeSuggestionIndex = preserveActive && previousActiveIndex >= 0
-      ? Math.min(previousActiveIndex, searchSuggestions.length - 1)
-      : -1
+    activeSuggestionIndex = previousActive
+      ? searchSuggestions.findIndex(item => suggestionIdentity(item) === suggestionIdentity(previousActive)) : -1
 
     const onSelectSuggestion = (selectedSuggestion: NewTabSearchSuggestion) => {
       const currentInput = getSearchInput()
-      if (!currentInput) {
+      if (!currentInput || !ownsWidget() || currentInput.value !== query || visibleSuggestionQuery !== query ||
+        visibleSuggestionIndex !== state.preparedSearchIndex || !state.searchIndexReady ||
+        !searchSuggestions.some(item => suggestionIdentity(item) === suggestionIdentity(selectedSuggestion))) {
         return
       }
       currentInput.value = selectedSuggestion.title
@@ -6569,15 +6587,29 @@ function initializeSearchWidget(): boolean {
     }
   }
 
-  const scheduleSuggestionsRender = ({ preserveActive = false, immediate = false } = {}) => {
+  const scheduleSuggestionsRender = ({ preserveActive = false, immediate = false, passive = false } = {}) => {
     const input = getSearchInput()
     if (!input) {
       return
     }
     const query = input.value
+    if (passive && dismissedSearchQuery === query) return
+    if (!passive) dismissedSearchQuery = null
     const requestId = suggestionRequestId + 1
     suggestionRequestId = requestId
     window.clearTimeout(suggestionDebounceTimer)
+    abortNewTabNaturalSearchRequest()
+    if (!query.trim()) { hideSuggestions(); return }
+    if (visibleSuggestionQuery !== query) {
+      searchSuggestions = []
+      activeSuggestionIndex = -1
+      setActiveSearchDescendant('')
+      patchNewtabSearchWidgetView({ suggestions: [], hint: { type: 'empty' }, chips: createNewTabSearchChips(query) })
+    }
+    if (searchInputComposing) return
+    const requestedIndex = state.preparedSearchIndex
+    const isCurrent = () => ownsWidget() && requestId === suggestionRequestId && getSearchInput()?.value === query &&
+      state.searchIndexReady && requestedIndex === state.preparedSearchIndex
 
     const renderCurrentSuggestions = () => {
       const currentInput = getSearchInput()
@@ -6605,7 +6637,7 @@ function initializeSearchWidget(): boolean {
         showSearchPanel()
       }
       void getSearchBookmarkSuggestions(query).then((directSuggestions) => {
-        if (requestId !== suggestionRequestId) {
+        if (!isCurrent()) {
           return
         }
 
@@ -6614,8 +6646,11 @@ function initializeSearchWidget(): boolean {
           return
         }
 
-        void getNaturalSearchBookmarkSuggestions(query, { onPendingChange: updateNaturalButton }).then((naturalSuggestions) => {
-          if (requestId !== suggestionRequestId) {
+        const runSemantic = () => {
+          suggestionDebounceTimer = 0
+          if (!isCurrent()) return
+          void getNaturalSearchBookmarkSuggestions(query, { onPendingChange: updateNaturalButton, isActive: isCurrent }).then((naturalSuggestions) => {
+          if (!isCurrent()) {
             return
           }
 
@@ -6624,12 +6659,14 @@ function initializeSearchWidget(): boolean {
         }).catch(() => {
           // Keep the popup-aligned suggestions visible if the optional natural-search chunk fails to load.
         }).finally(() => {
-          if (requestId === suggestionRequestId) {
+          if (isCurrent()) {
             updateNaturalButton()
           }
         })
+        }
+        suggestionDebounceTimer = window.setTimeout(runSemantic, immediate ? 0 : 520)
       }).catch(() => {
-        if (requestId !== suggestionRequestId) {
+        if (!isCurrent()) {
           return
         }
         patchNewtabSearchWidgetView({ hint: { type: 'text', text: '本地索引暂时无法读取，请重新输入以重试。' } })
@@ -6671,7 +6708,7 @@ function initializeSearchWidget(): boolean {
 
   refreshNewTabSearchSuggestionsAfterAiSettingsChange = () => {
     updateNaturalButton()
-    scheduleSuggestionsRender({ preserveActive: true, immediate: true })
+    scheduleSuggestionsRender({ preserveActive: true, immediate: true, passive: true })
   }
 
   const moveActiveSuggestion = (direction: 1 | -1) => {
@@ -6779,10 +6816,12 @@ function initializeSearchWidget(): boolean {
 
   function getSearchSuggestionHintText(): string {
     const mode = state.searchSettings.naturalSearchEnabled
-      ? 'AI 改写'
+      ? state.naturalSearchError ? '本地回退' : 'AI 改写'
       : '关键词匹配'
     const fallback = state.naturalSearchError ? `；${state.naturalSearchError}` : ''
-    return `按 ↓ 选择书签，选中后 Enter 打开；Cmd/Ctrl+Enter 用 ${getSearchEngineDisplayName()} 搜索网页；${mode}${fallback}`
+    const webShortcut = state.searchSettings.webSearchEnabled === false
+      ? '' : `；Cmd/Ctrl+Enter 用 ${getSearchEngineDisplayName()} 搜索网页`
+    return `按 ↓ 选择书签，选中后 Enter 打开${webShortcut}；${mode}${fallback}`
   }
 }
 
@@ -7074,10 +7113,12 @@ function getNewTabCommandScore(normalizedQuery: string, command: NewTabCommandSu
 interface SearchSuggestionCacheEntry {
   promise: Promise<SearchBookmarkSuggestion[]>
   updatedAt: number
+  settled: boolean
 }
 
 interface NaturalSearchSuggestionOptions {
   onPendingChange?: () => void
+  isActive?: () => boolean
 }
 
 const searchSuggestionCache = new Map<string, SearchSuggestionCacheEntry>()
@@ -7103,6 +7144,9 @@ function abortNewTabNaturalSearchRequest(): void {
   state.naturalSearchAbortController?.abort()
   state.naturalSearchAbortController = null
   state.naturalSearchPending = false
+  for (const [key, entry] of naturalSearchSuggestionCache) {
+    if (!entry.settled) naturalSearchSuggestionCache.delete(key)
+  }
 }
 
 function isNewTabNaturalSearchAbortError(error: unknown): boolean {
@@ -7183,6 +7227,8 @@ function getNaturalSearchBookmarkSuggestions(
   const cacheKey = getSearchSuggestionCacheKey(query)
   const cached = getSearchSuggestionCacheEntry(naturalSearchSuggestionCache, cacheKey)
   if (cached) {
+    const plan = state.naturalSearchPlanCache.get(getNaturalSearchPlanCacheKey(parseSearchQuery(query).rawQuery))
+    if (plan) { state.naturalSearchPlan = plan; state.naturalSearchError = '' }
     if (state.naturalSearchPending) {
       options.onPendingChange?.()
     }
@@ -7193,6 +7239,7 @@ function getNaturalSearchBookmarkSuggestions(
   const suggestionsPromise = resolveNewTabNaturalSearchPlan(query, options, settingsGeneration)
     .then(async (plan) => {
       throwIfNewTabNaturalSearchRequestStale(settingsGeneration)
+      if (options.isActive && !options.isActive()) throw new DOMException('搜索已失效', 'AbortError')
       const suggestions = await getNaturalSearchBookmarkSuggestionsFromIndex(
         query,
         state.preparedSearchIndex,
@@ -7200,6 +7247,8 @@ function getNaturalSearchBookmarkSuggestions(
         { naturalSearchPlan: plan }
       )
       throwIfNewTabNaturalSearchRequestStale(settingsGeneration)
+      if (options.isActive && !options.isActive()) throw new DOMException('搜索已失效', 'AbortError')
+      if (plan.source !== 'ai') naturalSearchSuggestionCache.delete(cacheKey)
       return suggestions
     })
   setSearchSuggestionCacheEntry(naturalSearchSuggestionCache, cacheKey, suggestionsPromise)
@@ -7213,9 +7262,10 @@ async function resolveNewTabNaturalSearchPlan(
 ): Promise<NaturalSearchPlan> {
   const naturalSearch = await import('../popup/natural-search.js')
   const localPlan = naturalSearch.buildLocalNaturalSearchPlan(query)
-  const normalizedQuery = normalizeNewTabSearchText(query)
+  const normalizedQuery = localPlan.rawQuery
 
   throwIfNewTabNaturalSearchRequestStale(settingsGeneration)
+  if (options.isActive && !options.isActive()) throw new DOMException('搜索已失效', 'AbortError')
 
   if (!state.searchSettings.naturalSearchEnabled) {
     state.naturalSearchPlan = null
@@ -7230,7 +7280,7 @@ async function resolveNewTabNaturalSearchPlan(
     return cachedPlan
   }
 
-  abortNewTabNaturalSearchRequest()
+  state.naturalSearchAbortController?.abort()
   const controller = new AbortController()
   state.naturalSearchAbortController = controller
   state.naturalSearchPending = true
@@ -7270,6 +7320,9 @@ async function resolveNewTabNaturalSearchPlan(
     state.naturalSearchError = ''
     if (plan.source === 'ai') {
       state.naturalSearchPlanCache.set(planCacheKey, plan)
+      while (state.naturalSearchPlanCache.size > SEARCH_SUGGESTION_CACHE_LIMIT) {
+        state.naturalSearchPlanCache.delete(state.naturalSearchPlanCache.keys().next().value!)
+      }
     }
     return plan
   } catch (error) {
@@ -7283,7 +7336,7 @@ async function resolveNewTabNaturalSearchPlan(
     const naturalSearchAi = await import('../popup/natural-search-ai.js')
     throwIfNewTabNaturalSearchRequestStale(settingsGeneration, controller.signal)
     state.naturalSearchError = naturalSearchAi.normalizeNaturalSearchAiError(error)
-    state.naturalSearchPlan = null
+    state.naturalSearchPlan = localPlan
     return localPlan
   } finally {
     if (state.naturalSearchAbortController === controller) {
@@ -7321,9 +7374,13 @@ function setSearchSuggestionCacheEntry(
 ): void {
   cache.set(cacheKey, {
     promise,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    settled: false
   })
-  promise.catch(() => {
+  promise.then(() => {
+    const entry = cache.get(cacheKey)
+    if (entry?.promise === promise) entry.settled = true
+  }, () => {
     if (cache.get(cacheKey)?.promise === promise) {
       cache.delete(cacheKey)
     }
@@ -7572,11 +7629,14 @@ function normalizeNewTabSnapshotTextList(value: unknown, limit: number): string[
 
 function getSearchSuggestionCacheKey(query: string): string {
   return [
+    searchDateBucket(),
     state.preparedSearchIndex.entries.length,
     state.bookmarkTagIndex?.updatedAt || 0,
     state.searchSnapshotIndex?.updatedAt || 0,
     state.searchSettings.naturalSearchEnabled ? 'ai' : 'local',
-    normalizeNewTabSearchText(query)
+    // The executable grammar preserves literal Unicode and punctuation. NFKC
+    // would alias distinct quoted terms even though their result sets differ.
+    parseSearchQuery(query).rawQuery
   ].join(':')
 }
 
@@ -8162,6 +8222,8 @@ function createBookmarkTileViewModel(
 }
 
 function cleanupNewTabController(): void {
+  searchWidgetGeneration += 1
+  dismissedSearchQuery = null
   state.deleteToastBusy = false
   state.featuredBackgroundRefreshing = false
   featuredBackgroundDownloadInFlight = false
@@ -8555,7 +8617,6 @@ function rebuildNewTabSearchIndex(): void {
   schedulePreparedNewTabSearchWarmup(state.preparedSearchIndex)
   searchSuggestionCache.clear()
   naturalSearchSuggestionCache.clear()
-  state.naturalSearchPlanCache.clear()
   state.searchIndexReady = true
   state.searchIndexReadyPromise = searchIndexReadyPromise
   resolveSearchIndexReady()
@@ -11219,6 +11280,9 @@ function getFolderCandidateMap(): Map<string, NewTabFolderCandidate> {
 }
 
 function formatFolderCandidateCountSummary(folder: NewTabFolderCandidate): string {
+  if (folder.directBookmarkCount === folder.totalBookmarkCount) {
+    return `${folder.totalBookmarkCount} 个书签`
+  }
   return `直属 ${folder.directBookmarkCount} / 合计 ${folder.totalBookmarkCount}`
 }
 
@@ -11549,7 +11613,6 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
   }
 
   clearFeaturedBackgroundHoverPreview()
-  const staticFeaturedBackgroundIds = new Set(gallery.FEATURED_BACKGROUND_ITEMS.map((item) => item.id))
   const selectedId = state.backgroundSettings.featuredId
   const pickerSections = getFeaturedBackgroundPickerSections(gallery)
   const pickerItems = [...pickerSections.favorites, ...pickerSections.refreshed]
@@ -11568,7 +11631,6 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
 
   const providerGroups = createFeaturedBackgroundPickerProviderGroups({
     items: pickerSections.refreshed,
-    staticFeaturedBackgroundIds,
     selectedId,
     renderIndexOffset: pickerSections.favorites.length
   })
@@ -11581,14 +11643,13 @@ function renderFeaturedBackgroundPicker(gallery: BackgroundGalleryModule): void 
           title: '收藏壁纸',
           emptyText: '还没有收藏壁纸',
           items: pickerSections.favorites,
-          staticFeaturedBackgroundIds,
           selectedId,
           renderIndexOffset: 0
         })
       },
       {
         type: 'providers',
-        title: '刷新图库',
+        title: '壁纸来源',
         groups: providerGroups
       }
     ]
@@ -11614,12 +11675,10 @@ function hasRenderedFeaturedBackgroundPickerContent(): boolean {
 function createFeaturedBackgroundPickerProviderGroups(
   {
     items,
-    staticFeaturedBackgroundIds,
     selectedId,
     renderIndexOffset
   }: {
     items: FeaturedBackgroundItem[]
-    staticFeaturedBackgroundIds: Set<string>
     selectedId: string
     renderIndexOffset: number
   }
@@ -11638,7 +11697,6 @@ function createFeaturedBackgroundPickerProviderGroups(
       title: FEATURED_BACKGROUND_PROVIDER_LABELS[provider],
       emptyText: FEATURED_BACKGROUND_PROVIDER_EMPTY_TEXT[provider],
       items: providerItems,
-      staticFeaturedBackgroundIds,
       selectedId,
       renderIndexOffset: offset
     }))
@@ -11662,14 +11720,12 @@ function createFeaturedBackgroundPickerProviderGroupViewModel(
     title,
     emptyText,
     items,
-    staticFeaturedBackgroundIds,
     selectedId,
     renderIndexOffset
   }: {
     title: string
     emptyText: string
     items: FeaturedBackgroundItem[]
-    staticFeaturedBackgroundIds: Set<string>
     selectedId: string
     renderIndexOffset: number
   }
@@ -11679,7 +11735,6 @@ function createFeaturedBackgroundPickerProviderGroupViewModel(
     emptyText,
     cards: createFeaturedBackgroundPickerCardViewModels({
       items,
-      staticFeaturedBackgroundIds,
       selectedId,
       renderIndexOffset
     })
@@ -11691,14 +11746,12 @@ function createFeaturedBackgroundPickerGridSectionViewModel(
     title,
     emptyText,
     items,
-    staticFeaturedBackgroundIds,
     selectedId,
     renderIndexOffset
   }: {
     title: string
     emptyText: string
     items: FeaturedBackgroundItem[]
-    staticFeaturedBackgroundIds: Set<string>
     selectedId: string
     renderIndexOffset: number
   }
@@ -11708,7 +11761,6 @@ function createFeaturedBackgroundPickerGridSectionViewModel(
     emptyText,
     cards: createFeaturedBackgroundPickerCardViewModels({
       items,
-      staticFeaturedBackgroundIds,
       selectedId,
       renderIndexOffset
     })
@@ -11718,21 +11770,16 @@ function createFeaturedBackgroundPickerGridSectionViewModel(
 function createFeaturedBackgroundPickerCardViewModels(
   {
     items,
-    staticFeaturedBackgroundIds,
     selectedId,
     renderIndexOffset
   }: {
     items: FeaturedBackgroundItem[]
-    staticFeaturedBackgroundIds: Set<string>
     selectedId: string
     renderIndexOffset: number
   }
 ): FeaturedBackgroundPickerCardViewModel[] {
   return items.map((item, index) => createFeaturedBackgroundPickerCardViewModel({
     item,
-    bundledPreviewUrl: staticFeaturedBackgroundIds.has(item.id)
-      ? getFeaturedBackgroundBundledThumbnailUrl(item.id)
-      : '',
     selected: selectedId === item.id,
     favorite: isFeaturedBackgroundFavorite(item.id),
     renderIndex: renderIndexOffset + index
@@ -11798,51 +11845,6 @@ function getFeaturedBackgroundPreviewPlaceholderColor({
   )
 }
 
-const FEATURED_BACKGROUND_BUNDLED_THUMBNAIL_URL_BY_ID: Record<string, string> = {
-  'met-wheat-field-with-cypresses': 'featured-gallery-thumbnails/met-wheat-field-with-cypresses.jpg',
-  'wikimedia-water-lilies-monet': 'featured-gallery-thumbnails/wikimedia-water-lilies-monet.jpg',
-  'nasa-apollo-earthrise': 'featured-gallery-thumbnails/nasa-apollo-earthrise.jpg',
-  'met-venice-from-the-porch': 'featured-gallery-thumbnails/met-venice-from-the-porch.jpg',
-  'wikimedia-among-sierra-nevada': 'featured-gallery-thumbnails/wikimedia-among-sierra-nevada.jpg',
-  'nasa-andromeda-infrared': 'featured-gallery-thumbnails/nasa-andromeda-infrared.jpg',
-  'met-sunflowers': 'featured-gallery-thumbnails/met-sunflowers.jpg',
-  'wikimedia-starry-night': 'featured-gallery-thumbnails/wikimedia-starry-night.jpg',
-  'nasa-eagle-nebula-wise': 'featured-gallery-thumbnails/nasa-eagle-nebula-wise.jpg',
-  'met-cypresses': 'featured-gallery-thumbnails/met-cypresses.jpg',
-  'wikimedia-great-wave': 'featured-gallery-thumbnails/wikimedia-great-wave.jpg',
-  'nasa-earth-limb-aurora': 'featured-gallery-thumbnails/nasa-earth-limb-aurora.jpg',
-  'met-irises': 'featured-gallery-thumbnails/met-irises.jpg',
-  'wikimedia-cotopaxi': 'featured-gallery-thumbnails/wikimedia-cotopaxi.jpg',
-  'nasa-mars-landscape-curiosity': 'featured-gallery-thumbnails/nasa-mars-landscape-curiosity.jpg',
-  'met-monet-family-garden': 'featured-gallery-thumbnails/met-monet-family-garden.jpg',
-  'wikimedia-fighting-temeraire': 'featured-gallery-thumbnails/wikimedia-fighting-temeraire.jpg',
-  'nasa-dust-devil-on-mars': 'featured-gallery-thumbnails/nasa-dust-devil-on-mars.jpg',
-  'met-bouquet-flowers': 'featured-gallery-thumbnails/met-bouquet-flowers.jpg',
-  'wikimedia-impression-sunrise': 'featured-gallery-thumbnails/wikimedia-impression-sunrise.jpg',
-  'nasa-jupiter-southern-hemisphere': 'featured-gallery-thumbnails/nasa-jupiter-southern-hemisphere.jpg',
-  'met-young-woman-water-pitcher': 'featured-gallery-thumbnails/met-young-woman-water-pitcher.jpg',
-  'wikimedia-wanderer-sea-fog': 'featured-gallery-thumbnails/wikimedia-wanderer-sea-fog.jpg',
-  'nasa-aurora-borealis-blankets-earth': 'featured-gallery-thumbnails/nasa-aurora-borealis-blankets-earth.jpg',
-  'met-dance-class': 'featured-gallery-thumbnails/met-dance-class.jpg',
-  'wikimedia-great-day-wrath': 'featured-gallery-thumbnails/wikimedia-great-day-wrath.jpg',
-  'nasa-orion-nebula-infrared': 'featured-gallery-thumbnails/nasa-orion-nebula-infrared.jpg',
-  'met-la-berceuse': 'featured-gallery-thumbnails/met-la-berceuse.jpg',
-  'wikimedia-snow-storm-steamboat': 'featured-gallery-thumbnails/wikimedia-snow-storm-steamboat.jpg',
-  'nasa-mars-cerberus-fossae': 'featured-gallery-thumbnails/nasa-mars-cerberus-fossae.jpg',
-  'met-rembrandt-self-portrait': 'featured-gallery-thumbnails/met-rembrandt-self-portrait.jpg'
-}
-
-function getFeaturedBackgroundBundledThumbnailUrl(featuredId: string): string {
-  const id = String(featuredId || '').trim()
-  if (!id) return ''
-  const path = FEATURED_BACKGROUND_BUNDLED_THUMBNAIL_URL_BY_ID[id]
-  if (!path) return ''
-  if (typeof chrome !== 'undefined' && typeof chrome.runtime?.getURL === 'function') {
-    return chrome.runtime.getURL(path)
-  }
-  return `/${path}`
-}
-
 async function resolveFeaturedBackgroundGalleryPreviewObjectUrlWithSource(
   imageUrl: string,
   { fallbackUrl = '' }: { fallbackUrl?: string } = {}
@@ -11888,13 +11890,11 @@ function revokeFeaturedBackgroundGalleryObjectUrls(): void {
 
 function createFeaturedBackgroundPickerCardViewModel({
   item,
-  bundledPreviewUrl = '',
   selected,
   favorite = false,
   renderIndex = 0
 }: {
   item: FeaturedBackgroundItem
-  bundledPreviewUrl?: string
   selected: boolean
   favorite?: boolean
   renderIndex?: number
@@ -11912,9 +11912,8 @@ function createFeaturedBackgroundPickerCardViewModel({
   const previewFallbackUrls = [
     remotePreviewUrl,
     imageUrl
-  ].filter((url, index, urls) => Boolean(url) && url !== bundledPreviewUrl && urls.indexOf(url) === index)
+  ].filter((url, index, urls) => Boolean(url) && urls.indexOf(url) === index)
   const initialPreviewUrl = featuredBackgroundGalleryPreviewObjectUrlCache.get(remotePreviewUrl) ||
-    bundledPreviewUrl ||
     remotePreviewUrl
   const resolutionText = formatFeaturedBackgroundResolution(item)
 
@@ -11935,7 +11934,7 @@ function createFeaturedBackgroundPickerCardViewModel({
     renderIndex,
     remotePreviewUrl,
     resolutionState: resolutionText ? 'ready' : 'pending',
-    resolutionText: resolutionText || '检测中',
+    resolutionText,
     selected,
     title
   }

@@ -16,7 +16,6 @@ export function GeneralPanel({
       <OptionPanelHeader
         titleId="general-title"
         title="通用设置"
-        description="调整自动整理方式、网页内容索引与快捷键。"
       />
 
       <FeatureSettingsControls />

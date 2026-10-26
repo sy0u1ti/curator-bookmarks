@@ -33,15 +33,15 @@ const modalButtonBaseClass = [
 ].join(' ')
 const modalSecondaryButtonClass = [
   modalButtonBaseClass,
-  'border-ds-border bg-ds-surface-2 text-ds-text-primary',
-  'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary'
+  'border-transparent bg-ds-surface-3 text-ds-text-primary',
+  'hover:bg-ds-active hover:text-ds-text-primary',
+  'focus-visible:bg-ds-active focus-visible:text-ds-text-primary'
 ].join(' ')
 const modalPrimaryButtonClass = [
   modalButtonBaseClass,
-  'border-ds-border-hover bg-[var(--ds-text-primary)] text-[var(--ds-bg-app)]',
-  'hover:border-ds-border-hover hover:bg-ds-text-primary hover:text-[var(--ds-bg-app)]',
-  'focus-visible:border-ds-border-hover focus-visible:bg-ds-text-primary focus-visible:text-[var(--ds-bg-app)]'
+  'border-transparent bg-[var(--ds-text-primary)] text-[var(--ds-bg-app)]',
+  'hover:bg-ds-text-primary hover:text-[var(--ds-bg-app)]',
+  'focus-visible:bg-ds-text-primary focus-visible:text-[var(--ds-bg-app)]'
 ].join(' ')
 const modalDangerButtonClass = [
   modalButtonBaseClass,
@@ -52,14 +52,14 @@ const modalDangerButtonClass = [
 const modalCompactButtonClass =
   cx(modalSecondaryButtonClass, 'min-h-[30px] min-w-0 flex-none px-2.5 py-0 text-xs')
 const modalCloseButtonClass = [
-  'inline-flex min-h-[30px] items-center justify-center rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-1.5 text-xs font-semibold leading-none text-ds-text-secondary shadow-none',
+  'inline-flex size-8 shrink-0 items-center justify-center rounded-ds-sm border-0 bg-transparent p-0 text-ds-text-secondary shadow-none',
   'transition-[border-color,background-color,color,transform,scale] duration-ds-fast ease-ds-standard',
   'hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary',
   'focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.38)] focus-visible:outline-offset-2',
   'active:scale-[var(--ds-press-scale)]',
   'disabled:pointer-events-none disabled:opacity-50 data-[disabled]:pointer-events-none data-[disabled]:opacity-50'
 ].join(' ')
-const modalFormClass = 'flex flex-col gap-[9px]'
+const modalFormClass = 'flex flex-col gap-3'
 const modalFieldClass = 'flex flex-col gap-1.5'
 const modalLabelClass = 'text-xs font-medium leading-tight text-ds-text-secondary'
 const modalInputClass = [
@@ -79,7 +79,7 @@ const modalEyebrowClass =
   'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
 const modalDangerEyebrowClass = cx(modalEyebrowClass, 'text-ds-danger-text')
 const modalBookmarkCardClass =
-  'relative flex flex-col gap-[5px] rounded-ds-sm border border-ds-border bg-ds-surface-1 px-3 py-2.5 shadow-none'
+  'relative flex flex-col gap-2 rounded-ds-sm border-0 bg-ds-surface-2 px-3 py-3 shadow-none'
 const modalCardLabelClass =
   'm-0 text-xs leading-[1.35] tracking-[0.01em] text-ds-text-muted'
 const modalCardTitleClass =
@@ -101,7 +101,7 @@ const modalStackClass =
 const modalDismissLayerClass =
   'absolute inset-0 z-0 block cursor-default border-0 bg-transparent'
 const modalCardShellClass = [
-  'relative z-[1] flex min-h-0 flex-col gap-[11px] overflow-hidden rounded-ds-lg border border-ds-border bg-ds-surface-1 p-[13px] text-ds-text-primary shadow-none outline-none',
+  'relative z-[1] flex min-h-0 flex-col gap-4 overflow-hidden rounded-ds-xl border border-ds-border bg-ds-surface-1 p-[18px] text-ds-text-primary shadow-none outline-none',
   'focus-visible:outline focus-visible:outline-2 focus-visible:outline-[rgba(245,245,247,0.86)] focus-visible:outline-offset-2'
 ].join(' ')
 const modalStandardCardClass = cx(
@@ -117,7 +117,7 @@ const modalWideCardClass = cx(
   'h-[min(548px,calc(100%_-_36px))] w-[min(620px,calc(100vw_-_28px))] max-h-[calc(100%_-_36px)] max-w-[620px]'
 )
 const modalListClass = [
-  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[6px_5px]',
+  'min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain rounded-ds-sm border-0 bg-ds-surface-2 p-[6px_5px]',
   '[scrollbar-color:var(--ds-border-hover)_transparent] [scrollbar-gutter:stable] [scrollbar-width:thin]'
 ].join(' ')
 const modalCompactListClass = cx(modalListClass, 'max-h-[170px]')
@@ -128,7 +128,6 @@ export function PopupModalsHost() {
   const lastOpenStateRef = useRef(liveState)
   const state = liveState.open ? liveState : lastOpenStateRef.current
   const previousActiveRef = useRef<PopupModalsView['active']>(null)
-  const previousEditPickerOpenRef = useRef(false)
   const moveSearchRef = useRef<HTMLInputElement | null>(null)
   const smartFolderTitleRef = useRef<HTMLInputElement | null>(null)
   const smartFolderSearchRef = useRef<HTMLInputElement | null>(null)
@@ -146,7 +145,6 @@ export function PopupModalsHost() {
   useEffect(() => {
     if (!liveState.open) {
       previousActiveRef.current = null
-      previousEditPickerOpenRef.current = false
       return
     }
 
@@ -161,11 +159,7 @@ export function PopupModalsHost() {
       })
     }
 
-    if (state.edit.folderPickerOpen && !previousEditPickerOpenRef.current) {
-      focusElement(editFolderSearchRef)
-    }
-    previousEditPickerOpenRef.current = state.edit.folderPickerOpen
-  }, [liveState.open, liveState.active, state.edit.folderPickerOpen])
+  }, [liveState.open, liveState.active])
 
   return (
     <div
@@ -261,11 +255,10 @@ function MoveBookmarkModal({
     <section id="move-modal" className={modalWideCardClass} aria-labelledby="move-modal-title" tabIndex={-1}>
       <header className={modalHeaderClass}>
         <div className={modalHeaderCopyClass}>
-          <p className={modalEyebrowClass}>移动书签</p>
-          <h2 id="move-modal-title" className={modalTitleClass}>选择目标文件夹</h2>
+          <h2 id="move-modal-title" className={modalTitleClass}>移动书签</h2>
         </div>
         <Button id="close-move-modal" className={modalCloseButtonClass} type="button" aria-label="关闭移动面板" onClick={() => dispatchPopupModalAction('close')} unstyled>
-          关闭
+          <Icon name="X" size={16} aria-hidden="true" />
         </Button>
       </header>
       <div className={modalBookmarkCardClass}>
@@ -302,11 +295,10 @@ function SmartFolderModal({
     <section id="smart-folder-modal" className={modalWideCardClass} aria-labelledby="smart-folder-modal-title" tabIndex={-1}>
       <header className={cx(modalHeaderClass, 'shrink-0')}>
         <div className={modalHeaderCopyClass}>
-          <p className={modalEyebrowClass}>设置名称与保存位置</p>
           <h2 id="smart-folder-modal-title" className={modalTitleClass}>保存书签</h2>
         </div>
         <Button id="close-smart-folder-modal" className={modalCloseButtonClass} type="button" aria-label="关闭书签保存面板" disabled={view.saving} onClick={() => dispatchPopupModalAction('close')} unstyled>
-          关闭
+          <Icon name="X" size={16} aria-hidden="true" />
         </Button>
       </header>
       <div className={cx(modalFieldClass, 'shrink-0')}>
@@ -386,7 +378,7 @@ function AiProviderPromptModal({
           <h2 id="ai-provider-prompt-title" className={modalTitleClass}>请配置 AI 渠道</h2>
         </div>
         <Button id="close-ai-provider-prompt" className={modalCloseButtonClass} type="button" aria-label="关闭 AI 渠道配置提示" onClick={() => dispatchPopupModalAction('close')} unstyled>
-          关闭
+          <Icon name="X" size={16} aria-hidden="true" />
         </Button>
       </header>
       <AiSetupPrompt
@@ -418,19 +410,29 @@ function EditBookmarkModal({
   useLayoutEffect(() => {
     const modal = modalRef.current
     if (!modal) return
-    const fixedBlocks = Array.from(modal.children).map(element =>
+    const flowChildren = Array.from(modal.children).filter(
+      element => !element.classList.contains('popup-edit-surface')
+    )
+    const fixedBlocks = flowChildren.map(element =>
       element.classList.contains('edit-folder-accordion') ? element.firstElementChild : element
     ).filter((element): element is HTMLElement => element instanceof HTMLElement)
     const measure = () => {
       const style = getComputedStyle(modal)
       const height = fixedBlocks.reduce((total, element) => total + element.offsetHeight, 0) +
-        (modal.children.length - 1) * Number.parseFloat(style.rowGap) +
+        Math.max(0, flowChildren.length - 1) * Number.parseFloat(style.rowGap) +
         Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom) +
         Number.parseFloat(style.borderTopWidth) + Number.parseFloat(style.borderBottomWidth)
       const value = `${height}px`
       if (modal.style.getPropertyValue('--popup-edit-rest-height') !== value) {
         modal.style.setProperty('--popup-edit-rest-height', value)
       }
+      const panelHeight = Math.max(0, Math.min(226, window.innerHeight - height - 64))
+      const openHeight = height + panelHeight
+      const surfaceScale = height > 0 ? openHeight / height : 1
+      modal.style.setProperty('--popup-edit-panel-height', `${panelHeight}px`)
+      modal.style.setProperty('--popup-edit-open-shift', `${panelHeight / 2}px`)
+      modal.style.setProperty('--popup-edit-surface-scale', String(surfaceScale))
+      modal.style.setProperty('--popup-edit-surface-inverse-scale', String(1 / surfaceScale))
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -440,69 +442,17 @@ function EditBookmarkModal({
 
   return (
     <section ref={modalRef} id="edit-modal" className={cx(modalStandardCardClass, 'popup-edit-modal')} data-squircle="off" aria-labelledby="edit-modal-title" tabIndex={-1}>
-      <header className={modalHeaderClass}>
+      <div className="popup-edit-surface" aria-hidden="true" />
+      <header className={cx(modalHeaderClass, 'popup-edit-upper')}>
         <div className={modalHeaderCopyClass}>
-          <p className={modalEyebrowClass}>编辑书签</p>
-          <h2 id="edit-modal-title" className={modalTitleClass}>修改标题与网址</h2>
+          <h2 id="edit-modal-title" className={modalTitleClass}>编辑书签</h2>
         </div>
         <Button id="close-edit-modal" className={modalCloseButtonClass} type="button" aria-label="关闭编辑面板" disabled={view.closeDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>
-          关闭
+          <Icon name="X" size={16} aria-hidden="true" />
         </Button>
       </header>
-      <CollapsibleRoot
-        className="edit-folder-accordion"
-        open={view.folderPickerOpen}
-        onOpenChange={(open) => {
-          if (open !== view.folderPickerOpen) {
-            dispatchPopupModalAction('edit-toggle-folder-picker')
-          }
-        }}
-      >
-        <div className={modalBookmarkCardClass}>
-          <p className={modalCardLabelClass}>来源路径</p>
-          <div className={modalPathRowClass}>
-            <p id="edit-bookmark-path" className={cx(modalCardPathClass, 'flex-auto', view.pathChanged ? modalCardPathChangedClass : '')}>
-              {view.path}
-            </p>
-            <CollapsibleTrigger
-              id="edit-folder-picker-button"
-              className={modalCompactButtonClass}
-              type="button"
-              aria-controls="edit-folder-picker"
-              disabled={view.closeDisabled}
-            >
-              <span>{view.folderPickerOpen ? '收起' : '更改'}</span>
-              <Icon name="ChevronDown" className="t-acc-chevron size-3.5" aria-hidden="true" />
-            </CollapsibleTrigger>
-          </div>
-        </div>
-        <CollapsiblePanel
-          id="edit-folder-picker"
-          className={editFolderPickerClass}
-          aria-label="选择新的来源路径"
-          hiddenUntilFound
-        >
-          <FolderSearch
-            inputRef={folderSearchRef}
-            htmlFor="edit-folder-search-input"
-            inputId="edit-folder-search-input"
-            placeholder="搜索目标文件夹"
-            label="搜索编辑目标文件夹"
-            mode="edit"
-            controls="edit-folder-list"
-            value={view.folderQuery}
-            action="edit-folder-query-change"
-            disabled={view.folderSearchDisabled}
-          />
-          <PopupFolderPickerHost
-            id="edit-folder-list"
-            className={modalCompactListClass}
-            mode="edit"
-            data-squircle-subtree="off"
-          />
-        </CollapsiblePanel>
-      </CollapsibleRoot>
-      <div className={modalFormClass}>
+      <EditFolderDisclosure folderSearchRef={folderSearchRef} view={view} />
+      <div className={cx(modalFormClass, 'popup-edit-lower')}>
         <label className={modalFieldClass} htmlFor="edit-title-input">
           <span className={modalLabelClass}>标题</span>
           <Input
@@ -535,11 +485,114 @@ function EditBookmarkModal({
           />
         </label>
       </div>
-      <footer className={modalActionsClass}>
+      <footer className={cx(modalActionsClass, 'popup-edit-lower')}>
         <Button id="cancel-edit" className={modalSecondaryButtonClass} type="button" disabled={view.cancelDisabled} onClick={() => dispatchPopupModalAction('close')} unstyled>取消</Button>
         <Button id="save-edit" className={modalPrimaryButtonClass} type="button" disabled={view.saveDisabled} onClick={() => dispatchPopupModalAction('save-edit')} unstyled>{view.saveLabel}</Button>
       </footer>
     </section>
+  )
+}
+
+function EditFolderDisclosure({
+  folderSearchRef,
+  view
+}: {
+  folderSearchRef: RefObject<HTMLInputElement | null>
+  view: PopupModalsView['edit']
+}) {
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const closeTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const panel = panelRef.current
+    if (panel) {
+      panel.inert = true
+      panel.setAttribute('aria-hidden', 'true')
+    }
+    return () => {
+      if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current)
+    }
+  }, [])
+
+  return (
+    <CollapsibleRoot
+      className="edit-folder-accordion"
+      onOpenChange={(open) => {
+        if (closeTimerRef.current !== null) {
+          window.clearTimeout(closeTimerRef.current)
+          closeTimerRef.current = null
+        }
+        const panel = panelRef.current
+        if (panel) {
+          panel.inert = !open
+          panel.setAttribute('aria-hidden', String(!open))
+        }
+        dispatchPopupModalAction('edit-folder-picker-change', String(open))
+        if (open) {
+          focusElement(folderSearchRef)
+        } else {
+          closeTimerRef.current = window.setTimeout(() => {
+            closeTimerRef.current = null
+            if (panelRef.current?.isConnected) {
+              dispatchPopupModalAction('edit-folder-query-change', '')
+            }
+          }, 280)
+        }
+      }}
+    >
+      <div className={cx(modalBookmarkCardClass, 'popup-edit-upper')}>
+        <p className={modalCardLabelClass}>文件夹</p>
+        <div className={modalPathRowClass}>
+          <p id="edit-bookmark-path" className={cx(modalCardPathClass, 'flex-auto', view.pathChanged ? modalCardPathChangedClass : '')}>
+            {view.path}
+          </p>
+          <CollapsibleTrigger
+            ref={triggerRef}
+            id="edit-folder-picker-button"
+            className={modalCompactButtonClass}
+            type="button"
+            aria-controls="edit-folder-picker"
+            disabled={view.closeDisabled}
+          >
+            <span className="popup-edit-toggle-closed">更改</span>
+            <span className="popup-edit-toggle-open">收起</span>
+            <Icon name="ChevronDown" className="t-acc-chevron size-3.5" aria-hidden="true" />
+          </CollapsibleTrigger>
+        </div>
+      </div>
+      <CollapsiblePanel
+        ref={panelRef}
+        id="edit-folder-picker"
+        className={editFolderPickerClass}
+        aria-label="选择书签文件夹"
+        hidden={false}
+      >
+        <FolderSearch
+          inputRef={folderSearchRef}
+          htmlFor="edit-folder-search-input"
+          inputId="edit-folder-search-input"
+          placeholder="搜索目标文件夹"
+          label="搜索编辑目标文件夹"
+          mode="edit"
+          controls="edit-folder-list"
+          value={view.folderQuery}
+          action="edit-folder-query-change"
+          disabled={view.folderSearchDisabled}
+        />
+        <PopupFolderPickerHost
+          id="edit-folder-list"
+          className={modalCompactListClass}
+          mode="edit"
+          data-squircle-subtree="off"
+          onFolderSelectStart={() => {
+            if (triggerRef.current?.getAttribute('aria-expanded') === 'true') {
+              triggerRef.current.click()
+            }
+          }}
+        />
+      </CollapsiblePanel>
+    </CollapsibleRoot>
   )
 }
 

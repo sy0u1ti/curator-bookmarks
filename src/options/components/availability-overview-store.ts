@@ -19,9 +19,7 @@ const defaultDecisionMetricsState: AvailabilityDecisionMetricsState = {
   ignored: '0',
   newCount: '0',
   persistent: '0',
-  progress: '0 / 0',
-  recovered: '0',
-  scope: '全部书签'
+  recovered: '0'
 }
 
 const defaultFiltersState: AvailabilityFiltersState = {

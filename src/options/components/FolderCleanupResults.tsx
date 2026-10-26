@@ -1,3 +1,4 @@
+import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { Button } from '../../ui/base/Button'
 import { NumberPop } from '../../ui/motion/NumberPop'
 import type {
@@ -17,9 +18,9 @@ const KIND_LABELS = {
 
 const FOLDER_CLEANUP_RESULTS_CLASS = 'mt-4 flex flex-col gap-3'
 const FOLDER_CLEANUP_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-[14px] text-[13px] leading-[1.55] text-ds-text-secondary'
+  `${OPTION_INSET_CLASS} px-4 py-[14px] text-[13px] leading-[1.55] text-ds-text-secondary`
 const FOLDER_CLEANUP_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
+  `${OPTION_INSET_CLASS} p-[14px_16px]`
 const SPLIT_UNDO_CARD_CLASS =
   'rounded-ds-sm border border-ds-border bg-ds-surface-1 p-[14px_16px]'
 const FOLDER_CLEANUP_CARD_HEAD_CLASS =

@@ -1,3 +1,4 @@
+import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '../../ui/base/Button.js'
 import { STORAGE_KEYS } from '../../shared/constants.js'
@@ -44,7 +45,7 @@ export function StorageManagement() {
   }, [run])
   const refresh = () => run()
   const clean = (category: StorageCleanupCategory) => run(category)
-  return <section aria-labelledby="storage-management-title" className="mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-5">
+  return <section aria-labelledby="storage-management-title" className={`mt-7 ${OPTION_SURFACE_CLASS} p-5`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h3 id="storage-management-title" className="m-0 text-[15px] font-semibold">本地存储空间</h3>
       <Button size="sm" variant="secondary" disabled={busy} onClick={() => void refresh()}>刷新用量</Button>
@@ -67,7 +68,7 @@ export function StorageManagement() {
         <Button size="sm" variant="secondary" disabled={busy || !usage.previewBytes} onClick={() => void clean('previews')}>清除预览缓存</Button>
       </StorageRow>
     </> : <p className="text-[13px] text-ds-text-secondary">{busy ? '正在读取用量…' : '用量暂不可用，请点击刷新用量重试。'}</p>}
-    <p role="status" className="text-[13px] text-ds-text-secondary">{status}</p>
+    {status ? <p role="status" className="text-[13px] text-ds-text-secondary">{status}</p> : null}
   </section>
 }
 

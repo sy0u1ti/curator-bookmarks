@@ -89,9 +89,34 @@ try {
       const metrics = await panel.evaluate(node => ({ title: node.querySelector('h1')?.textContent, width: node.getBoundingClientRect().width, viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, controls: node.querySelectorAll('button,input,select,a').length, contentWidth: node.scrollWidth }))
       assert.ok(metrics.documentWidth <= width + 2, section + ' must fit viewport ' + width)
       assert.ok(metrics.contentWidth <= metrics.width + 2, section + ' content must not overflow its panel: ' + JSON.stringify(metrics))
+      if (!before) {
+        const contours = await panel.evaluate(node => {
+          const visible = [...node.querySelectorAll('*')].filter(element =>
+            element instanceof HTMLElement && element.checkVisibility() &&
+            element.getBoundingClientRect().width > 2
+          )
+          const clippedBorders = visible.filter(element => {
+            const css = getComputedStyle(element)
+            return css.clipPath !== 'none' &&
+              [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth]
+                .some(value => parseFloat(value) > 0)
+          }).map(element => element.id || element.tagName)
+          const roundCheckboxes = visible.filter(element => {
+            if (element.getAttribute('role') !== 'checkbox') return false
+            const box = element.getBoundingClientRect()
+            return parseFloat(getComputedStyle(element).borderTopLeftRadius) >= Math.min(box.width, box.height) / 2
+          }).map(element => element.getAttribute('aria-label') || element.id)
+          return { clippedBorders, roundCheckboxes }
+        })
+        assert.deepEqual(contours.clippedBorders, [], `${section} keeps native bordered contours at ${width}px`)
+        assert.deepEqual(contours.roundCheckboxes, [], `${section} checkboxes must not look like radio buttons at ${width}px`)
+      }
       if (!before && section === 'ai') {
         await panel.getByText('iOS 自签名安装指南', { exact: true }).waitFor({ state: 'visible' })
         assert.equal(await panel.getByText('先配置 AI 渠道', { exact: true }).count(), 0, 'configured local providers do not require an API key')
+        const overview = panel.getByRole('region', { name: '书签智能分析决策概览' })
+        assert.equal(await overview.evaluate(node => getComputedStyle(node).borderTopWidth), '0px',
+          'analysis progress uses one tone group, not another outlined frame')
       }
       if (!before && section === 'ai-settings') {
         const setupSteps = panel.getByRole('list', { name: 'AI 渠道配置流程' })
@@ -158,7 +183,8 @@ try {
     const compact = await card.boundingBox()
     assert.ok(compact.height < 210, 'default result must remain compact')
     const buttonStyle = await details.evaluate(node => { const css=getComputedStyle(node); return { height: node.getBoundingClientRect().height, border: Number.parseFloat(css.borderTopWidth) } })
-    assert.ok(buttonStyle.height >= 32 && buttonStyle.border >= 1, 'detail actions need an obvious button affordance')
+    // DOMRect subtraction can report 31.99994 for a 32px translated control.
+    assert.ok(buttonStyle.height >= 31.99 && buttonStyle.border >= 1, `detail actions need an obvious button affordance: ${JSON.stringify(buttonStyle)}`)
     await details.click()
     await card.getByText('检测依据', { exact: true }).waitFor({ state: 'visible' })
     assert.ok((await card.innerText()).includes('私有资源和登录后内容'), 'full evidence must remain available')
@@ -294,15 +320,20 @@ try {
     }
     await page.goto(base + '#duplicates')
     const duplicates = page.locator('#duplicates')
+    const applyKeepRule = async (rule) => {
+      await duplicates.getByRole('combobox', { name: /保留规则/ }).click()
+      await page.getByRole('option', { name: rule, exact: true }).click()
+      await duplicates.getByRole('button', { name: /^(按推荐|按保留规则)选择重复书签当前结果$/ }).click()
+    }
     for (const strategy of ['最新', '最早', '路径最短', '有标签', '新标签页来源', '最近访问']) {
-      await duplicates.getByRole('button', { name: `保留${strategy}重复书签`, exact: true }).click()
+      await applyKeepRule(`保留${strategy}`)
       await duplicates.getByText('已选 2 条待移入回收站', { exact: true }).waitFor()
     }
-    await duplicates.getByRole('button', { name: '按推荐选择重复书签当前结果', exact: true }).click()
+    await applyKeepRule('按推荐保留')
     const group = duplicates.locator('article').first()
     for (const checkbox of await group.getByRole('checkbox').all()) await checkbox.check()
     assert.equal(await duplicates.getByRole('button', { name: '移入回收站', exact: true }).isDisabled(), true)
-    await duplicates.getByRole('button', { name: '保留最早重复书签', exact: true }).click()
+    await applyKeepRule('保留最早')
     await duplicates.getByRole('button', { name: '移入回收站', exact: true }).click()
     await confirmMutation()
     await page.waitForFunction(async url => (await chrome.bookmarks.search({ url })).length === 1, origin + '/article')
@@ -335,7 +366,7 @@ try {
       }
     })
     await apply.click()
-    const failedStatus = page.locator('#ai [role="alert"]').filter({ hasText: '执行方式' })
+    const failedStatus = page.locator('#ai [role="alert"]').filter({ hasText: '分析状态' })
     await failedStatus.getByText('操作失败', { exact: true }).waitFor()
     assert.ok((await failedStatus.innerText()).includes('测试改名失败'))
     assert.equal((await worker.evaluate(id => chrome.bookmarks.get(id), seeded.guide.id))[0].title, seeded.guide.title)
@@ -351,9 +382,9 @@ try {
     const renamed = await worker.evaluate(id => chrome.bookmarks.get(id), seeded.guide.id)
     assert.equal(renamed[0].url, seeded.guide.url)
     assert.equal(renamed[0].parentId, seeded.guide.parentId)
-    const aiStatus = page.locator('#ai [role="status"]').filter({ hasText: '执行方式' })
+    const aiStatus = page.locator('#ai [role="status"]').filter({ hasText: '分析状态' })
     await aiStatus.getByText('已应用 1 条书签命名建议。', { exact: true }).waitFor()
-    assert.equal(await page.locator('#ai [role="alert"]').filter({ hasText: '执行方式' }).count(), 0, 'A successful rename must not be announced as an error')
+    assert.equal(await page.locator('#ai [role="alert"]').filter({ hasText: '分析状态' }).count(), 0, 'A successful rename must not be announced as an error')
     await page.screenshot({ path: path.join(output, 'ai-applied.png'), animations: 'disabled' })
 
   }

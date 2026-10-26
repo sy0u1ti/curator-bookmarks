@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import '../styles/globals.css'
 import './archive.css'
 import { Button } from '../ui/base/Button'
+import { Surface } from '../ui/base/Surface'
 import { Icon } from '../ui/icons/Icon'
 import { ThemeProvider } from '../ui/theme/ThemeProvider'
 import { downloadBlobFile } from '../shared/download'
@@ -79,11 +80,11 @@ function ArchivePage() {
       <div className="flex items-center gap-3 text-sm text-ds-text-secondary"><Icon name="ArchiveRestore" size={22} />Curator · 页面离线存档</div>
       <h1 className="text-3xl font-semibold">保留当前网页的离线副本</h1>
       <p className="text-sm leading-relaxed text-ds-text-secondary">将已加载的页面、图片和样式保存为单个 MHTML 文件，可用 Chrome 或 Edge 离线打开。</p>
-      <section className="rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-5" aria-label="来源网页">
+      <Surface as="section" className="p-5" aria-label="来源网页">
         <h2 className="text-lg font-semibold">{source?.title || '来源标签页'}</h2>
         {source?.url ? <p className="mt-2 break-all text-sm text-ds-text-secondary">{source.url}</p> : null}
         <p className="mt-3 text-sm leading-relaxed text-ds-text-secondary">保存前请在来源页展开或加载需要保留的内容，并保持来源标签页打开。脚本交互、流媒体和服务器功能无法离线运行。</p>
-      </section>
+      </Surface>
       <div className="flex flex-wrap gap-3">
         <Button variant="primary" disabled={!source || busy || loading} onClick={() => void save()}><Icon name="Download" size={16} />{busy ? '正在生成离线副本…' : '保存离线文件'}</Button>
         {tabId !== null && error ? <Button variant="secondary" disabled={busy || loading} onClick={() => void loadSource()}>重新读取来源</Button> : null}

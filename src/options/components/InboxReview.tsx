@@ -1,3 +1,4 @@
+import { OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '../../ui/base/Button.js'
 import { Select } from '../../ui/base/Select.js'
@@ -47,15 +48,14 @@ export function InboxReview() {
   const filtered = pending.filter(item => `${item.title} ${item.url}`.toLocaleLowerCase().includes(normalizedQuery))
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 20) - 1))
   const visible = filtered.slice(currentPage * 20, currentPage * 20 + 20)
-  return <section aria-labelledby="inbox-review-title" className="mb-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-5">
+  return <section aria-labelledby="inbox-review-title" className={`mb-7 ${OPTION_SURFACE_CLASS} p-5`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <h3 id="inbox-review-title" className="m-0 text-[15px] font-semibold">待整理 · {pending.length}</h3>
+      <h3 id="inbox-review-title" className="m-0 text-[15px] font-semibold tabular-nums"><span className="sr-only">待整理 </span>{pending.length} 条</h3>
       {data?.inbox.lastUndoMove ? <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run({ type: 'inbox:undo-last-move' })}>撤销最近一次移动</Button> : null}
     </div>
-    <p className="text-[13px] text-ds-text-secondary">快速审阅分类建议、另选归档文件夹，或确认保留在待整理箱。</p>
-    <p role="status" className="text-[13px] text-ds-text-secondary">{status}</p>
+    {status ? <p role="status" className="text-[13px] text-ds-text-secondary">{status}</p> : null}
     {actionError || error ? <p role="alert" className="text-[13px] text-ds-text-secondary">{[actionError, error].filter(Boolean).join('；')}</p> : null}
-    <Input aria-label="搜索待整理书签" placeholder="搜索标题或网址" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
+    <Input className="mt-4" aria-label="搜索待整理书签" placeholder="搜索标题或网址" value={query} onChange={event => { setQuery(event.target.value); setPage(0) }} />
     {error ? <Button size="sm" disabled={busy} onClick={() => void refreshInboxReview()}>重新读取</Button> : null}
     {!data ? (!error ? <p>正在读取待整理…</p> : null) : !pending.length ? <p className="text-[13px] text-ds-text-secondary">当前没有待整理书签。</p> : (
       // Remount per query/page so filtering and paging swap rows instantly;

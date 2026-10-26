@@ -1,12 +1,11 @@
-import { normalizeText } from '../shared/text.js'
+import { normalizeText, normalizeSearchTextCompact } from '../shared/text.js'
+import { findPinyinMatchIndex } from '../shared/search/pinyin-match.js'
+import type { PinyinTokens } from '../shared/search/pinyin.js'
 
 export const POPUP_FOLDER_FILTER_INPUT_ID = 'popup-folder-filter-input'
 
 /** Pinyin tokens for one folder, produced by the lazily loaded pinyin module. */
-export interface PopupFolderFilterTokens {
-  full: string[]
-  initials: string[]
-}
+export type PopupFolderFilterTokens = PinyinTokens
 
 export interface PopupFolderFilterTarget {
   normalizedPath: string
@@ -24,7 +23,7 @@ export function normalizeFolderFilterQuery(value: unknown): string {
 
 /** ASCII-only queries can also be pinyin initials or full syllables. */
 export function folderFilterUsesPinyin(query: string): boolean {
-  return /^[a-z0-9]{2,}$/.test(normalizeFolderFilterQuery(query))
+  return normalizeFolderFilterQuery(query).split(/\s+/).some(term => /^[a-z]{2,}$/.test(normalizeSearchTextCompact(term)))
 }
 
 export function folderFilterMatchesTarget(
@@ -36,6 +35,8 @@ export function folderFilterMatchesTarget(
   if (!normalizedQuery) {
     return false
   }
+  const terms = normalizedQuery.split(/\s+/)
+  if (terms.length > 1) return terms.every(term => folderFilterMatchesTarget(target, term, tokens))
   if (
     target.normalizedTitle.includes(normalizedQuery) ||
     target.normalizedPath.includes(normalizedQuery)
@@ -45,9 +46,12 @@ export function folderFilterMatchesTarget(
   if (!tokens) {
     return false
   }
+  const compact = normalizeSearchTextCompact(normalizedQuery)
   return (
-    tokens.full.some((token) => token.includes(normalizedQuery)) ||
-    tokens.initials.some((token) => token.startsWith(normalizedQuery))
+    (tokens.runs
+      ? tokens.runs.some(run => findPinyinMatchIndex(run.full, compact, run.syllableStarts) >= 0)
+      : tokens.full.some(token => token.startsWith(compact))) ||
+    tokens.initials.some((token) => findPinyinMatchIndex(token, compact, null) >= 0)
   )
 }
 

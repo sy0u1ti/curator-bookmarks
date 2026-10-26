@@ -1,27 +1,17 @@
-import { generateClipPath, getLayoutSize, observeResize, parseBoxShadow } from '@lisse/core'
+import { generateClipPath, getLayoutSize, observeResize } from '@lisse/core'
 
 /**
- * 全局 squircle 引擎：把页面上所有普通圆角方框升级为 Figma/iOS 同款
- * 连续曲率圆角（squircle），基于 @lisse/core 的路径生成。
- *
- * 策略（对现有设计系统零侵入）：
- * - 只写 inline `clip-path`，保留元素原有的 border-radius —— squircle
- *   路径恒在圆角矩形内侧（preserveSmoothing: false 固定半径），二者相交
- *   即纯 squircle 轮廓；clip 未生效时优雅回退为普通圆角。
- * - 不注入任何 DOM、不剥离任何 CSS（Lisse auto-effects 的挂载时快照
- *   会冻结主题色、破坏 hover 过渡，这里不采用），对 React 树安全。
- * - 带外部 box-shadow 的元素跳过（clip-path 会裁掉阴影）：把外阴影迁
- *   移为 filter: drop-shadow(...)（跟随 squircle 轮廓）后自动纳入。
- * - 胶囊/圆形（rounded-full）天然平滑，跳过；已有 clip-path 的元素
- *   （如 Switch、遮罩）不碰；`data-squircle="off"` 显式退出。
- * - 依赖 focus-visible box-shadow 焦点环的元素打上 data-sq-focus，
- *   由全局 CSS 提供 outline 兜底（环会被 clip 裁掉）。
+ * Smooth only decorative artwork. A clip does not redraw a CSS border or
+ * focus ring along its path: clipping native rounded controls cuts their
+ * corners and focus indicators. Interactive surfaces retain native radii.
+ * Borderless artwork can opt in with data-squircle="on" or the eager API.
  */
 
 const SMOOTHING = 0.6
 const MIN_RADIUS_PX = 3
 const ENGINE_FLAG = '__curatorSquircleEngine'
-const SQUIRCLE_CLASS_HINT = /(?:^|\s)(?:t-tabs|t-tab|t-tabs-pill|popup-preboot-search|popup-active-result-indicator|popup-row-actions|popup-bookmark-drag-ghost|settings-drawer-scrollbar-track|settings-drawer-scrollbar-thumb|bookmark-add-menu-trigger-icon|featured-wallpaper-status|featured-wallpaper-state|featured-wallpaper-section-empty|featured-wallpaper-preview|featured-wallpaper-resolution|featured-wallpaper-card-action|featured-wallpaper-hover-preview|newtab-delete-toast-panel)(?:\s|$)/
+const SQUIRCLE_CLASS_HINT = /(?:^|\s)(?:bookmark-icon-shell|bookmark-favicon|bookmark-fallback|bookmark-folder-card-icon)(?:\s|$)/
+const INTERACTIVE_SELECTOR = 'button, input, textarea, select, a[href], [tabindex], [contenteditable="true"], [role="button"], [role="switch"], [role="checkbox"]'
 
 interface TrackedEntry {
   unobserve: () => void
@@ -49,20 +39,15 @@ function readCornerRadii(style: CSSStyleDeclaration): [number, number, number, n
   return [topLeft, topRight, bottomRight, bottomLeft]
 }
 
-function hasOuterBoxShadow(style: CSSStyleDeclaration): boolean {
-  const raw = style.boxShadow
-  if (!raw || raw === 'none') return false
-  const parsed = parseBoxShadow(raw)
-  return Boolean(parsed.shadow && parsed.shadow.length > 0)
-}
-
-/** hover / focus-within 状态才出现的外阴影无法在扫描时探测，按类名静态判定。 */
-function declaresStatefulOuterShadow(className: string): boolean {
-  return /(?:hover|focus-within):shadow-(?:\[0|ds-(?:card|popover|dialog))/.test(className)
-}
-
-function declaresFocusRingShadow(className: string): boolean {
-  return /focus-visible:shadow-(?:\[0|ds-focus)/.test(className)
+function requiresNativeContour(el: HTMLElement, style: CSSStyleDeclaration): boolean {
+  // Reserve even transparent borders: hover, selection and forced colors can
+  // paint them later without changing the element's class or layout size.
+  return [style.borderTopWidth, style.borderRightWidth, style.borderBottomWidth, style.borderLeftWidth]
+    .some(width => Number.parseFloat(width) > 0) ||
+    style.boxShadow !== 'none' ||
+    (style.outlineStyle !== 'none' && Number.parseFloat(style.outlineWidth) > 0) ||
+    el.matches(INTERACTIVE_SELECTOR) ||
+    el.querySelector(INTERACTIVE_SELECTOR) !== null
 }
 
 function cornerOptions(radii: [number, number, number, number]) {
@@ -153,7 +138,7 @@ function measureSquircleClipPath(el: HTMLElement): string | null {
   if (!radii) return null
   const maxRadius = Math.max(...radii)
   if (maxRadius < MIN_RADIUS_PX) return null
-  if (hasOuterBoxShadow(style)) return null
+  if (requiresNativeContour(el, style)) return null
   const { width, height } = getLayoutSize(el)
   if (width < 2 || height < 2) return null
   // 胶囊 / 圆形：圆弧已占满短边，squircle 退化为圆，交给原生渲染。
@@ -173,7 +158,7 @@ let eagerBatch: HTMLElement[] | null = null
  */
 export function applySquircleClipBeforePaint(el: HTMLElement): void {
   if (typeof ResizeObserver === 'undefined') return
-  if (el.dataset.squircle === 'off') return
+  if (el.closest('[data-squircle="off"], [data-squircle-subtree="off"]')) return
   if (eagerBatch) {
     eagerBatch.push(el)
     return
@@ -207,10 +192,7 @@ function consider(el: HTMLElement): void {
   if (tracked.has(el) || !el.isConnected) return
   if (el.dataset.squircle === 'off') return
   const className = el.getAttribute('class') ?? ''
-  // Most descendants (text wrappers and SVG internals in particular) cannot
-  // have a rounded surface. Reject them before getComputedStyle(), which can
-  // otherwise force hundreds of style resolutions during a large bookmark
-  // mount. CSS-only rounded classes are covered by the explicit hint list.
+  // Controls and layout containers never opt in merely by having a radius.
   if (!isPotentialSquircleCandidate(el, className)) return
   const style = getComputedStyle(el)
   // 元素自带 clip-path（开关滑块、壁纸遮罩等）不参与，避免互相覆盖；
@@ -218,32 +200,18 @@ function consider(el: HTMLElement): void {
   if (style.clipPath !== 'none' && el.dataset.sq !== 'on') return
   const radii = readCornerRadii(style)
   if (!radii || Math.max(...radii) < MIN_RADIUS_PX) return
-  if (declaresStatefulOuterShadow(className)) return
-  if (hasOuterBoxShadow(style)) return
-  if (declaresFocusRingShadow(className)) el.dataset.sqFocus = 'ring'
+  if (requiresNativeContour(el, style)) {
+    clearClip(el)
+    return
+  }
   const unobserve = observeResize(el, () => scheduleClip(el))
   tracked.set(el, { unobserve })
 }
 
 function isPotentialSquircleCandidate(el: HTMLElement, className: string): boolean {
-  if (el.dataset.sq === 'on' || className.includes('rounded') || SQUIRCLE_CLASS_HINT.test(className)) {
-    return true
-  }
-
-  if (
-    el.style.borderRadius ||
-    el.style.borderTopLeftRadius ||
-    el.style.borderTopRightRadius ||
-    el.style.borderBottomRightRadius ||
-    el.style.borderBottomLeftRadius
-  ) {
-    return true
-  }
-
-  return el.localName === 'button' ||
-    el.localName === 'input' ||
-    el.localName === 'textarea' ||
-    el.localName === 'select'
+  return el.dataset.sq === 'on' ||
+    el.dataset.squircle === 'on' ||
+    SQUIRCLE_CLASS_HINT.test(className)
 }
 
 function untrack(el: HTMLElement): void {

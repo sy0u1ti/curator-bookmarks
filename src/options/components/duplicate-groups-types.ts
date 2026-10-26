@@ -22,6 +22,7 @@ export interface DuplicateGroupViewModel {
   recentItemId: string
   recommendedKeepId: string
   recommendation: {
+    kind?: string
     reason?: string
   }
   risk: string

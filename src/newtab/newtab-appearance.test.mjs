@@ -208,7 +208,17 @@ try {
   }
   await page.getByRole('button', { name: '固定列数', exact: true }).click()
   await slider(page, 'icon-columns', 8)
-  assert.equal(await page.locator('#icon-live-preview > div').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length), 8)
+  await page.waitForFunction(() => {
+    const live = document.querySelector('.bookmark-tile[data-bookmark-id]')
+    const preview = document.querySelector('#icon-live-preview .bookmark-tile-preview')
+    const grid = live?.closest('.bookmark-grid')
+    if (!live || !preview || !grid) return false
+    const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').length
+    // The preview is a crop of full-size cards; the live responsive grid decides
+    // the effective columns instead of squeezing all eight requested columns in.
+    return document.querySelector('#icon-live-preview-summary')?.textContent.startsWith(`${columns} 列`) &&
+      Math.abs(live.getBoundingClientRect().width - preview.getBoundingClientRect().width) < 0.5
+  })
   await page.getByRole('button', { name: '自动适配', exact: true }).click()
   await slider(page, 'icon-folder-gap', 88)
   assert.equal(await page.locator('#icon-folder-gap-value').textContent(), '88px')

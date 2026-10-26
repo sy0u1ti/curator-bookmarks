@@ -2,12 +2,13 @@ import {
   markNewtabFaviconNotReady,
   markNewtabFaviconReady
 } from './newtab-favicon-readiness.js'
+import { readFaviconContrast } from './favicon-contrast.js'
 
 export const NEWTAB_BOOKMARK_PREBOOT_ROOT_ID = 'newtab-bookmark-preboot'
 export const NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY = 'curatorNewTabBookmarkPreboot'
 
 const NEWTAB_BOOKMARK_PREBOOT_STYLE_ID = 'newtab-bookmark-preboot-style'
-const NEWTAB_BOOKMARK_PREBOOT_VERSION = 4
+const NEWTAB_BOOKMARK_PREBOOT_VERSION = 5
 const NEWTAB_BOOKMARK_PREBOOT_MAX_AGE_MS = 10 * 60 * 1000
 const NEWTAB_BOOKMARK_PREBOOT_MAX_SECTIONS = 8
 const NEWTAB_BOOKMARK_PREBOOT_MAX_ITEMS = 72
@@ -773,12 +774,14 @@ function createNewtabBookmarkPrebootTile(
     image.alt = ''
     image.decoding = 'async'
     image.draggable = false
+    image.referrerPolicy = 'no-referrer'
     image.fetchPriority = loadAttributes.fetchPriority
     image.loading = loadAttributes.loading
     if (content.clipPaths.favicon) {
       image.style.clipPath = content.clipPaths.favicon
     }
     const revealImage = () => {
+      iconShell.dataset.iconContrast = readFaviconContrast(image, image.src)
       markNewtabFaviconReady(image.src)
       image.dataset.ready = 'true'
       fallback.dataset.hidden = 'true'
@@ -793,6 +796,7 @@ function createNewtabBookmarkPrebootTile(
     image.addEventListener('load', revealImage, { once: true })
     image.addEventListener('error', () => {
       markNewtabFaviconNotReady(image.src)
+      delete iconShell.dataset.iconContrast
       image.remove()
       delete fallback.dataset.hidden
     }, { once: true })
@@ -1451,10 +1455,10 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   padding: 8px 10px;
   overflow: hidden;
   border: 1px solid var(--preboot-card-border);
-  border-radius: 8px;
+  border-radius: var(--ui-radius-group, 10px);
   background: var(--preboot-card-bg);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.16),
-    var(--newtab-glass-edge-shadow, inset 0 0 0 0.5px rgba(255, 255, 255, 0.20), inset 0 0.5px 0 rgba(255, 255, 255, 0.26), inset 0 -0.5px 0 rgba(255, 255, 255, 0.10));
+    var(--newtab-glass-edge-shadow, 0 0 0 0 transparent);
   -webkit-backdrop-filter: var(--preboot-card-filter);
   backdrop-filter: var(--preboot-card-filter);
   transition: none;
@@ -1505,10 +1509,18 @@ const NEWTAB_BOOKMARK_PREBOOT_CSS = `
   height: var(--icon-shell-size);
   place-items: center;
   overflow: hidden;
-  border: 1px solid rgba(245, 245, 247, 0.14);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.32);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(245, 245, 247, 0.07);
+  border-radius: var(--ui-radius-control, 8px);
+  background: rgba(0, 0, 0, 0.24);
+  box-shadow: none;
+}
+
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-icon-shell[data-icon-contrast="light-backdrop"] {
+  background: rgba(245, 245, 247, 0.88);
+}
+
+#${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-icon-shell[data-icon-contrast="neutral-backdrop"] {
+  background: rgb(128, 128, 131);
 }
 
 #${NEWTAB_BOOKMARK_PREBOOT_ROOT_ID} .newtab-bookmark-preboot-favicon {

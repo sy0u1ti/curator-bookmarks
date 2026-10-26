@@ -33,11 +33,17 @@ export const OPTION_PANEL_WIDE_LAYOUT_CLASS =
 export const OPTION_PANEL_CLASS =
   `${OPTION_PANEL_STANDARD_LAYOUT_CLASS} ${OPTION_PANEL_SURFACE_RESET_CLASS}`
 
+export const OPTION_SURFACE_CLASS =
+  'rounded-ds-md border-0 bg-ds-surface-1 shadow-none'
+
+export const OPTION_INSET_CLASS =
+  'rounded-ds-sm border-0 bg-ds-surface-2 shadow-none'
+
 export const OPTION_GROUP_CLASS =
-  'options-interactive-surface curator-motion-surface mt-7 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 py-2 max-[760px]:mt-5'
+  `options-interactive-surface curator-motion-surface mt-7 ${OPTION_SURFACE_CLASS} py-2 max-[760px]:mt-5`
 
 export const OPTION_TOOL_PANEL_CLASS =
-  `options-interactive-surface curator-motion-surface mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `options-interactive-surface curator-motion-surface mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 
 export const OPTION_RUN_HEADER_CLASS = [
   'curator-motion-surface mt-6 grid grid-cols-[minmax(220px,0.82fr)_minmax(260px,1fr)_auto] items-stretch gap-3',
@@ -46,9 +52,7 @@ export const OPTION_RUN_HEADER_CLASS = [
 ].join(' ')
 
 export const OPTION_RUN_CELL_CLASS =
-  'options-interactive-surface curator-motion-surface min-w-0 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[16px_18px] shadow-none max-[760px]:p-4'
-
-  'options-interactive-surface curator-motion-surface min-w-0 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] shadow-none'
+  `options-interactive-surface curator-motion-surface min-w-0 ${OPTION_SURFACE_CLASS} p-[16px_18px] max-[760px]:p-4`
 
 export const OPTION_RUN_CELL_TITLE_CLASS =
   'block text-[15px] font-[650] leading-normal tracking-[0] text-ds-text-primary'
@@ -57,7 +61,7 @@ export const OPTION_RUN_CELL_TEXT_CLASS =
   'mt-2 mb-0 text-[13px] leading-[1.55] text-ds-text-secondary'
 
 export const OPTION_RUN_ACTIONS_CLASS =
-  'options-interactive-surface curator-motion-surface flex min-w-0 flex-wrap items-center justify-end gap-2.5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px] max-[1180px]:justify-start max-[860px]:items-stretch'
+  `options-interactive-surface curator-motion-surface flex min-w-0 flex-wrap items-center justify-end gap-2.5 ${OPTION_SURFACE_CLASS} p-[14px_16px] max-[1180px]:justify-start max-[860px]:items-stretch`
 
 export const OPTION_RUN_ACTION_BUTTON_CLASS =
   'max-[860px]:w-full'
@@ -78,7 +82,7 @@ export const OPTION_COPY_TEXT_CLASS =
   'mt-[7px] mb-0 text-[13px] leading-[1.65] text-ds-text-muted'
 
 export const OPTION_EMPTY_STATE_CLASS =
-  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px] text-left shadow-none'
+  'options-interactive-surface curator-motion-surface t-stagger rounded-ds-sm border-0 bg-ds-surface-1 p-[18px_20px] text-left shadow-none'
 
 export const OPTION_EMPTY_STATE_TITLE_CLASS =
   'm-0 text-sm font-bold leading-[1.4] text-ds-text-primary'
@@ -90,13 +94,13 @@ export const OPTION_EMPTY_STATE_ACTIONS_CLASS =
   'mt-4 flex flex-wrap items-center gap-2.5'
 
 export const OPTION_PANEL_TITLE_CLASS =
-  'm-0 max-w-[780px] text-[clamp(27px,2.2vw,34px)] font-[720] leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
+  'm-0 max-w-[780px] text-[28px] font-semibold leading-[1.15] tracking-[-0.025em] text-ds-text-primary'
 
 export const OPTION_PANEL_DESCRIPTION_CLASS =
   'mt-[10px] mb-0 max-w-[720px] text-[14px] leading-[1.7] tracking-[0] text-ds-text-secondary'
 
 export const OPTION_PANEL_HEADER_CLASS =
-  'mb-1 border-b border-ds-border-subtle pb-6 max-[760px]:pb-5'
+  'mb-1 pb-2'
 
 export const OPTION_VALUE_CLASS = [
   'inline-flex min-h-5 min-w-0 max-w-full items-center overflow-hidden text-ellipsis whitespace-nowrap',
@@ -120,7 +124,7 @@ export const OPTION_PAGINATION_PAGE_VALUE_CLASS =
   'options-stable-number inline-block min-w-[7ch] text-center'
 
 export const OPTION_RESULT_CHECKBOX_CLASS =
-  'inline-grid size-[15px] cursor-pointer place-items-center rounded-ds-sm border border-ds-border-hover bg-ds-surface-2 text-ds-text-inverse outline-none data-[checked]:border-ds-text-primary data-[checked]:bg-ds-text-primary data-[disabled]:cursor-default data-[disabled]:opacity-55 focus-visible:shadow-ds-focus'
+  'inline-grid size-[15px] cursor-pointer place-items-center rounded-[4px] border border-ds-border-hover bg-ds-surface-2 text-ds-text-inverse outline-none data-[checked]:border-ds-text-primary data-[checked]:bg-ds-text-primary data-[disabled]:cursor-default data-[disabled]:opacity-55 focus-visible:shadow-ds-focus'
 
 export const SCOPE_PICKER_TRIGGER_CLASS = [
   'curator-motion-chip relative inline-flex min-h-9 min-w-[220px] max-w-full items-center justify-start gap-2 overflow-visible',

@@ -8,7 +8,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary: 'border-ds-accent bg-ds-accent text-ds-accent-contrast hover:border-ds-accent-hover hover:bg-ds-accent-hover',
-        secondary: 'border-ds-border bg-ds-hover text-ds-text-primary hover:border-ds-border-hover hover:bg-ds-surface-1',
+        secondary: 'border-transparent bg-ds-surface-3 text-ds-text-primary hover:bg-ds-active',
         ghost: 'border-transparent bg-transparent text-ds-text-secondary hover:bg-ds-hover hover:text-ds-text-primary',
         danger: 'border-ds-danger/35 bg-transparent text-ds-danger-text hover:border-ds-danger hover:bg-ds-danger-soft'
       },

@@ -1,3 +1,4 @@
+import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import type { ShortcutListState } from './shortcut-types.js'
 
 const SHORTCUT_ROW_CLASS =
@@ -11,7 +12,7 @@ const SHORTCUT_KEY_CLASS =
   'inline-flex min-h-7 min-w-[72px] items-center justify-center whitespace-nowrap rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 text-xs font-bold text-ds-text-primary max-[760px]:w-fit max-[760px]:max-w-full'
 const SHORTCUT_KEY_UNASSIGNED_CLASS = 'text-ds-text-disabled'
 const SHORTCUT_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  `${OPTION_INSET_CLASS} p-[18px_16px] text-[13px] leading-[1.7] text-ds-text-secondary`
 const SHORTCUT_LOADING_COPY_CLASS = 'grid min-h-10 content-center gap-2'
 const SHORTCUT_LOADING_TITLE_CLASS =
   'block h-2.5 w-[min(62%,260px)] rounded-full bg-ds-text-primary/[0.075]'

@@ -4,11 +4,12 @@ import { useFolderCleanupControlsState } from './folder-cleanup-controls-store.j
 import {
   OPTION_COPY_CLASS,
   OPTION_COPY_TEXT_CLASS,
-  OPTION_COPY_TITLE_CLASS
+  OPTION_COPY_TITLE_CLASS,
+  OPTION_INSET_CLASS
 } from './option-layout-classes.js'
 
 const FOLDER_CLEANUP_RUN_HEADER_CLASS =
-  'grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-2 p-[14px_16px] max-[760px]:grid-cols-1 max-[760px]:items-start'
+  `grid min-h-[74px] grid-cols-[minmax(0,1fr)_auto] items-center gap-4 ${OPTION_INSET_CLASS} p-[14px_16px] max-[760px]:grid-cols-1 max-[760px]:items-start`
 const FOLDER_CLEANUP_ACTIONS_CLASS =
   'flex min-w-0 flex-wrap items-center justify-end gap-2.5 max-[760px]:w-full max-[760px]:justify-start'
 const FOLDER_CLEANUP_STATUS_BASE_CLASS =
@@ -21,7 +22,7 @@ const FOLDER_CLEANUP_STATUS_TONE_CLASS = {
 const FOLDER_CLEANUP_ANALYZE_BUTTON_CLASS =
   'justify-center whitespace-nowrap max-[760px]:w-full'
 const FOLDER_CLEANUP_SUMMARY_GRID_CLASS =
-  'mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
+  'mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 py-4 max-[760px]:grid-cols-1'
 const FOLDER_CLEANUP_SUMMARY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
 const FOLDER_CLEANUP_SUMMARY_LIST_CLASS = 'grid grid-cols-2 gap-x-5 gap-y-2 max-[520px]:grid-cols-1'
 const FOLDER_CLEANUP_SUMMARY_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'

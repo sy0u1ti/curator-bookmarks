@@ -3,6 +3,7 @@ import {
   NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY,
   createNewtabBookmarkPrebootSnapshot,
   getNewtabBookmarkPrebootFaviconLoadAttributes,
+  installNewtabBookmarkPreboot,
   isRenderableNewtabBookmarkPrebootSnapshot,
   writeNewtabBookmarkPrebootSnapshotFromView,
   type NewtabBookmarkPrebootItemView,
@@ -262,7 +263,7 @@ function testSnapshotWritesToStorage(): void {
   assert(rawSnapshot)
   const storedSnapshot = JSON.parse(rawSnapshot)
   assert.equal(storedSnapshot.updatedAt, 789)
-  assert.equal(storedSnapshot.version, 4)
+  assert.equal(storedSnapshot.version, 5)
   assert.deepEqual(
     storedSnapshot.sections[0].items[0].titleRect,
     { height: 15, left: 52, top: 16.5, width: 376 }
@@ -364,6 +365,17 @@ function testSnapshotRejectsMismatchedViewport(): void {
     innerHeight: 900,
     innerWidth: 1282
   }), false)
+  const storage = new MemoryStorage()
+  const documentRef = new Proxy({} as Document, {
+    get() { throw new Error('preboot paint requested') }
+  })
+  const viewport = { innerHeight: 900, innerWidth: 1280 } as Window
+  storage.setItem(NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY, JSON.stringify({ ...snapshot, version: 4 }))
+  assert.doesNotThrow(() => installNewtabBookmarkPreboot(documentRef, viewport, storage),
+    'Snapshots with clipped borders must be rejected before any DOM paint')
+  storage.setItem(NEWTAB_BOOKMARK_PREBOOT_STORAGE_KEY, JSON.stringify(snapshot))
+  assert.throws(() => installNewtabBookmarkPreboot(documentRef, viewport, storage), /preboot paint requested/,
+    'The equivalent current-version snapshot must remain eligible to paint')
 }
 
 function createBookmarkContentView(): NewtabBookmarkPrebootView {

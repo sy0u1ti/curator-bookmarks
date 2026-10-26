@@ -30,7 +30,6 @@ export function AvailabilityPanel({ hidden }: OptionsPanelVisibilityProps) {
       <OptionPanelHeader
         titleId="availability-title"
         title="书签可用性检测"
-        description="检查失效、超时或需要人工确认的链接，并集中处理检测结果。"
       />
 
       <div className={OPTION_RUN_HEADER_CLASS}>

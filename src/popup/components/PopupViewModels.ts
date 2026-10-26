@@ -1,3 +1,5 @@
+import type { PopupSearchRowPresentation } from '../popup-row-presentation'
+
 export interface PopupEmptyActionViewModel {
   action: string
   label: string
@@ -102,6 +104,7 @@ export interface PopupContentSearchResultViewModel {
   reasonLabel: string
   reasonTitle: string
   reasonTokens: string[]
+  presentation: PopupSearchRowPresentation
   title: string
   url: string
 }

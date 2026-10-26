@@ -14,7 +14,12 @@ import {
   type ParsedSearchQuery
 } from '../shared/search-query.js'
 import type { PinyinSearchFields, PinyinTokens } from '../shared/search/pinyin.js'
-import { canRecoverTitleTerm, chineseTitleFragmentCost, getTitleWords, titleAbbreviationCost } from '../shared/search/fuzzy-title.js'
+import { findPinyinMatchIndex } from '../shared/search/pinyin-match.js'
+import type { SearchMatchEvidence } from '../shared/search/match-evidence.js'
+import { yieldSearchTask } from '../shared/search/scheduler.js'
+import { isSearchContentForBookmark } from '../shared/search/content-identity.js'
+import { getSearchHighlightTerms, getPinyinEvidenceText } from '../shared/search/highlight.js'
+import { canRecoverTitleTerm, chineseTitleFragmentCost, findChineseTitleFragment, findTitleAbbreviation, getApproximateTokenCost, getTitleWords, titleAbbreviationCost } from '../shared/search/fuzzy-title.js'
 import {
   buildContentSnapshotSearchText,
   type ContentSnapshotRecord
@@ -23,13 +28,12 @@ import {
 export const MAX_POPUP_SEARCH_RESULTS = 20
 export const POPUP_SEARCH_ASYNC_THRESHOLD = 1200
 const SEARCH_PREFILTER_THRESHOLD = 64
-const SEARCH_CHUNK_SIZE = 260
 const FIRST_BATCH_MAX_SCAN_WITH_RESULTS = 8000
 const INDEXED_TERM_CACHE_LIMIT = 256
 const RECOVERED_POSTING_CACHE_BUDGET = 250_000
 const MAX_TITLE_DOMAIN_BOOST = 320
 const URL_STRUCTURE_PATTERN = /[/?#:@%\\]/
-const RECENT_SORT_TERMS = new Set(['recent', 'newest', 'latest', '最近', '新近', '最近优先'])
+export type BookmarkSearchQuery = string | ParsedSearchQuery
 
 export interface PopupSearchBookmark extends BookmarkRecord {
   normalizedPath: string
@@ -41,7 +45,7 @@ export interface PopupSearchBookmark extends BookmarkRecord {
   tagPinyinFull: string[]
   tagPinyinInitials: string[]
   searchText: string
-  searchTextCompact?: string
+  fullText?: string
   pinyinEnriched?: boolean
   pinyinBaseSearchText?: string
   pinyinFields?: PinyinSearchFields
@@ -50,6 +54,7 @@ export interface PopupSearchBookmark extends BookmarkRecord {
 export interface PopupSearchResult extends PopupSearchBookmark {
   score: number
   matchReasons: string[]
+  matchEvidence?: SearchMatchEvidence[]
 }
 
 export interface CooperativeSearchOptions {
@@ -72,6 +77,8 @@ interface ParsedPopupSearchQuery extends ParsedSearchQuery {
   approximateDistances?: Map<string, number>[]
   recoveryScoreCeiling?: number
   siteMatchCache: Map<string, boolean>
+  groups?: Array<{ term: string; variants: ParsedPopupSearchQuery[] }>
+  resolvedGroups?: Map<string, ParsedPopupSearchQuery>
 }
 
 interface DomainQueryEvidence {
@@ -87,6 +94,7 @@ interface CompactSearchField {
   weight: number
   titlePinyin?: boolean
   initials?: boolean
+  pinyinStarts?: readonly number[] | null
 }
 
 // Per-bookmark derived text that only depends on the indexed fields. Scoring
@@ -111,11 +119,10 @@ interface PopupSearchBookmarkDerived {
   compactFields: CompactSearchField[]
   contextScoreCeiling: number
   searchText: string
-  searchTextCompact: string
   compactSearchText: string
   pinyinFields: PinyinSearchFields | undefined
   titlePinyinFields: CompactSearchField[]
-  titlePinyinSearchText: string
+  contextPinyinFields: CompactSearchField[]
   approximateTokens: string[] | null
   titleWords: string[]
   titleApproximateTokens: string[]
@@ -138,6 +145,8 @@ interface SearchAccelerationIndex {
   titlePrefixTop: Map<string, number[]>
   exactTitles: Map<string, number[]>
   titleTermCache: Map<string, number[]>
+  bodyPostings: Map<string, number[]>
+  bodyBookmarkIds: number[]
 }
 
 interface RecoveredSearchTerm {
@@ -156,6 +165,9 @@ const buildingIndexes = new WeakMap<PopupSearchBookmark[], { index: SearchAccele
 const compactTermCache = new Map<string, string>()
 const COMPACT_TERM_CACHE_LIMIT = 512
 const searchPathCollator = new Intl.Collator('zh-Hans-CN')
+const EMPTY_PINYIN_FIELDS: PinyinSearchFields = {
+  title: { full: [], initials: [], runs: [] }, path: { full: [], initials: [], runs: [] }, metadata: { full: [], initials: [], runs: [] }
+}
 
 export function warmSearchAcceleration(bookmarks: PopupSearchBookmark[]): void {
   if (bookmarks.length >= SEARCH_PREFILTER_THRESHOLD) {
@@ -190,7 +202,8 @@ export function scheduleSearchAccelerationWarmup(bookmarks: PopupSearchBookmark[
   scheduledAccelerationWarmups.add(bookmarks)
   const state = {
     index: null as SearchAccelerationIndex | null,
-    next: 0
+    next: 0,
+    order: sortBookmarksCooperatively(bookmarks)
   }
   buildingIndexes.set(bookmarks, state)
 
@@ -198,8 +211,15 @@ export function scheduleSearchAccelerationWarmup(bookmarks: PopupSearchBookmark[
     if (buildingIndexes.get(bookmarks) !== state) {
       return
     }
-    state.index ||= createSearchAccelerationIndex(bookmarks)
     const deadline = performance.now() + 4
+    while (!state.index) {
+      const step = state.order.next()
+      if (step.done) state.index = createSearchAccelerationIndex(bookmarks, step.value)
+      if (!state.index && performance.now() >= deadline) {
+        requestSearchIdle(warmChunk)
+        return
+      }
+    }
     do {
       const end = Math.min(bookmarks.length, state.next + ACCELERATION_WARM_CHUNK_SIZE)
       addBookmarksToSearchAccelerationIndex(state.index, bookmarks, state.next, end)
@@ -215,6 +235,31 @@ export function scheduleSearchAccelerationWarmup(bookmarks: PopupSearchBookmark[
   }
 
   requestSearchIdle(warmChunk)
+}
+
+function* sortBookmarksCooperatively(bookmarks: PopupSearchBookmark[]): Generator<void, PopupSearchBookmark[]> {
+  let sorted: PopupSearchBookmark[] = []
+  const chunk = 256
+  for (let start = 0; start < bookmarks.length; start += chunk) {
+    sorted.push(...bookmarks.slice(start, start + chunk).sort(compareBookmarkOrder))
+    yield
+  }
+  for (let width = chunk; width < sorted.length; width *= 2) {
+    const merged: PopupSearchBookmark[] = []
+    for (let start = 0; start < sorted.length; start += width * 2) {
+      const middle = Math.min(start + width, sorted.length)
+      const end = Math.min(start + width * 2, sorted.length)
+      let left = start
+      let right = middle
+      while (left < middle || right < end) {
+        merged.push(right >= end || (left < middle && compareBookmarkOrder(sorted[left], sorted[right]) <= 0)
+          ? sorted[left++] : sorted[right++])
+        if (merged.length % chunk === 0) yield
+      }
+    }
+    sorted = merged
+  }
+  return sorted
 }
 
 function getCompactTerm(term: string): string {
@@ -246,14 +291,13 @@ function getBookmarkDerived(bookmark: PopupSearchBookmark): PopupSearchBookmarkD
     cached.tagPinyinFull === bookmark.tagPinyinFull &&
     cached.tagPinyinInitials === bookmark.tagPinyinInitials &&
     cached.pinyinFields === bookmark.pinyinFields &&
-    cached.searchText === bookmark.searchText &&
-    cached.searchTextCompact === bookmark.searchTextCompact
+    cached.searchText === bookmark.searchText
   ) {
     return cached
   }
 
   const compactFields = buildCompactSearchFields(bookmark)
-  const compactSearchText = buildCompactSearchText(compactFields)
+  const compactSearchText = buildCompactSearchText(compactFields.filter(field => field.pinyinStarts === undefined))
   const titlePinyinFields = compactFields.filter(field => field.titlePinyin)
   let contextScoreCeiling = 0
   for (let index = 3; index < compactFields.length; index++) {
@@ -274,7 +318,6 @@ function getBookmarkDerived(bookmark: PopupSearchBookmark): PopupSearchBookmarkD
     tagPinyinFull: bookmark.tagPinyinFull,
     tagPinyinInitials: bookmark.tagPinyinInitials,
     searchText: bookmark.searchText,
-    searchTextCompact: bookmark.searchTextCompact || '',
     normalizedDomain: normalizeText(bookmark.domain || ''),
     compactUrl: normalizeSearchTextCompact(bookmark.normalizedUrl),
     compactFields,
@@ -282,7 +325,7 @@ function getBookmarkDerived(bookmark: PopupSearchBookmark): PopupSearchBookmarkD
     compactSearchText,
     pinyinFields: bookmark.pinyinFields,
     titlePinyinFields,
-    titlePinyinSearchText: buildCompactSearchText(titlePinyinFields),
+    contextPinyinFields: compactFields.filter(field => field.pinyinStarts !== undefined && !field.titlePinyin),
     titleWords,
     titleApproximateTokens: [...new Set([
       ...titleWords,
@@ -301,14 +344,19 @@ export function indexBookmarkForSearch(
   snapshotRecord: ContentSnapshotRecord | null = null,
   options: { includeFullText?: boolean } = {}
 ): PopupSearchBookmark {
+  const contentTags = isSearchContentForBookmark(bookmark, tagRecord) ? tagRecord : null
+  const manualTags = tagRecord?.manualTags || []
+  tagRecord = contentTags
+  snapshotRecord = isSearchContentForBookmark(bookmark, snapshotRecord) ? snapshotRecord : null
   const normalizedPath = normalizeText(bookmark.path || '')
   const normalizedDomain = normalizeText(bookmark.domain || '')
   const tagSummary = normalizeText(tagRecord?.summary || '')
-  const tagContentType = normalizeText(tagRecord?.contentType || '')
+  const tagContentType = normalizeText(tagRecord?.contentType || snapshotRecord?.contentType || '')
   const tagTopics = normalizeSearchList(tagRecord?.topics)
-  const tagTags = normalizeSearchList(getEffectiveBookmarkTags(tagRecord))
+  const tagTags = normalizeSearchList(contentTags ? getEffectiveBookmarkTags(contentTags) : manualTags)
   const tagAliases = normalizeSearchList(tagRecord?.aliases)
-  const snapshotSearchText = buildContentSnapshotSearchText(snapshotRecord, options)
+  const snapshotSearchText = buildContentSnapshotSearchText(snapshotRecord)
+  const hasPinyinSource = /[㐀-鿿]/u.test([bookmark.title, bookmark.path, ...tagTopics, ...tagTags, ...tagAliases].join('\u0000'))
 
   const searchText = [
     bookmark.normalizedTitle,
@@ -335,21 +383,23 @@ export function indexBookmarkForSearch(
     tagAliases,
     tagPinyinFull: [],
     tagPinyinInitials: [],
-    pinyinFields: undefined,
+    pinyinFields: hasPinyinSource ? undefined : EMPTY_PINYIN_FIELDS,
+    pinyinBaseSearchText: undefined,
+    pinyinEnriched: !hasPinyinSource,
     searchText,
-    searchTextCompact: normalizeSearchTextCompact(searchText)
+    fullText: options.includeFullText && snapshotRecord?.fullTextStorage === 'local' ? normalizeText(snapshotRecord.fullText) : ''
   }
 }
 
 export function searchBookmarks(
-  query: string,
+  query: BookmarkSearchQuery,
   bookmarks: PopupSearchBookmark[]
 ): PopupSearchResult[] {
   return searchBookmarksWithLimit(query, bookmarks, MAX_POPUP_SEARCH_RESULTS)
 }
 
 export function searchBookmarksTopK(
-  query: string,
+  query: BookmarkSearchQuery,
   bookmarks: PopupSearchBookmark[],
   limit: number,
   offset = 0
@@ -371,7 +421,7 @@ export interface PopupSearchFirstBatch {
 }
 
 export function searchBookmarksFirstBatch(
-  query: string,
+  query: BookmarkSearchQuery,
   bookmarks: PopupSearchBookmark[],
   limit = MAX_POPUP_SEARCH_RESULTS
 ): PopupSearchFirstBatch {
@@ -428,7 +478,7 @@ export function searchBookmarksFirstBatch(
 }
 
 function searchBookmarksWithLimit(
-  query: string,
+  query: BookmarkSearchQuery,
   bookmarks: PopupSearchBookmark[],
   limit: number
 ): PopupSearchResult[] {
@@ -446,7 +496,7 @@ function searchCandidatesWithLimit(
   parsedQuery: ParsedPopupSearchQuery,
   limit: number
 ): PopupSearchResult[] {
-  const topResults = createTopKCollector<RankedSearchBookmark>(limit, compareRankedSearchBookmarks)
+  const topResults = createTopKCollector<RankedSearchBookmark>(limit, rankedComparator(parsedQuery))
   const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
   for (const bookmark of candidates) {
     const score = getQuickSearchScore(bookmark, parsedQuery, terms)
@@ -466,14 +516,14 @@ function scoreFallbackCandidates(
   limit: number
 ): PopupSearchResult[] {
   const tokens = new Set<string>()
-  if (parsedQuery.textTerms.some(isApproximateLatinTerm)) {
+  if (getRecoveryTerms(parsedQuery).some(isApproximateLatinTerm)) {
     for (const bookmark of candidates) {
       for (const token of collectApproximateSearchTokens(bookmark)) tokens.add(token)
     }
   }
   prepareScanApproximateTerms(parsedQuery, tokens)
   const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
-  const collector = createTopKCollector<RankedSearchBookmark>(limit, compareRankedSearchBookmarks)
+  const collector = createTopKCollector<RankedSearchBookmark>(limit, rankedComparator(parsedQuery))
   for (const bookmark of candidates) {
     const score = getQuickSearchScore(bookmark, parsedQuery, terms)
     if (score > 0) collector.add({ bookmark, score })
@@ -482,6 +532,10 @@ function scoreFallbackCandidates(
 }
 
 function prepareScanApproximateTerms(parsedQuery: ParsedPopupSearchQuery, tokens: Set<string>): void {
+  for (const group of parsedQuery.groups || []) {
+    for (const variant of group.variants) prepareScanApproximateTerms(variant, tokens)
+  }
+  parsedQuery.resolvedGroups?.clear()
   parsedQuery.approximateDistances = getCandidateRequiredTerms(parsedQuery).filter(Boolean).map(term => {
     const matches = new Map<string, number>()
     if (!isApproximateLatinTerm(term) || term.length > 48 || parsedQuery.phraseTerms.includes(term)) return matches
@@ -497,9 +551,13 @@ function prepareScanApproximateTerms(parsedQuery: ParsedPopupSearchQuery, tokens
 function shouldRecoverSearch(parsedQuery: ParsedPopupSearchQuery, results: { score: number }[]): boolean {
   if (results[0]?.score >= 1480) return false
   const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
-  return terms.length > 0 && terms.length <= 6 && terms.some(term =>
+  return terms.length > 0 && terms.length <= 6 && getRecoveryTerms(parsedQuery).some(term =>
     !parsedQuery.phraseTerms.includes(term) && (isApproximateLatinTerm(term) || canRecoverTitleTerm(term))
   )
+}
+
+function getRecoveryTerms(parsed: ParsedPopupSearchQuery): string[] {
+  return parsed.groups ? parsed.groups.flatMap(group => group.variants.flatMap(variant => variant.textTerms)) : parsed.textTerms
 }
 
 function searchRankedCandidates(
@@ -517,10 +575,16 @@ function searchRankedCandidates(
   const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
   return candidates.slice(0, safeLimit).map(candidate => {
     const reasons: string[] = []
-    getQuickSearchScore(candidate.bookmark, parsedQuery, terms, undefined, false, reasons)
+    const matchEvidence: SearchMatchEvidence[] = []
+    getQuickSearchScore(candidate.bookmark, parsedQuery, terms, undefined, false, reasons, matchEvidence)
+    for (const item of matchEvidence) {
+      item.literal = parsedQuery.phraseTerms.includes(item.term)
+      item.text = getEvidenceHighlightText(candidate.bookmark, item)
+    }
     return {
       ...candidate.bookmark,
       score: candidate.score,
+      matchEvidence,
       matchReasons: reasons.length ? prioritizeSearchReasons(reasons, 3) : [`命中：本地索引 ${parsedQuery.normalizedQuery}`]
     }
   })
@@ -536,37 +600,71 @@ function compareRankedSearchBookmarks(
   return compareBookmarkOrder(left.bookmark, right.bookmark)
 }
 
+function rankedComparator(parsed: ParsedPopupSearchQuery): typeof compareRankedSearchBookmarks {
+  return parsed.sort === 'recent'
+    ? (left, right) => Number(right.bookmark.dateAdded || 0) - Number(left.bookmark.dateAdded || 0) || compareRankedSearchBookmarks(left, right)
+    : compareRankedSearchBookmarks
+}
+
+function getEvidenceHighlightText(bookmark: PopupSearchBookmark, evidence: SearchMatchEvidence): string[] {
+  const { field, term, literal } = evidence
+  if (field === '站点') return getSearchHighlightTerms(bookmark.domain || '', [term], literal)
+  if (field.startsWith('文件夹')) return field === '文件夹拼音' || field === '文件夹首字母'
+    ? getPinyinEvidenceText(bookmark.pinyinFields?.path, term, field.endsWith('首字母'))
+    : getSearchHighlightTerms(bookmark.path, [term], literal)
+  if (!field.startsWith('标题')) return []
+  const title = bookmark.title
+  if (field === '标题拼音' || field === '标题首字母') return getPinyinEvidenceText(bookmark.pinyinFields?.title, term, field.endsWith('首字母'))
+  if (field === '标题片段') return getSearchHighlightTerms(title, findChineseTitleFragment(normalizeSearchTextCompact(title), term)?.terms || [])
+  if (field === '标题缩写') return getSearchHighlightTerms(title, findTitleAbbreviation(getTitleWords(title), term)?.terms || [])
+  if (field === '标题近似') {
+    const tokens = getBookmarkDerived(bookmark).titleApproximateTokens
+    const matches = tokens.flatMap(token => {
+      const cost = getApproximateTokenCost(term, token)
+      return cost === null ? [] : [{ token, cost }]
+    }).sort((a, b) => a.cost - b.cost)
+    const token = matches[0]?.token
+    return token ? [...getSearchHighlightTerms(title, [token]), ...getPinyinEvidenceText(bookmark.pinyinFields?.title, token, false)] : []
+  }
+  return getSearchHighlightTerms(title, [term], literal)
+}
+
+export function compareBookmarkSearchResults(left: PopupSearchResult, right: PopupSearchResult, sort: ParsedSearchQuery['sort'] = 'relevance'): number {
+  return (sort === 'recent' ? Number(right.dateAdded || 0) - Number(left.dateAdded || 0) : 0) || compareSearchResults(left, right)
+}
+
 export async function searchBookmarksCooperatively(
-  query: string,
+  query: BookmarkSearchQuery,
   bookmarks: PopupSearchBookmark[],
-  options: CooperativeSearchOptions
+  options: CooperativeSearchOptions,
+  limit = MAX_POPUP_SEARCH_RESULTS
 ): Promise<PopupSearchResult[]> {
   assertSearchActive(options)
   const parsedQuery = parsePopupSearchQuery(query)
-  const indexed = getIndexedSearchCandidates(bookmarks, parsedQuery, MAX_POPUP_SEARCH_RESULTS)
-  if (indexed) return searchRankedCandidates(indexed, parsedQuery, MAX_POPUP_SEARCH_RESULTS)
-  const collector = createTopKCollector<RankedSearchBookmark>(MAX_POPUP_SEARCH_RESULTS, compareRankedSearchBookmarks)
+  const indexed = getIndexedSearchCandidates(bookmarks, parsedQuery, limit)
+  if (indexed) return searchRankedCandidates(indexed, parsedQuery, limit)
+  const collector = createTopKCollector<RankedSearchBookmark>(limit, rankedComparator(parsedQuery))
   const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
   await processSearchChunks(bookmarks, options, bookmark => {
     const score = getQuickSearchScore(bookmark, parsedQuery, terms)
     if (score > 0) collector.add({ bookmark, score })
   })
   if (!shouldRecoverSearch(parsedQuery, collector.sortedValues())) {
-    return searchRankedCandidates(collector.sortedValues(), parsedQuery, MAX_POPUP_SEARCH_RESULTS)
+    return searchRankedCandidates(collector.sortedValues(), parsedQuery, limit)
   }
   const tokens = new Set<string>()
-  if (terms.some(isApproximateLatinTerm)) {
+  if (getRecoveryTerms(parsedQuery).some(isApproximateLatinTerm)) {
     await processSearchChunks(bookmarks, options, bookmark => {
       for (const token of collectApproximateSearchTokens(bookmark)) tokens.add(token)
     })
   }
   prepareScanApproximateTerms(parsedQuery, tokens)
-  const recovered = createTopKCollector<RankedSearchBookmark>(MAX_POPUP_SEARCH_RESULTS, compareRankedSearchBookmarks)
+  const recovered = createTopKCollector<RankedSearchBookmark>(limit, rankedComparator(parsedQuery))
   await processSearchChunks(bookmarks, options, bookmark => {
     const score = getQuickSearchScore(bookmark, parsedQuery, terms)
     if (score > 0) recovered.add({ bookmark, score })
   })
-  return searchRankedCandidates(recovered.sortedValues(), parsedQuery, MAX_POPUP_SEARCH_RESULTS)
+  return searchRankedCandidates(recovered.sortedValues(), parsedQuery, limit)
 }
 
 async function processSearchChunks<T>(
@@ -575,19 +673,15 @@ async function processSearchChunks<T>(
   processItem: (item: T, index: number) => void,
   start = 0
 ): Promise<void> {
-  if (start >= items.length) {
-    return
-  }
-
-  assertSearchActive(options)
-  let end = Math.min(start + SEARCH_CHUNK_SIZE, items.length)
-  for (let index = start; index < end; index += 1) {
+  let deadline = performance.now() + 4
+  for (let index = start; index < items.length; index++) {
+    assertSearchActive(options)
     processItem(items[index], index)
-  }
-
-  if (end < items.length) {
-    await yieldSearchWork(options)
-    await processSearchChunks(items, options, processItem, end)
+    if ((index + 1) % 32 === 0 && index + 1 < items.length && performance.now() >= deadline) {
+      await yieldSearchWork(options)
+      assertSearchActive(options)
+      deadline = performance.now() + 4
+    }
   }
 }
 
@@ -599,12 +693,11 @@ export function normalizeQuery(value: unknown): string {
   return normalizeText(stripCommonUrlPrefix(value))
 }
 
-function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
-  const parsed = parseSearchQuery(query)
+function parsePopupSearchQuery(query: BookmarkSearchQuery): ParsedPopupSearchQuery {
+  const parsed = typeof query === 'string' ? parseSearchQuery(query) : query
   const excludedTerms = parsed.excludedTerms
-  const isUnquotedRecencyTerm = (term: string) => !parsed.literalTerms.includes(term) && isRecencyHintTerm(term)
-  const recencyHint = parsed.textTerms.some(isUnquotedRecencyTerm)
-  const textTerms = parsed.textTerms.filter((term) => !isUnquotedRecencyTerm(term))
+  const recencyHint = parsed.recencyHint
+  const textTerms = parsed.textTerms
   const normalizedQuery = buildSearchTextQuery({ ...parsed, textTerms, excludedTerms })
   const hasStructuredFilters = Boolean(
     parsed.siteFilters.length ||
@@ -612,10 +705,10 @@ function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
     parsed.folderFilters.length ||
     parsed.typeFilters.length ||
     excludedTerms.length ||
-    parsed.dateRange
+    parsed.dateRange || parsed.sort === 'recent'
   )
   const compactQuery = normalizeSearchTextCompact(normalizedQuery)
-  return {
+  const output: ParsedPopupSearchQuery = {
     ...parsed,
     textTerms,
     excludedTerms,
@@ -629,20 +722,31 @@ function parsePopupSearchQuery(query: string): ParsedPopupSearchQuery {
     literalTermFlags: textTerms.map(term => parsed.literalTerms.includes(term)),
     domainEvidenceCache: new Map(),
     phraseTerms: parsed.literalTerms,
-    siteMatchCache: new Map()
+    siteMatchCache: new Map(),
+    groups: undefined,
+    resolvedGroups: undefined
   }
-}
-
-function isRecencyHintTerm(term: string): boolean {
-  const normalized = normalizeText(term).replace(/^sort[:：]/, '')
-  return RECENT_SORT_TERMS.has(normalized) || (normalized === 'new' && /^sort[:：]/.test(term))
+  if (parsed.termGroups?.some(group => group.alternatives.length > 1)) {
+    output.groups = parsed.termGroups.map(group => ({
+      term: group.term,
+      variants: group.alternatives.map(term => parsePopupSearchQuery({
+        ...parsed, termGroups: undefined, rawQuery: term,
+        textTerms: group.literal ? [term] : term.split(/\s+/).filter(Boolean),
+        literalTerms: group.literal ? [term] : [],
+        siteFilters: [], urlFilters: [], folderFilters: [], typeFilters: [], excludedTerms: [],
+        dateRange: null, sort: 'relevance', recencyHint: false, chips: []
+      }))
+    }))
+    output.resolvedGroups = new Map()
+  }
+  return output
 }
 
 function canUseFastFirstBatch(parsedQuery: ParsedPopupSearchQuery): boolean {
   if (
     !parsedQuery.normalizedQuery ||
     parsedQuery.hasStructuredFilters ||
-    parsedQuery.recencyHint
+    parsedQuery.recencyHint || parsedQuery.groups
   ) {
     return false
   }
@@ -668,14 +772,17 @@ function getQuickSearchScore(
   terms: string[],
   preparedDerived?: PopupSearchBookmarkDerived,
   filtersChecked = false,
-  reasons?: string[]
+  reasons?: string[],
+  matchEvidence?: SearchMatchEvidence[]
 ): number {
   if ((!filtersChecked && !matchesSearchCandidateFilters(bookmark, parsedQuery)) || !matchesRequiredPhraseTerms(bookmark, parsedQuery)) return 0
+  if (parsedQuery.groups) return getGroupedSearchScore(bookmark, parsedQuery, preparedDerived, reasons, matchEvidence)
   const query = parsedQuery.normalizedQuery
   const derived = preparedDerived || getBookmarkDerived(bookmark)
   if (reasons) {
     matchesStructuredFilters(bookmark, parsedQuery, reasons)
-    if (parsedQuery.recencyHint) addReason(reasons, '排序：最近添加优先')
+    if (parsedQuery.sort === 'recent') addReason(reasons, '排序：最近添加优先')
+    else if (parsedQuery.recencyHint) addReason(reasons, '排序：相关性 · 最近偏好')
   }
   if (!query) {
     return parsedQuery.hasStructuredFilters || parsedQuery.recencyHint
@@ -696,7 +803,8 @@ function getQuickSearchScore(
     const literal = parsedQuery.literalTermFlags[termIndex]
     const titleMatch = bookmark.normalizedTitle.includes(term)
     const compactTitleMatch = Boolean(!titleMatch && !literal && compact && derived.compactFields[0].value.includes(compact))
-    const titlePinyinMatch = Boolean(!titleMatch && !compactTitleMatch && !literal && compact && derived.titlePinyinSearchText.includes(compact))
+    const titlePinyinMatch = Boolean(!titleMatch && !compactTitleMatch && !literal && compact &&
+      derived.titlePinyinFields.some(field => findPinyinMatchIndex(field.value, compact, field.pinyinStarts!) >= 0))
     const directTitleMatch = titleMatch || compactTitleMatch || titlePinyinMatch
     const domainWeight = domainEvidence.termWeights[termIndex]
     const checkUrl = !domainWeight && (!directTitleMatch || Boolean(reasons))
@@ -708,8 +816,9 @@ function getQuickSearchScore(
     else if (domainWeight) weight = domainWeight
     else if (urlMatch) weight = 180
     else if (compactUrlMatch) weight = 160
-    else if (!literal && derived.compactSearchText.includes(compact || '\u0000\u0000')) weight = 120
-    else if ((literal ? getBookmarkLiteralSearchText(bookmark) : derived.searchText).includes(term)) weight = 40
+    else if (!literal && compact && (derived.compactSearchText.includes(compact) ||
+      derived.contextPinyinFields.some(field => findPinyinMatchIndex(field.value, compact, field.pinyinStarts!) >= 0))) weight = 120
+    else if (hasBookmarkLiteralTerm(bookmark, term)) weight = 40
     let titleTerm = weight >= 280
     let recoveredLabel = ''
     if (weight < 280 && parsedQuery.approximateTerms && !literal) {
@@ -730,16 +839,16 @@ function getQuickSearchScore(
       corroboration += domainEvidence.termBoosts[termIndex]
     }
     if (reasons) {
-      if (recoveredLabel) addFieldMatchReason(reasons, recoveredLabel, term)
-      else if (titleMatch || compactTitleMatch) addFieldMatchReason(reasons, '标题', term)
+      if (recoveredLabel) addFieldMatchReason(reasons, recoveredLabel, term, matchEvidence)
+      else if (titleMatch || compactTitleMatch) addFieldMatchReason(reasons, '标题', term, matchEvidence)
       else if (titlePinyinMatch) {
         const field = getBestTitlePinyinField(derived, compact)
-        if (field) addFieldMatchReason(reasons, field.label, term)
+        if (field) addFieldMatchReason(reasons, field.label, term, matchEvidence)
       }
-      if (domainWeight) addFieldMatchReason(reasons, '站点', bookmark.domain || term)
-      else if (urlMatch || compactUrlMatch) addFieldMatchReason(reasons, '网址', term)
+      if (domainWeight) addFieldMatchReason(reasons, '站点', term, matchEvidence)
+      else if (urlMatch || compactUrlMatch) addFieldMatchReason(reasons, '网址', term, matchEvidence)
       if (!titleTerm && !domainWeight && !urlMatch && !compactUrlMatch && !recoveredLabel) {
-        addFieldMatchReason(reasons, getContextMatchLabel(bookmark, derived, term, literal ? '' : compact), term)
+        addFieldMatchReason(reasons, getContextMatchLabel(bookmark, derived, term, literal ? '' : compact), term, matchEvidence)
       }
     }
   }
@@ -762,7 +871,7 @@ function getQuickSearchScore(
     if (score >= ceiling) continue
     score = Math.max(score, field.titlePinyin
       ? getTitlePinyinFieldScore(field, compactQuery)
-      : relevanceFieldScore(field.value, compactQuery, field.weight * 8, field.weight * 5, field.weight * 3))
+      : compactFieldScore(field, compactQuery, field.weight * 8, field.weight * 5, field.weight * 3))
   }
   if (score < 1000) score = Math.max(score, relevanceFieldScore(bookmark.normalizedUrl, query, 1000, 800, 600))
   if (score < 900) score = Math.max(score, relevanceFieldScore(derived.compactUrl, compactQuery, 900, 700, 500))
@@ -775,6 +884,40 @@ function getQuickSearchScore(
   score += corroboration / Math.max(1, terms.length)
   if (parsedQuery.recencyHint) score += getBookmarkRecencyBoost(bookmark)
   return Math.max(1, score)
+}
+
+function getGroupedSearchScore(
+  bookmark: PopupSearchBookmark, parsed: ParsedPopupSearchQuery, prepared?: PopupSearchBookmarkDerived,
+  reasons?: string[], evidence?: SearchMatchEvidence[]
+): number {
+  const derived = prepared || getBookmarkDerived(bookmark)
+  const selected: ParsedPopupSearchQuery[] = []
+  let changes = 0
+  for (const group of parsed.groups!) {
+    let best: ParsedPopupSearchQuery | undefined
+    let bestScore = 0
+    for (const variant of group.variants) {
+      const score = getQuickSearchScore(bookmark, variant, variant.textTerms, derived, true)
+      if (score > bestScore) { best = variant; bestScore = score }
+    }
+    if (!best) return 0
+    selected.push(best)
+    if (best.normalizedQuery !== group.term) changes++
+  }
+  const key = selected.map(variant => variant.normalizedQuery).join('\u0000')
+  let resolved = parsed.resolvedGroups!.get(key)
+  if (!resolved) {
+    resolved = parsePopupSearchQuery({ ...parsed, termGroups: undefined, textTerms: selected.flatMap(variant => variant.textTerms) })
+    if (parsed.approximateTerms) {
+      resolved.approximateDistances = selected.flatMap(variant => variant.approximateDistances || variant.textTerms.map(() => new Map<string, number>()))
+      resolved.approximateTerms = resolved.approximateDistances.map(variants => [...variants.keys()])
+    }
+    if (parsed.resolvedGroups!.size < 256) parsed.resolvedGroups!.set(key, resolved)
+  }
+  // Every original concept is covered before computing a single complete-intent
+  // score. A broad one-word expansion never contributes an exact-title bonus alone.
+  const score = getQuickSearchScore(bookmark, resolved, resolved.textTerms, derived, true, reasons, evidence)
+  return score > 0 ? Math.max(1, score - changes * 80 / Math.max(1, selected.length)) : 0
 }
 
 function getDomainQueryEvidence(
@@ -833,7 +976,10 @@ function getDomainCorroborationScore(derived: PopupSearchBookmarkDerived, term: 
   return best
 }
 
-function addFieldMatchReason(reasons: string[], label: string, term: string): void {
+function addFieldMatchReason(reasons: string[], label: string, term: string, evidence?: SearchMatchEvidence[]): void {
+  // Human-readable reasons are capped/deduplicated. The UI needs every term's
+  // actual field so it never reconstructs evidence from a shortened label.
+  evidence?.push({ field: label, term })
   const prefix = `命中：${label} `
   if (!reasons.some(reason => reason.startsWith(prefix))) addReason(reasons, `${prefix}${term}`)
 }
@@ -846,7 +992,7 @@ function getContextMatchLabel(
   if (compact) {
     for (const field of derived.compactFields.slice(3)) {
       if (field.titlePinyin) continue
-      const score = relevanceFieldScore(field.value, compact, field.weight * 8, field.weight * 5, field.weight * 3)
+      const score = compactFieldScore(field, compact, field.weight * 8, field.weight * 5, field.weight * 3)
       if (score > bestScore) {
         best = field
         bestScore = score
@@ -917,8 +1063,22 @@ function getTitlePinyinFieldScore(field: CompactSearchField, query: string): num
   // Short initials can coincide with ordinary words (e.g. "any"). Keep them
   // discoverable without letting an accidental acronym outrank a literal prefix.
   return field.initials
-    ? relevanceFieldScore(field.value, query, 2400, 2000, 1300)
-    : relevanceFieldScore(field.value, query, 3600, 2200, 1300)
+    ? compactFieldScore(field, query, 2400, 2000, 1300)
+    : compactFieldScore(field, query, 3600, 2200, 1300)
+}
+
+function compactFieldScore(field: CompactSearchField, query: string, exact: number, prefix: number, substring: number): number {
+  if (field.pinyinStarts === undefined) return relevanceFieldScore(field.value, query, exact, prefix, substring)
+  let index = findPinyinMatchIndex(field.value, query, field.pinyinStarts)
+  if (index < 0) return 0
+  if (field.value === query) return exact
+  if (index === 0) return prefix + getBoundaryMatchBonus(field.value, 0, query.length, 40)
+  let best = 0
+  while (index >= 0) {
+    best = Math.max(best, substring + getBoundaryMatchBonus(field.value, index, query.length, 40) - Math.min(index, 100))
+    index = findPinyinMatchIndex(field.value, query, field.pinyinStarts, index + 1)
+  }
+  return best
 }
 
 function getBestTitlePinyinField(derived: PopupSearchBookmarkDerived, query: string): CompactSearchField | undefined {
@@ -949,7 +1109,7 @@ function rankIndexedCandidates(
   terms: string[],
   limit: number
 ): RankedSearchBookmark[] {
-  const collector = createTopKCollector<RankedSearchBookmark>(limit, compareRankedSearchBookmarks)
+  const collector = createTopKCollector<RankedSearchBookmark>(limit, rankedComparator(parsedQuery))
   for (const bookmarkIndex of candidateIndexes) {
     // With no direct matches, every result pays at least one recovery step.
     // Postings follow the final tie order, so a full heap at that ceiling is final.
@@ -959,7 +1119,7 @@ function rankIndexedCandidates(
     if (!matchesSearchCandidateFilters(bookmark, parsedQuery)) continue
     const derived = derivedCache.get(bookmark) || getBookmarkDerived(bookmark)
     const worst = collector.size >= limit ? collector.worst : undefined
-    if (worst && parsedQuery.normalizedQuery && !parsedQuery.approximateTerms) {
+    if (worst && parsedQuery.normalizedQuery && !parsedQuery.approximateTerms && !parsedQuery.groups && parsedQuery.sort !== 'recent') {
       // Bound metadata by this bookmark's actual fields. Check title (including
       // pinyin), host and URL separately, including the host's support for each term.
       // This is a score bound, never a cap on the number of candidates.
@@ -971,7 +1131,7 @@ function rankIndexedCandidates(
       const termBound = terms.length === 1
         ? bookmark.normalizedTitle.includes(terms[0]) ? 320
           : !literalTerm && compactTerm && derived.compactFields[0].value.includes(compactTerm) ? 280
-            : !literalTerm && compactTerm && derived.titlePinyinSearchText.includes(compactTerm) ? 280
+            : !literalTerm && compactTerm && derived.titlePinyinFields.some(field => findPinyinMatchIndex(field.value, compactTerm, field.pinyinStarts!) >= 0) ? 280
             : domainEvidence.termWeights[0] ? domainEvidence.termWeights[0]
                 : bookmark.normalizedUrl.includes(terms[0]) ? 180
                   : !literalTerm && compactTerm && derived.compactUrl.includes(compactTerm) ? 160 : 120
@@ -1028,9 +1188,17 @@ function buildCompactSearchFields(bookmark: PopupSearchBookmark): CompactSearchF
 }
 
 function buildCompactPinyinFields(tokens: PinyinTokens, source: string, weight: number, titlePinyin = false): CompactSearchField[] {
+  if (tokens.runs) {
+    return tokens.runs.flatMap(run => [
+      { value: run.full, label: `${source}拼音`, weight, titlePinyin, pinyinStarts: run.syllableStarts },
+      { value: run.initials, label: `${source}首字母`, weight, titlePinyin, pinyinStarts: null, initials: true }
+    ])
+  }
   return [
-    ...tokens.full.map(value => ({ value: normalizeSearchTextCompact(value), label: `${source}拼音`, weight, titlePinyin })),
-    ...tokens.initials.map(value => ({ value: normalizeSearchTextCompact(value), label: `${source}首字母`, weight, titlePinyin, initials: true }))
+    // Legacy tokens have no recoverable internal boundaries; their start is
+    // safe until the normal enrichment step supplies source-aware runs.
+    ...tokens.full.map(value => ({ value: normalizeSearchTextCompact(value), label: `${source}拼音`, weight, titlePinyin, pinyinStarts: [0] })),
+    ...tokens.initials.map(value => ({ value: normalizeSearchTextCompact(value), label: `${source}首字母`, weight, titlePinyin, pinyinStarts: null, initials: true }))
   ]
 }
 
@@ -1051,7 +1219,7 @@ function matchesStructuredFilters(
   }
 
   if (!matchesParsedSearchQuery(parsedQuery, {
-    searchText: getBookmarkLiteralSearchText(bookmark),
+    searchText: `${getBookmarkLiteralSearchText(bookmark)}\u0000${bookmark.fullText || ''}`,
     domain: bookmark.domain,
     url: bookmark.normalizedUrl,
     path: bookmark.path,
@@ -1120,8 +1288,7 @@ function matchesRequiredPhraseTerms(
     return true
   }
 
-  const searchText = getBookmarkLiteralSearchText(bookmark)
-  return phraseTerms.every((term) => searchText.includes(term))
+  return phraseTerms.every((term) => hasBookmarkLiteralTerm(bookmark, term))
 }
 
 function isApproximateLatinTerm(term: string): boolean {
@@ -1164,62 +1331,6 @@ function collectApproximateSearchTokens(bookmark: PopupSearchBookmark): string[]
 
 function getApproximateDistanceLimit(term: string): number {
   return term.length >= 8 ? 2 : 1
-}
-
-function getApproximateTokenCost(term: string, token: string): number | null {
-  if (term === token) return null
-  const limit = getApproximateDistanceLimit(term)
-  if (Math.abs(token.length - term.length) <= limit) {
-    const distance = damerauLevenshteinDistance(term, token, limit)
-    if (distance <= limit) return distance
-  }
-  // Allow one typo in a meaningful prefix while the user is still typing.
-  if (term.length >= 5 && token.length > term.length && !token.startsWith(term)) {
-    for (const length of [term.length - 1, term.length, term.length + 1]) {
-      if (damerauLevenshteinDistance(term, token.slice(0, length), 1) <= 1) return 1.5
-    }
-  }
-  return null
-}
-
-function damerauLevenshteinDistance(left: string, right: string, limit: number): number {
-  let previousPreviousRow: number[] = new Array(right.length + 1).fill(0)
-  let previousRow: number[] = Array.from({ length: right.length + 1 }, (_value, index) => index)
-
-  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
-    const currentRow = [leftIndex]
-    let rowBest = currentRow[0]
-
-    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
-      const substitutionCost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
-      let distance = Math.min(
-        previousRow[rightIndex] + 1,
-        currentRow[rightIndex - 1] + 1,
-        previousRow[rightIndex - 1] + substitutionCost
-      )
-
-      if (
-        leftIndex > 1 &&
-        rightIndex > 1 &&
-        left[leftIndex - 1] === right[rightIndex - 2] &&
-        left[leftIndex - 2] === right[rightIndex - 1]
-      ) {
-        distance = Math.min(distance, previousPreviousRow[rightIndex - 2] + 1)
-      }
-
-      currentRow[rightIndex] = distance
-      rowBest = Math.min(rowBest, distance)
-    }
-
-    if (rowBest > limit) {
-      return limit + 1
-    }
-
-    previousPreviousRow = previousRow
-    previousRow = currentRow
-  }
-
-  return previousRow[right.length] ?? limit + 1
 }
 
 function normalizeSearchList(values: unknown): string[] {
@@ -1304,7 +1415,8 @@ function getCandidateRequiredTerms(parsedQuery: ParsedPopupSearchQuery): string[
 }
 
 function createSearchAccelerationIndex(
-  bookmarks: PopupSearchBookmark[]
+  bookmarks: PopupSearchBookmark[],
+  ordered = bookmarks.slice().sort(compareBookmarkOrder)
 ): SearchAccelerationIndex {
   return {
     length: bookmarks.length,
@@ -1318,11 +1430,13 @@ function createSearchAccelerationIndex(
     fuzzyTermCache: new Map(),
     recoveredTermCache: new Map(),
     recoveredPostingCount: 0,
-    bookmarks: bookmarks.slice().sort(compareBookmarkOrder),
+    bookmarks: ordered,
     titlePostings: new Map(),
     titlePrefixTop: new Map(),
     exactTitles: new Map(),
-    titleTermCache: new Map()
+    titleTermCache: new Map(),
+    bodyPostings: new Map(),
+    bodyBookmarkIds: []
   }
 }
 
@@ -1355,10 +1469,18 @@ function addBookmarksToSearchAccelerationIndex(
       )
     }
     collectSearchNgrams(
-      getBookmarkSearchText(bookmark),
+      getBookmarkLiteralSearchText(bookmark),
       (gram) => addIndexPosting(index.gramPostings, gram, bookmarkIndex),
       (short) => addIndexPosting(index.shortPostings, short, bookmarkIndex)
     )
+    if (bookmark.fullText) {
+      index.bodyBookmarkIds.push(bookmarkIndex)
+      // Short body queries scan the body-bearing subset. Avoid two additional
+      // dense posting sets for every one/two-character body fragment.
+      for (let offset = 0; offset + 3 <= bookmark.fullText.length; offset++) {
+        addIndexPosting(index.bodyPostings, bookmark.fullText.slice(offset, offset + 3), bookmarkIndex)
+      }
+    }
     for (const token of collectApproximateSearchTokens(bookmark)) {
       if (!index.tokenPostings.has(token)) {
         const byLength = index.tokensByLength.get(token.length) || []
@@ -1449,8 +1571,23 @@ function getIndexedSearchCandidates(
   const terms = getCandidateRequiredTerms(parsedQuery).filter(Boolean)
   const index = getSearchAccelerationIndex(bookmarks)
   if (!index) return null
+  if (parsedQuery.groups) {
+    const candidatesForGroups = (recover: boolean) => intersectPostingLists(parsedQuery.groups!.map(group => mergePostingLists(group.variants.map(variant => {
+      if (recover) {
+        variant.approximateDistances = variant.textTerms.map(term => variant.phraseTerms.includes(term) ? new Map<string, number>() : getApproximateIndexedTerms(index, term))
+        variant.approximateTerms = variant.approximateDistances.map(variants => [...variants.keys()])
+      }
+      return intersectPostingLists(variant.textTerms.map(term => recover && !variant.phraseTerms.includes(term)
+        ? getRecoveredTermPostings(index, term).postings : getTermPostings(index, term)))
+    }))))
+    const direct = rankIndexedCandidates(index.bookmarks, candidatesForGroups(false), parsedQuery, terms, limit)
+    if (!shouldRecoverSearch(parsedQuery, direct)) return direct
+    parsedQuery.approximateTerms = []
+    parsedQuery.resolvedGroups?.clear()
+    return rankIndexedCandidates(index.bookmarks, candidatesForGroups(true), parsedQuery, terms, limit)
+  }
   if (terms.length === 1 && !parsedQuery.phraseTerms.length && !parsedQuery.hasStructuredFilters &&
-    !parsedQuery.recencyHint && limit <= MAX_POPUP_SEARCH_RESULTS) {
+    !parsedQuery.recencyHint && parsedQuery.sort !== 'recent' && limit <= MAX_POPUP_SEARCH_RESULTS) {
     const term = terms[0]
     const prefixIds = index.titlePrefixTop.get(term)
     if (prefixIds?.length) {
@@ -1466,7 +1603,7 @@ function getIndexedSearchCandidates(
       if (prefixResults.length >= limit && prefixResults[limit - 1].score >= 2920) return prefixResults
     }
   }
-  if (terms.length) {
+  if (terms.length && parsedQuery.sort !== 'recent') {
     const titleLists = terms.map(term => getTitleTermPostings(index, term))
     const titleResults = rankIndexedCandidates(index.bookmarks, intersectPostingLists(titleLists), parsedQuery, terms, limit)
     const partialTitleBoost = MAX_TITLE_DOMAIN_BOOST * (terms.length - 1) / terms.length
@@ -1488,7 +1625,7 @@ function getIndexedSearchCandidates(
   const expanded = terms.map((term, termIndex) => parsedQuery.phraseTerms.includes(term)
     ? { postings: postings[termIndex], minimumCost: Infinity }
     : getRecoveredTermPostings(index, term))
-  if (!direct.length) {
+  if (!direct.length && parsedQuery.sort !== 'recent') {
     const minimumCost = Math.min(...expanded.map(term => term.minimumCost))
     parsedQuery.recoveryScoreCeiling = 1320 - minimumCost * 40 + (parsedQuery.recencyHint ? 120 : 0)
   }
@@ -1602,7 +1739,10 @@ function getTermPostings(index: SearchAccelerationIndex, term: string): number[]
 }
 
 function getTextPostings(index: SearchAccelerationIndex, text: string): number[] {
-  return getGramPostings(index.gramPostings, index.shortPostings, text)
+  return mergePostingLists([
+    getGramPostings(index.gramPostings, index.shortPostings, text),
+    text.length < 3 ? index.bodyBookmarkIds : getGramPostings(index.bodyPostings, index.bodyPostings, text)
+  ])
 }
 
 function getGramPostings(grams: Map<string, number[]>, shorts: Map<string, number[]>, text: string): number[] {
@@ -1682,10 +1822,10 @@ function matchesSearchCandidateFilters(
   if (parsedQuery.urlFilters.length && !parsedQuery.urlFilters.some(filter => bookmark.normalizedUrl.includes(filter))) return false
   if (parsedQuery.folderFilters.length && !parsedQuery.folderFilters.some(filter => bookmark.normalizedPath.includes(filter))) return false
   if (parsedQuery.typeFilters.length && !parsedQuery.typeFilters.some(filter => bookmark.tagContentType.includes(filter))) return false
-  if (parsedQuery.excludedTerms.some(term => getBookmarkLiteralSearchText(bookmark).includes(term))) return false
+  if (parsedQuery.excludedTerms.some(term => hasBookmarkLiteralTerm(bookmark, term))) return false
   if (parsedQuery.dateRange) {
     const date = Number(bookmark.dateAdded)
-    if (!Number.isFinite(date) || date < parsedQuery.dateRange.from || date > parsedQuery.dateRange.to) return false
+    if (!Number.isFinite(date) || date < parsedQuery.dateRange.from || date >= parsedQuery.dateRange.to) return false
   }
   return true
 }
@@ -1698,13 +1838,16 @@ function getBookmarkLiteralSearchText(bookmark: PopupSearchBookmark): string {
   return bookmark.pinyinBaseSearchText ?? getBookmarkSearchText(bookmark)
 }
 
+function hasBookmarkLiteralTerm(bookmark: PopupSearchBookmark, term: string): boolean {
+  return getBookmarkLiteralSearchText(bookmark).includes(term) || Boolean(bookmark.fullText?.includes(term))
+}
+
 function matchesSearchCandidateText(bookmark: PopupSearchBookmark, term: string): boolean {
   if (!term) {
     return true
   }
 
-  const searchText = getBookmarkSearchText(bookmark)
-  if (searchText.includes(term)) {
+  if (hasBookmarkLiteralTerm(bookmark, term)) {
     return true
   }
 
@@ -1714,7 +1857,9 @@ function matchesSearchCandidateText(bookmark: PopupSearchBookmark, term: string)
   }
 
   const derived = getBookmarkDerived(bookmark)
-  return derived.compactSearchText.includes(compactTerm)
+  return derived.compactSearchText.includes(compactTerm) ||
+    derived.titlePinyinFields.some(field => findPinyinMatchIndex(field.value, compactTerm, field.pinyinStarts!) >= 0) ||
+    derived.contextPinyinFields.some(field => findPinyinMatchIndex(field.value, compactTerm, field.pinyinStarts!) >= 0)
 }
 
 function getBoundaryMatchBonus(text: string, index: number, length: number, maxBonus: number): number {
@@ -1801,5 +1946,5 @@ function yieldSearchWork(options: CooperativeSearchOptions): Promise<unknown> {
     return options.yieldWork()
   }
 
-  return Promise.resolve()
+  return yieldSearchTask()
 }

@@ -105,7 +105,7 @@ export function AiProviderSettings({
   const [customModelsOpen, setCustomModelsOpen] = useState(false)
   const description = useMemo(() => (
     <>
-      <p className={AI_PROVIDER_NOTICE_CLASS}>{state.noticeText}</p>
+      {state.noticeText ? <p className={AI_PROVIDER_NOTICE_CLASS}>{state.noticeText}</p> : null}
       <p className={AI_PROVIDER_SUBTITLE_CLASS}>API Key 仅保存在本地；本机服务可留空。</p>
     </>
   ), [state.noticeText])
@@ -317,11 +317,13 @@ export function AiProviderSettings({
         </CollapsibleRoot>
 
         <div className={AI_PROVIDER_ACTIONS_CLASS}>
-          <span
-            className={`${AI_PROVIDER_SAVE_STATE_CLASS} ${aiProviderToneClass(state.configTone, AI_PROVIDER_SAVE_TONE_CLASS)}`}
-          >
-            {state.saveStatusText}
-          </span>
+          {state.saveStatusText ? (
+            <span
+              className={`${AI_PROVIDER_SAVE_STATE_CLASS} ${aiProviderToneClass(state.configTone, AI_PROVIDER_SAVE_TONE_CLASS)}`}
+            >
+              {state.saveStatusText}
+            </span>
+          ) : null}
           <div className={AI_PROVIDER_ACTION_BUTTONS_CLASS}>
             <Button
               variant={state.testButtonSecondary ? 'secondary' : 'primary'}

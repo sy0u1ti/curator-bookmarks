@@ -20,8 +20,8 @@ import type { PopupSmartClassifierViewModel, PopupSmartPageViewModel } from './P
 const SMART_ERROR_BANNER_CLASS =
   'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
 
-const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-[52px] w-full'
-const pageLayerClass = 'absolute inset-0 min-h-[52px]'
+const pageRevealShellClass = 't-skel popup-t-skel popup-page-reveal relative min-h-12 w-full'
+const pageLayerClass = 'absolute inset-0 min-h-12'
 const pageSkeletonLayerClass = cx(
   pageLayerClass,
   't-skel-skeleton is-pulsing popup-page-skeleton pointer-events-none z-[1]'
@@ -31,8 +31,8 @@ const pageContentLayerClass = cx(
   't-skel-content popup-page-content z-[2]'
 )
 const pageCardClass =
-  'grid min-h-[52px] w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-[7px] overflow-hidden rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-[7px] py-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
-const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-[7px]'
+  'grid min-h-12 w-full grid-cols-[minmax(0,1fr)_156px] items-center gap-2 overflow-hidden rounded-ds-sm border-0 bg-ds-surface-1 py-1.5 pl-2.5 pr-1.5 shadow-none max-[520px]:grid-cols-[minmax(0,1fr)] max-[520px]:items-stretch max-[520px]:gap-2 max-[520px]:p-2.5'
+const pageMainClass = 'grid min-w-0 grid-cols-[26px_minmax(0,1fr)] items-center gap-2.5'
 const pageIconClass =
   'grid h-[26px] w-[26px] place-items-center overflow-hidden rounded-md border-0 bg-ds-surface-2 text-sm font-bold leading-none text-ds-text-primary'
 const pageFaviconClass = 'block h-full w-full object-cover'
@@ -74,9 +74,9 @@ const placeholderPrimaryActionClass = cx(
 )
 
 const skeletonBarClass =
-  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] rounded-full bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
+  'block h-[9px] w-[calc(var(--skeleton-width,0.7)*100%)] rounded-full bg-[rgba(255,255,255,0.065)]'
 const skeletonDotClass =
-  'block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.024)]'
+  'block h-7 w-7 rounded-md bg-[rgba(255,255,255,0.065)]'
 const pageSkeletonCopyClass = 'grid min-w-0 gap-[7px]'
 const pageSkeletonTitleClass = cx(skeletonBarClass, 'h-[11px] min-w-24')
 const pageSkeletonStatusClass = cx(skeletonBarClass, 'h-2 min-w-[132px] opacity-[0.68]')

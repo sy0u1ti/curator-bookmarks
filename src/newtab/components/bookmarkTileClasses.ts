@@ -2,7 +2,7 @@ import { cx } from '../../ui/base/utils'
 
 const BOOKMARK_TILE_REDUCED_MOTION_CLASS =
   'motion-reduce:![animation-duration:1ms] motion-reduce:![transition-duration:1ms] motion-reduce:![transform:none]'
-const BOOKMARK_TILE_BASE_CLASS = `bookmark-tile group/bookmark-tile relative grid w-full items-center justify-self-stretch rounded-[var(--ui-radius-group)] border border-transparent bg-[rgba(21,21,22,0.64)] text-left leading-normal text-[var(--ui-text-primary)] no-underline shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] outline-none cursor-pointer touch-pan-y select-none [transform:none] [transition:var(--bookmark-tile-transition,border-color_var(--ui-motion-standard)_var(--ui-ease-standard),background-color_var(--ui-motion-standard)_var(--ui-ease-standard),box-shadow_var(--ui-motion-standard)_var(--ui-ease-standard),transform_var(--ui-motion-standard)_var(--ui-ease-standard),opacity_var(--ui-motion-standard)_var(--ui-ease-standard))] focus-visible:outline-none active:bg-[var(--bookmark-tile-active-bg,rgba(36,37,41,0.72))] active:shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] active:duration-[var(--ds-motion-feedback)] ${BOOKMARK_TILE_REDUCED_MOTION_CLASS}`
+const BOOKMARK_TILE_BASE_CLASS = `group/bookmark-tile relative grid w-full items-center justify-self-stretch rounded-[var(--ui-radius-group)] border border-transparent bg-[rgba(21,21,22,0.64)] text-left leading-normal text-[var(--ui-text-primary)] no-underline shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] outline-none cursor-pointer touch-pan-y select-none [transform:none] [transition:var(--bookmark-tile-transition,border-color_var(--bookmark-hover-duration,0ms)_var(--ui-ease-standard),background-color_var(--bookmark-hover-duration,0ms)_var(--ui-ease-standard),box-shadow_var(--bookmark-hover-duration,0ms)_var(--ui-ease-standard),top_var(--bookmark-hover-duration,var(--ds-motion-feedback))_var(--ui-ease-standard),transform_var(--bookmark-hover-duration,var(--ds-motion-feedback))_var(--ui-ease-standard),opacity_var(--ui-motion-standard)_var(--ui-ease-standard))] focus-visible:outline-none active:bg-[var(--bookmark-tile-active-bg,rgba(36,37,41,0.72))] active:shadow-[0_1px_2px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.075)] active:duration-[var(--ds-motion-feedback)] ${BOOKMARK_TILE_REDUCED_MOTION_CLASS}`
 const BOOKMARK_TILE_WITH_TITLE_CLASS = 'min-h-[calc(var(--icon-shell-size)+18px)] grid-cols-[var(--icon-shell-size)_minmax(0,1fr)] justify-start gap-2 px-2.5 py-2'
 const BOOKMARK_TILE_ICON_ONLY_CLASS = 'min-h-[calc(var(--icon-shell-size)+16px)] grid-cols-[var(--icon-shell-size)] justify-center gap-0 p-2'
 const BOOKMARK_TILE_DRAG_RESTING_CLASS = 'curator-motion-disabled [--bookmark-icon-active-bg:rgba(0,0,0,0.34)] [--bookmark-icon-active-border:rgba(245,245,247,0.14)] [--bookmark-icon-transition:none] [--bookmark-tile-active-bg:rgba(21,21,22,0.54)] opacity-100'
@@ -30,18 +30,21 @@ export function getBookmarkTileClass({
   dragActive = false,
   dragging = false,
   ghost = false,
+  preview = false,
   previewInitializing = false,
   showTitles
 }: {
   dragActive?: boolean
   dragging?: boolean
   ghost?: boolean
+  preview?: boolean
   previewInitializing?: boolean
   showTitles: boolean
 }): string {
   const dragResting = dragActive && !dragging && !ghost
 
   return cx(
+    preview ? 'bookmark-tile-preview pointer-events-none' : 'bookmark-tile',
     BOOKMARK_TILE_BASE_CLASS,
     showTitles ? BOOKMARK_TILE_WITH_TITLE_CLASS : BOOKMARK_TILE_ICON_ONLY_CLASS,
     dragResting && BOOKMARK_TILE_DRAG_RESTING_CLASS,

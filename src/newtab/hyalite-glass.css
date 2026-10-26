@@ -23,23 +23,19 @@ html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
   --newtab-glass-light-y: -1.36px;
   --newtab-glass-stroke: rgba(255, 255, 255, 0.18);
   --newtab-glass-border-hover: rgba(255, 255, 255, 0.38);
-  /* A continuous inner rim keeps the vertical sides readable at rest.
-     Directional light adds depth without replacing that complete perimeter. */
-  --newtab-glass-edge-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.20),
-    inset 0 0.5px 0 rgba(255, 255, 255, 0.26),
-    inset 0 -0.5px 0 rgba(255, 255, 255, 0.10);
+  /* The native border owns the complete edge; no competing half-pixel rims. */
+  --newtab-glass-edge-shadow: 0 0 0 0 transparent;
   --newtab-glass-rim-fade: 200ms;
 
   --newtab-panel-bg: rgba(22, 24, 29, 0.9);
   --newtab-panel-bg-raised: rgba(30, 32, 38, 0.98);
-  --newtab-panel-border: rgba(255, 255, 255, 0.13);
+  --newtab-panel-border: rgba(255, 255, 255, 0.22);
   --newtab-panel-filter: blur(16px) saturate(1.15);
   --newtab-panel-shadow: 0 22px 48px -18px rgba(0, 0, 0, 0.62),
-    0 4px 14px -6px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    0 4px 14px -6px rgba(0, 0, 0, 0.38);
 
   --newtab-chip-bg: rgba(12, 13, 16, 0.5);
-  --newtab-chip-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 3px rgba(0, 0, 0, 0.22);
+  --newtab-chip-shadow: none;
 }
 
 /* 1. Lens. The runtime may replace --newtab-glass-surface-fill per element with
@@ -54,8 +50,7 @@ html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
   backdrop-filter: var(--hyalite) !important;
   clip-path: none !important;
   filter: none !important;
-  box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow),
-    inset var(--newtab-glass-light-x) var(--newtab-glass-light-y) 0 rgba(255, 255, 255, var(--newtab-glass-rim-opacity));
+  box-shadow: var(--newtab-glass-drop-shadow);
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
@@ -70,7 +65,7 @@ html[data-newtab-glass-startup] :is(.newtab-shell, .settings-trigger-zone) {
 :is(.newtab-search-surface, .newtab-clock, .newtab-glass-preview)::before {
   content: "";
   position: absolute;
-  inset: calc(-1 * var(--newtab-glass-stroke-width, 1.5px));
+  inset: calc(-1 * var(--newtab-glass-stroke-width, 1px));
   z-index: -1;
   border-radius: inherit;
   background-image:
@@ -108,7 +103,7 @@ html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-
 }
 
 /* 2. Frost. */
-:is(.bookmark-tile, .newtab-speed-dial, .newtab-portal, .settings-trigger, .newtab-onboarding-strip, .newtab-state) {
+:is(.bookmark-tile, .bookmark-tile-preview, .newtab-speed-dial, .newtab-portal, .settings-trigger, .newtab-onboarding-strip, .newtab-state) {
   border-color: var(--newtab-glass-stroke);
   background-color: var(--newtab-glass-surface-fill, var(--newtab-glass-bg-fill));
   box-shadow: var(--newtab-glass-drop-shadow), var(--newtab-glass-edge-shadow);
@@ -119,7 +114,8 @@ html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
-.bookmark-tile {
+.bookmark-tile,
+.bookmark-tile-preview {
   /* Interaction changes elevation only; every state retains the same rim. */
   box-shadow: var(--newtab-bookmark-current-shadow), var(--newtab-glass-edge-shadow);
 }
@@ -152,9 +148,9 @@ html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-
    No backdrop blur: blurring an already blurred panel only costs GPU time. */
 [data-drawer-content],
 .custom-select-list {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: var(--newtab-panel-border);
   background-color: var(--newtab-panel-bg-raised);
-  box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 16px 36px -14px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.3);
   filter: none;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -169,7 +165,7 @@ html[data-newtab-glass-startup="fallback"] :is(.newtab-shell, .settings-trigger-
   --ds-surface-3: rgba(255, 255, 255, 0.1);
   --ds-bg-app: rgba(0, 0, 0, 0.2);
   --ds-hover: rgba(255, 255, 255, 0.09);
-  --ds-border: rgba(255, 255, 255, 0.12);
+  --ds-border: rgba(255, 255, 255, 0.22);
   --ds-border-hover: rgba(255, 255, 255, 0.28);
   --ds-text-secondary: rgba(245, 245, 247, 0.84);
   --ds-text-muted: rgba(245, 245, 247, 0.7);
@@ -224,7 +220,7 @@ body:has(#newtab-settings-drawer .settings-drawer-panel[data-ending-style]) .set
 
 /* 4. Chip. */
 :is(.folder-section-header, .bookmark-breadcrumb-item, .source-navigation-label, .source-navigation-link, .folder-section-add) {
-  border-color: rgba(255, 255, 255, 0.14);
+  border-color: transparent;
   background-color: var(--newtab-chip-bg);
   box-shadow: var(--newtab-chip-shadow);
   filter: none;

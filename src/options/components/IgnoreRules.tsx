@@ -3,7 +3,7 @@ import { Button } from '../../ui/base/Button'
 import { useListExit } from '../../ui/motion/useListExit'
 import { handleIgnoreRuleAction } from '../options-controller'
 import { useIgnoreRulesState } from './ignore-rules-store.js'
-import { OPTION_REVEAL_ENTER_CLASS } from './option-layout-classes.js'
+import { OPTION_REVEAL_ENTER_CLASS, OPTION_INSET_CLASS, OPTION_SURFACE_CLASS } from './option-layout-classes.js'
 import { OptionEmptyState } from './OptionEmptyState.js'
 import type {
   IgnoreRuleKind,
@@ -21,7 +21,7 @@ const ignoreSummaryMetrics = [
 }>
 
 const IGNORE_SUMMARY_GRID_CLASS =
-  'mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-4 max-[760px]:grid-cols-1'
+  `mt-5 grid grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] gap-4 ${OPTION_SURFACE_CLASS} p-4 max-[760px]:grid-cols-1`
 const IGNORE_SUMMARY_PRIMARY_CLASS = 'grid content-center gap-1 border-r border-ds-border-subtle pr-4 max-[760px]:border-r-0 max-[760px]:border-b max-[760px]:pb-3 max-[760px]:pr-0'
 const IGNORE_SUMMARY_LIST_CLASS = 'grid grid-cols-3 gap-x-5 gap-y-2 max-[620px]:grid-cols-1'
 const IGNORE_SUMMARY_ITEM_CLASS = 'flex items-baseline justify-between gap-3 border-b border-ds-border-subtle py-1.5'
@@ -31,7 +31,7 @@ const IGNORE_SUMMARY_VALUE_CLASS =
   'text-sm font-semibold leading-none text-ds-text-primary tabular-nums'
 const IGNORE_SUMMARY_PRIMARY_VALUE_CLASS = 'text-[28px] font-[650] leading-none tracking-[-0.03em] text-ds-text-primary tabular-nums'
 const IGNORE_RULE_GROUP_CLASS =
-  `mt-5 rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
+  `mt-5 ${OPTION_SURFACE_CLASS} p-[18px_20px_20px] shadow-none ${OPTION_REVEAL_ENTER_CLASS} max-[760px]:p-4`
 const IGNORE_RULE_HEADER_CLASS =
   'flex min-w-0 flex-wrap items-center justify-between gap-3'
 const IGNORE_RULE_HEADER_COPY_CLASS = 'min-w-0'
@@ -43,9 +43,9 @@ const IGNORE_RULE_CLEAR_BUTTON_CLASS =
   'justify-center whitespace-nowrap max-[760px]:w-full'
 const IGNORE_RULE_LIST_CLASS = 'mt-4 flex flex-col [--list-exit-gap:0.75rem]'
 const IGNORE_RULE_EMPTY_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary'
+  `${OPTION_INSET_CLASS} px-4 py-[18px] text-[13px] leading-[1.7] text-ds-text-secondary`
 const IGNORE_RULE_CARD_CLASS =
-  'rounded-ds-sm border border-ds-border-subtle bg-ds-surface-1 p-[14px_16px]'
+  `${OPTION_INSET_CLASS} p-[14px_16px]`
 const IGNORE_RULE_CARD_HEAD_CLASS =
   'flex min-w-0 items-start justify-between gap-3'
 const IGNORE_RULE_ACTIONS_CLASS =

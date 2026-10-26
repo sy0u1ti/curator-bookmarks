@@ -39,16 +39,10 @@ function loadPopupSearchHelpPopover(): Promise<PopupSearchHelpPopoverComponent> 
 }
 const errorBannerClass =
   'relative z-[1] flex-none rounded-ds-lg border border-[rgba(255,138,130,0.42)] bg-[rgba(255,138,130,0.10)] px-3.5 py-3 text-xs leading-[1.5] tracking-[0.01em] text-ds-danger-text shadow-none'
-const toolbarClass =
-  'relative z-[1] flex min-h-5 flex-wrap items-center justify-between gap-x-3 gap-y-1 px-px'
-const viewCaptionClass =
-  'm-0 min-w-0 text-xs font-semibold leading-normal tracking-[0.01em] text-ds-text-secondary'
-const keyHintClass =
-  'popup-keyboard-hint m-0 shrink-0 text-right text-xs leading-4 tracking-normal text-ds-text-secondary'
 const heroBaseClass =
-  'hero relative z-[5] -mx-3.5 flex h-[31px] min-h-[31px] flex-[0_0_31px] items-center overflow-visible border-0 bg-transparent px-3.5 max-[520px]:-mx-2.5 max-[520px]:px-2.5'
+  'hero relative z-[5] -mx-3.5 flex h-[37px] min-h-[37px] flex-[0_0_37px] items-center overflow-visible border-0 bg-transparent px-3.5 max-[520px]:-mx-2.5 max-[520px]:px-2.5'
 const heroBrandClass =
-  'hero-brand flex min-w-0 flex-none translate-y-[5px] items-center justify-start gap-2.5'
+  'hero-brand flex min-w-0 flex-none items-center justify-start gap-2.5'
 const heroMarkClass =
   'hero-mark relative block h-[27px] w-[27px] flex-none overflow-hidden rounded-lg border border-ds-border bg-ds-page shadow-none'
 const heroLogoClass =
@@ -60,7 +54,7 @@ const heroEyebrowClass =
 const heroTitleRowClass =
   'hero-title-row flex min-w-0 items-center gap-[5px]'
 const heroActionsClass =
-  'hero-actions inline-flex translate-y-[5px] items-center gap-3.5'
+  'hero-actions inline-flex items-center gap-3.5'
 const heroSettingsButtonClass = 'hero-settings-button shrink-0'
 const commandPanelBaseClass = 'grid gap-2'
 const commandPanelDefaultClass =
@@ -70,9 +64,10 @@ const commandPanelSmartClass =
 const searchBlockClass = 'flex flex-col gap-2'
 const searchShellClass = [
   'popup-search-shell group/search flex h-10 min-h-10 w-full cursor-text items-center gap-1.5 rounded-ds-sm border-0 bg-ds-surface-2 py-0 pl-3 pr-1.5 text-ds-text-primary max-[520px]:flex-wrap max-[520px]:items-stretch max-[520px]:py-1.5 max-[520px]:pl-2.5',
-  'transition-[background-color,box-shadow] duration-ds-fast ease-ds-standard',
+  // The focus ring is an inset shadow so it grows inward from the edge instead of popping in.
+  'shadow-[inset_0_0_0_0_rgba(245,245,247,0)] transition-[background-color,box-shadow] duration-ds-standard ease-ds-standard data-[focus-handoff=true]:transition-none',
   'hover:bg-ds-hover',
-  'focus-within:bg-ds-hover focus-within:[outline:3px_solid_rgba(245,245,247,0.14)] focus-within:outline-offset-0'
+  'focus-within:bg-ds-hover focus-within:shadow-[inset_0_0_0_3px_rgba(245,245,247,0.14)]'
 ].join(' ')
 const searchIconClass =
   'pointer-events-none flex-none text-ds-text-muted transition-colors duration-ds-fast ease-ds-standard group-focus-within/search:text-ds-text-secondary'
@@ -120,6 +115,20 @@ function adoptPrebootSearchWhenReady(input: HTMLInputElement | null, adopt: () =
   })
   observer.observe(root, { attributes: true, attributeFilter: ['data-popup-ready'] })
   return () => observer.disconnect()
+}
+
+// The preboot shell is already painted focused, so taking over its focus must
+// not replay the ring entrance; later focus changes keep the transition.
+function adoptPrebootFocusWithoutRingEntrance(input: HTMLInputElement): boolean {
+  const shell = input.closest<HTMLElement>('.popup-search-shell')
+  shell?.setAttribute('data-focus-handoff', 'true')
+  const adopted = completePopupPrebootSearchAdoption(input)
+  if (shell) {
+    // Commit the focused style before transitions come back.
+    void shell.offsetWidth
+    window.requestAnimationFrame(() => shell.removeAttribute('data-focus-handoff'))
+  }
+  return adopted
 }
 
 /**
@@ -180,7 +189,7 @@ function usePopupSearchInput(query: string, smartActive: boolean) {
       return true
     }
 
-    prebootAdoptedRef.current = completePopupPrebootSearchAdoption(input)
+    prebootAdoptedRef.current = adoptPrebootFocusWithoutRingEntrance(input)
     return prebootAdoptedRef.current
   }, [query])
 
@@ -342,13 +351,6 @@ export function PopupChromeHost({
         )}
         {children}
       </section>
-
-      {smartActive ? null : (
-        <section className={toolbarClass} aria-label="当前视图状态">
-          <p className={viewCaptionClass} id="view-caption">{state.viewCaption}</p>
-          <p className={keyHintClass}>方向键导航 · Enter 打开 · Esc 返回 · ? 查看快捷键</p>
-        </section>
-      )}
 
       {state.loadError ? (
         <section id="error-banner" className={errorBannerClass} role="alert">{state.loadError}</section>

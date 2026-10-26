@@ -1,3 +1,4 @@
+import { OPTION_INSET_CLASS } from './option-layout-classes.js'
 import { useMemo, useState } from 'react'
 import type { BackupRestorePreview } from '../../shared/backup'
 import { Button } from '../../ui/base/Button'
@@ -35,7 +36,7 @@ export function BackupBookmarkPreview({ bookmarks }: { bookmarks: BackupRestoreP
       {filtered.length ? (
         <ul className="mt-3 grid max-h-96 list-none gap-2 overflow-y-auto p-0" aria-label="备份书签预览列表">
           {filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE).map(bookmark => (
-            <li key={bookmark.id} className="min-w-0 rounded-ds-sm border border-ds-border-subtle p-3">
+            <li key={bookmark.id} className={`min-w-0 ${OPTION_INSET_CLASS} p-3`}>
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <strong className="min-w-0 flex-1 break-words text-sm text-ds-text-primary">{bookmark.title}</strong>
                 <span className="shrink-0 text-xs text-ds-text-secondary">{bookmark.missing ? '当前缺失' : '当前已有'}</span>

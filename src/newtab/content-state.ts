@@ -4,9 +4,11 @@ import type {
   ContentSnapshotRecord
 } from '../shared/content-snapshots.js'
 import type { BookmarkRecord } from '../shared/types.js'
-import type { NaturalSearchPlan, NaturalSearchResultSet } from '../popup/natural-search.js'
+import type { NaturalSearchPlan } from '../popup/natural-search.js'
 import { indexBookmarkForSearch, searchBookmarksTopK } from '../popup/search-lookup.js'
-import { extractDomain, normalizeSearchTextCompact } from '../shared/text.js'
+import { extractDomain } from '../shared/text.js'
+import { parseSearchQuery, type ParsedSearchQuery } from '../shared/search-query.js'
+import { isSearchContentForBookmark } from '../shared/search/content-identity.js'
 import type { PopupSearchBookmark } from '../popup/search.js'
 import { requiresPinyinTokens } from '../shared/search/pinyin-query.js'
 import {
@@ -148,7 +150,6 @@ export interface NewTabSearchIndexEntry {
   normalizedTitle: string
   normalizedUrl: string
   normalizedFolderTitle: string
-  normalizedSearchText: string
   order: number
   sourceDateAdded?: number
   sourceBookmark?: BookmarkRecord
@@ -470,12 +471,6 @@ export function buildNewTabSearchIndex(
         normalizedTitle: normalizeNewTabSearchText(title),
         normalizedUrl: normalizeNewTabSearchText(url),
         normalizedFolderTitle,
-        normalizedSearchText: buildNewTabEntrySearchText({
-          title,
-          url,
-          folderTitle,
-          folderPath
-        }),
         order,
         sourceDateAdded: Number(bookmark.dateAdded) || 0
       })
@@ -508,7 +503,12 @@ export function prepareNewTabSearchIndex(index: NewTabSearchIndexEntry[], fullTe
   const prepared: NewTabPreparedSearchIndex = {
     entries: index,
     fullTextEnabled,
-    fullTextReady: !fullTextEnabled || !popupSearchEntries.some(entry => entry.snapshotRecord?.hasFullText),
+    fullTextReady: !fullTextEnabled || !popupSearchEntries.some(({ bookmark, snapshotRecord }) =>
+      isSearchContentForBookmark(bookmark, snapshotRecord) && (
+        (snapshotRecord?.fullTextStorage === 'local' && Boolean(snapshotRecord.fullText)) ||
+        (snapshotRecord?.fullTextStorage === 'idb' && Boolean(snapshotRecord.fullTextRef))
+      )
+    ),
     entriesById,
     popupSearchEntries,
     supportsPopupSearch
@@ -576,16 +576,6 @@ function buildNewTabSearchIndexFromBookmarks({
         normalizedTitle: normalize(bookmark.normalizedTitle || title),
         normalizedUrl: normalize(bookmark.normalizedUrl || url),
         normalizedFolderTitle: normalize(folderTitle),
-        normalizedSearchText: buildNewTabEntrySearchText({
-          bookmark,
-          title,
-          url,
-          folderTitle,
-          folderPath,
-          tagRecord,
-          snapshotRecord,
-          normalize
-        }),
         order,
         sourceDateAdded: Number(bookmark.dateAdded) || 0,
         sourceBookmark: bookmark,
@@ -596,49 +586,6 @@ function buildNewTabSearchIndexFromBookmarks({
       return entry
     })
     .filter((entry): entry is NewTabSearchIndexEntry => Boolean(entry))
-}
-
-function buildNewTabEntrySearchText({
-  bookmark,
-  title,
-  url,
-  folderTitle,
-  folderPath,
-  tagRecord = null,
-  snapshotRecord = null,
-  normalize = normalizeNewTabSearchText
-}: {
-  bookmark?: BookmarkRecord
-  title: string
-  url: string
-  folderTitle: string
-  folderPath: string
-  tagRecord?: BookmarkTagRecord | null
-  snapshotRecord?: ContentSnapshotRecord | null
-  normalize?: (value: string) => string
-}): string {
-  return [
-    title,
-    url,
-    bookmark?.normalizedTitle,
-    bookmark?.normalizedUrl,
-    bookmark?.domain,
-    folderTitle,
-    folderPath,
-    tagRecord?.summary,
-    tagRecord?.contentType,
-    ...(tagRecord?.topics || []),
-    ...(tagRecord?.tags || []),
-    ...(tagRecord?.manualTags || []),
-    ...(tagRecord?.aliases || []),
-    snapshotRecord?.title,
-    snapshotRecord?.summary,
-    snapshotRecord?.canonicalUrl,
-    snapshotRecord?.finalUrl,
-    snapshotRecord?.contentType,
-    ...(snapshotRecord?.headings || [])
-  ].flatMap(value => { const mappedResult = normalize(String(value || '')); return mappedResult ? [mappedResult] : [] })
-    .join(' ')
 }
 
 function getNewTabSearchFolderTitle(path: string): string {
@@ -688,7 +635,7 @@ function getSearchBookmarkSuggestionsFromIndex(
   }
 
   const preparedIndex = Array.isArray(index) ? prepareNewTabSearchIndex(index) : index
-  const popupBookmarks = getFallbackPopupSearchBookmarks(preparedIndex.entries)
+  const popupBookmarks = preparedIndex.popupSearchBookmarks ||= getFallbackPopupSearchBookmarks(preparedIndex.entries)
   const results = searchBookmarksTopK(query, popupBookmarks, limit)
   return results
     .map((result) => getSuggestionFromFallbackPopupResult(preparedIndex, result.id, result.score))
@@ -729,15 +676,12 @@ export async function getPopupSearchBookmarkSuggestionsFromIndex(
   }
 
   const preparedIndex = Array.isArray(index) ? prepareNewTabSearchIndex(index) : index
-  if (!preparedIndex.supportsPopupSearch || !preparedIndex.popupSearchEntries.length) {
-    return getSearchBookmarkSuggestionsFromIndex(query, preparedIndex, limit, options)
-  }
-
+  const parsed = parseSearchQuery(query, options.now)
   await ensureNewTabSnapshotFullText(preparedIndex)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
-  await ensurePopupBookmarksHavePinyinIfNeeded(query, preparedIndex, popupBookmarks)
+  await ensurePopupBookmarksHavePinyinIfNeeded(parsed, preparedIndex, popupBookmarks)
 
-  return searchBookmarksTopK(query, popupBookmarks, limit)
+  return searchBookmarksTopK(parsed, popupBookmarks, limit)
     .map((result) => getSuggestionFromPopupResult(preparedIndex, result.id, result.score))
     .filter((suggestion): suggestion is SearchBookmarkSuggestion => Boolean(suggestion))
 }
@@ -754,56 +698,13 @@ export async function getNaturalSearchBookmarkSuggestionsFromIndex(
   }
 
   const preparedIndex = Array.isArray(index) ? prepareNewTabSearchIndex(index) : index
-  if (!preparedIndex.supportsPopupSearch || !preparedIndex.popupSearchEntries.length) {
-    return getSearchBookmarkSuggestionsFromIndex(query, preparedIndex, limit, options)
-  }
-
-  const {
-    buildLocalNaturalSearchPlan,
-    filterBookmarksByNaturalDateRange,
-    mergeNaturalSearchResultSets
-  } = await import('../popup/natural-search.js')
+  const { buildLocalNaturalSearchPlan, searchNaturalBookmarks } = await import('../popup/natural-search.js')
 
   const plan = options.naturalSearchPlan || buildLocalNaturalSearchPlan(query, options.now)
   await ensureNewTabSnapshotFullText(preparedIndex)
   const popupBookmarks = getPreparedPopupSearchBookmarks(preparedIndex, indexBookmarkForSearch)
-  const pinyinQuery = [query, ...plan.queries].find((value) => {
-    return Boolean(value && requiresPinyinTokens(value))
-  })
-  if (pinyinQuery) {
-    await ensurePopupBookmarksHavePinyinIfNeeded(pinyinQuery, preparedIndex, popupBookmarks)
-  }
-  const bookmarks = filterBookmarksByNaturalDateRange(popupBookmarks, plan)
-  const resultSets: NaturalSearchResultSet[] = []
-  const seenQueries = new Set<string>()
-
-  const directQuery = normalizeNewTabSearchText(query)
-  if (directQuery) {
-    const directResults = searchBookmarksTopK(query, bookmarks, limit)
-    if (directResults.length) {
-      resultSets.push({ query, results: directResults })
-      seenQueries.add(directQuery)
-    }
-  }
-
-  for (const naturalQuery of plan.queries) {
-    const normalizedNaturalQuery = normalizeNewTabSearchText(naturalQuery)
-    if (!normalizedNaturalQuery || seenQueries.has(normalizedNaturalQuery)) {
-      continue
-    }
-
-    seenQueries.add(normalizedNaturalQuery)
-    const results = searchBookmarksTopK(naturalQuery, bookmarks, limit)
-    if (results.length) {
-      resultSets.push({ query: naturalQuery, results })
-    }
-  }
-
-  if (!resultSets.length) {
-    return []
-  }
-
-  return mergeNaturalSearchResultSets(plan, resultSets)
+  await ensurePopupBookmarksHavePinyinIfNeeded(plan.query, preparedIndex, popupBookmarks)
+  return searchNaturalBookmarks(plan, popupBookmarks, limit)
     .map((result) => getSuggestionFromPopupResult(preparedIndex, result.id, result.score))
     .filter((suggestion): suggestion is SearchBookmarkSuggestion => Boolean(suggestion))
     .slice(0, limit)
@@ -813,23 +714,14 @@ async function ensureNewTabSnapshotFullText(index: NewTabPreparedSearchIndex): P
   if (!index.fullTextEnabled || index.fullTextReady) return
   if (!index.fullTextPromise) {
     index.fullTextPromise = (async () => {
-      const { buildContentSnapshotSearchMapWithFullText } = await import('../shared/content-snapshots.js')
-      const records = Object.fromEntries(index.popupSearchEntries.flatMap(entry => entry.snapshotRecord ? [[entry.bookmark.id, entry.snapshotRecord]] : []))
-      const text = await buildContentSnapshotSearchMapWithFullText({ version: 1, updatedAt: 0, records }, { includeFullText: true })
-      index.popupSearchBookmarks = getPreparedPopupSearchBookmarks(index, indexBookmarkForSearch).map(bookmark => {
-        const next = { ...bookmark, searchText: `${bookmark.searchText} ${text.get(bookmark.id) || ''}`.trim() }
-        next.searchTextCompact = normalizeSearchTextCompact(next.searchText)
-        next.tagPinyinFull = []
-        next.tagPinyinInitials = []
-        delete next.pinyinFields
-        delete next.pinyinBaseSearchText
-        delete next.pinyinEnriched
-        return next
-      })
-      index.popupSearchPinyinReady = false
+      const { buildContentSnapshotFullTextMap } = await import('../shared/content-snapshots.js')
+      const records = Object.fromEntries(index.popupSearchEntries.flatMap(entry => isSearchContentForBookmark(entry.bookmark, entry.snapshotRecord) ? [[entry.bookmark.id, entry.snapshotRecord!]] : []))
+      const text = await buildContentSnapshotFullTextMap({ version: 1, updatedAt: 0, records })
+      const bookmarks = getPreparedPopupSearchBookmarks(index, indexBookmarkForSearch)
+      for (const bookmark of bookmarks) bookmark.fullText = text.get(bookmark.id) || ''
       index.fullTextReady = true
-      invalidateSearchAccelerationForBookmarks(index.popupSearchBookmarks)
-      scheduleSearchAccelerationWarmup(index.popupSearchBookmarks)
+      invalidateSearchAccelerationForBookmarks(bookmarks)
+      scheduleSearchAccelerationWarmup(bookmarks)
     })().catch(error => { index.fullTextPromise = undefined; throw error })
   }
   await index.fullTextPromise
@@ -850,9 +742,16 @@ function getPreparedPopupSearchBookmarks(
   if (index.popupSearchBookmarks) {
     return index.popupSearchBookmarks
   }
+  if (!index.supportsPopupSearch) {
+    index.popupSearchBookmarks = getFallbackPopupSearchBookmarks(index.entries)
+    scheduleSearchAccelerationWarmup(index.popupSearchBookmarks)
+    return index.popupSearchBookmarks
+  }
 
   index.popupSearchBookmarks = index.popupSearchEntries.map((entry) =>
-    getPopupSearchBookmark(entry, indexBookmarkForSearch)
+    index.fullTextEnabled
+      ? { ...getPopupSearchBookmark(entry, indexBookmarkForSearch), fullText: '' }
+      : getPopupSearchBookmark(entry, indexBookmarkForSearch)
   )
   scheduleSearchAccelerationWarmup(index.popupSearchBookmarks)
   return index.popupSearchBookmarks
@@ -876,7 +775,7 @@ function getPopupSearchBookmark(
 }
 
 async function ensurePopupBookmarksHavePinyinIfNeeded(
-  query: string,
+  query: string | ParsedSearchQuery,
   index: NewTabPreparedSearchIndex,
   popupBookmarks: PopupSearchBookmark[]
 ): Promise<void> {
@@ -887,6 +786,10 @@ async function ensurePopupBookmarksHavePinyinIfNeeded(
     return
   }
   if (!requiresPinyinTokens(query)) {
+    return
+  }
+  if (popupBookmarks.every(bookmark => bookmark.pinyinEnriched)) {
+    index.popupSearchPinyinReady = true
     return
   }
   if (!index.popupSearchPinyinPromise) {
@@ -977,14 +880,6 @@ function getFallbackPopupSearchBookmarks(entries: NewTabSearchIndexEntry[]): Pop
       tagAliases: [],
       tagPinyinFull: [],
       tagPinyinInitials: [],
-      searchTextCompact: normalizeSearchTextCompact([
-        title,
-        url,
-        domain,
-        entry.folderTitle,
-        folderPath
-      ].flatMap(value => { const mappedResult = normalizeNewTabSearchText(String(value || '')); return mappedResult ? [mappedResult] : [] })
-        .join(' ')),
       searchText: [
         title,
         url,
@@ -992,7 +887,7 @@ function getFallbackPopupSearchBookmarks(entries: NewTabSearchIndexEntry[]): Pop
         entry.folderTitle,
         folderPath
       ].flatMap(value => { const mappedResult = normalizeNewTabSearchText(String(value || '')); return mappedResult ? [mappedResult] : [] })
-        .join(' ')
+        .join('\u0000')
     } as PopupSearchBookmark
   })
 }

@@ -32,6 +32,9 @@ import {
   OPTION_SWITCH_WRAP_CLASS
 } from '../../ui/switch-classes'
 import { SettingsDrawerClose } from './SettingsDrawerClose'
+import { BookmarkIconShell } from './BookmarkIconShell'
+import { getBookmarkTileClass, getBookmarkTitleClass } from './bookmarkTileClasses'
+import { useBookmarkPreviewLayout } from './useBookmarkPreviewLayout'
 import {
   ICON_PRESET_META,
   type IconLayoutPresetKey
@@ -114,34 +117,35 @@ const settingsTabs = [
 
 const DRAWER_PORTALED_CONTENT_ATTRIBUTES = { 'data-drawer-content': '' } as const
 const SETTINGS_DRAWER_CLASS = 'fixed inset-0 z-[10020] overflow-hidden bg-transparent'
-const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel isolate rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary [box-shadow:var(--newtab-glass-drop-shadow)] [filter:none] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
+const SETTINGS_DRAWER_SURFACE_CLASS = 'settings-drawer-panel @container/settings isolate rounded-ds-lg border border-[var(--newtab-glass-stroke)] [border-width:var(--newtab-glass-stroke-width)] bg-transparent text-ds-text-primary [box-shadow:var(--newtab-glass-drop-shadow)] [filter:none] [hanging-punctuation:allow-end] [line-break:strict] [text-autospace:normal] [text-spacing-trim:trim-start] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[hanging-punctuation:none] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[line-break:auto] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-autospace:no-autospace] [&_:where(input,textarea,button,code,kbd,pre,samp)]:[text-spacing-trim:space-all]'
 const SETTINGS_DRAWER_PANEL_CLASS = 'pointer-events-auto fixed inset-y-0 right-0 z-[1] grid h-dvh w-[min(520px,calc(100vw-24px))] max-w-full grid-rows-[minmax(0,1fr)] overflow-hidden opacity-100 [transform:translateX(var(--drawer-swipe-movement-x))] transition-[transform,scale,opacity] duration-[var(--panel-open-dur)] ease-[var(--panel-ease)] data-swiping:duration-0 data-ending-style:duration-[var(--panel-close-dur)] data-starting-style:opacity-0 data-ending-style:opacity-0 data-starting-style:[transform:translateX(100%)] data-ending-style:[transform:translateX(100%)] motion-reduce:transition-opacity motion-reduce:duration-[80ms] motion-reduce:[transform:none] max-[600px]:w-full max-[600px]:rounded-none max-[600px]:border-x-0'
-const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-6 max-[700px]:px-4 max-[700px]:pb-5'
-const SETTINGS_ROOT_CLASS = 'grid gap-4'
-const SETTINGS_HEADER_CLASS = 'grid gap-1 pr-14'
-const SETTINGS_KICKER_CLASS = 'm-0 text-xs font-medium leading-4 text-ds-text-secondary'
+const SETTINGS_DRAWER_SCROLL_CLASS = 'settings-drawer-scroll h-full min-h-0 overflow-x-hidden overflow-y-auto px-6 pb-6 pt-4 @max-[440px]/settings:px-4 @max-[440px]/settings:pb-5'
+const SETTINGS_ROOT_CLASS = 'grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]'
+const SETTINGS_CHROME_CLASS = 'settings-drawer-chrome grid gap-3 border-b border-ds-border-subtle px-6 pb-4 pt-4 @max-[440px]/settings:px-4'
+const SETTINGS_HEADER_CLASS = 'grid min-h-10 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3'
 const SETTINGS_TITLE_CLASS = 'm-0 text-xl font-semibold leading-tight text-ds-text-primary'
-const SETTINGS_SUMMARY_CLASS = 'm-0 text-sm leading-relaxed text-ds-text-secondary'
-const SETTINGS_SAVE_STATUS_CLASS = 'mt-1 justify-self-start text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
-const SETTINGS_TABS_LIST_CLASS = 't-tabs sticky top-0 z-[1] grid grid-cols-5 gap-1 rounded-ds-sm border border-[var(--newtab-glass-stroke)] bg-[rgba(245,245,247,0.06)] p-1 max-[380px]:grid-cols-3'
-const SETTINGS_TAB_CLASS = 't-tab min-h-8 min-w-0 rounded-ds-sm bg-transparent px-2 text-xs font-semibold outline-none hover:text-ds-text-primary data-[active]:text-ds-text-primary data-[selected]:text-ds-text-primary data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus'
+const SETTINGS_SAVE_STATUS_CLASS = 'col-span-2 mt-1 text-xs font-semibold text-ds-accent-text data-[state=error]:text-ds-danger-text'
+const SETTINGS_TABS_LIST_CLASS = 't-tabs grid grid-cols-5 gap-1 rounded-ds-md border-0 bg-[rgba(245,245,247,0.06)] p-1'
+const SETTINGS_TAB_CLASS = 't-tab min-h-8 min-w-0 whitespace-nowrap rounded-ds-sm bg-transparent px-2 text-xs font-semibold outline-none hover:text-ds-text-primary data-[active]:text-ds-text-primary data-[selected]:text-ds-text-primary data-[state=active]:text-ds-text-primary focus-visible:shadow-ds-focus @max-[380px]/settings:px-0'
 const SETTINGS_TABS_INDICATOR_CLASS = 't-tabs-pill'
 const SETTINGS_TAB_PANELS_CLASS = 'settings-tab-panels grid min-w-0 items-start'
 const SETTINGS_TAB_PANEL_CLASS = 'grid min-w-0 gap-4 outline-none [grid-area:1/1]'
-const SETTINGS_NESTED_SURFACE_CLASS = 'border-[rgba(245,245,247,0.105)] rounded-ds-sm bg-[rgba(245,245,247,0.045)] shadow-none'
+const SETTINGS_NESTED_SURFACE_CLASS = 'border-0 rounded-ds-sm bg-[rgba(245,245,247,0.045)] shadow-none'
 const SETTINGS_SELECTED_SURFACE_CLASS = 'border-[rgba(245,245,247,0.24)] bg-[rgba(245,245,247,0.14)] text-ds-text-primary shadow-none'
 const SETTINGS_SEGMENTED_BUTTON_CLASS = 'min-h-7 min-w-20 rounded-ds-sm border border-transparent bg-transparent px-2 text-xs font-semibold text-ds-text-secondary shadow-none data-[pressed]:border-ds-border-hover data-[pressed]:bg-ds-selected data-[pressed]:text-ds-text-primary data-[pressed]:shadow-none'
 const SETTINGS_PSEUDO_SHADOW_RESET_CLASS = '[&::before]:shadow-none [&::after]:shadow-none'
 const SETTINGS_SECTION_CLASS = 'grid min-w-0 gap-2.5'
 const SETTINGS_SECTION_TITLE_CLASS = 'm-0 text-sm font-semibold leading-snug text-ds-text-primary'
 const SETTINGS_LIST_CLASS = 'grid gap-2'
-const SETTINGS_INPUT_SURFACE_CLASS = 'border-[rgba(245,245,247,0.12)] rounded-ds-sm bg-[rgba(245,245,247,0.055)] text-ds-text-primary shadow-none'
+const SETTINGS_INPUT_SURFACE_CLASS = 'border-ds-border rounded-ds-sm bg-[rgba(245,245,247,0.055)] text-ds-text-primary shadow-none'
 const SETTINGS_INPUT_INTERACTION_CLASS = 'outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary hover:shadow-none hover:outline-none focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-none focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50'
 const SETTINGS_CONTROL_CLASS = cx(SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS)
 const SETTINGS_TEXT_INPUT_FOCUS_CLASS = 'focus:border-ds-focus focus:bg-ds-hover focus:outline-none focus:shadow-ds-focus focus-visible:border-ds-focus focus-visible:bg-ds-hover focus-visible:outline-none focus-visible:shadow-ds-focus'
 const SETTINGS_TEXT_INPUT_CLASS = cx('h-9 min-h-9 w-full min-w-0 px-3 text-xs font-semibold', SETTINGS_INPUT_SURFACE_CLASS, SETTINGS_INPUT_INTERACTION_CLASS, SETTINGS_TEXT_INPUT_FOCUS_CLASS)
-const SETTINGS_ROW_CLASS = 'grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-sm border border-[rgba(245,245,247,0.105)] bg-[rgba(245,245,247,0.045)] px-3 py-2.5 max-[700px]:grid-cols-1 max-[700px]:justify-items-stretch'
+const SETTINGS_ROW_CLASS = 'grid min-h-12 min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-ds-sm border-0 bg-[rgba(245,245,247,0.045)] px-3 py-2.5 @max-[440px]/settings:grid-cols-1 @max-[440px]/settings:justify-items-stretch'
 const SETTINGS_ROW_DISABLED_CLASS = 'opacity-60'
+// Switch rows keep label and control side by side at every drawer width.
+const SETTINGS_SWITCH_ROW_CLASS = 'settings-switch-row @max-[440px]/settings:grid-cols-[minmax(0,1fr)_auto]'
 const SETTINGS_ROW_SLIDER_CLASS = 'grid-cols-[minmax(0,1fr)_minmax(150px,42%)]'
 const SETTINGS_LABEL_STACK_CLASS = 'grid min-w-0 gap-1'
 const SETTINGS_LABEL_CLASS = 'min-w-0 text-sm font-semibold leading-snug text-ds-text-primary'
@@ -150,19 +154,19 @@ const SETTINGS_VALUE_CLASS = 'text-ds-text-secondary tabular-nums'
 const SETTINGS_SWITCH_WRAP_CLASS = OPTION_SWITCH_WRAP_CLASS
 const SETTINGS_SWITCH_CLASS = OPTION_SWITCH_CONTROL_CLASS
 const SETTINGS_SWITCH_THUMB_CLASS = OPTION_SWITCH_THUMB_CLASS
-const SETTINGS_SLIDER_CLASS = 'min-w-36 max-[700px]:w-full'
-const SETTINGS_SELECT_TRIGGER_CLASS = 'min-h-9 min-w-36 max-w-56 justify-between text-xs font-semibold max-[700px]:w-full max-[700px]:max-w-none'
+const SETTINGS_SLIDER_CLASS = 'min-w-36 @max-[440px]/settings:w-full'
+const SETTINGS_SELECT_TRIGGER_CLASS = 'min-h-9 min-w-36 max-w-56 justify-between text-xs font-semibold @max-[440px]/settings:w-full @max-[440px]/settings:max-w-none'
 const SETTINGS_SELECT_VALUE_CLASS = 'min-w-0 overflow-hidden text-ellipsis whitespace-nowrap'
 const SETTINGS_SELECT_POPUP_CLASS = 'max-h-80'
 const SETTINGS_SELECT_POSITIONER_CLASS = 'z-[10040]'
-const SETTINGS_FIELD_CLASS = 'block min-w-0 max-[700px]:w-full'
+const SETTINGS_FIELD_CLASS = 'block min-w-0 @max-[440px]/settings:w-full'
 const SETTINGS_NOTE_CLASS = 'm-0 text-xs leading-relaxed text-ds-text-secondary'
 const SETTINGS_WIDE_BUTTON_CLASS = 'min-h-9 w-full justify-between px-3 text-xs font-semibold'
-const SETTINGS_PICKER_BUTTON_CLASS = 'min-h-9 min-w-32 max-w-56 justify-center overflow-hidden px-3 text-xs font-semibold text-ellipsis whitespace-nowrap max-[700px]:w-full max-[700px]:max-w-none'
+const SETTINGS_PICKER_BUTTON_CLASS = 'min-h-9 min-w-32 max-w-56 justify-center overflow-hidden px-3 text-xs font-semibold text-ellipsis whitespace-nowrap @max-[440px]/settings:w-full @max-[440px]/settings:max-w-none'
 const SETTINGS_FILE_INPUT_CLASS = 'sr-only'
 const SETTINGS_STATUS_CLASS = 'block min-h-8 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2 text-xs leading-snug text-ds-text-secondary data-[tone=error]:border-ds-danger/60 data-[tone=error]:text-ds-danger-text data-[tone=success]:text-ds-text-primary'
 const FOLDER_STACK_CLASS = 'grid min-w-0 gap-2'
-const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 px-2.5 py-2'
+const FOLDER_SUMMARY_CLASS = 'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-ds-sm border-0 bg-ds-surface-2 px-2.5 py-2'
 const FOLDER_SELECTED_COPY_CLASS = 'grid min-w-0 gap-0.5 text-xs text-ds-text-secondary'
 const FOLDER_REMOVE_BUTTON_CLASS = 'curator-compact-hit-target group/folder-remove inline-flex size-8 min-h-8 min-w-8 items-center justify-center rounded-ds-sm border border-[rgba(245,245,247,0.07)] bg-[rgba(245,245,247,0.045)] p-0 text-[rgba(245,245,247,0.9)] outline-none transition-[background-color,border-color,color,transform,scale,opacity] duration-ds-fast ease-ds-standard hover:border-[rgba(255,138,130,0.24)] hover:bg-[rgba(255,138,130,0.11)] hover:text-[rgba(255,210,205,0.95)] focus-visible:border-[rgba(255,138,130,0.28)] focus-visible:bg-[rgba(255,138,130,0.12)] focus-visible:text-[rgba(255,210,205,0.95)] focus-visible:shadow-ds-focus active:scale-[var(--ds-press-scale)] motion-reduce:transition-colors motion-reduce:duration-[80ms] motion-reduce:active:scale-100 [&_svg]:size-[15px] [&_svg]:stroke-[1.9]'
 const FOLDER_EMPTY_CLASS = SETTINGS_NOTE_CLASS
@@ -182,27 +186,23 @@ const BACKGROUND_CREDIT_ICON_CLASS = 'shrink-0 text-ds-text-disabled transition-
 const SETTING_COLOR_CLASS = 'inline-grid min-h-9 min-w-40 grid-cols-[minmax(0,1fr)_34px] items-center gap-2 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 pl-2.5'
 const SETTING_COLOR_VALUE_CLASS = 'text-xs font-semibold text-ds-text-primary'
 const SETTING_COLOR_INPUT_CLASS = 'h-7 min-h-7 w-8 min-w-8 overflow-hidden rounded-ds-sm border-0 bg-transparent p-0'
-const ICON_PREVIEW_PANEL_CLASS = 'grid gap-2.5 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-3'
+const ICON_PREVIEW_PANEL_CLASS = 'grid gap-2.5 rounded-ds-sm border-0 bg-ds-surface-2 p-3'
 const ICON_PREVIEW_HEADER_CLASS = 'grid gap-1 text-xs font-semibold text-ds-text-primary'
 const ICON_PREVIEW_SUMMARY_CLASS = 'min-w-0 text-xs font-medium leading-relaxed text-ds-text-secondary'
-const ICON_LIVE_PREVIEW_CLASS = 'm-0 grid min-h-36 justify-items-center overflow-hidden rounded-ds-sm border border-ds-border bg-ds-app px-2.5 py-4'
-const ICON_LIVE_PREVIEW_GRID_CLASS = 'grid max-w-full w-[min(var(--preview-page-width),var(--preview-grid-max-width))] content-center justify-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
-const ICON_LIVE_PREVIEW_TILE_CLASS = 'flex min-w-0 items-center gap-1.5 overflow-hidden rounded-ds-sm border border-ds-border bg-ds-surface-1 px-1.5 py-2'
-const ICON_LIVE_PREVIEW_SHELL_CLASS = 'grid shrink-0 place-items-center rounded-ds-sm border border-ds-border bg-ds-surface-2 [height:var(--preview-shell-size)] [width:var(--preview-shell-size)]'
-const ICON_LIVE_PREVIEW_MARK_CLASS = 'text-xs font-semibold text-ds-text-primary'
-const ICON_LIVE_PREVIEW_TITLE_CLASS = 'min-w-0 overflow-hidden break-all text-left text-xs leading-tight text-ds-text-secondary [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:var(--preview-title-lines)]'
-const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2 max-[700px]:grid-cols-1'
+const ICON_LIVE_PREVIEW_CLASS = 'm-0 overflow-x-auto rounded-ds-sm border border-ds-border bg-ds-app px-2.5 py-4 outline-none focus-visible:shadow-ds-focus [scrollbar-width:thin] [scrollbar-color:var(--ds-border-hover)_transparent]'
+const ICON_LIVE_PREVIEW_GRID_CLASS = 'mx-auto grid w-[var(--preview-grid-max-width)] content-center [column-gap:var(--preview-column-gap)] [row-gap:var(--preview-row-gap)]'
+const ICON_PRESET_ROW_CLASS = 'grid grid-cols-3 gap-2 @max-[400px]/settings:grid-cols-1'
 const ICON_PRESET_CARD_CLASS = 'grid min-h-32 min-w-0 content-start gap-1.5 rounded-ds-sm border border-ds-border bg-ds-surface-1 p-2.5 text-left text-ds-text-secondary outline-none transition-colors duration-ds-fast ease-ds-standard hover:border-ds-border-hover hover:bg-ds-hover hover:text-ds-text-primary focus-visible:border-ds-border-hover focus-visible:bg-ds-hover focus-visible:text-ds-text-primary focus-visible:shadow-ds-focus'
 const ICON_PRESET_PREVIEW_CLASS = 'grid min-h-11 content-center rounded-ds-sm bg-ds-app'
 const ICON_PRESET_PREVIEW_CELL_CLASS = 'block rounded-ds-sm bg-ds-surface-2'
 const ICON_PRESET_NAME_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs font-semibold text-ds-text-primary'
 const ICON_PRESET_DETAIL_CLASS = 'min-w-0 overflow-hidden text-ellipsis text-xs leading-snug text-ds-text-secondary'
-const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 max-[700px]:w-full'
+const SETTINGS_SEGMENTED_CLASS = 'inline-flex min-h-9 items-center gap-1 rounded-ds-sm border border-ds-border bg-ds-surface-2 p-1 @max-[440px]/settings:w-full'
 const ICON_CONTROL_ROW_CLASS = 'grid-cols-[minmax(0,1fr)_auto]'
 const ICON_ADVANCED_PANEL_CLASS = 'grid'
 const ICON_RESET_DEFAULTS_CLASS = 'min-h-9 w-full justify-center px-3 text-xs font-semibold'
 const SEARCH_ENGINE_ROW_CLASS = 'items-start'
-const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-52 grid-cols-3 gap-1.5 max-[700px]:grid-cols-1'
+const SEARCH_ENGINE_GRID_CLASS = 'grid min-w-0 grid-cols-3 gap-1.5'
 const SEARCH_ENGINE_TOGGLE_CLASS = 'search-engine-toggle relative inline-flex min-h-8 min-w-0 items-center justify-center px-2 text-xs font-semibold'
 const SEARCH_ENGINE_HIDDEN_SWITCH_CLASS = 'pointer-events-none absolute h-px w-px opacity-0'
 const SETTINGS_SCROLLBAR_MIN_THUMB_HEIGHT = 40
@@ -265,7 +265,7 @@ function SwitchRow({
 }: {
   id: string
   title: string
-  description: string
+  description?: string
   checked?: boolean
   defaultChecked?: boolean
   disabled?: boolean
@@ -277,13 +277,13 @@ function SwitchRow({
   const descriptionId = `${id}-description`
 
   return (
-    <div className={settingRowClassName('settings-switch-row', disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
+    <div className={settingRowClassName(SETTINGS_SWITCH_ROW_CLASS, disabled ? SETTINGS_ROW_DISABLED_CLASS : undefined)} hidden={hidden}>
       <SettingLabelStack title={title} titleId={labelId} description={description} descriptionId={descriptionId} />
       <span className={SETTINGS_SWITCH_WRAP_CLASS}>
         <SwitchControl
           id={id}
           aria-labelledby={labelId}
-          aria-describedby={descriptionId}
+          aria-describedby={description ? descriptionId : undefined}
           className={SETTINGS_SWITCH_CLASS}
           checked={checked}
           defaultChecked={defaultChecked}
@@ -344,7 +344,7 @@ function SliderRow({
         </span>
         {description ? <small className={SETTINGS_DESCRIPTION_CLASS}>{description}</small> : null}
       </span>
-      <span className="grid min-w-36 gap-1.5 max-[700px]:w-full">
+      <span className="grid min-w-36 gap-1.5 @max-[440px]/settings:w-full">
         <SliderControl
           id={id}
           ariaLabel={ariaLabel}
@@ -426,14 +426,13 @@ export interface SettingsDrawerProps {
   onOpenChange: (open: boolean, event?: Event) => void
 }
 
-function SettingsDrawerHeader() {
+function SettingsDrawerHeader({ closeButtonRef }: { closeButtonRef: Ref<HTMLButtonElement> }) {
   const view = useNewtabSettingsDrawerView()
 
   return (
     <header className={SETTINGS_HEADER_CLASS}>
-      <p className={SETTINGS_KICKER_CLASS}>新标签页</p>
       <h1 id="newtab-settings-title" className={SETTINGS_TITLE_CLASS}>新标签页设置</h1>
-      <p id="newtab-settings-summary" className={SETTINGS_SUMMARY_CLASS}>按需调整，效果实时呈现。</p>
+      <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
       <output
         id="settings-save-status"
         className={SETTINGS_SAVE_STATUS_CLASS}
@@ -729,7 +728,6 @@ const AdvancedSettingsSection = memo(function AdvancedSettingsSection({
         <SwitchRow
           id="general-open-bookmarks-new-tab"
           title="新标签页打开"
-          description="点击书签图标在新标签页打开目标链接，保留当前 Curator 页面。"
           checked={folderSource.general.openBookmarksInNewTab}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('openBookmarksInNewTab', checked)
@@ -767,7 +765,7 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
       <h2 id="settings-folder-title" className={SETTINGS_SECTION_TITLE_CLASS}>书签来源</h2>
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <div className={FOLDER_STACK_CLASS}>
-          <div className={FOLDER_SUMMARY_CLASS}>
+          <div className="flex items-center justify-between gap-2.5 px-0.5 py-1">
             <span className={SETTINGS_LABEL_CLASS}>已选文件夹</span>
             <strong id="folder-selected-count" className="text-sm font-semibold text-ds-text-primary tabular-nums">{folderSource.selectedCount}</strong>
           </div>
@@ -862,14 +860,12 @@ const SourceSettingsSection = memo(function SourceSettingsSection({
         <SwitchRow
           id="folder-hide-names"
           title="隐藏文件夹名"
-          description="不显示文件夹小标题，直接呈现图标网格，适合极简或单目录场景。"
           checked={folderSource.hideFolderNames}
           onCheckedChange={dispatchNewtabFolderHideNamesToggle}
         />
         <SwitchRow
           id="folder-show-source-navigation"
           title="显示来源导航"
-          description="在顶部显示目录快速跳转条，多目录切换更便捷，不影响拖拽排序。"
           checked={folderSource.general.showSourceNavigation}
           onCheckedChange={(checked) => {
             dispatchNewtabGeneralSettingToggle('showSourceNavigation', checked)
@@ -1010,8 +1006,8 @@ function ModuleSettingRow({
   row: NewtabModuleSettingRowView
 }) {
   return (
-    <div className={settingRowClassName()} data-module-row={row.key}>
-      <SettingLabelStack title={row.label} description={row.description} />
+    <div className={settingRowClassName(SETTINGS_SWITCH_ROW_CLASS)} data-module-row={row.key}>
+      <SettingLabelStack title={row.label} />
       <span className={MODULE_SWITCH_LABEL_CLASS}>
         <SwitchControl
           aria-label={`${row.enabled ? '隐藏' : '显示'}模块：${row.label}`}
@@ -1068,7 +1064,6 @@ const BackgroundSettingsSection = memo(function BackgroundSettingsSection({
         <SettingsSelect
           id="background-type"
           label="背景类型"
-          description="可选择精选图库、纯色、本地图片/视频或远程图片链接。"
           ariaLabel="背景类型"
           onValueChange={(value) => {
             if (value) dispatchNewtabBackgroundSettingFieldChange('type', value)
@@ -1299,13 +1294,12 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
   return (
     <section ref={sectionRef} className={SETTINGS_SECTION_CLASS} data-settings-group="glass" aria-labelledby="settings-glass-title">
       <h2 id="settings-glass-title" className={SETTINGS_SECTION_TITLE_CLASS}>液态玻璃</h2>
-      <p className={SETTINGS_NOTE_CLASS}>统一调整书签卡片、时间、搜索栏与设置面板。</p>
       <div className="mb-3 grid grid-cols-3 gap-2" role="group" aria-label="玻璃材质预设">
         {GLASS_PRESETS.map(preset => <Button key={preset.id} size="sm" variant={presetId === preset.id ? 'primary' : 'secondary'}
           disabled={!view.ready} aria-pressed={presetId === preset.id} title={preset.description}
           onClick={() => applyNewtabGlassPreset({ ...preset.settings })}>{preset.label}</Button>)}
       </div>
-      <p className={SETTINGS_NOTE_CLASS}>{presetId === 'custom' ? '当前使用自定义材质。' : '选择预设后立即预览并保存。'} 可在下方精细调整。</p>
+      {presetId === 'custom' ? <p className={SETTINGS_NOTE_CLASS}>当前使用自定义材质。</p> : null}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Button size="sm" variant="secondary" disabled={!view.ready || !view.canUndo} onClick={undoNewtabGlassEditSession}>撤销本次调整</Button>
         <Button size="sm" variant="secondary" onClick={resetNewtabGlassSettings} disabled={!view.ready}>恢复玻璃默认值</Button>
@@ -1329,7 +1323,6 @@ const GlassSettingsSection = memo(function GlassSettingsSection({
           <div className="newtab-glass-preview-scene" aria-label="玻璃效果实时预览">
             <div className="newtab-glass-preview">
               <strong className="block text-sm font-semibold">实时预览</strong>
-              <p className="mb-0 mt-2 text-xs leading-relaxed">透过玻璃看纹理，沿边缘看折射。</p>
             </div>
           </div>
           {GLASS_CONTROLS.map(control => {
@@ -1356,14 +1349,18 @@ const IconSettingSliderRow = memo(function IconSettingSliderRow({
 
 const IconSettingsSection = memo(function IconSettingsSection() {
   const iconPreview = useNewtabIconPreviewView()
+  const layout = useBookmarkPreviewLayout()
+  const tileWidth = layout?.tileWidth ?? iconPreview.previewTileWidth
+  const columnGap = layout?.columnGap ?? iconPreview.previewColumnGap
+  const previewColumns = Math.min(layout?.columns ?? iconPreview.columns, iconPreview.showTitles ? 2 : 4)
+  const previewGridWidth = previewColumns * tileWidth + (previewColumns - 1) * columnGap
   const previewStyle = {
-    '--preview-page-width': `${iconPreview.pageWidth}%`,
-    '--preview-column-gap': `${iconPreview.previewColumnGap}px`,
-    '--preview-grid-max-width': `${iconPreview.previewGridMaxWidth}px`,
-    '--preview-row-gap': `${iconPreview.previewRowGap}px`,
-    '--preview-shell-size': `${iconPreview.previewShellSize}px`,
-    '--preview-tile-width': `${iconPreview.previewTileWidth}px`,
-    '--preview-title-lines': String(iconPreview.titleLines)
+    '--preview-column-gap': `${columnGap}px`,
+    '--preview-grid-max-width': `${previewGridWidth}px`,
+    '--preview-row-gap': `${layout?.rowGap ?? iconPreview.previewRowGap}px`,
+    '--preview-tile-width': `${tileWidth}px`,
+    '--icon-shell-size': `${iconPreview.iconShellSize}px`,
+    '--icon-title-lines': String(iconPreview.titleLines)
   } as React.CSSProperties
 
   return (
@@ -1372,9 +1369,9 @@ const IconSettingsSection = memo(function IconSettingsSection() {
       <Surface className={SETTINGS_LIST_CLASS} variant="plain">
         <div className={ICON_PREVIEW_PANEL_CLASS}>
           <div className={ICON_PREVIEW_HEADER_CLASS}>
-            <span>实时预览</span>
+            <span>{layout ? '实际尺寸预览' : '卡片预览'}</span>
             <span id="icon-live-preview-summary" className={ICON_PREVIEW_SUMMARY_CLASS}>
-              {iconPreview.summary}
+              {iconPreview.layoutMode === 'fixed' ? `${layout?.columns ?? iconPreview.fixedColumns} 列` : '自动适配'} · {Math.round(tileWidth)}px 卡片 · {iconPreview.iconShellSize}px 图标区 · {iconPreview.showTitles ? `${iconPreview.titleLines} 行标题` : '图标模式'}
             </span>
           </div>
           <figure
@@ -1382,18 +1379,25 @@ const IconSettingsSection = memo(function IconSettingsSection() {
             className={ICON_LIVE_PREVIEW_CLASS}
             aria-label="书签卡片布局预览"
             data-icon-layout-mode={iconPreview.layoutMode}
+            data-squircle="off"
+            tabIndex={0}
             style={previewStyle}
           >
             <div
-              className={ICON_LIVE_PREVIEW_GRID_CLASS}
-              style={{ gridTemplateColumns: `repeat(${iconPreview.columns}, minmax(0, 1fr))` }}
+              className={cx(ICON_LIVE_PREVIEW_GRID_CLASS, 'max-w-full justify-center')}
+              style={{
+                minWidth: tileWidth,
+                gridTemplateColumns: 'repeat(auto-fit, var(--preview-tile-width))'
+              }}
             >
               {iconPreview.tiles.map((item) => (
-                <span className={cx(ICON_LIVE_PREVIEW_TILE_CLASS, !iconPreview.showTitles && 'justify-center !px-1')} key={item.id}>
-                  <span className={ICON_LIVE_PREVIEW_SHELL_CLASS}>
-                    <span className={ICON_LIVE_PREVIEW_MARK_CLASS}>{item.mark}</span>
-                  </span>
-                  {iconPreview.showTitles ? <span className={ICON_LIVE_PREVIEW_TITLE_CLASS}>{item.title}</span> : null}
+                <span className={getBookmarkTileClass({ showTitles: iconPreview.showTitles, preview: true })} key={item.id}>
+                  <BookmarkIconShell
+                    customIcon={false}
+                    fallbackLabel={item.mark}
+                    favicon={{ src: item.iconSource, pageUrl: '', fetchpriority: 'low', loading: 'eager' }}
+                  />
+                  {iconPreview.showTitles ? <span className={getBookmarkTitleClass()} title={item.title}>{item.title}</span> : null}
                 </span>
               ))}
             </div>
@@ -1438,7 +1442,7 @@ const IconSettingsSection = memo(function IconSettingsSection() {
           ))}
         </div>
         <div className={settingRowClassName(ICON_CONTROL_ROW_CLASS)}>
-          <SettingLabelStack title="布局方式" description="「自动适配」随屏幕自动排列；「固定列数」始终保持指定网格列宽。" />
+          <SettingLabelStack title="布局方式" />
           <ToggleGroup
             id="icon-layout-control"
             slidingIndicator
@@ -1460,14 +1464,12 @@ const IconSettingsSection = memo(function IconSettingsSection() {
         <IconSettingSwitchRow
           id="icon-vertical-center"
           title="垂直居中"
-          description="书签较少时自动将内容在屏幕垂直方向居中对齐，避免顶部偏坠。"
           checked={iconPreview.verticalCenter}
           onCheckedChange={dispatchNewtabIconVerticalCenterToggle}
         />
         <IconSettingSwitchRow
           id="icon-show-titles"
           title="显示标题"
-          description="关闭后卡片仅展示网站图标，文字隐藏，布局更紧凑克制。"
           checked={iconPreview.showTitles}
           onCheckedChange={dispatchNewtabIconShowTitlesToggle}
         />
@@ -1542,14 +1544,12 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SwitchRow
           id="time-enabled"
           title="显示时间模块"
-          description="在搜索栏上方展示时钟与日期卡片；关闭后收起时钟并自适应间距。"
           checked={timeSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('enabled', checked)}
         />
         <SettingsSelect
           id="time-display-mode"
           label="显示内容"
-          description="可自由切换「时间和日期」、「仅时间」或「仅日期」。"
           ariaLabel="时间显示内容"
           disabled={timeSettings.settingsDisabled}
           onValueChange={(value) => {
@@ -1562,7 +1562,6 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SettingsSelect
           id="time-time-zone"
           label="时区"
-          description="自动跟随系统，也可固定为常用城市。"
           ariaLabel="时区"
           disabled={timeSettings.settingsDisabled}
           onValueChange={(value) => {
@@ -1588,7 +1587,6 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SwitchRow
           id="time-show-seconds"
           title="显示秒数"
-          description="开启后每秒刷新动态时间；关闭后按分钟跳变以节省系统能耗。"
           checked={timeSettings.showSeconds}
           disabled={timeSettings.switchesDisabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('showSeconds', checked)}
@@ -1596,7 +1594,6 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SwitchRow
           id="time-hour12"
           title="12 小时制"
-          description="开启后显示 12 小时制与 AM/PM 标记，关闭则使用 24 小时制。"
           checked={timeSettings.hour12}
           disabled={timeSettings.switchesDisabled}
           onCheckedChange={(checked) => dispatchNewtabTimeSettingToggle('hour12', checked)}
@@ -1604,7 +1601,6 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
         <SettingsSelect
           id="time-density"
           label="布局密度"
-          description="切换时间模块的排版结构，不改变字号。"
           ariaLabel="时间布局密度"
           disabled={timeSettings.settingsDisabled}
           onValueChange={(value) => {
@@ -1623,7 +1619,6 @@ const TimeSettingsSection = memo(function TimeSettingsSection({ panelElement }: 
           max="140"
           defaultValue="100"
           ariaLabel="时间字号"
-          description="只影响时间和日期，不改变搜索和书签区域。"
           disabled={timeSettings.settingsDisabled}
           onValueChange={(value) => dispatchNewtabTimeSettingFieldChange('clockSize', value)}
           sliderValue={timeSettings.clockSize}
@@ -1663,7 +1658,6 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
         <SwitchRow
           id="search-enabled"
           title="启用"
-          description="在新标签页居中呈现搜索栏，支持快速检索书签及发起网页搜索。"
           controlRef={firstControlRef}
           checked={searchSettings.enabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('enabled', checked)}
@@ -1679,15 +1673,13 @@ const SearchSettingsSection = memo(function SearchSettingsSection({
         <SwitchRow
           id="search-open-new-tab"
           title="在新标签页打开链接"
-          description="搜索结果在新的浏览器标签页中开启，保留当前新标签页原位。"
           checked={searchSettings.openInNewTab}
           disabled={searchSettings.openInNewTabDisabled}
           onCheckedChange={(checked) => dispatchNewtabSearchSettingToggle('openInNewTab', checked)}
         />
         <SettingsSelect
           id="search-engine"
-          label="搜索引擎"
-          description="在搜索栏输入普通文字或关键词时默认使用的搜索引擎。"
+          label="默认引擎"
           ariaLabel="默认搜索引擎"
           disabled={searchSettings.engineControlsDisabled}
           onValueChange={(value) => {
@@ -1961,64 +1953,65 @@ function SettingsDrawer({ open, activeGroup, onActiveGroupChange, onOpenChange }
         className={cx(SETTINGS_DRAWER_PANEL_CLASS, SETTINGS_DRAWER_SURFACE_CLASS)}
         ref={setPanelElement}
         aria-labelledby="newtab-settings-title"
-        aria-describedby="newtab-settings-summary"
         initialFocus={false}
         finalFocus={resolveFinalFocus}
         unanimated
       >
-        <SettingsDrawerClose buttonRef={closeButtonRef} className={SETTINGS_CONTROL_CLASS} />
-
-        <div className={SETTINGS_DRAWER_SCROLL_CLASS} ref={scrollHostRef}>
-          <TabsRoot
-            className={SETTINGS_ROOT_CLASS}
-            value={activeGroup}
-            onValueChange={handleActiveGroupChange}
-          >
-            <SettingsDrawerHeader />
+        <TabsRoot
+          className={SETTINGS_ROOT_CLASS}
+          value={activeGroup}
+          onValueChange={handleActiveGroupChange}
+        >
+          <div className={SETTINGS_CHROME_CLASS}>
+            <SettingsDrawerHeader closeButtonRef={closeButtonRef} />
             <SettingsDrawerTabs />
-            <div className={SETTINGS_TAB_PANELS_CLASS}>
-              <SettingsTabPanel value="advanced" active={activeGroup === 'advanced'} visited={visitedGroups.has('advanced')}>
-                <AdvancedSettingsSection
-                  firstControlRef={setAdvancedFirstControlRef}
-                  sectionRef={setAdvancedSectionRef}
-                />
-              </SettingsTabPanel>
-              <SettingsTabPanel value="source" active={activeGroup === 'source'} visited={visitedGroups.has('source')}>
-                <SourceSettingsSection
-                  folderCandidateSearchRef={folderCandidateSearchRef}
-                  sectionRef={setSourceSectionRef}
-                />
-              </SettingsTabPanel>
-              <SettingsTabPanel value="appearance" active={activeGroup === 'appearance'} visited={visitedGroups.has('appearance')}>
-                <BackgroundSettingsSection
-                  firstControlRef={setAppearanceFirstControlRef}
-                  panelElement={panelElement}
-                  sectionRef={setAppearanceSectionRef}
-                />
-                <IconSettingsSection />
-                <TimeSettingsSection panelElement={panelElement} />
-              </SettingsTabPanel>
-              <SettingsTabPanel value="glass" active={activeGroup === 'glass'} visited={visitedGroups.has('glass')}>
-                <GlassSettingsSection
-                  firstControlRef={setGlassFirstControlRef}
-                  sectionRef={setGlassSectionRef}
-                />
-              </SettingsTabPanel>
-              <SettingsTabPanel value="search" active={activeGroup === 'search'} visited={visitedGroups.has('search')}>
-                <SearchSettingsSection
-                  firstControlRef={setSearchFirstControlRef}
-                  panelElement={panelElement}
-                  sectionRef={setSearchSectionRef}
-                />
-              </SettingsTabPanel>
+          </div>
+          <div className="relative min-h-0 overflow-hidden">
+            <div className={SETTINGS_DRAWER_SCROLL_CLASS} ref={scrollHostRef}>
+              <div className={SETTINGS_TAB_PANELS_CLASS}>
+                <SettingsTabPanel value="advanced" active={activeGroup === 'advanced'} visited={visitedGroups.has('advanced')}>
+                  <AdvancedSettingsSection
+                    firstControlRef={setAdvancedFirstControlRef}
+                    sectionRef={setAdvancedSectionRef}
+                  />
+                </SettingsTabPanel>
+                <SettingsTabPanel value="source" active={activeGroup === 'source'} visited={visitedGroups.has('source')}>
+                  <SourceSettingsSection
+                    folderCandidateSearchRef={folderCandidateSearchRef}
+                    sectionRef={setSourceSectionRef}
+                  />
+                </SettingsTabPanel>
+                <SettingsTabPanel value="appearance" active={activeGroup === 'appearance'} visited={visitedGroups.has('appearance')}>
+                  <BackgroundSettingsSection
+                    firstControlRef={setAppearanceFirstControlRef}
+                    panelElement={panelElement}
+                    sectionRef={setAppearanceSectionRef}
+                  />
+                  <IconSettingsSection />
+                  <TimeSettingsSection panelElement={panelElement} />
+                </SettingsTabPanel>
+                <SettingsTabPanel value="glass" active={activeGroup === 'glass'} visited={visitedGroups.has('glass')}>
+                  <GlassSettingsSection
+                    firstControlRef={setGlassFirstControlRef}
+                    sectionRef={setGlassSectionRef}
+                  />
+                </SettingsTabPanel>
+                <SettingsTabPanel value="search" active={activeGroup === 'search'} visited={visitedGroups.has('search')}>
+                  <SearchSettingsSection
+                    firstControlRef={setSearchFirstControlRef}
+                    panelElement={panelElement}
+                    sectionRef={setSearchSectionRef}
+                  />
+                </SettingsTabPanel>
+              </div>
             </div>
-          </TabsRoot>
-        </div>
-        <SettingsDrawerScrollBar
-          activeGroup={activeGroup}
-          open={open}
-          scrollHostRef={scrollHostRef}
-        />
+            <SettingsDrawerScrollBar
+              activeGroup={activeGroup}
+              open={open}
+              scrollHostRef={scrollHostRef}
+            />
+          </div>
+        </TabsRoot>
       </DrawerPanel>
     </DrawerOverlay>
   )

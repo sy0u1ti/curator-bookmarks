@@ -14,19 +14,21 @@ import type { PopupFolderPickerState, PopupFolderTreeOptionViewModel } from './P
 
 type PopupFolderPickerMode = PopupFolderPickerState['mode']
 const PICKER_ROW_HEIGHT = 34
-const PICKER_MIN_WINDOW = 32
-const PICKER_OVERSCAN = 8
+const PICKER_OVERSCAN = 2
 const PICKER_VIRTUAL_THRESHOLD = 48
+const PICKER_WINDOW_BUDGET = 8
 
 export const PopupFolderPickerHost = memo(function PopupFolderPickerHost({
   className,
   id,
   mode,
+  onFolderSelectStart,
   ...props
 }: {
   className: string
   id: string
   mode: PopupFolderPickerMode
+  onFolderSelectStart?: (folderId: string) => void
   'data-squircle-subtree'?: 'off'
 }) {
   const state = usePopupFolderPickerState(mode)
@@ -35,7 +37,7 @@ export const PopupFolderPickerHost = memo(function PopupFolderPickerHost({
   const options = state.treeOptions || []
   const virtual = options.length > PICKER_VIRTUAL_THRESHOLD
   const [rowHeight, setRowHeight] = useState(PICKER_ROW_HEIGHT)
-  const [rowWindow, setRowWindow] = useState({ start: 0, count: PICKER_MIN_WINDOW })
+  const [rowWindow, setRowWindow] = useState({ start: 0, count: PICKER_WINDOW_BUDGET })
   const start = virtual ? Math.min(rowWindow.start, Math.max(0, options.length - rowWindow.count)) : 0
   const end = virtual ? Math.min(options.length, start + rowWindow.count) : options.length
   const selectSelector = getFolderPickerSelectSelector(mode)
@@ -43,9 +45,13 @@ export const PopupFolderPickerHost = memo(function PopupFolderPickerHost({
   const updateWindow = useCallback(() => {
     const container = containerRef.current
     if (!container || !virtual) return
-    // The minimum window covers the entire disclosure animation without
-    // mounting another row on each intermediate height.
-    const count = Math.max(PICKER_MIN_WINDOW, Math.ceil(container.clientHeight / rowHeight) + PICKER_OVERSCAN * 2)
+    // Keep the mounted rows independent of the disclosure's animated height.
+    // Reading a viewport that is clipped by the accordion would otherwise
+    // remount rows at intermediate heights.
+    const count = Math.min(
+      options.length,
+      Math.max(PICKER_WINDOW_BUDGET, Math.ceil(container.clientHeight / rowHeight) + PICKER_OVERSCAN * 2)
+    )
     const nextStart = Math.min(
       Math.max(0, options.length - count),
       Math.max(0, Math.floor(container.scrollTop / rowHeight) - PICKER_OVERSCAN)
@@ -107,8 +113,9 @@ export const PopupFolderPickerHost = memo(function PopupFolderPickerHost({
   }, [start, end, options, selectSelector])
 
   const selectFolder = useCallback((folderId: string) => {
+    onFolderSelectStart?.(folderId)
     dispatchPopupFolderPickerAction({ action: 'select', folderId, mode })
-  }, [mode])
+  }, [mode, onFolderSelectStart])
   const toggleFolder = useCallback((folderId: string) => {
     dispatchPopupFolderPickerAction({ action: 'toggle', folderId, mode })
   }, [mode])

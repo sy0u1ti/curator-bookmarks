@@ -9,10 +9,10 @@ import {
   normalizeSheenProgressPercent
 } from '../../ui/base/sheen-progress'
 import { useAvailabilityProgress } from './availability-overview-store.js'
-import { OPTION_VALUE_CLASS } from './option-layout-classes.js'
+import { OPTION_SURFACE_CLASS, OPTION_VALUE_CLASS } from './option-layout-classes.js'
 
 const AVAILABILITY_DECISION_PANEL_CLASS =
-  'mt-5 overflow-hidden rounded-ds-md border border-ds-border-subtle bg-ds-surface-1 p-[20px_22px] shadow-none max-[760px]:p-4'
+  `mt-5 ${OPTION_SURFACE_CLASS} p-[20px_22px] max-[760px]:p-4`
 const AVAILABILITY_DECISION_HEADER_CLASS =
   'flex min-w-0 items-start justify-between gap-3.5 max-[760px]:flex-col'
 const AVAILABILITY_DECISION_HEADER_COPY_CLASS = 'min-w-0'
@@ -103,9 +103,6 @@ export function AvailabilityDecisionPanel({ children }: { children: ReactNode })
           <strong className="t-stagger-line t-stagger-line--1 block text-sm font-semibold text-ds-text-primary">
             尚未开始检测
           </strong>
-          <p className="t-stagger-line t-stagger-line--2 mt-2 mb-0 text-[13px] leading-[1.65] text-ds-text-secondary">
-            启动检测后，指标和结果筛选会在这里展开。
-          </p>
         </div>
       )}
     </div>
